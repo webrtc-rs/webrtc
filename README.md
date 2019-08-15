@@ -1,2 +1,2 @@
-# webrtc
+# rtc
 WebRTC in Rust

@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "ice",
+    "rtp",
+    "srtp",
+    "sdp",
+    "utils",
+]
