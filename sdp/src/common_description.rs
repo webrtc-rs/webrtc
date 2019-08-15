@@ -13,27 +13,35 @@ pub type Information = String;
 // containing connection data.
 #[derive(Debug)]
 pub struct ConnectionInformation {
-    network_type: String,
-    address_type: String,
-    address: Address,
+    pub network_type: String,
+    pub address_type: String,
+    pub address: Option<Address>,
 }
 
 impl fmt::Display for ConnectionInformation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{} {} {}",
-            self.network_type, self.address_type, self.address,
-        )
+        if let Some(address) = &self.address {
+            write!(
+                f,
+                "{} {} {}",
+                self.network_type, self.address_type, address,
+            )
+        }else{
+            write!(
+                f,
+                "{} {}",
+                self.network_type, self.address_type,
+            )
+        }
     }
 }
 
 // Address desribes a structured address token from within the "c=" field.
 #[derive(Debug)]
 pub struct Address {
-    address: String,
-    ttl: Option<i32>,
-    range: Option<i32>,
+    pub address: String,
+    pub ttl: Option<i32>,
+    pub range: Option<i32>,
 }
 
 impl fmt::Display for Address {
@@ -53,9 +61,9 @@ impl fmt::Display for Address {
 // to be used by the session or media.
 #[derive(Debug)]
 pub struct Bandwidth {
-    experimental: bool,
-    bandwidth_type: String,
-    bandwidth: u64,
+    pub experimental: bool,
+    pub bandwidth_type: String,
+    pub bandwidth: u64,
 }
 
 impl fmt::Display for Bandwidth {
