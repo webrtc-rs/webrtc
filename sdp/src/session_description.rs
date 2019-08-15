@@ -398,7 +398,6 @@ fn s3<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a,
 
 fn s4<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error> {
     let key = read_type(lexer.reader)?;
-
 	match key.as_str() {
 	 "i=" =>  Ok(Some(StateFn {
          f: unmarshal_session_information,
@@ -427,46 +426,75 @@ fn s4<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a,
 
 fn s5<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error> {
     let key = read_type(lexer.reader)?;
-    /*if &key == "s=" {
-        return Ok(Some(StateFn {
-            f: unmarshal_session_name,
-        }));
-    }*/
-
-    Err(Error::new(format!("sdp: invalid syntax `{}`", key)))
+    match key.as_str() {
+        "b=" =>  Ok(Some(StateFn {
+            f: unmarshal_session_bandwidth,
+        })),
+        "t=" =>  Ok(Some(StateFn {
+            f: unmarshal_timing,
+        })),
+        _=> Err(Error::new(format!("sdp: invalid syntax `{}`", key)))
+    }
 }
 
 fn s6<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error> {
     let key = read_type(lexer.reader)?;
-    /*if &key == "s=" {
-        return Ok(Some(StateFn {
-            f: unmarshal_session_name,
-        }));
-    }*/
-
-    Err(Error::new(format!("sdp: invalid syntax `{}`", key)))
+    match key.as_str() {
+        "p=" =>  Ok(Some(StateFn {
+            f: unmarshal_phone,
+        })),
+        "c=" =>  Ok(Some(StateFn {
+            f: unmarshal_session_connection_information,
+        })),
+        "b=" =>  Ok(Some(StateFn {
+            f: unmarshal_session_bandwidth,
+        })),
+        "t=" =>  Ok(Some(StateFn {
+            f: unmarshal_timing,
+        })),
+        _=> Err(Error::new(format!("sdp: invalid syntax `{}`", key)))
+    }
 }
 
 fn s7<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error> {
     let key = read_type(lexer.reader)?;
-    /*if &key == "s=" {
-        return Ok(Some(StateFn {
-            f: unmarshal_session_name,
-        }));
-    }*/
-
-    Err(Error::new(format!("sdp: invalid syntax `{}`", key)))
+    match key.as_str() {
+        "u=" =>  Ok(Some(StateFn {
+            f: unmarshal_uri,
+        })),
+        "e=" =>  Ok(Some(StateFn {
+            f: unmarshal_email,
+        })),
+        "p=" =>  Ok(Some(StateFn {
+            f: unmarshal_phone,
+        })),
+        "c=" =>  Ok(Some(StateFn {
+            f: unmarshal_session_connection_information,
+        })),
+        "b=" =>  Ok(Some(StateFn {
+            f: unmarshal_session_bandwidth,
+        })),
+        "t=" =>  Ok(Some(StateFn {
+            f: unmarshal_timing,
+        })),
+        _=> Err(Error::new(format!("sdp: invalid syntax `{}`", key)))
+    }
 }
 
 fn s8<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error> {
     let key = read_type(lexer.reader)?;
-    /*if &key == "s=" {
-        return Ok(Some(StateFn {
-            f: unmarshal_session_name,
-        }));
-    }*/
-
-    Err(Error::new(format!("sdp: invalid syntax `{}`", key)))
+    match key.as_str() {
+        "c=" =>  Ok(Some(StateFn {
+            f: unmarshal_session_connection_information,
+        })),
+        "b=" =>  Ok(Some(StateFn {
+            f: unmarshal_session_bandwidth,
+        })),
+        "t=" =>  Ok(Some(StateFn {
+            f: unmarshal_timing,
+        })),
+        _=> Err(Error::new(format!("sdp: invalid syntax `{}`", key)))
+    }
 }
 
 fn s9<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error> {
@@ -482,13 +510,24 @@ fn s9<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a,
 
 fn s10<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error> {
     let key = read_type(lexer.reader)?;
-    /*if &key == "s=" {
-        return Ok(Some(StateFn {
-            f: unmarshal_session_name,
-        }));
-    }*/
-
-    Err(Error::new(format!("sdp: invalid syntax `{}`", key)))
+    match key.as_str() {
+        "e=" =>  Ok(Some(StateFn {
+            f: unmarshal_email,
+        })),
+        "p=" =>  Ok(Some(StateFn {
+            f: unmarshal_phone,
+        })),
+        "c=" =>  Ok(Some(StateFn {
+            f: unmarshal_session_connection_information,
+        })),
+        "b=" =>  Ok(Some(StateFn {
+            f: unmarshal_session_bandwidth,
+        })),
+        "t=" =>  Ok(Some(StateFn {
+            f: unmarshal_timing,
+        })),
+        _=> Err(Error::new(format!("sdp: invalid syntax `{}`", key)))
+    }
 }
 
 fn unmarshal_protocol_version<'a, R: io::BufRead>(
@@ -615,7 +654,7 @@ fn unmarshal_connection_information(value: &str) ->Result<Option<ConnectionInfor
 		return Err(Error::new(format!("sdp: invalid value `{}`", fields[1])));
 	}
 
-	let connAddr = if fields.len() > 2 {
+	let address = if fields.len() > 2 {
 		Some(Address{
             address: fields[2].to_owned(),
             ttl:None,
@@ -628,7 +667,7 @@ fn unmarshal_connection_information(value: &str) ->Result<Option<ConnectionInfor
 	Ok(Some(ConnectionInformation{
 		network_type: fields[0].to_owned(),
 		address_type: fields[1].to_owned(),
-		address:     connAddr,
+		address,
 	}))
 }
 
