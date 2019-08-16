@@ -46,29 +46,6 @@ impl MediaDescription {
         }
         return None;
     }
-
-    pub fn marshal(&self) -> String {
-        let mut result = String::new();
-
-        result += key_value_build("m=", Some(&self.media_name.to_string())).as_str();
-        result += key_value_build("i=", self.media_title.as_ref()).as_str();
-        if let Some(connection_information) = &self.connection_information {
-            result += key_value_build("c=", Some(&connection_information.to_string())).as_str();
-        }
-        for bandwidth in &self.bandwidth {
-            result += key_value_build("b=", Some(&bandwidth.to_string())).as_str();
-        }
-        result += key_value_build("k=", self.encryption_key.as_ref()).as_str();
-        for attribute in &self.attributes {
-            result += key_value_build("a=", Some(&attribute.to_string())).as_str();
-        }
-
-        result
-    }
-
-    pub fn unmarshal<R: io::BufRead>(reader: &mut R) -> Result<Vec<MediaDescription>, Error> {
-        Ok(vec![])
-    }
 }
 
 // RangedPort supports special format for the media field "m=" port value. If

@@ -7,6 +7,9 @@ use super::common_description::*;
 use super::media_description::*;
 use super::util::*;
 
+#[cfg(test)]
+mod session_description_test;
+
 // Version describes the value provided by the "v=" field which gives
 // the version of the Session Description Protocol.
 pub type Version = isize;
@@ -257,7 +260,19 @@ impl SessionDescription {
         }
 
         for media_description in &self.media_descriptions {
-            result += media_description.marshal().as_str();
+            result +=
+                key_value_build("m=", Some(&media_description.media_name.to_string())).as_str();
+            result += key_value_build("i=", media_description.media_title.as_ref()).as_str();
+            if let Some(connection_information) = &media_description.connection_information {
+                result += key_value_build("c=", Some(&connection_information.to_string())).as_str();
+            }
+            for bandwidth in &media_description.bandwidth {
+                result += key_value_build("b=", Some(&bandwidth.to_string())).as_str();
+            }
+            result += key_value_build("k=", media_description.encryption_key.as_ref()).as_str();
+            for attribute in &media_description.attributes {
+                result += key_value_build("a=", Some(&attribute.to_string())).as_str();
+            }
         }
 
         result
