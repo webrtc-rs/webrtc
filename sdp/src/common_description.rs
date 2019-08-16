@@ -32,8 +32,8 @@ impl fmt::Display for ConnectionInformation {
 #[derive(Debug)]
 pub struct Address {
     pub address: String,
-    pub ttl: Option<i32>,
-    pub range: Option<i32>,
+    pub ttl: Option<isize>,
+    pub range: Option<isize>,
 }
 
 impl fmt::Display for Address {

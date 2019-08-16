@@ -76,8 +76,8 @@ impl MediaDescription {
 // to write it as: <port>/<number of ports> where number of ports is a an
 // offsetting range.
 pub struct RangedPort {
-    pub value: u16,
-    pub range: Option<i32>,
+    pub value: isize,
+    pub range: Option<isize>,
 }
 
 impl fmt::Display for RangedPort {

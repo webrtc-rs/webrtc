@@ -9,7 +9,7 @@ use super::util::*;
 
 // Version describes the value provided by the "v=" field which gives
 // the version of the Session Description Protocol.
-pub type Version = u32;
+pub type Version = isize;
 
 // Origin defines the structure for the "o=" field which provides the
 // originator of the session plus a session identifier and version number.
@@ -68,7 +68,7 @@ pub type PhoneNumber = String;
 // repeated sessions scheduling.
 pub struct TimeZone {
     adjustment_time: u64,
-    offset: u64,
+    offset: i64,
 }
 
 impl fmt::Display for TimeZone {
@@ -106,9 +106,9 @@ impl fmt::Display for Timing {
 // RepeatTime describes the "r=" fields of the session description which
 // represents the intervals and durations for repeated scheduled sessions.
 pub struct RepeatTime {
-    interval: u64,
-    duration: u64,
-    offsets: Vec<u64>,
+    interval: i64,
+    duration: i64,
+    offsets: Vec<i64>,
 }
 
 impl fmt::Display for RepeatTime {
@@ -972,9 +972,9 @@ fn unmarshal_media_description<'a, R: io::BufRead>(
 
     // <port>
     let parts: Vec<&str> = fields[1].split("/").collect();
-    let port_value = parts[0].parse::<u16>()?;
+    let port_value = parts[0].parse::<u16>()? as isize;
     let port_range = if parts.len() > 1 {
-        Some(parts[1].parse::<i32>()?)
+        Some(parts[1].parse::<i32>()? as isize)
     } else {
         None
     };
@@ -1099,7 +1099,7 @@ fn unmarshal_media_attribute<'a, R: io::BufRead>(
     }
 }
 
-fn parse_time_units(value: &str) -> Result<u64, Error> {
+fn parse_time_units(value: &str) -> Result<i64, Error> {
     // Some time offsets in the protocol can be provided with a shorthand
     // notation. This code ensures to convert it to NTP timestamp format.
     //      d - days (86400 seconds)
@@ -1109,10 +1109,10 @@ fn parse_time_units(value: &str) -> Result<u64, Error> {
     let val = value.as_bytes();
     let len = val.len();
     let num = match val[len - 1] {
-        b'd' => value.trim_end_matches("d").parse::<u64>()? * 86400,
-        b'h' => value.trim_end_matches("h").parse::<u64>()? * 3600,
-        b'm' => value.trim_end_matches("m").parse::<u64>()? * 60,
-        _ => value.trim_end_matches("m").parse::<u64>()?,
+        b'd' => value.trim_end_matches("d").parse::<i64>()? * 86400,
+        b'h' => value.trim_end_matches("h").parse::<i64>()? * 3600,
+        b'm' => value.trim_end_matches("m").parse::<i64>()? * 60,
+        _ => value.trim_end_matches("m").parse::<i64>()?,
     };
 
     Ok(num)

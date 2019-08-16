@@ -13,7 +13,7 @@ mod extmap_test;
 //ExtMap represents the activation of a single RTP header extension
 #[derive(Debug, Clone)]
 struct ExtMap {
-    value: i32,
+    value: isize,
     direction: Direction,
     uri: Option<Url>,
     ext_attr: Option<String>,
@@ -61,7 +61,7 @@ impl ExtMap {
         }
 
         let valdir: Vec<&str> = fields[0].split("/").collect();
-        let value = valdir[0].parse::<u64>()? as i32;
+        let value = valdir[0].parse::<isize>()?;
         if value < 1 || value > 246 {
             return Err(Error::new(format!(
                 "SyntaxError: {} -- extmap key must be in the range 1-256",

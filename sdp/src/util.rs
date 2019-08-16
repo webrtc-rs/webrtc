@@ -27,6 +27,7 @@ pub fn read_type<R: io::BufRead>(reader: &mut R) -> Result<(String, usize), Erro
         return Err(Error::new(format!("SyntaxError: {:?}", buf)));
     }
     let key = String::from_utf8(buf)?;
+    //print!("{}", key);
     Ok((key, num_bytes))
 }
 
@@ -38,6 +39,7 @@ pub fn read_value<R: io::BufRead>(reader: &mut R) -> Result<(String, usize), Err
     }
 
     let value = String::from_utf8(line)?;
+    //print!("{}", value);
     Ok((value.trim().to_string(), num_bytes))
 }
 
