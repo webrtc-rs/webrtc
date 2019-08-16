@@ -21,17 +21,9 @@ pub struct ConnectionInformation {
 impl fmt::Display for ConnectionInformation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(address) = &self.address {
-            write!(
-                f,
-                "{} {} {}",
-                self.network_type, self.address_type, address,
-            )
-        }else{
-            write!(
-                f,
-                "{} {}",
-                self.network_type, self.address_type,
-            )
+            write!(f, "{} {} {}", self.network_type, self.address_type, address,)
+        } else {
+            write!(f, "{} {}", self.network_type, self.address_type,)
         }
     }
 }
@@ -81,13 +73,13 @@ pub type EncryptionKey = String;
 #[derive(Debug)]
 pub struct Attribute {
     pub key: String,
-    pub value: String,
+    pub value: Option<String>,
 }
 
 impl fmt::Display for Attribute {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.value.len() > 0 {
-            write!(f, "{}:{}", self.key, self.value)
+        if let Some(value) = &self.value {
+            write!(f, "{}:{}", self.key, value)
         } else {
             write!(f, "{}", self.key)
         }
@@ -96,7 +88,7 @@ impl fmt::Display for Attribute {
 
 impl Attribute {
     // constructs a new attribute
-    pub fn new(key: String, value: String) -> Self {
+    pub fn new(key: String, value: Option<String>) -> Self {
         Attribute { key, value }
     }
 
@@ -107,8 +99,14 @@ impl Attribute {
 
     // ToICECandidate parses the attribute as an ICE Candidate.
     pub fn to_ice_candidate(&self) -> Result<ICECandidate, Error> {
-        let mut reader = BufReader::new(self.value.as_bytes());
-        let parsed = ICECandidate::unmarshal(&mut reader)?;
-        Ok(parsed)
+        if let Some(value) = &self.value {
+            let mut reader = BufReader::new(value.as_bytes());
+            let parsed = ICECandidate::unmarshal(&mut reader)?;
+            Ok(parsed)
+        } else {
+            Err(Error::new(format!(
+                "sdp: empty value in candidate attribute"
+            )))
+        }
     }
 }

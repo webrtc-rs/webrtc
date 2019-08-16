@@ -4,7 +4,7 @@ use url::Url;
 use utils::Error;
 
 use super::common_description::*;
-use super::media_description::MediaDescription;
+use super::media_description::*;
 use super::util::*;
 
 // Version describes the value provided by the "v=" field which gives
@@ -68,7 +68,7 @@ pub type PhoneNumber = String;
 // repeated sessions scheduling.
 pub struct TimeZone {
     adjustment_time: u64,
-    offset: i64,
+    offset: u64,
 }
 
 impl fmt::Display for TimeZone {
@@ -106,9 +106,9 @@ impl fmt::Display for Timing {
 // RepeatTime describes the "r=" fields of the session description which
 // represents the intervals and durations for repeated scheduled sessions.
 pub struct RepeatTime {
-    interval: i64,
-    duration: i64,
-    offsets: Vec<i64>,
+    interval: u64,
+    duration: u64,
+    offsets: Vec<u64>,
 }
 
 impl fmt::Display for RepeatTime {
@@ -364,7 +364,7 @@ impl SessionDescription {
 }
 
 fn s1<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error> {
-    let key = read_type(lexer.reader)?;
+    let (key, _) = read_type(lexer.reader)?;
     if &key == "v=" {
         return Ok(Some(StateFn {
             f: unmarshal_protocol_version,
@@ -375,7 +375,7 @@ fn s1<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a,
 }
 
 fn s2<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error> {
-    let key = read_type(lexer.reader)?;
+    let (key, _) = read_type(lexer.reader)?;
     if &key == "o=" {
         return Ok(Some(StateFn {
             f: unmarshal_origin,
@@ -386,154 +386,286 @@ fn s2<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a,
 }
 
 fn s3<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error> {
-    let key = read_type(lexer.reader)?;
-	if &key == "s=" {
-		return Ok(Some(StateFn {
+    let (key, _) = read_type(lexer.reader)?;
+    if &key == "s=" {
+        return Ok(Some(StateFn {
             f: unmarshal_session_name,
         }));
-	}
+    }
 
     Err(Error::new(format!("sdp: invalid syntax `{}`", key)))
 }
 
 fn s4<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error> {
-    let key = read_type(lexer.reader)?;
-	match key.as_str() {
-	 "i=" =>  Ok(Some(StateFn {
-         f: unmarshal_session_information,
-     })),
-	 "u=" =>  Ok(Some(StateFn {
-         f: unmarshal_uri,
-     })),
-	 "e=" =>  Ok(Some(StateFn {
-         f: unmarshal_email,
-     })),
-	 "p=" =>  Ok(Some(StateFn {
-         f: unmarshal_phone,
-     })),
-	 "c=" =>  Ok(Some(StateFn {
-         f: unmarshal_session_connection_information,
-     })),
-	 "b=" =>  Ok(Some(StateFn {
-         f: unmarshal_session_bandwidth,
-     })),
-	 "t=" =>  Ok(Some(StateFn {
-         f: unmarshal_timing,
-     })),
-        _=> Err(Error::new(format!("sdp: invalid syntax `{}`", key)))
-	}
+    let (key, _) = read_type(lexer.reader)?;
+    match key.as_str() {
+        "i=" => Ok(Some(StateFn {
+            f: unmarshal_session_information,
+        })),
+        "u=" => Ok(Some(StateFn { f: unmarshal_uri })),
+        "e=" => Ok(Some(StateFn { f: unmarshal_email })),
+        "p=" => Ok(Some(StateFn { f: unmarshal_phone })),
+        "c=" => Ok(Some(StateFn {
+            f: unmarshal_session_connection_information,
+        })),
+        "b=" => Ok(Some(StateFn {
+            f: unmarshal_session_bandwidth,
+        })),
+        "t=" => Ok(Some(StateFn {
+            f: unmarshal_timing,
+        })),
+        _ => Err(Error::new(format!("sdp: invalid syntax `{}`", key))),
+    }
 }
 
 fn s5<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error> {
-    let key = read_type(lexer.reader)?;
+    let (key, _) = read_type(lexer.reader)?;
     match key.as_str() {
-        "b=" =>  Ok(Some(StateFn {
+        "b=" => Ok(Some(StateFn {
             f: unmarshal_session_bandwidth,
         })),
-        "t=" =>  Ok(Some(StateFn {
+        "t=" => Ok(Some(StateFn {
             f: unmarshal_timing,
         })),
-        _=> Err(Error::new(format!("sdp: invalid syntax `{}`", key)))
+        _ => Err(Error::new(format!("sdp: invalid syntax `{}`", key))),
     }
 }
 
 fn s6<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error> {
-    let key = read_type(lexer.reader)?;
+    let (key, _) = read_type(lexer.reader)?;
     match key.as_str() {
-        "p=" =>  Ok(Some(StateFn {
-            f: unmarshal_phone,
-        })),
-        "c=" =>  Ok(Some(StateFn {
+        "p=" => Ok(Some(StateFn { f: unmarshal_phone })),
+        "c=" => Ok(Some(StateFn {
             f: unmarshal_session_connection_information,
         })),
-        "b=" =>  Ok(Some(StateFn {
+        "b=" => Ok(Some(StateFn {
             f: unmarshal_session_bandwidth,
         })),
-        "t=" =>  Ok(Some(StateFn {
+        "t=" => Ok(Some(StateFn {
             f: unmarshal_timing,
         })),
-        _=> Err(Error::new(format!("sdp: invalid syntax `{}`", key)))
+        _ => Err(Error::new(format!("sdp: invalid syntax `{}`", key))),
     }
 }
 
 fn s7<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error> {
-    let key = read_type(lexer.reader)?;
+    let (key, _) = read_type(lexer.reader)?;
     match key.as_str() {
-        "u=" =>  Ok(Some(StateFn {
-            f: unmarshal_uri,
-        })),
-        "e=" =>  Ok(Some(StateFn {
-            f: unmarshal_email,
-        })),
-        "p=" =>  Ok(Some(StateFn {
-            f: unmarshal_phone,
-        })),
-        "c=" =>  Ok(Some(StateFn {
+        "u=" => Ok(Some(StateFn { f: unmarshal_uri })),
+        "e=" => Ok(Some(StateFn { f: unmarshal_email })),
+        "p=" => Ok(Some(StateFn { f: unmarshal_phone })),
+        "c=" => Ok(Some(StateFn {
             f: unmarshal_session_connection_information,
         })),
-        "b=" =>  Ok(Some(StateFn {
+        "b=" => Ok(Some(StateFn {
             f: unmarshal_session_bandwidth,
         })),
-        "t=" =>  Ok(Some(StateFn {
+        "t=" => Ok(Some(StateFn {
             f: unmarshal_timing,
         })),
-        _=> Err(Error::new(format!("sdp: invalid syntax `{}`", key)))
+        _ => Err(Error::new(format!("sdp: invalid syntax `{}`", key))),
     }
 }
 
 fn s8<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error> {
-    let key = read_type(lexer.reader)?;
+    let (key, _) = read_type(lexer.reader)?;
     match key.as_str() {
-        "c=" =>  Ok(Some(StateFn {
+        "c=" => Ok(Some(StateFn {
             f: unmarshal_session_connection_information,
         })),
-        "b=" =>  Ok(Some(StateFn {
+        "b=" => Ok(Some(StateFn {
             f: unmarshal_session_bandwidth,
         })),
-        "t=" =>  Ok(Some(StateFn {
+        "t=" => Ok(Some(StateFn {
             f: unmarshal_timing,
         })),
-        _=> Err(Error::new(format!("sdp: invalid syntax `{}`", key)))
+        _ => Err(Error::new(format!("sdp: invalid syntax `{}`", key))),
     }
 }
 
 fn s9<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error> {
-    let key = read_type(lexer.reader)?;
-    /*if &key == "s=" {
-        return Ok(Some(StateFn {
-            f: unmarshal_session_name,
-        }));
-    }*/
+    let (key, num_bytes) = read_type(lexer.reader)?;
+    if &key == "" && num_bytes == 0 {
+        return Ok(None);
+    }
 
-    Err(Error::new(format!("sdp: invalid syntax `{}`", key)))
+    match key.as_str() {
+        "z=" => Ok(Some(StateFn {
+            f: unmarshal_time_zones,
+        })),
+        "k=" => Ok(Some(StateFn {
+            f: unmarshal_session_encryption_key,
+        })),
+        "a=" => Ok(Some(StateFn {
+            f: unmarshal_session_attribute,
+        })),
+        "r=" => Ok(Some(StateFn {
+            f: unmarshal_repeat_times,
+        })),
+        "t=" => Ok(Some(StateFn {
+            f: unmarshal_timing,
+        })),
+        "m=" => Ok(Some(StateFn {
+            f: unmarshal_media_description,
+        })),
+        _ => Err(Error::new(format!("sdp: invalid syntax `{}`", key))),
+    }
 }
 
 fn s10<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error> {
-    let key = read_type(lexer.reader)?;
+    let (key, _) = read_type(lexer.reader)?;
     match key.as_str() {
-        "e=" =>  Ok(Some(StateFn {
-            f: unmarshal_email,
-        })),
-        "p=" =>  Ok(Some(StateFn {
-            f: unmarshal_phone,
-        })),
-        "c=" =>  Ok(Some(StateFn {
+        "e=" => Ok(Some(StateFn { f: unmarshal_email })),
+        "p=" => Ok(Some(StateFn { f: unmarshal_phone })),
+        "c=" => Ok(Some(StateFn {
             f: unmarshal_session_connection_information,
         })),
-        "b=" =>  Ok(Some(StateFn {
+        "b=" => Ok(Some(StateFn {
             f: unmarshal_session_bandwidth,
         })),
-        "t=" =>  Ok(Some(StateFn {
+        "t=" => Ok(Some(StateFn {
             f: unmarshal_timing,
         })),
-        _=> Err(Error::new(format!("sdp: invalid syntax `{}`", key)))
+        _ => Err(Error::new(format!("sdp: invalid syntax `{}`", key))),
+    }
+}
+
+fn s11<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error> {
+    let (key, num_bytes) = read_type(lexer.reader)?;
+    if &key == "" && num_bytes == 0 {
+        return Ok(None);
+    }
+
+    match key.as_str() {
+        "a=" => Ok(Some(StateFn {
+            f: unmarshal_session_attribute,
+        })),
+        "m=" => Ok(Some(StateFn {
+            f: unmarshal_media_description,
+        })),
+        _ => Err(Error::new(format!("sdp: invalid syntax `{}`", key))),
+    }
+}
+
+fn s12<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error> {
+    let (key, num_bytes) = read_type(lexer.reader)?;
+    if &key == "" && num_bytes == 0 {
+        return Ok(None);
+    }
+
+    match key.as_str() {
+        "a=" => Ok(Some(StateFn {
+            f: unmarshal_media_attribute,
+        })),
+        "k=" => Ok(Some(StateFn {
+            f: unmarshal_media_encryption_key,
+        })),
+        "b=" => Ok(Some(StateFn {
+            f: unmarshal_media_bandwidth,
+        })),
+        "c=" => Ok(Some(StateFn {
+            f: unmarshal_media_connection_information,
+        })),
+        "i=" => Ok(Some(StateFn {
+            f: unmarshal_media_title,
+        })),
+        "m=" => Ok(Some(StateFn {
+            f: unmarshal_media_description,
+        })),
+        _ => Err(Error::new(format!("sdp: invalid syntax `{}`", key))),
+    }
+}
+
+fn s13<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error> {
+    let (key, num_bytes) = read_type(lexer.reader)?;
+    if &key == "" && num_bytes == 0 {
+        return Ok(None);
+    }
+
+    match key.as_str() {
+        "a=" => Ok(Some(StateFn {
+            f: unmarshal_session_attribute,
+        })),
+        "k=" => Ok(Some(StateFn {
+            f: unmarshal_session_encryption_key,
+        })),
+        "m=" => Ok(Some(StateFn {
+            f: unmarshal_media_description,
+        })),
+        _ => Err(Error::new(format!("sdp: invalid syntax `{}`", key))),
+    }
+}
+
+fn s14<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error> {
+    let (key, num_bytes) = read_type(lexer.reader)?;
+    if &key == "" && num_bytes == 0 {
+        return Ok(None);
+    }
+
+    match key.as_str() {
+        "a=" => Ok(Some(StateFn {
+            f: unmarshal_media_attribute,
+        })),
+        "m=" => Ok(Some(StateFn {
+            f: unmarshal_media_description,
+        })),
+        _ => Err(Error::new(format!("sdp: invalid syntax `{}`", key))),
+    }
+}
+
+fn s15<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error> {
+    let (key, num_bytes) = read_type(lexer.reader)?;
+    if &key == "" && num_bytes == 0 {
+        return Ok(None);
+    }
+
+    match key.as_str() {
+        "a=" => Ok(Some(StateFn {
+            f: unmarshal_media_attribute,
+        })),
+        "k=" => Ok(Some(StateFn {
+            f: unmarshal_media_encryption_key,
+        })),
+        "b=" => Ok(Some(StateFn {
+            f: unmarshal_media_bandwidth,
+        })),
+        "m=" => Ok(Some(StateFn {
+            f: unmarshal_media_description,
+        })),
+        _ => Err(Error::new(format!("sdp: invalid syntax `{}`", key))),
+    }
+}
+
+fn s16<'a, R: io::BufRead>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error> {
+    let (key, num_bytes) = read_type(lexer.reader)?;
+    if &key == "" && num_bytes == 0 {
+        return Ok(None);
+    }
+
+    match key.as_str() {
+        "a=" => Ok(Some(StateFn {
+            f: unmarshal_media_attribute,
+        })),
+        "k=" => Ok(Some(StateFn {
+            f: unmarshal_media_encryption_key,
+        })),
+        "c=" => Ok(Some(StateFn {
+            f: unmarshal_media_connection_information,
+        })),
+        "b=" => Ok(Some(StateFn {
+            f: unmarshal_media_bandwidth,
+        })),
+        "m=" => Ok(Some(StateFn {
+            f: unmarshal_media_description,
+        })),
+        _ => Err(Error::new(format!("sdp: invalid syntax `{}`", key))),
     }
 }
 
 fn unmarshal_protocol_version<'a, R: io::BufRead>(
     lexer: &mut Lexer<'a, R>,
 ) -> Result<Option<StateFn<'a, R>>, Error> {
-    let value = read_value(lexer.reader)?;
+    let (value, _) = read_value(lexer.reader)?;
 
     let version = value.parse::<u32>()?;
 
@@ -549,7 +681,7 @@ fn unmarshal_protocol_version<'a, R: io::BufRead>(
 fn unmarshal_origin<'a, R: io::BufRead>(
     lexer: &mut Lexer<'a, R>,
 ) -> Result<Option<StateFn<'a, R>>, Error> {
-    let value = read_value(lexer.reader)?;
+    let (value, _) = read_value(lexer.reader)?;
 
     let fields: Vec<&str> = value.split_whitespace().collect();
     if fields.len() != 6 {
@@ -590,30 +722,31 @@ fn unmarshal_origin<'a, R: io::BufRead>(
 fn unmarshal_session_name<'a, R: io::BufRead>(
     lexer: &mut Lexer<'a, R>,
 ) -> Result<Option<StateFn<'a, R>>, Error> {
-    lexer.desc.session_name = read_value(lexer.reader)?;
+    let (value, _) = read_value(lexer.reader)?;
+    lexer.desc.session_name = value;
     Ok(Some(StateFn { f: s4 }))
 }
 
 fn unmarshal_session_information<'a, R: io::BufRead>(
     lexer: &mut Lexer<'a, R>,
 ) -> Result<Option<StateFn<'a, R>>, Error> {
-    let value = read_value(lexer.reader)?;
-	lexer.desc.session_information = Some(value);
+    let (value, _) = read_value(lexer.reader)?;
+    lexer.desc.session_information = Some(value);
     Ok(Some(StateFn { f: s7 }))
 }
 
 fn unmarshal_uri<'a, R: io::BufRead>(
     lexer: &mut Lexer<'a, R>,
 ) -> Result<Option<StateFn<'a, R>>, Error> {
-    let value = read_value(lexer.reader)?;
-    lexer.desc.uri =Some(Url::parse(&value)?);
+    let (value, _) = read_value(lexer.reader)?;
+    lexer.desc.uri = Some(Url::parse(&value)?);
     Ok(Some(StateFn { f: s10 }))
 }
 
 fn unmarshal_email<'a, R: io::BufRead>(
     lexer: &mut Lexer<'a, R>,
 ) -> Result<Option<StateFn<'a, R>>, Error> {
-    let value = read_value(lexer.reader)?;
+    let (value, _) = read_value(lexer.reader)?;
     lexer.desc.email_address = Some(value);
     Ok(Some(StateFn { f: s6 }))
 }
@@ -621,105 +754,105 @@ fn unmarshal_email<'a, R: io::BufRead>(
 fn unmarshal_phone<'a, R: io::BufRead>(
     lexer: &mut Lexer<'a, R>,
 ) -> Result<Option<StateFn<'a, R>>, Error> {
-    let value = read_value(lexer.reader)?;
-	lexer.desc.phone_number = Some(value);
+    let (value, _) = read_value(lexer.reader)?;
+    lexer.desc.phone_number = Some(value);
     Ok(Some(StateFn { f: s8 }))
 }
 
 fn unmarshal_session_connection_information<'a, R: io::BufRead>(
     lexer: &mut Lexer<'a, R>,
 ) -> Result<Option<StateFn<'a, R>>, Error> {
-    let value = read_value(lexer.reader)?;
-	lexer.desc.connection_information = unmarshal_connection_information(&value)?;
+    let (value, _) = read_value(lexer.reader)?;
+    lexer.desc.connection_information = unmarshal_connection_information(&value)?;
     Ok(Some(StateFn { f: s5 }))
 }
 
-fn unmarshal_connection_information(value: &str) ->Result<Option<ConnectionInformation>, Error> {
-	let fields: Vec<&str> = value.split_whitespace().collect();
-	if fields.len() < 2 {
-		return Err(Error::new(format!("sdp: invalid syntax `c={}`", value)));
-	}
+fn unmarshal_connection_information(value: &str) -> Result<Option<ConnectionInformation>, Error> {
+    let fields: Vec<&str> = value.split_whitespace().collect();
+    if fields.len() < 2 {
+        return Err(Error::new(format!("sdp: invalid syntax `c={}`", value)));
+    }
 
-	// Set according to currently registered with IANA
-	// https://tools.ietf.org/html/rfc4566#section-8.2.6
-	let i = index_of(fields[0], &vec!["IN"]);
+    // Set according to currently registered with IANA
+    // https://tools.ietf.org/html/rfc4566#section-8.2.6
+    let i = index_of(fields[0], &vec!["IN"]);
     if i == -1 {
-		return Err(Error::new(format!("sdp: invalid value `{}`", fields[0])));
-	}
+        return Err(Error::new(format!("sdp: invalid value `{}`", fields[0])));
+    }
 
-	// Set according to currently registered with IANA
-	// https://tools.ietf.org/html/rfc4566#section-8.2.7
-	let i = index_of(fields[1], &vec!["IP4", "IP6"]);
+    // Set according to currently registered with IANA
+    // https://tools.ietf.org/html/rfc4566#section-8.2.7
+    let i = index_of(fields[1], &vec!["IP4", "IP6"]);
     if i == -1 {
-		return Err(Error::new(format!("sdp: invalid value `{}`", fields[1])));
-	}
+        return Err(Error::new(format!("sdp: invalid value `{}`", fields[1])));
+    }
 
-	let address = if fields.len() > 2 {
-		Some(Address{
+    let address = if fields.len() > 2 {
+        Some(Address {
             address: fields[2].to_owned(),
-            ttl:None,
+            ttl: None,
             range: None,
         })
-	}else{
+    } else {
         None
     };
 
-	Ok(Some(ConnectionInformation{
-		network_type: fields[0].to_owned(),
-		address_type: fields[1].to_owned(),
-		address,
-	}))
+    Ok(Some(ConnectionInformation {
+        network_type: fields[0].to_owned(),
+        address_type: fields[1].to_owned(),
+        address,
+    }))
 }
 
 fn unmarshal_session_bandwidth<'a, R: io::BufRead>(
     lexer: &mut Lexer<'a, R>,
 ) -> Result<Option<StateFn<'a, R>>, Error> {
-    let value = read_value(lexer.reader)?;
+    let (value, _) = read_value(lexer.reader)?;
     lexer.desc.bandwidth.push(unmarshal_bandwidth(&value)?);
     Ok(Some(StateFn { f: s5 }))
 }
 
-fn unmarshal_bandwidth(value:&str) ->Result<Bandwidth, Error> {
-	let mut parts :Vec<&str> = value.split(":").collect();
-	if parts.len() != 2 {
-		return Err(Error::new(format!("sdp: invalid syntax `b={}`", value)));
-	}
+fn unmarshal_bandwidth(value: &str) -> Result<Bandwidth, Error> {
+    let mut parts: Vec<&str> = value.split(":").collect();
+    if parts.len() != 2 {
+        return Err(Error::new(format!("sdp: invalid syntax `b={}`", value)));
+    }
 
-	let experimental = parts[0].starts_with( "X-");
-	if experimental {
-		parts[0] = parts[0].trim_start_matches("X-");
-	} else {
-		// Set according to currently registered with IANA
-		// https://tools.ietf.org/html/rfc4566#section-5.8
-		let i = index_of(parts[0], &vec!["CT", "AS"]);
+    let experimental = parts[0].starts_with("X-");
+    if experimental {
+        parts[0] = parts[0].trim_start_matches("X-");
+    } else {
+        // Set according to currently registered with IANA
+        // https://tools.ietf.org/html/rfc4566#section-5.8
+        let i = index_of(parts[0], &vec!["CT", "AS"]);
         if i == -1 {
-			return Err(Error::new(format!("sdp: invalid value `{}`", parts[0])));
-		}
-	}
+            return Err(Error::new(format!("sdp: invalid value `{}`", parts[0])));
+        }
+    }
 
-	let bandwidth = parts[1].parse::<u64>()?;
+    let bandwidth = parts[1].parse::<u64>()?;
 
-    Ok(Bandwidth{
-		experimental,
+    Ok(Bandwidth {
+        experimental,
         bandwidth_type: parts[0].to_owned(),
-		bandwidth,
-	})
+        bandwidth,
+    })
 }
 
 fn unmarshal_timing<'a, R: io::BufRead>(
     lexer: &mut Lexer<'a, R>,
 ) -> Result<Option<StateFn<'a, R>>, Error> {
-    let value = read_value(lexer.reader)?;
+    let (value, _) = read_value(lexer.reader)?;
 
     let fields: Vec<&str> = value.split_whitespace().collect();
     if fields.len() < 2 {
         return Err(Error::new(format!("sdp: invalid syntax `t={}`", value)));
     }
 
-	let start_time = fields[0].parse::<u64>()?;
-	let stop_time = fields[1].parse::<u64>()?;
+    let start_time = fields[0].parse::<u64>()?;
+    let stop_time = fields[1].parse::<u64>()?;
 
-	lexer.desc.time_descriptions.push(TimeDescription{
+    lexer.desc.time_descriptions.push(TimeDescription {
         timing: Timing {
             start_time,
             stop_time,
@@ -728,4 +861,259 @@ fn unmarshal_timing<'a, R: io::BufRead>(
     });
 
     Ok(Some(StateFn { f: s9 }))
+}
+
+fn unmarshal_repeat_times<'a, R: io::BufRead>(
+    lexer: &mut Lexer<'a, R>,
+) -> Result<Option<StateFn<'a, R>>, Error> {
+    let (value, _) = read_value(lexer.reader)?;
+
+    let fields: Vec<&str> = value.split_whitespace().collect();
+    if fields.len() < 3 {
+        return Err(Error::new(format!("sdp: invalid syntax `r={}`", value)));
+    }
+
+    if let Some(latest_time_desc) = lexer.desc.time_descriptions.last_mut() {
+        let interval = parse_time_units(fields[0])?;
+        let duration = parse_time_units(fields[1])?;
+        let mut offsets = vec![];
+        for i in 2..fields.len() {
+            let offset = parse_time_units(fields[i])?;
+            offsets.push(offset);
+        }
+        latest_time_desc.repeat_times.push(RepeatTime {
+            interval,
+            duration,
+            offsets,
+        });
+
+        Ok(Some(StateFn { f: s9 }))
+    } else {
+        Err(Error::new(format!("sdp: empty time_descriptions")))
+    }
+}
+
+fn unmarshal_time_zones<'a, R: io::BufRead>(
+    lexer: &mut Lexer<'a, R>,
+) -> Result<Option<StateFn<'a, R>>, Error> {
+    let (value, _) = read_value(lexer.reader)?;
+
+    // These fields are transimitted in pairs
+    // z=<adjustment time> <offset> <adjustment time> <offset> ....
+    // so we are making sure that there are actually multiple of 2 total.
+    let fields: Vec<&str> = value.split_whitespace().collect();
+    if fields.len() % 2 != 0 {
+        return Err(Error::new(format!("sdp: invalid syntax `t={}`", value)));
+    }
+
+    for i in (0..fields.len()).step_by(2) {
+        let adjustment_time = fields[i].parse::<u64>()?;
+        let offset = parse_time_units(fields[i + 1])?;
+
+        lexer.desc.time_zones.push(TimeZone {
+            adjustment_time,
+            offset,
+        });
+    }
+
+    Ok(Some(StateFn { f: s13 }))
+}
+
+fn unmarshal_session_encryption_key<'a, R: io::BufRead>(
+    lexer: &mut Lexer<'a, R>,
+) -> Result<Option<StateFn<'a, R>>, Error> {
+    let (value, _) = read_value(lexer.reader)?;
+    lexer.desc.encryption_key = Some(value);
+    Ok(Some(StateFn { f: s11 }))
+}
+
+fn unmarshal_session_attribute<'a, R: io::BufRead>(
+    lexer: &mut Lexer<'a, R>,
+) -> Result<Option<StateFn<'a, R>>, Error> {
+    let (value, _) = read_value(lexer.reader)?;
+
+    let fields: Vec<&str> = value.splitn(2, ':').collect();
+    let attribute = if fields.len() == 2 {
+        Attribute {
+            key: fields[0].to_owned(),
+            value: Some(fields[1].to_owned()),
+        }
+    } else {
+        Attribute {
+            key: fields[0].to_owned(),
+            value: None,
+        }
+    };
+    lexer.desc.attributes.push(attribute);
+
+    Ok(Some(StateFn { f: s11 }))
+}
+
+fn unmarshal_media_description<'a, R: io::BufRead>(
+    lexer: &mut Lexer<'a, R>,
+) -> Result<Option<StateFn<'a, R>>, Error> {
+    let (value, _) = read_value(lexer.reader)?;
+
+    let fields: Vec<&str> = value.split_whitespace().collect();
+    if fields.len() < 4 {
+        return Err(Error::new(format!("sdp: invalid syntax `m={}`", value)));
+    }
+
+    // <media>
+    // Set according to currently registered with IANA
+    // https://tools.ietf.org/html/rfc4566#section-5.14
+    let i = index_of(
+        fields[0],
+        &vec!["audio", "video", "text", "application", "message"],
+    );
+    if i == -1 {
+        return Err(Error::new(format!("sdp: invalid value `{}`", fields[0])));
+    }
+
+    // <port>
+    let parts: Vec<&str> = fields[1].split("/").collect();
+    let port_value = parts[0].parse::<u16>()?;
+    let port_range = if parts.len() > 1 {
+        Some(parts[1].parse::<i32>()?)
+    } else {
+        None
+    };
+
+    // <proto>
+    // Set according to currently registered with IANA
+    // https://tools.ietf.org/html/rfc4566#section-5.14
+    let mut protos = vec![];
+    for proto in fields[2].split("/").collect::<Vec<&str>>() {
+        let i = index_of(
+            proto,
+            &vec!["UDP", "RTP", "AVP", "SAVP", "SAVPF", "TLS", "DTLS", "SCTP"],
+        );
+        if i == -1 {
+            return Err(Error::new(format!("sdp: invalid value `{}`", fields[2])));
+        }
+        protos.push(proto.to_owned());
+    }
+
+    // <fmt>...
+    let mut formats = vec![];
+    for i in 3..fields.len() {
+        formats.push(fields[i].to_owned());
+    }
+
+    lexer.desc.media_descriptions.push(MediaDescription {
+        media_name: MediaName {
+            media: fields[0].to_owned(),
+            port: RangedPort {
+                value: port_value,
+                range: port_range,
+            },
+            protos,
+            formats,
+        },
+        media_title: None,
+        connection_information: None,
+        bandwidth: vec![],
+        encryption_key: None,
+        attributes: vec![],
+    });
+
+    Ok(Some(StateFn { f: s12 }))
+}
+
+fn unmarshal_media_title<'a, R: io::BufRead>(
+    lexer: &mut Lexer<'a, R>,
+) -> Result<Option<StateFn<'a, R>>, Error> {
+    let (value, _) = read_value(lexer.reader)?;
+
+    if let Some(latest_media_desc) = lexer.desc.media_descriptions.last_mut() {
+        latest_media_desc.media_title = Some(value);
+        Ok(Some(StateFn { f: s16 }))
+    } else {
+        Err(Error::new(format!("sdp: empty media_descriptions")))
+    }
+}
+
+fn unmarshal_media_connection_information<'a, R: io::BufRead>(
+    lexer: &mut Lexer<'a, R>,
+) -> Result<Option<StateFn<'a, R>>, Error> {
+    let (value, _) = read_value(lexer.reader)?;
+
+    if let Some(latest_media_desc) = lexer.desc.media_descriptions.last_mut() {
+        latest_media_desc.connection_information = unmarshal_connection_information(&value)?;
+        Ok(Some(StateFn { f: s15 }))
+    } else {
+        Err(Error::new(format!("sdp: empty media_descriptions")))
+    }
+}
+
+fn unmarshal_media_bandwidth<'a, R: io::BufRead>(
+    lexer: &mut Lexer<'a, R>,
+) -> Result<Option<StateFn<'a, R>>, Error> {
+    let (value, _) = read_value(lexer.reader)?;
+
+    if let Some(latest_media_desc) = lexer.desc.media_descriptions.last_mut() {
+        let bandwidth = unmarshal_bandwidth(&value)?;
+        latest_media_desc.bandwidth.push(bandwidth);
+        Ok(Some(StateFn { f: s15 }))
+    } else {
+        Err(Error::new(format!("sdp: empty media_descriptions")))
+    }
+}
+
+fn unmarshal_media_encryption_key<'a, R: io::BufRead>(
+    lexer: &mut Lexer<'a, R>,
+) -> Result<Option<StateFn<'a, R>>, Error> {
+    let (value, _) = read_value(lexer.reader)?;
+
+    if let Some(latest_media_desc) = lexer.desc.media_descriptions.last_mut() {
+        latest_media_desc.encryption_key = Some(value);
+        Ok(Some(StateFn { f: s14 }))
+    } else {
+        Err(Error::new(format!("sdp: empty media_descriptions")))
+    }
+}
+
+fn unmarshal_media_attribute<'a, R: io::BufRead>(
+    lexer: &mut Lexer<'a, R>,
+) -> Result<Option<StateFn<'a, R>>, Error> {
+    let (value, _) = read_value(lexer.reader)?;
+
+    let fields: Vec<&str> = value.splitn(2, ':').collect();
+    let attribute = if fields.len() == 2 {
+        Attribute {
+            key: fields[0].to_owned(),
+            value: Some(fields[1].to_owned()),
+        }
+    } else {
+        Attribute {
+            key: fields[0].to_owned(),
+            value: None,
+        }
+    };
+
+    if let Some(latest_media_desc) = lexer.desc.media_descriptions.last_mut() {
+        latest_media_desc.attributes.push(attribute);
+        Ok(Some(StateFn { f: s14 }))
+    } else {
+        Err(Error::new(format!("sdp: empty media_descriptions")))
+    }
+}
+
+fn parse_time_units(value: &str) -> Result<u64, Error> {
+    // Some time offsets in the protocol can be provided with a shorthand
+    // notation. This code ensures to convert it to NTP timestamp format.
+    //      d - days (86400 seconds)
+    //      h - hours (3600 seconds)
+    //      m - minutes (60 seconds)
+    //      s - seconds (allowed for completeness)
+    let val = value.as_bytes();
+    let len = val.len();
+    let num = match val[len - 1] {
+        b'd' => value.trim_end_matches("d").parse::<u64>()? * 86400,
+        b'h' => value.trim_end_matches("h").parse::<u64>()? * 3600,
+        b'm' => value.trim_end_matches("m").parse::<u64>()? * 60,
+        _ => value.trim_end_matches("m").parse::<u64>()?,
+    };
+
+    Ok(num)
 }

@@ -38,10 +38,10 @@ pub struct MediaDescription {
 
 impl MediaDescription {
     // Attribute returns the value of an attribute and if it exists
-    pub fn attribute(&self, key: &str) -> Option<&str> {
+    pub fn attribute(&self, key: &str) -> Option<&String> {
         for a in &self.attributes {
             if &a.key == key {
-                return Some(a.value.as_str());
+                return a.value.as_ref();
             }
         }
         return None;
@@ -76,8 +76,8 @@ impl MediaDescription {
 // to write it as: <port>/<number of ports> where number of ports is a an
 // offsetting range.
 pub struct RangedPort {
-    value: i32,
-    range: Option<i32>,
+    pub value: u16,
+    pub range: Option<i32>,
 }
 
 impl fmt::Display for RangedPort {
@@ -92,10 +92,10 @@ impl fmt::Display for RangedPort {
 
 // MediaName describes the "m=" field storage structure.
 pub struct MediaName {
-    media: String,
-    port: RangedPort,
-    protos: Vec<String>,
-    formats: Vec<String>,
+    pub media: String,
+    pub port: RangedPort,
+    pub protos: Vec<String>,
+    pub formats: Vec<String>,
 }
 
 impl fmt::Display for MediaName {

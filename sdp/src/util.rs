@@ -16,21 +16,29 @@ pub struct StateFn<'a, R: io::BufRead> {
     pub f: fn(&mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error>,
 }
 
-pub fn read_type<R: io::BufRead>(reader: &mut R) -> Result<String, Error> {
+pub fn read_type<R: io::BufRead>(reader: &mut R) -> Result<(String, usize), Error> {
     let mut buf = vec![];
-    reader.read_until(b'=', &mut buf)?;
+    let num_bytes = reader.read_until(b'=', &mut buf)?;
+    if num_bytes == 0 {
+        return Ok(("".to_owned(), num_bytes));
+    }
+
     if buf.len() != 2 {
         return Err(Error::new(format!("SyntaxError: {:?}", buf)));
     }
     let key = String::from_utf8(buf)?;
-    Ok(key)
+    Ok((key, num_bytes))
 }
 
-pub fn read_value<R: io::BufRead>(reader: &mut R) -> Result<String, Error> {
+pub fn read_value<R: io::BufRead>(reader: &mut R) -> Result<(String, usize), Error> {
     let mut line = vec![];
-    reader.read_until(b'\n', &mut line)?;
+    let num_bytes = reader.read_until(b'\n', &mut line)?;
+    if num_bytes == 0 {
+        return Ok(("".to_owned(), num_bytes));
+    }
+
     let value = String::from_utf8(line)?;
-    Ok(value.trim().to_string())
+    Ok((value.trim().to_string(), num_bytes))
 }
 
 pub fn index_of(element: &str, data: &[&str]) -> i32 {
