@@ -4,6 +4,7 @@ use std::io;
 use url::Url;
 use utils::Error;
 
+use super::common_description::*;
 use super::direction::*;
 use super::util::*;
 
@@ -39,13 +40,15 @@ impl fmt::Display for ExtMap {
     }
 }
 
-//Clone converts this object to an Attribute
-//TODO:
-//func (e *ExtMap) Clone() Attribute {
-//    return Attribute{Key: "extmap", Value: e.string()}
-//}
-
 impl ExtMap {
+    //Clone converts this object to an Attribute
+    pub fn convert(&self) -> Attribute {
+        return Attribute {
+            key: "extmap".to_string(),
+            value: Some(self.to_string()),
+        };
+    }
+
     //Unmarshal creates an Extmap from a string
     pub fn unmarshal<R: io::BufRead>(reader: &mut R) -> Result<Self, Error> {
         let mut line = String::new();
