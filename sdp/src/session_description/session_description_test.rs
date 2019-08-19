@@ -179,3 +179,226 @@ fn test_marshal() -> Result<(), Error> {
 
     Ok(())
 }
+
+const BaseSDP: &'static str = "v=0\r\n\
+                               o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
+                               s=SDP Seminar\r\n";
+
+const SessionInformationSDP: &'static str = "v=0\r\n\
+                                             o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
+                                             s=SDP Seminar\r\n\
+                                             i=A Seminar on the session description protocol\r\n\
+                                             t=3034423619 3042462419\r\n";
+
+const URISDP: &'static str = "v=0\r\n\
+                              o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
+                              s=SDP Seminar\r\n\
+                              u=http://www.example.com/seminars/sdp.pdf\r\n\
+                              t=3034423619 3042462419\r\n";
+
+const EmailAddressSDP: &'static str = "v=0\r\n\
+                                       o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
+                                       s=SDP Seminar\r\n\
+                                       e=j.doe@example.com (Jane Doe)\r\n\
+                                       t=3034423619 3042462419\r\n";
+
+const PhoneNumberSDP: &'static str = "v=0\r\n\
+                                      o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
+                                      s=SDP Seminar\r\n\
+                                      p=+1 617 555-6011\r\n\
+                                      t=3034423619 3042462419\r\n";
+
+const SessionConnectionInformationSDP: &'static str =
+    "v=0\r\n\
+     o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
+     s=SDP Seminar\r\n\
+     c=IN IP4 224.2.17.12/127\r\n\
+     t=3034423619 3042462419\r\n";
+
+const SessionBandwidthSDP: &'static str = "v=0\r\n\
+                                           o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
+                                           s=SDP Seminar\r\n\
+                                           b=X-YZ:128\r\n\
+                                           b=AS:12345\r\n\
+                                           t=3034423619 3042462419\r\n";
+
+const TimingSDP: &'static str = "v=0\r\n\
+                                 o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
+                                 s=SDP Seminar\r\n\
+                                 t=2873397496 2873404696\r\n";
+
+// Short hand time notation is converted into NTP timestamp format in
+// seconds. Because of that unittest comparisons will fail as the same time
+// will be expressed in different units.
+const RepeatTimesSDP: &'static str = "v=0\r\n\
+                                      o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
+                                      s=SDP Seminar\r\n\
+                                      t=2873397496 2873404696\r\n\
+                                      r=604800 3600 0 90000\r\n\
+                                      r=3d 2h 0 21h\r\n";
+
+const RepeatTimesSDPExpected: &'static str = "v=0\r\n\
+                                              o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
+                                              s=SDP Seminar\r\n\
+                                              t=2873397496 2873404696\r\n\
+                                              r=604800 3600 0 90000\r\n\
+                                              r=259200 7200 0 75600\r\n";
+
+// The expected value looks a bit different for the same reason as mentioned
+// above regarding RepeatTimes.
+const TimeZonesSDP: &'static str = "v=0\r\n\
+                                    o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
+                                    s=SDP Seminar\r\n\
+                                    t=2873397496 2873404696\r\n\
+                                    r=2882844526 -1h 2898848070 0\r\n";
+
+const TimeZonesSDPExpected: &'static str = "v=0\r\n\
+                                            o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
+                                            s=SDP Seminar\r\n\
+                                            t=2873397496 2873404696\r\n\
+                                            r=2882844526 -3600 2898848070 0\r\n";
+
+const SessionEncryptionKeySDP: &'static str = "v=0\r\n\
+                                               o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
+                                               s=SDP Seminar\r\n\
+                                               t=2873397496 2873404696\r\n\
+                                               k=prompt\r\n";
+
+const SessionAttributesSDP: &'static str = "v=0\r\n\
+                                            o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
+                                            s=SDP Seminar\r\n\
+                                            t=2873397496 2873404696\r\n\
+                                            a=rtpmap:96 opus/48000\r\n";
+
+const MediaNameSDP: &'static str = "v=0\r\n\
+                                    o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
+                                    s=SDP Seminar\r\n\
+                                    t=2873397496 2873404696\r\n\
+                                    m=video 51372 RTP/AVP 99\r\n\
+                                    m=audio 54400 RTP/SAVPF 0 96\r\n";
+
+const MediaTitleSDP: &'static str = "v=0\r\n\
+                                     o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
+                                     s=SDP Seminar\r\n\
+                                     t=2873397496 2873404696\r\n\
+                                     m=video 51372 RTP/AVP 99\r\n\
+                                     m=audio 54400 RTP/SAVPF 0 96\r\n\
+                                     i=Vivamus a posuere nisl\r\n";
+
+const MediaConnectionInformationSDP: &'static str =
+    "v=0\r\n\
+     o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
+     s=SDP Seminar\r\n\
+     t=2873397496 2873404696\r\n\
+     m=video 51372 RTP/AVP 99\r\n\
+     m=audio 54400 RTP/SAVPF 0 96\r\n\
+     c=IN IP4 203.0.113.1\r\n";
+
+const MediaBandwidthSDP: &'static str = "v=0\r\n\
+                                         o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
+                                         s=SDP Seminar\r\n\
+                                         t=2873397496 2873404696\r\n\
+                                         m=video 51372 RTP/AVP 99\r\n\
+                                         m=audio 54400 RTP/SAVPF 0 96\r\n\
+                                         b=X-YZ:128\r\n\
+                                         b=AS:12345\r\n";
+
+const MediaEncryptionKeySDP: &'static str = "v=0\r\n\
+                                             o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
+                                             s=SDP Seminar\r\n\
+                                             t=2873397496 2873404696\r\n\
+                                             m=video 51372 RTP/AVP 99\r\n\
+                                             m=audio 54400 RTP/SAVPF 0 96\r\n\
+                                             k=prompt\r\n";
+
+const MediaAttributesSDP: &'static str =
+    "v=0\r\n\
+     o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
+     s=SDP Seminar\r\n\
+     t=2873397496 2873404696\r\n\
+     m=video 51372 RTP/AVP 99\r\n\
+     m=audio 54400 RTP/SAVPF 0 96\r\n\
+     a=rtpmap:99 h263-1998/90000\r\n\
+     a=candidate:0 1 UDP 2113667327 203.0.113.1 54400 typ host\r\n";
+
+const CanonicalUnmarshalSDP: &'static str =
+    "v=0\r\n\
+     o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
+     s=SDP Seminar\r\n\
+     i=A Seminar on the session description protocol\r\n\
+     u=http://www.example.com/seminars/sdp.pdf\r\n\
+     e=j.doe@example.com (Jane Doe)\r\n\
+     p=+1 617 555-6011\r\n\
+     c=IN IP4 224.2.17.12/127\r\n\
+     b=X-YZ:128\r\n\
+     b=AS:12345\r\n\
+     t=2873397496 2873404696\r\n\
+     t=3034423619 3042462419\r\n\
+     r=604800 3600 0 90000\r\n\
+     z=2882844526 -3600 2898848070 0\r\n\
+     k=prompt\r\n\
+     a=candidate:0 1 UDP 2113667327 203.0.113.1 54400 typ host\r\n\
+     a=recvonly\r\n\
+     m=audio 49170 RTP/AVP 0\r\n\
+     i=Vivamus a posuere nisl\r\n\
+     c=IN IP4 203.0.113.1\r\n\
+     b=X-YZ:128\r\n\
+     k=prompt\r\n\
+     a=sendrecv\r\n\
+     m=video 51372 RTP/AVP 99\r\n\
+     a=rtpmap:99 h263-1998/90000\r\n";
+
+#[test]
+fn test_round_trip() -> Result<(), Error> {
+    let tests = vec![
+        ("SessionInformation", SessionInformationSDP),
+        ("URI", URISDP),
+        ("EmailAddress", EmailAddressSDP),
+        ("PhoneNumber", PhoneNumberSDP),
+        (
+            "SessionConnectionInformation",
+            SessionConnectionInformationSDP,
+        ),
+        ("SessionBandwidth", SessionBandwidthSDP),
+        ("SessionEncryptionKey", SessionEncryptionKeySDP),
+        ("SessionAttributes", SessionAttributesSDP),
+        ("MediaName", MediaNameSDP),
+        ("MediaTitle", MediaTitleSDP),
+        ("MediaConnectionInformation", MediaConnectionInformationSDP),
+        ("MediaBandwidth", MediaBandwidthSDP),
+        ("MediaEncryptionKey", MediaEncryptionKeySDP),
+        ("MediaAttributes", MediaAttributesSDP),
+        ("CanonicalUnmarshal", CanonicalUnmarshalSDP),
+    ];
+
+    for (name, expected) in tests {
+        let mut reader = BufReader::new(expected.as_bytes());
+        let sdp = SessionDescription::unmarshal(&mut reader);
+        if let Ok(sdp) = sdp {
+            let actual = sdp.marshal();
+            assert_eq!(actual.as_str(), expected);
+        } else {
+            assert!(false, "{}, {}", name, expected);
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_unmarshal_repeat_times() -> Result<(), Error> {
+    let mut reader = BufReader::new(RepeatTimesSDP.as_bytes());
+    let sdp = SessionDescription::unmarshal(&mut reader)?;
+    let actual = sdp.marshal();
+    assert_eq!(actual.as_str(), RepeatTimesSDPExpected);
+    Ok(())
+}
+
+#[test]
+fn test_unmarshal_time_zones() -> Result<(), Error> {
+    let mut reader = BufReader::new(TimeZonesSDP.as_bytes());
+    let sdp = SessionDescription::unmarshal(&mut reader)?;
+    let actual = sdp.marshal();
+    assert_eq!(actual.as_str(), TimeZonesSDPExpected);
+    Ok(())
+}
