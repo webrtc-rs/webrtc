@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 utils = { path = "../utils" }
 url = "2.1.0"
+rand = "0.7.0"

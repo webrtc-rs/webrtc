@@ -1,11 +1,66 @@
-use std::io;
+use std::{fmt, io};
 
 use utils::Error;
+
+use rand::Rng;
 
 use super::session_description::SessionDescription;
 
 pub const END_LINE: &'static str = "\r\n";
 pub const ATTRIBUTE_KEY: &'static str = "a=";
+
+// ConnectionRole indicates which of the end points should initiate the connection establishment
+#[derive(Debug)]
+pub enum ConnectionRole {
+    // ConnectionRoleActive indicates the endpoint will initiate an outgoing connection.
+    ConnectionRoleActive = 1,
+
+    // ConnectionRolePassive indicates the endpoint will accept an incoming connection.
+    ConnectionRolePassive = 2,
+
+    // ConnectionRoleActpass indicates the endpoint is willing to accept an incoming connection or to initiate an outgoing connection.
+    ConnectionRoleActpass = 3,
+
+    // ConnectionRoleHoldconn indicates the endpoint does not want the connection to be established for the time being.
+    ConnectionRoleHoldconn = 4,
+}
+
+impl fmt::Display for ConnectionRole {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match self {
+            ConnectionRole::ConnectionRoleActive => "active",
+            ConnectionRole::ConnectionRolePassive => "passive",
+            ConnectionRole::ConnectionRoleActpass => "actpass",
+            ConnectionRole::ConnectionRoleHoldconn => "holdconn",
+            _ => "Unknown",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+fn new_session_id() -> u64 {
+    let mut rng = rand::thread_rng();
+    rng.gen::<u64>()
+}
+
+// Codec represents a codec
+struct Codec {
+    payload_type: u8,
+    name: String,
+    clock_rate: u32,
+    encoding_parameters: String,
+    fmtp: String,
+}
+
+impl fmt::Display for Codec {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{} {}/{}/{} ({})",
+            self.payload_type, self.name, self.clock_rate, self.encoding_parameters, self.fmtp,
+        )
+    }
+}
 
 pub struct Lexer<'a, R: io::BufRead> {
     pub desc: SessionDescription,
