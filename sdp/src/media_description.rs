@@ -126,13 +126,13 @@ impl MediaDescription {
         mut self,
         ssrc: u32,
         cname: String,
-        streamLabel: String,
+        stream_label: String,
         label: String,
     ) -> Self {
         self.
             with_value_attribute("ssrc".to_string(), format!("{} cname:{}", ssrc, cname)). // Deprecated but not phased out?
-            with_value_attribute("ssrc".to_string(), format!("{} msid:{} {}", ssrc, streamLabel, label)).
-            with_value_attribute("ssrc".to_string(), format!("{} mslabel:{}", ssrc, streamLabel)). // Deprecated but not phased out?
+            with_value_attribute("ssrc".to_string(), format!("{} msid:{} {}", ssrc, stream_label, label)).
+            with_value_attribute("ssrc".to_string(), format!("{} mslabel:{}", ssrc, stream_label)). // Deprecated but not phased out?
             with_value_attribute("ssrc".to_string(), format!("{} label:{}", ssrc, label)) // Deprecated but not phased out?
     }
 

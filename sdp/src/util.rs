@@ -39,7 +39,7 @@ impl fmt::Display for ConnectionRole {
     }
 }
 
-fn new_session_id() -> u64 {
+pub(crate) fn new_session_id() -> u64 {
     let mut rng = rand::thread_rng();
     rng.gen::<u64>()
 }

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::{fmt, io};
 
 use url::Url;
@@ -10,6 +11,24 @@ use super::util::*;
 
 #[cfg(test)]
 mod session_description_test;
+
+// Constants for SDP attributes used in JSEP
+const ATTR_KEY_IDENTITY: &'static str = "identity";
+const ATTR_KEY_GROUP: &'static str = "group";
+const ATTR_KEY_SSRC: &'static str = "ssrc";
+const ATTR_KEY_SSRCGROUP: &'static str = "ssrc-group";
+const ATTR_KEY_MSID_SEMANTIC: &'static str = "msid-semantic";
+const ATTR_KEY_CONNECTION_SETUP: &'static str = "setup";
+const ATTR_KEY_MID: &'static str = "mid";
+const ATTR_KEY_ICELITE: &'static str = "ice-lite";
+const ATTR_KEY_RTCPMUX: &'static str = "rtcp-mux";
+const ATTR_KEY_RTCPRSIZE: &'static str = "rtcp-rsize";
+
+// Constants for semantic tokens used in JSEP
+const SEMANTIC_TOKEN_LIP_SYNCHRONIZATION: &'static str = "LS";
+const SEMANTIC_TOKEN_FLOW_IDENTIFICATION: &'static str = "FID";
+const SEMANTIC_TOKEN_FORWARD_ERROR_CORRECTION: &'static str = "FEC";
+const SEMANTIC_TOKEN_WEB_RTCMEDIA_STREAMS: &'static str = "WMS";
 
 // Version describes the value provided by the "v=" field which gives
 // the version of the Session Description Protocol.
@@ -190,6 +209,75 @@ pub struct SessionDescription {
 
 // Reset cleans the SessionDescription, and sets all fields back to their default values
 impl SessionDescription {
+    // API to match draft-ietf-rtcweb-jsep
+    // Move to webrtc or its own package?
+
+    // NewJSEPSessionDescription creates a new SessionDescription with
+    // some settings that are required by the JSEP spec.
+    pub fn new(identity: bool) -> Self {
+        let mut d = SessionDescription {
+            version: 0,
+            origin: Origin {
+                username: "-".to_string(),
+                session_id: new_session_id(),
+                session_version: SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .expect("Time went backwards")
+                    .subsec_nanos() as u64,
+                network_type: "IN".to_string(),
+                address_type: "IP4".to_string(),
+                unicast_address: "0.0.0.0".to_string(),
+            },
+            session_name: "-".to_string(),
+            session_information: None,
+            uri: None,
+            email_address: None,
+            phone_number: None,
+            connection_information: None,
+            bandwidth: vec![],
+            time_descriptions: vec![TimeDescription {
+                timing: Timing {
+                    start_time: 0,
+                    stop_time: 0,
+                },
+                repeat_times: vec![],
+            }],
+            time_zones: vec![],
+            encryption_key: None,
+            attributes: vec![], // TODO: implement trickle ICE
+            media_descriptions: vec![],
+        };
+
+        if identity {
+            d.with_property_attribute(ATTR_KEY_IDENTITY.to_string())
+        } else {
+            d
+        }
+    }
+
+    // WithPropertyAttribute adds a property attribute 'a=key' to the session description
+    pub fn with_property_attribute(mut self, key: String) -> Self {
+        self.attributes.push(Attribute::new(key, None));
+        self
+    }
+
+    // WithValueAttribute adds a value attribute 'a=key:value' to the session description
+    pub fn with_value_attribute(mut self, key: String, value: String) -> Self {
+        self.attributes.push(Attribute::new(key, Some(value)));
+        self
+    }
+
+    // WithFingerprint adds a fingerprint to the session description
+    pub fn with_fingerprint(mut self, algorithm: String, value: String) -> Self {
+        self.with_value_attribute("fingerprint".to_string(), algorithm + " " + value.as_str())
+    }
+
+    // WithMedia adds a media description to the session description
+    pub fn with_media(mut self, md: MediaDescription) -> Self {
+        self.media_descriptions.push(md);
+        self
+    }
+
     fn build_codec_map(&self) -> HashMap<u8, Codec> {
         let mut codecs: HashMap<u8, Codec> = HashMap::new();
 
