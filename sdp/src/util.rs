@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::{fmt, io};
 
 use utils::Error;
@@ -32,7 +33,7 @@ impl fmt::Display for ConnectionRole {
             ConnectionRole::ConnectionRolePassive => "passive",
             ConnectionRole::ConnectionRoleActpass => "actpass",
             ConnectionRole::ConnectionRoleHoldconn => "holdconn",
-            _ => "Unknown",
+            //_ => "Unknown",
         };
         write!(f, "{}", s)
     }
@@ -44,7 +45,8 @@ fn new_session_id() -> u64 {
 }
 
 // Codec represents a codec
-struct Codec {
+#[derive(Debug, Clone)]
+pub struct Codec {
     payload_type: u8,
     name: String,
     clock_rate: u32,
@@ -60,6 +62,131 @@ impl fmt::Display for Codec {
             self.payload_type, self.name, self.clock_rate, self.encoding_parameters, self.fmtp,
         )
     }
+}
+
+pub(crate) fn parse_rtpmap(rtpmap: &str) -> Result<Codec, Error> {
+    let parsing_failed = Error::new("could not extract codec from rtpmap".to_string());
+
+    // a=rtpmap:<payload type> <encoding name>/<clock rate>[/<encoding parameters>]
+    let split: Vec<&str> = rtpmap.split_whitespace().collect();
+    if split.len() != 2 {
+        return Err(parsing_failed);
+    }
+
+    let pt_split: Vec<&str> = split[0].split(":").collect();
+    if pt_split.len() != 2 {
+        return Err(parsing_failed);
+    }
+    let payload_type = pt_split[1].parse::<u8>()?;
+
+    let split: Vec<&str> = split[1].split("/").collect();
+    let name = split[0].to_string();
+    let parts = split.len();
+    let clock_rate = if parts > 1 {
+        split[1].parse::<u32>()?
+    } else {
+        0
+    };
+    let encoding_parameters = if parts > 2 {
+        split[2].to_string()
+    } else {
+        "".to_string()
+    };
+
+    Ok(Codec {
+        payload_type,
+        name,
+        clock_rate,
+        encoding_parameters,
+        fmtp: "".to_string(),
+    })
+}
+
+pub(crate) fn parse_fmtp(fmtp: &str) -> Result<Codec, Error> {
+    let parsing_failed = Error::new("could not extract codec from fmtp".to_string());
+
+    // a=fmtp:<format> <format specific parameters>
+    let split: Vec<&str> = fmtp.split_whitespace().collect();
+    if split.len() != 2 {
+        return Err(parsing_failed);
+    }
+
+    let fmtp = split[1].to_string();
+
+    let split: Vec<&str> = split[0].split(":").collect();
+    if split.len() != 2 {
+        return Err(parsing_failed);
+    }
+    let payload_type = split[1].parse::<u8>()?;
+
+    Ok(Codec {
+        payload_type,
+        name: "".to_string(),
+        clock_rate: 0,
+        encoding_parameters: "".to_string(),
+        fmtp,
+    })
+}
+
+pub(crate) fn merge_codecs(codec: Codec, codecs: &mut HashMap<u8, Codec>) {
+    if let Some(saved_codec) = codecs.get_mut(&codec.payload_type) {
+        if saved_codec.payload_type == 0 {
+            saved_codec.payload_type = codec.payload_type
+        }
+        if &saved_codec.name == "" {
+            saved_codec.name = codec.name
+        }
+        if saved_codec.clock_rate == 0 {
+            saved_codec.clock_rate = codec.clock_rate
+        }
+        if &saved_codec.encoding_parameters == "" {
+            saved_codec.encoding_parameters = codec.encoding_parameters
+        }
+        if &saved_codec.fmtp == "" {
+            saved_codec.fmtp = codec.fmtp
+        }
+    } else {
+        codecs.insert(codec.payload_type, codec);
+    }
+}
+
+fn equivalent_fmtp(want: &str, got: &str) -> bool {
+    let mut want_split: Vec<&str> = want.split(";").collect();
+    let mut got_split: Vec<&str> = got.split(";").collect();
+
+    if want_split.len() != got_split.len() {
+        return false;
+    }
+
+    want_split.sort();
+    got_split.sort();
+
+    for (i, &want_part) in want_split.iter().enumerate() {
+        let want_part = want_part.trim();
+        let got_part = got_split[i].trim();
+        if got_part != want_part {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+pub(crate) fn codecs_match(wanted: &Codec, got: &Codec) -> bool {
+    if &wanted.name != "" && wanted.name != got.name {
+        return false;
+    }
+    if wanted.clock_rate != 0 && wanted.clock_rate != got.clock_rate {
+        return false;
+    }
+    if &wanted.encoding_parameters != "" && wanted.encoding_parameters != got.encoding_parameters {
+        return false;
+    }
+    if &wanted.fmtp != "" && !equivalent_fmtp(&wanted.fmtp, &got.fmtp) {
+        return false;
+    }
+
+    return true;
 }
 
 pub struct Lexer<'a, R: io::BufRead> {

@@ -1,9 +1,6 @@
-use std::{fmt, io};
-
-use utils::Error;
+use std::fmt;
 
 use super::common_description::*;
-use super::util::*;
 
 // MediaDescription represents a media type.
 // https://tools.ietf.org/html/rfc4566#section-5.14
