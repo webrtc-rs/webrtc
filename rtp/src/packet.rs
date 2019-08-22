@@ -1,29 +1,32 @@
 use std::fmt;
-use std::io::Cursor;
+use std::io::{Read, Write};
 
 use utils::Error;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+
+#[cfg(test)]
+mod packet_test;
 
 // Header represents an RTP packet header
 // NOTE: PayloadOffset is populated by Marshal/Unmarshal and should not be modified
 // NOTE: Raw is populated by Marshal/Unmarshal and should not be modified
 
 // Packet represents an RTP Packet
-#[derive(Debug)]
-struct Packet {
-    version: u8,
-    padding: bool,
-    extension: bool,
-    marker: bool,
-    payload_type: u8,
-    sequence_number: u16,
-    timestamp: u32,
-    ssrc: u32,
-    csrc: Vec<u32>,
-    extension_profile: u16,
-    extension_payload: Vec<u8>,
-    payload: Vec<u8>,
+#[derive(Debug, Eq, PartialEq)]
+pub struct Packet {
+    pub version: u8,
+    pub padding: bool,
+    pub extension: bool,
+    pub marker: bool,
+    pub payload_type: u8,
+    pub sequence_number: u16,
+    pub timestamp: u32,
+    pub ssrc: u32,
+    pub csrc: Vec<u32>,
+    pub extension_profile: u16,
+    pub extension_payload: Vec<u8>,
+    pub payload: Vec<u8>,
 }
 
 const HEADER_LENGTH: usize = 4;
@@ -64,15 +67,7 @@ impl fmt::Display for Packet {
 
 impl Packet {
     // Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
-    pub fn unmarshal(raw_packet: &[u8]) -> Result<Self, Error> {
-        if raw_packet.len() < HEADER_LENGTH {
-            return Err(Error::new(format!(
-                "RTP header size insufficient; {} < {}",
-                raw_packet.len(),
-                HEADER_LENGTH
-            )));
-        }
-
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
         /*
          *  0                   1                   2                   3
          *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -88,64 +83,42 @@ impl Packet {
          * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
 
-        let version = raw_packet[0] >> VERSION_SHIFT & VERSION_MASK;
-        let padding = (raw_packet[0] >> PADDING_SHIFT & PADDING_MASK) > 0;
-        let extension = (raw_packet[0] >> EXTENSION_SHIFT & EXTENSION_MASK) > 0;
-        let cc = (raw_packet[0] & CC_MASK) as usize;
+        let b0 = reader.read_u8()?;
+        let version = b0 >> VERSION_SHIFT & VERSION_MASK;
+        let padding = (b0 >> PADDING_SHIFT & PADDING_MASK) > 0;
+        let extension = (b0 >> EXTENSION_SHIFT & EXTENSION_MASK) > 0;
+        let cc = (b0 & CC_MASK) as usize;
 
-        let marker = (raw_packet[1] >> MARKER_SHIFT & MARKER_MASK) > 0;
-        let payload_type = raw_packet[1] & PT_MASK;
+        let b1 = reader.read_u8()?;
+        let marker = (b1 >> MARKER_SHIFT & MARKER_MASK) > 0;
+        let payload_type = b1 & PT_MASK;
 
-        let mut rdr = Cursor::new(&raw_packet[SEQ_NUM_OFFSET..]);
-        let sequence_number = rdr.read_u16::<BigEndian>()?;
-        let timestamp = rdr.read_u32::<BigEndian>()?;
-        let ssrc = rdr.read_u32::<BigEndian>()?;
+        let sequence_number = reader.read_u16::<BigEndian>()?;
+        let timestamp = reader.read_u32::<BigEndian>()?;
+        let ssrc = reader.read_u32::<BigEndian>()?;
 
         let mut curr_offset = CSRC_OFFSET + (cc * CSRC_LENGTH);
-        if raw_packet.len() < curr_offset {
-            return Err(Error::new(format!(
-                "RTP header size insufficient; {} < {}",
-                raw_packet.len(),
-                curr_offset
-            )));
-        }
-
         let mut csrc = vec![];
         for i in 0..cc {
-            let offset = CSRC_OFFSET + (i * CSRC_LENGTH);
-            csrc.push(rdr.read_u32::<BigEndian>()?);
+            csrc.push(reader.read_u32::<BigEndian>()?);
         }
 
         let (extension_profile, extension_payload) = if extension {
-            if raw_packet.len() < curr_offset + 4 {
-                return Err(Error::new(format!(
-                    "RTP header size insufficient for extension; {} < {}",
-                    raw_packet.len(),
-                    curr_offset + 4
-                )));
-            }
-
-            let extension_profile = rdr.read_u16::<BigEndian>()?;
+            let extension_profile = reader.read_u16::<BigEndian>()?;
             curr_offset += 2;
-            let extension_length = rdr.read_u16::<BigEndian>()? as usize * 4;
+            let extension_length = reader.read_u16::<BigEndian>()? as usize * 4;
             curr_offset += 2;
 
-            if raw_packet.len() < curr_offset + extension_length {
-                return Err(Error::new(format!(
-                    "RTP header size insufficient for extension length; {} < {}",
-                    raw_packet.len(),
-                    curr_offset + extension_length
-                )));
-            }
-
-            let extension_payload = &raw_packet[curr_offset..curr_offset + extension_length];
+            let mut extension_payload = vec![0; extension_length];
+            reader.read_exact(&mut extension_payload)?;
             curr_offset += extension_payload.len();
-            (extension_profile, extension_payload.to_vec())
+            (extension_profile, extension_payload)
         } else {
             (0, vec![])
         };
 
-        let payload = (&raw_packet[curr_offset..]).to_vec();
+        let mut payload = vec![];
+        reader.read_to_end(&mut payload)?;
 
         Ok(Packet {
             version,
@@ -173,7 +146,7 @@ impl Packet {
     }
 
     // Marshal serializes the header and writes to the buffer.
-    pub fn marshal(&self) -> Result<Vec<u8>, Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         /*
          *  0                   1                   2                   3
          *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -188,9 +161,6 @@ impl Packet {
          * |                             ....                              |
          * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
-        let marshal_size = self.marshal_size();
-        let mut buf = Vec::with_capacity(marshal_size);
-
         // The first byte contains the version, padding bit, extension bit, and csrc size
         let mut b0 = (self.version << VERSION_SHIFT) | self.csrc.len() as u8;
         if self.padding {
@@ -200,23 +170,21 @@ impl Packet {
         if self.extension {
             b0 |= 1 << EXTENSION_SHIFT;
         }
-        buf.push(b0);
+        writer.write_u8(b0)?;
 
         // The second byte contains the marker bit and payload type.
         let mut b1 = self.payload_type;
         if self.marker {
             b1 |= 1 << MARKER_SHIFT;
         }
-        buf.push(b1);
+        writer.write_u8(b1)?;
 
-        buf.write_u16::<BigEndian>(self.sequence_number)?;
-        buf.write_u32::<BigEndian>(self.timestamp)?;
-        buf.write_u32::<BigEndian>(self.ssrc)?;
+        writer.write_u16::<BigEndian>(self.sequence_number)?;
+        writer.write_u32::<BigEndian>(self.timestamp)?;
+        writer.write_u32::<BigEndian>(self.ssrc)?;
 
-        let mut curr_offset = CSRC_OFFSET;
         for csrc in &self.csrc {
-            buf.write_u32::<BigEndian>(*csrc)?;
-            curr_offset += 4;
+            writer.write_u32::<BigEndian>(*csrc)?;
         }
 
         if self.extension {
@@ -227,26 +195,14 @@ impl Packet {
                 ));
             }
             let extension_payload_size = self.extension_payload.len();
-            buf.write_u16::<BigEndian>(self.extension_profile)?;
-            buf.write_u16::<BigEndian>((extension_payload_size / 4) as u16)?;
-            curr_offset += 4;
+            writer.write_u16::<BigEndian>(self.extension_profile)?;
+            writer.write_u16::<BigEndian>((extension_payload_size / 4) as u16)?;
 
-            {
-                let (left, right) = buf.split_at_mut(curr_offset);
-                {
-                    let (extension_payload, others) =
-                        right.split_at_mut(self.extension_payload.len());
-                    extension_payload.clone_from_slice(&self.extension_payload);
-                }
-            }
-            curr_offset += self.extension_payload.len();
+            writer.write_all(&self.extension_payload)?;
         }
 
-        {
-            let (header, payload) = buf.split_at_mut(curr_offset);
-            payload.clone_from_slice(&self.payload);
-        }
+        writer.write_all(&self.payload)?;
 
-        Ok(buf)
+        Ok(())
     }
 }
