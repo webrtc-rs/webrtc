@@ -1,18 +1,18 @@
 use crate::packet::*;
 use crate::sequence::*;
 
-use std::io::{Read, Write};
+use std::io::Read;
 use std::time::{Duration, SystemTime};
 
 use utils::Error;
 
 // Payloader payloads a byte array for use as rtp.Packet payloads
-trait Payloader {
+pub trait Payloader {
     fn payload<R: Read>(&self, mtu: isize, reader: &mut R) -> Result<Vec<Vec<u8>>, Error>;
 }
 
 // Packetizer packetizes a payload
-trait Packetizer {
+pub trait Packetizer {
     fn packetize<R: Read, P: Payloader, S: Sequencer>(
         &mut self,
         reader: &mut R,
@@ -21,6 +21,11 @@ trait Packetizer {
         samples: u32,
     ) -> Result<Vec<Packet>, Error>;
     fn enable_abs_send_time(&mut self, value: isize);
+}
+
+// Depacketizer depacketizes a RTP payload, removing any RTP specific data from the payload
+pub trait Depacketizer {
+    fn depacketize<R: Read>(&mut self, reader: &mut R) -> Result<(), Error>;
 }
 
 struct PacketizerImpl {

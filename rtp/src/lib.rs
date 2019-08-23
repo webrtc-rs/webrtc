@@ -1,6 +1,7 @@
 use std::io::{Read, Write};
 use utils::Error;
 
+pub mod codecs;
 pub mod packet;
 pub mod packetizer;
 pub mod sequence;
