@@ -97,7 +97,7 @@ impl Packet {
         let timestamp = reader.read_u32::<BigEndian>()?;
         let ssrc = reader.read_u32::<BigEndian>()?;
 
-        let mut curr_offset = CSRC_OFFSET + (cc * CSRC_LENGTH);
+        //let mut curr_offset = CSRC_OFFSET + (cc * CSRC_LENGTH);
         let mut csrc = vec![];
         for i in 0..cc {
             csrc.push(reader.read_u32::<BigEndian>()?);
@@ -105,13 +105,13 @@ impl Packet {
 
         let (extension_profile, extension_payload) = if extension {
             let extension_profile = reader.read_u16::<BigEndian>()?;
-            curr_offset += 2;
+            //curr_offset += 2;
             let extension_length = reader.read_u16::<BigEndian>()? as usize * 4;
-            curr_offset += 2;
+            //curr_offset += 2;
 
             let mut extension_payload = vec![0; extension_length];
             reader.read_exact(&mut extension_payload)?;
-            curr_offset += extension_payload.len();
+            //curr_offset += extension_payload.len();
             (extension_profile, extension_payload)
         } else {
             (0, vec![])

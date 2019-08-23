@@ -1,30 +1,118 @@
 use crate::packet::*;
+use crate::sequence::*;
+
 use std::io::{Read, Write};
+use std::time::{Duration, SystemTime};
+
 use utils::Error;
 
 // Payloader payloads a byte array for use as rtp.Packet payloads
 trait Payloader {
-    fn payload<R: Read>(mtu: isize, reader: &mut R); //TODO: [][]byte
+    fn payload<R: Read>(&self, mtu: isize, reader: &mut R) -> Result<Vec<Vec<u8>>, Error>;
 }
 
 // Packetizer packetizes a payload
 trait Packetizer {
-    fn packetize<R: Read>(reader: &mut R, samples: u32) -> Vec<Packet>;
-    fn enable_abs_send_time(value: isize);
+    fn packetize<R: Read, P: Payloader, S: Sequencer>(
+        &mut self,
+        reader: &mut R,
+        payloader: &mut P,
+        sequencer: &mut S,
+        samples: u32,
+    ) -> Result<Vec<Packet>, Error>;
+    fn enable_abs_send_time(&mut self, value: isize);
 }
 
-/*
-struct packetizer  {
-    mtu:              isize,
-    payload_type :     u8,
-    ssrc          :   u32,
-    payloader      :  dyn Payloader,
-    sequencer       : Sequencer,
-    timestamp       : u32,
-    clock_rate       : u32,
-    extensionNumbers struct { //put extension numbers in here. If they're 0, the extension is disabled (0 is not a legal extension number)
-        AbsSendTime int //http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
-    }
-    timegen: func() time.Time,
+struct PacketizerImpl {
+    mtu: isize,
+    payload_type: u8,
+    ssrc: u32,
+    timestamp: u32,
+    clock_rate: u32,
+    abs_send_time: isize, //http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
 }
-*/
+
+impl PacketizerImpl {
+    pub fn new(mtu: isize, payload_type: u8, ssrc: u32, clock_rate: u32) -> Self {
+        PacketizerImpl {
+            mtu,
+            payload_type,
+            ssrc,
+            timestamp: rand::random::<u32>(),
+            clock_rate,
+            abs_send_time: 0,
+        }
+    }
+}
+
+impl Packetizer for PacketizerImpl {
+    fn enable_abs_send_time(&mut self, value: isize) {
+        self.abs_send_time = value
+    }
+
+    fn packetize<R: Read, P: Payloader, S: Sequencer>(
+        &mut self,
+        reader: &mut R,
+        payloader: &mut P,
+        sequencer: &mut S,
+        samples: u32,
+    ) -> Result<Vec<Packet>, Error> {
+        let payloads = payloader.payload(self.mtu - 12, reader)?;
+        let mut packets = vec![];
+        let (mut i, l) = (0, payloads.len());
+        for payload in payloads {
+            packets.push(Packet {
+                version: 2,
+                padding: false,
+                extension: false,
+                marker: i == l - 1,
+                payload_type: self.payload_type,
+                sequence_number: sequencer.next_sequence_number(),
+                timestamp: self.timestamp, //TODO: Figure out how to do timestamps
+                ssrc: self.ssrc,
+                payload,
+                ..Default::default()
+            });
+            i += 1;
+        }
+
+        self.timestamp += samples;
+
+        if l != 0 && self.abs_send_time != 0 {
+            let d = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap();
+            let t = unix2ntp(d) >> 14;
+            //apply http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
+            packets[l - 1].extension = true;
+            packets[l - 1].extension_profile = 0xBEDE;
+            packets[l - 1].extension_payload = vec![
+                //the first byte is
+                // 0 1 2 3 4 5 6 7
+                //+-+-+-+-+-+-+-+-+
+                //|  ID   |  len  |
+                //+-+-+-+-+-+-+-+-+
+                //per RFC 5285
+                //Len is the number of bytes in the extension - 1
+                ((self.abs_send_time << 4) | 2) as u8,
+                (t & 0xFF0000 >> 16) as u8,
+                (t & 0xFF00 >> 8) as u8,
+                (t & 0xFF) as u8,
+            ];
+        }
+
+        Ok(packets)
+    }
+}
+
+fn unix2ntp(t: Duration) -> u64 {
+    let u = t.as_nanos() as u64;
+    let mut s = u / 1000000000;
+    s += 0x83AA7E80; //offset in seconds between unix epoch and ntp epoch
+    let mut f = u % 1000000000;
+    f <<= 32;
+    f /= 1000000000;
+    s <<= 32;
+
+    return s | f;
+}
