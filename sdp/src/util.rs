@@ -40,8 +40,7 @@ impl fmt::Display for ConnectionRole {
 }
 
 pub(crate) fn new_session_id() -> u64 {
-    let mut rng = rand::thread_rng();
-    rng.gen::<u64>()
+    rand::random::<u64>()
 }
 
 // Codec represents a codec
