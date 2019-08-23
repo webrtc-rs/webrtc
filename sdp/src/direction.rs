@@ -36,6 +36,11 @@ impl fmt::Display for Direction {
     }
 }
 
+impl Default for Direction {
+    fn default() -> Direction {
+        Direction::DirectionUnknown
+    }
+}
 // NewDirection defines a procedure for creating a new direction from a raw string.
 impl Direction {
     pub fn new(raw: &str) -> Self {

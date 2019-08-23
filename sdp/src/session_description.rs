@@ -36,6 +36,7 @@ pub type Version = isize;
 
 // Origin defines the structure for the "o=" field which provides the
 // originator of the session plus a session identifier and version number.
+#[derive(Debug, Default)]
 pub struct Origin {
     username: String,
     session_id: u64,
@@ -89,6 +90,7 @@ pub type PhoneNumber = String;
 
 // TimeZone defines the structured object for "z=" line which describes
 // repeated sessions scheduling.
+#[derive(Debug, Default)]
 pub struct TimeZone {
     adjustment_time: u64,
     offset: i64,
@@ -103,6 +105,7 @@ impl fmt::Display for TimeZone {
 // TimeDescription describes "t=", "r=" fields of the session description
 // which are used to specify the start and stop times for a session as well as
 // repeat intervals and durations for the scheduled session.
+#[derive(Debug, Default)]
 pub struct TimeDescription {
     // t=<start-time> <stop-time>
     // https://tools.ietf.org/html/rfc4566#section-5.9
@@ -115,6 +118,7 @@ pub struct TimeDescription {
 
 // Timing defines the "t=" field's structured representation for the start and
 // stop times.
+#[derive(Debug, Default)]
 pub struct Timing {
     start_time: u64,
     stop_time: u64,
@@ -128,6 +132,7 @@ impl fmt::Display for Timing {
 
 // RepeatTime describes the "r=" fields of the session description which
 // represents the intervals and durations for repeated scheduled sessions.
+#[derive(Debug, Default)]
 pub struct RepeatTime {
     interval: i64,
     duration: i64,
@@ -148,6 +153,7 @@ impl fmt::Display for RepeatTime {
 
 // SessionDescription is a a well-defined format for conveying sufficient
 // information to discover and participate in a multimedia session.
+#[derive(Debug, Default)]
 pub struct SessionDescription {
     // v=0
     // https://tools.ietf.org/html/rfc4566#section-5.1

@@ -6,7 +6,7 @@ use utils::Error;
 mod ice_candidate_test;
 
 // ICECandidate is used to (un)marshal ICE candidates.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ICECandidate {
     foundation: String,
     component: u16,
@@ -21,7 +21,7 @@ pub struct ICECandidate {
 }
 
 // ICECandidateAttribute represents an ICE candidate extension attribute
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct ICECandidateAttribute {
     key: String,
     value: String,

@@ -13,7 +13,7 @@ mod packet_test;
 // NOTE: Raw is populated by Marshal/Unmarshal and should not be modified
 
 // Packet represents an RTP Packet
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Default)]
 pub struct Packet {
     pub version: u8,
     pub padding: bool,

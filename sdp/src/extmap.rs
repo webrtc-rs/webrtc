@@ -12,7 +12,7 @@ use super::util::*;
 mod extmap_test;
 
 //ExtMap represents the activation of a single RTP header extension
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct ExtMap {
     value: isize,
     direction: Direction,

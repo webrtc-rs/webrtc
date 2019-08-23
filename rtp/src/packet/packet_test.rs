@@ -67,3 +67,55 @@ fn test_basic() -> Result<(), Error> {
 
     Ok(())
 }
+
+#[test]
+fn test_extension() -> Result<(), Error> {
+    let missing_extension_pkt = vec![
+        0x90, 0x60, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82,
+    ];
+    let mut reader = BufReader::new(missing_extension_pkt.as_slice());
+    let result = Packet::unmarshal(&mut reader);
+    if result.is_ok() {
+        assert!(
+            false,
+            "Unmarshal did not error on packet with missing extension data"
+        );
+    }
+
+    let invalid_extension_length_pkt = vec![
+        0x90, 0x60, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0x99, 0x99, 0x99,
+        0x99,
+    ];
+    let mut reader = BufReader::new(invalid_extension_length_pkt.as_slice());
+    let result = Packet::unmarshal(&mut reader);
+    if result.is_ok() {
+        assert!(
+            false,
+            "Unmarshal did not error on packet with invalid extension length"
+        );
+    }
+
+    let packet = Packet {
+        extension: true,
+        extension_profile: 3,
+        extension_payload: vec![0],
+        payload: vec![],
+        ..Default::default()
+    };
+
+    let mut raw: Vec<u8> = vec![];
+    {
+        let mut writer = BufWriter::<&mut Vec<u8>>::new(raw.as_mut());
+        let result = packet.marshal(&mut writer);
+        if result.is_ok() {
+            assert!(
+                false,
+                "Marshal did not error on packet with invalid extension length"
+            );
+        }
+    }
+
+    Ok(())
+}
+
+// TODO: Benchmark RTP Marshal/Unmarshal
