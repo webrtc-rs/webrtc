@@ -87,9 +87,7 @@ impl Packetizer for PacketizerImpl {
         self.timestamp += samples;
 
         if l != 0 && self.abs_send_time != 0 {
-            let d = SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap();
+            let d = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
             let t = unix2ntp(d) >> 14;
             //apply http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
             packets[l - 1].extension = true;

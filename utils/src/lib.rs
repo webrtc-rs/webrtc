@@ -1,5 +1,7 @@
 use std::string::FromUtf8Error;
+use std::time::SystemTimeError;
 use std::{fmt, io, num};
+
 use url::ParseError;
 
 #[derive(Debug)]
@@ -46,6 +48,14 @@ impl From<ParseError> for Error {
 
 impl From<FromUtf8Error> for Error {
     fn from(error: FromUtf8Error) -> Self {
+        Error {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<SystemTimeError> for Error {
+    fn from(error: SystemTimeError) -> Self {
         Error {
             message: error.to_string(),
         }
