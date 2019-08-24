@@ -1,12 +1,12 @@
 use super::*;
 
-use std::io::{BufReader, BufWriter};
+use std::io::BufReader;
 
 use utils::Error;
 
 #[test]
 fn test_opus_unmarshal() -> Result<(), Error> {
-    let mut pck = Opus { payload: vec![] };
+    let mut pck = Opus::default();
 
     // Empty packet
     let empty_bytes = vec![];
@@ -25,7 +25,7 @@ fn test_opus_unmarshal() -> Result<(), Error> {
 
 #[test]
 fn test_opus_payload() -> Result<(), Error> {
-    let mut pck = Opus { payload: vec![] };
+    let pck = Opus::default();
     let empty = vec![];
     let payload = vec![0x90, 0x90, 0x90];
 

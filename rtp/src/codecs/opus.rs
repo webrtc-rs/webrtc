@@ -7,12 +7,13 @@ use utils::Error;
 #[cfg(test)]
 mod opus_test;
 
+#[derive(Debug, Default)]
 struct Opus {
     payload: Vec<u8>,
 }
 
 impl Payloader for Opus {
-    fn payload<R: Read>(&self, mtu: isize, reader: &mut R) -> Result<Vec<Vec<u8>>, Error> {
+    fn payload<R: Read>(&self, _mtu: isize, reader: &mut R) -> Result<Vec<Vec<u8>>, Error> {
         let mut payload = vec![];
         reader.read_to_end(&mut payload)?;
         if payload.is_empty() {

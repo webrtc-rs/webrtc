@@ -99,7 +99,7 @@ impl Packet {
 
         //let mut curr_offset = CSRC_OFFSET + (cc * CSRC_LENGTH);
         let mut csrc = vec![];
-        for i in 0..cc {
+        for _i in 0..cc {
             csrc.push(reader.read_u32::<BigEndian>()?);
         }
 
