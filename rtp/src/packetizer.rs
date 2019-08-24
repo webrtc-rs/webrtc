@@ -6,6 +6,9 @@ use std::time::{Duration, SystemTime};
 
 use utils::Error;
 
+#[cfg(test)]
+mod packetizer_test;
+
 // Payloader payloads a byte array for use as rtp.Packet payloads
 pub trait Payloader {
     fn payload<R: Read>(&self, mtu: isize, reader: &mut R) -> Result<Vec<Vec<u8>>, Error>;
