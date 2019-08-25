@@ -6,7 +6,7 @@ use utils::Error;
 
 #[test]
 fn test_vp8_unmarshal() -> Result<(), Error> {
-    let mut pck = VP8::default();
+    let mut pck = VP8Packet::default();
 
     // Empty packet
     let empty_bytes = vec![];
@@ -110,7 +110,7 @@ fn test_vp8_unmarshal() -> Result<(), Error> {
 
 #[test]
 fn test_vp8_payload() -> Result<(), Error> {
-    let mut pck = VP8::default();
+    let mut pck = VP8Payloader;
     let empty = vec![];
     let payload = vec![0x90, 0x90, 0x90];
 

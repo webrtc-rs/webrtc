@@ -43,7 +43,7 @@ fn test_packetizer() -> Result<(), Error> {
     //use the G722 payloader here, because it's very simple and all 0s is valid G722 data.
     let mut packetizer = PacketizerImpl::new(100, 98, 0x1234ABCD, 90000);
 
-    let mut g722 = g722::G722::default();
+    let mut g722 = g722::G722Payloader;
     let mut seq = new_random_sequencer();
     let packets = packetizer.packetize(&mut reader, &mut g722, &mut seq, 2000)?;
 

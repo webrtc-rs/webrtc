@@ -6,7 +6,7 @@ use utils::Error;
 
 #[test]
 fn test_opus_unmarshal() -> Result<(), Error> {
-    let mut pck = Opus::default();
+    let mut pck = OpusPacket::default();
 
     // Empty packet
     let empty_bytes = vec![];
@@ -25,7 +25,7 @@ fn test_opus_unmarshal() -> Result<(), Error> {
 
 #[test]
 fn test_opus_payload() -> Result<(), Error> {
-    let pck = Opus::default();
+    let pck = OpusPayloader;
     let empty = vec![];
     let payload = vec![0x90, 0x90, 0x90];
 

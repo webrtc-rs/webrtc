@@ -10,31 +10,9 @@ mod vp8_test;
 
 const VP8HEADER_SIZE: isize = 1;
 
-#[derive(Debug, Default)]
-struct VP8 {
-    // Required Header
-    x: u8,   /* extended controlbits present */
-    n: u8,   /* (non-reference frame)  when set to 1 this frame can be discarded */
-    s: u8,   /* start of VP8 partition */
-    pid: u8, /* partition index */
+pub struct VP8Payloader;
 
-    // Optional Header
-    i: u8, /* 1 if PictureID is present */
-    l: u8, /* 1 if TL0PICIDX is present */
-    t: u8, /* 1 if TID is present */
-    k: u8, /* 1 if KEYIDX is present */
-
-    picture_id: u16, /* 8 or 16 bits, picture ID */
-    tl0_pic_idx: u8, /* 8 bits temporal level zero index */
-
-    tid: u8,
-    y: u8,
-    key_idx: u8,
-
-    payload: Vec<u8>,
-}
-
-impl Payloader for VP8 {
+impl Payloader for VP8Payloader {
     fn payload<R: Read>(&self, mtu: isize, reader: &mut R) -> Result<Vec<Vec<u8>>, Error> {
         /*
          * https://tools.ietf.org/html/rfc7741#section-4.2
@@ -92,7 +70,31 @@ impl Payloader for VP8 {
     }
 }
 
-impl Depacketizer for VP8 {
+#[derive(Debug, Default)]
+struct VP8Packet {
+    // Required Header
+    x: u8,   /* extended controlbits present */
+    n: u8,   /* (non-reference frame)  when set to 1 this frame can be discarded */
+    s: u8,   /* start of VP8 partition */
+    pid: u8, /* partition index */
+
+    // Optional Header
+    i: u8, /* 1 if PictureID is present */
+    l: u8, /* 1 if TL0PICIDX is present */
+    t: u8, /* 1 if TID is present */
+    k: u8, /* 1 if KEYIDX is present */
+
+    picture_id: u16, /* 8 or 16 bits, picture ID */
+    tl0_pic_idx: u8, /* 8 bits temporal level zero index */
+
+    tid: u8,
+    y: u8,
+    key_idx: u8,
+
+    payload: Vec<u8>,
+}
+
+impl Depacketizer for VP8Packet {
     fn depacketize<R: Read>(&mut self, reader: &mut R) -> Result<(), Error> {
         //    0 1 2 3 4 5 6 7                      0 1 2 3 4 5 6 7
         //    +-+-+-+-+-+-+-+-+                   +-+-+-+-+-+-+-+-+

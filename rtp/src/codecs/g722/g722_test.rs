@@ -8,7 +8,7 @@ use utils::Error;
 
 #[test]
 fn test_g722_payload() -> Result<(), Error> {
-    let pck = G722::default();
+    let pck = G722Payloader;
 
     const test_len: usize = 10000;
     const test_mtu: isize = 1500;
