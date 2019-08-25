@@ -14,7 +14,7 @@ mod header_test;
 // RTCP packet types registered with IANA. See: https://www.iana.org/assignments/rtp-parameters/rtp-parameters.xhtml#rtp-parameters-4
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-enum PacketType {
+pub enum PacketType {
     TypeUnsupported = 0,
     TypeSenderReport = 200,              // RFC 3550, 6.4.1
     TypeReceiverReport = 201,            // RFC 3550, 6.4.2
@@ -67,7 +67,7 @@ const RTP_VERSION: u8 = 2;
 
 // A Header is the common header shared by all RTCP packets
 #[derive(Debug, PartialEq)]
-struct Header {
+pub struct Header {
     // If the padding bit is set, this individual RTCP packet contains
     // some additional padding octets at the end which are not part of
     // the control information but are included in the length field.
@@ -81,7 +81,7 @@ struct Header {
     length: u16,
 }
 
-const HEADER_LENGTH: u8 = 4;
+pub const HEADER_LENGTH: usize = 4;
 const VERSION_SHIFT: u8 = 6;
 const VERSION_MASK: u8 = 0x3;
 const PADDING_SHIFT: u8 = 5;
