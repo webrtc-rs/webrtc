@@ -16,7 +16,13 @@ fn test_vp8_unmarshal() -> Result<(), Error> {
 
     // Payload smaller than header size
     let small_bytes = vec![0x00, 0x11, 0x22];
-    let mut reader = BufReader::new(empty_bytes.as_slice());
+    let mut reader = BufReader::new(small_bytes.as_slice());
+    let result = pck.depacketize(&mut reader);
+    assert!(result.is_err(), "Result should be err in case of error");
+
+    // Payload smaller than header size
+    let small_bytes = vec![0x00, 0x11];
+    let mut reader = BufReader::new(small_bytes.as_slice());
     let result = pck.depacketize(&mut reader);
     assert!(result.is_err(), "Result should be err in case of error");
 
@@ -110,7 +116,7 @@ fn test_vp8_unmarshal() -> Result<(), Error> {
 
 #[test]
 fn test_vp8_payload() -> Result<(), Error> {
-    let mut pck = VP8Payloader;
+    let pck = VP8Payloader;
     let empty = vec![];
     let payload = vec![0x90, 0x90, 0x90];
 

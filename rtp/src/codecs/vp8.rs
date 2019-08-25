@@ -112,8 +112,10 @@ impl Depacketizer for VP8Packet {
         //    +-+-+-+-+-+-+-+-+
 
         self.payload.clear();
+        let mut num_bytes = 0;
 
         let mut b = reader.read_u8()?;
+        num_bytes += 1;
 
         self.x = (b & 0x80) >> 7;
         self.n = (b & 0x20) >> 5;
@@ -122,6 +124,7 @@ impl Depacketizer for VP8Packet {
 
         if self.x == 1 {
             b = reader.read_u8()?;
+            num_bytes += 1;
             self.i = (b & 0x80) >> 7;
             self.l = (b & 0x40) >> 6;
             self.t = (b & 0x20) >> 5;
@@ -135,10 +138,12 @@ impl Depacketizer for VP8Packet {
 
         if self.i == 1 {
             b = reader.read_u8()?;
+            num_bytes += 1;
             // PID present?
             if b & 0x80 > 0 {
                 // M == 1, PID is 16bit
                 self.picture_id = (((b & 0x7f) as u16) << 8) | (reader.read_u8()? as u16);
+                num_bytes += 1;
             } else {
                 self.picture_id = b as u16;
             }
@@ -146,13 +151,20 @@ impl Depacketizer for VP8Packet {
 
         if self.l == 1 {
             self.tl0_pic_idx = reader.read_u8()?;
+            num_bytes += 1;
         }
 
         if self.t == 1 || self.k == 1 {
             b = reader.read_u8()?;
+            num_bytes += 1;
             self.tid = (b & 0b11000000) >> 6;
             self.y = (b & 0b00100000) >> 5;
             self.key_idx = b & 0b00011111;
+        }
+
+        while num_bytes < 3 {
+            reader.read_u8()?;
+            num_bytes += 1;
         }
 
         reader.read_to_end(&mut self.payload)?;

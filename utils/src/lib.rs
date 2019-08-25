@@ -4,7 +4,7 @@ use std::{fmt, io, num};
 
 use url::ParseError;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Error {
     message: String,
 }
