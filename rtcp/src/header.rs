@@ -71,14 +71,14 @@ pub struct Header {
     // If the padding bit is set, this individual RTCP packet contains
     // some additional padding octets at the end which are not part of
     // the control information but are included in the length field.
-    padding: bool,
+    pub padding: bool,
     // The number of reception reports, sources contained or FMT in this packet (depending on the Type)
-    count: u8,
+    pub count: u8,
     // The RTCP packet type for this packet
-    packet_type: PacketType,
+    pub packet_type: PacketType,
     // The length of this RTCP packet in 32-bit words minus one,
     // including the header and any padding.
-    length: u16,
+    pub length: u16,
 }
 
 pub const HEADER_LENGTH: usize = 4;

@@ -5,6 +5,7 @@ use utils::Error;
 
 use super::errors::*;
 use super::header::*;
+use super::packet::*;
 
 #[cfg(test)]
 mod raw_packet_test;
@@ -12,7 +13,7 @@ mod raw_packet_test;
 // RawPacket represents an unparsed RTCP packet. It's returned by Unmarshal when
 // a packet with an unknown type is encountered.
 #[derive(Debug, PartialEq)]
-struct RawPacket(Vec<u8>);
+pub struct RawPacket(Vec<u8>);
 
 impl fmt::Display for RawPacket {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -21,12 +22,11 @@ impl fmt::Display for RawPacket {
 }
 
 //var _ Packet = (*RawPacket)(nil) // assert is a Packet
-
 impl RawPacket {
-    // Marshal encodes the packet in binary.
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        writer.write(&self.0)?;
-        Ok(())
+    // Header returns the Header associated with this packet.
+    pub fn header(&self) -> Result<Header, Error> {
+        let mut reader = BufReader::new(self.0.as_slice());
+        Header::unmarshal(&mut reader)
     }
 
     // Unmarshal decodes the packet from binary.
@@ -41,15 +41,17 @@ impl RawPacket {
             Ok(raw_packet)
         }
     }
+}
 
-    // Header returns the Header associated with this packet.
-    pub fn header(&self) -> Result<Header, Error> {
-        let mut reader = BufReader::new(self.0.as_slice());
-        Header::unmarshal(&mut reader)
+impl<W: Write> Packet<W> for RawPacket {
+    // DestinationSSRC returns an array of SSRC values that this packet refers to.
+    fn destination_ssrc() -> Vec<u32> {
+        vec![]
     }
 
-    // DestinationSSRC returns an array of SSRC values that this packet refers to.
-    pub fn destination_ssrc() -> Vec<u32> {
-        vec![]
+    // Marshal encodes the packet in binary.
+    fn marshal(&self, writer: &mut W) -> Result<(), Error> {
+        writer.write(&self.0)?;
+        Ok(())
     }
 }
