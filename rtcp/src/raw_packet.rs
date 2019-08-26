@@ -45,7 +45,7 @@ impl RawPacket {
 
 impl<W: Write> Packet<W> for RawPacket {
     // DestinationSSRC returns an array of SSRC values that this packet refers to.
-    fn destination_ssrc() -> Vec<u32> {
+    fn destination_ssrc(&self) -> Vec<u32> {
         vec![]
     }
 

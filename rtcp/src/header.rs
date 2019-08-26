@@ -81,14 +81,17 @@ pub struct Header {
     pub length: u16,
 }
 
-pub const HEADER_LENGTH: usize = 4;
 const VERSION_SHIFT: u8 = 6;
 const VERSION_MASK: u8 = 0x3;
 const PADDING_SHIFT: u8 = 5;
 const PADDING_MASK: u8 = 0x1;
 const COUNT_SHIFT: u8 = 0;
 const COUNT_MASK: u8 = 0x1f;
-const COUNT_MAX: u8 = (1 << 5) - 1;
+
+pub const HEADER_LENGTH: usize = 4;
+pub const COUNT_MAX: usize = (1 << 5) - 1;
+pub const SSRC_LENGTH: usize = 4;
+pub const SDES_MAX_OCTET_COUNT: usize = (1 << 8) - 1;
 
 // Marshal encodes the Header in binary
 impl Header {

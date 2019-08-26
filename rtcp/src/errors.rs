@@ -23,4 +23,6 @@ lazy_static! {
     pub static ref ErrReasonTooLong: Error =
         Error::new("rtcp: reason must be < 255 octets long".to_owned());
     pub static ref ErrBadVersion: Error = Error::new("rtcp: invalid packet version".to_owned());
+    pub static ref ErrFailedToFillWholeBuffer: Error =
+        Error::new("failed to fill whole buffer".to_owned());
 }

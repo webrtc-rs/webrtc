@@ -9,7 +9,7 @@ use super::raw_packet::*;
 
 pub trait Packet<W: Write> {
     // DestinationSSRC returns an array of SSRC values that this packet refers to.
-    fn destination_ssrc() -> Vec<u32>;
+    fn destination_ssrc(&self) -> Vec<u32>;
     fn marshal(&self, writer: &mut W) -> Result<(), Error>;
 }
 
