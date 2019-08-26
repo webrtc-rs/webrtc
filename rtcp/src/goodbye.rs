@@ -1,4 +1,3 @@
-use std::fmt;
 use std::io::{Read, Write};
 
 use utils::Error;
@@ -15,7 +14,7 @@ mod goodbye_test;
 
 // The Goodbye packet indicates that one or more sources are no longer active.
 #[derive(Debug, PartialEq)]
-struct Goodbye {
+pub struct Goodbye {
     // The SSRC/CSRC identifiers that are no longer active
     sources: Vec<u32>,
     // Optional text indicating the reason for leaving, e.g., "camera malfunction" or "RTP loop detected"

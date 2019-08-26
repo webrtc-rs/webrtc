@@ -25,6 +25,12 @@ pub enum PacketType {
     TypePayloadSpecificFeedback = 206,   // RFC 4585, 6.3
 }
 
+impl Default for PacketType {
+    fn default() -> Self {
+        PacketType::TypeUnsupported
+    }
+}
+
 // Transport and Payload specific feedback messages overload the count field to act as a message type. those are listed here
 const FORMAT_SLI: u8 = 2;
 const FORMAT_PLI: u8 = 1;
@@ -66,7 +72,7 @@ impl From<u8> for PacketType {
 const RTP_VERSION: u8 = 2;
 
 // A Header is the common header shared by all RTCP packets
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Default)]
 pub struct Header {
     // If the padding bit is set, this individual RTCP packet contains
     // some additional padding octets at the end which are not part of

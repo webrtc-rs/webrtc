@@ -1,6 +1,6 @@
 use super::*;
 
-use std::io::{BufReader, BufWriter};
+use std::io::BufReader;
 
 use utils::Error;
 
