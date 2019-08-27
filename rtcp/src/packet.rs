@@ -6,7 +6,9 @@ use super::errors::*;
 use super::goodbye::*;
 use super::header::*;
 use super::raw_packet::*;
+use super::receiver_report::*;
 use super::sender_report::*;
+use super::source_description::*;
 
 #[cfg(test)]
 mod packet_test;
@@ -67,15 +69,6 @@ fn unmarshaler<R: Read, W: Write>(
 ) -> Result<Box<dyn Packet<W>>, Error> {
     match packet_type {
         /*
-
-            case TypeReceiverReport:
-                packet = new(ReceiverReport)
-
-            case TypeSourceDescription:
-                packet = new(SourceDescription)
-
-
-
             case TypeTransportSpecificFeedback:
                 switch h.Count {
                 case FormatTLN:
@@ -99,6 +92,8 @@ fn unmarshaler<R: Read, W: Write>(
                 }
         */
         PacketType::TypeSenderReport => Ok(Box::new(SenderReport::unmarshal(reader)?)),
+        PacketType::TypeReceiverReport => Ok(Box::new(ReceiverReport::unmarshal(reader)?)),
+        PacketType::TypeSourceDescription => Ok(Box::new(SourceDescription::unmarshal(reader)?)),
         PacketType::TypeGoodbye => Ok(Box::new(Goodbye::unmarshal(reader)?)),
         _ => Ok(Box::new(RawPacket::unmarshal(reader)?)),
     }

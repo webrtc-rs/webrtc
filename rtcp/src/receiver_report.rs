@@ -16,17 +16,17 @@ mod receiver_report_test;
 
 // A ReceiverReport (RR) packet provides reception quality feedback for an RTP stream
 #[derive(Debug, PartialEq, Default)]
-struct ReceiverReport {
+pub struct ReceiverReport {
     // The synchronization source identifier for the originator of this RR packet.
-    ssrc: u32,
+    pub ssrc: u32,
     // Zero or more reception report blocks depending on the number of other
     // sources heard by this sender since the last report. Each reception report
     // block conveys statistics on the reception of RTP packets from a
     // single synchronization source.
-    reports: Vec<ReceptionReport>,
+    pub reports: Vec<ReceptionReport>,
     // Extension contains additional, payload-specific information that needs to
     // be reported regularly about the receiver.
-    profile_extensions: Vec<u8>,
+    pub profile_extensions: Vec<u8>,
 }
 
 impl fmt::Display for ReceiverReport {
