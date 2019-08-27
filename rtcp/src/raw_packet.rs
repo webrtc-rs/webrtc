@@ -23,6 +23,10 @@ impl fmt::Display for RawPacket {
 
 //var _ Packet = (*RawPacket)(nil) // assert is a Packet
 impl RawPacket {
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+
     // Header returns the Header associated with this packet.
     pub fn header(&self) -> Result<Header, Error> {
         let mut reader = BufReader::new(self.0.as_slice());

@@ -6,6 +6,7 @@ pub mod goodbye;
 pub mod header;
 pub mod packet;
 pub mod raw_packet;
+pub mod receiver_report;
 pub mod reception_report;
 pub mod sender_report;
 

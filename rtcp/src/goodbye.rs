@@ -39,19 +39,17 @@ impl Goodbye {
         let srcs_length = self.sources.len() * SSRC_LENGTH;
         let reason_length = self.reason.len() + 1;
 
-        let l = HEADER_LENGTH + srcs_length + reason_length;
-
-        // align to 32-bit boundary
-        l + get_padding(l)
+        HEADER_LENGTH + srcs_length + reason_length
     }
 
     // Header returns the Header associated with this packet.
     pub fn header(&self) -> Header {
+        let l = self.len() + get_padding(self.len());
         Header {
-            padding: false,
+            padding: get_padding(self.len()) != 0,
             count: self.sources.len() as u8,
             packet_type: PacketType::TypeGoodbye,
-            length: ((self.len() / 4) - 1) as u16,
+            length: ((l / 4) - 1) as u16,
         }
     }
 
