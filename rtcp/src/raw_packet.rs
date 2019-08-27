@@ -12,7 +12,7 @@ mod raw_packet_test;
 
 // RawPacket represents an unparsed RTCP packet. It's returned by Unmarshal when
 // a packet with an unknown type is encountered.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Default)]
 pub struct RawPacket(Vec<u8>);
 
 impl fmt::Display for RawPacket {

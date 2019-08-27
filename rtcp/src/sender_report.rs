@@ -1,5 +1,5 @@
 use std::fmt;
-use std::io::{BufReader, Read, Write};
+use std::io::{Read, Write};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
@@ -14,42 +14,43 @@ use super::reception_report::*;
 mod sender_report_test;
 
 // A SenderReport (SR) packet provides reception quality feedback for an RTP stream
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Default)]
 pub struct SenderReport {
     // The synchronization source identifier for the originator of this SR packet.
-    ssrc: u32,
+    pub ssrc: u32,
     // The wallclock time when this report was sent so that it may be used in
     // combination with timestamps returned in reception reports from other
     // receivers to measure round-trip propagation to those receivers.
-    ntp_time: u64,
+    pub ntp_time: u64,
     // Corresponds to the same time as the NTP timestamp (above), but in
     // the same units and with the same random offset as the RTP
     // timestamps in data packets. This correspondence may be used for
     // intra- and inter-media synchronization for sources whose NTP
     // timestamps are synchronized, and may be used by media-independent
     // receivers to estimate the nominal RTP clock frequency.
-    rtp_time: u32,
+    pub rtp_time: u32,
     // The total number of RTP data packets transmitted by the sender
     // since starting transmission up until the time this SR packet was
     // generated.
-    packet_count: u32,
+    pub packet_count: u32,
     // The total number of payload octets (i.e., not including header or
     // padding) transmitted in RTP data packets by the sender since
     // starting transmission up until the time this SR packet was
     // generated.
-    octet_count: u32,
+    pub octet_count: u32,
     // Zero or more reception report blocks depending on the number of other
     // sources heard by this sender since the last report. Each reception report
     // block conveys statistics on the reception of RTP packets from a
     // single synchronization source.
-    reports: Vec<ReceptionReport>,
+    pub reports: Vec<ReceptionReport>,
 
     // ProfileExtensions contains additional, payload-specific information that needs to
     // be reported regularly about the sender.
-    profile_extensions: Vec<u8>,
+    pub profile_extensions: Vec<u8>,
 }
 
-const srHeaderLength: usize = 24;
+const SR_HEADER_LENGTH: usize = 24;
+/*
 const srSSRCOffset: usize = 0;
 const srNTPOffset: usize = srSSRCOffset + SSRC_LENGTH;
 const ntpTimeLength: usize = 8;
@@ -59,7 +60,7 @@ const srPacketCountOffset: usize = srRTPOffset + rtpTimeLength;
 const srPacketCountLength: usize = 4;
 const srOctetCountOffset: usize = srPacketCountOffset + srPacketCountLength;
 const srOctetCountLength: usize = 4;
-const srReportOffset: usize = srOctetCountOffset + srOctetCountLength;
+const srReportOffset: usize = srOctetCountOffset + srOctetCountLength;*/
 
 impl fmt::Display for SenderReport {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -88,7 +89,7 @@ impl SenderReport {
         for rep in &self.reports {
             reps_length += rep.len();
         }
-        HEADER_LENGTH + srHeaderLength + reps_length + self.profile_extensions.len()
+        HEADER_LENGTH + SR_HEADER_LENGTH + reps_length + self.profile_extensions.len()
     }
 
     // Header returns the Header associated with this packet.
@@ -157,7 +158,7 @@ impl SenderReport {
         }
 
         let mut profile_extensions: Vec<u8> = vec![];
-        reader.read_to_end(&mut profile_extensions);
+        reader.read_to_end(&mut profile_extensions)?;
 
         Ok(SenderReport {
             ssrc,

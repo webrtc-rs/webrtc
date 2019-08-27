@@ -8,7 +8,7 @@ use super::errors::*;
 
 // A ReceptionReport block conveys statistics on the reception of RTP packets
 // from a single synchronization source.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Default)]
 pub struct ReceptionReport {
     // The SSRC identifier of the source to which the information in this
     // reception report block pertains.
@@ -39,7 +39,7 @@ pub struct ReceptionReport {
     pub delay: u32,
 }
 
-const receptionReportLength: usize = 24;
+const RECEPTION_REPORT_LENGTH: usize = 24;
 /*const fractionLostOffset: u8 = 4;
 const totalLostOffset: u8 = 5;
 const lastSeqOffset: u8 = 8;
@@ -49,7 +49,7 @@ const delayOffset: u8 = 20;*/
 
 impl ReceptionReport {
     pub fn len(&self) -> usize {
-        receptionReportLength
+        RECEPTION_REPORT_LENGTH
     }
 
     // Marshal encodes the ReceptionReport in binary
@@ -113,9 +113,9 @@ impl ReceptionReport {
         let ssrc = reader.read_u32::<BigEndian>()?;
         let fraction_lost = reader.read_u8()?;
 
-        let b2 = reader.read_u8()?;
-        let b1 = reader.read_u8()?;
         let b0 = reader.read_u8()?;
+        let b1 = reader.read_u8()?;
+        let b2 = reader.read_u8()?;
         let total_lost = b2 as u32 | (b1 as u32) << 8 | (b0 as u32) << 16;
 
         let last_sequence_number = reader.read_u32::<BigEndian>()?;
