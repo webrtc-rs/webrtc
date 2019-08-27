@@ -6,6 +6,8 @@ pub mod goodbye;
 pub mod header;
 pub mod packet;
 pub mod raw_packet;
+pub mod reception_report;
+pub mod sender_report;
 
 // getPadding Returns the padding required to make the length a multiple of 4
 fn get_padding(len: usize) -> usize {

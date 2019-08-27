@@ -1,3 +1,4 @@
+use std::fmt;
 use std::io::{Read, Write};
 
 use utils::Error;
@@ -21,17 +22,19 @@ pub struct Goodbye {
     reason: String,
 }
 
-impl Goodbye {
-    // Header returns the Header associated with this packet.
-    pub fn header(&self) -> Header {
-        return Header {
-            padding: false,
-            count: self.sources.len() as u8,
-            packet_type: PacketType::TypeGoodbye,
-            length: ((self.len() / 4) - 1) as u16,
-        };
-    }
+impl fmt::Display for Goodbye {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut out = format!("Goodbye:\n\tSources:\n");
+        for s in &self.sources {
+            out += format!("\t{}\n", *s).as_str();
+        }
+        out += format!("\tReason: {:?}\n", self.reason).as_str();
 
+        write!(f, "{}", out)
+    }
+}
+
+impl Goodbye {
     fn len(&self) -> usize {
         let srcs_length = self.sources.len() * SSRC_LENGTH;
         let reason_length = self.reason.len() + 1;
@@ -40,6 +43,16 @@ impl Goodbye {
 
         // align to 32-bit boundary
         l + get_padding(l)
+    }
+
+    // Header returns the Header associated with this packet.
+    pub fn header(&self) -> Header {
+        Header {
+            padding: false,
+            count: self.sources.len() as u8,
+            packet_type: PacketType::TypeGoodbye,
+            length: ((self.len() / 4) - 1) as u16,
+        }
     }
 
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
@@ -68,7 +81,7 @@ impl Goodbye {
 
         let mut sources = vec![];
 
-        for i in 0..header.count {
+        for _i in 0..header.count {
             sources.push(reader.read_u32::<BigEndian>()?);
         }
 
