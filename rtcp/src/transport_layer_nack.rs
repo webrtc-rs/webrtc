@@ -20,12 +20,12 @@ type PacketBitmap = u16;
 // NackPair is a wire-representation of a collection of
 // Lost RTP packets
 #[derive(Debug, PartialEq, Default)]
-struct NackPair {
+pub struct NackPair {
     // ID of lost packets
-    packet_id: u16,
+    pub packet_id: u16,
 
     // Bitmask of following lost packets
-    lost_packets: PacketBitmap,
+    pub lost_packets: PacketBitmap,
 }
 
 // PacketList returns a list of Nack'd packets that's referenced by a NackPair
@@ -53,14 +53,14 @@ const nackOffset: usize = 8;
 // IETF RFC 4585, Section 6.2.1
 // https://tools.ietf.org/html/rfc4585#section-6.2.1
 #[derive(Debug, PartialEq, Default)]
-struct TransportLayerNack {
+pub struct TransportLayerNack {
     // SSRC of sender
-    sender_ssrc: u32,
+    pub sender_ssrc: u32,
 
     // SSRC of the media source
-    media_ssrc: u32,
+    pub media_ssrc: u32,
 
-    nacks: Vec<NackPair>,
+    pub nacks: Vec<NackPair>,
 }
 
 impl fmt::Display for TransportLayerNack {

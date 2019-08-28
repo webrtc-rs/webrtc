@@ -5,10 +5,12 @@ use util::Error;
 use super::errors::*;
 use super::goodbye::*;
 use super::header::*;
+use super::rapid_resynchronization_request::*;
 use super::raw_packet::*;
 use super::receiver_report::*;
 use super::sender_report::*;
 use super::source_description::*;
+use super::transport_layer_nack::*;
 
 #[cfg(test)]
 mod packet_test;
@@ -48,7 +50,7 @@ pub fn unmarshal<W: Write>(mut raw_data: &[u8]) -> Result<Vec<Box<dyn Packet<W>>
             return Err(ErrPacketTooShort.clone());
         }
         let mut reader = BufReader::new(&raw_data[0..bytes_processed]);
-        let packet = unmarshaler(&mut reader, header.packet_type)?;
+        let packet = unmarshaler(&mut reader, &header)?;
         packets.push(packet);
         raw_data = &raw_data[bytes_processed..];
     }
@@ -65,20 +67,10 @@ pub fn unmarshal<W: Write>(mut raw_data: &[u8]) -> Result<Vec<Box<dyn Packet<W>>
 // and returns it's parsed representation, and the amount of data that was processed.
 fn unmarshaler<R: Read, W: Write>(
     reader: &mut R,
-    packet_type: PacketType,
+    header: &Header,
 ) -> Result<Box<dyn Packet<W>>, Error> {
-    match packet_type {
+    match header.packet_type {
         /*
-            case TypeTransportSpecificFeedback:
-                switch h.Count {
-                case FormatTLN:
-                    packet = new(TransportLayerNack)
-                case FormatRRR:
-                    packet = new(RapidResynchronizationRequest)
-                default:
-                    packet = new(RawPacket)
-                }
-
             case TypePayloadSpecificFeedback:
                 switch h.Count {
                 case FormatPLI:
@@ -95,6 +87,11 @@ fn unmarshaler<R: Read, W: Write>(
         PacketType::TypeReceiverReport => Ok(Box::new(ReceiverReport::unmarshal(reader)?)),
         PacketType::TypeSourceDescription => Ok(Box::new(SourceDescription::unmarshal(reader)?)),
         PacketType::TypeGoodbye => Ok(Box::new(Goodbye::unmarshal(reader)?)),
+        PacketType::TypeTransportSpecificFeedback => match header.count {
+            FORMAT_TLN => Ok(Box::new(TransportLayerNack::unmarshal(reader)?)),
+            FORMAT_RRR => Ok(Box::new(RapidResynchronizationRequest::unmarshal(reader)?)),
+            _ => Ok(Box::new(RawPacket::unmarshal(reader)?)),
+        },
         _ => Ok(Box::new(RawPacket::unmarshal(reader)?)),
     }
 }
