@@ -75,7 +75,7 @@ fn test_goodbye_unmarshal() -> Result<(), Error> {
                 sources: vec![],
                 reason: "".to_string(),
             },
-            Some(ErrPacketTooShort.clone()),
+            Some(ErrFailedToFillWholeBuffer.clone()),
         ),
         (
             "bad count in header",

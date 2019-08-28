@@ -17,9 +17,9 @@ mod goodbye_test;
 #[derive(Debug, PartialEq, Default)]
 pub struct Goodbye {
     // The SSRC/CSRC identifiers that are no longer active
-    sources: Vec<u32>,
+    pub sources: Vec<u32>,
     // Optional text indicating the reason for leaving, e.g., "camera malfunction" or "RTP loop detected"
-    reason: String,
+    pub reason: String,
 }
 
 impl fmt::Display for Goodbye {
@@ -37,7 +37,11 @@ impl fmt::Display for Goodbye {
 impl Goodbye {
     fn len(&self) -> usize {
         let srcs_length = self.sources.len() * SSRC_LENGTH;
-        let reason_length = self.reason.len() + 1;
+        let reason_length = if self.reason.len() == 0 {
+            0
+        } else {
+            self.reason.len() + 1
+        };
 
         HEADER_LENGTH + srcs_length + reason_length
     }
@@ -73,9 +77,6 @@ impl Goodbye {
         if header.packet_type != PacketType::TypeGoodbye {
             return Err(ErrWrongType.clone());
         }
-        if get_padding(header.length as usize) != 0 {
-            return Err(ErrPacketTooShort.clone());
-        }
 
         let mut sources = vec![];
 
@@ -96,7 +97,14 @@ impl Goodbye {
             }
         }
 
-        Ok(Goodbye { sources, reason })
+        let goodbye = Goodbye { sources, reason };
+        let mut padding_len = get_padding(goodbye.len());
+        while padding_len > 0 {
+            reader.read_u8()?;
+            padding_len -= 1;
+        }
+
+        Ok(goodbye)
     }
 }
 
