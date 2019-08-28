@@ -5,6 +5,7 @@ pub mod errors;
 pub mod goodbye;
 pub mod header;
 pub mod packet;
+pub mod picture_loss_indication;
 pub mod rapid_resynchronization_request;
 pub mod raw_packet;
 pub mod receiver_report;
