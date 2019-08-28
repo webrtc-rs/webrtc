@@ -5,10 +5,13 @@ use util::Error;
 use super::errors::*;
 use super::goodbye::*;
 use super::header::*;
+use super::picture_loss_indication::*;
 use super::rapid_resynchronization_request::*;
 use super::raw_packet::*;
+use super::receiver_estimated_maximum_bitrate::*;
 use super::receiver_report::*;
 use super::sender_report::*;
+use super::slice_loss_indication::*;
 use super::source_description::*;
 use super::transport_layer_nack::*;
 
@@ -70,19 +73,6 @@ fn unmarshaler<R: Read, W: Write>(
     header: &Header,
 ) -> Result<Box<dyn Packet<W>>, Error> {
     match header.packet_type {
-        /*
-            case TypePayloadSpecificFeedback:
-                switch h.Count {
-                case FormatPLI:
-                    packet = new(PictureLossIndication)
-                case FormatSLI:
-                    packet = new(SliceLossIndication)
-                case FormatREMB:
-                    packet = new(ReceiverEstimatedMaximumBitrate)
-                default:
-                    packet = new(RawPacket)
-                }
-        */
         PacketType::TypeSenderReport => Ok(Box::new(SenderReport::unmarshal(reader)?)),
         PacketType::TypeReceiverReport => Ok(Box::new(ReceiverReport::unmarshal(reader)?)),
         PacketType::TypeSourceDescription => Ok(Box::new(SourceDescription::unmarshal(reader)?)),
@@ -90,6 +80,14 @@ fn unmarshaler<R: Read, W: Write>(
         PacketType::TypeTransportSpecificFeedback => match header.count {
             FORMAT_TLN => Ok(Box::new(TransportLayerNack::unmarshal(reader)?)),
             FORMAT_RRR => Ok(Box::new(RapidResynchronizationRequest::unmarshal(reader)?)),
+            _ => Ok(Box::new(RawPacket::unmarshal(reader)?)),
+        },
+        PacketType::TypePayloadSpecificFeedback => match header.count {
+            FORMAT_PLI => Ok(Box::new(PictureLossIndication::unmarshal(reader)?)),
+            FORMAT_SLI => Ok(Box::new(SliceLossIndication::unmarshal(reader)?)),
+            FORMAT_REMB => Ok(Box::new(ReceiverEstimatedMaximumBitrate::unmarshal(
+                reader,
+            )?)),
             _ => Ok(Box::new(RawPacket::unmarshal(reader)?)),
         },
         _ => Ok(Box::new(RawPacket::unmarshal(reader)?)),

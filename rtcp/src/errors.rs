@@ -25,4 +25,7 @@ lazy_static! {
     pub static ref ErrBadVersion: Error = Error::new("rtcp: invalid packet version".to_owned());
     pub static ref ErrFailedToFillWholeBuffer: Error =
         Error::new("failed to fill whole buffer".to_owned());
+    pub static ref ErrBadUniqueIdentifier: Error =
+        Error::new("rtcp: invalid unique identifier".to_owned());
+    pub static ref ErrBadMediaSSRC: Error = Error::new("rtcp: invalid media SSRC".to_owned());
 }
