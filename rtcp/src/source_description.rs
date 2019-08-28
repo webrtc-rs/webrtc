@@ -3,7 +3,7 @@ use std::io::{Read, Write};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-use utils::Error;
+use util::Error;
 
 use super::errors::*;
 use super::header::*;

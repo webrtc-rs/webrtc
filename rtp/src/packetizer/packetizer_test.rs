@@ -5,7 +5,7 @@ use crate::sequence::*;
 use std::io::BufReader;
 use std::time::Duration;
 
-use utils::Error;
+use util::Error;
 
 use chrono::prelude::*;
 

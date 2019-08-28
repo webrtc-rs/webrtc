@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::{fmt, io};
 
-use utils::Error;
+use util::Error;
 
 use rand::Rng;
 

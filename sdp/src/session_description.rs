@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::{fmt, io};
 
 use url::Url;
-use utils::Error;
+use util::Error;
 
 use super::common_description::*;
 use super::media_description::*;

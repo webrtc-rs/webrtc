@@ -4,7 +4,7 @@ use std::io::BufReader;
 
 use rand::Rng;
 
-use utils::Error;
+use util::Error;
 
 #[test]
 fn test_h264_payload() -> Result<(), Error> {

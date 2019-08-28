@@ -1,7 +1,7 @@
 use std::fmt;
 use std::io::{Read, Write};
 
-use utils::Error;
+use util::Error;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 

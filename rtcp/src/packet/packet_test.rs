@@ -2,7 +2,7 @@ use super::*;
 
 use std::io::BufReader;
 
-use utils::Error;
+use util::Error;
 
 #[test]
 fn test_packet_unmarshal_empty() -> Result<(), Error> {

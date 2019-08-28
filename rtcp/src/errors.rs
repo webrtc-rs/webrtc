@@ -1,4 +1,4 @@
-use utils::Error;
+use util::Error;
 
 lazy_static! {
     pub static ref ErrInvalidTotalLost: Error =

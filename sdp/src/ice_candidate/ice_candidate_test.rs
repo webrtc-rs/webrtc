@@ -1,5 +1,5 @@
 use super::*;
-use utils::Error;
+use util::Error;
 
 use std::io::BufReader;
 use std::iter::Iterator;

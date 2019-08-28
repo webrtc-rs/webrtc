@@ -1,7 +1,7 @@
 use super::*;
 use crate::util::{ATTRIBUTE_KEY, END_LINE};
 
-use utils::Error;
+use util::Error;
 
 use std::io::BufReader;
 use std::iter::Iterator;

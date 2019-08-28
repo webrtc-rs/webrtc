@@ -1,6 +1,6 @@
 use std::io;
 
-use utils::Error;
+use util::Error;
 
 #[cfg(test)]
 mod ice_candidate_test;

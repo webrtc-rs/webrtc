@@ -2,7 +2,7 @@ use crate::packetizer::{Depacketizer, Payloader};
 
 use std::io::Read;
 
-use utils::Error;
+use util::Error;
 
 #[cfg(test)]
 mod opus_test;

@@ -3,7 +3,7 @@ use std::io::BufReader;
 
 use crate::ice_candidate::ICECandidate;
 
-use utils::Error;
+use util::Error;
 
 // Information describes the "i=" field which provides textual information
 // about the session.

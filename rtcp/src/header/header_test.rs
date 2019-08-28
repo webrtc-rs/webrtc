@@ -2,7 +2,7 @@ use super::*;
 
 use std::io::{BufReader, BufWriter};
 
-use utils::Error;
+use util::Error;
 
 #[test]
 fn test_header_unmarshal() -> Result<(), Error> {

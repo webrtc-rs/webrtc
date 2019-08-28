@@ -2,7 +2,7 @@ use std::fmt;
 use std::io;
 
 use url::Url;
-use utils::Error;
+use util::Error;
 
 use super::common_description::*;
 use super::direction::*;

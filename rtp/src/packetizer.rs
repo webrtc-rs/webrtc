@@ -4,7 +4,7 @@ use crate::sequence::*;
 use std::io::Read;
 use std::time::{Duration, SystemTime};
 
-use utils::Error;
+use util::Error;
 
 #[cfg(test)]
 mod packetizer_test;

@@ -3,7 +3,7 @@ use crate::reception_report::*;
 
 use std::io::{BufReader, BufWriter};
 
-use utils::Error;
+use util::Error;
 
 #[test]
 fn test_sender_report_unmarshal() -> Result<(), Error> {

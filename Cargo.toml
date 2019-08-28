@@ -1,9 +1,13 @@
 [workspace]
 members = [
+    "dtls",
     "ice",
-    "rtp",
+    "rtc",
     "rtcp",
-    "srtp",
+    "rtp",
     "sdp",
-    "utils",
+    "srtp",
+    "stun",
+    "turn",
+    "util",
 ]

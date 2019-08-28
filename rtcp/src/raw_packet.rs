@@ -1,7 +1,7 @@
 use std::fmt;
 use std::io::{BufReader, Read, Write};
 
-use utils::Error;
+use util::Error;
 
 use super::errors::*;
 use super::header::*;
