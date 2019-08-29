@@ -11,7 +11,7 @@ mod raw_packet_test;
 
 // RawPacket represents an unparsed RTCP packet. It's returned by Unmarshal when
 // a packet with an unknown type is encountered.
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, Clone)]
 pub struct RawPacket {
     pub header: Header,
     pub raw: Vec<u8>,

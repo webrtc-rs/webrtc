@@ -14,7 +14,7 @@ mod receiver_estimated_maximum_bitrate_test;
 
 // ReceiverEstimatedMaximumBitrate contains the receiver's estimated maximum bitrate.
 // see: https://tools.ietf.org/html/draft-alvestrand-rmcat-remb-03
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, Clone)]
 pub struct ReceiverEstimatedMaximumBitrate {
     // SSRC of sender
     pub sender_ssrc: u32,

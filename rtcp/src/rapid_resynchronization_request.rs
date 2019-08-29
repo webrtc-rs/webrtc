@@ -13,7 +13,7 @@ use crate::get_padding;
 mod rapid_resynchronization_request_test;
 
 // The RapidResynchronizationRequest packet informs the encoder about the loss of an undefined amount of coded video data belonging to one or more pictures
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, Clone)]
 pub struct RapidResynchronizationRequest {
     // SSRC of sender
     pub sender_ssrc: u32,

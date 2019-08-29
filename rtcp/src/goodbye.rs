@@ -13,7 +13,7 @@ use crate::get_padding;
 mod goodbye_test;
 
 // The Goodbye packet indicates that one or more sources are no longer active.
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, Clone)]
 pub struct Goodbye {
     // The SSRC/CSRC identifiers that are no longer active
     pub sources: Vec<u32>,

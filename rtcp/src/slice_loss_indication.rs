@@ -14,8 +14,7 @@ mod slice_loss_indication_test;
 
 // SLIEntry represents a single entry to the SLI packet's
 // list of lost slices.
-#[derive(Debug, PartialEq, Default)]
-
+#[derive(Debug, PartialEq, Default, Clone)]
 pub struct SLIEntry {
     // ID of first lost slice
     pub first: u16,
@@ -28,7 +27,7 @@ pub struct SLIEntry {
 }
 
 // The SliceLossIndication packet informs the encoder about the loss of a picture slice
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, Clone)]
 pub struct SliceLossIndication {
     // SSRC of sender
     pub sender_ssrc: u32,

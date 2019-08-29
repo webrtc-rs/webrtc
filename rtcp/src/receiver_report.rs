@@ -14,7 +14,7 @@ use crate::get_padding;
 mod receiver_report_test;
 
 // A ReceiverReport (RR) packet provides reception quality feedback for an RTP stream
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, Clone)]
 pub struct ReceiverReport {
     // The synchronization source identifier for the originator of this RR packet.
     pub ssrc: u32,

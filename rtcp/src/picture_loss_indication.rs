@@ -13,7 +13,7 @@ use crate::get_padding;
 mod picture_loss_indication_test;
 
 // The PictureLossIndication packet informs the encoder about the loss of an undefined amount of coded video data belonging to one or more pictures
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, Clone)]
 pub struct PictureLossIndication {
     // SSRC of sender
     pub sender_ssrc: u32,

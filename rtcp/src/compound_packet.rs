@@ -8,9 +8,8 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use super::errors::*;
 use super::header::*;
 use super::packet::*;
-use super::source_description::SDESType;
+use super::source_description::*;
 use crate::get_padding;
-use crate::source_description::SourceDescription;
 
 #[cfg(test)]
 mod compound_packet_test;
@@ -27,36 +26,33 @@ mod compound_packet_test;
 // to identify the source and to begin associating media for purposes such as lip-sync.
 //
 // Other RTCP packet types may follow in any order. Packet types may appear more than once.
-/*
-pub struct CompoundPacket<W: Write>(Vec<Box<dyn Packet<W>>>);
+pub struct CompoundPacket(Vec<Packet>);
 
-impl<W: Write> CompoundPacket<W> {
-    /*
+impl CompoundPacket {
     // Validate returns an error if this is not an RFC-compliant CompoundPacket.
     pub fn validate(&self) -> Result<(), Error> {
-        if self.len() == 0 {
+        if self.0.len() == 0 {
             return Err(ErrEmptyCompound.clone());
         }
 
         // SenderReport and ReceiverReport are the only types that
         // are allowed to be the first packet in a compound datagram
-        match self[0].header().packet_type {
-            PacketType::TypeSenderReport | PacketType::TypeReceiverReport => {}
+        match &self.0[0] {
+            Packet::SenderReport(_) | Packet::ReceiverReport(_) => {}
             _ => return Err(ErrBadFirstPacket.clone()),
         };
 
-        for pkt in &self[1..] {
-            match pkt.header().packet_type {
+        for pkt in &self.0[1..] {
+            match pkt {
                 // If the number of RecetpionReports exceeds 31 additional ReceiverReports
                 // can be included here.
-                PacketType::TypeReceiverReport => {}
+                Packet::ReceiverReport(_) => {}
 
                 // A SourceDescription containing a CNAME must be included in every
                 // CompoundPacket.
-                PacketType::TypeSourceDescription => {
+                Packet::SourceDescription(p) => {
                     let mut has_cname = false;
-                    let pkt = pkt as SourceDescription;
-                    for c in &pkt.chunks {
+                    for c in &p.chunks {
                         for it in &c.items {
                             if it.sdes_type == SDESType::SDESCNAME {
                                 has_cname = true
@@ -81,70 +77,59 @@ impl<W: Write> CompoundPacket<W> {
 
     //CNAME returns the CNAME that *must* be present in every CompoundPacket
     pub fn cname(&self) -> Result<String, Error> {
-        if self.len() < 1 {
+        if self.0.len() < 1 {
             return Err(ErrEmptyCompound.clone());
         }
 
-        for pkt in &self[1..] {
-            sdes, ok := pkt.(*SourceDescription)
-            if ok {
-                for _, c := range sdes.Chunks {
-                    for _, it := range c.Items {
-                        if it.Type == SDESCNAME {
-                            return it.Text, err
+        for pkt in &self.0[1..] {
+            match pkt {
+                Packet::ReceiverReport(_) => {}
+
+                // A SourceDescription containing a CNAME must be included in every
+                // CompoundPacket.
+                Packet::SourceDescription(p) => {
+                    for c in &p.chunks {
+                        for it in &c.items {
+                            if it.sdes_type == SDESType::SDESCNAME {
+                                return Ok(it.text.clone());
+                            }
                         }
                     }
                 }
-            } else {
-                _, ok := pkt.(*ReceiverReport)
-                if !ok {
-                    err = errPacketBeforeCNAME
-                }
-            }
+
+                _ => return Err(ErrPacketBeforeCNAME.clone()),
+            };
         }
-        return "", errMissingCNAME
+        Err(ErrMissingCNAME.clone())
     }
 
     // Marshal encodes the CompoundPacket as binary.
-    func (c CompoundPacket) Marshal() ([]byte, error) {
-        if err := c.Validate(); err != nil {
-            return nil, err
-        }
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.validate()?;
 
-        p := []Packet(c)
-        return Marshal(p)
+        // use packet::marshal function
+        marshal(&self.0, writer)
     }
 
     // Unmarshal decodes a CompoundPacket from binary.
-    func (c *CompoundPacket) Unmarshal(rawData []byte) error {
-        out := make(CompoundPacket, 0)
-        for len(rawData) != 0 {
-            p, processed, err := unmarshal(rawData)
-
-            if err != nil {
-                return err
-            }
-
-            out = append(out, p)
-            rawData = rawData[processed:]
-        }
-        *c = out
-
-        if err := c.Validate(); err != nil {
-            return err
-        }
-
-        return nil
+    pub fn unmarshal(raw_data: &[u8]) -> Result<Self, Error> {
+        let packets = unmarshal(raw_data)?;
+        let compound_packet = CompoundPacket(packets);
+        compound_packet.validate()?;
+        Ok(compound_packet)
     }
-    */
+
     // DestinationSSRC returns the synchronization sources associated with this
     // CompoundPacket's reception report.
     pub fn destination_ssrc(&self) -> Vec<u32> {
         if self.0.len() == 0 {
             vec![]
         } else {
-            self.0[0].destination_ssrc()
+            match &self.0[0] {
+                Packet::SenderReport(p) => p.destination_ssrc(),
+                Packet::ReceiverReport(p) => p.destination_ssrc(),
+                _ => vec![],
+            }
         }
     }
 }
-*/

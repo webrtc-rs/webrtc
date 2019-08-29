@@ -14,7 +14,7 @@ use crate::get_padding;
 mod sender_report_test;
 
 // A SenderReport (SR) packet provides reception quality feedback for an RTP stream
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, Clone)]
 pub struct SenderReport {
     // The synchronization source identifier for the originator of this SR packet.
     pub ssrc: u32,

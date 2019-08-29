@@ -19,6 +19,7 @@ use super::transport_layer_nack::*;
 mod packet_test;
 
 // Packet represents an RTCP packet, a protocol used for out-of-band statistics and control information for an RTP session
+#[derive(Debug, Clone)]
 pub enum Packet {
     SenderReport(SenderReport),
     ReceiverReport(ReceiverReport),

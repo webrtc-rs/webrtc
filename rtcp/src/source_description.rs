@@ -72,7 +72,7 @@ const sdesOctetCountLen: usize = 1;
 const sdesMaxOctetCount: usize = (1 << 8) - 1;
 
 // A SourceDescriptionChunk contains items describing a single RTP source
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, Clone)]
 pub struct SourceDescriptionChunk {
     // The source (ssrc) or contributing source (csrc) identifier this packet describes
     pub source: u32,
@@ -152,7 +152,7 @@ impl SourceDescriptionChunk {
 }
 
 // A SourceDescriptionItem is a part of a SourceDescription that describes a stream.
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, Clone)]
 pub struct SourceDescriptionItem {
     // The type identifier for this item. eg, SDESCNAME for canonical name description.
     //
@@ -235,7 +235,7 @@ impl SourceDescriptionItem {
 }
 
 // A SourceDescription (SDES) packet describes the sources in an RTP stream.
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, Clone)]
 pub struct SourceDescription {
     pub chunks: Vec<SourceDescriptionChunk>,
 }
