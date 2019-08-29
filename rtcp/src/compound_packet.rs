@@ -26,7 +26,8 @@ mod compound_packet_test;
 // to identify the source and to begin associating media for purposes such as lip-sync.
 //
 // Other RTCP packet types may follow in any order. Packet types may appear more than once.
-pub struct CompoundPacket(Vec<Packet>);
+#[derive(Debug, Clone)]
+pub struct CompoundPacket(pub Vec<Packet>);
 
 impl CompoundPacket {
     // Validate returns an error if this is not an RFC-compliant CompoundPacket.
@@ -109,14 +110,6 @@ impl CompoundPacket {
 
         // use packet::marshal function
         marshal(&self.0, writer)
-    }
-
-    // Unmarshal decodes a CompoundPacket from binary.
-    pub fn unmarshal(raw_data: &[u8]) -> Result<Self, Error> {
-        let packets = unmarshal(raw_data)?;
-        let compound_packet = CompoundPacket(packets);
-        compound_packet.validate()?;
-        Ok(compound_packet)
     }
 
     // DestinationSSRC returns the synchronization sources associated with this

@@ -2,6 +2,7 @@ use std::io::{BufReader, Read, Write};
 
 use util::Error;
 
+use super::compound_packet::*;
 use super::errors::*;
 use super::goodbye::*;
 use super::header::*;
@@ -33,6 +34,8 @@ pub enum Packet {
     PictureLossIndication(PictureLossIndication),
     SliceLossIndication(SliceLossIndication),
     ReceiverEstimatedMaximumBitrate(ReceiverEstimatedMaximumBitrate),
+
+    CompoundPacket(CompoundPacket),
 }
 
 impl Packet {
@@ -48,6 +51,7 @@ impl Packet {
             Packet::PictureLossIndication(p) => p.marshal(writer)?,
             Packet::SliceLossIndication(p) => p.marshal(writer)?,
             Packet::ReceiverEstimatedMaximumBitrate(p) => p.marshal(writer)?,
+            Packet::CompoundPacket(p) => p.marshal(writer)?,
         };
         Ok(())
     }
@@ -67,7 +71,7 @@ pub fn marshal<W: Write>(packets: &[Packet], writer: &mut W) -> Result<(), Error
 // If this is a reduced-size RTCP packet a feedback packet (Goodbye, SliceLossIndication, etc)
 // will be returned. Otherwise, the underlying type of the returned packet will be
 // CompoundPacket.
-pub fn unmarshal(mut raw_data: &[u8]) -> Result<Vec<Packet>, Error> {
+pub fn unmarshal(mut raw_data: &[u8]) -> Result<Packet, Error> {
     let mut packets = vec![];
     while raw_data.len() != 0 {
         if raw_data.len() < HEADER_LENGTH {
@@ -89,8 +93,9 @@ pub fn unmarshal(mut raw_data: &[u8]) -> Result<Vec<Packet>, Error> {
     match packets.len() {
         // Empty packet
         0 => Err(ErrInvalidHeader.clone()),
+        1 => packets.pop().ok_or(ErrBadFirstPacket.clone()),
         // Multiple Packets
-        _ => Ok(packets),
+        _ => Ok(Packet::CompoundPacket(CompoundPacket(packets))),
     }
 }
 

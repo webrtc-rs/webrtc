@@ -58,7 +58,7 @@ fn test_read_eof() -> Result<(), Error> {
     let short_header = vec![
         0x81, 0xc9, // missing type & len
     ];
-    let result = CompoundPacket::unmarshal(&short_header);
+    let result = unmarshal(&short_header);
     assert!(result.is_err(), "missing type & len");
 
     Ok(())
@@ -67,12 +67,15 @@ fn test_read_eof() -> Result<(), Error> {
 #[test]
 fn test_bad_compound() -> Result<(), Error> {
     let bad_compound = &real_packet[..34];
-    let result = CompoundPacket::unmarshal(bad_compound);
+    let result = unmarshal(bad_compound);
     assert!(result.is_err(), "trailing data!");
 
     let bad_compound = &real_packet[84..104];
-    let result = CompoundPacket::unmarshal(bad_compound);
-    assert!(result.is_err(), "must start with RR or SR");
+    let packet = unmarshal(bad_compound)?;
+    let result = match packet {
+        Packet::CompoundPacket(p) => p.validate(),
+        _ => Ok(()),
+    };
     if let Err(got) = result {
         let want = ErrBadFirstPacket.clone();
         assert_eq!(
@@ -333,7 +336,7 @@ fn test_compound_packet_roundtrip() -> Result<(), Error> {
             }
         }
 
-        let decoded = CompoundPacket::unmarshal(&data)?;
+        let decoded = unmarshal(&data)?;
 
         let mut expect: Vec<u8> = vec![];
         {

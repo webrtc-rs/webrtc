@@ -42,11 +42,9 @@ fn test_packet_unmarshal() -> Result<(), Error> {
 
     let mut actual: Vec<u8> = vec![];
     {
-        let packets = unmarshal(&real_packet)?;
+        let packet = unmarshal(&real_packet)?;
         let mut writer = BufWriter::<&mut Vec<u8>>::new(actual.as_mut());
-        for packet in &packets {
-            packet.marshal(&mut writer)?;
-        }
+        packet.marshal(&mut writer)?;
     }
 
     let mut expect: Vec<u8> = vec![];
@@ -101,7 +99,7 @@ fn test_packet_unmarshal() -> Result<(), Error> {
 #[test]
 fn test_packet_unmarshal_empty() -> Result<(), Error> {
     let data = vec![];
-    let result: Result<Vec<Packet>, Error> = unmarshal(data.as_slice());
+    let result = unmarshal(data.as_slice());
     if let Err(got) = result {
         let want = ErrInvalidHeader.clone();
         assert_eq!(got, want, "Unmarshal(nil) err = {}, want {}", got, want);
@@ -114,17 +112,12 @@ fn test_packet_unmarshal_empty() -> Result<(), Error> {
 
 #[test]
 fn test_packet_invalid_header_length() -> Result<(), Error> {
-    /*let data = vec![
-        // Receiver Report (offset=0)
-        // v=2, p=0, count=1, RR, len=100
-        0x81, 0xc9, 0x0, 0x64,
-    ];*/
     let data = vec![
         // Goodbye (offset=84)
         // v=2, p=0, count=1, BYE, len=100
         0x81, 0xcb, 0x0, 0x64,
     ];
-    let result: Result<Vec<Packet>, Error> = unmarshal(data.as_slice());
+    let result = unmarshal(data.as_slice());
     if let Err(got) = result {
         let want = ErrPacketTooShort.clone();
         assert_eq!(
