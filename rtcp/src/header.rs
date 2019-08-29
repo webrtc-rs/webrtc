@@ -15,19 +15,19 @@ mod header_test;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum PacketType {
-    TypeUnsupported = 0,
-    TypeSenderReport = 200,              // RFC 3550, 6.4.1
-    TypeReceiverReport = 201,            // RFC 3550, 6.4.2
-    TypeSourceDescription = 202,         // RFC 3550, 6.5
-    TypeGoodbye = 203,                   // RFC 3550, 6.6
-    TypeApplicationDefined = 204,        // RFC 3550, 6.7 (unimplemented)
-    TypeTransportSpecificFeedback = 205, // RFC 4585, 6051
-    TypePayloadSpecificFeedback = 206,   // RFC 4585, 6.3
+    Unsupported = 0,
+    SenderReport = 200,              // RFC 3550, 6.4.1
+    ReceiverReport = 201,            // RFC 3550, 6.4.2
+    SourceDescription = 202,         // RFC 3550, 6.5
+    Goodbye = 203,                   // RFC 3550, 6.6
+    ApplicationDefined = 204,        // RFC 3550, 6.7 (unimplemented)
+    TransportSpecificFeedback = 205, // RFC 4585, 6051
+    PayloadSpecificFeedback = 206,   // RFC 4585, 6.3
 }
 
 impl Default for PacketType {
     fn default() -> Self {
-        PacketType::TypeUnsupported
+        PacketType::Unsupported
     }
 }
 
@@ -41,14 +41,14 @@ pub const FORMAT_REMB: u8 = 15;
 impl fmt::Display for PacketType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = match self {
-            PacketType::TypeUnsupported => "Unsupported",
-            PacketType::TypeSenderReport => "SR",
-            PacketType::TypeReceiverReport => "RR",
-            PacketType::TypeSourceDescription => "SDES",
-            PacketType::TypeGoodbye => "BYE",
-            PacketType::TypeApplicationDefined => "APP",
-            PacketType::TypeTransportSpecificFeedback => "TSFB",
-            PacketType::TypePayloadSpecificFeedback => "PSFB",
+            PacketType::Unsupported => "Unsupported",
+            PacketType::SenderReport => "SR",
+            PacketType::ReceiverReport => "RR",
+            PacketType::SourceDescription => "SDES",
+            PacketType::Goodbye => "BYE",
+            PacketType::ApplicationDefined => "APP",
+            PacketType::TransportSpecificFeedback => "TSFB",
+            PacketType::PayloadSpecificFeedback => "PSFB",
         };
         write!(f, "{}", s)
     }
@@ -57,14 +57,14 @@ impl fmt::Display for PacketType {
 impl From<u8> for PacketType {
     fn from(b: u8) -> Self {
         match b {
-            200 => PacketType::TypeSenderReport,       // RFC 3550, 6.4.1
-            201 => PacketType::TypeReceiverReport,     // RFC 3550, 6.4.2
-            202 => PacketType::TypeSourceDescription,  // RFC 3550, 6.5
-            203 => PacketType::TypeGoodbye,            // RFC 3550, 6.6
-            204 => PacketType::TypeApplicationDefined, // RFC 3550, 6.7 (unimplemented)
-            205 => PacketType::TypeTransportSpecificFeedback, // RFC 4585, 6051
-            206 => PacketType::TypePayloadSpecificFeedback, // RFC 4585, 6.3
-            _ => PacketType::TypeUnsupported,
+            200 => PacketType::SenderReport,              // RFC 3550, 6.4.1
+            201 => PacketType::ReceiverReport,            // RFC 3550, 6.4.2
+            202 => PacketType::SourceDescription,         // RFC 3550, 6.5
+            203 => PacketType::Goodbye,                   // RFC 3550, 6.6
+            204 => PacketType::ApplicationDefined,        // RFC 3550, 6.7 (unimplemented)
+            205 => PacketType::TransportSpecificFeedback, // RFC 4585, 6051
+            206 => PacketType::PayloadSpecificFeedback,   // RFC 4585, 6.3
+            _ => PacketType::Unsupported,
         }
     }
 }
@@ -72,7 +72,7 @@ impl From<u8> for PacketType {
 const RTP_VERSION: u8 = 2;
 
 // A Header is the common header shared by all RTCP packets
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, Clone)]
 pub struct Header {
     // If the padding bit is set, this individual RTCP packet contains
     // some additional padding octets at the end which are not part of
@@ -150,7 +150,7 @@ impl Header {
 
         let b1 = reader.read_u8()?;
         let packet_type: PacketType = b1.into();
-        if packet_type == PacketType::TypeUnsupported {
+        if packet_type == PacketType::Unsupported {
             return Err(ErrWrongType.clone());
         }
 

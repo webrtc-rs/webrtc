@@ -7,7 +7,6 @@ use util::Error;
 
 use super::errors::*;
 use super::header::*;
-use super::packet::*;
 use super::reception_report::*;
 use crate::get_padding;
 
@@ -94,16 +93,6 @@ impl SenderReport {
         HEADER_LENGTH + SR_HEADER_LENGTH + reps_length + self.profile_extensions.len()
     }
 
-    // Header returns the Header associated with this packet.
-    pub fn header(&self) -> Header {
-        let l = self.len() + get_padding(self.len());
-        Header {
-            padding: get_padding(self.len()) != 0,
-            count: self.reports.len() as u8,
-            packet_type: PacketType::TypeSenderReport,
-            length: ((l / 4) - 1) as u16,
-        }
-    }
     // Unmarshal decodes the ReceptionReport from binary
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
         /*
@@ -145,7 +134,7 @@ impl SenderReport {
          */
         let header = Header::unmarshal(reader)?;
 
-        if header.packet_type != PacketType::TypeSenderReport {
+        if header.packet_type != PacketType::SenderReport {
             return Err(ErrWrongType.clone());
         }
 
@@ -173,16 +162,25 @@ impl SenderReport {
             profile_extensions,
         })
     }
-}
 
-impl<W: Write> Packet<W> for SenderReport {
+    // Header returns the Header associated with this packet.
+    pub fn header(&self) -> Header {
+        let l = self.len() + get_padding(self.len());
+        Header {
+            padding: get_padding(self.len()) != 0,
+            count: self.reports.len() as u8,
+            packet_type: PacketType::SenderReport,
+            length: ((l / 4) - 1) as u16,
+        }
+    }
+
     // DestinationSSRC returns an array of SSRC values that this packet refers to.
-    fn destination_ssrc(&self) -> Vec<u32> {
+    pub fn destination_ssrc(&self) -> Vec<u32> {
         self.reports.iter().map(|x| x.ssrc).collect()
     }
 
     // Marshal encodes the packet in binary.
-    fn marshal(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         /*
          *         0                   1                   2                   3
          *         0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1

@@ -16,7 +16,7 @@ fn test_header_unmarshal() -> Result<(), Error> {
             Header {
                 padding: false,
                 count: 1,
-                packet_type: PacketType::TypeReceiverReport,
+                packet_type: PacketType::ReceiverReport,
                 length: 7,
             },
             None,
@@ -30,7 +30,7 @@ fn test_header_unmarshal() -> Result<(), Error> {
             Header {
                 padding: true,
                 count: 1,
-                packet_type: PacketType::TypeApplicationDefined,
+                packet_type: PacketType::ApplicationDefined,
                 length: 7,
             },
             None,
@@ -44,7 +44,7 @@ fn test_header_unmarshal() -> Result<(), Error> {
             Header {
                 padding: false,
                 count: 0,
-                packet_type: PacketType::TypeUnsupported,
+                packet_type: PacketType::Unsupported,
                 length: 0,
             },
             Some(ErrBadVersion.clone()),
@@ -88,7 +88,7 @@ fn test_header_roundtrip() -> Result<(), Error> {
             Header {
                 padding: true,
                 count: 31,
-                packet_type: PacketType::TypeSenderReport,
+                packet_type: PacketType::SenderReport,
                 length: 4,
             },
             None,
@@ -98,7 +98,7 @@ fn test_header_roundtrip() -> Result<(), Error> {
             Header {
                 padding: false,
                 count: 28,
-                packet_type: PacketType::TypeReceiverReport,
+                packet_type: PacketType::ReceiverReport,
                 length: 65535,
             },
             None,
@@ -108,7 +108,7 @@ fn test_header_roundtrip() -> Result<(), Error> {
             Header {
                 padding: false,
                 count: 40,
-                packet_type: PacketType::TypeUnsupported,
+                packet_type: PacketType::Unsupported,
                 length: 0,
             },
             Some(ErrInvalidHeader.clone()),

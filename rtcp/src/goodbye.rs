@@ -7,7 +7,6 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use super::errors::*;
 use super::header::*;
-use super::packet::*;
 use crate::get_padding;
 
 #[cfg(test)]
@@ -46,17 +45,6 @@ impl Goodbye {
         HEADER_LENGTH + srcs_length + reason_length
     }
 
-    // Header returns the Header associated with this packet.
-    pub fn header(&self) -> Header {
-        let l = self.len() + get_padding(self.len());
-        Header {
-            padding: get_padding(self.len()) != 0,
-            count: self.sources.len() as u8,
-            packet_type: PacketType::TypeGoodbye,
-            length: ((l / 4) - 1) as u16,
-        }
-    }
-
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
         /*
          *        0                   1                   2                   3
@@ -74,7 +62,7 @@ impl Goodbye {
 
         let header = Header::unmarshal(reader)?;
 
-        if header.packet_type != PacketType::TypeGoodbye {
+        if header.packet_type != PacketType::Goodbye {
             return Err(ErrWrongType.clone());
         }
 
@@ -106,16 +94,25 @@ impl Goodbye {
 
         Ok(goodbye)
     }
-}
 
-impl<W: Write> Packet<W> for Goodbye {
+    // Header returns the Header associated with this packet.
+    pub fn header(&self) -> Header {
+        let l = self.len() + get_padding(self.len());
+        Header {
+            padding: get_padding(self.len()) != 0,
+            count: self.sources.len() as u8,
+            packet_type: PacketType::Goodbye,
+            length: ((l / 4) - 1) as u16,
+        }
+    }
+
     // DestinationSSRC returns an array of SSRC values that this packet refers to.
-    fn destination_ssrc(&self) -> Vec<u32> {
+    pub fn destination_ssrc(&self) -> Vec<u32> {
         self.sources.to_vec()
     }
 
     // Marshal encodes the packet in binary.
-    fn marshal(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         /*
          *        0                   1                   2                   3
          *        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -134,7 +131,8 @@ impl<W: Write> Packet<W> for Goodbye {
             return Err(ErrTooManySources.clone());
         }
 
-        self.header().marshal(writer)?;
+        let header = self.header();
+        header.marshal(writer)?;
 
         for s in &self.sources {
             writer.write_u32::<BigEndian>(*s)?;

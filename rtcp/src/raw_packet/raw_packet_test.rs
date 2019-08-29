@@ -9,27 +9,41 @@ fn test_raw_packet_roundtrip() -> Result<(), Error> {
     let tests = vec![
         (
             "valid",
-            RawPacket(vec![
-                // v=2, p=0, count=1, BYE, len=12
-                0x81, 0xcb, 0x00, 0x0c, // ssrc=0x902f9e2e
-                0x90, 0x2f, 0x9e, 0x2e, // len=3, text=FOO
-                0x03, 0x46, 0x4f, 0x4f,
-            ]),
+            RawPacket {
+                raw: vec![
+                    // v=2, p=0, count=1, BYE, len=12
+                    0x81, 0xcb, 0x00, 0x0c, // ssrc=0x902f9e2e
+                    0x90, 0x2f, 0x9e, 0x2e, // len=3, text=FOO
+                    0x03, 0x46, 0x4f, 0x4f,
+                ],
+                header: Header {
+                    padding: false,
+                    count: 1,
+                    packet_type: PacketType::Goodbye,
+                    length: 12,
+                },
+            },
             None,
             None,
         ),
         (
             "short header",
-            RawPacket(vec![0x00]),
+            RawPacket {
+                raw: vec![0x80],
+                ..Default::default()
+            },
             None,
-            Some(ErrPacketTooShort.clone()),
+            Some(ErrFailedToFillWholeBuffer.clone()),
         ),
         (
             "invalid header",
-            RawPacket(vec![
-                // v=0, p=0, count=0, RR, len=4
-                0x00, 0xc9, 0x00, 0x04,
-            ]),
+            RawPacket {
+                raw: vec![
+                    // v=0, p=0, count=0, RR, len=4
+                    0x00, 0xc9, 0x00, 0x04,
+                ],
+                ..Default::default()
+            },
             None,
             Some(ErrBadVersion.clone()),
         ),

@@ -7,7 +7,6 @@ use util::Error;
 
 use super::errors::*;
 use super::header::*;
-use super::packet::*;
 use crate::get_padding;
 
 #[cfg(test)]
@@ -40,23 +39,11 @@ impl PictureLossIndication {
         HEADER_LENGTH + SSRC_LENGTH * 2
     }
 
-    // Header returns the Header associated with this packet.
-    pub fn header(&self) -> Header {
-        let l = self.len() + get_padding(self.len());
-        Header {
-            padding: get_padding(self.len()) != 0,
-            count: FORMAT_PLI,
-            packet_type: PacketType::TypePayloadSpecificFeedback,
-            length: ((l / 4) - 1) as u16,
-        }
-    }
     // Unmarshal decodes the ReceptionReport from binary
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let header = Header::unmarshal(reader)?;
 
-        if header.packet_type != PacketType::TypePayloadSpecificFeedback
-            || header.count != FORMAT_PLI
-        {
+        if header.packet_type != PacketType::PayloadSpecificFeedback || header.count != FORMAT_PLI {
             return Err(ErrWrongType.clone());
         }
 
@@ -68,16 +55,25 @@ impl PictureLossIndication {
             media_ssrc,
         })
     }
-}
 
-impl<W: Write> Packet<W> for PictureLossIndication {
+    // Header returns the Header associated with this packet.
+    pub fn header(&self) -> Header {
+        let l = self.len() + get_padding(self.len());
+        Header {
+            padding: get_padding(self.len()) != 0,
+            count: FORMAT_PLI,
+            packet_type: PacketType::PayloadSpecificFeedback,
+            length: ((l / 4) - 1) as u16,
+        }
+    }
+
     // DestinationSSRC returns an array of SSRC values that this packet refers to.
-    fn destination_ssrc(&self) -> Vec<u32> {
+    pub fn destination_ssrc(&self) -> Vec<u32> {
         vec![self.media_ssrc]
     }
 
     // Marshal encodes the packet in binary.
-    fn marshal(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.header().marshal(writer)?;
 
         writer.write_u32::<BigEndian>(self.sender_ssrc)?;

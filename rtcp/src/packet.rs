@@ -19,16 +19,43 @@ use super::transport_layer_nack::*;
 mod packet_test;
 
 // Packet represents an RTCP packet, a protocol used for out-of-band statistics and control information for an RTP session
-pub trait Packet<W: Write> {
-    // DestinationSSRC returns an array of SSRC values that this packet refers to.
-    fn destination_ssrc(&self) -> Vec<u32>;
-    fn marshal(&self, writer: &mut W) -> Result<(), Error>;
+pub enum Packet {
+    SenderReport(SenderReport),
+    ReceiverReport(ReceiverReport),
+    SourceDescription(SourceDescription),
+    Goodbye(Goodbye),
+    RawPacket(RawPacket),
+
+    TransportLayerNack(TransportLayerNack),
+    RapidResynchronizationRequest(RapidResynchronizationRequest),
+
+    PictureLossIndication(PictureLossIndication),
+    SliceLossIndication(SliceLossIndication),
+    ReceiverEstimatedMaximumBitrate(ReceiverEstimatedMaximumBitrate),
+}
+
+impl Packet {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        match self {
+            Packet::SenderReport(p) => p.marshal(writer)?,
+            Packet::ReceiverReport(p) => p.marshal(writer)?,
+            Packet::SourceDescription(p) => p.marshal(writer)?,
+            Packet::Goodbye(p) => p.marshal(writer)?,
+            Packet::RawPacket(p) => p.marshal(writer)?,
+            Packet::TransportLayerNack(p) => p.marshal(writer)?,
+            Packet::RapidResynchronizationRequest(p) => p.marshal(writer)?,
+            Packet::PictureLossIndication(p) => p.marshal(writer)?,
+            Packet::SliceLossIndication(p) => p.marshal(writer)?,
+            Packet::ReceiverEstimatedMaximumBitrate(p) => p.marshal(writer)?,
+        };
+        Ok(())
+    }
 }
 
 //Marshal takes an array of Packets and serializes them to a single buffer
-pub fn marshal<W: Write>(packets: &[impl Packet<W>], writer: &mut W) -> Result<(), Error> {
-    for p in packets {
-        p.marshal(writer)?;
+pub fn marshal<W: Write>(packets: &[Packet], writer: &mut W) -> Result<(), Error> {
+    for packet in packets {
+        packet.marshal(writer)?;
     }
     Ok(())
 }
@@ -39,7 +66,7 @@ pub fn marshal<W: Write>(packets: &[impl Packet<W>], writer: &mut W) -> Result<(
 // If this is a reduced-size RTCP packet a feedback packet (Goodbye, SliceLossIndication, etc)
 // will be returned. Otherwise, the underlying type of the returned packet will be
 // CompoundPacket.
-pub fn unmarshal<W: Write>(mut raw_data: &[u8]) -> Result<Vec<Box<dyn Packet<W>>>, Error> {
+pub fn unmarshal(mut raw_data: &[u8]) -> Result<Vec<Packet>, Error> {
     let mut packets = vec![];
     while raw_data.len() != 0 {
         if raw_data.len() < HEADER_LENGTH {
@@ -68,28 +95,37 @@ pub fn unmarshal<W: Write>(mut raw_data: &[u8]) -> Result<Vec<Box<dyn Packet<W>>
 
 // unmarshaler is a factory which pulls the first RTCP packet from a bytestream,
 // and returns it's parsed representation, and the amount of data that was processed.
-fn unmarshaler<R: Read, W: Write>(
-    reader: &mut R,
-    header: &Header,
-) -> Result<Box<dyn Packet<W>>, Error> {
+fn unmarshaler<R: Read>(reader: &mut R, header: &Header) -> Result<Packet, Error> {
     match header.packet_type {
-        PacketType::TypeSenderReport => Ok(Box::new(SenderReport::unmarshal(reader)?)),
-        PacketType::TypeReceiverReport => Ok(Box::new(ReceiverReport::unmarshal(reader)?)),
-        PacketType::TypeSourceDescription => Ok(Box::new(SourceDescription::unmarshal(reader)?)),
-        PacketType::TypeGoodbye => Ok(Box::new(Goodbye::unmarshal(reader)?)),
-        PacketType::TypeTransportSpecificFeedback => match header.count {
-            FORMAT_TLN => Ok(Box::new(TransportLayerNack::unmarshal(reader)?)),
-            FORMAT_RRR => Ok(Box::new(RapidResynchronizationRequest::unmarshal(reader)?)),
-            _ => Ok(Box::new(RawPacket::unmarshal(reader)?)),
-        },
-        PacketType::TypePayloadSpecificFeedback => match header.count {
-            FORMAT_PLI => Ok(Box::new(PictureLossIndication::unmarshal(reader)?)),
-            FORMAT_SLI => Ok(Box::new(SliceLossIndication::unmarshal(reader)?)),
-            FORMAT_REMB => Ok(Box::new(ReceiverEstimatedMaximumBitrate::unmarshal(
+        PacketType::SenderReport => Ok(Packet::SenderReport(SenderReport::unmarshal(reader)?)),
+        PacketType::ReceiverReport => {
+            Ok(Packet::ReceiverReport(ReceiverReport::unmarshal(reader)?))
+        }
+        PacketType::SourceDescription => Ok(Packet::SourceDescription(
+            SourceDescription::unmarshal(reader)?,
+        )),
+        PacketType::Goodbye => Ok(Packet::Goodbye(Goodbye::unmarshal(reader)?)),
+        PacketType::TransportSpecificFeedback => match header.count {
+            FORMAT_TLN => Ok(Packet::TransportLayerNack(TransportLayerNack::unmarshal(
                 reader,
             )?)),
-            _ => Ok(Box::new(RawPacket::unmarshal(reader)?)),
+            FORMAT_RRR => Ok(Packet::RapidResynchronizationRequest(
+                RapidResynchronizationRequest::unmarshal(reader)?,
+            )),
+            _ => Ok(Packet::RawPacket(RawPacket::unmarshal(reader)?)),
         },
-        _ => Ok(Box::new(RawPacket::unmarshal(reader)?)),
+        PacketType::PayloadSpecificFeedback => match header.count {
+            FORMAT_PLI => Ok(Packet::PictureLossIndication(
+                PictureLossIndication::unmarshal(reader)?,
+            )),
+            FORMAT_SLI => Ok(Packet::SliceLossIndication(SliceLossIndication::unmarshal(
+                reader,
+            )?)),
+            FORMAT_REMB => Ok(Packet::ReceiverEstimatedMaximumBitrate(
+                ReceiverEstimatedMaximumBitrate::unmarshal(reader)?,
+            )),
+            _ => Ok(Packet::RawPacket(RawPacket::unmarshal(reader)?)),
+        },
+        _ => Ok(Packet::RawPacket(RawPacket::unmarshal(reader)?)),
     }
 }

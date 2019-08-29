@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
 
+pub mod compound_packet;
 pub mod errors;
 pub mod goodbye;
 pub mod header;
