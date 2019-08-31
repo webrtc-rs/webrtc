@@ -22,9 +22,9 @@ pub struct RapidResynchronizationRequest {
     pub media_ssrc: u32,
 }
 
-const rrrLength: usize = 2;
-const rrrHeaderLength: usize = SSRC_LENGTH * 2;
-const rrrMediaOffset: usize = 4;
+const RRR_LENGTH: usize = 2;
+const RRR_HEADER_LENGTH: usize = SSRC_LENGTH * 2;
+const RRR_MEDIA_OFFSET: usize = 4;
 
 impl fmt::Display for RapidResynchronizationRequest {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -38,7 +38,7 @@ impl fmt::Display for RapidResynchronizationRequest {
 
 impl RapidResynchronizationRequest {
     fn len(&self) -> usize {
-        HEADER_LENGTH + rrrHeaderLength
+        HEADER_LENGTH + RRR_HEADER_LENGTH
     }
 
     // Unmarshal decodes the ReceptionReport from binary
@@ -47,7 +47,7 @@ impl RapidResynchronizationRequest {
 
         if header.packet_type != PacketType::TransportSpecificFeedback || header.count != FORMAT_RRR
         {
-            return Err(ErrWrongType.clone());
+            return Err(ERR_WRONG_TYPE.clone());
         }
 
         let sender_ssrc = reader.read_u32::<BigEndian>()?;

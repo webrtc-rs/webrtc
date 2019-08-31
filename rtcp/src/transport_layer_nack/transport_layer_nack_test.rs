@@ -34,7 +34,7 @@ fn test_transport_layer_nack_unmarshal() -> Result<(), Error> {
                 // report ends early
             ],
             TransportLayerNack::default(),
-            Some(ErrFailedToFillWholeBuffer.clone()),
+            Some(ERR_FAILED_TO_FILL_WHOLE_BUFFER.clone()),
         ),
         (
             "wrong type",
@@ -50,13 +50,13 @@ fn test_transport_layer_nack_unmarshal() -> Result<(), Error> {
                 0x0, 0x2, 0x4a, 0x79,
             ],
             TransportLayerNack::default(),
-            Some(ErrWrongType.clone()),
+            Some(ERR_WRONG_TYPE.clone()),
         ),
         (
             "nil",
             vec![],
             TransportLayerNack::default(),
-            Some(ErrFailedToFillWholeBuffer.clone()),
+            Some(ERR_FAILED_TO_FILL_WHOLE_BUFFER.clone()),
         ),
     ];
 

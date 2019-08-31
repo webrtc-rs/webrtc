@@ -1,4 +1,5 @@
 use super::*;
+use crate::errors::*;
 
 use std::io::{BufReader, BufWriter};
 
@@ -33,7 +34,7 @@ fn test_raw_packet_roundtrip() -> Result<(), Error> {
                 ..Default::default()
             },
             None,
-            Some(ErrFailedToFillWholeBuffer.clone()),
+            Some(ERR_FAILED_TO_FILL_WHOLE_BUFFER.clone()),
         ),
         (
             "invalid header",
@@ -45,7 +46,7 @@ fn test_raw_packet_roundtrip() -> Result<(), Error> {
                 ..Default::default()
             },
             None,
-            Some(ErrBadVersion.clone()),
+            Some(ERR_BAD_VERSION.clone()),
         ),
     ];
 

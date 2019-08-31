@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub mod common_description;
 pub mod direction;
 pub mod extmap;

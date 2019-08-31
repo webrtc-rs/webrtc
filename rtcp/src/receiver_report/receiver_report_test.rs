@@ -74,7 +74,7 @@ fn test_receiver_report_unmarshal() -> Result<(), Error> {
                 // report ends early
             ],
             ReceiverReport::default(),
-            Some(ErrFailedToFillWholeBuffer.clone()),
+            Some(ERR_FAILED_TO_FILL_WHOLE_BUFFER.clone()),
         ),
         (
             "wrong type",
@@ -90,7 +90,7 @@ fn test_receiver_report_unmarshal() -> Result<(), Error> {
                 0x0, 0x2, 0x4a, 0x79,
             ],
             ReceiverReport::default(),
-            Some(ErrWrongType.clone()),
+            Some(ERR_WRONG_TYPE.clone()),
         ),
         (
             "bad count in header",
@@ -106,13 +106,13 @@ fn test_receiver_report_unmarshal() -> Result<(), Error> {
                 0x0, 0x2, 0x4a, 0x79,
             ],
             ReceiverReport::default(),
-            Some(ErrFailedToFillWholeBuffer.clone()),
+            Some(ERR_FAILED_TO_FILL_WHOLE_BUFFER.clone()),
         ),
         (
             "nil",
             vec![],
             ReceiverReport::default(),
-            Some(ErrFailedToFillWholeBuffer.clone()),
+            Some(ERR_FAILED_TO_FILL_WHOLE_BUFFER.clone()),
         ),
     ];
 
@@ -208,7 +208,7 @@ fn test_receiver_report_roundtrip() -> Result<(), Error> {
                 }],
                 ..Default::default()
             },
-            Some(ErrInvalidTotalLost.clone()),
+            Some(ERR_INVALID_TOTAL_LOST.clone()),
         ),
         (
             "count overflow",
@@ -217,7 +217,7 @@ fn test_receiver_report_roundtrip() -> Result<(), Error> {
                 reports: too_many_reports,
                 ..Default::default()
             },
-            Some(ErrTooManyReports.clone()),
+            Some(ERR_TOO_MANY_REPORTS.clone()),
         ),
     ];
 

@@ -221,7 +221,7 @@ impl SessionDescription {
     // NewJSEPSessionDescription creates a new SessionDescription with
     // some settings that are required by the JSEP spec.
     pub fn new(identity: bool) -> Self {
-        let mut d = SessionDescription {
+        let d = SessionDescription {
             version: 0,
             origin: Origin {
                 username: "-".to_string(),
@@ -274,7 +274,7 @@ impl SessionDescription {
     }
 
     // WithFingerprint adds a fingerprint to the session description
-    pub fn with_fingerprint(mut self, algorithm: String, value: String) -> Self {
+    pub fn with_fingerprint(self, algorithm: String, value: String) -> Self {
         self.with_value_attribute("fingerprint".to_string(), algorithm + " " + value.as_str())
     }
 

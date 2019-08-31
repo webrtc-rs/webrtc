@@ -1,26 +1,16 @@
 use super::*;
-use crate::*;
 
-use std::io::{BufReader, BufWriter};
+use std::io::BufWriter;
 
 use util::Error;
 
-use crate::errors::*;
 use crate::goodbye::*;
-use crate::header::*;
-use crate::picture_loss_indication::*;
-use crate::rapid_resynchronization_request::*;
-use crate::raw_packet::*;
-use crate::receiver_estimated_maximum_bitrate::*;
 use crate::receiver_report::*;
 use crate::sender_report::*;
-use crate::slice_loss_indication::*;
-use crate::source_description::*;
-use crate::transport_layer_nack::*;
 
 lazy_static! {
 // An RTCP packet from a packet dump
-static ref real_packet:Vec<u8> = vec![
+static ref REAL_PACKET:Vec<u8> = vec![
     // Receiver Report (offset=0)
     // v=2, p=0, count=1, RR, len=7
     0x81, 0xc9, 0x0, 0x7, // ssrc=0x902f9e2e
@@ -66,18 +56,18 @@ fn test_read_eof() -> Result<(), Error> {
 
 #[test]
 fn test_bad_compound() -> Result<(), Error> {
-    let bad_compound = &real_packet[..34];
+    let bad_compound = &REAL_PACKET[..34];
     let result = unmarshal(bad_compound);
     assert!(result.is_err(), "trailing data!");
 
-    let bad_compound = &real_packet[84..104];
+    let bad_compound = &REAL_PACKET[84..104];
     let packet = unmarshal(bad_compound)?;
     let result = match packet {
         Packet::CompoundPacket(p) => p.validate(),
         _ => Ok(()),
     };
     if let Err(got) = result {
-        let want = ErrBadFirstPacket.clone();
+        let want = ERR_BAD_FIRST_PACKET.clone();
         assert_eq!(
             got, want,
             "Unmarshal(badcompound) err={}, want {}",
@@ -106,17 +96,17 @@ fn test_valid_compound() -> Result<(), Error> {
         (
             "empty",
             CompoundPacket(vec![]),
-            Some(ErrEmptyCompound.clone()),
+            Some(ERR_EMPTY_COMPOUND.clone()),
         ),
         (
             "no cname",
             CompoundPacket(vec![Packet::SenderReport(SenderReport::default())]),
-            Some(ErrMissingCNAME.clone()),
+            Some(ERR_MISSING_CNAME.clone()),
         ),
         (
             "just BYE",
             CompoundPacket(vec![Packet::Goodbye(Goodbye::default())]),
-            Some(ErrBadFirstPacket.clone()),
+            Some(ERR_BAD_FIRST_PACKET.clone()),
         ),
         (
             "SDES / no cname",
@@ -124,7 +114,7 @@ fn test_valid_compound() -> Result<(), Error> {
                 Packet::SenderReport(SenderReport::default()),
                 Packet::SourceDescription(SourceDescription::default()),
             ]),
-            Some(ErrMissingCNAME.clone()),
+            Some(ERR_MISSING_CNAME.clone()),
         ),
         (
             "just SR",
@@ -141,7 +131,7 @@ fn test_valid_compound() -> Result<(), Error> {
                 Packet::SenderReport(SenderReport::default()),
                 cname.clone(),
             ]),
-            Some(ErrPacketBeforeCNAME.clone()),
+            Some(ERR_PACKET_BEFORE_CNAME.clone()),
         ),
         (
             "just RR",
@@ -203,7 +193,7 @@ fn test_cname() -> Result<(), Error> {
         (
             "no cname",
             CompoundPacket(vec![Packet::SenderReport(SenderReport::default())]),
-            Some(ErrMissingCNAME.clone()),
+            Some(ERR_MISSING_CNAME.clone()),
             "",
         ),
         (
@@ -212,7 +202,7 @@ fn test_cname() -> Result<(), Error> {
                 Packet::SenderReport(SenderReport::default()),
                 Packet::SourceDescription(SourceDescription::default()),
             ]),
-            Some(ErrMissingCNAME.clone()),
+            Some(ERR_MISSING_CNAME.clone()),
             "",
         ),
         (
@@ -231,7 +221,7 @@ fn test_cname() -> Result<(), Error> {
                 Packet::SenderReport(SenderReport::default()),
                 cname.clone(),
             ]),
-            Some(ErrPacketBeforeCNAME.clone()),
+            Some(ERR_PACKET_BEFORE_CNAME.clone()),
             "",
         ),
         (
@@ -311,7 +301,7 @@ fn test_compound_packet_roundtrip() -> Result<(), Error> {
         (
             "no cname",
             CompoundPacket(vec![Packet::ReceiverReport(ReceiverReport::default())]),
-            Some(ErrMissingCNAME.clone()),
+            Some(ERR_MISSING_CNAME.clone()),
         ),
     ];
 
@@ -336,12 +326,12 @@ fn test_compound_packet_roundtrip() -> Result<(), Error> {
             }
         }
 
-        let decoded = unmarshal(&data)?;
+        let _decoded = unmarshal(&data)?;
 
         let mut expect: Vec<u8> = vec![];
         {
             let mut writer = BufWriter::<&mut Vec<u8>>::new(expect.as_mut());
-            let result = packet.marshal(&mut writer);
+            let _result = packet.marshal(&mut writer);
         }
         assert_eq!(
             data, expect,

@@ -117,7 +117,7 @@ impl Header {
         }
 
         if self.count > 31 {
-            return Err(ErrInvalidHeader.clone());
+            return Err(ERR_INVALID_HEADER.clone());
         }
         b0 |= self.count << COUNT_SHIFT;
         writer.write_u8(b0)?;
@@ -142,7 +142,7 @@ impl Header {
         let b0 = reader.read_u8()?;
         let version = b0 >> VERSION_SHIFT & VERSION_MASK;
         if version != RTP_VERSION {
-            return Err(ErrBadVersion.clone());
+            return Err(ERR_BAD_VERSION.clone());
         }
 
         let padding = (b0 >> PADDING_SHIFT & PADDING_MASK) > 0;
@@ -151,7 +151,7 @@ impl Header {
         let b1 = reader.read_u8()?;
         let packet_type: PacketType = b1.into();
         if packet_type == PacketType::Unsupported {
-            return Err(ErrWrongType.clone());
+            return Err(ERR_WRONG_TYPE.clone());
         }
 
         let length = reader.read_u16::<BigEndian>()?;

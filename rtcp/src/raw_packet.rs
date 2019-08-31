@@ -3,7 +3,6 @@ use std::io::{BufReader, Read, Write};
 
 use util::Error;
 
-use super::errors::*;
 use super::header::*;
 
 #[cfg(test)]

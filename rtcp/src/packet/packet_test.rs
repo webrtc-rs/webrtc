@@ -42,7 +42,7 @@ fn test_packet_unmarshal() -> Result<(), Error> {
 
     let mut actual: Vec<u8> = vec![];
     {
-        let packet = unmarshal(&real_packet)?;
+        let packet = unmarshal(real_packet.as_slice())?;
         let mut writer = BufWriter::<&mut Vec<u8>>::new(actual.as_mut());
         packet.marshal(&mut writer)?;
     }
@@ -101,7 +101,7 @@ fn test_packet_unmarshal_empty() -> Result<(), Error> {
     let data = vec![];
     let result = unmarshal(data.as_slice());
     if let Err(got) = result {
-        let want = ErrInvalidHeader.clone();
+        let want = ERR_INVALID_HEADER.clone();
         assert_eq!(got, want, "Unmarshal(nil) err = {}, want {}", got, want);
     } else {
         assert!(false, "want error");
@@ -119,7 +119,7 @@ fn test_packet_invalid_header_length() -> Result<(), Error> {
     ];
     let result = unmarshal(data.as_slice());
     if let Err(got) = result {
-        let want = ErrPacketTooShort.clone();
+        let want = ERR_PACKET_TOO_SHORT.clone();
         assert_eq!(
             got, want,
             "Unmarshal(invalid_header_length) err = {}, want {}",

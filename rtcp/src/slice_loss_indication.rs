@@ -38,8 +38,8 @@ pub struct SliceLossIndication {
     pub sli_entries: Vec<SLIEntry>,
 }
 
-const sliLength: usize = 2;
-const sliOffset: usize = 8;
+const SLI_LENGTH: usize = 2;
+const SLI_OFFSET: usize = 8;
 
 impl fmt::Display for SliceLossIndication {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -53,7 +53,7 @@ impl fmt::Display for SliceLossIndication {
 
 impl SliceLossIndication {
     fn len(&self) -> usize {
-        HEADER_LENGTH + sliOffset + self.sli_entries.len() * 4
+        HEADER_LENGTH + SLI_OFFSET + self.sli_entries.len() * 4
     }
 
     // Unmarshal decodes the ReceptionReport from binary
@@ -62,14 +62,14 @@ impl SliceLossIndication {
 
         if header.packet_type != PacketType::TransportSpecificFeedback || header.count != FORMAT_SLI
         {
-            return Err(ErrWrongType.clone());
+            return Err(ERR_WRONG_TYPE.clone());
         }
 
         let sender_ssrc = reader.read_u32::<BigEndian>()?;
         let media_ssrc = reader.read_u32::<BigEndian>()?;
 
         let mut sli_entries = vec![];
-        for _i in 0..(header.length as i32 - sliOffset as i32 / 4) {
+        for _i in 0..(header.length as i32 - SLI_OFFSET as i32 / 4) {
             let sli_entry = reader.read_u32::<BigEndian>()?;
             sli_entries.push(SLIEntry {
                 first: ((sli_entry >> 19) & 0x1FFF) as u16,
@@ -103,8 +103,8 @@ impl SliceLossIndication {
 
     // Marshal encodes the packet in binary.
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        if self.sli_entries.len() + sliLength > std::u8::MAX as usize {
-            return Err(ErrTooManyReports.clone());
+        if self.sli_entries.len() + SLI_LENGTH > std::u8::MAX as usize {
+            return Err(ERR_TOO_MANY_REPORTS.clone());
         }
 
         self.header().marshal(writer)?;

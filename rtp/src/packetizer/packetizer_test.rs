@@ -1,6 +1,5 @@
 use super::*;
 use crate::codecs::*;
-use crate::sequence::*;
 
 use std::io::BufReader;
 use std::time::Duration;

@@ -35,7 +35,7 @@ fn test_slice_loss_indication_unmarshal() -> Result<(), Error> {
                 // report ends early
             ],
             SliceLossIndication::default(),
-            Some(ErrFailedToFillWholeBuffer.clone()),
+            Some(ERR_FAILED_TO_FILL_WHOLE_BUFFER.clone()),
         ),
         (
             "wrong type",
@@ -51,13 +51,13 @@ fn test_slice_loss_indication_unmarshal() -> Result<(), Error> {
                 0x0, 0x2, 0x4a, 0x79,
             ],
             SliceLossIndication::default(),
-            Some(ErrWrongType.clone()),
+            Some(ERR_WRONG_TYPE.clone()),
         ),
         (
             "nil",
             vec![],
             SliceLossIndication::default(),
-            Some(ErrFailedToFillWholeBuffer.clone()),
+            Some(ERR_FAILED_TO_FILL_WHOLE_BUFFER.clone()),
         ),
     ];
 

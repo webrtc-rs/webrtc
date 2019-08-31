@@ -3,8 +3,6 @@ use std::{fmt, io};
 
 use util::Error;
 
-use rand::Rng;
-
 use super::session_description::SessionDescription;
 
 pub const END_LINE: &'static str = "\r\n";

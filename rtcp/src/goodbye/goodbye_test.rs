@@ -33,7 +33,7 @@ fn test_goodbye_unmarshal() -> Result<(), Error> {
                 sources: vec![],
                 reason: "".to_string(),
             },
-            Some(ErrPacketTooShort.clone()),
+            Some(ERR_PACKET_TOO_SHORT.clone()),
         ),
         (
             "wrong type",
@@ -47,7 +47,7 @@ fn test_goodbye_unmarshal() -> Result<(), Error> {
                 sources: vec![],
                 reason: "".to_string(),
             },
-            Some(ErrWrongType.clone()),
+            Some(ERR_WRONG_TYPE.clone()),
         ),
         (
             "short reason",
@@ -75,7 +75,7 @@ fn test_goodbye_unmarshal() -> Result<(), Error> {
                 sources: vec![],
                 reason: "".to_string(),
             },
-            Some(ErrFailedToFillWholeBuffer.clone()),
+            Some(ERR_FAILED_TO_FILL_WHOLE_BUFFER.clone()),
         ),
         (
             "bad count in header",
@@ -88,7 +88,7 @@ fn test_goodbye_unmarshal() -> Result<(), Error> {
                 sources: vec![],
                 reason: "".to_string(),
             },
-            Some(ErrFailedToFillWholeBuffer.clone()),
+            Some(ERR_FAILED_TO_FILL_WHOLE_BUFFER.clone()),
         ),
         (
             "empty packet",
@@ -109,7 +109,7 @@ fn test_goodbye_unmarshal() -> Result<(), Error> {
                 sources: vec![],
                 reason: "".to_string(),
             },
-            Some(ErrFailedToFillWholeBuffer.clone()),
+            Some(ERR_FAILED_TO_FILL_WHOLE_BUFFER.clone()),
         ),
     ];
 

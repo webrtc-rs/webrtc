@@ -29,11 +29,11 @@ pub struct ReceiverEstimatedMaximumBitrate {
     pub ssrcs: Vec<u32>,
 }
 
-const rembOffset: usize = 16;
+const REMB_OFFSET: usize = 16;
 
 // Keep a table of powers to units for fast conversion.
 lazy_static! {
-    static ref bitUnits: Vec<&'static str> = vec!["b", "Kb", "Mb", "Gb", "Tb", "Pb", "Eb"];
+    static ref BIT_UNITS: Vec<&'static str> = vec!["b", "Kb", "Mb", "Gb", "Tb", "Pb", "Eb"];
     static ref UNIQUE_IDENTIFIER: Vec<u8> = vec![b'R', b'E', b'M', b'B'];
 }
 
@@ -45,12 +45,12 @@ impl fmt::Display for ReceiverEstimatedMaximumBitrate {
         let mut powers = 0;
 
         // Keep dividing the bitrate until it's under 1000
-        while bitrate >= 1000.0 && powers < bitUnits.len() {
+        while bitrate >= 1000.0 && powers < BIT_UNITS.len() {
             bitrate /= 1000.0;
             powers += 1;
         }
 
-        let unit = bitUnits[powers];
+        let unit = BIT_UNITS[powers];
 
         write!(
             f,
@@ -62,7 +62,7 @@ impl fmt::Display for ReceiverEstimatedMaximumBitrate {
 
 impl ReceiverEstimatedMaximumBitrate {
     fn len(&self) -> usize {
-        HEADER_LENGTH + rembOffset + self.ssrcs.len() * 4
+        HEADER_LENGTH + REMB_OFFSET + self.ssrcs.len() * 4
     }
 
     // Unmarshal decodes the ReceptionReport from binary
@@ -89,13 +89,13 @@ impl ReceiverEstimatedMaximumBitrate {
 
         if header.packet_type != PacketType::PayloadSpecificFeedback || header.count != FORMAT_REMB
         {
-            return Err(ErrWrongType.clone());
+            return Err(ERR_WRONG_TYPE.clone());
         }
 
         let sender_ssrc = reader.read_u32::<BigEndian>()?;
         let media_ssrc = reader.read_u32::<BigEndian>()?;
         if media_ssrc != 0 {
-            return Err(ErrBadMediaSSRC.clone());
+            return Err(ERR_BAD_MEDIA_SSRC.clone());
         }
 
         // REMB rules all around me
@@ -106,7 +106,7 @@ impl ReceiverEstimatedMaximumBitrate {
             || unique_identifier[2] != UNIQUE_IDENTIFIER[2]
             || unique_identifier[3] != UNIQUE_IDENTIFIER[3]
         {
-            return Err(ErrBadUniqueIdentifier.clone());
+            return Err(ERR_BAD_UNIQUE_IDENTIFIER.clone());
         }
 
         // The next byte is the number of SSRC entries at the end.

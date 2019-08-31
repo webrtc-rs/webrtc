@@ -2,8 +2,6 @@ use super::*;
 
 use std::io::BufReader;
 
-use rand::Rng;
-
 use util::Error;
 
 #[test]

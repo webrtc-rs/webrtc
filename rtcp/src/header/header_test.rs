@@ -47,7 +47,7 @@ fn test_header_unmarshal() -> Result<(), Error> {
                 packet_type: PacketType::Unsupported,
                 length: 0,
             },
-            Some(ErrBadVersion.clone()),
+            Some(ERR_BAD_VERSION.clone()),
         ),
     ];
 
@@ -111,7 +111,7 @@ fn test_header_roundtrip() -> Result<(), Error> {
                 packet_type: PacketType::Unsupported,
                 length: 0,
             },
-            Some(ErrInvalidHeader.clone()),
+            Some(ERR_INVALID_HEADER.clone()),
         ),
     ];
 

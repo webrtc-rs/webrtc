@@ -11,7 +11,7 @@ fn test_sender_report_unmarshal() -> Result<(), Error> {
             "nil",
             vec![],
             SenderReport::default(),
-            Some(ErrFailedToFillWholeBuffer.clone()),
+            Some(ERR_FAILED_TO_FILL_WHOLE_BUFFER.clone()),
         ),
         (
             "valid",
@@ -67,7 +67,7 @@ fn test_sender_report_unmarshal() -> Result<(), Error> {
                 0x0, 0x2, 0x4a, 0x79,
             ],
             SenderReport::default(),
-            Some(ErrWrongType.clone()),
+            Some(ERR_WRONG_TYPE.clone()),
         ),
         (
             "bad count in header",
@@ -87,7 +87,7 @@ fn test_sender_report_unmarshal() -> Result<(), Error> {
                 0x0, 0x2, 0x4a, 0x79,
             ],
             SenderReport::default(),
-            Some(ErrFailedToFillWholeBuffer.clone()),
+            Some(ERR_FAILED_TO_FILL_WHOLE_BUFFER.clone()),
         ),
         (
             "with extension", // issue #447
@@ -230,7 +230,7 @@ fn test_sender_report_roundtrip() -> Result<(), Error> {
                 reports: too_many_reports,
                 ..Default::default()
             },
-            Some(ErrTooManyReports.clone()),
+            Some(ERR_TOO_MANY_REPORTS.clone()),
         ),
     ];
 

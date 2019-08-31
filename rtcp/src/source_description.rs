@@ -66,10 +66,10 @@ impl From<u8> for SDESType {
     }
 }
 
-const sdesSourceLen: usize = 4;
-const sdesTypeLen: usize = 1;
-const sdesOctetCountLen: usize = 1;
-const sdesMaxOctetCount: usize = (1 << 8) - 1;
+const SDES_SOURCE_LEN: usize = 4;
+const SDES_TYPE_LEN: usize = 1;
+const SDES_OCTET_COUNT_LEN: usize = 1;
+const SDES_MAX_OCTET_COUNT: usize = (1 << 8) - 1;
 
 // A SourceDescriptionChunk contains items describing a single RTP source
 #[derive(Debug, PartialEq, Default, Clone)]
@@ -141,11 +141,11 @@ impl SourceDescriptionChunk {
     }
 
     fn len(&self) -> usize {
-        let mut len = sdesSourceLen;
+        let mut len = SDES_SOURCE_LEN;
         for it in &self.items {
             len += it.len();
         }
-        len += sdesTypeLen; // for terminating null octet
+        len += SDES_TYPE_LEN; // for terminating null octet
 
         len
     }
@@ -171,7 +171,7 @@ impl SourceDescriptionItem {
          *  |    CNAME=1    |     length    | user and domain name        ...
          *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
-        sdesTypeLen + sdesOctetCountLen + self.text.len()
+        SDES_TYPE_LEN + SDES_OCTET_COUNT_LEN + self.text.len()
     }
 
     // Marshal encodes the SourceDescriptionItem in binary
@@ -185,13 +185,13 @@ impl SourceDescriptionItem {
          */
 
         if self.sdes_type == SDESType::SDESEnd {
-            return Err(ErrSDESMissingType.clone());
+            return Err(ERR_SDESMISSING_TYPE.clone());
         }
 
         writer.write_u8(self.sdes_type as u8)?;
 
-        if self.text.len() > sdesMaxOctetCount {
-            return Err(ErrSDESTextTooLong.clone());
+        if self.text.len() > SDES_MAX_OCTET_COUNT {
+            return Err(ERR_SDESTEXT_TOO_LONG.clone());
         }
 
         writer.write_u8(self.text.len() as u8)?;
@@ -224,7 +224,7 @@ impl SourceDescriptionItem {
         let mut text: Vec<u8> = vec![0; length as usize];
         let result = reader.read_exact(&mut text);
         if result.is_err() {
-            Err(ErrPacketTooShort.clone())
+            Err(ERR_PACKET_TOO_SHORT.clone())
         } else {
             Ok(SourceDescriptionItem {
                 sdes_type,
@@ -285,7 +285,7 @@ impl SourceDescription {
         let header = Header::unmarshal(reader)?;
 
         if header.packet_type != PacketType::SourceDescription {
-            return Err(ErrWrongType.clone());
+            return Err(ERR_WRONG_TYPE.clone());
         }
 
         let mut chunks = vec![];
@@ -332,7 +332,7 @@ impl SourceDescription {
          *        +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
          */
         if self.chunks.len() > COUNT_MAX {
-            return Err(ErrTooManyChunks.clone());
+            return Err(ERR_TOO_MANY_CHUNKS.clone());
         }
 
         self.header().marshal(writer)?;

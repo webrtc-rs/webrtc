@@ -135,7 +135,7 @@ impl SenderReport {
         let header = Header::unmarshal(reader)?;
 
         if header.packet_type != PacketType::SenderReport {
-            return Err(ErrWrongType.clone());
+            return Err(ERR_WRONG_TYPE.clone());
         }
 
         let ssrc = reader.read_u32::<BigEndian>()?;
@@ -219,7 +219,7 @@ impl SenderReport {
          *        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
         if self.reports.len() > COUNT_MAX {
-            return Err(ErrTooManyReports.clone());
+            return Err(ERR_TOO_MANY_REPORTS.clone());
         }
 
         self.header().marshal(writer)?;

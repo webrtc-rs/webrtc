@@ -63,7 +63,7 @@ impl Goodbye {
         let header = Header::unmarshal(reader)?;
 
         if header.packet_type != PacketType::Goodbye {
-            return Err(ErrWrongType.clone());
+            return Err(ERR_WRONG_TYPE.clone());
         }
 
         let mut sources = vec![];
@@ -81,7 +81,7 @@ impl Goodbye {
             let mut reason_reader = reader.take(reason_len);
             reason_reader.read_to_string(&mut reason)?;
             if reason.len() < reason_len as usize {
-                return Err(ErrPacketTooShort.clone());
+                return Err(ERR_PACKET_TOO_SHORT.clone());
             }
         }
 
@@ -128,7 +128,7 @@ impl Goodbye {
          */
 
         if self.sources.len() > COUNT_MAX {
-            return Err(ErrTooManySources.clone());
+            return Err(ERR_TOO_MANY_SOURCES.clone());
         }
 
         let header = self.header();
@@ -140,7 +140,7 @@ impl Goodbye {
 
         if &self.reason != "" {
             if self.reason.len() > SDES_MAX_OCTET_COUNT {
-                return Err(ErrReasonTooLong.clone());
+                return Err(ERR_REASON_TOO_LONG.clone());
             }
             writer.write_u8(self.reason.len() as u8)?;
             writer.write_all(self.reason.as_bytes())?;

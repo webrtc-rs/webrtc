@@ -76,7 +76,7 @@ impl ReceptionReport {
 
         // pack TotalLost into 24 bits
         if self.total_lost >= (1 << 25) {
-            return Err(ErrInvalidTotalLost.clone());
+            return Err(ERR_INVALID_TOTAL_LOST.clone());
         }
         writer.write_u8(((self.total_lost >> 16) & 0xFF) as u8)?;
         writer.write_u8(((self.total_lost >> 8) & 0xFF) as u8)?;

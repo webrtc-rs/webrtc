@@ -45,8 +45,8 @@ impl NackPair {
     }
 }
 
-const tlnLength: usize = 2;
-const nackOffset: usize = 8;
+const TLN_LENGTH: usize = 2;
+const NACK_OFFSET: usize = 8;
 
 // The TransportLayerNack packet informs the encoder about the loss of a transport packet
 // IETF RFC 4585, Section 6.2.1
@@ -76,7 +76,7 @@ impl fmt::Display for TransportLayerNack {
 
 impl TransportLayerNack {
     fn len(&self) -> usize {
-        HEADER_LENGTH + nackOffset + self.nacks.len() * 4
+        HEADER_LENGTH + NACK_OFFSET + self.nacks.len() * 4
     }
 
     // Unmarshal decodes the ReceptionReport from binary
@@ -85,14 +85,14 @@ impl TransportLayerNack {
 
         if header.packet_type != PacketType::TransportSpecificFeedback || header.count != FORMAT_TLN
         {
-            return Err(ErrWrongType.clone());
+            return Err(ERR_WRONG_TYPE.clone());
         }
 
         let sender_ssrc = reader.read_u32::<BigEndian>()?;
         let media_ssrc = reader.read_u32::<BigEndian>()?;
 
         let mut nacks = vec![];
-        for _i in 0..(header.length as i32 - nackOffset as i32 / 4) {
+        for _i in 0..(header.length as i32 - NACK_OFFSET as i32 / 4) {
             nacks.push(NackPair {
                 packet_id: reader.read_u16::<BigEndian>()?,
                 lost_packets: reader.read_u16::<BigEndian>()?,
@@ -124,8 +124,8 @@ impl TransportLayerNack {
 
     // Marshal encodes the packet in binary.
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        if self.nacks.len() + tlnLength > std::u8::MAX as usize {
-            return Err(ErrTooManyReports.clone());
+        if self.nacks.len() + TLN_LENGTH > std::u8::MAX as usize {
+            return Err(ERR_TOO_MANY_REPORTS.clone());
         }
 
         self.header().marshal(writer)?;

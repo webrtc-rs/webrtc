@@ -48,7 +48,8 @@ impl MediaDescription {
 
     // New JSEPMediaDescription creates a new MediaName with
     // some settings that are required by the JSEP spec.
-    pub fn new(codec_type: String, codec_prefs: Vec<&str>) -> Self {
+    // TODO: use codec_prefs
+    pub fn new(codec_type: String, _codec_prefs: Vec<&str>) -> Self {
         // TODO: handle codec_prefs
         MediaDescription {
             media_name: MediaName {
@@ -94,7 +95,7 @@ impl MediaDescription {
     }
 
     // WithICECredentials adds ICE credentials to the media description
-    pub fn with_ice_credentials(mut self, username: String, password: String) -> Self {
+    pub fn with_ice_credentials(self, username: String, password: String) -> Self {
         self.with_value_attribute("ice-ufrag".to_string(), username)
             .with_value_attribute("ice-pwd".to_string(), password)
     }
@@ -124,7 +125,7 @@ impl MediaDescription {
 
     // WithMediaSource adds media source information to the media description
     pub fn with_media_source(
-        mut self,
+        self,
         ssrc: u32,
         cname: String,
         stream_label: String,
@@ -139,12 +140,12 @@ impl MediaDescription {
 
     // WithCandidate adds an ICE candidate to the media description
     // Deprecated: use WithICECandidate instead
-    pub fn with_candidate(mut self, value: String) -> Self {
+    pub fn with_candidate(self, value: String) -> Self {
         self.with_value_attribute("candidate".to_string(), value)
     }
 
     // WithICECandidate adds an ICE candidate to the media description
-    pub fn with_ice_candidate(mut self, c: ICECandidate) -> Self {
+    pub fn with_ice_candidate(self, c: ICECandidate) -> Self {
         self.with_value_attribute("candidate".to_string(), c.marshal())
     }
 }

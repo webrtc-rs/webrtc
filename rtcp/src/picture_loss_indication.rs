@@ -22,7 +22,7 @@ pub struct PictureLossIndication {
     pub media_ssrc: u32,
 }
 
-const pliLength: usize = 2;
+const PLI_LENGTH: usize = 2;
 
 impl fmt::Display for PictureLossIndication {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -44,7 +44,7 @@ impl PictureLossIndication {
         let header = Header::unmarshal(reader)?;
 
         if header.packet_type != PacketType::PayloadSpecificFeedback || header.count != FORMAT_PLI {
-            return Err(ErrWrongType.clone());
+            return Err(ERR_WRONG_TYPE.clone());
         }
 
         let sender_ssrc = reader.read_u32::<BigEndian>()?;

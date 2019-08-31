@@ -75,14 +75,14 @@ pub fn unmarshal(mut raw_data: &[u8]) -> Result<Packet, Error> {
     let mut packets = vec![];
     while raw_data.len() != 0 {
         if raw_data.len() < HEADER_LENGTH {
-            return Err(ErrPacketTooShort.clone());
+            return Err(ERR_PACKET_TOO_SHORT.clone());
         }
         let mut header_reader = BufReader::new(&raw_data[0..HEADER_LENGTH]);
         let header = Header::unmarshal(&mut header_reader)?;
 
         let bytes_processed = (header.length + 1) as usize * 4;
         if bytes_processed > raw_data.len() {
-            return Err(ErrPacketTooShort.clone());
+            return Err(ERR_PACKET_TOO_SHORT.clone());
         }
         let mut reader = BufReader::new(&raw_data[0..bytes_processed]);
         let packet = unmarshaler(&mut reader, &header)?;
@@ -92,8 +92,8 @@ pub fn unmarshal(mut raw_data: &[u8]) -> Result<Packet, Error> {
 
     match packets.len() {
         // Empty packet
-        0 => Err(ErrInvalidHeader.clone()),
-        1 => packets.pop().ok_or(ErrBadFirstPacket.clone()),
+        0 => Err(ERR_INVALID_HEADER.clone()),
+        1 => packets.pop().ok_or(ERR_BAD_FIRST_PACKET.clone()),
         // Multiple Packets
         _ => Ok(Packet::CompoundPacket(CompoundPacket(packets))),
     }

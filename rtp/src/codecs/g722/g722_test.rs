@@ -2,29 +2,27 @@ use super::*;
 
 use std::io::BufReader;
 
-use rand::Rng;
-
 use util::Error;
 
 #[test]
 fn test_g722_payload() -> Result<(), Error> {
     let pck = G722Payloader;
 
-    const test_len: usize = 10000;
-    const test_mtu: isize = 1500;
+    const TEST_LEN: usize = 10000;
+    const TEST_MTU: isize = 1500;
 
     //generate random 8-bit g722 samples
-    let samples: Vec<u8> = (0..test_len).map(|_| rand::random::<u8>()).collect();
+    let samples: Vec<u8> = (0..TEST_LEN).map(|_| rand::random::<u8>()).collect();
 
     //make a copy, for payloader input
-    let mut samples_in = vec![0; test_len];
+    let mut samples_in = vec![0; TEST_LEN];
     samples_in.clone_from_slice(&samples);
 
     //split our samples into payloads
     let mut reader = BufReader::new(samples_in.as_slice());
-    let payloads = pck.payload(test_mtu, &mut reader)?;
+    let payloads = pck.payload(TEST_MTU, &mut reader)?;
 
-    let outcnt = ((test_len as f64) / (test_mtu as f64)).ceil() as usize;
+    let outcnt = ((TEST_LEN as f64) / (TEST_MTU as f64)).ceil() as usize;
     assert_eq!(
         outcnt,
         payloads.len(),

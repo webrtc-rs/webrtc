@@ -25,7 +25,7 @@ fn test_picture_loss_indication_unmarshal() -> Result<(), Error> {
             "packet too short",
             vec![0x81, 0xce, 0x00, 0x00],
             PictureLossIndication::default(),
-            Some(ErrFailedToFillWholeBuffer.clone()),
+            Some(ERR_FAILED_TO_FILL_WHOLE_BUFFER.clone()),
         ),
         (
             "invalid header",
@@ -33,7 +33,7 @@ fn test_picture_loss_indication_unmarshal() -> Result<(), Error> {
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             ],
             PictureLossIndication::default(),
-            Some(ErrBadVersion.clone()),
+            Some(ERR_BAD_VERSION.clone()),
         ),
         (
             "wrong type",
@@ -44,7 +44,7 @@ fn test_picture_loss_indication_unmarshal() -> Result<(), Error> {
                 0x4b, 0xc4, 0xfc, 0xb4,
             ],
             PictureLossIndication::default(),
-            Some(ErrWrongType.clone()),
+            Some(ERR_WRONG_TYPE.clone()),
         ),
         (
             "wrong fmt",
@@ -55,7 +55,7 @@ fn test_picture_loss_indication_unmarshal() -> Result<(), Error> {
                 0x4b, 0xc4, 0xfc, 0xb4,
             ],
             PictureLossIndication::default(),
-            Some(ErrWrongType.clone()),
+            Some(ERR_WRONG_TYPE.clone()),
         ),
     ];
 

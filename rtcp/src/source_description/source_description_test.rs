@@ -11,7 +11,7 @@ fn test_source_description_unmarshal() -> Result<(), Error> {
             "nil",
             vec![],
             SourceDescription::default(),
-            Some(ErrFailedToFillWholeBuffer.clone()),
+            Some(ERR_FAILED_TO_FILL_WHOLE_BUFFER.clone()),
         ),
         (
             "no chunks",
@@ -30,7 +30,7 @@ fn test_source_description_unmarshal() -> Result<(), Error> {
                 0x00, 0x00, 0x00, 0x00,
             ],
             SourceDescription::default(),
-            Some(ErrFailedToFillWholeBuffer.clone()),
+            Some(ERR_FAILED_TO_FILL_WHOLE_BUFFER.clone()),
         ),
         (
             "bad cname length",
@@ -41,7 +41,7 @@ fn test_source_description_unmarshal() -> Result<(), Error> {
                 0x01, 0x01,
             ],
             SourceDescription::default(),
-            Some(ErrPacketTooShort.clone()),
+            Some(ERR_PACKET_TOO_SHORT.clone()),
         ),
         (
             "short cname",
@@ -52,7 +52,7 @@ fn test_source_description_unmarshal() -> Result<(), Error> {
                 0x01,
             ],
             SourceDescription::default(),
-            Some(ErrFailedToFillWholeBuffer.clone()),
+            Some(ERR_FAILED_TO_FILL_WHOLE_BUFFER.clone()),
         ),
         (
             "no end",
@@ -64,7 +64,7 @@ fn test_source_description_unmarshal() -> Result<(), Error> {
                 // Missing END
             ],
             SourceDescription::default(),
-            Some(ErrPacketTooShort.clone()),
+            Some(ERR_PACKET_TOO_SHORT.clone()),
         ),
         (
             "bad octet count",
@@ -75,7 +75,7 @@ fn test_source_description_unmarshal() -> Result<(), Error> {
                 0x01, 0x01,
             ],
             SourceDescription::default(),
-            Some(ErrPacketTooShort.clone()),
+            Some(ERR_PACKET_TOO_SHORT.clone()),
         ),
         (
             "zero item chunk",
@@ -102,7 +102,7 @@ fn test_source_description_unmarshal() -> Result<(), Error> {
                 0x00, 0x00, 0x00, 0x00,
             ],
             SourceDescription::default(),
-            Some(ErrWrongType.clone()),
+            Some(ERR_WRONG_TYPE.clone()),
         ),
         (
             "bad count in header",
@@ -111,7 +111,7 @@ fn test_source_description_unmarshal() -> Result<(), Error> {
                 0x81, 0xca, 0x00, 0x0c,
             ],
             SourceDescription::default(),
-            Some(ErrFailedToFillWholeBuffer.clone()),
+            Some(ERR_FAILED_TO_FILL_WHOLE_BUFFER.clone()),
         ),
         (
             "empty string",
@@ -278,7 +278,7 @@ fn test_source_description_roundtrip() -> Result<(), Error> {
                     }],
                 }],
             },
-            Some(ErrSDESMissingType.clone()),
+            Some(ERR_SDESMISSING_TYPE.clone()),
         ),
         (
             "zero items",
@@ -327,14 +327,14 @@ fn test_source_description_roundtrip() -> Result<(), Error> {
                     }],
                 }],
             },
-            Some(ErrSDESTextTooLong.clone()),
+            Some(ERR_SDESTEXT_TOO_LONG.clone()),
         ),
         (
             "count overflow",
             SourceDescription {
                 chunks: too_many_chunks,
             },
-            Some(ErrTooManyChunks.clone()),
+            Some(ERR_TOO_MANY_CHUNKS.clone()),
         ),
     ];
 

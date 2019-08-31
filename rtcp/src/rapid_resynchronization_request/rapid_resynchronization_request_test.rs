@@ -29,7 +29,7 @@ fn test_rapid_resynchronization_request_unmarshal() -> Result<(), Error> {
                 // report ends early
             ],
             RapidResynchronizationRequest::default(),
-            Some(ErrFailedToFillWholeBuffer.clone()),
+            Some(ERR_FAILED_TO_FILL_WHOLE_BUFFER.clone()),
         ),
         (
             "wrong type",
@@ -45,13 +45,13 @@ fn test_rapid_resynchronization_request_unmarshal() -> Result<(), Error> {
                 0x0, 0x2, 0x4a, 0x79,
             ],
             RapidResynchronizationRequest::default(),
-            Some(ErrWrongType.clone()),
+            Some(ERR_WRONG_TYPE.clone()),
         ),
         (
             "nil",
             vec![],
             RapidResynchronizationRequest::default(),
-            Some(ErrFailedToFillWholeBuffer.clone()),
+            Some(ERR_FAILED_TO_FILL_WHOLE_BUFFER.clone()),
         ),
     ];
 
