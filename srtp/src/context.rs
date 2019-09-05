@@ -11,28 +11,31 @@ use byteorder::{BigEndian, WriteBytesExt};
 
 use util::Error;
 
+pub mod srtcp;
+pub mod srtp;
+
 // ProtectionProfile specifies Cipher and AuthTag details, similar to TLS cipher suite
 pub type ProtectionProfile = u16;
 
 // Supported protection profiles
-const ProtectionProfileAes128CmHmacSha1_80: ProtectionProfile = 0x0001;
+const PROTECTION_PROFILE_AES128CM_HMAC_SHA1_80: ProtectionProfile = 0x0001;
 
-const labelSRTPEncryption: u8 = 0x00;
-const labelSRTPAuthenticationTag: u8 = 0x01;
-const labelSRTPSalt: u8 = 0x02;
+const LABEL_SRTPENCRYPTION: u8 = 0x00;
+const LABEL_SRTPAUTHENTICATION_TAG: u8 = 0x01;
+const LABEL_SRTPSALT: u8 = 0x02;
 
-const labelSRTCPEncryption: u8 = 0x03;
-const labelSRTCPAuthenticationTag: u8 = 0x04;
-const labelSRTCPSalt: u8 = 0x05;
+const LABEL_SRTCPENCRYPTION: u8 = 0x03;
+const LABEL_SRTCPAUTHENTICATION_TAG: u8 = 0x04;
+const LABEL_SRTCPSALT: u8 = 0x05;
 
-const keyLen: usize = 16;
-const saltLen: usize = 14;
+const KEY_LEN: usize = 16;
+const SALT_LEN: usize = 14;
 
-const maxROCDisorder: u16 = 100;
-const maxSequenceNumber: u16 = 65535;
+const MAX_ROCDISORDER: u16 = 100;
+const MAX_SEQUENCE_NUMBER: u16 = 65535;
 
-const authTagSize: usize = 10;
-const srtcpIndexSize: usize = 4;
+const AUTH_TAG_SIZE: usize = 10;
+const SRTCP_INDEX_SIZE: usize = 4;
 
 type HmacSha1 = Hmac<Sha1>;
 //type Aes128Ctr = Ctr128<Aes128>;
@@ -74,30 +77,30 @@ impl Context {
     pub fn new(
         master_key: Vec<u8>,
         master_salt: Vec<u8>,
-        profile: ProtectionProfile,
+        _profile: ProtectionProfile,
     ) -> Result<Context, Error> {
-        if master_key.len() != keyLen {
+        if master_key.len() != KEY_LEN {
             return Err(Error::new(format!(
                 "SRTP Master Key must be len {}, got {}",
-                keyLen,
+                KEY_LEN,
                 master_key.len()
             )));
-        } else if master_salt.len() != saltLen {
+        } else if master_salt.len() != SALT_LEN {
             return Err(Error::new(format!(
                 "SRTP Salt must be len {}, got {}",
-                saltLen,
+                SALT_LEN,
                 master_salt.len()
             )));
         }
 
         let srtp_session_key =
-            Context::generate_session_key(&master_key, &master_salt, labelSRTPEncryption)?;
+            Context::generate_session_key(&master_key, &master_salt, LABEL_SRTPENCRYPTION)?;
         let srtp_session_salt =
-            Context::generate_session_salt(&master_key, &master_salt, labelSRTPSalt)?;
+            Context::generate_session_salt(&master_key, &master_salt, LABEL_SRTPSALT)?;
         let srtp_session_auth_tag = Context::generate_session_auth_tag(
             &master_key,
             &master_salt,
-            labelSRTPAuthenticationTag,
+            LABEL_SRTPAUTHENTICATION_TAG,
         )?;
 
         let srtp_block = Aes128::new(&GenericArray::from_slice(&srtp_session_key));
@@ -105,13 +108,13 @@ impl Context {
         let srtp_session_auth = HmacSha1::new(&GenericArray::from_slice(&srtp_session_auth_tag));
 
         let srtcp_session_key =
-            Context::generate_session_key(&master_key, &master_salt, labelSRTCPEncryption)?;
+            Context::generate_session_key(&master_key, &master_salt, LABEL_SRTCPENCRYPTION)?;
         let srtcp_session_salt =
-            Context::generate_session_salt(&master_key, &master_salt, labelSRTCPSalt)?;
+            Context::generate_session_salt(&master_key, &master_salt, LABEL_SRTCPSALT)?;
         let srtcp_session_auth_tag = Context::generate_session_auth_tag(
             &master_key,
             &master_salt,
-            labelSRTCPAuthenticationTag,
+            LABEL_SRTCPAUTHENTICATION_TAG,
         )?;
 
         let srtcp_block = Aes128::new(&GenericArray::from_slice(&srtcp_session_key));
@@ -157,12 +160,18 @@ impl Context {
             session_key.len() as i32 - 1,
         );
 
+        while i >= 0 && j >= 0 {
+            session_key[j as usize] ^= label_and_index_over_kdr[i as usize];
+            i = i - 1;
+            j = j - 1;
+        }
+
         // then padding on the right with two null octets (which implements the multiply-by-2^16 operation, see Section 4.3.3).
         session_key.extend_from_slice(&[0x00, 0x00]);
 
         //The resulting value is then AES-CM- encrypted using the master key to get the cipher key.
         let key = GenericArray::from_slice(master_key);
-        let mut block = Aes128::new(&key);
+        let block = Aes128::new(&key);
 
         let session_key = GenericArray::from_mut_slice(&mut session_key);
         block.encrypt_block(session_key);
@@ -196,11 +205,11 @@ impl Context {
         session_salt.extend_from_slice(&[0x00, 0x00]);
 
         let key = GenericArray::from_slice(master_key);
-        let mut block = Aes128::new(&key);
+        let block = Aes128::new(&key);
 
         let session_salt = GenericArray::from_mut_slice(&mut session_salt);
         block.encrypt_block(session_salt);
-        Ok(session_salt[0..saltLen].to_vec())
+        Ok(session_salt[0..SALT_LEN].to_vec())
     }
 
     fn generate_session_auth_tag(
@@ -237,7 +246,7 @@ impl Context {
         let second_run = GenericArray::from_mut_slice(&mut second_run);
 
         let key = GenericArray::from_slice(master_key);
-        let mut block = Aes128::new(&key);
+        let block = Aes128::new(&key);
 
         block.encrypt_block(first_run);
         block.encrypt_block(second_run);
@@ -354,21 +363,21 @@ impl Context {
         } else if sequence_number == 0 {
             // We exactly hit the rollover count
 
-            // Only update rolloverCounter if lastSequenceNumber is greater then maxROCDisorder
+            // Only update rolloverCounter if lastSequenceNumber is greater then MAX_ROCDISORDER
             // otherwise we already incremented for disorder
-            if s.last_sequence_number > maxROCDisorder {
+            if s.last_sequence_number > MAX_ROCDISORDER {
                 s.rollover_counter += 1;
             }
-        } else if s.last_sequence_number < maxROCDisorder
-            && sequence_number > (maxSequenceNumber - maxROCDisorder)
+        } else if s.last_sequence_number < MAX_ROCDISORDER
+            && sequence_number > (MAX_SEQUENCE_NUMBER - MAX_ROCDISORDER)
         {
-            // Our last sequence number incremented because we crossed 0, but then our current number was within maxROCDisorder of the max
+            // Our last sequence number incremented because we crossed 0, but then our current number was within MAX_ROCDISORDER of the max
             // So we fell behind, drop to account for jitter
             s.rollover_counter -= 1;
-        } else if sequence_number < maxROCDisorder
-            && s.last_sequence_number > (maxSequenceNumber - maxROCDisorder)
+        } else if sequence_number < MAX_ROCDISORDER
+            && s.last_sequence_number > (MAX_SEQUENCE_NUMBER - MAX_ROCDISORDER)
         {
-            // our current is within a maxROCDisorder of 0
+            // our current is within a MAX_ROCDISORDER of 0
             // and our last sequence number was a high sequence number, increment to account for jitter
             s.rollover_counter += 1;
         }
