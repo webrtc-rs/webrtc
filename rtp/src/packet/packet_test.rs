@@ -18,17 +18,21 @@ fn test_basic() -> Result<(), Error> {
         0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0x98, 0x36, 0xbe, 0x88, 0x9e,
     ];
     let parsed_packet = Packet {
-        version: 2,
-        padding: false,
-        extension: true,
-        marker: true,
-        payload_type: 96,
-        sequence_number: 27023,
-        timestamp: 3653407706,
-        ssrc: 476325762,
-        csrc: vec![],
-        extension_profile: 1,
-        extension_payload: vec![0xFF, 0xFF, 0xFF, 0xFF],
+        header: Header {
+            version: 2,
+            padding: false,
+            extension: true,
+            marker: true,
+            payload_type: 96,
+            sequence_number: 27023,
+            timestamp: 3653407706,
+            ssrc: 476325762,
+            csrc: vec![],
+            extension_profile: 1,
+            extension_payload: vec![0xFF, 0xFF, 0xFF, 0xFF],
+
+            payload_offset: 20,
+        },
         payload: vec![0x98, 0x36, 0xbe, 0x88, 0x9e],
     };
 
@@ -40,11 +44,7 @@ fn test_basic() -> Result<(), Error> {
         packet, parsed_packet
     );
 
-    assert_eq!(
-        packet.marshal_size(),
-        raw_pkt.len(),
-        "wrong computed marshal size"
-    );
+    assert_eq!(packet.len(), raw_pkt.len(), "wrong computed marshal size");
 
     let mut raw: Vec<u8> = vec![];
     {
@@ -96,11 +96,13 @@ fn test_extension() -> Result<(), Error> {
     }
 
     let packet = Packet {
-        extension: true,
-        extension_profile: 3,
-        extension_payload: vec![0],
+        header: Header {
+            extension: true,
+            extension_profile: 3,
+            extension_payload: vec![0],
+            ..Default::default()
+        },
         payload: vec![],
-        ..Default::default()
     };
 
     let mut raw: Vec<u8> = vec![];

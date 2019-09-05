@@ -10,11 +10,8 @@ mod packet_test;
 
 // Header represents an RTP packet header
 // NOTE: PayloadOffset is populated by Marshal/Unmarshal and should not be modified
-// NOTE: Raw is populated by Marshal/Unmarshal and should not be modified
-
-// Packet represents an RTP Packet
 #[derive(Debug, Eq, PartialEq, Default)]
-pub struct Packet {
+pub struct Header {
     pub version: u8,
     pub padding: bool,
     pub extension: bool,
@@ -26,46 +23,20 @@ pub struct Packet {
     pub csrc: Vec<u32>,
     pub extension_profile: u16,
     pub extension_payload: Vec<u8>,
-    pub payload: Vec<u8>,
+
+    pub payload_offset: usize,
 }
 
-const HEADER_LENGTH: usize = 4;
-const VERSION_SHIFT: u8 = 6;
-const VERSION_MASK: u8 = 0x3;
-const PADDING_SHIFT: u8 = 5;
-const PADDING_MASK: u8 = 0x1;
-const EXTENSION_SHIFT: u8 = 4;
-const EXTENSION_MASK: u8 = 0x1;
-const CC_MASK: u8 = 0xF;
-const MARKER_SHIFT: u8 = 7;
-const MARKER_MASK: u8 = 0x1;
-const PT_MASK: u8 = 0x7F;
-const SEQ_NUM_OFFSET: usize = 2;
-const SEQ_NUM_LENGTH: usize = 2;
-const TIMESTAMP_OFFSET: usize = 4;
-const TIMESTAMP_LENGTH: usize = 4;
-const SSRC_OFFSET: usize = 8;
-const SSRC_LENGTH: usize = 4;
-const CSRC_OFFSET: usize = 12;
-const CSRC_LENGTH: usize = 4;
-
-impl fmt::Display for Packet {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut out = "RTP PACKET:\n".to_string();
-
-        out += format!("\tVersion: {}\n", self.version).as_str();
-        out += format!("\tMarker: {}\n", self.marker).as_str();
-        out += format!("\tPayload Type: {}\n", self.payload_type).as_str();
-        out += format!("\tSequence Number: {}\n", self.sequence_number).as_str();
-        out += format!("\tTimestamp: {}\n", self.timestamp).as_str();
-        out += format!("\tSSRC: {} ({:x})\n", self.ssrc, self.ssrc).as_str();
-        out += format!("\tPayload Length: {}\n", self.payload.len()).as_str();
-
-        write!(f, "{}", out)
+impl Header {
+    // MarshalSize returns the size of the packet once marshaled.
+    pub fn len(&self) -> usize {
+        let mut head_size = 12 + (self.csrc.len() * CSRC_LENGTH);
+        if self.extension {
+            head_size += 4 + self.extension_payload.len();
+        }
+        head_size
     }
-}
 
-impl Packet {
     // Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
         /*
@@ -97,7 +68,7 @@ impl Packet {
         let timestamp = reader.read_u32::<BigEndian>()?;
         let ssrc = reader.read_u32::<BigEndian>()?;
 
-        //let mut curr_offset = CSRC_OFFSET + (cc * CSRC_LENGTH);
+        let mut payload_offset = CSRC_OFFSET + (cc * CSRC_LENGTH);
         let mut csrc = vec![];
         for _i in 0..cc {
             csrc.push(reader.read_u32::<BigEndian>()?);
@@ -105,22 +76,19 @@ impl Packet {
 
         let (extension_profile, extension_payload) = if extension {
             let extension_profile = reader.read_u16::<BigEndian>()?;
-            //curr_offset += 2;
+            payload_offset += 2;
             let extension_length = reader.read_u16::<BigEndian>()? as usize * 4;
-            //curr_offset += 2;
+            payload_offset += 2;
 
             let mut extension_payload = vec![0; extension_length];
             reader.read_exact(&mut extension_payload)?;
-            //curr_offset += extension_payload.len();
+            payload_offset += extension_payload.len();
             (extension_profile, extension_payload)
         } else {
             (0, vec![])
         };
 
-        let mut payload = vec![];
-        reader.read_to_end(&mut payload)?;
-
-        Ok(Packet {
+        Ok(Header {
             version,
             padding,
             extension,
@@ -132,17 +100,8 @@ impl Packet {
             csrc,
             extension_profile,
             extension_payload,
-            payload,
+            payload_offset,
         })
-    }
-
-    // MarshalSize returns the size of the packet once marshaled.
-    pub fn marshal_size(&self) -> usize {
-        let mut head_size = 12 + (self.csrc.len() * CSRC_LENGTH);
-        if self.extension {
-            head_size += 4 + self.extension_payload.len();
-        }
-        head_size + self.payload.len()
     }
 
     // Marshal serializes the header and writes to the buffer.
@@ -201,6 +160,73 @@ impl Packet {
             writer.write_all(&self.extension_payload)?;
         }
 
+        Ok(())
+    }
+}
+
+// Packet represents an RTP Packet
+// NOTE: Raw is populated by Marshal/Unmarshal and should not be modified
+#[derive(Debug, Eq, PartialEq, Default)]
+pub struct Packet {
+    pub header: Header,
+    pub payload: Vec<u8>,
+}
+
+const HEADER_LENGTH: usize = 4;
+const VERSION_SHIFT: u8 = 6;
+const VERSION_MASK: u8 = 0x3;
+const PADDING_SHIFT: u8 = 5;
+const PADDING_MASK: u8 = 0x1;
+const EXTENSION_SHIFT: u8 = 4;
+const EXTENSION_MASK: u8 = 0x1;
+const CC_MASK: u8 = 0xF;
+const MARKER_SHIFT: u8 = 7;
+const MARKER_MASK: u8 = 0x1;
+const PT_MASK: u8 = 0x7F;
+const SEQ_NUM_OFFSET: usize = 2;
+const SEQ_NUM_LENGTH: usize = 2;
+const TIMESTAMP_OFFSET: usize = 4;
+const TIMESTAMP_LENGTH: usize = 4;
+const SSRC_OFFSET: usize = 8;
+const SSRC_LENGTH: usize = 4;
+const CSRC_OFFSET: usize = 12;
+const CSRC_LENGTH: usize = 4;
+
+impl fmt::Display for Packet {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut out = "RTP PACKET:\n".to_string();
+
+        out += format!("\tVersion: {}\n", self.header.version).as_str();
+        out += format!("\tMarker: {}\n", self.header.marker).as_str();
+        out += format!("\tPayload Type: {}\n", self.header.payload_type).as_str();
+        out += format!("\tSequence Number: {}\n", self.header.sequence_number).as_str();
+        out += format!("\tTimestamp: {}\n", self.header.timestamp).as_str();
+        out += format!("\tSSRC: {} ({:x})\n", self.header.ssrc, self.header.ssrc).as_str();
+        out += format!("\tPayload Length: {}\n", self.payload.len()).as_str();
+
+        write!(f, "{}", out)
+    }
+}
+
+impl Packet {
+    // MarshalSize returns the size of the packet once marshaled.
+    pub fn len(&self) -> usize {
+        self.header.len() + self.payload.len()
+    }
+
+    // Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        let header = Header::unmarshal(reader)?;
+
+        let mut payload = vec![];
+        reader.read_to_end(&mut payload)?;
+
+        Ok(Packet { header, payload })
+    }
+
+    // Marshal serializes the header and writes to the buffer.
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        self.header.marshal(writer)?;
         writer.write_all(&self.payload)?;
 
         Ok(())

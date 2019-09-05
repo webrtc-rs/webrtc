@@ -70,16 +70,18 @@ impl Packetizer for PacketizerImpl {
         let (mut i, l) = (0, payloads.len());
         for payload in payloads {
             packets.push(Packet {
-                version: 2,
-                padding: false,
-                extension: false,
-                marker: i == l - 1,
-                payload_type: self.payload_type,
-                sequence_number: sequencer.next_sequence_number(),
-                timestamp: self.timestamp, //TODO: Figure out how to do timestamps
-                ssrc: self.ssrc,
+                header: Header {
+                    version: 2,
+                    padding: false,
+                    extension: false,
+                    marker: i == l - 1,
+                    payload_type: self.payload_type,
+                    sequence_number: sequencer.next_sequence_number(),
+                    timestamp: self.timestamp, //TODO: Figure out how to do timestamps
+                    ssrc: self.ssrc,
+                    ..Default::default()
+                },
                 payload,
-                ..Default::default()
             });
             i += 1;
         }
@@ -90,9 +92,9 @@ impl Packetizer for PacketizerImpl {
             let d = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
             let t = unix2ntp(d) >> 14;
             //apply http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
-            packets[l - 1].extension = true;
-            packets[l - 1].extension_profile = 0xBEDE;
-            packets[l - 1].extension_payload = vec![
+            packets[l - 1].header.extension = true;
+            packets[l - 1].header.extension_profile = 0xBEDE;
+            packets[l - 1].header.extension_payload = vec![
                 //the first byte is
                 // 0 1 2 3 4 5 6 7
                 //+-+-+-+-+-+-+-+-+

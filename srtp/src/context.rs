@@ -11,6 +11,9 @@ use byteorder::{BigEndian, WriteBytesExt};
 
 use util::Error;
 
+#[cfg(test)]
+mod context_test;
+
 pub mod srtcp;
 pub mod srtp;
 
@@ -23,7 +26,6 @@ const PROTECTION_PROFILE_AES128CM_HMAC_SHA1_80: ProtectionProfile = 0x0001;
 const LABEL_SRTPENCRYPTION: u8 = 0x00;
 const LABEL_SRTPAUTHENTICATION_TAG: u8 = 0x01;
 const LABEL_SRTPSALT: u8 = 0x02;
-
 const LABEL_SRTCPENCRYPTION: u8 = 0x03;
 const LABEL_SRTCPAUTHENTICATION_TAG: u8 = 0x04;
 const LABEL_SRTCPSALT: u8 = 0x05;
@@ -38,22 +40,51 @@ const AUTH_TAG_SIZE: usize = 10;
 const SRTCP_INDEX_SIZE: usize = 4;
 
 type HmacSha1 = Hmac<Sha1>;
-//type Aes128Ctr = Ctr128<Aes128>;
 
 // Encode/Decode state for a single SSRC
 #[derive(Debug, Default)]
-struct SSRCState {
+pub struct SSRCState {
     ssrc: u32,
     rollover_counter: u32,
     rollover_has_processed: bool,
     last_sequence_number: u16,
 }
 
+impl SSRCState {
+    // https://tools.ietf.org/html/rfc3550#appendix-A.1
+    pub fn update_rollover_count(&mut self, sequence_number: u16) {
+        if !self.rollover_has_processed {
+            self.rollover_has_processed = true;
+        } else if sequence_number == 0 {
+            // We exactly hit the rollover count
+
+            // Only update rolloverCounter if lastSequenceNumber is greater then MAX_ROCDISORDER
+            // otherwise we already incremented for disorder
+            if self.last_sequence_number > MAX_ROCDISORDER {
+                self.rollover_counter += 1;
+            }
+        } else if self.last_sequence_number < MAX_ROCDISORDER
+            && sequence_number > (MAX_SEQUENCE_NUMBER - MAX_ROCDISORDER)
+        {
+            // Our last sequence number incremented because we crossed 0, but then our current number was within MAX_ROCDISORDER of the max
+            // So we fell behind, drop to account for jitter
+            self.rollover_counter -= 1;
+        } else if sequence_number < MAX_ROCDISORDER
+            && self.last_sequence_number > (MAX_SEQUENCE_NUMBER - MAX_ROCDISORDER)
+        {
+            // our current is within a MAX_ROCDISORDER of 0
+            // and our last sequence number was a high sequence number, increment to account for jitter
+            self.rollover_counter += 1;
+        }
+        self.last_sequence_number = sequence_number;
+    }
+}
+
 // Context represents a SRTP cryptographic context
 // Context can only be used for one-way operations
 // it must either used ONLY for encryption or ONLY for decryption
 #[derive(Debug)]
-struct Context {
+pub struct Context {
     master_key: Vec<u8>,
     master_salt: Vec<u8>,
 
@@ -62,14 +93,13 @@ struct Context {
     srtp_session_salt: Vec<u8>,
     srtp_session_auth: HmacSha1,
     srtp_session_auth_tag: Vec<u8>,
-    srtp_block: Aes128,
-
+    //srtp_block: Aes128,
     srtcp_session_key: Vec<u8>,
     srtcp_session_salt: Vec<u8>,
     srtcp_session_auth: HmacSha1,
     srtcp_session_auth_tag: Vec<u8>,
     srtcp_index: u32,
-    srtcp_block: Aes128,
+    // srtcp_block: Aes128,
 }
 
 impl Context {
@@ -103,7 +133,7 @@ impl Context {
             LABEL_SRTPAUTHENTICATION_TAG,
         )?;
 
-        let srtp_block = Aes128::new(&GenericArray::from_slice(&srtp_session_key));
+        //let srtp_block = Aes128::new(&GenericArray::from_slice(&srtp_session_key));
 
         let srtp_session_auth = HmacSha1::new(&GenericArray::from_slice(&srtp_session_auth_tag));
 
@@ -117,7 +147,7 @@ impl Context {
             LABEL_SRTCPAUTHENTICATION_TAG,
         )?;
 
-        let srtcp_block = Aes128::new(&GenericArray::from_slice(&srtcp_session_key));
+        //let srtcp_block = Aes128::new(&GenericArray::from_slice(&srtcp_session_key));
 
         let srtcp_session_auth = HmacSha1::new(&GenericArray::from_slice(&srtcp_session_auth_tag));
 
@@ -129,14 +159,12 @@ impl Context {
             srtp_session_salt,
             srtp_session_auth,
             srtp_session_auth_tag,
-            srtp_block,
-
+            //srtp_block,
             srtcp_session_key,
             srtcp_session_salt,
             srtcp_session_auth,
             srtcp_session_auth_tag,
-            srtcp_block,
-
+            //srtcp_block,
             ssrc_states: HashMap::new(),
             srtcp_index: 0,
         })
@@ -278,7 +306,7 @@ impl Context {
 
         let mut counter: Vec<u8> = vec![0; 16];
         {
-            let mut writer = BufWriter::<&mut Vec<u8>>::new(counter.as_mut());
+            let mut writer = BufWriter::<&mut [u8]>::new(counter[4..].as_mut());
             writer.write_u32::<BigEndian>(ssrc)?;
             writer.write_u32::<BigEndian>(rollover_counter)?;
             writer.write_u32::<BigEndian>((sequence_number as u32) << 16)?;
@@ -326,8 +354,8 @@ impl Context {
         let result = srtp_session_auth.clone().result();
         let code_bytes = result.code();
 
-        // Truncate the hash to the first 10 bytes.
-        Ok(code_bytes[0..10].to_vec())
+        // Truncate the hash to the first AUTH_TAG_SIZE bytes.
+        Ok(code_bytes[0..AUTH_TAG_SIZE].to_vec())
     }
 
     fn generate_srtcp_auth_tag(
@@ -352,39 +380,7 @@ impl Context {
         let result = srtcp_session_auth.clone().result();
         let code_bytes = result.code();
 
-        // Truncate the hash to the first 10 bytes.
-        Ok(code_bytes[0..10].to_vec())
-    }
-
-    // https://tools.ietf.org/html/rfc3550#appendix-A.1
-    fn update_rollover_count(sequence_number: u16, s: &mut SSRCState) {
-        if !s.rollover_has_processed {
-            s.rollover_has_processed = true;
-        } else if sequence_number == 0 {
-            // We exactly hit the rollover count
-
-            // Only update rolloverCounter if lastSequenceNumber is greater then MAX_ROCDISORDER
-            // otherwise we already incremented for disorder
-            if s.last_sequence_number > MAX_ROCDISORDER {
-                s.rollover_counter += 1;
-            }
-        } else if s.last_sequence_number < MAX_ROCDISORDER
-            && sequence_number > (MAX_SEQUENCE_NUMBER - MAX_ROCDISORDER)
-        {
-            // Our last sequence number incremented because we crossed 0, but then our current number was within MAX_ROCDISORDER of the max
-            // So we fell behind, drop to account for jitter
-            s.rollover_counter -= 1;
-        } else if sequence_number < MAX_ROCDISORDER
-            && s.last_sequence_number > (MAX_SEQUENCE_NUMBER - MAX_ROCDISORDER)
-        {
-            // our current is within a MAX_ROCDISORDER of 0
-            // and our last sequence number was a high sequence number, increment to account for jitter
-            s.rollover_counter += 1;
-        }
-        s.last_sequence_number = sequence_number;
-    }
-
-    fn get_ssrc_state(&self, ssrc: &u32) -> Option<&SSRCState> {
-        self.ssrc_states.get(ssrc)
+        // Truncate the hash to the first AUTH_TAG_SIZE bytes.
+        Ok(code_bytes[0..AUTH_TAG_SIZE].to_vec())
     }
 }
