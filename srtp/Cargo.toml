@@ -11,3 +11,5 @@ util = { path = "../util" }
 byteorder = "1.3.2"
 hmac = "0.7.1"
 sha-1 = "0.8.1"
+ctr = "0.3.2"
+aes = "0.3.2"
