@@ -4,6 +4,9 @@ use std::io::{BufReader, BufWriter};
 
 use util::Error;
 
+//TODO: BenchmarkMarshal
+//TODO: BenchmarkUnmarshal
+
 #[test]
 fn test_basic() -> Result<(), Error> {
     let empty_bytes = vec![];

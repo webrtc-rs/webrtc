@@ -26,16 +26,18 @@ impl Context {
         let header = rtp::packet::Header::unmarshal(&mut reader)?;
 
         let mut dst: Vec<u8> = vec![0; encrypted.len() - AUTH_TAG_SIZE];
-        let s = match self.ssrc_states.get_mut(&header.ssrc) {
-            Some(s) => s,
-            None => {
+        let s: SSRCState;
+        {
+            if let Some(ss) = self.get_ssrc_state(header.ssrc) {
+                ss.update_rollover_count(header.sequence_number);
+                s = ss.clone();
+            } else {
                 return Err(Error::new(format!(
                     "can't find ssrc: {} in ssrc_states",
                     header.ssrc
-                )))
+                )));
             }
-        };
-        s.update_rollover_count(header.sequence_number);
+        }
 
         // Split the auth tag and the cipher text into two parts.
         let actual_tag = &encrypted[encrypted.len() - AUTH_TAG_SIZE..];
@@ -71,26 +73,29 @@ impl Context {
 
         stream.decrypt(&mut dst[header.payload_offset..]);
 
-        Ok(vec![])
+        Ok(dst)
     }
 
     // EncryptRTP marshals and encrypts an RTP packet, writing to the dst buffer provided.
     // If the dst buffer does not have the capacity to hold `len(plaintext) + 10` bytes, a new one will be allocated and returned.
-    fn encrypt_rtp(&mut self, plaintext: &[u8]) -> Result<Vec<u8>, Error> {
+    pub fn encrypt_rtp(&mut self, plaintext: &[u8]) -> Result<Vec<u8>, Error> {
         let mut reader = BufReader::new(plaintext);
         let header = rtp::packet::Header::unmarshal(&mut reader)?;
 
         let mut dst: Vec<u8> = vec![0; plaintext.len()];
-        let s = match self.ssrc_states.get_mut(&header.ssrc) {
-            Some(s) => s,
-            None => {
+
+        let s: SSRCState;
+        {
+            if let Some(ss) = self.get_ssrc_state(header.ssrc) {
+                ss.update_rollover_count(header.sequence_number);
+                s = ss.clone();
+            } else {
                 return Err(Error::new(format!(
                     "can't find ssrc: {} in ssrc_states",
                     header.ssrc
-                )))
+                )));
             }
-        };
-        s.update_rollover_count(header.sequence_number);
+        }
 
         // Write the plaintext header to the destination buffer.
         dst.copy_from_slice(plaintext);

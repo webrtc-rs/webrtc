@@ -45,7 +45,7 @@ const SRTCP_INDEX_SIZE: usize = 4;
 type HmacSha1 = Hmac<Sha1>;
 
 // Encode/Decode state for a single SSRC
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct SSRCState {
     ssrc: u32,
     rollover_counter: u32,
@@ -356,13 +356,13 @@ impl Context {
         srtp_session_auth.input(buf);
 
         // For SRTP only, we need to hash the rollover counter as well.
-        let mut roc_buf: Vec<u8> = vec![0; 4];
+        let mut roc_buf: Vec<u8> = vec![];
         {
             let mut writer = BufWriter::<&mut Vec<u8>>::new(roc_buf.as_mut());
             writer.write_u32::<BigEndian>(roc)?;
         }
 
-        srtp_session_auth.input(roc_buf.as_slice());
+        srtp_session_auth.input(&roc_buf);
 
         let result = srtp_session_auth.clone().result();
         let code_bytes = result.code();
@@ -395,5 +395,16 @@ impl Context {
 
         // Truncate the hash to the first AUTH_TAG_SIZE bytes.
         Ok(code_bytes[0..AUTH_TAG_SIZE].to_vec())
+    }
+
+    fn get_ssrc_state(&mut self, ssrc: u32) -> Option<&mut SSRCState> {
+        if !self.ssrc_states.contains_key(&ssrc) {
+            let s = SSRCState {
+                ssrc,
+                ..Default::default()
+            };
+            self.ssrc_states.insert(ssrc, s);
+        }
+        self.ssrc_states.get_mut(&ssrc)
     }
 }
