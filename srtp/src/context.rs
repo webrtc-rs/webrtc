@@ -14,6 +14,9 @@ use util::Error;
 #[cfg(test)]
 mod context_test;
 
+#[cfg(test)]
+mod srtp_test;
+
 pub mod srtcp;
 pub mod srtp;
 
@@ -135,7 +138,10 @@ impl Context {
 
         //let srtp_block = Aes128::new(&GenericArray::from_slice(&srtp_session_key));
 
-        let srtp_session_auth = HmacSha1::new(&GenericArray::from_slice(&srtp_session_auth_tag));
+        let srtp_session_auth = match HmacSha1::new_varkey(&srtp_session_auth_tag) {
+            Ok(srtp_session_auth) => srtp_session_auth,
+            Err(err) => return Err(Error::new(err.to_string())),
+        };
 
         let srtcp_session_key =
             Context::generate_session_key(&master_key, &master_salt, LABEL_SRTCPENCRYPTION)?;
@@ -149,7 +155,10 @@ impl Context {
 
         //let srtcp_block = Aes128::new(&GenericArray::from_slice(&srtcp_session_key));
 
-        let srtcp_session_auth = HmacSha1::new(&GenericArray::from_slice(&srtcp_session_auth_tag));
+        let srtcp_session_auth = match HmacSha1::new_varkey(&srtcp_session_auth_tag) {
+            Ok(srtcp_session_auth) => srtcp_session_auth,
+            Err(err) => return Err(Error::new(err.to_string())),
+        };
 
         Ok(Context {
             master_key,
@@ -268,7 +277,7 @@ impl Context {
         let mut first_run = session_auth_tag.clone();
         let mut second_run = session_auth_tag.clone();
         first_run.extend_from_slice(&[0x00, 0x00]);
-        second_run.extend_from_slice(&[0x00, 0x00]);
+        second_run.extend_from_slice(&[0x00, 0x01]);
 
         let first_run = GenericArray::from_mut_slice(&mut first_run);
         let second_run = GenericArray::from_mut_slice(&mut second_run);
