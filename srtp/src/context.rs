@@ -17,6 +17,9 @@ mod context_test;
 #[cfg(test)]
 mod srtp_test;
 
+#[cfg(test)]
+mod srtcp_test;
+
 pub mod srtcp;
 pub mod srtp;
 

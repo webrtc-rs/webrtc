@@ -28,8 +28,8 @@ struct RTPTestCase {
 }
 
 lazy_static! {
-    static ref rtpTestCaseDecrypted: Vec<u8> = vec![0x00, 0x01, 0x02, 0x03, 0x04, 0x05];
-    static ref rtpTestCases: Vec<RTPTestCase> = vec![
+    static ref RTP_TEST_CASE_DECRYPTED: Vec<u8> = vec![0x00, 0x01, 0x02, 0x03, 0x04, 0x05];
+    static ref RTP_TEST_CASES: Vec<RTPTestCase> = vec![
         RTPTestCase {
             sequence_number: 5000,
             encrypted: vec![
@@ -85,13 +85,13 @@ fn test_rtp_invalid_auth() -> Result<(), Error> {
         PROTECTION_PROFILE_AES128CM_HMAC_SHA1_80,
     )?;
 
-    for testCase in rtpTestCases.iter() {
+    for test_case in RTP_TEST_CASES.iter() {
         let pkt = rtp::packet::Packet {
             header: rtp::packet::Header {
-                sequence_number: testCase.sequence_number,
+                sequence_number: test_case.sequence_number,
                 ..Default::default()
             },
-            payload: rtpTestCaseDecrypted.clone(),
+            payload: RTP_TEST_CASE_DECRYPTED.clone(),
         };
         let mut pkt_raw: Vec<u8> = vec![];
         {
@@ -105,7 +105,7 @@ fn test_rtp_invalid_auth() -> Result<(), Error> {
         assert!(
             result.is_err(),
             "Managed to decrypt with incorrect salt for packet with SeqNum: {}",
-            testCase.sequence_number
+            test_case.sequence_number
         );
     }
 
@@ -117,13 +117,13 @@ fn test_rtp_lifecyle() -> Result<(), Error> {
     let mut encrypt_context = build_test_context()?;
     let mut decrypt_context = build_test_context()?;
 
-    for testCase in rtpTestCases.iter() {
+    for test_case in RTP_TEST_CASES.iter() {
         let decrypted_pkt = rtp::packet::Packet {
             header: rtp::packet::Header {
-                sequence_number: testCase.sequence_number,
+                sequence_number: test_case.sequence_number,
                 ..Default::default()
             },
-            payload: rtpTestCaseDecrypted.clone(),
+            payload: RTP_TEST_CASE_DECRYPTED.clone(),
         };
 
         let mut decrypted_raw: Vec<u8> = vec![];
@@ -134,10 +134,10 @@ fn test_rtp_lifecyle() -> Result<(), Error> {
 
         let encrypted_pkt = rtp::packet::Packet {
             header: rtp::packet::Header {
-                sequence_number: testCase.sequence_number,
+                sequence_number: test_case.sequence_number,
                 ..Default::default()
             },
-            payload: testCase.encrypted.clone(),
+            payload: test_case.encrypted.clone(),
         };
         let mut encrypted_raw: Vec<u8> = vec![];
         {
@@ -149,7 +149,7 @@ fn test_rtp_lifecyle() -> Result<(), Error> {
         assert_eq!(
             actual_encrypted, encrypted_raw,
             "RTP packet with SeqNum invalid encryption: {}",
-            testCase.sequence_number
+            test_case.sequence_number
         );
 
         let actual_decrypted = decrypt_context.decrypt_rtp(&encrypted_raw)?;
@@ -162,7 +162,7 @@ fn test_rtp_lifecyle() -> Result<(), Error> {
         assert_eq!(
             actual_decrypted, decrypted_raw,
             "RTP packet with SeqNum invalid decryption: {}",
-            testCase.sequence_number,
+            test_case.sequence_number,
         )
     }
 
