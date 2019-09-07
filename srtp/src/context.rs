@@ -36,8 +36,8 @@ const LABEL_SRTCPENCRYPTION: u8 = 0x03;
 const LABEL_SRTCPAUTHENTICATION_TAG: u8 = 0x04;
 const LABEL_SRTCPSALT: u8 = 0x05;
 
-const KEY_LEN: usize = 16;
-const SALT_LEN: usize = 14;
+pub const KEY_LEN: usize = 16;
+pub const SALT_LEN: usize = 14;
 
 const MAX_ROCDISORDER: u16 = 100;
 const MAX_SEQUENCE_NUMBER: u16 = 65535;
