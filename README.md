@@ -1,5 +1,11 @@
 # WebRTC in Rust
 
+Use Rust nightly for async/await syntax with Tokio 0.2+
+
+`$ rustup toolchain install nightly`
+
+`$ rustup default nightly`
+
 ### Work in Progress Towards 1.0
 
 - [x] SDP
