@@ -1,69 +1,11 @@
-use std::string::FromUtf8Error;
-use std::time::SystemTimeError;
-use std::{fmt, io, num};
+#![warn(rust_2018_idioms)]
+#![allow(dead_code)]
 
-use url::ParseError;
+#[macro_use]
+extern crate lazy_static;
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct Error {
-    message: String,
-}
+pub mod buffer;
+pub mod error;
 
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{}", self.message)
-    }
-}
-
-impl std::error::Error for Error {
-    fn description(&self) -> &str {
-        &self.message
-    }
-}
-
-// Implement std::convert::From for AppError; from io::Error
-impl From<io::Error> for Error {
-    fn from(error: io::Error) -> Self {
-        Error {
-            message: error.to_string(),
-        }
-    }
-}
-
-impl From<num::ParseIntError> for Error {
-    fn from(error: num::ParseIntError) -> Self {
-        Error {
-            message: error.to_string(),
-        }
-    }
-}
-
-impl From<ParseError> for Error {
-    fn from(error: ParseError) -> Self {
-        Error {
-            message: error.to_string(),
-        }
-    }
-}
-
-impl From<FromUtf8Error> for Error {
-    fn from(error: FromUtf8Error) -> Self {
-        Error {
-            message: error.to_string(),
-        }
-    }
-}
-
-impl From<SystemTimeError> for Error {
-    fn from(error: SystemTimeError) -> Self {
-        Error {
-            message: error.to_string(),
-        }
-    }
-}
-
-impl Error {
-    pub fn new(message: String) -> Self {
-        Error { message }
-    }
-}
+pub use crate::buffer::Buffer;
+pub use crate::error::Error;

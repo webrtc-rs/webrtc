@@ -6,6 +6,9 @@ use crate::stream::*;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
+use tokio::net::UdpSocket;
+use tokio::sync::mpsc;
+
 pub mod session_srtcp;
 pub mod session_srtp;
 
@@ -19,22 +22,49 @@ pub enum Session {
 
 struct SessionBase {
     //localContextMutex           sync.Mutex
-    local_context: Context,
-    remote_context: Context,
+    local_context: Option<Context>,
+    remote_context: Option<Context>,
 
-    //newStream chan readStream
+    new_stream_tx: Option<mpsc::Sender<Box<dyn ReadStream>>>,
+    new_stream_rx: mpsc::Receiver<Box<dyn ReadStream>>,
 
-    //started chan interface{}
-    //closed  chan interface{}
+    started_tx: Option<mpsc::Sender<()>>,
+    started_rx: mpsc::Receiver<()>,
+    closed_tx: Option<mpsc::Sender<()>>,
+    closed_rx: mpsc::Receiver<()>,
+
     read_streams_closed: bool,
-
     read_streams: Mutex<HashMap<u32, Box<dyn ReadStream>>>,
-    //log logging.LeveledLogger
 
-    //nextConn net.Conn
+    next_conn: UdpSocket,
+    //log logging.LeveledLogger
 }
 
 impl SessionBase {
+    pub fn new(next_conn: UdpSocket) -> Self {
+        let (new_stream_tx, new_stream_rx) = mpsc::channel(1);
+        let (started_tx, started_rx) = mpsc::channel(1);
+        let (closed_tx, closed_rx) = mpsc::channel(1);
+
+        SessionBase {
+            local_context: None,
+            remote_context: None,
+
+            new_stream_tx: Some(new_stream_tx),
+            new_stream_rx,
+
+            started_tx: Some(started_tx),
+            started_rx,
+            closed_tx: Some(closed_tx),
+            closed_rx,
+
+            read_streams_closed: false,
+            read_streams: Mutex::new(HashMap::new()),
+
+            next_conn,
+        }
+    }
+
     fn get_or_create_read_stream(
         &mut self,
         ssrc: u32,
@@ -68,68 +98,54 @@ impl SessionBase {
         read_streams.remove(&ssrc);
     }
 
-    fn close(&mut self) -> Result<(), Error> {
-        /*if s.nextConn == nil {
-            return nil
-        } else if err := s.nextConn.Close(); err != nil {
-            return err
-        }
+    async fn close(&mut self) -> Result<(), Error> {
+        self.closed_rx.recv().await;
 
-        <-s.closed
-        return nil*/
         Ok(())
     }
 
-    fn start(
+    async fn run(&mut self, child: Session) -> Result<(), Error> {
+        self.started_tx.take(); //drop started_x
+
+        let mut buf: Vec<u8> = vec![0; 8192];
+        loop {
+            let result = self.next_conn.recv_from(&mut buf).await;
+            match result {
+                Ok((len, remote)) => {
+                    match &child {
+                        Session::SessionSRTP(s) => {}
+                        Session::SessionSRTCP(s) => {}
+                    };
+                }
+                Err(err) => {
+                    self.new_stream_tx.take();
+                    self.closed_tx.take();
+                    self.read_streams_closed = true; //TODO: mutex?
+                    return Err(err.into());
+                }
+            }
+        }
+    }
+
+    async fn start(
         &mut self,
-        localMasterKey: Vec<u8>,
-        localMasterSalt: Vec<u8>,
-        remoteMasterKey: Vec<u8>,
-        remoteMasterSalt: Vec<u8>,
+        local_master_key: Vec<u8>,
+        local_master_salt: Vec<u8>,
+        remote_master_key: Vec<u8>,
+        remote_master_salt: Vec<u8>,
         profile: ProtectionProfile,
         child: Session,
     ) -> Result<(), Error> {
-        /*var err error
-        s.localContext, err = CreateContext(localMasterKey, localMasterSalt, profile)
-        if err != nil {
-            return err
-        }
+        self.local_context = Some(Context::new(local_master_key, local_master_salt, profile)?);
+        self.remote_context = Some(Context::new(
+            remote_master_key,
+            remote_master_salt,
+            profile,
+        )?);
 
-        s.remoteContext, err = CreateContext(remoteMasterKey, remoteMasterSalt, profile)
-        if err != nil {
-            return err
-        }
+        // This starts the server task.
+        self.run(child).await?;
 
-        go func() {
-            defer func() {
-                close(s.newStream)
-
-                s.readStreamsLock.Lock()
-                s.readStreamsClosed = true
-                s.readStreamsLock.Unlock()
-                close(s.closed)
-            }()
-
-            b := make([]byte, 8192)
-            for {
-                var i int
-                i, err = s.nextConn.Read(b)
-                if err != nil {
-                    if err != io.EOF {
-                        s.log.Errorf("srtp: %s", err.Error())
-                    }
-                    return
-                }
-
-                if err = child.decrypt(b[:i]); err != nil {
-                    s.log.Infof("%v \n", err)
-                }
-            }
-        }()
-
-        close(s.started)
-
-        return nil*/
         Ok(())
     }
 }
