@@ -4,6 +4,9 @@ use std::collections::VecDeque;
 
 use tokio::sync::{mpsc, Lock};
 
+#[cfg(test)]
+mod buffer_test;
+
 // ErrFull is returned when the buffer has hit the configured limits.
 lazy_static! {
     pub static ref ERR_BUFFER_FULL: Error = Error::new("buffer: full".to_owned());
@@ -35,9 +38,13 @@ pub struct Buffer {
 }
 
 impl Buffer {
-    pub fn new(limit_count: usize, limit_size: usize) -> Self {
+    pub fn new(limit_count: usize, limit_size: usize) -> Result<Self, Error> {
+        if limit_count == 0 {
+            return Err(Error::new("limit_count must > 0".to_string()));
+        }
         let (notify_tx, notify_rx) = mpsc::channel(limit_count);
-        Buffer {
+
+        Ok(Buffer {
             buffer: Lock::new(BufferInternal {
                 packets: VecDeque::new(),
 
@@ -50,7 +57,7 @@ impl Buffer {
                 limit_count,
                 limit_size,
             }),
-        }
+        })
     }
 
     // Write appends a copy of the packet data to the buffer.
@@ -77,7 +84,7 @@ impl Buffer {
         b.packets.push_back(packet.to_vec());
         b.size += packet.len();
 
-        Ok(0)
+        Ok(packet.len())
     }
 
     // Read populates the given byte slice, returning the number of bytes read.
@@ -130,28 +137,10 @@ impl Buffer {
         b.packets.len()
     }
 
-    // SetLimitCount controls the maximum number of packets that can be buffered.
-    // Causes Write to return ErrFull when this limit is reached.
-    // A zero value will disable this limit.
-    pub async fn set_limit_count(&mut self, limit: usize) {
-        let mut b = self.buffer.lock().await;
-
-        b.limit_count = limit
-    }
-
     // Size returns the total byte size of packets in the buffer.
     pub async fn size(&mut self) -> usize {
         let b = self.buffer.lock().await;
 
         b.size
-    }
-
-    // SetLimitSize controls the maximum number of bytes that can be buffered.
-    // Causes Write to return ErrFull when this limit is reached.
-    // A zero value will disable this limit.
-    pub async fn set_limit_size(&mut self, limit: usize) {
-        let mut b = self.buffer.lock().await;
-
-        b.limit_size = limit
     }
 }
