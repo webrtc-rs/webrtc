@@ -42,7 +42,7 @@ const SLI_LENGTH: usize = 2;
 const SLI_OFFSET: usize = 8;
 
 impl fmt::Display for SliceLossIndication {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "SliceLossIndication {:x} {:x} {:?}",

@@ -193,7 +193,7 @@ const CSRC_OFFSET: usize = 12;
 const CSRC_LENGTH: usize = 4;
 
 impl fmt::Display for Packet {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut out = "RTP PACKET:\n".to_string();
 
         out += format!("\tVersion: {}\n", self.header.version).as_str();

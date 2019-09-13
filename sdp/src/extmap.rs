@@ -21,7 +21,7 @@ struct ExtMap {
 }
 
 impl fmt::Display for ExtMap {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut output = format!("{}", self.value);
         let dirstring = self.direction.to_string();
         if &dirstring != DIRECTION_UNKNOWN_STR {

@@ -19,7 +19,7 @@ pub struct ConnectionInformation {
 }
 
 impl fmt::Display for ConnectionInformation {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(address) = &self.address {
             write!(f, "{} {} {}", self.network_type, self.address_type, address,)
         } else {
@@ -37,7 +37,7 @@ pub struct Address {
 }
 
 impl fmt::Display for Address {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut parts = vec![self.address.to_owned()];
         if let Some(t) = &self.ttl {
             parts.push(t.to_string());
@@ -59,7 +59,7 @@ pub struct Bandwidth {
 }
 
 impl fmt::Display for Bandwidth {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let output = if self.experimental { "X-" } else { "" };
         write!(f, "{}{}:{}", output, self.bandwidth_type, self.bandwidth)
     }
@@ -77,7 +77,7 @@ pub struct Attribute {
 }
 
 impl fmt::Display for Attribute {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(value) = &self.value {
             write!(f, "{}:{}", self.key, value)
         } else {

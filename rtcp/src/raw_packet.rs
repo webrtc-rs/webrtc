@@ -17,7 +17,7 @@ pub struct RawPacket {
 }
 
 impl fmt::Display for RawPacket {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "RawPacket: {:?}", self.raw)
     }
 }

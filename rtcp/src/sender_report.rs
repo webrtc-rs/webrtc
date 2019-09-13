@@ -63,7 +63,7 @@ const srOctetCountLength: usize = 4;
 const srReportOffset: usize = srOctetCountOffset + srOctetCountLength;*/
 
 impl fmt::Display for SenderReport {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut out = format!("SenderReport from {}\n", self.ssrc);
         out += format!("\tNTPTime:\t{}\n", self.ntp_time).as_str();
         out += format!("\tRTPTIme:\t{}\n", self.rtp_time).as_str();

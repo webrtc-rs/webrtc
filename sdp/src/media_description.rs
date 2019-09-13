@@ -135,7 +135,8 @@ impl MediaDescription {
             with_value_attribute("ssrc".to_string(), format!("{} cname:{}", ssrc, cname)). // Deprecated but not phased out?
             with_value_attribute("ssrc".to_string(), format!("{} msid:{} {}", ssrc, stream_label, label)).
             with_value_attribute("ssrc".to_string(), format!("{} mslabel:{}", ssrc, stream_label)). // Deprecated but not phased out?
-            with_value_attribute("ssrc".to_string(), format!("{} label:{}", ssrc, label)) // Deprecated but not phased out?
+            with_value_attribute("ssrc".to_string(), format!("{} label:{}", ssrc, label))
+        // Deprecated but not phased out?
     }
 
     // WithCandidate adds an ICE candidate to the media description
@@ -161,7 +162,7 @@ pub struct RangedPort {
 }
 
 impl fmt::Display for RangedPort {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(range) = self.range {
             write!(f, "{}/{}", self.value, range)
         } else {
@@ -180,7 +181,7 @@ pub struct MediaName {
 }
 
 impl fmt::Display for MediaName {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = vec![
             self.media.clone(),
             self.port.to_string(),

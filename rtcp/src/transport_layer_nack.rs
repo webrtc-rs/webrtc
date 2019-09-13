@@ -63,7 +63,7 @@ pub struct TransportLayerNack {
 }
 
 impl fmt::Display for TransportLayerNack {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut out = format!("TransportLayerNack from {:x}\n", self.sender_ssrc);
         out += format!("\tMedia Ssrc {:x}\n", self.media_ssrc).as_str();
         out += format!("\tID\tLostPackets\n").as_str();

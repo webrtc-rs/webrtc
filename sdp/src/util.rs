@@ -25,7 +25,7 @@ pub enum ConnectionRole {
 }
 
 impl fmt::Display for ConnectionRole {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
             ConnectionRole::ConnectionRoleActive => "active",
             ConnectionRole::ConnectionRolePassive => "passive",
@@ -52,7 +52,7 @@ pub struct Codec {
 }
 
 impl fmt::Display for Codec {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "{} {}/{}/{} ({})",

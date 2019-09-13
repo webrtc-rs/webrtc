@@ -39,7 +39,7 @@ lazy_static! {
 
 // String prints the REMB packet in a human-readable format.
 impl fmt::Display for ReceiverEstimatedMaximumBitrate {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Do some unit conversions because b/s is far too difficult to read.
         let mut bitrate = self.bitrate as f64;
         let mut powers = 0;

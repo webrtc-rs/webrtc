@@ -24,7 +24,7 @@ pub const DIRECTION_INACTIVE_STR: &'static str = "inactive";
 pub const DIRECTION_UNKNOWN_STR: &'static str = "";
 
 impl fmt::Display for Direction {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
             Direction::DirectionSendRecv => DIRECTION_SEND_RECV_STR,
             Direction::DirectionSendOnly => DIRECTION_SEND_ONLY_STR,

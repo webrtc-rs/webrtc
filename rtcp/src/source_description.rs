@@ -34,7 +34,7 @@ impl Default for SDESType {
 }
 
 impl fmt::Display for SDESType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
             SDESType::SDESEnd => "END",
             SDESType::SDESCNAME => "CNAME",
@@ -241,7 +241,7 @@ pub struct SourceDescription {
 }
 
 impl fmt::Display for SourceDescription {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut out = format!("Source Description:\n");
         for c in &self.chunks {
             out += format!("\t{:x}\n", c.source).as_str();

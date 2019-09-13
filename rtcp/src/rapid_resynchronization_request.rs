@@ -27,7 +27,7 @@ const RRR_HEADER_LENGTH: usize = SSRC_LENGTH * 2;
 const RRR_MEDIA_OFFSET: usize = 4;
 
 impl fmt::Display for RapidResynchronizationRequest {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "RapidResynchronizationRequest {:x} {:x}",

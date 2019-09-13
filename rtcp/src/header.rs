@@ -39,7 +39,7 @@ pub const FORMAT_RRR: u8 = 5;
 pub const FORMAT_REMB: u8 = 15;
 
 impl fmt::Display for PacketType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
             PacketType::Unsupported => "Unsupported",
             PacketType::SenderReport => "SR",

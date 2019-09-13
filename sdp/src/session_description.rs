@@ -47,7 +47,7 @@ pub struct Origin {
 }
 
 impl fmt::Display for Origin {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "{} {} {} {} {} {}",
@@ -97,7 +97,7 @@ pub struct TimeZone {
 }
 
 impl fmt::Display for TimeZone {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} {}", self.adjustment_time, self.offset)
     }
 }
@@ -125,7 +125,7 @@ pub struct Timing {
 }
 
 impl fmt::Display for Timing {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} {}", self.start_time, self.stop_time)
     }
 }
@@ -140,7 +140,7 @@ pub struct RepeatTime {
 }
 
 impl fmt::Display for RepeatTime {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut fields = vec![];
         fields.push(format!("{}", self.interval));
         fields.push(format!("{}", self.duration));

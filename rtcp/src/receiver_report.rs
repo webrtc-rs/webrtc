@@ -29,7 +29,7 @@ pub struct ReceiverReport {
 }
 
 impl fmt::Display for ReceiverReport {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut out = format!("ReceiverReport from {}\n", self.ssrc);
         for rep in &self.reports {
             out += format!(

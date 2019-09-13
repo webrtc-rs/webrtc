@@ -22,7 +22,7 @@ pub struct Goodbye {
 }
 
 impl fmt::Display for Goodbye {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut out = format!("Goodbye:\n\tSources:\n");
         for s in &self.sources {
             out += format!("\t{}\n", *s).as_str();
