@@ -12,21 +12,19 @@ use tokio::sync::mpsc;
 pub mod session_srtcp;
 pub mod session_srtp;
 
-use session_srtcp::SessionSRTCP;
-use session_srtp::SessionSRTP;
-
-pub enum Session {
-    SessionSRTP(SessionSRTP),
-    SessionSRTCP(SessionSRTCP),
+pub trait StreamSession {
+    fn close(&mut self) -> Result<(), Error>;
+    fn write(&mut self, buf: &[u8]) -> Result<usize, Error>;
+    fn decrypt(&mut self, buf: &[u8]) -> Result<(), Error>;
 }
 
-pub(crate) struct SessionBase {
+pub(crate) struct Session {
     //localContextMutex           sync.Mutex
     local_context: Option<Context>,
     remote_context: Option<Context>,
 
-    new_stream_tx: Option<mpsc::Sender<ReadStream>>,
-    new_stream_rx: mpsc::Receiver<ReadStream>,
+    new_stream_tx: Option<mpsc::Sender<Box<dyn ReadStream>>>,
+    new_stream_rx: mpsc::Receiver<Box<dyn ReadStream>>,
 
     started_tx: Option<mpsc::Sender<()>>,
     started_rx: mpsc::Receiver<()>,
@@ -34,19 +32,19 @@ pub(crate) struct SessionBase {
     closed_rx: mpsc::Receiver<()>,
 
     read_streams_closed: bool,
-    read_streams: Mutex<HashMap<u32, ReadStream>>,
+    read_streams: Mutex<HashMap<u32, Box<dyn ReadStream>>>,
 
     next_conn: UdpSocket,
     //log logging.LeveledLogger
 }
 
-impl SessionBase {
+impl Session {
     pub fn new(next_conn: UdpSocket) -> Self {
         let (new_stream_tx, new_stream_rx) = mpsc::channel(1);
         let (started_tx, started_rx) = mpsc::channel(1);
         let (closed_tx, closed_rx) = mpsc::channel(1);
 
-        SessionBase {
+        Session {
             local_context: None,
             remote_context: None,
 
@@ -68,9 +66,9 @@ impl SessionBase {
     async fn get_or_create_read_stream(
         &mut self,
         ssrc: u32,
-        child: Session,
-        proto: fn() -> ReadStream,
-    ) -> Option<&ReadStream> {
+        child: impl StreamSession,
+        proto: fn() -> Box<dyn ReadStream>,
+    ) -> Option<&Box<dyn ReadStream>> {
         let read_streams = self.read_streams.get_mut().unwrap();
 
         if self.read_streams_closed {
@@ -79,11 +77,8 @@ impl SessionBase {
 
         if !read_streams.contains_key(&ssrc) {
             let mut r = proto();
-            match &mut r {
-                ReadStream::ReadStreamSRTP(r) => if r.init(child, ssrc).await.is_err() {
-                        return None;
-                    }
-                _ => return None,
+            if r.init(ssrc).await.is_err() {
+                return None;
             }
             read_streams.insert(ssrc, r);
         }
@@ -107,7 +102,7 @@ impl SessionBase {
         Ok(())
     }
 
-    async fn run(&mut self, child: Session) -> Result<(), Error> {
+    async fn run(&mut self, child: impl StreamSession) -> Result<(), Error> {
         self.started_tx.take(); //drop started_x
 
         let mut buf: Vec<u8> = vec![0; 8192];
@@ -115,10 +110,10 @@ impl SessionBase {
             let result = self.next_conn.recv_from(&mut buf).await;
             match result {
                 Ok((len, remote)) => {
-                    match &child {
+                    /*match &child {
                         Session::SessionSRTP(s) => {}
                         Session::SessionSRTCP(s) => {}
-                    };
+                    };*/
                 }
                 Err(err) => {
                     self.new_stream_tx.take();
@@ -137,7 +132,7 @@ impl SessionBase {
         remote_master_key: Vec<u8>,
         remote_master_salt: Vec<u8>,
         profile: ProtectionProfile,
-        child: Session,
+        child: impl StreamSession,
     ) -> Result<(), Error> {
         self.local_context = Some(Context::new(local_master_key, local_master_salt, profile)?);
         self.remote_context = Some(Context::new(

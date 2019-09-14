@@ -9,14 +9,14 @@ use tokio::net::UdpSocket;
 // for local/remote to each have their own keying material. This provides those patterns
 // instead of making everyone re-implement
 pub struct SessionSRTP {
-    pub(crate) session: SessionBase,
+    pub(crate) session: Session,
     //pub(crate) write_stream: Option<WriteStreamSRTP<'a>>,
 }
 
 impl SessionSRTP {
     pub fn new(conn: UdpSocket, config: &Config) -> Result<Self, Error> {
         let mut s = SessionSRTP {
-            session: SessionBase::new(conn),
+            session: Session::new(conn),
             //write_stream: None,
         };
 

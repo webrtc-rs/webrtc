@@ -1,6 +1,3 @@
-use crate::session::session_srtp::SessionSRTP;
-use crate::session::Session;
-
 use super::*;
 
 use rtp::packet::Header;
@@ -15,145 +12,104 @@ use tokio::sync::Lock;
 const SRTP_BUFFER_SIZE: usize = 1000 * 1000;
 
 // ReadStreamSRTP handles decryption for a single RTP SSRC
-struct ReadStreamSRTPInternal {
-    is_inited: bool,
+pub struct ReadStreamSRTP {
+    is_inited: Lock<bool>,
     is_closed: bool,
 
-    session: Option<SessionSRTP>,
+    //session: Option<SessionSRTP>,
     ssrc: u32,
 
-    buffer: Option<Buffer>,
+    buffer: Buffer,
 }
 
-pub struct ReadStreamSRTP {
-    mu: Lock<ReadStreamSRTPInternal>,
-}
+#[async_trait]
+impl ReadStream for ReadStreamSRTP {
+    async fn init(&mut self, ssrc: u32) -> Result<(), Error> {
+        let mut is_inited = self.is_inited.lock().await;
 
-impl ReadStreamSRTP {
-    pub(crate) async fn init(&mut self, child: Session, ssrc: u32) -> Result<(), Error> {
-        let session_rtp = match child {
-            Session::SessionSRTP(s) => s,
-            _ => {
-                return Err(Error::new(
-                    "ReadStreamSRTP init failed type assertion".to_string(),
-                ))
-            }
-        };
-
-        let mut r = self.mu.lock().await;
-        if r.is_inited {
+        if *is_inited {
             return Err(Error::new(
                 "ReadStreamSRTP has already been inited".to_string(),
             ));
         }
 
-        r.session = Some(session_rtp);
-        r.ssrc = ssrc;
-        r.is_inited = true;
-
-        // Create a buffer with a 1MB limit
-        r.buffer = Some(Buffer::new(0, SRTP_BUFFER_SIZE));
+        self.ssrc = ssrc;
+        *is_inited = true;
 
         Ok(())
     }
 
-
     // Read reads and decrypts full RTP packet from the nextConn
-    pub(crate) async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
-        let mut r = self.mu.lock().await;
-
-        if let Some(buffer) = &mut r.buffer {
-            buffer.read(buf).await
-        } else {
-            Err(Error::new("ReadStreamSRTP has empty buffer".to_string()))
-        }
+    async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
+        self.buffer.read(buf).await
     }
 
     // GetSSRC returns the SSRC we are demuxing for
-    pub(crate) async fn  get_ssrc(&mut self) ->u32 {
-        let r = self.mu.lock().await;
-
-        r.ssrc
+    fn get_ssrc(&mut self) -> u32 {
+        self.ssrc
     }
+}
 
+impl ReadStreamSRTP {
     pub(crate) fn new() -> Self {
         ReadStreamSRTP {
-            mu: Lock::new(ReadStreamSRTPInternal {
-                is_inited: false,
-                is_closed: false,
+            is_inited: Lock::new(false),
+            is_closed: false,
 
-                session: None,
-                ssrc: 0,
+            //session: None,
+            ssrc: 0,
 
-                buffer: None,
-            }),
+            // Create a buffer with a 1MB limit
+            buffer: Buffer::new(0, SRTP_BUFFER_SIZE),
         }
     }
-
 
     pub(crate) async fn write(&mut self, buf: &[u8]) -> Result<usize, Error> {
-        let mut r = self.mu.lock().await;
-
-        if let Some(buffer) = &mut r.buffer {
-            let result = buffer.write(buf).await;
-            match result {
-                Ok(size) => Ok(size),
-                Err(err) => {
-                    if err == ERR_BUFFER_FULL.clone() {
-                        // Silently drop data when the buffer is full.
-                        Ok(buf.len())
-                    } else {
-                        Err(err)
-                    }
+        let result = self.buffer.write(buf).await;
+        match result {
+            Ok(size) => Ok(size),
+            Err(err) => {
+                if err == ERR_BUFFER_FULL.clone() {
+                    // Silently drop data when the buffer is full.
+                    Ok(buf.len())
+                } else {
+                    Err(err)
                 }
             }
-        } else {
-            Err(Error::new("ReadStreamSRTP has empty buffer".to_string()))
         }
     }
-
 
     // ReadRTP reads and decrypts full RTP packet and its header from the nextConn
     pub(crate) async fn read_rtp(&mut self, buf: &mut [u8]) -> Result<(usize, Header), Error> {
-        let mut r = self.mu.lock().await;
+        let n = self.buffer.read(buf).await?;
+        let mut reader = Cursor::new(buf);
+        let header = Header::unmarshal(&mut reader)?;
 
-        if let Some(buffer) = &mut r.buffer {
-            let n = buffer.read(buf).await?;
-            let mut reader = Cursor::new(buf);
-            let header = Header::unmarshal(&mut reader)?;
-
-            Ok((n, header))
-        } else {
-            Err(Error::new("ReadStreamSRTP has empty buffer".to_string()))
-        }
+        Ok((n, header))
     }
 
     // Close removes the ReadStream from the session and cleans up any associated state
     pub(crate) async fn close(&mut self) -> Result<(), Error> {
-        let mut r = self.mu.lock().await;
+        let is_inited = self.is_inited.lock().await;
 
-        if !r.is_inited {
+        if !(*is_inited) {
             return Err(Error::new("ReadStreamSRTP has not been inited".to_string()));
         }
 
-        if r.is_closed {
+        if self.is_closed {
             return Err(Error::new("ReadStreamSRTP is already closed".to_string()));
         }
 
-        r.is_closed = true;
+        self.is_closed = true;
 
-        if let Some(buffer) = &mut r.buffer {
-            buffer.close().await;
-        } else {
-            return Err(Error::new("ReadStreamSRTP has empty buffer".to_string()));
-        }
+        self.buffer.close().await;
 
-        let ssrc = r.ssrc;
+        /*let ssrc = r.ssrc;
         if let Some(session) = &mut r.session {
             session.session.remove_read_stream(ssrc);
         } else {
             return Err(Error::new("ReadStreamSRTP has empty session".to_string()));
-        }
+        }*/
 
         Ok(())
     }
@@ -162,7 +118,7 @@ impl ReadStreamSRTP {
 /*
 // WriteStreamSRTP is stream for a single Session that is used to encrypt RTP
 pub struct WriteStreamSRTP<'a>  {
-	session: Option<&'a SessionSRTP<'a>>,
+    session: Option<&'a SessionSRTP<'a>>,
 }
 
 impl<'a> WriteStreamSRTP<'a> {
