@@ -20,9 +20,10 @@ lazy_static! {
 struct BufferInternal {
     packets: VecDeque<Vec<u8>>,
 
-    notify_tx: mpsc::Sender<()>,
-    notify_rx: mpsc::Receiver<()>,
+    notify_tx: Option<mpsc::Sender<()>>,
+    notify_rx: Option<mpsc::Receiver<()>>,
 
+    subs: bool,
     closed: bool,
 
     // The number of buffered packets in bytes.
@@ -33,31 +34,30 @@ struct BufferInternal {
     limit_size: usize,
 }
 
+#[derive(Clone)]
 pub struct Buffer {
     buffer: Lock<BufferInternal>,
 }
 
 impl Buffer {
-    pub fn new(limit_count: usize, limit_size: usize) -> Result<Self, Error> {
-        if limit_count == 0 {
-            return Err(Error::new("limit_count must > 0".to_string()));
-        }
-        let (notify_tx, notify_rx) = mpsc::channel(limit_count);
+    pub fn new(limit_count: usize, limit_size: usize) -> Self {
+        let (notify_tx, notify_rx) = mpsc::channel(1);
 
-        Ok(Buffer {
+        Buffer {
             buffer: Lock::new(BufferInternal {
                 packets: VecDeque::new(),
 
-                notify_tx,
-                notify_rx,
+                notify_tx: Some(notify_tx),
+                notify_rx: Some(notify_rx),
 
+                subs: false,
                 closed: false,
                 size: 0,
 
                 limit_count,
                 limit_size,
             }),
-        })
+        }
     }
 
     // Write appends a copy of the packet data to the buffer.
@@ -79,10 +79,33 @@ impl Buffer {
             return Err(ERR_BUFFER_FULL.clone());
         }
 
-        b.notify_tx.send(()).await?;
+        // Decide if we need to wake up any readers.
+        let mut notify = if b.subs {
+            // If so, close the notify channel and make a new one.
+            // This effectively behaves like a broadcast, waking up any blocked goroutines.
+            // We close after we release the lock to reduce contention.
+            let notify = b.notify_tx.take();
+
+            let (notify_tx, notify_rx) = mpsc::channel(1);
+
+            b.notify_tx = Some(notify_tx);
+            b.notify_rx = Some(notify_rx);
+
+            // Reset the subs marker.
+            b.subs = false;
+
+            notify
+        } else {
+            None
+        };
 
         b.packets.push_back(packet.to_vec());
         b.size += packet.len();
+
+        // Actually close the notify channel down here.
+        if notify.is_some() {
+            notify.take(); //drop notify
+        }
 
         Ok(packet.len())
     }
@@ -92,26 +115,45 @@ impl Buffer {
     // Returns io.ErrShortBuffer is the packet is too small to copy the Write.
     // Returns io.EOF if the buffer is closed.
     pub async fn read(&mut self, packet: &mut [u8]) -> Result<usize, Error> {
-        let mut b = self.buffer.lock().await;
+        loop {
+            let notify;
+            {
+                // use {} to let LockGuard RAII
+                let mut b = self.buffer.lock().await;
 
-        if b.closed {
-            return Err(ERR_BUFFER_CLOSED.clone());
-        }
+                // See if there are any packets in the queue.
+                if !b.packets.is_empty() {
+                    let first = b.packets.pop_front();
 
-        let r = b.notify_rx.recv().await;
-        if r.is_none() {
-            return Err(ERR_BUFFER_CLOSED.clone());
-        }
+                    if let Some(first) = first {
+                        // This is a packet-based reader/writer so we can't truncate.
+                        if first.len() > packet.len() {
+                            return Err(ERR_BUFFER_TOO_SHORT.clone());
+                        }
 
-        let first = b.packets.pop_front();
-        if let Some(first) = first {
-            if first.len() > packet.len() {
-                return Err(ERR_BUFFER_TOO_SHORT.clone());
+                        packet[0..first.len()].copy_from_slice(&first);
+                        return Ok(first.len());
+                    } else {
+                        return Err(ERR_BUFFER_UNEXPECTED_EMPTY.clone());
+                    }
+                }
+
+                // Make sure the reader isn't actually closed.
+                // This is done after checking packets to fully read the buffer.
+                if b.closed {
+                    return Err(ERR_BUFFER_CLOSED.clone());
+                }
+
+                notify = b.notify_rx.take();
+
+                // Set the subs marker, telling the writer we're waiting.
+                b.subs = true
             }
-            packet[0..first.len()].copy_from_slice(&first);
-            Ok(first.len())
-        } else {
-            Err(ERR_BUFFER_UNEXPECTED_EMPTY.clone())
+
+            // Wake for the broadcast.
+            if let Some(mut notify) = notify {
+                notify.recv().await;
+            }
         }
     }
 
@@ -126,8 +168,8 @@ impl Buffer {
             return;
         }
 
+        b.notify_tx.take();
         b.closed = true;
-        b.notify_rx.close();
     }
 
     // Count returns the number of packets in the buffer.
