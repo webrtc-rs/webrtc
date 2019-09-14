@@ -20,13 +20,13 @@ pub enum Session {
     SessionSRTCP(SessionSRTCP),
 }
 
-struct SessionBase {
+pub(crate) struct SessionBase {
     //localContextMutex           sync.Mutex
     local_context: Option<Context>,
     remote_context: Option<Context>,
 
-    new_stream_tx: Option<mpsc::Sender<Box<dyn ReadStream>>>,
-    new_stream_rx: mpsc::Receiver<Box<dyn ReadStream>>,
+    new_stream_tx: Option<mpsc::Sender<ReadStream>>,
+    new_stream_rx: mpsc::Receiver<ReadStream>,
 
     started_tx: Option<mpsc::Sender<()>>,
     started_rx: mpsc::Receiver<()>,
@@ -34,7 +34,7 @@ struct SessionBase {
     closed_rx: mpsc::Receiver<()>,
 
     read_streams_closed: bool,
-    read_streams: Mutex<HashMap<u32, Box<dyn ReadStream>>>,
+    read_streams: Mutex<HashMap<u32, ReadStream>>,
 
     next_conn: UdpSocket,
     //log logging.LeveledLogger
@@ -65,12 +65,12 @@ impl SessionBase {
         }
     }
 
-    fn get_or_create_read_stream(
+    async fn get_or_create_read_stream(
         &mut self,
         ssrc: u32,
         child: Session,
-        proto: fn() -> Box<dyn ReadStream>,
-    ) -> Option<&Box<dyn ReadStream>> {
+        proto: fn() -> ReadStream,
+    ) -> Option<&ReadStream> {
         let read_streams = self.read_streams.get_mut().unwrap();
 
         if self.read_streams_closed {
@@ -78,9 +78,12 @@ impl SessionBase {
         }
 
         if !read_streams.contains_key(&ssrc) {
-            let r = proto();
-            if r.init(child, ssrc).is_err() {
-                return None;
+            let mut r = proto();
+            match &mut r {
+                ReadStream::ReadStreamSRTP(r) => if r.init(child, ssrc).await.is_err() {
+                        return None;
+                    }
+                _ => return None,
             }
             read_streams.insert(ssrc, r);
         }
@@ -88,7 +91,7 @@ impl SessionBase {
         read_streams.get(&ssrc)
     }
 
-    fn remove_read_stream(&mut self, ssrc: u32) {
+    pub(crate) fn remove_read_stream(&mut self, ssrc: u32) {
         let read_streams = self.read_streams.get_mut().unwrap();
 
         if self.read_streams_closed {

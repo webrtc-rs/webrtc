@@ -237,7 +237,7 @@ async fn test_buffer_misc() {
 
     // Try to read with a short buffer
     let mut packet: Vec<u8> = vec![0; 3];
-    let result  = buffer.read(&mut packet).await;
+    let result = buffer.read(&mut packet).await;
     assert!(result.is_err());
     if let Err(err) = result {
         assert_eq!(err, ERR_BUFFER_SHORT.clone());

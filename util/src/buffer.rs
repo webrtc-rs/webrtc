@@ -128,7 +128,7 @@ impl Buffer {
                         }
                     }
 
-                    if let Some(first) =  b.packets.pop_front() {
+                    if let Some(first) = b.packets.pop_front() {
                         b.size -= first.len();
 
                         packet[0..first.len()].copy_from_slice(&first);

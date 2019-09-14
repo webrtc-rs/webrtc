@@ -5,7 +5,7 @@ use crate::context::*;
 const LABEL_EXTRACTOR_DTLS_SRTP: &'static str = "EXTRACTOR-dtls_srtp";
 
 // KeyingMaterialExporter allows package SRTP to extract keying material
-trait KeyingMaterialExporter {
+pub trait KeyingMaterialExporter {
     fn export_keying_material(
         &self,
         label: String,
@@ -15,7 +15,7 @@ trait KeyingMaterialExporter {
 }
 
 // SessionKeys bundles the keys required to setup an SRTP session
-struct SessionKeys {
+pub struct SessionKeys {
     local_master_key: Vec<u8>,
     local_master_salt: Vec<u8>,
     remote_master_key: Vec<u8>,
@@ -26,7 +26,7 @@ struct SessionKeys {
 // You can provide either a KeyingMaterialExporter to export keys
 // or directly pass the keys themselves.
 // After a Config is passed to a session it must not be modified.
-struct Config {
+pub struct Config {
     keys: SessionKeys,
     profile: ProtectionProfile,
     //LoggerFactory: logging.LoggerFactory
