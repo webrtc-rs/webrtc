@@ -17,3 +17,10 @@ Use Rust nightly for async/await syntax with Tokio 0.2+
 - [ ] STUN
 - [ ] TURN
 - [ ] RTC
+
+### Road Map Towards 2.0
+
+- [ ] SIP
+- [ ] SCTP
+- [ ] QUIC
+- [ ] ...
