@@ -11,9 +11,7 @@ mod buffer_test;
 lazy_static! {
     pub static ref ERR_BUFFER_FULL: Error = Error::new("buffer: full".to_owned());
     pub static ref ERR_BUFFER_CLOSED: Error = Error::new("buffer: closed".to_owned());
-    pub static ref ERR_BUFFER_UNEXPECTED_EMPTY: Error =
-        Error::new("buffer: unexpected empty".to_owned());
-    pub static ref ERR_BUFFER_TOO_SHORT: Error = Error::new("buffer: too short".to_owned());
+    pub static ref ERR_BUFFER_SHORT: Error = Error::new("buffer: short".to_owned());
 }
 // Buffer allows writing packets to an intermediate buffer, which can then be read form.
 // This is verify similar to bytes.Buffer but avoids combining multiple writes into a single read.
@@ -123,18 +121,18 @@ impl Buffer {
 
                 // See if there are any packets in the queue.
                 if !b.packets.is_empty() {
-                    let first = b.packets.pop_front();
-
-                    if let Some(first) = first {
+                    if let Some(first) = b.packets.front() {
                         // This is a packet-based reader/writer so we can't truncate.
                         if first.len() > packet.len() {
-                            return Err(ERR_BUFFER_TOO_SHORT.clone());
+                            return Err(ERR_BUFFER_SHORT.clone());
                         }
+                    }
+
+                    if let Some(first) =  b.packets.pop_front() {
+                        b.size -= first.len();
 
                         packet[0..first.len()].copy_from_slice(&first);
                         return Ok(first.len());
-                    } else {
-                        return Err(ERR_BUFFER_UNEXPECTED_EMPTY.clone());
                     }
                 }
 
