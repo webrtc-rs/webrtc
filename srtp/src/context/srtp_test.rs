@@ -2,6 +2,8 @@ use super::*;
 
 use util::Error;
 
+use lazy_static::lazy_static;
+
 //TODO: BenchmarkEncryptRTP
 //TODO: BenchmarkEncryptRTPInPlace
 //TODO: BenchmarkDecryptRTP

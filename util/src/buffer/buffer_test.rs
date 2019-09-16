@@ -253,6 +253,9 @@ async fn test_buffer_misc() {
     // Close
     buffer.close().await;
 
+    // check is_close
+    assert!(buffer.is_closed().await);
+
     // Make sure you can Close twice
     buffer.close().await;
 }

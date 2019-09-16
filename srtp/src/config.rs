@@ -16,10 +16,10 @@ pub trait KeyingMaterialExporter {
 
 // SessionKeys bundles the keys required to setup an SRTP session
 pub struct SessionKeys {
-    local_master_key: Vec<u8>,
-    local_master_salt: Vec<u8>,
-    remote_master_key: Vec<u8>,
-    remote_master_salt: Vec<u8>,
+    pub local_master_key: Vec<u8>,
+    pub local_master_salt: Vec<u8>,
+    pub remote_master_key: Vec<u8>,
+    pub remote_master_salt: Vec<u8>,
 }
 
 // Config is used to configure a session.
@@ -27,8 +27,8 @@ pub struct SessionKeys {
 // or directly pass the keys themselves.
 // After a Config is passed to a session it must not be modified.
 pub struct Config {
-    keys: SessionKeys,
-    profile: ProtectionProfile,
+    pub keys: SessionKeys,
+    pub profile: ProtectionProfile,
     //LoggerFactory: logging.LoggerFactory
 }
 

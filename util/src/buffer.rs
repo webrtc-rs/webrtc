@@ -170,6 +170,12 @@ impl Buffer {
         b.closed = true;
     }
 
+    pub async fn is_closed(&mut self) -> bool {
+        let b = self.buffer.lock().await;
+
+        b.closed
+    }
+
     // Count returns the number of packets in the buffer.
     pub async fn count(&mut self) -> usize {
         let b = self.buffer.lock().await;
