@@ -89,7 +89,7 @@ fn test_rtp_invalid_auth() -> Result<(), Error> {
 
     for test_case in RTP_TEST_CASES.iter() {
         let pkt = rtp::packet::Packet {
-            header: rtp::packet::Header {
+            header: rtp::header::Header {
                 sequence_number: test_case.sequence_number,
                 ..Default::default()
             },
@@ -121,7 +121,7 @@ fn test_rtp_lifecyle() -> Result<(), Error> {
 
     for test_case in RTP_TEST_CASES.iter() {
         let decrypted_pkt = rtp::packet::Packet {
-            header: rtp::packet::Header {
+            header: rtp::header::Header {
                 sequence_number: test_case.sequence_number,
                 ..Default::default()
             },
@@ -135,7 +135,7 @@ fn test_rtp_lifecyle() -> Result<(), Error> {
         }
 
         let encrypted_pkt = rtp::packet::Packet {
-            header: rtp::packet::Header {
+            header: rtp::header::Header {
                 sequence_number: test_case.sequence_number,
                 ..Default::default()
             },

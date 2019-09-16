@@ -1,8 +1,9 @@
 use crate::config::Config;
 use crate::context::Context;
-use crate::stream::stream_srtp::StreamSRTP;
+use crate::stream::{Stream, SRTP_BUFFER_SIZE};
 
-use rtp::packet::{Header, Packet};
+use rtp::header::Header;
+use rtp::packet::Packet;
 use util::buffer::ERR_BUFFER_FULL;
 use util::{Buffer, Error};
 
@@ -25,7 +26,7 @@ use futures::{
 // instead of making everyone re-implement
 pub struct SessionSRTP {
     local_context: Lock<Context>,
-    new_stream_rx: mpsc::Receiver<StreamSRTP>,
+    new_stream_rx: mpsc::Receiver<Stream>,
     close_session_tx: mpsc::Sender<()>,
     udp_tx: UdpSocketSendHalf,
 }
@@ -99,7 +100,7 @@ impl SessionSRTP {
         buf: &mut [u8],
         mut streams_map: Lock<HashMap<u32, Buffer>>,
         close_stream_tx: &mpsc::Sender<u32>,
-        new_stream_tx: &mut mpsc::Sender<StreamSRTP>,
+        new_stream_tx: &mut mpsc::Sender<Stream>,
         remote_context: &mut Context,
     ) -> Result<(), Error> {
         let n = udp_rx.recv(buf).await?;
@@ -114,7 +115,7 @@ impl SessionSRTP {
 
         let mut streams = streams_map.lock().await;
         if !streams.contains_key(&ssrc) {
-            let stream = StreamSRTP::new(ssrc, close_stream_tx.clone());
+            let stream = Stream::new(ssrc, close_stream_tx.clone(), SRTP_BUFFER_SIZE);
             streams.insert(ssrc, stream.get_cloned_buffer());
             new_stream_tx.send(stream).await?;
         }
@@ -132,7 +133,7 @@ impl SessionSRTP {
     }
 
     // AcceptStream returns a stream to handle RTCP for a single SSRC
-    pub async fn accept(&mut self) -> Result<StreamSRTP, Error> {
+    pub async fn accept(&mut self) -> Result<Stream, Error> {
         let result = self.new_stream_rx.recv().await;
         if let Some(stream) = result {
             Ok(stream)

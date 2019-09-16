@@ -23,7 +23,7 @@ impl Context {
             )));
         }
         let mut reader = BufReader::new(encrypted);
-        let header = rtp::packet::Header::unmarshal(&mut reader)?;
+        let header = rtp::header::Header::unmarshal(&mut reader)?;
 
         let mut dst: Vec<u8> = vec![0; encrypted.len() - AUTH_TAG_SIZE];
         let s: SSRCState;
@@ -80,7 +80,7 @@ impl Context {
     // If the dst buffer does not have the capacity to hold `len(plaintext) + 10` bytes, a new one will be allocated and returned.
     pub fn encrypt_rtp(&mut self, plaintext: &[u8]) -> Result<Vec<u8>, Error> {
         let mut reader = BufReader::new(plaintext);
-        let header = rtp::packet::Header::unmarshal(&mut reader)?;
+        let header = rtp::header::Header::unmarshal(&mut reader)?;
 
         let mut dst: Vec<u8> = vec![0; plaintext.len()];
 
