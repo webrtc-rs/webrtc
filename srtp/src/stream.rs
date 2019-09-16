@@ -15,15 +15,24 @@ pub struct Stream {
     ssrc: u32,
     tx: mpsc::Sender<u32>,
     buffer: Buffer,
+    is_rtp: bool,
 }
 
 impl Stream {
-    pub fn new(ssrc: u32, tx: mpsc::Sender<u32>, buffer_size: usize) -> Self {
+    pub fn new(ssrc: u32, tx: mpsc::Sender<u32>, is_rtp: bool) -> Self {
         Stream {
             ssrc,
             tx,
             // Create a buffer with a 1MB limit
-            buffer: Buffer::new(0, buffer_size),
+            buffer: Buffer::new(
+                0,
+                if is_rtp {
+                    SRTP_BUFFER_SIZE
+                } else {
+                    SRTCP_BUFFER_SIZE
+                },
+            ),
+            is_rtp,
         }
     }
 
@@ -37,6 +46,10 @@ impl Stream {
         self.ssrc
     }
 
+    pub fn is_rtp_stream(&self) -> bool {
+        self.is_rtp
+    }
+
     // Read reads and decrypts full RTP packet from the nextConn
     pub async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
         self.buffer.read(buf).await
@@ -47,6 +60,10 @@ impl Stream {
         &mut self,
         buf: &mut [u8],
     ) -> Result<(usize, rtp::header::Header), Error> {
+        if !self.is_rtp {
+            return Err(Error::new("this stream is not RTPStream".to_string()));
+        }
+
         let n = self.buffer.read(buf).await?;
         let mut reader = Cursor::new(buf);
         let header = rtp::header::Header::unmarshal(&mut reader)?;
@@ -59,6 +76,10 @@ impl Stream {
         &mut self,
         buf: &mut [u8],
     ) -> Result<(usize, rtcp::header::Header), Error> {
+        if self.is_rtp {
+            return Err(Error::new("this stream is not RTCPStream".to_string()));
+        }
+
         let n = self.buffer.read(buf).await?;
         let mut reader = Cursor::new(buf);
         let header = rtcp::header::Header::unmarshal(&mut reader)?;

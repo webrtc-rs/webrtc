@@ -55,6 +55,22 @@ impl Packet {
         };
         Ok(())
     }
+
+    pub fn destination_ssrc(&self) -> Vec<u32> {
+        match self {
+            Packet::SenderReport(p) => p.destination_ssrc(),
+            Packet::ReceiverReport(p) => p.destination_ssrc(),
+            Packet::SourceDescription(p) => p.destination_ssrc(),
+            Packet::Goodbye(p) => p.destination_ssrc(),
+            Packet::RawPacket(p) => p.destination_ssrc(),
+            Packet::TransportLayerNack(p) => p.destination_ssrc(),
+            Packet::RapidResynchronizationRequest(p) => p.destination_ssrc(),
+            Packet::PictureLossIndication(p) => p.destination_ssrc(),
+            Packet::SliceLossIndication(p) => p.destination_ssrc(),
+            Packet::ReceiverEstimatedMaximumBitrate(p) => p.destination_ssrc(),
+            Packet::CompoundPacket(p) => p.destination_ssrc(),
+        }
+    }
 }
 
 //Marshal takes an array of Packets and serializes them to a single buffer
