@@ -2,7 +2,8 @@ use crate::config::Config;
 use crate::context::Context;
 use crate::stream::stream_srtp::StreamSRTP;
 
-use rtp::packet::Header;
+use rtp::packet::{Header, Packet};
+use util::buffer::ERR_BUFFER_FULL;
 use util::{Buffer, Error};
 
 use tokio::net::udp::split::{UdpSocketRecvHalf, UdpSocketSendHalf};
@@ -10,7 +11,7 @@ use tokio::net::UdpSocket;
 use tokio::sync::{mpsc, Lock};
 
 use std::collections::HashMap;
-use std::io::Cursor;
+use std::io::{BufWriter, Cursor};
 
 use futures::{
     future::FutureExt, // for `.fuse()`
@@ -23,7 +24,7 @@ use futures::{
 // for local/remote to each have their own keying material. This provides those patterns
 // instead of making everyone re-implement
 pub struct SessionSRTP {
-    local_context: Context,
+    local_context: Lock<Context>,
     new_stream_rx: mpsc::Receiver<StreamSRTP>,
     close_session_tx: mpsc::Sender<()>,
     udp_tx: UdpSocketSendHalf,
@@ -81,7 +82,7 @@ impl SessionSRTP {
         });
 
         Ok(SessionSRTP {
-            local_context,
+            local_context: Lock::new(local_context),
             new_stream_rx,
             close_session_tx,
             udp_tx,
@@ -117,9 +118,17 @@ impl SessionSRTP {
             streams.insert(ssrc, stream.get_cloned_buffer());
             new_stream_tx.send(stream).await?;
         }
-        streams.get_mut(&ssrc).unwrap().write(&decrypted).await?;
-
-        Ok(())
+        match streams.get_mut(&ssrc).unwrap().write(&decrypted).await {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                // Silently drop data when the buffer is full.
+                if err != ERR_BUFFER_FULL.clone() {
+                    Err(err)
+                } else {
+                    Ok(())
+                }
+            }
+        }
     }
 
     // AcceptStream returns a stream to handle RTCP for a single SSRC
@@ -136,5 +145,25 @@ impl SessionSRTP {
         self.close_session_tx.send(()).await?;
 
         Ok(())
+    }
+
+    pub async fn write(&mut self, buf: &[u8]) -> Result<usize, Error> {
+        let mut local_context = self.local_context.lock().await;
+
+        let encrypted = local_context.encrypt_rtp(buf)?;
+
+        match self.udp_tx.send(&encrypted).await {
+            Ok(n) => Ok(n),
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    pub async fn write_rtp(&mut self, packet: &Packet) -> Result<usize, Error> {
+        let mut raw: Vec<u8> = vec![];
+        {
+            let mut writer = BufWriter::<&mut Vec<u8>>::new(raw.as_mut());
+            packet.marshal(&mut writer)?;
+        }
+        self.write(&raw).await
     }
 }

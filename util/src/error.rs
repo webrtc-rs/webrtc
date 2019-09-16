@@ -1,6 +1,6 @@
 use std::string::FromUtf8Error;
 use std::time::SystemTimeError;
-use std::{fmt, io, num};
+use std::{fmt, num};
 
 use tokio::sync::mpsc::error::SendError;
 
@@ -24,8 +24,8 @@ impl std::error::Error for Error {
 }
 
 // Implement std::convert::From for AppError; from io::Error
-impl From<io::Error> for Error {
-    fn from(error: io::Error) -> Self {
+impl From<std::io::Error> for Error {
+    fn from(error: std::io::Error) -> Self {
         Error {
             message: error.to_string(),
         }

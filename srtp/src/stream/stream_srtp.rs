@@ -1,5 +1,4 @@
 use rtp::packet::Header;
-use util::buffer::*;
 use util::{Buffer, Error};
 
 use tokio::sync::mpsc;
@@ -29,21 +28,6 @@ impl StreamSRTP {
     // Get Cloned Buffer
     pub(crate) fn get_cloned_buffer(&self) -> Buffer {
         self.buffer.clone()
-    }
-
-    pub(crate) async fn write(buffer: &mut Buffer, buf: &[u8]) -> Result<usize, Error> {
-        let result = buffer.write(buf).await;
-        match result {
-            Ok(size) => Ok(size),
-            Err(err) => {
-                if err == ERR_BUFFER_FULL.clone() {
-                    // Silently drop data when the buffer is full.
-                    Ok(buf.len())
-                } else {
-                    Err(err)
-                }
-            }
-        }
     }
 
     // GetSSRC returns the SSRC we are demuxing for
