@@ -11,8 +11,8 @@ Use Rust nightly for async/await syntax with Tokio 0.2+
 - [x] SDP
 - [x] RTP
 - [x] RTCP
-- [x] SRTP
-- [ ] DTLS
+- [x] SRTP (TODO: add tests for session/stream)
+- [ ] DTLS (WIP)
 - [ ] ICE
 - [ ] STUN
 - [ ] TURN
