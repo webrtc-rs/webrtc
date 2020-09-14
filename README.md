@@ -10,14 +10,14 @@ A pure Rust implementation of WebRTC API
 - [x] SRTP
 - [ ] DTLS
 - [ ] ICE
-- [ ] STUN
-- [ ] TURN
-- [ ] RTCPeerConnection
+- [ ] PeerConnection
 
 ### Road Map Towards 2.0
 
+- [ ] STUN
+- [ ] TURN
 - [ ] SCTP
-- [ ] RTCDataChannel
+- [ ] DataChannel
 
 ### Road Map Towards 3.0
 
