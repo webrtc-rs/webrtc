@@ -6,7 +6,7 @@ members = [
     "rtcp",
     "rtp",
     "sdp",
-    # "srtp",
+    "srtp",
     "stun",
     "turn",
     "util",

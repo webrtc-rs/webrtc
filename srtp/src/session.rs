@@ -5,12 +5,13 @@ use crate::stream::Stream;
 use util::buffer::ERR_BUFFER_FULL;
 use util::{Buffer, Error};
 
-use tokio::net::udp::split::{UdpSocketRecvHalf, UdpSocketSendHalf};
+use tokio::net::udp::{RecvHalf, SendHalf};
 use tokio::net::UdpSocket;
-use tokio::sync::{mpsc, Lock};
+use tokio::sync::{mpsc, Mutex};
 
 use std::collections::HashMap;
 use std::io::{BufWriter, Cursor};
+use std::sync::Arc;
 
 use futures::{
     future::FutureExt, // for `.fuse()`
@@ -23,10 +24,10 @@ use futures::{
 // for local/remote to each have their own keying material. This provides those patterns
 // instead of making everyone re-implement
 pub struct Session {
-    local_context: Lock<Context>,
+    local_context: Arc<Mutex<Context>>,
     new_stream_rx: mpsc::Receiver<Stream>,
     close_session_tx: mpsc::Sender<()>,
-    udp_tx: UdpSocketSendHalf,
+    udp_tx: SendHalf,
     is_rtp: bool,
 }
 
@@ -44,7 +45,7 @@ impl Session {
             config.profile,
         )?;
 
-        let streams_map = Lock::new(HashMap::new());
+        let streams_map = Arc::new(Mutex::new(HashMap::new()));
         let (mut new_stream_tx, new_stream_rx) = mpsc::channel(1);
         let (close_stream_tx, mut close_stream_rx) = mpsc::channel(1);
         let (close_session_tx, mut close_session_rx) = mpsc::channel(1);
@@ -56,7 +57,7 @@ impl Session {
             let listen_udp = Session::listening(
                 &mut udp_rx,
                 &mut buf,
-                streams_map.clone(),
+                Arc::clone(&streams_map),
                 &close_stream_tx,
                 &mut new_stream_tx,
                 &mut remote_context,
@@ -74,7 +75,7 @@ impl Session {
                         Err(_) => break,
                     },
                     opt = close_stream => match opt {
-                        Some(ssrc) => Session::close_stream(streams_map.clone(), ssrc).await,
+                        Some(ssrc) => Session::close_stream(Arc::clone(&streams_map), ssrc).await,
                         None => {}
                     },
                     opt = close_session => break
@@ -83,7 +84,7 @@ impl Session {
         });
 
         Ok(Session {
-            local_context: Lock::new(local_context),
+            local_context: Arc::new(Mutex::new(local_context)),
             new_stream_rx,
             close_session_tx,
             udp_tx,
@@ -91,15 +92,15 @@ impl Session {
         })
     }
 
-    async fn close_stream(mut streams_map: Lock<HashMap<u32, Buffer>>, ssrc: u32) {
+    async fn close_stream(streams_map: Arc<Mutex<HashMap<u32, Buffer>>>, ssrc: u32) {
         let mut streams = streams_map.lock().await;
         streams.remove(&ssrc);
     }
 
     async fn listening(
-        udp_rx: &mut UdpSocketRecvHalf,
+        udp_rx: &mut RecvHalf,
         buf: &mut [u8],
-        mut streams_map: Lock<HashMap<u32, Buffer>>,
+        streams_map: Arc<Mutex<HashMap<u32, Buffer>>>,
         close_stream_tx: &mpsc::Sender<u32>,
         new_stream_tx: &mut mpsc::Sender<Stream>,
         remote_context: &mut Context,
