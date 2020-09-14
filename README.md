@@ -7,8 +7,8 @@ A pure Rust implementation of WebRTC API
 - [x] SDP
 - [x] RTP
 - [x] RTCP
-- [x] SRTP (TODO: add tests for session/stream)
-- [ ] DTLS (WIP)
+- [ ] SRTP (TODO: update to tokio stable version 0.2)
+- [ ] DTLS
 - [ ] ICE
 - [ ] STUN
 - [ ] TURN
