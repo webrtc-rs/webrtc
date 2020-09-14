@@ -1,8 +1,9 @@
 use crate::error::Error;
 
 use std::collections::VecDeque;
+use std::sync::Arc;
 
-use tokio::sync::{mpsc, Lock};
+use tokio::sync::{mpsc, Mutex};
 
 #[cfg(test)]
 mod buffer_test;
@@ -34,7 +35,7 @@ struct BufferInternal {
 
 #[derive(Clone)]
 pub struct Buffer {
-    buffer: Lock<BufferInternal>,
+    buffer: Arc<Mutex<BufferInternal>>,
 }
 
 impl Buffer {
@@ -42,7 +43,7 @@ impl Buffer {
         let (notify_tx, notify_rx) = mpsc::channel(1);
 
         Buffer {
-            buffer: Lock::new(BufferInternal {
+            buffer: Arc::new(Mutex::new(BufferInternal {
                 packets: VecDeque::new(),
 
                 notify_tx: Some(notify_tx),
@@ -54,7 +55,7 @@ impl Buffer {
 
                 limit_count,
                 limit_size,
-            }),
+            })),
         }
     }
 
