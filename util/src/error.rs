@@ -2,7 +2,7 @@ use std::string::FromUtf8Error;
 use std::time::SystemTimeError;
 use std::{fmt, num};
 
-use tokio::sync::mpsc::error::SendError;
+//use tokio::sync::mpsc::error::SendError;
 
 use url::ParseError;
 
@@ -64,13 +64,13 @@ impl From<SystemTimeError> for Error {
     }
 }
 
-impl From<SendError> for Error {
+/*impl From<SendError> for Error {
     fn from(error: SendError) -> Self {
         Error {
             message: error.to_string(),
         }
     }
-}
+}*/
 
 impl Error {
     pub fn new(message: String) -> Self {
