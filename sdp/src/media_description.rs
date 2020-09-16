@@ -1,7 +1,13 @@
 use std::fmt;
+use url::Url;
 
 use super::common_description::*;
-use super::ice_candidate::*;
+use super::extmap::*;
+
+// Constants for extmap key
+const EXT_MAP_VALUE_TRANSPORT_CC_KEY: isize = 3;
+const EXT_MAP_VALUE_TRANSPORT_CC_URI: &'static str =
+    "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
 
 // MediaDescription represents a media type.
 // https://tools.ietf.org/html/rfc4566#section-5.14
@@ -145,9 +151,24 @@ impl MediaDescription {
         self.with_value_attribute("candidate".to_string(), value)
     }
 
-    // WithICECandidate adds an ICE candidate to the media description
-    pub fn with_ice_candidate(self, c: ICECandidate) -> Self {
-        self.with_value_attribute("candidate".to_string(), c.marshal())
+    pub fn with_extmap(self, e: ExtMap) -> Self {
+        self.with_property_attribute(e.marshal())
+    }
+
+    // WithTransportCCExtMap adds an extmap to the media description
+    pub fn with_transport_cc_extmap(self) -> Self {
+        let uri = match Url::parse(EXT_MAP_VALUE_TRANSPORT_CC_URI) {
+            Ok(uri) => Some(uri),
+            Err(_) => None,
+        };
+
+        let e = ExtMap {
+            value: EXT_MAP_VALUE_TRANSPORT_CC_KEY,
+            uri,
+            ..Default::default()
+        };
+
+        self.with_extmap(e)
     }
 }
 

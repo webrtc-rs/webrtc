@@ -25,11 +25,11 @@ pub const SDES_RTP_STREAM_ID_URI: &'static str = "urn:ietf:params:rtp-hdrext:sde
 
 //ExtMap represents the activation of a single RTP header extension
 #[derive(Debug, Clone, Default)]
-struct ExtMap {
-    value: isize,
-    direction: Direction,
-    uri: Option<Url>,
-    ext_attr: Option<String>,
+pub struct ExtMap {
+    pub(crate) value: isize,
+    pub(crate) direction: Direction,
+    pub(crate) uri: Option<Url>,
+    pub(crate) ext_attr: Option<String>,
 }
 
 impl fmt::Display for ExtMap {

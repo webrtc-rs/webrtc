@@ -17,12 +17,18 @@ const ATTR_KEY_IDENTITY: &'static str = "identity";
 const ATTR_KEY_GROUP: &'static str = "group";
 const ATTR_KEY_SSRC: &'static str = "ssrc";
 const ATTR_KEY_SSRCGROUP: &'static str = "ssrc-group";
+const ATTR_KEY_MSID: &'static str = "msid";
 const ATTR_KEY_MSID_SEMANTIC: &'static str = "msid-semantic";
 const ATTR_KEY_CONNECTION_SETUP: &'static str = "setup";
 const ATTR_KEY_MID: &'static str = "mid";
 const ATTR_KEY_ICELITE: &'static str = "ice-lite";
 const ATTR_KEY_RTCPMUX: &'static str = "rtcp-mux";
 const ATTR_KEY_RTCPRSIZE: &'static str = "rtcp-rsize";
+const ATTR_KEY_INACTIVE: &'static str = "inactive";
+const ATTR_KEY_RECV_ONLY: &'static str = "recvonly";
+const ATTR_KEY_SEND_ONLY: &'static str = "sendonly";
+const ATTR_KEY_SEND_RECV: &'static str = "sendrecv";
+const ATTR_KEY_EXT_MAP: &'static str = "extmap";
 
 // Constants for semantic tokens used in JSEP
 const SEMANTIC_TOKEN_LIP_SYNCHRONIZATION: &'static str = "LS";
@@ -220,7 +226,7 @@ impl SessionDescription {
 
     // NewJSEPSessionDescription creates a new SessionDescription with
     // some settings that are required by the JSEP spec.
-    pub fn new(identity: bool) -> Self {
+    pub fn new_jsep_session_description(identity: bool) -> Self {
         let d = SessionDescription {
             version: 0,
             origin: Origin {
