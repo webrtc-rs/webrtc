@@ -1,9 +1,4 @@
 use std::fmt;
-use std::io::BufReader;
-
-use crate::ice_candidate::ICECandidate;
-
-use util::Error;
 
 // Information describes the "i=" field which provides textual information
 // about the session.
@@ -95,18 +90,5 @@ impl Attribute {
     // IsICECandidate returns true if the attribute key equals "candidate".
     pub fn is_ice_candidate(&self) -> bool {
         self.key.as_str() == "candidate"
-    }
-
-    // ToICECandidate parses the attribute as an ICE Candidate.
-    pub fn to_ice_candidate(&self) -> Result<ICECandidate, Error> {
-        if let Some(value) = &self.value {
-            let mut reader = BufReader::new(value.as_bytes());
-            let parsed = ICECandidate::unmarshal(&mut reader)?;
-            Ok(parsed)
-        } else {
-            Err(Error::new(format!(
-                "sdp: empty value in candidate attribute"
-            )))
-        }
     }
 }

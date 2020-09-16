@@ -6,10 +6,22 @@ use util::Error;
 
 use super::common_description::*;
 use super::direction::*;
-use super::util::*;
 
 #[cfg(test)]
 mod extmap_test;
+
+// Default ext values
+pub const DEF_EXT_MAP_VALUE_ABS_SEND_TIME: usize = 1;
+pub const DEF_EXT_MAP_VALUE_TRANSPORT_CC: usize = 2;
+pub const DEF_EXT_MAP_VALUE_SDES_MID: usize = 3;
+pub const DEF_EXT_MAP_VALUE_SDES_RTP_STREAM_ID: usize = 4;
+
+pub const ABS_SEND_TIME_URI: &'static str =
+    "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time";
+pub const TRANSPORT_CC_URI: &'static str =
+    "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
+pub const SDES_MID_URI: &'static str = "urn:ietf:params:rtp-hdrext:sdes:mid";
+pub const SDES_RTP_STREAM_ID_URI: &'static str = "urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id";
 
 //ExtMap represents the activation of a single RTP header extension
 #[derive(Debug, Clone, Default)]
@@ -98,6 +110,6 @@ impl ExtMap {
 
     //Marshal creates a string from an ExtMap
     pub fn marshal(&self) -> String {
-        ATTRIBUTE_KEY.to_owned() + "extmap:" + self.to_string().as_str() + END_LINE
+        "extmap:".to_string() + self.to_string().as_str()
     }
 }
