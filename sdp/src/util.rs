@@ -39,25 +39,36 @@ impl fmt::Display for ConnectionRole {
 }
 
 pub(crate) fn new_session_id() -> u64 {
-    rand::random::<u64>()
+    // https://tools.ietf.org/html/draft-ietf-rtcweb-jsep-26#section-5.2.1
+    // Session ID is recommended to be constructed by generating a 64-bit
+    // quantity with the highest bit set to zero and the remaining 63-bits
+    // being cryptographically random.
+    let c = u64::MAX ^ (1u64 << 63);
+    rand::random::<u64>() & c
 }
 
 // Codec represents a codec
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Codec {
     payload_type: u8,
     name: String,
     clock_rate: u32,
     encoding_parameters: String,
     fmtp: String,
+    rtcp_feedback: Vec<String>,
 }
 
 impl fmt::Display for Codec {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{} {}/{}/{} ({})",
-            self.payload_type, self.name, self.clock_rate, self.encoding_parameters, self.fmtp,
+            "{} {}/{}/{} ({}) [{}]",
+            self.payload_type,
+            self.name,
+            self.clock_rate,
+            self.encoding_parameters,
+            self.fmtp,
+            self.rtcp_feedback.join(", "),
         )
     }
 }
@@ -96,7 +107,7 @@ pub(crate) fn parse_rtpmap(rtpmap: &str) -> Result<Codec, Error> {
         name,
         clock_rate,
         encoding_parameters,
-        fmtp: "".to_string(),
+        ..Default::default()
     })
 }
 
@@ -119,14 +130,33 @@ pub(crate) fn parse_fmtp(fmtp: &str) -> Result<Codec, Error> {
 
     Ok(Codec {
         payload_type,
-        name: "".to_string(),
-        clock_rate: 0,
-        encoding_parameters: "".to_string(),
         fmtp,
+        ..Default::default()
     })
 }
 
-pub(crate) fn merge_codecs(codec: Codec, codecs: &mut HashMap<u8, Codec>) {
+pub(crate) fn parse_rtcp_fb(rtcp_fb: &str) -> Result<Codec, Error> {
+    let parsing_failed = Error::new("could not extract codec from rtcp-fb".to_string());
+
+    // a=ftcp-fb:<payload type> <RTCP feedback type> [<RTCP feedback parameter>]
+    let split: Vec<&str> = rtcp_fb.split_whitespace().collect();
+    if split.len() != 2 {
+        return Err(parsing_failed);
+    }
+
+    let pt_split: Vec<&str> = split[0].split(":").collect();
+    if pt_split.len() != 2 {
+        return Err(parsing_failed);
+    }
+
+    Ok(Codec {
+        payload_type: split[1].parse::<u8>()?,
+        rtcp_feedback: vec![split[1].to_string()],
+        ..Default::default()
+    })
+}
+
+pub(crate) fn merge_codecs(mut codec: Codec, codecs: &mut HashMap<u8, Codec>) {
     if let Some(saved_codec) = codecs.get_mut(&codec.payload_type) {
         if saved_codec.payload_type == 0 {
             saved_codec.payload_type = codec.payload_type
@@ -143,6 +173,7 @@ pub(crate) fn merge_codecs(codec: Codec, codecs: &mut HashMap<u8, Codec>) {
         if &saved_codec.fmtp == "" {
             saved_codec.fmtp = codec.fmtp
         }
+        saved_codec.rtcp_feedback.append(&mut codec.rtcp_feedback);
     } else {
         codecs.insert(codec.payload_type, codec);
     }
@@ -171,7 +202,7 @@ fn equivalent_fmtp(want: &str, got: &str) -> bool {
 }
 
 pub(crate) fn codecs_match(wanted: &Codec, got: &Codec) -> bool {
-    if &wanted.name != "" && wanted.name != got.name {
+    if &wanted.name != "" && wanted.name.to_lowercase() != got.name.to_lowercase() {
         return false;
     }
     if wanted.clock_rate != 0 && wanted.clock_rate != got.clock_rate {
@@ -216,7 +247,6 @@ pub fn read_type<R: io::BufRead + io::Seek>(reader: &mut R) -> Result<(String, u
         }
 
         let key = String::from_utf8(buf)?;
-        //print!("{}:", key);
         match key.len() {
             2 => return Ok((key, num_bytes)),
             _ => return Err(Error::new(format!("SyntaxError: {:?}", key))),
@@ -225,24 +255,9 @@ pub fn read_type<R: io::BufRead + io::Seek>(reader: &mut R) -> Result<(String, u
 }
 
 pub fn read_value<R: io::BufRead + io::Seek>(reader: &mut R) -> Result<(String, usize), Error> {
-    let mut line = vec![];
-    let num_bytes = reader.read_until(b'\n', &mut line)?;
-    if num_bytes == 0 {
-        return Ok(("".to_owned(), num_bytes));
-    }
-
-    let value = String::from_utf8(line)?;
-    //print!("{}", value);
-    Ok((value.trim().to_string(), num_bytes))
-
-    /*
     let mut value = String::new();
     let num_bytes = reader.read_line(&mut value)?;
-    if num_bytes == 0 {
-        Ok(("".to_owned(), num_bytes))
-    } else {
-        Ok((value.trim().to_string(), num_bytes))
-    }*/
+    Ok((value.trim().to_string(), num_bytes))
 }
 
 pub fn index_of(element: &str, data: &[&str]) -> i32 {

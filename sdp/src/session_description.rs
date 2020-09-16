@@ -298,6 +298,10 @@ impl SessionDescription {
                     if let Ok(codec) = parse_fmtp(&attr) {
                         merge_codecs(codec, &mut codecs);
                     }
+                } else if attr.starts_with("rtcp-fb:") {
+                    if let Ok(codec) = parse_rtcp_fb(&attr) {
+                        merge_codecs(codec, &mut codecs);
+                    }
                 }
             }
         }
