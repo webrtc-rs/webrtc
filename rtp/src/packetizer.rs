@@ -1,10 +1,10 @@
-use crate::extension::abs_send_time_extension::*;
+//use crate::extension::abs_send_time_extension::*;
 use crate::header::*;
 use crate::packet::*;
 use crate::sequence::*;
 
 use std::io::Read;
-use std::time::SystemTime;
+//use std::time::SystemTime;
 use util::Error;
 
 #[cfg(test)]
@@ -89,26 +89,26 @@ impl Packetizer for PacketizerImpl {
 
         self.timestamp += samples;
 
-        if l != 0 && self.abs_send_time != 0 {
-            let d = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
-            let t = unix2ntp(d) >> 14;
-            //apply http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
-            //packets[l - 1].header.extension = true;
-            //packets[l - 1].header.extension_profile = 0xBEDE;
-            /*packets[l - 1].header.extension_payload = vec![
-                //the first byte is
-                // 0 1 2 3 4 5 6 7
-                //+-+-+-+-+-+-+-+-+
-                //|  ID   |  len  |
-                //+-+-+-+-+-+-+-+-+
-                //per RFC 5285
-                //Len is the number of bytes in the extension - 1
-                ((self.abs_send_time << 4) | 2) as u8,
-                (t & 0xFF0000 >> 16) as u8,
-                (t & 0xFF00 >> 8) as u8,
-                (t & 0xFF) as u8,
-            ];*/
-        }
+        //if l != 0 && self.abs_send_time != 0 {
+        //let d = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
+        //let t = unix2ntp(d) >> 14;
+        //apply http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
+        //packets[l - 1].header.extension = true;
+        //packets[l - 1].header.extension_profile = 0xBEDE;
+        /*packets[l - 1].header.extension_payload = vec![
+            //the first byte is
+            // 0 1 2 3 4 5 6 7
+            //+-+-+-+-+-+-+-+-+
+            //|  ID   |  len  |
+            //+-+-+-+-+-+-+-+-+
+            //per RFC 5285
+            //Len is the number of bytes in the extension - 1
+            ((self.abs_send_time << 4) | 2) as u8,
+            (t & 0xFF0000 >> 16) as u8,
+            (t & 0xFF00 >> 8) as u8,
+            (t & 0xFF) as u8,
+        ];*/
+        //}
 
         Ok(packets)
     }

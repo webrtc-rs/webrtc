@@ -4,6 +4,9 @@ use util::Error;
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
 
+#[cfg(test)]
+mod abs_send_time_extension_test;
+
 const ABS_SEND_TIME_EXTENSION_SIZE: usize = 3;
 
 // AbsSendTimeExtension is a extension payload format in
@@ -34,9 +37,9 @@ impl AbsSendTimeExtension {
     // Estimate absolute send time according to the receive time.
     // Note that if the transmission delay is larger than 64 seconds, estimated time will be wrong.
     pub fn estimate(&self, receive: Duration) -> Duration {
-        let receiveNTP = unix2ntp(receive);
-        let mut ntp = receiveNTP & 0xFFFFFFC000000000 | (self.timestamp & 0xFFFFFF) << 14;
-        if receiveNTP < ntp {
+        let receive_ntp = unix2ntp(receive);
+        let mut ntp = receive_ntp & 0xFFFFFFC000000000 | (self.timestamp & 0xFFFFFF) << 14;
+        if receive_ntp < ntp {
             // Receive time must be always later than send time
             ntp -= 0x1000000 << 14;
         }
@@ -45,9 +48,9 @@ impl AbsSendTimeExtension {
     }
 
     // NewAbsSendTimeExtension makes new AbsSendTimeExtension from time.Time.
-    pub fn new(sendTime: Duration) -> Self {
+    pub fn new(send_time: Duration) -> Self {
         AbsSendTimeExtension {
-            timestamp: unix2ntp(sendTime) >> 14,
+            timestamp: unix2ntp(send_time) >> 14,
         }
     }
 }
