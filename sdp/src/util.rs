@@ -51,7 +51,7 @@ pub(crate) fn new_session_id() -> u64 {
 }
 
 // Codec represents a codec
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Codec {
     payload_type: u8,
     name: String,
@@ -142,7 +142,7 @@ pub(crate) fn parse_rtcp_fb(rtcp_fb: &str) -> Result<Codec, Error> {
     let parsing_failed = Error::new("could not extract codec from rtcp-fb".to_string());
 
     // a=ftcp-fb:<payload type> <RTCP feedback type> [<RTCP feedback parameter>]
-    let split: Vec<&str> = rtcp_fb.split_whitespace().collect();
+    let split: Vec<&str> = rtcp_fb.splitn(2, " ").collect();
     if split.len() != 2 {
         return Err(parsing_failed);
     }
@@ -153,7 +153,7 @@ pub(crate) fn parse_rtcp_fb(rtcp_fb: &str) -> Result<Codec, Error> {
     }
 
     Ok(Codec {
-        payload_type: split[1].parse::<u8>()?,
+        payload_type: pt_split[1].parse::<u8>()?,
         rtcp_feedback: vec![split[1].to_string()],
         ..Default::default()
     })
