@@ -32,9 +32,9 @@ fn test_basic() -> Result<(), Error> {
             ssrc: 476325762,
             csrc: vec![],
             extension_profile: 1,
-            extension_payload: vec![0xFF, 0xFF, 0xFF, 0xFF],
-
+            //extension_payload: vec![0xFF, 0xFF, 0xFF, 0xFF],
             payload_offset: 20,
+            ..Default::default()
         },
         payload: vec![0x98, 0x36, 0xbe, 0x88, 0x9e],
     };
@@ -102,7 +102,7 @@ fn test_extension() -> Result<(), Error> {
         header: Header {
             extension: true,
             extension_profile: 3,
-            extension_payload: vec![0],
+            //extension_payload: vec![0],
             ..Default::default()
         },
         payload: vec![],

@@ -47,7 +47,7 @@ impl PacketizerImpl {
             mtu,
             payload_type,
             ssrc,
-            timestamp: rand::random::<u32>(),
+            timestamp: rand::random::<u32>(), //TODO: globalMathRandomGenerator?
             clock_rate,
             abs_send_time: 0,
         }
@@ -93,9 +93,9 @@ impl Packetizer for PacketizerImpl {
             let d = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
             let t = unix2ntp(d) >> 14;
             //apply http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
-            packets[l - 1].header.extension = true;
-            packets[l - 1].header.extension_profile = 0xBEDE;
-            packets[l - 1].header.extension_payload = vec![
+            //packets[l - 1].header.extension = true;
+            //packets[l - 1].header.extension_profile = 0xBEDE;
+            /*packets[l - 1].header.extension_payload = vec![
                 //the first byte is
                 // 0 1 2 3 4 5 6 7
                 //+-+-+-+-+-+-+-+-+
@@ -107,7 +107,7 @@ impl Packetizer for PacketizerImpl {
                 (t & 0xFF0000 >> 16) as u8,
                 (t & 0xFF00 >> 8) as u8,
                 (t & 0xFF) as u8,
-            ];
+            ];*/
         }
 
         Ok(packets)
