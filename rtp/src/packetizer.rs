@@ -1,10 +1,10 @@
+use crate::extension::abs_send_time_extension::*;
 use crate::header::*;
 use crate::packet::*;
 use crate::sequence::*;
 
 use std::io::Read;
-use std::time::{Duration, SystemTime};
-
+use std::time::SystemTime;
 use util::Error;
 
 #[cfg(test)]
@@ -112,16 +112,4 @@ impl Packetizer for PacketizerImpl {
 
         Ok(packets)
     }
-}
-
-fn unix2ntp(t: Duration) -> u64 {
-    let u = t.as_nanos() as u64;
-    let mut s = u / 1000000000;
-    s += 0x83AA7E80; //offset in seconds between unix epoch and ntp epoch
-    let mut f = u % 1000000000;
-    f <<= 32;
-    f /= 1000000000;
-    s <<= 32;
-
-    return s | f;
 }

@@ -6,7 +6,7 @@ use util::Error;
 
 //TODO: BenchmarkMarshal
 //TODO: BenchmarkUnmarshal
-
+/*
 #[test]
 fn test_basic() -> Result<(), Error> {
     let empty_bytes = vec![];
@@ -122,5 +122,5 @@ fn test_extension() -> Result<(), Error> {
 
     Ok(())
 }
-
+*/
 // TODO: Benchmark RTP Marshal/Unmarshal
