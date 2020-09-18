@@ -1,5 +1,6 @@
 use super::*;
-//use std::io::BufReader;
+
+use std::io::{BufReader, BufWriter};
 use std::time::Duration;
 
 use chrono::prelude::*;
@@ -7,7 +8,7 @@ use chrono::prelude::*;
 use std::ops::Sub;
 use util::Error;
 
-const ABS_SEND_TIME_RESOLUTION: i128 = 3800 * 1_000_000_000; // time.Nanosecond;
+const ABS_SEND_TIME_RESOLUTION: i128 = 1000;
 
 #[test]
 fn test_ntp_conversion() -> Result<(), Error> {
@@ -41,6 +42,62 @@ fn test_ntp_conversion() -> Result<(), Error> {
                 false,
                 "Converted time.Time from NTP time differs, expected: {:?}, got: {:?}",
                 input, output,
+            );
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_abs_send_time_extension_roundtrip() -> Result<(), Error> {
+    let tests = vec![
+        AbsSendTimeExtension { timestamp: 123456 },
+        AbsSendTimeExtension { timestamp: 654321 },
+    ];
+
+    for test in &tests {
+        let mut raw: Vec<u8> = vec![];
+        {
+            let mut writer = BufWriter::<&mut Vec<u8>>::new(raw.as_mut());
+            test.marshal(&mut writer)?;
+        }
+        let mut reader = BufReader::new(raw.as_slice());
+        let out = AbsSendTimeExtension::unmarshal(&mut reader)?;
+        assert_eq!(test.timestamp, out.timestamp);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_abs_send_time_extension_estimate() -> Result<(), Error> {
+    let tests = vec![
+        //FFFFFFC000000000 mask of second
+        (0xa0c65b1000100000, 0xa0c65b1001000000), // not carried
+        (0xa0c65b3f00000000, 0xa0c65b4001000000), // carried during transmission
+    ];
+
+    for (send_ntp, receive_ntp) in tests {
+        let in_time = ntp2unix(send_ntp);
+        let send = AbsSendTimeExtension {
+            timestamp: send_ntp >> 14,
+        };
+        let mut raw: Vec<u8> = vec![];
+        {
+            let mut writer = BufWriter::<&mut Vec<u8>>::new(raw.as_mut());
+            send.marshal(&mut writer)?;
+        }
+        let mut reader = BufReader::new(raw.as_slice());
+        let receive = AbsSendTimeExtension::unmarshal(&mut reader)?;
+
+        let estimated = receive.estimate(ntp2unix(receive_ntp));
+        let diff = estimated.sub(in_time).as_nanos() as i128;
+        if diff < -ABS_SEND_TIME_RESOLUTION || ABS_SEND_TIME_RESOLUTION < diff {
+            assert!(
+                false,
+                "Converted time.Time from NTP time differs, expected: {:?}, got: {:?}",
+                in_time, estimated,
             );
         }
     }

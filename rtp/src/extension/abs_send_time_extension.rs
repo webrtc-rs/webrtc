@@ -18,8 +18,8 @@ pub struct AbsSendTimeExtension {
 impl AbsSendTimeExtension {
     // Marshal serializes the members to buffer.
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        writer.write_u8((self.timestamp & 0xFF0000 >> 16) as u8)?;
-        writer.write_u8((self.timestamp & 0xFF00 >> 8) as u8)?;
+        writer.write_u8(((self.timestamp & 0xFF0000) >> 16) as u8)?;
+        writer.write_u8(((self.timestamp & 0xFF00) >> 8) as u8)?;
         writer.write_u8((self.timestamp & 0xFF) as u8)?;
 
         Ok(())
@@ -27,9 +27,10 @@ impl AbsSendTimeExtension {
 
     // Unmarshal parses the passed byte slice and stores the result in the members.
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let timestamp = (reader.read_u8()? as u64) << 16
-            | (reader.read_u8()? as u64) << 8
-            | reader.read_u8()? as u64;
+        let b0 = reader.read_u8()?;
+        let b1 = reader.read_u8()?;
+        let b2 = reader.read_u8()?;
+        let timestamp = (b0 as u64) << 16 | (b1 as u64) << 8 | b2 as u64;
 
         Ok(AbsSendTimeExtension { timestamp })
     }
