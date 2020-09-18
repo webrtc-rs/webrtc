@@ -1,12 +1,12 @@
-//use super::*;
+use super::*;
 
-//use std::io::{BufReader, BufWriter};
+use std::io::{BufReader, BufWriter};
 
-//use util::Error;
+use util::Error;
 
 //TODO: BenchmarkMarshal
 //TODO: BenchmarkUnmarshal
-/*
+
 #[test]
 fn test_basic() -> Result<(), Error> {
     let empty_bytes = vec![];
@@ -32,7 +32,10 @@ fn test_basic() -> Result<(), Error> {
             ssrc: 476325762,
             csrc: vec![],
             extension_profile: 1,
-            //extension_payload: vec![0xFF, 0xFF, 0xFF, 0xFF],
+            extensions: vec![Extension {
+                id: 0,
+                payload: vec![0xFF, 0xFF, 0xFF, 0xFF],
+            }],
             payload_offset: 20,
             ..Default::default()
         },
@@ -102,7 +105,10 @@ fn test_extension() -> Result<(), Error> {
         header: Header {
             extension: true,
             extension_profile: 3,
-            //extension_payload: vec![0],
+            extensions: vec![Extension {
+                id: 0,
+                payload: vec![0],
+            }],
             ..Default::default()
         },
         payload: vec![],
@@ -122,5 +128,5 @@ fn test_extension() -> Result<(), Error> {
 
     Ok(())
 }
-*/
+
 // TODO: Benchmark RTP Marshal/Unmarshal

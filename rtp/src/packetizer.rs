@@ -1,11 +1,12 @@
-//use crate::extension::abs_send_time_extension::*;
+use crate::extension::abs_send_time_extension::*;
 use crate::header::*;
 use crate::packet::*;
 use crate::sequence::*;
 
-use std::io::Read;
-//use std::time::SystemTime;
 use util::Error;
+
+use std::io::{BufWriter, Read};
+use std::time::SystemTime;
 
 #[cfg(test)]
 mod packetizer_test;
@@ -24,7 +25,7 @@ pub trait Packetizer {
         sequencer: &mut S,
         samples: u32,
     ) -> Result<Vec<Packet>, Error>;
-    fn enable_abs_send_time(&mut self, value: isize);
+    fn enable_abs_send_time(&mut self, value: u8);
 }
 
 // Depacketizer depacketizes a RTP payload, removing any RTP specific data from the payload
@@ -38,7 +39,7 @@ struct PacketizerImpl {
     ssrc: u32,
     timestamp: u32,
     clock_rate: u32,
-    abs_send_time: isize, //http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
+    abs_send_time: u8, //http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
 }
 
 impl PacketizerImpl {
@@ -55,7 +56,7 @@ impl PacketizerImpl {
 }
 
 impl Packetizer for PacketizerImpl {
-    fn enable_abs_send_time(&mut self, value: isize) {
+    fn enable_abs_send_time(&mut self, value: u8) {
         self.abs_send_time = value
     }
 
@@ -89,26 +90,20 @@ impl Packetizer for PacketizerImpl {
 
         self.timestamp += samples;
 
-        //if l != 0 && self.abs_send_time != 0 {
-        //let d = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
-        //let t = unix2ntp(d) >> 14;
-        //apply http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
-        //packets[l - 1].header.extension = true;
-        //packets[l - 1].header.extension_profile = 0xBEDE;
-        /*packets[l - 1].header.extension_payload = vec![
-            //the first byte is
-            // 0 1 2 3 4 5 6 7
-            //+-+-+-+-+-+-+-+-+
-            //|  ID   |  len  |
-            //+-+-+-+-+-+-+-+-+
-            //per RFC 5285
-            //Len is the number of bytes in the extension - 1
-            ((self.abs_send_time << 4) | 2) as u8,
-            (t & 0xFF0000 >> 16) as u8,
-            (t & 0xFF00 >> 8) as u8,
-            (t & 0xFF) as u8,
-        ];*/
-        //}
+        if l != 0 && self.abs_send_time != 0 {
+            let d = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
+            let send_time = AbsSendTimeExtension::new(d);
+            //apply http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
+            let mut raw: Vec<u8> = vec![];
+            {
+                let mut writer = BufWriter::<&mut Vec<u8>>::new(raw.as_mut());
+                send_time.marshal(&mut writer)?;
+            }
+
+            packets[l - 1]
+                .header
+                .set_extension(self.abs_send_time, &raw)?;
+        }
 
         Ok(packets)
     }
