@@ -6,7 +6,7 @@ use crate::sequence::*;
 use util::Error;
 
 use std::io::{BufWriter, Read};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 #[cfg(test)]
 mod packetizer_test;
@@ -33,6 +33,8 @@ pub trait Depacketizer {
     fn depacketize<R: Read>(&mut self, reader: &mut R) -> Result<(), Error>;
 }
 
+pub type FnTimeGen = fn() -> Duration;
+
 struct PacketizerImpl {
     mtu: isize,
     payload_type: u8,
@@ -40,6 +42,7 @@ struct PacketizerImpl {
     timestamp: u32,
     clock_rate: u32,
     abs_send_time: u8, //http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
+    time_gen: Option<FnTimeGen>,
 }
 
 impl PacketizerImpl {
@@ -51,6 +54,7 @@ impl PacketizerImpl {
             timestamp: rand::random::<u32>(), //TODO: globalMathRandomGenerator?
             clock_rate,
             abs_send_time: 0,
+            time_gen: None,
         }
     }
 }
@@ -91,7 +95,11 @@ impl Packetizer for PacketizerImpl {
         self.timestamp += samples;
 
         if l != 0 && self.abs_send_time != 0 {
-            let d = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
+            let d = if let Some(fn_time_gen) = &self.time_gen {
+                fn_time_gen()
+            } else {
+                SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?
+            };
             let send_time = AbsSendTimeExtension::new(d);
             //apply http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
             let mut raw: Vec<u8> = vec![];

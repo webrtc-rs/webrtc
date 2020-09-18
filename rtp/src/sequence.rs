@@ -22,7 +22,7 @@ pub fn new_random_sequencer() -> impl Sequencer {
 pub fn new_fixed_sequencer(s: u16) -> impl Sequencer {
     SequencerImpl {
         mutex: Arc::new(Mutex::new(SequencerInternal {
-            sequence_number: s,
+            sequence_number: s - 1,
             roll_over_count: 0,
         })),
     }

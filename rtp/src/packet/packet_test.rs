@@ -129,4 +129,44 @@ fn test_extension() -> Result<(), Error> {
     Ok(())
 }
 
+#[test]
+fn test_rfc8285_one_byte_extension() -> Result<(), Error> {
+    let raw_pkt = vec![
+        0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0xBE, 0xDE, 0x00,
+        0x01, 0x50, 0xAA, 0x00, 0x00, 0x98, 0x36, 0xbe, 0x88, 0x9e,
+    ];
+    let mut reader = BufReader::new(raw_pkt.as_slice());
+    Packet::unmarshal(&mut reader)?;
+
+    let p = Packet {
+        header: Header {
+            marker: true,
+            extension: true,
+            extension_profile: 0xBEDE,
+            extensions: vec![Extension {
+                id: 5,
+                payload: vec![0xAA],
+            }],
+            version: 2,
+            payload_offset: 18,
+            payload_type: 96,
+            sequence_number: 27023,
+            timestamp: 3653407706,
+            ssrc: 476325762,
+            csrc: vec![],
+            ..Default::default()
+        },
+        payload: raw_pkt[20..].to_vec(),
+    };
+
+    let mut dst: Vec<u8> = vec![];
+    {
+        let mut writer = BufWriter::<&mut Vec<u8>>::new(dst.as_mut());
+        p.marshal(&mut writer)?;
+    }
+    assert_eq!(dst, raw_pkt);
+
+    Ok(())
+}
+
 // TODO: Benchmark RTP Marshal/Unmarshal

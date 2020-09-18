@@ -241,7 +241,7 @@ impl Header {
                         }
 
                         let extid = payload[curr_offset] >> 4;
-                        let len = (payload[curr_offset] & (0xFF ^ 0xF0) + 1) as usize;
+                        let len = ((payload[curr_offset] & (0xFF ^ 0xF0)) + 1) as usize;
                         curr_offset += 1;
 
                         if extid == EXTENSION_ID_RESERVED {
@@ -350,14 +350,18 @@ impl Header {
             writer.write_u16::<BigEndian>(self.extension_profile)?;
 
             let extension_payload_len = self.get_extension_payload_len();
-            if extension_payload_len % 4 != 0 {
-                //the payload must be in 32-bit words.
-                return Err(Error::new(
-                    "extension_payload must be in 32-bit words".to_string(),
-                ));
+            if self.extension_profile != EXTENSION_PROFILE_ONE_BYTE
+                && self.extension_profile != EXTENSION_PROFILE_TWO_BYTE
+            {
+                if extension_payload_len % 4 != 0 {
+                    //the payload must be in 32-bit words.
+                    return Err(Error::new(
+                        "extension_payload must be in 32-bit words".to_string(),
+                    ));
+                }
             }
-
-            writer.write_u16::<BigEndian>(extension_payload_len as u16 / 4)?;
+            let extension_payload_size = (extension_payload_len as u16 + 3) / 4;
+            writer.write_u16::<BigEndian>(extension_payload_size)?;
 
             match self.extension_profile {
                 EXTENSION_PROFILE_ONE_BYTE => {
@@ -380,6 +384,10 @@ impl Header {
                     }
                 }
             };
+
+            for _ in extension_payload_len..extension_payload_size as usize * 4 {
+                writer.write_u8(0)?;
+            }
         }
 
         Ok(())
