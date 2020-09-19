@@ -10,7 +10,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use super::errors::*;
 use super::header::*;
-use crate::get_padding;
+use crate::util::get_padding;
 
 // A FIREntry is a (ssrc, seqno) pair, as carried by FullIntraRequest.
 #[derive(Debug, PartialEq, Default, Clone)]

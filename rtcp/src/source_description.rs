@@ -7,7 +7,7 @@ use util::Error;
 
 use super::errors::*;
 use super::header::*;
-use crate::get_padding;
+use crate::util::get_padding;
 
 #[cfg(test)]
 mod source_description_test;
@@ -307,7 +307,7 @@ impl SourceDescription {
         }
     }
 
-    // DestinationSSRC returns an array of SSRC values that this packet refers to.
+    // destination_ssrc returns an array of SSRC values that this packet refers to.
     pub fn destination_ssrc(&self) -> Vec<u32> {
         self.chunks.iter().map(|x| x.source).collect()
     }

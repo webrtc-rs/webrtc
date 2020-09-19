@@ -8,7 +8,7 @@ use util::Error;
 use super::errors::*;
 use super::header::*;
 use super::reception_report::*;
-use crate::get_padding;
+use crate::util::get_padding;
 
 #[cfg(test)]
 mod sender_report_test;
@@ -174,7 +174,7 @@ impl SenderReport {
         }
     }
 
-    // DestinationSSRC returns an array of SSRC values that this packet refers to.
+    // destination_ssrc returns an array of SSRC values that this packet refers to.
     pub fn destination_ssrc(&self) -> Vec<u32> {
         let mut out: Vec<u32> = self.reports.iter().map(|x| x.ssrc).collect();
         out.push(self.ssrc);

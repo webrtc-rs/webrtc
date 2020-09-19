@@ -7,7 +7,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use super::errors::*;
 use super::header::*;
-use crate::get_padding;
+use crate::util::get_padding;
 
 #[cfg(test)]
 mod goodbye_test;
@@ -106,7 +106,7 @@ impl Goodbye {
         }
     }
 
-    // DestinationSSRC returns an array of SSRC values that this packet refers to.
+    // destination_ssrc returns an array of SSRC values that this packet refers to.
     pub fn destination_ssrc(&self) -> Vec<u32> {
         self.sources.to_vec()
     }

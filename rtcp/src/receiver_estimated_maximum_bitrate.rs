@@ -7,7 +7,7 @@ use util::Error;
 
 use super::errors::*;
 use super::header::*;
-use crate::get_padding;
+use crate::util::get_padding;
 
 #[cfg(test)]
 mod receiver_estimated_maximum_bitrate_test;
@@ -154,7 +154,7 @@ impl ReceiverEstimatedMaximumBitrate {
         }
     }
 
-    // DestinationSSRC returns an array of SSRC values that this packet refers to.
+    // destination_ssrc returns an array of SSRC values that this packet refers to.
     pub fn destination_ssrc(&self) -> Vec<u32> {
         self.ssrcs.clone()
     }

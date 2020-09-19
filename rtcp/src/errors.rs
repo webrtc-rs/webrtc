@@ -28,4 +28,5 @@ lazy_static! {
     pub static ref ERR_BAD_UNIQUE_IDENTIFIER: Error =
         Error::new("rtcp: invalid unique identifier".to_owned());
     pub static ref ERR_BAD_MEDIA_SSRC: Error = Error::new("rtcp: invalid media SSRC".to_owned());
+    pub static ref ERR_DELTA_EXCEED_LIMIT: Error = Error::new("delta exceed limit".to_owned());
 }

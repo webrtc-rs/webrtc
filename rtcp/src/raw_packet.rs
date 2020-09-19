@@ -44,7 +44,7 @@ impl RawPacket {
         self.header.clone()
     }
 
-    // DestinationSSRC returns an array of SSRC values that this packet refers to.
+    // destination_ssrc returns an array of SSRC values that this packet refers to.
     pub fn destination_ssrc(&self) -> Vec<u32> {
         vec![]
     }

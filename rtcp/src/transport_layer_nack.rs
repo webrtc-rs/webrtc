@@ -7,7 +7,7 @@ use util::Error;
 
 use super::errors::*;
 use super::header::*;
-use crate::get_padding;
+use crate::util::get_padding;
 
 #[cfg(test)]
 mod transport_layer_nack_test;
@@ -117,7 +117,7 @@ impl TransportLayerNack {
         }
     }
 
-    // DestinationSSRC returns an array of SSRC values that this packet refers to.
+    // destination_ssrc returns an array of SSRC values that this packet refers to.
     pub fn destination_ssrc(&self) -> Vec<u32> {
         vec![self.media_ssrc]
     }

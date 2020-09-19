@@ -107,7 +107,7 @@ impl CompoundPacket {
         marshal(&self.0, writer)
     }
 
-    // DestinationSSRC returns the synchronization sources associated with this
+    // destination_ssrc returns the synchronization sources associated with this
     // CompoundPacket's reception report.
     pub fn destination_ssrc(&self) -> Vec<u32> {
         if self.0.len() == 0 {

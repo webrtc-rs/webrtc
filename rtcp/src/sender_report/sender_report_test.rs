@@ -150,7 +150,7 @@ fn test_sender_report_unmarshal() -> Result<(), Error> {
                 }
                 assert_eq!(
                     ssrc_found, true,
-                    "Unmarshal {} sr: sr's DestinationSSRC should include it's SSRC field",
+                    "Unmarshal {} sr: sr's destination_ssrc should include it's SSRC field",
                     name
                 );
             } else {
