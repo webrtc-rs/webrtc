@@ -158,6 +158,7 @@ impl Payloader for H264Payloader {
     }
 }
 
+#[derive(Debug, Default)]
 pub struct H264Packet {
     payload: Vec<u8>,
 }
@@ -172,6 +173,7 @@ impl Depacketizer for H264Packet {
         let nalu_type = b0 & NALU_TYPE_BITMASK;
         if nalu_type > 0 && nalu_type < 24 {
             self.payload.append(&mut ANNEXB_NALUSTART_CODE.to_vec());
+            self.payload.push(b0);
             reader.read_to_end(&mut self.payload)?;
             Ok(())
         } else if nalu_type == STAPA_NALU_TYPE {
