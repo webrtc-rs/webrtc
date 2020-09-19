@@ -66,7 +66,7 @@ impl fmt::Display for TransportLayerNack {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut out = format!("TransportLayerNack from {:x}\n", self.sender_ssrc);
         out += format!("\tMedia Ssrc {:x}\n", self.media_ssrc).as_str();
-        out += format!("\tID\tLostPackets\n").as_str();
+        out += "\tID\tLostPackets\n";
         for nack in &self.nacks {
             out += format!("\t{}\t{:b}\n", nack.packet_id, nack.lost_packets).as_str();
         }

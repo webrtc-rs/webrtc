@@ -31,6 +31,7 @@ pub struct ReceiverReport {
 impl fmt::Display for ReceiverReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut out = format!("ReceiverReport from {}\n", self.ssrc);
+        out += "\tSSRC    \tLost\tLastSequence\n";
         for rep in &self.reports {
             out += format!(
                 "\t{:x}\t{}/{}\t{}\n",

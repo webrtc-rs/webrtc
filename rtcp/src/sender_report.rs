@@ -69,7 +69,7 @@ impl fmt::Display for SenderReport {
         out += format!("\tRTPTIme:\t{}\n", self.rtp_time).as_str();
         out += format!("\tPacketCount:\t{}\n", self.packet_count).as_str();
         out += format!("\tOctetCount:\t{}\n", self.octet_count).as_str();
-        out += format!("\tSSRC    \tLost\tLastSequence\n").as_str();
+        out += "\tSSRC    \tLost\tLastSequence\n";
         for rep in &self.reports {
             out += format!(
                 "\t{:x}\t{}/{}\t{}\n",
@@ -176,7 +176,9 @@ impl SenderReport {
 
     // DestinationSSRC returns an array of SSRC values that this packet refers to.
     pub fn destination_ssrc(&self) -> Vec<u32> {
-        self.reports.iter().map(|x| x.ssrc).collect()
+        let mut out: Vec<u32> = self.reports.iter().map(|x| x.ssrc).collect();
+        out.push(self.ssrc);
+        out
     }
 
     // Marshal encodes the packet in binary.

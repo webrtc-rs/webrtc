@@ -138,7 +138,21 @@ fn test_sender_report_unmarshal() -> Result<(), Error> {
                     got, want,
                     "Unmarshal {} header: got {:?}, want {:?}",
                     name, got, want,
-                )
+                );
+
+                let mut ssrc_found = false;
+                let dst_ssrc = got.destination_ssrc();
+                for v in &dst_ssrc {
+                    if *v == got.ssrc {
+                        ssrc_found = true;
+                        break;
+                    }
+                }
+                assert_eq!(
+                    ssrc_found, true,
+                    "Unmarshal {} sr: sr's DestinationSSRC should include it's SSRC field",
+                    name
+                );
             } else {
                 assert!(false, "must no error in test {}", name);
             }
