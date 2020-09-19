@@ -1,4 +1,6 @@
-# ![revc](doc/webrtc.rs.png) [![Actions Status](https://github.com/rtcrs/webrtc/workflows/webrtc/badge.svg?branch=master)](https://github.com/rtcrs/webrtc/actions) 
+# ![revc](doc/webrtc.rs.png) 
+
+[![Actions Status](https://github.com/rtcrs/webrtc/workflows/webrtc/badge.svg?branch=master)](https://github.com/rtcrs/webrtc/actions) 
 
 A pure Rust implementation of WebRTC API. Rewrite [Pion](http://pion.ly) in Rust!
 
