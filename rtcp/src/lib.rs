@@ -6,6 +6,7 @@ extern crate lazy_static;
 
 pub mod compound_packet;
 pub mod errors;
+pub mod full_intra_request;
 pub mod goodbye;
 pub mod header;
 pub mod packet;
