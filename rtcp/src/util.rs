@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod util_test;
+
 use util::Error;
 
 // getPadding Returns the padding required to make the length a multiple of 4
