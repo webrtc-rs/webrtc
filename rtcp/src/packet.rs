@@ -4,6 +4,7 @@ use util::Error;
 
 use super::compound_packet::*;
 use super::errors::*;
+use super::full_intra_request::*;
 use super::goodbye::*;
 use super::header::*;
 use super::picture_loss_indication::*;
@@ -14,6 +15,7 @@ use super::receiver_report::*;
 use super::sender_report::*;
 use super::slice_loss_indication::*;
 use super::source_description::*;
+use super::transport_layer_cc::*;
 use super::transport_layer_nack::*;
 
 #[cfg(test)]
@@ -30,10 +32,12 @@ pub enum Packet {
 
     TransportLayerNack(TransportLayerNack),
     RapidResynchronizationRequest(RapidResynchronizationRequest),
+    TransportLayerCC(TransportLayerCC),
 
     PictureLossIndication(PictureLossIndication),
     SliceLossIndication(SliceLossIndication),
     ReceiverEstimatedMaximumBitrate(ReceiverEstimatedMaximumBitrate),
+    FullIntraRequest(FullIntraRequest),
 
     CompoundPacket(CompoundPacket),
 }
@@ -46,11 +50,16 @@ impl Packet {
             Packet::SourceDescription(p) => p.marshal(writer)?,
             Packet::Goodbye(p) => p.marshal(writer)?,
             Packet::RawPacket(p) => p.marshal(writer)?,
+
             Packet::TransportLayerNack(p) => p.marshal(writer)?,
             Packet::RapidResynchronizationRequest(p) => p.marshal(writer)?,
+            Packet::TransportLayerCC(p) => p.marshal(writer)?,
+
             Packet::PictureLossIndication(p) => p.marshal(writer)?,
             Packet::SliceLossIndication(p) => p.marshal(writer)?,
             Packet::ReceiverEstimatedMaximumBitrate(p) => p.marshal(writer)?,
+            Packet::FullIntraRequest(p) => p.marshal(writer)?,
+
             Packet::CompoundPacket(p) => p.marshal(writer)?,
         };
         Ok(())
@@ -63,11 +72,16 @@ impl Packet {
             Packet::SourceDescription(p) => p.destination_ssrc(),
             Packet::Goodbye(p) => p.destination_ssrc(),
             Packet::RawPacket(p) => p.destination_ssrc(),
+
             Packet::TransportLayerNack(p) => p.destination_ssrc(),
             Packet::RapidResynchronizationRequest(p) => p.destination_ssrc(),
+            Packet::TransportLayerCC(p) => p.destination_ssrc(),
+
             Packet::PictureLossIndication(p) => p.destination_ssrc(),
             Packet::SliceLossIndication(p) => p.destination_ssrc(),
             Packet::ReceiverEstimatedMaximumBitrate(p) => p.destination_ssrc(),
+            Packet::FullIntraRequest(p) => p.destination_ssrc(),
+
             Packet::CompoundPacket(p) => p.destination_ssrc(),
         }
     }
@@ -134,6 +148,9 @@ fn unmarshaler<R: Read>(reader: &mut R, header: &Header) -> Result<Packet, Error
             FORMAT_RRR => Ok(Packet::RapidResynchronizationRequest(
                 RapidResynchronizationRequest::unmarshal(reader)?,
             )),
+            FORMAT_TCC => Ok(Packet::TransportLayerCC(TransportLayerCC::unmarshal(
+                reader,
+            )?)),
             _ => Ok(Packet::RawPacket(RawPacket::unmarshal(reader)?)),
         },
         PacketType::PayloadSpecificFeedback => match header.count {
@@ -146,6 +163,9 @@ fn unmarshaler<R: Read>(reader: &mut R, header: &Header) -> Result<Packet, Error
             FORMAT_REMB => Ok(Packet::ReceiverEstimatedMaximumBitrate(
                 ReceiverEstimatedMaximumBitrate::unmarshal(reader)?,
             )),
+            FORMAT_FIR => Ok(Packet::FullIntraRequest(FullIntraRequest::unmarshal(
+                reader,
+            )?)),
             _ => Ok(Packet::RawPacket(RawPacket::unmarshal(reader)?)),
         },
         _ => Ok(Packet::RawPacket(RawPacket::unmarshal(reader)?)),

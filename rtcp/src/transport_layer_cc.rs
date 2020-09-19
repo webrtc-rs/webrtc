@@ -42,7 +42,7 @@ use crate::util::*;
 // for packet status chunk
 
 // type of packet status chunk
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 enum TypeTCC {
     RunLengthChunk = 0,
     StatusVectorChunk = 1,
@@ -54,7 +54,7 @@ const PACKET_STATUS_CHUNK_LENGTH: usize = 2;
 // type of packet status symbol and recv delta
 
 // https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.1
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 enum TypeTCCPacket {
     NotReceived = 0,
     ReceivedSmallDelta = 1,
@@ -78,7 +78,7 @@ static NUM_OF_BITS_OF_SYMBOL_SIZE: [u16; 2] = [1, 2];
 
 // PacketStatusChunk has two kinds:
 // RunLengthChunk and StatusVectorChunk
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum PacketStatusChunk {
     RunLengthChunk(RunLengthChunk),
     StatusVectorChunk(StatusVectorChunk),
@@ -90,7 +90,7 @@ enum PacketStatusChunk {
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 // |T| S |       Run Length        |
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct RunLengthChunk {
     //PacketStatusChunk
 
@@ -150,7 +150,7 @@ impl RunLengthChunk {
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 // |T|S|       symbol list         |
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct StatusVectorChunk {
     // T = TypeTCCRunLengthChunk
     type_tcc: TypeTCC,
@@ -227,7 +227,7 @@ const TYPE_TCC_DELTA_SCALE_FACTOR: i64 = 250;
 // small delta is 1 byte: [0，63.75]ms = [0, 63750]us = [0, 255]*250us
 // big delta is 2 bytes: [-8192.0, 8191.75]ms = [-8192000, 8191750]us = [-32768, 32767]*250us
 // https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.5
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct RecvDelta {
     type_tcc_packet: TypeTCCPacket,
     // us
@@ -303,7 +303,8 @@ const PACKET_CHUNK_OFFSET: usize = 16;
 
 // TransportLayerCC for sender-BWE
 // https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-5
-struct TransportLayerCC {
+#[derive(Debug, Clone)]
+pub struct TransportLayerCC {
     // header
     header: Header,
 
