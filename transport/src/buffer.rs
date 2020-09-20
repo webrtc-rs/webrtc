@@ -1,4 +1,4 @@
-use crate::error::Error;
+use util::error::Error;
 
 use std::collections::VecDeque;
 use std::sync::Arc;

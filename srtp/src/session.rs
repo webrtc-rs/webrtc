@@ -2,8 +2,9 @@ use crate::config::Config;
 use crate::context::Context;
 use crate::stream::Stream;
 
-use util::buffer::ERR_BUFFER_FULL;
-use util::{Buffer, Error};
+use transport::buffer::ERR_BUFFER_FULL;
+use transport::Buffer;
+use util::Error;
 
 use tokio::net::udp::{RecvHalf, SendHalf};
 use tokio::net::UdpSocket;
@@ -128,7 +129,7 @@ impl Session {
                 new_stream_tx.send(stream).await?;
             }
             match streams.get_mut(&ssrc).unwrap().write(&decrypted).await {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(err) => {
                     // Silently drop data when the buffer is full.
                     if err != ERR_BUFFER_FULL.clone() {
