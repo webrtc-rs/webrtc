@@ -1,4 +1,4 @@
-<h1 align="center">
+<h1 align="left">
  <a href="https://webrtc.rs"><img src="./doc/webrtc.rs.png" alt="WebRTC.rs"></a>
  <br>
 </h1>
