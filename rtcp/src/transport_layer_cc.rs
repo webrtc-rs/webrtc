@@ -54,7 +54,7 @@ const PACKET_STATUS_CHUNK_LENGTH: usize = 2;
 // type of packet status symbol and recv delta
 
 // https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.1
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 enum TypeTCCPacket {
     NotReceived = 0,
     ReceivedSmallDelta = 1,
@@ -62,6 +62,18 @@ enum TypeTCCPacket {
     // https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-7
     // see Example 2: "packet received, w/o recv delta"
     ReceivedWithoutDelta = 3,
+}
+
+impl From<u16> for TypeTCCPacket {
+    fn from(val: u16) -> Self {
+        use self::TypeTCCPacket::*;
+        match val {
+            0 => NotReceived,
+            1 => ReceivedSmallDelta,
+            2 => ReceivedLargeDelta,
+            _ => ReceivedWithoutDelta,
+        }
+    }
 }
 
 // for status vector chunk
@@ -78,7 +90,7 @@ static NUM_OF_BITS_OF_SYMBOL_SIZE: [u16; 2] = [1, 2];
 
 // PacketStatusChunk has two kinds:
 // RunLengthChunk and StatusVectorChunk
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 enum PacketStatusChunk {
     RunLengthChunk(RunLengthChunk),
     StatusVectorChunk(StatusVectorChunk),
@@ -90,7 +102,7 @@ enum PacketStatusChunk {
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 // |T| S |       Run Length        |
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct RunLengthChunk {
     //PacketStatusChunk
 
@@ -99,7 +111,7 @@ struct RunLengthChunk {
 
     // S: type of packet status
     // kind: TypeTCCPacketNotReceived or...
-    packet_status_symbol: u16,
+    packet_status_symbol: TypeTCCPacket,
 
     // run_length: count of S
     run_length: u16,
@@ -112,7 +124,7 @@ impl RunLengthChunk {
         let mut dst = set_nbits_of_uint16(0, 1, 0, 0)?;
 
         // append 2 bit packet_status_symbol
-        dst = set_nbits_of_uint16(dst, 2, 1, self.packet_status_symbol)?;
+        dst = set_nbits_of_uint16(dst, 2, 1, self.packet_status_symbol as u16)?;
 
         // append 13 bit run_length
         dst = set_nbits_of_uint16(dst, 13, 3, self.run_length)?;
@@ -138,7 +150,7 @@ impl RunLengthChunk {
 
         Ok(RunLengthChunk {
             type_tcc,
-            packet_status_symbol,
+            packet_status_symbol: packet_status_symbol.into(),
             run_length,
         })
     }
@@ -150,7 +162,7 @@ impl RunLengthChunk {
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 // |T|S|       symbol list         |
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct StatusVectorChunk {
     // T = TypeTCCRunLengthChunk
     type_tcc: TypeTCC,
@@ -162,7 +174,7 @@ struct StatusVectorChunk {
     // TypeTCCSymbolListPacketReceived or TypeTCCSymbolListPacketNotReceived
     // when symbol_size = TypeTCCSymbolSizeTwoBit, symbol_list is 7*2bit:
     // TypeTCCPacketNotReceived TypeTCCPacketReceivedSmallDelta TypeTCCPacketReceivedLargeDelta or typePacketReserved
-    symbol_list: Vec<u16>,
+    symbol_list: Vec<TypeTCCPacket>,
 }
 
 impl StatusVectorChunk {
@@ -178,7 +190,7 @@ impl StatusVectorChunk {
         // append 14 bit symbol_list
         for i in 0..self.symbol_list.len() {
             let index = num_of_bits * (i as u16) + 2;
-            dst = set_nbits_of_uint16(dst, num_of_bits, index, self.symbol_list[i])?;
+            dst = set_nbits_of_uint16(dst, num_of_bits, index, self.symbol_list[i] as u16)?;
         }
 
         writer.write_u16::<BigEndian>(dst)?;
@@ -193,20 +205,20 @@ impl StatusVectorChunk {
 
         let type_tcc = TypeTCC::StatusVectorChunk;
         let mut symbol_size = get_nbits_from_byte(b0, 1, 1);
-        let mut symbol_list = vec![];
+        let mut symbol_list: Vec<TypeTCCPacket> = vec![];
         if symbol_size == TYPE_TCC_SYMBOL_SIZE_ONE_BIT {
             for i in 0..6 {
-                symbol_list.push(get_nbits_from_byte(b0, 2 + i, 1));
+                symbol_list.push(get_nbits_from_byte(b0, 2 + i, 1).into());
             }
             for i in 0..8 {
-                symbol_list.push(get_nbits_from_byte(b1, i, 1));
+                symbol_list.push(get_nbits_from_byte(b1, i, 1).into());
             }
         } else if symbol_size == TYPE_TCC_SYMBOL_SIZE_TWO_BIT {
             for i in 0..3 {
-                symbol_list.push(get_nbits_from_byte(b0, 2 + i * 2, 2));
+                symbol_list.push(get_nbits_from_byte(b0, 2 + i * 2, 2).into());
             }
             for i in 0..4 {
-                symbol_list.push(get_nbits_from_byte(b1, i * 2, 2));
+                symbol_list.push(get_nbits_from_byte(b1, i * 2, 2).into());
             }
         } else {
             symbol_size = (get_nbits_from_byte(b0, 2, 6) << 8) + (b1 as u16);
@@ -227,7 +239,7 @@ const TYPE_TCC_DELTA_SCALE_FACTOR: i64 = 250;
 // small delta is 1 byte: [0，63.75]ms = [0, 63750]us = [0, 255]*250us
 // big delta is 2 bytes: [-8192.0, 8191.75]ms = [-8192000, 8191750]us = [-32768, 32767]*250us
 // https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.5
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct RecvDelta {
     type_tcc_packet: TypeTCCPacket,
     // us
@@ -303,7 +315,7 @@ const PACKET_CHUNK_OFFSET: usize = 16;
 
 // TransportLayerCC for sender-BWE
 // https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-5
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TransportLayerCC {
     // header
     header: Header,
@@ -363,9 +375,17 @@ impl TransportLayerCC {
             let delta = d.delta / TYPE_TCC_DELTA_SCALE_FACTOR;
 
             // small delta
-            if delta >= 0 && delta <= u8::MAX as i64 {
+            if d.type_tcc_packet == TypeTCCPacket::ReceivedSmallDelta
+                && delta >= 0
+                && delta <= u8::MAX as i64
+            {
                 n += 1;
-            } else {
+            }
+
+            if d.type_tcc_packet == TypeTCCPacket::ReceivedLargeDelta
+                && delta >= i16::MIN as i64
+                && delta <= i16::MAX as i64
+            {
                 n += 2
             }
         }
@@ -407,7 +427,7 @@ impl TransportLayerCC {
             delta.marshal(writer)?;
         }
 
-        if self.header.padding {
+        if self.header.padding && self.len() > self.packet_len() {
             for i in 0..self.len() - self.packet_len() {
                 if i == self.len() - self.packet_len() - 1 {
                     writer.write_u8((self.len() - self.packet_len()) as u8)?;
@@ -464,14 +484,13 @@ impl TransportLayerCC {
                     packet_status_count as i16 - processed_packet_num,
                     packet_status.run_length as i16,
                 );
-                if packet_status.packet_status_symbol == TypeTCCPacket::ReceivedSmallDelta as u16
-                    || packet_status.packet_status_symbol
-                        == TypeTCCPacket::ReceivedLargeDelta as u16
+                if packet_status.packet_status_symbol == TypeTCCPacket::ReceivedSmallDelta
+                    || packet_status.packet_status_symbol == TypeTCCPacket::ReceivedLargeDelta
                 {
                     for _ in 0..packet_number_to_process {
                         recv_deltas.push(RecvDelta {
                             type_tcc_packet: if packet_status.packet_status_symbol
-                                == TypeTCCPacket::ReceivedSmallDelta as u16
+                                == TypeTCCPacket::ReceivedSmallDelta
                             {
                                 TypeTCCPacket::ReceivedSmallDelta
                             } else {
@@ -490,10 +509,9 @@ impl TransportLayerCC {
                 let mut chunk_reader = Cursor::new(&data);
                 let packet_status = StatusVectorChunk::unmarshal(&mut chunk_reader)?;
 
-                if packet_status.symbol_size == TYPE_TCC_SYMBOL_SIZE_TWO_BIT {
+                if packet_status.symbol_size == TYPE_TCC_SYMBOL_SIZE_ONE_BIT {
                     for j in 0..packet_status.symbol_list.len() {
-                        if packet_status.symbol_list[j] == TypeTCCPacket::ReceivedSmallDelta as u16
-                        {
+                        if packet_status.symbol_list[j] == TypeTCCPacket::ReceivedSmallDelta {
                             recv_deltas.push(RecvDelta {
                                 type_tcc_packet: TypeTCCPacket::ReceivedSmallDelta,
                                 delta: 0,
@@ -503,18 +521,11 @@ impl TransportLayerCC {
                 }
                 if packet_status.symbol_size == TYPE_TCC_SYMBOL_SIZE_TWO_BIT {
                     for j in 0..packet_status.symbol_list.len() {
-                        if packet_status.symbol_list[j] == TypeTCCPacket::ReceivedSmallDelta as u16
-                            || packet_status.symbol_list[j]
-                                == TypeTCCPacket::ReceivedLargeDelta as u16
+                        if packet_status.symbol_list[j] == TypeTCCPacket::ReceivedSmallDelta
+                            || packet_status.symbol_list[j] == TypeTCCPacket::ReceivedLargeDelta
                         {
                             recv_deltas.push(RecvDelta {
-                                type_tcc_packet: if packet_status.symbol_list[j]
-                                    == TypeTCCPacket::ReceivedSmallDelta as u16
-                                {
-                                    TypeTCCPacket::ReceivedSmallDelta
-                                } else {
-                                    TypeTCCPacket::ReceivedLargeDelta
-                                },
+                                type_tcc_packet: packet_status.symbol_list[j],
                                 delta: 0,
                             })
                         }
@@ -527,27 +538,21 @@ impl TransportLayerCC {
             packet_chunks.push(packet_status);
         }
 
-        /*
-        recvDeltasPos := packetStatusPos
-        for _, delta := range t.recv_deltas {
-            if recvDeltasPos >= total_length {
-                return errPacketTooShort
+        for delta in &mut recv_deltas {
+            if delta.type_tcc_packet == TypeTCCPacket::ReceivedSmallDelta {
+                let b0 = reader.read_u8()?;
+                let buf = vec![b0];
+                let mut delta_reader = Cursor::new(&buf);
+                *delta = RecvDelta::unmarshal(&mut delta_reader)?;
+            } else {
+                //TypeTCCPacketReceivedLargeDelta
+                let b0 = reader.read_u8()?;
+                let b1 = reader.read_u8()?;
+                let buf = vec![b0, b1];
+                let mut delta_reader = Cursor::new(&buf);
+                *delta = RecvDelta::unmarshal(&mut delta_reader)?;
             }
-            if delta.Type == TypeTCCPacketReceivedSmallDelta {
-                err := delta.Unmarshal(rawPacket[recvDeltasPos : recvDeltasPos+1])
-                if err != nil {
-                    return err
-                }
-                recvDeltasPos++
-            }
-            if delta.Type == TypeTCCPacketReceivedLargeDelta {
-                err := delta.Unmarshal(rawPacket[recvDeltasPos : recvDeltasPos+2])
-                if err != nil {
-                    return err
-                }
-                recvDeltasPos += 2
-            }
-        }*/
+        }
 
         Ok(TransportLayerCC {
             header,
