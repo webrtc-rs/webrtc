@@ -60,24 +60,28 @@ impl Deadline {
 
         d.stop_tx.take();
 
-        let mut exceeded_rx = d.exceeded_rx.take();
+        {
+            let mut exceeded_rx = d.exceeded_rx.take();
 
-        tokio::select! {
-            _ = exceeded_rx.as_mut().unwrap().recv() => {
-                let (exceeded_tx, exceeded_rx) = mpsc::channel(1);
-                d.exceeded_tx = Some(exceeded_tx);
-                d.exceeded_rx = Some(exceeded_rx);
-            }
-            stopped = d.stopped_rx.as_mut().unwrap().recv() => {
-                if let Some(stopped) = stopped{
-                    if !stopped {
-                        let (exceeded_tx, exceeded_rx) = mpsc::channel(1);
-                        d.exceeded_tx = Some(exceeded_tx);
-                        d.exceeded_rx = Some(exceeded_rx);
+            tokio::select! {
+                _ = exceeded_rx.as_mut().unwrap().recv() => {
+                    let (exceeded_tx, exceeded_rx) = mpsc::channel(1);
+                    d.exceeded_tx = Some(exceeded_tx);
+                    d.exceeded_rx = Some(exceeded_rx);
+                }
+                stopped = d.stopped_rx.as_mut().unwrap().recv() => {
+                    if let Some(stopped) = stopped{
+                        if !stopped {
+                            let (exceeded_tx, exceeded_rx) = mpsc::channel(1);
+                            d.exceeded_tx = Some(exceeded_tx);
+                            d.exceeded_rx = Some(exceeded_rx);
+                        }else{
+                            d.exceeded_rx = exceeded_rx.take();
+                        }
                     }
                 }
             }
-        };
+        }
 
         let (stop_tx, stop_rx) = mpsc::channel(1);
         let (stopped_tx, stopped_rx) = mpsc::channel(1);
@@ -95,16 +99,17 @@ impl Deadline {
         let exceeded_tx = d.exceeded_tx.take();
         let mut stopped_tx = d.stopped_tx.take();
         let mut stop_rx = d.stop_rx.take();
+        let mut delay = delay_for(t);
         tokio::spawn(async move {
             tokio::select! {
-                _ = delay_for(t) => {
+                _ = &mut delay => {
                     drop(exceeded_tx);
                     let _ = stopped_tx.as_mut().unwrap().send(false).await;
                 }
                 _ = stop_rx.as_mut().unwrap().recv() => {
                     let _ = stopped_tx.as_mut().unwrap().send(false).await;
                 }
-            };
+            }
         });
     }
 
