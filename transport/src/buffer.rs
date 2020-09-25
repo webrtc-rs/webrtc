@@ -81,16 +81,16 @@ impl BufferInternal {
 
         let mut newdata: Vec<u8> = vec![0; newsize];
 
-        let mut n = 0;
+        let mut n;
         if self.head <= self.tail {
             // data was contiguous
-            newdata.extend_from_slice(&self.data[self.head..self.tail]);
-            n += self.tail - self.head;
+            n = self.tail - self.head;
+            newdata[..n].copy_from_slice(&self.data[self.head..self.tail]);
         } else {
             // data was discontiguous
-            newdata.extend_from_slice(&self.data[self.head..]);
-            n += self.data.len() - self.head;
-            newdata.extend_from_slice(&self.data[..self.tail]);
+            n = self.data.len() - self.head;
+            newdata[..n].copy_from_slice(&self.data[self.head..]);
+            newdata[n..n + self.tail].copy_from_slice(&self.data[..self.tail]);
             n += self.tail;
         }
         self.head = 0;
@@ -259,7 +259,7 @@ impl Buffer {
                     } else {
                         let k = b.data.len() - b.head;
                         packet[..k].copy_from_slice(&b.data[b.head..]);
-                        packet[k..].copy_from_slice(&b.data[..copied - k]);
+                        packet[k..copied].copy_from_slice(&b.data[..copied - k]);
                     }
 
                     // advance head, discarding any data that wasn't copied

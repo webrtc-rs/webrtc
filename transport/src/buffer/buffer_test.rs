@@ -62,6 +62,67 @@ async fn test_buffer() {
     assert_eq!(result.unwrap_err(), ERR_BUFFER_CLOSED.clone());
 }
 
+async fn test_wraparound(grow: bool) {
+    let mut buffer = Buffer::new(0, 0);
+    {
+        let mut b = buffer.buffer.lock().await;
+        let result = b.grow();
+        assert!(result.is_ok());
+
+        b.head = b.data.len() - 13;
+        b.tail = b.head;
+    }
+
+    let p1 = vec![1, 2, 3];
+    let p2 = vec![4, 5, 6];
+    let p3 = vec![7, 8, 9];
+    let p4 = vec![10, 11, 12];
+
+    assert_ok!(buffer.write(&p1).await);
+    assert_ok!(buffer.write(&p2).await);
+    assert_ok!(buffer.write(&p3).await);
+
+    let mut p = vec![0; 10];
+
+    let n = assert_ok!(buffer.read(&mut p, None).await);
+    assert_eq!(&p1[..], &p[..n]);
+
+    if grow {
+        let mut b = buffer.buffer.lock().await;
+        let result = b.grow();
+        assert!(result.is_ok());
+    }
+
+    let n = assert_ok!(buffer.read(&mut p, None).await);
+    assert_eq!(&p2[..], &p[..n]);
+
+    assert_ok!(buffer.write(&p4).await);
+
+    let n = assert_ok!(buffer.read(&mut p, None).await);
+    assert_eq!(&p3[..], &p[..n]);
+    let n = assert_ok!(buffer.read(&mut p, None).await);
+    assert_eq!(&p4[..], &p[..n]);
+
+    {
+        let b = buffer.buffer.lock().await;
+        if !grow {
+            assert_eq!(b.data.len(), MIN_SIZE);
+        } else {
+            assert_eq!(b.data.len(), 2 * MIN_SIZE);
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_buffer_wraparound() {
+    test_wraparound(false).await;
+}
+
+#[tokio::test]
+async fn test_buffer_wraparound_grow() {
+    test_wraparound(true).await;
+}
+
 #[tokio::test]
 async fn test_buffer_async() {
     let mut buffer = Buffer::new(0, 0);
@@ -223,6 +284,51 @@ async fn test_buffer_limit_size() {
 
     // Nothing left.
     buffer.close().await;
+}
+
+#[tokio::test]
+async fn test_buffer_limit_sizes() {
+    let sizes = vec![
+        128 * 1024,
+        1024 * 1024,
+        8 * 1024 * 1024,
+        0, // default
+    ];
+    const HEADER_SIZE: usize = 2;
+    const PACKET_SIZE: usize = 0x8000;
+
+    for mut size in sizes {
+        let mut name = "default".to_owned();
+        if size > 0 {
+            name = format!("{}kbytes", size / 1024);
+        }
+
+        let mut buffer = Buffer::new(0, 0);
+        if size == 0 {
+            size = MAX_SIZE;
+        } else {
+            buffer.set_limit_size(size + HEADER_SIZE).await;
+        }
+
+        //assert.NoError(buffer.SetReadDeadline(now.Add(5 * time.Second))) // Set deadline to avoid test deadlock
+
+        let n_packets = size / (PACKET_SIZE + HEADER_SIZE);
+        let pkt = vec![0; PACKET_SIZE];
+        for _ in 0..n_packets {
+            assert_ok!(buffer.write(&pkt).await);
+        }
+
+        // Next write is expected to be errored.
+        let result = buffer.write(&pkt).await;
+        assert!(result.is_err(), "{}", name);
+        assert_eq!(result.unwrap_err(), ERR_BUFFER_FULL.clone(), "{}", name);
+
+        let mut packet = vec![0; size];
+        for _ in 0..n_packets {
+            let n = assert_ok!(buffer.read(&mut packet, Some(Duration::new(5, 0))).await);
+            assert_eq!(PACKET_SIZE, n, "{}", name);
+        }
+    }
 }
 
 #[tokio::test]
