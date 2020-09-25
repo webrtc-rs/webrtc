@@ -15,9 +15,14 @@ async fn test_buffer() {
     assert_eq!(n, 2, "n must be 2");
 
     // Read once
-    let n = assert_ok!(buffer.read(&mut packet).await);
+    let n = assert_ok!(buffer.read(&mut packet, None).await);
     assert_eq!(n, 2, "n must be 2");
     assert_eq!(&[0, 1], &packet[..n]);
+
+    // Read deadline
+    let result = buffer.read(&mut packet, Some(Duration::new(0, 1))).await;
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), ERR_TIMEOUT.clone());
 
     // Write twice
     let n = assert_ok!(buffer.write(&[2, 3, 4]).await);
@@ -27,11 +32,11 @@ async fn test_buffer() {
     assert_eq!(n, 3, "n must be 3");
 
     // Read twice
-    let n = assert_ok!(buffer.read(&mut packet).await);
+    let n = assert_ok!(buffer.read(&mut packet, None).await);
     assert_eq!(n, 3, "n must be 3");
     assert_eq!(&[2, 3, 4], &packet[..n]);
 
-    let n = assert_ok!(buffer.read(&mut packet).await);
+    let n = assert_ok!(buffer.read(&mut packet, None).await);
     assert_eq!(n, 3, "n must be 3");
     assert_eq!(&[5, 6, 7], &packet[..n]);
 
@@ -47,16 +52,14 @@ async fn test_buffer() {
     assert!(result.is_err());
 
     // But we can read the remaining data.
-    let n = assert_ok!(buffer.read(&mut packet).await);
+    let n = assert_ok!(buffer.read(&mut packet, None).await);
     assert_eq!(n, 1, "n must be 1");
     assert_eq!(&[3], &packet[..n]);
 
     // Until EOF
-    let result = buffer.read(&mut packet).await;
+    let result = buffer.read(&mut packet, None).await;
     assert!(result.is_err());
-    if let Err(err) = result {
-        assert_eq!(err, ERR_BUFFER_CLOSED.clone());
-    }
+    assert_eq!(result.unwrap_err(), ERR_BUFFER_CLOSED.clone());
 }
 
 #[tokio::test]
@@ -69,15 +72,13 @@ async fn test_buffer_async() {
     tokio::spawn(async move {
         let mut packet: Vec<u8> = vec![0; 4];
 
-        let n = assert_ok!(buffer2.read(&mut packet).await);
+        let n = assert_ok!(buffer2.read(&mut packet, None).await);
         assert_eq!(n, 2, "n must be 2");
         assert_eq!(&[0, 1], &packet[..n]);
 
-        let result = buffer2.read(&mut packet).await;
+        let result = buffer2.read(&mut packet, None).await;
         assert!(result.is_err());
-        if let Err(err) = result {
-            assert_eq!(err, ERR_BUFFER_CLOSED.clone());
-        }
+        assert_eq!(result.unwrap_err(), ERR_BUFFER_CLOSED.clone());
 
         drop(done_tx);
     });
@@ -123,7 +124,7 @@ async fn test_buffer_limit_count() {
 
     // Read once
     let mut packet: Vec<u8> = vec![0; 4];
-    let n = assert_ok!(buffer.read(&mut packet).await);
+    let n = assert_ok!(buffer.read(&mut packet, None).await);
     assert_eq!(n, 2, "n must be 2");
     assert_eq!(&[0, 1], &packet[..n]);
     assert_eq!(1, buffer.count().await);
@@ -142,12 +143,12 @@ async fn test_buffer_limit_count() {
     assert_eq!(2, buffer.count().await);
 
     // Read twice
-    let n = assert_ok!(buffer.read(&mut packet).await);
+    let n = assert_ok!(buffer.read(&mut packet, None).await);
     assert_eq!(n, 2, "n must be 2");
     assert_eq!(&[2, 3], &packet[..n]);
     assert_eq!(1, buffer.count().await);
 
-    let n = assert_ok!(buffer.read(&mut packet).await);
+    let n = assert_ok!(buffer.read(&mut packet, None).await);
     assert_eq!(n, 2, "n must be 2");
     assert_eq!(&[6, 7], &packet[..n]);
     assert_eq!(0, buffer.count().await);
@@ -158,18 +159,18 @@ async fn test_buffer_limit_count() {
 
 #[tokio::test]
 async fn test_buffer_limit_size() {
-    let mut buffer = Buffer::new(0, 5);
+    let mut buffer = Buffer::new(0, 11);
 
     assert_eq!(0, buffer.size().await);
 
     // Write twice
     let n = assert_ok!(buffer.write(&[0, 1]).await);
     assert_eq!(n, 2, "n must be 2");
-    assert_eq!(2, buffer.size().await);
+    assert_eq!(4, buffer.size().await);
 
     let n = assert_ok!(buffer.write(&[2, 3]).await);
     assert_eq!(n, 2, "n must be 2");
-    assert_eq!(4, buffer.size().await);
+    assert_eq!(8, buffer.size().await);
 
     // Over capacity
     let result = buffer.write(&[4, 5]).await;
@@ -177,24 +178,24 @@ async fn test_buffer_limit_size() {
     if let Err(err) = result {
         assert_eq!(err, ERR_BUFFER_FULL.clone());
     }
-    assert_eq!(4, buffer.size().await);
+    assert_eq!(8, buffer.size().await);
 
     // Cheeky write at exact size.
     let n = assert_ok!(buffer.write(&[6]).await);
     assert_eq!(n, 1, "n must be 1");
-    assert_eq!(5, buffer.size().await);
+    assert_eq!(11, buffer.size().await);
 
     // Read once
     let mut packet: Vec<u8> = vec![0; 4];
-    let n = assert_ok!(buffer.read(&mut packet).await);
+    let n = assert_ok!(buffer.read(&mut packet, None).await);
     assert_eq!(n, 2, "n must be 2");
     assert_eq!(&[0, 1], &packet[..n]);
-    assert_eq!(3, buffer.size().await);
+    assert_eq!(7, buffer.size().await);
 
     // Write once
     let n = assert_ok!(buffer.write(&[7, 8]).await);
     assert_eq!(n, 2, "n must be 2");
-    assert_eq!(5, buffer.size().await);
+    assert_eq!(11, buffer.size().await);
 
     // Over capacity
     let result = buffer.write(&[9, 10]).await;
@@ -202,20 +203,20 @@ async fn test_buffer_limit_size() {
     if let Err(err) = result {
         assert_eq!(err, ERR_BUFFER_FULL.clone());
     }
-    assert_eq!(5, buffer.size().await);
+    assert_eq!(11, buffer.size().await);
 
     // Read everything
-    let n = assert_ok!(buffer.read(&mut packet).await);
+    let n = assert_ok!(buffer.read(&mut packet, None).await);
     assert_eq!(n, 2, "n must be 2");
     assert_eq!(&[2, 3], &packet[..n]);
-    assert_eq!(3, buffer.size().await);
+    assert_eq!(7, buffer.size().await);
 
-    let n = assert_ok!(buffer.read(&mut packet).await);
+    let n = assert_ok!(buffer.read(&mut packet, None).await);
     assert_eq!(n, 1, "n must be 1");
     assert_eq!(&[6], &packet[..n]);
-    assert_eq!(2, buffer.size().await);
+    assert_eq!(4, buffer.size().await);
 
-    let n = assert_ok!(buffer.read(&mut packet).await);
+    let n = assert_ok!(buffer.read(&mut packet, None).await);
     assert_eq!(n, 2, "n must be 2");
     assert_eq!(&[7, 8], &packet[..n]);
     assert_eq!(0, buffer.size().await);
@@ -231,22 +232,14 @@ async fn test_buffer_misc() {
     // Write once
     let n = assert_ok!(buffer.write(&[0, 1, 2, 3]).await);
     assert_eq!(n, 4, "n must be 4");
-    assert_eq!(4, buffer.size().await);
 
     // Try to read with a short buffer
     let mut packet: Vec<u8> = vec![0; 3];
-    let result = buffer.read(&mut packet).await;
+    let result = buffer.read(&mut packet, None).await;
     assert!(result.is_err());
     if let Err(err) = result {
         assert_eq!(err, ERR_BUFFER_SHORT.clone());
     }
-
-    // Try again with the right size
-    let mut packet: Vec<u8> = vec![0; 4];
-    let n = assert_ok!(buffer.read(&mut packet).await);
-    assert_eq!(n, 4, "n must be 4");
-    assert_eq!(&[0, 1, 2, 3], &packet[..n]);
-    assert_eq!(0, buffer.size().await);
 
     // Close
     buffer.close().await;

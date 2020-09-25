@@ -53,7 +53,7 @@ impl Stream {
 
     // Read reads and decrypts full RTP packet from the nextConn
     pub async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
-        self.buffer.read(buf).await
+        self.buffer.read(buf, None).await
     }
 
     // ReadRTP reads and decrypts full RTP packet and its header from the nextConn
@@ -65,7 +65,7 @@ impl Stream {
             return Err(Error::new("this stream is not RTPStream".to_string()));
         }
 
-        let n = self.buffer.read(buf).await?;
+        let n = self.buffer.read(buf, None).await?;
         let mut reader = Cursor::new(buf);
         let header = rtp::header::Header::unmarshal(&mut reader)?;
 
@@ -81,7 +81,7 @@ impl Stream {
             return Err(Error::new("this stream is not RTCPStream".to_string()));
         }
 
-        let n = self.buffer.read(buf).await?;
+        let n = self.buffer.read(buf, None).await?;
         let mut reader = Cursor::new(buf);
         let header = rtcp::header::Header::unmarshal(&mut reader)?;
 

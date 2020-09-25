@@ -5,6 +5,5 @@
 extern crate lazy_static;
 
 pub mod buffer;
-mod deadline;
 
 pub use crate::buffer::Buffer;
