@@ -31,7 +31,11 @@ impl FixedBigInt {
         FixedBigInt {
             bits: vec![0; chunk_size],
             n,
-            msb_mask: (1 << (64 - n % 64)) - 1,
+            msb_mask: if n % 64 == 0 {
+                u64::MAX
+            } else {
+                (1 << (64 - n % 64)) - 1
+            },
         }
     }
 

@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod replay_detector_test;
+
 use super::fixed_big_int::*;
 
 // ReplayDetector is the interface of sequence replay detector.
@@ -160,6 +163,7 @@ impl ReplayDetector for WrappedSlidingWindowDetector {
             self.mask.lsh((-diff) as usize);
             self.latest_seq = self.seq;
         }
-        self.mask.set_bit((self.latest_seq - self.seq) as usize);
+        self.mask
+            .set_bit((self.latest_seq as isize - self.seq as isize) as usize);
     }
 }
