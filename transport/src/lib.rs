@@ -5,6 +5,6 @@
 extern crate lazy_static;
 
 pub mod buffer;
-pub mod replay_detector;
+pub mod fixed_big_int;
 
 pub use crate::buffer::Buffer;

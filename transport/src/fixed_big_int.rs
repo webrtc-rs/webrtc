@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod replay_detector_test;
+mod fixed_big_int_test;
 
 use std::fmt;
 
