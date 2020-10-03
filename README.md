@@ -15,7 +15,7 @@ A pure Rust implementation of WebRTC API. Rewrite [Pion](http://pion.ly) in Rust
 - [x] SDP
 - [x] RTP
 - [x] RTCP
-- [+] SRTP (WIP)
+- [ ] SRTP (WIP)
 - [ ] DTLS
 - [ ] ICE
 - [ ] PeerConnection
