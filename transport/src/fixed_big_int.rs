@@ -4,7 +4,7 @@ mod fixed_big_int_test;
 use std::fmt;
 
 // FixedBigInt is the fix-sized multi-word integer.
-struct FixedBigInt {
+pub(crate) struct FixedBigInt {
     bits: Vec<u64>,
     n: usize,
     msb_mask: u64,
@@ -22,7 +22,7 @@ impl fmt::Display for FixedBigInt {
 }
 
 impl FixedBigInt {
-    fn new(n: usize) -> Self {
+    pub(crate) fn new(n: usize) -> Self {
         let mut chunk_size = (n + 63) / 64;
         if chunk_size == 0 {
             chunk_size = 1;
@@ -36,7 +36,7 @@ impl FixedBigInt {
     }
 
     // lsh is the left shift operation.
-    fn lsh(&mut self, n: usize) {
+    pub(crate) fn lsh(&mut self, n: usize) {
         if n == 0 {
             return;
         }
@@ -71,7 +71,7 @@ impl FixedBigInt {
     }
 
     // bit returns i-th bit of the fixedBigInt.
-    fn bit(&self, i: usize) -> usize {
+    pub(crate) fn bit(&self, i: usize) -> usize {
         if i >= self.n {
             return 0;
         }
@@ -85,7 +85,7 @@ impl FixedBigInt {
     }
 
     // set_bit sets i-th bit to 1.
-    fn set_bit(&mut self, i: usize) {
+    pub(crate) fn set_bit(&mut self, i: usize) {
         if i >= self.n {
             return;
         }
