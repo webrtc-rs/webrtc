@@ -14,6 +14,8 @@ use ctr::stream_cipher::{NewStreamCipher, StreamCipher};
 
 type Aes128Ctr = ctr::Ctr128<aes::Aes128>;
 
+pub(crate) const MAX_SRTCP_INDEX: u64 = 0x7FFFFFFF;
+
 impl Context {
     // DecryptRTCP decrypts a RTCP packet with an encrypted payload
     pub fn decrypt_rtcp(&mut self, encrypted: &[u8]) -> Result<Vec<u8>, Error> {

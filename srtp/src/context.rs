@@ -39,8 +39,8 @@ const LABEL_SRTCPSALT: u8 = 0x05;
 pub const KEY_LEN: usize = 16;
 pub const SALT_LEN: usize = 14;
 
-const MAX_ROCDISORDER: u16 = 100;
-const MAX_SEQUENCE_NUMBER: u16 = 65535;
+const MAX_ROC_DISORDER: u16 = 100;
+pub(crate) const MAX_SEQUENCE_NUMBER: u16 = 65535;
 
 const AUTH_TAG_SIZE: usize = 10;
 const SRTCP_INDEX_SIZE: usize = 4;
@@ -66,17 +66,17 @@ impl SSRCState {
 
             // Only update rolloverCounter if lastSequenceNumber is greater then MAX_ROCDISORDER
             // otherwise we already incremented for disorder
-            if self.last_sequence_number > MAX_ROCDISORDER {
+            if self.last_sequence_number > MAX_ROC_DISORDER {
                 self.rollover_counter += 1;
             }
-        } else if self.last_sequence_number < MAX_ROCDISORDER
-            && sequence_number > (MAX_SEQUENCE_NUMBER - MAX_ROCDISORDER)
+        } else if self.last_sequence_number < MAX_ROC_DISORDER
+            && sequence_number > (MAX_SEQUENCE_NUMBER - MAX_ROC_DISORDER)
         {
             // Our last sequence number incremented because we crossed 0, but then our current number was within MAX_ROCDISORDER of the max
             // So we fell behind, drop to account for jitter
             self.rollover_counter -= 1;
-        } else if sequence_number < MAX_ROCDISORDER
-            && self.last_sequence_number > (MAX_SEQUENCE_NUMBER - MAX_ROCDISORDER)
+        } else if sequence_number < MAX_ROC_DISORDER
+            && self.last_sequence_number > (MAX_SEQUENCE_NUMBER - MAX_ROC_DISORDER)
         {
             // our current is within a MAX_ROCDISORDER of 0
             // and our last sequence number was a high sequence number, increment to account for jitter

@@ -3,5 +3,6 @@
 
 pub mod config;
 pub mod context;
+pub mod option;
 pub mod session;
 pub mod stream;

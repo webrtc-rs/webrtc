@@ -4,7 +4,7 @@ mod replay_detector_test;
 use super::fixed_big_int::*;
 
 // ReplayDetector is the interface of sequence replay detector.
-trait ReplayDetector {
+pub trait ReplayDetector {
     // Check returns true if given sequence number is not replayed.
     // Call accept() to mark the packet is received properly.
     fn check(&mut self, seq: u64) -> bool;
@@ -166,4 +166,19 @@ impl ReplayDetector for WrappedSlidingWindowDetector {
         self.mask
             .set_bit((self.latest_seq as isize - self.seq as isize) as usize);
     }
+}
+
+pub struct NoOpReplayDetector {}
+
+impl NoOpReplayDetector {
+    pub fn new() -> Self {
+        NoOpReplayDetector {}
+    }
+}
+
+impl ReplayDetector for NoOpReplayDetector {
+    fn check(&mut self, _: u64) -> bool {
+        true
+    }
+    fn accept(&mut self) {}
 }
