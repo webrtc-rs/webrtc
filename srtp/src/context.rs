@@ -11,6 +11,8 @@ use byteorder::{BigEndian, WriteBytesExt};
 
 use util::Error;
 
+use super::protection_profile::*;
+
 #[cfg(test)]
 mod context_test;
 
@@ -23,18 +25,12 @@ mod srtcp_test;
 pub mod srtcp;
 pub mod srtp;
 
-// ProtectionProfile specifies Cipher and AuthTag details, similar to TLS cipher suite
-pub type ProtectionProfile = u16;
-
-// Supported protection profiles
-const PROTECTION_PROFILE_AES128CM_HMAC_SHA1_80: ProtectionProfile = 0x0001;
-
-const LABEL_SRTPENCRYPTION: u8 = 0x00;
-const LABEL_SRTPAUTHENTICATION_TAG: u8 = 0x01;
-const LABEL_SRTPSALT: u8 = 0x02;
-const LABEL_SRTCPENCRYPTION: u8 = 0x03;
-const LABEL_SRTCPAUTHENTICATION_TAG: u8 = 0x04;
-const LABEL_SRTCPSALT: u8 = 0x05;
+pub const LABEL_SRTP_ENCRYPTION: u8 = 0x00;
+pub const LABEL_SRTP_AUTHENTICATION_TAG: u8 = 0x01;
+pub const LABEL_SRTP_SALT: u8 = 0x02;
+pub const LABEL_SRTCP_ENCRYPTION: u8 = 0x03;
+pub const LABEL_SRTCP_AUTHENTICATION_TAG: u8 = 0x04;
+pub const LABEL_SRTCP_SALT: u8 = 0x05;
 
 pub const KEY_LEN: usize = 16;
 pub const SALT_LEN: usize = 14;
@@ -130,13 +126,13 @@ impl Context {
         }
 
         let srtp_session_key =
-            Context::generate_session_key(&master_key, &master_salt, LABEL_SRTPENCRYPTION)?;
+            Context::generate_session_key(&master_key, &master_salt, LABEL_SRTP_ENCRYPTION)?;
         let srtp_session_salt =
-            Context::generate_session_salt(&master_key, &master_salt, LABEL_SRTPSALT)?;
+            Context::generate_session_salt(&master_key, &master_salt, LABEL_SRTP_SALT)?;
         let srtp_session_auth_tag = Context::generate_session_auth_tag(
             &master_key,
             &master_salt,
-            LABEL_SRTPAUTHENTICATION_TAG,
+            LABEL_SRTP_AUTHENTICATION_TAG,
         )?;
 
         //let srtp_block = Aes128::new(&GenericArray::from_slice(&srtp_session_key));
@@ -147,13 +143,13 @@ impl Context {
         };
 
         let srtcp_session_key =
-            Context::generate_session_key(&master_key, &master_salt, LABEL_SRTCPENCRYPTION)?;
+            Context::generate_session_key(&master_key, &master_salt, LABEL_SRTCP_ENCRYPTION)?;
         let srtcp_session_salt =
-            Context::generate_session_salt(&master_key, &master_salt, LABEL_SRTCPSALT)?;
+            Context::generate_session_salt(&master_key, &master_salt, LABEL_SRTCP_SALT)?;
         let srtcp_session_auth_tag = Context::generate_session_auth_tag(
             &master_key,
             &master_salt,
-            LABEL_SRTCPAUTHENTICATION_TAG,
+            LABEL_SRTCP_AUTHENTICATION_TAG,
         )?;
 
         //let srtcp_block = Aes128::new(&GenericArray::from_slice(&srtcp_session_key));

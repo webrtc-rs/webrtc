@@ -48,7 +48,7 @@ fn test_valid_session_keys() -> Result<(), Error> {
     let c = Context::new(master_key, master_salt, CIPHER_CONTEXT_ALGO)?;
 
     let session_key =
-        Context::generate_session_key(&c.master_key, &c.master_salt, LABEL_SRTPENCRYPTION)?;
+        Context::generate_session_key(&c.master_key, &c.master_salt, LABEL_SRTP_ENCRYPTION)?;
     assert_eq!(
         session_key, expected_session_key,
         "Session Key:\n{:?} \ndoes not match expected:\n{:?}\nMaster Key:\n{:?}\nMaster Salt:\n{:?}\n",
@@ -56,7 +56,7 @@ fn test_valid_session_keys() -> Result<(), Error> {
     );
 
     let session_salt =
-        Context::generate_session_salt(&c.master_key, &c.master_salt, LABEL_SRTPSALT)?;
+        Context::generate_session_salt(&c.master_key, &c.master_salt, LABEL_SRTP_SALT)?;
     assert_eq!(
         session_salt, expected_session_salt,
         "Session Salt {:?} does not match expected {:?}",
@@ -66,7 +66,7 @@ fn test_valid_session_keys() -> Result<(), Error> {
     let session_auth_tag = Context::generate_session_auth_tag(
         &c.master_key,
         &c.master_salt,
-        LABEL_SRTPAUTHENTICATION_TAG,
+        LABEL_SRTP_AUTHENTICATION_TAG,
     )?;
     assert_eq!(
         session_auth_tag, expected_session_auth_tag,
