@@ -62,10 +62,10 @@ pub(crate) fn aes_cm_key_derivation(
 // Generate IV https://tools.ietf.org/html/rfc3711#section-4.1.1
 // where the 128-bit integer value IV SHALL be defined by the SSRC, the
 // SRTP packet index i, and the SRTP session salting key k_s, as below.
-// - ROC = a 32-bit unsigned rollover counter (ROC), which records how many
+// - roc = a 32-bit unsigned rollover counter (roc), which records how many
 // -       times the 16-bit RTP sequence number has been reset to zero after
 // -       passing through 65,535
-// i = 2^16 * ROC + SEQ
+// i = 2^16 * roc + SEQ
 // IV = (salt*2 ^ 16) | (ssrc*2 ^ 64) | (i*2 ^ 16)
 pub(crate) fn generate_counter(
     sequence_number: u16,

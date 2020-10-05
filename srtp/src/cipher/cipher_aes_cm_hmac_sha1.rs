@@ -108,7 +108,7 @@ impl CipherAesCmHmacSha1 {
         // https://tools.ietf.org/html/rfc3711#section-4.2
         // In the case of SRTP, M SHALL consist of the Authenticated
         // Portion of the packet (as specified in Figure 1) concatenated with
-        // the ROC, M = Authenticated Portion || ROC;
+        // the roc, M = Authenticated Portion || roc;
         //
         // The pre-defined authentication transform for SRTP is HMAC-SHA1
         // [RFC2104].  With HMAC-SHA1, the SRTP_PREFIX_LENGTH (Figure 3) SHALL
@@ -177,8 +177,8 @@ impl Cipher for CipherAesCmHmacSha1 {
 
     fn encrypt_rtp(
         &mut self,
-        header: &rtp::header::Header,
         payload: &[u8],
+        header: &rtp::header::Header,
         roc: u32,
     ) -> Result<Vec<u8>, Error> {
         let mut dst: Vec<u8> =
@@ -216,8 +216,8 @@ impl Cipher for CipherAesCmHmacSha1 {
 
     fn decrypt_rtp(
         &mut self,
-        header: &rtp::header::Header,
         encrypted: &[u8],
+        header: &rtp::header::Header,
         roc: u32,
     ) -> Result<Vec<u8>, Error> {
         if encrypted.len() < self.auth_tag_len() {
@@ -289,7 +289,7 @@ impl Cipher for CipherAesCmHmacSha1 {
 
         stream.encrypt(&mut dst[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH..]);
 
-        // Add SRTCP Index and set Encryption bit
+        // Add SRTCP index and set Encryption bit
         let mut srtcp_index_buffer: Vec<u8> = vec![];
         {
             let mut writer = BufWriter::new(&mut srtcp_index_buffer);

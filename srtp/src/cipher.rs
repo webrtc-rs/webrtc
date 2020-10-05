@@ -9,14 +9,14 @@ pub(crate) trait Cipher {
 
     fn encrypt_rtp(
         &mut self,
-        header: &rtp::header::Header,
         payload: &[u8],
+        header: &rtp::header::Header,
         roc: u32,
     ) -> Result<Vec<u8>, Error>;
     fn decrypt_rtp(
         &mut self,
-        header: &rtp::header::Header,
         encrypted: &[u8],
+        header: &rtp::header::Header,
         roc: u32,
     ) -> Result<Vec<u8>, Error>;
 

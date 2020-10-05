@@ -1,4 +1,4 @@
-use crate::config::Config;
+//use crate::config::Config;
 use crate::context::Context;
 use crate::stream::Stream;
 
@@ -7,18 +7,12 @@ use transport::Buffer;
 use util::Error;
 
 use tokio::net::udp::{RecvHalf, SendHalf};
-use tokio::net::UdpSocket;
+//use tokio::net::UdpSocket;
 use tokio::sync::{mpsc, Mutex};
 
 use std::collections::HashMap;
 use std::io::{BufWriter, Cursor};
 use std::sync::Arc;
-
-use futures::{
-    future::FutureExt, // for `.fuse()`
-    pin_mut,
-    select,
-};
 
 // Session implements io.ReadWriteCloser and provides a bi-directional SRTP session
 // SRTP itself does not have a design like this, but it is common in most applications
@@ -33,7 +27,7 @@ pub struct Session {
 }
 
 impl Session {
-    pub async fn new(conn: UdpSocket, config: Config, is_rtp: bool) -> Result<Self, Error> {
+    /*pub async fn new(conn: UdpSocket, config: Config, is_rtp: bool) -> Result<Self, Error> {
         let local_context = Context::new(
             config.keys.local_master_key,
             config.keys.local_master_salt,
@@ -46,16 +40,16 @@ impl Session {
             config.profile,
         )?;
 
-        let streams_map = Arc::new(Mutex::new(HashMap::new()));
-        let (mut new_stream_tx, new_stream_rx) = mpsc::channel(1);
-        let (close_stream_tx, mut close_stream_rx) = mpsc::channel(1);
+        //let streams_map = Arc::new(Mutex::new(HashMap::new()));
+        //let (mut new_stream_tx, new_stream_rx) = mpsc::channel(1);
+        //let (close_stream_tx, mut close_stream_rx) = mpsc::channel(1);
         let (close_session_tx, mut close_session_rx) = mpsc::channel(1);
-        let (mut udp_rx, udp_tx) = conn.split();
+        //let (mut udp_rx, udp_tx) = conn.split();
 
         tokio::spawn(async move {
             let mut buf: Vec<u8> = vec![0; 8192];
 
-            let listen_udp = Session::listening(
+            /*let listen_udp = Session::listening(
                 &mut udp_rx,
                 &mut buf,
                 Arc::clone(&streams_map),
@@ -81,7 +75,7 @@ impl Session {
                     },
                     opt = close_session => break
                 }
-            }
+            }*/
         });
 
         Ok(Session {
@@ -91,7 +85,7 @@ impl Session {
             udp_tx,
             is_rtp,
         })
-    }
+    }*/
 
     async fn close_stream(streams_map: Arc<Mutex<HashMap<u32, Buffer>>>, ssrc: u32) {
         let mut streams = streams_map.lock().await;
