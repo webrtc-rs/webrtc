@@ -39,7 +39,7 @@ const MAX_ROC_DISORDER: u16 = 100;
 pub(crate) const MAX_SEQUENCE_NUMBER: u16 = 65535;
 
 const AUTH_TAG_SIZE: usize = 10;
-const SRTCP_INDEX_SIZE: usize = 4;
+pub(crate) const SRTCP_INDEX_SIZE: usize = 4;
 
 type HmacSha1 = Hmac<Sha1>;
 
@@ -109,18 +109,21 @@ impl Context {
     pub fn new(
         master_key: Vec<u8>,
         master_salt: Vec<u8>,
-        _profile: ProtectionProfile,
+        profile: ProtectionProfile,
     ) -> Result<Context, Error> {
-        if master_key.len() != KEY_LEN {
+        let key_len = profile.key_len()?;
+        let salt_len = profile.salt_len()?;
+
+        if master_key.len() != key_len {
             return Err(Error::new(format!(
                 "SRTP Master Key must be len {}, got {}",
-                KEY_LEN,
+                key_len,
                 master_key.len()
             )));
-        } else if master_salt.len() != SALT_LEN {
+        } else if master_salt.len() != salt_len {
             return Err(Error::new(format!(
                 "SRTP Salt must be len {}, got {}",
-                SALT_LEN,
+                salt_len,
                 master_salt.len()
             )));
         }

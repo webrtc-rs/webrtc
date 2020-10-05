@@ -1,6 +1,6 @@
 use util::Error;
 
-use super::context::*;
+use super::option::*;
 use super::protection_profile::*;
 
 const LABEL_EXTRACTOR_DTLS_SRTP: &'static str = "EXTRACTOR-dtls_srtp";
@@ -31,6 +31,12 @@ pub struct Config {
     pub keys: SessionKeys,
     pub profile: ProtectionProfile,
     //LoggerFactory: logging.LoggerFactory
+
+    // List of local/remote context options.
+    // ReplayProtection is enabled on remote context by default.
+    // Default replay protection window size is 64.
+    local_options: Vec<ContextOption>,
+    remote_options: Vec<ContextOption>,
 }
 
 impl Config {
@@ -42,23 +48,27 @@ impl Config {
         exporter: impl KeyingMaterialExporter,
         is_client: bool,
     ) -> Result<(), Error> {
+        let key_len = self.profile.key_len()?;
+
+        let salt_len = self.profile.salt_len()?;
+
         let keying_material = exporter.export_keying_material(
             LABEL_EXTRACTOR_DTLS_SRTP.to_string(),
-            &vec![],
-            (KEY_LEN * 2) + (SALT_LEN * 2),
+            &[],
+            (key_len * 2) + (salt_len * 2),
         )?;
 
         let mut offset = 0;
-        let client_write_key = keying_material[offset..offset + KEY_LEN].to_vec();
-        offset += KEY_LEN;
+        let client_write_key = keying_material[offset..offset + key_len].to_vec();
+        offset += key_len;
 
-        let server_write_key = keying_material[offset..offset + KEY_LEN].to_vec();
-        offset += KEY_LEN;
+        let server_write_key = keying_material[offset..offset + key_len].to_vec();
+        offset += key_len;
 
-        let client_write_salt = keying_material[offset..offset + SALT_LEN].to_vec();
-        offset += SALT_LEN;
+        let client_write_salt = keying_material[offset..offset + salt_len].to_vec();
+        offset += salt_len;
 
-        let server_write_salt = keying_material[offset..offset + SALT_LEN].to_vec();
+        let server_write_salt = keying_material[offset..offset + salt_len].to_vec();
 
         if is_client {
             self.keys.local_master_key = client_write_key;
