@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-//use transport::replay_detector::*;
+use transport::replay_detector::*;
 use util::Error;
 
 use super::cipher::*;
@@ -37,21 +37,21 @@ const AUTH_TAG_SIZE: usize = 10;
 pub(crate) const SRTCP_INDEX_SIZE: usize = 4;
 
 // Encrypt/Decrypt state for a single SRTP SSRC
-#[derive(Debug, Clone, Default)]
+#[derive(Default)]
 pub struct SrtpSsrcState {
     ssrc: u32,
     rollover_counter: u32,
     rollover_has_processed: bool,
     last_sequence_number: u16,
-    //replay_detector: Option<Box<dyn ReplayDetector>>,
+    replay_detector: Option<Box<dyn ReplayDetector>>,
 }
 
 // Encrypt/Decrypt state for a single SRTCP SSRC
-#[derive(Debug, Clone, Default)]
+#[derive(Default)]
 pub struct SrtcpSsrcState {
     srtcp_index: u32,
     ssrc: u32,
-    //replayDetector replaydetector.ReplayDetector
+    replay_detector: Option<Box<dyn ReplayDetector>>,
 }
 
 impl SrtpSsrcState {
@@ -116,14 +116,14 @@ impl SrtpSsrcState {
 // Context represents a SRTP cryptographic context
 // Context can only be used for one-way operations
 // it must either used ONLY for encryption or ONLY for decryption
-//#[derive(Debug)]
 pub struct Context {
     cipher: Box<dyn Cipher>,
 
     srtp_ssrc_states: HashMap<u32, SrtpSsrcState>,
     srtcp_ssrc_states: HashMap<u32, SrtcpSsrcState>,
-    //newSRTCPReplayDetector: fn() -> ReplayDetector,
-    //newSRTPReplayDetector: fn() -> ReplayDetector,
+
+    new_srtp_replay_detector: ContextOption,
+    new_srtcp_replay_detector: ContextOption,
 }
 
 impl Context {
@@ -132,7 +132,8 @@ impl Context {
         master_key: &[u8],
         master_salt: &[u8],
         profile: ProtectionProfile,
-        _opts: &[ContextOption],
+        rtp_opt: ContextOption,
+        rtcp_opt: ContextOption,
     ) -> Result<Context, Error> {
         let key_len = profile.key_len()?;
         let salt_len = profile.salt_len()?;
@@ -163,6 +164,8 @@ impl Context {
             cipher,
             srtp_ssrc_states: HashMap::new(),
             srtcp_ssrc_states: HashMap::new(),
+            new_srtp_replay_detector: rtp_opt,
+            new_srtcp_replay_detector: rtcp_opt,
         })
     }
 
@@ -170,6 +173,7 @@ impl Context {
         if !self.srtp_ssrc_states.contains_key(&ssrc) {
             let s = SrtpSsrcState {
                 ssrc,
+                replay_detector: Some((self.new_srtp_replay_detector)()),
                 ..Default::default()
             };
             self.srtp_ssrc_states.insert(ssrc, s);
@@ -181,6 +185,7 @@ impl Context {
         if !self.srtcp_ssrc_states.contains_key(&ssrc) {
             let s = SrtcpSsrcState {
                 ssrc,
+                replay_detector: Some((self.new_srtcp_replay_detector)()),
                 ..Default::default()
             };
             self.srtcp_ssrc_states.insert(ssrc, s);
