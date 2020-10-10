@@ -29,8 +29,6 @@ pub const LABEL_SRTCP_SALT: u8 = 0x05;
 
 const MAX_ROC_DISORDER: u16 = 100;
 pub(crate) const MAX_SEQUENCE_NUMBER: u16 = 65535;
-
-const AUTH_TAG_SIZE: usize = 10;
 pub(crate) const SRTCP_INDEX_SIZE: usize = 4;
 
 // Encrypt/Decrypt state for a single SRTP SSRC

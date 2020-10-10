@@ -40,7 +40,7 @@ impl Context {
         let dst = self.cipher.decrypt_rtcp(encrypted, index, ssrc)?;
 
         {
-            if let Some(state) = self.get_srtp_ssrc_state(ssrc) {
+            if let Some(state) = self.get_srtcp_ssrc_state(ssrc) {
                 if let Some(replay_detector) = &mut state.replay_detector {
                     replay_detector.accept();
                 }
