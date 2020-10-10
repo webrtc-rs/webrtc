@@ -6,7 +6,7 @@ use util::Error;
 use super::cipher::*;
 use super::protection_profile::*;
 use crate::cipher::cipher_aes_cm_hmac_sha1::CipherAesCmHmacSha1;
-use crate::option::ContextOption;
+use crate::option::*;
 
 #[cfg(test)]
 mod context_test;
@@ -26,9 +26,6 @@ pub const LABEL_SRTP_SALT: u8 = 0x02;
 pub const LABEL_SRTCP_ENCRYPTION: u8 = 0x03;
 pub const LABEL_SRTCP_AUTHENTICATION_TAG: u8 = 0x04;
 pub const LABEL_SRTCP_SALT: u8 = 0x05;
-
-pub const KEY_LEN: usize = 16;
-pub const SALT_LEN: usize = 14;
 
 const MAX_ROC_DISORDER: u16 = 100;
 pub(crate) const MAX_SEQUENCE_NUMBER: u16 = 65535;
@@ -132,8 +129,8 @@ impl Context {
         master_key: &[u8],
         master_salt: &[u8],
         profile: ProtectionProfile,
-        rtp_opt: ContextOption,
-        rtcp_opt: ContextOption,
+        srtp_ctx_opt: Option<ContextOption>,
+        srtcp_ctx_opt: Option<ContextOption>,
     ) -> Result<Context, Error> {
         let key_len = profile.key_len()?;
         let salt_len = profile.salt_len()?;
@@ -160,12 +157,23 @@ impl Context {
             p => return Err(Error::new(format!("Not supported SRTP Profile {:?}", p))),
         });
 
+        let srtp_ctx_opt = if let Some(ctx_opt) = srtp_ctx_opt {
+            ctx_opt
+        } else {
+            srtp_no_replay_protection()
+        };
+        let srtcp_ctx_opt = if let Some(ctx_opt) = srtcp_ctx_opt {
+            ctx_opt
+        } else {
+            srtcp_no_replay_protection()
+        };
+
         Ok(Context {
             cipher,
             srtp_ssrc_states: HashMap::new(),
             srtcp_ssrc_states: HashMap::new(),
-            new_srtp_replay_detector: rtp_opt,
-            new_srtcp_replay_detector: rtcp_opt,
+            new_srtp_replay_detector: srtp_ctx_opt,
+            new_srtcp_replay_detector: srtcp_ctx_opt,
         })
     }
 
@@ -204,7 +212,7 @@ impl Context {
 
     // set_roc sets SRTP rollover counter value of specified SSRC.
     fn set_roc(&mut self, ssrc: u32, roc: u32) {
-        if let Some(s) = self.srtp_ssrc_states.get_mut(&ssrc) {
+        if let Some(s) = self.get_srtp_ssrc_state(ssrc) {
             s.rollover_counter = roc;
         }
     }
@@ -220,7 +228,7 @@ impl Context {
 
     // set_index sets SRTCP index value of specified SSRC.
     fn set_index(&mut self, ssrc: u32, index: u32) {
-        if let Some(s) = self.srtcp_ssrc_states.get_mut(&ssrc) {
+        if let Some(s) = self.get_srtcp_ssrc_state(ssrc) {
             s.srtcp_index = index;
         }
     }
