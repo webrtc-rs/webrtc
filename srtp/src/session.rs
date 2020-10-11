@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod session_test;
 
+use super::option::*;
 use crate::config::Config;
 use crate::context::Context;
 use crate::stream::Stream;
@@ -16,6 +17,11 @@ use tokio::sync::{mpsc, Mutex};
 use std::collections::HashMap;
 use std::io::{BufWriter, Cursor};
 use std::sync::Arc;
+
+use log;
+
+const DEFAULT_SESSION_SRTP_REPLAY_PROTECTION_WINDOW: usize = 64;
+const DEFAULT_SESSION_SRTCP_REPLAY_PROTECTION_WINDOW: usize = 64;
 
 // Session implements io.ReadWriteCloser and provides a bi-directional SRTP session
 // SRTP itself does not have a design like this, but it is common in most applications
@@ -45,8 +51,20 @@ impl Session {
             &config.keys.remote_master_key,
             &config.keys.remote_master_salt,
             config.profile,
-            config.remote_rtp_options,
-            config.remote_rtcp_options,
+            if config.remote_rtp_options.is_none() {
+                Some(srtp_replay_protection(
+                    DEFAULT_SESSION_SRTP_REPLAY_PROTECTION_WINDOW,
+                ))
+            } else {
+                config.remote_rtp_options
+            },
+            if config.remote_rtcp_options.is_none() {
+                Some(srtcp_replay_protection(
+                    DEFAULT_SESSION_SRTCP_REPLAY_PROTECTION_WINDOW,
+                ))
+            } else {
+                config.remote_rtcp_options
+            },
         )?;
 
         let streams_map = Arc::new(Mutex::new(HashMap::new()));
@@ -76,7 +94,7 @@ impl Session {
                 tokio::select! {
                     result = listen_udp => match result{
                         Ok(()) => {},
-                        Err(_) => break,
+                        Err(err) => log::info!("{}", err),
                     },
                     opt = close_stream => match opt {
                         Some(ssrc) => Session::close_stream(&cloned_streams_map, ssrc).await,
@@ -152,9 +170,9 @@ impl Session {
         Ok(())
     }
 
-    // create_stream create a read stream for the given SSRC, it can be used
-    // if you want a certain SSRC, but don't want to wait for AcceptStream
-    pub async fn create_stream(&mut self, ssrc: u32) -> Result<Stream, Error> {
+    // listen on the given SSRC to create a stream, it can be used
+    // if you want a certain SSRC, but don't want to wait for Accept
+    pub async fn listen(&mut self, ssrc: u32) -> Result<Stream, Error> {
         let mut streams = self.streams_map.lock().await;
 
         if streams.contains_key(&ssrc) {
@@ -167,8 +185,8 @@ impl Session {
         }
     }
 
-    // AcceptStream returns a stream to handle RTCP for a single SSRC
-    pub async fn accept_stream(&mut self) -> Result<Stream, Error> {
+    // accept returns a stream to handle RTCP for a single SSRC
+    pub async fn accept(&mut self) -> Result<Stream, Error> {
         let result = self.new_stream_rx.recv().await;
         if let Some(stream) = result {
             Ok(stream)

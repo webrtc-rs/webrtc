@@ -89,7 +89,7 @@ async fn test_session_srtp() -> Result<(), Error> {
     };
     sa.write_rtp(&packet).await?;
 
-    let mut read_stream = sb.accept_stream().await?;
+    let mut read_stream = sb.accept().await?;
     let ssrc = read_stream.get_ssrc();
     assert_eq!(
         ssrc, TEST_SSRC,
@@ -128,7 +128,7 @@ async fn test_session_srtp_create_stream() -> Result<(), Error> {
         payload: test_payload.clone(),
     };
 
-    let mut read_stream = sb.create_stream(TEST_SSRC).await?;
+    let mut read_stream = sb.listen(TEST_SSRC).await?;
 
     sa.write_rtp(&packet).await?;
 
@@ -158,7 +158,7 @@ async fn test_session_srtp_multi_ssrc() -> Result<(), Error> {
 
     let mut read_streams = HashMap::new();
     for ssrc in &ssrcs {
-        let read_stream = sb.create_stream(*ssrc).await?;
+        let read_stream = sb.listen(*ssrc).await?;
         read_streams.insert(*ssrc, read_stream);
     }
 
@@ -225,41 +225,38 @@ async fn payload_srtp(
     Ok(hdr.sequence_number)
 }
 
-/*
 #[tokio::test]
 async fn test_session_srtp_replay_protection() -> Result<(), Error> {
     let test_payload = vec![0x00, 0x01, 0x03, 0x04];
 
     let (mut sa, mut sb) = build_session_srtp_pair().await?;
 
-    let mut read_stream = sb.create_stream(TEST_SSRC).await?;
+    let mut read_stream = sb.listen(TEST_SSRC).await?;
 
     // Generate test packets
     let mut packets = vec![];
     let mut expected_sequence_number = vec![];
-    let mut i = 0xFF00u16;
-    while i != 0x100 {
-        expected_sequence_number.push(i);
+    {
+        let mut i = 0xFF00u16;
+        while i != 0x100 {
+            expected_sequence_number.push(i);
 
-        let mut local_context = sa.local_context.lock().await;
-        let encrypted = encrypt_srtp(
-            &mut local_context,
-            &rtp::packet::Packet {
+            let packet = rtp::packet::Packet {
                 header: rtp::header::Header {
                     ssrc: TEST_SSRC,
                     sequence_number: i,
                     ..Default::default()
                 },
                 payload: test_payload.clone(),
-            },
-        )?;
+            };
 
-        packets.push(encrypted);
+            packets.push(packet);
 
-        if i == 0xFFFF {
-            i = 0;
-        } else {
-            i += 1;
+            if i == 0xFFFF {
+                i = 0;
+            } else {
+                i += 1;
+            }
         }
     }
 
@@ -290,15 +287,15 @@ async fn test_session_srtp_replay_protection() -> Result<(), Error> {
     });
 
     // Write with replay attack
-    for p in &packets {
-        sa.write(p, true).await?;
+    for packet in &packets {
+        sa.write_rtp(packet).await?;
 
         // Immediately replay
-        sa.write(p, true).await?;
+        sa.write_rtp(packet).await?;
     }
-    for p in &packets {
+    for packet in &packets {
         // Delayed replay
-        sa.write(p, true).await?;
+        sa.write_rtp(packet).await?;
     }
 
     done_rx.recv().await;
@@ -312,4 +309,4 @@ async fn test_session_srtp_replay_protection() -> Result<(), Error> {
     }
 
     Ok(())
-}*/
+}
