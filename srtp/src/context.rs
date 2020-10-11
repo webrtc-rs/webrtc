@@ -112,7 +112,7 @@ impl SrtpSsrcState {
 // Context can only be used for one-way operations
 // it must either used ONLY for encryption or ONLY for decryption
 pub struct Context {
-    cipher: Box<dyn Cipher>,
+    cipher: Box<dyn Cipher + Send>,
 
     srtp_ssrc_states: HashMap<u32, SrtpSsrcState>,
     srtcp_ssrc_states: HashMap<u32, SrtcpSsrcState>,
@@ -120,6 +120,8 @@ pub struct Context {
     new_srtp_replay_detector: ContextOption,
     new_srtcp_replay_detector: ContextOption,
 }
+
+unsafe impl Send for Context {}
 
 impl Context {
     // CreateContext creates a new SRTP Context
@@ -147,7 +149,7 @@ impl Context {
             )));
         }
 
-        let cipher: Box<dyn Cipher> = Box::new(match &profile {
+        let cipher: Box<dyn Cipher + Send> = Box::new(match &profile {
             &PROTECTION_PROFILE_AES128CM_HMAC_SHA1_80 => {
                 CipherAesCmHmacSha1::new(master_key, master_salt)?
             }

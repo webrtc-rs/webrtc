@@ -1,4 +1,8 @@
-//use crate::config::Config;
+#[cfg(test)]
+mod session_test;
+
+//use super::option::*;
+use crate::config::Config;
 use crate::context::Context;
 use crate::stream::Stream;
 
@@ -7,7 +11,7 @@ use transport::Buffer;
 use util::Error;
 
 use tokio::net::udp::{RecvHalf, SendHalf};
-//use tokio::net::UdpSocket;
+use tokio::net::UdpSocket;
 use tokio::sync::{mpsc, Mutex};
 
 use std::collections::HashMap;
@@ -20,6 +24,7 @@ use std::sync::Arc;
 // instead of making everyone re-implement
 pub struct Session {
     local_context: Arc<Mutex<Context>>,
+    //remote_context: Arc<Mutex<Context>>,
     new_stream_rx: mpsc::Receiver<Stream>,
     close_session_tx: mpsc::Sender<()>,
     udp_tx: SendHalf,
@@ -27,44 +32,46 @@ pub struct Session {
 }
 
 impl Session {
-    /*pub async fn new(conn: UdpSocket, config: Config, is_rtp: bool) -> Result<Self, Error> {
+    pub async fn new(conn: UdpSocket, config: Config, is_rtp: bool) -> Result<Self, Error> {
         let local_context = Context::new(
-            config.keys.local_master_key,
-            config.keys.local_master_salt,
+            &config.keys.local_master_key,
+            &config.keys.local_master_salt,
             config.profile,
+            config.local_rtp_options,
+            config.local_rtcp_options,
         )?;
 
         let mut remote_context = Context::new(
-            config.keys.remote_master_key,
-            config.keys.remote_master_salt,
+            &config.keys.remote_master_key,
+            &config.keys.remote_master_salt,
             config.profile,
+            config.remote_rtp_options,
+            config.remote_rtcp_options,
         )?;
 
-        //let streams_map = Arc::new(Mutex::new(HashMap::new()));
-        //let (mut new_stream_tx, new_stream_rx) = mpsc::channel(1);
-        //let (close_stream_tx, mut close_stream_rx) = mpsc::channel(1);
+        let streams_map = Arc::new(Mutex::new(HashMap::new()));
+        let (mut new_stream_tx, new_stream_rx) = mpsc::channel(1);
+        let (close_stream_tx, mut close_stream_rx) = mpsc::channel(1);
         let (close_session_tx, mut close_session_rx) = mpsc::channel(1);
-        //let (mut udp_rx, udp_tx) = conn.split();
+        let (mut udp_rx, udp_tx) = conn.split();
 
         tokio::spawn(async move {
             let mut buf: Vec<u8> = vec![0; 8192];
 
-            /*let listen_udp = Session::listening(
-                &mut udp_rx,
-                &mut buf,
-                Arc::clone(&streams_map),
-                &close_stream_tx,
-                &mut new_stream_tx,
-                &mut remote_context,
-                is_rtp,
-            )
-            .fuse();
-            let close_stream = close_stream_rx.recv().fuse();
-            let close_session = close_session_rx.recv().fuse();
-            pin_mut!(listen_udp, close_stream, close_session);
-
             loop {
-                select! {
+                let listen_udp = Session::listening(
+                    &mut udp_rx,
+                    &mut buf,
+                    Arc::clone(&streams_map),
+                    &close_stream_tx,
+                    &mut new_stream_tx,
+                    &mut remote_context,
+                    is_rtp,
+                );
+                let close_stream = close_stream_rx.recv();
+                let close_session = close_session_rx.recv();
+
+                tokio::select! {
                     result = listen_udp => match result{
                         Ok(()) => {},
                         Err(_) => break,
@@ -73,9 +80,9 @@ impl Session {
                         Some(ssrc) => Session::close_stream(Arc::clone(&streams_map), ssrc).await,
                         None => {}
                     },
-                    opt = close_session => break
+                    _ = close_session => break
                 }
-            }*/
+            }
         });
 
         Ok(Session {
@@ -85,7 +92,7 @@ impl Session {
             udp_tx,
             is_rtp,
         })
-    }*/
+    }
 
     async fn close_stream(streams_map: Arc<Mutex<HashMap<u32, Buffer>>>, ssrc: u32) {
         let mut streams = streams_map.lock().await;
@@ -106,7 +113,12 @@ impl Session {
             return Err(Error::new("EOF".to_string()));
         }
 
-        let decrypted = remote_context.decrypt_rtp(&buf[0..n])?;
+        let decrypted = if is_rtp {
+            remote_context.decrypt_rtp(&buf[0..n])?
+        } else {
+            remote_context.decrypt_rtcp(&buf[0..n])?
+        };
+
         let ssrcs = if is_rtp {
             let mut reader = Cursor::new(&decrypted);
             vec![rtp::header::Header::unmarshal(&mut reader)?.ssrc]

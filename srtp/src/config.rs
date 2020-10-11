@@ -35,8 +35,11 @@ pub struct Config {
     // List of local/remote context options.
     // ReplayProtection is enabled on remote context by default.
     // Default replay protection window size is 64.
-    local_options: Vec<ContextOption>,
-    remote_options: Vec<ContextOption>,
+    pub local_rtp_options: Option<ContextOption>,
+    pub remote_rtp_options: Option<ContextOption>,
+
+    pub local_rtcp_options: Option<ContextOption>,
+    pub remote_rtcp_options: Option<ContextOption>,
 }
 
 impl Config {
