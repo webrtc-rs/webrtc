@@ -43,7 +43,7 @@ impl Stream {
     }
 
     // GetSSRC returns the SSRC we are demuxing for
-    pub fn get_ssrc(&mut self) -> u32 {
+    pub fn get_ssrc(&self) -> u32 {
         self.ssrc
     }
 

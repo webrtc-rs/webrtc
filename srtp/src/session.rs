@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod session_test;
 
-//use super::option::*;
 use crate::config::Config;
 use crate::context::Context;
 use crate::stream::Stream;
@@ -24,8 +23,9 @@ use std::sync::Arc;
 // instead of making everyone re-implement
 pub struct Session {
     local_context: Arc<Mutex<Context>>,
-    //remote_context: Arc<Mutex<Context>>,
+    streams_map: Arc<Mutex<HashMap<u32, Buffer>>>,
     new_stream_rx: mpsc::Receiver<Stream>,
+    close_stream_tx: mpsc::Sender<u32>,
     close_session_tx: mpsc::Sender<()>,
     udp_tx: SendHalf,
     is_rtp: bool,
@@ -54,6 +54,8 @@ impl Session {
         let (close_stream_tx, mut close_stream_rx) = mpsc::channel(1);
         let (close_session_tx, mut close_session_rx) = mpsc::channel(1);
         let (mut udp_rx, udp_tx) = conn.split();
+        let cloned_streams_map = Arc::clone(&streams_map);
+        let cloned_close_stream_tx = close_stream_tx.clone();
 
         tokio::spawn(async move {
             let mut buf: Vec<u8> = vec![0; 8192];
@@ -62,8 +64,8 @@ impl Session {
                 let listen_udp = Session::listening(
                     &mut udp_rx,
                     &mut buf,
-                    Arc::clone(&streams_map),
-                    &close_stream_tx,
+                    &cloned_streams_map,
+                    &cloned_close_stream_tx,
                     &mut new_stream_tx,
                     &mut remote_context,
                     is_rtp,
@@ -77,7 +79,7 @@ impl Session {
                         Err(_) => break,
                     },
                     opt = close_stream => match opt {
-                        Some(ssrc) => Session::close_stream(Arc::clone(&streams_map), ssrc).await,
+                        Some(ssrc) => Session::close_stream(&cloned_streams_map, ssrc).await,
                         None => {}
                     },
                     _ = close_session => break
@@ -87,14 +89,16 @@ impl Session {
 
         Ok(Session {
             local_context: Arc::new(Mutex::new(local_context)),
+            streams_map,
             new_stream_rx,
+            close_stream_tx,
             close_session_tx,
             udp_tx,
             is_rtp,
         })
     }
 
-    async fn close_stream(streams_map: Arc<Mutex<HashMap<u32, Buffer>>>, ssrc: u32) {
+    async fn close_stream(streams_map: &Arc<Mutex<HashMap<u32, Buffer>>>, ssrc: u32) {
         let mut streams = streams_map.lock().await;
         streams.remove(&ssrc);
     }
@@ -102,7 +106,7 @@ impl Session {
     async fn listening(
         udp_rx: &mut RecvHalf,
         buf: &mut [u8],
-        streams_map: Arc<Mutex<HashMap<u32, Buffer>>>,
+        streams_map: &Arc<Mutex<HashMap<u32, Buffer>>>,
         close_stream_tx: &mpsc::Sender<u32>,
         new_stream_tx: &mut mpsc::Sender<Stream>,
         remote_context: &mut Context,
@@ -148,8 +152,23 @@ impl Session {
         Ok(())
     }
 
+    // create_stream create a read stream for the given SSRC, it can be used
+    // if you want a certain SSRC, but don't want to wait for AcceptStream
+    pub async fn create_stream(&mut self, ssrc: u32) -> Result<Stream, Error> {
+        let mut streams = self.streams_map.lock().await;
+
+        if streams.contains_key(&ssrc) {
+            Err(Error::new(format!("Stream with ssrc {} exists", ssrc)))
+        } else {
+            let stream = Stream::new(ssrc, self.close_stream_tx.clone(), self.is_rtp);
+            streams.insert(ssrc, stream.get_cloned_buffer());
+
+            Ok(stream)
+        }
+    }
+
     // AcceptStream returns a stream to handle RTCP for a single SSRC
-    pub async fn accept(&mut self) -> Result<Stream, Error> {
+    pub async fn accept_stream(&mut self) -> Result<Stream, Error> {
         let result = self.new_stream_rx.recv().await;
         if let Some(stream) = result {
             Ok(stream)
