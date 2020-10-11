@@ -12,3 +12,6 @@ members = [
     "util",
     "transport",
 ]
+
+[profile.dev]
+opt-level = 0

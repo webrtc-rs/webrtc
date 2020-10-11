@@ -74,7 +74,7 @@ const TEST_SSRC: u32 = 5000;
 const RTP_HEADER_SIZE: usize = 12;
 
 #[tokio::test]
-async fn test_session_srtp() -> Result<(), Error> {
+async fn test_session_srtp_accept() -> Result<(), Error> {
     let test_payload = vec![0x00, 0x01, 0x03, 0x04];
     let mut read_buffer = vec![0; RTP_HEADER_SIZE + test_payload.len()];
 
@@ -114,7 +114,7 @@ async fn test_session_srtp() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_session_srtp_create_stream() -> Result<(), Error> {
+async fn test_session_srtp_listen() -> Result<(), Error> {
     let test_payload = vec![0x00, 0x01, 0x03, 0x04];
     let mut read_buffer = vec![0; RTP_HEADER_SIZE + test_payload.len()];
 
@@ -237,8 +237,9 @@ async fn test_session_srtp_replay_protection() -> Result<(), Error> {
     let mut packets = vec![];
     let mut expected_sequence_number = vec![];
     {
-        let mut i = 0xFF00u16;
-        while i != 0x100 {
+        let mut local_context = sa.local_context.lock().await;
+        let mut i = 0xFFF0u16;
+        while i != 0x10 {
             expected_sequence_number.push(i);
 
             let packet = rtp::packet::Packet {
@@ -250,7 +251,9 @@ async fn test_session_srtp_replay_protection() -> Result<(), Error> {
                 payload: test_payload.clone(),
             };
 
-            packets.push(packet);
+            let encrypted = encrypt_srtp(&mut local_context, &packet)?;
+
+            packets.push(encrypted);
 
             if i == 0xFFFF {
                 i = 0;
@@ -268,16 +271,13 @@ async fn test_session_srtp_replay_protection() -> Result<(), Error> {
 
     tokio::spawn(async move {
         let mut i = 0;
-        loop {
+        while i < count {
             match payload_srtp(&mut read_stream, RTP_HEADER_SIZE, &test_payload).await {
                 Ok(seq) => {
                     let mut r = cloned_received_sequence_number.lock().await;
                     r.push(seq);
 
                     i += 1;
-                    if i >= count {
-                        break;
-                    }
                 }
                 Err(_) => break,
             }
@@ -288,14 +288,14 @@ async fn test_session_srtp_replay_protection() -> Result<(), Error> {
 
     // Write with replay attack
     for packet in &packets {
-        sa.write_rtp(packet).await?;
+        sa.udp_tx.send(packet).await?;
 
         // Immediately replay
-        sa.write_rtp(packet).await?;
+        sa.udp_tx.send(packet).await?;
     }
     for packet in &packets {
         // Delayed replay
-        sa.write_rtp(packet).await?;
+        sa.udp_tx.send(packet).await?;
     }
 
     done_rx.recv().await;
