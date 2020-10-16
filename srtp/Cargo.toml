@@ -18,10 +18,10 @@ ctr = "0.3.2"
 aes = "0.3.2"
 subtle = "2.1.1"
 futures = "0.3"
-tokio = { version = "0.2", features = ["full"] }
+tokio = { version = "0.3", features = ["full"] }
 async-trait = "0.1"
 log = "0.4"
 
 [dev-dependencies]
-tokio-test = "0.2"
+tokio-test = "0.3"
 lazy_static = "1.3.0"

@@ -1,9 +1,7 @@
 use super::*;
 
-use tokio::time::delay_for;
+use tokio::time::{sleep, Duration};
 use tokio_test::assert_ok;
-
-use std::time::Duration;
 
 #[tokio::test]
 async fn test_buffer() {
@@ -145,14 +143,14 @@ async fn test_buffer_async() {
     });
 
     // Wait for the reader to start reading.
-    delay_for(Duration::from_micros(1)).await;
+    sleep(Duration::from_micros(1)).await;
 
     // Write once
     let n = assert_ok!(buffer.write(&[0, 1]).await);
     assert_eq!(n, 2, "n must be 2");
 
     // Wait for the reader to start reading again.
-    delay_for(Duration::from_micros(1)).await;
+    sleep(Duration::from_micros(1)).await;
 
     // Close will unblock the reader.
     buffer.close().await;

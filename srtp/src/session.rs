@@ -13,7 +13,6 @@ use transport::buffer::ERR_BUFFER_FULL;
 use transport::Buffer;
 use util::Error;
 
-use tokio::net::udp::{RecvHalf, SendHalf};
 use tokio::net::UdpSocket;
 use tokio::sync::{mpsc, Mutex};
 
@@ -36,7 +35,7 @@ pub struct Session {
     new_stream_rx: mpsc::Receiver<Stream>,
     close_stream_tx: mpsc::Sender<u32>,
     close_session_tx: mpsc::Sender<()>,
-    pub(crate) udp_tx: SendHalf,
+    pub(crate) udp_tx: Arc<UdpSocket>,
     is_rtp: bool,
 }
 
@@ -74,7 +73,8 @@ impl Session {
         let (mut new_stream_tx, new_stream_rx) = mpsc::channel(1);
         let (close_stream_tx, mut close_stream_rx) = mpsc::channel(1);
         let (close_session_tx, mut close_session_rx) = mpsc::channel(1);
-        let (mut udp_rx, udp_tx) = conn.split();
+        let udp_tx = Arc::new(conn);
+        let udp_rx = Arc::clone(&udp_tx);
         let cloned_streams_map = Arc::clone(&streams_map);
         let cloned_close_stream_tx = close_stream_tx.clone();
 
@@ -83,7 +83,7 @@ impl Session {
 
             loop {
                 let incoming_stream = Session::incoming(
-                    &mut udp_rx,
+                    &udp_rx,
                     &mut buf,
                     &cloned_streams_map,
                     &cloned_close_stream_tx,
@@ -125,7 +125,7 @@ impl Session {
     }
 
     async fn incoming(
-        udp_rx: &mut RecvHalf,
+        udp_rx: &Arc<UdpSocket>,
         buf: &mut [u8],
         streams_map: &Arc<Mutex<HashMap<u32, Buffer>>>,
         close_stream_tx: &mpsc::Sender<u32>,

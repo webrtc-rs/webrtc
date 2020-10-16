@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 url = "2.1.0"
-tokio = { version = "0.2", features = ["full"] }
+tokio = { version = "0.3", features = ["full"] }
 
 [dev-dependencies]
-tokio-test = "0.2"
+tokio-test = "0.3"

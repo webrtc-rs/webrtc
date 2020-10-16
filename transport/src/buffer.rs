@@ -3,7 +3,7 @@ use util::error::Error;
 use std::sync::Arc;
 
 use tokio::sync::{mpsc, Mutex};
-use tokio::time::{delay_for, Duration};
+use tokio::time::{timeout, Duration};
 
 #[cfg(test)]
 mod buffer_test;
@@ -225,7 +225,7 @@ impl Buffer {
     pub async fn read(
         &mut self,
         packet: &mut [u8],
-        timeout: Option<Duration>,
+        duration: Option<Duration>,
     ) -> Result<usize, Error> {
         loop {
             let notify;
@@ -295,13 +295,9 @@ impl Buffer {
 
             // Wake for the broadcast.
             if let Some(mut notify) = notify {
-                if let Some(d) = timeout {
-                    let mut delay = delay_for(d);
-                    tokio::select! {
-                        _ = &mut delay => {
-                            return Err(ERR_TIMEOUT.clone())
-                        }
-                        _ = notify.recv() => {}
+                if let Some(d) = duration {
+                    if let Err(_) = timeout(d, notify.recv()).await {
+                        return Err(ERR_TIMEOUT.clone());
                     }
                 } else {
                     notify.recv().await;
