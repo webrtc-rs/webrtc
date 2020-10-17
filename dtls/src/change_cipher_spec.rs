@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod change_cipher_spec_test;
+
 use std::io::{Read, Write};
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
@@ -12,6 +15,7 @@ use super::errors::*;
 // which is encrypted and compressed under the current (not the pending)
 // connection state.  The message consists of a single byte of value 1.
 // https://tools.ietf.org/html/rfc5246#section-7.1
+#[derive(PartialEq, Debug)]
 pub struct ChangeCipherSpec;
 
 impl Content for ChangeCipherSpec {
