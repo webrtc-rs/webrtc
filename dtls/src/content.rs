@@ -3,7 +3,7 @@ use std::io::{Read, Write};
 use util::Error;
 
 // https://tools.ietf.org/html/rfc4346#section-6.2.1
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum ContentType {
     ChangeCipherSpec = 20,
     Alert = 21,

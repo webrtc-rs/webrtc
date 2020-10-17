@@ -2,7 +2,10 @@ mod handshake_header;
 mod handshake_message_certificate;
 mod handshake_message_certificate_request;
 mod handshake_message_certificate_verify;
+mod handshake_message_client_hello;
+mod handshake_message_client_key_exchange;
 mod handshake_message_finished;
+mod handshake_message_hello_verify_request;
 
 use std::fmt;
 use std::io::{Read, Write};

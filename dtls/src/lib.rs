@@ -10,4 +10,5 @@ pub mod change_cipher_spec;
 pub mod content;
 mod errors;
 pub mod handshake;
+pub mod record_layer;
 pub mod signature_hash_algorithm;
