@@ -1,6 +1,7 @@
 mod handshake_header;
 mod handshake_message_certificate;
 mod handshake_message_certificate_request;
+mod handshake_message_certificate_verify;
 mod handshake_message_finished;
 
 use std::fmt;

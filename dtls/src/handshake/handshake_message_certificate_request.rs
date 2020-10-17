@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod handshake_message_certificate_request_test;
+
 use super::*;
 use crate::signature_hash_algorithm::*;
 
@@ -7,7 +10,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use util::Error;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 enum ClientCertificateType {
     RSASign = 1,
     ECDSASign = 64,
@@ -31,7 +34,7 @@ message, if sent, will immediately follow the ServerKeyExchange
 message (if it is sent; otherwise, this message follows the
 server's Certificate message).
 */
-
+#[derive(Clone, Debug, PartialEq)]
 pub struct HandshakeMessageCertificateRequest {
     certificate_types: Vec<ClientCertificateType>,
     signature_hash_algorithms: Vec<SignatureHashAlgorithm>,

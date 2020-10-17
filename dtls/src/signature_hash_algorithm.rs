@@ -1,7 +1,7 @@
 // HashAlgorithm is used to indicate the hash algorithm used
 // https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-18
 // Supported hash hash algorithms
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum HashAlgorithm {
     MD2 = 0,  // Blacklisted
     MD5 = 1,  // Blacklisted
@@ -31,7 +31,7 @@ impl From<u8> for HashAlgorithm {
 }
 
 // https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-16
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum SignatureAlgorithm {
     RSA = 1,
     ECDSA = 3,
@@ -50,7 +50,7 @@ impl From<u8> for SignatureAlgorithm {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct SignatureHashAlgorithm {
     pub hash: HashAlgorithm,
     pub signature: SignatureAlgorithm,
