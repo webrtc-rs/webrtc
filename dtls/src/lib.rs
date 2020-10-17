@@ -1,7 +1,5 @@
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+#![warn(rust_2018_idioms)]
+#![allow(dead_code)]
+
+pub mod alert;
+pub mod content;
