@@ -25,7 +25,7 @@ use handshake_header::*;
 use handshake_message_finished::*;
 
 // https://tools.ietf.org/html/rfc5246#section-7.4
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum HandshakeType {
     HelloRequest = 0,
     ClientHello = 1,
@@ -79,6 +79,7 @@ impl From<u8> for HandshakeType {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
 pub enum HandshakeMessage {
     Finished(HandshakeMessageFinished),
 }
@@ -99,13 +100,14 @@ impl HandshakeMessage {
 // handshake protocol can also optionally authenticate parties who have
 // certificates signed by a trusted certificate authority.
 // https://tools.ietf.org/html/rfc5246#section-7.3
+#[derive(Clone, PartialEq, Debug)]
 pub struct Handshake {
     handshake_header: HandshakeHeader,
     handshake_message: HandshakeMessage,
 }
 
 impl Handshake {
-    pub fn content_type() -> ContentType {
+    pub fn content_type(&self) -> ContentType {
         return ContentType::Handshake;
     }
 

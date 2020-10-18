@@ -9,12 +9,13 @@ use super::content::*;
 // state.  The messages are treated as transparent data to the record
 // layer.
 // https://tools.ietf.org/html/rfc5246#section-10
+#[derive(Clone, PartialEq, Debug)]
 pub struct ApplicationData {
     data: Vec<u8>,
 }
 
 impl ApplicationData {
-    pub fn content_type() -> ContentType {
+    pub fn content_type(&self) -> ContentType {
         return ContentType::ApplicationData;
     }
 

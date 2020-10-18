@@ -156,7 +156,7 @@ impl fmt::Display for Alert {
 }
 
 impl Alert {
-    pub fn content_type() -> ContentType {
+    pub fn content_type(&self) -> ContentType {
         return ContentType::Alert;
     }
 

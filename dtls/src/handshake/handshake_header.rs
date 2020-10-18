@@ -10,6 +10,7 @@ use util::Error;
 // sequence, fragment and version information
 const HANDSHAKE_HEADER_LENGTH: usize = 12;
 
+#[derive(Clone, PartialEq, Debug)]
 pub struct HandshakeHeader {
     pub handshake_type: HandshakeType,
     length: u32, // uint24 in spec

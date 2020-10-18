@@ -15,11 +15,11 @@ use super::errors::*;
 // which is encrypted and compressed under the current (not the pending)
 // connection state.  The message consists of a single byte of value 1.
 // https://tools.ietf.org/html/rfc5246#section-7.1
-#[derive(PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct ChangeCipherSpec;
 
 impl ChangeCipherSpec {
-    pub fn content_type() -> ContentType {
+    pub fn content_type(&self) -> ContentType {
         return ContentType::ChangeCipherSpec;
     }
 
