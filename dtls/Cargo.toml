@@ -13,6 +13,7 @@ byteorder = "1.3.2"
 lazy_static = "1.3.0"
 p256 = "0.5.2"
 p384 = "0.4.1"
+rand = "0.7.3"
 
 [dev-dependencies]
 

@@ -9,6 +9,7 @@ mod handshake_message_hello_verify_request;
 mod handshake_message_server_hello;
 mod handshake_message_server_hello_done;
 mod handshake_message_server_key_exchange;
+mod handshake_random;
 
 use std::fmt;
 use std::io::{Read, Write};
