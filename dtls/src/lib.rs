@@ -7,6 +7,8 @@ extern crate lazy_static;
 pub mod alert;
 pub mod application_data;
 pub mod change_cipher_spec;
+pub mod cipher_suite;
+pub mod client_certificate_type;
 pub mod compression_methods;
 pub mod content;
 pub mod curve;

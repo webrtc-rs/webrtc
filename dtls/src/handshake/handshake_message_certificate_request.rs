@@ -2,6 +2,7 @@
 mod handshake_message_certificate_request_test;
 
 use super::*;
+use crate::client_certificate_type::*;
 use crate::signature_hash_algorithm::*;
 
 use std::io::{Read, Write};
@@ -9,23 +10,6 @@ use std::io::{Read, Write};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use util::Error;
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-enum ClientCertificateType {
-    RSASign = 1,
-    ECDSASign = 64,
-    Unsupported,
-}
-
-impl From<u8> for ClientCertificateType {
-    fn from(val: u8) -> Self {
-        match val {
-            1 => ClientCertificateType::RSASign,
-            64 => ClientCertificateType::ECDSASign,
-            _ => ClientCertificateType::Unsupported,
-        }
-    }
-}
 
 /*
 A non-anonymous server can optionally request a certificate from

@@ -62,7 +62,7 @@ lazy_static! {
     pub static ref ERR_INVALID_NAMED_CURVE: Error = Error::new("invalid named curve".to_owned());
     pub static ref ERR_INVALID_PRIVATE_KEY: Error =
         Error::new("invalid private key type".to_owned());
-    pub static ref ERR_INVALID_SNIFORMAT: Error =
+    pub static ref ERR_INVALID_SNI_FORMAT: Error =
         Error::new("invalid server name format".to_owned());
     pub static ref ERR_INVALID_SIGNATURE_ALGORITHM: Error =
         Error::new("invalid signature algorithm".to_owned());

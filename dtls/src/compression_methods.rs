@@ -21,11 +21,21 @@ impl From<u8> for CompressionMethodId {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CompressionMethods {
-    ids: Vec<CompressionMethodId>,
+    pub ids: Vec<CompressionMethodId>,
 }
 
 impl CompressionMethods {
-    fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        writer.write_u8(self.ids.len() as u8)?;
+
+        for id in &self.ids {
+            writer.write_u8(*id as u8)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let compression_methods_count = reader.read_u8()? as usize;
         let mut ids = vec![];
         for _ in 0..compression_methods_count {
@@ -36,15 +46,5 @@ impl CompressionMethods {
         }
 
         Ok(CompressionMethods { ids })
-    }
-
-    fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        writer.write_u8(self.ids.len() as u8)?;
-
-        for id in &self.ids {
-            writer.write_u8(*id as u8)?;
-        }
-
-        Ok(())
     }
 }

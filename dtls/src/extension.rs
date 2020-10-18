@@ -12,6 +12,14 @@ use extension_supported_signature_algorithms::*;
 use extension_use_extended_master_secret::*;
 use extension_use_srtp::*;
 
+use crate::errors::*;
+
+use std::io::{Read, Write};
+
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+
+use util::Error;
+
 // https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml
 #[derive(Clone, Debug, PartialEq)]
 pub enum ExtensionValue {
@@ -21,6 +29,21 @@ pub enum ExtensionValue {
     SupportedSignatureAlgorithms = 13,
     UseSRTP = 14,
     UseExtendedMasterSecret = 23,
+    Unsupported,
+}
+
+impl From<u16> for ExtensionValue {
+    fn from(val: u16) -> Self {
+        match val {
+            0 => ExtensionValue::ServerName,
+            10 => ExtensionValue::SupportedEllipticCurves,
+            11 => ExtensionValue::SupportedPointFormats,
+            13 => ExtensionValue::SupportedSignatureAlgorithms,
+            14 => ExtensionValue::UseSRTP,
+            23 => ExtensionValue::UseExtendedMasterSecret,
+            _ => ExtensionValue::Unsupported,
+        }
+    }
 }
 
 pub enum Extension {
@@ -32,65 +55,27 @@ pub enum Extension {
     UseExtendedMasterSecret(ExtensionUseExtendedMasterSecret),
 }
 
-/*
-func decodeExtensions(buf []byte) ([]extension, error) {
-    if len(buf) < 2 {
-        return nil, errBufferTooSmall
-    }
-    declaredLen := binary.BigEndian.Uint16(buf)
-    if len(buf)-2 != int(declaredLen) {
-        return nil, errLengthMismatch
+impl Extension {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        match self {
+            Extension::ServerName(ext) => {
+                writer.write_u16::<BigEndian>(ExtensionServerName::extension_value() as u16)?;
+                ext.marshal(writer)?;
+            }
+
+            _ => {}
+        }
+
+        Ok(())
     }
 
-    extensions := []extension{}
-    unmarshalAndAppend := func(data []byte, e extension) error {
-        err := e.Unmarshal(data)
-        if err != nil {
-            return err
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        let extension_value: ExtensionValue = reader.read_u16::<BigEndian>()?.into();
+        match extension_value {
+            ExtensionValue::ServerName => Ok(Extension::ServerName(
+                ExtensionServerName::unmarshal(reader)?,
+            )),
+            _ => Err(ERR_INVALID_EXTENSION_TYPE.clone()),
         }
-        extensions = append(extensions, e)
-        return nil
     }
-
-    for offset := 2; offset < len(buf); {
-        if len(buf) < (offset + 2) {
-            return nil, errBufferTooSmall
-        }
-        var err error
-        switch extension_value(binary.BigEndian.Uint16(buf[offset:])) {
-        case extensionServerNameValue:
-            err = unmarshalAndAppend(buf[offset:], &extensionServerName{})
-        case extensionSupportedEllipticCurvesValue:
-            err = unmarshalAndAppend(buf[offset:], &ExtensionSupportedEllipticCurves{})
-        case extensionUseSRTPValue:
-            err = unmarshalAndAppend(buf[offset:], &ExtensionUseSrtp{})
-        case extensionUseExtendedMasterSecretValue:
-            err = unmarshalAndAppend(buf[offset:], &ExtensionUseExtendedMasterSecret{})
-        default:
-        }
-        if err != nil {
-            return nil, err
-        }
-        if len(buf) < (offset + 4) {
-            return nil, errBufferTooSmall
-        }
-        extensionLength := binary.BigEndian.Uint16(buf[offset+2:])
-        offset += (4 + int(extensionLength))
-    }
-    return extensions, nil
 }
-
-func encodeExtensions(e []extension) ([]byte, error) {
-    extensions := []byte{}
-    for _, e := range e {
-        raw, err := e.Marshal()
-        if err != nil {
-            return nil, err
-        }
-        extensions = append(extensions, raw...)
-    }
-    out := []byte{0x00, 0x00}
-    binary.BigEndian.PutUint16(out, uint16(len(extensions)))
-    return append(out, extensions...), nil
-}
-*/
