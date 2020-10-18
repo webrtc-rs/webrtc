@@ -11,6 +11,8 @@ util = { path = "../util" }
 transport = {path = "../transport"}
 byteorder = "1.3.2"
 lazy_static = "1.3.0"
+p256 = "0.5.2"
+p384 = "0.4.1"
 
 [dev-dependencies]
 

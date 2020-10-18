@@ -8,6 +8,7 @@ pub mod alert;
 pub mod application_data;
 pub mod change_cipher_spec;
 pub mod content;
+pub mod curve;
 mod errors;
 pub mod handshake;
 pub mod record_layer;
