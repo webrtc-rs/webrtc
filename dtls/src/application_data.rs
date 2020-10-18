@@ -13,18 +13,18 @@ pub struct ApplicationData {
     data: Vec<u8>,
 }
 
-impl Content for ApplicationData {
-    fn content_type() -> ContentType {
+impl ApplicationData {
+    pub fn content_type() -> ContentType {
         return ContentType::ApplicationData;
     }
 
-    fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         writer.write_all(&self.data)?;
 
         Ok(())
     }
 
-    fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let mut data: Vec<u8> = vec![];
         reader.read_to_end(&mut data)?;
 

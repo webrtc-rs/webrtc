@@ -155,19 +155,19 @@ impl fmt::Display for Alert {
     }
 }
 
-impl Content for Alert {
-    fn content_type() -> ContentType {
+impl Alert {
+    pub fn content_type() -> ContentType {
         return ContentType::Alert;
     }
 
-    fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         writer.write_u8(self.alert_level as u8)?;
         writer.write_u8(self.alert_description as u8)?;
 
         Ok(())
     }
 
-    fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let alert_level = reader.read_u8()?.into();
         let alert_description = reader.read_u8()?.into();
 

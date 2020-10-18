@@ -18,18 +18,18 @@ use super::errors::*;
 #[derive(PartialEq, Debug)]
 pub struct ChangeCipherSpec;
 
-impl Content for ChangeCipherSpec {
-    fn content_type() -> ContentType {
+impl ChangeCipherSpec {
+    pub fn content_type() -> ContentType {
         return ContentType::ChangeCipherSpec;
     }
 
-    fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         writer.write_u8(0x01)?;
 
         Ok(())
     }
 
-    fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let data = reader.read_u8()?;
         if data != 0x01 {
             return Err(ERR_INVALID_CIPHER_SPEC.clone());

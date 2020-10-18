@@ -104,18 +104,18 @@ pub struct Handshake {
     handshake_message: HandshakeMessage,
 }
 
-impl Content for Handshake {
-    fn content_type() -> ContentType {
+impl Handshake {
+    pub fn content_type() -> ContentType {
         return ContentType::Handshake;
     }
 
-    fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.handshake_header.marshal(writer)?;
         self.handshake_message.marshal(writer)?;
         Ok(())
     }
 
-    fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let handshake_header = HandshakeHeader::unmarshal(reader)?;
 
         let handshake_message = match handshake_header.handshake_type {

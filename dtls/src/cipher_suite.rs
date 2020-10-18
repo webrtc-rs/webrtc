@@ -1,5 +1,10 @@
 use std::fmt;
 
+use super::client_certificate_type::*;
+use super::record_layer::*;
+
+use util::Error;
+
 // CipherSuiteID is an ID for our supported CipherSuites
 // Supported Cipher Suites
 #[allow(non_camel_case_types)]
@@ -55,4 +60,23 @@ impl fmt::Display for CipherSuiteID {
     }
 }
 
-pub enum CipherSuite {}
+pub trait CipherSuite {
+    fn to_string(&self) -> String;
+    fn id(&self) -> CipherSuiteID;
+    fn certificate_type(&self) -> ClientCertificateType;
+    //TODO: fn hash_func() -> func() hash.Hash;
+    fn is_psk(&self) -> bool;
+    fn is_initialized(&self) -> bool;
+
+    // Generate the internal encryption state
+    fn init(
+        &mut self,
+        master_secret: &[u8],
+        client_random: &[u8],
+        server_random: &[u8],
+        is_client: bool,
+    ) -> Result<(), Error>;
+
+    fn encrypt(&self, pkt: &RecordLayer, raw: &[u8]) -> Result<Vec<u8>, Error>;
+    fn decrypt(&self, input: &[u8]) -> Result<Vec<u8>, Error>;
+}

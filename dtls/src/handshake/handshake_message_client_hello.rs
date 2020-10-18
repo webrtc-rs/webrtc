@@ -22,7 +22,7 @@ pub struct HandshakeMessageClientHello {
     random: HandshakeRandom,
     cookie: Vec<u8>,
 
-    cipher_suites: Vec<CipherSuite>,
+    cipher_suites: Vec<Box<dyn CipherSuite>>,
     compression_methods: CompressionMethods,
     extensions: Vec<Extension>,
 }
