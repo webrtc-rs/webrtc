@@ -1,6 +1,8 @@
 use std::fmt;
+//use std::hash::Hasher;
 
 use super::client_certificate_type::*;
+use super::errors::*;
 use super::record_layer::*;
 
 use util::Error;
@@ -8,7 +10,7 @@ use util::Error;
 // CipherSuiteID is an ID for our supported CipherSuites
 // Supported Cipher Suites
 #[allow(non_camel_case_types)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum CipherSuiteID {
     // AES-128-CCM
     TLS_ECDHE_ECDSA_WITH_AES_128_CCM = 0xc0ac,
@@ -60,11 +62,35 @@ impl fmt::Display for CipherSuiteID {
     }
 }
 
+impl From<u16> for CipherSuiteID {
+    fn from(val: u16) -> Self {
+        match val {
+            // AES-128-CCM
+            0xc0ac => CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM,
+            0xc0ae => CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8,
+
+            // AES-128-GCM-SHA256
+            0xc02b => CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+            0xc02f => CipherSuiteID::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+
+            // AES-256-CBC-SHA
+            0xc00a => CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+            0xc014 => CipherSuiteID::TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+
+            0xc0a4 => CipherSuiteID::TLS_PSK_WITH_AES_128_CCM,
+            0xc0a8 => CipherSuiteID::TLS_PSK_WITH_AES_128_CCM_8,
+            0x00a8 => CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256,
+
+            _ => CipherSuiteID::Unsupported,
+        }
+    }
+}
+
 pub trait CipherSuite {
     fn to_string(&self) -> String;
     fn id(&self) -> CipherSuiteID;
     fn certificate_type(&self) -> ClientCertificateType;
-    //TODO: fn hash_func() -> func() hash.Hash;
+    //fn hash_func() -> Box<dyn Hasher>;
     fn is_psk(&self) -> bool;
     fn is_initialized(&self) -> bool;
 
@@ -79,4 +105,31 @@ pub trait CipherSuite {
 
     fn encrypt(&self, pkt: &RecordLayer, raw: &[u8]) -> Result<Vec<u8>, Error>;
     fn decrypt(&self, input: &[u8]) -> Result<Vec<u8>, Error>;
+}
+
+// Taken from https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
+// A cipher_suite is a specific combination of key agreement, cipher and MAC
+// function.
+pub fn cipher_suite_for_id(id: CipherSuiteID) -> Result<Box<dyn CipherSuite>, Error> {
+    match id {
+        /*CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM:
+        return newCipherSuiteTLSEcdheEcdsaWithAes128Ccm()
+            CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8:
+        return newCipherSuiteTLSEcdheEcdsaWithAes128Ccm8()
+            CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256:
+        return &cipherSuiteTLSEcdheEcdsaWithAes128GcmSha256{}
+            CipherSuiteID::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256:
+        return &cipherSuiteTLSEcdheRsaWithAes128GcmSha256{}
+            CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA:
+        return &cipherSuiteTLSEcdheEcdsaWithAes256CbcSha{}
+            CipherSuiteID::TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA:
+        return &cipherSuiteTLSEcdheRsaWithAes256CbcSha{}
+            CipherSuiteID::TLS_PSK_WITH_AES_128_CCM:
+        return newCipherSuiteTLSPskWithAes128Ccm()
+            CipherSuiteID::TLS_PSK_WITH_AES_128_CCM_8:
+        return newCipherSuiteTLSPskWithAes128Ccm8()
+            CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256:
+        return &cipherSuiteTLSPskWithAes128GcmSha256{}*/
+        _ => Err(ERR_INVALID_CIPHER_SUITE.clone()),
+    }
 }

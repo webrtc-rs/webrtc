@@ -50,8 +50,8 @@ impl HandshakeMessageClientHello {
         writer.write_all(&self.cookie)?;
 
         writer.write_u16::<BigEndian>(self.cipher_suites.len() as u16)?;
-        for _cipher_suite in &self.cipher_suites {
-            //TODO: cipher_suite.marshal(writer)?;
+        for cipher_suite in &self.cipher_suites {
+            writer.write_u16::<BigEndian>(cipher_suite.id() as u16)?;
         }
 
         self.compression_methods.marshal(writer)?;
@@ -77,10 +77,11 @@ impl HandshakeMessageClientHello {
         reader.read_exact(&mut cookie)?;
 
         let cipher_suites_len = reader.read_u16::<BigEndian>()? as usize;
-        let cipher_suites = vec![];
+        let mut cipher_suites = vec![];
         for _ in 0..cipher_suites_len {
-            //TODO: let cipher_suite = CipherSuite::unmarshal(reader)?;
-            // cipher_suites.push(cipher_suite);
+            let id: CipherSuiteID = reader.read_u16::<BigEndian>()?.into();
+            let cipher_suite = cipher_suite_for_id(id)?;
+            cipher_suites.push(cipher_suite);
         }
 
         let compression_methods = CompressionMethods::unmarshal(reader)?;
