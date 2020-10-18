@@ -10,7 +10,7 @@ pub struct ExtensionSupportedSignatureAlgorithms {
 }
 
 impl ExtensionSupportedSignatureAlgorithms {
-    pub fn extension_value() -> ExtensionValue {
+    pub fn extension_value(&self) -> ExtensionValue {
         ExtensionValue::SupportedSignatureAlgorithms
     }
 }

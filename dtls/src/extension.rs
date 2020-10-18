@@ -59,7 +59,7 @@ impl Extension {
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         match self {
             Extension::ServerName(ext) => {
-                writer.write_u16::<BigEndian>(ExtensionServerName::extension_value() as u16)?;
+                writer.write_u16::<BigEndian>(ext.extension_value() as u16)?;
                 ext.marshal(writer)?;
             }
 

@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod extension_server_name_test;
+
 use super::*;
 use crate::errors::*;
 
@@ -15,12 +18,12 @@ pub struct ExtensionServerName {
 }
 
 impl ExtensionServerName {
-    pub fn extension_value() -> ExtensionValue {
+    pub fn extension_value(&self) -> ExtensionValue {
         ExtensionValue::ServerName
     }
 
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        //writer.write_u16::<BigEndian>(ExtensionServerName::extension_value() as u16)?;
+        //TODO: check how to do cryptobyte?
         writer.write_u8(EXTENSION_SERVER_NAME_TYPE_DNSHOST_NAME)?;
         writer.write_u16::<BigEndian>(self.server_name.len() as u16)?;
         writer.write_all(self.server_name.as_bytes())?;
@@ -29,11 +32,7 @@ impl ExtensionServerName {
     }
 
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        //let extension_value: ExtensionValue = reader.read_u16::<BigEndian>()?.into();
-        //if extension_value != ExtensionValue::ServerName {
-        //    return Err(ERR_INVALID_EXTENSION_TYPE.clone());
-        //}
-
+        //TODO: check how to do cryptobyte?
         let name_type = reader.read_u8()?;
         if name_type != EXTENSION_SERVER_NAME_TYPE_DNSHOST_NAME {
             return Err(ERR_INVALID_SNI_FORMAT.clone());

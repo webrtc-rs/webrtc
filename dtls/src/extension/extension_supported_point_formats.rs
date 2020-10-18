@@ -13,7 +13,7 @@ pub struct ExtensionSupportedPointFormats {
 }
 
 impl ExtensionSupportedPointFormats {
-    pub fn extension_value() -> ExtensionValue {
+    pub fn extension_value(&self) -> ExtensionValue {
         ExtensionValue::SupportedPointFormats
     }
 }

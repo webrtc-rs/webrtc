@@ -21,7 +21,7 @@ pub struct ExtensionUseSRTP {
 }
 
 impl ExtensionUseSRTP {
-    pub fn extension_value() -> ExtensionValue {
+    pub fn extension_value(&self) -> ExtensionValue {
         ExtensionValue::UseSRTP
     }
 }
