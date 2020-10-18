@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod extension_supported_signature_algorithms_test;
+
 use super::*;
 use crate::signature_hash_algorithm::*;
 
@@ -12,5 +15,32 @@ pub struct ExtensionSupportedSignatureAlgorithms {
 impl ExtensionSupportedSignatureAlgorithms {
     pub fn extension_value(&self) -> ExtensionValue {
         ExtensionValue::SupportedSignatureAlgorithms
+    }
+
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        writer.write_u16::<BigEndian>(2 + 2 * self.signature_hash_algorithms.len() as u16)?;
+        writer.write_u16::<BigEndian>(2 * self.signature_hash_algorithms.len() as u16)?;
+        for v in &self.signature_hash_algorithms {
+            writer.write_u8(v.hash as u8)?;
+            writer.write_u8(v.signature as u8)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        let _ = reader.read_u16::<BigEndian>()?;
+
+        let algorithm_count = reader.read_u16::<BigEndian>()? as usize / 2;
+        let mut signature_hash_algorithms = vec![];
+        for _ in 0..algorithm_count {
+            let hash = reader.read_u8()?.into();
+            let signature = reader.read_u8()?.into();
+            signature_hash_algorithms.push(SignatureHashAlgorithm { hash, signature });
+        }
+
+        Ok(ExtensionSupportedSignatureAlgorithms {
+            signature_hash_algorithms,
+        })
     }
 }
