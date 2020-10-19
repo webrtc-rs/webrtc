@@ -1,3 +1,5 @@
+mod cipher_suite_tls_ecdhe_ecdsa_with_aes_128_gcm_sha256;
+
 use std::fmt;
 //use std::hash::Hasher;
 
@@ -86,11 +88,15 @@ impl From<u16> for CipherSuiteID {
     }
 }
 
+pub enum CipherSuiteHash {
+    SHA256,
+}
+
 pub trait CipherSuite {
     fn to_string(&self) -> String;
     fn id(&self) -> CipherSuiteID;
     fn certificate_type(&self) -> ClientCertificateType;
-    //fn hash_func() -> Box<dyn Hasher>;
+    fn hash_func(&self) -> CipherSuiteHash;
     fn is_psk(&self) -> bool;
     fn is_initialized(&self) -> bool;
 
