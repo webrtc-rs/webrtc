@@ -56,17 +56,27 @@ pub enum Extension {
 }
 
 impl Extension {
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn extension_value(&self) -> ExtensionValue {
         match self {
-            Extension::ServerName(ext) => {
-                writer.write_u16::<BigEndian>(ext.extension_value() as u16)?;
-                ext.marshal(writer)?;
-            }
-
-            _ => {}
+            Extension::ServerName(ext) => ext.extension_value(),
+            Extension::SupportedEllipticCurves(ext) => ext.extension_value(),
+            Extension::SupportedPointFormats(ext) => ext.extension_value(),
+            Extension::SupportedSignatureAlgorithms(ext) => ext.extension_value(),
+            Extension::UseSRTP(ext) => ext.extension_value(),
+            Extension::UseExtendedMasterSecret(ext) => ext.extension_value(),
         }
+    }
 
-        Ok(())
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        writer.write_u16::<BigEndian>(self.extension_value() as u16)?;
+        match self {
+            Extension::ServerName(ext) => ext.marshal(writer),
+            Extension::SupportedEllipticCurves(ext) => ext.marshal(writer),
+            Extension::SupportedPointFormats(ext) => ext.marshal(writer),
+            Extension::SupportedSignatureAlgorithms(ext) => ext.marshal(writer),
+            Extension::UseSRTP(ext) => ext.marshal(writer),
+            Extension::UseExtendedMasterSecret(ext) => ext.marshal(writer),
+        }
     }
 
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
@@ -74,6 +84,21 @@ impl Extension {
         match extension_value {
             ExtensionValue::ServerName => Ok(Extension::ServerName(
                 ExtensionServerName::unmarshal(reader)?,
+            )),
+            ExtensionValue::SupportedEllipticCurves => Ok(Extension::SupportedEllipticCurves(
+                ExtensionSupportedEllipticCurves::unmarshal(reader)?,
+            )),
+            ExtensionValue::SupportedPointFormats => Ok(Extension::SupportedPointFormats(
+                ExtensionSupportedPointFormats::unmarshal(reader)?,
+            )),
+            ExtensionValue::SupportedSignatureAlgorithms => {
+                Ok(Extension::SupportedSignatureAlgorithms(
+                    ExtensionSupportedSignatureAlgorithms::unmarshal(reader)?,
+                ))
+            }
+            ExtensionValue::UseSRTP => Ok(Extension::UseSRTP(ExtensionUseSRTP::unmarshal(reader)?)),
+            ExtensionValue::UseExtendedMasterSecret => Ok(Extension::UseExtendedMasterSecret(
+                ExtensionUseExtendedMasterSecret::unmarshal(reader)?,
             )),
             _ => Err(ERR_INVALID_EXTENSION_TYPE.clone()),
         }
