@@ -11,6 +11,7 @@ pub mod cipher_suite;
 pub mod client_certificate_type;
 pub mod compression_methods;
 pub mod content;
+pub mod crypto;
 pub mod curve;
 pub mod errors;
 pub mod extension;
