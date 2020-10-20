@@ -9,6 +9,9 @@
  <a href="https://github.com/webrtc-rs/webrtc/blob/master/LICENSE">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
  </a>
+ <a href="https://star-history.t9t.io/#webrtc-rs/webrtc">
+  <img src="./doc/stars.svg" alt="Github Stars">
+ </a>
 </p>
 <p align="center">
  A pure Rust implementation of WebRTC API. Rewrite Pion WebRTC stack (<a href="http://Pion.ly">http://Pion.ly</a>) in Rust
