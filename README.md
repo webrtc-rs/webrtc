@@ -1,12 +1,18 @@
-<h1 align="left">
+<h1 align="center">
  <a href="https://webrtc.rs"><img src="./doc/webrtc.rs.png" alt="WebRTC.rs"></a>
  <br>
 </h1>
-
-[![Actions Status](https://github.com/rtcrs/webrtc/workflows/webrtc/badge.svg?branch=master)](https://github.com/rtcrs/webrtc/actions) 
-<a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-
-A pure Rust implementation of WebRTC API. Rewrite Pion WebRTC stack ([http://Pion.ly](http://pion.ly)) in Rust!
+<p align="center">
+ <a href="https://github.com/webrtc-rs/webrtc/actions"> 
+  <img src="https://github.com/rtcrs/webrtc/workflows/webrtc/badge.svg?branch=master">
+ </a> 
+ <a href="https://github.com/webrtc-rs/webrtc/blob/master/LICENSE">
+  <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
+ </a>
+</p>
+<p align="center">
+ A pure Rust implementation of WebRTC API. Rewrite Pion WebRTC stack (<a href="http://Pion.ly">http://Pion.ly</a>) in Rust
+</p>
 
 # Roadmap
 
