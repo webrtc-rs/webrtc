@@ -6,7 +6,7 @@
 [![Actions Status](https://github.com/rtcrs/webrtc/workflows/webrtc/badge.svg?branch=master)](https://github.com/rtcrs/webrtc/actions) 
 <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
 
-A pure Rust implementation of WebRTC API. Rewrite [Pion](http://pion.ly) in Rust!
+A pure Rust implementation of WebRTC API. Rewrite Pion WebRTC stack ([http://Pion.ly](http://pion.ly)) in Rust!
 
 # Roadmap
 
