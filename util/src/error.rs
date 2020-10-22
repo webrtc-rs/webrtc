@@ -4,6 +4,7 @@ use std::{fmt, num};
 
 use tokio::sync::mpsc::error::SendError;
 
+use aes_gcm;
 use url::ParseError;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -66,6 +67,14 @@ impl From<SystemTimeError> for Error {
 
 impl<T> From<SendError<T>> for Error {
     fn from(error: SendError<T>) -> Self {
+        Error {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<aes_gcm::Error> for Error {
+    fn from(error: aes_gcm::Error) -> Self {
         Error {
             message: error.to_string(),
         }

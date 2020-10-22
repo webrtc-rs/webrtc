@@ -52,7 +52,7 @@ impl CipherSuite for CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
             return err
         }
 
-        var gcm *cryptoGCM
+        var gcm *CryptoGcm
         if isClient {
             gcm, err = newCryptoGCM(keys.clientWriteKey, keys.clientWriteIV, keys.serverWriteKey, keys.serverWriteIV)
         } else {
@@ -72,7 +72,7 @@ impl CipherSuite for CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
             return nil, errors.New("CipherSuite has not been initialized, unable to encrypt")
         }
 
-        return gcm.(*cryptoGCM).encrypt(pkt, raw)
+        return gcm.(*CryptoGcm).encrypt(pkt, raw)
 
          */
         Ok(vec![])
@@ -84,7 +84,7 @@ impl CipherSuite for CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
             return nil, errors.New("CipherSuite has not been initialized, unable to decrypt ")
         }
 
-        return gcm.(*cryptoGCM).decrypt(raw)*/
+        return gcm.(*CryptoGcm).decrypt(raw)*/
         Ok(vec![])
     }
 }

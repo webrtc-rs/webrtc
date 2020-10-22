@@ -20,6 +20,6 @@ use record_layer_header::*;
  https://tools.ietf.org/html/rfc4347#section-4.1
 */
 pub struct RecordLayer {
-    record_layer_header: RecordLayerHeader,
-    content: Content,
+    pub record_layer_header: RecordLayerHeader,
+    pub content: Content,
 }
