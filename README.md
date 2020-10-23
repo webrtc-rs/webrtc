@@ -9,7 +9,7 @@
  <a href="https://github.com/webrtc-rs/webrtc/blob/master/LICENSE">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
  </a>
- <a href="https://star-history.t9t.io/#webrtc-rs/webrtc">
+ <a href="https://seladb.github.io/StarTrack-js/#/preload?r=webrtc-rs,webrtc">
   <img src="./doc/stars.svg" alt="Github Stars">
  </a>
 </p>
