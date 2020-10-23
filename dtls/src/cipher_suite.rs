@@ -1,7 +1,8 @@
 mod cipher_suite_tls_ecdhe_ecdsa_with_aes_128_gcm_sha256;
 
 use std::fmt;
-//use std::hash::Hasher;
+
+use async_trait::async_trait;
 
 use super::client_certificate_type::*;
 use super::errors::*;
@@ -92,16 +93,17 @@ pub enum CipherSuiteHash {
     SHA256,
 }
 
+#[async_trait]
 pub trait CipherSuite {
     fn to_string(&self) -> String;
     fn id(&self) -> CipherSuiteID;
     fn certificate_type(&self) -> ClientCertificateType;
     fn hash_func(&self) -> CipherSuiteHash;
     fn is_psk(&self) -> bool;
-    fn is_initialized(&self) -> bool;
+    async fn is_initialized(&self) -> bool;
 
     // Generate the internal encryption state
-    fn init(
+    async fn init(
         &mut self,
         master_secret: &[u8],
         client_random: &[u8],
@@ -109,8 +111,8 @@ pub trait CipherSuite {
         is_client: bool,
     ) -> Result<(), Error>;
 
-    fn encrypt(&self, pkt: &RecordLayer, raw: &[u8]) -> Result<Vec<u8>, Error>;
-    fn decrypt(&self, input: &[u8]) -> Result<Vec<u8>, Error>;
+    async fn encrypt(&self, pkt: &RecordLayer, raw: &[u8]) -> Result<Vec<u8>, Error>;
+    async fn decrypt(&self, input: &[u8]) -> Result<Vec<u8>, Error>;
 }
 
 // Taken from https://www.iana.org/assignments/tls-parameters/tls-parameters.xml

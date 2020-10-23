@@ -16,6 +16,8 @@ p384 = "0.4.1"
 rand = "0.7.3"
 aes-gcm = "0.8.0"
 ccm = "0.3.0"
+tokio = { version = "0.3", features = ["full"] }
+async-trait = "0.1"
 
 [dev-dependencies]
-
+tokio-test = "0.3"

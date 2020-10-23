@@ -1,15 +1,20 @@
 use super::*;
+use crate::crypto::crypto_gcm::*;
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+use async_trait::async_trait;
 
 const PRF_MAC_LEN: usize = 0;
 const PRF_KEY_LEN: usize = 16;
 const PRF_IV_LEN: usize = 4;
 
 pub struct CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
-    gcm: Arc<Mutex<Option<bool>>>,
+    gcm: Arc<Mutex<Option<CryptoGcm>>>,
 }
 
+#[async_trait]
 impl CipherSuite for CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
     fn to_string(&self) -> String {
         "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256".to_owned()
@@ -31,15 +36,12 @@ impl CipherSuite for CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
         false
     }
 
-    fn is_initialized(&self) -> bool {
-        if let Ok(gcm) = self.gcm.lock() {
-            gcm.is_some()
-        } else {
-            false
-        }
+    async fn is_initialized(&self) -> bool {
+        let gcm = self.gcm.lock().await;
+        gcm.is_some()
     }
 
-    fn init(
+    async fn init(
         &mut self,
         _master_secret: &[u8],
         _client_random: &[u8],
@@ -66,25 +68,25 @@ impl CipherSuite for CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
         Ok(())
     }
 
-    fn encrypt(&self, _pkt: &RecordLayer, _raw: &[u8]) -> Result<Vec<u8>, Error> {
-        /*gcm := c.gcm.Load()
-        if gcm == nil { // !c.isInitialized()
-            return nil, errors.New("CipherSuite has not been initialized, unable to encrypt")
+    async fn encrypt(&self, pkt: &RecordLayer, raw: &[u8]) -> Result<Vec<u8>, Error> {
+        let mut gcm = self.gcm.lock().await;
+        if let Some(cg) = gcm.as_mut() {
+            cg.encrypt(pkt, raw)
+        } else {
+            Err(Error::new(
+                "CipherSuite has not been initialized, unable to encrypt".to_owned(),
+            ))
         }
-
-        return gcm.(*CryptoGcm).encrypt(pkt, raw)
-
-         */
-        Ok(vec![])
     }
 
-    fn decrypt(&self, _input: &[u8]) -> Result<Vec<u8>, Error> {
-        /*gcm := c.gcm.Load()
-        if gcm == nil { // !c.isInitialized()
-            return nil, errors.New("CipherSuite has not been initialized, unable to decrypt ")
+    async fn decrypt(&self, input: &[u8]) -> Result<Vec<u8>, Error> {
+        let mut gcm = self.gcm.lock().await;
+        if let Some(cg) = gcm.as_mut() {
+            cg.decrypt(input)
+        } else {
+            Err(Error::new(
+                "CipherSuite has not been initialized, unable to decrypt".to_owned(),
+            ))
         }
-
-        return gcm.(*CryptoGcm).decrypt(raw)*/
-        Ok(vec![])
     }
 }
