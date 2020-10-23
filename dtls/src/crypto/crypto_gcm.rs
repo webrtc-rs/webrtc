@@ -83,8 +83,7 @@ impl CryptoGcm {
 
     /*
     pub fn decrypt(&mut self, r: &[u8]) ->Result<Vec<u8>, Error> {
-        var h recordLayerHeader
-        err := h.Unmarshal(in)
+        RecordLayerHeader::unmarshal(in)
         switch {
         case err != nil:
             return nil, err

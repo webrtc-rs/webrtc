@@ -1,5 +1,12 @@
 use crate::content::*;
 
+use util::Error;
+
+use crate::errors::*;
+
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use std::io::{Read, Write};
+
 pub const RECORD_LAYER_HEADER_SIZE: usize = 13;
 pub const MAX_SEQUENCE_NUMBER: u64 = 0x0000FFFFFFFFFFFF;
 
@@ -38,44 +45,48 @@ pub struct RecordLayerHeader {
     pub sequence_number: u64, // uint48 in spec
 }
 
-/*
-func (v ProtocolVersion) Equal(x ProtocolVersion) bool {
-    return v.major == x.major && v.minor == x.minor
-}
+impl RecordLayerHeader {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        if self.sequence_number > MAX_SEQUENCE_NUMBER {
+            return Err(ERR_SEQUENCE_NUMBER_OVERFLOW.clone());
+        }
 
-func (r *RecordLayerHeader) Marshal() ([]byte, error) {
-    if r.sequence_number > MAX_SEQUENCE_NUMBER {
-        return nil, errSequenceNumberOverflow
+        writer.write_u8(self.content_type as u8)?;
+        writer.write_u8(self.protocol_version.major)?;
+        writer.write_u8(self.protocol_version.minor)?;
+        writer.write_u16::<BigEndian>(self.epoch)?;
+
+        let be: [u8; 8] = self.sequence_number.to_be_bytes();
+        writer.write_all(&be[2..])?; // uint48 in spec
+
+        writer.write_u16::<BigEndian>(self.content_len)?;
+
+        Ok(())
     }
 
-    out := make([]byte, RECORD_LAYER_HEADER_SIZE)
-    out[0] = byte(r.content_type)
-    out[1] = r.ProtocolVersion.major
-    out[2] = r.ProtocolVersion.minor
-    binary.BigEndian.PutUint16(out[3:], r.epoch)
-    putBigEndianUint48(out[5:], r.sequence_number)
-    binary.BigEndian.PutUint16(out[RECORD_LAYER_HEADER_SIZE-2:], r.content_len)
-    return out, nil
-}
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        let content_type = reader.read_u8()?.into();
+        let major = reader.read_u8()?;
+        let minor = reader.read_u8()?;
+        let epoch = reader.read_u16::<BigEndian>()?;
 
-func (r *RecordLayerHeader) Unmarshal(data []byte) error {
-    if len(data) < RECORD_LAYER_HEADER_SIZE {
-        return errBufferTooSmall
+        // SequenceNumber is stored as uint48, make into uint64
+        let mut be: [u8; 8] = [0u8; 8];
+        reader.read_exact(&mut be[2..])?;
+        let sequence_number = u64::from_be_bytes(be);
+
+        let protocol_version = ProtocolVersion { major, minor };
+        if protocol_version != PROTOCOL_VERSION1_0 && protocol_version != PROTOCOL_VERSION1_2 {
+            return Err(ERR_UNSUPPORTED_PROTOCOL_VERSION.clone());
+        }
+        let content_len = reader.read_u16::<BigEndian>()?;
+
+        Ok(RecordLayerHeader {
+            content_type,
+            content_len,
+            protocol_version,
+            epoch,
+            sequence_number,
+        })
     }
-    r.content_type = content_type(data[0])
-    r.ProtocolVersion.major = data[1]
-    r.ProtocolVersion.minor = data[2]
-    r.epoch = binary.BigEndian.Uint16(data[3:])
-
-    // SequenceNumber is stored as uint48, make into uint64
-    seqCopy := make([]byte, 8)
-    copy(seqCopy[2:], data[5:11])
-    r.sequence_number = binary.BigEndian.Uint64(seqCopy)
-
-    if !r.ProtocolVersion.Equal(PROTOCOL_VERSION1_0) && !r.ProtocolVersion.Equal(PROTOCOL_VERSION1_2) {
-        return errUnsupportedProtocolVersion
-    }
-
-    return nil
 }
-*/

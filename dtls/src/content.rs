@@ -7,6 +7,8 @@ use std::io::{Read, Write};
 
 use util::Error;
 
+use crate::errors::*;
+
 // https://tools.ietf.org/html/rfc4346#section-6.2.1
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum ContentType {
@@ -14,16 +16,20 @@ pub enum ContentType {
     Alert = 21,
     Handshake = 22,
     ApplicationData = 23,
+    Invalid,
 }
 
-/*
-pub trait Content {
-    fn content_type() -> ContentType;
-    fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error>;
-    fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error>
-    where
-        Self: std::marker::Sized;
-}*/
+impl From<u8> for ContentType {
+    fn from(val: u8) -> Self {
+        match val {
+            20 => ContentType::ChangeCipherSpec,
+            21 => ContentType::Alert,
+            22 => ContentType::Handshake,
+            23 => ContentType::ApplicationData,
+            _ => ContentType::Invalid,
+        }
+    }
+}
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum Content {
@@ -62,6 +68,7 @@ impl Content {
             ContentType::ApplicationData => Ok(Content::ApplicationData(
                 ApplicationData::unmarshal(reader)?,
             )),
+            _ => Err(ERR_INVALID_CONTENT_TYPE.clone()),
         }
     }
 }
