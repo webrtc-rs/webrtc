@@ -1,5 +1,6 @@
 use super::*;
 use crate::crypto::crypto_gcm::*;
+use crate::prf::*;
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -43,28 +44,38 @@ impl CipherSuite for CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
 
     async fn init(
         &mut self,
-        _master_secret: &[u8],
-        _client_random: &[u8],
-        _server_random: &[u8],
-        _is_client: bool,
+        master_secret: &[u8],
+        client_random: &[u8],
+        server_random: &[u8],
+        is_client: bool,
     ) -> Result<(), Error> {
-        /*
-        keys, err := prf_encryption_keys(masterSecret, clientRandom, serverRandom, PRF_MAC_LEN, PRF_KEY_LEN, PRF_IV_LEN, c.hashFunc())
-        if err != nil {
-            return err
-        }
+        let keys = prf_encryption_keys(
+            master_secret,
+            client_random,
+            server_random,
+            PRF_MAC_LEN,
+            PRF_KEY_LEN,
+            PRF_IV_LEN,
+            self.hash_func(),
+        )?;
 
-        var gcm *CryptoGcm
-        if isClient {
-            gcm, err = newCryptoGCM(keys.clientWriteKey, keys.clientWriteIV, keys.serverWriteKey, keys.serverWriteIV)
+        let mut gcm = self.gcm.lock().await;
+        if is_client {
+            *gcm = Some(CryptoGcm::new(
+                &keys.client_write_key,
+                &keys.client_write_iv,
+                &keys.server_write_key,
+                &keys.server_write_iv,
+            ));
         } else {
-            gcm, err = newCryptoGCM(keys.serverWriteKey, keys.serverWriteIV, keys.clientWriteKey, keys.clientWriteIV)
+            *gcm = Some(CryptoGcm::new(
+                &keys.server_write_key,
+                &keys.server_write_iv,
+                &keys.client_write_key,
+                &keys.client_write_iv,
+            ));
         }
-        c.gcm.Store(gcm)
 
-        return err
-
-         */
         Ok(())
     }
 

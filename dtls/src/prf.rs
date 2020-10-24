@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod prf_test;
+
 use std::fmt;
 
 use hmac::{Hmac, Mac, NewMac};
@@ -22,14 +25,15 @@ pub(crate) const PRF_KEY_EXPANSION_LABEL: &'static str = "key expansion";
 pub(crate) const PRF_VERIFY_DATA_CLIENT_LABEL: &'static str = "client finished";
 pub(crate) const PRF_VERIFY_DATA_SERVER_LABEL: &'static str = "server finished";
 
+#[derive(PartialEq, Debug, Clone)]
 pub(crate) struct EncryptionKeys {
-    master_secret: Vec<u8>,
-    client_mac_key: Vec<u8>,
-    server_mac_key: Vec<u8>,
-    client_write_key: Vec<u8>,
-    server_write_key: Vec<u8>,
-    client_write_iv: Vec<u8>,
-    server_write_iv: Vec<u8>,
+    pub(crate) master_secret: Vec<u8>,
+    pub(crate) client_mac_key: Vec<u8>,
+    pub(crate) server_mac_key: Vec<u8>,
+    pub(crate) client_write_key: Vec<u8>,
+    pub(crate) server_write_key: Vec<u8>,
+    pub(crate) client_write_iv: Vec<u8>,
+    pub(crate) server_write_iv: Vec<u8>,
 }
 
 impl fmt::Display for EncryptionKeys {
@@ -141,8 +145,9 @@ pub(crate) fn prf_p_hash(
     for _ in 0..iterations {
         last_round = hmac_sha(h, secret, &last_round)?;
 
-        last_round.extend_from_slice(seed);
-        let with_secret = hmac_sha(h, secret, &last_round)?;
+        let mut last_round_seed = last_round.clone();
+        last_round_seed.extend_from_slice(seed);
+        let with_secret = hmac_sha(h, secret, &last_round_seed)?;
 
         out.extend_from_slice(&with_secret);
     }

@@ -35,22 +35,22 @@ pub struct CryptoGcm {
 impl CryptoGcm {
     pub fn new(
         local_key: &[u8],
-        local_write_iv: Vec<u8>,
+        local_write_iv: &[u8],
         remote_key: &[u8],
-        remote_write_iv: Vec<u8>,
-    ) -> Result<Self, Error> {
+        remote_write_iv: &[u8],
+    ) -> Self {
         let key = GenericArray::from_slice(local_key);
         let local_gcm = Aes128Gcm::new(key);
 
         let key = GenericArray::from_slice(remote_key);
         let remote_gcm = Aes128Gcm::new(key);
 
-        Ok(CryptoGcm {
+        CryptoGcm {
             local_gcm,
-            local_write_iv,
+            local_write_iv: local_write_iv.to_vec(),
             remote_gcm,
-            remote_write_iv,
-        })
+            remote_write_iv: remote_write_iv.to_vec(),
+        }
     }
 
     pub fn encrypt(&mut self, pkt: &RecordLayer, raw: &[u8]) -> Result<Vec<u8>, Error> {
