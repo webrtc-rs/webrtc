@@ -49,7 +49,7 @@ impl CipherSuite for CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
         _is_client: bool,
     ) -> Result<(), Error> {
         /*
-        keys, err := prfEncryptionKeys(masterSecret, clientRandom, serverRandom, PRF_MAC_LEN, PRF_KEY_LEN, PRF_IV_LEN, c.hashFunc())
+        keys, err := prf_encryption_keys(masterSecret, clientRandom, serverRandom, PRF_MAC_LEN, PRF_KEY_LEN, PRF_IV_LEN, c.hashFunc())
         if err != nil {
             return err
         }

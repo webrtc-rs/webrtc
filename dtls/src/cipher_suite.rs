@@ -89,8 +89,17 @@ impl From<u16> for CipherSuiteID {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
 pub enum CipherSuiteHash {
     SHA256,
+}
+
+impl CipherSuiteHash {
+    pub(crate) fn size(&self) -> usize {
+        match *self {
+            CipherSuiteHash::SHA256 => 32,
+        }
+    }
 }
 
 #[async_trait]

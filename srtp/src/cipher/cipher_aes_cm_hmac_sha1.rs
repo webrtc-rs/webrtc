@@ -84,14 +84,8 @@ impl CipherAesCmHmacSha1 {
             auth_key_len,
         )?;
 
-        let srtp_session_auth = match HmacSha1::new_varkey(&srtp_session_auth_tag) {
-            Ok(srtp_session_auth) => srtp_session_auth,
-            Err(err) => return Err(Error::new(err.to_string())),
-        };
-        let srtcp_session_auth = match HmacSha1::new_varkey(&srtcp_session_auth_tag) {
-            Ok(srtcp_session_auth) => srtcp_session_auth,
-            Err(err) => return Err(Error::new(err.to_string())),
-        };
+        let srtp_session_auth = HmacSha1::new_varkey(&srtp_session_auth_tag)?;
+        let srtcp_session_auth = HmacSha1::new_varkey(&srtcp_session_auth_tag)?;
 
         Ok(CipherAesCmHmacSha1 {
             srtp_session_key,

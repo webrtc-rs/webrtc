@@ -1,9 +1,20 @@
 use std::fmt;
 
+use hmac::{Hmac, Mac, NewMac};
+use sha1::Sha1;
+use sha2::Digest;
+use sha2::Sha256;
+
+type HmacSha256 = Hmac<Sha256>;
+type HmacSha1 = Hmac<Sha1>;
+
 use util::Error;
 
+use crate::cipher_suite::CipherSuiteHash;
+use crate::content::ContentType;
 use crate::curve::named_curve::*;
 use crate::errors::*;
+use crate::record_layer::record_layer_header::ProtocolVersion;
 
 pub(crate) const PRF_MASTER_SECRET_LABEL: &'static str = "master secret";
 pub(crate) const PRF_EXTENDED_MASTER_SECRET_LABEL: &'static str = "extended master secret";
@@ -107,33 +118,174 @@ fn ellipticCurvePreMasterSecret(publicKey:&[u8], privateKey: &[u8], c1:, c2 elli
 //  output data.
 //
 // https://tools.ietf.org/html/rfc4346w
-/*
-pub(crate) fn prfPHash<H: Hasher>(secret:&[u8], seed: &[u8], requestedLength: usize, h: H) -> Result<Vec<u8>, Error> {
-    hmacSHA256 := func(key, data []byte) ([]byte, error) {
-        mac := hmac.New(h, key)
-        if _, err := mac.Write(data); err != nil {
-            return nil, err
-        }
-        return mac.Sum(nil), nil
-    }
-
-    var err error
-    lastRound := seed
-    out := []byte{}
-
-    iterations := int(math.Ceil(float64(requestedLength) / float64(h().Size())))
-    for i := 0; i < iterations; i++ {
-        lastRound, err = hmacSHA256(secret, lastRound)
-        if err != nil {
-            return nil, err
-        }
-        withSecret, err := hmacSHA256(secret, append(lastRound, seed...))
-        if err != nil {
-            return nil, err
-        }
-        out = append(out, withSecret...)
-    }
-
-    return out[:requestedLength], nil
+fn hmac_sha(h: CipherSuiteHash, key: &[u8], data: &[u8]) -> Result<Vec<u8>, Error> {
+    let mut mac = match h {
+        CipherSuiteHash::SHA256 => HmacSha256::new_varkey(key)?,
+    };
+    mac.update(data);
+    let result = mac.finalize();
+    let code_bytes = result.into_bytes();
+    Ok(code_bytes.to_vec())
 }
-*/
+
+pub(crate) fn prf_p_hash(
+    secret: &[u8],
+    seed: &[u8],
+    requested_length: usize,
+    h: CipherSuiteHash,
+) -> Result<Vec<u8>, Error> {
+    let mut last_round = seed.to_vec();
+    let mut out = vec![];
+
+    let iterations = ((requested_length as f64) / (h.size() as f64)).ceil() as usize;
+    for _ in 0..iterations {
+        last_round = hmac_sha(h, secret, &last_round)?;
+
+        last_round.extend_from_slice(seed);
+        let with_secret = hmac_sha(h, secret, &last_round)?;
+
+        out.extend_from_slice(&with_secret);
+    }
+
+    Ok(out[..requested_length].to_vec())
+}
+
+pub(crate) fn prf_extended_master_secret(
+    pre_master_secret: &[u8],
+    session_hash: &[u8],
+    h: CipherSuiteHash,
+) -> Result<Vec<u8>, Error> {
+    let mut seed = PRF_MASTER_SECRET_LABEL.as_bytes().to_vec();
+    seed.extend_from_slice(session_hash);
+    prf_p_hash(pre_master_secret, &seed, 48, h)
+}
+
+pub(crate) fn prf_master_secret(
+    pre_master_secret: &[u8],
+    client_random: &[u8],
+    server_random: &[u8],
+    h: CipherSuiteHash,
+) -> Result<Vec<u8>, Error> {
+    let mut seed = PRF_MASTER_SECRET_LABEL.as_bytes().to_vec();
+    seed.extend_from_slice(client_random);
+    seed.extend_from_slice(server_random);
+    prf_p_hash(pre_master_secret, &seed, 48, h)
+}
+
+pub(crate) fn prf_encryption_keys(
+    master_secret: &[u8],
+    client_random: &[u8],
+    server_random: &[u8],
+    prf_mac_len: usize,
+    prf_key_len: usize,
+    prf_iv_len: usize,
+    h: CipherSuiteHash,
+) -> Result<EncryptionKeys, Error> {
+    let mut seed = PRF_KEY_EXPANSION_LABEL.as_bytes().to_vec();
+    seed.extend_from_slice(server_random);
+    seed.extend_from_slice(client_random);
+
+    let material = prf_p_hash(
+        master_secret,
+        &seed,
+        (2 * prf_mac_len) + (2 * prf_key_len) + (2 * prf_iv_len),
+        h,
+    )?;
+    let mut key_material = &material[..];
+
+    let client_mac_key = key_material[..prf_mac_len].to_vec();
+    key_material = &key_material[prf_mac_len..];
+
+    let server_mac_key = key_material[..prf_mac_len].to_vec();
+    key_material = &key_material[prf_mac_len..];
+
+    let client_write_key = key_material[..prf_key_len].to_vec();
+    key_material = &key_material[prf_key_len..];
+
+    let server_write_key = key_material[..prf_key_len].to_vec();
+    key_material = &key_material[prf_key_len..];
+
+    let client_write_iv = key_material[..prf_iv_len].to_vec();
+    key_material = &key_material[prf_iv_len..];
+
+    let server_write_iv = key_material[..prf_iv_len].to_vec();
+
+    Ok(EncryptionKeys {
+        master_secret: master_secret.to_vec(),
+        client_mac_key,
+        server_mac_key,
+        client_write_key,
+        server_write_key,
+        client_write_iv,
+        server_write_iv,
+    })
+}
+
+pub(crate) fn prf_verify_data(
+    master_secret: &[u8],
+    handshake_bodies: &[u8],
+    label: &str,
+    h: CipherSuiteHash,
+) -> Result<Vec<u8>, Error> {
+    let mut hasher = match h {
+        CipherSuiteHash::SHA256 => Sha256::new(),
+    };
+    hasher.update(handshake_bodies);
+    let result = hasher.finalize();
+    let mut seed = label.as_bytes().to_vec();
+    seed.extend_from_slice(&result);
+
+    prf_p_hash(master_secret, &seed, 12, h)
+}
+
+pub(crate) fn prf_verify_data_client(
+    master_secret: &[u8],
+    handshake_bodies: &[u8],
+    h: CipherSuiteHash,
+) -> Result<Vec<u8>, Error> {
+    prf_verify_data(
+        master_secret,
+        handshake_bodies,
+        PRF_VERIFY_DATA_CLIENT_LABEL,
+        h,
+    )
+}
+
+pub(crate) fn prf_verify_data_server(
+    master_secret: &[u8],
+    handshake_bodies: &[u8],
+    h: CipherSuiteHash,
+) -> Result<Vec<u8>, Error> {
+    prf_verify_data(
+        master_secret,
+        handshake_bodies,
+        PRF_VERIFY_DATA_SERVER_LABEL,
+        h,
+    )
+}
+
+// compute the MAC using HMAC-SHA1
+pub(crate) fn prf_mac(
+    epoch: u16,
+    sequence_number: u64,
+    content_type: ContentType,
+    protocol_version: ProtocolVersion,
+    payload: &[u8],
+    key: &[u8],
+) -> Result<Vec<u8>, Error> {
+    let mut hmac = HmacSha1::new_varkey(key)?;
+
+    let mut msg = vec![0u8; 13];
+    msg[..2].copy_from_slice(&epoch.to_be_bytes());
+    msg[2..8].copy_from_slice(&sequence_number.to_be_bytes()[2..]);
+    msg[8] = content_type as u8;
+    msg[9] = protocol_version.major;
+    msg[10] = protocol_version.minor;
+    msg[11..].copy_from_slice(&(payload.len() as u16).to_be_bytes());
+
+    hmac.update(&msg);
+    hmac.update(payload);
+    let result = hmac.finalize();
+
+    Ok(result.into_bytes().to_vec())
+}
