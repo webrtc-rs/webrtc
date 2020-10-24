@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod key_derivation_test;
 
-use aes::block_cipher_trait::generic_array::GenericArray;
-use aes::block_cipher_trait::BlockCipher;
+use aes::cipher::generic_array::GenericArray;
+use aes::cipher::{BlockCipher, NewBlockCipher};
 use aes::Aes128;
 
 use std::io::BufWriter;

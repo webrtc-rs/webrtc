@@ -1,7 +1,8 @@
 use aes;
 use ctr;
-use ctr::stream_cipher::generic_array::GenericArray;
-use ctr::stream_cipher::{NewStreamCipher, StreamCipher};
+
+use aes::cipher::generic_array::GenericArray;
+use ctr::cipher::stream::{NewStreamCipher, StreamCipher};
 use hmac::{Hmac, Mac};
 use sha1::Sha1;
 use subtle::ConstantTimeEq;
@@ -18,6 +19,7 @@ use std::io::{BufWriter, Cursor};
 
 type HmacSha1 = Hmac<Sha1>;
 type Aes128Ctr = ctr::Ctr128<aes::Aes128>;
+use hmac::NewMac;
 
 pub(crate) const CIPHER_AES_CM_HMAC_SHA1AUTH_TAG_LEN: usize = 10;
 
@@ -121,7 +123,7 @@ impl CipherAesCmHmacSha1 {
         // - n_tag is the bit-length of the output authentication tag
         self.srtp_session_auth.reset();
 
-        self.srtp_session_auth.input(buf);
+        self.srtp_session_auth.update(buf);
 
         // For SRTP only, we need to hash the rollover counter as well.
         let mut roc_buf: Vec<u8> = vec![];
@@ -130,10 +132,10 @@ impl CipherAesCmHmacSha1 {
             writer.write_u32::<BigEndian>(roc)?;
         }
 
-        self.srtp_session_auth.input(&roc_buf);
+        self.srtp_session_auth.update(&roc_buf);
 
-        let result = self.srtp_session_auth.clone().result();
-        let code_bytes = result.code();
+        let result = self.srtp_session_auth.clone().finalize();
+        let code_bytes = result.into_bytes();
 
         // Truncate the hash to the first AUTH_TAG_SIZE bytes.
         Ok(code_bytes[0..self.auth_tag_len()].to_vec())
@@ -153,10 +155,10 @@ impl CipherAesCmHmacSha1 {
         // - n_tag is the bit-length of the output authentication tag
         self.srtcp_session_auth.reset();
 
-        self.srtcp_session_auth.input(buf);
+        self.srtcp_session_auth.update(buf);
 
-        let result = self.srtcp_session_auth.clone().result();
-        let code_bytes = result.code();
+        let result = self.srtcp_session_auth.clone().finalize();
+        let code_bytes = result.into_bytes();
 
         // Truncate the hash to the first AUTH_TAG_SIZE bytes.
         Ok(code_bytes[0..self.auth_tag_len()].to_vec())
