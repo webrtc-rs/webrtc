@@ -11,6 +11,7 @@ url = "2.1.0"
 tokio = { version = "0.3", features = ["full"] }
 aes-gcm = "0.8.0"
 hmac = "0.10.1"
+p256 = "0.5.2"
 
 [dev-dependencies]
 tokio-test = "0.3"

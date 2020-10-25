@@ -3,7 +3,7 @@ use crate::cipher_suite::CipherSuiteHash;
 
 use util::Error;
 
-/* TODO
+/*
 #[test]
 fn test_pre_master_secret() -> Result<(), Error> {
     let private_key = vec![
@@ -22,7 +22,7 @@ fn test_pre_master_secret() -> Result<(), Error> {
         0x76, 0x24,
     ];
 
-    let pre_master_secret = prf_pre_master_secret(public_key, private_key, namedCurveX25519)?;
+    let pre_master_secret = prf_pre_master_secret(&public_key, private_key, NamedCurve::X25519)?;
 
     assert_eq!(
         expected_pre_master_secret, pre_master_secret,

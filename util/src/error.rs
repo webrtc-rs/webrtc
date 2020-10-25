@@ -91,6 +91,14 @@ impl From<hmac::crypto_mac::InvalidKeyLength> for Error {
     }
 }
 
+impl From<p256::elliptic_curve::Error> for Error {
+    fn from(error: p256::elliptic_curve::Error) -> Self {
+        Error {
+            message: error.to_string(),
+        }
+    }
+}
+
 impl Error {
     pub fn new(message: String) -> Self {
         Error { message }

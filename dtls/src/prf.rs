@@ -71,33 +71,32 @@ pub(crate) fn prf_psk_pre_master_secret(psk: &[u8]) -> Vec<u8> {
 }
 
 pub(crate) fn prf_pre_master_secret(
-    _public_key: &[u8],
-    _private_key: &[u8],
+    public_key: &[u8],
+    private_key: &NamedCurvePrivateKey,
     curve: NamedCurve,
 ) -> Result<Vec<u8>, Error> {
     match curve {
-        //TODO: NamedCurve::X25519 => curve25519.X25519(privateKey, publicKey)
-        //TODO: NamedCurve::P256 => ellipticCurvePreMasterSecret(publicKey, privateKey, elliptic.P256(), elliptic.P256())
-        //TODO: NamedCurve::P384 => ellipticCurvePreMasterSecret(publicKey, privateKey, elliptic.P384(), elliptic.P384())
+        NamedCurve::P256 => elliptic_curve_pre_master_secret(public_key, private_key, curve),
         _ => Err(ERR_INVALID_NAMED_CURVE.clone()),
     }
 }
 
-/*
-TODO:
-fn ellipticCurvePreMasterSecret(publicKey:&[u8], privateKey: &[u8], c1:, c2 elliptic.Curve) ([]byte, error) {
-    x, y := elliptic.Unmarshal(c1, publicKey)
-    if x == nil || y == nil {
-        return nil, errInvalidNamedCurve
-    }
-
-    result, _ := c2.ScalarMult(x, y, privateKey)
-    preMasterSecret := make([]byte, (c2.Params().BitSize+7)>>3)
-    resultBytes := result.Bytes()
-    copy(preMasterSecret[len(preMasterSecret)-len(resultBytes):], resultBytes)
-    return preMasterSecret, nil
+fn elliptic_curve_pre_master_secret(
+    public_key: &[u8],
+    private_key: &NamedCurvePrivateKey,
+    curve: NamedCurve,
+) -> Result<Vec<u8>, Error> {
+    let public = match curve {
+        NamedCurve::P256 => p256::EncodedPoint::from_bytes(public_key)?,
+        _ => return Err(ERR_INVALID_NAMED_CURVE.clone()),
+    };
+    let pre_master_secret = match private_key {
+        NamedCurvePrivateKey::EphemeralSecretP256(secret) => {
+            secret.diffie_hellman(&public)?.as_bytes().to_vec()
+        }
+    };
+    Ok(pre_master_secret)
 }
-*/
 
 //  This PRF with the SHA-256 hash function is used for all cipher suites
 //  defined in this document and in TLS documents published prior to this

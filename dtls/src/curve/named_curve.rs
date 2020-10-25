@@ -24,32 +24,26 @@ impl From<u16> for NamedCurve {
     }
 }
 
+pub(crate) enum NamedCurvePrivateKey {
+    EphemeralSecretP256(p256::ecdh::EphemeralSecret),
+}
+
 pub struct NamedCurveKeypair {
     curve: NamedCurve,
     public_key: Vec<u8>,
-    private_key: Vec<u8>,
+    pub(crate) private_key: NamedCurvePrivateKey,
 }
 
 fn elliptic_curve_keypair(curve: NamedCurve) -> Result<NamedCurveKeypair, Error> {
     let (public_key, private_key) = match curve {
         NamedCurve::P256 => {
-            let secret_key = elliptic_curve::SecretKey::<p256::NistP256>::random(&mut OsRng);
-            let public_key = elliptic_curve::sec1::EncodedPoint::<p256::NistP256>::from_secret_key(
-                &secret_key,
-                false,
-            );
+            let secret_key = p256::ecdh::EphemeralSecret::random(&mut OsRng);
+            let public_key = p256::EncodedPoint::from(&secret_key);
             (
                 public_key.as_bytes().to_vec(),
-                secret_key.to_bytes().to_vec(),
+                NamedCurvePrivateKey::EphemeralSecretP256(secret_key),
             )
         }
-        /*NamedCurve::P384 => {
-            let secret_key = elliptic_curve::SecretKey::<p384::NistP384>::random(&mut OsRng);
-            let public_key = elliptic_curve::sec1::EncodedPoint::<p384::NistP384>::from_secret_key(
-                &secret_key,
-                false,
-            );
-        }*/
         _ => return Err(ERR_INVALID_NAMED_CURVE.clone()),
     };
 
