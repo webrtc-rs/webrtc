@@ -193,12 +193,12 @@ fn cipher_suites_for_ids(ids: &[CipherSuiteID]) -> Result<Vec<Box<dyn CipherSuit
 }
 
 pub(crate) fn parse_cipher_suites(
-    user_selected_suites: Vec<CipherSuiteID>,
+    user_selected_suites: &[CipherSuiteID],
     exclude_psk: bool,
     exclude_non_psk: bool,
 ) -> Result<Vec<Box<dyn CipherSuite>>, Error> {
     let cipher_suites = if user_selected_suites.len() != 0 {
-        cipher_suites_for_ids(&user_selected_suites)?
+        cipher_suites_for_ids(user_selected_suites)?
     } else {
         default_cipher_suites()
     };
