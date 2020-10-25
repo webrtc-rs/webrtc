@@ -4,12 +4,11 @@ use crate::cipher_suite::cipher_suite_tls_ecdhe_ecdsa_with_aes_256_cbc_sha::*;
 use crate::curve::named_curve::*;
 use crate::extension::extension_supported_elliptic_curves::*;
 
-use std::io::BufReader; //, BufWriter
+use std::io::{BufReader, BufWriter};
 use std::time::{Duration, SystemTime};
 
 use util::Error;
 
-//TODO
 #[test]
 fn test_handshake_message_client_hello() -> Result<(), Error> {
     let raw_client_hello = vec![

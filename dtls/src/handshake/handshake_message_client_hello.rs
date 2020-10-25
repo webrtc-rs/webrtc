@@ -20,7 +20,6 @@ client hello in response to a hello request or on its own
 initiative in order to renegotiate the security parameters in an
 existing connection.
 */
-//#[derive(Debug)]
 pub struct HandshakeMessageClientHello {
     version: ProtocolVersion,
     random: HandshakeRandom,
@@ -33,13 +32,23 @@ pub struct HandshakeMessageClientHello {
 
 impl PartialEq for HandshakeMessageClientHello {
     fn eq(&self, other: &Self) -> bool {
-        let is_eq = self.version == other.version
+        if !(self.version == other.version
             && self.random == other.random
             && self.cookie == other.cookie
             && self.compression_methods == other.compression_methods
-            && self.extensions == other.extensions;
+            && self.extensions == other.extensions
+            && self.cipher_suites.len() == other.cipher_suites.len())
+        {
+            return false;
+        }
 
-        is_eq
+        for i in 0..self.cipher_suites.len() {
+            if self.cipher_suites[i].id() != other.cipher_suites[i].id() {
+                return false;
+            }
+        }
+
+        true
     }
 }
 
