@@ -2,7 +2,6 @@
 mod extension_server_name_test;
 
 use super::*;
-use crate::errors::*;
 
 use std::io::{Read, Write};
 
@@ -24,7 +23,7 @@ impl ExtensionServerName {
 
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         //TODO: check how to do cryptobyte?
-        writer.write_u8(EXTENSION_SERVER_NAME_TYPE_DNSHOST_NAME)?;
+        //writer.write_u8(EXTENSION_SERVER_NAME_TYPE_DNSHOST_NAME)?;
         writer.write_u16::<BigEndian>(self.server_name.len() as u16)?;
         writer.write_all(self.server_name.as_bytes())?;
 
@@ -33,10 +32,10 @@ impl ExtensionServerName {
 
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
         //TODO: check how to do cryptobyte?
-        let name_type = reader.read_u8()?;
-        if name_type != EXTENSION_SERVER_NAME_TYPE_DNSHOST_NAME {
-            return Err(ERR_INVALID_SNI_FORMAT.clone());
-        }
+        //let name_type = reader.read_u8()?;
+        //if name_type != EXTENSION_SERVER_NAME_TYPE_DNSHOST_NAME {
+        //    return Err(ERR_INVALID_SNI_FORMAT.clone());
+        //}
 
         let buf_len = reader.read_u16::<BigEndian>()? as usize;
         let mut buf: Vec<u8> = vec![0u8; buf_len];

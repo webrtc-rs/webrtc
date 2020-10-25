@@ -19,6 +19,8 @@ rand = "0.7.3"
 hmac = "0.10.1"
 sha-1 = "0.9.1"
 sha2 = "0.9.1"
+aes = "0.6.0"
+block-modes = "0.7.0"
 aes-gcm = "0.8.0"
 ccm = "0.3.0"
 tokio = { version = "0.3", features = ["full"] }

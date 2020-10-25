@@ -1,5 +1,5 @@
 use super::*;
-use crate::crypto::crypto_gcm::*;
+use crate::crypto::crypto_cbc::*;
 use crate::prf::*;
 
 use std::sync::Arc;
@@ -7,30 +7,30 @@ use tokio::sync::Mutex;
 
 use async_trait::async_trait;
 
-pub struct CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
-    gcm: Arc<Mutex<Option<CryptoGcm>>>,
+pub struct CipherSuiteTLSEcdheEcdsaWithAes256CbcSha {
+    cbc: Arc<Mutex<Option<CryptoCbc>>>,
 }
 
-impl CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
-    const PRF_MAC_LEN: usize = 0;
-    const PRF_KEY_LEN: usize = 16;
-    const PRF_IV_LEN: usize = 4;
+impl CipherSuiteTLSEcdheEcdsaWithAes256CbcSha {
+    const PRF_MAC_LEN: usize = 20;
+    const PRF_KEY_LEN: usize = 32;
+    const PRF_IV_LEN: usize = 16;
 
     pub fn new() -> Self {
-        CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
-            gcm: Arc::new(Mutex::new(None)),
+        CipherSuiteTLSEcdheEcdsaWithAes256CbcSha {
+            cbc: Arc::new(Mutex::new(None)),
         }
     }
 }
 
 #[async_trait]
-impl CipherSuite for CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
+impl CipherSuite for CipherSuiteTLSEcdheEcdsaWithAes256CbcSha {
     fn to_string(&self) -> String {
-        "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256".to_owned()
+        "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA".to_owned()
     }
 
     fn id(&self) -> CipherSuiteID {
-        CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+        CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA
     }
 
     fn certificate_type(&self) -> ClientCertificateType {
@@ -46,8 +46,8 @@ impl CipherSuite for CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
     }
 
     async fn is_initialized(&self) -> bool {
-        let gcm = self.gcm.lock().await;
-        gcm.is_some()
+        let cbc = self.cbc.lock().await;
+        cbc.is_some()
     }
 
     async fn init(
@@ -61,35 +61,39 @@ impl CipherSuite for CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
             master_secret,
             client_random,
             server_random,
-            CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::PRF_MAC_LEN,
-            CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::PRF_KEY_LEN,
-            CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::PRF_IV_LEN,
+            CipherSuiteTLSEcdheEcdsaWithAes256CbcSha::PRF_MAC_LEN,
+            CipherSuiteTLSEcdheEcdsaWithAes256CbcSha::PRF_KEY_LEN,
+            CipherSuiteTLSEcdheEcdsaWithAes256CbcSha::PRF_IV_LEN,
             self.hash_func(),
         )?;
 
-        let mut gcm = self.gcm.lock().await;
+        let mut cbc = self.cbc.lock().await;
         if is_client {
-            *gcm = Some(CryptoGcm::new(
+            *cbc = Some(CryptoCbc::new(
                 &keys.client_write_key,
                 &keys.client_write_iv,
+                &keys.client_mac_key,
                 &keys.server_write_key,
                 &keys.server_write_iv,
-            ));
+                &keys.server_mac_key,
+            )?);
         } else {
-            *gcm = Some(CryptoGcm::new(
+            *cbc = Some(CryptoCbc::new(
                 &keys.server_write_key,
                 &keys.server_write_iv,
+                &keys.server_mac_key,
                 &keys.client_write_key,
                 &keys.client_write_iv,
-            ));
+                &keys.client_mac_key,
+            )?);
         }
 
         Ok(())
     }
 
     async fn encrypt(&self, pkt: &RecordLayer, raw: &[u8]) -> Result<Vec<u8>, Error> {
-        let mut gcm = self.gcm.lock().await;
-        if let Some(cg) = gcm.as_mut() {
+        let mut cbc = self.cbc.lock().await;
+        if let Some(cg) = cbc.as_mut() {
             cg.encrypt(pkt, raw)
         } else {
             Err(Error::new(
@@ -99,8 +103,8 @@ impl CipherSuite for CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
     }
 
     async fn decrypt(&self, input: &[u8]) -> Result<Vec<u8>, Error> {
-        let mut gcm = self.gcm.lock().await;
-        if let Some(cg) = gcm.as_mut() {
+        let mut cbc = self.cbc.lock().await;
+        if let Some(cg) = cbc.as_mut() {
             cg.decrypt(input)
         } else {
             Err(Error::new(

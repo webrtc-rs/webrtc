@@ -1,13 +1,18 @@
 use super::*;
+use crate::cipher_suite::cipher_suite_tls_ecdhe_ecdsa_with_aes_128_gcm_sha256::*;
+use crate::cipher_suite::cipher_suite_tls_ecdhe_ecdsa_with_aes_256_cbc_sha::*;
+use crate::curve::named_curve::*;
+use crate::extension::extension_supported_elliptic_curves::*;
 
-//use std::io::{BufReader, BufWriter};
+use std::io::BufReader; //, BufWriter
 use std::time::{Duration, SystemTime};
 
 use util::Error;
 
+//TODO
 #[test]
 fn test_handshake_message_client_hello() -> Result<(), Error> {
-    let _raw_client_hello = vec![
+    let raw_client_hello = vec![
         0xfe, 0xfd, 0xb6, 0x2f, 0xce, 0x5c, 0x42, 0x54, 0xff, 0x86, 0xe1, 0x24, 0x41, 0x91, 0x42,
         0x62, 0x15, 0xad, 0x16, 0xc9, 0x15, 0x8d, 0x95, 0x71, 0x8a, 0xbb, 0x22, 0xd7, 0x47, 0xec,
         0xd8, 0x3d, 0xdc, 0x4b, 0x00, 0x14, 0xe6, 0x14, 0x3a, 0x1b, 0x04, 0xea, 0x9e, 0x7a, 0x14,
@@ -22,7 +27,7 @@ fn test_handshake_message_client_hello() -> Result<(), Error> {
     } else {
         SystemTime::UNIX_EPOCH
     };
-    let _parsed_client_hello = HandshakeMessageClientHello {
+    let parsed_client_hello = HandshakeMessageClientHello {
         version: ProtocolVersion {
             major: 0xFE,
             minor: 0xFD,
@@ -38,26 +43,29 @@ fn test_handshake_message_client_hello() -> Result<(), Error> {
             0xe6, 0x14, 0x3a, 0x1b, 0x04, 0xea, 0x9e, 0x7a, 0x14, 0xd6, 0x6c, 0x57, 0xd0, 0x0e,
             0x32, 0x85, 0x76, 0x18, 0xde, 0xd8,
         ],
-        cipher_suites: vec![],
-        //&cipherSuiteTLSEcdheEcdsaWithAes128GcmSha256{},
-        //&cipherSuiteTLSEcdheEcdsaWithAes256CbcSha{},
-        //],
+        cipher_suites: vec![
+            Box::new(CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::new()),
+            Box::new(CipherSuiteTLSEcdheEcdsaWithAes256CbcSha::new()),
+        ],
         compression_methods: CompressionMethods {
             ids: vec![CompressionMethodId::Null],
         },
-        extensions: vec![],
-        //extension{
-        //&extensionSupportedEllipticCurves{ellipticCurves: []namedCurve{namedCurveX25519}},
-        //}],
+        extensions: vec![Extension::SupportedEllipticCurves(
+            ExtensionSupportedEllipticCurves {
+                elliptic_curves: vec![NamedCurve::X25519],
+            },
+        )],
     };
-    /*
-    c := &handshakeMessageClientHello{}
-    if err := c.Unmarshal(rawClientHello); err != nil {
-        t.Error(err)
-    } else if !reflect.DeepEqual(c, parsedClientHello) {
-        t.Errorf("handshakeMessageClientHello unmarshal: got %#v, want %#v", c, parsedClientHello)
-    }
 
+    let mut reader = BufReader::new(raw_client_hello.as_slice());
+    let c = HandshakeMessageClientHello::unmarshal(&mut reader)?;
+    assert_eq!(
+        c, parsed_client_hello,
+        "handshakeMessageClientHello unmarshal: got {:?}, want {:?}",
+        c, parsed_client_hello
+    );
+
+    /*
     raw, err := c.Marshal()
     if err != nil {
         t.Error(err)

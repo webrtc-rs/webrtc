@@ -1,4 +1,5 @@
-mod cipher_suite_tls_ecdhe_ecdsa_with_aes_128_gcm_sha256;
+pub mod cipher_suite_tls_ecdhe_ecdsa_with_aes_128_gcm_sha256;
+pub mod cipher_suite_tls_ecdhe_ecdsa_with_aes_256_cbc_sha;
 
 use std::fmt;
 
@@ -9,6 +10,9 @@ use super::errors::*;
 use super::record_layer::*;
 
 use util::Error;
+
+use cipher_suite_tls_ecdhe_ecdsa_with_aes_128_gcm_sha256::*;
+use cipher_suite_tls_ecdhe_ecdsa_with_aes_256_cbc_sha::*;
 
 // CipherSuiteID is an ID for our supported CipherSuites
 // Supported Cipher Suites
@@ -129,17 +133,21 @@ pub trait CipherSuite {
 // function.
 pub fn cipher_suite_for_id(id: CipherSuiteID) -> Result<Box<dyn CipherSuite>, Error> {
     match id {
-        /*CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM:
+        /*CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM =>
         return newCipherSuiteTLSEcdheEcdsaWithAes128Ccm()
             CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8:
         return newCipherSuiteTLSEcdheEcdsaWithAes128Ccm8()
-            CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256:
-        return &cipherSuiteTLSEcdheEcdsaWithAes128GcmSha256{}
-            CipherSuiteID::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256:
+        */
+        CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 => {
+            Ok(Box::new(CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::new()))
+        }
+        /*    CipherSuiteID::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256:
         return &cipherSuiteTLSEcdheRsaWithAes128GcmSha256{}
-            CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA:
-        return &cipherSuiteTLSEcdheEcdsaWithAes256CbcSha{}
-            CipherSuiteID::TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA:
+         */
+        CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA => {
+            Ok(Box::new(CipherSuiteTLSEcdheEcdsaWithAes256CbcSha::new()))
+        }
+        /*   CipherSuiteID::TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA:
         return &cipherSuiteTLSEcdheRsaWithAes256CbcSha{}
             CipherSuiteID::TLS_PSK_WITH_AES_128_CCM:
         return newCipherSuiteTLSPskWithAes128Ccm()

@@ -39,10 +39,10 @@ pub struct ProtocolVersion {
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct RecordLayerHeader {
     pub content_type: ContentType,
-    pub content_len: u16,
     pub protocol_version: ProtocolVersion,
     pub epoch: u16,
     pub sequence_number: u64, // uint48 in spec
+    pub content_len: u16,
 }
 
 impl RecordLayerHeader {
@@ -83,10 +83,10 @@ impl RecordLayerHeader {
 
         Ok(RecordLayerHeader {
             content_type,
-            content_len,
             protocol_version,
             epoch,
             sequence_number,
+            content_len,
         })
     }
 }

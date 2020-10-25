@@ -99,6 +99,21 @@ impl From<p256::elliptic_curve::Error> for Error {
     }
 }
 
+impl From<block_modes::InvalidKeyIvLength> for Error {
+    fn from(error: block_modes::InvalidKeyIvLength) -> Self {
+        Error {
+            message: error.to_string(),
+        }
+    }
+}
+impl From<block_modes::BlockModeError> for Error {
+    fn from(error: block_modes::BlockModeError) -> Self {
+        Error {
+            message: error.to_string(),
+        }
+    }
+}
+
 impl Error {
     pub fn new(message: String) -> Self {
         Error { message }

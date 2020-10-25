@@ -1,9 +1,9 @@
-mod extension_server_name;
-mod extension_supported_elliptic_curves;
-mod extension_supported_point_formats;
-mod extension_supported_signature_algorithms;
-mod extension_use_extended_master_secret;
-mod extension_use_srtp;
+pub mod extension_server_name;
+pub mod extension_supported_elliptic_curves;
+pub mod extension_supported_point_formats;
+pub mod extension_supported_signature_algorithms;
+pub mod extension_use_extended_master_secret;
+pub mod extension_use_srtp;
 
 use extension_server_name::*;
 use extension_supported_elliptic_curves::*;
@@ -46,6 +46,7 @@ impl From<u16> for ExtensionValue {
     }
 }
 
+#[derive(PartialEq, Debug, Clone)]
 pub enum Extension {
     ServerName(ExtensionServerName),
     SupportedEllipticCurves(ExtensionSupportedEllipticCurves),
