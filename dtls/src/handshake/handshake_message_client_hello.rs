@@ -83,7 +83,7 @@ impl HandshakeMessageClientHello {
         writer.write_u8(self.cookie.len() as u8)?;
         writer.write_all(&self.cookie)?;
 
-        writer.write_u16::<BigEndian>(self.cipher_suites.len() as u16)?;
+        writer.write_u16::<BigEndian>(2 * self.cipher_suites.len() as u16)?;
         for cipher_suite in &self.cipher_suites {
             writer.write_u16::<BigEndian>(cipher_suite.id() as u16)?;
         }

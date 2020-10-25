@@ -65,13 +65,16 @@ fn test_handshake_message_client_hello() -> Result<(), Error> {
         c, parsed_client_hello
     );
 
-    /*
-    raw, err := c.Marshal()
-    if err != nil {
-        t.Error(err)
-    } else if !reflect.DeepEqual(raw, rawClientHello) {
-        t.Errorf("handshakeMessageClientHello marshal: got %#v, want %#v", raw, rawClientHello)
-    }*/
+    let mut raw = vec![];
+    {
+        let mut writer = BufWriter::<&mut Vec<u8>>::new(raw.as_mut());
+        c.marshal(&mut writer)?;
+    }
+    assert_eq!(
+        raw, raw_client_hello,
+        "handshakeMessageClientHello marshal: got {:?}, want {:?}",
+        raw, raw_client_hello
+    );
 
     Ok(())
 }
