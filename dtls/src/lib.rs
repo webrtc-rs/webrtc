@@ -10,6 +10,7 @@ pub mod change_cipher_spec;
 pub mod cipher_suite;
 pub mod client_certificate_type;
 pub mod compression_methods;
+pub mod config;
 pub mod content;
 pub mod crypto;
 pub mod curve;

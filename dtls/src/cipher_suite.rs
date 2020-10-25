@@ -133,6 +133,7 @@ pub trait CipherSuite {
 // function.
 pub fn cipher_suite_for_id(id: CipherSuiteID) -> Result<Box<dyn CipherSuite>, Error> {
     match id {
+        //TODO: complete all cipher suites
         /*CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM =>
         return newCipherSuiteTLSEcdheEcdsaWithAes128Ccm()
             CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8:
@@ -156,5 +157,60 @@ pub fn cipher_suite_for_id(id: CipherSuiteID) -> Result<Box<dyn CipherSuite>, Er
             CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256:
         return &cipherSuiteTLSPskWithAes128GcmSha256{}*/
         _ => Err(ERR_INVALID_CIPHER_SUITE.clone()),
+    }
+}
+
+// CipherSuites we support in order of preference
+fn default_cipher_suites() -> Vec<Box<dyn CipherSuite>> {
+    vec![
+        Box::new(CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::new()),
+        Box::new(CipherSuiteTLSEcdheEcdsaWithAes256CbcSha::new()),
+        //TODO: Box::new(CipherSuiteTLSEcdheRsaWithAes128GcmSha256{},
+        //TODO: Box::new(CipherSuiteTLSEcdheRsaWithAes256CbcSha{},
+    ]
+}
+
+fn all_cipher_suites() -> Vec<Box<dyn CipherSuite>> {
+    vec![
+        //TODO: newCipherSuiteTLSEcdheEcdsaWithAes128Ccm(),
+        //TODO: newCipherSuiteTLSEcdheEcdsaWithAes128Ccm8(),
+        Box::new(CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::new()),
+        Box::new(CipherSuiteTLSEcdheEcdsaWithAes256CbcSha::new()),
+        //TODO: &cipherSuiteTLSEcdheRsaWithAes128GcmSha256{},
+        //TODO: &cipherSuiteTLSEcdheRsaWithAes256CbcSha{},
+        //TODO: newCipherSuiteTLSPskWithAes128Ccm(),
+        //TODO: newCipherSuiteTLSPskWithAes128Ccm8(),
+        //TODO: &cipherSuiteTLSPskWithAes128GcmSha256{},
+    ]
+}
+
+fn cipher_suites_for_ids(ids: &[CipherSuiteID]) -> Result<Vec<Box<dyn CipherSuite>>, Error> {
+    let mut cipher_suites = vec![];
+    for id in ids {
+        cipher_suites.push(cipher_suite_for_id(*id)?);
+    }
+    Ok(cipher_suites)
+}
+
+pub(crate) fn parse_cipher_suites(
+    user_selected_suites: Vec<CipherSuiteID>,
+    exclude_psk: bool,
+    exclude_non_psk: bool,
+) -> Result<Vec<Box<dyn CipherSuite>>, Error> {
+    let cipher_suites = if user_selected_suites.len() != 0 {
+        cipher_suites_for_ids(&user_selected_suites)?
+    } else {
+        default_cipher_suites()
+    };
+
+    let filtered_cipher_suites: Vec<Box<dyn CipherSuite>> = cipher_suites
+        .into_iter()
+        .filter(|c| !((exclude_psk && c.is_psk()) || (exclude_non_psk && !c.is_psk())))
+        .collect();
+
+    if filtered_cipher_suites.len() == 0 {
+        Err(ERR_NO_AVAILABLE_CIPHER_SUITES.clone())
+    } else {
+        Ok(filtered_cipher_suites)
     }
 }
