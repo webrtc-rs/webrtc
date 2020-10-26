@@ -114,6 +114,14 @@ impl From<block_modes::BlockModeError> for Error {
     }
 }
 
+impl From<rsa::errors::Error> for Error {
+    fn from(error: rsa::errors::Error) -> Self {
+        Error {
+            message: error.to_string(),
+        }
+    }
+}
+
 impl Error {
     pub fn new(message: String) -> Self {
         Error { message }

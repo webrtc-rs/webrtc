@@ -13,6 +13,7 @@ aes-gcm = "0.8.0"
 hmac = "0.10.1"
 p256 = "0.5.2"
 block-modes = "0.7.0"
+rsa = "0.3.0"
 
 [dev-dependencies]
 tokio-test = "0.3"

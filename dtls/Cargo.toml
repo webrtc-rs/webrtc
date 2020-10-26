@@ -13,7 +13,7 @@ byteorder = "1.3.2"
 lazy_static = "1.3.0"
 rand_core = "0.5.1"
 elliptic-curve = {version = "0.6.6", features=["default", "ecdh", "zeroize"]}
-p256 = { version = "0.5.2", features=["default", "ecdh", "zeroize"] }
+p256 = { version = "0.5.2", features=["default", "ecdh", "zeroize", "ecdsa", "ecdsa-core"] }
 p384 = "0.4.1"
 rand = "0.7.3"
 hmac = "0.10.1"
@@ -25,6 +25,10 @@ aes-gcm = "0.8.0"
 ccm = "0.3.0"
 tokio = { version = "0.3", features = ["full"] }
 async-trait = "0.1"
+ed25519 = "1.0"
+ed25519-dalek = "1.0"
+signature = "1.2.2"
+rsa = "0.3.0"
 
 [dev-dependencies]
 tokio-test = "0.3"
