@@ -3,7 +3,9 @@ pub mod crypto_ccm;
 pub mod crypto_gcm;
 
 use crate::curve::named_curve::*;
+use crate::errors::*;
 use crate::record_layer::record_layer_header::*;
+use crate::signature_hash_algorithm::*;
 
 use util::Error;
 
@@ -59,6 +61,28 @@ pub(crate) fn generate_key_signature(
     };
 
     Ok(signature)
+}
+
+pub(crate) fn verify_key_signature(
+    _message: &[u8],
+    _remote_key_signature: &[u8],
+    _hash_algorithm: HashAlgorithm,
+    raw_certificates: &[u8],
+) -> Result<(), Error> {
+    if raw_certificates.len() == 0 {
+        return Err(ERR_LENGTH_MISMATCH.clone());
+    }
+
+    let res = x509_parser::parse_x509_der(raw_certificates);
+
+    let (_rem, _certificate) = match res {
+        Ok((rem, cert)) => (rem, cert),
+        Err(err) => return Err(Error::new(err.to_string())),
+    };
+
+    //TODO:
+
+    Ok(())
 }
 
 pub(crate) fn generate_aead_additional_data(h: &RecordLayerHeader, payload_len: usize) -> Vec<u8> {
