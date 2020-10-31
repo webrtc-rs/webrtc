@@ -66,7 +66,7 @@ impl BufferInternal {
         if newsize < MIN_SIZE {
             newsize = MIN_SIZE
         }
-        if (self.limit_size <= 0/*|| sizeHardlimit*/) && newsize > MAX_SIZE {
+        if (self.limit_size == 0/*|| sizeHardlimit*/) && newsize > MAX_SIZE {
             newsize = MAX_SIZE
         }
 
