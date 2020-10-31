@@ -51,7 +51,7 @@ impl RawPacket {
 
     // Marshal encodes the packet in binary.
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        writer.write(&self.raw)?;
+        writer.write_all(&self.raw)?;
         Ok(())
     }
 }
