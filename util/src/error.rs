@@ -130,6 +130,22 @@ impl From<signature::Error> for Error {
     }
 }
 
+impl From<der_parser::nom::Err<x509_parser::error::X509Error>> for Error {
+    fn from(error: der_parser::nom::Err<x509_parser::error::X509Error>) -> Self {
+        Error {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<x509_parser::error::X509Error> for Error {
+    fn from(error: x509_parser::error::X509Error) -> Self {
+        Error {
+            message: error.to_string(),
+        }
+    }
+}
+
 impl Error {
     pub fn new(message: String) -> Self {
         Error { message }

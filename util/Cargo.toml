@@ -15,6 +15,8 @@ p256 = "0.5.2"
 block-modes = "0.7.0"
 rsa = "0.3.0"
 signature = "1.2.2"
+x509-parser = "0.8.2"
+der-parser = "4.1.0"
 
 [dev-dependencies]
 tokio-test = "0.3"
