@@ -122,6 +122,14 @@ impl From<rsa::errors::Error> for Error {
     }
 }
 
+impl From<signature::Error> for Error {
+    fn from(error: signature::Error) -> Self {
+        Error {
+            message: error.to_string(),
+        }
+    }
+}
+
 impl Error {
     pub fn new(message: String) -> Self {
         Error { message }
