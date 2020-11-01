@@ -61,7 +61,7 @@ impl fmt::Display for ReceiverEstimatedMaximumBitrate {
 }
 
 impl ReceiverEstimatedMaximumBitrate {
-    fn len(&self) -> usize {
+    fn size(&self) -> usize {
         HEADER_LENGTH + REMB_OFFSET + self.ssrcs.len() * 4
     }
 
@@ -145,9 +145,9 @@ impl ReceiverEstimatedMaximumBitrate {
 
     // Header returns the Header associated with this packet.
     pub fn header(&self) -> Header {
-        let l = self.len() + get_padding(self.len());
+        let l = self.size() + get_padding(self.size());
         Header {
-            padding: get_padding(self.len()) != 0,
+            padding: get_padding(self.size()) != 0,
             count: FORMAT_REMB,
             packet_type: PacketType::PayloadSpecificFeedback,
             length: ((l / 4) - 1) as u16,

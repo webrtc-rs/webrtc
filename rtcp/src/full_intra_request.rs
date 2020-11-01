@@ -43,14 +43,14 @@ impl fmt::Display for FullIntraRequest {
 }
 
 impl FullIntraRequest {
-    fn len(&self) -> usize {
+    fn size(&self) -> usize {
         HEADER_LENGTH + FIR_OFFSET + self.fir.len() * 8
     }
 
     pub fn header(&self) -> Header {
-        let l = self.len() + get_padding(self.len());
+        let l = self.size() + get_padding(self.size());
         Header {
-            padding: get_padding(self.len()) != 0,
+            padding: get_padding(self.size()) != 0,
             count: FORMAT_FIR,
             packet_type: PacketType::PayloadSpecificFeedback,
             length: ((l / 4) - 1) as u16,

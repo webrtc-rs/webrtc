@@ -46,10 +46,10 @@ impl fmt::Display for ReceiverReport {
 }
 
 impl ReceiverReport {
-    fn len(&self) -> usize {
+    fn size(&self) -> usize {
         let mut reps_length = 0;
         for rep in &self.reports {
-            reps_length += rep.len();
+            reps_length += rep.size();
         }
         HEADER_LENGTH + SSRC_LENGTH + reps_length + self.profile_extensions.len()
     }
@@ -107,7 +107,7 @@ impl ReceiverReport {
 
     // Header returns the Header associated with this packet.
     pub fn header(&self) -> Header {
-        let l = self.len() + get_padding(self.len());
+        let l = self.size() + get_padding(self.size());
         Header {
             padding: false,
             count: self.reports.len() as u8,

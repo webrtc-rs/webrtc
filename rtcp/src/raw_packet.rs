@@ -24,7 +24,7 @@ impl fmt::Display for RawPacket {
 
 //var _ Packet = (*RawPacket)(nil) // assert is a Packet
 impl RawPacket {
-    fn len(&self) -> usize {
+    fn size(&self) -> usize {
         self.raw.len()
     }
 

@@ -190,8 +190,8 @@ fn equivalent_fmtp(want: &str, got: &str) -> bool {
         return false;
     }
 
-    want_split.sort();
-    got_split.sort();
+    want_split.sort_unstable();
+    got_split.sort_unstable();
 
     for (i, &want_part) in want_split.iter().enumerate() {
         let want_part = want_part.trim();
@@ -226,8 +226,10 @@ pub struct Lexer<'a, R: io::BufRead + io::Seek> {
     pub reader: &'a mut R,
 }
 
+pub type StateFnType<'a, R> = fn(&mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error>;
+
 pub struct StateFn<'a, R: io::BufRead + io::Seek> {
-    pub f: fn(&mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error>,
+    pub f: StateFnType<'a, R>,
 }
 
 pub fn read_type<R: io::BufRead + io::Seek>(reader: &mut R) -> Result<(String, usize), Error> {

@@ -33,8 +33,8 @@ impl fmt::Display for Packet {
 
 impl Packet {
     // MarshalSize returns the size of the packet once marshaled.
-    pub fn len(&self) -> usize {
-        self.header.len() + self.payload.len()
+    pub fn size(&self) -> usize {
+        self.header.size() + self.payload.len()
     }
 
     // Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon

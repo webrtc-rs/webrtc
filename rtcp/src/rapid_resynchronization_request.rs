@@ -37,7 +37,7 @@ impl fmt::Display for RapidResynchronizationRequest {
 }
 
 impl RapidResynchronizationRequest {
-    fn len(&self) -> usize {
+    fn size(&self) -> usize {
         HEADER_LENGTH + RRR_HEADER_LENGTH
     }
 
@@ -61,9 +61,9 @@ impl RapidResynchronizationRequest {
 
     // Header returns the Header associated with this packet.
     pub fn header(&self) -> Header {
-        let l = self.len() + get_padding(self.len());
+        let l = self.size() + get_padding(self.size());
         Header {
-            padding: get_padding(self.len()) != 0,
+            padding: get_padding(self.size()) != 0,
             count: FORMAT_RRR,
             packet_type: PacketType::TransportSpecificFeedback,
             length: ((l / 4) - 1) as u16,

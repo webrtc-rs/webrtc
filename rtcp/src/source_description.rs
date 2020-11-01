@@ -101,7 +101,7 @@ impl SourceDescriptionChunk {
         writer.write_u8(SDESType::SDESEnd as u8)?;
 
         // additional null octets MUST be included if needed to pad until the next 32-bit boundary
-        let padding_len = get_padding(self.len());
+        let padding_len = get_padding(self.size());
         let padding: Vec<u8> = vec![0; padding_len];
         writer.write_all(padding.as_slice())?;
 
@@ -131,7 +131,7 @@ impl SourceDescriptionChunk {
         }
 
         let sdc = SourceDescriptionChunk { source, items };
-        let mut padding_len = get_padding(sdc.len());
+        let mut padding_len = get_padding(sdc.size());
         while padding_len > 0 {
             reader.read_u8()?;
             padding_len -= 1;
@@ -140,10 +140,10 @@ impl SourceDescriptionChunk {
         Ok(sdc)
     }
 
-    fn len(&self) -> usize {
+    fn size(&self) -> usize {
         let mut len = SDES_SOURCE_LEN;
         for it in &self.items {
-            len += it.len();
+            len += it.size();
         }
         len += SDES_TYPE_LEN; // for terminating null octet
 
@@ -163,7 +163,7 @@ pub struct SourceDescriptionItem {
 }
 
 impl SourceDescriptionItem {
-    fn len(&self) -> usize {
+    fn size(&self) -> usize {
         /*
          *   0                   1                   2                   3
          *   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -254,10 +254,10 @@ impl fmt::Display for SourceDescription {
 }
 
 impl SourceDescription {
-    fn len(&self) -> usize {
+    fn size(&self) -> usize {
         let mut chunks_length = 0;
         for c in &self.chunks {
-            chunks_length += c.len();
+            chunks_length += c.size();
         }
         HEADER_LENGTH + chunks_length
     }
@@ -298,9 +298,9 @@ impl SourceDescription {
 
     // Header returns the Header associated with this packet.
     pub fn header(&self) -> Header {
-        let l = self.len() + get_padding(self.len());
+        let l = self.size() + get_padding(self.size());
         Header {
-            padding: get_padding(self.len()) != 0,
+            padding: get_padding(self.size()) != 0,
             count: self.chunks.len() as u8,
             packet_type: PacketType::SourceDescription,
             length: ((l / 4) - 1) as u16,

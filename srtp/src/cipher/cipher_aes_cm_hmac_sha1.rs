@@ -175,7 +175,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         roc: u32,
     ) -> Result<Vec<u8>, Error> {
         let mut dst: Vec<u8> =
-            Vec::with_capacity(header.len() + payload.len() + self.auth_tag_len());
+            Vec::with_capacity(header.size() + payload.len() + self.auth_tag_len());
 
         // Copy the header unencrypted.
         {

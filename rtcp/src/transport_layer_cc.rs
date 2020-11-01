@@ -392,7 +392,7 @@ impl TransportLayerCC {
         n
     }
 
-    fn len(&self) -> usize {
+    fn size(&self) -> usize {
         let n = self.packet_len();
         n + get_padding(n)
     }
@@ -427,10 +427,10 @@ impl TransportLayerCC {
             delta.marshal(writer)?;
         }
 
-        if self.header.padding && self.len() > self.packet_len() {
-            for i in 0..self.len() - self.packet_len() {
-                if i == self.len() - self.packet_len() - 1 {
-                    writer.write_u8((self.len() - self.packet_len()) as u8)?;
+        if self.header.padding && self.size() > self.packet_len() {
+            for i in 0..self.size() - self.packet_len() {
+                if i == self.size() - self.packet_len() - 1 {
+                    writer.write_u8((self.size() - self.packet_len()) as u8)?;
                 } else {
                     writer.write_u8(0)?;
                 }

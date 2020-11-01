@@ -48,7 +48,7 @@ const lastSROffset: u8 = 16;
 const delayOffset: u8 = 20;*/
 
 impl ReceptionReport {
-    pub fn len(&self) -> usize {
+    pub fn size(&self) -> usize {
         RECEPTION_REPORT_LENGTH
     }
 

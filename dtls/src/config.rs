@@ -123,9 +123,9 @@ enum ClientAuthType {
 // ExtendedMasterSecretType declares the policy the client and server
 // will follow for the Extended Master Secret extension
 enum ExtendedMasterSecretType {
-    RequestExtendedMasterSecret = 0,
-    RequireExtendedMasterSecret = 1,
-    DisableExtendedMasterSecret = 2,
+    Request = 0,
+    Require = 1,
+    Disable = 2,
 }
 
 pub(crate) fn validate_config(config: &Config) -> Result<(), Error> {

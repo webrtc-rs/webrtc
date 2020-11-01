@@ -34,7 +34,7 @@ impl fmt::Display for Goodbye {
 }
 
 impl Goodbye {
-    fn len(&self) -> usize {
+    fn size(&self) -> usize {
         let srcs_length = self.sources.len() * SSRC_LENGTH;
         let reason_length = if self.reason.is_empty() {
             0
@@ -86,7 +86,7 @@ impl Goodbye {
         }
 
         let goodbye = Goodbye { sources, reason };
-        let mut padding_len = get_padding(goodbye.len());
+        let mut padding_len = get_padding(goodbye.size());
         while padding_len > 0 {
             reader.read_u8()?;
             padding_len -= 1;
@@ -97,9 +97,9 @@ impl Goodbye {
 
     // Header returns the Header associated with this packet.
     pub fn header(&self) -> Header {
-        let l = self.len() + get_padding(self.len());
+        let l = self.size() + get_padding(self.size());
         Header {
-            padding: get_padding(self.len()) != 0,
+            padding: get_padding(self.size()) != 0,
             count: self.sources.len() as u8,
             packet_type: PacketType::Goodbye,
             length: ((l / 4) - 1) as u16,

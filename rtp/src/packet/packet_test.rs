@@ -50,7 +50,7 @@ fn test_basic() -> Result<(), Error> {
         packet, parsed_packet
     );
 
-    assert_eq!(packet.len(), raw_pkt.len(), "wrong computed marshal size");
+    assert_eq!(packet.size(), raw_pkt.len(), "wrong computed marshal size");
 
     let mut raw: Vec<u8> = vec![];
     {

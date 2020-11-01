@@ -54,7 +54,7 @@ pub struct Header {
 
 impl Header {
     // MarshalSize returns the size of the packet once marshaled.
-    pub fn len(&self) -> usize {
+    pub fn size(&self) -> usize {
         let mut head_size = 12 + (self.csrc.len() * CSRC_LENGTH);
         if self.extension {
             head_size += 4 + self.get_extension_payload_len();
