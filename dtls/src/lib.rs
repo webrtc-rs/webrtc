@@ -16,6 +16,7 @@ pub mod crypto;
 pub mod curve;
 pub mod errors;
 pub mod extension;
+pub mod fragment_buffer;
 pub mod handshake;
 pub mod prf;
 pub mod record_layer;

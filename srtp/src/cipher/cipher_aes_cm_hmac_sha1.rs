@@ -1,6 +1,3 @@
-use aes;
-use ctr;
-
 use aes::cipher::generic_array::GenericArray;
 use ctr::cipher::stream::{NewStreamCipher, StreamCipher};
 use hmac::{Hmac, Mac};

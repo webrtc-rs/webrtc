@@ -16,12 +16,11 @@ pub const DEF_EXT_MAP_VALUE_TRANSPORT_CC: usize = 2;
 pub const DEF_EXT_MAP_VALUE_SDES_MID: usize = 3;
 pub const DEF_EXT_MAP_VALUE_SDES_RTP_STREAM_ID: usize = 4;
 
-pub const ABS_SEND_TIME_URI: &'static str =
-    "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time";
-pub const TRANSPORT_CC_URI: &'static str =
+pub const ABS_SEND_TIME_URI: &str = "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time";
+pub const TRANSPORT_CC_URI: &str =
     "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
-pub const SDES_MID_URI: &'static str = "urn:ietf:params:rtp-hdrext:sdes:mid";
-pub const SDES_RTP_STREAM_ID_URI: &'static str = "urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id";
+pub const SDES_MID_URI: &str = "urn:ietf:params:rtp-hdrext:sdes:mid";
+pub const SDES_RTP_STREAM_ID_URI: &str = "urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id";
 
 //ExtMap represents the activation of a single RTP header extension
 #[derive(Debug, Clone, Default)]
@@ -36,7 +35,7 @@ impl fmt::Display for ExtMap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut output = format!("{}", self.value);
         let dirstring = self.direction.to_string();
-        if &dirstring != DIRECTION_UNKNOWN_STR {
+        if dirstring != DIRECTION_UNKNOWN_STR {
             output += format!("/{}", dirstring).as_str();
         }
 
@@ -55,10 +54,10 @@ impl fmt::Display for ExtMap {
 impl ExtMap {
     //Clone converts this object to an Attribute
     pub fn convert(&self) -> Attribute {
-        return Attribute {
+        Attribute {
             key: "extmap".to_string(),
             value: Some(self.to_string()),
-        };
+        }
     }
 
     //Unmarshal creates an Extmap from a string
@@ -75,7 +74,7 @@ impl ExtMap {
             return Err(Error::new(format!("SyntaxError: {}", line)));
         }
 
-        let valdir: Vec<&str> = fields[0].split("/").collect();
+        let valdir: Vec<&str> = fields[0].split('/').collect();
         let value = valdir[0].parse::<isize>()?;
         if value < 1 || value > 246 {
             return Err(Error::new(format!(

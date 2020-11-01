@@ -157,7 +157,7 @@ impl fmt::Display for Alert {
 
 impl Alert {
     pub fn content_type(&self) -> ContentType {
-        return ContentType::Alert;
+        ContentType::Alert
     }
 
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {

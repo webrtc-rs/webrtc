@@ -3,7 +3,7 @@ use util::Error;
 use super::option::*;
 use super::protection_profile::*;
 
-const LABEL_EXTRACTOR_DTLS_SRTP: &'static str = "EXTRACTOR-dtls_srtp";
+const LABEL_EXTRACTOR_DTLS_SRTP: &str = "EXTRACTOR-dtls_srtp";
 
 // KeyingMaterialExporter allows package SRTP to extract keying material
 pub trait KeyingMaterialExporter {

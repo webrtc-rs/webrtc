@@ -27,7 +27,7 @@ pub struct CompoundPacket(pub Vec<Packet>);
 impl CompoundPacket {
     // Validate returns an error if this is not an RFC-compliant CompoundPacket.
     pub fn validate(&self) -> Result<(), Error> {
-        if self.0.len() == 0 {
+        if self.0.is_empty() {
             return Err(ERR_EMPTY_COMPOUND.clone());
         }
 
@@ -73,7 +73,7 @@ impl CompoundPacket {
 
     //CNAME returns the CNAME that *must* be present in every CompoundPacket
     pub fn cname(&self) -> Result<String, Error> {
-        if self.0.len() < 1 {
+        if self.0.is_empty() {
             return Err(ERR_EMPTY_COMPOUND.clone());
         }
 
@@ -110,7 +110,7 @@ impl CompoundPacket {
     // destination_ssrc returns the synchronization sources associated with this
     // CompoundPacket's reception report.
     pub fn destination_ssrc(&self) -> Vec<u32> {
-        if self.0.len() == 0 {
+        if self.0.is_empty() {
             vec![]
         } else {
             match &self.0[0] {

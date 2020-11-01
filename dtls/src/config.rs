@@ -132,7 +132,7 @@ pub(crate) fn validate_config(config: &Config) -> Result<(), Error> {
     //TODO: if config.Certificates.len() > 0 && config.psk != nil:
     //	return ErrPSKAndCertificate
 
-    if config.psk_identity_hint.len() != 0 && config.psk.is_none() {
+    if !config.psk_identity_hint.is_empty() && config.psk.is_none() {
         return Err(ERR_IDENTITY_NO_PSK.clone());
     }
 

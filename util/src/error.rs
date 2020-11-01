@@ -4,9 +4,6 @@ use std::{fmt, num};
 
 use tokio::sync::mpsc::error::SendError;
 
-use aes_gcm;
-use hmac;
-
 use url::ParseError;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -124,6 +121,22 @@ impl From<rsa::errors::Error> for Error {
 
 impl From<signature::Error> for Error {
     fn from(error: signature::Error) -> Self {
+        Error {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<der_parser::nom::Err<x509_parser::error::X509Error>> for Error {
+    fn from(error: der_parser::nom::Err<x509_parser::error::X509Error>) -> Self {
+        Error {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<x509_parser::error::X509Error> for Error {
+    fn from(error: x509_parser::error::X509Error) -> Self {
         Error {
             message: error.to_string(),
         }

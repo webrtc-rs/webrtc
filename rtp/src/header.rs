@@ -164,7 +164,7 @@ impl Header {
                 return Some(&extension.payload);
             }
         }
-        return None;
+        None
     }
 
     // Removes an RTP Header extension
@@ -178,7 +178,7 @@ impl Header {
                 return Ok(());
             }
         }
-        return Err(Error::new("extension not found".to_owned()));
+        Err(Error::new("extension not found".to_owned()))
     }
 
     // Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
@@ -352,13 +352,12 @@ impl Header {
             let extension_payload_len = self.get_extension_payload_len();
             if self.extension_profile != EXTENSION_PROFILE_ONE_BYTE
                 && self.extension_profile != EXTENSION_PROFILE_TWO_BYTE
+                && extension_payload_len % 4 != 0
             {
-                if extension_payload_len % 4 != 0 {
-                    //the payload must be in 32-bit words.
-                    return Err(Error::new(
-                        "extension_payload must be in 32-bit words".to_string(),
-                    ));
-                }
+                //the payload must be in 32-bit words.
+                return Err(Error::new(
+                    "extension_payload must be in 32-bit words".to_string(),
+                ));
             }
             let extension_payload_size = (extension_payload_len as u16 + 3) / 4;
             writer.write_u16::<BigEndian>(extension_payload_size)?;

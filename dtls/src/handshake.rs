@@ -1,15 +1,15 @@
-mod handshake_header;
-mod handshake_message_certificate;
-mod handshake_message_certificate_request;
-mod handshake_message_certificate_verify;
-mod handshake_message_client_hello;
-mod handshake_message_client_key_exchange;
-mod handshake_message_finished;
-mod handshake_message_hello_verify_request;
-mod handshake_message_server_hello;
-mod handshake_message_server_hello_done;
-mod handshake_message_server_key_exchange;
-mod handshake_random;
+pub mod handshake_header;
+pub mod handshake_message_certificate;
+pub mod handshake_message_certificate_request;
+pub mod handshake_message_certificate_verify;
+pub mod handshake_message_client_hello;
+pub mod handshake_message_client_key_exchange;
+pub mod handshake_message_finished;
+pub mod handshake_message_hello_verify_request;
+pub mod handshake_message_server_hello;
+pub mod handshake_message_server_hello_done;
+pub mod handshake_message_server_key_exchange;
+pub mod handshake_random;
 
 use std::fmt;
 use std::io::{Read, Write};
@@ -108,7 +108,7 @@ pub struct Handshake {
 
 impl Handshake {
     pub fn content_type(&self) -> ContentType {
-        return ContentType::Handshake;
+        ContentType::Handshake
     }
 
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {

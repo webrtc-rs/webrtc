@@ -29,7 +29,7 @@ ed25519 = "1.0"
 ed25519-dalek = "1.0"
 signature = "1.2.2"
 rsa = "0.3.0"
-x509-parser = "0.8.2"
+x509-parser = { version = "0.8.2", features = ["default", "verify"]}
 der-parser = "4.1.0"
 
 

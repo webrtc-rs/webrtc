@@ -13,28 +13,28 @@ use super::util::*;
 mod session_description_test;
 
 // Constants for SDP attributes used in JSEP
-const ATTR_KEY_IDENTITY: &'static str = "identity";
-const ATTR_KEY_GROUP: &'static str = "group";
-const ATTR_KEY_SSRC: &'static str = "ssrc";
-const ATTR_KEY_SSRCGROUP: &'static str = "ssrc-group";
-const ATTR_KEY_MSID: &'static str = "msid";
-const ATTR_KEY_MSID_SEMANTIC: &'static str = "msid-semantic";
-const ATTR_KEY_CONNECTION_SETUP: &'static str = "setup";
-const ATTR_KEY_MID: &'static str = "mid";
-const ATTR_KEY_ICELITE: &'static str = "ice-lite";
-const ATTR_KEY_RTCPMUX: &'static str = "rtcp-mux";
-const ATTR_KEY_RTCPRSIZE: &'static str = "rtcp-rsize";
-const ATTR_KEY_INACTIVE: &'static str = "inactive";
-const ATTR_KEY_RECV_ONLY: &'static str = "recvonly";
-const ATTR_KEY_SEND_ONLY: &'static str = "sendonly";
-const ATTR_KEY_SEND_RECV: &'static str = "sendrecv";
-const ATTR_KEY_EXT_MAP: &'static str = "extmap";
+const ATTR_KEY_IDENTITY: &str = "identity";
+const ATTR_KEY_GROUP: &str = "group";
+const ATTR_KEY_SSRC: &str = "ssrc";
+const ATTR_KEY_SSRCGROUP: &str = "ssrc-group";
+const ATTR_KEY_MSID: &str = "msid";
+const ATTR_KEY_MSID_SEMANTIC: &str = "msid-semantic";
+const ATTR_KEY_CONNECTION_SETUP: &str = "setup";
+const ATTR_KEY_MID: &str = "mid";
+const ATTR_KEY_ICELITE: &str = "ice-lite";
+const ATTR_KEY_RTCPMUX: &str = "rtcp-mux";
+const ATTR_KEY_RTCPRSIZE: &str = "rtcp-rsize";
+const ATTR_KEY_INACTIVE: &str = "inactive";
+const ATTR_KEY_RECV_ONLY: &str = "recvonly";
+const ATTR_KEY_SEND_ONLY: &str = "sendonly";
+const ATTR_KEY_SEND_RECV: &str = "sendrecv";
+const ATTR_KEY_EXT_MAP: &str = "extmap";
 
 // Constants for semantic tokens used in JSEP
-const SEMANTIC_TOKEN_LIP_SYNCHRONIZATION: &'static str = "LS";
-const SEMANTIC_TOKEN_FLOW_IDENTIFICATION: &'static str = "FID";
-const SEMANTIC_TOKEN_FORWARD_ERROR_CORRECTION: &'static str = "FEC";
-const SEMANTIC_TOKEN_WEB_RTCMEDIA_STREAMS: &'static str = "WMS";
+const SEMANTIC_TOKEN_LIP_SYNCHRONIZATION: &str = "LS";
+const SEMANTIC_TOKEN_FLOW_IDENTIFICATION: &str = "FID";
+const SEMANTIC_TOKEN_FORWARD_ERROR_CORRECTION: &str = "FEC";
+const SEMANTIC_TOKEN_WEB_RTCMEDIA_STREAMS: &str = "WMS";
 
 // Version describes the value provided by the "v=" field which gives
 // the version of the Session Description Protocol.
@@ -397,7 +397,7 @@ impl SessionDescription {
                 result += key_value_build("r=", Some(&repeat_time.to_string())).as_str();
             }
         }
-        if self.time_zones.len() > 0 {
+        if !self.time_zones.is_empty() {
             let mut time_zones = vec![];
             for time_zone in &self.time_zones {
                 time_zones.push(time_zone.to_string());
@@ -921,14 +921,14 @@ fn unmarshal_origin<'a, R: io::BufRead + io::Seek>(
 
     // Set according to currently registered with IANA
     // https://tools.ietf.org/html/rfc4566#section-8.2.6
-    let i = index_of(fields[3], &vec!["IN"]);
+    let i = index_of(fields[3], &["IN"]);
     if i == -1 {
         return Err(Error::new(format!("sdp: invalid value `{}`", fields[3])));
     }
 
     // Set according to currently registered with IANA
     // https://tools.ietf.org/html/rfc4566#section-8.2.7
-    let i = index_of(fields[4], &vec!["IP4", "IP6"]);
+    let i = index_of(fields[4], &["IP4", "IP6"]);
     if i == -1 {
         return Err(Error::new(format!("sdp: invalid value `{}`", fields[4])));
     }
@@ -1003,14 +1003,14 @@ fn unmarshal_connection_information(value: &str) -> Result<Option<ConnectionInfo
 
     // Set according to currently registered with IANA
     // https://tools.ietf.org/html/rfc4566#section-8.2.6
-    let i = index_of(fields[0], &vec!["IN"]);
+    let i = index_of(fields[0], &["IN"]);
     if i == -1 {
         return Err(Error::new(format!("sdp: invalid value `{}`", fields[0])));
     }
 
     // Set according to currently registered with IANA
     // https://tools.ietf.org/html/rfc4566#section-8.2.7
-    let i = index_of(fields[1], &vec!["IP4", "IP6"]);
+    let i = index_of(fields[1], &["IP4", "IP6"]);
     if i == -1 {
         return Err(Error::new(format!("sdp: invalid value `{}`", fields[1])));
     }
@@ -1041,7 +1041,7 @@ fn unmarshal_session_bandwidth<'a, R: io::BufRead + io::Seek>(
 }
 
 fn unmarshal_bandwidth(value: &str) -> Result<Bandwidth, Error> {
-    let mut parts: Vec<&str> = value.split(":").collect();
+    let mut parts: Vec<&str> = value.split(':').collect();
     if parts.len() != 2 {
         return Err(Error::new(format!("sdp: invalid syntax `b={}`", value)));
     }
@@ -1052,7 +1052,7 @@ fn unmarshal_bandwidth(value: &str) -> Result<Bandwidth, Error> {
     } else {
         // Set according to currently registered with IANA
         // https://tools.ietf.org/html/rfc4566#section-5.8
-        let i = index_of(parts[0], &vec!["CT", "AS"]);
+        let i = index_of(parts[0], &["CT", "AS"]);
         if i == -1 {
             return Err(Error::new(format!("sdp: invalid value `{}`", parts[0])));
         }
@@ -1105,8 +1105,8 @@ fn unmarshal_repeat_times<'a, R: io::BufRead + io::Seek>(
         let interval = parse_time_units(fields[0])?;
         let duration = parse_time_units(fields[1])?;
         let mut offsets = vec![];
-        for i in 2..fields.len() {
-            let offset = parse_time_units(fields[i])?;
+        for field in fields.iter().skip(2) {
+            let offset = parse_time_units(field)?;
             offsets.push(offset);
         }
         latest_time_desc.repeat_times.push(RepeatTime {
@@ -1117,7 +1117,7 @@ fn unmarshal_repeat_times<'a, R: io::BufRead + io::Seek>(
 
         Ok(Some(StateFn { f: s9 }))
     } else {
-        Err(Error::new(format!("sdp: empty time_descriptions")))
+        Err(Error::new("sdp: empty time_descriptions".to_string()))
     }
 }
 
@@ -1192,14 +1192,14 @@ fn unmarshal_media_description<'a, R: io::BufRead + io::Seek>(
     // https://tools.ietf.org/html/rfc4566#section-5.14
     let i = index_of(
         fields[0],
-        &vec!["audio", "video", "text", "application", "message"],
+        &["audio", "video", "text", "application", "message"],
     );
     if i == -1 {
         return Err(Error::new(format!("sdp: invalid value `{}`", fields[0])));
     }
 
     // <port>
-    let parts: Vec<&str> = fields[1].split("/").collect();
+    let parts: Vec<&str> = fields[1].split('/').collect();
     let port_value = parts[0].parse::<u16>()? as isize;
     let port_range = if parts.len() > 1 {
         Some(parts[1].parse::<i32>()? as isize)
@@ -1211,10 +1211,10 @@ fn unmarshal_media_description<'a, R: io::BufRead + io::Seek>(
     // Set according to currently registered with IANA
     // https://tools.ietf.org/html/rfc4566#section-5.14
     let mut protos = vec![];
-    for proto in fields[2].split("/").collect::<Vec<&str>>() {
+    for proto in fields[2].split('/').collect::<Vec<&str>>() {
         let i = index_of(
             proto,
-            &vec![
+            &[
                 "UDP", "RTP", "AVP", "SAVP", "SAVPF", "TLS", "DTLS", "SCTP", "AVPF",
             ],
         );
@@ -1226,8 +1226,8 @@ fn unmarshal_media_description<'a, R: io::BufRead + io::Seek>(
 
     // <fmt>...
     let mut formats = vec![];
-    for i in 3..fields.len() {
-        formats.push(fields[i].to_owned());
+    for field in fields.iter().skip(3) {
+        formats.push(field.to_string());
     }
 
     lexer.desc.media_descriptions.push(MediaDescription {
@@ -1259,7 +1259,7 @@ fn unmarshal_media_title<'a, R: io::BufRead + io::Seek>(
         latest_media_desc.media_title = Some(value);
         Ok(Some(StateFn { f: s16 }))
     } else {
-        Err(Error::new(format!("sdp: empty media_descriptions")))
+        Err(Error::new("sdp: empty media_descriptions".to_string()))
     }
 }
 
@@ -1272,7 +1272,7 @@ fn unmarshal_media_connection_information<'a, R: io::BufRead + io::Seek>(
         latest_media_desc.connection_information = unmarshal_connection_information(&value)?;
         Ok(Some(StateFn { f: s15 }))
     } else {
-        Err(Error::new(format!("sdp: empty media_descriptions")))
+        Err(Error::new("sdp: empty media_descriptions".to_string()))
     }
 }
 
@@ -1286,7 +1286,7 @@ fn unmarshal_media_bandwidth<'a, R: io::BufRead + io::Seek>(
         latest_media_desc.bandwidth.push(bandwidth);
         Ok(Some(StateFn { f: s15 }))
     } else {
-        Err(Error::new(format!("sdp: empty media_descriptions")))
+        Err(Error::new("sdp: empty media_descriptions".to_string()))
     }
 }
 
@@ -1299,7 +1299,7 @@ fn unmarshal_media_encryption_key<'a, R: io::BufRead + io::Seek>(
         latest_media_desc.encryption_key = Some(value);
         Ok(Some(StateFn { f: s14 }))
     } else {
-        Err(Error::new(format!("sdp: empty media_descriptions")))
+        Err(Error::new("sdp: empty media_descriptions".to_string()))
     }
 }
 
@@ -1325,7 +1325,7 @@ fn unmarshal_media_attribute<'a, R: io::BufRead + io::Seek>(
         latest_media_desc.attributes.push(attribute);
         Ok(Some(StateFn { f: s14 }))
     } else {
-        Err(Error::new(format!("sdp: empty media_descriptions")))
+        Err(Error::new("sdp: empty media_descriptions".to_string()))
     }
 }
 
@@ -1339,10 +1339,10 @@ fn parse_time_units(value: &str) -> Result<i64, Error> {
     let val = value.as_bytes();
     let len = val.len();
     let num = match val[len - 1] {
-        b'd' => value.trim_end_matches("d").parse::<i64>()? * 86400,
-        b'h' => value.trim_end_matches("h").parse::<i64>()? * 3600,
-        b'm' => value.trim_end_matches("m").parse::<i64>()? * 60,
-        _ => value.trim_end_matches("m").parse::<i64>()?,
+        b'd' => value.trim_end_matches('d').parse::<i64>()? * 86400,
+        b'h' => value.trim_end_matches('h').parse::<i64>()? * 3600,
+        b'm' => value.trim_end_matches('m').parse::<i64>()? * 60,
+        _ => value.trim_end_matches('m').parse::<i64>()?,
     };
 
     Ok(num)

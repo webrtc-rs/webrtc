@@ -242,7 +242,7 @@ pub struct SourceDescription {
 
 impl fmt::Display for SourceDescription {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut out = format!("Source Description:\n");
+        let mut out = "Source Description:\n".to_string();
         for c in &self.chunks {
             out += format!("\t{:x}\n", c.source).as_str();
             for it in &c.items {

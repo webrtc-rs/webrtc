@@ -47,11 +47,7 @@ impl BufferInternal {
             available += self.data.len() as isize;
         }
         // we interpret head=tail as empty, so always keep a byte free
-        if size as isize + 2 + 1 > available {
-            false
-        } else {
-            true
-        }
+        size as isize + 2 < available
     }
 
     // grow increases the size of the buffer.  If it returns nil, then the
@@ -296,7 +292,7 @@ impl Buffer {
             // Wake for the broadcast.
             if let Some(mut notify) = notify {
                 if let Some(d) = duration {
-                    if let Err(_) = timeout(d, notify.recv()).await {
+                    if timeout(d, notify.recv()).await.is_err() {
                         return Err(ERR_TIMEOUT.clone());
                     }
                 } else {

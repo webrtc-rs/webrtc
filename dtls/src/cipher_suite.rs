@@ -197,7 +197,7 @@ pub(crate) fn parse_cipher_suites(
     exclude_psk: bool,
     exclude_non_psk: bool,
 ) -> Result<Vec<Box<dyn CipherSuite>>, Error> {
-    let cipher_suites = if user_selected_suites.len() != 0 {
+    let cipher_suites = if !user_selected_suites.is_empty() {
         cipher_suites_for_ids(user_selected_suites)?
     } else {
         default_cipher_suites()
@@ -208,7 +208,7 @@ pub(crate) fn parse_cipher_suites(
         .filter(|c| !((exclude_psk && c.is_psk()) || (exclude_non_psk && !c.is_psk())))
         .collect();
 
-    if filtered_cipher_suites.len() == 0 {
+    if filtered_cipher_suites.is_empty() {
         Err(ERR_NO_AVAILABLE_CIPHER_SUITES.clone())
     } else {
         Ok(filtered_cipher_suites)

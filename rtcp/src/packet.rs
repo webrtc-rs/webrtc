@@ -103,7 +103,7 @@ pub fn marshal<W: Write>(packets: &[Packet], writer: &mut W) -> Result<(), Error
 // CompoundPacket.
 pub fn unmarshal(mut raw_data: &[u8]) -> Result<Packet, Error> {
     let mut packets = vec![];
-    while raw_data.len() != 0 {
+    while !raw_data.is_empty() {
         if raw_data.len() < HEADER_LENGTH {
             return Err(ERR_PACKET_TOO_SHORT.clone());
         }
@@ -123,7 +123,7 @@ pub fn unmarshal(mut raw_data: &[u8]) -> Result<Packet, Error> {
     match packets.len() {
         // Empty packet
         0 => Err(ERR_INVALID_HEADER.clone()),
-        1 => packets.pop().ok_or(ERR_BAD_FIRST_PACKET.clone()),
+        1 => packets.pop().ok_or_else(|| ERR_BAD_FIRST_PACKET.clone()),
         // Multiple Packets
         _ => Ok(Packet::CompoundPacket(CompoundPacket(packets))),
     }

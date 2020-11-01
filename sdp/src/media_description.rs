@@ -6,7 +6,7 @@ use super::extmap::*;
 
 // Constants for extmap key
 const EXT_MAP_VALUE_TRANSPORT_CC_KEY: isize = 3;
-const EXT_MAP_VALUE_TRANSPORT_CC_URI: &'static str =
+const EXT_MAP_VALUE_TRANSPORT_CC_URI: &str =
     "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
 
 // MediaDescription represents a media type.
@@ -45,11 +45,11 @@ impl MediaDescription {
     // Attribute returns the value of an attribute and if it exists
     pub fn attribute(&self, key: &str) -> Option<&String> {
         for a in &self.attributes {
-            if &a.key == key {
+            if a.key == key {
                 return a.value.as_ref();
             }
         }
-        return None;
+        None
     }
 
     // New JSEPMediaDescription creates a new MediaName with

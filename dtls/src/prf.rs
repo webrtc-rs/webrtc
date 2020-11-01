@@ -19,11 +19,11 @@ use crate::curve::named_curve::*;
 use crate::errors::*;
 use crate::record_layer::record_layer_header::ProtocolVersion;
 
-pub(crate) const PRF_MASTER_SECRET_LABEL: &'static str = "master secret";
-pub(crate) const PRF_EXTENDED_MASTER_SECRET_LABEL: &'static str = "extended master secret";
-pub(crate) const PRF_KEY_EXPANSION_LABEL: &'static str = "key expansion";
-pub(crate) const PRF_VERIFY_DATA_CLIENT_LABEL: &'static str = "client finished";
-pub(crate) const PRF_VERIFY_DATA_SERVER_LABEL: &'static str = "server finished";
+pub(crate) const PRF_MASTER_SECRET_LABEL: &str = "master secret";
+pub(crate) const PRF_EXTENDED_MASTER_SECRET_LABEL: &str = "extended master secret";
+pub(crate) const PRF_KEY_EXPANSION_LABEL: &str = "key expansion";
+pub(crate) const PRF_VERIFY_DATA_CLIENT_LABEL: &str = "client finished";
+pub(crate) const PRF_VERIFY_DATA_SERVER_LABEL: &str = "server finished";
 
 #[derive(PartialEq, Debug, Clone)]
 pub(crate) struct EncryptionKeys {
@@ -38,7 +38,7 @@ pub(crate) struct EncryptionKeys {
 
 impl fmt::Display for EncryptionKeys {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut out = format!("EncryptionKeys:\n");
+        let mut out = "EncryptionKeys:\n".to_string();
 
         out += format!("- master_secret: {:?}\n", self.master_secret).as_str();
         out += format!("- client_mackey: {:?}\n", self.client_mac_key).as_str();
