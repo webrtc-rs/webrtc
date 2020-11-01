@@ -21,4 +21,3 @@ pub mod handshake;
 pub mod prf;
 pub mod record_layer;
 pub mod signature_hash_algorithm;
-pub mod state;
