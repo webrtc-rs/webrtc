@@ -86,7 +86,7 @@ fn test_generate_key_signature() -> Result<(), Error> {
         &server_random,
         &public_key,
         NamedCurve::X25519,
-        CryptoPrivateKey::RSA256(private_key),
+        CryptoPrivateKey::RSA256(Box::new(private_key)),
         //hashAlgorithmSHA256,
     )?;
 

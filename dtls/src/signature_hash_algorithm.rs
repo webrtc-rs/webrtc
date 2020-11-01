@@ -55,10 +55,10 @@ impl fmt::Display for HashAlgorithm {
 
 impl HashAlgorithm {
     pub(crate) fn insecure(&self) -> bool {
-        match *self {
-            HashAlgorithm::MD2 | HashAlgorithm::MD5 | HashAlgorithm::SHA1 => true,
-            _ => false,
-        }
+        matches!(
+            *self,
+            HashAlgorithm::MD2 | HashAlgorithm::MD5 | HashAlgorithm::SHA1
+        )
     }
 }
 

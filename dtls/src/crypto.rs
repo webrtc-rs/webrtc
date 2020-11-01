@@ -40,7 +40,7 @@ pub(crate) fn value_key_message(
 pub(crate) enum CryptoPrivateKey {
     ED25519(Box<dyn ed25519::signature::Signer<ed25519::Signature>>),
     ECDSA256(Box<dyn p256::ecdsa::signature::Signer<p256::ecdsa::Signature>>),
-    RSA256(rsa::RSAPrivateKey),
+    RSA256(Box<rsa::RSAPrivateKey>),
 }
 
 // If the client provided a "signature_algorithms" extension, then all
