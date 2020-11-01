@@ -7,16 +7,16 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use util::Error;
 
 // msg_len for Handshake messages assumes an extra 12 bytes for
-// sequence, fragment and version information
-const HANDSHAKE_HEADER_LENGTH: usize = 12;
+// sequence, Fragment and version information
+pub(crate) const HANDSHAKE_HEADER_LENGTH: usize = 12;
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct HandshakeHeader {
     pub handshake_type: HandshakeType,
-    length: u32, // uint24 in spec
-    message_sequence: u16,
-    fragment_offset: u32, // uint24 in spec
-    fragment_length: u32, // uint24 in spec
+    pub(crate) length: u32, // uint24 in spec
+    pub message_sequence: u16,
+    pub(crate) fragment_offset: u32, // uint24 in spec
+    pub(crate) fragment_length: u32, // uint24 in spec
 }
 
 impl HandshakeHeader {
