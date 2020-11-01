@@ -121,10 +121,10 @@ fn append_message(target_offset: u32, frags: &[Fragment], raw_message: &mut Vec<
         if f.handshake_header.fragment_offset == target_offset {
             let fragment_end =
                 f.handshake_header.fragment_offset + f.handshake_header.fragment_length;
-            if fragment_end != f.handshake_header.length {
-                if !append_message(fragment_end, frags, raw_message) {
-                    return false;
-                }
+            if fragment_end != f.handshake_header.length
+                && !append_message(fragment_end, frags, raw_message)
+            {
+                return false;
             }
 
             let mut message = vec![];

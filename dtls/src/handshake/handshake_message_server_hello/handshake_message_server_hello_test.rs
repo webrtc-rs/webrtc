@@ -33,7 +33,7 @@ fn test_handshake_message_server_hello() -> Result<(), Error> {
                 0x7f, 0x7c, 0x78, 0xf1, 0x5f, 0x7e, 0x1c, 0xb7, 0xa1, 0x1e, 0xcf, 0x63, 0x84, 0x28,
             ],
         },
-        cipher_suite: Box::new(CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::new()),
+        cipher_suite: Box::new(CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::default()),
         compression_method: CompressionMethodId::Null,
         extensions: vec![],
     };

@@ -139,14 +139,14 @@ pub fn cipher_suite_for_id(id: CipherSuiteID) -> Result<Box<dyn CipherSuite>, Er
             CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8:
         return newCipherSuiteTLSEcdheEcdsaWithAes128Ccm8()
         */
-        CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 => {
-            Ok(Box::new(CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::new()))
-        }
+        CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 => Ok(Box::new(
+            CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::default(),
+        )),
         /*    CipherSuiteID::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256:
         return &cipherSuiteTLSEcdheRsaWithAes128GcmSha256{}
          */
         CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA => {
-            Ok(Box::new(CipherSuiteTLSEcdheEcdsaWithAes256CbcSha::new()))
+            Ok(Box::new(CipherSuiteTLSEcdheEcdsaWithAes256CbcSha::default()))
         }
         /*   CipherSuiteID::TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA:
         return &cipherSuiteTLSEcdheRsaWithAes256CbcSha{}
@@ -163,8 +163,8 @@ pub fn cipher_suite_for_id(id: CipherSuiteID) -> Result<Box<dyn CipherSuite>, Er
 // CipherSuites we support in order of preference
 fn default_cipher_suites() -> Vec<Box<dyn CipherSuite>> {
     vec![
-        Box::new(CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::new()),
-        Box::new(CipherSuiteTLSEcdheEcdsaWithAes256CbcSha::new()),
+        Box::new(CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::default()),
+        Box::new(CipherSuiteTLSEcdheEcdsaWithAes256CbcSha::default()),
         //TODO: Box::new(CipherSuiteTLSEcdheRsaWithAes128GcmSha256{},
         //TODO: Box::new(CipherSuiteTLSEcdheRsaWithAes256CbcSha{},
     ]
@@ -174,8 +174,8 @@ fn all_cipher_suites() -> Vec<Box<dyn CipherSuite>> {
     vec![
         //TODO: newCipherSuiteTLSEcdheEcdsaWithAes128Ccm(),
         //TODO: newCipherSuiteTLSEcdheEcdsaWithAes128Ccm8(),
-        Box::new(CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::new()),
-        Box::new(CipherSuiteTLSEcdheEcdsaWithAes256CbcSha::new()),
+        Box::new(CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::default()),
+        Box::new(CipherSuiteTLSEcdheEcdsaWithAes256CbcSha::default()),
         //TODO: &cipherSuiteTLSEcdheRsaWithAes128GcmSha256{},
         //TODO: &cipherSuiteTLSEcdheRsaWithAes256CbcSha{},
         //TODO: newCipherSuiteTLSPskWithAes128Ccm(),

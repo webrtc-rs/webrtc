@@ -168,8 +168,8 @@ impl ReplayDetector for WrappedSlidingWindowDetector {
 
 pub struct NoOpReplayDetector {}
 
-impl NoOpReplayDetector {
-    pub fn new() -> Self {
+impl Default for NoOpReplayDetector {
+    fn default() -> Self {
         NoOpReplayDetector {}
     }
 }

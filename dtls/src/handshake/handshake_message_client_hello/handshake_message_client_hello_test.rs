@@ -43,8 +43,8 @@ fn test_handshake_message_client_hello() -> Result<(), Error> {
             0x32, 0x85, 0x76, 0x18, 0xde, 0xd8,
         ],
         cipher_suites: vec![
-            Box::new(CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::new()),
-            Box::new(CipherSuiteTLSEcdheEcdsaWithAes256CbcSha::new()),
+            Box::new(CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::default()),
+            Box::new(CipherSuiteTLSEcdheEcdsaWithAes256CbcSha::default()),
         ],
         compression_methods: CompressionMethods {
             ids: vec![CompressionMethodId::Null],

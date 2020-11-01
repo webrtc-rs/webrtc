@@ -15,8 +15,10 @@ impl CipherSuiteTLSEcdheEcdsaWithAes256CbcSha {
     const PRF_MAC_LEN: usize = 20;
     const PRF_KEY_LEN: usize = 32;
     const PRF_IV_LEN: usize = 16;
+}
 
-    pub fn new() -> Self {
+impl Default for CipherSuiteTLSEcdheEcdsaWithAes256CbcSha {
+    fn default() -> Self {
         CipherSuiteTLSEcdheEcdsaWithAes256CbcSha {
             cbc: Arc::new(Mutex::new(None)),
         }
