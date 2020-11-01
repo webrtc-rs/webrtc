@@ -23,16 +23,20 @@ jobs:
 
   rustfmt_and_clippy:
     name: Check rustfmt style && run clippy
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.46.0
+          profile: minimal
+          components: clippy, rustfmt
+          override: true
       - name: Cache cargo registry
         uses: actions/cache@v1
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-      - name: Add clippy
-        run: rustup component add clippy
       - name: Run clippy
         uses: actions-rs/cargo@v1
         with:
