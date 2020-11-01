@@ -4,9 +4,6 @@ use std::{fmt, num};
 
 use tokio::sync::mpsc::error::SendError;
 
-use aes_gcm;
-use hmac;
-
 use url::ParseError;
 
 #[derive(Debug, Clone, PartialEq)]

@@ -108,7 +108,7 @@ pub struct Handshake {
 
 impl Handshake {
     pub fn content_type(&self) -> ContentType {
-        return ContentType::Handshake;
+        ContentType::Handshake
     }
 
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {

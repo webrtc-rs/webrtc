@@ -31,7 +31,7 @@ impl HandshakeMessageServerKeyExchange {
     }
 
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        if self.identity_hint.len() != 0 {
+        if !self.identity_hint.is_empty() {
             writer.write_u16::<BigEndian>(self.identity_hint.len() as u16)?;
             writer.write_all(&self.identity_hint)?;
             return Ok(());

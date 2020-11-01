@@ -58,23 +58,23 @@ impl AbsSendTimeExtension {
 
 pub fn unix2ntp(t: Duration) -> u64 {
     let u = t.as_nanos() as u64;
-    let mut s = u / 1000_000_000;
+    let mut s = u / 1_000_000_000;
     s += 0x83AA7E80; //offset in seconds between unix epoch and ntp epoch
-    let mut f = u % 1000_000_000;
+    let mut f = u % 1_000_000_000;
     f <<= 32;
-    f /= 1000_000_000;
+    f /= 1_000_000_000;
     s <<= 32;
 
-    return s | f;
+    s | f
 }
 
 pub fn ntp2unix(t: u64) -> Duration {
     let mut s = t >> 32;
     let mut f = t & 0xFFFFFFFF;
-    f *= 1000_000_000;
+    f *= 1_000_000_000;
     f >>= 32;
     s -= 0x83AA7E80;
-    let u = s * 1000_000_000 + f;
+    let u = s * 1_000_000_000 + f;
 
-    Duration::new(u / 1000_000_000, (u % 1000_000_000) as u32)
+    Duration::new(u / 1_000_000_000, (u % 1_000_000_000) as u32)
 }

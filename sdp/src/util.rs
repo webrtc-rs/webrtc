@@ -9,8 +9,8 @@ use util::Error;
 use super::session_description::SessionDescription;
 use std::io::SeekFrom;
 
-pub const END_LINE: &'static str = "\r\n";
-pub const ATTRIBUTE_KEY: &'static str = "a=";
+pub const END_LINE: &str = "\r\n";
+pub const ATTRIBUTE_KEY: &str = "a=";
 
 // ConnectionRole indicates which of the end points should initiate the connection establishment
 #[derive(Debug)]
@@ -85,13 +85,13 @@ pub(crate) fn parse_rtpmap(rtpmap: &str) -> Result<Codec, Error> {
         return Err(parsing_failed);
     }
 
-    let pt_split: Vec<&str> = split[0].split(":").collect();
+    let pt_split: Vec<&str> = split[0].split(':').collect();
     if pt_split.len() != 2 {
         return Err(parsing_failed);
     }
     let payload_type = pt_split[1].parse::<u8>()?;
 
-    let split: Vec<&str> = split[1].split("/").collect();
+    let split: Vec<&str> = split[1].split('/').collect();
     let name = split[0].to_string();
     let parts = split.len();
     let clock_rate = if parts > 1 {
@@ -125,7 +125,7 @@ pub(crate) fn parse_fmtp(fmtp: &str) -> Result<Codec, Error> {
 
     let fmtp = split[1].to_string();
 
-    let split: Vec<&str> = split[0].split(":").collect();
+    let split: Vec<&str> = split[0].split(':').collect();
     if split.len() != 2 {
         return Err(parsing_failed);
     }
@@ -142,12 +142,12 @@ pub(crate) fn parse_rtcp_fb(rtcp_fb: &str) -> Result<Codec, Error> {
     let parsing_failed = Error::new("could not extract codec from rtcp-fb".to_string());
 
     // a=ftcp-fb:<payload type> <RTCP feedback type> [<RTCP feedback parameter>]
-    let split: Vec<&str> = rtcp_fb.splitn(2, " ").collect();
+    let split: Vec<&str> = rtcp_fb.splitn(2, ' ').collect();
     if split.len() != 2 {
         return Err(parsing_failed);
     }
 
-    let pt_split: Vec<&str> = split[0].split(":").collect();
+    let pt_split: Vec<&str> = split[0].split(':').collect();
     if pt_split.len() != 2 {
         return Err(parsing_failed);
     }
@@ -183,8 +183,8 @@ pub(crate) fn merge_codecs(mut codec: Codec, codecs: &mut HashMap<u8, Codec>) {
 }
 
 fn equivalent_fmtp(want: &str, got: &str) -> bool {
-    let mut want_split: Vec<&str> = want.split(";").collect();
-    let mut got_split: Vec<&str> = got.split(";").collect();
+    let mut want_split: Vec<&str> = want.split(';').collect();
+    let mut got_split: Vec<&str> = got.split(';').collect();
 
     if want_split.len() != got_split.len() {
         return false;
@@ -201,7 +201,7 @@ fn equivalent_fmtp(want: &str, got: &str) -> bool {
         }
     }
 
-    return true;
+    true
 }
 
 pub(crate) fn codecs_match(wanted: &Codec, got: &Codec) -> bool {
@@ -218,7 +218,7 @@ pub(crate) fn codecs_match(wanted: &Codec, got: &Codec) -> bool {
         return false;
     }
 
-    return true;
+    true
 }
 
 pub struct Lexer<'a, R: io::BufRead + io::Seek> {
@@ -233,9 +233,8 @@ pub struct StateFn<'a, R: io::BufRead + io::Seek> {
 pub fn read_type<R: io::BufRead + io::Seek>(reader: &mut R) -> Result<(String, usize), Error> {
     loop {
         let mut b = [0; 1];
-        match reader.read_exact(&mut b) {
-            Err(_) => return Ok(("".to_owned(), 0)),
-            _ => {}
+        if reader.read_exact(&mut b).is_err() {
+            return Ok(("".to_owned(), 0));
         }
 
         if b[0] == b'\n' || b[0] == b'\r' {
@@ -269,7 +268,7 @@ pub fn index_of(element: &str, data: &[&str]) -> i32 {
             return k as i32;
         }
     }
-    return -1;
+    -1
 }
 
 pub fn key_value_build(key: &str, value: Option<&String>) -> String {

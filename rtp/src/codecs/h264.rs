@@ -30,10 +30,8 @@ fn next_ind(nalu: &[u8], start: usize) -> (isize, isize) {
         if b == 0 {
             zero_count += 1;
             continue;
-        } else if b == 1 {
-            if zero_count >= 2 {
-                return ((start + i - zero_count) as isize, zero_count as isize + 1);
-            }
+        } else if b == 1 && zero_count >= 2 {
+            return ((start + i - zero_count) as isize, zero_count as isize + 1);
         }
         zero_count = 0
     }

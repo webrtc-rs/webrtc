@@ -55,7 +55,7 @@ impl FixedBigInt {
                 } else {
                     self.bits[(i - n_chunk) as usize] << n_n
                 };
-                if i - n_chunk - 1 >= 0 {
+                if i - n_chunk > 0 {
                     carry |= if n_n == 0 {
                         0
                     } else {
@@ -64,7 +64,7 @@ impl FixedBigInt {
                 }
             }
             self.bits[i as usize] = if n >= 64 {
-                0 | carry
+                carry
             } else {
                 (self.bits[i as usize] << n) | carry
             };

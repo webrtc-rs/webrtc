@@ -43,8 +43,7 @@ pub(crate) fn aes_cm_key_derivation(
     let block = Aes128::new(&key);
 
     let mut out = vec![0u8; ((out_len + n_master_key) / n_master_key) * n_master_key];
-    let mut i = 0u16;
-    for n in (0..out_len).step_by(n_master_key) {
+    for (i, n) in (0..out_len).step_by(n_master_key).enumerate() {
         //BigEndian.PutUint16(prfIn[nMasterKey-2:], i)
         prf_in[n_master_key - 2] = ((i >> 8) & 0xFF) as u8;
         prf_in[n_master_key - 1] = (i & 0xFF) as u8;
@@ -52,8 +51,6 @@ pub(crate) fn aes_cm_key_derivation(
         out[n..n + n_master_key].copy_from_slice(&prf_in);
         let out_key = GenericArray::from_mut_slice(&mut out[n..n + n_master_key]);
         block.encrypt_block(out_key);
-
-        i += 1;
     }
 
     Ok(out[..out_len].to_vec())

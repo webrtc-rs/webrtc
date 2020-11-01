@@ -17,11 +17,11 @@ pub enum Direction {
     DirectionInactive = 4,
 }
 
-pub const DIRECTION_SEND_RECV_STR: &'static str = "sendrecv";
-pub const DIRECTION_SEND_ONLY_STR: &'static str = "sendonly";
-pub const DIRECTION_RECV_ONLY_STR: &'static str = "recvonly";
-pub const DIRECTION_INACTIVE_STR: &'static str = "inactive";
-pub const DIRECTION_UNKNOWN_STR: &'static str = "";
+pub const DIRECTION_SEND_RECV_STR: &str = "sendrecv";
+pub const DIRECTION_SEND_ONLY_STR: &str = "sendonly";
+pub const DIRECTION_RECV_ONLY_STR: &str = "recvonly";
+pub const DIRECTION_INACTIVE_STR: &str = "inactive";
+pub const DIRECTION_UNKNOWN_STR: &str = "";
 
 impl fmt::Display for Direction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

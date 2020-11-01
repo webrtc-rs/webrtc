@@ -82,7 +82,7 @@ pub(crate) fn verify_key_signature(
     /*_hash_algorithm: HashAlgorithm,*/
     raw_certificates: &[u8],
 ) -> Result<(), Error> {
-    if raw_certificates.len() == 0 {
+    if raw_certificates.is_empty() {
         return Err(ERR_LENGTH_MISMATCH.clone());
     }
 
@@ -174,7 +174,7 @@ pub(crate) fn verify_certificate_verify(
     remote_key_signature: &[u8],
     raw_certificates: &[u8],
 ) -> Result<(), Error> {
-    if raw_certificates.len() == 0 {
+    if raw_certificates.is_empty() {
         return Err(ERR_LENGTH_MISMATCH.clone());
     }
 
@@ -234,7 +234,7 @@ pub(crate) fn verify_certificate_verify(
 pub(crate) fn load_certs(
     raw_certificates: &[u8],
 ) -> Result<x509_parser::X509Certificate<'_>, Error> {
-    if raw_certificates.len() == 0 {
+    if raw_certificates.is_empty() {
         return Err(ERR_LENGTH_MISMATCH.clone());
     }
 

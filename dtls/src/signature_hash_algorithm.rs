@@ -179,7 +179,7 @@ pub(crate) fn parse_signature_schemes(
     sigs: &[SignatureScheme],
     insecure_hashes: bool,
 ) -> Result<Vec<SignatureHashAlgorithm>, Error> {
-    if sigs.len() == 0 {
+    if sigs.is_empty() {
         return Ok(default_signature_schemes());
     }
 
@@ -202,7 +202,7 @@ pub(crate) fn parse_signature_schemes(
         })
     }
 
-    if out.len() == 0 {
+    if out.is_empty() {
         Err(ERR_NO_AVAILABLE_SIGNATURE_SCHEMES.clone())
     } else {
         Ok(out)

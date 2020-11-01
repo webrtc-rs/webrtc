@@ -16,7 +16,7 @@ pub struct ApplicationData {
 
 impl ApplicationData {
     pub fn content_type(&self) -> ContentType {
-        return ContentType::ApplicationData;
+        ContentType::ApplicationData
     }
 
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {

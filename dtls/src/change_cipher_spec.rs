@@ -20,7 +20,7 @@ pub struct ChangeCipherSpec;
 
 impl ChangeCipherSpec {
     pub fn content_type(&self) -> ContentType {
-        return ContentType::ChangeCipherSpec;
+        ContentType::ChangeCipherSpec
     }
 
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {

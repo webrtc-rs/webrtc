@@ -131,11 +131,9 @@ impl ReplayDetector for WrappedSlidingWindowDetector {
             // Too old.
             return false;
         }
-        if diff >= 0 {
-            if self.mask.bit(diff as usize) != 0 {
-                // The sequence number is duplicated.
-                return false;
-            }
+        if diff >= 0 && self.mask.bit(diff as usize) != 0 {
+            // The sequence number is duplicated.
+            return false;
         }
 
         self.accepted = true;
@@ -170,8 +168,8 @@ impl ReplayDetector for WrappedSlidingWindowDetector {
 
 pub struct NoOpReplayDetector {}
 
-impl NoOpReplayDetector {
-    pub fn new() -> Self {
+impl Default for NoOpReplayDetector {
+    fn default() -> Self {
         NoOpReplayDetector {}
     }
 }

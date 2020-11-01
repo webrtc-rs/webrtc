@@ -20,8 +20,6 @@ use std::collections::HashMap;
 use std::io::{BufWriter, Cursor};
 use std::sync::Arc;
 
-use log;
-
 const DEFAULT_SESSION_SRTP_REPLAY_PROTECTION_WINDOW: usize = 64;
 const DEFAULT_SESSION_SRTCP_REPLAY_PROTECTION_WINDOW: usize = 64;
 
@@ -99,9 +97,8 @@ impl Session {
                         Ok(()) => {},
                         Err(err) => log::info!("{}", err),
                     },
-                    opt = close_stream => match opt {
-                        Some(ssrc) => Session::close_stream(&cloned_streams_map, ssrc).await,
-                        None => {}
+                    opt = close_stream => if let Some(ssrc) = opt {
+                        Session::close_stream(&cloned_streams_map, ssrc).await
                     },
                     _ = close_session => break
                 }

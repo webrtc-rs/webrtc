@@ -21,13 +21,13 @@ impl HandshakeMessageClientKeyExchange {
     }
 
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        if (self.identity_hint.len() != 0 && self.public_key.len() != 0)
-            || (self.identity_hint.len() == 0 && self.public_key.len() == 0)
+        if (!self.identity_hint.is_empty() && !self.public_key.is_empty())
+            || (self.identity_hint.is_empty() && self.public_key.is_empty())
         {
             return Err(ERR_INVALID_CLIENT_KEY_EXCHANGE.clone());
         }
 
-        if self.public_key.len() != 0 {
+        if !self.public_key.is_empty() {
             writer.write_u8(self.public_key.len() as u8)?;
             writer.write_all(&self.public_key)?;
         } else {

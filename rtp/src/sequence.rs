@@ -46,13 +46,13 @@ impl Sequencer for SequencerImpl {
         if s.sequence_number == 0 {
             s.roll_over_count += 1;
         }
-        return s.sequence_number;
+        s.sequence_number
     }
 
     // RollOverCount returns the amount of times the 16bit sequence number
     // has wrapped
     fn roll_over_count(&self) -> u64 {
         let s = self.mutex.lock().unwrap();
-        return s.roll_over_count;
+        s.roll_over_count
     }
 }

@@ -23,7 +23,7 @@ pub struct Goodbye {
 
 impl fmt::Display for Goodbye {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut out = format!("Goodbye:\n\tSources:\n");
+        let mut out = "Goodbye:\n\tSources:\n".to_string();
         for s in &self.sources {
             out += format!("\t{}\n", *s).as_str();
         }
@@ -36,7 +36,7 @@ impl fmt::Display for Goodbye {
 impl Goodbye {
     fn len(&self) -> usize {
         let srcs_length = self.sources.len() * SSRC_LENGTH;
-        let reason_length = if self.reason.len() == 0 {
+        let reason_length = if self.reason.is_empty() {
             0
         } else {
             self.reason.len() + 1

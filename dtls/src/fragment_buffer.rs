@@ -44,13 +44,13 @@ impl FragmentBuffer {
         }
 
         buf = &buf[RECORD_LAYER_HEADER_SIZE..];
-        while buf.len() != 0 {
+        while !buf.is_empty() {
             let mut reader = Cursor::new(buf);
             let handshake_header = HandshakeHeader::unmarshal(&mut reader)?;
 
-            if !self.cache.contains_key(&handshake_header.message_sequence) {
-                self.cache.insert(handshake_header.message_sequence, vec![]);
-            }
+            self.cache
+                .entry(handshake_header.message_sequence)
+                .or_insert_with(Vec::new);
 
             // end index should be the length of handshake header but if the handshake
             // was fragmented, we should keep them all
@@ -95,10 +95,9 @@ impl FragmentBuffer {
             let mut raw_header = vec![];
             {
                 let mut writer = BufWriter::<&mut Vec<u8>>::new(raw_header.as_mut());
-                match first_header.marshal(&mut writer) {
-                    Err(_) => return (vec![], 0),
-                    Ok(_) => {}
-                };
+                if first_header.marshal(&mut writer).is_err() {
+                    return (vec![], 0);
+                }
             }
 
             let message_epoch = frags[0].record_layer_header.epoch;
@@ -122,10 +121,10 @@ fn append_message(target_offset: u32, frags: &[Fragment], raw_message: &mut Vec<
         if f.handshake_header.fragment_offset == target_offset {
             let fragment_end =
                 f.handshake_header.fragment_offset + f.handshake_header.fragment_length;
-            if fragment_end != f.handshake_header.length {
-                if !append_message(fragment_end, frags, raw_message) {
-                    return false;
-                }
+            if fragment_end != f.handshake_header.length
+                && !append_message(fragment_end, frags, raw_message)
+            {
+                return false;
             }
 
             let mut message = vec![];
