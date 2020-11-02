@@ -28,7 +28,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: doc
-          args: --verbose --no-deps --all-features
+          args: --verbose --no-deps --all-features --workspace
 
       - name: Finalize documentation
         run: |
