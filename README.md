@@ -9,9 +9,9 @@
  <a href="https://codecov.io/gh/webrtc-rs/webrtc"> 
   <img src="https://codecov.io/gh/webrtc-rs/webrtc/branch/master/graph/badge.svg">
  </a>
- <!--a href="https://webrtc.rs/webrtc/webrtc/index.html"> 
+ <a href="https://webrtc.rs/docs/index.html"> 
   <img src="https://img.shields.io/static/v1?label=docs&message=master&color=5479ab">
- </a-->
+ </a>
  <a href="https://github.com/webrtc-rs/webrtc/blob/master/LICENSE">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
  </a>
