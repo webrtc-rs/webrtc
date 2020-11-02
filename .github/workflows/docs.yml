@@ -1,0 +1,49 @@
+name: Documentation
+
+on:
+  push:
+    branches: [ master ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+
+      - name: Build documentation
+        uses: actions-rs/cargo@v1
+        with:
+          command: doc
+          args: --verbose --no-deps --all-features
+
+      - name: Finalize documentation
+        run: |
+          CRATE_NAME=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]' | cut -f2 -d"/")
+          echo "<meta http-equiv=\"refresh\" content=\"0; url=${CRATE_NAME/-/_}\">" > target/doc/index.html
+          touch target/doc/.nojekyll
+      - name: Upload as artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: Documentation
+          path: target/doc
+
+      - name: Deploy
+        uses: JamesIves/github-pages-deploy-action@3.7.1
+        with:
+          ACCESS_TOKEN: ${{ secrets.GH_PAT }}
+          BRANCH: gh-pages
+          FOLDER: target/doc
