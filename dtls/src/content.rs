@@ -31,7 +31,7 @@ impl From<u8> for ContentType {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(PartialEq, Debug)]
 pub enum Content {
     ChangeCipherSpec(ChangeCipherSpec),
     Alert(Alert),

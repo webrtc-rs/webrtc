@@ -12,9 +12,9 @@ pub(crate) const HANDSHAKE_HEADER_LENGTH: usize = 12;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct HandshakeHeader {
-    pub handshake_type: HandshakeType,
+    pub(crate) handshake_type: HandshakeType,
     pub(crate) length: u32, // uint24 in spec
-    pub message_sequence: u16,
+    pub(crate) message_sequence: u16,
     pub(crate) fragment_offset: u32, // uint24 in spec
     pub(crate) fragment_length: u32, // uint24 in spec
 }

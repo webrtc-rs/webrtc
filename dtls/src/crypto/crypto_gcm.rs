@@ -16,7 +16,6 @@ use super::*;
 use crate::content::*;
 use crate::errors::*;
 use crate::record_layer::record_layer_header::*;
-use crate::record_layer::*;
 
 use aes_gcm::aead::{generic_array::GenericArray, AeadInPlace, NewAead};
 use aes_gcm::Aes128Gcm; // what about Aes256Gcm?
@@ -53,7 +52,7 @@ impl CryptoGcm {
         }
     }
 
-    pub fn encrypt(&mut self, pkt: &RecordLayer, raw: &[u8]) -> Result<Vec<u8>, Error> {
+    pub fn encrypt(&mut self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>, Error> {
         let payload = &raw[RECORD_LAYER_HEADER_SIZE..];
         let raw = &raw[..RECORD_LAYER_HEADER_SIZE];
 
@@ -62,8 +61,7 @@ impl CryptoGcm {
         rand::thread_rng().fill(&mut nonce[4..]);
         let nonce = GenericArray::from_slice(&nonce);
 
-        let additional_data =
-            generate_aead_additional_data(&pkt.record_layer_header, payload.len());
+        let additional_data = generate_aead_additional_data(pkt_rlh, payload.len());
 
         let mut buffer: Vec<u8> = Vec::new();
         buffer.extend_from_slice(payload);

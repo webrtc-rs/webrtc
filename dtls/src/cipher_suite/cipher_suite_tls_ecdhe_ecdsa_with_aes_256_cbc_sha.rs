@@ -7,6 +7,7 @@ use tokio::sync::Mutex;
 
 use async_trait::async_trait;
 
+#[derive(Clone)]
 pub struct CipherSuiteTLSEcdheEcdsaWithAes256CbcSha {
     cbc: Arc<Mutex<Option<CryptoCbc>>>,
 }
@@ -93,10 +94,10 @@ impl CipherSuite for CipherSuiteTLSEcdheEcdsaWithAes256CbcSha {
         Ok(())
     }
 
-    async fn encrypt(&self, pkt: &RecordLayer, raw: &[u8]) -> Result<Vec<u8>, Error> {
+    async fn encrypt(&self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>, Error> {
         let mut cbc = self.cbc.lock().await;
         if let Some(cg) = cbc.as_mut() {
-            cg.encrypt(pkt, raw)
+            cg.encrypt(pkt_rlh, raw)
         } else {
             Err(Error::new(
                 "CipherSuite has not been initialized, unable to encrypt".to_owned(),

@@ -16,7 +16,6 @@ use crate::content::*;
 use crate::errors::*;
 use crate::prf::*;
 use crate::record_layer::record_layer_header::*;
-use crate::record_layer::*;
 
 use aes::Aes256;
 use block_modes::block_padding::Pkcs7;
@@ -51,12 +50,12 @@ impl CryptoCbc {
         })
     }
 
-    pub fn encrypt(&mut self, pkt: &RecordLayer, raw: &[u8]) -> Result<Vec<u8>, Error> {
+    pub fn encrypt(&mut self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>, Error> {
         let mut payload = raw[RECORD_LAYER_HEADER_SIZE..].to_vec();
         let raw = &raw[..RECORD_LAYER_HEADER_SIZE];
 
         // Generate + Append MAC
-        let h = &pkt.record_layer_header;
+        let h = pkt_rlh;
 
         let mac = prf_mac(
             h.epoch,

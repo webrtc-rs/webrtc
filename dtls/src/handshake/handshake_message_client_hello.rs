@@ -21,13 +21,13 @@ initiative in order to renegotiate the security parameters in an
 existing connection.
 */
 pub struct HandshakeMessageClientHello {
-    version: ProtocolVersion,
-    random: HandshakeRandom,
-    cookie: Vec<u8>,
+    pub(crate) version: ProtocolVersion,
+    pub(crate) random: HandshakeRandom,
+    pub(crate) cookie: Vec<u8>,
 
-    cipher_suites: Vec<Box<dyn CipherSuite>>,
-    compression_methods: CompressionMethods,
-    extensions: Vec<Extension>,
+    pub(crate) cipher_suites: Vec<Box<dyn CipherSuite>>,
+    pub(crate) compression_methods: CompressionMethods,
+    pub(crate) extensions: Vec<Extension>,
 }
 
 impl PartialEq for HandshakeMessageClientHello {

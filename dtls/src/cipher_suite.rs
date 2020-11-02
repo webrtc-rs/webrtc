@@ -7,7 +7,7 @@ use async_trait::async_trait;
 
 use super::client_certificate_type::*;
 use super::errors::*;
-use super::record_layer::*;
+use super::record_layer::record_layer_header::*;
 
 use util::Error;
 
@@ -124,7 +124,7 @@ pub trait CipherSuite {
         is_client: bool,
     ) -> Result<(), Error>;
 
-    async fn encrypt(&self, pkt: &RecordLayer, raw: &[u8]) -> Result<Vec<u8>, Error>;
+    async fn encrypt(&self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>, Error>;
     async fn decrypt(&self, input: &[u8]) -> Result<Vec<u8>, Error>;
 }
 
