@@ -1,3 +1,4 @@
+pub mod handshake_cache;
 pub mod handshake_header;
 pub mod handshake_message_certificate;
 pub mod handshake_message_certificate_request;
@@ -14,8 +15,6 @@ pub mod handshake_random;
 use std::fmt;
 use std::io::{Read, Write};
 
-//use byteorder::{ReadBytesExt, WriteBytesExt};
-
 use util::Error;
 
 use super::content::*;
@@ -25,7 +24,7 @@ use handshake_header::*;
 use handshake_message_finished::*;
 
 // https://tools.ietf.org/html/rfc5246#section-7.4
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum HandshakeType {
     HelloRequest = 0,
     ClientHello = 1,
