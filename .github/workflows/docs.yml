@@ -29,6 +29,8 @@ jobs:
         with:
           command: doc
           args: --verbose --no-deps --all-features --workspace
+        env:
+          RUSTDOCFLAGS: '--enable-index-page -Zunstable-options'
 
       - name: Finalize documentation
         run: |
