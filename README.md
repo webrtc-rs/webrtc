@@ -6,6 +6,9 @@
  <a href="https://github.com/webrtc-rs/webrtc/actions"> 
   <img src="https://github.com/rtcrs/webrtc/workflows/webrtc/badge.svg?branch=master">
  </a> 
+ <a href="https://codecov.io/gh/webrtc-rs/webrtc"> 
+  <img src="https://codecov.io/gh/webrtc-rs/webrtc/branch/master/graph/badge.svg">
+ </a>
  <a href="https://github.com/webrtc-rs/webrtc/blob/master/LICENSE">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
  </a>
