@@ -11,7 +11,7 @@ use byteorder::{ReadBytesExt, WriteBytesExt};
 use super::content::*;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
-enum AlertLevel {
+pub(crate) enum AlertLevel {
     Warning = 1,
     Fatal = 2,
     Invalid,
@@ -38,7 +38,7 @@ impl From<u8> for AlertLevel {
 }
 
 #[derive(Copy, Clone, PartialEq, Debug)]
-enum AlertDescription {
+pub(crate) enum AlertDescription {
     CloseNotify = 0,
     UnexpectedMessage = 10,
     BadRecordMac = 20,
