@@ -83,9 +83,9 @@ lazy_static! {
     );
     pub static ref ERR_UNSUPPORTED_PROTOCOL_VERSION: Error =
         Error::new("unsupported protocol version".to_owned());
-    pub static ref ERR_PSKAND_CERTIFICATE: Error =
+    pub static ref ERR_PSK_AND_CERTIFICATE: Error =
         Error::new("Certificate and PSK provided".to_owned());
-    pub static ref ERR_PSKAND_IDENTITY_MUST_BE_SET_FOR_CLIENT: Error =
+    pub static ref ERR_PSK_AND_IDENTITY_MUST_BE_SET_FOR_CLIENT: Error =
         Error::new("PSK and PSK Identity Hint must both be set for client".to_owned());
     pub static ref ERR_REQUESTED_BUT_NO_SRTPEXTENSION: Error = Error::new(
         "SRTP support was requested but server did not respond with use_srtp extension".to_owned()

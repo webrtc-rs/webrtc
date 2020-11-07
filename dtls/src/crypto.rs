@@ -17,6 +17,11 @@ use rsa::PublicKey;
 use sha2::{Digest, Sha256};
 use signature::{Signature, Verifier};
 
+pub struct Certificate {
+    pub certificate: Vec<u8>,
+    pub private_key: CryptoPrivateKey,
+}
+
 pub(crate) fn value_key_message(
     client_random: &[u8],
     server_random: &[u8],
@@ -37,7 +42,7 @@ pub(crate) fn value_key_message(
     plaintext
 }
 
-pub(crate) enum CryptoPrivateKey {
+pub enum CryptoPrivateKey {
     ED25519(Box<dyn ed25519::signature::Signer<ed25519::Signature>>),
     ECDSA256(Box<dyn p256::ecdsa::signature::Signer<p256::ecdsa::Signature>>),
     RSA256(Box<rsa::RSAPrivateKey>),

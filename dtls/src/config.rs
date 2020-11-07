@@ -1,6 +1,8 @@
 use crate::cipher_suite::*;
+use crate::crypto::*;
 use crate::errors::*;
 use crate::extension::extension_use_srtp::SRTPProtectionProfile;
+use crate::signature_hash_algorithm::SignatureScheme;
 
 use std::time::Duration;
 
@@ -12,16 +14,16 @@ pub struct Config {
     // Certificates contains certificate chain to present to the other side of the connection.
     // Server MUST set this if psk is non-nil
     // client SHOULD sets this so CertificateRequests can be handled if psk is non-nil
-    //TODO: Certificates []tls.Certificate
+    certificates: Vec<Certificate>,
 
     // cipher_suites is a list of supported cipher suites.
     // If cipher_suites is nil, a default list is used
     cipher_suites: Vec<CipherSuiteID>,
 
     // SignatureSchemes contains the signature and hash schemes that the peer requests to verify.
-    //TODO: SignatureSchemes: []tls.SignatureScheme
+    signature_schemes: Vec<SignatureScheme>,
 
-    // srtpprotection_profiles are the supported protection profiles
+    // srtp_protection_profiles are the supported protection profiles
     // Clients will send this via use_srtp and assert that the server properly responds
     // Servers will assert that clients send one of these profiles and will respond as needed
     srtp_protection_profiles: Vec<SRTPProtectionProfile>,
@@ -58,7 +60,7 @@ pub struct Config {
     // VerifyPeerCertificate, if not nil, is called after normal
     // certificate verification by either a client or server. It
     // receives the certificate provided by the peer and also a flag
-    // that tells if normal verification has succeedded. If it returns a
+    // that tells if normal verification has succeeded. If it returns a
     // non-nil error, the handshake is aborted and that error results.
     //
     // If normal verification fails then the handshake will abort before
@@ -129,26 +131,21 @@ enum ExtendedMasterSecretType {
 }
 
 pub(crate) fn validate_config(config: &Config) -> Result<(), Error> {
-    //TODO: if config.Certificates.len() > 0 && config.psk != nil:
-    //	return ErrPSKAndCertificate
+    if !config.certificates.is_empty() && config.psk.is_some() {
+        return Err(ERR_PSK_AND_CERTIFICATE.clone());
+    }
 
     if !config.psk_identity_hint.is_empty() && config.psk.is_none() {
         return Err(ERR_IDENTITY_NO_PSK.clone());
     }
 
-    /*TODO: for _, cert := range config.Certificates {
-        if cert.Certificate == nil {
-            return errInvalidCertificate
+    for cert in &config.certificates {
+        match cert.private_key {
+            CryptoPrivateKey::ED25519(_) => {}
+            CryptoPrivateKey::ECDSA256(_) => {}
+            _ => return Err(ERR_INVALID_PRIVATE_KEY.clone()),
         }
-        if cert.PrivateKey != nil {
-            switch cert.PrivateKey.(type) {
-            case ed25519.PrivateKey:
-            case *ecdsa.PrivateKey:
-            default:
-                return errInvalidPrivateKey
-            }
-        }
-    }*/
+    }
 
     parse_cipher_suites(
         &config.cipher_suites,
