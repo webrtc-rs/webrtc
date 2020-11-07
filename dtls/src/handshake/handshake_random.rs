@@ -17,6 +17,15 @@ pub struct HandshakeRandom {
     pub random_bytes: [u8; RANDOM_BYTES_LENGTH],
 }
 
+impl Default for HandshakeRandom {
+    fn default() -> Self {
+        HandshakeRandom {
+            gmt_unix_time: SystemTime::UNIX_EPOCH,
+            random_bytes: [0u8; RANDOM_BYTES_LENGTH],
+        }
+    }
+}
+
 impl HandshakeRandom {
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         let secs = match self.gmt_unix_time.duration_since(SystemTime::UNIX_EPOCH) {

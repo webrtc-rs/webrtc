@@ -5,7 +5,7 @@ lazy_static! {
     pub static ref ERR_DEADLINE_EXCEEDED: Error = Error::new("read/write timeout".to_owned());
     pub static ref ERR_BUFFER_TOO_SMALL: Error = Error::new("buffer is too small".to_owned());
     pub static ref ERR_CONTEXT_UNSUPPORTED: Error =
-        Error::new("context is not supported for ExportKeyingMaterial".to_owned());
+        Error::new("context is not supported for export_keying_material".to_owned());
     pub static ref ERR_DTLSPACKET_INVALID_LENGTH: Error =
         Error::new("packet is too short".to_owned());
     pub static ref ERR_HANDSHAKE_IN_PROGRESS: Error =
@@ -15,7 +15,7 @@ lazy_static! {
     pub static ref ERR_INVALID_PACKET_LENGTH: Error =
         Error::new("packet length and declared length do not match".to_owned());
     pub static ref ERR_RESERVED_EXPORT_KEYING_MATERIAL: Error =
-        Error::new("ExportKeyingMaterial can not be used with a reserved label".to_owned());
+        Error::new("export_keying_material can not be used with a reserved label".to_owned());
     pub static ref ERR_CERTIFICATE_VERIFY_NO_CERTIFICATE: Error = Error::new(
         "client sent certificate verify but we have no certificate to verify".to_owned()
     );
