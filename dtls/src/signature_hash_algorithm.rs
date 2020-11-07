@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod signature_hash_algorithm_test;
+
 use std::fmt;
 
 use crate::crypto::*;
@@ -59,6 +62,10 @@ impl HashAlgorithm {
             *self,
             HashAlgorithm::MD2 | HashAlgorithm::MD5 | HashAlgorithm::SHA1
         )
+    }
+
+    pub(crate) fn invalid(&self) -> bool {
+        matches!(*self, HashAlgorithm::MD2)
     }
 }
 
@@ -176,7 +183,7 @@ pub(crate) enum SignatureScheme {
 // parse_signature_schemes translates []tls.SignatureScheme to []signatureHashAlgorithm.
 // It returns default signature scheme list if no SignatureScheme is passed.
 pub(crate) fn parse_signature_schemes(
-    sigs: &[SignatureScheme],
+    sigs: &[u16],
     insecure_hashes: bool,
 ) -> Result<Vec<SignatureHashAlgorithm>, Error> {
     if sigs.is_empty() {
@@ -185,12 +192,12 @@ pub(crate) fn parse_signature_schemes(
 
     let mut out = vec![];
     for ss in sigs {
-        let sig: SignatureAlgorithm = ((*ss as u16 & 0xFF) as u8).into();
+        let sig: SignatureAlgorithm = ((*ss & 0xFF) as u8).into();
         if sig == SignatureAlgorithm::Unsupported {
             return Err(ERR_INVALID_SIGNATURE_ALGORITHM.clone());
         }
-        let h: HashAlgorithm = (((*ss as u16 >> 8) & 0xFF) as u8).into();
-        if h == HashAlgorithm::Unsupported {
+        let h: HashAlgorithm = (((*ss >> 8) & 0xFF) as u8).into();
+        if h == HashAlgorithm::Unsupported || h.invalid() {
             return Err(ERR_INVALID_HASH_ALGORITHM.clone());
         }
         if h.insecure() && !insecure_hashes {
