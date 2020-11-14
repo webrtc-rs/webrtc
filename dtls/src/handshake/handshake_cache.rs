@@ -22,10 +22,10 @@ pub(crate) struct HandshakeCacheItem {
 
 #[derive(Copy, Clone, Debug)]
 pub(crate) struct HandshakeCachePullRule {
-    typ: HandshakeType,
-    epoch: u16,
-    is_client: bool,
-    optional: bool,
+    pub(crate) typ: HandshakeType,
+    pub(crate) epoch: u16,
+    pub(crate) is_client: bool,
+    pub(crate) optional: bool,
 }
 
 pub(crate) struct HandshakeCache {

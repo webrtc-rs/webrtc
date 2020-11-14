@@ -110,11 +110,11 @@ const DEFAULT_MTU: usize = 1200; // bytes
 
 // PSKCallback is called once we have the remote's psk_identity_hint.
 // If the remote provided none it will be nil
-type PSKCallback = fn(&[u8]) -> Result<Vec<u8>, Error>;
+pub(crate) type PSKCallback = fn(&[u8]) -> Result<Vec<u8>, Error>;
 
 // ClientAuthType declares the policy the server will follow for
 // TLS Client Authentication.
-enum ClientAuthType {
+pub(crate) enum ClientAuthType {
     NoClientCert = 0,
     RequestClientCert = 1,
     RequireAnyClientCert = 2,
@@ -124,7 +124,8 @@ enum ClientAuthType {
 
 // ExtendedMasterSecretType declares the policy the client and server
 // will follow for the Extended Master Secret extension
-enum ExtendedMasterSecretType {
+#[derive(PartialEq)]
+pub(crate) enum ExtendedMasterSecretType {
     Request = 0,
     Require = 1,
     Disable = 2,

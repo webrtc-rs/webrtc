@@ -13,7 +13,7 @@ const EXTENSION_SERVER_NAME_TYPE_DNSHOST_NAME: u8 = 0;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExtensionServerName {
-    server_name: String,
+    pub(crate) server_name: String,
 }
 
 impl ExtensionServerName {

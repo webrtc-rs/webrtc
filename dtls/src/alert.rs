@@ -145,8 +145,8 @@ impl From<u8> for AlertDescription {
 // https://tools.ietf.org/html/rfc5246#section-7.2
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct Alert {
-    alert_level: AlertLevel,
-    alert_description: AlertDescription,
+    pub(crate) alert_level: AlertLevel,
+    pub(crate) alert_description: AlertDescription,
 }
 
 impl fmt::Display for Alert {

@@ -13,36 +13,36 @@ use std::io::{BufWriter, Cursor};
 use std::sync::atomic::{AtomicU16, Ordering};
 
 // State holds the dtls connection state and implements both encoding.BinaryMarshaler and encoding.BinaryUnmarshaler
-pub struct State {
-    local_epoch: AtomicU16,
-    remote_epoch: AtomicU16,
-    local_sequence_number: Vec<u64>, // uint48
-    local_random: HandshakeRandom,
-    remote_random: HandshakeRandom,
-    master_secret: Vec<u8>,
-    cipher_suite: Option<Box<dyn CipherSuite>>, // nil if a cipher_suite hasn't been chosen
+pub(crate) struct State {
+    pub(crate) local_epoch: AtomicU16,
+    pub(crate) remote_epoch: AtomicU16,
+    pub(crate) local_sequence_number: Vec<u64>, // uint48
+    pub(crate) local_random: HandshakeRandom,
+    pub(crate) remote_random: HandshakeRandom,
+    pub(crate) master_secret: Vec<u8>,
+    pub(crate) cipher_suite: Option<Box<dyn CipherSuite>>, // nil if a cipher_suite hasn't been chosen
 
-    srtp_protection_profile: SRTPProtectionProfile, // Negotiated srtpprotection_profile
-    peer_certificates: Vec<Vec<u8>>,
+    pub(crate) srtp_protection_profile: SRTPProtectionProfile, // Negotiated srtpprotection_profile
+    pub(crate) peer_certificates: Vec<Vec<u8>>,
 
-    is_client: bool,
+    pub(crate) is_client: bool,
 
-    pre_master_secret: Vec<u8>,
-    extended_master_secret: bool,
+    pub(crate) pre_master_secret: Vec<u8>,
+    pub(crate) extended_master_secret: bool,
 
-    named_curve: NamedCurve,
-    local_keypair: Option<NamedCurveKeypair>,
-    cookie: Vec<u8>,
-    handshake_send_sequence: isize,
-    handshake_recv_sequence: isize,
-    server_name: String,
-    remote_requested_certificate: bool, // Did we get a CertificateRequest
-    local_certificates_verify: Vec<u8>, // cache CertificateVerify
-    local_verify_data: Vec<u8>,         // cached VerifyData
-    local_key_signature: Vec<u8>,       // cached keySignature
-    peer_certificates_verified: bool,
+    pub(crate) named_curve: NamedCurve,
+    pub(crate) local_keypair: Option<NamedCurveKeypair>,
+    pub(crate) cookie: Vec<u8>,
+    pub(crate) handshake_send_sequence: isize,
+    pub(crate) handshake_recv_sequence: isize,
+    pub(crate) server_name: String,
+    pub(crate) remote_requested_certificate: bool, // Did we get a CertificateRequest
+    pub(crate) local_certificates_verify: Vec<u8>, // cache CertificateVerify
+    pub(crate) local_verify_data: Vec<u8>,         // cached VerifyData
+    pub(crate) local_key_signature: Vec<u8>,       // cached keySignature
+    pub(crate) peer_certificates_verified: bool,
 
-    replay_detector: Vec<Box<dyn ReplayDetector>>,
+    pub(crate) replay_detector: Vec<Box<dyn ReplayDetector>>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]

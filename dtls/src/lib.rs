@@ -28,3 +28,34 @@ pub mod prf;
 pub mod record_layer;
 pub mod signature_hash_algorithm;
 pub mod state;
+
+use cipher_suite::*;
+use extension::extension_use_srtp::SRTPProtectionProfile;
+
+pub(crate) fn find_matching_srtp_profile(
+    a: &[SRTPProtectionProfile],
+    b: &[SRTPProtectionProfile],
+) -> Result<SRTPProtectionProfile, ()> {
+    for a_profile in a {
+        for b_profile in b {
+            if a_profile == b_profile {
+                return Ok(*a_profile);
+            }
+        }
+    }
+    Err(())
+}
+
+pub(crate) fn find_matching_cipher_suite(
+    a: &[Box<dyn CipherSuite>],
+    b: &[Box<dyn CipherSuite>],
+) -> Result<CipherSuiteID, ()> {
+    for a_suite in a {
+        for b_suite in b {
+            if a_suite.id() == b_suite.id() {
+                return Ok(a_suite.id());
+            }
+        }
+    }
+    Err(())
+}

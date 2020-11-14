@@ -33,7 +33,7 @@ const EXTENSION_USE_SRTPHEADER_SIZE: usize = 6;
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExtensionUseSRTP {
-    protection_profiles: Vec<SRTPProtectionProfile>,
+    pub(crate) protection_profiles: Vec<SRTPProtectionProfile>,
 }
 
 impl ExtensionUseSRTP {

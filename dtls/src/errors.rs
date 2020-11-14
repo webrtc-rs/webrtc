@@ -92,7 +92,7 @@ lazy_static! {
     );
     pub static ref ERR_SERVER_MUST_HAVE_CERTIFICATE: Error =
         Error::new("Certificate is mandatory for server".to_owned());
-    pub static ref ERR_SERVER_NO_MATCHING_SRTPPROFILE: Error =
+    pub static ref ERR_SERVER_NO_MATCHING_SRTP_PROFILE: Error =
         Error::new("client requested SRTP but we have no matching profiles".to_owned());
     pub static ref ERR_SERVER_REQUIRED_BUT_NO_CLIENT_EMS: Error = Error::new(
         "server requires the Extended Master Secret extension, but the client does not support it"
@@ -117,4 +117,6 @@ lazy_static! {
         Error::new("sequence number overflow".to_owned());
     pub static ref ERR_UNABLE_TO_MARSHAL_FRAGMENTED: Error =
         Error::new("unable to marshal fragmented handshakes".to_owned());
+    pub static ref ERR_INVALID_FSM_TRANSITION: Error =
+        Error::new("invalid state machine transition".to_owned());
 }

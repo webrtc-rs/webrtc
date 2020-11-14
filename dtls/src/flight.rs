@@ -1,3 +1,5 @@
+mod flight0;
+
 use std::fmt;
 
 use util::Error;
@@ -85,27 +87,29 @@ pub(crate) struct Packet {
 
 pub(crate) trait FlightConn {
     fn notify(
+        &self,
         /*ctx context.Context,*/ level: AlertLevel,
         desc: AlertDescription,
     ) -> Result<(), Error>;
-    fn write_packets(/*context.Context,*/ packets: Vec<Packet>) -> Result<(), Error>;
-    fn recv_handshake() -> mpsc::Receiver<()>;
-    fn set_local_epoch(epoch: u16);
-    fn handle_queued_packets(/*context.Context*/) -> Result<(), Error>;
+    fn write_packets(&self, /*context.Context,*/ packets: Vec<Packet>) -> Result<(), Error>;
+    fn recv_handshake(&self) -> mpsc::Receiver<()>;
+    fn set_local_epoch(&self, epoch: u16);
+    fn handle_queued_packets(&self /*context.Context*/) -> Result<(), Error>;
 }
 
 // Parse received handshakes and return next flightVal
-type FlightParser = fn(
-    /*context.Context,*/ fc: Box<dyn FlightConn>,
-    state: &State,
+/*type FlightParser = fn<FC: FlightConn>(
+    /*context.Context,*/ fc: FC,
+    state: &mut State,
     handshake_cache: &HandshakeCache,
     handshake_config: &HandshakeConfig,
 ) -> Result<(Flight, Option<Alert>), Error>;
 
 // Generate flights
-type FlightGenerator = fn(
-    fc: Box<dyn FlightConn>,
+type FlightGenerator = fn<FC: FlightConn>(
+    fc: FC,
     state: &State,
     handshake_cache: &HandshakeCache,
     handshake_config: &HandshakeConfig,
 ) -> Result<(Vec<Packet>, Option<Alert>), Error>;
+*/
