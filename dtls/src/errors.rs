@@ -27,7 +27,7 @@ lazy_static! {
         Error::new("client sent certificate but did not verify it".to_owned());
     pub static ref ERR_CLIENT_CERTIFICATE_REQUIRED: Error =
         Error::new("server required client verification, but got none".to_owned());
-    pub static ref ERR_CLIENT_NO_MATCHING_SRTPPROFILE: Error =
+    pub static ref ERR_CLIENT_NO_MATCHING_SRTP_PROFILE: Error =
         Error::new("server responded with SRTP Profile we do not support".to_owned());
     pub static ref ERR_CLIENT_REQUIRED_BUT_NO_SERVER_EMS: Error = Error::new(
         "client required Extended Master Secret extension, but server does not support it"
@@ -87,7 +87,7 @@ lazy_static! {
         Error::new("Certificate and PSK provided".to_owned());
     pub static ref ERR_PSK_AND_IDENTITY_MUST_BE_SET_FOR_CLIENT: Error =
         Error::new("PSK and PSK Identity Hint must both be set for client".to_owned());
-    pub static ref ERR_REQUESTED_BUT_NO_SRTPEXTENSION: Error = Error::new(
+    pub static ref ERR_REQUESTED_BUT_NO_SRTP_EXTENSION: Error = Error::new(
         "SRTP support was requested but server did not respond with use_srtp extension".to_owned()
     );
     pub static ref ERR_SERVER_MUST_HAVE_CERTIFICATE: Error =

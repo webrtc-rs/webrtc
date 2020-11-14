@@ -21,12 +21,12 @@ failure alert.
 https://tools.ietf.org/html/rfc5246#section-7.4.1.3
 */
 pub struct HandshakeMessageServerHello {
-    version: ProtocolVersion,
-    random: HandshakeRandom,
+    pub(crate) version: ProtocolVersion,
+    pub(crate) random: HandshakeRandom,
 
-    cipher_suite: Box<dyn CipherSuite>,
+    pub(crate) cipher_suite: CipherSuiteID,
     compression_method: CompressionMethodId,
-    extensions: Vec<Extension>,
+    pub(crate) extensions: Vec<Extension>,
 }
 
 impl PartialEq for HandshakeMessageServerHello {
@@ -35,7 +35,7 @@ impl PartialEq for HandshakeMessageServerHello {
             && self.random == other.random
             && self.compression_method == other.compression_method
             && self.extensions == other.extensions
-            && self.cipher_suite.id() == other.cipher_suite.id()
+            && self.cipher_suite == other.cipher_suite
     }
 }
 
@@ -43,7 +43,7 @@ impl fmt::Debug for HandshakeMessageServerHello {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = vec![
             format!("version: {:?} random: {:?}", self.version, self.random),
-            format!("cipher_suites: {:?}", self.cipher_suite.to_string()),
+            format!("cipher_suites: {:?}", self.cipher_suite),
             format!("compression_method: {:?}", self.compression_method),
             format!("extensions: {:?}", self.extensions),
         ];
@@ -64,7 +64,7 @@ impl HandshakeMessageServerHello {
         // SessionID
         writer.write_u8(0x00)?;
 
-        writer.write_u16::<BigEndian>(self.cipher_suite.id() as u16)?;
+        writer.write_u16::<BigEndian>(self.cipher_suite as u16)?;
 
         writer.write_u8(self.compression_method as u8)?;
 
@@ -90,8 +90,7 @@ impl HandshakeMessageServerHello {
         // Session ID
         reader.read_u8()?;
 
-        let id: CipherSuiteID = reader.read_u16::<BigEndian>()?.into();
-        let cipher_suite = cipher_suite_for_id(id)?;
+        let cipher_suite: CipherSuiteID = reader.read_u16::<BigEndian>()?.into();
 
         let compression_method = reader.read_u8()?.into();
         let mut extensions = vec![];

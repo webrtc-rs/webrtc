@@ -29,7 +29,7 @@ pub(crate) enum NamedCurvePrivateKey {
 }
 
 pub struct NamedCurveKeypair {
-    curve: NamedCurve,
+    pub(crate) curve: NamedCurve,
     public_key: Vec<u8>,
     pub(crate) private_key: NamedCurvePrivateKey,
 }

@@ -1,5 +1,5 @@
 use super::*;
-//use crate::compression_methods::*;
+use crate::compression_methods::*;
 use crate::config::*;
 use crate::conn::*;
 use crate::content::*;
@@ -10,7 +10,7 @@ use crate::extension::extension_supported_elliptic_curves::*;
 use crate::extension::extension_supported_point_formats::*;
 use crate::extension::extension_supported_signature_algorithms::*;
 use crate::extension::extension_use_extended_master_secret::*;
-//use crate::extension::extension_use_srtp::*;
+use crate::extension::extension_use_srtp::*;
 use crate::extension::*;
 use crate::handshake::handshake_header::*;
 use crate::handshake::handshake_message_client_hello::*;
@@ -20,8 +20,6 @@ use crate::record_layer::*;
 
 use util::Error;
 
-use crate::compression_methods::default_compression_methods;
-use crate::extension::extension_use_srtp::ExtensionUseSRTP;
 use std::sync::atomic::Ordering;
 
 pub(crate) async fn flight1parse<C: FlightConn>(

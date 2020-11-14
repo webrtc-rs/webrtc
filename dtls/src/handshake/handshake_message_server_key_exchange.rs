@@ -15,11 +15,11 @@ use util::Error;
 // Structure supports ECDH and PSK
 #[derive(Clone, Debug, PartialEq)]
 pub struct HandshakeMessageServerKeyExchange {
-    identity_hint: Vec<u8>,
+    pub(crate) identity_hint: Vec<u8>,
 
     elliptic_curve_type: EllipticCurveType,
-    named_curve: NamedCurve,
-    public_key: Vec<u8>,
+    pub(crate) named_curve: NamedCurve,
+    pub(crate) public_key: Vec<u8>,
     hash_algorithm: HashAlgorithm,
     signature_algorithm: SignatureAlgorithm,
     signature: Vec<u8>,

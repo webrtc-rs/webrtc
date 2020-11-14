@@ -13,7 +13,7 @@ const HANDSHAKE_MESSAGE_CERTIFICATE_LENGTH_FIELD_SIZE: usize = 3;
 
 #[derive(PartialEq, Debug)]
 pub struct HandshakeMessageCertificate {
-    certificate: Vec<Vec<u8>>,
+    pub(crate) certificate: Vec<Vec<u8>>,
 }
 
 impl HandshakeMessageCertificate {
