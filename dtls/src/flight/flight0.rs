@@ -1,5 +1,6 @@
 use super::*;
 use crate::config::*;
+use crate::conn::*;
 use crate::errors::*;
 use crate::extension::*;
 use crate::handshake::*;
@@ -7,6 +8,10 @@ use crate::record_layer::record_layer_header::*;
 use crate::*;
 
 use util::Error;
+
+use rand::Rng;
+
+use std::sync::atomic::Ordering;
 
 pub(crate) async fn flight0parse<C: FlightConn>(
     /*context.Context,*/
@@ -155,4 +160,23 @@ pub(crate) async fn flight0parse<C: FlightConn>(
             None,
         ))
     }
+}
+
+pub(crate) async fn flight0generate<C: FlightConn>(
+    _c: C,
+    state: &mut State,
+    _cache: &HandshakeCache,
+    _cfg: &HandshakeConfig,
+) -> Result<Vec<Packet>, (Option<Alert>, Option<Error>)> {
+    // Initialize
+    rand::thread_rng().fill(state.cookie.as_mut_slice());
+
+    let zero_epoch = 0;
+    state.local_epoch.store(zero_epoch, Ordering::Relaxed);
+    state.remote_epoch.store(zero_epoch, Ordering::Relaxed);
+    state.named_curve = DEFAULT_NAMED_CURVE;
+
+    state.local_random.populate();
+
+    Ok(vec![])
 }
