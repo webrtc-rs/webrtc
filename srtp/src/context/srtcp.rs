@@ -6,7 +6,7 @@ use std::io::BufReader;
 pub(crate) const MAX_SRTCP_INDEX: usize = 0x7FFFFFFF;
 
 impl Context {
-    // DecryptRTCP decrypts a RTCP packet with an encrypted payload
+    /// DecryptRTCP decrypts a RTCP packet with an encrypted payload
     pub fn decrypt_rtcp(&mut self, encrypted: &[u8]) -> Result<Vec<u8>, Error> {
         {
             let mut reader = BufReader::new(encrypted);
@@ -50,8 +50,8 @@ impl Context {
         Ok(dst)
     }
 
-    // EncryptRTCP marshals and encrypts an RTCP packet, writing to the dst buffer provided.
-    // If the dst buffer does not have the capacity to hold `len(plaintext) + 14` bytes, a new one will be allocated and returned.
+    /// EncryptRTCP marshals and encrypts an RTCP packet, writing to the dst buffer provided.
+    /// If the dst buffer does not have the capacity to hold `len(plaintext) + 14` bytes, a new one will be allocated and returned.
     pub fn encrypt_rtcp(&mut self, decrypted: &[u8]) -> Result<Vec<u8>, Error> {
         {
             let mut reader = BufReader::new(decrypted);

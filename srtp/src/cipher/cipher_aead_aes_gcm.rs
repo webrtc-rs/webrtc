@@ -12,6 +12,7 @@ use crate::{context, key_derivation};
 pub(crate) const CIPHER_AEAD_AES_GCM_AUTH_TAG_LEN: usize = 16;
 const RTCP_ENCRYPTION_FLAG: u8 = 0x80;
 
+/// AEAD Cipher based on AES.
 pub(crate) struct CipherAeadAesGcm {
     srtp_cipher: aes_gcm::Aes128Gcm,
     srtcp_cipher: aes_gcm::Aes128Gcm,
@@ -128,6 +129,7 @@ impl Cipher for CipherAeadAesGcm {
 }
 
 impl CipherAeadAesGcm {
+    /// Create a new AEAD instance.
     pub(crate) fn new(master_key: &[u8], master_salt: &[u8]) -> Result<CipherAeadAesGcm, Error> {
         let srtp_session_key = key_derivation::aes_cm_key_derivation(
             context::LABEL_SRTP_ENCRYPTION,
