@@ -9,7 +9,7 @@ use lazy_static::lazy_static;
 
 struct RTCPTestCase {
     ssrc: u32,
-    index: u32,
+    index: usize,
     encrypted: Vec<u8>,
     decrypted: Vec<u8>,
 }
@@ -91,14 +91,14 @@ fn test_rtcp_lifecycle() -> Result<(), Error> {
     let mut encrypt_context = Context::new(
         &RTCP_TEST_MASTER_KEY,
         &RTCP_TEST_MASTER_SALT,
-        PROTECTION_PROFILE_AES128CM_HMAC_SHA1_80,
+        ProtectionProfile::AES128CMHMACSHA1_80,
         None,
         None,
     )?;
     let mut decrypt_context = Context::new(
         &RTCP_TEST_MASTER_KEY,
         &RTCP_TEST_MASTER_SALT,
-        PROTECTION_PROFILE_AES128CM_HMAC_SHA1_80,
+        ProtectionProfile::AES128CMHMACSHA1_80,
         None,
         None,
     )?;
@@ -123,12 +123,12 @@ fn test_rtcp_lifecycle() -> Result<(), Error> {
 
 #[test]
 fn test_rtcp_invalid_auth_tag() -> Result<(), Error> {
-    let auth_tag_len = PROTECTION_PROFILE_AES128CM_HMAC_SHA1_80.auth_tag_len()?;
+    let auth_tag_len = ProtectionProfile::AES128CMHMACSHA1_80.auth_tag_len()?;
 
     let mut decrypt_context = Context::new(
         &RTCP_TEST_MASTER_KEY,
         &RTCP_TEST_MASTER_SALT,
-        PROTECTION_PROFILE_AES128CM_HMAC_SHA1_80,
+        ProtectionProfile::AES128CMHMACSHA1_80,
         None,
         None,
     )?;
@@ -157,7 +157,7 @@ fn test_rtcp_replay_detector_separation() -> Result<(), Error> {
     let mut decrypt_context = Context::new(
         &RTCP_TEST_MASTER_KEY,
         &RTCP_TEST_MASTER_SALT,
-        PROTECTION_PROFILE_AES128CM_HMAC_SHA1_80,
+        ProtectionProfile::AES128CMHMACSHA1_80,
         None,
         Some(srtcp_replay_protection(10)),
     )?;
@@ -203,17 +203,17 @@ fn test_encrypt_rtcp_separation() -> Result<(), Error> {
     let mut encrypt_context = Context::new(
         &RTCP_TEST_MASTER_KEY,
         &RTCP_TEST_MASTER_SALT,
-        PROTECTION_PROFILE_AES128CM_HMAC_SHA1_80,
+        ProtectionProfile::AES128CMHMACSHA1_80,
         None,
         None,
     )?;
 
-    let auth_tag_len = PROTECTION_PROFILE_AES128CM_HMAC_SHA1_80.auth_tag_len()?;
+    let auth_tag_len = ProtectionProfile::AES128CMHMACSHA1_80.auth_tag_len()?;
 
     let mut decrypt_context = Context::new(
         &RTCP_TEST_MASTER_KEY,
         &RTCP_TEST_MASTER_SALT,
-        PROTECTION_PROFILE_AES128CM_HMAC_SHA1_80,
+        ProtectionProfile::AES128CMHMACSHA1_80,
         None,
         Some(srtcp_replay_protection(10)),
     )?;

@@ -1,4 +1,3 @@
-#[cfg(test)]
 mod key_derivation_test;
 
 use aes::cipher::generic_array::GenericArray;

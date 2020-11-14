@@ -19,7 +19,7 @@ pub fn srtcp_replay_protection(window_size: usize) -> ContextOption {
     Box::new(move || -> Box<dyn ReplayDetector + Send> {
         Box::new(WrappedSlidingWindowDetector::new(
             window_size,
-            MAX_SRTCP_INDEX,
+            MAX_SRTCP_INDEX as u64,
         ))
     })
 }

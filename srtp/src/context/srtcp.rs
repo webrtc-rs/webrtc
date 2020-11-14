@@ -3,7 +3,7 @@ use super::*;
 use byteorder::{BigEndian, ReadBytesExt};
 use std::io::BufReader;
 
-pub(crate) const MAX_SRTCP_INDEX: u64 = 0x7FFFFFFF;
+pub(crate) const MAX_SRTCP_INDEX: usize = 0x7FFFFFFF;
 
 impl Context {
     // DecryptRTCP decrypts a RTCP packet with an encrypted payload
@@ -13,7 +13,7 @@ impl Context {
             rtcp::header::Header::unmarshal(&mut reader)?;
         }
 
-        let index = self.cipher.get_rtcp_index(encrypted)?;
+        let index = self.cipher.get_rtcp_index(encrypted);
         let ssrc = {
             let mut reader = BufReader::new(&encrypted[4..]);
             reader.read_u32::<BigEndian>()?
@@ -67,7 +67,7 @@ impl Context {
         {
             if let Some(state) = self.get_srtcp_ssrc_state(ssrc) {
                 state.srtcp_index += 1;
-                if state.srtcp_index > MAX_SRTCP_INDEX as u32 {
+                if state.srtcp_index > MAX_SRTCP_INDEX {
                     state.srtcp_index = 0;
                 }
                 index = state.srtcp_index;

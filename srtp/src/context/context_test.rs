@@ -3,7 +3,7 @@ use crate::key_derivation::*;
 
 use util::Error;
 
-const CIPHER_CONTEXT_ALGO: ProtectionProfile = PROTECTION_PROFILE_AES128CM_HMAC_SHA1_80;
+const CIPHER_CONTEXT_ALGO: ProtectionProfile = ProtectionProfile::AES128CMHMACSHA1_80;
 const DEFAULT_SSRC: u32 = 0;
 
 #[test]

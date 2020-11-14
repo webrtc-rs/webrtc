@@ -22,7 +22,7 @@ fn build_test_context() -> Result<Context, Error> {
     Context::new(
         &master_key,
         &master_salt,
-        PROTECTION_PROFILE_AES128CM_HMAC_SHA1_80,
+        ProtectionProfile::AES128CMHMACSHA1_80,
         None,
         None,
     )
@@ -95,7 +95,7 @@ fn test_rtp_invalid_auth() -> Result<(), Error> {
     let mut invalid_context = Context::new(
         &master_key,
         &invalid_salt,
-        PROTECTION_PROFILE_AES128CM_HMAC_SHA1_80,
+        ProtectionProfile::AES128CMHMACSHA1_80,
         None,
         None,
     )?;
@@ -131,7 +131,7 @@ fn test_rtp_invalid_auth() -> Result<(), Error> {
 fn test_rtp_lifecyle() -> Result<(), Error> {
     let mut encrypt_context = build_test_context()?;
     let mut decrypt_context = build_test_context()?;
-    let auth_tag_len = PROTECTION_PROFILE_AES128CM_HMAC_SHA1_80.auth_tag_len()?;
+    let auth_tag_len = ProtectionProfile::AES128CMHMACSHA1_80.auth_tag_len()?;
 
     for test_case in RTP_TEST_CASES.iter() {
         let decrypted_pkt = rtp::packet::Packet {
