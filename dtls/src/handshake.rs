@@ -90,6 +90,12 @@ impl From<u8> for HandshakeType {
     }
 }
 
+impl Default for HandshakeType {
+    fn default() -> Self {
+        HandshakeType::Invalid
+    }
+}
+
 #[derive(PartialEq, Debug)]
 pub enum HandshakeMessage {
     //HelloRequest(errNotImplemented),
@@ -132,8 +138,8 @@ impl HandshakeMessage {
 // https://tools.ietf.org/html/rfc5246#section-7.3
 #[derive(PartialEq, Debug)]
 pub struct Handshake {
-    handshake_header: HandshakeHeader,
-    handshake_message: HandshakeMessage,
+    pub(crate) handshake_header: HandshakeHeader,
+    pub(crate) handshake_message: HandshakeMessage,
 }
 
 impl Handshake {

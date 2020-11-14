@@ -72,9 +72,9 @@ pub(crate) type VerifyPeerCertificateFn =
 pub(crate) type OnFlightStateFn = fn(f: Flight, hs: HandshakeState);
 
 pub(crate) struct HandshakeConfig {
-    pub(crate) local_psk_callback: PSKCallback,
+    pub(crate) local_psk_callback: Option<PSKCallback>,
     pub(crate) local_psk_identity_hint: Vec<u8>,
-    pub(crate) local_cipher_suites: Vec<Box<dyn CipherSuite>>, // Available CipherSuites
+    pub(crate) local_cipher_suites: Vec<CipherSuiteID>, // Available CipherSuites
     pub(crate) local_signature_schemes: Vec<SignatureHashAlgorithm>, // Available signature schemes
     pub(crate) extended_master_secret: ExtendedMasterSecretType, // Policy for the Extended Master Support extension
     pub(crate) local_srtp_protection_profiles: Vec<SRTPProtectionProfile>, // Available SRTPProtectionProfiles, if empty no SRTP support

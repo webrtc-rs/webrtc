@@ -1,6 +1,4 @@
 use super::*;
-use crate::cipher_suite::cipher_suite_tls_ecdhe_ecdsa_with_aes_128_gcm_sha256::*;
-use crate::cipher_suite::cipher_suite_tls_ecdhe_ecdsa_with_aes_256_cbc_sha::*;
 use crate::curve::named_curve::*;
 use crate::extension::extension_supported_elliptic_curves::*;
 
@@ -43,8 +41,10 @@ fn test_handshake_message_client_hello() -> Result<(), Error> {
             0x32, 0x85, 0x76, 0x18, 0xde, 0xd8,
         ],
         cipher_suites: vec![
-            Box::new(CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::default()),
-            Box::new(CipherSuiteTLSEcdheEcdsaWithAes256CbcSha::default()),
+            CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+            CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+            //Box::new(CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::default()),
+            //Box::new(CipherSuiteTLSEcdheEcdsaWithAes256CbcSha::default()),
         ],
         compression_methods: CompressionMethods {
             ids: vec![CompressionMethodId::Null],

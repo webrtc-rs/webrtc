@@ -68,8 +68,8 @@ pub(crate) async fn flight0parse<C: FlightConn>(
         if let Ok(id) =
             find_matching_cipher_suite(&client_hello.cipher_suites, &cfg.local_cipher_suites)
         {
-            if let Ok(cs) = cipher_suite_for_id(id) {
-                state.cipher_suite = Some(cs);
+            if let Ok(cipher_suite) = cipher_suite_for_id(id) {
+                state.cipher_suite = Some(cipher_suite);
             }
         } else {
             return Err((
@@ -171,11 +171,12 @@ pub(crate) async fn flight0generate<C: FlightConn>(
     // Initialize
     rand::thread_rng().fill(state.cookie.as_mut_slice());
 
+    //TODO: figure out difference between golang's atom store and rust atom store
     let zero_epoch = 0;
     state.local_epoch.store(zero_epoch, Ordering::Relaxed);
     state.remote_epoch.store(zero_epoch, Ordering::Relaxed);
-    state.named_curve = DEFAULT_NAMED_CURVE;
 
+    state.named_curve = DEFAULT_NAMED_CURVE;
     state.local_random.populate();
 
     Ok(vec![])

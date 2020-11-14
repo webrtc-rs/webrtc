@@ -48,3 +48,9 @@ impl CompressionMethods {
         Ok(CompressionMethods { ids })
     }
 }
+
+pub fn default_compression_methods() -> CompressionMethods {
+    CompressionMethods {
+        ids: vec![CompressionMethodId::Null],
+    }
+}

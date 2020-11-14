@@ -31,6 +31,12 @@ impl From<u8> for ContentType {
     }
 }
 
+impl Default for ContentType {
+    fn default() -> Self {
+        ContentType::Invalid
+    }
+}
+
 #[derive(PartialEq, Debug)]
 pub enum Content {
     ChangeCipherSpec(ChangeCipherSpec),

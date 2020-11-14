@@ -47,13 +47,13 @@ pub(crate) fn find_matching_srtp_profile(
 }
 
 pub(crate) fn find_matching_cipher_suite(
-    a: &[Box<dyn CipherSuite>],
-    b: &[Box<dyn CipherSuite>],
+    a: &[CipherSuiteID],
+    b: &[CipherSuiteID],
 ) -> Result<CipherSuiteID, ()> {
     for a_suite in a {
         for b_suite in b {
-            if a_suite.id() == b_suite.id() {
-                return Ok(a_suite.id());
+            if a_suite == b_suite {
+                return Ok(*a_suite);
             }
         }
     }

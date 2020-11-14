@@ -28,8 +28,8 @@ use util::Error;
 */
 #[derive(Clone, Debug, PartialEq)]
 pub struct HandshakeMessageHelloVerifyRequest {
-    version: ProtocolVersion,
-    cookie: Vec<u8>,
+    pub(crate) version: ProtocolVersion,
+    pub(crate) cookie: Vec<u8>,
 }
 
 impl HandshakeMessageHelloVerifyRequest {

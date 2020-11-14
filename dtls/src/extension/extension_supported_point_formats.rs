@@ -12,7 +12,7 @@ pub const ELLIPTIC_CURVE_POINT_FORMAT_UNCOMPRESSED: EllipticCurvePointFormat = 0
 // https://tools.ietf.org/html/rfc4492#section-5.1.2
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExtensionSupportedPointFormats {
-    point_formats: Vec<EllipticCurvePointFormat>,
+    pub(crate) point_formats: Vec<EllipticCurvePointFormat>,
 }
 
 impl ExtensionSupportedPointFormats {

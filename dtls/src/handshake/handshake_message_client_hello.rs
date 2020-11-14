@@ -25,7 +25,7 @@ pub struct HandshakeMessageClientHello {
     pub(crate) random: HandshakeRandom,
     pub(crate) cookie: Vec<u8>,
 
-    pub(crate) cipher_suites: Vec<Box<dyn CipherSuite>>,
+    pub(crate) cipher_suites: Vec<CipherSuiteID>,
     pub(crate) compression_methods: CompressionMethods,
     pub(crate) extensions: Vec<Extension>,
 }
@@ -43,7 +43,7 @@ impl PartialEq for HandshakeMessageClientHello {
         }
 
         for i in 0..self.cipher_suites.len() {
-            if self.cipher_suites[i].id() != other.cipher_suites[i].id() {
+            if self.cipher_suites[i] != other.cipher_suites[i] {
                 return false;
             }
         }
@@ -94,7 +94,7 @@ impl HandshakeMessageClientHello {
 
         writer.write_u16::<BigEndian>(2 * self.cipher_suites.len() as u16)?;
         for cipher_suite in &self.cipher_suites {
-            writer.write_u16::<BigEndian>(cipher_suite.id() as u16)?;
+            writer.write_u16::<BigEndian>(*cipher_suite as u16)?;
         }
 
         self.compression_methods.marshal(writer)?;
@@ -129,8 +129,8 @@ impl HandshakeMessageClientHello {
         let mut cipher_suites = vec![];
         for _ in 0..cipher_suites_len {
             let id: CipherSuiteID = reader.read_u16::<BigEndian>()?.into();
-            let cipher_suite = cipher_suite_for_id(id)?;
-            cipher_suites.push(cipher_suite);
+            //let cipher_suite = cipher_suite_for_id(id)?;
+            cipher_suites.push(id);
         }
 
         let compression_methods = CompressionMethods::unmarshal(reader)?;
