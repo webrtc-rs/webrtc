@@ -1,5 +1,5 @@
 use aes_gcm::{
-    aead::{generic_array::GenericArray, Aead, AeadInPlace, NewAead, Nonce, Payload},
+    aead::{generic_array::GenericArray, Aead, NewAead, Nonce, Payload},
     Aes128Gcm,
 };
 use byteorder::{BigEndian, ByteOrder};
@@ -170,10 +170,10 @@ impl CipherAeadAesGcm {
         )?;
 
         Ok(CipherAeadAesGcm {
-            srtp_cipher: srtp_cipher,
-            srtcp_cipher: srtcp_cipher,
-            srtp_session_salt: srtp_session_salt,
-            srtcp_session_salt: srtcp_session_salt,
+            srtp_cipher,
+            srtcp_cipher,
+            srtp_session_salt,
+            srtcp_session_salt,
         })
     }
 
@@ -193,8 +193,8 @@ impl CipherAeadAesGcm {
         BigEndian::write_u32(&mut iv[6..], roc);
         BigEndian::write_u16(&mut iv[10..], header.sequence_number);
 
-        for i in 0..iv.len() {
-            iv[i] ^= self.srtp_session_salt[i];
+        for (i, v) in iv.iter_mut().enumerate() {
+            *v ^= self.srtp_session_salt[i];
         }
 
         iv
@@ -213,8 +213,8 @@ impl CipherAeadAesGcm {
         BigEndian::write_u32(&mut iv[2..], ssrc);
         BigEndian::write_u32(&mut iv[8..], srtcp_index as u32);
 
-        for i in 0..iv.len() {
-            iv[i] ^= self.srtcp_session_salt[i];
+        for (i, v) in iv.iter_mut().enumerate() {
+            *v ^= self.srtcp_session_salt[i];
         }
 
         iv

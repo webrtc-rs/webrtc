@@ -50,7 +50,7 @@ impl Session {
         let mut remote_context = Context::new(
             &config.keys.remote_master_key,
             &config.keys.remote_master_salt,
-            config.profile.clone(),
+            config.profile,
             if config.remote_rtp_options.is_none() {
                 Some(srtp_replay_protection(
                     DEFAULT_SESSION_SRTP_REPLAY_PROTECTION_WINDOW,
