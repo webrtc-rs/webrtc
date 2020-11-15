@@ -14,7 +14,7 @@ async fn build_session_srtp_pair() -> Result<(Session, Session), Error> {
     ub.connect(ua.local_addr()?).await?;
 
     let ca = Config {
-        profile: PROTECTION_PROFILE_AES128CM_HMAC_SHA1_80,
+        profile: ProtectionProfile::AES128CMHMACSHA1_80,
         keys: SessionKeys {
             local_master_key: vec![
                 0xE1, 0xF9, 0x7A, 0x0D, 0x3E, 0x01, 0x8B, 0xE0, 0xD6, 0x4F, 0xA3, 0x2C, 0x06, 0xDE,
@@ -39,7 +39,7 @@ async fn build_session_srtp_pair() -> Result<(Session, Session), Error> {
         remote_rtcp_options: None,
     };
     let cb = Config {
-        profile: PROTECTION_PROFILE_AES128CM_HMAC_SHA1_80,
+        profile: ProtectionProfile::AES128CMHMACSHA1_80,
         keys: SessionKeys {
             local_master_key: vec![
                 0xE1, 0xF9, 0x7A, 0x0D, 0x3E, 0x01, 0x8B, 0xE0, 0xD6, 0x4F, 0xA3, 0x2C, 0x06, 0xDE,

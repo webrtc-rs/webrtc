@@ -21,6 +21,8 @@ futures = "0.3"
 tokio = { version = "0.3", features = ["full"] }
 async-trait = "0.1"
 log = "0.4"
+aead = "^0.3"
+aes-gcm = "^0.8"
 
 [dev-dependencies]
 tokio-test = "0.3"

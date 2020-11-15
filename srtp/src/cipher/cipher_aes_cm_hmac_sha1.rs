@@ -1,22 +1,21 @@
-use aes::cipher::generic_array::GenericArray;
-use ctr::cipher::stream::{NewStreamCipher, StreamCipher};
-use hmac::{Hmac, Mac};
-use sha1::Sha1;
-use subtle::ConstantTimeEq;
-
-use super::*;
+use super::Cipher;
 use crate::context::*;
 use crate::key_derivation::*;
 use crate::protection_profile::*;
 
+use aes::cipher::generic_array::GenericArray;
+use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
+use ctr::cipher::stream::{NewStreamCipher, StreamCipher};
+use hmac::NewMac;
+use hmac::{Hmac, Mac};
+use sha1::Sha1;
+use subtle::ConstantTimeEq;
 use util::Error;
 
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use std::io::{BufWriter, Cursor};
+use std::io::BufWriter;
 
 type HmacSha1 = Hmac<Sha1>;
 type Aes128Ctr = ctr::Ctr128<aes::Aes128>;
-use hmac::NewMac;
 
 pub(crate) const CIPHER_AES_CM_HMAC_SHA1AUTH_TAG_LEN: usize = 10;
 
@@ -64,7 +63,7 @@ impl CipherAesCmHmacSha1 {
             master_salt.len(),
         )?;
 
-        let auth_key_len = PROTECTION_PROFILE_AES128CM_HMAC_SHA1_80.auth_key_len()?;
+        let auth_key_len = ProtectionProfile::AES128CMHMACSHA1_80.auth_key_len()?;
 
         let srtp_session_auth_tag = aes_cm_key_derivation(
             LABEL_SRTP_AUTHENTICATION_TAG,
@@ -161,11 +160,10 @@ impl Cipher for CipherAesCmHmacSha1 {
         CIPHER_AES_CM_HMAC_SHA1AUTH_TAG_LEN
     }
 
-    fn get_rtcp_index(&self, input: &[u8]) -> Result<u32, Error> {
+    fn get_rtcp_index(&self, input: &[u8]) -> usize {
         let tail_offset = input.len() - (self.auth_tag_len() + SRTCP_INDEX_SIZE);
-        let mut reader = Cursor::new(&input[tail_offset..tail_offset + SRTCP_INDEX_SIZE]);
-        let rtcp_index = reader.read_u32::<BigEndian>()? & 0x7FFFFFFF; //^(1 << 31)
-        Ok(rtcp_index)
+        (BigEndian::read_u32(&input[tail_offset..tail_offset + SRTCP_INDEX_SIZE]) & !(1 << 31))
+            as usize
     }
 
     fn encrypt_rtp(
@@ -259,7 +257,7 @@ impl Cipher for CipherAesCmHmacSha1 {
     fn encrypt_rtcp(
         &mut self,
         decrypted: &[u8],
-        srtcp_index: u32,
+        srtcp_index: usize,
         ssrc: u32,
     ) -> Result<Vec<u8>, Error> {
         let mut dst: Vec<u8> =
@@ -271,7 +269,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         // Encrypt everything after header
         let counter = generate_counter(
             (srtcp_index & 0xFFFF) as u16,
-            srtcp_index >> 16,
+            (srtcp_index >> 16) as u32,
             ssrc,
             &self.srtcp_session_salt,
         )?;
@@ -286,7 +284,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         let mut srtcp_index_buffer: Vec<u8> = vec![];
         {
             let mut writer = BufWriter::new(&mut srtcp_index_buffer);
-            writer.write_u32::<BigEndian>(srtcp_index | (1u32 << 31))?;
+            writer.write_u32::<BigEndian>(srtcp_index as u32 | (1u32 << 31))?;
         }
         dst.extend_from_slice(&srtcp_index_buffer);
 
@@ -301,7 +299,7 @@ impl Cipher for CipherAesCmHmacSha1 {
     fn decrypt_rtcp(
         &mut self,
         encrypted: &[u8],
-        srtcp_index: u32,
+        srtcp_index: usize,
         ssrc: u32,
     ) -> Result<Vec<u8>, Error> {
         if encrypted.len() < self.auth_tag_len() + SRTCP_INDEX_SIZE {
@@ -337,7 +335,7 @@ impl Cipher for CipherAesCmHmacSha1 {
 
         let counter = generate_counter(
             (srtcp_index & 0xFFFF) as u16,
-            srtcp_index >> 16,
+            (srtcp_index >> 16) as u32,
             ssrc,
             &self.srtcp_session_salt,
         )?;

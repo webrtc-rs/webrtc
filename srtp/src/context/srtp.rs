@@ -30,7 +30,6 @@ impl Context {
         }
 
         let dst = self.cipher.decrypt_rtp(encrypted, header, roc)?;
-
         {
             if let Some(state) = self.get_srtp_ssrc_state(header.ssrc) {
                 if let Some(replay_detector) = &mut state.replay_detector {

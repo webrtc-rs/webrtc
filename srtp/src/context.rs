@@ -3,9 +3,8 @@ use std::collections::HashMap;
 use transport::replay_detector::*;
 use util::Error;
 
-use super::cipher::*;
 use super::protection_profile::*;
-use crate::cipher::cipher_aes_cm_hmac_sha1::CipherAesCmHmacSha1;
+use crate::cipher;
 use crate::option::*;
 
 #[cfg(test)]
@@ -44,7 +43,7 @@ pub struct SrtpSsrcState {
 // Encrypt/Decrypt state for a single SRTCP SSRC
 #[derive(Default)]
 pub struct SrtcpSsrcState {
-    srtcp_index: u32,
+    srtcp_index: usize,
     ssrc: u32,
     replay_detector: Option<Box<dyn ReplayDetector>>,
 }
@@ -112,7 +111,7 @@ impl SrtpSsrcState {
 // Context can only be used for one-way operations
 // it must either used ONLY for encryption or ONLY for decryption
 pub struct Context {
-    cipher: Box<dyn Cipher + Send>,
+    cipher: Box<dyn cipher::Cipher + Send>,
 
     srtp_ssrc_states: HashMap<u32, SrtpSsrcState>,
     srtcp_ssrc_states: HashMap<u32, SrtcpSsrcState>,
@@ -149,19 +148,22 @@ impl Context {
             )));
         }
 
-        let cipher: Box<dyn Cipher + Send> = Box::new(match &profile {
-            &PROTECTION_PROFILE_AES128CM_HMAC_SHA1_80 => {
-                CipherAesCmHmacSha1::new(master_key, master_salt)?
+        let cipher: Box<dyn cipher::Cipher + Send> = match profile {
+            ProtectionProfile::AES128CMHMACSHA1_80 => {
+                Box::new(cipher::CipherAesCmHmacSha1::new(master_key, master_salt)?)
             }
-            //&PROTECTION_PROFILE_AEAD_AES128_GCM =>CipherAeadAesGcm::new(master_key, master_salt)?,
-            p => return Err(Error::new(format!("Not supported SRTP Profile {:?}", p))),
-        });
+
+            ProtectionProfile::AEADAES128GCM => {
+                Box::new(cipher::CipherAeadAesGcm::new(master_key, master_salt)?)
+            }
+        };
 
         let srtp_ctx_opt = if let Some(ctx_opt) = srtp_ctx_opt {
             ctx_opt
         } else {
             srtp_no_replay_protection()
         };
+
         let srtcp_ctx_opt = if let Some(ctx_opt) = srtcp_ctx_opt {
             ctx_opt
         } else {
@@ -177,12 +179,14 @@ impl Context {
         })
     }
 
+    // ToDo: We shouldnt be using an optional return as we can send a cloned "s".
     fn get_srtp_ssrc_state(&mut self, ssrc: u32) -> Option<&mut SrtpSsrcState> {
         let s = SrtpSsrcState {
             ssrc,
             replay_detector: Some((self.new_srtp_replay_detector)()),
             ..Default::default()
         };
+
         self.srtp_ssrc_states.entry(ssrc).or_insert(s);
         self.srtp_ssrc_states.get_mut(&ssrc)
     }
@@ -214,7 +218,7 @@ impl Context {
     }
 
     // index returns SRTCP index value of specified SSRC.
-    fn get_index(&self, ssrc: u32) -> Option<u32> {
+    fn get_index(&self, ssrc: u32) -> Option<usize> {
         if let Some(s) = self.srtcp_ssrc_states.get(&ssrc) {
             Some(s.srtcp_index)
         } else {
@@ -223,7 +227,7 @@ impl Context {
     }
 
     // set_index sets SRTCP index value of specified SSRC.
-    fn set_index(&mut self, ssrc: u32, index: u32) {
+    fn set_index(&mut self, ssrc: u32, index: usize) {
         if let Some(s) = self.get_srtcp_ssrc_state(ssrc) {
             s.srtcp_index = index;
         }
