@@ -22,7 +22,7 @@ pub(crate) struct CipherAeadAesGcm {
 
 impl Cipher for CipherAeadAesGcm {
     fn auth_tag_len(&self) -> usize {
-        16
+        CIPHER_AEAD_AES_GCM_AUTH_TAG_LEN
     }
 
     fn encrypt_rtp(

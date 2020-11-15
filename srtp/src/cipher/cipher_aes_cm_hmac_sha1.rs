@@ -24,12 +24,11 @@ pub(crate) struct CipherAesCmHmacSha1 {
     srtp_session_key: Vec<u8>,
     srtp_session_salt: Vec<u8>,
     srtp_session_auth: HmacSha1,
-    srtp_session_auth_tag: Vec<u8>,
-
+    //srtp_session_auth_tag: Vec<u8>,
     srtcp_session_key: Vec<u8>,
     srtcp_session_salt: Vec<u8>,
     srtcp_session_auth: HmacSha1,
-    srtcp_session_auth_tag: Vec<u8>,
+    //srtcp_session_auth_tag: Vec<u8>,
 }
 
 impl CipherAesCmHmacSha1 {
@@ -88,12 +87,11 @@ impl CipherAesCmHmacSha1 {
             srtp_session_key,
             srtp_session_salt,
             srtp_session_auth,
-            srtp_session_auth_tag,
-
+            //srtp_session_auth_tag,
             srtcp_session_key,
             srtcp_session_salt,
             srtcp_session_auth,
-            srtcp_session_auth_tag,
+            //srtcp_session_auth_tag,
         })
     }
 

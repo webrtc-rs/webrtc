@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 mod cipher;
 pub mod config;
 pub mod context;
