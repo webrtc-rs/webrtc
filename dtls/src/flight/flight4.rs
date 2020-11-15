@@ -470,7 +470,7 @@ pub(crate) async fn flight4parse<C: FlightConn>(
     Ok(Flight::Flight6)
 }
 
-pub(crate) async fn flight3generate<C: FlightConn>(
+pub(crate) async fn flight4generate<C: FlightConn>(
     _c: C,
     state: &mut State,
     _cache: &HandshakeCache,

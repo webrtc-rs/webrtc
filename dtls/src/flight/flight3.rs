@@ -298,7 +298,7 @@ pub(crate) async fn flight3parse<C: FlightConn>(
     Ok(Flight::Flight5)
 }
 
-fn handle_server_key_exchange(
+pub(crate) fn handle_server_key_exchange(
     state: &mut State,
     cfg: &HandshakeConfig,
     h: &HandshakeMessageServerKeyExchange,
@@ -355,7 +355,7 @@ fn handle_server_key_exchange(
     Ok(())
 }
 
-pub(crate) async fn flight4generate<C: FlightConn>(
+pub(crate) async fn flight3generate<C: FlightConn>(
     _c: C,
     state: &mut State,
     _cache: &HandshakeCache,

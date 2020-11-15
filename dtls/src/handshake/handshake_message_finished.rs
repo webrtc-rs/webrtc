@@ -9,7 +9,7 @@ use util::Error;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct HandshakeMessageFinished {
-    verify_data: Vec<u8>,
+    pub(crate) verify_data: Vec<u8>,
 }
 
 impl HandshakeMessageFinished {

@@ -173,7 +173,7 @@ pub(crate) fn verify_key_signature(
 // https://tools.ietf.org/html/rfc5246#section-7.3
 pub(crate) fn generate_certificate_verify(
     handshake_bodies: &[u8],
-    private_key: CryptoPrivateKey, /*, hashAlgorithm hashAlgorithm*/
+    private_key: &CryptoPrivateKey, /*, hashAlgorithm hashAlgorithm*/
 ) -> Result<Vec<u8>, Error> {
     let mut h = Sha256::new();
     h.update(handshake_bodies);
