@@ -1,9 +1,7 @@
-#[cfg(test)]
-mod protection_profile_test;
-
 use super::cipher::cipher_aead_aes_gcm::*;
 use super::cipher::cipher_aes_cm_hmac_sha1::*;
 use util::Error;
+mod test;
 
 /// ProtectionProfile specifies Cipher and AuthTag details, similar to TLS cipher suite
 #[derive(Debug, Clone, Copy)]

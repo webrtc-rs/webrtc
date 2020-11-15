@@ -26,4 +26,4 @@ aes-gcm = "^0.8"
 
 [dev-dependencies]
 tokio-test = "0.3"
-lazy_static = "1.3.0"
+lazy_static = "^1.4"

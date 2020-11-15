@@ -4,17 +4,11 @@ use transport::replay_detector::*;
 use util::Error;
 
 use super::protection_profile::*;
-use crate::cipher;
-use crate::option::*;
+use crate::{cipher, option};
 
-#[cfg(test)]
 mod context_test;
-
-#[cfg(test)]
-mod srtp_test;
-
-#[cfg(test)]
 mod srtcp_test;
+mod srtp_test;
 
 pub mod srtcp;
 pub mod srtp;
@@ -116,8 +110,8 @@ pub struct Context {
     srtp_ssrc_states: HashMap<u32, SrtpSsrcState>,
     srtcp_ssrc_states: HashMap<u32, SrtcpSsrcState>,
 
-    new_srtp_replay_detector: ContextOption,
-    new_srtcp_replay_detector: ContextOption,
+    new_srtp_replay_detector: option::ContextOption,
+    new_srtcp_replay_detector: option::ContextOption,
 }
 
 unsafe impl Send for Context {}
@@ -128,8 +122,8 @@ impl Context {
         master_key: &[u8],
         master_salt: &[u8],
         profile: ProtectionProfile,
-        srtp_ctx_opt: Option<ContextOption>,
-        srtcp_ctx_opt: Option<ContextOption>,
+        srtp_ctx_opt: Option<option::ContextOption>,
+        srtcp_ctx_opt: Option<option::ContextOption>,
     ) -> Result<Context, Error> {
         let key_len = profile.key_len()?;
         let salt_len = profile.salt_len()?;
@@ -161,13 +155,13 @@ impl Context {
         let srtp_ctx_opt = if let Some(ctx_opt) = srtp_ctx_opt {
             ctx_opt
         } else {
-            srtp_no_replay_protection()
+            option::srtp_no_replay_protection()
         };
 
         let srtcp_ctx_opt = if let Some(ctx_opt) = srtcp_ctx_opt {
             ctx_opt
         } else {
-            srtcp_no_replay_protection()
+            option::srtcp_no_replay_protection()
         };
 
         Ok(Context {
