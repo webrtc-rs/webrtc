@@ -142,10 +142,10 @@ pub(crate) fn default_signature_schemes() -> Vec<SignatureHashAlgorithm> {
 // select Signature Scheme returns most preferred and compatible scheme.
 pub(crate) fn select_signature_scheme(
     sigs: &[SignatureHashAlgorithm],
-    private_key: CryptoPrivateKey,
+    private_key: &CryptoPrivateKey,
 ) -> Result<SignatureHashAlgorithm, Error> {
     for ss in sigs {
-        if ss.is_compatible(&private_key) {
+        if ss.is_compatible(private_key) {
             return Ok(*ss);
         }
     }

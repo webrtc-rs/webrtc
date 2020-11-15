@@ -22,7 +22,7 @@ pub(crate) struct State {
     pub(crate) master_secret: Vec<u8>,
     pub(crate) cipher_suite: Option<Box<dyn CipherSuite>>, // nil if a cipher_suite hasn't been chosen
 
-    pub(crate) srtp_protection_profile: SRTPProtectionProfile, // Negotiated srtpprotection_profile
+    pub(crate) srtp_protection_profile: SRTPProtectionProfile, // Negotiated srtp_protection_profile
     pub(crate) peer_certificates: Vec<Vec<u8>>,
 
     pub(crate) is_client: bool,

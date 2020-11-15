@@ -12,9 +12,9 @@ use util::Error;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct HandshakeMessageCertificateVerify {
-    hash_algorithm: HashAlgorithm,
-    signature_algorithm: SignatureAlgorithm,
-    signature: Vec<u8>,
+    pub(crate) hash_algorithm: HashAlgorithm,
+    pub(crate) signature_algorithm: SignatureAlgorithm,
+    pub(crate) signature: Vec<u8>,
 }
 
 const HANDSHAKE_MESSAGE_CERTIFICATE_VERIFY_MIN_LENGTH: usize = 4;

@@ -15,8 +15,9 @@ use util::Error;
 
 use rsa::PublicKey;
 use sha2::{Digest, Sha256};
-use signature::{Signature, Verifier};
+use signature::{Signature, Signer, Verifier};
 
+#[derive(Clone)]
 pub struct Certificate {
     pub certificate: Vec<u8>,
     pub private_key: CryptoPrivateKey,
@@ -43,9 +44,27 @@ pub(crate) fn value_key_message(
 }
 
 pub enum CryptoPrivateKey {
-    ED25519(Box<dyn ed25519::signature::Signer<ed25519::Signature>>),
-    ECDSA256(Box<dyn p256::ecdsa::signature::Signer<p256::ecdsa::Signature>>),
+    ED25519(Box<ed25519_dalek::Keypair>), //ED25519(Box<dyn ed25519::signature::Signer<ed25519::Signature>>),
+    ECDSA256(Box<p256::ecdsa::SigningKey>), //ECDSA256(Box<dyn p256::ecdsa::signature::Signer<p256::ecdsa::Signature>>),
     RSA256(Box<rsa::RSAPrivateKey>),
+}
+
+impl Clone for CryptoPrivateKey {
+    fn clone(&self) -> Self {
+        match self {
+            CryptoPrivateKey::ED25519(p) => {
+                let b = p.to_bytes();
+                let keypair = ed25519_dalek::Keypair::from_bytes(&b).unwrap();
+                CryptoPrivateKey::ED25519(Box::new(keypair))
+            }
+            CryptoPrivateKey::ECDSA256(p) => {
+                let b = p.to_bytes();
+                let signing_key = p256::ecdsa::SigningKey::new(&b).unwrap();
+                CryptoPrivateKey::ECDSA256(Box::new(signing_key))
+            }
+            CryptoPrivateKey::RSA256(p) => CryptoPrivateKey::RSA256(p.clone()),
+        }
+    }
 }
 
 // If the client provided a "signature_algorithms" extension, then all
@@ -58,10 +77,10 @@ pub(crate) fn generate_key_signature(
     server_random: &[u8],
     public_key: &[u8],
     named_curve: NamedCurve,
-    private_key: CryptoPrivateKey, /*, hash_algorithm: HashAlgorithm*/
+    private_key: &CryptoPrivateKey, /*, hash_algorithm: HashAlgorithm*/
 ) -> Result<Vec<u8>, Error> {
     let msg = value_key_message(client_random, server_random, public_key, named_curve);
-    let signature = match &private_key {
+    let signature = match private_key {
         CryptoPrivateKey::ED25519(p) => p.sign(&msg).to_bytes().to_vec(),
         CryptoPrivateKey::ECDSA256(p) => p.sign(&msg).as_bytes().to_vec(),
         CryptoPrivateKey::RSA256(p) => {
@@ -248,12 +267,14 @@ pub(crate) fn load_certs(
     Ok(certificate)
 }
 
-pub(crate) fn verify_cert(raw_certificates: &[u8]) -> Result<(), Error> {
+pub(crate) fn verify_cert(
+    raw_certificates: &[u8],
+) -> Result<Vec<x509_parser::X509Certificate<'_>>, Error> {
     let certificate = load_certs(raw_certificates)?;
 
     certificate.verify_signature(None)?;
 
-    Ok(())
+    Ok(vec![certificate])
 }
 
 pub(crate) fn generate_aead_additional_data(h: &RecordLayerHeader, payload_len: usize) -> Vec<u8> {

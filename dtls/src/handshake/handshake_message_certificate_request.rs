@@ -20,8 +20,8 @@ server's Certificate message).
 */
 #[derive(Clone, Debug, PartialEq)]
 pub struct HandshakeMessageCertificateRequest {
-    certificate_types: Vec<ClientCertificateType>,
-    signature_hash_algorithms: Vec<SignatureHashAlgorithm>,
+    pub(crate) certificate_types: Vec<ClientCertificateType>,
+    pub(crate) signature_hash_algorithms: Vec<SignatureHashAlgorithm>,
 }
 
 const HANDSHAKE_MESSAGE_CERTIFICATE_REQUEST_MIN_LENGTH: usize = 5;

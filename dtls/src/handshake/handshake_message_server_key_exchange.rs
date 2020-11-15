@@ -17,12 +17,12 @@ use util::Error;
 pub struct HandshakeMessageServerKeyExchange {
     pub(crate) identity_hint: Vec<u8>,
 
-    elliptic_curve_type: EllipticCurveType,
+    pub(crate) elliptic_curve_type: EllipticCurveType,
     pub(crate) named_curve: NamedCurve,
     pub(crate) public_key: Vec<u8>,
-    hash_algorithm: HashAlgorithm,
-    signature_algorithm: SignatureAlgorithm,
-    signature: Vec<u8>,
+    pub(crate) hash_algorithm: HashAlgorithm,
+    pub(crate) signature_algorithm: SignatureAlgorithm,
+    pub(crate) signature: Vec<u8>,
 }
 
 impl HandshakeMessageServerKeyExchange {

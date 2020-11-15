@@ -11,8 +11,8 @@ use util::Error;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct HandshakeMessageClientKeyExchange {
-    identity_hint: Vec<u8>,
-    public_key: Vec<u8>,
+    pub(crate) identity_hint: Vec<u8>,
+    pub(crate) public_key: Vec<u8>,
 }
 
 impl HandshakeMessageClientKeyExchange {

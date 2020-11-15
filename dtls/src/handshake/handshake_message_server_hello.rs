@@ -25,7 +25,7 @@ pub struct HandshakeMessageServerHello {
     pub(crate) random: HandshakeRandom,
 
     pub(crate) cipher_suite: CipherSuiteID,
-    compression_method: CompressionMethodId,
+    pub(crate) compression_method: CompressionMethodId,
     pub(crate) extensions: Vec<Extension>,
 }
 

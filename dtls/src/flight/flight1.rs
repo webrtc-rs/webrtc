@@ -1,3 +1,4 @@
+use super::flight3::*;
 use super::*;
 use crate::compression_methods::*;
 use crate::config::*;
@@ -24,7 +25,7 @@ use std::sync::atomic::Ordering;
 
 pub(crate) async fn flight1parse<C: FlightConn>(
     /*context.Context,*/
-    _c: C,
+    c: C,
     state: &mut State,
     cache: &HandshakeCache,
     cfg: &HandshakeConfig,
@@ -59,7 +60,7 @@ pub(crate) async fn flight1parse<C: FlightConn>(
     if msgs.contains_key(&HandshakeType::ServerHello) {
         // Flight1 and flight2 were skipped.
         // Parse as flight3.
-        // TODO: return flight3parse(c, state, cache, cfg);
+        return flight3parse(c, state, cache, cfg).await;
     }
 
     if let Some(message) = msgs.get(&HandshakeType::HelloVerifyRequest) {

@@ -114,6 +114,7 @@ pub(crate) type PSKCallback = fn(&[u8]) -> Result<Vec<u8>, Error>;
 
 // ClientAuthType declares the policy the server will follow for
 // TLS Client Authentication.
+#[derive(Copy, Clone)]
 pub(crate) enum ClientAuthType {
     NoClientCert = 0,
     RequestClientCert = 1,

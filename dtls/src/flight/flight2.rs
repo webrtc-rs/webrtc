@@ -1,3 +1,4 @@
+use super::flight0::*;
 use super::*;
 use crate::content::*;
 use crate::errors::*;
@@ -6,7 +7,6 @@ use crate::handshake::handshake_message_hello_verify_request::*;
 use crate::handshake::*;
 use crate::record_layer::record_layer_header::*;
 
-use crate::flight::flight0::flight0parse;
 use util::Error;
 
 pub(crate) async fn flight2parse<C: FlightConn>(
