@@ -17,7 +17,6 @@ sha-1 = "0.9.1"
 ctr = "0.6.0"
 aes = "0.6.0"
 subtle = "2.1.1"
-futures = "0.3"
 tokio = { version = "0.3", features = ["full"] }
 async-trait = "0.1"
 log = "0.4"

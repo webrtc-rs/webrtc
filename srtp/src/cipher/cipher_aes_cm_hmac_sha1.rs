@@ -19,7 +19,7 @@ type Aes128Ctr = ctr::Ctr128<aes::Aes128>;
 
 pub(crate) const CIPHER_AES_CM_HMAC_SHA1AUTH_TAG_LEN: usize = 10;
 
-// ToDo: @rainliu whats a use case for srtp_session_auth and srtcp_session_auth?
+// ToDo: @rainliu whats a use case for srtp_session_auth and srtcp_session_auth
 pub(crate) struct CipherAesCmHmacSha1 {
     srtp_session_key: Vec<u8>,
     srtp_session_salt: Vec<u8>,
