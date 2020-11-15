@@ -1,32 +1,29 @@
-#[cfg(test)]
 mod session_rtcp_test;
-
-#[cfg(test)]
 mod session_rtp_test;
 
-use super::option::*;
-use crate::config::Config;
-use crate::context::Context;
-use crate::stream::Stream;
+use crate::{config::Config, context::Context, option, stream::Stream};
 
-use transport::buffer::ERR_BUFFER_FULL;
-use transport::Buffer;
+use transport::{buffer::ERR_BUFFER_FULL, Buffer};
 use util::Error;
 
-use tokio::net::UdpSocket;
-use tokio::sync::{mpsc, Mutex};
+use tokio::{
+    net::UdpSocket,
+    sync::{mpsc, Mutex},
+};
 
-use std::collections::HashMap;
-use std::io::{BufWriter, Cursor};
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    io::{BufWriter, Cursor},
+    sync::Arc,
+};
 
 const DEFAULT_SESSION_SRTP_REPLAY_PROTECTION_WINDOW: usize = 64;
 const DEFAULT_SESSION_SRTCP_REPLAY_PROTECTION_WINDOW: usize = 64;
 
-// Session implements io.ReadWriteCloser and provides a bi-directional SRTP session
-// SRTP itself does not have a design like this, but it is common in most applications
-// for local/remote to each have their own keying material. This provides those patterns
-// instead of making everyone re-implement
+/// Session implements io.ReadWriteCloser and provides a bi-directional SRTP session
+/// SRTP itself does not have a design like this, but it is common in most applications
+/// for local/remote to each have their own keying material. This provides those patterns
+/// instead of making everyone re-implement
 pub struct Session {
     local_context: Arc<Mutex<Context>>,
     streams_map: Arc<Mutex<HashMap<u32, Buffer>>>,
@@ -52,14 +49,14 @@ impl Session {
             &config.keys.remote_master_salt,
             config.profile,
             if config.remote_rtp_options.is_none() {
-                Some(srtp_replay_protection(
+                Some(option::srtp_replay_protection(
                     DEFAULT_SESSION_SRTP_REPLAY_PROTECTION_WINDOW,
                 ))
             } else {
                 config.remote_rtp_options
             },
             if config.remote_rtcp_options.is_none() {
-                Some(srtcp_replay_protection(
+                Some(option::srtcp_replay_protection(
                     DEFAULT_SESSION_SRTCP_REPLAY_PROTECTION_WINDOW,
                 ))
             } else {
