@@ -4,6 +4,7 @@ mod flight2;
 mod flight3;
 mod flight4;
 mod flight5;
+mod flight6;
 
 use std::fmt;
 

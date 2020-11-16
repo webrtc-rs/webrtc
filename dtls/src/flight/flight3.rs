@@ -298,63 +298,6 @@ pub(crate) async fn flight3parse<C: FlightConn>(
     Ok(Flight::Flight5)
 }
 
-pub(crate) fn handle_server_key_exchange(
-    state: &mut State,
-    cfg: &HandshakeConfig,
-    h: &HandshakeMessageServerKeyExchange,
-) -> Result<(), (Option<Alert>, Option<Error>)> {
-    if let Some(local_psk_callback) = &cfg.local_psk_callback {
-        let psk = match local_psk_callback(&h.identity_hint) {
-            Ok(psk) => psk,
-            Err(err) => {
-                return Err((
-                    Some(Alert {
-                        alert_level: AlertLevel::Fatal,
-                        alert_description: AlertDescription::InternalError,
-                    }),
-                    Some(err),
-                ))
-            }
-        };
-
-        state.pre_master_secret = prf_psk_pre_master_secret(&psk);
-    } else {
-        let local_keypair = match h.named_curve.generate_keypair() {
-            Ok(local_keypair) => local_keypair,
-            Err(err) => {
-                return Err((
-                    Some(Alert {
-                        alert_level: AlertLevel::Fatal,
-                        alert_description: AlertDescription::InternalError,
-                    }),
-                    Some(err),
-                ))
-            }
-        };
-
-        state.pre_master_secret = match prf_pre_master_secret(
-            &h.public_key,
-            &local_keypair.private_key,
-            local_keypair.curve,
-        ) {
-            Ok(pre_master_secret) => pre_master_secret,
-            Err(err) => {
-                return Err((
-                    Some(Alert {
-                        alert_level: AlertLevel::Fatal,
-                        alert_description: AlertDescription::InternalError,
-                    }),
-                    Some(err),
-                ))
-            }
-        };
-
-        state.local_keypair = Some(local_keypair);
-    }
-
-    Ok(())
-}
-
 pub(crate) async fn flight3generate<C: FlightConn>(
     _c: C,
     state: &mut State,
@@ -420,4 +363,61 @@ pub(crate) async fn flight3generate<C: FlightConn>(
         should_encrypt: false,
         reset_local_sequence_number: false,
     }])
+}
+
+pub(crate) fn handle_server_key_exchange(
+    state: &mut State,
+    cfg: &HandshakeConfig,
+    h: &HandshakeMessageServerKeyExchange,
+) -> Result<(), (Option<Alert>, Option<Error>)> {
+    if let Some(local_psk_callback) = &cfg.local_psk_callback {
+        let psk = match local_psk_callback(&h.identity_hint) {
+            Ok(psk) => psk,
+            Err(err) => {
+                return Err((
+                    Some(Alert {
+                        alert_level: AlertLevel::Fatal,
+                        alert_description: AlertDescription::InternalError,
+                    }),
+                    Some(err),
+                ))
+            }
+        };
+
+        state.pre_master_secret = prf_psk_pre_master_secret(&psk);
+    } else {
+        let local_keypair = match h.named_curve.generate_keypair() {
+            Ok(local_keypair) => local_keypair,
+            Err(err) => {
+                return Err((
+                    Some(Alert {
+                        alert_level: AlertLevel::Fatal,
+                        alert_description: AlertDescription::InternalError,
+                    }),
+                    Some(err),
+                ))
+            }
+        };
+
+        state.pre_master_secret = match prf_pre_master_secret(
+            &h.public_key,
+            &local_keypair.private_key,
+            local_keypair.curve,
+        ) {
+            Ok(pre_master_secret) => pre_master_secret,
+            Err(err) => {
+                return Err((
+                    Some(Alert {
+                        alert_level: AlertLevel::Fatal,
+                        alert_description: AlertDescription::InternalError,
+                    }),
+                    Some(err),
+                ))
+            }
+        };
+
+        state.local_keypair = Some(local_keypair);
+    }
+
+    Ok(())
 }
