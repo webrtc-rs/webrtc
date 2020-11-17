@@ -24,6 +24,7 @@ const CRYPTO_GCM_TAG_LENGTH: usize = 16;
 const CRYPTO_GCM_NONCE_LENGTH: usize = 12;
 
 // State needed to handle encrypted input/output
+#[derive(Clone)]
 pub struct CryptoGcm {
     local_gcm: Aes128Gcm,
     remote_gcm: Aes128Gcm,
@@ -52,7 +53,7 @@ impl CryptoGcm {
         }
     }
 
-    pub fn encrypt(&mut self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>, Error> {
+    pub fn encrypt(&self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>, Error> {
         let payload = &raw[RECORD_LAYER_HEADER_SIZE..];
         let raw = &raw[..RECORD_LAYER_HEADER_SIZE];
 
@@ -82,7 +83,7 @@ impl CryptoGcm {
         Ok(r)
     }
 
-    pub fn decrypt(&mut self, r: &[u8]) -> Result<Vec<u8>, Error> {
+    pub fn decrypt(&self, r: &[u8]) -> Result<Vec<u8>, Error> {
         let mut reader = Cursor::new(r);
         let h = RecordLayerHeader::unmarshal(&mut reader)?;
         if h.content_type == ContentType::ChangeCipherSpec {

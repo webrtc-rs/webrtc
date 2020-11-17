@@ -2,8 +2,9 @@ pub mod cipher_suite_tls_ecdhe_ecdsa_with_aes_128_gcm_sha256;
 pub mod cipher_suite_tls_ecdhe_ecdsa_with_aes_256_cbc_sha;
 
 use std::fmt;
+use std::marker::{Send, Sync};
 
-use async_trait::async_trait;
+//use async_trait::async_trait;
 
 use super::client_certificate_type::*;
 use super::errors::*;
@@ -106,17 +107,19 @@ impl CipherSuiteHash {
     }
 }
 
-#[async_trait]
+//#[async_trait]
 pub trait CipherSuite {
     fn to_string(&self) -> String;
     fn id(&self) -> CipherSuiteID;
     fn certificate_type(&self) -> ClientCertificateType;
     fn hash_func(&self) -> CipherSuiteHash;
     fn is_psk(&self) -> bool;
-    async fn is_initialized(&self) -> bool;
+    /*async*/
+    fn is_initialized(&self) -> bool;
 
     // Generate the internal encryption state
-    async fn init(
+    /*async*/
+    fn init(
         &mut self,
         master_secret: &[u8],
         client_random: &[u8],
@@ -124,14 +127,16 @@ pub trait CipherSuite {
         is_client: bool,
     ) -> Result<(), Error>;
 
-    async fn encrypt(&self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>, Error>;
-    async fn decrypt(&self, input: &[u8]) -> Result<Vec<u8>, Error>;
+    /*async*/
+    fn encrypt(&self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>, Error>;
+    /*async*/
+    fn decrypt(&self, input: &[u8]) -> Result<Vec<u8>, Error>;
 }
 
 // Taken from https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
 // A cipher_suite is a specific combination of key agreement, cipher and MAC
 // function.
-pub fn cipher_suite_for_id(id: CipherSuiteID) -> Result<Box<dyn CipherSuite>, Error> {
+pub fn cipher_suite_for_id(id: CipherSuiteID) -> Result<Box<dyn CipherSuite + Send + Sync>, Error> {
     match id {
         //TODO: complete all cipher suites
         /*CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM =>
@@ -161,7 +166,7 @@ pub fn cipher_suite_for_id(id: CipherSuiteID) -> Result<Box<dyn CipherSuite>, Er
 }
 
 // CipherSuites we support in order of preference
-fn default_cipher_suites() -> Vec<Box<dyn CipherSuite>> {
+fn default_cipher_suites() -> Vec<Box<dyn CipherSuite + Send + Sync>> {
     vec![
         Box::new(CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::default()),
         Box::new(CipherSuiteTLSEcdheEcdsaWithAes256CbcSha::default()),
@@ -170,7 +175,7 @@ fn default_cipher_suites() -> Vec<Box<dyn CipherSuite>> {
     ]
 }
 
-fn all_cipher_suites() -> Vec<Box<dyn CipherSuite>> {
+fn all_cipher_suites() -> Vec<Box<dyn CipherSuite + Send + Sync>> {
     vec![
         //TODO: newCipherSuiteTLSEcdheEcdsaWithAes128Ccm(),
         //TODO: newCipherSuiteTLSEcdheEcdsaWithAes128Ccm8(),
@@ -184,7 +189,9 @@ fn all_cipher_suites() -> Vec<Box<dyn CipherSuite>> {
     ]
 }
 
-fn cipher_suites_for_ids(ids: &[CipherSuiteID]) -> Result<Vec<Box<dyn CipherSuite>>, Error> {
+fn cipher_suites_for_ids(
+    ids: &[CipherSuiteID],
+) -> Result<Vec<Box<dyn CipherSuite + Send + Sync>>, Error> {
     let mut cipher_suites = vec![];
     for id in ids {
         cipher_suites.push(cipher_suite_for_id(*id)?);
@@ -196,14 +203,14 @@ pub(crate) fn parse_cipher_suites(
     user_selected_suites: &[CipherSuiteID],
     exclude_psk: bool,
     exclude_non_psk: bool,
-) -> Result<Vec<Box<dyn CipherSuite>>, Error> {
+) -> Result<Vec<Box<dyn CipherSuite + Send + Sync>>, Error> {
     let cipher_suites = if !user_selected_suites.is_empty() {
         cipher_suites_for_ids(user_selected_suites)?
     } else {
         default_cipher_suites()
     };
 
-    let filtered_cipher_suites: Vec<Box<dyn CipherSuite>> = cipher_suites
+    let filtered_cipher_suites: Vec<Box<dyn CipherSuite + Send + Sync>> = cipher_suites
         .into_iter()
         .filter(|c| !((exclude_psk && c.is_psk()) || (exclude_non_psk && !c.is_psk())))
         .collect();

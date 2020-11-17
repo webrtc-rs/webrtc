@@ -1,3 +1,4 @@
+use super::flight2::*;
 use super::*;
 use crate::config::*;
 use crate::conn::*;
@@ -13,171 +14,179 @@ use rand::Rng;
 
 use std::sync::atomic::Ordering;
 
-pub(crate) async fn flight0parse<C: FlightConn>(
-    /*context.Context,*/
-    _c: C,
-    state: &mut State,
-    cache: &HandshakeCache,
-    cfg: &HandshakeConfig,
-) -> Result<Flight, (Option<Alert>, Option<Error>)> {
-    let (seq, msgs) = match cache
-        .full_pull_map(
-            0,
-            &[HandshakeCachePullRule {
-                typ: HandshakeType::ClientHello,
-                epoch: cfg.initial_epoch,
-                is_client: true,
-                optional: false,
-            }],
-        )
-        .await
-    {
-        Ok((seq, msgs)) => (seq, msgs),
-        Err(_) => return Err((None, None)),
-    };
+use async_trait::async_trait;
 
-    state.handshake_recv_sequence = seq;
+pub(crate) struct Flight0;
 
-    if let Some(message) = msgs.get(&HandshakeType::ClientHello) {
-        // Validate type
-        let client_hello = match message {
-            HandshakeMessage::ClientHello(client_hello) => client_hello,
-            _ => {
-                return Err((
-                    Some(Alert {
-                        alert_level: AlertLevel::Fatal,
-                        alert_description: AlertDescription::InternalError,
-                    }),
-                    None,
-                ))
-            }
+#[async_trait]
+impl Flight for Flight0 {
+    async fn parse(
+        &self,
+        _c: &Conn,
+        state: &mut State,
+        cache: &HandshakeCache,
+        cfg: &HandshakeConfig,
+    ) -> Result<Box<dyn Flight>, (Option<Alert>, Option<Error>)> {
+        let (seq, msgs) = match cache
+            .full_pull_map(
+                0,
+                &[HandshakeCachePullRule {
+                    typ: HandshakeType::ClientHello,
+                    epoch: cfg.initial_epoch,
+                    is_client: true,
+                    optional: false,
+                }],
+            )
+            .await
+        {
+            Ok((seq, msgs)) => (seq, msgs),
+            Err(_) => return Err((None, None)),
         };
 
-        if client_hello.version != PROTOCOL_VERSION1_2 {
-            return Err((
-                Some(Alert {
-                    alert_level: AlertLevel::Fatal,
-                    alert_description: AlertDescription::ProtocolVersion,
-                }),
-                Some(ERR_UNSUPPORTED_PROTOCOL_VERSION.clone()),
-            ));
-        }
+        state.handshake_recv_sequence = seq;
 
-        state.remote_random = client_hello.random.clone();
-
-        if let Ok(id) =
-            find_matching_cipher_suite(&client_hello.cipher_suites, &cfg.local_cipher_suites)
-        {
-            if let Ok(cipher_suite) = cipher_suite_for_id(id) {
-                state.cipher_suite = Some(cipher_suite);
-            }
-        } else {
-            return Err((
-                Some(Alert {
-                    alert_level: AlertLevel::Fatal,
-                    alert_description: AlertDescription::InsufficientSecurity,
-                }),
-                Some(ERR_CIPHER_SUITE_NO_INTERSECTION.clone()),
-            ));
-        }
-
-        for extension in &client_hello.extensions {
-            match extension {
-                Extension::SupportedEllipticCurves(e) => {
-                    if e.elliptic_curves.is_empty() {
-                        return Err((
-                            Some(Alert {
-                                alert_level: AlertLevel::Fatal,
-                                alert_description: AlertDescription::InsufficientSecurity,
-                            }),
-                            Some(ERR_NO_SUPPORTED_ELLIPTIC_CURVES.clone()),
-                        ));
-                    }
-                    state.named_curve = e.elliptic_curves[0];
-                }
-                Extension::UseSRTP(e) => {
-                    if let Ok(profile) = find_matching_srtp_profile(
-                        &e.protection_profiles,
-                        &cfg.local_srtp_protection_profiles,
-                    ) {
-                        state.srtp_protection_profile = profile;
-                    } else {
-                        return Err((
-                            Some(Alert {
-                                alert_level: AlertLevel::Fatal,
-                                alert_description: AlertDescription::InsufficientSecurity,
-                            }),
-                            Some(ERR_SERVER_NO_MATCHING_SRTP_PROFILE.clone()),
-                        ));
-                    }
-                }
-                Extension::UseExtendedMasterSecret(_) => {
-                    if cfg.extended_master_secret != ExtendedMasterSecretType::Disable {
-                        state.extended_master_secret = true;
-                    }
-                }
-                Extension::ServerName(e) => {
-                    state.server_name = e.server_name.clone(); // remote server name
-                }
-                _ => {}
-            }
-        }
-
-        if cfg.extended_master_secret == ExtendedMasterSecretType::Require
-            && !state.extended_master_secret
-        {
-            return Err((
-                Some(Alert {
-                    alert_level: AlertLevel::Fatal,
-                    alert_description: AlertDescription::InsufficientSecurity,
-                }),
-                Some(ERR_SERVER_REQUIRED_BUT_NO_CLIENT_EMS.clone()),
-            ));
-        }
-
-        if state.local_keypair.is_none() {
-            state.local_keypair = match state.named_curve.generate_keypair() {
-                Ok(local_keypar) => Some(local_keypar),
-                Err(err) => {
+        if let Some(message) = msgs.get(&HandshakeType::ClientHello) {
+            // Validate type
+            let client_hello = match message {
+                HandshakeMessage::ClientHello(client_hello) => client_hello,
+                _ => {
                     return Err((
                         Some(Alert {
                             alert_level: AlertLevel::Fatal,
-                            alert_description: AlertDescription::IllegalParameter,
+                            alert_description: AlertDescription::InternalError,
                         }),
-                        Some(err),
+                        None,
                     ))
                 }
             };
+
+            if client_hello.version != PROTOCOL_VERSION1_2 {
+                return Err((
+                    Some(Alert {
+                        alert_level: AlertLevel::Fatal,
+                        alert_description: AlertDescription::ProtocolVersion,
+                    }),
+                    Some(ERR_UNSUPPORTED_PROTOCOL_VERSION.clone()),
+                ));
+            }
+
+            state.remote_random = client_hello.random.clone();
+
+            if let Ok(id) =
+                find_matching_cipher_suite(&client_hello.cipher_suites, &cfg.local_cipher_suites)
+            {
+                if let Ok(cipher_suite) = cipher_suite_for_id(id) {
+                    state.cipher_suite = Some(cipher_suite);
+                }
+            } else {
+                return Err((
+                    Some(Alert {
+                        alert_level: AlertLevel::Fatal,
+                        alert_description: AlertDescription::InsufficientSecurity,
+                    }),
+                    Some(ERR_CIPHER_SUITE_NO_INTERSECTION.clone()),
+                ));
+            }
+
+            for extension in &client_hello.extensions {
+                match extension {
+                    Extension::SupportedEllipticCurves(e) => {
+                        if e.elliptic_curves.is_empty() {
+                            return Err((
+                                Some(Alert {
+                                    alert_level: AlertLevel::Fatal,
+                                    alert_description: AlertDescription::InsufficientSecurity,
+                                }),
+                                Some(ERR_NO_SUPPORTED_ELLIPTIC_CURVES.clone()),
+                            ));
+                        }
+                        state.named_curve = e.elliptic_curves[0];
+                    }
+                    Extension::UseSRTP(e) => {
+                        if let Ok(profile) = find_matching_srtp_profile(
+                            &e.protection_profiles,
+                            &cfg.local_srtp_protection_profiles,
+                        ) {
+                            state.srtp_protection_profile = profile;
+                        } else {
+                            return Err((
+                                Some(Alert {
+                                    alert_level: AlertLevel::Fatal,
+                                    alert_description: AlertDescription::InsufficientSecurity,
+                                }),
+                                Some(ERR_SERVER_NO_MATCHING_SRTP_PROFILE.clone()),
+                            ));
+                        }
+                    }
+                    Extension::UseExtendedMasterSecret(_) => {
+                        if cfg.extended_master_secret != ExtendedMasterSecretType::Disable {
+                            state.extended_master_secret = true;
+                        }
+                    }
+                    Extension::ServerName(e) => {
+                        state.server_name = e.server_name.clone(); // remote server name
+                    }
+                    _ => {}
+                }
+            }
+
+            if cfg.extended_master_secret == ExtendedMasterSecretType::Require
+                && !state.extended_master_secret
+            {
+                return Err((
+                    Some(Alert {
+                        alert_level: AlertLevel::Fatal,
+                        alert_description: AlertDescription::InsufficientSecurity,
+                    }),
+                    Some(ERR_SERVER_REQUIRED_BUT_NO_CLIENT_EMS.clone()),
+                ));
+            }
+
+            if state.local_keypair.is_none() {
+                state.local_keypair = match state.named_curve.generate_keypair() {
+                    Ok(local_keypar) => Some(local_keypar),
+                    Err(err) => {
+                        return Err((
+                            Some(Alert {
+                                alert_level: AlertLevel::Fatal,
+                                alert_description: AlertDescription::IllegalParameter,
+                            }),
+                            Some(err),
+                        ))
+                    }
+                };
+            }
+
+            Ok(Box::new(Flight2 {}))
+        } else {
+            Err((
+                Some(Alert {
+                    alert_level: AlertLevel::Fatal,
+                    alert_description: AlertDescription::InternalError,
+                }),
+                None,
+            ))
         }
-
-        Ok(Flight::Flight2)
-    } else {
-        Err((
-            Some(Alert {
-                alert_level: AlertLevel::Fatal,
-                alert_description: AlertDescription::InternalError,
-            }),
-            None,
-        ))
     }
-}
 
-pub(crate) async fn flight0generate<C: FlightConn>(
-    _c: C,
-    state: &mut State,
-    _cache: &HandshakeCache,
-    _cfg: &HandshakeConfig,
-) -> Result<Vec<Packet>, (Option<Alert>, Option<Error>)> {
-    // Initialize
-    rand::thread_rng().fill(state.cookie.as_mut_slice());
+    async fn generate(
+        &self,
+        _c: &Conn,
+        state: &mut State,
+        _cache: &HandshakeCache,
+        _cfg: &HandshakeConfig,
+    ) -> Result<Vec<Packet>, (Option<Alert>, Option<Error>)> {
+        // Initialize
+        rand::thread_rng().fill(state.cookie.as_mut_slice());
 
-    //TODO: figure out difference between golang's atom store and rust atom store
-    let zero_epoch = 0;
-    state.local_epoch.store(zero_epoch, Ordering::Relaxed);
-    state.remote_epoch.store(zero_epoch, Ordering::Relaxed);
+        //TODO: figure out difference between golang's atom store and rust atom store
+        let zero_epoch = 0;
+        state.local_epoch.store(zero_epoch, Ordering::Relaxed);
+        state.remote_epoch.store(zero_epoch, Ordering::Relaxed);
 
-    state.named_curve = DEFAULT_NAMED_CURVE;
-    state.local_random.populate();
+        state.named_curve = DEFAULT_NAMED_CURVE;
+        state.local_random.populate();
 
-    Ok(vec![])
+        Ok(vec![])
+    }
 }

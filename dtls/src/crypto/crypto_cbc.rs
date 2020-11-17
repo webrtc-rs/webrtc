@@ -23,6 +23,7 @@ use block_modes::{BlockMode, Cbc};
 type Aes256Cbc = Cbc<Aes256, Pkcs7>;
 
 // State needed to handle encrypted input/output
+#[derive(Clone)]
 pub struct CryptoCbc {
     write_cbc: Aes256Cbc,
     read_cbc: Aes256Cbc,
@@ -50,7 +51,7 @@ impl CryptoCbc {
         })
     }
 
-    pub fn encrypt(&mut self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>, Error> {
+    pub fn encrypt(&self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>, Error> {
         let mut payload = raw[RECORD_LAYER_HEADER_SIZE..].to_vec();
         let raw = &raw[..RECORD_LAYER_HEADER_SIZE];
 
@@ -81,7 +82,7 @@ impl CryptoCbc {
         Ok(r)
     }
 
-    pub fn decrypt(&mut self, r: &[u8]) -> Result<Vec<u8>, Error> {
+    pub fn decrypt(&self, r: &[u8]) -> Result<Vec<u8>, Error> {
         let mut reader = Cursor::new(r);
         let h = RecordLayerHeader::unmarshal(&mut reader)?;
         if h.content_type == ContentType::ChangeCipherSpec {

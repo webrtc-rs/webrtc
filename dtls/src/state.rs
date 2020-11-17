@@ -10,6 +10,7 @@ use transport::replay_detector::*;
 use util::Error;
 
 use std::io::{BufWriter, Cursor};
+use std::marker::{Send, Sync};
 use std::sync::atomic::{AtomicU16, Ordering};
 
 // State holds the dtls connection state and implements both encoding.BinaryMarshaler and encoding.BinaryUnmarshaler
@@ -20,7 +21,7 @@ pub(crate) struct State {
     pub(crate) local_random: HandshakeRandom,
     pub(crate) remote_random: HandshakeRandom,
     pub(crate) master_secret: Vec<u8>,
-    pub(crate) cipher_suite: Option<Box<dyn CipherSuite>>, // nil if a cipher_suite hasn't been chosen
+    pub(crate) cipher_suite: Option<Box<dyn CipherSuite + Send + Sync>>, // nil if a cipher_suite hasn't been chosen
 
     pub(crate) srtp_protection_profile: SRTPProtectionProfile, // Negotiated srtp_protection_profile
     pub(crate) peer_certificates: Vec<Vec<u8>>,
@@ -44,6 +45,8 @@ pub(crate) struct State {
 
     pub(crate) replay_detector: Vec<Box<dyn ReplayDetector>>,
 }
+
+unsafe impl std::marker::Send for State {}
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 struct SerializedState {
@@ -179,7 +182,7 @@ impl State {
 
     pub async fn init_cipher_suite(&mut self) -> Result<(), Error> {
         if let Some(cipher_suite) = &mut self.cipher_suite {
-            if cipher_suite.is_initialized().await {
+            if cipher_suite.is_initialized() {
                 return Ok(());
             }
 
@@ -195,13 +198,9 @@ impl State {
             }
 
             if self.is_client {
-                cipher_suite
-                    .init(&self.master_secret, &local_random, &remote_random, true)
-                    .await
+                cipher_suite.init(&self.master_secret, &local_random, &remote_random, true)
             } else {
-                cipher_suite
-                    .init(&self.master_secret, &remote_random, &local_random, false)
-                    .await
+                cipher_suite.init(&self.master_secret, &remote_random, &local_random, false)
             }
         } else {
             Err(ERR_CIPHER_SUITE_UNSET.clone())
