@@ -4,7 +4,6 @@ use std::io::{Read, Write};
 use crate::header::*;
 use util::Error;
 
-#[cfg(test)]
 mod packet_test;
 
 // Packet represents an RTP Packet

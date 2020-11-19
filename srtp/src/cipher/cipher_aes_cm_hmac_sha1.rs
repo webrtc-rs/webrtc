@@ -63,7 +63,7 @@ impl CipherAesCmHmacSha1 {
             master_salt.len(),
         )?;
 
-        let auth_key_len = ProtectionProfile::AES128CMHMACSHA1_80.auth_key_len()?;
+        let auth_key_len = ProtectionProfile::AES128CMHMACSHA1_80.auth_key_len();
 
         let srtp_session_auth_tag = aes_cm_key_derivation(
             LABEL_SRTP_AUTHENTICATION_TAG,
