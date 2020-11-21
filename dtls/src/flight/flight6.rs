@@ -16,6 +16,10 @@ pub(crate) struct Flight6;
 
 #[async_trait]
 impl Flight for Flight6 {
+    fn to_string(&self) -> String {
+        "Flight6".to_owned()
+    }
+
     fn is_last_send_flight(&self) -> bool {
         true
     }

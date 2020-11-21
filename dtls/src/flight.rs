@@ -53,19 +53,25 @@ use async_trait::async_trait;
 */
 
 pub(crate) struct Packet {
-    record: RecordLayer,
+    pub(crate) record: RecordLayer,
     should_encrypt: bool,
     reset_local_sequence_number: bool,
 }
 
 #[async_trait]
 pub(crate) trait Flight {
+    fn to_string(&self) -> String;
+
     fn is_last_send_flight(&self) -> bool {
         false
     }
 
     fn is_last_recv_flight(&self) -> bool {
         false
+    }
+
+    fn has_retransmit(&self) -> bool {
+        true
     }
 
     async fn parse(

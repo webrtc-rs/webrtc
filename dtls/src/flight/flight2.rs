@@ -17,6 +17,14 @@ pub(crate) struct Flight2;
 
 #[async_trait]
 impl Flight for Flight2 {
+    fn to_string(&self) -> String {
+        "Flight2".to_owned()
+    }
+
+    fn has_retransmit(&self) -> bool {
+        false
+    }
+
     async fn parse(
         &self,
         c: &Conn,

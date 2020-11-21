@@ -6,9 +6,10 @@ use crate::flight::flight1::*;
 //use crate::flight::flight2::*;
 //use crate::flight::flight3::*;
 //use crate::flight::flight4::*;
+use crate::alert::*;
 use crate::flight::flight5::*;
 use crate::flight::flight6::*;
-use crate::flight::Flight;
+use crate::flight::*;
 use crate::fragment_buffer::*;
 use crate::handshake::handshake_cache::*;
 use crate::handshaker::*;
@@ -18,6 +19,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use tokio::net::*;
+//use tokio::sync::mpsc;
 use tokio::time;
 
 use crate::signature_hash_algorithm::parse_signature_schemes;
@@ -41,19 +43,6 @@ lazy_static! {
         map
     };
 }
-
-/*
-pub(crate) trait FlightConn {
-    fn notify(
-        &self,
-        /*ctx context.Context,*/ level: AlertLevel,
-        desc: AlertDescription,
-    ) -> Result<(), Error>;
-    fn write_packets(&self, /*context.Context,*/ packets: Vec<Packet>) -> Result<(), Error>;
-    fn recv_handshake(&self) -> mpsc::Receiver<()>;
-    fn set_local_epoch(&self, epoch: u16);
-    fn handle_queued_packets(&self /*context.Context*/) -> Result<(), Error>;
-}*/
 
 // Conn represents a DTLS connection
 pub(crate) struct Conn {
@@ -224,23 +213,33 @@ impl Conn {
         Ok(c)
     }
 
+    pub(crate) fn notify(&self, _level: AlertLevel, _desc: AlertDescription) -> Result<(), Error> {
+        Ok(())
+    }
+
+    pub(crate) fn write_packets(&self, _packets: &[Packet]) -> Result<(), Error> {
+        Ok(())
+    }
+
+    //pub(crate) fn recv_handshake(&self) -> mpsc::Receiver<()> {}
+
     pub(crate) fn handle_queued_packets(&self) -> Result<(), Error> {
         Ok(())
     }
 
-    fn set_local_epoch(&mut self, epoch: u16) {
+    pub(crate) fn set_local_epoch(&mut self, epoch: u16) {
         self.state.local_epoch.store(epoch, Ordering::Relaxed);
     }
 
-    fn get_local_epoch(&self) -> u16 {
+    pub(crate) fn get_local_epoch(&self) -> u16 {
         self.state.local_epoch.load(Ordering::Relaxed)
     }
 
-    fn set_remote_epoch(&mut self, epoch: u16) {
+    pub(crate) fn set_remote_epoch(&mut self, epoch: u16) {
         self.state.remote_epoch.store(epoch, Ordering::Relaxed);
     }
 
-    fn get_remote_epoch(&self) -> u16 {
+    pub(crate) fn get_remote_epoch(&self) -> u16 {
         self.state.remote_epoch.load(Ordering::Relaxed)
     }
 }
