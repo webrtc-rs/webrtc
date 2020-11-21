@@ -196,7 +196,7 @@ impl HandshakeConfig {
     }
 }
 
-fn srv_cli_str(is_client: bool) -> String {
+pub(crate) fn srv_cli_str(is_client: bool) -> String {
     if is_client {
         return "client".to_owned();
     }
@@ -268,13 +268,13 @@ impl HandshakeFsm {
 
     async fn prepare(&mut self, c: &mut Conn) -> Result<HandshakeState, Error> {
         self.flights = vec![];
-        // Prepare flights
 
+        // Prepare flights
         self.retransmit = self.current_flight.has_retransmit();
 
         let result = self
             .current_flight
-            .generate(c, &mut self.state, &self.cache, &self.cfg)
+            .generate(&mut self.state, &self.cache, &self.cfg)
             .await;
 
         match result {
@@ -320,7 +320,7 @@ impl HandshakeFsm {
     }
     async fn send(&mut self, c: &mut Conn) -> Result<HandshakeState, Error> {
         // Send flights
-        c.write_packets(&self.flights)?;
+        c.write_packets(&mut self.flights).await?;
 
         if self.current_flight.is_last_send_flight() {
             Ok(HandshakeState::Finished)

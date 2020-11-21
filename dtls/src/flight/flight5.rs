@@ -182,7 +182,6 @@ impl Flight for Flight5 {
 
     async fn generate(
         &self,
-        _c: &Conn,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,

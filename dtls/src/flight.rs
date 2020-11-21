@@ -54,8 +54,8 @@ use async_trait::async_trait;
 
 pub(crate) struct Packet {
     pub(crate) record: RecordLayer,
-    should_encrypt: bool,
-    reset_local_sequence_number: bool,
+    pub(crate) should_encrypt: bool,
+    pub(crate) reset_local_sequence_number: bool,
 }
 
 #[async_trait]
@@ -84,7 +84,6 @@ pub(crate) trait Flight {
 
     async fn generate(
         &self,
-        c: &Conn,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
