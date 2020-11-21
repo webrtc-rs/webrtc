@@ -119,4 +119,8 @@ lazy_static! {
         Error::new("unable to marshal fragmented handshakes".to_owned());
     pub static ref ERR_INVALID_FSM_TRANSITION: Error =
         Error::new("invalid state machine transition".to_owned());
+    pub static ref ERR_APPLICATION_DATA_EPOCH_ZERO: Error =
+        Error::new("ApplicationData with epoch of 0".to_owned());
+    pub static ref ERR_UNHANDLED_CONTEXT_TYPE: Error =
+        Error::new("unhandled contentType".to_owned());
 }

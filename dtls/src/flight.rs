@@ -1,10 +1,10 @@
-mod flight0;
-mod flight1;
-mod flight2;
-mod flight3;
-mod flight4;
-mod flight5;
-mod flight6;
+pub(crate) mod flight0;
+pub(crate) mod flight1;
+pub(crate) mod flight2;
+pub(crate) mod flight3;
+pub(crate) mod flight4;
+pub(crate) mod flight5;
+pub(crate) mod flight6;
 
 //use std::fmt;
 

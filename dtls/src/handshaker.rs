@@ -89,10 +89,32 @@ pub(crate) struct HandshakeConfig {
     //clientCAs                   *x509.CertPool
     pub(crate) retransmit_interval: Duration,
 
-    pub(crate) on_flight_state: OnFlightStateFn,
+    pub(crate) on_flight_state: Option<OnFlightStateFn>,
     //log           logging.LeveledLogger
     pub(crate) initial_epoch: u16,
     //mu sync.Mutex
+}
+
+impl Default for HandshakeConfig {
+    fn default() -> Self {
+        HandshakeConfig {
+            local_psk_callback: None,
+            local_psk_identity_hint: vec![],
+            local_cipher_suites: vec![],
+            local_signature_schemes: vec![],
+            extended_master_secret: ExtendedMasterSecretType::Disable,
+            local_srtp_protection_profiles: vec![],
+            server_name: String::new(),
+            client_auth: ClientAuthType::NoClientCert,
+            local_certificates: vec![],
+            name_to_certificate: HashMap::new(),
+            insecure_skip_verify: false,
+            verify_peer_certificate: None,
+            retransmit_interval: Duration::from_secs(0),
+            on_flight_state: None,
+            initial_epoch: 0,
+        }
+    }
 }
 
 impl HandshakeConfig {

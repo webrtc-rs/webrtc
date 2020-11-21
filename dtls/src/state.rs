@@ -64,7 +64,19 @@ struct SerializedState {
 
 impl Clone for State {
     fn clone(&self) -> Self {
-        let mut state = State {
+        let mut state = State::default();
+
+        if let Ok(serialized) = self.serialize() {
+            let _ = state.deserialize(&serialized);
+        }
+
+        state
+    }
+}
+
+impl Default for State {
+    fn default() -> Self {
+        State {
             local_epoch: AtomicU16::new(0),
             remote_epoch: AtomicU16::new(0),
             local_sequence_number: vec![], // uint48
@@ -94,13 +106,7 @@ impl Clone for State {
             peer_certificates_verified: false,
 
             replay_detector: vec![],
-        };
-
-        if let Ok(serialized) = self.serialize() {
-            let _ = state.deserialize(&serialized);
         }
-
-        state
     }
 }
 

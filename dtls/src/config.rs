@@ -2,9 +2,10 @@ use crate::cipher_suite::*;
 use crate::crypto::*;
 use crate::errors::*;
 use crate::extension::extension_use_srtp::SRTPProtectionProfile;
+use crate::handshaker::VerifyPeerCertificateFn;
 use crate::signature_hash_algorithm::SignatureScheme;
 
-use std::time::Duration;
+use tokio::time::Duration;
 
 use util::Error;
 
@@ -14,36 +15,36 @@ pub struct Config {
     // Certificates contains certificate chain to present to the other side of the connection.
     // Server MUST set this if psk is non-nil
     // client SHOULD sets this so CertificateRequests can be handled if psk is non-nil
-    certificates: Vec<Certificate>,
+    pub(crate) certificates: Vec<Certificate>,
 
     // cipher_suites is a list of supported cipher suites.
     // If cipher_suites is nil, a default list is used
-    cipher_suites: Vec<CipherSuiteID>,
+    pub(crate) cipher_suites: Vec<CipherSuiteID>,
 
     // SignatureSchemes contains the signature and hash schemes that the peer requests to verify.
-    signature_schemes: Vec<SignatureScheme>,
+    pub(crate) signature_schemes: Vec<SignatureScheme>,
 
     // srtp_protection_profiles are the supported protection profiles
     // Clients will send this via use_srtp and assert that the server properly responds
     // Servers will assert that clients send one of these profiles and will respond as needed
-    srtp_protection_profiles: Vec<SRTPProtectionProfile>,
+    pub(crate) srtp_protection_profiles: Vec<SRTPProtectionProfile>,
 
     // client_auth determines the server's policy for
     // TLS Client Authentication. The default is NoClientCert.
-    client_auth: ClientAuthType,
+    pub(crate) client_auth: ClientAuthType,
 
     // RequireExtendedMasterSecret determines if the "Extended Master Secret" extension
     // should be disabled, requested, or required (default requested).
-    extended_master_secret: ExtendedMasterSecretType,
+    pub(crate) extended_master_secret: ExtendedMasterSecretType,
 
     // flight_interval controls how often we send outbound handshake messages
     // defaults to time.Second
-    flight_interval: Duration,
+    pub(crate) flight_interval: Duration,
 
     // psk sets the pre-shared key used by this DTLS connection
     // If psk is non-nil only psk cipher_suites will be used
-    psk: Option<PSKCallback>,
-    psk_identity_hint: Vec<u8>,
+    pub(crate) psk: Option<PSKCallback>,
+    pub(crate) psk_identity_hint: Vec<u8>,
 
     // insecure_skip_verify controls whether a client verifies the
     // server's certificate chain and host name.
@@ -51,11 +52,11 @@ pub struct Config {
     // presented by the server and any host name in that certificate.
     // In this mode, TLS is susceptible to man-in-the-middle attacks.
     // This should be used only for testing.
-    insecure_skip_verify: bool,
+    pub(crate) insecure_skip_verify: bool,
 
     // insecure_hashes allows the use of hashing algorithms that are known
     // to be vulnerable.
-    insecure_hashes: bool,
+    pub(crate) insecure_hashes: bool,
 
     // VerifyPeerCertificate, if not nil, is called after normal
     // certificate verification by either a client or server. It
@@ -68,7 +69,7 @@ pub struct Config {
     // setting insecure_skip_verify, or (for a server) when client_auth is
     // RequestClientCert or RequireAnyClientCert, then this callback will
     // be considered but the verifiedChains will always be nil.
-    //TODO: VerifyPeerCertificate func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error
+    pub(crate) verify_peer_certificate: Option<VerifyPeerCertificateFn>,
 
     // RootCAs defines the set of root certificate authorities
     // that one peer uses when verifying the other peer's certificates.
@@ -82,7 +83,7 @@ pub struct Config {
 
     // server_name is used to verify the hostname on the returned
     // certificates unless insecure_skip_verify is given.
-    server_name: String,
+    pub(crate) server_name: String,
 
     //TODO: LoggerFactory logging.LoggerFactory
 
@@ -97,16 +98,16 @@ pub struct Config {
 
     // mtu is the length at which handshake messages will be fragmented to
     // fit within the maximum transmission unit (default is 1200 bytes)
-    mtu: usize,
+    pub(crate) mtu: usize,
 
     // replay_protection_window is the size of the replay attack protection window.
     // Duplication of the sequence number is checked in this window size.
     // Packet with sequence number older than this value compared to the latest
     // accepted packet will be discarded. (default is 64)
-    replay_protection_window: usize,
+    pub(crate) replay_protection_window: usize,
 }
 
-const DEFAULT_MTU: usize = 1200; // bytes
+pub(crate) const DEFAULT_MTU: usize = 1200; // bytes
 
 // PSKCallback is called once we have the remote's psk_identity_hint.
 // If the remote provided none it will be nil
@@ -125,7 +126,7 @@ pub(crate) enum ClientAuthType {
 
 // ExtendedMasterSecretType declares the policy the client and server
 // will follow for the Extended Master Secret extension
-#[derive(PartialEq)]
+#[derive(PartialEq, Copy, Clone)]
 pub(crate) enum ExtendedMasterSecretType {
     Request = 0,
     Require = 1,
