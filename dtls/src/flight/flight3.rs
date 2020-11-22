@@ -37,7 +37,7 @@ impl Flight for Flight3 {
 
     async fn parse(
         &self,
-        _c: &Conn,
+        _c: &mut Conn,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,

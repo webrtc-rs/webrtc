@@ -124,4 +124,5 @@ lazy_static! {
     pub static ref ERR_UNHANDLED_CONTEXT_TYPE: Error =
         Error::new("unhandled contentType".to_owned());
     pub static ref ERR_CONTEXT_CANCELED: Error = Error::new("context canceled".to_owned());
+    pub static ref ERR_EMPTY_FRAGMENT: Error = Error::new("empty fragment".to_owned());
 }

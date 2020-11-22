@@ -2,6 +2,7 @@
 mod fragment_buffer_test;
 
 use crate::content::*;
+use crate::errors::*;
 use crate::handshake::handshake_header::*;
 use crate::record_layer::record_layer_header::*;
 
@@ -75,17 +76,17 @@ impl FragmentBuffer {
         Ok(true)
     }
 
-    pub fn pop(&mut self) -> (Vec<u8>, u16) {
+    pub fn pop(&mut self) -> Result<(Vec<u8>, u16), Error> {
         let seq_num = self.current_message_sequence_number;
         if !self.cache.contains_key(&seq_num) {
-            return (vec![], 0);
+            return Err(ERR_EMPTY_FRAGMENT.clone());
         }
 
         let (content, epoch) = if let Some(frags) = self.cache.get_mut(&seq_num) {
             let mut raw_message = vec![];
             // Recursively collect up
             if !append_message(0, frags, &mut raw_message) {
-                return (vec![], 0);
+                return Err(ERR_EMPTY_FRAGMENT.clone());
             }
 
             let mut first_header = frags[0].handshake_header;
@@ -96,7 +97,7 @@ impl FragmentBuffer {
             {
                 let mut writer = BufWriter::<&mut Vec<u8>>::new(raw_header.as_mut());
                 if first_header.marshal(&mut writer).is_err() {
-                    return (vec![], 0);
+                    return Err(ERR_EMPTY_FRAGMENT.clone());
                 }
             }
 
@@ -106,13 +107,13 @@ impl FragmentBuffer {
 
             (raw_header, message_epoch)
         } else {
-            (vec![], 0)
+            return Err(ERR_EMPTY_FRAGMENT.clone());
         };
 
         self.cache.remove(&seq_num);
         self.current_message_sequence_number += 1;
 
-        (content, epoch)
+        Ok((content, epoch))
     }
 }
 

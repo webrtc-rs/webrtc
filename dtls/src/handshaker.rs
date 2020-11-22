@@ -280,7 +280,7 @@ impl HandshakeFsm {
         match result {
             Err((a, mut err)) => {
                 if let Some(a) = a {
-                    let alert_err = c.notify(a.alert_level, a.alert_description);
+                    let alert_err = c.notify(a.alert_level, a.alert_description).await;
 
                     if let Err(alert_err) = alert_err {
                         if err.is_some() {
@@ -339,7 +339,7 @@ impl HandshakeFsm {
                    match result {
                         Err((alert, mut err)) => {
                             if let Some(alert) = alert {
-                                let alert_err = c.notify(alert.alert_level, alert.alert_description);
+                                let alert_err = c.notify(alert.alert_level, alert.alert_description).await;
 
                                 if let Err(alert_err) = alert_err {
                                     if err.is_some() {
@@ -385,8 +385,7 @@ impl HandshakeFsm {
                match result {
                     Err((alert, mut err)) => {
                         if let Some(alert) = alert {
-                            let alert_err = c.notify(alert.alert_level, alert.alert_description);
-
+                            let alert_err = c.notify(alert.alert_level, alert.alert_description).await;
                             if let Err(alert_err) = alert_err {
                                 if err.is_some() {
                                     err = Some(alert_err);

@@ -76,7 +76,7 @@ pub(crate) trait Flight {
 
     async fn parse(
         &self,
-        c: &Conn,
+        c: &mut Conn,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,

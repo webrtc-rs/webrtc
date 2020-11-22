@@ -33,8 +33,9 @@ use tokio::net::*;
 use tokio::sync::mpsc;
 use tokio::time;
 
-use std::io::BufWriter;
+use std::io::{BufReader, BufWriter};
 use tokio::time::Duration;
+use transport::replay_detector::SlidingWindowDetector;
 use util::Error;
 
 pub(crate) const INITIAL_TICKER_INTERVAL: time::Duration = time::Duration::from_secs(1);
@@ -61,14 +62,15 @@ pub(crate) struct Conn {
     next_conn: UdpSocket, // Embedded Conn, typically a udpconn we read/write from
     fragment_buffer: FragmentBuffer, // out-of-order and missing fragment handling
     handshake_cache: HandshakeCache, // caching of handshake messages for verifyData generation
-    //decrypted      chan interface{} // Decrypted Application Data or error, pull by calling `Read`
-    state: State, // Internal state
+    decrypted_tx: mpsc::Sender<Result<Vec<u8>, Error>>, // Decrypted Application Data or error, pull by calling `Read`
+    decrypted_rx: mpsc::Receiver<Result<Vec<u8>, Error>>, // Decrypted Application Data or error, pull by calling `Read`
+    state: State,                                         // Internal state
 
     maximum_transmission_unit: usize,
 
     handshake_completed_successfully: AtomicBool,
 
-    encrypted_packets: Vec<Vec<u8>>,
+    encrypted_packets: Option<Vec<Vec<u8>>>,
 
     connection_closed_by_user: bool,
     // closeLock              sync.Mutex
@@ -139,17 +141,21 @@ impl Conn {
             config.replay_protection_window
         };
 
+        let (decrypted_tx, decrypted_rx) = mpsc::channel(1);
+
         let mut c = Conn {
             next_conn,
             fragment_buffer: FragmentBuffer::new(),
             handshake_cache: HandshakeCache::new(),
+            decrypted_tx,
+            decrypted_rx,
             state: State {
                 is_client,
                 ..Default::default()
             },
             maximum_transmission_unit,
             handshake_completed_successfully: AtomicBool::new(false),
-            encrypted_packets: vec![],
+            encrypted_packets: None,
             connection_closed_by_user: false,
             replay_protection_window,
             closed: false,
@@ -361,8 +367,27 @@ impl Conn {
         self.state.srtp_protection_profile
     }
 
-    pub(crate) fn notify(&self, _level: AlertLevel, _desc: AlertDescription) -> Result<(), Error> {
-        Ok(())
+    pub(crate) async fn notify(
+        &mut self,
+        level: AlertLevel,
+        desc: AlertDescription,
+    ) -> Result<(), Error> {
+        self.write_packets(&mut [Packet {
+            record: RecordLayer {
+                record_layer_header: RecordLayerHeader {
+                    epoch: self.get_local_epoch(),
+                    protocol_version: PROTOCOL_VERSION1_2,
+                    ..Default::default()
+                },
+                content: Content::Alert(Alert {
+                    alert_level: level,
+                    alert_description: desc,
+                }),
+            },
+            should_encrypt: self.is_handshake_completed_successfully(),
+            reset_local_sequence_number: false,
+        }])
+        .await
     }
 
     pub(crate) async fn write_packets(&mut self, pkts: &mut [Packet]) -> Result<(), Error> {
@@ -556,8 +581,264 @@ impl Conn {
 
     //pub(crate) fn recv_handshake(&self) -> mpsc::Receiver<()> {}
 
-    pub(crate) fn handle_queued_packets(&self) -> Result<(), Error> {
+    pub(crate) async fn handle_queued_packets(&mut self) -> Result<(), Error> {
+        if let Some(pkts) = self.encrypted_packets.take() {
+            for p in pkts {
+                let (_, alert, mut err) = self.handle_incoming_packet(p, false).await; // don't re-enqueue
+                if let Some(alert) = alert {
+                    let alert_err = self
+                        .notify(alert.alert_level, alert.alert_description)
+                        .await;
+                    if let Err(alert_err) = alert_err {
+                        if err.is_none() {
+                            err = Some(alert_err);
+                        }
+                    }
+
+                    if alert.alert_level == AlertLevel::Fatal
+                        || alert.alert_description == AlertDescription::CloseNotify
+                    {
+                        return Err(Error::new("Alert is Fatal or Close Notify".to_owned()));
+                    }
+                }
+
+                if let Some(err) = err {
+                    return Err(err);
+                }
+            }
+        }
+
         Ok(())
+    }
+
+    async fn handle_incoming_packet(
+        &mut self,
+        mut buf: Vec<u8>,
+        enqueue: bool,
+    ) -> (bool, Option<Alert>, Option<Error>) {
+        let mut reader = BufReader::new(buf.as_slice());
+        let h = match RecordLayerHeader::unmarshal(&mut reader) {
+            Ok(h) => h,
+            Err(err) => {
+                // Decode error must be silently discarded
+                // [RFC6347 Section-4.1.2.7]
+                debug!("discarded broken packet: {}", err);
+                return (false, None, None);
+            }
+        };
+
+        // Validate epoch
+        let remote_epoch = self.get_remote_epoch();
+        if h.epoch > remote_epoch {
+            if h.epoch > remote_epoch + 1 {
+                debug!(
+                    "discarded future packet (epoch: {}, seq: {})",
+                    h.epoch, h.sequence_number,
+                );
+                return (false, None, None);
+            }
+            if enqueue {
+                debug!("received packet of next epoch, queuing packet");
+                if let Some(encrypted_packets) = &mut self.encrypted_packets {
+                    encrypted_packets.push(buf);
+                }
+            }
+            return (false, None, None);
+        }
+
+        // Anti-replay protection
+        while self.state.replay_detector.len() <= h.epoch as usize {
+            self.state
+                .replay_detector
+                .push(Box::new(SlidingWindowDetector::new(
+                    self.replay_protection_window,
+                    MAX_SEQUENCE_NUMBER,
+                )));
+        }
+
+        let ok = self.state.replay_detector[h.epoch as usize].check(h.sequence_number);
+        if !ok {
+            debug!(
+                "discarded duplicated packet (epoch: {}, seq: {})",
+                h.epoch, h.sequence_number,
+            );
+            return (false, None, None);
+        }
+
+        // Decrypt
+        if h.epoch != 0 {
+            let invalid_cipher_suite = if self.state.cipher_suite.is_none() {
+                true
+            } else if let Some(cipher_suite) = &self.state.cipher_suite {
+                !cipher_suite.is_initialized()
+            } else {
+                false
+            };
+            if invalid_cipher_suite {
+                if enqueue {
+                    if let Some(encrypted_packets) = &mut self.encrypted_packets {
+                        encrypted_packets.push(buf);
+                    }
+                    debug!("handshake not finished, queuing packet");
+                }
+                return (false, None, None);
+            }
+
+            if let Some(cipher_suite) = &self.state.cipher_suite {
+                buf = match cipher_suite.decrypt(&buf) {
+                    Ok(buf) => buf,
+                    Err(err) => {
+                        debug!(
+                            "{}: decrypt failed: {}",
+                            srv_cli_str(self.state.is_client),
+                            err
+                        );
+                        return (false, None, None);
+                    }
+                };
+            }
+        }
+
+        let is_handshake = match self.fragment_buffer.push(&buf) {
+            Ok(is_handshake) => is_handshake,
+            Err(err) => {
+                // Decode error must be silently discarded
+                // [RFC6347 Section-4.1.2.7]
+                debug!("defragment failed: {}", err);
+                return (false, None, None);
+            }
+        };
+        if is_handshake {
+            self.state.replay_detector[h.epoch as usize].accept();
+            while let Ok((out, epoch)) = self.fragment_buffer.pop() {
+                let mut reader = BufReader::new(out.as_slice());
+                let raw_handshake = match Handshake::unmarshal(&mut reader) {
+                    Ok(h) => h,
+                    Err(err) => {
+                        debug!(
+                            "{}: handshake parse failed: {}",
+                            srv_cli_str(self.state.is_client),
+                            err
+                        );
+                        continue;
+                    }
+                };
+
+                self.handshake_cache
+                    .push(
+                        out,
+                        epoch,
+                        raw_handshake.handshake_header.message_sequence,
+                        raw_handshake.handshake_header.handshake_type,
+                        !self.state.is_client,
+                    )
+                    .await;
+            }
+
+            return (true, None, None);
+        }
+
+        let mut reader = BufReader::new(buf.as_slice());
+        let r = match RecordLayer::unmarshal(&mut reader) {
+            Ok(r) => r,
+            Err(err) => {
+                return (
+                    false,
+                    Some(Alert {
+                        alert_level: AlertLevel::Fatal,
+                        alert_description: AlertDescription::DecodeError,
+                    }),
+                    Some(err),
+                );
+            }
+        };
+
+        match r.content {
+            Content::Alert(mut a) => {
+                trace!(
+                    "{}: <- {}",
+                    srv_cli_str(self.state.is_client),
+                    a.to_string()
+                );
+                if a.alert_description == AlertDescription::CloseNotify {
+                    // Respond with a close_notify [RFC5246 Section 7.2.1]
+                    a = Alert {
+                        alert_level: AlertLevel::Warning,
+                        alert_description: AlertDescription::CloseNotify,
+                    };
+                }
+                self.state.replay_detector[h.epoch as usize].accept();
+                return (
+                    false,
+                    Some(a),
+                    Some(Error::new(format!("Error of Alert {}", a.to_string()))),
+                ); //TODO: &errAlert { content });
+            }
+            Content::ChangeCipherSpec(_) => {
+                let invalid_cipher_suite = if self.state.cipher_suite.is_none() {
+                    true
+                } else if let Some(cipher_suite) = &self.state.cipher_suite {
+                    !cipher_suite.is_initialized()
+                } else {
+                    false
+                };
+
+                if invalid_cipher_suite {
+                    if enqueue {
+                        if let Some(encrypted_packets) = &mut self.encrypted_packets {
+                            encrypted_packets.push(buf);
+                        }
+                        debug!("CipherSuite not initialized, queuing packet");
+                    }
+                    return (false, None, None);
+                }
+
+                let new_remote_epoch = h.epoch + 1;
+                trace!(
+                    "{}: <- ChangeCipherSpec (epoch: {})",
+                    srv_cli_str(self.state.is_client),
+                    new_remote_epoch
+                );
+
+                if self.get_remote_epoch() + 1 == new_remote_epoch {
+                    self.set_remote_epoch(new_remote_epoch);
+                    self.state.replay_detector[h.epoch as usize].accept();
+                }
+            }
+            Content::ApplicationData(a) => {
+                if h.epoch == 0 {
+                    return (
+                        false,
+                        Some(Alert {
+                            alert_level: AlertLevel::Fatal,
+                            alert_description: AlertDescription::UnexpectedMessage,
+                        }),
+                        Some(ERR_APPLICATION_DATA_EPOCH_ZERO.clone()),
+                    );
+                }
+
+                self.state.replay_detector[h.epoch as usize].accept();
+
+                let _ = self.decrypted_tx.send(Ok(a.data)).await;
+                //TODO
+                /*select {
+                    case self.decrypted < - content.data:
+                    case < -c.closed.Done():
+                }*/
+            }
+            _ => {
+                return (
+                    false,
+                    Some(Alert {
+                        alert_level: AlertLevel::Fatal,
+                        alert_description: AlertDescription::UnexpectedMessage,
+                    }),
+                    Some(ERR_UNHANDLED_CONTEXT_TYPE.clone()),
+                );
+            }
+        };
+
+        (false, None, None)
     }
 
     fn is_connection_closed(&self) -> bool {

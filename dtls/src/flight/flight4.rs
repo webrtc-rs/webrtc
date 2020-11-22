@@ -43,7 +43,7 @@ impl Flight for Flight4 {
 
     async fn parse(
         &self,
-        c: &Conn,
+        c: &mut Conn,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
@@ -381,7 +381,7 @@ impl Flight for Flight4 {
         }
 
         // Now, encrypted packets can be handled
-        if let Err(err) = c.handle_queued_packets() {
+        if let Err(err) = c.handle_queued_packets().await {
             return Err((
                 Some(Alert {
                     alert_level: AlertLevel::Fatal,

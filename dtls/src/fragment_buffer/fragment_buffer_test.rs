@@ -121,7 +121,7 @@ fn test_fragment_buffer() -> Result<(), Error> {
         }
 
         for expected in expects {
-            let (out, epoch) = fragment_buffer.pop();
+            let (out, epoch) = fragment_buffer.pop()?;
             assert_eq!(
                 out, expected,
                 "fragment_buffer '{}' push/pop: got {:?}, want {:?}",
@@ -135,10 +135,9 @@ fn test_fragment_buffer() -> Result<(), Error> {
             );
         }
 
-        let (frag, _) = fragment_buffer.pop();
-        assert_eq!(
-            frag.len(),
-            0,
+        let result = fragment_buffer.pop();
+        assert!(
+            result.is_err(),
             "fragment_buffer popped single buffer multiple times for '{}'",
             name
         );
