@@ -34,7 +34,7 @@ use tokio::sync::mpsc;
 use tokio::time;
 
 use std::io::{BufReader, BufWriter};
-use tokio::time::Duration;
+use tokio::time::{timeout, Duration};
 use transport::replay_detector::SlidingWindowDetector;
 use util::Error;
 
@@ -178,7 +178,7 @@ impl Conn {
             }
         }*/
 
-        let _hs_cfg = HandshakeConfig {
+        let hs_cfg = HandshakeConfig {
             local_psk_callback: config.psk.take(),
             local_psk_identity_hint: config.psk_identity_hint.clone(),
             local_cipher_suites,
@@ -198,7 +198,7 @@ impl Conn {
             ..Default::default()
         };
 
-        let (_initial_flight, _initial_fsm_state) = if let Some(state) = initial_state {
+        let (initial_flight, initial_fsm_state) = if let Some(state) = initial_state {
             c.state = state;
             if is_client {
                 (
@@ -224,9 +224,10 @@ impl Conn {
         };
 
         // Do handshake
-        //Todo: c.handshake(ctx, hsCfg, initialFlight, initialFSMState)?
+        c.handshake(hs_cfg, initial_flight, initial_fsm_state)
+            .await?;
 
-        //c.log.Trace("Handshake Completed")
+        trace!("Handshake Completed");
 
         Ok(c)
     }
@@ -282,42 +283,40 @@ impl Conn {
     }
 
     // Read reads data from the connection.
-    pub async fn read(
-        &mut self,
-        _p: &mut [u8],
-        duration: Option<Duration>,
-    ) -> Result<usize, Error> {
+    pub async fn read(&mut self, p: &mut [u8], duration: Option<Duration>) -> Result<usize, Error> {
         if !self.is_handshake_completed_successfully() {
             return Err(ERR_HANDSHAKE_IN_PROGRESS.clone());
         }
 
-        //TODO
-        if let Some(_d) = duration {
-        } else {
-        }
-        /*select {
-        case <-c.readDeadline.Done():
-            return 0, errDeadlineExceeded
-        case out, ok := <-c.decrypted:
-            if !ok {
-                return 0, io.EOF
-            }
-            switch val := out.(type) {
-            case ([]byte):
-                if len(p) < len(val) {
-                    return 0, errBufferTooSmall
+        loop {
+            let rx = if let Some(d) = duration {
+                match timeout(d, self.decrypted_rx.recv()).await {
+                    Ok(rx) => rx,
+                    Err(_) => return Err(ERR_DEADLINE_EXCEEDED.clone()),
                 }
-                copy(p, val)
-                return len(val), nil
-            case (error):
-                return 0, val
+            } else {
+                self.decrypted_rx.recv().await
+            };
+
+            if let Some(out) = rx {
+                match out {
+                    Ok(val) => {
+                        if p.len() < val.len() {
+                            return Err(ERR_BUFFER_TOO_SMALL.clone());
+                        }
+                        p[..val.len()].copy_from_slice(&val);
+                        return Ok(val.len());
+                    }
+                    Err(err) => return Err(err),
+                };
+            } else {
+                continue;
             }
-        }*/
-        Ok(0)
+        }
     }
 
     // Write writes len(p) bytes from p to the DTLS connection
-    pub async fn write(&mut self, p: &[u8], _duration: Option<Duration>) -> Result<usize, Error> {
+    pub async fn write(&mut self, p: &[u8], duration: Option<Duration>) -> Result<usize, Error> {
         if self.is_connection_closed() {
             return Err(ERR_CONN_CLOSED.clone());
         }
@@ -326,7 +325,7 @@ impl Conn {
             return Err(ERR_HANDSHAKE_IN_PROGRESS.clone());
         }
 
-        self.write_packets(&mut [Packet {
+        let mut pkts = vec![Packet {
             record: RecordLayer {
                 record_layer_header: RecordLayerHeader {
                     epoch: self.get_local_epoch(),
@@ -337,8 +336,15 @@ impl Conn {
             },
             should_encrypt: true,
             reset_local_sequence_number: false,
-        }])
-        .await?;
+        }];
+
+        if let Some(d) = duration {
+            if timeout(d, self.write_packets(&mut pkts)).await.is_err() {
+                return Err(ERR_DEADLINE_EXCEEDED.clone());
+            }
+        } else {
+            self.write_packets(&mut pkts).await?;
+        }
 
         Ok(p.len())
     }
@@ -579,7 +585,59 @@ impl Conn {
             .load(Ordering::Relaxed)
     }
 
-    //pub(crate) fn recv_handshake(&self) -> mpsc::Receiver<()> {}
+    async fn read_and_buffer(&mut self) -> Result<(), Error> {
+        //bufptr := poolReadBuffer.Get().(*[]byte)
+        //defer poolReadBuffer.Put(bufptr)
+
+        //b := *bufptr
+        //TODO: use buffer pool
+        let mut b = vec![0; INBOUND_BUFFER_SIZE];
+        let i = self.next_conn.recv(&mut b).await?;
+        let pkts = unpack_datagram(&b[..i])?;
+
+        let mut has_handshake = false;
+        for p in pkts {
+            let (hs, alert, mut err) = self.handle_incoming_packet(p, true).await;
+            if let Some(alert) = alert {
+                let alert_err = self
+                    .notify(alert.alert_level, alert.alert_description)
+                    .await;
+                if let Err(alert_err) = alert_err {
+                    if err.is_none() {
+                        err = Some(alert_err);
+                    }
+                }
+
+                if alert.alert_level == AlertLevel::Fatal
+                    || alert.alert_description == AlertDescription::CloseNotify
+                {
+                    return Err(Error::new("Alert is Fatal or Close Notify".to_owned()));
+                }
+            }
+
+            if let Some(err) = err {
+                return Err(err);
+            }
+
+            if hs {
+                has_handshake = true
+            }
+        }
+
+        if has_handshake {
+            /*TODO:
+               done := make(chan struct{})
+            select {
+            case c.handshakeRecv <- done:
+                // If the other party may retransmit the flight,
+                // we should respond even if it not a new message.
+                <-done
+            case <-c.fsm.Done():
+            }*/
+        }
+
+        Ok(())
+    }
 
     pub(crate) async fn handle_queued_packets(&mut self) -> Result<(), Error> {
         if let Some(pkts) = self.encrypted_packets.take() {
