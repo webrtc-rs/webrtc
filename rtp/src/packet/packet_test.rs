@@ -2,7 +2,10 @@
 mod packet_test {
     use crate::{header, packet::Packet};
 
-    use std::io::{BufReader, BufWriter};
+    use std::{
+        io::{BufReader, BufWriter},
+        vec,
+    };
     use util::Error;
 
     #[test]
@@ -29,7 +32,7 @@ mod packet_test {
                 timestamp: 3653407706,
                 ssrc: 476325762,
                 csrc: vec![],
-                extension_profile: 1,
+                extension_profile: 1.into(),
                 extensions: vec![header::Extension {
                     id: 0,
                     payload: vec![0xFF, 0xFF, 0xFF, 0xFF],
@@ -52,8 +55,8 @@ mod packet_test {
 
         let mut raw: Vec<u8> = vec![];
         {
-            let mut writer = BufWriter::<&mut Vec<u8>>::new(raw.as_mut());
-            packet.marshal(&mut writer)?;
+            //  let mut writer = BufWriter::<&mut Vec<u8>>::new(raw.as_mut());
+            packet.marshal(&mut raw)?;
         }
 
         assert_eq!(
@@ -102,7 +105,7 @@ mod packet_test {
         let packet = Packet {
             header: header::Header {
                 extension: true,
-                extension_profile: 3,
+                extension_profile: 3.into(),
                 extensions: vec![header::Extension {
                     id: 0,
                     payload: vec![0],
@@ -113,15 +116,13 @@ mod packet_test {
         };
 
         let mut raw: Vec<u8> = vec![];
-        {
-            let mut writer = BufWriter::<&mut Vec<u8>>::new(raw.as_mut());
-            let result = packet.marshal(&mut writer);
-            if result.is_ok() {
-                assert!(
-                    false,
-                    "Marshal did not error on packet with invalid extension length"
-                );
-            }
+
+        let result = packet.marshal(&mut raw);
+        if result.is_ok() {
+            assert!(
+                false,
+                "Marshal did not error on packet with invalid extension length"
+            );
         }
 
         Ok(())
@@ -140,7 +141,7 @@ mod packet_test {
             header: header::Header {
                 marker: true,
                 extension: true,
-                extension_profile: 0xBEDE,
+                extension_profile: crate::header::ExtensionProfile::OneByte,
                 extensions: vec![header::Extension {
                     id: 5,
                     payload: vec![0xAA],
@@ -158,10 +159,8 @@ mod packet_test {
         };
 
         let mut dst: Vec<u8> = vec![];
-        {
-            let mut writer = BufWriter::<&mut Vec<u8>>::new(dst.as_mut());
-            p.marshal(&mut writer)?;
-        }
+        p.marshal(&mut dst)?;
+
         assert_eq!(dst, raw_pkt);
 
         Ok(())
@@ -205,7 +204,7 @@ mod packet_test {
             header: header::Header {
                 marker: true,
                 extension: true,
-                extension_profile: 0xBEDE,
+                extension_profile: header::ExtensionProfile::OneByte,
                 extensions: vec![
                     header::Extension {
                         id: 1,
@@ -229,10 +228,8 @@ mod packet_test {
         };
 
         let mut dst: Vec<u8> = vec![];
-        {
-            let mut writer = BufWriter::<&mut Vec<u8>>::new(dst.as_mut());
-            p.marshal(&mut writer)?;
-        }
+        p.marshal(&mut dst)?;
+
         assert_eq!(dst, raw_pkt);
 
         Ok(())
@@ -285,6 +282,12 @@ mod packet_test {
 
         let ext3_expect: [u8; 4] = [0xCC, 0xCC, 0xCC, 0xCC];
         assert_eq!(ext3, ext3_expect);
+
+        let mut dst_buf: [Vec<u8>; 2] = [vec![0u8; 1000], vec![0u8; 1000]];
+
+        let checker = |name: String, mut buf: &mut [u8], p: &mut Packet| {
+            p.marshal(&mut buf).expect("Error marshalling byte");
+        };
     }
 
     //TODO: TestRFC8285OneByteMultipleExtensionsWithPadding

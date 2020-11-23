@@ -33,7 +33,7 @@ impl Cipher for CipherAeadAesGcm {
     ) -> Result<Vec<u8>, Error> {
         let mut writer: Vec<u8> = Vec::new();
 
-        header.marshal(&mut writer)?;
+        header.marshal_to(&mut writer)?;
         let nonce = self.rtp_initialization_vector(header, roc);
 
         let mut encrypted = self.srtp_cipher.encrypt(

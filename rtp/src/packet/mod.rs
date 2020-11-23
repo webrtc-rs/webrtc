@@ -1,5 +1,5 @@
-use std::fmt;
 use std::io::{Read, Write};
+use std::{fmt, todo};
 
 use crate::header::*;
 use util::Error;
@@ -33,7 +33,7 @@ impl fmt::Display for Packet {
 impl Packet {
     // MarshalSize returns the size of the packet once marshaled.
     pub fn size(&self) -> usize {
-        self.header.size() + self.payload.len()
+        self.header.marshal_size() + self.payload.len()
     }
 
     // Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
@@ -47,9 +47,10 @@ impl Packet {
     }
 
     // Marshal serializes the header and writes to the buffer.
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.header.marshal(writer)?;
-        writer.write_all(&self.payload)?;
+    pub fn marshal(&self, mut buf: &mut [u8]) -> Result<(), Error> {
+        todo!()
+        // self.header.marshal(buf)?;
+        // writer.write_all(&self.payload)?;
 
         Ok(writer.flush()?)
     }

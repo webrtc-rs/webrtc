@@ -5,7 +5,7 @@ mod session_rtp_test {
         session::Session, stream::Stream,
     };
 
-    use std::{collections::HashMap, io::BufWriter, sync::Arc};
+    use std::{collections::HashMap, sync::Arc};
 
     use tokio::{
         net::UdpSocket,
@@ -208,10 +208,7 @@ mod session_rtp_test {
 
     fn encrypt_srtp(context: &mut Context, pkt: &rtp::packet::Packet) -> Result<Vec<u8>, Error> {
         let mut decrypted = vec![];
-        {
-            let mut writer = BufWriter::<&mut Vec<u8>>::new(decrypted.as_mut());
-            pkt.marshal(&mut writer)?;
-        }
+        pkt.marshal(&mut decrypted)?;
 
         let encrypted = context.encrypt_rtp(&decrypted)?;
 

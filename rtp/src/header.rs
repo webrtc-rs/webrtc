@@ -1,8 +1,11 @@
-use std::io::{Read, Write};
+use std::{
+    io::{Read, Write},
+    todo,
+};
 
 use util::Error;
 
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use byteorder::{BigEndian, ReadBytesExt};
 
 const HEADER_LENGTH: usize = 4;
 const VERSION_SHIFT: u8 = 6;
@@ -11,8 +14,6 @@ const PADDING_SHIFT: u8 = 5;
 const PADDING_MASK: u8 = 0x1;
 const EXTENSION_SHIFT: u8 = 4;
 const EXTENSION_MASK: u8 = 0x1;
-const EXTENSION_PROFILE_ONE_BYTE: u16 = 0xBEDE;
-const EXTENSION_PROFILE_TWO_BYTE: u16 = 0x1000;
 const EXTENSION_ID_RESERVED: u8 = 0xF;
 const CC_MASK: u8 = 0xF;
 const MARKER_SHIFT: u8 = 7;
@@ -26,6 +27,30 @@ const SSRC_OFFSET: usize = 8;
 const SSRC_LENGTH: usize = 4;
 const CSRC_OFFSET: usize = 12;
 const CSRC_LENGTH: usize = 4;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(u16)]
+pub enum ExtensionProfile {
+    OneByte = 0xBEDE,
+    TwoByte = 0x1000,
+    Default,
+}
+
+impl Default for ExtensionProfile {
+    fn default() -> Self {
+        ExtensionProfile::OneByte
+    }
+}
+
+impl From<u16> for ExtensionProfile {
+    fn from(val: u16) -> Self {
+        match val {
+            0xBEDE => ExtensionProfile::OneByte,
+            0x1000 => ExtensionProfile::TwoByte,
+            _ => ExtensionProfile::Default,
+        }
+    }
+}
 
 #[derive(Debug, Eq, PartialEq, Default)]
 pub struct Extension {
@@ -46,7 +71,7 @@ pub struct Header {
     pub timestamp: u32,
     pub ssrc: u32,
     pub csrc: Vec<u32>,
-    pub extension_profile: u16,
+    pub extension_profile: ExtensionProfile,
     pub extensions: Vec<Extension>,
 
     pub payload_offset: usize,
@@ -54,7 +79,7 @@ pub struct Header {
 
 impl Header {
     // MarshalSize returns the size of the packet once marshaled.
-    pub fn size(&self) -> usize {
+    pub fn marshal_size(&self) -> usize {
         let mut head_size = 12 + (self.csrc.len() * CSRC_LENGTH);
         if self.extension {
             let extension_payload_len = self.get_extension_payload_len();
@@ -91,7 +116,7 @@ impl Header {
     pub fn set_extension(&mut self, id: u8, payload: &[u8]) -> Result<(), Error> {
         if self.extension {
             match self.extension_profile {
-                EXTENSION_PROFILE_ONE_BYTE => {
+                ExtensionProfile::OneByte => {
                     if id < 1 || id > 14 {
                         return Err(Error::new(
                             "header extension id must be between 1 and 14 for RFC 5285 extensions"
@@ -102,7 +127,7 @@ impl Header {
                         return Err(Error::new("header extension payload must be 16bytes or less for RFC 5285 one byte extensions".to_owned()));
                     }
                 }
-                EXTENSION_PROFILE_TWO_BYTE => {
+                ExtensionProfile::TwoByte => {
                     if id < 1 {
                         return Err(Error::new(
                             "header extension id must be between 1 and 255 for RFC 5285 extensions"
@@ -142,9 +167,9 @@ impl Header {
 
         let len = payload.len();
         if len <= 16 {
-            self.extension_profile = EXTENSION_PROFILE_ONE_BYTE
+            self.extension_profile = ExtensionProfile::OneByte
         } else if len > 16 && len < 256 {
-            self.extension_profile = EXTENSION_PROFILE_TWO_BYTE
+            self.extension_profile = ExtensionProfile::TwoByte
         }
 
         self.extensions.push(Extension {
@@ -231,9 +256,9 @@ impl Header {
             payload_offset += payload.len();
 
             let mut extensions = vec![];
-            match extension_profile {
+            match extension_profile.into() {
                 // RFC 8285 RTP One Byte Header Extension
-                EXTENSION_PROFILE_ONE_BYTE => {
+                ExtensionProfile::OneByte => {
                     let mut curr_offset = 0;
                     while curr_offset < extension_length {
                         if payload[curr_offset] == 0x00 {
@@ -258,7 +283,7 @@ impl Header {
                     }
                 }
                 // RFC 8285 RTP Two Byte Header Extension
-                EXTENSION_PROFILE_TWO_BYTE => {
+                ExtensionProfile::TwoByte => {
                     let mut curr_offset = 0;
                     while curr_offset < extension_length {
                         if payload[curr_offset] == 0x00 {
@@ -285,9 +310,9 @@ impl Header {
                 }
             };
 
-            (extension_profile, extensions)
+            (ExtensionProfile::from(extension_profile), extensions)
         } else {
-            (0, vec![])
+            (ExtensionProfile::Default, vec![])
         };
 
         Ok(Header {
@@ -306,8 +331,13 @@ impl Header {
         })
     }
 
-    // Marshal serializes the header and writes to the buffer.
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    /// Marshal serializes the packet into bytes.
+    pub fn marshal(&self) -> Result<Vec<u8>, Error> {
+        todo!()
+    }
+
+    /// Serializes the header and writes to the buffer.
+    pub fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize, Error> {
         /*
          *  0                   1                   2                   3
          *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -322,16 +352,6 @@ impl Header {
          * |                             ....                              |
          * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
-        // The first byte contains the version, padding bit, extension bit, and csrc size
-        let mut b0 = (self.version << VERSION_SHIFT) | self.csrc.len() as u8;
-        if self.padding {
-            b0 |= 1 << PADDING_SHIFT;
-        }
-
-        if self.extension {
-            b0 |= 1 << EXTENSION_SHIFT;
-        }
-        writer.write_u8(b0)?;
 
         // The second byte contains the marker bit and payload type.
         let mut b1 = self.payload_type;

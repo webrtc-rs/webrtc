@@ -108,10 +108,7 @@ mod srtp_test {
                 payload: RTP_TEST_CASE_DECRYPTED.clone(),
             };
             let mut pkt_raw: Vec<u8> = vec![];
-            {
-                let mut writer = BufWriter::<&mut Vec<u8>>::new(pkt_raw.as_mut());
-                pkt.marshal(&mut writer)?;
-            }
+            pkt.marshal(&mut pkt_raw)?;
 
             let out = encrypt_context.encrypt_rtp(&pkt_raw)?;
 
@@ -142,10 +139,7 @@ mod srtp_test {
             };
 
             let mut decrypted_raw: Vec<u8> = vec![];
-            {
-                let mut writer = BufWriter::<&mut Vec<u8>>::new(decrypted_raw.as_mut());
-                decrypted_pkt.marshal(&mut writer)?;
-            }
+            decrypted_pkt.marshal(&mut decrypted_raw)?;
 
             let encrypted_pkt = rtp::packet::Packet {
                 header: rtp::header::Header {
@@ -155,10 +149,7 @@ mod srtp_test {
                 payload: test_case.encrypted.clone(),
             };
             let mut encrypted_raw: Vec<u8> = vec![];
-            {
-                let mut writer = BufWriter::<&mut Vec<u8>>::new(encrypted_raw.as_mut());
-                encrypted_pkt.marshal(&mut writer)?;
-            }
+            encrypted_pkt.marshal(&mut encrypted_raw)?;
 
             let actual_encrypted = encrypt_context.encrypt_rtp(&decrypted_raw)?;
             assert_eq!(

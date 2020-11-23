@@ -221,10 +221,8 @@ impl Session {
 
     pub async fn write_rtp(&mut self, packet: &rtp::packet::Packet) -> Result<usize, Error> {
         let mut raw: Vec<u8> = vec![];
-        {
-            let mut writer = BufWriter::<&mut Vec<u8>>::new(raw.as_mut());
-            packet.marshal(&mut writer)?;
-        }
+        packet.marshal(&mut raw)?;
+
         self.write(&raw, true).await
     }
 

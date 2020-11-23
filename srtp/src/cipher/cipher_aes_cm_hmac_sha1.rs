@@ -172,13 +172,10 @@ impl Cipher for CipherAesCmHmacSha1 {
         roc: u32,
     ) -> Result<Vec<u8>, Error> {
         let mut dst: Vec<u8> =
-            Vec::with_capacity(header.size() + payload.len() + self.auth_tag_len());
+            Vec::with_capacity(header.marshal_size() + payload.len() + self.auth_tag_len());
 
         // Copy the header unencrypted.
-        {
-            let mut writer = BufWriter::<&mut Vec<u8>>::new(dst.as_mut());
-            header.marshal(&mut writer)?;
-        }
+        header.marshal_to(&mut dst)?;
 
         // Write the plaintext header to the destination buffer.
         dst.extend_from_slice(payload);
