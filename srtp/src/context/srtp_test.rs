@@ -4,7 +4,6 @@
 #[cfg(test)]
 mod srtp_test {
     use crate::{context::Context, protection_profile::ProtectionProfile};
-    use std::io::BufWriter;
     use util::Error;
 
     use lazy_static::lazy_static;
@@ -67,6 +66,7 @@ mod srtp_test {
             0x0d, 0xcd, 0x21, 0x3e, 0x4c, 0xbc, 0xf2, 0x8f, 0x01, 0x7f, 0x69, 0x94, 0x40, 0x1e,
             0x28, 0x89,
         ];
+
         let master_salt = vec![
             0x62, 0x77, 0x60, 0x38, 0xc0, 0x6d, 0xc9, 0x41, 0x9f, 0x6d, 0xd9, 0x43, 0x3e, 0x7c,
         ];
@@ -86,6 +86,7 @@ mod srtp_test {
             0x0d, 0xcd, 0x21, 0x3e, 0x4c, 0xbc, 0xf2, 0x8f, 0x01, 0x7f, 0x69, 0x94, 0x40, 0x1e,
             0x28, 0x89,
         ];
+
         let invalid_salt = vec![
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         ];
@@ -106,13 +107,16 @@ mod srtp_test {
                     ..Default::default()
                 },
                 payload: RTP_TEST_CASE_DECRYPTED.clone(),
+                ..Default::default()
             };
+
             let mut pkt_raw: Vec<u8> = vec![];
             pkt.marshal(&mut pkt_raw)?;
 
-            let out = encrypt_context.encrypt_rtp(&pkt_raw)?;
+            let mut out = encrypt_context.encrypt_rtp(&mut pkt_raw)?;
 
-            let result = invalid_context.decrypt_rtp(&out);
+            let result = invalid_context.decrypt_rtp(&mut out);
+
             assert!(
                 result.is_err(),
                 "Managed to decrypt with incorrect salt for packet with SeqNum: {}",
@@ -135,7 +139,9 @@ mod srtp_test {
                     sequence_number: test_case.sequence_number,
                     ..Default::default()
                 },
+
                 payload: RTP_TEST_CASE_DECRYPTED.clone(),
+                ..Default::default()
             };
 
             let mut decrypted_raw: Vec<u8> = vec![];
@@ -146,19 +152,24 @@ mod srtp_test {
                     sequence_number: test_case.sequence_number,
                     ..Default::default()
                 },
+
                 payload: test_case.encrypted.clone(),
+                ..Default::default()
             };
+
             let mut encrypted_raw: Vec<u8> = vec![];
             encrypted_pkt.marshal(&mut encrypted_raw)?;
 
-            let actual_encrypted = encrypt_context.encrypt_rtp(&decrypted_raw)?;
+            let actual_encrypted = encrypt_context.encrypt_rtp(&mut decrypted_raw)?;
+
             assert_eq!(
                 actual_encrypted, encrypted_raw,
                 "RTP packet with SeqNum invalid encryption: {}",
                 test_case.sequence_number
             );
 
-            let actual_decrypted = decrypt_context.decrypt_rtp(&encrypted_raw)?;
+            let actual_decrypted = decrypt_context.decrypt_rtp(&mut encrypted_raw)?;
+
             assert_ne!(
                 encrypted_raw[..encrypted_raw.len() - auth_tag_len].to_vec(),
                 actual_decrypted,

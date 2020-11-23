@@ -1,4 +1,5 @@
 #[cfg(test)]
+#[allow(const_item_mutation)]
 mod test {
     use crate::{context::Context, protection_profile::ProtectionProfile};
 
@@ -42,7 +43,7 @@ mod test {
         .expect("Error creating srtp context");
 
         let gotten_encrypted_rtp_packet = ctx
-            .encrypt_rtp(&DECRYPTED_RTP_PACKET)
+            .encrypt_rtp(&mut DECRYPTED_RTP_PACKET)
             .expect("Error encrypting rtp payload");
 
         assert_eq!(gotten_encrypted_rtp_packet, ENCRYPTED_RTP_PACKET)
@@ -60,7 +61,7 @@ mod test {
         .expect("Error creating srtp context");
 
         let gotten_decrypted_rtp_packet = ctx
-            .decrypt_rtp(&ENCRYPTED_RTP_PACKET)
+            .decrypt_rtp(&mut ENCRYPTED_RTP_PACKET)
             .expect("Error decrypting rtp payload");
 
         assert_eq!(gotten_decrypted_rtp_packet, DECRYPTED_RTP_PACKET)

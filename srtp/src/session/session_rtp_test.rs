@@ -98,8 +98,11 @@ mod session_rtp_test {
                 ssrc: TEST_SSRC,
                 ..Default::default()
             },
+
             payload: test_payload.clone(),
+            ..Default::default()
         };
+
         sa.write_rtp(&packet).await?;
 
         let mut read_stream = sb.accept().await?;
@@ -138,7 +141,9 @@ mod session_rtp_test {
                 ssrc: TEST_SSRC,
                 ..Default::default()
             },
+
             payload: test_payload.clone(),
+            ..Default::default()
         };
 
         let mut read_stream = sb.listen(TEST_SSRC).await?;
@@ -181,7 +186,9 @@ mod session_rtp_test {
                     ssrc: *ssrc,
                     ..Default::default()
                 },
+
                 payload: test_payload.clone(),
+                ..Default::default()
             };
             sa.write_rtp(&packet).await?;
 
@@ -210,7 +217,7 @@ mod session_rtp_test {
         let mut decrypted = vec![];
         pkt.marshal(&mut decrypted)?;
 
-        let encrypted = context.encrypt_rtp(&decrypted)?;
+        let encrypted = context.encrypt_rtp(&mut decrypted)?;
 
         Ok(encrypted)
     }
@@ -258,7 +265,9 @@ mod session_rtp_test {
                         sequence_number: i,
                         ..Default::default()
                     },
+
                     payload: test_payload.clone(),
+                    ..Default::default()
                 };
 
                 let encrypted = encrypt_srtp(&mut local_context, &packet)?;

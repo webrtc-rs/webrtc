@@ -68,8 +68,9 @@ impl Stream {
         }
 
         let n = self.buffer.read(buf, None).await?;
-        let mut reader = Cursor::new(buf);
-        let header = rtp::header::Header::unmarshal(&mut reader)?;
+
+        let header = rtp::header::Header::default();
+        header.unmarshal(buf)?;
 
         Ok((n, header))
     }

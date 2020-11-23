@@ -132,15 +132,17 @@ impl Session {
             return Err(Error::new("EOF".to_string()));
         }
 
-        let decrypted = if is_rtp {
-            remote_context.decrypt_rtp(&buf[0..n])?
+        let mut decrypted = if is_rtp {
+            remote_context.decrypt_rtp(&mut buf[0..n])?
         } else {
             remote_context.decrypt_rtcp(&buf[0..n])?
         };
 
         let ssrcs = if is_rtp {
-            let mut reader = Cursor::new(&decrypted);
-            vec![rtp::header::Header::unmarshal(&mut reader)?.ssrc]
+            let header = rtp::header::Header::default();
+            header.unmarshal(&mut decrypted)?;
+
+            vec![header.ssrc]
         } else {
             rtcp::packet::unmarshal(&decrypted)?.destination_ssrc()
         };
@@ -153,6 +155,7 @@ impl Session {
                 streams.insert(ssrc, stream.get_cloned_buffer());
                 new_stream_tx.send(stream).await?;
             }
+
             match streams.get_mut(&ssrc).unwrap().write(&decrypted).await {
                 Ok(_) => {}
                 Err(err) => {
@@ -198,7 +201,7 @@ impl Session {
         Ok(())
     }
 
-    pub async fn write(&mut self, buf: &[u8], is_rtp: bool) -> Result<usize, Error> {
+    pub async fn write(&mut self, buf: &mut [u8], is_rtp: bool) -> Result<usize, Error> {
         if self.is_rtp != is_rtp {
             return Err(Error::new(
                 "Session RTP/RTCP type must be same as input buffer".to_string(),
@@ -223,7 +226,7 @@ impl Session {
         let mut raw: Vec<u8> = vec![];
         packet.marshal(&mut raw)?;
 
-        self.write(&raw, true).await
+        self.write(&mut raw, true).await
     }
 
     pub async fn write_rtcp(&mut self, packet: &rtcp::packet::Packet) -> Result<usize, Error> {
@@ -232,6 +235,7 @@ impl Session {
             let mut writer = BufWriter::<&mut Vec<u8>>::new(raw.as_mut());
             packet.marshal(&mut writer)?;
         }
-        self.write(&raw, false).await
+
+        self.write(&mut raw, false).await
     }
 }

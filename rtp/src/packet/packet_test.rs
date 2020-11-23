@@ -1,26 +1,23 @@
 #[cfg(test)]
 mod packet_test {
     use crate::{header, packet::Packet};
-
-    use std::{
-        io::{BufReader, BufWriter},
-        vec,
-    };
     use util::Error;
 
     #[test]
     fn test_basic() -> Result<(), Error> {
-        let empty_bytes = vec![];
-        let mut reader = BufReader::new(empty_bytes.as_slice());
-        let result = Packet::unmarshal(&mut reader);
+        let mut empty_bytes = vec![];
+
+        let packet = Packet::default();
+        let result = packet.unmarshal(&mut empty_bytes);
         if result.is_ok() {
             assert!(false, "Unmarshal did not error on zero length packet");
         }
 
-        let raw_pkt = vec![
+        let mut raw_pkt = vec![
             0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0x00, 0x01,
             0x00, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0x98, 0x36, 0xbe, 0x88, 0x9e,
         ];
+
         let parsed_packet = Packet {
             header: header::Header {
                 version: 2,
@@ -40,24 +37,28 @@ mod packet_test {
                 payload_offset: 20,
                 ..Default::default()
             },
+
             payload: vec![0x98, 0x36, 0xbe, 0x88, 0x9e],
+            ..Default::default()
         };
 
-        let mut reader = BufReader::new(raw_pkt.as_slice());
-        let packet = Packet::unmarshal(&mut reader)?;
+        let packet = Packet::default();
+        packet.unmarshal(&mut raw_pkt)?;
+
         assert_eq!(
             packet, parsed_packet,
             "TestBasic unmarshal: got {}, want {}",
             packet, parsed_packet
         );
 
-        assert_eq!(packet.size(), raw_pkt.len(), "wrong computed marshal size");
+        assert_eq!(
+            packet.marshal_size(),
+            raw_pkt.len(),
+            "wrong computed marshal size"
+        );
 
         let mut raw: Vec<u8> = vec![];
-        {
-            //  let mut writer = BufWriter::<&mut Vec<u8>>::new(raw.as_mut());
-            packet.marshal(&mut raw)?;
-        }
+        packet.marshal(&mut raw)?;
 
         assert_eq!(
             raw.len(),
@@ -77,11 +78,13 @@ mod packet_test {
 
     #[test]
     fn test_extension() -> Result<(), Error> {
-        let missing_extension_pkt = vec![
+        let mut missing_extension_pkt = vec![
             0x90, 0x60, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82,
         ];
-        let mut reader = BufReader::new(missing_extension_pkt.as_slice());
-        let result = Packet::unmarshal(&mut reader);
+
+        let packet = Packet::default();
+        let result = packet.unmarshal(&mut missing_extension_pkt);
+
         if result.is_ok() {
             assert!(
                 false,
@@ -89,12 +92,14 @@ mod packet_test {
             );
         }
 
-        let invalid_extension_length_pkt = vec![
+        let mut invalid_extension_length_pkt = vec![
             0x90, 0x60, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0x99, 0x99,
             0x99, 0x99,
         ];
-        let mut reader = BufReader::new(invalid_extension_length_pkt.as_slice());
-        let result = Packet::unmarshal(&mut reader);
+
+        let packet = Packet::default();
+        let result = packet.unmarshal(&mut invalid_extension_length_pkt);
+
         if result.is_ok() {
             assert!(
                 false,
@@ -112,7 +117,9 @@ mod packet_test {
                 }],
                 ..Default::default()
             },
+
             payload: vec![],
+            ..Default::default()
         };
 
         let mut raw: Vec<u8> = vec![];
@@ -130,12 +137,13 @@ mod packet_test {
 
     #[test]
     fn test_rfc8285_one_byte_extension() -> Result<(), Error> {
-        let raw_pkt = vec![
+        let mut raw_pkt = vec![
             0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0xBE, 0xDE,
             0x00, 0x01, 0x50, 0xAA, 0x00, 0x00, 0x98, 0x36, 0xbe, 0x88, 0x9e,
         ];
-        let mut reader = BufReader::new(raw_pkt.as_slice());
-        Packet::unmarshal(&mut reader)?;
+
+        let packet = Packet::default();
+        packet.unmarshal(&mut raw_pkt)?;
 
         let p = Packet {
             header: header::Header {
@@ -155,7 +163,9 @@ mod packet_test {
                 csrc: vec![],
                 ..Default::default()
             },
+
             payload: raw_pkt[20..].to_vec(),
+            ..Default::default()
         };
 
         let mut dst: Vec<u8> = vec![];
@@ -175,15 +185,16 @@ mod packet_test {
         // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
         // |  ID   | L=0   |     data      |  ID   |  L=0  |   data...
         // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-        let raw_pkt = vec![
+        let mut raw_pkt = vec![
             0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0xBE, 0xDE,
             0x00, 0x01, 0x10, 0xAA, 0x20, 0xBB, // Payload
             0x98, 0x36, 0xbe, 0x88, 0x9e,
         ];
-        let mut reader = BufReader::new(raw_pkt.as_slice());
-        let p = Packet::unmarshal(&mut reader)?;
 
-        let ext1 = p.header.get_extension(1);
+        let packet = Packet::default();
+        packet.unmarshal(&mut raw_pkt)?;
+
+        let ext1 = packet.header.get_extension(1);
         let ext1_expect = &[0xAA];
         if let Some(ext1) = ext1 {
             assert_eq!(ext1, ext1_expect);
@@ -191,7 +202,7 @@ mod packet_test {
             assert!(false, "ext1 is none");
         }
 
-        let ext2 = p.header.get_extension(2);
+        let ext2 = packet.header.get_extension(2);
         let ext2_expect = [0xBB];
         if let Some(ext2) = ext2 {
             assert_eq!(ext2, ext2_expect);
@@ -224,7 +235,9 @@ mod packet_test {
                 csrc: vec![],
                 ..Default::default()
             },
+
             payload: raw_pkt[20..].to_vec(),
+            ..Default::default()
         };
 
         let mut dst: Vec<u8> = vec![];
@@ -249,15 +262,18 @@ mod packet_test {
         // |                          data                                 |
         // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
-        let raw_pkt: Vec<u8> = vec![
+        let mut raw_pkt: Vec<u8> = vec![
             0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0xBE, 0xDE,
             0x00, 0x03, 0x10, 0xAA, 0x21, 0xBB, 0xBB, 0x00, 0x00, 0x33, 0xCC, 0xCC, 0xCC, 0xCC,
             // Payload
             0x98, 0x36, 0xbe, 0x88, 0x9e,
         ];
 
-        let mut reader = BufReader::new(raw_pkt.as_slice());
-        let packet = Packet::unmarshal(&mut reader).expect("Error unmarshalling packets");
+        let packet = Packet::default();
+
+        packet
+            .unmarshal(&mut raw_pkt)
+            .expect("Error unmarshalling packets");
 
         let ext1 = packet
             .header

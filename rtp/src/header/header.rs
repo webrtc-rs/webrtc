@@ -161,7 +161,7 @@ impl Header {
     }
 
     // Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal(&self, reader: &mut [u8]) -> Result<(), Error> {
         /*
          *  0                   1                   2                   3
          *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -177,110 +177,112 @@ impl Header {
          * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
 
-        let b0 = reader.read_u8()?;
-        let version = b0 >> super::VERSION_SHIFT & super::VERSION_MASK;
-        let padding = (b0 >> super::PADDING_SHIFT & super::PADDING_MASK) > 0;
-        let extension = (b0 >> super::EXTENSION_SHIFT & super::EXTENSION_MASK) > 0;
-        let cc = (b0 & super::CC_MASK) as usize;
+        todo!()
 
-        let b1 = reader.read_u8()?;
-        let marker = (b1 >> super::MARKER_SHIFT & super::MARKER_MASK) > 0;
-        let payload_type = b1 & super::PT_MASK;
+        // let b0 = reader.read_u8()?;
+        // let version = b0 >> super::VERSION_SHIFT & super::VERSION_MASK;
+        // let padding = (b0 >> super::PADDING_SHIFT & super::PADDING_MASK) > 0;
+        // let extension = (b0 >> super::EXTENSION_SHIFT & super::EXTENSION_MASK) > 0;
+        // let cc = (b0 & super::CC_MASK) as usize;
 
-        let sequence_number = reader.read_u16::<BigEndian>()?;
-        let timestamp = reader.read_u32::<BigEndian>()?;
-        let ssrc = reader.read_u32::<BigEndian>()?;
+        // let b1 = reader.read_u8()?;
+        // let marker = (b1 >> super::MARKER_SHIFT & super::MARKER_MASK) > 0;
+        // let payload_type = b1 & super::PT_MASK;
 
-        let mut payload_offset = super::CSRC_OFFSET + (cc * super::CSRC_LENGTH);
-        let mut csrc = vec![];
-        for _i in 0..cc {
-            csrc.push(reader.read_u32::<BigEndian>()?);
-        }
+        // let sequence_number = reader.read_u16::<BigEndian>()?;
+        // let timestamp = reader.read_u32::<BigEndian>()?;
+        // let ssrc = reader.read_u32::<BigEndian>()?;
 
-        let (extension_profile, extensions) = if extension {
-            let extension_profile = reader.read_u16::<BigEndian>()?;
-            payload_offset += 2;
-            let extension_length = reader.read_u16::<BigEndian>()? as usize * 4;
-            payload_offset += 2;
+        // let mut payload_offset = super::CSRC_OFFSET + (cc * super::CSRC_LENGTH);
+        // let mut csrc = vec![];
+        // for _i in 0..cc {
+        //     csrc.push(reader.read_u32::<BigEndian>()?);
+        // }
 
-            let mut payload = vec![0; extension_length];
-            reader.read_exact(&mut payload)?;
-            payload_offset += payload.len();
+        // let (extension_profile, extensions) = if extension {
+        //     let extension_profile = reader.read_u16::<BigEndian>()?;
+        //     payload_offset += 2;
+        //     let extension_length = reader.read_u16::<BigEndian>()? as usize * 4;
+        //     payload_offset += 2;
 
-            let mut extensions = vec![];
-            match extension_profile.into() {
-                // RFC 8285 RTP One Byte Header Extension
-                super::ExtensionProfile::OneByte => {
-                    let mut curr_offset = 0;
-                    while curr_offset < extension_length {
-                        if payload[curr_offset] == 0x00 {
-                            // padding
-                            curr_offset += 1;
-                            continue;
-                        }
+        //     let mut payload = vec![0; extension_length];
+        //     reader.read_exact(&mut payload)?;
+        //     payload_offset += payload.len();
 
-                        let extid = payload[curr_offset] >> 4;
-                        let len = ((payload[curr_offset] & (0xFF ^ 0xF0)) + 1) as usize;
-                        curr_offset += 1;
+        //     let mut extensions = vec![];
+        //     match extension_profile.into() {
+        //         // RFC 8285 RTP One Byte Header Extension
+        //         super::ExtensionProfile::OneByte => {
+        //             let mut curr_offset = 0;
+        //             while curr_offset < extension_length {
+        //                 if payload[curr_offset] == 0x00 {
+        //                     // padding
+        //                     curr_offset += 1;
+        //                     continue;
+        //                 }
 
-                        if extid == super::EXTENSION_ID_RESERVED {
-                            break;
-                        }
+        //                 let extid = payload[curr_offset] >> 4;
+        //                 let len = ((payload[curr_offset] & (0xFF ^ 0xF0)) + 1) as usize;
+        //                 curr_offset += 1;
 
-                        extensions.push(Extension {
-                            id: extid,
-                            payload: payload[curr_offset..curr_offset + len].to_vec(),
-                        });
-                        curr_offset += len;
-                    }
-                }
-                // RFC 8285 RTP Two Byte Header Extension
-                super::ExtensionProfile::TwoByte => {
-                    let mut curr_offset = 0;
-                    while curr_offset < extension_length {
-                        if payload[curr_offset] == 0x00 {
-                            // padding
-                            curr_offset += 1;
-                            continue;
-                        }
+        //                 if extid == super::EXTENSION_ID_RESERVED {
+        //                     break;
+        //                 }
 
-                        let extid = payload[curr_offset];
-                        curr_offset += 1;
+        //                 extensions.push(Extension {
+        //                     id: extid,
+        //                     payload: payload[curr_offset..curr_offset + len].to_vec(),
+        //                 });
+        //                 curr_offset += len;
+        //             }
+        //         }
+        //         // RFC 8285 RTP Two Byte Header Extension
+        //         super::ExtensionProfile::TwoByte => {
+        //             let mut curr_offset = 0;
+        //             while curr_offset < extension_length {
+        //                 if payload[curr_offset] == 0x00 {
+        //                     // padding
+        //                     curr_offset += 1;
+        //                     continue;
+        //                 }
 
-                        let len = payload[curr_offset] as usize;
-                        curr_offset += 1;
+        //                 let extid = payload[curr_offset];
+        //                 curr_offset += 1;
 
-                        extensions.push(Extension {
-                            id: extid,
-                            payload: payload[curr_offset..curr_offset + len].to_vec(),
-                        });
-                        curr_offset += len;
-                    }
-                }
-                _ => {
-                    extensions.push(Extension { id: 0, payload });
-                }
-            };
+        //                 let len = payload[curr_offset] as usize;
+        //                 curr_offset += 1;
 
-            (super::ExtensionProfile::from(extension_profile), extensions)
-        } else {
-            (super::ExtensionProfile::Undefined, vec![])
-        };
+        //                 extensions.push(Extension {
+        //                     id: extid,
+        //                     payload: payload[curr_offset..curr_offset + len].to_vec(),
+        //                 });
+        //                 curr_offset += len;
+        //             }
+        //         }
+        //         _ => {
+        //             extensions.push(Extension { id: 0, payload });
+        //         }
+        //     };
 
-        Ok(Header {
-            version,
-            padding,
-            extension,
-            marker,
-            payload_type,
-            sequence_number,
-            timestamp,
-            ssrc,
-            csrc,
-            extension_profile,
-            extensions,
-            payload_offset,
-        })
+        //     (super::ExtensionProfile::from(extension_profile), extensions)
+        // } else {
+        //     (super::ExtensionProfile::Undefined, vec![])
+        // };
+
+        // Ok(Header {
+        //     version,
+        //     padding,
+        //     extension,
+        //     marker,
+        //     payload_type,
+        //     sequence_number,
+        //     timestamp,
+        //     ssrc,
+        //     csrc,
+        //     extension_profile,
+        //     extensions,
+        //     payload_offset,
+        // })
     }
 
     /// Marshal serializes the packet into bytes.

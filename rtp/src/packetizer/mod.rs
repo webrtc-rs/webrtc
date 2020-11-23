@@ -41,7 +41,7 @@ struct PacketizerImpl {
     ssrc: u32,
     timestamp: u32,
     clock_rate: u32,
-    abs_send_time: u8, //http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
+    abs_send_time: u8, // http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
     time_gen: Option<FnTimeGen>,
 }
 
@@ -51,7 +51,7 @@ impl PacketizerImpl {
             mtu,
             payload_type,
             ssrc,
-            timestamp: rand::random::<u32>(), //TODO: globalMathRandomGenerator?
+            timestamp: rand::random::<u32>(), // TODO: globalMathRandomGenerator?
             clock_rate,
             abs_send_time: 0,
             time_gen: None,
@@ -74,6 +74,7 @@ impl Packetizer for PacketizerImpl {
         let payloads = payloader.payload(self.mtu - 12, reader)?;
         let mut packets = vec![];
         let (mut i, l) = (0, payloads.len());
+
         for payload in payloads {
             packets.push(Packet {
                 header: Header {
@@ -88,6 +89,7 @@ impl Packetizer for PacketizerImpl {
                     ..Default::default()
                 },
                 payload,
+                ..Default::default()
             });
             i += 1;
         }
@@ -101,7 +103,8 @@ impl Packetizer for PacketizerImpl {
                 SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?
             };
             let send_time = AbsSendTimeExtension::new(d);
-            //apply http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
+
+            // apply http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
             let mut raw: Vec<u8> = vec![];
             {
                 let mut writer = BufWriter::<&mut Vec<u8>>::new(raw.as_mut());

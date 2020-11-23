@@ -74,7 +74,9 @@ fn test_packetizer_abs_send_time() -> Result<(), Error> {
                 payload: vec![0x40, 0, 0],
             }],
         },
+
         payload: vec![0x11, 0x12, 0x13, 0x14],
+        ..Default::default()
     };
 
     if packets.len() != 1 {

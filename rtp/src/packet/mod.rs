@@ -1,7 +1,5 @@
-use std::io::{Read, Write};
-use std::{fmt, todo};
-
 use crate::header::*;
+use std::fmt;
 use util::Error;
 
 mod packet_test;
@@ -12,6 +10,7 @@ mod packet_test;
 pub struct Packet {
     pub header: Header,
     pub payload: Vec<u8>,
+    pub raw: Vec<u8>,
 }
 
 impl fmt::Display for Packet {
@@ -31,23 +30,28 @@ impl fmt::Display for Packet {
 }
 
 impl Packet {
+    pub fn new() -> Self {
+        Packet::default()
+    }
+
     // MarshalSize returns the size of the packet once marshaled.
-    pub fn size(&self) -> usize {
+    pub fn marshal_size(&self) -> usize {
         self.header.marshal_size() + self.payload.len()
     }
 
     // Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let header = Header::unmarshal(reader)?;
+    pub fn unmarshal(&self, reader: &mut [u8]) -> Result<(), Error> {
+        todo!()
+        // let header = Header::unmarshal(reader)?;
 
-        let mut payload = vec![];
-        reader.read_to_end(&mut payload)?;
+        // let mut payload = vec![];
+        // reader.read_to_end(&mut payload)?;
 
-        Ok(Packet { header, payload })
+        // Ok(Packet { header, payload })
     }
 
     // Marshal serializes the header and writes to the buffer.
-    pub fn marshal(&self, mut buf: &mut [u8]) -> Result<(), Error> {
+    pub fn marshal(&self, mut buf: &mut [u8]) -> Result<Vec<u8>, Error> {
         todo!()
         // self.header.marshal(buf)?;
         // writer.write_all(&self.payload)?;
