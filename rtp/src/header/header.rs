@@ -287,7 +287,7 @@ impl Header {
 
     /// Marshal serializes the packet into bytes.
     pub fn marshal(&mut self) -> Result<Vec<u8>, Error> {
-        let mut buf = Vec::new();
+        let mut buf = vec![0u8; self.marshal_size()];
 
         let size = self.marshal_to(&mut buf)?;
 

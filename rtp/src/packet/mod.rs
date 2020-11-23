@@ -34,27 +34,26 @@ impl Packet {
         Packet::default()
     }
 
+    // Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
+    pub fn unmarshal(&mut self, raw_packet: &mut [u8]) -> Result<(), Error> {
+        self.header.unmarshal(raw_packet)?;
+
+        self.payload = raw_packet[self.header.payload_offset..].to_vec();
+        self.raw = raw_packet.to_vec();
+
+        Ok(())
+    }
+
     // MarshalSize returns the size of the packet once marshaled.
     pub fn marshal_size(&self) -> usize {
         self.header.marshal_size() + self.payload.len()
     }
 
-    // Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
-    pub fn unmarshal(&self, reader: &mut [u8]) -> Result<(), Error> {
-        todo!()
-        // let header = Header::unmarshal(reader)?;
-
-        // let mut payload = vec![];
-        // reader.read_to_end(&mut payload)?;
-
-        // Ok(Packet { header, payload })
-    }
-
     // Marshal serializes the header and writes to the buffer.
-    pub fn marshal(&self, mut buf: &mut [u8]) -> Result<Vec<u8>, Error> {
-        todo!()
-        // self.header.marshal(buf)?;
-        // writer.write_all(&self.payload)?;
+    pub fn marshal(&mut self) -> Result<Vec<u8>, Error> {
+        let mut buf = vec![0u8; self.marshal_size()];
+
+        let size = self.marshal_to(&mut buf)?;
 
         Ok(writer.flush()?)
     }

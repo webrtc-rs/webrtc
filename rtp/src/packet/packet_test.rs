@@ -7,8 +7,9 @@ mod packet_test {
     fn test_basic() -> Result<(), Error> {
         let mut empty_bytes = vec![];
 
-        let packet = Packet::default();
+        let mut packet = Packet::default();
         let result = packet.unmarshal(&mut empty_bytes);
+
         if result.is_ok() {
             assert!(false, "Unmarshal did not error on zero length packet");
         }
@@ -42,7 +43,7 @@ mod packet_test {
             ..Default::default()
         };
 
-        let packet = Packet::default();
+        let mut packet = Packet::default();
         packet.unmarshal(&mut raw_pkt)?;
 
         assert_eq!(
@@ -57,8 +58,7 @@ mod packet_test {
             "wrong computed marshal size"
         );
 
-        let mut raw: Vec<u8> = vec![];
-        packet.marshal(&mut raw)?;
+        let raw: Vec<u8> = packet.marshal()?;
 
         assert_eq!(
             raw.len(),
@@ -82,7 +82,7 @@ mod packet_test {
             0x90, 0x60, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82,
         ];
 
-        let packet = Packet::default();
+        let mut packet = Packet::default();
         let result = packet.unmarshal(&mut missing_extension_pkt);
 
         if result.is_ok() {
@@ -97,7 +97,7 @@ mod packet_test {
             0x99, 0x99,
         ];
 
-        let packet = Packet::default();
+        let mut packet = Packet::default();
         let result = packet.unmarshal(&mut invalid_extension_length_pkt);
 
         if result.is_ok() {
@@ -107,7 +107,7 @@ mod packet_test {
             );
         }
 
-        let packet = Packet {
+        let mut packet = Packet {
             header: header::Header {
                 extension: true,
                 extension_profile: 3.into(),
@@ -122,9 +122,8 @@ mod packet_test {
             ..Default::default()
         };
 
-        let mut raw: Vec<u8> = vec![];
+        let result = packet.marshal();
 
-        let result = packet.marshal(&mut raw);
         if result.is_ok() {
             assert!(
                 false,
@@ -142,10 +141,10 @@ mod packet_test {
             0x00, 0x01, 0x50, 0xAA, 0x00, 0x00, 0x98, 0x36, 0xbe, 0x88, 0x9e,
         ];
 
-        let packet = Packet::default();
+        let mut packet = Packet::default();
         packet.unmarshal(&mut raw_pkt)?;
 
-        let p = Packet {
+        let mut p = Packet {
             header: header::Header {
                 marker: true,
                 extension: true,
@@ -168,8 +167,7 @@ mod packet_test {
             ..Default::default()
         };
 
-        let mut dst: Vec<u8> = vec![];
-        p.marshal(&mut dst)?;
+        let dst = p.marshal()?;
 
         assert_eq!(dst, raw_pkt);
 
@@ -191,7 +189,7 @@ mod packet_test {
             0x98, 0x36, 0xbe, 0x88, 0x9e,
         ];
 
-        let packet = Packet::default();
+        let mut packet = Packet::default();
         packet.unmarshal(&mut raw_pkt)?;
 
         let ext1 = packet.header.get_extension(1);
@@ -211,7 +209,7 @@ mod packet_test {
         }
 
         // Test Marshal
-        let p = Packet {
+        let mut p = Packet {
             header: header::Header {
                 marker: true,
                 extension: true,
@@ -240,8 +238,7 @@ mod packet_test {
             ..Default::default()
         };
 
-        let mut dst: Vec<u8> = vec![];
-        p.marshal(&mut dst)?;
+        let dst: Vec<u8> = p.marshal()?;
 
         assert_eq!(dst, raw_pkt);
 
@@ -269,7 +266,7 @@ mod packet_test {
             0x98, 0x36, 0xbe, 0x88, 0x9e,
         ];
 
-        let packet = Packet::default();
+        let mut packet = Packet::default();
 
         packet
             .unmarshal(&mut raw_pkt)
@@ -302,7 +299,7 @@ mod packet_test {
         let mut dst_buf: [Vec<u8>; 2] = [vec![0u8; 1000], vec![0u8; 1000]];
 
         let checker = |name: String, mut buf: &mut [u8], p: &mut Packet| {
-            p.marshal(&mut buf).expect("Error marshalling byte");
+            p.marshal_to(&mut buf).expect("Error marshalling byte");
         };
     }
 

@@ -101,7 +101,7 @@ mod srtp_test {
         )?;
 
         for test_case in &*RTP_TEST_CASES {
-            let pkt = rtp::packet::Packet {
+            let mut pkt = rtp::packet::Packet {
                 header: rtp::header::Header {
                     sequence_number: test_case.sequence_number,
                     ..Default::default()
@@ -110,8 +110,7 @@ mod srtp_test {
                 ..Default::default()
             };
 
-            let mut pkt_raw: Vec<u8> = vec![];
-            pkt.marshal(&mut pkt_raw)?;
+            let mut pkt_raw: Vec<u8> = pkt.marshal()?;
 
             let mut out = encrypt_context.encrypt_rtp(&mut pkt_raw)?;
 
@@ -134,7 +133,7 @@ mod srtp_test {
         let auth_tag_len = ProtectionProfile::AES128CMHMACSHA1_80.auth_tag_len();
 
         for test_case in RTP_TEST_CASES.iter() {
-            let decrypted_pkt = rtp::packet::Packet {
+            let mut decrypted_pkt = rtp::packet::Packet {
                 header: rtp::header::Header {
                     sequence_number: test_case.sequence_number,
                     ..Default::default()
@@ -144,10 +143,9 @@ mod srtp_test {
                 ..Default::default()
             };
 
-            let mut decrypted_raw: Vec<u8> = vec![];
-            decrypted_pkt.marshal(&mut decrypted_raw)?;
+            let mut decrypted_raw: Vec<u8> = decrypted_pkt.marshal()?;
 
-            let encrypted_pkt = rtp::packet::Packet {
+            let mut encrypted_pkt = rtp::packet::Packet {
                 header: rtp::header::Header {
                     sequence_number: test_case.sequence_number,
                     ..Default::default()
@@ -157,8 +155,7 @@ mod srtp_test {
                 ..Default::default()
             };
 
-            let mut encrypted_raw: Vec<u8> = vec![];
-            encrypted_pkt.marshal(&mut encrypted_raw)?;
+            let mut encrypted_raw: Vec<u8> = encrypted_pkt.marshal()?;
 
             let actual_encrypted = encrypt_context.encrypt_rtp(&mut decrypted_raw)?;
 

@@ -43,7 +43,7 @@ fn fixed_time_gen() -> Duration {
 
 #[test]
 fn test_packetizer_abs_send_time() -> Result<(), Error> {
-    //use the G722 payloader here, because it's very simple and all 0s is valid G722 data.
+    // use the G722 payloader here, because it's very simple and all 0s is valid G722 data.
     let mut pktizer = PacketizerImpl::new(100, 98, 0x1234ABCD, 90000);
     pktizer.timestamp = 45678;
     pktizer.time_gen = Some(fixed_time_gen);

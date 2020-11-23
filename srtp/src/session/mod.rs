@@ -155,7 +155,6 @@ impl Session {
                 streams.insert(ssrc, stream.get_cloned_buffer());
                 new_stream_tx.send(stream).await?;
             }
-
             match streams.get_mut(&ssrc).unwrap().write(&decrypted).await {
                 Ok(_) => {}
                 Err(err) => {
@@ -222,9 +221,8 @@ impl Session {
         }
     }
 
-    pub async fn write_rtp(&mut self, packet: &rtp::packet::Packet) -> Result<usize, Error> {
-        let mut raw: Vec<u8> = vec![];
-        packet.marshal(&mut raw)?;
+    pub async fn write_rtp(&mut self, packet: &mut rtp::packet::Packet) -> Result<usize, Error> {
+        let mut raw: Vec<u8> = packet.marshal()?;
 
         self.write(&mut raw, true).await
     }

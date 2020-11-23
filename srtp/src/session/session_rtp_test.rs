@@ -93,7 +93,7 @@ mod session_rtp_test {
 
         let (mut sa, mut sb) = build_session_srtp_pair().await?;
 
-        let packet = rtp::packet::Packet {
+        let mut packet = rtp::packet::Packet {
             header: rtp::header::Header {
                 ssrc: TEST_SSRC,
                 ..Default::default()
@@ -103,7 +103,7 @@ mod session_rtp_test {
             ..Default::default()
         };
 
-        sa.write_rtp(&packet).await?;
+        sa.write_rtp(&mut packet).await?;
 
         let mut read_stream = sb.accept().await?;
         let ssrc = read_stream.get_ssrc();
@@ -136,7 +136,7 @@ mod session_rtp_test {
 
         let (mut sa, mut sb) = build_session_srtp_pair().await?;
 
-        let packet = rtp::packet::Packet {
+        let mut packet = rtp::packet::Packet {
             header: rtp::header::Header {
                 ssrc: TEST_SSRC,
                 ..Default::default()
@@ -148,7 +148,7 @@ mod session_rtp_test {
 
         let mut read_stream = sb.listen(TEST_SSRC).await?;
 
-        sa.write_rtp(&packet).await?;
+        sa.write_rtp(&mut packet).await?;
 
         read_stream.read(&mut read_buffer).await?;
 
@@ -181,7 +181,7 @@ mod session_rtp_test {
         }
 
         for ssrc in &ssrcs {
-            let packet = rtp::packet::Packet {
+            let mut packet = rtp::packet::Packet {
                 header: rtp::header::Header {
                     ssrc: *ssrc,
                     ..Default::default()
@@ -190,7 +190,8 @@ mod session_rtp_test {
                 payload: test_payload.clone(),
                 ..Default::default()
             };
-            sa.write_rtp(&packet).await?;
+
+            sa.write_rtp(&mut packet).await?;
 
             if let Some(read_stream) = read_streams.get_mut(ssrc) {
                 read_stream.read(&mut read_buffer).await?;
@@ -213,9 +214,11 @@ mod session_rtp_test {
         Ok(())
     }
 
-    fn encrypt_srtp(context: &mut Context, pkt: &rtp::packet::Packet) -> Result<Vec<u8>, Error> {
-        let mut decrypted = vec![];
-        pkt.marshal(&mut decrypted)?;
+    fn encrypt_srtp(
+        context: &mut Context,
+        pkt: &mut rtp::packet::Packet,
+    ) -> Result<Vec<u8>, Error> {
+        let mut decrypted = pkt.marshal()?;
 
         let encrypted = context.encrypt_rtp(&mut decrypted)?;
 
@@ -259,7 +262,7 @@ mod session_rtp_test {
             while i != 0x10 {
                 expected_sequence_number.push(i);
 
-                let packet = rtp::packet::Packet {
+                let mut packet = rtp::packet::Packet {
                     header: rtp::header::Header {
                         ssrc: TEST_SSRC,
                         sequence_number: i,
@@ -270,7 +273,7 @@ mod session_rtp_test {
                     ..Default::default()
                 };
 
-                let encrypted = encrypt_srtp(&mut local_context, &packet)?;
+                let encrypted = encrypt_srtp(&mut local_context, &mut packet)?;
 
                 packets.push(encrypted);
 
