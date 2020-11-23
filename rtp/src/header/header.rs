@@ -1,56 +1,8 @@
-use std::{
-    io::{Read, Write},
-    todo,
-};
+use std::{io::Read, todo};
 
 use util::Error;
 
-use byteorder::{BigEndian, ReadBytesExt};
-
-const HEADER_LENGTH: usize = 4;
-const VERSION_SHIFT: u8 = 6;
-const VERSION_MASK: u8 = 0x3;
-const PADDING_SHIFT: u8 = 5;
-const PADDING_MASK: u8 = 0x1;
-const EXTENSION_SHIFT: u8 = 4;
-const EXTENSION_MASK: u8 = 0x1;
-const EXTENSION_ID_RESERVED: u8 = 0xF;
-const CC_MASK: u8 = 0xF;
-const MARKER_SHIFT: u8 = 7;
-const MARKER_MASK: u8 = 0x1;
-const PT_MASK: u8 = 0x7F;
-const SEQ_NUM_OFFSET: usize = 2;
-const SEQ_NUM_LENGTH: usize = 2;
-const TIMESTAMP_OFFSET: usize = 4;
-const TIMESTAMP_LENGTH: usize = 4;
-const SSRC_OFFSET: usize = 8;
-const SSRC_LENGTH: usize = 4;
-const CSRC_OFFSET: usize = 12;
-const CSRC_LENGTH: usize = 4;
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-#[repr(u16)]
-pub enum ExtensionProfile {
-    OneByte = 0xBEDE,
-    TwoByte = 0x1000,
-    Default,
-}
-
-impl Default for ExtensionProfile {
-    fn default() -> Self {
-        ExtensionProfile::OneByte
-    }
-}
-
-impl From<u16> for ExtensionProfile {
-    fn from(val: u16) -> Self {
-        match val {
-            0xBEDE => ExtensionProfile::OneByte,
-            0x1000 => ExtensionProfile::TwoByte,
-            _ => ExtensionProfile::Default,
-        }
-    }
-}
+use byteorder::{BigEndian, ByteOrder, ReadBytesExt};
 
 #[derive(Debug, Eq, PartialEq, Default)]
 pub struct Extension {
@@ -71,7 +23,7 @@ pub struct Header {
     pub timestamp: u32,
     pub ssrc: u32,
     pub csrc: Vec<u32>,
-    pub extension_profile: ExtensionProfile,
+    pub extension_profile: super::ExtensionProfile,
     pub extensions: Vec<Extension>,
 
     pub payload_offset: usize,
@@ -80,7 +32,7 @@ pub struct Header {
 impl Header {
     // MarshalSize returns the size of the packet once marshaled.
     pub fn marshal_size(&self) -> usize {
-        let mut head_size = 12 + (self.csrc.len() * CSRC_LENGTH);
+        let mut head_size = 12 + (self.csrc.len() * super::CSRC_LENGTH);
         if self.extension {
             let extension_payload_len = self.get_extension_payload_len();
             let extension_payload_size = (extension_payload_len + 3) / 4;
@@ -92,12 +44,12 @@ impl Header {
     fn get_extension_payload_len(&self) -> usize {
         let mut extension_length = 0;
         match self.extension_profile {
-            EXTENSION_PROFILE_ONE_BYTE => {
+            super::ExtensionProfile::OneByte => {
                 for extension in &self.extensions {
                     extension_length += 1 + extension.payload.len();
                 }
             }
-            EXTENSION_PROFILE_TWO_BYTE => {
+            super::ExtensionProfile::TwoByte => {
                 for extension in &self.extensions {
                     extension_length += 2 + extension.payload.len();
                 }
@@ -116,7 +68,7 @@ impl Header {
     pub fn set_extension(&mut self, id: u8, payload: &[u8]) -> Result<(), Error> {
         if self.extension {
             match self.extension_profile {
-                ExtensionProfile::OneByte => {
+                super::ExtensionProfile::OneByte => {
                     if id < 1 || id > 14 {
                         return Err(Error::new(
                             "header extension id must be between 1 and 14 for RFC 5285 extensions"
@@ -127,7 +79,7 @@ impl Header {
                         return Err(Error::new("header extension payload must be 16bytes or less for RFC 5285 one byte extensions".to_owned()));
                     }
                 }
-                ExtensionProfile::TwoByte => {
+                super::ExtensionProfile::TwoByte => {
                     if id < 1 {
                         return Err(Error::new(
                             "header extension id must be between 1 and 255 for RFC 5285 extensions"
@@ -167,9 +119,9 @@ impl Header {
 
         let len = payload.len();
         if len <= 16 {
-            self.extension_profile = ExtensionProfile::OneByte
+            self.extension_profile = super::ExtensionProfile::OneByte
         } else if len > 16 && len < 256 {
-            self.extension_profile = ExtensionProfile::TwoByte
+            self.extension_profile = super::ExtensionProfile::TwoByte
         }
 
         self.extensions.push(Extension {
@@ -226,20 +178,20 @@ impl Header {
          */
 
         let b0 = reader.read_u8()?;
-        let version = b0 >> VERSION_SHIFT & VERSION_MASK;
-        let padding = (b0 >> PADDING_SHIFT & PADDING_MASK) > 0;
-        let extension = (b0 >> EXTENSION_SHIFT & EXTENSION_MASK) > 0;
-        let cc = (b0 & CC_MASK) as usize;
+        let version = b0 >> super::VERSION_SHIFT & super::VERSION_MASK;
+        let padding = (b0 >> super::PADDING_SHIFT & super::PADDING_MASK) > 0;
+        let extension = (b0 >> super::EXTENSION_SHIFT & super::EXTENSION_MASK) > 0;
+        let cc = (b0 & super::CC_MASK) as usize;
 
         let b1 = reader.read_u8()?;
-        let marker = (b1 >> MARKER_SHIFT & MARKER_MASK) > 0;
-        let payload_type = b1 & PT_MASK;
+        let marker = (b1 >> super::MARKER_SHIFT & super::MARKER_MASK) > 0;
+        let payload_type = b1 & super::PT_MASK;
 
         let sequence_number = reader.read_u16::<BigEndian>()?;
         let timestamp = reader.read_u32::<BigEndian>()?;
         let ssrc = reader.read_u32::<BigEndian>()?;
 
-        let mut payload_offset = CSRC_OFFSET + (cc * CSRC_LENGTH);
+        let mut payload_offset = super::CSRC_OFFSET + (cc * super::CSRC_LENGTH);
         let mut csrc = vec![];
         for _i in 0..cc {
             csrc.push(reader.read_u32::<BigEndian>()?);
@@ -258,7 +210,7 @@ impl Header {
             let mut extensions = vec![];
             match extension_profile.into() {
                 // RFC 8285 RTP One Byte Header Extension
-                ExtensionProfile::OneByte => {
+                super::ExtensionProfile::OneByte => {
                     let mut curr_offset = 0;
                     while curr_offset < extension_length {
                         if payload[curr_offset] == 0x00 {
@@ -271,7 +223,7 @@ impl Header {
                         let len = ((payload[curr_offset] & (0xFF ^ 0xF0)) + 1) as usize;
                         curr_offset += 1;
 
-                        if extid == EXTENSION_ID_RESERVED {
+                        if extid == super::EXTENSION_ID_RESERVED {
                             break;
                         }
 
@@ -283,7 +235,7 @@ impl Header {
                     }
                 }
                 // RFC 8285 RTP Two Byte Header Extension
-                ExtensionProfile::TwoByte => {
+                super::ExtensionProfile::TwoByte => {
                     let mut curr_offset = 0;
                     while curr_offset < extension_length {
                         if payload[curr_offset] == 0x00 {
@@ -310,9 +262,9 @@ impl Header {
                 }
             };
 
-            (ExtensionProfile::from(extension_profile), extensions)
+            (super::ExtensionProfile::from(extension_profile), extensions)
         } else {
-            (ExtensionProfile::Default, vec![])
+            (super::ExtensionProfile::Undefined, vec![])
         };
 
         Ok(Header {
@@ -332,12 +284,16 @@ impl Header {
     }
 
     /// Marshal serializes the packet into bytes.
-    pub fn marshal(&self) -> Result<Vec<u8>, Error> {
-        todo!()
+    pub fn marshal(&mut self) -> Result<Vec<u8>, Error> {
+        let mut buf = Vec::new();
+
+        let size = self.marshal_to(&mut buf)?;
+
+        return Ok(buf[..size].to_vec());
     }
 
     /// Serializes the header and writes to the buffer.
-    pub fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize, Error> {
+    pub fn marshal_to(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
         /*
          *  0                   1                   2                   3
          *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1

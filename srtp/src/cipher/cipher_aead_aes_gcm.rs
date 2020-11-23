@@ -28,7 +28,7 @@ impl Cipher for CipherAeadAesGcm {
     fn encrypt_rtp(
         &mut self,
         payload: &[u8],
-        header: &rtp::header::Header,
+        header: &mut rtp::header::Header,
         roc: u32,
     ) -> Result<Vec<u8>, Error> {
         let mut writer: Vec<u8> = Vec::new();

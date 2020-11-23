@@ -52,7 +52,7 @@ impl Context {
     pub fn encrypt_rtp_with_header(
         &mut self,
         plaintext: &[u8],
-        header: &rtp::header::Header,
+        header: &mut rtp::header::Header,
     ) -> Result<Vec<u8>, Error> {
         let roc;
         {
@@ -83,7 +83,7 @@ impl Context {
     // If the dst buffer does not have the capacity to hold `len(plaintext) + 10` bytes, a new one will be allocated and returned.
     pub fn encrypt_rtp(&mut self, plaintext: &[u8]) -> Result<Vec<u8>, Error> {
         let mut reader = BufReader::new(plaintext);
-        let header = rtp::header::Header::unmarshal(&mut reader)?;
-        self.encrypt_rtp_with_header(plaintext, &header)
+        let mut header = rtp::header::Header::unmarshal(&mut reader)?;
+        self.encrypt_rtp_with_header(plaintext, &mut header)
     }
 }

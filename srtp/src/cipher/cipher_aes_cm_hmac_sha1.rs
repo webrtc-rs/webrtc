@@ -168,7 +168,7 @@ impl Cipher for CipherAesCmHmacSha1 {
     fn encrypt_rtp(
         &mut self,
         payload: &[u8],
-        header: &rtp::header::Header,
+        header: &mut rtp::header::Header,
         roc: u32,
     ) -> Result<Vec<u8>, Error> {
         let mut dst: Vec<u8> =
