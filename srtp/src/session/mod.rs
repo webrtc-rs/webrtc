@@ -11,11 +11,7 @@ use tokio::{
     sync::{mpsc, Mutex},
 };
 
-use std::{
-    collections::HashMap,
-    io::{BufWriter, Cursor},
-    sync::Arc,
-};
+use std::{collections::HashMap, io::BufWriter, sync::Arc};
 
 const DEFAULT_SESSION_SRTP_REPLAY_PROTECTION_WINDOW: usize = 64;
 const DEFAULT_SESSION_SRTCP_REPLAY_PROTECTION_WINDOW: usize = 64;
@@ -139,7 +135,7 @@ impl Session {
         };
 
         let ssrcs = if is_rtp {
-            let header = rtp::header::Header::default();
+            let mut header = rtp::header::Header::default();
             header.unmarshal(&mut decrypted)?;
 
             vec![header.ssrc]

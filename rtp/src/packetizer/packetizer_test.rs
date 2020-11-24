@@ -68,7 +68,7 @@ fn test_packetizer_abs_send_time() -> Result<(), Error> {
             timestamp: 45678,
             ssrc: 0x1234ABCD,
             csrc: vec![],
-            extension_profile: super::ExtensionProfile::OneByte,
+            extension_profile: super::ExtensionProfile::OneByte.into(),
             extensions: vec![Extension {
                 id: 1,
                 payload: vec![0x40, 0, 0],

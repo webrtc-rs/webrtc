@@ -84,7 +84,7 @@ impl Packetizer for PacketizerImpl {
                     marker: i == l - 1,
                     payload_type: self.payload_type,
                     sequence_number: sequencer.next_sequence_number(),
-                    timestamp: self.timestamp, //TODO: Figure out how to do timestamps
+                    timestamp: self.timestamp, // TODO: Figure out how to do timestamps
                     ssrc: self.ssrc,
                     ..Default::default()
                 },

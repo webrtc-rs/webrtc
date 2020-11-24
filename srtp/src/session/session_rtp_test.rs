@@ -258,7 +258,7 @@ mod session_rtp_test {
         let mut expected_sequence_number = vec![];
         {
             let mut local_context = sa.local_context.lock().await;
-            let mut i = 0xFFF0u16;
+            let mut i = 0xFF00u16;
             while i != 0x10 {
                 expected_sequence_number.push(i);
 
@@ -268,7 +268,6 @@ mod session_rtp_test {
                         sequence_number: i,
                         ..Default::default()
                     },
-
                     payload: test_payload.clone(),
                     ..Default::default()
                 };
@@ -293,6 +292,7 @@ mod session_rtp_test {
 
         tokio::spawn(async move {
             let mut i = 0;
+
             while i < count {
                 match payload_srtp(&mut read_stream, RTP_HEADER_SIZE, &test_payload).await {
                     Ok(seq) => {

@@ -39,7 +39,7 @@ impl Packet {
         self.header.unmarshal(raw_packet)?;
 
         self.payload = raw_packet[self.header.payload_offset..].to_vec();
-        self.raw = raw_packet.to_vec();
+        self.raw = raw_packet.to_owned();
 
         Ok(())
     }

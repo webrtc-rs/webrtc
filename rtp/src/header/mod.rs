@@ -1,7 +1,6 @@
-pub mod header;
-
-pub use header::Extension;
-pub use header::Header;
+mod header_def;
+pub use header_def::Extension;
+pub use header_def::Header;
 
 const HEADER_LENGTH: usize = 4;
 const VERSION_SHIFT: u8 = 6;
@@ -42,7 +41,7 @@ pub enum ExtensionProfile {
 
 impl Default for ExtensionProfile {
     fn default() -> Self {
-        ExtensionProfile::OneByte
+        0.into()
     }
 }
 
@@ -52,6 +51,16 @@ impl From<u16> for ExtensionProfile {
             0xBEDE => ExtensionProfile::OneByte,
             0x1000 => ExtensionProfile::TwoByte,
             _ => ExtensionProfile::Undefined,
+        }
+    }
+}
+
+impl Into<u16> for ExtensionProfile {
+    fn into(self) -> u16 {
+        match self {
+            ExtensionProfile::OneByte => 0xBEDE,
+            ExtensionProfile::TwoByte => 0x1000,
+            _ => 0x00,
         }
     }
 }

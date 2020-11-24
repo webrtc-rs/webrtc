@@ -1,7 +1,5 @@
 use super::*;
 
-use std::io::BufReader;
-
 impl Context {
     pub fn decrypt_rtp_with_header(
         &mut self,
@@ -44,7 +42,7 @@ impl Context {
 
     // DecryptRTP decrypts a RTP packet with an encrypted payload
     pub fn decrypt_rtp(&mut self, encrypted: &mut [u8]) -> Result<Vec<u8>, Error> {
-        let header = rtp::header::Header::default();
+        let mut header = rtp::header::Header::default();
         header.unmarshal(encrypted)?;
         self.decrypt_rtp_with_header(encrypted, &header)
     }

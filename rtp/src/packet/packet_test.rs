@@ -30,17 +30,18 @@ mod packet_test {
                 timestamp: 3653407706,
                 ssrc: 476325762,
                 csrc: vec![],
-                extension_profile: 1.into(),
+                extension_profile: 1,
                 extensions: vec![header::Extension {
                     id: 0,
                     payload: vec![0xFF, 0xFF, 0xFF, 0xFF],
                 }],
+
                 payload_offset: 20,
                 ..Default::default()
             },
 
             payload: vec![0x98, 0x36, 0xbe, 0x88, 0x9e],
-            ..Default::default()
+            raw: raw_pkt.clone(),
         };
 
         let mut packet = Packet::default();
@@ -48,7 +49,7 @@ mod packet_test {
 
         assert_eq!(
             packet, parsed_packet,
-            "TestBasic unmarshal: got {}, want {}",
+            "TestBasic unmarshal: got \n{:#?}, want \n{:#?}",
             packet, parsed_packet
         );
 
@@ -58,7 +59,13 @@ mod packet_test {
             "wrong computed marshal size"
         );
 
-        let raw: Vec<u8> = packet.marshal()?;
+        assert_eq!(
+            packet.header.payload_offset, 20,
+            "wrong payload offset: {} != {} ",
+            packet.header.payload_offset, 20
+        );
+
+        let raw = packet.marshal()?;
 
         assert_eq!(
             raw.len(),
@@ -67,6 +74,7 @@ mod packet_test {
             raw.len(),
             raw_pkt.len()
         );
+
         assert_eq!(
             raw, raw_pkt,
             "TestBasic marshal: got {:?}, want {:?}",
@@ -110,7 +118,7 @@ mod packet_test {
         let mut packet = Packet {
             header: header::Header {
                 extension: true,
-                extension_profile: 3.into(),
+                extension_profile: 3,
                 extensions: vec![header::Extension {
                     id: 0,
                     payload: vec![0],
@@ -148,7 +156,7 @@ mod packet_test {
             header: header::Header {
                 marker: true,
                 extension: true,
-                extension_profile: crate::header::ExtensionProfile::OneByte,
+                extension_profile: crate::header::ExtensionProfile::OneByte.into(),
                 extensions: vec![header::Extension {
                     id: 5,
                     payload: vec![0xAA],
@@ -164,7 +172,7 @@ mod packet_test {
             },
 
             payload: raw_pkt[20..].to_vec(),
-            ..Default::default()
+            raw: raw_pkt.clone(),
         };
 
         let dst = p.marshal()?;
@@ -213,7 +221,7 @@ mod packet_test {
             header: header::Header {
                 marker: true,
                 extension: true,
-                extension_profile: header::ExtensionProfile::OneByte,
+                extension_profile: header::ExtensionProfile::OneByte.into(),
                 extensions: vec![
                     header::Extension {
                         id: 1,
@@ -296,11 +304,29 @@ mod packet_test {
         let ext3_expect: [u8; 4] = [0xCC, 0xCC, 0xCC, 0xCC];
         assert_eq!(ext3, ext3_expect);
 
-        let mut dst_buf: [Vec<u8>; 2] = [vec![0u8; 1000], vec![0u8; 1000]];
+        let mut dst_buf: [Vec<u8>; 2] = [vec![0u8; 1000], vec![0xFF; 1000]];
 
-        let checker = |name: String, mut buf: &mut [u8], p: &mut Packet| {
-            p.marshal_to(&mut buf).expect("Error marshalling byte");
+        let raw_pkg_marshal: [u8; 33] = [
+            0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0xBE, 0xDE,
+            0x00, 0x03, 0x10, 0xAA, 0x21, 0xBB, 0xBB, 0x33, 0xCC, 0xCC, 0xCC, 0xCC, 0x00,
+            0x00, // padding is moved to the end by re-marshaling
+            // Payload
+            0x98, 0x36, 0xbe, 0x88, 0x9e,
+        ];
+
+        let checker = |name: &str, mut buf: &mut [u8], p: &mut Packet| {
+            let n = p.marshal_to(&mut buf).expect("Error marshalling byte");
+
+            assert_eq!(
+                &buf[..n],
+                &raw_pkg_marshal[..],
+                "Marshalled fields are not equal for {}.",
+                name
+            );
         };
+
+        checker("CleanBuffer", &mut dst_buf[0], &mut packet);
+        checker("DirtyBuffer", &mut dst_buf[1], &mut packet);
     }
 
     //TODO: TestRFC8285OneByteMultipleExtensionsWithPadding
