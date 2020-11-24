@@ -29,9 +29,13 @@ pub(crate) struct Flight1;
 
 #[async_trait]
 impl Flight for Flight1 {
+    fn to_string(&self) -> String {
+        "Flight1".to_owned()
+    }
+
     async fn parse(
         &self,
-        c: &Conn,
+        c: &mut Conn,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
@@ -112,7 +116,6 @@ impl Flight for Flight1 {
 
     async fn generate(
         &self,
-        _c: &Conn,
         state: &mut State,
         _cache: &HandshakeCache,
         cfg: &HandshakeConfig,

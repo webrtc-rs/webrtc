@@ -1,10 +1,10 @@
-mod flight0;
-mod flight1;
-mod flight2;
-mod flight3;
-mod flight4;
-mod flight5;
-mod flight6;
+pub(crate) mod flight0;
+pub(crate) mod flight1;
+pub(crate) mod flight2;
+pub(crate) mod flight3;
+pub(crate) mod flight4;
+pub(crate) mod flight5;
+pub(crate) mod flight6;
 
 //use std::fmt;
 
@@ -53,13 +53,15 @@ use async_trait::async_trait;
 */
 
 pub(crate) struct Packet {
-    record: RecordLayer,
-    should_encrypt: bool,
-    reset_local_sequence_number: bool,
+    pub(crate) record: RecordLayer,
+    pub(crate) should_encrypt: bool,
+    pub(crate) reset_local_sequence_number: bool,
 }
 
 #[async_trait]
 pub(crate) trait Flight {
+    fn to_string(&self) -> String;
+
     fn is_last_send_flight(&self) -> bool {
         false
     }
@@ -68,9 +70,13 @@ pub(crate) trait Flight {
         false
     }
 
+    fn has_retransmit(&self) -> bool {
+        true
+    }
+
     async fn parse(
         &self,
-        c: &Conn,
+        c: &mut Conn,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
@@ -78,7 +84,6 @@ pub(crate) trait Flight {
 
     async fn generate(
         &self,
-        c: &Conn,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,

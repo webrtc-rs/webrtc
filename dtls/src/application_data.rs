@@ -11,7 +11,7 @@ use super::content::*;
 // https://tools.ietf.org/html/rfc5246#section-10
 #[derive(Clone, PartialEq, Debug)]
 pub struct ApplicationData {
-    data: Vec<u8>,
+    pub data: Vec<u8>,
 }
 
 impl ApplicationData {

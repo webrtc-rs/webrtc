@@ -29,13 +29,17 @@ pub(crate) struct Flight5;
 
 #[async_trait]
 impl Flight for Flight5 {
+    fn to_string(&self) -> String {
+        "Flight5".to_owned()
+    }
+
     fn is_last_recv_flight(&self) -> bool {
         true
     }
 
     async fn parse(
         &self,
-        _c: &Conn,
+        _c: &mut Conn,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
@@ -178,7 +182,6 @@ impl Flight for Flight5 {
 
     async fn generate(
         &self,
-        _c: &Conn,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,

@@ -37,9 +37,13 @@ pub(crate) struct Flight4;
 
 #[async_trait]
 impl Flight for Flight4 {
+    fn to_string(&self) -> String {
+        "Flight4".to_owned()
+    }
+
     async fn parse(
         &self,
-        c: &Conn,
+        c: &mut Conn,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
@@ -377,7 +381,7 @@ impl Flight for Flight4 {
         }
 
         // Now, encrypted packets can be handled
-        if let Err(err) = c.handle_queued_packets() {
+        if let Err(err) = c.handle_queued_packets().await {
             return Err((
                 Some(Alert {
                     alert_level: AlertLevel::Fatal,
@@ -482,7 +486,6 @@ impl Flight for Flight4 {
 
     async fn generate(
         &self,
-        _c: &Conn,
         state: &mut State,
         _cache: &HandshakeCache,
         cfg: &HandshakeConfig,

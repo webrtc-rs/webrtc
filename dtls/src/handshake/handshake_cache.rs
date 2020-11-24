@@ -28,6 +28,7 @@ pub(crate) struct HandshakeCachePullRule {
     pub(crate) optional: bool,
 }
 
+#[derive(Clone)]
 pub(crate) struct HandshakeCache {
     cache: Arc<Mutex<Vec<HandshakeCacheItem>>>,
 }
