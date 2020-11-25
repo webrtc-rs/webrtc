@@ -91,7 +91,7 @@ impl Session {
                         Err(err) => {
                             // ToDo: Is it okay to exit here on error? Are there specific error that requires an exit?.
                             log::error!("{}", err);
-                            return;
+                           // return;
                         },
                     },
                     opt = close_stream => if let Some(ssrc) = opt {

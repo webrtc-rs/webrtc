@@ -5,9 +5,8 @@ use crate::protection_profile::*;
 
 use aes::cipher::{
     generic_array::GenericArray,
-    stream::{NewStreamCipher, StreamCipher, SyncStreamCipher, SyncStreamCipherSeek},
+    stream::{NewStreamCipher, StreamCipher},
 };
-use aes_ctr::Aes128Ctr;
 use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
 use hmac::NewMac;
 use hmac::{Hmac, Mac};
@@ -18,7 +17,7 @@ use util::Error;
 use std::io::BufWriter;
 
 type HmacSha1 = Hmac<Sha1>;
-// type Aes128Ctr = ctr::Ctr128<aes::Aes128>;
+type Aes128Ctr = ctr::Ctr128<aes::Aes128>;
 
 pub(crate) const CIPHER_AES_CM_HMAC_SHA1AUTH_TAG_LEN: usize = 10;
 
@@ -191,7 +190,6 @@ impl Cipher for CipherAesCmHmacSha1 {
         let nonce = GenericArray::from_slice(&counter);
 
         let mut stream = Aes128Ctr::new(&key, &nonce);
-        stream.seek(size + payload.len());
         stream.encrypt(&mut dst[size..size + payload.len()]);
 
         size += payload.len();
@@ -232,10 +230,11 @@ impl Cipher for CipherAesCmHmacSha1 {
             return Err(Error::new("failed to verify auth tag".to_string()));
         }
 
-        let mut dst: Vec<u8> = vec![0u8; encrypted.len() - self.auth_tag_len()];
+        let size = encrypted.len() - self.auth_tag_len();
+        let mut dst: Vec<u8> = vec![0u8; size];
 
         // Write cipher_text to the destination buffer.
-        dst[..header.payload_offset].copy_from_slice(&cipher_text[..header.payload_offset]);
+        dst.copy_from_slice(&cipher_text[..size]);
 
         // Decrypt the ciphertext for the payload.
         let counter = generate_counter(

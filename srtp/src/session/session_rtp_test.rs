@@ -258,8 +258,9 @@ mod session_rtp_test {
         let mut expected_sequence_number = vec![];
         {
             let mut local_context = sa.local_context.lock().await;
-            let mut i = 0xFF00u16;
-            while i != 0x10 {
+            let mut i = 0xFFu16;
+
+            while i != 0x100 {
                 expected_sequence_number.push(i);
 
                 let mut packet = rtp::packet::Packet {
@@ -277,11 +278,7 @@ mod session_rtp_test {
 
                 packets.push(encrypted);
 
-                if i == 0xFFFF {
-                    i = 0;
-                } else {
-                    i += 1;
-                }
+                i += 1;
             }
         }
 
@@ -293,7 +290,6 @@ mod session_rtp_test {
 
         tokio::spawn(async move {
             let mut i = 0;
-
             while i < count {
                 match payload_srtp(&mut read_stream, RTP_HEADER_SIZE, &test_payload).await {
                     Ok(seq) => {
@@ -302,10 +298,7 @@ mod session_rtp_test {
 
                         i += 1;
                     }
-                    // ToDo: We should instead break if error is an End Of File. Errors and not definitive YET!!!!!
-                    Err(e) => {
-                        break;
-                    }
+                    Err(_) => break,
                 }
             }
 
@@ -314,23 +307,14 @@ mod session_rtp_test {
 
         // Write with replay attack
         for packet in &packets {
-            sa.udp_tx
-                .send(packet)
-                .await
-                .expect("Error sending session A UDP stream");
+            sa.udp_tx.send(packet).await?;
 
             // Immediately replay
-            sa.udp_tx
-                .send(packet)
-                .await
-                .expect("Error sending session A UDP stream");
+            sa.udp_tx.send(packet).await?;
         }
         for packet in &packets {
             // Delayed replay
-            sa.udp_tx
-                .send(packet)
-                .await
-                .expect("Error sending session A UDP stream");
+            sa.udp_tx.send(packet).await?;
         }
 
         done_rx.recv().await;

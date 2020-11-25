@@ -281,6 +281,7 @@ impl Buffer {
                     if copied < count {
                         return Err(ERR_BUFFER_SHORT.clone());
                     }
+
                     return Ok(copied);
                 }
 
