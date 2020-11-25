@@ -5,7 +5,8 @@ use crate::protection_profile::*;
 
 use aes::cipher::generic_array::GenericArray;
 use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
-use ctr::cipher::stream::{NewStreamCipher, StreamCipher};
+use ctr::cipher::block::NewBlockCipher;
+use ctr::cipher::stream::{FromBlockCipher, NewStreamCipher, StreamCipher};
 use hmac::NewMac;
 use hmac::{Hmac, Mac};
 use sha1::Sha1;
@@ -175,10 +176,7 @@ impl Cipher for CipherAesCmHmacSha1 {
             vec![0u8; header.marshal_size() + payload.len() + self.auth_tag_len()];
 
         // Copy the header unencrypted.
-        header.marshal_to(&mut dst)?;
-
-        // Write the plaintext header to the destination buffer.
-        dst.extend_from_slice(payload);
+        let mut size = header.marshal_to(&mut dst)?;
 
         // Encrypt the payload
         let counter = generate_counter(
@@ -187,16 +185,20 @@ impl Cipher for CipherAesCmHmacSha1 {
             header.ssrc,
             &self.srtp_session_salt,
         )?;
+
         let key = GenericArray::from_slice(&self.srtp_session_key);
         let nonce = GenericArray::from_slice(&counter);
         let mut stream = Aes128Ctr::new(&key, &nonce);
 
-        stream.encrypt(&mut dst[header.payload_offset..]);
+        stream.encrypt(&mut dst[size..size + payload.len()]);
 
         // Generate the auth tag.
         let auth_tag = self.generate_srtp_auth_tag(&dst, roc)?;
 
-        dst.extend_from_slice(&auth_tag);
+        size += payload.len();
+
+        // Write the auth tag to the dest.
+        dst[size..size + auth_tag.len()].copy_from_slice(&auth_tag);
 
         Ok(dst)
     }
@@ -215,8 +217,6 @@ impl Cipher for CipherAesCmHmacSha1 {
             )));
         }
 
-        let mut dst: Vec<u8> = Vec::with_capacity(encrypted.len() - self.auth_tag_len());
-
         // Split the auth tag and the cipher text into two parts.
         let actual_tag = &encrypted[encrypted.len() - self.auth_tag_len()..];
         let cipher_text = &encrypted[..encrypted.len() - self.auth_tag_len()];
@@ -230,8 +230,10 @@ impl Cipher for CipherAesCmHmacSha1 {
             return Err(Error::new("failed to verify auth tag".to_string()));
         }
 
+        let mut dst: Vec<u8> = vec![0u8; encrypted.len() - self.auth_tag_len()];
+
         // Write cipher_text to the destination buffer.
-        dst.extend_from_slice(cipher_text);
+        dst[..header.payload_offset].copy_from_slice(&cipher_text[..header.payload_offset]);
 
         // Decrypt the ciphertext for the payload.
         let counter = generate_counter(

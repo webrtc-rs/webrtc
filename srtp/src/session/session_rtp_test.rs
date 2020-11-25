@@ -268,6 +268,7 @@ mod session_rtp_test {
                         sequence_number: i,
                         ..Default::default()
                     },
+
                     payload: test_payload.clone(),
                     ..Default::default()
                 };
@@ -301,7 +302,10 @@ mod session_rtp_test {
 
                         i += 1;
                     }
-                    Err(_) => break,
+                    // ToDo: We should instead break if error is an End Of File. Errors and not definitive YET!!!!!
+                    Err(e) => {
+                        break;
+                    }
                 }
             }
 
@@ -310,14 +314,23 @@ mod session_rtp_test {
 
         // Write with replay attack
         for packet in &packets {
-            sa.udp_tx.send(packet).await?;
+            sa.udp_tx
+                .send(packet)
+                .await
+                .expect("Error sending session A UDP stream");
 
             // Immediately replay
-            sa.udp_tx.send(packet).await?;
+            sa.udp_tx
+                .send(packet)
+                .await
+                .expect("Error sending session A UDP stream");
         }
         for packet in &packets {
             // Delayed replay
-            sa.udp_tx.send(packet).await?;
+            sa.udp_tx
+                .send(packet)
+                .await
+                .expect("Error sending session A UDP stream");
         }
 
         done_rx.recv().await;

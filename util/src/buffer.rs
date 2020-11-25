@@ -214,10 +214,10 @@ impl Buffer {
         Ok(packet.len())
     }
 
-    // Read populates the given byte slice, returning the number of bytes read.
-    // Blocks until data is available or the buffer is closed.
-    // Returns io.ErrShortBuffer is the packet is too small to copy the Write.
-    // Returns io.EOF if the buffer is closed.
+    /// Read populates the given byte slice, returning the number of bytes read.
+    /// Blocks until data is available or the buffer is closed.
+    /// Returns io.ErrShortBuffer is the packet is too small to copy the Write.
+    /// Returns io.EOF if the buffer is closed.
     pub async fn read(
         &mut self,
         packet: &mut [u8],
@@ -233,15 +233,19 @@ impl Buffer {
                     // decode the packet size
                     let n1 = b.data[b.head];
                     b.head += 1;
+
                     if b.head >= b.data.len() {
                         b.head = 0;
                     }
+
                     let n2 = b.data[b.head];
                     b.head += 1;
+
                     if b.head >= b.data.len() {
                         b.head = 0;
                     }
-                    let count = ((n1 as usize) << 8) | n2 as usize;
+
+                    let count = (((n1 as u16) << 8) | n2 as u16) as usize;
 
                     // determine the number of bytes we'll actually copy
                     let mut copied = count;
@@ -254,6 +258,7 @@ impl Buffer {
                         packet[..copied].copy_from_slice(&b.data[b.head..b.head + copied]);
                     } else {
                         let k = b.data.len() - b.head;
+
                         packet[..k].copy_from_slice(&b.data[b.head..]);
                         packet[k..copied].copy_from_slice(&b.data[..copied - k]);
                     }
