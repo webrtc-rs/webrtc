@@ -258,7 +258,7 @@ mod session_rtp_test {
         let mut expected_sequence_number = vec![];
         {
             let mut local_context = sa.local_context.lock().await;
-            let mut i = 0xFFu16;
+            let mut i = 0x0FFu16;
 
             while i != 0x100 {
                 expected_sequence_number.push(i);

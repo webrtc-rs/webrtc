@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod packet_test {
     use crate::{header, packet::Packet};
+    use header::{Extension, ExtensionProfile, Header};
     use util::Error;
 
     #[test]
@@ -327,6 +328,223 @@ mod packet_test {
 
         checker("CleanBuffer", &mut dst_buf[0], &mut packet);
         checker("DirtyBuffer", &mut dst_buf[1], &mut packet);
+    }
+
+    #[test]
+    fn test_rfc_8285_one_byte_multiple_extensions() {
+        //  0                   1                   2                   3
+        //  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        // |       0xBE    |    0xDE       |           length=3            |
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        // |  ID=1 | L=0   |     data      |  ID=2 |  L=1  |   data...     |
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        //       ...data   |  ID=3 | L=3   |           data...
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        //             ...data             |
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+        let raw_pkt = vec![
+            0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0xBE, 0xDE,
+            0x00, 0x03, 0x10, 0xAA, 0x21, 0xBB, 0xBB, 0x33, 0xCC, 0xCC, 0xCC, 0xCC, 0x00, 0x00,
+            // Payload
+            0x98, 0x36, 0xbe, 0x88, 0x9e,
+        ];
+
+        let mut p = Packet {
+            header: Header {
+                marker: true,
+                extension: true,
+                extension_profile: ExtensionProfile::OneByte.into(),
+                extensions: vec![
+                    Extension {
+                        id: 1,
+                        payload: vec![0xAA],
+                    },
+                    Extension {
+                        id: 2,
+                        payload: vec![0xBB, 0xBB],
+                    },
+                    Extension {
+                        id: 3,
+                        payload: vec![0xCC, 0xCC, 0xCC, 0xCC],
+                    },
+                ],
+                version: 2,
+                payload_offset: 26,
+                payload_type: 96,
+                sequence_number: 27023,
+                timestamp: 3653407706,
+                ssrc: 476325762,
+                ..Default::default()
+            },
+            payload: raw_pkt[28..].to_vec(),
+            raw: raw_pkt.clone(),
+        };
+
+        let dst_data = p.marshal().expect("Error marshalling packet.");
+
+        assert_eq!(dst_data[..], raw_pkt[..]);
+    }
+
+    #[test]
+    fn test_rfc_8285_two_byte_extension() {
+        let mut raw_pkt = vec![
+            0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0x10, 0x00,
+            0x00, 0x07, 0x05, 0x18, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
+            0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
+            0x00, 0x00, 0x98, 0x36, 0xbe, 0x88, 0x9e,
+        ];
+
+        let mut p = Packet::default();
+
+        p.unmarshal(&mut raw_pkt)
+            .expect("Error unmarshalling packet");
+
+        let mut p = Packet {
+            header: header::Header {
+                marker: true,
+                extension: true,
+                extension_profile: ExtensionProfile::TwoByte.into(),
+                extensions: vec![Extension {
+                    id: 5,
+                    payload: vec![
+                        0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
+                        0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
+                    ],
+                }],
+                version: 2,
+                payload_offset: 42,
+                payload_type: 96,
+                sequence_number: 27023,
+                timestamp: 3653407706,
+                ssrc: 476325762,
+                ..Default::default()
+            },
+            payload: raw_pkt[44..].to_vec(),
+            raw: raw_pkt.clone(),
+        };
+
+        let dst_data = p.marshal().expect("Error marshalling packet");
+
+        assert_eq!(dst_data[..], raw_pkt[..]);
+    }
+
+    #[test]
+    fn test_rfc_8285_two_byte_multiple_extension_with_padding() {
+        // 0                   1                   2                   3
+        // 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        // |       0x10    |    0x00       |           length=3            |
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        // |      ID=1     |     L=0       |     ID=2      |     L=1       |
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        // |       data    |    0 (pad)    |       ID=3    |      L=4      |
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        // |                          data                                 |
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+        let mut p = Packet::default();
+
+        let mut raw_pkt = vec![
+            0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0x10, 0x00,
+            0x00, 0x03, 0x01, 0x00, 0x02, 0x01, 0xBB, 0x00, 0x03, 0x04, 0xCC, 0xCC, 0xCC, 0xCC,
+            0x98, 0x36, 0xbe, 0x88, 0x9e,
+        ];
+
+        p.unmarshal(&mut raw_pkt)
+            .expect("Error unmarshalling packet");
+
+        match p.header.get_extension(1) {
+            Some(e) => {
+                assert_eq!(*e, []);
+            }
+
+            None => panic!("Header gave an empty extension"),
+        }
+
+        match p.header.get_extension(2) {
+            Some(e) => {
+                assert_eq!(*e, [0xBB]);
+            }
+
+            None => panic!("Header gave an empty extension"),
+        }
+
+        match p.header.get_extension(3) {
+            Some(e) => {
+                assert_eq!(*e, [0xCC, 0xCC, 0xCC, 0xCC]);
+            }
+
+            None => panic!("Header gave an empty extension"),
+        }
+    }
+
+    #[test]
+    fn test_rfc_8285_two_byte_multiple_extension_with_large_extension() {
+        // 0                   1                   2                   3
+        // 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        // |       0x10    |    0x00       |           length=3            |
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        // |      ID=1     |     L=0       |     ID=2      |     L=1       |
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        // |       data    |       ID=3    |      L=17      |    data...
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        //                            ...data...
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        //                            ...data...
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        //                            ...data...
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        //                            ...data...                           |
+        // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+        let raw_pkt = vec![
+            0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0x10, 0x00,
+            0x00, 0x06, 0x01, 0x00, 0x02, 0x01, 0xBB, 0x03, 0x11, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+            0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+            // Payload
+            0x98, 0x36, 0xbe, 0x88, 0x9e,
+        ];
+
+        let mut p = Packet {
+            header: Header {
+                marker: true,
+                extension: true,
+                extension_profile: ExtensionProfile::TwoByte.into(),
+                extensions: vec![
+                    Extension {
+                        id: 1,
+                        payload: vec![],
+                    },
+                    Extension {
+                        id: 2,
+                        payload: vec![0xBB],
+                    },
+                    Extension {
+                        id: 3,
+                        payload: vec![
+                            0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+                            0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+                        ],
+                    },
+                ],
+                version: 2,
+                payload_offset: 40,
+                payload_type: 96,
+                sequence_number: 27023,
+                timestamp: 3653407706,
+                ssrc: 476325762,
+                ..Default::default()
+            },
+            payload: raw_pkt[40..].to_vec(),
+            raw: raw_pkt.clone(),
+        };
+
+        let dst_data = p.marshal().expect("Error marshalling packet");
+
+        assert_eq!(dst_data[..], raw_pkt[..]);
     }
 
     //TODO: TestRFC8285OneByteMultipleExtensionsWithPadding
