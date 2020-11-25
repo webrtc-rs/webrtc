@@ -3,10 +3,12 @@ use crate::context::*;
 use crate::key_derivation::*;
 use crate::protection_profile::*;
 
-use aes::cipher::generic_array::GenericArray;
+use aes::cipher::{
+    generic_array::GenericArray,
+    stream::{NewStreamCipher, StreamCipher, SyncStreamCipher, SyncStreamCipherSeek},
+};
+use aes_ctr::Aes128Ctr;
 use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
-use ctr::cipher::block::NewBlockCipher;
-use ctr::cipher::stream::{FromBlockCipher, NewStreamCipher, StreamCipher};
 use hmac::NewMac;
 use hmac::{Hmac, Mac};
 use sha1::Sha1;
@@ -16,7 +18,7 @@ use util::Error;
 use std::io::BufWriter;
 
 type HmacSha1 = Hmac<Sha1>;
-type Aes128Ctr = ctr::Ctr128<aes::Aes128>;
+// type Aes128Ctr = ctr::Ctr128<aes::Aes128>;
 
 pub(crate) const CIPHER_AES_CM_HMAC_SHA1AUTH_TAG_LEN: usize = 10;
 
@@ -113,19 +115,16 @@ impl CipherAesCmHmacSha1 {
         // - n_tag is the bit-length of the output authentication tag
         self.srtp_session_auth.reset();
 
-        self.srtp_session_auth.update(buf);
+        self.srtp_session_auth.update(&buf);
 
         // For SRTP only, we need to hash the rollover counter as well.
-        let mut roc_buf: Vec<u8> = vec![];
-        {
-            let mut writer = BufWriter::<&mut Vec<u8>>::new(roc_buf.as_mut());
-            writer.write_u32::<BigEndian>(roc)?;
-        }
+        let mut roc_buf = vec![0u8; 4];
+        BigEndian::write_u32(&mut roc_buf, roc);
 
         self.srtp_session_auth.update(&roc_buf);
 
         let result = self.srtp_session_auth.clone().finalize();
-        let code_bytes = result.into_bytes();
+        let code_bytes = result.into_bytes().to_vec();
 
         // Truncate the hash to the first AUTH_TAG_SIZE bytes.
         Ok(code_bytes[0..self.auth_tag_len()].to_vec())
@@ -186,16 +185,19 @@ impl Cipher for CipherAesCmHmacSha1 {
             &self.srtp_session_salt,
         )?;
 
+        dst[size..size + payload.len()].copy_from_slice(&payload);
+
         let key = GenericArray::from_slice(&self.srtp_session_key);
         let nonce = GenericArray::from_slice(&counter);
-        let mut stream = Aes128Ctr::new(&key, &nonce);
 
+        let mut stream = Aes128Ctr::new(&key, &nonce);
+        stream.seek(size + payload.len());
         stream.encrypt(&mut dst[size..size + payload.len()]);
 
-        // Generate the auth tag.
-        let auth_tag = self.generate_srtp_auth_tag(&dst, roc)?;
-
         size += payload.len();
+
+        // Generate the auth tag.
+        let auth_tag = self.generate_srtp_auth_tag(&dst[..size], roc)?;
 
         // Write the auth tag to the dest.
         dst[size..size + auth_tag.len()].copy_from_slice(&auth_tag);

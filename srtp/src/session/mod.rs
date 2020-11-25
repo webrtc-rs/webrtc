@@ -88,7 +88,11 @@ impl Session {
                 tokio::select! {
                     result = incoming_stream => match result{
                         Ok(()) => {},
-                        Err(err) => log::info!("{}", err),
+                        Err(err) => {
+                            // ToDo: Is it okay to exit here on error? Are there specific error that requires an exit?.
+                            log::error!("{}", err);
+                            return;
+                        },
                     },
                     opt = close_stream => if let Some(ssrc) = opt {
                         Session::close_stream(&cloned_streams_map, ssrc).await
@@ -165,8 +169,9 @@ impl Session {
         Ok(())
     }
 
-    // listen on the given SSRC to create a stream, it can be used
-    // if you want a certain SSRC, but don't want to wait for Accept
+    // ToDo: @RainLiu is "Listen" a definitive name?
+    /// Listen on the given SSRC to create a stream, it can be used
+    /// if you want a certain SSRC, but don't want to wait for Accept.
     pub async fn listen(&mut self, ssrc: u32) -> Result<Stream, Error> {
         let mut streams = self.streams_map.lock().await;
 
