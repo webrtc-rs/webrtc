@@ -630,7 +630,7 @@ async fn initalize_cipher_suite(
     sending_plain_text: &[u8],
 ) -> Result<(), (Option<Alert>, Option<Error>)> {
     if let Some(cipher_suite) = &state.cipher_suite {
-        if cipher_suite.is_initialized() {
+        if cipher_suite.is_initialized().await {
             return Ok(());
         }
     }
@@ -771,8 +771,9 @@ async fn initalize_cipher_suite(
     }
 
     if let Some(cipher_suite) = &mut state.cipher_suite {
-        if let Err(err) =
-            cipher_suite.init(&state.master_secret, &client_random, &server_random, true)
+        if let Err(err) = cipher_suite
+            .init(&state.master_secret, &client_random, &server_random, true)
+            .await
         {
             return Err((
                 Some(Alert {

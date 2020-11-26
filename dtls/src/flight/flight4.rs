@@ -260,7 +260,7 @@ impl Flight for Flight4 {
         }
 
         if let Some(cipher_suite) = &state.cipher_suite {
-            if !cipher_suite.is_initialized() {
+            if !cipher_suite.is_initialized().await {
                 let mut server_random = vec![];
                 {
                     let mut writer = BufWriter::new(server_random.as_mut_slice());
@@ -362,12 +362,10 @@ impl Flight for Flight4 {
                 }
 
                 if let Some(cipher_suite) = &mut state.cipher_suite {
-                    if let Err(err) = cipher_suite.init(
-                        &state.master_secret,
-                        &client_random,
-                        &server_random,
-                        false,
-                    ) {
+                    if let Err(err) = cipher_suite
+                        .init(&state.master_secret, &client_random, &server_random, false)
+                        .await
+                    {
                         return Err((
                             Some(Alert {
                                 alert_level: AlertLevel::Fatal,

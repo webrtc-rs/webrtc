@@ -43,10 +43,8 @@ pub(crate) struct State {
     pub(crate) local_key_signature: Vec<u8>,       // cached keySignature
     pub(crate) peer_certificates_verified: bool,
 
-    pub(crate) replay_detector: Vec<Box<dyn ReplayDetector>>,
+    pub(crate) replay_detector: Vec<Box<dyn ReplayDetector + Send + Sync>>,
 }
-
-unsafe impl std::marker::Send for State {}
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 struct SerializedState {
@@ -188,7 +186,7 @@ impl State {
 
     pub async fn init_cipher_suite(&mut self) -> Result<(), Error> {
         if let Some(cipher_suite) = &mut self.cipher_suite {
-            if cipher_suite.is_initialized() {
+            if cipher_suite.is_initialized().await {
                 return Ok(());
             }
 
@@ -204,9 +202,13 @@ impl State {
             }
 
             if self.is_client {
-                cipher_suite.init(&self.master_secret, &local_random, &remote_random, true)
+                cipher_suite
+                    .init(&self.master_secret, &local_random, &remote_random, true)
+                    .await
             } else {
-                cipher_suite.init(&self.master_secret, &remote_random, &local_random, false)
+                cipher_suite
+                    .init(&self.master_secret, &remote_random, &local_random, false)
+                    .await
             }
         } else {
             Err(ERR_CIPHER_SUITE_UNSET.clone())

@@ -4,7 +4,7 @@ pub mod cipher_suite_tls_ecdhe_ecdsa_with_aes_256_cbc_sha;
 use std::fmt;
 use std::marker::{Send, Sync};
 
-//use async_trait::async_trait;
+use async_trait::async_trait;
 
 use super::client_certificate_type::*;
 use super::errors::*;
@@ -107,19 +107,17 @@ impl CipherSuiteHash {
     }
 }
 
-//#[async_trait]
+#[async_trait]
 pub trait CipherSuite {
     fn to_string(&self) -> String;
     fn id(&self) -> CipherSuiteID;
     fn certificate_type(&self) -> ClientCertificateType;
     fn hash_func(&self) -> CipherSuiteHash;
     fn is_psk(&self) -> bool;
-    /*async*/
-    fn is_initialized(&self) -> bool;
+    async fn is_initialized(&self) -> bool;
 
     // Generate the internal encryption state
-    /*async*/
-    fn init(
+    async fn init(
         &mut self,
         master_secret: &[u8],
         client_random: &[u8],
@@ -127,10 +125,8 @@ pub trait CipherSuite {
         is_client: bool,
     ) -> Result<(), Error>;
 
-    /*async*/
-    fn encrypt(&self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>, Error>;
-    /*async*/
-    fn decrypt(&self, input: &[u8]) -> Result<Vec<u8>, Error>;
+    async fn encrypt(&self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>, Error>;
+    async fn decrypt(&self, input: &[u8]) -> Result<Vec<u8>, Error>;
 }
 
 // Taken from https://www.iana.org/assignments/tls-parameters/tls-parameters.xml

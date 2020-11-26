@@ -425,10 +425,10 @@ impl Conn {
                     )
                     .await;
 
-                let raw_handshake_packets = self.process_handshake_packet(p, h)?;
+                let raw_handshake_packets = self.process_handshake_packet(p, h).await?;
                 raw_packets.extend_from_slice(&raw_handshake_packets);
             } else {
-                let raw_packet = self.process_packet(p)?;
+                let raw_packet = self.process_packet(p).await?;
                 raw_packets.push(raw_packet);
             }
         }
@@ -446,7 +446,7 @@ impl Conn {
         Ok(())
     }
 
-    fn process_packet(&mut self, p: &mut Packet) -> Result<Vec<u8>, Error> {
+    async fn process_packet(&mut self, p: &mut Packet) -> Result<Vec<u8>, Error> {
         let epoch = p.record.record_layer_header.epoch as usize;
         while self.state.local_sequence_number.len() <= epoch {
             self.state.local_sequence_number.push(0);
@@ -470,14 +470,16 @@ impl Conn {
 
         if p.should_encrypt {
             if let Some(cipher_suite) = &self.state.cipher_suite {
-                raw_packet = cipher_suite.encrypt(&p.record.record_layer_header, &raw_packet)?;
+                raw_packet = cipher_suite
+                    .encrypt(&p.record.record_layer_header, &raw_packet)
+                    .await?;
             }
         }
 
         Ok(raw_packet)
     }
 
-    fn process_handshake_packet(
+    async fn process_handshake_packet(
         &mut self,
         p: &Packet,
         h: &Handshake,
@@ -520,7 +522,9 @@ impl Conn {
             raw_packet.extend_from_slice(&handshake_fragment);
             if p.should_encrypt {
                 if let Some(cipher_suite) = &self.state.cipher_suite {
-                    raw_packet = cipher_suite.encrypt(&record_layer_header, &raw_packet)?;
+                    raw_packet = cipher_suite
+                        .encrypt(&record_layer_header, &raw_packet)
+                        .await?;
                 }
             }
 
@@ -728,7 +732,7 @@ impl Conn {
             let invalid_cipher_suite = if self.state.cipher_suite.is_none() {
                 true
             } else if let Some(cipher_suite) = &self.state.cipher_suite {
-                !cipher_suite.is_initialized()
+                !cipher_suite.is_initialized().await
             } else {
                 false
             };
@@ -743,7 +747,7 @@ impl Conn {
             }
 
             if let Some(cipher_suite) = &self.state.cipher_suite {
-                buf = match cipher_suite.decrypt(&buf) {
+                buf = match cipher_suite.decrypt(&buf).await {
                     Ok(buf) => buf,
                     Err(err) => {
                         debug!(
@@ -836,7 +840,7 @@ impl Conn {
                 let invalid_cipher_suite = if self.state.cipher_suite.is_none() {
                     true
                 } else if let Some(cipher_suite) = &self.state.cipher_suite {
-                    !cipher_suite.is_initialized()
+                    !cipher_suite.is_initialized().await
                 } else {
                     false
                 };
