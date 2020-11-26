@@ -6,9 +6,7 @@ use crate::crypto::*;
 use crate::errors::*;
 use crate::extension::extension_use_srtp::*;
 use crate::flight::*;
-use crate::handshake::handshake_cache::*;
 use crate::signature_hash_algorithm::*;
-use crate::state::*;
 
 use log::*;
 
@@ -16,8 +14,6 @@ use util::Error;
 
 use std::collections::HashMap;
 use std::fmt;
-
-use tokio::sync::mpsc;
 
 // [RFC6347 Section-4.2.4]
 //                      +-----------+
@@ -203,84 +199,43 @@ pub(crate) fn srv_cli_str(is_client: bool) -> String {
     "server".to_owned()
 }
 
-pub(crate) struct HandshakeFsm {
-    current_flight: Box<dyn Flight>,
-    flights: Vec<Packet>,
-    retransmit: bool,
-    state: State,
-    cache: HandshakeCache,
-    cfg: HandshakeConfig,
-
-    closed_tx: mpsc::Sender<()>,
-    handshake_rx: mpsc::Receiver<()>,
-    done_rx: mpsc::Receiver<()>,
-}
-
-impl HandshakeFsm {
-    pub(crate) fn new(
-        state: State,
-        cache: HandshakeCache,
-        cfg: HandshakeConfig,
-        initial_flight: Box<dyn Flight>,
-        closed_tx: mpsc::Sender<()>,
-        handshake_rx: mpsc::Receiver<()>,
-        done_rx: mpsc::Receiver<()>,
-    ) -> Self {
-        HandshakeFsm {
-            current_flight: initial_flight,
-            flights: vec![],
-            retransmit: false,
-            state,
-            cache,
-            cfg,
-
-            closed_tx,
-            handshake_rx,
-            done_rx,
-        }
-    }
-
-    pub(crate) async fn run(
-        &mut self,
-        c: &mut Conn,
-        initial_state: HandshakeState,
-    ) -> Result<(), Error> {
-        let mut state = initial_state;
+impl Conn {
+    pub(crate) async fn handshake(&mut self, mut state: HandshakeState) -> Result<(), Error> {
         loop {
             trace!(
                 "[handshake:{}] {}: {}",
                 srv_cli_str(self.state.is_client),
-                self.current_flight.to_string(),
+                self.flight.to_string(),
                 state.to_string()
             );
             if let Some(on_flight_state) = &self.cfg.on_flight_state {
-                on_flight_state(&self.current_flight, state);
+                on_flight_state(&self.flight, state);
             }
             state = match state {
-                HandshakeState::Preparing => self.prepare(c).await?,
-                HandshakeState::Sending => self.send(c).await?,
-                HandshakeState::Waiting => self.wait(c).await?,
-                HandshakeState::Finished => self.finish(c).await?,
+                HandshakeState::Preparing => self.prepare().await?,
+                HandshakeState::Sending => self.send().await?,
+                HandshakeState::Waiting => self.wait().await?,
+                HandshakeState::Finished => self.finish().await?,
                 _ => return Err(ERR_INVALID_FSM_TRANSITION.clone()),
             };
         }
     }
 
-    async fn prepare(&mut self, c: &mut Conn) -> Result<HandshakeState, Error> {
-        self.flights = vec![];
+    async fn prepare(&mut self) -> Result<HandshakeState, Error> {
+        self.pkts = None;
 
         // Prepare flights
-        self.retransmit = self.current_flight.has_retransmit();
+        self.retransmit = self.flight.has_retransmit();
 
         let result = self
-            .current_flight
+            .flight
             .generate(&mut self.state, &self.cache, &self.cfg)
             .await;
 
         match result {
             Err((a, mut err)) => {
                 if let Some(a) = a {
-                    let alert_err = c.notify(a.alert_level, a.alert_description).await;
+                    let alert_err = self.notify(a.alert_level, a.alert_description).await;
 
                     if let Err(alert_err) = alert_err {
                         if err.is_some() {
@@ -292,19 +247,21 @@ impl HandshakeFsm {
                     return Err(err);
                 }
             }
-            Ok(pkts) => self.flights = pkts,
+            Ok(pkts) => self.pkts = Some(pkts),
         };
 
         let epoch = self.cfg.initial_epoch;
         let mut next_epoch = epoch;
-        for p in &mut self.flights {
-            p.record.record_layer_header.epoch += epoch;
-            if p.record.record_layer_header.epoch > next_epoch {
-                next_epoch = p.record.record_layer_header.epoch;
-            }
-            if let Content::Handshake(h) = &mut p.record.content {
-                h.handshake_header.message_sequence = self.state.handshake_send_sequence as u16;
-                self.state.handshake_send_sequence += 1;
+        if let Some(pkts) = &mut self.pkts {
+            for p in pkts {
+                p.record.record_layer_header.epoch += epoch;
+                if p.record.record_layer_header.epoch > next_epoch {
+                    next_epoch = p.record.record_layer_header.epoch;
+                }
+                if let Content::Handshake(h) = &mut p.record.content {
+                    h.handshake_header.message_sequence = self.state.handshake_send_sequence as u16;
+                    self.state.handshake_send_sequence += 1;
+                }
             }
         }
         if epoch != next_epoch {
@@ -313,33 +270,35 @@ impl HandshakeFsm {
                 srv_cli_str(self.state.is_client),
                 next_epoch
             );
-            c.set_local_epoch(next_epoch);
+            self.set_local_epoch(next_epoch);
         }
 
         Ok(HandshakeState::Sending)
     }
-    async fn send(&mut self, c: &mut Conn) -> Result<HandshakeState, Error> {
+    async fn send(&mut self) -> Result<HandshakeState, Error> {
         // Send flights
-        c.write_packets(&mut self.flights).await?;
+        if let Some(pkts) = self.pkts.clone() {
+            self.write_packets(pkts).await?;
+        }
 
-        if self.current_flight.is_last_send_flight() {
+        if self.flight.is_last_send_flight() {
             Ok(HandshakeState::Finished)
         } else {
             Ok(HandshakeState::Waiting)
         }
     }
-    async fn wait(&mut self, c: &mut Conn) -> Result<HandshakeState, Error> {
+    async fn wait(&mut self) -> Result<HandshakeState, Error> {
         let mut retransmit_timer = tokio::time::sleep(self.cfg.retransmit_interval);
 
         loop {
             tokio::select! {
-                 _ = self.handshake_rx.recv() =>{
-                   let result = self.current_flight.parse( c, &mut self.state, &self.cache, &self.cfg).await;
-                   // TODO: drop(handshake_rx)
+                 done = self.handshake_rx.recv() =>{
+                   let result = self.flight.parse(&mut self.handle_queue_tx, &mut self.state, &self.cache, &self.cfg).await;
+                   drop(done);
                    match result {
                         Err((alert, mut err)) => {
                             if let Some(alert) = alert {
-                                let alert_err = c.notify(alert.alert_level, alert.alert_description).await;
+                                let alert_err = self.notify(alert.alert_level, alert.alert_description).await;
 
                                 if let Err(alert_err) = alert_err {
                                     if err.is_some() {
@@ -352,11 +311,11 @@ impl HandshakeFsm {
                             }
                         }
                         Ok(next_flight) => {
-                            trace!("[handshake:{}] {} -> {}", srv_cli_str(self.state.is_client), self.current_flight.to_string(), next_flight.to_string());
-                            if next_flight.is_last_recv_flight() && self.current_flight.to_string() == next_flight.to_string() {
+                            trace!("[handshake:{}] {} -> {}", srv_cli_str(self.state.is_client), self.flight.to_string(), next_flight.to_string());
+                            if next_flight.is_last_recv_flight() && self.flight.to_string() == next_flight.to_string() {
                                 return Ok(HandshakeState::Finished);
                             }
-                            self.current_flight = next_flight;
+                            self.flight = next_flight;
                             return Ok(HandshakeState::Preparing);
                         }
                     };
@@ -369,23 +328,23 @@ impl HandshakeFsm {
                     return Ok(HandshakeState::Sending);
                 }
 
-                _ = self.done_rx.recv() => {
+                /*_ = self.done_rx.recv() => {
                     return Err(Error::new("done_rx recv".to_owned()));
-                }
+                }*/
             }
         }
     }
-    async fn finish(&mut self, c: &mut Conn) -> Result<HandshakeState, Error> {
+    async fn finish(&mut self) -> Result<HandshakeState, Error> {
         let retransmit_timer = tokio::time::sleep(self.cfg.retransmit_interval);
 
         tokio::select! {
-             _ = self.handshake_rx.recv() =>{
-               let result = self.current_flight.parse( c, &mut self.state, &self.cache, &self.cfg).await;
-                // TODO: drop(handshake_rx)
+             done = self.handshake_rx.recv() =>{
+               let result = self.flight.parse(&mut self.handle_queue_tx, &mut self.state, &self.cache, &self.cfg).await;
+               drop(done);
                match result {
                     Err((alert, mut err)) => {
                         if let Some(alert) = alert {
-                            let alert_err = c.notify(alert.alert_level, alert.alert_description).await;
+                            let alert_err = self.notify(alert.alert_level, alert.alert_description).await;
                             if let Err(alert_err) = alert_err {
                                 if err.is_some() {
                                     err = Some(alert_err);
@@ -404,9 +363,9 @@ impl HandshakeFsm {
                 };
             }
 
-            _ = self.done_rx.recv() => {
+            /*_ = self.done_rx.recv() => {
                 return Err(Error::new("done_rx recv".to_owned()));
-            }
+            }*/
         }
 
         Ok(HandshakeState::Finished)

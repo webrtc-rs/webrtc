@@ -37,7 +37,7 @@ impl Default for ContentType {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Content {
     ChangeCipherSpec(ChangeCipherSpec),
     Alert(Alert),

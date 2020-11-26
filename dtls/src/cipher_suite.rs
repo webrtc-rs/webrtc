@@ -118,7 +118,7 @@ pub trait CipherSuite {
 
     // Generate the internal encryption state
     async fn init(
-        &mut self,
+        &self,
         master_secret: &[u8],
         client_random: &[u8],
         server_random: &[u8],

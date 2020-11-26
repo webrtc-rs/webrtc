@@ -96,7 +96,7 @@ impl Default for HandshakeType {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum HandshakeMessage {
     //HelloRequest(errNotImplemented),
     ClientHello(HandshakeMessageClientHello),
@@ -136,7 +136,7 @@ impl HandshakeMessage {
 // handshake protocol can also optionally authenticate parties who have
 // certificates signed by a trusted certificate authority.
 // https://tools.ietf.org/html/rfc5246#section-7.3
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Handshake {
     pub(crate) handshake_header: HandshakeHeader,
     pub(crate) handshake_message: HandshakeMessage,

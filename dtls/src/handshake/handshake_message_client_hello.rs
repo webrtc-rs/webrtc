@@ -20,6 +20,7 @@ client hello in response to a hello request or on its own
 initiative in order to renegotiate the security parameters in an
 existing connection.
 */
+#[derive(Clone)]
 pub struct HandshakeMessageClientHello {
     pub(crate) version: ProtocolVersion,
     pub(crate) random: HandshakeRandom,

@@ -2,7 +2,7 @@ use super::flight5::*;
 use super::*;
 use crate::compression_methods::*;
 use crate::config::*;
-use crate::conn::*;
+//use crate::conn::*;
 use crate::content::*;
 use crate::curve::named_curve::*;
 use crate::errors::*;
@@ -25,6 +25,8 @@ use crate::prf::{prf_pre_master_secret, prf_psk_pre_master_secret};
 use crate::{find_matching_cipher_suite, find_matching_srtp_profile};
 use util::Error;
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 
 pub(crate) struct Flight3;
@@ -37,7 +39,7 @@ impl Flight for Flight3 {
 
     async fn parse(
         &self,
-        _c: &mut Conn,
+        _tx: &mut mpsc::Sender<()>,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
@@ -250,7 +252,7 @@ impl Flight for Flight3 {
             }
 
             if let Ok(cipher_suite) = cipher_suite_for_id(h.cipher_suite) {
-                state.cipher_suite = Some(cipher_suite);
+                state.cipher_suite = Arc::new(Some(cipher_suite));
             }
             state.remote_random = h.random.clone();
             //cfg.log.Tracef("[handshake] use cipher suite: %s", h.cipherSuite.String())

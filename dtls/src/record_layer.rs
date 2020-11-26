@@ -33,7 +33,7 @@ use util::Error;
  verify the TLS MAC.
  https://tools.ietf.org/html/rfc4347#section-4.1
 */
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RecordLayer {
     pub record_layer_header: RecordLayerHeader,
     pub content: Content,

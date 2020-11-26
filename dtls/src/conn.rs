@@ -24,18 +24,20 @@ use crate::record_layer::*;
 use crate::signature_hash_algorithm::parse_signature_schemes;
 use crate::state::*;
 
+use transport::replay_detector::*;
+
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::io::{BufReader, BufWriter};
+use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU64, Ordering};
+use std::sync::Arc;
 
 use log::*;
 
 use tokio::net::*;
 use tokio::sync::mpsc;
 use tokio::time;
-
-use std::io::{BufReader, BufWriter};
 use tokio::time::{timeout, Duration};
-use transport::replay_detector::SlidingWindowDetector;
+
 use util::Error;
 
 pub(crate) const INITIAL_TICKER_INTERVAL: time::Duration = time::Duration::from_secs(1);
@@ -56,22 +58,25 @@ lazy_static! {
     };
 }
 
+struct ConnReaderContext {
+    is_client: bool,
+    replay_protection_window: usize,
+    replay_detector: Vec<Box<dyn ReplayDetector + Send>>,
+    decrypted_tx: mpsc::Sender<Result<Vec<u8>, Error>>,
+    encrypted_packets: Vec<Vec<u8>>,
+    fragment_buffer: FragmentBuffer,
+    cache: HandshakeCache,
+    cipher_suite: Arc<Option<Box<dyn CipherSuite + Send + Sync>>>,
+    remote_epoch: Arc<AtomicU16>,
+}
+
 // Conn represents a DTLS connection
 pub(crate) struct Conn {
-    //lock           sync.RWMutex     // Internal lock (must not be public)
-    next_conn: UdpSocket, // Embedded Conn, typically a udpconn we read/write from
-    fragment_buffer: FragmentBuffer, // out-of-order and missing fragment handling
-    handshake_cache: HandshakeCache, // caching of handshake messages for verifyData generation
-    decrypted_tx: mpsc::Sender<Result<Vec<u8>, Error>>, // Decrypted Application Data or error, pull by calling `Read`
+    pub(crate) cache: HandshakeCache, // caching of handshake messages for verifyData generation
     decrypted_rx: mpsc::Receiver<Result<Vec<u8>, Error>>, // Decrypted Application Data or error, pull by calling `Read`
-    state: State,                                         // Internal state
+    pub(crate) state: State,                              // Internal state
 
-    maximum_transmission_unit: usize,
-
-    handshake_completed_successfully: AtomicBool,
-
-    encrypted_packets: Option<Vec<Vec<u8>>>,
-
+    handshake_completed_successfully: Arc<AtomicBool>,
     connection_closed_by_user: bool,
     // closeLock              sync.Mutex
     closed: bool, //  *closer.Closer
@@ -87,16 +92,19 @@ pub(crate) struct Conn {
     cancelHandshaker      func()
     cancelHandshakeReader func()
     */
-    //fsm: HandshakeFsm,
-    replay_protection_window: usize,
-}
+    pub(crate) flight: Box<dyn Flight>,
+    pub(crate) pkts: Option<Vec<Packet>>,
+    pub(crate) cfg: HandshakeConfig,
+    pub(crate) retransmit: bool,
+    pub(crate) handshake_rx: mpsc::Receiver<mpsc::Sender<()>>,
 
-unsafe impl std::marker::Send for Conn {}
-unsafe impl std::marker::Sync for Conn {}
+    pub(crate) packet_tx: Arc<mpsc::Sender<Vec<Packet>>>,
+    pub(crate) handle_queue_tx: mpsc::Sender<()>,
+}
 
 impl Conn {
     pub async fn new(
-        next_conn: UdpSocket,
+        udp_socket: UdpSocket,
         config: &mut Config,
         is_client: bool,
         initial_state: Option<State>,
@@ -141,29 +149,6 @@ impl Conn {
             config.replay_protection_window
         };
 
-        let (decrypted_tx, decrypted_rx) = mpsc::channel(1);
-
-        let mut c = Conn {
-            next_conn,
-            fragment_buffer: FragmentBuffer::new(),
-            handshake_cache: HandshakeCache::new(),
-            decrypted_tx,
-            decrypted_rx,
-            state: State {
-                is_client,
-                ..Default::default()
-            },
-            maximum_transmission_unit,
-            handshake_completed_successfully: AtomicBool::new(false),
-            encrypted_packets: None,
-            connection_closed_by_user: false,
-            replay_protection_window,
-            closed: false,
-        };
-
-        //c.set_remote_epoch(0);
-        //c.set_local_epoch(0);
-
         let server_name = config.server_name.clone();
         // Use host from conn address when server_name is not provided
         // TODO:
@@ -178,7 +163,7 @@ impl Conn {
             }
         }*/
 
-        let hs_cfg = HandshakeConfig {
+        let cfg = HandshakeConfig {
             local_psk_callback: config.psk.take(),
             local_psk_identity_hint: config.psk_identity_hint.clone(),
             local_cipher_suites,
@@ -198,88 +183,117 @@ impl Conn {
             ..Default::default()
         };
 
-        let (initial_flight, initial_fsm_state) = if let Some(state) = initial_state {
-            c.state = state;
-            if is_client {
-                (
-                    Box::new(Flight5 {}) as Box<dyn Flight>,
-                    HandshakeState::Finished,
-                )
+        let (state, flight, initial_fsm_state) = if let Some(state) = initial_state {
+            let flight = if is_client {
+                Box::new(Flight5 {}) as Box<dyn Flight>
             } else {
-                (
-                    Box::new(Flight6 {}) as Box<dyn Flight>,
-                    HandshakeState::Finished,
-                )
-            }
-        } else if is_client {
-            (
-                Box::new(Flight1 {}) as Box<dyn Flight>,
-                HandshakeState::Preparing,
-            )
+                Box::new(Flight6 {}) as Box<dyn Flight>
+            };
+
+            (state, flight, HandshakeState::Finished)
         } else {
+            let flight = if is_client {
+                Box::new(Flight1 {}) as Box<dyn Flight>
+            } else {
+                Box::new(Flight0 {}) as Box<dyn Flight>
+            };
+
             (
-                Box::new(Flight0 {}) as Box<dyn Flight>,
+                State {
+                    is_client,
+                    ..Default::default()
+                },
+                flight,
                 HandshakeState::Preparing,
             )
         };
 
+        let (decrypted_tx, decrypted_rx) = mpsc::channel(1);
+        let (_handshake_tx, handshake_rx) = mpsc::channel(1);
+        let (packet_tx, packet_rx) = mpsc::channel(1);
+        let (handle_queue_tx, mut handle_queue_rx) = mpsc::channel(1);
+
+        let packet_tx = Arc::new(packet_tx);
+        let packet_tx2 = Arc::clone(&packet_tx);
+        let next_conn_rx = Arc::new(udp_socket);
+        let next_conn_tx = Arc::clone(&next_conn_rx);
+        let cache = HandshakeCache::new();
+        let cache1 = cache.clone();
+        let cache2 = cache.clone();
+        let handshake_completed_successfully = Arc::new(AtomicBool::new(false));
+        let handshake_completed_successfully2 = Arc::clone(&handshake_completed_successfully);
+
+        let mut c = Conn {
+            cache,
+            decrypted_rx,
+            state,
+            handshake_completed_successfully,
+            connection_closed_by_user: false,
+            closed: false,
+
+            flight,
+            pkts: None,
+            cfg,
+            retransmit: false,
+            handshake_rx,
+            packet_tx,
+            handle_queue_tx,
+        };
+
+        let cipher_suite1 = Arc::clone(&c.state.cipher_suite);
+        let sequence_number = Arc::clone(&c.state.local_sequence_number);
+
+        tokio::spawn(async move {
+            let _ = Conn::handle_outgoing_packets(
+                next_conn_tx,
+                packet_rx,
+                cache1,
+                is_client,
+                sequence_number,
+                cipher_suite1,
+                maximum_transmission_unit,
+            )
+            .await;
+        });
+
+        let local_epoch = Arc::clone(&c.state.local_epoch);
+        let remote_epoch = Arc::clone(&c.state.remote_epoch);
+        let cipher_suite2 = Arc::clone(&c.state.cipher_suite);
+
+        tokio::spawn(async move {
+            let mut buf = vec![0u8; INBOUND_BUFFER_SIZE];
+            let mut ctx = ConnReaderContext {
+                is_client,
+                replay_protection_window,
+                replay_detector: vec![],
+                decrypted_tx,
+                encrypted_packets: vec![],
+                fragment_buffer: FragmentBuffer::new(),
+                cache: cache2,
+                cipher_suite: cipher_suite2,
+                remote_epoch,
+            };
+
+            loop {
+                let _ = Conn::read_and_buffer(
+                    &mut ctx,
+                    &next_conn_rx,
+                    &packet_tx2,
+                    &mut handle_queue_rx,
+                    &mut buf,
+                    &local_epoch,
+                    &handshake_completed_successfully2,
+                )
+                .await;
+            }
+        });
+
         // Do handshake
-        c.handshake(hs_cfg, initial_flight, initial_fsm_state)
-            .await?;
+        c.handshake(initial_fsm_state).await?;
 
         trace!("Handshake Completed");
 
         Ok(c)
-    }
-
-    async fn handshake(
-        &mut self,
-        cfg: HandshakeConfig,
-        initial_flight: Box<dyn Flight>,
-        _initial_state: HandshakeState,
-    ) -> Result<(), Error> {
-        let (closed_tx, _closed_rx) = mpsc::channel(1);
-        let (_handshake_tx, handshake_rx) = mpsc::channel(1);
-        let (_done_tx, done_rx) = mpsc::channel(1);
-        //let (first_err_tx, mut first_err_rx) = mpsc::channel(1);
-
-        let _fsm = HandshakeFsm::new(
-            self.state.clone(),
-            self.handshake_cache.clone(),
-            cfg,
-            initial_flight,
-            closed_tx,
-            handshake_rx,
-            done_rx,
-        );
-
-        //TODO:
-        /*cfg.onFlightState = func(f flightVal, s handshakeState) {
-            if s == handshakeFinished && !c.is_handshake_completed_successfully() {
-                c.set_handshake_completed_successfully()
-                close(done)
-            }
-        }*/
-
-        // Handshake routine should be live until close.
-        // The other party may request retransmission of the last flight to cope with packet drop.
-        /*tokio::spawn(async move {
-            let result = fsm.run(/*ctxHs,*/ c, initial_state).await;
-            if let Err(err) = result {
-                if err != *ERR_CONTEXT_CANCELED {
-                    let _ = first_err_tx.send(err).await;
-                }
-            }
-            //TODO: c.handshakeLoopsFinished.Done()
-        });*/
-
-        tokio::spawn(async move {});
-
-        //tokio::select! {
-        //_ = first_err_rx.recv() => {}
-        //}
-
-        Ok(())
     }
 
     // Read reads data from the connection.
@@ -325,7 +339,7 @@ impl Conn {
             return Err(ERR_HANDSHAKE_IN_PROGRESS.clone());
         }
 
-        let mut pkts = vec![Packet {
+        let pkts = vec![Packet {
             record: RecordLayer {
                 record_layer_header: RecordLayerHeader {
                     epoch: self.get_local_epoch(),
@@ -339,11 +353,11 @@ impl Conn {
         }];
 
         if let Some(d) = duration {
-            if timeout(d, self.write_packets(&mut pkts)).await.is_err() {
+            if timeout(d, self.write_packets(pkts)).await.is_err() {
                 return Err(ERR_DEADLINE_EXCEEDED.clone());
             }
         } else {
-            self.write_packets(&mut pkts).await?;
+            self.write_packets(pkts).await?;
         }
 
         Ok(p.len())
@@ -378,7 +392,7 @@ impl Conn {
         level: AlertLevel,
         desc: AlertDescription,
     ) -> Result<(), Error> {
-        self.write_packets(&mut [Packet {
+        self.write_packets(vec![Packet {
             record: RecordLayer {
                 record_layer_header: RecordLayerHeader {
                     epoch: self.get_local_epoch(),
@@ -396,64 +410,101 @@ impl Conn {
         .await
     }
 
-    pub(crate) async fn write_packets(&mut self, pkts: &mut [Packet]) -> Result<(), Error> {
-        //c.lock.Lock()
-        //defer c.lock.Unlock()
-
-        let mut raw_packets = vec![];
-        for p in pkts {
-            if let Content::Handshake(h) = &p.record.content {
-                let mut handshake_raw = vec![];
-                {
-                    let mut writer = BufWriter::<&mut Vec<u8>>::new(handshake_raw.as_mut());
-                    p.record.marshal(&mut writer)?;
-                }
-                trace!(
-                    "[handshake:{}] -> {} (epoch: {}, seq: {})",
-                    srv_cli_str(self.state.is_client),
-                    h.handshake_header.handshake_type.to_string(),
-                    p.record.record_layer_header.epoch,
-                    h.handshake_header.message_sequence
-                );
-                self.handshake_cache
-                    .push(
-                        handshake_raw[RECORD_LAYER_HEADER_SIZE..].to_vec(),
-                        p.record.record_layer_header.epoch,
-                        h.handshake_header.message_sequence,
-                        h.handshake_header.handshake_type,
-                        self.state.is_client,
-                    )
-                    .await;
-
-                let raw_handshake_packets = self.process_handshake_packet(p, h).await?;
-                raw_packets.extend_from_slice(&raw_handshake_packets);
-            } else {
-                let raw_packet = self.process_packet(p).await?;
-                raw_packets.push(raw_packet);
-            }
-        }
-        if raw_packets.is_empty() {
-            return Ok(());
-        }
-
-        let compacted_raw_packets =
-            compact_raw_packets(&raw_packets, self.maximum_transmission_unit);
-
-        for compacted_raw_packets in &compacted_raw_packets {
-            self.next_conn.send(compacted_raw_packets).await?;
-        }
+    pub(crate) async fn write_packets(&mut self, pkts: Vec<Packet>) -> Result<(), Error> {
+        self.packet_tx.send(pkts).await?;
 
         Ok(())
     }
 
-    async fn process_packet(&mut self, p: &mut Packet) -> Result<Vec<u8>, Error> {
-        let epoch = p.record.record_layer_header.epoch as usize;
-        while self.state.local_sequence_number.len() <= epoch {
-            self.state.local_sequence_number.push(0);
+    async fn handle_outgoing_packets(
+        next_conn: Arc<UdpSocket>,
+        mut packet_rx: mpsc::Receiver<Vec<Packet>>,
+        mut cache: HandshakeCache,
+        is_client: bool,
+        sequence_number: Arc<AtomicU64>,
+        cipher_suite: Arc<Option<Box<dyn CipherSuite + Send + Sync>>>,
+        maximum_transmission_unit: usize,
+    ) -> Result<(), Error> {
+        let mut local_sequence_number = vec![];
+
+        loop {
+            let rx = packet_rx.recv().await;
+            if let Some(mut pkts) = rx {
+                let mut raw_packets = vec![];
+                for p in &mut pkts {
+                    if let Content::Handshake(h) = &p.record.content {
+                        let mut handshake_raw = vec![];
+                        {
+                            let mut writer = BufWriter::<&mut Vec<u8>>::new(handshake_raw.as_mut());
+                            p.record.marshal(&mut writer)?;
+                        }
+                        trace!(
+                            "[handshake:{}] -> {} (epoch: {}, seq: {})",
+                            srv_cli_str(is_client),
+                            h.handshake_header.handshake_type.to_string(),
+                            p.record.record_layer_header.epoch,
+                            h.handshake_header.message_sequence
+                        );
+                        cache
+                            .push(
+                                handshake_raw[RECORD_LAYER_HEADER_SIZE..].to_vec(),
+                                p.record.record_layer_header.epoch,
+                                h.handshake_header.message_sequence,
+                                h.handshake_header.handshake_type,
+                                is_client,
+                            )
+                            .await;
+
+                        let raw_handshake_packets = Conn::process_handshake_packet(
+                            &mut local_sequence_number,
+                            &sequence_number,
+                            &cipher_suite,
+                            maximum_transmission_unit,
+                            p,
+                            h,
+                        )
+                        .await?;
+                        raw_packets.extend_from_slice(&raw_handshake_packets);
+                    } else {
+                        let raw_packet = Conn::process_packet(
+                            &mut local_sequence_number,
+                            &sequence_number,
+                            &cipher_suite,
+                            p,
+                        )
+                        .await?;
+                        raw_packets.push(raw_packet);
+                    }
+                }
+                if raw_packets.is_empty() {
+                    return Ok(());
+                }
+
+                let compacted_raw_packets =
+                    compact_raw_packets(&raw_packets, maximum_transmission_unit);
+
+                for compacted_raw_packets in &compacted_raw_packets {
+                    next_conn.send(compacted_raw_packets).await?;
+                }
+            }
         }
-        //TODO: seq := atomic.AddUint64(&c.state.localSequenceNumber[epoch], 1) - 1
-        self.state.local_sequence_number[epoch] += 1;
-        let seq = self.state.local_sequence_number[epoch] - 1;
+    }
+
+    async fn process_packet(
+        local_sequence_number: &mut Vec<u64>,
+        sequence_number: &Arc<AtomicU64>,
+        cipher_suite: &Arc<Option<Box<dyn CipherSuite + Send + Sync>>>,
+        p: &mut Packet,
+    ) -> Result<Vec<u8>, Error> {
+        let epoch = p.record.record_layer_header.epoch as usize;
+        let seq = {
+            while local_sequence_number.len() <= epoch {
+                local_sequence_number.push(0);
+            }
+            local_sequence_number[epoch] += 1;
+            sequence_number.store(local_sequence_number[epoch], Ordering::Relaxed);
+            local_sequence_number[epoch] - 1
+        };
         if seq > MAX_SEQUENCE_NUMBER {
             // RFC 6347 Section 4.1.0
             // The implementation must either abandon an association or rehandshake
@@ -469,7 +520,7 @@ impl Conn {
         }
 
         if p.should_encrypt {
-            if let Some(cipher_suite) = &self.state.cipher_suite {
+            if let Some(cipher_suite) = &**cipher_suite {
                 raw_packet = cipher_suite
                     .encrypt(&p.record.record_layer_header, &raw_packet)
                     .await?;
@@ -480,23 +531,29 @@ impl Conn {
     }
 
     async fn process_handshake_packet(
-        &mut self,
+        local_sequence_number: &mut Vec<u64>,
+        sequence_number: &Arc<AtomicU64>,
+        cipher_suite: &Arc<Option<Box<dyn CipherSuite + Send + Sync>>>,
+        maximum_transmission_unit: usize,
         p: &Packet,
         h: &Handshake,
     ) -> Result<Vec<Vec<u8>>, Error> {
         let mut raw_packets = vec![];
 
-        let handshake_fragments = self.fragment_handshake(h)?;
+        let handshake_fragments = Conn::fragment_handshake(maximum_transmission_unit, h)?;
 
         let epoch = p.record.record_layer_header.epoch as usize;
-        while self.state.local_sequence_number.len() <= epoch {
-            self.state.local_sequence_number.push(0);
+
+        while local_sequence_number.len() <= epoch {
+            local_sequence_number.push(0);
         }
 
         for handshake_fragment in &handshake_fragments {
-            //seq := atomic.AddUint64(&c.state.localSequenceNumber[epoch], 1) - 1
-            self.state.local_sequence_number[epoch] += 1;
-            let seq = self.state.local_sequence_number[epoch] - 1;
+            let seq = {
+                local_sequence_number[epoch] += 1;
+                sequence_number.store(local_sequence_number[epoch], Ordering::Relaxed);
+                local_sequence_number[epoch] - 1
+            };
             if seq > MAX_SEQUENCE_NUMBER {
                 return Err(ERR_SEQUENCE_NUMBER_OVERFLOW.clone());
             }
@@ -521,7 +578,7 @@ impl Conn {
             raw_packet.extend_from_slice(&record_layer_header_bytes);
             raw_packet.extend_from_slice(&handshake_fragment);
             if p.should_encrypt {
-                if let Some(cipher_suite) = &self.state.cipher_suite {
+                if let Some(cipher_suite) = &**cipher_suite {
                     raw_packet = cipher_suite
                         .encrypt(&record_layer_header, &raw_packet)
                         .await?;
@@ -534,7 +591,10 @@ impl Conn {
         Ok(raw_packets)
     }
 
-    fn fragment_handshake(&self, h: &Handshake) -> Result<Vec<Vec<u8>>, Error> {
+    fn fragment_handshake(
+        maximum_transmission_unit: usize,
+        h: &Handshake,
+    ) -> Result<Vec<Vec<u8>>, Error> {
         let mut content = vec![];
         {
             let mut writer = BufWriter::<&mut Vec<u8>>::new(content.as_mut());
@@ -543,7 +603,7 @@ impl Conn {
 
         let mut fragmented_handshakes = vec![];
 
-        let mut content_fragments = split_bytes(&content, self.maximum_transmission_unit);
+        let mut content_fragments = split_bytes(&content, maximum_transmission_unit);
         if content_fragments.is_empty() {
             content_fragments = vec![vec![]];
         }
@@ -589,26 +649,58 @@ impl Conn {
             .load(Ordering::Relaxed)
     }
 
-    async fn read_and_buffer(&mut self) -> Result<(), Error> {
-        //bufptr := poolReadBuffer.Get().(*[]byte)
-        //defer poolReadBuffer.Put(bufptr)
-
-        //b := *bufptr
-        //TODO: use buffer pool
-        let mut b = vec![0; INBOUND_BUFFER_SIZE];
-        let i = self.next_conn.recv(&mut b).await?;
-        let pkts = unpack_datagram(&b[..i])?;
-
+    async fn read_and_buffer(
+        ctx: &mut ConnReaderContext,
+        next_conn: &Arc<UdpSocket>,
+        packet_tx: &Arc<mpsc::Sender<Vec<Packet>>>,
+        handle_queue_rx: &mut mpsc::Receiver<()>,
+        buf: &mut [u8],
+        local_epoch: &Arc<AtomicU16>,
+        handshake_completed_successfully: &Arc<AtomicBool>,
+    ) -> Result<(), Error> {
         let mut has_handshake = false;
-        for p in pkts {
-            let (hs, alert, mut err) = self.handle_incoming_packet(p, true).await;
+        let mut enqueue = false;
+        let pkts;
+
+        tokio::select! {
+            result = next_conn.recv(buf) => {
+                 match result {
+                    Ok(n) =>{
+                        pkts = unpack_datagram(&buf[..n])?;
+                        enqueue = true;
+                    }
+                    Err(err) => return Err(Error::new(err.to_string())),
+                 };
+            }
+            _ = handle_queue_rx.recv() => {
+                pkts = ctx.encrypted_packets.drain(..).collect();
+            }
+        }
+
+        for pkt in pkts {
+            let (hs, alert, mut err) = Conn::handle_incoming_packet(ctx, pkt, enqueue).await;
             if let Some(alert) = alert {
-                let alert_err = self
-                    .notify(alert.alert_level, alert.alert_description)
+                let alert_err = packet_tx
+                    .send(vec![Packet {
+                        record: RecordLayer {
+                            record_layer_header: RecordLayerHeader {
+                                epoch: local_epoch.load(Ordering::Relaxed),
+                                protocol_version: PROTOCOL_VERSION1_2,
+                                ..Default::default()
+                            },
+                            content: Content::Alert(Alert {
+                                alert_level: alert.alert_level,
+                                alert_description: alert.alert_description,
+                            }),
+                        },
+                        should_encrypt: handshake_completed_successfully.load(Ordering::Relaxed),
+                        reset_local_sequence_number: false,
+                    }])
                     .await;
+
                 if let Err(alert_err) = alert_err {
                     if err.is_none() {
-                        err = Some(alert_err);
+                        err = Some(Error::new(alert_err.to_string()));
                     }
                 }
 
@@ -623,7 +715,7 @@ impl Conn {
                 return Err(err);
             }
 
-            if hs {
+            if hs && enqueue {
                 has_handshake = true
             }
         }
@@ -643,42 +735,12 @@ impl Conn {
         Ok(())
     }
 
-    pub(crate) async fn handle_queued_packets(&mut self) -> Result<(), Error> {
-        if let Some(pkts) = self.encrypted_packets.take() {
-            for p in pkts {
-                let (_, alert, mut err) = self.handle_incoming_packet(p, false).await; // don't re-enqueue
-                if let Some(alert) = alert {
-                    let alert_err = self
-                        .notify(alert.alert_level, alert.alert_description)
-                        .await;
-                    if let Err(alert_err) = alert_err {
-                        if err.is_none() {
-                            err = Some(alert_err);
-                        }
-                    }
-
-                    if alert.alert_level == AlertLevel::Fatal
-                        || alert.alert_description == AlertDescription::CloseNotify
-                    {
-                        return Err(Error::new("Alert is Fatal or Close Notify".to_owned()));
-                    }
-                }
-
-                if let Some(err) = err {
-                    return Err(err);
-                }
-            }
-        }
-
-        Ok(())
-    }
-
     async fn handle_incoming_packet(
-        &mut self,
-        mut buf: Vec<u8>,
+        ctx: &mut ConnReaderContext,
+        mut pkt: Vec<u8>,
         enqueue: bool,
     ) -> (bool, Option<Alert>, Option<Error>) {
-        let mut reader = BufReader::new(buf.as_slice());
+        let mut reader = BufReader::new(pkt.as_slice());
         let h = match RecordLayerHeader::unmarshal(&mut reader) {
             Ok(h) => h,
             Err(err) => {
@@ -690,9 +752,9 @@ impl Conn {
         };
 
         // Validate epoch
-        let remote_epoch = self.get_remote_epoch();
-        if h.epoch > remote_epoch {
-            if h.epoch > remote_epoch + 1 {
+        let epoch = ctx.remote_epoch.load(Ordering::Relaxed);
+        if h.epoch > epoch {
+            if h.epoch > epoch + 1 {
                 debug!(
                     "discarded future packet (epoch: {}, seq: {})",
                     h.epoch, h.sequence_number,
@@ -701,24 +763,21 @@ impl Conn {
             }
             if enqueue {
                 debug!("received packet of next epoch, queuing packet");
-                if let Some(encrypted_packets) = &mut self.encrypted_packets {
-                    encrypted_packets.push(buf);
-                }
+                ctx.encrypted_packets.push(pkt);
             }
             return (false, None, None);
         }
 
         // Anti-replay protection
-        while self.state.replay_detector.len() <= h.epoch as usize {
-            self.state
-                .replay_detector
+        while ctx.replay_detector.len() <= h.epoch as usize {
+            ctx.replay_detector
                 .push(Box::new(SlidingWindowDetector::new(
-                    self.replay_protection_window,
+                    ctx.replay_protection_window,
                     MAX_SEQUENCE_NUMBER,
                 )));
         }
 
-        let ok = self.state.replay_detector[h.epoch as usize].check(h.sequence_number);
+        let ok = ctx.replay_detector[h.epoch as usize].check(h.sequence_number);
         if !ok {
             debug!(
                 "discarded duplicated packet (epoch: {}, seq: {})",
@@ -729,39 +788,33 @@ impl Conn {
 
         // Decrypt
         if h.epoch != 0 {
-            let invalid_cipher_suite = if self.state.cipher_suite.is_none() {
+            let invalid_cipher_suite = if ctx.cipher_suite.is_none() {
                 true
-            } else if let Some(cipher_suite) = &self.state.cipher_suite {
+            } else if let Some(cipher_suite) = &*ctx.cipher_suite {
                 !cipher_suite.is_initialized().await
             } else {
                 false
             };
             if invalid_cipher_suite {
                 if enqueue {
-                    if let Some(encrypted_packets) = &mut self.encrypted_packets {
-                        encrypted_packets.push(buf);
-                    }
                     debug!("handshake not finished, queuing packet");
+                    ctx.encrypted_packets.push(pkt);
                 }
                 return (false, None, None);
             }
 
-            if let Some(cipher_suite) = &self.state.cipher_suite {
-                buf = match cipher_suite.decrypt(&buf).await {
-                    Ok(buf) => buf,
+            if let Some(cipher_suite) = &*ctx.cipher_suite {
+                pkt = match cipher_suite.decrypt(&pkt).await {
+                    Ok(pkt) => pkt,
                     Err(err) => {
-                        debug!(
-                            "{}: decrypt failed: {}",
-                            srv_cli_str(self.state.is_client),
-                            err
-                        );
+                        debug!("{}: decrypt failed: {}", srv_cli_str(ctx.is_client), err);
                         return (false, None, None);
                     }
                 };
             }
         }
 
-        let is_handshake = match self.fragment_buffer.push(&buf) {
+        let is_handshake = match ctx.fragment_buffer.push(&pkt) {
             Ok(is_handshake) => is_handshake,
             Err(err) => {
                 // Decode error must be silently discarded
@@ -771,28 +824,28 @@ impl Conn {
             }
         };
         if is_handshake {
-            self.state.replay_detector[h.epoch as usize].accept();
-            while let Ok((out, epoch)) = self.fragment_buffer.pop() {
+            ctx.replay_detector[h.epoch as usize].accept();
+            while let Ok((out, epoch)) = ctx.fragment_buffer.pop() {
                 let mut reader = BufReader::new(out.as_slice());
                 let raw_handshake = match Handshake::unmarshal(&mut reader) {
                     Ok(h) => h,
                     Err(err) => {
                         debug!(
                             "{}: handshake parse failed: {}",
-                            srv_cli_str(self.state.is_client),
+                            srv_cli_str(ctx.is_client),
                             err
                         );
                         continue;
                     }
                 };
 
-                self.handshake_cache
+                ctx.cache
                     .push(
                         out,
                         epoch,
                         raw_handshake.handshake_header.message_sequence,
                         raw_handshake.handshake_header.handshake_type,
-                        !self.state.is_client,
+                        !ctx.is_client,
                     )
                     .await;
             }
@@ -800,7 +853,7 @@ impl Conn {
             return (true, None, None);
         }
 
-        let mut reader = BufReader::new(buf.as_slice());
+        let mut reader = BufReader::new(pkt.as_slice());
         let r = match RecordLayer::unmarshal(&mut reader) {
             Ok(r) => r,
             Err(err) => {
@@ -817,11 +870,7 @@ impl Conn {
 
         match r.content {
             Content::Alert(mut a) => {
-                trace!(
-                    "{}: <- {}",
-                    srv_cli_str(self.state.is_client),
-                    a.to_string()
-                );
+                trace!("{}: <- {}", srv_cli_str(ctx.is_client), a.to_string());
                 if a.alert_description == AlertDescription::CloseNotify {
                     // Respond with a close_notify [RFC5246 Section 7.2.1]
                     a = Alert {
@@ -829,7 +878,7 @@ impl Conn {
                         alert_description: AlertDescription::CloseNotify,
                     };
                 }
-                self.state.replay_detector[h.epoch as usize].accept();
+                ctx.replay_detector[h.epoch as usize].accept();
                 return (
                     false,
                     Some(a),
@@ -837,9 +886,9 @@ impl Conn {
                 ); //TODO: &errAlert { content });
             }
             Content::ChangeCipherSpec(_) => {
-                let invalid_cipher_suite = if self.state.cipher_suite.is_none() {
+                let invalid_cipher_suite = if ctx.cipher_suite.is_none() {
                     true
-                } else if let Some(cipher_suite) = &self.state.cipher_suite {
+                } else if let Some(cipher_suite) = &*ctx.cipher_suite {
                     !cipher_suite.is_initialized().await
                 } else {
                     false
@@ -847,10 +896,8 @@ impl Conn {
 
                 if invalid_cipher_suite {
                     if enqueue {
-                        if let Some(encrypted_packets) = &mut self.encrypted_packets {
-                            encrypted_packets.push(buf);
-                        }
                         debug!("CipherSuite not initialized, queuing packet");
+                        ctx.encrypted_packets.push(pkt);
                     }
                     return (false, None, None);
                 }
@@ -858,13 +905,13 @@ impl Conn {
                 let new_remote_epoch = h.epoch + 1;
                 trace!(
                     "{}: <- ChangeCipherSpec (epoch: {})",
-                    srv_cli_str(self.state.is_client),
+                    srv_cli_str(ctx.is_client),
                     new_remote_epoch
                 );
 
-                if self.get_remote_epoch() + 1 == new_remote_epoch {
-                    self.set_remote_epoch(new_remote_epoch);
-                    self.state.replay_detector[h.epoch as usize].accept();
+                if epoch + 1 == new_remote_epoch {
+                    ctx.remote_epoch.store(new_remote_epoch, Ordering::Relaxed);
+                    ctx.replay_detector[h.epoch as usize].accept();
                 }
             }
             Content::ApplicationData(a) => {
@@ -879,9 +926,9 @@ impl Conn {
                     );
                 }
 
-                self.state.replay_detector[h.epoch as usize].accept();
+                ctx.replay_detector[h.epoch as usize].accept();
 
-                let _ = self.decrypted_tx.send(Ok(a.data)).await;
+                let _ = ctx.decrypted_tx.send(Ok(a.data)).await;
                 //TODO
                 /*select {
                     case self.decrypted < - content.data:
@@ -919,14 +966,6 @@ impl Conn {
 
     pub(crate) fn get_local_epoch(&self) -> u16 {
         self.state.local_epoch.load(Ordering::Relaxed)
-    }
-
-    pub(crate) fn set_remote_epoch(&mut self, epoch: u16) {
-        self.state.remote_epoch.store(epoch, Ordering::Relaxed);
-    }
-
-    pub(crate) fn get_remote_epoch(&self) -> u16 {
-        self.state.remote_epoch.load(Ordering::Relaxed)
     }
 }
 

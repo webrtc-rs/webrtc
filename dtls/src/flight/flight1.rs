@@ -35,7 +35,7 @@ impl Flight for Flight1 {
 
     async fn parse(
         &self,
-        c: &mut Conn,
+        tx: &mut mpsc::Sender<()>,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
@@ -71,7 +71,7 @@ impl Flight for Flight1 {
             // Flight1 and flight2 were skipped.
             // Parse as flight3.
             let flight3 = Flight3 {};
-            return flight3.parse(c, state, cache, cfg).await;
+            return flight3.parse(tx, state, cache, cfg).await;
         }
 
         if let Some(message) = msgs.get(&HandshakeType::HelloVerifyRequest) {

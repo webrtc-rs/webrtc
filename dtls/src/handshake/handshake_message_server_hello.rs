@@ -20,6 +20,7 @@ If it cannot find such a match, it will respond with a handshake
 failure alert.
 https://tools.ietf.org/html/rfc5246#section-7.4.1.3
 */
+#[derive(Clone)]
 pub struct HandshakeMessageServerHello {
     pub(crate) version: ProtocolVersion,
     pub(crate) random: HandshakeRandom,
