@@ -144,6 +144,25 @@ impl Header {
         None
     }
 
+    // GetExtensionIDs returns an extension id array
+    pub fn get_extension_ids(&self) -> Vec<u8> {
+        if !self.extension {
+            return vec![];
+        }
+
+        if self.extensions.len() == 0 {
+            return vec![];
+        }
+
+        let mut ids = vec![0u8; self.extensions.len()];
+
+        for i in 0..self.extensions.len() {
+            ids[i] = self.extensions[0].id
+        }
+
+        return ids;
+    }
+
     // Removes an RTP Header extension
     pub fn del_extension(&mut self, id: u8) -> Result<(), Error> {
         if !self.extension {

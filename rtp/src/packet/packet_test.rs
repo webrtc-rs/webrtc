@@ -547,9 +547,263 @@ mod packet_test {
         assert_eq!(dst_data[..], raw_pkt[..]);
     }
 
-    //TODO: TestRFC8285OneByteMultipleExtensionsWithPadding
-    //TODO: ...
-    //TODO: TestRoundtrip
+    #[test]
+    fn test_rfc_8285_get_extension_returns_nil_when_extension_disabled() {
+        let payload = [0x98u8, 0x36, 0xbe, 0x88, 0x9e];
+
+        let p = Packet {
+            header: Header {
+                marker: true,
+                extension: false,
+                version: 2,
+                payload_offset: 26,
+                payload_type: 96,
+                sequence_number: 27023,
+                timestamp: 3653407706,
+                ssrc: 476325762,
+                ..Default::default()
+            },
+
+            payload: payload.to_vec(),
+            ..Default::default()
+        };
+
+        let val = p.header.get_extension(1);
+        if val.is_some() {
+            panic!("Should return a none value on get extension when self.extension is false");
+        }
+    }
+
+    #[test]
+    fn test_rfc_8285_del_extension() {
+        let payload = [0x98u8, 0x36, 0xbe, 0x88, 0x9e];
+
+        let mut p = Packet {
+            header: Header {
+                marker: true,
+                extension: true,
+                extension_profile: ExtensionProfile::OneByte.into(),
+                extensions: vec![Extension {
+                    id: 1,
+                    payload: vec![0xAA],
+                }],
+                version: 2,
+                payload_offset: 26,
+                payload_type: 96,
+                sequence_number: 27023,
+                timestamp: 3653407706,
+                ssrc: 476325762,
+                ..Default::default()
+            },
+
+            payload: payload.to_vec(),
+            ..Default::default()
+        };
+
+        p.header.get_extension(1).expect("Extension should exist");
+
+        p.header
+            .del_extension(1)
+            .expect("Should successfully delete extension");
+
+        if p.header.get_extension(1).is_some() {
+            panic!("Extension should not exist");
+        }
+
+        p.header
+            .del_extension(1)
+            .expect_err("Should return an error when deleting extension that does'nt exist");
+    }
+
+    #[test]
+    fn test_rfc_8285_get_extension_ids() {
+        let payload = [0x98u8, 0x36, 0xbe, 0x88, 0x9e];
+
+        let p = Packet {
+            header: Header {
+                marker: true,
+                extension: true,
+                extension_profile: ExtensionProfile::OneByte.into(),
+                extensions: vec![
+                    Extension {
+                        id: 1,
+                        payload: vec![0xAA],
+                    },
+                    Extension {
+                        id: 2,
+                        payload: vec![0xBB],
+                    },
+                ],
+                version: 2,
+                payload_offset: 26,
+                payload_type: 96,
+                sequence_number: 27023,
+                timestamp: 3653407706,
+                ssrc: 476325762,
+                ..Default::default()
+            },
+
+            payload: payload.to_vec(),
+            ..Default::default()
+        };
+
+        let ids = p.header.get_extension_ids();
+
+        if ids.is_empty() {
+            panic!("Extesnions should exist");
+        }
+
+        if ids.len() != p.header.extensions.len() {
+            panic!(
+                "The number of IDS should be equal to the number of extensions, want={}, got={}",
+                p.header.extensions.len(),
+                ids.len()
+            );
+        }
+
+        for id in ids {
+            p.header.get_extension(id).expect("Extension should exist");
+        }
+    }
+
+    #[test]
+    fn test_rfc_8285_get_extension_ids_returns_error_when_extensions_disabled() {
+        let payload = [0x98u8, 0x36, 0xbe, 0x88, 0x9e];
+
+        let p = Packet {
+            header: Header {
+                marker: true,
+                extension: false,
+                version: 2,
+                payload_offset: 26,
+                payload_type: 96,
+                sequence_number: 27023,
+                timestamp: 3653407706,
+                ssrc: 476325762,
+                ..Default::default()
+            },
+
+            payload: payload.to_vec(),
+            ..Default::default()
+        };
+
+        let ids = p.header.get_extension_ids();
+
+        if !ids.is_empty() {
+            panic!(
+                "Should return empty on get extension ids when Header Extensions variable is empty"
+            );
+        }
+    }
+
+    #[test]
+    fn test_rfc_8285_del_extension_returns_error_when_extensions_disabled() {
+        let payload = [0x98u8, 0x36, 0xbe, 0x88, 0x9e];
+
+        let mut p = Packet {
+            header: Header {
+                marker: true,
+                extension: false,
+                version: 2,
+                payload_offset: 26,
+                payload_type: 96,
+                sequence_number: 27023,
+                timestamp: 3653407706,
+                ssrc: 476325762,
+                ..Default::default()
+            },
+
+            payload: payload.to_vec(),
+            ..Default::default()
+        };
+
+        p.header
+            .del_extension(1)
+            .expect_err("Should return error on delete extension when Header Extension is false");
+    }
+
+    #[test]
+    fn test_rfc_8285_one_byte_set_extension_should_enable_extension_when_adding() {
+        let payload = [0x98u8, 0x36, 0xbe, 0x88, 0x9e];
+
+        let mut p = Packet {
+            header: Header {
+                marker: true,
+                extension: false,
+                version: 2,
+                payload_offset: 26,
+                payload_type: 96,
+                sequence_number: 27023,
+                timestamp: 3653407706,
+                ssrc: 476325762,
+                ..Default::default()
+            },
+
+            payload: payload.to_vec(),
+            ..Default::default()
+        };
+
+        let extension = vec![0xAAu8, 0xAA];
+
+        p.header
+            .set_extension(1, &extension)
+            .expect("Error setting extension");
+
+        if p.header.extension != true {
+            panic!("Extension should be set to true");
+        }
+
+        if p.header.extension_profile != ExtensionProfile::OneByte.into() {
+            panic!("Extension profile should be set to One Byte")
+        }
+
+        if p.header.extensions.len() != 1 {
+            panic!("Extensions should be set to 1")
+        }
+
+        let ext = p
+            .header
+            .get_extension(1)
+            .expect("Get extension should not be nil");
+
+        assert_eq!(ext[..], extension[..]);
+    }
+
+    #[test]
+    fn test_rfc_8285_one_byte_set_extension_should_set_correct_extension_profile_for_16_byte_extension(
+    ) {
+        let payload = [0x98u8, 0x36, 0xbe, 0x88, 0x9e];
+
+        let mut p = Packet {
+            header: Header {
+                marker: true,
+                extension: false,
+                version: 2,
+                payload_offset: 26,
+                payload_type: 96,
+                sequence_number: 27023,
+                timestamp: 3653407706,
+                ssrc: 476325762,
+                ..Default::default()
+            },
+
+            payload: payload.to_vec(),
+            ..Default::default()
+        };
+
+        let extension = vec![
+            0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
+            0xAA, 0xAA,
+        ];
+
+        p.header
+            .set_extension(1, &extension)
+            .expect("Error setting extension");
+
+        if p.header.extension_profile != ExtensionProfile::OneByte.into() {
+            panic!("Extension profile should be set to One Byte");
+        }
+    }
 }
 
 #[test]
