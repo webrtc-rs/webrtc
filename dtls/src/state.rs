@@ -6,22 +6,22 @@ use super::extension::extension_use_srtp::SRTPProtectionProfile;
 use super::handshake::handshake_random::*;
 use super::prf::*;
 
-use transport::replay_detector::*;
 use util::Error;
 
 use std::io::{BufWriter, Cursor};
 use std::marker::{Send, Sync};
-use std::sync::atomic::{AtomicU16, Ordering};
+use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
+use std::sync::Arc;
 
 // State holds the dtls connection state and implements both encoding.BinaryMarshaler and encoding.BinaryUnmarshaler
 pub(crate) struct State {
-    pub(crate) local_epoch: AtomicU16,
-    pub(crate) remote_epoch: AtomicU16,
-    pub(crate) local_sequence_number: Vec<u64>, // uint48
+    pub(crate) local_epoch: Arc<AtomicU16>,
+    pub(crate) remote_epoch: Arc<AtomicU16>,
+    pub(crate) local_sequence_number: Arc<AtomicU64>, // uint48
     pub(crate) local_random: HandshakeRandom,
     pub(crate) remote_random: HandshakeRandom,
     pub(crate) master_secret: Vec<u8>,
-    pub(crate) cipher_suite: Option<Box<dyn CipherSuite + Send + Sync>>, // nil if a cipher_suite hasn't been chosen
+    pub(crate) cipher_suite: Arc<Option<Box<dyn CipherSuite + Send + Sync>>>, // nil if a cipher_suite hasn't been chosen
 
     pub(crate) srtp_protection_profile: SRTPProtectionProfile, // Negotiated srtp_protection_profile
     pub(crate) peer_certificates: Vec<Vec<u8>>,
@@ -42,8 +42,7 @@ pub(crate) struct State {
     pub(crate) local_verify_data: Vec<u8>,         // cached VerifyData
     pub(crate) local_key_signature: Vec<u8>,       // cached keySignature
     pub(crate) peer_certificates_verified: bool,
-
-    pub(crate) replay_detector: Vec<Box<dyn ReplayDetector + Send + Sync>>,
+    //pub(crate) replay_detector: Vec<Box<dyn ReplayDetector + Send + Sync>>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
@@ -75,15 +74,15 @@ impl Clone for State {
 impl Default for State {
     fn default() -> Self {
         State {
-            local_epoch: AtomicU16::new(0),
-            remote_epoch: AtomicU16::new(0),
-            local_sequence_number: vec![], // uint48
+            local_epoch: Arc::new(AtomicU16::new(0)),
+            remote_epoch: Arc::new(AtomicU16::new(0)),
+            local_sequence_number: Arc::new(AtomicU64::new(0)),
             local_random: HandshakeRandom::default(),
             remote_random: HandshakeRandom::default(),
             master_secret: vec![],
-            cipher_suite: None, // nil if a cipher_suite hasn't been chosen
+            cipher_suite: Arc::new(None), // nil if a cipher_suite hasn't been chosen
 
-            srtp_protection_profile: SRTPProtectionProfile::Unsupported, // Negotiated srtpprotection_profile
+            srtp_protection_profile: SRTPProtectionProfile::Unsupported, // Negotiated srtp_protection_profile
             peer_certificates: vec![],
 
             is_client: false,
@@ -102,8 +101,7 @@ impl Default for State {
             local_verify_data: vec![],           // cached VerifyData
             local_key_signature: vec![],         // cached keySignature
             peer_certificates_verified: false,
-
-            replay_detector: vec![],
+            //replay_detector: vec![],
         }
     }
 }
@@ -129,7 +127,8 @@ impl State {
 
         let local_epoch = self.local_epoch.load(Ordering::Relaxed);
         let remote_epoch = self.remote_epoch.load(Ordering::Relaxed);
-        let cipher_suite_id = match &self.cipher_suite {
+        let sequence_number = self.local_sequence_number.load(Ordering::Relaxed);
+        let cipher_suite_id = match &*self.cipher_suite {
             Some(cipher_suite) => cipher_suite.id() as u16,
             None => return Err(ERR_CIPHER_SUITE_UNSET.clone()),
         };
@@ -141,7 +140,7 @@ impl State {
             remote_random,
             cipher_suite_id,
             master_secret: self.master_secret.clone(),
-            sequence_number: self.local_sequence_number[local_epoch as usize],
+            sequence_number,
             srtp_protection_profile: self.srtp_protection_profile as u16,
             peer_certificates: self.peer_certificates.clone(),
             is_client: self.is_client,
@@ -150,15 +149,12 @@ impl State {
 
     fn deserialize(&mut self, serialized: &SerializedState) -> Result<(), Error> {
         // Set epoch values
-        let epoch = serialized.local_epoch;
         self.local_epoch
             .store(serialized.local_epoch, Ordering::Relaxed);
         self.remote_epoch
             .store(serialized.remote_epoch, Ordering::Relaxed);
-
-        while self.local_sequence_number.len() <= epoch as usize {
-            self.local_sequence_number.push(0);
-        }
+        self.local_sequence_number
+            .store(serialized.sequence_number, Ordering::Relaxed);
 
         // Set random values
         let mut reader = Cursor::new(&serialized.local_random);
@@ -173,9 +169,10 @@ impl State {
         self.master_secret = serialized.master_secret.clone();
 
         // Set cipher suite
-        self.cipher_suite = Some(cipher_suite_for_id(serialized.cipher_suite_id.into())?);
+        self.cipher_suite = Arc::new(Some(cipher_suite_for_id(
+            serialized.cipher_suite_id.into(),
+        )?));
 
-        self.local_sequence_number[epoch as usize] = serialized.sequence_number;
         self.srtp_protection_profile = serialized.srtp_protection_profile.into();
 
         // Set remote certificate
@@ -185,7 +182,7 @@ impl State {
     }
 
     pub async fn init_cipher_suite(&mut self) -> Result<(), Error> {
-        if let Some(cipher_suite) = &mut self.cipher_suite {
+        if let Some(cipher_suite) = &*self.cipher_suite {
             if cipher_suite.is_initialized().await {
                 return Ok(());
             }
@@ -275,7 +272,7 @@ impl State {
             seed.extend_from_slice(&local_random);
         }
 
-        if let Some(cipher_suite) = &self.cipher_suite {
+        if let Some(cipher_suite) = &*self.cipher_suite {
             prf_p_hash(&self.master_secret, &seed, length, cipher_suite.hash_func())
         } else {
             Err(ERR_CIPHER_SUITE_UNSET.clone())

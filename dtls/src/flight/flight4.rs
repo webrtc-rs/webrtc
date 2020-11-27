@@ -4,7 +4,7 @@ use crate::cipher_suite::*;
 use crate::client_certificate_type::*;
 use crate::compression_methods::*;
 use crate::config::*;
-use crate::conn::*;
+//use crate::conn::*;
 use crate::content::*;
 use crate::crypto::*;
 use crate::curve::named_curve::*;
@@ -43,7 +43,7 @@ impl Flight for Flight4 {
 
     async fn parse(
         &self,
-        c: &mut Conn,
+        tx: &mut mpsc::Sender<()>,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
@@ -259,7 +259,7 @@ impl Flight for Flight4 {
             state.peer_certificates_verified = verified
         }
 
-        if let Some(cipher_suite) = &state.cipher_suite {
+        if let Some(cipher_suite) = &*state.cipher_suite {
             if !cipher_suite.is_initialized().await {
                 let mut server_random = vec![];
                 {
@@ -307,7 +307,7 @@ impl Flight for Flight4 {
                     };
                 }
 
-                if let Some(cipher_suite) = &state.cipher_suite {
+                if let Some(cipher_suite) = &*state.cipher_suite {
                     if state.extended_master_secret {
                         let hf = cipher_suite.hash_func();
                         let session_hash =
@@ -361,7 +361,7 @@ impl Flight for Flight4 {
                     }
                 }
 
-                if let Some(cipher_suite) = &mut state.cipher_suite {
+                if let Some(cipher_suite) = &*state.cipher_suite {
                     if let Err(err) = cipher_suite
                         .init(&state.master_secret, &client_random, &server_random, false)
                         .await
@@ -379,13 +379,13 @@ impl Flight for Flight4 {
         }
 
         // Now, encrypted packets can be handled
-        if let Err(err) = c.handle_queued_packets().await {
+        if let Err(err) = tx.send(()).await {
             return Err((
                 Some(Alert {
                     alert_level: AlertLevel::Fatal,
                     alert_description: AlertDescription::InternalError,
                 }),
-                Some(err),
+                Some(Error::new(err.to_string())),
             ));
         }
 
@@ -526,7 +526,7 @@ impl Flight for Flight4 {
                     handshake_message: HandshakeMessage::ServerHello(HandshakeMessageServerHello {
                         version: PROTOCOL_VERSION1_2,
                         random: state.local_random.clone(),
-                        cipher_suite: if let Some(cipher_suite) = &state.cipher_suite {
+                        cipher_suite: if let Some(cipher_suite) = &*state.cipher_suite {
                             cipher_suite.id()
                         } else {
                             CipherSuiteID::Unsupported

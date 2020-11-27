@@ -1,6 +1,6 @@
 use super::flight3::*;
 use super::*;
-use crate::conn::*;
+//use crate::conn::*;
 use crate::content::*;
 use crate::crypto::*;
 use crate::curve::named_curve::*;
@@ -39,7 +39,7 @@ impl Flight for Flight5 {
 
     async fn parse(
         &self,
-        _c: &mut Conn,
+        _tx: &mut mpsc::Sender<()>,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
@@ -148,7 +148,7 @@ impl Flight for Flight5 {
             ])
             .await;
 
-        if let Some(cipher_suite) = &state.cipher_suite {
+        if let Some(cipher_suite) = &*state.cipher_suite {
             let expected_verify_data = match prf_verify_data_server(
                 &state.master_secret,
                 &plain_text,
@@ -581,7 +581,7 @@ impl Flight for Flight5 {
                 .await;
 
             plain_text.extend_from_slice(&merged);
-            if let Some(cipher_suite) = &state.cipher_suite {
+            if let Some(cipher_suite) = &*state.cipher_suite {
                 state.local_verify_data = match prf_verify_data_client(
                     &state.master_secret,
                     &plain_text,
@@ -619,7 +619,7 @@ impl Flight for Flight5 {
             reset_local_sequence_number: true,
         });
 
-        Ok(vec![])
+        Ok(pkts)
     }
 }
 async fn initalize_cipher_suite(
@@ -629,7 +629,7 @@ async fn initalize_cipher_suite(
     h: &HandshakeMessageServerKeyExchange,
     sending_plain_text: &[u8],
 ) -> Result<(), (Option<Alert>, Option<Error>)> {
-    if let Some(cipher_suite) = &state.cipher_suite {
+    if let Some(cipher_suite) = &*state.cipher_suite {
         if cipher_suite.is_initialized().await {
             return Ok(());
         }
@@ -646,7 +646,7 @@ async fn initalize_cipher_suite(
         let _ = state.remote_random.marshal(&mut writer);
     }
 
-    if let Some(cipher_suite) = &state.cipher_suite {
+    if let Some(cipher_suite) = &*state.cipher_suite {
         if state.extended_master_secret {
             let session_hash = match cache
                 .session_hash(
@@ -770,7 +770,7 @@ async fn initalize_cipher_suite(
         }
     }
 
-    if let Some(cipher_suite) = &mut state.cipher_suite {
+    if let Some(cipher_suite) = &*state.cipher_suite {
         if let Err(err) = cipher_suite
             .init(&state.master_secret, &client_random, &server_random, true)
             .await

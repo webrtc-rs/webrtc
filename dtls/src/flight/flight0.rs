@@ -13,6 +13,7 @@ use util::Error;
 use rand::Rng;
 
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 
@@ -26,7 +27,7 @@ impl Flight for Flight0 {
 
     async fn parse(
         &self,
-        _c: &mut Conn,
+        _tx: &mut mpsc::Sender<()>,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
@@ -80,7 +81,7 @@ impl Flight for Flight0 {
                 find_matching_cipher_suite(&client_hello.cipher_suites, &cfg.local_cipher_suites)
             {
                 if let Ok(cipher_suite) = cipher_suite_for_id(id) {
-                    state.cipher_suite = Some(cipher_suite);
+                    state.cipher_suite = Arc::new(Some(cipher_suite));
                 }
             } else {
                 return Err((

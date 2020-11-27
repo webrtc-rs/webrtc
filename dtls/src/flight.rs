@@ -11,11 +11,13 @@ pub(crate) mod flight6;
 use util::Error;
 
 use crate::alert::*;
-use crate::conn::*;
+//use crate::conn::*;
 use crate::handshake::handshake_cache::*;
 use crate::handshaker::*;
 use crate::record_layer::*;
 use crate::state::*;
+
+use tokio::sync::mpsc;
 
 use async_trait::async_trait;
 
@@ -52,6 +54,7 @@ use async_trait::async_trait;
 
 */
 
+#[derive(Clone)]
 pub(crate) struct Packet {
     pub(crate) record: RecordLayer,
     pub(crate) should_encrypt: bool,
@@ -76,7 +79,7 @@ pub(crate) trait Flight {
 
     async fn parse(
         &self,
-        c: &mut Conn,
+        tx: &mut mpsc::Sender<()>,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,

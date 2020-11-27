@@ -1,6 +1,6 @@
 use super::*;
 use crate::change_cipher_spec::*;
-use crate::conn::*;
+//use crate::conn::*;
 use crate::content::*;
 use crate::handshake::handshake_header::*;
 use crate::handshake::handshake_message_finished::*;
@@ -26,7 +26,7 @@ impl Flight for Flight6 {
 
     async fn parse(
         &self,
-        _c: &mut Conn,
+        _tx: &mut mpsc::Sender<()>,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
@@ -151,7 +151,7 @@ impl Flight for Flight6 {
                 ])
                 .await;
 
-            if let Some(cipher_suite) = &state.cipher_suite {
+            if let Some(cipher_suite) = &*state.cipher_suite {
                 state.local_verify_data = match prf_verify_data_server(
                     &state.master_secret,
                     &plain_text,

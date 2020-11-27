@@ -1,7 +1,7 @@
 use super::flight0::*;
 use super::flight4::*;
 use super::*;
-use crate::conn::*;
+//use crate::conn::*;
 use crate::content::*;
 use crate::errors::*;
 use crate::handshake::handshake_header::*;
@@ -27,7 +27,7 @@ impl Flight for Flight2 {
 
     async fn parse(
         &self,
-        c: &mut Conn,
+        tx: &mut mpsc::Sender<()>,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
@@ -49,7 +49,7 @@ impl Flight for Flight2 {
 
             // Client may retransmit the first ClientHello when HelloVerifyRequest is dropped.
             // Parse as flight 0 in this case.
-            Err(_) => return Flight0 {}.parse(c, state, cache, cfg).await,
+            Err(_) => return Flight0 {}.parse(tx, state, cache, cfg).await,
         };
 
         state.handshake_recv_sequence = seq;
