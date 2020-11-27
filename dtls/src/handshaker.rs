@@ -5,7 +5,6 @@ use crate::content::*;
 use crate::crypto::*;
 use crate::errors::*;
 use crate::extension::extension_use_srtp::*;
-use crate::flight::*;
 use crate::signature_hash_algorithm::*;
 
 use log::*;
@@ -50,7 +49,7 @@ use std::fmt;
 //              Read retransmit
 //           Retransmit last flight
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub(crate) enum HandshakeState {
     Errored,
     Preparing,
@@ -74,8 +73,6 @@ impl fmt::Display for HandshakeState {
 pub(crate) type VerifyPeerCertificateFn =
     fn(rawCerts: &[u8], verifiedChains: &[x509_parser::X509Certificate<'_>]) -> Result<(), Error>;
 
-pub(crate) type OnFlightStateFn = fn(f: &Box<dyn Flight>, hs: HandshakeState);
-
 pub(crate) struct HandshakeConfig {
     pub(crate) local_psk_callback: Option<PSKCallback>,
     pub(crate) local_psk_identity_hint: Vec<u8>,
@@ -92,10 +89,8 @@ pub(crate) struct HandshakeConfig {
     //rootCAs                     *x509.CertPool
     //clientCAs                   *x509.CertPool
     pub(crate) retransmit_interval: tokio::time::Duration,
-
-    pub(crate) on_flight_state: Option<OnFlightStateFn>,
-    //log           logging.LeveledLogger
     pub(crate) initial_epoch: u16,
+    //log           logging.LeveledLogger
     //mu sync.Mutex
 }
 
@@ -115,7 +110,6 @@ impl Default for HandshakeConfig {
             insecure_skip_verify: false,
             verify_peer_certificate: None,
             retransmit_interval: tokio::time::Duration::from_secs(0),
-            on_flight_state: None,
             initial_epoch: 0,
         }
     }
@@ -208,9 +202,13 @@ impl Conn {
                 self.flight.to_string(),
                 state.to_string()
             );
-            if let Some(on_flight_state) = &self.cfg.on_flight_state {
-                on_flight_state(&self.flight, state);
+
+            if state == HandshakeState::Finished && !self.is_handshake_completed_successfully() {
+                self.set_handshake_completed_successfully();
+                self.handshake_done_tx.take(); // drop it by take
+                return Ok(());
             }
+
             state = match state {
                 HandshakeState::Preparing => self.prepare().await?,
                 HandshakeState::Sending => self.send().await?,

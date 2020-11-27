@@ -1,16 +1,16 @@
-use crate::cipher_suite::*;
-use crate::config::*;
-use crate::curve::named_curve::NamedCurve;
-use crate::flight::flight0::*;
-use crate::flight::flight1::*;
-//use crate::flight::flight2::*;
-//use crate::flight::flight3::*;
-//use crate::flight::flight4::*;
+#[cfg(test)]
+mod conn_test;
+
 use crate::alert::*;
 use crate::application_data::*;
+use crate::cipher_suite::*;
+use crate::config::*;
 use crate::content::*;
+use crate::curve::named_curve::NamedCurve;
 use crate::errors::*;
 use crate::extension::extension_use_srtp::*;
+use crate::flight::flight0::*;
+use crate::flight::flight1::*;
 use crate::flight::flight5::*;
 use crate::flight::flight6::*;
 use crate::flight::*;
@@ -68,6 +68,8 @@ struct ConnReaderContext {
     cache: HandshakeCache,
     cipher_suite: Arc<Option<Box<dyn CipherSuite + Send + Sync>>>,
     remote_epoch: Arc<AtomicU16>,
+    handshake_tx: mpsc::Sender<mpsc::Sender<()>>,
+    handshake_done_rx: mpsc::Receiver<()>,
 }
 
 // Conn represents a DTLS connection
@@ -100,6 +102,7 @@ pub(crate) struct Conn {
 
     pub(crate) packet_tx: Arc<mpsc::Sender<Vec<Packet>>>,
     pub(crate) handle_queue_tx: mpsc::Sender<()>,
+    pub(crate) handshake_done_tx: Option<mpsc::Sender<()>>,
 }
 
 impl Conn {
@@ -209,7 +212,8 @@ impl Conn {
         };
 
         let (decrypted_tx, decrypted_rx) = mpsc::channel(1);
-        let (_handshake_tx, handshake_rx) = mpsc::channel(1);
+        let (handshake_tx, handshake_rx) = mpsc::channel(1);
+        let (handshake_done_tx, handshake_done_rx) = mpsc::channel(1);
         let (packet_tx, packet_rx) = mpsc::channel(1);
         let (handle_queue_tx, mut handle_queue_rx) = mpsc::channel(1);
 
@@ -238,6 +242,7 @@ impl Conn {
             handshake_rx,
             packet_tx,
             handle_queue_tx,
+            handshake_done_tx: Some(handshake_done_tx),
         };
 
         let cipher_suite1 = Arc::clone(&c.state.cipher_suite);
@@ -272,6 +277,8 @@ impl Conn {
                 cache: cache2,
                 cipher_suite: cipher_suite2,
                 remote_epoch,
+                handshake_tx,
+                handshake_done_rx,
             };
 
             loop {
@@ -639,12 +646,12 @@ impl Conn {
         Ok(fragmented_handshakes)
     }
 
-    fn set_handshake_completed_successfully(&mut self) {
+    pub(crate) fn set_handshake_completed_successfully(&mut self) {
         self.handshake_completed_successfully
             .store(true, Ordering::Relaxed);
     }
 
-    fn is_handshake_completed_successfully(&self) -> bool {
+    pub(crate) fn is_handshake_completed_successfully(&self) -> bool {
         self.handshake_completed_successfully
             .load(Ordering::Relaxed)
     }
@@ -721,15 +728,16 @@ impl Conn {
         }
 
         if has_handshake {
-            /*TODO:
-               done := make(chan struct{})
-            select {
-            case c.handshakeRecv <- done:
-                // If the other party may retransmit the flight,
-                // we should respond even if it not a new message.
-                <-done
-            case <-c.fsm.Done():
-            }*/
+            let (done_tx, mut done_rx) = mpsc::channel(1);
+
+            tokio::select! {
+                _ = ctx.handshake_tx.send(done_tx) => {
+                    // If the other party may retransmit the flight,
+                    // we should respond even if it not a new message.
+                    done_rx.recv().await;
+                }
+                _ = ctx.handshake_done_rx.recv() => {}
+            }
         }
 
         Ok(())
