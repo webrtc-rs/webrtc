@@ -18,7 +18,7 @@ jobs:
         os:
           - ubuntu-latest
         toolchain:
-          - nightly
+          - stable
         cargo_flags:
           - "--all-features"
     steps:
