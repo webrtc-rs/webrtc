@@ -20,6 +20,10 @@ pub struct HandshakeHeader {
 }
 
 impl HandshakeHeader {
+    pub fn size(&self) -> usize {
+        1 + 3 + 2 + 3 + 3
+    }
+
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         writer.write_u8(self.handshake_type as u8)?;
         writer.write_u24::<BigEndian>(self.length)?;

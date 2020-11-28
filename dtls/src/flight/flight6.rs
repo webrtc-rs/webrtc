@@ -1,8 +1,6 @@
 use super::*;
 use crate::change_cipher_spec::*;
-//use crate::conn::*;
 use crate::content::*;
-use crate::handshake::handshake_header::*;
 use crate::handshake::handshake_message_finished::*;
 use crate::handshake::*;
 use crate::prf::*;
@@ -178,12 +176,11 @@ impl Flight for Flight6 {
                     epoch: 1,
                     ..Default::default()
                 },
-                content: Content::Handshake(Handshake {
-                    handshake_header: HandshakeHeader::default(),
-                    handshake_message: HandshakeMessage::Finished(HandshakeMessageFinished {
+                content: Content::Handshake(Handshake::new(HandshakeMessage::Finished(
+                    HandshakeMessageFinished {
                         verify_data: state.local_verify_data.clone(),
-                    }),
-                }),
+                    },
+                ))),
             },
             should_encrypt: true,
             reset_local_sequence_number: true,

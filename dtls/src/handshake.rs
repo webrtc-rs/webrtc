@@ -112,6 +112,36 @@ pub enum HandshakeMessage {
 }
 
 impl HandshakeMessage {
+    pub fn handshake_type(&self) -> HandshakeType {
+        match self {
+            HandshakeMessage::ClientHello(msg) => msg.handshake_type(),
+            HandshakeMessage::ServerHello(msg) => msg.handshake_type(),
+            HandshakeMessage::HelloVerifyRequest(msg) => msg.handshake_type(),
+            HandshakeMessage::Certificate(msg) => msg.handshake_type(),
+            HandshakeMessage::ServerKeyExchange(msg) => msg.handshake_type(),
+            HandshakeMessage::CertificateRequest(msg) => msg.handshake_type(),
+            HandshakeMessage::ServerHelloDone(msg) => msg.handshake_type(),
+            HandshakeMessage::CertificateVerify(msg) => msg.handshake_type(),
+            HandshakeMessage::ClientKeyExchange(msg) => msg.handshake_type(),
+            HandshakeMessage::Finished(msg) => msg.handshake_type(),
+        }
+    }
+
+    pub fn size(&self) -> usize {
+        match self {
+            HandshakeMessage::ClientHello(msg) => msg.size(),
+            HandshakeMessage::ServerHello(msg) => msg.size(),
+            HandshakeMessage::HelloVerifyRequest(msg) => msg.size(),
+            HandshakeMessage::Certificate(msg) => msg.size(),
+            HandshakeMessage::ServerKeyExchange(msg) => msg.size(),
+            HandshakeMessage::CertificateRequest(msg) => msg.size(),
+            HandshakeMessage::ServerHelloDone(msg) => msg.size(),
+            HandshakeMessage::CertificateVerify(msg) => msg.size(),
+            HandshakeMessage::ClientKeyExchange(msg) => msg.size(),
+            HandshakeMessage::Finished(msg) => msg.size(),
+        }
+    }
+
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         match self {
             HandshakeMessage::ClientHello(msg) => msg.marshal(writer)?,
@@ -143,8 +173,25 @@ pub struct Handshake {
 }
 
 impl Handshake {
+    pub fn new(handshake_message: HandshakeMessage) -> Self {
+        Handshake {
+            handshake_header: HandshakeHeader {
+                handshake_type: handshake_message.handshake_type(),
+                length: handshake_message.size() as u32,
+                message_sequence: 0,
+                fragment_offset: 0,
+                fragment_length: handshake_message.size() as u32,
+            },
+            handshake_message,
+        }
+    }
+
     pub fn content_type(&self) -> ContentType {
         ContentType::Handshake
+    }
+
+    pub fn size(&self) -> usize {
+        self.handshake_header.size() + self.handshake_message.size()
     }
 
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {

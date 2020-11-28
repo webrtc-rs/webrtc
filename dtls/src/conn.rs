@@ -94,8 +94,8 @@ pub(crate) struct Conn {
     cancelHandshaker      func()
     cancelHandshakeReader func()
     */
-    pub(crate) flight: Box<dyn Flight + Send + Sync>,
-    pub(crate) pkts: Option<Vec<Packet>>,
+    pub(crate) current_flight: Box<dyn Flight + Send + Sync>,
+    pub(crate) flights: Option<Vec<Packet>>,
     pub(crate) cfg: HandshakeConfig,
     pub(crate) retransmit: bool,
     pub(crate) handshake_rx: mpsc::Receiver<mpsc::Sender<()>>,
@@ -235,8 +235,8 @@ impl Conn {
             connection_closed_by_user: false,
             closed: false,
 
-            flight,
-            pkts: None,
+            current_flight: flight,
+            flights: None,
             cfg,
             retransmit: false,
             handshake_rx,
@@ -446,7 +446,7 @@ impl Conn {
                             p.record.marshal(&mut writer)?;
                         }
                         trace!(
-                            "[handshake:{}] -> {} (epoch: {}, seq: {})",
+                            "Sending [handshake:{}] -> {} (epoch: {}, seq: {})",
                             srv_cli_str(is_client),
                             h.handshake_header.handshake_type.to_string(),
                             p.record.record_layer_header.epoch,

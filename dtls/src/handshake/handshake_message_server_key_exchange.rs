@@ -26,8 +26,16 @@ pub struct HandshakeMessageServerKeyExchange {
 }
 
 impl HandshakeMessageServerKeyExchange {
-    fn handshake_type() -> HandshakeType {
+    pub fn handshake_type(&self) -> HandshakeType {
         HandshakeType::ServerKeyExchange
+    }
+
+    pub fn size(&self) -> usize {
+        if !self.identity_hint.is_empty() {
+            2 + self.identity_hint.len()
+        } else {
+            1 + 2 + 1 + self.public_key.len() + 2 + 2 + self.signature.len()
+        }
     }
 
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {

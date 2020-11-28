@@ -4,7 +4,6 @@ use crate::cipher_suite::*;
 use crate::client_certificate_type::*;
 use crate::compression_methods::*;
 use crate::config::*;
-//use crate::conn::*;
 use crate::content::*;
 use crate::crypto::*;
 use crate::curve::named_curve::*;
@@ -15,7 +14,6 @@ use crate::extension::extension_supported_point_formats::*;
 use crate::extension::extension_use_extended_master_secret::*;
 use crate::extension::extension_use_srtp::*;
 use crate::extension::*;
-use crate::handshake::handshake_header::*;
 use crate::handshake::handshake_message_certificate::*;
 use crate::handshake::handshake_message_certificate_request::*;
 use crate::handshake::handshake_message_server_hello::*;
@@ -263,12 +261,12 @@ impl Flight for Flight4 {
             if !cipher_suite.is_initialized().await {
                 let mut server_random = vec![];
                 {
-                    let mut writer = BufWriter::new(server_random.as_mut_slice());
+                    let mut writer = BufWriter::<&mut Vec<u8>>::new(server_random.as_mut());
                     let _ = state.local_random.marshal(&mut writer);
                 }
                 let mut client_random = vec![];
                 {
-                    let mut writer = BufWriter::new(client_random.as_mut_slice());
+                    let mut writer = BufWriter::<&mut Vec<u8>>::new(client_random.as_mut());
                     let _ = state.remote_random.marshal(&mut writer);
                 }
 
@@ -521,9 +519,8 @@ impl Flight for Flight4 {
                     protocol_version: PROTOCOL_VERSION1_2,
                     ..Default::default()
                 },
-                content: Content::Handshake(Handshake {
-                    handshake_header: HandshakeHeader::default(),
-                    handshake_message: HandshakeMessage::ServerHello(HandshakeMessageServerHello {
+                content: Content::Handshake(Handshake::new(HandshakeMessage::ServerHello(
+                    HandshakeMessageServerHello {
                         version: PROTOCOL_VERSION1_2,
                         random: state.local_random.clone(),
                         cipher_suite: if let Some(cipher_suite) = &*state.cipher_suite {
@@ -533,8 +530,8 @@ impl Flight for Flight4 {
                         },
                         compression_method: default_compression_methods().ids[0],
                         extensions,
-                    }),
-                }),
+                    },
+                ))),
             },
             should_encrypt: false,
             reset_local_sequence_number: false,
@@ -560,14 +557,11 @@ impl Flight for Flight4 {
                         protocol_version: PROTOCOL_VERSION1_2,
                         ..Default::default()
                     },
-                    content: Content::Handshake(Handshake {
-                        handshake_header: HandshakeHeader::default(),
-                        handshake_message: HandshakeMessage::Certificate(
-                            HandshakeMessageCertificate {
-                                certificate: vec![certificate.certificate.clone()],
-                            },
-                        ),
-                    }),
+                    content: Content::Handshake(Handshake::new(HandshakeMessage::Certificate(
+                        HandshakeMessageCertificate {
+                            certificate: vec![certificate.certificate.clone()],
+                        },
+                    ))),
                 },
                 should_encrypt: false,
                 reset_local_sequence_number: false,
@@ -575,12 +569,12 @@ impl Flight for Flight4 {
 
             let mut server_random = vec![];
             {
-                let mut writer = BufWriter::new(server_random.as_mut_slice());
+                let mut writer = BufWriter::<&mut Vec<u8>>::new(server_random.as_mut());
                 let _ = state.local_random.marshal(&mut writer);
             }
             let mut client_random = vec![];
             {
-                let mut writer = BufWriter::new(client_random.as_mut_slice());
+                let mut writer = BufWriter::<&mut Vec<u8>>::new(client_random.as_mut());
                 let _ = state.remote_random.marshal(&mut writer);
             }
 
@@ -629,9 +623,8 @@ impl Flight for Flight4 {
                             protocol_version: PROTOCOL_VERSION1_2,
                             ..Default::default()
                         },
-                        content: Content::Handshake(Handshake {
-                            handshake_header: HandshakeHeader::default(),
-                            handshake_message: HandshakeMessage::ServerKeyExchange(
+                        content: Content::Handshake(Handshake::new(
+                            HandshakeMessage::ServerKeyExchange(
                                 HandshakeMessageServerKeyExchange {
                                     identity_hint: vec![],
                                     elliptic_curve_type: EllipticCurveType::NamedCurve,
@@ -642,7 +635,7 @@ impl Flight for Flight4 {
                                     signature: state.local_key_signature.clone(),
                                 },
                             ),
-                        }),
+                        )),
                     },
                     should_encrypt: false,
                     reset_local_sequence_number: false,
@@ -656,9 +649,8 @@ impl Flight for Flight4 {
                             protocol_version: PROTOCOL_VERSION1_2,
                             ..Default::default()
                         },
-                        content: Content::Handshake(Handshake {
-                            handshake_header: HandshakeHeader::default(),
-                            handshake_message: HandshakeMessage::CertificateRequest(
+                        content: Content::Handshake(Handshake::new(
+                            HandshakeMessage::CertificateRequest(
                                 HandshakeMessageCertificateRequest {
                                     certificate_types: vec![
                                         ClientCertificateType::RSASign,
@@ -667,7 +659,7 @@ impl Flight for Flight4 {
                                     signature_hash_algorithms: cfg.local_signature_schemes.clone(),
                                 },
                             ),
-                        }),
+                        )),
                     },
                     should_encrypt: false,
                     reset_local_sequence_number: false,
@@ -685,20 +677,17 @@ impl Flight for Flight4 {
                         protocol_version: PROTOCOL_VERSION1_2,
                         ..Default::default()
                     },
-                    content: Content::Handshake(Handshake {
-                        handshake_header: HandshakeHeader::default(),
-                        handshake_message: HandshakeMessage::ServerKeyExchange(
-                            HandshakeMessageServerKeyExchange {
-                                identity_hint: cfg.local_psk_identity_hint.clone(),
-                                elliptic_curve_type: EllipticCurveType::Unsupported,
-                                named_curve: NamedCurve::Unsupported,
-                                public_key: vec![],
-                                hash_algorithm: HashAlgorithm::Unsupported,
-                                signature_algorithm: SignatureAlgorithm::Unsupported,
-                                signature: vec![],
-                            },
-                        ),
-                    }),
+                    content: Content::Handshake(Handshake::new(
+                        HandshakeMessage::ServerKeyExchange(HandshakeMessageServerKeyExchange {
+                            identity_hint: cfg.local_psk_identity_hint.clone(),
+                            elliptic_curve_type: EllipticCurveType::Unsupported,
+                            named_curve: NamedCurve::Unsupported,
+                            public_key: vec![],
+                            hash_algorithm: HashAlgorithm::Unsupported,
+                            signature_algorithm: SignatureAlgorithm::Unsupported,
+                            signature: vec![],
+                        }),
+                    )),
                 },
                 should_encrypt: false,
                 reset_local_sequence_number: false,
@@ -711,12 +700,9 @@ impl Flight for Flight4 {
                     protocol_version: PROTOCOL_VERSION1_2,
                     ..Default::default()
                 },
-                content: Content::Handshake(Handshake {
-                    handshake_header: HandshakeHeader::default(),
-                    handshake_message: HandshakeMessage::ServerHelloDone(
-                        HandshakeMessageServerHelloDone {},
-                    ),
-                }),
+                content: Content::Handshake(Handshake::new(HandshakeMessage::ServerHelloDone(
+                    HandshakeMessageServerHelloDone {},
+                ))),
             },
             should_encrypt: false,
             reset_local_sequence_number: false,

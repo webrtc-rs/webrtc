@@ -20,6 +20,10 @@ impl ExtensionSupportedPointFormats {
         ExtensionValue::SupportedPointFormats
     }
 
+    pub fn size(&self) -> usize {
+        2 + 1 + self.point_formats.len()
+    }
+
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         writer.write_u16::<BigEndian>(1 + self.point_formats.len() as u16)?;
         writer.write_u8(self.point_formats.len() as u8)?;

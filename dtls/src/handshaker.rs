@@ -13,6 +13,7 @@ use util::Error;
 
 use std::collections::HashMap;
 use std::fmt;
+use std::io::BufWriter;
 
 // [RFC6347 Section-4.2.4]
 //                      +-----------+
@@ -199,7 +200,7 @@ impl Conn {
             trace!(
                 "[handshake:{}] {}: {}",
                 srv_cli_str(self.state.is_client),
-                self.flight.to_string(),
+                self.current_flight.to_string(),
                 state.to_string()
             );
 
@@ -220,13 +221,13 @@ impl Conn {
     }
 
     async fn prepare(&mut self) -> Result<HandshakeState, Error> {
-        self.pkts = None;
+        self.flights = None;
 
         // Prepare flights
-        self.retransmit = self.flight.has_retransmit();
+        self.retransmit = self.current_flight.has_retransmit();
 
         let result = self
-            .flight
+            .current_flight
             .generate(&mut self.state, &self.cache, &self.cfg)
             .await;
 
@@ -245,12 +246,27 @@ impl Conn {
                     return Err(err);
                 }
             }
-            Ok(pkts) => self.pkts = Some(pkts),
+            Ok(pkts) => {
+                if !pkts.is_empty() {
+                    let mut s = vec![];
+                    {
+                        let mut writer = BufWriter::<&mut Vec<u8>>::new(s.as_mut());
+                        pkts[0].record.content.marshal(&mut writer)?;
+                    }
+                    trace!(
+                        "[handshake:{}] {}: {:?}",
+                        srv_cli_str(self.state.is_client),
+                        self.current_flight.to_string(),
+                        s,
+                    );
+                }
+                self.flights = Some(pkts)
+            }
         };
 
         let epoch = self.cfg.initial_epoch;
         let mut next_epoch = epoch;
-        if let Some(pkts) = &mut self.pkts {
+        if let Some(pkts) = &mut self.flights {
             for p in pkts {
                 p.record.record_layer_header.epoch += epoch;
                 if p.record.record_layer_header.epoch > next_epoch {
@@ -275,11 +291,11 @@ impl Conn {
     }
     async fn send(&mut self) -> Result<HandshakeState, Error> {
         // Send flights
-        if let Some(pkts) = self.pkts.clone() {
+        if let Some(pkts) = self.flights.clone() {
             self.write_packets(pkts).await?;
         }
 
-        if self.flight.is_last_send_flight() {
+        if self.current_flight.is_last_send_flight() {
             Ok(HandshakeState::Finished)
         } else {
             Ok(HandshakeState::Waiting)
@@ -291,7 +307,7 @@ impl Conn {
         loop {
             tokio::select! {
                  done = self.handshake_rx.recv() =>{
-                   let result = self.flight.parse(&mut self.handle_queue_tx, &mut self.state, &self.cache, &self.cfg).await;
+                   let result = self.current_flight.parse(&mut self.handle_queue_tx, &mut self.state, &self.cache, &self.cfg).await;
                    drop(done);
                    match result {
                         Err((alert, mut err)) => {
@@ -309,11 +325,11 @@ impl Conn {
                             }
                         }
                         Ok(next_flight) => {
-                            trace!("[handshake:{}] {} -> {}", srv_cli_str(self.state.is_client), self.flight.to_string(), next_flight.to_string());
-                            if next_flight.is_last_recv_flight() && self.flight.to_string() == next_flight.to_string() {
+                            trace!("[handshake:{}] {} -> {}", srv_cli_str(self.state.is_client), self.current_flight.to_string(), next_flight.to_string());
+                            if next_flight.is_last_recv_flight() && self.current_flight.to_string() == next_flight.to_string() {
                                 return Ok(HandshakeState::Finished);
                             }
-                            self.flight = next_flight;
+                            self.current_flight = next_flight;
                             return Ok(HandshakeState::Preparing);
                         }
                     };
@@ -337,7 +353,7 @@ impl Conn {
 
         tokio::select! {
              done = self.handshake_rx.recv() =>{
-               let result = self.flight.parse(&mut self.handle_queue_tx, &mut self.state, &self.cache, &self.cfg).await;
+               let result = self.current_flight.parse(&mut self.handle_queue_tx, &mut self.state, &self.cache, &self.cfg).await;
                drop(done);
                match result {
                     Err((alert, mut err)) => {

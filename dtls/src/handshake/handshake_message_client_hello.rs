@@ -74,8 +74,31 @@ impl fmt::Debug for HandshakeMessageClientHello {
 const HANDSHAKE_MESSAGE_CLIENT_HELLO_VARIABLE_WIDTH_START: usize = 34;
 
 impl HandshakeMessageClientHello {
-    fn handshake_type() -> HandshakeType {
+    pub fn handshake_type(&self) -> HandshakeType {
         HandshakeType::ClientHello
+    }
+
+    pub fn size(&self) -> usize {
+        let mut len = 0;
+
+        len += 2; // version.major+minor
+        len += self.random.size();
+
+        // SessionID
+        len += 1;
+
+        len += 1 + self.cookie.len();
+
+        len += 2 + 2 * self.cipher_suites.len();
+
+        len += self.compression_methods.size();
+
+        len += 2;
+        for extension in &self.extensions {
+            len += extension.size();
+        }
+
+        len
     }
 
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {

@@ -6,6 +6,8 @@ async fn build_pipe() -> Result<(Conn, Conn), Error> {
     let ua = UdpSocket::bind("127.0.0.1:0").await?;
     let ub = UdpSocket::bind("127.0.0.1:0").await?;
 
+    trace!("{} vs {}", ua.local_addr()?, ub.local_addr()?);
+
     ua.connect(ub.local_addr()?).await?;
     ub.connect(ua.local_addr()?).await?;
 
@@ -76,9 +78,9 @@ async fn create_test_server(
 
 #[tokio::test]
 async fn test_routine_leak_on_close() -> Result<(), Error> {
-    env_logger::init();
+    /*env_logger::init();
 
-    /*let (mut ca, _cb) = build_pipe().await?;
+    let (mut ca, _cb) = build_pipe().await?;
 
     let n = ca.write(&[0; 100], Some(Duration::from_secs(5))).await?;
     assert_eq!(n, 100);*/

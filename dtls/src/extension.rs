@@ -68,6 +68,21 @@ impl Extension {
         }
     }
 
+    pub fn size(&self) -> usize {
+        let mut len = 2;
+
+        len += match self {
+            Extension::ServerName(ext) => ext.size(),
+            Extension::SupportedEllipticCurves(ext) => ext.size(),
+            Extension::SupportedPointFormats(ext) => ext.size(),
+            Extension::SupportedSignatureAlgorithms(ext) => ext.size(),
+            Extension::UseSRTP(ext) => ext.size(),
+            Extension::UseExtendedMasterSecret(ext) => ext.size(),
+        };
+
+        len
+    }
+
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         writer.write_u16::<BigEndian>(self.extension_value() as u16)?;
         match self {

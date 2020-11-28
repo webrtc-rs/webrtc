@@ -11,8 +11,12 @@ use util::Error;
 pub struct HandshakeMessageServerHelloDone;
 
 impl HandshakeMessageServerHelloDone {
-    fn handshake_type() -> HandshakeType {
+    pub fn handshake_type(&self) -> HandshakeType {
         HandshakeType::ServerHelloDone
+    }
+
+    pub fn size(&self) -> usize {
+        0
     }
 
     pub fn marshal<W: Write>(&self, _writer: &mut W) -> Result<(), Error> {

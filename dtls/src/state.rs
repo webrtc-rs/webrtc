@@ -110,12 +110,12 @@ impl State {
     fn serialize(&self) -> Result<SerializedState, Error> {
         let mut local_rand = vec![];
         {
-            let mut writer = BufWriter::new(&mut local_rand);
+            let mut writer = BufWriter::<&mut Vec<u8>>::new(local_rand.as_mut());
             self.local_random.marshal(&mut writer)?;
         }
         let mut remote_rand = vec![];
         {
-            let mut writer = BufWriter::new(&mut remote_rand);
+            let mut writer = BufWriter::<&mut Vec<u8>>::new(remote_rand.as_mut());
             self.remote_random.marshal(&mut writer)?;
         }
 
@@ -189,12 +189,12 @@ impl State {
 
             let mut local_random = vec![];
             {
-                let mut writer = BufWriter::new(&mut local_random);
+                let mut writer = BufWriter::<&mut Vec<u8>>::new(local_random.as_mut());
                 self.local_random.marshal(&mut writer)?;
             }
             let mut remote_random = vec![];
             {
-                let mut writer = BufWriter::new(&mut remote_random);
+                let mut writer = BufWriter::<&mut Vec<u8>>::new(remote_random.as_mut());
                 self.remote_random.marshal(&mut writer)?;
             }
 
@@ -254,12 +254,12 @@ impl State {
 
         let mut local_random = vec![];
         {
-            let mut writer = BufWriter::new(&mut local_random);
+            let mut writer = BufWriter::<&mut Vec<u8>>::new(local_random.as_mut());
             self.local_random.marshal(&mut writer)?;
         }
         let mut remote_random = vec![];
         {
-            let mut writer = BufWriter::new(&mut remote_random);
+            let mut writer = BufWriter::<&mut Vec<u8>>::new(remote_random.as_mut());
             self.remote_random.marshal(&mut writer)?;
         }
 

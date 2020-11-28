@@ -20,8 +20,12 @@ pub struct HandshakeMessageCertificateVerify {
 const HANDSHAKE_MESSAGE_CERTIFICATE_VERIFY_MIN_LENGTH: usize = 4;
 
 impl HandshakeMessageCertificateVerify {
-    fn handshake_type() -> HandshakeType {
+    pub fn handshake_type(&self) -> HandshakeType {
         HandshakeType::CertificateVerify
+    }
+
+    pub fn size(&self) -> usize {
+        1 + 1 + 2 + self.signature.len()
     }
 
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {

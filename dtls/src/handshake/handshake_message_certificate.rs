@@ -17,8 +17,18 @@ pub struct HandshakeMessageCertificate {
 }
 
 impl HandshakeMessageCertificate {
-    fn handshake_type() -> HandshakeType {
+    pub fn handshake_type(&self) -> HandshakeType {
         HandshakeType::Certificate
+    }
+
+    pub fn size(&self) -> usize {
+        let mut len = 3;
+
+        for r in &self.certificate {
+            len += HANDSHAKE_MESSAGE_CERTIFICATE_LENGTH_FIELD_SIZE + r.len();
+        }
+
+        len
     }
 
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {

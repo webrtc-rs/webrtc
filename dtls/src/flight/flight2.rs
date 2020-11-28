@@ -1,10 +1,8 @@
 use super::flight0::*;
 use super::flight4::*;
 use super::*;
-//use crate::conn::*;
 use crate::content::*;
 use crate::errors::*;
-use crate::handshake::handshake_header::*;
 use crate::handshake::handshake_message_hello_verify_request::*;
 use crate::handshake::*;
 use crate::record_layer::record_layer_header::*;
@@ -118,15 +116,12 @@ impl Flight for Flight2 {
                     protocol_version: PROTOCOL_VERSION1_2,
                     ..Default::default()
                 },
-                content: Content::Handshake(Handshake {
-                    handshake_header: HandshakeHeader::default(),
-                    handshake_message: HandshakeMessage::HelloVerifyRequest(
-                        HandshakeMessageHelloVerifyRequest {
-                            version: PROTOCOL_VERSION1_2,
-                            cookie: state.cookie.clone(),
-                        },
-                    ),
-                }),
+                content: Content::Handshake(Handshake::new(HandshakeMessage::HelloVerifyRequest(
+                    HandshakeMessageHelloVerifyRequest {
+                        version: PROTOCOL_VERSION1_2,
+                        cookie: state.cookie.clone(),
+                    },
+                ))),
             },
             should_encrypt: false,
             reset_local_sequence_number: false,

@@ -21,6 +21,11 @@ impl ExtensionServerName {
         ExtensionValue::ServerName
     }
 
+    pub fn size(&self) -> usize {
+        //TODO: check how to do cryptobyte?
+        2 + self.server_name.as_bytes().len()
+    }
+
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         //TODO: check how to do cryptobyte?
         //writer.write_u8(EXTENSION_SERVER_NAME_TYPE_DNSHOST_NAME)?;

@@ -25,6 +25,10 @@ pub struct CompressionMethods {
 }
 
 impl CompressionMethods {
+    pub fn size(&self) -> usize {
+        1 + self.ids.len()
+    }
+
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         writer.write_u8(self.ids.len() as u8)?;
 

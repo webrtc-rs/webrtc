@@ -16,6 +16,10 @@ impl ExtensionUseExtendedMasterSecret {
         ExtensionValue::UseExtendedMasterSecret
     }
 
+    pub fn size(&self) -> usize {
+        2
+    }
+
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         // length
         writer.write_u16::<BigEndian>(0)?;

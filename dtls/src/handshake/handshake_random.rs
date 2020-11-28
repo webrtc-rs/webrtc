@@ -27,6 +27,10 @@ impl Default for HandshakeRandom {
 }
 
 impl HandshakeRandom {
+    pub fn size(&self) -> usize {
+        4 + RANDOM_BYTES_LENGTH
+    }
+
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         let secs = match self.gmt_unix_time.duration_since(SystemTime::UNIX_EPOCH) {
             Ok(d) => d.as_secs() as u32,

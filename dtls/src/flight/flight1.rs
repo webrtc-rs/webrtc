@@ -13,7 +13,6 @@ use crate::extension::extension_supported_signature_algorithms::*;
 use crate::extension::extension_use_extended_master_secret::*;
 use crate::extension::extension_use_srtp::*;
 use crate::extension::*;
-use crate::handshake::handshake_header::*;
 use crate::handshake::handshake_message_client_hello::*;
 use crate::handshake::*;
 use crate::record_layer::record_layer_header::*;
@@ -172,9 +171,8 @@ impl Flight for Flight1 {
                     protocol_version: PROTOCOL_VERSION1_2,
                     ..Default::default()
                 },
-                content: Content::Handshake(Handshake {
-                    handshake_header: HandshakeHeader::default(),
-                    handshake_message: HandshakeMessage::ClientHello(HandshakeMessageClientHello {
+                content: Content::Handshake(Handshake::new(HandshakeMessage::ClientHello(
+                    HandshakeMessageClientHello {
                         version: PROTOCOL_VERSION1_2,
                         random: state.local_random.clone(),
                         cookie: state.cookie.clone(),
@@ -182,8 +180,8 @@ impl Flight for Flight1 {
                         cipher_suites: cfg.local_cipher_suites.clone(),
                         compression_methods: default_compression_methods(),
                         extensions,
-                    }),
-                }),
+                    },
+                ))),
             },
             should_encrypt: false,
             reset_local_sequence_number: false,

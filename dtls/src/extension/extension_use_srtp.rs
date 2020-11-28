@@ -41,6 +41,10 @@ impl ExtensionUseSRTP {
         ExtensionValue::UseSRTP
     }
 
+    pub fn size(&self) -> usize {
+        2 + 2 + self.protection_profiles.len() * 2 + 1
+    }
+
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         writer.write_u16::<BigEndian>(
             2 + /* MKI Length */ 1 + 2 * self.protection_profiles.len() as u16,

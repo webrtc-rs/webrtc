@@ -17,6 +17,10 @@ impl ExtensionSupportedSignatureAlgorithms {
         ExtensionValue::SupportedSignatureAlgorithms
     }
 
+    pub fn size(&self) -> usize {
+        2 + 2 + self.signature_hash_algorithms.len() * 2
+    }
+
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         writer.write_u16::<BigEndian>(2 + 2 * self.signature_hash_algorithms.len() as u16)?;
         writer.write_u16::<BigEndian>(2 * self.signature_hash_algorithms.len() as u16)?;

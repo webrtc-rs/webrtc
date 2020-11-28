@@ -1,12 +1,10 @@
 use super::flight3::*;
 use super::*;
-//use crate::conn::*;
 use crate::content::*;
 use crate::crypto::*;
 use crate::curve::named_curve::*;
 use crate::curve::*;
 use crate::errors::*;
-use crate::handshake::handshake_header::*;
 use crate::handshake::handshake_message_certificate::*;
 use crate::handshake::handshake_message_certificate_verify::*;
 use crate::handshake::handshake_message_client_key_exchange::*;
@@ -213,18 +211,15 @@ impl Flight for Flight5 {
                         protocol_version: PROTOCOL_VERSION1_2,
                         ..Default::default()
                     },
-                    content: Content::Handshake(Handshake {
-                        handshake_header: HandshakeHeader::default(),
-                        handshake_message: HandshakeMessage::Certificate(
-                            HandshakeMessageCertificate {
-                                certificate: vec![if let Some(cert) = &certificate {
-                                    cert.certificate.clone()
-                                } else {
-                                    vec![]
-                                }],
-                            },
-                        ),
-                    }),
+                    content: Content::Handshake(Handshake::new(HandshakeMessage::Certificate(
+                        HandshakeMessageCertificate {
+                            certificate: vec![if let Some(cert) = &certificate {
+                                cert.certificate.clone()
+                            } else {
+                                vec![]
+                            }],
+                        },
+                    ))),
                 },
                 should_encrypt: false,
                 reset_local_sequence_number: false,
@@ -249,10 +244,9 @@ impl Flight for Flight5 {
                     protocol_version: PROTOCOL_VERSION1_2,
                     ..Default::default()
                 },
-                content: Content::Handshake(Handshake {
-                    handshake_header: HandshakeHeader::default(),
-                    handshake_message: HandshakeMessage::ClientKeyExchange(client_key_exchange),
-                }),
+                content: Content::Handshake(Handshake::new(HandshakeMessage::ClientKeyExchange(
+                    client_key_exchange,
+                ))),
             },
             should_encrypt: false,
             reset_local_sequence_number: false,
@@ -333,7 +327,7 @@ impl Flight for Flight5 {
 
             let mut raw = vec![];
             {
-                let mut writer = BufWriter::new(raw.as_mut_slice());
+                let mut writer = BufWriter::<&mut Vec<u8>>::new(raw.as_mut());
                 if let Err(err) = h.marshal(&mut writer) {
                     return Err((
                         Some(Alert {
@@ -453,16 +447,13 @@ impl Flight for Flight5 {
                         protocol_version: PROTOCOL_VERSION1_2,
                         ..Default::default()
                     },
-                    content: Content::Handshake(Handshake {
-                        handshake_header: HandshakeHeader::default(),
-                        handshake_message: HandshakeMessage::CertificateVerify(
-                            HandshakeMessageCertificateVerify {
-                                hash_algorithm: signature_hash_algo.hash,
-                                signature_algorithm: signature_hash_algo.signature,
-                                signature: state.local_certificates_verify.clone(),
-                            },
-                        ),
-                    }),
+                    content: Content::Handshake(Handshake::new(
+                        HandshakeMessage::CertificateVerify(HandshakeMessageCertificateVerify {
+                            hash_algorithm: signature_hash_algo.hash,
+                            signature_algorithm: signature_hash_algo.signature,
+                            signature: state.local_certificates_verify.clone(),
+                        }),
+                    )),
                 },
                 should_encrypt: false,
                 reset_local_sequence_number: false,
@@ -486,7 +477,7 @@ impl Flight for Flight5 {
 
             let mut raw = vec![];
             {
-                let mut writer = BufWriter::new(raw.as_mut_slice());
+                let mut writer = BufWriter::<&mut Vec<u8>>::new(raw.as_mut());
                 if let Err(err) = h.marshal(&mut writer) {
                     return Err((
                         Some(Alert {
@@ -608,12 +599,11 @@ impl Flight for Flight5 {
                     epoch: 1,
                     ..Default::default()
                 },
-                content: Content::Handshake(Handshake {
-                    handshake_header: HandshakeHeader::default(),
-                    handshake_message: HandshakeMessage::Finished(HandshakeMessageFinished {
+                content: Content::Handshake(Handshake::new(HandshakeMessage::Finished(
+                    HandshakeMessageFinished {
                         verify_data: state.local_verify_data.clone(),
-                    }),
-                }),
+                    },
+                ))),
             },
             should_encrypt: true,
             reset_local_sequence_number: true,
@@ -637,12 +627,12 @@ async fn initalize_cipher_suite(
 
     let mut client_random = vec![];
     {
-        let mut writer = BufWriter::new(client_random.as_mut_slice());
+        let mut writer = BufWriter::<&mut Vec<u8>>::new(client_random.as_mut());
         let _ = state.local_random.marshal(&mut writer);
     }
     let mut server_random = vec![];
     {
-        let mut writer = BufWriter::new(server_random.as_mut_slice());
+        let mut writer = BufWriter::<&mut Vec<u8>>::new(server_random.as_mut());
         let _ = state.remote_random.marshal(&mut writer);
     }
 

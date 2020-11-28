@@ -282,7 +282,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         // Add SRTCP index and set Encryption bit
         let mut srtcp_index_buffer: Vec<u8> = vec![];
         {
-            let mut writer = BufWriter::new(&mut srtcp_index_buffer);
+            let mut writer = BufWriter::<&mut Vec<u8>>::new(srtcp_index_buffer.as_mut());
             writer.write_u32::<BigEndian>(srtcp_index as u32 | (1u32 << 31))?;
         }
         dst.extend_from_slice(&srtcp_index_buffer);

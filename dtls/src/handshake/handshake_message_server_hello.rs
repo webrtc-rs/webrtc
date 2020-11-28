@@ -53,8 +53,26 @@ impl fmt::Debug for HandshakeMessageServerHello {
 }
 
 impl HandshakeMessageServerHello {
-    fn handshake_type() -> HandshakeType {
+    pub fn handshake_type(&self) -> HandshakeType {
         HandshakeType::ServerHello
+    }
+
+    pub fn size(&self) -> usize {
+        let mut len = 2 + self.random.size();
+
+        // SessionID
+        len += 1;
+
+        len += 2;
+
+        len += 1;
+
+        len += 2;
+        for extension in &self.extensions {
+            len += extension.size();
+        }
+
+        len
     }
 
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
