@@ -19,9 +19,12 @@ use crate::content::*;
 use crate::errors::*;
 use crate::record_layer::record_layer_header::*;
 
-use ccm::{Ccm, consts::{U8, U12, U16}};
-use ccm::aead::{NewAead, AeadInPlace, generic_array::GenericArray};
 use aes::Aes256;
+use ccm::aead::{generic_array::GenericArray, AeadInPlace, NewAead};
+use ccm::{
+    consts::{U12, U16, U8},
+    Ccm,
+};
 
 const CRYPTO_CCM_8_TAG_LENGTH: usize = 8;
 const CRYPTO_CCM_TAG_LENGTH: usize = 16;
@@ -58,22 +61,14 @@ impl CryptCcm {
     ) -> Self {
         let key = GenericArray::from_slice(local_key);
         let local_ccm = match tag_len {
-            CryptoCcmTagLen::CryptoCcmTagLength => {
-                CryptoCcm::CryptoCcm(AesCcm::new(key))
-            },
-            CryptoCcmTagLen::CryptoCcm8TagLength => {
-                CryptoCcm::CryptoCcm8(AesCcm8::new(key))
-            },
+            CryptoCcmTagLen::CryptoCcmTagLength => CryptoCcm::CryptoCcm(AesCcm::new(key)),
+            CryptoCcmTagLen::CryptoCcm8TagLength => CryptoCcm::CryptoCcm8(AesCcm8::new(key)),
         };
 
         let key = GenericArray::from_slice(remote_key);
         let remote_ccm = match tag_len {
-            CryptoCcmTagLen::CryptoCcmTagLength => {
-                CryptoCcm::CryptoCcm(AesCcm::new(key))
-            },
-            CryptoCcmTagLen::CryptoCcm8TagLength => {
-                CryptoCcm::CryptoCcm8(AesCcm8::new(key))
-            },
+            CryptoCcmTagLen::CryptoCcmTagLength => CryptoCcm::CryptoCcm(AesCcm::new(key)),
+            CryptoCcmTagLen::CryptoCcm8TagLength => CryptoCcm::CryptoCcm8(AesCcm8::new(key)),
         };
 
         CryptCcm {
@@ -97,14 +92,14 @@ impl CryptCcm {
 
         let mut buffer: Vec<u8> = Vec::new();
         buffer.extend_from_slice(payload);
-        
+
         match &self.local_ccm {
             CryptoCcm::CryptoCcm(ccm) => {
                 ccm.encrypt_in_place(nonce, &additional_data, &mut buffer)?;
-            },
+            }
             CryptoCcm::CryptoCcm8(ccm8) => {
                 ccm8.encrypt_in_place(nonce, &additional_data, &mut buffer)?;
-            },
+            }
         }
 
         let mut r = Vec::with_capacity(raw.len() + nonce.len() + buffer.len());
@@ -145,13 +140,15 @@ impl CryptCcm {
 
         match &self.remote_ccm {
             CryptoCcm::CryptoCcm(ccm) => {
-                let additional_data = generate_aead_additional_data(&h, out.len() - CRYPTO_CCM_TAG_LENGTH);
+                let additional_data =
+                    generate_aead_additional_data(&h, out.len() - CRYPTO_CCM_TAG_LENGTH);
                 ccm.decrypt_in_place(nonce, &additional_data, &mut buffer)?;
-            },
+            }
             CryptoCcm::CryptoCcm8(ccm8) => {
-                let additional_data = generate_aead_additional_data(&h, out.len() - CRYPTO_CCM_8_TAG_LENGTH);
+                let additional_data =
+                    generate_aead_additional_data(&h, out.len() - CRYPTO_CCM_8_TAG_LENGTH);
                 ccm8.decrypt_in_place(nonce, &additional_data, &mut buffer)?;
-            },
+            }
         }
 
         let mut d = Vec::with_capacity(RECORD_LAYER_HEADER_SIZE + buffer.len());
@@ -161,4 +158,3 @@ impl CryptCcm {
         Ok(d)
     }
 }
-
