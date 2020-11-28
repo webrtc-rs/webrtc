@@ -39,7 +39,7 @@ impl Flight for Flight1 {
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Box<dyn Flight>, (Option<Alert>, Option<Error>)> {
+    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<Error>)> {
         // HelloVerifyRequest can be skipped by the server,
         // so allow ServerHello during flight1 also
         let (seq, msgs) = match cache

@@ -11,6 +11,7 @@ use util::Error;
 
 // Config is used to configure a DTLS client or server.
 // After a Config is passed to a DTLS function it must not be modified.
+#[derive(Default, Clone)]
 pub struct Config {
     // Certificates contains certificate chain to present to the other side of the connection.
     // Server MUST set this if psk is non-nil
@@ -124,6 +125,12 @@ pub(crate) enum ClientAuthType {
     RequireAndVerifyClientCert = 4,
 }
 
+impl Default for ClientAuthType {
+    fn default() -> Self {
+        ClientAuthType::NoClientCert
+    }
+}
+
 // ExtendedMasterSecretType declares the policy the client and server
 // will follow for the Extended Master Secret extension
 #[derive(PartialEq, Copy, Clone)]
@@ -131,6 +138,12 @@ pub(crate) enum ExtendedMasterSecretType {
     Request = 0,
     Require = 1,
     Disable = 2,
+}
+
+impl Default for ExtendedMasterSecretType {
+    fn default() -> Self {
+        ExtendedMasterSecretType::Request
+    }
 }
 
 pub(crate) fn validate_config(config: &Config) -> Result<(), Error> {

@@ -94,7 +94,7 @@ pub(crate) struct Conn {
     cancelHandshaker      func()
     cancelHandshakeReader func()
     */
-    pub(crate) flight: Box<dyn Flight>,
+    pub(crate) flight: Box<dyn Flight + Send + Sync>,
     pub(crate) pkts: Option<Vec<Packet>>,
     pub(crate) cfg: HandshakeConfig,
     pub(crate) retransmit: bool,
@@ -108,11 +108,11 @@ pub(crate) struct Conn {
 impl Conn {
     pub async fn new(
         udp_socket: UdpSocket,
-        config: &mut Config,
+        mut config: Config,
         is_client: bool,
         initial_state: Option<State>,
     ) -> Result<Self, Error> {
-        validate_config(config)?;
+        validate_config(&config)?;
 
         let local_cipher_suites: Vec<CipherSuiteID> = parse_cipher_suites(
             &config.cipher_suites,
@@ -188,17 +188,17 @@ impl Conn {
 
         let (state, flight, initial_fsm_state) = if let Some(state) = initial_state {
             let flight = if is_client {
-                Box::new(Flight5 {}) as Box<dyn Flight>
+                Box::new(Flight5 {}) as Box<dyn Flight + Send + Sync>
             } else {
-                Box::new(Flight6 {}) as Box<dyn Flight>
+                Box::new(Flight6 {}) as Box<dyn Flight + Send + Sync>
             };
 
             (state, flight, HandshakeState::Finished)
         } else {
             let flight = if is_client {
-                Box::new(Flight1 {}) as Box<dyn Flight>
+                Box::new(Flight1 {}) as Box<dyn Flight + Send + Sync>
             } else {
-                Box::new(Flight0 {}) as Box<dyn Flight>
+                Box::new(Flight0 {}) as Box<dyn Flight + Send + Sync>
             };
 
             (
