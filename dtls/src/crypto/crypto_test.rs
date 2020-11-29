@@ -1,4 +1,8 @@
+use super::crypto_ccm::*;
 use super::*;
+
+use crate::content::ContentType;
+use crate::record_layer::record_layer_header::{ProtocolVersion, RECORD_LAYER_HEADER_SIZE};
 
 use std::io::Cursor;
 
@@ -94,6 +98,56 @@ fn test_generate_key_signature() -> Result<(), Error> {
         expected_signature, signature,
         "Signature generation failed \nexp {:?} \nactual {:?} ",
         expected_signature, signature
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_ccm_encryption_and_decryption() -> Result<(), Error> {
+    let key = vec![
+        0x18, 0x78, 0xac, 0xc2, 0x2a, 0xd8, 0xbd, 0xd8, 0xc6, 0x01, 0xa6, 0x17, 0x12, 0x6f, 0x63,
+        0x54, 0x18, 0x78, 0xac, 0xc2, 0x2a, 0xd8, 0xbd, 0xd8, 0xc6, 0x01, 0xa6, 0x17, 0x12, 0x6f,
+        0x63, 0x54,
+    ];
+    let iv = vec![0x0e, 0xb2, 0x09, 0x06];
+
+    let ccm = CryptCcm::new(CryptoCcmTagLen::CryptoCcmTagLength, &key, &iv, &key, &iv);
+
+    let rlh = RecordLayerHeader {
+        content_type: ContentType::ApplicationData,
+        protocol_version: ProtocolVersion {
+            major: 0xfe,
+            minor: 0xff,
+        },
+        epoch: 0,
+        sequence_number: 18,
+        content_len: 3,
+    };
+
+    let raw = vec![
+        0x17, 0xfe, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x12, 0x00, 0x03, 0xff, 0xaa,
+        0xbb,
+    ];
+
+    let cipher_text = ccm.encrypt(&rlh, &raw)?;
+
+    assert_eq!(
+        [0, 27],
+        &cipher_text[RECORD_LAYER_HEADER_SIZE - 2..RECORD_LAYER_HEADER_SIZE],
+        "RecordLayer size updating failed \nexp: {:?} \nactual {:?} ",
+        [0, 27],
+        &cipher_text[RECORD_LAYER_HEADER_SIZE - 2..RECORD_LAYER_HEADER_SIZE]
+    );
+
+    let plain_text = ccm.decrypt(&cipher_text)?;
+
+    assert_eq!(
+        raw[RECORD_LAYER_HEADER_SIZE..],
+        plain_text[RECORD_LAYER_HEADER_SIZE..],
+        "Decryption failed \nexp: {:?} \nactual {:?} ",
+        &raw[RECORD_LAYER_HEADER_SIZE..],
+        &plain_text[RECORD_LAYER_HEADER_SIZE..]
     );
 
     Ok(())
