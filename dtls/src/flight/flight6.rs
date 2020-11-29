@@ -72,13 +72,11 @@ impl Flight for Flight6 {
         cfg: &HandshakeConfig,
     ) -> Result<Vec<Packet>, (Option<Alert>, Option<Error>)> {
         let mut pkts = vec![Packet {
-            record: RecordLayer {
-                record_layer_header: RecordLayerHeader {
-                    protocol_version: PROTOCOL_VERSION1_2,
-                    ..Default::default()
-                },
-                content: Content::ChangeCipherSpec(ChangeCipherSpec {}),
-            },
+            record: RecordLayer::new(
+                PROTOCOL_VERSION1_2,
+                0,
+                Content::ChangeCipherSpec(ChangeCipherSpec {}),
+            ),
             should_encrypt: false,
             reset_local_sequence_number: false,
         }];
@@ -170,18 +168,15 @@ impl Flight for Flight6 {
         }
 
         pkts.push(Packet {
-            record: RecordLayer {
-                record_layer_header: RecordLayerHeader {
-                    protocol_version: PROTOCOL_VERSION1_2,
-                    epoch: 1,
-                    ..Default::default()
-                },
-                content: Content::Handshake(Handshake::new(HandshakeMessage::Finished(
+            record: RecordLayer::new(
+                PROTOCOL_VERSION1_2,
+                1,
+                Content::Handshake(Handshake::new(HandshakeMessage::Finished(
                     HandshakeMessageFinished {
                         verify_data: state.local_verify_data.clone(),
                     },
                 ))),
-            },
+            ),
             should_encrypt: true,
             reset_local_sequence_number: true,
         });

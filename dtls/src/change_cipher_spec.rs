@@ -23,6 +23,10 @@ impl ChangeCipherSpec {
         ContentType::ChangeCipherSpec
     }
 
+    pub fn size(&self) -> usize {
+        1
+    }
+
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         writer.write_u8(0x01)?;
 

@@ -514,12 +514,10 @@ impl Flight for Flight4 {
         }
 
         let mut pkts = vec![Packet {
-            record: RecordLayer {
-                record_layer_header: RecordLayerHeader {
-                    protocol_version: PROTOCOL_VERSION1_2,
-                    ..Default::default()
-                },
-                content: Content::Handshake(Handshake::new(HandshakeMessage::ServerHello(
+            record: RecordLayer::new(
+                PROTOCOL_VERSION1_2,
+                0,
+                Content::Handshake(Handshake::new(HandshakeMessage::ServerHello(
                     HandshakeMessageServerHello {
                         version: PROTOCOL_VERSION1_2,
                         random: state.local_random.clone(),
@@ -532,7 +530,7 @@ impl Flight for Flight4 {
                         extensions,
                     },
                 ))),
-            },
+            ),
             should_encrypt: false,
             reset_local_sequence_number: false,
         }];
@@ -552,17 +550,15 @@ impl Flight for Flight4 {
             };
 
             pkts.push(Packet {
-                record: RecordLayer {
-                    record_layer_header: RecordLayerHeader {
-                        protocol_version: PROTOCOL_VERSION1_2,
-                        ..Default::default()
-                    },
-                    content: Content::Handshake(Handshake::new(HandshakeMessage::Certificate(
+                record: RecordLayer::new(
+                    PROTOCOL_VERSION1_2,
+                    0,
+                    Content::Handshake(Handshake::new(HandshakeMessage::Certificate(
                         HandshakeMessageCertificate {
                             certificate: vec![certificate.certificate.clone()],
                         },
                     ))),
-                },
+                ),
                 should_encrypt: false,
                 reset_local_sequence_number: false,
             });
@@ -618,25 +614,21 @@ impl Flight for Flight4 {
                 state.local_key_signature = signature;
 
                 pkts.push(Packet {
-                    record: RecordLayer {
-                        record_layer_header: RecordLayerHeader {
-                            protocol_version: PROTOCOL_VERSION1_2,
-                            ..Default::default()
-                        },
-                        content: Content::Handshake(Handshake::new(
-                            HandshakeMessage::ServerKeyExchange(
-                                HandshakeMessageServerKeyExchange {
-                                    identity_hint: vec![],
-                                    elliptic_curve_type: EllipticCurveType::NamedCurve,
-                                    named_curve: state.named_curve,
-                                    public_key: local_keypair.public_key.clone(),
-                                    hash_algorithm: signature_hash_algo.hash,
-                                    signature_algorithm: signature_hash_algo.signature,
-                                    signature: state.local_key_signature.clone(),
-                                },
-                            ),
-                        )),
-                    },
+                    record: RecordLayer::new(
+                        PROTOCOL_VERSION1_2,
+                        0,
+                        Content::Handshake(Handshake::new(HandshakeMessage::ServerKeyExchange(
+                            HandshakeMessageServerKeyExchange {
+                                identity_hint: vec![],
+                                elliptic_curve_type: EllipticCurveType::NamedCurve,
+                                named_curve: state.named_curve,
+                                public_key: local_keypair.public_key.clone(),
+                                hash_algorithm: signature_hash_algo.hash,
+                                signature_algorithm: signature_hash_algo.signature,
+                                signature: state.local_key_signature.clone(),
+                            },
+                        ))),
+                    ),
                     should_encrypt: false,
                     reset_local_sequence_number: false,
                 });
@@ -644,23 +636,19 @@ impl Flight for Flight4 {
 
             if cfg.client_auth as u8 > ClientAuthType::NoClientCert as u8 {
                 pkts.push(Packet {
-                    record: RecordLayer {
-                        record_layer_header: RecordLayerHeader {
-                            protocol_version: PROTOCOL_VERSION1_2,
-                            ..Default::default()
-                        },
-                        content: Content::Handshake(Handshake::new(
-                            HandshakeMessage::CertificateRequest(
-                                HandshakeMessageCertificateRequest {
-                                    certificate_types: vec![
-                                        ClientCertificateType::RSASign,
-                                        ClientCertificateType::ECDSASign,
-                                    ],
-                                    signature_hash_algorithms: cfg.local_signature_schemes.clone(),
-                                },
-                            ),
-                        )),
-                    },
+                    record: RecordLayer::new(
+                        PROTOCOL_VERSION1_2,
+                        0,
+                        Content::Handshake(Handshake::new(HandshakeMessage::CertificateRequest(
+                            HandshakeMessageCertificateRequest {
+                                certificate_types: vec![
+                                    ClientCertificateType::RSASign,
+                                    ClientCertificateType::ECDSASign,
+                                ],
+                                signature_hash_algorithms: cfg.local_signature_schemes.clone(),
+                            },
+                        ))),
+                    ),
                     should_encrypt: false,
                     reset_local_sequence_number: false,
                 });
@@ -672,13 +660,11 @@ impl Flight for Flight4 {
             //
             // https://tools.ietf.org/html/rfc4279#section-2
             pkts.push(Packet {
-                record: RecordLayer {
-                    record_layer_header: RecordLayerHeader {
-                        protocol_version: PROTOCOL_VERSION1_2,
-                        ..Default::default()
-                    },
-                    content: Content::Handshake(Handshake::new(
-                        HandshakeMessage::ServerKeyExchange(HandshakeMessageServerKeyExchange {
+                record: RecordLayer::new(
+                    PROTOCOL_VERSION1_2,
+                    0,
+                    Content::Handshake(Handshake::new(HandshakeMessage::ServerKeyExchange(
+                        HandshakeMessageServerKeyExchange {
                             identity_hint: cfg.local_psk_identity_hint.clone(),
                             elliptic_curve_type: EllipticCurveType::Unsupported,
                             named_curve: NamedCurve::Unsupported,
@@ -686,24 +672,22 @@ impl Flight for Flight4 {
                             hash_algorithm: HashAlgorithm::Unsupported,
                             signature_algorithm: SignatureAlgorithm::Unsupported,
                             signature: vec![],
-                        }),
-                    )),
-                },
+                        },
+                    ))),
+                ),
                 should_encrypt: false,
                 reset_local_sequence_number: false,
             });
         }
 
         pkts.push(Packet {
-            record: RecordLayer {
-                record_layer_header: RecordLayerHeader {
-                    protocol_version: PROTOCOL_VERSION1_2,
-                    ..Default::default()
-                },
-                content: Content::Handshake(Handshake::new(HandshakeMessage::ServerHelloDone(
+            record: RecordLayer::new(
+                PROTOCOL_VERSION1_2,
+                0,
+                Content::Handshake(Handshake::new(HandshakeMessage::ServerHelloDone(
                     HandshakeMessageServerHelloDone {},
                 ))),
-            },
+            ),
             should_encrypt: false,
             reset_local_sequence_number: false,
         });

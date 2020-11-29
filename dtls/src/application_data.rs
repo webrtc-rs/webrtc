@@ -19,6 +19,10 @@ impl ApplicationData {
         ContentType::ApplicationData
     }
 
+    pub fn size(&self) -> usize {
+        self.data.len()
+    }
+
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         writer.write_all(&self.data)?;
 

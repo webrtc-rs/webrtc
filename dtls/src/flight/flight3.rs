@@ -354,12 +354,10 @@ impl Flight for Flight3 {
         }
 
         Ok(vec![Packet {
-            record: RecordLayer {
-                record_layer_header: RecordLayerHeader {
-                    protocol_version: PROTOCOL_VERSION1_2,
-                    ..Default::default()
-                },
-                content: Content::Handshake(Handshake::new(HandshakeMessage::ClientHello(
+            record: RecordLayer::new(
+                PROTOCOL_VERSION1_2,
+                0,
+                Content::Handshake(Handshake::new(HandshakeMessage::ClientHello(
                     HandshakeMessageClientHello {
                         version: PROTOCOL_VERSION1_2,
                         random: state.local_random.clone(),
@@ -370,7 +368,7 @@ impl Flight for Flight3 {
                         extensions,
                     },
                 ))),
-            },
+            ),
             should_encrypt: false,
             reset_local_sequence_number: false,
         }])

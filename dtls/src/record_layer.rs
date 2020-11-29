@@ -40,6 +40,19 @@ pub struct RecordLayer {
 }
 
 impl RecordLayer {
+    pub fn new(protocol_version: ProtocolVersion, epoch: u16, content: Content) -> Self {
+        RecordLayer {
+            record_layer_header: RecordLayerHeader {
+                content_type: content.content_type(),
+                protocol_version,
+                epoch,
+                sequence_number: 0,
+                content_len: content.size() as u16,
+            },
+            content,
+        }
+    }
+
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.record_layer_header.marshal(writer)?;
         self.content.marshal(writer)?;

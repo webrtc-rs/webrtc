@@ -55,6 +55,15 @@ impl Content {
         }
     }
 
+    pub fn size(&self) -> usize {
+        match self {
+            Content::ChangeCipherSpec(c) => c.size(),
+            Content::Alert(c) => c.size(),
+            Content::Handshake(c) => c.size(),
+            Content::ApplicationData(c) => c.size(),
+        }
+    }
+
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         match self {
             Content::ChangeCipherSpec(c) => c.marshal(writer),

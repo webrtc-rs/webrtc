@@ -217,8 +217,8 @@ impl Conn {
         let (packet_tx, packet_rx) = mpsc::channel(1);
         let (handle_queue_tx, mut handle_queue_rx) = mpsc::channel(1);
 
-        let packet_tx = Arc::new(packet_tx);
-        let packet_tx2 = Arc::clone(&packet_tx);
+        let packet_tx1 = Arc::new(packet_tx);
+        let packet_tx2 = Arc::clone(&packet_tx1);
         let next_conn_rx = Arc::new(udp_socket);
         let next_conn_tx = Arc::clone(&next_conn_rx);
         let cache = HandshakeCache::new();
@@ -240,7 +240,7 @@ impl Conn {
             cfg,
             retransmit: false,
             handshake_rx,
-            packet_tx,
+            packet_tx: packet_tx1,
             handle_queue_tx,
             handshake_done_tx: Some(handshake_done_tx),
         };
@@ -281,6 +281,7 @@ impl Conn {
                 handshake_done_rx,
             };
 
+            trace!("before enter read_and_buffer: {}] ", srv_cli_str(is_client));
             loop {
                 let _ = Conn::read_and_buffer(
                     &mut ctx,
@@ -347,14 +348,11 @@ impl Conn {
         }
 
         let pkts = vec![Packet {
-            record: RecordLayer {
-                record_layer_header: RecordLayerHeader {
-                    epoch: self.get_local_epoch(),
-                    protocol_version: PROTOCOL_VERSION1_2,
-                    ..Default::default()
-                },
-                content: Content::ApplicationData(ApplicationData { data: p.to_vec() }),
-            },
+            record: RecordLayer::new(
+                PROTOCOL_VERSION1_2,
+                self.get_local_epoch(),
+                Content::ApplicationData(ApplicationData { data: p.to_vec() }),
+            ),
             should_encrypt: true,
             reset_local_sequence_number: false,
         }];
@@ -400,17 +398,14 @@ impl Conn {
         desc: AlertDescription,
     ) -> Result<(), Error> {
         self.write_packets(vec![Packet {
-            record: RecordLayer {
-                record_layer_header: RecordLayerHeader {
-                    epoch: self.get_local_epoch(),
-                    protocol_version: PROTOCOL_VERSION1_2,
-                    ..Default::default()
-                },
-                content: Content::Alert(Alert {
+            record: RecordLayer::new(
+                PROTOCOL_VERSION1_2,
+                self.get_local_epoch(),
+                Content::Alert(Alert {
                     alert_level: level,
                     alert_description: desc,
                 }),
-            },
+            ),
             should_encrypt: self.is_handshake_completed_successfully(),
             reset_local_sequence_number: false,
         }])
@@ -484,7 +479,7 @@ impl Conn {
                     }
                 }
                 if raw_packets.is_empty() {
-                    return Ok(());
+                    continue;
                 }
 
                 let compacted_raw_packets =
@@ -669,8 +664,11 @@ impl Conn {
         let mut enqueue = false;
         let pkts;
 
+        trace!("entered read_and_buffer: {}] ", srv_cli_str(ctx.is_client));
+
         tokio::select! {
             result = next_conn.recv(buf) => {
+                 trace!("recv next_conn: {}, {:?} ", srv_cli_str(ctx.is_client), result);
                  match result {
                     Ok(n) =>{
                         pkts = unpack_datagram(&buf[..n])?;
@@ -680,26 +678,30 @@ impl Conn {
                  };
             }
             _ = handle_queue_rx.recv() => {
+                trace!("recv handle_queue_rx: {} ", srv_cli_str(ctx.is_client));
                 pkts = ctx.encrypted_packets.drain(..).collect();
             }
         }
+
+        trace!(
+            "before handle_incoming_packet: {}, with {} pkts] ",
+            srv_cli_str(ctx.is_client),
+            pkts.len()
+        );
 
         for pkt in pkts {
             let (hs, alert, mut err) = Conn::handle_incoming_packet(ctx, pkt, enqueue).await;
             if let Some(alert) = alert {
                 let alert_err = packet_tx
                     .send(vec![Packet {
-                        record: RecordLayer {
-                            record_layer_header: RecordLayerHeader {
-                                epoch: local_epoch.load(Ordering::Relaxed),
-                                protocol_version: PROTOCOL_VERSION1_2,
-                                ..Default::default()
-                            },
-                            content: Content::Alert(Alert {
+                        record: RecordLayer::new(
+                            PROTOCOL_VERSION1_2,
+                            local_epoch.load(Ordering::Relaxed),
+                            Content::Alert(Alert {
                                 alert_level: alert.alert_level,
                                 alert_description: alert.alert_description,
                             }),
-                        },
+                        ),
                         should_encrypt: handshake_completed_successfully.load(Ordering::Relaxed),
                         reset_local_sequence_number: false,
                     }])
@@ -732,6 +734,10 @@ impl Conn {
 
             tokio::select! {
                 _ = ctx.handshake_tx.send(done_tx) => {
+                    trace!(
+                        "wait handshake done_rx: {}",
+                        srv_cli_str(ctx.is_client),
+                    );
                     // If the other party may retransmit the flight,
                     // we should respond even if it not a new message.
                     done_rx.recv().await;

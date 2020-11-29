@@ -44,6 +44,7 @@ fn elliptic_curve_keypair(curve: NamedCurve) -> Result<NamedCurveKeypair, Error>
                 NamedCurvePrivateKey::EphemeralSecretP256(secret_key),
             )
         }
+        //TODO: add other two
         _ => return Err(ERR_INVALID_NAMED_CURVE.clone()),
     };
 
@@ -57,6 +58,7 @@ fn elliptic_curve_keypair(curve: NamedCurve) -> Result<NamedCurveKeypair, Error>
 impl NamedCurve {
     pub fn generate_keypair(&self) -> Result<NamedCurveKeypair, Error> {
         match *self {
+            //TODO: add X25519 and P384
             /*NamedCurve::X25519=>{
                 tmp := make([]byte, 32)
                 if _, err := rand.Read(tmp); err != nil {

@@ -111,18 +111,16 @@ impl Flight for Flight2 {
     ) -> Result<Vec<Packet>, (Option<Alert>, Option<Error>)> {
         state.handshake_send_sequence = 0;
         Ok(vec![Packet {
-            record: RecordLayer {
-                record_layer_header: RecordLayerHeader {
-                    protocol_version: PROTOCOL_VERSION1_2,
-                    ..Default::default()
-                },
-                content: Content::Handshake(Handshake::new(HandshakeMessage::HelloVerifyRequest(
+            record: RecordLayer::new(
+                PROTOCOL_VERSION1_2,
+                0,
+                Content::Handshake(Handshake::new(HandshakeMessage::HelloVerifyRequest(
                     HandshakeMessageHelloVerifyRequest {
                         version: PROTOCOL_VERSION1_2,
                         cookie: state.cookie.clone(),
                     },
                 ))),
-            },
+            ),
             should_encrypt: false,
             reset_local_sequence_number: false,
         }])

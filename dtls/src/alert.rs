@@ -160,6 +160,10 @@ impl Alert {
         ContentType::Alert
     }
 
+    pub fn size(&self) -> usize {
+        2
+    }
+
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         writer.write_u8(self.alert_level as u8)?;
         writer.write_u8(self.alert_description as u8)?;
