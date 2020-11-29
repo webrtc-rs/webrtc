@@ -325,7 +325,7 @@ impl Flight for Flight3 {
         if cfg.local_psk_callback.is_none() {
             extensions.extend_from_slice(&[
                 Extension::SupportedEllipticCurves(ExtensionSupportedEllipticCurves {
-                    elliptic_curves: vec![NamedCurve::X25519, NamedCurve::P256, NamedCurve::P384],
+                    elliptic_curves: vec![NamedCurve::P256, NamedCurve::X25519, NamedCurve::P384],
                 }),
                 Extension::SupportedPointFormats(ExtensionSupportedPointFormats {
                     point_formats: vec![ELLIPTIC_CURVE_POINT_FORMAT_UNCOMPRESSED],

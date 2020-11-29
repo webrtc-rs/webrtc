@@ -281,7 +281,7 @@ impl Conn {
                 handshake_done_rx,
             };
 
-            trace!("before enter read_and_buffer: {}] ", srv_cli_str(is_client));
+            //trace!("before enter read_and_buffer: {}] ", srv_cli_str(is_client));
             loop {
                 let _ = Conn::read_and_buffer(
                     &mut ctx,
@@ -441,7 +441,7 @@ impl Conn {
                             p.record.marshal(&mut writer)?;
                         }
                         trace!(
-                            "Sending [handshake:{}] -> {} (epoch: {}, seq: {})",
+                            "Send [handshake:{}] -> {} (epoch: {}, seq: {})",
                             srv_cli_str(is_client),
                             h.handshake_header.handshake_type.to_string(),
                             p.record.record_layer_header.epoch,
@@ -664,11 +664,11 @@ impl Conn {
         let mut enqueue = false;
         let pkts;
 
-        trace!("entered read_and_buffer: {}] ", srv_cli_str(ctx.is_client));
+        //trace!("entered read_and_buffer: {}] ", srv_cli_str(ctx.is_client));
 
         tokio::select! {
             result = next_conn.recv(buf) => {
-                 trace!("recv next_conn: {}, {:?} ", srv_cli_str(ctx.is_client), result);
+                 //trace!("recv next_conn: {}, {:?} ", srv_cli_str(ctx.is_client), result);
                  match result {
                     Ok(n) =>{
                         pkts = unpack_datagram(&buf[..n])?;
@@ -678,16 +678,16 @@ impl Conn {
                  };
             }
             _ = handle_queue_rx.recv() => {
-                trace!("recv handle_queue_rx: {} ", srv_cli_str(ctx.is_client));
+                //trace!("recv handle_queue_rx: {} ", srv_cli_str(ctx.is_client));
                 pkts = ctx.encrypted_packets.drain(..).collect();
             }
         }
 
-        trace!(
+        /*trace!(
             "before handle_incoming_packet: {}, with {} pkts] ",
             srv_cli_str(ctx.is_client),
             pkts.len()
-        );
+        );*/
 
         for pkt in pkts {
             let (hs, alert, mut err) = Conn::handle_incoming_packet(ctx, pkt, enqueue).await;
@@ -842,7 +842,16 @@ impl Conn {
             while let Ok((out, epoch)) = ctx.fragment_buffer.pop() {
                 let mut reader = BufReader::new(out.as_slice());
                 let raw_handshake = match Handshake::unmarshal(&mut reader) {
-                    Ok(h) => h,
+                    Ok(rh) => {
+                        trace!(
+                            "Recv [handshake:{}] -> {} (epoch: {}, seq: {})",
+                            srv_cli_str(ctx.is_client),
+                            rh.handshake_header.handshake_type.to_string(),
+                            h.epoch,
+                            rh.handshake_header.message_sequence
+                        );
+                        rh
+                    }
                     Err(err) => {
                         debug!(
                             "{}: handshake parse failed: {}",

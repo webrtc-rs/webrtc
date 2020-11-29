@@ -312,6 +312,12 @@ impl Conn {
                    drop(done);
                    match result {
                         Err((alert, mut err)) => {
+                            trace!("[handshake:{}] {} result alert:{:?}, err:{:?}",
+                                    srv_cli_str(self.state.is_client),
+                                    self.current_flight.to_string(),
+                                    alert,
+                                    err);
+
                             if let Some(alert) = alert {
                                 let alert_err = self.notify(alert.alert_level, alert.alert_description).await;
 
@@ -337,6 +343,8 @@ impl Conn {
                 }
 
                 _ = &mut retransmit_timer =>{
+                    trace!("[handshake:{}] {} retransmit_timer", srv_cli_str(self.state.is_client), self.current_flight.to_string());
+
                     if !self.retransmit {
                         return Ok(HandshakeState::Waiting);
                     }

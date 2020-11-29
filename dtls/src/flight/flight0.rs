@@ -181,6 +181,7 @@ impl Flight for Flight0 {
         _cfg: &HandshakeConfig,
     ) -> Result<Vec<Packet>, (Option<Alert>, Option<Error>)> {
         // Initialize
+        state.cookie = vec![0; COOKIE_LENGTH];
         rand::thread_rng().fill(state.cookie.as_mut_slice());
 
         //TODO: figure out difference between golang's atom store and rust atom store
