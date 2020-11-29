@@ -307,7 +307,7 @@ impl Conn {
         loop {
             tokio::select! {
                  done = self.handshake_rx.recv() =>{
-                   trace!("[handshake:{}] {} received handshake_rx", srv_cli_str(self.state.is_client), self.current_flight.to_string());
+                   //trace!("[handshake:{}] {} received handshake_rx", srv_cli_str(self.state.is_client), self.current_flight.to_string());
                    let result = self.current_flight.parse(&mut self.handle_queue_tx, &mut self.state, &self.cache, &self.cfg).await;
                    drop(done);
                    match result {

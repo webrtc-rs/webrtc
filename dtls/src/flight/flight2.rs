@@ -16,7 +16,7 @@ pub(crate) struct Flight2;
 #[async_trait]
 impl Flight for Flight2 {
     fn to_string(&self) -> String {
-        "Flight2".to_owned()
+        "Flight 2".to_owned()
     }
 
     fn has_retransmit(&self) -> bool {
@@ -25,7 +25,7 @@ impl Flight for Flight2 {
 
     async fn parse(
         &self,
-        tx: &mut mpsc::Sender<()>,
+        tx: &mut mpsc::Sender<mpsc::Sender<()>>,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,

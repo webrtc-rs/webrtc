@@ -79,7 +79,7 @@ pub(crate) trait Flight {
 
     async fn parse(
         &self,
-        tx: &mut mpsc::Sender<()>,
+        tx: &mut mpsc::Sender<mpsc::Sender<()>>,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,

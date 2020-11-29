@@ -101,7 +101,7 @@ pub(crate) struct Conn {
     pub(crate) handshake_rx: mpsc::Receiver<mpsc::Sender<()>>,
 
     pub(crate) packet_tx: Arc<mpsc::Sender<Vec<Packet>>>,
-    pub(crate) handle_queue_tx: mpsc::Sender<()>,
+    pub(crate) handle_queue_tx: mpsc::Sender<mpsc::Sender<()>>,
     pub(crate) handshake_done_tx: Option<mpsc::Sender<()>>,
 }
 
@@ -655,7 +655,7 @@ impl Conn {
         ctx: &mut ConnReaderContext,
         next_conn: &Arc<UdpSocket>,
         packet_tx: &Arc<mpsc::Sender<Vec<Packet>>>,
-        handle_queue_rx: &mut mpsc::Receiver<()>,
+        handle_queue_rx: &mut mpsc::Receiver<mpsc::Sender<()>>,
         buf: &mut [u8],
         local_epoch: &Arc<AtomicU16>,
         handshake_completed_successfully: &Arc<AtomicBool>,
@@ -663,6 +663,7 @@ impl Conn {
         let mut has_handshake = false;
         let mut enqueue = false;
         let pkts;
+        let mut handle_queue_done = None;
 
         //trace!("entered read_and_buffer: {}] ", srv_cli_str(ctx.is_client));
 
@@ -677,8 +678,9 @@ impl Conn {
                     Err(err) => return Err(Error::new(err.to_string())),
                  };
             }
-            _ = handle_queue_rx.recv() => {
-                //trace!("recv handle_queue_rx: {} ", srv_cli_str(ctx.is_client));
+            done = handle_queue_rx.recv() => {
+                trace!("recv handle_queue: {} ", srv_cli_str(ctx.is_client));
+                handle_queue_done = Some(done);
                 pkts = ctx.encrypted_packets.drain(..).collect();
             }
         }
@@ -729,15 +731,20 @@ impl Conn {
             }
         }
 
+        if handle_queue_done.is_some() {
+            trace!("drop handle_queue: {} ", srv_cli_str(ctx.is_client));
+            handle_queue_done.take(); //drop it
+        }
+
         if has_handshake {
             let (done_tx, mut done_rx) = mpsc::channel(1);
 
             tokio::select! {
                 _ = ctx.handshake_tx.send(done_tx) => {
-                    trace!(
+                    /*trace!(
                         "wait handshake done_rx: {}",
                         srv_cli_str(ctx.is_client),
-                    );
+                    );*/
                     // If the other party may retransmit the flight,
                     // we should respond even if it not a new message.
                     done_rx.recv().await;
@@ -760,7 +767,11 @@ impl Conn {
             Err(err) => {
                 // Decode error must be silently discarded
                 // [RFC6347 Section-4.1.2.7]
-                debug!("discarded broken packet: {}", err);
+                debug!(
+                    "{}: discarded broken packet: {}",
+                    srv_cli_str(ctx.is_client),
+                    err
+                );
                 return (false, None, None);
             }
         };
@@ -770,13 +781,18 @@ impl Conn {
         if h.epoch > epoch {
             if h.epoch > epoch + 1 {
                 debug!(
-                    "discarded future packet (epoch: {}, seq: {})",
-                    h.epoch, h.sequence_number,
+                    "{}: discarded future packet (epoch: {}, seq: {})",
+                    srv_cli_str(ctx.is_client),
+                    h.epoch,
+                    h.sequence_number,
                 );
                 return (false, None, None);
             }
             if enqueue {
-                debug!("received packet of next epoch, queuing packet");
+                debug!(
+                    "{}: received packet of next epoch, queuing packet",
+                    srv_cli_str(ctx.is_client)
+                );
                 ctx.encrypted_packets.push(pkt);
             }
             return (false, None, None);
@@ -794,8 +810,10 @@ impl Conn {
         let ok = ctx.replay_detector[h.epoch as usize].check(h.sequence_number);
         if !ok {
             debug!(
-                "discarded duplicated packet (epoch: {}, seq: {})",
-                h.epoch, h.sequence_number,
+                "{}: discarded duplicated packet (epoch: {}, seq: {})",
+                srv_cli_str(ctx.is_client),
+                h.epoch,
+                h.sequence_number,
             );
             return (false, None, None);
         }
@@ -811,7 +829,10 @@ impl Conn {
             };
             if invalid_cipher_suite {
                 if enqueue {
-                    debug!("handshake not finished, queuing packet");
+                    debug!(
+                        "{}: handshake not finished, queuing packet",
+                        srv_cli_str(ctx.is_client)
+                    );
                     ctx.encrypted_packets.push(pkt);
                 }
                 return (false, None, None);
@@ -833,7 +854,7 @@ impl Conn {
             Err(err) => {
                 // Decode error must be silently discarded
                 // [RFC6347 Section-4.1.2.7]
-                debug!("defragment failed: {}", err);
+                debug!("{}: defragment failed: {}", srv_cli_str(ctx.is_client), err);
                 return (false, None, None);
             }
         };
@@ -919,7 +940,10 @@ impl Conn {
 
                 if invalid_cipher_suite {
                     if enqueue {
-                        debug!("CipherSuite not initialized, queuing packet");
+                        debug!(
+                            "{}: CipherSuite not initialized, queuing packet",
+                            srv_cli_str(ctx.is_client)
+                        );
                         ctx.encrypted_packets.push(pkt);
                     }
                     return (false, None, None);

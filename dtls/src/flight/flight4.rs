@@ -36,19 +36,19 @@ pub(crate) struct Flight4;
 #[async_trait]
 impl Flight for Flight4 {
     fn to_string(&self) -> String {
-        "Flight4".to_owned()
+        "Flight 4".to_owned()
     }
 
     async fn parse(
         &self,
-        tx: &mut mpsc::Sender<()>,
+        tx: &mut mpsc::Sender<mpsc::Sender<()>>,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
     ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<Error>)> {
         let (seq, msgs) = match cache
             .full_pull_map(
-                0,
+                state.handshake_recv_sequence,
                 &[
                     HandshakeCachePullRule {
                         typ: HandshakeType::Certificate,
@@ -377,7 +377,8 @@ impl Flight for Flight4 {
         }
 
         // Now, encrypted packets can be handled
-        if let Err(err) = tx.send(()).await {
+        let (done_tx, mut done_rx) = mpsc::channel(1);
+        if let Err(err) = tx.send(done_tx).await {
             return Err((
                 Some(Alert {
                     alert_level: AlertLevel::Fatal,
@@ -386,6 +387,8 @@ impl Flight for Flight4 {
                 Some(Error::new(err.to_string())),
             ));
         }
+
+        done_rx.recv().await;
 
         let (seq, msgs) = match cache
             .full_pull_map(

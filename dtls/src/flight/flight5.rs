@@ -28,7 +28,7 @@ pub(crate) struct Flight5;
 #[async_trait]
 impl Flight for Flight5 {
     fn to_string(&self) -> String {
-        "Flight5".to_owned()
+        "Flight 5".to_owned()
     }
 
     fn is_last_recv_flight(&self) -> bool {
@@ -37,14 +37,14 @@ impl Flight for Flight5 {
 
     async fn parse(
         &self,
-        _tx: &mut mpsc::Sender<()>,
+        _tx: &mut mpsc::Sender<mpsc::Sender<()>>,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
     ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<Error>)> {
         let (_seq, msgs) = match cache
             .full_pull_map(
-                0,
+                state.handshake_recv_sequence,
                 &[HandshakeCachePullRule {
                     typ: HandshakeType::Finished,
                     epoch: cfg.initial_epoch + 1,

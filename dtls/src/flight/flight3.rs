@@ -25,6 +25,8 @@ use util::Error;
 
 use std::sync::Arc;
 
+use log::*;
+
 use async_trait::async_trait;
 
 pub(crate) struct Flight3;
@@ -32,12 +34,12 @@ pub(crate) struct Flight3;
 #[async_trait]
 impl Flight for Flight3 {
     fn to_string(&self) -> String {
-        "Flight3".to_owned()
+        "Flight 3".to_owned()
     }
 
     async fn parse(
         &self,
-        _tx: &mut mpsc::Sender<()>,
+        _tx: &mut mpsc::Sender<mpsc::Sender<()>>,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
@@ -250,10 +252,10 @@ impl Flight for Flight3 {
             }
 
             if let Ok(cipher_suite) = cipher_suite_for_id(h.cipher_suite) {
+                trace!("[handshake] use cipher suite: {}", cipher_suite.to_string());
                 state.cipher_suite = Arc::new(Some(cipher_suite));
             }
             state.remote_random = h.random.clone();
-            //cfg.log.Tracef("[handshake] use cipher suite: %s", h.cipherSuite.String())
         }
 
         if let Some(message) = msgs.get(&HandshakeType::Certificate) {
