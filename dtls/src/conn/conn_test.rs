@@ -25,7 +25,7 @@ async fn pipe_conn(ca: UdpSocket, cb: UdpSocket) -> Result<(Conn, Conn), Error> 
                 srtp_protection_profiles: vec![SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_80],
                 ..Default::default()
             },
-            true,
+            false,
         )
         .await;
 
@@ -39,7 +39,7 @@ async fn pipe_conn(ca: UdpSocket, cb: UdpSocket) -> Result<(Conn, Conn), Error> 
             srtp_protection_profiles: vec![SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_80],
             ..Default::default()
         },
-        true,
+        false,
     )
     .await?;
 
@@ -52,6 +52,22 @@ async fn pipe_conn(ca: UdpSocket, cb: UdpSocket) -> Result<(Conn, Conn), Error> 
     Ok((client, sever))
 }
 
+fn psk_callback_client(hint: &[u8]) -> Result<Vec<u8>, Error> {
+    trace!(
+        "Server's hint: {}",
+        String::from_utf8(hint.to_vec()).unwrap()
+    );
+    Ok(vec![0xAB, 0xC1, 0x23])
+}
+
+fn psk_callback_server(hint: &[u8]) -> Result<Vec<u8>, Error> {
+    trace!(
+        "Client's hint: {}",
+        String::from_utf8(hint.to_vec()).unwrap()
+    );
+    Ok(vec![0xAB, 0xC1, 0x23])
+}
+
 async fn create_test_client(
     ca: UdpSocket,
     mut cfg: Config,
@@ -59,6 +75,10 @@ async fn create_test_client(
 ) -> Result<Conn, Error> {
     if generate_certificate {
         //TODO:
+    } else {
+        cfg.psk = Some(psk_callback_client);
+        cfg.psk_identity_hint = "WebRTC.rs DTLS Server".as_bytes().to_vec();
+        cfg.cipher_suites = vec![CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256];
     }
 
     cfg.insecure_skip_verify = true;
@@ -67,11 +87,15 @@ async fn create_test_client(
 
 async fn create_test_server(
     cb: UdpSocket,
-    cfg: Config,
+    mut cfg: Config,
     generate_certificate: bool,
 ) -> Result<Conn, Error> {
     if generate_certificate {
         //TODO:
+    } else {
+        cfg.psk = Some(psk_callback_server);
+        cfg.psk_identity_hint = "WebRTC.rs DTLS Client".as_bytes().to_vec();
+        cfg.cipher_suites = vec![CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256];
     }
     Conn::new(cb, cfg, false, None).await
 }

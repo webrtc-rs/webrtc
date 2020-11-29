@@ -1,5 +1,6 @@
 pub mod cipher_suite_tls_ecdhe_ecdsa_with_aes_128_gcm_sha256;
 pub mod cipher_suite_tls_ecdhe_ecdsa_with_aes_256_cbc_sha;
+pub mod cipher_suite_tls_psk_with_aes_128_gcm_sha256;
 
 use std::fmt;
 use std::marker::{Send, Sync};
@@ -14,6 +15,7 @@ use util::Error;
 
 use cipher_suite_tls_ecdhe_ecdsa_with_aes_128_gcm_sha256::*;
 use cipher_suite_tls_ecdhe_ecdsa_with_aes_256_cbc_sha::*;
+use cipher_suite_tls_psk_with_aes_128_gcm_sha256::*;
 
 // CipherSuiteID is an ID for our supported CipherSuites
 // Supported Cipher Suites
@@ -154,9 +156,10 @@ pub fn cipher_suite_for_id(id: CipherSuiteID) -> Result<Box<dyn CipherSuite + Se
             CipherSuiteID::TLS_PSK_WITH_AES_128_CCM:
         return newCipherSuiteTLSPskWithAes128Ccm()
             CipherSuiteID::TLS_PSK_WITH_AES_128_CCM_8:
-        return newCipherSuiteTLSPskWithAes128Ccm8()
-            CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256:
-        return &cipherSuiteTLSPskWithAes128GcmSha256{}*/
+        return newCipherSuiteTLSPskWithAes128Ccm8()*/
+        CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256 => {
+            Ok(Box::new(CipherSuiteTLSPskWithAes128GcmSha256::default()))
+        }
         _ => Err(ERR_INVALID_CIPHER_SUITE.clone()),
     }
 }
@@ -181,7 +184,7 @@ fn all_cipher_suites() -> Vec<Box<dyn CipherSuite + Send + Sync>> {
         //TODO: &cipherSuiteTLSEcdheRsaWithAes256CbcSha{},
         //TODO: newCipherSuiteTLSPskWithAes128Ccm(),
         //TODO: newCipherSuiteTLSPskWithAes128Ccm8(),
-        //TODO: &cipherSuiteTLSPskWithAes128GcmSha256{},
+        Box::new(CipherSuiteTLSPskWithAes128GcmSha256::default()),
     ]
 }
 
