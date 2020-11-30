@@ -95,7 +95,7 @@ impl CryptoGcm {
             return Err(ERR_NOT_ENOUGH_ROOM_FOR_NONCE.clone());
         }
 
-        let mut nonce = vec![0u8; CRYPTO_GCM_NONCE_LENGTH];
+        let mut nonce = vec![];
         nonce.extend_from_slice(&self.remote_write_iv[..4]);
         nonce.extend_from_slice(&r[RECORD_LAYER_HEADER_SIZE..RECORD_LAYER_HEADER_SIZE + 8]);
         let nonce = GenericArray::from_slice(&nonce);

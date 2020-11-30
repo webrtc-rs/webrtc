@@ -34,7 +34,7 @@ use std::sync::Arc;
 use log::*;
 
 use tokio::net::*;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 use tokio::time;
 use tokio::time::{timeout, Duration};
 
@@ -66,7 +66,7 @@ struct ConnReaderContext {
     encrypted_packets: Vec<Vec<u8>>,
     fragment_buffer: FragmentBuffer,
     cache: HandshakeCache,
-    cipher_suite: Arc<Option<Box<dyn CipherSuite + Send + Sync>>>,
+    cipher_suite: Arc<Mutex<Option<Box<dyn CipherSuite + Send + Sync>>>>,
     remote_epoch: Arc<AtomicU16>,
     handshake_tx: mpsc::Sender<mpsc::Sender<()>>,
     handshake_done_rx: mpsc::Receiver<()>,
@@ -378,11 +378,11 @@ impl Conn {
 
     // ConnectionState returns basic DTLS details about the connection.
     // Note that this replaced the `Export` function of v1.
-    pub fn connection_state(&self) -> State {
-        //c.lock.RLock()
-        //defer c.lock.RUnlock()
-        self.state.clone()
-    }
+    //pub fn connection_state(&self) -> State {
+    //c.lock.RLock()
+    //defer c.lock.RUnlock()
+    //self.state.clone()
+    //}
 
     // selected_srtpprotection_profile returns the selected SRTPProtectionProfile
     pub fn selected_srtpprotection_profile(&self) -> SRTPProtectionProfile {
@@ -424,7 +424,7 @@ impl Conn {
         mut cache: HandshakeCache,
         is_client: bool,
         sequence_number: Arc<AtomicU64>,
-        cipher_suite: Arc<Option<Box<dyn CipherSuite + Send + Sync>>>,
+        cipher_suite: Arc<Mutex<Option<Box<dyn CipherSuite + Send + Sync>>>>,
         maximum_transmission_unit: usize,
     ) -> Result<(), Error> {
         let mut local_sequence_number = vec![];
@@ -495,7 +495,7 @@ impl Conn {
     async fn process_packet(
         local_sequence_number: &mut Vec<u64>,
         sequence_number: &Arc<AtomicU64>,
-        cipher_suite: &Arc<Option<Box<dyn CipherSuite + Send + Sync>>>,
+        cipher_suite: &Arc<Mutex<Option<Box<dyn CipherSuite + Send + Sync>>>>,
         p: &mut Packet,
     ) -> Result<Vec<u8>, Error> {
         let epoch = p.record.record_layer_header.epoch as usize;
@@ -522,7 +522,8 @@ impl Conn {
         }
 
         if p.should_encrypt {
-            if let Some(cipher_suite) = &**cipher_suite {
+            let cipher_suite = cipher_suite.lock().await;
+            if let Some(cipher_suite) = &*cipher_suite {
                 raw_packet = cipher_suite
                     .encrypt(&p.record.record_layer_header, &raw_packet)
                     .await?;
@@ -535,7 +536,7 @@ impl Conn {
     async fn process_handshake_packet(
         local_sequence_number: &mut Vec<u64>,
         sequence_number: &Arc<AtomicU64>,
-        cipher_suite: &Arc<Option<Box<dyn CipherSuite + Send + Sync>>>,
+        cipher_suite: &Arc<Mutex<Option<Box<dyn CipherSuite + Send + Sync>>>>,
         maximum_transmission_unit: usize,
         p: &Packet,
         h: &Handshake,
@@ -580,7 +581,8 @@ impl Conn {
             raw_packet.extend_from_slice(&record_layer_header_bytes);
             raw_packet.extend_from_slice(&handshake_fragment);
             if p.should_encrypt {
-                if let Some(cipher_suite) = &**cipher_suite {
+                let cipher_suite = cipher_suite.lock().await;
+                if let Some(cipher_suite) = &*cipher_suite {
                     raw_packet = cipher_suite
                         .encrypt(&record_layer_header, &raw_packet)
                         .await?;
@@ -661,38 +663,11 @@ impl Conn {
         handshake_completed_successfully: &Arc<AtomicBool>,
     ) -> Result<(), Error> {
         let mut has_handshake = false;
-        let mut enqueue = false;
-        let pkts;
-        let mut handle_queue_done = None;
-
-        //trace!("entered read_and_buffer: {}] ", srv_cli_str(ctx.is_client));
-
-        tokio::select! {
-            result = next_conn.recv(buf) => {
-                 //trace!("recv next_conn: {}, {:?} ", srv_cli_str(ctx.is_client), result);
-                 match result {
-                    Ok(n) =>{
-                        pkts = unpack_datagram(&buf[..n])?;
-                        enqueue = true;
-                    }
-                    Err(err) => return Err(Error::new(err.to_string())),
-                 };
-            }
-            done = handle_queue_rx.recv() => {
-                trace!("recv handle_queue: {} ", srv_cli_str(ctx.is_client));
-                handle_queue_done = Some(done);
-                pkts = ctx.encrypted_packets.drain(..).collect();
-            }
-        }
-
-        /*trace!(
-            "before handle_incoming_packet: {}, with {} pkts] ",
-            srv_cli_str(ctx.is_client),
-            pkts.len()
-        );*/
+        let n = next_conn.recv(buf).await?;
+        let pkts = unpack_datagram(&buf[..n])?;
 
         for pkt in pkts {
-            let (hs, alert, mut err) = Conn::handle_incoming_packet(ctx, pkt, enqueue).await;
+            let (hs, alert, mut err) = Conn::handle_incoming_packet(ctx, pkt, true).await;
             if let Some(alert) = alert {
                 let alert_err = packet_tx
                     .send(vec![Packet {
@@ -726,14 +701,9 @@ impl Conn {
                 return Err(err);
             }
 
-            if hs && enqueue {
+            if hs {
                 has_handshake = true
             }
-        }
-
-        if handle_queue_done.is_some() {
-            trace!("drop handle_queue: {} ", srv_cli_str(ctx.is_client));
-            handle_queue_done.take(); //drop it
         }
 
         if has_handshake {
@@ -741,15 +711,71 @@ impl Conn {
 
             tokio::select! {
                 _ = ctx.handshake_tx.send(done_tx) => {
-                    /*trace!(
-                        "wait handshake done_rx: {}",
-                        srv_cli_str(ctx.is_client),
-                    );*/
-                    // If the other party may retransmit the flight,
-                    // we should respond even if it not a new message.
-                    done_rx.recv().await;
+                    let mut wait_done_rx = true;
+                    while wait_done_rx{
+                        tokio::select!{
+                            _ = done_rx.recv() => {
+                                // If the other party may retransmit the flight,
+                                // we should respond even if it not a new message.
+                                wait_done_rx = false;
+                            }
+                            done = handle_queue_rx.recv() => {
+                                trace!("recv handle_queue: {} ", srv_cli_str(ctx.is_client));
+
+                                let pkts = ctx.encrypted_packets.drain(..).collect();
+                                Conn::handle_queued_packets(ctx, packet_tx, local_epoch, handshake_completed_successfully, pkts).await?;
+
+                                drop(done);
+                            }
+                        }
+                    }
                 }
                 _ = ctx.handshake_done_rx.recv() => {}
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn handle_queued_packets(
+        ctx: &mut ConnReaderContext,
+        packet_tx: &Arc<mpsc::Sender<Vec<Packet>>>,
+        local_epoch: &Arc<AtomicU16>,
+        handshake_completed_successfully: &Arc<AtomicBool>,
+        pkts: Vec<Vec<u8>>,
+    ) -> Result<(), Error> {
+        for p in pkts {
+            let (_, alert, mut err) = Conn::handle_incoming_packet(ctx, p, false).await; // don't re-enqueue
+            if let Some(alert) = alert {
+                let alert_err = packet_tx
+                    .send(vec![Packet {
+                        record: RecordLayer::new(
+                            PROTOCOL_VERSION1_2,
+                            local_epoch.load(Ordering::Relaxed),
+                            Content::Alert(Alert {
+                                alert_level: alert.alert_level,
+                                alert_description: alert.alert_description,
+                            }),
+                        ),
+                        should_encrypt: handshake_completed_successfully.load(Ordering::Relaxed),
+                        reset_local_sequence_number: false,
+                    }])
+                    .await;
+
+                if let Err(alert_err) = alert_err {
+                    if err.is_none() {
+                        err = Some(Error::new(alert_err.to_string()));
+                    }
+                }
+                if alert.alert_level == AlertLevel::Fatal
+                    || alert.alert_description == AlertDescription::CloseNotify
+                {
+                    return Err(Error::new("Alert is Fatal or Close Notify".to_owned()));
+                }
+            }
+
+            if let Some(err) = err {
+                return Err(err);
             }
         }
 
@@ -820,12 +846,15 @@ impl Conn {
 
         // Decrypt
         if h.epoch != 0 {
-            let invalid_cipher_suite = if ctx.cipher_suite.is_none() {
-                true
-            } else if let Some(cipher_suite) = &*ctx.cipher_suite {
-                !cipher_suite.is_initialized().await
-            } else {
-                false
+            let invalid_cipher_suite = {
+                let cipher_suite = ctx.cipher_suite.lock().await;
+                if cipher_suite.is_none() {
+                    true
+                } else if let Some(cipher_suite) = &*cipher_suite {
+                    !cipher_suite.is_initialized().await
+                } else {
+                    false
+                }
             };
             if invalid_cipher_suite {
                 if enqueue {
@@ -838,7 +867,8 @@ impl Conn {
                 return (false, None, None);
             }
 
-            if let Some(cipher_suite) = &*ctx.cipher_suite {
+            let cipher_suite = ctx.cipher_suite.lock().await;
+            if let Some(cipher_suite) = &*cipher_suite {
                 pkt = match cipher_suite.decrypt(&pkt).await {
                     Ok(pkt) => pkt,
                     Err(err) => {
@@ -930,12 +960,15 @@ impl Conn {
                 ); //TODO: &errAlert { content });
             }
             Content::ChangeCipherSpec(_) => {
-                let invalid_cipher_suite = if ctx.cipher_suite.is_none() {
-                    true
-                } else if let Some(cipher_suite) = &*ctx.cipher_suite {
-                    !cipher_suite.is_initialized().await
-                } else {
-                    false
+                let invalid_cipher_suite = {
+                    let cipher_suite = ctx.cipher_suite.lock().await;
+                    if cipher_suite.is_none() {
+                        true
+                    } else if let Some(cipher_suite) = &*cipher_suite {
+                        !cipher_suite.is_initialized().await
+                    } else {
+                        false
+                    }
                 };
 
                 if invalid_cipher_suite {

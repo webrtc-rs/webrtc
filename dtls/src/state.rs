@@ -13,6 +13,8 @@ use std::marker::{Send, Sync};
 use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 use std::sync::Arc;
 
+use tokio::sync::Mutex;
+
 // State holds the dtls connection state and implements both encoding.BinaryMarshaler and encoding.BinaryUnmarshaler
 pub(crate) struct State {
     pub(crate) local_epoch: Arc<AtomicU16>,
@@ -21,7 +23,7 @@ pub(crate) struct State {
     pub(crate) local_random: HandshakeRandom,
     pub(crate) remote_random: HandshakeRandom,
     pub(crate) master_secret: Vec<u8>,
-    pub(crate) cipher_suite: Arc<Option<Box<dyn CipherSuite + Send + Sync>>>, // nil if a cipher_suite hasn't been chosen
+    pub(crate) cipher_suite: Arc<Mutex<Option<Box<dyn CipherSuite + Send + Sync>>>>, // nil if a cipher_suite hasn't been chosen
 
     pub(crate) srtp_protection_profile: SRTPProtectionProfile, // Negotiated srtp_protection_profile
     pub(crate) peer_certificates: Vec<Vec<u8>>,
@@ -59,7 +61,7 @@ struct SerializedState {
     is_client: bool,
 }
 
-impl Clone for State {
+/*impl Clone for State {
     fn clone(&self) -> Self {
         let mut state = State::default();
 
@@ -69,7 +71,7 @@ impl Clone for State {
 
         state
     }
-}
+}*/
 
 impl Default for State {
     fn default() -> Self {
@@ -80,7 +82,7 @@ impl Default for State {
             local_random: HandshakeRandom::default(),
             remote_random: HandshakeRandom::default(),
             master_secret: vec![],
-            cipher_suite: Arc::new(None), // nil if a cipher_suite hasn't been chosen
+            cipher_suite: Arc::new(Mutex::new(None)), // nil if a cipher_suite hasn't been chosen
 
             srtp_protection_profile: SRTPProtectionProfile::Unsupported, // Negotiated srtp_protection_profile
             peer_certificates: vec![],
@@ -107,7 +109,7 @@ impl Default for State {
 }
 
 impl State {
-    fn serialize(&self) -> Result<SerializedState, Error> {
+    async fn serialize(&self) -> Result<SerializedState, Error> {
         let mut local_rand = vec![];
         {
             let mut writer = BufWriter::<&mut Vec<u8>>::new(local_rand.as_mut());
@@ -128,9 +130,12 @@ impl State {
         let local_epoch = self.local_epoch.load(Ordering::Relaxed);
         let remote_epoch = self.remote_epoch.load(Ordering::Relaxed);
         let sequence_number = self.local_sequence_number.load(Ordering::Relaxed);
-        let cipher_suite_id = match &*self.cipher_suite {
-            Some(cipher_suite) => cipher_suite.id() as u16,
-            None => return Err(ERR_CIPHER_SUITE_UNSET.clone()),
+        let cipher_suite_id = {
+            let cipher_suite = self.cipher_suite.lock().await;
+            match &*cipher_suite {
+                Some(cipher_suite) => cipher_suite.id() as u16,
+                None => return Err(ERR_CIPHER_SUITE_UNSET.clone()),
+            }
         };
 
         Ok(SerializedState {
@@ -169,9 +174,9 @@ impl State {
         self.master_secret = serialized.master_secret.clone();
 
         // Set cipher suite
-        self.cipher_suite = Arc::new(Some(cipher_suite_for_id(
+        self.cipher_suite = Arc::new(Mutex::new(Some(cipher_suite_for_id(
             serialized.cipher_suite_id.into(),
-        )?));
+        )?)));
 
         self.srtp_protection_profile = serialized.srtp_protection_profile.into();
 
@@ -182,7 +187,8 @@ impl State {
     }
 
     pub async fn init_cipher_suite(&mut self) -> Result<(), Error> {
-        if let Some(cipher_suite) = &*self.cipher_suite {
+        let cipher_suite = self.cipher_suite.lock().await;
+        if let Some(cipher_suite) = &*cipher_suite {
             if cipher_suite.is_initialized().await {
                 return Ok(());
             }
@@ -213,8 +219,8 @@ impl State {
     }
 
     // marshal_binary is a binary.BinaryMarshaler.marshal_binary implementation
-    pub fn marshal_binary(&self) -> Result<Vec<u8>, Error> {
-        let serialized = self.serialize()?;
+    pub async fn marshal_binary(&self) -> Result<Vec<u8>, Error> {
+        let serialized = self.serialize().await?;
 
         match bincode::serialize(&serialized) {
             Ok(enc) => Ok(enc),
@@ -238,7 +244,7 @@ impl State {
     // slice as defined in RFC 5705.
     // This allows protocols to use DTLS for key establishment, but
     // then use some of the keying material for their own purposes
-    pub fn export_keying_material(
+    pub async fn export_keying_material(
         &self,
         label: &str,
         context: &[u8],
@@ -272,7 +278,8 @@ impl State {
             seed.extend_from_slice(&local_random);
         }
 
-        if let Some(cipher_suite) = &*self.cipher_suite {
+        let cipher_suite = self.cipher_suite.lock().await;
+        if let Some(cipher_suite) = &*cipher_suite {
             prf_p_hash(&self.master_secret, &seed, length, cipher_suite.hash_func())
         } else {
             Err(ERR_CIPHER_SUITE_UNSET.clone())

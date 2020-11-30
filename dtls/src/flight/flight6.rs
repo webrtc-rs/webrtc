@@ -147,7 +147,8 @@ impl Flight for Flight6 {
                 ])
                 .await;
 
-            if let Some(cipher_suite) = &*state.cipher_suite {
+            let cipher_suite = state.cipher_suite.lock().await;
+            if let Some(cipher_suite) = &*cipher_suite {
                 state.local_verify_data = match prf_verify_data_server(
                     &state.master_secret,
                     &plain_text,

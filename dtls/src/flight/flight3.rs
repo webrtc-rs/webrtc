@@ -23,8 +23,6 @@ use crate::prf::{prf_pre_master_secret, prf_psk_pre_master_secret};
 use crate::{find_matching_cipher_suite, find_matching_srtp_profile};
 use util::Error;
 
-use std::sync::Arc;
-
 use log::*;
 
 use async_trait::async_trait;
@@ -253,7 +251,8 @@ impl Flight for Flight3 {
 
             if let Ok(cipher_suite) = cipher_suite_for_id(h.cipher_suite) {
                 trace!("[handshake] use cipher suite: {}", cipher_suite.to_string());
-                state.cipher_suite = Arc::new(Some(cipher_suite));
+                let mut cs = state.cipher_suite.lock().await;
+                *cs = Some(cipher_suite);
             }
             state.remote_random = h.random.clone();
         }

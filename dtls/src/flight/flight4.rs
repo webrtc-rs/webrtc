@@ -257,55 +257,56 @@ impl Flight for Flight4 {
             state.peer_certificates_verified = verified
         }
 
-        if let Some(cipher_suite) = &*state.cipher_suite {
-            if !cipher_suite.is_initialized().await {
-                let mut server_random = vec![];
-                {
-                    let mut writer = BufWriter::<&mut Vec<u8>>::new(server_random.as_mut());
-                    let _ = state.local_random.marshal(&mut writer);
-                }
-                let mut client_random = vec![];
-                {
-                    let mut writer = BufWriter::<&mut Vec<u8>>::new(client_random.as_mut());
-                    let _ = state.remote_random.marshal(&mut writer);
-                }
+        {
+            let cipher_suite = state.cipher_suite.lock().await;
+            if let Some(cipher_suite) = &*cipher_suite {
+                if !cipher_suite.is_initialized().await {
+                    let mut server_random = vec![];
+                    {
+                        let mut writer = BufWriter::<&mut Vec<u8>>::new(server_random.as_mut());
+                        let _ = state.local_random.marshal(&mut writer);
+                    }
+                    let mut client_random = vec![];
+                    {
+                        let mut writer = BufWriter::<&mut Vec<u8>>::new(client_random.as_mut());
+                        let _ = state.remote_random.marshal(&mut writer);
+                    }
 
-                let mut pre_master_secret = vec![];
-                if let Some(local_psk_callback) = &cfg.local_psk_callback {
-                    let psk = match local_psk_callback(&client_key_exchange.identity_hint) {
-                        Ok(psk) => psk,
-                        Err(err) => {
-                            return Err((
-                                Some(Alert {
-                                    alert_level: AlertLevel::Fatal,
-                                    alert_description: AlertDescription::InternalError,
-                                }),
-                                Some(err),
-                            ))
-                        }
-                    };
+                    let mut pre_master_secret = vec![];
+                    if let Some(local_psk_callback) = &cfg.local_psk_callback {
+                        let psk = match local_psk_callback(&client_key_exchange.identity_hint) {
+                            Ok(psk) => psk,
+                            Err(err) => {
+                                return Err((
+                                    Some(Alert {
+                                        alert_level: AlertLevel::Fatal,
+                                        alert_description: AlertDescription::InternalError,
+                                    }),
+                                    Some(err),
+                                ))
+                            }
+                        };
 
-                    pre_master_secret = prf_psk_pre_master_secret(&psk);
-                } else if let Some(local_keypair) = &state.local_keypair {
-                    pre_master_secret = match prf_pre_master_secret(
-                        &client_key_exchange.public_key,
-                        &local_keypair.private_key,
-                        local_keypair.curve,
-                    ) {
-                        Ok(pre_master_secret) => pre_master_secret,
-                        Err(err) => {
-                            return Err((
-                                Some(Alert {
-                                    alert_level: AlertLevel::Fatal,
-                                    alert_description: AlertDescription::IllegalParameter,
-                                }),
-                                Some(err),
-                            ))
-                        }
-                    };
-                }
+                        pre_master_secret = prf_psk_pre_master_secret(&psk);
+                    } else if let Some(local_keypair) = &state.local_keypair {
+                        pre_master_secret = match prf_pre_master_secret(
+                            &client_key_exchange.public_key,
+                            &local_keypair.private_key,
+                            local_keypair.curve,
+                        ) {
+                            Ok(pre_master_secret) => pre_master_secret,
+                            Err(err) => {
+                                return Err((
+                                    Some(Alert {
+                                        alert_level: AlertLevel::Fatal,
+                                        alert_description: AlertDescription::IllegalParameter,
+                                    }),
+                                    Some(err),
+                                ))
+                            }
+                        };
+                    }
 
-                if let Some(cipher_suite) = &*state.cipher_suite {
                     if state.extended_master_secret {
                         let hf = cipher_suite.hash_func();
                         let session_hash =
@@ -357,9 +358,7 @@ impl Flight for Flight4 {
                             }
                         };
                     }
-                }
 
-                if let Some(cipher_suite) = &*state.cipher_suite {
                     if let Err(err) = cipher_suite
                         .init(&state.master_secret, &client_random, &server_random, false)
                         .await
@@ -524,10 +523,13 @@ impl Flight for Flight4 {
                     HandshakeMessageServerHello {
                         version: PROTOCOL_VERSION1_2,
                         random: state.local_random.clone(),
-                        cipher_suite: if let Some(cipher_suite) = &*state.cipher_suite {
-                            cipher_suite.id()
-                        } else {
-                            CipherSuiteID::Unsupported
+                        cipher_suite: {
+                            let cipher_suite = state.cipher_suite.lock().await;
+                            if let Some(cipher_suite) = &*cipher_suite {
+                                cipher_suite.id()
+                            } else {
+                                CipherSuiteID::Unsupported
+                            }
                         },
                         compression_method: default_compression_methods().ids[0],
                         extensions,

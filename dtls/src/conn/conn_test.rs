@@ -102,12 +102,12 @@ async fn create_test_server(
 
 #[tokio::test]
 async fn test_routine_leak_on_close() -> Result<(), Error> {
-    /*env_logger::init();
+    env_logger::init();
 
     let (mut ca, _cb) = build_pipe().await?;
 
     let n = ca.write(&[0; 100], Some(Duration::from_secs(5))).await?;
-    assert_eq!(n, 100);*/
+    assert_eq!(n, 100);
 
     Ok(())
 }

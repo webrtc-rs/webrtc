@@ -146,32 +146,35 @@ impl Flight for Flight5 {
             ])
             .await;
 
-        if let Some(cipher_suite) = &*state.cipher_suite {
-            let expected_verify_data = match prf_verify_data_server(
-                &state.master_secret,
-                &plain_text,
-                cipher_suite.hash_func(),
-            ) {
-                Ok(d) => d,
-                Err(err) => {
+        {
+            let cipher_suite = state.cipher_suite.lock().await;
+            if let Some(cipher_suite) = &*cipher_suite {
+                let expected_verify_data = match prf_verify_data_server(
+                    &state.master_secret,
+                    &plain_text,
+                    cipher_suite.hash_func(),
+                ) {
+                    Ok(d) => d,
+                    Err(err) => {
+                        return Err((
+                            Some(Alert {
+                                alert_level: AlertLevel::Fatal,
+                                alert_description: AlertDescription::InsufficientSecurity,
+                            }),
+                            Some(err),
+                        ))
+                    }
+                };
+
+                if expected_verify_data != finished.verify_data {
                     return Err((
                         Some(Alert {
                             alert_level: AlertLevel::Fatal,
-                            alert_description: AlertDescription::InsufficientSecurity,
+                            alert_description: AlertDescription::HandshakeFailure,
                         }),
-                        Some(err),
-                    ))
+                        Some(ERR_VERIFY_DATA_MISMATCH.clone()),
+                    ));
                 }
-            };
-
-            if expected_verify_data != finished.verify_data {
-                return Err((
-                    Some(Alert {
-                        alert_level: AlertLevel::Fatal,
-                        alert_description: AlertDescription::HandshakeFailure,
-                    }),
-                    Some(ERR_VERIFY_DATA_MISMATCH.clone()),
-                ));
             }
         }
 
@@ -564,7 +567,9 @@ impl Flight for Flight5 {
                 .await;
 
             plain_text.extend_from_slice(&merged);
-            if let Some(cipher_suite) = &*state.cipher_suite {
+
+            let cipher_suite = state.cipher_suite.lock().await;
+            if let Some(cipher_suite) = &*cipher_suite {
                 state.local_verify_data = match prf_verify_data_client(
                     &state.master_secret,
                     &plain_text,
@@ -608,7 +613,9 @@ async fn initalize_cipher_suite(
     h: &HandshakeMessageServerKeyExchange,
     sending_plain_text: &[u8],
 ) -> Result<(), (Option<Alert>, Option<Error>)> {
-    if let Some(cipher_suite) = &*state.cipher_suite {
+    let cipher_suite = state.cipher_suite.lock().await;
+
+    if let Some(cipher_suite) = &*cipher_suite {
         if cipher_suite.is_initialized().await {
             return Ok(());
         }
@@ -625,7 +632,7 @@ async fn initalize_cipher_suite(
         let _ = state.remote_random.marshal(&mut writer);
     }
 
-    if let Some(cipher_suite) = &*state.cipher_suite {
+    if let Some(cipher_suite) = &*cipher_suite {
         if state.extended_master_secret {
             let session_hash = match cache
                 .session_hash(
@@ -749,7 +756,7 @@ async fn initalize_cipher_suite(
         }
     }
 
-    if let Some(cipher_suite) = &*state.cipher_suite {
+    if let Some(cipher_suite) = &*cipher_suite {
         if let Err(err) = cipher_suite
             .init(&state.master_secret, &client_random, &server_random, true)
             .await
