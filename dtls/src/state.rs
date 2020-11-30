@@ -61,18 +61,6 @@ struct SerializedState {
     is_client: bool,
 }
 
-/*impl Clone for State {
-    fn clone(&self) -> Self {
-        let mut state = State::default();
-
-        if let Ok(serialized) = self.serialize() {
-            let _ = state.deserialize(&serialized);
-        }
-
-        state
-    }
-}*/
-
 impl Default for State {
     fn default() -> Self {
         State {
@@ -109,6 +97,16 @@ impl Default for State {
 }
 
 impl State {
+    pub(crate) async fn clone(&self) -> Self {
+        let mut state = State::default();
+
+        if let Ok(serialized) = self.serialize().await {
+            let _ = state.deserialize(&serialized);
+        }
+
+        state
+    }
+
     async fn serialize(&self) -> Result<SerializedState, Error> {
         let mut local_rand = vec![];
         {
@@ -187,9 +185,9 @@ impl State {
     }
 
     pub async fn init_cipher_suite(&mut self) -> Result<(), Error> {
-        let cipher_suite = self.cipher_suite.lock().await;
-        if let Some(cipher_suite) = &*cipher_suite {
-            if cipher_suite.is_initialized().await {
+        let mut cipher_suite = self.cipher_suite.lock().await;
+        if let Some(cipher_suite) = &mut *cipher_suite {
+            if cipher_suite.is_initialized() {
                 return Ok(());
             }
 
@@ -205,13 +203,9 @@ impl State {
             }
 
             if self.is_client {
-                cipher_suite
-                    .init(&self.master_secret, &local_random, &remote_random, true)
-                    .await
+                cipher_suite.init(&self.master_secret, &local_random, &remote_random, true)
             } else {
-                cipher_suite
-                    .init(&self.master_secret, &remote_random, &local_random, false)
-                    .await
+                cipher_suite.init(&self.master_secret, &remote_random, &local_random, false)
             }
         } else {
             Err(ERR_CIPHER_SUITE_UNSET.clone())

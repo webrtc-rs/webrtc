@@ -116,19 +116,19 @@ pub trait CipherSuite {
     fn certificate_type(&self) -> ClientCertificateType;
     fn hash_func(&self) -> CipherSuiteHash;
     fn is_psk(&self) -> bool;
-    async fn is_initialized(&self) -> bool;
+    fn is_initialized(&self) -> bool;
 
     // Generate the internal encryption state
-    async fn init(
-        &self,
+    fn init(
+        &mut self,
         master_secret: &[u8],
         client_random: &[u8],
         server_random: &[u8],
         is_client: bool,
     ) -> Result<(), Error>;
 
-    async fn encrypt(&self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>, Error>;
-    async fn decrypt(&self, input: &[u8]) -> Result<Vec<u8>, Error>;
+    fn encrypt(&self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>, Error>;
+    fn decrypt(&self, input: &[u8]) -> Result<Vec<u8>, Error>;
 }
 
 // Taken from https://www.iana.org/assignments/tls-parameters/tls-parameters.xml

@@ -378,11 +378,9 @@ impl Conn {
 
     // ConnectionState returns basic DTLS details about the connection.
     // Note that this replaced the `Export` function of v1.
-    //pub fn connection_state(&self) -> State {
-    //c.lock.RLock()
-    //defer c.lock.RUnlock()
-    //self.state.clone()
-    //}
+    pub async fn connection_state(&self) -> State {
+        self.state.clone().await
+    }
 
     // selected_srtpprotection_profile returns the selected SRTPProtectionProfile
     pub fn selected_srtpprotection_profile(&self) -> SRTPProtectionProfile {
@@ -524,9 +522,7 @@ impl Conn {
         if p.should_encrypt {
             let cipher_suite = cipher_suite.lock().await;
             if let Some(cipher_suite) = &*cipher_suite {
-                raw_packet = cipher_suite
-                    .encrypt(&p.record.record_layer_header, &raw_packet)
-                    .await?;
+                raw_packet = cipher_suite.encrypt(&p.record.record_layer_header, &raw_packet)?;
             }
         }
 
@@ -583,9 +579,7 @@ impl Conn {
             if p.should_encrypt {
                 let cipher_suite = cipher_suite.lock().await;
                 if let Some(cipher_suite) = &*cipher_suite {
-                    raw_packet = cipher_suite
-                        .encrypt(&record_layer_header, &raw_packet)
-                        .await?;
+                    raw_packet = cipher_suite.encrypt(&record_layer_header, &raw_packet)?;
                 }
             }
 
@@ -851,7 +845,7 @@ impl Conn {
                 if cipher_suite.is_none() {
                     true
                 } else if let Some(cipher_suite) = &*cipher_suite {
-                    !cipher_suite.is_initialized().await
+                    !cipher_suite.is_initialized()
                 } else {
                     false
                 }
@@ -869,7 +863,7 @@ impl Conn {
 
             let cipher_suite = ctx.cipher_suite.lock().await;
             if let Some(cipher_suite) = &*cipher_suite {
-                pkt = match cipher_suite.decrypt(&pkt).await {
+                pkt = match cipher_suite.decrypt(&pkt) {
                     Ok(pkt) => pkt,
                     Err(err) => {
                         debug!("{}: decrypt failed: {}", srv_cli_str(ctx.is_client), err);
@@ -965,7 +959,7 @@ impl Conn {
                     if cipher_suite.is_none() {
                         true
                     } else if let Some(cipher_suite) = &*cipher_suite {
-                        !cipher_suite.is_initialized().await
+                        !cipher_suite.is_initialized()
                     } else {
                         false
                     }

@@ -613,10 +613,10 @@ async fn initalize_cipher_suite(
     h: &HandshakeMessageServerKeyExchange,
     sending_plain_text: &[u8],
 ) -> Result<(), (Option<Alert>, Option<Error>)> {
-    let cipher_suite = state.cipher_suite.lock().await;
+    let mut cipher_suite = state.cipher_suite.lock().await;
 
     if let Some(cipher_suite) = &*cipher_suite {
-        if cipher_suite.is_initialized().await {
+        if cipher_suite.is_initialized() {
             return Ok(());
         }
     }
@@ -756,10 +756,9 @@ async fn initalize_cipher_suite(
         }
     }
 
-    if let Some(cipher_suite) = &*cipher_suite {
-        if let Err(err) = cipher_suite
-            .init(&state.master_secret, &client_random, &server_random, true)
-            .await
+    if let Some(cipher_suite) = &mut *cipher_suite {
+        if let Err(err) =
+            cipher_suite.init(&state.master_secret, &client_random, &server_random, true)
         {
             return Err((
                 Some(Alert {

@@ -2,13 +2,9 @@ use super::*;
 use crate::crypto::crypto_gcm::*;
 use crate::prf::*;
 
-use async_trait::async_trait;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-
 #[derive(Clone)]
 pub struct CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
-    gcm: Arc<Mutex<Option<CryptoGcm>>>,
+    gcm: Option<CryptoGcm>,
 }
 
 impl CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
@@ -19,13 +15,10 @@ impl CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
 
 impl Default for CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
     fn default() -> Self {
-        CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
-            gcm: Arc::new(Mutex::new(None)),
-        }
+        CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 { gcm: None }
     }
 }
 
-#[async_trait]
 impl CipherSuite for CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
     fn to_string(&self) -> String {
         "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256".to_owned()
@@ -47,13 +40,12 @@ impl CipherSuite for CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
         false
     }
 
-    async fn is_initialized(&self) -> bool {
-        let gcm = self.gcm.lock().await;
-        gcm.is_some()
+    fn is_initialized(&self) -> bool {
+        self.gcm.is_some()
     }
 
-    async fn init(
-        &self,
+    fn init(
+        &mut self,
         master_secret: &[u8],
         client_random: &[u8],
         server_random: &[u8],
@@ -69,16 +61,15 @@ impl CipherSuite for CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
             self.hash_func(),
         )?;
 
-        let mut gcm = self.gcm.lock().await;
         if is_client {
-            *gcm = Some(CryptoGcm::new(
+            self.gcm = Some(CryptoGcm::new(
                 &keys.client_write_key,
                 &keys.client_write_iv,
                 &keys.server_write_key,
                 &keys.server_write_iv,
             ));
         } else {
-            *gcm = Some(CryptoGcm::new(
+            self.gcm = Some(CryptoGcm::new(
                 &keys.server_write_key,
                 &keys.server_write_iv,
                 &keys.client_write_key,
@@ -89,9 +80,8 @@ impl CipherSuite for CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
         Ok(())
     }
 
-    async fn encrypt(&self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>, Error> {
-        let gcm = self.gcm.lock().await;
-        if let Some(cg) = &*gcm {
+    fn encrypt(&self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>, Error> {
+        if let Some(cg) = &self.gcm {
             cg.encrypt(pkt_rlh, raw)
         } else {
             Err(Error::new(
@@ -100,9 +90,8 @@ impl CipherSuite for CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
         }
     }
 
-    async fn decrypt(&self, input: &[u8]) -> Result<Vec<u8>, Error> {
-        let gcm = self.gcm.lock().await;
-        if let Some(cg) = &*gcm {
+    fn decrypt(&self, input: &[u8]) -> Result<Vec<u8>, Error> {
+        if let Some(cg) = &self.gcm {
             cg.decrypt(input)
         } else {
             Err(Error::new(
