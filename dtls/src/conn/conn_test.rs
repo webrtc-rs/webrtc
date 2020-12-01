@@ -2,6 +2,8 @@ use super::*;
 
 use tokio::net::UdpSocket;
 
+//use std::io::Write;
+
 async fn build_pipe() -> Result<(Conn, Conn), Error> {
     let ua = UdpSocket::bind("127.0.0.1:0").await?;
     let ub = UdpSocket::bind("127.0.0.1:0").await?;
@@ -102,12 +104,31 @@ async fn create_test_server(
 
 #[tokio::test]
 async fn test_routine_leak_on_close() -> Result<(), Error> {
-    env_logger::init();
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, LevelFilter::Trace)
+    .init();*/
 
-    let (mut ca, _cb) = build_pipe().await?;
+    let (mut ca, mut cb) = build_pipe().await?;
 
-    let n = ca.write(&[0; 100], Some(Duration::from_secs(5))).await?;
-    assert_eq!(n, 100);
+    let buf_a = vec![0xFA; 100];
+    let n_a = ca.write(&buf_a, Some(Duration::from_secs(5))).await?;
+    assert_eq!(n_a, 100);
+
+    let mut buf_b = vec![0; 1024];
+    let n_b = cb.read(&mut buf_b, None).await?;
+    assert_eq!(n_a, 100);
+    assert_eq!(&buf_a[..], &buf_b[0..n_b]);
 
     Ok(())
 }

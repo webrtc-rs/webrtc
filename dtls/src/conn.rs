@@ -713,7 +713,7 @@ impl Conn {
                                 wait_done_rx = false;
                             }
                             done = handle_queue_rx.recv() => {
-                                trace!("recv handle_queue: {} ", srv_cli_str(ctx.is_client));
+                                //trace!("recv handle_queue: {} ", srv_cli_str(ctx.is_client));
 
                                 let pkts = ctx.encrypted_packets.drain(..).collect();
                                 Conn::handle_queued_packets(ctx, packet_tx, local_epoch, handshake_completed_successfully, pkts).await?;
