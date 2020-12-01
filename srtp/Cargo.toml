@@ -8,7 +8,6 @@ edition = "2018"
 
 [dependencies]
 util = { path = "../util" }
-transport = {path = "../transport"}
 rtp = { path = "../rtp" }
 rtcp = { path = "../rtcp" }
 byteorder = "1.3.2"

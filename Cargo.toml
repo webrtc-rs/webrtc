@@ -10,7 +10,6 @@ members = [
     "stun",
     "turn",
     "util",
-    "transport",
 ]
 
 [profile.dev]

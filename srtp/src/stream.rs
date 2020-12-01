@@ -1,4 +1,4 @@
-use transport::Buffer;
+use util::Buffer;
 use util::Error;
 
 use tokio::sync::mpsc;

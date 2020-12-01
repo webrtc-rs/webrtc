@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use transport::replay_detector::*;
+use util::replay_detector::*;
 use util::Error;
 
 use super::protection_profile::*;

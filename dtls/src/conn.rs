@@ -24,8 +24,6 @@ use crate::record_layer::*;
 use crate::signature_hash_algorithm::parse_signature_schemes;
 use crate::state::*;
 
-use transport::replay_detector::*;
-
 use std::collections::HashMap;
 use std::io::{BufReader, BufWriter};
 use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU64, Ordering};
@@ -38,6 +36,7 @@ use tokio::sync::{mpsc, Mutex};
 use tokio::time;
 use tokio::time::{timeout, Duration};
 
+use util::replay_detector::*;
 use util::Error;
 
 pub(crate) const INITIAL_TICKER_INTERVAL: time::Duration = time::Duration::from_secs(1);

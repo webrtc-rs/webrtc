@@ -1,4 +1,4 @@
-use util::error::Error;
+use crate::error::Error;
 
 use std::sync::Arc;
 
