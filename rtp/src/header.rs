@@ -57,7 +57,9 @@ impl Header {
     pub fn size(&self) -> usize {
         let mut head_size = 12 + (self.csrc.len() * CSRC_LENGTH);
         if self.extension {
-            head_size += 4 + self.get_extension_payload_len();
+            let extension_payload_len = self.get_extension_payload_len();
+            let extension_payload_size = (extension_payload_len + 3) / 4;
+            head_size += 4 + extension_payload_size * 4;
         }
         head_size
     }
