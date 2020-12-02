@@ -38,15 +38,15 @@ pub enum CryptoCcmTagLen {
     CryptoCcmTagLength,
 }
 
-enum CryptoCcm {
+enum CryptoCcmType {
     CryptoCcm8(AesCcm8),
     CryptoCcm(AesCcm),
 }
 
 // State needed to handle encrypted input/output
 pub struct CryptCcm {
-    local_ccm: CryptoCcm,
-    remote_ccm: CryptoCcm,
+    local_ccm: CryptoCcmType,
+    remote_ccm: CryptoCcmType,
     local_write_iv: Vec<u8>,
     remote_write_iv: Vec<u8>,
 }
@@ -61,14 +61,14 @@ impl CryptCcm {
     ) -> Self {
         let key = GenericArray::from_slice(local_key);
         let local_ccm = match tag_len {
-            CryptoCcmTagLen::CryptoCcmTagLength => CryptoCcm::CryptoCcm(AesCcm::new(key)),
-            CryptoCcmTagLen::CryptoCcm8TagLength => CryptoCcm::CryptoCcm8(AesCcm8::new(key)),
+            CryptoCcmTagLen::CryptoCcmTagLength => CryptoCcmType::CryptoCcm(AesCcm::new(key)),
+            CryptoCcmTagLen::CryptoCcm8TagLength => CryptoCcmType::CryptoCcm8(AesCcm8::new(key)),
         };
 
         let key = GenericArray::from_slice(remote_key);
         let remote_ccm = match tag_len {
-            CryptoCcmTagLen::CryptoCcmTagLength => CryptoCcm::CryptoCcm(AesCcm::new(key)),
-            CryptoCcmTagLen::CryptoCcm8TagLength => CryptoCcm::CryptoCcm8(AesCcm8::new(key)),
+            CryptoCcmTagLen::CryptoCcmTagLength => CryptoCcmType::CryptoCcm(AesCcm::new(key)),
+            CryptoCcmTagLen::CryptoCcm8TagLength => CryptoCcmType::CryptoCcm8(AesCcm8::new(key)),
         };
 
         CryptCcm {
@@ -94,10 +94,10 @@ impl CryptCcm {
         buffer.extend_from_slice(payload);
 
         match &self.local_ccm {
-            CryptoCcm::CryptoCcm(ccm) => {
+            CryptoCcmType::CryptoCcm(ccm) => {
                 ccm.encrypt_in_place(nonce, &additional_data, &mut buffer)?;
             }
-            CryptoCcm::CryptoCcm8(ccm8) => {
+            CryptoCcmType::CryptoCcm8(ccm8) => {
                 ccm8.encrypt_in_place(nonce, &additional_data, &mut buffer)?;
             }
         }
@@ -139,12 +139,12 @@ impl CryptCcm {
         buffer.extend_from_slice(out);
 
         match &self.remote_ccm {
-            CryptoCcm::CryptoCcm(ccm) => {
+            CryptoCcmType::CryptoCcm(ccm) => {
                 let additional_data =
                     generate_aead_additional_data(&h, out.len() - CRYPTO_CCM_TAG_LENGTH);
                 ccm.decrypt_in_place(nonce, &additional_data, &mut buffer)?;
             }
-            CryptoCcm::CryptoCcm8(ccm8) => {
+            CryptoCcmType::CryptoCcm8(ccm8) => {
                 let additional_data =
                     generate_aead_additional_data(&h, out.len() - CRYPTO_CCM_8_TAG_LENGTH);
                 ccm8.decrypt_in_place(nonce, &additional_data, &mut buffer)?;
