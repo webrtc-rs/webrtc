@@ -58,24 +58,20 @@ pub struct CryptoCcm {
 impl Clone for CryptoCcm {
     fn clone(&self) -> Self {
         match self.local_ccm {
-            CryptoCcmType::CryptoCcm(_) => {
-                return Self::new(
-                    &CryptoCcmTagLen::CryptoCcmTagLength,
-                    &self.local_write_key,
-                    &self.local_write_iv,
-                    &self.remote_write_key,
-                    &self.remote_write_iv,
-                );
-            }
-            CryptoCcmType::CryptoCcm8(_) => {
-                return Self::new(
-                    &CryptoCcmTagLen::CryptoCcm8TagLength,
-                    &self.local_write_key,
-                    &self.local_write_iv,
-                    &self.remote_write_key,
-                    &self.remote_write_iv,
-                );
-            }
+            CryptoCcmType::CryptoCcm(_) => Self::new(
+                &CryptoCcmTagLen::CryptoCcmTagLength,
+                &self.local_write_key,
+                &self.local_write_iv,
+                &self.remote_write_key,
+                &self.remote_write_iv,
+            ),
+            CryptoCcmType::CryptoCcm8(_) => Self::new(
+                &CryptoCcmTagLen::CryptoCcm8TagLength,
+                &self.local_write_key,
+                &self.local_write_iv,
+                &self.remote_write_key,
+                &self.remote_write_iv,
+            ),
         }
     }
 }
