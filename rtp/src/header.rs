@@ -391,6 +391,8 @@ impl Header {
             }
         }
 
+        writer.flush()?;
+
         Ok(())
     }
 }
