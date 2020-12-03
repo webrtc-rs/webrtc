@@ -33,6 +33,7 @@ const CRYPTO_CCM_NONCE_LENGTH: usize = 12;
 type AesCcm8 = Ccm<Aes256, U8, U12>;
 type AesCcm = Ccm<Aes256, U16, U12>;
 
+#[derive(Clone)]
 pub enum CryptoCcmTagLen {
     CryptoCcm8TagLength,
     CryptoCcmTagLength,
@@ -44,7 +45,7 @@ enum CryptoCcmType {
 }
 
 // State needed to handle encrypted input/output
-pub struct CryptCcm {
+pub struct CryptoCcm {
     local_ccm: CryptoCcmType,
     remote_ccm: CryptoCcmType,
     local_write_iv: Vec<u8>,
@@ -54,12 +55,12 @@ pub struct CryptCcm {
     remote_write_key: Vec<u8>,
 }
 
-impl Clone for CryptCcm {
+impl Clone for CryptoCcm {
     fn clone(&self) -> Self {
         match self.local_ccm {
             CryptoCcmType::CryptoCcm(_) => {
                 return Self::new(
-                    CryptoCcmTagLen::CryptoCcmTagLength,
+                    &CryptoCcmTagLen::CryptoCcmTagLength,
                     &self.local_write_key,
                     &self.local_write_iv,
                     &self.remote_write_key,
@@ -68,7 +69,7 @@ impl Clone for CryptCcm {
             }
             CryptoCcmType::CryptoCcm8(_) => {
                 return Self::new(
-                    CryptoCcmTagLen::CryptoCcm8TagLength,
+                    &CryptoCcmTagLen::CryptoCcm8TagLength,
                     &self.local_write_key,
                     &self.local_write_iv,
                     &self.remote_write_key,
@@ -79,9 +80,9 @@ impl Clone for CryptCcm {
     }
 }
 
-impl CryptCcm {
+impl CryptoCcm {
     pub fn new(
-        tag_len: CryptoCcmTagLen,
+        tag_len: &CryptoCcmTagLen,
         local_key: &[u8],
         local_write_iv: &[u8],
         remote_key: &[u8],
@@ -99,7 +100,7 @@ impl CryptCcm {
             CryptoCcmTagLen::CryptoCcm8TagLength => CryptoCcmType::CryptoCcm8(AesCcm8::new(key)),
         };
 
-        CryptCcm {
+        CryptoCcm {
             local_ccm,
             local_write_key: local_key.to_vec(),
             local_write_iv: local_write_iv.to_vec(),

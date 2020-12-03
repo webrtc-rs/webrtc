@@ -112,7 +112,7 @@ fn test_ccm_encryption_and_decryption() -> Result<(), Error> {
     ];
     let iv = vec![0x0e, 0xb2, 0x09, 0x06];
 
-    let ccm = CryptCcm::new(CryptoCcmTagLen::CryptoCcmTagLength, &key, &iv, &key, &iv);
+    let ccm = CryptoCcm::new(&CryptoCcmTagLen::CryptoCcmTagLength, &key, &iv, &key, &iv);
 
     let rlh = RecordLayerHeader {
         content_type: ContentType::ApplicationData,
