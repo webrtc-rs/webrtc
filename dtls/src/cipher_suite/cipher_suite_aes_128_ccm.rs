@@ -1,9 +1,7 @@
 use super::*;
 use crate::client_certificate_type::ClientCertificateType;
-use crate::crypto::crypto_ccm::CryptoCcm;
+use crate::crypto::crypto_ccm::{CryptoCcm, CryptoCcmTagLen};
 use crate::prf::*;
-
-pub use crate::crypto::crypto_ccm::CryptoCcmTagLen;
 
 #[derive(Clone)]
 pub struct CipherSuiteAes128Ccm {
@@ -18,7 +16,7 @@ impl CipherSuiteAes128Ccm {
     const PRF_MAC_LEN: usize = 0;
     const PRF_KEY_LEN: usize = 16;
     const PRF_IV_LEN: usize = 4;
-    
+
     pub fn new(
         client_certificate_type: ClientCertificateType,
         id: CipherSuiteID,
@@ -65,7 +63,7 @@ impl CipherSuite for CipherSuiteAes128Ccm {
         master_secret: &[u8],
         client_random: &[u8],
         server_random: &[u8],
-        is_client: bool
+        is_client: bool,
     ) -> Result<(), Error> {
         let keys = prf_encryption_keys(
             master_secret,
@@ -92,7 +90,7 @@ impl CipherSuite for CipherSuiteAes128Ccm {
                 &keys.server_write_key,
                 &keys.client_write_key,
                 &keys.client_write_iv,
-            ));            
+            ));
         }
 
         Ok(())
@@ -118,4 +116,3 @@ impl CipherSuite for CipherSuiteAes128Ccm {
         }
     }
 }
-

@@ -1,6 +1,10 @@
 pub mod cipher_suite_aes_128_ccm;
+pub mod cipher_suite_tls_ecdhe_ecdsa_with_aes_128_ccm;
+pub mod cipher_suite_tls_ecdhe_ecdsa_with_aes_128_ccm8;
 pub mod cipher_suite_tls_ecdhe_ecdsa_with_aes_128_gcm_sha256;
 pub mod cipher_suite_tls_ecdhe_ecdsa_with_aes_256_cbc_sha;
+pub mod cipher_suite_tls_psk_with_aes_128_ccm;
+pub mod cipher_suite_tls_psk_with_aes_128_ccm8;
 pub mod cipher_suite_tls_psk_with_aes_128_gcm_sha256;
 
 use std::fmt;
@@ -14,8 +18,12 @@ use super::record_layer::record_layer_header::*;
 
 use util::Error;
 
+use cipher_suite_tls_ecdhe_ecdsa_with_aes_128_ccm::*;
+use cipher_suite_tls_ecdhe_ecdsa_with_aes_128_ccm8::*;
 use cipher_suite_tls_ecdhe_ecdsa_with_aes_128_gcm_sha256::*;
 use cipher_suite_tls_ecdhe_ecdsa_with_aes_256_cbc_sha::*;
+use cipher_suite_tls_psk_with_aes_128_ccm::*;
+use cipher_suite_tls_psk_with_aes_128_ccm8::*;
 use cipher_suite_tls_psk_with_aes_128_gcm_sha256::*;
 
 // CipherSuiteID is an ID for our supported CipherSuites
@@ -138,11 +146,12 @@ pub trait CipherSuite {
 pub fn cipher_suite_for_id(id: CipherSuiteID) -> Result<Box<dyn CipherSuite + Send + Sync>, Error> {
     match id {
         //TODO: complete all cipher suites
-        /*CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM =>
-        return newCipherSuiteTLSEcdheEcdsaWithAes128Ccm()
-            CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8:
-        return newCipherSuiteTLSEcdheEcdsaWithAes128Ccm8()
-        */
+        CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM => {
+            Ok(Box::new(new_cipher_suite_tls_ecdhe_ecdsa_with_aes_128_ccm()))
+        }
+        CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 => Ok(Box::new(
+            new_cipher_suite_tls_ecdhe_ecdsa_with_aes_128_ccm8(),
+        )),
         CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 => Ok(Box::new(
             CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::default(),
         )),
@@ -153,11 +162,13 @@ pub fn cipher_suite_for_id(id: CipherSuiteID) -> Result<Box<dyn CipherSuite + Se
             Ok(Box::new(CipherSuiteTLSEcdheEcdsaWithAes256CbcSha::default()))
         }
         /*   CipherSuiteID::TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA:
-        return &cipherSuiteTLSEcdheRsaWithAes256CbcSha{}
-            CipherSuiteID::TLS_PSK_WITH_AES_128_CCM:
-        return newCipherSuiteTLSPskWithAes128Ccm()
-            CipherSuiteID::TLS_PSK_WITH_AES_128_CCM_8:
-        return newCipherSuiteTLSPskWithAes128Ccm8()*/
+        return &cipherSuiteTLSEcdheRsaWithAes256CbcSha{}*/
+        CipherSuiteID::TLS_PSK_WITH_AES_128_CCM => {
+            Ok(Box::new(new_cipher_suite_tls_psk_with_aes_128_ccm()))
+        }
+        CipherSuiteID::TLS_PSK_WITH_AES_128_CCM_8 => {
+            Ok(Box::new(new_cipher_suite_tls_psk_with_aes_128_ccm8()))
+        }
         CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256 => {
             Ok(Box::new(CipherSuiteTLSPskWithAes128GcmSha256::default()))
         }
@@ -177,14 +188,14 @@ fn default_cipher_suites() -> Vec<Box<dyn CipherSuite + Send + Sync>> {
 
 fn all_cipher_suites() -> Vec<Box<dyn CipherSuite + Send + Sync>> {
     vec![
-        //TODO: newCipherSuiteTLSEcdheEcdsaWithAes128Ccm(),
-        //TODO: newCipherSuiteTLSEcdheEcdsaWithAes128Ccm8(),
+        Box::new(new_cipher_suite_tls_ecdhe_ecdsa_with_aes_128_ccm()),
+        Box::new(new_cipher_suite_tls_ecdhe_ecdsa_with_aes_128_ccm8()),
         Box::new(CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::default()),
         Box::new(CipherSuiteTLSEcdheEcdsaWithAes256CbcSha::default()),
         //TODO: &cipherSuiteTLSEcdheRsaWithAes128GcmSha256{},
         //TODO: &cipherSuiteTLSEcdheRsaWithAes256CbcSha{},
-        //TODO: newCipherSuiteTLSPskWithAes128Ccm(),
-        //TODO: newCipherSuiteTLSPskWithAes128Ccm8(),
+        Box::new(new_cipher_suite_tls_psk_with_aes_128_ccm()),
+        Box::new(new_cipher_suite_tls_psk_with_aes_128_ccm8()),
         Box::new(CipherSuiteTLSPskWithAes128GcmSha256::default()),
     ]
 }
