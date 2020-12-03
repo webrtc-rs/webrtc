@@ -49,6 +49,34 @@ pub struct CryptCcm {
     remote_ccm: CryptoCcmType,
     local_write_iv: Vec<u8>,
     remote_write_iv: Vec<u8>,
+    // used by clone()
+    local_write_key: Vec<u8>,
+    remote_write_key: Vec<u8>,
+}
+
+impl Clone for CryptCcm {
+    fn clone(&self) -> Self {
+        match self.local_ccm {
+            CryptoCcmType::CryptoCcm(_) => {
+                return Self::new(
+                    CryptoCcmTagLen::CryptoCcmTagLength,
+                    &self.local_write_key,
+                    &self.local_write_iv,
+                    &self.remote_write_key,
+                    &self.remote_write_iv,
+                );
+            }
+            CryptoCcmType::CryptoCcm8(_) => {
+                return Self::new(
+                    CryptoCcmTagLen::CryptoCcm8TagLength,
+                    &self.local_write_key,
+                    &self.local_write_iv,
+                    &self.remote_write_key,
+                    &self.remote_write_iv,
+                );
+            }
+        }
+    }
 }
 
 impl CryptCcm {
@@ -73,8 +101,10 @@ impl CryptCcm {
 
         CryptCcm {
             local_ccm,
+            local_write_key: local_key.to_vec(),
             local_write_iv: local_write_iv.to_vec(),
             remote_ccm,
+            remote_write_key: remote_key.to_vec(),
             remote_write_iv: remote_write_iv.to_vec(),
         }
     }
