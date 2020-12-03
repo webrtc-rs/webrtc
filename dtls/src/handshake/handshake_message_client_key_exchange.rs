@@ -43,7 +43,7 @@ impl HandshakeMessageClientKeyExchange {
             writer.write_all(&self.identity_hint)?;
         }
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {

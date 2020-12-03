@@ -22,7 +22,7 @@ impl AbsSendTimeExtension {
         writer.write_u8(((self.timestamp & 0xFF00) >> 8) as u8)?;
         writer.write_u8((self.timestamp & 0xFF) as u8)?;
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     // Unmarshal parses the passed byte slice and stores the result in the members.

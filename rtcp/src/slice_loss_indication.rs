@@ -119,6 +119,6 @@ impl SliceLossIndication {
             writer.write_u32::<BigEndian>(sli)?;
         }
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 }

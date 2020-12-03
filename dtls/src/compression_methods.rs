@@ -36,7 +36,7 @@ impl CompressionMethods {
             writer.write_u8(*id as u8)?;
         }
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {

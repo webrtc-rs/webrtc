@@ -82,6 +82,6 @@ impl RapidResynchronizationRequest {
         writer.write_u32::<BigEndian>(self.sender_ssrc)?;
         writer.write_u32::<BigEndian>(self.media_ssrc)?;
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 }

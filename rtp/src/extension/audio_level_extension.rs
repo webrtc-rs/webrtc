@@ -42,7 +42,7 @@ impl AudioLevelExtension {
 
         writer.write_u8(voice | self.level)?;
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     // Unmarshal parses the passed byte slice and stores the result in the members

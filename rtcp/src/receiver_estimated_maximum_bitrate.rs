@@ -221,6 +221,6 @@ impl ReceiverEstimatedMaximumBitrate {
             writer.write_u32::<BigEndian>(*ssrc)?;
         }
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 }

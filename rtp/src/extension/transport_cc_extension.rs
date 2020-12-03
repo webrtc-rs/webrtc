@@ -26,7 +26,7 @@ impl TransportCCExtension {
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         writer.write_u16::<BigEndian>(self.transport_sequence)?;
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     // Unmarshal parses the passed byte slice and stores the result in the members

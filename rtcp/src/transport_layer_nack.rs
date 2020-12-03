@@ -138,6 +138,6 @@ impl TransportLayerNack {
             writer.write_u16::<BigEndian>(nack.lost_packets)?;
         }
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 }

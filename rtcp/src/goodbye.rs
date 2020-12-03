@@ -146,6 +146,6 @@ impl Goodbye {
             writer.write_all(self.reason.as_bytes())?;
         }
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 }

@@ -31,7 +31,7 @@ impl HandshakeHeader {
         writer.write_u24::<BigEndian>(self.fragment_offset)?;
         writer.write_u24::<BigEndian>(self.fragment_length)?;
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {

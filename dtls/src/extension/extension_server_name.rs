@@ -32,7 +32,7 @@ impl ExtensionServerName {
         writer.write_u16::<BigEndian>(self.server_name.len() as u16)?;
         writer.write_all(self.server_name.as_bytes())?;
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {

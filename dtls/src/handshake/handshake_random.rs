@@ -39,7 +39,7 @@ impl HandshakeRandom {
         writer.write_u32::<BigEndian>(secs)?;
         writer.write_all(&self.random_bytes)?;
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {

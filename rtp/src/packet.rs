@@ -51,8 +51,7 @@ impl Packet {
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.header.marshal(writer)?;
         writer.write_all(&self.payload)?;
-        writer.flush()?;
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 }
