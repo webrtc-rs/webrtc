@@ -130,5 +130,10 @@ async fn test_routine_leak_on_close() -> Result<(), Error> {
     assert_eq!(n_a, 100);
     assert_eq!(&buf_a[..], &buf_b[0..n_b]);
 
+    cb.close().await?;
+    ca.close().await?;
+
+    //tokio::time::sleep(Duration::from_secs(1)).await;
+
     Ok(())
 }
