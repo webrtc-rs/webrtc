@@ -1,4 +1,8 @@
 use super::*;
+use crate::cipher_suite::*;
+use crate::compression_methods::*;
+use crate::handshake::handshake_message_client_hello::*;
+use crate::handshake::handshake_random::*;
 
 use tokio::net::UdpSocket;
 
@@ -144,7 +148,7 @@ async fn test_routine_leak_on_close() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_sequence_number_overflow() -> Result<(), Error> {
+async fn test_sequence_number_overflow_on_application_data() -> Result<(), Error> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -190,6 +194,71 @@ async fn test_sequence_number_overflow() -> Result<(), Error> {
     } else {
         assert!(false, "Expected error but it is OK");
     }
+
+    {
+        drop(ca);
+        drop(cb);
+    }
+
+    tokio::time::sleep(Duration::from_millis(1)).await;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_sequence_number_overflow_on_handshake() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, LevelFilter::Trace)
+    .init();*/
+
+    let (mut ca, mut cb) = build_pipe().await?;
+
+    {
+        let mut lsn = ca.state.local_sequence_number.lock().await;
+        lsn[0] = MAX_SEQUENCE_NUMBER + 1;
+    }
+
+    // Try to send handshake packet.
+    if let Err(err) = ca
+        .write_packets(vec![Packet {
+            record: RecordLayer::new(
+                PROTOCOL_VERSION1_2,
+                0,
+                Content::Handshake(Handshake::new(HandshakeMessage::ClientHello(
+                    HandshakeMessageClientHello {
+                        version: PROTOCOL_VERSION1_2,
+                        random: HandshakeRandom::default(),
+                        cookie: vec![0; 64],
+
+                        cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256],
+                        compression_methods: default_compression_methods(),
+                        extensions: vec![],
+                    },
+                ))),
+            ),
+            should_encrypt: false,
+            reset_local_sequence_number: false,
+        }])
+        .await
+    {
+        assert_eq!(err, ERR_SEQUENCE_NUMBER_OVERFLOW.clone());
+    } else {
+        assert!(false, "Expected error but it is OK");
+    }
+
+    cb.close().await?;
+    ca.close().await?;
 
     {
         drop(ca);

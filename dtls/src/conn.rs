@@ -607,6 +607,7 @@ impl Conn {
                 lsn[epoch] += 1;
                 lsn[epoch] - 1
             };
+            //trace!("seq = {}", seq);
             if seq > MAX_SEQUENCE_NUMBER {
                 return Err(ERR_SEQUENCE_NUMBER_OVERFLOW.clone());
             }
