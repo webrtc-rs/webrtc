@@ -19,7 +19,7 @@ use crate::content::*;
 use crate::errors::*;
 use crate::record_layer::record_layer_header::*;
 
-use aes::Aes256;
+use aes::Aes128;
 use ccm::aead::{generic_array::GenericArray, AeadInPlace, NewAead};
 use ccm::{
     consts::{U12, U16, U8},
@@ -30,8 +30,8 @@ const CRYPTO_CCM_8_TAG_LENGTH: usize = 8;
 const CRYPTO_CCM_TAG_LENGTH: usize = 16;
 const CRYPTO_CCM_NONCE_LENGTH: usize = 12;
 
-type AesCcm8 = Ccm<Aes256, U8, U12>;
-type AesCcm = Ccm<Aes256, U16, U12>;
+type AesCcm8 = Ccm<Aes128, U8, U12>;
+type AesCcm = Ccm<Aes128, U16, U12>;
 
 #[derive(Clone)]
 pub enum CryptoCcmTagLen {
