@@ -745,7 +745,7 @@ impl Conn {
                 if alert.alert_level == AlertLevel::Fatal
                     || alert.alert_description == AlertDescription::CloseNotify
                 {
-                    return Err(Error::new("Alert is Fatal or Close Notify".to_owned()));
+                    return Err(ERR_ALERT_FATAL_OR_CLOSE.clone());
                 }
             }
 
@@ -826,7 +826,7 @@ impl Conn {
                 if alert.alert_level == AlertLevel::Fatal
                     || alert.alert_description == AlertDescription::CloseNotify
                 {
-                    return Err(Error::new("Alert is Fatal or Close Notify".to_owned()));
+                    return Err(ERR_ALERT_FATAL_OR_CLOSE.clone());
                 }
             }
 

@@ -3,12 +3,19 @@ use crate::cipher_suite::*;
 use crate::compression_methods::*;
 use crate::handshake::handshake_message_client_hello::*;
 use crate::handshake::handshake_random::*;
+//use crate::signature_hash_algorithm::*;
 
 use tokio::net::UdpSocket;
 
 //use std::io::Write;
 
 async fn build_pipe() -> Result<(Conn, Conn), Error> {
+    let (ua, ub) = pipe().await?;
+
+    pipe_conn(ua, ub).await
+}
+
+async fn pipe() -> Result<(UdpSocket, UdpSocket), Error> {
     let ua = UdpSocket::bind("127.0.0.1:0").await?;
     let ub = UdpSocket::bind("127.0.0.1:0").await?;
 
@@ -17,7 +24,7 @@ async fn build_pipe() -> Result<(Conn, Conn), Error> {
     ua.connect(ub.local_addr()?).await?;
     ub.connect(ua.local_addr()?).await?;
 
-    pipe_conn(ua, ub).await
+    Ok((ua, ub))
 }
 
 async fn pipe_conn(ca: UdpSocket, cb: UdpSocket) -> Result<(Conn, Conn), Error> {
@@ -29,6 +36,7 @@ async fn pipe_conn(ca: UdpSocket, cb: UdpSocket) -> Result<(Conn, Conn), Error> 
             ca,
             Config {
                 srtp_protection_profiles: vec![SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_80],
+                cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256],
                 ..Default::default()
             },
             false,
@@ -43,6 +51,7 @@ async fn pipe_conn(ca: UdpSocket, cb: UdpSocket) -> Result<(Conn, Conn), Error> 
         cb,
         Config {
             srtp_protection_profiles: vec![SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_80],
+            cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256],
             ..Default::default()
         },
         false,
@@ -84,7 +93,6 @@ async fn create_test_client(
     } else {
         cfg.psk = Some(psk_callback_client);
         cfg.psk_identity_hint = "WebRTC.rs DTLS Server".as_bytes().to_vec();
-        cfg.cipher_suites = vec![CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256];
     }
 
     cfg.insecure_skip_verify = true;
@@ -101,7 +109,6 @@ async fn create_test_server(
     } else {
         cfg.psk = Some(psk_callback_server);
         cfg.psk_identity_hint = "WebRTC.rs DTLS Client".as_bytes().to_vec();
-        cfg.cipher_suites = vec![CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256];
     }
     Conn::new(cb, cfg, false, None).await
 }
@@ -269,3 +276,104 @@ async fn test_sequence_number_overflow_on_handshake() -> Result<(), Error> {
 
     Ok(())
 }
+
+// TODO: enable it when self-sign is supported.
+// https://github.com/webrtc-rs/webrtc/issues/25
+/*
+#[tokio::test]
+async fn test_handshake_with_alert() -> Result<(), Error> {
+    env_logger::Builder::new()
+        .format(|buf, record| {
+            writeln!(
+                buf,
+                "{}:{} [{}] {} - {}",
+                record.file().unwrap_or("unknown"),
+                record.line().unwrap_or(0),
+                record.level(),
+                chrono::Local::now().format("%H:%M:%S.%6f"),
+                record.args()
+            )
+        })
+        .filter(None, LevelFilter::Trace)
+        .init();
+
+    let cases = vec![
+        (
+            "CipherSuiteNoIntersection",
+            Config {
+                // Server
+                cipher_suites: vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256],
+                ..Default::default()
+            },
+            Config {
+                // Client
+                cipher_suites: vec![CipherSuiteID::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256],
+                ..Default::default()
+            },
+            ERR_CIPHER_SUITE_NO_INTERSECTION.clone(),
+            ERR_ALERT_FATAL_OR_CLOSE.clone(), //errClient: &errAlert{&alert{alertLevelFatal, alertInsufficientSecurity}},
+        ),
+        (
+            "SignatureSchemesNoIntersection",
+            Config {
+                // Server
+                cipher_suites: vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256],
+                signature_schemes: vec![SignatureScheme::ECDSAWithP256AndSHA256],
+                ..Default::default()
+            },
+            Config {
+                // Client
+                cipher_suites: vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256],
+                signature_schemes: vec![SignatureScheme::ECDSAWithP521AndSHA512],
+                ..Default::default()
+            },
+            ERR_ALERT_FATAL_OR_CLOSE.clone(), //errServer: &errAlert{&alert{alertLevelFatal, alertInsufficientSecurity}},
+            ERR_NO_AVAILABLE_SIGNATURE_SCHEMES.clone(), //NoAvailableSignatureSchemes,
+        ),
+    ];
+
+    for (name, config_server, config_client, err_server, err_client) in cases {
+        let (client_err_tx, mut client_err_rx) = mpsc::channel(1);
+
+        let (ca, cb) = pipe().await?;
+        tokio::spawn(async move {
+            let result = create_test_client(ca, config_client, false).await;
+            let _ = client_err_tx.send(result).await;
+        });
+
+        let result_server = create_test_server(cb, config_server, false).await;
+        if let Err(err) = result_server {
+            assert_eq!(
+                err, err_server,
+                "{} Server error exp({}) failed({})",
+                name, err_server, err
+            );
+        } else {
+            assert!(
+                false,
+                "{} expected error but create_test_server return OK",
+                name
+            );
+        }
+
+        let result_client = client_err_rx.recv().await;
+        if let Some(result_client) = result_client {
+            if let Err(err) = result_client {
+                assert_eq!(
+                    err, err_client,
+                    "{} Client error exp({}) failed({})",
+                    name, err_client, err
+                );
+            } else {
+                assert!(
+                    false,
+                    "{} expected error but create_test_client return OK",
+                    name
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+*/
