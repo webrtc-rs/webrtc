@@ -26,7 +26,7 @@ use crate::state::*;
 
 use std::collections::HashMap;
 use std::io::{BufReader, BufWriter};
-use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::Arc;
 
 use log::*;
@@ -34,7 +34,7 @@ use log::*;
 use tokio::net::*;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time;
-use tokio::time::{timeout, Duration};
+use tokio::time::Duration;
 
 use util::replay_detector::*;
 use util::Error;
@@ -57,6 +57,8 @@ lazy_static! {
     };
 }
 
+type PacketSendRequest = (Vec<Packet>, Option<mpsc::Sender<Result<(), Error>>>);
+
 struct ConnReaderContext {
     is_client: bool,
     replay_protection_window: usize,
@@ -69,7 +71,7 @@ struct ConnReaderContext {
     remote_epoch: Arc<AtomicU16>,
     handshake_tx: mpsc::Sender<mpsc::Sender<()>>,
     handshake_done_rx: mpsc::Receiver<()>,
-    packet_tx: Arc<mpsc::Sender<Vec<Packet>>>,
+    packet_tx: Arc<mpsc::Sender<PacketSendRequest>>,
 }
 
 // Conn represents a DTLS connection
@@ -100,7 +102,7 @@ pub(crate) struct Conn {
     pub(crate) retransmit: bool,
     pub(crate) handshake_rx: mpsc::Receiver<mpsc::Sender<()>>,
 
-    pub(crate) packet_tx: Arc<mpsc::Sender<Vec<Packet>>>,
+    pub(crate) packet_tx: Arc<mpsc::Sender<PacketSendRequest>>,
     pub(crate) handle_queue_tx: mpsc::Sender<mpsc::Sender<()>>,
     pub(crate) handshake_done_tx: Option<mpsc::Sender<()>>,
 
@@ -216,7 +218,7 @@ impl Conn {
         let (decrypted_tx, decrypted_rx) = mpsc::channel(1);
         let (handshake_tx, handshake_rx) = mpsc::channel(1);
         let (handshake_done_tx, handshake_done_rx) = mpsc::channel(1);
-        let (packet_tx, packet_rx) = mpsc::channel(1);
+        let (packet_tx, mut packet_rx) = mpsc::channel(1);
         let (handle_queue_tx, mut handle_queue_rx) = mpsc::channel(1);
         let (reader_close_tx, mut reader_close_rx) = mpsc::channel(1);
 
@@ -225,7 +227,7 @@ impl Conn {
         let next_conn_rx = Arc::new(udp_socket);
         let next_conn_tx = Arc::clone(&next_conn_rx);
         let cache = HandshakeCache::new();
-        let cache1 = cache.clone();
+        let mut cache1 = cache.clone();
         let cache2 = cache.clone();
         let handshake_completed_successfully = Arc::new(AtomicBool::new(false));
         let handshake_completed_successfully2 = Arc::clone(&handshake_completed_successfully);
@@ -253,16 +255,30 @@ impl Conn {
         let sequence_number = Arc::clone(&c.state.local_sequence_number);
 
         tokio::spawn(async move {
-            let _ = Conn::handle_outgoing_packets(
-                next_conn_tx,
-                packet_rx,
-                cache1,
-                is_client,
-                sequence_number,
-                cipher_suite1,
-                maximum_transmission_unit,
-            )
-            .await;
+            loop {
+                let rx = packet_rx.recv().await;
+                if let Some(r) = rx {
+                    let (pkt, result_tx) = r;
+
+                    let result = Conn::handle_outgoing_packets(
+                        &next_conn_tx,
+                        pkt,
+                        &mut cache1,
+                        is_client,
+                        &sequence_number,
+                        &cipher_suite1,
+                        maximum_transmission_unit,
+                    )
+                    .await;
+
+                    if let Some(tx) = result_tx {
+                        let _ = tx.send(result).await;
+                    }
+                } else {
+                    trace!("{}: handle_outgoing_packets exit", srv_cli_str(is_client));
+                    break;
+                }
+            }
         });
 
         let local_epoch = Arc::clone(&c.state.local_epoch);
@@ -288,16 +304,31 @@ impl Conn {
 
             //trace!("before enter read_and_buffer: {}] ", srv_cli_str(is_client));
             loop {
-                let _ = Conn::read_and_buffer(
-                    &mut ctx,
-                    &next_conn_rx,
-                    &mut reader_close_rx,
-                    &mut handle_queue_rx,
-                    &mut buf,
-                    &local_epoch,
-                    &handshake_completed_successfully2,
-                )
-                .await;
+                tokio::select! {
+                    _ = reader_close_rx.recv() => {
+                        trace!(
+                                "{}: read_and_buffer exit",
+                                srv_cli_str(ctx.is_client),
+                            );
+                        break;
+                    }
+                    result = Conn::read_and_buffer(
+                                            &mut ctx,
+                                            &next_conn_rx,
+                                            &mut handle_queue_rx,
+                                            &mut buf,
+                                            &local_epoch,
+                                            &handshake_completed_successfully2,
+                                        ) => {
+                        if let Err(err) = result {
+                            trace!(
+                                "{}: read_and_buffer return err: {}",
+                                srv_cli_str(is_client),
+                                err
+                            );
+                        }
+                    }
+                }
             }
         });
 
@@ -317,9 +348,11 @@ impl Conn {
 
         loop {
             let rx = if let Some(d) = duration {
-                match timeout(d, self.decrypted_rx.recv()).await {
-                    Ok(rx) => rx,
-                    Err(_) => return Err(ERR_DEADLINE_EXCEEDED.clone()),
+                let mut timer = tokio::time::sleep(d);
+
+                tokio::select! {
+                    r = self.decrypted_rx.recv() => r,
+                    _ = &mut timer => return Err(ERR_DEADLINE_EXCEEDED.clone()),
                 }
             } else {
                 self.decrypted_rx.recv().await
@@ -363,8 +396,15 @@ impl Conn {
         }];
 
         if let Some(d) = duration {
-            if timeout(d, self.write_packets(pkts)).await.is_err() {
-                return Err(ERR_DEADLINE_EXCEEDED.clone());
+            let mut timer = tokio::time::sleep(d);
+
+            tokio::select! {
+                result = self.write_packets(pkts) => {
+                    if let Err(err) = result {
+                        return Err(err);
+                    }
+                }
+                _ = &mut timer => return Err(ERR_DEADLINE_EXCEEDED.clone()),
             }
         } else {
             self.write_packets(pkts).await?;
@@ -424,89 +464,79 @@ impl Conn {
     }
 
     pub(crate) async fn write_packets(&mut self, pkts: Vec<Packet>) -> Result<(), Error> {
-        self.packet_tx.send(pkts).await?;
+        let (tx, mut rx) = mpsc::channel(1);
 
-        Ok(())
+        self.packet_tx.send((pkts, Some(tx))).await?;
+
+        if let Some(result) = rx.recv().await {
+            result
+        } else {
+            Ok(())
+        }
     }
 
     async fn handle_outgoing_packets(
-        next_conn: Arc<UdpSocket>,
-        mut packet_rx: mpsc::Receiver<Vec<Packet>>,
-        mut cache: HandshakeCache,
+        next_conn: &Arc<UdpSocket>,
+        mut pkts: Vec<Packet>,
+        cache: &mut HandshakeCache,
         is_client: bool,
-        sequence_number: Arc<AtomicU64>,
-        cipher_suite: Arc<Mutex<Option<Box<dyn CipherSuite + Send + Sync>>>>,
+        local_sequence_number: &Arc<Mutex<Vec<u64>>>,
+        cipher_suite: &Arc<Mutex<Option<Box<dyn CipherSuite + Send + Sync>>>>,
         maximum_transmission_unit: usize,
     ) -> Result<(), Error> {
-        let mut local_sequence_number = vec![];
-        let mut closed = false;
+        let mut raw_packets = vec![];
+        for p in &mut pkts {
+            if let Content::Handshake(h) = &p.record.content {
+                let mut handshake_raw = vec![];
+                {
+                    let mut writer = BufWriter::<&mut Vec<u8>>::new(handshake_raw.as_mut());
+                    p.record.marshal(&mut writer)?;
+                }
+                trace!(
+                    "Send [handshake:{}] -> {} (epoch: {}, seq: {})",
+                    srv_cli_str(is_client),
+                    h.handshake_header.handshake_type.to_string(),
+                    p.record.record_layer_header.epoch,
+                    h.handshake_header.message_sequence
+                );
+                cache
+                    .push(
+                        handshake_raw[RECORD_LAYER_HEADER_SIZE..].to_vec(),
+                        p.record.record_layer_header.epoch,
+                        h.handshake_header.message_sequence,
+                        h.handshake_header.handshake_type,
+                        is_client,
+                    )
+                    .await;
 
-        while !closed {
-            let rx = packet_rx.recv().await;
-
-            if let Some(mut pkts) = rx {
-                let mut raw_packets = vec![];
-                for p in &mut pkts {
-                    if let Content::Handshake(h) = &p.record.content {
-                        let mut handshake_raw = vec![];
-                        {
-                            let mut writer = BufWriter::<&mut Vec<u8>>::new(handshake_raw.as_mut());
-                            p.record.marshal(&mut writer)?;
-                        }
-                        trace!(
-                            "Send [handshake:{}] -> {} (epoch: {}, seq: {})",
-                            srv_cli_str(is_client),
-                            h.handshake_header.handshake_type.to_string(),
-                            p.record.record_layer_header.epoch,
-                            h.handshake_header.message_sequence
-                        );
-                        cache
-                            .push(
-                                handshake_raw[RECORD_LAYER_HEADER_SIZE..].to_vec(),
-                                p.record.record_layer_header.epoch,
-                                h.handshake_header.message_sequence,
-                                h.handshake_header.handshake_type,
-                                is_client,
-                            )
-                            .await;
-
-                        let raw_handshake_packets = Conn::process_handshake_packet(
-                            &mut local_sequence_number,
-                            &sequence_number,
-                            &cipher_suite,
-                            maximum_transmission_unit,
-                            p,
-                            h,
-                        )
-                        .await?;
-                        raw_packets.extend_from_slice(&raw_handshake_packets);
-                    } else {
-                        if let Content::Alert(a) = &p.record.content {
-                            if a.alert_description == AlertDescription::CloseNotify {
-                                closed = true;
-                            }
-                        }
-
-                        let raw_packet = Conn::process_packet(
-                            &mut local_sequence_number,
-                            &sequence_number,
-                            &cipher_suite,
-                            p,
-                        )
-                        .await?;
-                        raw_packets.push(raw_packet);
+                let raw_handshake_packets = Conn::process_handshake_packet(
+                    &local_sequence_number,
+                    &cipher_suite,
+                    maximum_transmission_unit,
+                    p,
+                    h,
+                )
+                .await?;
+                raw_packets.extend_from_slice(&raw_handshake_packets);
+            } else {
+                /*if let Content::Alert(a) = &p.record.content {
+                    if a.alert_description == AlertDescription::CloseNotify {
+                        closed = true;
                     }
-                }
-                if raw_packets.is_empty() {
-                    continue;
-                }
+                }*/
 
-                let compacted_raw_packets =
-                    compact_raw_packets(&raw_packets, maximum_transmission_unit);
+                let raw_packet =
+                    Conn::process_packet(&local_sequence_number, &cipher_suite, p).await?;
+                raw_packets.push(raw_packet);
+            }
+        }
 
-                for compacted_raw_packets in &compacted_raw_packets {
-                    next_conn.send(compacted_raw_packets).await?;
-                }
+        if !raw_packets.is_empty() {
+            let compacted_raw_packets =
+                compact_raw_packets(&raw_packets, maximum_transmission_unit);
+
+            for compacted_raw_packets in &compacted_raw_packets {
+                next_conn.send(compacted_raw_packets).await?;
             }
         }
 
@@ -514,20 +544,22 @@ impl Conn {
     }
 
     async fn process_packet(
-        local_sequence_number: &mut Vec<u64>,
-        sequence_number: &Arc<AtomicU64>,
+        local_sequence_number: &Arc<Mutex<Vec<u64>>>,
         cipher_suite: &Arc<Mutex<Option<Box<dyn CipherSuite + Send + Sync>>>>,
         p: &mut Packet,
     ) -> Result<Vec<u8>, Error> {
         let epoch = p.record.record_layer_header.epoch as usize;
         let seq = {
-            while local_sequence_number.len() <= epoch {
-                local_sequence_number.push(0);
+            let mut lsn = local_sequence_number.lock().await;
+            while lsn.len() <= epoch {
+                lsn.push(0);
             }
-            local_sequence_number[epoch] += 1;
-            sequence_number.store(local_sequence_number[epoch], Ordering::Relaxed);
-            local_sequence_number[epoch] - 1
+
+            lsn[epoch] += 1;
+            lsn[epoch] - 1
         };
+        //trace!("{}: seq = {}", srv_cli_str(is_client), seq);
+
         if seq > MAX_SEQUENCE_NUMBER {
             // RFC 6347 Section 4.1.0
             // The implementation must either abandon an association or rehandshake
@@ -553,8 +585,7 @@ impl Conn {
     }
 
     async fn process_handshake_packet(
-        local_sequence_number: &mut Vec<u64>,
-        sequence_number: &Arc<AtomicU64>,
+        local_sequence_number: &Arc<Mutex<Vec<u64>>>,
         cipher_suite: &Arc<Mutex<Option<Box<dyn CipherSuite + Send + Sync>>>>,
         maximum_transmission_unit: usize,
         p: &Packet,
@@ -566,15 +597,15 @@ impl Conn {
 
         let epoch = p.record.record_layer_header.epoch as usize;
 
-        while local_sequence_number.len() <= epoch {
-            local_sequence_number.push(0);
+        let mut lsn = local_sequence_number.lock().await;
+        while lsn.len() <= epoch {
+            lsn.push(0);
         }
 
         for handshake_fragment in &handshake_fragments {
             let seq = {
-                local_sequence_number[epoch] += 1;
-                sequence_number.store(local_sequence_number[epoch], Ordering::Relaxed);
-                local_sequence_number[epoch] - 1
+                lsn[epoch] += 1;
+                lsn[epoch] - 1
             };
             if seq > MAX_SEQUENCE_NUMBER {
                 return Err(ERR_SEQUENCE_NUMBER_OVERFLOW.clone());
@@ -673,23 +704,12 @@ impl Conn {
     async fn read_and_buffer(
         ctx: &mut ConnReaderContext,
         next_conn: &Arc<UdpSocket>,
-        close_rx: &mut mpsc::Receiver<()>,
         handle_queue_rx: &mut mpsc::Receiver<mpsc::Sender<()>>,
         buf: &mut [u8],
         local_epoch: &Arc<AtomicU16>,
         handshake_completed_successfully: &Arc<AtomicBool>,
     ) -> Result<(), Error> {
-        let n;
-        tokio::select! {
-            _ = close_rx.recv() => return Err(Error::new("recv close signal".to_owned())),
-            res = next_conn.recv(buf) => {
-                match res {
-                    Ok(size) => n = size,
-                    Err(err) => return Err(Error::new(err.to_string())),
-                }
-            }
-        }
-
+        let n = next_conn.recv(buf).await?;
         let pkts = unpack_datagram(&buf[..n])?;
         let mut has_handshake = false;
         for pkt in pkts {
@@ -697,18 +717,22 @@ impl Conn {
             if let Some(alert) = alert {
                 let alert_err = ctx
                     .packet_tx
-                    .send(vec![Packet {
-                        record: RecordLayer::new(
-                            PROTOCOL_VERSION1_2,
-                            local_epoch.load(Ordering::Relaxed),
-                            Content::Alert(Alert {
-                                alert_level: alert.alert_level,
-                                alert_description: alert.alert_description,
-                            }),
-                        ),
-                        should_encrypt: handshake_completed_successfully.load(Ordering::Relaxed),
-                        reset_local_sequence_number: false,
-                    }])
+                    .send((
+                        vec![Packet {
+                            record: RecordLayer::new(
+                                PROTOCOL_VERSION1_2,
+                                local_epoch.load(Ordering::Relaxed),
+                                Content::Alert(Alert {
+                                    alert_level: alert.alert_level,
+                                    alert_description: alert.alert_description,
+                                }),
+                            ),
+                            should_encrypt: handshake_completed_successfully
+                                .load(Ordering::Relaxed),
+                            reset_local_sequence_number: false,
+                        }],
+                        None,
+                    ))
                     .await;
 
                 if let Err(alert_err) = alert_err {
@@ -741,7 +765,6 @@ impl Conn {
                     let mut wait_done_rx = true;
                     while wait_done_rx{
                         tokio::select!{
-                            _ = close_rx.recv() => return Err(Error::new("recv close signal".to_owned())),
                             _ = done_rx.recv() => {
                                 // If the other party may retransmit the flight,
                                 // we should respond even if it not a new message.
@@ -776,18 +799,22 @@ impl Conn {
             if let Some(alert) = alert {
                 let alert_err = ctx
                     .packet_tx
-                    .send(vec![Packet {
-                        record: RecordLayer::new(
-                            PROTOCOL_VERSION1_2,
-                            local_epoch.load(Ordering::Relaxed),
-                            Content::Alert(Alert {
-                                alert_level: alert.alert_level,
-                                alert_description: alert.alert_description,
-                            }),
-                        ),
-                        should_encrypt: handshake_completed_successfully.load(Ordering::Relaxed),
-                        reset_local_sequence_number: false,
-                    }])
+                    .send((
+                        vec![Packet {
+                            record: RecordLayer::new(
+                                PROTOCOL_VERSION1_2,
+                                local_epoch.load(Ordering::Relaxed),
+                                Content::Alert(Alert {
+                                    alert_level: alert.alert_level,
+                                    alert_description: alert.alert_description,
+                                }),
+                            ),
+                            should_encrypt: handshake_completed_successfully
+                                .load(Ordering::Relaxed),
+                            reset_local_sequence_number: false,
+                        }],
+                        None,
+                    ))
                     .await;
 
                 if let Err(alert_err) = alert_err {

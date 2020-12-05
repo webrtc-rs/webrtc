@@ -10,7 +10,7 @@ use util::Error;
 
 use std::io::{BufWriter, Cursor};
 use std::marker::{Send, Sync};
-use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::Arc;
 
 use tokio::sync::Mutex;
@@ -19,7 +19,7 @@ use tokio::sync::Mutex;
 pub(crate) struct State {
     pub(crate) local_epoch: Arc<AtomicU16>,
     pub(crate) remote_epoch: Arc<AtomicU16>,
-    pub(crate) local_sequence_number: Arc<AtomicU64>, // uint48
+    pub(crate) local_sequence_number: Arc<Mutex<Vec<u64>>>, // uint48
     pub(crate) local_random: HandshakeRandom,
     pub(crate) remote_random: HandshakeRandom,
     pub(crate) master_secret: Vec<u8>,
@@ -66,7 +66,7 @@ impl Default for State {
         State {
             local_epoch: Arc::new(AtomicU16::new(0)),
             remote_epoch: Arc::new(AtomicU16::new(0)),
-            local_sequence_number: Arc::new(AtomicU64::new(0)),
+            local_sequence_number: Arc::new(Mutex::new(vec![])),
             local_random: HandshakeRandom::default(),
             remote_random: HandshakeRandom::default(),
             master_secret: vec![],
@@ -127,7 +127,10 @@ impl State {
 
         let local_epoch = self.local_epoch.load(Ordering::Relaxed);
         let remote_epoch = self.remote_epoch.load(Ordering::Relaxed);
-        let sequence_number = self.local_sequence_number.load(Ordering::Relaxed);
+        let sequence_number = {
+            let lsn = self.local_sequence_number.lock().await;
+            lsn[local_epoch as usize]
+        };
         let cipher_suite_id = {
             let cipher_suite = self.cipher_suite.lock().await;
             match &*cipher_suite {
@@ -150,14 +153,19 @@ impl State {
         })
     }
 
-    fn deserialize(&mut self, serialized: &SerializedState) -> Result<(), Error> {
+    async fn deserialize(&mut self, serialized: &SerializedState) -> Result<(), Error> {
         // Set epoch values
         self.local_epoch
             .store(serialized.local_epoch, Ordering::Relaxed);
         self.remote_epoch
             .store(serialized.remote_epoch, Ordering::Relaxed);
-        self.local_sequence_number
-            .store(serialized.sequence_number, Ordering::Relaxed);
+        {
+            let mut lsn = self.local_sequence_number.lock().await;
+            while lsn.len() <= serialized.local_epoch as usize {
+                lsn.push(0);
+            }
+            lsn[serialized.local_epoch as usize] = serialized.sequence_number;
+        }
 
         // Set random values
         let mut reader = Cursor::new(&serialized.local_random);
@@ -228,7 +236,7 @@ impl State {
             Ok(dec) => dec,
             Err(err) => return Err(Error::new(err.to_string())),
         };
-        self.deserialize(&serialized)?;
+        self.deserialize(&serialized).await?;
         self.init_cipher_suite().await?;
 
         Ok(())

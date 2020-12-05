@@ -126,14 +126,77 @@ async fn test_routine_leak_on_close() -> Result<(), Error> {
     assert_eq!(n_a, 100);
 
     let mut buf_b = vec![0; 1024];
-    let n_b = cb.read(&mut buf_b, None).await?;
+    let n_b = cb.read(&mut buf_b, Some(Duration::from_secs(5))).await?;
     assert_eq!(n_a, 100);
     assert_eq!(&buf_a[..], &buf_b[0..n_b]);
 
     cb.close().await?;
     ca.close().await?;
 
-    //tokio::time::sleep(Duration::from_secs(1)).await;
+    {
+        drop(ca);
+        drop(cb);
+    }
+
+    tokio::time::sleep(Duration::from_millis(1)).await;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_sequence_number_overflow() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, LevelFilter::Trace)
+    .init();*/
+
+    let (mut ca, mut cb) = build_pipe().await?;
+
+    {
+        let mut lsn = ca.state.local_sequence_number.lock().await;
+        lsn[1] = MAX_SEQUENCE_NUMBER;
+    }
+
+    let buf_a = vec![0xFA; 100];
+    let n_a = ca.write(&buf_a, Some(Duration::from_secs(5))).await?;
+    assert_eq!(n_a, 100);
+
+    let mut buf_b = vec![0; 1024];
+    let n_b = cb.read(&mut buf_b, Some(Duration::from_secs(5))).await?;
+    assert_eq!(n_a, 100);
+    assert_eq!(&buf_a[..], &buf_b[0..n_b]);
+
+    let result = ca.write(&buf_a, Some(Duration::from_secs(5))).await;
+    if let Err(err) = result {
+        assert_eq!(err, ERR_SEQUENCE_NUMBER_OVERFLOW.clone());
+    } else {
+        assert!(false, "Expected error but it is OK");
+    }
+
+    cb.close().await?;
+
+    if let Err(err) = ca.close().await {
+        assert_eq!(err, ERR_SEQUENCE_NUMBER_OVERFLOW.clone());
+    } else {
+        assert!(false, "Expected error but it is OK");
+    }
+
+    {
+        drop(ca);
+        drop(cb);
+    }
+
+    tokio::time::sleep(Duration::from_millis(1)).await;
 
     Ok(())
 }
