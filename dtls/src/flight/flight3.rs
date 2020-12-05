@@ -91,7 +91,7 @@ impl Flight for Flight3 {
             }
         }
 
-        let result = if cfg.local_psk_callback.is_none() {
+        let result = if cfg.local_psk_callback.is_some() {
             cache
                 .full_pull_map(
                     state.handshake_recv_sequence,

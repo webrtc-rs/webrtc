@@ -172,7 +172,7 @@ impl Conn {
 
         let cfg = HandshakeConfig {
             local_psk_callback: config.psk.take(),
-            local_psk_identity_hint: config.psk_identity_hint.clone(),
+            local_psk_identity_hint: config.psk_identity_hint.take(),
             local_cipher_suites,
             local_signature_schemes,
             extended_master_secret: config.extended_master_secret,
@@ -326,6 +326,9 @@ impl Conn {
                                 srv_cli_str(is_client),
                                 err
                             );
+                            if err == *ERR_ALERT_FATAL_OR_CLOSE {
+                                break;
+                            }
                         }
                     }
                 }
@@ -950,13 +953,13 @@ impl Conn {
                 let mut reader = BufReader::new(out.as_slice());
                 let raw_handshake = match Handshake::unmarshal(&mut reader) {
                     Ok(rh) => {
-                        trace!(
+                        /*trace!(
                             "Recv [handshake:{}] -> {} (epoch: {}, seq: {})",
                             srv_cli_str(ctx.is_client),
                             rh.handshake_header.handshake_type.to_string(),
                             h.epoch,
                             rh.handshake_header.message_sequence
-                        );
+                        );*/
                         rh
                     }
                     Err(err) => {

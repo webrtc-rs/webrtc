@@ -10,7 +10,17 @@ use crate::errors::*;
 use tokio::net::UdpSocket;
 
 use std::time::SystemTime;
+
 //use std::io::Write;
+
+lazy_static! {
+    pub static ref ERR_TEST_PSK_INVALID_IDENTITY: Error =
+        Error::new("TestPSK: Server got invalid identity".to_owned());
+    pub static ref ERR_PSK_REJECTED: Error = Error::new("PSK Rejected".to_owned());
+    pub static ref ERR_NOT_EXPECTED_CHAIN: Error = Error::new("not expected chain".to_owned());
+    pub static ref ERR_EXPECTED_CHAIN: Error = Error::new("expected chain".to_owned());
+    pub static ref ERR_WRONG_CERT: Error = Error::new("wrong cert".to_owned());
+}
 
 async fn build_pipe() -> Result<(Conn, Conn), Error> {
     let (ua, ub) = pipe().await?;
@@ -39,10 +49,13 @@ async fn pipe_conn(ca: UdpSocket, cb: UdpSocket) -> Result<(Conn, Conn), Error> 
             ca,
             Config {
                 srtp_protection_profiles: vec![SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_80],
+                //TODO: change PSK to cert
                 cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256],
+                psk: Some(psk_callback_client),
+                psk_identity_hint: Some("WebRTC.rs DTLS Server".as_bytes().to_vec()),
                 ..Default::default()
             },
-            false,
+            false, //TODO: use ceritificate
         )
         .await;
 
@@ -54,10 +67,13 @@ async fn pipe_conn(ca: UdpSocket, cb: UdpSocket) -> Result<(Conn, Conn), Error> 
         cb,
         Config {
             srtp_protection_profiles: vec![SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_80],
+            //TODO: change PSK to cert
             cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256],
+            psk: Some(psk_callback_server),
+            psk_identity_hint: Some("WebRTC.rs DTLS Client".as_bytes().to_vec()),
             ..Default::default()
         },
-        false,
+        false, //TODO: use ceritificate
     )
     .await?;
 
@@ -86,6 +102,10 @@ fn psk_callback_server(hint: &[u8]) -> Result<Vec<u8>, Error> {
     Ok(vec![0xAB, 0xC1, 0x23])
 }
 
+fn psk_callback_hint_fail(_hint: &[u8]) -> Result<Vec<u8>, Error> {
+    Err(ERR_PSK_REJECTED.clone())
+}
+
 async fn create_test_client(
     ca: UdpSocket,
     mut cfg: Config,
@@ -93,9 +113,6 @@ async fn create_test_client(
 ) -> Result<Conn, Error> {
     if generate_certificate {
         //TODO:
-    } else {
-        cfg.psk = Some(psk_callback_client);
-        cfg.psk_identity_hint = "WebRTC.rs DTLS Server".as_bytes().to_vec();
     }
 
     cfg.insecure_skip_verify = true;
@@ -104,15 +121,13 @@ async fn create_test_client(
 
 async fn create_test_server(
     cb: UdpSocket,
-    mut cfg: Config,
+    cfg: Config,
     generate_certificate: bool,
 ) -> Result<Conn, Error> {
     if generate_certificate {
         //TODO:
-    } else {
-        cfg.psk = Some(psk_callback_server);
-        cfg.psk_identity_hint = "WebRTC.rs DTLS Client".as_bytes().to_vec();
     }
+
     Conn::new(cb, cfg, false, None).await
 }
 
@@ -340,11 +355,11 @@ async fn test_handshake_with_alert() -> Result<(), Error> {
 
         let (ca, cb) = pipe().await?;
         tokio::spawn(async move {
-            let result = create_test_client(ca, config_client, false).await;
+            let result = create_test_client(ca, config_client, false).await; //TODO: use certificate
             let _ = client_err_tx.send(result).await;
         });
 
-        let result_server = create_test_server(cb, config_server, false).await;
+        let result_server = create_test_server(cb, config_server, false).await; //TODO: use certificate
         if let Err(err) = result_server {
             assert_eq!(
                 err, err_server,
@@ -492,6 +507,144 @@ async fn test_export_keying_material() -> Result<(), Error> {
         "ExportKeyingMaterial client export: expected ({:?}) actual ({:?})",
         &expected_client_key, &keying_material,
     );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_psk() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, LevelFilter::Trace)
+    .init();*/
+
+    let tests = vec![
+        (
+            "Server identity specified",
+            Some("Test Identity".as_bytes().to_vec()),
+        ),
+        ("Server identity nil", None),
+    ];
+
+    for (name, server_identity) in tests {
+        let client_identity = "Client Identity".as_bytes();
+        let (client_res_tx, mut client_res_rx) = mpsc::channel(1);
+
+        let (ca, cb) = pipe().await?;
+        tokio::spawn(async move {
+            let conf = Config {
+                psk: Some(psk_callback_client),
+                psk_identity_hint: Some(client_identity.to_vec()),
+                cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256], //TODO: change it to TLS_PSK_WITH_AES_128_CCM_8
+                ..Default::default()
+            };
+
+            let result = create_test_client(ca, conf, false).await;
+            let _ = client_res_tx.send(result).await;
+        });
+
+        let config = Config {
+            psk: Some(psk_callback_server),
+            psk_identity_hint: server_identity,
+            cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256], //TODO: change it to TLS_PSK_WITH_AES_128_CCM_8
+            ..Default::default()
+        };
+
+        let mut server = create_test_server(cb, config, false).await?;
+
+        if let Some(result) = client_res_rx.recv().await {
+            if let Ok(mut client) = result {
+                client.close().await?;
+            } else {
+                assert!(
+                    false,
+                    "{}: Expected create_test_client successfully, but got error",
+                    name,
+                );
+            }
+        }
+
+        server.close().await?;
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_psk_hint_fail() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, LevelFilter::Trace)
+    .init();*/
+
+    let (client_res_tx, mut client_res_rx) = mpsc::channel(1);
+
+    let (ca, cb) = pipe().await?;
+    tokio::spawn(async move {
+        let conf = Config {
+            psk: Some(psk_callback_hint_fail),
+            psk_identity_hint: Some(vec![]),
+            cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256], //TODO: change it to TLS_PSK_WITH_AES_128_CCM_8
+            ..Default::default()
+        };
+
+        let result = create_test_client(ca, conf, false).await;
+        let _ = client_res_tx.send(result).await;
+    });
+
+    let config = Config {
+        psk: Some(psk_callback_hint_fail),
+        psk_identity_hint: Some(vec![]),
+        cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256], //TODO: change it to TLS_PSK_WITH_AES_128_CCM_8
+        ..Default::default()
+    };
+
+    if let Err(server_err) = create_test_server(cb, config, false).await {
+        assert_eq!(
+            server_err,
+            ERR_ALERT_FATAL_OR_CLOSE.clone(),
+            "TestPSK: Server error exp({}) failed({})",
+            ERR_ALERT_FATAL_OR_CLOSE.clone(),
+            server_err,
+        );
+    } else {
+        assert!(false, "Expected server error, but got OK");
+    }
+
+    let result = client_res_rx.recv().await;
+    if let Some(client) = result {
+        if let Err(client_err) = client {
+            assert_eq!(
+                client_err,
+                ERR_PSK_REJECTED.clone(),
+                "TestPSK: Client error exp({}) failed({})",
+                ERR_PSK_REJECTED.clone(),
+                client_err,
+            );
+        } else {
+            assert!(false, "Expected client error, but got OK");
+        }
+    }
 
     Ok(())
 }
