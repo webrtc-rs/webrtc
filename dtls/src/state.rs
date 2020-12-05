@@ -101,7 +101,7 @@ impl State {
         let mut state = State::default();
 
         if let Ok(serialized) = self.serialize().await {
-            let _ = state.deserialize(&serialized);
+            let _ = state.deserialize(&serialized).await;
         }
 
         state
@@ -271,7 +271,7 @@ impl State {
             self.remote_random.marshal(&mut writer)?;
         }
 
-        let mut seed = vec![];
+        let mut seed = label.as_bytes().to_vec();
         if self.is_client {
             seed.extend_from_slice(&local_random);
             seed.extend_from_slice(&remote_random);

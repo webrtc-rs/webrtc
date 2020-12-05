@@ -4,9 +4,12 @@ use crate::compression_methods::*;
 use crate::handshake::handshake_message_client_hello::*;
 use crate::handshake::handshake_random::*;
 //use crate::signature_hash_algorithm::*;
+use crate::cipher_suite::cipher_suite_tls_ecdhe_ecdsa_with_aes_128_gcm_sha256::*;
+use crate::errors::*;
 
 use tokio::net::UdpSocket;
 
+use std::time::SystemTime;
 //use std::io::Write;
 
 async fn build_pipe() -> Result<(Conn, Conn), Error> {
@@ -377,3 +380,118 @@ async fn test_handshake_with_alert() -> Result<(), Error> {
     Ok(())
 }
 */
+
+#[tokio::test]
+async fn test_export_keying_material() -> Result<(), Error> {
+    let export_label = "EXTRACTOR-dtls_srtp";
+    let expected_server_key = vec![0x61, 0x09, 0x9d, 0x7d, 0xcb, 0x08, 0x52, 0x2c, 0xe7, 0x7b];
+    let expected_client_key = vec![0x87, 0xf0, 0x40, 0x02, 0xf6, 0x1c, 0xf1, 0xfe, 0x8c, 0x77];
+
+    let (_decrypted_tx, decrypted_rx) = mpsc::channel(1);
+    let (_handshake_tx, handshake_rx) = mpsc::channel(1);
+    let (packet_tx, _packet_rx) = mpsc::channel(1);
+    let (handle_queue_tx, _handle_queue_rx) = mpsc::channel(1);
+
+    let mut c = Conn {
+        state: State {
+            local_random: HandshakeRandom {
+                gmt_unix_time: SystemTime::UNIX_EPOCH
+                    .checked_add(Duration::new(500, 0))
+                    .unwrap(),
+                ..Default::default()
+            },
+            remote_random: HandshakeRandom {
+                gmt_unix_time: SystemTime::UNIX_EPOCH
+                    .checked_add(Duration::new(1000, 0))
+                    .unwrap(),
+                ..Default::default()
+            },
+            local_sequence_number: Arc::new(Mutex::new(vec![0, 0])),
+            cipher_suite: Arc::new(Mutex::new(Some(Box::new(
+                CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::default(),
+            )))),
+            ..Default::default()
+        },
+        cache: HandshakeCache::new(),
+        decrypted_rx,
+        handshake_completed_successfully: Arc::new(AtomicBool::new(false)),
+        connection_closed_by_user: false,
+        closed: false,
+        current_flight: Box::new(Flight0 {}) as Box<dyn Flight + Send + Sync>,
+        flights: None,
+        cfg: HandshakeConfig::default(),
+        retransmit: false,
+        handshake_rx,
+
+        packet_tx: Arc::new(packet_tx),
+        handle_queue_tx,
+        handshake_done_tx: None,
+
+        reader_close_tx: None,
+    };
+
+    c.set_local_epoch(0);
+    let state = c.connection_state().await;
+    if let Err(err) = state.export_keying_material(&export_label, &[], 0).await {
+        assert_eq!(
+            err,
+            ERR_HANDSHAKE_IN_PROGRESS.clone(),
+            "ExportKeyingMaterial when epoch == 0: expected '{}' actual '{}'",
+            ERR_HANDSHAKE_IN_PROGRESS.clone(),
+            err,
+        );
+    } else {
+        assert!(false, "expect error but export_keying_material returns OK");
+    }
+
+    c.set_local_epoch(1);
+    let state = c.connection_state().await;
+    if let Err(err) = state
+        .export_keying_material(&export_label, &[0x00], 0)
+        .await
+    {
+        assert_eq!(
+            err,
+            ERR_CONTEXT_UNSUPPORTED.clone(),
+            "ExportKeyingMaterial with context: expected '{}' actual '{}'",
+            ERR_CONTEXT_UNSUPPORTED.clone(),
+            err
+        );
+    } else {
+        assert!(false, "expect error but export_keying_material returns OK");
+    }
+
+    for (k, _v) in INVALID_KEYING_LABELS.iter() {
+        let state = c.connection_state().await;
+        if let Err(err) = state.export_keying_material(k, &[], 0).await {
+            assert_eq!(
+                err,
+                ERR_RESERVED_EXPORT_KEYING_MATERIAL.clone(),
+                "ExportKeyingMaterial reserved label: expected '{}' actual '{}'",
+                ERR_RESERVED_EXPORT_KEYING_MATERIAL.clone(),
+                err,
+            );
+        } else {
+            assert!(false, "expect error but export_keying_material returns OK");
+        }
+    }
+
+    let state = c.connection_state().await;
+    let keying_material = state.export_keying_material(&export_label, &[], 10).await?;
+    assert_eq!(
+        &keying_material, &expected_server_key,
+        "ExportKeyingMaterial client export: expected ({:?}) actual ({:?})",
+        &expected_server_key, &keying_material,
+    );
+
+    c.state.is_client = true;
+    let state = c.connection_state().await;
+    let keying_material = state.export_keying_material(&export_label, &[], 10).await?;
+    assert_eq!(
+        &keying_material, &expected_client_key,
+        "ExportKeyingMaterial client export: expected ({:?}) actual ({:?})",
+        &expected_client_key, &keying_material,
+    );
+
+    Ok(())
+}
