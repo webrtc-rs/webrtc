@@ -42,7 +42,7 @@ impl HandshakeMessageServerKeyExchange {
         if !self.identity_hint.is_empty() {
             writer.write_u16::<BigEndian>(self.identity_hint.len() as u16)?;
             writer.write_all(&self.identity_hint)?;
-            return Ok(());
+            return Ok(writer.flush()?);
         }
 
         writer.write_u8(self.elliptic_curve_type as u8)?;
@@ -57,7 +57,7 @@ impl HandshakeMessageServerKeyExchange {
         writer.write_u16::<BigEndian>(self.signature.len() as u16)?;
         writer.write_all(&self.signature)?;
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {

@@ -80,7 +80,7 @@ impl FullIntraRequest {
             writer.write_u16::<BigEndian>(0)?;
         }
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     // Unmarshal decodes the TransportLayerNack

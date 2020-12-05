@@ -134,7 +134,7 @@ impl HandshakeMessageClientHello {
         writer.write_u16::<BigEndian>(extension_buffer.len() as u16)?;
         writer.write_all(&extension_buffer)?;
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {

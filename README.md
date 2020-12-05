@@ -38,13 +38,12 @@
 - [ ] DTLS
   - work in progress
   - catch up [pion/dtls/v2.0.0](https://github.com/pion/dtls/tree/789798433596e4dd92451b66984dddb2f8a9f165)
+- [ ] STUN
+- [ ] TURN
 - [ ] ICE
 - [ ] PeerConnection
 
 ### Road Map Towards 2.0
-
-- [ ] STUN
-- [ ] TURN
 - [ ] SCTP
 - [ ] DataChannel
 

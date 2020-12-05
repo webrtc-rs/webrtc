@@ -105,7 +105,7 @@ impl SourceDescriptionChunk {
         let padding: Vec<u8> = vec![0; padding_len];
         writer.write_all(padding.as_slice())?;
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     // Unmarshal decodes the SourceDescriptionChunk from binary
@@ -198,7 +198,7 @@ impl SourceDescriptionItem {
 
         writer.write_all(self.text.as_bytes())?;
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     // Unmarshal decodes the SourceDescriptionItem from binary

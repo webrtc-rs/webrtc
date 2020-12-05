@@ -391,6 +391,6 @@ impl Header {
             }
         }
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 }

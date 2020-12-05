@@ -168,7 +168,7 @@ impl Alert {
         writer.write_u8(self.alert_level as u8)?;
         writer.write_u8(self.alert_description as u8)?;
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {

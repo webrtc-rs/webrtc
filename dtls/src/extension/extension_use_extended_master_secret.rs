@@ -24,7 +24,7 @@ impl ExtensionUseExtendedMasterSecret {
         // length
         writer.write_u16::<BigEndian>(0)?;
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {

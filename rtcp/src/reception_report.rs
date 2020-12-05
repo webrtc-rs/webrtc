@@ -87,7 +87,7 @@ impl ReceptionReport {
         writer.write_u32::<BigEndian>(self.last_sender_report)?;
         writer.write_u32::<BigEndian>(self.delay)?;
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     // Unmarshal decodes the ReceptionReport from binary

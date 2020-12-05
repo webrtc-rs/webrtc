@@ -61,7 +61,7 @@ impl RecordLayerHeader {
 
         writer.write_u16::<BigEndian>(self.content_len)?;
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {

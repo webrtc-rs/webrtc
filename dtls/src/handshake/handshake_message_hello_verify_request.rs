@@ -51,7 +51,7 @@ impl HandshakeMessageHelloVerifyRequest {
         writer.write_u8(self.cookie.len() as u8)?;
         writer.write_all(&self.cookie)?;
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {

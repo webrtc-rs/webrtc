@@ -56,7 +56,6 @@ impl RecordLayer {
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.record_layer_header.marshal(writer)?;
         self.content.marshal(writer)?;
-
         Ok(())
     }
 

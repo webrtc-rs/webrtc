@@ -69,6 +69,7 @@ struct ConnReaderContext {
     remote_epoch: Arc<AtomicU16>,
     handshake_tx: mpsc::Sender<mpsc::Sender<()>>,
     handshake_done_rx: mpsc::Receiver<()>,
+    packet_tx: Arc<mpsc::Sender<Vec<Packet>>>,
 }
 
 // Conn represents a DTLS connection
@@ -102,6 +103,8 @@ pub(crate) struct Conn {
     pub(crate) packet_tx: Arc<mpsc::Sender<Vec<Packet>>>,
     pub(crate) handle_queue_tx: mpsc::Sender<mpsc::Sender<()>>,
     pub(crate) handshake_done_tx: Option<mpsc::Sender<()>>,
+
+    reader_close_tx: Option<mpsc::Sender<()>>,
 }
 
 impl Conn {
@@ -215,6 +218,7 @@ impl Conn {
         let (handshake_done_tx, handshake_done_rx) = mpsc::channel(1);
         let (packet_tx, packet_rx) = mpsc::channel(1);
         let (handle_queue_tx, mut handle_queue_rx) = mpsc::channel(1);
+        let (reader_close_tx, mut reader_close_rx) = mpsc::channel(1);
 
         let packet_tx1 = Arc::new(packet_tx);
         let packet_tx2 = Arc::clone(&packet_tx1);
@@ -242,6 +246,7 @@ impl Conn {
             packet_tx: packet_tx1,
             handle_queue_tx,
             handshake_done_tx: Some(handshake_done_tx),
+            reader_close_tx: Some(reader_close_tx),
         };
 
         let cipher_suite1 = Arc::clone(&c.state.cipher_suite);
@@ -278,6 +283,7 @@ impl Conn {
                 remote_epoch,
                 handshake_tx,
                 handshake_done_rx,
+                packet_tx: packet_tx2,
             };
 
             //trace!("before enter read_and_buffer: {}] ", srv_cli_str(is_client));
@@ -285,7 +291,7 @@ impl Conn {
                 let _ = Conn::read_and_buffer(
                     &mut ctx,
                     &next_conn_rx,
-                    &packet_tx2,
+                    &mut reader_close_rx,
                     &mut handle_queue_rx,
                     &mut buf,
                     &local_epoch,
@@ -368,10 +374,18 @@ impl Conn {
     }
 
     // Close closes the connection.
-    pub fn close(&self) -> Result<(), Error> {
-        //err := c.close(true)
-        //c.handshakeLoopsFinished.Wait()
-        //return err
+    pub async fn close(&mut self) -> Result<(), Error> {
+        if !self.closed {
+            // Discard error from notify() to return non-error on the first user call of Close()
+            // even if the underlying connection is already closed.
+            self.notify(AlertLevel::Warning, AlertDescription::CloseNotify)
+                .await?;
+
+            self.reader_close_tx.take();
+
+            self.closed = true;
+        }
+
         Ok(())
     }
 
@@ -425,9 +439,11 @@ impl Conn {
         maximum_transmission_unit: usize,
     ) -> Result<(), Error> {
         let mut local_sequence_number = vec![];
+        let mut closed = false;
 
-        loop {
+        while !closed {
             let rx = packet_rx.recv().await;
+
             if let Some(mut pkts) = rx {
                 let mut raw_packets = vec![];
                 for p in &mut pkts {
@@ -465,6 +481,12 @@ impl Conn {
                         .await?;
                         raw_packets.extend_from_slice(&raw_handshake_packets);
                     } else {
+                        if let Content::Alert(a) = &p.record.content {
+                            if a.alert_description == AlertDescription::CloseNotify {
+                                closed = true;
+                            }
+                        }
+
                         let raw_packet = Conn::process_packet(
                             &mut local_sequence_number,
                             &sequence_number,
@@ -487,6 +509,8 @@ impl Conn {
                 }
             }
         }
+
+        Ok(())
     }
 
     async fn process_packet(
@@ -649,20 +673,30 @@ impl Conn {
     async fn read_and_buffer(
         ctx: &mut ConnReaderContext,
         next_conn: &Arc<UdpSocket>,
-        packet_tx: &Arc<mpsc::Sender<Vec<Packet>>>,
+        close_rx: &mut mpsc::Receiver<()>,
         handle_queue_rx: &mut mpsc::Receiver<mpsc::Sender<()>>,
         buf: &mut [u8],
         local_epoch: &Arc<AtomicU16>,
         handshake_completed_successfully: &Arc<AtomicBool>,
     ) -> Result<(), Error> {
-        let mut has_handshake = false;
-        let n = next_conn.recv(buf).await?;
-        let pkts = unpack_datagram(&buf[..n])?;
+        let n;
+        tokio::select! {
+            _ = close_rx.recv() => return Err(Error::new("recv close signal".to_owned())),
+            res = next_conn.recv(buf) => {
+                match res {
+                    Ok(size) => n = size,
+                    Err(err) => return Err(Error::new(err.to_string())),
+                }
+            }
+        }
 
+        let pkts = unpack_datagram(&buf[..n])?;
+        let mut has_handshake = false;
         for pkt in pkts {
             let (hs, alert, mut err) = Conn::handle_incoming_packet(ctx, pkt, true).await;
             if let Some(alert) = alert {
-                let alert_err = packet_tx
+                let alert_err = ctx
+                    .packet_tx
                     .send(vec![Packet {
                         record: RecordLayer::new(
                             PROTOCOL_VERSION1_2,
@@ -707,6 +741,7 @@ impl Conn {
                     let mut wait_done_rx = true;
                     while wait_done_rx{
                         tokio::select!{
+                            _ = close_rx.recv() => return Err(Error::new("recv close signal".to_owned())),
                             _ = done_rx.recv() => {
                                 // If the other party may retransmit the flight,
                                 // we should respond even if it not a new message.
@@ -716,7 +751,7 @@ impl Conn {
                                 //trace!("recv handle_queue: {} ", srv_cli_str(ctx.is_client));
 
                                 let pkts = ctx.encrypted_packets.drain(..).collect();
-                                Conn::handle_queued_packets(ctx, packet_tx, local_epoch, handshake_completed_successfully, pkts).await?;
+                                Conn::handle_queued_packets(ctx, local_epoch, handshake_completed_successfully, pkts).await?;
 
                                 drop(done);
                             }
@@ -732,7 +767,6 @@ impl Conn {
 
     async fn handle_queued_packets(
         ctx: &mut ConnReaderContext,
-        packet_tx: &Arc<mpsc::Sender<Vec<Packet>>>,
         local_epoch: &Arc<AtomicU16>,
         handshake_completed_successfully: &Arc<AtomicBool>,
         pkts: Vec<Vec<u8>>,
@@ -740,7 +774,8 @@ impl Conn {
         for p in pkts {
             let (_, alert, mut err) = Conn::handle_incoming_packet(ctx, p, false).await; // don't re-enqueue
             if let Some(alert) = alert {
-                let alert_err = packet_tx
+                let alert_err = ctx
+                    .packet_tx
                     .send(vec![Packet {
                         record: RecordLayer::new(
                             PROTOCOL_VERSION1_2,
@@ -1024,12 +1059,6 @@ impl Conn {
     }
 
     fn is_connection_closed(&self) -> bool {
-        /*select {
-        case <-c.closed.Done():
-            return true
-        default:
-            return false
-        }*/
         self.closed
     }
 

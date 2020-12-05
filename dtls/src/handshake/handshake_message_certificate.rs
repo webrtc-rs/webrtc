@@ -48,7 +48,7 @@ impl HandshakeMessageCertificate {
             writer.write_all(r)?;
         }
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {

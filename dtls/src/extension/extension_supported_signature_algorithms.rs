@@ -29,7 +29,7 @@ impl ExtensionSupportedSignatureAlgorithms {
             writer.write_u8(v.signature as u8)?;
         }
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {

@@ -288,7 +288,7 @@ fn test_rfc8285_one_byte_multiple_extensions_with_padding() {
     let ext3_expect: [u8; 4] = [0xCC, 0xCC, 0xCC, 0xCC];
     assert_eq!(ext3, ext3_expect);
 
-    let mut dst_buf: Vec<Vec<u8>> = vec![vec![0u8; 1000], vec![0xFF; 1000], vec![0xAA; 20]];
+    let mut dst_buf: Vec<Vec<u8>> = vec![vec![0u8; 1000], vec![0xFF; 1000], vec![0xAA; 2]];
 
     let raw_pkg_marshal: [u8; 33] = [
         0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0xBE, 0xDE, 0x00,
@@ -323,15 +323,9 @@ fn test_rfc8285_one_byte_multiple_extensions_with_padding() {
         // NOTE: buf.as_mut_slice() won't increase buf size.
         // If buf size is not big enough, it will be silent and won't report error
         let mut writer = BufWriter::new(dst_buf[2].as_mut_slice());
-        packet.marshal(&mut writer).expect("Error marshalling byte");
+        let result = packet.marshal(&mut writer);
+        assert!(result.is_err());
     }
-    //println!("{:?}", &dst_buf[2]);
-    assert_ne!(dst_buf[2].len(), packet.size());
-    assert_eq!(
-        &dst_buf[2][..],
-        &raw_pkg_marshal[..dst_buf[2].len()],
-        "Marshalled fields are not equal.",
-    );
 }
 
 //TODO: ADD more tests in https://github.com/pion/rtp/blob/master/packet_test.go

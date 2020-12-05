@@ -49,7 +49,7 @@ impl HandshakeMessageCertificateRequest {
 
         writer.write_all(&[0x00, 0x00])?; // Distinguished Names Length
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {

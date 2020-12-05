@@ -130,7 +130,7 @@ impl Header {
 
         writer.write_u16::<BigEndian>(self.length)?;
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     // Unmarshal decodes the Header from binary

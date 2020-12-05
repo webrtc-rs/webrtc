@@ -131,7 +131,7 @@ impl RunLengthChunk {
 
         writer.write_u16::<BigEndian>(dst)?;
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     // Unmarshal ..
@@ -195,7 +195,7 @@ impl StatusVectorChunk {
 
         writer.write_u16::<BigEndian>(dst)?;
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     // Unmarshal ..
@@ -257,7 +257,7 @@ impl RecvDelta {
             && delta <= u8::MAX as i64
         {
             writer.write_u8(delta as u8)?;
-            return Ok(());
+            return Ok(writer.flush()?);
         }
 
         //big delta
@@ -266,7 +266,7 @@ impl RecvDelta {
             && delta <= i16::MAX as i64
         {
             writer.write_i16::<BigEndian>(delta as i16)?;
-            return Ok(());
+            return Ok(writer.flush()?);
         }
 
         //overflow
@@ -437,7 +437,7 @@ impl TransportLayerCC {
             }
         }
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     // Unmarshal ..

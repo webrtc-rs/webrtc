@@ -28,7 +28,7 @@ impl ExtensionSupportedEllipticCurves {
             writer.write_u16::<BigEndian>(*v as u16)?;
         }
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {

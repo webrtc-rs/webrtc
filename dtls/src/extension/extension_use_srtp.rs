@@ -57,7 +57,7 @@ impl ExtensionUseSRTP {
         /* MKI Length */
         writer.write_u8(0x00)?;
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {

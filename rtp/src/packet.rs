@@ -52,6 +52,6 @@ impl Packet {
         self.header.marshal(writer)?;
         writer.write_all(&self.payload)?;
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 }

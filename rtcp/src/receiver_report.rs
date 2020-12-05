@@ -164,6 +164,6 @@ impl ReceiverReport {
 
         writer.write_all(&self.profile_extensions)?;
 
-        Ok(())
+        Ok(writer.flush()?)
     }
 }
