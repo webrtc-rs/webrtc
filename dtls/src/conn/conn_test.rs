@@ -545,7 +545,7 @@ async fn test_psk() -> Result<(), Error> {
             let conf = Config {
                 psk: Some(psk_callback_client),
                 psk_identity_hint: Some(client_identity.to_vec()),
-                cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256], //TODO: change it to TLS_PSK_WITH_AES_128_CCM_8
+                cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_CCM_8],
                 ..Default::default()
             };
 
@@ -556,7 +556,7 @@ async fn test_psk() -> Result<(), Error> {
         let config = Config {
             psk: Some(psk_callback_server),
             psk_identity_hint: server_identity,
-            cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256], //TODO: change it to TLS_PSK_WITH_AES_128_CCM_8
+            cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_CCM_8],
             ..Default::default()
         };
 
@@ -604,7 +604,7 @@ async fn test_psk_hint_fail() -> Result<(), Error> {
         let conf = Config {
             psk: Some(psk_callback_hint_fail),
             psk_identity_hint: Some(vec![]),
-            cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256], //TODO: change it to TLS_PSK_WITH_AES_128_CCM_8
+            cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_CCM_8],
             ..Default::default()
         };
 
@@ -615,7 +615,7 @@ async fn test_psk_hint_fail() -> Result<(), Error> {
     let config = Config {
         psk: Some(psk_callback_hint_fail),
         psk_identity_hint: Some(vec![]),
-        cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256], //TODO: change it to TLS_PSK_WITH_AES_128_CCM_8
+        cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_CCM_8],
         ..Default::default()
     };
 
