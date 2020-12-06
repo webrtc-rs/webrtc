@@ -79,7 +79,7 @@ impl CipherSuite for CipherSuiteAes128Ccm {
             self.ccm = Some(CryptoCcm::new(
                 &self.crypto_ccm_tag_len,
                 &keys.client_write_key,
-                &keys.client_write_key,
+                &keys.client_write_iv,
                 &keys.server_write_key,
                 &keys.server_write_iv,
             ));
@@ -87,7 +87,7 @@ impl CipherSuite for CipherSuiteAes128Ccm {
             self.ccm = Some(CryptoCcm::new(
                 &self.crypto_ccm_tag_len,
                 &keys.server_write_key,
-                &keys.server_write_key,
+                &keys.server_write_iv,
                 &keys.client_write_key,
                 &keys.client_write_iv,
             ));
