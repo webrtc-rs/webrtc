@@ -235,8 +235,8 @@ impl Flight for Flight5 {
             if let Some(local_keypair) = &state.local_keypair {
                 client_key_exchange.public_key = local_keypair.public_key.clone();
             }
-        } else {
-            client_key_exchange.identity_hint = cfg.local_psk_identity_hint.clone();
+        } else if let Some(local_psk_identity_hint) = &cfg.local_psk_identity_hint {
+            client_key_exchange.identity_hint = local_psk_identity_hint.clone();
         }
 
         pkts.push(Packet {

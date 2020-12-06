@@ -660,7 +660,7 @@ impl Flight for Flight4 {
                     reset_local_sequence_number: false,
                 });
             }
-        } else if !cfg.local_psk_identity_hint.is_empty() {
+        } else if let Some(local_psk_identity_hint) = &cfg.local_psk_identity_hint {
             // To help the client in selecting which identity to use, the server
             // can provide a "PSK identity hint" in the ServerKeyExchange message.
             // If no hint is provided, the ServerKeyExchange message is omitted.
@@ -672,7 +672,7 @@ impl Flight for Flight4 {
                     0,
                     Content::Handshake(Handshake::new(HandshakeMessage::ServerKeyExchange(
                         HandshakeMessageServerKeyExchange {
-                            identity_hint: cfg.local_psk_identity_hint.clone(),
+                            identity_hint: local_psk_identity_hint.clone(),
                             elliptic_curve_type: EllipticCurveType::Unsupported,
                             named_curve: NamedCurve::Unsupported,
                             public_key: vec![],

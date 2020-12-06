@@ -177,7 +177,7 @@ pub fn cipher_suite_for_id(id: CipherSuiteID) -> Result<Box<dyn CipherSuite + Se
 }
 
 // CipherSuites we support in order of preference
-fn default_cipher_suites() -> Vec<Box<dyn CipherSuite + Send + Sync>> {
+pub(crate) fn default_cipher_suites() -> Vec<Box<dyn CipherSuite + Send + Sync>> {
     vec![
         Box::new(CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::default()),
         Box::new(CipherSuiteTLSEcdheEcdsaWithAes256CbcSha::default()),

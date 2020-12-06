@@ -125,4 +125,6 @@ lazy_static! {
         Error::new("unhandled contentType".to_owned());
     pub static ref ERR_CONTEXT_CANCELED: Error = Error::new("context canceled".to_owned());
     pub static ref ERR_EMPTY_FRAGMENT: Error = Error::new("empty fragment".to_owned());
+    pub static ref ERR_ALERT_FATAL_OR_CLOSE: Error =
+        Error::new("Alert is Fatal or Close Notify".to_owned());
 }

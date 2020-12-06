@@ -45,7 +45,7 @@ pub struct Config {
     // psk sets the pre-shared key used by this DTLS connection
     // If psk is non-nil only psk cipher_suites will be used
     pub(crate) psk: Option<PSKCallback>,
-    pub(crate) psk_identity_hint: Vec<u8>,
+    pub(crate) psk_identity_hint: Option<Vec<u8>>,
 
     // insecure_skip_verify controls whether a client verifies the
     // server's certificate chain and host name.
@@ -151,7 +151,7 @@ pub(crate) fn validate_config(config: &Config) -> Result<(), Error> {
         return Err(ERR_PSK_AND_CERTIFICATE.clone());
     }
 
-    if !config.psk_identity_hint.is_empty() && config.psk.is_none() {
+    if config.psk_identity_hint.is_some() && config.psk.is_none() {
         return Err(ERR_IDENTITY_NO_PSK.clone());
     }
 
