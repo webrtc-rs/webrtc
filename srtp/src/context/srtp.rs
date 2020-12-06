@@ -42,9 +42,12 @@ impl Context {
 
     // DecryptRTP decrypts a RTP packet with an encrypted payload
     pub fn decrypt_rtp(&mut self, encrypted: &mut [u8]) -> Result<Vec<u8>, Error> {
+        todo!()
+        /*
         let mut header = rtp::header::Header::default();
         header.unmarshal(encrypted)?;
         self.decrypt_rtp_with_header(encrypted, &header)
+        */
     }
 
     pub fn encrypt_rtp_with_header(
@@ -80,8 +83,11 @@ impl Context {
     // EncryptRTP marshals and encrypts an RTP packet, writing to the dst buffer provided.
     // If the dst buffer does not have the capacity to hold `len(plaintext) + 10` bytes, a new one will be allocated and returned.
     pub fn encrypt_rtp(&mut self, plaintext: &mut [u8]) -> Result<Vec<u8>, Error> {
+        todo!()
+        /*
         let mut header = rtp::header::Header::default();
         header.unmarshal(plaintext)?;
         self.encrypt_rtp_with_header(plaintext, &mut header)
+        */
     }
 }

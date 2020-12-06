@@ -1,4 +1,5 @@
 use byteorder::{BigEndian, ByteOrder};
+use bytes::BytesMut;
 use util::Error;
 
 #[derive(Debug, Eq, PartialEq, Default)]
@@ -179,7 +180,7 @@ impl Header {
     }
 
     // Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
-    pub fn unmarshal(&mut self, raw_packet: &mut [u8]) -> Result<(), Error> {
+    pub fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         /*
          *  0                   1                   2                   3
          *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -343,16 +344,19 @@ impl Header {
     }
 
     /// Marshal serializes the packet into bytes.
-    pub fn marshal(&mut self) -> Result<Vec<u8>, Error> {
-        let mut buf = vec![0u8; self.marshal_size()];
+    pub fn marshal(&mut self) -> Result<BytesMut, Error> {
+        let mut buf = BytesMut::new();
+
+        buf.resize(self.marshal_size(), 0u8);
 
         let size = self.marshal_to(&mut buf)?;
+        buf.truncate(size);
 
-        Ok(buf[..size].to_vec())
+        Ok(buf)
     }
 
-    /// Serializes the header and writes to the buffer.
-    pub fn marshal_to(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
+    /// Serializes the header and writes to the buffer. It requires buf length size to have been allocated.
+    pub fn marshal_to(&mut self, buf: &mut BytesMut) -> Result<usize, Error> {
         /*
          *  0                   1                   2                   3
          *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -368,64 +372,111 @@ impl Header {
          * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
 
-        // The second byte contains the marker bit and payload type.
-        let mut b1 = self.payload_type;
-        if self.marker {
-            b1 |= 1 << MARKER_SHIFT;
+        let size = self.marshal_size();
+        if size > buf.len() {
+            return Err(Error::new("short buffer".to_string()));
         }
-        writer.write_u8(b1)?;
 
-        writer.write_u16::<BigEndian>(self.sequence_number)?;
-        writer.write_u32::<BigEndian>(self.timestamp)?;
-        writer.write_u32::<BigEndian>(self.ssrc)?;
+        // The first byte contains the version, padding bit, extension bit, and csrc size
+        buf[0] = (self.version << super::VERSION_SHIFT) | self.csrc.len() as u8;
 
-        for csrc in &self.csrc {
-            writer.write_u32::<BigEndian>(*csrc)?;
+        if self.padding {
+            buf[0] |= 1 << super::PADDING_SHIFT
         }
 
         if self.extension {
-            writer.write_u16::<BigEndian>(self.extension_profile)?;
+            buf[0] |= 1 << super::EXTENSION_SHIFT
+        }
 
-            let extension_payload_len = self.get_extension_payload_len();
-            if self.extension_profile != EXTENSION_PROFILE_ONE_BYTE
-                && self.extension_profile != EXTENSION_PROFILE_TWO_BYTE
-                && extension_payload_len % 4 != 0
-            {
-                //the payload must be in 32-bit words.
-                return Err(Error::new(
-                    "extension_payload must be in 32-bit words".to_string(),
-                ));
-            }
-            let extension_payload_size = (extension_payload_len as u16 + 3) / 4;
-            writer.write_u16::<BigEndian>(extension_payload_size)?;
+        // The second byte contains the marker bit and payload type.
+        buf[1] = self.payload_type;
 
-            match self.extension_profile {
-                EXTENSION_PROFILE_ONE_BYTE => {
+        if self.marker {
+            buf[1] |= 1 << super::MARKER_SHIFT
+        }
+
+        BigEndian::write_u16(&mut buf[2..4], self.sequence_number);
+        BigEndian::write_u32(&mut buf[4..8], self.timestamp);
+        BigEndian::write_u32(&mut buf[8..12], self.ssrc);
+
+        let mut no_alloc = 12usize;
+
+        for n in self.csrc.clone() {
+            BigEndian::write_u32(&mut buf[no_alloc..no_alloc + 4], n);
+            no_alloc += 4;
+        }
+
+        if self.extension {
+            let ext_header_pos = no_alloc;
+            BigEndian::write_u16(&mut buf[no_alloc..no_alloc + 2], self.extension_profile);
+
+            no_alloc += 4;
+            let start_extensions_pos = no_alloc;
+
+            match self.extension_profile.into() {
+                // RFC 8285 RTP One Byte Header Extension
+                super::ExtensionProfile::OneByte => {
                     for extension in &self.extensions {
-                        writer
-                            .write_u8((extension.id << 4) | (extension.payload.len() as u8 - 1))?;
-                        writer.write_all(&extension.payload)?;
+                        buf[no_alloc] = extension.id << 4 | (extension.payload.len() - 1) as u8;
+                        no_alloc += 1;
+
+                        buf[no_alloc..no_alloc + extension.payload.len()]
+                            .copy_from_slice(&extension.payload);
+
+                        no_alloc += extension.payload.len();
                     }
                 }
-                EXTENSION_PROFILE_TWO_BYTE => {
+
+                // RFC 8285 RTP Two Byte Header Extension
+                super::ExtensionProfile::TwoByte => {
                     for extension in &self.extensions {
-                        writer.write_u8(extension.id)?;
-                        writer.write_u8(extension.payload.len() as u8)?;
-                        writer.write_all(&extension.payload)?;
+                        buf[no_alloc] = extension.id;
+                        no_alloc += 1;
+
+                        buf[no_alloc] = extension.payload.len() as u8;
+                        no_alloc += 1;
+
+                        buf[no_alloc..no_alloc + extension.payload.len()]
+                            .copy_from_slice(&extension.payload);
+
+                        no_alloc += extension.payload.len();
                     }
                 }
+
+                // RFC3550 Extension
                 _ => {
-                    for extension in &self.extensions {
-                        writer.write_all(&extension.payload)?;
-                    }
-                }
-            };
+                    let ext_len = self.extensions[0].payload.len();
 
-            for _ in extension_payload_len..extension_payload_size as usize * 4 {
-                writer.write_u8(0)?;
+                    if ext_len % 4 != 0 {
+                        // The payload must be in 32-bit words.
+                        return Err(Error::new("short buffer".to_string()));
+                    }
+
+                    buf[no_alloc..no_alloc + self.extensions[0].payload.len()]
+                        .copy_from_slice(&self.extensions[0].payload);
+
+                    no_alloc += self.extensions[0].payload.len();
+                }
+            }
+
+            // calculate extensions size and round to 4 bytes boundaries
+            let ext_size = no_alloc - start_extensions_pos;
+            let rounded_ext_size = ((ext_size + 3) / 4) * 4;
+
+            BigEndian::write_u16(
+                &mut buf[ext_header_pos + 2..ext_header_pos + 4],
+                (rounded_ext_size / 4) as u16,
+            );
+
+            // add padding to reach 4 bytes boundaries
+            for _ in 0..(rounded_ext_size - ext_size) {
+                buf[no_alloc] = 0;
+                no_alloc += 1;
             }
         }
 
-        Ok(writer.flush()?)
+        self.payload_offset = no_alloc;
+
+        Ok(no_alloc)
     }
 }

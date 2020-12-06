@@ -31,6 +31,8 @@ impl Cipher for CipherAeadAesGcm {
         header: &mut rtp::header::Header,
         roc: u32,
     ) -> Result<Vec<u8>, Error> {
+        todo!()
+        /*
         let mut writer = header.marshal()?;
         let nonce = self.rtp_initialization_vector(header, roc);
 
@@ -44,6 +46,7 @@ impl Cipher for CipherAeadAesGcm {
 
         writer.append(&mut encrypted);
         Ok(writer)
+        */
     }
 
     fn decrypt_rtp(

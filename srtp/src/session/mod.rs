@@ -127,6 +127,8 @@ impl Session {
         remote_context: &mut Context,
         is_rtp: bool,
     ) -> Result<(), Error> {
+        todo!()
+        /*
         let n = udp_rx.recv(buf).await?;
         if n == 0 {
             return Err(Error::new("EOF".to_string()));
@@ -167,6 +169,7 @@ impl Session {
         }
 
         Ok(())
+        */
     }
 
     // ToDo: @RainLiu is "Listen" a definitive name?
@@ -223,9 +226,12 @@ impl Session {
     }
 
     pub async fn write_rtp(&mut self, packet: &mut rtp::packet::Packet) -> Result<usize, Error> {
+        todo!()
+        /*
         let mut raw: Vec<u8> = packet.marshal()?;
 
         self.write(&mut raw, true).await
+        */
     }
 
     pub async fn write_rtcp(&mut self, packet: &rtcp::packet::Packet) -> Result<usize, Error> {

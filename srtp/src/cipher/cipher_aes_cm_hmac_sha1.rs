@@ -170,6 +170,8 @@ impl Cipher for CipherAesCmHmacSha1 {
         header: &mut rtp::header::Header,
         roc: u32,
     ) -> Result<Vec<u8>, Error> {
+        todo!()
+        /*
         let mut dst: Vec<u8> =
             vec![0u8; header.marshal_size() + payload.len() + self.auth_tag_len()];
 
@@ -201,6 +203,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         dst[size..size + auth_tag.len()].copy_from_slice(&auth_tag);
 
         Ok(dst)
+        */
     }
 
     fn decrypt_rtp(
