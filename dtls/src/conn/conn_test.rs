@@ -648,3 +648,53 @@ async fn test_psk_hint_fail() -> Result<(), Error> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_client_timeout() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, LevelFilter::Trace)
+    .init();*/
+
+    let (client_res_tx, mut client_res_rx) = mpsc::channel(1);
+
+    let (ca, _cb) = pipe().await?;
+    tokio::spawn(async move {
+        let conf = Config {
+            psk: Some(psk_callback_client),
+            psk_identity_hint: Some("WebRTC.rs DTLS Client".as_bytes().to_vec()),
+            cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_CCM_8],
+            ..Default::default()
+        };
+
+        let result =
+            tokio::time::timeout(Duration::from_secs(1), create_test_client(ca, conf, false)).await;
+        let _ = client_res_tx.send(result).await;
+    });
+
+    // no server!
+    let result = client_res_rx.recv().await;
+    if let Some(client_timeout_result) = result {
+        if let Err(err) = client_timeout_result {
+            assert!(
+                true,
+                "Client error exp(Temporary network error) failed({})",
+                err
+            );
+        } else {
+            assert!(false, "Expected Error but got Ok");
+        }
+    }
+
+    Ok(())
+}
