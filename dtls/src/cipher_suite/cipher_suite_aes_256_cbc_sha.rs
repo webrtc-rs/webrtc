@@ -1,35 +1,46 @@
 use super::*;
-use crate::crypto::crypto_gcm::*;
+use crate::crypto::crypto_cbc::*;
 use crate::prf::*;
 
 #[derive(Clone)]
-pub struct CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
-    gcm: Option<CryptoGcm>,
+pub struct CipherSuiteAes256CbcSha {
+    cbc: Option<CryptoCbc>,
+    rsa: bool,
 }
 
-impl CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
-    const PRF_MAC_LEN: usize = 0;
-    const PRF_KEY_LEN: usize = 16;
-    const PRF_IV_LEN: usize = 4;
-}
+impl CipherSuiteAes256CbcSha {
+    const PRF_MAC_LEN: usize = 20;
+    const PRF_KEY_LEN: usize = 32;
+    const PRF_IV_LEN: usize = 16;
 
-impl Default for CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
-    fn default() -> Self {
-        CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 { gcm: None }
+    pub fn new(rsa: bool) -> Self {
+        CipherSuiteAes256CbcSha { cbc: None, rsa }
     }
 }
 
-impl CipherSuite for CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
+impl CipherSuite for CipherSuiteAes256CbcSha {
     fn to_string(&self) -> String {
-        "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256".to_owned()
+        if self.rsa {
+            "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA".to_owned()
+        } else {
+            "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA".to_owned()
+        }
     }
 
     fn id(&self) -> CipherSuiteID {
-        CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+        if self.rsa {
+            CipherSuiteID::TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA
+        } else {
+            CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA
+        }
     }
 
     fn certificate_type(&self) -> ClientCertificateType {
-        ClientCertificateType::ECDSASign
+        if self.rsa {
+            ClientCertificateType::RSASign
+        } else {
+            ClientCertificateType::ECDSASign
+        }
     }
 
     fn hash_func(&self) -> CipherSuiteHash {
@@ -41,7 +52,7 @@ impl CipherSuite for CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
     }
 
     fn is_initialized(&self) -> bool {
-        self.gcm.is_some()
+        self.cbc.is_some()
     }
 
     fn init(
@@ -55,33 +66,37 @@ impl CipherSuite for CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
             master_secret,
             client_random,
             server_random,
-            CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::PRF_MAC_LEN,
-            CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::PRF_KEY_LEN,
-            CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::PRF_IV_LEN,
+            CipherSuiteAes256CbcSha::PRF_MAC_LEN,
+            CipherSuiteAes256CbcSha::PRF_KEY_LEN,
+            CipherSuiteAes256CbcSha::PRF_IV_LEN,
             self.hash_func(),
         )?;
 
         if is_client {
-            self.gcm = Some(CryptoGcm::new(
+            self.cbc = Some(CryptoCbc::new(
                 &keys.client_write_key,
                 &keys.client_write_iv,
+                &keys.client_mac_key,
                 &keys.server_write_key,
                 &keys.server_write_iv,
-            ));
+                &keys.server_mac_key,
+            )?);
         } else {
-            self.gcm = Some(CryptoGcm::new(
+            self.cbc = Some(CryptoCbc::new(
                 &keys.server_write_key,
                 &keys.server_write_iv,
+                &keys.server_mac_key,
                 &keys.client_write_key,
                 &keys.client_write_iv,
-            ));
+                &keys.client_mac_key,
+            )?);
         }
 
         Ok(())
     }
 
     fn encrypt(&self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>, Error> {
-        if let Some(cg) = &self.gcm {
+        if let Some(cg) = &self.cbc {
             cg.encrypt(pkt_rlh, raw)
         } else {
             Err(Error::new(
@@ -91,7 +106,7 @@ impl CipherSuite for CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256 {
     }
 
     fn decrypt(&self, input: &[u8]) -> Result<Vec<u8>, Error> {
-        if let Some(cg) = &self.gcm {
+        if let Some(cg) = &self.cbc {
             cg.decrypt(input)
         } else {
             Err(Error::new(
