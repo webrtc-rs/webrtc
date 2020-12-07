@@ -8,6 +8,7 @@ use aes::cipher::{
     stream::{NewStreamCipher, StreamCipher},
 };
 use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
+use bytes::BytesMut;
 use hmac::NewMac;
 use hmac::{Hmac, Mac};
 use sha1::Sha1;
@@ -166,14 +167,16 @@ impl Cipher for CipherAesCmHmacSha1 {
 
     fn encrypt_rtp(
         &mut self,
-        payload: &[u8],
+        payload: &BytesMut,
         header: &mut rtp::header::Header,
         roc: u32,
-    ) -> Result<Vec<u8>, Error> {
-        todo!()
-        /*
-        let mut dst: Vec<u8> =
-            vec![0u8; header.marshal_size() + payload.len() + self.auth_tag_len()];
+    ) -> Result<BytesMut, Error> {
+        let mut dst = BytesMut::new();
+
+        dst.resize(
+            header.marshal_size() + payload.len() + self.auth_tag_len(),
+            0u8,
+        );
 
         // Copy the header unencrypted.
         let mut size = header.marshal_to(&mut dst)?;
@@ -203,15 +206,14 @@ impl Cipher for CipherAesCmHmacSha1 {
         dst[size..size + auth_tag.len()].copy_from_slice(&auth_tag);
 
         Ok(dst)
-        */
     }
 
     fn decrypt_rtp(
         &mut self,
-        encrypted: &[u8],
+        encrypted: &BytesMut,
         header: &rtp::header::Header,
         roc: u32,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<BytesMut, Error> {
         if encrypted.len() < self.auth_tag_len() {
             return Err(Error::new(format!(
                 "too short SRTP packet: only {} bytes, expected > {} bytes",
@@ -253,15 +255,15 @@ impl Cipher for CipherAesCmHmacSha1 {
 
         stream.decrypt(&mut dst[header.payload_offset..]);
 
-        Ok(dst)
+        Ok(dst[..].into())
     }
 
     fn encrypt_rtcp(
         &mut self,
-        decrypted: &[u8],
+        decrypted: &BytesMut,
         srtcp_index: usize,
         ssrc: u32,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<BytesMut, Error> {
         let mut dst: Vec<u8> =
             Vec::with_capacity(decrypted.len() + SRTCP_INDEX_SIZE + self.auth_tag_len());
 
@@ -295,15 +297,15 @@ impl Cipher for CipherAesCmHmacSha1 {
 
         dst.extend_from_slice(&auth_tag);
 
-        Ok(dst)
+        Ok(dst[..].into())
     }
 
     fn decrypt_rtcp(
         &mut self,
-        encrypted: &[u8],
+        encrypted: &BytesMut,
         srtcp_index: usize,
         ssrc: u32,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<BytesMut, Error> {
         if encrypted.len() < self.auth_tag_len() + SRTCP_INDEX_SIZE {
             return Err(Error::new(format!(
                 "too short SRTCP packet: only {} bytes, expected > {} bytes",
@@ -319,7 +321,7 @@ impl Cipher for CipherAesCmHmacSha1 {
 
         let is_encrypted = encrypted[tail_offset] >> 7;
         if is_encrypted == 0 {
-            return Ok(dst);
+            return Ok(dst[..].into());
         }
 
         // Split the auth tag and the cipher text into two parts.
@@ -348,6 +350,6 @@ impl Cipher for CipherAesCmHmacSha1 {
 
         stream.decrypt(&mut dst[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH..]);
 
-        Ok(dst)
+        Ok(dst[..].into())
     }
 }

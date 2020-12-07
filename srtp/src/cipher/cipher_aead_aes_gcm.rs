@@ -1,13 +1,13 @@
+use super::Cipher;
+use crate::{context, key_derivation};
 use aes_gcm::{
     aead::{generic_array::GenericArray, Aead, NewAead, Nonce, Payload},
     Aes128Gcm,
 };
 use byteorder::{BigEndian, ByteOrder};
+use bytes::BytesMut;
 use rtp::header;
 use util::Error;
-
-use super::Cipher;
-use crate::{context, key_derivation};
 
 pub(crate) const CIPHER_AEAD_AES_GCM_AUTH_TAG_LEN: usize = 16;
 const RTCP_ENCRYPTION_FLAG: u8 = 0x80;
@@ -27,34 +27,32 @@ impl Cipher for CipherAeadAesGcm {
 
     fn encrypt_rtp(
         &mut self,
-        payload: &[u8],
+        payload: &BytesMut,
         header: &mut rtp::header::Header,
         roc: u32,
-    ) -> Result<Vec<u8>, Error> {
-        todo!()
-        /*
-        let mut writer = header.marshal()?;
+    ) -> Result<BytesMut, Error> {
+        let mut hdr = header.marshal()?;
+
         let nonce = self.rtp_initialization_vector(header, roc);
 
         let mut encrypted = self.srtp_cipher.encrypt(
             Nonce::from_slice(&nonce),
             Payload {
                 msg: &payload,
-                aad: &writer,
+                aad: &hdr,
             },
         )?;
 
-        writer.append(&mut encrypted);
-        Ok(writer)
-        */
+        hdr.extend_from_slice(&mut encrypted);
+        Ok(hdr)
     }
 
     fn decrypt_rtp(
         &mut self,
-        ciphertext: &[u8],
+        ciphertext: &BytesMut,
         header: &header::Header,
         roc: u32,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<BytesMut, Error> {
         let nonce = self.rtp_initialization_vector(header, roc);
 
         let decrypted_msg: Vec<u8> = self.srtp_cipher.decrypt(
@@ -70,15 +68,15 @@ impl Cipher for CipherAeadAesGcm {
         decrypted_msg[..header.payload_offset]
             .copy_from_slice(&ciphertext[..header.payload_offset]);
 
-        Ok(decrypted_msg)
+        Ok(decrypted_msg[..].into())
     }
 
     fn encrypt_rtcp(
         &mut self,
-        decrypted: &[u8],
+        decrypted: &BytesMut,
         srtcp_index: usize,
         ssrc: u32,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<BytesMut, Error> {
         let iv = self.rtcp_initialization_vector(srtcp_index, ssrc);
 
         let aad = self.rtcp_additional_authenticated_data(decrypted, srtcp_index);
@@ -96,15 +94,15 @@ impl Cipher for CipherAeadAesGcm {
         encrypted_data[..8].copy_from_slice(&decrypted[..8]);
         encrypted_data.append(&mut aad[8..].to_vec());
 
-        Ok(encrypted_data)
+        Ok(encrypted_data[..].into())
     }
 
     fn decrypt_rtcp(
         &mut self,
-        encrypted: &[u8],
+        encrypted: &BytesMut,
         srtcp_index: usize,
         ssrc: u32,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<BytesMut, Error> {
         let nonce = self.rtcp_initialization_vector(srtcp_index, ssrc);
 
         let aad = self.rtcp_additional_authenticated_data(&encrypted, srtcp_index);
@@ -118,7 +116,7 @@ impl Cipher for CipherAeadAesGcm {
         )?;
 
         let decrypted_data = [encrypted[..8].to_vec(), decrypted_data].concat();
-        Ok(decrypted_data)
+        Ok(decrypted_data[..].into())
     }
 
     fn get_rtcp_index(&self, input: &[u8]) -> usize {
