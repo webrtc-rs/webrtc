@@ -23,6 +23,31 @@ pub struct Certificate {
     pub private_key: CryptoPrivateKey,
 }
 
+impl Certificate {
+    pub fn generate_self_signed(subject_alt_names: impl Into<Vec<String>>) -> Result<Self, Error> {
+        let cert = rcgen::generate_simple_self_signed(subject_alt_names)?;
+        let certificate = cert.serialize_der()?;
+        let key_pair = cert.get_key_pair();
+        let private_key_der = cert.serialize_private_key_der();
+        let private_key = if key_pair.is_compatible(&rcgen::PKCS_ED25519) {
+            let keypair = ed25519_dalek::Keypair::from_bytes(&private_key_der)?;
+            CryptoPrivateKey::ED25519(Box::new(keypair))
+        } else if key_pair.is_compatible(&rcgen::PKCS_ECDSA_P256_SHA256) {
+            let signing_key = p256::ecdsa::SigningKey::new(&private_key_der)?;
+            CryptoPrivateKey::ECDSA256(Box::new(signing_key))
+        } else if key_pair.is_compatible(&rcgen::PKCS_RSA_SHA256) {
+            CryptoPrivateKey::RSA256(Box::new(rsa::RSAPrivateKey::from_pkcs8(&private_key_der)?))
+        } else {
+            return Err(Error::new("Unsupported key_pair".to_owned()));
+        };
+
+        Ok(Certificate {
+            certificate,
+            private_key,
+        })
+    }
+}
+
 pub(crate) fn value_key_message(
     client_random: &[u8],
     server_random: &[u8],
