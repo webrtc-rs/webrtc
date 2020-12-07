@@ -4,7 +4,7 @@ use crate::compression_methods::*;
 use crate::handshake::handshake_message_client_hello::*;
 use crate::handshake::handshake_random::*;
 //use crate::signature_hash_algorithm::*;
-use crate::cipher_suite::cipher_suite_tls_ecdhe_ecdsa_with_aes_128_gcm_sha256::*;
+use crate::cipher_suite::cipher_suite_aes_128_gcm_sha256::*;
 use crate::errors::*;
 
 use tokio::net::UdpSocket;
@@ -423,7 +423,7 @@ async fn test_export_keying_material() -> Result<(), Error> {
             },
             local_sequence_number: Arc::new(Mutex::new(vec![0, 0])),
             cipher_suite: Arc::new(Mutex::new(Some(Box::new(
-                CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::default(),
+                CipherSuiteAes128GcmSha256::new(false),
             )))),
             ..Default::default()
         },
