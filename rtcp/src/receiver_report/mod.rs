@@ -2,6 +2,8 @@ mod receiver_report_def;
 #[cfg(test)]
 mod receiver_report_test;
 
+pub use receiver_report_def::ReceiverReport;
+
 use crate::header;
 
 pub(super) const SSRC_LENGTH: usize = 4;

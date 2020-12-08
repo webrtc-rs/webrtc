@@ -315,7 +315,7 @@ const PACKET_CHUNK_OFFSET: usize = 16;
 
 // TransportLayerCC for sender-BWE
 // https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-5
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct TransportLayerCC {
     // header
     header: Header,

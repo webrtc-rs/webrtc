@@ -1,175 +1,112 @@
-use std::io::{BufReader, Read, Write};
-
 use bytes::BytesMut;
+use full_intra_request::FullIntraRequest;
 use util::Error;
 
-use super::compound_packet::*;
-use super::errors::*;
-use super::full_intra_request::*;
-use super::goodbye::*;
-use super::header::*;
-use super::picture_loss_indication::*;
-use super::rapid_resynchronization_request::*;
-use super::raw_packet::*;
-use super::receiver_estimated_maximum_bitrate::*;
-use super::receiver_report::*;
-use super::sender_report::*;
-use super::slice_loss_indication::*;
-use super::source_description::*;
-use super::transport_layer_cc::*;
-use super::transport_layer_nack::*;
+use crate::raw_packet;
+
+use super::{
+    full_intra_request, goodbye, header, header::Header, header::PacketType,
+    picture_loss_indication, rapid_resynchronization_request, raw_packet::RawPacket,
+    receiver_estimated_maximum_bitrate, receiver_report, sender_report, slice_loss_indication,
+    source_description, transport_layer_cc, transport_layer_nack,
+};
 
 #[cfg(test)]
 mod packet_test;
 
-// Packet represents an RTCP packet, a protocol used for out-of-band statistics and control information for an RTP session
-#[derive(Debug, Clone)]
-pub enum Packet {
-    SenderReport(SenderReport),
-    ReceiverReport(ReceiverReport),
-    SourceDescription(SourceDescription),
-    Goodbye(Goodbye),
-    RawPacket(RawPacket),
+/// Packet represents an RTCP packet, a protocol used for out-of-band statistics and control information for an RTP session
+pub trait Packet {
+    fn destination_ssrc(&self) -> Vec<u32>;
 
-    TransportLayerNack(TransportLayerNack),
-    RapidResynchronizationRequest(RapidResynchronizationRequest),
-    TransportLayerCC(TransportLayerCC),
-
-    PictureLossIndication(PictureLossIndication),
-    SliceLossIndication(SliceLossIndication),
-    ReceiverEstimatedMaximumBitrate(ReceiverEstimatedMaximumBitrate),
-    FullIntraRequest(FullIntraRequest),
-
-    CompoundPacket(CompoundPacket),
+    fn marshal(&self) -> Result<BytesMut, Error>;
+    fn unmarshal(&self, raw_packet: Vec<u8>) -> Result<(), Error>;
 }
 
-impl Packet {
-    pub fn marshal(&self, writer: &mut BytesMut) -> Result<(), Error> {
-        match self {
-            Packet::SenderReport(p) => p.marshal()?,
-            al(writer)?,
-            Packet::ReceiverReport(p) => p.marshal(writer)?,
-            Packet::SourceDescription(p) => p.marshal(writer)?,
-            Packet::Goodbye(p) => p.marshal(writer)?,
-            Packet::RawPacket(p) => p.marshal(writer)?,
-
-            Packet::TransportLayerNack(p) => p.marshal(writer)?,
-            Packet::RapidResynchronizationRequest(p) => p.marshal(writer)?,
-            Packet::TransportLayerCC(p) => p.marshal(writer)?,
-
-            Packet::PictureLossIndication(p) => p.marshal(writer)?,
-            Packet::SliceLossIndication(p) => p.marshal(writer)?,
-            Packet::ReceiverEstimatedMaximumBitrate(p) => p.marshal(writer)?,
-            Packet::FullIntraRequest(p) => p.marshal(writer)?,
-
-            Packet::CompoundPacket(p) => p.marshal(writer)?,
-        };
-        Ok(())
-    }
-
-    pub fn destination_ssrc(&self) -> Vec<u32> {
-        match self {
-            Packet::SenderReport(p) => p.destination_ssrc(),
-            Packet::ReceiverReport(p) => p.destination_ssrc(),
-            Packet::SourceDescription(p) => p.destination_ssrc(),
-            Packet::Goodbye(p) => p.destination_ssrc(),
-            Packet::RawPacket(p) => p.destination_ssrc(),
-
-            Packet::TransportLayerNack(p) => p.destination_ssrc(),
-            Packet::RapidResynchronizationRequest(p) => p.destination_ssrc(),
-            Packet::TransportLayerCC(p) => p.destination_ssrc(),
-
-            Packet::PictureLossIndication(p) => p.destination_ssrc(),
-            Packet::SliceLossIndication(p) => p.destination_ssrc(),
-            Packet::ReceiverEstimatedMaximumBitrate(p) => p.destination_ssrc(),
-            Packet::FullIntraRequest(p) => p.destination_ssrc(),
-
-            Packet::CompoundPacket(p) => p.destination_ssrc(),
-        }
-    }
-}
-
-//Marshal takes an array of Packets and serializes them to a single buffer
-pub fn marshal<W: Write>(packets: &[Packet], writer: &mut W) -> Result<(), Error> {
-    for packet in packets {
-        packet.marshal(writer)?;
-    }
-    Ok(())
-}
-
-// Unmarshal takes an entire udp datagram (which may consist of multiple RTCP packets) and
-// returns the unmarshaled packets it contains.
-//
-// If this is a reduced-size RTCP packet a feedback packet (Goodbye, SliceLossIndication, etc)
-// will be returned. Otherwise, the underlying type of the returned packet will be
-// CompoundPacket.
-pub fn unmarshal(mut raw_data: &[u8]) -> Result<Packet, Error> {
+pub fn unmarshal(raw_data: &mut BytesMut) -> Result<Vec<impl Packet>, Error> {
     let mut packets = vec![];
-    while !raw_data.is_empty() {
-        if raw_data.len() < HEADER_LENGTH {
-            return Err(ERR_PACKET_TOO_SHORT.clone());
-        }
-        let mut header_reader = BufReader::new(&raw_data[0..HEADER_LENGTH]);
-        let header = Header::unmarshal(&mut header_reader)?;
 
-        let bytes_processed = (header.length + 1) as usize * 4;
-        if bytes_processed > raw_data.len() {
-            return Err(ERR_PACKET_TOO_SHORT.clone());
-        }
-        let mut reader = BufReader::new(&raw_data[0..bytes_processed]);
-        let packet = unmarshaler(&mut reader, &header)?;
-        packets.push(packet);
-        raw_data = &raw_data[bytes_processed..];
+    while raw_data.len() != 0 {
+        let (p, processed) = unmarshaller(raw_data)?;
+
+        packets.push(p);
+        raw_data = raw_data[processed..];
     }
 
     match packets.len() {
         // Empty packet
-        0 => Err(ERR_INVALID_HEADER.clone()),
-        1 => packets.pop().ok_or_else(|| ERR_BAD_FIRST_PACKET.clone()),
-        // Multiple Packets
-        _ => Ok(Packet::CompoundPacket(CompoundPacket(packets))),
+        0 => Err(Error::new("packet too short".to_string())),
+
+        // Multiple packets
+        _ => Ok(packets),
     }
 }
 
-// unmarshaler is a factory which pulls the first RTCP packet from a bytestream,
-// and returns it's parsed representation, and the amount of data that was processed.
-fn unmarshaler<R: Read>(reader: &mut R, header: &Header) -> Result<Packet, Error> {
-    match header.packet_type {
-        PacketType::SenderReport => Ok(Packet::SenderReport(SenderReport::unmarshal(reader)?)),
-        PacketType::ReceiverReport => {
-            Ok(Packet::ReceiverReport(ReceiverReport::unmarshal(reader)?))
-        }
-        PacketType::SourceDescription => Ok(Packet::SourceDescription(
-            SourceDescription::unmarshal(reader)?,
-        )),
-        PacketType::Goodbye => Ok(Packet::Goodbye(Goodbye::unmarshal(reader)?)),
-        PacketType::TransportSpecificFeedback => match header.count {
-            FORMAT_TLN => Ok(Packet::TransportLayerNack(TransportLayerNack::unmarshal(
-                reader,
-            )?)),
-            FORMAT_RRR => Ok(Packet::RapidResynchronizationRequest(
-                RapidResynchronizationRequest::unmarshal(reader)?,
-            )),
-            FORMAT_TCC => Ok(Packet::TransportLayerCC(TransportLayerCC::unmarshal(
-                reader,
-            )?)),
-            _ => Ok(Packet::RawPacket(RawPacket::unmarshal(reader)?)),
-        },
-        PacketType::PayloadSpecificFeedback => match header.count {
-            FORMAT_PLI => Ok(Packet::PictureLossIndication(
-                PictureLossIndication::unmarshal(reader)?,
-            )),
-            FORMAT_SLI => Ok(Packet::SliceLossIndication(SliceLossIndication::unmarshal(
-                reader,
-            )?)),
-            FORMAT_REMB => Ok(Packet::ReceiverEstimatedMaximumBitrate(
-                ReceiverEstimatedMaximumBitrate::unmarshal(reader)?,
-            )),
-            FORMAT_FIR => Ok(Packet::FullIntraRequest(FullIntraRequest::unmarshal(
-                reader,
-            )?)),
-            _ => Ok(Packet::RawPacket(RawPacket::unmarshal(reader)?)),
-        },
-        _ => Ok(Packet::RawPacket(RawPacket::unmarshal(reader)?)),
+/// Marshal takes an array of Packets and serializes them to a single buffer
+pub fn marshal(packets: &[impl Packet]) -> Result<BytesMut, Error> {
+    let mut out = BytesMut::new();
+
+    for packet in packets {
+        let a = packet.marshal()?;
+
+        out.extend(a);
     }
+
+    Ok(out)
+}
+
+/// unmarshaller is a factory which pulls the first RTCP packet from a bytestream,
+/// and returns it's parsed representation, and the amount of data that was processed.
+fn unmarshaller(raw_data: &mut BytesMut) -> Result<(impl Packet, usize), Error> {
+    let h = Header::default();
+
+    h.unmarshal(&mut raw_data)?;
+
+    let mut bytes_processed = (h.length as usize + 1) * 4;
+    if bytes_processed > raw_data.len() {
+        return Err(Error::new("packet too short".to_string()));
+    }
+
+    let mut in_packet = &raw_data[..bytes_processed];
+
+    let packet = match h.packet_type {
+        PacketType::SenderReport => sender_report::SenderReport::default(),
+
+        PacketType::ReceiverReport => receiver_report::ReceiverReport::default(),
+
+        PacketType::SourceDescription => source_description::SourceDescription::default(),
+
+        PacketType::Goodbye => goodbye::Goodbye::default(),
+
+        PacketType::TransportSpecificFeedback => match h.count {
+            header::FORMAT_TLN => transport_layer_nack::TransportLayerNack::default(),
+
+            header::FORMAT_RRR => {
+                rapid_resynchronization_request::RapidResynchronizationRequest::default()
+            }
+
+            header::FORMAT_TCC => transport_layer_cc::TransportLayerCC::default(),
+
+            _ => raw_packet::RawPacket::default(),
+        },
+
+        PacketType::PayloadSpecificFeedback => match h.count {
+            header::FORMAT_PLI => picture_loss_indication::PictureLossIndication::default(),
+
+            header::FORMAT_SLI => slice_loss_indication::SliceLossIndication::default(),
+
+            header::FORMAT_REMB => {
+                receiver_estimated_maximum_bitrate::ReceiverEstimatedMaximumBitrate::default()
+            }
+
+            header::FORMAT_FIR => FullIntraRequest::default(),
+
+            _ => RawPacket::default(),
+        },
+
+        _ => RawPacket::default(),
+    };
+
+    packet.unmarshal(&mut in_packet)?;
+
+    Ok(packet, bytes_processed)
 }
