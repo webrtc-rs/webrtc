@@ -1,11 +1,12 @@
 use super::*;
+use crate::cipher_suite::cipher_suite_aes_128_gcm_sha256::*;
 use crate::cipher_suite::*;
 use crate::compression_methods::*;
+use crate::crypto::Certificate;
+use crate::errors::*;
 use crate::handshake::handshake_message_client_hello::*;
 use crate::handshake::handshake_random::*;
-//use crate::signature_hash_algorithm::*;
-use crate::cipher_suite::cipher_suite_aes_128_gcm_sha256::*;
-use crate::errors::*;
+use crate::signature_hash_algorithm::*;
 
 use tokio::net::UdpSocket;
 
@@ -49,13 +50,9 @@ async fn pipe_conn(ca: UdpSocket, cb: UdpSocket) -> Result<(Conn, Conn), Error> 
             ca,
             Config {
                 srtp_protection_profiles: vec![SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_80],
-                //TODO: change PSK to cert
-                cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256],
-                psk: Some(psk_callback_client),
-                psk_identity_hint: Some("WebRTC.rs DTLS Server".as_bytes().to_vec()),
                 ..Default::default()
             },
-            false, //TODO: use ceritificate
+            true,
         )
         .await;
 
@@ -67,13 +64,9 @@ async fn pipe_conn(ca: UdpSocket, cb: UdpSocket) -> Result<(Conn, Conn), Error> 
         cb,
         Config {
             srtp_protection_profiles: vec![SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_80],
-            //TODO: change PSK to cert
-            cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256],
-            psk: Some(psk_callback_server),
-            psk_identity_hint: Some("WebRTC.rs DTLS Client".as_bytes().to_vec()),
             ..Default::default()
         },
-        false, //TODO: use ceritificate
+        true,
     )
     .await?;
 
@@ -112,7 +105,8 @@ async fn create_test_client(
     generate_certificate: bool,
 ) -> Result<Conn, Error> {
     if generate_certificate {
-        //TODO:
+        let client_cert = Certificate::generate_self_signed(vec!["localhost".to_owned()])?;
+        cfg.certificates = vec![client_cert];
     }
 
     cfg.insecure_skip_verify = true;
@@ -121,11 +115,12 @@ async fn create_test_client(
 
 async fn create_test_server(
     cb: UdpSocket,
-    cfg: Config,
+    mut cfg: Config,
     generate_certificate: bool,
 ) -> Result<Conn, Error> {
     if generate_certificate {
-        //TODO:
+        let server_cert = Certificate::generate_self_signed(vec!["localhost".to_owned()])?;
+        cfg.certificates = vec![server_cert];
     }
 
     Conn::new(cb, cfg, false, None).await
@@ -295,25 +290,22 @@ async fn test_sequence_number_overflow_on_handshake() -> Result<(), Error> {
     Ok(())
 }
 
-// TODO: enable it when self-sign is supported.
-// https://github.com/webrtc-rs/webrtc/issues/25
-/*
 #[tokio::test]
 async fn test_handshake_with_alert() -> Result<(), Error> {
-    env_logger::Builder::new()
-        .format(|buf, record| {
-            writeln!(
-                buf,
-                "{}:{} [{}] {} - {}",
-                record.file().unwrap_or("unknown"),
-                record.line().unwrap_or(0),
-                record.level(),
-                chrono::Local::now().format("%H:%M:%S.%6f"),
-                record.args()
-            )
-        })
-        .filter(None, LevelFilter::Trace)
-        .init();
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, LevelFilter::Trace)
+    .init();*/
 
     let cases = vec![
         (
@@ -355,11 +347,11 @@ async fn test_handshake_with_alert() -> Result<(), Error> {
 
         let (ca, cb) = pipe().await?;
         tokio::spawn(async move {
-            let result = create_test_client(ca, config_client, false).await; //TODO: use certificate
+            let result = create_test_client(ca, config_client, true).await;
             let _ = client_err_tx.send(result).await;
         });
 
-        let result_server = create_test_server(cb, config_server, false).await; //TODO: use certificate
+        let result_server = create_test_server(cb, config_server, true).await;
         if let Err(err) = result_server {
             assert_eq!(
                 err, err_server,
@@ -394,7 +386,6 @@ async fn test_handshake_with_alert() -> Result<(), Error> {
 
     Ok(())
 }
-*/
 
 #[tokio::test]
 async fn test_export_keying_material() -> Result<(), Error> {

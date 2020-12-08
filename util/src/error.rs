@@ -151,6 +151,22 @@ impl From<rcgen::RcgenError> for Error {
     }
 }
 
+impl From<ring::error::KeyRejected> for Error {
+    fn from(error: ring::error::KeyRejected) -> Self {
+        Error {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<ring::error::Unspecified> for Error {
+    fn from(error: ring::error::Unspecified) -> Self {
+        Error {
+            message: error.to_string(),
+        }
+    }
+}
+
 impl Error {
     pub fn new(message: String) -> Self {
         Error { message }
