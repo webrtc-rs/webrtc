@@ -1,16 +1,12 @@
+use byteorder::{BigEndian, ByteOrder};
 use std::fmt;
-use std::io::Write;
-
-use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
 
 use bytes::BytesMut;
 use header::{Header, PacketType};
 use util::Error;
 
+use crate::reception_report::ReceptionReport;
 use crate::{header, util::get_padding};
-use crate::{packet, reception_report::ReceptionReport};
-
-use super::SR_REPORT_OFFSET;
 
 // A SenderReport (SR) packet provides reception quality feedback for an RTP stream
 #[derive(Debug, PartialEq, Default, Clone)]
@@ -48,29 +44,8 @@ pub struct SenderReport {
     pub profile_extensions: Vec<u8>,
 }
 
-impl fmt::Display for SenderReport {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut out = format!("SenderReport from {}\n", self.ssrc);
-        out += format!("\tNTPTime:\t{}\n", self.ntp_time).as_str();
-        out += format!("\tRTPTIme:\t{}\n", self.rtp_time).as_str();
-        out += format!("\tPacketCount:\t{}\n", self.packet_count).as_str();
-        out += format!("\tOctetCount:\t{}\n", self.octet_count).as_str();
-        out += "\tSSRC    \tLost\tLastSequence\n";
-        for rep in &self.reports {
-            out += format!(
-                "\t{:x}\t{}/{}\t{}\n",
-                rep.ssrc, rep.fraction_lost, rep.total_lost, rep.last_sequence_number
-            )
-            .as_str();
-        }
-        out += format!("\tProfile Extension Data: {:?}\n", self.profile_extensions).as_str();
-
-        write!(f, "{}", out)
-    }
-}
-
 impl SenderReport {
-    fn size(&self) -> usize {
+    fn len(&self) -> usize {
         let mut reps_length = 0;
         for rep in &self.reports {
             reps_length += rep.size();
@@ -151,21 +126,34 @@ impl SenderReport {
                 return Err(Error::new("packet too short".to_string()));
             }
 
-            let rr_body =
-                &packet_body[offset..offset + crate::reception_report::RECEPTION_REPORT_LENGTH];
+            let mut rr_body = &packet_body
+                [offset..offset + crate::reception_report::RECEPTION_REPORT_LENGTH]
+                .into();
 
             offset = rr_end;
 
             let reception_report = ReceptionReport::default();
+
+            reception_report.unmarshal(&mut rr_body)?;
+            self.reports.push(reception_report);
         }
-        todo!()
+
+        if offset < packet_body.len() {
+            self.profile_extensions = packet_body[offset..].to_vec();
+        }
+
+        if self.reports.len() as u8 != header.count {
+            return Err(Error::new("invalid header".to_string()));
+        }
+
+        Ok(())
     }
 
     // Header returns the Header associated with this packet.
     pub fn header(&self) -> Header {
-        let l = self.size() + get_padding(self.size());
+        let l = self.len() + get_padding(self.len());
         Header {
-            padding: get_padding(self.size()) != 0,
+            padding: get_padding(self.len()) != 0,
             count: self.reports.len() as u8,
             packet_type: PacketType::SenderReport,
             length: ((l / 4) - 1) as u16,
@@ -180,7 +168,7 @@ impl SenderReport {
     }
 
     // Marshal encodes the packet in binary.
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal(&self) -> Result<BytesMut, Error> {
         /*
          *         0                   1                   2                   3
          *         0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -218,24 +206,64 @@ impl SenderReport {
          *        |                  profile-specific extensions                  |
          *        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
-        if self.reports.len() > COUNT_MAX {
-            return Err(ERR_TOO_MANY_REPORTS.clone());
+
+        let mut raw_packet = vec![0u8; self.len()];
+        let mut packet_body = &raw_packet[header::HEADER_LENGTH..];
+
+        BigEndian::write_u32(&mut packet_body[super::SR_SSRC_OFFSET..], self.ssrc);
+        BigEndian::write_u64(&mut packet_body[super::SR_NTP_OFFSET..], self.ntp_time);
+        BigEndian::write_u32(&mut packet_body[super::SR_RTP_OFFSET..], self.rtp_time);
+        BigEndian::write_u32(
+            &mut packet_body[super::SR_PACKET_COUNT_OFFSET..],
+            self.packet_count,
+        );
+        BigEndian::write_u32(
+            &mut packet_body[super::SR_OCTET_COUNT_OFFSET..],
+            self.octet_count,
+        );
+
+        let mut offset = super::SR_HEADER_LENGTH;
+
+        for rp in self.reports {
+            let data = rp.marshal()?;
+
+            packet_body[offset..offset + data.len()].copy_from_slice(&data);
+
+            offset += crate::reception_report::RECEPTION_REPORT_LENGTH;
         }
 
-        self.header().marshal(writer)?;
+        if self.reports.len() > header::COUNT_MAX {
+            return Err(Error::new("too many reports".to_string()));
+        }
 
-        writer.write_u32::<BigEndian>(self.ssrc)?;
-        writer.write_u64::<BigEndian>(self.ntp_time)?;
-        writer.write_u32::<BigEndian>(self.rtp_time)?;
-        writer.write_u32::<BigEndian>(self.packet_count)?;
-        writer.write_u32::<BigEndian>(self.octet_count)?;
+        packet_body[offset..offset + self.profile_extensions.len()]
+            .copy_from_slice(&self.profile_extensions);
 
+        let header_data = self.header().marshal()?;
+
+        raw_packet[..header_data.len()].copy_from_slice(&header_data);
+
+        Ok(raw_packet[..].into())
+    }
+}
+
+impl fmt::Display for SenderReport {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut out = format!("SenderReport from {}\n", self.ssrc);
+        out += format!("\tNTPTime:\t{}\n", self.ntp_time).as_str();
+        out += format!("\tRTPTIme:\t{}\n", self.rtp_time).as_str();
+        out += format!("\tPacketCount:\t{}\n", self.packet_count).as_str();
+        out += format!("\tOctetCount:\t{}\n", self.octet_count).as_str();
+        out += "\tSSRC    \tLost\tLastSequence\n";
         for rep in &self.reports {
-            rep.marshal(writer)?;
+            out += format!(
+                "\t{:x}\t{}/{}\t{}\n",
+                rep.ssrc, rep.fraction_lost, rep.total_lost, rep.last_sequence_number
+            )
+            .as_str();
         }
+        out += format!("\tProfile Extension Data: {:?}\n", self.profile_extensions).as_str();
 
-        writer.write_all(&self.profile_extensions)?;
-
-        Ok(writer.flush()?)
+        write!(f, "{}", out)
     }
 }
