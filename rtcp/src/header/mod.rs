@@ -24,14 +24,21 @@ impl Default for PacketType {
     }
 }
 
-// Transport and Payload specific feedback messages overload the count field to act as a message type. those are listed here
+/// Transport and Payload specific feedback messages overload the count field to act as a message type. those are listed here
 pub const FORMAT_SLI: u8 = 2;
+/// Transport and Payload specific feedback messages overload the count field to act as a message type. those are listed here
 pub const FORMAT_PLI: u8 = 1;
+/// Transport and Payload specific feedback messages overload the count field to act as a message type. those are listed here
 pub const FORMAT_FIR: u8 = 4;
+/// Transport and Payload specific feedback messages overload the count field to act as a message type. those are listed here
 pub const FORMAT_TLN: u8 = 1;
+/// Transport and Payload specific feedback messages overload the count field to act as a message type. those are listed here
 pub const FORMAT_RRR: u8 = 5;
+/// Transport and Payload specific feedback messages overload the count field to act as a message type. those are listed here
 pub const FORMAT_REMB: u8 = 15;
-//https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-5
+/// Transport and Payload specific feedback messages overload the count field to act as a message type. those are listed here.
+///
+/// https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-5
 pub const FORMAT_TCC: u8 = 15;
 
 impl std::fmt::Display for PacketType {

@@ -1,19 +1,16 @@
 use std::fmt;
-use std::io::{Read, Write};
 
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use byteorder::{BigEndian, ByteOrder};
 
+use bytes::BytesMut;
 use util::Error;
 
-use super::errors::*;
-use super::header::*;
-use crate::util::get_padding;
+use crate::{header, header::Header, header::PacketType, util::get_padding};
 
-#[cfg(test)]
 mod receiver_estimated_maximum_bitrate_test;
 
-// ReceiverEstimatedMaximumBitrate contains the receiver's estimated maximum bitrate.
-// see: https://tools.ietf.org/html/draft-alvestrand-rmcat-remb-03
+/// ReceiverEstimatedMaximumBitrate contains the receiver's estimated maximum bitrate.
+/// see: https://tools.ietf.org/html/draft-alvestrand-rmcat-remb-03
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct ReceiverEstimatedMaximumBitrate {
     // SSRC of sender
@@ -61,12 +58,29 @@ impl fmt::Display for ReceiverEstimatedMaximumBitrate {
 }
 
 impl ReceiverEstimatedMaximumBitrate {
-    fn size(&self) -> usize {
-        HEADER_LENGTH + REMB_OFFSET + self.ssrcs.len() * 4
+    pub fn marshal_size(&self) -> usize {
+        header::HEADER_LENGTH + REMB_OFFSET + self.ssrcs.len() * 4
     }
 
-    // Unmarshal decodes the ReceptionReport from binary
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    /// Marshal serializes the packet and returns a byte slice.
+    pub fn marshal(&self) -> Result<BytesMut, Error> {
+        // Allocate a buffer of the exact output size.
+        let mut buf = BytesMut::new();
+        buf.resize(self.marshal_size(), 0u8);
+
+        // Write to our buffer.
+        let n = self.marshal_to(&mut buf)?;
+
+        // This will always be true but just to be safe.
+        if n != buf.len() {
+            return Err(Error::new("wrong marshal size".to_string()));
+        }
+
+        Ok(buf)
+    }
+
+    /// MarshalTo serializes the packet to the given byte slice.
+    pub fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error> {
         /*
             0                   1                   2                   3
             0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -85,107 +99,29 @@ impl ReceiverEstimatedMaximumBitrate {
            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
            |  ...                                                          |
         */
-        let header = Header::unmarshal(reader)?;
 
-        if header.packet_type != PacketType::PayloadSpecificFeedback || header.count != FORMAT_REMB
-        {
-            return Err(ERR_WRONG_TYPE.clone());
+        let size = self.marshal_size();
+        if buf.len() < size {
+            return Err(Error::new("packet too short".to_string()));
         }
 
-        let sender_ssrc = reader.read_u32::<BigEndian>()?;
-        let media_ssrc = reader.read_u32::<BigEndian>()?;
-        if media_ssrc != 0 {
-            return Err(ERR_BAD_MEDIA_SSRC.clone());
-        }
+        buf[0] = 143; // v=2, p=0, fmt=15
+        buf[1] = 206;
 
-        // REMB rules all around me
-        let mut unique_identifier = vec![0; 4];
-        reader.read_exact(&mut unique_identifier)?;
-        if unique_identifier[0] != UNIQUE_IDENTIFIER[0]
-            || unique_identifier[1] != UNIQUE_IDENTIFIER[1]
-            || unique_identifier[2] != UNIQUE_IDENTIFIER[2]
-            || unique_identifier[3] != UNIQUE_IDENTIFIER[3]
-        {
-            return Err(ERR_BAD_UNIQUE_IDENTIFIER.clone());
-        }
+        // Length of this packet in 32-bit words minus one.
+        let length = (self.marshal_size() / 4) - 1;
+        BigEndian::write_u16(&mut buf[2..4], length as u16);
 
-        // The next byte is the number of SSRC entries at the end.
-        let ssrcs_len = reader.read_u8()? as usize;
+        BigEndian::write_u32(&mut buf[4..8], self.sender_ssrc);
+        BigEndian::write_u32(&mut buf[8..12], 0); // always zero
 
-        // Get the 6-bit exponent value.
-        let b17 = reader.read_u8()?;
-        let exp = (b17 as u64) >> 2;
+        buf[12] = "R".as_bytes()[0];
+        buf[13] = "E".as_bytes()[0];
+        buf[14] = "M".as_bytes()[0];
+        buf[15] = "B".as_bytes()[0];
 
-        // The remaining 2-bits plus the next 16-bits are the mantissa.
-        let b18 = reader.read_u8()?;
-        let b19 = reader.read_u8()?;
-        let mantissa = ((b17 & 3) as u64) << 16 | (b18 as u64) << 8 | b19 as u64;
-
-        let bitrate = if exp > 46 {
-            // NOTE: We intentionally truncate values so they fit in a uint64.
-            // Otherwise we would need a uint82.
-            // This is 2.3 exabytes per second, which should be good enough.
-            std::u64::MAX
-        } else {
-            mantissa << exp
-        };
-
-        let mut ssrcs = vec![];
-        for _i in 0..ssrcs_len {
-            ssrcs.push(reader.read_u32::<BigEndian>()?);
-        }
-
-        Ok(ReceiverEstimatedMaximumBitrate {
-            sender_ssrc,
-            //media_ssrc,
-            bitrate,
-            ssrcs,
-        })
-    }
-
-    // Header returns the Header associated with this packet.
-    pub fn header(&self) -> Header {
-        let l = self.size() + get_padding(self.size());
-        Header {
-            padding: get_padding(self.size()) != 0,
-            count: FORMAT_REMB,
-            packet_type: PacketType::PayloadSpecificFeedback,
-            length: ((l / 4) - 1) as u16,
-        }
-    }
-
-    // destination_ssrc returns an array of SSRC values that this packet refers to.
-    pub fn destination_ssrc(&self) -> Vec<u32> {
-        self.ssrcs.clone()
-    }
-
-    // Marshal encodes the packet in binary.
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        /*
-            0                   1                   2                   3
-            0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-           |V=2|P| FMT=15  |   PT=206      |             length            |
-           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-           |                  SSRC of packet sender                        |
-           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-           |                  SSRC of media source                         |
-           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-           |  Unique identifier 'R' 'E' 'M' 'B'                            |
-           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-           |  Num SSRC     | BR Exp    |  BR Mantissa                      |
-           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-           |   SSRC feedback                                               |
-           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-           |  ...                                                          |
-        */
-        self.header().marshal(writer)?;
-
-        writer.write_u32::<BigEndian>(self.sender_ssrc)?;
-        writer.write_u32::<BigEndian>(0)?; //self.media_ssrc always zero
-
-        writer.write_all(&UNIQUE_IDENTIFIER)?;
-        writer.write_u8(self.ssrcs.len() as u8)?;
+        // Write the length of the ssrcs to follow at the end
+        buf[16] = self.ssrcs.len() as u8;
 
         // We can only encode 18 bits of information in the mantissa.
         // The exponent lets us shift to the left up to 64 places (6-bits).
@@ -197,30 +133,180 @@ impl ReceiverEstimatedMaximumBitrate {
 
         // Calculate the total shift based on the leading number of zeroes.
         // This will be negative if there is no shift required.
-        let shift = 64 - self.bitrate.leading_zeros();
-        let mantissa;
-        let exp;
+        let mut shift = 64 - self.bitrate.leading_zeros();
+
+        let mantissa = 0usize;
+        let exp = 0usize;
+
         if shift <= 18 {
             // Fit everything in the mantissa because we can.
-            mantissa = self.bitrate;
-            exp = 0;
+            mantissa = self.bitrate as usize;
         } else {
             // We can only use 18 bits of precision, so truncate.
-            mantissa = self.bitrate >> (shift - 18);
-            exp = shift - 18;
+            mantissa = self.bitrate as usize >> (shift - 18);
+            exp = shift as usize - 18;
         }
 
         // We can't quite use the binary package because
         // a) it's a uint24 and b) the exponent is only 6-bits
         // Just trust me; this is big-endian encoding.
-        writer.write_u8(((exp << 2) | ((mantissa >> 16) as u32)) as u8)?;
-        writer.write_u8((mantissa >> 8) as u8)?;
-        writer.write_u8(mantissa as u8)?;
+        buf[17] = ((exp << 2) | (mantissa >> 16)) as u8;
+        buf[18] = (mantissa >> 8) as u8;
+        buf[19] = mantissa as u8;
 
-        for ssrc in &self.ssrcs {
-            writer.write_u32::<BigEndian>(*ssrc)?;
+        // Write the SSRCs at the very end.
+        let mut n = 20;
+        for ssrc in self.ssrcs {
+            BigEndian::write_u32(&mut buf[n..n + 4], ssrc);
+            n += 4
         }
 
-        Ok(writer.flush()?)
+        Ok(n)
+    }
+
+    /// Unmarshal reads a REMB packet from the given byte slice.
+    pub fn unmarshal(&self, buf: &BytesMut) -> Result<(), Error> {
+        /*
+            0                   1                   2                   3
+            0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           |V=2|P| FMT=15  |   PT=206      |             length            |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           |                  SSRC of packet sender                        |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           |                  SSRC of media source                         |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           |  Unique identifier 'R' 'E' 'M' 'B'                            |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           |  Num SSRC     | BR Exp    |  BR Mantissa                      |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           |   SSRC feedback                                               |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           |  ...                                                          |
+        */
+
+        // 20 bytes is the size of the packet with no SSRCs
+        if buf.len() < 20 {
+            return Err(Error::new("packet too short".to_string()));
+        }
+
+        // version  must be 2
+        let version = buf[0] >> 6;
+        if version != 2 {
+            return Err(Error::new(format!(
+                "bad version: expected(2) actual({})",
+                version
+            )));
+        }
+
+        // padding must be unset
+        let padding = (buf[0] >> 5) & 1;
+        if padding != 0 {
+            return Err(Error::new(format!(
+                "wrong padding: expected(0) actual({})",
+                padding
+            )));
+        }
+
+        // fmt must be 15
+        let fmt_val = buf[0] & 31;
+        if fmt_val != 15 {
+            return Err(Error::new(format!(
+                "wrong feedback type: expected(15) actual({})",
+                fmt_val
+            )));
+        }
+
+        // Must be payload specific feedback
+        if buf[1] != 206 {
+            return Err(Error::new(format!(
+                "wrong payload type: expected(206) actual({})",
+                buf[1]
+            )));
+        }
+
+        // length is the number of 32-bit words, minus 1
+        let length = BigEndian::read_u16(&buf[2..4]);
+        let size = (length as usize + 1) * 4;
+
+        // There's not way this could be legit
+        if size < 20 {
+            return Err(Error::new("header too small".to_string()));
+        }
+
+        // Make sure the buffer is large enough.
+        if buf.len() < size {
+            return Err(Error::new("packet too short".to_string()));
+        }
+
+        // The sender SSRC is 32-bits
+        self.sender_ssrc = BigEndian::read_u32(&buf[4..8]);
+
+        // The destination SSRC must be 0
+        let media = BigEndian::read_u32(&buf[8..12]);
+        if media != 0 {
+            return Err(Error::new("ssrc must be 0".to_string()));
+        }
+
+        // REMB rules all around me
+        if buf[12..16].eq("REMB".as_bytes()) {
+            return Err(Error::new("missing REMB identifier".to_string()));
+        }
+
+        // The next byte is the number of SSRC entries at the end.
+        let num = buf[16] as usize;
+
+        // Now we know the expected size, make sure they match.
+        if size != 20 + 4 * num {
+            return Err(Error::new("SSRC number and length mismatch".to_string()));
+        }
+
+        // Get the 6-bit exponent value.
+        let exp = buf[17] >> 2;
+
+        // The remaining 2-bits plus the next 16-bits are the mantissa.
+        let mantissa = ((buf[17] as u64) & 3) << 16 | (buf[18] as u64) << 8 | buf[19] as u64;
+
+        if exp > 46 {
+            // NOTE: We intentionally truncate values so they fit in a uint64.
+            // Otherwise we would need a uint82.
+            // This is 2.3 exabytes per second, which should be good enough.
+            self.bitrate = !0
+        } else {
+            self.bitrate = mantissa << exp
+        }
+
+        // Clear any existing SSRCs
+        self.ssrcs = vec![];
+
+        let mut n = 20;
+
+        // Loop over and parse the SSRC entires at the end.
+        // We already verified that size == num * 4
+        while n < size {
+            let ssrc = BigEndian::read_u32(&buf[n..n + 4]);
+            self.ssrcs.push(ssrc);
+
+            n += 4;
+        }
+
+        Ok(())
+    }
+
+    // Header returns the Header associated with this packet.
+    pub fn header(&self) -> Header {
+        let l = self.marshal_size() + get_padding(self.marshal_size());
+
+        Header {
+            padding: get_padding(self.marshal_size()) != 0,
+            count: header::FORMAT_REMB,
+            packet_type: PacketType::PayloadSpecificFeedback,
+            length: ((l / 4) - 1) as u16,
+        }
+    }
+
+    // destination_ssrc returns an array of SSRC values that this packet refers to.
+    pub fn destination_ssrc(&self) -> Vec<u32> {
+        self.ssrcs.clone()
     }
 }
