@@ -1,16 +1,16 @@
 #[cfg(test)]
 mod full_intra_request_test;
 
+use bytes::BytesMut;
+use fmt::Binary;
 use std::fmt;
-use std::io::{Read, Write};
-
 use util::Error;
 
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
 
 use super::errors::*;
 use super::header::*;
-use crate::util::get_padding;
+use crate::{rapid_resynchronization_request, util::get_padding};
 
 // A FIREntry is a (ssrc, seqno) pair, as carried by FullIntraRequest.
 #[derive(Debug, PartialEq, Default, Clone)]
@@ -47,7 +47,7 @@ impl FullIntraRequest {
         HEADER_LENGTH + FIR_OFFSET + self.fir.len() * 8
     }
 
-    pub fn header(&self) -> Header {
+    pub fn header(&self) -> crate::header::Header {
         let l = self.size() + get_padding(self.size());
         Header {
             padding: get_padding(self.size()) != 0,
@@ -66,50 +66,59 @@ impl FullIntraRequest {
     }
 
     // Marshal encodes the FullIntraRequest
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        let header = self.header();
-        header.marshal(writer)?;
+    pub fn marshal(&self) -> Result<BytesMut, Error> {
+        let mut raw_packet = BytesMut::new();
+        raw_packet.resize(FIR_OFFSET + (self.fir.len() * 8), 0u8);
 
-        writer.write_u32::<BigEndian>(self.sender_ssrc)?;
-        writer.write_u32::<BigEndian>(self.media_ssrc)?;
+        BigEndian::write_u32(&mut raw_packet, self.sender_ssrc);
+        BigEndian::write_u32(&mut raw_packet[4..], self.media_ssrc);
 
-        for fir in &self.fir {
-            writer.write_u32::<BigEndian>(fir.ssrc)?;
-            writer.write_u8(fir.sequence_number)?;
-            writer.write_u8(0)?;
-            writer.write_u16::<BigEndian>(0)?;
+        for i in 0..self.fir.len() {
+            BigEndian::write_u32(&mut raw_packet[FIR_OFFSET + 8 * i..], self.fir[i].ssrc);
+            raw_packet[FIR_OFFSET + 8 * i] = self.fir[i].sequence_number;
         }
 
-        Ok(writer.flush()?)
+        let header = self.header();
+
+        let header_data = header.marshal()?;
+
+        header_data.extend_from_slice(&raw_packet);
+
+        Ok(header_data)
     }
 
     // Unmarshal decodes the TransportLayerNack
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let header = Header::unmarshal(reader)?;
+    pub fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
+        if raw_packet.len() < (HEADER_LENGTH + SSRC_LENGTH) {
+            return Err(Error::new("packet too short".to_string()));
+        }
+
+        let header = Header::default();
+
+        header.unmarshal(raw_packet)?;
+
+        if raw_packet.len() < (HEADER_LENGTH + (4 * header.length) as usize) {
+            return Err(Error::new("packet too short".to_string()));
+        }
 
         if header.packet_type != PacketType::PayloadSpecificFeedback || header.count != FORMAT_FIR {
-            return Err(ERR_WRONG_TYPE.clone());
+            return Err(Error::new("wrong packet type".to_string()));
         }
 
-        let sender_ssrc = reader.read_u32::<BigEndian>()?;
-        let media_ssrc = reader.read_u32::<BigEndian>()?;
-        let mut fir: Vec<FIREntry> = vec![];
-        for _ in (FIR_OFFSET..header.length as usize * 4).step_by(8) {
-            let ssrc = reader.read_u32::<BigEndian>()?;
-            let sequence_number = reader.read_u8()?;
-            reader.read_u8()?;
-            reader.read_u16::<BigEndian>()?;
-            fir.push(FIREntry {
-                ssrc,
-                sequence_number,
+        self.sender_ssrc = BigEndian::read_u32(&raw_packet[HEADER_LENGTH..]);
+        self.media_ssrc = BigEndian::read_u32(&raw_packet[HEADER_LENGTH + SSRC_LENGTH..]);
+
+        let mut i = HEADER_LENGTH + FIR_OFFSET;
+
+        while i < HEADER_LENGTH + (header.length * 4) as usize {
+            self.fir.push(FIREntry {
+                ssrc: BigEndian::read_u32(&raw_packet[i..]),
+                sequence_number: raw_packet[i + 4],
             });
+
+            i += 8;
         }
 
-        Ok(FullIntraRequest {
-            sender_ssrc,
-            media_ssrc,
-
-            fir,
-        })
+        Ok(())
     }
 }

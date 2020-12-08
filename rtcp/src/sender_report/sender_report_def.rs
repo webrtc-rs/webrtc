@@ -1,17 +1,16 @@
 use std::fmt;
-use std::io::{Read, Write};
+use std::io::Write;
 
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
 
+use bytes::BytesMut;
+use header::{Header, PacketType};
 use util::Error;
 
-use super::errors::*;
-use super::header::*;
-use super::reception_report::*;
-use crate::util::get_padding;
+use crate::{header, util::get_padding};
+use crate::{packet, reception_report::ReceptionReport};
 
-#[cfg(test)]
-mod sender_report_test;
+use super::SR_REPORT_OFFSET;
 
 // A SenderReport (SR) packet provides reception quality feedback for an RTP stream
 #[derive(Debug, PartialEq, Default, Clone)]
@@ -49,19 +48,6 @@ pub struct SenderReport {
     pub profile_extensions: Vec<u8>,
 }
 
-const SR_HEADER_LENGTH: usize = 24;
-/*
-const srSSRCOffset: usize = 0;
-const srNTPOffset: usize = srSSRCOffset + SSRC_LENGTH;
-const ntpTimeLength: usize = 8;
-const srRTPOffset: usize = srNTPOffset + ntpTimeLength;
-const rtpTimeLength: usize = 4;
-const srPacketCountOffset: usize = srRTPOffset + rtpTimeLength;
-const srPacketCountLength: usize = 4;
-const srOctetCountOffset: usize = srPacketCountOffset + srPacketCountLength;
-const srOctetCountLength: usize = 4;
-const srReportOffset: usize = srOctetCountOffset + srOctetCountLength;*/
-
 impl fmt::Display for SenderReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut out = format!("SenderReport from {}\n", self.ssrc);
@@ -90,11 +76,14 @@ impl SenderReport {
             reps_length += rep.size();
         }
 
-        HEADER_LENGTH + SR_HEADER_LENGTH + reps_length + self.profile_extensions.len()
+        header::HEADER_LENGTH
+            + super::SR_HEADER_LENGTH
+            + reps_length
+            + self.profile_extensions.len()
     }
 
     // Unmarshal decodes the ReceptionReport from binary
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         /*
          *         0                   1                   2                   3
          *         0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -132,35 +121,44 @@ impl SenderReport {
          *        |                  profile-specific extensions                  |
          *        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
-        let header = Header::unmarshal(reader)?;
+
+        if raw_packet.len() < (header::HEADER_LENGTH + super::SR_HEADER_LENGTH) {
+            return Err(Error::new("packet too short".to_string()));
+        }
+
+        let mut header = Header::default();
+
+        header.unmarshal(&mut raw_packet)?;
 
         if header.packet_type != PacketType::SenderReport {
-            return Err(ERR_WRONG_TYPE.clone());
+            return Err(Error::new("wrong packet type".to_string()));
         }
 
-        let ssrc = reader.read_u32::<BigEndian>()?;
-        let ntp_time = reader.read_u64::<BigEndian>()?;
-        let rtp_time = reader.read_u32::<BigEndian>()?;
-        let packet_count = reader.read_u32::<BigEndian>()?;
-        let octet_count = reader.read_u32::<BigEndian>()?;
+        let packet_body = &raw_packet[header::HEADER_LENGTH..];
 
-        let mut reports = vec![];
-        for _i in 0..header.count {
-            reports.push(ReceptionReport::unmarshal(reader)?);
+        self.ssrc = BigEndian::read_u32(&packet_body[super::SR_SSRC_OFFSET..]);
+        self.ntp_time = BigEndian::read_u64(&packet_body[super::SR_NTP_OFFSET..]);
+        self.rtp_time = BigEndian::read_u32(&packet_body[super::SR_RTP_OFFSET..]);
+        self.packet_count = BigEndian::read_u32(&packet_body[super::SR_PACKET_COUNT_OFFSET..]);
+        self.octet_count = BigEndian::read_u32(&packet_body[super::SR_OCTET_COUNT_OFFSET..]);
+
+        let mut offset = super::SR_REPORT_OFFSET;
+
+        for i in 0..header.count {
+            let rr_end = offset + crate::reception_report::RECEPTION_REPORT_LENGTH;
+
+            if rr_end > packet_body.len() {
+                return Err(Error::new("packet too short".to_string()));
+            }
+
+            let rr_body =
+                &packet_body[offset..offset + crate::reception_report::RECEPTION_REPORT_LENGTH];
+
+            offset = rr_end;
+
+            let reception_report = ReceptionReport::default();
         }
-
-        let mut profile_extensions: Vec<u8> = vec![];
-        reader.read_to_end(&mut profile_extensions)?;
-
-        Ok(SenderReport {
-            ssrc,
-            ntp_time,
-            rtp_time,
-            packet_count,
-            octet_count,
-            reports,
-            profile_extensions,
-        })
+        todo!()
     }
 
     // Header returns the Header associated with this packet.

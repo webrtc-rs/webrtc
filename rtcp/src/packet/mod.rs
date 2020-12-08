@@ -1,5 +1,6 @@
 use std::io::{BufReader, Read, Write};
 
+use bytes::BytesMut;
 use util::Error;
 
 use super::compound_packet::*;
@@ -43,9 +44,10 @@ pub enum Packet {
 }
 
 impl Packet {
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal(&self, writer: &mut BytesMut) -> Result<(), Error> {
         match self {
-            Packet::SenderReport(p) => p.marshal(writer)?,
+            Packet::SenderReport(p) => p.marshal()?,
+            al(writer)?,
             Packet::ReceiverReport(p) => p.marshal(writer)?,
             Packet::SourceDescription(p) => p.marshal(writer)?,
             Packet::Goodbye(p) => p.marshal(writer)?,

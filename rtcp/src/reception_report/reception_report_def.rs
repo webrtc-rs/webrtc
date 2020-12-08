@@ -1,10 +1,7 @@
-use std::io::{Read, Write};
-
+use bytes::BytesMut;
 use util::Error;
 
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-
-use super::errors::*;
+use byteorder::{BigEndian, ByteOrder};
 
 // A ReceptionReport block conveys statistics on the reception of RTP packets
 // from a single synchronization source.
@@ -39,21 +36,13 @@ pub struct ReceptionReport {
     pub delay: u32,
 }
 
-const RECEPTION_REPORT_LENGTH: usize = 24;
-/*const fractionLostOffset: u8 = 4;
-const totalLostOffset: u8 = 5;
-const lastSeqOffset: u8 = 8;
-const jitterOffset: u8 = 12;
-const lastSROffset: u8 = 16;
-const delayOffset: u8 = 20;*/
-
 impl ReceptionReport {
     pub fn size(&self) -> usize {
-        RECEPTION_REPORT_LENGTH
+        super::RECEPTION_REPORT_LENGTH
     }
 
     // Marshal encodes the ReceptionReport in binary
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal(&self) -> Result<BytesMut, Error> {
         /*
          *  0                   1                   2                   3
          *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -71,27 +60,46 @@ impl ReceptionReport {
          * |                   delay since last SR (DLSR)                  |
          * +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
          */
-        writer.write_u32::<BigEndian>(self.ssrc)?;
-        writer.write_u8(self.fraction_lost)?;
+
+        let mut raw_packet = vec![0u8; super::RECEPTION_REPORT_LENGTH];
+
+        BigEndian::write_u32(&mut raw_packet.as_slice(), self.ssrc);
+
+        raw_packet[super::FRACTION_LOST_OFFSET as usize] = self.fraction_lost;
 
         // pack TotalLost into 24 bits
         if self.total_lost >= (1 << 25) {
-            return Err(ERR_INVALID_TOTAL_LOST.clone());
+            return Err(Error::new("invalid total lost count".to_string()));
         }
-        writer.write_u8(((self.total_lost >> 16) & 0xFF) as u8)?;
-        writer.write_u8(((self.total_lost >> 8) & 0xFF) as u8)?;
-        writer.write_u8(((self.total_lost) & 0xFF) as u8)?;
 
-        writer.write_u32::<BigEndian>(self.last_sequence_number)?;
-        writer.write_u32::<BigEndian>(self.jitter)?;
-        writer.write_u32::<BigEndian>(self.last_sender_report)?;
-        writer.write_u32::<BigEndian>(self.delay)?;
+        let mut tl_bytes = &raw_packet[super::TOTAL_LOST_OFFSET..];
+        tl_bytes[0] = (self.total_lost >> 16) as u8;
+        tl_bytes[1] = (self.total_lost >> 8) as u8;
+        tl_bytes[2] = (self.total_lost) as u8;
 
-        Ok(writer.flush()?)
+        BigEndian::write_u32(
+            &mut raw_packet[super::LAST_SEQ_OFFSET..],
+            self.last_sequence_number,
+        );
+
+        BigEndian::write_u32(&mut raw_packet[super::JITTER_OFFSET..], self.jitter);
+
+        BigEndian::write_u32(
+            &mut raw_packet[super::LAST_SR_OFFSET..],
+            self.last_sender_report,
+        );
+
+        BigEndian::write_u32(&mut raw_packet[super::DELAY_OFFSET..], self.delay);
+
+        Ok(raw_packet[..].into())
     }
 
     // Unmarshal decodes the ReceptionReport from binary
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
+        if raw_packet.len() < super::RECEPTION_REPORT_LENGTH {
+            return Err(Error::new("packet too short".to_string()));
+        }
+
         /*
          *  0                   1                   2                   3
          *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -110,27 +118,18 @@ impl ReceptionReport {
          * +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
          */
 
-        let ssrc = reader.read_u32::<BigEndian>()?;
-        let fraction_lost = reader.read_u8()?;
+        self.ssrc = BigEndian::read_u32(raw_packet);
+        self.fraction_lost = raw_packet[super::FRACTION_LOST_OFFSET];
 
-        let b0 = reader.read_u8()?;
-        let b1 = reader.read_u8()?;
-        let b2 = reader.read_u8()?;
-        let total_lost = b2 as u32 | (b1 as u32) << 8 | (b0 as u32) << 16;
+        let mut tl_bytes = &raw_packet[super::TOTAL_LOST_OFFSET..];
+        self.total_lost =
+            (tl_bytes[2] as u32) | (tl_bytes[1] << 8) as u32 | (tl_bytes[0] << 16) as u32;
 
-        let last_sequence_number = reader.read_u32::<BigEndian>()?;
-        let jitter = reader.read_u32::<BigEndian>()?;
-        let last_sender_report = reader.read_u32::<BigEndian>()?;
-        let delay = reader.read_u32::<BigEndian>()?;
+        self.last_sequence_number = BigEndian::read_u32(&raw_packet[super::LAST_SEQ_OFFSET..]);
+        self.jitter = BigEndian::read_u32(&raw_packet[super::JITTER_OFFSET..]);
+        self.last_sender_report = BigEndian::read_u32(&raw_packet[super::LAST_SR_OFFSET..]);
+        self.delay = BigEndian::read_u32(&raw_packet[super::DELAY_OFFSET..]);
 
-        Ok(ReceptionReport {
-            ssrc,
-            fraction_lost,
-            total_lost,
-            last_sequence_number,
-            jitter,
-            last_sender_report,
-            delay,
-        })
+        Ok(())
     }
 }

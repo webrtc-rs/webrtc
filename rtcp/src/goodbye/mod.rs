@@ -1,13 +1,14 @@
 use std::fmt;
 use std::io::{Read, Write};
 
+use bytes::BytesMut;
 use util::Error;
 
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
 
 use super::errors::*;
-use super::header::*;
-use crate::util::get_padding;
+use super::header::{Header, PacketType};
+use crate::{header, util::get_padding};
 
 #[cfg(test)]
 mod goodbye_test;
@@ -34,18 +35,7 @@ impl fmt::Display for Goodbye {
 }
 
 impl Goodbye {
-    fn size(&self) -> usize {
-        let srcs_length = self.sources.len() * SSRC_LENGTH;
-        let reason_length = if self.reason.is_empty() {
-            0
-        } else {
-            self.reason.len() + 1
-        };
-
-        HEADER_LENGTH + srcs_length + reason_length
-    }
-
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         /*
          *        0                   1                   2                   3
          *        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -60,50 +50,71 @@ impl Goodbye {
          *       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
 
-        let header = Header::unmarshal(reader)?;
+        let header = Header::default();
+        header.unmarshal(&mut raw_packet)?;
 
         if header.packet_type != PacketType::Goodbye {
             return Err(ERR_WRONG_TYPE.clone());
         }
 
-        let mut sources = vec![];
-
-        for _i in 0..header.count {
-            sources.push(reader.read_u32::<BigEndian>()?);
+        if get_padding(raw_packet.len()) != 0 {
+            return Err(Error::new("packet too short".to_string()));
         }
 
-        let mut buf: Vec<u8> = vec![0; 1];
-        let num_bytes = reader.read(&mut buf)?;
+        self.sources = vec![0u32; header.count as usize];
 
-        let mut reason = String::new();
-        if num_bytes == 1 {
-            let reason_len = buf[0] as u64;
-            let mut reason_reader = reader.take(reason_len);
-            reason_reader.read_to_string(&mut reason)?;
-            if reason.len() < reason_len as usize {
-                return Err(ERR_PACKET_TOO_SHORT.clone());
+        let reason_offset =
+            (header::HEADER_LENGTH + header.count as usize * header::SSRC_LENGTH) as usize;
+
+        if reason_offset > raw_packet.len() {
+            return Err(Error::new("packet too short".to_string()));
+        }
+
+        for i in 0..header.count as usize {
+            let offset = header::HEADER_LENGTH + i * header::SSRC_LENGTH;
+
+            self.sources[i] = BigEndian::read_u32(&raw_packet[offset..]);
+        }
+
+        if reason_offset < raw_packet.len() {
+            let reason_len = raw_packet[reason_offset] as usize;
+            let reason_end = reason_offset + 1 + reason_len;
+
+            if reason_end > raw_packet.len() {
+                return Err(Error::new("packet too short".to_string()));
             }
+
+            self.reason =
+                match String::from_utf8(raw_packet[reason_offset + 1..reason_end].to_vec()) {
+                    Ok(e) => e,
+
+                    Err(e) => {
+                        return Err(Error::new("error converting byte to string".to_string()));
+                    }
+                };
         }
 
-        let goodbye = Goodbye { sources, reason };
-        let mut padding_len = get_padding(goodbye.size());
-        while padding_len > 0 {
-            reader.read_u8()?;
-            padding_len -= 1;
-        }
-
-        Ok(goodbye)
+        Ok(())
     }
 
     // Header returns the Header associated with this packet.
     pub fn header(&self) -> Header {
-        let l = self.size() + get_padding(self.size());
         Header {
-            padding: get_padding(self.size()) != 0,
+            padding: false,
             count: self.sources.len() as u8,
             packet_type: PacketType::Goodbye,
-            length: ((l / 4) - 1) as u16,
+            length: ((self.len() / 4) - 1) as u16,
         }
+    }
+
+    fn len(&self) -> usize {
+        let srcs_length = self.sources.len() * header::SSRC_LENGTH;
+        let reason_length = self.reason.len() + 1;
+
+        let l = header::HEADER_LENGTH + srcs_length + reason_length;
+
+        // align to 32-bit boundary
+        return l + get_padding(l);
     }
 
     // destination_ssrc returns an array of SSRC values that this packet refers to.
@@ -112,7 +123,7 @@ impl Goodbye {
     }
 
     // Marshal encodes the packet in binary.
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal(&self) -> Result<BytesMut, Error> {
         /*
          *        0                   1                   2                   3
          *        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -127,25 +138,41 @@ impl Goodbye {
          *       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
 
-        if self.sources.len() > COUNT_MAX {
+        if self.sources.len() > header::COUNT_MAX {
             return Err(ERR_TOO_MANY_SOURCES.clone());
         }
 
-        let header = self.header();
-        header.marshal(writer)?;
+        let mut raw_packet = vec![0u8; self.len()];
+        let mut packet_body = &raw_packet[header::HEADER_LENGTH..];
 
-        for s in &self.sources {
-            writer.write_u32::<BigEndian>(*s)?;
+        if self.sources.len() > header::COUNT_MAX {
+            return Err(Error::new("too many sources".to_string()));
         }
 
-        if &self.reason != "" {
-            if self.reason.len() > SDES_MAX_OCTET_COUNT {
-                return Err(ERR_REASON_TOO_LONG.clone());
+        for i in 0..self.sources.len() {
+            BigEndian::write_u32(&mut packet_body[i * header::SSRC_LENGTH..], self.sources[i]);
+        }
+
+        if self.reason != "" {
+            let reason = self.reason.as_bytes();
+
+            if reason.len() > header::SDES_MAX_OCTET_COUNT {
+                return Err(Error::new("reason too long".to_string()));
             }
-            writer.write_u8(self.reason.len() as u8)?;
-            writer.write_all(self.reason.as_bytes())?;
+
+            let reason_offset = self.sources.len() * header::SSRC_LENGTH;
+
+            packet_body[reason_offset] = reason.len() as u8;
+
+            let n = reason_offset + 1;
+
+            packet_body[n..n + reason.len()].copy_from_slice(&reason);
         }
 
-        Ok(writer.flush()?)
+        let header_data = self.header().marshal()?;
+
+        raw_packet[..header_data.len()].copy_from_slice(&header_data);
+
+        Ok(raw_packet[..].into())
     }
 }
