@@ -2,12 +2,12 @@ use std::fmt;
 use std::io::{Read, Write};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-
+use bytes::BytesMut;
 use util::Error;
 
 use super::errors::*;
 use super::header::*;
-use crate::util::get_padding;
+use crate::{packet::Packet, util as utility};
 
 #[cfg(test)]
 mod transport_layer_nack_test;
@@ -74,70 +74,36 @@ impl fmt::Display for TransportLayerNack {
     }
 }
 
+impl Packet for TransportLayerNack {
+    /// Unmarshal decodes the ReceptionReport from binary
+    fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
+        todo!()
+    }
+
+    /// destination_ssrc returns an array of SSRC values that this packet refers to.
+    fn destination_ssrc(&self) -> Vec<u32> {
+        vec![self.media_ssrc]
+    }
+
+    /// Marshal encodes the packet in binary.
+    fn marshal(&self) -> Result<BytesMut, Error> {
+        todo!()
+    }
+}
+
 impl TransportLayerNack {
     fn size(&self) -> usize {
         HEADER_LENGTH + NACK_OFFSET + self.nacks.len() * 4
     }
 
-    // Unmarshal decodes the ReceptionReport from binary
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let header = Header::unmarshal(reader)?;
-
-        if header.packet_type != PacketType::TransportSpecificFeedback || header.count != FORMAT_TLN
-        {
-            return Err(ERR_WRONG_TYPE.clone());
-        }
-
-        let sender_ssrc = reader.read_u32::<BigEndian>()?;
-        let media_ssrc = reader.read_u32::<BigEndian>()?;
-
-        let mut nacks = vec![];
-        for _i in 0..(header.length as i32 - NACK_OFFSET as i32 / 4) {
-            nacks.push(NackPair {
-                packet_id: reader.read_u16::<BigEndian>()?,
-                lost_packets: reader.read_u16::<BigEndian>()?,
-            });
-        }
-
-        Ok(TransportLayerNack {
-            sender_ssrc,
-            media_ssrc,
-            nacks,
-        })
-    }
-
     // Header returns the Header associated with this packet.
     pub fn header(&self) -> Header {
-        let l = self.size() + get_padding(self.size());
+        let l = self.size() + utility::get_padding(self.size());
         Header {
-            padding: get_padding(self.size()) != 0,
+            padding: utility::get_padding(self.size()) != 0,
             count: FORMAT_TLN,
             packet_type: PacketType::TransportSpecificFeedback,
             length: ((l / 4) - 1) as u16,
         }
-    }
-
-    // destination_ssrc returns an array of SSRC values that this packet refers to.
-    pub fn destination_ssrc(&self) -> Vec<u32> {
-        vec![self.media_ssrc]
-    }
-
-    // Marshal encodes the packet in binary.
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        if self.nacks.len() + TLN_LENGTH > std::u8::MAX as usize {
-            return Err(ERR_TOO_MANY_REPORTS.clone());
-        }
-
-        self.header().marshal(writer)?;
-
-        writer.write_u32::<BigEndian>(self.sender_ssrc)?;
-        writer.write_u32::<BigEndian>(self.media_ssrc)?;
-
-        for nack in &self.nacks {
-            writer.write_u16::<BigEndian>(nack.packet_id)?;
-            writer.write_u16::<BigEndian>(nack.lost_packets)?;
-        }
-
-        Ok(writer.flush()?)
     }
 }

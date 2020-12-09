@@ -2,12 +2,13 @@ use std::fmt;
 use std::io::{Read, Write};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use bytes::BytesMut;
 
 use util::Error;
 
 use super::errors::*;
 use super::header::*;
-use crate::util::get_padding;
+use crate::{packet::Packet, util::get_padding};
 
 #[cfg(test)]
 mod rapid_resynchronization_request_test;
@@ -36,27 +37,23 @@ impl fmt::Display for RapidResynchronizationRequest {
     }
 }
 
+impl Packet for RapidResynchronizationRequest {
+    fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
+        todo!()
+    }
+
+    fn marshal(&self) -> Result<BytesMut, Error> {
+        todo!()
+    }
+
+    fn destination_ssrc(&self) -> Vec<u32> {
+        vec![self.media_ssrc]
+    }
+}
+
 impl RapidResynchronizationRequest {
     fn size(&self) -> usize {
         HEADER_LENGTH + RRR_HEADER_LENGTH
-    }
-
-    // Unmarshal decodes the ReceptionReport from binary
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let header = Header::unmarshal(reader)?;
-
-        if header.packet_type != PacketType::TransportSpecificFeedback || header.count != FORMAT_RRR
-        {
-            return Err(ERR_WRONG_TYPE.clone());
-        }
-
-        let sender_ssrc = reader.read_u32::<BigEndian>()?;
-        let media_ssrc = reader.read_u32::<BigEndian>()?;
-
-        Ok(RapidResynchronizationRequest {
-            sender_ssrc,
-            media_ssrc,
-        })
     }
 
     // Header returns the Header associated with this packet.
@@ -68,20 +65,5 @@ impl RapidResynchronizationRequest {
             packet_type: PacketType::TransportSpecificFeedback,
             length: ((l / 4) - 1) as u16,
         }
-    }
-
-    // destination_ssrc returns an array of SSRC values that this packet refers to.
-    pub fn destination_ssrc(&self) -> Vec<u32> {
-        vec![self.media_ssrc]
-    }
-
-    // Marshal encodes the packet in binary.
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.header().marshal(writer)?;
-
-        writer.write_u32::<BigEndian>(self.sender_ssrc)?;
-        writer.write_u32::<BigEndian>(self.media_ssrc)?;
-
-        Ok(writer.flush()?)
     }
 }

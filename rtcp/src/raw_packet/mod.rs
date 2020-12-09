@@ -3,6 +3,9 @@ use std::io::{BufReader, Read, Write};
 
 use util::Error;
 
+use crate::packet::Packet;
+use bytes::BytesMut;
+
 use super::header::*;
 
 #[cfg(test)]
@@ -22,36 +25,28 @@ impl fmt::Display for RawPacket {
     }
 }
 
-//var _ Packet = (*RawPacket)(nil) // assert is a Packet
-impl RawPacket {
-    fn size(&self) -> usize {
-        self.raw.len()
+impl Packet for RawPacket {
+    // destination_ssrc returns an array of SSRC values that this packet refers to.
+    fn destination_ssrc(&self) -> Vec<u32> {
+        vec![]
     }
 
-    // Unmarshal decodes the packet from binary.
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let mut raw_packet = RawPacket::default();
-        reader.read_to_end(&mut raw_packet.raw)?;
+    fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
+        todo!()
+    }
 
-        let mut reader = BufReader::new(raw_packet.raw.as_slice());
-        raw_packet.header = Header::unmarshal(&mut reader)?;
+    fn marshal(&self) -> Result<BytesMut, Error> {
+        todo!()
+    }
+}
 
-        Ok(raw_packet)
+impl RawPacket {
+    fn len(&self) -> usize {
+        self.raw.len()
     }
 
     // Header returns the Header associated with this packet.
     pub fn header(&self) -> Header {
         self.header.clone()
-    }
-
-    // destination_ssrc returns an array of SSRC values that this packet refers to.
-    pub fn destination_ssrc(&self) -> Vec<u32> {
-        vec![]
-    }
-
-    // Marshal encodes the packet in binary.
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        writer.write_all(&self.raw)?;
-        Ok(writer.flush()?)
     }
 }

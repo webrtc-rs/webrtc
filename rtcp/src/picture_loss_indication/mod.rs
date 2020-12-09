@@ -2,11 +2,11 @@ use std::fmt;
 use std::io::{Read, Write};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-
+use bytes::BytesMut;
 use util::Error;
 
-use super::errors::*;
 use super::header::*;
+use crate::packet::Packet;
 use crate::util::get_padding;
 
 #[cfg(test)]
@@ -34,51 +34,34 @@ impl fmt::Display for PictureLossIndication {
     }
 }
 
-impl PictureLossIndication {
-    fn size(&self) -> usize {
-        HEADER_LENGTH + SSRC_LENGTH * 2
+impl Packet for PictureLossIndication {
+    fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
+        todo!()
     }
 
-    // Unmarshal decodes the ReceptionReport from binary
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let header = Header::unmarshal(reader)?;
+    fn marshal(&self) -> Result<BytesMut, Error> {
+        todo!()
+    }
 
-        if header.packet_type != PacketType::PayloadSpecificFeedback || header.count != FORMAT_PLI {
-            return Err(ERR_WRONG_TYPE.clone());
-        }
+    // destination_ssrc returns an array of SSRC values that this packet refers to.
+    fn destination_ssrc(&self) -> Vec<u32> {
+        vec![self.media_ssrc]
+    }
+}
 
-        let sender_ssrc = reader.read_u32::<BigEndian>()?;
-        let media_ssrc = reader.read_u32::<BigEndian>()?;
-
-        Ok(PictureLossIndication {
-            sender_ssrc,
-            media_ssrc,
-        })
+impl PictureLossIndication {
+    fn len(&self) -> usize {
+        HEADER_LENGTH + SSRC_LENGTH * 2
     }
 
     // Header returns the Header associated with this packet.
     pub fn header(&self) -> Header {
-        let l = self.size() + get_padding(self.size());
+        let l = self.len() + get_padding(self.len());
         Header {
-            padding: get_padding(self.size()) != 0,
+            padding: get_padding(self.len()) != 0,
             count: FORMAT_PLI,
             packet_type: PacketType::PayloadSpecificFeedback,
             length: ((l / 4) - 1) as u16,
         }
-    }
-
-    // destination_ssrc returns an array of SSRC values that this packet refers to.
-    pub fn destination_ssrc(&self) -> Vec<u32> {
-        vec![self.media_ssrc]
-    }
-
-    // Marshal encodes the packet in binary.
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.header().marshal(writer)?;
-
-        writer.write_u32::<BigEndian>(self.sender_ssrc)?;
-        writer.write_u32::<BigEndian>(self.media_ssrc)?;
-
-        Ok(writer.flush()?)
     }
 }

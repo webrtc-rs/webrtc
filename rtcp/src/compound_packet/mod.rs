@@ -21,8 +21,7 @@ mod compound_packet_test;
 // to identify the source and to begin associating media for purposes such as lip-sync.
 //
 // Other RTCP packet types may follow in any order. Packet types may appear more than once.
-#[derive(Debug, Clone)]
-pub struct CompoundPacket(pub Vec<Packet>);
+pub struct CompoundPacket(Vec<Box<dyn Packet>>);
 
 impl CompoundPacket {
     // Validate returns an error if this is not an RFC-compliant CompoundPacket.

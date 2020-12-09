@@ -2,7 +2,6 @@
 mod full_intra_request_test;
 
 use bytes::BytesMut;
-use fmt::Binary;
 use std::fmt;
 use util::Error;
 
@@ -10,7 +9,7 @@ use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
 
 use super::errors::*;
 use super::header::*;
-use crate::{rapid_resynchronization_request, util::get_padding};
+use crate::{packet::Packet, rapid_resynchronization_request, util::get_padding};
 
 // A FIREntry is a (ssrc, seqno) pair, as carried by FullIntraRequest.
 #[derive(Debug, PartialEq, Default, Clone)]
@@ -42,22 +41,9 @@ impl fmt::Display for FullIntraRequest {
     }
 }
 
-impl FullIntraRequest {
-    fn size(&self) -> usize {
-        HEADER_LENGTH + FIR_OFFSET + self.fir.len() * 8
-    }
-
-    pub fn header(&self) -> crate::header::Header {
-        let l = self.size() + get_padding(self.size());
-        Header {
-            padding: get_padding(self.size()) != 0,
-            count: FORMAT_FIR,
-            packet_type: PacketType::PayloadSpecificFeedback,
-            length: ((l / 4) - 1) as u16,
-        }
-    }
-
-    pub fn destination_ssrc(&self) -> Vec<u32> {
+impl Packet for FullIntraRequest {
+    // destination_ssrc returns an array of SSRC values that this packet refers to.
+    fn destination_ssrc(&self) -> Vec<u32> {
         let mut ssrcs: Vec<u32> = Vec::with_capacity(self.fir.len());
         for entry in &self.fir {
             ssrcs.push(entry.ssrc);
@@ -66,7 +52,7 @@ impl FullIntraRequest {
     }
 
     // Marshal encodes the FullIntraRequest
-    pub fn marshal(&self) -> Result<BytesMut, Error> {
+    fn marshal(&self) -> Result<BytesMut, Error> {
         let mut raw_packet = BytesMut::new();
         raw_packet.resize(FIR_OFFSET + (self.fir.len() * 8), 0u8);
 
@@ -88,7 +74,7 @@ impl FullIntraRequest {
     }
 
     // Unmarshal decodes the TransportLayerNack
-    pub fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
+    fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         if raw_packet.len() < (HEADER_LENGTH + SSRC_LENGTH) {
             return Err(Error::new("packet too short".to_string()));
         }
@@ -120,5 +106,21 @@ impl FullIntraRequest {
         }
 
         Ok(())
+    }
+}
+
+impl FullIntraRequest {
+    fn size(&self) -> usize {
+        HEADER_LENGTH + FIR_OFFSET + self.fir.len() * 8
+    }
+
+    pub fn header(&self) -> crate::header::Header {
+        let l = self.size() + get_padding(self.size());
+        Header {
+            padding: get_padding(self.size()) != 0,
+            count: FORMAT_FIR,
+            packet_type: PacketType::PayloadSpecificFeedback,
+            length: ((l / 4) - 1) as u16,
+        }
     }
 }

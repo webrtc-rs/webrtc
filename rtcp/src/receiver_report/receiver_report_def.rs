@@ -6,11 +6,11 @@ use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
 use bytes::BytesMut;
 use util::Error;
 
-use crate::reception_report::ReceptionReport;
 use crate::{
     header, header::Header, header::PacketType, receiver_report, reception_report,
     util::get_padding,
 };
+use crate::{packet::Packet, reception_report::ReceptionReport};
 
 // A ReceiverReport (RR) packet provides reception quality feedback for an RTP stream
 #[derive(Debug, PartialEq, Default, Clone)]
@@ -44,16 +44,9 @@ impl fmt::Display for ReceiverReport {
     }
 }
 
-impl ReceiverReport {
-    fn len(&self) -> usize {
-        let mut reps_length = 0;
-        for rep in &self.reports {
-            reps_length += rep.size();
-        }
-        header::HEADER_LENGTH + header::SSRC_LENGTH + reps_length + self.profile_extensions.len()
-    }
+impl Packet for ReceiverReport {
     // Unmarshal decodes the ReceiverReport from binary
-    pub fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
+    fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         /*
          *         0                   1                   2                   3
          *         0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -117,24 +110,13 @@ impl ReceiverReport {
         Ok(())
     }
 
-    // Header returns the Header associated with this packet.
-    pub fn header(&self) -> Header {
-        let l = self.len() + get_padding(self.len());
-        Header {
-            padding: false,
-            count: self.reports.len() as u8,
-            packet_type: PacketType::ReceiverReport,
-            length: ((l / 4) - 1) as u16,
-        }
-    }
-
     // destination_ssrc returns an array of SSRC values that this packet refers to.
-    pub fn destination_ssrc(&self) -> Vec<u32> {
+    fn destination_ssrc(&self) -> Vec<u32> {
         self.reports.iter().map(|x| x.ssrc).collect()
     }
 
     // Marshal encodes the packet in binary.
-    pub fn marshal(&self) -> Result<BytesMut, Error> {
+    fn marshal(&self) -> Result<BytesMut, Error> {
         /*
          *         0                   1                   2                   3
          *         0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -197,5 +179,26 @@ impl ReceiverReport {
         raw_packet[..header_data.len()].copy_from_slice(&header_data);
 
         Ok(raw_packet[..].into())
+    }
+}
+
+impl ReceiverReport {
+    fn len(&self) -> usize {
+        let mut reps_length = 0;
+        for rep in &self.reports {
+            reps_length += rep.size();
+        }
+        header::HEADER_LENGTH + header::SSRC_LENGTH + reps_length + self.profile_extensions.len()
+    }
+
+    // Header returns the Header associated with this packet.
+    pub fn header(&self) -> Header {
+        let l = self.len() + get_padding(self.len());
+        Header {
+            padding: false,
+            count: self.reports.len() as u8,
+            packet_type: PacketType::ReceiverReport,
+            length: ((l / 4) - 1) as u16,
+        }
     }
 }

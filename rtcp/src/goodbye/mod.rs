@@ -8,7 +8,7 @@ use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
 
 use super::errors::*;
 use super::header::{Header, PacketType};
-use crate::{header, util::get_padding};
+use crate::{header, packet::Packet, util::get_padding};
 
 #[cfg(test)]
 mod goodbye_test;
@@ -34,8 +34,8 @@ impl fmt::Display for Goodbye {
     }
 }
 
-impl Goodbye {
-    pub fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
+impl Packet for Goodbye {
+    fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         /*
          *        0                   1                   2                   3
          *        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -97,33 +97,13 @@ impl Goodbye {
         Ok(())
     }
 
-    // Header returns the Header associated with this packet.
-    pub fn header(&self) -> Header {
-        Header {
-            padding: false,
-            count: self.sources.len() as u8,
-            packet_type: PacketType::Goodbye,
-            length: ((self.len() / 4) - 1) as u16,
-        }
-    }
-
-    fn len(&self) -> usize {
-        let srcs_length = self.sources.len() * header::SSRC_LENGTH;
-        let reason_length = self.reason.len() + 1;
-
-        let l = header::HEADER_LENGTH + srcs_length + reason_length;
-
-        // align to 32-bit boundary
-        return l + get_padding(l);
-    }
-
-    // destination_ssrc returns an array of SSRC values that this packet refers to.
-    pub fn destination_ssrc(&self) -> Vec<u32> {
+    /// destination_ssrc returns an array of SSRC values that this packet refers to.
+    fn destination_ssrc(&self) -> Vec<u32> {
         self.sources.to_vec()
     }
 
-    // Marshal encodes the packet in binary.
-    pub fn marshal(&self) -> Result<BytesMut, Error> {
+    /// Marshal encodes the packet in binary.
+    fn marshal(&self) -> Result<BytesMut, Error> {
         /*
          *        0                   1                   2                   3
          *        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -174,5 +154,27 @@ impl Goodbye {
         raw_packet[..header_data.len()].copy_from_slice(&header_data);
 
         Ok(raw_packet[..].into())
+    }
+}
+
+impl Goodbye {
+    // Header returns the Header associated with this packet.
+    pub fn header(&self) -> Header {
+        Header {
+            padding: false,
+            count: self.sources.len() as u8,
+            packet_type: PacketType::Goodbye,
+            length: ((self.len() / 4) - 1) as u16,
+        }
+    }
+
+    fn len(&self) -> usize {
+        let srcs_length = self.sources.len() * header::SSRC_LENGTH;
+        let reason_length = self.reason.len() + 1;
+
+        let l = header::HEADER_LENGTH + srcs_length + reason_length;
+
+        // align to 32-bit boundary
+        return l + get_padding(l);
     }
 }

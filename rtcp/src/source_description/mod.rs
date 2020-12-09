@@ -2,11 +2,12 @@ use std::fmt;
 use std::io::{Read, Write};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-
+use bytes::BytesMut;
 use util::Error;
 
 use super::errors::*;
 use super::header::*;
+use crate::packet::Packet;
 use crate::util::get_padding;
 
 #[cfg(test)]
@@ -253,17 +254,9 @@ impl fmt::Display for SourceDescription {
     }
 }
 
-impl SourceDescription {
-    fn size(&self) -> usize {
-        let mut chunks_length = 0;
-        for c in &self.chunks {
-            chunks_length += c.size();
-        }
-        HEADER_LENGTH + chunks_length
-    }
-
+impl Packet for SourceDescription {
     // Unmarshal decodes the SourceDescription from binary
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         /*
          *         0                   1                   2                   3
          *         0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -282,18 +275,69 @@ impl SourceDescription {
          *        +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
          */
 
-        let header = Header::unmarshal(reader)?;
+        todo!()
 
-        if header.packet_type != PacketType::SourceDescription {
-            return Err(ERR_WRONG_TYPE.clone());
+        // let header = Header::unmarshal(reader)?;
+
+        // if header.packet_type != PacketType::SourceDescription {
+        //     return Err(ERR_WRONG_TYPE.clone());
+        // }
+
+        // let mut chunks = vec![];
+        // for _i in 0..header.count {
+        //     chunks.push(SourceDescriptionChunk::unmarshal(reader)?);
+        // }
+
+        // Ok(SourceDescription { chunks })
+    }
+
+    // destination_ssrc returns an array of SSRC values that this packet refers to.
+    fn destination_ssrc(&self) -> Vec<u32> {
+        self.chunks.iter().map(|x| x.source).collect()
+    }
+
+    // Marshal encodes the SourceDescription in binary
+    fn marshal(&self) -> Result<BytesMut, Error> {
+        /*
+         *         0                   1                   2                   3
+         *         0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+         *        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+         * header |V=2|P|    SC   |  PT=SDES=202  |             length            |
+         *        +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+         * chunk  |                          SSRC/CSRC_1                          |
+         *   1    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+         *        |                           SDES items                          |
+         *        |                              ...                              |
+         *        +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+         * chunk  |                          SSRC/CSRC_2                          |
+         *   2    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+         *        |                           SDES items                          |
+         *        |                              ...                              |
+         *        +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+         */
+
+        todo!()
+        // if self.chunks.len() > COUNT_MAX {
+        //     return Err(ERR_TOO_MANY_CHUNKS.clone());
+        // }
+
+        // self.header().marshal(writer)?;
+
+        // for c in &self.chunks {
+        //     c.marshal(writer)?;
+        // }
+
+        // Ok(())
+    }
+}
+
+impl SourceDescription {
+    fn size(&self) -> usize {
+        let mut chunks_length = 0;
+        for c in &self.chunks {
+            chunks_length += c.size();
         }
-
-        let mut chunks = vec![];
-        for _i in 0..header.count {
-            chunks.push(SourceDescriptionChunk::unmarshal(reader)?);
-        }
-
-        Ok(SourceDescription { chunks })
+        HEADER_LENGTH + chunks_length
     }
 
     // Header returns the Header associated with this packet.
@@ -305,42 +349,5 @@ impl SourceDescription {
             packet_type: PacketType::SourceDescription,
             length: ((l / 4) - 1) as u16,
         }
-    }
-
-    // destination_ssrc returns an array of SSRC values that this packet refers to.
-    pub fn destination_ssrc(&self) -> Vec<u32> {
-        self.chunks.iter().map(|x| x.source).collect()
-    }
-
-    // Marshal encodes the SourceDescription in binary
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        /*
-         *         0                   1                   2                   3
-         *         0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-         *        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-         * header |V=2|P|    SC   |  PT=SDES=202  |             length            |
-         *        +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
-         * chunk  |                          SSRC/CSRC_1                          |
-         *   1    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-         *        |                           SDES items                          |
-         *        |                              ...                              |
-         *        +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
-         * chunk  |                          SSRC/CSRC_2                          |
-         *   2    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-         *        |                           SDES items                          |
-         *        |                              ...                              |
-         *        +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
-         */
-        if self.chunks.len() > COUNT_MAX {
-            return Err(ERR_TOO_MANY_CHUNKS.clone());
-        }
-
-        self.header().marshal(writer)?;
-
-        for c in &self.chunks {
-            c.marshal(writer)?;
-        }
-
-        Ok(())
     }
 }

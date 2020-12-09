@@ -5,7 +5,7 @@ use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
 use util::Error;
 
-use crate::{header, header::Header, header::PacketType, util::get_padding};
+use crate::{header, header::Header, header::PacketType, packet::Packet, util::get_padding};
 
 mod receiver_estimated_maximum_bitrate_test;
 
@@ -57,13 +57,9 @@ impl fmt::Display for ReceiverEstimatedMaximumBitrate {
     }
 }
 
-impl ReceiverEstimatedMaximumBitrate {
-    pub fn marshal_size(&self) -> usize {
-        header::HEADER_LENGTH + REMB_OFFSET + self.ssrcs.len() * 4
-    }
-
+impl Packet for ReceiverEstimatedMaximumBitrate {
     /// Marshal serializes the packet and returns a byte slice.
-    pub fn marshal(&self) -> Result<BytesMut, Error> {
+    fn marshal(&self) -> Result<BytesMut, Error> {
         // Allocate a buffer of the exact output size.
         let mut buf = BytesMut::new();
         buf.resize(self.marshal_size(), 0u8);
@@ -79,93 +75,8 @@ impl ReceiverEstimatedMaximumBitrate {
         Ok(buf)
     }
 
-    /// MarshalTo serializes the packet to the given byte slice.
-    pub fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error> {
-        /*
-            0                   1                   2                   3
-            0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-           |V=2|P| FMT=15  |   PT=206      |             length            |
-           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-           |                  SSRC of packet sender                        |
-           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-           |                  SSRC of media source                         |
-           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-           |  Unique identifier 'R' 'E' 'M' 'B'                            |
-           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-           |  Num SSRC     | BR Exp    |  BR Mantissa                      |
-           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-           |   SSRC feedback                                               |
-           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-           |  ...                                                          |
-        */
-
-        let size = self.marshal_size();
-        if buf.len() < size {
-            return Err(Error::new("packet too short".to_string()));
-        }
-
-        buf[0] = 143; // v=2, p=0, fmt=15
-        buf[1] = 206;
-
-        // Length of this packet in 32-bit words minus one.
-        let length = (self.marshal_size() / 4) - 1;
-        BigEndian::write_u16(&mut buf[2..4], length as u16);
-
-        BigEndian::write_u32(&mut buf[4..8], self.sender_ssrc);
-        BigEndian::write_u32(&mut buf[8..12], 0); // always zero
-
-        buf[12] = "R".as_bytes()[0];
-        buf[13] = "E".as_bytes()[0];
-        buf[14] = "M".as_bytes()[0];
-        buf[15] = "B".as_bytes()[0];
-
-        // Write the length of the ssrcs to follow at the end
-        buf[16] = self.ssrcs.len() as u8;
-
-        // We can only encode 18 bits of information in the mantissa.
-        // The exponent lets us shift to the left up to 64 places (6-bits).
-        // We actually need a uint82 to encode the largest possible number,
-        // but uint64 should be good enough for 2.3 exabytes per second.
-
-        // So we need to truncate the bitrate and use the exponent for the shift.
-        // bitrate = mantissa * (1 << exp)
-
-        // Calculate the total shift based on the leading number of zeroes.
-        // This will be negative if there is no shift required.
-        let mut shift = 64 - self.bitrate.leading_zeros();
-
-        let mantissa = 0usize;
-        let exp = 0usize;
-
-        if shift <= 18 {
-            // Fit everything in the mantissa because we can.
-            mantissa = self.bitrate as usize;
-        } else {
-            // We can only use 18 bits of precision, so truncate.
-            mantissa = self.bitrate as usize >> (shift - 18);
-            exp = shift as usize - 18;
-        }
-
-        // We can't quite use the binary package because
-        // a) it's a uint24 and b) the exponent is only 6-bits
-        // Just trust me; this is big-endian encoding.
-        buf[17] = ((exp << 2) | (mantissa >> 16)) as u8;
-        buf[18] = (mantissa >> 8) as u8;
-        buf[19] = mantissa as u8;
-
-        // Write the SSRCs at the very end.
-        let mut n = 20;
-        for ssrc in self.ssrcs {
-            BigEndian::write_u32(&mut buf[n..n + 4], ssrc);
-            n += 4
-        }
-
-        Ok(n)
-    }
-
     /// Unmarshal reads a REMB packet from the given byte slice.
-    pub fn unmarshal(&self, buf: &BytesMut) -> Result<(), Error> {
+    fn unmarshal(&self, buf: &mut BytesMut) -> Result<(), Error> {
         /*
             0                   1                   2                   3
             0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -293,6 +204,102 @@ impl ReceiverEstimatedMaximumBitrate {
         Ok(())
     }
 
+    // destination_ssrc returns an array of SSRC values that this packet refers to.
+    fn destination_ssrc(&self) -> Vec<u32> {
+        self.ssrcs.clone()
+    }
+}
+
+impl ReceiverEstimatedMaximumBitrate {
+    pub fn marshal_size(&self) -> usize {
+        header::HEADER_LENGTH + REMB_OFFSET + self.ssrcs.len() * 4
+    }
+
+    /// MarshalTo serializes the packet to the given byte slice.
+    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error> {
+        /*
+            0                   1                   2                   3
+            0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           |V=2|P| FMT=15  |   PT=206      |             length            |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           |                  SSRC of packet sender                        |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           |                  SSRC of media source                         |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           |  Unique identifier 'R' 'E' 'M' 'B'                            |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           |  Num SSRC     | BR Exp    |  BR Mantissa                      |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           |   SSRC feedback                                               |
+           +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+           |  ...                                                          |
+        */
+
+        let size = self.marshal_size();
+        if buf.len() < size {
+            return Err(Error::new("packet too short".to_string()));
+        }
+
+        buf[0] = 143; // v=2, p=0, fmt=15
+        buf[1] = 206;
+
+        // Length of this packet in 32-bit words minus one.
+        let length = (self.marshal_size() / 4) - 1;
+        BigEndian::write_u16(&mut buf[2..4], length as u16);
+
+        BigEndian::write_u32(&mut buf[4..8], self.sender_ssrc);
+        BigEndian::write_u32(&mut buf[8..12], 0); // always zero
+
+        buf[12] = "R".as_bytes()[0];
+        buf[13] = "E".as_bytes()[0];
+        buf[14] = "M".as_bytes()[0];
+        buf[15] = "B".as_bytes()[0];
+
+        // Write the length of the ssrcs to follow at the end
+        buf[16] = self.ssrcs.len() as u8;
+
+        // We can only encode 18 bits of information in the mantissa.
+        // The exponent lets us shift to the left up to 64 places (6-bits).
+        // We actually need a uint82 to encode the largest possible number,
+        // but uint64 should be good enough for 2.3 exabytes per second.
+
+        // So we need to truncate the bitrate and use the exponent for the shift.
+        // bitrate = mantissa * (1 << exp)
+
+        // Calculate the total shift based on the leading number of zeroes.
+        // This will be negative if there is no shift required.
+        let mut shift = 64 - self.bitrate.leading_zeros();
+
+        let mantissa = 0usize;
+        let exp = 0usize;
+
+        if shift <= 18 {
+            // Fit everything in the mantissa because we can.
+            mantissa = self.bitrate as usize;
+        } else {
+            // We can only use 18 bits of precision, so truncate.
+            mantissa = self.bitrate as usize >> (shift - 18);
+            exp = shift as usize - 18;
+        }
+
+        // We can't quite use the binary package because
+        // a) it's a uint24 and b) the exponent is only 6-bits
+        // Just trust me; this is big-endian encoding.
+        buf[17] = ((exp << 2) | (mantissa >> 16)) as u8;
+        buf[18] = (mantissa >> 8) as u8;
+        buf[19] = mantissa as u8;
+
+        // Write the SSRCs at the very end.
+        let mut n = 20;
+        for ssrc in self.ssrcs {
+            BigEndian::write_u32(&mut buf[n..n + 4], ssrc);
+            n += 4
+        }
+
+        Ok(n)
+    }
+
     // Header returns the Header associated with this packet.
     pub fn header(&self) -> Header {
         let l = self.marshal_size() + get_padding(self.marshal_size());
@@ -303,10 +310,5 @@ impl ReceiverEstimatedMaximumBitrate {
             packet_type: PacketType::PayloadSpecificFeedback,
             length: ((l / 4) - 1) as u16,
         }
-    }
-
-    // destination_ssrc returns an array of SSRC values that this packet refers to.
-    pub fn destination_ssrc(&self) -> Vec<u32> {
-        self.ssrcs.clone()
     }
 }
