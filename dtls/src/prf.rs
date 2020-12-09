@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod prf_test;
 
+use std::convert::TryInto;
 use std::fmt;
 
 use hmac::{Hmac, Mac, NewMac};
@@ -77,6 +78,7 @@ pub(crate) fn prf_pre_master_secret(
 ) -> Result<Vec<u8>, Error> {
     match curve {
         NamedCurve::P256 => elliptic_curve_pre_master_secret(public_key, private_key, curve),
+        NamedCurve::X25519 => elliptic_curve_pre_master_secret(public_key, private_key, curve),
         _ => Err(ERR_INVALID_NAMED_CURVE.clone()),
     }
 }
@@ -86,16 +88,24 @@ fn elliptic_curve_pre_master_secret(
     private_key: &NamedCurvePrivateKey,
     curve: NamedCurve,
 ) -> Result<Vec<u8>, Error> {
-    let public = match curve {
-        NamedCurve::P256 => p256::EncodedPoint::from_bytes(public_key)?,
-        _ => return Err(ERR_INVALID_NAMED_CURVE.clone()),
-    };
-    let pre_master_secret = match private_key {
-        NamedCurvePrivateKey::EphemeralSecretP256(secret) => {
-            secret.diffie_hellman(&public)?.as_bytes().to_vec()
+    match curve {
+        NamedCurve::P256 => {
+            let public = p256::EncodedPoint::from_bytes(public_key)?;
+            if let NamedCurvePrivateKey::EphemeralSecretP256(secret) = private_key {
+                return Ok(secret.diffie_hellman(&public)?.as_bytes().to_vec());
+            }
         }
-    };
-    Ok(pre_master_secret)
+        NamedCurve::X25519 => {
+            let pub_key: [u8; 32] = public_key.try_into().expect("slice with incorrect length"); // TODO: error handling
+            let public = x25519_dalek::PublicKey::from(pub_key);
+            if let NamedCurvePrivateKey::StaticSecretX25519(secret) = private_key {
+                return Ok(secret.diffie_hellman(&public).as_bytes().to_vec());
+            }
+        }
+        _ => return Err(ERR_INVALID_NAMED_CURVE.clone()),
+    }
+    // TODO: is correct error?
+    Err(ERR_INVALID_NAMED_CURVE.clone())
 }
 
 //  This PRF with the SHA-256 hash function is used for all cipher suites
