@@ -6,7 +6,7 @@ pub fn new_cipher_suite_tls_ecdhe_ecdsa_with_aes_128_ccm8() -> CipherSuiteAes128
     CipherSuiteAes128Ccm::new(
         ClientCertificateType::ECDSASign,
         CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8,
-        true,
+        false,
         CryptoCcmTagLen::CryptoCcm8TagLength,
     )
 }
