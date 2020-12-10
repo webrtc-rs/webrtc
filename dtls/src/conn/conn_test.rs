@@ -661,15 +661,9 @@ async fn test_client_timeout() -> Result<(), Error> {
 
     let (ca, _cb) = pipe().await?;
     tokio::spawn(async move {
-        let conf = Config {
-            psk: Some(psk_callback_client),
-            psk_identity_hint: Some("WebRTC.rs DTLS Client".as_bytes().to_vec()),
-            cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_CCM_8],
-            ..Default::default()
-        };
-
+        let conf = Config::default();
         let result =
-            tokio::time::timeout(Duration::from_secs(1), create_test_client(ca, conf, false)).await;
+            tokio::time::timeout(Duration::from_secs(1), create_test_client(ca, conf, true)).await;
         let _ = client_res_tx.send(result).await;
     });
 
