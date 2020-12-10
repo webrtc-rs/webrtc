@@ -1,7 +1,7 @@
+use std::array::TryFromSliceError;
 use std::string::FromUtf8Error;
 use std::time::SystemTimeError;
 use std::{fmt, num};
-use std::array::TryFromSliceError;
 
 use tokio::sync::mpsc::error::SendError;
 
