@@ -26,6 +26,7 @@ impl From<u16> for NamedCurve {
 
 pub(crate) enum NamedCurvePrivateKey {
     EphemeralSecretP256(p256::ecdh::EphemeralSecret),
+    StaticSecretX25519(x25519_dalek::StaticSecret),
 }
 
 pub struct NamedCurveKeypair {
@@ -44,7 +45,15 @@ fn elliptic_curve_keypair(curve: NamedCurve) -> Result<NamedCurveKeypair, Error>
                 NamedCurvePrivateKey::EphemeralSecretP256(secret_key),
             )
         }
-        //TODO: add other two
+        NamedCurve::X25519 => {
+            let secret_key = x25519_dalek::StaticSecret::new(rand_core::OsRng);
+            let public_key = x25519_dalek::PublicKey::from(&secret_key);
+            (
+                public_key.as_bytes().to_vec(),
+                NamedCurvePrivateKey::StaticSecretX25519(secret_key),
+            )
+        }
+        //TODO: add NamedCurve::p384
         _ => return Err(ERR_INVALID_NAMED_CURVE.clone()),
     };
 
@@ -58,19 +67,8 @@ fn elliptic_curve_keypair(curve: NamedCurve) -> Result<NamedCurveKeypair, Error>
 impl NamedCurve {
     pub fn generate_keypair(&self) -> Result<NamedCurveKeypair, Error> {
         match *self {
-            //TODO: add X25519 and P384
-            /*NamedCurve::X25519=>{
-                tmp := make([]byte, 32)
-                if _, err := rand.Read(tmp); err != nil {
-                    return nil, err
-                }
-
-                var public, private [32]byte
-                copy(private[:], tmp)
-
-                curve25519.ScalarBaseMult(&public, &private)
-                Ok(NamedCurveKeypair{curve:NamedCurve::X25519, public_key, private_key})
-            }*/
+            //TODO: add P384
+            NamedCurve::X25519 => elliptic_curve_keypair(NamedCurve::X25519),
             NamedCurve::P256 => elliptic_curve_keypair(NamedCurve::P256),
             //NamedCurve::P384 => elliptic_curve_keypair(NamedCurve::P384),
             _ => Err(ERR_INVALID_NAMED_CURVE.clone()),
