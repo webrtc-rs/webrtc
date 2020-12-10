@@ -96,7 +96,7 @@ fn elliptic_curve_pre_master_secret(
             }
         }
         NamedCurve::X25519 => {
-            let pub_key: [u8; 32] = public_key.try_into().expect("slice with incorrect length"); // TODO: error handling
+            let pub_key: [u8; 32] = public_key.try_into()?;
             let public = x25519_dalek::PublicKey::from(pub_key);
             if let NamedCurvePrivateKey::StaticSecretX25519(secret) = private_key {
                 return Ok(secret.diffie_hellman(&public).as_bytes().to_vec());
@@ -104,8 +104,7 @@ fn elliptic_curve_pre_master_secret(
         }
         _ => return Err(ERR_INVALID_NAMED_CURVE.clone()),
     }
-    // TODO: is correct error?
-    Err(ERR_INVALID_NAMED_CURVE.clone())
+    Err(ERR_NAMED_CURVE_AND_PRIVATE_KEY_MISMATCH.clone())
 }
 
 //  This PRF with the SHA-256 hash function is used for all cipher suites
