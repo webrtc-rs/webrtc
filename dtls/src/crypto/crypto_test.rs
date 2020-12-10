@@ -47,7 +47,7 @@ fn test_generate_key_signature() -> Result<(), Error> {
         Ok((pem, _)) => pem,
         Err(_) => return Err(Error::new("Pem::read error".to_owned())),
     };
-    let private_key = rsa::RSAPrivateKey::from_pkcs1(&pem.contents)?;
+    //let private_key = rsa::RSAPrivateKey::from_pkcs1(&pem.contents)?;
 
     let client_random = vec![
         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e,
@@ -90,8 +90,10 @@ fn test_generate_key_signature() -> Result<(), Error> {
         &server_random,
         &public_key,
         NamedCurve::X25519,
-        &CryptoPrivateKey::RSA256(Box::new(private_key)),
-        //hashAlgorithmSHA256,
+        &CryptoPrivateKey {
+            kind: CryptoPrivateKeyKind::RSA256(RsaKeyPair::from_der(&pem.contents)?),
+            serialized_der: pem.contents.clone(),
+        }, //hashAlgorithmSHA256,
     )?;
 
     assert_eq!(

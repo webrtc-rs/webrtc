@@ -143,6 +143,30 @@ impl From<x509_parser::error::X509Error> for Error {
     }
 }
 
+impl From<rcgen::RcgenError> for Error {
+    fn from(error: rcgen::RcgenError) -> Self {
+        Error {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<ring::error::KeyRejected> for Error {
+    fn from(error: ring::error::KeyRejected) -> Self {
+        Error {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<ring::error::Unspecified> for Error {
+    fn from(error: ring::error::Unspecified) -> Self {
+        Error {
+            message: error.to_string(),
+        }
+    }
+}
+
 impl Error {
     pub fn new(message: String) -> Self {
         Error { message }

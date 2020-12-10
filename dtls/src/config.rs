@@ -156,9 +156,9 @@ pub(crate) fn validate_config(config: &Config) -> Result<(), Error> {
     }
 
     for cert in &config.certificates {
-        match cert.private_key {
-            CryptoPrivateKey::ED25519(_) => {}
-            CryptoPrivateKey::ECDSA256(_) => {}
+        match cert.private_key.kind {
+            CryptoPrivateKeyKind::ED25519(_) => {}
+            CryptoPrivateKeyKind::ECDSA256(_) => {}
             _ => return Err(ERR_INVALID_PRIVATE_KEY.clone()),
         }
     }
