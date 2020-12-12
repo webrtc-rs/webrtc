@@ -13,7 +13,7 @@ use util::Error;
 use std::io::Cursor;
 
 use crate::content::*;
-use crate::errors::*;
+//use crate::errors::*;
 use crate::prf::*;
 use crate::record_layer::record_layer_header::*;
 
@@ -90,11 +90,10 @@ impl CryptoCbc {
             return Ok(r.to_vec());
         }
 
-        if r.len() % CryptoCbc::BLOCK_SIZE != 0 {
-            return Err(ERR_NOT_ENOUGH_ROOM_FOR_NONCE.clone());
-        }
+        let body = &r[RECORD_LAYER_HEADER_SIZE..];
+        //TODO: add body.len() check
 
-        let decrypted = self.read_cbc.clone().decrypt_vec(r)?;
+        let decrypted = self.read_cbc.clone().decrypt_vec(body)?;
 
         let mut d = Vec::with_capacity(RECORD_LAYER_HEADER_SIZE + decrypted.len());
         d.extend_from_slice(&r[..RECORD_LAYER_HEADER_SIZE]);

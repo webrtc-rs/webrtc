@@ -146,7 +146,15 @@ impl Default for ExtendedMasterSecretType {
     }
 }
 
-pub(crate) fn validate_config(config: &Config) -> Result<(), Error> {
+pub(crate) fn validate_config(is_client: bool, config: &Config) -> Result<(), Error> {
+    if is_client && config.psk.is_some() && config.psk_identity_hint.is_none() {
+        return Err(ERR_PSK_AND_IDENTITY_MUST_BE_SET_FOR_CLIENT.clone());
+    }
+
+    if !is_client && config.psk.is_none() && config.certificates.is_empty() {
+        return Err(ERR_SERVER_MUST_HAVE_CERTIFICATE.clone());
+    }
+
     if !config.certificates.is_empty() && config.psk.is_some() {
         return Err(ERR_PSK_AND_CERTIFICATE.clone());
     }

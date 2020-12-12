@@ -3,13 +3,24 @@ use crate::cipher_suite::cipher_suite_aes_128_gcm_sha256::*;
 use crate::cipher_suite::*;
 use crate::compression_methods::*;
 use crate::crypto::*;
+use crate::curve::*;
 use crate::errors::*;
+use crate::extension::extension_supported_elliptic_curves::*;
+use crate::extension::extension_supported_point_formats::*;
+use crate::extension::extension_supported_signature_algorithms::*;
+use crate::extension::*;
+use crate::handshake::handshake_message_certificate::*;
 use crate::handshake::handshake_message_client_hello::*;
+use crate::handshake::handshake_message_hello_verify_request::*;
+use crate::handshake::handshake_message_server_hello::*;
+use crate::handshake::handshake_message_server_hello_done::*;
+use crate::handshake::handshake_message_server_key_exchange::*;
 use crate::handshake::handshake_random::*;
 use crate::signature_hash_algorithm::*;
 
 use tokio::net::UdpSocket;
 
+use rand::Rng;
 use std::time::SystemTime;
 
 //use std::io::Write;
@@ -792,8 +803,8 @@ async fn test_srtp_configuration() -> Result<(), Error> {
             if let Err(err) = result {
                 assert_eq!(
                     err, expected_err,
-                    "TestPSK: Server error exp({}) failed({})",
-                    expected_err, err,
+                    "{} TestPSK: Server error exp({}) failed({})",
+                    name, expected_err, err,
                 );
             } else {
                 assert!(false, "{} expected error, but got ok", name);
@@ -1488,3 +1499,860 @@ async fn test_server_certificate() -> Result<(), Error> {
     }
     Ok(())
 }*/
+
+#[tokio::test]
+async fn test_cipher_suite_configuration() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, LevelFilter::Trace)
+    .init();*/
+
+    let tests = vec![
+        (
+            "No CipherSuites specified",
+            vec![],
+            vec![],
+            None,
+            None,
+            None,
+        ),
+        (
+            "Invalid CipherSuite",
+            vec![CipherSuiteID::Unsupported],
+            vec![CipherSuiteID::Unsupported],
+            Some(ERR_INVALID_CIPHER_SUITE.clone()),
+            Some(ERR_INVALID_CIPHER_SUITE.clone()),
+            None,
+        ),
+        (
+            "Valid CipherSuites specified",
+            vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256],
+            vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256],
+            None,
+            None,
+            Some(CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256),
+        ),
+        (
+            "CipherSuites mismatch",
+            vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256],
+            vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA],
+            Some(ERR_ALERT_FATAL_OR_CLOSE.clone()),
+            Some(ERR_CIPHER_SUITE_NO_INTERSECTION.clone()),
+            None,
+        ),
+        (
+            "Valid CipherSuites CCM specified",
+            vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM],
+            vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM],
+            None,
+            None,
+            Some(CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM),
+        ),
+        (
+            "Valid CipherSuites CCM-8 specified",
+            vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8],
+            vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8],
+            None,
+            None,
+            Some(CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8),
+        ),
+        (
+            "Server supports subset of client suites",
+            vec![
+                CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+                CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+            ],
+            vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA],
+            None,
+            None,
+            Some(CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA),
+        ),
+    ];
+
+    for (
+        name,
+        client_cipher_suites,
+        server_cipher_suites,
+        want_client_error,
+        want_server_error,
+        want_selected_cipher_suite,
+    ) in tests
+    {
+        let (client_res_tx, mut client_res_rx) = mpsc::channel(1);
+        let (ca, cb) = pipe().await?;
+        tokio::spawn(async move {
+            let conf = Config {
+                cipher_suites: client_cipher_suites,
+                ..Default::default()
+            };
+
+            let result = create_test_client(ca, conf, true).await;
+            let _ = client_res_tx.send(result).await;
+        });
+
+        let config = Config {
+            cipher_suites: server_cipher_suites,
+            ..Default::default()
+        };
+
+        let result = create_test_server(cb, config, true).await;
+        if let Some(expected_err) = want_server_error {
+            if let Err(err) = result {
+                assert_eq!(
+                    err, expected_err,
+                    "{} test_cipher_suite_configuration: Server error exp({}) failed({})",
+                    name, expected_err, err,
+                );
+            } else {
+                assert!(false, "{} expected error, but got ok", name);
+            }
+        } else {
+            assert!(result.is_ok(), "{} expected ok, but got error", name)
+        }
+
+        let client_result = client_res_rx.recv().await;
+        if let Some(result) = client_result {
+            if let Some(expected_err) = want_client_error {
+                if let Err(err) = result {
+                    assert_eq!(
+                        err, expected_err,
+                        "{} test_cipher_suite_configuration: Client error exp({}) failed({})",
+                        name, expected_err, err,
+                    );
+                } else {
+                    assert!(false, "{} expected error, but got ok", name);
+                }
+            } else {
+                assert!(result.is_ok(), "{} expected ok, but got error", name);
+                let client = result.unwrap();
+                if let Some(want_cs) = want_selected_cipher_suite {
+                    let cipher_suite = client.state.cipher_suite.lock().await;
+                    assert!(
+                        cipher_suite.is_some(),
+                        "{} expected some, but got none",
+                        name
+                    );
+                    if let Some(cs) = &*cipher_suite {
+                        assert_eq!(cs.id(), want_cs,
+                                   "test_cipher_suite_configuration: Server Selected Bad Cipher Suite '{}': expected({}) actual({})", 
+                                   name, want_cs, cs.id());
+                    }
+                }
+            }
+        } else {
+            assert!(false, "{} expected Some, but got None", name);
+        }
+    }
+
+    Ok(())
+}
+
+fn psk_callback(_b: &[u8]) -> Result<Vec<u8>, Error> {
+    Ok(vec![0x00, 0x01, 0x02])
+}
+
+#[tokio::test]
+async fn test_psk_configuration() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, LevelFilter::Trace)
+    .init();*/
+
+    let tests = vec![
+        (
+            "PSK specified",
+            false,
+            false,
+            true, //Some(psk_callback),
+            true, //Some(psk_callback),
+            Some(vec![0x00]),
+            Some(vec![0x00]),
+            Some(ERR_NO_AVAILABLE_CIPHER_SUITES.clone()),
+            Some(ERR_NO_AVAILABLE_CIPHER_SUITES.clone()),
+        ),
+        (
+            "PSK and certificate specified",
+            true,
+            true,
+            true, //Some(psk_callback),
+            true, //Some(psk_callback),
+            Some(vec![0x00]),
+            Some(vec![0x00]),
+            Some(ERR_PSK_AND_CERTIFICATE.clone()),
+            Some(ERR_PSK_AND_CERTIFICATE.clone()),
+        ),
+        (
+            "PSK and no identity specified",
+            false,
+            false,
+            true, //Some(psk_callback),
+            true, //Some(psk_callback),
+            None,
+            None,
+            Some(ERR_PSK_AND_IDENTITY_MUST_BE_SET_FOR_CLIENT.clone()),
+            Some(ERR_NO_AVAILABLE_CIPHER_SUITES.clone()),
+        ),
+        (
+            "No PSK and identity specified",
+            false,
+            false,
+            false,
+            false,
+            Some(vec![0x00]),
+            Some(vec![0x00]),
+            Some(ERR_IDENTITY_NO_PSK.clone()),
+            Some(ERR_SERVER_MUST_HAVE_CERTIFICATE.clone()),
+        ),
+    ];
+
+    for (
+        name,
+        client_has_certificate,
+        server_has_certificate,
+        client_psk,
+        server_psk,
+        client_psk_identity,
+        server_psk_identity,
+        want_client_error,
+        want_server_error,
+    ) in tests
+    {
+        let (client_res_tx, mut client_res_rx) = mpsc::channel(1);
+        let (ca, cb) = pipe().await?;
+        tokio::spawn(async move {
+            let conf = Config {
+                psk: if client_psk { Some(psk_callback) } else { None },
+                psk_identity_hint: client_psk_identity,
+                ..Default::default()
+            };
+
+            let result = create_test_client(ca, conf, client_has_certificate).await;
+            let _ = client_res_tx.send(result).await;
+        });
+
+        let config = Config {
+            psk: if server_psk { Some(psk_callback) } else { None },
+            psk_identity_hint: server_psk_identity,
+            ..Default::default()
+        };
+
+        let result = create_test_server(cb, config, server_has_certificate).await;
+        if let Some(expected_err) = want_server_error {
+            if let Err(err) = result {
+                assert_eq!(
+                    err, expected_err,
+                    "{} test_psk_configuration: Server error exp({}) failed({})",
+                    name, expected_err, err,
+                );
+            } else {
+                assert!(false, "{} expected error, but got ok", name);
+            }
+        } else {
+            assert!(result.is_ok(), "{} expected ok, but got error", name)
+        }
+
+        let client_result = client_res_rx.recv().await;
+        if let Some(result) = client_result {
+            if let Some(expected_err) = want_client_error {
+                if let Err(err) = result {
+                    assert_eq!(
+                        err, expected_err,
+                        "{} test_psk_configuration: Client error exp({}) failed({})",
+                        name, expected_err, err,
+                    );
+                } else {
+                    assert!(false, "{} expected error, but got ok", name);
+                }
+            } else {
+                assert!(result.is_ok(), "{} expected ok, but got error", name);
+            }
+        } else {
+            assert!(false, "{} expected Some, but got None", name);
+        }
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_server_timeout() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, LevelFilter::Trace)
+    .init();*/
+
+    let mut cookie = vec![0u8; 20];
+    rand::thread_rng().fill(cookie.as_mut_slice());
+
+    let random_bytes = [0u8; RANDOM_BYTES_LENGTH];
+    let gmt_unix_time = SystemTime::UNIX_EPOCH
+        .checked_add(Duration::new(500, 0))
+        .unwrap();
+    let random = HandshakeRandom {
+        gmt_unix_time,
+        random_bytes,
+    };
+
+    let cipher_suites = vec![
+        CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, //&cipherSuiteTLSEcdheEcdsaWithAes128GcmSha256{},
+        CipherSuiteID::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256, //&cipherSuiteTLSEcdheRsaWithAes128GcmSha256{},
+    ];
+
+    let extensions = vec![
+        Extension::SupportedSignatureAlgorithms(ExtensionSupportedSignatureAlgorithms {
+            signature_hash_algorithms: vec![
+                SignatureHashAlgorithm {
+                    hash: HashAlgorithm::SHA256,
+                    signature: SignatureAlgorithm::ECDSA,
+                },
+                SignatureHashAlgorithm {
+                    hash: HashAlgorithm::SHA384,
+                    signature: SignatureAlgorithm::ECDSA,
+                },
+                SignatureHashAlgorithm {
+                    hash: HashAlgorithm::SHA512,
+                    signature: SignatureAlgorithm::ECDSA,
+                },
+                SignatureHashAlgorithm {
+                    hash: HashAlgorithm::SHA256,
+                    signature: SignatureAlgorithm::RSA,
+                },
+                SignatureHashAlgorithm {
+                    hash: HashAlgorithm::SHA384,
+                    signature: SignatureAlgorithm::RSA,
+                },
+                SignatureHashAlgorithm {
+                    hash: HashAlgorithm::SHA512,
+                    signature: SignatureAlgorithm::RSA,
+                },
+            ],
+        }),
+        Extension::SupportedEllipticCurves(ExtensionSupportedEllipticCurves {
+            elliptic_curves: vec![NamedCurve::X25519, NamedCurve::P256, NamedCurve::P384],
+        }),
+        Extension::SupportedPointFormats(ExtensionSupportedPointFormats {
+            point_formats: vec![ELLIPTIC_CURVE_POINT_FORMAT_UNCOMPRESSED],
+        }),
+    ];
+
+    let record = RecordLayer::new(
+        PROTOCOL_VERSION1_2,
+        0,
+        Content::Handshake(Handshake::new(HandshakeMessage::ClientHello(
+            HandshakeMessageClientHello {
+                version: PROTOCOL_VERSION1_2,
+                cookie,
+                random,
+                cipher_suites,
+                compression_methods: default_compression_methods(),
+                extensions,
+            },
+        ))),
+    );
+
+    let mut packet = vec![];
+    {
+        let mut writer = BufWriter::<&mut Vec<u8>>::new(packet.as_mut());
+        record.marshal(&mut writer)?;
+    }
+
+    let (ca, cb) = pipe().await?;
+
+    // Client reader
+    let (ca_read_chan_tx, mut ca_read_chan_rx) = mpsc::channel(1000);
+
+    let ca_rx = Arc::new(ca);
+    let ca_tx = Arc::clone(&ca_rx);
+
+    tokio::spawn(async move {
+        let mut data = vec![0; 8192];
+        loop {
+            if let Ok(n) = ca_rx.recv(&mut data).await {
+                let result = ca_read_chan_tx.send(data[..n].to_vec()).await;
+                if result.is_ok() {
+                    return;
+                }
+            } else {
+                return;
+            }
+        }
+    });
+
+    // Start sending ClientHello packets until server responds with first packet
+    tokio::spawn(async move {
+        loop {
+            let mut timer = tokio::time::sleep(Duration::from_millis(10));
+
+            tokio::select! {
+                _ = &mut timer => {
+                    let result = ca_tx.send(&packet).await;
+                    if result.is_err() {
+                        return;
+                    }
+                }
+                _ = ca_read_chan_rx.recv() => return,
+            }
+        }
+    });
+
+    let config = Config {
+        cipher_suites: vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256],
+        flight_interval: Duration::from_millis(100),
+        ..Default::default()
+    };
+
+    let result = tokio::time::timeout(
+        Duration::from_millis(50),
+        create_test_server(cb, config, true),
+    )
+    .await;
+    if let Err(err) = result {
+        assert!(
+            true,
+            "Sever error exp(Temporary network error) failed({})",
+            err
+        );
+    } else {
+        assert!(false, "Expected Error but got Ok");
+    }
+
+    // Wait a little longer to ensure no additional messages have been sent by the server
+    //tokio::time::sleep(Duration::from_millis(300)).await;
+
+    /*tokio::select! {
+    case msg := <-caReadChan:
+        t.Fatalf("Expected no additional messages from server, got: %+v", msg)
+    default:
+    }*/
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_protocol_version_validation() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, LevelFilter::Trace)
+    .init();*/
+
+    let mut cookie = vec![0; 20];
+    rand::thread_rng().fill(cookie.as_mut_slice());
+
+    let random_bytes = [0u8; RANDOM_BYTES_LENGTH];
+    let gmt_unix_time = SystemTime::UNIX_EPOCH
+        .checked_add(Duration::new(500, 0))
+        .unwrap();
+    let random = HandshakeRandom {
+        gmt_unix_time,
+        random_bytes,
+    };
+
+    let local_keypair = NamedCurve::X25519.generate_keypair()?;
+
+    //|"Server"|
+    {
+        let server_cases = vec![
+            (
+                "ClientHelloVersion",
+                vec![RecordLayer::new(
+                    PROTOCOL_VERSION1_2,
+                    0,
+                    Content::Handshake(Handshake::new(HandshakeMessage::ClientHello(
+                        HandshakeMessageClientHello {
+                            version: ProtocolVersion {
+                                major: 0xfe,
+                                minor: 0xff,
+                            }, // try to downgrade
+                            cookie: cookie.clone(),
+                            random: random.clone(),
+                            cipher_suites: vec![
+                                CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+                            ],
+                            compression_methods: default_compression_methods(),
+                            extensions: vec![],
+                        },
+                    ))),
+                )],
+            ),
+            (
+                "SecondsClientHelloVersion",
+                vec![
+                    RecordLayer::new(
+                        PROTOCOL_VERSION1_2,
+                        0,
+                        Content::Handshake(Handshake::new(HandshakeMessage::ClientHello(
+                            HandshakeMessageClientHello {
+                                version: PROTOCOL_VERSION1_2,
+                                cookie: cookie.clone(),
+                                random: random.clone(),
+                                cipher_suites: vec![
+                                    CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+                                ],
+                                compression_methods: default_compression_methods(),
+                                extensions: vec![],
+                            },
+                        ))),
+                    ),
+                    {
+                        let mut handshake = Handshake::new(HandshakeMessage::ClientHello(
+                            HandshakeMessageClientHello {
+                                version: ProtocolVersion {
+                                    major: 0xfe,
+                                    minor: 0xff,
+                                }, // try to downgrade
+                                cookie: cookie.clone(),
+                                random: random.clone(),
+                                cipher_suites: vec![
+                                    CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+                                ],
+                                compression_methods: default_compression_methods(),
+                                extensions: vec![],
+                            },
+                        ));
+                        handshake.handshake_header.message_sequence = 1;
+                        let mut record_layer =
+                            RecordLayer::new(PROTOCOL_VERSION1_2, 0, Content::Handshake(handshake));
+                        record_layer.record_layer_header.sequence_number = 1;
+
+                        record_layer
+                    },
+                ],
+            ),
+        ];
+        for (name, records) in server_cases {
+            let (ca, cb) = pipe().await?;
+
+            tokio::spawn(async move {
+                let config = Config {
+                    cipher_suites: vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256],
+                    flight_interval: Duration::from_millis(100),
+                    ..Default::default()
+                };
+                let timeout_result = tokio::time::timeout(
+                    Duration::from_millis(1000),
+                    create_test_server(cb, config, true),
+                )
+                .await;
+                match timeout_result {
+                    Ok(result) => {
+                        if let Err(err) = result {
+                            assert_eq!(
+                                err,
+                                ERR_UNSUPPORTED_PROTOCOL_VERSION.clone(),
+                                "{} Client error exp({}) failed({})",
+                                name,
+                                ERR_UNSUPPORTED_PROTOCOL_VERSION.clone(),
+                                err,
+                            );
+                        } else {
+                            assert!(false, "{} expected error, but got ok", name);
+                        }
+                    }
+                    Err(err) => {
+                        assert!(false, "server timeout {}", err);
+                    }
+                };
+            });
+
+            tokio::time::sleep(Duration::from_millis(50)).await;
+
+            let mut resp = vec![0; 1024];
+            let mut n = 0;
+            for record in records {
+                let mut packet = vec![];
+                {
+                    let mut writer = BufWriter::<&mut Vec<u8>>::new(packet.as_mut());
+                    record.marshal(&mut writer)?;
+                }
+
+                let _ = ca.send(&packet).await;
+                n = ca.recv(&mut resp).await?;
+            }
+
+            let mut reader = BufReader::new(&resp[..n]);
+            let h = RecordLayerHeader::unmarshal(&mut reader)?;
+            assert_eq!(
+                h.content_type,
+                ContentType::Alert,
+                "Peer must return alert to unsupported protocol version"
+            );
+        }
+    }
+
+    //"Client"
+    {
+        let client_cases = vec![(
+            "ServerHelloVersion",
+            vec![
+                RecordLayer::new(
+                    PROTOCOL_VERSION1_2,
+                    0,
+                    Content::Handshake(Handshake::new(HandshakeMessage::HelloVerifyRequest(
+                        HandshakeMessageHelloVerifyRequest {
+                            version: PROTOCOL_VERSION1_2,
+                            cookie: cookie.clone(),
+                        },
+                    ))),
+                ),
+                {
+                    let mut handshake = Handshake::new(HandshakeMessage::ServerHello(
+                        HandshakeMessageServerHello {
+                            version: ProtocolVersion {
+                                major: 0xfe,
+                                minor: 0xff,
+                            }, // try to downgrade
+                            random: random.clone(),
+                            cipher_suite: CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+                            compression_method: default_compression_methods().ids[0],
+                            extensions: vec![],
+                        },
+                    ));
+                    handshake.handshake_header.message_sequence = 1;
+                    let mut record =
+                        RecordLayer::new(PROTOCOL_VERSION1_2, 0, Content::Handshake(handshake));
+                    record.record_layer_header.sequence_number = 1;
+                    record
+                },
+                {
+                    let mut handshake = Handshake::new(HandshakeMessage::Certificate(
+                        HandshakeMessageCertificate {
+                            certificate: vec![],
+                        },
+                    ));
+                    handshake.handshake_header.message_sequence = 2;
+                    let mut record =
+                        RecordLayer::new(PROTOCOL_VERSION1_2, 0, Content::Handshake(handshake));
+                    record.record_layer_header.sequence_number = 2;
+                    record
+                },
+                {
+                    let mut handshake = Handshake::new(HandshakeMessage::ServerKeyExchange(
+                        HandshakeMessageServerKeyExchange {
+                            identity_hint: vec![],
+                            elliptic_curve_type: EllipticCurveType::NamedCurve,
+                            named_curve: NamedCurve::X25519,
+                            public_key: local_keypair.public_key.clone(),
+                            hash_algorithm: HashAlgorithm::SHA256,
+                            signature_algorithm: SignatureAlgorithm::ECDSA,
+                            signature: vec![0; 64],
+                        },
+                    ));
+                    handshake.handshake_header.message_sequence = 3;
+                    let mut record =
+                        RecordLayer::new(PROTOCOL_VERSION1_2, 0, Content::Handshake(handshake));
+                    record.record_layer_header.sequence_number = 3;
+                    record
+                },
+                {
+                    let mut handshake = Handshake::new(HandshakeMessage::ServerHelloDone(
+                        HandshakeMessageServerHelloDone {},
+                    ));
+                    handshake.handshake_header.message_sequence = 4;
+                    let mut record =
+                        RecordLayer::new(PROTOCOL_VERSION1_2, 0, Content::Handshake(handshake));
+                    record.record_layer_header.sequence_number = 4;
+                    record
+                },
+            ],
+        )];
+
+        for (name, records) in client_cases {
+            let (ca, cb) = pipe().await?;
+
+            tokio::spawn(async move {
+                let config = Config {
+                    cipher_suites: vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256],
+                    flight_interval: Duration::from_millis(100),
+                    ..Default::default()
+                };
+                let timeout_result = tokio::time::timeout(
+                    Duration::from_millis(1000),
+                    create_test_client(cb, config, true),
+                )
+                .await;
+                match timeout_result {
+                    Ok(result) => {
+                        if let Err(err) = result {
+                            assert_eq!(
+                                err,
+                                ERR_UNSUPPORTED_PROTOCOL_VERSION.clone(),
+                                "{} Server error exp({}) failed({})",
+                                name,
+                                ERR_UNSUPPORTED_PROTOCOL_VERSION.clone(),
+                                err,
+                            );
+                        } else {
+                            assert!(false, "{} expected error, but got ok", name);
+                        }
+                    }
+                    Err(err) => {
+                        assert!(false, "server timeout {}", err);
+                    }
+                };
+            });
+
+            tokio::time::sleep(Duration::from_millis(50)).await;
+
+            let mut resp = vec![0; 1024];
+            for record in records {
+                let _ = ca.recv(&mut resp).await?;
+
+                let mut packet = vec![];
+                {
+                    let mut writer = BufWriter::<&mut Vec<u8>>::new(packet.as_mut());
+                    record.marshal(&mut writer)?;
+                }
+                let _ = ca.send(&packet).await;
+            }
+
+            let n = ca.recv(&mut resp).await?;
+
+            let mut reader = BufReader::new(&resp[..n]);
+            let h = RecordLayerHeader::unmarshal(&mut reader)?;
+
+            assert_eq!(
+                h.content_type,
+                ContentType::Alert,
+                "Peer must return alert to unsupported protocol version"
+            );
+        }
+    }
+
+    Ok(())
+}
+
+//TODO: FIX
+/*
+#[tokio::test]
+async fn test_multiple_hello_verify_request() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, LevelFilter::Trace)
+    .init();*/
+
+    let mut cookies = vec![
+        // first clientHello contains an empty cookie
+        vec![],
+    ];
+
+    let mut packets = vec![];
+    for i in 0..2 {
+        let mut cookie = vec![0; 20];
+        rand::thread_rng().fill(cookie.as_mut_slice());
+        cookies.push(cookie.clone());
+
+        let mut handshake = Handshake::new(HandshakeMessage::HelloVerifyRequest(
+            HandshakeMessageHelloVerifyRequest {
+                version: PROTOCOL_VERSION1_2,
+                cookie,
+            },
+        ));
+        handshake.handshake_header.message_sequence = i as u16;
+
+        let mut record = RecordLayer::new(PROTOCOL_VERSION1_2, 0, Content::Handshake(handshake));
+        record.record_layer_header.sequence_number = i as u64;
+
+        let mut packet = vec![];
+        {
+            let mut writer = BufWriter::<&mut Vec<u8>>::new(packet.as_mut());
+            record.marshal(&mut writer)?;
+        }
+
+        packets.push(packet);
+    }
+
+    let (ca, cb) = pipe().await?;
+
+    //TODO: add cancel channel to Conn
+    tokio::spawn(async move {
+        let conf = Config::default();
+        let _ = tokio::time::timeout(
+            Duration::from_millis(100),
+            create_test_client(ca, conf, true),
+        )
+        .await;
+    });
+
+    for i in 0..cookies.len() {
+        let cookie = &cookies[i];
+        trace!("cookie {}: {:?}", i, cookie);
+
+        // read client hello
+        let mut resp = vec![0; 1024];
+        let n = cb.recv(&mut resp).await?;
+        let mut reader = BufReader::new(&resp[..n]);
+        let record = RecordLayer::unmarshal(&mut reader)?;
+        match record.content {
+            Content::Handshake(h) => match h.handshake_message {
+                HandshakeMessage::ClientHello(client_hello) => {
+                    assert_eq!(
+                        &client_hello.cookie, cookie,
+                        "Wrong cookie {}, expected: {:?}, got: {:?}",
+                        i, &client_hello.cookie, cookie
+                    );
+                }
+                _ => assert!(false, "unexpected handshake message"),
+            },
+            _ => assert!(false, "unexpected content"),
+        };
+
+        if packets.len() <= i {
+            break;
+        }
+        // write hello verify request
+        cb.send(&packets[i]).await?;
+    }
+
+    Ok(())
+}
+*/

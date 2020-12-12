@@ -116,7 +116,7 @@ impl Conn {
         is_client: bool,
         initial_state: Option<State>,
     ) -> Result<Self, Error> {
-        validate_config(&config)?;
+        validate_config(is_client, &config)?;
 
         let local_cipher_suites: Vec<CipherSuiteID> = parse_cipher_suites(
             &config.cipher_suites,
@@ -953,13 +953,13 @@ impl Conn {
                 let mut reader = BufReader::new(out.as_slice());
                 let raw_handshake = match Handshake::unmarshal(&mut reader) {
                     Ok(rh) => {
-                        /*trace!(
+                        trace!(
                             "Recv [handshake:{}] -> {} (epoch: {}, seq: {})",
                             srv_cli_str(ctx.is_client),
                             rh.handshake_header.handshake_type.to_string(),
                             h.epoch,
                             rh.handshake_header.message_sequence
-                        );*/
+                        );
                         rh
                     }
                     Err(err) => {
