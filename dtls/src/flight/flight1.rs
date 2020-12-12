@@ -99,7 +99,7 @@ impl Flight for Flight1 {
                 ));
             }
 
-            state.cookie.extend_from_slice(&h.cookie);
+            state.cookie = h.cookie.clone();
             state.handshake_recv_sequence = seq;
             Ok(Box::new(Flight3 {}))
         } else {

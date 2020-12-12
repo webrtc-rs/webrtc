@@ -2261,8 +2261,6 @@ async fn test_protocol_version_validation() -> Result<(), Error> {
     Ok(())
 }
 
-//TODO: FIX
-/*
 #[tokio::test]
 async fn test_multiple_hello_verify_request() -> Result<(), Error> {
     /*env_logger::Builder::new()
@@ -2355,4 +2353,3 @@ async fn test_multiple_hello_verify_request() -> Result<(), Error> {
 
     Ok(())
 }
-*/
