@@ -7,11 +7,13 @@ use crate::signature_hash_algorithm::SignatureScheme;
 
 use tokio::time::Duration;
 
+use std::sync::Arc;
+
 use util::Error;
 
 // Config is used to configure a DTLS client or server.
 // After a Config is passed to a DTLS function it must not be modified.
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct Config {
     // Certificates contains certificate chain to present to the other side of the connection.
     // Server MUST set this if psk is non-nil
@@ -75,12 +77,14 @@ pub struct Config {
     // RootCAs defines the set of root certificate authorities
     // that one peer uses when verifying the other peer's certificates.
     // If RootCAs is nil, TLS uses the host's root CA set.
-    //TODO: RootCAs *x509.CertPool
+    // Used by Client to verify server's certificate
+    pub(crate) roots_cas: rustls::RootCertStore,
 
-    // ClientCAs defines the set of root certificate authorities
+    // client_cas defines the set of root certificate authorities
     // that servers use if required to verify a client certificate
     // by the policy in client_auth.
-    //TODO: ClientCAs *x509.CertPool
+    // Used by Server to verify client's certificate
+    pub(crate) client_cert_verifier: Arc<dyn rustls::ClientCertVerifier>,
 
     // server_name is used to verify the hostname on the returned
     // certificates unless insecure_skip_verify is given.
@@ -106,6 +110,30 @@ pub struct Config {
     // Packet with sequence number older than this value compared to the latest
     // accepted packet will be discarded. (default is 64)
     pub(crate) replay_protection_window: usize,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            certificates: vec![],
+            cipher_suites: vec![],
+            signature_schemes: vec![],
+            srtp_protection_profiles: vec![],
+            client_auth: ClientAuthType::default(),
+            extended_master_secret: ExtendedMasterSecretType::default(),
+            flight_interval: Duration::default(),
+            psk: None,
+            psk_identity_hint: None,
+            insecure_skip_verify: false,
+            insecure_hashes: false,
+            verify_peer_certificate: None,
+            roots_cas: rustls::RootCertStore::empty(),
+            client_cert_verifier: rustls::NoClientAuth::new(),
+            server_name: String::default(),
+            mtu: 0,
+            replay_protection_window: 0,
+        }
+    }
 }
 
 pub(crate) const DEFAULT_MTU: usize = 1200; // bytes

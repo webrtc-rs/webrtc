@@ -18,6 +18,8 @@ use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
 
 use sha2::{Digest, Sha256};
 
+use std::sync::Arc;
+
 //use log::*;
 
 #[derive(Clone)]
@@ -308,31 +310,50 @@ pub(crate) fn verify_certificate_verify(
     verify_key_signature(&hashed, remote_key_signature, raw_certificates)
 }
 
-pub(crate) fn load_certs(
-    raw_certificates: &[Vec<u8>],
-) -> Result<Vec<x509_parser::X509Certificate<'_>>, Error> {
+pub(crate) fn load_certs(raw_certificates: &[Vec<u8>]) -> Result<Vec<rustls::Certificate>, Error> {
     if raw_certificates.is_empty() {
         return Err(ERR_LENGTH_MISMATCH.clone());
     }
 
     let mut certs = vec![];
     for raw_cert in raw_certificates {
-        let (_, cert) = x509_parser::parse_x509_der(raw_cert)?;
+        let cert = rustls::Certificate(raw_cert.to_vec());
         certs.push(cert);
     }
 
     Ok(certs)
 }
 
-//TODO: split it to verifyClientCert and verifyServerCert
-pub(crate) fn verify_cert(
+pub(crate) fn verify_client_cert(
     raw_certificates: &[Vec<u8>],
-) -> Result<Vec<Vec<x509_parser::X509Certificate<'_>>>, Error> {
-    let certificate = load_certs(raw_certificates)?;
+    cert_verifier: &Arc<dyn rustls::ClientCertVerifier>,
+) -> Result<Vec<rustls::Certificate>, Error> {
+    let chains = load_certs(raw_certificates)?;
 
-    certificate[0].verify_signature(None)?;
+    match cert_verifier.verify_client_cert(&chains, None) {
+        Ok(_) => {}
+        Err(err) => return Err(Error::new(err.to_string())),
+    };
 
-    let chains = vec![certificate];
+    Ok(chains)
+}
+
+pub(crate) fn verify_server_cert(
+    raw_certificates: &[Vec<u8>],
+    cert_verifier: &Arc<dyn rustls::ServerCertVerifier>,
+    roots: &rustls::RootCertStore,
+    server_name: &str,
+) -> Result<Vec<rustls::Certificate>, Error> {
+    let chains = load_certs(raw_certificates)?;
+    let dns_name = match webpki::DNSNameRef::try_from_ascii_str(server_name) {
+        Ok(dns_name) => dns_name,
+        Err(err) => return Err(Error::new(err.to_string())),
+    };
+
+    match cert_verifier.verify_server_cert(roots, &chains, dns_name, &[]) {
+        Ok(_) => {}
+        Err(err) => return Err(Error::new(err.to_string())),
+    };
 
     Ok(chains)
 }

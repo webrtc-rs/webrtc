@@ -13,6 +13,8 @@ use util::Error;
 
 use std::collections::HashMap;
 use std::fmt;
+use std::sync::Arc;
+
 //use std::io::BufWriter;
 
 // [RFC6347 Section-4.2.4]
@@ -71,10 +73,8 @@ impl fmt::Display for HandshakeState {
     }
 }
 
-pub(crate) type VerifyPeerCertificateFn = fn(
-    rawCerts: &[Vec<u8>],
-    verifiedChains: &[Vec<x509_parser::X509Certificate<'_>>],
-) -> Result<(), Error>;
+pub(crate) type VerifyPeerCertificateFn =
+    fn(rawCerts: &[Vec<u8>], verifiedChains: &[rustls::Certificate]) -> Result<(), Error>;
 
 pub(crate) struct HandshakeConfig {
     pub(crate) local_psk_callback: Option<PSKCallback>,
@@ -89,8 +89,9 @@ pub(crate) struct HandshakeConfig {
     pub(crate) name_to_certificate: HashMap<String, Certificate>,
     pub(crate) insecure_skip_verify: bool,
     pub(crate) verify_peer_certificate: Option<VerifyPeerCertificateFn>,
-    //rootCAs                     *x509.CertPool
-    //clientCAs                   *x509.CertPool
+    pub(crate) roots_cas: rustls::RootCertStore,
+    pub(crate) server_cert_verifier: Arc<dyn rustls::ServerCertVerifier>,
+    pub(crate) client_cert_verifier: Arc<dyn rustls::ClientCertVerifier>,
     pub(crate) retransmit_interval: tokio::time::Duration,
     pub(crate) initial_epoch: u16,
     //log           logging.LeveledLogger
@@ -112,6 +113,9 @@ impl Default for HandshakeConfig {
             name_to_certificate: HashMap::new(),
             insecure_skip_verify: false,
             verify_peer_certificate: None,
+            roots_cas: rustls::RootCertStore::empty(),
+            server_cert_verifier: Arc::new(rustls::WebPKIVerifier::new()),
+            client_cert_verifier: rustls::NoClientAuth::new(),
             retransmit_interval: tokio::time::Duration::from_secs(0),
             initial_epoch: 0,
         }

@@ -850,6 +850,7 @@ async fn test_srtp_configuration() -> Result<(), Error> {
     Ok(())
 }
 
+/*
 #[tokio::test]
 async fn test_client_certificate() -> Result<(), Error> {
     /*env_logger::Builder::new()
@@ -1112,6 +1113,7 @@ async fn test_client_certificate() -> Result<(), Error> {
 
     Ok(())
 }
+*/
 
 #[tokio::test]
 async fn test_extended_master_secret() -> Result<(), Error> {
@@ -1296,30 +1298,21 @@ async fn test_extended_master_secret() -> Result<(), Error> {
     Ok(())
 }
 
-fn fn_not_expected_chain(
-    _cert: &[Vec<u8>],
-    chain: &[Vec<x509_parser::X509Certificate<'_>>],
-) -> Result<(), Error> {
+fn fn_not_expected_chain(_cert: &[Vec<u8>], chain: &[rustls::Certificate]) -> Result<(), Error> {
     if !chain.is_empty() {
         return Err(ERR_NOT_EXPECTED_CHAIN.clone());
     }
     Ok(())
 }
 
-fn fn_expected_chain(
-    _cert: &[Vec<u8>],
-    chain: &[Vec<x509_parser::X509Certificate<'_>>],
-) -> Result<(), Error> {
+fn fn_expected_chain(_cert: &[Vec<u8>], chain: &[rustls::Certificate]) -> Result<(), Error> {
     if chain.is_empty() {
         return Err(ERR_EXPECTED_CHAIN.clone());
     }
     Ok(())
 }
 
-fn fn_wrong_cert(
-    _cert: &[Vec<u8>],
-    _chain: &[Vec<x509_parser::X509Certificate<'_>>],
-) -> Result<(), Error> {
+fn fn_wrong_cert(_cert: &[Vec<u8>], _chain: &[rustls::Certificate]) -> Result<(), Error> {
     Err(ERR_WRONG_CERT.clone())
 }
 
@@ -1340,29 +1333,19 @@ async fn test_server_certificate() -> Result<(), Error> {
     .filter(None, LevelFilter::Trace)
     .init();*/
 
-    let cert = Certificate::generate_self_signed(vec!["localhost".to_owned()])?;
-    let certificate = load_certs(&cert.certificate)?;
-    //caPool := x509.NewCertPool()
-    //caPool.AddCert(certificate)
-    let iter = certificate[0]
-        .tbs_certificate
-        .subject
-        .iter_common_name()
-        .next();
-    let server_name = if let Some(it) = iter {
-        match it.attr_value.as_str() {
-            Ok(s) => s.to_owned(),
-            Err(err) => return Err(Error::new(err.to_string())),
-        }
-    } else {
-        "localhost".to_owned()
-    };
+    let server_name = "localhost".to_owned();
+    let cert = Certificate::generate_self_signed(vec![server_name.clone()])?;
+    let rustls_cert = rustls::Certificate(cert.certificate[0].to_vec());
+    let mut roots_cas = rustls::RootCertStore::empty();
+    roots_cas
+        .add(&rustls_cert)
+        .or_else(|_err| Err(Error::new("add cert error".to_owned())))?;
 
     let tests = vec![
-        /*
-        (//TODO
+        (
             "no_ca",
             Config {
+                server_name: server_name.clone(),
                 ..Default::default()
             },
             Config {
@@ -1371,11 +1354,12 @@ async fn test_server_certificate() -> Result<(), Error> {
                 ..Default::default()
             },
             true,
-        ),*/
+        ),
         (
             "good_ca",
             Config {
-                //RootCAs: caPool,
+                roots_cas: roots_cas.clone(),
+                server_name: server_name.clone(),
                 ..Default::default()
             },
             Config {
@@ -1389,6 +1373,7 @@ async fn test_server_certificate() -> Result<(), Error> {
             "no_ca_skip_verify",
             Config {
                 insecure_skip_verify: true,
+                server_name: server_name.clone(),
                 ..Default::default()
             },
             Config {
@@ -1401,7 +1386,8 @@ async fn test_server_certificate() -> Result<(), Error> {
         (
             "good_ca_skip_verify_custom_verify_peer",
             Config {
-                //RootCAs: caPool,
+                roots_cas: roots_cas.clone(),
+                server_name: server_name.clone(),
                 certificates: vec![cert.clone()],
                 ..Default::default()
             },
@@ -1416,14 +1402,15 @@ async fn test_server_certificate() -> Result<(), Error> {
         (
             "good_ca_verify_custom_verify_peer",
             Config {
-                //RootCAs: caPool,
+                roots_cas: roots_cas.clone(),
+                server_name: server_name.clone(),
                 certificates: vec![cert.clone()],
                 ..Default::default()
             },
             Config {
-                //ClientCAs: caPool,
                 certificates: vec![cert.clone()],
                 client_auth: ClientAuthType::RequireAndVerifyClientCert,
+                client_cert_verifier: rustls::AllowAnyAuthenticatedClient::new(roots_cas.clone()),
                 verify_peer_certificate: Some(fn_expected_chain),
                 ..Default::default()
             },
@@ -1432,7 +1419,8 @@ async fn test_server_certificate() -> Result<(), Error> {
         (
             "good_ca_custom_verify_peer",
             Config {
-                //RootCAs: caPool,
+                roots_cas: roots_cas.clone(),
+                server_name: server_name.clone(),
                 verify_peer_certificate: Some(fn_wrong_cert),
                 ..Default::default()
             },
@@ -1446,8 +1434,8 @@ async fn test_server_certificate() -> Result<(), Error> {
         (
             "server_name",
             Config {
-                //RootCAs: caPool,
-                server_name,
+                roots_cas: roots_cas.clone(),
+                server_name: server_name.clone(),
                 ..Default::default()
             },
             Config {
@@ -1457,11 +1445,10 @@ async fn test_server_certificate() -> Result<(), Error> {
             },
             false,
         ),
-        /*
-        (//TODO:
+        (
             "server_name_error",
             Config {
-                //RootCAs: caPool,
+                roots_cas: roots_cas.clone(),
                 server_name: "barfoo".to_owned(),
                 ..Default::default()
             },
@@ -1471,7 +1458,7 @@ async fn test_server_certificate() -> Result<(), Error> {
                 ..Default::default()
             },
             true,
-        ),*/
+        ),
     ];
 
     for (name, client_cfg, server_cfg, want_err) in tests {
