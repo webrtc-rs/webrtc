@@ -16,9 +16,9 @@ use util::Error;
 use ring::rand::SystemRandom;
 use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
 
-use rsa::PublicKey;
 use sha2::{Digest, Sha256};
-use signature::{Signature, Verifier};
+
+//use log::*;
 
 #[derive(Clone)]
 pub struct Certificate {
@@ -29,6 +29,44 @@ pub struct Certificate {
 impl Certificate {
     pub fn generate_self_signed(subject_alt_names: impl Into<Vec<String>>) -> Result<Self, Error> {
         let cert = rcgen::generate_simple_self_signed(subject_alt_names)?;
+        let certificate = cert.serialize_der()?;
+        let key_pair = cert.get_key_pair();
+        let serialized_der = key_pair.serialize_der();
+        let private_key = if key_pair.is_compatible(&rcgen::PKCS_ED25519) {
+            CryptoPrivateKey {
+                kind: CryptoPrivateKeyKind::ED25519(Ed25519KeyPair::from_pkcs8(&serialized_der)?),
+                serialized_der,
+            }
+        } else if key_pair.is_compatible(&rcgen::PKCS_ECDSA_P256_SHA256) {
+            CryptoPrivateKey {
+                kind: CryptoPrivateKeyKind::ECDSA256(EcdsaKeyPair::from_pkcs8(
+                    &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
+                    &serialized_der,
+                )?),
+                serialized_der,
+            }
+        } else if key_pair.is_compatible(&rcgen::PKCS_RSA_SHA256) {
+            CryptoPrivateKey {
+                kind: CryptoPrivateKeyKind::RSA256(RsaKeyPair::from_pkcs8(&serialized_der)?),
+                serialized_der,
+            }
+        } else {
+            return Err(Error::new("Unsupported key_pair".to_owned()));
+        };
+
+        Ok(Certificate {
+            certificate,
+            private_key,
+        })
+    }
+
+    pub fn generate_self_signed_with_alg(
+        subject_alt_names: impl Into<Vec<String>>,
+        alg: &'static rcgen::SignatureAlgorithm,
+    ) -> Result<Self, Error> {
+        let mut params = rcgen::CertificateParams::new(subject_alt_names);
+        params.alg = alg;
+        let cert = rcgen::Certificate::from_params(params)?;
         let certificate = cert.serialize_der()?;
         let key_pair = cert.get_key_pair();
         let serialized_der = key_pair.serialize_der();
@@ -163,8 +201,8 @@ pub const OID_ECDSA: Oid<'static> = oid!(1.2.840 .10045 .2 .1);
 
 pub(crate) fn verify_key_signature(
     message: &[u8],
-    remote_key_signature: &[u8],
     /*_hash_algorithm: HashAlgorithm,*/
+    remote_key_signature: &[u8],
     raw_certificates: &[u8],
 ) -> Result<(), Error> {
     if raw_certificates.is_empty() {
@@ -174,52 +212,44 @@ pub(crate) fn verify_key_signature(
     let (_, certificate) = x509_parser::parse_x509_der(raw_certificates)?;
 
     let pki_alg = &certificate.tbs_certificate.subject_pki.algorithm.algorithm;
-    if *pki_alg == OID_ED25519 {
-        let public_key = ed25519_dalek::PublicKey::from_bytes(
-            certificate
-                .tbs_certificate
-                .subject_pki
-                .subject_public_key
-                .data,
-        )?;
-        let signature = ed25519_dalek::Signature::from_bytes(remote_key_signature)?;
-        public_key.verify(message, &signature)?;
-    } else if *pki_alg == OID_ECDSA {
-        let public_key = p256::ecdsa::VerifyKey::new(
-            certificate
-                .tbs_certificate
-                .subject_pki
-                .subject_public_key
-                .data,
-        )?;
-        let signature = p256::ecdsa::Signature::from_asn1(remote_key_signature)?;
-        public_key.verify(message, &signature)?;
-    } else if *pki_alg == x509_parser::objects::OID_RSA_ENCRYPTION {
-        let sign_alg = &certificate.tbs_certificate.signature.algorithm;
+    let sign_alg = &certificate.tbs_certificate.signature.algorithm;
 
-        //*sign_alg ==  x509_parser::objects::OID_RSA_SHA1 ||
-        //*sign_alg ==  x509_parser::objects::OID_RSA_SHA384 ||
-        //*sign_alg ==  x509_parser::objects::OID_RSA_SHA512 ||
-        if *sign_alg == x509_parser::objects::OID_RSA_SHA256 {
-            let public_key = rsa::RSAPublicKey::from_pkcs1(
-                certificate
-                    .tbs_certificate
-                    .subject_pki
-                    .subject_public_key
-                    .data,
-            )?;
-            let padding =
-                rsa::padding::PaddingScheme::new_pkcs1v15_sign(Some(rsa::hash::Hash::SHA2_256));
-            let mut hasher = Sha256::new();
-            hasher.update(message);
-            let hashed = hasher.finalize();
-            public_key.verify(padding, hashed.as_slice(), remote_key_signature)?;
+    let verify_alg: &dyn ring::signature::VerificationAlgorithm = if *pki_alg == OID_ED25519 {
+        &ring::signature::ED25519
+    } else if *pki_alg == OID_ECDSA {
+        if *sign_alg == x509_parser::objects::OID_ECDSA_SHA256 {
+            &ring::signature::ECDSA_P256_SHA256_ASN1
+        } else if *sign_alg == x509_parser::objects::OID_ECDSA_SHA384 {
+            &ring::signature::ECDSA_P384_SHA384_ASN1
+        } else {
+            return Err(ERR_KEY_SIGNATURE_VERIFY_UNIMPLEMENTED.clone());
+        }
+    } else if *pki_alg == x509_parser::objects::OID_RSA_ENCRYPTION {
+        if *sign_alg == x509_parser::objects::OID_RSA_SHA1 {
+            &ring::signature::RSA_PKCS1_1024_8192_SHA1_FOR_LEGACY_USE_ONLY
+        } else if *sign_alg == x509_parser::objects::OID_RSA_SHA256 {
+            &ring::signature::RSA_PKCS1_2048_8192_SHA256
+        } else if *sign_alg == x509_parser::objects::OID_RSA_SHA384 {
+            &ring::signature::RSA_PKCS1_2048_8192_SHA384
+        } else if *sign_alg == x509_parser::objects::OID_RSA_SHA512 {
+            &ring::signature::RSA_PKCS1_2048_8192_SHA512
         } else {
             return Err(ERR_KEY_SIGNATURE_VERIFY_UNIMPLEMENTED.clone());
         }
     } else {
         return Err(ERR_KEY_SIGNATURE_VERIFY_UNIMPLEMENTED.clone());
-    }
+    };
+
+    let public_key = ring::signature::UnparsedPublicKey::new(
+        verify_alg,
+        certificate
+            .tbs_certificate
+            .subject_pki
+            .subject_public_key
+            .data,
+    );
+
+    public_key.verify(&message, remote_key_signature)?;
 
     Ok(())
 }
@@ -271,61 +301,11 @@ pub(crate) fn verify_certificate_verify(
     remote_key_signature: &[u8],
     raw_certificates: &[u8],
 ) -> Result<(), Error> {
-    if raw_certificates.is_empty() {
-        return Err(ERR_LENGTH_MISMATCH.clone());
-    }
+    let mut h = Sha256::new();
+    h.update(handshake_bodies);
+    let hashed = h.finalize();
 
-    let (_, certificate) = x509_parser::parse_x509_der(raw_certificates)?;
-
-    let pki_alg = &certificate.tbs_certificate.subject_pki.algorithm.algorithm;
-    if *pki_alg == OID_ED25519 {
-        let public_key = ed25519_dalek::PublicKey::from_bytes(
-            certificate
-                .tbs_certificate
-                .subject_pki
-                .subject_public_key
-                .data,
-        )?;
-        let signature = ed25519_dalek::Signature::from_bytes(remote_key_signature)?;
-        public_key.verify(handshake_bodies, &signature)?;
-    } else if *pki_alg == OID_ECDSA {
-        let public_key = p256::ecdsa::VerifyKey::new(
-            certificate
-                .tbs_certificate
-                .subject_pki
-                .subject_public_key
-                .data,
-        )?;
-        let signature = p256::ecdsa::Signature::from_asn1(remote_key_signature)?;
-        public_key.verify(handshake_bodies, &signature)?;
-    } else if *pki_alg == x509_parser::objects::OID_RSA_ENCRYPTION {
-        let sign_alg = &certificate.tbs_certificate.signature.algorithm;
-
-        //*sign_alg ==  x509_parser::objects::OID_RSA_SHA1 ||
-        //*sign_alg ==  x509_parser::objects::OID_RSA_SHA384 ||
-        //*sign_alg ==  x509_parser::objects::OID_RSA_SHA512 ||
-        if *sign_alg == x509_parser::objects::OID_RSA_SHA256 {
-            let public_key = rsa::RSAPublicKey::from_pkcs1(
-                certificate
-                    .tbs_certificate
-                    .subject_pki
-                    .subject_public_key
-                    .data,
-            )?;
-            let padding =
-                rsa::padding::PaddingScheme::new_pkcs1v15_sign(Some(rsa::hash::Hash::SHA2_256));
-            let mut hasher = Sha256::new();
-            hasher.update(handshake_bodies);
-            let hashed = hasher.finalize();
-            public_key.verify(padding, hashed.as_slice(), remote_key_signature)?;
-        } else {
-            return Err(ERR_KEY_SIGNATURE_VERIFY_UNIMPLEMENTED.clone());
-        }
-    } else {
-        return Err(ERR_KEY_SIGNATURE_VERIFY_UNIMPLEMENTED.clone());
-    }
-
-    Ok(())
+    verify_key_signature(&hashed, remote_key_signature, raw_certificates)
 }
 
 pub(crate) fn load_certs(

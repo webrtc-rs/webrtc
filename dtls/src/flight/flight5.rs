@@ -21,6 +21,8 @@ use util::Error;
 use crate::change_cipher_spec::ChangeCipherSpec;
 use std::io::{BufReader, BufWriter};
 
+use log::*;
+
 use async_trait::async_trait;
 
 pub(crate) struct Flight5;
@@ -423,6 +425,14 @@ impl Flight for Flight5 {
                 }
             };
 
+            trace!(
+                "{} generate_certificate_verify {}, {:?}, cert: {}, {:?}",
+                srv_cli_str(state.is_client),
+                plain_text.len(),
+                &plain_text[..10],
+                &certificate.as_ref().unwrap().certificate.len(),
+                &certificate.as_ref().unwrap().certificate[..10],
+            );
             let cert_verify = match generate_certificate_verify(
                 &plain_text,
                 &certificate.as_ref().unwrap().private_key, /*, signature_hash_algo.hash*/

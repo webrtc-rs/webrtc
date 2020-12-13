@@ -120,7 +120,7 @@ impl From<block_modes::BlockModeError> for Error {
     }
 }
 
-impl From<rsa::errors::Error> for Error {
+/*impl From<rsa::errors::Error> for Error {
     fn from(error: rsa::errors::Error) -> Self {
         Error {
             message: error.to_string(),
@@ -134,7 +134,7 @@ impl From<signature::Error> for Error {
             message: error.to_string(),
         }
     }
-}
+}*/
 
 impl From<der_parser::nom::Err<x509_parser::error::X509Error>> for Error {
     fn from(error: der_parser::nom::Err<x509_parser::error::X509Error>) -> Self {

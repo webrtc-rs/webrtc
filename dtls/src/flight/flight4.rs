@@ -29,6 +29,8 @@ use util::Error;
 
 use std::io::BufWriter;
 
+use log::*;
+
 use async_trait::async_trait;
 
 pub(crate) struct Flight4;
@@ -212,6 +214,14 @@ impl Flight for Flight4 {
                 ));
             }
 
+            trace!(
+                "{} verify_certificate_verify {}, {:?}, cert: {}, {:?}",
+                srv_cli_str(state.is_client),
+                plain_text.len(),
+                &plain_text[..10],
+                state.peer_certificates[0].len(),
+                &state.peer_certificates[0][..10],
+            );
             if let Err(err) = verify_certificate_verify(
                 &plain_text,
                 /*h.hash_algorithm,*/ &h.signature,
@@ -225,6 +235,10 @@ impl Flight for Flight4 {
                     Some(err),
                 ));
             }
+            trace!(
+                "{} verify_certificate_verify...done",
+                srv_cli_str(state.is_client)
+            );
 
             let mut chains = vec![];
             let mut verified = false;

@@ -850,8 +850,6 @@ async fn test_srtp_configuration() -> Result<(), Error> {
     Ok(())
 }
 
-//TODO
-/*
 #[tokio::test]
 async fn test_client_certificate() -> Result<(), Error> {
     /*env_logger::Builder::new()
@@ -950,7 +948,8 @@ async fn test_client_certificate() -> Result<(), Error> {
             },
             false,
         ),
-        (
+        /*
+        (//TODO
             "RequireAnyClientCert_error",
             Config {
                 //RootCAs: srvCAPool,
@@ -963,7 +962,7 @@ async fn test_client_certificate() -> Result<(), Error> {
             },
             true,
         ),
-        (
+        (//TODO
             "VerifyClientCertIfGiven_no_cert",
             Config {
                 //RootCAs: srvCAPool,
@@ -976,7 +975,7 @@ async fn test_client_certificate() -> Result<(), Error> {
                 ..Default::default()
             },
             false,
-        ),
+        ),*/
         (
             "VerifyClientCertIfGiven_cert",
             Config {
@@ -991,21 +990,21 @@ async fn test_client_certificate() -> Result<(), Error> {
                 ..Default::default()
             },
             false,
-        ),
-        (
-            "VerifyClientCertIfGiven_error",
-            Config {
-                //RootCAs: srvCAPool,
-                certificates: vec![cert.clone()],
-                ..Default::default()
-            },
-            Config {
-                certificates: vec![srv_cert.clone()],
-                client_auth: ClientAuthType::VerifyClientCertIfGiven,
-                ..Default::default()
-            },
-            true,
-        ),
+        ), /*
+           (//TODO
+               "VerifyClientCertIfGiven_error",
+               Config {
+                   //RootCAs: srvCAPool,
+                   certificates: vec![cert.clone()],
+                   ..Default::default()
+               },
+               Config {
+                   certificates: vec![srv_cert.clone()],
+                   client_auth: ClientAuthType::VerifyClientCertIfGiven,
+                   ..Default::default()
+               },
+               true,
+           ),*/
         (
             "RequireAndVerifyClientCert",
             Config {
@@ -1112,7 +1111,7 @@ async fn test_client_certificate() -> Result<(), Error> {
     }
 
     Ok(())
-}*/
+}
 
 #[tokio::test]
 async fn test_extended_master_secret() -> Result<(), Error> {
@@ -1321,8 +1320,6 @@ fn fn_wrong_cert(_cert: &[u8], _chain: &[x509_parser::X509Certificate<'_>]) -> R
     Err(ERR_WRONG_CERT.clone())
 }
 
-//TODO
-/*
 #[tokio::test]
 async fn test_server_certificate() -> Result<(), Error> {
     /*env_logger::Builder::new()
@@ -1359,7 +1356,8 @@ async fn test_server_certificate() -> Result<(), Error> {
     };
 
     let tests = vec![
-        (
+        /*
+        (//TODO
             "no_ca",
             Config {
                 ..Default::default()
@@ -1370,7 +1368,7 @@ async fn test_server_certificate() -> Result<(), Error> {
                 ..Default::default()
             },
             true,
-        ),
+        ),*/
         (
             "good_ca",
             Config {
@@ -1456,7 +1454,8 @@ async fn test_server_certificate() -> Result<(), Error> {
             },
             false,
         ),
-        (
+        /*
+        (//TODO:
             "server_name_error",
             Config {
                 //RootCAs: caPool,
@@ -1469,7 +1468,7 @@ async fn test_server_certificate() -> Result<(), Error> {
                 ..Default::default()
             },
             true,
-        ),
+        ),*/
     ];
 
     for (name, client_cfg, server_cfg, want_err) in tests {
@@ -1498,7 +1497,7 @@ async fn test_server_certificate() -> Result<(), Error> {
         let _ = res_rx.recv().await;
     }
     Ok(())
-}*/
+}
 
 #[tokio::test]
 async fn test_cipher_suite_configuration() -> Result<(), Error> {
@@ -2311,7 +2310,6 @@ async fn test_multiple_hello_verify_request() -> Result<(), Error> {
 
     let (ca, cb) = pipe().await?;
 
-    //TODO: add cancel channel to Conn
     tokio::spawn(async move {
         let conf = Config::default();
         let _ = tokio::time::timeout(
