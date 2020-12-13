@@ -216,11 +216,11 @@ impl Flight for Flight5 {
                     0,
                     Content::Handshake(Handshake::new(HandshakeMessage::Certificate(
                         HandshakeMessageCertificate {
-                            certificate: vec![if let Some(cert) = &certificate {
-                                cert.certificate.clone()
+                            certificate: if let Some(cert) = &certificate {
+                                vec![cert.certificate.clone()]
                             } else {
                                 vec![]
-                            }],
+                            },
                         },
                     ))),
                 ),

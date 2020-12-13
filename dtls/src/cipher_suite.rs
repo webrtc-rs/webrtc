@@ -145,7 +145,6 @@ pub trait CipherSuite {
 // function.
 pub fn cipher_suite_for_id(id: CipherSuiteID) -> Result<Box<dyn CipherSuite + Send + Sync>, Error> {
     match id {
-        //TODO: complete all cipher suites
         CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM => {
             Ok(Box::new(new_cipher_suite_tls_ecdhe_ecdsa_with_aes_128_ccm()))
         }

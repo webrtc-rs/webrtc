@@ -118,10 +118,7 @@ impl Default for HandshakeConfig {
 
 impl HandshakeConfig {
     pub(crate) fn get_certificate(&self, server_name: &str) -> Result<Certificate, Error> {
-        //TODO: add mutex
-        //c.mu.Lock()
-        //defer c.mu.Unlock()
-
+        //TODO
         /*if self.name_to_certificate.is_empty() {
             let mut name_to_certificate = HashMap::new();
             for cert in &self.local_certificates {

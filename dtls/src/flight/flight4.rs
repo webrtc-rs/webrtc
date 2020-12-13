@@ -117,6 +117,10 @@ impl Flight for Flight4 {
             };
 
             state.peer_certificates = h.certificate.clone();
+            trace!(
+                "[handshake] PeerCertificates4 {}",
+                state.peer_certificates.len()
+            );
         }
 
         if let Some(message) = msgs.get(&HandshakeType::CertificateVerify) {
@@ -214,14 +218,6 @@ impl Flight for Flight4 {
                 ));
             }
 
-            trace!(
-                "{} verify_certificate_verify {}, {:?}, cert: {}, {:?}",
-                srv_cli_str(state.is_client),
-                plain_text.len(),
-                &plain_text[..10],
-                state.peer_certificates[0].len(),
-                &state.peer_certificates[0][..10],
-            );
             if let Err(err) = verify_certificate_verify(
                 &plain_text,
                 /*h.hash_algorithm,*/ &h.signature,
@@ -235,10 +231,6 @@ impl Flight for Flight4 {
                     Some(err),
                 ));
             }
-            trace!(
-                "{} verify_certificate_verify...done",
-                srv_cli_str(state.is_client)
-            );
 
             let mut chains = vec![];
             let mut verified = false;
@@ -449,6 +441,11 @@ impl Flight for Flight4 {
 
         match cfg.client_auth {
             ClientAuthType::RequireAnyClientCert => {
+                trace!(
+                    "{} peer_certificates.len() {}",
+                    srv_cli_str(state.is_client),
+                    state.peer_certificates.len(),
+                );
                 if state.peer_certificates.is_empty() {
                     return Err((
                         Some(Alert {

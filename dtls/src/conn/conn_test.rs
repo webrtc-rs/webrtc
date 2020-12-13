@@ -948,8 +948,7 @@ async fn test_client_certificate() -> Result<(), Error> {
             },
             false,
         ),
-        /*
-        (//TODO
+        (
             "RequireAnyClientCert_error",
             Config {
                 //RootCAs: srvCAPool,
@@ -962,7 +961,7 @@ async fn test_client_certificate() -> Result<(), Error> {
             },
             true,
         ),
-        (//TODO
+        (
             "VerifyClientCertIfGiven_no_cert",
             Config {
                 //RootCAs: srvCAPool,
@@ -975,7 +974,7 @@ async fn test_client_certificate() -> Result<(), Error> {
                 ..Default::default()
             },
             false,
-        ),*/
+        ),
         (
             "VerifyClientCertIfGiven_cert",
             Config {
@@ -990,21 +989,22 @@ async fn test_client_certificate() -> Result<(), Error> {
                 ..Default::default()
             },
             false,
-        ), /*
-           (//TODO
-               "VerifyClientCertIfGiven_error",
-               Config {
-                   //RootCAs: srvCAPool,
-                   certificates: vec![cert.clone()],
-                   ..Default::default()
-               },
-               Config {
-                   certificates: vec![srv_cert.clone()],
-                   client_auth: ClientAuthType::VerifyClientCertIfGiven,
-                   ..Default::default()
-               },
-               true,
-           ),*/
+        ),
+        /*(
+            //TODO
+            "VerifyClientCertIfGiven_error",
+            Config {
+                //RootCAs: srvCAPool,
+                certificates: vec![cert.clone()],
+                ..Default::default()
+            },
+            Config {
+                certificates: vec![srv_cert.clone()],
+                client_auth: ClientAuthType::VerifyClientCertIfGiven,
+                ..Default::default()
+            },
+            true,
+        ),*/
         (
             "RequireAndVerifyClientCert",
             Config {

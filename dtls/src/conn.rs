@@ -1016,7 +1016,7 @@ impl Conn {
                     false,
                     Some(a),
                     Some(Error::new(format!("Error of Alert {}", a.to_string()))),
-                ); //TODO: &errAlert { content });
+                );
             }
             Content::ChangeCipherSpec(_) => {
                 let invalid_cipher_suite = {
