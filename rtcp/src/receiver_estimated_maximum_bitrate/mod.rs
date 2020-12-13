@@ -80,7 +80,7 @@ impl Packet for ReceiverEstimatedMaximumBitrate {
     }
 
     /// Unmarshal reads a REMB packet from the given byte slice.
-    fn unmarshal(&self, buf: &mut BytesMut) -> Result<(), Error> {
+    fn unmarshal(&mut self, buf: &mut BytesMut) -> Result<(), Error> {
         /*
             0                   1                   2                   3
             0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -273,10 +273,10 @@ impl ReceiverEstimatedMaximumBitrate {
 
         // Calculate the total shift based on the leading number of zeroes.
         // This will be negative if there is no shift required.
-        let mut shift = 64 - self.bitrate.leading_zeros();
+        let shift = 64 - self.bitrate.leading_zeros();
 
-        let mantissa = 0usize;
-        let exp = 0usize;
+        let mut mantissa = 0usize;
+        let mut exp = 0usize;
 
         if shift <= 18 {
             // Fit everything in the mantissa because we can.
@@ -296,7 +296,7 @@ impl ReceiverEstimatedMaximumBitrate {
 
         // Write the SSRCs at the very end.
         let mut n = 20;
-        for ssrc in self.ssrcs {
+        for ssrc in self.ssrcs.clone() {
             BigEndian::write_u32(&mut buf[n..n + 4], ssrc);
             n += 4
         }

@@ -21,7 +21,7 @@ pub trait Packet {
     fn destination_ssrc(&self) -> Vec<u32>;
 
     fn marshal(&self) -> Result<BytesMut, Error>;
-    fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error>;
+    fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error>;
 }
 
 pub fn unmarshal(raw_data: &mut BytesMut) -> Result<Vec<Box<dyn Packet>>, Error> {
@@ -70,7 +70,7 @@ pub(crate) fn unmarshaller(mut raw_data: &mut BytesMut) -> Result<(Box<dyn Packe
 
     let mut in_packet = raw_data[..bytes_processed].into();
 
-    let packet: Box<dyn Packet> = match h.packet_type {
+    let mut packet: Box<dyn Packet> = match h.packet_type {
         PacketType::SenderReport => Box::new(sender_report::SenderReport::default()),
 
         PacketType::ReceiverReport => Box::new(receiver_report::ReceiverReport::default()),

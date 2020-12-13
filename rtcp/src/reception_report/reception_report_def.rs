@@ -63,7 +63,7 @@ impl ReceptionReport {
 
         let mut raw_packet = vec![0u8; super::RECEPTION_REPORT_LENGTH];
 
-        BigEndian::write_u32(&mut raw_packet.as_slice(), self.ssrc);
+        BigEndian::write_u32(&mut raw_packet, self.ssrc);
 
         raw_packet[super::FRACTION_LOST_OFFSET as usize] = self.fraction_lost;
 
@@ -72,7 +72,7 @@ impl ReceptionReport {
             return Err(Error::new("invalid total lost count".to_string()));
         }
 
-        let mut tl_bytes = &raw_packet[super::TOTAL_LOST_OFFSET..];
+        let tl_bytes = &mut raw_packet[super::TOTAL_LOST_OFFSET..];
         tl_bytes[0] = (self.total_lost >> 16) as u8;
         tl_bytes[1] = (self.total_lost >> 8) as u8;
         tl_bytes[2] = (self.total_lost) as u8;
@@ -95,7 +95,7 @@ impl ReceptionReport {
     }
 
     // Unmarshal decodes the ReceptionReport from binary
-    pub fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
+    pub fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         if raw_packet.len() < super::RECEPTION_REPORT_LENGTH {
             return Err(Error::new("packet too short".to_string()));
         }
@@ -121,7 +121,7 @@ impl ReceptionReport {
         self.ssrc = BigEndian::read_u32(raw_packet);
         self.fraction_lost = raw_packet[super::FRACTION_LOST_OFFSET];
 
-        let mut tl_bytes = &raw_packet[super::TOTAL_LOST_OFFSET..];
+        let tl_bytes = &mut raw_packet[super::TOTAL_LOST_OFFSET..];
         self.total_lost =
             (tl_bytes[2] as u32) | (tl_bytes[1] << 8) as u32 | (tl_bytes[0] << 16) as u32;
 

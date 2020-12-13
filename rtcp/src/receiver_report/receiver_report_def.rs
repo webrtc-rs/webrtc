@@ -1,7 +1,6 @@
-use std::io::Write;
 use std::{fmt, vec};
 
-use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
+use byteorder::{BigEndian, ByteOrder};
 
 use bytes::BytesMut;
 use util::Error;
@@ -50,7 +49,7 @@ impl Packet for ReceiverReport {
     }
 
     // Unmarshal decodes the ReceiverReport from binary
-    fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
+    fn unmarshal(&mut self, mut raw_packet: &mut BytesMut) -> Result<(), Error> {
         /*
          *         0                   1                   2                   3
          *         0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -150,7 +149,7 @@ impl Packet for ReceiverReport {
          */
 
         let mut raw_packet = vec![0u8; self.len()];
-        let mut packet_body = &raw_packet[header::HEADER_LENGTH..];
+        let mut packet_body = &mut raw_packet[header::HEADER_LENGTH..];
 
         BigEndian::write_u32(&mut packet_body, self.ssrc);
 

@@ -1,24 +1,20 @@
 use std::fmt;
-use std::io::{Read, Write};
 
 use bytes::BytesMut;
 use util::Error;
 
-use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
+use byteorder::{BigEndian, ByteOrder};
 
 use super::errors::*;
 use super::header::{Header, PacketType};
 use crate::{header, packet::Packet, util::get_padding};
 
-#[cfg(test)]
-mod goodbye_test;
-
-// The Goodbye packet indicates that one or more sources are no longer active.
+/// The Goodbye packet indicates that one or more sources are no longer active.
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct Goodbye {
-    // The SSRC/CSRC identifiers that are no longer active
+    /// The SSRC/CSRC identifiers that are no longer active
     pub sources: Vec<u32>,
-    // Optional text indicating the reason for leaving, e.g., "camera malfunction" or "RTP loop detected"
+    /// Optional text indicating the reason for leaving, e.g., "camera malfunction" or "RTP loop detected"
     pub reason: String,
 }
 
@@ -35,7 +31,7 @@ impl fmt::Display for Goodbye {
 }
 
 impl Packet for Goodbye {
-    fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
+    fn unmarshal(&mut self, mut raw_packet: &mut BytesMut) -> Result<(), Error> {
         /*
          *        0                   1                   2                   3
          *        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -50,7 +46,7 @@ impl Packet for Goodbye {
          *       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
 
-        let header = Header::default();
+        let mut header = Header::default();
         header.unmarshal(&mut raw_packet)?;
 
         if header.packet_type != PacketType::Goodbye {
@@ -88,7 +84,8 @@ impl Packet for Goodbye {
                 match String::from_utf8(raw_packet[reason_offset + 1..reason_end].to_vec()) {
                     Ok(e) => e,
 
-                    Err(e) => {
+                    // ToDo: @metaclips: add proper error handling also returning the utf8error.
+                    Err(_) => {
                         return Err(Error::new("error converting byte to string".to_string()));
                     }
                 };
@@ -127,7 +124,7 @@ impl Packet for Goodbye {
         }
 
         let mut raw_packet = vec![0u8; self.len()];
-        let mut packet_body = &raw_packet[header::HEADER_LENGTH..];
+        let packet_body = &mut raw_packet[header::HEADER_LENGTH..];
 
         if self.sources.len() > header::COUNT_MAX {
             return Err(Error::new("too many sources".to_string()));
@@ -162,7 +159,7 @@ impl Packet for Goodbye {
 }
 
 impl Goodbye {
-    // Header returns the Header associated with this packet.
+    /// Header returns the Header associated with this packet.
     pub fn header(&self) -> Header {
         Header {
             padding: false,

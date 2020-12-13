@@ -80,7 +80,7 @@ impl Packet for TransportLayerNack {
     }
 
     /// Unmarshal decodes the ReceptionReport from binary
-    fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
+    fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         todo!()
     }
 

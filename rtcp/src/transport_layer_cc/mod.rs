@@ -80,7 +80,7 @@ impl From<u16> for TypeTCCPacket {
 /// RunLengthChunk and StatusVectorChunk
 pub trait PacketStatusChunk {
     fn marshal(&self) -> Result<BytesMut, Error>;
-    fn unmarshal(&self, rawPacket: &mut BytesMut) -> Result<(), Error>;
+    fn unmarshal(&mut self, rawPacket: &mut BytesMut) -> Result<(), Error>;
 }
 
 /// RunLengthChunk T=TypeTCCRunLengthChunk
@@ -105,7 +105,7 @@ struct RunLengthChunk {
 impl PacketStatusChunk for RunLengthChunk {
     // Marshal ..
     fn marshal(&self) -> Result<BytesMut, Error> {
-        let chunks = vec![0u8; 2];
+        let mut chunks = vec![0u8; 2];
 
         // append 1 bit '0'
         let mut dst = utility::set_nbits_of_uint16(0, 1, 0, 0)?;
@@ -122,7 +122,7 @@ impl PacketStatusChunk for RunLengthChunk {
     }
 
     // Unmarshal ..
-    fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
+    fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         if raw_packet.len() != PACKET_STATUS_CHUNK_LENGTH as usize {
             return Err(Error::new(
                 "packet status chunk must be 2 bytes".to_string(),
@@ -169,7 +169,7 @@ struct StatusVectorChunk {
 impl PacketStatusChunk for StatusVectorChunk {
     // Marshal ..
     fn marshal(&self) -> Result<BytesMut, Error> {
-        let chunk = vec![0u8; 2];
+        let mut chunk = vec![0u8; 2];
 
         // set first bit '1'
         let mut dst = utility::set_nbits_of_uint16(0, 1, 0, 1)?;
@@ -192,7 +192,7 @@ impl PacketStatusChunk for StatusVectorChunk {
     }
 
     // Unmarshal ..
-    fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
+    fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         todo!()
     }
 }
@@ -354,7 +354,7 @@ impl Packet for TransportLayerCC {
         self
     }
 
-    fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
+    fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         todo!()
     }
 

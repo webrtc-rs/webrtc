@@ -260,7 +260,7 @@ impl Packet for SourceDescription {
     }
 
     // Unmarshal decodes the SourceDescription from binary
-    fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
+    fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         /*
          *         0                   1                   2                   3
          *         0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1

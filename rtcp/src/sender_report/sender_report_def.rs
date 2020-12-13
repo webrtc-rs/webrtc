@@ -50,7 +50,7 @@ impl Packet for SenderReport {
     }
 
     // Unmarshal decodes the ReceptionReport from binary
-    fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
+    fn unmarshal(&mut self, mut raw_packet: &mut BytesMut) -> Result<(), Error> {
         /*
          *         0                   1                   2                   3
          *         0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -111,20 +111,20 @@ impl Packet for SenderReport {
 
         let mut offset = super::SR_REPORT_OFFSET;
 
-        for i in 0..header.count {
+        for _ in 0..header.count {
             let rr_end = offset + crate::reception_report::RECEPTION_REPORT_LENGTH;
 
             if rr_end > packet_body.len() {
                 return Err(Error::new("packet too short".to_string()));
             }
 
-            let mut rr_body = &packet_body
+            let mut rr_body = packet_body
                 [offset..offset + crate::reception_report::RECEPTION_REPORT_LENGTH]
                 .into();
 
             offset = rr_end;
 
-            let reception_report = ReceptionReport::default();
+            let mut reception_report = ReceptionReport::default();
 
             reception_report.unmarshal(&mut rr_body)?;
             self.reports.push(reception_report);
@@ -189,7 +189,7 @@ impl Packet for SenderReport {
          */
 
         let mut raw_packet = vec![0u8; self.len()];
-        let mut packet_body = &raw_packet[header::HEADER_LENGTH..];
+        let packet_body = &mut raw_packet[header::HEADER_LENGTH..];
 
         BigEndian::write_u32(&mut packet_body[super::SR_SSRC_OFFSET..], self.ssrc);
         BigEndian::write_u64(&mut packet_body[super::SR_NTP_OFFSET..], self.ntp_time);
@@ -205,7 +205,7 @@ impl Packet for SenderReport {
 
         let mut offset = super::SR_HEADER_LENGTH;
 
-        for rp in self.reports {
+        for rp in &self.reports {
             let data = rp.marshal()?;
 
             packet_body[offset..offset + data.len()].copy_from_slice(&data);

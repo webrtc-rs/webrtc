@@ -42,7 +42,7 @@ impl Packet for RapidResynchronizationRequest {
         self
     }
 
-    fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
+    fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         todo!()
     }
 
