@@ -71,8 +71,10 @@ impl fmt::Display for HandshakeState {
     }
 }
 
-pub(crate) type VerifyPeerCertificateFn =
-    fn(rawCerts: &[u8], verifiedChains: &[x509_parser::X509Certificate<'_>]) -> Result<(), Error>;
+pub(crate) type VerifyPeerCertificateFn = fn(
+    rawCerts: &[Vec<u8>],
+    verifiedChains: &[Vec<x509_parser::X509Certificate<'_>>],
+) -> Result<(), Error>;
 
 pub(crate) struct HandshakeConfig {
     pub(crate) local_psk_callback: Option<PSKCallback>,

@@ -217,7 +217,7 @@ impl Flight for Flight5 {
                     Content::Handshake(Handshake::new(HandshakeMessage::Certificate(
                         HandshakeMessageCertificate {
                             certificate: if let Some(cert) = &certificate {
-                                vec![cert.certificate.clone()]
+                                cert.certificate.clone()
                             } else {
                                 vec![]
                             },
@@ -725,7 +725,7 @@ async fn initalize_cipher_suite(
         if let Err(err) = verify_key_signature(
             &expected_msg,
             &h.signature,
-            /*h.hash_algorithm,*/ &state.peer_certificates[0],
+            /*h.hash_algorithm,*/ &state.peer_certificates,
         ) {
             return Err((
                 Some(Alert {
@@ -739,7 +739,7 @@ async fn initalize_cipher_suite(
         let mut chains = vec![];
         if !cfg.insecure_skip_verify {
             chains = match verify_cert(
-                &state.peer_certificates[0], /*cfg.rootCAs, cfg.serverName*/
+                &state.peer_certificates, /*cfg.rootCAs, cfg.serverName*/
             ) {
                 Ok(chains) => chains,
                 Err(err) => {
@@ -754,7 +754,7 @@ async fn initalize_cipher_suite(
             }
         }
         if let Some(verify_peer_certificate) = &cfg.verify_peer_certificate {
-            if let Err(err) = verify_peer_certificate(&state.peer_certificates[0], &chains) {
+            if let Err(err) = verify_peer_certificate(&state.peer_certificates, &chains) {
                 return Err((
                     Some(Alert {
                         alert_level: AlertLevel::Fatal,

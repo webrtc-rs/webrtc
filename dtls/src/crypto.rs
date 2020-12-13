@@ -22,7 +22,7 @@ use sha2::{Digest, Sha256};
 
 #[derive(Clone)]
 pub struct Certificate {
-    pub certificate: Vec<u8>,
+    pub certificate: Vec<Vec<u8>>,
     pub private_key: CryptoPrivateKey,
 }
 
@@ -55,7 +55,7 @@ impl Certificate {
         };
 
         Ok(Certificate {
-            certificate,
+            certificate: vec![certificate],
             private_key,
         })
     }
@@ -93,7 +93,7 @@ impl Certificate {
         };
 
         Ok(Certificate {
-            certificate,
+            certificate: vec![certificate],
             private_key,
         })
     }
@@ -203,13 +203,13 @@ pub(crate) fn verify_key_signature(
     message: &[u8],
     /*_hash_algorithm: HashAlgorithm,*/
     remote_key_signature: &[u8],
-    raw_certificates: &[u8],
+    raw_certificates: &[Vec<u8>],
 ) -> Result<(), Error> {
     if raw_certificates.is_empty() {
         return Err(ERR_LENGTH_MISMATCH.clone());
     }
 
-    let (_, certificate) = x509_parser::parse_x509_der(raw_certificates)?;
+    let (_, certificate) = x509_parser::parse_x509_der(&raw_certificates[0])?;
 
     let pki_alg = &certificate.tbs_certificate.subject_pki.algorithm.algorithm;
     let sign_alg = &certificate.tbs_certificate.signature.algorithm;
@@ -299,7 +299,7 @@ pub(crate) fn verify_certificate_verify(
     handshake_bodies: &[u8],
     /*hashAlgorithm hashAlgorithm,*/
     remote_key_signature: &[u8],
-    raw_certificates: &[u8],
+    raw_certificates: &[Vec<u8>],
 ) -> Result<(), Error> {
     let mut h = Sha256::new();
     h.update(handshake_bodies);
@@ -309,25 +309,32 @@ pub(crate) fn verify_certificate_verify(
 }
 
 pub(crate) fn load_certs(
-    raw_certificates: &[u8],
-) -> Result<x509_parser::X509Certificate<'_>, Error> {
+    raw_certificates: &[Vec<u8>],
+) -> Result<Vec<x509_parser::X509Certificate<'_>>, Error> {
     if raw_certificates.is_empty() {
         return Err(ERR_LENGTH_MISMATCH.clone());
     }
 
-    let (_, certificate) = x509_parser::parse_x509_der(raw_certificates)?;
+    let mut certs = vec![];
+    for raw_cert in raw_certificates {
+        let (_, cert) = x509_parser::parse_x509_der(raw_cert)?;
+        certs.push(cert);
+    }
 
-    Ok(certificate)
+    Ok(certs)
 }
 
+//TODO: split it to verifyClientCert and verifyServerCert
 pub(crate) fn verify_cert(
-    raw_certificates: &[u8],
-) -> Result<Vec<x509_parser::X509Certificate<'_>>, Error> {
+    raw_certificates: &[Vec<u8>],
+) -> Result<Vec<Vec<x509_parser::X509Certificate<'_>>>, Error> {
     let certificate = load_certs(raw_certificates)?;
 
-    certificate.verify_signature(None)?;
+    certificate[0].verify_signature(None)?;
 
-    Ok(vec![certificate])
+    let chains = vec![certificate];
+
+    Ok(chains)
 }
 
 pub(crate) fn generate_aead_additional_data(h: &RecordLayerHeader, payload_len: usize) -> Vec<u8> {

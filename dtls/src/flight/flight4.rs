@@ -221,7 +221,7 @@ impl Flight for Flight4 {
             if let Err(err) = verify_certificate_verify(
                 &plain_text,
                 /*h.hash_algorithm,*/ &h.signature,
-                &state.peer_certificates[0],
+                &state.peer_certificates,
             ) {
                 return Err((
                     Some(Alert {
@@ -235,7 +235,7 @@ impl Flight for Flight4 {
             let mut chains = vec![];
             let mut verified = false;
             if cfg.client_auth as u8 >= ClientAuthType::VerifyClientCertIfGiven as u8 {
-                chains = match verify_cert(&state.peer_certificates[0] /*, cfg.clientCAs*/) {
+                chains = match verify_cert(&state.peer_certificates /*, cfg.clientCAs*/) {
                     Ok(chains) => chains,
                     Err(err) => {
                         return Err((
@@ -250,7 +250,7 @@ impl Flight for Flight4 {
                 verified = true
             }
             if let Some(verify_peer_certificate) = &cfg.verify_peer_certificate {
-                if let Err(err) = verify_peer_certificate(&state.peer_certificates[0], &chains) {
+                if let Err(err) = verify_peer_certificate(&state.peer_certificates, &chains) {
                     return Err((
                         Some(Alert {
                             alert_level: AlertLevel::Fatal,
@@ -573,7 +573,7 @@ impl Flight for Flight4 {
                     0,
                     Content::Handshake(Handshake::new(HandshakeMessage::Certificate(
                         HandshakeMessageCertificate {
-                            certificate: vec![certificate.certificate.clone()],
+                            certificate: certificate.certificate.clone(),
                         },
                     ))),
                 ),

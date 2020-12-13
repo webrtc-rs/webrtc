@@ -1071,7 +1071,7 @@ async fn test_client_certificate() -> Result<(), Error> {
             );
             //if actual_client_cert.len() != len(tt.clientCfg.Certificates[0].Certificate) || !bytes.Equal(tt.clientCfg.Certificates[0].Certificate[0], actual_client_cert[0]) {
             assert_eq!(
-                actual_client_cert[0], client_cfg.certificates[0].certificate,
+                actual_client_cert[0], client_cfg.certificates[0].certificate[0],
                 "{} Client certificate was not communicated correctly",
                 name,
             );
@@ -1099,12 +1099,12 @@ async fn test_client_certificate() -> Result<(), Error> {
         )*/
         assert_eq!(
             actual_server_cert[0].len(),
-            server_cfg.certificates[0].certificate.len(),
+            server_cfg.certificates[0].certificate[0].len(),
             "{} Server certificate was not communicated correctly",
             name,
         );
         assert_eq!(
-            actual_server_cert[0], server_cfg.certificates[0].certificate,
+            actual_server_cert[0], server_cfg.certificates[0].certificate[0],
             "{} Server certificate was not communicated correctly",
             name,
         );
@@ -1297,8 +1297,8 @@ async fn test_extended_master_secret() -> Result<(), Error> {
 }
 
 fn fn_not_expected_chain(
-    _cert: &[u8],
-    chain: &[x509_parser::X509Certificate<'_>],
+    _cert: &[Vec<u8>],
+    chain: &[Vec<x509_parser::X509Certificate<'_>>],
 ) -> Result<(), Error> {
     if !chain.is_empty() {
         return Err(ERR_NOT_EXPECTED_CHAIN.clone());
@@ -1307,8 +1307,8 @@ fn fn_not_expected_chain(
 }
 
 fn fn_expected_chain(
-    _cert: &[u8],
-    chain: &[x509_parser::X509Certificate<'_>],
+    _cert: &[Vec<u8>],
+    chain: &[Vec<x509_parser::X509Certificate<'_>>],
 ) -> Result<(), Error> {
     if chain.is_empty() {
         return Err(ERR_EXPECTED_CHAIN.clone());
@@ -1316,7 +1316,10 @@ fn fn_expected_chain(
     Ok(())
 }
 
-fn fn_wrong_cert(_cert: &[u8], _chain: &[x509_parser::X509Certificate<'_>]) -> Result<(), Error> {
+fn fn_wrong_cert(
+    _cert: &[Vec<u8>],
+    _chain: &[Vec<x509_parser::X509Certificate<'_>>],
+) -> Result<(), Error> {
     Err(ERR_WRONG_CERT.clone())
 }
 
@@ -1341,7 +1344,7 @@ async fn test_server_certificate() -> Result<(), Error> {
     let certificate = load_certs(&cert.certificate)?;
     //caPool := x509.NewCertPool()
     //caPool.AddCert(certificate)
-    let iter = certificate
+    let iter = certificate[0]
         .tbs_certificate
         .subject
         .iter_common_name()
