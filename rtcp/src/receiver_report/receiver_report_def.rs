@@ -45,6 +45,10 @@ impl fmt::Display for ReceiverReport {
 }
 
 impl Packet for ReceiverReport {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     // Unmarshal decodes the ReceiverReport from binary
     fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         /*

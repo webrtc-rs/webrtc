@@ -35,6 +35,10 @@ impl fmt::Display for PictureLossIndication {
 }
 
 impl Packet for PictureLossIndication {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         todo!()
     }

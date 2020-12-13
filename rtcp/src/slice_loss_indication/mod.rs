@@ -53,6 +53,10 @@ impl fmt::Display for SliceLossIndication {
 }
 
 impl Packet for SliceLossIndication {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         todo!()
     }

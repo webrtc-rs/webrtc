@@ -255,6 +255,10 @@ impl fmt::Display for SourceDescription {
 }
 
 impl Packet for SourceDescription {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     // Unmarshal decodes the SourceDescription from binary
     fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         /*

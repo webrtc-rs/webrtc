@@ -26,6 +26,10 @@ impl fmt::Display for RawPacket {
 }
 
 impl Packet for RawPacket {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     // destination_ssrc returns an array of SSRC values that this packet refers to.
     fn destination_ssrc(&self) -> Vec<u32> {
         vec![]

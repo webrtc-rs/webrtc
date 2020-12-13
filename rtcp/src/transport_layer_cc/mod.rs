@@ -350,6 +350,10 @@ impl fmt::Display for TransportLayerCC {
 }
 
 impl Packet for TransportLayerCC {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         todo!()
     }

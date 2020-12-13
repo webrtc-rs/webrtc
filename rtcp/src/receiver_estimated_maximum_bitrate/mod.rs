@@ -58,6 +58,10 @@ impl fmt::Display for ReceiverEstimatedMaximumBitrate {
 }
 
 impl Packet for ReceiverEstimatedMaximumBitrate {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     /// Marshal serializes the packet and returns a byte slice.
     fn marshal(&self) -> Result<BytesMut, Error> {
         // Allocate a buffer of the exact output size.

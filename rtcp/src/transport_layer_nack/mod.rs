@@ -75,6 +75,10 @@ impl fmt::Display for TransportLayerNack {
 }
 
 impl Packet for TransportLayerNack {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     /// Unmarshal decodes the ReceptionReport from binary
     fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         todo!()

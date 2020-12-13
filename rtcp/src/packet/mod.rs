@@ -16,6 +16,8 @@ mod packet_test;
 
 /// Packet represents an RTCP packet, a protocol used for out-of-band statistics and control information for an RTP session
 pub trait Packet {
+    fn as_any(&self) -> &dyn std::any::Any;
+
     fn destination_ssrc(&self) -> Vec<u32>;
 
     fn marshal(&self) -> Result<BytesMut, Error>;
@@ -42,7 +44,7 @@ pub fn unmarshal(raw_data: &mut BytesMut) -> Result<Vec<Box<dyn Packet>>, Error>
 }
 
 /// Marshal takes an array of Packets and serializes them to a single buffer
-pub fn marshal(packets: &[impl Packet]) -> Result<BytesMut, Error> {
+pub fn marshal(packets: &[Box<dyn Packet>]) -> Result<BytesMut, Error> {
     let mut out = BytesMut::new();
 
     for packet in packets {
@@ -56,17 +58,17 @@ pub fn marshal(packets: &[impl Packet]) -> Result<BytesMut, Error> {
 
 /// unmarshaller is a factory which pulls the first RTCP packet from a bytestream,
 /// and returns it's parsed representation, and the amount of data that was processed.
-fn unmarshaller(raw_data: &mut BytesMut) -> Result<(Box<dyn Packet>, usize), Error> {
-    let h = Header::default();
+pub(crate) fn unmarshaller(mut raw_data: &mut BytesMut) -> Result<(Box<dyn Packet>, usize), Error> {
+    let mut h = Header::default();
 
     h.unmarshal(&mut raw_data)?;
 
-    let mut bytes_processed = (h.length as usize + 1) * 4;
+    let bytes_processed = (h.length as usize + 1) * 4;
     if bytes_processed > raw_data.len() {
         return Err(Error::new("packet too short".to_string()));
     }
 
-    let mut in_packet = &raw_data[..bytes_processed].into();
+    let mut in_packet = raw_data[..bytes_processed].into();
 
     let packet: Box<dyn Packet> = match h.packet_type {
         PacketType::SenderReport => Box::new(sender_report::SenderReport::default()),
@@ -74,7 +76,6 @@ fn unmarshaller(raw_data: &mut BytesMut) -> Result<(Box<dyn Packet>, usize), Err
         PacketType::ReceiverReport => Box::new(receiver_report::ReceiverReport::default()),
 
         PacketType::SourceDescription => Box::new(source_description::SourceDescription::default()),
-
         PacketType::Goodbye => Box::new(goodbye::Goodbye::default()),
 
         PacketType::TransportSpecificFeedback => match h.count {

@@ -102,6 +102,10 @@ impl Packet for Goodbye {
         self.sources.to_vec()
     }
 
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     /// Marshal encodes the packet in binary.
     fn marshal(&self) -> Result<BytesMut, Error> {
         /*
