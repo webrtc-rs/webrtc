@@ -184,7 +184,7 @@ fn test_certificate_verify() -> Result<(), Error> {
     verify_certificate_verify(
         &plain_text,
         &cert_verify_ecdsa256,
-        &certificate_ecdsa256.certificate,
+        &vec![certificate_ecdsa256.certificate.as_ref().to_vec()],
     )?;
 
     //test ED25519
@@ -197,7 +197,7 @@ fn test_certificate_verify() -> Result<(), Error> {
     verify_certificate_verify(
         &plain_text,
         &cert_verify_ed25519,
-        &certificate_ed25519.certificate,
+        &vec![certificate_ed25519.certificate.as_ref().to_vec()],
     )?;
 
     Ok(())

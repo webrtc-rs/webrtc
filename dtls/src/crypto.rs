@@ -24,7 +24,7 @@ use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct Certificate {
-    pub certificate: Vec<Vec<u8>>,
+    pub certificate: rustls::Certificate,
     pub private_key: CryptoPrivateKey,
 }
 
@@ -57,7 +57,7 @@ impl Certificate {
         };
 
         Ok(Certificate {
-            certificate: vec![certificate],
+            certificate: rustls::Certificate(certificate),
             private_key,
         })
     }
@@ -95,7 +95,7 @@ impl Certificate {
         };
 
         Ok(Certificate {
-            certificate: vec![certificate],
+            certificate: rustls::Certificate(certificate),
             private_key,
         })
     }
