@@ -26,6 +26,7 @@ impl From<u16> for NamedCurve {
 
 pub(crate) enum NamedCurvePrivateKey {
     EphemeralSecretP256(p256::ecdh::EphemeralSecret),
+    EphemeralSecretP384(ring::agreement::EphemeralPrivateKey),
     StaticSecretX25519(x25519_dalek::StaticSecret),
 }
 
@@ -45,6 +46,15 @@ fn elliptic_curve_keypair(curve: NamedCurve) -> Result<NamedCurveKeypair, Error>
                 NamedCurvePrivateKey::EphemeralSecretP256(secret_key),
             )
         }
+        NamedCurve::P384 => {
+            let rng = ring::rand::SystemRandom::new();
+            let secret_key = ring::agreement::EphemeralPrivateKey::generate(&ring::agreement::ECDH_P256, &rng)?;
+            let public_key = secret_key.compute_public_key()?;
+            (
+                public_key.as_ref().to_vec(),
+                NamedCurvePrivateKey::EphemeralSecretP384(secret_key),
+            )
+        }
         NamedCurve::X25519 => {
             let secret_key = x25519_dalek::StaticSecret::new(rand_core::OsRng);
             let public_key = x25519_dalek::PublicKey::from(&secret_key);
@@ -53,7 +63,6 @@ fn elliptic_curve_keypair(curve: NamedCurve) -> Result<NamedCurveKeypair, Error>
                 NamedCurvePrivateKey::StaticSecretX25519(secret_key),
             )
         }
-        //TODO: add NamedCurve::p384
         _ => return Err(ERR_INVALID_NAMED_CURVE.clone()),
     };
 
@@ -67,10 +76,9 @@ fn elliptic_curve_keypair(curve: NamedCurve) -> Result<NamedCurveKeypair, Error>
 impl NamedCurve {
     pub fn generate_keypair(&self) -> Result<NamedCurveKeypair, Error> {
         match *self {
-            //TODO: add P384
             NamedCurve::X25519 => elliptic_curve_keypair(NamedCurve::X25519),
             NamedCurve::P256 => elliptic_curve_keypair(NamedCurve::P256),
-            //NamedCurve::P384 => elliptic_curve_keypair(NamedCurve::P384),
+            NamedCurve::P384 => elliptic_curve_keypair(NamedCurve::P384),
             _ => Err(ERR_INVALID_NAMED_CURVE.clone()),
         }
     }
