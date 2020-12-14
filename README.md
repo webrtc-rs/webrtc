@@ -9,6 +9,9 @@
  <a href="https://codecov.io/gh/webrtc-rs/webrtc"> 
   <img src="https://codecov.io/gh/webrtc-rs/webrtc/branch/master/graph/badge.svg">
  </a>
+ <a href="https://deps.rs/repo/github/webrtc-rs/webrtc"> 
+  <img src="https://deps.rs/repo/github/webrtc-rs/webrtc/status.svg">
+ </a>
  <a href="https://webrtc.rs/docs/index.html"> 
   <img src="https://img.shields.io/static/v1?label=docs&message=master&color=5479ab">
  </a>
