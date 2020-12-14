@@ -6,9 +6,9 @@ use bytes::BytesMut;
 use util::Error;
 
 use super::errors::*;
-use super::header::*;
-use crate::packet::Packet;
+use super::header;
 use crate::util::get_padding;
+use crate::{packet::Packet, source_description};
 
 #[cfg(test)]
 mod source_description_test;
@@ -82,7 +82,7 @@ pub struct SourceDescriptionChunk {
 
 impl SourceDescriptionChunk {
     // Marshal encodes the SourceDescriptionChunk in binary
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal(&self) -> Result<BytesMut, Error> {
         /*
          *  +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
          *  |                          SSRC/CSRC_1                          |
@@ -92,25 +92,27 @@ impl SourceDescriptionChunk {
          *  +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
          */
 
-        writer.write_u32::<BigEndian>(self.source)?;
+        todo!()
 
-        for it in &self.items {
-            it.marshal(writer)?;
-        }
+        // writer.write_u32::<BigEndian>(self.source)?;
 
-        // The list of items in each chunk MUST be terminated by one or more null octets
-        writer.write_u8(SDESType::SDESEnd as u8)?;
+        // for it in &self.items {
+        //     it.marshal(writer)?;
+        // }
 
-        // additional null octets MUST be included if needed to pad until the next 32-bit boundary
-        let padding_len = get_padding(self.size());
-        let padding: Vec<u8> = vec![0; padding_len];
-        writer.write_all(padding.as_slice())?;
+        // // The list of items in each chunk MUST be terminated by one or more null octets
+        // writer.write_u8(SDESType::SDESEnd as u8)?;
 
-        Ok(writer.flush()?)
+        // // additional null octets MUST be included if needed to pad until the next 32-bit boundary
+        // let padding_len = get_padding(self.size());
+        // let padding: Vec<u8> = vec![0; padding_len];
+        // writer.write_all(padding.as_slice())?;
+
+        // Ok(writer.flush()?)
     }
 
     // Unmarshal decodes the SourceDescriptionChunk from binary
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         /*
          *  +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
          *  |                          SSRC/CSRC_1                          |
@@ -119,32 +121,34 @@ impl SourceDescriptionChunk {
          *  |                              ...                              |
          *  +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
          */
-        let source = reader.read_u32::<BigEndian>()?;
 
-        let mut items = vec![];
-        loop {
-            let item = SourceDescriptionItem::unmarshal(reader)?;
-            if item.sdes_type != SDESType::SDESEnd {
-                items.push(item);
-            } else {
-                break;
-            }
-        }
+        todo!()
+        // let source = reader.read_u32::<BigEndian>()?;
 
-        let sdc = SourceDescriptionChunk { source, items };
-        let mut padding_len = get_padding(sdc.size());
-        while padding_len > 0 {
-            reader.read_u8()?;
-            padding_len -= 1;
-        }
+        // let mut items = vec![];
+        // loop {
+        //     let item = SourceDescriptionItem::unmarshal(reader)?;
+        //     if item.sdes_type != SDESType::SDESEnd {
+        //         items.push(item);
+        //     } else {
+        //         break;
+        //     }
+        // }
 
-        Ok(sdc)
+        // let sdc = SourceDescriptionChunk { source, items };
+        // let mut padding_len = get_padding(sdc.size());
+        // while padding_len > 0 {
+        //     reader.read_u8()?;
+        //     padding_len -= 1;
+        // }
+
+        // Ok(sdc)
     }
 
-    fn size(&self) -> usize {
+    fn len(&self) -> usize {
         let mut len = SDES_SOURCE_LEN;
         for it in &self.items {
-            len += it.size();
+            len += it.len();
         }
         len += SDES_TYPE_LEN; // for terminating null octet
 
@@ -164,7 +168,7 @@ pub struct SourceDescriptionItem {
 }
 
 impl SourceDescriptionItem {
-    fn size(&self) -> usize {
+    fn len(&self) -> usize {
         /*
          *   0                   1                   2                   3
          *   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -176,7 +180,7 @@ impl SourceDescriptionItem {
     }
 
     // Marshal encodes the SourceDescriptionItem in binary
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal(&self) -> Result<BytesMut, Error> {
         /*
          *   0                   1                   2                   3
          *   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -185,25 +189,26 @@ impl SourceDescriptionItem {
          *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
 
-        if self.sdes_type == SDESType::SDESEnd {
-            return Err(ERR_SDESMISSING_TYPE.clone());
-        }
+        todo!()
+        // if self.sdes_type == SDESType::SDESEnd {
+        //     return Err(ERR_SDESMISSING_TYPE.clone());
+        // }
 
-        writer.write_u8(self.sdes_type as u8)?;
+        // writer.write_u8(self.sdes_type as u8)?;
 
-        if self.text.len() > SDES_MAX_OCTET_COUNT {
-            return Err(ERR_SDESTEXT_TOO_LONG.clone());
-        }
+        // if self.text.len() > SDES_MAX_OCTET_COUNT {
+        //     return Err(ERR_SDESTEXT_TOO_LONG.clone());
+        // }
 
-        writer.write_u8(self.text.len() as u8)?;
+        // writer.write_u8(self.text.len() as u8)?;
 
-        writer.write_all(self.text.as_bytes())?;
+        // writer.write_all(self.text.as_bytes())?;
 
-        Ok(writer.flush()?)
+        // Ok(writer.flush()?)
     }
 
     // Unmarshal decodes the SourceDescriptionItem from binary
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal(&self, reader: &mut BytesMut) -> Result<(), Error> {
         /*
          *   0                   1                   2                   3
          *   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -211,27 +216,29 @@ impl SourceDescriptionItem {
          *  |    CNAME=1    |     length    | user and domain name        ...
          *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
-        let b0 = reader.read_u8()?;
-        let sdes_type: SDESType = b0.into();
-        if sdes_type == SDESType::SDESEnd {
-            return Ok(SourceDescriptionItem {
-                sdes_type,
-                text: String::new(),
-            });
-        }
 
-        let length = reader.read_u8()?;
+        todo!()
+        // let b0 = reader.read_u8()?;
+        // let sdes_type: SDESType = b0.into();
+        // if sdes_type == SDESType::SDESEnd {
+        //     return Ok(SourceDescriptionItem {
+        //         sdes_type,
+        //         text: String::new(),
+        //     });
+        // }
 
-        let mut text: Vec<u8> = vec![0; length as usize];
-        let result = reader.read_exact(&mut text);
-        if result.is_err() {
-            Err(ERR_PACKET_TOO_SHORT.clone())
-        } else {
-            Ok(SourceDescriptionItem {
-                sdes_type,
-                text: String::from_utf8(text)?,
-            })
-        }
+        // let length = reader.read_u8()?;
+
+        // let mut text: Vec<u8> = vec![0; length as usize];
+        // let result = reader.read_exact(&mut text);
+        // if result.is_err() {
+        //     Err(ERR_PACKET_TOO_SHORT.clone())
+        // } else {
+        //     Ok(SourceDescriptionItem {
+        //         sdes_type,
+        //         text: String::from_utf8(text)?,
+        //     })
+        // }
     }
 }
 
@@ -279,20 +286,30 @@ impl Packet for SourceDescription {
          *        +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
          */
 
-        todo!()
+        let mut h = header::Header::default();
 
-        // let header = Header::unmarshal(reader)?;
+        h.unmarshal(raw_packet)?;
 
-        // if header.packet_type != PacketType::SourceDescription {
-        //     return Err(ERR_WRONG_TYPE.clone());
-        // }
+        if h.packet_type != header::PacketType::SourceDescription {
+            return Err(ERR_WRONG_TYPE.to_owned());
+        }
 
-        // let mut chunks = vec![];
-        // for _i in 0..header.count {
-        //     chunks.push(SourceDescriptionChunk::unmarshal(reader)?);
-        // }
+        let mut i = header::HEADER_LENGTH;
 
-        // Ok(SourceDescription { chunks })
+        while i < raw_packet.len() {
+            let chunk = source_description::SourceDescriptionChunk::default();
+
+            chunk.unmarshal(&mut raw_packet[i..].into())?;
+
+            i += chunk.len();
+            self.chunks.push(chunk);
+        }
+
+        if self.chunks.len() != h.count as usize {
+            return Err(ERR_INVALID_HEADER.to_owned());
+        }
+
+        Ok(())
     }
 
     // destination_ssrc returns an array of SSRC values that this packet refers to.
@@ -320,37 +337,49 @@ impl Packet for SourceDescription {
          *        +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
          */
 
-        todo!()
-        // if self.chunks.len() > COUNT_MAX {
-        //     return Err(ERR_TOO_MANY_CHUNKS.clone());
-        // }
+        let mut raw_packet = BytesMut::new();
+        raw_packet.resize(self.len(), 0u8);
 
-        // self.header().marshal(writer)?;
+        let packet_body = &mut raw_packet[header::HEADER_LENGTH..];
 
-        // for c in &self.chunks {
-        //     c.marshal(writer)?;
-        // }
+        let mut chunk_offset = 0;
 
-        // Ok(())
+        for c in &self.chunks {
+            let data = c.marshal()?;
+
+            packet_body[chunk_offset..chunk_offset + data.len()].copy_from_slice(&data);
+            chunk_offset += data.len();
+        }
+
+        if self.chunks.len() > header::COUNT_MAX {
+            return Err(ERR_TOO_MANY_CHUNKS.to_owned());
+        }
+
+        let header_data = self.header().marshal()?;
+
+        raw_packet[header_data.len()..].copy_from_slice(&header_data);
+
+        Ok(raw_packet)
     }
 }
 
 impl SourceDescription {
-    fn size(&self) -> usize {
+    fn len(&self) -> usize {
         let mut chunks_length = 0;
         for c in &self.chunks {
-            chunks_length += c.size();
+            chunks_length += c.len();
         }
-        HEADER_LENGTH + chunks_length
+
+        header::HEADER_LENGTH + chunks_length
     }
 
-    // Header returns the Header associated with this packet.
-    pub fn header(&self) -> Header {
-        let l = self.size() + get_padding(self.size());
-        Header {
-            padding: get_padding(self.size()) != 0,
+    /// Header returns the Header associated with this packet.
+    pub fn header(&self) -> header::Header {
+        let l = self.len() + get_padding(self.len());
+        header::Header {
+            padding: get_padding(self.len()) != 0,
             count: self.chunks.len() as u8,
-            packet_type: PacketType::SourceDescription,
+            packet_type: header::PacketType::SourceDescription,
             length: ((l / 4) - 1) as u16,
         }
     }

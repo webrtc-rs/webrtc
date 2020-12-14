@@ -11,36 +11,36 @@ use crate::{packet::Packet, reception_report::ReceptionReport};
 // A SenderReport (SR) packet provides reception quality feedback for an RTP stream
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct SenderReport {
-    // The synchronization source identifier for the originator of this SR packet.
+    /// The synchronization source identifier for the originator of this SR packet.
     pub ssrc: u32,
-    // The wallclock time when this report was sent so that it may be used in
-    // combination with timestamps returned in reception reports from other
-    // receivers to measure round-trip propagation to those receivers.
+    /// The wallclock time when this report was sent so that it may be used in
+    /// combination with timestamps returned in reception reports from other
+    /// receivers to measure round-trip propagation to those receivers.
     pub ntp_time: u64,
-    // Corresponds to the same time as the NTP timestamp (above), but in
-    // the same units and with the same random offset as the RTP
-    // timestamps in data packets. This correspondence may be used for
-    // intra- and inter-media synchronization for sources whose NTP
-    // timestamps are synchronized, and may be used by media-independent
-    // receivers to estimate the nominal RTP clock frequency.
+    /// Corresponds to the same time as the NTP timestamp (above), but in
+    /// the same units and with the same random offset as the RTP
+    /// timestamps in data packets. This correspondence may be used for
+    /// intra- and inter-media synchronization for sources whose NTP
+    /// timestamps are synchronized, and may be used by media-independent
+    /// receivers to estimate the nominal RTP clock frequency.
     pub rtp_time: u32,
-    // The total number of RTP data packets transmitted by the sender
-    // since starting transmission up until the time this SR packet was
-    // generated.
+    /// The total number of RTP data packets transmitted by the sender
+    /// since starting transmission up until the time this SR packet was
+    /// generated.
     pub packet_count: u32,
-    // The total number of payload octets (i.e., not including header or
-    // padding) transmitted in RTP data packets by the sender since
-    // starting transmission up until the time this SR packet was
-    // generated.
+    /// The total number of payload octets (i.e., not including header or
+    /// padding) transmitted in RTP data packets by the sender since
+    /// starting transmission up until the time this SR packet was
+    /// generated.
     pub octet_count: u32,
-    // Zero or more reception report blocks depending on the number of other
-    // sources heard by this sender since the last report. Each reception report
-    // block conveys statistics on the reception of RTP packets from a
-    // single synchronization source.
+    /// Zero or more reception report blocks depending on the number of other
+    /// sources heard by this sender since the last report. Each reception report
+    /// block conveys statistics on the reception of RTP packets from a
+    /// single synchronization source.
     pub reports: Vec<ReceptionReport>,
 
-    // ProfileExtensions contains additional, payload-specific information that needs to
-    // be reported regularly about the sender.
+    /// ProfileExtensions contains additional, payload-specific information that needs to
+    /// be reported regularly about the sender.
     pub profile_extensions: Vec<u8>,
 }
 

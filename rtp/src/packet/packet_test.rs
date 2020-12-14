@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod packet_test {
+
     use crate::{header, packet::Packet};
     use bytes::BytesMut;
-    use header::{Extension, ExtensionProfile, Header};
     use util::Error;
 
     #[test]

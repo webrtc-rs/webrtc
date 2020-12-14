@@ -31,7 +31,61 @@ impl fmt::Display for Goodbye {
 }
 
 impl Packet for Goodbye {
-    fn unmarshal(&mut self, mut raw_packet: &mut BytesMut) -> Result<(), Error> {
+    /// Marshal encodes the packet in binary.
+    fn marshal(&self) -> Result<BytesMut, Error> {
+        /*
+         *        0                   1                   2                   3
+         *        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+         *       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+         *       |V=2|P|    SC   |   PT=BYE=203  |             length            |
+         *       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+         *       |                           SSRC/CSRC                           |
+         *       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+         *       :                              ...                              :
+         *       +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+         * (opt) |     length    |               reason for leaving            ...
+         *       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+         */
+
+        if self.sources.len() > header::COUNT_MAX {
+            return Err(ERR_TOO_MANY_SOURCES.clone());
+        }
+
+        let mut raw_packet = vec![0u8; self.len()];
+        let packet_body = &mut raw_packet[header::HEADER_LENGTH..];
+
+        if self.sources.len() > header::COUNT_MAX {
+            return Err(Error::new("too many sources".to_string()));
+        }
+
+        for i in 0..self.sources.len() {
+            BigEndian::write_u32(&mut packet_body[i * header::SSRC_LENGTH..], self.sources[i]);
+        }
+
+        if self.reason != "" {
+            let reason = self.reason.as_bytes();
+
+            if reason.len() > header::SDES_MAX_OCTET_COUNT {
+                return Err(Error::new("reason too long".to_string()));
+            }
+
+            let reason_offset = self.sources.len() * header::SSRC_LENGTH;
+
+            packet_body[reason_offset] = reason.len() as u8;
+
+            let n = reason_offset + 1;
+
+            packet_body[n..n + reason.len()].copy_from_slice(&reason);
+        }
+
+        let header_data = self.header().marshal()?;
+
+        raw_packet[..header_data.len()].copy_from_slice(&header_data);
+
+        Ok(raw_packet[..].into())
+    }
+
+    fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         /*
          *        0                   1                   2                   3
          *        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -47,7 +101,7 @@ impl Packet for Goodbye {
          */
 
         let mut header = Header::default();
-        header.unmarshal(&mut raw_packet)?;
+        header.unmarshal(raw_packet)?;
 
         if header.packet_type != PacketType::Goodbye {
             return Err(ERR_WRONG_TYPE.clone());
@@ -101,60 +155,6 @@ impl Packet for Goodbye {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    }
-
-    /// Marshal encodes the packet in binary.
-    fn marshal(&self) -> Result<BytesMut, Error> {
-        /*
-         *        0                   1                   2                   3
-         *        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-         *       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-         *       |V=2|P|    SC   |   PT=BYE=203  |             length            |
-         *       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-         *       |                           SSRC/CSRC                           |
-         *       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-         *       :                              ...                              :
-         *       +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
-         * (opt) |     length    |               reason for leaving            ...
-         *       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-         */
-
-        if self.sources.len() > header::COUNT_MAX {
-            return Err(ERR_TOO_MANY_SOURCES.clone());
-        }
-
-        let mut raw_packet = vec![0u8; self.len()];
-        let packet_body = &mut raw_packet[header::HEADER_LENGTH..];
-
-        if self.sources.len() > header::COUNT_MAX {
-            return Err(Error::new("too many sources".to_string()));
-        }
-
-        for i in 0..self.sources.len() {
-            BigEndian::write_u32(&mut packet_body[i * header::SSRC_LENGTH..], self.sources[i]);
-        }
-
-        if self.reason != "" {
-            let reason = self.reason.as_bytes();
-
-            if reason.len() > header::SDES_MAX_OCTET_COUNT {
-                return Err(Error::new("reason too long".to_string()));
-            }
-
-            let reason_offset = self.sources.len() * header::SSRC_LENGTH;
-
-            packet_body[reason_offset] = reason.len() as u8;
-
-            let n = reason_offset + 1;
-
-            packet_body[n..n + reason.len()].copy_from_slice(&reason);
-        }
-
-        let header_data = self.header().marshal()?;
-
-        raw_packet[..header_data.len()].copy_from_slice(&header_data);
-
-        Ok(raw_packet[..].into())
     }
 }
 

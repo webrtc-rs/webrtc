@@ -3,8 +3,8 @@ mod header_test;
 
 pub use header_def::Header;
 
-// PacketType specifies the type of an RTCP packet
-// RTCP packet types registered with IANA. See: https://www.iana.org/assignments/rtp-parameters/rtp-parameters.xhtml#rtp-parameters-4
+/// PacketType specifies the type of an RTCP packet
+/// RTCP packet types registered with IANA. See: https://www.iana.org/assignments/rtp-parameters/rtp-parameters.xhtml#rtp-parameters-4
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(u8)]
 pub enum PacketType {
@@ -72,15 +72,15 @@ impl From<u8> for PacketType {
     }
 }
 
-pub(crate) const RTP_VERSION: u8 = 2;
-pub(crate) const VERSION_SHIFT: u8 = 6;
-pub(crate) const VERSION_MASK: u8 = 0x3;
-pub(crate) const PADDING_SHIFT: u8 = 5;
-pub(crate) const PADDING_MASK: u8 = 0x1;
-pub(crate) const COUNT_SHIFT: u8 = 0;
-pub(crate) const COUNT_MASK: u8 = 0x1f;
+pub const RTP_VERSION: u8 = 2;
+pub const VERSION_SHIFT: u8 = 6;
+pub const VERSION_MASK: u8 = 0x3;
+pub const PADDING_SHIFT: u8 = 5;
+pub const PADDING_MASK: u8 = 0x1;
+pub const COUNT_SHIFT: u8 = 0;
+pub const COUNT_MASK: u8 = 0x1f;
 
-pub(crate) const HEADER_LENGTH: usize = 4;
-pub(crate) const COUNT_MAX: usize = (1 << 5) - 1;
-pub(crate) const SSRC_LENGTH: usize = 4;
-pub(crate) const SDES_MAX_OCTET_COUNT: usize = (1 << 8) - 1;
+pub const HEADER_LENGTH: usize = 4;
+pub const COUNT_MAX: usize = (1 << 5) - 1;
+pub const SSRC_LENGTH: usize = 4;
+pub const SDES_MAX_OCTET_COUNT: usize = (1 << 8) - 1;

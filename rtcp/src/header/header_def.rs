@@ -5,23 +5,23 @@ use bytes::BytesMut;
 
 use super::PacketType;
 
-// A Header is the common header shared by all RTCP packets
+/// A Header is the common header shared by all RTCP packets
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct Header {
-    // If the padding bit is set, this individual RTCP packet contains
-    // some additional padding octets at the end which are not part of
-    // the control information but are included in the length field.
+    /// If the padding bit is set, this individual RTCP packet contains
+    /// some additional padding octets at the end which are not part of
+    /// the control information but are included in the length field.
     pub padding: bool,
-    // The number of reception reports, sources contained or FMT in this packet (depending on the Type)
+    /// The number of reception reports, sources contained or FMT in this packet (depending on the Type)
     pub count: u8,
-    // The RTCP packet type for this packet
+    /// The RTCP packet type for this packet
     pub packet_type: super::PacketType,
-    // The length of this RTCP packet in 32-bit words minus one,
-    // including the header and any padding.
+    /// The length of this RTCP packet in 32-bit words minus one,
+    /// including the header and any padding.
     pub length: u16,
 }
 
-// Marshal encodes the Header in binary
+/// Marshal encodes the Header in binary
 impl Header {
     pub fn marshal(&self) -> Result<BytesMut, Error> {
         /*
@@ -54,7 +54,7 @@ impl Header {
         Ok(raw_packet)
     }
 
-    // Unmarshal decodes the Header from binary
+    /// Unmarshal decodes the Header from binary
     pub fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         /*
          *  0                   1                   2                   3

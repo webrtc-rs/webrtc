@@ -123,7 +123,7 @@ impl ReceptionReport {
 
         let tl_bytes = &mut raw_packet[super::TOTAL_LOST_OFFSET..];
         self.total_lost =
-            (tl_bytes[2] as u32) | (tl_bytes[1] << 8) as u32 | (tl_bytes[0] << 16) as u32;
+            (tl_bytes[2] as u32) | (tl_bytes[1] as u32) << 8 | (tl_bytes[0] as u32) << 16;
 
         self.last_sequence_number = BigEndian::read_u32(&raw_packet[super::LAST_SEQ_OFFSET..]);
         self.jitter = BigEndian::read_u32(&raw_packet[super::JITTER_OFFSET..]);

@@ -10,16 +10,16 @@ use byteorder::{BigEndian, ByteOrder};
 use super::{header, header::Header};
 use crate::{packet::Packet, util::get_padding};
 
-// A FIREntry is a (ssrc, seqno) pair, as carried by FullIntraRequest.
+/// A FIREntry is a (ssrc, seqno) pair, as carried by FullIntraRequest.
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct FIREntry {
     ssrc: u32,
     sequence_number: u8,
 }
 
-// The FullIntraRequest packet is used to reliably request an Intra frame
-// in a video stream.  See RFC 5104 Section 3.5.1.  This is not for loss
-// recovery, which should use PictureLossIndication (PLI) instead.
+/// The FullIntraRequest packet is used to reliably request an Intra frame
+/// in a video stream.  See RFC 5104 Section 3.5.1.  This is not for loss
+/// recovery, which should use PictureLossIndication (PLI) instead.
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct FullIntraRequest {
     sender_ssrc: u32,
@@ -45,7 +45,7 @@ impl Packet for FullIntraRequest {
         self
     }
 
-    // destination_ssrc returns an array of SSRC values that this packet refers to.
+    /// destination_ssrc returns an array of SSRC values that this packet refers to.
     fn destination_ssrc(&self) -> Vec<u32> {
         let mut ssrcs: Vec<u32> = Vec::with_capacity(self.fir.len());
         for entry in &self.fir {
@@ -54,7 +54,7 @@ impl Packet for FullIntraRequest {
         ssrcs
     }
 
-    // Marshal encodes the FullIntraRequest
+    /// Marshal encodes the FullIntraRequest
     fn marshal(&self) -> Result<BytesMut, Error> {
         let mut raw_packet = BytesMut::new();
         raw_packet.resize(FIR_OFFSET + (self.fir.len() * 8), 0u8);
@@ -76,7 +76,7 @@ impl Packet for FullIntraRequest {
         Ok(header_data)
     }
 
-    // Unmarshal decodes the TransportLayerNack
+    /// Unmarshal decodes the TransportLayerNack
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         if raw_packet.len() < (header::HEADER_LENGTH + header::SSRC_LENGTH) {
             return Err(Error::new("packet too short".to_string()));
