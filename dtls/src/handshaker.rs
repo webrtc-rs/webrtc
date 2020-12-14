@@ -91,7 +91,7 @@ pub(crate) struct HandshakeConfig {
     pub(crate) verify_peer_certificate: Option<VerifyPeerCertificateFn>,
     pub(crate) roots_cas: rustls::RootCertStore,
     pub(crate) server_cert_verifier: Arc<dyn rustls::ServerCertVerifier>,
-    pub(crate) client_cert_verifier: Arc<dyn rustls::ClientCertVerifier>,
+    pub(crate) client_cert_verifier: Option<Arc<dyn rustls::ClientCertVerifier>>,
     pub(crate) retransmit_interval: tokio::time::Duration,
     pub(crate) initial_epoch: u16,
     //log           logging.LeveledLogger
@@ -115,7 +115,7 @@ impl Default for HandshakeConfig {
             verify_peer_certificate: None,
             roots_cas: rustls::RootCertStore::empty(),
             server_cert_verifier: Arc::new(rustls::WebPKIVerifier::new()),
-            client_cert_verifier: rustls::NoClientAuth::new(),
+            client_cert_verifier: None,
             retransmit_interval: tokio::time::Duration::from_secs(0),
             initial_epoch: 0,
         }

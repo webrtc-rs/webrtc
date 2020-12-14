@@ -235,19 +235,29 @@ impl Flight for Flight4 {
             let mut chains = vec![];
             let mut verified = false;
             if cfg.client_auth as u8 >= ClientAuthType::VerifyClientCertIfGiven as u8 {
-                chains =
-                    match verify_client_cert(&state.peer_certificates, &cfg.client_cert_verifier) {
-                        Ok(chains) => chains,
-                        Err(err) => {
-                            return Err((
-                                Some(Alert {
-                                    alert_level: AlertLevel::Fatal,
-                                    alert_description: AlertDescription::BadCertificate,
-                                }),
-                                Some(err),
-                            ))
-                        }
-                    };
+                if let Some(client_cert_verifier) = &cfg.client_cert_verifier {
+                    chains =
+                        match verify_client_cert(&state.peer_certificates, client_cert_verifier) {
+                            Ok(chains) => chains,
+                            Err(err) => {
+                                return Err((
+                                    Some(Alert {
+                                        alert_level: AlertLevel::Fatal,
+                                        alert_description: AlertDescription::BadCertificate,
+                                    }),
+                                    Some(err),
+                                ))
+                            }
+                        };
+                } else {
+                    return Err((
+                        Some(Alert {
+                            alert_level: AlertLevel::Fatal,
+                            alert_description: AlertDescription::BadCertificate,
+                        }),
+                        Some(ERR_INVALID_CERTIFICATE.clone()),
+                    ));
+                }
 
                 verified = true
             }

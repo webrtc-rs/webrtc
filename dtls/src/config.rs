@@ -84,7 +84,7 @@ pub struct Config {
     // that servers use if required to verify a client certificate
     // by the policy in client_auth.
     // Used by Server to verify client's certificate
-    pub(crate) client_cert_verifier: Arc<dyn rustls::ClientCertVerifier>,
+    pub(crate) client_cert_verifier: Option<Arc<dyn rustls::ClientCertVerifier>>,
 
     // server_name is used to verify the hostname on the returned
     // certificates unless insecure_skip_verify is given.
@@ -128,7 +128,7 @@ impl Default for Config {
             insecure_hashes: false,
             verify_peer_certificate: None,
             roots_cas: rustls::RootCertStore::empty(),
-            client_cert_verifier: rustls::NoClientAuth::new(),
+            client_cert_verifier: None,
             server_name: String::default(),
             mtu: 0,
             replay_protection_window: 0,

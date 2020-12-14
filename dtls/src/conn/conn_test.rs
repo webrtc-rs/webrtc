@@ -850,7 +850,6 @@ async fn test_srtp_configuration() -> Result<(), Error> {
     Ok(())
 }
 
-/*
 #[tokio::test]
 async fn test_client_certificate() -> Result<(), Error> {
     /*env_logger::Builder::new()
@@ -868,27 +867,33 @@ async fn test_client_certificate() -> Result<(), Error> {
     .filter(None, LevelFilter::Trace)
     .init();*/
 
+    let server_name = "localhost".to_owned();
+
     let srv_cert = Certificate::generate_self_signed(vec!["localhost".to_owned()])?;
-    //let srv_certificate = load_certs(&srv_cert.certificate)?;
-    //srvCAPool := x509.NewCertPool()
-    //srvCAPool.AddCert(srvCertificate)
+    let rustls_srv_cert = rustls::Certificate(srv_cert.certificate[0].to_vec());
+    let mut srv_ca_pool = rustls::RootCertStore::empty();
+    srv_ca_pool
+        .add(&rustls_srv_cert)
+        .or_else(|_err| Err(Error::new("add srv_cert error".to_owned())))?;
 
     let cert = Certificate::generate_self_signed(vec!["localhost".to_owned()])?;
-    //let certificate = load_certs(&cert.certificate)?;
-    //caPool := x509.NewCertPool()
-    //caPool.AddCert(certificate)
+    let rustls_cert = rustls::Certificate(cert.certificate[0].to_vec());
+    let mut roots_cas = rustls::RootCertStore::empty();
+    roots_cas
+        .add(&rustls_cert)
+        .or_else(|_err| Err(Error::new("add cert error".to_owned())))?;
 
     let tests = vec![
         (
             "NoClientCert",
             Config {
-                //RootCAs: srvCAPool
+                roots_cas: srv_ca_pool.clone(),
+                server_name: server_name.clone(),
                 ..Default::default()
             },
             Config {
                 certificates: vec![srv_cert.clone()],
                 client_auth: ClientAuthType::NoClientCert,
-                //ClientCAs:    caPool,
                 ..Default::default()
             },
             false,
@@ -896,7 +901,8 @@ async fn test_client_certificate() -> Result<(), Error> {
         (
             "NoClientCert_cert",
             Config {
-                //RootCAs: srvCAPool,
+                roots_cas: srv_ca_pool.clone(),
+                server_name: server_name.clone(),
                 certificates: vec![cert.clone()],
                 ..Default::default()
             },
@@ -910,7 +916,8 @@ async fn test_client_certificate() -> Result<(), Error> {
         (
             "RequestClientCert_cert",
             Config {
-                //RootCAs: srvCAPool,
+                roots_cas: srv_ca_pool.clone(),
+                server_name: server_name.clone(),
                 certificates: vec![cert.clone()],
                 ..Default::default()
             },
@@ -924,13 +931,13 @@ async fn test_client_certificate() -> Result<(), Error> {
         (
             "RequestClientCert_no_cert",
             Config {
-                //RootCAs: srvCAPool,
+                roots_cas: srv_ca_pool.clone(),
+                server_name: server_name.clone(),
                 ..Default::default()
             },
             Config {
                 certificates: vec![srv_cert.clone()],
                 client_auth: ClientAuthType::RequestClientCert,
-                //ClientCAs:    caPool,
                 ..Default::default()
             },
             false,
@@ -938,7 +945,8 @@ async fn test_client_certificate() -> Result<(), Error> {
         (
             "RequireAnyClientCert",
             Config {
-                //RootCAs: srvCAPool,
+                roots_cas: srv_ca_pool.clone(),
+                server_name: server_name.clone(),
                 certificates: vec![cert.clone()],
                 ..Default::default()
             },
@@ -952,7 +960,8 @@ async fn test_client_certificate() -> Result<(), Error> {
         (
             "RequireAnyClientCert_error",
             Config {
-                //RootCAs: srvCAPool,
+                roots_cas: srv_ca_pool.clone(),
+                server_name: server_name.clone(),
                 ..Default::default()
             },
             Config {
@@ -965,13 +974,16 @@ async fn test_client_certificate() -> Result<(), Error> {
         (
             "VerifyClientCertIfGiven_no_cert",
             Config {
-                //RootCAs: srvCAPool,
+                roots_cas: srv_ca_pool.clone(),
+                server_name: server_name.clone(),
                 ..Default::default()
             },
             Config {
                 certificates: vec![srv_cert.clone()],
                 client_auth: ClientAuthType::VerifyClientCertIfGiven,
-                //ClientCAs:    caPool,
+                client_cert_verifier: Some(rustls::AllowAnyAuthenticatedClient::new(
+                    roots_cas.clone(),
+                )),
                 ..Default::default()
             },
             false,
@@ -979,23 +991,26 @@ async fn test_client_certificate() -> Result<(), Error> {
         (
             "VerifyClientCertIfGiven_cert",
             Config {
-                //RootCAs: srvCAPool,
+                roots_cas: srv_ca_pool.clone(),
+                server_name: server_name.clone(),
                 certificates: vec![cert.clone()],
                 ..Default::default()
             },
             Config {
                 certificates: vec![srv_cert.clone()],
                 client_auth: ClientAuthType::VerifyClientCertIfGiven,
-                //ClientCAs:    caPool,
+                client_cert_verifier: Some(rustls::AllowAnyAuthenticatedClient::new(
+                    roots_cas.clone(),
+                )),
                 ..Default::default()
             },
             false,
         ),
-        /*(
-            //TODO
+        (
             "VerifyClientCertIfGiven_error",
             Config {
-                //RootCAs: srvCAPool,
+                roots_cas: srv_ca_pool.clone(),
+                server_name: server_name.clone(),
                 certificates: vec![cert.clone()],
                 ..Default::default()
             },
@@ -1005,18 +1020,21 @@ async fn test_client_certificate() -> Result<(), Error> {
                 ..Default::default()
             },
             true,
-        ),*/
+        ),
         (
             "RequireAndVerifyClientCert",
             Config {
-                //RootCAs: srvCAPool,
+                roots_cas: srv_ca_pool.clone(),
+                server_name: server_name.clone(),
                 certificates: vec![cert.clone()],
                 ..Default::default()
             },
             Config {
                 certificates: vec![srv_cert.clone()],
                 client_auth: ClientAuthType::RequireAndVerifyClientCert,
-                //ClientCAs:    caPool,
+                client_cert_verifier: Some(rustls::AllowAnyAuthenticatedClient::new(
+                    roots_cas.clone(),
+                )),
                 ..Default::default()
             },
             false,
@@ -1113,7 +1131,6 @@ async fn test_client_certificate() -> Result<(), Error> {
 
     Ok(())
 }
-*/
 
 #[tokio::test]
 async fn test_extended_master_secret() -> Result<(), Error> {
@@ -1410,7 +1427,9 @@ async fn test_server_certificate() -> Result<(), Error> {
             Config {
                 certificates: vec![cert.clone()],
                 client_auth: ClientAuthType::RequireAndVerifyClientCert,
-                client_cert_verifier: rustls::AllowAnyAuthenticatedClient::new(roots_cas.clone()),
+                client_cert_verifier: Some(rustls::AllowAnyAuthenticatedClient::new(
+                    roots_cas.clone(),
+                )),
                 verify_peer_certificate: Some(fn_expected_chain),
                 ..Default::default()
             },
