@@ -38,6 +38,8 @@
 - [x] DTLS
   - sync up to [pion/dtls/v2.0.0](https://github.com/pion/dtls/tree/789798433596e4dd92451b66984dddb2f8a9f165)
 - [ ] STUN
+  - work in progress
+  - catch up [pion/stun/v0.3.5](https://github.com/pion/stun/tree/v0.3.5)
 - [ ] TURN
 - [ ] ICE
 - [ ] PeerConnection
