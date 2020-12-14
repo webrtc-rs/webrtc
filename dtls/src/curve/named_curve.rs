@@ -48,7 +48,7 @@ fn elliptic_curve_keypair(curve: NamedCurve) -> Result<NamedCurveKeypair, Error>
         }
         NamedCurve::P384 => {
             let rng = ring::rand::SystemRandom::new();
-            let secret_key = ring::agreement::EphemeralPrivateKey::generate(&ring::agreement::ECDH_P256, &rng)?;
+            let secret_key = ring::agreement::EphemeralPrivateKey::generate(&ring::agreement::ECDH_P384, &rng)?;
             let public_key = secret_key.compute_public_key()?;
             (
                 public_key.as_ref().to_vec(),
