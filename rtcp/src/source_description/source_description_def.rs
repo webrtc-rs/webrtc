@@ -1,7 +1,6 @@
 use std::fmt;
-use std::io::{Read, Write};
 
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
 use util::Error;
 
@@ -10,16 +9,16 @@ use crate::header;
 use crate::util::get_padding;
 use crate::{packet::Packet, source_description};
 
-// A SourceDescriptionChunk contains items describing a single RTP source
+/// A SourceDescriptionChunk contains items describing a single RTP source
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct SourceDescriptionChunk {
-    // The source (ssrc) or contributing source (csrc) identifier this packet describes
+    /// The source (ssrc) or contributing source (csrc) identifier this packet describes
     pub source: u32,
     pub items: Vec<SourceDescriptionItem>,
 }
 
 impl SourceDescriptionChunk {
-    // Marshal encodes the SourceDescriptionChunk in binary
+    /// Marshal encodes the SourceDescriptionChunk in binary
     pub fn marshal(&self) -> Result<BytesMut, Error> {
         /*
          *  +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
@@ -30,27 +29,28 @@ impl SourceDescriptionChunk {
          *  +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
          */
 
-        todo!()
+        let mut raw_packet = BytesMut::new();
+        raw_packet.resize(super::SDES_SOURCE_LEN, 0u8);
 
-        // writer.write_u32::<BigEndian>(self.source)?;
+        BigEndian::write_u32(&mut raw_packet, self.source);
 
-        // for it in &self.items {
-        //     it.marshal(writer)?;
-        // }
+        for it in &self.items {
+            let data = it.marshal()?;
 
-        // // The list of items in each chunk MUST be terminated by one or more null octets
-        // writer.write_u8(SDESType::SDESEnd as u8)?;
+            raw_packet.extend(data);
+        }
 
-        // // additional null octets MUST be included if needed to pad until the next 32-bit boundary
-        // let padding_len = get_padding(self.size());
-        // let padding: Vec<u8> = vec![0; padding_len];
-        // writer.write_all(padding.as_slice())?;
+        // The list of items in each chunk MUST be terminated by one or more null octets
+        raw_packet.extend(&[super::SDESType::SDESEnd as u8]);
 
-        // Ok(writer.flush()?)
+        // additional null octets MUST be included if needed to pad until the next 32-bit boundary
+        raw_packet.extend(vec![0u8; get_padding(raw_packet.len())]);
+
+        Ok(raw_packet)
     }
 
-    // Unmarshal decodes the SourceDescriptionChunk from binary
-    pub fn unmarshal(&self, raw_packet: &mut BytesMut) -> Result<(), Error> {
+    /// Unmarshal decodes the SourceDescriptionChunk from binary
+    pub fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         /*
          *  +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
          *  |                          SSRC/CSRC_1                          |
@@ -60,27 +60,30 @@ impl SourceDescriptionChunk {
          *  +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
          */
 
-        todo!()
-        // let source = reader.read_u32::<BigEndian>()?;
+        if raw_packet.len() < (super::SDES_SOURCE_LEN + super::SDES_TYPE_LEN) {
+            return Err(ERR_PACKET_TOO_SHORT.to_owned());
+        }
 
-        // let mut items = vec![];
-        // loop {
-        //     let item = SourceDescriptionItem::unmarshal(reader)?;
-        //     if item.sdes_type != SDESType::SDESEnd {
-        //         items.push(item);
-        //     } else {
-        //         break;
-        //     }
-        // }
+        self.source = BigEndian::read_u32(raw_packet);
 
-        // let sdc = SourceDescriptionChunk { source, items };
-        // let mut padding_len = get_padding(sdc.size());
-        // while padding_len > 0 {
-        //     reader.read_u8()?;
-        //     padding_len -= 1;
-        // }
+        let mut i = 4;
 
-        // Ok(sdc)
+        while i < raw_packet.len() {
+            let pkt_type = super::SDESType::from(raw_packet[i]);
+
+            if pkt_type == super::SDESType::SDESEnd {
+                return Ok(());
+            }
+
+            let mut it = SourceDescriptionItem::default();
+
+            it.unmarshal(&mut raw_packet[i..].into())?;
+
+            i += it.len();
+            self.items.push(it);
+        }
+
+        Err(ERR_PACKET_TOO_SHORT.to_owned())
     }
 
     fn len(&self) -> usize {
@@ -245,7 +248,7 @@ impl Packet for SourceDescription {
         let mut i = header::HEADER_LENGTH;
 
         while i < raw_packet.len() {
-            let chunk = source_description::SourceDescriptionChunk::default();
+            let mut chunk = source_description::SourceDescriptionChunk::default();
 
             chunk.unmarshal(&mut raw_packet[i..].into())?;
 
