@@ -211,7 +211,7 @@ pub(crate) fn verify_key_signature(
         return Err(ERR_LENGTH_MISMATCH.clone());
     }
 
-    let (_, certificate) = x509_parser::parse_x509_der(&raw_certificates[0])?;
+    let (_, certificate) = x509_parser::parse_x509_certificate(&raw_certificates[0])?;
 
     let pki_alg = &certificate.tbs_certificate.subject_pki.algorithm.algorithm;
     let sign_alg = &certificate.tbs_certificate.signature.algorithm;
@@ -219,21 +219,21 @@ pub(crate) fn verify_key_signature(
     let verify_alg: &dyn ring::signature::VerificationAlgorithm = if *pki_alg == OID_ED25519 {
         &ring::signature::ED25519
     } else if *pki_alg == OID_ECDSA {
-        if *sign_alg == x509_parser::objects::OID_ECDSA_SHA256 {
+        if *sign_alg == oid_registry::OID_SIG_ECDSA_WITH_SHA256 {
             &ring::signature::ECDSA_P256_SHA256_ASN1
-        } else if *sign_alg == x509_parser::objects::OID_ECDSA_SHA384 {
+        } else if *sign_alg == oid_registry::OID_SIG_ECDSA_WITH_SHA384 {
             &ring::signature::ECDSA_P384_SHA384_ASN1
         } else {
             return Err(ERR_KEY_SIGNATURE_VERIFY_UNIMPLEMENTED.clone());
         }
-    } else if *pki_alg == x509_parser::objects::OID_RSA_ENCRYPTION {
-        if *sign_alg == x509_parser::objects::OID_RSA_SHA1 {
+    } else if *pki_alg == oid_registry::OID_PKCS1_RSAENCRYPTION {
+        if *sign_alg == oid_registry::OID_PKCS1_SHA1WITHRSA {
             &ring::signature::RSA_PKCS1_1024_8192_SHA1_FOR_LEGACY_USE_ONLY
-        } else if *sign_alg == x509_parser::objects::OID_RSA_SHA256 {
+        } else if *sign_alg == oid_registry::OID_PKCS1_SHA256WITHRSA {
             &ring::signature::RSA_PKCS1_2048_8192_SHA256
-        } else if *sign_alg == x509_parser::objects::OID_RSA_SHA384 {
+        } else if *sign_alg == oid_registry::OID_PKCS1_SHA384WITHRSA {
             &ring::signature::RSA_PKCS1_2048_8192_SHA384
-        } else if *sign_alg == x509_parser::objects::OID_RSA_SHA512 {
+        } else if *sign_alg == oid_registry::OID_PKCS1_SHA512WITHRSA {
             &ring::signature::RSA_PKCS1_2048_8192_SHA512
         } else {
             return Err(ERR_KEY_SIGNATURE_VERIFY_UNIMPLEMENTED.clone());
