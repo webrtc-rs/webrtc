@@ -122,11 +122,13 @@ impl CompoundPacket {
     pub fn unmarshal(&mut self, raw_data: &mut BytesMut) -> Result<(), Error> {
         let mut out = Vec::new();
 
+        let mut raw_data = raw_data.clone();
+
         while raw_data.len() != 0 {
-            let (p, processed) = crate::packet::unmarshaller(raw_data)?;
+            let (p, processed) = crate::packet::unmarshaller(&mut raw_data)?;
             out.push(p);
 
-            *raw_data = raw_data.split_off(processed);
+            raw_data = raw_data.split_off(processed);
         }
 
         *self = Self(out);

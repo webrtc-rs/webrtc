@@ -329,6 +329,7 @@ mod test {
             let mut c = CompoundPacket::default();
 
             let mut data1 = result.unwrap();
+
             c.unmarshal(&mut data1).expect("Unmarshall should be nil");
 
             let data2 = packet.marshal().expect("Marshal should be nil");

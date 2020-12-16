@@ -308,7 +308,7 @@ impl Packet for SourceDescription {
 
         let header_data = self.header().marshal()?;
 
-        raw_packet[header_data.len()..].copy_from_slice(&header_data);
+        raw_packet[..header_data.len()].copy_from_slice(&header_data);
 
         Ok(raw_packet)
     }
