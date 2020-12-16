@@ -7,7 +7,7 @@ use tokio::sync::mpsc::error::SendError;
 
 use url::ParseError;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct Error {
     message: String,
 }

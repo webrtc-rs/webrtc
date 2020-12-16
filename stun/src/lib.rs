@@ -5,5 +5,7 @@
 extern crate lazy_static;
 
 pub mod addr;
+pub mod agent;
 pub mod attributes;
 pub mod errors;
+pub mod message;

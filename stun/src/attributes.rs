@@ -1,6 +1,7 @@
 use std::fmt;
 
 // Attributes is list of message attributes.
+#[derive(Default)]
 pub struct Attributes(Vec<RawAttribute>);
 
 impl Attributes {
