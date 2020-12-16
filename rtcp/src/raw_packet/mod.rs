@@ -1,27 +1,25 @@
 use std::fmt;
 use std::io::{BufReader, Read, Write};
 
+use errors::*;
+use header::Header;
 use util::Error;
 
-use crate::packet::Packet;
+use crate::{errors, packet::Packet};
 use bytes::BytesMut;
 
-use super::header::*;
+use super::header;
 
-#[cfg(test)]
 mod raw_packet_test;
 
-// RawPacket represents an unparsed RTCP packet. It's returned by Unmarshal when
-// a packet with an unknown type is encountered.
+/// RawPacket represents an unparsed RTCP packet. It's returned by Unmarshal when
+/// a packet with an unknown type is encountered.
 #[derive(Debug, PartialEq, Default, Clone)]
-pub struct RawPacket {
-    pub header: Header,
-    pub raw: Vec<u8>,
-}
+pub struct RawPacket(Vec<u8>);
 
 impl fmt::Display for RawPacket {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "RawPacket: {:?}", self.raw)
+        write!(f, "RawPacket: {:?}", self)
     }
 }
 
@@ -30,27 +28,39 @@ impl Packet for RawPacket {
         self
     }
 
-    // destination_ssrc returns an array of SSRC values that this packet refers to.
+    /// destination_ssrc returns an array of SSRC values that this packet refers to.
     fn destination_ssrc(&self) -> Vec<u32> {
         vec![]
     }
 
+    /// Unmarshal decodes the packet from binary.
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
-        todo!()
+        if raw_packet.len() < header::HEADER_LENGTH {
+            return Err(ERR_PACKET_TOO_SHORT.to_owned());
+        }
+
+        *self = Self(raw_packet.to_vec());
+
+        let mut h = Header::default();
+        h.unmarshal(raw_packet)
     }
 
+    /// Marshal encodes the packet in binary.
     fn marshal(&self) -> Result<BytesMut, Error> {
-        todo!()
+        Ok(self.0[..].into())
     }
 }
 
 impl RawPacket {
-    fn len(&self) -> usize {
-        self.raw.len()
-    }
+    /// Header returns the Header associated with this packet.
+    pub fn header(&mut self) -> header::Header {
+        let mut h = header::Header::default();
 
-    // Header returns the Header associated with this packet.
-    pub fn header(&self) -> Header {
-        self.header.clone()
+        match h.unmarshal(&mut self.0.as_slice().into()) {
+            Ok(_) => h,
+
+            // ToDo: @metaclips: log error.
+            Err(_) => header::Header::default(),
+        }
     }
 }

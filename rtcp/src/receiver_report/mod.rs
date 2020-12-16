@@ -1,5 +1,4 @@
 mod receiver_report_def;
-#[cfg(test)]
 mod receiver_report_test;
 
 pub use receiver_report_def::ReceiverReport;

@@ -189,7 +189,7 @@ impl ReceiverReport {
     fn len(&self) -> usize {
         let mut reps_length = 0;
         for rep in &self.reports {
-            reps_length += rep.size();
+            reps_length += rep.len();
         }
         header::HEADER_LENGTH + header::SSRC_LENGTH + reps_length + self.profile_extensions.len()
     }

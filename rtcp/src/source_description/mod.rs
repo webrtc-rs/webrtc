@@ -6,8 +6,8 @@ pub use source_description_def::{
     SourceDescription, SourceDescriptionChunk, SourceDescriptionItem,
 };
 
-// SDESType is the item type used in the RTCP SDES control packet.
-// RTP SDES item types registered with IANA. See: https://www.iana.org/assignments/rtp-parameters/rtp-parameters.xhtml#rtp-parameters-5
+/// SDESType is the item type used in the RTCP SDES control packet.
+/// RTP SDES item types registered with IANA. See: https://www.iana.org/assignments/rtp-parameters/rtp-parameters.xhtml#rtp-parameters-5
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(u8)]
 pub enum SDESType {

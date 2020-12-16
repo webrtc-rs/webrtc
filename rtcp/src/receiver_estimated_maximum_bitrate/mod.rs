@@ -208,7 +208,7 @@ impl Packet for ReceiverEstimatedMaximumBitrate {
         Ok(())
     }
 
-    // destination_ssrc returns an array of SSRC values that this packet refers to.
+    /// destination_ssrc returns an array of SSRC values that this packet refers to.
     fn destination_ssrc(&self) -> Vec<u32> {
         self.ssrcs.clone()
     }
@@ -304,7 +304,7 @@ impl ReceiverEstimatedMaximumBitrate {
         Ok(n)
     }
 
-    // Header returns the Header associated with this packet.
+    /// Header returns the Header associated with this packet.
     pub fn header(&self) -> Header {
         let l = self.marshal_size() + get_padding(self.marshal_size());
 

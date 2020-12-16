@@ -3,45 +3,45 @@ use util::Error;
 
 use byteorder::{BigEndian, ByteOrder};
 
-// A ReceptionReport block conveys statistics on the reception of RTP packets
-// from a single synchronization source.
+/// A ReceptionReport block conveys statistics on the reception of RTP packets
+/// from a single synchronization source.
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct ReceptionReport {
-    // The SSRC identifier of the source to which the information in this
-    // reception report block pertains.
+    /// The SSRC identifier of the source to which the information in this
+    /// reception report block pertains.
     pub ssrc: u32,
-    // The fraction of RTP data packets from source SSRC lost since the
-    // previous SR or RR packet was sent, expressed as a fixed point
-    // number with the binary point at the left edge of the field.
+    /// The fraction of RTP data packets from source SSRC lost since the
+    /// previous SR or RR packet was sent, expressed as a fixed point
+    /// number with the binary point at the left edge of the field.
     pub fraction_lost: u8,
-    // The total number of RTP data packets from source SSRC that have
-    // been lost since the beginning of reception.
+    /// The total number of RTP data packets from source SSRC that have
+    /// been lost since the beginning of reception.
     pub total_lost: u32,
-    // The low 16 bits contain the highest sequence number received in an
-    // RTP data packet from source SSRC, and the most significant 16
-    // bits extend that sequence number with the corresponding count of
-    // sequence number cycles.
+    /// The low 16 bits contain the highest sequence number received in an
+    /// RTP data packet from source SSRC, and the most significant 16
+    /// bits extend that sequence number with the corresponding count of
+    /// sequence number cycles.
     pub last_sequence_number: u32,
-    // An estimate of the statistical variance of the RTP data packet
-    // interarrival time, measured in timestamp units and expressed as an
-    // unsigned integer.
+    /// An estimate of the statistical variance of the RTP data packet
+    /// interarrival time, measured in timestamp units and expressed as an
+    /// unsigned integer.
     pub jitter: u32,
-    // The middle 32 bits out of 64 in the NTP timestamp received as part of
-    // the most recent RTCP sender report (SR) packet from source SSRC. If no
-    // SR has been received yet, the field is set to zero.
+    /// The middle 32 bits out of 64 in the NTP timestamp received as part of
+    /// the most recent RTCP sender report (SR) packet from source SSRC. If no
+    /// SR has been received yet, the field is set to zero.
     pub last_sender_report: u32,
-    // The delay, expressed in units of 1/65536 seconds, between receiving the
-    // last SR packet from source SSRC and sending this reception report block.
-    // If no SR packet has been received yet from SSRC, the field is set to zero.
+    /// The delay, expressed in units of 1/65536 seconds, between receiving the
+    /// last SR packet from source SSRC and sending this reception report block.
+    /// If no SR packet has been received yet from SSRC, the field is set to zero.
     pub delay: u32,
 }
 
 impl ReceptionReport {
-    pub fn size(&self) -> usize {
+    pub fn len(&self) -> usize {
         super::RECEPTION_REPORT_LENGTH
     }
 
-    // Marshal encodes the ReceptionReport in binary
+    /// Marshal encodes the ReceptionReport in binary
     pub fn marshal(&self) -> Result<BytesMut, Error> {
         /*
          *  0                   1                   2                   3
@@ -94,7 +94,7 @@ impl ReceptionReport {
         Ok(raw_packet[..].into())
     }
 
-    // Unmarshal decodes the ReceptionReport from binary
+    /// Unmarshal decodes the ReceptionReport from binary
     pub fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         if raw_packet.len() < super::RECEPTION_REPORT_LENGTH {
             return Err(Error::new("packet too short".to_string()));

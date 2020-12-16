@@ -97,14 +97,14 @@ impl SourceDescriptionChunk {
     }
 }
 
-// A SourceDescriptionItem is a part of a SourceDescription that describes a stream.
+/// A SourceDescriptionItem is a part of a SourceDescription that describes a stream.
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct SourceDescriptionItem {
-    // The type identifier for this item. eg, SDESCNAME for canonical name description.
-    //
-    // Type zero or SDESEnd is interpreted as the end of an item list and cannot be used.
+    /// The type identifier for this item. eg, SDESCNAME for canonical name description.
+    ///
+    /// Type zero or SDESEnd is interpreted as the end of an item list and cannot be used.
     pub sdes_type: super::SDESType,
-    // Text is a unicode text blob associated with the item. Its meaning varies based on the item's Type.
+    /// Text is a unicode text blob associated with the item. Its meaning varies based on the item's Type.
     pub text: String,
 }
 
@@ -120,7 +120,7 @@ impl SourceDescriptionItem {
         super::SDES_TYPE_LEN + super::SDES_OCTET_COUNT_LEN + self.text.len()
     }
 
-    // Marshal encodes the SourceDescriptionItem in binary
+    /// Marshal encodes the SourceDescriptionItem in binary
     pub fn marshal(&self) -> Result<BytesMut, Error> {
         /*
          *   0                   1                   2                   3
@@ -154,7 +154,7 @@ impl SourceDescriptionItem {
         Ok(raw_packet)
     }
 
-    // Unmarshal decodes the SourceDescriptionItem from binary
+    /// Unmarshal decodes the SourceDescriptionItem from binary
     pub fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         /*
          *   0                   1                   2                   3
@@ -217,7 +217,7 @@ impl Packet for SourceDescription {
         self
     }
 
-    // Unmarshal decodes the SourceDescription from binary
+    /// Unmarshal decodes the SourceDescription from binary
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         /*
          *         0                   1                   2                   3
@@ -263,12 +263,12 @@ impl Packet for SourceDescription {
         Ok(())
     }
 
-    // destination_ssrc returns an array of SSRC values that this packet refers to.
+    /// destination_ssrc returns an array of SSRC values that this packet refers to.
     fn destination_ssrc(&self) -> Vec<u32> {
         self.chunks.iter().map(|x| x.source).collect()
     }
 
-    // Marshal encodes the SourceDescription in binary
+    /// Marshal encodes the SourceDescription in binary
     fn marshal(&self) -> Result<BytesMut, Error> {
         /*
          *         0                   1                   2                   3

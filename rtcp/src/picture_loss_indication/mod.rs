@@ -9,20 +9,18 @@ use crate::util::get_padding;
 use crate::{errors, packet::Packet};
 use errors::*;
 
-#[cfg(test)]
 mod picture_loss_indication_test;
 
-// The PictureLossIndication packet informs the encoder about the loss of an undefined amount of coded video data belonging to one or more pictures
+const PLI_LENGTH: usize = 2;
+
+/// The PictureLossIndication packet informs the encoder about the loss of an undefined amount of coded video data belonging to one or more pictures
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct PictureLossIndication {
-    // SSRC of sender
+    /// SSRC of sender
     pub sender_ssrc: u32,
-
-    // SSRC where the loss was experienced
+    /// SSRC where the loss was experienced
     pub media_ssrc: u32,
 }
-
-const PLI_LENGTH: usize = 2;
 
 impl fmt::Display for PictureLossIndication {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -63,7 +61,7 @@ impl Packet for PictureLossIndication {
         Ok(())
     }
 
-    // Marshal encodes the PictureLossIndication in binary
+    /// Marshal encodes the PictureLossIndication in binary
     fn marshal(&self) -> Result<BytesMut, Error> {
         /*
          * PLI does not require parameters.  Therefore, the length field MUST be
@@ -105,7 +103,7 @@ impl PictureLossIndication {
         header::HEADER_LENGTH + receiver_report::SSRC_LENGTH * 2
     }
 
-    // Header returns the Header associated with this packet.
+    /// Header returns the Header associated with this packet.
     pub fn header(&self) -> header::Header {
         let l = self.len() + get_padding(self.len());
 
