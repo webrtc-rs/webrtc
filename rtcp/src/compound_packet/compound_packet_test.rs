@@ -2,7 +2,7 @@
 mod test {
     use crate::compound_packet::*;
     use crate::errors::*;
-    use crate::{goodbye, header, packet, receiver_report, sender_report, source_description};
+    use crate::{goodbye, packet, receiver_report, sender_report, source_description};
 
     lazy_static! {
     // An RTCP packet from a packet dump

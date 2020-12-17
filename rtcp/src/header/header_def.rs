@@ -3,6 +3,10 @@ use util::Error;
 use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
 
+use errors::*;
+
+use crate::errors;
+
 use super::PacketType;
 
 /// A Header is the common header shared by all RTCP packets
@@ -42,7 +46,7 @@ impl Header {
         }
 
         if self.count > 31 {
-            return Err(Error::new("invalid header".to_string()));
+            return Err(ERR_INVALID_HEADER.to_owned());
         }
 
         raw_packet[0] |= self.count << super::COUNT_SHIFT;
@@ -65,13 +69,13 @@ impl Header {
          */
 
         if raw_packet.len() < super::HEADER_LENGTH {
-            return Err(Error::new("packet too short".to_string()));
+            return Err(ERR_PACKET_TOO_SHORT.to_owned());
         }
 
         let version = raw_packet[0] >> super::VERSION_SHIFT & super::VERSION_MASK;
 
         if version != super::RTP_VERSION {
-            return Err(Error::new("invalid packet version".to_string()));
+            return Err(ERR_BAD_VERSION.to_owned());
         }
 
         self.padding = (raw_packet[0] >> super::PADDING_SHIFT & super::PADDING_MASK) > 0;

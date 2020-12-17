@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod full_intra_request_test;
 
+use crate::errors::*;
 use bytes::BytesMut;
 use std::fmt;
 use util::Error;
@@ -62,9 +63,9 @@ impl Packet for FullIntraRequest {
         BigEndian::write_u32(&mut raw_packet, self.sender_ssrc);
         BigEndian::write_u32(&mut raw_packet[4..], self.media_ssrc);
 
-        for i in 0..self.fir.len() {
-            BigEndian::write_u32(&mut raw_packet[FIR_OFFSET + 8 * i..], self.fir[i].ssrc);
-            raw_packet[FIR_OFFSET + 8 * i] = self.fir[i].sequence_number;
+        for (i, fir) in self.fir.iter().enumerate() {
+            BigEndian::write_u32(&mut raw_packet[FIR_OFFSET + 8 * i..], fir.ssrc);
+            raw_packet[FIR_OFFSET + 8 * i + 4] = fir.sequence_number;
         }
 
         let header = self.header();
@@ -79,7 +80,7 @@ impl Packet for FullIntraRequest {
     /// Unmarshal decodes the TransportLayerNack
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         if raw_packet.len() < (header::HEADER_LENGTH + header::SSRC_LENGTH) {
-            return Err(Error::new("packet too short".to_string()));
+            return Err(ERR_PACKET_TOO_SHORT.to_owned());
         }
 
         let mut header = Header::default();
@@ -87,13 +88,13 @@ impl Packet for FullIntraRequest {
         header.unmarshal(raw_packet)?;
 
         if raw_packet.len() < (header::HEADER_LENGTH + (4 * header.length) as usize) {
-            return Err(Error::new("packet too short".to_string()));
+            return Err(ERR_PACKET_TOO_SHORT.to_owned());
         }
 
         if header.packet_type != header::PacketType::PayloadSpecificFeedback
             || header.count != header::FORMAT_FIR
         {
-            return Err(Error::new("wrong packet type".to_string()));
+            return Err(ERR_WRONG_TYPE.to_owned());
         }
 
         self.sender_ssrc = BigEndian::read_u32(&raw_packet[header::HEADER_LENGTH..]);
