@@ -1,4 +1,10 @@
+use crate::agent::*;
 use crate::attributes::*;
+use crate::errors::*;
+
+use util::Error;
+
+use std::fmt;
 
 // MAGIC_COOKIE is fixed value that aids in distinguishing STUN packets
 // from packets of other protocols when STUN is multiplexed with those
@@ -15,41 +21,12 @@ const MESSAGE_HEADER_SIZE: usize = 20;
 // TRANSACTION_ID_SIZE is length of transaction id array (in bytes).
 pub const TRANSACTION_ID_SIZE: usize = 12; // 96 bit
 
-/*
-// NewTransactionID returns new random transaction ID using crypto/rand
-// as source.
-func NewTransactionID() (b [TRANSACTION_IDSIZE]byte) {
-    readFullOrPanic(rand.Reader, b[:])
-    return b
-}
-
-// IsMessage returns true if b looks like STUN message.
-// Useful for multiplexing. IsMessage does not guarantee
+// is_message returns true if b looks like STUN message.
+// Useful for multiplexing. is_message does not guarantee
 // that decoding will be successful.
-func IsMessage(b []byte) bool {
-    return len(b) >= MESSAGE_HEADER_SIZE && bin.Uint32(b[4:8]) == MAGIC_COOKIE
+pub fn is_message(b: &[u8]) -> bool {
+    b.len() >= MESSAGE_HEADER_SIZE && u32::from_be_bytes([b[4], b[5], b[6], b[7]]) == MAGIC_COOKIE
 }
-
-// New returns *Message with pre-allocated Raw.
-func New() *Message {
-    const defaultRawCapacity = 120
-    return &Message{
-        Raw: make([]byte, MESSAGE_HEADER_SIZE, defaultRawCapacity),
-    }
-}
-
-// ErrDecodeToNil occurs on Decode(data, nil) call.
-var ErrDecodeToNil = errors.New("attempt to decode to nil message")
-
-// Decode decodes Message from data to m, returning error if any.
-func Decode(data []byte, m *Message) error {
-    if m == nil {
-        return ErrDecodeToNil
-    }
-    m.Raw = append(m.Raw[:0], data...)
-    return m.Decode()
-}
-*/
 // Message represents a single STUN packet. It uses aggressive internal
 // buffering to enable zero-allocation encoding and decoding,
 // so there are some usage constraints:
@@ -60,37 +37,120 @@ func Decode(data []byte, m *Message) error {
 pub struct Message {
     pub typ: MessageType,
     pub length: u32, // len(Raw) not including header
-    pub transaction_id: [u8; TRANSACTION_ID_SIZE],
+    pub transaction_id: TransactionId,
     pub attributes: Attributes,
     pub raw: Vec<u8>,
 }
+
+const DEFAULT_RAW_CAPACITY: usize = 120;
+
+impl Message {
+    // New returns *Message with pre-allocated Raw.
+    pub fn new() -> Self {
+        Message {
+            raw: {
+                let mut raw = Vec::with_capacity(DEFAULT_RAW_CAPACITY);
+                raw.extend_from_slice(&[0; MESSAGE_HEADER_SIZE]);
+                raw
+            },
+            ..Default::default()
+        }
+    }
+
+    // Decode decodes m.Raw into m.
+    pub fn decode(&mut self) -> Result<(), Error> {
+        // decoding message header
+        let buf = &self.raw;
+        if buf.len() < MESSAGE_HEADER_SIZE {
+            return Err(ERR_UNEXPECTED_HEADER_EOF.clone());
+        }
+
+        let t = u16::from_be_bytes([buf[0], buf[1]]); // first 2 bytes
+        let size = u16::from_be_bytes([buf[2], buf[3]]) as usize; // second 2 bytes
+        let cookie = u32::from_be_bytes([buf[4], buf[5], buf[6], buf[7]]); // last 4 bytes
+        let full_size = MESSAGE_HEADER_SIZE + size; // len(m.Raw)
+
+        if cookie != MAGIC_COOKIE {
+            return Err(Error::new(format!(
+                "{:x} is invalid magic cookie (should be {:x})",
+                cookie, MAGIC_COOKIE
+            )));
+        }
+        if buf.len() < full_size {
+            return Err(Error::new(format!(
+                "buffer length {} is less than {} (expected message size)",
+                buf.len(),
+                full_size
+            )));
+        }
+
+        // saving header data
+        self.typ.read_value(t);
+        self.length = size as u32;
+        self.transaction_id
+            .0
+            .copy_from_slice(&buf[8..MESSAGE_HEADER_SIZE]);
+
+        self.attributes = Attributes(vec![]);
+        let mut offset = 0;
+        let mut b = &buf[MESSAGE_HEADER_SIZE..full_size];
+
+        while offset < size {
+            // checking that we have enough bytes to read header
+            if b.len() < ATTRIBUTE_HEADER_SIZE {
+                return Err(Error::new(format!(
+                    "buffer length {} is less than {} (expected header size)",
+                    b.len(),
+                    ATTRIBUTE_HEADER_SIZE
+                )));
+            }
+
+            let mut a = RawAttribute {
+                typ: compat_attr_type(u16::from_be_bytes([b[0], b[1]])), // first 2 bytes
+                length: u16::from_be_bytes([b[2], b[3]]),                // second 2 bytes
+                ..Default::default()
+            };
+            let a_l = a.length as usize; // attribute length
+            let a_buff_l = nearest_padded_value_length(a_l); // expected buffer length (with padding)
+
+            b = &b[ATTRIBUTE_HEADER_SIZE..]; // slicing again to simplify value read
+            offset += ATTRIBUTE_HEADER_SIZE;
+            if b.len() < a_buff_l {
+                // checking size
+                return Err(Error::new(format!(
+                    "buffer length {} is less than {} (expected value size for {})",
+                    b.len(),
+                    a_buff_l,
+                    a.typ
+                )));
+            }
+            a.value = b[..a_l].to_vec();
+            offset += a_buff_l;
+            b = &b[a_buff_l..];
+
+            self.attributes.0.push(a);
+        }
+
+        Ok(())
+    }
+
+    // marshal_binary implements the encoding.BinaryMarshaler interface.
+    pub fn marshal_binary(&self) -> Result<Vec<u8>, Error> {
+        // We can't return m.Raw, allocation is expected by implicit interface
+        // contract induced by other implementations.
+        Ok(self.raw.clone())
+    }
+
+    // unmarshal_binary implements the encoding.BinaryUnmarshaler interface.
+    pub fn unmarshal_binary(&mut self, data: &[u8]) -> Result<(), Error> {
+        // We can't retain data, copy is expected by interface contract.
+        self.raw = vec![];
+        self.raw.extend_from_slice(data);
+        self.decode()
+    }
+}
+
 /*
-// MarshalBinary implements the encoding.BinaryMarshaler interface.
-func (m Message) MarshalBinary() (data []byte, err error) {
-    // We can't return m.Raw, allocation is expected by implicit interface
-    // contract induced by other implementations.
-    b := make([]byte, len(m.Raw))
-    copy(b, m.Raw)
-    return b, nil
-}
-
-// UnmarshalBinary implements the encoding.BinaryUnmarshaler interface.
-func (m *Message) UnmarshalBinary(data []byte) error {
-    // We can't retain data, copy is expected by interface contract.
-    m.Raw = append(m.Raw[:0], data...)
-    return m.Decode()
-}
-
-// GobEncode implements the gob.GobEncoder interface.
-func (m Message) GobEncode() ([]byte, error) {
-    return m.MarshalBinary()
-}
-
-// GobDecode implements the gob.GobDecoder interface.
-func (m *Message) GobDecode(data []byte) error {
-    return m.UnmarshalBinary(data)
-}
-
 // AddTo sets b.TransactionID to m.TransactionID.
 //
 // Implements Setter to aid in crafting responses.
@@ -328,69 +388,7 @@ func (m *Message) ReadFrom(r io.Reader) (int64, error) {
     return int64(n), m.Decode()
 }
 
-// ErrUnexpectedHeaderEOF means that there were not enough bytes in
-// m.Raw to read header.
-var ErrUnexpectedHeaderEOF = errors.New("unexpected EOF: not enough bytes to read header")
 
-// Decode decodes m.Raw into m.
-func (m *Message) Decode() error {
-    // decoding message header
-    buf := m.Raw
-    if len(buf) < MESSAGE_HEADER_SIZE {
-        return ErrUnexpectedHeaderEOF
-    }
-    var (
-        t        = bin.Uint16(buf[0:2])      // first 2 bytes
-        size     = int(bin.Uint16(buf[2:4])) // second 2 bytes
-        cookie   = bin.Uint32(buf[4:8])      // last 4 bytes
-        fullSize = MESSAGE_HEADER_SIZE + size  // len(m.Raw)
-    )
-    if cookie != MAGIC_COOKIE {
-        msg := fmt.Sprintf("%x is invalid magic cookie (should be %x)", cookie, MAGIC_COOKIE)
-        return newDecodeErr("message", "cookie", msg)
-    }
-    if len(buf) < fullSize {
-        msg := fmt.Sprintf("buffer length %d is less than %d (expected message size)", len(buf), fullSize)
-        return newAttrDecodeErr("message", msg)
-    }
-    // saving header data
-    m.Type.ReadValue(t)
-    m.Length = uint32(size)
-    copy(m.TransactionID[:], buf[8:MESSAGE_HEADER_SIZE])
-
-    m.Attributes = m.Attributes[:0]
-    var (
-        offset = 0
-        b      = buf[MESSAGE_HEADER_SIZE:fullSize]
-    )
-    for offset < size {
-        // checking that we have enough bytes to read header
-        if len(b) < ATTRIBUTE_HEADER_SIZE {
-            msg := fmt.Sprintf("buffer length %d is less than %d (expected header size)", len(b), ATTRIBUTE_HEADER_SIZE)
-            return newAttrDecodeErr("header", msg)
-        }
-        var (
-            a = RawAttribute{
-                Type:   compatAttrType(bin.Uint16(b[0:2])), // first 2 bytes
-                Length: bin.Uint16(b[2:4]),                 // second 2 bytes
-            }
-            aL     = int(a.Length)                // attribute length
-            aBuffL = nearestPaddedValueLength(aL) // expected buffer length (with padding)
-        )
-        b = b[ATTRIBUTE_HEADER_SIZE:] // slicing again to simplify value read
-        offset += ATTRIBUTE_HEADER_SIZE
-        if len(b) < aBuffL { // checking size
-            msg := fmt.Sprintf("buffer length %d is less than %d (expected value size for %s)", len(b), aBuffL, a.Type)
-            return newAttrDecodeErr("value", msg)
-        }
-        a.Value = b[:aL]
-        offset += aBuffL
-        b = b[aBuffL:]
-
-        m.Attributes = append(m.Attributes, a)
-    }
-    return nil
-}
 
 // Write decodes message and return error if any.
 //
@@ -405,185 +403,7 @@ func (m *Message) CloneTo(b *Message) error {
     b.Raw = append(b.Raw[:0], m.Raw...)
     return b.Decode()
 }
-*/
-// MessageClass is 8-bit representation of 2-bit class of STUN Message Class.
-#[derive(Default)]
-pub struct MessageClass(u8);
-/*
-// Possible values for message class in STUN Message Type.
-const (
-    ClassRequest         MessageClass = 0x00 // 0b00
-    ClassIndication      MessageClass = 0x01 // 0b01
-    ClassSuccessResponse MessageClass = 0x02 // 0b10
-    ClassErrorResponse   MessageClass = 0x03 // 0b11
-)
 
-// Common STUN message types.
-var (
-    // Binding request message type.
-    BindingRequest = NewType(MethodBinding, ClassRequest) // nolint:gochecknoglobals
-    // Binding success response message type
-    BindingSuccess = NewType(MethodBinding, ClassSuccessResponse) // nolint:gochecknoglobals
-    // Binding error response message type.
-    BindingError = NewType(MethodBinding, ClassErrorResponse) // nolint:gochecknoglobals
-)
-
-func (c MessageClass) String() string {
-    switch c {
-    case ClassRequest:
-        return "request"
-    case ClassIndication:
-        return "indication"
-    case ClassSuccessResponse:
-        return "success response"
-    case ClassErrorResponse:
-        return "error response"
-    default:
-        panic("unknown message class") // nolint: never happens unless wrongly casted
-    }
-}
-*/
-// Method is uint16 representation of 12-bit STUN method.
-#[derive(Default)]
-pub struct Method(u16);
-/*
-// Possible methods for STUN Message.
-const (
-    MethodBinding          Method = 0x001
-    MethodAllocate         Method = 0x003
-    MethodRefresh          Method = 0x004
-    MethodSend             Method = 0x006
-    MethodData             Method = 0x007
-    MethodCreatePermission Method = 0x008
-    MethodChannelBind      Method = 0x009
-)
-
-// Methods from RFC 6062.
-const (
-    MethodConnect           Method = 0x000a
-    MethodConnectionBind    Method = 0x000b
-    MethodConnectionAttempt Method = 0x000c
-)
-
-func methodName() map[Method]string {
-    return map[Method]string{
-        MethodBinding:          "Binding",
-        MethodAllocate:         "Allocate",
-        MethodRefresh:          "Refresh",
-        MethodSend:             "Send",
-        MethodData:             "Data",
-        MethodCreatePermission: "CreatePermission",
-        MethodChannelBind:      "ChannelBind",
-
-        // RFC 6062.
-        MethodConnect:           "Connect",
-        MethodConnectionBind:    "ConnectionBind",
-        MethodConnectionAttempt: "ConnectionAttempt",
-    }
-}
-
-func (m Method) String() string {
-    s, ok := methodName()[m]
-    if !ok {
-        // Falling back to hex representation.
-        s = fmt.Sprintf("0x%x", uint16(m))
-    }
-    return s
-}
-*/
-// MessageType is STUN Message Type Field.
-#[derive(Default)]
-pub struct MessageType {
-    pub method: Method,      // e.g. binding
-    pub class: MessageClass, // e.g. request
-}
-/*
-// AddTo sets m type to t.
-func (t MessageType) AddTo(m *Message) error {
-    m.SetType(t)
-    return nil
-}
-
-// NewType returns new message type with provided method and class.
-func NewType(method Method, class MessageClass) MessageType {
-    return MessageType{
-        Method: method,
-        Class:  class,
-    }
-}
-
-const (
-    methodABits = 0xf   // 0b0000000000001111
-    methodBBits = 0x70  // 0b0000000001110000
-    methodDBits = 0xf80 // 0b0000111110000000
-
-    methodBShift = 1
-    methodDShift = 2
-
-    firstBit  = 0x1
-    secondBit = 0x2
-
-    c0Bit = firstBit
-    c1Bit = secondBit
-
-    classC0Shift = 4
-    classC1Shift = 7
-)
-
-// Value returns bit representation of messageType.
-func (t MessageType) Value() uint16 {
-    //	 0                 1
-    //	 2  3  4 5 6 7 8 9 0 1 2 3 4 5
-    //	+--+--+-+-+-+-+-+-+-+-+-+-+-+-+
-    //	|M |M |M|M|M|C|M|M|M|C|M|M|M|M|
-    //	|11|10|9|8|7|1|6|5|4|0|3|2|1|0|
-    //	+--+--+-+-+-+-+-+-+-+-+-+-+-+-+
-    // Figure 3: Format of STUN Message Type Field
-
-    // Warning: Abandon all hope ye who enter here.
-    // Splitting M into A(M0-M3), B(M4-M6), D(M7-M11).
-    m := uint16(t.Method)
-    a := m & methodABits // A = M * 0b0000000000001111 (right 4 bits)
-    b := m & methodBBits // B = M * 0b0000000001110000 (3 bits after A)
-    d := m & methodDBits // D = M * 0b0000111110000000 (5 bits after B)
-
-    // Shifting to add "holes" for C0 (at 4 bit) and C1 (8 bit).
-    m = a + (b << methodBShift) + (d << methodDShift)
-
-    // C0 is zero bit of C, C1 is first bit.
-    // C0 = C * 0b01, C1 = (C * 0b10) >> 1
-    // Ct = C0 << 4 + C1 << 8.
-    // Optimizations: "((C * 0b10) >> 1) << 8" as "(C * 0b10) << 7"
-    // We need C0 shifted by 4, and C1 by 8 to fit "11" and "7" positions
-    // (see figure 3).
-    c := uint16(t.Class)
-    c0 := (c & c0Bit) << classC0Shift
-    c1 := (c & c1Bit) << classC1Shift
-    class := c0 + c1
-
-    return m + class
-}
-
-// ReadValue decodes uint16 into MessageType.
-func (t *MessageType) ReadValue(v uint16) {
-    // Decoding class.
-    // We are taking first bit from v >> 4 and second from v >> 7.
-    c0 := (v >> classC0Shift) & c0Bit
-    c1 := (v >> classC1Shift) & c1Bit
-    class := c0 + c1
-    t.Class = MessageClass(class)
-
-    // Decoding method.
-    a := v & methodABits                   // A(M0-M3)
-    b := (v >> methodBShift) & methodBBits // B(M4-M6)
-    d := (v >> methodDShift) & methodDBits // D(M7-M11)
-    m := a + b + d
-    t.Method = Method(m)
-}
-
-func (t MessageType) String() string {
-    return fmt.Sprintf("%s %s", t.Method, t.Class)
-}
 
 // Contains return true if message contain t attribute.
 func (m *Message) Contains(t AttrType) bool {
@@ -595,17 +415,182 @@ func (m *Message) Contains(t AttrType) bool {
     return false
 }
 
-type transactionIDValueSetter [TRANSACTION_IDSIZE]byte
 
-// NewTransactionIDSetter returns new Setter that sets message transaction id
-// to provided value.
-func NewTransactionIDSetter(value [TRANSACTION_IDSIZE]byte) Setter {
-    return transactionIDValueSetter(value)
+*/
+// MessageClass is 8-bit representation of 2-bit class of STUN Message Class.
+#[derive(Default, PartialEq, Eq)]
+pub struct MessageClass(u8);
+
+// Possible values for message class in STUN Message Type.
+pub const CLASS_REQUEST: MessageClass = MessageClass(0x00); // 0b00
+pub const CLASS_INDICATION: MessageClass = MessageClass(0x01); // 0b01
+pub const CLASS_SUCCESS_RESPONSE: MessageClass = MessageClass(0x02); // 0b10
+pub const CLASS_ERROR_RESPONSE: MessageClass = MessageClass(0x03); // 0b11
+
+impl fmt::Display for MessageClass {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match *self {
+            CLASS_REQUEST => "request",
+            CLASS_INDICATION => "indication",
+            CLASS_SUCCESS_RESPONSE => "success response",
+            CLASS_ERROR_RESPONSE => "error response",
+            _ => "unknown message class",
+        };
+
+        write!(f, "{}", s)
+    }
 }
 
-func (t transactionIDValueSetter) AddTo(m *Message) error {
-    m.TransactionID = t
-    m.WriteTransactionID()
+// Method is uint16 representation of 12-bit STUN method.
+#[derive(Default, PartialEq, Eq)]
+pub struct Method(u16);
+
+// Possible methods for STUN Message.
+pub const METHOD_BINDING: Method = Method(0x001);
+pub const METHOD_ALLOCATE: Method = Method(0x003);
+pub const METHOD_REFRESH: Method = Method(0x004);
+pub const METHOD_SEND: Method = Method(0x006);
+pub const METHOD_DATA: Method = Method(0x007);
+pub const METHOD_CREATE_PERMISSION: Method = Method(0x008);
+pub const METHOD_CHANNEL_BIND: Method = Method(0x009);
+
+// Methods from RFC 6062.
+pub const METHOD_CONNECT: Method = Method(0x000a);
+pub const METHOD_CONNECTION_BIND: Method = Method(0x000b);
+pub const METHOD_CONNECTION_ATTEMPT: Method = Method(0x000c);
+
+impl fmt::Display for Method {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let unknown = format!("0x{:x}", self.0);
+
+        let s = match *self {
+            METHOD_BINDING => "Binding",
+            METHOD_ALLOCATE => "Allocate",
+            METHOD_REFRESH => "Refresh",
+            METHOD_SEND => "Send",
+            METHOD_DATA => "Data",
+            METHOD_CREATE_PERMISSION => "CreatePermission",
+            METHOD_CHANNEL_BIND => "ChannelBind",
+
+            // RFC 6062.
+            METHOD_CONNECT => "Connect",
+            METHOD_CONNECTION_BIND => "ConnectionBind",
+            METHOD_CONNECTION_ATTEMPT => "ConnectionAttempt",
+            _ => unknown.as_str(),
+        };
+
+        write!(f, "{}", s)
+    }
+}
+
+// MessageType is STUN Message Type Field.
+#[derive(Default)]
+pub struct MessageType {
+    pub method: Method,      // e.g. binding
+    pub class: MessageClass, // e.g. request
+}
+
+// Common STUN message types.
+// Binding request message type.
+pub const BINDING_REQUEST: MessageType = MessageType {
+    method: METHOD_BINDING,
+    class: CLASS_REQUEST,
+};
+// Binding success response message type
+pub const BINDING_SUCCESS: MessageType = MessageType {
+    method: METHOD_BINDING,
+    class: CLASS_SUCCESS_RESPONSE,
+};
+// Binding error response message type.
+pub const BINDING_ERROR: MessageType = MessageType {
+    method: METHOD_BINDING,
+    class: CLASS_ERROR_RESPONSE,
+};
+
+impl fmt::Display for MessageType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {}", self.method.0, self.class.0)
+    }
+}
+
+/*TODO:
+// AddTo sets m type to t.
+func (t MessageType) AddTo(m *Message) error {
+    m.SetType(t)
     return nil
 }
 */
+
+const METHOD_ABITS: u16 = 0xf; // 0b0000000000001111
+const METHOD_BBITS: u16 = 0x70; // 0b0000000001110000
+const METHOD_DBITS: u16 = 0xf80; // 0b0000111110000000
+
+const METHOD_BSHIFT: u16 = 1;
+const METHOD_DSHIFT: u16 = 2;
+
+const FIRST_BIT: u16 = 0x1;
+const SECOND_BIT: u16 = 0x2;
+
+const C0BIT: u16 = FIRST_BIT;
+const C1BIT: u16 = SECOND_BIT;
+
+const CLASS_C0SHIFT: u16 = 4;
+const CLASS_C1SHIFT: u16 = 7;
+
+impl MessageType {
+    // NewType returns new message type with provided method and class.
+    pub fn new(method: Method, class: MessageClass) -> Self {
+        MessageType { method, class }
+    }
+
+    // Value returns bit representation of messageType.
+    pub fn value(&self) -> u16 {
+        //	 0                 1
+        //	 2  3  4 5 6 7 8 9 0 1 2 3 4 5
+        //	+--+--+-+-+-+-+-+-+-+-+-+-+-+-+
+        //	|M |M |M|M|M|C|M|M|M|C|M|M|M|M|
+        //	|11|10|9|8|7|1|6|5|4|0|3|2|1|0|
+        //	+--+--+-+-+-+-+-+-+-+-+-+-+-+-+
+        // Figure 3: Format of STUN Message Type Field
+
+        // Warning: Abandon all hope ye who enter here.
+        // Splitting M into A(M0-M3), B(M4-M6), D(M7-M11).
+        let method = self.method.0;
+        let a = method & METHOD_ABITS; // A = M * 0b0000000000001111 (right 4 bits)
+        let b = method & METHOD_BBITS; // B = M * 0b0000000001110000 (3 bits after A)
+        let d = method & METHOD_DBITS; // D = M * 0b0000111110000000 (5 bits after B)
+
+        // Shifting to add "holes" for C0 (at 4 bit) and C1 (8 bit).
+        let method = a + (b << METHOD_BSHIFT) + (d << METHOD_DSHIFT);
+
+        // C0 is zero bit of C, C1 is first bit.
+        // C0 = C * 0b01, C1 = (C * 0b10) >> 1
+        // Ct = C0 << 4 + C1 << 8.
+        // Optimizations: "((C * 0b10) >> 1) << 8" as "(C * 0b10) << 7"
+        // We need C0 shifted by 4, and C1 by 8 to fit "11" and "7" positions
+        // (see figure 3).
+        let c = self.class.0 as u16;
+        let c0 = (c & C0BIT) << CLASS_C0SHIFT;
+        let c1 = (c & C1BIT) << CLASS_C1SHIFT;
+        let class = c0 + c1;
+
+        method + class
+    }
+
+    // ReadValue decodes uint16 into MessageType.
+    pub fn read_value(&mut self, value: u16) {
+        // Decoding class.
+        // We are taking first bit from v >> 4 and second from v >> 7.
+        let c0 = (value >> CLASS_C0SHIFT) & C0BIT;
+        let c1 = (value >> CLASS_C1SHIFT) & C1BIT;
+        let class = c0 + c1;
+        self.class = MessageClass(class as u8);
+
+        // Decoding method.
+        let a = value & METHOD_ABITS; // A(M0-M3)
+        let b = (value >> METHOD_BSHIFT) & METHOD_BBITS; // B(M4-M6)
+        let d = (value >> METHOD_DSHIFT) & METHOD_DBITS; // D(M7-M11)
+        let m = a + b + d;
+        self.method = Method(m);
+    }
+}

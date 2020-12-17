@@ -8,6 +8,8 @@ use std::collections::HashMap;
 use tokio::sync::Mutex;
 use tokio::time;
 
+use rand::Rng;
+
 // noop_handler just discards any event.
 pub fn noop_handler() -> Handler {
     Box::new(|_e| {})
@@ -42,7 +44,7 @@ pub type Handler = Box<dyn Fn(&Event)>;
 // Do not reuse outside Handler.
 #[derive(Default)]
 pub struct Event {
-    pub transaction_id: [u8; TRANSACTION_ID_SIZE],
+    pub transaction_id: TransactionId,
     pub message: Message,
     pub error: Error,
 }
@@ -58,7 +60,25 @@ pub(crate) struct AgentTransaction {
 // sufficient to make function zero-alloc in most cases.
 const AGENT_COLLECT_CAP: usize = 100;
 
-type TransactionId = [u8; TRANSACTION_ID_SIZE];
+#[derive(PartialEq, Eq, Hash, Copy, Clone, Default)]
+pub struct TransactionId(pub(crate) [u8; TRANSACTION_ID_SIZE]);
+
+impl TransactionId {
+    // NewTransactionID returns new random transaction ID using crypto/rand
+    // as source.
+    pub fn new() -> Self {
+        let mut b = TransactionId([0u8; TRANSACTION_ID_SIZE]);
+        rand::thread_rng().fill(&mut b.0);
+        b
+    }
+
+    /*TODO:
+       func (t transactionIDValueSetter) AddTo(m *Message) error {
+        m.TransactionID = t
+        m.WriteTransactionID()
+        return nil
+    }*/
+}
 
 // NewAgent initializes and returns new Agent with provided handler.
 // If h is nil, the noop_handler will be used.
@@ -76,11 +96,7 @@ impl Agent {
 
     // stop_with_error removes transaction from list and calls handler with
     // provided error. Can return ErrTransactionNotExists and ErrAgentClosed.
-    pub async fn stop_with_error(
-        &self,
-        id: [u8; TRANSACTION_ID_SIZE],
-        error: Error,
-    ) -> Result<(), Error> {
+    pub async fn stop_with_error(&self, id: TransactionId, error: Error) -> Result<(), Error> {
         let mut a = self.mux.lock().await;
         if a.closed {
             return Err(ERR_AGENT_CLOSED.clone());
@@ -101,7 +117,7 @@ impl Agent {
 
     // Stop stops transaction by id with ErrTransactionStopped, blocking
     // until handler returns.
-    pub async fn stop(&mut self, id: [u8; TRANSACTION_ID_SIZE]) -> Result<(), Error> {
+    pub async fn stop(&mut self, id: TransactionId) -> Result<(), Error> {
         self.stop_with_error(id, ERR_TRANSACTION_STOPPED.clone())
             .await
     }
@@ -110,11 +126,7 @@ impl Agent {
     // Could return ErrAgentClosed, ErrTransactionExists.
     //
     // Agent handler is guaranteed to be eventually called.
-    pub async fn start(
-        &self,
-        id: [u8; TRANSACTION_ID_SIZE],
-        deadline: time::Duration,
-    ) -> Result<(), Error> {
+    pub async fn start(&self, id: TransactionId, deadline: time::Duration) -> Result<(), Error> {
         let mut a = self.mux.lock().await;
         if a.closed {
             return Err(ERR_AGENT_CLOSED.clone());

@@ -230,7 +230,7 @@ impl State {
         }
     }
 
-    // unmarshal_binary is a binary.BinaryUnmarshaler.UnmarshalBinary implementation
+    // unmarshal_binary is a binary.BinaryUnmarshaler.unmarshal_binary implementation
     pub async fn unmarshal_binary(&mut self, data: &[u8]) -> Result<(), Error> {
         let serialized: SerializedState = match bincode::deserialize(data) {
             Ok(dec) => dec,

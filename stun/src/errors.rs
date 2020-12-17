@@ -3,8 +3,7 @@ use util::Error;
 lazy_static! {
     // ErrAttributeNotFound means that attribute with provided attribute
     // type does not exist in message.
-     pub static ref ERR_ATTRIBUTE_NOT_FOUND: Error = Error::new("attribute not found".to_owned());
-
+    pub static ref ERR_ATTRIBUTE_NOT_FOUND: Error = Error::new("attribute not found".to_owned());
     // ErrTransactionStopped indicates that transaction was manually stopped.
     pub static ref ERR_TRANSACTION_STOPPED: Error = Error::new("transaction is stopped".to_owned());
     // ErrTransactionNotExists indicates that agent failed to find transaction.
@@ -22,7 +21,11 @@ lazy_static! {
     pub static ref ERR_NO_DEFAULT_REASON: Error = Error::new("no default reason for ErrorCode".to_owned());
     pub static ref ERR_UNEXPECTED_EOF: Error = Error::new("unexpected EOF".to_owned());
     // ErrAttributeSizeInvalid means that decoded attribute size is invalid.
-    pub static ref  ERR_ATTRIBUTE_SIZE_INVALID: Error = Error::new("attribute size is invalid".to_owned());
+    pub static ref ERR_ATTRIBUTE_SIZE_INVALID: Error = Error::new("attribute size is invalid".to_owned());
     // ErrAttributeSizeOverflow means that decoded attribute size is too big.
-    pub static ref  ERR_ATTRIBUTE_SIZE_OVERFLOW: Error = Error::new("attribute size overflow".to_owned());
+    pub static ref ERR_ATTRIBUTE_SIZE_OVERFLOW: Error = Error::new("attribute size overflow".to_owned());
+    // ErrDecodeToNil occurs on Decode(data, nil) call.
+    pub static ref ERR_DECODE_TO_NIL: Error = Error::new("attempt to decode to nil message".to_owned());
+    // ErrUnexpectedHeaderEOF means that there were not enough bytes in Raw to read header.
+    pub static ref ERR_UNEXPECTED_HEADER_EOF: Error = Error::new("unexpected EOF: not enough bytes to read header".to_owned());
 }

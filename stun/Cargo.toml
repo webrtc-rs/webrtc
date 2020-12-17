@@ -10,7 +10,7 @@ edition = "2018"
 util = { path = "../util" }
 lazy_static = "1.3.0"
 tokio = { version = "0.3", features = ["full"] }
-
+rand = "0.7.3"
 
 [dev-dependencies]
 tokio-test = "0.3"
