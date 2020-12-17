@@ -9,6 +9,8 @@ use super::errors::*;
 use super::header::{Header, PacketType};
 use crate::{header, packet::Packet, util::get_padding};
 
+mod goodbye_test;
+
 /// The Goodbye packet indicates that one or more sources are no longer active.
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct Goodbye {
@@ -55,7 +57,7 @@ impl Packet for Goodbye {
         let packet_body = &mut raw_packet[header::HEADER_LENGTH..];
 
         if self.sources.len() > header::COUNT_MAX {
-            return Err(Error::new("too many sources".to_string()));
+            return Err(ERR_TOO_MANY_SOURCES.to_owned());
         }
 
         for i in 0..self.sources.len() {
@@ -66,7 +68,7 @@ impl Packet for Goodbye {
             let reason = self.reason.as_bytes();
 
             if reason.len() > header::SDES_MAX_OCTET_COUNT {
-                return Err(Error::new("reason too long".to_string()));
+                return Err(ERR_REASON_TOO_LONG.to_owned());
             }
 
             let reason_offset = self.sources.len() * header::SSRC_LENGTH;
@@ -108,7 +110,7 @@ impl Packet for Goodbye {
         }
 
         if get_padding(raw_packet.len()) != 0 {
-            return Err(Error::new("packet too short".to_string()));
+            return Err(ERR_PACKET_TOO_SHORT.to_owned());
         }
 
         self.sources = vec![0u32; header.count as usize];
@@ -117,7 +119,7 @@ impl Packet for Goodbye {
             (header::HEADER_LENGTH + header.count as usize * header::SSRC_LENGTH) as usize;
 
         if reason_offset > raw_packet.len() {
-            return Err(Error::new("packet too short".to_string()));
+            return Err(ERR_PACKET_TOO_SHORT.to_owned());
         }
 
         for i in 0..header.count as usize {
@@ -131,7 +133,7 @@ impl Packet for Goodbye {
             let reason_end = reason_offset + 1 + reason_len;
 
             if reason_end > raw_packet.len() {
-                return Err(Error::new("packet too short".to_string()));
+                return Err(ERR_PACKET_TOO_SHORT.to_owned());
             }
 
             self.reason =
