@@ -1,5 +1,4 @@
 use std::fmt;
-use std::io::{BufReader, Read, Write};
 
 use errors::*;
 use header::Header;

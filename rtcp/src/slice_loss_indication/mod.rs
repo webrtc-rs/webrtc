@@ -1,15 +1,14 @@
 use std::fmt;
-use std::io::{Read, Write};
 
-use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
+use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
 use header::Header;
 use util::Error;
 
 use super::errors::*;
 use super::{header, receiver_report};
+use crate::packet::Packet;
 use crate::util::get_padding;
-use crate::{packet::Packet, receiver_estimated_maximum_bitrate};
 
 mod slice_loss_indication_test;
 

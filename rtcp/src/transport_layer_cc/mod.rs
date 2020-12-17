@@ -28,9 +28,8 @@
 mod transport_layer_cc_test;
 
 use std::fmt;
-use std::io::{Cursor, Read, Write};
 
-use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
+use byteorder::{BigEndian, ByteOrder};
 
 use bytes::BytesMut;
 use util::Error;
@@ -270,13 +269,6 @@ impl PacketStatusChunk for StatusVectorChunk {
                     self.symbol_list
                         .push(get_nbits_from_byte(raw_packet[1], i * 2, 2).into());
                 }
-
-                Ok(())
-            }
-
-            _ => {
-                self.symbol_size =
-                    (get_nbits_from_byte(raw_packet[0], 2, 6) << 8 + raw_packet[1] as u16).into();
 
                 Ok(())
             }

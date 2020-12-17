@@ -3,8 +3,8 @@ mod session_rtp_test;
 
 use crate::{config::Config, context::Context, option, stream::Stream};
 
+use util::Buffer;
 use util::Error;
-use util::{buffer::ERR_BUFFER_FULL, Buffer};
 
 use tokio::{
     net::UdpSocket,

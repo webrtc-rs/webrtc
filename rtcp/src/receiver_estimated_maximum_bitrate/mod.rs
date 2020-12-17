@@ -275,24 +275,24 @@ impl ReceiverEstimatedMaximumBitrate {
         // This will be negative if there is no shift required.
         let shift = 64 - self.bitrate.leading_zeros();
 
-        let mut mantissa = 0usize;
+        let mut _mantissa = 0usize;
         let mut exp = 0usize;
 
         if shift <= 18 {
             // Fit everything in the mantissa because we can.
-            mantissa = self.bitrate as usize;
+            _mantissa = self.bitrate as usize;
         } else {
             // We can only use 18 bits of precision, so truncate.
-            mantissa = self.bitrate as usize >> (shift - 18);
+            _mantissa = self.bitrate as usize >> (shift - 18);
             exp = shift as usize - 18;
         }
 
         // We can't quite use the binary package because
         // a) it's a uint24 and b) the exponent is only 6-bits
         // Just trust me; this is big-endian encoding.
-        buf[17] = ((exp << 2) | (mantissa >> 16)) as u8;
-        buf[18] = (mantissa >> 8) as u8;
-        buf[19] = mantissa as u8;
+        buf[17] = ((exp << 2) | (_mantissa >> 16)) as u8;
+        buf[18] = (_mantissa >> 8) as u8;
+        buf[19] = _mantissa as u8;
 
         // Write the SSRCs at the very end.
         let mut n = 20;
