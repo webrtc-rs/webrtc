@@ -11,7 +11,7 @@ url = "2.1.0"
 tokio = { version = "0.3", features = ["full"] }
 aes-gcm = "0.8.0"
 hmac = "0.10.1"
-p256 = "0.6.0"
+p256 = "0.7.1"
 block-modes = "0.7.0"
 x509-parser = "0.9"
 der-parser = "5.0"

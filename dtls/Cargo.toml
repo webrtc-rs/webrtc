@@ -11,8 +11,8 @@ util = { path = "../util" }
 byteorder = "1.3.2"
 lazy_static = "1.3.0"
 rand_core = "0.5"
-elliptic-curve = {version = "0.7.1", features=["default", "ecdh", "zeroize"]}
-p256 = { version = "0.6", features=["default", "ecdh", "zeroize", "ecdsa"] }
+elliptic-curve = {version = "0.8.1", features=["default", "ecdh", "zeroize"]}
+p256 = { version = "0.7.1", features=["default", "ecdh", "zeroize", "ecdsa"] }
 #p384 = "0.4.1"
 rand = "0.7.3"
 hmac = "0.10.1"
