@@ -24,14 +24,14 @@ pub trait Packet {
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error>;
 }
 
-pub fn unmarshal(raw_data: &mut BytesMut) -> Result<Vec<Box<dyn Packet>>, Error> {
+pub fn unmarshal(mut raw_data: BytesMut) -> Result<Vec<Box<dyn Packet>>, Error> {
     let mut packets = vec![];
 
     while raw_data.len() != 0 {
-        let (p, processed) = unmarshaller(raw_data)?;
+        let (p, processed) = unmarshaller(&mut raw_data)?;
 
         packets.push(p);
-        *raw_data = raw_data.split_off(processed);
+        raw_data = raw_data.split_off(processed);
     }
 
     match packets.len() {

@@ -41,25 +41,25 @@ mod test {
 
     #[test]
     fn test_read_eof() {
-        let mut short_header = vec![
+        let short_header = vec![
             0x81, 0xc9, // missing type & len
         ]
         .as_slice()
         .into();
 
-        let result = packet::unmarshal(&mut short_header);
+        let result = packet::unmarshal(short_header);
         assert!(result.is_err(), "missing type & len");
     }
 
     #[test]
     fn test_bad_compound() {
-        let mut bad_compound = &mut REAL_PACKET[..34].into();
-        let result = packet::unmarshal(&mut bad_compound);
+        let bad_compound = REAL_PACKET[..34].into();
+        let result = packet::unmarshal(bad_compound);
         assert!(result.is_err(), "trailing data!");
 
-        let mut bad_compound = &mut REAL_PACKET[84..104].into();
+        let bad_compound = REAL_PACKET[84..104].into();
 
-        let packets = packet::unmarshal(&mut bad_compound).expect("Error unmarshalling packet");
+        let packets = packet::unmarshal(bad_compound).expect("Error unmarshalling packet");
 
         let compound = CompoundPacket(packets);
 
@@ -328,9 +328,10 @@ mod test {
 
             let mut c = CompoundPacket::default();
 
-            let mut data1 = result.unwrap();
+            let data1 = result.unwrap();
 
-            c.unmarshal(&mut data1).expect("Unmarshall should be nil");
+            c.unmarshal(data1.clone())
+                .expect("Unmarshall should be nil");
 
             let data2 = packet.marshal().expect("Marshal should be nil");
 
