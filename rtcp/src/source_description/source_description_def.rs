@@ -91,7 +91,11 @@ impl SourceDescriptionChunk {
         for it in &self.items {
             len += it.len();
         }
+
         len += super::SDES_TYPE_LEN; // for terminating null octet
+
+        // align to 32-bit boundary
+        len += get_padding(len);
 
         len
     }
