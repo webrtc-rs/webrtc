@@ -72,12 +72,10 @@ impl TransactionId {
         b
     }
 
-    /*TODO:
-       func (t transactionIDValueSetter) AddTo(m *Message) error {
-        m.TransactionID = t
-        m.WriteTransactionID()
-        return nil
-    }*/
+    pub fn add_to(&self, m: &mut Message) {
+        m.transaction_id = *self;
+        m.write_transaction_id();
+    }
 }
 
 // NewAgent initializes and returns new Agent with provided handler.

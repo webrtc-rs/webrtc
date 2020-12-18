@@ -35,8 +35,8 @@ const ERROR_CODE_REASON_MAX_B: usize = 763;
 const ERROR_CODE_MODULO: u16 = 100;
 
 impl ErrorCodeAttribute {
-    // AddTo adds ERROR-CODE to m.
-    pub fn add_to(&self, _m: &Message) -> Result<(), Error> {
+    // add_to adds ERROR-CODE to m.
+    pub fn add_to(&self, m: &mut Message) -> Result<(), Error> {
         check_overflow(
             ATTR_ERROR_CODE,
             self.reason.len() + ERROR_CODE_REASON_START,
@@ -52,14 +52,14 @@ impl ErrorCodeAttribute {
         value.push(number); //[ERROR_CODE_NUMBER_BYTE] =
         value.extend_from_slice(&self.reason); //[ERROR_CODE_REASON_START:]
 
-        //TODO: m.Add(AttrErrorCode, value)
+        m.add(ATTR_ERROR_CODE, &value);
 
         Ok(())
     }
 
     // GetFrom decodes ERROR-CODE from m. Reason is valid until m.Raw is valid.
-    pub fn get_from(&mut self, _m: &Message) -> Result<(), Error> {
-        let v = vec![]; //TODO: m.Get(AttrErrorCode)?;
+    pub fn get_from(&mut self, m: &Message) -> Result<(), Error> {
+        let v = m.get(ATTR_ERROR_CODE)?;
 
         if v.len() < ERROR_CODE_REASON_START {
             return Err(ERR_UNEXPECTED_EOF.clone());
@@ -80,9 +80,9 @@ impl ErrorCodeAttribute {
 pub struct ErrorCode(u16);
 
 impl ErrorCode {
-    // AddTo adds ERROR-CODE with default reason to m. If there
+    // add_to adds ERROR-CODE with default reason to m. If there
     // is no default reason, returns ErrNoDefaultReason.
-    pub fn add_to(&self, m: &Message) -> Result<(), Error> {
+    pub fn add_to(&self, m: &mut Message) -> Result<(), Error> {
         if let Some(reason) = ERROR_REASONS.get(self) {
             let a = ErrorCodeAttribute {
                 code: *self,

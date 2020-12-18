@@ -4,7 +4,9 @@ use crate::errors::*;
 
 use util::Error;
 
+use rand::Rng;
 use std::fmt;
+use std::io::{Read, Write};
 
 // MAGIC_COOKIE is fixed value that aids in distinguishing STUN packets
 // from packets of other protocols when STUN is multiplexed with those
@@ -33,13 +35,27 @@ pub fn is_message(b: &[u8]) -> bool {
 //
 // 	Message, its fields, results of m.Get or any attribute a.GetFrom
 //	are valid only until Message.Raw is not modified.
-#[derive(Default)]
+#[derive(Default, PartialEq)]
 pub struct Message {
     pub typ: MessageType,
     pub length: u32, // len(Raw) not including header
     pub transaction_id: TransactionId,
     pub attributes: Attributes,
     pub raw: Vec<u8>,
+}
+
+impl fmt::Display for Message {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let t_id = base64::encode(&self.transaction_id.0);
+        write!(
+            f,
+            "{} l={} attrs={} id={}",
+            self.typ,
+            self.length,
+            self.attributes.0.len(),
+            t_id
+        )
+    }
 }
 
 const DEFAULT_RAW_CAPACITY: usize = 120;
@@ -148,275 +164,215 @@ impl Message {
         self.raw.extend_from_slice(data);
         self.decode()
     }
-}
 
-/*
-// AddTo sets b.TransactionID to m.TransactionID.
-//
-// Implements Setter to aid in crafting responses.
-func (m *Message) AddTo(b *Message) error {
-    b.TransactionID = m.TransactionID
-    b.WriteTransactionID()
-    return nil
-}
-
-// NewTransactionID sets m.TransactionID to random value from crypto/rand
-// and returns error if any.
-func (m *Message) NewTransactionID() error {
-    _, err := io.ReadFull(rand.Reader, m.TransactionID[:])
-    if err == nil {
-        m.WriteTransactionID()
-    }
-    return err
-}
-
-func (m *Message) String() string {
-    tID := base64.StdEncoding.EncodeToString(m.TransactionID[:])
-    return fmt.Sprintf("%s l=%d attrs=%d id=%s", m.Type, m.Length, len(m.Attributes), tID)
-}
-
-// Reset resets Message, attributes and underlying buffer length.
-func (m *Message) Reset() {
-    m.Raw = m.Raw[:0]
-    m.Length = 0
-    m.Attributes = m.Attributes[:0]
-}
-
-// grow ensures that internal buffer has n length.
-func (m *Message) grow(n int) {
-    if len(m.Raw) >= n {
-        return
-    }
-    if cap(m.Raw) >= n {
-        m.Raw = m.Raw[:n]
-        return
-    }
-    m.Raw = append(m.Raw, make([]byte, n-len(m.Raw))...)
-}
-
-// Add appends new attribute to message. Not goroutine-safe.
-//
-// Value of attribute is copied to internal buffer so
-// it is safe to reuse v.
-func (m *Message) Add(t AttrType, v []byte) {
-    // Allocating buffer for TLV (type-length-value).
-    // T = t, L = len(v), V = v.
-    // m.Raw will look like:
-    // [0:20]                               <- message header
-    // [20:20+m.Length]                     <- existing message attributes
-    // [20+m.Length:20+m.Length+len(v) + 4] <- allocated buffer for new TLV
-    // [first:last]                         <- same as previous
-    // [0 1|2 3|4    4 + len(v)]            <- mapping for allocated buffer
-    //   T   L        V
-    allocSize := ATTRIBUTE_HEADER_SIZE + len(v)  // ~ len(TLV) = len(TL) + len(V)
-    first := MESSAGE_HEADER_SIZE + int(m.Length) // first byte number
-    last := first + allocSize                  // last byte number
-    m.grow(last)                               // growing cap(Raw) to fit TLV
-    m.Raw = m.Raw[:last]                       // now len(Raw) = last
-    m.Length += uint32(allocSize)              // rendering length change
-
-    // Sub-slicing internal buffer to simplify encoding.
-    buf := m.Raw[first:last]           // slice for TLV
-    value := buf[ATTRIBUTE_HEADER_SIZE:] // slice for V
-    attr := RawAttribute{
-        Type:   t,              // T
-        Length: uint16(len(v)), // L
-        Value:  value,          // V
+    // add_to sets b.TransactionID to m.TransactionID.
+    //
+    // Implements Setter to aid in crafting responses.
+    pub fn add_to(&self, b: &mut Message) -> Result<(), Error> {
+        b.transaction_id = self.transaction_id;
+        b.write_transaction_id();
+        Ok(())
     }
 
-    // Encoding attribute TLV to allocated buffer.
-    bin.PutUint16(buf[0:2], attr.Type.Value()) // T
-    bin.PutUint16(buf[2:4], attr.Length)       // L
-    copy(value, v)                             // V
+    // NewTransactionID sets m.TransactionID to random value from crypto/rand
+    // and returns error if any.
+    pub fn new_transaction_id(&mut self) -> Result<(), Error> {
+        rand::thread_rng().fill(&mut self.transaction_id.0);
+        self.write_transaction_id();
+        Ok(())
+    }
 
-    // Checking that attribute value needs padding.
-    if attr.Length%padding != 0 {
-        // Performing padding.
-        bytesToAdd := nearestPaddedValueLength(len(v)) - len(v)
-        last += bytesToAdd
-        m.grow(last)
-        // setting all padding bytes to zero
-        // to prevent data leak from previous
-        // data in next bytesToAdd bytes
-        buf = m.Raw[last-bytesToAdd : last]
-        for i := range buf {
-            buf[i] = 0
+    // Reset resets Message, attributes and underlying buffer length.
+    pub fn reset(&mut self) {
+        self.raw = vec![];
+        self.length = 0;
+        self.attributes = Attributes::default();
+    }
+
+    // grow ensures that internal buffer has n length.
+    /*TODO: pub fn grow(&mut self, n: usize) {
+        if self.raw.len() >= n {
+            return
         }
-        m.Raw = m.Raw[:last]           // increasing buffer length
-        m.Length += uint32(bytesToAdd) // rendering length change
-    }
-    m.Attributes = append(m.Attributes, attr)
-    m.WriteLength()
-}
+        if self.raw.capacity() >= n {
+            m.Raw = m.Raw[:n]
+            return
+        }
+        m.Raw = append(m.Raw, make([]byte, n-len(m.Raw))...)
+    }*/
 
-func attrSliceEqual(a, b Attributes) bool {
-    for _, attr := range a {
-        found := false
-        for _, attrB := range b {
-            if attrB.Type != attr.Type {
-                continue
+    // Add appends new attribute to message. Not goroutine-safe.
+    //
+    // Value of attribute is copied to internal buffer so
+    // it is safe to reuse v.
+    pub fn add(&mut self, t: AttrType, v: &[u8]) {
+        // Allocating buffer for TLV (type-length-value).
+        // T = t, L = len(v), V = v.
+        // m.Raw will look like:
+        // [0:20]                               <- message header
+        // [20:20+m.Length]                     <- existing message attributes
+        // [20+m.Length:20+m.Length+len(v) + 4] <- allocated buffer for new TLV
+        // [first:last]                         <- same as previous
+        // [0 1|2 3|4    4 + len(v)]            <- mapping for allocated buffer
+        //   T   L        V
+        let alloc_size = ATTRIBUTE_HEADER_SIZE + v.len(); // ~ len(TLV) = len(TL) + len(V)
+        let first = MESSAGE_HEADER_SIZE + self.length as usize; // first byte number
+        let mut last = first + alloc_size; // last byte number
+                                           //TODO: m.grow(last)                               // growing cap(Raw) to fit TLV
+                                           //TODO: m.Raw = m.Raw[:last]                       // now len(Raw) = last
+        self.length += alloc_size as u32; // rendering length change
+
+        // Sub-slicing internal buffer to simplify encoding.
+        let buf = &self.raw[first..last]; // slice for TLV
+        let value = &buf[ATTRIBUTE_HEADER_SIZE..]; // slice for V
+        let attr = RawAttribute {
+            typ: t,                 // T
+            length: v.len() as u16, // L
+            value: value.to_vec(),  // V
+        };
+
+        // Encoding attribute TLV to allocated buffer.
+
+        let buf = &mut self.raw[first..last];
+        buf[0..2].copy_from_slice(&attr.typ.value().to_be_bytes()); // T
+        buf[2..4].copy_from_slice(&attr.length.to_be_bytes()); // L
+
+        let value = &mut buf[ATTRIBUTE_HEADER_SIZE..];
+        value.copy_from_slice(v); // V
+
+        // Checking that attribute value needs padding.
+        if attr.length as usize % PADDING != 0 {
+            // Performing padding.
+            let bytes_to_add = nearest_padded_value_length(v.len()) - v.len();
+            last += bytes_to_add;
+            //TODO: m.grow(last)
+            // setting all padding bytes to zero
+            // to prevent data leak from previous
+            // data in next bytes_to_add bytes
+            let buf = &mut self.raw[last - bytes_to_add..last];
+            for b in buf {
+                *b = 0;
             }
-            if attrB.Equal(attr) {
-                found = true
-                break
+            //TODO:m.Raw = m.Raw[:last]           // increasing buffer length
+            self.length += bytes_to_add as u32; // rendering length change
+        }
+        self.attributes.0.push(attr);
+        self.write_length();
+    }
+
+    // WriteLength writes m.Length to m.Raw.
+    pub fn write_length(&mut self) {
+        //m.grow(4)
+        self.raw[2..4].copy_from_slice(&self.length.to_be_bytes());
+    }
+
+    // WriteHeader writes header to underlying buffer. Not goroutine-safe.
+    pub fn write_header(&mut self) {
+        //m.grow(MESSAGE_HEADER_SIZE)
+        //_ = m.Raw[:MESSAGE_HEADER_SIZE] // early bounds check to guarantee safety of writes below
+
+        self.write_type();
+        self.write_length();
+        self.raw[4..8].copy_from_slice(&MAGIC_COOKIE.to_be_bytes()); // magic cookie
+        self.raw[8..MESSAGE_HEADER_SIZE].copy_from_slice(&self.transaction_id.0);
+        // transaction ID
+    }
+
+    // WriteTransactionID writes m.TransactionID to m.Raw.
+    pub fn write_transaction_id(&mut self) {
+        self.raw[8..MESSAGE_HEADER_SIZE].copy_from_slice(&self.transaction_id.0);
+        // transaction ID
+    }
+
+    // WriteAttributes encodes all m.Attributes to m.
+    pub fn write_attributes(&mut self) {
+        let attributes: Vec<RawAttribute> = self.attributes.0.drain(..).collect();
+        for a in &attributes {
+            self.add(a.typ, &a.value);
+        }
+        self.attributes = Attributes(attributes);
+    }
+
+    // WriteType writes m.Type to m.Raw.
+    pub fn write_type(&mut self) {
+        //m.grow(2)
+        self.raw[..2].copy_from_slice(&self.typ.value().to_be_bytes()); // message type
+    }
+
+    // SetType sets m.Type and writes it to m.Raw.
+    pub fn set_type(&mut self, t: MessageType) {
+        self.typ = t;
+        self.write_type();
+    }
+
+    // Encode re-encodes message into m.Raw.
+    pub fn encode(&mut self) {
+        self.raw = vec![];
+        self.write_header();
+        self.length = 0;
+        self.write_attributes();
+    }
+
+    // WriteTo implements WriterTo via calling Write(m.Raw) on w and returning
+    // call result.
+    pub fn write_to<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        let n = writer.write(&self.raw)?;
+        Ok(n)
+    }
+
+    // ReadFrom implements ReaderFrom. Reads message from r into m.Raw,
+    // Decodes it and return error if any. If m.Raw is too small, will return
+    // ErrUnexpectedEOF, ErrUnexpectedHeaderEOF or *DecodeErr.
+    //
+    // Can return *DecodeErr while decoding too.
+    pub fn read_from<R: Read>(&mut self, reader: &mut R) -> Result<usize, Error> {
+        //tBuf := m.Raw[:cap(m.Raw)]
+        let n = reader.read(&mut self.raw)?;
+        //let m.Raw = tBuf[:n]
+        self.decode()?;
+        Ok(n)
+    }
+
+    // Write decodes message and return error if any.
+    //
+    // Any error is unrecoverable, but message could be partially decoded.
+    pub fn write(&mut self, t_buf: &[u8]) -> Result<usize, Error> {
+        self.raw = vec![];
+        self.raw.extend_from_slice(t_buf);
+        self.decode()?;
+        Ok(t_buf.len())
+    }
+
+    // CloneTo clones m to b securing any further m mutations.
+    pub fn clone_to(&self, b: &mut Message) -> Result<(), Error> {
+        b.raw = vec![];
+        b.raw.extend_from_slice(&self.raw);
+        b.decode()
+    }
+
+    // Contains return true if message contain t attribute.
+    pub fn contains(&self, t: AttrType) -> bool {
+        for a in &self.attributes.0 {
+            if a.typ == t {
+                return true;
             }
         }
-        if !found {
-            return false
+        false
+    }
+
+    // get returns byte slice that represents attribute value,
+    // if there is no attribute with such type,
+    // ErrAttributeNotFound is returned.
+    pub(crate) fn get(&self, t: AttrType) -> Result<Vec<u8>, Error> {
+        let (v, ok) = self.attributes.get(t);
+        if ok {
+            Ok(v.value)
+        } else {
+            Err(ERR_ATTRIBUTE_NOT_FOUND.clone())
         }
     }
-    return true
 }
 
-func attrEqual(a, b Attributes) bool {
-    if a == nil && b == nil {
-        return true
-    }
-    if a == nil || b == nil {
-        return false
-    }
-    if len(a) != len(b) {
-        return false
-    }
-    if !attrSliceEqual(a, b) {
-        return false
-    }
-    if !attrSliceEqual(b, a) {
-        return false
-    }
-    return true
-}
-
-// Equal returns true if Message b equals to m.
-// Ignores m.Raw.
-func (m *Message) Equal(b *Message) bool {
-    if m == nil && b == nil {
-        return true
-    }
-    if m == nil || b == nil {
-        return false
-    }
-    if m.Type != b.Type {
-        return false
-    }
-    if m.TransactionID != b.TransactionID {
-        return false
-    }
-    if m.Length != b.Length {
-        return false
-    }
-    if !attrEqual(m.Attributes, b.Attributes) {
-        return false
-    }
-    return true
-}
-
-// WriteLength writes m.Length to m.Raw.
-func (m *Message) WriteLength() {
-    m.grow(4)
-    bin.PutUint16(m.Raw[2:4], uint16(m.Length))
-}
-
-// WriteHeader writes header to underlying buffer. Not goroutine-safe.
-func (m *Message) WriteHeader() {
-    m.grow(MESSAGE_HEADER_SIZE)
-    _ = m.Raw[:MESSAGE_HEADER_SIZE] // early bounds check to guarantee safety of writes below
-
-    m.WriteType()
-    m.WriteLength()
-    bin.PutUint32(m.Raw[4:8], MAGIC_COOKIE)               // magic cookie
-    copy(m.Raw[8:MESSAGE_HEADER_SIZE], m.TransactionID[:]) // transaction ID
-}
-
-// WriteTransactionID writes m.TransactionID to m.Raw.
-func (m *Message) WriteTransactionID() {
-    copy(m.Raw[8:MESSAGE_HEADER_SIZE], m.TransactionID[:]) // transaction ID
-}
-
-// WriteAttributes encodes all m.Attributes to m.
-func (m *Message) WriteAttributes() {
-    attributes := m.Attributes
-    m.Attributes = attributes[:0]
-    for _, a := range attributes {
-        m.Add(a.Type, a.Value)
-    }
-    m.Attributes = attributes
-}
-
-// WriteType writes m.Type to m.Raw.
-func (m *Message) WriteType() {
-    m.grow(2)
-    bin.PutUint16(m.Raw[0:2], m.Type.Value()) // message type
-}
-
-// SetType sets m.Type and writes it to m.Raw.
-func (m *Message) SetType(t MessageType) {
-    m.Type = t
-    m.WriteType()
-}
-
-// Encode re-encodes message into m.Raw.
-func (m *Message) Encode() {
-    m.Raw = m.Raw[:0]
-    m.WriteHeader()
-    m.Length = 0
-    m.WriteAttributes()
-}
-
-// WriteTo implements WriterTo via calling Write(m.Raw) on w and returning
-// call result.
-func (m *Message) WriteTo(w io.Writer) (int64, error) {
-    n, err := w.Write(m.Raw)
-    return int64(n), err
-}
-
-// ReadFrom implements ReaderFrom. Reads message from r into m.Raw,
-// Decodes it and return error if any. If m.Raw is too small, will return
-// ErrUnexpectedEOF, ErrUnexpectedHeaderEOF or *DecodeErr.
-//
-// Can return *DecodeErr while decoding too.
-func (m *Message) ReadFrom(r io.Reader) (int64, error) {
-    tBuf := m.Raw[:cap(m.Raw)]
-    var (
-        n   int
-        err error
-    )
-    if n, err = r.Read(tBuf); err != nil {
-        return int64(n), err
-    }
-    m.Raw = tBuf[:n]
-    return int64(n), m.Decode()
-}
-
-
-
-// Write decodes message and return error if any.
-//
-// Any error is unrecoverable, but message could be partially decoded.
-func (m *Message) Write(tBuf []byte) (int, error) {
-    m.Raw = append(m.Raw[:0], tBuf...)
-    return len(tBuf), m.Decode()
-}
-
-// CloneTo clones m to b securing any further m mutations.
-func (m *Message) CloneTo(b *Message) error {
-    b.Raw = append(b.Raw[:0], m.Raw...)
-    return b.Decode()
-}
-
-
-// Contains return true if message contain t attribute.
-func (m *Message) Contains(t AttrType) bool {
-    for _, a := range m.Attributes {
-        if a.Type == t {
-            return true
-        }
-    }
-    return false
-}
-
-
-*/
 // MessageClass is 8-bit representation of 2-bit class of STUN Message Class.
 #[derive(Default, PartialEq, Eq)]
 pub struct MessageClass(u8);
@@ -484,7 +440,7 @@ impl fmt::Display for Method {
 }
 
 // MessageType is STUN Message Type Field.
-#[derive(Default)]
+#[derive(Default, PartialEq)]
 pub struct MessageType {
     pub method: Method,      // e.g. binding
     pub class: MessageClass, // e.g. request
@@ -514,8 +470,8 @@ impl fmt::Display for MessageType {
 }
 
 /*TODO:
-// AddTo sets m type to t.
-func (t MessageType) AddTo(m *Message) error {
+// add_to sets m type to t.
+func (t MessageType) add_to(m *Message) error {
     m.SetType(t)
     return nil
 }

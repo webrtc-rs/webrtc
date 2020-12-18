@@ -36,8 +36,8 @@ pub struct OtherAddress {
 }
 /*
 impl AlternateServer {
-    // AddTo adds ALTERNATE-SERVER attribute to message.
-    pub fn AddTo(m *Message) error {
+    // add_to adds ALTERNATE-SERVER attribute to message.
+    pub fn add_to(m *Message) error {
         a : = ( * MappedAddress)(s)
         return a.AddToAs(m, ATTR_ALTERNATE_SERVER)
     }
@@ -112,8 +112,8 @@ func (a *MappedAddress) AddToAs(m *Message, t AttrType) error {
     return nil
 }
 
-// AddTo adds MAPPED-ADDRESS to message.
-func (a *MappedAddress) AddTo(m *Message) error {
+// add_to adds MAPPED-ADDRESS to message.
+func (a *MappedAddress) add_to(m *Message) error {
     return a.AddToAs(m, ATTR_MAPPED_ADDRESS)
 }
 
@@ -122,8 +122,8 @@ func (a *MappedAddress) GetFrom(m *Message) error {
     return a.GetFromAs(m, ATTR_MAPPED_ADDRESS)
 }
 
-// AddTo adds OTHER-ADDRESS attribute to message.
-func (o *OtherAddress) AddTo(m *Message) error {
+// add_to adds OTHER-ADDRESS attribute to message.
+func (o *OtherAddress) add_to(m *Message) error {
     a := (*MappedAddress)(o)
     return a.AddToAs(m, ATTR_OTHER_ADDRESS)
 }
@@ -138,8 +138,8 @@ func (o OtherAddress) String() string {
     return net.JoinHostPort(o.IP.String(), strconv.Itoa(o.Port))
 }
 
-// AddTo adds RESPONSE-ORIGIN attribute to message.
-func (o *ResponseOrigin) AddTo(m *Message) error {
+// add_to adds RESPONSE-ORIGIN attribute to message.
+func (o *ResponseOrigin) add_to(m *Message) error {
     a := (*MappedAddress)(o)
     return a.AddToAs(m, ATTR_RESPONSE_ORIGIN)
 }

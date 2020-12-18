@@ -1,7 +1,9 @@
+use crate::message::*;
+
 use std::fmt;
 
 // Attributes is list of message attributes.
-#[derive(Default)]
+#[derive(Default, PartialEq, Eq)]
 pub struct Attributes(pub(crate) Vec<RawAttribute>);
 
 impl Attributes {
@@ -167,28 +169,12 @@ impl fmt::Display for RawAttribute {
 }
 
 impl RawAttribute {
-    // AddTo implements Setter, adding attribute as a.Type with a.Value and ignoring
+    // add_to implements Setter, adding attribute as a.Type with a.Value and ignoring
     // the Length field.
-    //TODO:
-    /*fn AddTo(m *Message) error {
-        m.Add(a.Type, a.Value)
-        return nil
-    }*/
-}
-
-/*
-TODO:
-// get returns byte slice that represents attribute value,
-// if there is no attribute with such type,
-// ErrAttributeNotFound is returned.
-func (m *Message) get(t AttrType) ([]byte, error) {
-    v, ok := m.Attributes.get(t)
-    if !ok {
-        return nil, ErrAttributeNotFound
+    pub fn add_to(&self, m: &mut Message) {
+        m.add(self.typ, &self.value);
     }
-    return v.Value, nil
 }
-*/
 
 // STUN aligns attributes on 32-bit boundaries, attributes whose content
 // is not a multiple of 4 bytes are padded with 1, 2, or 3 bytes of
