@@ -1,8 +1,9 @@
 use bytes::BytesMut;
+use errors::*;
 use full_intra_request::FullIntraRequest;
 use util::Error;
 
-use crate::raw_packet;
+use crate::{errors, raw_packet};
 
 use super::{
     full_intra_request, goodbye, header, header::Header, header::PacketType,
@@ -36,7 +37,7 @@ pub fn unmarshal(mut raw_data: BytesMut) -> Result<Vec<Box<dyn Packet>>, Error> 
 
     match packets.len() {
         // Empty packet
-        0 => Err(Error::new("packet too short".to_string())),
+        0 => Err(ERR_INVALID_HEADER.to_owned()),
 
         // Multiple packets
         _ => Ok(packets),
@@ -65,7 +66,7 @@ pub(crate) fn unmarshaller(mut raw_data: &mut BytesMut) -> Result<(Box<dyn Packe
 
     let bytes_processed = (h.length as usize + 1) * 4;
     if bytes_processed > raw_data.len() {
-        return Err(Error::new("packet too short".to_string()));
+        return Err(ERR_PACKET_TOO_SHORT.to_owned());
     }
 
     let mut in_packet = raw_data[..bytes_processed].into();

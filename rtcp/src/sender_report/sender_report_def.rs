@@ -1,6 +1,7 @@
 use byteorder::{BigEndian, ByteOrder};
 use std::fmt;
 
+use crate::errors::*;
 use bytes::BytesMut;
 use header::{Header, PacketType};
 use util::Error;
@@ -90,7 +91,7 @@ impl Packet for SenderReport {
          */
 
         if raw_packet.len() < (header::HEADER_LENGTH + super::SR_HEADER_LENGTH) {
-            return Err(Error::new("packet too short".to_string()));
+            return Err(ERR_PACKET_TOO_SHORT.to_owned());
         }
 
         let mut header = Header::default();
@@ -98,7 +99,7 @@ impl Packet for SenderReport {
         header.unmarshal(&mut raw_packet)?;
 
         if header.packet_type != PacketType::SenderReport {
-            return Err(Error::new("wrong packet type".to_string()));
+            return Err(ERR_WRONG_TYPE.to_owned());
         }
 
         let packet_body = &raw_packet[header::HEADER_LENGTH..];
@@ -115,7 +116,7 @@ impl Packet for SenderReport {
             let rr_end = offset + crate::reception_report::RECEPTION_REPORT_LENGTH;
 
             if rr_end > packet_body.len() {
-                return Err(Error::new("packet too short".to_string()));
+                return Err(ERR_PACKET_TOO_SHORT.to_owned());
             }
 
             let mut rr_body = packet_body
@@ -135,7 +136,7 @@ impl Packet for SenderReport {
         }
 
         if self.reports.len() as u8 != header.count {
-            return Err(Error::new("invalid header".to_string()));
+            return Err(ERR_INVALID_HEADER.to_owned());
         }
 
         Ok(())
@@ -214,7 +215,7 @@ impl Packet for SenderReport {
         }
 
         if self.reports.len() > header::COUNT_MAX {
-            return Err(Error::new("too many reports".to_string()));
+            return Err(ERR_TOO_MANY_REPORTS.to_owned());
         }
 
         packet_body[offset..offset + self.profile_extensions.len()]
