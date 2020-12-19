@@ -6,9 +6,7 @@ use bytes::BytesMut;
 
 use util::Error;
 
-use crate::{
-    errors::*, header, header::Header, header::PacketType, packet::Packet, util::get_padding,
-};
+use crate::{header, header::Header, header::PacketType, packet::Packet, util::get_padding};
 
 mod receiver_estimated_maximum_bitrate_test;
 
@@ -16,26 +14,22 @@ mod receiver_estimated_maximum_bitrate_test;
 /// see: https://tools.ietf.org/html/draft-alvestrand-rmcat-remb-03
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct ReceiverEstimatedMaximumBitrate {
-    // SSRC of sender
+    /// SSRC of sender
     pub sender_ssrc: u32,
 
-    // SSRC of media: always 0
-    // pub media_ssrc: u32,
-
-    // Estimated maximum bitrate
+    /// Estimated maximum bitrate
     pub bitrate: u64,
 
-    // SSRC entries which this packet applies to
+    /// SSRC entries which this packet applies to
     pub ssrcs: Vec<u32>,
 }
 
 const REMB_OFFSET: usize = 16;
 
 // Keep a table of powers to units for fast conversion.
-lazy_static! {
-    static ref BIT_UNITS: Vec<&'static str> = vec!["b", "Kb", "Mb", "Gb", "Tb", "Pb", "Eb"];
-    static ref UNIQUE_IDENTIFIER: Vec<u8> = vec![b'R', b'E', b'M', b'B'];
-}
+
+const BIT_UNITS: [&str; 7] = ["b", "Kb", "Mb", "Gb", "Tb", "Pb", "Eb"];
+const UNIQUE_IDENTIFIER: [u8; 4] = [b'R', b'E', b'M', b'B'];
 
 // String prints the REMB packet in a human-readable format.
 impl fmt::Display for ReceiverEstimatedMaximumBitrate {
@@ -167,7 +161,7 @@ impl Packet for ReceiverEstimatedMaximumBitrate {
         }
 
         // REMB rules all around me
-        if buf[12..16].eq("REMB".as_bytes()) {
+        if !buf[12..16].eq(&[b'R', b'E', b'M', b'B']) {
             return Err(Error::new("missing REMB identifier".to_string()));
         }
 
@@ -223,7 +217,7 @@ impl ReceiverEstimatedMaximumBitrate {
     }
 
     /// MarshalTo serializes the packet to the given byte slice.
-    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error> {
+    pub fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error> {
         /*
             0                   1                   2                   3
             0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -258,10 +252,10 @@ impl ReceiverEstimatedMaximumBitrate {
         BigEndian::write_u32(&mut buf[4..8], self.sender_ssrc);
         BigEndian::write_u32(&mut buf[8..12], 0); // always zero
 
-        buf[12] = "R".as_bytes()[0];
-        buf[13] = "E".as_bytes()[0];
-        buf[14] = "M".as_bytes()[0];
-        buf[15] = "B".as_bytes()[0];
+        buf[12] = b'R';
+        buf[13] = b'E';
+        buf[14] = b'M';
+        buf[15] = b'B';
 
         // Write the length of the ssrcs to follow at the end
         buf[16] = self.ssrcs.len() as u8;
@@ -286,14 +280,14 @@ impl ReceiverEstimatedMaximumBitrate {
             _mantissa = self.bitrate as usize;
         } else {
             // We can only use 18 bits of precision, so truncate.
-            _mantissa = self.bitrate as usize >> (shift - 18);
+            _mantissa = (self.bitrate >> (shift - 18)) as usize;
             exp = shift as usize - 18;
         }
 
         // We can't quite use the binary package because
         // a) it's a uint24 and b) the exponent is only 6-bits
         // Just trust me; this is big-endian encoding.
-        buf[17] = ((exp << 2) | (_mantissa >> 16)) as u8;
+        buf[17] = ((exp << 2) | (_mantissa >> 16) as usize) as u8;
         buf[18] = (_mantissa >> 8) as u8;
         buf[19] = _mantissa as u8;
 
