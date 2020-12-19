@@ -87,7 +87,7 @@ impl Packet for PictureLossIndication {
 
         let header_data = h.marshal()?;
 
-        raw_packet[header_data.len()..].copy_from_slice(&header_data);
+        raw_packet[..header_data.len()].copy_from_slice(&header_data);
 
         Ok(raw_packet)
     }
