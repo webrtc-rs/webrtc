@@ -3,7 +3,7 @@ use crate::message::*;
 use std::fmt;
 
 // Attributes is list of message attributes.
-#[derive(Default, PartialEq, Eq)]
+#[derive(Default, PartialEq, Eq, Debug, Clone)]
 pub struct Attributes(pub(crate) Vec<RawAttribute>);
 
 impl Attributes {
@@ -23,7 +23,7 @@ impl Attributes {
 }
 
 // AttrType is attribute type.
-#[derive(PartialEq, Eq, Default, Copy, Clone)]
+#[derive(PartialEq, Debug, Eq, Default, Copy, Clone)]
 pub struct AttrType(u16);
 
 impl fmt::Display for AttrType {
@@ -155,7 +155,7 @@ pub const ATTR_ALTERNATE_DOMAIN: AttrType = AttrType(0x8003); // ALTERNATE-DOMAI
 // don't understand, but cannot successfully process a message if it
 // contains comprehension-required attributes that are not
 // understood.
-#[derive(Default, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct RawAttribute {
     pub typ: AttrType,
     pub length: u16, // ignored while encoding

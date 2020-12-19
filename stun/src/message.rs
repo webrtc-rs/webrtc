@@ -35,7 +35,7 @@ pub fn is_message(b: &[u8]) -> bool {
 //
 // 	Message, its fields, results of m.Get or any attribute a.GetFrom
 //	are valid only until Message.Raw is not modified.
-#[derive(Default, PartialEq)]
+#[derive(Default, Debug, PartialEq, Clone)]
 pub struct Message {
     pub typ: MessageType,
     pub length: u32, // len(Raw) not including header
@@ -366,7 +366,7 @@ impl Message {
 }
 
 // MessageClass is 8-bit representation of 2-bit class of STUN Message Class.
-#[derive(Default, PartialEq, Eq)]
+#[derive(Default, PartialEq, Eq, Debug, Copy, Clone)]
 pub struct MessageClass(u8);
 
 // Possible values for message class in STUN Message Type.
@@ -390,7 +390,7 @@ impl fmt::Display for MessageClass {
 }
 
 // Method is uint16 representation of 12-bit STUN method.
-#[derive(Default, PartialEq, Eq)]
+#[derive(Default, PartialEq, Eq, Debug, Copy, Clone)]
 pub struct Method(u16);
 
 // Possible methods for STUN Message.
@@ -432,7 +432,7 @@ impl fmt::Display for Method {
 }
 
 // MessageType is STUN Message Type Field.
-#[derive(Default, PartialEq)]
+#[derive(Default, Debug, PartialEq, Clone)]
 pub struct MessageType {
     pub method: Method,      // e.g. binding
     pub class: MessageClass, // e.g. request

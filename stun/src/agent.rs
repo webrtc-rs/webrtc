@@ -1,21 +1,34 @@
+#[cfg(test)]
+mod agent_test;
+
 use crate::errors::*;
 use crate::message::*;
 
 use util::Error;
 
+use std::cell::RefCell;
 use std::collections::HashMap;
-
-use tokio::sync::Mutex;
-use tokio::time;
+use std::rc::Rc;
+use std::time::Duration;
 
 use rand::Rng;
+
+// Handler handles state changes of transaction.
+//
+// Handler is called on transaction state change.
+// Usage of e is valid only during call, user must
+// copy needed fields explicitly.
+pub type Handler = Box<dyn Fn(&Event)>;
 
 // noop_handler just discards any event.
 pub fn noop_handler() -> Handler {
     Box::new(|_e| {})
 }
 
-struct AgentInternal {
+// Agent is low-level abstraction over transaction list that
+// handles concurrency (all calls are goroutine-safe) and
+// time outs (via Collect call).
+pub struct Agent {
     // transactions is map of transactions that are currently
     // in progress. Event handling is done in such way when
     // transaction is unregistered before AgentTransaction access,
@@ -26,41 +39,27 @@ struct AgentInternal {
     handler: Handler, // handles transactions
 }
 
-// Agent is low-level abstraction over transaction list that
-// handles concurrency (all calls are goroutine-safe) and
-// time outs (via Collect call).
-pub struct Agent {
-    mux: Mutex<AgentInternal>,
-}
-
-// Handler handles state changes of transaction.
-//
-// Handler is called on transaction state change.
-// Usage of e is valid only during call, user must
-// copy needed fields explicitly.
-pub type Handler = Box<dyn Fn(&Event)>;
-
 // Event is passed to Handler describing the transaction event.
 // Do not reuse outside Handler.
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 pub struct Event {
     pub transaction_id: TransactionId,
-    pub message: Message,
-    pub error: Error,
+    pub message: Rc<RefCell<Message>>,
+    pub error: Option<Error>,
 }
 
 // AgentTransaction represents transaction in progress.
 // Concurrent access is invalid.
 pub(crate) struct AgentTransaction {
     id: TransactionId,
-    deadline: time::Duration,
+    deadline: Duration,
 }
 
 // AGENT_COLLECT_CAP is initial capacity for Agent.Collect slices,
 // sufficient to make function zero-alloc in most cases.
 const AGENT_COLLECT_CAP: usize = 100;
 
-#[derive(PartialEq, Eq, Hash, Copy, Clone, Default)]
+#[derive(PartialEq, Eq, Hash, Copy, Clone, Default, Debug)]
 pub struct TransactionId(pub(crate) [u8; TRANSACTION_ID_SIZE]);
 
 impl TransactionId {
@@ -81,31 +80,27 @@ impl TransactionId {
 // NewAgent initializes and returns new Agent with provided handler.
 // If h is nil, the noop_handler will be used.
 impl Agent {
-    pub fn new(handler: Handler) -> Agent {
-        let ai = AgentInternal {
+    pub fn new(handler: Handler) -> Self {
+        Agent {
             transactions: HashMap::new(),
             closed: false,
             handler,
-        };
-        Agent {
-            mux: Mutex::new(ai),
         }
     }
 
     // stop_with_error removes transaction from list and calls handler with
     // provided error. Can return ErrTransactionNotExists and ErrAgentClosed.
-    pub async fn stop_with_error(&self, id: TransactionId, error: Error) -> Result<(), Error> {
-        let mut a = self.mux.lock().await;
-        if a.closed {
+    pub fn stop_with_error(&mut self, id: TransactionId, error: Error) -> Result<(), Error> {
+        if self.closed {
             return Err(ERR_AGENT_CLOSED.clone());
         }
 
-        let v = a.transactions.remove(&id);
+        let v = self.transactions.remove(&id);
         if let Some(t) = v {
-            (a.handler)(&Event {
+            (self.handler)(&Event {
                 transaction_id: t.id,
-                message: Message::default(),
-                error,
+                message: Rc::new(RefCell::new(Message::default())),
+                error: Some(error),
             });
             Ok(())
         } else {
@@ -115,25 +110,24 @@ impl Agent {
 
     // Stop stops transaction by id with ErrTransactionStopped, blocking
     // until handler returns.
-    pub async fn stop(&mut self, id: TransactionId) -> Result<(), Error> {
+    pub fn stop(&mut self, id: TransactionId) -> Result<(), Error> {
         self.stop_with_error(id, ERR_TRANSACTION_STOPPED.clone())
-            .await
     }
 
     // Start registers transaction with provided id and deadline.
     // Could return ErrAgentClosed, ErrTransactionExists.
     //
     // Agent handler is guaranteed to be eventually called.
-    pub async fn start(&self, id: TransactionId, deadline: time::Duration) -> Result<(), Error> {
-        let mut a = self.mux.lock().await;
-        if a.closed {
+    pub fn start(&mut self, id: TransactionId, deadline: Duration) -> Result<(), Error> {
+        if self.closed {
             return Err(ERR_AGENT_CLOSED.clone());
         }
-        if a.transactions.contains_key(&id) {
+        if self.transactions.contains_key(&id) {
             return Err(ERR_TRANSACTION_EXISTS.clone());
         }
 
-        a.transactions.insert(id, AgentTransaction { id, deadline });
+        self.transactions
+            .insert(id, AgentTransaction { id, deadline });
 
         Ok(())
     }
@@ -143,9 +137,8 @@ impl Agent {
     // Will return ErrAgentClosed if agent is already closed.
     //
     // It is safe to call Collect concurrently but makes no sense.
-    pub async fn collect(&self, gc_time: time::Duration) -> Result<(), Error> {
-        let mut a = self.mux.lock().await;
-        if a.closed {
+    pub fn collect(&mut self, gc_time: Duration) -> Result<(), Error> {
+        if self.closed {
             // Doing nothing if agent is closed.
             // All transactions should be already closed
             // during Close() call.
@@ -158,14 +151,14 @@ impl Agent {
         // to toCall and to_remove slices.
         // No allocs if there are less than AGENT_COLLECT_CAP
         // timed out transactions.
-        for (id, t) in &a.transactions {
+        for (id, t) in &self.transactions {
             if t.deadline < gc_time {
                 to_remove.push(*id);
             }
         }
         // Un-registering timed out transactions.
         for id in &to_remove {
-            a.transactions.remove(id);
+            self.transactions.remove(id);
         }
         // Calling handler does not require locked mutex,
         // reducing lock time.
@@ -174,69 +167,66 @@ impl Agent {
         // Sending ErrTransactionTimeOut to handler for all transactions,
         // blocking until last one.
         let mut event = Event {
-            error: ERR_TRANSACTION_TIME_OUT.clone(),
+            error: Some(ERR_TRANSACTION_TIME_OUT.clone()),
             ..Default::default()
         };
         for id in to_remove {
             event.transaction_id = id;
-            (a.handler)(&event);
+            (self.handler)(&event);
         }
 
         Ok(())
     }
 
     // process incoming message, synchronously passing it to handler.
-    pub async fn process(&self, m: Message) -> Result<(), Error> {
-        let mut a = self.mux.lock().await;
-        if a.closed {
+    pub fn process(&mut self, m: &Rc<RefCell<Message>>) -> Result<(), Error> {
+        if self.closed {
             return Err(ERR_AGENT_CLOSED.clone());
         }
 
         let e = Event {
-            transaction_id: m.transaction_id,
-            message: m,
+            transaction_id: m.borrow().transaction_id,
+            message: Rc::clone(&m),
             ..Default::default()
         };
 
         //h := a.handler
-        a.transactions.remove(&e.transaction_id);
+        self.transactions.remove(&e.transaction_id);
 
-        (a.handler)(&e);
+        (self.handler)(&e);
 
         Ok(())
     }
 
     // set_handler sets agent handler to h.
-    pub async fn set_handler(&self, h: Handler) -> Result<(), Error> {
-        let mut a = self.mux.lock().await;
-        if a.closed {
+    pub fn set_handler(&mut self, h: Handler) -> Result<(), Error> {
+        if self.closed {
             return Err(ERR_AGENT_CLOSED.clone());
         }
-        a.handler = h;
+        self.handler = h;
 
         Ok(())
     }
 
     // Close terminates all transactions with ErrAgentClosed and renders Agent to
     // closed state.
-    pub async fn close(&self) -> Result<(), Error> {
-        let mut a = self.mux.lock().await;
-        if a.closed {
+    pub fn close(&mut self) -> Result<(), Error> {
+        if self.closed {
             return Err(ERR_AGENT_CLOSED.clone());
         }
 
         let mut e = Event {
-            error: ERR_AGENT_CLOSED.clone(),
+            error: Some(ERR_AGENT_CLOSED.clone()),
             ..Default::default()
         };
 
-        for id in a.transactions.keys() {
+        for id in self.transactions.keys() {
             e.transaction_id = *id;
-            (a.handler)(&e)
+            (self.handler)(&e);
         }
-        a.transactions = HashMap::new();
-        a.closed = true;
-        a.handler = noop_handler();
+        self.transactions = HashMap::new();
+        self.closed = true;
+        self.handler = noop_handler();
 
         Ok(())
     }
