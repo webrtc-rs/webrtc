@@ -6,7 +6,7 @@ use bytes::BytesMut;
 use util::Error;
 
 use crate::{
-    header, header::Header, header::PacketType, receiver_report, reception_report,
+    errors::*, header, header::Header, header::PacketType, receiver_report, reception_report,
     util::get_padding,
 };
 use crate::{packet::Packet, reception_report::ReceptionReport};
@@ -79,14 +79,14 @@ impl Packet for ReceiverReport {
          */
 
         if raw_packet.len() < (header::HEADER_LENGTH + receiver_report::SSRC_LENGTH) {
-            return Err(Error::new("packet too short".to_string()));
+            return Err(ERR_PACKET_TOO_SHORT.to_owned());
         }
 
         let mut header = Header::default();
         header.unmarshal(&mut raw_packet)?;
 
         if header.packet_type != header::PacketType::ReceiverReport {
-            return Err(Error::new("wrong packet type".to_string()));
+            return Err(ERR_WRONG_TYPE.to_owned());
         }
 
         self.ssrc = BigEndian::read_u32(&raw_packet[super::RR_SSRC_OFFSET..]);
@@ -107,7 +107,7 @@ impl Packet for ReceiverReport {
             .to_vec();
 
         if self.reports.len() != header.count as usize {
-            return Err(Error::new("invalid header".to_string()));
+            return Err(ERR_INVALID_HEADER.to_owned());
         }
 
         Ok(())
@@ -163,7 +163,7 @@ impl Packet for ReceiverReport {
         }
 
         if self.reports.len() > header::COUNT_MAX {
-            return Err(Error::new("too many reports".to_string()));
+            return Err(ERR_TOO_MANY_REPORTS.to_owned());
         }
 
         let mut pe = vec![0u8; self.profile_extensions.len()];
