@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod addr_test;
+
 use crate::attributes::*;
 use crate::errors::*;
 use crate::message::*;
@@ -29,6 +32,15 @@ impl fmt::Display for MappedAddress {
     }
 }
 
+impl Default for MappedAddress {
+    fn default() -> Self {
+        MappedAddress {
+            ip: IpAddr::V4(Ipv4Addr::from(0)),
+            port: 0,
+        }
+    }
+}
+
 impl MappedAddress {
     // get_from_as decodes MAPPED-ADDRESS value in message m as an attribute of type t.
     pub fn get_from_as(&mut self, m: &Message, t: AttrType) -> Result<(), Error> {
@@ -46,12 +58,12 @@ impl MappedAddress {
         if family == FAMILY_IPV6 {
             let mut ip = [0; IPV6LEN];
             let l = std::cmp::min(ip.len(), v[4..].len());
-            ip[..l].copy_from_slice(&v[4..l]);
+            ip[..l].copy_from_slice(&v[4..4 + l]);
             self.ip = IpAddr::V6(Ipv6Addr::from(ip));
         } else {
             let mut ip = [0; IPV4LEN];
             let l = std::cmp::min(ip.len(), v[4..].len());
-            ip[..l].copy_from_slice(&v[4..l]);
+            ip[..l].copy_from_slice(&v[4..4 + l]);
             self.ip = IpAddr::V4(Ipv4Addr::from(ip));
         };
 

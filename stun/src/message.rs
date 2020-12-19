@@ -190,16 +190,15 @@ impl Message {
     }
 
     // grow ensures that internal buffer has n length.
-    /*TODO: pub fn grow(&mut self, n: usize) {
+    fn grow(&mut self, n: usize, resize: bool) {
         if self.raw.len() >= n {
-            return
+            if resize {
+                self.raw.resize(n, 0);
+            }
+            return;
         }
-        if self.raw.capacity() >= n {
-            m.Raw = m.Raw[:n]
-            return
-        }
-        m.Raw = append(m.Raw, make([]byte, n-len(m.Raw))...)
-    }*/
+        self.raw.extend_from_slice(&vec![0; n - self.raw.len()]);
+    }
 
     // Add appends new attribute to message. Not goroutine-safe.
     //
@@ -218,34 +217,29 @@ impl Message {
         let alloc_size = ATTRIBUTE_HEADER_SIZE + v.len(); // ~ len(TLV) = len(TL) + len(V)
         let first = MESSAGE_HEADER_SIZE + self.length as usize; // first byte number
         let mut last = first + alloc_size; // last byte number
-                                           //TODO: m.grow(last)                               // growing cap(Raw) to fit TLV
-                                           //TODO: m.Raw = m.Raw[:last]                       // now len(Raw) = last
+        self.grow(last, true); // growing cap(Raw) to fit TLV
         self.length += alloc_size as u32; // rendering length change
 
-        // Sub-slicing internal buffer to simplify encoding.
-        let buf = &self.raw[first..last]; // slice for TLV
-        let value = &buf[ATTRIBUTE_HEADER_SIZE..]; // slice for V
+        // Encoding attribute TLV to allocated buffer.
+        let buf = &mut self.raw[first..last];
+        buf[0..2].copy_from_slice(&t.value().to_be_bytes()); // T
+        buf[2..4].copy_from_slice(&(v.len() as u16).to_be_bytes()); // L
+
+        let value = &mut buf[ATTRIBUTE_HEADER_SIZE..];
+        value.copy_from_slice(v); // V
+
         let attr = RawAttribute {
             typ: t,                 // T
             length: v.len() as u16, // L
             value: value.to_vec(),  // V
         };
 
-        // Encoding attribute TLV to allocated buffer.
-
-        let buf = &mut self.raw[first..last];
-        buf[0..2].copy_from_slice(&attr.typ.value().to_be_bytes()); // T
-        buf[2..4].copy_from_slice(&attr.length.to_be_bytes()); // L
-
-        let value = &mut buf[ATTRIBUTE_HEADER_SIZE..];
-        value.copy_from_slice(v); // V
-
         // Checking that attribute value needs padding.
         if attr.length as usize % PADDING != 0 {
             // Performing padding.
             let bytes_to_add = nearest_padded_value_length(v.len()) - v.len();
             last += bytes_to_add;
-            //TODO: m.grow(last)
+            self.grow(last, true);
             // setting all padding bytes to zero
             // to prevent data leak from previous
             // data in next bytes_to_add bytes
@@ -253,7 +247,6 @@ impl Message {
             for b in buf {
                 *b = 0;
             }
-            //TODO:m.Raw = m.Raw[:last]           // increasing buffer length
             self.length += bytes_to_add as u32; // rendering length change
         }
         self.attributes.0.push(attr);
@@ -262,14 +255,13 @@ impl Message {
 
     // WriteLength writes m.Length to m.Raw.
     pub fn write_length(&mut self) {
-        //m.grow(4)
-        self.raw[2..4].copy_from_slice(&self.length.to_be_bytes());
+        self.grow(4, false);
+        self.raw[2..4].copy_from_slice(&(self.length as u16).to_be_bytes());
     }
 
     // WriteHeader writes header to underlying buffer. Not goroutine-safe.
     pub fn write_header(&mut self) {
-        //m.grow(MESSAGE_HEADER_SIZE)
-        //_ = m.Raw[:MESSAGE_HEADER_SIZE] // early bounds check to guarantee safety of writes below
+        self.grow(MESSAGE_HEADER_SIZE, false);
 
         self.write_type();
         self.write_length();
@@ -295,7 +287,7 @@ impl Message {
 
     // WriteType writes m.Type to m.Raw.
     pub fn write_type(&mut self) {
-        //m.grow(2)
+        self.grow(2, false);
         self.raw[..2].copy_from_slice(&self.typ.value().to_be_bytes()); // message type
     }
 
@@ -326,9 +318,9 @@ impl Message {
     //
     // Can return *DecodeErr while decoding too.
     pub fn read_from<R: Read>(&mut self, reader: &mut R) -> Result<usize, Error> {
-        //tBuf := m.Raw[:cap(m.Raw)]
-        let n = reader.read(&mut self.raw)?;
-        //let m.Raw = tBuf[:n]
+        let mut t_buf = vec![0; DEFAULT_RAW_CAPACITY];
+        let n = reader.read(&mut t_buf)?;
+        self.raw = t_buf[..n].to_vec();
         self.decode()?;
         Ok(n)
     }
