@@ -14,7 +14,7 @@ rand_core = "0.5"
 elliptic-curve = {version = "0.8.1", features=["default", "ecdh", "zeroize"]}
 p256 = { version = "0.7.1", features=["default", "ecdh", "zeroize", "ecdsa"] }
 #p384 = "0.4.1"
-rand = "0.7.3"
+rand = "0.8.0"
 hmac = "0.10.1"
 sha-1 = "0.9.1"
 sha2 = "0.9.1"
