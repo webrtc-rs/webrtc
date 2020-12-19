@@ -1,14 +1,12 @@
-use std::fmt;
-
-use byteorder::{BigEndian, ByteOrder};
-use bytes::BytesMut;
-
-use header::HEADER_LENGTH;
-use util::Error;
-
 use super::errors::*;
 use super::{header, receiver_report};
 use crate::{packet::Packet, util::get_padding};
+use byteorder::{BigEndian, ByteOrder};
+use bytes::BytesMut;
+use std::fmt;
+use util::Error;
+
+mod rapid_resynchronization_request_test;
 
 const RRR_LENGTH: usize = 2;
 const RRR_HEADER_LENGTH: usize = receiver_report::SSRC_LENGTH * 2;
@@ -73,14 +71,14 @@ impl Packet for RapidResynchronizationRequest {
         let mut raw_packet = BytesMut::new();
         raw_packet.resize(self.len(), 0u8);
 
-        let packet_body = &mut raw_packet[HEADER_LENGTH..];
+        let packet_body = &mut raw_packet[header::HEADER_LENGTH..];
 
         BigEndian::write_u32(packet_body, self.sender_ssrc);
         BigEndian::write_u32(&mut packet_body[RRR_MEDIA_OFFSET..], self.media_ssrc);
 
         let header_data = self.header().marshal()?;
 
-        raw_packet[header_data.len()..].copy_from_slice(&header_data);
+        raw_packet[..header_data.len()].copy_from_slice(&header_data);
         Ok(raw_packet)
     }
 
