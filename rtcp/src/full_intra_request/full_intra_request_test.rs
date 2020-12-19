@@ -202,12 +202,9 @@ mod test {
             let data = fir.unmarshal(&mut data.as_slice().into());
 
             assert_eq!(
-                data.is_ok(),
-                want_error.is_ok(),
+                data, want_error,
                 "Unmarshal header {} rr: err = {:?}, want {:?}",
-                name,
-                data,
-                want_error
+                name, data, want_error
             );
 
             match data {

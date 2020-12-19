@@ -159,12 +159,9 @@ mod test {
             let result = pli.unmarshal(&mut bytes[..].into());
 
             assert_eq!(
-                result.is_ok(),
-                want_error.is_ok(),
+                result, want_error,
                 "Unmarshal header {} rr: err = {:?}, want {:?}",
-                name,
-                result,
-                want_error
+                name, result, want_error
             );
 
             match result {

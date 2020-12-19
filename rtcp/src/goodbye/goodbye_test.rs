@@ -140,7 +140,7 @@ mod test {
 
     #[test]
     fn test_goodbye_round_trip() {
-        let mut too_many_sources = vec![0u32; 1 << 5];
+        let too_many_sources = vec![0u32; 1 << 5];
 
         let mut too_long_text = String::new();
         for _ in 0..1 << 8 {
@@ -210,8 +210,8 @@ mod test {
             let want = want_bye.marshal();
 
             assert_eq!(
-                want.is_ok(),
-                want_error.is_ok(),
+                want.clone().err(),
+                want_error.clone().err(),
                 "Marshal {}: err = {:?}, want {:?}",
                 name,
                 want,

@@ -56,8 +56,8 @@ mod test {
             let got_error = h.unmarshal(&mut data.as_slice().into());
 
             assert_eq!(
-                got_error.is_ok(),
-                want_error.is_ok(),
+                got_error,
+                want_error,
                 "Unmarshal {} header: err = {:?}, want {:?}",
                 name,
                 got_error,
@@ -117,8 +117,8 @@ mod test {
             let data = header.marshal();
 
             assert_eq!(
-                data.is_ok(),
-                want_error.is_ok(),
+                data.clone().err(),
+                want_error.clone().err(),
                 "Marshal {}: err = {:?}, want {:?}",
                 name,
                 data,
