@@ -1,4 +1,16 @@
-use std::net;
+use crate::attributes::*;
+use crate::errors::*;
+use crate::message::*;
+
+use util::Error;
+
+use std::fmt;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+
+pub(crate) const FAMILY_IPV4: u16 = 0x01;
+pub(crate) const FAMILY_IPV6: u16 = 0x02;
+pub(crate) const IPV4LEN: usize = 4;
+pub(crate) const IPV6LEN: usize = 16;
 
 // MappedAddress represents MAPPED-ADDRESS attribute.
 //
@@ -7,150 +19,88 @@ use std::net;
 //
 // RFC 5389 Section 15.1
 pub struct MappedAddress {
-    pub ip: net::IpAddr,
+    pub ip: IpAddr,
     pub port: u16,
+}
+
+impl fmt::Display for MappedAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.ip, self.port)
+    }
+}
+
+impl MappedAddress {
+    // get_from_as decodes MAPPED-ADDRESS value in message m as an attribute of type t.
+    pub fn get_from_as(&mut self, m: &Message, t: AttrType) -> Result<(), Error> {
+        let v = m.get(t)?;
+        if v.len() <= 4 {
+            return Err(ERR_UNEXPECTED_EOF.clone());
+        }
+
+        let family = u16::from_be_bytes([v[0], v[1]]);
+        if family != FAMILY_IPV6 && family != FAMILY_IPV4 {
+            return Err(Error::new(format!("bad value {}", family)));
+        }
+        self.port = u16::from_be_bytes([v[2], v[3]]);
+
+        if family == FAMILY_IPV6 {
+            let mut ip = [0; IPV6LEN];
+            let l = std::cmp::min(ip.len(), v[4..].len());
+            ip[..l].copy_from_slice(&v[4..l]);
+            self.ip = IpAddr::V6(Ipv6Addr::from(ip));
+        } else {
+            let mut ip = [0; IPV4LEN];
+            let l = std::cmp::min(ip.len(), v[4..].len());
+            ip[..l].copy_from_slice(&v[4..l]);
+            self.ip = IpAddr::V4(Ipv4Addr::from(ip));
+        };
+
+        Ok(())
+    }
+
+    // AddToAs adds MAPPED-ADDRESS value to m as t attribute.
+    pub fn add_to_as(&mut self, m: &mut Message, t: AttrType) -> Result<(), Error> {
+        let family = match self.ip {
+            IpAddr::V4(_) => FAMILY_IPV4,
+            IpAddr::V6(_) => FAMILY_IPV6,
+        };
+
+        let mut value = vec![0u8; 4];
+        //value[0] = 0 // first 8 bits are zeroes
+        value[0..2].copy_from_slice(&family.to_be_bytes());
+        value[2..4].copy_from_slice(&self.port.to_be_bytes());
+
+        match self.ip {
+            IpAddr::V4(ipv4) => value.extend_from_slice(&ipv4.octets()),
+            IpAddr::V6(ipv6) => value.extend_from_slice(&ipv6.octets()),
+        };
+
+        m.add(t, &value);
+        Ok(())
+    }
+
+    // add_to adds MAPPED-ADDRESS to message.
+    pub fn add_to(&mut self, m: &mut Message) -> Result<(), Error> {
+        self.add_to_as(m, ATTR_MAPPED_ADDRESS)
+    }
+
+    // GetFrom decodes MAPPED-ADDRESS from message.
+    pub fn get_from(&mut self, m: &Message) -> Result<(), Error> {
+        self.get_from_as(m, ATTR_MAPPED_ADDRESS)
+    }
 }
 
 // AlternateServer represents ALTERNATE-SERVER attribute.
 //
 // RFC 5389 Section 15.11
-pub struct AlternateServer {
-    pub ip: net::IpAddr,
-    pub port: u16,
-}
+pub type AlternateServer = MappedAddress;
 
 // ResponseOrigin represents RESPONSE-ORIGIN attribute.
 //
 // RFC 5780 Section 7.3
-pub struct ResponseOrigin {
-    pub ip: net::IpAddr,
-    pub port: u16,
-}
+pub type ResponseOrigin = MappedAddress;
 
 // OtherAddress represents OTHER-ADDRESS attribute.
 //
 // RFC 5780 Section 7.4
-pub struct OtherAddress {
-    pub ip: net::IpAddr,
-    pub port: u16,
-}
-/*
-impl AlternateServer {
-    // add_to adds ALTERNATE-SERVER attribute to message.
-    pub fn add_to(m *Message) error {
-        a : = ( * MappedAddress)(s)
-        return a.AddToAs(m, ATTR_ALTERNATE_SERVER)
-    }
-
-    // GetFrom decodes ALTERNATE-SERVER from message.
-    func (s *AlternateServer) GetFrom(m *Message) error {
-    a : = ( * MappedAddress)(s)
-    return a.GetFromAs(m, ATTR_ALTERNATE_SERVER)
-    }
-}
-
-func (a MappedAddress) String() string {
-    return net.JoinHostPort(a.IP.String(), strconv.Itoa(a.Port))
-}
-
-// GetFromAs decodes MAPPED-ADDRESS value in message m as an attribute of type t.
-func (a *MappedAddress) GetFromAs(m *Message, t AttrType) error {
-    v, err := m.get(t)
-    if err != nil {
-        return err
-    }
-    if len(v) <= 4 {
-        return io.ErrUnexpectedEOF
-    }
-    family := bin.Uint16(v[0:2])
-    if family != familyIPv6 && family != familyIPv4 {
-        return newDecodeErr("xor-mapped address", "family",
-            fmt.Sprintf("bad value %d", family),
-        )
-    }
-    ipLen := net.IPv4len
-    if family == familyIPv6 {
-        ipLen = net.IPv6len
-    }
-    // Ensuring len(a.IP) == ipLen and reusing a.IP.
-    if len(a.IP) < ipLen {
-        a.IP = a.IP[:cap(a.IP)]
-        for len(a.IP) < ipLen {
-            a.IP = append(a.IP, 0)
-        }
-    }
-    a.IP = a.IP[:ipLen]
-    for i := range a.IP {
-        a.IP[i] = 0
-    }
-    a.Port = int(bin.Uint16(v[2:4]))
-    copy(a.IP, v[4:])
-    return nil
-}
-
-// AddToAs adds MAPPED-ADDRESS value to m as t attribute.
-func (a *MappedAddress) AddToAs(m *Message, t AttrType) error {
-    var (
-        family = familyIPv4
-        ip     = a.IP
-    )
-    if len(a.IP) == net.IPv6len {
-        if isIPv4(ip) {
-            ip = ip[12:16] // like in ip.To4()
-        } else {
-            family = familyIPv6
-        }
-    } else if len(ip) != net.IPv4len {
-        return ErrBadIPLength
-    }
-    value := make([]byte, 128)
-    value[0] = 0 // first 8 bits are zeroes
-    bin.PutUint16(value[0:2], family)
-    bin.PutUint16(value[2:4], uint16(a.Port))
-    copy(value[4:], ip)
-    m.Add(t, value[:4+len(ip)])
-    return nil
-}
-
-// add_to adds MAPPED-ADDRESS to message.
-func (a *MappedAddress) add_to(m *Message) error {
-    return a.AddToAs(m, ATTR_MAPPED_ADDRESS)
-}
-
-// GetFrom decodes MAPPED-ADDRESS from message.
-func (a *MappedAddress) GetFrom(m *Message) error {
-    return a.GetFromAs(m, ATTR_MAPPED_ADDRESS)
-}
-
-// add_to adds OTHER-ADDRESS attribute to message.
-func (o *OtherAddress) add_to(m *Message) error {
-    a := (*MappedAddress)(o)
-    return a.AddToAs(m, ATTR_OTHER_ADDRESS)
-}
-
-// GetFrom decodes OTHER-ADDRESS from message.
-func (o *OtherAddress) GetFrom(m *Message) error {
-    a := (*MappedAddress)(o)
-    return a.GetFromAs(m, ATTR_OTHER_ADDRESS)
-}
-
-func (o OtherAddress) String() string {
-    return net.JoinHostPort(o.IP.String(), strconv.Itoa(o.Port))
-}
-
-// add_to adds RESPONSE-ORIGIN attribute to message.
-func (o *ResponseOrigin) add_to(m *Message) error {
-    a := (*MappedAddress)(o)
-    return a.AddToAs(m, ATTR_RESPONSE_ORIGIN)
-}
-
-// GetFrom decodes RESPONSE-ORIGIN from message.
-func (o *ResponseOrigin) GetFrom(m *Message) error {
-    a := (*MappedAddress)(o)
-    return a.GetFromAs(m, ATTR_RESPONSE_ORIGIN)
-}
-
-func (o ResponseOrigin) String() string {
-    return net.JoinHostPort(o.IP.String(), strconv.Itoa(o.Port))
-}
-*/
+pub type OtherAddress = MappedAddress;
