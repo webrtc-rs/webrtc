@@ -178,3 +178,32 @@ impl TransportLayerNack {
         }
     }
 }
+
+fn nack_pairs_from_sequence_numbers(seq_nos: &[u16]) -> Vec<NackPair> {
+    if seq_nos.len() == 0 {
+        return vec![];
+    }
+
+    let mut nack_pair = NackPair {
+        packet_id: seq_nos[0],
+        ..Default::default()
+    };
+
+    let mut pairs = vec![];
+
+    for i in 1..seq_nos.len() {
+        let m = seq_nos[i];
+
+        if m - nack_pair.packet_id > 16 {
+            pairs.push(nack_pair.clone());
+            nack_pair.packet_id = m;
+            continue;
+        }
+
+        nack_pair.lost_packets |= 1 << (m - nack_pair.packet_id - 1);
+    }
+
+    pairs.push(nack_pair);
+
+    pairs
+}
