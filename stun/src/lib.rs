@@ -12,3 +12,4 @@ pub mod error_code;
 pub mod errors;
 pub mod fingerprint;
 pub mod message;
+pub mod textattrs;

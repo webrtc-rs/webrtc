@@ -70,7 +70,7 @@ impl MappedAddress {
         Ok(())
     }
 
-    // AddToAs adds MAPPED-ADDRESS value to m as t attribute.
+    // add_to_as adds MAPPED-ADDRESS value to m as t attribute.
     pub fn add_to_as(&mut self, m: &mut Message, t: AttrType) -> Result<(), Error> {
         let family = match self.ip {
             IpAddr::V4(_) => FAMILY_IPV4,
