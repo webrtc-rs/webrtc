@@ -1,4 +1,9 @@
+#[cfg(test)]
+mod attributes_test;
+
 use crate::message::*;
+
+use util::Error;
 
 use std::fmt;
 
@@ -168,11 +173,12 @@ impl fmt::Display for RawAttribute {
     }
 }
 
-impl RawAttribute {
+impl Setter for RawAttribute {
     // add_to implements Setter, adding attribute as a.Type with a.Value and ignoring
     // the Length field.
-    pub fn add_to(&self, m: &mut Message) {
+    fn add_to(&self, m: &mut Message) -> Result<(), Error> {
         m.add(self.typ, &self.value);
+        Ok(())
     }
 }
 

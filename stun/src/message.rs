@@ -23,6 +23,23 @@ const MESSAGE_HEADER_SIZE: usize = 20;
 // TRANSACTION_ID_SIZE is length of transaction id array (in bytes).
 pub const TRANSACTION_ID_SIZE: usize = 12; // 96 bit
 
+// Interfaces that are implemented by message attributes, shorthands for them,
+// or helpers for message fields as type or transaction id.
+pub trait Setter {
+    // Setter sets *Message attribute.
+    fn add_to(&self, m: &mut Message) -> Result<(), Error>;
+}
+
+// Getter parses attribute from *Message.
+pub trait Getter {
+    fn get_from(&self, m: &Message) -> Result<(), Error>;
+}
+
+// Checker checks *Message attribute.
+pub trait Checker {
+    fn check(&self, m: &Message) -> Result<(), Error>;
+}
+
 // is_message returns true if b looks like STUN message.
 // Useful for multiplexing. is_message does not guarantee
 // that decoding will be successful.
@@ -362,6 +379,46 @@ impl Message {
         } else {
             Err(ERR_ATTRIBUTE_NOT_FOUND.clone())
         }
+    }
+
+    // Build resets message and applies setters to it in batch, returning on
+    // first error. To prevent allocations, pass pointers to values.
+    //
+    // Example:
+    //  var (
+    //  	t        = BindingRequest
+    //  	username = NewUsername("username")
+    //  	nonce    = NewNonce("nonce")
+    //  	realm    = NewRealm("example.org")
+    //  )
+    //  m := new(Message)
+    //  m.Build(t, username, nonce, realm)     // 4 allocations
+    //  m.Build(&t, &username, &nonce, &realm) // 0 allocations
+    //
+    // See BenchmarkBuildOverhead.
+    pub fn build<S: Setter>(&mut self, setters: &[S]) -> Result<(), Error> {
+        self.reset();
+        self.write_header();
+        for s in setters {
+            s.add_to(self)?;
+        }
+        Ok(())
+    }
+
+    // Check applies checkers to message in batch, returning on first error.
+    pub fn check<C: Checker>(&self, checkers: &[C]) -> Result<(), Error> {
+        for c in checkers {
+            c.check(self)?;
+        }
+        Ok(())
+    }
+
+    // Parse applies getters to message in batch, returning on first error.
+    pub fn parse<G: Getter>(&self, getters: &[G]) -> Result<(), Error> {
+        for c in getters {
+            c.get_from(self)?;
+        }
+        Ok(())
     }
 }
 
