@@ -46,10 +46,6 @@ pub struct SenderReport {
 }
 
 impl Packet for SenderReport {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     // Unmarshal decodes the ReceptionReport from binary
     fn unmarshal(&mut self, mut raw_packet: &mut BytesMut) -> Result<(), Error> {
         /*
@@ -142,13 +138,6 @@ impl Packet for SenderReport {
         Ok(())
     }
 
-    // destination_ssrc returns an array of SSRC values that this packet refers to.
-    fn destination_ssrc(&self) -> Vec<u32> {
-        let mut out: Vec<u32> = self.reports.iter().map(|x| x.ssrc).collect();
-        out.push(self.ssrc);
-        out
-    }
-
     // Marshal encodes the packet in binary.
     fn marshal(&self) -> Result<BytesMut, Error> {
         /*
@@ -226,6 +215,24 @@ impl Packet for SenderReport {
         raw_packet[..header_data.len()].copy_from_slice(&header_data);
 
         Ok(raw_packet[..].into())
+    }
+
+    /// destination_ssrc returns an array of SSRC values that this packet refers to.
+    fn destination_ssrc(&self) -> Vec<u32> {
+        let mut out: Vec<u32> = self.reports.iter().map(|x| x.ssrc).collect();
+        out.push(self.ssrc);
+        out
+    }
+
+    fn trait_eq(&self, other: &dyn Packet) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<SenderReport>()
+            .map_or(false, |a| self == a)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

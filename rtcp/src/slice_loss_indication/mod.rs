@@ -49,10 +49,6 @@ impl fmt::Display for SliceLossIndication {
 }
 
 impl Packet for SliceLossIndication {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     /// Unmarshal decodes the SliceLossIndication from binary
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         if raw_packet.len() < (header::HEADER_LENGTH + receiver_report::SSRC_LENGTH) {
@@ -124,6 +120,17 @@ impl Packet for SliceLossIndication {
     /// destination_ssrc returns an array of SSRC values that this packet refers to.
     fn destination_ssrc(&self) -> Vec<u32> {
         vec![self.media_ssrc]
+    }
+
+    fn trait_eq(&self, other: &dyn Packet) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<SliceLossIndication>()
+            .map_or(false, |a| self == a)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

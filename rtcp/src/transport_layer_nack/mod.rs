@@ -73,10 +73,6 @@ impl fmt::Display for TransportLayerNack {
 }
 
 impl Packet for TransportLayerNack {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     /// Marshal encodes the packet in binary.
     fn marshal(&self) -> Result<BytesMut, Error> {
         if self.nacks.len() + TLN_LENGTH > std::u8::MAX as usize {
@@ -151,6 +147,17 @@ impl Packet for TransportLayerNack {
     /// destination_ssrc returns an array of SSRC values that this packet refers to.
     fn destination_ssrc(&self) -> Vec<u32> {
         vec![self.media_ssrc]
+    }
+
+    fn trait_eq(&self, other: &dyn Packet) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<TransportLayerNack>()
+            .map_or(false, |a| self == a)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

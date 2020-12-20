@@ -62,7 +62,7 @@ pub enum SymbolTypeTCC {
     PacketReceivedLargeDelta = 2,
     /// https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-7
     /// see Example 2: "packet received, w/o recv delta"
-    PacketReceivedWithoutDelta = 4,
+    PacketReceivedWithoutDelta = 3,
 }
 
 /// for status vector chunk
@@ -124,8 +124,16 @@ impl Default for SymbolTypeTCC {
 /// PacketStatusChunk has two kinds:
 /// RunLengthChunk and StatusVectorChunk
 pub trait PacketStatusChunk {
+    fn as_any(&self) -> &dyn std::any::Any;
+    fn tr_eq(&self, other: &dyn PacketStatusChunk) -> bool;
     fn marshal(&self) -> Result<BytesMut, Error>;
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error>;
+}
+
+impl PartialEq for dyn PacketStatusChunk {
+    fn eq(&self, other: &dyn PacketStatusChunk) -> bool {
+        self.tr_eq(other)
+    }
 }
 
 /// RunLengthChunk T=TypeTCCRunLengthChunk
@@ -146,7 +154,7 @@ struct RunLengthChunk {
 }
 
 impl PacketStatusChunk for RunLengthChunk {
-    // Marshal ..
+    /// Marshal ..
     fn marshal(&self) -> Result<BytesMut, Error> {
         let mut chunks = vec![0u8; 2];
 
@@ -164,7 +172,7 @@ impl PacketStatusChunk for RunLengthChunk {
         Ok(chunks[..].into())
     }
 
-    // Unmarshal ..
+    /// Unmarshal ..
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         if raw_packet.len() != PACKET_STATUS_CHUNK_LENGTH as usize {
             return Err(Error::new(
@@ -182,10 +190,22 @@ impl PacketStatusChunk for RunLengthChunk {
 
         // get RunLength
         // r.RunLength = uint16(rawPacket[0]&0x1F)*256 + uint16(rawPacket[1])
-        self.run_length =
-            utility::get_nbits_from_byte(raw_packet[0], 3, 5) << 8 + raw_packet[1] as u16;
+        self.run_length = ((utility::get_nbits_from_byte(raw_packet[0], 3, 5) as usize) << 8)
+            as u16
+            + (raw_packet[1] as u16);
 
         Ok(())
+    }
+
+    fn tr_eq(&self, other: &dyn PacketStatusChunk) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<RunLengthChunk>()
+            .map_or(false, |a| self == a)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
@@ -274,6 +294,17 @@ impl PacketStatusChunk for StatusVectorChunk {
             }
         }
     }
+
+    fn tr_eq(&self, other: &dyn PacketStatusChunk) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<StatusVectorChunk>()
+            .map_or(false, |a| self == a)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 /// RecvDelta are represented as multiples of 250us
@@ -304,7 +335,7 @@ impl RecvDelta {
 
         // big delta
         if self.type_tcc_packet == SymbolTypeTCC::PacketReceivedLargeDelta
-            && delta >= std::u16::MIN as i64
+            && delta >= std::i16::MIN as i64
             && delta <= std::u16::MAX as i64
         {
             let mut delta_chunk = vec![0u8; 2];
@@ -312,6 +343,7 @@ impl RecvDelta {
             return Ok(delta_chunk[..].into());
         }
 
+        // overflow
         Err(ERR_DELTA_EXCEED_LIMIT.to_owned())
     }
 
@@ -326,12 +358,12 @@ impl RecvDelta {
 
         if chunk_len == 1 {
             self.type_tcc_packet = SymbolTypeTCC::PacketReceivedSmallDelta;
-            self.delta = TYPE_TCC_DELTA_SCALE_FACTOR + raw_packet[0] as i64;
+            self.delta = TYPE_TCC_DELTA_SCALE_FACTOR * raw_packet[0] as i64;
             return Ok(());
         }
 
         self.type_tcc_packet = SymbolTypeTCC::PacketReceivedLargeDelta;
-        self.delta = TYPE_TCC_DELTA_SCALE_FACTOR + BigEndian::read_u16(raw_packet) as i64;
+        self.delta = TYPE_TCC_DELTA_SCALE_FACTOR * BigEndian::read_i16(raw_packet) as i64;
 
         Ok(())
     }
@@ -364,7 +396,7 @@ const PACKET_STATUS_CHUNK_LENGTH: usize = 2;
 
 /// TransportLayerCC for sender-BWE
 /// https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-5
-#[derive(Default)]
+#[derive(Default, PartialEq)]
 pub struct TransportLayerCC {
     /// header
     header: header::Header,
@@ -407,10 +439,6 @@ impl fmt::Display for TransportLayerCC {
 }
 
 impl Packet for TransportLayerCC {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     /// Unmarshal ..
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         if raw_packet.len() < (header::HEADER_LENGTH + receiver_report::SSRC_LENGTH) {
@@ -639,6 +667,17 @@ impl Packet for TransportLayerCC {
     /// destination_ssrc returns an array of SSRC values that this packet refers to.
     fn destination_ssrc(&self) -> Vec<u32> {
         vec![self.media_ssrc]
+    }
+
+    fn trait_eq(&self, other: &dyn Packet) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<TransportLayerCC>()
+            .map_or(false, |a| self == a)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

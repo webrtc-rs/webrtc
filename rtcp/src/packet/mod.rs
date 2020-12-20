@@ -12,17 +12,23 @@ use super::{
     source_description, transport_layer_cc, transport_layer_nack,
 };
 
-#[cfg(test)]
 mod packet_test;
 
 /// Packet represents an RTCP packet, a protocol used for out-of-band statistics and control information for an RTP session
 pub trait Packet {
+    fn trait_eq(&self, other: &dyn Packet) -> bool;
     fn as_any(&self) -> &dyn std::any::Any;
 
     fn destination_ssrc(&self) -> Vec<u32>;
 
     fn marshal(&self) -> Result<BytesMut, Error>;
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error>;
+}
+
+impl PartialEq for dyn Packet {
+    fn eq(&self, other: &Self) -> bool {
+        self.trait_eq(other)
+    }
 }
 
 pub fn unmarshal(mut raw_data: BytesMut) -> Result<Vec<Box<dyn Packet>>, Error> {

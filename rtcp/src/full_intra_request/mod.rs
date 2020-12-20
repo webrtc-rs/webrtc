@@ -42,19 +42,6 @@ impl fmt::Display for FullIntraRequest {
 }
 
 impl Packet for FullIntraRequest {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    /// destination_ssrc returns an array of SSRC values that this packet refers to.
-    fn destination_ssrc(&self) -> Vec<u32> {
-        let mut ssrcs: Vec<u32> = Vec::with_capacity(self.fir.len());
-        for entry in &self.fir {
-            ssrcs.push(entry.ssrc);
-        }
-        ssrcs
-    }
-
     /// Marshal encodes the FullIntraRequest
     fn marshal(&self) -> Result<BytesMut, Error> {
         let mut raw_packet = BytesMut::new();
@@ -113,6 +100,26 @@ impl Packet for FullIntraRequest {
         }
 
         Ok(())
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    /// destination_ssrc returns an array of SSRC values that this packet refers to.
+    fn destination_ssrc(&self) -> Vec<u32> {
+        let mut ssrcs: Vec<u32> = Vec::with_capacity(self.fir.len());
+        for entry in &self.fir {
+            ssrcs.push(entry.ssrc);
+        }
+        ssrcs
+    }
+
+    fn trait_eq(&self, other: &dyn Packet) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<FullIntraRequest>()
+            .map_or(false, |a| self == a)
     }
 }
 

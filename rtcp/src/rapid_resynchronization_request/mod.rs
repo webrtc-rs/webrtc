@@ -32,10 +32,6 @@ impl fmt::Display for RapidResynchronizationRequest {
 }
 
 impl Packet for RapidResynchronizationRequest {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     /// Unmarshal decodes the RapidResynchronizationRequest from binary
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         if raw_packet.len() < (header::HEADER_LENGTH + (receiver_report::SSRC_LENGTH * 2)) {
@@ -85,6 +81,17 @@ impl Packet for RapidResynchronizationRequest {
     /// Destination SSRC returns an array of SSRC values that this packet refers to.
     fn destination_ssrc(&self) -> Vec<u32> {
         vec![self.media_ssrc]
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn trait_eq(&self, other: &dyn Packet) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<RapidResynchronizationRequest>()
+            .map_or(false, |a| self == a)
     }
 }
 

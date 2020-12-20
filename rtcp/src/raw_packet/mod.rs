@@ -48,6 +48,13 @@ impl Packet for RawPacket {
     fn marshal(&self) -> Result<BytesMut, Error> {
         Ok(self.0[..].into())
     }
+
+    fn trait_eq(&self, other: &dyn Packet) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<RawPacket>()
+            .map_or(false, |a| self == a)
+    }
 }
 
 impl RawPacket {

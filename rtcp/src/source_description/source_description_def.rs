@@ -198,7 +198,7 @@ impl SourceDescriptionItem {
 }
 
 // A SourceDescription (SDES) packet describes the sources in an RTP stream.
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct SourceDescription {
     pub chunks: Vec<SourceDescriptionChunk>,
 }
@@ -217,10 +217,6 @@ impl fmt::Display for SourceDescription {
 }
 
 impl Packet for SourceDescription {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     /// Unmarshal decodes the SourceDescription from binary
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         /*
@@ -267,11 +263,6 @@ impl Packet for SourceDescription {
         Ok(())
     }
 
-    /// destination_ssrc returns an array of SSRC values that this packet refers to.
-    fn destination_ssrc(&self) -> Vec<u32> {
-        self.chunks.iter().map(|x| x.source).collect()
-    }
-
     /// Marshal encodes the SourceDescription in binary
     fn marshal(&self) -> Result<BytesMut, Error> {
         /*
@@ -315,6 +306,22 @@ impl Packet for SourceDescription {
         raw_packet[..header_data.len()].copy_from_slice(&header_data);
 
         Ok(raw_packet)
+    }
+
+    /// destination_ssrc returns an array of SSRC values that this packet refers to.
+    fn destination_ssrc(&self) -> Vec<u32> {
+        self.chunks.iter().map(|x| x.source).collect()
+    }
+
+    fn trait_eq(&self, other: &dyn Packet) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<SourceDescription>()
+            .map_or(false, |a| self == a)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

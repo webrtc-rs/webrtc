@@ -158,6 +158,13 @@ impl Packet for Goodbye {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+
+    fn trait_eq(&self, other: &dyn Packet) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<Goodbye>()
+            .map_or(false, |a| self == a)
+    }
 }
 
 impl Goodbye {

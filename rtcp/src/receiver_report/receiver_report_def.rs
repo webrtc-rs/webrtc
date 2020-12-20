@@ -44,11 +44,7 @@ impl fmt::Display for ReceiverReport {
 }
 
 impl Packet for ReceiverReport {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    // Unmarshal decodes the ReceiverReport from binary
+    /// Unmarshal decodes the ReceiverReport from binary
     fn unmarshal(&mut self, mut raw_packet: &mut BytesMut) -> Result<(), Error> {
         /*
          *         0                   1                   2                   3
@@ -113,12 +109,7 @@ impl Packet for ReceiverReport {
         Ok(())
     }
 
-    // destination_ssrc returns an array of SSRC values that this packet refers to.
-    fn destination_ssrc(&self) -> Vec<u32> {
-        self.reports.iter().map(|x| x.ssrc).collect()
-    }
-
-    // Marshal encodes the packet in binary.
+    /// Marshal encodes the packet in binary.
     fn marshal(&self) -> Result<BytesMut, Error> {
         /*
          *         0                   1                   2                   3
@@ -182,6 +173,22 @@ impl Packet for ReceiverReport {
         raw_packet[..header_data.len()].copy_from_slice(&header_data);
 
         Ok(raw_packet[..].into())
+    }
+
+    /// destination_ssrc returns an array of SSRC values that this packet refers to.
+    fn destination_ssrc(&self) -> Vec<u32> {
+        self.reports.iter().map(|x| x.ssrc).collect()
+    }
+
+    fn trait_eq(&self, other: &dyn Packet) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<ReceiverReport>()
+            .map_or(false, |a| self == a)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

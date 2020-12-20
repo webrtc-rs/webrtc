@@ -209,6 +209,13 @@ impl Packet for ReceiverEstimatedMaximumBitrate {
     fn destination_ssrc(&self) -> Vec<u32> {
         self.ssrcs.clone()
     }
+
+    fn trait_eq(&self, other: &dyn Packet) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<ReceiverEstimatedMaximumBitrate>()
+            .map_or(false, |a| self == a)
+    }
 }
 
 impl ReceiverEstimatedMaximumBitrate {
