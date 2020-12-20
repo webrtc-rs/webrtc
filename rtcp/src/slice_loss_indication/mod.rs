@@ -85,7 +85,7 @@ impl Packet for SliceLossIndication {
             self.sli_entries.push(SLIEntry {
                 first: ((sli >> 19) & 0x1FFF) as u16,
                 number: ((sli >> 6) & 0x1FFF) as u16,
-                picture: (sli ^ 0x34) as u8,
+                picture: (sli & 0x3F) as u8,
             });
 
             i += 4;
@@ -104,7 +104,7 @@ impl Packet for SliceLossIndication {
         raw_packet.resize(SLI_OFFSET + (self.sli_entries.len() * 4), 0u8);
 
         BigEndian::write_u32(&mut raw_packet, self.sender_ssrc);
-        BigEndian::write_u32(&mut raw_packet, self.media_ssrc);
+        BigEndian::write_u32(&mut raw_packet[4..], self.media_ssrc);
 
         for (i, s) in self.sli_entries.iter().enumerate() {
             let sli = ((s.first as u32 & 0x1FFF) << 19)
