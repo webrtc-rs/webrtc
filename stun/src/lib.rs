@@ -10,4 +10,5 @@ pub mod attributes;
 mod checks;
 pub mod error_code;
 pub mod errors;
+pub mod fingerprint;
 pub mod message;

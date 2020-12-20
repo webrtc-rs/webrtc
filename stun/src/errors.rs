@@ -28,4 +28,10 @@ lazy_static! {
     pub static ref ERR_DECODE_TO_NIL: Error = Error::new("attempt to decode to nil message".to_owned());
     // ErrUnexpectedHeaderEOF means that there were not enough bytes in Raw to read header.
     pub static ref ERR_UNEXPECTED_HEADER_EOF: Error = Error::new("unexpected EOF: not enough bytes to read header".to_owned());
+    // ErrIntegrityMismatch means that computed HMAC differs from expected.
+    pub static ref ERR_INTEGRITY_MISMATCH: Error = Error::new("integrity check failed".to_owned());
+    // ErrFingerprintMismatch means that computed fingerprint differs from expected.
+    pub static ref ERR_FINGERPRINT_MISMATCH: Error = Error::new("fingerprint check failed".to_owned());
+
+
 }
