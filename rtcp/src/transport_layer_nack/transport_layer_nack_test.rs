@@ -3,6 +3,8 @@
 // use std::io::{BufReader, BufWriter};
 
 // use util::Error;
+#[cfg(test)]
+mod test {}
 
 // #[test]
 // fn test_transport_layer_nack_unmarshal() -> Result<(), Error> {

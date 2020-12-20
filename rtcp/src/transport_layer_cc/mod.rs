@@ -483,7 +483,7 @@ impl Packet for TransportLayerCC {
 
         self.fb_pkt_count = raw_packet[header::HEADER_LENGTH + FB_PKT_COUNT_OFFSET];
 
-        let mut packet_status_pos = header::HEADER_LENGTH + PACKET_STATUS_COUNT_OFFSET;
+        let mut packet_status_pos = header::HEADER_LENGTH + PACKET_CHUNK_OFFSET;
 
         let mut processed_packet_num = 0u16;
 
@@ -636,7 +636,8 @@ impl Packet for TransportLayerCC {
         for (i, chunk) in self.packet_chunks.iter().enumerate() {
             let b = chunk.marshal()?;
 
-            payload[PACKET_CHUNK_OFFSET + i * 2..b.len()].copy_from_slice(&b);
+            let v = PACKET_CHUNK_OFFSET + i * 2;
+            payload[v..v + b.len()].copy_from_slice(&b);
         }
 
         let recv_delta_offset = PACKET_CHUNK_OFFSET + self.packet_chunks.len() * 2;
@@ -645,7 +646,7 @@ impl Packet for TransportLayerCC {
         for delta in &self.recv_deltas {
             let b = delta.marshal()?;
 
-            payload[recv_delta_offset + i..b.len()].copy_from_slice(&b);
+            payload[recv_delta_offset + i..b.len() + recv_delta_offset + i].copy_from_slice(&b);
             i += 1;
 
             if delta.type_tcc_packet == SymbolTypeTCC::PacketReceivedLargeDelta {

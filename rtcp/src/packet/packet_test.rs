@@ -80,68 +80,18 @@ mod test {
             media_ssrc: 0x902f9e2e,
         };
 
+        let expected: Vec<Box<dyn Packet>> = vec![
+            Box::new(a),
+            Box::new(b),
+            Box::new(c),
+            Box::new(d),
+            Box::new(e),
+        ];
+
         assert_eq!(packet.len(), 5);
 
-        match packet[0]
-            .as_any()
-            .downcast_ref::<receiver_report::ReceiverReport>()
-        {
-            Some(val) => {
-                let val: &receiver_report::ReceiverReport = val;
-
-                assert_eq!(*val, a, "Error comparing receiver report results");
-            }
-
-            None => panic!("Trait panic on downcasting to receiver_report."),
-        }
-
-        match packet[1]
-            .as_any()
-            .downcast_ref::<source_description::SourceDescription>()
-        {
-            Some(val) => {
-                let val: &source_description::SourceDescription = val;
-
-                assert_eq!(*val, b, "Error comparing receiver report results");
-            }
-
-            None => panic!("Trait panic on downcasting to receiver_report."),
-        }
-
-        match packet[2].as_any().downcast_ref::<goodbye::Goodbye>() {
-            Some(val) => {
-                let val: &goodbye::Goodbye = val;
-
-                assert_eq!(*val, c, "Error comparing receiver report results");
-            }
-
-            None => panic!("Trait panic on downcasting to receiver_report."),
-        }
-
-        match packet[3]
-            .as_any()
-            .downcast_ref::<picture_loss_indication::PictureLossIndication>()
-        {
-            Some(val) => {
-                let val: &picture_loss_indication::PictureLossIndication = val;
-
-                assert_eq!(*val, d, "Error comparing receiver report results");
-            }
-
-            None => panic!("Trait panic on downcasting to receiver_report."),
-        }
-
-        match packet[4]
-            .as_any()
-            .downcast_ref::<rapid_resynchronization_request::RapidResynchronizationRequest>()
-        {
-            Some(val) => {
-                let val: &rapid_resynchronization_request::RapidResynchronizationRequest = val;
-
-                assert_eq!(*val, e, "Error comparing receiver report results");
-            }
-
-            None => panic!("Trait panic on downcasting to receiver_report."),
+        if packet != expected {
+            panic!("Invalid packets")
         }
     }
 
