@@ -1,7 +1,5 @@
 #[cfg(test)]
 mod test {
-    use std::vec;
-
     use crate::goodbye::*;
 
     #[test]
@@ -10,10 +8,9 @@ mod test {
             (
                 "valid",
                 vec![
-                    // v=2, p=0, count=1, BYE, len=12
-                    0x81, 0xcb, 0x00, 0x0c, // ssrc=0x902f9e2e
-                    0x90, 0x2f, 0x9e, 0x2e, // len=3, text=FOO
-                    0x03, 0x46, 0x4f, 0x4f,
+                    0x81, 0xcb, 0x00, 0x0c, // v=2, p=0, count=1, BYE, len=12
+                    0x90, 0x2f, 0x9e, 0x2e, // ssrc=0x902f9e2e
+                    0x03, 0x46, 0x4f, 0x4f, // len=3, text=FOO
                 ],
                 Goodbye {
                     sources: vec![0x902f9e2e],
@@ -24,10 +21,9 @@ mod test {
             (
                 "invalid octet count",
                 vec![
-                    // v=2, p=0, count=1, BYE, len=12
-                    0x81, 0xcb, 0x00, 0x0c, // ssrc=0x902f9e2e
-                    0x90, 0x2f, 0x9e, 0x2e, // len=4, text=FOO
-                    0x04, 0x46, 0x4f, 0x4f,
+                    0x81, 0xcb, 0x00, 0x0c, // v=2, p=0, count=1, BYE, len=12
+                    0x90, 0x2f, 0x9e, 0x2e, // ssrc=0x902f9e2e
+                    0x04, 0x46, 0x4f, 0x4f, // len=4, text=FOO
                 ],
                 Goodbye {
                     sources: vec![],
@@ -38,10 +34,9 @@ mod test {
             (
                 "wrong type",
                 vec![
-                    // v=2, p=0, count=1, SDES, len=12
-                    0x81, 0xca, 0x00, 0x0c, // ssrc=0x902f9e2e
-                    0x90, 0x2f, 0x9e, 0x2e, // len=3, text=FOO
-                    0x03, 0x46, 0x4f, 0x4f,
+                    0x81, 0xca, 0x00, 0x0c, // v=2, p=0, count=1, SDES, len=12
+                    0x90, 0x2f, 0x9e, 0x2e, // ssrc=0x902f9e2e
+                    0x03, 0x46, 0x4f, 0x4f, // len=3, text=FOO
                 ],
                 Goodbye {
                     sources: vec![],
@@ -52,10 +47,9 @@ mod test {
             (
                 "short reason",
                 vec![
-                    // v=2, p=0, count=1, BYE, len=12
-                    0x81, 0xcb, 0x00, 0x0c, // ssrc=0x902f9e2e
-                    0x90, 0x2f, 0x9e, 0x2e, // len=3, text=F + padding
-                    0x01, 0x46, 0x00, 0x00,
+                    0x81, 0xcb, 0x00, 0x0c, // v=2, p=0, count=1, BYE, len=12
+                    0x90, 0x2f, 0x9e, 0x2e, // ssrc=0x902f9e2e
+                    0x01, 0x46, 0x00, 0x00, // len=3, text=F + padding
                 ],
                 Goodbye {
                     sources: vec![0x902f9e2e],
@@ -66,10 +60,9 @@ mod test {
             (
                 "not byte aligned",
                 vec![
-                    // v=2, p=0, count=1, BYE, len=10
-                    0x81, 0xcb, 0x00, 0x0a, // ssrc=0x902f9e2e
-                    0x90, 0x2f, 0x9e, 0x2e, // len=1, text=F
-                    0x01, 0x46,
+                    0x81, 0xcb, 0x00, 0x0a, // v=2, p=0, count=1, BYE, len=10
+                    0x90, 0x2f, 0x9e, 0x2e, // ssrc=0x902f9e2e
+                    0x01, 0x46, // len=1, text=F
                 ],
                 Goodbye {
                     sources: vec![],
@@ -80,9 +73,8 @@ mod test {
             (
                 "bad count in header",
                 vec![
-                    // v=2, p=0, count=2, BYE, len=8
-                    0x82, 0xcb, 0x00, 0x0c, // ssrc=0x902f9e2e
-                    0x90, 0x2f, 0x9e, 0x2e,
+                    0x82, 0xcb, 0x00, 0x0c, // v=2, p=0, count=2, BYE, len=8
+                    0x90, 0x2f, 0x9e, 0x2e, // ssrc=0x902f9e2e
                 ],
                 Goodbye {
                     sources: vec![],

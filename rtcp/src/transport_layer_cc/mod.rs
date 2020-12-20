@@ -125,14 +125,14 @@ impl Default for SymbolTypeTCC {
 /// RunLengthChunk and StatusVectorChunk
 pub trait PacketStatusChunk {
     fn as_any(&self) -> &dyn std::any::Any;
-    fn tr_eq(&self, other: &dyn PacketStatusChunk) -> bool;
+    fn trait_eq(&self, other: &dyn PacketStatusChunk) -> bool;
     fn marshal(&self) -> Result<BytesMut, Error>;
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error>;
 }
 
 impl PartialEq for dyn PacketStatusChunk {
     fn eq(&self, other: &dyn PacketStatusChunk) -> bool {
-        self.tr_eq(other)
+        self.trait_eq(other)
     }
 }
 
@@ -197,7 +197,7 @@ impl PacketStatusChunk for RunLengthChunk {
         Ok(())
     }
 
-    fn tr_eq(&self, other: &dyn PacketStatusChunk) -> bool {
+    fn trait_eq(&self, other: &dyn PacketStatusChunk) -> bool {
         other
             .as_any()
             .downcast_ref::<RunLengthChunk>()
@@ -295,7 +295,7 @@ impl PacketStatusChunk for StatusVectorChunk {
         }
     }
 
-    fn tr_eq(&self, other: &dyn PacketStatusChunk) -> bool {
+    fn trait_eq(&self, other: &dyn PacketStatusChunk) -> bool {
         other
             .as_any()
             .downcast_ref::<StatusVectorChunk>()

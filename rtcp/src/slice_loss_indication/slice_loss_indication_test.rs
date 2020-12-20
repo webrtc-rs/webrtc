@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::{errors::*, slice_loss_indication::*};
+    use crate::slice_loss_indication::*;
 
     #[test]
     fn test_slice_loss_indication_unmarshal() {

@@ -9,10 +9,9 @@ mod test {
             (
                 "valid",
                 vec![
-                    // v=2, p=0, FMT=1, PSFB, len=1
-                    0x81, 0xce, 0x00, 0x02, // ssrc=0x0
-                    0x00, 0x00, 0x00, 0x00, // ssrc=0x4bc4fcb4
-                    0x4b, 0xc4, 0xfc, 0xb4,
+                    0x81, 0xce, 0x00, 0x02, // v=2, p=0, FMT=1, PSFB, len=1
+                    0x00, 0x00, 0x00, 0x00, // ssrc=0x0
+                    0x4b, 0xc4, 0xfc, 0xb4, // ssrc=0x4bc4fcb4
                 ],
                 PictureLossIndication {
                     sender_ssrc: 0x0,
@@ -37,10 +36,9 @@ mod test {
             (
                 "wrong type",
                 vec![
-                    // v=2, p=0, FMT=1, RR, len=1
-                    0x81, 0xc9, 0x00, 0x02, // ssrc=0x0
-                    0x00, 0x00, 0x00, 0x00, // ssrc=0x4bc4fcb4
-                    0x4b, 0xc4, 0xfc, 0xb4,
+                    0x81, 0xc9, 0x00, 0x02, // v=2, p=0, FMT=1, RR, len=1
+                    0x00, 0x00, 0x00, 0x00, // ssrc=0x0
+                    0x4b, 0xc4, 0xfc, 0xb4, // ssrc=0x4bc4fcb4
                 ],
                 PictureLossIndication::default(),
                 Err(ERR_WRONG_TYPE.clone()),
@@ -48,10 +46,9 @@ mod test {
             (
                 "wrong fmt",
                 vec![
-                    // v=2, p=0, FMT=2, RR, len=1
-                    0x82, 0xc9, 0x00, 0x02, // ssrc=0x0
-                    0x00, 0x00, 0x00, 0x00, // ssrc=0x4bc4fcb4
-                    0x4b, 0xc4, 0xfc, 0xb4,
+                    0x82, 0xc9, 0x00, 0x02, // v=2, p=0, FMT=2, RR, len=1
+                    0x00, 0x00, 0x00, 0x00, // ssrc=0x0
+                    0x4b, 0xc4, 0xfc, 0xb4, // ssrc=0x4bc4fcb4
                 ],
                 PictureLossIndication::default(),
                 Err(ERR_WRONG_TYPE.clone()),
@@ -139,10 +136,9 @@ mod test {
         let test: Vec<(&str, Vec<u8>, Header, Result<(), Error>)> = vec![(
             "valid header",
             vec![
-                // v=2, p=0, FMT=1, PSFB, len=1
-                0x81u8, 0xce, 0x00, 0x02, // ssrc=0x0
-                0x00, 0x00, 0x00, 0x00, // ssrc=0x4bc4fcb4
-                0x4b, 0xc4, 0xfc, 0xb4,
+                0x81u8, 0xce, 0x00, 0x02, // v=2, p=0, FMT=1, PSFB, len=1
+                0x00, 0x00, 0x00, 0x00, // ssrc=0x0
+                0x4b, 0xc4, 0xfc, 0xb4, // ssrc=0x4bc4fcb4
             ],
             Header {
                 count: header::FORMAT_PLI,

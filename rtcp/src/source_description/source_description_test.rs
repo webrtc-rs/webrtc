@@ -1,8 +1,3 @@
-// use super::*;
-
-// use std::io::{BufReader, BufWriter};
-
-// use util::Error;
 #[cfg(test)]
 mod test {
     use crate::{errors::*, packet::Packet, source_description::*};

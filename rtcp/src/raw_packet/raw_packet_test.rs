@@ -1,10 +1,3 @@
-// use super::*;
-// use crate::errors::*;
-
-// use std::io::{BufReader, BufWriter};
-
-// use util::Error;
-
 #[cfg(test)]
 mod test {
     use crate::raw_packet::*;
@@ -15,10 +8,9 @@ mod test {
             (
                 "valid",
                 RawPacket(vec![
-                    // v=2, p=0, count=1, BYE, len=12
-                    0x81, 0xcb, 0x00, 0x0c, // ssrc=0x902f9e2e
-                    0x90, 0x2f, 0x9e, 0x2e, // len=3, text=FOO
-                    0x03, 0x46, 0x4f, 0x4f,
+                    0x81, 0xcb, 0x00, 0x0c, // v=2, p=0, count=1, BYE, len=12
+                    0x90, 0x2f, 0x9e, 0x2e, // ssrc=0x902f9e2e
+                    0x03, 0x46, 0x4f, 0x4f, // len=3, text=FOO
                 ]),
                 Ok(()),
                 Ok(()),
