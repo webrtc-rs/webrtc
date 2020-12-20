@@ -1,6 +1,7 @@
 use std::fmt;
 
 mod source_description_def;
+mod source_description_test;
 
 pub use source_description_def::{
     SourceDescription, SourceDescriptionChunk, SourceDescriptionItem,
