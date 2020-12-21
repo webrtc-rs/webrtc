@@ -19,7 +19,7 @@ pub struct FingerprintAttr;
 // Example:
 //
 //  m := New()
-//  FINGERPRINT.AddTo(m)
+//  FINGERPRINT.add_to(m)
 pub const FINGERPRINT: FingerprintAttr = FingerprintAttr {};
 
 const FINGERPRINT_XOR_VALUE: u32 = 0x5354554e;
@@ -39,7 +39,7 @@ pub fn fingerprint_value(b: &[u8]) -> u32 {
 }
 
 impl FingerprintAttr {
-    // AddTo adds fingerprint to message.
+    // add_to adds fingerprint to message.
     pub fn add_to(&self, m: &mut Message) -> Result<(), Error> {
         let l = m.length;
         // length in header should include size of fingerprint attribute

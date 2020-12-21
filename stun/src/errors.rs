@@ -32,6 +32,9 @@ lazy_static! {
     pub static ref ERR_INTEGRITY_MISMATCH: Error = Error::new("integrity check failed".to_owned());
     // ErrFingerprintMismatch means that computed fingerprint differs from expected.
     pub static ref ERR_FINGERPRINT_MISMATCH: Error = Error::new("fingerprint check failed".to_owned());
-
+    // ErrFingerprintBeforeIntegrity means that FINGERPRINT attribute is already in
+    // message, so MESSAGE-INTEGRITY attribute cannot be added.
+    pub static ref ERR_FINGERPRINT_BEFORE_INTEGRITY: Error = Error::new("FINGERPRINT before MESSAGE-INTEGRITY attribute".to_owned());
+    // ErrIntegrityMismatch means that computed HMAC differs from expected.
 
 }

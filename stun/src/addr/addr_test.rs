@@ -12,7 +12,7 @@ fn test_mapped_address() -> Result<(), Error> {
     };
     assert_eq!(addr.to_string(), "122.12.34.5:5412", "bad string {}", addr);
 
-    //"AddTo"
+    //"add_to"
     {
         addr.add_to(&mut m)?;
 
@@ -74,7 +74,7 @@ fn test_mapped_address_v6() -> Result<(), Error> {
         port: 5412,
     };
 
-    //"AddTo"
+    //"add_to"
     {
         addr.add_to(&mut m)?;
 
@@ -113,7 +113,7 @@ fn test_alternate_server() -> Result<(), Error> {
         port: 5412,
     };
 
-    //"AddTo"
+    //"add_to"
     {
         addr.add_to(&mut m)?;
 
@@ -153,7 +153,7 @@ fn test_other_address() -> Result<(), Error> {
         port: 5412,
     };
 
-    //"AddTo"
+    //"add_to"
     {
         addr.add_to(&mut m)?;
 

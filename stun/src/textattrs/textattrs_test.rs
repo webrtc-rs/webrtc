@@ -47,7 +47,7 @@ fn test_software_add_to_invalid() -> Result<(), Error> {
     if let Err(err) = result {
         assert!(
             is_attr_size_overflow(&err),
-            "AddTo should return AttrOverflowErr, got: {}",
+            "add_to should return AttrOverflowErr, got: {}",
             err
         );
     } else {
@@ -72,7 +72,7 @@ fn test_software_add_to_invalid() -> Result<(), Error> {
 
 #[test]
 fn test_software_add_to_regression() -> Result<(), Error> {
-    // s.AddTo checked len(m.Raw) instead of len(s.Raw).
+    // s.add_to checked len(m.Raw) instead of len(s.Raw).
     let mut m = Message {
         raw: vec![0u8; 2048],
         ..Default::default()
@@ -105,14 +105,14 @@ fn test_username() -> Result<(), Error> {
         if let Err(err) = result {
             assert!(
                 is_attr_size_overflow(&err),
-                "AddTo should return *AttrOverflowErr, got: {}",
+                "add_to should return *AttrOverflowErr, got: {}",
                 err
             );
         } else {
             assert!(false, "expected error, but got ok");
         }
     }
-    //"AddTo"
+    //"add_to"
     {
         u.add_to(&mut m)?;
 
@@ -206,7 +206,7 @@ fn test_realm_add_to_invalid() -> Result<(), Error> {
     if let Err(err) = result {
         assert!(
             is_attr_size_overflow(&err),
-            "AddTo should return AttrOverflowErr, got: {}",
+            "add_to should return AttrOverflowErr, got: {}",
             err
         );
     } else {
@@ -280,7 +280,7 @@ fn test_nonce_add_to_invalid() -> Result<(), Error> {
     if let Err(err) = result {
         assert!(
             is_attr_size_overflow(&err),
-            "AddTo should return AttrOverflowErr, got: {}",
+            "add_to should return AttrOverflowErr, got: {}",
             err
         );
     } else {

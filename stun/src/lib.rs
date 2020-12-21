@@ -11,5 +11,6 @@ mod checks;
 pub mod error_code;
 pub mod errors;
 pub mod fingerprint;
+pub mod integrity;
 pub mod message;
 pub mod textattrs;
