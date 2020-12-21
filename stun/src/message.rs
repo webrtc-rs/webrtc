@@ -489,7 +489,7 @@ impl fmt::Display for Method {
 }
 
 // MessageType is STUN Message Type Field.
-#[derive(Default, Debug, PartialEq, Clone)]
+#[derive(Default, Debug, PartialEq, Clone, Copy)]
 pub struct MessageType {
     pub method: Method,      // e.g. binding
     pub class: MessageClass, // e.g. request
@@ -518,14 +518,6 @@ impl fmt::Display for MessageType {
     }
 }
 
-/*TODO:
-// add_to sets m type to t.
-func (t MessageType) add_to(m *Message) error {
-    m.SetType(t)
-    return nil
-}
-*/
-
 const METHOD_ABITS: u16 = 0xf; // 0b0000000000001111
 const METHOD_BBITS: u16 = 0x70; // 0b0000000001110000
 const METHOD_DBITS: u16 = 0xf80; // 0b0000111110000000
@@ -546,6 +538,12 @@ impl MessageType {
     // NewType returns new message type with provided method and class.
     pub fn new(method: Method, class: MessageClass) -> Self {
         MessageType { method, class }
+    }
+
+    // add_to sets m type to t.
+    pub fn add_to(&self, m: &mut Message) -> Result<(), Error> {
+        m.set_type(*self);
+        Ok(())
     }
 
     // Value returns bit representation of messageType.

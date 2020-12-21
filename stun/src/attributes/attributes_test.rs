@@ -1,4 +1,5 @@
 use super::*;
+use crate::textattrs::TextAttribute;
 
 use util::Error;
 
@@ -20,26 +21,23 @@ fn test_raw_attribute_add_to() -> Result<(), Error> {
 
 #[test]
 fn test_message_get_no_allocs() -> Result<(), Error> {
-    /*TODO: let mut m = Message::new();
-    NewSoftware("c").AddTo(m) // nolint:errcheck,gosec
-    m.WriteHeader()
+    let mut m = Message::new();
+    let a = TextAttribute {
+        attr: ATTR_SOFTWARE,
+        text: "c".to_owned(),
+    };
+    a.add_to(&mut m)?;
+    m.write_header();
 
-    t.Run("Default", func(t *testing.T) {
-        allocs := testing.AllocsPerRun(10, func() {
-            m.Get(AttrSoftware) // nolint:errcheck,gosec
-        })
-        if allocs > 0 {
-            t.Error("allocated memory, but should not")
-        }
-    })
-    t.Run("Not found", func(t *testing.T) {
-        allocs := testing.AllocsPerRun(10, func() {
-            m.Get(AttrOrigin) // nolint:errcheck,gosec
-        })
-        if allocs > 0 {
-            t.Error("allocated memory, but should not")
-        }
-    })*/
+    //"Default"
+    {
+        m.get(ATTR_SOFTWARE)?;
+    }
+    //"Not found"
+    {
+        let result = m.get(ATTR_ORIGIN);
+        assert!(result.is_err(), "should error");
+    }
 
     Ok(())
 }
