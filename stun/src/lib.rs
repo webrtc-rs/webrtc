@@ -15,3 +15,4 @@ pub mod integrity;
 pub mod message;
 pub mod textattrs;
 pub mod uattrs;
+pub mod uri;
