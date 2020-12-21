@@ -14,13 +14,13 @@ use crc32fast::Hasher;
 // RFC 5389 Section 15.5
 pub struct FingerprintAttr;
 
-// Fingerprint is shorthand for FingerprintAttr.
+// FINGERPRINT is shorthand for FingerprintAttr.
 //
 // Example:
 //
 //  m := New()
-//  Fingerprint.AddTo(m)
-//var Fingerprint FingerprintAttr // nolint:gochecknoglobals
+//  FINGERPRINT.AddTo(m)
+pub const FINGERPRINT: FingerprintAttr = FingerprintAttr {};
 
 const FINGERPRINT_XOR_VALUE: u32 = 0x5354554e;
 const FINGERPRINT_SIZE: usize = 4; // 32 bit
