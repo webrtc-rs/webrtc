@@ -1,9 +1,9 @@
 use super::*;
-
 use crate::agent::TransactionId;
 use crate::attributes::ATTR_SOFTWARE;
 use crate::fingerprint::FINGERPRINT;
 use crate::textattrs::TextAttribute;
+
 use util::Error;
 
 #[test]

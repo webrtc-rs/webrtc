@@ -35,6 +35,8 @@ lazy_static! {
     // ErrFingerprintBeforeIntegrity means that FINGERPRINT attribute is already in
     // message, so MESSAGE-INTEGRITY attribute cannot be added.
     pub static ref ERR_FINGERPRINT_BEFORE_INTEGRITY: Error = Error::new("FINGERPRINT before MESSAGE-INTEGRITY attribute".to_owned());
-    // ErrIntegrityMismatch means that computed HMAC differs from expected.
+    // ErrBadUnknownAttrsSize means that UNKNOWN-ATTRIBUTES attribute value
+    // has invalid length.
+    pub static ref ERR_BAD_UNKNOWN_ATTRS_SIZE: Error = Error::new("bad UNKNOWN-ATTRIBUTES size".to_owned());
 
 }

@@ -14,3 +14,4 @@ pub mod fingerprint;
 pub mod integrity;
 pub mod message;
 pub mod textattrs;
+pub mod uattrs;

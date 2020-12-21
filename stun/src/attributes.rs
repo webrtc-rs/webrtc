@@ -29,7 +29,7 @@ impl Attributes {
 
 // AttrType is attribute type.
 #[derive(PartialEq, Debug, Eq, Default, Copy, Clone)]
-pub struct AttrType(u16);
+pub struct AttrType(pub u16);
 
 impl fmt::Display for AttrType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

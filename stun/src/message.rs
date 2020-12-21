@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod message_test;
+
 use crate::agent::*;
 use crate::attributes::*;
 use crate::errors::*;
@@ -90,83 +93,6 @@ impl Message {
         }
     }
 
-    // Decode decodes m.Raw into m.
-    pub fn decode(&mut self) -> Result<(), Error> {
-        // decoding message header
-        let buf = &self.raw;
-        if buf.len() < MESSAGE_HEADER_SIZE {
-            return Err(ERR_UNEXPECTED_HEADER_EOF.clone());
-        }
-
-        let t = u16::from_be_bytes([buf[0], buf[1]]); // first 2 bytes
-        let size = u16::from_be_bytes([buf[2], buf[3]]) as usize; // second 2 bytes
-        let cookie = u32::from_be_bytes([buf[4], buf[5], buf[6], buf[7]]); // last 4 bytes
-        let full_size = MESSAGE_HEADER_SIZE + size; // len(m.Raw)
-
-        if cookie != MAGIC_COOKIE {
-            return Err(Error::new(format!(
-                "{:x} is invalid magic cookie (should be {:x})",
-                cookie, MAGIC_COOKIE
-            )));
-        }
-        if buf.len() < full_size {
-            return Err(Error::new(format!(
-                "buffer length {} is less than {} (expected message size)",
-                buf.len(),
-                full_size
-            )));
-        }
-
-        // saving header data
-        self.typ.read_value(t);
-        self.length = size as u32;
-        self.transaction_id
-            .0
-            .copy_from_slice(&buf[8..MESSAGE_HEADER_SIZE]);
-
-        self.attributes = Attributes(vec![]);
-        let mut offset = 0;
-        let mut b = &buf[MESSAGE_HEADER_SIZE..full_size];
-
-        while offset < size {
-            // checking that we have enough bytes to read header
-            if b.len() < ATTRIBUTE_HEADER_SIZE {
-                return Err(Error::new(format!(
-                    "buffer length {} is less than {} (expected header size)",
-                    b.len(),
-                    ATTRIBUTE_HEADER_SIZE
-                )));
-            }
-
-            let mut a = RawAttribute {
-                typ: compat_attr_type(u16::from_be_bytes([b[0], b[1]])), // first 2 bytes
-                length: u16::from_be_bytes([b[2], b[3]]),                // second 2 bytes
-                ..Default::default()
-            };
-            let a_l = a.length as usize; // attribute length
-            let a_buff_l = nearest_padded_value_length(a_l); // expected buffer length (with padding)
-
-            b = &b[ATTRIBUTE_HEADER_SIZE..]; // slicing again to simplify value read
-            offset += ATTRIBUTE_HEADER_SIZE;
-            if b.len() < a_buff_l {
-                // checking size
-                return Err(Error::new(format!(
-                    "buffer length {} is less than {} (expected value size for {})",
-                    b.len(),
-                    a_buff_l,
-                    a.typ
-                )));
-            }
-            a.value = b[..a_l].to_vec();
-            offset += a_buff_l;
-            b = &b[a_buff_l..];
-
-            self.attributes.0.push(a);
-        }
-
-        Ok(())
-    }
-
     // marshal_binary implements the encoding.BinaryMarshaler interface.
     pub fn marshal_binary(&self) -> Result<Vec<u8>, Error> {
         // We can't return m.Raw, allocation is expected by implicit interface
@@ -177,7 +103,7 @@ impl Message {
     // unmarshal_binary implements the encoding.BinaryUnmarshaler interface.
     pub fn unmarshal_binary(&mut self, data: &[u8]) -> Result<(), Error> {
         // We can't retain data, copy is expected by interface contract.
-        self.raw = vec![];
+        self.raw.clear();
         self.raw.extend_from_slice(data);
         self.decode()
     }
@@ -201,9 +127,9 @@ impl Message {
 
     // Reset resets Message, attributes and underlying buffer length.
     pub fn reset(&mut self) {
-        self.raw = vec![];
+        self.raw.clear();
         self.length = 0;
-        self.attributes = Attributes::default();
+        self.attributes.0.clear();
     }
 
     // grow ensures that internal buffer has n length.
@@ -316,10 +242,87 @@ impl Message {
 
     // Encode re-encodes message into m.Raw.
     pub fn encode(&mut self) {
-        self.raw = vec![];
+        self.raw.clear();
         self.write_header();
         self.length = 0;
         self.write_attributes();
+    }
+
+    // Decode decodes m.Raw into m.
+    pub fn decode(&mut self) -> Result<(), Error> {
+        // decoding message header
+        let buf = &self.raw;
+        if buf.len() < MESSAGE_HEADER_SIZE {
+            return Err(ERR_UNEXPECTED_HEADER_EOF.clone());
+        }
+
+        let t = u16::from_be_bytes([buf[0], buf[1]]); // first 2 bytes
+        let size = u16::from_be_bytes([buf[2], buf[3]]) as usize; // second 2 bytes
+        let cookie = u32::from_be_bytes([buf[4], buf[5], buf[6], buf[7]]); // last 4 bytes
+        let full_size = MESSAGE_HEADER_SIZE + size; // len(m.Raw)
+
+        if cookie != MAGIC_COOKIE {
+            return Err(Error::new(format!(
+                "{:x} is invalid magic cookie (should be {:x})",
+                cookie, MAGIC_COOKIE
+            )));
+        }
+        if buf.len() < full_size {
+            return Err(Error::new(format!(
+                "buffer length {} is less than {} (expected message size)",
+                buf.len(),
+                full_size
+            )));
+        }
+
+        // saving header data
+        self.typ.read_value(t);
+        self.length = size as u32;
+        self.transaction_id
+            .0
+            .copy_from_slice(&buf[8..MESSAGE_HEADER_SIZE]);
+
+        self.attributes.0.clear();
+        let mut offset = 0;
+        let mut b = &buf[MESSAGE_HEADER_SIZE..full_size];
+
+        while offset < size {
+            // checking that we have enough bytes to read header
+            if b.len() < ATTRIBUTE_HEADER_SIZE {
+                return Err(Error::new(format!(
+                    "buffer length {} is less than {} (expected header size)",
+                    b.len(),
+                    ATTRIBUTE_HEADER_SIZE
+                )));
+            }
+
+            let mut a = RawAttribute {
+                typ: compat_attr_type(u16::from_be_bytes([b[0], b[1]])), // first 2 bytes
+                length: u16::from_be_bytes([b[2], b[3]]),                // second 2 bytes
+                ..Default::default()
+            };
+            let a_l = a.length as usize; // attribute length
+            let a_buff_l = nearest_padded_value_length(a_l); // expected buffer length (with padding)
+
+            b = &b[ATTRIBUTE_HEADER_SIZE..]; // slicing again to simplify value read
+            offset += ATTRIBUTE_HEADER_SIZE;
+            if b.len() < a_buff_l {
+                // checking size
+                return Err(Error::new(format!(
+                    "buffer length {} is less than {} (expected value size for {})",
+                    b.len(),
+                    a_buff_l,
+                    a.typ
+                )));
+            }
+            a.value = b[..a_l].to_vec();
+            offset += a_buff_l;
+            b = &b[a_buff_l..];
+
+            self.attributes.0.push(a);
+        }
+
+        Ok(())
     }
 
     // WriteTo implements WriterTo via calling Write(m.Raw) on w and returning
@@ -346,7 +349,7 @@ impl Message {
     //
     // Any error is unrecoverable, but message could be partially decoded.
     pub fn write(&mut self, t_buf: &[u8]) -> Result<usize, Error> {
-        self.raw = vec![];
+        self.raw.clear();
         self.raw.extend_from_slice(t_buf);
         self.decode()?;
         Ok(t_buf.len())
@@ -354,7 +357,7 @@ impl Message {
 
     // CloneTo clones m to b securing any further m mutations.
     pub fn clone_to(&self, b: &mut Message) -> Result<(), Error> {
-        b.raw = vec![];
+        b.raw.clear();
         b.raw.extend_from_slice(&self.raw);
         b.decode()
     }
