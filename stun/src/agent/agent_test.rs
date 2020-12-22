@@ -1,7 +1,7 @@
 use super::*;
 use crate::errors::*;
 
-//use tokio::sync::mpsc;
+use std::ops::Add;
 use tokio::time::Duration;
 
 use util::Error;
@@ -27,7 +27,7 @@ fn test_agent_process_in_transaction() -> Result<(), Error> {
         let mut msg = m.borrow_mut();
         msg.new_transaction_id()?;
     }
-    a.start(m.borrow().transaction_id, Duration::from_millis(0))?;
+    a.start(m.borrow().transaction_id, Instant::now())?;
     a.process(&m)?;
     a.close()?;
 
@@ -79,7 +79,7 @@ fn test_agent_process() -> Result<(), Error> {
 fn test_agent_start() -> Result<(), Error> {
     let mut a = Agent::new(noop_handler());
     let id = TransactionId::new();
-    let deadline = Duration::from_secs(3600);
+    let deadline = Instant::now().add(Duration::from_secs(3600));
     a.start(id, deadline)?;
 
     let result = a.start(id, deadline);

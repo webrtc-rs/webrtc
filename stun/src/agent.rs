@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod agent_test;
 
+use crate::client::*;
 use crate::errors::*;
 use crate::message::*;
 
@@ -9,7 +10,7 @@ use util::Error;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::time::Duration;
+use std::time::Instant;
 
 use rand::Rng;
 
@@ -52,7 +53,7 @@ pub struct Event {
 // Concurrent access is invalid.
 pub(crate) struct AgentTransaction {
     id: TransactionId,
-    deadline: Duration,
+    deadline: Instant,
 }
 
 // AGENT_COLLECT_CAP is initial capacity for Agent.Collect slices,
@@ -80,48 +81,55 @@ impl Setter for TransactionId {
     }
 }
 
-// NewAgent initializes and returns new Agent with provided handler.
-// If h is nil, the noop_handler will be used.
-impl Agent {
-    pub fn new(handler: Handler) -> Self {
-        Agent {
-            transactions: HashMap::new(),
-            closed: false,
-            handler,
-        }
-    }
-
-    // stop_with_error removes transaction from list and calls handler with
-    // provided error. Can return ErrTransactionNotExists and ErrAgentClosed.
-    pub fn stop_with_error(&mut self, id: TransactionId, error: Error) -> Result<(), Error> {
+impl ClientAgent for Agent {
+    // process incoming message, synchronously passing it to handler.
+    fn process(&mut self, m: &Rc<RefCell<Message>>) -> Result<(), Error> {
         if self.closed {
             return Err(ERR_AGENT_CLOSED.clone());
         }
 
-        let v = self.transactions.remove(&id);
-        if let Some(t) = v {
-            (self.handler)(&Event {
-                transaction_id: t.id,
-                message: Rc::new(RefCell::new(Message::default())),
-                error: Some(error),
-            });
-            Ok(())
-        } else {
-            Err(ERR_TRANSACTION_NOT_EXISTS.clone())
-        }
+        let e = Event {
+            transaction_id: m.borrow().transaction_id,
+            message: Rc::clone(&m),
+            ..Default::default()
+        };
+
+        //h := a.handler
+        self.transactions.remove(&e.transaction_id);
+
+        (self.handler)(&e);
+
+        Ok(())
     }
 
-    // Stop stops transaction by id with ErrTransactionStopped, blocking
-    // until handler returns.
-    pub fn stop(&mut self, id: TransactionId) -> Result<(), Error> {
-        self.stop_with_error(id, ERR_TRANSACTION_STOPPED.clone())
+    // Close terminates all transactions with ErrAgentClosed and renders Agent to
+    // closed state.
+    fn close(&mut self) -> Result<(), Error> {
+        if self.closed {
+            return Err(ERR_AGENT_CLOSED.clone());
+        }
+
+        let mut e = Event {
+            error: Some(ERR_AGENT_CLOSED.clone()),
+            ..Default::default()
+        };
+
+        for id in self.transactions.keys() {
+            e.transaction_id = *id;
+            (self.handler)(&e);
+        }
+        self.transactions = HashMap::new();
+        self.closed = true;
+        self.handler = noop_handler();
+
+        Ok(())
     }
 
     // Start registers transaction with provided id and deadline.
     // Could return ErrAgentClosed, ErrTransactionExists.
     //
     // Agent handler is guaranteed to be eventually called.
-    pub fn start(&mut self, id: TransactionId, deadline: Duration) -> Result<(), Error> {
+    fn start(&mut self, id: TransactionId, deadline: Instant) -> Result<(), Error> {
         if self.closed {
             return Err(ERR_AGENT_CLOSED.clone());
         }
@@ -135,12 +143,18 @@ impl Agent {
         Ok(())
     }
 
+    // Stop stops transaction by id with ErrTransactionStopped, blocking
+    // until handler returns.
+    fn stop(&mut self, id: TransactionId) -> Result<(), Error> {
+        self.stop_with_error(id, ERR_TRANSACTION_STOPPED.clone())
+    }
+
     // Collect terminates all transactions that have deadline before provided
     // time, blocking until all handlers will process ErrTransactionTimeOut.
     // Will return ErrAgentClosed if agent is already closed.
     //
     // It is safe to call Collect concurrently but makes no sense.
-    pub fn collect(&mut self, gc_time: Duration) -> Result<(), Error> {
+    fn collect(&mut self, gc_time: Instant) -> Result<(), Error> {
         if self.closed {
             // Doing nothing if agent is closed.
             // All transactions should be already closed
@@ -181,28 +195,8 @@ impl Agent {
         Ok(())
     }
 
-    // process incoming message, synchronously passing it to handler.
-    pub fn process(&mut self, m: &Rc<RefCell<Message>>) -> Result<(), Error> {
-        if self.closed {
-            return Err(ERR_AGENT_CLOSED.clone());
-        }
-
-        let e = Event {
-            transaction_id: m.borrow().transaction_id,
-            message: Rc::clone(&m),
-            ..Default::default()
-        };
-
-        //h := a.handler
-        self.transactions.remove(&e.transaction_id);
-
-        (self.handler)(&e);
-
-        Ok(())
-    }
-
     // set_handler sets agent handler to h.
-    pub fn set_handler(&mut self, h: Handler) -> Result<(), Error> {
+    fn set_handler(&mut self, h: Handler) -> Result<(), Error> {
         if self.closed {
             return Err(ERR_AGENT_CLOSED.clone());
         }
@@ -210,27 +204,36 @@ impl Agent {
 
         Ok(())
     }
+}
 
-    // Close terminates all transactions with ErrAgentClosed and renders Agent to
-    // closed state.
-    pub fn close(&mut self) -> Result<(), Error> {
+// NewAgent initializes and returns new Agent with provided handler.
+// If h is nil, the noop_handler will be used.
+impl Agent {
+    pub fn new(handler: Handler) -> Self {
+        Agent {
+            transactions: HashMap::new(),
+            closed: false,
+            handler,
+        }
+    }
+
+    // stop_with_error removes transaction from list and calls handler with
+    // provided error. Can return ErrTransactionNotExists and ErrAgentClosed.
+    pub fn stop_with_error(&mut self, id: TransactionId, error: Error) -> Result<(), Error> {
         if self.closed {
             return Err(ERR_AGENT_CLOSED.clone());
         }
 
-        let mut e = Event {
-            error: Some(ERR_AGENT_CLOSED.clone()),
-            ..Default::default()
-        };
-
-        for id in self.transactions.keys() {
-            e.transaction_id = *id;
-            (self.handler)(&e);
+        let v = self.transactions.remove(&id);
+        if let Some(t) = v {
+            (self.handler)(&Event {
+                transaction_id: t.id,
+                message: Rc::new(RefCell::new(Message::default())),
+                error: Some(error),
+            });
+            Ok(())
+        } else {
+            Err(ERR_TRANSACTION_NOT_EXISTS.clone())
         }
-        self.transactions = HashMap::new();
-        self.closed = true;
-        self.handler = noop_handler();
-
-        Ok(())
     }
 }

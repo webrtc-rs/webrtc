@@ -40,4 +40,8 @@ lazy_static! {
     pub static ref ERR_BAD_UNKNOWN_ATTRS_SIZE: Error = Error::new("bad UNKNOWN-ATTRIBUTES size".to_owned());
     // ErrBadIPLength means that len(IP) is not net.{IPv6len,IPv4len}.
     pub static ref ERR_BAD_IP_LENGTH: Error = Error::new("invalid length of IP value".to_owned());
+    // ErrNoConnection means that ClientOptions.Connection is nil.
+    pub static ref ERR_NO_CONNECTION: Error = Error::new("no connection provided".to_owned());
+    // ErrClientClosed indicates that client is closed.
+    pub static ref ERR_CLIENT_CLOSED: Error = Error::new("client is closed".to_owned());
 }
