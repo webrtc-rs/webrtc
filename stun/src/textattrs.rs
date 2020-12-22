@@ -26,10 +26,10 @@ impl fmt::Display for TextAttribute {
     }
 }
 
-impl TextAttribute {
+impl Setter for TextAttribute {
     // add_to_as adds attribute with type t to m, checking maximum length. If max_len
     // is less than 0, no check is performed.
-    pub fn add_to(&self, m: &mut Message) -> Result<(), Error> {
+    fn add_to(&self, m: &mut Message) -> Result<(), Error> {
         let text = self.text.as_bytes();
         let max_len = match self.attr {
             ATTR_USERNAME => MAX_USERNAME_B,
@@ -42,6 +42,12 @@ impl TextAttribute {
         check_overflow(self.attr, text.len(), max_len)?;
         m.add(self.attr, text);
         Ok(())
+    }
+}
+
+impl TextAttribute {
+    pub fn new(attr: AttrType, text: String) -> Self {
+        TextAttribute { attr, text }
     }
 
     // get_from_as gets t attribute from m and appends its value to reseted v.

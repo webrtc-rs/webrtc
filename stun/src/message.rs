@@ -55,7 +55,7 @@ pub fn is_message(b: &[u8]) -> bool {
 //
 // 	Message, its fields, results of m.Get or any attribute a.GetFrom
 //	are valid only until Message.Raw is not modified.
-#[derive(Default, Debug, PartialEq, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct Message {
     pub typ: MessageType,
     pub length: u32, // len(Raw) not including header
@@ -75,6 +75,26 @@ impl fmt::Display for Message {
             self.attributes.0.len(),
             t_id
         )
+    }
+}
+
+// Equal returns true if Message b equals to m.
+// Ignores m.Raw.
+impl PartialEq for Message {
+    fn eq(&self, other: &Self) -> bool {
+        if self.typ != other.typ {
+            return false;
+        }
+        if self.transaction_id != other.transaction_id {
+            return false;
+        }
+        if self.length != other.length {
+            return false;
+        }
+        if self.attributes != other.attributes {
+            return false;
+        }
+        true
     }
 }
 
@@ -399,7 +419,7 @@ impl Message {
     //  m.Build(&t, &username, &nonce, &realm) // 0 allocations
     //
     // See BenchmarkBuildOverhead.
-    pub fn build<S: Setter>(&mut self, setters: &[S]) -> Result<(), Error> {
+    pub fn build(&mut self, setters: &[Box<dyn Setter>]) -> Result<(), Error> {
         self.reset();
         self.write_header();
         for s in setters {
@@ -537,16 +557,18 @@ const C1BIT: u16 = SECOND_BIT;
 const CLASS_C0SHIFT: u16 = 4;
 const CLASS_C1SHIFT: u16 = 7;
 
+impl Setter for MessageType {
+    // add_to sets m type to t.
+    fn add_to(&self, m: &mut Message) -> Result<(), Error> {
+        m.set_type(*self);
+        Ok(())
+    }
+}
+
 impl MessageType {
     // NewType returns new message type with provided method and class.
     pub fn new(method: Method, class: MessageClass) -> Self {
         MessageType { method, class }
-    }
-
-    // add_to sets m type to t.
-    pub fn add_to(&self, m: &mut Message) -> Result<(), Error> {
-        m.set_type(*self);
-        Ok(())
     }
 
     // Value returns bit representation of messageType.

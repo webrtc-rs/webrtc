@@ -34,27 +34,11 @@ impl fmt::Display for MessageIntegrity {
     }
 }
 
-pub(crate) const MESSAGE_INTEGRITY_SIZE: usize = 20;
-
-impl MessageIntegrity {
-    // new_long_term_integrity returns new MessageIntegrity with key for long-term
-    // credentials. Password, username, and realm must be SASL-prepared.
-    pub fn new_long_term_integrity(username: String, realm: String, password: String) -> Self {
-        let k = vec![username, realm, password].join(CREDENTIALS_SEP);
-        let digest = md5::compute(k);
-        MessageIntegrity(digest.to_vec())
-    }
-
-    // new_short_term_integrity returns new MessageIntegrity with key for short-term
-    // credentials. Password must be SASL-prepared.
-    pub fn new_short_term_integrity(password: String) -> Self {
-        MessageIntegrity(password.as_bytes().to_vec())
-    }
-
+impl Setter for MessageIntegrity {
     // add_to adds MESSAGE-INTEGRITY attribute to message.
     //
     // CPU costly, see BenchmarkMessageIntegrity_AddTo.
-    pub fn add_to(&self, m: &mut Message) -> Result<(), Error> {
+    fn add_to(&self, m: &mut Message) -> Result<(), Error> {
         for a in &m.attributes.0 {
             // Message should not contain FINGERPRINT attribute
             // before MESSAGE-INTEGRITY.
@@ -75,6 +59,24 @@ impl MessageIntegrity {
         m.add(ATTR_MESSAGE_INTEGRITY, &v);
 
         Ok(())
+    }
+}
+
+pub(crate) const MESSAGE_INTEGRITY_SIZE: usize = 20;
+
+impl MessageIntegrity {
+    // new_long_term_integrity returns new MessageIntegrity with key for long-term
+    // credentials. Password, username, and realm must be SASL-prepared.
+    pub fn new_long_term_integrity(username: String, realm: String, password: String) -> Self {
+        let k = vec![username, realm, password].join(CREDENTIALS_SEP);
+        let digest = md5::compute(k);
+        MessageIntegrity(digest.to_vec())
+    }
+
+    // new_short_term_integrity returns new MessageIntegrity with key for short-term
+    // credentials. Password must be SASL-prepared.
+    pub fn new_short_term_integrity(password: String) -> Self {
+        MessageIntegrity(password.as_bytes().to_vec())
     }
 
     // Check checks MESSAGE-INTEGRITY attribute.

@@ -38,9 +38,9 @@ pub fn fingerprint_value(b: &[u8]) -> u32 {
     checksum ^ FINGERPRINT_XOR_VALUE // XOR
 }
 
-impl FingerprintAttr {
+impl Setter for FingerprintAttr {
     // add_to adds fingerprint to message.
-    pub fn add_to(&self, m: &mut Message) -> Result<(), Error> {
+    fn add_to(&self, m: &mut Message) -> Result<(), Error> {
         let l = m.length;
         // length in header should include size of fingerprint attribute
         m.length += (FINGERPRINT_SIZE + ATTRIBUTE_HEADER_SIZE) as u32; // increasing length
@@ -51,7 +51,9 @@ impl FingerprintAttr {
         m.add(ATTR_FINGERPRINT, &b);
         Ok(())
     }
+}
 
+impl FingerprintAttr {
     // Check reads fingerprint value from m and checks it, returning error if any.
     // Can return *AttrLengthErr, ErrAttributeNotFound, and *CRCMismatch.
     pub fn check(&self, m: &Message) -> Result<(), Error> {

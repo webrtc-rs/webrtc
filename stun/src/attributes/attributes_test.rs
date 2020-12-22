@@ -7,11 +7,11 @@ use util::Error;
 fn test_raw_attribute_add_to() -> Result<(), Error> {
     let v = vec![1, 2, 3, 4];
     let mut m = Message::new();
-    let ra = RawAttribute {
+    let ra = Box::new(RawAttribute {
         typ: ATTR_DATA,
         value: v.clone(),
         ..Default::default()
-    };
+    });
     m.build(&[ra])?;
     let got_v = m.get(ATTR_DATA)?;
     assert_eq!(got_v, v, "value mismatch");

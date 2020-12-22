@@ -88,9 +88,17 @@ impl fmt::Display for XORMappedAddress {
     }
 }
 
+impl Setter for XORMappedAddress {
+    // AddTo adds XOR-MAPPED-ADDRESS to m. Can return ErrBadIPLength
+    // if len(a.IP) is invalid.
+    fn add_to(&self, m: &mut Message) -> Result<(), Error> {
+        self.add_to_as(m, ATTR_XORMAPPED_ADDRESS)
+    }
+}
+
 impl XORMappedAddress {
     // AddToAs adds XOR-MAPPED-ADDRESS value to m as t attribute.
-    pub fn add_to_as(&mut self, m: &mut Message, t: AttrType) -> Result<(), Error> {
+    pub fn add_to_as(&self, m: &mut Message, t: AttrType) -> Result<(), Error> {
         let (family, ip_len, ip) = match self.ip {
             IpAddr::V4(ipv4) => (FAMILY_IPV4, IPV4LEN, ipv4.octets().to_vec()),
             IpAddr::V6(ipv6) => (FAMILY_IPV6, IPV6LEN, ipv6.octets().to_vec()),
@@ -106,12 +114,6 @@ impl XORMappedAddress {
         xor_bytes(&mut value[4..4 + ip_len], &ip, &xor_value);
         m.add(t, &value[..4 + ip_len]);
         Ok(())
-    }
-
-    // AddTo adds XOR-MAPPED-ADDRESS to m. Can return ErrBadIPLength
-    // if len(a.IP) is invalid.
-    pub fn add_to(&mut self, m: &mut Message) -> Result<(), Error> {
-        self.add_to_as(m, ATTR_XORMAPPED_ADDRESS)
     }
 
     // GetFromAs decodes XOR-MAPPED-ADDRESS attribute value in message

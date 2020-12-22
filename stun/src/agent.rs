@@ -70,10 +70,13 @@ impl TransactionId {
         rand::thread_rng().fill(&mut b.0);
         b
     }
+}
 
-    pub fn add_to(&self, m: &mut Message) {
+impl Setter for TransactionId {
+    fn add_to(&self, m: &mut Message) -> Result<(), Error> {
         m.transaction_id = *self;
         m.write_transaction_id();
+        Ok(())
     }
 }
 

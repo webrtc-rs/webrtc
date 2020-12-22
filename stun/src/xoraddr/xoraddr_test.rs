@@ -172,7 +172,7 @@ fn test_xormapped_address_add_to_ipv6() -> Result<(), Error> {
     m.transaction_id.0.copy_from_slice(&transaction_id);
     let expected_ip: IpAddr = "fe80::dc2b:44ff:fe20:6009".parse().unwrap();
     let expected_port = 21254u16;
-    let mut addr = XORMappedAddress {
+    let addr = XORMappedAddress {
         ip: "fe80::dc2b:44ff:fe20:6009".parse().unwrap(),
         port: 21254,
     };
