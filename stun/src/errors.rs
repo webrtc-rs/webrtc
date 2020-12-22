@@ -38,5 +38,6 @@ lazy_static! {
     // ErrBadUnknownAttrsSize means that UNKNOWN-ATTRIBUTES attribute value
     // has invalid length.
     pub static ref ERR_BAD_UNKNOWN_ATTRS_SIZE: Error = Error::new("bad UNKNOWN-ATTRIBUTES size".to_owned());
-
+    // ErrBadIPLength means that len(IP) is not net.{IPv6len,IPv4len}.
+    pub static ref ERR_BAD_IP_LENGTH: Error = Error::new("invalid length of IP value".to_owned());
 }
