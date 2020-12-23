@@ -1,30 +1,28 @@
 #[cfg(test)]
 mod agent_test;
 
-use crate::client::*;
 use crate::errors::*;
 use crate::message::*;
 
 use util::Error;
 
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::mpsc;
+use tokio::time::Instant;
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
 
+use crate::client::ClientTransaction;
 use rand::Rng;
 
 // Handler handles state changes of transaction.
-//
 // Handler is called on transaction state change.
 // Usage of e is valid only during call, user must
 // copy needed fields explicitly.
-pub type Handler = Option<mpsc::UnboundedSender<Event>>; //Box<dyn Fn(&Event)>;
+pub type Handler = Option<Arc<mpsc::UnboundedSender<Event>>>;
 
 // noop_handler just discards any event.
 pub fn noop_handler() -> Handler {
-    //Box::new(|_e| {})
     None
 }
 
@@ -42,13 +40,35 @@ pub struct Agent {
     handler: Handler, // handles transactions
 }
 
+#[derive(Debug, Clone)]
+pub enum EventType {
+    CALLBACK(TransactionId),
+    INSERT(ClientTransaction),
+    REMOVE(TransactionId),
+    CLOSE,
+}
+
+impl Default for EventType {
+    fn default() -> Self {
+        EventType::CALLBACK(TransactionId::default())
+    }
+}
+
 // Event is passed to Handler describing the transaction event.
 // Do not reuse outside Handler.
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct Event {
-    pub transaction_id: TransactionId,
-    pub message: Option<Arc<Mutex<Message>>>,
-    pub error: Option<Error>,
+    pub event_type: EventType,
+    pub event_body: Result<Message, Error>,
+}
+
+impl Default for Event {
+    fn default() -> Self {
+        Event {
+            event_type: EventType::default(),
+            event_body: Ok(Message::default()),
+        }
+    }
 }
 
 // AgentTransaction represents transaction in progress.
@@ -83,29 +103,64 @@ impl Setter for TransactionId {
     }
 }
 
-impl ClientAgent for Agent {
-    // process incoming message, synchronously passing it to handler.
-    fn process(
-        &mut self,
-        transaction_id: TransactionId,
-        message: Option<Arc<Mutex<Message>>>,
-    ) -> Result<(), Error> {
+// ClientAgent is Agent implementation that is used by Client to
+// process transactions.
+pub enum ClientAgent {
+    Process(Message),
+    Collect(Instant),
+    Start(TransactionId, Instant),
+    Stop(TransactionId),
+    Close,
+}
+
+// NewAgent initializes and returns new Agent with provided handler.
+// If h is nil, the noop_handler will be used.
+impl Agent {
+    pub fn new(handler: Handler) -> Self {
+        Agent {
+            transactions: HashMap::new(),
+            closed: false,
+            handler,
+        }
+    }
+
+    // stop_with_error removes transaction from list and calls handler with
+    // provided error. Can return ErrTransactionNotExists and ErrAgentClosed.
+    fn stop_with_error(&mut self, id: TransactionId, error: Error) -> Result<(), Error> {
         if self.closed {
             return Err(ERR_AGENT_CLOSED.clone());
         }
 
-        self.transactions.remove(&transaction_id);
+        let v = self.transactions.remove(&id);
+        if let Some(t) = v {
+            if let Some(handler) = &self.handler {
+                handler.send(Event {
+                    event_type: EventType::CALLBACK(t.id),
+                    event_body: Err(error),
+                })?;
+            }
+            Ok(())
+        } else {
+            Err(ERR_TRANSACTION_NOT_EXISTS.clone())
+        }
+    }
+
+    // process incoming message, synchronously passing it to handler.
+    fn process(&mut self, message: Message) -> Result<(), Error> {
+        if self.closed {
+            return Err(ERR_AGENT_CLOSED.clone());
+        }
+
+        self.transactions.remove(&message.transaction_id);
 
         let e = Event {
-            transaction_id,
-            message,
-            ..Default::default()
+            event_type: EventType::CALLBACK(message.transaction_id),
+            event_body: Ok(message),
         };
 
         if let Some(handler) = &self.handler {
             handler.send(e)?;
         }
-        //(self.handler)(&e);
 
         Ok(())
     }
@@ -119,9 +174,8 @@ impl ClientAgent for Agent {
 
         for id in self.transactions.keys() {
             let e = Event {
-                error: Some(ERR_AGENT_CLOSED.clone()),
-                transaction_id: *id,
-                ..Default::default()
+                event_type: EventType::CALLBACK(*id),
+                event_body: Err(ERR_AGENT_CLOSED.clone()),
             };
             if let Some(handler) = &self.handler {
                 handler.send(e)?;
@@ -163,7 +217,7 @@ impl ClientAgent for Agent {
     // Will return ErrAgentClosed if agent is already closed.
     //
     // It is safe to call Collect concurrently but makes no sense.
-    fn collect(&mut self, gc_time: Instant) -> Result<(), Error> {
+    fn collect(&mut self, deadline: Instant) -> Result<(), Error> {
         if self.closed {
             // Doing nothing if agent is closed.
             // All transactions should be already closed
@@ -178,7 +232,7 @@ impl ClientAgent for Agent {
         // No allocs if there are less than AGENT_COLLECT_CAP
         // timed out transactions.
         for (id, t) in &self.transactions {
-            if t.deadline < gc_time {
+            if t.deadline < deadline {
                 to_remove.push(*id);
             }
         }
@@ -186,18 +240,11 @@ impl ClientAgent for Agent {
         for id in &to_remove {
             self.transactions.remove(id);
         }
-        // Calling handler does not require locked mutex,
-        // reducing lock time.
-        //let h = a.handler.clone();
-        //a.mux.Unlock()
-        // Sending ErrTransactionTimeOut to handler for all transactions,
-        // blocking until last one.
 
         for id in to_remove {
             let event = Event {
-                error: Some(ERR_TRANSACTION_TIME_OUT.clone()),
-                transaction_id: id,
-                ..Default::default()
+                event_type: EventType::CALLBACK(id),
+                event_body: Err(ERR_TRANSACTION_TIME_OUT.clone()),
             };
             if let Some(handler) = &self.handler {
                 handler.send(event)?;
@@ -216,38 +263,22 @@ impl ClientAgent for Agent {
 
         Ok(())
     }
-}
 
-// NewAgent initializes and returns new Agent with provided handler.
-// If h is nil, the noop_handler will be used.
-impl Agent {
-    pub fn new(handler: Handler) -> Self {
-        Agent {
-            transactions: HashMap::new(),
-            closed: false,
-            handler,
-        }
-    }
+    pub async fn run(mut agent: Agent, mut rx: mpsc::Receiver<ClientAgent>) {
+        while let Some(client_agent) = rx.recv().await {
+            let result = match client_agent {
+                ClientAgent::Process(message) => agent.process(message),
+                ClientAgent::Collect(deadline) => agent.collect(deadline),
+                ClientAgent::Start(tid, deadline) => agent.start(tid, deadline),
+                ClientAgent::Stop(tid) => agent.stop(tid),
+                ClientAgent::Close => agent.close(),
+            };
 
-    // stop_with_error removes transaction from list and calls handler with
-    // provided error. Can return ErrTransactionNotExists and ErrAgentClosed.
-    pub fn stop_with_error(&mut self, id: TransactionId, error: Error) -> Result<(), Error> {
-        if self.closed {
-            return Err(ERR_AGENT_CLOSED.clone());
-        }
-
-        let v = self.transactions.remove(&id);
-        if let Some(t) = v {
-            if let Some(handler) = &self.handler {
-                handler.send(Event {
-                    transaction_id: t.id,
-                    message: None,
-                    error: Some(error),
-                })?;
+            if let Err(err) = result {
+                if err == *ERR_AGENT_CLOSED {
+                    break;
+                }
             }
-            Ok(())
-        } else {
-            Err(ERR_TRANSACTION_NOT_EXISTS.clone())
         }
     }
 }

@@ -46,4 +46,6 @@ lazy_static! {
     pub static ref ERR_CLIENT_CLOSED: Error = Error::new("client is closed".to_owned());
     // ErrNoAgent indicates that agent is not set.
     pub static ref ERR_NO_AGENT: Error = Error::new("no agent is set".to_owned());
+    // ErrCollectorClosed indicates that client is closed.
+    pub static ref ERR_COLLECTOR_CLOSED: Error = Error::new("collector is closed".to_owned());
 }

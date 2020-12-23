@@ -5,51 +5,82 @@ use crate::message::*;
 use util::Error;
 
 use tokio::net::UdpSocket;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::mpsc;
 
 use std::collections::HashMap;
 use std::io::BufReader;
-use std::marker::Send;
 use std::ops::Add;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+
+use tokio::time::{self, Duration, Instant};
 
 const DEFAULT_TIMEOUT_RATE: Duration = Duration::from_millis(5);
 const DEFAULT_RTO: Duration = Duration::from_millis(300);
 const DEFAULT_MAX_ATTEMPTS: u32 = 7;
 
-// ClientAgent is Agent implementation that is used by Client to
-// process transactions.
-pub trait ClientAgent {
-    fn process(
-        &mut self,
-        transaction_id: TransactionId,
-        message: Option<Arc<Mutex<Message>>>,
-    ) -> Result<(), Error>;
-    fn close(&mut self) -> Result<(), Error>;
-    fn start(&mut self, id: TransactionId, deadline: Instant) -> Result<(), Error>;
-    fn stop(&mut self, id: TransactionId) -> Result<(), Error>;
-    fn collect(&mut self, gc_time: Instant) -> Result<(), Error>;
-    fn set_handler(&mut self, h: Handler) -> Result<(), Error>;
-}
-
 // Collector calls function f with constant rate.
 //
 // The simple Collector is ticker which calls function on each tick.
 pub trait Collector {
-    fn start(&mut self, rate: Duration, f: fn(now: Instant)) -> Result<(), Error>;
+    fn start(
+        &mut self,
+        rate: Duration,
+        client_agent_tx: Arc<mpsc::Sender<ClientAgent>>,
+    ) -> Result<(), Error>;
     fn close(&mut self) -> Result<(), Error>;
+}
+
+#[derive(Default)]
+struct TickerCollector {
+    close_tx: Option<mpsc::Sender<()>>,
+}
+
+impl Collector for TickerCollector {
+    fn start(
+        &mut self,
+        rate: Duration,
+        client_agent_tx: Arc<mpsc::Sender<ClientAgent>>,
+    ) -> Result<(), Error> {
+        let (close_tx, mut close_rx) = mpsc::channel(1);
+        self.close_tx = Some(close_tx);
+
+        tokio::spawn(async move {
+            let mut interval = time::interval(rate);
+
+            loop {
+                tokio::select! {
+                    _ = close_rx.recv() => break,
+                    _ = interval.tick() => {
+                        if client_agent_tx.send(ClientAgent::Collect(Instant::now())).await.is_err() {
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+
+        Ok(())
+    }
+
+    fn close(&mut self) -> Result<(), Error> {
+        if self.close_tx.is_none() {
+            return Err(ERR_COLLECTOR_CLOSED.clone());
+        }
+        self.close_tx.take();
+        Ok(())
+    }
 }
 
 // clientTransaction represents transaction in progress.
 // If transaction is succeed or failed, f will be called
 // provided by event.
 // Concurrent access is invalid.
-pub(crate) struct ClientTransaction {
+#[derive(Debug, Clone)]
+pub struct ClientTransaction {
     id: TransactionId,
     attempt: u32,
     calls: u32,
-    h: Handler,
+    handler: Handler,
     start: Instant,
     rto: Duration,
     raw: Vec<u8>,
@@ -59,7 +90,7 @@ impl ClientTransaction {
     pub(crate) fn handle(&mut self, e: Event) -> Result<(), Error> {
         self.calls += 1;
         if self.calls == 1 {
-            if let Some(handler) = &self.h {
+            if let Some(handler) = &self.handler {
                 handler.send(e)?;
             }
         }
@@ -73,12 +104,12 @@ impl ClientTransaction {
 
 #[derive(Default)]
 struct ClientSettings {
+    buffer_size: usize,
     rto: Duration,
-    a: Option<Box<dyn ClientAgent + Send>>,
     rto_rate: Duration,
     max_attempts: u32,
     closed: bool,
-    handler: Option<Handler>,
+    handler: Handler,
     collector: Option<Box<dyn Collector>>,
     c: Option<Arc<UdpSocket>>,
 }
@@ -92,8 +123,8 @@ impl ClientBuilder {
     // WithHandler sets client handler which is called if Agent emits the Event
     // with TransactionID that is not currently registered by Client.
     // Useful for handling Data indications from TURN server.
-    pub fn with_handler(mut self, h: Handler) -> Self {
-        self.settings.handler = Some(h);
+    pub fn with_handler(mut self, handler: Handler) -> Self {
+        self.settings.handler = handler;
         self
     }
 
@@ -102,13 +133,6 @@ impl ClientBuilder {
         self.settings.rto = rto;
         self
     }
-
-    // WithClock sets Clock of client, the source of current time.
-    // Also clock is passed to default collector if set.
-    /*pub fn with_clock(mut self, clock: Clock) ->Self {
-        self.settings.clock = clock
-        self
-    }*/
 
     // WithTimeoutRate sets RTO timer minimum resolution.
     pub fn with_timeout_rate(mut self, d: Duration) -> Self {
@@ -120,8 +144,8 @@ impl ClientBuilder {
     //
     // Defaults to agent implementation in current package,
     // see agent.go.
-    pub fn with_agent(mut self, a: Box<dyn ClientAgent + Send>) -> Self {
-        self.settings.a = Some(a);
+    pub fn with_buffer_size(mut self, buffer_size: usize) -> Self {
+        self.settings.buffer_size = buffer_size;
         self
     }
 
@@ -155,15 +179,17 @@ impl ClientBuilder {
         }
     }
 
-    pub fn build(self) -> Result<Client, Error> {
+    pub fn build(mut self) -> Result<Client, Error> {
         if self.settings.c.is_none() {
             return Err(ERR_NO_CONNECTION.clone());
+        }
+        if self.settings.buffer_size == 0 {
+            self.settings.buffer_size = 8;
         }
 
         Ok(Client {
             settings: self.settings,
-            close_tx: None,
-            t: HashMap::new(),
+            ..Default::default()
         })
     }
 }
@@ -173,69 +199,17 @@ impl ClientBuilder {
 pub struct Client {
     settings: ClientSettings,
     close_tx: Option<mpsc::Sender<()>>,
-    t: HashMap<TransactionId, ClientTransaction>,
-    // mux guards closed and t
-    //	mux sync.RWMutex
+    client_agent_tx: Option<Arc<mpsc::Sender<ClientAgent>>>,
+    handler_tx: Option<Arc<mpsc::UnboundedSender<Event>>>,
 }
 
 impl Client {
-    // NewClient initializes new Client from provided options,
-    // starting internal goroutines and using default options fields
-    // if necessary. Call Close method after using Client to close conn and
-    // release resources.
-    //
-    // The conn will be closed on Close call. Use with_no_conn_close option to
-    // prevent that.
-    //
-    // Note that user should handle the protocol multiplexing, client does not
-    // provide any API for it, so if you need to read application data, wrap the
-    // connection with your (de-)multiplexer and pass the wrapper as conn.
-    /*pub fn new(conn Connection, options: &[ClientOption]) ->Result<Client, Error> {
-        c := &Client{
-            close:       make(chan struct{}),
-            c:           conn,
-            clock:       systemClock(),
-            rto:         int64(DEFAULT_RTO),
-            rto_rate:     DEFAULT_TIMEOUT_RATE,
-            t:           make(map[transactionID]*clientTransaction, 100),
-            max_attempts: DEFAULT_MAX_ATTEMPTS,
-            close_conn:   true,
-        }
-        for _, o := range options {
-            o(c)
-        }
-        if c.c == nil {
-            return nil, ErrNoConnection
-        }
-        if c.a == nil {
-            c.a = NewAgent(nil)
-        }
-        if err := c.a.SetHandler(c.handleAgentCallback); err != nil {
-            return nil, err
-        }
-        if c.collector == nil {
-            c.collector = &tickerCollector{
-                close: make(chan struct{}),
-                clock: c.clock,
-            }
-        }
-        if err := c.collector.Start(c.rto_rate, func(t time.Time) {
-            closedOrPanic(c.a.Collect(t))
-        }); err != nil {
-            return nil, err
-        }
-        c.wg.Add(1)
-        go c.read_until_closed()
-        runtime.SetFinalizer(c, clientFinalizer)
-        return c, nil
-    }*/
-
     async fn read_until_closed(
         mut close_rx: mpsc::Receiver<()>,
         c: Arc<UdpSocket>,
-        mut a: Box<dyn ClientAgent + Send>,
+        client_agent_tx: Arc<mpsc::Sender<ClientAgent>>,
     ) {
-        let msg = Arc::new(Mutex::new(Message::new()));
+        let mut msg = Message::new();
         let mut buf = vec![0; 1024];
 
         loop {
@@ -243,21 +217,14 @@ impl Client {
                 _ = close_rx.recv() => return,
                 res = c.recv(&mut buf) => {
                     if let Ok(n) = res {
-                        let transaction_id;
-                        {
-                            let mut reader = BufReader::new(&buf[..n]);
-                            let mut m = msg.lock().await;
-                            let result = m.read_from(&mut reader);
-                            if result.is_err() {
-                                continue;
-                            }
-
-                            transaction_id = m.transaction_id;
+                        let mut reader = BufReader::new(&buf[..n]);
+                        let result = msg.read_from(&mut reader);
+                        if result.is_err() {
+                            continue;
                         }
-                        if let Err(err) = a.process(transaction_id, Some(Arc::clone(&msg))) {
-                            if err == *ERR_AGENT_CLOSED {
-                                return;
-                            }
+
+                        if client_agent_tx.send(ClientAgent::Process(msg.clone())).await.is_err(){
+                            return;
                         }
                     }
                 }
@@ -267,29 +234,115 @@ impl Client {
 
     // start registers transaction.
     // Could return ErrClientClosed, ErrTransactionExists.
-    fn register(&mut self, t: ClientTransaction) -> Result<(), Error> {
-        //c.mux.Lock()
-        //defer c.mux.Unlock()
+    fn insert(&mut self, ct: ClientTransaction) -> Result<(), Error> {
         if self.settings.closed {
             return Err(ERR_CLIENT_CLOSED.clone());
         }
 
-        if self.t.contains_key(&t.id) {
-            return Err(ERR_TRANSACTION_EXISTS.clone());
+        if let Some(handler_tx) = &mut self.handler_tx {
+            handler_tx.send(Event {
+                event_type: EventType::INSERT(ct),
+                ..Default::default()
+            })?;
         }
-        self.t.insert(t.id, t);
+
         Ok(())
     }
 
-    fn delete(&mut self, id: &TransactionId) {
-        //c.mux.Lock()
-        self.t.remove(id);
-        //c.mux.Unlock()
+    fn remove(&mut self, id: TransactionId) -> Result<(), Error> {
+        if self.settings.closed {
+            return Err(ERR_CLIENT_CLOSED.clone());
+        }
+
+        if let Some(handler_tx) = &mut self.handler_tx {
+            handler_tx.send(Event {
+                event_type: EventType::REMOVE(id),
+                ..Default::default()
+            })?;
+        }
+
+        Ok(())
     }
 
-    // set_rto sets current RTO value.
-    pub fn set_rto(&mut self, rto: Duration) {
-        self.settings.rto = rto;
+    fn start(
+        conn: Option<Arc<UdpSocket>>,
+        mut handler_rx: mpsc::UnboundedReceiver<Event>,
+        client_agent_tx: Arc<mpsc::Sender<ClientAgent>>,
+        mut t: HashMap<TransactionId, ClientTransaction>,
+        max_attempts: u32,
+    ) {
+        tokio::spawn(async move {
+            while let Some(event) = handler_rx.recv().await {
+                match event.event_type {
+                    EventType::CLOSE => {
+                        break;
+                    }
+                    EventType::INSERT(ct) => {
+                        if t.contains_key(&ct.id) {
+                            continue;
+                        }
+                        t.insert(ct.id, ct);
+                    }
+                    EventType::REMOVE(id) => {
+                        t.remove(&id);
+                    }
+                    EventType::CALLBACK(id) => {
+                        let mut ct;
+                        if t.contains_key(&id) {
+                            ct = t.remove(&id).unwrap();
+                        } else {
+                            /*if c.handler != nil && !errors.Is(e.Error, ErrTransactionStopped) {
+                                c.handler(e)
+                            }*/
+                            continue;
+                        }
+
+                        if ct.attempt >= max_attempts || event.event_body.is_ok() {
+                            if let Some(handler) = ct.handler {
+                                let _ = handler.send(event);
+                            }
+                            continue;
+                        }
+
+                        // Doing re-transmission.
+                        ct.attempt += 1;
+
+                        let raw = ct.raw.clone();
+                        let timeout = ct.next_timeout(Instant::now());
+                        let id = ct.id;
+
+                        // Starting client transaction.
+                        t.insert(ct.id, ct);
+
+                        // Starting agent transaction.
+                        if client_agent_tx
+                            .send(ClientAgent::Start(id, timeout))
+                            .await
+                            .is_err()
+                        {
+                            let ct = t.remove(&id).unwrap();
+                            if let Some(handler) = ct.handler {
+                                let _ = handler.send(event);
+                            }
+                            continue;
+                        }
+
+                        // Writing message to connection again.
+                        if let Some(c) = &conn {
+                            if c.send(&raw).await.is_err() {
+                                let _ = client_agent_tx.send(ClientAgent::Stop(id)).await;
+
+                                let ct = t.remove(&id).unwrap();
+                                if let Some(handler) = ct.handler {
+                                    let _ = handler.send(event);
+                                }
+                                continue;
+                            }
+                        }
+                    }
+                };
+            }
+        });
     }
 
     // Close stops internal connection and agent, returning CloseErr on error.
@@ -299,41 +352,107 @@ impl Client {
         }
 
         self.settings.closed = true;
-        if let Some(collector) = &mut self.settings.collector {
-            collector.close()?;
-        }
-        self.close_tx.take(); //drop close channel
 
-        /*TODO:?if let Some(a) = &mut self.settings.a {
-            a.close()?;
-        }*/
+        if let Some(collector) = &mut self.settings.collector {
+            let _ = collector.close();
+        }
+        self.settings.collector.take();
+
+        self.close_tx.take(); //drop close channel
+        if let Some(client_agent_tx) = &mut self.client_agent_tx {
+            let _ = client_agent_tx.send(ClientAgent::Close).await;
+        }
+        self.client_agent_tx.take();
 
         Ok(())
     }
 
     pub async fn run(&mut self) -> Result<(), Error> {
-        let (_close_tx, close_rx) = mpsc::channel(1);
+        let (close_tx, close_rx) = mpsc::channel(1);
+        let (client_agent_tx, client_agent_rx) = mpsc::channel(self.settings.buffer_size);
+        let (handler_tx, handler_rx) = mpsc::unbounded_channel();
+        let t: HashMap<TransactionId, ClientTransaction> = HashMap::new();
+
+        let client_agent_tx = Arc::new(client_agent_tx);
+        let handler_tx = Arc::new(handler_tx);
+        self.client_agent_tx = Some(Arc::clone(&client_agent_tx));
+        self.handler_tx = Some(Arc::clone(&handler_tx));
+        self.close_tx = Some(close_tx);
+
         let conn = if let Some(conn) = &self.settings.c {
             Arc::clone(conn)
         } else {
             return Err(ERR_NO_CONNECTION.clone());
         };
 
-        let agent = if let Some(agent) = self.settings.a.take() {
-            agent
-        } else {
-            return Err(ERR_NO_AGENT.clone());
-        };
+        Client::start(
+            self.settings.c.clone(),
+            handler_rx,
+            Arc::clone(&client_agent_tx),
+            t,
+            self.settings.max_attempts,
+        );
 
-        //TODO: agent.set_handler(c.handleAgentCallback)?;
+        let agent = Agent::new(Some(handler_tx));
+        tokio::spawn(async move { Agent::run(agent, client_agent_rx).await });
+
+        if self.settings.collector.is_none() {
+            self.settings.collector = Some(Box::new(TickerCollector::default()));
+        }
+        if let Some(collector) = &mut self.settings.collector {
+            collector.start(self.settings.rto_rate, Arc::clone(&client_agent_tx))?;
+        }
 
         let conn_rx = Arc::clone(&conn);
-        tokio::spawn(async move { Client::read_until_closed(close_rx, conn_rx, agent).await });
+        tokio::spawn(
+            async move { Client::read_until_closed(close_rx, conn_rx, client_agent_tx).await },
+        );
 
         Ok(())
     }
 
-    /*pub async fn start(&mut self, m: &Message, h: Handler) -> Result<(), Error> {
+    pub async fn send(&mut self, m: &Message, handler: Handler) -> Result<(), Error> {
+        if self.settings.closed {
+            return Err(ERR_CLIENT_CLOSED.clone());
+        }
+
+        let has_handler = handler.is_some();
+
+        if handler.is_some() {
+            let t = ClientTransaction {
+                id: m.transaction_id,
+                attempt: 0,
+                calls: 0,
+                handler,
+                start: Instant::now(),
+                rto: self.settings.rto,
+                raw: m.raw.clone(),
+            };
+            let d = t.next_timeout(t.start);
+            self.insert(t)?;
+
+            if let Some(client_agent_tx) = &mut self.client_agent_tx {
+                client_agent_tx
+                    .send(ClientAgent::Start(m.transaction_id, d))
+                    .await?;
+            }
+        }
+
+        if let Some(c) = &self.settings.c {
+            let result = c.send(&m.raw).await;
+            if result.is_err() && has_handler {
+                self.remove(m.transaction_id)?;
+
+                if let Some(client_agent_tx) = &mut self.client_agent_tx {
+                    client_agent_tx
+                        .send(ClientAgent::Stop(m.transaction_id))
+                        .await?;
+                }
+            } else if let Err(err) = result {
+                return Err(Error::new(err.to_string()));
+            }
+        }
+
         Ok(())
-    }*/
+    }
 }
