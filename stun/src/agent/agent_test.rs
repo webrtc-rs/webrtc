@@ -6,60 +6,81 @@ use tokio::time::Duration;
 
 use util::Error;
 
-#[test]
-fn test_agent_process_in_transaction() -> Result<(), Error> {
-    let m = Rc::new(RefCell::new(Message::new()));
-    let m2 = Rc::clone(&m);
-    let mut a = Agent::new(Box::new(move |e| {
+#[tokio::test]
+async fn test_agent_process_in_transaction() -> Result<(), Error> {
+    let m = Arc::new(Mutex::new(Message::new()));
+    let (handler_tx, mut hander_rx) = tokio::sync::mpsc::unbounded_channel();
+
+    let mut a = Agent::new(Some(handler_tx));
+    let transaction_id;
+    {
+        let mut msg = m.lock().await;
+        msg.transaction_id = TransactionId([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+        transaction_id = msg.transaction_id;
+    }
+    a.start(transaction_id, Instant::now())?;
+    a.process(transaction_id, Some(m))?;
+    a.close()?;
+
+    while let Some(e) = hander_rx.recv().await {
         assert!(
             e.error.is_none(),
             "got error: {}",
             e.error.as_ref().unwrap()
         );
-        assert_eq!(
-            e.message, m2,
-            "{:?} (got) != {:?} (expected)",
-            e.message, m2
-        );
-    }));
-
-    {
-        let mut msg = m.borrow_mut();
-        msg.new_transaction_id()?;
+        if let Some(msg) = &e.message {
+            let m2 = msg.lock().await;
+            let tid = TransactionId([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+            assert_eq!(
+                m2.transaction_id, tid,
+                "{:?} (got) != {:?} (expected)",
+                m2.transaction_id, tid
+            );
+        } else {
+            assert!(false, "expected error, but got ok");
+        }
     }
-    a.start(m.borrow().transaction_id, Instant::now())?;
-    a.process(&m)?;
-    a.close()?;
 
     Ok(())
 }
 
-#[test]
-fn test_agent_process() -> Result<(), Error> {
-    let m = Rc::new(RefCell::new(Message::new()));
-    let m2 = Rc::clone(&m);
-    let mut a = Agent::new(Box::new(move |e| {
+#[tokio::test]
+async fn test_agent_process() -> Result<(), Error> {
+    let m = Arc::new(Mutex::new(Message::new()));
+    let (handler_tx, mut hander_rx) = tokio::sync::mpsc::unbounded_channel();
+
+    let mut a = Agent::new(Some(handler_tx));
+
+    let transaction_id;
+    {
+        let mut msg = m.lock().await;
+        msg.transaction_id = TransactionId([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+        transaction_id = msg.transaction_id;
+    }
+
+    a.process(transaction_id, Some(Arc::clone(&m)))?;
+    a.close()?;
+
+    while let Some(e) = hander_rx.recv().await {
         assert!(
             e.error.is_none(),
             "got error: {}",
             e.error.as_ref().unwrap()
         );
-        assert_eq!(
-            e.message, m2,
-            "{:?} (got) != {:?} (expected)",
-            e.message, m2
-        );
-    }));
-
-    {
-        let mut msg = m.borrow_mut();
-        msg.new_transaction_id()?;
+        if let Some(msg) = &e.message {
+            let m2 = msg.lock().await;
+            let tid = TransactionId([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+            assert_eq!(
+                m2.transaction_id, tid,
+                "{:?} (got) != {:?} (expected)",
+                m2.transaction_id, tid
+            );
+        } else {
+            assert!(false, "expected error, but got ok");
+        }
     }
 
-    a.process(&m)?;
-    a.close()?;
-
-    let result = a.process(&m);
+    let result = a.process(transaction_id, Some(m));
     if let Err(err) = result {
         assert_eq!(
             err,
@@ -126,14 +147,10 @@ fn test_agent_start() -> Result<(), Error> {
     Ok(())
 }
 
-/*TODO:
 #[tokio::test]
 async fn test_agent_stop() -> Result<(), Error> {
-    let (called_tx, mut called_rx) = mpsc::channel(8);
-
-    let mut a = Agent::new(Box::new(move |e| {
-        let _ = called_tx.send(e.clone()); //.await;
-    }));
+    let (handler_tx, mut hander_rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut a = Agent::new(Some(handler_tx));
 
     let result = a.stop(TransactionId::default());
     if let Err(err) = result {
@@ -149,14 +166,15 @@ async fn test_agent_stop() -> Result<(), Error> {
     }
 
     let id = TransactionId::new();
-    let deadline = Duration::from_millis(200);
+    let deadline = Instant::now().add(Duration::from_millis(200));
     a.start(id, deadline)?;
     a.stop(id)?;
 
-    let mut timeout = tokio::time::sleep(Duration::from_millis(400));
+    let timeout = tokio::time::sleep(Duration::from_millis(400));
+    tokio::pin!(timeout);
 
     tokio::select! {
-        evt = called_rx.recv() => {
+        evt = hander_rx.recv() => {
             if let Some(error) = evt.unwrap().error{
                 assert_eq!(error, ERR_TRANSACTION_STOPPED.clone(),
                     "unexpected error: {}, should be {}",
@@ -165,7 +183,7 @@ async fn test_agent_stop() -> Result<(), Error> {
                 assert!(false, "expected error, got ok");
             }
         }
-     _ = &mut timeout => assert!(false, "timed out"),
+     _ = timeout.as_mut() => assert!(false, "timed out"),
     }
 
     a.close()?;
@@ -198,4 +216,3 @@ async fn test_agent_stop() -> Result<(), Error> {
 
     Ok(())
 }
- */

@@ -7,9 +7,10 @@ use crate::message::*;
 
 use util::Error;
 
-use std::cell::RefCell;
+use tokio::sync::{mpsc, Mutex};
+
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::sync::Arc;
 use std::time::Instant;
 
 use rand::Rng;
@@ -19,11 +20,12 @@ use rand::Rng;
 // Handler is called on transaction state change.
 // Usage of e is valid only during call, user must
 // copy needed fields explicitly.
-pub type Handler = Box<dyn Fn(&Event)>;
+pub type Handler = Option<mpsc::UnboundedSender<Event>>; //Box<dyn Fn(&Event)>;
 
 // noop_handler just discards any event.
 pub fn noop_handler() -> Handler {
-    Box::new(|_e| {})
+    //Box::new(|_e| {})
+    None
 }
 
 // Agent is low-level abstraction over transaction list that
@@ -45,7 +47,7 @@ pub struct Agent {
 #[derive(Default, Debug, Clone)]
 pub struct Event {
     pub transaction_id: TransactionId,
-    pub message: Rc<RefCell<Message>>,
+    pub message: Option<Arc<Mutex<Message>>>,
     pub error: Option<Error>,
 }
 
@@ -83,21 +85,27 @@ impl Setter for TransactionId {
 
 impl ClientAgent for Agent {
     // process incoming message, synchronously passing it to handler.
-    fn process(&mut self, m: &Rc<RefCell<Message>>) -> Result<(), Error> {
+    fn process(
+        &mut self,
+        transaction_id: TransactionId,
+        message: Option<Arc<Mutex<Message>>>,
+    ) -> Result<(), Error> {
         if self.closed {
             return Err(ERR_AGENT_CLOSED.clone());
         }
 
+        self.transactions.remove(&transaction_id);
+
         let e = Event {
-            transaction_id: m.borrow().transaction_id,
-            message: Rc::clone(&m),
+            transaction_id,
+            message,
             ..Default::default()
         };
 
-        //h := a.handler
-        self.transactions.remove(&e.transaction_id);
-
-        (self.handler)(&e);
+        if let Some(handler) = &self.handler {
+            handler.send(e)?;
+        }
+        //(self.handler)(&e);
 
         Ok(())
     }
@@ -109,14 +117,15 @@ impl ClientAgent for Agent {
             return Err(ERR_AGENT_CLOSED.clone());
         }
 
-        let mut e = Event {
-            error: Some(ERR_AGENT_CLOSED.clone()),
-            ..Default::default()
-        };
-
         for id in self.transactions.keys() {
-            e.transaction_id = *id;
-            (self.handler)(&e);
+            let e = Event {
+                error: Some(ERR_AGENT_CLOSED.clone()),
+                transaction_id: *id,
+                ..Default::default()
+            };
+            if let Some(handler) = &self.handler {
+                handler.send(e)?;
+            }
         }
         self.transactions = HashMap::new();
         self.closed = true;
@@ -183,13 +192,16 @@ impl ClientAgent for Agent {
         //a.mux.Unlock()
         // Sending ErrTransactionTimeOut to handler for all transactions,
         // blocking until last one.
-        let mut event = Event {
-            error: Some(ERR_TRANSACTION_TIME_OUT.clone()),
-            ..Default::default()
-        };
+
         for id in to_remove {
-            event.transaction_id = id;
-            (self.handler)(&event);
+            let event = Event {
+                error: Some(ERR_TRANSACTION_TIME_OUT.clone()),
+                transaction_id: id,
+                ..Default::default()
+            };
+            if let Some(handler) = &self.handler {
+                handler.send(event)?;
+            }
         }
 
         Ok(())
@@ -226,11 +238,13 @@ impl Agent {
 
         let v = self.transactions.remove(&id);
         if let Some(t) = v {
-            (self.handler)(&Event {
-                transaction_id: t.id,
-                message: Rc::new(RefCell::new(Message::default())),
-                error: Some(error),
-            });
+            if let Some(handler) = &self.handler {
+                handler.send(Event {
+                    transaction_id: t.id,
+                    message: None,
+                    error: Some(error),
+                })?;
+            }
             Ok(())
         } else {
             Err(ERR_TRANSACTION_NOT_EXISTS.clone())

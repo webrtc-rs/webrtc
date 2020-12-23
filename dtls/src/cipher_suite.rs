@@ -10,8 +10,6 @@ pub mod cipher_suite_tls_psk_with_aes_128_gcm_sha256;
 use std::fmt;
 use std::marker::{Send, Sync};
 
-use async_trait::async_trait;
-
 use super::client_certificate_type::*;
 use super::errors::*;
 use super::record_layer::record_layer_header::*;
@@ -118,7 +116,6 @@ impl CipherSuiteHash {
     }
 }
 
-#[async_trait]
 pub trait CipherSuite {
     fn to_string(&self) -> String;
     fn id(&self) -> CipherSuiteID;

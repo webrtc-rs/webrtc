@@ -44,4 +44,6 @@ lazy_static! {
     pub static ref ERR_NO_CONNECTION: Error = Error::new("no connection provided".to_owned());
     // ErrClientClosed indicates that client is closed.
     pub static ref ERR_CLIENT_CLOSED: Error = Error::new("client is closed".to_owned());
+    // ErrNoAgent indicates that agent is not set.
+    pub static ref ERR_NO_AGENT: Error = Error::new("no agent is set".to_owned());
 }
