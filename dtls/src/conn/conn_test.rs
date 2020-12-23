@@ -1918,10 +1918,11 @@ async fn test_server_timeout() -> Result<(), Error> {
     // Start sending ClientHello packets until server responds with first packet
     tokio::spawn(async move {
         loop {
-            let mut timer = tokio::time::sleep(Duration::from_millis(10));
+            let timer = tokio::time::sleep(Duration::from_millis(10));
+            tokio::pin!(timer);
 
             tokio::select! {
-                _ = &mut timer => {
+                _ = timer.as_mut() => {
                     let result = ca_tx.send(&packet).await;
                     if result.is_err() {
                         return;

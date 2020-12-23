@@ -305,7 +305,8 @@ impl Conn {
         }
     }
     async fn wait(&mut self) -> Result<HandshakeState, Error> {
-        let mut retransmit_timer = tokio::time::sleep(self.cfg.retransmit_interval);
+        let retransmit_timer = tokio::time::sleep(self.cfg.retransmit_interval);
+        tokio::pin!(retransmit_timer);
 
         loop {
             tokio::select! {
@@ -350,7 +351,7 @@ impl Conn {
                     };
                 }
 
-                _ = &mut retransmit_timer =>{
+                _ = retransmit_timer.as_mut() =>{
                     trace!("[handshake:{}] {} retransmit_timer", srv_cli_str(self.state.is_client), self.current_flight.to_string());
 
                     if !self.retransmit {

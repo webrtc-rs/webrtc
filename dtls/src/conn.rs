@@ -351,11 +351,12 @@ impl Conn {
 
         loop {
             let rx = if let Some(d) = duration {
-                let mut timer = tokio::time::sleep(d);
+                let timer = tokio::time::sleep(d);
+                tokio::pin!(timer);
 
                 tokio::select! {
                     r = self.decrypted_rx.recv() => r,
-                    _ = &mut timer => return Err(ERR_DEADLINE_EXCEEDED.clone()),
+                    _ = timer.as_mut() => return Err(ERR_DEADLINE_EXCEEDED.clone()),
                 }
             } else {
                 self.decrypted_rx.recv().await
@@ -399,7 +400,8 @@ impl Conn {
         }];
 
         if let Some(d) = duration {
-            let mut timer = tokio::time::sleep(d);
+            let timer = tokio::time::sleep(d);
+            tokio::pin!(timer);
 
             tokio::select! {
                 result = self.write_packets(pkts) => {
@@ -407,7 +409,7 @@ impl Conn {
                         return Err(err);
                     }
                 }
-                _ = &mut timer => return Err(ERR_DEADLINE_EXCEEDED.clone()),
+                _ = timer.as_mut() => return Err(ERR_DEADLINE_EXCEEDED.clone()),
             }
         } else {
             self.write_packets(pkts).await?;
