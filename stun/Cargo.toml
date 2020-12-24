@@ -5,6 +5,9 @@ authors = ["Rain Liu <yuliu@outlook.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+binaries = ["clap"]
+default = ["binaries"]
 
 [dependencies]
 util = { path = "../util" }
@@ -16,6 +19,13 @@ subtle = "2.1.1"
 crc32fast = "1.2.1"
 ring = "0.16.19"
 md5 = "0.7.0"
+clap = { version = "2", optional = true, default-features = false }
 
 [dev-dependencies]
 tokio-test = "0.4"
+
+[[example]]
+name = "stun_client"
+path = "examples/stun_client.rs"
+required-features = ["binaries"]
+bench = false

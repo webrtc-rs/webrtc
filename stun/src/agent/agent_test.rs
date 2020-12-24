@@ -9,14 +9,14 @@ use util::Error;
 #[tokio::test]
 async fn test_agent_process_in_transaction() -> Result<(), Error> {
     let mut m = Message::new();
-    let (handler_tx, mut hander_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (handler_tx, mut handler_rx) = tokio::sync::mpsc::unbounded_channel();
     let mut a = Agent::new(Some(Arc::new(handler_tx)));
     m.transaction_id = TransactionId([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
     a.start(m.transaction_id, Instant::now())?;
     a.process(m)?;
     a.close()?;
 
-    while let Some(e) = hander_rx.recv().await {
+    while let Some(e) = handler_rx.recv().await {
         assert!(e.event_body.is_ok(), "got error: {:?}", e.event_body);
 
         let tid = TransactionId([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
@@ -35,13 +35,13 @@ async fn test_agent_process_in_transaction() -> Result<(), Error> {
 #[tokio::test]
 async fn test_agent_process() -> Result<(), Error> {
     let mut m = Message::new();
-    let (handler_tx, mut hander_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (handler_tx, mut handler_rx) = tokio::sync::mpsc::unbounded_channel();
     let mut a = Agent::new(Some(Arc::new(handler_tx)));
     m.transaction_id = TransactionId([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
     a.process(m.clone())?;
     a.close()?;
 
-    while let Some(e) = hander_rx.recv().await {
+    while let Some(e) = handler_rx.recv().await {
         assert!(e.event_body.is_ok(), "got error: {:?}", e.event_body);
 
         let tid = TransactionId([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
@@ -123,7 +123,7 @@ fn test_agent_start() -> Result<(), Error> {
 
 #[tokio::test]
 async fn test_agent_stop() -> Result<(), Error> {
-    let (handler_tx, mut hander_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (handler_tx, mut handler_rx) = tokio::sync::mpsc::unbounded_channel();
     let mut a = Agent::new(Some(Arc::new(handler_tx)));
 
     let result = a.stop(TransactionId::default());
@@ -148,7 +148,7 @@ async fn test_agent_stop() -> Result<(), Error> {
     tokio::pin!(timeout);
 
     tokio::select! {
-        evt = hander_rx.recv() => {
+        evt = handler_rx.recv() => {
             if let Err(err) = evt.unwrap().event_body{
                 assert_eq!(err, ERR_TRANSACTION_STOPPED.clone(),
                     "unexpected error: {}, should be {}",

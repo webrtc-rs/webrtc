@@ -74,6 +74,15 @@ pub struct XORMappedAddress {
     pub port: u16,
 }
 
+impl Default for XORMappedAddress {
+    fn default() -> Self {
+        XORMappedAddress {
+            ip: IpAddr::V4(Ipv4Addr::from(0)),
+            port: 0,
+        }
+    }
+}
+
 impl fmt::Display for XORMappedAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let family = match self.ip {

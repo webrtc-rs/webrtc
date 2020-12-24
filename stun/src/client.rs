@@ -17,6 +17,7 @@ use tokio::time::{self, Duration, Instant};
 const DEFAULT_TIMEOUT_RATE: Duration = Duration::from_millis(5);
 const DEFAULT_RTO: Duration = Duration::from_millis(300);
 const DEFAULT_MAX_ATTEMPTS: u32 = 7;
+const DEFAULT_MAX_BUFFER_SIZE: usize = 8;
 
 // Collector calls function f with constant rate.
 //
@@ -102,16 +103,30 @@ impl ClientTransaction {
     }
 }
 
-#[derive(Default)]
 struct ClientSettings {
     buffer_size: usize,
     rto: Duration,
     rto_rate: Duration,
     max_attempts: u32,
     closed: bool,
-    handler: Handler,
+    //handler: Handler,
     collector: Option<Box<dyn Collector>>,
     c: Option<Arc<UdpSocket>>,
+}
+
+impl Default for ClientSettings {
+    fn default() -> Self {
+        ClientSettings {
+            buffer_size: DEFAULT_MAX_BUFFER_SIZE,
+            rto: DEFAULT_RTO,
+            rto_rate: DEFAULT_TIMEOUT_RATE,
+            max_attempts: DEFAULT_MAX_ATTEMPTS,
+            closed: false,
+            //handler: None,
+            collector: None,
+            c: None,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -123,10 +138,10 @@ impl ClientBuilder {
     // WithHandler sets client handler which is called if Agent emits the Event
     // with TransactionID that is not currently registered by Client.
     // Useful for handling Data indications from TURN server.
-    pub fn with_handler(mut self, handler: Handler) -> Self {
-        self.settings.handler = handler;
-        self
-    }
+    //pub fn with_handler(mut self, handler: Handler) -> Self {
+    //    self.settings.handler = handler;
+    //    self
+    //}
 
     // WithRTO sets client RTO as defined in STUN RFC.
     pub fn with_rto(mut self, rto: Duration) -> Self {
@@ -179,18 +194,18 @@ impl ClientBuilder {
         }
     }
 
-    pub fn build(mut self) -> Result<Client, Error> {
+    pub fn build(self) -> Result<Client, Error> {
         if self.settings.c.is_none() {
             return Err(ERR_NO_CONNECTION.clone());
         }
-        if self.settings.buffer_size == 0 {
-            self.settings.buffer_size = 8;
-        }
 
-        Ok(Client {
+        let client = Client {
             settings: self.settings,
             ..Default::default()
-        })
+        }
+        .run()?;
+
+        Ok(client)
     }
 }
 
@@ -367,7 +382,7 @@ impl Client {
         Ok(())
     }
 
-    pub async fn run(&mut self) -> Result<(), Error> {
+    fn run(mut self) -> Result<Self, Error> {
         let (close_tx, close_rx) = mpsc::channel(1);
         let (client_agent_tx, client_agent_rx) = mpsc::channel(self.settings.buffer_size);
         let (handler_tx, handler_rx) = mpsc::unbounded_channel();
@@ -408,7 +423,7 @@ impl Client {
             async move { Client::read_until_closed(close_rx, conn_rx, client_agent_tx).await },
         );
 
-        Ok(())
+        Ok(self)
     }
 
     pub async fn send(&mut self, m: &Message, handler: Handler) -> Result<(), Error> {

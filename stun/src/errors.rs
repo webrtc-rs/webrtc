@@ -48,4 +48,6 @@ lazy_static! {
     pub static ref ERR_NO_AGENT: Error = Error::new("no agent is set".to_owned());
     // ErrCollectorClosed indicates that client is closed.
     pub static ref ERR_COLLECTOR_CLOSED: Error = Error::new("collector is closed".to_owned());
+    // ErrUnsupportedNetwork indicates that client is closed.
+    pub static ref ERR_UNSUPPORTED_NETWORK: Error = Error::new("unsupported network".to_owned());
 }
