@@ -1,0 +1,31 @@
+[package]
+name = "stun"
+version = "0.1.0"
+authors = ["Rain Liu <yuliu@outlook.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+binaries = ["clap"]
+default = ["binaries"]
+
+[dependencies]
+util = { git = "https://github.com/webrtc-rs/util", branch = "main" }
+lazy_static = "1.3.0"
+tokio = { version = "1.0", features = ["full"] }
+rand = "0.8.0"
+base64 = "0.13.0"
+subtle = "2.1.1"
+crc32fast = "1.2.1"
+ring = "0.16.19"
+md5 = "0.7.0"
+clap = { version = "2", optional = true, default-features = false }
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[[example]]
+name = "stun_client"
+path = "examples/stun_client.rs"
+required-features = ["binaries"]
+bench = false
