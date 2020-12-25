@@ -1,0 +1,12 @@
+[package]
+name = "sdp"
+version = "0.1.0"
+authors = ["Rain Liu <yuliu@outlook.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+util = { git = "https://github.com/webrtc-rs/util", branch = "main" }
+url = "2.1.0"
+rand = "0.8.0"
