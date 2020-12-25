@@ -1,12 +1,17 @@
 [package]
-name = "sdp"
+name = "webrtc-rs-sdp"
 version = "0.1.0"
 authors = ["Rain Liu <yuliu@outlook.com>"]
 edition = "2018"
+description = "A pure Rust implementation of SDP"
+license = "MIT"
+documentation = "https://docs.rs/webrtc-rs-sdp"
+homepage = "https://webrtc.rs"
+repository = "https://github.com/webrtc-rs/sdp"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-util = { git = "https://github.com/webrtc-rs/util", branch = "main" }
+util = { package = "webrtc-rs-util", version = "0.1.0" }
 url = "2.1.0"
 rand = "0.8.0"
