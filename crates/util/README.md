@@ -4,7 +4,7 @@
 </h1>
 <p align="center">
  <a href="https://github.com/webrtc-rs/util/actions"> 
-  <img src="https://github.com/webrtc-rs/util/workflows/cargo/badge.svg?branch=main">
+  <img src="https://github.com/webrtc-rs/util/workflows/Cargo/badge.svg">
  </a> 
  <a href="https://codecov.io/gh/webrtc-rs/util"> 
   <img src="https://codecov.io/gh/webrtc-rs/util/branch/main/graph/badge.svg">
@@ -12,7 +12,7 @@
  <a href="https://deps.rs/repo/github/webrtc-rs/util"> 
   <img src="https://deps.rs/repo/github/webrtc-rs/util/status.svg">
  </a>
- <a href="https://github.com/webrtc-rs/webrtc/blob/master/LICENSE">
+ <a href="https://github.com/webrtc-rs/util/blob/master/LICENSE">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
  </a>
 </p>
