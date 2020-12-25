@@ -1,8 +1,13 @@
 [package]
-name = "util"
+name = "webrtc-rs-util"
 version = "0.1.0"
 authors = ["Rain Liu <yuliu@outlook.com>"]
 edition = "2018"
+description = "Utilities for WebRTC.rs stack"
+license = "MIT"
+documentation = "https://docs.rs/webrtc-rs-util"
+homepage = "https://webrtc.rs"
+repository = "https://github.com/webrtc-rs/util"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
