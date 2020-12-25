@@ -1,8 +1,13 @@
 [package]
-name = "ice"
-version = "0.1.0"
+name = "webrtc-rs-ice"
+version = "0.0.1"
 authors = ["Rain Liu <yuliu@outlook.com>"]
 edition = "2018"
+description = "A pure Rust implementation of ICE"
+license = "MIT"
+documentation = "https://docs.rs/webrtc-rs-ice"
+homepage = "https://webrtc.rs"
+repository = "https://github.com/webrtc-rs/ice"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
