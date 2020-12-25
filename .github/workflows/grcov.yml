@@ -2,9 +2,9 @@ name: Coverage
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, main ]
   pull_request:
-    branches: [ master ]
+    branches: [ master, main ]
 
 env:
   CARGO_TERM_COLOR: always

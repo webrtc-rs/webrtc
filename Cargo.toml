@@ -1,16 +1,9 @@
-[workspace]
-members = [
-    "dtls",
-    "ice",
-    "rtc",
-    "rtcp",
-    "rtp",
-    "sdp",
-    "srtp",
-    "stun",
-    "turn",
-    "util",
-]
+[package]
+name = "webrtc"
+version = "0.1.0"
+authors = ["Rain Liu <yuliu@outlook.com>"]
+edition = "2018"
 
-[profile.dev]
-opt-level = 0
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
