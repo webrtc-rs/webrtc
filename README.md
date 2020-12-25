@@ -42,15 +42,15 @@
   - sync up to [pion/dtls/v2.0.0](https://github.com/pion/dtls/tree/789798433596e4dd92451b66984dddb2f8a9f165)
 - [x] STUN: [webrtc-rs/stun](https://github.com/webrtc-rs/stun)
   - sync up to [pion/stun/v0.3.5](https://github.com/pion/stun/tree/7b20b792b7e18b3846032aaa80e8c0e2d412d0f8)
-- [ ] TURN: [webrtc-rs/turn](https://github.com/webrtc-rs/turn)
-  - work in progress
-  - catch up [pion/turn/v2.0.2](https://github.com/pion/turn/tree/502d01577bf86a442ab9b9fa23f78987e7f1e1cd)
 - [ ] ICE: [webrtc-rs/ice](https://github.com/webrtc-rs/ice)
   - work in progress
   - catch up [pion/ice/v2.0.14](https://github.com/pion/ice/tree/c0a874421c45ef6bbc51166b9056aa46c201f075)
 - [ ] PeerConnection
 
 ### Road Map Towards 2.0
+- [ ] TURN: [webrtc-rs/turn](https://github.com/webrtc-rs/turn)
+  - work in progress
+  - catch up [pion/turn/v2.0.2](https://github.com/pion/turn/tree/502d01577bf86a442ab9b9fa23f78987e7f1e1cd)
 - [ ] SCTP
 - [ ] DataChannel
 
