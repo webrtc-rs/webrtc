@@ -1,0 +1,27 @@
+[package]
+name = "srtp"
+version = "0.1.0"
+authors = ["Rain Liu <yuliu@outlook.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+util = { git = "https://github.com/webrtc-rs/util", branch = "main" }
+rtp = { git = "https://github.com/webrtc-rs/rtp", branch = "main" }
+rtcp = { git = "https://github.com/webrtc-rs/rtcp", branch = "main" }
+byteorder = "1.3.2"
+hmac = "0.10.1"
+sha-1 = "0.9.1"
+ctr = "0.6.0"
+aes = "0.6.0"
+subtle = "2.1.1"
+tokio = { version = "1.0", features = ["full"] }
+async-trait = "0.1"
+log = "0.4"
+aead = "^0.3"
+aes-gcm = "^0.8"
+
+[dev-dependencies]
+tokio-test = "0.4"
+lazy_static = "^1.4"
