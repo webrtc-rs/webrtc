@@ -1,3 +1,5 @@
+use webrtc_rs_stun as stun;
+
 use stun::agent::*;
 use stun::client::*;
 use stun::message::*;
