@@ -1,129 +1,119 @@
-use super::*;
+#[cfg(test)]
+mod test {
+    use crate::rapid_resynchronization_request::*;
 
-use std::io::{BufReader, BufWriter};
+    #[test]
+    fn test_rapid_resynchronization_request_unmarshal() {
+        let tests = vec![
+            (
+                "valid",
+                vec![
+                    0x85, 0xcd, 0x0, 0x2, // RapidResynchronizationRequest
+                    0x90, 0x2f, 0x9e, 0x2e, // sender=0x902f9e2e
+                    0x90, 0x2f, 0x9e, 0x2e, // media=0x902f9e2e
+                ],
+                RapidResynchronizationRequest {
+                    sender_ssrc: 0x902f9e2e,
+                    media_ssrc: 0x902f9e2e,
+                },
+                Ok(()),
+            ),
+            (
+                "short report",
+                vec![
+                    0x85, 0xcd, 0x0, 0x2, // ssrc=0x902f9e2e
+                    0x90, 0x2f, 0x9e, 0x2e,
+                    // report ends early
+                ],
+                RapidResynchronizationRequest::default(),
+                Err(ERR_PACKET_TOO_SHORT.clone()),
+            ),
+            (
+                "wrong type",
+                vec![
+                    0x81, 0xc8, 0x0, 0x7, // v=2, p=0, count=1, SR, len=7
+                    0x90, 0x2f, 0x9e, 0x2e, // ssrc=0x902f9e2e
+                    0xbc, 0x5e, 0x9a, 0x40, // ssrc=0xbc5e9a40
+                    0x0, 0x0, 0x0, 0x0, // fracLost=0, totalLost=0
+                    0x0, 0x0, 0x46, 0xe1, // lastSeq=0x46e1
+                    0x0, 0x0, 0x1, 0x11, // jitter=273
+                    0x9, 0xf3, 0x64, 0x32, // lsr=0x9f36432
+                    0x0, 0x2, 0x4a, 0x79, // delay=150137
+                ],
+                RapidResynchronizationRequest::default(),
+                Err(ERR_WRONG_TYPE.clone()),
+            ),
+            (
+                "nil",
+                vec![],
+                RapidResynchronizationRequest::default(),
+                Err(ERR_PACKET_TOO_SHORT.clone()),
+            ),
+        ];
 
-use util::Error;
+        for (name, data, want, want_error) in tests {
+            let mut rrr = RapidResynchronizationRequest::default();
 
-#[test]
-fn test_rapid_resynchronization_request_unmarshal() -> Result<(), Error> {
-    let tests = vec![
-        (
+            let result = rrr.unmarshal(&mut data[..].into());
+
+            assert_eq!(
+                result, want_error,
+                "Unmarshal {} rr: err = {:?}, want {:?}",
+                name, result, want_error
+            );
+
+            match result {
+                Ok(_) => assert_eq!(
+                    rrr, want,
+                    "Unmarshal {} rr: got {:?}, want {:?}",
+                    name, rrr, want
+                ),
+
+                Err(_) => continue,
+            }
+        }
+    }
+
+    #[test]
+    fn test_rapid_resynchronization_request_roundtrip() {
+        let tests: Vec<(&str, RapidResynchronizationRequest, Result<(), Error>)> = vec![(
             "valid",
-            vec![
-                // RapidResynchronizationRequest
-                0x85, 0xcd, 0x0, 0x2, // sender=0x902f9e2e
-                0x90, 0x2f, 0x9e, 0x2e, // media=0x902f9e2e
-                0x90, 0x2f, 0x9e, 0x2e,
-            ],
             RapidResynchronizationRequest {
                 sender_ssrc: 0x902f9e2e,
                 media_ssrc: 0x902f9e2e,
             },
-            None,
-        ),
-        (
-            "short report",
-            vec![
-                0x85, 0xcd, 0x0, 0x2, // ssrc=0x902f9e2e
-                0x90, 0x2f, 0x9e, 0x2e,
-                // report ends early
-            ],
-            RapidResynchronizationRequest::default(),
-            Some(ERR_FAILED_TO_FILL_WHOLE_BUFFER.clone()),
-        ),
-        (
-            "wrong type",
-            vec![
-                // v=2, p=0, count=1, SR, len=7
-                0x81, 0xc8, 0x0, 0x7, // ssrc=0x902f9e2e
-                0x90, 0x2f, 0x9e, 0x2e, // ssrc=0xbc5e9a40
-                0xbc, 0x5e, 0x9a, 0x40, // fracLost=0, totalLost=0
-                0x0, 0x0, 0x0, 0x0, // lastSeq=0x46e1
-                0x0, 0x0, 0x46, 0xe1, // jitter=273
-                0x0, 0x0, 0x1, 0x11, // lsr=0x9f36432
-                0x9, 0xf3, 0x64, 0x32, // delay=150137
-                0x0, 0x2, 0x4a, 0x79,
-            ],
-            RapidResynchronizationRequest::default(),
-            Some(ERR_WRONG_TYPE.clone()),
-        ),
-        (
-            "nil",
-            vec![],
-            RapidResynchronizationRequest::default(),
-            Some(ERR_FAILED_TO_FILL_WHOLE_BUFFER.clone()),
-        ),
-    ];
+            Ok(()),
+        )];
 
-    for (name, data, want, want_error) in tests {
-        let mut reader = BufReader::new(data.as_slice());
-        let result = RapidResynchronizationRequest::unmarshal(&mut reader);
-        if let Some(err) = want_error {
-            if let Err(got) = result {
-                assert_eq!(
-                    got, err,
-                    "Unmarshal {} header: err = {}, want {}",
-                    name, got, err
-                );
-            } else {
-                assert!(false, "want error in test {}", name);
-            }
-        } else {
-            if let Ok(got) = result {
-                assert_eq!(
-                    got, want,
-                    "Unmarshal {} header: got {:?}, want {:?}",
-                    name, got, want,
-                )
-            } else {
-                assert!(false, "must no error in test {}", name);
-            }
-        }
-    }
+        for (name, report, want_error) in tests {
+            let data = report.marshal();
 
-    Ok(())
-}
+            assert_eq!(
+                data.clone().err(),
+                want_error.clone().err(),
+                "Marshal {}: err = {:?}, want {:?}",
+                name,
+                data,
+                want_error
+            );
 
-#[test]
-fn test_rapid_resynchronization_request_roundtrip() -> Result<(), Error> {
-    let tests = vec![(
-        "valid",
-        RapidResynchronizationRequest {
-            sender_ssrc: 0x902f9e2e,
-            media_ssrc: 0x902f9e2e,
-        },
-        None,
-    )];
+            match data {
+                Ok(mut e) => {
+                    let mut decoded = RapidResynchronizationRequest::default();
 
-    for (name, report, marshal_error) in tests {
-        let mut data: Vec<u8> = vec![];
-        {
-            let mut writer = BufWriter::<&mut Vec<u8>>::new(data.as_mut());
-            let result = report.marshal(&mut writer);
-            if let Some(err) = marshal_error {
-                if let Err(got) = result {
+                    decoded
+                        .unmarshal(&mut e)
+                        .expect(format!("Unmarshal error {}", name).as_str());
+
                     assert_eq!(
-                        got, err,
-                        "marshal {} header: err = {}, want {}",
-                        name, got, err
-                    );
-                } else {
-                    assert!(false, "want error in test {}", name);
+                        decoded, report,
+                        "{} rrr round trip: got {:?}, want {:?}",
+                        name, decoded, report
+                    )
                 }
-                continue;
-            } else {
-                assert!(result.is_ok(), "must no error in test {}", name);
+
+                Err(_) => continue,
             }
         }
-
-        let mut reader = BufReader::new(data.as_slice());
-        let decoded = RapidResynchronizationRequest::unmarshal(&mut reader)?;
-        assert_eq!(
-            decoded, report,
-            "{} header round trip: got {:?}, want {:?}",
-            name, decoded, report
-        )
     }
-
-    Ok(())
 }

@@ -1,4 +1,3 @@
-#[cfg(test)]
 mod util_test;
 
 use util::Error;
