@@ -37,6 +37,7 @@ pub struct ReceptionReport {
     pub delay: u32,
 }
 
+#[allow(clippy::len_without_is_empty)]
 impl ReceptionReport {
     pub fn len(&self) -> usize {
         super::RECEPTION_REPORT_LENGTH

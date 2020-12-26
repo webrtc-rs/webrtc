@@ -34,7 +34,7 @@ impl PartialEq for dyn Packet {
 pub fn unmarshal(mut raw_data: BytesMut) -> Result<Vec<Box<dyn Packet>>, Error> {
     let mut packets = vec![];
 
-    while raw_data.len() != 0 {
+    while !raw_data.is_empty() {
         let (p, processed) = unmarshaller(&mut raw_data)?;
 
         packets.push(p);

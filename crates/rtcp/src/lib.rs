@@ -15,7 +15,7 @@
 //! service parameters, perhaps by limiting flow, or using a different codec.
 //!
 //! Decoding RTCP packets:
-//!
+//!```nobuild
 //!     let pkt = rtcp.Unmarshal(rtcpData).unwrap();
 //!
 //!     if let Some(e) = packet
@@ -31,7 +31,7 @@
 //!
 //!
 //! Encoding RTCP packets:
-//!
+//!```nobuild
 //!     let pkt = crate::picture_loss_indication::PictureLossIndication{
 //!         sender_ssrc: sender_ssrc,
 //!         media_ssrc: media_ssrc

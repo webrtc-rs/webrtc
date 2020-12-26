@@ -135,7 +135,7 @@ impl Packet for TransportLayerNack {
         while i < (header::HEADER_LENGTH + (h.length * 4) as usize) {
             self.nacks.push(NackPair {
                 packet_id: BigEndian::read_u16(&raw_packet[i..]),
-                lost_packets: PacketBitmap::from(BigEndian::read_u16(&raw_packet[i + 2..])),
+                lost_packets: BigEndian::read_u16(&raw_packet[i + 2..]),
             });
 
             i += 4
@@ -180,7 +180,7 @@ impl TransportLayerNack {
 }
 
 fn nack_pairs_from_sequence_numbers(seq_nos: &[u16]) -> Vec<NackPair> {
-    if seq_nos.len() == 0 {
+    if seq_nos.is_empty() {
         return vec![];
     }
 
@@ -191,16 +191,14 @@ fn nack_pairs_from_sequence_numbers(seq_nos: &[u16]) -> Vec<NackPair> {
 
     let mut pairs = vec![];
 
-    for i in 1..seq_nos.len() {
-        let m = seq_nos[i];
-
-        if m - nack_pair.packet_id > 16 {
+    for seq in seq_nos.iter().skip(1) {
+        if seq - nack_pair.packet_id > 16 {
             pairs.push(nack_pair.clone());
-            nack_pair.packet_id = m;
+            nack_pair.packet_id = *seq;
             continue;
         }
 
-        nack_pair.lost_packets |= 1 << (m - nack_pair.packet_id - 1);
+        nack_pair.lost_packets |= 1 << (seq - nack_pair.packet_id - 1);
     }
 
     pairs.push(nack_pair);

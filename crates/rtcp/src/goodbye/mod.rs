@@ -185,6 +185,6 @@ impl Goodbye {
         let l = header::HEADER_LENGTH + srcs_length + reason_length;
 
         // align to 32-bit boundary
-        return l + get_padding(l);
+        l + get_padding(l)
     }
 }

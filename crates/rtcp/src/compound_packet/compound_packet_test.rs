@@ -262,20 +262,41 @@ mod test {
         ];
 
         for (name, compound_packet, want_error, text) in tests {
-            let result = compound_packet.validate();
-            if let Some(err) = want_error {
-                if let Err(got) = result {
-                    assert_eq!(got, err, "validate {} : err = {}, want {}", name, got, err);
-                } else {
-                    assert!(false, "want error in test {}", name);
+            let err = compound_packet.validate();
+
+            assert_eq!(
+                err.clone().err(),
+                want_error,
+                "Valid({}) = {:?}, want {:?}",
+                name,
+                err.err(),
+                want_error
+            );
+
+            let name_result = compound_packet.cname();
+
+            assert_eq!(
+                name_result.clone().err(),
+                want_error,
+                "CNAME({}) = {:?}, want {:?}",
+                name,
+                name_result.err(),
+                want_error
+            );
+
+            match name_result {
+                Ok(e) => {
+                    assert_eq!(
+                        e.as_str(),
+                        text,
+                        "CNAME({}) = {}, want {}",
+                        name,
+                        e.as_str(),
+                        text,
+                    );
                 }
-            } else {
-                assert!(result.is_ok(), "must no error in test {}", name);
-                if let Ok(cname) = compound_packet.cname() {
-                    assert_eq!(cname, text, "test {} = {}, want {}", name, cname, text);
-                } else {
-                    assert!(false, "want cname in test {}", name);
-                }
+
+                Err(_) => continue,
             }
         }
     }

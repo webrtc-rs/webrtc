@@ -47,7 +47,7 @@ impl CompoundPacket {
         for pkt in &self.0[1..] {
             // If the number of RecetpionReports exceeds 31 additional ReceiverReports
             // can be included here.
-            if let Some(_) = pkt.as_any().downcast_ref::<ReceiverReport>() {
+            if pkt.as_any().downcast_ref::<ReceiverReport>().is_some() {
                 continue;
             // A SourceDescription containing a CNAME must be included in every
             // CompoundPacket.
@@ -64,13 +64,14 @@ impl CompoundPacket {
                             has_cname = true
                         }
                     }
-
-                    if !has_cname {
-                        return Err(ERR_MISSING_CNAME.clone());
-                    }
-
-                    return Ok(());
                 }
+
+                if !has_cname {
+                    return Err(ERR_MISSING_CNAME.clone());
+                }
+
+                return Ok(());
+
             // Other packets are not permitted before the CNAME
             } else {
                 return Err(ERR_PACKET_BEFORE_CNAME.clone());
@@ -101,9 +102,10 @@ impl CompoundPacket {
                         }
                     }
                 }
-            } else if let None = pkt
+            } else if pkt
                 .as_any()
                 .downcast_ref::<crate::receiver_report::ReceiverReport>()
+                .is_none()
             {
                 return Err(ERR_PACKET_BEFORE_CNAME.to_owned());
             }
@@ -122,7 +124,7 @@ impl CompoundPacket {
     pub fn unmarshal(&mut self, mut raw_data: BytesMut) -> Result<(), Error> {
         let mut out = Vec::new();
 
-        while raw_data.len() != 0 {
+        while !raw_data.is_empty() {
             let (p, processed) = crate::packet::unmarshaller(&mut raw_data)?;
             out.push(p);
 
