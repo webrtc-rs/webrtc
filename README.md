@@ -12,8 +12,8 @@
  <a href="https://deps.rs/repo/github/webrtc-rs/webrtc"> 
   <img src="https://deps.rs/repo/github/webrtc-rs/webrtc/status.svg">
  </a>
- <a href="https://webrtc.rs/docs/index.html"> 
-  <img src="https://img.shields.io/static/v1?label=docs&message=master&color=5479ab">
+ <a href="https://docs.rs/webrtc-rs"> 
+  <img src="https://docs.rs/webrtc-rs/badge.svg">
  </a>
  <a href="https://github.com/webrtc-rs/webrtc/blob/master/LICENSE">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
