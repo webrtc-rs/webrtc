@@ -1,99 +1,77 @@
-use super::*;
-use crate::errors::*;
+#[cfg(test)]
+mod test {
+    use crate::raw_packet::*;
 
-use std::io::{BufReader, BufWriter};
-
-use util::Error;
-
-#[test]
-fn test_raw_packet_roundtrip() -> Result<(), Error> {
-    let tests = vec![
-        (
-            "valid",
-            RawPacket {
-                raw: vec![
-                    // v=2, p=0, count=1, BYE, len=12
-                    0x81, 0xcb, 0x00, 0x0c, // ssrc=0x902f9e2e
-                    0x90, 0x2f, 0x9e, 0x2e, // len=3, text=FOO
-                    0x03, 0x46, 0x4f, 0x4f,
-                ],
-                header: Header {
-                    padding: false,
-                    count: 1,
-                    packet_type: PacketType::Goodbye,
-                    length: 12,
-                },
-            },
-            None,
-            None,
-        ),
-        (
-            "short header",
-            RawPacket {
-                raw: vec![0x80],
-                ..Default::default()
-            },
-            None,
-            Some(ERR_FAILED_TO_FILL_WHOLE_BUFFER.clone()),
-        ),
-        (
-            "invalid header",
-            RawPacket {
-                raw: vec![
+    #[test]
+    fn test_raw_packet_roundtrip() {
+        let tests: Vec<(&str, RawPacket, Result<(), Error>, Result<(), Error>)> = vec![
+            (
+                "valid",
+                RawPacket(vec![
+                    0x81, 0xcb, 0x00, 0x0c, // v=2, p=0, count=1, BYE, len=12
+                    0x90, 0x2f, 0x9e, 0x2e, // ssrc=0x902f9e2e
+                    0x03, 0x46, 0x4f, 0x4f, // len=3, text=FOO
+                ]),
+                Ok(()),
+                Ok(()),
+            ),
+            (
+                "short header",
+                RawPacket(vec![0x80]),
+                Ok(()),
+                Err(ERR_FAILED_TO_FILL_WHOLE_BUFFER.clone()),
+            ),
+            (
+                "invalid header",
+                RawPacket(
                     // v=0, p=0, count=0, RR, len=4
-                    0x00, 0xc9, 0x00, 0x04,
-                ],
-                ..Default::default()
-            },
-            None,
-            Some(ERR_BAD_VERSION.clone()),
-        ),
-    ];
+                    vec![0x00, 0xc9, 0x00, 0x04],
+                ),
+                Ok(()),
+                Err(ERR_BAD_VERSION.clone()),
+            ),
+        ];
 
-    for (name, pkt, marshal_error, unmarshal_error) in tests {
-        let mut data: Vec<u8> = vec![];
-        {
-            let mut writer = BufWriter::<&mut Vec<u8>>::new(data.as_mut());
-            let result = pkt.marshal(&mut writer);
-            if let Some(err) = marshal_error {
-                if let Err(got) = result {
-                    assert_eq!(
-                        got, err,
-                        "marshal {} header: err = {}, want {}",
-                        name, got, err
-                    );
-                } else {
-                    assert!(false, "want error in test {}", name);
-                }
-                continue;
-            } else {
-                assert!(result.is_ok(), "must no error in test {}", name);
-            }
-        }
+        for (name, pkt, marshal_error, unmarshal_error) in tests {
+            let data = pkt.marshal();
 
-        let mut reader = BufReader::new(data.as_slice());
-        let result = RawPacket::unmarshal(&mut reader);
-        if let Some(err) = unmarshal_error {
-            if let Err(got) = result {
-                assert_eq!(
-                    got, err,
-                    "Unmarshal {} header: err = {}, want {}",
-                    name, got, err
-                );
-            } else {
-                assert!(false, "want error in test {}", name);
-            }
-            continue;
-        } else {
-            assert!(result.is_ok(), "must no error in test {}", name);
-            let decoded = result.unwrap();
             assert_eq!(
-                decoded, pkt,
-                "{} header round trip: got {:?}, want {:?}",
-                name, decoded, pkt
-            )
+                data.is_err(),
+                marshal_error.is_err(),
+                "Marshal {}: err = {:?}, want {:?}",
+                name,
+                data,
+                marshal_error
+            );
+
+            match data {
+                Ok(mut e) => {
+                    let mut decoded = RawPacket::default();
+
+                    let result = decoded.unmarshal(&mut e);
+
+                    assert_eq!(
+                        result.is_err(),
+                        unmarshal_error.is_err(),
+                        "Unmarshal {}: err = {:?}, want {:?}",
+                        name,
+                        result,
+                        unmarshal_error
+                    );
+
+                    if result.is_err() {
+                        continue;
+                    }
+
+                    assert_eq!(
+                        decoded, pkt,
+                        "{} raw round trip: got {:?}, want {:?}",
+                        name, decoded, pkt
+                    )
+                }
+
+                Err(_) => continue,
+            }
         }
     }
-
-    Ok(())
 }

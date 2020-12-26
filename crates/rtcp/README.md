@@ -1,5 +1,5 @@
 <h1 align="center">
- <a href="https://webrtc.rs"><img src="https://github.com/webrtc-rs/webrtc/doc/webrtc.rs.png" alt="WebRTC.rs"></a>
+ <a href="https://webrtc.rs"><img src="./media/webrtc.rs.png" alt="WebRTC.rs"></a>
  <br>
 </h1>
 <p align="center">
@@ -17,5 +17,5 @@
  </a>
 </p>
 <p align="center">
- A pure Rust implementation of RTCP. Rewrite Pion RTCP (<a href="http://Pion.ly">http://Pion.ly</a>) in Rust
+ A pure Rust implementation of RTCP. Rewrite <a href="https://Pion.ly">Pion</a> RTCP in Rust
 </p>
