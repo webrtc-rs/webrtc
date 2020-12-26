@@ -12,7 +12,7 @@
  <a href="https://deps.rs/repo/github/webrtc-rs/ice"> 
   <img src="https://deps.rs/repo/github/webrtc-rs/ice/status.svg">
  </a>
-<a href="https://docs.rs/webrtc-rs-ice"> 
+ <a href="https://docs.rs/webrtc-rs-ice"> 
   <img src="https://docs.rs/webrtc-rs-ice/badge.svg">
  </a>
  <a href="https://github.com/webrtc-rs/ice/blob/master/LICENSE">
