@@ -1,5 +1,5 @@
 <h1 align="center">
- <a href="https://webrtc.rs"><img src="https://github.com/webrtc-rs/webrtc/doc/webrtc.rs.png" alt="WebRTC.rs"></a>
+ <a href="https://webrtc.rs"><img src="./doc/webrtc.rs.png" alt="WebRTC.rs"></a>
  <br>
 </h1>
 <p align="center">
@@ -12,10 +12,13 @@
  <a href="https://deps.rs/repo/github/webrtc-rs/ice"> 
   <img src="https://deps.rs/repo/github/webrtc-rs/ice/status.svg">
  </a>
+<a href="https://docs.rs/webrtc-rs-ice"> 
+  <img src="https://docs.rs/webrtc-rs-ice/badge.svg">
+ </a>
  <a href="https://github.com/webrtc-rs/ice/blob/master/LICENSE">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
  </a>
 </p>
 <p align="center">
- A pure Rust implementation of ICE. Rewrite Pion ICE (<a href="http://Pion.ly">http://Pion.ly</a>) in Rust
+ A pure Rust implementation of ICE. Rewrite <a href="http://Pion.ly">Pion</a> ICE in Rust
 </p>
