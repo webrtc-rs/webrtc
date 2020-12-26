@@ -1,5 +1,5 @@
 <h1 align="center">
- <a href="https://webrtc.rs"><img src="./media/webrtc.rs.png" alt="WebRTC.rs"></a>
+ <a href="https://webrtc.rs"><img src="./doc/webrtc.rs.png" alt="WebRTC.rs"></a>
  <br>
 </h1>
 <p align="center">
@@ -11,6 +11,9 @@
  </a>
  <a href="https://deps.rs/repo/github/webrtc-rs/rtcp"> 
   <img src="https://deps.rs/repo/github/webrtc-rs/rtcp/status.svg">
+ </a>
+ <a href="https://docs.rs/webrtc-rs-rtcp"> 
+  <img src="https://docs.rs/webrtc-rs-rtcp/badge.svg">
  </a>
  <a href="https://github.com/webrtc-rs/rtcp/blob/master/LICENSE">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
