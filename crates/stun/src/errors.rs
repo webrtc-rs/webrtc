@@ -50,4 +50,9 @@ lazy_static! {
     pub static ref ERR_COLLECTOR_CLOSED: Error = Error::new("collector is closed".to_owned());
     // ErrUnsupportedNetwork indicates that client is closed.
     pub static ref ERR_UNSUPPORTED_NETWORK: Error = Error::new("unsupported network".to_owned());
+    pub static ref ERR_INVALID_URL: Error = Error::new("invalid url".to_owned());
+    // ErrSchemeType indicates the scheme type could not be parsed.
+    pub static ref ERR_SCHEME_TYPE:Error = Error::new("unknown scheme type".to_owned());
+    // ErrHost indicates malformed hostname is provided.
+    pub static ref ERR_HOST:Error = Error::new("invalid hostname".to_owned());
 }
