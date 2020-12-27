@@ -7,3 +7,4 @@ extern crate lazy_static;
 pub mod agent;
 pub mod errors;
 pub mod url;
+pub mod use_candidate;
