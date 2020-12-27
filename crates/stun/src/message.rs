@@ -395,7 +395,7 @@ impl Message {
     // get returns byte slice that represents attribute value,
     // if there is no attribute with such type,
     // ErrAttributeNotFound is returned.
-    pub(crate) fn get(&self, t: AttrType) -> Result<Vec<u8>, Error> {
+    pub fn get(&self, t: AttrType) -> Result<Vec<u8>, Error> {
         let (v, ok) = self.attributes.get(t);
         if ok {
             Ok(v.value)
