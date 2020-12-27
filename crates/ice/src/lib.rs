@@ -6,6 +6,7 @@ extern crate lazy_static;
 
 pub mod agent;
 pub mod errors;
+pub mod network_type;
 pub mod priority;
 pub mod tcp_type;
 pub mod url;
