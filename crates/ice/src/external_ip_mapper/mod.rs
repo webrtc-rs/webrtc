@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod external_ip_mapper_test;
 
-use crate::candidate_type::*;
+use crate::candidate::candidate_type::*;
 use crate::errors::*;
 
 use util::Error;
