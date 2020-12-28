@@ -32,7 +32,7 @@ mod test {
                     // report ends early
                 ],
                 SliceLossIndication::default(),
-                Some(ERR_PACKET_TOO_SHORT.clone()),
+                Some(Error::PacketTooShort),
             ),
             (
                 "wrong type",
@@ -48,13 +48,13 @@ mod test {
                     0x0, 0x2, 0x4a, 0x79,
                 ],
                 SliceLossIndication::default(),
-                Some(ERR_WRONG_TYPE.clone()),
+                Some(Error::WrongType),
             ),
             (
                 "nil",
                 vec![],
                 SliceLossIndication::default(),
-                Some(ERR_PACKET_TOO_SHORT.clone()),
+                Some(Error::PacketTooShort),
             ),
         ];
 

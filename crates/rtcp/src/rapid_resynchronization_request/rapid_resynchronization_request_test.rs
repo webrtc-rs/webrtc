@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::rapid_resynchronization_request::*;
+    use crate::{errors::Error, rapid_resynchronization_request::*};
 
     #[test]
     fn test_rapid_resynchronization_request_unmarshal() {
@@ -26,7 +26,7 @@ mod test {
                     // report ends early
                 ],
                 RapidResynchronizationRequest::default(),
-                Err(ERR_PACKET_TOO_SHORT.clone()),
+                Err(Error::PacketTooShort),
             ),
             (
                 "wrong type",
@@ -41,13 +41,13 @@ mod test {
                     0x0, 0x2, 0x4a, 0x79, // delay=150137
                 ],
                 RapidResynchronizationRequest::default(),
-                Err(ERR_WRONG_TYPE.clone()),
+                Err(Error::WrongType),
             ),
             (
                 "nil",
                 vec![],
                 RapidResynchronizationRequest::default(),
-                Err(ERR_PACKET_TOO_SHORT.clone()),
+                Err(Error::PacketTooShort),
             ),
         ];
 

@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod test {
-    use crate::{errors::*, packet::Packet, reception_report::ReceptionReport, sender_report::*};
+    use crate::{
+        errors::Error, packet::Packet, reception_report::ReceptionReport, sender_report::*,
+    };
 
     #[test]
     fn test_sender_report_unmarshal() {
@@ -9,7 +11,7 @@ mod test {
                 "nil",
                 vec![],
                 SenderReport::default(),
-                Some(ERR_PACKET_TOO_SHORT.clone()),
+                Some(Error::PacketTooShort),
             ),
             (
                 "valid",
@@ -63,7 +65,7 @@ mod test {
                     0x0, 0x2, 0x4a, 0x79, // delay=150137
                 ],
                 SenderReport::default(),
-                Some(ERR_WRONG_TYPE.clone()),
+                Some(Error::WrongType),
             ),
             (
                 "bad count in header",
@@ -82,7 +84,7 @@ mod test {
                     0x0, 0x2, 0x4a, 0x79, // delay=150137
                 ],
                 SenderReport::default(),
-                Some(ERR_PACKET_TOO_SHORT.clone()),
+                Some(Error::PacketTooShort),
             ),
             (
                 "with extension", // issue #447
@@ -238,7 +240,7 @@ mod test {
                     reports: too_many_reports,
                     ..Default::default()
                 },
-                Some(ERR_TOO_MANY_REPORTS.clone()),
+                Some(Error::TooManyReports),
             ),
         ];
 

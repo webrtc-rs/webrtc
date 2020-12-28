@@ -1,12 +1,11 @@
 use std::fmt;
 
 use byteorder::{BigEndian, ByteOrder};
-
 use bytes::BytesMut;
 
-use util::Error;
-
-use crate::{header, header::Header, header::PacketType, packet::Packet, util::get_padding};
+use crate::{
+    errors::Error, header, header::Header, header::PacketType, packet::Packet, util::get_padding,
+};
 
 mod receiver_estimated_maximum_bitrate_test;
 
@@ -70,7 +69,7 @@ impl Packet for ReceiverEstimatedMaximumBitrate {
 
         // This will always be true but just to be safe.
         if n != buf.len() {
-            return Err(Error::new("wrong marshal size".to_string()));
+            return Err(Error::WrongMarshalSize);
         }
 
         Ok(buf)
@@ -99,13 +98,13 @@ impl Packet for ReceiverEstimatedMaximumBitrate {
 
         // 20 bytes is the size of the packet with no SSRCs
         if buf.len() < 20 {
-            return Err(Error::new("packet too short".to_string()));
+            return Err(Error::PacketTooShort);
         }
 
         // version  must be 2
         let version = buf[0] >> 6;
         if version != 2 {
-            return Err(Error::new(format!(
+            return Err(Error::Other(format!(
                 "bad version: expected(2) actual({})",
                 version
             )));
@@ -114,8 +113,8 @@ impl Packet for ReceiverEstimatedMaximumBitrate {
         // padding must be unset
         let padding = (buf[0] >> 5) & 1;
         if padding != 0 {
-            return Err(Error::new(format!(
-                "wrong padding: expected(0) actual({})",
+            return Err(Error::WrongPadding(format!(
+                "expected(0) actual({})",
                 padding
             )));
         }
@@ -123,16 +122,16 @@ impl Packet for ReceiverEstimatedMaximumBitrate {
         // fmt must be 15
         let fmt_val = buf[0] & 31;
         if fmt_val != 15 {
-            return Err(Error::new(format!(
-                "wrong feedback type: expected(15) actual({})",
+            return Err(Error::WrongFeedbackType(format!(
+                "expected(15) actual({})",
                 fmt_val
             )));
         }
 
         // Must be payload specific feedback
         if buf[1] != 206 {
-            return Err(Error::new(format!(
-                "wrong payload type: expected(206) actual({})",
+            return Err(Error::WrongPayloadType(format!(
+                "expected(206) actual({})",
                 buf[1]
             )));
         }
@@ -143,12 +142,12 @@ impl Packet for ReceiverEstimatedMaximumBitrate {
 
         // There's not way this could be legit
         if size < 20 {
-            return Err(Error::new("header too small".to_string()));
+            return Err(Error::HeaderTooSmall);
         }
 
         // Make sure the buffer is large enough.
         if buf.len() < size {
-            return Err(Error::new("packet too short".to_string()));
+            return Err(Error::PacketTooShort);
         }
 
         // The sender SSRC is 32-bits
@@ -157,12 +156,12 @@ impl Packet for ReceiverEstimatedMaximumBitrate {
         // The destination SSRC must be 0
         let media = BigEndian::read_u32(&buf[8..12]);
         if media != 0 {
-            return Err(Error::new("ssrc must be 0".to_string()));
+            return Err(Error::SSRCMustBeZero);
         }
 
         // REMB rules all around me
         if !buf[12..16].eq(&[b'R', b'E', b'M', b'B']) {
-            return Err(Error::new("missing REMB identifier".to_string()));
+            return Err(Error::MissingREMBIdentifier);
         }
 
         // The next byte is the number of SSRC entries at the end.
@@ -170,7 +169,7 @@ impl Packet for ReceiverEstimatedMaximumBitrate {
 
         // Now we know the expected size, make sure they match.
         if size != 20 + 4 * num {
-            return Err(Error::new("SSRC number and length mismatch".to_string()));
+            return Err(Error::SSRCNumAndLengthMismatch);
         }
 
         // Get the 6-bit exponent value.
@@ -246,7 +245,7 @@ impl ReceiverEstimatedMaximumBitrate {
 
         let size = self.marshal_size();
         if buf.len() < size {
-            return Err(Error::new("packet too short".to_string()));
+            return Err(Error::PacketTooShort);
         }
 
         buf[0] = 143; // v=2, p=0, fmt=15

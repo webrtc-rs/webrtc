@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::errors::*;
+    use crate::errors::Error;
     use crate::header::*;
 
     #[test]
@@ -46,7 +46,7 @@ mod test {
                     packet_type: PacketType::Unsupported,
                     length: 0,
                 },
-                Err(ERR_BAD_VERSION.clone()),
+                Err(Error::BadVersion("".to_string())),
             ),
         ];
 
@@ -106,7 +106,7 @@ mod test {
                     packet_type: PacketType::Unsupported,
                     length: 0,
                 },
-                Err(ERR_INVALID_HEADER.clone()),
+                Err(Error::InvalidHeader),
             ),
         ];
 

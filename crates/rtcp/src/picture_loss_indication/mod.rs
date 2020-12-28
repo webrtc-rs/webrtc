@@ -1,13 +1,10 @@
-use std::fmt;
-
 use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
-use util::Error;
+use std::fmt;
 
 use super::{header, receiver_report};
 use crate::util::get_padding;
-use crate::{errors, packet::Packet};
-use errors::*;
+use crate::{errors::Error, packet::Packet};
 
 mod picture_loss_indication_test;
 
@@ -36,7 +33,7 @@ impl Packet for PictureLossIndication {
     /// Unmarshal decodes the PictureLossIndication from binary
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         if raw_packet.len() < (header::HEADER_LENGTH + (receiver_report::SSRC_LENGTH * 2)) {
-            return Err(ERR_PACKET_TOO_SHORT.to_owned());
+            return Err(Error::PacketTooShort);
         }
 
         let mut h = header::Header::default();
@@ -46,7 +43,7 @@ impl Packet for PictureLossIndication {
         if h.packet_type != header::PacketType::PayloadSpecificFeedback
             || h.count != header::FORMAT_PLI
         {
-            return Err(ERR_WRONG_TYPE.to_owned());
+            return Err(Error::WrongType);
         }
 
         self.sender_ssrc = BigEndian::read_u32(&raw_packet[header::HEADER_LENGTH..]);

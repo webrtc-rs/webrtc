@@ -3,10 +3,9 @@ use std::fmt;
 use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
 use header::Header;
-use util::Error;
 
-use super::errors::*;
 use super::{header, receiver_report};
+use crate::errors::Error;
 use crate::packet::Packet;
 use crate::util::get_padding;
 
@@ -52,20 +51,20 @@ impl Packet for SliceLossIndication {
     /// Unmarshal decodes the SliceLossIndication from binary
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         if raw_packet.len() < (header::HEADER_LENGTH + receiver_report::SSRC_LENGTH) {
-            return Err(ERR_PACKET_TOO_SHORT.to_owned());
+            return Err(Error::PacketTooShort);
         }
 
         let mut h = header::Header::default();
         h.unmarshal(raw_packet)?;
 
         if raw_packet.len() < (header::HEADER_LENGTH + (4 * h.length as usize)) {
-            return Err(ERR_PACKET_TOO_SHORT.to_owned());
+            return Err(Error::PacketTooShort);
         }
 
         if h.packet_type != header::PacketType::TransportSpecificFeedback
             || h.count != header::FORMAT_SLI
         {
-            return Err(ERR_WRONG_TYPE.to_owned());
+            return Err(Error::WrongType);
         }
 
         self.sender_ssrc = BigEndian::read_u32(&raw_packet[header::HEADER_LENGTH..]);
@@ -93,7 +92,7 @@ impl Packet for SliceLossIndication {
     /// Marshal encodes the SliceLossIndication in binary
     fn marshal(&self) -> Result<BytesMut, Error> {
         if (self.sli_entries.len() + SLI_LENGTH) as u8 > std::u8::MAX {
-            return Err(ERR_TOO_MANY_REPORTS.to_owned());
+            return Err(Error::TooManyReports);
         }
 
         let mut raw_packet = BytesMut::new();

@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::transport_layer_nack::*;
+    use crate::{errors::Error, transport_layer_nack::*};
 
     #[test]
     fn test_transport_layer_nack_unmarshal() {
@@ -32,7 +32,7 @@ mod test {
                     // report ends early
                 ],
                 TransportLayerNack::default(),
-                Some(ERR_PACKET_TOO_SHORT.clone()),
+                Some(Error::PacketTooShort),
             ),
             (
                 "wrong type",
@@ -48,13 +48,13 @@ mod test {
                     0x0, 0x2, 0x4a, 0x79,
                 ],
                 TransportLayerNack::default(),
-                Some(ERR_WRONG_TYPE.clone()),
+                Some(Error::WrongType),
             ),
             (
                 "nil",
                 vec![],
                 TransportLayerNack::default(),
-                Some(ERR_PACKET_TOO_SHORT.clone()),
+                Some(Error::PacketTooShort),
             ),
         ];
 

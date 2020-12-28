@@ -1,10 +1,8 @@
-use std::fmt;
-
 use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
-use util::Error;
+use std::fmt;
 
-use crate::errors::*;
+use crate::errors::Error;
 use crate::header;
 use crate::util::get_padding;
 use crate::{packet::Packet, source_description};
@@ -61,7 +59,7 @@ impl SourceDescriptionChunk {
          */
 
         if raw_packet.len() < (super::SDES_SOURCE_LEN + super::SDES_TYPE_LEN) {
-            return Err(ERR_PACKET_TOO_SHORT.to_owned());
+            return Err(Error::PacketTooShort);
         }
 
         self.source = BigEndian::read_u32(raw_packet);
@@ -83,7 +81,7 @@ impl SourceDescriptionChunk {
             self.items.push(it);
         }
 
-        Err(ERR_PACKET_TOO_SHORT.to_owned())
+        Err(Error::PacketTooShort)
     }
 
     fn len(&self) -> usize {
@@ -135,7 +133,7 @@ impl SourceDescriptionItem {
          */
 
         if self.sdes_type == super::SDESType::SDESEnd {
-            return Err(ERR_SDESMISSING_TYPE.to_owned());
+            return Err(Error::SDESMissingType);
         }
 
         let mut raw_packet = BytesMut::new();
@@ -148,7 +146,7 @@ impl SourceDescriptionItem {
         let octet_count = text_bytes.len();
 
         if octet_count > super::SDES_MAX_OCTET_COUNT {
-            return Err(ERR_SDESTEXT_TOO_LONG.to_owned());
+            return Err(Error::SDESTextTooLong);
         }
 
         raw_packet[super::SDES_OCTET_COUNT_OFFSET] = octet_count as u8;
@@ -169,14 +167,14 @@ impl SourceDescriptionItem {
          */
 
         if raw_packet.len() < (super::SDES_TYPE_LEN + super::SDES_OCTET_COUNT_LEN) {
-            return Err(ERR_PACKET_TOO_SHORT.to_owned());
+            return Err(Error::PacketTooShort);
         }
 
         self.sdes_type = super::SDESType::from(raw_packet[super::SDES_TYPE_OFFSET]);
 
         let octet_count = raw_packet[super::SDES_OCTET_COUNT_OFFSET] as usize;
         if super::SDES_TEXT_OFFSET + octet_count as usize > raw_packet.len() {
-            return Err(ERR_PACKET_TOO_SHORT.to_owned());
+            return Err(Error::PacketTooShort);
         }
 
         let text_bytes =
@@ -186,7 +184,7 @@ impl SourceDescriptionItem {
             Ok(e) => e,
 
             Err(e) => {
-                return Err(Error::new(format!(
+                return Err(Error::Other(format!(
                     "Error converting byte to string, error:{:?}",
                     e,
                 )))
@@ -242,7 +240,7 @@ impl Packet for SourceDescription {
         h.unmarshal(raw_packet)?;
 
         if h.packet_type != header::PacketType::SourceDescription {
-            return Err(ERR_WRONG_TYPE.to_owned());
+            return Err(Error::WrongType);
         }
 
         let mut i = header::HEADER_LENGTH;
@@ -257,7 +255,7 @@ impl Packet for SourceDescription {
         }
 
         if self.chunks.len() != h.count as usize {
-            return Err(ERR_INVALID_HEADER.to_owned());
+            return Err(Error::InvalidHeader);
         }
 
         Ok(())
@@ -298,7 +296,7 @@ impl Packet for SourceDescription {
         }
 
         if self.chunks.len() > header::COUNT_MAX {
-            return Err(ERR_TOO_MANY_CHUNKS.to_owned());
+            return Err(Error::TooManyChunks);
         }
 
         let header_data = self.header().marshal()?;

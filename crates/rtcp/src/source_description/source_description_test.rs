@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::{errors::*, packet::Packet, source_description::*};
+    use crate::{errors::Error, packet::Packet, source_description::*};
 
     #[test]
     fn test_source_description_unmarshal() {
@@ -9,7 +9,7 @@ mod test {
                 "nil",
                 vec![],
                 SourceDescription::default(),
-                Some(ERR_PACKET_TOO_SHORT.clone()),
+                Some(Error::PacketTooShort),
             ),
             (
                 "no chunks",
@@ -28,7 +28,7 @@ mod test {
                     0x00, 0x00, 0x00, 0x00,
                 ],
                 SourceDescription::default(),
-                Some(ERR_PACKET_TOO_SHORT.clone()),
+                Some(Error::PacketTooShort),
             ),
             (
                 "bad cname length",
@@ -39,7 +39,7 @@ mod test {
                     0x01, 0x01,
                 ],
                 SourceDescription::default(),
-                Some(ERR_PACKET_TOO_SHORT.clone()),
+                Some(Error::PacketTooShort),
             ),
             (
                 "short cname",
@@ -50,7 +50,7 @@ mod test {
                     0x01,
                 ],
                 SourceDescription::default(),
-                Some(ERR_PACKET_TOO_SHORT.clone()),
+                Some(Error::PacketTooShort),
             ),
             (
                 "no end",
@@ -62,7 +62,7 @@ mod test {
                     // Missing END
                 ],
                 SourceDescription::default(),
-                Some(ERR_PACKET_TOO_SHORT.clone()),
+                Some(Error::PacketTooShort),
             ),
             (
                 "bad octet count",
@@ -73,7 +73,7 @@ mod test {
                     0x01, 0x01,
                 ],
                 SourceDescription::default(),
-                Some(ERR_PACKET_TOO_SHORT.clone()),
+                Some(Error::PacketTooShort),
             ),
             (
                 "zero item chunk",
@@ -100,7 +100,7 @@ mod test {
                     0x00, 0x00, 0x00, 0x00,
                 ],
                 SourceDescription::default(),
-                Some(ERR_WRONG_TYPE.clone()),
+                Some(Error::WrongType),
             ),
             (
                 "bad count in header",
@@ -109,7 +109,7 @@ mod test {
                     0x81, 0xca, 0x00, 0x0c,
                 ],
                 SourceDescription::default(),
-                Some(ERR_INVALID_HEADER.clone()),
+                Some(Error::InvalidHeader),
             ),
             (
                 "empty string",
@@ -275,7 +275,7 @@ mod test {
                         }],
                     }],
                 },
-                Some(ERR_SDESMISSING_TYPE.clone()),
+                Some(Error::SDESMissingType),
             ),
             (
                 "zero items",
@@ -324,14 +324,14 @@ mod test {
                         }],
                     }],
                 },
-                Some(ERR_SDESTEXT_TOO_LONG.clone()),
+                Some(Error::SDESTextTooLong),
             ),
             (
                 "count overflow",
                 SourceDescription {
                     chunks: too_many_chunks,
                 },
-                Some(ERR_TOO_MANY_CHUNKS.clone()),
+                Some(Error::TooManyChunks),
             ),
         ];
 

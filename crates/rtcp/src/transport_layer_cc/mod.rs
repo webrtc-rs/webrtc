@@ -1,45 +1,37 @@
-//! https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-5
-//! 0                   1                   2                   3
-//! 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-//! +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-//! |V=2|P|  FMT=15 |    PT=205     |           length              |
-//! +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-//! |                     SSRC of packet sender                     |
-//! +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-//! |                      SSRC of media source                     |
-//! +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-//! |      base sequence number     |      packet status count      |
-//! +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-//! |                 reference time                | fb pkt. count |
-//! +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-//! |          packet chunk         |         packet chunk          |
-//! +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-//! .                                                               .
-//! .                                                               .
-//! +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-//! |         packet chunk          |  recv delta   |  recv delta   |
-//! +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-//! .                                                               .
-//! .                                                               .
-//! +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-//! |           recv delta          |  recv delta   | zero padding  |
-//! +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-
 mod transport_layer_cc_test;
 
+use byteorder::{BigEndian, ByteOrder};
+use bytes::BytesMut;
 use std::fmt;
 
-use byteorder::{BigEndian, ByteOrder};
+use crate::{errors::Error, header, packet::Packet, receiver_report, util};
 
-use bytes::BytesMut;
-use util::Error;
-use utility::get_nbits_from_byte;
-
-use crate::{packet::Packet, receiver_report};
-
-use super::header;
-use super::util as utility;
-use crate::errors::*;
+/// https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-5
+/// 0                   1                   2                   3
+/// 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |V=2|P|  FMT=15 |    PT=205     |           length              |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |                     SSRC of packet sender                     |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |                      SSRC of media source                     |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |      base sequence number     |      packet status count      |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |                 reference time                | fb pkt. count |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |          packet chunk         |         packet chunk          |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// .                                                               .
+/// .                                                               .
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |         packet chunk          |  recv delta   |  recv delta   |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// .                                                               .
+/// .                                                               .
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |           recv delta          |  recv delta   | zero padding  |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
 // for packet status chunk
 /// type of packet status chunk
@@ -159,13 +151,13 @@ impl PacketStatusChunk for RunLengthChunk {
         let mut chunks = vec![0u8; 2];
 
         // append 1 bit '0'
-        let mut dst = utility::set_nbits_of_uint16(0, 1, 0, 0)?;
+        let mut dst = util::set_nbits_of_uint16(0, 1, 0, 0)?;
 
         // append 2 bit packet_status_symbol
-        dst = utility::set_nbits_of_uint16(dst, 2, 1, self.packet_status_symbol.clone() as u16)?;
+        dst = util::set_nbits_of_uint16(dst, 2, 1, self.packet_status_symbol.clone() as u16)?;
 
         // append 13 bit run_length
-        dst = utility::set_nbits_of_uint16(dst, 13, 3, self.run_length)?;
+        dst = util::set_nbits_of_uint16(dst, 13, 3, self.run_length)?;
 
         BigEndian::write_u16(&mut chunks, dst);
 
@@ -175,9 +167,7 @@ impl PacketStatusChunk for RunLengthChunk {
     /// Unmarshal ..
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         if raw_packet.len() != PACKET_STATUS_CHUNK_LENGTH as usize {
-            return Err(Error::new(
-                "packet status chunk must be 2 bytes".to_string(),
-            ));
+            return Err(Error::PacketStatusChunkLength);
         }
 
         // record type
@@ -185,13 +175,11 @@ impl PacketStatusChunk for RunLengthChunk {
 
         // get PacketStatusSymbol
         // r.PacketStatusSymbol = uint16(rawPacket[0] >> 5 & 0x03)
-        self.packet_status_symbol =
-            (utility::get_nbits_from_byte(raw_packet[0], 1, 2) as u16).into();
+        self.packet_status_symbol = (util::get_nbits_from_byte(raw_packet[0], 1, 2) as u16).into();
 
         // get RunLength
         // r.RunLength = uint16(rawPacket[0]&0x1F)*256 + uint16(rawPacket[1])
-        self.run_length = ((utility::get_nbits_from_byte(raw_packet[0], 3, 5) as usize) << 8)
-            as u16
+        self.run_length = ((util::get_nbits_from_byte(raw_packet[0], 3, 5) as usize) << 8) as u16
             + (raw_packet[1] as u16);
 
         Ok(())
@@ -236,16 +224,16 @@ impl PacketStatusChunk for StatusVectorChunk {
         let mut chunk = vec![0u8; 2];
 
         // set first bit '1'
-        let mut dst = utility::set_nbits_of_uint16(0, 1, 0, 1)?;
+        let mut dst = util::set_nbits_of_uint16(0, 1, 0, 1)?;
 
         // set second bit symbol_size
-        dst = utility::set_nbits_of_uint16(dst, 1, 1, self.symbol_size.clone() as u16)?;
+        dst = util::set_nbits_of_uint16(dst, 1, 1, self.symbol_size.clone() as u16)?;
 
         let num_of_bits = NUM_OF_BITS_OF_SYMBOL_SIZE[self.symbol_size.clone() as usize];
         // append 14 bit symbol_list
         for (i, s) in self.symbol_list.iter().enumerate() {
             let index = num_of_bits * (i as u16) + 2;
-            dst = utility::set_nbits_of_uint16(dst, num_of_bits, index, s.clone() as u16)?;
+            dst = util::set_nbits_of_uint16(dst, num_of_bits, index, s.clone() as u16)?;
         }
 
         BigEndian::write_u16(&mut chunk, dst);
@@ -258,22 +246,22 @@ impl PacketStatusChunk for StatusVectorChunk {
     // Unmarshal ..
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         if raw_packet.len() != PACKET_STATUS_CHUNK_LENGTH {
-            return Err(ERR_PACKET_BEFORE_CNAME.to_owned());
+            return Err(Error::PacketBeforeCNAME);
         }
 
         self.type_tcc = StatusChunkTypeTCC::StatusVectorChunk;
-        self.symbol_size = get_nbits_from_byte(raw_packet[0], 1, 1).into();
+        self.symbol_size = util::get_nbits_from_byte(raw_packet[0], 1, 1).into();
 
         match self.symbol_size {
             SymbolSizeTypeTCC::OneBit => {
                 for i in 0..6u16 {
                     self.symbol_list
-                        .push(get_nbits_from_byte(raw_packet[0], 2 + i, 1).into());
+                        .push(util::get_nbits_from_byte(raw_packet[0], 2 + i, 1).into());
                 }
 
                 for i in 0..8u16 {
                     self.symbol_list
-                        .push(get_nbits_from_byte(raw_packet[1], i, 1).into())
+                        .push(util::get_nbits_from_byte(raw_packet[1], i, 1).into())
                 }
 
                 Ok(())
@@ -282,12 +270,12 @@ impl PacketStatusChunk for StatusVectorChunk {
             SymbolSizeTypeTCC::TwoBit => {
                 for i in 0..3u16 {
                     self.symbol_list
-                        .push(get_nbits_from_byte(raw_packet[0], 2 + i * 2, 2).into());
+                        .push(util::get_nbits_from_byte(raw_packet[0], 2 + i * 2, 2).into());
                 }
 
                 for i in 0..4u16 {
                     self.symbol_list
-                        .push(get_nbits_from_byte(raw_packet[1], i * 2, 2).into());
+                        .push(util::get_nbits_from_byte(raw_packet[1], i * 2, 2).into());
                 }
 
                 Ok(())
@@ -344,7 +332,7 @@ impl RecvDelta {
         }
 
         // overflow
-        Err(ERR_DELTA_EXCEED_LIMIT.to_owned())
+        Err(Error::DeltaExceedLimit)
     }
 
     /// Unmarshal ..
@@ -353,7 +341,7 @@ impl RecvDelta {
 
         // must be 1 or 2 bytes
         if chunk_len != 1 && chunk_len != 2 {
-            return Err(ERR_DELTA_EXCEED_LIMIT.to_owned());
+            return Err(Error::DeltaExceedLimit);
         }
 
         if chunk_len == 1 {
@@ -442,7 +430,7 @@ impl Packet for TransportLayerCC {
     /// Unmarshal ..
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         if raw_packet.len() < (header::HEADER_LENGTH + receiver_report::SSRC_LENGTH) {
-            return Err(ERR_PACKET_TOO_SHORT.to_owned());
+            return Err(Error::PacketTooShort);
         }
 
         if let Err(e) = self.header.unmarshal(raw_packet) {
@@ -453,17 +441,17 @@ impl Packet for TransportLayerCC {
         let total_length = 4 * (self.header.length + 1);
 
         if total_length as usize <= header::HEADER_LENGTH + PACKET_CHUNK_OFFSET {
-            return Err(ERR_PACKET_TOO_SHORT.to_owned());
+            return Err(Error::PacketTooShort);
         }
 
         if raw_packet.len() < total_length as usize {
-            return Err(ERR_PACKET_TOO_SHORT.to_owned());
+            return Err(Error::PacketTooShort);
         }
 
         if self.header.packet_type != header::PacketType::TransportSpecificFeedback
             || self.header.count != header::FORMAT_TCC
         {
-            return Err(ERR_WRONG_TYPE.to_owned());
+            return Err(Error::WrongType);
         }
 
         self.sender_ssrc = BigEndian::read_u32(&raw_packet[header::HEADER_LENGTH..]);
@@ -476,7 +464,7 @@ impl Packet for TransportLayerCC {
         self.packet_status_count =
             BigEndian::read_u16(&raw_packet[header::HEADER_LENGTH + PACKET_STATUS_COUNT_OFFSET..]);
 
-        self.reference_time = utility::get_24bits_from_bytes(
+        self.reference_time = util::get_24bits_from_bytes(
             &raw_packet[header::HEADER_LENGTH + REFERENCE_TIME_OFFSET
                 ..header::HEADER_LENGTH + REFERENCE_TIME_OFFSET + 3],
         );
@@ -489,10 +477,10 @@ impl Packet for TransportLayerCC {
 
         while processed_packet_num < self.packet_status_count {
             if packet_status_pos + PACKET_STATUS_CHUNK_LENGTH >= total_length as usize {
-                return Err(ERR_PACKET_TOO_SHORT.to_owned());
+                return Err(Error::PacketTooShort);
             }
 
-            let typ = utility::get_nbits_from_byte(
+            let typ = util::get_nbits_from_byte(
                 (raw_packet[packet_status_pos..packet_status_pos + 1])[0],
                 0,
                 1,
@@ -584,7 +572,7 @@ impl Packet for TransportLayerCC {
 
         for delta in &mut self.recv_deltas {
             if recv_deltas_pos >= total_length as usize {
-                return Err(ERR_PACKET_TOO_SHORT.to_owned());
+                return Err(Error::PacketTooShort);
             }
 
             if delta.type_tcc_packet == SymbolTypeTCC::PacketReceivedSmallDelta {
@@ -621,8 +609,8 @@ impl Packet for TransportLayerCC {
         );
 
         let reference_time_and_fb_pkt_count =
-            utility::append_nbits_to_uint32(0, 24, self.reference_time);
-        let reference_time_and_fb_pkt_count = utility::append_nbits_to_uint32(
+            util::append_nbits_to_uint32(0, 24, self.reference_time);
+        let reference_time_and_fb_pkt_count = util::append_nbits_to_uint32(
             reference_time_and_fb_pkt_count,
             8,
             self.fb_pkt_count as u32,
@@ -708,6 +696,6 @@ impl TransportLayerCC {
 
     fn len(&self) -> usize {
         let n = self.packet_len();
-        n + utility::get_padding(n)
+        n + util::get_padding(n)
     }
 }

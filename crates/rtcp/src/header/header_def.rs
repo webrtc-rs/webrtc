@@ -1,11 +1,7 @@
-use util::Error;
-
 use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
 
-use errors::*;
-
-use crate::errors;
+use crate::errors::Error;
 
 use super::PacketType;
 
@@ -46,7 +42,7 @@ impl Header {
         }
 
         if self.count > 31 {
-            return Err(ERR_INVALID_HEADER.to_owned());
+            return Err(Error::InvalidHeader);
         }
 
         raw_packet[0] |= self.count << super::COUNT_SHIFT;
@@ -69,13 +65,13 @@ impl Header {
          */
 
         if raw_packet.len() < super::HEADER_LENGTH {
-            return Err(ERR_PACKET_TOO_SHORT.to_owned());
+            return Err(Error::PacketTooShort);
         }
 
         let version = raw_packet[0] >> super::VERSION_SHIFT & super::VERSION_MASK;
 
         if version != super::RTP_VERSION {
-            return Err(ERR_BAD_VERSION.to_owned());
+            return Err(Error::BadVersion("".to_string()));
         }
 
         self.padding = (raw_packet[0] >> super::PADDING_SHIFT & super::PADDING_MASK) > 0;

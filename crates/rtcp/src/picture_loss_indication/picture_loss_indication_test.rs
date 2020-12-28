@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod test {
+    use crate::errors::Error;
     use crate::header::Header;
     use crate::picture_loss_indication::*;
 
@@ -23,7 +24,7 @@ mod test {
                 "packet too short",
                 vec![0x81, 0xce, 0x00, 0x00],
                 PictureLossIndication::default(),
-                Err(ERR_PACKET_TOO_SHORT.clone()),
+                Err(Error::PacketTooShort),
             ),
             (
                 "invalid header",
@@ -31,7 +32,7 @@ mod test {
                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 ],
                 PictureLossIndication::default(),
-                Err(ERR_BAD_VERSION.clone()),
+                Err(Error::BadVersion("".to_string())),
             ),
             (
                 "wrong type",
@@ -41,7 +42,7 @@ mod test {
                     0x4b, 0xc4, 0xfc, 0xb4, // ssrc=0x4bc4fcb4
                 ],
                 PictureLossIndication::default(),
-                Err(ERR_WRONG_TYPE.clone()),
+                Err(Error::WrongType),
             ),
             (
                 "wrong fmt",
@@ -51,7 +52,7 @@ mod test {
                     0x4b, 0xc4, 0xfc, 0xb4, // ssrc=0x4bc4fcb4
                 ],
                 PictureLossIndication::default(),
-                Err(ERR_WRONG_TYPE.clone()),
+                Err(Error::WrongType),
             ),
         ];
 

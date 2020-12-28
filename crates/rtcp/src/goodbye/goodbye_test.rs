@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::goodbye::*;
+    use crate::{errors::Error, goodbye::*};
 
     #[test]
     fn test_goodbye_unmarshal() {
@@ -29,7 +29,7 @@ mod test {
                     sources: vec![],
                     reason: "".to_string(),
                 },
-                Err(ERR_PACKET_TOO_SHORT.clone()),
+                Err(Error::PacketTooShort),
             ),
             (
                 "wrong type",
@@ -42,7 +42,7 @@ mod test {
                     sources: vec![],
                     reason: "".to_string(),
                 },
-                Err(ERR_WRONG_TYPE.clone()),
+                Err(Error::WrongType),
             ),
             (
                 "short reason",
@@ -68,7 +68,7 @@ mod test {
                     sources: vec![],
                     reason: "".to_string(),
                 },
-                Err(ERR_PACKET_TOO_SHORT.clone()),
+                Err(Error::PacketTooShort),
             ),
             (
                 "bad count in header",
@@ -80,7 +80,7 @@ mod test {
                     sources: vec![],
                     reason: "".to_string(),
                 },
-                Err(ERR_PACKET_TOO_SHORT.clone()),
+                Err(Error::PacketTooShort),
             ),
             (
                 "empty packet",
@@ -101,7 +101,7 @@ mod test {
                     sources: vec![],
                     reason: "".to_string(),
                 },
-                Err(ERR_PACKET_TOO_SHORT.clone()),
+                Err(Error::PacketTooShort),
             ),
         ];
 
@@ -186,7 +186,7 @@ mod test {
                     sources: too_many_sources.clone(),
                     reason: "".to_owned(),
                 },
-                Err(ERR_TOO_MANY_SOURCES.to_owned()),
+                Err(Error::TooManySources),
             ),
             (
                 "reason too long",
@@ -194,7 +194,7 @@ mod test {
                     sources: vec![],
                     reason: too_long_text,
                 },
-                Err(ERR_REASON_TOO_LONG.to_owned()),
+                Err(Error::ReasonTooLong),
             ),
         ];
 

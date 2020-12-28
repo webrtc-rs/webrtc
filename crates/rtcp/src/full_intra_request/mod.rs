@@ -1,15 +1,10 @@
-#[cfg(test)]
 mod full_intra_request_test;
 
-use crate::errors::*;
+use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
 use std::fmt;
-use util::Error;
 
-use byteorder::{BigEndian, ByteOrder};
-
-use super::{header, header::Header};
-use crate::{packet::Packet, util::get_padding};
+use crate::{errors::Error, header, header::Header, packet::Packet, util::get_padding};
 
 /// A FIREntry is a (ssrc, seqno) pair, as carried by FullIntraRequest.
 #[derive(Debug, PartialEq, Default, Clone)]
@@ -67,7 +62,7 @@ impl Packet for FullIntraRequest {
     /// Unmarshal decodes the TransportLayerNack
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         if raw_packet.len() < (header::HEADER_LENGTH + header::SSRC_LENGTH) {
-            return Err(ERR_PACKET_TOO_SHORT.to_owned());
+            return Err(Error::PacketTooShort);
         }
 
         let mut header = Header::default();
@@ -75,13 +70,13 @@ impl Packet for FullIntraRequest {
         header.unmarshal(raw_packet)?;
 
         if raw_packet.len() < (header::HEADER_LENGTH + (4 * header.length) as usize) {
-            return Err(ERR_PACKET_TOO_SHORT.to_owned());
+            return Err(Error::PacketTooShort);
         }
 
         if header.packet_type != header::PacketType::PayloadSpecificFeedback
             || header.count != header::FORMAT_FIR
         {
-            return Err(ERR_WRONG_TYPE.to_owned());
+            return Err(Error::WrongType);
         }
 
         self.sender_ssrc = BigEndian::read_u32(&raw_packet[header::HEADER_LENGTH..]);
