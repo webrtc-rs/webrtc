@@ -1,6 +1,6 @@
 mod util_test;
 
-use util::Error;
+use crate::errors::Error;
 
 // getPadding Returns the padding required to make the length a multiple of 4
 pub(crate) fn get_padding(len: usize) -> usize {
@@ -19,7 +19,7 @@ pub(crate) fn set_nbits_of_uint16(
     mut val: u16,
 ) -> Result<u16, Error> {
     if start_index + size > 16 {
-        return Err(Error::new("invalid size or start_index".to_owned()));
+        return Err(Error::InvalidSizeOrStartIndex);
     }
 
     // truncate val to size bits

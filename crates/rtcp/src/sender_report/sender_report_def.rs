@@ -1,13 +1,10 @@
 use byteorder::{BigEndian, ByteOrder};
-use std::fmt;
-
-use crate::errors::*;
 use bytes::BytesMut;
 use header::{Header, PacketType};
-use util::Error;
+use std::fmt;
 
+use crate::{errors::Error, packet::Packet, reception_report::ReceptionReport};
 use crate::{header, util::get_padding};
-use crate::{packet::Packet, reception_report::ReceptionReport};
 
 // A SenderReport (SR) packet provides reception quality feedback for an RTP stream
 #[derive(Debug, PartialEq, Default, Clone)]
@@ -87,7 +84,7 @@ impl Packet for SenderReport {
          */
 
         if raw_packet.len() < (header::HEADER_LENGTH + super::SR_HEADER_LENGTH) {
-            return Err(ERR_PACKET_TOO_SHORT.to_owned());
+            return Err(Error::PacketTooShort);
         }
 
         let mut header = Header::default();
@@ -95,7 +92,7 @@ impl Packet for SenderReport {
         header.unmarshal(&mut raw_packet)?;
 
         if header.packet_type != PacketType::SenderReport {
-            return Err(ERR_WRONG_TYPE.to_owned());
+            return Err(Error::WrongType);
         }
 
         let packet_body = &raw_packet[header::HEADER_LENGTH..];
@@ -112,7 +109,7 @@ impl Packet for SenderReport {
             let rr_end = offset + crate::reception_report::RECEPTION_REPORT_LENGTH;
 
             if rr_end > packet_body.len() {
-                return Err(ERR_PACKET_TOO_SHORT.to_owned());
+                return Err(Error::PacketTooShort);
             }
 
             let mut rr_body = packet_body
@@ -132,7 +129,7 @@ impl Packet for SenderReport {
         }
 
         if self.reports.len() as u8 != header.count {
-            return Err(ERR_INVALID_HEADER.to_owned());
+            return Err(Error::InvalidHeader);
         }
 
         Ok(())
@@ -204,7 +201,7 @@ impl Packet for SenderReport {
         }
 
         if self.reports.len() > header::COUNT_MAX {
-            return Err(ERR_TOO_MANY_REPORTS.to_owned());
+            return Err(Error::TooManyReports);
         }
 
         packet_body[offset..offset + self.profile_extensions.len()]

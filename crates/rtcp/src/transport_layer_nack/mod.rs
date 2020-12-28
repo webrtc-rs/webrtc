@@ -1,10 +1,8 @@
-use std::fmt;
-
 use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
-use util::Error;
+use std::fmt;
 
-use super::errors::*;
+use super::errors::Error;
 use super::header;
 use crate::{packet::Packet, receiver_report, util as utility};
 
@@ -76,7 +74,7 @@ impl Packet for TransportLayerNack {
     /// Marshal encodes the packet in binary.
     fn marshal(&self) -> Result<BytesMut, Error> {
         if self.nacks.len() + TLN_LENGTH > std::u8::MAX as usize {
-            return Err(ERR_TOO_MANY_REPORTS.to_owned());
+            return Err(Error::TooManyReports);
         }
 
         let mut raw_packet = BytesMut::new();
@@ -108,7 +106,7 @@ impl Packet for TransportLayerNack {
     /// Unmarshal decodes the ReceptionReport from binary
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         if raw_packet.len() < (header::HEADER_LENGTH + receiver_report::SSRC_LENGTH) {
-            return Err(ERR_PACKET_TOO_SHORT.to_owned());
+            return Err(Error::PacketTooShort);
         }
 
         let mut h = header::Header::default();
@@ -116,13 +114,13 @@ impl Packet for TransportLayerNack {
         h.unmarshal(raw_packet)?;
 
         if raw_packet.len() < (header::HEADER_LENGTH + (4 * h.length) as usize) {
-            return Err(ERR_PACKET_TOO_SHORT.to_owned());
+            return Err(Error::PacketTooShort);
         }
 
         if h.packet_type != header::PacketType::TransportSpecificFeedback
             || h.count != header::FORMAT_TLN
         {
-            return Err(ERR_WRONG_TYPE.to_owned());
+            return Err(Error::WrongType);
         }
 
         self.sender_ssrc = BigEndian::read_u32(&raw_packet[header::HEADER_LENGTH..]);

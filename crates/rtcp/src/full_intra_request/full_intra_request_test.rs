@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::{errors::*, full_intra_request::*};
-    use util::Error;
+    use crate::{errors::Error, full_intra_request::*};
 
     #[test]
     fn test_full_intra_request_unmarshal() {
@@ -56,7 +55,7 @@ mod test {
                 "packet too short",
                 vec![0x00, 0x00, 0x00, 0x00],
                 FullIntraRequest::default(),
-                Err(ERR_PACKET_TOO_SHORT.clone()),
+                Err(Error::PacketTooShort),
             ),
             (
                 "invalid header",
@@ -65,7 +64,7 @@ mod test {
                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 ],
                 FullIntraRequest::default(),
-                Err(ERR_BAD_VERSION.clone()),
+                Err(Error::BadVersion("".to_string())),
             ),
             (
                 "wrong type",
@@ -77,7 +76,7 @@ mod test {
                     0x42, 0x00, 0x00, 0x00, // Seqno=0x42
                 ],
                 FullIntraRequest::default(),
-                Err(ERR_WRONG_TYPE.clone()),
+                Err(Error::WrongType),
             ),
             (
                 "wrong fmt",
@@ -89,7 +88,7 @@ mod test {
                     0x42, 0x00, 0x00, 0x00, // Seqno=0x42
                 ],
                 FullIntraRequest::default(),
-                Err(ERR_WRONG_TYPE.clone()),
+                Err(Error::WrongType),
             ),
         ];
 

@@ -1,10 +1,10 @@
-use super::errors::*;
-use super::{header, receiver_report};
-use crate::{packet::Packet, util::get_padding};
 use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
 use std::fmt;
-use util::Error;
+
+use super::errors::Error;
+use super::{header, receiver_report};
+use crate::{packet::Packet, util::get_padding};
 
 mod rapid_resynchronization_request_test;
 
@@ -35,7 +35,7 @@ impl Packet for RapidResynchronizationRequest {
     /// Unmarshal decodes the RapidResynchronizationRequest from binary
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         if raw_packet.len() < (header::HEADER_LENGTH + (receiver_report::SSRC_LENGTH * 2)) {
-            return Err(ERR_PACKET_TOO_SHORT.to_owned());
+            return Err(Error::PacketTooShort);
         }
 
         let mut h = header::Header::default();
@@ -45,7 +45,7 @@ impl Packet for RapidResynchronizationRequest {
         if h.packet_type != header::PacketType::TransportSpecificFeedback
             || h.count != header::FORMAT_RRR
         {
-            return Err(ERR_WRONG_TYPE.to_owned());
+            return Err(Error::WrongType);
         }
 
         self.sender_ssrc = BigEndian::read_u32(&raw_packet[header::HEADER_LENGTH..]);

@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::raw_packet::*;
+    use crate::{errors::Error, raw_packet::*};
 
     #[test]
     fn test_raw_packet_roundtrip() {
@@ -19,7 +19,7 @@ mod test {
                 "short header",
                 RawPacket(vec![0x80]),
                 Ok(()),
-                Err(ERR_FAILED_TO_FILL_WHOLE_BUFFER.clone()),
+                Err(Error::PacketTooShort),
             ),
             (
                 "invalid header",
@@ -28,7 +28,7 @@ mod test {
                     vec![0x00, 0xc9, 0x00, 0x04],
                 ),
                 Ok(()),
-                Err(ERR_BAD_VERSION.clone()),
+                Err(Error::BadVersion("".to_string())),
             ),
         ];
 

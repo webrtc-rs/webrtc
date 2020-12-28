@@ -1,11 +1,7 @@
-use bytes::BytesMut;
-use util::Error;
-
-use super::errors::*;
 use super::packet::Packet;
 use super::source_description::SDESType;
-use crate::receiver_report::ReceiverReport;
-use crate::sender_report::SenderReport;
+use crate::{errors::Error, receiver_report::ReceiverReport, sender_report::SenderReport};
+use bytes::BytesMut;
 
 mod compound_packet_test;
 
@@ -28,7 +24,7 @@ impl CompoundPacket {
     /// Validate returns an error if this is not an RFC-compliant CompoundPacket.
     pub fn validate(&self) -> Result<(), Error> {
         if self.0.is_empty() {
-            return Err(ERR_EMPTY_COMPOUND.clone());
+            return Err(Error::EmptyCompound);
         }
 
         // ToDo: Any way to match types cleanly???? @metaclips
@@ -41,7 +37,7 @@ impl CompoundPacket {
                 .downcast_ref::<ReceiverReport>()
                 .is_none()
         {
-            return Err(ERR_BAD_FIRST_PACKET.clone());
+            return Err(Error::BadFirstPacket);
         }
 
         for pkt in &self.0[1..] {
@@ -67,25 +63,25 @@ impl CompoundPacket {
                 }
 
                 if !has_cname {
-                    return Err(ERR_MISSING_CNAME.clone());
+                    return Err(Error::MissingCNAME);
                 }
 
                 return Ok(());
 
             // Other packets are not permitted before the CNAME
             } else {
-                return Err(ERR_PACKET_BEFORE_CNAME.clone());
+                return Err(Error::PacketBeforeCNAME);
             }
         }
 
         // CNAME never reached
-        Err(ERR_MISSING_CNAME.clone())
+        Err(Error::MissingCNAME)
     }
 
     /// CNAME returns the CNAME that *must* be present in every CompoundPacket
     pub fn cname(&self) -> Result<String, Error> {
         if self.0.is_empty() {
-            return Err(ERR_EMPTY_COMPOUND.clone());
+            return Err(Error::EmptyCompound);
         }
 
         for pkt in &self.0[1..] {
@@ -107,11 +103,11 @@ impl CompoundPacket {
                 .downcast_ref::<crate::receiver_report::ReceiverReport>()
                 .is_none()
             {
-                return Err(ERR_PACKET_BEFORE_CNAME.to_owned());
+                return Err(Error::PacketBeforeCNAME);
             }
         }
 
-        Err(ERR_MISSING_CNAME.clone())
+        Err(Error::MissingCNAME)
     }
 
     /// Marshal encodes the CompoundPacket as binary.

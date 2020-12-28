@@ -1,13 +1,14 @@
+use byteorder::{BigEndian, ByteOrder};
+use bytes::BytesMut;
 use std::fmt;
 
-use bytes::BytesMut;
-use util::Error;
-
-use byteorder::{BigEndian, ByteOrder};
-
-use super::errors::*;
-use super::header::{Header, PacketType};
-use crate::{header, packet::Packet, util::get_padding};
+use crate::{
+    errors::Error,
+    header,
+    header::{Header, PacketType},
+    packet::Packet,
+    util::get_padding,
+};
 
 mod goodbye_test;
 
@@ -50,14 +51,14 @@ impl Packet for Goodbye {
          */
 
         if self.sources.len() > header::COUNT_MAX {
-            return Err(ERR_TOO_MANY_SOURCES.clone());
+            return Err(Error::TooManySources);
         }
 
         let mut raw_packet = vec![0u8; self.len()];
         let packet_body = &mut raw_packet[header::HEADER_LENGTH..];
 
         if self.sources.len() > header::COUNT_MAX {
-            return Err(ERR_TOO_MANY_SOURCES.to_owned());
+            return Err(Error::TooManySources);
         }
 
         for i in 0..self.sources.len() {
@@ -68,7 +69,7 @@ impl Packet for Goodbye {
             let reason = self.reason.as_bytes();
 
             if reason.len() > header::SDES_MAX_OCTET_COUNT {
-                return Err(ERR_REASON_TOO_LONG.to_owned());
+                return Err(Error::ReasonTooLong);
             }
 
             let reason_offset = self.sources.len() * header::SSRC_LENGTH;
@@ -106,11 +107,11 @@ impl Packet for Goodbye {
         header.unmarshal(raw_packet)?;
 
         if header.packet_type != PacketType::Goodbye {
-            return Err(ERR_WRONG_TYPE.clone());
+            return Err(Error::WrongType);
         }
 
         if get_padding(raw_packet.len()) != 0 {
-            return Err(ERR_PACKET_TOO_SHORT.to_owned());
+            return Err(Error::PacketTooShort);
         }
 
         self.sources = vec![0u32; header.count as usize];
@@ -119,7 +120,7 @@ impl Packet for Goodbye {
             (header::HEADER_LENGTH + header.count as usize * header::SSRC_LENGTH) as usize;
 
         if reason_offset > raw_packet.len() {
-            return Err(ERR_PACKET_TOO_SHORT.to_owned());
+            return Err(Error::PacketTooShort);
         }
 
         for i in 0..header.count as usize {
@@ -133,7 +134,7 @@ impl Packet for Goodbye {
             let reason_end = reason_offset + 1 + reason_len;
 
             if reason_end > raw_packet.len() {
-                return Err(ERR_PACKET_TOO_SHORT.to_owned());
+                return Err(Error::PacketTooShort);
             }
 
             self.reason =
@@ -142,7 +143,7 @@ impl Packet for Goodbye {
 
                     // ToDo: @metaclips: add proper error handling also returning the utf8error.
                     Err(_) => {
-                        return Err(Error::new("error converting byte to string".to_string()));
+                        return Err(Error::Other("error converting byte to string".to_string()));
                     }
                 };
         }

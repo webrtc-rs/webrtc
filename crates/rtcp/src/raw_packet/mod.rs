@@ -1,13 +1,9 @@
 use std::fmt;
 
-use errors::*;
-use header::Header;
-use util::Error;
-
-use crate::{errors, packet::Packet};
 use bytes::BytesMut;
+use header::Header;
 
-use super::header;
+use crate::{errors::Error, header, packet::Packet};
 
 mod raw_packet_test;
 
@@ -35,7 +31,7 @@ impl Packet for RawPacket {
     /// Unmarshal decodes the packet from binary.
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         if raw_packet.len() < header::HEADER_LENGTH {
-            return Err(ERR_PACKET_TOO_SHORT.to_owned());
+            return Err(Error::PacketTooShort);
         }
 
         *self = Self(raw_packet.to_vec());

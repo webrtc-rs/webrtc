@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod test {
     use crate::{
-        goodbye, packet::*, picture_loss_indication, rapid_resynchronization_request,
-        reception_report, source_description,
+        errors::Error, goodbye, packet::*, picture_loss_indication,
+        rapid_resynchronization_request, reception_report, source_description,
     };
 
     const BYTES: [u8; 116] = [
@@ -97,7 +97,7 @@ mod test {
     fn test_packet_unmarshal_empty() -> Result<(), Error> {
         let result = unmarshal(BytesMut::new());
         if let Err(got) = result {
-            let want = ERR_INVALID_HEADER.clone();
+            let want = Error::InvalidHeader;
             assert_eq!(got, want, "Unmarshal(nil) err = {}, want {}", got, want);
         } else {
             assert!(false, "want error");
@@ -116,7 +116,7 @@ mod test {
 
         let result = unmarshal(data[..].into());
         if let Err(got) = result {
-            let want = ERR_PACKET_TOO_SHORT.clone();
+            let want = Error::PacketTooShort;
             assert_eq!(
                 got, want,
                 "Unmarshal(invalid_header_length) err = {}, want {}",

@@ -1,8 +1,7 @@
-use crate::errors::*;
+use crate::errors::Error;
 
 use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
-use util::Error;
 
 /// A ReceptionReport block conveys statistics on the reception of RTP packets
 /// from a single synchronization source.
@@ -71,7 +70,7 @@ impl ReceptionReport {
 
         // pack TotalLost into 24 bits
         if self.total_lost >= (1 << 25) {
-            return Err(ERR_INVALID_TOTAL_LOST.to_owned());
+            return Err(Error::InvalidTotalLost);
         }
 
         let tl_bytes = &mut raw_packet[super::TOTAL_LOST_OFFSET..];
@@ -99,7 +98,7 @@ impl ReceptionReport {
     /// Unmarshal decodes the ReceptionReport from binary
     pub fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         if raw_packet.len() < super::RECEPTION_REPORT_LENGTH {
-            return Err(ERR_PACKET_TOO_SHORT.to_owned());
+            return Err(Error::PacketTooShort);
         }
 
         /*

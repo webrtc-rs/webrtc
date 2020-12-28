@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod test {
-    use crate::{errors::*, packet::Packet, receiver_report::*, reception_report::ReceptionReport};
+    use crate::{
+        errors::Error, packet::Packet, receiver_report::*, reception_report::ReceptionReport,
+    };
 
     #[test]
     fn test_receiver_report_unmarshal() {
@@ -71,7 +73,7 @@ mod test {
                           // report ends early
                 ],
                 ReceiverReport::default(),
-                Err(ERR_PACKET_TOO_SHORT.clone()),
+                Err(Error::PacketTooShort),
             ),
             (
                 "wrong type",
@@ -87,7 +89,7 @@ mod test {
                     0x0, 0x2, 0x4a, 0x79,
                 ],
                 ReceiverReport::default(),
-                Err(ERR_WRONG_TYPE.clone()),
+                Err(Error::WrongType),
             ),
             (
                 "bad count in header",
@@ -102,13 +104,13 @@ mod test {
                     0x0, 0x2, 0x4a, 0x79, // delay=150137
                 ],
                 ReceiverReport::default(),
-                Err(ERR_INVALID_HEADER.clone()),
+                Err(Error::InvalidHeader),
             ),
             (
                 "nil",
                 vec![],
                 ReceiverReport::default(),
-                Err(ERR_PACKET_TOO_SHORT.clone()),
+                Err(Error::PacketTooShort),
             ),
         ];
 
@@ -202,7 +204,7 @@ mod test {
                     }],
                     ..Default::default()
                 },
-                Some(ERR_INVALID_TOTAL_LOST.clone()),
+                Some(Error::InvalidTotalLost),
             ),
             (
                 "count overflow",
@@ -211,7 +213,7 @@ mod test {
                     reports: too_many_reports,
                     ..Default::default()
                 },
-                Some(ERR_TOO_MANY_REPORTS.clone()),
+                Some(Error::TooManyReports),
             ),
         ];
 
