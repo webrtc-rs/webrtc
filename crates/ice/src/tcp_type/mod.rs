@@ -41,3 +41,9 @@ impl fmt::Display for TCPType {
         write!(f, "{}", s)
     }
 }
+
+impl Default for TCPType {
+    fn default() -> Self {
+        TCPType::Unspecified
+    }
+}

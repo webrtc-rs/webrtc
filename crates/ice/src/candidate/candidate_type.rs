@@ -25,6 +25,12 @@ impl fmt::Display for CandidateType {
     }
 }
 
+impl Default for CandidateType {
+    fn default() -> Self {
+        CandidateType::Unspecified
+    }
+}
+
 impl CandidateType {
     // preference returns the preference weight of a CandidateType
     //

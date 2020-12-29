@@ -1,6 +1,10 @@
 pub mod candidate_base;
+pub mod candidate_host;
 pub mod candidate_pair;
+pub mod candidate_peer_reflexive;
 pub mod candidate_related_address;
+pub mod candidate_relay;
+pub mod candidate_server_reflexive;
 pub mod candidate_type;
 
 use crate::network_type::*;
@@ -11,7 +15,7 @@ use candidate_type::*;
 use util::Error;
 
 use std::fmt;
-use std::net::IpAddr;
+use std::net::{IpAddr, SocketAddr};
 use tokio::time::Instant;
 
 pub(crate) const RECEIVE_MTU: usize = 8192;
@@ -60,13 +64,15 @@ pub trait Candidate: fmt::Display {
 
     fn marshal(&self) -> String;
 
-    fn addr(&self) -> IpAddr;
+    fn addr(&self) -> SocketAddr;
     //TODO:fn agent(&self) -> Agent;
     //TODO:fn context(&self) ->Context;
 
-    fn close(&self) -> Result<(), Error>;
+    fn close(&mut self) -> Result<(), Error>;
     fn seen(&mut self, outbound: bool);
     //TODO:fn start(&self,a: &Agent, conn: PacketConn, initializedCh <-chan struct{})
     fn write_to(&mut self, raw: &[u8], dst: &dyn Candidate) -> Result<usize, Error>;
     fn equal(&self, other: &dyn Candidate) -> bool;
+
+    fn set_ip(&mut self, ip: &IpAddr) -> Result<(), Error>;
 }

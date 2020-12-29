@@ -39,6 +39,12 @@ impl fmt::Display for NetworkType {
     }
 }
 
+impl Default for NetworkType {
+    fn default() -> Self {
+        NetworkType::UDP4
+    }
+}
+
 impl NetworkType {
     // is_udp returns true when network is UDP4 or UDP6.
     pub fn is_udp(&self) -> bool {

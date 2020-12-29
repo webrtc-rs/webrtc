@@ -1,39 +1,50 @@
 use super::*;
+use crate::util::*;
 
 use std::fmt;
 
 use crc32fast::Hasher;
 
+pub struct CandidateBaseConfig {
+    pub candidate_id: String,
+    pub network: String,
+    pub address: String,
+    pub port: u16,
+    pub component: u16,
+    pub priority: u32,
+    pub foundation: String,
+}
+
 pub(crate) type OnClose = fn() -> Result<(), Error>;
 
 #[derive(Debug, Clone)]
 pub(crate) struct CandidateBase {
-    id: String,
-    network_type: NetworkType,
-    candidate_type: CandidateType,
+    pub(crate) id: String,
+    pub(crate) network_type: NetworkType,
+    pub(crate) candidate_type: CandidateType,
 
-    component: u16,
-    address: String,
-    port: u16,
-    related_address: Option<CandidateRelatedAddress>,
-    tcp_type: TCPType,
+    pub(crate) component: u16,
+    pub(crate) address: String,
+    pub(crate) port: u16,
+    pub(crate) related_address: Option<CandidateRelatedAddress>,
+    pub(crate) tcp_type: TCPType,
 
-    resolved_addr: IpAddr,
+    pub(crate) resolved_addr: SocketAddr,
 
-    last_sent: Instant,     //atomic.Value
-    last_received: Instant, //atomic.Value
-    //TODO:conn         net.PacketConn
+    pub(crate) last_sent: Instant,     //atomic.Value
+    pub(crate) last_received: Instant, //atomic.Value
+    //TODO:pub(crate) conn         net.PacketConn
 
-    //TODO:currAgent :Option<Agent>,
-    //TODO:closeCh   chan struct{}
-    //TODO:closedCh  chan struct{}
-    foundation_override: String,
-    priority_override: u32,
+    //TODO:pub(crate) currAgent :Option<Agent>,
+    //TODO:pub(crate) closeCh   chan struct{}
+    //TODO:pub(crate) closedCh  chan struct{}
+    pub(crate) foundation_override: String,
+    pub(crate) priority_override: u32,
 
     //CandidateHost
-    network: Option<String>,
+    pub(crate) network: String,
     //CandidateRelay
-    on_close: Option<OnClose>,
+    pub(crate) on_close: Option<OnClose>,
 }
 
 /* TODO:
@@ -62,6 +73,35 @@ func (c *candidateBase) Value(key interface{}) interface{} {
     return nil
 }
 */
+
+impl Default for CandidateBase {
+    fn default() -> Self {
+        CandidateBase {
+            id: String::new(),
+            network_type: NetworkType::default(),
+            candidate_type: CandidateType::default(),
+
+            component: 0,
+            address: String::new(),
+            port: 0,
+            related_address: None,
+            tcp_type: TCPType::default(),
+
+            resolved_addr: SocketAddr::new(IpAddr::from([0, 0, 0, 0]), 0),
+
+            last_sent: Instant::now(),
+            last_received: Instant::now(),
+            //TODO:conn         net.PacketConn
+            //TODO:currAgent :Option<Agent>,
+            //TODO:closeCh   chan struct{}
+            //TODO:closedCh  chan struct{}
+            foundation_override: String::new(),
+            priority_override: 0,
+            network: String::new(),
+            on_close: None,
+        }
+    }
+}
 
 // String makes the candidateBase printable
 impl fmt::Display for CandidateBase {
@@ -210,7 +250,7 @@ impl Candidate for CandidateBase {
         val
     }
 
-    fn addr(&self) -> IpAddr {
+    fn addr(&self) -> SocketAddr {
         self.resolved_addr
     }
 
@@ -223,7 +263,7 @@ impl Candidate for CandidateBase {
     }*/
 
     // close stops the recvLoop
-    fn close(&self) -> Result<(), Error> {
+    fn close(&mut self) -> Result<(), Error> {
         //TODO:
         // If conn has never been started will be nil
         /*if c.Done() == nil {
@@ -257,7 +297,14 @@ impl Candidate for CandidateBase {
         // Wait until the recvLoop is closed
         <-c.closedCh*/
 
-        Ok(())
+        let result = if let Some(on_close) = self.on_close {
+            on_close()
+        } else {
+            Ok(())
+        };
+        self.on_close = None;
+
+        result
     }
 
     fn seen(&mut self, outbound: bool) {
@@ -286,6 +333,15 @@ impl Candidate for CandidateBase {
             && self.port() == other.port()
             && self.tcp_type() == other.tcp_type()
             && self.related_address() == other.related_address()
+    }
+
+    fn set_ip(&mut self, ip: &IpAddr) -> Result<(), Error> {
+        let network_type = determine_network_type(&self.network, ip)?;
+
+        self.network_type = network_type;
+        self.resolved_addr = create_addr(network_type, *ip, self.port);
+
+        Ok(())
     }
 }
 
@@ -434,11 +490,6 @@ func handleInboundCandidateMsg(ctx context.Context, c Candidate, buffer []byte, 
 }
 
 
-
-
-
-
-
 // UnmarshalCandidate creates a Candidate from its string representation
 func UnmarshalCandidate(raw string) (Candidate, error) {
     split := strings.Fields(raw)
@@ -511,11 +562,11 @@ func UnmarshalCandidate(raw string) (Candidate, error) {
     case "host":
         return NewCandidateHost(&CandidateHostConfig{"", protocol, address, port, component, priority, foundation, tcpType})
     case "srflx":
-        return NewCandidateServerReflexive(&CandidateServerReflexiveConfig{"", protocol, address, port, component, priority, foundation, relatedAddress, relatedPort})
+        return new_candidate_server_reflexive(&CandidateServerReflexiveConfig{"", protocol, address, port, component, priority, foundation, relatedAddress, relatedPort})
     case "prflx":
-        return NewCandidatePeerReflexive(&CandidatePeerReflexiveConfig{"", protocol, address, port, component, priority, foundation, relatedAddress, relatedPort})
+        return new_candidate_peer_reflexive(&CandidatePeerReflexiveConfig{"", protocol, address, port, component, priority, foundation, relatedAddress, relatedPort})
     case "relay":
-        return NewCandidateRelay(&CandidateRelayConfig{"", protocol, address, port, component, priority, foundation, relatedAddress, relatedPort, nil})
+        return new_candidate_relay(&CandidateRelayConfig{"", protocol, address, port, component, priority, foundation, relatedAddress, relatedPort, nil})
     default:
     }
 
