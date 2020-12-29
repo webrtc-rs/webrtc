@@ -35,7 +35,7 @@ pub trait Setter {
 
 // Getter parses attribute from *Message.
 pub trait Getter {
-    fn get_from(&self, m: &Message) -> Result<(), Error>;
+    fn get_from(&mut self, m: &Message) -> Result<(), Error>;
 }
 
 // Checker checks *Message attribute.
@@ -437,7 +437,7 @@ impl Message {
     }
 
     // Parse applies getters to message in batch, returning on first error.
-    pub fn parse<G: Getter>(&self, getters: &[G]) -> Result<(), Error> {
+    pub fn parse<G: Getter>(&self, getters: &mut [G]) -> Result<(), Error> {
         for c in getters {
             c.get_from(self)?;
         }
