@@ -14,7 +14,7 @@ pub struct PriorityAttr(u32);
 const PRIORITY_SIZE: usize = 4; // 32 bit
 
 impl Setter for PriorityAttr {
-    // AddTo adds PRIORITY attribute to message.
+    // add_to adds PRIORITY attribute to message.
     fn add_to(&self, m: &mut Message) -> Result<(), Error> {
         let mut v = vec![0u8; PRIORITY_SIZE];
         v.copy_from_slice(&self.0.to_be_bytes());
@@ -24,7 +24,7 @@ impl Setter for PriorityAttr {
 }
 
 impl PriorityAttr {
-    // GetFrom decodes PRIORITY attribute from message.
+    // get_from decodes PRIORITY attribute from message.
     pub fn get_from(&mut self, m: &Message) -> Result<(), Error> {
         let v = m.get(ATTR_PRIORITY)?;
 

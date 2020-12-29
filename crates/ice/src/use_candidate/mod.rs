@@ -11,7 +11,7 @@ use util::Error;
 pub struct UseCandidateAttr;
 
 impl Setter for UseCandidateAttr {
-    // AddTo adds USE-CANDIDATE attribute to message.
+    // add_to adds USE-CANDIDATE attribute to message.
     fn add_to(&self, m: &mut Message) -> Result<(), Error> {
         m.add(ATTR_USE_CANDIDATE, &[]);
         Ok(())

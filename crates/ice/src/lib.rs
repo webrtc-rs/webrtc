@@ -6,6 +6,7 @@ extern crate lazy_static;
 
 pub mod agent;
 pub mod candidate;
+pub mod control;
 pub mod errors;
 pub mod external_ip_mapper;
 pub mod mdns;
