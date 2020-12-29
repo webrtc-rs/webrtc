@@ -82,7 +82,7 @@ lazy_static! {
 
     // ErrMulticastDNSWithNAT1To1IPMapping indicates that the mDNS gathering cannot be used along
     // with 1:1 NAT IP mapping for host candidate.
-    pub static ref ERR_MULTICAST_DNSWITH_NAT_1TO1_IP_MAPPING:Error = Error::new("mDNS gathering cannot be used with 1:1 NAT IP mapping for host candidate".to_owned());
+    pub static ref ERR_MULTICAST_DNS_WITH_NAT_1TO1_IP_MAPPING:Error = Error::new("mDNS gathering cannot be used with 1:1 NAT IP mapping for host candidate".to_owned());
 
     // ErrIneffectiveNAT1To1IPMappingHost indicates that 1:1 NAT IP mapping for host candidate is
     // requested, but the host candidate type is disabled.

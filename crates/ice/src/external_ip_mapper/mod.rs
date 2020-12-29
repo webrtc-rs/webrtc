@@ -65,15 +65,15 @@ impl IpMapping {
 }
 
 pub(crate) struct ExternalIPMapper {
-    ipv4_mapping: IpMapping,
-    ipv6_mapping: IpMapping,
-    candidate_type: CandidateType,
+    pub(crate) ipv4_mapping: IpMapping,
+    pub(crate) ipv6_mapping: IpMapping,
+    pub(crate) candidate_type: CandidateType,
 }
 
 impl ExternalIPMapper {
     pub(crate) fn new(
         mut candidate_type: CandidateType,
-        ips: &[&str],
+        ips: &[String],
     ) -> Result<ExternalIPMapper, Error> {
         if candidate_type == CandidateType::Unspecified {
             candidate_type = CandidateType::Host; // defaults to host
