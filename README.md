@@ -42,6 +42,9 @@
   - sync up to [pion/dtls/v2.0.0](https://github.com/pion/dtls/tree/789798433596e4dd92451b66984dddb2f8a9f165)
 - [x] STUN: [webrtc-rs/stun](https://github.com/webrtc-rs/stun)
   - sync up to [pion/stun/v0.3.5](https://github.com/pion/stun/tree/7b20b792b7e18b3846032aaa80e8c0e2d412d0f8)
+- [ ] mDNS: [webrtc-rs/mdns](https://github.com/webrtc-rs/mdns)
+  - work in progress
+  - catch up [pion/mdns/v0.0.4](https://github.com/pion/mdns/tree/2e1665e5f21a89afc152bb4b3791b30eda9b28cf)
 - [ ] ICE: [webrtc-rs/ice](https://github.com/webrtc-rs/ice)
   - work in progress
   - catch up [pion/ice/v2.0.14](https://github.com/pion/ice/tree/c0a874421c45ef6bbc51166b9056aa46c201f075)
