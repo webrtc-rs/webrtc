@@ -26,20 +26,19 @@ use crate::state::*;
 
 use std::collections::HashMap;
 use std::io::{BufReader, BufWriter};
+use std::marker::{Send, Sync};
 use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::Arc;
 
 use log::*;
 
-use tokio::net::*;
 use tokio::sync::{mpsc, Mutex};
-use tokio::time;
 use tokio::time::Duration;
 
 use util::replay_detector::*;
 use util::Error;
 
-pub(crate) const INITIAL_TICKER_INTERVAL: time::Duration = time::Duration::from_secs(1);
+pub(crate) const INITIAL_TICKER_INTERVAL: Duration = Duration::from_secs(1);
 pub(crate) const COOKIE_LENGTH: usize = 20;
 pub(crate) const DEFAULT_NAMED_CURVE: NamedCurve = NamedCurve::X25519;
 pub(crate) const INBOUND_BUFFER_SIZE: usize = 8192;
@@ -111,7 +110,7 @@ pub(crate) struct Conn {
 
 impl Conn {
     pub async fn new(
-        udp_socket: UdpSocket,
+        conn: Arc<dyn util::Conn + Send + Sync>,
         mut config: Config,
         is_client: bool,
         initial_state: Option<State>,
@@ -224,8 +223,8 @@ impl Conn {
 
         let packet_tx1 = Arc::new(packet_tx);
         let packet_tx2 = Arc::clone(&packet_tx1);
-        let next_conn_rx = Arc::new(udp_socket);
-        let next_conn_tx = Arc::clone(&next_conn_rx);
+        let next_conn_rx = Arc::clone(&conn);
+        let next_conn_tx = Arc::clone(&conn);
         let cache = HandshakeCache::new();
         let mut cache1 = cache.clone();
         let cache2 = cache.clone();
@@ -481,7 +480,7 @@ impl Conn {
     }
 
     async fn handle_outgoing_packets(
-        next_conn: &Arc<UdpSocket>,
+        next_conn: &Arc<dyn util::Conn + Send + Sync>,
         mut pkts: Vec<Packet>,
         cache: &mut HandshakeCache,
         is_client: bool,
@@ -709,7 +708,7 @@ impl Conn {
 
     async fn read_and_buffer(
         ctx: &mut ConnReaderContext,
-        next_conn: &Arc<UdpSocket>,
+        next_conn: &Arc<dyn util::Conn + Send + Sync>,
         handle_queue_rx: &mut mpsc::Receiver<mpsc::Sender<()>>,
         buf: &mut [u8],
         local_epoch: &Arc<AtomicU16>,

@@ -18,10 +18,10 @@ use crate::handshake::handshake_message_server_key_exchange::*;
 use crate::handshake::handshake_random::*;
 use crate::signature_hash_algorithm::*;
 
-use tokio::net::UdpSocket;
-
 use rand::Rng;
 use std::time::SystemTime;
+
+use util::conn::conn_pipe::*;
 
 //use std::io::Write;
 
@@ -35,24 +35,15 @@ lazy_static! {
 }
 
 async fn build_pipe() -> Result<(Conn, Conn), Error> {
-    let (ua, ub) = pipe().await?;
+    let (ua, ub) = pipe();
 
-    pipe_conn(ua, ub).await
+    pipe_conn(Arc::new(ua), Arc::new(ub)).await
 }
 
-async fn pipe() -> Result<(UdpSocket, UdpSocket), Error> {
-    let ua = UdpSocket::bind("127.0.0.1:0").await?;
-    let ub = UdpSocket::bind("127.0.0.1:0").await?;
-
-    trace!("{} vs {}", ua.local_addr()?, ub.local_addr()?);
-
-    ua.connect(ub.local_addr()?).await?;
-    ub.connect(ua.local_addr()?).await?;
-
-    Ok((ua, ub))
-}
-
-async fn pipe_conn(ca: UdpSocket, cb: UdpSocket) -> Result<(Conn, Conn), Error> {
+async fn pipe_conn(
+    ca: Arc<dyn util::Conn + Send + Sync>,
+    cb: Arc<dyn util::Conn + Send + Sync>,
+) -> Result<(Conn, Conn), Error> {
     let (c_tx, mut c_rx) = mpsc::channel(1);
 
     // Setup client
@@ -111,7 +102,7 @@ fn psk_callback_hint_fail(_hint: &[u8]) -> Result<Vec<u8>, Error> {
 }
 
 async fn create_test_client(
-    ca: UdpSocket,
+    ca: Arc<dyn util::Conn + Send + Sync>,
     mut cfg: Config,
     generate_certificate: bool,
 ) -> Result<Conn, Error> {
@@ -125,7 +116,7 @@ async fn create_test_client(
 }
 
 async fn create_test_server(
-    cb: UdpSocket,
+    cb: Arc<dyn util::Conn + Send + Sync>,
     mut cfg: Config,
     generate_certificate: bool,
 ) -> Result<Conn, Error> {
@@ -356,13 +347,13 @@ async fn test_handshake_with_alert() -> Result<(), Error> {
     for (name, config_server, config_client, err_server, err_client) in cases {
         let (client_err_tx, mut client_err_rx) = mpsc::channel(1);
 
-        let (ca, cb) = pipe().await?;
+        let (ca, cb) = pipe();
         tokio::spawn(async move {
-            let result = create_test_client(ca, config_client, true).await;
+            let result = create_test_client(Arc::new(ca), config_client, true).await;
             let _ = client_err_tx.send(result).await;
         });
 
-        let result_server = create_test_server(cb, config_server, true).await;
+        let result_server = create_test_server(Arc::new(cb), config_server, true).await;
         if let Err(err) = result_server {
             assert_eq!(
                 err, err_server,
@@ -542,7 +533,7 @@ async fn test_psk() -> Result<(), Error> {
         let client_identity = "Client Identity".as_bytes();
         let (client_res_tx, mut client_res_rx) = mpsc::channel(1);
 
-        let (ca, cb) = pipe().await?;
+        let (ca, cb) = pipe();
         tokio::spawn(async move {
             let conf = Config {
                 psk: Some(psk_callback_client),
@@ -551,7 +542,7 @@ async fn test_psk() -> Result<(), Error> {
                 ..Default::default()
             };
 
-            let result = create_test_client(ca, conf, false).await;
+            let result = create_test_client(Arc::new(ca), conf, false).await;
             let _ = client_res_tx.send(result).await;
         });
 
@@ -562,7 +553,7 @@ async fn test_psk() -> Result<(), Error> {
             ..Default::default()
         };
 
-        let mut server = create_test_server(cb, config, false).await?;
+        let mut server = create_test_server(Arc::new(cb), config, false).await?;
 
         if let Some(result) = client_res_rx.recv().await {
             if let Ok(mut client) = result {
@@ -576,7 +567,7 @@ async fn test_psk() -> Result<(), Error> {
             }
         }
 
-        server.close().await?;
+        let _ = server.close().await;
     }
 
     Ok(())
@@ -601,7 +592,7 @@ async fn test_psk_hint_fail() -> Result<(), Error> {
 
     let (client_res_tx, mut client_res_rx) = mpsc::channel(1);
 
-    let (ca, cb) = pipe().await?;
+    let (ca, cb) = pipe();
     tokio::spawn(async move {
         let conf = Config {
             psk: Some(psk_callback_hint_fail),
@@ -610,7 +601,7 @@ async fn test_psk_hint_fail() -> Result<(), Error> {
             ..Default::default()
         };
 
-        let result = create_test_client(ca, conf, false).await;
+        let result = create_test_client(Arc::new(ca), conf, false).await;
         let _ = client_res_tx.send(result).await;
     });
 
@@ -621,7 +612,7 @@ async fn test_psk_hint_fail() -> Result<(), Error> {
         ..Default::default()
     };
 
-    if let Err(server_err) = create_test_server(cb, config, false).await {
+    if let Err(server_err) = create_test_server(Arc::new(cb), config, false).await {
         assert_eq!(
             server_err,
             ERR_ALERT_FATAL_OR_CLOSE.clone(),
@@ -670,12 +661,12 @@ async fn test_client_timeout() -> Result<(), Error> {
 
     let (client_res_tx, mut client_res_rx) = mpsc::channel(1);
 
-    let (ca, _cb) = pipe().await?;
+    let (ca, _cb) = pipe();
     tokio::spawn(async move {
         let conf = Config::default();
         let result = tokio::time::timeout(
             Duration::from_millis(100),
-            create_test_client(ca, conf, true),
+            create_test_client(Arc::new(ca), conf, true),
         )
         .await;
         let _ = client_res_tx.send(result).await;
@@ -782,14 +773,14 @@ async fn test_srtp_configuration() -> Result<(), Error> {
         tests
     {
         let (client_res_tx, mut client_res_rx) = mpsc::channel(1);
-        let (ca, cb) = pipe().await?;
+        let (ca, cb) = pipe();
         tokio::spawn(async move {
             let conf = Config {
                 srtp_protection_profiles: client_srtp,
                 ..Default::default()
             };
 
-            let result = create_test_client(ca, conf, true).await;
+            let result = create_test_client(Arc::new(ca), conf, true).await;
             let _ = client_res_tx.send(result).await;
         });
 
@@ -798,7 +789,7 @@ async fn test_srtp_configuration() -> Result<(), Error> {
             ..Default::default()
         };
 
-        let result = create_test_server(cb, config, true).await;
+        let result = create_test_server(Arc::new(cb), config, true).await;
         if let Some(expected_err) = want_server_err {
             if let Err(err) = result {
                 assert_eq!(
@@ -1041,14 +1032,14 @@ async fn test_client_certificate() -> Result<(), Error> {
 
     for (name, client_cfg, server_cfg, want_err) in tests {
         let (client_res_tx, mut client_res_rx) = mpsc::channel(1);
-        let (ca, cb) = pipe().await?;
+        let (ca, cb) = pipe();
         let client_cfg_clone = client_cfg.clone();
         tokio::spawn(async move {
-            let result = Conn::new(ca, client_cfg_clone, true, None).await;
+            let result = Conn::new(Arc::new(ca), client_cfg_clone, true, None).await;
             let _ = client_res_tx.send(result).await;
         });
 
-        let result = Conn::new(cb, server_cfg.clone(), false, None).await;
+        let result = Conn::new(Arc::new(cb), server_cfg.clone(), false, None).await;
         let client_result = client_res_rx.recv().await;
 
         if want_err {
@@ -1271,14 +1262,14 @@ async fn test_extended_master_secret() -> Result<(), Error> {
 
     for (name, client_cfg, server_cfg, expected_client_err, expected_server_err) in tests {
         let (client_res_tx, mut client_res_rx) = mpsc::channel(1);
-        let (ca, cb) = pipe().await?;
+        let (ca, cb) = pipe();
         let client_cfg_clone = client_cfg.clone();
         tokio::spawn(async move {
-            let result = create_test_client(ca, client_cfg_clone, true).await;
+            let result = create_test_client(Arc::new(ca), client_cfg_clone, true).await;
             let _ = client_res_tx.send(result).await;
         });
 
-        let result = create_test_server(cb, server_cfg.clone(), true).await;
+        let result = create_test_server(Arc::new(cb), server_cfg.clone(), true).await;
         let client_result = client_res_rx.recv().await;
         assert!(client_result.is_some(), "{}, expected client conn", name);
         let res = client_result.unwrap();
@@ -1481,14 +1472,14 @@ async fn test_server_certificate() -> Result<(), Error> {
 
     for (name, client_cfg, server_cfg, want_err) in tests {
         let (res_tx, mut res_rx) = mpsc::channel(1);
-        let (ca, cb) = pipe().await?;
+        let (ca, cb) = pipe();
 
         tokio::spawn(async move {
-            let result = Conn::new(cb, server_cfg, false, None).await;
+            let result = Conn::new(Arc::new(cb), server_cfg, false, None).await;
             let _ = res_tx.send(result).await;
         });
 
-        let cli_result = Conn::new(ca, client_cfg, true, None).await;
+        let cli_result = Conn::new(Arc::new(ca), client_cfg, true, None).await;
 
         if !want_err && cli_result.is_err() {
             assert!(
@@ -1596,14 +1587,14 @@ async fn test_cipher_suite_configuration() -> Result<(), Error> {
     ) in tests
     {
         let (client_res_tx, mut client_res_rx) = mpsc::channel(1);
-        let (ca, cb) = pipe().await?;
+        let (ca, cb) = pipe();
         tokio::spawn(async move {
             let conf = Config {
                 cipher_suites: client_cipher_suites,
                 ..Default::default()
             };
 
-            let result = create_test_client(ca, conf, true).await;
+            let result = create_test_client(Arc::new(ca), conf, true).await;
             let _ = client_res_tx.send(result).await;
         });
 
@@ -1612,7 +1603,7 @@ async fn test_cipher_suite_configuration() -> Result<(), Error> {
             ..Default::default()
         };
 
-        let result = create_test_server(cb, config, true).await;
+        let result = create_test_server(Arc::new(cb), config, true).await;
         if let Some(expected_err) = want_server_error {
             if let Err(err) = result {
                 assert_eq!(
@@ -1745,7 +1736,7 @@ async fn test_psk_configuration() -> Result<(), Error> {
     ) in tests
     {
         let (client_res_tx, mut client_res_rx) = mpsc::channel(1);
-        let (ca, cb) = pipe().await?;
+        let (ca, cb) = pipe();
         tokio::spawn(async move {
             let conf = Config {
                 psk: if client_psk { Some(psk_callback) } else { None },
@@ -1753,7 +1744,7 @@ async fn test_psk_configuration() -> Result<(), Error> {
                 ..Default::default()
             };
 
-            let result = create_test_client(ca, conf, client_has_certificate).await;
+            let result = create_test_client(Arc::new(ca), conf, client_has_certificate).await;
             let _ = client_res_tx.send(result).await;
         });
 
@@ -1763,7 +1754,7 @@ async fn test_psk_configuration() -> Result<(), Error> {
             ..Default::default()
         };
 
-        let result = create_test_server(cb, config, server_has_certificate).await;
+        let result = create_test_server(Arc::new(cb), config, server_has_certificate).await;
         if let Some(expected_err) = want_server_error {
             if let Err(err) = result {
                 assert_eq!(
@@ -1893,7 +1884,8 @@ async fn test_server_timeout() -> Result<(), Error> {
         record.marshal(&mut writer)?;
     }
 
-    let (ca, cb) = pipe().await?;
+    use util::Conn;
+    let (ca, cb) = pipe();
 
     // Client reader
     let (ca_read_chan_tx, mut ca_read_chan_rx) = mpsc::channel(1000);
@@ -1941,7 +1933,7 @@ async fn test_server_timeout() -> Result<(), Error> {
 
     let result = tokio::time::timeout(
         Duration::from_millis(50),
-        create_test_server(cb, config, true),
+        create_test_server(Arc::new(cb), config, true),
     )
     .await;
     if let Err(err) = result {
@@ -2067,8 +2059,10 @@ async fn test_protocol_version_validation() -> Result<(), Error> {
                 ],
             ),
         ];
+
+        use util::Conn;
         for (name, records) in server_cases {
-            let (ca, cb) = pipe().await?;
+            let (ca, cb) = pipe();
 
             tokio::spawn(async move {
                 let config = Config {
@@ -2078,7 +2072,7 @@ async fn test_protocol_version_validation() -> Result<(), Error> {
                 };
                 let timeout_result = tokio::time::timeout(
                     Duration::from_millis(1000),
-                    create_test_server(cb, config, true),
+                    create_test_server(Arc::new(cb), config, true),
                 )
                 .await;
                 match timeout_result {
@@ -2204,8 +2198,9 @@ async fn test_protocol_version_validation() -> Result<(), Error> {
             ],
         )];
 
+        use util::Conn;
         for (name, records) in client_cases {
-            let (ca, cb) = pipe().await?;
+            let (ca, cb) = pipe();
 
             tokio::spawn(async move {
                 let config = Config {
@@ -2215,7 +2210,7 @@ async fn test_protocol_version_validation() -> Result<(), Error> {
                 };
                 let timeout_result = tokio::time::timeout(
                     Duration::from_millis(1000),
-                    create_test_client(cb, config, true),
+                    create_test_client(Arc::new(cb), config, true),
                 )
                 .await;
                 match timeout_result {
@@ -2317,13 +2312,14 @@ async fn test_multiple_hello_verify_request() -> Result<(), Error> {
         packets.push(packet);
     }
 
-    let (ca, cb) = pipe().await?;
+    use util::Conn;
+    let (ca, cb) = pipe();
 
     tokio::spawn(async move {
         let conf = Config::default();
         let _ = tokio::time::timeout(
             Duration::from_millis(100),
-            create_test_client(ca, conf, true),
+            create_test_client(Arc::new(ca), conf, true),
         )
         .await;
     });
