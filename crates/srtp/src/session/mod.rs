@@ -3,19 +3,17 @@ mod session_rtp_test;
 
 use crate::{config::Config, context::Context, option, stream::Stream};
 
+use util::Conn;
 use util::Error;
 use util::{buffer::ERR_BUFFER_FULL, Buffer};
 
-use tokio::{
-    net::UdpSocket,
-    sync::{mpsc, Mutex},
-};
-
+use std::marker::{Send, Sync};
 use std::{
     collections::HashMap,
     io::{BufWriter, Cursor},
     sync::Arc,
 };
+use tokio::sync::{mpsc, Mutex};
 
 const DEFAULT_SESSION_SRTP_REPLAY_PROTECTION_WINDOW: usize = 64;
 const DEFAULT_SESSION_SRTCP_REPLAY_PROTECTION_WINDOW: usize = 64;
@@ -30,12 +28,16 @@ pub struct Session {
     new_stream_rx: mpsc::Receiver<Stream>,
     close_stream_tx: mpsc::Sender<u32>,
     close_session_tx: mpsc::Sender<()>,
-    pub(crate) udp_tx: Arc<UdpSocket>,
+    pub(crate) udp_tx: Arc<dyn Conn + Send + Sync>,
     is_rtp: bool,
 }
 
 impl Session {
-    pub async fn new(conn: UdpSocket, config: Config, is_rtp: bool) -> Result<Self, Error> {
+    pub async fn new(
+        conn: Arc<dyn Conn + Send + Sync>,
+        config: Config,
+        is_rtp: bool,
+    ) -> Result<Self, Error> {
         let local_context = Context::new(
             &config.keys.local_master_key,
             &config.keys.local_master_salt,
@@ -68,8 +70,8 @@ impl Session {
         let (mut new_stream_tx, new_stream_rx) = mpsc::channel(1);
         let (close_stream_tx, mut close_stream_rx) = mpsc::channel(1);
         let (close_session_tx, mut close_session_rx) = mpsc::channel(1);
-        let udp_tx = Arc::new(conn);
-        let udp_rx = Arc::clone(&udp_tx);
+        let udp_tx = Arc::clone(&conn);
+        let udp_rx = Arc::clone(&conn);
         let cloned_streams_map = Arc::clone(&streams_map);
         let cloned_close_stream_tx = close_stream_tx.clone();
 
@@ -119,7 +121,7 @@ impl Session {
     }
 
     async fn incoming(
-        udp_rx: &Arc<UdpSocket>,
+        udp_rx: &Arc<dyn Conn + Send + Sync>,
         buf: &mut [u8],
         streams_map: &Arc<Mutex<HashMap<u32, Buffer>>>,
         close_stream_tx: &mpsc::Sender<u32>,

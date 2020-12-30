@@ -7,20 +7,14 @@ mod session_rtcp_test {
 
     use std::io::{BufReader, BufWriter};
 
+    use util::conn::conn_pipe::*;
     use util::Error;
 
     use std::sync::Arc;
-    use tokio::{
-        net::UdpSocket,
-        sync::{mpsc, Mutex},
-    };
+    use tokio::sync::{mpsc, Mutex};
 
     async fn build_session_srtcp_pair() -> Result<(Session, Session), Error> {
-        let ua = UdpSocket::bind("127.0.0.1:0").await?;
-        let ub = UdpSocket::bind("127.0.0.1:0").await?;
-
-        ua.connect(ub.local_addr()?).await?;
-        ub.connect(ua.local_addr()?).await?;
+        let (ua, ub) = pipe();
 
         let ca = config::Config {
             profile: ProtectionProfile::AES128CMHMACSHA1_80,
@@ -78,8 +72,8 @@ mod session_rtcp_test {
             remote_rtcp_options: None,
         };
 
-        let sa = Session::new(ua, ca, false).await?;
-        let sb = Session::new(ub, cb, false).await?;
+        let sa = Session::new(Arc::new(ua), ca, false).await?;
+        let sb = Session::new(Arc::new(ub), cb, false).await?;
 
         Ok((sa, sb))
     }

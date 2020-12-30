@@ -77,8 +77,8 @@ mod session_rtp_test {
             remote_rtcp_options: None,
         };
 
-        let sa = Session::new(ua, ca, true).await?;
-        let sb = Session::new(ub, cb, true).await?;
+        let sa = Session::new(Arc::new(ua), ca, true).await?;
+        let sb = Session::new(Arc::new(ub), cb, true).await?;
 
         Ok((sa, sb))
     }
