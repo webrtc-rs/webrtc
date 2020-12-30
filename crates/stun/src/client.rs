@@ -2,13 +2,13 @@ use crate::agent::*;
 use crate::errors::*;
 use crate::message::*;
 
-use util::Error;
+use util::{Conn, Error};
 
-use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 
 use std::collections::HashMap;
 use std::io::BufReader;
+use std::marker::{Send, Sync};
 use std::ops::Add;
 use std::sync::Arc;
 
@@ -111,7 +111,7 @@ struct ClientSettings {
     closed: bool,
     //handler: Handler,
     collector: Option<Box<dyn Collector>>,
-    c: Option<Arc<UdpSocket>>,
+    c: Option<Arc<dyn Conn + Send + Sync>>,
 }
 
 impl Default for ClientSettings {
@@ -171,8 +171,8 @@ impl ClientBuilder {
         self
     }
 
-    pub fn with_conn(mut self, udp_socket: UdpSocket) -> Self {
-        self.settings.c = Some(Arc::new(udp_socket));
+    pub fn with_conn(mut self, conn: Arc<dyn Conn + Send + Sync>) -> Self {
+        self.settings.c = Some(conn);
         self
     }
 
@@ -221,7 +221,7 @@ pub struct Client {
 impl Client {
     async fn read_until_closed(
         mut close_rx: mpsc::Receiver<()>,
-        c: Arc<UdpSocket>,
+        c: Arc<dyn Conn + Send + Sync>,
         client_agent_tx: Arc<mpsc::Sender<ClientAgent>>,
     ) {
         let mut msg = Message::new();
@@ -280,7 +280,7 @@ impl Client {
     }
 
     fn start(
-        conn: Option<Arc<UdpSocket>>,
+        conn: Option<Arc<dyn Conn + Send + Sync>>,
         mut handler_rx: mpsc::UnboundedReceiver<Event>,
         client_agent_tx: Arc<mpsc::Sender<ClientAgent>>,
         mut t: HashMap<TransactionId, ClientTransaction>,

@@ -32,7 +32,7 @@ async fn main() -> Result<(), Error> {
 
     conn.connect(server).await?;
 
-    let mut client = ClientBuilder::new().with_conn(conn).build()?;
+    let mut client = ClientBuilder::new().with_conn(Arc::new(conn)).build()?;
 
     let mut msg = Message::new();
     msg.build(&[
