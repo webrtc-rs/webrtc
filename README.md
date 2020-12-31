@@ -31,6 +31,8 @@
 
 # Roadmap
 
+<img src="./doc/webrtc_stack.png" alt="WebRTC.rs">
+
 ### Work in Progress Towards 1.0
 
 - [x] SDP: [webrtc-rs/sdp](https://github.com/webrtc-rs/sdp) ![sdp](https://img.shields.io/crates/v/webrtc-rs-sdp.svg)
