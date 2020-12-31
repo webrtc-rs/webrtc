@@ -4,6 +4,9 @@ pub mod name;
 pub mod question;
 pub mod resource;
 
+#[cfg(test)]
+mod name_test;
+
 use std::fmt;
 
 // Message formats
