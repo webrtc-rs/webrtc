@@ -1,6 +1,7 @@
 pub mod body;
 pub mod header;
 pub mod name;
+mod packer;
 pub mod question;
 pub mod resource;
 
@@ -34,6 +35,32 @@ pub enum DNSType {
     ALL = 255,
 
     Unsupported,
+}
+
+impl From<u16> for DNSType {
+    fn from(v: u16) -> Self {
+        match v {
+            1 => DNSType::A,
+            2 => DNSType::NS,
+            5 => DNSType::CNAME,
+            6 => DNSType::SOA,
+            12 => DNSType::PTR,
+            15 => DNSType::MX,
+            16 => DNSType::TXT,
+            28 => DNSType::AAAA,
+            33 => DNSType::SRV,
+            41 => DNSType::OPT,
+
+            // Question.Type
+            11 => DNSType::WKS,
+            13 => DNSType::HINFO,
+            14 => DNSType::MINFO,
+            252 => DNSType::AXFR,
+            255 => DNSType::ALL,
+
+            _ => DNSType::Unsupported,
+        }
+    }
 }
 
 impl fmt::Display for DNSType {
@@ -71,6 +98,23 @@ pub enum DNSClass {
 
     // Question.Class
     ANY = 255,
+    Unsupported,
+}
+
+impl From<u16> for DNSClass {
+    fn from(v: u16) -> Self {
+        match v {
+            1 => DNSClass::INET,
+            2 => DNSClass::CSNET,
+            3 => DNSClass::CHAOS,
+            4 => DNSClass::HESIOD,
+
+            // Question.Class
+            255 => DNSClass::ANY,
+
+            _ => DNSClass::Unsupported,
+        }
+    }
 }
 
 impl fmt::Display for DNSClass {
@@ -81,6 +125,7 @@ impl fmt::Display for DNSClass {
             DNSClass::CHAOS => "ClassCHAOS",
             DNSClass::HESIOD => "ClassHESIOD",
             DNSClass::ANY => "ClassANY",
+            DNSClass::Unsupported => "Unsupported",
         };
         write!(f, "{}", s)
     }
@@ -195,33 +240,33 @@ func (h *header) count(sec section) uint16 {
 
 // pack appends the wire format of the header to msg.
 func (h *header) pack(msg []byte) []byte {
-    msg = packUint16(msg, h.id)
-    msg = packUint16(msg, h.bits)
-    msg = packUint16(msg, h.questions)
-    msg = packUint16(msg, h.answers)
-    msg = packUint16(msg, h.authorities)
-    return packUint16(msg, h.additionals)
+    msg = pack_uint16(msg, h.id)
+    msg = pack_uint16(msg, h.bits)
+    msg = pack_uint16(msg, h.questions)
+    msg = pack_uint16(msg, h.answers)
+    msg = pack_uint16(msg, h.authorities)
+    return pack_uint16(msg, h.additionals)
 }
 
 func (h *header) unpack(msg []byte, off int) (int, error) {
     newOff := off
     var err error
-    if h.id, newOff, err = unpackUint16(msg, newOff); err != nil {
+    if h.id, newOff, err = unpack_uint16(msg, newOff); err != nil {
         return off, &nestedError{"id", err}
     }
-    if h.bits, newOff, err = unpackUint16(msg, newOff); err != nil {
+    if h.bits, newOff, err = unpack_uint16(msg, newOff); err != nil {
         return off, &nestedError{"bits", err}
     }
-    if h.questions, newOff, err = unpackUint16(msg, newOff); err != nil {
+    if h.questions, newOff, err = unpack_uint16(msg, newOff); err != nil {
         return off, &nestedError{"questions", err}
     }
-    if h.answers, newOff, err = unpackUint16(msg, newOff); err != nil {
+    if h.answers, newOff, err = unpack_uint16(msg, newOff); err != nil {
         return off, &nestedError{"answers", err}
     }
-    if h.authorities, newOff, err = unpackUint16(msg, newOff); err != nil {
+    if h.authorities, newOff, err = unpack_uint16(msg, newOff); err != nil {
         return off, &nestedError{"authorities", err}
     }
-    if h.additionals, newOff, err = unpackUint16(msg, newOff); err != nil {
+    if h.additionals, newOff, err = unpack_uint16(msg, newOff); err != nil {
         return off, &nestedError{"additionals", err}
     }
     return newOff, nil
@@ -361,11 +406,11 @@ func (p *Parser) Question() (Question, error) {
     if err != nil {
         return Question{}, &nestedError{"unpacking Question.Name", err}
     }
-    typ, off, err := unpackType(p.msg, off)
+    typ, off, err := unpack_type(p.msg, off)
     if err != nil {
         return Question{}, &nestedError{"unpacking Question.Type", err}
     }
-    class, off, err := unpackClass(p.msg, off)
+    class, off, err := unpack_class(p.msg, off)
     if err != nil {
         return Question{}, &nestedError{"unpacking Question.Class", err}
     }
@@ -404,10 +449,10 @@ func (p *Parser) SkipQuestion() error {
     if err != nil {
         return &nestedError{"skipping Question Name", err}
     }
-    if off, err = skipType(p.msg, off); err != nil {
+    if off, err = skip_type(p.msg, off); err != nil {
         return &nestedError{"skipping Question Type", err}
     }
-    if off, err = skipClass(p.msg, off); err != nil {
+    if off, err = skip_class(p.msg, off); err != nil {
         return &nestedError{"skipping Question Class", err}
     }
     p.off = off
@@ -1301,55 +1346,55 @@ func (b *Builder) Finish() ([]byte, error) {
     return b.msg, nil
 }
 
-// packUint16 appends the wire format of field to msg.
-func packUint16(msg []byte, field uint16) []byte {
+// pack_uint16 appends the wire format of field to msg.
+func pack_uint16(msg []byte, field uint16) []byte {
     return append(msg, byte(field>>8), byte(field))
 }
 
-func unpackUint16(msg []byte, off int) (uint16, int, error) {
+func unpack_uint16(msg []byte, off int) (uint16, int, error) {
     if off+UINT16LEN > len(msg) {
         return 0, off, errBaseLen
     }
     return uint16(msg[off])<<8 | uint16(msg[off+1]), off + UINT16LEN, nil
 }
 
-func skipUint16(msg []byte, off int) (int, error) {
+func skip_uint16(msg []byte, off int) (int, error) {
     if off+UINT16LEN > len(msg) {
         return off, errBaseLen
     }
     return off + UINT16LEN, nil
 }
 
-// packType appends the wire format of field to msg.
-func packType(msg []byte, field Type) []byte {
-    return packUint16(msg, uint16(field))
+// pack_type appends the wire format of field to msg.
+func pack_type(msg []byte, field Type) []byte {
+    return pack_uint16(msg, uint16(field))
 }
 
-func unpackType(msg []byte, off int) (Type, int, error) {
-    t, o, err := unpackUint16(msg, off)
+func unpack_type(msg []byte, off int) (Type, int, error) {
+    t, o, err := unpack_uint16(msg, off)
     return Type(t), o, err
 }
 
-func skipType(msg []byte, off int) (int, error) {
-    return skipUint16(msg, off)
+func skip_type(msg []byte, off int) (int, error) {
+    return skip_uint16(msg, off)
 }
 
-// packClass appends the wire format of field to msg.
-func packClass(msg []byte, field Class) []byte {
-    return packUint16(msg, uint16(field))
+// pack_class appends the wire format of field to msg.
+func pack_class(msg []byte, field Class) []byte {
+    return pack_uint16(msg, uint16(field))
 }
 
-func unpackClass(msg []byte, off int) (Class, int, error) {
-    c, o, err := unpackUint16(msg, off)
+func unpack_class(msg []byte, off int) (Class, int, error) {
+    c, o, err := unpack_uint16(msg, off)
     return Class(c), o, err
 }
 
-func skipClass(msg []byte, off int) (int, error) {
-    return skipUint16(msg, off)
+func skip_class(msg []byte, off int) (int, error) {
+    return skip_uint16(msg, off)
 }
 
-// packUint32 appends the wire format of field to msg.
-func packUint32(msg []byte, field uint32) []byte {
+// pack_uint32 appends the wire format of field to msg.
+func pack_uint32(msg []byte, field uint32) []byte {
     return append(
         msg,
         byte(field>>24),
@@ -1359,7 +1404,7 @@ func packUint32(msg []byte, field uint32) []byte {
     )
 }
 
-func unpackUint32(msg []byte, off int) (uint32, int, error) {
+func unpack_uint32(msg []byte, off int) (uint32, int, error) {
     if off+UINT32LEN > len(msg) {
         return 0, off, errBaseLen
     }
@@ -1367,15 +1412,15 @@ func unpackUint32(msg []byte, off int) (uint32, int, error) {
     return v, off + UINT32LEN, nil
 }
 
-func skipUint32(msg []byte, off int) (int, error) {
+func skip_uint32(msg []byte, off int) (int, error) {
     if off+UINT32LEN > len(msg) {
         return off, errBaseLen
     }
     return off + UINT32LEN, nil
 }
 
-// packText appends the wire format of field to msg.
-func packText(msg []byte, field string) ([]byte, error) {
+// pack_text appends the wire format of field to msg.
+func pack_text(msg []byte, field string) ([]byte, error) {
     l := len(field)
     if l > 255 {
         return nil, errStringTooLong
@@ -1386,7 +1431,7 @@ func packText(msg []byte, field string) ([]byte, error) {
     return msg, nil
 }
 
-func unpackText(msg []byte, off int) (string, int, error) {
+func unpack_text(msg []byte, off int) (string, int, error) {
     if off >= len(msg) {
         return "", off, errBaseLen
     }
@@ -1398,12 +1443,12 @@ func unpackText(msg []byte, off int) (string, int, error) {
     return string(msg[beginOff:endOff]), endOff, nil
 }
 
-// packBytes appends the wire format of field to msg.
-func packBytes(msg []byte, field []byte) []byte {
+// pack_bytes appends the wire format of field to msg.
+func pack_bytes(msg []byte, field []byte) []byte {
     return append(msg, field...)
 }
 
-func unpackBytes(msg []byte, off int, field []byte) (int, error) {
+func unpack_bytes(msg []byte, off int, field []byte) (int, error) {
     newOff := off + len(field)
     if newOff > len(msg) {
         return off, errBaseLen
@@ -1426,7 +1471,7 @@ func (r *MXResource) real_type() Type {
 // pack appends the wire format of the MXResource to msg.
 func (r *MXResource) pack(msg []byte, compression map[string]int, compressionOff int) ([]byte, error) {
     oldMsg := msg
-    msg = packUint16(msg, r.Pref)
+    msg = pack_uint16(msg, r.Pref)
     msg, err := r.MX.pack(msg, compression, compressionOff)
     if err != nil {
         return oldMsg, &nestedError{"MXResource.MX", err}
@@ -1442,7 +1487,7 @@ func (r *MXResource) GoString() string {
 }
 
 func unpackMXResource(msg []byte, off int) (MXResource, error) {
-    pref, off, err := unpackUint16(msg, off)
+    pref, off, err := unpack_uint16(msg, off)
     if err != nil {
         return MXResource{}, &nestedError{"Pref", err}
     }
@@ -1537,11 +1582,11 @@ func (r *SOAResource) pack(msg []byte, compression map[string]int, compressionOf
     if err != nil {
         return oldMsg, &nestedError{"SOAResource.MBox", err}
     }
-    msg = packUint32(msg, r.Serial)
-    msg = packUint32(msg, r.Refresh)
-    msg = packUint32(msg, r.Retry)
-    msg = packUint32(msg, r.Expire)
-    return packUint32(msg, r.MinTTL), nil
+    msg = pack_uint32(msg, r.Serial)
+    msg = pack_uint32(msg, r.Refresh)
+    msg = pack_uint32(msg, r.Retry)
+    msg = pack_uint32(msg, r.Expire)
+    return pack_uint32(msg, r.MinTTL), nil
 }
 
 // GoString implements fmt.GoStringer.GoString.
@@ -1566,23 +1611,23 @@ func unpackSOAResource(msg []byte, off int) (SOAResource, error) {
     if off, err = mbox.unpack(msg, off); err != nil {
         return SOAResource{}, &nestedError{"MBox", err}
     }
-    serial, off, err := unpackUint32(msg, off)
+    serial, off, err := unpack_uint32(msg, off)
     if err != nil {
         return SOAResource{}, &nestedError{"Serial", err}
     }
-    refresh, off, err := unpackUint32(msg, off)
+    refresh, off, err := unpack_uint32(msg, off)
     if err != nil {
         return SOAResource{}, &nestedError{"Refresh", err}
     }
-    retry, off, err := unpackUint32(msg, off)
+    retry, off, err := unpack_uint32(msg, off)
     if err != nil {
         return SOAResource{}, &nestedError{"Retry", err}
     }
-    expire, off, err := unpackUint32(msg, off)
+    expire, off, err := unpack_uint32(msg, off)
     if err != nil {
         return SOAResource{}, &nestedError{"Expire", err}
     }
-    minTTL, _, err := unpackUint32(msg, off)
+    minTTL, _, err := unpack_uint32(msg, off)
     if err != nil {
         return SOAResource{}, &nestedError{"MinTTL", err}
     }
@@ -1603,7 +1648,7 @@ func (r *TXTResource) pack(msg []byte, compression map[string]int, compressionOf
     oldMsg := msg
     for _, s := range r.TXT {
         var err error
-        msg, err = packText(msg, s)
+        msg, err = pack_text(msg, s)
         if err != nil {
             return oldMsg, err
         }
@@ -1629,7 +1674,7 @@ func unpackTXTResource(msg []byte, off int, length uint16) (TXTResource, error) 
     for n := uint16(0); n < length; {
         var t string
         var err error
-        if t, off, err = unpackText(msg, off); err != nil {
+        if t, off, err = unpack_text(msg, off); err != nil {
             return TXTResource{}, &nestedError{"text", err}
         }
         // Check if we got too many bytes.
@@ -1657,9 +1702,9 @@ func (r *SRVResource) real_type() Type {
 // pack appends the wire format of the SRVResource to msg.
 func (r *SRVResource) pack(msg []byte, compression map[string]int, compressionOff int) ([]byte, error) {
     oldMsg := msg
-    msg = packUint16(msg, r.Priority)
-    msg = packUint16(msg, r.Weight)
-    msg = packUint16(msg, r.Port)
+    msg = pack_uint16(msg, r.Priority)
+    msg = pack_uint16(msg, r.Weight)
+    msg = pack_uint16(msg, r.Port)
     msg, err := r.Target.pack(msg, nil, compressionOff)
     if err != nil {
         return oldMsg, &nestedError{"SRVResource.Target", err}
@@ -1677,15 +1722,15 @@ func (r *SRVResource) GoString() string {
 }
 
 func unpackSRVResource(msg []byte, off int) (SRVResource, error) {
-    priority, off, err := unpackUint16(msg, off)
+    priority, off, err := unpack_uint16(msg, off)
     if err != nil {
         return SRVResource{}, &nestedError{"Priority", err}
     }
-    weight, off, err := unpackUint16(msg, off)
+    weight, off, err := unpack_uint16(msg, off)
     if err != nil {
         return SRVResource{}, &nestedError{"Weight", err}
     }
-    port, off, err := unpackUint16(msg, off)
+    port, off, err := unpack_uint16(msg, off)
     if err != nil {
         return SRVResource{}, &nestedError{"Port", err}
     }
@@ -1707,7 +1752,7 @@ func (r *AResource) real_type() Type {
 
 // pack appends the wire format of the AResource to msg.
 func (r *AResource) pack(msg []byte, compression map[string]int, compressionOff int) ([]byte, error) {
-    return packBytes(msg, r.A[:]), nil
+    return pack_bytes(msg, r.A[:]), nil
 }
 
 // GoString implements fmt.GoStringer.GoString.
@@ -1718,7 +1763,7 @@ func (r *AResource) GoString() string {
 
 func unpackAResource(msg []byte, off int) (AResource, error) {
     var a [4]byte
-    if _, err := unpackBytes(msg, off, a[:]); err != nil {
+    if _, err := unpack_bytes(msg, off, a[:]); err != nil {
         return AResource{}, err
     }
     return AResource{a}, nil
@@ -1741,12 +1786,12 @@ func (r *AAAAResource) GoString() string {
 
 // pack appends the wire format of the AAAAResource to msg.
 func (r *AAAAResource) pack(msg []byte, compression map[string]int, compressionOff int) ([]byte, error) {
-    return packBytes(msg, r.AAAA[:]), nil
+    return pack_bytes(msg, r.AAAA[:]), nil
 }
 
 func unpackAAAAResource(msg []byte, off int) (AAAAResource, error) {
     var aaaa [16]byte
-    if _, err := unpackBytes(msg, off, aaaa[:]); err != nil {
+    if _, err := unpack_bytes(msg, off, aaaa[:]); err != nil {
         return AAAAResource{}, err
     }
     return AAAAResource{aaaa}, nil
@@ -1782,10 +1827,10 @@ func (r *OPTResource) real_type() Type {
 
 func (r *OPTResource) pack(msg []byte, compression map[string]int, compressionOff int) ([]byte, error) {
     for _, opt := range r.Options {
-        msg = packUint16(msg, opt.Code)
+        msg = pack_uint16(msg, opt.Code)
         l := uint16(len(opt.Data))
-        msg = packUint16(msg, l)
-        msg = packBytes(msg, opt.Data)
+        msg = pack_uint16(msg, l)
+        msg = pack_bytes(msg, opt.Data)
     }
     return msg, nil
 }
@@ -1808,12 +1853,12 @@ func unpackOPTResource(msg []byte, off int, length uint16) (OPTResource, error) 
     for oldOff := off; off < oldOff+int(length); {
         var err error
         var o Option
-        o.Code, off, err = unpackUint16(msg, off)
+        o.Code, off, err = unpack_uint16(msg, off)
         if err != nil {
             return OPTResource{}, &nestedError{"Code", err}
         }
         var l uint16
-        l, off, err = unpackUint16(msg, off)
+        l, off, err = unpack_uint16(msg, off)
         if err != nil {
             return OPTResource{}, &nestedError{"Data", err}
         }

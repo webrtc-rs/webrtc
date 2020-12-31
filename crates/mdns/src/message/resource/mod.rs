@@ -28,16 +28,16 @@ func skipResource(msg []byte, off int) (int, error) {
     if err != nil {
         return off, &nestedError{"Name", err}
     }
-    if newOff, err = skipType(msg, newOff); err != nil {
+    if newOff, err = skip_type(msg, newOff); err != nil {
         return off, &nestedError{"Type", err}
     }
-    if newOff, err = skipClass(msg, newOff); err != nil {
+    if newOff, err = skip_class(msg, newOff); err != nil {
         return off, &nestedError{"Class", err}
     }
-    if newOff, err = skipUint32(msg, newOff); err != nil {
+    if newOff, err = skip_uint32(msg, newOff); err != nil {
         return off, &nestedError{"TTL", err}
     }
-    length, newOff, err := unpackUint16(msg, newOff)
+    length, newOff, err := unpack_uint16(msg, newOff)
     if err != nil {
         return off, &nestedError{"Length", err}
     }
@@ -94,11 +94,11 @@ func (h *ResourceHeader) pack(oldMsg []byte, compression map[string]int, compres
     if msg, err = h.Name.pack(msg, compression, compressionOff); err != nil {
         return oldMsg, 0, &nestedError{"Name", err}
     }
-    msg = packType(msg, h.Type)
-    msg = packClass(msg, h.Class)
-    msg = packUint32(msg, h.TTL)
+    msg = pack_type(msg, h.Type)
+    msg = pack_class(msg, h.Class)
+    msg = pack_uint32(msg, h.TTL)
     lenOff = len(msg)
-    msg = packUint16(msg, h.Length)
+    msg = pack_uint16(msg, h.Length)
     return msg, lenOff, nil
 }
 
@@ -108,16 +108,16 @@ func (h *ResourceHeader) unpack(msg []byte, off int) (int, error) {
     if newOff, err = h.Name.unpack(msg, newOff); err != nil {
         return off, &nestedError{"Name", err}
     }
-    if h.Type, newOff, err = unpackType(msg, newOff); err != nil {
+    if h.Type, newOff, err = unpack_type(msg, newOff); err != nil {
         return off, &nestedError{"Type", err}
     }
-    if h.Class, newOff, err = unpackClass(msg, newOff); err != nil {
+    if h.Class, newOff, err = unpack_class(msg, newOff); err != nil {
         return off, &nestedError{"Class", err}
     }
-    if h.TTL, newOff, err = unpackUint32(msg, newOff); err != nil {
+    if h.TTL, newOff, err = unpack_uint32(msg, newOff); err != nil {
         return off, &nestedError{"TTL", err}
     }
-    if h.Length, newOff, err = unpackUint16(msg, newOff); err != nil {
+    if h.Length, newOff, err = unpack_uint16(msg, newOff); err != nil {
         return off, &nestedError{"Length", err}
     }
     return newOff, nil
@@ -136,7 +136,7 @@ func (h *ResourceHeader) fixLen(msg []byte, lenOff int, preLen int) error {
     }
 
     // Fill in the length now that we know how long the content is.
-    packUint16(msg[lenOff:lenOff], uint16(conLen))
+    pack_uint16(msg[lenOff:lenOff], uint16(conLen))
     h.Length = uint16(conLen)
 
     return nil

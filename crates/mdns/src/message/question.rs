@@ -1,5 +1,11 @@
 use super::name::*;
+use super::packer::*;
 use super::*;
+
+use std::collections::HashMap;
+use std::fmt;
+
+use util::Error;
 
 // A Question is a DNS query.
 pub struct Question {
@@ -8,22 +14,26 @@ pub struct Question {
     pub class: DNSClass,
 }
 
-/*
-// pack appends the wire format of the Question to msg.
-func (q *Question) pack(msg []byte, compression map[string]int, compressionOff int) ([]byte, error) {
-    msg, err := q.Name.pack(msg, compression, compressionOff)
-    if err != nil {
-        return msg, &nestedError{"Name", err}
+impl fmt::Display for Question {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "dnsmessage.Question{{Name: {}, Type: {}, Class: {}}}",
+            self.name, self.typ, self.class
+        )
     }
-    msg = packType(msg, q.Type)
-    return packClass(msg, q.Class), nil
 }
 
-// GoString implements fmt.GoStringer.GoString.
-func (q *Question) GoString() string {
-    return "dnsmessage.Question{" +
-        "Name: " + q.Name.GoString() + ", " +
-        "Type: " + q.Type.GoString() + ", " +
-        "Class: " + q.Class.GoString() + "}"
+impl Question {
+    // pack appends the wire format of the Question to msg.
+    pub fn pack(
+        &self,
+        msg: &[u8],
+        compression: &mut Option<HashMap<String, usize>>,
+        compression_off: usize,
+    ) -> Result<Vec<u8>, Error> {
+        let mut msg = self.name.pack(msg, compression, compression_off)?;
+        msg = pack_type(msg, self.typ);
+        Ok(pack_class(msg, self.class))
+    }
 }
-*/
