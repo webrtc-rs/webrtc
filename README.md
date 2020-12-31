@@ -13,7 +13,7 @@
   <img src="https://deps.rs/repo/github/webrtc-rs/webrtc/status.svg">
  </a>
  <a href="https://crates.io/crates/webrtc-rs"> 
-  <img src="https://img.shields.io/crates/v/webrtc-rs-sdp.svg">
+  <img src="https://img.shields.io/crates/v/webrtc-rs.svg">
  </a> 
  <a href="https://docs.rs/webrtc-rs"> 
   <img src="https://docs.rs/webrtc-rs/badge.svg">
