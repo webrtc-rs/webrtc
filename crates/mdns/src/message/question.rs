@@ -1,5 +1,4 @@
 use super::name::*;
-use super::packer::*;
 use super::*;
 
 use std::collections::HashMap;
@@ -28,12 +27,12 @@ impl Question {
     // pack appends the wire format of the Question to msg.
     pub fn pack(
         &self,
-        msg: &[u8],
+        mut msg: Vec<u8>,
         compression: &mut Option<HashMap<String, usize>>,
         compression_off: usize,
     ) -> Result<Vec<u8>, Error> {
-        let mut msg = self.name.pack(msg, compression, compression_off)?;
-        msg = pack_type(msg, self.typ);
-        Ok(pack_class(msg, self.class))
+        msg = self.name.pack(msg, compression, compression_off)?;
+        msg = self.typ.pack(msg);
+        Ok(self.class.pack(msg))
     }
 }

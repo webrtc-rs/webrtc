@@ -12,7 +12,7 @@ const NAME_LEN: usize = 255;
 // allocations.
 #[derive(Default, PartialEq, Debug)]
 pub struct Name {
-    data: String,
+    pub(crate) data: String,
 }
 
 // String implements fmt.Stringer.String.
@@ -40,11 +40,10 @@ impl Name {
     // is nil, compression will not be used.
     pub fn pack(
         &self,
-        msg: &[u8],
+        mut msg: Vec<u8>,
         compression: &mut Option<HashMap<String, usize>>,
         compression_off: usize,
     ) -> Result<Vec<u8>, Error> {
-        let mut r = msg.to_vec();
         let data = self.data.as_bytes();
 
         // Add a trailing dot to canonicalize name.
@@ -54,8 +53,8 @@ impl Name {
 
         // Allow root domain.
         if data.len() == 1 && data[0] == b'.' {
-            r.push(0);
-            return Ok(r);
+            msg.push(0);
+            return Ok(msg);
         }
 
         // Emit sequence of counted strings, chopping at dots.
@@ -75,8 +74,8 @@ impl Name {
                     return Err(ERR_ZERO_SEG_LEN.to_owned());
                 }
 
-                r.push((i - begin) as u8);
-                r.extend_from_slice(&data[begin..i]);
+                msg.push((i - begin) as u8);
+                msg.extend_from_slice(&data[begin..i]);
 
                 begin = i + 1;
                 continue;
@@ -91,9 +90,9 @@ impl Name {
                     if let Some(ptr) = compression.get(&key) {
                         // Hit. Emit a pointer instead of the rest of
                         // the domain.
-                        r.push(((ptr >> 8) | 0xC0) as u8);
-                        r.push((ptr & 0xFF) as u8);
-                        return Ok(r);
+                        msg.push(((ptr >> 8) | 0xC0) as u8);
+                        msg.push((ptr & 0xFF) as u8);
+                        return Ok(msg);
                     }
 
                     // Miss. Add the suffix to the compression table if the
@@ -105,8 +104,8 @@ impl Name {
             }
         }
 
-        r.push(0);
-        Ok(r)
+        msg.push(0);
+        Ok(msg)
     }
 
     // unpack unpacks a domain name.
@@ -193,47 +192,47 @@ impl Name {
         }
         Ok(new_off)
     }
-}
 
-pub(crate) fn skip_name(msg: &[u8], off: usize) -> Result<usize, Error> {
-    // new_off is the offset where the next record will start. Pointers lead
-    // to data that belongs to other names and thus doesn't count towards to
-    // the usage of this name.
-    let mut new_off = off;
+    pub(crate) fn skip(msg: &[u8], off: usize) -> Result<usize, Error> {
+        // new_off is the offset where the next record will start. Pointers lead
+        // to data that belongs to other names and thus doesn't count towards to
+        // the usage of this name.
+        let mut new_off = off;
 
-    loop {
-        if new_off >= msg.len() {
-            return Err(ERR_BASE_LEN.to_owned());
-        }
-        let c = msg[new_off];
-        new_off += 1;
-        match c & 0xC0 {
-            0x00 => {
-                if c == 0x00 {
-                    // A zero length signals the end of the name.
+        loop {
+            if new_off >= msg.len() {
+                return Err(ERR_BASE_LEN.to_owned());
+            }
+            let c = msg[new_off];
+            new_off += 1;
+            match c & 0xC0 {
+                0x00 => {
+                    if c == 0x00 {
+                        // A zero length signals the end of the name.
+                        break;
+                    }
+                    // literal string
+                    new_off += c as usize;
+                    if new_off > msg.len() {
+                        return Err(ERR_CALC_LEN.to_owned());
+                    }
+                }
+                0xC0 => {
+                    // Pointer to somewhere else in msg.
+
+                    // Pointers are two bytes.
+                    new_off += 1;
+
+                    // Don't follow the pointer as the data here has ended.
                     break;
                 }
-                // literal string
-                new_off += c as usize;
-                if new_off > msg.len() {
-                    return Err(ERR_CALC_LEN.to_owned());
+                _ => {
+                    // Prefixes 0x80 and 0x40 are reserved.
+                    return Err(ERR_RESERVED.to_owned());
                 }
             }
-            0xC0 => {
-                // Pointer to somewhere else in msg.
-
-                // Pointers are two bytes.
-                new_off += 1;
-
-                // Don't follow the pointer as the data here has ended.
-                break;
-            }
-            _ => {
-                // Prefixes 0x80 and 0x40 are reserved.
-                return Err(ERR_RESERVED.to_owned());
-            }
         }
-    }
 
-    Ok(new_off)
+        Ok(new_off)
+    }
 }

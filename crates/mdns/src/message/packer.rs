@@ -66,22 +66,8 @@ pub(crate) fn skip_uint32(msg: &[u8], off: usize) -> Result<usize, Error> {
     Ok(off + UINT32LEN)
 }
 
-// pack_class appends the wire format of field to msg.
-pub(crate) fn pack_class(msg: Vec<u8>, field: DNSClass) -> Vec<u8> {
-    pack_uint16(msg, field as u16)
-}
-
-pub(crate) fn unpack_class(msg: &[u8], off: usize) -> Result<(DNSClass, usize), Error> {
-    let (c, o) = unpack_uint16(msg, off)?;
-    Ok((DNSClass::from(c), o))
-}
-
-pub(crate) fn skip_class(msg: &[u8], off: usize) -> Result<usize, Error> {
-    skip_uint16(msg, off)
-}
-
 // pack_text appends the wire format of field to msg.
-pub(crate) fn pack_text(mut msg: Vec<u8>, field: &str) -> Result<Vec<u8>, Error> {
+pub(crate) fn pack_str(mut msg: Vec<u8>, field: &str) -> Result<Vec<u8>, Error> {
     let l = field.len();
     if l > 255 {
         return Err(ERR_STRING_TOO_LONG.to_owned());
@@ -91,7 +77,7 @@ pub(crate) fn pack_text(mut msg: Vec<u8>, field: &str) -> Result<Vec<u8>, Error>
     Ok(msg)
 }
 
-pub(crate) fn unpack_text(msg: &[u8], off: usize) -> Result<(String, usize), Error> {
+pub(crate) fn unpack_str(msg: &[u8], off: usize) -> Result<(String, usize), Error> {
     if off >= msg.len() {
         return Err(ERR_BASE_LEN.to_owned());
     }
@@ -105,18 +91,4 @@ pub(crate) fn unpack_text(msg: &[u8], off: usize) -> Result<(String, usize), Err
         String::from_utf8(msg[begin_off..end_off].to_vec())?,
         end_off,
     ))
-}
-
-// pack_type appends the wire format of field to msg.
-pub(crate) fn pack_type(msg: Vec<u8>, field: DNSType) -> Vec<u8> {
-    pack_uint16(msg, field as u16)
-}
-
-pub(crate) fn unpack_type(msg: &[u8], off: usize) -> Result<(DNSType, usize), Error> {
-    let (t, o) = unpack_uint16(msg, off)?;
-    Ok((DNSType::from(t), o))
-}
-
-pub(crate) fn skip_type(msg: &[u8], off: usize) -> Result<usize, Error> {
-    skip_uint16(msg, off)
 }

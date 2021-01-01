@@ -1,33 +1,33 @@
 use super::*;
 use crate::message::name::*;
 
-// A CNAMEResource is a cname Resource record.
-pub struct CNAMEResource {
-    cname: Name,
+// A PTRResource is a PTR Resource record.
+pub struct PTRResource {
+    ptr: Name,
 }
 
-impl fmt::Display for CNAMEResource {
+impl fmt::Display for PTRResource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "dnsmessage.CNAMEResource{{cname: {}}}", self.cname)
+        write!(f, "dnsmessage.PTRResource{{PTR: {}}}", self.ptr)
     }
 }
 
-impl ResourceBody for CNAMEResource {
+impl ResourceBody for PTRResource {
     fn real_type(&self) -> DNSType {
-        DNSType::CNAME
+        DNSType::PTR
     }
 
-    // pack appends the wire format of the CNAMEResource to msg.
+    // pack appends the wire format of the PTRResource to msg.
     fn pack(
         &self,
         msg: Vec<u8>,
         compression: &mut Option<HashMap<String, usize>>,
         compression_off: usize,
     ) -> Result<Vec<u8>, Error> {
-        self.cname.pack(msg, compression, compression_off)
+        self.ptr.pack(msg, compression, compression_off)
     }
 
     fn unpack(&mut self, msg: &[u8], off: usize, _length: usize) -> Result<usize, Error> {
-        self.cname.unpack(msg, off)
+        self.ptr.unpack(msg, off)
     }
 }

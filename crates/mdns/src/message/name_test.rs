@@ -43,7 +43,7 @@ fn test_name_pack_unpack() -> Result<(), Error> {
 
     for (input, want, want_err) in tests {
         let input = Name::new(input.to_owned())?;
-        let result = input.pack(&vec![], &mut Some(HashMap::new()), 0);
+        let result = input.pack(vec![], &mut Some(HashMap::new()), 0);
         if let Some(want_err) = want_err {
             if let Err(actual_err) = result {
                 assert_eq!(want_err, actual_err);
@@ -84,8 +84,8 @@ fn test_name_pack_unpack() -> Result<(), Error> {
 fn test_incompressible_name() -> Result<(), Error> {
     let name = Name::new("example.com.".to_owned())?;
     let mut compression = Some(HashMap::new());
-    let buf = name.pack(&vec![], &mut compression, 0)?;
-    let buf = name.pack(&buf, &mut compression, 0)?;
+    let buf = name.pack(vec![], &mut compression, 0)?;
+    let buf = name.pack(buf, &mut compression, 0)?;
     let mut n1 = Name::default();
     let off = n1.unpack_compressed(&buf, 0, false /* allowCompression */)?;
     let mut n2 = Name::default();

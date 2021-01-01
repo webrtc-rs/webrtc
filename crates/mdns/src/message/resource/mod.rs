@@ -1,12 +1,30 @@
+pub mod a;
+pub mod aaaa;
 pub mod cname;
+pub mod mx;
+pub mod ns;
+pub mod opt;
+pub mod ptr;
+pub mod soa;
+pub mod srv;
+pub mod txt;
 
 use super::name::*;
+use super::packer::*;
 use super::*;
+use crate::errors::*;
 
 use std::collections::HashMap;
 use std::fmt;
 
 use util::Error;
+
+// EDNS(0) wire constants.
+
+const EDNS0_VERSION: u32 = 0;
+const EDNS0_DNSSEC_OK: u32 = 0x00008000;
+const EDNS_VERSION_MASK: u32 = 0x00ff0000;
+const EDNS0_DNSSEC_OK_MASK: u32 = 0x00ff8000;
 
 // A Resource is a DNS resource record.
 pub struct Resource {
@@ -14,40 +32,127 @@ pub struct Resource {
     body: Box<dyn ResourceBody>,
 }
 
-/*
-func (r *Resource) GoString() string {
-    return "dnsmessage.Resource{" +
-        "Header: " + r.Header.GoString() +
-        ", Body: &" + r.Body.GoString() +
-        "}"
+impl fmt::Display for Resource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "dnsmessage.Resource{{Header: {}, Body: {}}}",
+            self.header, self.body
+        )
+    }
 }
 
+impl Resource {
+    /*
+    // pack appends the wire format of the Resource to msg.
+    pub fn pack(
+        &self,
+        mut msg: Vec<u8>,
+        compression: &mut Option<HashMap<String, usize>>,
+        compression_off: usize,
+    ) -> Result<Vec<u8>, Error> {
+        if r.Body == nil {
+            return msg, errNilResouceBody
+        }
+        oldMsg := msg
+        r.Header.Type = r.Body.real_type()
+        msg, lenOff, err := r.Header.pack(msg, compression, compressionOff)
+        if err != nil {
+            return msg, &nestedError{"ResourceHeader", err}
+        }
+        preLen := len(msg)
+        msg, err = r.Body.pack(msg, compression, compressionOff)
+        if err != nil {
+            return msg, &nestedError{"content", err}
+        }
+        if err := r.Header.fix_len(msg, lenOff, preLen); err != nil {
+            return oldMsg, err
+        }
+        return msg, nil
+    }
 
-func skipResource(msg []byte, off int) (int, error) {
-    newOff, err := skip_name(msg, off)
-    if err != nil {
-        return off, &nestedError{"Name", err}
+    //pub fn unpack(&mut self, msg: &[u8], off: usize) -> Result<usize, Error> {
+    func unpackResourceBody(msg []byte, off int, hdr ResourceHeader) (ResourceBody, int, error) {
+        var (
+            r    ResourceBody
+            err  error
+            name string
+        )
+        switch hdr.Type {
+        case TypeA:
+            var rb AResource
+            rb, err = unpackAResource(msg, off)
+            r = &rb
+            name = "A"
+        case TypeNS:
+            var rb NSResource
+            rb, err = unpackNSResource(msg, off)
+            r = &rb
+            name = "NS"
+        case TypeCNAME:
+            var rb CNAMEResource
+            rb, err = unpackCNAMEResource(msg, off)
+            r = &rb
+            name = "CNAME"
+        case TypeSOA:
+            var rb SOAResource
+            rb, err = unpackSOAResource(msg, off)
+            r = &rb
+            name = "SOA"
+        case TypePTR:
+            var rb PTRResource
+            rb, err = unpackPTRResource(msg, off)
+            r = &rb
+            name = "PTR"
+        case TypeMX:
+            var rb MXResource
+            rb, err = unpackMXResource(msg, off)
+            r = &rb
+            name = "MX"
+        case TypeTXT:
+            var rb TXTResource
+            rb, err = unpackTXTResource(msg, off, hdr.Length)
+            r = &rb
+            name = "TXT"
+        case TypeAAAA:
+            var rb AAAAResource
+            rb, err = unpackAAAAResource(msg, off)
+            r = &rb
+            name = "AAAA"
+        case TypeSRV:
+            var rb SRVResource
+            rb, err = unpackSRVResource(msg, off)
+            r = &rb
+            name = "SRV"
+        case TypeOPT:
+            var rb OPTResource
+            rb, err = unpackOPTResource(msg, off, hdr.Length)
+            r = &rb
+            name = "OPT"
+        }
+        if err != nil {
+            return nil, off, &nestedError{name + " record", err}
+        }
+        if r == nil {
+            return nil, off, errors.New("invalid resource type: " + hdr.Type.String())
+        }
+        return r, off + int(hdr.Length), nil
     }
-    if newOff, err = skip_type(msg, newOff); err != nil {
-        return off, &nestedError{"Type", err}
+    */
+
+    pub(crate) fn skip(msg: &[u8], off: usize) -> Result<usize, Error> {
+        let mut new_off = Name::skip(msg, off)?;
+        new_off = DNSType::skip(msg, new_off)?;
+        new_off = DNSClass::skip(msg, new_off)?;
+        new_off = skip_uint32(msg, new_off)?;
+        let (length, mut new_off) = unpack_uint16(msg, new_off)?;
+        new_off += length as usize;
+        if new_off > msg.len() {
+            return Err(ERR_RESOURCE_LEN.to_owned());
+        }
+        Ok(new_off)
     }
-    if newOff, err = skip_class(msg, newOff); err != nil {
-        return off, &nestedError{"Class", err}
-    }
-    if newOff, err = skip_uint32(msg, newOff); err != nil {
-        return off, &nestedError{"TTL", err}
-    }
-    length, newOff, err := unpack_uint16(msg, newOff)
-    if err != nil {
-        return off, &nestedError{"Length", err}
-    }
-    if newOff += int(length); newOff > len(msg) {
-        return off, errResourceLen
-    }
-    return newOff, nil
 }
-
- */
 
 // A ResourceHeader is the header of a DNS resource record. There are
 // many types of DNS resource records, but they all share the same header.
@@ -75,214 +180,125 @@ pub struct ResourceHeader {
     length: u16,
 }
 
-/*
-// GoString implements fmt.GoStringer.GoString.
-func (h *ResourceHeader) GoString() string {
-    return "dnsmessage.ResourceHeader{" +
-        "Name: " + h.Name.GoString() + ", " +
-        "Type: " + h.Type.GoString() + ", " +
-        "Class: " + h.Class.GoString() + ", " +
-        "TTL: " + printUint32(h.TTL) + ", " +
-        "Length: " + printUint16(h.Length) + "}"
+impl fmt::Display for ResourceHeader {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "dnsmessage.ResourceHeader{{Name: {}, Type: {}, Class: {}, TTL: {}, Length: {}}}",
+            self.name, self.typ, self.class, self.ttl, self.length,
+        )
+    }
 }
 
-// pack appends the wire format of the ResourceHeader to oldMsg.
-//
-// lenOff is the offset in msg where the Length field was packed.
-func (h *ResourceHeader) pack(oldMsg []byte, compression map[string]int, compressionOff int) (msg []byte, lenOff int, err error) {
-    msg = oldMsg
-    if msg, err = h.Name.pack(msg, compression, compressionOff); err != nil {
-        return oldMsg, 0, &nestedError{"Name", err}
+impl ResourceHeader {
+    // pack appends the wire format of the ResourceHeader to oldMsg.
+    //
+    // lenOff is the offset in msg where the Length field was packed.
+    fn pack(
+        &self,
+        mut msg: Vec<u8>,
+        compression: &mut Option<HashMap<String, usize>>,
+        compression_off: usize,
+    ) -> Result<(Vec<u8>, usize), Error> {
+        msg = self.name.pack(msg, compression, compression_off)?;
+        msg = self.typ.pack(msg);
+        msg = self.class.pack(msg);
+        msg = pack_uint32(msg, self.ttl);
+        let len_off = msg.len();
+        msg = pack_uint16(msg, self.length);
+        Ok((msg, len_off))
     }
-    msg = pack_type(msg, h.Type)
-    msg = pack_class(msg, h.Class)
-    msg = pack_uint32(msg, h.TTL)
-    lenOff = len(msg)
-    msg = pack_uint16(msg, h.Length)
-    return msg, lenOff, nil
+
+    fn unpack(&mut self, msg: &[u8], off: usize, _length: usize) -> Result<usize, Error> {
+        let mut new_off = off;
+        new_off = self.name.unpack(msg, new_off)?;
+        new_off = self.typ.unpack(msg, new_off)?;
+        new_off = self.class.unpack(msg, new_off)?;
+        let (ttl, new_off) = unpack_uint32(msg, new_off)?;
+        self.ttl = ttl;
+        let (l, new_off) = unpack_uint16(msg, new_off)?;
+        self.length = l;
+
+        Ok(new_off)
+    }
+
+    // fix_len updates a packed ResourceHeader to include the length of the
+    // ResourceBody.
+    //
+    // len_off is the offset of the ResourceHeader.Length field in msg.
+    //
+    // pre_len is the length that msg was before the ResourceBody was packed.
+    pub(crate) fn fix_len(
+        &mut self,
+        msg: &[u8],
+        len_off: usize,
+        pre_len: usize,
+    ) -> Result<(), Error> {
+        if msg.len() < pre_len || msg.len() - pre_len > u16::MAX as usize {
+            return Err(ERR_RES_TOO_LONG.to_owned());
+        }
+
+        let con_len = msg.len() - pre_len;
+
+        // Fill in the length now that we know how long the content is.
+        pack_uint16(msg[len_off..len_off].to_vec(), con_len as u16);
+        self.length = con_len as u16;
+
+        Ok(())
+    }
+
+    // set_edns0 configures h for EDNS(0).
+    //
+    // The provided ext_rcode must be an extedned RCode.
+    pub fn set_edns0(
+        &mut self,
+        udp_payload_len: u16,
+        ext_rcode: RCode,
+        dnssec_ok: bool,
+    ) -> Result<(), Error> {
+        self.name = Name {
+            data: ".".to_owned(),
+        }; // RFC 6891 section 6.1.2
+        self.typ = DNSType::OPT;
+        self.class = DNSClass::from(udp_payload_len);
+        self.ttl = ((ext_rcode as u32) >> 4) << 24;
+        if dnssec_ok {
+            self.ttl |= EDNS0_DNSSEC_OK;
+        }
+        Ok(())
+    }
+
+    // dnssec_allowed reports whether the DNSSEC OK bit is set.
+    pub fn dnssec_allowed(&self) -> bool {
+        self.ttl & EDNS0_DNSSEC_OK_MASK == EDNS0_DNSSEC_OK // RFC 6891 section 6.1.3
+    }
+
+    // extended_rcode returns an extended RCode.
+    //
+    // The provided rcode must be the RCode in DNS message header.
+    pub fn extended_rcode(&self, rcode: RCode) -> RCode {
+        if self.ttl & EDNS_VERSION_MASK == EDNS0_VERSION {
+            // RFC 6891 section 6.1.3
+            let ttl = ((self.ttl >> 24) << 4) as u8 | rcode as u8;
+            return RCode::from(ttl);
+        }
+        rcode
+    }
 }
-
-func (h *ResourceHeader) unpack(msg []byte, off int) (int, error) {
-    newOff := off
-    var err error
-    if newOff, err = h.Name.unpack(msg, newOff); err != nil {
-        return off, &nestedError{"Name", err}
-    }
-    if h.Type, newOff, err = unpack_type(msg, newOff); err != nil {
-        return off, &nestedError{"Type", err}
-    }
-    if h.Class, newOff, err = unpack_class(msg, newOff); err != nil {
-        return off, &nestedError{"Class", err}
-    }
-    if h.TTL, newOff, err = unpack_uint32(msg, newOff); err != nil {
-        return off, &nestedError{"TTL", err}
-    }
-    if h.Length, newOff, err = unpack_uint16(msg, newOff); err != nil {
-        return off, &nestedError{"Length", err}
-    }
-    return newOff, nil
-}
-
-// fixLen updates a packed ResourceHeader to include the length of the
-// ResourceBody.
-//
-// lenOff is the offset of the ResourceHeader.Length field in msg.
-//
-// preLen is the length that msg was before the ResourceBody was packed.
-func (h *ResourceHeader) fixLen(msg []byte, lenOff int, preLen int) error {
-    conLen := len(msg) - preLen
-    if conLen > int(^uint16(0)) {
-        return errResTooLong
-    }
-
-    // Fill in the length now that we know how long the content is.
-    pack_uint16(msg[lenOff:lenOff], uint16(conLen))
-    h.Length = uint16(conLen)
-
-    return nil
-}
-
-// EDNS(0) wire constants.
-const (
-    edns0Version = 0
-
-    edns0DNSSECOK     = 0x00008000
-    ednsVersionMask   = 0x00ff0000
-    edns0DNSSECOKMask = 0x00ff8000
-)
-
-// SetEDNS0 configures h for EDNS(0).
-//
-// The provided extRCode must be an extedned RCode.
-func (h *ResourceHeader) SetEDNS0(udpPayloadLen int, extRCode RCode, dnssecOK bool) error {
-    h.Name = Name{Data: [nameLen]byte{'.'}, Length: 1} // RFC 6891 section 6.1.2
-    h.Type = TypeOPT
-    h.Class = Class(udpPayloadLen)
-    h.TTL = uint32(extRCode) >> 4 << 24
-    if dnssecOK {
-        h.TTL |= edns0DNSSECOK
-    }
-    return nil
-}
-
-// DNSSECAllowed reports whether the DNSSEC OK bit is set.
-func (h *ResourceHeader) DNSSECAllowed() bool {
-    return h.TTL&edns0DNSSECOKMask == edns0DNSSECOK // RFC 6891 section 6.1.3
-}
-
-// ExtendedRCode returns an extended RCode.
-//
-// The provided rcode must be the RCode in DNS message header.
-func (h *ResourceHeader) ExtendedRCode(rcode RCode) RCode {
-    if h.TTL&ednsVersionMask == edns0Version { // RFC 6891 section 6.1.3
-        return RCode(h.TTL>>24<<4) | rcode
-    }
-    return rcode
-}
-*/
 
 // A ResourceBody is a DNS resource record minus the header.
 pub trait ResourceBody: fmt::Display {
-    // pack packs a Resource except for its header.
-    fn pack(
-        &self,
-        msg: &[u8],
-        compression: &mut HashMap<String, usize>,
-        compression_off: usize,
-    ) -> Result<Vec<u8>, Error>;
-
     // real_type returns the actual type of the Resource. This is used to
     // fill in the header Type field.
     fn real_type(&self) -> DNSType;
-}
 
-/*
-// pack appends the wire format of the Resource to msg.
-func (r *Resource) pack(msg []byte, compression map[string]int, compressionOff int) ([]byte, error) {
-    if r.Body == nil {
-        return msg, errNilResouceBody
-    }
-    oldMsg := msg
-    r.Header.Type = r.Body.real_type()
-    msg, lenOff, err := r.Header.pack(msg, compression, compressionOff)
-    if err != nil {
-        return msg, &nestedError{"ResourceHeader", err}
-    }
-    preLen := len(msg)
-    msg, err = r.Body.pack(msg, compression, compressionOff)
-    if err != nil {
-        return msg, &nestedError{"content", err}
-    }
-    if err := r.Header.fixLen(msg, lenOff, preLen); err != nil {
-        return oldMsg, err
-    }
-    return msg, nil
-}
+    // pack packs a Resource except for its header.
+    fn pack(
+        &self,
+        msg: Vec<u8>,
+        compression: &mut Option<HashMap<String, usize>>,
+        compression_off: usize,
+    ) -> Result<Vec<u8>, Error>;
 
-func unpackResourceBody(msg []byte, off int, hdr ResourceHeader) (ResourceBody, int, error) {
-    var (
-        r    ResourceBody
-        err  error
-        name string
-    )
-    switch hdr.Type {
-    case TypeA:
-        var rb AResource
-        rb, err = unpackAResource(msg, off)
-        r = &rb
-        name = "A"
-    case TypeNS:
-        var rb NSResource
-        rb, err = unpackNSResource(msg, off)
-        r = &rb
-        name = "NS"
-    case TypeCNAME:
-        var rb CNAMEResource
-        rb, err = unpackCNAMEResource(msg, off)
-        r = &rb
-        name = "CNAME"
-    case TypeSOA:
-        var rb SOAResource
-        rb, err = unpackSOAResource(msg, off)
-        r = &rb
-        name = "SOA"
-    case TypePTR:
-        var rb PTRResource
-        rb, err = unpackPTRResource(msg, off)
-        r = &rb
-        name = "PTR"
-    case TypeMX:
-        var rb MXResource
-        rb, err = unpackMXResource(msg, off)
-        r = &rb
-        name = "MX"
-    case TypeTXT:
-        var rb TXTResource
-        rb, err = unpackTXTResource(msg, off, hdr.Length)
-        r = &rb
-        name = "TXT"
-    case TypeAAAA:
-        var rb AAAAResource
-        rb, err = unpackAAAAResource(msg, off)
-        r = &rb
-        name = "AAAA"
-    case TypeSRV:
-        var rb SRVResource
-        rb, err = unpackSRVResource(msg, off)
-        r = &rb
-        name = "SRV"
-    case TypeOPT:
-        var rb OPTResource
-        rb, err = unpackOPTResource(msg, off, hdr.Length)
-        r = &rb
-        name = "OPT"
-    }
-    if err != nil {
-        return nil, off, &nestedError{name + " record", err}
-    }
-    if r == nil {
-        return nil, off, errors.New("invalid resource type: " + hdr.Type.String())
-    }
-    return r, off + int(hdr.Length), nil
+    fn unpack(&mut self, msg: &[u8], off: usize, length: usize) -> Result<usize, Error>;
 }
-*/
