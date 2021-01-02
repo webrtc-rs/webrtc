@@ -1,11 +1,11 @@
 #[cfg(test)]
-mod name_test;
+mod message_test;
 
 pub mod builder;
 pub mod header;
 pub mod name;
 mod packer;
-mod parser;
+pub mod parser;
 pub mod question;
 pub mod resource;
 

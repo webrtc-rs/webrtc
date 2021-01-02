@@ -40,8 +40,8 @@ const EDNS0_DNSSEC_OK_MASK: u32 = 0x00ff8000;
 
 // A Resource is a DNS resource record.
 pub struct Resource {
-    header: ResourceHeader,
-    body: Box<dyn ResourceBody>,
+    pub header: ResourceHeader,
+    pub body: Box<dyn ResourceBody>,
 }
 
 impl fmt::Display for Resource {

@@ -55,22 +55,14 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    fn resource(&mut self, _sec: Section) -> Result<Resource, Error> {
-        /*let mut r= Resource::default();
-        var err error
-        r.Header, err = self.resourceHeader(sec)
-        if err != nil {
-            return r, err
-        }
-        self.res_header_valid = false
-        r.Body, self.off, err = unpackResourceBody(self.msg, self.off, r.Header)
-        if err != nil {
-            return Resource{}, &nestedError{"unpacking " + sectionNames[sec], err}
-        }
-        self.index++
-        return r, nil*/
-        //TODO:
-        Err(ERR_NIL_RESOUCE_BODY.to_owned())
+    fn resource(&mut self, sec: Section) -> Result<Resource, Error> {
+        let header = self.resource_header(sec)?;
+        self.res_header_valid = false;
+        let (body, off) =
+            unpack_resource_body(header.typ, self.msg, self.off, header.length as usize)?;
+        self.off = off;
+        self.index += 1;
+        Ok(Resource { header, body })
     }
 
     fn resource_header(&mut self, sec: Section) -> Result<ResourceHeader, Error> {
