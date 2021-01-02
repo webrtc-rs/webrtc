@@ -48,6 +48,12 @@ pub enum DNSType {
     Unsupported,
 }
 
+impl Default for DNSType {
+    fn default() -> Self {
+        DNSType::Unsupported
+    }
+}
+
 impl From<u16> for DNSType {
     fn from(v: u16) -> Self {
         match v {
@@ -127,6 +133,12 @@ pub enum DNSClass {
     // question.Class
     ANY = 255,
     Unsupported,
+}
+
+impl Default for DNSClass {
+    fn default() -> Self {
+        DNSClass::Unsupported
+    }
 }
 
 impl From<u16> for DNSClass {
@@ -286,19 +298,19 @@ impl Message {
     pub fn unpack(&mut self, _msg: &[u8]) -> Result<(), Error> {
         /*var p Parser
         var err error
-        if m.Header, err = p.Start(msg); err != nil {
+        if m.Header, err = p.start(msg); err != nil {
             return err
         }
-        if m.Questions, err = p.AllQuestions(); err != nil {
+        if m.Questions, err = p.all_questions(); err != nil {
             return err
         }
-        if m.Answers, err = p.AllAnswers(); err != nil {
+        if m.Answers, err = p.all_answers(); err != nil {
             return err
         }
-        if m.Authorities, err = p.AllAuthorities(); err != nil {
+        if m.Authorities, err = p.all_authorities(); err != nil {
             return err
         }
-        if m.Additionals, err = p.AllAdditionals(); err != nil {
+        if m.Additionals, err = p.all_additionals(); err != nil {
             return err
         }*/
         Ok(())

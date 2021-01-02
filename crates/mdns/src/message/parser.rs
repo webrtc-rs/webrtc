@@ -1,4 +1,12 @@
-/*
+use crate::errors::*;
+use crate::message::header::{Header, HeaderInternal, Section};
+use crate::message::resource::{unpack_resource_body, Resource, ResourceBody, ResourceHeader};
+
+use crate::message::name::Name;
+use crate::message::question::Question;
+use crate::message::{DNSClass, DNSType};
+use util::Error;
+
 // A Parser allows incrementally parsing a DNS message.
 //
 // When parsing is started, the Header is parsed. Next, each question can be
@@ -11,506 +19,332 @@
 // proceeding to the next type of Resource.
 //
 // Note that there is no requirement to fully skip or parse the message.
-type Parser struct {
-    msg    []byte
-    header header
+pub struct Parser<'a> {
+    msg: &'a [u8],
+    header: HeaderInternal,
 
-    section        section
-    off            int
-    index          int
-    resHeaderValid bool
-    resHeader      ResourceHeader
+    section: Section,
+    off: usize,
+    index: usize,
+    res_header_valid: bool,
+    res_header: ResourceHeader,
 }
 
-// Start parses the header and enables the parsing of Questions.
-func (p *Parser) Start(msg []byte) (Header, error) {
-    if p.msg != nil {
-        *p = Parser{}
+impl<'a> Parser<'a> {
+    // start parses the header and enables the parsing of Questions.
+    pub fn start(&mut self, msg: &'a [u8]) -> Result<Header, Error> {
+        self.msg = msg;
+        self.off = self.header.unpack(msg, 0)?;
+        self.section = Section::Questions;
+        Ok(self.header.header())
     }
-    p.msg = msg
-    var err error
-    if p.off, err = p.header.unpack(msg, 0); err != nil {
-        return Header{}, &nestedError{"unpacking header", err}
-    }
-    p.section = sectionQuestions
-    return p.header.header(), nil
-}
 
-func (p *Parser) checkAdvance(sec section) error {
-    if p.section < sec {
-        return ErrNotStarted
-    }
-    if p.section > sec {
-        return ErrSectionDone
-    }
-    p.resHeaderValid = false
-    if p.index == int(p.header.count(sec)) {
-        p.index = 0
-        p.section++
-        return ErrSectionDone
-    }
-    return nil
-}
-
-func (p *Parser) resource(sec section) (Resource, error) {
-    var r Resource
-    var err error
-    r.Header, err = p.resourceHeader(sec)
-    if err != nil {
-        return r, err
-    }
-    p.resHeaderValid = false
-    r.Body, p.off, err = unpackResourceBody(p.msg, p.off, r.Header)
-    if err != nil {
-        return Resource{}, &nestedError{"unpacking " + sectionNames[sec], err}
-    }
-    p.index++
-    return r, nil
-}
-
-func (p *Parser) resourceHeader(sec section) (ResourceHeader, error) {
-    if p.resHeaderValid {
-        return p.resHeader, nil
-    }
-    if err := p.checkAdvance(sec); err != nil {
-        return ResourceHeader{}, err
-    }
-    var hdr ResourceHeader
-    off, err := hdr.unpack(p.msg, p.off)
-    if err != nil {
-        return ResourceHeader{}, err
-    }
-    p.resHeaderValid = true
-    p.resHeader = hdr
-    p.off = off
-    return hdr, nil
-}
-
-func (p *Parser) skip_resource(sec section) error {
-    if p.resHeaderValid {
-        newOff := p.off + int(p.resHeader.Length)
-        if newOff > len(p.msg) {
-            return errResourceLen
+    fn check_advance(&mut self, sec: Section) -> Result<(), Error> {
+        if self.section < sec {
+            return Err(ERR_NOT_STARTED.to_owned());
         }
-        p.off = newOff
-        p.resHeaderValid = false
-        p.index++
-        return nil
-    }
-    if err := p.checkAdvance(sec); err != nil {
-        return err
-    }
-    var err error
-    p.off, err = skip_resource(p.msg, p.off)
-    if err != nil {
-        return &nestedError{"skipping: " + sectionNames[sec], err}
-    }
-    p.index++
-    return nil
-}
-
-// question parses a single question.
-func (p *Parser) question() (question, error) {
-    if err := p.checkAdvance(sectionQuestions); err != nil {
-        return question{}, err
-    }
-    var name Name
-    off, err := name.unpack(p.msg, p.off)
-    if err != nil {
-        return question{}, &nestedError{"unpacking question.Name", err}
-    }
-    typ, off, err := unpack_type(p.msg, off)
-    if err != nil {
-        return question{}, &nestedError{"unpacking question.Type", err}
-    }
-    class, off, err := unpack_class(p.msg, off)
-    if err != nil {
-        return question{}, &nestedError{"unpacking question.Class", err}
-    }
-    p.off = off
-    p.index++
-    return question{name, typ, class}, nil
-}
-
-// AllQuestions parses all Questions.
-func (p *Parser) AllQuestions() ([]question, error) {
-    // Multiple questions are valid according to the spec,
-    // but servers don't actually support them. There will
-    // be at most one question here.
-    //
-    // Do not pre-allocate based on info in p.header, since
-    // the data is untrusted.
-    qs := []question{}
-    for {
-        q, err := p.question()
-        if err == ErrSectionDone {
-            return qs, nil
+        if self.section > sec {
+            return Err(ERR_SECTION_DONE.to_owned());
         }
+        self.res_header_valid = false;
+        if self.index == self.header.count(sec) as usize {
+            self.index = 0;
+            self.section = Section::from(1 + self.section as u8);
+            return Err(ERR_SECTION_DONE.to_owned());
+        }
+        Ok(())
+    }
+
+    fn resource(&mut self, _sec: Section) -> Result<Resource, Error> {
+        /*let mut r= Resource::default();
+        var err error
+        r.Header, err = self.resourceHeader(sec)
         if err != nil {
-            return nil, err
+            return r, err
         }
-        qs = append(qs, q)
-    }
-}
-
-// SkipQuestion skips a single question.
-func (p *Parser) SkipQuestion() error {
-    if err := p.checkAdvance(sectionQuestions); err != nil {
-        return err
-    }
-    off, err := skip_name(p.msg, p.off)
-    if err != nil {
-        return &nestedError{"skipping question Name", err}
-    }
-    if off, err = skip_type(p.msg, off); err != nil {
-        return &nestedError{"skipping question Type", err}
-    }
-    if off, err = skip_class(p.msg, off); err != nil {
-        return &nestedError{"skipping question Class", err}
-    }
-    p.off = off
-    p.index++
-    return nil
-}
-
-// SkipAllQuestions skips all Questions.
-func (p *Parser) SkipAllQuestions() error {
-    for {
-        if err := p.SkipQuestion(); err == ErrSectionDone {
-            return nil
-        } else if err != nil {
-            return err
-        }
-    }
-}
-
-// AnswerHeader parses a single Answer ResourceHeader.
-func (p *Parser) AnswerHeader() (ResourceHeader, error) {
-    return p.resourceHeader(sectionAnswers)
-}
-
-// Answer parses a single Answer Resource.
-func (p *Parser) Answer() (Resource, error) {
-    return p.resource(sectionAnswers)
-}
-
-// AllAnswers parses all Answer Resources.
-func (p *Parser) AllAnswers() ([]Resource, error) {
-    // The most common query is for A/AAAA, which usually returns
-    // a handful of IPs.
-    //
-    // Pre-allocate up to a certain limit, since p.header is
-    // untrusted data.
-    n := int(p.header.answers)
-    if n > 20 {
-        n = 20
-    }
-    as := make([]Resource, 0, n)
-    for {
-        a, err := p.Answer()
-        if err == ErrSectionDone {
-            return as, nil
-        }
+        self.res_header_valid = false
+        r.Body, self.off, err = unpackResourceBody(self.msg, self.off, r.Header)
         if err != nil {
-            return nil, err
+            return Resource{}, &nestedError{"unpacking " + sectionNames[sec], err}
         }
-        as = append(as, a)
+        self.index++
+        return r, nil*/
+        //TODO:
+        Err(ERR_NIL_RESOUCE_BODY.to_owned())
     }
-}
 
-// SkipAnswer skips a single Answer Resource.
-func (p *Parser) SkipAnswer() error {
-    return p.skip_resource(sectionAnswers)
-}
+    fn resource_header(&mut self, sec: Section) -> Result<ResourceHeader, Error> {
+        if self.res_header_valid {
+            return Ok(self.res_header.clone());
+        }
+        self.check_advance(sec)?;
+        let mut hdr = ResourceHeader::default();
+        let off = hdr.unpack(self.msg, self.off, 0)?;
 
-// SkipAllAnswers skips all Answer Resources.
-func (p *Parser) SkipAllAnswers() error {
-    for {
-        if err := p.SkipAnswer(); err == ErrSectionDone {
-            return nil
-        } else if err != nil {
-            return err
+        self.res_header_valid = true;
+        self.res_header = hdr.clone();
+        self.off = off;
+        Ok(hdr)
+    }
+
+    fn skip_resource(&mut self, sec: Section) -> Result<(), Error> {
+        if self.res_header_valid {
+            let new_off = self.off + self.res_header.length as usize;
+            if new_off > self.msg.len() {
+                return Err(ERR_RESOURCE_LEN.to_owned());
+            }
+            self.off = new_off;
+            self.res_header_valid = false;
+            self.index += 1;
+            return Ok(());
+        }
+        self.check_advance(sec)?;
+
+        self.off = Resource::skip(self.msg, self.off)?;
+        self.index += 1;
+        Ok(())
+    }
+
+    // question parses a single question.
+    fn question(&mut self) -> Result<Question, Error> {
+        self.check_advance(Section::Questions)?;
+        let mut name = Name::new("".to_owned())?;
+        let mut off = name.unpack(self.msg, self.off)?;
+        let mut typ = DNSType::Unsupported;
+        off = typ.unpack(self.msg, off)?;
+        let mut class = DNSClass::Unsupported;
+        off = class.unpack(self.msg, off)?;
+        self.off = off;
+        self.index += 1;
+        Ok(Question { name, typ, class })
+    }
+
+    // all_questions parses all Questions.
+    pub fn all_questions(&mut self) -> Result<Vec<Question>, Error> {
+        // Multiple questions are valid according to the spec,
+        // but servers don't actually support them. There will
+        // be at most one question here.
+        //
+        // Do not pre-allocate based on info in self.header, since
+        // the data is untrusted.
+        let mut qs = vec![];
+        loop {
+            match self.question() {
+                Err(err) => {
+                    if err == *ERR_SECTION_DONE {
+                        return Ok(qs);
+                    } else {
+                        return Err(err);
+                    }
+                }
+                Ok(q) => qs.push(q),
+            }
         }
     }
-}
 
-// AuthorityHeader parses a single Authority ResourceHeader.
-func (p *Parser) AuthorityHeader() (ResourceHeader, error) {
-    return p.resourceHeader(sectionAuthorities)
-}
+    // skip_question skips a single question.
+    pub fn skip_question(&mut self) -> Result<(), Error> {
+        self.check_advance(Section::Questions)?;
+        let mut off = Name::skip(self.msg, self.off)?;
+        off = DNSType::skip(self.msg, off)?;
+        off = DNSClass::skip(self.msg, off)?;
+        self.off = off;
+        self.index += 1;
+        Ok(())
+    }
 
-// Authority parses a single Authority Resource.
-func (p *Parser) Authority() (Resource, error) {
-    return p.resource(sectionAuthorities)
-}
+    // skip_all_questions skips all Questions.
+    pub fn skip_all_questions(&mut self) -> Result<(), Error> {
+        loop {
+            if let Err(err) = self.skip_question() {
+                if err == *ERR_SECTION_DONE {
+                    return Ok(());
+                } else {
+                    return Err(err);
+                }
+            }
+        }
+    }
 
-// AllAuthorities parses all Authority Resources.
-func (p *Parser) AllAuthorities() ([]Resource, error) {
-    // Authorities contains SOA in case of NXDOMAIN and friends,
-    // otherwise it is empty.
+    // answer_header parses a single answer ResourceHeader.
+    pub fn answer_header(&mut self) -> Result<ResourceHeader, Error> {
+        self.resource_header(Section::Answers)
+    }
+
+    // answer parses a single answer Resource.
+    pub fn answer(&mut self) -> Result<Resource, Error> {
+        self.resource(Section::Answers)
+    }
+
+    // all_answers parses all answer Resources.
+    pub fn all_answers(&mut self) -> Result<Vec<Resource>, Error> {
+        // The most common query is for A/AAAA, which usually returns
+        // a handful of IPs.
+        //
+        // Pre-allocate up to a certain limit, since self.header is
+        // untrusted data.
+        let mut n = self.header.answers as usize;
+        if n > 20 {
+            n = 20
+        }
+        let mut a = Vec::with_capacity(n);
+        loop {
+            match self.answer() {
+                Err(err) => {
+                    if err == *ERR_SECTION_DONE {
+                        return Ok(a);
+                    } else {
+                        return Err(err);
+                    }
+                }
+                Ok(r) => a.push(r),
+            }
+        }
+    }
+
+    // skip_answer skips a single answer Resource.
+    pub fn skip_answer(&mut self) -> Result<(), Error> {
+        self.skip_resource(Section::Answers)
+    }
+
+    // skip_all_answers skips all answer Resources.
+    pub fn skip_all_answers(&mut self) -> Result<(), Error> {
+        loop {
+            if let Err(err) = self.skip_answer() {
+                if err == *ERR_SECTION_DONE {
+                    return Ok(());
+                } else {
+                    return Err(err);
+                }
+            }
+        }
+    }
+
+    // authority_header parses a single authority ResourceHeader.
+    pub fn authority_header(&mut self) -> Result<ResourceHeader, Error> {
+        self.resource_header(Section::Authorities)
+    }
+
+    // authority parses a single authority Resource.
+    pub fn authority(&mut self) -> Result<Resource, Error> {
+        self.resource(Section::Authorities)
+    }
+
+    // all_authorities parses all authority Resources.
+    pub fn all_authorities(&mut self) -> Result<Vec<Resource>, Error> {
+        // Authorities contains SOA in case of NXDOMAIN and friends,
+        // otherwise it is empty.
+        //
+        // Pre-allocate up to a certain limit, since self.header is
+        // untrusted data.
+        let mut n = self.header.authorities as usize;
+        if n > 10 {
+            n = 10;
+        }
+        let mut a = Vec::with_capacity(n);
+        loop {
+            match self.authority() {
+                Err(err) => {
+                    if err == *ERR_SECTION_DONE {
+                        return Ok(a);
+                    } else {
+                        return Err(err);
+                    }
+                }
+                Ok(r) => a.push(r),
+            }
+        }
+    }
+
+    // skip_authority skips a single authority Resource.
+    pub fn skip_authority(&mut self) -> Result<(), Error> {
+        self.skip_resource(Section::Authorities)
+    }
+
+    // skip_all_authorities skips all authority Resources.
+    pub fn skip_all_authorities(&mut self) -> Result<(), Error> {
+        loop {
+            if let Err(err) = self.skip_authority() {
+                if err == *ERR_SECTION_DONE {
+                    return Ok(());
+                } else {
+                    return Err(err);
+                }
+            }
+        }
+    }
+
+    // additional_header parses a single additional ResourceHeader.
+    pub fn additional_header(&mut self) -> Result<ResourceHeader, Error> {
+        self.resource_header(Section::Additionals)
+    }
+
+    // additional parses a single additional Resource.
+    pub fn additional(&mut self) -> Result<Resource, Error> {
+        self.resource(Section::Additionals)
+    }
+
+    // all_additionals parses all additional Resources.
+    pub fn all_additionals(&mut self) -> Result<Vec<Resource>, Error> {
+        // Additionals usually contain OPT, and sometimes A/AAAA
+        // glue records.
+        //
+        // Pre-allocate up to a certain limit, since self.header is
+        // untrusted data.
+        let mut n = self.header.additionals as usize;
+        if n > 10 {
+            n = 10;
+        }
+        let mut a = Vec::with_capacity(n);
+        loop {
+            match self.additional() {
+                Err(err) => {
+                    if err == *ERR_SECTION_DONE {
+                        return Ok(a);
+                    } else {
+                        return Err(err);
+                    }
+                }
+                Ok(r) => a.push(r),
+            }
+        }
+    }
+
+    // skip_additional skips a single additional Resource.
+    pub fn skip_additional(&mut self) -> Result<(), Error> {
+        self.skip_resource(Section::Additionals)
+    }
+
+    // skip_all_additionals skips all additional Resources.
+    pub fn skip_all_additionals(&mut self) -> Result<(), Error> {
+        loop {
+            if let Err(err) = self.skip_additional() {
+                if err == *ERR_SECTION_DONE {
+                    return Ok(());
+                } else {
+                    return Err(err);
+                }
+            }
+        }
+    }
+
+    // resource_body parses a single resource_boy.
     //
-    // Pre-allocate up to a certain limit, since p.header is
-    // untrusted data.
-    n := int(p.header.authorities)
-    if n > 10 {
-        n = 10
-    }
-    as := make([]Resource, 0, n)
-    for {
-        a, err := p.Authority()
-        if err == ErrSectionDone {
-            return as, nil
+    // One of the XXXHeader methods must have been called before calling this
+    // method.
+    pub fn resource_body(&mut self) -> Result<Box<dyn ResourceBody>, Error> {
+        if !self.res_header_valid {
+            return Err(ERR_NOT_STARTED.to_owned());
         }
-        if err != nil {
-            return nil, err
-        }
-        as = append(as, a)
+        let (rb, _off) = unpack_resource_body(
+            self.res_header.typ,
+            self.msg,
+            self.off,
+            self.res_header.length as usize,
+        )?;
+        self.off += self.res_header.length as usize;
+        self.res_header_valid = false;
+        self.index += 1;
+        Ok(rb)
     }
 }
-
-// SkipAuthority skips a single Authority Resource.
-func (p *Parser) SkipAuthority() error {
-    return p.skip_resource(sectionAuthorities)
-}
-
-// SkipAllAuthorities skips all Authority Resources.
-func (p *Parser) SkipAllAuthorities() error {
-    for {
-        if err := p.SkipAuthority(); err == ErrSectionDone {
-            return nil
-        } else if err != nil {
-            return err
-        }
-    }
-}
-
-// AdditionalHeader parses a single Additional ResourceHeader.
-func (p *Parser) AdditionalHeader() (ResourceHeader, error) {
-    return p.resourceHeader(sectionAdditionals)
-}
-
-// Additional parses a single Additional Resource.
-func (p *Parser) Additional() (Resource, error) {
-    return p.resource(sectionAdditionals)
-}
-
-// AllAdditionals parses all Additional Resources.
-func (p *Parser) AllAdditionals() ([]Resource, error) {
-    // Additionals usually contain OPT, and sometimes A/AAAA
-    // glue records.
-    //
-    // Pre-allocate up to a certain limit, since p.header is
-    // untrusted data.
-    n := int(p.header.additionals)
-    if n > 10 {
-        n = 10
-    }
-    as := make([]Resource, 0, n)
-    for {
-        a, err := p.Additional()
-        if err == ErrSectionDone {
-            return as, nil
-        }
-        if err != nil {
-            return nil, err
-        }
-        as = append(as, a)
-    }
-}
-
-// SkipAdditional skips a single Additional Resource.
-func (p *Parser) SkipAdditional() error {
-    return p.skip_resource(sectionAdditionals)
-}
-
-// SkipAllAdditionals skips all Additional Resources.
-func (p *Parser) SkipAllAdditionals() error {
-    for {
-        if err := p.SkipAdditional(); err == ErrSectionDone {
-            return nil
-        } else if err != nil {
-            return err
-        }
-    }
-}
-
-// cnameresource parses a single cnameresource.
-//
-// One of the XXXHeader methods must have been called before calling this
-// method.
-func (p *Parser) cnameresource() (cnameresource, error) {
-    if !p.resHeaderValid || p.resHeader.Type != TypeCNAME {
-        return cnameresource{}, ErrNotStarted
-    }
-    r, err := unpackCNAMEResource(p.msg, p.off)
-    if err != nil {
-        return cnameresource{}, err
-    }
-    p.off += int(p.resHeader.Length)
-    p.resHeaderValid = false
-    p.index++
-    return r, nil
-}
-
-// MXResource parses a single MXResource.
-//
-// One of the XXXHeader methods must have been called before calling this
-// method.
-func (p *Parser) MXResource() (MXResource, error) {
-    if !p.resHeaderValid || p.resHeader.Type != TypeMX {
-        return MXResource{}, ErrNotStarted
-    }
-    r, err := unpackMXResource(p.msg, p.off)
-    if err != nil {
-        return MXResource{}, err
-    }
-    p.off += int(p.resHeader.Length)
-    p.resHeaderValid = false
-    p.index++
-    return r, nil
-}
-
-// NSResource parses a single NSResource.
-//
-// One of the XXXHeader methods must have been called before calling this
-// method.
-func (p *Parser) NSResource() (NSResource, error) {
-    if !p.resHeaderValid || p.resHeader.Type != TypeNS {
-        return NSResource{}, ErrNotStarted
-    }
-    r, err := unpackNSResource(p.msg, p.off)
-    if err != nil {
-        return NSResource{}, err
-    }
-    p.off += int(p.resHeader.Length)
-    p.resHeaderValid = false
-    p.index++
-    return r, nil
-}
-
-// PTRResource parses a single PTRResource.
-//
-// One of the XXXHeader methods must have been called before calling this
-// method.
-func (p *Parser) PTRResource() (PTRResource, error) {
-    if !p.resHeaderValid || p.resHeader.Type != TypePTR {
-        return PTRResource{}, ErrNotStarted
-    }
-    r, err := unpackPTRResource(p.msg, p.off)
-    if err != nil {
-        return PTRResource{}, err
-    }
-    p.off += int(p.resHeader.Length)
-    p.resHeaderValid = false
-    p.index++
-    return r, nil
-}
-
-// SOAResource parses a single SOAResource.
-//
-// One of the XXXHeader methods must have been called before calling this
-// method.
-func (p *Parser) SOAResource() (SOAResource, error) {
-    if !p.resHeaderValid || p.resHeader.Type != TypeSOA {
-        return SOAResource{}, ErrNotStarted
-    }
-    r, err := unpackSOAResource(p.msg, p.off)
-    if err != nil {
-        return SOAResource{}, err
-    }
-    p.off += int(p.resHeader.Length)
-    p.resHeaderValid = false
-    p.index++
-    return r, nil
-}
-
-// TXTResource parses a single TXTResource.
-//
-// One of the XXXHeader methods must have been called before calling this
-// method.
-func (p *Parser) TXTResource() (TXTResource, error) {
-    if !p.resHeaderValid || p.resHeader.Type != TypeTXT {
-        return TXTResource{}, ErrNotStarted
-    }
-    r, err := unpackTXTResource(p.msg, p.off, p.resHeader.Length)
-    if err != nil {
-        return TXTResource{}, err
-    }
-    p.off += int(p.resHeader.Length)
-    p.resHeaderValid = false
-    p.index++
-    return r, nil
-}
-
-// SRVResource parses a single SRVResource.
-//
-// One of the XXXHeader methods must have been called before calling this
-// method.
-func (p *Parser) SRVResource() (SRVResource, error) {
-    if !p.resHeaderValid || p.resHeader.Type != TypeSRV {
-        return SRVResource{}, ErrNotStarted
-    }
-    r, err := unpackSRVResource(p.msg, p.off)
-    if err != nil {
-        return SRVResource{}, err
-    }
-    p.off += int(p.resHeader.Length)
-    p.resHeaderValid = false
-    p.index++
-    return r, nil
-}
-
-// AResource parses a single AResource.
-//
-// One of the XXXHeader methods must have been called before calling this
-// method.
-func (p *Parser) AResource() (AResource, error) {
-    if !p.resHeaderValid || p.resHeader.Type != TypeA {
-        return AResource{}, ErrNotStarted
-    }
-    r, err := unpackAResource(p.msg, p.off)
-    if err != nil {
-        return AResource{}, err
-    }
-    p.off += int(p.resHeader.Length)
-    p.resHeaderValid = false
-    p.index++
-    return r, nil
-}
-
-// AAAAResource parses a single AAAAResource.
-//
-// One of the XXXHeader methods must have been called before calling this
-// method.
-func (p *Parser) AAAAResource() (AAAAResource, error) {
-    if !p.resHeaderValid || p.resHeader.Type != TypeAAAA {
-        return AAAAResource{}, ErrNotStarted
-    }
-    r, err := unpackAAAAResource(p.msg, p.off)
-    if err != nil {
-        return AAAAResource{}, err
-    }
-    p.off += int(p.resHeader.Length)
-    p.resHeaderValid = false
-    p.index++
-    return r, nil
-}
-
-// OPTResource parses a single OPTResource.
-//
-// One of the XXXHeader methods must have been called before calling this
-// method.
-func (p *Parser) OPTResource() (OPTResource, error) {
-    if !p.resHeaderValid || p.resHeader.Type != TypeOPT {
-        return OPTResource{}, ErrNotStarted
-    }
-    r, err := unpackOPTResource(p.msg, p.off, p.resHeader.Length)
-    if err != nil {
-        return OPTResource{}, err
-    }
-    p.off += int(p.resHeader.Length)
-    p.resHeaderValid = false
-    p.index++
-    return r, nil
-}
-*/

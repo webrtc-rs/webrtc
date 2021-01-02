@@ -250,7 +250,7 @@ func (c *Conn) start() { //nolint gocognit
             c.mu.RLock()
             defer c.mu.RUnlock()
 
-            if _, err := p.Start(b[:n]); err != nil {
+            if _, err := p.start(b[:n]); err != nil {
                 c.log.Warnf("Failed to parse mDNS packet %v", err)
                 return
             }
@@ -278,7 +278,7 @@ func (c *Conn) start() { //nolint gocognit
             }
 
             for i := 0; i <= MAX_MESSAGE_RECORDS; i++ {
-                a, err := p.AnswerHeader()
+                a, err := p.answer_header()
                 if errors.Is(err, dnsmessage.ErrSectionDone) {
                     return
                 }

@@ -64,15 +64,29 @@ pub(crate) enum Section {
     Done = 6,
 }
 
+impl From<u8> for Section {
+    fn from(v: u8) -> Self {
+        match v {
+            0 => Section::NotStarted,
+            1 => Section::Header,
+            2 => Section::Questions,
+            3 => Section::Answers,
+            4 => Section::Authorities,
+            5 => Section::Additionals,
+            _ => Section::Done,
+        }
+    }
+}
+
 impl fmt::Display for Section {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
             Section::NotStarted => "NotStarted",
             Section::Header => "Header",
             Section::Questions => "question",
-            Section::Answers => "Answer",
-            Section::Authorities => "Authority",
-            Section::Additionals => "Additional",
+            Section::Answers => "answer",
+            Section::Authorities => "authority",
+            Section::Additionals => "additional",
             Section::Done => "Done",
         };
         write!(f, "{}", s)

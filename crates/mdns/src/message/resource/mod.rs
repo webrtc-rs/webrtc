@@ -75,66 +75,10 @@ impl Resource {
 
     pub fn unpack(&mut self, msg: &[u8], mut off: usize) -> Result<usize, Error> {
         off = self.header.unpack(msg, off, 0)?;
-        off = self.unpack_resource_body(msg, off)?;
+        let (rb, off) =
+            unpack_resource_body(self.header.typ, msg, off, self.header.length as usize)?;
+        self.body = rb;
         Ok(off)
-    }
-
-    fn unpack_resource_body(&mut self, msg: &[u8], mut off: usize) -> Result<usize, Error> {
-        self.body = match self.header.typ {
-            DNSType::A => {
-                let mut rb = AResource::default();
-                off = rb.unpack(msg, off, 0)?;
-                Box::new(rb)
-            }
-            DNSType::NS => {
-                let mut rb = NSResource::default();
-                off = rb.unpack(msg, off, 0)?;
-                Box::new(rb)
-            }
-            DNSType::CNAME => {
-                let mut rb = CNAMEResource::default();
-                off = rb.unpack(msg, off, 0)?;
-                Box::new(rb)
-            }
-            DNSType::SOA => {
-                let mut rb = SOAResource::default();
-                off = rb.unpack(msg, off, 0)?;
-                Box::new(rb)
-            }
-            DNSType::PTR => {
-                let mut rb = PTRResource::default();
-                off = rb.unpack(msg, off, 0)?;
-                Box::new(rb)
-            }
-            DNSType::MX => {
-                let mut rb = MXResource::default();
-                off = rb.unpack(msg, off, 0)?;
-                Box::new(rb)
-            }
-            DNSType::TXT => {
-                let mut rb = TXTResource::default();
-                off = rb.unpack(msg, off, self.header.length as usize)?;
-                Box::new(rb)
-            }
-            DNSType::AAAA => {
-                let mut rb = AAAAResource::default();
-                off = rb.unpack(msg, off, 0)?;
-                Box::new(rb)
-            }
-            DNSType::SRV => {
-                let mut rb = SRVResource::default();
-                off = rb.unpack(msg, off, 0)?;
-                Box::new(rb)
-            }
-            DNSType::OPT => {
-                let mut rb = OPTResource::default();
-                off = rb.unpack(msg, off, self.header.length as usize)?;
-                Box::new(rb)
-            }
-            _ => return Err(ERR_NIL_RESOUCE_BODY.to_owned()),
-        };
-
-        Ok(off + self.header.length as usize)
     }
 
     pub(crate) fn skip(msg: &[u8], off: usize) -> Result<usize, Error> {
@@ -153,7 +97,7 @@ impl Resource {
 
 // A ResourceHeader is the header of a DNS resource record. There are
 // many types of DNS resource records, but they all share the same header.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct ResourceHeader {
     // Name is the domain name for which this resource record pertains.
     pub name: Name,
@@ -273,4 +217,29 @@ pub trait ResourceBody: fmt::Display {
     ) -> Result<Vec<u8>, Error>;
 
     fn unpack(&mut self, msg: &[u8], off: usize, length: usize) -> Result<usize, Error>;
+}
+
+pub fn unpack_resource_body(
+    typ: DNSType,
+    msg: &[u8],
+    mut off: usize,
+    length: usize,
+) -> Result<(Box<dyn ResourceBody>, usize), Error> {
+    let mut rb: Box<dyn ResourceBody> = match typ {
+        DNSType::A => Box::new(AResource::default()),
+        DNSType::NS => Box::new(NSResource::default()),
+        DNSType::CNAME => Box::new(CNAMEResource::default()),
+        DNSType::SOA => Box::new(SOAResource::default()),
+        DNSType::PTR => Box::new(PTRResource::default()),
+        DNSType::MX => Box::new(MXResource::default()),
+        DNSType::TXT => Box::new(TXTResource::default()),
+        DNSType::AAAA => Box::new(AAAAResource::default()),
+        DNSType::SRV => Box::new(SRVResource::default()),
+        DNSType::OPT => Box::new(OPTResource::default()),
+        _ => return Err(ERR_NIL_RESOUCE_BODY.to_owned()),
+    };
+
+    off = rb.unpack(msg, off, length)?;
+
+    Ok((rb, off + length))
 }
