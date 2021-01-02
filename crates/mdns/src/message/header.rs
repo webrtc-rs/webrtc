@@ -53,78 +53,95 @@ impl Header {
     }
 }
 
-/*
+pub(crate) enum Section {
+    NotStarted,
+    Header,
+    Questions,
+    Answers,
+    Authorities,
+    Additionals,
+    Done,
+}
 
+impl fmt::Display for Section {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match *self {
+            Section::NotStarted => "NotStarted",
+            Section::Header => "Header",
+            Section::Questions => "Question",
+            Section::Answers => "Answer",
+            Section::Authorities => "Authority",
+            Section::Additionals => "Additional",
+            Section::Done => "Done",
+        };
+        write!(f, "{}", s)
+    }
+}
 
 // header is the wire format for a DNS message header.
-type header struct {
-    id          uint16
-    bits        uint16
-    questions   uint16
-    answers     uint16
-    authorities uint16
-    additionals uint16
+pub(crate) struct HeaderInternal {
+    pub(crate) id: u16,
+    pub(crate) bits: u16,
+    pub(crate) questions: u16,
+    pub(crate) answers: u16,
+    pub(crate) authorities: u16,
+    pub(crate) additionals: u16,
 }
 
-func (h *header) count(sec section) uint16 {
-    switch sec {
-    case sectionQuestions:
-        return h.questions
-    case sectionAnswers:
-        return h.answers
-    case sectionAuthorities:
-        return h.authorities
-    case sectionAdditionals:
-        return h.additionals
+impl HeaderInternal {
+    pub(crate) fn count(&self, sec: Section) -> u16 {
+        match sec {
+            Section::Questions => self.questions,
+            Section::Answers => self.answers,
+            Section::Authorities => self.authorities,
+            Section::Additionals => self.additionals,
+            _ => 0,
+        }
     }
-    return 0
-}
 
-// pack appends the wire format of the header to msg.
-func (h *header) pack(msg []byte) []byte {
-    msg = pack_uint16(msg, h.id)
-    msg = pack_uint16(msg, h.bits)
-    msg = pack_uint16(msg, h.questions)
-    msg = pack_uint16(msg, h.answers)
-    msg = pack_uint16(msg, h.authorities)
-    return pack_uint16(msg, h.additionals)
-}
+    // pack appends the wire format of the header to msg.
+    pub(crate) fn pack(&self, mut msg: Vec<u8>) -> Result<Vec<u8>, Error> {
+        msg = pack_uint16(msg, self.id);
+        msg = pack_uint16(msg, self.bits);
+        msg = pack_uint16(msg, self.questions);
+        msg = pack_uint16(msg, self.answers);
+        msg = pack_uint16(msg, self.authorities);
+        msg = pack_uint16(msg, self.additionals);
+        Ok(msg)
+    }
 
-func (h *header) unpack(msg []byte, off int) (int, error) {
-    newOff := off
-    var err error
-    if h.id, newOff, err = unpack_uint16(msg, newOff); err != nil {
-        return off, &nestedError{"id", err}
-    }
-    if h.bits, newOff, err = unpack_uint16(msg, newOff); err != nil {
-        return off, &nestedError{"bits", err}
-    }
-    if h.questions, newOff, err = unpack_uint16(msg, newOff); err != nil {
-        return off, &nestedError{"questions", err}
-    }
-    if h.answers, newOff, err = unpack_uint16(msg, newOff); err != nil {
-        return off, &nestedError{"answers", err}
-    }
-    if h.authorities, newOff, err = unpack_uint16(msg, newOff); err != nil {
-        return off, &nestedError{"authorities", err}
-    }
-    if h.additionals, newOff, err = unpack_uint16(msg, newOff); err != nil {
-        return off, &nestedError{"additionals", err}
-    }
-    return newOff, nil
-}
+    pub(crate) fn unpack(&mut self, msg: &[u8], off: usize) -> Result<usize, Error> {
+        let (id, off) = unpack_uint16(msg, off)?;
+        self.id = id;
 
-func (h *header) header() Header {
-    return Header{
-        ID:                 h.id,
-        Response:           (h.bits & HEADER_BIT_QR) != 0,
-        OpCode:             OpCode(h.bits>>11) & 0xF,
-        Authoritative:      (h.bits & HEADER_BIT_AA) != 0,
-        Truncated:          (h.bits & HEADER_BIT_TC) != 0,
-        RecursionDesired:   (h.bits & HEADER_BIT_RD) != 0,
-        RecursionAvailable: (h.bits & HEADER_BIT_RA) != 0,
-        RCode:              RCode(h.bits & 0xF),
+        let (bits, off) = unpack_uint16(msg, off)?;
+        self.bits = bits;
+
+        let (questions, off) = unpack_uint16(msg, off)?;
+        self.questions = questions;
+
+        let (answers, off) = unpack_uint16(msg, off)?;
+        self.answers = answers;
+
+        let (authorities, off) = unpack_uint16(msg, off)?;
+        self.authorities = authorities;
+
+        let (additionals, off) = unpack_uint16(msg, off)?;
+        self.additionals = additionals;
+
+        Ok(off)
+    }
+
+    pub(crate) fn header(&self) -> Header {
+        Header {
+            id: self.id,
+            response: (self.bits & HEADER_BIT_QR) != 0,
+            op_code: ((self.bits >> 11) & 0xF) as OpCode,
+            authoritative: (self.bits & HEADER_BIT_AA) != 0,
+            truncated: (self.bits & HEADER_BIT_TC) != 0,
+            recursion_desired: (self.bits & HEADER_BIT_RD) != 0,
+            recursion_available: (self.bits & HEADER_BIT_RA) != 0,
+            rcode: RCode::from((self.bits & 0xF) as u8),
+        }
     }
 }
-
- */

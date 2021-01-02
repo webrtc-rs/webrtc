@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod name_test;
 
-pub mod body;
 pub mod builder;
 pub mod header;
 pub mod name;
@@ -10,10 +9,16 @@ mod parser;
 pub mod question;
 pub mod resource;
 
+use header::*;
 use packer::*;
+use question::*;
+use resource::*;
+
+use crate::errors::*;
 
 use std::fmt;
 
+use std::collections::HashMap;
 use util::Error;
 
 // Message formats
@@ -172,7 +177,7 @@ impl DNSClass {
 }
 
 // An OpCode is a DNS operation code.
-type OpCode = u16;
+pub type OpCode = u16;
 
 // An RCode is a DNS response status code.
 #[derive(Copy, Clone)]
@@ -242,27 +247,129 @@ const HEADER_BIT_TC: u16 = 1 << 9; // truncated
 const HEADER_BIT_RD: u16 = 1 << 8; // recursion desired
 const HEADER_BIT_RA: u16 = 1 << 7; // recursion available
 
-enum Section {
-    NotStarted,
-    Header,
-    Questions,
-    Answers,
-    Authorities,
-    Additionals,
-    Done,
+// Message is a representation of a DNS message.
+pub struct Message {
+    header: Header,
+    questions: Vec<Question>,
+    answers: Vec<Resource>,
+    authorities: Vec<Resource>,
+    additionals: Vec<Resource>,
 }
 
-impl fmt::Display for Section {
+impl fmt::Display for Message {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = match *self {
-            Section::NotStarted => "NotStarted",
-            Section::Header => "Header",
-            Section::Questions => "Question",
-            Section::Answers => "Answer",
-            Section::Authorities => "Authority",
-            Section::Additionals => "Additional",
-            Section::Done => "Done",
-        };
+        let mut s = "dnsmessage.Message{Header: ".to_owned();
+        s += self.header.to_string().as_str();
+
+        s += ", Questions: ";
+        let v: Vec<String> = self.questions.iter().map(|q| q.to_string()).collect();
+        s += &v.join(", ");
+
+        s += ", Answers: ";
+        let v: Vec<String> = self.answers.iter().map(|q| q.to_string()).collect();
+        s += &v.join(", ");
+
+        s += ", Authorities: ";
+        let v: Vec<String> = self.authorities.iter().map(|q| q.to_string()).collect();
+        s += &v.join(", ");
+
+        s += ", Additionals: ";
+        let v: Vec<String> = self.additionals.iter().map(|q| q.to_string()).collect();
+        s += &v.join(", ");
+
         write!(f, "{}", s)
+    }
+}
+
+impl Message {
+    // Unpack parses a full Message.
+    pub fn unpack(&mut self, _msg: &[u8]) -> Result<(), Error> {
+        /*var p Parser
+        var err error
+        if m.Header, err = p.Start(msg); err != nil {
+            return err
+        }
+        if m.Questions, err = p.AllQuestions(); err != nil {
+            return err
+        }
+        if m.Answers, err = p.AllAnswers(); err != nil {
+            return err
+        }
+        if m.Authorities, err = p.AllAuthorities(); err != nil {
+            return err
+        }
+        if m.Additionals, err = p.AllAdditionals(); err != nil {
+            return err
+        }*/
+        Ok(())
+    }
+
+    // Pack packs a full Message.
+    pub fn pack(&self) -> Result<Vec<u8>, Error> {
+        self.append_pack(vec![])
+    }
+
+    // append_pack is like Pack but appends the full Message to b and returns the
+    // extended buffer.
+    pub fn append_pack(&self, b: Vec<u8>) -> Result<Vec<u8>, Error> {
+        // Validate the lengths. It is very unlikely that anyone will try to
+        // pack more than 65535 of any particular type, but it is possible and
+        // we should fail gracefully.
+        if self.questions.len() > u16::MAX as usize {
+            return Err(ERR_TOO_MANY_QUESTIONS.to_owned());
+        }
+        if self.answers.len() > u16::MAX as usize {
+            return Err(ERR_TOO_MANY_ANSWERS.to_owned());
+        }
+        if self.authorities.len() > u16::MAX as usize {
+            return Err(ERR_TOO_MANY_AUTHORITIES.to_owned());
+        }
+        if self.additionals.len() > u16::MAX as usize {
+            return Err(ERR_TOO_MANY_ADDITIONALS.to_owned());
+        }
+
+        let (id, bits) = self.header.pack();
+
+        let questions = self.questions.len() as u16;
+        let answers = self.answers.len() as u16;
+        let authorities = self.authorities.len() as u16;
+        let additionals = self.additionals.len() as u16;
+
+        let h = HeaderInternal {
+            id,
+            bits,
+            questions,
+            answers,
+            authorities,
+            additionals,
+        };
+
+        let compression_off = b.len();
+        let mut msg = h.pack(b)?;
+
+        // RFC 1035 allows (but does not require) compression for packing. RFC
+        // 1035 requires unpacking implementations to support compression, so
+        // unconditionally enabling it is fine.
+        //
+        // DNS lookups are typically done over UDP, and RFC 1035 states that UDP
+        // DNS messages can be a maximum of 512 bytes long. Without compression,
+        // many DNS response messages are over this limit, so enabling
+        // compression will help ensure compliance.
+        let mut compression = Some(HashMap::new());
+
+        for question in &self.questions {
+            msg = question.pack(msg, &mut compression, compression_off)?;
+        }
+        for answer in &self.answers {
+            msg = answer.pack(msg, &mut compression, compression_off)?;
+        }
+        for authority in &self.authorities {
+            msg = authority.pack(msg, &mut compression, compression_off)?;
+        }
+        for additional in &self.additionals {
+            msg = additional.pack(msg, &mut compression, compression_off)?;
+        }
+
+        Ok(msg)
     }
 }
