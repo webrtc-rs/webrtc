@@ -3,6 +3,7 @@ use crate::message::name::*;
 use crate::message::packer::*;
 
 // An MXResource is an mx Resource record.
+#[derive(Default)]
 pub struct MXResource {
     pref: u16,
     mx: Name,

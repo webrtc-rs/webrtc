@@ -3,6 +3,7 @@ use crate::message::name::*;
 use crate::message::packer::*;
 
 // An SRVResource is an SRV Resource record.
+#[derive(Default)]
 pub struct SRVResource {
     priority: u16,
     weight: u16,

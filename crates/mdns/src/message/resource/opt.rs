@@ -6,6 +6,7 @@ use crate::message::packer::*;
 //
 // The pseudo resource record is part of the extension mechanisms for DNS
 // as defined in RFC 6891.
+#[derive(Default)]
 pub struct OPTResource {
     options: Vec<DNSOption>,
 }
@@ -14,6 +15,7 @@ pub struct OPTResource {
 //
 // The message option is part of the extension mechanisms for DNS as
 // defined in RFC 6891.
+#[derive(Default)]
 pub struct DNSOption {
     code: u16, // option code
     data: Vec<u8>,

@@ -12,6 +12,9 @@
  <a href="https://deps.rs/repo/github/webrtc-rs/mdns"> 
   <img src="https://deps.rs/repo/github/webrtc-rs/mdns/status.svg">
  </a>
+ <a href="https://crates.io/crates/webrtc-rs"> 
+  <img src="https://img.shields.io/crates/v/webrtc-rs.svg">
+ </a> 
  <a href="https://docs.rs/webrtc-rs-mdns"> 
   <img src="https://docs.rs/webrtc-rs-mdns/badge.svg">
  </a>
@@ -20,5 +23,5 @@
  </a>
 </p>
 <p align="center">
- A pure Rust implementation of mDNS. Rewrite Pion mDNS (<a href="http://Pion.ly">http://Pion.ly</a>) in Rust
+ A pure Rust implementation of mDNS. Rewrite <a href="https://github.com/pion/mdns">Pion mDNS</a> in Rust
 </p>
