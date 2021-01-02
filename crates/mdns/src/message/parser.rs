@@ -1,7 +1,7 @@
 /*
 // A Parser allows incrementally parsing a DNS message.
 //
-// When parsing is started, the Header is parsed. Next, each Question can be
+// When parsing is started, the Header is parsed. Next, each question can be
 // either parsed or skipped. Alternatively, all Questions can be skipped at
 // once. When all Questions have been parsed, attempting to parse Questions
 // will return (nil, nil) and attempting to skip Questions will return
@@ -109,40 +109,40 @@ func (p *Parser) skip_resource(sec section) error {
     return nil
 }
 
-// Question parses a single Question.
-func (p *Parser) Question() (Question, error) {
+// question parses a single question.
+func (p *Parser) question() (question, error) {
     if err := p.checkAdvance(sectionQuestions); err != nil {
-        return Question{}, err
+        return question{}, err
     }
     var name Name
     off, err := name.unpack(p.msg, p.off)
     if err != nil {
-        return Question{}, &nestedError{"unpacking Question.Name", err}
+        return question{}, &nestedError{"unpacking question.Name", err}
     }
     typ, off, err := unpack_type(p.msg, off)
     if err != nil {
-        return Question{}, &nestedError{"unpacking Question.Type", err}
+        return question{}, &nestedError{"unpacking question.Type", err}
     }
     class, off, err := unpack_class(p.msg, off)
     if err != nil {
-        return Question{}, &nestedError{"unpacking Question.Class", err}
+        return question{}, &nestedError{"unpacking question.Class", err}
     }
     p.off = off
     p.index++
-    return Question{name, typ, class}, nil
+    return question{name, typ, class}, nil
 }
 
 // AllQuestions parses all Questions.
-func (p *Parser) AllQuestions() ([]Question, error) {
+func (p *Parser) AllQuestions() ([]question, error) {
     // Multiple questions are valid according to the spec,
     // but servers don't actually support them. There will
     // be at most one question here.
     //
     // Do not pre-allocate based on info in p.header, since
     // the data is untrusted.
-    qs := []Question{}
+    qs := []question{}
     for {
-        q, err := p.Question()
+        q, err := p.question()
         if err == ErrSectionDone {
             return qs, nil
         }
@@ -153,20 +153,20 @@ func (p *Parser) AllQuestions() ([]Question, error) {
     }
 }
 
-// SkipQuestion skips a single Question.
+// SkipQuestion skips a single question.
 func (p *Parser) SkipQuestion() error {
     if err := p.checkAdvance(sectionQuestions); err != nil {
         return err
     }
     off, err := skip_name(p.msg, p.off)
     if err != nil {
-        return &nestedError{"skipping Question Name", err}
+        return &nestedError{"skipping question Name", err}
     }
     if off, err = skip_type(p.msg, off); err != nil {
-        return &nestedError{"skipping Question Type", err}
+        return &nestedError{"skipping question Type", err}
     }
     if off, err = skip_class(p.msg, off); err != nil {
-        return &nestedError{"skipping Question Class", err}
+        return &nestedError{"skipping question Class", err}
     }
     p.off = off
     p.index++
@@ -334,17 +334,17 @@ func (p *Parser) SkipAllAdditionals() error {
     }
 }
 
-// CNAMEResource parses a single CNAMEResource.
+// cnameresource parses a single cnameresource.
 //
 // One of the XXXHeader methods must have been called before calling this
 // method.
-func (p *Parser) CNAMEResource() (CNAMEResource, error) {
+func (p *Parser) cnameresource() (cnameresource, error) {
     if !p.resHeaderValid || p.resHeader.Type != TypeCNAME {
-        return CNAMEResource{}, ErrNotStarted
+        return cnameresource{}, ErrNotStarted
     }
     r, err := unpackCNAMEResource(p.msg, p.off)
     if err != nil {
-        return CNAMEResource{}, err
+        return cnameresource{}, err
     }
     p.off += int(p.resHeader.Length)
     p.resHeaderValid = false

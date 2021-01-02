@@ -156,26 +156,26 @@ impl Resource {
 #[derive(Clone)]
 pub struct ResourceHeader {
     // Name is the domain name for which this resource record pertains.
-    name: Name,
+    pub name: Name,
 
     // Type is the type of DNS resource record.
     //
     // This field will be set automatically during packing.
-    typ: DNSType,
+    pub typ: DNSType,
 
     // Class is the class of network to which this DNS resource record
     // pertains.
-    class: DNSClass,
+    pub class: DNSClass,
 
     // TTL is the length of time (measured in seconds) which this resource
     // record is valid for (time to live). All Resources in a set should
     // have the same TTL (RFC 2181 Section 5.2).
-    ttl: u32,
+    pub ttl: u32,
 
     // Length is the length of data in the resource record after the header.
     //
     // This field will be set automatically during packing.
-    length: u16,
+    pub length: u16,
 }
 
 impl fmt::Display for ResourceHeader {
@@ -192,7 +192,7 @@ impl ResourceHeader {
     // pack appends the wire format of the ResourceHeader to oldMsg.
     //
     // lenOff is the offset in msg where the Length field was packed.
-    fn pack(
+    pub fn pack(
         &self,
         mut msg: Vec<u8>,
         compression: &mut Option<HashMap<String, usize>>,
@@ -206,7 +206,7 @@ impl ResourceHeader {
         Ok(msg)
     }
 
-    fn unpack(&mut self, msg: &[u8], off: usize, _length: usize) -> Result<usize, Error> {
+    pub fn unpack(&mut self, msg: &[u8], off: usize, _length: usize) -> Result<usize, Error> {
         let mut new_off = off;
         new_off = self.name.unpack(msg, new_off)?;
         new_off = self.typ.unpack(msg, new_off)?;

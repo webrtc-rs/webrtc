@@ -1,7 +1,7 @@
 use super::*;
 use crate::message::name::*;
 
-// A CNAMEResource is a cname Resource record.
+// A cnameresource is a cname Resource record.
 #[derive(Default)]
 pub struct CNAMEResource {
     cname: Name,
@@ -9,7 +9,7 @@ pub struct CNAMEResource {
 
 impl fmt::Display for CNAMEResource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "dnsmessage.CNAMEResource{{cname: {}}}", self.cname)
+        write!(f, "dnsmessage.cnameresource{{cname: {}}}", self.cname)
     }
 }
 
@@ -18,7 +18,7 @@ impl ResourceBody for CNAMEResource {
         DNSType::CNAME
     }
 
-    // pack appends the wire format of the CNAMEResource to msg.
+    // pack appends the wire format of the cnameresource to msg.
     fn pack(
         &self,
         msg: Vec<u8>,

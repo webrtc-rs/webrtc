@@ -26,7 +26,7 @@ use util::Error;
 // A Type is a type of DNS request and response.
 #[derive(Copy, Clone)]
 pub enum DNSType {
-    // ResourceHeader.Type and Question.Type
+    // ResourceHeader.Type and question.Type
     A = 1,
     NS = 2,
     CNAME = 5,
@@ -38,7 +38,7 @@ pub enum DNSType {
     SRV = 33,
     OPT = 41,
 
-    // Question.Type
+    // question.Type
     WKS = 11,
     HINFO = 13,
     MINFO = 14,
@@ -62,7 +62,7 @@ impl From<u16> for DNSType {
             33 => DNSType::SRV,
             41 => DNSType::OPT,
 
-            // Question.Type
+            // question.Type
             11 => DNSType::WKS,
             13 => DNSType::HINFO,
             14 => DNSType::MINFO,
@@ -118,13 +118,13 @@ impl DNSType {
 // A Class is a type of network.
 #[derive(Copy, Clone)]
 pub enum DNSClass {
-    // ResourceHeader.Class and Question.Class
+    // ResourceHeader.Class and question.Class
     INET = 1,
     CSNET = 2,
     CHAOS = 3,
     HESIOD = 4,
 
-    // Question.Class
+    // question.Class
     ANY = 255,
     Unsupported,
 }
@@ -137,7 +137,7 @@ impl From<u16> for DNSClass {
             3 => DNSClass::CHAOS,
             4 => DNSClass::HESIOD,
 
-            // Question.Class
+            // question.Class
             255 => DNSClass::ANY,
 
             _ => DNSClass::Unsupported,

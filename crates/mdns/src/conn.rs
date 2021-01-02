@@ -170,7 +170,7 @@ func (c *Conn) sendQuestion(name string) {
 
     msg := dnsmessage.Message{
         Header: dnsmessage.Header{},
-        Questions: []dnsmessage.Question{
+        Questions: []dnsmessage.question{
             {
                 Type:  dnsmessage.TypeA,
                 Class: dnsmessage.ClassINET,
@@ -256,7 +256,7 @@ func (c *Conn) start() { //nolint gocognit
             }
 
             for i := 0; i <= MAX_MESSAGE_RECORDS; i++ {
-                q, err := p.Question()
+                q, err := p.question()
                 if errors.Is(err, dnsmessage.ErrSectionDone) {
                     break
                 } else if err != nil {

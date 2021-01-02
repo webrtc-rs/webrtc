@@ -6,7 +6,7 @@ use std::fmt;
 
 use util::Error;
 
-// A Question is a DNS query.
+// A question is a DNS query.
 pub struct Question {
     pub name: Name,
     pub typ: DNSType,
@@ -17,14 +17,14 @@ impl fmt::Display for Question {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "dnsmessage.Question{{Name: {}, Type: {}, Class: {}}}",
+            "dnsmessage.question{{Name: {}, Type: {}, Class: {}}}",
             self.name, self.typ, self.class
         )
     }
 }
 
 impl Question {
-    // pack appends the wire format of the Question to msg.
+    // pack appends the wire format of the question to msg.
     pub fn pack(
         &self,
         mut msg: Vec<u8>,

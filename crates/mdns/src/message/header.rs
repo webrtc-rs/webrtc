@@ -53,14 +53,15 @@ impl Header {
     }
 }
 
+#[derive(Copy, Clone, PartialOrd, PartialEq)]
 pub(crate) enum Section {
-    NotStarted,
-    Header,
-    Questions,
-    Answers,
-    Authorities,
-    Additionals,
-    Done,
+    NotStarted = 0,
+    Header = 1,
+    Questions = 2,
+    Answers = 3,
+    Authorities = 4,
+    Additionals = 5,
+    Done = 6,
 }
 
 impl fmt::Display for Section {
@@ -68,7 +69,7 @@ impl fmt::Display for Section {
         let s = match *self {
             Section::NotStarted => "NotStarted",
             Section::Header => "Header",
-            Section::Questions => "Question",
+            Section::Questions => "question",
             Section::Answers => "Answer",
             Section::Authorities => "Authority",
             Section::Additionals => "Additional",
@@ -79,6 +80,7 @@ impl fmt::Display for Section {
 }
 
 // header is the wire format for a DNS message header.
+#[derive(Default)]
 pub(crate) struct HeaderInternal {
     pub(crate) id: u16,
     pub(crate) bits: u16,

@@ -1,419 +1,220 @@
-/*
+use super::header::*;
+use super::question::*;
+use super::resource::*;
+use super::*;
+use crate::errors::*;
+
+use util::Error;
+
+use std::collections::HashMap;
 
 // A Builder allows incrementally packing a DNS message.
 //
 // Example usage:
-//	buf := make([]byte, 2, 514)
-//	b := NewBuilder(buf, Header{...})
-//	b.EnableCompression()
+//	b := NewBuilder(Header{...})
+//	b.enable_compression()
 //	// Optionally start a section and add things to that section.
 //	// Repeat adding sections as necessary.
 //	buf, err := b.Finish()
 //	// If err is nil, buf[2:] will contain the built bytes.
-type Builder struct {
+pub struct Builder {
     // msg is the storage for the message being built.
-    msg []byte
+    msg: Option<Vec<u8>>,
 
     // section keeps track of the current section being built.
-    section section
+    section: Section,
 
     // header keeps track of what should go in the header when Finish is
     // called.
-    header header
+    header: HeaderInternal,
 
     // start is the starting index of the bytes allocated in msg for header.
-    start int
+    start: usize,
 
     // compression is a mapping from name suffixes to their starting index
     // in msg.
-    compression map[string]int
+    compression: Option<HashMap<String, usize>>,
 }
 
-// NewBuilder creates a new builder with compression disabled.
-//
-// Note: Most users will want to immediately enable compression with the
-// EnableCompression method. See that method's comment for why you may or may
-// not want to enable compression.
-//
-// The DNS message is appended to the provided initial buffer buf (which may be
-// nil) as it is built. The final message is returned by the (*Builder).Finish
-// method, which may return the same underlying array if there was sufficient
-// capacity in the slice.
-func NewBuilder(buf []byte, h Header) Builder {
-    if buf == nil {
-        buf = make([]byte, 0, PACK_STARTING_CAP)
-    }
-    b := Builder{msg: buf, start: len(buf)}
-    b.header.id, b.header.bits = h.pack()
-    var hb [HEADER_LEN]byte
-    b.msg = append(b.msg, hb[:]...)
-    b.section = sectionHeader
-    return b
-}
+impl Builder {
+    // NewBuilder creates a new builder with compression disabled.
+    //
+    // Note: Most users will want to immediately enable compression with the
+    // enable_compression method. See that method's comment for why you may or may
+    // not want to enable compression.
+    //
+    // The DNS message is appended to the provided initial buffer buf (which may be
+    // nil) as it is built. The final message is returned by the (*Builder).Finish
+    // method, which may return the same underlying array if there was sufficient
+    // capacity in the slice.
+    pub fn new(h: &Header) -> Self {
+        let (id, bits) = h.pack();
 
-// EnableCompression enables compression in the Builder.
-//
-// Leaving compression disabled avoids compression related allocations, but can
-// result in larger message sizes. Be careful with this mode as it can cause
-// messages to exceed the UDP size limit.
-//
-// According to RFC 1035, section 4.1.4, the use of compression is optional, but
-// all implementations must accept both compressed and uncompressed DNS
-// messages.
-//
-// Compression should be enabled before any sections are added for best results.
-func (b *Builder) EnableCompression() {
-    b.compression = map[string]int{}
-}
+        Builder {
+            msg: Some(vec![0; HEADER_LEN]),
+            start: 0,
+            section: Section::Header,
+            header: HeaderInternal {
+                id,
+                bits,
+                ..Default::default()
+            },
+            compression: None,
+        }
 
-func (b *Builder) startCheck(s section) error {
-    if b.section <= sectionNotStarted {
-        return ErrNotStarted
+        //var hb [HEADER_LEN]byte
+        //b.msg = append(b.msg, hb[:]...)
+        //return b
     }
-    if b.section > s {
-        return ErrSectionDone
-    }
-    return nil
-}
 
-// StartQuestions prepares the builder for packing Questions.
-func (b *Builder) StartQuestions() error {
-    if err := b.startCheck(sectionQuestions); err != nil {
-        return err
+    // enable_compression enables compression in the Builder.
+    //
+    // Leaving compression disabled avoids compression related allocations, but can
+    // result in larger message sizes. Be careful with this mode as it can cause
+    // messages to exceed the UDP size limit.
+    //
+    // According to RFC 1035, section 4.1.4, the use of compression is optional, but
+    // all implementations must accept both compressed and uncompressed DNS
+    // messages.
+    //
+    // Compression should be enabled before any sections are added for best results.
+    pub fn enable_compression(&mut self) {
+        self.compression = Some(HashMap::new());
     }
-    b.section = sectionQuestions
-    return nil
-}
 
-// StartAnswers prepares the builder for packing Answers.
-func (b *Builder) StartAnswers() error {
-    if err := b.startCheck(sectionAnswers); err != nil {
-        return err
-    }
-    b.section = sectionAnswers
-    return nil
-}
+    fn start_check(&self, section: Section) -> Result<(), Error> {
+        if self.section <= Section::NotStarted {
+            return Err(ERR_NOT_STARTED.to_owned());
+        }
+        if self.section > section {
+            return Err(ERR_SECTION_DONE.to_owned());
+        }
 
-// StartAuthorities prepares the builder for packing Authorities.
-func (b *Builder) StartAuthorities() error {
-    if err := b.startCheck(sectionAuthorities); err != nil {
-        return err
+        Ok(())
     }
-    b.section = sectionAuthorities
-    return nil
-}
 
-// StartAdditionals prepares the builder for packing Additionals.
-func (b *Builder) StartAdditionals() error {
-    if err := b.startCheck(sectionAdditionals); err != nil {
-        return err
+    // start_questions prepares the builder for packing Questions.
+    pub fn start_questions(&mut self) -> Result<(), Error> {
+        self.start_check(Section::Questions)?;
+        self.section = Section::Questions;
+        Ok(())
     }
-    b.section = sectionAdditionals
-    return nil
-}
 
-func (b *Builder) incrementSectionCount() error {
-    var count *uint16
-    var err error
-    switch b.section {
-    case sectionQuestions:
-        count = &b.header.questions
-        err = errTooManyQuestions
-    case sectionAnswers:
-        count = &b.header.answers
-        err = errTooManyAnswers
-    case sectionAuthorities:
-        count = &b.header.authorities
-        err = errTooManyAuthorities
-    case sectionAdditionals:
-        count = &b.header.additionals
-        err = errTooManyAdditionals
+    // start_answers prepares the builder for packing Answers.
+    pub fn start_answers(&mut self) -> Result<(), Error> {
+        self.start_check(Section::Answers)?;
+        self.section = Section::Answers;
+        Ok(())
     }
-    if *count == ^uint16(0) {
-        return err
-    }
-    *count++
-    return nil
-}
 
-// Question adds a single Question.
-func (b *Builder) Question(q Question) error {
-    if b.section < sectionQuestions {
-        return ErrNotStarted
+    // start_authorities prepares the builder for packing Authorities.
+    pub fn start_authorities(&mut self) -> Result<(), Error> {
+        self.start_check(Section::Authorities)?;
+        self.section = Section::Authorities;
+        Ok(())
     }
-    if b.section > sectionQuestions {
-        return ErrSectionDone
-    }
-    msg, err := q.pack(b.msg, b.compression, b.start)
-    if err != nil {
-        return err
-    }
-    if err := b.incrementSectionCount(); err != nil {
-        return err
-    }
-    b.msg = msg
-    return nil
-}
 
-func (b *Builder) checkResourceSection() error {
-    if b.section < sectionAnswers {
-        return ErrNotStarted
+    // start_additionals prepares the builder for packing Additionals.
+    pub fn start_additionals(&mut self) -> Result<(), Error> {
+        self.start_check(Section::Additionals)?;
+        self.section = Section::Additionals;
+        Ok(())
     }
-    if b.section > sectionAdditionals {
-        return ErrSectionDone
-    }
-    return nil
-}
 
-// CNAMEResource adds a single CNAMEResource.
-func (b *Builder) CNAMEResource(h ResourceHeader, r CNAMEResource) error {
-    if err := b.checkResourceSection(); err != nil {
-        return err
-    }
-    h.Type = r.real_type()
-    msg, lenOff, err := h.pack(b.msg, b.compression, b.start)
-    if err != nil {
-        return &nestedError{"ResourceHeader", err}
-    }
-    preLen := len(msg)
-    if msg, err = r.pack(msg, b.compression, b.start); err != nil {
-        return &nestedError{"CNAMEResource body", err}
-    }
-    if err := h.fix_len(msg, lenOff, preLen); err != nil {
-        return err
-    }
-    if err := b.incrementSectionCount(); err != nil {
-        return err
-    }
-    b.msg = msg
-    return nil
-}
+    fn increment_section_count(&mut self) -> Result<(), Error> {
+        let section = self.section;
+        let (count, err) = match section {
+            Section::Questions => (
+                &mut self.header.questions,
+                ERR_TOO_MANY_QUESTIONS.to_owned(),
+            ),
+            Section::Answers => (&mut self.header.answers, ERR_TOO_MANY_ANSWERS.to_owned()),
+            Section::Authorities => (
+                &mut self.header.authorities,
+                ERR_TOO_MANY_AUTHORITIES.to_owned(),
+            ),
+            Section::Additionals => (
+                &mut self.header.additionals,
+                ERR_TOO_MANY_ADDITIONALS.to_owned(),
+            ),
+            Section::NotStarted => return Err(ERR_NOT_STARTED.to_owned()),
+            Section::Done => return Err(ERR_SECTION_DONE.to_owned()),
+            Section::Header => return Err(ERR_SECTION_HEADER.to_owned()),
+        };
 
-// MXResource adds a single MXResource.
-func (b *Builder) MXResource(h ResourceHeader, r MXResource) error {
-    if err := b.checkResourceSection(); err != nil {
-        return err
+        if *count == u16::MAX {
+            Err(err)
+        } else {
+            *count += 1;
+            Ok(())
+        }
     }
-    h.Type = r.real_type()
-    msg, lenOff, err := h.pack(b.msg, b.compression, b.start)
-    if err != nil {
-        return &nestedError{"ResourceHeader", err}
-    }
-    preLen := len(msg)
-    if msg, err = r.pack(msg, b.compression, b.start); err != nil {
-        return &nestedError{"MXResource body", err}
-    }
-    if err := h.fix_len(msg, lenOff, preLen); err != nil {
-        return err
-    }
-    if err := b.incrementSectionCount(); err != nil {
-        return err
-    }
-    b.msg = msg
-    return nil
-}
 
-// NSResource adds a single NSResource.
-func (b *Builder) NSResource(h ResourceHeader, r NSResource) error {
-    if err := b.checkResourceSection(); err != nil {
-        return err
-    }
-    h.Type = r.real_type()
-    msg, lenOff, err := h.pack(b.msg, b.compression, b.start)
-    if err != nil {
-        return &nestedError{"ResourceHeader", err}
-    }
-    preLen := len(msg)
-    if msg, err = r.pack(msg, b.compression, b.start); err != nil {
-        return &nestedError{"NSResource body", err}
-    }
-    if err := h.fix_len(msg, lenOff, preLen); err != nil {
-        return err
-    }
-    if err := b.incrementSectionCount(); err != nil {
-        return err
-    }
-    b.msg = msg
-    return nil
-}
+    // question adds a single question.
+    pub fn add_question(&mut self, q: Question) -> Result<(), Error> {
+        if self.section < Section::Questions {
+            return Err(ERR_NOT_STARTED.to_owned());
+        }
+        if self.section > Section::Questions {
+            return Err(ERR_SECTION_DONE.to_owned());
+        }
+        let msg = self.msg.take();
+        if let Some(mut msg) = msg {
+            msg = q.pack(msg, &mut self.compression, self.start)?;
+            self.increment_section_count()?;
+            self.msg = Some(msg);
+        }
 
-// PTRResource adds a single PTRResource.
-func (b *Builder) PTRResource(h ResourceHeader, r PTRResource) error {
-    if err := b.checkResourceSection(); err != nil {
-        return err
+        Ok(())
     }
-    h.Type = r.real_type()
-    msg, lenOff, err := h.pack(b.msg, b.compression, b.start)
-    if err != nil {
-        return &nestedError{"ResourceHeader", err}
-    }
-    preLen := len(msg)
-    if msg, err = r.pack(msg, b.compression, b.start); err != nil {
-        return &nestedError{"PTRResource body", err}
-    }
-    if err := h.fix_len(msg, lenOff, preLen); err != nil {
-        return err
-    }
-    if err := b.incrementSectionCount(); err != nil {
-        return err
-    }
-    b.msg = msg
-    return nil
-}
 
-// SOAResource adds a single SOAResource.
-func (b *Builder) SOAResource(h ResourceHeader, r SOAResource) error {
-    if err := b.checkResourceSection(); err != nil {
-        return err
+    fn check_resource_section(&self) -> Result<(), Error> {
+        if self.section < Section::Answers {
+            return Err(ERR_NOT_STARTED.to_owned());
+        }
+        if self.section > Section::Additionals {
+            return Err(ERR_SECTION_DONE.to_owned());
+        }
+        Ok(())
     }
-    h.Type = r.real_type()
-    msg, lenOff, err := h.pack(b.msg, b.compression, b.start)
-    if err != nil {
-        return &nestedError{"ResourceHeader", err}
-    }
-    preLen := len(msg)
-    if msg, err = r.pack(msg, b.compression, b.start); err != nil {
-        return &nestedError{"SOAResource body", err}
-    }
-    if err := h.fix_len(msg, lenOff, preLen); err != nil {
-        return err
-    }
-    if err := b.incrementSectionCount(); err != nil {
-        return err
-    }
-    b.msg = msg
-    return nil
-}
 
-// TXTResource adds a single TXTResource.
-func (b *Builder) TXTResource(h ResourceHeader, r TXTResource) error {
-    if err := b.checkResourceSection(); err != nil {
-        return err
-    }
-    h.Type = r.real_type()
-    msg, lenOff, err := h.pack(b.msg, b.compression, b.start)
-    if err != nil {
-        return &nestedError{"ResourceHeader", err}
-    }
-    preLen := len(msg)
-    if msg, err = r.pack(msg, b.compression, b.start); err != nil {
-        return &nestedError{"TXTResource body", err}
-    }
-    if err := h.fix_len(msg, lenOff, preLen); err != nil {
-        return err
-    }
-    if err := b.incrementSectionCount(); err != nil {
-        return err
-    }
-    b.msg = msg
-    return nil
-}
+    // Resource adds a single resource.
+    pub fn add_resource(
+        &mut self,
+        mut h: ResourceHeader,
+        r: Box<dyn ResourceBody>,
+    ) -> Result<(), Error> {
+        self.check_resource_section()?;
 
-// SRVResource adds a single SRVResource.
-func (b *Builder) SRVResource(h ResourceHeader, r SRVResource) error {
-    if err := b.checkResourceSection(); err != nil {
-        return err
-    }
-    h.Type = r.real_type()
-    msg, lenOff, err := h.pack(b.msg, b.compression, b.start)
-    if err != nil {
-        return &nestedError{"ResourceHeader", err}
-    }
-    preLen := len(msg)
-    if msg, err = r.pack(msg, b.compression, b.start); err != nil {
-        return &nestedError{"SRVResource body", err}
-    }
-    if err := h.fix_len(msg, lenOff, preLen); err != nil {
-        return err
-    }
-    if err := b.incrementSectionCount(); err != nil {
-        return err
-    }
-    b.msg = msg
-    return nil
-}
+        h.typ = r.real_type();
+        let buf = r.pack(vec![], &mut self.compression, self.start)?;
+        h.length = buf.len() as u16;
 
-// AResource adds a single AResource.
-func (b *Builder) AResource(h ResourceHeader, r AResource) error {
-    if err := b.checkResourceSection(); err != nil {
-        return err
+        let msg = self.msg.take();
+        if let Some(mut msg) = msg {
+            msg = h.pack(msg, &mut self.compression, self.start)?;
+            self.increment_section_count()?;
+            msg.extend_from_slice(&buf);
+            self.msg = Some(msg);
+        }
+        Ok(())
     }
-    h.Type = r.real_type()
-    msg, lenOff, err := h.pack(b.msg, b.compression, b.start)
-    if err != nil {
-        return &nestedError{"ResourceHeader", err}
-    }
-    preLen := len(msg)
-    if msg, err = r.pack(msg, b.compression, b.start); err != nil {
-        return &nestedError{"AResource body", err}
-    }
-    if err := h.fix_len(msg, lenOff, preLen); err != nil {
-        return err
-    }
-    if err := b.incrementSectionCount(); err != nil {
-        return err
-    }
-    b.msg = msg
-    return nil
-}
 
-// AAAAResource adds a single AAAAResource.
-func (b *Builder) AAAAResource(h ResourceHeader, r AAAAResource) error {
-    if err := b.checkResourceSection(); err != nil {
-        return err
-    }
-    h.Type = r.real_type()
-    msg, lenOff, err := h.pack(b.msg, b.compression, b.start)
-    if err != nil {
-        return &nestedError{"ResourceHeader", err}
-    }
-    preLen := len(msg)
-    if msg, err = r.pack(msg, b.compression, b.start); err != nil {
-        return &nestedError{"AAAAResource body", err}
-    }
-    if err := h.fix_len(msg, lenOff, preLen); err != nil {
-        return err
-    }
-    if err := b.incrementSectionCount(); err != nil {
-        return err
-    }
-    b.msg = msg
-    return nil
-}
+    // Finish ends message building and generates a binary message.
+    pub fn finish(&mut self) -> Result<Vec<u8>, Error> {
+        if self.section < Section::Header {
+            return Err(ERR_NOT_STARTED.to_owned());
+        }
+        self.section = Section::Done;
 
-// OPTResource adds a single OPTResource.
-func (b *Builder) OPTResource(h ResourceHeader, r OPTResource) error {
-    if err := b.checkResourceSection(); err != nil {
-        return err
+        // Space for the header was allocated in NewBuilder.
+        let buf = self.header.pack(vec![])?;
+        assert_eq!(buf.len(), HEADER_LEN);
+        if let Some(mut msg) = self.msg.take() {
+            msg[..HEADER_LEN].copy_from_slice(&buf[..HEADER_LEN]);
+            Ok(msg)
+        } else {
+            Err(ERR_EMPTY_BUILDER_MSG.to_owned())
+        }
     }
-    h.Type = r.real_type()
-    msg, lenOff, err := h.pack(b.msg, b.compression, b.start)
-    if err != nil {
-        return &nestedError{"ResourceHeader", err}
-    }
-    preLen := len(msg)
-    if msg, err = r.pack(msg, b.compression, b.start); err != nil {
-        return &nestedError{"OPTResource body", err}
-    }
-    if err := h.fix_len(msg, lenOff, preLen); err != nil {
-        return err
-    }
-    if err := b.incrementSectionCount(); err != nil {
-        return err
-    }
-    b.msg = msg
-    return nil
 }
-
-// Finish ends message building and generates a binary message.
-func (b *Builder) Finish() ([]byte, error) {
-    if b.section < sectionHeader {
-        return nil, ErrNotStarted
-    }
-    b.section = sectionDone
-    // Space for the header was allocated in NewBuilder.
-    b.header.pack(b.msg[b.start:b.start])
-    return b.msg, nil
-}
-
- */
