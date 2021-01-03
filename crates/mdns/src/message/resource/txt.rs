@@ -5,7 +5,7 @@ use crate::message::packer::*;
 // A TXTResource is a txt Resource record.
 #[derive(Default)]
 pub struct TXTResource {
-    txt: Vec<String>,
+    pub txt: Vec<String>,
 }
 
 impl fmt::Display for TXTResource {

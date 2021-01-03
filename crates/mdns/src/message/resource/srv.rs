@@ -5,10 +5,10 @@ use crate::message::packer::*;
 // An SRVResource is an SRV Resource record.
 #[derive(Default)]
 pub struct SRVResource {
-    priority: u16,
-    weight: u16,
-    port: u16,
-    target: Name, // Not compressed as per RFC 2782.
+    pub priority: u16,
+    pub weight: u16,
+    pub port: u16,
+    pub target: Name, // Not compressed as per RFC 2782.
 }
 
 impl fmt::Display for SRVResource {

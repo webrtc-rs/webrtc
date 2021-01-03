@@ -8,7 +8,7 @@ use crate::message::packer::*;
 // as defined in RFC 6891.
 #[derive(Default)]
 pub struct OPTResource {
-    options: Vec<DNSOption>,
+    pub options: Vec<DNSOption>,
 }
 
 // An Option represents a DNS message option within OPTResource.
@@ -17,8 +17,8 @@ pub struct OPTResource {
 // defined in RFC 6891.
 #[derive(Default)]
 pub struct DNSOption {
-    code: u16, // option code
-    data: Vec<u8>,
+    pub code: u16, // option code
+    pub data: Vec<u8>,
 }
 
 impl fmt::Display for DNSOption {

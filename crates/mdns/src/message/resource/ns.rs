@@ -4,7 +4,7 @@ use crate::message::name::*;
 // An NSResource is an NS Resource record.
 #[derive(Default)]
 pub struct NSResource {
-    ns: Name,
+    pub ns: Name,
 }
 
 impl fmt::Display for NSResource {

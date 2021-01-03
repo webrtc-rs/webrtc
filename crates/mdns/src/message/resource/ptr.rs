@@ -4,7 +4,7 @@ use crate::message::name::*;
 // A PTRResource is a PTR Resource record.
 #[derive(Default)]
 pub struct PTRResource {
-    ptr: Name,
+    pub ptr: Name,
 }
 
 impl fmt::Display for PTRResource {

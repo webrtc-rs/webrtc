@@ -151,7 +151,7 @@ impl Builder {
     }
 
     // question adds a single question.
-    pub fn add_question(&mut self, q: Question) -> Result<(), Error> {
+    pub fn add_question(&mut self, q: &Question) -> Result<(), Error> {
         if self.section < Section::Questions {
             return Err(ERR_NOT_STARTED.to_owned());
         }
@@ -179,20 +179,16 @@ impl Builder {
     }
 
     // Resource adds a single resource.
-    pub fn add_resource(
-        &mut self,
-        mut h: ResourceHeader,
-        r: Box<dyn ResourceBody>,
-    ) -> Result<(), Error> {
+    pub fn add_resource(&mut self, r: &mut Resource) -> Result<(), Error> {
         self.check_resource_section()?;
 
-        h.typ = r.real_type();
-        let buf = r.pack(vec![], &mut self.compression, self.start)?;
-        h.length = buf.len() as u16;
+        r.header.typ = r.body.real_type();
+        let buf = r.body.pack(vec![], &mut self.compression, self.start)?;
+        r.header.length = buf.len() as u16;
 
         let msg = self.msg.take();
         if let Some(mut msg) = msg {
-            msg = h.pack(msg, &mut self.compression, self.start)?;
+            msg = r.header.pack(msg, &mut self.compression, self.start)?;
             self.increment_section_count()?;
             msg.extend_from_slice(&buf);
             self.msg = Some(msg);

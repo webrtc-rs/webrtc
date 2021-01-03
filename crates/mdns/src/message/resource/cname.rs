@@ -4,7 +4,7 @@ use crate::message::name::*;
 // A cnameresource is a cname Resource record.
 #[derive(Default)]
 pub struct CNAMEResource {
-    cname: Name,
+    pub cname: Name,
 }
 
 impl fmt::Display for CNAMEResource {

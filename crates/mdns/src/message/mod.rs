@@ -204,6 +204,12 @@ pub enum RCode {
     Unsupported,
 }
 
+impl Default for RCode {
+    fn default() -> Self {
+        RCode::Unsupported
+    }
+}
+
 impl From<u8> for RCode {
     fn from(v: u8) -> Self {
         match v {
@@ -261,11 +267,11 @@ const HEADER_BIT_RA: u16 = 1 << 7; // recursion available
 
 // Message is a representation of a DNS message.
 pub struct Message {
-    header: Header,
-    questions: Vec<Question>,
-    answers: Vec<Resource>,
-    authorities: Vec<Resource>,
-    additionals: Vec<Resource>,
+    pub header: Header,
+    pub questions: Vec<Question>,
+    pub answers: Vec<Resource>,
+    pub authorities: Vec<Resource>,
+    pub additionals: Vec<Resource>,
 }
 
 impl fmt::Display for Message {

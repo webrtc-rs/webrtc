@@ -4,7 +4,7 @@ use crate::message::packer::*;
 // An AResource is an A Resource record.
 #[derive(Default)]
 pub struct AResource {
-    a: [u8; 4],
+    pub a: [u8; 4],
 }
 
 impl fmt::Display for AResource {

@@ -67,7 +67,7 @@ impl Resource {
         header.typ = self.body.real_type();
         header.length = body_msg.len() as u16;
 
-        msg = self.header.pack(msg, compression, compression_off)?;
+        msg = header.pack(msg, compression, compression_off)?;
         msg.extend_from_slice(&body_msg);
 
         Ok(msg)
@@ -169,7 +169,7 @@ impl ResourceHeader {
     pub fn set_edns0(
         &mut self,
         udp_payload_len: u16,
-        ext_rcode: RCode,
+        ext_rcode: u32,
         dnssec_ok: bool,
     ) -> Result<(), Error> {
         self.name = Name {
@@ -177,7 +177,7 @@ impl ResourceHeader {
         }; // RFC 6891 section 6.1.2
         self.typ = DNSType::OPT;
         self.class = DNSClass::from(udp_payload_len);
-        self.ttl = ((ext_rcode as u32) >> 4) << 24;
+        self.ttl = (ext_rcode >> 4) << 24;
         if dnssec_ok {
             self.ttl |= EDNS0_DNSSEC_OK;
         }

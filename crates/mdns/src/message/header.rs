@@ -1,15 +1,16 @@
 use super::*;
 
 // Header is a representation of a DNS message header.
+#[derive(Default)]
 pub struct Header {
-    id: u16,
-    response: bool,
-    op_code: OpCode,
-    authoritative: bool,
-    truncated: bool,
-    recursion_desired: bool,
-    recursion_available: bool,
-    rcode: RCode,
+    pub id: u16,
+    pub response: bool,
+    pub op_code: OpCode,
+    pub authoritative: bool,
+    pub truncated: bool,
+    pub recursion_desired: bool,
+    pub recursion_available: bool,
+    pub rcode: RCode,
 }
 
 impl fmt::Display for Header {
