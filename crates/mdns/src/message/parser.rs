@@ -19,15 +19,16 @@ use util::Error;
 // proceeding to the next type of Resource.
 //
 // Note that there is no requirement to fully skip or parse the message.
+#[derive(Default)]
 pub struct Parser<'a> {
-    msg: &'a [u8],
-    header: HeaderInternal,
+    pub msg: &'a [u8],
+    pub header: HeaderInternal,
 
-    section: Section,
-    off: usize,
-    index: usize,
-    res_header_valid: bool,
-    res_header: ResourceHeader,
+    pub section: Section,
+    pub off: usize,
+    pub index: usize,
+    pub res_header_valid: bool,
+    pub res_header: ResourceHeader,
 }
 
 impl<'a> Parser<'a> {
@@ -98,9 +99,9 @@ impl<'a> Parser<'a> {
     }
 
     // question parses a single question.
-    fn question(&mut self) -> Result<Question, Error> {
+    pub fn question(&mut self) -> Result<Question, Error> {
         self.check_advance(Section::Questions)?;
-        let mut name = Name::new("".to_owned())?;
+        let mut name = Name::new("")?;
         let mut off = name.unpack(self.msg, self.off)?;
         let mut typ = DNSType::Unsupported;
         off = typ.unpack(self.msg, off)?;

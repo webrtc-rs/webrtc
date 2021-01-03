@@ -23,11 +23,13 @@ impl fmt::Display for Name {
 }
 
 impl Name {
-    pub fn new(data: String) -> Result<Self, Error> {
+    pub fn new(data: &str) -> Result<Self, Error> {
         if data.len() > NAME_LEN {
             Err(ERR_CALC_LEN.to_owned())
         } else {
-            Ok(Name { data })
+            Ok(Name {
+                data: data.to_owned(),
+            })
         }
     }
 

@@ -103,12 +103,12 @@ impl fmt::Display for Section {
 // header is the wire format for a DNS message header.
 #[derive(Default)]
 pub struct HeaderInternal {
-    pub(crate) id: u16,
-    pub(crate) bits: u16,
-    pub(crate) questions: u16,
-    pub(crate) answers: u16,
-    pub(crate) authorities: u16,
-    pub(crate) additionals: u16,
+    pub id: u16,
+    pub bits: u16,
+    pub questions: u16,
+    pub answers: u16,
+    pub authorities: u16,
+    pub additionals: u16,
 }
 
 impl HeaderInternal {

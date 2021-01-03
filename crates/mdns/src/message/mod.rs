@@ -24,7 +24,7 @@ use util::Error;
 // Message formats
 
 // A Type is a type of DNS request and response.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum DNSType {
     // ResourceHeader.Type and question.Type
     A = 1,
@@ -122,7 +122,7 @@ impl DNSType {
 }
 
 // A Class is a type of network.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum DNSClass {
     // ResourceHeader.Class and question.Class
     INET = 1,

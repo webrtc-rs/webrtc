@@ -7,6 +7,7 @@ use std::fmt;
 use util::Error;
 
 // A question is a DNS query.
+#[derive(Default, Debug, PartialEq)]
 pub struct Question {
     pub name: Name,
     pub typ: DNSType,

@@ -1,6 +1,7 @@
 use super::builder::*;
 use super::header::*;
 use super::name::*;
+use super::parser::*;
 use super::question::*;
 use super::resource::{
     a::*, aaaa::*, cname::*, mx::*, ns::*, opt::*, ptr::*, soa::*, srv::*, txt::*, *,
@@ -12,7 +13,7 @@ use std::collections::HashMap;
 use util::Error;
 
 fn small_test_msg() -> Result<Message, Error> {
-    let name = Name::new("example.com.".to_owned())?;
+    let name = Name::new("example.com.")?;
     Ok(Message {
         header: Header {
             response: true,
@@ -55,7 +56,7 @@ fn small_test_msg() -> Result<Message, Error> {
 }
 
 fn large_test_msg() -> Result<Message, Error> {
-    let name = Name::new("foo.bar.example.com.".to_owned())?;
+    let name = Name::new("foo.bar.example.com.")?;
     Ok(Message {
         header: Header {
             response: true,
@@ -105,7 +106,7 @@ fn large_test_msg() -> Result<Message, Error> {
                     ..Default::default()
                 },
                 body: Box::new(CNAMEResource {
-                    cname: Name::new("alias.example.com.".to_owned())?,
+                    cname: Name::new("alias.example.com.")?,
                 }),
             },
             Resource {
@@ -116,8 +117,8 @@ fn large_test_msg() -> Result<Message, Error> {
                     ..Default::default()
                 },
                 body: Box::new(SOAResource {
-                    ns: Name::new("ns1.example.com.".to_owned())?,
-                    mbox: Name::new("mb.example.com.".to_owned())?,
+                    ns: Name::new("ns1.example.com.")?,
+                    mbox: Name::new("mb.example.com.")?,
                     serial: 1,
                     refresh: 2,
                     retry: 3,
@@ -133,7 +134,7 @@ fn large_test_msg() -> Result<Message, Error> {
                     ..Default::default()
                 },
                 body: Box::new(PTRResource {
-                    ptr: Name::new("ptr.example.com.".to_owned())?,
+                    ptr: Name::new("ptr.example.com.")?,
                 }),
             },
             Resource {
@@ -145,7 +146,7 @@ fn large_test_msg() -> Result<Message, Error> {
                 },
                 body: Box::new(MXResource {
                     pref: 7,
-                    mx: Name::new("mx.example.com.".to_owned())?,
+                    mx: Name::new("mx.example.com.")?,
                 }),
             },
             Resource {
@@ -159,7 +160,7 @@ fn large_test_msg() -> Result<Message, Error> {
                     priority: 8,
                     weight: 9,
                     port: 11,
-                    target: Name::new("srv.example.com.".to_owned())?,
+                    target: Name::new("srv.example.com.")?,
                 }),
             },
         ],
@@ -172,7 +173,7 @@ fn large_test_msg() -> Result<Message, Error> {
                     ..Default::default()
                 },
                 body: Box::new(NSResource {
-                    ns: Name::new("ns1.example.com.".to_owned())?,
+                    ns: Name::new("ns1.example.com.")?,
                 }),
             },
             Resource {
@@ -183,7 +184,7 @@ fn large_test_msg() -> Result<Message, Error> {
                     ..Default::default()
                 },
                 body: Box::new(NSResource {
-                    ns: Name::new("ns2.example.com.".to_owned())?,
+                    ns: Name::new("ns2.example.com.")?,
                 }),
             },
         ],
@@ -233,6 +234,51 @@ fn must_edns0_resource_header(l: u16, extrc: u32, d: bool) -> Result<ResourceHea
 }
 
 #[test]
+fn test_name_string() -> Result<(), Error> {
+    let want = "foo";
+    let name = Name::new(want)?;
+    assert_eq!(name.to_string(), want);
+
+    Ok(())
+}
+
+#[test]
+fn test_question_pack_unpack() -> Result<(), Error> {
+    let want = Question {
+        name: Name::new(".")?,
+        typ: DNSType::A,
+        class: DNSClass::INET,
+    };
+    let buf = want.pack(vec![0; 1], &mut Some(HashMap::new()), 1)?;
+    let mut p = Parser {
+        msg: &buf,
+        header: HeaderInternal {
+            questions: 1,
+            ..Default::default()
+        },
+        section: Section::Questions,
+        off: 1,
+        ..Default::default()
+    };
+
+    let got = p.question()?;
+    assert_eq!(
+        p.off,
+        buf.len(),
+        "unpacked different amount than packed: got = {}, want = {}",
+        p.off,
+        buf.len(),
+    );
+    assert_eq!(
+        got, want,
+        "got from Parser.Question() = {}, want = {}",
+        got, want
+    );
+
+    Ok(())
+}
+
+#[test]
 fn test_name() -> Result<(), Error> {
     let tests = vec![
         "",
@@ -247,7 +293,7 @@ fn test_name() -> Result<(), Error> {
     ];
 
     for test in tests {
-        let name = Name::new(test.to_owned())?;
+        let name = Name::new(test)?;
         let ns = name.to_string();
         assert_eq!(ns, test, "got {} = {}, want = {}", name, ns, test);
     }
@@ -270,7 +316,7 @@ fn test_name_pack_unpack() -> Result<(), Error> {
     ];
 
     for (input, want, want_err) in tests {
-        let input = Name::new(input.to_owned())?;
+        let input = Name::new(input)?;
         let result = input.pack(vec![], &mut Some(HashMap::new()), 0);
         if let Some(want_err) = want_err {
             if let Err(actual_err) = result {
@@ -285,7 +331,7 @@ fn test_name_pack_unpack() -> Result<(), Error> {
 
         let buf = result.unwrap();
 
-        let want = Name::new(want.to_owned())?;
+        let want = Name::new(want)?;
 
         let mut got = Name::default();
         let n = got.unpack(&buf, 0)?;
@@ -310,7 +356,7 @@ fn test_name_pack_unpack() -> Result<(), Error> {
 
 #[test]
 fn test_incompressible_name() -> Result<(), Error> {
-    let name = Name::new("example.com.".to_owned())?;
+    let name = Name::new("example.com.")?;
     let mut compression = Some(HashMap::new());
     let buf = name.pack(vec![], &mut compression, 0)?;
     let buf = name.pack(buf, &mut compression, 0)?;
@@ -328,6 +374,208 @@ fn test_incompressible_name() -> Result<(), Error> {
         );
     } else {
         assert!(false);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_header_unpack_error() -> Result<(), Error> {
+    let wants = vec![
+        "id",
+        "bits",
+        "questions",
+        "answers",
+        "authorities",
+        "additionals",
+    ];
+
+    let mut buf = vec![];
+    for want in wants {
+        let mut h = HeaderInternal::default();
+        let result = h.unpack(&buf, 0);
+        assert!(result.is_err(), "{}", want);
+        buf.extend_from_slice(&[0, 0]);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_parser_start() -> Result<(), Error> {
+    let mut p = Parser::default();
+    let result = p.start(&vec![]);
+    assert!(result.is_err());
+
+    Ok(())
+}
+
+#[test]
+fn test_resource_not_started() -> Result<(), Error> {
+    let tests: Vec<(&str, Box<dyn Fn(&mut Parser<'_>) -> Result<(), Error>>)> = vec![
+        (
+            "CNAMEResource",
+            Box::new(|p: &mut Parser<'_>| -> Result<(), Error> {
+                if let Err(err) = p.resource_body() {
+                    Err(err)
+                } else {
+                    Ok(())
+                }
+            }),
+        ),
+        (
+            "MXResource",
+            Box::new(|p: &mut Parser<'_>| -> Result<(), Error> {
+                if let Err(err) = p.resource_body() {
+                    Err(err)
+                } else {
+                    Ok(())
+                }
+            }),
+        ),
+        (
+            "NSResource",
+            Box::new(|p: &mut Parser<'_>| -> Result<(), Error> {
+                if let Err(err) = p.resource_body() {
+                    Err(err)
+                } else {
+                    Ok(())
+                }
+            }),
+        ),
+        (
+            "PTRResource",
+            Box::new(|p: &mut Parser<'_>| -> Result<(), Error> {
+                if let Err(err) = p.resource_body() {
+                    Err(err)
+                } else {
+                    Ok(())
+                }
+            }),
+        ),
+        (
+            "SOAResource",
+            Box::new(|p: &mut Parser<'_>| -> Result<(), Error> {
+                if let Err(err) = p.resource_body() {
+                    Err(err)
+                } else {
+                    Ok(())
+                }
+            }),
+        ),
+        (
+            "TXTResource",
+            Box::new(|p: &mut Parser<'_>| -> Result<(), Error> {
+                if let Err(err) = p.resource_body() {
+                    Err(err)
+                } else {
+                    Ok(())
+                }
+            }),
+        ),
+        (
+            "SRVResource",
+            Box::new(|p: &mut Parser<'_>| -> Result<(), Error> {
+                if let Err(err) = p.resource_body() {
+                    Err(err)
+                } else {
+                    Ok(())
+                }
+            }),
+        ),
+        (
+            "AResource",
+            Box::new(|p: &mut Parser<'_>| -> Result<(), Error> {
+                if let Err(err) = p.resource_body() {
+                    Err(err)
+                } else {
+                    Ok(())
+                }
+            }),
+        ),
+        (
+            "AAAAResource",
+            Box::new(|p: &mut Parser<'_>| -> Result<(), Error> {
+                if let Err(err) = p.resource_body() {
+                    Err(err)
+                } else {
+                    Ok(())
+                }
+            }),
+        ),
+    ];
+
+    for (name, test_fn) in tests {
+        let mut p = Parser::default();
+        if let Err(err) = test_fn(&mut p) {
+            assert_eq!(err, ERR_NOT_STARTED.to_owned(), "{}", name);
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_start_error() -> Result<(), Error> {
+    let tests: Vec<(&str, Box<dyn Fn(&mut Builder) -> Result<(), Error>>)> = vec![
+        (
+            "Questions",
+            Box::new(|b: &mut Builder| -> Result<(), Error> { b.start_questions() }),
+        ),
+        (
+            "Answers",
+            Box::new(|b: &mut Builder| -> Result<(), Error> { b.start_answers() }),
+        ),
+        (
+            "Authorities",
+            Box::new(|b: &mut Builder| -> Result<(), Error> { b.start_authorities() }),
+        ),
+        (
+            "Additionals",
+            Box::new(|b: &mut Builder| -> Result<(), Error> { b.start_additionals() }),
+        ),
+    ];
+
+    let envs: Vec<(&str, Box<dyn Fn() -> Builder>, Error)> = vec![
+        (
+            "sectionNotStarted",
+            Box::new(|| -> Builder {
+                Builder {
+                    section: Section::NotStarted,
+                    ..Default::default()
+                }
+            }),
+            ERR_NOT_STARTED.to_owned(),
+        ),
+        (
+            "sectionDone",
+            Box::new(|| -> Builder {
+                Builder {
+                    section: Section::Done,
+                    ..Default::default()
+                }
+            }),
+            ERR_SECTION_DONE.to_owned(),
+        ),
+    ];
+
+    for (env_name, env_fn, env_err) in &envs {
+        for (test_name, test_fn) in &tests {
+            let mut b = env_fn();
+            if let Err(got_err) = test_fn(&mut b) {
+                assert_eq!(
+                    got_err, *env_err,
+                    "got Builder{}.{} = {}, want = {}",
+                    env_name, test_name, got_err, *env_err
+                );
+            } else {
+                assert!(
+                    false,
+                    "{}.{}expected error, but got ok",
+                    env_name, test_name
+                );
+            }
+        }
     }
 
     Ok(())
