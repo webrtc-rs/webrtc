@@ -3,7 +3,7 @@ use crate::message::name::*;
 use crate::message::packer::*;
 
 // An SRVResource is an SRV Resource record.
-#[derive(Default)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct SRVResource {
     pub priority: u16,
     pub weight: u16,
@@ -50,7 +50,8 @@ impl ResourceBody for SRVResource {
         let (port, off) = unpack_uint16(msg, off)?;
         self.port = port;
 
-        self.target
+        let off = self
+            .target
             .unpack_compressed(msg, off, false /* allowCompression */)?;
 
         Ok(off)

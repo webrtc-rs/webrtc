@@ -2,7 +2,7 @@ use super::*;
 use crate::message::packer::*;
 
 // An AAAAResource is an aaaa Resource record.
-#[derive(Default)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct AAAAResource {
     pub aaaa: [u8; 16],
 }

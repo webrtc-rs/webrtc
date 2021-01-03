@@ -3,7 +3,7 @@ use crate::message::name::*;
 use crate::message::packer::*;
 
 // An SOAResource is an SOA Resource record.
-#[derive(Default)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct SOAResource {
     pub ns: Name,
     pub mbox: Name,

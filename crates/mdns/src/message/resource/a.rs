@@ -2,7 +2,7 @@ use super::*;
 use crate::message::packer::*;
 
 // An AResource is an A Resource record.
-#[derive(Default)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct AResource {
     pub a: [u8; 4],
 }

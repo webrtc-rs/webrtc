@@ -183,17 +183,20 @@ impl Builder {
     pub fn add_resource(&mut self, r: &mut Resource) -> Result<(), Error> {
         self.check_resource_section()?;
 
-        r.header.typ = r.body.real_type();
-        let buf = r.body.pack(vec![], &mut self.compression, self.start)?;
-        r.header.length = buf.len() as u16;
-
-        let msg = self.msg.take();
-        if let Some(mut msg) = msg {
-            msg = r.header.pack(msg, &mut self.compression, self.start)?;
-            self.increment_section_count()?;
-            msg.extend_from_slice(&buf);
+        if let Some(body) = &r.body {
+            r.header.typ = body.real_type();
+        }
+        if let Some(msg) = self.msg.take() {
+            let (mut msg, len_off) = r.header.pack(msg, &mut self.compression, self.start)?;
+            let pre_len = msg.len();
+            if let Some(body) = &r.body {
+                msg = body.pack(msg, &mut self.compression, self.start)?;
+                r.header.fix_len(&mut msg, len_off, pre_len)?;
+                self.increment_section_count()?;
+            }
             self.msg = Some(msg);
         }
+
         Ok(())
     }
 

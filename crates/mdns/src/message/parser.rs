@@ -63,7 +63,10 @@ impl<'a> Parser<'a> {
             unpack_resource_body(header.typ, self.msg, self.off, header.length as usize)?;
         self.off = off;
         self.index += 1;
-        Ok(Resource { header, body })
+        Ok(Resource {
+            header,
+            body: Some(body),
+        })
     }
 
     fn resource_header(&mut self, sec: Section) -> Result<ResourceHeader, Error> {

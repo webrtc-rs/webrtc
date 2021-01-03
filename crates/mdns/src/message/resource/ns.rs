@@ -2,7 +2,7 @@ use super::*;
 use crate::message::name::*;
 
 // An NSResource is an NS Resource record.
-#[derive(Default)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct NSResource {
     pub ns: Name,
 }

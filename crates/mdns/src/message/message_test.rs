@@ -32,7 +32,7 @@ fn small_test_msg() -> Result<Message, Error> {
                 class: DNSClass::INET,
                 ..Default::default()
             },
-            body: Box::new(AResource { a: [127, 0, 0, 1] }),
+            body: Some(Box::new(AResource { a: [127, 0, 0, 1] })),
         }],
         authorities: vec![Resource {
             header: ResourceHeader {
@@ -41,7 +41,7 @@ fn small_test_msg() -> Result<Message, Error> {
                 class: DNSClass::INET,
                 ..Default::default()
             },
-            body: Box::new(AResource { a: [127, 0, 0, 1] }),
+            body: Some(Box::new(AResource { a: [127, 0, 0, 1] })),
         }],
         additionals: vec![Resource {
             header: ResourceHeader {
@@ -50,7 +50,7 @@ fn small_test_msg() -> Result<Message, Error> {
                 class: DNSClass::INET,
                 ..Default::default()
             },
-            body: Box::new(AResource { a: [127, 0, 0, 1] }),
+            body: Some(Box::new(AResource { a: [127, 0, 0, 1] })),
         }],
     })
 }
@@ -76,7 +76,7 @@ fn large_test_msg() -> Result<Message, Error> {
                     class: DNSClass::INET,
                     ..Default::default()
                 },
-                body: Box::new(AResource { a: [127, 0, 0, 1] }),
+                body: Some(Box::new(AResource { a: [127, 0, 0, 1] })),
             },
             Resource {
                 header: ResourceHeader {
@@ -85,7 +85,7 @@ fn large_test_msg() -> Result<Message, Error> {
                     class: DNSClass::INET,
                     ..Default::default()
                 },
-                body: Box::new(AResource { a: [127, 0, 0, 2] }),
+                body: Some(Box::new(AResource { a: [127, 0, 0, 2] })),
             },
             Resource {
                 header: ResourceHeader {
@@ -94,9 +94,9 @@ fn large_test_msg() -> Result<Message, Error> {
                     class: DNSClass::INET,
                     ..Default::default()
                 },
-                body: Box::new(AAAAResource {
+                body: Some(Box::new(AAAAResource {
                     aaaa: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
-                }),
+                })),
             },
             Resource {
                 header: ResourceHeader {
@@ -105,9 +105,9 @@ fn large_test_msg() -> Result<Message, Error> {
                     class: DNSClass::INET,
                     ..Default::default()
                 },
-                body: Box::new(CNAMEResource {
+                body: Some(Box::new(CNAMEResource {
                     cname: Name::new("alias.example.com.")?,
-                }),
+                })),
             },
             Resource {
                 header: ResourceHeader {
@@ -116,7 +116,7 @@ fn large_test_msg() -> Result<Message, Error> {
                     class: DNSClass::INET,
                     ..Default::default()
                 },
-                body: Box::new(SOAResource {
+                body: Some(Box::new(SOAResource {
                     ns: Name::new("ns1.example.com.")?,
                     mbox: Name::new("mb.example.com.")?,
                     serial: 1,
@@ -124,7 +124,7 @@ fn large_test_msg() -> Result<Message, Error> {
                     retry: 3,
                     expire: 4,
                     min_ttl: 5,
-                }),
+                })),
             },
             Resource {
                 header: ResourceHeader {
@@ -133,9 +133,9 @@ fn large_test_msg() -> Result<Message, Error> {
                     class: DNSClass::INET,
                     ..Default::default()
                 },
-                body: Box::new(PTRResource {
+                body: Some(Box::new(PTRResource {
                     ptr: Name::new("ptr.example.com.")?,
-                }),
+                })),
             },
             Resource {
                 header: ResourceHeader {
@@ -144,10 +144,10 @@ fn large_test_msg() -> Result<Message, Error> {
                     class: DNSClass::INET,
                     ..Default::default()
                 },
-                body: Box::new(MXResource {
+                body: Some(Box::new(MXResource {
                     pref: 7,
                     mx: Name::new("mx.example.com.")?,
-                }),
+                })),
             },
             Resource {
                 header: ResourceHeader {
@@ -156,12 +156,12 @@ fn large_test_msg() -> Result<Message, Error> {
                     class: DNSClass::INET,
                     ..Default::default()
                 },
-                body: Box::new(SRVResource {
+                body: Some(Box::new(SRVResource {
                     priority: 8,
                     weight: 9,
                     port: 11,
                     target: Name::new("srv.example.com.")?,
-                }),
+                })),
             },
         ],
         authorities: vec![
@@ -172,9 +172,9 @@ fn large_test_msg() -> Result<Message, Error> {
                     class: DNSClass::INET,
                     ..Default::default()
                 },
-                body: Box::new(NSResource {
+                body: Some(Box::new(NSResource {
                     ns: Name::new("ns1.example.com.")?,
-                }),
+                })),
             },
             Resource {
                 header: ResourceHeader {
@@ -183,9 +183,9 @@ fn large_test_msg() -> Result<Message, Error> {
                     class: DNSClass::INET,
                     ..Default::default()
                 },
-                body: Box::new(NSResource {
+                body: Some(Box::new(NSResource {
                     ns: Name::new("ns2.example.com.")?,
-                }),
+                })),
             },
         ],
         additionals: vec![
@@ -196,9 +196,9 @@ fn large_test_msg() -> Result<Message, Error> {
                     class: DNSClass::INET,
                     ..Default::default()
                 },
-                body: Box::new(TXTResource {
+                body: Some(Box::new(TXTResource {
                     txt: vec!["So Long, and Thanks for All the Fish".to_owned()],
-                }),
+                })),
             },
             Resource {
                 header: ResourceHeader {
@@ -207,18 +207,18 @@ fn large_test_msg() -> Result<Message, Error> {
                     class: DNSClass::INET,
                     ..Default::default()
                 },
-                body: Box::new(TXTResource {
+                body: Some(Box::new(TXTResource {
                     txt: vec!["Hamster Huey and the Gooey Kablooie".to_owned()],
-                }),
+                })),
             },
             Resource {
                 header: must_edns0_resource_header(4096, 0xfe0 | (RCode::Success as u32), false)?,
-                body: Box::new(OPTResource {
+                body: Some(Box::new(OPTResource {
                     options: vec![DNSOption {
                         code: 10, // see RFC 7873
                         data: vec![0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef],
                     }],
-                }),
+                })),
             },
         ],
     })
@@ -516,6 +516,50 @@ fn test_resource_not_started() -> Result<(), Error> {
 }
 
 #[test]
+fn test_srv_pack_unpack() -> Result<(), Error> {
+    let want = Box::new(SRVResource {
+        priority: 8,
+        weight: 9,
+        port: 11,
+        target: Name::new("srv.example.com.")?,
+    });
+
+    let b = want.pack(vec![], &mut None, 0)?;
+    let mut got = SRVResource::default();
+    got.unpack(&b, 0, 0)?;
+    assert_eq!(got.to_string(), want.to_string(),);
+
+    Ok(())
+}
+
+#[test]
+fn test_dns_pack_unpack() -> Result<(), Error> {
+    let wants = vec![
+        Message {
+            header: Header::default(),
+            questions: vec![Question {
+                name: Name::new(".")?,
+                typ: DNSType::AAAA,
+                class: DNSClass::INET,
+            }],
+            answers: vec![],
+            authorities: vec![],
+            additionals: vec![],
+        },
+        large_test_msg()?,
+    ];
+
+    for mut want in wants {
+        let b = want.pack()?;
+        let mut got = Message::default();
+        got.unpack(&b)?;
+        assert_eq!(got.to_string(), want.to_string(),);
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_start_error() -> Result<(), Error> {
     let tests: Vec<(&str, Box<dyn Fn(&mut Builder) -> Result<(), Error>>)> = vec![
         (
@@ -589,7 +633,7 @@ fn test_builder_resource_error() -> Result<(), Error> {
             Box::new(|b: &mut Builder| -> Result<(), Error> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Box::new(CNAMEResource::default()),
+                    body: Some(Box::new(CNAMEResource::default())),
                 })
             }),
         ),
@@ -598,7 +642,7 @@ fn test_builder_resource_error() -> Result<(), Error> {
             Box::new(|b: &mut Builder| -> Result<(), Error> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Box::new(MXResource::default()),
+                    body: Some(Box::new(MXResource::default())),
                 })
             }),
         ),
@@ -607,7 +651,7 @@ fn test_builder_resource_error() -> Result<(), Error> {
             Box::new(|b: &mut Builder| -> Result<(), Error> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Box::new(NSResource::default()),
+                    body: Some(Box::new(NSResource::default())),
                 })
             }),
         ),
@@ -616,7 +660,7 @@ fn test_builder_resource_error() -> Result<(), Error> {
             Box::new(|b: &mut Builder| -> Result<(), Error> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Box::new(PTRResource::default()),
+                    body: Some(Box::new(PTRResource::default())),
                 })
             }),
         ),
@@ -625,7 +669,7 @@ fn test_builder_resource_error() -> Result<(), Error> {
             Box::new(|b: &mut Builder| -> Result<(), Error> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Box::new(SOAResource::default()),
+                    body: Some(Box::new(SOAResource::default())),
                 })
             }),
         ),
@@ -634,7 +678,7 @@ fn test_builder_resource_error() -> Result<(), Error> {
             Box::new(|b: &mut Builder| -> Result<(), Error> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Box::new(TXTResource::default()),
+                    body: Some(Box::new(TXTResource::default())),
                 })
             }),
         ),
@@ -643,7 +687,7 @@ fn test_builder_resource_error() -> Result<(), Error> {
             Box::new(|b: &mut Builder| -> Result<(), Error> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Box::new(SRVResource::default()),
+                    body: Some(Box::new(SRVResource::default())),
                 })
             }),
         ),
@@ -652,7 +696,7 @@ fn test_builder_resource_error() -> Result<(), Error> {
             Box::new(|b: &mut Builder| -> Result<(), Error> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Box::new(AResource::default()),
+                    body: Some(Box::new(AResource::default())),
                 })
             }),
         ),
@@ -661,7 +705,7 @@ fn test_builder_resource_error() -> Result<(), Error> {
             Box::new(|b: &mut Builder| -> Result<(), Error> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Box::new(AAAAResource::default()),
+                    body: Some(Box::new(AAAAResource::default())),
                 })
             }),
         ),
@@ -670,7 +714,7 @@ fn test_builder_resource_error() -> Result<(), Error> {
             Box::new(|b: &mut Builder| -> Result<(), Error> {
                 b.add_resource(&mut Resource {
                     header: ResourceHeader::default(),
-                    body: Box::new(OPTResource::default()),
+                    body: Some(Box::new(OPTResource::default())),
                 })
             }),
         ),

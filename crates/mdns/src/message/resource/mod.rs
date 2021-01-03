@@ -14,7 +14,7 @@ use super::packer::*;
 use super::*;
 use crate::errors::*;
 
-//use a::*;
+use a::*;
 use aaaa::*;
 use cname::*;
 use mx::*;
@@ -28,7 +28,6 @@ use txt::*;
 use std::collections::HashMap;
 use std::fmt;
 
-use crate::message::resource::a::AResource;
 use util::Error;
 
 // EDNS(0) wire constants.
@@ -39,9 +38,10 @@ const EDNS_VERSION_MASK: u32 = 0x00ff0000;
 const EDNS0_DNSSEC_OK_MASK: u32 = 0x00ff8000;
 
 // A Resource is a DNS resource record.
+#[derive(Default, Debug)]
 pub struct Resource {
     pub header: ResourceHeader,
-    pub body: Box<dyn ResourceBody>,
+    pub body: Option<Box<dyn ResourceBody>>,
 }
 
 impl fmt::Display for Resource {
@@ -49,7 +49,12 @@ impl fmt::Display for Resource {
         write!(
             f,
             "dnsmessage.Resource{{Header: {}, Body: {}}}",
-            self.header, self.body
+            self.header,
+            if let Some(body) = &self.body {
+                body.to_string()
+            } else {
+                "None".to_owned()
+            }
         )
     }
 }
@@ -57,19 +62,20 @@ impl fmt::Display for Resource {
 impl Resource {
     // pack appends the wire format of the Resource to msg.
     pub fn pack(
-        &self,
-        mut msg: Vec<u8>,
+        &mut self,
+        msg: Vec<u8>,
         compression: &mut Option<HashMap<String, usize>>,
         compression_off: usize,
     ) -> Result<Vec<u8>, Error> {
-        let body_msg = self.body.pack(vec![], compression, compression_off)?;
-        let mut header = self.header.clone();
-        header.typ = self.body.real_type();
-        header.length = body_msg.len() as u16;
-
-        msg = header.pack(msg, compression, compression_off)?;
-        msg.extend_from_slice(&body_msg);
-
+        if let Some(body) = &self.body {
+            self.header.typ = body.real_type();
+        }
+        let (mut msg, len_off) = self.header.pack(msg, compression, compression_off)?;
+        let pre_len = msg.len();
+        if let Some(body) = &self.body {
+            msg = body.pack(msg, compression, compression_off)?;
+            self.header.fix_len(&mut msg, len_off, pre_len)?;
+        }
         Ok(msg)
     }
 
@@ -77,7 +83,7 @@ impl Resource {
         off = self.header.unpack(msg, off, 0)?;
         let (rb, off) =
             unpack_resource_body(self.header.typ, msg, off, self.header.length as usize)?;
-        self.body = rb;
+        self.body = Some(rb);
         Ok(off)
     }
 
@@ -97,7 +103,7 @@ impl Resource {
 
 // A ResourceHeader is the header of a DNS resource record. There are
 // many types of DNS resource records, but they all share the same header.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, PartialEq, Debug)]
 pub struct ResourceHeader {
     // Name is the domain name for which this resource record pertains.
     pub name: Name,
@@ -141,13 +147,14 @@ impl ResourceHeader {
         mut msg: Vec<u8>,
         compression: &mut Option<HashMap<String, usize>>,
         compression_off: usize,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<(Vec<u8>, usize), Error> {
         msg = self.name.pack(msg, compression, compression_off)?;
         msg = self.typ.pack(msg);
         msg = self.class.pack(msg);
         msg = pack_uint32(msg, self.ttl);
+        let len_off = msg.len();
         msg = pack_uint16(msg, self.length);
-        Ok(msg)
+        Ok((msg, len_off))
     }
 
     pub fn unpack(&mut self, msg: &[u8], off: usize, _length: usize) -> Result<usize, Error> {
@@ -161,6 +168,27 @@ impl ResourceHeader {
         self.length = l;
 
         Ok(new_off)
+    }
+
+    // fixLen updates a packed ResourceHeader to include the length of the
+    // ResourceBody.
+    //
+    // lenOff is the offset of the ResourceHeader.Length field in msg.
+    //
+    // preLen is the length that msg was before the ResourceBody was packed.
+    pub fn fix_len(&mut self, msg: &mut [u8], len_off: usize, pre_len: usize) -> Result<(), Error> {
+        if msg.len() < pre_len || msg.len() > pre_len + u16::MAX as usize {
+            return Err(ERR_RES_TOO_LONG.to_owned());
+        }
+
+        let con_len = msg.len() - pre_len;
+
+        // Fill in the length now that we know how long the content is.
+        msg[len_off] = ((con_len >> 8) & 0xFF) as u8;
+        msg[len_off + 1] = (con_len & 0xFF) as u8;
+        self.length = con_len as u16;
+
+        Ok(())
     }
 
     // set_edns0 configures h for EDNS(0).
@@ -203,7 +231,7 @@ impl ResourceHeader {
 }
 
 // A ResourceBody is a DNS resource record minus the header.
-pub trait ResourceBody: fmt::Display {
+pub trait ResourceBody: fmt::Display + fmt::Debug {
     // real_type returns the actual type of the Resource. This is used to
     // fill in the header Type field.
     fn real_type(&self) -> DNSType;
@@ -241,5 +269,5 @@ pub fn unpack_resource_body(
 
     off = rb.unpack(msg, off, length)?;
 
-    Ok((rb, off + length))
+    Ok((rb, off))
 }

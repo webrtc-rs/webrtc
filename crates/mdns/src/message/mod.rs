@@ -11,6 +11,7 @@ pub mod resource;
 
 use header::*;
 use packer::*;
+use parser::*;
 use question::*;
 use resource::*;
 
@@ -45,7 +46,7 @@ pub enum DNSType {
     AXFR = 252,
     ALL = 255,
 
-    Unsupported,
+    Unsupported = 0,
 }
 
 impl Default for DNSType {
@@ -83,21 +84,21 @@ impl From<u16> for DNSType {
 impl fmt::Display for DNSType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
-            DNSType::A => "TypeA",
-            DNSType::NS => "TypeNS",
-            DNSType::CNAME => "TypeCNAME",
-            DNSType::SOA => "TypeSOA",
-            DNSType::PTR => "TypePTR",
-            DNSType::MX => "TypeMX",
-            DNSType::TXT => "TypeTXT",
-            DNSType::AAAA => "TypeAAAA",
-            DNSType::SRV => "TypeSRV",
-            DNSType::OPT => "TypeOPT",
-            DNSType::WKS => "TypeWKS",
-            DNSType::HINFO => "TypeHINFO",
-            DNSType::MINFO => "TypeMINFO",
-            DNSType::AXFR => "TypeAXFR",
-            DNSType::ALL => "TypeALL",
+            DNSType::A => "A",
+            DNSType::NS => "NS",
+            DNSType::CNAME => "CNAME",
+            DNSType::SOA => "SOA",
+            DNSType::PTR => "PTR",
+            DNSType::MX => "MX",
+            DNSType::TXT => "TXT",
+            DNSType::AAAA => "AAAA",
+            DNSType::SRV => "SRV",
+            DNSType::OPT => "OPT",
+            DNSType::WKS => "WKS",
+            DNSType::HINFO => "HINFO",
+            DNSType::MINFO => "MINFO",
+            DNSType::AXFR => "AXFR",
+            DNSType::ALL => "ALL",
             _ => "Unsupported",
         };
         write!(f, "{}", s)
@@ -132,7 +133,7 @@ pub enum DNSClass {
 
     // question.Class
     ANY = 255,
-    Unsupported,
+    Unsupported = 0,
 }
 
 impl Default for DNSClass {
@@ -192,7 +193,7 @@ impl DNSClass {
 pub type OpCode = u16;
 
 // An RCode is a DNS response status code.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum RCode {
     // Message.Rcode
     Success = 0,
@@ -206,7 +207,7 @@ pub enum RCode {
 
 impl Default for RCode {
     fn default() -> Self {
-        RCode::Unsupported
+        RCode::Success
     }
 }
 
@@ -266,6 +267,7 @@ const HEADER_BIT_RD: u16 = 1 << 8; // recursion desired
 const HEADER_BIT_RA: u16 = 1 << 7; // recursion available
 
 // Message is a representation of a DNS message.
+#[derive(Default, Debug)]
 pub struct Message {
     pub header: Header,
     pub questions: Vec<Question>,
@@ -301,35 +303,24 @@ impl fmt::Display for Message {
 
 impl Message {
     // Unpack parses a full Message.
-    pub fn unpack(&mut self, _msg: &[u8]) -> Result<(), Error> {
-        /*var p Parser
-        var err error
-        if m.Header, err = p.start(msg); err != nil {
-            return err
-        }
-        if m.Questions, err = p.all_questions(); err != nil {
-            return err
-        }
-        if m.Answers, err = p.all_answers(); err != nil {
-            return err
-        }
-        if m.Authorities, err = p.all_authorities(); err != nil {
-            return err
-        }
-        if m.Additionals, err = p.all_additionals(); err != nil {
-            return err
-        }*/
+    pub fn unpack(&mut self, msg: &[u8]) -> Result<(), Error> {
+        let mut p = Parser::default();
+        self.header = p.start(msg)?;
+        self.questions = p.all_questions()?;
+        self.answers = p.all_answers()?;
+        self.authorities = p.all_authorities()?;
+        self.additionals = p.all_additionals()?;
         Ok(())
     }
 
     // Pack packs a full Message.
-    pub fn pack(&self) -> Result<Vec<u8>, Error> {
+    pub fn pack(&mut self) -> Result<Vec<u8>, Error> {
         self.append_pack(vec![])
     }
 
     // append_pack is like Pack but appends the full Message to b and returns the
     // extended buffer.
-    pub fn append_pack(&self, b: Vec<u8>) -> Result<Vec<u8>, Error> {
+    pub fn append_pack(&mut self, b: Vec<u8>) -> Result<Vec<u8>, Error> {
         // Validate the lengths. It is very unlikely that anyone will try to
         // pack more than 65535 of any particular type, but it is possible and
         // we should fail gracefully.
@@ -378,13 +369,13 @@ impl Message {
         for question in &self.questions {
             msg = question.pack(msg, &mut compression, compression_off)?;
         }
-        for answer in &self.answers {
+        for answer in &mut self.answers {
             msg = answer.pack(msg, &mut compression, compression_off)?;
         }
-        for authority in &self.authorities {
+        for authority in &mut self.authorities {
             msg = authority.pack(msg, &mut compression, compression_off)?;
         }
-        for additional in &self.additionals {
+        for additional in &mut self.additionals {
             msg = additional.pack(msg, &mut compression, compression_off)?;
         }
 

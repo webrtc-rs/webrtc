@@ -2,7 +2,7 @@ use super::*;
 use crate::message::name::*;
 
 // A PTRResource is a PTR Resource record.
-#[derive(Default)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct PTRResource {
     pub ptr: Name,
 }
