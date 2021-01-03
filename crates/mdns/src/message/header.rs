@@ -55,7 +55,7 @@ impl Header {
 }
 
 #[derive(Copy, Clone, PartialOrd, PartialEq)]
-pub(crate) enum Section {
+pub enum Section {
     NotStarted = 0,
     Header = 1,
     Questions = 2,
@@ -63,6 +63,12 @@ pub(crate) enum Section {
     Authorities = 4,
     Additionals = 5,
     Done = 6,
+}
+
+impl Default for Section {
+    fn default() -> Self {
+        Section::NotStarted
+    }
 }
 
 impl From<u8> for Section {
@@ -96,7 +102,7 @@ impl fmt::Display for Section {
 
 // header is the wire format for a DNS message header.
 #[derive(Default)]
-pub(crate) struct HeaderInternal {
+pub struct HeaderInternal {
     pub(crate) id: u16,
     pub(crate) bits: u16,
     pub(crate) questions: u16,

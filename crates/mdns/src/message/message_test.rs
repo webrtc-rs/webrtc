@@ -233,46 +233,6 @@ fn must_edns0_resource_header(l: u16, extrc: u32, d: bool) -> Result<ResourceHea
 }
 
 #[test]
-fn test_builder() -> Result<(), Error> {
-    let mut msg = large_test_msg()?;
-    let want = msg.pack()?;
-
-    let mut b = Builder::new(&msg.header);
-    b.enable_compression();
-
-    b.start_questions()?;
-    for q in &msg.questions {
-        b.add_question(q)?;
-    }
-
-    b.start_answers()?;
-    for r in &mut msg.answers {
-        b.add_resource(r)?;
-    }
-
-    b.start_authorities()?;
-    for r in &mut msg.authorities {
-        b.add_resource(r)?;
-    }
-
-    b.start_additionals()?;
-    for r in &mut msg.additionals {
-        b.add_resource(r)?;
-    }
-
-    let got = b.finish()?;
-    assert_eq!(
-        got,
-        want,
-        "got.len()={}, want.len()={}",
-        got.len(),
-        want.len()
-    );
-
-    Ok(())
-}
-
-#[test]
 fn test_name() -> Result<(), Error> {
     let tests = vec![
         "",
@@ -369,6 +329,219 @@ fn test_incompressible_name() -> Result<(), Error> {
     } else {
         assert!(false);
     }
+
+    Ok(())
+}
+
+#[test]
+fn test_builder_resource_error() -> Result<(), Error> {
+    let tests: Vec<(&str, Box<dyn Fn(&mut Builder) -> Result<(), Error>>)> = vec![
+        (
+            "CNAMEResource",
+            Box::new(|b: &mut Builder| -> Result<(), Error> {
+                b.add_resource(&mut Resource {
+                    header: ResourceHeader::default(),
+                    body: Box::new(CNAMEResource::default()),
+                })
+            }),
+        ),
+        (
+            "MXResource",
+            Box::new(|b: &mut Builder| -> Result<(), Error> {
+                b.add_resource(&mut Resource {
+                    header: ResourceHeader::default(),
+                    body: Box::new(MXResource::default()),
+                })
+            }),
+        ),
+        (
+            "NSResource",
+            Box::new(|b: &mut Builder| -> Result<(), Error> {
+                b.add_resource(&mut Resource {
+                    header: ResourceHeader::default(),
+                    body: Box::new(NSResource::default()),
+                })
+            }),
+        ),
+        (
+            "PTRResource",
+            Box::new(|b: &mut Builder| -> Result<(), Error> {
+                b.add_resource(&mut Resource {
+                    header: ResourceHeader::default(),
+                    body: Box::new(PTRResource::default()),
+                })
+            }),
+        ),
+        (
+            "SOAResource",
+            Box::new(|b: &mut Builder| -> Result<(), Error> {
+                b.add_resource(&mut Resource {
+                    header: ResourceHeader::default(),
+                    body: Box::new(SOAResource::default()),
+                })
+            }),
+        ),
+        (
+            "TXTResource",
+            Box::new(|b: &mut Builder| -> Result<(), Error> {
+                b.add_resource(&mut Resource {
+                    header: ResourceHeader::default(),
+                    body: Box::new(TXTResource::default()),
+                })
+            }),
+        ),
+        (
+            "SRVResource",
+            Box::new(|b: &mut Builder| -> Result<(), Error> {
+                b.add_resource(&mut Resource {
+                    header: ResourceHeader::default(),
+                    body: Box::new(SRVResource::default()),
+                })
+            }),
+        ),
+        (
+            "AResource",
+            Box::new(|b: &mut Builder| -> Result<(), Error> {
+                b.add_resource(&mut Resource {
+                    header: ResourceHeader::default(),
+                    body: Box::new(AResource::default()),
+                })
+            }),
+        ),
+        (
+            "AAAAResource",
+            Box::new(|b: &mut Builder| -> Result<(), Error> {
+                b.add_resource(&mut Resource {
+                    header: ResourceHeader::default(),
+                    body: Box::new(AAAAResource::default()),
+                })
+            }),
+        ),
+        (
+            "OPTResource",
+            Box::new(|b: &mut Builder| -> Result<(), Error> {
+                b.add_resource(&mut Resource {
+                    header: ResourceHeader::default(),
+                    body: Box::new(OPTResource::default()),
+                })
+            }),
+        ),
+    ];
+
+    let envs: Vec<(&str, Box<dyn Fn() -> Builder>, Error)> = vec![
+        (
+            "sectionNotStarted",
+            Box::new(|| -> Builder {
+                Builder {
+                    section: Section::NotStarted,
+                    ..Default::default()
+                }
+            }),
+            ERR_NOT_STARTED.to_owned(),
+        ),
+        (
+            "sectionHeader",
+            Box::new(|| -> Builder {
+                Builder {
+                    section: Section::Header,
+                    ..Default::default()
+                }
+            }),
+            ERR_NOT_STARTED.to_owned(),
+        ),
+        (
+            "sectionQuestions",
+            Box::new(|| -> Builder {
+                Builder {
+                    section: Section::Questions,
+                    ..Default::default()
+                }
+            }),
+            ERR_NOT_STARTED.to_owned(),
+        ),
+        (
+            "sectionDone",
+            Box::new(|| -> Builder {
+                Builder {
+                    section: Section::Done,
+                    ..Default::default()
+                }
+            }),
+            ERR_SECTION_DONE.to_owned(),
+        ),
+    ];
+
+    for (env_name, env_fn, env_err) in &envs {
+        for (test_name, test_fn) in &tests {
+            let mut b = env_fn();
+            if let Err(got_err) = test_fn(&mut b) {
+                assert_eq!(
+                    got_err, *env_err,
+                    "got Builder{}.{} = {}, want = {}",
+                    env_name, test_name, got_err, *env_err
+                );
+            } else {
+                assert!(
+                    false,
+                    "{}.{}expected error, but got ok",
+                    env_name, test_name
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_finish_error() -> Result<(), Error> {
+    let mut b = Builder::default();
+    let want = ERR_NOT_STARTED.to_owned();
+    if let Err(got) = b.finish() {
+        assert_eq!(got, want, "got Builder.Finish() = {}, want = {}", got, want);
+    } else {
+        assert!(false, "expected error, but got ok");
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_builder() -> Result<(), Error> {
+    let mut msg = large_test_msg()?;
+    let want = msg.pack()?;
+
+    let mut b = Builder::new(&msg.header);
+    b.enable_compression();
+
+    b.start_questions()?;
+    for q in &msg.questions {
+        b.add_question(q)?;
+    }
+
+    b.start_answers()?;
+    for r in &mut msg.answers {
+        b.add_resource(r)?;
+    }
+
+    b.start_authorities()?;
+    for r in &mut msg.authorities {
+        b.add_resource(r)?;
+    }
+
+    b.start_additionals()?;
+    for r in &mut msg.additionals {
+        b.add_resource(r)?;
+    }
+
+    let got = b.finish()?;
+    assert_eq!(
+        got,
+        want,
+        "got.len()={}, want.len()={}",
+        got.len(),
+        want.len()
+    );
 
     Ok(())
 }
