@@ -553,7 +553,204 @@ fn test_dns_pack_unpack() -> Result<(), Error> {
         let b = want.pack()?;
         let mut got = Message::default();
         got.unpack(&b)?;
-        assert_eq!(got.to_string(), want.to_string(),);
+        assert_eq!(got.to_string(), want.to_string());
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_dns_append_pack_unpack() -> Result<(), Error> {
+    let wants = vec![
+        Message {
+            header: Header::default(),
+            questions: vec![Question {
+                name: Name::new(".")?,
+                typ: DNSType::AAAA,
+                class: DNSClass::INET,
+            }],
+            answers: vec![],
+            authorities: vec![],
+            additionals: vec![],
+        },
+        large_test_msg()?,
+    ];
+
+    for mut want in wants {
+        let mut b = vec![0; 2];
+        b = want.append_pack(b)?;
+        let mut got = Message::default();
+        got.unpack(&b[2..])?;
+        assert_eq!(got.to_string(), want.to_string());
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_skip_all() -> Result<(), Error> {
+    let mut msg = large_test_msg()?;
+    let buf = msg.pack()?;
+    let mut p = Parser::default();
+    p.start(&buf)?;
+
+    for _ in 1..=3 {
+        p.skip_all_questions()?;
+    }
+    for _ in 1..=3 {
+        p.skip_all_answers()?;
+    }
+    for _ in 1..=3 {
+        p.skip_all_authorities()?;
+    }
+    for _ in 1..=3 {
+        p.skip_all_additionals()?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_skip_each() -> Result<(), Error> {
+    let mut msg = small_test_msg()?;
+    let buf = msg.pack()?;
+    let mut p = Parser::default();
+    p.start(&buf)?;
+
+    //	{"SkipQuestion", p.SkipQuestion},
+    //	{"SkipAnswer", p.SkipAnswer},
+    //	{"SkipAuthority", p.SkipAuthority},
+    //  {"SkipAdditional", p.SkipAdditional},
+
+    p.skip_question()?;
+    if let Err(err) = p.skip_question() {
+        assert_eq!(err, ERR_SECTION_DONE.to_owned());
+    } else {
+        assert!(false, "expected error, but got ok");
+    }
+
+    p.skip_answer()?;
+    if let Err(err) = p.skip_answer() {
+        assert_eq!(err, ERR_SECTION_DONE.to_owned());
+    } else {
+        assert!(false, "expected error, but got ok");
+    }
+
+    p.skip_authority()?;
+    if let Err(err) = p.skip_authority() {
+        assert_eq!(err, ERR_SECTION_DONE.to_owned());
+    } else {
+        assert!(false, "expected error, but got ok");
+    }
+
+    p.skip_additional()?;
+    if let Err(err) = p.skip_additional() {
+        assert_eq!(err, ERR_SECTION_DONE.to_owned());
+    } else {
+        assert!(false, "expected error, but got ok");
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_skip_after_read() -> Result<(), Error> {
+    let mut msg = small_test_msg()?;
+    let buf = msg.pack()?;
+    let mut p = Parser::default();
+    p.start(&buf)?;
+
+    let tests: Vec<(&str, Box<dyn Fn(&mut Parser<'_>) -> Result<(), Error>>)> = vec![
+        (
+            "Question",
+            Box::new(|p: &mut Parser<'_>| -> Result<(), Error> {
+                if let Err(err) = p.question() {
+                    Err(err)
+                } else {
+                    Ok(())
+                }
+            }),
+        ),
+        (
+            "Answer",
+            Box::new(|p: &mut Parser<'_>| -> Result<(), Error> {
+                if let Err(err) = p.answer() {
+                    Err(err)
+                } else {
+                    Ok(())
+                }
+            }),
+        ),
+        (
+            "Authority",
+            Box::new(|p: &mut Parser<'_>| -> Result<(), Error> {
+                if let Err(err) = p.authority() {
+                    Err(err)
+                } else {
+                    Ok(())
+                }
+            }),
+        ),
+        (
+            "Additional",
+            Box::new(|p: &mut Parser<'_>| -> Result<(), Error> {
+                if let Err(err) = p.additional() {
+                    Err(err)
+                } else {
+                    Ok(())
+                }
+            }),
+        ),
+    ];
+
+    for (name, read_fn) in tests {
+        read_fn(&mut p)?;
+
+        let result = match name {
+            "Question" => p.skip_question(),
+            "Answer" => p.skip_answer(),
+            "Authority" => p.skip_authority(),
+            _ => p.skip_additional(),
+        };
+
+        if let Err(err) = result {
+            assert_eq!(err, ERR_SECTION_DONE.to_owned());
+        } else {
+            assert!(false, "expected error, but got ok");
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_skip_not_started() -> Result<(), Error> {
+    let tests: Vec<(&str, Box<dyn Fn(&mut Parser<'_>) -> Result<(), Error>>)> = vec![
+        (
+            "SkipAllQuestions",
+            Box::new(|p: &mut Parser<'_>| -> Result<(), Error> { p.skip_all_questions() }),
+        ),
+        (
+            "SkipAllAnswers",
+            Box::new(|p: &mut Parser<'_>| -> Result<(), Error> { p.skip_all_answers() }),
+        ),
+        (
+            "SkipAllAuthorities",
+            Box::new(|p: &mut Parser<'_>| -> Result<(), Error> { p.skip_all_authorities() }),
+        ),
+        (
+            "SkipAllAdditionals",
+            Box::new(|p: &mut Parser<'_>| -> Result<(), Error> { p.skip_all_additionals() }),
+        ),
+    ];
+
+    let mut p = Parser::default();
+    for (name, test_fn) in tests {
+        if let Err(err) = test_fn(&mut p) {
+            assert_eq!(err, ERR_NOT_STARTED.to_owned());
+        } else {
+            assert!(false, "{} expected error, but got ok", name);
+        }
     }
 
     Ok(())
