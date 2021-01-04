@@ -23,13 +23,13 @@ fn small_test_msg() -> Result<Message, Error> {
         questions: vec![Question {
             name: name.clone(),
             typ: DNSType::A,
-            class: DNSClass::INET,
+            class: DNSCLASS_INET,
         }],
         answers: vec![Resource {
             header: ResourceHeader {
                 name: name.clone(),
                 typ: DNSType::A,
-                class: DNSClass::INET,
+                class: DNSCLASS_INET,
                 ..Default::default()
             },
             body: Some(Box::new(AResource { a: [127, 0, 0, 1] })),
@@ -38,7 +38,7 @@ fn small_test_msg() -> Result<Message, Error> {
             header: ResourceHeader {
                 name: name.clone(),
                 typ: DNSType::A,
-                class: DNSClass::INET,
+                class: DNSCLASS_INET,
                 ..Default::default()
             },
             body: Some(Box::new(AResource { a: [127, 0, 0, 1] })),
@@ -47,7 +47,7 @@ fn small_test_msg() -> Result<Message, Error> {
             header: ResourceHeader {
                 name: name.clone(),
                 typ: DNSType::A,
-                class: DNSClass::INET,
+                class: DNSCLASS_INET,
                 ..Default::default()
             },
             body: Some(Box::new(AResource { a: [127, 0, 0, 1] })),
@@ -66,14 +66,14 @@ fn large_test_msg() -> Result<Message, Error> {
         questions: vec![Question {
             name: name.clone(),
             typ: DNSType::A,
-            class: DNSClass::INET,
+            class: DNSCLASS_INET,
         }],
         answers: vec![
             Resource {
                 header: ResourceHeader {
                     name: name.clone(),
                     typ: DNSType::A,
-                    class: DNSClass::INET,
+                    class: DNSCLASS_INET,
                     ..Default::default()
                 },
                 body: Some(Box::new(AResource { a: [127, 0, 0, 1] })),
@@ -82,7 +82,7 @@ fn large_test_msg() -> Result<Message, Error> {
                 header: ResourceHeader {
                     name: name.clone(),
                     typ: DNSType::A,
-                    class: DNSClass::INET,
+                    class: DNSCLASS_INET,
                     ..Default::default()
                 },
                 body: Some(Box::new(AResource { a: [127, 0, 0, 2] })),
@@ -91,7 +91,7 @@ fn large_test_msg() -> Result<Message, Error> {
                 header: ResourceHeader {
                     name: name.clone(),
                     typ: DNSType::AAAA,
-                    class: DNSClass::INET,
+                    class: DNSCLASS_INET,
                     ..Default::default()
                 },
                 body: Some(Box::new(AAAAResource {
@@ -102,7 +102,7 @@ fn large_test_msg() -> Result<Message, Error> {
                 header: ResourceHeader {
                     name: name.clone(),
                     typ: DNSType::CNAME,
-                    class: DNSClass::INET,
+                    class: DNSCLASS_INET,
                     ..Default::default()
                 },
                 body: Some(Box::new(CNAMEResource {
@@ -113,7 +113,7 @@ fn large_test_msg() -> Result<Message, Error> {
                 header: ResourceHeader {
                     name: name.clone(),
                     typ: DNSType::SOA,
-                    class: DNSClass::INET,
+                    class: DNSCLASS_INET,
                     ..Default::default()
                 },
                 body: Some(Box::new(SOAResource {
@@ -130,7 +130,7 @@ fn large_test_msg() -> Result<Message, Error> {
                 header: ResourceHeader {
                     name: name.clone(),
                     typ: DNSType::PTR,
-                    class: DNSClass::INET,
+                    class: DNSCLASS_INET,
                     ..Default::default()
                 },
                 body: Some(Box::new(PTRResource {
@@ -141,7 +141,7 @@ fn large_test_msg() -> Result<Message, Error> {
                 header: ResourceHeader {
                     name: name.clone(),
                     typ: DNSType::MX,
-                    class: DNSClass::INET,
+                    class: DNSCLASS_INET,
                     ..Default::default()
                 },
                 body: Some(Box::new(MXResource {
@@ -153,7 +153,7 @@ fn large_test_msg() -> Result<Message, Error> {
                 header: ResourceHeader {
                     name: name.clone(),
                     typ: DNSType::SRV,
-                    class: DNSClass::INET,
+                    class: DNSCLASS_INET,
                     ..Default::default()
                 },
                 body: Some(Box::new(SRVResource {
@@ -169,7 +169,7 @@ fn large_test_msg() -> Result<Message, Error> {
                 header: ResourceHeader {
                     name: name.clone(),
                     typ: DNSType::NS,
-                    class: DNSClass::INET,
+                    class: DNSCLASS_INET,
                     ..Default::default()
                 },
                 body: Some(Box::new(NSResource {
@@ -180,7 +180,7 @@ fn large_test_msg() -> Result<Message, Error> {
                 header: ResourceHeader {
                     name: name.clone(),
                     typ: DNSType::NS,
-                    class: DNSClass::INET,
+                    class: DNSCLASS_INET,
                     ..Default::default()
                 },
                 body: Some(Box::new(NSResource {
@@ -193,7 +193,7 @@ fn large_test_msg() -> Result<Message, Error> {
                 header: ResourceHeader {
                     name: name.clone(),
                     typ: DNSType::TXT,
-                    class: DNSClass::INET,
+                    class: DNSCLASS_INET,
                     ..Default::default()
                 },
                 body: Some(Box::new(TXTResource {
@@ -204,7 +204,7 @@ fn large_test_msg() -> Result<Message, Error> {
                 header: ResourceHeader {
                     name: name.clone(),
                     typ: DNSType::TXT,
-                    class: DNSClass::INET,
+                    class: DNSCLASS_INET,
                     ..Default::default()
                 },
                 body: Some(Box::new(TXTResource {
@@ -226,7 +226,7 @@ fn large_test_msg() -> Result<Message, Error> {
 
 fn must_edns0_resource_header(l: u16, extrc: u32, d: bool) -> Result<ResourceHeader, Error> {
     let mut h = ResourceHeader {
-        class: DNSClass::INET,
+        class: DNSCLASS_INET,
         ..Default::default()
     };
     h.set_edns0(l, extrc, d)?;
@@ -247,7 +247,7 @@ fn test_question_pack_unpack() -> Result<(), Error> {
     let want = Question {
         name: Name::new(".")?,
         typ: DNSType::A,
-        class: DNSClass::INET,
+        class: DNSCLASS_INET,
     };
     let buf = want.pack(vec![0; 1], &mut Some(HashMap::new()), 1)?;
     let mut p = Parser {
@@ -540,7 +540,7 @@ fn test_dns_pack_unpack() -> Result<(), Error> {
             questions: vec![Question {
                 name: Name::new(".")?,
                 typ: DNSType::AAAA,
-                class: DNSClass::INET,
+                class: DNSCLASS_INET,
             }],
             answers: vec![],
             authorities: vec![],
@@ -567,7 +567,7 @@ fn test_dns_append_pack_unpack() -> Result<(), Error> {
             questions: vec![Question {
                 name: Name::new(".")?,
                 typ: DNSType::AAAA,
-                class: DNSClass::INET,
+                class: DNSCLASS_INET,
             }],
             answers: vec![],
             authorities: vec![],
@@ -751,6 +751,137 @@ fn test_skip_not_started() -> Result<(), Error> {
         } else {
             assert!(false, "{} expected error, but got ok", name);
         }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_too_many_records() -> Result<(), Error> {
+    let recs: usize = u16::MAX as usize + 1;
+    let tests = vec![
+        (
+            "Questions",
+            Message {
+                questions: vec![Question::default(); recs],
+                ..Default::default()
+            },
+            ERR_TOO_MANY_QUESTIONS.to_owned(),
+        ),
+        (
+            "Answers",
+            Message {
+                answers: {
+                    let mut a = vec![];
+                    for _ in 0..recs {
+                        a.push(Resource::default());
+                    }
+                    a
+                },
+                ..Default::default()
+            },
+            ERR_TOO_MANY_ANSWERS.to_owned(),
+        ),
+        (
+            "Authorities",
+            Message {
+                authorities: {
+                    let mut a = vec![];
+                    for _ in 0..recs {
+                        a.push(Resource::default());
+                    }
+                    a
+                },
+                ..Default::default()
+            },
+            ERR_TOO_MANY_AUTHORITIES.to_owned(),
+        ),
+        (
+            "Additionals",
+            Message {
+                additionals: {
+                    let mut a = vec![];
+                    for _ in 0..recs {
+                        a.push(Resource::default());
+                    }
+                    a
+                },
+                ..Default::default()
+            },
+            ERR_TOO_MANY_ADDITIONALS.to_owned(),
+        ),
+    ];
+
+    for (name, mut msg, want) in tests {
+        if let Err(got) = msg.pack() {
+            assert_eq!(
+                got, want,
+                "got Message.Pack() for {} = {}, want = {}",
+                name, got, want
+            )
+        } else {
+            assert!(false, "expected error, but got ok");
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_very_long_txt() -> Result<(), Error> {
+    let mut str255 = String::new();
+    for _ in 0..255 {
+        str255.push('.');
+    }
+
+    let mut want = Resource {
+        header: ResourceHeader {
+            name: Name::new("foo.bar.example.com.")?,
+            typ: DNSType::TXT,
+            class: DNSCLASS_INET,
+            ..Default::default()
+        },
+        body: Some(Box::new(TXTResource {
+            txt: vec![
+                "".to_owned(),
+                "".to_owned(),
+                "foo bar".to_owned(),
+                "".to_owned(),
+                "www.example.com".to_owned(),
+                "www.example.com.".to_owned(),
+                str255,
+            ],
+        })),
+    };
+
+    let buf = want.pack(vec![], &mut Some(HashMap::new()), 0)?;
+    let mut got = Resource::default();
+    let off = got.header.unpack(&buf, 0, 0)?;
+    let (body, n) = unpack_resource_body(got.header.typ, &buf, off, got.header.length as usize)?;
+    got.body = Some(body);
+    assert_eq!(
+        n,
+        buf.len(),
+        "unpacked different amount than packed: got = {}, want = {}",
+        n,
+        buf.len(),
+    );
+    assert_eq!(got.to_string(), want.to_string());
+
+    Ok(())
+}
+
+#[test]
+fn test_too_long_txt() -> Result<(), Error> {
+    let mut str256 = String::new();
+    for _ in 0..256 {
+        str256.push('.');
+    }
+    let rb = TXTResource { txt: vec![str256] };
+    if let Err(err) = rb.pack(vec![], &mut Some(HashMap::new()), 0) {
+        assert_eq!(err, ERR_STRING_TOO_LONG.to_owned());
+    } else {
+        assert!(false, "expected error, but got ok");
     }
 
     Ok(())
@@ -1031,6 +1162,231 @@ fn test_builder() -> Result<(), Error> {
         got.len(),
         want.len()
     );
+
+    Ok(())
+}
+
+#[test]
+fn test_resource_pack() -> Result<(), Error> {
+    let tests = vec![
+        (
+            Message {
+                questions: vec![Question {
+                    name: Name::new(".")?,
+                    typ: DNSType::AAAA,
+                    class: DNSCLASS_INET,
+                }],
+                answers: vec![Resource {
+                    header: ResourceHeader::default(),
+                    body: None,
+                }],
+                ..Default::default()
+            },
+            ERR_NIL_RESOURCE_BODY.to_owned(),
+        ),
+        (
+            Message {
+                questions: vec![Question {
+                    name: Name::new(".")?,
+                    typ: DNSType::AAAA,
+                    class: DNSCLASS_INET,
+                }],
+                authorities: vec![Resource {
+                    header: ResourceHeader::default(),
+                    body: Some(Box::new(NSResource::default())),
+                }],
+                ..Default::default()
+            },
+            ERR_NON_CANONICAL_NAME.to_owned(),
+        ),
+        (
+            Message {
+                questions: vec![Question {
+                    name: Name::new(".")?,
+                    typ: DNSType::A,
+                    class: DNSCLASS_INET,
+                }],
+                additionals: vec![Resource {
+                    header: ResourceHeader::default(),
+                    body: None,
+                }],
+                ..Default::default()
+            },
+            ERR_NIL_RESOURCE_BODY.to_owned(),
+        ),
+    ];
+
+    for (mut m, want_err) in tests {
+        if let Err(err) = m.pack() {
+            assert_eq!(err, want_err);
+        } else {
+            assert!(false, "expected error, but got ok");
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_resource_pack_length() -> Result<(), Error> {
+    let mut r = Resource {
+        header: ResourceHeader {
+            name: Name::new(".")?,
+            typ: DNSType::A,
+            class: DNSCLASS_INET,
+            ..Default::default()
+        },
+        body: Some(Box::new(AResource { a: [127, 0, 0, 2] })),
+    };
+
+    let (hb, _) = r.header.pack(vec![], &mut None, 0)?;
+    let buf = r.pack(vec![], &mut None, 0)?;
+
+    let mut hdr = ResourceHeader::default();
+    hdr.unpack(&buf, 0, 0)?;
+
+    let (got, want) = (hdr.length as usize, buf.len() - hb.len());
+    assert_eq!(got, want, "got hdr.Length = {}, want = {}", got, want);
+
+    Ok(())
+}
+
+#[test]
+fn test_option_pack_unpack() -> Result<(), Error> {
+    let tests = vec![
+        (
+            "without EDNS(0) options",
+            vec![
+                0x00, 0x00, 0x29, 0x10, 0x00, 0xfe, 0x00, 0x80, 0x00, 0x00, 0x00,
+            ],
+            Message {
+                header: Header {
+                    rcode: RCode::FormatError,
+                    ..Default::default()
+                },
+                questions: vec![Question {
+                    name: Name::new(".")?,
+                    typ: DNSType::A,
+                    class: DNSCLASS_INET,
+                }],
+                additionals: vec![Resource {
+                    header: must_edns0_resource_header(
+                        4096,
+                        0xfe0 | RCode::FormatError as u32,
+                        true,
+                    )?,
+                    body: Some(Box::new(OPTResource::default())),
+                }],
+                ..Default::default()
+            },
+            //true,
+            //0xfe0 | RCode::FormatError as u32,
+        ),
+        (
+            "with EDNS(0) options",
+            vec![
+                0x00, 0x00, 0x29, 0x10, 0x00, 0xff, 0x00, 0x00, 0x00, 0x00, 0x0c, 0x00, 0x0c, 0x00,
+                0x02, 0x00, 0x00, 0x00, 0x0b, 0x00, 0x02, 0x12, 0x34,
+            ],
+            Message {
+                header: Header {
+                    rcode: RCode::ServerFailure,
+                    ..Default::default()
+                },
+                questions: vec![Question {
+                    name: Name::new(".")?,
+                    typ: DNSType::AAAA,
+                    class: DNSCLASS_INET,
+                }],
+                additionals: vec![Resource {
+                    header: must_edns0_resource_header(
+                        4096,
+                        0xff0 | RCode::ServerFailure as u32,
+                        false,
+                    )?,
+                    body: Some(Box::new(OPTResource {
+                        options: vec![
+                            DNSOption {
+                                code: 12, // see RFC 7828
+                                data: vec![0x00, 0x00],
+                            },
+                            DNSOption {
+                                code: 11, // see RFC 7830
+                                data: vec![0x12, 0x34],
+                            },
+                        ],
+                    })),
+                }],
+                ..Default::default()
+            },
+            //dnssecOK: false,
+            //extRCode: 0xff0 | RCodeServerFailure,
+        ),
+        (
+            // Containing multiple OPT resources in a
+            // message is invalid, but it's necessary for
+            // protocol conformance testing.
+            "with multiple OPT resources",
+            vec![
+                0x00, 0x00, 0x29, 0x10, 0x00, 0xff, 0x00, 0x00, 0x00, 0x00, 0x06, 0x00, 0x0b, 0x00,
+                0x02, 0x12, 0x34, 0x00, 0x00, 0x29, 0x10, 0x00, 0xff, 0x00, 0x00, 0x00, 0x00, 0x06,
+                0x00, 0x0c, 0x00, 0x02, 0x00, 0x00,
+            ],
+            Message {
+                header: Header {
+                    rcode: RCode::NameError,
+                    ..Default::default()
+                },
+                questions: vec![Question {
+                    name: Name::new(".")?,
+                    typ: DNSType::AAAA,
+                    class: DNSCLASS_INET,
+                }],
+                additionals: vec![
+                    Resource {
+                        header: must_edns0_resource_header(
+                            4096,
+                            0xff0 | RCode::NameError as u32,
+                            false,
+                        )?,
+                        body: Some(Box::new(OPTResource {
+                            options: vec![DNSOption {
+                                code: 11, // see RFC 7830
+                                data: vec![0x12, 0x34],
+                            }],
+                        })),
+                    },
+                    Resource {
+                        header: must_edns0_resource_header(
+                            4096,
+                            0xff0 | RCode::NameError as u32,
+                            false,
+                        )?,
+                        body: Some(Box::new(OPTResource {
+                            options: vec![DNSOption {
+                                code: 12, // see RFC 7828
+                                data: vec![0x00, 0x00],
+                            }],
+                        })),
+                    },
+                ],
+                ..Default::default()
+            },
+        ),
+    ];
+
+    for (_tt_name, tt_w, mut tt_m) in tests {
+        let w = tt_m.pack()?;
+
+        assert_eq!(&w[w.len() - tt_w.len()..], &tt_w[..]);
+
+        let mut m = Message::default();
+        m.unpack(&w)?;
+
+        let ms: Vec<String> = m.additionals.iter().map(|s| s.to_string()).collect();
+        let tt_ms: Vec<String> = tt_m.additionals.iter().map(|s| s.to_string()).collect();
+        assert_eq!(ms, tt_ms);
+    }
 
     Ok(())
 }

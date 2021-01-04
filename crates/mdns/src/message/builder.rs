@@ -185,7 +185,10 @@ impl Builder {
 
         if let Some(body) = &r.body {
             r.header.typ = body.real_type();
+        } else {
+            return Err(ERR_NIL_RESOURCE_BODY.to_owned());
         }
+
         if let Some(msg) = self.msg.take() {
             let (mut msg, len_off) = r.header.pack(msg, &mut self.compression, self.start)?;
             let pre_len = msg.len();

@@ -69,6 +69,8 @@ impl Resource {
     ) -> Result<Vec<u8>, Error> {
         if let Some(body) = &self.body {
             self.header.typ = body.real_type();
+        } else {
+            return Err(ERR_NIL_RESOURCE_BODY.to_owned());
         }
         let (mut msg, len_off) = self.header.pack(msg, compression, compression_off)?;
         let pre_len = msg.len();
@@ -204,7 +206,7 @@ impl ResourceHeader {
             data: ".".to_owned(),
         }; // RFC 6891 section 6.1.2
         self.typ = DNSType::OPT;
-        self.class = DNSClass::from(udp_payload_len);
+        self.class = DNSClass(udp_payload_len);
         self.ttl = (ext_rcode >> 4) << 24;
         if dnssec_ok {
             self.ttl |= EDNS0_DNSSEC_OK;
@@ -264,7 +266,7 @@ pub fn unpack_resource_body(
         DNSType::AAAA => Box::new(AAAAResource::default()),
         DNSType::SRV => Box::new(SRVResource::default()),
         DNSType::OPT => Box::new(OPTResource::default()),
-        _ => return Err(ERR_NIL_RESOUCE_BODY.to_owned()),
+        _ => return Err(ERR_NIL_RESOURCE_BODY.to_owned()),
     };
 
     off = rb.unpack(msg, off, length)?;

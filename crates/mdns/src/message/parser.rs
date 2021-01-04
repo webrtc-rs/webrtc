@@ -108,7 +108,7 @@ impl<'a> Parser<'a> {
         let mut off = name.unpack(self.msg, self.off)?;
         let mut typ = DNSType::Unsupported;
         off = typ.unpack(self.msg, off)?;
-        let mut class = DNSClass::Unsupported;
+        let mut class = DNSClass::default();
         off = class.unpack(self.msg, off)?;
         self.off = off;
         self.index += 1;

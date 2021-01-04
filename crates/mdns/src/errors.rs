@@ -23,7 +23,7 @@ lazy_static! {
     pub static ref ERR_RESERVED             :Error = Error::new("segment prefix is reserved".to_owned());
     pub static ref ERR_TOO_MANY_PTR         :Error = Error::new("too many pointers (>10)".to_owned());
     pub static ref ERR_INVALID_PTR          :Error = Error::new("invalid pointer".to_owned());
-    pub static ref ERR_NIL_RESOUCE_BODY     :Error = Error::new("nil resource body".to_owned());
+    pub static ref ERR_NIL_RESOURCE_BODY     :Error = Error::new("nil resource body".to_owned());
     pub static ref ERR_RESOURCE_LEN         :Error = Error::new("insufficient data for resource body length".to_owned());
     pub static ref ERR_SEG_TOO_LONG         :Error = Error::new("segment length too long".to_owned());
     pub static ref ERR_ZERO_SEG_LEN         :Error = Error::new("zero length segment".to_owned());

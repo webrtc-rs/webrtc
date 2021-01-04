@@ -123,50 +123,33 @@ impl DNSType {
 }
 
 // A Class is a type of network.
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum DNSClass {
-    // ResourceHeader.Class and question.Class
-    INET = 1,
-    CSNET = 2,
-    CHAOS = 3,
-    HESIOD = 4,
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct DNSClass(pub u16);
 
-    // question.Class
-    ANY = 255,
-    Unsupported = 0,
-}
+// ResourceHeader.Class and question.Class
+pub const DNSCLASS_INET: DNSClass = DNSClass(1);
+pub const DNSCLASS_CSNET: DNSClass = DNSClass(2);
+pub const DNSCLASS_CHAOS: DNSClass = DNSClass(3);
+pub const DNSCLASS_HESIOD: DNSClass = DNSClass(4);
+// question.Class
+pub const DNSCLASS_ANY: DNSClass = DNSClass(255);
 
 impl Default for DNSClass {
     fn default() -> Self {
-        DNSClass::Unsupported
-    }
-}
-
-impl From<u16> for DNSClass {
-    fn from(v: u16) -> Self {
-        match v {
-            1 => DNSClass::INET,
-            2 => DNSClass::CSNET,
-            3 => DNSClass::CHAOS,
-            4 => DNSClass::HESIOD,
-
-            // question.Class
-            255 => DNSClass::ANY,
-
-            _ => DNSClass::Unsupported,
-        }
+        DNSClass(0)
     }
 }
 
 impl fmt::Display for DNSClass {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let other = format!("{}", self.0);
         let s = match *self {
-            DNSClass::INET => "ClassINET",
-            DNSClass::CSNET => "ClassCSNET",
-            DNSClass::CHAOS => "ClassCHAOS",
-            DNSClass::HESIOD => "ClassHESIOD",
-            DNSClass::ANY => "ClassANY",
-            DNSClass::Unsupported => "Unsupported",
+            DNSCLASS_INET => "ClassINET",
+            DNSCLASS_CSNET => "ClassCSNET",
+            DNSCLASS_CHAOS => "ClassCHAOS",
+            DNSCLASS_HESIOD => "ClassHESIOD",
+            DNSCLASS_ANY => "ClassANY",
+            _ => other.as_str(),
         };
         write!(f, "{}", s)
     }
@@ -175,12 +158,12 @@ impl fmt::Display for DNSClass {
 impl DNSClass {
     // pack_class appends the wire format of field to msg.
     pub(crate) fn pack(&self, msg: Vec<u8>) -> Vec<u8> {
-        pack_uint16(msg, *self as u16)
+        pack_uint16(msg, self.0)
     }
 
     pub(crate) fn unpack(&mut self, msg: &[u8], off: usize) -> Result<usize, Error> {
         let (c, o) = unpack_uint16(msg, off)?;
-        *self = DNSClass::from(c);
+        *self = DNSClass(c);
         Ok(o)
     }
 
