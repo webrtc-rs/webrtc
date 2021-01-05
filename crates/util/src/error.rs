@@ -1,4 +1,5 @@
 use std::array::TryFromSliceError;
+use std::net::AddrParseError;
 use std::string::FromUtf8Error;
 use std::time::SystemTimeError;
 use std::{fmt, num};
@@ -153,6 +154,14 @@ impl From<ring::error::KeyRejected> for Error {
 
 impl From<ring::error::Unspecified> for Error {
     fn from(error: ring::error::Unspecified) -> Self {
+        Error {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<AddrParseError> for Error {
+    fn from(error: AddrParseError) -> Self {
         Error {
             message: error.to_string(),
         }
