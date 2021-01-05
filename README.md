@@ -22,7 +22,7 @@
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
  </a>
  <a href="https://seladb.github.io/StarTrack-js/#/preload?r=webrtc-rs,webrtc">
-  <img src="https://img.shields.io/github/stars/webrtc-rs/webrtc.svg?style=social&label=Star&maxAge=2592000" alt="Github Stars">
+  <img src="https://img.shields.io/github/stars/webrtc-rs/webrtc.svg?style=social&label=Star" alt="Github Stars">
  </a>
 </p>
 <p align="center">
