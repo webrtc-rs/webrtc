@@ -1,26 +1,38 @@
-use std::net::{IpAddr, SocketAddr};
+use crate::config::*;
+use crate::errors::*;
+use crate::message::name::*;
+use crate::message::{header::*, parser::*, question::*, resource::a::*, resource::*, *};
+
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::sync::Arc;
 use std::time::Duration;
 
+use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
+use tokio::sync::Mutex;
+
+use util::Error;
+
+use log::*;
 
 const INBOUND_BUFFER_SIZE: usize = 512;
 const DEFAULT_QUERY_INTERVAL: Duration = Duration::from_secs(1);
 const DESTINATION_ADDRESS: &str = "224.0.0.251:5353";
 const MAX_MESSAGE_RECORDS: usize = 3;
-const RESPONSE_TTL: usize = 120;
+const RESPONSE_TTL: u32 = 120;
 
 // Conn represents a mDNS Server
-pub struct Conn {
+pub struct DNSConn {
     //mu  sync.RWMutex
     //log logging.LeveledLogger
-    socket: SocketAddr, //*ipv4.PacketConn
-    dst_addr: IpAddr,   //*net.UDPAddr
+    socket: UdpSocket,    //*ipv4.PacketConn
+    dst_addr: SocketAddr, //*net.UDPAddr
 
     query_interval: Duration,
     local_names: Vec<String>,
-    queries: Vec<Query>,
+    queries: Arc<Mutex<Vec<Query>>>,
 
-    closed: mpsc::Receiver<()>, //chan interface{}
+    closed: Option<mpsc::Sender<()>>,
 }
 
 struct Query {
@@ -29,275 +41,238 @@ struct Query {
 }
 
 struct QueryResult {
-    //answer dnsmessage.ResourceHeader
-//addr   :net.Addr
+    answer: ResourceHeader,
+    addr: SocketAddr, //net.Addr
 }
 
-/*
-// Server establishes a mDNS connection over an existing conn
-func Server(conn *ipv4.PacketConn, config *Config) (*Conn, error) {
-    if config == nil {
-        return nil, errNilConfig
-    }
+impl DNSConn {
+    // server establishes a mDNS connection over an existing conn
+    pub fn server(conn: UdpSocket, config: Config) -> Result<Self, Error> {
+        conn.join_multicast_v4(Ipv4Addr::new(224, 0, 0, 251), Ipv4Addr::new(0, 0, 0, 0))?;
 
-    ifaces, err := net.Interfaces()
-    if err != nil {
-        return nil, err
-    }
+        let dst_addr: SocketAddr = DESTINATION_ADDRESS.parse()?;
+        let local_names = config
+            .local_names
+            .iter()
+            .map(|l| l.to_string() + ".")
+            .collect();
 
-    joinErrCount := 0
-    for i := range ifaces {
-        if err = conn.JoinGroup(&ifaces[i], &net.UDPAddr{IP: net.IPv4(224, 0, 0, 251)}); err != nil {
-            joinErrCount++
-        }
-    }
-    if joinErrCount >= len(ifaces) {
-        return nil, errJoiningMulticastGroup
-    }
+        let (closed_tx, _closed_rx) = mpsc::channel(1);
 
-    dst_addr, err := net.ResolveUDPAddr("udp", DESTINATION_ADDRESS)
-    if err != nil {
-        return nil, err
-    }
-
-    loggerFactory := config.LoggerFactory
-    if loggerFactory == nil {
-        loggerFactory = logging.NewDefaultLoggerFactory()
-    }
-
-    local_names := []string{}
-    for _, l := range config.LocalNames {
-        local_names = append(local_names, l+".")
-    }
-
-    c := &Conn{
-        query_interval: DEFAULT_QUERY_INTERVAL,
-        queries:       []Query{},
-        socket:        conn,
-        dst_addr:       dst_addr,
-        local_names:    local_names,
-        log:           loggerFactory.NewLogger("mdns"),
-        closed:        make(chan interface{}),
-    }
-    if config.QueryInterval != 0 {
-        c.query_interval = config.QueryInterval
-    }
-
-    go c.start()
-    return c, nil
-}
-
-// Close closes the mDNS Conn
-func (c *Conn) Close() error {
-    select {
-    case <-c.closed:
-        return nil
-    default:
-    }
-
-    if err := c.socket.Close(); err != nil {
-        return err
-    }
-
-    <-c.closed
-    return nil
-}
-
-// Query sends mDNS Queries for the following name until
-// either the Context is canceled/expires or we get a result
-func (c *Conn) Query(ctx context.Context, name string) (dnsmessage.ResourceHeader, net.Addr, error) {
-    select {
-    case <-c.closed:
-        return dnsmessage.ResourceHeader{}, nil, errConnectionClosed
-    default:
-    }
-
-    name_with_suffix := name + "."
-
-    queryChan := make(chan QueryResult, 1)
-    c.mu.Lock()
-    c.queries = append(c.queries, Query{name_with_suffix, queryChan})
-    ticker := time.NewTicker(c.query_interval)
-    c.mu.Unlock()
-
-    c.sendQuestion(name_with_suffix)
-    for {
-        select {
-        case <-ticker.C:
-            c.sendQuestion(name_with_suffix)
-        case <-c.closed:
-            return dnsmessage.ResourceHeader{}, nil, errConnectionClosed
-        case res := <-queryChan:
-            return res.answer, res.addr, nil
-        case <-ctx.Done():
-            return dnsmessage.ResourceHeader{}, nil, errContextElapsed
-        }
-    }
-}
-
-func ipToBytes(ip net.IP) (out [4]byte) {
-    rawIP := ip.To4()
-    if rawIP == nil {
-        return
-    }
-
-    ipInt := big.NewInt(0)
-    ipInt.SetBytes(rawIP)
-    copy(out[:], ipInt.Bytes())
-    return
-}
-
-func interfaceForRemote(remote string) (net.IP, error) {
-    conn, err := net.Dial("udp", remote)
-    if err != nil {
-        return nil, err
-    }
-
-    localAddr := conn.LocalAddr().(*net.UDPAddr)
-    if err := conn.Close(); err != nil {
-        return nil, err
-    }
-
-    return localAddr.IP, nil
-}
-
-func (c *Conn) sendQuestion(name string) {
-    packedName, err := dnsmessage.NewName(name)
-    if err != nil {
-        c.log.Warnf("Failed to construct mDNS packet %v", err)
-        return
-    }
-
-    msg := dnsmessage.Message{
-        Header: dnsmessage.Header{},
-        Questions: []dnsmessage.question{
-            {
-                Type:  dnsmessage.TypeA,
-                Class: dnsmessage.ClassINET,
-                Name:  packedName,
+        let c = DNSConn {
+            query_interval: if config.query_interval != Duration::from_secs(0) {
+                config.query_interval
+            } else {
+                DEFAULT_QUERY_INTERVAL
             },
-        },
+            queries: Arc::new(Mutex::new(vec![])),
+            socket: conn,
+            dst_addr,
+            local_names,
+            closed: Some(closed_tx),
+        };
+
+        //go c.start()
+        Ok(c)
     }
 
-    rawQuery, err := msg.Pack()
-    if err != nil {
-        c.log.Warnf("Failed to construct mDNS packet %v", err)
-        return
-    }
-
-    if _, err := c.socket.WriteTo(rawQuery, nil, c.dst_addr); err != nil {
-        c.log.Warnf("Failed to send mDNS packet %v", err)
-        return
-    }
-}
-
-func (c *Conn) sendAnswer(name string, dst net.IP) {
-    packedName, err := dnsmessage.NewName(name)
-    if err != nil {
-        c.log.Warnf("Failed to construct mDNS packet %v", err)
-        return
-    }
-
-    msg := dnsmessage.Message{
-        Header: dnsmessage.Header{
-            Response:      true,
-            Authoritative: true,
-        },
-        Answers: []dnsmessage.Resource{
-            {
-                Header: dnsmessage.ResourceHeader{
-                    Type:  dnsmessage.TypeA,
-                    Class: dnsmessage.ClassINET,
-                    Name:  packedName,
-                    TTL:   RESPONSE_TTL,
-                },
-                Body: &dnsmessage.AResource{
-                    A: ipToBytes(dst),
-                },
-            },
-        },
-    }
-
-    rawAnswer, err := msg.Pack()
-    if err != nil {
-        c.log.Warnf("Failed to construct mDNS packet %v", err)
-        return
-    }
-
-    if _, err := c.socket.WriteTo(rawAnswer, nil, c.dst_addr); err != nil {
-        c.log.Warnf("Failed to send mDNS packet %v", err)
-        return
-    }
-}
-
-func (c *Conn) start() { //nolint gocognit
-    defer func() {
-        c.mu.Lock()
-        defer c.mu.Unlock()
-        close(c.closed)
-    }()
-
-    b := make([]byte, INBOUND_BUFFER_SIZE)
-    p := dnsmessage.Parser{}
-
-    for {
-        n, _, src, err := c.socket.ReadFrom(b)
-        if err != nil {
-            return
+    // Close closes the mDNS Conn
+    pub fn close(&mut self) -> Result<(), Error> {
+        if self.closed.is_none() {
+            return Err(ERR_CONNECTION_CLOSED.to_owned());
         }
 
-        func() {
-            c.mu.RLock()
-            defer c.mu.RUnlock()
+        self.closed.take();
 
-            if _, err := p.start(b[:n]); err != nil {
-                c.log.Warnf("Failed to parse mDNS packet %v", err)
-                return
+        Ok(())
+    }
+
+    // Query sends mDNS Queries for the following name until
+    // either the Context is canceled/expires or we get a result
+    pub async fn query(&self, name: &str) -> Result<(ResourceHeader, SocketAddr), Error> {
+        if self.closed.is_none() {
+            return Err(ERR_CONNECTION_CLOSED.to_owned());
+        }
+
+        let name_with_suffix = name.to_owned() + ".";
+
+        let (query_tx, mut query_rx) = mpsc::channel(1);
+        {
+            let mut queries = self.queries.lock().await;
+            queries.push(Query {
+                name_with_suffix: name_with_suffix.clone(),
+                query_result_chan: query_tx,
+            });
+        }
+
+        self.send_question(&name_with_suffix).await;
+
+        let ticker = tokio::time::sleep(self.query_interval);
+        tokio::pin!(ticker);
+
+        loop {
+            tokio::select! {
+                _ = ticker.as_mut() => self.send_question(&name_with_suffix).await,
+                //TODO: _ = self.closed.recv() => return Err(ERR_CONNECTION_CLOSED.to_owned()),
+                res_opt = query_rx.recv() =>{
+                    if let Some(res) = res_opt{
+                        return Ok((res.answer, res.addr));
+                    }
+                }
+            }
+        }
+    }
+
+    async fn send_question(&self, name: &str) {
+        let packed_name = match Name::new(name) {
+            Ok(pn) => pn,
+            Err(err) => {
+                warn!("Failed to construct mDNS packet {}", err);
+                return;
+            }
+        };
+
+        let mut msg = Message {
+            header: Header::default(),
+            questions: vec![Question {
+                typ: DNSType::A,
+                class: DNSCLASS_INET,
+                name: packed_name,
+            }],
+            ..Default::default()
+        };
+
+        let raw_query = match msg.pack() {
+            Ok(v) => v,
+            Err(err) => {
+                warn!("Failed to construct mDNS packet {}", err);
+                return;
+            }
+        };
+
+        if let Err(err) = self.socket.send_to(&raw_query, self.dst_addr).await {
+            warn!("Failed to send mDNS packet {}", err);
+        }
+    }
+
+    async fn start(
+        mut closed_rx: mpsc::Receiver<()>,
+        socket: Arc<UdpSocket>,
+        local_names: Vec<String>,
+        dst_addr: SocketAddr,
+        queries: Arc<Mutex<Vec<Query>>>,
+    ) -> Result<(), Error> {
+        let mut b = vec![0u8; INBOUND_BUFFER_SIZE];
+
+        let (mut n, mut _src);
+
+        loop {
+            tokio::select! {
+                result = socket.recv_from(&mut b) => {
+                    match result{
+                        Ok((len, addr)) => {
+                            n = len;
+                            _src = addr;
+                        },
+                        Err(err) => return Err(Error::new(err.to_string())),
+                    }
+                }
+                _ = closed_rx.recv() => return Ok(()),
             }
 
-            for i := 0; i <= MAX_MESSAGE_RECORDS; i++ {
-                q, err := p.question()
-                if errors.Is(err, dnsmessage.ErrSectionDone) {
-                    break
-                } else if err != nil {
-                    c.log.Warnf("Failed to parse mDNS packet %v", err)
-                    return
-                }
+            let mut p = Parser {
+                msg: &b[..n],
+                ..Default::default()
+            };
 
-                for _, localName := range c.local_names {
-                    if localName == q.Name.String() {
-                        localAddress, err := interfaceForRemote(src.String())
+            for _ in 0..=MAX_MESSAGE_RECORDS {
+                let q = match p.question() {
+                    Ok(q) => q,
+                    Err(err) => {
+                        if err == *ERR_SECTION_DONE {
+                            break;
+                        } else {
+                            return Err(Error::new(err.to_string()));
+                        }
+                    }
+                };
+
+                for local_name in &local_names {
+                    if local_name == &q.name.data {
+                        /*let localAddress = interfaceForRemote(src.String())
                         if err != nil {
                             c.log.Warnf("Failed to get local interface to communicate with %s: %v", src.String(), err)
                             continue
-                        }
+                        }*/
+                        let local_addr = socket.local_addr()?;
 
-                        c.sendAnswer(q.Name.String(), localAddress)
+                        send_answer(&socket, &q.name.data, local_addr.ip(), dst_addr).await?;
                     }
                 }
             }
 
-            for i := 0; i <= MAX_MESSAGE_RECORDS; i++ {
-                a, err := p.answer_header()
-                if errors.Is(err, dnsmessage.ErrSectionDone) {
-                    return
-                }
-                if err != nil {
-                    c.log.Warnf("Failed to parse mDNS packet %v", err)
-                    return
+            for _ in 0..=MAX_MESSAGE_RECORDS {
+                let a = match p.answer_header() {
+                    Ok(a) => a,
+                    Err(_) => break,
+                };
+
+                if a.typ != DNSType::A && a.typ != DNSType::AAAA {
+                    continue;
                 }
 
-                if a.Type != dnsmessage.TypeA && a.Type != dnsmessage.TypeAAAA {
-                    continue
-                }
-
-                for i := len(c.queries) - 1; i >= 0; i-- {
-                    if c.queries[i].name_with_suffix == a.Name.String() {
-                        c.queries[i].query_result_chan <- QueryResult{a, src}
-                        c.queries = append(c.queries[:i], c.queries[i+1:]...)
+                let mut qs = queries.lock().await;
+                for j in (0..qs.len()).rev() {
+                    if qs[j].name_with_suffix == a.name.data {
+                        let _ = qs[j]
+                            .query_result_chan
+                            .send(QueryResult {
+                                answer: a.clone(),
+                                addr: socket.local_addr()?,
+                            })
+                            .await;
+                        qs.remove(j);
                     }
                 }
             }
-        }()
+        }
     }
-}*/
+}
+
+async fn send_answer(
+    socket: &Arc<UdpSocket>,
+    name: &str,
+    dst: IpAddr,
+    dst_addr: SocketAddr,
+) -> Result<(), Error> {
+    let packed_name = Name::new(name)?;
+
+    let mut msg = Message {
+        header: Header {
+            response: true,
+            authoritative: true,
+            ..Default::default()
+        },
+        answers: vec![Resource {
+            header: ResourceHeader {
+                typ: DNSType::A,
+                class: DNSCLASS_INET,
+                name: packed_name,
+                ttl: RESPONSE_TTL,
+                ..Default::default()
+            },
+            body: Some(Box::new(AResource {
+                a: match dst {
+                    IpAddr::V4(ip) => ip.octets(),
+                    IpAddr::V6(_) => return Err(Error::new("unexpected IpV6 addr".to_owned())),
+                },
+            })),
+        }],
+        ..Default::default()
+    };
+
+    let raw_answer = msg.pack()?;
+    socket.send_to(&raw_answer, dst_addr).await?;
+
+    Ok(())
+}

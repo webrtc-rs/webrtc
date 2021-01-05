@@ -9,10 +9,10 @@ pub const DEFAULT_ADDRESS: &str = "224.0.0.0:5353";
 pub struct Config {
     // query_interval controls how often we sends Queries until we
     // get a response for the requested name
-    query_interval: Duration,
+    pub query_interval: Duration,
 
     // local_names are the names that we will generate answers for
     // when we get questions
-    local_names: Vec<String>,
+    pub local_names: Vec<String>,
     //LoggerFactory logging.LoggerFactory
 }

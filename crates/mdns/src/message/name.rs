@@ -12,7 +12,7 @@ const NAME_LEN: usize = 255;
 // allocations.
 #[derive(Default, PartialEq, Debug, Clone)]
 pub struct Name {
-    pub(crate) data: String,
+    pub data: String,
 }
 
 // String implements fmt.Stringer.String.

@@ -34,7 +34,10 @@ pub struct Parser<'a> {
 impl<'a> Parser<'a> {
     // start parses the header and enables the parsing of Questions.
     pub fn start(&mut self, msg: &'a [u8]) -> Result<Header, Error> {
-        self.msg = msg;
+        *self = Parser {
+            msg,
+            ..Default::default()
+        };
         self.off = self.header.unpack(msg, 0)?;
         self.section = Section::Questions;
         Ok(self.header.header())
