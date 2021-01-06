@@ -37,7 +37,7 @@ impl Payloader for VP8Payloader {
 
         let max_fragment_size = (mtu - VP8_HEADER_SIZE) as isize;
 
-        let mut payload_data = payload.clone();
+        let payload_data = payload.clone();
         let mut payload_data_remaining = payload_data.len() as isize;
 
         let mut payload_data_index: usize = 0;

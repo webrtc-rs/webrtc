@@ -1,5 +1,5 @@
+use crate::errors::RTPError;
 use bytes::BytesMut;
-use std::io::{Read, Write};
 use std::time::Duration;
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
@@ -20,23 +20,24 @@ pub struct AbsSendTimeExtension {
 impl AbsSendTimeExtension {
     // Marshal serializes the members to buffer.
     pub fn marshal(&self) -> Result<BytesMut, RTPError> {
-        todo!()
-        // writer.write_u8(((self.timestamp & 0xFF0000) >> 16) as u8)?;
-        // writer.write_u8(((self.timestamp & 0xFF00) >> 8) as u8)?;
-        // writer.write_u8((self.timestamp & 0xFF) as u8)?;
-
-        // Ok(writer.flush()?)
+        Ok(vec![
+            (self.timestamp & 0xFF0000 >> 16) as u8,
+            (self.timestamp & 0xFF00 >> 8) as u8,
+            (self.timestamp & 0xFF) as u8,
+        ]
+        .as_slice()
+        .into())
     }
 
     // Unmarshal parses the passed byte slice and stores the result in the members.
-    pub fn unmarshal(&mut self, payload: &mut BytesMut) -> Result<(), RTPError> {
-        todo!()
-        // let b0 = reader.read_u8()?;
-        // let b1 = reader.read_u8()?;
-        // let b2 = reader.read_u8()?;
-        // let timestamp = (b0 as u64) << 16 | (b1 as u64) << 8 | b2 as u64;
+    pub fn unmarshal(&mut self, raw_data: &mut BytesMut) -> Result<(), RTPError> {
+        if raw_data.len() < ABS_SEND_TIME_EXTENSION_SIZE {
+            return Err(RTPError::BufferTooSmall);
+        }
+        self.timestamp =
+            (raw_data[0] as u64) << 16 | (raw_data[1] as u64) << 8 | raw_data[2] as u64;
 
-        // Ok(AbsSendTimeExtension { timestamp })
+        Ok(())
     }
 
     // Estimate absolute send time according to the receive time.

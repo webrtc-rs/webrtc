@@ -10,6 +10,7 @@ pub enum RTPError {
     ShortPacket(String),
     UnhandledNALUType(String),
     ShortBuffer,
+    BufferTooSmall,
     HeaderExtensionNotEnabled,
     HeaderExtensionNotFound,
 }

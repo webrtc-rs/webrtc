@@ -94,7 +94,6 @@ impl PacketizerInterface for Packetizer {
         self.timestamp += samples;
 
         if packets.len() != 0 && self.abs_send_time != 0 {
-            // ToDo: what is the default value of time.time???
             let send_time = AbsSendTimeExtension::new(
                 self.time_gen.map_or_else(|| Duration::default(), |v| v()),
             );
