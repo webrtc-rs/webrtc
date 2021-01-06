@@ -8,7 +8,7 @@ mod packet_test;
 
 // Packet represents an RTP Packet
 // NOTE: Raw is populated by Marshal/Unmarshal and should not be modified
-#[derive(Debug, Eq, PartialEq, Default)]
+#[derive(Debug, Eq, PartialEq, Clone, Default)]
 pub struct Packet {
     pub header: Header,
     pub payload: Vec<u8>,

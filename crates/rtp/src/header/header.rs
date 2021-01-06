@@ -2,7 +2,7 @@ use crate::errors::RTPError;
 use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
 
-#[derive(Debug, Eq, PartialEq, Default)]
+#[derive(Debug, Eq, Clone, PartialEq, Default)]
 pub struct Extension {
     pub id: u8,
     pub payload: Vec<u8>,
@@ -10,7 +10,7 @@ pub struct Extension {
 
 /// Header represents an RTP packet header
 /// NOTE: PayloadOffset is populated by Marshal/Unmarshal and should not be modified
-#[derive(Debug, Eq, PartialEq, Default)]
+#[derive(Debug, Eq, Clone, PartialEq, Default)]
 pub struct Header {
     pub version: u8,
     pub padding: bool,
