@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod conn_test;
+
 use crate::config::*;
 use crate::errors::*;
 use crate::message::name::*;
@@ -25,11 +28,11 @@ const RESPONSE_TTL: u32 = 120;
 pub struct DNSConn {
     //mu  sync.RWMutex
     //log logging.LeveledLogger
-    socket: UdpSocket,    //*ipv4.PacketConn
-    dst_addr: SocketAddr, //*net.UDPAddr
+    socket: Arc<UdpSocket>, //*ipv4.PacketConn
+    dst_addr: SocketAddr,   //*net.UDPAddr
 
     query_interval: Duration,
-    local_names: Vec<String>,
+    //local_names: Vec<String>,
     queries: Arc<Mutex<Vec<Query>>>,
 
     closed: Option<mpsc::Sender<()>>,
@@ -57,7 +60,7 @@ impl DNSConn {
             .map(|l| l.to_string() + ".")
             .collect();
 
-        let (closed_tx, _closed_rx) = mpsc::channel(1);
+        let (closed_tx, closed_rx) = mpsc::channel(1);
 
         let c = DNSConn {
             query_interval: if config.query_interval != Duration::from_secs(0) {
@@ -66,13 +69,18 @@ impl DNSConn {
                 DEFAULT_QUERY_INTERVAL
             },
             queries: Arc::new(Mutex::new(vec![])),
-            socket: conn,
+            socket: Arc::new(conn),
             dst_addr,
-            local_names,
             closed: Some(closed_tx),
         };
 
-        //go c.start()
+        let socket = Arc::clone(&c.socket);
+        let queries = Arc::clone(&c.queries);
+
+        tokio::spawn(async move {
+            let _ = DNSConn::start(closed_rx, socket, local_names, dst_addr, queries).await;
+        });
+
         Ok(c)
     }
 
@@ -167,6 +175,8 @@ impl DNSConn {
         let (mut n, mut _src);
 
         loop {
+            trace!("enter loop");
+
             tokio::select! {
                 result = socket.recv_from(&mut b) => {
                     match result{
@@ -179,6 +189,8 @@ impl DNSConn {
                 }
                 _ = closed_rx.recv() => return Ok(()),
             }
+
+            trace!("src = {}", _src);
 
             let mut p = Parser {
                 msg: &b[..n],
@@ -245,33 +257,34 @@ async fn send_answer(
     dst: IpAddr,
     dst_addr: SocketAddr,
 ) -> Result<(), Error> {
-    let packed_name = Name::new(name)?;
-
-    let mut msg = Message {
-        header: Header {
-            response: true,
-            authoritative: true,
-            ..Default::default()
-        },
-        answers: vec![Resource {
-            header: ResourceHeader {
-                typ: DNSType::A,
-                class: DNSCLASS_INET,
-                name: packed_name,
-                ttl: RESPONSE_TTL,
+    let raw_answer = {
+        let mut msg = Message {
+            header: Header {
+                response: true,
+                authoritative: true,
                 ..Default::default()
             },
-            body: Some(Box::new(AResource {
-                a: match dst {
-                    IpAddr::V4(ip) => ip.octets(),
-                    IpAddr::V6(_) => return Err(Error::new("unexpected IpV6 addr".to_owned())),
+            answers: vec![Resource {
+                header: ResourceHeader {
+                    typ: DNSType::A,
+                    class: DNSCLASS_INET,
+                    name: Name::new(name)?,
+                    ttl: RESPONSE_TTL,
+                    ..Default::default()
                 },
-            })),
-        }],
-        ..Default::default()
+                body: Some(Box::new(AResource {
+                    a: match dst {
+                        IpAddr::V4(ip) => ip.octets(),
+                        IpAddr::V6(_) => return Err(Error::new("unexpected IpV6 addr".to_owned())),
+                    },
+                })),
+            }],
+            ..Default::default()
+        };
+
+        msg.pack()?
     };
 
-    let raw_answer = msg.pack()?;
     socket.send_to(&raw_answer, dst_addr).await?;
 
     Ok(())
