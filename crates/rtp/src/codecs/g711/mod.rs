@@ -9,29 +9,23 @@ mod g711_test;
 pub struct G711Payloader;
 
 impl Payloader for G711Payloader {
-    fn payload<R: Read>(&self, mtu: isize, reader: &mut R) -> Result<Vec<Vec<u8>>, Error> {
+    fn payload(&self, mtu: usize, mut payload: BytesMut) -> Vec<Vec<u8>> {
         let mut payloads = vec![];
-        if mtu <= 0 {
-            return Ok(payloads);
+        if payload.is_empty() || mtu <= 0 {
+            return payloads;
         }
 
-        let mut payload_data = vec![];
-        reader.read_to_end(&mut payload_data)?;
-        let mut payload_data_remaining = payload_data.len() as isize;
-        let mut payload_data_index: usize = 0;
-        while payload_data_remaining > 0 {
-            let current_fragment_size = std::cmp::min(mtu, payload_data_remaining) as usize;
-            let mut out = vec![];
-
-            out.extend_from_slice(
-                &payload_data[payload_data_index..payload_data_index + current_fragment_size],
-            );
-            payloads.push(out);
-
-            payload_data_remaining -= current_fragment_size as isize;
-            payload_data_index += current_fragment_size;
+        while payload.len() > mtu {
+            let mut o = vec![0u8; mtu];
+            o.copy_from_slice(&payload[..mtu]);
+            payload = payload.split_off(mtu);
+            payloads.push(o)
         }
 
-        Ok(payloads)
+        let mut o = vec![0u8; payload.len()];
+        o.copy_from_slice(&payload);
+        payloads.push(o);
+
+        payloads
     }
 }
