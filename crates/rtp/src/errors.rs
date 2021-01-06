@@ -7,6 +7,8 @@ pub enum RTPError {
     RFC8285TwoByteHeaderIDRange(String),
     RFC8285TwoByteHeaderSize(String),
     RFC3550HeaderIDRange(String),
+    ShortPacket(String),
+    UnhandledNALUType(String),
     ShortBuffer,
     HeaderExtensionNotEnabled,
     HeaderExtensionNotFound,

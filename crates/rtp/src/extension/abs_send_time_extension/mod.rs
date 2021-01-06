@@ -1,3 +1,4 @@
+use bytes::BytesMut;
 use std::io::{Read, Write};
 use std::time::Duration;
 
@@ -18,22 +19,24 @@ pub struct AbsSendTimeExtension {
 
 impl AbsSendTimeExtension {
     // Marshal serializes the members to buffer.
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        writer.write_u8(((self.timestamp & 0xFF0000) >> 16) as u8)?;
-        writer.write_u8(((self.timestamp & 0xFF00) >> 8) as u8)?;
-        writer.write_u8((self.timestamp & 0xFF) as u8)?;
+    pub fn marshal(&self) -> Result<BytesMut, RTPError> {
+        todo!()
+        // writer.write_u8(((self.timestamp & 0xFF0000) >> 16) as u8)?;
+        // writer.write_u8(((self.timestamp & 0xFF00) >> 8) as u8)?;
+        // writer.write_u8((self.timestamp & 0xFF) as u8)?;
 
-        Ok(writer.flush()?)
+        // Ok(writer.flush()?)
     }
 
     // Unmarshal parses the passed byte slice and stores the result in the members.
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let b0 = reader.read_u8()?;
-        let b1 = reader.read_u8()?;
-        let b2 = reader.read_u8()?;
-        let timestamp = (b0 as u64) << 16 | (b1 as u64) << 8 | b2 as u64;
+    pub fn unmarshal(&mut self, payload: &mut BytesMut) -> Result<(), RTPError> {
+        todo!()
+        // let b0 = reader.read_u8()?;
+        // let b1 = reader.read_u8()?;
+        // let b2 = reader.read_u8()?;
+        // let timestamp = (b0 as u64) << 16 | (b1 as u64) << 8 | b2 as u64;
 
-        Ok(AbsSendTimeExtension { timestamp })
+        // Ok(AbsSendTimeExtension { timestamp })
     }
 
     // Estimate absolute send time according to the receive time.
