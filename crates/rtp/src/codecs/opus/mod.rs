@@ -9,20 +9,21 @@ mod opus_test;
 pub struct OpusPayloader;
 
 impl Payloader for OpusPayloader {
-    fn payload<R: Read>(&self, _mtu: isize, reader: &mut R) -> Result<Vec<Vec<u8>>, Error> {
-        let mut payload = vec![];
-        reader.read_to_end(&mut payload)?;
+    fn payload(&self, _: usize, payload: BytesMut) -> Vec<Vec<u8>> {
         if payload.is_empty() {
-            Ok(vec![])
-        } else {
-            Ok(vec![payload])
+            return vec![];
         }
+
+        let mut out = vec![0u8; payload.len()];
+        out.copy_from_slice(&payload);
+
+        vec![out]
     }
 }
 
 #[derive(Debug, Default)]
 pub struct OpusPacket {
-    payload: Vec<u8>,
+    payload: BytesMut,
 }
 
 impl Depacketizer for OpusPacket {
@@ -34,5 +35,7 @@ impl Depacketizer for OpusPacket {
         } else {
             Ok(())
         }
+
+        true
     }
 }
