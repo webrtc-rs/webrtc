@@ -1,6 +1,6 @@
-mod header;
+mod header_def;
 
-pub use header::{Extension, Header};
+pub use header_def::{Extension, Header};
 
 pub(super) const HEADER_LENGTH: usize = 4;
 pub(super) const VERSION_SHIFT: u8 = 6;

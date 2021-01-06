@@ -67,7 +67,7 @@ impl Header {
         if self.extension {
             match self.extension_profile.into() {
                 super::ExtensionProfile::OneByte => {
-                    if id < 1 || id > 14 {
+                    if !(1..=14).contains(&id) {
                         return Err(RTPError::RFC8285OneByteHeaderIDRange(format!(
                             "actual({})",
                             id
@@ -155,17 +155,17 @@ impl Header {
             return vec![];
         }
 
-        if self.extensions.len() == 0 {
+        if self.extensions.is_empty() {
             return vec![];
         }
 
         let mut ids = vec![0u8; self.extensions.len()];
 
-        for i in 0..self.extensions.len() {
-            ids[i] = self.extensions[0].id
+        for id in ids.iter_mut().take(self.extensions.len()) {
+            *id = self.extensions[0].id
         }
 
-        return ids;
+        ids
     }
 
     // Removes an RTP Header extension

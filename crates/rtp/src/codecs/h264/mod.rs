@@ -8,7 +8,9 @@ use byteorder::ReadBytesExt;
 #[cfg(test)]
 mod h264_test;
 
-mod h264;
+mod h264_def;
+
+pub use h264_def::{H264Packet, H264Payloader};
 
 const STAPA_NALU_TYPE: u8 = 24;
 const FUA_NALU_TYPE: u8 = 28;
@@ -20,19 +22,18 @@ const NALU_REF_IDC_BITMASK: u8 = 0x60;
 const FUA_START_BITMASK: u8 = 0x80;
 const ANNEXB_NALUSTART_CODE: [u8; 4] = [0x00, 0x00, 0x00, 0x01];
 
-fn emit_nalus(nals: BytesMut, mut emit: impl FnMut(BytesMut)) {
-    let next_ind = |nalu: BytesMut, start: usize| -> (isize, isize) {
+fn emit_nalus(nals: BytesMut, mut emit: impl FnMut(&BytesMut)) {
+    let next_ind = |nalu: &BytesMut, start: usize| -> (isize, isize) {
         let mut zero_count = 0;
 
         for (i, b) in nalu[start..].iter().enumerate() {
             if *b == 0 {
                 zero_count += 1;
                 continue;
-            } else if *b == 1 {
-                if zero_count >= 2 {
-                    return ((start + i - zero_count) as isize, (zero_count + 1) as isize);
-                }
+            } else if *b == 1 && zero_count >= 2 {
+                return ((start + i - zero_count) as isize, (zero_count + 1) as isize);
             }
+
             zero_count = 0;
         }
 
@@ -94,7 +95,7 @@ impl Depacketizer for H264Packet {
                 Ok(())
             } else {
                 // Emit until end of stream, no end indicator found
-                emit(nals[prev_start as usize..].into());
+                emit(&nals[prev_start as usize..].into());
             }
         } else {
             Err(Error::NaluTypeIsNotHandled(nalu_type))

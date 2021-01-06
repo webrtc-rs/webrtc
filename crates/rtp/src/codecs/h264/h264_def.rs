@@ -94,7 +94,7 @@ impl Payloader for H264Payloader {
                         &nalu_data[nalu_data_index..nalu_data_index + current_fragment_size],
                     );
 
-                &payloads.push(out);
+                payloads.push(out);
 
                 nalu_data_remaining -= current_fragment_size;
                 nalu_data_index += current_fragment_size;

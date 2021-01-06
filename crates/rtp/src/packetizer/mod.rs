@@ -68,7 +68,7 @@ impl PacketizerInterface for Packetizer {
 
     fn packetize(&mut self, payload: &mut BytesMut, samples: u32) -> Result<Vec<Packet>, RTPError> {
         // Guard against an empty payload
-        if payload.len() == 0 {
+        if payload.is_empty() {
             return Ok(vec![]);
         }
 
@@ -91,26 +91,23 @@ impl PacketizerInterface for Packetizer {
 
         self.timestamp += samples;
 
-        if packets.len() != 0 && self.abs_send_time != 0 {
-            let send_time = AbsSendTimeExtension::new(
-                self.time_gen.map_or_else(|| Duration::default(), |v| v()),
-            );
+        if packets.is_empty() && self.abs_send_time != 0 {
+            let send_time =
+                AbsSendTimeExtension::new(self.time_gen.map_or(Duration::default(), |v| v()));
 
             // apply http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
             let b = match send_time.marshal() {
                 Ok(e) => e,
-                Err(e) => return Err(e),
+                Err(e) => return Err(RTPError::ExtensionError(e)),
             };
 
             let len = packets.len() - 1;
 
-            match packets[len].header.set_extension(self.abs_send_time, &b) {
-                Err(e) => return Err(e),
-
-                _ => {}
+            if let Err(e) = packets[len].header.set_extension(self.abs_send_time, &b) {
+                return Err(e);
             }
         }
 
-        return Ok(packets);
+        Ok(packets)
     }
 }

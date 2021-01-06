@@ -9,8 +9,8 @@ pub enum RTPError {
     RFC3550HeaderIDRange(String),
     ShortPacket(String),
     UnhandledNALUType(String),
+    ExtensionError(ExtensionError),
     ShortBuffer,
-    BufferTooSmall,
     HeaderExtensionNotEnabled,
     HeaderExtensionNotFound,
 }
@@ -22,3 +22,9 @@ impl std::fmt::Display for RTPError {
 }
 
 impl std::error::Error for RTPError {}
+
+#[derive(Debug)]
+pub enum ExtensionError {
+    TooSmall,
+    AudioLevelOverflow,
+}

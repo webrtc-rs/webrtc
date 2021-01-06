@@ -7,6 +7,8 @@ use crate::error::Error;
 #[cfg(test)]
 mod audio_level_extension_test;
 
+const AUDIO_LEVEL_EXTENSION_SIZE: usize = 1;
+
 // AudioLevelExtension is a extension payload format described in
 // https://tools.ietf.org/html/rfc6464
 //
@@ -34,24 +36,27 @@ pub struct AudioLevelExtension {
 
 impl AudioLevelExtension {
     // Marshal serializes the members to buffer
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal(&self) -> Result<BytesMut, ExtensionError> {
         if self.level > 127 {
             return Err(Error::AudioLevelOverflow);
         }
+
         let voice = if self.voice { 0x80u8 } else { 0u8 };
 
-        writer.write_u8(voice | self.level)?;
+        let mut buf = vec![0u8; AUDIO_LEVEL_EXTENSION_SIZE];
+        buf[0] = voice | self.level;
 
-        Ok(writer.flush()?)
+        Ok(buf.as_slice().into())
     }
 
     // Unmarshal parses the passed byte slice and stores the result in the members
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let b = reader.read_u8()?;
+    pub fn unmarshal(&mut self, raw_data: &mut BytesMut) -> Result<(), ExtensionError> {
+        if raw_data.len() < AUDIO_LEVEL_EXTENSION_SIZE {
+            return Err(ExtensionError::TooSmall);
+        }
 
-        Ok(AudioLevelExtension {
-            level: b & 0x7F,
-            voice: (b & 0x80) != 0,
-        })
+        self.level = raw_data[0] & 0x7F;
+        self.voice = (raw_data[0] & 0x80) != 0;
+        Ok(())
     }
 }

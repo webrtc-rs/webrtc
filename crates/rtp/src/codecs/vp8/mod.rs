@@ -13,7 +13,7 @@ const VP8_HEADER_SIZE: usize = 1;
 pub struct VP8Payloader;
 
 impl Payloader for VP8Payloader {
-    fn payload(&self, mtu: usize, payload: BytesMut) -> Vec<Vec<u8>> {
+    fn payload(&self, mtu: usize, payload_data: BytesMut) -> Vec<Vec<u8>> {
         /*
          * https://tools.ietf.org/html/rfc7741#section-4.2
          *
@@ -37,7 +37,6 @@ impl Payloader for VP8Payloader {
 
         let max_fragment_size = (mtu - VP8_HEADER_SIZE) as isize;
 
-        let payload_data = payload.clone();
         let mut payload_data_remaining = payload_data.len() as isize;
 
         let mut payload_data_index: usize = 0;

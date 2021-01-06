@@ -11,7 +11,7 @@ pub struct G722Payloader;
 impl Payloader for G722Payloader {
     fn payload(&self, mtu: usize, mut payload: BytesMut) -> Vec<Vec<u8>> {
         let mut payloads = vec![];
-        if payload.is_empty() || mtu <= 0 {
+        if payload.is_empty() || mtu == 0 {
             return payloads;
         }
 
