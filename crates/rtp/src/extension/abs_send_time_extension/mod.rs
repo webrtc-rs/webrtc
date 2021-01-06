@@ -14,7 +14,7 @@ const ABS_SEND_TIME_EXTENSION_SIZE: usize = 3;
 // AbsSendTimeExtension is a extension payload format in
 // http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
 pub struct AbsSendTimeExtension {
-    timestamp: u64,
+    pub timestamp: u64,
 }
 
 impl AbsSendTimeExtension {

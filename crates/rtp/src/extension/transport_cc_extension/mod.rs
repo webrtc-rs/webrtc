@@ -18,7 +18,7 @@ mod transport_cc_extension_test;
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 #[derive(PartialEq, Debug)]
 pub struct TransportCCExtension {
-    transport_sequence: u16,
+    pub transport_sequence: u16,
 }
 
 impl TransportCCExtension {

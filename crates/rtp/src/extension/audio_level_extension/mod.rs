@@ -28,8 +28,8 @@ mod audio_level_extension_test;
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 #[derive(PartialEq, Debug)]
 pub struct AudioLevelExtension {
-    level: u8,
-    voice: bool,
+    pub level: u8,
+    pub voice: bool,
 }
 
 impl AudioLevelExtension {

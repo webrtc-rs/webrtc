@@ -40,26 +40,24 @@ struct Packetizer {
     time_gen: Option<FnTimeGen>,
 }
 
-impl Packetizer {
-    pub fn new(
-        mtu: usize,
-        payload_type: u8,
-        ssrc: u32,
-        clock_rate: u32,
-        payloader: Box<dyn Payloader>,
-        sequencer: Box<dyn Sequencer>,
-    ) -> Self {
-        Packetizer {
-            mtu,
-            payload_type,
-            ssrc,
-            sequencer,
-            payloader,
-            timestamp: rand::random::<u32>(),
-            clock_rate,
-            abs_send_time: 0,
-            time_gen: None,
-        }
+pub fn new_packetizer(
+    mtu: usize,
+    payload_type: u8,
+    ssrc: u32,
+    clock_rate: u32,
+    payloader: Box<dyn Payloader>,
+    sequencer: Box<dyn Sequencer>,
+) -> impl PacketizerInterface {
+    Packetizer {
+        mtu,
+        payload_type,
+        ssrc,
+        sequencer,
+        payloader,
+        timestamp: rand::random::<u32>(),
+        clock_rate,
+        abs_send_time: 0,
+        time_gen: None,
     }
 }
 
