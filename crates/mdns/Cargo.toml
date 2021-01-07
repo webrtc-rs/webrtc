@@ -1,6 +1,6 @@
 [package]
 name = "webrtc-rs-mdns"
-version = "0.0.1"
+version = "0.1.0"
 authors = ["Rain Liu <yuliu@outlook.com>"]
 edition = "2018"
 description = "A pure Rust implementation of mDNS"
