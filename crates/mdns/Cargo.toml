@@ -22,3 +22,15 @@ log = "0.4"
 tokio-test = "0.4"
 env_logger = "0.8"
 chrono = "0.4.19"
+
+
+[[example]]
+name = "mdns_query"
+path = "examples/mdns_query.rs"
+bench = false
+
+
+[[example]]
+name = "mdns_server"
+path = "examples/mdns_server.rs"
+bench = false

@@ -8,6 +8,8 @@ pub const DEFAULT_ADDRESS: &str = "224.0.0.0:5353";
 // Config is used to configure a mDNS client or server.
 #[derive(Default, Debug)]
 pub struct Config {
+    pub dst_port: Option<u16>,
+
     // query_interval controls how often we sends Queries until we
     // get a response for the requested name
     pub query_interval: Duration,
