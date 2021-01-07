@@ -12,8 +12,8 @@
  <a href="https://deps.rs/repo/github/webrtc-rs/mdns"> 
   <img src="https://deps.rs/repo/github/webrtc-rs/mdns/status.svg">
  </a>
- <a href="https://crates.io/crates/webrtc-rs"> 
-  <img src="https://img.shields.io/crates/v/webrtc-rs.svg">
+ <a href="https://crates.io/crates/webrtc-rs-mdns"> 
+  <img src="https://img.shields.io/crates/v/webrtc-rs-mdns.svg">
  </a> 
  <a href="https://docs.rs/webrtc-rs-mdns"> 
   <img src="https://docs.rs/webrtc-rs-mdns/badge.svg">
