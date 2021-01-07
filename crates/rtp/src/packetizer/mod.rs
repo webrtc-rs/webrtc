@@ -7,7 +7,6 @@ use crate::sequence::*;
 use std::io::{BufWriter, Read};
 use std::time::{Duration, SystemTime};
 
-#[cfg(test)]
 mod packetizer_test;
 
 // Payloader payloads a byte array for use as rtp.Packet payloads
@@ -78,7 +77,7 @@ impl PacketizerInterface for Packetizer {
         for (i, pp) in payloads.iter().enumerate() {
             packets[i].header = Header {
                 version: 2,
-                marker: 1 == payloads.len() - 1,
+                marker: i == payloads.len() - 1,
                 payload_type: self.payload_type,
                 sequence_number: self.sequencer.next_sequence_number(),
                 timestamp: self.timestamp,
@@ -91,7 +90,7 @@ impl PacketizerInterface for Packetizer {
 
         self.timestamp += samples;
 
-        if packets.is_empty() && self.abs_send_time != 0 {
+        if !packets.is_empty() && self.abs_send_time != 0 {
             let send_time =
                 AbsSendTimeExtension::new(self.time_gen.map_or(Duration::default(), |v| v()));
 

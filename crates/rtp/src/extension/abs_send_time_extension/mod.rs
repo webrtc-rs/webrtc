@@ -21,8 +21,8 @@ impl AbsSendTimeExtension {
     // Marshal serializes the members to buffer.
     pub fn marshal(&self) -> Result<BytesMut, ExtensionError> {
         Ok(vec![
-            (self.timestamp & 0xFF0000 >> 16) as u8,
-            (self.timestamp & 0xFF00 >> 8) as u8,
+            ((self.timestamp & 0xFF0000) >> 16) as u8,
+            ((self.timestamp & 0xFF00) >> 8) as u8,
             (self.timestamp & 0xFF) as u8,
         ]
         .as_slice()
