@@ -10,17 +10,20 @@ use util::Error;
 async fn main() -> Result<(), Error> {
     env_logger::Builder::new().init();
 
-    let socket = UdpSocket::bind("0.0.0.0:9999").await?;
+    let socket = UdpSocket::bind(("0.0.0.0", 5333)).await.unwrap();
 
     let server = DNSConn::server(
         socket,
         Config {
-            dst_port: Some(8888),
+            query_interval: std::time::Duration::from_secs(5),
             ..Default::default()
         },
     )?;
 
-    let (answer, src) = server.query("webrtc-rs-mdns-1.local").await?;
+    log::info!("querying dns");
+
+    let (answer, src) = server.query("webrtc-rs-mdns-2.local").await?;
+    log::info!("dns queried");
     println!("answer = {}, src = {}", answer, src);
 
     Ok(())

@@ -1,29 +1,28 @@
+use mdns::{config::*, conn::*};
+use signal_hook::{consts::SIGINT, iterator::Signals};
+use tokio::net::UdpSocket;
 use webrtc_rs_mdns as mdns;
 
-use mdns::{config::*, conn::*};
-
-use tokio::net::UdpSocket;
-
-use util::Error;
-
 #[tokio::main]
-async fn main() -> Result<(), Error> {
+async fn main() {
     env_logger::Builder::new().init();
 
-    let socket = UdpSocket::bind("0.0.0.0:8888").await?;
-    println!("socket.local_addr={:?}", socket.local_addr());
+    let mut signals = Signals::new(&[SIGINT]).unwrap();
+
+    let socket = UdpSocket::bind(("0.0.0.0", 5333)).await.unwrap();
+    //  socket.connect(mdns::DEFAULT_ADDRESS).await.unwrap();
 
     let _server = DNSConn::server(
         socket,
         Config {
-            dst_port: Some(9999),
-            local_names: vec![
-                "webrtc-rs-mdns-1.local".to_owned(),
-                "webrtc-rs-mdns-2.local".to_owned(),
-            ],
+            local_names: vec!["webrtc-rs-mdns-2.local".to_owned()],
             ..Default::default()
         },
-    )?;
+    )
+    .unwrap();
 
-    loop {}
+    for _ in signals.forever() {
+        log::info!("Received ctrl-c signal. Exiting.");
+        return;
+    }
 }

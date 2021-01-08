@@ -1,12 +1,9 @@
-#[cfg(test)]
-mod conn_test;
-
 use crate::config::*;
 use crate::errors::*;
 use crate::message::name::*;
 use crate::message::{header::*, parser::*, question::*, resource::a::*, resource::*, *};
 
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -20,7 +17,7 @@ use log::*;
 
 const INBOUND_BUFFER_SIZE: usize = 512;
 const DEFAULT_QUERY_INTERVAL: Duration = Duration::from_secs(1);
-const DEFAULT_DEST_ADDR: &str = "224.0.0.251";
+const DEFAULT_DEST_ADDR: &str = "224.0.0.251:5353";
 const DEFAULT_DEST_PORT: u16 = 5353;
 const MAX_MESSAGE_RECORDS: usize = 3;
 const RESPONSE_TTL: u32 = 120;
@@ -53,15 +50,31 @@ struct QueryResult {
 impl DNSConn {
     // server establishes a mDNS connection over an existing conn
     pub fn server(conn: UdpSocket, config: Config) -> Result<Self, Error> {
-        conn.join_multicast_v4(Ipv4Addr::new(224, 0, 0, 251), Ipv4Addr::new(0, 0, 0, 0))?;
+        conn.set_multicast_loop_v4(true)?;
+        conn.set_multicast_ttl_v4(255)?;
 
-        let port = if let Some(port) = config.dst_port {
-            port
-        } else {
-            DEFAULT_DEST_PORT
-        };
+        let dst_addr: SocketAddr = format!("{}", DEFAULT_DEST_ADDR).parse()?;
 
-        let dst_addr: SocketAddr = format!("{}:{}", DEFAULT_DEST_ADDR, port).parse()?;
+        {
+            let mut _join_error_count = 0;
+
+            let interfaces = ifaces::Interface::get_all().unwrap();
+            _join_error_count = 0;
+
+            for interface in interfaces {
+                for ip in interface.addr {
+                    if let IpAddr::V4(e) = ip.ip() {
+                        if let Err(e) = conn.join_multicast_v4(Ipv4Addr::new(224, 0, 0, 251), e) {
+                            _join_error_count += 1;
+                            println!("Error connecting multicast, error: {:?}", e);
+                        }
+                        continue;
+                    }
+
+                    _join_error_count += 1;
+                }
+            }
+        }
 
         let local_names = config
             .local_names
@@ -84,11 +97,15 @@ impl DNSConn {
             query_closed_tx: Arc::new(Mutex::new(None)),
         };
 
+        let queries = c.queries.clone();
         let socket = Arc::clone(&c.socket);
-        let queries = Arc::clone(&c.queries);
 
         tokio::spawn(async move {
-            let _ = DNSConn::start(start_closed_rx, socket, local_names, dst_addr, queries).await;
+            if let Err(e) =
+                DNSConn::start(start_closed_rx, socket, local_names, dst_addr, queries).await
+            {
+                panic!("Error starting dns connection, error: {:?}", e);
+            };
         });
 
         Ok(c)
@@ -141,13 +158,12 @@ impl DNSConn {
 
         self.send_question(&name_with_suffix).await;
 
-        let ticker = tokio::time::sleep(self.query_interval);
-        tokio::pin!(ticker);
-
         loop {
             tokio::select! {
-                _ = ticker.as_mut() => self.send_question(&name_with_suffix).await,
+                _ = tokio::time::sleep(self.query_interval) => self.send_question(&name_with_suffix).await,
+
                 _ = query_close_rx.recv() => return Err(ERR_CONNECTION_CLOSED.to_owned()),
+
                 res_opt = query_rx.recv() =>{
                     if let Some(res) = res_opt{
                         return Ok((res.answer, res.addr));
@@ -179,14 +195,14 @@ impl DNSConn {
         let raw_query = match msg.pack() {
             Ok(v) => v,
             Err(err) => {
-                warn!("Failed to construct mDNS packet {}", err);
+                println!("Failed to construct mDNS packet {}", err);
                 return;
             }
         };
 
-        trace!("{:?} sending {:?}...", self.socket.local_addr(), raw_query);
+        println!("{:?} sending {:?}...", self.socket.local_addr(), raw_query);
         if let Err(err) = self.socket.send_to(&raw_query, self.dst_addr).await {
-            warn!("Failed to send mDNS packet {}", err);
+            println!("Failed to send mDNS packet {}", err);
         }
     }
 
@@ -197,15 +213,17 @@ impl DNSConn {
         dst_addr: SocketAddr,
         queries: Arc<Mutex<Vec<Query>>>,
     ) -> Result<(), Error> {
-        let mut b = vec![0u8; INBOUND_BUFFER_SIZE];
+        let mut b = vec![0u8; 1024];
 
         let (mut n, mut src);
 
         loop {
-            trace!("enter loop and listening {:?}", socket.local_addr());
+            println!("enter loop and listening {:?}", socket.local_addr());
 
             tokio::select! {
                 result = socket.recv_from(&mut b) => {
+                    println!("Received new connection");
+
                     match result{
                         Ok((len, addr)) => {
                             n = len;
@@ -214,20 +232,31 @@ impl DNSConn {
                         Err(err) => return Err(Error::new(err.to_string())),
                     }
                 }
-                _ = closed_rx.recv() => return Ok(()),
+
+                _ = closed_rx.recv() => {
+                    println!("Closing connection");
+                    return Ok(());
+                }
             }
 
-            trace!("recv bytes {:?} from {}", &b[..n], src);
+            println!("recv bytes {:?} from {}", &b[..n], src);
 
             let mut p = Parser::default();
             if let Err(err) = p.start(&b[..n]) {
-                warn!("Failed to parse mDNS packet {}", err);
+                println!("Failed to parse mDNS packet {}", err);
                 continue;
             }
 
             run(&mut p, &socket, &local_names, src, dst_addr, &queries).await;
         }
     }
+}
+
+async fn interface_for_remote(remote: String) -> Result<std::net::IpAddr, Error> {
+    let conn = UdpSocket::bind(remote).await?;
+    let local_addr = conn.local_addr()?;
+
+    Ok(local_addr.ip())
 }
 
 async fn run(
@@ -245,7 +274,7 @@ async fn run(
                 if err == *ERR_SECTION_DONE {
                     break;
                 } else {
-                    warn!("Failed to parse mDNS packet {}", err);
+                    println!("Failed to parse mDNS packet {}", err);
                     return;
                 }
             }
@@ -253,7 +282,15 @@ async fn run(
 
         for local_name in local_names {
             if local_name == &q.name.data {
-                let _ = send_answer(socket, &q.name.data, src.ip(), dst_addr).await;
+                let local_address = match interface_for_remote(src.ip().to_string()).await {
+                    Ok(e) => e,
+                    Err(e) => {
+                        println!("failed to retrieve remote interface for ip, error: {:?}", e);
+                        continue;
+                    }
+                };
+
+                let _ = send_answer(socket, &q.name.data, local_address, dst_addr).await;
             }
         }
     }
