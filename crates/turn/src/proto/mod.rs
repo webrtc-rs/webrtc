@@ -8,11 +8,12 @@ pub mod lifetime;
 pub mod peeraddr;
 pub mod relayaddr;
 pub mod reqfamily;
+pub mod reqtrans;
 
 use std::fmt;
 
 // Protocol is IANA assigned protocol number.
-#[derive(PartialEq, Eq, Default)]
+#[derive(PartialEq, Eq, Default, Debug)]
 pub struct Protocol(pub u8);
 
 // PROTO_UDP is IANA assigned protocol number for UDP.
