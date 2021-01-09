@@ -4,5 +4,7 @@
 #[macro_use]
 extern crate lazy_static;
 
+pub mod client;
 pub mod errors;
-mod relay_address_generator;
+pub mod proto;
+pub mod relay_address_generator;
