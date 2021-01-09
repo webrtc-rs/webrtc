@@ -6,6 +6,7 @@ pub mod dontfrag;
 pub mod evenport;
 pub mod lifetime;
 pub mod peeraddr;
+pub mod relayaddr;
 
 use std::fmt;
 
