@@ -10,15 +10,14 @@ use util::Error;
 async fn main() -> Result<(), Error> {
     env_logger::Builder::new().init();
 
-    let socket = UdpSocket::bind(("0.0.0.0", 5333)).await.unwrap();
-
     let server = DNSConn::server(
-        socket,
+        ("0.0.0.0", 5353),
         Config {
-            query_interval: std::time::Duration::from_secs(5),
+            local_names: vec!["webrtc-rs-mdns-2.local".to_owned()],
             ..Default::default()
         },
-    )?;
+    )
+    .unwrap();
 
     log::info!("querying dns");
 
