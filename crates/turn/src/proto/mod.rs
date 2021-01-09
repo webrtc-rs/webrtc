@@ -4,6 +4,7 @@ pub mod channum;
 pub mod data;
 pub mod dontfrag;
 pub mod evenport;
+pub mod lifetime;
 
 use std::fmt;
 
