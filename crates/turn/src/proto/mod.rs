@@ -9,6 +9,7 @@ pub mod peeraddr;
 pub mod relayaddr;
 pub mod reqfamily;
 pub mod reqtrans;
+pub mod rsrvtoken;
 
 use std::fmt;
 
