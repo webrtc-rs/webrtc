@@ -5,6 +5,7 @@ pub mod data;
 pub mod dontfrag;
 pub mod evenport;
 pub mod lifetime;
+pub mod peeraddr;
 
 use std::fmt;
 
