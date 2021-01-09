@@ -1,8 +1,5 @@
-use webrtc_rs_mdns as mdns;
-
 use mdns::{config::*, conn::*};
-
-use tokio::net::UdpSocket;
+use webrtc_rs_mdns as mdns;
 
 use util::Error;
 
