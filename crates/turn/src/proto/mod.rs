@@ -1,4 +1,6 @@
 pub mod addr;
+pub mod chandata;
+pub mod channum;
 
 use std::fmt;
 
