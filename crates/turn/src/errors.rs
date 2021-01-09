@@ -47,4 +47,9 @@ lazy_static! {
     // ErrInvalidChannelNumber means that channel number is not valid as by RFC 5766 Section 11.
     pub static ref ERR_INVALID_CHANNEL_NUMBER: Error =
         Error::new("channel number not in [0x4000, 0x7FFF]".to_owned());
+    // ErrBadChannelDataLength means that channel data length is not equal
+    // to actual data length.
+    pub static ref ERR_BAD_CHANNEL_DATA_LENGTH: Error =
+        Error::new("channelData length != len(Data)".to_owned());
+    pub static ref ERR_UNEXPECTED_EOF: Error = Error::new("unexpected EOF".to_owned());
 }

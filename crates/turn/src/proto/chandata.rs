@@ -1,133 +1,120 @@
-/*
+#[cfg(test)]
+mod chandata_test;
+
+use super::channum::*;
+use crate::errors::*;
+
+use util::Error;
+
+const PADDING: usize = 4;
+
+fn nearest_padded_value_length(l: usize) -> usize {
+    let mut n = PADDING * (l / PADDING);
+    if n < l {
+        n += PADDING;
+    }
+    n
+}
+
+const CHANNEL_DATA_LENGTH_SIZE: usize = 2;
+const CHANNEL_DATA_NUMBER_SIZE: usize = CHANNEL_DATA_LENGTH_SIZE;
+const CHANNEL_DATA_HEADER_SIZE: usize = CHANNEL_DATA_LENGTH_SIZE + CHANNEL_DATA_NUMBER_SIZE;
+
 // ChannelData represents The ChannelData Message.
 //
 // See RFC 5766 Section 11.4
-pub struct ChannelData  {
-    Data   :Vec<u8>, // can be subslice of Raw
-    Length :usize,    // ignored while encoding, len(Data) is used
-    Number :ChannelNumber,
-    Raw    :Vec<u8>,
+#[derive(Default, Debug)]
+pub struct ChannelData {
+    pub data: Vec<u8>, // can be subslice of Raw
+    pub number: ChannelNumber,
+    pub raw: Vec<u8>,
 }
 
-// Equal returns true if b == c.
-func (c *ChannelData) Equal(b *ChannelData) bool {
-    if c == nil && b == nil {
-        return true
+impl PartialEq for ChannelData {
+    fn eq(&self, other: &Self) -> bool {
+        self.data == other.data && self.number == other.number
     }
-    if c == nil || b == nil {
-        return false
-    }
-    if c.Number != b.Number {
-        return false
-    }
-    if len(c.Data) != len(b.Data) {
-        return false
-    }
-    return bytes.Equal(c.Data, b.Data)
 }
 
-// grow ensures that internal buffer will fit v more bytes and
-// increases it capacity if necessary.
-//
-// Similar to stun.Message.grow method.
-func (c *ChannelData) grow(v int) {
-    n := len(c.Raw) + v
-    for cap(c.Raw) < n {
-        c.Raw = append(c.Raw, 0)
+impl ChannelData {
+    // grow ensures that internal buffer will fit v more bytes and
+    // increases it capacity if necessary.
+    //
+    // Similar to stun.Message.grow method.
+    fn grow(&mut self, v: usize) {
+        let n = self.raw.len() + v;
+        self.raw.extend_from_slice(&vec![0; n - self.raw.len()]);
     }
-    c.Raw = c.Raw[:n]
-}
 
-// Reset resets Length, Data and Raw length.
-func (c *ChannelData) Reset() {
-    c.Raw = c.Raw[:0]
-    c.Length = 0
-    c.Data = c.Data[:0]
-}
+    // Reset resets Length, Data and Raw length.
+    pub fn reset(&mut self) {
+        self.raw.clear();
+        self.data.clear();
+    }
 
-// Encode encodes ChannelData Message to Raw.
-func (c *ChannelData) Encode() {
-    c.Raw = c.Raw[:0]
-    c.WriteHeader()
-    c.Raw = append(c.Raw, c.Data...)
-    padded := nearestPaddedValueLength(len(c.Raw))
-    if bytesToAdd := padded - len(c.Raw); bytesToAdd > 0 {
-        for i := 0; i < bytesToAdd; i++ {
-            c.Raw = append(c.Raw, 0)
+    // Encode encodes ChannelData Message to Raw.
+    pub fn encode(&mut self) {
+        self.raw.clear();
+        self.write_header();
+        self.raw.extend_from_slice(&self.data);
+        let padded = nearest_padded_value_length(self.raw.len());
+        let bytes_to_add = padded - self.raw.len();
+        if bytes_to_add > 0 {
+            self.raw.extend_from_slice(&vec![0; bytes_to_add]);
         }
     }
+
+    // Decode decodes The ChannelData Message from Raw.
+    pub fn decode(&mut self) -> Result<(), Error> {
+        let buf = &self.raw;
+        if buf.len() < CHANNEL_DATA_HEADER_SIZE {
+            return Err(ERR_UNEXPECTED_EOF.to_owned());
+        }
+        let num = u16::from_be_bytes([buf[0], buf[1]]);
+        self.number = ChannelNumber(num);
+        if !self.number.valid() {
+            return Err(ERR_INVALID_CHANNEL_NUMBER.to_owned());
+        }
+        let l = u16::from_be_bytes([
+            buf[CHANNEL_DATA_NUMBER_SIZE],
+            buf[CHANNEL_DATA_NUMBER_SIZE + 1],
+        ]) as usize;
+        if l > buf[CHANNEL_DATA_HEADER_SIZE..].len() {
+            return Err(ERR_BAD_CHANNEL_DATA_LENGTH.to_owned());
+        }
+        self.data = buf[CHANNEL_DATA_HEADER_SIZE..CHANNEL_DATA_HEADER_SIZE + l].to_vec();
+
+        Ok(())
+    }
+
+    // WriteHeader writes channel number and length.
+    pub fn write_header(&mut self) {
+        if self.raw.len() < CHANNEL_DATA_HEADER_SIZE {
+            // Making WriteHeader call valid even when c.Raw
+            // is nil or len(c.Raw) is less than needed for header.
+            self.grow(CHANNEL_DATA_HEADER_SIZE);
+        }
+        self.raw[..CHANNEL_DATA_NUMBER_SIZE].copy_from_slice(&self.number.0.to_be_bytes());
+        self.raw[CHANNEL_DATA_NUMBER_SIZE..CHANNEL_DATA_HEADER_SIZE]
+            .copy_from_slice(&(self.data.len() as u16).to_be_bytes());
+    }
+
+    // is_channel_data returns true if buf looks like the ChannelData Message.
+    pub fn is_channel_data(buf: &[u8]) -> bool {
+        if buf.len() < CHANNEL_DATA_HEADER_SIZE {
+            return false;
+        }
+
+        if u16::from_be_bytes([
+            buf[CHANNEL_DATA_NUMBER_SIZE],
+            buf[CHANNEL_DATA_NUMBER_SIZE + 1],
+        ]) > buf[CHANNEL_DATA_HEADER_SIZE..].len() as u16
+        {
+            return false;
+        }
+
+        // Quick check for channel number.
+        let num = ChannelNumber(u16::from_be_bytes([buf[0], buf[1]]));
+        num.valid()
+    }
 }
-
-const padding = 4
-
-func nearestPaddedValueLength(l int) int {
-    n := padding * (l / padding)
-    if n < l {
-        n += padding
-    }
-    return n
-}
-
-// WriteHeader writes channel number and length.
-func (c *ChannelData) WriteHeader() {
-    if len(c.Raw) < channelDataHeaderSize {
-        // Making WriteHeader call valid even when c.Raw
-        // is nil or len(c.Raw) is less than needed for header.
-        c.grow(channelDataHeaderSize)
-    }
-    // Early bounds check to guarantee safety of writes below.
-    _ = c.Raw[:channelDataHeaderSize]
-    binary.BigEndian.PutUint16(c.Raw[:channelDataNumberSize], uint16(c.Number))
-    binary.BigEndian.PutUint16(c.Raw[channelDataNumberSize:channelDataHeaderSize],
-        uint16(len(c.Data)),
-    )
-}
-
-// ErrBadChannelDataLength means that channel data length is not equal
-// to actual data length.
-var ErrBadChannelDataLength = errors.New("channelData length != len(Data)")
-
-// Decode decodes The ChannelData Message from Raw.
-func (c *ChannelData) Decode() error {
-    buf := c.Raw
-    if len(buf) < channelDataHeaderSize {
-        return io.ErrUnexpectedEOF
-    }
-    num := binary.BigEndian.Uint16(buf[:channelDataNumberSize])
-    c.Number = ChannelNumber(num)
-    l := binary.BigEndian.Uint16(buf[channelDataNumberSize:channelDataHeaderSize])
-    c.Data = buf[channelDataHeaderSize:]
-    c.Length = int(l)
-    if !c.Number.Valid() {
-        return ErrInvalidChannelNumber
-    }
-    if int(l) < len(c.Data) {
-        c.Data = c.Data[:int(l)]
-    }
-    if int(l) > len(buf[channelDataHeaderSize:]) {
-        return ErrBadChannelDataLength
-    }
-    return nil
-}
-
-const (
-    channelDataLengthSize = 2
-    channelDataNumberSize = channelDataLengthSize
-    channelDataHeaderSize = channelDataLengthSize + channelDataNumberSize
-)
-
-// IsChannelData returns true if buf looks like the ChannelData Message.
-func IsChannelData(buf []byte) bool {
-    if len(buf) < channelDataHeaderSize {
-        return false
-    }
-
-    if int(binary.BigEndian.Uint16(buf[channelDataNumberSize:channelDataHeaderSize])) > len(buf[channelDataHeaderSize:]) {
-        return false
-    }
-
-    // Quick check for channel number.
-    num := binary.BigEndian.Uint16(buf[0:channelNumberSize])
-    return isChannelNumberValid(num)
-}
-*/

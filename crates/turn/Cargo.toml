@@ -25,6 +25,7 @@ clap = { version = "2", optional = true, default-features = false }
 
 [dev-dependencies]
 tokio-test = "0.4"
+hex = "0.4.2"
 
 
 [[example]]
