@@ -2,6 +2,7 @@ pub mod addr;
 pub mod chandata;
 pub mod channum;
 pub mod data;
+pub mod dontfrag;
 
 use std::fmt;
 
