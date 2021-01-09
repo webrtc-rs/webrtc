@@ -52,4 +52,5 @@ lazy_static! {
     pub static ref ERR_BAD_CHANNEL_DATA_LENGTH: Error =
         Error::new("channelData length != len(Data)".to_owned());
     pub static ref ERR_UNEXPECTED_EOF: Error = Error::new("unexpected EOF".to_owned());
+    pub static ref ERR_INVALID_REQUESTED_FAMILY_VALUE: Error = Error::new("invalid value for requested family attribute".to_owned());
 }

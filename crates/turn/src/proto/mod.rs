@@ -7,6 +7,7 @@ pub mod evenport;
 pub mod lifetime;
 pub mod peeraddr;
 pub mod relayaddr;
+pub mod reqfamily;
 
 use std::fmt;
 
