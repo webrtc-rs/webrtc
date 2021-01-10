@@ -1,7 +1,10 @@
 
+// mock types
+#[allow(dead_code)]
 mod dtls {
 
-    use tokio_stream::{self as stream};
+    use std::sync::{Arc, Mutex};
+    use tokio::time::{sleep, Duration};
 
     pub type CipherSuite = u16;
     pub const TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256: CipherSuite = 0;
@@ -13,24 +16,66 @@ mod dtls {
     pub type MTU = u16;
     // TODO
     pub type PSK = ();
-    pub type PSK_Id_Hint = ();
+    pub type PSKIdHint = ();
+
+    const BACKOFF: Duration = Duration::from_millis(500);
 
     #[derive(Debug)]
-    pub struct Client { config: Config }
+    pub struct Client {
+        config: Config,
+        num_events_emitted: Arc<Mutex<u8>>,
+    }
 
     impl Client {
-        pub fn new(config: Config) -> Self { Client { config }}
-        pub async fn start(&self) -> Option<()> { Some(()) }
-        pub async fn next(&self) -> Event { Event::Message { content: () } }
+        pub fn new(config: Config) -> Self {
+            Client {
+                config,
+                num_events_emitted: Arc::new(Mutex::new(0)),
+            }
+        }
+        pub async fn start(&self) {
+            println!("client started")
+        }
+        pub async fn next(&self) -> Event {
+            println!("client polled");
+            let data = Arc::clone(&self.num_events_emitted);
+            let mut n = data.lock().unwrap();
+            if *n > 0 {
+                println!("client already polled {} times, waiting {:?}", *n, BACKOFF);
+                sleep(BACKOFF).await;
+            }
+            *n += 1;
+            Event::Message { content: () }
+        }
     }
-    
+
     #[derive(Debug)]
-    pub struct Server { config: Config }
+    pub struct Server {
+        config: Config,
+        num_events_emitted: Arc<Mutex<u8>>,
+    }
 
     impl Server {
-        pub fn new(config: Config) -> Self { Server { config }}
-        pub async fn start(&self) -> Option<()> { Some(()) }
-        pub async fn next(&self) -> Event { Event::Message { content: () } }
+        pub fn new(config: Config) -> Self {
+            Server {
+                config,
+                num_events_emitted: Arc::new(Mutex::new(0)),
+            }
+        }
+        pub async fn start(&self) {
+            println!("server started")
+        }
+        pub async fn next(&self) -> Event {
+            println!("server polled");
+            let data = Arc::clone(&self.num_events_emitted);
+            let mut n = data.lock().unwrap();
+            if *n > 0 {
+                println!("server already polled {} times, waiting {:?}", *n, BACKOFF);
+                sleep(BACKOFF).await;
+            }
+            *n += 1;
+            Event::Message { content: () }
+        }
     }
 
     #[derive(Debug)]
@@ -42,10 +87,10 @@ mod dtls {
     #[derive(Debug)]
     #[derive(Clone)]
     #[derive(Copy)]
-    pub struct Cert {}
+    pub struct Cert { host: &'static str }
 
     impl Cert {
-        pub fn new() -> Self { Cert {} }
+        pub fn new(host: &'static str) -> Self { Cert { host } }
     }
 
     #[derive(Debug)]
@@ -56,7 +101,7 @@ mod dtls {
         cert: Option<Cert>,
         insecure_skip_verify: bool,
         psk: Option<PSK>,
-        psk_id_hint: Option<PSK_Id_Hint>,
+        psk_id_hint: Option<PSKIdHint>,
         mtu: Option<MTU>,
     }
 
@@ -74,7 +119,7 @@ mod dtls {
         }
 
         pub fn cert(&self, cert: Cert) -> Self {
-            Config {
+             Config {
                 cipher_suite: self.cipher_suite,
                 cert: Some(cert),
                 insecure_skip_verify: self.insecure_skip_verify,
@@ -106,7 +151,7 @@ mod dtls {
             }
         }
 
-        pub fn psk(&self, psk: PSK, psk_id_hint: PSK_Id_Hint) -> Self {
+        pub fn psk(&self, psk: PSK, psk_id_hint: PSKIdHint) -> Self {
             Config {
                 cipher_suite: self.cipher_suite,
                 cert: self.cert,
@@ -135,12 +180,11 @@ mod dtls {
 mod tests {
 
     use crate::dtls;
-    use crate::dtls::{Client, Server, Event, Cert, Config, CipherSuite, PSK, PSK_Id_Hint, MTU};
+    use crate::dtls::{Client, Server, Event, Cert, Config, CipherSuite, PSK, PSKIdHint, MTU};
     use tokio;
-    use tokio::runtime::Runtime;
     use tokio::time::{sleep, Duration};
 
-    const test_message: () = ();
+    const TEST_MESSAGE: () = ();
     
     #[test]
     pub fn e2e_basic() {
@@ -188,58 +232,64 @@ mod tests {
                 .cipher_suite(dtls::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256)
                 .mtu(*mtu)
                 .insecure_skip_verify();
-            Runtime::new().unwrap().block_on( async {
-                check_comms(conf).await;
-            })
+            check_comms(conf);
         }
     }
 
-    fn create_self_signed_cert(host: &'static str) -> Cert { Cert::new() }
+    fn create_self_signed_cert(host: &'static str) -> Cert {
+        Cert::new(host)
+    }
 
-    fn create_psk() -> (PSK, PSK_Id_Hint) { ((), ()) }
+    fn create_psk() -> (PSK, PSKIdHint) { ((), ()) }
 
-    async fn check_comms(config: Config) {
-        let timeout_duration =  Duration::from_secs(1);
-        let mut client_seen = false;
-        let mut server_seen = false;
+    fn check_comms(config: Config) {
+        println!("Checking client server comunnication:\n{:?}\n", config);
+        let timeout_duration =  Duration::from_millis(500);
         let client = Client::new(config);
         let server = Server::new(config);
-        let sleep = sleep(timeout_duration);
-        tokio::pin!(sleep);
-        loop {
-            let mut event_count: u8 = 0;
-            tokio::select! {
-                _ = &mut sleep => {
-                    assert!(false, "test timed out after {:?}", timeout_duration);
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on( async move {
+            let sleep = sleep(timeout_duration);
+            tokio::pin!(sleep);
+            let mut event_count: u8 = 0;  // break after two events have been emitted
+            let mut client_seen = false;
+            let mut server_seen = false;
+            loop {
+                tokio::select! {
+                    _ = &mut sleep => {
+                        assert!(false, "test timed out after {:?}", timeout_duration);
+                        break
+                    }
+                    event = client.next() => {
+                        println!("client event:\n{:?}\n", event);
+                        match event {
+                            Event::Message { content } => {
+                                assert_eq!(content, TEST_MESSAGE);
+                                client_seen = true;
+                            }
+                            _ => { assert!(false, "client retured error") }
+                        }
+                        event_count = event_count + 1;
+                    }
+                    event = server.next() => {
+                        println!("server event:\n{:?}\n", event);
+                        match event {
+                            Event::Message { content }  => {
+                                assert_eq!(content, TEST_MESSAGE);
+                                server_seen = true;
+                            }
+                            _ => { assert!(false, "server returned error") }
+                        }
+                        event_count = event_count + 1;
+                    }
+                }
+                if event_count >= 2 {
                     break
                 }
-                event = client.next() => {
-                    match event {
-                        Event::Message { content } => {
-                            assert_eq!(content, test_message);
-                            client_seen = true;
-                        }
-                        _ => { assert!(false, "client retured error") }
-                    }
-                    event_count = event_count + 1;
-                }
-                event = server.next() => {
-                    match event {
-                        Event::Message { content }  => {
-                            assert_eq!(content, test_message);
-                            server_seen = true;
-                        }
-                        _ => { assert!(false, "server returned error") }
-                    }
-                    event_count = event_count + 1;
-                }
-            }
-            if event_count >= 2 {
-                break
-            }
-        };
-        assert!(client_seen);
-        assert!(server_seen);
+            };
+            assert!(client_seen);
+            assert!(server_seen);
+        });
     }
 
 }
