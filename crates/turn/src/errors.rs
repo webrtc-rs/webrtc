@@ -53,4 +53,17 @@ lazy_static! {
         Error::new("channelData length != len(Data)".to_owned());
     pub static ref ERR_UNEXPECTED_EOF: Error = Error::new("unexpected EOF".to_owned());
     pub static ref ERR_INVALID_REQUESTED_FAMILY_VALUE: Error = Error::new("invalid value for requested family attribute".to_owned());
+
+    pub static ref ERR_FAKE_ERR: Error = Error::new("fake error".to_owned());
+    pub static ref ERR_TRY_AGAIN: Error = Error::new("try again".to_owned());
+    pub static ref ERR_CLOSED: Error = Error::new("use of closed network connection".to_owned());
+    pub static ref ERR_UDPADDR_CAST: Error = Error::new("addr is not a net.UDPAddr".to_owned());
+    pub static ref ERR_ALREADY_CLOSED: Error = Error::new("already closed".to_owned());
+    pub static ref ERR_DOUBLE_LOCK: Error = Error::new("try-lock is already locked".to_owned());
+    pub static ref ERR_TRANSACTION_CLOSED: Error = Error::new("transaction closed".to_owned());
+    pub static ref ERR_WAIT_FOR_RESULT_ON_NON_RESULT_TRANSACTION: Error = Error::new("WaitForResult called on non-result transaction".to_owned());
+    pub static ref ERR_FAILED_TO_BUILD_REFRESH_REQUEST: Error = Error::new("failed to build refresh request".to_owned());
+    pub static ref ERR_FAILED_TO_REFRESH_ALLOCATION: Error = Error::new("failed to refresh allocation".to_owned());
+    pub static ref ERR_FAILED_TO_GET_LIFETIME: Error = Error::new("failed to get lifetime from refresh response".to_owned());
+
 }
