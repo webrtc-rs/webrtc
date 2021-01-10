@@ -23,7 +23,7 @@ impl Permission {
 
 // Thread-safe Permission map
 #[derive(Default)]
-struct PermissionMap {
+pub(crate) struct PermissionMap {
     perm_map: HashMap<String, Permission>,
 }
 
