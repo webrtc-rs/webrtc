@@ -1,6 +1,6 @@
 [package]
 name = "webrtc-rs-stun"
-version = "0.1.4"
+version = "0.1.5"
 authors = ["Rain Liu <yuliu@outlook.com>"]
 edition = "2018"
 description = "A pure Rust implementation of STUN"

@@ -18,3 +18,7 @@ pub mod textattrs;
 pub mod uattrs;
 pub mod uri;
 pub mod xoraddr;
+
+// IANA assigned ports for "stun" protocol.
+pub const DEFAULT_PORT: u16 = 3478;
+pub const DEFAULT_TLS_PORT: u16 = 5349;
