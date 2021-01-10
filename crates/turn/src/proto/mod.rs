@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod proto_test;
+
 pub mod addr;
 pub mod chandata;
 pub mod channum;
