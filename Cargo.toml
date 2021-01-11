@@ -12,3 +12,5 @@ repository = "https://github.com/webrtc-rs/webrtc"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+tokio = { version = "1.0.1", features = ["full"] }
+rand = { version = "0.8.1" }
