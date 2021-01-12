@@ -24,14 +24,14 @@ pub mod dtls {
 
     const BACKOFF: Duration = Duration::from_millis(500);
 
-    pub struct Client<'a> {
-        conn: &'a transport::Connection,
+    pub struct Client {
+        conn: Arc<Mutex<transport::Connection>>,
         config: Config,
         num_events_emitted: Arc<Mutex<u8>>,
     }
 
-    impl Client<'_> {
-        pub fn new(conn: &'static transport::Connection, config: Config) -> Result<Self, &'static str> {
+    impl Client {
+        pub fn new(conn: Arc<Mutex<transport::Connection>>, config: Config) -> Result<Self, &'static str> {
             Ok( Client {
                 conn,
                 config,
@@ -52,20 +52,19 @@ pub mod dtls {
             *n += 1;
             Event::Message { content: () }
         }
-        pub fn get_connection(&self) -> &transport::Connection {
-             &self.conn
+        pub fn get_connection(&self) -> &Arc<Mutex<transport::Connection>> {
+            &self.conn
         }
     }
 
-    #[derive(Debug)]
-    pub struct Server<'a> {
-        conn: &'a transport::Connection,
+    pub struct Server {
+        conn: Arc<Mutex<transport::Connection>>,
         config: Config,
         num_events_emitted: Arc<Mutex<u8>>,
     }
 
-    impl Server<'_> {
-        pub fn new(conn: &'static transport::Connection, config: Config) -> Result<Self, &'static str> {
+    impl Server {
+        pub fn new(conn: Arc<Mutex<transport::Connection>>, config: Config) -> Result<Self, &'static str> {
             Ok( Server {
                 conn,
                 config,
@@ -86,8 +85,8 @@ pub mod dtls {
             *n += 1;
             Event::Message { content: () }
         }
-        pub fn get_connection(&self) -> &transport::Connection {
-             &self.conn
+        pub fn get_connection(&self) -> &Arc<Mutex<transport::Connection>> {
+            &self.conn
         }
     }
 
@@ -272,13 +271,16 @@ pub mod dtls {
 #[allow(unused_variables)]
 pub mod transport {
 
-    #[derive(Debug)]
+    #[derive(Copy)]
+    #[derive(Clone)]
     pub struct Connection { }
 
     impl Connection {
-        pub fn new() -> &'static Self { & Connection { } }
+        pub fn new() -> Self { Connection { } }
     }
 
+    #[derive(Copy)]
+    #[derive(Clone)]
     pub struct Bridge { }
     
     impl Bridge {

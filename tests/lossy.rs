@@ -12,6 +12,8 @@ struct RunResult {
     error: Option<()>,
 }
 
+#[derive(Copy)]
+#[derive(Clone)]
 struct TestCase {
     loss_chance: u8,
     do_client_auth: bool,
@@ -100,20 +102,15 @@ pub fn e2e_lossy() {
                 // do nothing
             }
         }
+        println!("Test: {}", name);
         let flight_interval = Duration::from_millis(100);
-        let server_config = Config::new()
-            .flight_interval(flight_interval)
-            .cert(server_cert)
-            .mtu(case.mtu);
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on( async move {
             let chosen_loss = rand::thread_rng().gen_range(0..9) + case.loss_chance;
-            let mut bridge = transport::Bridge::new();
+            let bridge = transport::Bridge::new();
             bridge.set_loss_chance(chosen_loss);
 
-            let (client_done_tx, mut client_done_rx) = tokio::sync::oneshot::channel();
-            let mut client: Arc<Mutex<Result<Client, &str>>>;
-            tokio::spawn( async move {
+            let mut client_join_handle: tokio::task::JoinHandle<Result<Client, &str>> = tokio::spawn( async move {
                 let mut config = Config::new()
                     .flight_interval(flight_interval)
                     .insecure_skip_verify()
@@ -129,14 +126,11 @@ pub fn e2e_lossy() {
                 if case.do_client_auth {
                     config = config.cert(client_cert);
                 }
-                let mut c = Arc::clone(&client).lock().unwrap();
-                *c = Client::new(&bridge.get_connection(), config);
-                client_done_tx.send(());
+                let conn = Arc::new(Mutex::new(bridge.get_connection()));
+                return Client::new(conn, config);
             });
 
-            let (server_done_tx, mut server_done_rx) = tokio::sync::oneshot::channel();
-            let mut server: Arc<Mutex<Result<Server, &str>>>;
-            tokio::spawn( async move {
+            let mut server_join_handle: tokio::task::JoinHandle<Result<Server, &str>> = tokio::spawn( async move {
                 let mut config = Config::new()
                     .cert(server_cert)
                     .flight_interval(flight_interval)
@@ -144,58 +138,74 @@ pub fn e2e_lossy() {
                 if case.do_client_auth {
                     config = config.client_auth_type(dtls::ClientAuthType::RequireAnyClientCert);
                 }
-                let mut s = Arc::clone(&server).lock().unwrap();
-                *s = Server::new(&bridge.get_connection(), config);
-                server_done_tx.send(());
+                let conn = Arc::new(Mutex::new(bridge.get_connection()));
+                return Server::new(conn, config);
             });
 
             let test_timeout = tokio::time::sleep(LOSSY_TEST_TIMEOUT);
-            let mut server_conn: Option<transport::Connection> = None;
-            let mut client_conn: Option<transport::Connection> = None;
-            let mut server_done = false;
-            let mut client_done = false;
+            let server_conn: Option<transport::Connection> = None;
+            let client_conn: Option<transport::Connection> = None;
+            let server_done = false;
+            let client_done = false;
             tokio::pin!(test_timeout);
             tokio::pin!(server_conn);
             tokio::pin!(client_conn);
             loop {
                 let iter_timeout = tokio::time::sleep(Duration::from_secs(10));
-                tokio::select! {
-                    _ = server_done_rx.await => {
-                        match *Arc::clone(&server).lock().unwrap() {
-                            Ok(server) => { *server_conn = Some(*server.get_connection()) }
-                            Err(reason) => {
+                match (*server_conn, *client_conn) {
+                    (Some(srv_conn), Some(cli_conn)) => {
+                        // TODO check for expected props
+                        break;
+                    }
+                    (_, _) => {
+                        tokio::select! {
+                            maybe_server = &mut server_join_handle => {
+                                match maybe_server {
+                                    Ok(server) => {
+                                        let data = server.unwrap().get_connection().clone();
+                                        let conn = data.lock().unwrap();
+                                        *server_conn = Some(*conn)
+                                    }
+                                    Err(reason) => {
+                                        assert!(
+                                            false,
+                                            "Server error: clientComplete({}) serverComplete({}) LossChance({}) error({})",
+                                            client_done, server_done, chosen_loss, reason,
+                                        );
+                                        break
+                                    }
+                                }
+                            }
+                            maybe_client = &mut client_join_handle => {
+                                match maybe_client {
+                                    Ok(client) => {
+                                        let data = client.unwrap().get_connection().clone();
+                                        let conn = data.lock().unwrap();
+                                        *client_conn = Some(*conn)
+                                    }
+                                    Err(reason) => {
+                                        assert!(
+                                            false,
+                                            "Client error: clientComplete({}) serverComplete({}) LossChance({}) error({})",
+                                            client_done, server_done, chosen_loss, reason,
+                                        );
+                                        break
+                                    }
+                                }
+                            }
+                            _ = &mut test_timeout => {
                                 assert!(
                                     false,
-                                    "Server error: clientComplete({}) serverComplete({}) LossChance({}) error({})",
-                                    client_done, server_done, chosen_loss, reason,
+                                    "Test expired: clientComplete({}) serverComplete({}) LossChance({})"
                                 );
-                                break
+                            }
+                            _ = iter_timeout => {
+                                // Do nothing
                             }
                         }
-                    }
-                    _ = client_done_rx.await => {
-                        match *Arc::clone(&server).lock().unwrap() {
-                            Ok(client) => { *client_conn = Some(*client.get_connection()) }
-                            Err(reason) => {
-                                assert!(
-                                    false,
-                                    "Server error: clientComplete({}) serverComplete({}) LossChance({}) error({})",
-                                    client_done, server_done, chosen_loss, reason,
-                                );
-                                break
-                            }
-                        }
-                    }
-                    _ = test_timeout => {
-                        assert!(
-                            false,
-                            "Test expired: clientComplete({}) serverComplete({}) LossChance({})"
-                        );
-                    }
-                    _ = iter_timeout => {
-                        // Do nothing
                     }
                 }
+                
             }
         });
     }

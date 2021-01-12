@@ -5,6 +5,7 @@ use mocks::dtls::{self, Client, Server, Config, Event, Cert, CertConfig, CipherS
 use mocks::transport;
 use tokio;
 use tokio::time::{sleep, Duration};
+use std::sync::{Arc, Mutex};
 
 const TEST_MESSAGE: () = ();
 
@@ -62,10 +63,10 @@ fn create_psk() -> (PSK, PSKIdHint) { ((), ()) }
 
 fn check_comms(config: Config) {
     println!("Checking client server comunnication:\n{:?}\n", config);
-    let timeout_duration =  Duration::from_millis(500);
-    let conn = transport::Connection::new();
-    let client = Client::new(&conn, config).unwrap();
-    let server = Server::new(&conn, config).unwrap();
+    let timeout_duration = Duration::from_millis(500);
+    let conn = Arc::new(Mutex::new(transport::Connection::new()));
+    let client = Client::new(Arc::clone(&conn), config).unwrap();
+    let server = Server::new(Arc::clone(&conn), config).unwrap();
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on( async move {
         let sleep = sleep(timeout_duration);
