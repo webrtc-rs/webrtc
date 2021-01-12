@@ -20,8 +20,10 @@ async fn main() {
     let mut signals = Signals::new(&[signal_hook::consts::SIGINT]).unwrap();
     let close = signals.handle();
 
-    for _ in signals.forever() {
+    for _sig in signals.forever() {
+        println!("closing connection now");
+        server.close().await.unwrap();
         close.close();
-        server.close().await.unwrap()
+        return;
     }
 }

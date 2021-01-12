@@ -10,10 +10,9 @@ use util::Error;
 async fn main() -> Result<(), Error> {
     env_logger::Builder::new().init();
 
-    let mut server = DNSConn::server(
+    let server = DNSConn::server(
         SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 5353),
         Config {
-            local_names: vec!["webrtc-rs-mdns-2.local".to_owned()],
             ..Default::default()
         },
     )
@@ -27,6 +26,5 @@ async fn main() -> Result<(), Error> {
     log::info!("dns queried");
     println!("answer = {}, src = {}", answer, src);
 
-    server.close().await?;
-    Ok(())
+    server.close().await
 }

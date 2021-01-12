@@ -8,5 +8,3 @@ pub mod config;
 pub mod conn;
 pub mod errors;
 pub mod message;
-
-pub use config::DEFAULT_ADDRESS;

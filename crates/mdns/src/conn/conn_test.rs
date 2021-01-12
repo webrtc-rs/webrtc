@@ -1,56 +1,72 @@
 #[cfg(test)]
 mod test {
+
     use crate::{config::Config, conn::*};
     use tokio::time::timeout;
     use util::Error;
 
     #[tokio::test]
-    async fn test_valid_communication() -> Result<(), Error> {
-        println!("a");
-        let server_a = DNSConn::server(
+    async fn test_valid_communication() {
+        let (close_tx, mut close_rx) = mpsc::channel(1);
+        tokio::spawn(async move {
+            let server_a = DNSConn::server(
+                SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 5353),
+                Config {
+                    local_names: vec![
+                        "webrtc-rs-mdns-1.local".to_owned(),
+                        "webrtc-rs-mdns-2.local".to_owned(),
+                    ],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
+            close_rx.recv().await.unwrap();
+            server_a.close().await.unwrap()
+        });
+
+        let server_b = DNSConn::server(
             SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 5353),
             Config {
-                local_names: vec![
-                    "webrtc-rs-mdns-1.local".to_owned(),
-                    "webrtc-rs-mdns-2.local".to_owned(),
-                ],
                 ..Default::default()
             },
-        )?;
+        )
+        .unwrap();
 
-        let mut server_b = DNSConn::server(
-            SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 5353),
-            Config {
-                ..Default::default()
-            },
-        )?;
+        let (a, b) = mpsc::channel(1);
 
-        println!("a");
+        tokio::spawn(async move {
+            tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+            a.send(()).await
+        });
 
-        let (_a, b) = mpsc::channel(1);
-
-        assert!(
-            !server_b.query("webrtc-rs-mdns-1.local", b).await.is_err(),
-            "first server_b.query timeout!"
-        );
-
-        println!("b");
-
-        let (_a, b) = mpsc::channel(1);
+        let result = server_b.query("webrtc-rs-mdns-2.local", b).await;
 
         assert!(
-            !server_b.query("webrtc-rs-mdns-2.local", b).await.is_err(),
-            "second server_b.query timeout!"
+            result.is_ok(),
+            "first server_b.query timeout!: {:?}",
+            result.err()
         );
 
-        println!("c");
+        println!("done");
 
-        server_a.close().await?;
+        let (a, b) = mpsc::channel(1);
 
-        println!("d");
-        server_b.close().await?;
+        tokio::spawn(async move {
+            tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+            a.send(()).await
+        });
 
-        Ok(())
+        let result = server_b.query("webrtc-rs-mdns-2.local", b).await;
+        assert!(
+            result.is_ok(),
+            "second server_b.query timeout!: {:?}",
+            result.err()
+        );
+        println!("closing servers");
+
+        close_tx.send(()).await.unwrap();
+        server_b.close().await.unwrap();
     }
 
     #[tokio::test]
@@ -72,7 +88,7 @@ mod test {
 
     #[tokio::test]
     async fn test_query_respect_timeout() -> Result<(), Error> {
-        let mut server_a = DNSConn::server(
+        let server_a = DNSConn::server(
             SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 5353),
             Config::default(),
         )?;

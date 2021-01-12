@@ -1,10 +1,5 @@
 use std::time::Duration;
 
-// DEFAULT_ADDRESS is the default used by mDNS
-// and in most cases should be the address that the
-// net.Conn passed to Server is bound to
-pub const DEFAULT_ADDRESS: &str = "224.0.0.0:5353";
-
 // Config is used to configure a mDNS client or server.
 #[derive(Default, Debug)]
 pub struct Config {

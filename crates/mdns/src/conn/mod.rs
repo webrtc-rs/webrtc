@@ -93,7 +93,7 @@ impl DNSConn {
         let socket = Arc::clone(&c.socket);
 
         tokio::spawn(async move {
-            if let Err(e) = DNSConn::start(
+            DNSConn::start(
                 close_server_rcv,
                 is_server_closed,
                 socket,
@@ -102,9 +102,6 @@ impl DNSConn {
                 queries,
             )
             .await
-            {
-                panic!("Error starting dns connection, error: {:?}", e);
-            };
         });
 
         Ok(c)
@@ -116,13 +113,13 @@ impl DNSConn {
             if self.is_server_closed.load(atomic::Ordering::SeqCst) {
                 return Err(ERR_CONNECTION_CLOSED.to_owned());
             }
+        }
 
-            match self.close_server.send(()).await {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    log::warn!("error sending close command to server: {:?}", e);
-                    Err(ERR_CONNECTION_CLOSED.to_owned())
-                }
+        match self.close_server.send(()).await {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                log::warn!("error sending close command to server: {:?}", e);
+                Err(ERR_CONNECTION_CLOSED.to_owned())
             }
         }
     }
@@ -130,7 +127,7 @@ impl DNSConn {
     // Query sends mDNS Queries for the following name until
     // either the Context is canceled/expires or we get a result
     pub async fn query(
-        &mut self,
+        &self,
         name: &str,
         mut close_query_signal: mpsc::Receiver<()>,
     ) -> Result<(ResourceHeader, SocketAddr), Error> {
@@ -155,7 +152,9 @@ impl DNSConn {
 
         loop {
             tokio::select! {
-                _ = tokio::time::sleep(self.query_interval) => self.send_question(&name_with_suffix).await,
+                _ = tokio::time::sleep(self.query_interval) => {
+                    self.send_question(&name_with_suffix).await
+                },
 
                 _ = close_query_signal.recv() => return Err(ERR_CONNECTION_CLOSED.to_owned()),
 
@@ -197,10 +196,8 @@ impl DNSConn {
 
         log::trace!("{:?} sending {:?}...", self.socket.local_addr(), raw_query);
         if let Err(err) = self.socket.send_to(&raw_query, self.dst_addr).await {
-            println!("not sent");
             log::error!("Failed to send mDNS packet {}", err);
         }
-        println!("sent");
     }
 
     async fn start(
@@ -211,11 +208,11 @@ impl DNSConn {
         dst_addr: SocketAddr,
         queries: Arc<Mutex<Vec<Query>>>,
     ) -> Result<(), Error> {
-        let mut b = vec![0u8; 1024];
-
-        let (mut n, mut src);
-
         loop {
+            let mut b = vec![0u8; INBOUND_BUFFER_SIZE];
+
+            let (n, src);
+
             log::info!("enter loop and listening {:?}", socket.local_addr());
 
             tokio::select! {
@@ -236,7 +233,7 @@ impl DNSConn {
                     println!("Closing connection");
                     close_server.store(true, atomic::Ordering::SeqCst);
 
-                    return Ok(());
+                    break;
                 }
             }
 
@@ -248,8 +245,10 @@ impl DNSConn {
                 continue;
             }
 
-            run(&mut p, &socket, &local_names, src, dst_addr, &queries).await;
+            run(&mut p, &socket, &local_names, src, dst_addr, &queries).await
         }
+
+        Ok(())
     }
 }
 
