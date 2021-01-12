@@ -1,177 +1,94 @@
-use super::*;
+#[cfg(test)]
+mod test {
+    use crate::{config::Config, conn::*};
+    use tokio::time::timeout;
+    use util::Error;
 
-#[tokio::test]
-async fn test_valid_communication() -> Result<(), Error> {
-    /*use std::io::Write;
-    env_logger::Builder::new()
-        .format(|buf, record| {
-            writeln!(
-                buf,
-                "{}:{} [{}] {} - {}",
-                record.file().unwrap_or("unknown"),
-                record.line().unwrap_or(0),
-                record.level(),
-                chrono::Local::now().format("%H:%M:%S.%6f"),
-                record.args()
-            )
-        })
-        .filter(None, LevelFilter::Trace)
-        .init();*/
+    #[tokio::test]
+    async fn test_valid_communication() -> Result<(), Error> {
+        println!("a");
+        let server_a = DNSConn::server(
+            SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 5353),
+            Config {
+                local_names: vec![
+                    "webrtc-rs-mdns-1.local".to_owned(),
+                    "webrtc-rs-mdns-2.local".to_owned(),
+                ],
+                ..Default::default()
+            },
+        )?;
 
-    let sock_a = UdpSocket::bind("0.0.0.0:0").await?;
-    trace!("sock_a.local_addr={:?}", sock_a.local_addr());
-    let port_a = sock_a.local_addr()?.port();
+        let mut server_b = DNSConn::server(
+            SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 5353),
+            Config {
+                ..Default::default()
+            },
+        )?;
 
-    let sock_b = UdpSocket::bind("0.0.0.0:0").await?;
-    trace!("sock_b.local_addr={:?}", sock_b.local_addr());
-    let port_b = sock_b.local_addr()?.port();
+        println!("a");
 
-    let server_a = DNSConn::server(
-        sock_a,
-        Config {
-            dst_port: Some(port_b),
-            local_names: vec![
-                "webrtc-rs-mdns-1.local".to_owned(),
-                "webrtc-rs-mdns-2.local".to_owned(),
-            ],
-            ..Default::default()
-        },
-    )?;
+        let (_a, b) = mpsc::channel(1);
 
-    let server_b = DNSConn::server(
-        sock_b,
-        Config {
-            dst_port: Some(port_a),
-            ..Default::default()
-        },
-    )?;
+        assert!(
+            !server_b.query("webrtc-rs-mdns-1.local", b).await.is_err(),
+            "first server_b.query timeout!"
+        );
 
-    let res = tokio::time::timeout(
-        Duration::from_millis(500),
-        server_b.query("webrtc-rs-mdns-1.local"),
-    )
-    .await;
-    assert!(!res.is_err(), "first server_b.query timeout!");
+        println!("b");
 
-    let res = tokio::time::timeout(
-        Duration::from_millis(500),
-        server_b.query("webrtc-rs-mdns-2.local"),
-    )
-    .await;
-    assert!(!res.is_err(), "second server_b.query timeout!");
+        let (_a, b) = mpsc::channel(1);
 
-    server_a.close().await?;
-    server_b.close().await?;
+        assert!(
+            !server_b.query("webrtc-rs-mdns-2.local", b).await.is_err(),
+            "second server_b.query timeout!"
+        );
 
-    Ok(())
-}
+        println!("c");
 
-#[tokio::test]
-async fn test_multiple_close() -> Result<(), Error> {
-    /*use std::io::Write;
-    env_logger::Builder::new()
-        .format(|buf, record| {
-            writeln!(
-                buf,
-                "{}:{} [{}] {} - {}",
-                record.file().unwrap_or("unknown"),
-                record.line().unwrap_or(0),
-                record.level(),
-                chrono::Local::now().format("%H:%M:%S.%6f"),
-                record.args()
-            )
-        })
-        .filter(None, LevelFilter::Trace)
-        .init();*/
+        server_a.close().await?;
 
-    let sock_a = UdpSocket::bind("0.0.0.0:0").await?;
-    trace!("sock_a.local_addr={:?}", sock_a.local_addr());
+        println!("d");
+        server_b.close().await?;
 
-    let server_a = DNSConn::server(sock_a, Config::default())?;
-
-    server_a.close().await?;
-    if let Err(err) = server_a.close().await {
-        assert_eq!(err, *ERR_CONNECTION_CLOSED);
-    } else {
-        assert!(false, "expected error, but got ok");
+        Ok(())
     }
 
-    Ok(())
-}
+    #[tokio::test]
+    async fn test_multiple_close() -> Result<(), Error> {
+        let server_a = DNSConn::server(
+            SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 5353),
+            Config::default(),
+        )?;
 
-#[tokio::test]
-async fn test_query_respect_timeout() -> Result<(), Error> {
-    /*use std::io::Write;
-    env_logger::Builder::new()
-        .format(|buf, record| {
-            writeln!(
-                buf,
-                "{}:{} [{}] {} - {}",
-                record.file().unwrap_or("unknown"),
-                record.line().unwrap_or(0),
-                record.level(),
-                chrono::Local::now().format("%H:%M:%S.%6f"),
-                record.args()
-            )
-        })
-        .filter(None, LevelFilter::Trace)
-        .init();*/
+        server_a.close().await?;
+        if let Err(err) = server_a.close().await {
+            assert_eq!(err, *ERR_CONNECTION_CLOSED);
+        } else {
+            assert!(false, "expected error, but got ok");
+        }
 
-    let sock_a = UdpSocket::bind("0.0.0.0:0").await?;
-    trace!("sock_a.local_addr={:?}", sock_a.local_addr());
-
-    let server_a = DNSConn::server(sock_a, Config::default())?;
-
-    let res =
-        tokio::time::timeout(Duration::from_millis(100), server_a.query("invalid-host")).await;
-    assert!(res.is_err(), "server_a.query expects timeout!");
-
-    server_a.close().await?;
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_query_respect_close() -> Result<(), Error> {
-    /*use std::io::Write;
-    env_logger::Builder::new()
-        .format(|buf, record| {
-            writeln!(
-                buf,
-                "{}:{} [{}] {} - {}",
-                record.file().unwrap_or("unknown"),
-                record.line().unwrap_or(0),
-                record.level(),
-                chrono::Local::now().format("%H:%M:%S.%6f"),
-                record.args()
-            )
-        })
-        .filter(None, LevelFilter::Trace)
-        .init();*/
-
-    let sock_a = UdpSocket::bind("0.0.0.0:0").await?;
-    trace!("sock_a.local_addr={:?}", sock_a.local_addr());
-
-    let server = DNSConn::server(sock_a, Config::default())?;
-    let server_a = Arc::new(server);
-    let server_b = Arc::clone(&server_a);
-
-    tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(500)).await;
-        let _ = server_a.close().await;
-    });
-
-    if let Err(err) = server_b.query("invalid-host").await {
-        assert_eq!(err, *ERR_CONNECTION_CLOSED);
-    } else {
-        assert!(false, "expected error, but got ok");
+        Ok(())
     }
 
-    if let Err(err) = server_b.query("invalid-host").await {
-        assert_eq!(err, *ERR_CONNECTION_CLOSED);
-    } else {
-        assert!(false, "expected error, but got ok");
-    }
+    #[tokio::test]
+    async fn test_query_respect_timeout() -> Result<(), Error> {
+        let mut server_a = DNSConn::server(
+            SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 5353),
+            Config::default(),
+        )?;
 
-    Ok(())
+        let (a, b) = mpsc::channel(1);
+
+        timeout(Duration::from_millis(100), a.send(()))
+            .await
+            .unwrap()
+            .unwrap();
+
+        let res = server_a.query("invalid-host", b).await;
+        assert!(res.is_err(), "server_a.query expects timeout!");
+
+        server_a.close().await?;
+
+        Ok(())
+    }
 }

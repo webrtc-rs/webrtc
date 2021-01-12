@@ -3,37 +3,35 @@ use crate::errors::*;
 use crate::message::name::*;
 use crate::message::{header::*, parser::*, question::*, resource::a::*, resource::*, *};
 
-use net2::unix::UnixUdpBuilderExt;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
+use core::sync::atomic;
+use socket2::SockAddr;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 
 use util::Error;
+mod conn_test;
 
 const INBOUND_BUFFER_SIZE: usize = 512;
 const DEFAULT_QUERY_INTERVAL: Duration = Duration::from_secs(1);
 const DEFAULT_DEST_ADDR: &str = "224.0.0.251:5353";
-const DEFAULT_DEST_PORT: u16 = 5353;
 const MAX_MESSAGE_RECORDS: usize = 3;
 const RESPONSE_TTL: u32 = 120;
 
 // Conn represents a mDNS Server
 pub struct DNSConn {
-    //mu  sync.RWMutex
-    //log logging.LeveledLogger
-    socket: Arc<UdpSocket>, //*ipv4.PacketConn
-    dst_addr: SocketAddr,   //*net.UDPAddr
+    socket: Arc<UdpSocket>,
+    dst_addr: SocketAddr,
 
     query_interval: Duration,
-    //local_names: Vec<String>,
     queries: Arc<Mutex<Vec<Query>>>,
 
-    start_closed_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
-    query_closed_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
+    is_server_closed: Arc<atomic::AtomicBool>,
+    close_server: mpsc::Sender<()>,
 }
 
 struct Query {
@@ -48,13 +46,18 @@ struct QueryResult {
 
 impl DNSConn {
     // server establishes a mDNS connection over an existing conn
-    pub fn server(addr: impl ToSocketAddrs, config: Config) -> Result<Self, Error> {
-        let socket = net2::UdpBuilder::new_v4()?
-            .reuse_address(true)?
-            .reuse_port(true)?
-            .bind(addr)?;
+    pub fn server(addr: SocketAddr, config: Config) -> Result<Self, Error> {
+        let socket = socket2::Socket::new(
+            socket2::Domain::ipv4(),
+            socket2::Type::dgram(),
+            Some(socket2::Protocol::udp()),
+        )?;
 
-        let socket = UdpSocket::from_std(socket)?;
+        socket.set_reuse_address(true)?;
+        socket.set_reuse_port(true)?;
+        socket.bind(&SockAddr::from(addr))?;
+
+        let socket = UdpSocket::from_std(socket.into_udp_socket())?;
 
         socket.set_multicast_loop_v4(true)?;
         socket.set_multicast_ttl_v4(255)?;
@@ -68,7 +71,9 @@ impl DNSConn {
 
         let dst_addr: SocketAddr = format!("{}", DEFAULT_DEST_ADDR).parse()?;
 
-        let (start_closed_tx, start_closed_rx) = mpsc::channel(1);
+        let is_server_closed = Arc::new(atomic::AtomicBool::new(false));
+
+        let (close_server_send, close_server_rcv) = mpsc::channel(1);
 
         let c = DNSConn {
             query_interval: if config.query_interval != Duration::from_secs(0) {
@@ -80,16 +85,23 @@ impl DNSConn {
             queries: Arc::new(Mutex::new(vec![])),
             socket: Arc::new(socket),
             dst_addr,
-            start_closed_tx: Arc::new(Mutex::new(Some(start_closed_tx))),
-            query_closed_tx: Arc::new(Mutex::new(None)),
+            is_server_closed: Arc::clone(&is_server_closed),
+            close_server: close_server_send,
         };
 
         let queries = c.queries.clone();
         let socket = Arc::clone(&c.socket);
 
         tokio::spawn(async move {
-            if let Err(e) =
-                DNSConn::start(start_closed_rx, socket, local_names, dst_addr, queries).await
+            if let Err(e) = DNSConn::start(
+                close_server_rcv,
+                is_server_closed,
+                socket,
+                local_names,
+                dst_addr,
+                queries,
+            )
+            .await
             {
                 panic!("Error starting dns connection, error: {:?}", e);
             };
@@ -101,36 +113,31 @@ impl DNSConn {
     // Close closes the mDNS Conn
     pub async fn close(&self) -> Result<(), Error> {
         {
-            let mut start_closed_tx = self.start_closed_tx.lock().await;
-            if start_closed_tx.is_none() {
+            if self.is_server_closed.load(atomic::Ordering::SeqCst) {
                 return Err(ERR_CONNECTION_CLOSED.to_owned());
             }
-            start_closed_tx.take();
-        }
 
-        {
-            let mut query_closed_tx = self.query_closed_tx.lock().await;
-            query_closed_tx.take();
+            match self.close_server.send(()).await {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    log::warn!("error sending close command to server: {:?}", e);
+                    Err(ERR_CONNECTION_CLOSED.to_owned())
+                }
+            }
         }
-
-        Ok(())
     }
 
     // Query sends mDNS Queries for the following name until
     // either the Context is canceled/expires or we get a result
-    pub async fn query(&self, name: &str) -> Result<(ResourceHeader, SocketAddr), Error> {
-        // ToDo: we should use a tokio::select instead to check if channel has been closed.
+    pub async fn query(
+        &mut self,
+        name: &str,
+        mut close_query_signal: mpsc::Receiver<()>,
+    ) -> Result<(ResourceHeader, SocketAddr), Error> {
         {
-            let start_closed_tx = self.start_closed_tx.lock().await;
-            if start_closed_tx.is_none() {
+            if self.is_server_closed.load(atomic::Ordering::SeqCst) {
                 return Err(ERR_CONNECTION_CLOSED.to_owned());
             }
-        }
-
-        let (query_tx, mut query_close_rx) = mpsc::channel(1);
-        {
-            let mut query_closed_tx = self.query_closed_tx.lock().await;
-            *query_closed_tx = Some(query_tx);
         }
 
         let name_with_suffix = name.to_owned() + ".";
@@ -150,7 +157,7 @@ impl DNSConn {
             tokio::select! {
                 _ = tokio::time::sleep(self.query_interval) => self.send_question(&name_with_suffix).await,
 
-                _ = query_close_rx.recv() => return Err(ERR_CONNECTION_CLOSED.to_owned()),
+                _ = close_query_signal.recv() => return Err(ERR_CONNECTION_CLOSED.to_owned()),
 
                 res_opt = query_rx.recv() =>{
                     if let Some(res) = res_opt{
@@ -165,7 +172,7 @@ impl DNSConn {
         let packed_name = match Name::new(name) {
             Ok(pn) => pn,
             Err(err) => {
-                log::warn!("Failed to construct mDNS packet {}", err);
+                log::warn!("Failed to construct mDNS packet: {}", err);
                 return;
             }
         };
@@ -190,12 +197,15 @@ impl DNSConn {
 
         log::trace!("{:?} sending {:?}...", self.socket.local_addr(), raw_query);
         if let Err(err) = self.socket.send_to(&raw_query, self.dst_addr).await {
+            println!("not sent");
             log::error!("Failed to send mDNS packet {}", err);
         }
+        println!("sent");
     }
 
     async fn start(
         mut closed_rx: mpsc::Receiver<()>,
+        close_server: Arc<atomic::AtomicBool>,
         socket: Arc<UdpSocket>,
         local_names: Vec<String>,
         dst_addr: SocketAddr,
@@ -224,6 +234,8 @@ impl DNSConn {
 
                 _ = closed_rx.recv() => {
                     println!("Closing connection");
+                    close_server.store(true, atomic::Ordering::SeqCst);
+
                     return Ok(());
                 }
             }
@@ -322,6 +334,7 @@ async fn send_answer(
                 authoritative: true,
                 ..Default::default()
             },
+
             answers: vec![Resource {
                 header: ResourceHeader {
                     typ: DNSType::A,
