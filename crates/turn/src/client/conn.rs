@@ -38,8 +38,8 @@ struct InboundData {
 // UDPConnObserver is an interface to UDPConn observer
 pub trait UDPConnObserver {
     fn turnserver_addr(&self) -> SocketAddr;
-    fn username(&self) -> TextAttribute;
-    fn realm(&self) -> TextAttribute;
+    fn username(&self) -> Username;
+    fn realm(&self) -> Realm;
     fn write_to(&self, data: &[u8], to: SocketAddr) -> Result<usize, Error>;
     fn perform_transaction(
         &self,
@@ -55,7 +55,7 @@ pub struct UDPConnConfig {
     observer: Box<dyn UDPConnObserver>,
     relayed_addr: SocketAddr,
     integrity: MessageIntegrity,
-    nonce: TextAttribute,
+    nonce: Nonce,
     lifetime: Duration,
     //Log         :logging.LeveledLogger,
 }
@@ -68,7 +68,7 @@ pub struct UDPConn {
     perm_map: PermissionMap,       // thread-safe
     //TODO: bindingMgr        :*bindingManager,       // thread-safe
     integrity: MessageIntegrity,          // read-only
-    nonce: TextAttribute,                 // needs mutex x
+    nonce: Nonce,                         // needs mutex x
     lifetime: Duration,                   // needs mutex x
     read_ch: mpsc::Receiver<InboundData>, // thread-safe
     close_ch: mpsc::Receiver<()>,         // thread-safe
@@ -409,8 +409,8 @@ func (c *UDPConn) createPermissions(addrs ...net.Addr) error {
     return nil
 }
 
-// HandleInbound passes inbound data in UDPConn
-func (c *UDPConn) HandleInbound(data []byte, from net.Addr) {
+// handle_inbound passes inbound data in UDPConn
+func (c *UDPConn) handle_inbound(data []byte, from net.Addr) {
     // copy data
     copied := make([]byte, len(data))
     copy(copied, data)
