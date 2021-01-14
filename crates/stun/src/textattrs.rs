@@ -35,6 +35,7 @@ pub type Nonce = TextAttribute;
 pub type Software = TextAttribute;
 
 // TextAttribute is helper for adding and getting text attributes.
+#[derive(Clone, Default)]
 pub struct TextAttribute {
     pub attr: AttrType,
     pub text: String,

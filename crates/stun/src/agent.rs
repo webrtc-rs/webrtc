@@ -83,7 +83,7 @@ pub(crate) struct AgentTransaction {
 const AGENT_COLLECT_CAP: usize = 100;
 
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Default, Debug)]
-pub struct TransactionId(pub(crate) [u8; TRANSACTION_ID_SIZE]);
+pub struct TransactionId(pub [u8; TRANSACTION_ID_SIZE]);
 
 impl TransactionId {
     // NewTransactionID returns new random transaction ID using crypto/rand

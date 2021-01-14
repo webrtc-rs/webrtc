@@ -21,6 +21,7 @@ pub(crate) const CREDENTIALS_SEP: &str = ":";
 // newHMAC function and internal/hmac/pool.go.
 //
 // RFC 5389 Section 15.4
+#[derive(Default, Clone)]
 pub struct MessageIntegrity(Vec<u8>);
 
 fn new_hmac(key: &[u8], message: &[u8]) -> Vec<u8> {
