@@ -14,6 +14,26 @@ const MAX_REALM_B: usize = 763;
 const MAX_SOFTWARE_B: usize = 763;
 const MAX_NONCE_B: usize = 763;
 
+// Username represents USERNAME attribute.
+//
+// RFC 5389 Section 15.3
+pub type Username = TextAttribute;
+
+// Realm represents REALM attribute.
+//
+// RFC 5389 Section 15.7
+pub type Realm = TextAttribute;
+
+// Nonce represents NONCE attribute.
+//
+// RFC 5389 Section 15.8
+pub type Nonce = TextAttribute;
+
+// Software is SOFTWARE attribute.
+//
+// RFC 5389 Section 15.10
+pub type Software = TextAttribute;
+
 // TextAttribute is helper for adding and getting text attributes.
 pub struct TextAttribute {
     pub attr: AttrType,
