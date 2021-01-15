@@ -265,6 +265,24 @@ pub mod dtls {
         }
     }
 
+    pub async fn listen(
+        proto: &str,
+        addr: &str,
+        port: u16,
+        config: Config,
+    ) -> Result<tokio::net::TcpListener, std::io::Error> {
+        tokio::net::TcpListener::bind("127.0.0.1:0").await
+    }
+
+    pub async fn dial(
+        proto: &str,
+        addr: &str,
+        port: u16,
+        config: Config,
+    ) -> Result<tokio::net::TcpStream, std::io::Error> {
+        tokio::net::TcpStream::connect("127.0.1.1:0").await
+    }
+
 }
 
 #[allow(dead_code)]
@@ -277,6 +295,8 @@ pub mod transport {
 
     impl Connection {
         pub fn new() -> Self { Connection { } }
+        pub fn send(&self, message: &str) -> Result<u16, &str> { Ok(0) }
+        pub fn recv(&self, buffer: &mut [u8; 8192]) -> Result<usize, &str> { Ok(0) }
     }
 
     #[derive(Copy)]
