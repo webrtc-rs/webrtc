@@ -5,6 +5,7 @@ use mocks::dtls::{self, Config, Cert, CertConfig, CipherSuite, PSK, PSKIdHint, M
 use mocks::transport;
 use tokio;
 use tokio::time::{sleep, Duration};
+use std::sync::{Arc, Mutex};
 
 const TEST_MESSAGE: &str = "Hello world";
 const TEST_TIME_LIMIT: Duration = Duration::from_secs(5);
@@ -23,104 +24,112 @@ pub async fn random_port() -> u16 {
     local_addr.port()
 }
 
+// Spawn and await tasks to read from and write to the given stream
+pub async fn simple_read_write(
+    stream: &'static Arc<Mutex<tokio::net::TcpStream>>,
+    out_buffer: &'static Arc<Mutex<[u8; 8192]>>,
+) -> (Result<(), std::io::Error>, Result<(), std::io::Error>) {
+    // Read from stream into out buffer
+    let read_jh = tokio::spawn( async move {
+        let mx_buf = Arc::clone(out_buffer);
+        let mut buf = *mx_buf.lock().unwrap();
+        loop {
+            let mx_stream = Arc::clone(stream);
+            let stream = mx_stream.lock().unwrap();
+            match stream.readable().await {
+                Ok(_) => {}
+                Err(e) => {
+                    return Err(e)
+                }
+            }
+            match stream.try_read(&mut buf) {
+                Ok(n) => {
+                    return Ok(());
+                },
+                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    continue;
+                }
+                Err(e) => {
+                    return Err(e)
+                }
+            };
+        }
+    });
+    // Write TEST_MESSAGE to socket
+    let write_jh = tokio::spawn( async move {
+        loop {
+            let mx_stream = Arc::clone(stream);
+            let stream = mx_stream.lock().unwrap();
+            match stream.writable().await {
+                Ok(_) => {}
+                Err(e) => {
+                    return Err(e)
+                }
+            }
+            match stream.try_write(TEST_MESSAGE.as_bytes()) {
+                Ok(n) => {
+                    return Ok(());
+                }
+                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    continue;
+                }
+                Err(e) => {
+                    return Err(e)
+                }
+            }
+        }
+    });
+    let read_result = match read_jh.await {
+        Ok(r) => r,
+        Err(e) => Err(e),
+    };
+    let write_result = match write_jh.await {
+        Ok(r) => r,
+        Err(e) => Err(e),
+    };
+    (read_result, write_result)
+}
+
 pub async fn run_client(
     client_config: Config,
     server_port: u16,
-    server_ready: tokio::sync::oneshot::Receiver<()>,
-    err_chan: tokio::sync::mpsc::Sender<std::io::Error>,
-) {
+    out_buffer: Arc<Mutex<[u8; 8192]>>,
+    start_rx: tokio::sync::oneshot::Receiver<()>,
+) -> (Result<(), std::io::Error>, Result<(), std::io::Error>) {
     let mut sleep = sleep(Duration::from_secs(1));
     tokio::select! {
-        _ = server_ready => {}  // Do nothing
-        _ = &mut sleep => { err_chan.send(format!("server timeout after {:?}", sleep)); }
+        _ = start_rx => {}  // Do nothing
+        _ = &mut sleep => { return Err(std::io::Error::new(std::io::Error::Other, "timed out")) }
     }
-    match dtls::dial("udp", "127.0.0.1", server_port, client_config).await {
-        Ok(stream) => {
-            stream.try_write(TEST_MESSAGE.as_bytes());
-        }
-        Err(e) => { err_chan.send(e); return; }
+    let stream = match dtls::dial("udp", "127.0.0.1", server_port, client_config).await {
+        Ok(stream) => stream,
+        Err(e) => panic!(e),
+    };
+    match simple_read_write(stream, out_buffer).await {
+        Ok(v) => return v,
+        Err(e) => panic!(e),
     }
 }
 
 pub async fn run_server(
     server_config: Config,
-    out_chan: tokio::sync::mpsc::Sender<&str>,
     server_port: u16,
-    server_ready: tokio::sync::oneshot::Sender<()>,
-    err_chan: tokio::sync::mpsc::Sender<std::io::Error>,
+    out_buffer: Arc<Mutex<[u8; 8192]>>,
+    start_rx: tokio::sync::oneshot::Receiver<()>,
+    ready_tx: tokio::sync::oneshot::Sender<()>,
 ) {
     let listener = match dtls::listen("udp", "127.0.0.1", server_port, server_config).await {
         Ok(listener) => listener,
-        Err(e) => {
-            err_chan.send(e);
-            return;
-        }
+        Err(e) => panic!(e),
     };
-    server_ready.send(());
     let (stream, addr) = match listener.accept().await {
         Ok((stream, addr)) => (stream, addr),
-        Err(e) => {
-            err_chan.send(e);
-            return;
-        }
+        Err(e) => panic!(e),
     };
-    // TODO make sure addr is the expected client
-    let mut buf = vec![0_u8; 8192];
-    loop {
-        match stream.readable().await {
-            Ok(_) => {}
-            Err(e) => {
-                err_chan.send(e);
-                return;
-            }
-        }
-        match stream.try_read(&mut buf) {
-            Ok(n) => {
-                buf.truncate(n);
-                break;
-            },
-            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                continue;
-            }
-            Err(e) => {
-                err_chan.send(e);
-                return;
-            }
-        };
-    }
-    let s = match std::str::from_utf8(&buf) {
-        Ok(v) => v,
-        Err(e) => {
-            err_chan.send(
-                std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "failed to parse utf8"
-                )
-            );
-            return;
-        }
-    };
-    out_chan.send(s);
-    loop {
-        match stream.writable().await {
-            Ok(_) => { }
-            Err(e) => {
-                err_chan.send(e);
-                return;
-            }
-        }
-        match stream.try_write(TEST_MESSAGE.as_bytes()) {
-            Ok(n) => {
-                break;
-            }
-            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                continue;
-            }
-            Err(e) => {
-                err_chan.send(e);
-                break;
-            }
-        }
+    ready_tx.send(());
+    match simple_read_write(stream, out_buffer).await {
+        Ok(v) => return v,
+        Err(e) => panic!(e),
     }
 }
 
@@ -128,7 +137,7 @@ pub async fn run_server(
 fn create_psk() -> (PSK, PSKIdHint) { ((), ()) }
 
 fn check_comms(config: Config) {
-    println!("Checking client server comunnication:\n{:?}\n", config);
+    println!("Checking client server communication:\n{:?}\n", config);
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on( async move {
         let mut sleep = sleep(TEST_TIME_LIMIT);
@@ -136,27 +145,27 @@ fn check_comms(config: Config) {
         let mut client_seen = false;
         let mut server_seen = false;
         let conn = tokio::sync::RwLock::new(transport::Connection::new());
-        let (server_ready_tx, server_ready_rx) = tokio::sync::oneshot::channel();
-        let (client_chan_tx, client_chan_rx) = tokio::sync::mpsc::channel(1);
-        let (server_chan_tx, server_chan_rx) = tokio::sync::mpsc::channel(1);
-        let (err_chan_tx, err_chan_rx) = tokio::sync::mpsc::channel(1);
         let server_port = random_port().await;
+        let mut server_out_buffer = [0_u8; 8192];
+        let (server_start_tx, server_start_rx) = tokio::sync::oneshot::channel();
+        let (server_ready_tx, server_ready_rx) = tokio::sync::oneshot::channel();
+        let mut client_out_buffer = [0_u8; 8192];
+        let (client_start_tx, client_start_rx) = tokio::sync::oneshot::channel();
+        let (client_ready_tx, client_ready_rx) = tokio::sync::oneshot::channel();
         let client_jh = tokio::spawn(run_client(
             config,
             server_port,
+            &mut client_out_buffer,
             server_ready_rx,
-            err_chan_tx,
         ));
         let server_jh = tokio::spawn(run_server(
             config,
-            server_chan_tx,
             server_port,
+            &mut server_out_buffer,
+            server_start_rx,
             server_ready_tx,
-            err_chan_tx,
         ));
         tokio::pin!(sleep);
-        tokio::pin!(client_chan_rx);
-        tokio::pin!(server_chan_rx);
         loop {
             tokio::select! {
                 reason = err_chan_rx => {
