@@ -28,7 +28,7 @@ pub async fn random_port() -> u16 {
 pub async fn simple_read_write(
     stream: &'static Arc<Mutex<tokio::net::TcpStream>>,
     out_buffer: &'static Arc<Mutex<[u8; 8192]>>,
-) -> (Result<(), std::io::Error>, Result<(), std::io::Error>) {
+) -> Result< (Result<(), std::io::Error>, Result<(), std::io::Error>), std::io::Error > {
     // Read from stream into out buffer
     let read_jh = tokio::spawn( async move {
         let mx_buf = Arc::clone(out_buffer);
@@ -115,9 +115,8 @@ pub async fn run_server(
     server_config: Config,
     server_port: u16,
     out_buffer: Arc<Mutex<[u8; 8192]>>,
-    start_rx: tokio::sync::oneshot::Receiver<()>,
     ready_tx: tokio::sync::oneshot::Sender<()>,
-) {
+) -> (Result<(), std::io::Error>, Result<(), std::io::Error>) {
     let listener = match dtls::listen("udp", "127.0.0.1", server_port, server_config).await {
         Ok(listener) => listener,
         Err(e) => panic!(e),
@@ -147,11 +146,8 @@ fn check_comms(config: Config) {
         let conn = tokio::sync::RwLock::new(transport::Connection::new());
         let server_port = random_port().await;
         let mut server_out_buffer = [0_u8; 8192];
-        let (server_start_tx, server_start_rx) = tokio::sync::oneshot::channel();
-        let (server_ready_tx, server_ready_rx) = tokio::sync::oneshot::channel();
         let mut client_out_buffer = [0_u8; 8192];
-        let (client_start_tx, client_start_rx) = tokio::sync::oneshot::channel();
-        let (client_ready_tx, client_ready_rx) = tokio::sync::oneshot::channel();
+        let (server_ready_tx, server_ready_rx) = tokio::sync::oneshot::channel();
         let client_jh = tokio::spawn(run_client(
             config,
             server_port,
@@ -162,7 +158,6 @@ fn check_comms(config: Config) {
             config,
             server_port,
             &mut server_out_buffer,
-            server_start_rx,
             server_ready_tx,
         ));
         tokio::pin!(sleep);
