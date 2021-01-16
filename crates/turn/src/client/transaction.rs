@@ -13,10 +13,10 @@ const MAX_RTX_INTERVAL: Duration = Duration::from_millis(1600);
 // TransactionResult is a bag of result values of a transaction
 #[derive(Debug)]
 pub struct TransactionResult {
-    msg: Message,
-    from: SocketAddr,
-    retries: u16,
-    err: Option<Error>,
+    pub msg: Message,
+    pub from: SocketAddr,
+    pub retries: u16,
+    pub err: Option<Error>,
 }
 
 impl Default for TransactionResult {

@@ -53,12 +53,6 @@ fn test_channel_number_add_to() -> Result<(), Error> {
         num_decoded.get_from(&decoded)?;
         assert_eq!(num_decoded, n, "Decoded {}, expected {}", num_decoded, n);
 
-        /*TODO: if wasAllocs(func() {
-            var num ChannelNumber
-            num.GetFrom(decoded) //nolint
-        }) {
-            t.Error("Unexpected allocations")
-        }*/
         //"HandleErr"
         {
             let mut m = Message::new();

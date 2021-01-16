@@ -3,7 +3,8 @@ mod binding_test;
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::time::Instant;
+
+use tokio::time::Instant;
 
 //  Chanel number:
 //    0x4000 through 0x7FFF: These values are the allowed channel
@@ -12,7 +13,7 @@ const MIN_CHANNEL_NUMBER: u16 = 0x4000;
 const MAX_CHANNEL_NUMBER: u16 = 0x7fff;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-enum BindingState {
+pub(crate) enum BindingState {
     Idle,
     Request,
     Ready,
@@ -21,46 +22,42 @@ enum BindingState {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-struct Binding {
-    number: u16,      // read-only
-    st: BindingState, // thread-safe (atomic op)
-    addr: SocketAddr, // read-only
-    //TODO: mgr: BindingManager, // read-only
-    //muBind       :sync.Mutex      // thread-safe, for ChannelBind ops
-    refreshed_at: Instant, // protected by mutex
-                           //mutex        :sync.RWMutex    // thread-safe
+pub(crate) struct Binding {
+    pub(crate) number: u16,
+    pub(crate) st: BindingState,
+    pub(crate) addr: SocketAddr,
+    pub(crate) refreshed_at: Instant,
 }
 
 impl Binding {
-    fn set_tate(&mut self, state: BindingState) {
+    pub(crate) fn set_state(&mut self, state: BindingState) {
         //atomic.StoreInt32((*int32)(&b.st), int32(state))
         self.st = state;
     }
 
-    fn state(&self) -> BindingState {
+    pub(crate) fn state(&self) -> BindingState {
         //return BindingState(atomic.LoadInt32((*int32)(&b.st)))
         self.st
     }
 
-    fn set_refreshed_at(&mut self, at: Instant) {
+    pub(crate) fn set_refreshed_at(&mut self, at: Instant) {
         self.refreshed_at = at;
     }
 
-    fn refreshed_at(&self) -> Instant {
+    pub(crate) fn refreshed_at(&self) -> Instant {
         self.refreshed_at
     }
 }
 // Thread-safe Binding map
 #[derive(Default)]
-struct BindingManager {
-    chan_map: HashMap<u16, Binding>,
+pub(crate) struct BindingManager {
+    chan_map: HashMap<u16, String>,
     addr_map: HashMap<String, Binding>,
     next: u16,
-    //mutex   :sync.RWMutex,
 }
 
 impl BindingManager {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         BindingManager {
             chan_map: HashMap::new(),
             addr_map: HashMap::new(),
@@ -68,7 +65,7 @@ impl BindingManager {
         }
     }
 
-    fn assign_channel_number(&mut self) -> u16 {
+    pub(crate) fn assign_channel_number(&mut self) -> u16 {
         let n = self.next;
         if self.next == MAX_CHANNEL_NUMBER {
             self.next = MIN_CHANNEL_NUMBER;
@@ -78,29 +75,44 @@ impl BindingManager {
         n
     }
 
-    fn create(&mut self, addr: SocketAddr) -> Binding {
+    pub(crate) fn create(&mut self, addr: SocketAddr) -> Option<&Binding> {
         let b = Binding {
             number: self.assign_channel_number(),
             st: BindingState::Idle,
             addr,
-            //TODO: mgr:          mgr,
             refreshed_at: Instant::now(),
         };
 
-        self.chan_map.insert(b.number, b);
+        self.chan_map.insert(b.number, b.addr.to_string());
         self.addr_map.insert(b.addr.to_string(), b);
-        b
-    }
-
-    fn find_by_addr(&self, addr: SocketAddr) -> Option<&Binding> {
         self.addr_map.get(&addr.to_string())
     }
 
-    fn find_by_number(&self, number: u16) -> Option<&Binding> {
-        self.chan_map.get(&number)
+    pub(crate) fn find_by_addr(&self, addr: &SocketAddr) -> Option<&Binding> {
+        self.addr_map.get(&addr.to_string())
     }
 
-    fn delete_by_addr(&mut self, addr: SocketAddr) -> bool {
+    pub(crate) fn get_by_addr(&mut self, addr: &SocketAddr) -> Option<&mut Binding> {
+        self.addr_map.get_mut(&addr.to_string())
+    }
+
+    pub(crate) fn find_by_number(&self, number: u16) -> Option<&Binding> {
+        if let Some(s) = self.chan_map.get(&number) {
+            self.addr_map.get(s)
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn get_by_number(&mut self, number: u16) -> Option<&mut Binding> {
+        if let Some(s) = self.chan_map.get(&number) {
+            self.addr_map.get_mut(s)
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn delete_by_addr(&mut self, addr: &SocketAddr) -> bool {
         if let Some(b) = self.addr_map.remove(&addr.to_string()) {
             self.chan_map.remove(&b.number);
             true
@@ -109,16 +121,16 @@ impl BindingManager {
         }
     }
 
-    fn delete_by_number(&mut self, number: u16) -> bool {
-        if let Some(b) = self.chan_map.remove(&number) {
-            self.addr_map.remove(&b.addr.to_string());
+    pub(crate) fn delete_by_number(&mut self, number: u16) -> bool {
+        if let Some(s) = self.chan_map.remove(&number) {
+            self.addr_map.remove(&s);
             true
         } else {
             false
         }
     }
 
-    fn size(&self) -> usize {
-        self.chan_map.len()
+    pub(crate) fn size(&self) -> usize {
+        self.addr_map.len()
     }
 }

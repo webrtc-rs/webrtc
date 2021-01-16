@@ -65,5 +65,5 @@ lazy_static! {
     pub static ref ERR_FAILED_TO_BUILD_REFRESH_REQUEST: Error = Error::new("failed to build refresh request".to_owned());
     pub static ref ERR_FAILED_TO_REFRESH_ALLOCATION: Error = Error::new("failed to refresh allocation".to_owned());
     pub static ref ERR_FAILED_TO_GET_LIFETIME: Error = Error::new("failed to get lifetime from refresh response".to_owned());
-
+    pub static ref ERR_SHORT_BUFFER: Error = Error::new("too short buffer".to_owned());
 }

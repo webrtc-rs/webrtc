@@ -269,7 +269,7 @@ impl Client {
             return nil // silently discard
         }
 
-        addr, ok := relayedConn.FindAddrByChannelNumber(uint16(ch_data.Number))
+        addr, ok := relayedConn.find_addr_by_channel_number(uint16(ch_data.Number))
         if !ok {
             return fmt.Errorf("%w: %d", errChannelBindNotFound, int(ch_data.Number))
         }

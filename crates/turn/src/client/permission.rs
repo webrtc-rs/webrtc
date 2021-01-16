@@ -2,21 +2,28 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
-enum PermState {
+pub(crate) enum PermState {
     Idle,
     Permitted,
 }
 
-struct Permission {
+impl Default for PermState {
+    fn default() -> Self {
+        PermState::Idle
+    }
+}
+
+#[derive(Default, Copy, Clone)]
+pub(crate) struct Permission {
     st: PermState,
 }
 
 impl Permission {
-    fn set_state(&mut self, state: PermState) {
+    pub(crate) fn set_state(&mut self, state: PermState) {
         self.st = state;
     }
 
-    fn state(&self) -> PermState {
+    pub(crate) fn state(&self) -> PermState {
         self.st
     }
 }
@@ -28,25 +35,25 @@ pub(crate) struct PermissionMap {
 }
 
 impl PermissionMap {
-    fn new() -> PermissionMap {
+    pub(crate) fn new() -> PermissionMap {
         PermissionMap {
             perm_map: HashMap::new(),
         }
     }
 
-    fn insert(&mut self, addr: SocketAddr, p: Permission) {
+    pub(crate) fn insert(&mut self, addr: &SocketAddr, p: Permission) {
         self.perm_map.insert(addr.ip().to_string(), p);
     }
 
-    fn find(&self, addr: SocketAddr) -> Option<&Permission> {
+    pub(crate) fn find(&self, addr: &SocketAddr) -> Option<&Permission> {
         self.perm_map.get(&addr.ip().to_string())
     }
 
-    fn delete(&mut self, addr: SocketAddr) {
+    pub(crate) fn delete(&mut self, addr: &SocketAddr) {
         self.perm_map.remove(&addr.ip().to_string());
     }
 
-    fn addrs(&self) -> Vec<SocketAddr> {
+    pub(crate) fn addrs(&self) -> Vec<SocketAddr> {
         let mut a = vec![];
         for k in self.perm_map.keys() {
             if let Ok(ip) = k.parse() {

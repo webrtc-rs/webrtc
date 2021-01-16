@@ -31,8 +31,11 @@ fn test_binding_manager_method() -> Result<(), Error> {
     let mut m = BindingManager::new();
     for i in 0..count {
         let addr = SocketAddr::V4(SocketAddrV4::new(lo, 10000 + i));
-        let b0 = m.create(addr);
-        let b1 = m.find_by_addr(addr);
+        let b0 = {
+            let b = m.create(addr);
+            b.unwrap().clone()
+        };
+        let b1 = m.find_by_addr(&addr);
         assert!(b1.is_some(), "should succeed");
         let b2 = m.find_by_number(b0.number);
         assert!(b2.is_some(), "should succeed");
@@ -47,7 +50,7 @@ fn test_binding_manager_method() -> Result<(), Error> {
     for i in 0..count {
         let addr = SocketAddr::V4(SocketAddrV4::new(lo, 10000 + i));
         if i % 2 == 0 {
-            assert!(m.delete_by_addr(addr), "should return true");
+            assert!(m.delete_by_addr(&addr), "should return true");
         } else {
             assert!(
                 m.delete_by_number(MIN_CHANNEL_NUMBER + i),
@@ -67,11 +70,11 @@ fn test_binding_manager_failure() -> Result<(), Error> {
     let ipv4 = Ipv4Addr::new(127, 0, 0, 1);
     let addr = SocketAddr::V4(SocketAddrV4::new(ipv4, 7777));
     let mut m = BindingManager::new();
-    let b = m.find_by_addr(addr);
+    let b = m.find_by_addr(&addr);
     assert!(b.is_none(), "should fail");
     let b = m.find_by_number(5555);
     assert!(b.is_none(), "should fail");
-    let ok = m.delete_by_addr(addr);
+    let ok = m.delete_by_addr(&addr);
     assert!(!ok, "should fail");
     let ok = m.delete_by_number(5555);
     assert!(!ok, "should fail");

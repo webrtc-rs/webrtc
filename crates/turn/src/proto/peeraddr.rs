@@ -19,8 +19,8 @@ use std::net::{IpAddr, Ipv4Addr};
 // RFC 5766 Section 14.3
 #[derive(PartialEq, Eq, Debug)]
 pub struct PeerAddress {
-    ip: IpAddr,
-    port: u16,
+    pub ip: IpAddr,
+    pub port: u16,
 }
 
 impl Default for PeerAddress {
