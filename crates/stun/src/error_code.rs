@@ -11,6 +11,7 @@ use std::fmt;
 // ErrorCodeAttribute represents ERROR-CODE attribute.
 //
 // RFC 5389 Section 15.6
+#[derive(Default)]
 pub struct ErrorCodeAttribute {
     pub code: ErrorCode,
     pub reason: Vec<u8>,
@@ -34,9 +35,9 @@ const ERROR_CODE_REASON_START: usize = 4;
 const ERROR_CODE_REASON_MAX_B: usize = 763;
 const ERROR_CODE_MODULO: u16 = 100;
 
-impl ErrorCodeAttribute {
+impl Setter for ErrorCodeAttribute {
     // add_to adds ERROR-CODE to m.
-    pub fn add_to(&self, m: &mut Message) -> Result<(), Error> {
+    fn add_to(&self, m: &mut Message) -> Result<(), Error> {
         check_overflow(
             ATTR_ERROR_CODE,
             self.reason.len() + ERROR_CODE_REASON_START,
@@ -56,9 +57,11 @@ impl ErrorCodeAttribute {
 
         Ok(())
     }
+}
 
+impl Getter for ErrorCodeAttribute {
     // GetFrom decodes ERROR-CODE from m. Reason is valid until m.Raw is valid.
-    pub fn get_from(&mut self, m: &Message) -> Result<(), Error> {
+    fn get_from(&mut self, m: &Message) -> Result<(), Error> {
         let v = m.get(ATTR_ERROR_CODE)?;
 
         if v.len() < ERROR_CODE_REASON_START {
@@ -76,13 +79,13 @@ impl ErrorCodeAttribute {
 }
 
 // ErrorCode is code for ERROR-CODE attribute.
-#[derive(PartialEq, Eq, Hash, Copy, Clone)]
+#[derive(PartialEq, Eq, Hash, Copy, Clone, Default)]
 pub struct ErrorCode(u16);
 
-impl ErrorCode {
+impl Setter for ErrorCode {
     // add_to adds ERROR-CODE with default reason to m. If there
     // is no default reason, returns ErrNoDefaultReason.
-    pub fn add_to(&self, m: &mut Message) -> Result<(), Error> {
+    fn add_to(&self, m: &mut Message) -> Result<(), Error> {
         if let Some(reason) = ERROR_REASONS.get(self) {
             let a = ErrorCodeAttribute {
                 code: *self,

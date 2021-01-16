@@ -100,6 +100,17 @@ impl PartialEq for Message {
 
 const DEFAULT_RAW_CAPACITY: usize = 120;
 
+impl Setter for Message {
+    // add_to sets b.TransactionID to m.TransactionID.
+    //
+    // Implements Setter to aid in crafting responses.
+    fn add_to(&self, b: &mut Message) -> Result<(), Error> {
+        b.transaction_id = self.transaction_id;
+        b.write_transaction_id();
+        Ok(())
+    }
+}
+
 impl Message {
     // New returns *Message with pre-allocated Raw.
     pub fn new() -> Self {
@@ -126,15 +137,6 @@ impl Message {
         self.raw.clear();
         self.raw.extend_from_slice(data);
         self.decode()
-    }
-
-    // add_to sets b.TransactionID to m.TransactionID.
-    //
-    // Implements Setter to aid in crafting responses.
-    pub fn add_to(&self, b: &mut Message) -> Result<(), Error> {
-        b.transaction_id = self.transaction_id;
-        b.write_transaction_id();
-        Ok(())
     }
 
     // NewTransactionID sets m.TransactionID to random value from crypto/rand

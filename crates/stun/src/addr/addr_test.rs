@@ -6,7 +6,7 @@ use util::Error;
 #[test]
 fn test_mapped_address() -> Result<(), Error> {
     let mut m = Message::new();
-    let mut addr = MappedAddress {
+    let addr = MappedAddress {
         ip: "122.12.34.5".parse().unwrap(),
         port: 5412,
     };
@@ -69,7 +69,7 @@ fn test_mapped_address() -> Result<(), Error> {
 #[test]
 fn test_mapped_address_v6() -> Result<(), Error> {
     let mut m = Message::new();
-    let mut addr = MappedAddress {
+    let addr = MappedAddress {
         ip: "::".parse().unwrap(),
         port: 5412,
     };
@@ -108,7 +108,7 @@ fn test_mapped_address_v6() -> Result<(), Error> {
 #[test]
 fn test_alternate_server() -> Result<(), Error> {
     let mut m = Message::new();
-    let mut addr = MappedAddress {
+    let addr = MappedAddress {
         ip: "122.12.34.5".parse().unwrap(),
         port: 5412,
     };
@@ -148,7 +148,7 @@ fn test_alternate_server() -> Result<(), Error> {
 #[test]
 fn test_other_address() -> Result<(), Error> {
     let mut m = Message::new();
-    let mut addr = OtherAddress {
+    let addr = OtherAddress {
         ip: "122.12.34.5".parse().unwrap(),
         port: 5412,
     };

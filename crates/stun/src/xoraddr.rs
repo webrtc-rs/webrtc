@@ -105,6 +105,33 @@ impl Setter for XORMappedAddress {
     }
 }
 
+impl Getter for XORMappedAddress {
+    // GetFrom decodes XOR-MAPPED-ADDRESS attribute in message and returns
+    // error if any. While decoding, a.IP is reused if possible and can be
+    // rendered to invalid state (e.g. if a.IP was set to IPv6 and then
+    // IPv4 value were decoded into it), be careful.
+    //
+    // Example:
+    //
+    //  expectedIP := net.ParseIP("213.141.156.236")
+    //  expectedIP.String() // 213.141.156.236, 16 bytes, first 12 of them are zeroes
+    //  expectedPort := 21254
+    //  addr := &XORMappedAddress{
+    //    IP:   expectedIP,
+    //    Port: expectedPort,
+    //  }
+    //  // addr were added to message that is decoded as newMessage
+    //  // ...
+    //
+    //  addr.GetFrom(newMessage)
+    //  addr.IP.String()    // 213.141.156.236, net.IPv4Len
+    //  expectedIP.String() // d58d:9cec::ffff:d58d:9cec, 16 bytes, first 4 are IPv4
+    //  // now we have len(expectedIP) = 16 and len(addr.IP) = 4.
+    fn get_from(&mut self, m: &Message) -> Result<(), Error> {
+        self.get_from_as(m, ATTR_XORMAPPED_ADDRESS)
+    }
+}
+
 impl XORMappedAddress {
     // AddToAs adds XOR-MAPPED-ADDRESS value to m as t attribute.
     pub fn add_to_as(&self, m: &mut Message, t: AttrType) -> Result<(), Error> {
@@ -163,30 +190,5 @@ impl XORMappedAddress {
         };
 
         Ok(())
-    }
-
-    // GetFrom decodes XOR-MAPPED-ADDRESS attribute in message and returns
-    // error if any. While decoding, a.IP is reused if possible and can be
-    // rendered to invalid state (e.g. if a.IP was set to IPv6 and then
-    // IPv4 value were decoded into it), be careful.
-    //
-    // Example:
-    //
-    //  expectedIP := net.ParseIP("213.141.156.236")
-    //  expectedIP.String() // 213.141.156.236, 16 bytes, first 12 of them are zeroes
-    //  expectedPort := 21254
-    //  addr := &XORMappedAddress{
-    //    IP:   expectedIP,
-    //    Port: expectedPort,
-    //  }
-    //  // addr were added to message that is decoded as newMessage
-    //  // ...
-    //
-    //  addr.GetFrom(newMessage)
-    //  addr.IP.String()    // 213.141.156.236, net.IPv4Len
-    //  expectedIP.String() // d58d:9cec::ffff:d58d:9cec, 16 bytes, first 4 are IPv4
-    //  // now we have len(expectedIP) = 16 and len(addr.IP) = 4.
-    pub fn get_from(&mut self, m: &Message) -> Result<(), Error> {
-        self.get_from_as(m, ATTR_XORMAPPED_ADDRESS)
     }
 }

@@ -31,9 +31,9 @@ impl fmt::Display for UnknownAttributes {
 // type size is 16 bit.
 const ATTR_TYPE_SIZE: usize = 2;
 
-impl UnknownAttributes {
+impl Setter for UnknownAttributes {
     // add_to adds UNKNOWN-ATTRIBUTES attribute to message.
-    pub fn add_to(&self, m: &mut Message) -> Result<(), Error> {
+    fn add_to(&self, m: &mut Message) -> Result<(), Error> {
         let mut v = Vec::with_capacity(ATTR_TYPE_SIZE * 20); // 20 should be enough
                                                              // If len(a.Types) > 20, there will be allocations.
         for t in &self.0 {
@@ -42,9 +42,11 @@ impl UnknownAttributes {
         m.add(ATTR_UNKNOWN_ATTRIBUTES, &v);
         Ok(())
     }
+}
 
+impl Getter for UnknownAttributes {
     // GetFrom parses UNKNOWN-ATTRIBUTES from message.
-    pub fn get_from(&mut self, m: &Message) -> Result<(), Error> {
+    fn get_from(&mut self, m: &Message) -> Result<(), Error> {
         let v = m.get(ATTR_UNKNOWN_ATTRIBUTES)?;
         if v.len() % ATTR_TYPE_SIZE != 0 {
             return Err(ERR_BAD_UNKNOWN_ATTRS_SIZE.clone());
