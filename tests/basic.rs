@@ -5,7 +5,8 @@ use mocks::dtls::{self, Config};
 use mocks::transport;
 use tokio;
 use tokio::time::{sleep, Duration};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 const TEST_MESSAGE: &str = "Hello world";
 const TEST_TIME_LIMIT: Duration = Duration::from_secs(5);
@@ -34,11 +35,12 @@ pub async fn simple_read_write<'a>(
 {
     let ref arc_mx_stream = Arc::new(Mutex::new(stream));
     let read = Arc::clone(arc_mx_stream);
+    let write = Arc::clone(arc_mx_stream);
     // Read from stream into out buffer
-    *reader_join_handle = tokio::spawn( async {
-        let buf = *out_buffer.lock().unwrap();
+    *reader_join_handle = tokio::spawn( async move {
+        let mut buf = *out_buffer.lock().await;
         loop {
-            let s = read.lock().unwrap();
+            let s = read.lock().await;
             match s.readable().await {
                 Ok(_) => {}
                 Err(e) => {
@@ -59,10 +61,9 @@ pub async fn simple_read_write<'a>(
         }
     });
     // Write TEST_MESSAGE to socket
-    let write = Arc::clone(arc_mx_stream);
-    *writer_join_handle = tokio::spawn( async {
+    *writer_join_handle = tokio::spawn( async move {
         loop {
-            let s = *write.lock().unwrap();
+            let s = write.lock().await;
             match s.writable().await {
                 Ok(_) => {}
                 Err(e) => {
@@ -186,7 +187,7 @@ fn check_comms(config: Config) {
                     match result {
                         Ok(_) => {
                             client_reader_seen = true;
-                            let buf = *client_out_buffer.lock().unwrap();
+                            let buf = *client_out_buffer.lock().await;
                             let msg = std::str::from_utf8(&buf).unwrap();
                             assert!(msg == TEST_MESSAGE);
                         }
@@ -203,7 +204,7 @@ fn check_comms(config: Config) {
                     match result {
                         Ok(_) => {
                             server_reader_seen = true;
-                            let buf = *server_out_buffer.lock().unwrap();
+                            let buf = *server_out_buffer.lock().await;
                             let msg = std::str::from_utf8(&buf).unwrap();
                             assert!(msg == TEST_MESSAGE);
                         }
