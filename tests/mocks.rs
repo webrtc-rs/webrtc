@@ -266,19 +266,19 @@ pub mod dtls {
     }
 
     pub async fn listen(
-        proto: &str,
-        addr: &str,
-        port: u16,
-        config: Config,
+        _proto: &str,
+        _addr: &str,
+        _port: u16,
+        _config: Config,
     ) -> Result<tokio::net::TcpListener, std::io::Error> {
         tokio::net::TcpListener::bind("127.0.0.1:0").await
     }
 
     pub async fn dial(
-        proto: &str,
-        addr: &str,
-        port: u16,
-        config: Config,
+        _proto: &str,
+        _addr: &str,
+        _port: u16,
+        _config: Config,
     ) -> Result<tokio::net::TcpStream, std::io::Error> {
         tokio::net::TcpStream::connect("127.0.1.1:0").await
     }

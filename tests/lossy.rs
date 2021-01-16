@@ -7,11 +7,6 @@ use std::time::Duration;
 use rand::prelude::*;
 use std::sync::{Arc, Mutex};
 
-struct RunResult {
-    dtls_conn: transport::Connection,
-    error: Option<()>,
-}
-
 #[derive(Copy)]
 #[derive(Clone)]
 struct TestCase {
@@ -153,7 +148,7 @@ pub fn e2e_lossy() {
             loop {
                 let iter_timeout = tokio::time::sleep(Duration::from_secs(10));
                 match (*server_conn, *client_conn) {
-                    (Some(srv_conn), Some(cli_conn)) => {
+                    (Some(_srv_conn), Some(_cli_conn)) => {
                         // TODO check for expected props
                         break;
                     }
@@ -205,7 +200,6 @@ pub fn e2e_lossy() {
                         }
                     }
                 }
-                
             }
         });
     }
