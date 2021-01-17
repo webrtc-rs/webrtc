@@ -73,10 +73,7 @@ async fn random_port() -> u16 {
     local_addr.port()
 }
 
-async fn read_from(
-    stream: Arc<Mutex<TcpStream>>,
-) -> Result<String, Error>
-{
+async fn read_from(stream: Arc<Mutex<TcpStream>>) -> Result<String, Error> {
     loop {
         let s = stream.lock().await;
         match s.readable().await {
@@ -103,10 +100,7 @@ async fn read_from(
     }
 }
 
-async fn write_to(
-    stream: Arc<Mutex<TcpStream>>,
-) -> Result<(), Error>
-{
+async fn write_to(stream: Arc<Mutex<TcpStream>>) -> Result<(), Error> {
     println!("writing to stream...");
     loop {
         let s = stream.lock().await;
@@ -134,10 +128,7 @@ async fn write_to(
 
 /// Read and write to the stream
 /// Returns the UTF8 String received from stream
-async fn simple_read_write(
-    stream: TcpStream,
-) -> Result<String, std::io::Error>
-{
+async fn simple_read_write(stream: TcpStream) -> Result<String, std::io::Error> {
     let ref stream = Arc::new(Mutex::new(stream));
     let reader_join_handle = tokio::spawn(read_from(Arc::clone(stream)));
     let writer_join_handle = tokio::spawn(write_to(Arc::clone(stream)));
@@ -219,16 +210,18 @@ fn check_comms(config: Config) {
         tokio::pin!(sleep);
         tokio::pin!(client);
         tokio::pin!(server);
-        loop {
+        while !(server_complete && client_complete) {
             tokio::select! {
-                _ = &mut sleep => { panic!("Test timed out after {:?}", timeout) }
+                _ = &mut sleep => {
+                    panic!("Test timed out after {:?}", timeout)
+                }
                 join_result = &mut client => {
                     match join_result {
                         Ok(msg) => match msg {
                             Ok(s) => {
                                 client_complete = true;
-                                println!("     got: {}", s);
-                                println!("expected: {}", TEST_MESSAGE);
+                                println!("client got: {}", s);
+                                println!("  expected: {}", TEST_MESSAGE);
                                 assert!(s == TEST_MESSAGE);
                             }
                             Err(e) => assert!(false, "client failed: {}", e)
@@ -241,8 +234,8 @@ fn check_comms(config: Config) {
                         Ok(msg) => match msg {
                             Ok(s) => {
                                 server_complete = true;
-                                println!("     got: {}", s);
-                                println!("expected: {}", TEST_MESSAGE);
+                                println!("server got: {}", s);
+                                println!("  expected: {}", TEST_MESSAGE);
                                 assert!(s == TEST_MESSAGE);
                             }
                             Err(e) => assert!(false, "server failed: {}", e)
@@ -250,9 +243,6 @@ fn check_comms(config: Config) {
                         Err(e) => assert!(false, "failed to join with server: {}", e)
                     }
                 }
-            }
-            if server_complete && client_complete {
-                break
             }
         }
     });
