@@ -12,6 +12,9 @@
  <a href="https://deps.rs/repo/github/webrtc-rs/sdp"> 
   <img src="https://deps.rs/repo/github/webrtc-rs/sdp/status.svg">
  </a>
+ <a href="https://discord.gg/4Ju8UHdXMs">
+  <img src="https://img.shields.io/discord/800204819540869120?logo=discord" alt="Discord">
+ </a>
  <a href="https://github.com/webrtc-rs/sdp/blob/master/LICENSE">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
  </a>
