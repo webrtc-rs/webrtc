@@ -452,7 +452,7 @@ func (c *Client) PerformTransaction(msg *stun.Message, to net.Addr, ignoreResult
         return client.TransactionResult{}, err
     }
 
-    tr.StartRtxTimer(c.onRtxTimeout)
+    tr.StartRtxTimer(c.on_rtx_timeout)
 
     // If dontWait is true, get the transaction going and return immediately
     if ignoreResult {
@@ -473,7 +473,7 @@ func (c *Client) OnDeallocated(relayedAddr net.Addr) {
 }
 
 
-func (c *Client) onRtxTimeout(trKey string, nRtx int) {
+func (c *Client) on_rtx_timeout(trKey string, nRtx int) {
     c.mutexTrMap.Lock()
     defer c.mutexTrMap.Unlock()
 
@@ -505,7 +505,7 @@ func (c *Client) onRtxTimeout(trKey string, nRtx int) {
         }
         return
     }
-    tr.StartRtxTimer(c.onRtxTimeout)
+    tr.StartRtxTimer(c.on_rtx_timeout)
 }
 
 func (c *Client) setRelayedUDPConn(conn *client.UDPConn) {

@@ -2,13 +2,13 @@ use super::*;
 
 use util::Error;
 
-fn timeout_handler(id: usize) {
-    assert_eq!(id, 3);
+fn timeout_handler(id: TimerIdRefresh) {
+    assert_eq!(id, TimerIdRefresh::Perms);
 }
 
 #[tokio::test]
 async fn test_periodic_timer() -> Result<(), Error> {
-    let timer_id = 3;
+    let timer_id = TimerIdRefresh::Perms;
     let mut rt = PeriodicTimer::new(timer_id, Some(timeout_handler), Duration::from_millis(50));
 
     assert!(!rt.is_running(), "should not be running yet");

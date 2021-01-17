@@ -26,11 +26,6 @@ const MAX_READ_QUEUE_SIZE: usize = 1024;
 const PERM_REFRESH_INTERVAL: Duration = Duration::from_secs(120);
 const MAX_RETRY_ATTEMPTS: u16 = 3;
 
-enum TimerIdRefresh {
-    Alloc = 0,
-    Perms = 1,
-}
-
 struct InboundData {
     data: Vec<u8>,
     from: SocketAddr,
@@ -84,6 +79,8 @@ impl UDPConn {
         let (read_ch_tx, read_ch_rx) = mpsc::channel(MAX_READ_QUEUE_SIZE);
         let (close_ch_tx, close_ch_rx) = mpsc::channel(1);
 
+        log::debug!("initial lifetime: {} seconds", config.lifetime.as_secs());
+
         let mut c = UDPConn {
             obs: config.observer,
             relayed_addr: config.relayed_addr,
@@ -97,18 +94,16 @@ impl UDPConn {
             close_ch_tx: Some(close_ch_tx),
             close_ch_rx,
             refresh_alloc_timer: PeriodicTimer::new(
-                TimerIdRefresh::Alloc as usize,
+                TimerIdRefresh::Alloc,
                 None, //TODO
                 config.lifetime / 2,
             ),
             refresh_perms_timer: PeriodicTimer::new(
-                TimerIdRefresh::Perms as usize,
+                TimerIdRefresh::Perms,
                 None, //TODO
                 PERM_REFRESH_INTERVAL,
             ),
         };
-
-        log::debug!("initial lifetime: {} seconds", c.lifetime.as_secs());
 
         if c.refresh_alloc_timer.start() {
             log::debug!("refresh_alloc_timer started");
@@ -180,14 +175,17 @@ impl UDPConn {
             Ok(())
         };
 
+        let mut result = Ok(());
         for _ in 0..MAX_RETRY_ATTEMPTS {
-            if let Err(err) = create_permission() {
-                if err == *ERR_TRY_AGAIN {
+            result = create_permission();
+            if let Err(err) = &result {
+                if *err == *ERR_TRY_AGAIN {
                     break;
-                } else {
-                    return Err(err);
                 }
             }
+        }
+        if let Err(err) = result {
+            return Err(err);
         }
 
         // bind channel
@@ -483,42 +481,44 @@ impl UDPConn {
         // Success.
         Ok(())
     }
-}
 
-/*
-
-func (c *UDPConn) onRefreshTimers(id int) {
-    c.log.Debugf("refresh timer %d expired", id)
-    switch id {
-    case timerIDRefreshAlloc:
-        var err error
-        lifetime := c.lifetime()
-        // limit the max retries on errTryAgain to 3
-        // when stale nonce returns, sencond retry should succeed
-        for i := 0; i < MAX_RETRY_ATTEMPTS; i++ {
-            err = c.refresh_allocation(lifetime, false)
-            if !errors.Is(err, errTryAgain) {
-                break
+    fn on_refresh_timers(&mut self, id: TimerIdRefresh) {
+        log::debug!("refresh timer {:?} expired", id);
+        match id {
+            TimerIdRefresh::Alloc => {
+                let lifetime = self.lifetime;
+                // limit the max retries on errTryAgain to 3
+                // when stale nonce returns, sencond retry should succeed
+                let mut result = Ok(());
+                for _ in 0..MAX_RETRY_ATTEMPTS {
+                    result = self.refresh_allocation(lifetime, false);
+                    if let Err(err) = &result {
+                        if *err == *ERR_TRY_AGAIN {
+                            break;
+                        }
+                    }
+                }
+                if result.is_err() {
+                    log::warn!("refresh allocation failed");
+                }
             }
-        }
-        if err != nil {
-            c.log.Warnf("refresh allocation failed")
-        }
-    case timerIDRefreshPerms:
-        var err error
-        for i := 0; i < MAX_RETRY_ATTEMPTS; i++ {
-            err = c.refresh_permissions()
-            if !errors.Is(err, errTryAgain) {
-                break
+            TimerIdRefresh::Perms => {
+                let mut result = Ok(());
+                for _ in 0..MAX_RETRY_ATTEMPTS {
+                    result = self.refresh_permissions();
+                    if let Err(err) = &result {
+                        if *err == *ERR_TRY_AGAIN {
+                            break;
+                        }
+                    }
+                }
+                if result.is_err() {
+                    log::warn!("refresh permissions failed");
+                }
             }
-        }
-        if err != nil {
-            c.log.Warnf("refresh permissions failed")
         }
     }
 }
-
-*/
 
 fn socket_addr2peer_address(addr: &SocketAddr) -> proto::peeraddr::PeerAddress {
     proto::peeraddr::PeerAddress {

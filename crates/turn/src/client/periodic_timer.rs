@@ -4,23 +4,34 @@ mod periodic_timer_test;
 use tokio::sync::mpsc;
 use tokio::time::Duration;
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum TimerIdRefresh {
+    Alloc,
+    Perms,
+}
+
+impl Default for TimerIdRefresh {
+    fn default() -> Self {
+        TimerIdRefresh::Alloc
+    }
+}
+
 // PeriodicTimerTimeoutHandler is a handler called on timeout
-pub type PeriodicTimerTimeoutHandler = fn(usize);
+pub type PeriodicTimerTimeoutHandler = fn(TimerIdRefresh);
 
 // PeriodicTimer is a periodic timer
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct PeriodicTimer {
-    id: usize,
+    id: TimerIdRefresh,
     interval: Duration,
     timeout_handler: Option<PeriodicTimerTimeoutHandler>,
     close_tx: Option<mpsc::Sender<()>>,
-    //mutex          :sync.RWMutex
 }
 
 impl PeriodicTimer {
     // create a new timer
     pub fn new(
-        id: usize,
+        id: TimerIdRefresh,
         timeout_handler: Option<PeriodicTimerTimeoutHandler>,
         interval: Duration,
     ) -> Self {
