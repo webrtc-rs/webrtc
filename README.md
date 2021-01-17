@@ -21,6 +21,9 @@
  <a href="https://github.com/webrtc-rs/webrtc/blob/master/LICENSE">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
  </a>
+ <a href="https://discord.gg/4Ju8UHdXMs">
+  <img src="https://img.shields.io/discord/800204819540869120?logo=discord" alt="Discord">
+ </a>
  <a href="https://seladb.github.io/StarTrack-js/#/preload?r=webrtc-rs,webrtc">
   <img src="https://img.shields.io/github/stars/webrtc-rs/webrtc.svg?style=social&label=Star" alt="Github Stars">
  </a>
