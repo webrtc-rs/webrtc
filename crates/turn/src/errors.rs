@@ -61,7 +61,7 @@ lazy_static! {
     pub static ref ERR_ALREADY_CLOSED: Error = Error::new("already closed".to_owned());
     pub static ref ERR_DOUBLE_LOCK: Error = Error::new("try-lock is already locked".to_owned());
     pub static ref ERR_TRANSACTION_CLOSED: Error = Error::new("transaction closed".to_owned());
-    pub static ref ERR_WAIT_FOR_RESULT_ON_NON_RESULT_TRANSACTION: Error = Error::new("WaitForResult called on non-result transaction".to_owned());
+    pub static ref ERR_WAIT_FOR_RESULT_ON_NON_RESULT_TRANSACTION: Error = Error::new("wait_for_result called on non-result transaction".to_owned());
     pub static ref ERR_FAILED_TO_BUILD_REFRESH_REQUEST: Error = Error::new("failed to build refresh request".to_owned());
     pub static ref ERR_FAILED_TO_REFRESH_ALLOCATION: Error = Error::new("failed to refresh allocation".to_owned());
     pub static ref ERR_FAILED_TO_GET_LIFETIME: Error = Error::new("failed to get lifetime from refresh response".to_owned());

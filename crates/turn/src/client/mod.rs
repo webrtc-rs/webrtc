@@ -5,7 +5,7 @@ pub mod permission;
 pub mod transaction;
 
 //use binding::*;
-//use conn::*;
+use conn::*;
 //use periodic_timer::*;
 //use permission::*;
 use crate::errors::*;
@@ -13,19 +13,23 @@ use crate::proto::chandata::*;
 use crate::proto::peeraddr::*;
 use transaction::*;
 
+use stun::agent::*;
 use stun::attributes::*;
 use stun::integrity::*;
 use stun::message::*;
 use stun::textattrs::*;
+use stun::xoraddr::*;
 
 use std::sync::Arc;
 
-use tokio::net::{ToSocketAddrs, UdpSocket};
+use tokio::net::UdpSocket;
 use tokio::time::Duration;
 
 use std::net::SocketAddr;
 use tokio::sync::Mutex;
 use util::Error;
+
+use async_trait::async_trait;
 
 const DEFAULT_RTO: Duration = Duration::from_millis(200);
 const MAX_RTX_COUNT: u16 = 7; // total 7 requests (Rc)
@@ -43,8 +47,8 @@ const MAX_DATA_BUFFER_SIZE: usize = u16::MAX as usize; // message size limit for
 
 // ClientConfig is a bag of config parameters for Client.
 pub struct ClientConfig {
-    stun_serv_addr: String, // STUN server address (e.g. "stun.abc.com:3478")
-    turn_serv_addr: String, // TURN server addrees (e.g. "turn.abc.com:3478")
+    stun_serv_addr: Option<SocketAddr>, // STUN server address (e.g. "stun.abc.com:3478")
+    turn_serv_addr: SocketAddr,         // TURN server addrees (e.g. "turn.abc.com:3478")
     username: String,
     password: String,
     realm: String,
@@ -55,19 +59,82 @@ pub struct ClientConfig {
 
 // Client is a STUN server client
 pub struct Client {
-    conn: Arc<UdpSocket>,        // read-only
-    stun_serv_addr: String,      // read-only, used for dmuxing
-    turn_serv_addr: String,      // read-only, used for dmuxing
-    username: Username,          // read-only
-    password: String,            // read-only
-    realm: Realm,                // read-only
-    integrity: MessageIntegrity, // read-only
-    software: Software,          // read-only
-    tr_map: TransactionMap,      // thread-safe
-    rto: Duration,               // read-only
-                                 //relayedConn   *client.UDPConn        // protected by mutex ***
-                                 //allocTryLock  client.TryLock         // thread-safe
-                                 //listenTryLock client.TryLock         // thread-safe
+    conn: Arc<UdpSocket>,
+    stun_serv_addr: Option<SocketAddr>,
+    turn_serv_addr: SocketAddr,
+    username: Username,
+    password: String,
+    realm: Realm,
+    integrity: MessageIntegrity,
+    software: Software,
+    tr_map: TransactionMap,
+    rto: Duration,
+    //relayedConn   *client.UDPConn
+    //allocTryLock  client.TryLock
+    //listenTryLock client.TryLock
+}
+
+#[async_trait]
+impl UDPConnObserver for Client {
+    // turn_server_addr return the TURN server address
+    fn turn_server_addr(&self) -> SocketAddr {
+        self.turn_serv_addr
+    }
+
+    // username returns username
+    fn username(&self) -> Username {
+        self.username.clone()
+    }
+
+    // realm return realm
+    fn realm(&self) -> Realm {
+        self.realm.clone()
+    }
+
+    // WriteTo sends data to the specified destination using the base socket.
+    async fn write_to(&self, data: &[u8], to: SocketAddr) -> Result<usize, Error> {
+        let n = self.conn.send_to(data, to).await?;
+        Ok(n)
+    }
+
+    // PerformTransaction performs STUN transaction
+    async fn perform_transaction(
+        &mut self,
+        msg: &Message,
+        to: SocketAddr,
+        ignore_result: bool,
+    ) -> Result<TransactionResult, Error> {
+        let tr_key = base64::encode(&msg.transaction_id.0);
+
+        let tr = Transaction::new(TransactionConfig {
+            key: tr_key.clone(),
+            raw: msg.raw.clone(),
+            to,
+            interval: self.rto,
+            ignore_result,
+        });
+
+        log::trace!("start {} transaction {} to {}", msg.typ, tr_key, tr.to);
+        self.tr_map.insert(tr_key, tr);
+
+        self.conn.send_to(&msg.raw, to).await?;
+
+        //TODO: tr.start_rtx_timer(c.on_rtx_timeout)
+
+        // If dontWait is true, get the transaction going and return immediately
+        if ignore_result {
+            return Ok(TransactionResult::default());
+        }
+
+        //TODO: tr.wait_for_result().await
+        Ok(TransactionResult::default())
+    }
+
+    // OnDeallocated is called when deallocation of relay address has been complete.
+    // (Called by UDPConn)
+    async fn on_deallocated(&self, _relayed_ddr: SocketAddr) {
+        //TODO: c.setRelayedUDPConn(nil)
+    }
 }
 
 impl Client {
@@ -91,36 +158,19 @@ impl Client {
         }
     }
 
-    // turn_server_addr return the TURN server address
-    pub fn turn_server_addr(&self) -> String {
-        self.turn_serv_addr.clone()
-    }
-
     // stun_server_addr return the STUN server address
-    pub fn stun_server_addr(&self) -> String {
-        self.stun_serv_addr.clone()
-    }
-
-    // username returns username
-    pub fn username(&self) -> Username {
-        self.username.clone()
-    }
-
-    // realm return realm
-    pub fn realm(&self) -> Realm {
-        self.realm.clone()
-    }
-
-    // WriteTo sends data to the specified destination using the base socket.
-    pub async fn write_to<A: ToSocketAddrs>(&self, data: &[u8], to: A) -> Result<usize, Error> {
-        let n = self.conn.send_to(data, to).await?;
-        Ok(n)
+    pub fn stun_server_addr(&self) -> Option<SocketAddr> {
+        self.stun_serv_addr
     }
 
     // Listen will have this client start listening on the conn provided via the config.
     // This is optional. If not used, you will need to call handle_inbound method
     // to supply incoming data, instead.
-    pub async fn listen(conn: Arc<UdpSocket>) -> Result<(), Error> {
+    pub async fn listen(
+        conn: Arc<UdpSocket>,
+        stun_serv_str: Option<SocketAddr>,
+        tr_map: Arc<Mutex<TransactionMap>>,
+    ) -> Result<(), Error> {
         tokio::spawn(async move {
             let mut buf = vec![0u8; MAX_DATA_BUFFER_SIZE];
             loop {
@@ -132,7 +182,9 @@ impl Client {
                     }
                 };
 
-                if let Err(err) = Client::handle_inbound(&buf[..n], from) {
+                if let Err(err) =
+                    Client::handle_inbound(&buf[..n], from, stun_serv_str, &tr_map).await
+                {
                     log::debug!("exiting read loop: {}", err);
                     break;
                 }
@@ -149,7 +201,12 @@ impl Client {
     // Caller should check if the packet was handled by this client or not.
     // If not handled, it is assumed that the packet is application data.
     // If an error is returned, the caller should discard the packet regardless.
-    pub fn handle_inbound(_data: &[u8], _from: SocketAddr) -> Result<bool, Error> {
+    async fn handle_inbound(
+        data: &[u8],
+        from: SocketAddr,
+        stun_serv_str: Option<SocketAddr>,
+        tr_map: &Arc<Mutex<TransactionMap>>,
+    ) -> Result<(), Error> {
         // +-------------------+-------------------------------+
         // |   Return Values   |                               |
         // +-------------------+       Meaning / Action        |
@@ -168,20 +225,19 @@ impl Client {
         //  - STUN message was a request
         //  - Non-STUN message from the STUN server
 
-        /*switch {
-        case stun.IsMessage(data):
-            return true, c.handle_stunmessage(data, from)
-        case proto.IsChannelData(data):
-            return true, c.handle_channel_data(data)
-        case len(c.stunServStr) != 0 && from.String() == c.stunServStr:
+        if is_message(data) {
+            Client::handle_stun_message(tr_map, data, from).await
+        } else if ChannelData::is_channel_data(data) {
+            Client::handle_channel_data(data).await
+        } else if stun_serv_str.is_some() && Some(from) == stun_serv_str {
+            //TODO: len(c.stun_serv_str) != 0 && ?
             // received from STUN server but it is not a STUN message
-            return true, errNonSTUNMessage
-        default:
+            Err(ERR_NON_STUNMESSAGE.to_owned())
+        } else {
             // assume, this is an application data
-            c.log.Tracef("non-STUN/TURN packect, unhandled")
-        }*/
-
-        Ok(false)
+            log::trace!("non-STUN/TURN packect, unhandled");
+            Ok(())
+        }
     }
 
     async fn handle_stun_message(
@@ -238,7 +294,7 @@ impl Client {
         let mut tm = tr_map.lock().await;
         if let Some(_tr) = tm.find(&tr_key) {
             // End the transaction
-            //TODO: tr.StopRtxTimer()
+            //TODO: tr.stop_rtx_timer()
             tm.delete(&tr_key);
 
         /*TODO: if !tr.WriteResult(client.TransactionResult{
@@ -284,49 +340,41 @@ impl Client {
 
     // Close closes this client
     pub fn close(&mut self) {
-        //TODO: self.tr_map.CloseAndDeleteAll()
+        self.tr_map.close_and_delete_all();
+    }
+
+    // send_binding_request_to sends a new STUN request to the given transport address
+    pub async fn send_binding_request_to(&mut self, to: SocketAddr) -> Result<SocketAddr, Error> {
+        let mut attrs: Vec<Box<dyn Setter>> =
+            vec![Box::new(TransactionId::new()), Box::new(BINDING_REQUEST)];
+        if !self.software.text.is_empty() {
+            attrs.push(Box::new(self.software.clone()));
+        }
+
+        let mut msg = Message::new();
+        msg.build(&attrs)?;
+
+        let tr_res = self.perform_transaction(&msg, to, false).await?;
+
+        let mut refl_addr = XORMappedAddress::default();
+        refl_addr.get_from(&tr_res.msg)?;
+
+        Ok(SocketAddr::new(refl_addr.ip, refl_addr.port))
+    }
+
+    // send_binding_request sends a new STUN request to the STUN server
+    pub async fn send_binding_request(&mut self) -> Result<SocketAddr, Error> {
+        if let Some(stun_serv_addr) = self.stun_serv_addr {
+            self.send_binding_request_to(stun_serv_addr).await
+        } else {
+            Err(ERR_STUNSERVER_ADDRESS_NOT_SET.to_owned())
+        }
     }
 }
 
 /*
 
 
-// TransactionID & Base64: https://play.golang.org/p/EEgmJDI971P
-
-// SendBindingRequestTo sends a new STUN request to the given transport address
-func (c *Client) SendBindingRequestTo(to net.Addr) (net.Addr, error) {
-    attrs := []stun.Setter{stun.TransactionID, stun.BindingRequest}
-    if len(c.software) > 0 {
-        attrs = append(attrs, c.software)
-    }
-
-    msg, err := stun.Build(attrs...)
-    if err != nil {
-        return nil, err
-    }
-    trRes, err := c.PerformTransaction(msg, to, false)
-    if err != nil {
-        return nil, err
-    }
-
-    var reflAddr stun.XORMappedAddress
-    if err := reflAddr.GetFrom(trRes.Msg); err != nil {
-        return nil, err
-    }
-
-    return &net.UDPAddr{
-        IP:   reflAddr.IP,
-        Port: reflAddr.Port,
-    }, nil
-}
-
-// SendBindingRequest sends a new STUN request to the STUN server
-func (c *Client) SendBindingRequest() (net.Addr, error) {
-    if c.stun_serv == nil {
-        return nil, errSTUNServerAddressNotSet
-    }
-    return c.SendBindingRequestTo(c.stun_serv)
-}
 
 // Allocate sends a TURN allocation request to the given transport address
 func (c *Client) Allocate() (net.PacketConn, error) {
@@ -428,49 +476,6 @@ func (c *Client) Allocate() (net.PacketConn, error) {
     return relayedConn, nil
 }
 
-// PerformTransaction performs STUN transaction
-func (c *Client) PerformTransaction(msg *stun.Message, to net.Addr, ignoreResult bool) (client.TransactionResult,
-    error) {
-    trKey := b64.StdEncoding.EncodeToString(msg.TransactionID[:])
-
-    raw := make([]byte, len(msg.Raw))
-    copy(raw, msg.Raw)
-
-    tr := client.NewTransaction(&client.TransactionConfig{
-        Key:          trKey,
-        Raw:          raw,
-        To:           to,
-        Interval:     c.rto,
-        IgnoreResult: ignoreResult,
-    })
-
-    c.tr_map.Insert(trKey, tr)
-
-    c.log.Tracef("start %s transaction %s to %s", msg.Type, trKey, tr.To.String())
-    _, err := c.conn.WriteTo(tr.Raw, to)
-    if err != nil {
-        return client.TransactionResult{}, err
-    }
-
-    tr.StartRtxTimer(c.on_rtx_timeout)
-
-    // If dontWait is true, get the transaction going and return immediately
-    if ignoreResult {
-        return client.TransactionResult{}, nil
-    }
-
-    res := tr.WaitForResult()
-    if res.Err != nil {
-        return res, res.Err
-    }
-    return res, nil
-}
-
-// OnDeallocated is called when deallocation of relay address has been complete.
-// (Called by UDPConn)
-func (c *Client) OnDeallocated(relayedAddr net.Addr) {
-    c.setRelayedUDPConn(nil)
-}
 
 
 func (c *Client) on_rtx_timeout(trKey string, nRtx int) {
@@ -505,7 +510,7 @@ func (c *Client) on_rtx_timeout(trKey string, nRtx int) {
         }
         return
     }
-    tr.StartRtxTimer(c.on_rtx_timeout)
+    tr.start_rtx_timer(c.on_rtx_timeout)
 }
 
 func (c *Client) setRelayedUDPConn(conn *client.UDPConn) {

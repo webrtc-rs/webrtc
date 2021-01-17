@@ -22,6 +22,8 @@ use std::net::SocketAddr;
 use tokio::sync::mpsc;
 use tokio::time::{Duration, Instant};
 
+use async_trait::async_trait;
+
 const MAX_READ_QUEUE_SIZE: usize = 1024;
 const PERM_REFRESH_INTERVAL: Duration = Duration::from_secs(120);
 const MAX_RETRY_ATTEMPTS: u16 = 3;
@@ -32,18 +34,19 @@ struct InboundData {
 }
 
 // UDPConnObserver is an interface to UDPConn observer
+#[async_trait]
 pub trait UDPConnObserver {
     fn turn_server_addr(&self) -> SocketAddr;
     fn username(&self) -> Username;
     fn realm(&self) -> Realm;
-    fn write_to(&self, data: &[u8], to: SocketAddr) -> Result<usize, Error>;
-    fn perform_transaction(
-        &self,
+    async fn write_to(&self, data: &[u8], to: SocketAddr) -> Result<usize, Error>;
+    async fn perform_transaction(
+        &mut self,
         msg: &Message,
         to: SocketAddr,
         dont_wait: bool,
     ) -> Result<TransactionResult, Error>;
-    fn on_deallocated(&self, relayed_addr: SocketAddr);
+    async fn on_deallocated(&self, relayed_addr: SocketAddr);
 }
 
 // UDPConnConfig is a set of configuration params use by NewUDPConn
@@ -141,12 +144,31 @@ impl UDPConn {
         }
     }
 
+    // This func-block would block, per destination IP (, or perm), until
+    // the perm state becomes "requested". Purpose of this is to guarantee
+    // the order of packets (within the same perm).
+    // Note that CreatePermission transaction may not be complete before
+    // all the data transmission. This is done assuming that the request
+    // will be mostly likely successful and we can tolerate some loss of
+    // UDP packet (or reorder), inorder to minimize the latency in most cases.
+    async fn create_perm(&mut self, perm: &mut Permission, addr: SocketAddr) -> Result<(), Error> {
+        if perm.state() == PermState::Idle {
+            // punch a hole! (this would block a bit..)
+            if let Err(err) = self.create_permissions(&[addr]).await {
+                self.perm_map.delete(&addr);
+                return Err(err);
+            }
+            perm.set_state(PermState::Permitted);
+        }
+        Ok(())
+    }
+
     // write_to writes a packet with payload p to addr.
     // write_to can be made to time out and return
     // an Error with Timeout() == true after a fixed time limit;
     // see SetDeadline and SetWriteDeadline.
     // On packet-oriented connections, write timeouts are rare.
-    pub fn send_to(&mut self, p: &[u8], addr: SocketAddr) -> Result<usize, Error> {
+    pub async fn send_to(&mut self, p: &[u8], addr: SocketAddr) -> Result<usize, Error> {
         // check if we have a permission for the destination IP addr
         let mut perm = if let Some(perm) = self.perm_map.find(&addr) {
             *perm
@@ -156,28 +178,9 @@ impl UDPConn {
             perm
         };
 
-        // This func-block would block, per destination IP (, or perm), until
-        // the perm state becomes "requested". Purpose of this is to guarantee
-        // the order of packets (within the same perm).
-        // Note that CreatePermission transaction may not be complete before
-        // all the data transmission. This is done assuming that the request
-        // will be mostly likely successful and we can tolerate some loss of
-        // UDP packet (or reorder), inorder to minimize the latency in most cases.
-        let mut create_permission = || -> Result<(), Error> {
-            if perm.state() == PermState::Idle {
-                // punch a hole! (this would block a bit..)
-                if let Err(err) = self.create_permissions(&[addr]) {
-                    self.perm_map.delete(&addr);
-                    return Err(err);
-                }
-                perm.set_state(PermState::Permitted);
-            }
-            Ok(())
-        };
-
         let mut result = Ok(());
         for _ in 0..MAX_RETRY_ATTEMPTS {
-            result = create_permission();
+            result = self.create_perm(&mut perm, addr).await;
             if let Err(err) = &result {
                 if *err == *ERR_TRY_AGAIN {
                     break;
@@ -238,7 +241,10 @@ impl UDPConn {
 
                 // indication has no transaction (fire-and-forget)
 
-                return self.obs.write_to(&msg.raw, self.obs.turn_server_addr());
+                return self
+                    .obs
+                    .write_to(&msg.raw, self.obs.turn_server_addr())
+                    .await;
             }
 
             // binding is either ready
@@ -268,20 +274,22 @@ impl UDPConn {
         };
 
         // send via ChannelData
-        self.send_channel_data(p, number)
+        self.send_channel_data(p, number).await
     }
 
-    fn send_channel_data(&self, data: &[u8], ch_num: u16) -> Result<usize, Error> {
+    async fn send_channel_data(&self, data: &[u8], ch_num: u16) -> Result<usize, Error> {
         let mut ch_data = proto::chandata::ChannelData {
             data: data.to_vec(),
             number: proto::channum::ChannelNumber(ch_num),
             ..Default::default()
         };
         ch_data.encode();
-        self.obs.write_to(&ch_data.raw, self.obs.turn_server_addr())
+        self.obs
+            .write_to(&ch_data.raw, self.obs.turn_server_addr())
+            .await
     }
 
-    fn create_permissions(&mut self, addrs: &[SocketAddr]) -> Result<(), Error> {
+    async fn create_permissions(&mut self, addrs: &[SocketAddr]) -> Result<(), Error> {
         let mut setters: Vec<Box<dyn Setter>> = vec![
             Box::new(TransactionId::new()),
             Box::new(MessageType::new(METHOD_CREATE_PERMISSION, CLASS_REQUEST)),
@@ -302,7 +310,8 @@ impl UDPConn {
 
         let tr_res = self
             .obs
-            .perform_transaction(&msg, self.obs.turn_server_addr(), false)?;
+            .perform_transaction(&msg, self.obs.turn_server_addr(), false)
+            .await?;
 
         let res = tr_res.msg;
 
@@ -340,7 +349,7 @@ impl UDPConn {
 
     // Close closes the connection.
     // Any blocked ReadFrom or write_to operations will be unblocked and return errors.
-    pub fn close(&mut self) -> Result<(), Error> {
+    pub async fn close(&mut self) -> Result<(), Error> {
         if self.close_ch_tx.is_none() {
             return Err(ERR_ALREADY_CLOSED.to_owned());
         }
@@ -349,8 +358,9 @@ impl UDPConn {
         self.refresh_perms_timer.stop();
         self.close_ch_tx.take();
 
-        self.obs.on_deallocated(self.relayed_addr);
+        self.obs.on_deallocated(self.relayed_addr).await;
         self.refresh_allocation(Duration::from_secs(0), true /* dontWait=true */)
+            .await
     }
 
     // handle_inbound passes inbound data in UDPConn
@@ -377,7 +387,11 @@ impl UDPConn {
         }
     }
 
-    fn refresh_allocation(&mut self, lifetime: Duration, dont_wait: bool) -> Result<(), Error> {
+    async fn refresh_allocation(
+        &mut self,
+        lifetime: Duration,
+        dont_wait: bool,
+    ) -> Result<(), Error> {
         let mut msg = Message::new();
         msg.build(&[
             Box::new(TransactionId::new()),
@@ -393,7 +407,8 @@ impl UDPConn {
         log::debug!("send refresh request (dont_wait={})", dont_wait);
         let tr_res = self
             .obs
-            .perform_transaction(&msg, self.obs.turn_server_addr(), dont_wait)?;
+            .perform_transaction(&msg, self.obs.turn_server_addr(), dont_wait)
+            .await?;
 
         if dont_wait {
             log::debug!("refresh request sent");
@@ -425,14 +440,14 @@ impl UDPConn {
         Ok(())
     }
 
-    fn refresh_permissions(&mut self) -> Result<(), Error> {
+    async fn refresh_permissions(&mut self) -> Result<(), Error> {
         let addrs = self.perm_map.addrs();
         if addrs.is_empty() {
             log::debug!("no permission to refresh");
             return Ok(());
         }
 
-        if let Err(err) = self.create_permissions(&addrs) {
+        if let Err(err) = self.create_permissions(&addrs).await {
             if err != *ERR_TRY_AGAIN {
                 log::error!("fail to refresh permissions: {}", err);
             }
@@ -443,7 +458,7 @@ impl UDPConn {
         Ok(())
     }
 
-    fn bind(&mut self, b: &Binding) -> Result<(), Error> {
+    async fn bind(&mut self, b: &Binding) -> Result<(), Error> {
         let setters: Vec<Box<dyn Setter>> = vec![
             Box::new(TransactionId::new()),
             Box::new(MessageType::new(METHOD_CHANNEL_BIND, CLASS_REQUEST)),
@@ -462,6 +477,7 @@ impl UDPConn {
         let tr_res = match self
             .obs
             .perform_transaction(&msg, self.obs.turn_server_addr(), false)
+            .await
         {
             Err(err) => {
                 self.binding_mgr.delete_by_addr(&b.addr);
@@ -482,7 +498,7 @@ impl UDPConn {
         Ok(())
     }
 
-    fn on_refresh_timers(&mut self, id: TimerIdRefresh) {
+    async fn on_refresh_timers(&mut self, id: TimerIdRefresh) {
         log::debug!("refresh timer {:?} expired", id);
         match id {
             TimerIdRefresh::Alloc => {
@@ -491,7 +507,7 @@ impl UDPConn {
                 // when stale nonce returns, sencond retry should succeed
                 let mut result = Ok(());
                 for _ in 0..MAX_RETRY_ATTEMPTS {
-                    result = self.refresh_allocation(lifetime, false);
+                    result = self.refresh_allocation(lifetime, false).await;
                     if let Err(err) = &result {
                         if *err == *ERR_TRY_AGAIN {
                             break;
@@ -505,7 +521,7 @@ impl UDPConn {
             TimerIdRefresh::Perms => {
                 let mut result = Ok(());
                 for _ in 0..MAX_RETRY_ATTEMPTS {
-                    result = self.refresh_permissions();
+                    result = self.refresh_permissions().await;
                     if let Err(err) = &result {
                         if *err == *ERR_TRY_AGAIN {
                             break;
