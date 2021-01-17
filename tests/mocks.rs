@@ -4,8 +4,7 @@ pub mod dtls {
 
     use super::transport;
 
-    use std::sync::{Arc, Mutex};
-    use tokio::time::{sleep, Duration};
+    use tokio::time::Duration;
 
     pub type CipherSuite = u16;
     pub const TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256: CipherSuite = 0;
@@ -25,17 +24,15 @@ pub mod dtls {
     const BACKOFF: Duration = Duration::from_millis(500);
 
     pub struct Client {
-        conn: Arc<Mutex<transport::Connection>>,
+        conn: transport::Connection,
         config: Config,
-        num_events_emitted: Arc<Mutex<u8>>,
     }
 
     impl Client {
-        pub fn new(conn: Arc<Mutex<transport::Connection>>, config: Config) -> Result<Self, &'static str> {
+        pub fn new(conn: transport::Connection, config: Config) -> Result<Self, String> {
             Ok( Client {
                 conn,
                 config,
-                num_events_emitted: Arc::new(Mutex::new(0)),
             })
         }
         pub async fn start(&self) {
@@ -43,32 +40,23 @@ pub mod dtls {
         }
         pub async fn next(&self) -> Event {
             println!("client polled");
-            let data = Arc::clone(&self.num_events_emitted);
-            let mut n = data.lock().unwrap();
-            if *n > 0 {
-                println!("client already polled {} times, waiting {:?}", *n, BACKOFF);
-                sleep(BACKOFF).await;
-            }
-            *n += 1;
             Event::Message { content: () }
         }
-        pub fn get_connection(&self) -> &Arc<Mutex<transport::Connection>> {
+        pub fn get_connection(&self) -> &transport::Connection {
             &self.conn
         }
     }
 
     pub struct Server {
-        conn: Arc<Mutex<transport::Connection>>,
+        conn: transport::Connection,
         config: Config,
-        num_events_emitted: Arc<Mutex<u8>>,
     }
 
     impl Server {
-        pub fn new(conn: Arc<Mutex<transport::Connection>>, config: Config) -> Result<Self, &'static str> {
+        pub fn new(conn: transport::Connection, config: Config) -> Result<Self, String> {
             Ok( Server {
                 conn,
                 config,
-                num_events_emitted: Arc::new(Mutex::new(0)),
             })
         }
         pub async fn start(&self) {
@@ -76,16 +64,9 @@ pub mod dtls {
         }
         pub async fn next(&self) -> Event {
             println!("server polled");
-            let data = Arc::clone(&self.num_events_emitted);
-            let mut n = data.lock().unwrap();
-            if *n > 0 {
-                println!("server already polled {} times, waiting {:?}", *n, BACKOFF);
-                sleep(BACKOFF).await;
-            }
-            *n += 1;
             Event::Message { content: () }
         }
-        pub fn get_connection(&self) -> &Arc<Mutex<transport::Connection>> {
+        pub fn get_connection(&self) -> &transport::Connection {
             &self.conn
         }
     }

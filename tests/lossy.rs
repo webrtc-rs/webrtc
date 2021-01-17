@@ -3,9 +3,8 @@ mod mocks;
 
 use mocks::dtls::{self, Client, Server, Config, Cert, CertConfig, CipherSuite, MTU};
 use mocks::transport;
-use std::time::Duration;
+use tokio::time::{sleep, Duration};
 use rand::prelude::*;
-use std::sync::{Arc, Mutex};
 
 #[derive(Copy)]
 #[derive(Clone)]
@@ -105,7 +104,7 @@ pub fn e2e_lossy() {
             let bridge = transport::Bridge::new();
             bridge.set_loss_chance(chosen_loss);
 
-            let mut client_join_handle: tokio::task::JoinHandle<Result<Client, &str>> = tokio::spawn( async move {
+            let client = tokio::spawn( async move {
                 let mut config = Config::new()
                     .flight_interval(flight_interval)
                     .insecure_skip_verify()
@@ -114,18 +113,15 @@ pub fn e2e_lossy() {
                     Some(cipher_suite) => {
                         config = config.cipher_suite(cipher_suite);
                     }
-                    _ => {
-                        // do nothing
-                    }
+                    _ => {}  // do nothing
                 }
                 if case.do_client_auth {
                     config = config.cert(client_cert);
                 }
-                let conn = Arc::new(Mutex::new(bridge.get_connection()));
-                return Client::new(conn, config);
+                return Client::new(bridge.get_connection(), config);
             });
 
-            let mut server_join_handle: tokio::task::JoinHandle<Result<Server, &str>> = tokio::spawn( async move {
+            let server = tokio::spawn( async move {
                 let mut config = Config::new()
                     .cert(server_cert)
                     .flight_interval(flight_interval)
@@ -133,18 +129,19 @@ pub fn e2e_lossy() {
                 if case.do_client_auth {
                     config = config.client_auth_type(dtls::ClientAuthType::RequireAnyClientCert);
                 }
-                let conn = Arc::new(Mutex::new(bridge.get_connection()));
-                return Server::new(conn, config);
+                return Server::new(bridge.get_connection(), config);
             });
 
-            let test_timeout = tokio::time::sleep(LOSSY_TEST_TIMEOUT);
-            let server_conn: Option<transport::Connection> = None;
-            let client_conn: Option<transport::Connection> = None;
+            let test_timeout = sleep(LOSSY_TEST_TIMEOUT);
+            let server_conn = None;
+            let client_conn = None;
             let server_done = false;
             let client_done = false;
             tokio::pin!(test_timeout);
-            tokio::pin!(server_conn);
             tokio::pin!(client_conn);
+            tokio::pin!(server_conn);
+            tokio::pin!(client);
+            tokio::pin!(server);
             loop {
                 let iter_timeout = tokio::time::sleep(Duration::from_secs(10));
                 match (*server_conn, *client_conn) {
@@ -154,44 +151,43 @@ pub fn e2e_lossy() {
                     }
                     (_, _) => {
                         tokio::select! {
-                            maybe_server = &mut server_join_handle => {
-                                match maybe_server {
-                                    Ok(server) => {
-                                        let data = server.unwrap().get_connection().clone();
-                                        let conn = data.lock().unwrap();
-                                        *server_conn = Some(*conn)
+                            result = &mut server => {
+                                match result {
+                                    Ok(Ok(server)) => {
+                                        let conn = server.get_connection();
+                                        *server_conn = Some(*conn);
                                     }
-                                    Err(reason) => {
-                                        assert!(
-                                            false,
-                                            "Server error: clientComplete({}) serverComplete({}) LossChance({}) error({})",
-                                            client_done, server_done, chosen_loss, reason,
-                                        );
-                                        break
+                                    Ok(Err(e)) => {
+                                        fail("server".to_string(),
+                                        client_done, server_done, chosen_loss, e.to_string());
+                                    }
+                                    Err(e) => {
+                                        fail("server".to_string(),
+                                            client_done, server_done, chosen_loss, e.to_string());
                                     }
                                 }
                             }
-                            maybe_client = &mut client_join_handle => {
-                                match maybe_client {
-                                    Ok(client) => {
-                                        let data = client.unwrap().get_connection().clone();
-                                        let conn = data.lock().unwrap();
-                                        *client_conn = Some(*conn)
+                            result = &mut client => {
+                                match result {
+                                    Ok(Ok(client)) => {
+                                        let conn = client.get_connection();
+                                        *client_conn = Some(*conn);
                                     }
-                                    Err(reason) => {
-                                        assert!(
-                                            false,
-                                            "Client error: clientComplete({}) serverComplete({}) LossChance({}) error({})",
-                                            client_done, server_done, chosen_loss, reason,
-                                        );
-                                        break
+                                    Ok(Err(e)) => {
+                                        fail("client".to_string(),
+                                        client_done, server_done, chosen_loss, e.to_string());
+                                    }
+                                    Err(e) => {
+                                        fail("client".to_string(),
+                                            client_done, server_done, chosen_loss, e.to_string());
                                     }
                                 }
                             }
                             _ = &mut test_timeout => {
                                 assert!(
                                     false,
-                                    "Test expired: clientComplete({}) serverComplete({}) LossChance({})"
+                                    "Test expired: clientComplete({}) serverComplete({}) LossChance({})",
+                                    client_done, server_done, chosen_loss
                                 );
                             }
                             _ = iter_timeout => {
@@ -203,4 +199,12 @@ pub fn e2e_lossy() {
             }
         });
     }
+}
+
+fn fail(name: String, client_done: bool, server_done: bool, chosen_loss: u8, msg: String) {
+    assert!(
+        false,
+        "{} error: clientComplete({}) serverComplete({}) LossChance({}) error({})",
+        name, client_done, server_done, chosen_loss, msg,
+    );
 }
