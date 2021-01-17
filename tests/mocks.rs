@@ -12,6 +12,11 @@ pub mod dtls {
     pub const TLS_PSK_WITH_AES_128_CCM: CipherSuite                = 0;
     pub const TLS_PSK_WITH_AES_128_CCM_8: CipherSuite              = 0;
     pub const TLS_PSK_WITH_AES_128_GCM_SHA256: CipherSuite         = 0;
+    pub const TLS_ECDHE_ECDSA_WITH_AES_128_CCM: CipherSuite        = 0;
+    pub const TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8: CipherSuite      = 0;
+    pub const TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256: CipherSuite   = 0;
+    pub const TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA: CipherSuite      = 0;
+
     // TODO
     pub const REQUIRE_ANY_CLIENT_CERT: () = ();
 
@@ -129,14 +134,14 @@ pub mod dtls {
     #[derive(Clone)]
     #[derive(Copy)]
     pub struct Config {
-        cipher_suite: Option<CipherSuite>,
-        cert: Option<Cert>,
-        insecure_skip_verify: bool,
-        psk: Option<PSK>,
-        psk_id_hint: Option<PSKIdHint>,
-        mtu: Option<MTU>,
-        flight_interval: Option<FlightInterval>,
-        client_auth_type: ClientAuthType,
+        pub cipher_suite: Option<CipherSuite>,
+        pub cert: Option<Cert>,
+        pub insecure_skip_verify: bool,
+        pub psk: Option<PSK>,
+        pub psk_id_hint: Option<PSKIdHint>,
+        pub mtu: Option<MTU>,
+        pub flight_interval: Option<FlightInterval>,
+        pub client_auth_type: ClientAuthType,
     }
 
     // TODO: there is almost definitely an existing macro for this...
