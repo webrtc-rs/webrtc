@@ -2,8 +2,8 @@
 mod mocks;
 
 use mocks::dtls::{self, Config, Cert, CertConfig, CipherSuite, MTU, PSK};
-use tokio::{self, net::TcpStream};
-use std::sync::Arc;
+use tokio::{self, net::TcpStream, time::{Duration, sleep}};
+use std::{sync::Arc, io::{Error, ErrorKind}};
 use tokio::sync::Mutex;
 
 const TEST_MESSAGE: &str = "Hello world";
@@ -75,10 +75,8 @@ async fn random_port() -> u16 {
 
 async fn read_from(
     stream: Arc<Mutex<TcpStream>>,
-    out_buffer: Arc<Mutex<[u8; 8192]>>,   
-) -> Result<(), std::io::Error>
+) -> Result<String, Error>
 {
-    let mut buf = *out_buffer.lock().await;
     loop {
         let s = stream.lock().await;
         match s.readable().await {
@@ -87,11 +85,15 @@ async fn read_from(
                 return Err(e)
             }
         }
+        let mut buf = [0_u8; 8192];
         match s.try_read(&mut buf) {
-            Ok(_) => {
-                break;
+            Ok(n) => {
+                match std::str::from_utf8(&buf[0..n]) {
+                    Ok(s) => return Ok(s.to_string()),
+                    Err(e) => return Err(Error::new(ErrorKind::Other, format!("Failed to parse utf8: {:?}", e))),
+                }
             },
-            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
                 continue;
             }
             Err(e) => {
@@ -99,12 +101,11 @@ async fn read_from(
             }
         };
     }
-    Ok(())
 }
 
 async fn write_to(
     stream: Arc<Mutex<TcpStream>>,
-) -> Result<(), std::io::Error>
+) -> Result<(), Error>
 {
     println!("writing to stream...");
     loop {
@@ -119,7 +120,7 @@ async fn write_to(
             Ok(_) => {
                 break;
             }
-            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
                 continue;
             }
             Err(e) => {
@@ -131,34 +132,37 @@ async fn write_to(
     Ok(())
 }
 
+/// Read and write to the stream
+/// Returns the UTF8 String received from stream
 async fn simple_read_write(
     stream: TcpStream,
-    out_buffer: Arc<Mutex<[u8; 8192]>>,
-) -> Result<(), std::io::Error>
+) -> Result<String, std::io::Error>
 {
     let ref stream = Arc::new(Mutex::new(stream));
-    let reader_join_handle = tokio::spawn(read_from(Arc::clone(stream), out_buffer));
+    let reader_join_handle = tokio::spawn(read_from(Arc::clone(stream)));
     let writer_join_handle = tokio::spawn(write_to(Arc::clone(stream)));
-    match reader_join_handle.await {
-        Ok(_) => {},
-        Err(e) => return Err(e.into()),
-    }
+    let msg = match reader_join_handle.await {
+        Ok(r) => match r {
+            Ok(s) => s,
+            Err(e) => return Err(e.into())
+        }
+        Err(e) => return Err(e.into())
+    };
     match writer_join_handle.await {
         Ok(_) => {},
-        Err(e) => return Err(e.into()),
+        Err(e) => return Err(e.into())
     }
-    Ok(())
+    Ok(msg)
 }
 
 async fn run_client(
     client_config: Config,
     server_port: u16,
-    out_buffer: Arc<Mutex<[u8; 8192]>>,
     start_rx: tokio::sync::oneshot::Receiver<()>,
-) -> Result<(), std::io::Error>
+) -> Result<String, std::io::Error>
 {
-    let timeout = tokio::time::Duration::from_secs(1);
-    let sleep = tokio::time::sleep(timeout);
+    let timeout = Duration::from_secs(1);
+    let sleep = sleep(timeout);
     tokio::pin!(sleep);
     tokio::select! {
         _ = &mut sleep => { panic!("Client timed out waiting for server after {:?}", timeout) }
@@ -168,15 +172,14 @@ async fn run_client(
         Ok(stream) => stream,
         Err(e) => return Err(e),
     };
-    simple_read_write(stream, out_buffer).await
+    simple_read_write(stream).await
 }
 
 async fn run_server(
     server_config: Config,
     server_port: u16,
-    out_buffer: Arc<Mutex<[u8; 8192]>>,
     ready_tx: tokio::sync::oneshot::Sender<()>,
-) -> Result<(), std::io::Error>
+) -> Result<String, Error>
 {
     let listener = match dtls::listen("udp".to_string(), "127.0.0.1".to_string(), server_port, server_config).await {
         Ok(listener) => listener,
@@ -190,7 +193,7 @@ async fn run_server(
         Ok((stream, addr)) => (stream, addr),
         Err(e) => panic!(e),
     };
-    simple_read_write(stream, out_buffer).await
+    simple_read_write(stream).await
 }
 
 fn check_comms(config: Config) {
@@ -200,55 +203,51 @@ fn check_comms(config: Config) {
         let mut client_complete = false;
         let mut server_complete = false;
         let server_port = random_port().await;
-        let server_out_buffer = Arc::new(Mutex::new([0_u8; 8192]));
-        let client_out_buffer = Arc::new(Mutex::new([0_u8; 8192]));
         let (server_ready_tx, server_ready_rx) = tokio::sync::oneshot::channel();
         let client = tokio::spawn(run_client(
             config,
             server_port,
-            Arc::clone(&client_out_buffer),
             server_ready_rx,
         ));
         let server = tokio::spawn(run_server(
             config,
             server_port,
-            Arc::clone(&server_out_buffer),
             server_ready_tx,
         ));
-        let timeout = tokio::time::Duration::from_secs(5);
-        let sleep = tokio::time::sleep(timeout);
+        let timeout = Duration::from_secs(5);
+        let sleep = sleep(timeout);
         tokio::pin!(sleep);
-        tokio::pin!(client_out_buffer);
-        tokio::pin!(server_out_buffer);
         tokio::pin!(client);
         tokio::pin!(server);
         loop {
             tokio::select! {
                 _ = &mut sleep => { panic!("Test timed out after {:?}", timeout) }
-                result = &mut client => {
-                    match result {
-                        Ok(_) => {
-                            client_complete = true;
-                            let buf = *client_out_buffer.lock().await;
-                            let msg = std::str::from_utf8(&buf).unwrap();
-                            println!("     got: {}", msg);
-                            println!("expected: {}", TEST_MESSAGE);
-                            assert!(msg == TEST_MESSAGE);
+                join_result = &mut client => {
+                    match join_result {
+                        Ok(msg) => match msg {
+                            Ok(s) => {
+                                client_complete = true;
+                                println!("     got: {}", s);
+                                println!("expected: {}", TEST_MESSAGE);
+                                assert!(s == TEST_MESSAGE);
+                            }
+                            Err(e) => assert!(false, "client failed: {}", e)
                         }
-                        Err(e) => assert!(false, "client failed: {}", e)
+                        Err(e) => assert!(false, "failed to join with client: {}", e)
                     }
                 }
-                result = &mut server => {
-                    match result {
-                        Ok(_) => {
-                            server_complete = true;
-                            let buf = *server_out_buffer.lock().await;
-                            let msg = std::str::from_utf8(&buf).unwrap().to_string();
-                            println!("     got: {}", msg);
-                            println!("expected: {}", TEST_MESSAGE);
-                            assert!(msg == TEST_MESSAGE);
+                join_result = &mut server => {
+                    match join_result {
+                        Ok(msg) => match msg {
+                            Ok(s) => {
+                                server_complete = true;
+                                println!("     got: {}", s);
+                                println!("expected: {}", TEST_MESSAGE);
+                                assert!(s == TEST_MESSAGE);
+                            }
+                            Err(e) => assert!(false, "server failed: {}", e)
                         }
-                        Err(e) => assert!(false, "server failed: {}", e)
+                        Err(e) => assert!(false, "failed to join with server: {}", e)
                     }
                 }
             }
