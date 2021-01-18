@@ -1,29 +1,29 @@
-use webrtc_rs_mdns as mdns;
+use std::net::{Ipv4Addr, SocketAddr};
 
 use mdns::{config::*, conn::*};
-
-use tokio::net::UdpSocket;
-
-use util::Error;
+use signal_hook::iterator::Signals;
+use webrtc_rs_mdns as mdns;
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
-    env_logger::Builder::new().init();
+async fn main() {
+    env_logger::init();
 
-    let socket = UdpSocket::bind("0.0.0.0:8888").await?;
-    println!("socket.local_addr={:?}", socket.local_addr());
-
-    let _server = DNSConn::server(
-        socket,
+    let server = DNSConn::server(
+        SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 5353),
         Config {
-            dst_port: Some(9999),
-            local_names: vec![
-                "webrtc-rs-mdns-1.local".to_owned(),
-                "webrtc-rs-mdns-2.local".to_owned(),
-            ],
+            local_names: vec!["webrtc-rs-mdns-2.local".to_owned()],
             ..Default::default()
         },
-    )?;
+    )
+    .unwrap();
 
-    loop {}
+    let mut signals = Signals::new(&[signal_hook::consts::SIGINT]).unwrap();
+    let close_handle = signals.handle();
+
+    for _sig in signals.forever() {
+        println!("closing connection now");
+        server.close().await.unwrap();
+        close_handle.close();
+        return;
+    }
 }
