@@ -243,11 +243,10 @@ impl DNSConn {
     ) -> Result<(), Error> {
         log::info!("enter loop and listening {:?}", socket.local_addr());
 
+        let mut b = vec![0u8; INBOUND_BUFFER_SIZE];
+        let (mut n, mut src);
+
         loop {
-            let mut b = vec![0u8; INBOUND_BUFFER_SIZE];
-
-            let (n, src);
-
             tokio::select! {
                 _ = closed_rx.recv() => {
                     log::info!("Closing server connection");
