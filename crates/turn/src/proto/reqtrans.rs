@@ -20,7 +20,7 @@ use std::fmt;
 // RFC 5766 Section 14.7
 #[derive(Default, Debug, PartialEq)]
 pub struct RequestedTransport {
-    protocol: Protocol,
+    pub protocol: Protocol,
 }
 
 impl fmt::Display for RequestedTransport {

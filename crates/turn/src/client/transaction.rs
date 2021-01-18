@@ -22,6 +22,7 @@ pub struct TransactionResult {
     pub msg: Message,
     pub from: SocketAddr,
     pub retries: u16,
+    pub err: Option<Error>,
 }
 
 impl Default for TransactionResult {
@@ -30,6 +31,7 @@ impl Default for TransactionResult {
             msg: Message::default(),
             from: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             retries: 0,
+            err: None,
         }
     }
 }
@@ -203,8 +205,8 @@ impl TransactionMap {
     }
 
     // Delete deletes a transaction by its key
-    pub fn delete(&mut self, key: &str) {
-        self.tr_map.remove(key);
+    pub fn delete(&mut self, key: &str) -> Option<Transaction> {
+        self.tr_map.remove(key)
     }
 
     // close_and_delete_all closes and deletes all transactions

@@ -4,17 +4,17 @@ pub mod periodic_timer;
 pub mod permission;
 pub mod transaction;
 
-//use binding::*;
-use conn::*;
-//use periodic_timer::*;
-//use permission::*;
 use crate::errors::*;
-use crate::proto::chandata::*;
-use crate::proto::peeraddr::*;
+use crate::proto::{
+    chandata::*, data::*, lifetime::*, peeraddr::*, relayaddr::*, reqtrans::*, PROTO_UDP,
+};
+use conn::*;
 use transaction::*;
 
 use stun::agent::*;
 use stun::attributes::*;
+use stun::error_code::*;
+use stun::fingerprint::*;
 use stun::integrity::*;
 use stun::message::*;
 use stun::textattrs::*;
@@ -70,8 +70,6 @@ pub struct Client {
     tr_map: TransactionMap,
     rto: Duration,
     //relayedConn   *client.UDPConn
-    //allocTryLock  client.TryLock
-    //listenTryLock client.TryLock
 }
 
 #[async_trait]
@@ -230,7 +228,6 @@ impl Client {
         } else if ChannelData::is_channel_data(data) {
             Client::handle_channel_data(data).await
         } else if stun_serv_str.is_some() && Some(from) == stun_serv_str {
-            //TODO: len(c.stun_serv_str) != 0 && ?
             // received from STUN server but it is not a STUN message
             Err(ERR_NON_STUNMESSAGE.to_owned())
         } else {
@@ -243,7 +240,7 @@ impl Client {
     async fn handle_stun_message(
         tr_map: &Arc<Mutex<TransactionMap>>,
         data: &[u8],
-        _from: SocketAddr,
+        mut from: SocketAddr,
     ) -> Result<(), Error> {
         let mut msg = Message::new();
         msg.raw = data.to_vec();
@@ -260,19 +257,14 @@ impl Client {
             if msg.typ.method == METHOD_DATA {
                 let mut peer_addr = PeerAddress::default();
                 peer_addr.get_from(&msg)?;
-                /*TODO: from = &net.UDPAddr{
-                    IP:   peer_addr.IP,
-                    Port: peer_addr.Port,
-                }
+                from = SocketAddr::new(peer_addr.ip, peer_addr.port);
 
-                var data proto.Data
-                if err := data.GetFrom(msg); err != nil {
-                    return err
-                }
+                let mut data = Data::default();
+                data.get_from(&msg)?;
 
-                c.log.Debugf("data indication received from %s", from.String())
+                log::debug!("data indication received from {}", from);
 
-                relayedConn := c.relayedUDPConn()
+                /*TODO: relayedConn := c.relayedUDPConn()
                 if relayedConn == nil {
                     c.log.Debug("no relayed conn allocated")
                     return nil // silently discard
@@ -292,21 +284,27 @@ impl Client {
         let tr_key = base64::encode(&msg.transaction_id.0);
 
         let mut tm = tr_map.lock().await;
-        if let Some(_tr) = tm.find(&tr_key) {
-            // End the transaction
-            //TODO: tr.stop_rtx_timer()
-            tm.delete(&tr_key);
-
-        /*TODO: if !tr.WriteResult(client.TransactionResult{
-            Msg:     msg,
-            From:    from,
-            Retries: tr.Retries(),
-        }) {
-            c.log.Debugf("no listener for %s", msg.String())
-        }*/
-        } else {
+        if tm.find(&tr_key).is_none() {
             // silently discard
             log::debug!("no transaction for {}", msg);
+            return Ok(());
+        }
+
+        if let Some(mut tr) = tm.delete(&tr_key) {
+            // End the transaction
+            tr.stop_rtx_timer();
+
+            if !tr
+                .write_result(TransactionResult {
+                    msg,
+                    from,
+                    retries: tr.retries(),
+                    ..Default::default()
+                })
+                .await
+            {
+                log::debug!("no listener for msg.raw {:?}", data);
+            }
         }
 
         Ok(())
@@ -370,149 +368,148 @@ impl Client {
             Err(ERR_STUNSERVER_ADDRESS_NOT_SET.to_owned())
         }
     }
+
+    // Allocate sends a TURN allocation request to the given transport address
+    pub async fn allocate(&mut self) -> Result<SocketAddr, Error> {
+        /*TODO: relayedConn := c.relayedUDPConn()
+        if relayedConn != nil {
+            return nil, fmt.Errorf("%w: %s", errAlreadyAllocated, relayedConn.LocalAddr().String())
+        }*/
+
+        let mut msg = Message::new();
+        msg.build(&[
+            Box::new(TransactionId::new()),
+            Box::new(MessageType::new(METHOD_ALLOCATE, CLASS_REQUEST)),
+            Box::new(RequestedTransport {
+                protocol: PROTO_UDP,
+            }),
+            Box::new(FINGERPRINT),
+        ])?;
+
+        let tr_res = self
+            .perform_transaction(&msg, self.turn_serv_addr, false)
+            .await?;
+        let res = tr_res.msg;
+
+        // Anonymous allocate failed, trying to authenticate.
+        let nonce = Nonce::get_from_as(&res, ATTR_NONCE)?;
+        self.realm = Realm::get_from_as(&res, ATTR_REALM)?;
+
+        self.integrity = MessageIntegrity::new_long_term_integrity(
+            self.username.text.clone(),
+            self.realm.text.clone(),
+            self.password.clone(),
+        );
+
+        // Trying to authorize.
+        msg.build(&[
+            Box::new(TransactionId::new()),
+            Box::new(MessageType::new(METHOD_ALLOCATE, CLASS_REQUEST)),
+            Box::new(RequestedTransport {
+                protocol: PROTO_UDP,
+            }),
+            Box::new(self.username.clone()),
+            Box::new(self.realm.clone()),
+            Box::new(nonce),
+            Box::new(self.integrity.clone()),
+            Box::new(FINGERPRINT),
+        ])?;
+
+        let tr_res = self
+            .perform_transaction(&msg, self.turn_serv_addr, false)
+            .await?;
+        let res = tr_res.msg;
+
+        if res.typ.class == CLASS_ERROR_RESPONSE {
+            let mut code = ErrorCodeAttribute::default();
+            let result = code.get_from(&res);
+            if result.is_err() {
+                return Err(Error::new(format!("{}", res.typ)));
+            } else {
+                return Err(Error::new(format!("{} (error {})", res.typ, code)));
+            }
+        }
+
+        // Getting relayed addresses from response.
+        let mut relayed = RelayedAddress::default();
+        relayed.get_from(&res)?;
+        let relayed_addr = SocketAddr::new(relayed.ip, relayed.port);
+
+        // Getting lifetime from response
+        let mut lifetime = Lifetime::default();
+        lifetime.get_from(&res)?;
+
+        /*TODO: relayedConn = client.NewUDPConn(&client.UDPConnConfig{
+            Observer:    c,
+            RelayedAddr: relayed_addr,
+            Integrity:   c.integrity,
+            Nonce:       nonce,
+            Lifetime:    lifetime.Duration,
+            Log:         c.log,
+        })
+
+        c.setRelayedUDPConn(relayedConn)
+
+        return relayedConn, nil
+
+         */
+        Ok(relayed_addr)
+    }
+
+    pub async fn on_rtx_timeout(&mut self, tr_key: String, n_rtx: u16) {
+        let (tr_raw, tr_to) = match self.tr_map.find(&tr_key) {
+            Some(tr) => (tr.raw.clone(), tr.to),
+            None => return, // already gone
+        };
+
+        if n_rtx == MAX_RTX_COUNT {
+            // all retransmisstions failed
+            if let Some(mut tr) = self.tr_map.delete(&tr_key) {
+                if !tr
+                    .write_result(TransactionResult {
+                        err: Some(Error::new(format!(
+                            "{} {}",
+                            *ERR_ALL_RETRANSMISSIONS_FAILED, tr_key
+                        ))),
+                        ..Default::default()
+                    })
+                    .await
+                {
+                    log::debug!("no listener for transaction");
+                }
+            }
+            return;
+        }
+
+        log::trace!(
+            "retransmitting transaction {} to {} (n_rtx={})",
+            tr_key,
+            tr_to,
+            n_rtx
+        );
+
+        if self.conn.send_to(&tr_raw, tr_to).await.is_err() {
+            if let Some(mut tr) = self.tr_map.delete(&tr_key) {
+                if !tr
+                    .write_result(TransactionResult {
+                        err: Some(Error::new(format!(
+                            "{} {}",
+                            *ERR_ALL_RETRANSMISSIONS_FAILED, tr_key
+                        ))),
+                        ..Default::default()
+                    })
+                    .await
+                {
+                    log::debug!("no listener for transaction");
+                }
+            }
+            return;
+        }
+        //tr.start_rtx_timer(.on_rtx_timeout)
+    }
 }
 
 /*
-
-
-
-// Allocate sends a TURN allocation request to the given transport address
-func (c *Client) Allocate() (net.PacketConn, error) {
-    if err := c.allocTryLock.Lock(); err != nil {
-        return nil, fmt.Errorf("%w: %s", errOneAllocateOnly, err.Error())
-    }
-    defer c.allocTryLock.Unlock()
-
-    relayedConn := c.relayedUDPConn()
-    if relayedConn != nil {
-        return nil, fmt.Errorf("%w: %s", errAlreadyAllocated, relayedConn.LocalAddr().String())
-    }
-
-    msg, err := stun.Build(
-        stun.TransactionID,
-        stun.NewType(stun.MethodAllocate, stun.ClassRequest),
-        proto.RequestedTransport{Protocol: proto.ProtoUDP},
-        stun.Fingerprint,
-    )
-    if err != nil {
-        return nil, err
-    }
-
-    trRes, err := c.PerformTransaction(msg, c.turn_serv, false)
-    if err != nil {
-        return nil, err
-    }
-
-    res := trRes.Msg
-
-    // Anonymous allocate failed, trying to authenticate.
-    var nonce stun.Nonce
-    if err = nonce.GetFrom(res); err != nil {
-        return nil, err
-    }
-    if err = c.realm.GetFrom(res); err != nil {
-        return nil, err
-    }
-    c.realm = append([]byte(nil), c.realm...)
-    c.integrity = stun.NewLongTermIntegrity(
-        c.username.String(), c.realm.String(), c.password,
-    )
-    // Trying to authorize.
-    msg, err = stun.Build(
-        stun.TransactionID,
-        stun.NewType(stun.MethodAllocate, stun.ClassRequest),
-        proto.RequestedTransport{Protocol: proto.ProtoUDP},
-        &c.username,
-        &c.realm,
-        &nonce,
-        &c.integrity,
-        stun.Fingerprint,
-    )
-    if err != nil {
-        return nil, err
-    }
-
-    trRes, err = c.PerformTransaction(msg, c.turn_serv, false)
-    if err != nil {
-        return nil, err
-    }
-    res = trRes.Msg
-
-    if res.Type.Class == stun.ClassErrorResponse {
-        var code stun.ErrorCodeAttribute
-        if err = code.GetFrom(res); err == nil {
-            return nil, fmt.Errorf("%s (error %s)", res.Type, code) //nolint:goerr113
-        }
-        return nil, fmt.Errorf("%s", res.Type) //nolint:goerr113
-    }
-
-    // Getting relayed addresses from response.
-    var relayed proto.RelayedAddress
-    if err := relayed.GetFrom(res); err != nil {
-        return nil, err
-    }
-    relayedAddr := &net.UDPAddr{
-        IP:   relayed.IP,
-        Port: relayed.Port,
-    }
-
-    // Getting lifetime from response
-    var lifetime proto.Lifetime
-    if err := lifetime.GetFrom(res); err != nil {
-        return nil, err
-    }
-
-    relayedConn = client.NewUDPConn(&client.UDPConnConfig{
-        Observer:    c,
-        RelayedAddr: relayedAddr,
-        Integrity:   c.integrity,
-        Nonce:       nonce,
-        Lifetime:    lifetime.Duration,
-        Log:         c.log,
-    })
-
-    c.setRelayedUDPConn(relayedConn)
-
-    return relayedConn, nil
-}
-
-
-
-func (c *Client) on_rtx_timeout(trKey string, nRtx int) {
-    c.mutexTrMap.Lock()
-    defer c.mutexTrMap.Unlock()
-
-    tr, ok := c.tr_map.Find(trKey)
-    if !ok {
-        return // already gone
-    }
-
-    if nRtx == MAX_RTX_COUNT {
-        // all retransmisstions failed
-        c.tr_map.Delete(trKey)
-        if !tr.WriteResult(client.TransactionResult{
-            Err: fmt.Errorf("%w %s", errAllRetransmissionsFailed, trKey),
-        }) {
-            c.log.Debug("no listener for transaction")
-        }
-        return
-    }
-
-    c.log.Tracef("retransmitting transaction %s to %s (nRtx=%d)",
-        trKey, tr.To.String(), nRtx)
-    _, err := c.conn.WriteTo(tr.Raw, tr.To)
-    if err != nil {
-        c.tr_map.Delete(trKey)
-        if !tr.WriteResult(client.TransactionResult{
-            Err: fmt.Errorf("%w %s", errFailedToRetransmitTransaction, trKey),
-        }) {
-            c.log.Debug("no listener for transaction")
-        }
-        return
-    }
-    tr.start_rtx_timer(c.on_rtx_timeout)
-}
-
 func (c *Client) setRelayedUDPConn(conn *client.UDPConn) {
     c.mutex.Lock()
     defer c.mutex.Unlock()

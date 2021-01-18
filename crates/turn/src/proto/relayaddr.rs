@@ -18,8 +18,8 @@ use std::net::{IpAddr, Ipv4Addr};
 // RFC 5766 Section 14.5
 #[derive(PartialEq, Eq, Debug)]
 pub struct RelayedAddress {
-    ip: IpAddr,
-    port: u16,
+    pub ip: IpAddr,
+    pub port: u16,
 }
 
 impl Default for RelayedAddress {
