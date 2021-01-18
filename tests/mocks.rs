@@ -6,10 +6,9 @@ pub mod dtls {
 
     use super::transport;
     use tokio::time::Duration;
-    use std::error::Error;
 
     #[allow(non_camel_case_types)]
-    #[derive(Clone, Copy)]
+    #[derive(Debug, Clone, Copy)]
     pub enum CipherSuite {
         TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
         TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
@@ -28,8 +27,32 @@ pub mod dtls {
     type FlightInterval = Duration;
     pub type MTU = u16;
     pub type TcpPort = u16;
-    pub type PskCallback = &'static dyn Fn(Option<PskIdHint>) -> Result<Vec<u8>, String>;
-    pub type PskIdHint = &'static Vec<u8>;
+    pub type PskCallback = &'static dyn Fn(Option<PskIdHint>) -> Result<Psk, String>;
+    // TODO
+
+    #[derive(Clone, Copy)]
+    pub struct Psk { }
+
+    impl std::fmt::Display for Psk {
+        fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            panic!("unimplemented")
+        }
+    }
+
+    #[derive(Clone, Copy)]
+    pub struct PskIdHint { }
+
+    impl std::fmt::Display for PskIdHint {
+        fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            panic!("unimplemented")
+        }
+    }
+
+    impl PskIdHint {
+        pub fn len(&self) -> usize {
+            panic!("unimplemented")
+        }
+    }
 
     const BACKOFF: Duration = Duration::from_millis(500);
 
@@ -104,7 +127,7 @@ pub mod dtls {
         pub cipher_suites: &'static Vec<CipherSuite>,
         pub insecure_skip_verify: bool,
         // sets the PSK used by the DTLS connection
-        pub psk_callback: PskCallback,
+        pub psk_callback: Option<PskCallback>,
         pub psk_id_hint: PskIdHint,
         // maximum tranmission unit in bytes
         pub mtu: MTU,
