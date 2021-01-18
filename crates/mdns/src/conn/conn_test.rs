@@ -11,7 +11,7 @@ mod test {
     //     log::trace!("server a created");
 
     //     let server_a = DNSConn::server(
-    //         SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0),
+    //         SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 5353),
     //         Config {
     //             local_names: vec![
     //                 "webrtc-rs-mdns-1.local".to_owned(),
@@ -23,7 +23,7 @@ mod test {
     //     .unwrap();
 
     //     let server_b = DNSConn::server(
-    //         SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0),
+    //         SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 5353),
     //         Config {
     //             ..Default::default()
     //         },
