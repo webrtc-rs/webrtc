@@ -1,5 +1,4 @@
 pub mod conn_pipe;
-pub mod conn_tcp;
 pub mod conn_udp;
 
 #[cfg(test)]
@@ -11,19 +10,10 @@ use std::net::SocketAddr;
 
 #[async_trait]
 pub trait Conn {
-    // Read reads data from the connection.
-    // Read can be made to time out and return an error after a fixed
-    // time limit; see SetDeadline and SetReadDeadline.
-    async fn recv(&self, b: &mut [u8]) -> Result<usize>;
-
-    // Write writes data to the connection.
-    // Write can be made to time out and return an error after a fixed
-    // time limit; see SetDeadline and SetWriteDeadline.
-    async fn send(&self, b: &[u8]) -> Result<usize>;
-
-    // LocalAddr returns the local network address.
+    async fn connect(&self, addr: SocketAddr) -> Result<()>;
+    async fn recv(&self, buf: &mut [u8]) -> Result<usize>;
+    async fn recv_from(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr)>;
+    async fn send(&self, buf: &[u8]) -> Result<usize>;
+    async fn send_to(&self, buf: &[u8], target: SocketAddr) -> Result<usize>;
     fn local_addr(&self) -> Result<SocketAddr>;
-
-    // RemoteAddr returns the remote network address.
-    // fn remote_addr(&self) -> Result<SocketAddr>;
 }
