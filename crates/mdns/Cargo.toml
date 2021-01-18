@@ -35,3 +35,8 @@ bench = false
 name = "mdns_server"
 path = "examples/mdns_server.rs"
 bench = false
+
+[[example]]
+name = "mdns_server_query"
+path = "examples/mdns_server_query.rs"
+bench = false
