@@ -1,30 +1,35 @@
+#[macro_use]
+extern crate derive_builder;
 
 #[allow(dead_code)]
 pub mod dtls {
 
     use super::transport;
-
     use tokio::time::Duration;
+    use std::error::Error;
 
-    pub type CipherSuite = u16;
-    pub const TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256: CipherSuite = 0;
-    pub const TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA: CipherSuite    = 0;
-    pub const TLS_PSK_WITH_AES_128_CCM: CipherSuite                = 0;
-    pub const TLS_PSK_WITH_AES_128_CCM_8: CipherSuite              = 0;
-    pub const TLS_PSK_WITH_AES_128_GCM_SHA256: CipherSuite         = 0;
-    pub const TLS_ECDHE_ECDSA_WITH_AES_128_CCM: CipherSuite        = 0;
-    pub const TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8: CipherSuite      = 0;
-    pub const TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256: CipherSuite   = 0;
-    pub const TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA: CipherSuite      = 0;
+    #[allow(non_camel_case_types)]
+    #[derive(Clone, Copy)]
+    pub enum CipherSuite {
+        TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+        TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+        TLS_PSK_WITH_AES_128_CCM,
+        TLS_PSK_WITH_AES_128_CCM_8,
+        TLS_PSK_WITH_AES_128_GCM_SHA256,
+        TLS_ECDHE_ECDSA_WITH_AES_128_CCM,
+        TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8,
+        TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+        TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+    }
 
     // TODO
     pub const REQUIRE_ANY_CLIENT_CERT: () = ();
 
     type FlightInterval = Duration;
     pub type MTU = u16;
-    // TODO
-    pub type PSK = ();
-    pub type PSKIdHint = ();
+    pub type TcpPort = u16;
+    pub type PskCallback = &'static dyn Fn(Option<PskIdHint>) -> Result<Vec<u8>, String>;
+    pub type PskIdHint = &'static Vec<u8>;
 
     const BACKOFF: Duration = Duration::from_millis(500);
 
@@ -76,179 +81,36 @@ pub mod dtls {
         }
     }
 
-    #[derive(Debug)]
     pub enum Event {
         Message { content: () },
         Error { reason: () },
     }
 
-    #[derive(Debug)]
-    #[derive(Clone)]
-    #[derive(Copy)]
-    pub struct Cert {
-        config: CertConfig
-    }
-
-    impl Cert {
-        pub fn new(config: CertConfig) -> Self { Cert { config } }
-    }
-
-    #[derive(Debug)]
-    #[derive(Clone)]
-    #[derive(Copy)]
-    pub struct CertConfig {
-        host: Option<&'static str>,
+    #[derive(Builder, Clone)]
+    pub struct Certificate {
+        host: String,
         self_signed: bool,
     }
 
-    impl CertConfig {
-        pub fn new() -> Self {
-            CertConfig {
-                host: None,
-                self_signed: false,
-            }
-        }
-        pub fn host(&self, host: &'static str) -> Self {
-            CertConfig {
-                host: Some(host),
-                self_signed: self.self_signed,
-            }
-        }
-        pub fn self_signed(&self) -> Self {
-            CertConfig {
-                host: self.host,
-                self_signed: true,
-            }
-        }
-    }
-
-    #[derive(Debug)]
-    #[derive(Clone)]
-    #[derive(Copy)]
+    #[derive(Clone, Copy)]
     pub enum ClientAuthType {
         NoClientCert,
         RequireAnyClientCert,
     }
 
-    #[derive(Debug)]
-    #[derive(Clone)]
-    #[derive(Copy)]
+    #[derive(Builder, Clone, Copy)]
     pub struct Config {
-        pub cipher_suite: Option<CipherSuite>,
-        pub cert: Option<Cert>,
+        pub certificates: &'static Vec<Certificate>,
+        pub cipher_suites: &'static Vec<CipherSuite>,
         pub insecure_skip_verify: bool,
-        pub psk: Option<PSK>,
-        pub psk_id_hint: Option<PSKIdHint>,
-        pub mtu: Option<MTU>,
-        pub flight_interval: Option<FlightInterval>,
+        // sets the PSK used by the DTLS connection
+        pub psk_callback: PskCallback,
+        pub psk_id_hint: PskIdHint,
+        // maximum tranmission unit in bytes
+        pub mtu: MTU,
+        // how often we send outbound handshake messages
+        pub flight_interval: FlightInterval,
         pub client_auth_type: ClientAuthType,
-    }
-
-    // TODO: there is almost definitely an existing macro for this...
-    impl Config {
-        pub fn new() -> Self {
-            Config {
-                cipher_suite: None,
-                cert: None,
-                insecure_skip_verify: false,
-                psk: None,
-                psk_id_hint: None,
-                mtu: None,
-                flight_interval: None,
-                client_auth_type: ClientAuthType::NoClientCert,
-            }
-        }
-
-        pub fn cert(&self, cert: Cert) -> Self {
-             Config {
-                cipher_suite: self.cipher_suite,
-                cert: Some(cert),
-                insecure_skip_verify: self.insecure_skip_verify,
-                psk: self.psk,
-                psk_id_hint: self.psk_id_hint,
-                mtu: self.mtu,
-                flight_interval: None,
-                client_auth_type: self.client_auth_type,
-            }
-        }
-
-        pub fn cipher_suite(&self, cipher_suite: CipherSuite) -> Self {
-            Config {
-                cipher_suite: Some(cipher_suite),
-                cert: self.cert,
-                insecure_skip_verify: self.insecure_skip_verify,
-                psk: self.psk,
-                psk_id_hint: self.psk_id_hint,
-                mtu: self.mtu,
-                flight_interval: None,
-                client_auth_type: self.client_auth_type,
-            }
-        }
-
-        pub fn insecure_skip_verify(&self) -> Self {
-            Config {
-                cipher_suite: self.cipher_suite,
-                cert: self.cert,
-                insecure_skip_verify: true,
-                psk: self.psk,
-                psk_id_hint: self.psk_id_hint,
-                mtu: self.mtu,
-                flight_interval: None,
-                client_auth_type: self.client_auth_type,
-            }
-        }
-
-        pub fn psk(&self, psk: PSK, psk_id_hint: PSKIdHint) -> Self {
-            Config {
-                cipher_suite: self.cipher_suite,
-                cert: self.cert,
-                insecure_skip_verify: self.insecure_skip_verify,
-                psk: Some(psk),
-                psk_id_hint: Some(psk_id_hint),
-                mtu: self.mtu,
-                flight_interval: None,
-                client_auth_type: self.client_auth_type,
-            }
-        }
-
-        pub fn mtu(&self, mtu: MTU) -> Self {
-            Config {
-                cipher_suite: self.cipher_suite,
-                cert: self.cert,
-                insecure_skip_verify: self.insecure_skip_verify,
-                psk: self.psk,
-                psk_id_hint: self.psk_id_hint,
-                mtu: Some(mtu),
-                flight_interval: None,
-                client_auth_type: self.client_auth_type,
-            }
-        }
-
-        pub fn flight_interval(&self, flight_interval: FlightInterval) -> Self {
-            Config {
-                cipher_suite: self.cipher_suite,
-                cert: self.cert,
-                insecure_skip_verify: self.insecure_skip_verify,
-                psk: self.psk,
-                psk_id_hint: self.psk_id_hint,
-                mtu: self.mtu,
-                flight_interval: Some(flight_interval),
-                client_auth_type: self.client_auth_type,
-            }
-        }
-
-        pub fn client_auth_type(&self, client_auth_type: ClientAuthType) -> Self {
-            Config {
-                cipher_suite: self.cipher_suite,
-                cert: self.cert,
-                insecure_skip_verify: self.insecure_skip_verify,
-                psk: self.psk,
-                psk_id_hint: self.psk_id_hint,
-                mtu: self.mtu,
-                flight_interval: None,
-                client_auth_type: client_auth_type,
-            }
-        }
     }
 
     pub async fn listen(

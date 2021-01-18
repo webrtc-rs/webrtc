@@ -1,25 +1,38 @@
 
 mod mocks;
 
-use mocks::dtls::{self, Config, Cert, CertConfig, CipherSuite, MTU, PSK};
+use mocks::dtls::{
+    self,
+    Config,
+    ConfigBuilder,
+    CertificateBuilder,
+    CipherSuite,
+    MTU,
+    TcpPort
+};
 use tokio::{self, net::TcpStream, time::{Duration, sleep}};
-use std::{sync::Arc, io::{Error, ErrorKind}};
-use tokio::sync::Mutex;
+use tokio::{sync::{oneshot, Mutex}, io::{Error, ErrorKind}};
+use std::sync::Arc;
 
 const TEST_MESSAGE: &str = "Hello world";
 
 #[test]
 pub fn e2e_basic() {
-    let cipher_suites: [u16; 2] = [
-        dtls::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-        dtls::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA
+    let cipher_suites: [CipherSuite; 2] = [
+        CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+        CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA
     ];
-    for cipher in cipher_suites.iter() {
-        let cert = Cert::new(CertConfig::new().self_signed());
-        let conf = Config::new()
-            .cipher_suite(*cipher)
-            .cert(cert)
-            .insecure_skip_verify();
+    for cs in cipher_suites.iter() {
+        let cert = CertificateBuilder::default()
+            .self_signed(true)
+            .build()
+            .unwrap();
+        let conf = ConfigBuilder::default()
+            .cipher_suites(vec!(*cs))
+            .certificates(vec!(cert))
+            .insecure_skip_verify(true)
+            .build()
+            .unwrap();
         check_comms(conf);
     }
 }
@@ -27,15 +40,18 @@ pub fn e2e_basic() {
 #[test]
 pub fn e2e_simple_psk() {
     let cipher_suites: [CipherSuite; 3] = [
-        dtls::TLS_PSK_WITH_AES_128_CCM,
-        dtls::TLS_PSK_WITH_AES_128_CCM_8,
-        dtls::TLS_PSK_WITH_AES_128_GCM_SHA256,
+        CipherSuite::TLS_PSK_WITH_AES_128_CCM,
+        CipherSuite::TLS_PSK_WITH_AES_128_CCM_8,
+        CipherSuite::TLS_PSK_WITH_AES_128_GCM_SHA256,
     ];
-    for cipher in cipher_suites.iter() {
-        let (psk, psk_id_hint) = create_psk();
-        let conf = Config::new()
-            .psk(psk, psk_id_hint)
-            .cipher_suite(*cipher);
+    for cs in cipher_suites.iter() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let conf = ConfigBuilder::default()
+            .psk_callback(&|_| { vec!(0xAB, 0xC1, 0x23,) })
+            .psk_id_hint(vec!(0x01, 0x02, 0x03, 0x04, 0x05))
+            .cipher_suites(vec!(*cs))
+            .build()
+            .unwrap();
         check_comms(conf);
     }      
 }
@@ -48,19 +64,23 @@ pub fn e2e_mtu() {
         100
     ];
     for mtu in mtus.iter() {
-        let cert = Cert::new(CertConfig::new().self_signed().host("localhost"));
-        let conf: Config = Config::new()
-            .cert(cert)
-            .cipher_suite(dtls::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256)
+        let cert = CertificateBuilder::default()
+            .self_signed(true)
+            .host("localhost".to_string())
+            .build()
+            .unwrap();
+        let conf = ConfigBuilder::default()
+            .certificates(vec!(cert))
+            .cipher_suites(vec!(CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256))
+            .insecure_skip_verify(true)
             .mtu(*mtu)
-            .insecure_skip_verify();
+            .build()
+            .unwrap();
         check_comms(conf);
     }
 }
 
-fn create_psk() -> (PSK,PSK) { ((),()) }
-
-async fn random_port() -> u16 {
+async fn random_port() -> TcpPort {
     let addr = "127.0.0.1:0".parse::<std::net::SocketAddr>().unwrap();
     let sock = match tokio::net::UdpSocket::bind(addr).await {
         Ok(s) => s,
@@ -147,8 +167,8 @@ async fn simple_read_write(stream: TcpStream) -> Result<String, std::io::Error> 
 }
 
 async fn run_client(
-    client_config: Config,
-    server_port: u16,
+    config: &Config,
+    server_port: TcpPort,
     start_rx: tokio::sync::oneshot::Receiver<()>,
 ) -> Result<String, std::io::Error>
 {
@@ -159,7 +179,13 @@ async fn run_client(
         _ = &mut sleep => { panic!("Client timed out waiting for server after {:?}", timeout) }
         _ = start_rx => {}  // Do nothing
     }
-    let stream = match dtls::dial("udp".to_string(), "127.0.0.1".to_string(), server_port, client_config).await {
+    let dial = dtls::dial(
+        "udp".to_string(),
+        "127.0.0.1".to_string(),
+        server_port,
+        *config
+    );
+    let stream = match dial.await {
         Ok(stream) => stream,
         Err(e) => return Err(e),
     };
@@ -167,12 +193,18 @@ async fn run_client(
 }
 
 async fn run_server(
-    server_config: Config,
-    server_port: u16,
+    config: &Config,
+    server_port: TcpPort,
     ready_tx: tokio::sync::oneshot::Sender<()>,
 ) -> Result<String, Error>
 {
-    let listener = match dtls::listen("udp".to_string(), "127.0.0.1".to_string(), server_port, server_config).await {
+    let listen = dtls::listen(
+        "udp".to_string(),
+        "127.0.0.1".to_string(),
+        server_port,
+        *config
+    );
+    let listener = match listen.await {
         Ok(listener) => listener,
         Err(e) => panic!(e),
     };
@@ -187,24 +219,15 @@ async fn run_server(
     simple_read_write(stream).await
 }
 
-fn check_comms(config: Config) {
-    println!("Checking client server communication:\n{:?}\n", config);
+pub fn check_comms(conf: Config) {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on( async move {
+        let port = random_port().await;
+        let (server_start_tx, server_start_rx) = oneshot::channel();
+        let server = tokio::spawn(run_server(&conf, port, server_start_tx));
+        let client = tokio::spawn(run_client(&conf, port, server_start_rx));
         let mut client_complete = false;
         let mut server_complete = false;
-        let server_port = random_port().await;
-        let (server_ready_tx, server_ready_rx) = tokio::sync::oneshot::channel();
-        let client = tokio::spawn(run_client(
-            config,
-            server_port,
-            server_ready_rx,
-        ));
-        let server = tokio::spawn(run_server(
-            config,
-            server_port,
-            server_ready_tx,
-        ));
         let timeout = Duration::from_secs(5);
         let sleep = sleep(timeout);
         tokio::pin!(sleep);

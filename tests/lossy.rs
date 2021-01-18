@@ -1,100 +1,63 @@
 
+#[macro_use]
+extern crate derive_builder;
+
 mod mocks;
 
-use mocks::dtls::{self, Client, Server, Config, Cert, CertConfig, CipherSuite, MTU};
+use mocks::dtls::{
+    self,
+    Client,
+    Server,
+    ConfigBuilder,
+    CertificateBuilder,
+    CipherSuite,
+    MTU
+};
 use mocks::transport;
 use tokio::time::{sleep, Duration};
 use rand::prelude::*;
 
-#[derive(Copy)]
-#[derive(Clone)]
+#[derive(Builder, Clone, Copy)]
 struct TestCase {
-    loss_chance: u8,
-    do_client_auth: bool,
-    cipher_suite: Option<CipherSuite>,
-    mtu: MTU,
-}
-
-// TODO find macro for this
-impl TestCase {
-    pub fn new() -> Self {
-        TestCase {
-            loss_chance: 0,
-            do_client_auth: false,
-            cipher_suite: None,
-            mtu: 0,
-        }
-    }
-    pub fn loss_chance(&self, loss_chance: u8) -> Self {
-        TestCase {
-            loss_chance,
-            do_client_auth: self.do_client_auth,
-            cipher_suite: self.cipher_suite,
-            mtu: self.mtu,
-        }
-    }
-    pub fn do_client_auth(&self) -> Self {
-        TestCase {
-            loss_chance: self.loss_chance,
-            do_client_auth: true,
-            cipher_suite: self.cipher_suite,
-            mtu: self.mtu,
-        }
-    }
-    pub fn mtu(&self, mtu: MTU) -> Self {
-        TestCase {
-            loss_chance: self.loss_chance,
-            do_client_auth: self.do_client_auth,
-            cipher_suite: self.cipher_suite,
-            mtu: mtu,
-        }
-    }
-    pub fn cipher_suite(&self, cipher_suite: CipherSuite) -> Self {
-        TestCase {
-            loss_chance: self.loss_chance,
-            do_client_auth: self.do_client_auth,
-            cipher_suite: Some(cipher_suite),
-            mtu: self.mtu,
-        }
-    }
+    pub loss_chance: u8,
+    pub do_client_auth: bool,
+    pub cipher_suite: Option<CipherSuite>,
+    pub mtu: MTU,
 }
 
 const LOSSY_TEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[test]
 pub fn e2e_lossy() {
-    let server_cert = Cert::new(CertConfig::new().self_signed());
-    let client_cert = Cert::new(CertConfig::new().self_signed());
-    let cases: Vec<TestCase> = vec!(
-        TestCase::new().loss_chance(0),
-        TestCase::new().loss_chance(10),
-        TestCase::new().loss_chance(20),
-        TestCase::new().loss_chance(50),
-        TestCase::new().loss_chance(0).do_client_auth(),
-        TestCase::new().loss_chance(10).do_client_auth(),
-        TestCase::new().loss_chance(20).do_client_auth(),
-        TestCase::new().loss_chance(50).do_client_auth(),
-        TestCase::new().loss_chance(0).cipher_suite(dtls::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA),
-        TestCase::new().loss_chance(10).cipher_suite(dtls::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA),
-        TestCase::new().loss_chance(20).cipher_suite(dtls::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA),
-        TestCase::new().loss_chance(50).cipher_suite(dtls::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA),
-        TestCase::new().loss_chance(0).do_client_auth().mtu(100),
-        TestCase::new().loss_chance(10).do_client_auth().mtu(100),
-        TestCase::new().loss_chance(20).do_client_auth().mtu(100),
-        TestCase::new().loss_chance(50).do_client_auth().mtu(100),
+    let server_cert = CertificateBuilder::default().self_signed(true);
+    let client_cert = CertificateBuilder::default().self_signed(true);
+    let cases: Vec<&mut TestCaseBuilder> = vec!(
+        TestCaseBuilder::default().loss_chance(0),
+        TestCaseBuilder::default().loss_chance(10),
+        TestCaseBuilder::default().loss_chance(20),
+        TestCaseBuilder::default().loss_chance(50),
+        TestCaseBuilder::default().loss_chance(0) .do_client_auth(true),
+        TestCaseBuilder::default().loss_chance(10).do_client_auth(true),
+        TestCaseBuilder::default().loss_chance(20).do_client_auth(true),
+        TestCaseBuilder::default().loss_chance(50).do_client_auth(true),
+        TestCaseBuilder::default().loss_chance(0) .cipher_suite( Some(CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA)),
+        TestCaseBuilder::default().loss_chance(10).cipher_suite(Some(CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA)),
+        TestCaseBuilder::default().loss_chance(20).cipher_suite(Some(CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA)),
+        TestCaseBuilder::default().loss_chance(50).cipher_suite(Some(CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA)),
+        TestCaseBuilder::default().loss_chance(0) .do_client_auth(true).mtu(100),
+        TestCaseBuilder::default().loss_chance(10).do_client_auth(true).mtu(100),
+        TestCaseBuilder::default().loss_chance(20).do_client_auth(true).mtu(100),
+        TestCaseBuilder::default().loss_chance(50).do_client_auth(true).mtu(100),
     );
-    for case in cases {
+    for c in cases {
+        let case = c.build().unwrap();
         let mut name = format!("Loss{}_MTU{}", case.loss_chance, case.mtu);
         if case.do_client_auth {
             name = format!("{}_WithCliAuth", name);
         }
         match case.cipher_suite {
-            Some(cipher_suite) => {
-                name = format!("{}_With{}", name, cipher_suite);
-            }
-            _ => {
-                // do nothing
-            }
+            Some(cs) => name = format!("{}_With{:?}", name, cs),
+            None => {},
         }
         println!("Test: {}", name);
         let flight_interval = Duration::from_millis(100);
@@ -105,31 +68,31 @@ pub fn e2e_lossy() {
             bridge.set_loss_chance(chosen_loss);
 
             let client = tokio::spawn( async move {
-                let mut config = Config::new()
+                let mut config = ConfigBuilder::default()
                     .flight_interval(flight_interval)
-                    .insecure_skip_verify()
+                    .insecure_skip_verify(true)
                     .mtu(case.mtu);
                 match case.cipher_suite {
                     Some(cipher_suite) => {
-                        config = config.cipher_suite(cipher_suite);
+                        config.cipher_suites(vec!(cipher_suite));
                     }
                     _ => {}  // do nothing
                 }
                 if case.do_client_auth {
-                    config = config.cert(client_cert);
+                    config = config.certificates(vec!(client_cert));
                 }
-                return Client::new(bridge.get_connection(), config);
+                return Client::new(bridge.get_connection(), config.build().unwrap());
             });
 
             let server = tokio::spawn( async move {
-                let mut config = Config::new()
-                    .cert(server_cert)
+                let mut config = ConfigBuilder::default()
+                    .certificates(vec!(server_cert))
                     .flight_interval(flight_interval)
                     .mtu(case.mtu);
                 if case.do_client_auth {
                     config = config.client_auth_type(dtls::ClientAuthType::RequireAnyClientCert);
                 }
-                return Server::new(bridge.get_connection(), config);
+                return Server::new(bridge.get_connection(), config.build().unwrap());
             });
 
             let test_timeout = sleep(LOSSY_TEST_TIMEOUT);
@@ -158,12 +121,14 @@ pub fn e2e_lossy() {
                                         *server_conn = Some(*conn);
                                     }
                                     Ok(Err(e)) => {
-                                        fail("server".to_string(),
-                                        client_done, server_done, chosen_loss, e.to_string());
+                                        fail("server error".to_string(),
+                                            client_done, server_done, chosen_loss,
+                                            e.to_string());
                                     }
                                     Err(e) => {
-                                        fail("server".to_string(),
-                                            client_done, server_done, chosen_loss, e.to_string());
+                                        fail("server error".to_string(),
+                                            client_done, server_done, chosen_loss,
+                                            e.to_string());
                                     }
                                 }
                             }
@@ -174,21 +139,21 @@ pub fn e2e_lossy() {
                                         *client_conn = Some(*conn);
                                     }
                                     Ok(Err(e)) => {
-                                        fail("client".to_string(),
-                                        client_done, server_done, chosen_loss, e.to_string());
+                                        fail("client error".to_string(),
+                                            client_done, server_done, chosen_loss,
+                                            e.to_string());
                                     }
                                     Err(e) => {
-                                        fail("client".to_string(),
-                                            client_done, server_done, chosen_loss, e.to_string());
+                                        fail("client error".to_string(),
+                                            client_done, server_done, chosen_loss,
+                                            e.to_string());
                                     }
                                 }
                             }
                             _ = &mut test_timeout => {
-                                assert!(
-                                    false,
-                                    "Test expired: clientComplete({}) serverComplete({}) LossChance({})",
-                                    client_done, server_done, chosen_loss
-                                );
+                                fail("timed out".to_string(),
+                                    client_done, server_done, chosen_loss,
+                                    format!("test timed out after {:?}", LOSSY_TEST_TIMEOUT));
                             }
                             _ = iter_timeout => {
                                 // Do nothing
@@ -201,10 +166,10 @@ pub fn e2e_lossy() {
     }
 }
 
-fn fail(name: String, client_done: bool, server_done: bool, chosen_loss: u8, msg: String) {
+fn fail(preamble: String, client_done: bool, server_done: bool, chosen_loss: u8, msg: String) {
     assert!(
         false,
-        "{} error: clientComplete({}) serverComplete({}) LossChance({}) error({})",
-        name, client_done, server_done, chosen_loss, msg,
+        "{} ... clientComplete({}) serverComplete({}) LossChance({}) error({})",
+        preamble, client_done, server_done, chosen_loss, msg,
     );
 }

@@ -1,61 +1,56 @@
 
 mod mocks;
 
-use mocks::dtls::{self, Client, Server, Config, Event, Cert, CertConfig, CipherSuite, PSK, PSKIdHint, MTU};
-use mocks::transport;
+use mocks::dtls::{self, Config, Event, Cert, CertConfig, CipherSuite, PSK, PSKIdHint, MTU};
 use tokio::{sync::{mpsc, oneshot}, process::Command};
 use std::io::Error;
 
-
-async fn server_openssl(
+async fn run_server(
     config: Config,
     err_chan: mpsc::Sender<String>
 ) -> Result<(), Error>
 {
-    let jh = tokio::spawn( async {
-        let args = vec!(
-            "s_server",
-            "-dtls1_2",
-            "-quiet",
-            "-verify_quiet",
-            "-verify_return_error",
-        );
-        let ciphers = cipher_openssl(&config);
-        if ciphers != "" {
-            args.push(format!("-cipher={}", ciphers))
-        }
-        if config.psk != None {
-            let psk = match psk(None) {
-                Ok(k) => k,
-                Err(e) => return Err(e.into()),
-            };
-            args.push(format!("-psk={}", psk));
-        }
-        if config.psk_id_hint.length() > 0 {
-            args.push(format!("-psk_hint={}", config.psk_id_hint))
-        }
-        if config.certificates.length() > 0 {
-            // TODO drop the temp file
-            let (cert_pem, key_pem) = match write_temp_pem(&config) {
-                Ok((c,k)) => (c,k),
-                Err(e) => return Err(e.into()),
-            };
-            args.push(format!("-cert={}", cert_pem));
-            args.push(format!("-key={}", key_pem));
-        } else {
-            args.push(format!("-nocert"));
-        }
-        let output = match Command::new("openssl").args(&args).output().await {
-            Ok(o) => o,
+    let args = vec!(
+        "s_server",
+        "-dtls1_2",
+        "-quiet",
+        "-verify_quiet",
+        "-verify_return_error",
+    );
+    let ciphers = cipher_openssl(&config);
+    if ciphers != "" {
+        args.push(format!("-cipher={}", ciphers))
+    }
+    if config.psk != None {
+        let psk = match psk(None) {
+            Ok(k) => k,
             Err(e) => return Err(e.into()),
         };
-        println!("{:?}", output);
-        Ok(())
-    });
+        args.push(format!("-psk={}", psk));
+    }
+    if config.psk_id_hint.length() > 0 {
+        args.push(format!("-psk_hint={}", config.psk_id_hint))
+    }
+    if config.certificates.length() > 0 {
+        // TODO drop the temp file
+        let (cert_pem, key_pem) = match write_temp_pem(&config) {
+            Ok((c,k)) => (c,k),
+            Err(e) => return Err(e.into()),
+        };
+        args.push(format!("-cert={}", cert_pem));
+        args.push(format!("-key={}", key_pem));
+    } else {
+        args.push(format!("-nocert"));
+    }
+    let output = match Command::new("openssl").args(&args).output().await {
+        Ok(o) => o,
+        Err(e) => return Err(e.into()),
+    };
+    println!("{:?}", output);
     simple_read_write(stream).await
 }
 
-async fn client_openssl(
+async fn run_client(
     config: Config,
     server_port: u16,
     server_ready: oneshot::Receiver<()>
