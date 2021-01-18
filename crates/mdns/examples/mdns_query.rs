@@ -4,11 +4,9 @@ use mdns::{config::*, conn::*};
 use tokio::sync::mpsc;
 use webrtc_rs_mdns as mdns;
 
-use util::Error;
-
 #[tokio::main]
-async fn main() -> Result<(), Error> {
-    env_logger::Builder::new().init();
+async fn main() {
+    env_logger::init();
 
     let server = DNSConn::server(
         SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 5353),
@@ -22,9 +20,9 @@ async fn main() -> Result<(), Error> {
 
     let (_a, b) = mpsc::channel(1);
 
-    let (answer, src) = server.query("webrtc-rs-mdns-2.local", b).await?;
+    let (answer, src) = server.query("webrtc-rs-mdns-2.local", b).await.unwrap();
     log::info!("dns queried");
     println!("answer = {}, src = {}", answer, src);
 
-    server.close().await
+    server.close().await.unwrap();
 }

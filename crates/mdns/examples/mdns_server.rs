@@ -6,7 +6,7 @@ use webrtc_rs_mdns as mdns;
 
 #[tokio::main]
 async fn main() {
-    env_logger::Builder::new().init();
+    env_logger::init();
 
     let server = DNSConn::server(
         SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 5353),
@@ -18,12 +18,12 @@ async fn main() {
     .unwrap();
 
     let mut signals = Signals::new(&[signal_hook::consts::SIGINT]).unwrap();
-    let close = signals.handle();
+    let close_handle = signals.handle();
 
     for _sig in signals.forever() {
         println!("closing connection now");
         server.close().await.unwrap();
-        close.close();
+        close_handle.close();
         return;
     }
 }
