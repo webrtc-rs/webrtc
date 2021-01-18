@@ -15,11 +15,13 @@ use stun::integrity::*;
 use stun::message::*;
 use stun::textattrs::*;
 
-use util::Error;
+use util::{Conn, Error};
 
+use std::io;
 use std::net::SocketAddr;
+use std::sync::Arc;
 
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 use tokio::time::{Duration, Instant};
 
 use async_trait::async_trait;
@@ -35,7 +37,7 @@ struct InboundData {
 
 // UDPConnObserver is an interface to UDPConn observer
 #[async_trait]
-pub trait UDPConnObserver {
+pub trait RelayConnObserver {
     fn turn_server_addr(&self) -> SocketAddr;
     fn username(&self) -> Username;
     fn realm(&self) -> Realm;
@@ -49,42 +51,148 @@ pub trait UDPConnObserver {
     async fn on_deallocated(&self, relayed_addr: SocketAddr);
 }
 
-// UDPConnConfig is a set of configuration params use by NewUDPConn
-pub struct UDPConnConfig {
-    observer: Box<dyn UDPConnObserver>,
+// RelayConnConfig is a set of configuration params use by NewUDPConn
+pub struct RelayConnConfig {
+    observer: Arc<Mutex<Box<dyn RelayConnObserver + Send + Sync>>>,
     relayed_addr: SocketAddr,
     integrity: MessageIntegrity,
     nonce: Nonce,
     lifetime: Duration,
 }
 
-// UDPConn is the implementation of the Conn and PacketConn interfaces for UDP network connections.
-// compatible with net.PacketConn and net.Conn
-pub struct UDPConn {
-    obs: Box<dyn UDPConnObserver>,
+pub struct RelayConnInternal {
+    obs: Arc<Mutex<Box<dyn RelayConnObserver + Send + Sync>>>,
     relayed_addr: SocketAddr,
     perm_map: PermissionMap,
     binding_mgr: BindingManager,
     integrity: MessageIntegrity,
     nonce: Nonce,
     lifetime: Duration,
-    read_ch_tx: mpsc::Sender<InboundData>,
-    read_ch_rx: mpsc::Receiver<InboundData>,
-    close_ch_tx: Option<mpsc::Sender<()>>,
-    close_ch_rx: mpsc::Receiver<()>,
     refresh_alloc_timer: PeriodicTimer,
     refresh_perms_timer: PeriodicTimer,
 }
 
-impl UDPConn {
-    // new creates a new instance of UDPConn
-    pub fn new(config: UDPConnConfig) -> Self {
-        let (read_ch_tx, read_ch_rx) = mpsc::channel(MAX_READ_QUEUE_SIZE);
-        let (close_ch_tx, close_ch_rx) = mpsc::channel(1);
+// RelayConn is the implementation of the Conn interfaces for UDP Relayed network connections.
+pub struct RelayConn {
+    relayed_addr: SocketAddr,
+    read_ch_tx: Option<mpsc::Sender<InboundData>>,
+    read_ch_rx: Arc<Mutex<mpsc::Receiver<InboundData>>>,
+    relay_conn: Arc<Mutex<RelayConnInternal>>,
+}
 
+impl RelayConn {
+    // new creates a new instance of UDPConn
+    pub fn new(config: RelayConnConfig) -> Self {
+        let (read_ch_tx, read_ch_rx) = mpsc::channel(MAX_READ_QUEUE_SIZE);
+        RelayConn {
+            relayed_addr: config.relayed_addr,
+            read_ch_tx: Some(read_ch_tx),
+            read_ch_rx: Arc::new(Mutex::new(read_ch_rx)),
+            relay_conn: Arc::new(Mutex::new(RelayConnInternal::new(config))),
+        }
+    }
+
+    // handle_inbound passes inbound data in UDPConn
+    pub fn handle_inbound(&self, data: &[u8], from: SocketAddr) -> Result<(), Error> {
+        if let Some(read_ch_tx) = &self.read_ch_tx {
+            if read_ch_tx
+                .try_send(InboundData {
+                    data: data.to_vec(),
+                    from,
+                })
+                .is_err()
+            {
+                log::warn!("receive buffer full");
+            }
+            Ok(())
+        } else {
+            Err(ERR_ALREADY_CLOSED.to_owned())
+        }
+    }
+
+    // Close closes the connection.
+    // Any blocked ReadFrom or write_to operations will be unblocked and return errors.
+    pub async fn close(&mut self) -> Result<(), Error> {
+        if self.read_ch_tx.is_none() {
+            return Err(ERR_ALREADY_CLOSED.to_owned());
+        }
+        self.read_ch_tx.take();
+
+        let mut relay_conn = self.relay_conn.lock().await;
+        relay_conn.close().await
+    }
+}
+
+#[async_trait]
+impl Conn for RelayConn {
+    async fn connect(&self, _addr: SocketAddr) -> io::Result<()> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    }
+
+    async fn recv(&self, _buf: &mut [u8]) -> io::Result<usize> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    }
+
+    // ReadFrom reads a packet from the connection,
+    // copying the payload into p. It returns the number of
+    // bytes copied into p and the return address that
+    // was on the packet.
+    // It returns the number of bytes read (0 <= n <= len(p))
+    // and any error encountered. Callers should always process
+    // the n > 0 bytes returned before considering the error err.
+    // ReadFrom can be made to time out and return
+    // an Error with Timeout() == true after a fixed time limit;
+    // see SetDeadline and SetReadDeadline.
+    async fn recv_from(&self, p: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
+        let mut read_ch_rx = self.read_ch_rx.lock().await;
+
+        if let Some(ib_data) = read_ch_rx.recv().await {
+            let n = ib_data.data.len();
+            if p.len() < n {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    ERR_SHORT_BUFFER.to_string(),
+                ));
+            }
+            p[..n].copy_from_slice(&ib_data.data);
+            Ok((n, ib_data.from))
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::ConnectionAborted,
+                ERR_ALREADY_CLOSED.to_string(),
+            ))
+        }
+    }
+
+    async fn send(&self, _buf: &[u8]) -> io::Result<usize> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    }
+
+    // write_to writes a packet with payload p to addr.
+    // write_to can be made to time out and return
+    // an Error with Timeout() == true after a fixed time limit;
+    // see SetDeadline and SetWriteDeadline.
+    // On packet-oriented connections, write timeouts are rare.
+    async fn send_to(&self, p: &[u8], addr: SocketAddr) -> io::Result<usize> {
+        let mut relay_conn = self.relay_conn.lock().await;
+        match relay_conn.send_to(p, addr).await {
+            Ok(n) => Ok(n),
+            Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.to_string())),
+        }
+    }
+
+    // LocalAddr returns the local network address.
+    fn local_addr(&self) -> io::Result<SocketAddr> {
+        Ok(self.relayed_addr)
+    }
+}
+
+impl RelayConnInternal {
+    // new creates a new instance of UDPConn
+    pub fn new(config: RelayConnConfig) -> Self {
         log::debug!("initial lifetime: {} seconds", config.lifetime.as_secs());
 
-        let mut c = UDPConn {
+        let mut c = RelayConnInternal {
             obs: config.observer,
             relayed_addr: config.relayed_addr,
             perm_map: PermissionMap::new(),
@@ -92,10 +200,6 @@ impl UDPConn {
             integrity: config.integrity,
             nonce: config.nonce,
             lifetime: config.lifetime,
-            read_ch_tx,
-            read_ch_rx,
-            close_ch_tx: Some(close_ch_tx),
-            close_ch_rx,
             refresh_alloc_timer: PeriodicTimer::new(
                 TimerIdRefresh::Alloc,
                 None, //TODO
@@ -118,57 +222,12 @@ impl UDPConn {
         c
     }
 
-    // ReadFrom reads a packet from the connection,
-    // copying the payload into p. It returns the number of
-    // bytes copied into p and the return address that
-    // was on the packet.
-    // It returns the number of bytes read (0 <= n <= len(p))
-    // and any error encountered. Callers should always process
-    // the n > 0 bytes returned before considering the error err.
-    // ReadFrom can be made to time out and return
-    // an Error with Timeout() == true after a fixed time limit;
-    // see SetDeadline and SetReadDeadline.
-    pub async fn recv_from(&mut self, p: &mut [u8]) -> Result<(usize, SocketAddr), Error> {
-        loop {
-            tokio::select! {
-                result = self.read_ch_rx.recv() => if let Some(ib_data) = result{
-                    let n = ib_data.data.len();
-                    if p.len() <  n {
-                        return Err(ERR_SHORT_BUFFER.to_owned());
-                    }
-                    p[..n].copy_from_slice(&ib_data.data);
-                    return Ok((n, ib_data.from));
-                },
-                _ = self.close_ch_rx.recv() => return Err(ERR_CLOSED.to_owned()),
-            }
-        }
-    }
-
-    // This func-block would block, per destination IP (, or perm), until
-    // the perm state becomes "requested". Purpose of this is to guarantee
-    // the order of packets (within the same perm).
-    // Note that CreatePermission transaction may not be complete before
-    // all the data transmission. This is done assuming that the request
-    // will be mostly likely successful and we can tolerate some loss of
-    // UDP packet (or reorder), inorder to minimize the latency in most cases.
-    async fn create_perm(&mut self, perm: &mut Permission, addr: SocketAddr) -> Result<(), Error> {
-        if perm.state() == PermState::Idle {
-            // punch a hole! (this would block a bit..)
-            if let Err(err) = self.create_permissions(&[addr]).await {
-                self.perm_map.delete(&addr);
-                return Err(err);
-            }
-            perm.set_state(PermState::Permitted);
-        }
-        Ok(())
-    }
-
     // write_to writes a packet with payload p to addr.
     // write_to can be made to time out and return
     // an Error with Timeout() == true after a fixed time limit;
     // see SetDeadline and SetWriteDeadline.
     // On packet-oriented connections, write timeouts are rare.
-    pub async fn send_to(&mut self, p: &[u8], addr: SocketAddr) -> Result<usize, Error> {
+    async fn send_to(&mut self, p: &[u8], addr: SocketAddr) -> Result<usize, Error> {
         // check if we have a permission for the destination IP addr
         let mut perm = if let Some(perm) = self.perm_map.find(&addr) {
             *perm
@@ -182,7 +241,7 @@ impl UDPConn {
         for _ in 0..MAX_RETRY_ATTEMPTS {
             result = self.create_perm(&mut perm, addr).await;
             if let Err(err) = &result {
-                if *err == *ERR_TRY_AGAIN {
+                if *err != *ERR_TRY_AGAIN {
                     break;
                 }
             }
@@ -240,11 +299,8 @@ impl UDPConn {
                 ])?;
 
                 // indication has no transaction (fire-and-forget)
-
-                return self
-                    .obs
-                    .write_to(&msg.raw, self.obs.turn_server_addr())
-                    .await;
+                let obs = self.obs.lock().await;
+                return obs.write_to(&msg.raw, obs.turn_server_addr()).await;
             }
 
             // binding is either ready
@@ -277,6 +333,25 @@ impl UDPConn {
         self.send_channel_data(p, number).await
     }
 
+    // This func-block would block, per destination IP (, or perm), until
+    // the perm state becomes "requested". Purpose of this is to guarantee
+    // the order of packets (within the same perm).
+    // Note that CreatePermission transaction may not be complete before
+    // all the data transmission. This is done assuming that the request
+    // will be mostly likely successful and we can tolerate some loss of
+    // UDP packet (or reorder), inorder to minimize the latency in most cases.
+    async fn create_perm(&mut self, perm: &mut Permission, addr: SocketAddr) -> Result<(), Error> {
+        if perm.state() == PermState::Idle {
+            // punch a hole! (this would block a bit..)
+            if let Err(err) = self.create_permissions(&[addr]).await {
+                self.perm_map.delete(&addr);
+                return Err(err);
+            }
+            perm.set_state(PermState::Permitted);
+        }
+        Ok(())
+    }
+
     async fn send_channel_data(&self, data: &[u8], ch_num: u16) -> Result<usize, Error> {
         let mut ch_data = proto::chandata::ChannelData {
             data: data.to_vec(),
@@ -284,36 +359,43 @@ impl UDPConn {
             ..Default::default()
         };
         ch_data.encode();
-        self.obs
-            .write_to(&ch_data.raw, self.obs.turn_server_addr())
-            .await
+
+        let obs = self.obs.lock().await;
+        obs.write_to(&ch_data.raw, obs.turn_server_addr()).await
     }
 
     async fn create_permissions(&mut self, addrs: &[SocketAddr]) -> Result<(), Error> {
-        let mut setters: Vec<Box<dyn Setter>> = vec![
-            Box::new(TransactionId::new()),
-            Box::new(MessageType::new(METHOD_CREATE_PERMISSION, CLASS_REQUEST)),
-        ];
+        let res = {
+            let msg = {
+                let obs = self.obs.lock().await;
+                let mut setters: Vec<Box<dyn Setter>> = vec![
+                    Box::new(TransactionId::new()),
+                    Box::new(MessageType::new(METHOD_CREATE_PERMISSION, CLASS_REQUEST)),
+                ];
 
-        for addr in addrs {
-            setters.push(Box::new(socket_addr2peer_address(addr)));
-        }
+                for addr in addrs {
+                    setters.push(Box::new(socket_addr2peer_address(addr)));
+                }
 
-        setters.push(Box::new(self.obs.username()));
-        setters.push(Box::new(self.obs.realm()));
-        setters.push(Box::new(self.nonce.clone()));
-        setters.push(Box::new(self.integrity.clone()));
-        setters.push(Box::new(FINGERPRINT));
+                setters.push(Box::new(obs.username()));
+                setters.push(Box::new(obs.realm()));
+                setters.push(Box::new(self.nonce.clone()));
+                setters.push(Box::new(self.integrity.clone()));
+                setters.push(Box::new(FINGERPRINT));
 
-        let mut msg = Message::new();
-        msg.build(&setters)?;
+                let mut msg = Message::new();
+                msg.build(&setters)?;
+                msg
+            };
 
-        let tr_res = self
-            .obs
-            .perform_transaction(&msg, self.obs.turn_server_addr(), false)
-            .await?;
+            let mut obs = self.obs.lock().await;
+            let turn_server_addr = obs.turn_server_addr();
+            let tr_res = obs
+                .perform_transaction(&msg, turn_server_addr, false)
+                .await?;
 
-        let res = tr_res.msg;
+            tr_res.msg
+        };
 
         if res.typ.class == CLASS_ERROR_RESPONSE {
             let mut code = ErrorCodeAttribute::default();
@@ -342,39 +424,17 @@ impl UDPConn {
         }
     }
 
-    // LocalAddr returns the local network address.
-    pub fn local_addr(&self) -> SocketAddr {
-        self.relayed_addr
-    }
-
     // Close closes the connection.
     // Any blocked ReadFrom or write_to operations will be unblocked and return errors.
     pub async fn close(&mut self) -> Result<(), Error> {
-        if self.close_ch_tx.is_none() {
-            return Err(ERR_ALREADY_CLOSED.to_owned());
-        }
-
         self.refresh_alloc_timer.stop();
         self.refresh_perms_timer.stop();
-        self.close_ch_tx.take();
-
-        self.obs.on_deallocated(self.relayed_addr).await;
+        {
+            let obs = self.obs.lock().await;
+            obs.on_deallocated(self.relayed_addr).await;
+        }
         self.refresh_allocation(Duration::from_secs(0), true /* dontWait=true */)
             .await
-    }
-
-    // handle_inbound passes inbound data in UDPConn
-    pub fn handle_inbound(&mut self, data: &[u8], from: SocketAddr) {
-        if self
-            .read_ch_tx
-            .try_send(InboundData {
-                data: data.to_vec(),
-                from,
-            })
-            .is_err()
-        {
-            log::warn!("receive buffer full");
-        }
     }
 
     // find_addr_by_channel_number returns a peer address associated with the
@@ -392,32 +452,37 @@ impl UDPConn {
         lifetime: Duration,
         dont_wait: bool,
     ) -> Result<(), Error> {
-        let mut msg = Message::new();
-        msg.build(&[
-            Box::new(TransactionId::new()),
-            Box::new(MessageType::new(METHOD_REFRESH, CLASS_REQUEST)),
-            Box::new(proto::lifetime::Lifetime(lifetime)),
-            Box::new(self.obs.username()),
-            Box::new(self.obs.realm()),
-            Box::new(self.nonce.clone()),
-            Box::new(self.integrity.clone()),
-            Box::new(FINGERPRINT),
-        ])?;
+        let res = {
+            let mut obs = self.obs.lock().await;
 
-        log::debug!("send refresh request (dont_wait={})", dont_wait);
-        let tr_res = self
-            .obs
-            .perform_transaction(&msg, self.obs.turn_server_addr(), dont_wait)
-            .await?;
+            let mut msg = Message::new();
+            msg.build(&[
+                Box::new(TransactionId::new()),
+                Box::new(MessageType::new(METHOD_REFRESH, CLASS_REQUEST)),
+                Box::new(proto::lifetime::Lifetime(lifetime)),
+                Box::new(obs.username()),
+                Box::new(obs.realm()),
+                Box::new(self.nonce.clone()),
+                Box::new(self.integrity.clone()),
+                Box::new(FINGERPRINT),
+            ])?;
 
-        if dont_wait {
-            log::debug!("refresh request sent");
-            return Ok(());
-        }
+            log::debug!("send refresh request (dont_wait={})", dont_wait);
+            let turn_server_addr = obs.turn_server_addr();
+            let tr_res = obs
+                .perform_transaction(&msg, turn_server_addr, dont_wait)
+                .await?;
 
-        log::debug!("refresh request sent, and waiting response");
+            if dont_wait {
+                log::debug!("refresh request sent");
+                return Ok(());
+            }
 
-        let res = tr_res.msg;
+            log::debug!("refresh request sent, and waiting response");
+
+            tr_res.msg
+        };
+
         if res.typ.class == CLASS_ERROR_RESPONSE {
             let mut code = ErrorCodeAttribute::default();
             let result = code.get_from(&res);
@@ -459,13 +524,15 @@ impl UDPConn {
     }
 
     async fn bind(&mut self, b: &Binding) -> Result<(), Error> {
+        let mut obs = self.obs.lock().await;
+
         let setters: Vec<Box<dyn Setter>> = vec![
             Box::new(TransactionId::new()),
             Box::new(MessageType::new(METHOD_CHANNEL_BIND, CLASS_REQUEST)),
             Box::new(socket_addr2peer_address(&b.addr)),
             Box::new(proto::channum::ChannelNumber(b.number)),
-            Box::new(self.obs.username()),
-            Box::new(self.obs.realm()),
+            Box::new(obs.username()),
+            Box::new(obs.realm()),
             Box::new(self.nonce.clone()),
             Box::new(self.integrity.clone()),
             Box::new(FINGERPRINT),
@@ -474,11 +541,8 @@ impl UDPConn {
         let mut msg = Message::new();
         msg.build(&setters)?;
 
-        let tr_res = match self
-            .obs
-            .perform_transaction(&msg, self.obs.turn_server_addr(), false)
-            .await
-        {
+        let turn_server_addr = obs.turn_server_addr();
+        let tr_res = match obs.perform_transaction(&msg, turn_server_addr, false).await {
             Err(err) => {
                 self.binding_mgr.delete_by_addr(&b.addr);
                 return Err(err);
@@ -509,7 +573,7 @@ impl UDPConn {
                 for _ in 0..MAX_RETRY_ATTEMPTS {
                     result = self.refresh_allocation(lifetime, false).await;
                     if let Err(err) = &result {
-                        if *err == *ERR_TRY_AGAIN {
+                        if *err != *ERR_TRY_AGAIN {
                             break;
                         }
                     }
@@ -523,7 +587,7 @@ impl UDPConn {
                 for _ in 0..MAX_RETRY_ATTEMPTS {
                     result = self.refresh_permissions().await;
                     if let Err(err) = &result {
-                        if *err == *ERR_TRY_AGAIN {
+                        if *err != *ERR_TRY_AGAIN {
                             break;
                         }
                     }

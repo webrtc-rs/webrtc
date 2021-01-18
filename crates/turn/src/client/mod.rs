@@ -73,7 +73,7 @@ pub struct Client {
 }
 
 #[async_trait]
-impl UDPConnObserver for Client {
+impl RelayConnObserver for Client {
     // turn_server_addr return the TURN server address
     fn turn_server_addr(&self) -> SocketAddr {
         self.turn_serv_addr
