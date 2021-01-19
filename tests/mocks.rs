@@ -111,11 +111,12 @@ pub mod dtls {
 
     pub struct Certificate {
         pub certificate: Vec<CertParts>,
-        pub private_key: (),
+        pub private_key: CertPrivateKey,
     }
 
     // TODO
-    struct CertParts { }
+    pub struct CertParts      {}
+    pub struct CertPrivateKey {}
 
     #[derive(Builder, Clone)]
     pub struct CertConfig {
@@ -190,8 +191,27 @@ pub mod transport {
         pub fn get_connection(&self) -> Connection { Connection { } }
     }
 }
-pub mod test_runner {
 
+pub mod pem {
+    use super::dtls::CertParts;
+    use std::fs::File;
+    pub struct Block {}
+    impl Block {
+        pub fn new(kind: String, der_bytes: CertParts) -> Self { Block {} }
+    }
+    pub fn encode(out_file: File, block: Block) -> Result<(), String> { Ok(()) }
+}
+
+pub mod x509 {
+    use super::dtls::{CertParts, CertPrivateKey};
+    pub fn marshal_pkcs8_private_key(pk: CertPrivateKey, )
+    -> Result<CertParts, String>
+    {
+        Ok(CertParts {} )
+    }
+}
+
+pub mod test_runner {
     use super::dtls::{Config, TcpPort};
     use tokio::{
         self,

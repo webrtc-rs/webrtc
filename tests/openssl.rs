@@ -130,7 +130,7 @@ async fn run_server(
     // Notify client
     match ready_tx.send(()) {
         Ok(_) => {},
-        Err(e) => return Err("failed to send server ready signal".to_string()),
+        Err(_) => return Err("failed to send server ready signal".to_string()),
     }
 
     // Accept client connection
@@ -234,7 +234,7 @@ pub fn write_temp_pem<F>(cert: Certificate)
         .read(true)
         .open(cert_path)
         .unwrap();
-    match pem::encode(cert_out, pem::Block::new("CERTIFICATE", der_bytes)) {
+    match pem::encode(cert_out, pem::Block::new("CERTIFICATE".to_string(), der_bytes)) {
         Ok(_) => {},
         Err(e) => return Err(e.to_string())
     }
@@ -252,7 +252,7 @@ pub fn write_temp_pem<F>(cert: Certificate)
         Ok(b) => b,
         Err(e) => return Err(e.to_string())
     };
-    match pem::encode(key_out, pem::Block::new("PRIVATE KEY", priv_bytes)) {
+    match pem::encode(key_out, pem::Block::new("PRIVATE KEY".to_string(), priv_bytes)) {
         Ok(_) => {},
         Err(e) => return Err(e.to_string())
     }
