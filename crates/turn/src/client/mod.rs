@@ -1,14 +1,14 @@
 pub mod binding;
-pub mod conn;
 pub mod periodic_timer;
 pub mod permission;
+pub mod relay_conn;
 pub mod transaction;
 
 use crate::errors::*;
 use crate::proto::{
     chandata::*, data::*, lifetime::*, peeraddr::*, relayaddr::*, reqtrans::*, PROTO_UDP,
 };
-use conn::*;
+use relay_conn::*;
 use transaction::*;
 
 use stun::agent::*;
@@ -161,7 +161,7 @@ impl Client {
         self.stun_serv_addr
     }
 
-    // Listen will have this client start listening on the conn provided via the config.
+    // Listen will have this client start listening on the relay_conn provided via the config.
     // This is optional. If not used, you will need to call handle_inbound method
     // to supply incoming data, instead.
     pub async fn listen(
@@ -266,7 +266,7 @@ impl Client {
 
                 /*TODO: relayedConn := c.relayedUDPConn()
                 if relayedConn == nil {
-                    c.log.Debug("no relayed conn allocated")
+                    c.log.Debug("no relayed relay_conn allocated")
                     return nil // silently discard
                 }
 
@@ -319,7 +319,7 @@ impl Client {
 
         /*TODO: relayedConn := c.relayedUDPConn()
         if relayedConn == nil {
-            c.log.Debug("no relayed conn allocated")
+            c.log.Debug("no relayed relay_conn allocated")
             return nil // silently discard
         }
 
@@ -510,11 +510,11 @@ impl Client {
 }
 
 /*
-func (c *Client) setRelayedUDPConn(conn *client.UDPConn) {
+func (c *Client) setRelayedUDPConn(relay_conn *client.UDPConn) {
     c.mutex.Lock()
     defer c.mutex.Unlock()
 
-    c.relayedConn = conn
+    c.relayedConn = relay_conn
 }
 
 func (c *Client) relayedUDPConn() *client.UDPConn {

@@ -21,7 +21,7 @@ lazy_static! {
         Error::new("turn: MaxPort must be not 0".to_owned());
     pub static ref ERR_MIN_PORT_NOT_ZERO: Error =
         Error::new("turn: MaxPort must be not 0".to_owned());
-    pub static ref ERR_NIL_CONN: Error = Error::new("turn: conn cannot not be nil".to_owned());
+    pub static ref ERR_NIL_CONN: Error = Error::new("turn: relay_conn cannot not be nil".to_owned());
     pub static ref ERR_TODO: Error = Error::new("turn: TODO".to_owned());
     pub static ref ERR_ALREADY_LISTENING: Error = Error::new("turn: already listening".to_owned());
     pub static ref ERR_FAILED_TO_CLOSE: Error =
@@ -66,4 +66,5 @@ lazy_static! {
     pub static ref ERR_FAILED_TO_REFRESH_ALLOCATION: Error = Error::new("failed to refresh allocation".to_owned());
     pub static ref ERR_FAILED_TO_GET_LIFETIME: Error = Error::new("failed to get lifetime from refresh response".to_owned());
     pub static ref ERR_SHORT_BUFFER: Error = Error::new("too short buffer".to_owned());
+    pub static ref ERR_UNEXPECTED_RESPONSE: Error = Error::new("unexpected response type".to_owned());
 }

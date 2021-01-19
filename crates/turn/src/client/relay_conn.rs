@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod relay_conn_test;
+
 // client implements the API for a TURN client
 use super::binding::*;
 use super::periodic_timer::*;
@@ -64,12 +67,10 @@ pub struct RelayConnInternal {
     obs: Arc<Mutex<Box<dyn RelayConnObserver + Send + Sync>>>,
     relayed_addr: SocketAddr,
     perm_map: PermissionMap,
-    binding_mgr: BindingManager,
+    binding_mgr: Arc<Mutex<BindingManager>>,
     integrity: MessageIntegrity,
     nonce: Nonce,
     lifetime: Duration,
-    refresh_alloc_timer: PeriodicTimer,
-    refresh_perms_timer: PeriodicTimer,
 }
 
 // RelayConn is the implementation of the Conn interfaces for UDP Relayed network connections.
@@ -78,18 +79,34 @@ pub struct RelayConn {
     read_ch_tx: Option<mpsc::Sender<InboundData>>,
     read_ch_rx: Arc<Mutex<mpsc::Receiver<InboundData>>>,
     relay_conn: Arc<Mutex<RelayConnInternal>>,
+    refresh_alloc_timer: PeriodicTimer,
+    refresh_perms_timer: PeriodicTimer,
 }
 
 impl RelayConn {
     // new creates a new instance of UDPConn
     pub fn new(config: RelayConnConfig) -> Self {
         let (read_ch_tx, read_ch_rx) = mpsc::channel(MAX_READ_QUEUE_SIZE);
-        RelayConn {
+        let mut c = RelayConn {
+            refresh_alloc_timer: PeriodicTimer::new(TimerIdRefresh::Alloc, config.lifetime / 2),
+            refresh_perms_timer: PeriodicTimer::new(TimerIdRefresh::Perms, PERM_REFRESH_INTERVAL),
             relayed_addr: config.relayed_addr,
             read_ch_tx: Some(read_ch_tx),
             read_ch_rx: Arc::new(Mutex::new(read_ch_rx)),
             relay_conn: Arc::new(Mutex::new(RelayConnInternal::new(config))),
+        };
+
+        let rci1 = Arc::clone(&c.relay_conn);
+        let rci2 = Arc::clone(&c.relay_conn);
+
+        if c.refresh_alloc_timer.start(rci1) {
+            log::debug!("refresh_alloc_timer started");
         }
+        if c.refresh_perms_timer.start(rci2) {
+            log::debug!("refresh_perms_timer started");
+        }
+
+        c
     }
 
     // handle_inbound passes inbound data in UDPConn
@@ -116,6 +133,8 @@ impl RelayConn {
         if self.read_ch_tx.is_none() {
             return Err(ERR_ALREADY_CLOSED.to_owned());
         }
+        self.refresh_alloc_timer.stop();
+        self.refresh_perms_timer.stop();
         self.read_ch_tx.take();
 
         let mut relay_conn = self.relay_conn.lock().await;
@@ -190,36 +209,15 @@ impl Conn for RelayConn {
 impl RelayConnInternal {
     // new creates a new instance of UDPConn
     pub fn new(config: RelayConnConfig) -> Self {
-        log::debug!("initial lifetime: {} seconds", config.lifetime.as_secs());
-
-        let mut c = RelayConnInternal {
+        RelayConnInternal {
             obs: config.observer,
             relayed_addr: config.relayed_addr,
             perm_map: PermissionMap::new(),
-            binding_mgr: BindingManager::new(),
+            binding_mgr: Arc::new(Mutex::new(BindingManager::new())),
             integrity: config.integrity,
             nonce: config.nonce,
             lifetime: config.lifetime,
-            refresh_alloc_timer: PeriodicTimer::new(
-                TimerIdRefresh::Alloc,
-                None, //TODO
-                config.lifetime / 2,
-            ),
-            refresh_perms_timer: PeriodicTimer::new(
-                TimerIdRefresh::Perms,
-                None, //TODO
-                PERM_REFRESH_INTERVAL,
-            ),
-        };
-
-        if c.refresh_alloc_timer.start() {
-            log::debug!("refresh_alloc_timer started");
         }
-        if c.refresh_perms_timer.start() {
-            log::debug!("refresh_perms_timer started");
-        }
-
-        c
     }
 
     // write_to writes a packet with payload p to addr.
@@ -250,42 +248,65 @@ impl RelayConnInternal {
             return Err(err);
         }
 
-        // bind channel
-        if self.binding_mgr.find_by_addr(&addr).is_none() {
-            self.binding_mgr.create(addr);
-        }
-
         let number = {
-            let b = self
-                .binding_mgr
-                .get_by_addr(&addr)
-                .ok_or_else(|| Error::new("Addr not found".to_owned()))?;
-
-            let bind_st = b.state();
+            let (bind_st, bind_at, bind_number, bind_addr) = {
+                let mut binding_mgr = self.binding_mgr.lock().await;
+                let b = if let Some(b) = binding_mgr.find_by_addr(&addr) {
+                    b
+                } else {
+                    binding_mgr
+                        .create(addr)
+                        .ok_or_else(|| Error::new("Addr not found".to_owned()))?
+                };
+                (b.state(), b.refreshed_at(), b.number, b.addr)
+            };
 
             if bind_st == BindingState::Idle
                 || bind_st == BindingState::Request
                 || bind_st == BindingState::Failed
             {
-                let mut f = || {
-                    // block only callers with the same binding until
-                    // the binding transaction has been complete
-                    // binding state may have been changed while waiting. check again.
-                    if b.state() == BindingState::Idle {
-                        b.set_state(BindingState::Request);
-                        /*TODO: go func() {
-                            err2 := c.bind(b)
-                            if err2 != nil {
-                                c.log.Warnf("bind() failed: %s", err2.Error())
-                                b.setState(bindingStateFailed)
-                                // keep going...
-                            } else {
-                                b.setState(bindingStateReady)
+                // block only callers with the same binding until
+                // the binding transaction has been complete
+                // binding state may have been changed while waiting. check again.
+                if bind_st == BindingState::Idle {
+                    let binding_mgr = Arc::clone(&self.binding_mgr);
+                    let rc_obs = Arc::clone(&self.obs);
+                    let nonce = self.nonce.clone();
+                    let integrity = self.integrity.clone();
+                    tokio::spawn(async move {
+                        {
+                            let mut bm = binding_mgr.lock().await;
+                            if let Some(b) = bm.get_by_addr(&bind_addr) {
+                                b.set_state(BindingState::Request);
                             }
-                        }()*/
-                    }
-                };
-                f();
+                        }
+
+                        let result = RelayConnInternal::bind(
+                            rc_obs,
+                            bind_addr,
+                            bind_number,
+                            nonce,
+                            integrity,
+                        )
+                        .await;
+
+                        {
+                            let mut bm = binding_mgr.lock().await;
+                            if let Err(err) = result {
+                                if err != *ERR_UNEXPECTED_RESPONSE {
+                                    bm.delete_by_addr(&bind_addr);
+                                } else if let Some(b) = bm.get_by_addr(&bind_addr) {
+                                    b.set_state(BindingState::Failed);
+                                }
+
+                                // keep going...
+                                log::warn!("bind() failed: {}", err);
+                            } else if let Some(b) = bm.get_by_addr(&bind_addr) {
+                                b.set_state(BindingState::Ready);
+                            }
+                        }
+                    });
+                }
 
                 // send data using SendIndication
                 let peer_addr = socket_addr2peer_address(&addr);
@@ -306,27 +327,45 @@ impl RelayConnInternal {
             // binding is either ready
 
             // check if the binding needs a refresh
-            let mut f = || {
-                if b.state() == BindingState::Ready
-                    && Instant::now().duration_since(b.refreshed_at()) > Duration::from_secs(5 * 60)
-                {
-                    b.set_state(BindingState::Refresh);
-                    /*TODO: go func() {
-                        err = c.bind(b)
-                        if err != nil {
-                            c.log.Warnf("bind() for refresh failed: %s", err.Error())
-                            b.setState(bindingStateFailed)
-                            // keep going...
-                        } else {
-                            b.setRefreshedAt(time.Now())
-                            b.setState(bindingStateReady)
+            if bind_st == BindingState::Ready
+                && Instant::now().duration_since(bind_at) > Duration::from_secs(5 * 60)
+            {
+                let binding_mgr = Arc::clone(&self.binding_mgr);
+                let rc_obs = Arc::clone(&self.obs);
+                let nonce = self.nonce.clone();
+                let integrity = self.integrity.clone();
+                tokio::spawn(async move {
+                    {
+                        let mut bm = binding_mgr.lock().await;
+                        if let Some(b) = bm.get_by_addr(&bind_addr) {
+                            b.set_state(BindingState::Refresh);
                         }
-                    }()*/
-                }
-            };
-            f();
+                    }
 
-            b.number
+                    let result =
+                        RelayConnInternal::bind(rc_obs, bind_addr, bind_number, nonce, integrity)
+                            .await;
+
+                    {
+                        let mut bm = binding_mgr.lock().await;
+                        if let Err(err) = result {
+                            if err != *ERR_UNEXPECTED_RESPONSE {
+                                bm.delete_by_addr(&bind_addr);
+                            } else if let Some(b) = bm.get_by_addr(&bind_addr) {
+                                b.set_state(BindingState::Failed);
+                            }
+
+                            // keep going...
+                            log::warn!("bind() for refresh failed: {}", err);
+                        } else if let Some(b) = bm.get_by_addr(&bind_addr) {
+                            b.set_refreshed_at(Instant::now());
+                            b.set_state(BindingState::Ready);
+                        }
+                    }
+                });
+            }
+
+            bind_number
         };
 
         // send via ChannelData
@@ -427,8 +466,6 @@ impl RelayConnInternal {
     // Close closes the connection.
     // Any blocked ReadFrom or write_to operations will be unblocked and return errors.
     pub async fn close(&mut self) -> Result<(), Error> {
-        self.refresh_alloc_timer.stop();
-        self.refresh_perms_timer.stop();
         {
             let obs = self.obs.lock().await;
             obs.on_deallocated(self.relayed_addr).await;
@@ -439,8 +476,9 @@ impl RelayConnInternal {
 
     // find_addr_by_channel_number returns a peer address associated with the
     // channel number on this UDPConn
-    pub fn find_addr_by_channel_number(&self, ch_num: u16) -> Option<SocketAddr> {
-        if let Some(b) = self.binding_mgr.find_by_number(ch_num) {
+    pub async fn find_addr_by_channel_number(&self, ch_num: u16) -> Option<SocketAddr> {
+        let binding_mgr = self.binding_mgr.lock().await;
+        if let Some(b) = binding_mgr.find_by_number(ch_num) {
             Some(b.addr)
         } else {
             None
@@ -523,46 +561,56 @@ impl RelayConnInternal {
         Ok(())
     }
 
-    async fn bind(&mut self, b: &Binding) -> Result<(), Error> {
-        let mut obs = self.obs.lock().await;
+    async fn bind(
+        rc_obs: Arc<Mutex<Box<dyn RelayConnObserver + Send + Sync>>>,
+        bind_addr: SocketAddr,
+        bind_number: u16,
+        nonce: Nonce,
+        integrity: MessageIntegrity,
+    ) -> Result<(), Error> {
+        let (msg, turn_server_addr) = {
+            let obs = rc_obs.lock().await;
 
-        let setters: Vec<Box<dyn Setter>> = vec![
-            Box::new(TransactionId::new()),
-            Box::new(MessageType::new(METHOD_CHANNEL_BIND, CLASS_REQUEST)),
-            Box::new(socket_addr2peer_address(&b.addr)),
-            Box::new(proto::channum::ChannelNumber(b.number)),
-            Box::new(obs.username()),
-            Box::new(obs.realm()),
-            Box::new(self.nonce.clone()),
-            Box::new(self.integrity.clone()),
-            Box::new(FINGERPRINT),
-        ];
+            let setters: Vec<Box<dyn Setter>> = vec![
+                Box::new(TransactionId::new()),
+                Box::new(MessageType::new(METHOD_CHANNEL_BIND, CLASS_REQUEST)),
+                Box::new(socket_addr2peer_address(&bind_addr)),
+                Box::new(proto::channum::ChannelNumber(bind_number)),
+                Box::new(obs.username()),
+                Box::new(obs.realm()),
+                Box::new(nonce),
+                Box::new(integrity),
+                Box::new(FINGERPRINT),
+            ];
 
-        let mut msg = Message::new();
-        msg.build(&setters)?;
+            let mut msg = Message::new();
+            msg.build(&setters)?;
 
-        let turn_server_addr = obs.turn_server_addr();
-        let tr_res = match obs.perform_transaction(&msg, turn_server_addr, false).await {
-            Err(err) => {
-                self.binding_mgr.delete_by_addr(&b.addr);
-                return Err(err);
-            }
-            Ok(tr_res) => tr_res,
+            (msg, obs.turn_server_addr())
+        };
+
+        let tr_res = {
+            let mut obs = rc_obs.lock().await;
+            obs.perform_transaction(&msg, turn_server_addr, false)
+                .await?
         };
 
         let res = tr_res.msg;
 
         if res.typ != MessageType::new(METHOD_CHANNEL_BIND, CLASS_SUCCESS_RESPONSE) {
-            return Err(Error::new(format!("unexpected response type {}", res.typ)));
+            return Err(ERR_UNEXPECTED_RESPONSE.to_owned());
         }
 
-        log::debug!("channel binding successful: {} {}", b.addr, b.number);
+        log::debug!("channel binding successful: {} {}", bind_addr, bind_number);
 
         // Success.
         Ok(())
     }
+}
 
-    async fn on_refresh_timers(&mut self, id: TimerIdRefresh) {
+#[async_trait]
+impl PeriodicTimerTimeoutHandler for RelayConnInternal {
+    async fn on_timeout(&mut self, id: TimerIdRefresh) {
         log::debug!("refresh timer {:?} expired", id);
         match id {
             TimerIdRefresh::Alloc => {

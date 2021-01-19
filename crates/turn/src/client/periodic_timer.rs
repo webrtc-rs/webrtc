@@ -1,8 +1,12 @@
 #[cfg(test)]
 mod periodic_timer_test;
 
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 use tokio::time::Duration;
+
+use std::sync::Arc;
+
+use async_trait::async_trait;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum TimerIdRefresh {
@@ -17,34 +21,34 @@ impl Default for TimerIdRefresh {
 }
 
 // PeriodicTimerTimeoutHandler is a handler called on timeout
-pub type PeriodicTimerTimeoutHandler = fn(TimerIdRefresh);
+#[async_trait]
+pub trait PeriodicTimerTimeoutHandler {
+    async fn on_timeout(&mut self, id: TimerIdRefresh);
+}
 
 // PeriodicTimer is a periodic timer
 #[derive(Default)]
 pub struct PeriodicTimer {
     id: TimerIdRefresh,
     interval: Duration,
-    timeout_handler: Option<PeriodicTimerTimeoutHandler>,
     close_tx: Option<mpsc::Sender<()>>,
 }
 
 impl PeriodicTimer {
     // create a new timer
-    pub fn new(
-        id: TimerIdRefresh,
-        timeout_handler: Option<PeriodicTimerTimeoutHandler>,
-        interval: Duration,
-    ) -> Self {
+    pub fn new(id: TimerIdRefresh, interval: Duration) -> Self {
         PeriodicTimer {
             id,
             interval,
-            timeout_handler,
             close_tx: None,
         }
     }
 
     // Start starts the timer.
-    pub fn start(&mut self) -> bool {
+    pub fn start<T: 'static + PeriodicTimerTimeoutHandler + std::marker::Send>(
+        &mut self,
+        timeout_handler: Arc<Mutex<T>>,
+    ) -> bool {
         // this is a noop if the timer is always running
         if self.close_tx.is_some() {
             return false;
@@ -53,7 +57,6 @@ impl PeriodicTimer {
         let (close_tx, mut close_rx) = mpsc::channel(1);
         let interval = self.interval;
         let id = self.id;
-        let timeout_handler = self.timeout_handler;
 
         tokio::spawn(async move {
             loop {
@@ -62,9 +65,8 @@ impl PeriodicTimer {
 
                 tokio::select! {
                     _ = timer.as_mut() => {
-                        if let Some(handler) = timeout_handler{
-                            handler(id);
-                        }
+                        let mut handler = timeout_handler.lock().await;
+                        handler.on_timeout(id).await;
                     }
                     _ = close_rx.recv() => break,
                 }
