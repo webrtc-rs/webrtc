@@ -1,10 +1,9 @@
 #[macro_use]
 extern crate derive_builder;
 
-#[allow(dead_code)]
 pub mod dtls {
 
-    use super::transport;
+    use super::{transport, protocol::Protocol};
     use tokio::time::Duration;
 
     #[allow(non_camel_case_types)]
@@ -27,8 +26,10 @@ pub mod dtls {
     type FlightInterval = Duration;
     pub type MTU = u16;
     pub type TcpPort = u16;
+    pub type TcpHost = &str;
+
+    // TODO check these types
     pub type PskCallback = &'static dyn Fn(Option<PskIdHint>) -> Result<Psk, String>;
-    // TODO
 
     #[derive(Clone, Copy)]
     pub struct Psk { }
@@ -114,6 +115,15 @@ pub mod dtls {
         pub private_key: CertPrivateKey,
     }
 
+    impl Certificate {
+        pub fn new(config: CertConfig) -> Certificate {
+            Certificate {
+                certificate: vec!(),
+                private_key: CertPrivateKey {}
+            }
+        }
+    }
+
     // TODO
     pub struct CertParts      {}
     pub struct CertPrivateKey {}
@@ -146,9 +156,9 @@ pub mod dtls {
     }
 
     pub async fn listen(
-        _proto: String,
-        addr: String,
-        port: u16,
+        _proto: Protocol,
+        addr: TcpHost,
+        port: TcpPort,
         _config: Config,
     ) -> Result<tokio::net::TcpListener, std::io::Error> {
         println!("mock dtls::listen on {}:{}", addr, port);
@@ -156,9 +166,9 @@ pub mod dtls {
     }
 
     pub async fn dial(
-        _proto: String,
-        addr: String,
-        port: u16,
+        _proto: Protocol,
+        addr: TcpHost,
+        port: TcpPort,
         _config: Config,
     ) -> Result<tokio::net::TcpStream, std::io::Error> {
         println!("mock dtls::dial on {}:{}", addr, port);
@@ -167,8 +177,6 @@ pub mod dtls {
 
 }
 
-#[allow(dead_code)]
-#[allow(unused_variables)]
 pub mod transport {
 
     #[derive(Copy)]
@@ -211,8 +219,194 @@ pub mod x509 {
     }
 }
 
+pub mod protocol {
+    pub enum Protocol {
+        Udp,
+    }
+}
+
+pub mod openssl {
+    use super::{
+        pem,
+        x509,
+        dtls::{Config, CipherSuite, Certificate, TcpPort},
+    };
+    use tokio::{
+        sync::oneshot,
+        process::Command,
+    };
+    use std::{
+        env,
+        fs::{self, OpenOptions},
+    };
+    
+    /// Create server cert and key files in a temp dir
+    /// Returns a channel to delete the temp dir
+    pub async fn create_server_openssl_files(config: Config)
+    -> Result<Option<oneshot::Sender<()>>, String>
+    {
+        // Determine server openssl args
+        let args = vec!(
+            "s_server",
+            "-dtls1_2",
+            "-quiet",
+            "-verify_quiet",
+            "-verify_return_error",
+        );
+        let ciphers = cipher_openssl(*config.cipher_suites);
+        if ciphers != "" {
+            args.push(format!("-cipher={}", ciphers))
+        }
+        match config.psk_callback {
+            Some(cb) => match cb(None) {
+                Ok(psk) => args.push(format!("-psk={}", psk)),
+                Err(e) => return Err(e),
+            }
+            None => {}
+        }
+        if config.psk_id_hint.len() > 0 {
+            args.push(format!("-psk_hint={}", config.psk_id_hint))
+        }
+        let mut cleanup: Option<oneshot::Sender<()>> = None;
+        if config.certificates.len() > 0 {
+            let (cert_pem, key_pem, release_certs) = match write_temp_pem(config.certificates[0]) {
+                Ok((c,k,f)) => (c,k,f),
+                Err(e) => return Err(e.into()),
+            };
+            cleanup = Some(release_certs);
+            args.push(format!("-cert={}", cert_pem));
+            args.push(format!("-key={}", key_pem));
+        } else {
+            args.push(format!("-nocert"));
+        }
+    
+        // Run server openssl command
+        let output = match Command::new("openssl").args(&args).output().await {
+            Ok(o) => o,
+            Err(e) => return Err(e.to_string()),
+        };
+        println!("{:?}", output);
+        return Ok(cleanup);
+    }
+    
+    pub async fn create_client_openssl_files(config: Config, port: TcpPort)
+    -> Result<Option<oneshot::Sender<()>>, String>
+    {
+        // Determine client openssl args
+        let args = vec!(
+            "s_client",
+            "-dtls1_2",
+            "-quiet",
+            "-verify_quiet",
+            "-verify_return_error",
+            "-servername=localhost",
+            format!("-connect=127.0.0.1:{}", port),
+        );
+        let cipher_suites = cipher_openssl(*config.cipher_suites);
+        if cipher_suites.len() > 0 {
+            args.push(format!("-cipher={}", cipher_suites))
+        }
+        if config.psk_id_hint.len() > 0 {
+            args.push(format!("-psk_hint={}", config.psk_id_hint))
+        }
+        let mut cleanup: Option<oneshot::Sender<()>> = None;
+        if config.certificates.len() > 0 {
+            // TODO drop the temp file
+            let (cert_pem, key_pem, release_certs) = match write_temp_pem(config.certificates[0]) {
+                Ok((c,k,f)) => (c,k,f),
+                Err(e) => return Err(e.to_string()),
+            };
+            cleanup = Some(release_certs);
+            args.push(format!("-cert={}", cert_pem));
+            args.push(format!("-key={}", key_pem));
+        } else {
+            args.push(format!("-nocert"));
+        }
+    
+        // Run client openssl command
+        let output = match Command::new("openssl").args(&args).output().await {
+            Ok(o) => o,
+            Err(e) => return Err(e.to_string()),
+        };
+        println!("{:?}", output);
+        return Ok(cleanup);
+    }
+    
+    pub fn cipher_openssl(cipher_suites: Vec<CipherSuite>) -> String {
+        cipher_suites.iter().map( |cs| {
+            (match cs {
+                CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_128_CCM        => "ECDHE-ECDSA-AES128-CCM",
+                CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8      => "ECDHE-ECDSA-AES128-CCM8",
+                CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 => "ECDHE-ECDSA-AES128-GCM-SHA256",
+                CipherSuite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256   => "ECDHE-RSA-AES128-GCM-SHA256",
+                CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA    => "ECDHE-ECDSA-AES256-SHA",
+                CipherSuite::TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA      => "ECDHE-RSA-AES128-SHA",
+                CipherSuite::TLS_PSK_WITH_AES_128_CCM                => "PSK-AES128-CCM",
+                CipherSuite::TLS_PSK_WITH_AES_128_CCM_8              => "PSK-AES128-CCM8",
+                CipherSuite::TLS_PSK_WITH_AES_128_GCM_SHA256         => "PSK-AES128-GCM-SHA256",
+            }).to_string()
+        }).fold("".to_string(), |acc, x| format!("{},{}", acc, x))
+    }
+    
+    pub fn write_temp_pem(cert: Certificate)
+    -> Result<(String, String, oneshot::Sender<()>), String>
+    {
+        let mut dir = env::temp_dir();
+        dir.push("dtls-webrtc-rs-test");
+    
+        let der_bytes = cert.certificate[0];
+        let cert_path = dir.clone();
+        cert_path.push("cert.pem");
+        let cert_out = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .read(true)
+            .open(cert_path)
+            .unwrap();
+        match pem::encode(cert_out, pem::Block::new("CERTIFICATE".to_string(), der_bytes)) {
+            Ok(_) => {},
+            Err(e) => return Err(e.to_string())
+        }
+        
+        let key_path = dir.clone();
+        key_path.push("key.pem");
+        let key_out = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .read(true)
+            .open(key_path)
+            .unwrap();
+        let priv_key = cert.private_key;
+        let priv_bytes = match x509::marshal_pkcs8_private_key(priv_key) {
+            Ok(b) => b,
+            Err(e) => return Err(e.to_string())
+        };
+        match pem::encode(key_out, pem::Block::new("PRIVATE KEY".to_string(), priv_bytes)) {
+            Ok(_) => {},
+            Err(e) => return Err(e.to_string())
+        }
+        
+        let (tx, rx) = oneshot::channel();
+        let release_certs = tokio::spawn( async move {
+            rx.await;
+            fs::remove_dir_all(dir);
+        });
+        Ok((
+            cert_path
+                .into_os_string()
+                .into_string()
+                .unwrap(),
+            key_path
+                .into_os_string()
+                .into_string()
+                .unwrap(),
+            tx
+        ))
+    }
+}
+
 pub mod test_runner {
-    use super::dtls::{Config, TcpPort};
+    use super::dtls::{Config, TcpHost, TcpPort};
     use tokio::{
         self,
         net::TcpStream,
@@ -220,7 +414,7 @@ pub mod test_runner {
         sync::{oneshot, Mutex},
         time::{Duration, sleep},
     };
-    use std::sync::{Arc};
+    use std::sync::Arc;
 
     const TEST_MESSAGE: &str = "Hello world";
 
@@ -293,7 +487,7 @@ pub mod test_runner {
         Ok(())
     }
 
-    async fn random_port() -> TcpPort {
+    pub async fn random_port() -> TcpPort {
         let addr = "127.0.0.1:0".parse::<std::net::SocketAddr>().unwrap();
         let sock = match tokio::net::UdpSocket::bind(addr).await {
             Ok(s) => s,
@@ -305,14 +499,96 @@ pub mod test_runner {
         };
         local_addr.port()
     }
-    
-    pub fn check_comms(conf: Config) {
+
+    async fn run_client(
+        config: Config,
+        start_rx: tokio::sync::oneshot::Receiver<(TcpHost, TcpPort)>,
+    ) -> Result<String, String>
+    {
+        // Wait for server to tell us where it's listening
+        let timeout = Duration::from_secs(1);
+        let sleep = sleep(timeout);
+        tokio::pin!(sleep);
+        let (host, port) = tokio::select! {
+            _ = &mut sleep => return Err(format!("Client timed out waiting for server after {:?}", timeout))
+            r = start_rx => {
+                match r {
+                    Ok((host,port)) => (host, port),
+                    Err(e) => return Err("failed to receive server start signal".to_string()),
+                }
+            }
+        };
+
+        // Create client openssl files
+        let cleanup = match create_client_openssl(config, port).await {
+            Ok(c) => c,
+            Err(e) => return Err(e.to_string())
+        };
+        
+        // Dial the server
+        let dial = dtls::dial(Protocol::Udp, host, port, config);
+        let result = match dial.await {
+            Ok(stream) => simple_read_write(stream).await,
+            Err(e) => return Err(e.to_string()),
+        };
+
+        // Cleanup
+        match cleanup {
+            Some(x) => { x.send(()); },
+            None => {},
+        }
+        return result
+    }
+
+    async fn run_server(
+        config: Config,
+        ready_tx: oneshot::Sender<(TcpHost, TcpPort)>,
+    ) -> Result<String, String>
+    {
+        let host = "127.0.0.1";
+        let port = random_port().await;
+        // Create openssl server files
+        let cleanup = match create_server_openssl(config).await {
+            Ok(c) => c,
+            Err(e) => return Err(e.to_string())
+        };
+        // Start lisening
+        let listen = dtls::listen(Protocol::Udp, host, port, config);
+        let listener = match listen.await {
+            Ok(listener) => listener,
+            Err(e) => panic!(e),
+        };
+        // Notify client
+        match ready_tx.send((host, port)) {
+            Ok(_) => {},
+            Err(e) => panic!(e),
+        }
+        let result = match listener.accept().await {
+            Ok((stream, addr)) => {
+                // TODO check addr
+                simple_read_write(stream).await
+            },
+            Err(e) => panic!(e),
+        };
+        match cleanup {
+            Some(x) => { x.send(()); },
+            None => {},
+        }
+        return result
+    }
+
+    pub fn check_comms(client_config: Config, server_config: Config)
+    {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on( async move {
             let port = random_port().await;
             let (server_start_tx, server_start_rx) = oneshot::channel();
-            let server = tokio::spawn(run_server(&conf, port, server_start_tx));
-            let client = tokio::spawn(run_client(&conf, port, server_start_rx));
+            let server = tokio::spawn( async {
+                run_server(server_config, server_start_tx).await
+            });
+            let client = tokio::spawn( async {
+                run_client(client_config, server_start_rx).await
+            });
             let mut client_complete = false;
             let mut server_complete = false;
             let timeout = Duration::from_secs(5);

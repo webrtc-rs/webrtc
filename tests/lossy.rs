@@ -2,18 +2,21 @@
 #[macro_use]
 extern crate derive_builder;
 
-mod mocks;
+mod test_mods;
 
-use mocks::dtls::{
-    self,
-    Client,
-    Server,
-    ConfigBuilder,
-    CertificateBuilder,
-    CipherSuite,
-    MTU
+use test_mods::{
+    transport,
+    dtls::{
+        self,
+        Client,
+        Server,
+        ConfigBuilder,
+        Certificate,
+        CertConfigBuilder,
+        CipherSuite,
+        MTU,
+    },
 };
-use mocks::transport;
 use tokio::time::{sleep, Duration};
 use rand::prelude::*;
 
@@ -29,8 +32,8 @@ const LOSSY_TEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[test]
 pub fn e2e_lossy() {
-    let server_cert = CertificateBuilder::default().self_signed(true);
-    let client_cert = CertificateBuilder::default().self_signed(true);
+    let server_cert = Certificate::new(CertConfigBuilder::default().self_signed(true).build().unwrap());
+    let client_cert = Certificate::new(CertConfigBuilder::default().self_signed(true).build().unwrap());
     let cases: Vec<&mut TestCaseBuilder> = vec!(
         TestCaseBuilder::default().loss_chance(0),
         TestCaseBuilder::default().loss_chance(10),
