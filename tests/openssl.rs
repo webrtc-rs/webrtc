@@ -1,18 +1,28 @@
 
 mod mocks;
 
-use mocks::dtls::{Config, CipherSuite};
+use mocks::{
+    pem,
+    x509,
+    dtls::{self, Config, CipherSuite, Certificate, TcpPort},
+    test_runner::{simple_read_write, check_comms},
+};
 use tokio::{
-    sync::{mpsc, oneshot},
+    sync::oneshot,
     time::{sleep, Duration},
     process::Command,
 };
+use std::{
+    env,
+    fs::{self, OpenOptions},
+};
 
-async fn run_server(
-    config: Config,
-    err_chan: mpsc::Sender<String>
-) -> Result<(), String>
+/// Create server cert and key files in a temp dir
+/// Returns a channel to delete the temp dir
+async fn create_server_openssl(config: Config)
+-> Result<Option<oneshot::Sender<()>>, String>
 {
+    // Determine server openssl args
     let args = vec!(
         "s_server",
         "-dtls1_2",
@@ -20,7 +30,7 @@ async fn run_server(
         "-verify_quiet",
         "-verify_return_error",
     );
-    let ciphers = cipher_openssl(&config);
+    let ciphers = cipher_openssl(*config.cipher_suites);
     if ciphers != "" {
         args.push(format!("-cipher={}", ciphers))
     }
@@ -34,31 +44,126 @@ async fn run_server(
     if config.psk_id_hint.len() > 0 {
         args.push(format!("-psk_hint={}", config.psk_id_hint))
     }
+    let mut cleanup: Option<oneshot::Sender<()>> = None;
     if config.certificates.len() > 0 {
-        // TODO drop the temp file
-        let (cert_pem, key_pem) = match write_temp_pem(&config) {
-            Ok((c,k)) => (c,k),
+        let (cert_pem, key_pem, release_certs) = match write_temp_pem(config.certificates[0]) {
+            Ok((c,k,f)) => (c,k,f),
             Err(e) => return Err(e.into()),
         };
+        cleanup = Some(release_certs);
         args.push(format!("-cert={}", cert_pem));
         args.push(format!("-key={}", key_pem));
     } else {
         args.push(format!("-nocert"));
     }
+
+    // Run server openssl command
     let output = match Command::new("openssl").args(&args).output().await {
         Ok(o) => o,
         Err(e) => return Err(e.to_string()),
     };
     println!("{:?}", output);
-    simple_read_write(stream).await
+    return Ok(cleanup);
+}
+
+async fn create_client_openssl(config: Config, port: TcpPort)
+-> Result<Option<oneshot::Sender<()>>, String>
+{
+    // Determine client openssl args
+    let args = vec!(
+		"s_client",
+		"-dtls1_2",
+		"-quiet",
+		"-verify_quiet",
+		"-verify_return_error",
+		"-servername=localhost",
+		format!("-connect=127.0.0.1:{}", port),
+    );
+    let cipher_suites = cipher_openssl(*config.cipher_suites);
+    if cipher_suites.len() > 0 {
+        args.push(format!("-cipher={}", cipher_suites))
+    }
+    if config.psk_id_hint.len() > 0 {
+        args.push(format!("-psk_hint={}", config.psk_id_hint))
+    }
+    let mut cleanup: Option<oneshot::Sender<()>> = None;
+    if config.certificates.len() > 0 {
+        // TODO drop the temp file
+        let (cert_pem, key_pem, release_certs) = match write_temp_pem(config.certificates[0]) {
+            Ok((c,k,f)) => (c,k,f),
+            Err(e) => return Err(e.to_string()),
+        };
+        cleanup = Some(release_certs);
+        args.push(format!("-cert={}", cert_pem));
+        args.push(format!("-key={}", key_pem));
+    } else {
+        args.push(format!("-nocert"));
+    }
+
+    // Run client openssl command
+    let output = match Command::new("openssl").args(&args).output().await {
+        Ok(o) => o,
+        Err(e) => return Err(e.to_string()),
+    };
+    println!("{:?}", output);
+    return Ok(cleanup);
+}
+
+async fn run_server(
+    config: Config,
+    server_port: TcpPort,
+    ready_tx: oneshot::Sender<()>,
+) -> Result<(), String>
+{
+    // Listen for new connections
+    let listen = dtls::listen(
+        "udp".to_string(),
+        "127.0.0.1".to_string(),
+        server_port,
+        config
+    );
+    let listener = match listen.await {
+        Ok(listener) => listener,
+        Err(e) => return Err(e.to_string()),
+    };
+
+    // Notify client
+    match ready_tx.send(()) {
+        Ok(_) => {},
+        Err(e) => return Err("failed to send server ready signal".to_string()),
+    }
+
+    // Accept client connection
+    // TODO verify _addr
+    let (stream, _addr) = match listener.accept().await {
+        Ok((stream, addr)) => (stream, addr),
+        Err(e) => return Err(e.to_string()),
+    };
+
+    // create server ssl files
+    let cleanup = match create_server_openssl(config).await {
+        Ok(c) => c,
+        Err(e) => return Err(e.to_string())
+    };
+
+    // Read and write on the stream
+    simple_read_write(stream).await;
+
+    // Cleanup
+    match cleanup {
+        Some(x) => { x.send(()); },
+        None => {},
+    }
+    Ok(())
 }
 
 async fn run_client(
     config: Config,
-    server_port: u16,
+    port: TcpPort,
     server_ready: oneshot::Receiver<()>
 ) -> Result<(), String>
 {
+    // Wait for server to start listening
     let timeout = Duration::from_secs(1);
     let sleep = sleep(timeout);
     tokio::pin!(sleep);
@@ -68,36 +173,34 @@ async fn run_client(
             return Err(format!("timed out waiting for server after {:?}", timeout));
         }
     }
-    let args = vec!(
-		"s_client",
-		"-dtls1_2",
-		"-quiet",
-		"-verify_quiet",
-		"-verify_return_error",
-		"-servername=localhost",
-		format!("-connect=127.0.0.1:{}", server_port),
+
+    // Create client openssl files
+    let cleanup = match create_client_openssl(config, port).await {
+        Ok(c) => c,
+        Err(e) => return Err(e.to_string())
+    };
+    
+    // Dial the server
+    let dial = dtls::dial(
+        "udp".to_string(),
+        "127.0.0.1".to_string(),
+        port,
+        config
     );
-    let cipher_suites = cipher_openssl(*config.cipher_suites);
-    if cipher_suites.len() > 0 {
-        args.push(format!("-cipher={}", cipher_suites))
-    }
-    if config.psk_id_hint.len() > 0 {
-        args.push(format!("-psk_hint={}", config.psk_id_hint))
-    }
-    if config.certificates.len() > 0 {
-        // TODO drop the temp file
-        let (cert_pem, key_pem) = match write_temp_pem(&config) {
-            Ok((c,k)) => (c,k),
-            Err(e) => return Err(e.into()),
-        };
-        args.push(format!("-CAfile={}", cert_pem))
-    }
-    let output = match Command::new("openssl").args(&args).output().await {
-        Ok(o) => o,
+    let stream = match dial.await {
+        Ok(stream) => stream,
         Err(e) => return Err(e.to_string()),
     };
-    println!("{:?}", output);
-    simple_read_write(stream).await
+
+    // Send and recv on stream
+    simple_read_write(stream).await;
+
+    // Cleanup
+    match cleanup {
+        Some(x) => { x.send(()); },
+        None => {},
+    }
+    Ok(())
 }
 
 pub fn cipher_openssl(cipher_suites: Vec<CipherSuite>) -> String {
@@ -116,12 +219,66 @@ pub fn cipher_openssl(cipher_suites: Vec<CipherSuite>) -> String {
     }).fold("".to_string(), |acc, x| format!("{},{}", acc, x))
 }
 
-pub fn write_temp_pem() -> Result<(FilePath, FilePath), String> {
-    // TODO write pem output to files and return file handles
+pub fn write_temp_pem<F>(cert: Certificate)
+-> Result<(String, String, oneshot::Sender<()>), String>
+{
+    let mut dir = env::temp_dir();
+    dir.push("dtls-webrtc-rs-test");
+
+    let der_bytes = cert.certificate[0];
+    let cert_path = dir.clone();
+    cert_path.push("cert.pem");
+    let cert_out = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .read(true)
+        .open(cert_path)
+        .unwrap();
+    match pem::encode(cert_out, pem::Block::new("CERTIFICATE", der_bytes)) {
+        Ok(_) => {},
+        Err(e) => return Err(e.to_string())
+    }
+    
+    let key_path = dir.clone();
+    key_path.push("key.pem");
+    let key_out = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .read(true)
+        .open(key_path)
+        .unwrap();
+    let priv_key = cert.private_key;
+    let priv_bytes = match x509::marshal_pkcs8_private_key(priv_key) {
+        Ok(b) => b,
+        Err(e) => return Err(e.to_string())
+    };
+    match pem::encode(key_out, pem::Block::new("PRIVATE KEY", priv_bytes)) {
+        Ok(_) => {},
+        Err(e) => return Err(e.to_string())
+    }
+    
+    let (tx, rx) = oneshot::channel();
+    let release_certs = tokio::spawn( async move {
+        rx.await;
+        fs::remove_dir_all(dir);
+    });
+    Ok((
+        cert_path
+            .into_os_string()
+            .into_string()
+            .unwrap(),
+        key_path
+            .into_os_string()
+            .into_string()
+            .unwrap(),
+        tx
+    ))
 }
 
 #[test]
 pub fn openssl_e2e_simple() {
+    check_comms(run_client_basic, run_server_openssl);
+    check_comms(run_client_openssl, run_server_basic);
 }
 
 #[test]
