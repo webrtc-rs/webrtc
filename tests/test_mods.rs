@@ -26,10 +26,10 @@ pub mod dtls {
     type FlightInterval = Duration;
     pub type MTU = u16;
     pub type TcpPort = u16;
-    pub type TcpHost = &str;
+    pub type TcpHost = &'static str;
 
     // TODO check these types
-    pub type PskCallback = &'static dyn Fn(Option<PskIdHint>) -> Result<Psk, String>;
+    pub type PskCallback = &'static dyn Fn(Option<PskIdHint>) -> Result<Vec<u8>, String>;
 
     #[derive(Clone, Copy)]
     pub struct Psk { }
@@ -50,6 +50,7 @@ pub mod dtls {
     }
 
     impl PskIdHint {
+        pub fn new(bytes: Vec<u8>) -> Self { PskIdHint {} }
         pub fn len(&self) -> usize {
             panic!("unimplemented")
         }
@@ -110,22 +111,26 @@ pub mod dtls {
         Error { reason: () },
     }
 
+    #[derive(Copy, Clone)]
     pub struct Certificate {
-        pub certificate: Vec<CertParts>,
+        // TODO find number of parts in spec
+        pub certificate: [CertParts; 1],
         pub private_key: CertPrivateKey,
     }
 
     impl Certificate {
         pub fn new(config: CertConfig) -> Certificate {
             Certificate {
-                certificate: vec!(),
+                certificate: [CertParts {}],
                 private_key: CertPrivateKey {}
             }
         }
     }
 
     // TODO
+    #[derive(Copy, Clone)]
     pub struct CertParts      {}
+    #[derive(Copy, Clone)]
     pub struct CertPrivateKey {}
 
     #[derive(Builder, Clone)]
@@ -229,47 +234,73 @@ pub mod openssl {
     use super::{
         pem,
         x509,
-        dtls::{Config, CipherSuite, Certificate, TcpPort},
+        dtls::{
+            Config,
+            CipherSuite,
+            Certificate,
+            TcpPort,
+            PskCallback,
+            PskIdHint
+        },
     };
     use tokio::{
         sync::oneshot,
-        process::Command,
     };
     use std::{
+        process::Command,
         env,
         fs::{self, OpenOptions},
     };
+
+    fn format_psk_for_openssl(psk: Vec<u8>) -> String {
+        // $ openssl version
+        // OpenSSL 1.1.1f  31 Mar 2020
+        // $ openssl help s_server
+        // ...
+        // -psk val                   PSK in hex (without 0x)
+
+        // TODO
+        psk.iter().fold("".to_string(), |a,x| format!("{},{}", a, x))
+    }
     
     /// Create server cert and key files in a temp dir
     /// Returns a channel to delete the temp dir
-    pub async fn create_server_openssl_files(config: Config)
+    pub fn create_server_openssl_files(
+        cipher_suites: &Vec<CipherSuite>,
+        psk_callback: Option<PskCallback>,
+        psk_id_hint: PskIdHint,
+        certificates: &Vec<Certificate>,
+    )
     -> Result<Option<oneshot::Sender<()>>, String>
     {
         // Determine server openssl args
-        let args = vec!(
+        let mut args = vec!(
             "s_server",
             "-dtls1_2",
             "-quiet",
             "-verify_quiet",
             "-verify_return_error",
-        );
-        let ciphers = cipher_openssl(*config.cipher_suites);
+        ).iter().map( |s| s.to_string() ).collect::<Vec<String>>();
+        let ciphers = cipher_openssl(*cipher_suites);
         if ciphers != "" {
             args.push(format!("-cipher={}", ciphers))
         }
-        match config.psk_callback {
+        match psk_callback {
             Some(cb) => match cb(None) {
-                Ok(psk) => args.push(format!("-psk={}", psk)),
+                Ok(psk) => {
+                    let s = format_psk_for_openssl(psk);
+                    args.push(format!("-psk={}", s));
+                },
                 Err(e) => return Err(e),
             }
             None => {}
         }
-        if config.psk_id_hint.len() > 0 {
-            args.push(format!("-psk_hint={}", config.psk_id_hint))
+        if psk_id_hint.len() > 0 {
+            args.push(format!("-psk_hint={}", psk_id_hint))
         }
         let mut cleanup: Option<oneshot::Sender<()>> = None;
-        if config.certificates.len() > 0 {
-            let (cert_pem, key_pem, release_certs) = match write_temp_pem(config.certificates[0]) {
+        if certificates.len() > 0 {
+            let (cert_pem, key_pem, release_certs) = match write_temp_pem(certificates[0]) {
                 Ok((c,k,f)) => (c,k,f),
                 Err(e) => return Err(e.into()),
             };
@@ -277,11 +308,11 @@ pub mod openssl {
             args.push(format!("-cert={}", cert_pem));
             args.push(format!("-key={}", key_pem));
         } else {
-            args.push(format!("-nocert"));
+            args.push("-nocert".to_string());
         }
     
         // Run server openssl command
-        let output = match Command::new("openssl").args(&args).output().await {
+        let output = match Command::new("openssl").args(&args).output() {
             Ok(o) => o,
             Err(e) => return Err(e.to_string()),
         };
@@ -293,16 +324,16 @@ pub mod openssl {
     -> Result<Option<oneshot::Sender<()>>, String>
     {
         // Determine client openssl args
-        let args = vec!(
+        let mut args = vec!(
             "s_client",
             "-dtls1_2",
             "-quiet",
             "-verify_quiet",
             "-verify_return_error",
             "-servername=localhost",
-            format!("-connect=127.0.0.1:{}", port),
-        );
-        let cipher_suites = cipher_openssl(*config.cipher_suites);
+        ).iter().map( |s| s.to_string() ).collect::<Vec<String>>();
+        args.push(format!("-connect=127.0.0.1:{}", port));
+        let cipher_suites = cipher_openssl(config.cipher_suites.clone());
         if cipher_suites.len() > 0 {
             args.push(format!("-cipher={}", cipher_suites))
         }
@@ -324,7 +355,7 @@ pub mod openssl {
         }
     
         // Run client openssl command
-        let output = match Command::new("openssl").args(&args).output().await {
+        let output = match Command::new("openssl").args(&args).output() {
             Ok(o) => o,
             Err(e) => return Err(e.to_string()),
         };
@@ -334,7 +365,7 @@ pub mod openssl {
     
     pub fn cipher_openssl(cipher_suites: Vec<CipherSuite>) -> String {
         cipher_suites.iter().map( |cs| {
-            (match cs {
+            match cs {
                 CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_128_CCM        => "ECDHE-ECDSA-AES128-CCM",
                 CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8      => "ECDHE-ECDSA-AES128-CCM8",
                 CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 => "ECDHE-ECDSA-AES128-GCM-SHA256",
@@ -344,8 +375,8 @@ pub mod openssl {
                 CipherSuite::TLS_PSK_WITH_AES_128_CCM                => "PSK-AES128-CCM",
                 CipherSuite::TLS_PSK_WITH_AES_128_CCM_8              => "PSK-AES128-CCM8",
                 CipherSuite::TLS_PSK_WITH_AES_128_GCM_SHA256         => "PSK-AES128-GCM-SHA256",
-            }).to_string()
-        }).fold("".to_string(), |acc, x| format!("{},{}", acc, x))
+            }
+        }).fold("".to_string(), |a,x| format!("{},{}", a, x)).to_string()
     }
     
     pub fn write_temp_pem(cert: Certificate)
@@ -406,7 +437,21 @@ pub mod openssl {
 }
 
 pub mod test_runner {
-    use super::dtls::{Config, TcpHost, TcpPort};
+    use super::{
+        dtls::{
+            self,
+            Config,
+            ConfigBuilder,
+            CipherSuite,
+            Certificate,
+            CertConfigBuilder,
+            TcpHost,
+            TcpPort,
+            PskIdHint,
+        },
+        openssl::{create_server_openssl_files, create_client_openssl_files},
+        protocol::Protocol,
+    };
     use tokio::{
         self,
         net::TcpStream,
@@ -520,7 +565,7 @@ pub mod test_runner {
         };
 
         // Create client openssl files
-        let cleanup = match create_client_openssl(config, port).await {
+        let cleanup = match create_client_openssl_files(config, port).await {
             Ok(c) => c,
             Err(e) => return Err(e.to_string())
         };
@@ -548,7 +593,12 @@ pub mod test_runner {
         let host = "127.0.0.1";
         let port = random_port().await;
         // Create openssl server files
-        let cleanup = match create_server_openssl(config).await {
+        let cleanup = match create_server_openssl_files(
+            config.cipher_suites,
+            config.psk_callback,
+            config.psk_id_hint,
+            config.certificates,
+        ) {
             Ok(c) => c,
             Err(e) => return Err(e.to_string())
         };
@@ -577,7 +627,7 @@ pub mod test_runner {
         return result
     }
 
-    pub fn check_comms(client_config: Config, server_config: Config)
+    fn check_comms(client_config: Config, server_config: Config)
     {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on( async move {
@@ -633,4 +683,85 @@ pub mod test_runner {
             }
         });
     }
+
+    pub fn e2e_simple(
+        client_config: ConfigBuilder,
+        server_config: ConfigBuilder,
+    ) {
+        let cipher_suites = [
+            CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+            CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA
+        ];
+        for cs in cipher_suites.iter() {
+            let cert = Certificate::new(
+                CertConfigBuilder::default()
+                    .self_signed(true)
+                    .build()
+                    .unwrap()
+            );
+            let client_config = client_config
+                .certificates(&vec!(cert))
+                .cipher_suites(&vec!(*cs))
+                .insecure_skip_verify(true)
+                .build()
+                .unwrap();
+            let server_config = server_config
+                .certificates(&vec!(cert))
+                .cipher_suites(&vec!(*cs))
+                .insecure_skip_verify(true)
+                .build()
+                .unwrap();
+            check_comms(client_config, server_config);
+        }
+    }
+
+    pub fn e2e_simple_psk(
+        client_config: ConfigBuilder,
+        server_config: ConfigBuilder,
+    ) {
+        let cipher_suites = [
+            CipherSuite::TLS_PSK_WITH_AES_128_CCM,
+            CipherSuite::TLS_PSK_WITH_AES_128_CCM_8,
+            CipherSuite::TLS_PSK_WITH_AES_128_GCM_SHA256,
+        ];
+        for cs in cipher_suites.iter() {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            let config = ConfigBuilder::default()
+                .psk_callback(Some(&|_| { Ok(vec!(0xAB, 0xC1, 0x23)) }))
+                .psk_id_hint(PskIdHint::new(vec!(0x01, 0x02, 0x03, 0x04, 0x05)))
+                .cipher_suites(&vec!(*cs))
+                .build()
+                .unwrap();
+            check_comms(config, config);
+        }      
+    }
+
+    pub fn e2e_mtu(
+        client_config: ConfigBuilder,
+        server_config: ConfigBuilder,
+    ) {
+        let mtus = [
+            10_000,
+            1000,
+            100
+        ];
+        for mtu in mtus.iter() {
+            let cert = Certificate::new(
+                CertConfigBuilder::default()
+                    .self_signed(true)
+                    .host("localhost".to_string())
+                    .build()
+                    .unwrap()
+            );
+            let config = ConfigBuilder::default()
+                .certificates(&vec!(cert))
+                .cipher_suites(&vec!(CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256))
+                .insecure_skip_verify(true)
+                .mtu(*mtu)
+                .build()
+                .unwrap();
+            check_comms(config, config);
+        }
+    }
+
 }

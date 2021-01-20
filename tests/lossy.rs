@@ -77,19 +77,19 @@ pub fn e2e_lossy() {
                     .mtu(case.mtu);
                 match case.cipher_suite {
                     Some(cipher_suite) => {
-                        config.cipher_suites(vec!(cipher_suite));
+                        config.cipher_suites(&vec!(cipher_suite));
                     }
                     _ => {}  // do nothing
                 }
                 if case.do_client_auth {
-                    config = config.certificates(vec!(client_cert));
+                    config = config.certificates(&vec!(client_cert));
                 }
                 return Client::new(bridge.get_connection(), config.build().unwrap());
             });
 
             let server = tokio::spawn( async move {
                 let mut config = ConfigBuilder::default()
-                    .certificates(vec!(server_cert))
+                    .certificates(&vec!(server_cert))
                     .flight_interval(flight_interval)
                     .mtu(case.mtu);
                 if case.do_client_auth {
