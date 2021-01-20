@@ -32,7 +32,6 @@ use util::Error;
 use async_trait::async_trait;
 
 const DEFAULT_RTO: Duration = Duration::from_millis(200);
-const MAX_RTX_COUNT: u16 = 7; // total 7 requests (Rc)
 const MAX_DATA_BUFFER_SIZE: usize = u16::MAX as usize; // message size limit for Chromium
 
 //              interval [msec]
@@ -67,7 +66,7 @@ pub struct Client {
     realm: Realm,
     integrity: MessageIntegrity,
     software: Software,
-    tr_map: TransactionMap,
+    tr_map: Arc<Mutex<TransactionMap>>,
     rto: Duration,
     //relayedConn   *client.UDPConn
 }
@@ -104,28 +103,46 @@ impl RelayConnObserver for Client {
     ) -> Result<TransactionResult, Error> {
         let tr_key = base64::encode(&msg.transaction_id.0);
 
-        let tr = Transaction::new(TransactionConfig {
+        let mut tr = Transaction::new(TransactionConfig {
             key: tr_key.clone(),
             raw: msg.raw.clone(),
             to,
             interval: self.rto,
             ignore_result,
         });
+        let result_ch_rx = tr.get_result_channel();
 
         log::trace!("start {} transaction {} to {}", msg.typ, tr_key, tr.to);
-        self.tr_map.insert(tr_key, tr);
+        {
+            let mut tm = self.tr_map.lock().await;
+            tm.insert(tr_key.clone(), tr);
+        }
 
         self.conn.send_to(&msg.raw, to).await?;
 
-        //TODO: tr.start_rtx_timer(c.on_rtx_timeout)
+        let conn2 = Arc::clone(&self.conn);
+        let tr_map2 = Arc::clone(&self.tr_map);
+        {
+            let mut tm = self.tr_map.lock().await;
+            if let Some(tr) = tm.get(&tr_key) {
+                tr.start_rtx_timer(conn2, tr_map2).await;
+            }
+        }
 
         // If dontWait is true, get the transaction going and return immediately
         if ignore_result {
             return Ok(TransactionResult::default());
         }
 
-        //TODO: tr.wait_for_result().await
-        Ok(TransactionResult::default())
+        // wait_for_result waits for the transaction result
+        if let Some(mut result_ch_rx) = result_ch_rx {
+            match result_ch_rx.recv().await {
+                Some(tr) => Ok(tr),
+                None => Err(ERR_TRANSACTION_CLOSED.to_owned()),
+            }
+        } else {
+            Err(ERR_WAIT_FOR_RESULT_ON_NON_RESULT_TRANSACTION.to_owned())
+        }
     }
 
     // OnDeallocated is called when deallocation of relay address has been complete.
@@ -146,7 +163,7 @@ impl Client {
             password: config.password,
             realm: Realm::new(ATTR_REALM, config.realm),
             software: Software::new(ATTR_SOFTWARE, config.software),
-            tr_map: TransactionMap::new(),
+            tr_map: Arc::new(Mutex::new(TransactionMap::new())),
             rto: if config.rto > Duration::from_secs(0) {
                 config.rto
             } else {
@@ -337,8 +354,9 @@ impl Client {
     }
 
     // Close closes this client
-    pub fn close(&mut self) {
-        self.tr_map.close_and_delete_all();
+    pub async fn close(&mut self) {
+        let mut tm = self.tr_map.lock().await;
+        tm.close_and_delete_all();
     }
 
     // send_binding_request_to sends a new STUN request to the given transport address
@@ -454,58 +472,6 @@ impl Client {
 
          */
         Ok(relayed_addr)
-    }
-
-    pub async fn on_rtx_timeout(&mut self, tr_key: String, n_rtx: u16) {
-        let (tr_raw, tr_to) = match self.tr_map.find(&tr_key) {
-            Some(tr) => (tr.raw.clone(), tr.to),
-            None => return, // already gone
-        };
-
-        if n_rtx == MAX_RTX_COUNT {
-            // all retransmisstions failed
-            if let Some(mut tr) = self.tr_map.delete(&tr_key) {
-                if !tr
-                    .write_result(TransactionResult {
-                        err: Some(Error::new(format!(
-                            "{} {}",
-                            *ERR_ALL_RETRANSMISSIONS_FAILED, tr_key
-                        ))),
-                        ..Default::default()
-                    })
-                    .await
-                {
-                    log::debug!("no listener for transaction");
-                }
-            }
-            return;
-        }
-
-        log::trace!(
-            "retransmitting transaction {} to {} (n_rtx={})",
-            tr_key,
-            tr_to,
-            n_rtx
-        );
-
-        if self.conn.send_to(&tr_raw, tr_to).await.is_err() {
-            if let Some(mut tr) = self.tr_map.delete(&tr_key) {
-                if !tr
-                    .write_result(TransactionResult {
-                        err: Some(Error::new(format!(
-                            "{} {}",
-                            *ERR_ALL_RETRANSMISSIONS_FAILED, tr_key
-                        ))),
-                        ..Default::default()
-                    })
-                    .await
-                {
-                    log::debug!("no listener for transaction");
-                }
-            }
-            return;
-        }
-        //tr.start_rtx_timer(.on_rtx_timeout)
     }
 }
 

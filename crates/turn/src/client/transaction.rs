@@ -2,18 +2,76 @@ use crate::errors::*;
 
 use stun::message::*;
 
-use tokio::sync::mpsc;
+use tokio::net::UdpSocket;
+use tokio::sync::{mpsc, Mutex};
 use tokio::time::Duration;
 
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::sync::Arc;
 
 use util::Error;
 
 const MAX_RTX_INTERVAL: Duration = Duration::from_millis(1600);
+const MAX_RTX_COUNT: u16 = 7; // total 7 requests (Rc)
 
-pub trait RtxTimer {
-    fn on_timeout(&mut self, tr_key: String, n_rtx: u16);
+async fn on_rtx_timeout(
+    conn: &Arc<UdpSocket>,
+    tr_map: &Arc<Mutex<TransactionMap>>,
+    tr_key: &str,
+    n_rtx: u16,
+) -> bool {
+    let mut tm = tr_map.lock().await;
+    let (tr_raw, tr_to) = match tm.find(tr_key) {
+        Some(tr) => (tr.raw.clone(), tr.to),
+        None => return true, // already gone
+    };
+
+    if n_rtx == MAX_RTX_COUNT {
+        // all retransmisstions failed
+        if let Some(tr) = tm.delete(tr_key) {
+            if !tr
+                .write_result(TransactionResult {
+                    err: Some(Error::new(format!(
+                        "{} {}",
+                        *ERR_ALL_RETRANSMISSIONS_FAILED, tr_key
+                    ))),
+                    ..Default::default()
+                })
+                .await
+            {
+                log::debug!("no listener for transaction");
+            }
+        }
+        return true;
+    }
+
+    log::trace!(
+        "retransmitting transaction {} to {} (n_rtx={})",
+        tr_key,
+        tr_to,
+        n_rtx
+    );
+
+    if conn.send_to(&tr_raw, tr_to).await.is_err() {
+        if let Some(tr) = tm.delete(tr_key) {
+            if !tr
+                .write_result(TransactionResult {
+                    err: Some(Error::new(format!(
+                        "{} {}",
+                        *ERR_ALL_RETRANSMISSIONS_FAILED, tr_key
+                    ))),
+                    ..Default::default()
+                })
+                .await
+            {
+                log::debug!("no listener for transaction");
+            }
+        }
+        return true;
+    }
+
+    false
 }
 
 // TransactionResult is a bag of result values of a transaction
@@ -66,7 +124,6 @@ pub struct Transaction {
     pub to: SocketAddr,
     pub n_rtx: u16,
     pub interval: Duration,
-    //pub timer: Option<Sleep>,
     timer_ch_tx: Option<mpsc::Sender<()>>,
     result_ch_tx: Option<mpsc::Sender<TransactionResult>>,
     result_ch_rx: Option<mpsc::Receiver<TransactionResult>>,
@@ -110,27 +167,32 @@ impl Transaction {
     }
 
     // start_rtx_timer starts the transaction timer
-    pub async fn start_rtx_timer(&mut self, t: &mut Box<dyn RtxTimer>) {
+    pub async fn start_rtx_timer(
+        &mut self,
+        conn: Arc<UdpSocket>,
+        tr_map: Arc<Mutex<TransactionMap>>,
+    ) {
         let (timer_ch_tx, mut timer_ch_rx) = mpsc::channel(1);
         self.timer_ch_tx = Some(timer_ch_tx);
-
-        let timer = tokio::time::sleep(self.interval);
-        tokio::pin!(timer);
-
-        tokio::select! {
-            _ = timer.as_mut() => {
-                self.n_rtx+=1;
-                let n_rtx = self.n_rtx;
-                self.interval *= 2;
-                if self.interval > MAX_RTX_INTERVAL {
-                    self.interval = MAX_RTX_INTERVAL;
-                }
-                t.on_timeout(self.key.clone(), n_rtx);
-            }
-            _ = timer_ch_rx.recv() => {
-                self.timer_ch_tx.take();
-            }
+        self.n_rtx += 1;
+        self.interval *= 2;
+        if self.interval > MAX_RTX_INTERVAL {
+            self.interval = MAX_RTX_INTERVAL;
         }
+        let (n_rtx, interval, key) = (self.n_rtx, self.interval, self.key.clone());
+
+        tokio::spawn(async move {
+            let mut done = false;
+            while !done {
+                let timer = tokio::time::sleep(interval);
+                tokio::pin!(timer);
+
+                tokio::select! {
+                    _ = timer.as_mut() => done = on_rtx_timeout(&conn, &tr_map, &key, n_rtx).await,
+                    _ = timer_ch_rx.recv() => done = true,
+                }
+            }
+        });
     }
 
     // stop_rtx_timer stop the transaction timer
@@ -141,25 +203,16 @@ impl Transaction {
     }
 
     // write_result writes the result to the result channel
-    pub async fn write_result(&mut self, res: TransactionResult) -> bool {
+    pub async fn write_result(&self, res: TransactionResult) -> bool {
         if let Some(result_ch) = &self.result_ch_tx {
-            let _ = result_ch.send(res).await;
-            true
+            result_ch.send(res).await.is_ok()
         } else {
             false
         }
     }
 
-    // wait_for_result waits for the transaction result
-    pub async fn wait_for_result(&mut self) -> Result<TransactionResult, Error> {
-        if let Some(result_ch_rx) = &mut self.result_ch_rx {
-            match result_ch_rx.recv().await {
-                Some(tr) => Ok(tr),
-                None => Err(ERR_TRANSACTION_CLOSED.to_owned()),
-            }
-        } else {
-            Err(ERR_WAIT_FOR_RESULT_ON_NON_RESULT_TRANSACTION.to_owned())
-        }
+    pub fn get_result_channel(&mut self) -> Option<mpsc::Receiver<TransactionResult>> {
+        self.result_ch_rx.take()
     }
 
     // Close closes the transaction
