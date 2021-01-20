@@ -35,8 +35,6 @@ impl RelayConnObserver for DummyRelayConnObserver {
     ) -> Result<TransactionResult, Error> {
         Err(ERR_FAKE_ERR.to_owned())
     }
-
-    async fn on_deallocated(&self, _relayed_addr: SocketAddr) {}
 }
 
 #[tokio::test]
@@ -48,14 +46,13 @@ async fn test_relay_conn() -> Result<(), Error> {
     };
 
     let config = RelayConnConfig {
-        observer: Arc::new(Mutex::new(Box::new(obs))),
         relayed_addr: SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0),
         integrity: MessageIntegrity::default(),
         nonce: Nonce::new(ATTR_NONCE, "nonce".to_owned()),
         lifetime: Duration::from_secs(0),
     };
 
-    let rc = RelayConn::new(config);
+    let rc = RelayConn::new(Arc::new(Mutex::new(Box::new(obs))), config);
 
     let rci = rc.relay_conn.lock().await;
     let (bind_addr, bind_number) = {

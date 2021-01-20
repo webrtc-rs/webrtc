@@ -51,16 +51,14 @@ pub trait RelayConnObserver {
         to: SocketAddr,
         dont_wait: bool,
     ) -> Result<TransactionResult, Error>;
-    async fn on_deallocated(&self, relayed_addr: SocketAddr);
 }
 
 // RelayConnConfig is a set of configuration params use by NewUDPConn
 pub struct RelayConnConfig {
-    observer: Arc<Mutex<Box<dyn RelayConnObserver + Send + Sync>>>,
-    relayed_addr: SocketAddr,
-    integrity: MessageIntegrity,
-    nonce: Nonce,
-    lifetime: Duration,
+    pub relayed_addr: SocketAddr,
+    pub integrity: MessageIntegrity,
+    pub nonce: Nonce,
+    pub lifetime: Duration,
 }
 
 pub struct RelayConnInternal {
@@ -85,7 +83,10 @@ pub struct RelayConn {
 
 impl RelayConn {
     // new creates a new instance of UDPConn
-    pub fn new(config: RelayConnConfig) -> Self {
+    pub fn new(
+        obs: Arc<Mutex<Box<dyn RelayConnObserver + Send + Sync>>>,
+        config: RelayConnConfig,
+    ) -> Self {
         let (read_ch_tx, read_ch_rx) = mpsc::channel(MAX_READ_QUEUE_SIZE);
         let mut c = RelayConn {
             refresh_alloc_timer: PeriodicTimer::new(TimerIdRefresh::Alloc, config.lifetime / 2),
@@ -93,7 +94,7 @@ impl RelayConn {
             relayed_addr: config.relayed_addr,
             read_ch_tx: Some(read_ch_tx),
             read_ch_rx: Arc::new(Mutex::new(read_ch_rx)),
-            relay_conn: Arc::new(Mutex::new(RelayConnInternal::new(config))),
+            relay_conn: Arc::new(Mutex::new(RelayConnInternal::new(obs, config))),
         };
 
         let rci1 = Arc::clone(&c.relay_conn);
@@ -208,9 +209,12 @@ impl Conn for RelayConn {
 
 impl RelayConnInternal {
     // new creates a new instance of UDPConn
-    pub fn new(config: RelayConnConfig) -> Self {
+    pub fn new(
+        obs: Arc<Mutex<Box<dyn RelayConnObserver + Send + Sync>>>,
+        config: RelayConnConfig,
+    ) -> Self {
         RelayConnInternal {
-            obs: config.observer,
+            obs,
             relayed_addr: config.relayed_addr,
             perm_map: PermissionMap::new(),
             binding_mgr: Arc::new(Mutex::new(BindingManager::new())),
@@ -466,10 +470,6 @@ impl RelayConnInternal {
     // Close closes the connection.
     // Any blocked ReadFrom or write_to operations will be unblocked and return errors.
     pub async fn close(&mut self) -> Result<(), Error> {
-        {
-            let obs = self.obs.lock().await;
-            obs.on_deallocated(self.relayed_addr).await;
-        }
         self.refresh_allocation(Duration::from_secs(0), true /* dontWait=true */)
             .await
     }

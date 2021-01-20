@@ -144,12 +144,6 @@ impl RelayConnObserver for Client {
             Err(ERR_WAIT_FOR_RESULT_ON_NON_RESULT_TRANSACTION.to_owned())
         }
     }
-
-    // OnDeallocated is called when deallocation of relay address has been complete.
-    // (Called by UDPConn)
-    async fn on_deallocated(&self, _relayed_ddr: SocketAddr) {
-        //TODO: c.setRelayedUDPConn(nil)
-    }
 }
 
 impl Client {
@@ -388,12 +382,7 @@ impl Client {
     }
 
     // Allocate sends a TURN allocation request to the given transport address
-    pub async fn allocate(&mut self) -> Result<SocketAddr, Error> {
-        /*TODO: relayedConn := c.relayedUDPConn()
-        if relayedConn != nil {
-            return nil, fmt.Errorf("%w: %s", errAlreadyAllocated, relayedConn.LocalAddr().String())
-        }*/
-
+    pub async fn allocate(&mut self) -> Result<RelayConnConfig, Error> {
         let mut msg = Message::new();
         msg.build(&[
             Box::new(TransactionId::new()),
@@ -428,7 +417,7 @@ impl Client {
             }),
             Box::new(self.username.clone()),
             Box::new(self.realm.clone()),
-            Box::new(nonce),
+            Box::new(nonce.clone()),
             Box::new(self.integrity.clone()),
             Box::new(FINGERPRINT),
         ])?;
@@ -457,21 +446,12 @@ impl Client {
         let mut lifetime = Lifetime::default();
         lifetime.get_from(&res)?;
 
-        /*TODO: relayedConn = client.NewUDPConn(&client.UDPConnConfig{
-            Observer:    c,
-            RelayedAddr: relayed_addr,
-            Integrity:   c.integrity,
-            Nonce:       nonce,
-            Lifetime:    lifetime.Duration,
-            Log:         c.log,
+        Ok(RelayConnConfig {
+            relayed_addr,
+            integrity: self.integrity.clone(),
+            nonce,
+            lifetime: lifetime.0,
         })
-
-        c.setRelayedUDPConn(relayedConn)
-
-        return relayedConn, nil
-
-         */
-        Ok(relayed_addr)
     }
 }
 
