@@ -319,8 +319,14 @@ pub mod openssl {
         println!("{:?}", output);
         return Ok(cleanup);
     }
-    
-    pub async fn create_client_openssl_files(config: Config, port: TcpPort)
+
+    pub fn create_client_openssl_files(
+        cipher_suites: &Vec<CipherSuite>,
+        psk_callback: Option<PskCallback>,
+        psk_id_hint: PskIdHint,
+        certificates: &Vec<Certificate>,
+        port: TcpPort,
+    )
     -> Result<Option<oneshot::Sender<()>>, String>
     {
         // Determine client openssl args
@@ -333,17 +339,17 @@ pub mod openssl {
             "-servername=localhost",
         ).iter().map( |s| s.to_string() ).collect::<Vec<String>>();
         args.push(format!("-connect=127.0.0.1:{}", port));
-        let cipher_suites = cipher_openssl(config.cipher_suites.clone());
+        let cipher_suites = cipher_openssl(cipher_suites.clone());
         if cipher_suites.len() > 0 {
             args.push(format!("-cipher={}", cipher_suites))
         }
-        if config.psk_id_hint.len() > 0 {
-            args.push(format!("-psk_hint={}", config.psk_id_hint))
+        if psk_id_hint.len() > 0 {
+            args.push(format!("-psk_hint={}", psk_id_hint))
         }
         let mut cleanup: Option<oneshot::Sender<()>> = None;
-        if config.certificates.len() > 0 {
+        if certificates.len() > 0 {
             // TODO drop the temp file
-            let (cert_pem, key_pem, release_certs) = match write_temp_pem(config.certificates[0]) {
+            let (cert_pem, key_pem, release_certs) = match write_temp_pem(certificates[0]) {
                 Ok((c,k,f)) => (c,k,f),
                 Err(e) => return Err(e.to_string()),
             };
@@ -565,7 +571,13 @@ pub mod test_runner {
         };
 
         // Create client openssl files
-        let cleanup = match create_client_openssl_files(config, port).await {
+        let cleanup = match create_client_openssl_files(
+            config.cipher_suites,
+            config.psk_callback,
+            config.psk_id_hint,
+            config.certificates,
+            port,
+        ) {
             Ok(c) => c,
             Err(e) => return Err(e.to_string())
         };
