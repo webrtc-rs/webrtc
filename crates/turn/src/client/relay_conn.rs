@@ -29,13 +29,12 @@ use tokio::time::{Duration, Instant};
 
 use async_trait::async_trait;
 
-const MAX_READ_QUEUE_SIZE: usize = 1024;
 const PERM_REFRESH_INTERVAL: Duration = Duration::from_secs(120);
 const MAX_RETRY_ATTEMPTS: u16 = 3;
 
-struct InboundData {
-    data: Vec<u8>,
-    from: SocketAddr,
+pub(crate) struct InboundData {
+    pub(crate) data: Vec<u8>,
+    pub(crate) from: SocketAddr,
 }
 
 // UDPConnObserver is an interface to UDPConn observer
@@ -54,15 +53,17 @@ pub trait RelayConnObserver {
 }
 
 // RelayConnConfig is a set of configuration params use by NewUDPConn
-pub struct RelayConnConfig {
-    pub relayed_addr: SocketAddr,
-    pub integrity: MessageIntegrity,
-    pub nonce: Nonce,
-    pub lifetime: Duration,
+pub(crate) struct RelayConnConfig {
+    pub(crate) relayed_addr: SocketAddr,
+    pub(crate) integrity: MessageIntegrity,
+    pub(crate) nonce: Nonce,
+    pub(crate) lifetime: Duration,
+    pub(crate) binding_mgr: Arc<Mutex<BindingManager>>,
+    pub(crate) read_ch_rx: Arc<Mutex<mpsc::Receiver<InboundData>>>,
 }
 
-pub struct RelayConnInternal {
-    obs: Arc<Mutex<Box<dyn RelayConnObserver + Send + Sync>>>,
+pub struct RelayConnInternal<T: 'static + RelayConnObserver + Send + Sync> {
+    obs: Arc<Mutex<T>>,
     relayed_addr: SocketAddr,
     perm_map: PermissionMap,
     binding_mgr: Arc<Mutex<BindingManager>>,
@@ -72,28 +73,22 @@ pub struct RelayConnInternal {
 }
 
 // RelayConn is the implementation of the Conn interfaces for UDP Relayed network connections.
-pub struct RelayConn {
+pub struct RelayConn<T: 'static + RelayConnObserver + Send + Sync> {
     relayed_addr: SocketAddr,
-    read_ch_tx: Option<mpsc::Sender<InboundData>>,
     read_ch_rx: Arc<Mutex<mpsc::Receiver<InboundData>>>,
-    relay_conn: Arc<Mutex<RelayConnInternal>>,
+    relay_conn: Arc<Mutex<RelayConnInternal<T>>>,
     refresh_alloc_timer: PeriodicTimer,
     refresh_perms_timer: PeriodicTimer,
 }
 
-impl RelayConn {
+impl<T: 'static + RelayConnObserver + Send + Sync> RelayConn<T> {
     // new creates a new instance of UDPConn
-    pub fn new(
-        obs: Arc<Mutex<Box<dyn RelayConnObserver + Send + Sync>>>,
-        config: RelayConnConfig,
-    ) -> Self {
-        let (read_ch_tx, read_ch_rx) = mpsc::channel(MAX_READ_QUEUE_SIZE);
+    pub(crate) fn new(obs: Arc<Mutex<T>>, config: RelayConnConfig) -> Self {
         let mut c = RelayConn {
             refresh_alloc_timer: PeriodicTimer::new(TimerIdRefresh::Alloc, config.lifetime / 2),
             refresh_perms_timer: PeriodicTimer::new(TimerIdRefresh::Perms, PERM_REFRESH_INTERVAL),
             relayed_addr: config.relayed_addr,
-            read_ch_tx: Some(read_ch_tx),
-            read_ch_rx: Arc::new(Mutex::new(read_ch_rx)),
+            read_ch_rx: Arc::clone(&config.read_ch_rx),
             relay_conn: Arc::new(Mutex::new(RelayConnInternal::new(obs, config))),
         };
 
@@ -110,33 +105,11 @@ impl RelayConn {
         c
     }
 
-    // handle_inbound passes inbound data in UDPConn
-    pub fn handle_inbound(&self, data: &[u8], from: SocketAddr) -> Result<(), Error> {
-        if let Some(read_ch_tx) = &self.read_ch_tx {
-            if read_ch_tx
-                .try_send(InboundData {
-                    data: data.to_vec(),
-                    from,
-                })
-                .is_err()
-            {
-                log::warn!("receive buffer full");
-            }
-            Ok(())
-        } else {
-            Err(ERR_ALREADY_CLOSED.to_owned())
-        }
-    }
-
     // Close closes the connection.
     // Any blocked ReadFrom or write_to operations will be unblocked and return errors.
     pub async fn close(&mut self) -> Result<(), Error> {
-        if self.read_ch_tx.is_none() {
-            return Err(ERR_ALREADY_CLOSED.to_owned());
-        }
         self.refresh_alloc_timer.stop();
         self.refresh_perms_timer.stop();
-        self.read_ch_tx.take();
 
         let mut relay_conn = self.relay_conn.lock().await;
         relay_conn.close().await
@@ -144,7 +117,7 @@ impl RelayConn {
 }
 
 #[async_trait]
-impl Conn for RelayConn {
+impl<T: RelayConnObserver + Send + Sync> Conn for RelayConn<T> {
     async fn connect(&self, _addr: SocketAddr) -> io::Result<()> {
         Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
     }
@@ -207,17 +180,14 @@ impl Conn for RelayConn {
     }
 }
 
-impl RelayConnInternal {
+impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
     // new creates a new instance of UDPConn
-    pub fn new(
-        obs: Arc<Mutex<Box<dyn RelayConnObserver + Send + Sync>>>,
-        config: RelayConnConfig,
-    ) -> Self {
+    fn new(obs: Arc<Mutex<T>>, config: RelayConnConfig) -> Self {
         RelayConnInternal {
             obs,
             relayed_addr: config.relayed_addr,
             perm_map: PermissionMap::new(),
-            binding_mgr: Arc::new(Mutex::new(BindingManager::new())),
+            binding_mgr: config.binding_mgr,
             integrity: config.integrity,
             nonce: config.nonce,
             lifetime: config.lifetime,
@@ -474,17 +444,6 @@ impl RelayConnInternal {
             .await
     }
 
-    // find_addr_by_channel_number returns a peer address associated with the
-    // channel number on this UDPConn
-    pub async fn find_addr_by_channel_number(&self, ch_num: u16) -> Option<SocketAddr> {
-        let binding_mgr = self.binding_mgr.lock().await;
-        if let Some(b) = binding_mgr.find_by_number(ch_num) {
-            Some(b.addr)
-        } else {
-            None
-        }
-    }
-
     async fn refresh_allocation(
         &mut self,
         lifetime: Duration,
@@ -562,7 +521,7 @@ impl RelayConnInternal {
     }
 
     async fn bind(
-        rc_obs: Arc<Mutex<Box<dyn RelayConnObserver + Send + Sync>>>,
+        rc_obs: Arc<Mutex<T>>,
         bind_addr: SocketAddr,
         bind_number: u16,
         nonce: Nonce,
@@ -609,7 +568,7 @@ impl RelayConnInternal {
 }
 
 #[async_trait]
-impl PeriodicTimerTimeoutHandler for RelayConnInternal {
+impl<T: RelayConnObserver + Send + Sync> PeriodicTimerTimeoutHandler for RelayConnInternal<T> {
     async fn on_timeout(&mut self, id: TimerIdRefresh) {
         log::debug!("refresh timer {:?} expired", id);
         match id {

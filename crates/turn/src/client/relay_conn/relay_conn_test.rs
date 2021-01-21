@@ -45,14 +45,18 @@ async fn test_relay_conn() -> Result<(), Error> {
         realm: Realm::new(ATTR_REALM, "realm".to_owned()),
     };
 
+    let (_read_ch_tx, read_ch_rx) = mpsc::channel(100);
+
     let config = RelayConnConfig {
         relayed_addr: SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0),
         integrity: MessageIntegrity::default(),
         nonce: Nonce::new(ATTR_NONCE, "nonce".to_owned()),
         lifetime: Duration::from_secs(0),
+        binding_mgr: Arc::new(Mutex::new(BindingManager::new())),
+        read_ch_rx: Arc::new(Mutex::new(read_ch_rx)),
     };
 
-    let rc = RelayConn::new(Arc::new(Mutex::new(Box::new(obs))), config);
+    let rc = RelayConn::new(Arc::new(Mutex::new(obs)), config);
 
     let rci = rc.relay_conn.lock().await;
     let (bind_addr, bind_number) = {
