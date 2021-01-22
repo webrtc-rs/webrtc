@@ -10,9 +10,10 @@ use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 
+use std::sync::atomic::{AtomicU16, Ordering};
 use util::Error;
 
-const MAX_RTX_INTERVAL: Duration = Duration::from_millis(1600);
+const MAX_RTX_INTERVAL_IN_MS: u16 = 1600;
 const MAX_RTX_COUNT: u16 = 7; // total 7 requests (Rc)
 
 async fn on_rtx_timeout(
@@ -23,7 +24,7 @@ async fn on_rtx_timeout(
 ) -> bool {
     let mut tm = tr_map.lock().await;
     let (tr_raw, tr_to) = match tm.find(tr_key) {
-        Some(tr) => (tr.raw.clone(), tr.to),
+        Some(tr) => (tr.raw.clone(), tr.to.clone()),
         None => return true, // already gone
     };
 
@@ -95,25 +96,13 @@ impl Default for TransactionResult {
 }
 
 // TransactionConfig is a set of config params used by NewTransaction
-#[derive(Debug)]
+#[derive(Default)]
 pub struct TransactionConfig {
     pub key: String,
     pub raw: Vec<u8>,
-    pub to: SocketAddr,
-    pub interval: Duration,
+    pub to: String,
+    pub interval: u16,
     pub ignore_result: bool, // true to throw away the result of this transaction (it will not be readable using wait_for_result)
-}
-
-impl Default for TransactionConfig {
-    fn default() -> Self {
-        TransactionConfig {
-            key: String::new(),
-            raw: vec![],
-            to: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
-            interval: Duration::from_secs(0),
-            ignore_result: false,
-        }
-    }
 }
 
 // Transaction represents a transaction
@@ -121,9 +110,9 @@ impl Default for TransactionConfig {
 pub struct Transaction {
     pub key: String,
     pub raw: Vec<u8>,
-    pub to: SocketAddr,
-    pub n_rtx: u16,
-    pub interval: Duration,
+    pub to: String,
+    pub n_rtx: Arc<AtomicU16>,
+    pub interval: Arc<AtomicU16>,
     timer_ch_tx: Option<mpsc::Sender<()>>,
     result_ch_tx: Option<mpsc::Sender<TransactionResult>>,
     result_ch_rx: Option<mpsc::Receiver<TransactionResult>>,
@@ -134,9 +123,9 @@ impl Default for Transaction {
         Transaction {
             key: String::new(),
             raw: vec![],
-            to: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
-            n_rtx: 0,
-            interval: Duration::from_secs(0),
+            to: String::new(),
+            n_rtx: Arc::new(AtomicU16::new(0)),
+            interval: Arc::new(AtomicU16::new(0)),
             //timer: None,
             timer_ch_tx: None,
             result_ch_tx: None,
@@ -159,7 +148,7 @@ impl Transaction {
             key: config.key,
             raw: config.raw,
             to: config.to,
-            interval: config.interval,
+            interval: Arc::new(AtomicU16::new(config.interval)),
             result_ch_tx,
             result_ch_rx,
             ..Default::default()
@@ -174,21 +163,29 @@ impl Transaction {
     ) {
         let (timer_ch_tx, mut timer_ch_rx) = mpsc::channel(1);
         self.timer_ch_tx = Some(timer_ch_tx);
-        self.n_rtx += 1;
-        self.interval *= 2;
-        if self.interval > MAX_RTX_INTERVAL {
-            self.interval = MAX_RTX_INTERVAL;
-        }
-        let (n_rtx, interval, key) = (self.n_rtx, self.interval, self.key.clone());
+        let (n_rtx, interval, key) = (self.n_rtx.clone(), self.interval.clone(), self.key.clone());
 
         tokio::spawn(async move {
             let mut done = false;
             while !done {
-                let timer = tokio::time::sleep(interval);
+                let timer = tokio::time::sleep(Duration::from_millis(
+                    interval.load(Ordering::SeqCst) as u64,
+                ));
                 tokio::pin!(timer);
 
                 tokio::select! {
-                    _ = timer.as_mut() => done = on_rtx_timeout(&conn, &tr_map, &key, n_rtx).await,
+                    _ = timer.as_mut() => {
+                        let rtx = n_rtx.fetch_add(1, Ordering::SeqCst);
+
+                        let mut val = interval.load(Ordering::SeqCst);
+                        val *= 2;
+                        if val > MAX_RTX_INTERVAL_IN_MS {
+                            val = MAX_RTX_INTERVAL_IN_MS;
+                        }
+                        interval.store(val, Ordering::SeqCst);
+
+                        done = on_rtx_timeout(&conn, &tr_map, &key, rtx + 1).await;
+                    }
                     _ = timer_ch_rx.recv() => done = true,
                 }
             }
@@ -224,7 +221,7 @@ impl Transaction {
 
     // retries returns the number of retransmission it has made
     pub fn retries(&self) -> u16 {
-        self.n_rtx
+        self.n_rtx.load(Ordering::SeqCst)
     }
 }
 

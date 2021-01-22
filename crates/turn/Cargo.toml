@@ -15,7 +15,7 @@ binaries = ["clap"]
 default = ["binaries"]
 
 [dependencies]
-util = { package = "webrtc-rs-util", version = "0.1.3" }
+util = { package = "webrtc-rs-util", version = "0.1.4" }
 stun = { package = "webrtc-rs-stun", version = "0.1.8" }
 lazy_static = "1.3.0"
 tokio = { version = "1.0", features = ["full"] }
@@ -27,8 +27,8 @@ base64 = "0.13.0"
 
 [dev-dependencies]
 tokio-test = "0.4"
+env_logger = "0.8"
 hex = "0.4.2"
-
 
 [[example]]
 name = "turn_client_udp"

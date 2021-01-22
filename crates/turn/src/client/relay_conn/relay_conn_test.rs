@@ -4,15 +4,15 @@ use std::net::Ipv4Addr;
 use util::Error;
 
 struct DummyRelayConnObserver {
-    turn_server_addr: SocketAddr,
+    turn_server_addr: String,
     username: Username,
     realm: Realm,
 }
 
 #[async_trait]
 impl RelayConnObserver for DummyRelayConnObserver {
-    fn turn_server_addr(&self) -> SocketAddr {
-        self.turn_server_addr
+    fn turn_server_addr(&self) -> String {
+        self.turn_server_addr.clone()
     }
 
     fn username(&self) -> Username {
@@ -23,14 +23,14 @@ impl RelayConnObserver for DummyRelayConnObserver {
         self.realm.clone()
     }
 
-    async fn write_to(&self, _data: &[u8], _to: SocketAddr) -> Result<usize, Error> {
+    async fn write_to(&self, _data: &[u8], _to: &str) -> Result<usize, Error> {
         Ok(0)
     }
 
     async fn perform_transaction(
         &mut self,
         _msg: &Message,
-        _to: SocketAddr,
+        _to: &str,
         _dont_wait: bool,
     ) -> Result<TransactionResult, Error> {
         Err(ERR_FAKE_ERR.to_owned())
@@ -40,7 +40,7 @@ impl RelayConnObserver for DummyRelayConnObserver {
 #[tokio::test]
 async fn test_relay_conn() -> Result<(), Error> {
     let obs = DummyRelayConnObserver {
-        turn_server_addr: SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0),
+        turn_server_addr: String::new(),
         username: Username::new(ATTR_USERNAME, "username".to_owned()),
         realm: Realm::new(ATTR_REALM, "realm".to_owned()),
     };

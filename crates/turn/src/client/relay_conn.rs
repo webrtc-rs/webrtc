@@ -40,15 +40,15 @@ pub(crate) struct InboundData {
 // UDPConnObserver is an interface to UDPConn observer
 #[async_trait]
 pub trait RelayConnObserver {
-    fn turn_server_addr(&self) -> SocketAddr;
+    fn turn_server_addr(&self) -> String;
     fn username(&self) -> Username;
     fn realm(&self) -> Realm;
-    async fn write_to(&self, data: &[u8], to: SocketAddr) -> Result<usize, Error>;
+    async fn write_to(&self, data: &[u8], to: &str) -> Result<usize, Error>;
     async fn perform_transaction(
         &mut self,
         msg: &Message,
-        to: SocketAddr,
-        dont_wait: bool,
+        to: &str,
+        ignore_result: bool,
     ) -> Result<TransactionResult, Error>;
 }
 
@@ -295,7 +295,8 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
 
                 // indication has no transaction (fire-and-forget)
                 let obs = self.obs.lock().await;
-                return obs.write_to(&msg.raw, obs.turn_server_addr()).await;
+                let turn_server_addr = obs.turn_server_addr();
+                return obs.write_to(&msg.raw, &turn_server_addr).await;
             }
 
             // binding is either ready
@@ -374,7 +375,7 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
         ch_data.encode();
 
         let obs = self.obs.lock().await;
-        obs.write_to(&ch_data.raw, obs.turn_server_addr()).await
+        obs.write_to(&ch_data.raw, &obs.turn_server_addr()).await
     }
 
     async fn create_permissions(&mut self, addrs: &[SocketAddr]) -> Result<(), Error> {
@@ -404,7 +405,7 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
             let mut obs = self.obs.lock().await;
             let turn_server_addr = obs.turn_server_addr();
             let tr_res = obs
-                .perform_transaction(&msg, turn_server_addr, false)
+                .perform_transaction(&msg, &turn_server_addr, false)
                 .await?;
 
             tr_res.msg
@@ -467,7 +468,7 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
             log::debug!("send refresh request (dont_wait={})", dont_wait);
             let turn_server_addr = obs.turn_server_addr();
             let tr_res = obs
-                .perform_transaction(&msg, turn_server_addr, dont_wait)
+                .perform_transaction(&msg, &turn_server_addr, dont_wait)
                 .await?;
 
             if dont_wait {
@@ -550,7 +551,7 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
 
         let tr_res = {
             let mut obs = rc_obs.lock().await;
-            obs.perform_transaction(&msg, turn_server_addr, false)
+            obs.perform_transaction(&msg, &turn_server_addr, false)
                 .await?
         };
 
