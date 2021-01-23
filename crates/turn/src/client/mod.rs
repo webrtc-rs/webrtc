@@ -49,14 +49,14 @@ const MAX_READ_QUEUE_SIZE: usize = 1024;
 
 // ClientConfig is a bag of config parameters for Client.
 pub struct ClientConfig {
-    stun_serv_addr: String, // STUN server address (e.g. "stun.abc.com:3478")
-    turn_serv_addr: String, // TURN server addrees (e.g. "turn.abc.com:3478")
-    username: String,
-    password: String,
-    realm: String,
-    software: String,
-    rto_in_ms: u16,
-    conn: Arc<UdpSocket>, // Listening socket (net.PacketConn)
+    pub stun_serv_addr: String, // STUN server address (e.g. "stun.abc.com:3478")
+    pub turn_serv_addr: String, // TURN server addrees (e.g. "turn.abc.com:3478")
+    pub username: String,
+    pub password: String,
+    pub realm: String,
+    pub software: String,
+    pub rto_in_ms: u16,
+    pub conn: Arc<UdpSocket>, // Listening socket (net.PacketConn)
 }
 
 struct ClientInternal {
@@ -576,13 +576,13 @@ impl Client {
     }
 
     // send_binding_request_to sends a new STUN request to the given transport address
-    async fn send_binding_request_to(&self, to: &str) -> Result<SocketAddr, Error> {
+    pub async fn send_binding_request_to(&self, to: &str) -> Result<SocketAddr, Error> {
         let mut ci = self.client_internal.lock().await;
         ci.send_binding_request_to(to).await
     }
 
     // send_binding_request sends a new STUN request to the STUN server
-    async fn send_binding_request(&self) -> Result<SocketAddr, Error> {
+    pub async fn send_binding_request(&self) -> Result<SocketAddr, Error> {
         let mut ci = self.client_internal.lock().await;
         ci.send_binding_request().await
     }
