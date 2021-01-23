@@ -25,7 +25,7 @@ pub const MAX_CHANNEL_NUMBER: u16 = 0x7FFF;
 //
 // RFC 5766 Section 14.1
 // encoded as uint16
-#[derive(Default, Eq, PartialEq, Debug, Copy, Clone)]
+#[derive(Default, Eq, PartialEq, Debug, Copy, Clone, Hash)]
 pub struct ChannelNumber(pub u16);
 
 impl fmt::Display for ChannelNumber {

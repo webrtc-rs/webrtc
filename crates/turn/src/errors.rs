@@ -67,4 +67,17 @@ lazy_static! {
     pub static ref ERR_FAILED_TO_GET_LIFETIME: Error = Error::new("failed to get lifetime from refresh response".to_owned());
     pub static ref ERR_SHORT_BUFFER: Error = Error::new("too short buffer".to_owned());
     pub static ref ERR_UNEXPECTED_RESPONSE: Error = Error::new("unexpected response type".to_owned());
+
+    pub static ref ERR_ALLOCATE_PACKET_CONN_MUST_BE_SET:Error = Error::new("AllocatePacketConn must be set".to_owned());
+    pub static ref ERR_ALLOCATE_CONN_MUST_BE_SET      :Error = Error::new("AllocateConn must be set".to_owned());
+    pub static ref ERR_LEVELED_LOGGER_MUST_BE_SET     :Error = Error::new("LeveledLogger must be set".to_owned());
+    pub static ref ERR_SAME_CHANNEL_DIFFERENT_PEER   :Error = Error::new("you cannot use the same channel number with different peer".to_owned());
+    pub static ref ERR_NIL_FIVE_TUPLE               :Error = Error::new("allocations must not be created with nil FivTuple".to_owned());
+    pub static ref ERR_NIL_FIVE_TUPLE_SRC_ADDR        :Error = Error::new("allocations must not be created with nil FiveTuple.src_addr".to_owned());
+    pub static ref ERR_NIL_FIVE_TUPLE_DST_ADDR        :Error = Error::new("allocations must not be created with nil FiveTuple.dst_addr".to_owned());
+    pub static ref ERR_NIL_TURN_SOCKET              :Error = Error::new("allocations must not be created with nil turnSocket".to_owned());
+    pub static ref ERR_LIFETIME_ZERO               :Error = Error::new("allocations must not be created with a lifetime of 0".to_owned());
+    pub static ref ERR_DUPE_FIVE_TUPLE              :Error = Error::new("allocation attempt created with duplicate FiveTuple".to_owned());
+    pub static ref ERR_FAILED_TO_CAST_UDPADDR        :Error = Error::new("failed to cast net.Addr to *net.UDPAddr".to_owned());
+
 }

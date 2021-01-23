@@ -4,6 +4,7 @@
 #[macro_use]
 extern crate lazy_static;
 
+pub mod allocation;
 pub mod client;
 pub mod errors;
 pub mod proto;

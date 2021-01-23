@@ -20,11 +20,12 @@ use stun::message::*;
 
 // proto implements RFC 5766 Traversal Using Relays around NAT.
 
-// Protocol is IANA assigned protocol number.
+// protocol is IANA assigned protocol number.
 #[derive(PartialEq, Eq, Default, Debug)]
 pub struct Protocol(pub u8);
 
 // PROTO_UDP is IANA assigned protocol number for UDP.
+pub const PROTO_TCP: Protocol = Protocol(6);
 pub const PROTO_UDP: Protocol = Protocol(17);
 
 impl fmt::Display for Protocol {
@@ -32,6 +33,7 @@ impl fmt::Display for Protocol {
         let others = format!("{}", self.0);
         let s = match *self {
             PROTO_UDP => "UDP",
+            PROTO_TCP => "TCP",
             _ => others.as_str(),
         };
 
