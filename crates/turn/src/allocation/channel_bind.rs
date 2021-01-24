@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod channel_bind_test;
+
 use super::*;
 use crate::proto::channum::*;
 
