@@ -1,7 +1,12 @@
+#[cfg(test)]
+mod allocation_test;
+
+pub mod allocation_manager;
 pub mod channel_bind;
 pub mod five_tuple;
 pub mod permission;
 
+use crate::errors::*;
 use crate::proto::{channum::*, *};
 use channel_bind::*;
 use five_tuple::*;
@@ -10,14 +15,14 @@ use permission::*;
 use util::{Conn, Error};
 
 use tokio::sync::{mpsc, Mutex};
-use tokio::time::Duration;
+use tokio::time::{Duration, Instant};
 
 use std::collections::HashMap;
 use std::net::{Ipv4Addr, SocketAddr};
-use std::sync::Arc;
+use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
 
 // Allocation is tied to a FiveTuple and relays traffic
-// use CreateAllocation and GetAllocation to operate
+// use create_allocation and get_allocation to operate
 pub struct Allocation {
     relay_addr: SocketAddr,
     protocol: Protocol,
@@ -26,8 +31,10 @@ pub struct Allocation {
     five_tuple: FiveTuple,
     permissions: Arc<Mutex<HashMap<String, Permission>>>,
     channel_bindings: Arc<Mutex<HashMap<ChannelNumber, ChannelBind>>>,
-    //lifetimeTimer       :*time.Timer
-    closed: Option<mpsc::Receiver<()>>,
+    pub(crate) allocations: Option<Arc<Mutex<HashMap<String, Allocation>>>>,
+    reset_tx: Option<mpsc::Sender<Duration>>,
+    timer_expired: Arc<AtomicBool>,
+    closed: bool, // Option<mpsc::Receiver<()>>,
 }
 
 fn addr2ipfingerprint(addr: &SocketAddr) -> String {
@@ -44,7 +51,10 @@ impl Allocation {
             five_tuple,
             permissions: Arc::new(Mutex::new(HashMap::new())),
             channel_bindings: Arc::new(Mutex::new(HashMap::new())),
-            closed: None,
+            allocations: None,
+            reset_tx: None,
+            timer_expired: Arc::new(AtomicBool::new(false)),
+            closed: false,
         }
     }
 
@@ -88,6 +98,20 @@ impl Allocation {
         mut c: ChannelBind,
         lifetime: Duration,
     ) -> Result<(), Error> {
+        {
+            if let Some(addr) = self.get_channel_addr(&c.number).await {
+                if addr != c.peer {
+                    return Err(ERR_SAME_CHANNEL_DIFFERENT_PEER.to_owned());
+                }
+            }
+
+            if let Some(number) = self.get_channel_number(&c.peer).await {
+                if number != c.number {
+                    return Err(ERR_SAME_CHANNEL_DIFFERENT_PEER.to_owned());
+                }
+            }
+        }
+
         {
             let channel_bindings = self.channel_bindings.lock().await;
             if let Some(cb) = channel_bindings.get(&c.number) {
@@ -143,44 +167,83 @@ impl Allocation {
         }
         None
     }
+
+    // Close closes the allocation
+    pub async fn close(&mut self) -> Result<(), Error> {
+        if self.closed {
+            return Ok(());
+        }
+
+        self.closed = true;
+        self.stop();
+
+        {
+            let mut permissions = self.permissions.lock().await;
+            for p in permissions.values_mut() {
+                p.stop();
+            }
+        }
+
+        {
+            let mut channel_bindings = self.channel_bindings.lock().await;
+            for c in channel_bindings.values_mut() {
+                c.stop();
+            }
+        }
+
+        Ok(())
+    }
+
+    pub async fn start(&mut self, lifetime: Duration) {
+        let (reset_tx, mut reset_rx) = mpsc::channel(1);
+        self.reset_tx = Some(reset_tx);
+
+        let allocations = self.allocations.clone();
+        let five_tuple = self.five_tuple.clone();
+        let timer_expired = Arc::clone(&self.timer_expired);
+
+        tokio::spawn(async move {
+            let timer = tokio::time::sleep(lifetime);
+            tokio::pin!(timer);
+            let mut done = false;
+
+            while !done {
+                tokio::select! {
+                    _ = &mut timer => {
+                        if let Some(allocs) = &allocations{
+                            let mut a = allocs.lock().await;
+                            a.remove(&five_tuple.fingerprint());
+                        }
+                        done = true;
+                    },
+                    result = reset_rx.recv() => {
+                        if let Some(d) = result {
+                            timer.as_mut().reset(Instant::now() + d);
+                        } else {
+                            done = true;
+                        }
+                    },
+                }
+            }
+
+            timer_expired.store(true, Ordering::SeqCst);
+        });
+    }
+
+    pub fn stop(&mut self) -> bool {
+        let expired = self.reset_tx.is_none() || self.timer_expired.load(Ordering::SeqCst);
+        self.reset_tx.take();
+        expired
+    }
+
+    // Refresh updates the allocations lifetime
+    pub async fn refresh(&self, lifetime: Duration) {
+        if let Some(tx) = &self.reset_tx {
+            let _ = tx.send(lifetime).await;
+        }
+    }
 }
 /*
-
-
-
-// Refresh updates the allocations lifetime
-func (a *Allocation) Refresh(lifetime time.Duration) {
-    if !a.lifetimeTimer.Reset(lifetime) {
-        a.log.Errorf("Failed to reset allocation timer for %v", a.five_tuple)
-    }
-}
-
-// Close closes the allocation
-func (a *Allocation) Close() error {
-    select {
-    case <-a.closed:
-        return nil
-    default:
-    }
-    close(a.closed)
-
-    a.lifetimeTimer.Stop()
-
-    a.permissionsLock.RLock()
-    for _, p := range a.permissions {
-        p.lifetimeTimer.Stop()
-    }
-    a.permissionsLock.RUnlock()
-
-    a.channelBindingsLock.RLock()
-    for _, c := range a.channel_bindings {
-        c.lifetimeTimer.Stop()
-    }
-    a.channelBindingsLock.RUnlock()
-
-    return a.RelaySocket.Close()
-}
-
 //  https://tools.ietf.org/html/rfc5766#section-10.3
 //  When the server receives a UDP datagram at a currently allocated
 //  relayed transport address, the server looks up the allocation
@@ -209,7 +272,7 @@ func (a *Allocation) packetHandler(m *Manager) {
     for {
         n, srcAddr, err := a.RelaySocket.ReadFrom(buffer)
         if err != nil {
-            m.DeleteAllocation(a.five_tuple)
+            m.delete_allocation(a.five_tuple)
             return
         }
 

@@ -13,7 +13,7 @@ use std::time::Duration;
 // DEFAULT_LIFETIME in RFC 5766 is 10 minutes.
 //
 // RFC 5766 Section 2.2
-pub const DEFAULT_LIFETIME: Lifetime = Lifetime(Duration::from_secs(10 * 60));
+pub const DEFAULT_LIFETIME: Duration = Duration::from_secs(10 * 60);
 
 // Lifetime represents LIFETIME attribute.
 //

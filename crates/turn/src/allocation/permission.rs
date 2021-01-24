@@ -1,9 +1,8 @@
 use super::*;
 
+use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
 use tokio::sync::Mutex;
 use tokio::time::{Duration, Instant};
-
-use std::sync::Arc;
 
 pub(crate) const PERMISSION_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 
@@ -14,6 +13,7 @@ pub struct Permission {
     pub(crate) addr: SocketAddr,
     pub(crate) permissions: Option<Arc<Mutex<HashMap<String, Permission>>>>,
     reset_tx: Option<mpsc::Sender<Duration>>,
+    timer_expired: Arc<AtomicBool>,
 }
 
 impl Permission {
@@ -23,6 +23,7 @@ impl Permission {
             addr,
             permissions: None,
             reset_tx: None,
+            timer_expired: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -32,28 +33,40 @@ impl Permission {
 
         let permissions = self.permissions.clone();
         let addr = self.addr;
+        let timer_expired = Arc::clone(&self.timer_expired);
 
         tokio::spawn(async move {
             let timer = tokio::time::sleep(lifetime);
             tokio::pin!(timer);
+            let mut done = false;
 
-            loop {
+            while !done {
                 tokio::select! {
                     _ = &mut timer => {
-                        if let Some(permissions) = permissions{
-                            let mut permissions = permissions.lock().await;
-                            permissions.remove(&addr2ipfingerprint(&addr));
+                        if let Some(perms) = &permissions{
+                            let mut p = perms.lock().await;
+                            p.remove(&addr2ipfingerprint(&addr));
                         }
-                        break;
+                        done = true;
                     },
                     result = reset_rx.recv() => {
                         if let Some(d) = result {
                             timer.as_mut().reset(Instant::now() + d);
+                        } else {
+                            done = true;
                         }
                     },
                 }
             }
+
+            timer_expired.store(true, Ordering::SeqCst);
         });
+    }
+
+    pub(crate) fn stop(&mut self) -> bool {
+        let expired = self.reset_tx.is_none() || self.timer_expired.load(Ordering::SeqCst);
+        self.reset_tx.take();
+        expired
     }
 
     pub(crate) async fn refresh(&self, lifetime: Duration) {
