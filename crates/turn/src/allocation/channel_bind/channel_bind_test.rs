@@ -5,9 +5,11 @@ use util::Error;
 
 use tokio::net::UdpSocket;
 
+use std::net::Ipv4Addr;
+
 async fn create_channel_bind(lifetime: Duration) -> Result<Allocation, Error> {
     let socket = UdpSocket::bind("0.0.0.0:0").await?;
-    let a = Allocation::new(socket, FiveTuple::default());
+    let a = Allocation::new(Box::new(socket), FiveTuple::default());
 
     let addr = SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0);
     let c = ChannelBind::new(ChannelNumber(MIN_CHANNEL_NUMBER), addr);

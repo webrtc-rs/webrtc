@@ -8,7 +8,7 @@ use util::Error;
 #[tokio::test]
 async fn test_has_permission() -> Result<(), Error> {
     let socket = UdpSocket::bind("0.0.0.0:0").await?;
-    let a = Allocation::new(socket, FiveTuple::default());
+    let a = Allocation::new(Box::new(socket), FiveTuple::default());
 
     let addr1 = SocketAddr::from_str("127.0.0.1:3478")?;
     let addr2 = SocketAddr::from_str("127.0.0.1:3479")?;
@@ -37,7 +37,7 @@ async fn test_has_permission() -> Result<(), Error> {
 #[tokio::test]
 async fn test_add_permission() -> Result<(), Error> {
     let socket = UdpSocket::bind("0.0.0.0:0").await?;
-    let a = Allocation::new(socket, FiveTuple::default());
+    let a = Allocation::new(Box::new(socket), FiveTuple::default());
 
     let addr = SocketAddr::from_str("127.0.0.1:3478")?;
     let p = Permission::new(addr);
@@ -52,7 +52,7 @@ async fn test_add_permission() -> Result<(), Error> {
 #[tokio::test]
 async fn test_remove_permission() -> Result<(), Error> {
     let socket = UdpSocket::bind("0.0.0.0:0").await?;
-    let a = Allocation::new(socket, FiveTuple::default());
+    let a = Allocation::new(Box::new(socket), FiveTuple::default());
 
     let addr = SocketAddr::from_str("127.0.0.1:3478")?;
 
@@ -76,7 +76,7 @@ async fn test_remove_permission() -> Result<(), Error> {
 #[tokio::test]
 async fn test_add_channel_bind() -> Result<(), Error> {
     let socket = UdpSocket::bind("0.0.0.0:0").await?;
-    let a = Allocation::new(socket, FiveTuple::default());
+    let a = Allocation::new(Box::new(socket), FiveTuple::default());
 
     let addr = SocketAddr::from_str("127.0.0.1:3478")?;
     let c = ChannelBind::new(ChannelNumber(MIN_CHANNEL_NUMBER), addr);
@@ -101,7 +101,7 @@ async fn test_add_channel_bind() -> Result<(), Error> {
 #[tokio::test]
 async fn test_get_channel_by_number() -> Result<(), Error> {
     let socket = UdpSocket::bind("0.0.0.0:0").await?;
-    let a = Allocation::new(socket, FiveTuple::default());
+    let a = Allocation::new(Box::new(socket), FiveTuple::default());
 
     let addr = SocketAddr::from_str("127.0.0.1:3478")?;
     let c = ChannelBind::new(ChannelNumber(MIN_CHANNEL_NUMBER), addr);
@@ -128,7 +128,7 @@ async fn test_get_channel_by_number() -> Result<(), Error> {
 #[tokio::test]
 async fn test_get_channel_by_addr() -> Result<(), Error> {
     let socket = UdpSocket::bind("0.0.0.0:0").await?;
-    let a = Allocation::new(socket, FiveTuple::default());
+    let a = Allocation::new(Box::new(socket), FiveTuple::default());
 
     let addr = SocketAddr::from_str("127.0.0.1:3478")?;
     let addr2 = SocketAddr::from_str("127.0.0.1:3479")?;
@@ -151,7 +151,7 @@ async fn test_get_channel_by_addr() -> Result<(), Error> {
 #[tokio::test]
 async fn test_remove_channel_bind() -> Result<(), Error> {
     let socket = UdpSocket::bind("0.0.0.0:0").await?;
-    let a = Allocation::new(socket, FiveTuple::default());
+    let a = Allocation::new(Box::new(socket), FiveTuple::default());
 
     let addr = SocketAddr::from_str("127.0.0.1:3478")?;
     let number = ChannelNumber(MIN_CHANNEL_NUMBER);
@@ -179,7 +179,7 @@ async fn test_remove_channel_bind() -> Result<(), Error> {
 #[tokio::test]
 async fn test_allocation_refresh() -> Result<(), Error> {
     let socket = UdpSocket::bind("0.0.0.0:0").await?;
-    let mut a = Allocation::new(socket, FiveTuple::default());
+    let mut a = Allocation::new(Box::new(socket), FiveTuple::default());
 
     a.start(DEFAULT_LIFETIME).await;
     a.refresh(Duration::from_secs(0)).await;
@@ -192,7 +192,7 @@ async fn test_allocation_refresh() -> Result<(), Error> {
 #[tokio::test]
 async fn test_allocation_close() -> Result<(), Error> {
     let socket = UdpSocket::bind("0.0.0.0:0").await?;
-    let mut a = Allocation::new(socket, FiveTuple::default());
+    let mut a = Allocation::new(Box::new(socket), FiveTuple::default());
 
     // add mock lifetimeTimer
     a.start(DEFAULT_LIFETIME).await;
@@ -267,7 +267,7 @@ func subTestPacketHandler(t *testing.T) {
     channelBind := NewChannelBind(proto.MinChannelNumber, peerListener2.LocalAddr(), m.log)
     _ = a.AddChannelBind(channelBind, proto.DefaultLifetime)
 
-    _, port, _ := ipnet.AddrIPPort(a.RelaySocket.LocalAddr())
+    _, port, _ := ipnet.AddrIPPort(a.relay_socket.LocalAddr())
     relayAddrWithHostStr := fmt.Sprintf("127.0.0.1:%d", port)
     relayAddrWithHost, _ := net.ResolveUDPAddr(network, relayAddrWithHostStr)
 

@@ -18,20 +18,23 @@ use tokio::sync::{mpsc, Mutex};
 use tokio::time::{Duration, Instant};
 
 use std::collections::HashMap;
-use std::net::{Ipv4Addr, SocketAddr};
+use std::marker::Send;
+use std::net::SocketAddr;
 use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
+
+pub type AllocationMap = Arc<Mutex<HashMap<String, Arc<Mutex<Allocation>>>>>;
 
 // Allocation is tied to a FiveTuple and relays traffic
 // use create_allocation and get_allocation to operate
 pub struct Allocation {
-    relay_addr: SocketAddr,
     protocol: Protocol,
-    //TODO: TurnSocket: Box<dyn Conn>,
-    //TODO: RelaySocket: Box<dyn Conn>,
+    turn_socket: Box<dyn Conn + Send>,
+    relay_addr: Option<SocketAddr>,
+    relay_socket: Option<Box<dyn Conn + Send>>,
     five_tuple: FiveTuple,
     permissions: Arc<Mutex<HashMap<String, Permission>>>,
     channel_bindings: Arc<Mutex<HashMap<ChannelNumber, ChannelBind>>>,
-    pub(crate) allocations: Option<Arc<Mutex<HashMap<String, Allocation>>>>,
+    pub(crate) allocations: Option<AllocationMap>,
     reset_tx: Option<mpsc::Sender<Duration>>,
     timer_expired: Arc<AtomicBool>,
     closed: bool, // Option<mpsc::Receiver<()>>,
@@ -43,11 +46,12 @@ fn addr2ipfingerprint(addr: &SocketAddr) -> String {
 
 impl Allocation {
     // creates a new instance of NewAllocation.
-    pub fn new(_turn_socket: impl Conn, five_tuple: FiveTuple) -> Self {
+    pub fn new(turn_socket: Box<dyn Conn + Send>, five_tuple: FiveTuple) -> Self {
         Allocation {
-            relay_addr: SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0),
             protocol: PROTO_UDP,
-            //TODO: TurnSocket:  turnSocket,
+            turn_socket,
+            relay_addr: None,
+            relay_socket: None,
             five_tuple,
             permissions: Arc::new(Mutex::new(HashMap::new())),
             channel_bindings: Arc::new(Mutex::new(HashMap::new())),
@@ -211,8 +215,8 @@ impl Allocation {
                 tokio::select! {
                     _ = &mut timer => {
                         if let Some(allocs) = &allocations{
-                            let mut a = allocs.lock().await;
-                            a.remove(&five_tuple.fingerprint());
+                            let mut alls = allocs.lock().await;
+                            alls.remove(&five_tuple.fingerprint());
                         }
                         done = true;
                     },
@@ -270,14 +274,14 @@ func (a *Allocation) packetHandler(m *Manager) {
     buffer := make([]byte, rtpMTU)
 
     for {
-        n, srcAddr, err := a.RelaySocket.ReadFrom(buffer)
+        n, srcAddr, err := a.relay_socket.ReadFrom(buffer)
         if err != nil {
             m.delete_allocation(a.five_tuple)
             return
         }
 
         a.log.Debugf("relay socket %s received %d bytes from %s",
-            a.RelaySocket.LocalAddr().String(),
+            a.relay_socket.LocalAddr().String(),
             n,
             srcAddr.String())
 
@@ -288,7 +292,7 @@ func (a *Allocation) packetHandler(m *Manager) {
             }
             channelData.Encode()
 
-            if _, err = a.TurnSocket.WriteTo(channelData.Raw, a.five_tuple.src_addr); err != nil {
+            if _, err = a.turn_socket.WriteTo(channelData.Raw, a.five_tuple.src_addr); err != nil {
                 a.log.Errorf("Failed to send ChannelData from allocation %v %v", srcAddr, err)
             }
         } else if p := a.get_permission(srcAddr); p != nil {
@@ -303,7 +307,7 @@ func (a *Allocation) packetHandler(m *Manager) {
             a.log.Debugf("relaying message from %s to client at %s",
                 srcAddr.String(),
                 a.five_tuple.src_addr.String())
-            if _, err = a.TurnSocket.WriteTo(msg.Raw, a.five_tuple.src_addr); err != nil {
+            if _, err = a.turn_socket.WriteTo(msg.Raw, a.five_tuple.src_addr); err != nil {
                 a.log.Errorf("Failed to send DataIndication from allocation %v %v", srcAddr, err)
             }
         } else {
