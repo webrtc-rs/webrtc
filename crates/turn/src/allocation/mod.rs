@@ -7,10 +7,13 @@ pub mod five_tuple;
 pub mod permission;
 
 use crate::errors::*;
-use crate::proto::{channum::*, *};
+use crate::proto::{chandata::*, channum::*, data::*, peeraddr::*, *};
 use channel_bind::*;
 use five_tuple::*;
 use permission::*;
+
+use stun::agent::*;
+use stun::message::*;
 
 use util::{Conn, Error};
 
@@ -18,9 +21,11 @@ use tokio::sync::{mpsc, Mutex};
 use tokio::time::{Duration, Instant};
 
 use std::collections::HashMap;
-use std::marker::Send;
+use std::marker::{Send, Sync};
 use std::net::SocketAddr;
 use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
+
+const RTP_MTU: usize = 1500;
 
 pub type AllocationMap = Arc<Mutex<HashMap<String, Arc<Mutex<Allocation>>>>>;
 
@@ -28,9 +33,9 @@ pub type AllocationMap = Arc<Mutex<HashMap<String, Arc<Mutex<Allocation>>>>>;
 // use create_allocation and get_allocation to operate
 pub struct Allocation {
     protocol: Protocol,
-    turn_socket: Box<dyn Conn + Send>,
-    relay_addr: Option<SocketAddr>,
-    relay_socket: Option<Box<dyn Conn + Send>>,
+    turn_socket: Arc<dyn Conn + Send + Sync>,
+    relay_addr: SocketAddr,
+    relay_socket: Arc<dyn Conn + Send + Sync>,
     five_tuple: FiveTuple,
     permissions: Arc<Mutex<HashMap<String, Permission>>>,
     channel_bindings: Arc<Mutex<HashMap<ChannelNumber, ChannelBind>>>,
@@ -46,12 +51,17 @@ fn addr2ipfingerprint(addr: &SocketAddr) -> String {
 
 impl Allocation {
     // creates a new instance of NewAllocation.
-    pub fn new(turn_socket: Box<dyn Conn + Send>, five_tuple: FiveTuple) -> Self {
+    pub fn new(
+        turn_socket: Arc<dyn Conn + Send + Sync>,
+        relay_socket: Arc<dyn Conn + Send + Sync>,
+        relay_addr: SocketAddr,
+        five_tuple: FiveTuple,
+    ) -> Self {
         Allocation {
             protocol: PROTO_UDP,
             turn_socket,
-            relay_addr: None,
-            relay_socket: None,
+            relay_addr,
+            relay_socket,
             five_tuple,
             permissions: Arc::new(Mutex::new(HashMap::new())),
             channel_bindings: Arc::new(Mutex::new(HashMap::new())),
@@ -246,73 +256,144 @@ impl Allocation {
             let _ = tx.send(lifetime).await;
         }
     }
-}
-/*
-//  https://tools.ietf.org/html/rfc5766#section-10.3
-//  When the server receives a UDP datagram at a currently allocated
-//  relayed transport address, the server looks up the allocation
-//  associated with the relayed transport address.  The server then
-//  checks to see whether the set of permissions for the allocation allow
-//  the relaying of the UDP datagram as described in Section 8.
-//
-//  If relaying is permitted, then the server checks if there is a
-//  channel bound to the peer that sent the UDP datagram (see
-//  Section 11).  If a channel is bound, then processing proceeds as
-//  described in Section 11.7.
-//
-//  If relaying is permitted but no channel is bound to the peer, then
-//  the server forms and sends a Data indication.  The Data indication
-//  MUST contain both an XOR-PEER-ADDRESS and a DATA attribute.  The DATA
-//  attribute is set to the value of the 'data octets' field from the
-//  datagram, and the XOR-PEER-ADDRESS attribute is set to the source
-//  transport address of the received UDP datagram.  The Data indication
-//  is then sent on the 5-tuple associated with the allocation.
 
-const rtpMTU = 1500
+    //  https://tools.ietf.org/html/rfc5766#section-10.3
+    //  When the server receives a UDP datagram at a currently allocated
+    //  relayed transport address, the server looks up the allocation
+    //  associated with the relayed transport address.  The server then
+    //  checks to see whether the set of permissions for the allocation allow
+    //  the relaying of the UDP datagram as described in Section 8.
+    //
+    //  If relaying is permitted, then the server checks if there is a
+    //  channel bound to the peer that sent the UDP datagram (see
+    //  Section 11).  If a channel is bound, then processing proceeds as
+    //  described in Section 11.7.
+    //
+    //  If relaying is permitted but no channel is bound to the peer, then
+    //  the server forms and sends a Data indication.  The Data indication
+    //  MUST contain both an XOR-PEER-ADDRESS and a DATA attribute.  The DATA
+    //  attribute is set to the value of the 'data octets' field from the
+    //  datagram, and the XOR-PEER-ADDRESS attribute is set to the source
+    //  transport address of the received UDP datagram.  The Data indication
+    //  is then sent on the 5-tuple associated with the allocation.
+    async fn packet_handler(&self) {
+        let five_tuple = self.five_tuple.clone();
+        let relay_addr = self.relay_addr;
+        let relay_socket = Arc::clone(&self.relay_socket);
+        let turn_socket = Arc::clone(&self.turn_socket);
+        let allocations = self.allocations.clone();
+        let channel_bindings = Arc::clone(&self.channel_bindings);
+        let permissions = Arc::clone(&self.permissions);
 
-func (a *Allocation) packetHandler(m *Manager) {
-    buffer := make([]byte, rtpMTU)
+        tokio::spawn(async move {
+            let mut buffer = vec![0u8; RTP_MTU];
 
-    for {
-        n, srcAddr, err := a.relay_socket.ReadFrom(buffer)
-        if err != nil {
-            m.delete_allocation(a.five_tuple)
-            return
-        }
+            loop {
+                let (n, src_addr) = match relay_socket.recv_from(&mut buffer).await {
+                    Ok((n, src_addr)) => (n, src_addr),
+                    Err(_) => {
+                        if let Some(allocs) = &allocations {
+                            let mut alls = allocs.lock().await;
+                            alls.remove(&five_tuple.fingerprint());
+                        }
+                        break;
+                    }
+                };
 
-        a.log.Debugf("relay socket %s received %d bytes from %s",
-            a.relay_socket.LocalAddr().String(),
-            n,
-            srcAddr.String())
+                log::debug!(
+                    "relay socket {:?} received {} bytes from {}",
+                    relay_socket.local_addr(),
+                    n,
+                    src_addr
+                );
 
-        if channel := a.GetChannelByAddr(srcAddr); channel != nil {
-            channelData := &proto.ChannelData{
-                Data:   buffer[:n],
-                number: channel.number,
+                let cb_number = {
+                    let mut cb_number = None;
+                    let cbs = channel_bindings.lock().await;
+                    for cb in cbs.values() {
+                        if cb.peer == src_addr {
+                            cb_number = Some(cb.number);
+                            break;
+                        }
+                    }
+                    cb_number
+                };
+
+                if let Some(number) = cb_number {
+                    let mut channel_data = ChannelData {
+                        data: buffer[..n].to_vec(),
+                        number,
+                        raw: vec![],
+                    };
+                    channel_data.encode();
+
+                    if let Err(err) = turn_socket
+                        .send_to(&channel_data.raw, five_tuple.src_addr)
+                        .await
+                    {
+                        log::error!(
+                            "Failed to send ChannelData from allocation {} {}",
+                            src_addr,
+                            err
+                        );
+                    }
+                } else {
+                    let exist = {
+                        let ps = permissions.lock().await;
+                        ps.get(&addr2ipfingerprint(&src_addr)).is_some()
+                    };
+
+                    if exist {
+                        let msg = {
+                            let peer_address_attr = PeerAddress {
+                                ip: src_addr.ip(),
+                                port: src_addr.port(),
+                            };
+                            let data_attr = Data(buffer[..n].to_vec());
+
+                            let mut msg = Message::new();
+                            if let Err(err) = msg.build(&[
+                                Box::new(TransactionId::new()),
+                                Box::new(MessageType::new(METHOD_DATA, CLASS_INDICATION)),
+                                Box::new(peer_address_attr),
+                                Box::new(data_attr),
+                            ]) {
+                                log::error!(
+                                    "Failed to send DataIndication from allocation {} {}",
+                                    src_addr,
+                                    err
+                                );
+                                None
+                            } else {
+                                Some(msg)
+                            }
+                        };
+
+                        if let Some(msg) = msg {
+                            log::debug!(
+                                "relaying message from {} to client at {}",
+                                src_addr,
+                                five_tuple.src_addr
+                            );
+                            if let Err(err) =
+                                turn_socket.send_to(&msg.raw, five_tuple.src_addr).await
+                            {
+                                log::error!(
+                                    "Failed to send DataIndication from allocation {} {}",
+                                    src_addr,
+                                    err
+                                );
+                            }
+                        }
+                    } else {
+                        log::info!(
+                            "No Permission or Channel exists for {} on allocation {}",
+                            src_addr,
+                            relay_addr
+                        );
+                    }
+                }
             }
-            channelData.Encode()
-
-            if _, err = a.turn_socket.WriteTo(channelData.Raw, a.five_tuple.src_addr); err != nil {
-                a.log.Errorf("Failed to send ChannelData from allocation %v %v", srcAddr, err)
-            }
-        } else if p := a.get_permission(srcAddr); p != nil {
-            udpAddr := srcAddr.(*net.UDPAddr)
-            peerAddressAttr := proto.PeerAddress{IP: udpAddr.IP, Port: udpAddr.Port}
-            dataAttr := proto.Data(buffer[:n])
-
-            msg, err := stun.Build(stun.TransactionID, stun.NewType(stun.MethodData, stun.ClassIndication), peerAddressAttr, dataAttr)
-            if err != nil {
-                a.log.Errorf("Failed to send DataIndication from allocation %v %v", srcAddr, err)
-            }
-            a.log.Debugf("relaying message from %s to client at %s",
-                srcAddr.String(),
-                a.five_tuple.src_addr.String())
-            if _, err = a.turn_socket.WriteTo(msg.Raw, a.five_tuple.src_addr); err != nil {
-                a.log.Errorf("Failed to send DataIndication from allocation %v %v", srcAddr, err)
-            }
-        } else {
-            a.log.Infof("No Permission or Channel exists for %v on allocation %v", srcAddr, a.relay_addr.String())
-        }
+        });
     }
 }
-*/

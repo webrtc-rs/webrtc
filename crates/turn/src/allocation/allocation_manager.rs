@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod allocation_manager_test;
+
 use super::*;
 use crate::errors::*;
 
@@ -6,8 +9,10 @@ use std::net::SocketAddr;
 
 use util::{Conn, Error};
 
-type AllocateConnFn =
-    fn(network: String, requestedPort: u16) -> Result<(Box<dyn Conn + Send>, SocketAddr), Error>;
+type AllocateConnFn = fn(
+    network: String,
+    requestedPort: u16,
+) -> Result<(Arc<dyn Conn + Send + Sync>, SocketAddr), Error>;
 
 // ManagerConfig a bag of config params for Manager.
 pub struct ManagerConfig {
@@ -55,7 +60,7 @@ impl Manager {
     pub async fn create_allocation(
         &self,
         five_tuple: FiveTuple,
-        turn_socket: Box<dyn Conn + Send>,
+        turn_socket: Arc<dyn Conn + Send + Sync>,
         requested_port: u16,
         lifetime: Duration,
     ) -> Result<Arc<Mutex<Allocation>>, Error> {
@@ -67,24 +72,19 @@ impl Manager {
             return Err(ERR_DUPE_FIVE_TUPLE.to_owned());
         }
 
-        let mut a = Allocation::new(turn_socket, five_tuple.clone());
-
-        let (conn, relay_addr) = (self.allocate_conn)("udp4".to_owned(), requested_port)?;
-
-        a.relay_socket = Some(conn);
-        a.relay_addr = Some(relay_addr);
+        let (relay_socket, relay_addr) = (self.allocate_conn)("udp4".to_owned(), requested_port)?;
+        let mut a = Allocation::new(turn_socket, relay_socket, relay_addr, five_tuple.clone());
         a.allocations = Some(Arc::clone(&self.allocations));
 
         log::debug!("listening on relay addr: {:?}", a.relay_addr);
         a.start(lifetime).await;
+        a.packet_handler().await;
 
         let a = Arc::new(Mutex::new(a));
         {
             let mut allocations = self.allocations.lock().await;
             allocations.insert(five_tuple.fingerprint(), Arc::clone(&a));
         }
-
-        //TODO: go a.packetHandler(m)
 
         Ok(a)
     }
