@@ -1,11 +1,12 @@
-mod relay_address_generator_none;
-mod relay_address_generator_range;
-mod relay_address_generator_static;
+pub mod relay_address_generator_none;
+pub mod relay_address_generator_range;
+pub mod relay_address_generator_static;
 
-use util::Error;
+use util::{Conn, Error};
 
 use std::net::SocketAddr;
-use tokio::net::{TcpSocket, UdpSocket};
+use std::sync::Arc;
+use tokio::net::UdpSocket;
 
 use async_trait::async_trait;
 
@@ -16,17 +17,10 @@ pub(crate) trait RelayAddressGenerator {
     // validate confirms that the RelayAddressGenerator is properly initialized
     fn validate(&self) -> Result<(), Error>;
 
-    // Allocate a PacketConn (UDP) RelayAddress
-    async fn allocate_packet_conn(
-        &self,
-        network: &str,
-        requested_port: u16,
-    ) -> Result<(UdpSocket, SocketAddr), Error>;
-
-    // Allocate a Conn (TCP) RelayAddress
+    // Allocate a RelayAddress
     async fn allocate_conn(
         &self,
         network: &str,
         requested_port: u16,
-    ) -> Result<(TcpSocket, SocketAddr), Error>;
+    ) -> Result<(Arc<dyn Conn + Send + Sync>, SocketAddr), Error>;
 }

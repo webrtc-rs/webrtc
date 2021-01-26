@@ -7,7 +7,6 @@ use async_trait::async_trait;
 pub struct RelayAddressGeneratorNone {
     // Address is passed to Listen/ListenPacket when creating the Relay
     pub address: String,
-    //pub socket: UdpSocket, //Net *vnet.Net
 }
 
 #[async_trait]
@@ -22,22 +21,13 @@ impl RelayAddressGenerator for RelayAddressGeneratorNone {
     }
 
     // Allocate a PacketConn (UDP) RelayAddress
-    async fn allocate_packet_conn(
-        &self,
-        _network: &str,
-        requested_port: u16,
-    ) -> Result<(UdpSocket, SocketAddr), Error> {
-        let conn = UdpSocket::bind(format!("{}:{}", self.address, requested_port)).await?;
-        let local_addr = conn.local_addr()?;
-        Ok((conn, local_addr))
-    }
-
-    // Allocate a Conn (TCP) RelayAddress
     async fn allocate_conn(
         &self,
         _network: &str,
-        _requested_port: u16,
-    ) -> Result<(TcpSocket, SocketAddr), Error> {
-        Err(ERR_TODO.clone())
+        requested_port: u16,
+    ) -> Result<(Arc<dyn Conn + Send + Sync>, SocketAddr), Error> {
+        let conn = UdpSocket::bind(format!("{}:{}", self.address, requested_port)).await?;
+        let local_addr = conn.local_addr()?;
+        Ok((Arc::new(conn), local_addr))
     }
 }

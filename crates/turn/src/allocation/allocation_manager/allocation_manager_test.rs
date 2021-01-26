@@ -1,99 +1,140 @@
-/*
-func subTestPacketHandler(t *testing.T) {
-    network := "udp"
+use super::*;
+use crate::relay_address_generator::relay_address_generator_none::*;
 
-    m, _ := newTestManager()
+use crate::proto::lifetime::DEFAULT_LIFETIME;
+use std::str::FromStr;
+use tokio::net::UdpSocket;
+use util::Error;
+
+fn new_test_manager() -> Manager {
+    let config = ManagerConfig {
+        relay_addr_generator: Box::new(RelayAddressGeneratorNone {
+            address: "0.0.0.0".to_owned(),
+        }),
+    };
+    Manager::new(config)
+}
+
+#[tokio::test]
+async fn test_packet_handler() -> Result<(), Error> {
+    //env_logger::init();
 
     // turn server initialization
-    turnSocket, err := net.ListenPacket(network, "127.0.0.1:0")
-    if err != nil {
-        panic(err)
-    }
+    let turn_socket = UdpSocket::bind("127.0.0.1:0").await?;
 
     // client listener initialization
-    clientListener, err := net.ListenPacket(network, "127.0.0.1:0")
-    if err != nil {
-        panic(err)
-    }
-
-    dataCh := make(chan []byte)
+    let client_listener = UdpSocket::bind("127.0.0.1:0").await?;
+    let src_addr = client_listener.local_addr()?;
+    let (data_ch_tx, mut data_ch_rx) = mpsc::channel(1);
     // client listener read data
-    go func() {
-        buffer := make([]byte, RTP_MTU)
-        for {
-            n, _, err2 := clientListener.ReadFrom(buffer)
-            if err2 != nil {
-                return
-            }
+    tokio::spawn(async move {
+        let mut buffer = vec![0u8; RTP_MTU];
+        loop {
+            let n = match client_listener.recv_from(&mut buffer).await {
+                Ok((n, _)) => n,
+                Err(_) => break,
+            };
 
-            dataCh <- buffer[:n]
+            let _ = data_ch_tx.send(buffer[..n].to_vec()).await;
         }
-    }()
+    });
 
-    a, err := m.CreateAllocation(&FiveTuple{
-        SrcAddr: clientListener.LocalAddr(),
-        DstAddr: turnSocket.LocalAddr(),
-    }, turnSocket, 0, proto.DefaultLifetime)
+    let m = new_test_manager();
+    let a = m
+        .create_allocation(
+            FiveTuple {
+                src_addr,
+                dst_addr: turn_socket.local_addr()?,
+                ..Default::default()
+            },
+            Arc::new(turn_socket),
+            0,
+            DEFAULT_LIFETIME,
+        )
+        .await?;
 
-    assert.Nil(t, err, "should succeed")
+    let peer_listener1 = UdpSocket::bind("127.0.0.1:0").await?;
+    let peer_listener2 = UdpSocket::bind("127.0.0.1:0").await?;
 
-    peerListener1, err := net.ListenPacket(network, "127.0.0.1:0")
-    if err != nil {
-        panic(err)
-    }
+    let channel_bind = ChannelBind::new(
+        ChannelNumber(MIN_CHANNEL_NUMBER),
+        peer_listener2.local_addr()?,
+    );
 
-    peerListener2, err := net.ListenPacket(network, "127.0.0.1:0")
-    if err != nil {
-        panic(err)
-    }
+    let port = {
+        let a = a.lock().await;
 
-    // add permission with peer1 address
-    a.AddPermission(NewPermission(peerListener1.LocalAddr(), m.log))
-    // add channel with min channel number and peer2 address
-    channelBind := NewChannelBind(proto.MinChannelNumber, peerListener2.LocalAddr(), m.log)
-    _ = a.AddChannelBind(channelBind, proto.DefaultLifetime)
+        // add permission with peer1 address
+        a.add_permission(Permission::new(peer_listener1.local_addr()?))
+            .await;
+        // add channel with min channel number and peer2 address
+        a.add_channel_bind(channel_bind.clone(), DEFAULT_LIFETIME)
+            .await?;
 
-    _, port, _ := ipnet.AddrIPPort(a.relay_socket.LocalAddr())
-    relayAddrWithHostStr := fmt.Sprintf("127.0.0.1:%d", port)
-    relayAddrWithHost, _ := net.ResolveUDPAddr(network, relayAddrWithHostStr)
+        a.relay_socket.local_addr()?.port()
+    };
+
+    let relay_addr_with_host_str = format!("127.0.0.1:{}", port);
+    let relay_addr_with_host = SocketAddr::from_str(&relay_addr_with_host_str)?;
 
     // test for permission and data message
-    targetText := "permission"
-    _, _ = peerListener1.WriteTo([]byte(targetText), relayAddrWithHost)
-    data := <-dataCh
+    let target_text = "permission";
+    let _ = peer_listener1
+        .send_to(target_text.as_bytes(), relay_addr_with_host)
+        .await?;
+    let data = data_ch_rx
+        .recv()
+        .await
+        .ok_or_else(|| Error::new("data ch closed".to_owned()))?;
 
     // resolve stun data message
-    assert.True(t, stun.IsMessage(data), "should be stun message")
+    assert!(is_message(&data), "should be stun message");
 
-    var msg stun.Message
-    err = stun.Decode(data, &msg)
-    assert.Nil(t, err, "decode data to stun message failed")
+    let mut msg = Message::new();
+    msg.raw = data;
+    msg.decode()?;
 
-    var msgData proto.Data
-    err = msgData.GetFrom(&msg)
-    assert.Nil(t, err, "get data from stun message failed")
-    assert.Equal(t, targetText, string(msgData), "get message doesn't equal the target text")
+    let mut msg_data = Data::default();
+    msg_data.get_from(&msg)?;
+    assert_eq!(
+        target_text.as_bytes(),
+        &msg_data.0,
+        "get message doesn't equal the target text"
+    );
 
     // test for channel bind and channel data
-    targetText2 := "channel bind"
-    _, _ = peerListener2.WriteTo([]byte(targetText2), relayAddrWithHost)
-    data = <-dataCh
+    let target_text2 = "channel bind";
+    let _ = peer_listener2
+        .send_to(target_text2.as_bytes(), relay_addr_with_host)
+        .await?;
+    let data = data_ch_rx
+        .recv()
+        .await
+        .ok_or_else(|| Error::new("data ch closed".to_owned()))?;
 
     // resolve channel data
-    assert.True(t, proto.IsChannelData(data), "should be channel data")
+    assert!(
+        ChannelData::is_channel_data(&data),
+        "should be channel data"
+    );
 
-    channelData := proto.ChannelData{
-        Raw: data,
-    }
-    err = channelData.Decode()
-    assert.Nil(t, err, fmt.Sprintf("channel data decode with error: %v", err))
-    assert.Equal(t, channelBind.Number, channelData.Number, "get channel data's number is invalid")
-    assert.Equal(t, targetText2, string(channelData.Data), "get data doesn't equal the target text.")
+    let mut channel_data = ChannelData {
+        raw: data,
+        ..Default::default()
+    };
+    channel_data.decode()?;
+    assert_eq!(
+        channel_bind.number, channel_data.number,
+        "get channel data's number is invalid"
+    );
+    assert_eq!(
+        target_text2.as_bytes(),
+        &channel_data.data,
+        "get data doesn't equal the target text."
+    );
 
     // listeners close
-    _ = m.Close()
-    _ = clientListener.Close()
-    _ = peerListener1.Close()
-    _ = peerListener2.Close()
+    m.close().await?;
+
+    Ok(())
 }
- */

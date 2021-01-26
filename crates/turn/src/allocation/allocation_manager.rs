@@ -3,27 +3,22 @@ mod allocation_manager_test;
 
 use super::*;
 use crate::errors::*;
+use crate::relay_address_generator::*;
 
 use std::collections::HashMap;
-use std::net::SocketAddr;
 
 use util::{Conn, Error};
 
-type AllocateConnFn = fn(
-    network: String,
-    requestedPort: u16,
-) -> Result<(Arc<dyn Conn + Send + Sync>, SocketAddr), Error>;
-
 // ManagerConfig a bag of config params for Manager.
 pub struct ManagerConfig {
-    allocate_conn: AllocateConnFn,
+    pub(crate) relay_addr_generator: Box<dyn RelayAddressGenerator>,
 }
 
 // Manager is used to hold active allocations
 pub struct Manager {
     allocations: AllocationMap,
     reservations: Arc<Mutex<HashMap<String, u16>>>,
-    allocate_conn: AllocateConnFn,
+    relay_addr_generator: Box<dyn RelayAddressGenerator>,
 }
 
 impl Manager {
@@ -32,7 +27,7 @@ impl Manager {
         Manager {
             allocations: Arc::new(Mutex::new(HashMap::new())),
             reservations: Arc::new(Mutex::new(HashMap::new())),
-            allocate_conn: config.allocate_conn,
+            relay_addr_generator: config.relay_addr_generator,
         }
     }
 
@@ -72,7 +67,10 @@ impl Manager {
             return Err(ERR_DUPE_FIVE_TUPLE.to_owned());
         }
 
-        let (relay_socket, relay_addr) = (self.allocate_conn)("udp4".to_owned(), requested_port)?;
+        let (relay_socket, relay_addr) = self
+            .relay_addr_generator
+            .allocate_conn("udp4", requested_port)
+            .await?;
         let mut a = Allocation::new(turn_socket, relay_socket, relay_addr, five_tuple.clone());
         a.allocations = Some(Arc::clone(&self.allocations));
 
@@ -134,12 +132,8 @@ impl Manager {
     }
 
     // get_random_even_port returns a random un-allocated udp4 port
-    pub fn get_random_even_port(&self) -> Result<u16, Error> {
-        let (_, addr) = (self.allocate_conn)("udp4".to_owned(), 0)?;
-        if addr.port() % 2 == 1 {
-            self.get_random_even_port()
-        } else {
-            Ok(addr.port())
-        }
+    pub async fn get_random_even_port(&self) -> Result<u16, Error> {
+        let (_, addr) = self.relay_addr_generator.allocate_conn("udp4", 0).await?;
+        Ok(addr.port())
     }
 }
