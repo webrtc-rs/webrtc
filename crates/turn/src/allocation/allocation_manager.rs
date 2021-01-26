@@ -88,7 +88,7 @@ impl Manager {
     }
 
     // delete_allocation removes an allocation
-    pub async fn delete_allocation(&mut self, five_tuple: &FiveTuple) {
+    pub async fn delete_allocation(&self, five_tuple: &FiveTuple) {
         let fingerprint = five_tuple.fingerprint();
 
         let mut allocations = self.allocations.lock().await;

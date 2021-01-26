@@ -29,6 +29,7 @@ base64 = "0.13.0"
 tokio-test = "0.4"
 env_logger = "0.8"
 hex = "0.4.2"
+rand = "0.8.2"
 
 [[example]]
 name = "turn_client_udp"

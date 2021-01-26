@@ -185,7 +185,7 @@ impl Allocation {
     // Close closes the allocation
     pub async fn close(&mut self) -> Result<(), Error> {
         if self.closed {
-            return Ok(());
+            return Err(ERR_CLOSED.to_owned());
         }
 
         self.closed = true;
@@ -204,6 +204,8 @@ impl Allocation {
                 c.stop();
             }
         }
+
+        log::trace!("allocation with {} closed!", self.five_tuple);
 
         Ok(())
     }
@@ -226,7 +228,10 @@ impl Allocation {
                     _ = &mut timer => {
                         if let Some(allocs) = &allocations{
                             let mut alls = allocs.lock().await;
-                            alls.remove(&five_tuple.fingerprint());
+                            if let Some(a) = alls.remove(&five_tuple.fingerprint()) {
+                                let mut a = a.lock().await;
+                                let _ = a.close().await;
+                            }
                         }
                         done = true;
                     },

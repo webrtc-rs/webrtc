@@ -2,6 +2,7 @@ use super::*;
 use crate::relay_address_generator::relay_address_generator_none::*;
 
 use crate::proto::lifetime::DEFAULT_LIFETIME;
+use std::net::Ipv4Addr;
 use std::str::FromStr;
 use tokio::net::UdpSocket;
 use util::Error;
@@ -13,6 +14,15 @@ fn new_test_manager() -> Manager {
         }),
     };
     Manager::new(config)
+}
+
+fn random_five_tuple() -> FiveTuple {
+    /* #nosec */
+    FiveTuple {
+        src_addr: SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), rand::random()),
+        dst_addr: SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), rand::random()),
+        ..Default::default()
+    }
 }
 
 #[tokio::test]
@@ -135,6 +145,153 @@ async fn test_packet_handler() -> Result<(), Error> {
 
     // listeners close
     m.close().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_create_allocation_duplicate_five_tuple() -> Result<(), Error> {
+    //env_logger::init();
+
+    // turn server initialization
+    let turn_socket: Arc<dyn Conn + Send + Sync> = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
+
+    let m = new_test_manager();
+
+    let five_tuple = random_five_tuple();
+
+    let _ = m
+        .create_allocation(
+            five_tuple.clone(),
+            Arc::clone(&turn_socket),
+            0,
+            DEFAULT_LIFETIME,
+        )
+        .await?;
+
+    let result = m
+        .create_allocation(five_tuple, Arc::clone(&turn_socket), 0, DEFAULT_LIFETIME)
+        .await;
+    assert!(result.is_err(), "expected error, but got ok");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_delete_allocation() -> Result<(), Error> {
+    //env_logger::init();
+
+    // turn server initialization
+    let turn_socket: Arc<dyn Conn + Send + Sync> = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
+
+    let m = new_test_manager();
+
+    let five_tuple = random_five_tuple();
+
+    let _ = m
+        .create_allocation(
+            five_tuple.clone(),
+            Arc::clone(&turn_socket),
+            0,
+            DEFAULT_LIFETIME,
+        )
+        .await?;
+
+    assert!(
+        m.get_allocation(&five_tuple).await.is_some(),
+        "Failed to get allocation right after creation"
+    );
+
+    m.delete_allocation(&five_tuple).await;
+
+    assert!(
+        m.get_allocation(&five_tuple).await.is_none(),
+        "Get allocation with {} should be nil after delete",
+        five_tuple
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_allocation_timeout() -> Result<(), Error> {
+    //env_logger::init();
+
+    // turn server initialization
+    let turn_socket: Arc<dyn Conn + Send + Sync> = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
+
+    let m = new_test_manager();
+
+    let mut allocations = vec![];
+    let lifetime = Duration::from_millis(100);
+
+    for _ in 0..5 {
+        let five_tuple = random_five_tuple();
+
+        let a = m
+            .create_allocation(five_tuple, Arc::clone(&turn_socket), 0, lifetime)
+            .await?;
+
+        allocations.push(a);
+    }
+
+    tokio::time::sleep(lifetime + Duration::from_millis(100)).await;
+
+    for allocation in allocations {
+        let mut a = allocation.lock().await;
+        assert!(
+            a.close().await.is_err(),
+            "Allocation should be closed if lifetime timeout"
+        );
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_manager_close() -> Result<(), Error> {
+    // env_logger::init();
+
+    // turn server initialization
+    let turn_socket: Arc<dyn Conn + Send + Sync> = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
+
+    let m = new_test_manager();
+
+    let mut allocations = vec![];
+
+    let a1 = m
+        .create_allocation(
+            random_five_tuple(),
+            Arc::clone(&turn_socket),
+            0,
+            Duration::from_millis(100),
+        )
+        .await?;
+    allocations.push(a1);
+
+    let a2 = m
+        .create_allocation(
+            random_five_tuple(),
+            Arc::clone(&turn_socket),
+            0,
+            Duration::from_millis(200),
+        )
+        .await?;
+    allocations.push(a2);
+
+    tokio::time::sleep(Duration::from_millis(150)).await;
+
+    log::trace!("Mgr is going to be closed...");
+
+    m.close().await?;
+
+    for allocation in allocations {
+        let mut a = allocation.lock().await;
+        assert!(
+            a.close().await.is_err(),
+            "Allocation should be closed if lifetime timeout"
+        );
+    }
 
     Ok(())
 }
