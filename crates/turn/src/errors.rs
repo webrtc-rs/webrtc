@@ -70,16 +70,37 @@ lazy_static! {
     pub static ref ERR_SHORT_BUFFER: Error = Error::new("too short buffer".to_owned());
     pub static ref ERR_UNEXPECTED_RESPONSE: Error = Error::new("unexpected response type".to_owned());
 
-    pub static ref ERR_ALLOCATE_PACKET_CONN_MUST_BE_SET:Error = Error::new("AllocatePacketConn must be set".to_owned());
-    pub static ref ERR_ALLOCATE_CONN_MUST_BE_SET      :Error = Error::new("AllocateConn must be set".to_owned());
-    pub static ref ERR_LEVELED_LOGGER_MUST_BE_SET     :Error = Error::new("LeveledLogger must be set".to_owned());
-    pub static ref ERR_SAME_CHANNEL_DIFFERENT_PEER   :Error = Error::new("you cannot use the same channel number with different peer".to_owned());
-    pub static ref ERR_NIL_FIVE_TUPLE               :Error = Error::new("allocations must not be created with nil FivTuple".to_owned());
-    pub static ref ERR_NIL_FIVE_TUPLE_SRC_ADDR        :Error = Error::new("allocations must not be created with nil FiveTuple.src_addr".to_owned());
-    pub static ref ERR_NIL_FIVE_TUPLE_DST_ADDR        :Error = Error::new("allocations must not be created with nil FiveTuple.dst_addr".to_owned());
-    pub static ref ERR_NIL_TURN_SOCKET              :Error = Error::new("allocations must not be created with nil turnSocket".to_owned());
-    pub static ref ERR_LIFETIME_ZERO               :Error = Error::new("allocations must not be created with a lifetime of 0".to_owned());
-    pub static ref ERR_DUPE_FIVE_TUPLE              :Error = Error::new("allocation attempt created with duplicate FiveTuple".to_owned());
-    pub static ref ERR_FAILED_TO_CAST_UDPADDR        :Error = Error::new("failed to cast net.Addr to *net.UDPAddr".to_owned());
+    pub static ref ERR_ALLOCATE_PACKET_CONN_MUST_BE_SET: Error = Error::new("AllocatePacketConn must be set".to_owned());
+    pub static ref ERR_ALLOCATE_CONN_MUST_BE_SET: Error = Error::new("AllocateConn must be set".to_owned());
+    pub static ref ERR_LEVELED_LOGGER_MUST_BE_SET: Error = Error::new("LeveledLogger must be set".to_owned());
+    pub static ref ERR_SAME_CHANNEL_DIFFERENT_PEER: Error = Error::new("you cannot use the same channel number with different peer".to_owned());
+    pub static ref ERR_NIL_FIVE_TUPLE: Error = Error::new("allocations must not be created with nil FivTuple".to_owned());
+    pub static ref ERR_NIL_FIVE_TUPLE_SRC_ADDR: Error = Error::new("allocations must not be created with nil FiveTuple.src_addr".to_owned());
+    pub static ref ERR_NIL_FIVE_TUPLE_DST_ADDR: Error = Error::new("allocations must not be created with nil FiveTuple.dst_addr".to_owned());
+    pub static ref ERR_NIL_TURN_SOCKET: Error = Error::new("allocations must not be created with nil turnSocket".to_owned());
+    pub static ref ERR_LIFETIME_ZERO: Error = Error::new("allocations must not be created with a lifetime of 0".to_owned());
+    pub static ref ERR_DUPE_FIVE_TUPLE: Error = Error::new("allocation attempt created with duplicate FiveTuple".to_owned());
+    pub static ref ERR_FAILED_TO_CAST_UDPADDR: Error = Error::new("failed to cast net.Addr to *net.UDPAddr".to_owned());
+
+    pub static ref ERR_FAILED_TO_GENERATE_NONCE: Error = Error::new("failed to generate nonce".to_owned());
+    pub static ref ERR_FAILED_TO_SEND_ERROR: Error = Error::new("failed to send error message".to_owned());
+    pub static ref ERR_DUPLICATED_NONCE: Error = Error::new("duplicated Nonce generated, discarding request".to_owned());
+    pub static ref ERR_NO_SUCH_USER: Error = Error::new("no such user exists".to_owned());
+    pub static ref ERR_UNEXPECTED_CLASS: Error = Error::new("unexpected class".to_owned());
+    pub static ref ERR_UNEXPECTED_METHOD: Error = Error::new("unexpected method".to_owned());
+    pub static ref ERR_FAILED_TO_HANDLE: Error = Error::new("failed to handle".to_owned());
+    pub static ref ERR_UNHANDLED_STUNPACKET: Error = Error::new("unhandled STUN packet".to_owned());
+    pub static ref ERR_UNABLE_TO_HANDLE_CHANNEL_DATA: Error = Error::new("unable to handle ChannelData".to_owned());
+    pub static ref ERR_FAILED_TO_CREATE_STUNPACKET: Error = Error::new("failed to create stun message from packet".to_owned());
+    pub static ref ERR_FAILED_TO_CREATE_CHANNEL_DATA: Error = Error::new("failed to create channel data from packet".to_owned());
+    pub static ref ERR_RELAY_ALREADY_ALLOCATED_FOR_FIVE_TUPLE: Error = Error::new("relay already allocated for 5-TUPLE".to_owned());
+    pub static ref ERR_REQUESTED_TRANSPORT_MUST_BE_UDP: Error = Error::new("RequestedTransport must be UDP".to_owned());
+    pub static ref ERR_NO_DONT_FRAGMENT_SUPPORT: Error = Error::new("no support for DONT-FRAGMENT".to_owned());
+    pub static ref ERR_REQUEST_WITH_RESERVATION_TOKEN_AND_EVEN_PORT: Error = Error::new("Request must not contain RESERVATION-TOKEN and EVEN-PORT".to_owned());
+    pub static ref ERR_NO_ALLOCATION_FOUND: Error = Error::new("no allocation found".to_owned());
+    pub static ref ERR_NO_PERMISSION: Error = Error::new("unable to handle send-indication, no permission added".to_owned());
+    pub static ref ERR_SHORT_WRITE: Error = Error::new("packet write smaller than packet".to_owned());
+    pub static ref ERR_NO_SUCH_CHANNEL_BIND: Error = Error::new("no such channel bind".to_owned());
+    pub static ref ERR_FAILED_WRITE_SOCKET: Error = Error::new("failed writing to socket".to_owned());
 
 }
