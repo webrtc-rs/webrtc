@@ -21,6 +21,8 @@ lazy_static! {
         Error::new("turn: MaxPort must be not 0".to_owned());
     pub static ref ERR_MIN_PORT_NOT_ZERO: Error =
         Error::new("turn: MaxPort must be not 0".to_owned());
+    pub static ref ERR_MAX_PORT_LESS_THAN_MIN_PORT: Error =
+        Error::new("turn: MaxPort less than MinPort".to_owned());
     pub static ref ERR_NIL_CONN: Error = Error::new("turn: relay_conn cannot not be nil".to_owned());
     pub static ref ERR_TODO: Error = Error::new("turn: TODO".to_owned());
     pub static ref ERR_ALREADY_LISTENING: Error = Error::new("turn: already listening".to_owned());

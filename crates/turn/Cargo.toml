@@ -23,13 +23,12 @@ async-trait = "0.1"
 clap = { version = "2", optional = true, default-features = false }
 log = "0.4"
 base64 = "0.13.0"
-
+rand = "0.8.2"
 
 [dev-dependencies]
 tokio-test = "0.4"
 env_logger = "0.8"
 hex = "0.4.2"
-rand = "0.8.2"
 
 [[example]]
 name = "turn_client_udp"

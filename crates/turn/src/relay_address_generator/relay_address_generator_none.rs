@@ -1,6 +1,8 @@
 use super::*;
 use crate::errors::*;
 
+use tokio::net::UdpSocket;
+
 use async_trait::async_trait;
 
 // RelayAddressGeneratorNone returns the listener with no modifications
@@ -14,7 +16,7 @@ impl RelayAddressGenerator for RelayAddressGeneratorNone {
     // validate confirms that the RelayAddressGenerator is properly initialized
     fn validate(&self) -> Result<(), Error> {
         if self.address.is_empty() {
-            Err(ERR_LISTENING_ADDRESS_INVALID.clone())
+            Err(ERR_LISTENING_ADDRESS_INVALID.to_owned())
         } else {
             Ok(())
         }
@@ -27,7 +29,7 @@ impl RelayAddressGenerator for RelayAddressGeneratorNone {
         requested_port: u16,
     ) -> Result<(Arc<dyn Conn + Send + Sync>, SocketAddr), Error> {
         let conn = UdpSocket::bind(format!("{}:{}", self.address, requested_port)).await?;
-        let local_addr = conn.local_addr()?;
-        Ok((Arc::new(conn), local_addr))
+        let relay_addr = conn.local_addr()?;
+        Ok((Arc::new(conn), relay_addr))
     }
 }

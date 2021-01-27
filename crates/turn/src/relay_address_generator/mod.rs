@@ -6,7 +6,6 @@ use util::{Conn, Error};
 
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::net::UdpSocket;
 
 use async_trait::async_trait;
 
