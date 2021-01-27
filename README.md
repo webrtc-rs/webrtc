@@ -24,9 +24,9 @@
  <a href="https://discord.gg/4Ju8UHdXMs">
   <img src="https://img.shields.io/discord/800204819540869120?logo=discord" alt="Discord">
  </a>
- <a href="https://seladb.github.io/StarTrack-js/#/preload?r=webrtc-rs,webrtc">
-  <img src="https://img.shields.io/github/stars/webrtc-rs/webrtc.svg?style=social&label=Star" alt="Github Stars">
- </a>
+ <a href="https://twitter.com/WebRTCrs">
+  <img src="https://img.shields.io/twitter/url/https/twitter.com/webrtcrs.svg?style=social&label=Follow%20%40WebRTCrs" alt="Wwitter">
+ </a>  
 </p>
 <p align="center">
  A pure Rust implementation of WebRTC API. Rewrite Pion WebRTC stack (<a href="http://Pion.ly">http://Pion.ly</a>) in Rust
