@@ -25,7 +25,7 @@
   <img src="https://img.shields.io/discord/800204819540869120?logo=discord" alt="Discord">
  </a>
  <a href="https://twitter.com/WebRTCrs">
-  <img src="https://img.shields.io/twitter/url/https/twitter.com/webrtcrs.svg?style=social&label=Follow%20%40WebRTCrs" alt="Wwitter">
+  <img src="https://img.shields.io/twitter/url/https/twitter.com/webrtcrs.svg?style=social&label=Follow%20%40WebRTCrs" alt="Twitter">
  </a>  
 </p>
 <p align="center">
