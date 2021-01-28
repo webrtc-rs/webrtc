@@ -5,10 +5,8 @@ use std::io::Read;
 
 use byteorder::ReadBytesExt;
 
-#[cfg(test)]
-mod h264_test;
-
 mod h264_def;
+mod h264_test;
 
 pub use h264_def::{H264Packet, H264Payloader};
 

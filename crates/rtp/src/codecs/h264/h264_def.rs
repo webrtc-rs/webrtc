@@ -37,7 +37,7 @@ impl Payloader for H264Payloader {
             }
 
             // FU-A
-            let max_fragment_size = mtu - super::FUA_HEADER_SIZE;
+            let max_fragment_size = mtu as isize - super::FUA_HEADER_SIZE as isize;
 
             // The FU payload consists of fragments of the payload of the fragmented
             // NAL unit so that if the fragmentation unit payloads of consecutive
@@ -57,7 +57,7 @@ impl Payloader for H264Payloader {
             let nalu_data_length = nalu.len() - nalu_data_index;
             let mut nalu_data_remaining = nalu_data_length;
 
-            if (max_fragment_size as isize).min(nalu_data_remaining as isize) < 0 {
+            if (max_fragment_size).min(nalu_data_remaining as isize) < 0 {
                 return;
             }
 
@@ -106,9 +106,7 @@ impl Payloader for H264Payloader {
 }
 
 #[derive(Debug, Default)]
-pub struct H264Packet {
-    payload: Vec<u8>,
-}
+pub struct H264Packet {}
 
 impl Depacketizer for H264Packet {
     fn unmarshal(&mut self, payload: &mut BytesMut) -> Result<BytesMut, RTPError> {
@@ -140,7 +138,9 @@ impl Depacketizer for H264Packet {
                 }
 
                 result.extend_from_slice(&super::ANNEXB_NALUSTART_CODE);
-                result.extend_from_slice(&payload[current_offset..nalu_size as usize]);
+                result.extend_from_slice(
+                    &payload[current_offset..current_offset + nalu_size as usize],
+                );
                 current_offset += nalu_size as usize;
             }
 
