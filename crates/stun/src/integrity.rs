@@ -22,7 +22,7 @@ pub(crate) const CREDENTIALS_SEP: &str = ":";
 //
 // RFC 5389 Section 15.4
 #[derive(Default, Clone)]
-pub struct MessageIntegrity(Vec<u8>);
+pub struct MessageIntegrity(pub Vec<u8>);
 
 fn new_hmac(key: &[u8], message: &[u8]) -> Vec<u8> {
     let mac = hmac::Key::new(hmac::HMAC_SHA1_FOR_LEGACY_USE_ONLY, key);
