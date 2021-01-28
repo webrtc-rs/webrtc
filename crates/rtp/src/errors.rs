@@ -1,14 +1,14 @@
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum RTPError {
-    HeaderSizeInsufficient(String),
-    HeaderSizeInsufficientForExtension(String),
-    RFC8285OneByteHeaderIDRange(String),
-    RFC8285OneByteHeaderSize(String),
-    RFC8285TwoByteHeaderIDRange(String),
-    RFC8285TwoByteHeaderSize(String),
-    RFC3550HeaderIDRange(String),
-    ShortPacket(String),
-    UnhandledNALUType(String),
+    HeaderSizeInsufficient,
+    HeaderSizeInsufficientForExtension,
+    RFC8285OneByteHeaderIDRange(u8),
+    RFC8285OneByteHeaderSize(u8),
+    RFC8285TwoByteHeaderIDRange(u8),
+    RFC8285TwoByteHeaderSize(u8),
+    RFC3550HeaderIDRange(u8),
+    ShortPacket,
+    UnhandledNALUType(u8),
     ExtensionError(ExtensionError),
     ShortBuffer,
     HeaderExtensionNotEnabled,
@@ -23,7 +23,7 @@ impl std::fmt::Display for RTPError {
 
 impl std::error::Error for RTPError {}
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ExtensionError {
     TooSmall,
     AudioLevelOverflow,

@@ -111,7 +111,7 @@ pub struct H264Packet {}
 impl Depacketizer for H264Packet {
     fn unmarshal(&mut self, payload: &mut BytesMut) -> Result<BytesMut, RTPError> {
         if payload.len() <= 2 {
-            return Err(RTPError::ShortPacket(format!("{} <= 2", payload.len())));
+            return Err(RTPError::ShortPacket);
         }
 
         // NALU Types
@@ -130,11 +130,7 @@ impl Depacketizer for H264Packet {
                 current_offset += super::STAPA_NALU_LENGTH_SIZE;
 
                 if payload.len() < current_offset + nalu_size as usize {
-                    return Err(RTPError::ShortPacket(format!(
-                        "STAP-A declared size({}) is larger than buffer({})",
-                        nalu_size,
-                        payload.len() - current_offset
-                    )));
+                    return Err(RTPError::ShortPacket);
                 }
 
                 result.extend_from_slice(&super::ANNEXB_NALUSTART_CODE);
@@ -147,7 +143,7 @@ impl Depacketizer for H264Packet {
             return Ok(result);
         } else if nalu_type == super::FUA_NALU_TYPE {
             if payload.len() < super::FUA_HEADER_SIZE {
-                return Err(RTPError::ShortPacket(String::new()));
+                return Err(RTPError::ShortPacket);
             }
 
             if payload[1] & super::FUA_START_BITMASK != 0 {
@@ -170,6 +166,6 @@ impl Depacketizer for H264Packet {
             return Ok(payload[super::FUA_HEADER_SIZE..].into());
         }
 
-        Err(RTPError::UnhandledNALUType(format!("{}", nalu_type)))
+        Err(RTPError::UnhandledNALUType(nalu_type))
     }
 }

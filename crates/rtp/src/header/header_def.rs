@@ -68,36 +68,24 @@ impl Header {
             match self.extension_profile.into() {
                 super::ExtensionProfile::OneByte => {
                     if !(1..=14).contains(&id) {
-                        return Err(RTPError::RFC8285OneByteHeaderIDRange(format!(
-                            "actual({})",
-                            id
-                        )));
+                        return Err(RTPError::RFC8285OneByteHeaderIDRange(id));
                     }
                     if payload.len() > 16 {
-                        return Err(RTPError::RFC8285OneByteHeaderSize(format!(
-                            "actual({})",
-                            id
-                        )));
+                        return Err(RTPError::RFC8285OneByteHeaderSize(id));
                     }
                 }
 
                 super::ExtensionProfile::TwoByte => {
                     if id < 1 {
-                        return Err(RTPError::RFC8285TwoByteHeaderIDRange(format!(
-                            "actual({})",
-                            id
-                        )));
+                        return Err(RTPError::RFC8285TwoByteHeaderIDRange(id));
                     }
                     if payload.len() > 255 {
-                        return Err(RTPError::RFC8285TwoByteHeaderSize(format!(
-                            "actual({})",
-                            id
-                        )));
+                        return Err(RTPError::RFC8285TwoByteHeaderSize(id));
                     }
                 }
                 _ => {
                     if id != 0 {
-                        return Err(RTPError::RFC3550HeaderIDRange(format!("actual({})", id)));
+                        return Err(RTPError::RFC3550HeaderIDRange(id));
                     }
                 }
             };
@@ -201,11 +189,7 @@ impl Header {
          */
 
         if raw_packet.len() < super::HEADER_LENGTH {
-            return Err(RTPError::HeaderSizeInsufficient(format!(
-                "{} < {}",
-                raw_packet.len(),
-                super::HEADER_LENGTH
-            )));
+            return Err(RTPError::HeaderSizeInsufficient);
         }
 
         self.version = raw_packet[0] >> super::VERSION_SHIFT & super::VERSION_MASK;
@@ -215,11 +199,7 @@ impl Header {
 
         let mut current_offset = super::CSRC_OFFSET + (self.csrc.len() * super::CSRC_LENGTH);
         if raw_packet.len() < current_offset {
-            return Err(RTPError::HeaderSizeInsufficient(format!(
-                "{} < {}",
-                raw_packet.len(),
-                current_offset
-            )));
+            return Err(RTPError::HeaderSizeInsufficient);
         }
 
         self.marker = (raw_packet[1] >> super::MARKER_SHIFT & super::MARKER_MASK) > 0;
@@ -242,11 +222,7 @@ impl Header {
 
         if self.extension {
             if raw_packet.len() < current_offset + 4 {
-                return Err(RTPError::HeaderSizeInsufficientForExtension(format!(
-                    "{} < {}",
-                    raw_packet.len(),
-                    current_offset + 4
-                )));
+                return Err(RTPError::HeaderSizeInsufficientForExtension);
             }
 
             self.extension_profile = BigEndian::read_u16(&raw_packet[current_offset..]);
@@ -257,11 +233,7 @@ impl Header {
             current_offset += 2;
 
             if raw_packet.len() < current_offset + extension_length as usize {
-                return Err(RTPError::HeaderSizeInsufficientForExtension(format!(
-                    "{} < {}",
-                    raw_packet.len(),
-                    current_offset + extension_length as usize,
-                )));
+                return Err(RTPError::HeaderSizeInsufficientForExtension);
             }
 
             match self.extension_profile.into() {
@@ -323,11 +295,7 @@ impl Header {
                 // RFC3550 Extension
                 _ => {
                     if raw_packet.len() < current_offset + extension_length as usize {
-                        return Err(RTPError::HeaderSizeInsufficientForExtension(format!(
-                            "{} < {}",
-                            raw_packet.len(),
-                            current_offset + extension_length as usize,
-                        )));
+                        return Err(RTPError::HeaderSizeInsufficientForExtension);
                     }
 
                     self.extensions.push(super::Extension {

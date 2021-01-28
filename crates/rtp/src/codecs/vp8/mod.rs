@@ -97,7 +97,7 @@ impl Depacketizer for VP8Packet {
     fn unmarshal(&mut self, payload: &mut BytesMut) -> Result<BytesMut, RTPError> {
         let payload_len = payload.len();
         if payload_len < 4 {
-            return Err(RTPError::ShortPacket(String::new()));
+            return Err(RTPError::ShortPacket);
         }
 
         let mut payload_index = 0;
@@ -136,7 +136,7 @@ impl Depacketizer for VP8Packet {
         }
 
         if payload_index >= payload_len {
-            return Err(RTPError::ShortPacket(String::new()));
+            return Err(RTPError::ShortPacket);
         }
 
         self.payload = payload[payload_index..].into();
