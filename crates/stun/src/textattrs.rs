@@ -66,6 +66,14 @@ impl Setter for TextAttribute {
     }
 }
 
+impl Getter for TextAttribute {
+    fn get_from(&mut self, m: &Message) -> Result<(), Error> {
+        let attr = self.attr;
+        *self = TextAttribute::get_from_as(m, attr)?;
+        Ok(())
+    }
+}
+
 impl TextAttribute {
     pub fn new(attr: AttrType, text: String) -> Self {
         TextAttribute { attr, text }
