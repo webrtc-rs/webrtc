@@ -119,7 +119,7 @@ async fn test_client_nonce_expiration() -> Result<(), Error> {
     let udpListener = UdpSocket::bind("0.0.0.0:3478").await?;
 
     server, err := NewServer(ServerConfig{
-        AuthHandler: func(username, realm string, srcAddr net.Addr) (key []byte, ok bool) {
+        auth_handler: func(username, realm string, srcAddr net.Addr) (key []byte, ok bool) {
             return GenerateAuthKey(username, realm, "pass"), true
         },
         PacketConnConfigs: []PacketConnConfig{
@@ -131,7 +131,7 @@ async fn test_client_nonce_expiration() -> Result<(), Error> {
                 },
             },
         },
-        Realm: "pion.ly",
+        realm: "pion.ly",
     })
     assert.NoError(t, err)
 
