@@ -9,7 +9,7 @@ use std::fmt;
 
 // Attributes is list of message attributes.
 #[derive(Default, PartialEq, Eq, Debug, Clone)]
-pub struct Attributes(pub(crate) Vec<RawAttribute>);
+pub struct Attributes(pub Vec<RawAttribute>);
 
 impl Attributes {
     // get returns first attribute from list by the type.
