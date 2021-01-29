@@ -50,9 +50,9 @@ impl Addr {
 // FiveTuple represents 5-TUPLE value.
 #[derive(PartialEq, Eq, Default)]
 pub struct FiveTuple {
-    client: Addr,
-    server: Addr,
-    proto: Protocol,
+    pub client: Addr,
+    pub server: Addr,
+    pub proto: Protocol,
 }
 
 impl fmt::Display for FiveTuple {
