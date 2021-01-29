@@ -17,5 +17,5 @@
  </a>
 </p>
 <p align="center">
- A pure Rust implementation of WebRTC Media.
+ A pure Rust implementation of WebRTC media
 </p>
