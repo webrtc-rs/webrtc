@@ -129,13 +129,13 @@ async fn respond_with_nonce(
 }
 
 pub(crate) async fn authenticate_request(
-    mut r: Request,
+    r: &mut Request,
     m: &Message,
     calling_method: Method,
-) -> Result<Option<MessageIntegrity>, Error> {
+) -> Result<MessageIntegrity, Error> {
     if !m.contains(ATTR_MESSAGE_INTEGRITY) {
-        respond_with_nonce(&mut r, m, calling_method, CODE_UNAUTHORIZED).await?;
-        return Ok(None);
+        respond_with_nonce(r, m, calling_method, CODE_UNAUTHORIZED).await?;
+        return Ok(MessageIntegrity::default());
     }
 
     let mut nonce_attr = Nonce::new(ATTR_NONCE, String::new());
@@ -169,8 +169,8 @@ pub(crate) async fn authenticate_request(
     };
 
     if to_be_deleted {
-        respond_with_nonce(&mut r, m, calling_method, CODE_STALE_NONCE).await?;
-        return Ok(None);
+        respond_with_nonce(r, m, calling_method, CODE_STALE_NONCE).await?;
+        return Ok(MessageIntegrity::default());
     }
 
     realm_attr.get_from(m)?;
@@ -189,15 +189,16 @@ pub(crate) async fn authenticate_request(
             &bad_request_msg,
         )
         .await?;
-        return Ok(None);
+        return Ok(MessageIntegrity::default());
     }
 
     let mi = MessageIntegrity(our_key);
     if let Err(err) = mi.check(&mut m.clone()) {
         build_and_send_err(&r.conn, r.src_addr, err, &bad_request_msg).await?;
-        return Ok(None);
+        Ok(MessageIntegrity::default())
+    } else {
+        Ok(mi)
     }
-    Ok(Some(mi))
 }
 
 pub(crate) fn allocation_life_time(m: &Message) -> Duration {

@@ -1,7 +1,24 @@
 use super::utils::*;
 use super::*;
+use crate::allocation::five_tuple::*;
+use crate::errors::*;
+use crate::proto::*;
 
+use crate::allocation::channel_bind::ChannelBind;
+use crate::allocation::permission::Permission;
+use crate::proto::channum::ChannelNumber;
+use crate::proto::data::Data;
+use crate::proto::lifetime::*;
+use crate::proto::peeraddr::PeerAddress;
+use crate::proto::reqtrans::RequestedTransport;
+
+use crate::proto::evenport::EvenPort;
+use crate::proto::relayaddr::RelayedAddress;
+use crate::proto::rsrvtoken::ReservationToken;
+use stun::attributes::*;
+use stun::error_code::*;
 use stun::fingerprint::*;
+use stun::uattrs::*;
 use stun::xoraddr::*;
 
 pub(crate) async fn handle_binding_request(r: Request, m: &Message) -> Result<(), Error> {
@@ -20,9 +37,9 @@ pub(crate) async fn handle_binding_request(r: Request, m: &Message) -> Result<()
 
     build_and_send(&r.conn, r.src_addr, &attrs).await
 }
-/*
+
 // // https://tools.ietf.org/html/rfc5766#section-6.2
-pub(crate) async fn handle_allocate_request(r: Request, m: &Message) -> Result<(), Error> {
+pub(crate) async fn handle_allocate_request(mut r: Request, m: &Message) -> Result<(), Error> {
     log::debug!("received AllocateRequest from {}", r.src_addr);
 
     // 1. The server MUST require that the request be authenticated.  This
@@ -30,28 +47,55 @@ pub(crate) async fn handle_allocate_request(r: Request, m: &Message) -> Result<(
     //    mechanism of [https://tools.ietf.org/html/rfc5389#section-10.2.2]
     //    unless the client and server agree to use another mechanism through
     //    some procedure outside the scope of this document.
-    messageIntegrity, hasAuth, err := authenticate_request(r, m, stun.MethodAllocate)
-    if !hasAuth {
-        return err
-    }
+    let message_integrity = authenticate_request(&mut r, m, METHOD_ALLOCATE).await?;
+    let five_tuple = FiveTuple {
+        src_addr: r.src_addr,
+        dst_addr: r.conn.local_addr()?,
+        protocol: PROTO_UDP,
+    };
+    let mut requested_port = 0;
+    let mut reservation_token = "".to_owned();
 
-    fiveTuple := &allocation.FiveTuple{
-        SrcAddr:  r.SrcAddr,
-        DstAddr:  r.Conn.LocalAddr(),
-        Protocol: allocation.UDP,
-    }
-    requestedPort := 0
-    reservationToken := ""
-
-    badRequestMsg := buildMsg(m.TransactionID, stun.NewType(stun.MethodAllocate, stun.ClassErrorResponse), &stun.ErrorCodeAttribute{Code: stun.CodeBadRequest})
-    insufficentCapacityMsg := buildMsg(m.TransactionID, stun.NewType(stun.MethodAllocate, stun.ClassErrorResponse), &stun.ErrorCodeAttribute{Code: stun.CodeInsufficientCapacity})
+    let bad_request_msg = build_msg(
+        m.transaction_id,
+        MessageType::new(METHOD_ALLOCATE, CLASS_ERROR_RESPONSE),
+        vec![Box::new(ErrorCodeAttribute {
+            code: CODE_BAD_REQUEST,
+            reason: vec![],
+        })],
+    );
+    let insufficent_capacity_msg = build_msg(
+        m.transaction_id,
+        MessageType::new(METHOD_ALLOCATE, CLASS_ERROR_RESPONSE),
+        vec![Box::new(ErrorCodeAttribute {
+            code: CODE_INSUFFICIENT_CAPACITY,
+            reason: vec![],
+        })],
+    );
 
     // 2. The server checks if the 5-tuple is currently in use by an
     //    existing allocation.  If yes, the server rejects the request with
     //    a 437 (Allocation Mismatch) error.
-    if alloc := r.AllocationManager.GetAllocation(fiveTuple); alloc != nil {
-        msg := buildMsg(m.TransactionID, stun.NewType(stun.MethodAllocate, stun.ClassErrorResponse), &stun.ErrorCodeAttribute{Code: stun.CodeAllocMismatch})
-        return buildAndSendErr(r.Conn, r.SrcAddr, errRelayAlreadyAllocatedForFiveTuple, msg...)
+    if r.allocation_manager
+        .get_allocation(&five_tuple)
+        .await
+        .is_some()
+    {
+        let msg = build_msg(
+            m.transaction_id,
+            MessageType::new(METHOD_ALLOCATE, CLASS_ERROR_RESPONSE),
+            vec![Box::new(ErrorCodeAttribute {
+                code: CODE_ALLOC_MISMATCH,
+                reason: vec![],
+            })],
+        );
+        return build_and_send_err(
+            &r.conn,
+            r.src_addr,
+            ERR_RELAY_ALREADY_ALLOCATED_FOR_FIVE_TUPLE.to_owned(),
+            &msg,
+        )
+        .await;
     }
 
     // 3. The server checks if the request contains a REQUESTED-TRANSPORT
@@ -60,12 +104,25 @@ pub(crate) async fn handle_allocate_request(r: Request, m: &Message) -> Result<(
     //    Request) error.  Otherwise, if the attribute is included but
     //    specifies a protocol other that UDP, the server rejects the
     //    request with a 442 (Unsupported Transport Protocol) error.
-    var requestedTransport proto.RequestedTransport
-    if err = requestedTransport.GetFrom(m); err != nil {
-        return buildAndSendErr(r.Conn, r.SrcAddr, err, badRequestMsg...)
-    } else if requestedTransport.Protocol != proto.ProtoUDP {
-        msg := buildMsg(m.TransactionID, stun.NewType(stun.MethodAllocate, stun.ClassErrorResponse), &stun.ErrorCodeAttribute{Code: stun.CodeUnsupportedTransProto})
-        return buildAndSendErr(r.Conn, r.SrcAddr, errRequestedTransportMustBeUDP, msg...)
+    let mut requested_transport = RequestedTransport::default();
+    if let Err(err) = requested_transport.get_from(m) {
+        return build_and_send_err(&r.conn, r.src_addr, err, &bad_request_msg).await;
+    } else if requested_transport.protocol != PROTO_UDP {
+        let msg = build_msg(
+            m.transaction_id,
+            MessageType::new(METHOD_ALLOCATE, CLASS_ERROR_RESPONSE),
+            vec![Box::new(ErrorCodeAttribute {
+                code: CODE_UNSUPPORTED_TRANS_PROTO,
+                reason: vec![],
+            })],
+        );
+        return build_and_send_err(
+            &r.conn,
+            r.src_addr,
+            ERR_REQUESTED_TRANSPORT_MUST_BE_UDP.to_owned(),
+            &msg,
+        )
+        .await;
     }
 
     // 4. The request may contain a DONT-FRAGMENT attribute.  If it does,
@@ -73,9 +130,25 @@ pub(crate) async fn handle_allocate_request(r: Request, m: &Message) -> Result<(
     //    bit set to 1 (see Section 12), then the server treats the DONT-
     //    FRAGMENT attribute in the Allocate request as an unknown
     //    comprehension-required attribute.
-    if m.Contains(stun.AttrDontFragment) {
-        msg := buildMsg(m.TransactionID, stun.NewType(stun.MethodAllocate, stun.ClassErrorResponse), &stun.ErrorCodeAttribute{Code: stun.CodeUnknownAttribute}, &stun.UnknownAttributes{stun.AttrDontFragment})
-        return buildAndSendErr(r.Conn, r.SrcAddr, errNoDontFragmentSupport, msg...)
+    if m.contains(ATTR_DONT_FRAGMENT) {
+        let msg = build_msg(
+            m.transaction_id,
+            MessageType::new(METHOD_ALLOCATE, CLASS_ERROR_RESPONSE),
+            vec![
+                Box::new(ErrorCodeAttribute {
+                    code: CODE_UNKNOWN_ATTRIBUTE,
+                    reason: vec![],
+                }),
+                Box::new(UnknownAttributes(vec![ATTR_DONT_FRAGMENT])),
+            ],
+        );
+        return build_and_send_err(
+            &r.conn,
+            r.src_addr,
+            ERR_NO_DONT_FRAGMENT_SUPPORT.to_owned(),
+            &msg,
+        )
+        .await;
     }
 
     // 5.  The server checks if the request contains a RESERVATION-TOKEN
@@ -86,11 +159,17 @@ pub(crate) async fn handle_allocate_request(r: Request, m: &Message) -> Result<(
     //     corresponding relayed transport address is still available).  If
     //     the token is not valid for some reason, the server rejects the
     //     request with a 508 (Insufficient Capacity) error.
-    var reservationTokenAttr proto.ReservationToken
-    if err = reservationTokenAttr.GetFrom(m); err == nil {
-        var evenPort proto.EvenPort
-        if err = evenPort.GetFrom(m); err == nil {
-            return buildAndSendErr(r.Conn, r.SrcAddr, errRequestWithReservationTokenAndEvenPort, badRequestMsg...)
+    let mut reservation_token_attr = ReservationToken::default();
+    if reservation_token_attr.get_from(m).is_ok() {
+        let mut even_port = EvenPort::default();
+        if even_port.get_from(m).is_ok() {
+            return build_and_send_err(
+                &r.conn,
+                r.src_addr,
+                ERR_REQUEST_WITH_RESERVATION_TOKEN_AND_EVEN_PORT.to_owned(),
+                &bad_request_msg,
+            )
+            .await;
         }
     }
 
@@ -100,15 +179,22 @@ pub(crate) async fn handle_allocate_request(r: Request, m: &Message) -> Result<(
     //    below).  If the server cannot satisfy the request, then the
     //    server rejects the request with a 508 (Insufficient Capacity)
     //    error.
-    var evenPort proto.EvenPort
-    if err = evenPort.GetFrom(m); err == nil {
-        randomPort := 0
-        randomPort, err = r.AllocationManager.GetRandomEvenPort()
-        if err != nil {
-            return buildAndSendErr(r.Conn, r.SrcAddr, err, insufficentCapacityMsg...)
+    let mut even_port = EvenPort::default();
+    if even_port.get_from(m).is_ok() {
+        let mut random_port = 1;
+
+        while random_port % 2 != 0 {
+            random_port = match r.allocation_manager.get_random_even_port().await {
+                Ok(port) => port,
+                Err(err) => {
+                    return build_and_send_err(&r.conn, r.src_addr, err, &insufficent_capacity_msg)
+                        .await
+                }
+            };
         }
-        requestedPort = randomPort
-        reservationToken = randSeq(8)
+
+        requested_port = random_port;
+        reservation_token = rand_seq(8);
     }
 
     // 7. At any point, the server MAY choose to reject the request with a
@@ -122,15 +208,22 @@ pub(crate) async fn handle_allocate_request(r: Request, m: &Message) -> Result<(
     //    with a 300 (Try Alternate) error if it wishes to redirect the
     //    client to a different server.  The use of this error code and
     //    attribute follow the specification in [RFC5389].
-    lifetimeDuration := allocationLifeTime(m)
-    a, err := r.AllocationManager.CreateAllocation(
-        fiveTuple,
-        r.Conn,
-        requestedPort,
-        lifetimeDuration)
-    if err != nil {
-        return buildAndSendErr(r.Conn, r.SrcAddr, err, insufficentCapacityMsg...)
-    }
+    let lifetime_duration = allocation_life_time(m);
+    let a = match r
+        .allocation_manager
+        .create_allocation(
+            five_tuple,
+            Arc::clone(&r.conn),
+            requested_port,
+            lifetime_duration,
+        )
+        .await
+    {
+        Ok(a) => a,
+        Err(err) => {
+            return build_and_send_err(&r.conn, r.src_addr, err, &insufficent_capacity_msg).await
+        }
+    };
 
     // Once the allocation is created, the server replies with a success
     // response.  The success response contains:
@@ -143,224 +236,280 @@ pub(crate) async fn handle_allocate_request(r: Request, m: &Message) -> Result<(
     //   * An XOR-MAPPED-ADDRESS attribute containing the client's IP address
     //     and port (from the 5-tuple).
 
-    srcIP, srcPort, err := ipnet.AddrIPPort(r.SrcAddr)
-    if err != nil {
-        return buildAndSendErr(r.Conn, r.SrcAddr, err, badRequestMsg...)
+    let (src_ip, src_port) = (r.src_addr.ip(), r.src_addr.port());
+    let (relay_ip, relay_port) = {
+        let a = a.lock().await;
+        (a.relay_addr.ip(), a.relay_addr.port())
+    };
+
+    let mut response_attrs: Vec<Box<dyn Setter>> = vec![
+        Box::new(RelayedAddress {
+            ip: relay_ip,
+            port: relay_port,
+        }),
+        Box::new(Lifetime(lifetime_duration)),
+        Box::new(XORMappedAddress {
+            ip: src_ip,
+            port: src_port,
+        }),
+    ];
+
+    if !reservation_token.is_empty() {
+        let reservation_token_vec = reservation_token.as_bytes().to_vec();
+        r.allocation_manager
+            .create_reservation(reservation_token, relay_port)
+            .await;
+        response_attrs.push(Box::new(ReservationToken(reservation_token_vec)));
     }
 
-    relayIP, relayPort, err := ipnet.AddrIPPort(a.RelayAddr)
-    if err != nil {
-        return buildAndSendErr(r.Conn, r.SrcAddr, err, badRequestMsg...)
-    }
+    response_attrs.push(Box::new(message_integrity));
+    let msg = build_msg(
+        m.transaction_id,
+        MessageType::new(METHOD_ALLOCATE, CLASS_SUCCESS_RESPONSE),
+        response_attrs,
+    );
 
-    responseAttrs := []stun.Setter{
-        &proto.RelayedAddress{
-            IP:   relayIP,
-            Port: relayPort,
-        },
-        &proto.Lifetime{
-            Duration: lifetimeDuration,
-        },
-        &stun.XORMappedAddress{
-            IP:   srcIP,
-            Port: srcPort,
-        },
-    }
-
-    if reservationToken != "" {
-        r.AllocationManager.CreateReservation(reservationToken, relayPort)
-        responseAttrs = append(responseAttrs, proto.ReservationToken([]byte(reservationToken)))
-    }
-
-    msg := buildMsg(m.TransactionID, stun.NewType(stun.MethodAllocate, stun.ClassSuccessResponse), append(responseAttrs, messageIntegrity)...)
-    return buildAndSend(r.Conn, r.SrcAddr, msg...)
+    build_and_send(&r.conn, r.src_addr, &msg).await
 }
 
+pub(crate) async fn handle_refresh_request(mut r: Request, m: &Message) -> Result<(), Error> {
+    log::debug!("received RefreshRequest from {}", r.src_addr);
 
+    let message_integrity = authenticate_request(&mut r, m, METHOD_REFRESH).await?;
 
-func handleRefreshRequest(r Request, m *stun.Message) error {
-    r.Log.Debugf("received RefreshRequest from %s", r.SrcAddr.String())
+    let lifetime_duration = allocation_life_time(m);
+    let five_tuple = FiveTuple {
+        src_addr: r.src_addr,
+        dst_addr: r.conn.local_addr()?,
+        protocol: PROTO_UDP,
+    };
 
-    messageIntegrity, hasAuth, err := authenticateRequest(r, m, stun.MethodRefresh)
-    if !hasAuth {
-        return err
-    }
-
-    lifetimeDuration := allocationLifeTime(m)
-    fiveTuple := &allocation.FiveTuple{
-        SrcAddr:  r.SrcAddr,
-        DstAddr:  r.Conn.LocalAddr(),
-        Protocol: allocation.UDP,
-    }
-
-    if lifetimeDuration != 0 {
-        a := r.AllocationManager.GetAllocation(fiveTuple)
-
-        if a == nil {
-            return fmt.Errorf("%w %v:%v", errNoAllocationFound, r.SrcAddr, r.Conn.LocalAddr())
+    if lifetime_duration != Duration::from_secs(0) {
+        let a = r.allocation_manager.get_allocation(&five_tuple).await;
+        if let Some(a) = a {
+            let a = a.lock().await;
+            a.refresh(lifetime_duration).await;
+        } else {
+            return Err(ERR_NO_ALLOCATION_FOUND.to_owned());
         }
-        a.Refresh(lifetimeDuration)
     } else {
-        r.AllocationManager.DeleteAllocation(fiveTuple)
+        r.allocation_manager.delete_allocation(&five_tuple).await;
     }
 
-    return buildAndSend(r.Conn, r.SrcAddr, buildMsg(m.TransactionID, stun.NewType(stun.MethodRefresh, stun.ClassSuccessResponse), []stun.Setter{
-        &proto.Lifetime{
-            Duration: lifetimeDuration,
-        },
-        messageIntegrity,
-    }...)...)
+    build_and_send(
+        &r.conn,
+        r.src_addr,
+        &build_msg(
+            m.transaction_id,
+            MessageType::new(METHOD_REFRESH, CLASS_SUCCESS_RESPONSE),
+            vec![
+                Box::new(Lifetime(lifetime_duration)),
+                Box::new(message_integrity),
+            ],
+        ),
+    )
+    .await
 }
 
-func handleCreatePermissionRequest(r Request, m *stun.Message) error {
-    r.Log.Debugf("received CreatePermission from %s", r.SrcAddr.String())
+pub(crate) async fn handle_create_permission_request(
+    mut r: Request,
+    m: &Message,
+) -> Result<(), Error> {
+    log::debug!("received CreatePermission from {}", r.src_addr);
 
-    a := r.AllocationManager.GetAllocation(&allocation.FiveTuple{
-        SrcAddr:  r.SrcAddr,
-        DstAddr:  r.Conn.LocalAddr(),
-        Protocol: allocation.UDP,
-    })
-    if a == nil {
-        return fmt.Errorf("%w %v:%v", errNoAllocationFound, r.SrcAddr, r.Conn.LocalAddr())
-    }
+    let a = r
+        .allocation_manager
+        .get_allocation(&FiveTuple {
+            src_addr: r.src_addr,
+            dst_addr: r.conn.local_addr()?,
+            protocol: PROTO_UDP,
+        })
+        .await;
 
-    messageIntegrity, hasAuth, err := authenticateRequest(r, m, stun.MethodCreatePermission)
-    if !hasAuth {
-        return err
-    }
+    if let Some(a) = a {
+        let message_integrity = authenticate_request(&mut r, m, METHOD_CREATE_PERMISSION).await?;
+        let mut add_count = 0;
 
-    addCount := 0
+        {
+            let a = a.lock().await;
+            for attr in &m.attributes.0 {
+                if attr.typ != ATTR_XOR_PEER_ADDRESS {
+                    continue;
+                }
 
-    if err := m.ForEach(stun.AttrXORPeerAddress, func(m *stun.Message) error {
-        var peerAddress proto.PeerAddress
-        if err := peerAddress.GetFrom(m); err != nil {
-            return err
+                let mut peer_address = PeerAddress::default();
+                if peer_address.get_from(m).is_err() {
+                    add_count = 0;
+                    break;
+                }
+
+                log::debug!(
+                    "adding permission for {}",
+                    format!("{}:{}", peer_address.ip, peer_address.port)
+                );
+
+                a.add_permission(Permission::new(SocketAddr::new(
+                    peer_address.ip,
+                    peer_address.port,
+                )))
+                .await;
+                add_count += 1;
+            }
         }
 
-        r.Log.Debugf("adding permission for %s", fmt.Sprintf("%s:%d",
-            peerAddress.IP.String(), peerAddress.Port))
-        a.AddPermission(allocation.NewPermission(
-            &net.UDPAddr{
-                IP:   peerAddress.IP,
-                Port: peerAddress.Port,
-            },
-            r.Log,
-        ))
-        addCount++
-        return nil
-    }); err != nil {
-        addCount = 0
-    }
+        let mut resp_class = CLASS_SUCCESS_RESPONSE;
+        if add_count == 0 {
+            resp_class = CLASS_ERROR_RESPONSE;
+        }
 
-    respClass := stun.ClassSuccessResponse
-    if addCount == 0 {
-        respClass = stun.ClassErrorResponse
+        build_and_send(
+            &r.conn,
+            r.src_addr,
+            &build_msg(
+                m.transaction_id,
+                MessageType::new(METHOD_CREATE_PERMISSION, resp_class),
+                vec![Box::new(message_integrity)],
+            ),
+        )
+        .await
+    } else {
+        Err(ERR_NO_ALLOCATION_FOUND.to_owned())
     }
-
-    return buildAndSend(r.Conn, r.SrcAddr, buildMsg(m.TransactionID, stun.NewType(stun.MethodCreatePermission, respClass), []stun.Setter{messageIntegrity}...)...)
 }
 
-func handleSendIndication(r Request, m *stun.Message) error {
-    r.Log.Debugf("received SendIndication from %s", r.SrcAddr.String())
-    a := r.AllocationManager.GetAllocation(&allocation.FiveTuple{
-        SrcAddr:  r.SrcAddr,
-        DstAddr:  r.Conn.LocalAddr(),
-        Protocol: allocation.UDP,
-    })
-    if a == nil {
-        return fmt.Errorf("%w %v:%v", errNoAllocationFound, r.SrcAddr, r.Conn.LocalAddr())
-    }
+pub(crate) async fn handle_send_indication(r: Request, m: &Message) -> Result<(), Error> {
+    log::debug!("received SendIndication from {}", r.src_addr);
 
-    dataAttr := proto.Data{}
-    if err := dataAttr.GetFrom(m); err != nil {
-        return err
-    }
+    let a = r
+        .allocation_manager
+        .get_allocation(&FiveTuple {
+            src_addr: r.src_addr,
+            dst_addr: r.conn.local_addr()?,
+            protocol: PROTO_UDP,
+        })
+        .await;
 
-    peerAddress := proto.PeerAddress{}
-    if err := peerAddress.GetFrom(m); err != nil {
-        return err
-    }
+    if let Some(a) = a {
+        let mut data_attr = Data::default();
+        data_attr.get_from(m)?;
 
-    msgDst := &net.UDPAddr{IP: peerAddress.IP, Port: peerAddress.Port}
-    if perm := a.GetPermission(msgDst); perm == nil {
-        return fmt.Errorf("%w: %v", errNoPermission, msgDst)
-    }
+        let mut peer_address = PeerAddress::default();
+        peer_address.get_from(m)?;
 
-    l, err := a.RelaySocket.WriteTo(dataAttr, msgDst)
-    if l != len(dataAttr) {
-        return fmt.Errorf("%w %d != %d (expected) err: %v", errShortWrite, l, len(dataAttr), err)
+        let msg_dst = SocketAddr::new(peer_address.ip, peer_address.port);
+
+        let has_perm = {
+            let a = a.lock().await;
+            a.has_permission(&msg_dst).await
+        };
+        if !has_perm {
+            return Err(ERR_NO_PERMISSION.to_owned());
+        }
+
+        let a = a.lock().await;
+        let l = a.relay_socket.send_to(&data_attr.0, msg_dst).await?;
+        if l != data_attr.0.len() {
+            Err(ERR_SHORT_WRITE.to_owned())
+        } else {
+            Ok(())
+        }
+    } else {
+        Err(ERR_NO_ALLOCATION_FOUND.to_owned())
     }
-    return err
 }
 
-func handleChannelBindRequest(r Request, m *stun.Message) error {
-    r.Log.Debugf("received ChannelBindRequest from %s", r.SrcAddr.String())
+pub(crate) async fn handle_channel_bind_request(mut r: Request, m: &Message) -> Result<(), Error> {
+    log::debug!("received ChannelBindRequest from {}", r.src_addr);
 
-    a := r.AllocationManager.GetAllocation(&allocation.FiveTuple{
-        SrcAddr:  r.SrcAddr,
-        DstAddr:  r.Conn.LocalAddr(),
-        Protocol: allocation.UDP,
-    })
-    if a == nil {
-        return fmt.Errorf("%w %v:%v", errNoAllocationFound, r.SrcAddr, r.Conn.LocalAddr())
+    let a = r
+        .allocation_manager
+        .get_allocation(&FiveTuple {
+            src_addr: r.src_addr,
+            dst_addr: r.conn.local_addr()?,
+            protocol: PROTO_UDP,
+        })
+        .await;
+
+    if let Some(a) = a {
+        let bad_request_msg = build_msg(
+            m.transaction_id,
+            MessageType::new(METHOD_CHANNEL_BIND, CLASS_ERROR_RESPONSE),
+            vec![Box::new(ErrorCodeAttribute {
+                code: CODE_BAD_REQUEST,
+                reason: vec![],
+            })],
+        );
+
+        let message_integrity = authenticate_request(&mut r, m, METHOD_CHANNEL_BIND).await?;
+        let mut channel = ChannelNumber::default();
+        if let Err(err) = channel.get_from(m) {
+            return build_and_send_err(&r.conn, r.src_addr, err, &bad_request_msg).await;
+        }
+
+        let mut peer_addr = PeerAddress::default();
+        if let Err(err) = peer_addr.get_from(m) {
+            return build_and_send_err(&r.conn, r.src_addr, err, &bad_request_msg).await;
+        }
+
+        log::debug!(
+            "binding channel {} to {}",
+            channel,
+            format!("{}:{}", peer_addr.ip, peer_addr.port)
+        );
+
+        let result = {
+            let a = a.lock().await;
+            a.add_channel_bind(
+                ChannelBind::new(channel, SocketAddr::new(peer_addr.ip, peer_addr.port)),
+                r.channel_bind_timeout,
+            )
+            .await
+        };
+        if let Err(err) = result {
+            return build_and_send_err(&r.conn, r.src_addr, err, &bad_request_msg).await;
+        }
+
+        return build_and_send(
+            &r.conn,
+            r.src_addr,
+            &build_msg(
+                m.transaction_id,
+                MessageType::new(METHOD_CHANNEL_BIND, CLASS_SUCCESS_RESPONSE),
+                vec![Box::new(message_integrity)],
+            ),
+        )
+        .await;
+    } else {
+        Err(ERR_NO_ALLOCATION_FOUND.to_owned())
     }
-
-    badRequestMsg := buildMsg(m.TransactionID, stun.NewType(stun.MethodChannelBind, stun.ClassErrorResponse), &stun.ErrorCodeAttribute{Code: stun.CodeBadRequest})
-
-    messageIntegrity, hasAuth, err := authenticateRequest(r, m, stun.MethodChannelBind)
-    if !hasAuth {
-        return err
-    }
-
-    var channel proto.ChannelNumber
-    if err = channel.GetFrom(m); err != nil {
-        return buildAndSendErr(r.Conn, r.SrcAddr, err, badRequestMsg...)
-    }
-
-    peerAddr := proto.PeerAddress{}
-    if err = peerAddr.GetFrom(m); err != nil {
-        return buildAndSendErr(r.Conn, r.SrcAddr, err, badRequestMsg...)
-    }
-
-    r.Log.Debugf("binding channel %d to %s",
-        channel,
-        fmt.Sprintf("%s:%d", peerAddr.IP.String(), peerAddr.Port))
-    err = a.AddChannelBind(allocation.NewChannelBind(
-        channel,
-        &net.UDPAddr{IP: peerAddr.IP, Port: peerAddr.Port},
-        r.Log,
-    ), r.ChannelBindTimeout)
-    if err != nil {
-        return buildAndSendErr(r.Conn, r.SrcAddr, err, badRequestMsg...)
-    }
-
-    return buildAndSend(r.Conn, r.SrcAddr, buildMsg(m.TransactionID, stun.NewType(stun.MethodChannelBind, stun.ClassSuccessResponse), []stun.Setter{messageIntegrity}...)...)
 }
 
-func handleChannelData(r Request, c *proto.ChannelData) error {
-    r.Log.Debugf("received ChannelData from %s", r.SrcAddr.String())
+pub(crate) async fn handle_channel_data(r: Request, c: &ChannelData) -> Result<(), Error> {
+    log::debug!("received ChannelData from {}", r.src_addr);
 
-    a := r.AllocationManager.GetAllocation(&allocation.FiveTuple{
-        SrcAddr:  r.SrcAddr,
-        DstAddr:  r.Conn.LocalAddr(),
-        Protocol: allocation.UDP,
-    })
-    if a == nil {
-        return fmt.Errorf("%w %v:%v", errNoAllocationFound, r.SrcAddr, r.Conn.LocalAddr())
+    let a = r
+        .allocation_manager
+        .get_allocation(&FiveTuple {
+            src_addr: r.src_addr,
+            dst_addr: r.conn.local_addr()?,
+            protocol: PROTO_UDP,
+        })
+        .await;
+
+    if let Some(a) = a {
+        let a = a.lock().await;
+        let channel = a.get_channel_addr(&c.number).await;
+        if let Some(peer) = channel {
+            let l = a.relay_socket.send_to(&c.data, peer).await?;
+            if l != c.data.len() {
+                Err(ERR_SHORT_WRITE.to_owned())
+            } else {
+                Ok(())
+            }
+        } else {
+            Err(ERR_NO_SUCH_CHANNEL_BIND.to_owned())
+        }
+    } else {
+        Err(ERR_NO_ALLOCATION_FOUND.to_owned())
     }
-
-    channel := a.GetChannelByNumber(c.Number)
-    if channel == nil {
-        return fmt.Errorf("%w %x", errNoSuchChannelBind, uint16(c.Number))
-    }
-
-    l, err := a.RelaySocket.WriteTo(c.Data, channel.Peer)
-    if err != nil {
-        return fmt.Errorf("%w: %s", errFailedWriteSocket, err.Error())
-    } else if l != len(c.Data) {
-        return fmt.Errorf("%w %d != %d (expected)", errShortWrite, l, len(c.Data))
-    }
-
-    return nil
 }
-*/

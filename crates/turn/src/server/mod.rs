@@ -2,7 +2,9 @@ mod handler;
 mod utils;
 
 use crate::allocation::allocation_manager::*;
+use crate::errors::*;
 use crate::proto::chandata::ChannelData;
+use handler::*;
 
 use stun::message::*;
 use util::{Conn, Error};
@@ -35,7 +37,7 @@ pub struct Request {
 }
 
 // handle_request processes the give Request
-pub fn handle_request(r: Request) -> Result<(), Error> {
+pub async fn handle_request(r: Request) -> Result<(), Error> {
     log::debug!(
         "received {} bytes of udp from {} on {}",
         r.buff.len(),
@@ -44,74 +46,49 @@ pub fn handle_request(r: Request) -> Result<(), Error> {
     );
 
     if ChannelData::is_channel_data(&r.buff) {
-        handle_data_packet(r)
+        handle_data_packet(r).await
     } else {
-        handle_turn_packet(r)
+        handle_turn_packet(r).await
     }
 }
 
-fn handle_data_packet(r: Request) -> Result<(), Error> {
+async fn handle_data_packet(r: Request) -> Result<(), Error> {
     log::debug!("received DataPacket from {}", r.src_addr);
     let mut c = ChannelData {
-        raw: r.buff, //TODO.clone(),
+        raw: r.buff.clone(),
         ..Default::default()
     };
     c.decode()?;
-    //TODO: handleChannelData(r, &c)?;
-
-    Ok(())
+    handle_channel_data(r, &c).await
 }
 
-fn handle_turn_packet(r: Request) -> Result<(), Error> {
-    log::debug!("handle_turnpacket");
+async fn handle_turn_packet(r: Request) -> Result<(), Error> {
+    log::debug!("handle_turn_packet");
     let mut m = Message {
-        raw: r.buff, //TODO.clone(),
+        raw: r.buff.clone(),
         ..Default::default()
     };
     m.decode()?;
 
-    /*h, err := getMessageHandler(m.Type.Class, m.Type.Method)
-    if err != nil {
-        return fmt.Errorf("%w %v-%v from %v: %v", errUnhandledSTUNPacket, m.Type.Method, m.Type.Class, r.src_addr, err)
-    }
-
-    err = h(r, m)
-    if err != nil {
-        return fmt.Errorf("%w %v-%v from %v: %v", errFailedToHandle, m.Type.Method, m.Type.Class, r.src_addr, err)
-    }*/
-
-    Ok(())
+    process_message_handler(r, &m).await
 }
 
-/*
-func getMessageHandler(class stun.MessageClass, method stun.Method) (func(r Request, m *stun.Message) error, error) {
-    switch class {
-    case stun.ClassIndication:
-        switch method {
-        case stun.MethodSend:
-            return handleSendIndication, nil
-        default:
-            return nil, fmt.Errorf("%w: %s", errUnexpectedMethod, method)
+async fn process_message_handler(r: Request, m: &Message) -> Result<(), Error> {
+    if m.typ.class == CLASS_INDICATION {
+        match m.typ.method {
+            METHOD_SEND => handle_send_indication(r, m).await,
+            _ => Err(ERR_UNEXPECTED_CLASS.to_owned()),
         }
-
-    case stun.ClassRequest:
-        switch method {
-        case stun.MethodAllocate:
-            return handle_allocate_request, nil
-        case stun.MethodRefresh:
-            return handleRefreshRequest, nil
-        case stun.MethodCreatePermission:
-            return handleCreatePermissionRequest, nil
-        case stun.MethodChannelBind:
-            return handleChannelBindRequest, nil
-        case stun.MethodBinding:
-            return handle_binding_request, nil
-        default:
-            return nil, fmt.Errorf("%w: %s", errUnexpectedMethod, method)
+    } else if m.typ.class == CLASS_REQUEST {
+        match m.typ.method {
+            METHOD_ALLOCATE => handle_allocate_request(r, m).await,
+            METHOD_REFRESH => handle_refresh_request(r, m).await,
+            METHOD_CREATE_PERMISSION => handle_create_permission_request(r, m).await,
+            METHOD_CHANNEL_BIND => handle_channel_bind_request(r, m).await,
+            METHOD_BINDING => handle_binding_request(r, m).await,
+            _ => Err(ERR_UNEXPECTED_CLASS.to_owned()),
         }
-
-    default:
-        return nil, fmt.Errorf("%w: %s", errUnexpectedClass, class)
+    } else {
+        Err(ERR_UNEXPECTED_CLASS.to_owned())
     }
 }
-*/

@@ -34,8 +34,8 @@ pub type AllocationMap = Arc<Mutex<HashMap<String, Arc<Mutex<Allocation>>>>>;
 pub struct Allocation {
     protocol: Protocol,
     turn_socket: Arc<dyn Conn + Send + Sync>,
-    relay_addr: SocketAddr,
-    relay_socket: Arc<dyn Conn + Send + Sync>,
+    pub(crate) relay_addr: SocketAddr,
+    pub(crate) relay_socket: Arc<dyn Conn + Send + Sync>,
     five_tuple: FiveTuple,
     permissions: Arc<Mutex<HashMap<String, Permission>>>,
     channel_bindings: Arc<Mutex<HashMap<ChannelNumber, ChannelBind>>>,
