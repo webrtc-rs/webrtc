@@ -29,7 +29,7 @@
  </a>  
 </p>
 <p align="center">
- A pure Rust implementation of WebRTC API. Rewrite Pion WebRTC stack (<a href="http://Pion.ly">http://Pion.ly</a>) in Rust
+ A pure Rust implementation of WebRTC stack. Rewrite Pion WebRTC stack (<a href="http://Pion.ly">http://Pion.ly</a>) in Rust
 </p>
 
 # Roadmap
