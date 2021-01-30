@@ -1,13 +1,5 @@
 use super::*;
-use crate::allocation::five_tuple::*;
-use crate::proto::lifetime::*;
-use crate::proto::*;
-use crate::relay_address_generator::relay_address_generator_none::*;
-use crate::server::utils::*;
-
-use stun::attributes::*;
-use stun::integrity::*;
-use stun::textattrs::*;
+use crate::relay::none::*;
 
 use util::Error;
 

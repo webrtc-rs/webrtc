@@ -1,6 +1,6 @@
-use super::request::AuthHandler;
+use crate::auth::*;
 use crate::errors::*;
-use crate::relay_address_generator::*;
+use crate::relay::*;
 
 use util::{Conn, Error};
 

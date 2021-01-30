@@ -1,7 +1,5 @@
 #[cfg(test)]
-mod lt_cred_test;
-
-use crate::server::request::AuthHandler;
+mod auth_test;
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -9,6 +7,15 @@ use util::Error;
 
 use ring::hmac;
 use std::net::SocketAddr;
+
+pub trait AuthHandler {
+    fn auth_handle(
+        &self,
+        username: &str,
+        realm: &str,
+        src_addr: SocketAddr,
+    ) -> Result<Vec<u8>, Error>;
+}
 
 // generate_long_term_credentials can be used to create credentials valid for [duration] time
 pub fn generate_long_term_credentials(

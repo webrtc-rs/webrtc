@@ -3,7 +3,7 @@ use super::*;
 use util::Error;
 
 #[test]
-fn test_lt_cred_mech() -> Result<(), Error> {
+fn test_lt_cred() -> Result<(), Error> {
     let username = "1599491771";
     let shared_secret = "foobar";
 

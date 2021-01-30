@@ -6,9 +6,9 @@
 extern crate lazy_static;
 
 pub mod allocation;
+pub mod auth;
 pub mod client;
 pub mod errors;
-pub mod lt_cred;
 pub mod proto;
-pub mod relay_address_generator;
+pub mod relay;
 pub mod server;

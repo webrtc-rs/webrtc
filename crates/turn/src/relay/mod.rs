@@ -1,6 +1,6 @@
-pub mod relay_address_generator_none;
-pub mod relay_address_generator_range;
-pub mod relay_address_generator_static;
+pub mod none;
+pub mod range;
+pub mod r#static;
 
 use util::{Conn, Error};
 

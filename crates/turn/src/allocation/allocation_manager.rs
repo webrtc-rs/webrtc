@@ -3,7 +3,7 @@ mod allocation_manager_test;
 
 use super::*;
 use crate::errors::*;
-use crate::relay_address_generator::*;
+use crate::relay::*;
 
 use std::collections::HashMap;
 
