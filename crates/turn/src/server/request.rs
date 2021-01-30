@@ -39,6 +39,8 @@ use std::time::SystemTime;
 use tokio::sync::Mutex;
 use tokio::time::{Duration, Instant};
 
+use md5::{Digest, Md5};
+
 pub(crate) const MAXIMUM_ALLOCATION_LIFETIME: Duration = Duration::from_secs(3600); // https://tools.ietf.org/html/rfc5766#section-6.2 defines 3600 seconds recommendation
 pub(crate) const NONCE_LIFETIME: Duration = Duration::from_secs(3600); // https://tools.ietf.org/html/rfc5766#section-4
 
@@ -139,11 +141,11 @@ impl Request {
         &mut self,
         m: &Message,
         calling_method: Method,
-    ) -> Result<MessageIntegrity, Error> {
+    ) -> Result<Option<MessageIntegrity>, Error> {
         if !m.contains(ATTR_MESSAGE_INTEGRITY) {
             self.respond_with_nonce(m, calling_method, CODE_UNAUTHORIZED)
                 .await?;
-            return Ok(MessageIntegrity::default());
+            return Ok(None);
         }
 
         let mut nonce_attr = Nonce::new(ATTR_NONCE, String::new());
@@ -158,7 +160,10 @@ impl Request {
             })],
         )?;
 
-        nonce_attr.get_from(m)?;
+        if let Err(err) = nonce_attr.get_from(m) {
+            build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await?;
+            return Ok(None);
+        }
 
         let to_be_deleted = {
             // Assert Nonce exists and is not expired
@@ -179,11 +184,17 @@ impl Request {
         if to_be_deleted {
             self.respond_with_nonce(m, calling_method, CODE_STALE_NONCE)
                 .await?;
-            return Ok(MessageIntegrity::default());
+            return Ok(None);
         }
 
-        realm_attr.get_from(m)?;
-        username_attr.get_from(m)?;
+        if let Err(err) = realm_attr.get_from(m) {
+            build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await?;
+            return Ok(None);
+        }
+        if let Err(err) = username_attr.get_from(m) {
+            build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await?;
+            return Ok(None);
+        }
 
         let our_key = match self.auth_handler.auth_handle(
             &username_attr.to_string(),
@@ -199,16 +210,16 @@ impl Request {
                     ERR_NO_SUCH_USER.to_owned(),
                 )
                 .await?;
-                return Ok(MessageIntegrity::default());
+                return Ok(None);
             }
         };
 
         let mi = MessageIntegrity(our_key);
         if let Err(err) = mi.check(&mut m.clone()) {
             build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await?;
-            Ok(MessageIntegrity::default())
+            Ok(None)
         } else {
-            Ok(mi)
+            Ok(Some(mi))
         }
     }
 
@@ -271,7 +282,14 @@ impl Request {
         //    mechanism of [https://tools.ietf.org/html/rfc5389#section-10.2.2]
         //    unless the client and server agree to use another mechanism through
         //    some procedure outside the scope of this document.
-        let message_integrity = self.authenticate_request(m, METHOD_ALLOCATE).await?;
+        let message_integrity =
+            if let Some(mi) = self.authenticate_request(m, METHOD_ALLOCATE).await? {
+                mi
+            } else {
+                log::debug!("no MessageIntegrity");
+                return Ok(());
+            };
+
         let five_tuple = FiveTuple {
             src_addr: self.src_addr,
             dst_addr: self.conn.local_addr()?,
@@ -532,7 +550,13 @@ impl Request {
     pub(crate) async fn handle_refresh_request(&mut self, m: &Message) -> Result<(), Error> {
         log::debug!("received RefreshRequest from {}", self.src_addr);
 
-        let message_integrity = self.authenticate_request(m, METHOD_REFRESH).await?;
+        let message_integrity =
+            if let Some(mi) = self.authenticate_request(m, METHOD_REFRESH).await? {
+                mi
+            } else {
+                log::debug!("no MessageIntegrity");
+                return Ok(());
+            };
 
         let lifetime_duration = allocation_lifetime(m);
         let five_tuple = FiveTuple {
@@ -581,9 +605,15 @@ impl Request {
             .await;
 
         if let Some(a) = a {
-            let message_integrity = self
+            let message_integrity = if let Some(mi) = self
                 .authenticate_request(m, METHOD_CREATE_PERMISSION)
-                .await?;
+                .await?
+            {
+                mi
+            } else {
+                log::debug!("no MessageIntegrity");
+                return Ok(());
+            };
             let mut add_count = 0;
 
             {
@@ -693,7 +723,13 @@ impl Request {
                 })],
             )?;
 
-            let message_integrity = self.authenticate_request(m, METHOD_CHANNEL_BIND).await?;
+            let message_integrity =
+                if let Some(mi) = self.authenticate_request(m, METHOD_CHANNEL_BIND).await? {
+                    mi
+                } else {
+                    log::debug!("no MessageIntegrity");
+                    return Ok(());
+                };
             let mut channel = ChannelNumber::default();
             if let Err(err) = channel.get_from(m) {
                 return build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await;
@@ -779,8 +815,8 @@ pub(crate) fn rand_seq(n: usize) -> String {
 
 pub(crate) fn build_nonce() -> Result<String, Error> {
     /* #nosec */
-    let mut h = String::new();
-    h.push_str(
+    let mut s = String::new();
+    s.push_str(
         format!(
             "{}",
             SystemTime::now()
@@ -789,9 +825,11 @@ pub(crate) fn build_nonce() -> Result<String, Error> {
         )
         .as_str(),
     );
-    h.push_str(format!("{}", rand::random::<u64>()).as_str());
-    let digest = md5::compute(h.as_bytes());
-    Ok(format!("{:x}", digest))
+    s.push_str(format!("{}", rand::random::<u64>()).as_str());
+
+    let mut h = Md5::new();
+    h.update(s.as_bytes());
+    Ok(format!("{:x}", h.finalize()))
 }
 
 pub(crate) async fn build_and_send(

@@ -1,6 +1,11 @@
 use super::*;
+use crate::auth::*;
+use crate::relay::relay_static::*;
+use crate::server::{config::*, *};
 
+use std::net::IpAddr;
 use tokio::net::UdpSocket;
+use tokio::time::Duration;
 
 use util::Error;
 
@@ -111,60 +116,75 @@ async fn test_client_with_stun_send_binding_request_to_timeout() -> Result<(), E
     Ok(())
 }
 
+struct TestAuthHandler;
+impl AuthHandler for TestAuthHandler {
+    fn auth_handle(
+        &self,
+        username: &str,
+        realm: &str,
+        _src_addr: SocketAddr,
+    ) -> Result<Vec<u8>, Error> {
+        Ok(generate_auth_key(username, realm, "pass"))
+    }
+}
+
 // Create an allocation, and then delete all nonces
 // The subsequent Write on the allocation will cause a CreatePermission
 // which will be forced to handle a stale nonce response
 #[tokio::test]
 async fn test_client_nonce_expiration() -> Result<(), Error> {
-    /*TODO: env_logger::init();
+    // env_logger::init();
 
-    let udpListener = UdpSocket::bind("0.0.0.0:3478").await?;
+    // here, it should use static port, like "0.0.0.0:3478",
+    // but, due to different test environment, let's fake it by using "0.0.0.0:0"
+    // to auto assign a "static" port
+    let conn = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
+    let server_port = conn.local_addr()?.port();
 
-    server, err := NewServer(ServerConfig{
-        auth_handler: func(username, realm string, srcAddr net.Addr) (key []byte, ok bool) {
-            return generate_auth_key(username, realm, "pass"), true
-        },
-        PacketConnConfigs: []PacketConnConfig{
-            {
-                PacketConn: udpListener,
-                RelayAddressGenerator: &RelayAddressGeneratorStatic{
-                    RelayAddress: net.ParseIP("127.0.0.1"),
-                    Address:      "0.0.0.0",
-                },
-            },
-        },
-        realm: "pion.ly",
+    let server = Server::new(ServerConfig {
+        conn_configs: vec![ConnConfig {
+            conn,
+            relay_addr_generator: Box::new(RelayAddressGeneratorStatic {
+                relay_address: IpAddr::from_str("127.0.0.1")?,
+                address: "0.0.0.0".to_owned(),
+            }),
+        }],
+        realm: "webrtc.rs".to_owned(),
+        auth_handler: Arc::new(Box::new(TestAuthHandler {})),
+        channel_bind_timeout: Duration::from_secs(0),
     })
-    assert.NoError(t, err)
+    .await?;
 
-    conn, err := net.ListenPacket("udp4", "0.0.0.0:0")
-    assert.NoError(t, err)
+    let conn = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
 
-    client, err := NewClient(&ClientConfig{
-        Conn:           conn,
-        STUNServerAddr: "127.0.0.1:3478",
-        TURNServerAddr: "127.0.0.1:3478",
-        Username:       "foo",
-        Password:       "pass",
+    let client = Client::new(ClientConfig {
+        stun_serv_addr: format!("127.0.0.1:{}", server_port),
+        turn_serv_addr: format!("127.0.0.1:{}", server_port),
+        username: "foo".to_owned(),
+        password: "pass".to_owned(),
+        realm: String::new(),
+        software: String::new(),
+        rto_in_ms: 0,
+        conn,
     })
-    assert.NoError(t, err)
-    assert.NoError(t, client.Listen())
+    .await?;
 
-    allocation, err := client.Allocate()
-    assert.NoError(t, err)
+    client.listen().await?;
 
-    server.nonces.Range(func(key, value interface{}) bool {
-        server.nonces.Delete(key)
-        return true
-    })
+    let allocation = client.allocate().await?;
 
-    _, err = allocation.WriteTo([]byte{0x00}, &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 8080})
-    assert.NoError(t, err)
+    {
+        let mut nonces = server.nonces.lock().await;
+        nonces.clear();
+    }
+
+    allocation
+        .send_to(&[0x00], SocketAddr::from_str("127.0.0.1:8080")?)
+        .await?;
 
     // Shutdown
-    assert.NoError(t, allocation.Close())
-    assert.NoError(t, conn.Close())
-    assert.NoError(t, server.Close())*/
+    client.close().await?;
+    server.close()?;
 
     Ok(())
 }

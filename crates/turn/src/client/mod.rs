@@ -160,7 +160,7 @@ impl ClientInternal {
             log::debug!("resolving {}", config.stun_serv_addr);
             let local_addr = config.conn.local_addr()?;
             let stun_serv = lookup_host(local_addr.is_ipv4(), config.stun_serv_addr).await?;
-            log::debug!("local_addr {}, stun_serv: {}", local_addr, stun_serv);
+            log::debug!("stunServ: {}", stun_serv);
             stun_serv.to_string()
         };
 
@@ -170,7 +170,7 @@ impl ClientInternal {
             log::debug!("resolving {}", config.turn_serv_addr);
             let local_addr = config.conn.local_addr()?;
             let turn_serv = lookup_host(local_addr.is_ipv4(), config.turn_serv_addr).await?;
-            log::debug!("local_addr {}, turn_serv: {}", local_addr, turn_serv);
+            log::debug!("turnServ: {}", turn_serv);
             turn_serv.to_string()
         };
 
@@ -220,6 +220,8 @@ impl ClientInternal {
                         break;
                     }
                 };
+
+                log::debug!("received {} bytes of udp from {}", n, from);
 
                 if let Err(err) = ClientInternal::handle_inbound(
                     &read_ch_tx,

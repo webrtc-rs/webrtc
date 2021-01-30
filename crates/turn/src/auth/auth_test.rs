@@ -1,5 +1,13 @@
 use super::*;
+use crate::client::*;
+use crate::relay::relay_static::*;
+use crate::server::{config::*, *};
 
+use std::net::IpAddr;
+use std::str::FromStr;
+use std::sync::Arc;
+
+use tokio::net::UdpSocket;
 use util::Error;
 
 #[test]
@@ -18,52 +26,76 @@ fn test_lt_cred() -> Result<(), Error> {
     Ok(())
 }
 
-/*TODO:
-func TestNewLongTermAuthHandler(t *testing.T) {
-    const sharedSecret = "HELLO_WORLD"
+#[test]
+fn test_generate_auth_key() -> Result<(), Error> {
+    let username = "60";
+    let password = "HWbnm25GwSj6jiHTEDMTO5D7aBw=";
+    let realm = "webrtc.rs";
 
-    serverListener, err := net.ListenPacket("udp4", "0.0.0.0:3478")
-    assert.NoError(t, err)
+    let expected_key = vec![
+        56, 22, 47, 139, 198, 127, 13, 188, 171, 80, 23, 29, 195, 148, 216, 224,
+    ];
+    let actual_key = generate_auth_key(username, realm, password);
+    assert_eq!(
+        expected_key, actual_key,
+        "Expected {:?}, got {:?}",
+        expected_key, actual_key
+    );
 
-    server, err := NewServer(ServerConfig{
-        AuthHandler: NewLongTermAuthHandler(sharedSecret, nil),
-        PacketConnConfigs: []PacketConnConfig{
-            {
-                PacketConn: serverListener,
-                RelayAddressGenerator: &RelayAddressGeneratorStatic{
-                    RelayAddress: net.ParseIP("127.0.0.1"),
-                    Address:      "0.0.0.0",
-                },
-            },
-        },
-        Realm:         "pion.ly",
-        LoggerFactory: logging.NewDefaultLoggerFactory(),
-    })
-    assert.NoError(t, err)
-
-    conn, err := net.ListenPacket("udp4", "0.0.0.0:0")
-    assert.NoError(t, err)
-
-    username, password, err := GenerateLongTermCredentials(sharedSecret, time.Minute)
-    assert.NoError(t, err)
-
-    client, err := NewClient(&ClientConfig{
-        STUNServerAddr: "0.0.0.0:3478",
-        TURNServerAddr: "0.0.0.0:3478",
-        Conn:           conn,
-        Username:       username,
-        Password:       password,
-        LoggerFactory:  logging.NewDefaultLoggerFactory(),
-    })
-    assert.NoError(t, err)
-    assert.NoError(t, client.Listen())
-
-    relayConn, err := client.Allocate()
-    assert.NoError(t, err)
-
-    client.Close()
-    assert.NoError(t, relayConn.Close())
-    assert.NoError(t, conn.Close())
-    assert.NoError(t, server.Close())
+    Ok(())
 }
- */
+
+#[tokio::test]
+async fn test_new_long_term_auth_handler() -> Result<(), Error> {
+    // env_logger::init();
+
+    const SHARED_SECRET: &str = "HELLO_WORLD";
+
+    // here, it should use static port, like "0.0.0.0:3478",
+    // but, due to different test environment, let's fake it by using "0.0.0.0:0"
+    // to auto assign a "static" port
+    let conn = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
+    let server_port = conn.local_addr()?.port();
+
+    let server = Server::new(ServerConfig {
+        conn_configs: vec![ConnConfig {
+            conn,
+            relay_addr_generator: Box::new(RelayAddressGeneratorStatic {
+                relay_address: IpAddr::from_str("127.0.0.1")?,
+                address: "0.0.0.0".to_owned(),
+            }),
+        }],
+        realm: "webrtc.rs".to_owned(),
+        auth_handler: Arc::new(Box::new(LongTermAuthHandler::new(
+            SHARED_SECRET.to_string(),
+        ))),
+        channel_bind_timeout: Duration::from_secs(0),
+    })
+    .await?;
+
+    let (username, password) =
+        generate_long_term_credentials(SHARED_SECRET, Duration::from_secs(60))?;
+
+    let conn = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
+
+    let client = Client::new(ClientConfig {
+        stun_serv_addr: format!("0.0.0.0:{}", server_port),
+        turn_serv_addr: format!("0.0.0.0:{}", server_port),
+        username,
+        password,
+        realm: "webrtc.rs".to_owned(),
+        software: String::new(),
+        rto_in_ms: 0,
+        conn,
+    })
+    .await?;
+
+    client.listen().await?;
+
+    let _allocation = client.allocate().await?;
+
+    client.close().await?;
+    server.close()?;
+
+    Ok(())
+}

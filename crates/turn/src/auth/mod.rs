@@ -1,12 +1,13 @@
 #[cfg(test)]
 mod auth_test;
 
+use std::net::SocketAddr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use util::Error;
 
+use md5::{Digest, Md5};
 use ring::hmac;
-use std::net::SocketAddr;
 
 pub trait AuthHandler {
     fn auth_handle(
@@ -39,9 +40,11 @@ fn long_term_credentials(username: &str, shared_secret: &str) -> Result<String, 
 
 // generate_auth_key is a convince function to easily generate keys in the format used by AuthHandler
 pub fn generate_auth_key(username: &str, realm: &str, password: &str) -> Vec<u8> {
-    let h = format!("{}:{}:{}", username, realm, password);
-    let digest = md5::compute(h.as_bytes());
-    format!("{:x}", digest).as_bytes().to_vec()
+    let s = format!("{}:{}:{}", username, realm, password);
+
+    let mut h = Md5::new();
+    h.update(s.as_bytes());
+    h.finalize().as_slice().to_vec()
 }
 
 pub struct LongTermAuthHandler {
@@ -56,7 +59,7 @@ impl AuthHandler for LongTermAuthHandler {
         src_addr: SocketAddr,
     ) -> Result<Vec<u8>, Error> {
         log::trace!(
-            "Authentication username={} realm={} srcAddr={}\n",
+            "Authentication username={} realm={} src_addr={}",
             username,
             realm,
             src_addr

@@ -24,7 +24,7 @@ pub struct Server {
     auth_handler: Arc<Box<dyn AuthHandler + Send + Sync>>,
     realm: String,
     channel_bind_timeout: Duration,
-    nonces: Arc<Mutex<HashMap<String, Instant>>>,
+    pub(crate) nonces: Arc<Mutex<HashMap<String, Instant>>>,
 }
 
 impl Server {
