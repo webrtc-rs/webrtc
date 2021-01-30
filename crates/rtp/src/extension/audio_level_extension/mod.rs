@@ -28,7 +28,7 @@ const AUDIO_LEVEL_EXTENSION_SIZE: usize = 1;
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 // |      ID       |     len=1     |V|    level    |    0 (pad)    |
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Default)]
 pub struct AudioLevelExtension {
     pub level: u8,
     pub voice: bool,
