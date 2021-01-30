@@ -12,7 +12,7 @@ use async_trait::async_trait;
 // RelayAddressGenerator is used to generate a RelayAddress when creating an allocation.
 // You can use one of the provided ones or provide your own.
 #[async_trait]
-pub(crate) trait RelayAddressGenerator {
+pub trait RelayAddressGenerator {
     // validate confirms that the RelayAddressGenerator is properly initialized
     fn validate(&self) -> Result<(), Error>;
 

@@ -11,14 +11,14 @@ use util::{Conn, Error};
 
 // ManagerConfig a bag of config params for Manager.
 pub struct ManagerConfig {
-    pub(crate) relay_addr_generator: Box<dyn RelayAddressGenerator>,
+    pub relay_addr_generator: Box<dyn RelayAddressGenerator + Send + Sync>,
 }
 
 // Manager is used to hold active allocations
 pub struct Manager {
     allocations: AllocationMap,
     reservations: Arc<Mutex<HashMap<String, u16>>>,
-    relay_addr_generator: Box<dyn RelayAddressGenerator>,
+    relay_addr_generator: Box<dyn RelayAddressGenerator + Send + Sync>,
 }
 
 impl Manager {

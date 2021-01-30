@@ -1,152 +1,112 @@
 pub mod config;
 pub mod request;
 
-//use std::net::SocketAddr;
+use crate::allocation::allocation_manager::*;
+use crate::auth::AuthHandler;
+use crate::proto::lifetime::DEFAULT_LIFETIME;
+use config::*;
+use request::*;
 
-//use util::Error;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use tokio::time::{Duration, Instant};
+
+use util::{Conn, Error};
 
 const INBOUND_MTU: usize = 1500;
 
-/*
 // Server is an instance of the Pion TURN Server
-pub struct Server  {
-    authHandler        AuthHandler
-    realm              string
-    channelBindTimeout time.Duration
-    nonces             *sync.Map
-
-    packetConnConfigs []PacketConnConfig
-    listenerConfigs   []ListenerConfig
+pub struct Server {
+    auth_handler: Arc<Box<dyn AuthHandler + Send + Sync>>,
+    realm: String,
+    channel_bind_timeout: Duration,
+    nonces: Arc<Mutex<HashMap<String, Instant>>>,
 }
 
-// NewServer creates the Pion TURN server
-func NewServer(config ServerConfig) (*Server, error) {
-    if err := config.validate(); err != nil {
-        return nil, err
+impl Server {
+    // creates the TURN server
+    pub async fn new(config: ServerConfig) -> Result<Self, Error> {
+        config.validate()?;
+
+        let mut s = Server {
+            auth_handler: config.auth_handler,
+            realm: config.realm,
+            channel_bind_timeout: config.channel_bind_timeout,
+            nonces: Arc::new(Mutex::new(HashMap::new())),
+        };
+
+        if s.channel_bind_timeout == Duration::from_secs(0) {
+            s.channel_bind_timeout = DEFAULT_LIFETIME;
+        }
+
+        for p in config.conn_configs.into_iter() {
+            let nonces = Arc::clone(&s.nonces);
+            let auth_handler = Arc::clone(&s.auth_handler);
+            let realm = s.realm.clone();
+            let channel_bind_timeout = s.channel_bind_timeout;
+
+            tokio::spawn(async move {
+                let allocation_manager = Arc::new(Manager::new(ManagerConfig {
+                    relay_addr_generator: p.relay_addr_generator,
+                }));
+
+                let _ = Server::read_loop(
+                    p.conn,
+                    allocation_manager,
+                    nonces,
+                    auth_handler,
+                    realm,
+                    channel_bind_timeout,
+                )
+                .await;
+            });
+        }
+
+        Ok(s)
     }
 
-    loggerFactory := config.LoggerFactory
-    if loggerFactory == nil {
-        loggerFactory = logging.NewDefaultLoggerFactory()
-    }
+    async fn read_loop(
+        conn: Arc<dyn Conn + Send + Sync>,
+        allocation_manager: Arc<Manager>,
+        nonces: Arc<Mutex<HashMap<String, Instant>>>,
+        auth_handler: Arc<Box<dyn AuthHandler + Send + Sync>>,
+        realm: String,
+        channel_bind_timeout: Duration,
+    ) {
+        let mut buf = vec![0u8; INBOUND_MTU];
 
-    s := &Server{
-        log:                loggerFactory.NewLogger("turn"),
-        authHandler:        config.AuthHandler,
-        realm:              config.Realm,
-        channelBindTimeout: config.ChannelBindTimeout,
-        packetConnConfigs:  config.PacketConnConfigs,
-        listenerConfigs:    config.ListenerConfigs,
-        nonces:             &sync.Map{},
-    }
-
-    if s.channelBindTimeout == 0 {
-        s.channelBindTimeout = proto.DefaultLifetime
-    }
-
-    for i := range s.packetConnConfigs {
-        go func(p PacketConnConfig) {
-            allocationManager, err := allocation.NewManager(allocation.ManagerConfig{
-                AllocatePacketConn: p.RelayAddressGenerator.AllocatePacketConn,
-                AllocateConn:       p.RelayAddressGenerator.AllocateConn,
-                LeveledLogger:      s.log,
-            })
-            if err != nil {
-                s.log.Errorf("exit read loop on error: %s", err.Error())
-                return
-            }
-            defer func() {
-                if err := allocationManager.Close(); err != nil {
-                    s.log.Errorf("Failed to close AllocationManager: %s", err.Error())
+        loop {
+            let (n, addr) = match conn.recv_from(&mut buf).await {
+                Ok((n, addr)) => (n, addr),
+                Err(err) => {
+                    log::debug!("exit read loop on error: {}", err);
+                    break;
                 }
-            }()
+            };
 
-            s.readLoop(p.PacketConn, allocationManager)
-        }(s.packetConnConfigs[i])
-    }
+            let mut r = Request {
+                conn: Arc::clone(&conn),
+                src_addr: addr,
+                buff: buf[..n].to_vec(),
+                allocation_manager: Arc::clone(&allocation_manager),
+                nonces: Arc::clone(&nonces),
+                auth_handler: Arc::clone(&auth_handler),
+                realm: realm.clone(),
+                channel_bind_timeout,
+            };
 
-    for _, listener := range s.listenerConfigs {
-        go func(l ListenerConfig) {
-            allocationManager, err := allocation.NewManager(allocation.ManagerConfig{
-                AllocatePacketConn: l.RelayAddressGenerator.AllocatePacketConn,
-                AllocateConn:       l.RelayAddressGenerator.AllocateConn,
-                LeveledLogger:      s.log,
-            })
-            if err != nil {
-                s.log.Errorf("exit read loop on error: %s", err.Error())
-                return
+            if let Err(err) = r.handle_request().await {
+                log::error!("error when handling datagram: {}", err);
             }
-            defer func() {
-                if err := allocationManager.Close(); err != nil {
-                    s.log.Errorf("Failed to close AllocationManager: %s", err.Error())
-                }
-            }()
-
-            for {
-                conn, err := l.Listener.Accept()
-                if err != nil {
-                    s.log.Debugf("exit accept loop on error: %s", err.Error())
-                    return
-                }
-
-                go s.readLoop(NewSTUNConn(conn), allocationManager)
-            }
-        }(listener)
-    }
-
-    return s, nil
-}
-
-// Close stops the TURN Server. It cleans up any associated state and closes all connections it is managing
-func (s *Server) Close() error {
-    var errors []error
-
-    for _, p := range s.packetConnConfigs {
-        if err := p.PacketConn.Close(); err != nil {
-            errors = append(errors, err)
-        }
-    }
-
-    for _, l := range s.listenerConfigs {
-        if err := l.Listener.Close(); err != nil {
-            errors = append(errors, err)
-        }
-    }
-
-    if len(errors) == 0 {
-        return nil
-    }
-
-    err := errFailedToClose
-    for _, e := range errors {
-        err = fmt.Errorf("%s; Close error (%v) ", err.Error(), e) //nolint:goerr113
-    }
-
-    return err
-}
-
-func (s *Server) readLoop(p net.PacketConn, allocationManager *allocation.Manager) {
-    buf := make([]byte, INBOUND_MTU)
-    for {
-        n, addr, err := p.ReadFrom(buf)
-        if err != nil {
-            s.log.Debugf("exit read loop on error: %s", err.Error())
-            return
         }
 
-        if err := server.HandleRequest(server.Request{
-            Conn:               p,
-            SrcAddr:            addr,
-            Buff:               buf[:n],
-            Log:                s.log,
-            AuthHandler:        s.authHandler,
-            Realm:              s.realm,
-            AllocationManager:  allocationManager,
-            ChannelBindTimeout: s.channelBindTimeout,
-            Nonces:             s.nonces,
-        }); err != nil {
-            s.log.Errorf("error when handling datagram: %v", err)
-        }
+        let _ = allocation_manager.close().await;
+    }
+
+    // Close stops the TURN Server. It cleans up any associated state and closes all connections it is managing
+    pub fn close(&self) -> Result<(), Error> {
+        //TODO: gracefully exit read_loop
+        Ok(())
     }
 }
-*/

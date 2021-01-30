@@ -50,11 +50,11 @@ pub struct Request {
     pub buff: Vec<u8>,
 
     // Server State
-    pub allocation_manager: Manager,
+    pub allocation_manager: Arc<Manager>,
     pub nonces: Arc<Mutex<HashMap<String, Instant>>>,
 
     // User Configuration
-    pub auth_handler: Box<dyn AuthHandler>,
+    pub auth_handler: Arc<Box<dyn AuthHandler + Send + Sync>>,
     pub realm: String,
     pub channel_bind_timeout: Duration,
 }
@@ -63,8 +63,8 @@ impl Request {
     pub fn new(
         conn: Arc<dyn Conn + Send + Sync>,
         src_addr: SocketAddr,
-        allocation_manager: Manager,
-        auth_handler: Box<dyn AuthHandler>,
+        allocation_manager: Arc<Manager>,
+        auth_handler: Arc<Box<dyn AuthHandler + Send + Sync>>,
     ) -> Self {
         Request {
             conn,
@@ -156,7 +156,7 @@ impl Request {
                 code: CODE_BAD_REQUEST,
                 reason: vec![],
             })],
-        );
+        )?;
 
         nonce_attr.get_from(m)?;
 
@@ -195,8 +195,8 @@ impl Request {
                 build_and_send_err(
                     &self.conn,
                     self.src_addr,
+                    bad_request_msg,
                     ERR_NO_SUCH_USER.to_owned(),
-                    &bad_request_msg,
                 )
                 .await?;
                 return Ok(MessageIntegrity::default());
@@ -205,7 +205,7 @@ impl Request {
 
         let mi = MessageIntegrity(our_key);
         if let Err(err) = mi.check(&mut m.clone()) {
-            build_and_send_err(&self.conn, self.src_addr, err, &bad_request_msg).await?;
+            build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await?;
             Ok(MessageIntegrity::default())
         } else {
             Ok(mi)
@@ -229,23 +229,20 @@ impl Request {
             nonces.insert(nonce.clone(), Instant::now());
         }
 
-        build_and_send(
-            &self.conn,
-            self.src_addr,
-            &build_msg(
-                m.transaction_id,
-                MessageType::new(calling_method, CLASS_ERROR_RESPONSE),
-                vec![
-                    Box::new(ErrorCodeAttribute {
-                        code: response_code,
-                        reason: vec![],
-                    }),
-                    Box::new(Nonce::new(ATTR_NONCE, nonce)),
-                    Box::new(Realm::new(ATTR_REALM, self.realm.clone())),
-                ],
-            ),
-        )
-        .await
+        let msg = build_msg(
+            m.transaction_id,
+            MessageType::new(calling_method, CLASS_ERROR_RESPONSE),
+            vec![
+                Box::new(ErrorCodeAttribute {
+                    code: response_code,
+                    reason: vec![],
+                }),
+                Box::new(Nonce::new(ATTR_NONCE, nonce)),
+                Box::new(Realm::new(ATTR_REALM, self.realm.clone())),
+            ],
+        )?;
+
+        build_and_send(&self.conn, self.src_addr, msg).await
     }
 
     pub(crate) async fn handle_binding_request(&mut self, m: &Message) -> Result<(), Error> {
@@ -253,16 +250,16 @@ impl Request {
 
         let (ip, port) = (self.src_addr.ip(), self.src_addr.port());
 
-        let attrs = build_msg(
+        let msg = build_msg(
             m.transaction_id,
             BINDING_SUCCESS,
             vec![
                 Box::new(XORMappedAddress { ip, port }),
                 Box::new(FINGERPRINT),
             ],
-        );
+        )?;
 
-        build_and_send(&self.conn, self.src_addr, &attrs).await
+        build_and_send(&self.conn, self.src_addr, msg).await
     }
 
     // // https://tools.ietf.org/html/rfc5766#section-6.2
@@ -283,23 +280,6 @@ impl Request {
         let mut requested_port = 0;
         let mut reservation_token = "".to_owned();
 
-        let bad_request_msg = build_msg(
-            m.transaction_id,
-            MessageType::new(METHOD_ALLOCATE, CLASS_ERROR_RESPONSE),
-            vec![Box::new(ErrorCodeAttribute {
-                code: CODE_BAD_REQUEST,
-                reason: vec![],
-            })],
-        );
-        let insufficent_capacity_msg = build_msg(
-            m.transaction_id,
-            MessageType::new(METHOD_ALLOCATE, CLASS_ERROR_RESPONSE),
-            vec![Box::new(ErrorCodeAttribute {
-                code: CODE_INSUFFICIENT_CAPACITY,
-                reason: vec![],
-            })],
-        );
-
         // 2. The server checks if the 5-tuple is currently in use by an
         //    existing allocation.  If yes, the server rejects the request with
         //    a 437 (Allocation Mismatch) error.
@@ -316,12 +296,12 @@ impl Request {
                     code: CODE_ALLOC_MISMATCH,
                     reason: vec![],
                 })],
-            );
+            )?;
             return build_and_send_err(
                 &self.conn,
                 self.src_addr,
+                msg,
                 ERR_RELAY_ALREADY_ALLOCATED_FOR_FIVE_TUPLE.to_owned(),
-                &msg,
             )
             .await;
         }
@@ -334,7 +314,15 @@ impl Request {
         //    request with a 442 (Unsupported Transport Protocol) error.
         let mut requested_transport = RequestedTransport::default();
         if let Err(err) = requested_transport.get_from(m) {
-            return build_and_send_err(&self.conn, self.src_addr, err, &bad_request_msg).await;
+            let bad_request_msg = build_msg(
+                m.transaction_id,
+                MessageType::new(METHOD_ALLOCATE, CLASS_ERROR_RESPONSE),
+                vec![Box::new(ErrorCodeAttribute {
+                    code: CODE_BAD_REQUEST,
+                    reason: vec![],
+                })],
+            )?;
+            return build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await;
         } else if requested_transport.protocol != PROTO_UDP {
             let msg = build_msg(
                 m.transaction_id,
@@ -343,12 +331,12 @@ impl Request {
                     code: CODE_UNSUPPORTED_TRANS_PROTO,
                     reason: vec![],
                 })],
-            );
+            )?;
             return build_and_send_err(
                 &self.conn,
                 self.src_addr,
+                msg,
                 ERR_REQUESTED_TRANSPORT_MUST_BE_UDP.to_owned(),
-                &msg,
             )
             .await;
         }
@@ -369,12 +357,12 @@ impl Request {
                     }),
                     Box::new(UnknownAttributes(vec![ATTR_DONT_FRAGMENT])),
                 ],
-            );
+            )?;
             return build_and_send_err(
                 &self.conn,
                 self.src_addr,
+                msg,
                 ERR_NO_DONT_FRAGMENT_SUPPORT.to_owned(),
-                &msg,
             )
             .await;
         }
@@ -391,11 +379,19 @@ impl Request {
         if reservation_token_attr.get_from(m).is_ok() {
             let mut even_port = EvenPort::default();
             if even_port.get_from(m).is_ok() {
+                let bad_request_msg = build_msg(
+                    m.transaction_id,
+                    MessageType::new(METHOD_ALLOCATE, CLASS_ERROR_RESPONSE),
+                    vec![Box::new(ErrorCodeAttribute {
+                        code: CODE_BAD_REQUEST,
+                        reason: vec![],
+                    })],
+                )?;
                 return build_and_send_err(
                     &self.conn,
                     self.src_addr,
+                    bad_request_msg,
                     ERR_REQUEST_WITH_RESERVATION_TOKEN_AND_EVEN_PORT.to_owned(),
-                    &bad_request_msg,
                 )
                 .await;
             }
@@ -415,13 +411,21 @@ impl Request {
                 random_port = match self.allocation_manager.get_random_even_port().await {
                     Ok(port) => port,
                     Err(err) => {
+                        let insufficent_capacity_msg = build_msg(
+                            m.transaction_id,
+                            MessageType::new(METHOD_ALLOCATE, CLASS_ERROR_RESPONSE),
+                            vec![Box::new(ErrorCodeAttribute {
+                                code: CODE_INSUFFICIENT_CAPACITY,
+                                reason: vec![],
+                            })],
+                        )?;
                         return build_and_send_err(
                             &self.conn,
                             self.src_addr,
+                            insufficent_capacity_msg,
                             err,
-                            &insufficent_capacity_msg,
                         )
-                        .await
+                        .await;
                     }
                 };
             }
@@ -454,13 +458,21 @@ impl Request {
         {
             Ok(a) => a,
             Err(err) => {
+                let insufficent_capacity_msg = build_msg(
+                    m.transaction_id,
+                    MessageType::new(METHOD_ALLOCATE, CLASS_ERROR_RESPONSE),
+                    vec![Box::new(ErrorCodeAttribute {
+                        code: CODE_INSUFFICIENT_CAPACITY,
+                        reason: vec![],
+                    })],
+                )?;
                 return build_and_send_err(
                     &self.conn,
                     self.src_addr,
+                    insufficent_capacity_msg,
                     err,
-                    &insufficent_capacity_msg,
                 )
-                .await
+                .await;
             }
         };
 
@@ -481,34 +493,40 @@ impl Request {
             (a.relay_addr.ip(), a.relay_addr.port())
         };
 
-        let mut response_attrs: Vec<Box<dyn Setter>> = vec![
-            Box::new(RelayedAddress {
-                ip: relay_ip,
-                port: relay_port,
-            }),
-            Box::new(Lifetime(lifetime_duration)),
-            Box::new(XORMappedAddress {
-                ip: src_ip,
-                port: src_port,
-            }),
-        ];
+        let msg = {
+            if !reservation_token.is_empty() {
+                self.allocation_manager
+                    .create_reservation(reservation_token.clone(), relay_port)
+                    .await;
+            }
 
-        if !reservation_token.is_empty() {
-            let reservation_token_vec = reservation_token.as_bytes().to_vec();
-            self.allocation_manager
-                .create_reservation(reservation_token, relay_port)
-                .await;
-            response_attrs.push(Box::new(ReservationToken(reservation_token_vec)));
-        }
+            let mut response_attrs: Vec<Box<dyn Setter>> = vec![
+                Box::new(RelayedAddress {
+                    ip: relay_ip,
+                    port: relay_port,
+                }),
+                Box::new(Lifetime(lifetime_duration)),
+                Box::new(XORMappedAddress {
+                    ip: src_ip,
+                    port: src_port,
+                }),
+            ];
 
-        response_attrs.push(Box::new(message_integrity));
-        let msg = build_msg(
-            m.transaction_id,
-            MessageType::new(METHOD_ALLOCATE, CLASS_SUCCESS_RESPONSE),
-            response_attrs,
-        );
+            if !reservation_token.is_empty() {
+                response_attrs.push(Box::new(ReservationToken(
+                    reservation_token.as_bytes().to_vec(),
+                )));
+            }
 
-        build_and_send(&self.conn, self.src_addr, &msg).await
+            response_attrs.push(Box::new(message_integrity));
+            build_msg(
+                m.transaction_id,
+                MessageType::new(METHOD_ALLOCATE, CLASS_SUCCESS_RESPONSE),
+                response_attrs,
+            )?
+        };
+
+        build_and_send(&self.conn, self.src_addr, msg).await
     }
 
     pub(crate) async fn handle_refresh_request(&mut self, m: &Message) -> Result<(), Error> {
@@ -535,19 +553,16 @@ impl Request {
             self.allocation_manager.delete_allocation(&five_tuple).await;
         }
 
-        build_and_send(
-            &self.conn,
-            self.src_addr,
-            &build_msg(
-                m.transaction_id,
-                MessageType::new(METHOD_REFRESH, CLASS_SUCCESS_RESPONSE),
-                vec![
-                    Box::new(Lifetime(lifetime_duration)),
-                    Box::new(message_integrity),
-                ],
-            ),
-        )
-        .await
+        let msg = build_msg(
+            m.transaction_id,
+            MessageType::new(METHOD_REFRESH, CLASS_SUCCESS_RESPONSE),
+            vec![
+                Box::new(Lifetime(lifetime_duration)),
+                Box::new(message_integrity),
+            ],
+        )?;
+
+        build_and_send(&self.conn, self.src_addr, msg).await
     }
 
     pub(crate) async fn handle_create_permission_request(
@@ -603,16 +618,13 @@ impl Request {
                 resp_class = CLASS_ERROR_RESPONSE;
             }
 
-            build_and_send(
-                &self.conn,
-                self.src_addr,
-                &build_msg(
-                    m.transaction_id,
-                    MessageType::new(METHOD_CREATE_PERMISSION, resp_class),
-                    vec![Box::new(message_integrity)],
-                ),
-            )
-            .await
+            let msg = build_msg(
+                m.transaction_id,
+                MessageType::new(METHOD_CREATE_PERMISSION, resp_class),
+                vec![Box::new(message_integrity)],
+            )?;
+
+            build_and_send(&self.conn, self.src_addr, msg).await
         } else {
             Err(ERR_NO_ALLOCATION_FOUND.to_owned())
         }
@@ -679,17 +691,17 @@ impl Request {
                     code: CODE_BAD_REQUEST,
                     reason: vec![],
                 })],
-            );
+            )?;
 
             let message_integrity = self.authenticate_request(m, METHOD_CHANNEL_BIND).await?;
             let mut channel = ChannelNumber::default();
             if let Err(err) = channel.get_from(m) {
-                return build_and_send_err(&self.conn, self.src_addr, err, &bad_request_msg).await;
+                return build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await;
             }
 
             let mut peer_addr = PeerAddress::default();
             if let Err(err) = peer_addr.get_from(m) {
-                return build_and_send_err(&self.conn, self.src_addr, err, &bad_request_msg).await;
+                return build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await;
             }
 
             log::debug!(
@@ -707,19 +719,15 @@ impl Request {
                 .await
             };
             if let Err(err) = result {
-                return build_and_send_err(&self.conn, self.src_addr, err, &bad_request_msg).await;
+                return build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await;
             }
 
-            return build_and_send(
-                &self.conn,
-                self.src_addr,
-                &build_msg(
-                    m.transaction_id,
-                    MessageType::new(METHOD_CHANNEL_BIND, CLASS_SUCCESS_RESPONSE),
-                    vec![Box::new(message_integrity)],
-                ),
-            )
-            .await;
+            let msg = build_msg(
+                m.transaction_id,
+                MessageType::new(METHOD_CHANNEL_BIND, CLASS_SUCCESS_RESPONSE),
+                vec![Box::new(message_integrity)],
+            )?;
+            return build_and_send(&self.conn, self.src_addr, msg).await;
         } else {
             Err(ERR_NO_ALLOCATION_FOUND.to_owned())
         }
@@ -789,10 +797,8 @@ pub(crate) fn build_nonce() -> Result<String, Error> {
 pub(crate) async fn build_and_send(
     conn: &Arc<dyn Conn + Send + Sync>,
     dst: SocketAddr,
-    attrs: &[Box<dyn Setter>],
+    msg: Message,
 ) -> Result<(), Error> {
-    let mut msg = Message::new();
-    msg.build(attrs)?;
     let _ = conn.send_to(&msg.raw, dst).await?;
     Ok(())
 }
@@ -801,10 +807,10 @@ pub(crate) async fn build_and_send(
 pub(crate) async fn build_and_send_err(
     conn: &Arc<dyn Conn + Send + Sync>,
     dst: SocketAddr,
+    msg: Message,
     err: Error,
-    attrs: &[Box<dyn Setter>],
 ) -> Result<(), Error> {
-    if let Err(send_err) = build_and_send(conn, dst, attrs).await {
+    if let Err(send_err) = build_and_send(conn, dst, msg).await {
         Err(send_err)
     } else {
         Err(err)
@@ -815,7 +821,7 @@ pub(crate) fn build_msg(
     transaction_id: TransactionId,
     msg_type: MessageType,
     mut additional: Vec<Box<dyn Setter>>,
-) -> Vec<Box<dyn Setter>> {
+) -> Result<Message, Error> {
     let mut attrs: Vec<Box<dyn Setter>> = vec![
         Box::new(Message {
             transaction_id,
@@ -823,8 +829,12 @@ pub(crate) fn build_msg(
         }),
         Box::new(msg_type),
     ];
+
     attrs.append(&mut additional);
-    attrs
+
+    let mut msg = Message::new();
+    msg.build(&attrs)?;
+    Ok(msg)
 }
 
 pub(crate) fn allocation_lifetime(m: &Message) -> Duration {
