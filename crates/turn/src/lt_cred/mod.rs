@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod lt_cred_test;
 
-use crate::server::*;
+use crate::server::request::AuthHandler;
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
