@@ -1,5 +1,5 @@
 use super::*;
-use crate::relay::none::*;
+use crate::relay::relay_none::*;
 
 use util::Error;
 

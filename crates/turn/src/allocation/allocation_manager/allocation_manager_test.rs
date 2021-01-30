@@ -1,5 +1,5 @@
 use super::*;
-use crate::relay::none::*;
+use crate::relay::relay_none::*;
 
 use crate::proto::lifetime::DEFAULT_LIFETIME;
 use std::net::Ipv4Addr;

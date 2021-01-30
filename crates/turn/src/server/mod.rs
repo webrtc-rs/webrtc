@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod server_test;
+
 pub mod config;
 pub mod request;
 
@@ -77,6 +80,7 @@ impl Server {
         let mut buf = vec![0u8; INBOUND_MTU];
 
         loop {
+            //TODO: gracefully exit loop
             let (n, addr) = match conn.recv_from(&mut buf).await {
                 Ok((n, addr)) => (n, addr),
                 Err(err) => {
@@ -106,7 +110,6 @@ impl Server {
 
     // Close stops the TURN Server. It cleans up any associated state and closes all connections it is managing
     pub fn close(&self) -> Result<(), Error> {
-        //TODO: gracefully exit read_loop
         Ok(())
     }
 }

@@ -56,11 +56,11 @@ pub struct ClientConfig {
     pub realm: String,
     pub software: String,
     pub rto_in_ms: u16,
-    pub conn: Arc<UdpSocket>, // Listening socket (net.PacketConn)
+    pub conn: Arc<UdpSocket>, // TODO: change it to Arc<dyn Conn + Send + Sync>
 }
 
 struct ClientInternal {
-    conn: Arc<UdpSocket>,
+    conn: Arc<UdpSocket>, // TODO: change it to Arc<dyn Conn + Send + Sync>
     stun_serv_addr: String,
     turn_serv_addr: String,
     username: Username,
@@ -210,6 +210,7 @@ impl ClientInternal {
         tokio::spawn(async move {
             let mut buf = vec![0u8; MAX_DATA_BUFFER_SIZE];
             loop {
+                //TODO: gracefully exit loop
                 let (n, from) = match conn.recv_from(&mut buf).await {
                     Ok((n, from)) => (n, from),
                     Err(err) => {

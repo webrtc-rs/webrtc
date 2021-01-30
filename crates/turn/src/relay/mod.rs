@@ -1,6 +1,6 @@
-pub mod none;
-pub mod range;
-pub mod r#static;
+pub mod relay_none;
+pub mod relay_range;
+pub mod relay_static;
 
 use util::{Conn, Error};
 
