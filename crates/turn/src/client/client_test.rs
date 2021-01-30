@@ -120,7 +120,7 @@ async fn test_client_nonce_expiration() -> Result<(), Error> {
 
     server, err := NewServer(ServerConfig{
         auth_handler: func(username, realm string, srcAddr net.Addr) (key []byte, ok bool) {
-            return GenerateAuthKey(username, realm, "pass"), true
+            return generate_auth_key(username, realm, "pass"), true
         },
         PacketConnConfigs: []PacketConnConfig{
             {

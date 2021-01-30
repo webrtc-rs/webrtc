@@ -60,12 +60,16 @@ async fn test_allocation_lifetime_overflow() -> Result<(), Error> {
     Ok(())
 }
 
-fn auth_handler_test_fn(
-    _username: String,
-    _realm: String,
-    _src_addr: SocketAddr,
-) -> (Vec<u8>, bool) {
-    (STATIC_KEY.as_bytes().to_vec(), true)
+struct TestAuthHandler;
+impl AuthHandler for TestAuthHandler {
+    fn auth_handle(
+        &self,
+        _username: &str,
+        _realm: &str,
+        _src_addr: SocketAddr,
+    ) -> Result<Vec<u8>, Error> {
+        Ok(STATIC_KEY.as_bytes().to_vec())
+    }
 }
 
 #[tokio::test]
@@ -82,7 +86,7 @@ async fn test_allocation_lifetime_deletion_zero_lifetime() -> Result<(), Error> 
 
     let socket = SocketAddr::new(IpAddr::from_str("127.0.0.1")?, 5000);
 
-    let mut r = Request::new(l, socket, allocation_manager, auth_handler_test_fn);
+    let mut r = Request::new(l, socket, allocation_manager, Box::new(TestAuthHandler {}));
 
     {
         let mut nonces = r.nonces.lock().await;

@@ -25,7 +25,14 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{Duration, Instant};
 
-type AuthHandlerFn = fn(username: String, realm: String, srcAddr: SocketAddr) -> (Vec<u8>, bool);
+pub trait AuthHandler {
+    fn auth_handle(
+        &self,
+        username: &str,
+        realm: &str,
+        src_addr: SocketAddr,
+    ) -> Result<Vec<u8>, Error>;
+}
 
 // Request contains all the state needed to process a single incoming datagram
 pub struct Request {
@@ -39,7 +46,7 @@ pub struct Request {
     pub nonces: Arc<Mutex<HashMap<String, Instant>>>,
 
     // User Configuration
-    pub auth_handler: AuthHandlerFn,
+    pub auth_handler: Box<dyn AuthHandler>,
     pub realm: String,
     pub channel_bind_timeout: Duration,
 }
@@ -49,7 +56,7 @@ impl Request {
         conn: Arc<dyn Conn + Send + Sync>,
         src_addr: SocketAddr,
         allocation_manager: Manager,
-        auth_handler: AuthHandlerFn,
+        auth_handler: Box<dyn AuthHandler>,
     ) -> Self {
         Request {
             conn,
@@ -170,21 +177,23 @@ impl Request {
         realm_attr.get_from(m)?;
         username_attr.get_from(m)?;
 
-        let (our_key, ok) = (self.auth_handler)(
-            username_attr.to_string(),
-            realm_attr.to_string(),
+        let our_key = match self.auth_handler.auth_handle(
+            &username_attr.to_string(),
+            &realm_attr.to_string(),
             self.src_addr,
-        );
-        if !ok {
-            build_and_send_err(
-                &self.conn,
-                self.src_addr,
-                ERR_NO_SUCH_USER.to_owned(),
-                &bad_request_msg,
-            )
-            .await?;
-            return Ok(MessageIntegrity::default());
-        }
+        ) {
+            Ok(key) => key,
+            Err(_) => {
+                build_and_send_err(
+                    &self.conn,
+                    self.src_addr,
+                    ERR_NO_SUCH_USER.to_owned(),
+                    &bad_request_msg,
+                )
+                .await?;
+                return Ok(MessageIntegrity::default());
+            }
+        };
 
         let mi = MessageIntegrity(our_key);
         if let Err(err) = mi.check(&mut m.clone()) {
