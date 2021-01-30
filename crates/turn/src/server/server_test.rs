@@ -93,3 +93,9 @@ async fn test_server_simple() -> Result<(), Error> {
 
     Ok(())
 }
+
+/* TODO: use vnet
+func TestServerVNet(t *testing.T) {
+
+}
+ */

@@ -1,5 +1,7 @@
 use super::*;
 
+use tokio::net::UdpSocket;
+
 use util::Error;
 
 async fn create_listening_test_client(rto_in_ms: u16) -> Result<Client, Error> {

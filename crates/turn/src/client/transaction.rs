@@ -2,22 +2,22 @@ use crate::errors::*;
 
 use stun::message::*;
 
-use tokio::net::UdpSocket;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::Duration;
 
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::str::FromStr;
 use std::sync::Arc;
 
 use std::sync::atomic::{AtomicU16, Ordering};
-use util::Error;
+use util::{Conn, Error};
 
 const MAX_RTX_INTERVAL_IN_MS: u16 = 1600;
 const MAX_RTX_COUNT: u16 = 7; // total 7 requests (Rc)
 
 async fn on_rtx_timeout(
-    conn: &Arc<UdpSocket>, // TODO: change it to Arc<dyn Conn + Send + Sync>
+    conn: &Arc<dyn Conn + Send + Sync>,
     tr_map: &Arc<Mutex<TransactionMap>>,
     tr_key: &str,
     n_rtx: u16,
@@ -54,7 +54,12 @@ async fn on_rtx_timeout(
         n_rtx
     );
 
-    if conn.send_to(&tr_raw, tr_to).await.is_err() {
+    let dst = match SocketAddr::from_str(&tr_to) {
+        Ok(dst) => dst,
+        Err(_) => return false,
+    };
+
+    if conn.send_to(&tr_raw, dst).await.is_err() {
         if let Some(tr) = tm.delete(tr_key) {
             if !tr
                 .write_result(TransactionResult {
@@ -158,7 +163,7 @@ impl Transaction {
     // start_rtx_timer starts the transaction timer
     pub async fn start_rtx_timer(
         &mut self,
-        conn: Arc<UdpSocket>, // TODO: change it to Arc<dyn Conn + Send + Sync>
+        conn: Arc<dyn Conn + Send + Sync>,
         tr_map: Arc<Mutex<TransactionMap>>,
     ) {
         let (timer_ch_tx, mut timer_ch_rx) = mpsc::channel(1);

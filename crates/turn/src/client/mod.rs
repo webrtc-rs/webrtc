@@ -27,7 +27,7 @@ use stun::xoraddr::*;
 use std::sync::Arc;
 
 use std::net::SocketAddr;
-use tokio::net::UdpSocket;
+use std::str::FromStr;
 use tokio::sync::{mpsc, Mutex};
 use util::{conn::*, Error};
 
@@ -56,11 +56,11 @@ pub struct ClientConfig {
     pub realm: String,
     pub software: String,
     pub rto_in_ms: u16,
-    pub conn: Arc<UdpSocket>, // TODO: change it to Arc<dyn Conn + Send + Sync>
+    pub conn: Arc<dyn Conn + Send + Sync>,
 }
 
 struct ClientInternal {
-    conn: Arc<UdpSocket>, // TODO: change it to Arc<dyn Conn + Send + Sync>
+    conn: Arc<dyn Conn + Send + Sync>,
     stun_serv_addr: String,
     turn_serv_addr: String,
     username: Username,
@@ -93,7 +93,7 @@ impl RelayConnObserver for ClientInternal {
 
     // WriteTo sends data to the specified destination using the base socket.
     async fn write_to(&self, data: &[u8], to: &str) -> Result<usize, Error> {
-        let n = self.conn.send_to(data, to).await?;
+        let n = self.conn.send_to(data, SocketAddr::from_str(to)?).await?;
         Ok(n)
     }
 
@@ -121,7 +121,9 @@ impl RelayConnObserver for ClientInternal {
             tm.insert(tr_key.clone(), tr);
         }
 
-        self.conn.send_to(&msg.raw, to).await?;
+        self.conn
+            .send_to(&msg.raw, SocketAddr::from_str(to)?)
+            .await?;
 
         let conn2 = Arc::clone(&self.conn);
         let tr_map2 = Arc::clone(&self.tr_map);
