@@ -539,7 +539,7 @@ pub const BINDING_ERROR: MessageType = MessageType {
 
 impl fmt::Display for MessageType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {}", self.method.0, self.class.0)
+        write!(f, "{} {}", self.method, self.class)
     }
 }
 
