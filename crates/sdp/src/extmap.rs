@@ -87,7 +87,10 @@ impl ExtMap {
         if valdir.len() == 2 {
             direction = Direction::new(valdir[1]);
             if direction == Direction::DirectionUnknown {
-                return Err(Error::ExtMapParse(format!("unknown direction from {}", valdir[1])));
+                return Err(Error::ExtMapParse(format!(
+                    "unknown direction from {}",
+                    valdir[1]
+                )));
             }
         }
 

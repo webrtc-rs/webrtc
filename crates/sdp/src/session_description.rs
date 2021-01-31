@@ -5,8 +5,8 @@ use std::{fmt, io};
 use url::Url;
 
 use super::common_description::*;
-use super::media_description::*;
 use super::error::Error;
+use super::media_description::*;
 use super::util::*;
 
 #[cfg(test)]
@@ -1054,7 +1054,7 @@ fn unmarshal_bandwidth(value: &str) -> Result<Bandwidth, Error> {
         // https://tools.ietf.org/html/rfc4566#section-5.8
         let i = index_of(parts[0], &["CT", "AS"]);
         if i == -1 {
-        return Err(Error::SdpInvalidValue(parts[0].to_owned()));
+            return Err(Error::SdpInvalidValue(parts[0].to_owned()));
         }
     }
 
