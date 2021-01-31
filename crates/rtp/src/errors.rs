@@ -1,4 +1,4 @@
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RTPError {
     HeaderSizeInsufficient,
     HeaderSizeInsufficientForExtension,
@@ -23,7 +23,7 @@ impl std::fmt::Display for RTPError {
 
 impl std::error::Error for RTPError {}
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ExtensionError {
     TooSmall,
     AudioLevelOverflow,
