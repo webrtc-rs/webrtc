@@ -12,6 +12,6 @@ repository = "https://github.com/webrtc-rs/sdp"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-util = { package = "webrtc-rs-util", version = "0.1.0" }
 url = "2.1.0"
 rand = "0.8.0"
+thiserror = "1.0.23"

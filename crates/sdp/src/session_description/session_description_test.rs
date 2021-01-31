@@ -1,7 +1,5 @@
 use super::*;
 
-use util::Error;
-
 use std::io::Cursor;
 
 const CANONICAL_MARSHAL_SDP: &'static str = "v=0\r\n\

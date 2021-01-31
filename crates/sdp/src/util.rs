@@ -4,8 +4,7 @@ mod util_test;
 use std::collections::HashMap;
 use std::{fmt, io};
 
-use util::Error;
-
+use super::error::Error;
 use super::session_description::SessionDescription;
 use std::io::SeekFrom;
 
@@ -77,17 +76,15 @@ impl fmt::Display for Codec {
 }
 
 pub(crate) fn parse_rtpmap(rtpmap: &str) -> Result<Codec, Error> {
-    let parsing_failed = Error::new("could not extract codec from rtpmap".to_string());
-
     // a=rtpmap:<payload type> <encoding name>/<clock rate>[/<encoding parameters>]
     let split: Vec<&str> = rtpmap.split_whitespace().collect();
     if split.len() != 2 {
-        return Err(parsing_failed);
+        return Err(Error::RtpmapParse);
     }
 
     let pt_split: Vec<&str> = split[0].split(':').collect();
     if pt_split.len() != 2 {
-        return Err(parsing_failed);
+        return Err(Error::RtpmapParse);
     }
     let payload_type = pt_split[1].parse::<u8>()?;
 
@@ -115,19 +112,17 @@ pub(crate) fn parse_rtpmap(rtpmap: &str) -> Result<Codec, Error> {
 }
 
 pub(crate) fn parse_fmtp(fmtp: &str) -> Result<Codec, Error> {
-    let parsing_failed = Error::new("could not extract codec from fmtp".to_string());
-
     // a=fmtp:<format> <format specific parameters>
     let split: Vec<&str> = fmtp.split_whitespace().collect();
     if split.len() != 2 {
-        return Err(parsing_failed);
+        return Err(Error::FmtpParse);
     }
 
     let fmtp = split[1].to_string();
 
     let split: Vec<&str> = split[0].split(':').collect();
     if split.len() != 2 {
-        return Err(parsing_failed);
+        return Err(Error::FmtpParse);
     }
     let payload_type = split[1].parse::<u8>()?;
 
@@ -139,17 +134,15 @@ pub(crate) fn parse_fmtp(fmtp: &str) -> Result<Codec, Error> {
 }
 
 pub(crate) fn parse_rtcp_fb(rtcp_fb: &str) -> Result<Codec, Error> {
-    let parsing_failed = Error::new("could not extract codec from rtcp-fb".to_string());
-
     // a=ftcp-fb:<payload type> <RTCP feedback type> [<RTCP feedback parameter>]
     let split: Vec<&str> = rtcp_fb.splitn(2, ' ').collect();
     if split.len() != 2 {
-        return Err(parsing_failed);
+        return Err(Error::RtcpFb);
     }
 
     let pt_split: Vec<&str> = split[0].split(':').collect();
     if pt_split.len() != 2 {
-        return Err(parsing_failed);
+        return Err(Error::RtcpFb);
     }
 
     Ok(Codec {
@@ -253,7 +246,7 @@ pub fn read_type<R: io::BufRead + io::Seek>(reader: &mut R) -> Result<(String, u
         let key = String::from_utf8(buf)?;
         match key.len() {
             2 => return Ok((key, num_bytes)),
-            _ => return Err(Error::new(format!("SyntaxError: {:?}", key))),
+            _ => return Err(Error::SdpInvalidSyntax(format!("{:?}", key))),
         }
     }
 }
