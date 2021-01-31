@@ -84,6 +84,8 @@ pub struct RelayConn<T: 'static + RelayConnObserver + Send + Sync> {
 impl<T: 'static + RelayConnObserver + Send + Sync> RelayConn<T> {
     // new creates a new instance of UDPConn
     pub(crate) fn new(obs: Arc<Mutex<T>>, config: RelayConnConfig) -> Self {
+        log::debug!("initial lifetime: {} seconds", config.lifetime.as_secs());
+
         let mut c = RelayConn {
             refresh_alloc_timer: PeriodicTimer::new(TimerIdRefresh::Alloc, config.lifetime / 2),
             refresh_perms_timer: PeriodicTimer::new(TimerIdRefresh::Perms, PERM_REFRESH_INTERVAL),
@@ -404,6 +406,8 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
 
             let mut obs = self.obs.lock().await;
             let turn_server_addr = obs.turn_server_addr();
+
+            log::debug!("UDPConn.createPermissions call PerformTransaction 1");
             let tr_res = obs
                 .perform_transaction(&msg, &turn_server_addr, false)
                 .await?;
@@ -549,6 +553,7 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
             (msg, obs.turn_server_addr())
         };
 
+        log::debug!("UDPConn.bind call PerformTransaction 1");
         let tr_res = {
             let mut obs = rc_obs.lock().await;
             obs.perform_transaction(&msg, &turn_server_addr, false)

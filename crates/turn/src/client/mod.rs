@@ -71,7 +71,7 @@ struct ClientInternal {
     tr_map: Arc<Mutex<TransactionMap>>,
     binding_mgr: Arc<Mutex<BindingManager>>,
     rto_in_ms: u16,
-    read_ch_tx: Option<Arc<Mutex<mpsc::Sender<InboundData>>>>,
+    read_ch_tx: Arc<Mutex<Option<mpsc::Sender<InboundData>>>>,
 }
 
 #[async_trait]
@@ -190,7 +190,7 @@ impl ClientInternal {
                 DEFAULT_RTO_IN_MS
             },
             integrity: MessageIntegrity::new_short_term_integrity(String::new()),
-            read_ch_tx: None,
+            read_ch_tx: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -206,7 +206,7 @@ impl ClientInternal {
         let conn = Arc::clone(&self.conn);
         let stun_serv_str = self.stun_serv_addr.clone();
         let tr_map = Arc::clone(&self.tr_map);
-        let read_ch_tx = self.read_ch_tx.clone();
+        let read_ch_tx = Arc::clone(&self.read_ch_tx);
         let binding_mgr = Arc::clone(&self.binding_mgr);
 
         tokio::spawn(async move {
@@ -250,7 +250,7 @@ impl ClientInternal {
     // If not handled, it is assumed that the packet is application data.
     // If an error is returned, the caller should discard the packet regardless.
     async fn handle_inbound(
-        read_ch_tx: &Option<Arc<Mutex<mpsc::Sender<InboundData>>>>,
+        read_ch_tx: &Arc<Mutex<Option<mpsc::Sender<InboundData>>>>,
         data: &[u8],
         from: SocketAddr,
         stun_serv_str: &str,
@@ -291,7 +291,7 @@ impl ClientInternal {
 
     async fn handle_stun_message(
         tr_map: &Arc<Mutex<TransactionMap>>,
-        read_ch_tx: &Option<Arc<Mutex<mpsc::Sender<InboundData>>>>,
+        read_ch_tx: &Arc<Mutex<Option<mpsc::Sender<InboundData>>>>,
         data: &[u8],
         mut from: SocketAddr,
     ) -> Result<(), Error> {
@@ -359,7 +359,7 @@ impl ClientInternal {
 
     async fn handle_channel_data(
         binding_mgr: &Arc<Mutex<BindingManager>>,
-        read_ch_tx: &Option<Arc<Mutex<mpsc::Sender<InboundData>>>>,
+        read_ch_tx: &Arc<Mutex<Option<mpsc::Sender<InboundData>>>>,
         data: &[u8],
     ) -> Result<(), Error> {
         let mut ch_data = ChannelData {
@@ -385,12 +385,14 @@ impl ClientInternal {
 
     // handle_inbound_relay_conn passes inbound data in RelayConn
     async fn handle_inbound_relay_conn(
-        read_ch_tx: &Option<Arc<Mutex<mpsc::Sender<InboundData>>>>,
+        read_ch_tx: &Arc<Mutex<Option<mpsc::Sender<InboundData>>>>,
         data: &[u8],
         from: SocketAddr,
     ) -> Result<(), Error> {
-        if let Some(read_ch) = &read_ch_tx {
-            let tx = read_ch.lock().await;
+        let read_ch_tx_opt = read_ch_tx.lock().await;
+        log::debug!("read_ch_tx_opt = {}", read_ch_tx_opt.is_some());
+        if let Some(tx) = &*read_ch_tx_opt {
+            log::debug!("try_send data = {:?}, from = {}", data, from);
             if tx
                 .try_send(InboundData {
                     data: data.to_vec(),
@@ -408,9 +410,14 @@ impl ClientInternal {
 
     // Close closes this client
     async fn close(&mut self) {
-        self.read_ch_tx.take();
-        let mut tm = self.tr_map.lock().await;
-        tm.close_and_delete_all();
+        {
+            let mut read_ch_tx = self.read_ch_tx.lock().await;
+            read_ch_tx.take();
+        }
+        {
+            let mut tm = self.tr_map.lock().await;
+            tm.close_and_delete_all();
+        }
     }
 
     // send_binding_request_to sends a new STUN request to the given transport address
@@ -431,6 +438,7 @@ impl ClientInternal {
             msg
         };
 
+        log::debug!("client.SendBindingRequestTo call PerformTransaction 1");
         let tr_res = self.perform_transaction(&msg, to, false).await?;
 
         let mut refl_addr = XORMappedAddress::default();
@@ -465,8 +473,12 @@ impl ClientInternal {
 
     // Allocate sends a TURN allocation request to the given transport address
     async fn allocate(&mut self) -> Result<RelayConnConfig, Error> {
-        if self.read_ch_tx.is_some() {
-            return Err(ERR_ONE_ALLOCATE_ONLY.to_owned());
+        {
+            let read_ch_tx = self.read_ch_tx.lock().await;
+            log::debug!("allocate check: read_ch_tx_opt = {}", read_ch_tx.is_some());
+            if read_ch_tx.is_some() {
+                return Err(ERR_ONE_ALLOCATE_ONLY.to_owned());
+            }
         }
 
         let mut msg = Message::new();
@@ -479,6 +491,7 @@ impl ClientInternal {
             Box::new(FINGERPRINT),
         ])?;
 
+        log::debug!("client.Allocate call PerformTransaction 1");
         let tr_res = self
             .perform_transaction(&msg, &self.turn_serv_addr.clone(), false)
             .await?;
@@ -508,6 +521,7 @@ impl ClientInternal {
             Box::new(FINGERPRINT),
         ])?;
 
+        log::debug!("client.Allocate call PerformTransaction 2");
         let tr_res = self
             .perform_transaction(&msg, &self.turn_serv_addr.clone(), false)
             .await?;
@@ -533,7 +547,11 @@ impl ClientInternal {
         lifetime.get_from(&res)?;
 
         let (read_ch_tx, read_ch_rx) = mpsc::channel(MAX_READ_QUEUE_SIZE);
-        self.read_ch_tx = Some(Arc::new(Mutex::new(read_ch_tx)));
+        {
+            let mut read_ch_tx_opt = self.read_ch_tx.lock().await;
+            *read_ch_tx_opt = Some(read_ch_tx);
+            log::debug!("allocate: read_ch_tx_opt = {}", read_ch_tx_opt.is_some());
+        }
 
         Ok(RelayConnConfig {
             relayed_addr,

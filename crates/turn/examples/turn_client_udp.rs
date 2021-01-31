@@ -107,7 +107,6 @@ async fn main() -> Result<(), Error> {
     // If you provided `-ping`, perform a ping test agaist the
     // relayConn we have just allocated.
     if ping {
-        println!("ping start...");
         do_ping_test(&client, relay_conn).await?;
     }
 
@@ -124,14 +123,14 @@ async fn do_ping_test(
     let mapped_addr = client.send_binding_request().await?;
 
     // Set up pinger socket (pingerConn)
-    println!("bind...");
+    //println!("bind...");
     let pinger_conn_tx = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
 
     // Punch a UDP hole for the relay_conn by sending a data to the mapped_addr.
     // This will trigger a TURN client to generate a permission request to the
     // TURN server. After this, packets from the IP address will be accepted by
     // the TURN server.
-    println!("relay_conn send hello to mapped_addr {}", mapped_addr);
+    //println!("relay_conn send hello to mapped_addr {}", mapped_addr);
     relay_conn.send_to("Hello".as_bytes(), mapped_addr).await?;
     let relay_addr = relay_conn.local_addr()?;
 
@@ -151,7 +150,7 @@ async fn do_ping_test(
                 Err(_) => break,
             };
 
-            println!("{} from {}", msg, from);
+            println!("pingerConn read-loop: {} from {}", msg, from);
             /*if sentAt, pingerErr := time.Parse(time.RFC3339Nano, msg); pingerErr == nil {
                 rtt := time.Since(sentAt)
                 log.Printf("%d bytes from from %s time=%d ms\n", n, from.String(), int(rtt.Seconds()*1000))
@@ -168,7 +167,7 @@ async fn do_ping_test(
                 Ok((n, from)) => (n, from),
             };
 
-            println!("{:?} from {}", &buf[..n], from);
+            println!("relay_conn read-loop: {:?} from {}", &buf[..n], from);
 
             // Echo back
             if relay_conn.send_to(&buf[..n], from).await.is_err() {
@@ -179,18 +178,18 @@ async fn do_ping_test(
 
     tokio::time::sleep(Duration::from_millis(500)).await;
 
-    println!(
+    /*println!(
         "pinger_conn_tx send 10 packets to relay addr {}...",
         relay_addr
-    );
+    );*/
     // Send 10 packets from relay_conn to the echo server
-    for i in 0..10 {
-        let msg = format!("{:?}", tokio::time::Instant::now());
+    for _ in 0..2 {
+        let msg = "12345678910".to_owned(); //format!("{:?}", tokio::time::Instant::now());
+        println!("sending msg={} with size={}", msg, msg.as_bytes().len());
         pinger_conn_tx.send_to(msg.as_bytes(), relay_addr).await?;
 
         // For simplicity, this example does not wait for the pong (reply).
         // Instead, sleep 1 second.
-        println!("{}: sleep 1 second...", i);
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
 
