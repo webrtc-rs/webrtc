@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 pub mod codecs;
+pub mod error;
 pub mod extension;
 pub mod header;
 pub mod packet;

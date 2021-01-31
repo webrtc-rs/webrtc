@@ -1,8 +1,7 @@
+use crate::error::Error;
 use crate::packetizer::Payloader;
 
 use std::io::Read;
-
-use util::Error;
 
 #[cfg(test)]
 mod g711_test;

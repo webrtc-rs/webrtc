@@ -1,9 +1,8 @@
+use crate::error::Error;
 use crate::extension::abs_send_time_extension::*;
 use crate::header::*;
 use crate::packet::*;
 use crate::sequence::*;
-
-use util::Error;
 
 use std::io::{BufWriter, Read};
 use std::time::{Duration, SystemTime};

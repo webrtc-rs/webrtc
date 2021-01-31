@@ -5,8 +5,6 @@ use chrono::prelude::*;
 use std::io::BufReader;
 use std::time::Duration;
 
-use util::Error;
-
 #[test]
 fn test_packetizer() -> Result<(), Error> {
     let multiplepayload = vec![0; 128];

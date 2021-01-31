@@ -2,8 +2,6 @@ use super::*;
 
 use std::io::{BufReader, BufWriter};
 
-use util::Error;
-
 #[test]
 fn test_transport_cc_extension_too_small() -> Result<(), Error> {
     let raw: Vec<u8> = vec![];
