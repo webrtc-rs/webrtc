@@ -2,10 +2,10 @@ use std::fmt;
 use std::io;
 
 use url::Url;
-use util::Error;
 
 use super::common_description::*;
 use super::direction::*;
+use super::error::Error;
 
 #[cfg(test)]
 mod extmap_test;
@@ -66,19 +66,19 @@ impl ExtMap {
         reader.read_line(&mut line)?;
         let parts: Vec<&str> = line.trim().splitn(2, ':').collect();
         if parts.len() != 2 {
-            return Err(Error::new(format!("SyntaxError: {}", line)));
+            return Err(Error::ExtMapParse(line));
         }
 
         let fields: Vec<&str> = parts[1].split_whitespace().collect();
         if fields.len() < 2 {
-            return Err(Error::new(format!("SyntaxError: {}", line)));
+            return Err(Error::ExtMapParse(line));
         }
 
         let valdir: Vec<&str> = fields[0].split('/').collect();
         let value = valdir[0].parse::<isize>()?;
         if value < 1 || value > 246 {
-            return Err(Error::new(format!(
-                "SyntaxError: {} -- extmap key must be in the range 1-256",
+            return Err(Error::ExtMapParse(format!(
+                "{} -- extmap key must be in the range 1-256",
                 valdir[0]
             )));
         }
@@ -87,7 +87,10 @@ impl ExtMap {
         if valdir.len() == 2 {
             direction = Direction::new(valdir[1]);
             if direction == Direction::DirectionUnknown {
-                return Err(Error::new(format!("unknown direction from {}", valdir[1])));
+                return Err(Error::ExtMapParse(format!(
+                    "unknown direction from {}",
+                    valdir[1]
+                )));
             }
         }
 

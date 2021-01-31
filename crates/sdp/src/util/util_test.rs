@@ -3,8 +3,6 @@ use crate::common_description::*;
 use crate::media_description::*;
 use crate::session_description::*;
 
-use util::Error;
-
 fn get_test_session_description() -> SessionDescription {
     return SessionDescription{
         media_descriptions: vec![
