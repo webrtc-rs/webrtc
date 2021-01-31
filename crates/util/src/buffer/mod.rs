@@ -23,6 +23,7 @@ const MAX_SIZE: usize = 4 * 1024 * 1024;
 
 // Buffer allows writing packets to an intermediate buffer, which can then be read form.
 // This is verify similar to bytes.Buffer but avoids combining multiple writes into a single read.
+#[derive(Debug)]
 struct BufferInternal {
     data: Vec<u8>,
     head: usize,
@@ -105,7 +106,7 @@ impl BufferInternal {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Buffer {
     buffer: Arc<Mutex<BufferInternal>>,
 }
