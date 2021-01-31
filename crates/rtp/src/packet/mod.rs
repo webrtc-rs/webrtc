@@ -67,7 +67,7 @@ impl Packet {
         Ok(size + self.payload.len())
     }
 
-    /// MarshalTo serializes the packet and writes to the buffer.
+    /// Marshal serializes the packet into bytes.
     pub fn marshal(&mut self) -> Result<BytesMut, RTPError> {
         let mut buf = BytesMut::new();
         buf.resize(self.marshal_size(), 0u8);
