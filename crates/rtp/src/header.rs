@@ -1,8 +1,8 @@
 use std::io::{Read, Write};
 
-use util::Error;
-
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+
+use crate::error::Error;
 
 const HEADER_LENGTH: usize = 4;
 const VERSION_SHIFT: u8 = 6;
@@ -93,31 +93,23 @@ impl Header {
             match self.extension_profile {
                 EXTENSION_PROFILE_ONE_BYTE => {
                     if id < 1 || id > 14 {
-                        return Err(Error::new(
-                            "header extension id must be between 1 and 14 for RFC 5285 extensions"
-                                .to_owned(),
-                        ));
+                        return Err(Error::HeaderExtensionIdOneByteLength);
                     }
                     if payload.len() > 16 {
-                        return Err(Error::new("header extension payload must be 16bytes or less for RFC 5285 one byte extensions".to_owned()));
+                        return Err(Error::HeaderExtensionPayloadOneByteLength);
                     }
                 }
                 EXTENSION_PROFILE_TWO_BYTE => {
                     if id < 1 {
-                        return Err(Error::new(
-                            "header extension id must be between 1 and 255 for RFC 5285 extensions"
-                                .to_owned(),
-                        ));
+                        return Err(Error::HeaderExtensionIdTwoByteLength);
                     }
                     if payload.len() > 255 {
-                        return Err(Error::new("header extension payload must be 255bytes or less for RFC 5285 two byte extensions".to_owned()));
+                        return Err(Error::HeaderExtensionPayloadTwoByteLength);
                     }
                 }
                 _ => {
                     if id != 0 {
-                        return Err(Error::new(
-                            "header extension id must be 0 for none RFC 5285 extensions".to_owned(),
-                        ));
+                        return Err(Error::HeaderExtensionIdShouldBeZero);
                     }
                 }
             };
@@ -172,7 +164,7 @@ impl Header {
     // Removes an RTP Header extension
     pub fn del_extension(&mut self, id: u8) -> Result<(), Error> {
         if !self.extension {
-            return Err(Error::new("extension not enabled".to_owned()));
+            return Err(Error::HeaderExtensionNotEnabled);
         }
         for index in 0..self.extensions.len() {
             if self.extensions[index].id == id {
@@ -180,7 +172,7 @@ impl Header {
                 return Ok(());
             }
         }
-        Err(Error::new("extension not found".to_owned()))
+        Err(Error::HeaderExtensionNotFound)
     }
 
     // Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
@@ -357,9 +349,7 @@ impl Header {
                 && extension_payload_len % 4 != 0
             {
                 //the payload must be in 32-bit words.
-                return Err(Error::new(
-                    "extension_payload must be in 32-bit words".to_string(),
-                ));
+                return Err(Error::HeaderExtensionPayloadNot32BitWords);
             }
             let extension_payload_size = (extension_payload_len as u16 + 3) / 4;
             writer.write_u16::<BigEndian>(extension_payload_size)?;

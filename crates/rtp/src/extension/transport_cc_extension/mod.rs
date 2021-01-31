@@ -1,8 +1,8 @@
 use std::io::{Read, Write};
 
-use util::Error;
-
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+
+use crate::error::Error;
 
 #[cfg(test)]
 mod transport_cc_extension_test;

@@ -6,7 +6,6 @@ use std::time::Duration;
 use chrono::prelude::*;
 
 use std::ops::Sub;
-use util::Error;
 
 const ABS_SEND_TIME_RESOLUTION: i128 = 1000;
 

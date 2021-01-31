@@ -2,8 +2,6 @@ use super::*;
 
 use std::io::BufReader;
 
-use util::Error;
-
 #[test]
 fn test_vp8_unmarshal() -> Result<(), Error> {
     let mut pck = VP8Packet::default();

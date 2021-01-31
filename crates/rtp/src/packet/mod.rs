@@ -1,8 +1,8 @@
 use std::fmt;
 use std::io::{Read, Write};
 
+use crate::error::Error;
 use crate::header::*;
-use util::Error;
 
 #[cfg(test)]
 mod packet_test;

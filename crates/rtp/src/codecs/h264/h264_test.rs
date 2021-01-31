@@ -2,8 +2,6 @@ use super::*;
 
 use std::io::BufReader;
 
-use util::Error;
-
 #[test]
 fn test_h264_payload() -> Result<(), Error> {
     let empty = vec![];

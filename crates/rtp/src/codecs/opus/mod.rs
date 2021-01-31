@@ -1,8 +1,7 @@
+use crate::error::Error;
 use crate::packetizer::{Depacketizer, Payloader};
 
 use std::io::Read;
-
-use util::Error;
 
 #[cfg(test)]
 mod opus_test;
@@ -31,7 +30,7 @@ impl Depacketizer for OpusPacket {
         self.payload.clear();
         reader.read_to_end(&mut self.payload)?;
         if self.payload.is_empty() {
-            Err(Error::new("Payload is not large enough".to_string()))
+            Err(Error::PayloadIsNotLargeEnough)
         } else {
             Ok(())
         }

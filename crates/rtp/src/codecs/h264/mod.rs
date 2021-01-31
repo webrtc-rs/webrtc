@@ -1,9 +1,9 @@
+use crate::error::Error;
 use crate::packetizer::{Depacketizer, Payloader};
 
 use std::io::Read;
 
 use byteorder::ReadBytesExt;
-use util::Error;
 
 #[cfg(test)]
 mod h264_test;
@@ -185,11 +185,10 @@ impl Depacketizer for H264Packet {
                 curr_offset += STAPA_NALU_LENGTH_SIZE;
 
                 if curr_offset + nalu_size > payload.len() {
-                    return Err(Error::new(format!(
-                        "STAP-A declared size({}) is larger than buffer({})",
+                    return Err(Error::StapASizeLargerThanBuffer(
                         nalu_size,
-                        payload.len() - curr_offset
-                    )));
+                        payload.len() - curr_offset,
+                    ));
                 }
                 self.payload.append(&mut ANNEXB_NALUSTART_CODE.to_vec());
                 self.payload
@@ -214,10 +213,7 @@ impl Depacketizer for H264Packet {
                 Ok(())
             }
         } else {
-            Err(Error::new(format!(
-                "nalu type {} is currently not handled",
-                nalu_type
-            )))
+            Err(Error::NaluTypeIsNotHandled(nalu_type))
         }
     }
 }

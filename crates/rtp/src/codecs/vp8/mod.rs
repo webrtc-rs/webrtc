@@ -1,9 +1,9 @@
+use crate::error::Error;
 use crate::packetizer::{Depacketizer, Payloader};
 
 use std::io::Read;
 
 use byteorder::ReadBytesExt;
-use util::Error;
 
 #[cfg(test)]
 mod vp8_test;
@@ -170,7 +170,7 @@ impl Depacketizer for VP8Packet {
         reader.read_to_end(&mut self.payload)?;
 
         if self.payload.is_empty() {
-            Err(Error::new("Payload is not large enough".to_string()))
+            Err(Error::PayloadIsNotLargeEnough)
         } else {
             Ok(())
         }
