@@ -8,8 +8,12 @@ use tokio::net::UdpSocket;
 use tokio::time::Duration;
 use util::{Conn, Error};
 
+// RUST_LOG=trace cargo run --color=always --package webrtc-rs-turn --example turn_client_udp -- --host 0.0.0.0 --user user=pass --ping
+
 #[tokio::main]
 async fn main() -> Result<(), Error> {
+    env_logger::init();
+
     let mut app = App::new("TURN Client UDP")
         .version("0.1.0")
         .author("Rain Liu <yuliu@webrtc.rs>")

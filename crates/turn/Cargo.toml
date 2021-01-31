@@ -31,9 +31,16 @@ md-5 = "0.9.1"
 tokio-test = "0.4"
 env_logger = "0.8"
 hex = "0.4.2"
+signal-hook = "0.3.2"
 
 [[example]]
 name = "turn_client_udp"
 path = "examples/turn_client_udp.rs"
+required-features = ["binaries"]
+bench = false
+
+[[example]]
+name = "turn_server_udp"
+path = "examples/turn_server_udp.rs"
 required-features = ["binaries"]
 bench = false
