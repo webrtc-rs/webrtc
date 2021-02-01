@@ -1,7 +1,8 @@
-use crate::error::Error;
-use crate::packetizer::{Depacketizer, Payloader};
-
-use std::io::Read;
+use crate::{
+    errors::RTPError,
+    packetizer::{Depacketizer, Payloader},
+};
+use bytes::BytesMut;
 
 #[cfg(test)]
 mod opus_test;
@@ -9,7 +10,7 @@ mod opus_test;
 pub struct OpusPayloader;
 
 impl Payloader for OpusPayloader {
-    fn payload(&self, _: usize, payload: BytesMut) -> Vec<Vec<u8>> {
+    fn payload(&self, _: u16, payload: BytesMut) -> Vec<Vec<u8>> {
         if payload.is_empty() {
             return vec![];
         }
@@ -27,13 +28,26 @@ pub struct OpusPacket {
 }
 
 impl Depacketizer for OpusPacket {
-    fn depacketize<R: Read>(&mut self, reader: &mut R) -> Result<(), Error> {
-        self.payload.clear();
-        reader.read_to_end(&mut self.payload)?;
-        if self.payload.is_empty() {
-            Err(Error::PayloadIsNotLargeEnough)
-        } else {
-            Ok(())
+    fn unmarshal(&mut self, packet: &mut BytesMut) -> Result<BytesMut, RTPError> {
+        if packet.is_empty() {
+            return Err(RTPError::ShortPacket);
+        }
+
+        self.payload = packet.to_owned();
+        Ok(packet.to_owned())
+    }
+}
+/// OpusPartitionHeadChecker checks Opus partition head
+#[derive(Debug, Default)]
+pub struct OpusPartitionHeadChecker {}
+
+impl OpusPartitionHeadChecker {
+    // IsPartitionHead checks whether if this is a head of the Opus partition
+    pub fn is_partition_head(&mut self, packet: &mut BytesMut) -> bool {
+        let mut p = OpusPacket::default();
+
+        if p.unmarshal(packet).is_err() {
+            return false;
         }
 
         true

@@ -1,9 +1,8 @@
-use crate::error::Error;
-use crate::packetizer::{Depacketizer, Payloader};
-
-use std::io::Read;
-
-use byteorder::ReadBytesExt;
+use crate::{
+    errors::RTPError,
+    packetizer::{Depacketizer, Payloader},
+};
+use bytes::BytesMut;
 
 #[cfg(test)]
 mod vp8_test;
@@ -13,7 +12,7 @@ const VP8_HEADER_SIZE: usize = 1;
 pub struct VP8Payloader;
 
 impl Payloader for VP8Payloader {
-    fn payload(&self, mtu: usize, payload_data: BytesMut) -> Vec<Vec<u8>> {
+    fn payload(&self, mtu: u16, payload_data: BytesMut) -> Vec<Vec<u8>> {
         /*
          * https://tools.ietf.org/html/rfc7741#section-4.2
          *
@@ -35,7 +34,7 @@ impl Payloader for VP8Payloader {
          *     first packet of each encoded frame.
          */
 
-        let max_fragment_size = (mtu - VP8_HEADER_SIZE) as isize;
+        let max_fragment_size = mtu as isize - VP8_HEADER_SIZE as isize;
 
         let mut payload_data_remaining = payload_data.len() as isize;
 
@@ -144,10 +143,14 @@ impl Depacketizer for VP8Packet {
     }
 }
 
-        if self.payload.is_empty() {
-            Err(Error::PayloadIsNotLargeEnough)
-        } else {
-            Ok(())
+// VP8PartitionHeadChecker checks VP8 partition head
+struct VP8PartitionHeadChecker;
+
+impl VP8PartitionHeadChecker {
+    pub fn is_partition_head(&mut self, mut packet: BytesMut) -> bool {
+        let mut p = VP8Packet::default();
+        if p.unmarshal(&mut packet).is_err() {
+            return false;
         }
 
         p.s == 1

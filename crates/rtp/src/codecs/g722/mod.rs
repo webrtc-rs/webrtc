@@ -1,7 +1,6 @@
-use crate::error::Error;
 use crate::packetizer::Payloader;
 
-use std::io::Read;
+use bytes::BytesMut;
 
 #[cfg(test)]
 mod g722_test;
@@ -9,16 +8,16 @@ mod g722_test;
 pub struct G722Payloader;
 
 impl Payloader for G722Payloader {
-    fn payload(&self, mtu: usize, mut payload: BytesMut) -> Vec<Vec<u8>> {
+    fn payload(&self, mtu: u16, mut payload: BytesMut) -> Vec<Vec<u8>> {
         let mut payloads = vec![];
         if payload.is_empty() || mtu == 0 {
             return payloads;
         }
 
-        while payload.len() > mtu {
-            let mut o = vec![0u8; mtu];
-            o.copy_from_slice(&payload[..mtu]);
-            payload = payload.split_off(mtu);
+        while payload.len() > mtu as usize {
+            let mut o = vec![0u8; mtu as usize];
+            o.copy_from_slice(&payload[..mtu as usize]);
+            payload = payload.split_off(mtu as usize);
             payloads.push(o)
         }
 

@@ -1,17 +1,16 @@
-use crate::error::Error;
-use crate::extension::abs_send_time_extension::*;
-use crate::header::*;
-use crate::packet::*;
-use crate::sequence::*;
+use crate::errors::RTPError;
+use crate::packet::Packet;
+use crate::sequence::Sequencer;
+use crate::{extension::abs_send_time_extension::*, header::Header};
 
-use std::io::{BufWriter, Read};
-use std::time::{Duration, SystemTime};
+use bytes::BytesMut;
+use std::time::Duration;
 
 mod packetizer_test;
 
 // Payloader payloads a byte array for use as rtp.Packet payloads
 pub trait Payloader {
-    fn payload(&self, mtu: usize, payload: BytesMut) -> Vec<Vec<u8>>;
+    fn payload(&self, mtu: u16, payload: BytesMut) -> Vec<Vec<u8>>;
 }
 
 // Packetizer packetizes a payload
@@ -28,7 +27,7 @@ pub trait Depacketizer {
 pub type FnTimeGen = fn() -> Duration;
 
 struct Packetizer {
-    mtu: usize,
+    mtu: u16,
     payload_type: u8,
     ssrc: u32,
     payloader: Box<dyn Payloader>,
@@ -40,7 +39,7 @@ struct Packetizer {
 }
 
 pub fn new_packetizer(
-    mtu: usize,
+    mtu: u16,
     payload_type: u8,
     ssrc: u32,
     clock_rate: u32,

@@ -1,9 +1,4 @@
-use crate::error::Error;
-use crate::packetizer::{Depacketizer, Payloader};
-
-use std::io::Read;
-
-use byteorder::ReadBytesExt;
+use bytes::BytesMut;
 
 mod h264_def;
 mod h264_test;
@@ -35,68 +30,25 @@ fn emit_nalus(nals: BytesMut, mut emit: impl FnMut(&BytesMut)) {
             zero_count = 0;
         }
 
-        Ok(payloads)
-    }
-}
+        (-1, -1)
+    };
 
-#[derive(Debug, Default)]
-pub struct H264Packet {
-    payload: Vec<u8>,
-}
+    let (mut next_ind_start, next_ind_len) = next_ind(&nals, 0);
 
-impl Depacketizer for H264Packet {
-    fn depacketize<R: Read>(&mut self, reader: &mut R) -> Result<(), Error> {
-        self.payload.clear();
+    if next_ind_start == -1 {
+        emit(&nals);
+    } else {
+        while next_ind_start != -1 {
+            let prev_start = next_ind_start + next_ind_len;
+            let (a, _) = next_ind(&nals, prev_start as usize);
+            next_ind_start = a;
 
-        // NALU Types
-        // https://tools.ietf.org/html/rfc6184#section-5.4
-        let b0 = reader.read_u8()?;
-        let nalu_type = b0 & NALU_TYPE_BITMASK;
-        if nalu_type > 0 && nalu_type < 24 {
-            self.payload.append(&mut ANNEXB_NALUSTART_CODE.to_vec());
-            self.payload.push(b0);
-            reader.read_to_end(&mut self.payload)?;
-            Ok(())
-        } else if nalu_type == STAPA_NALU_TYPE {
-            let mut curr_offset = 0;
-            let mut payload = vec![];
-            reader.read_to_end(&mut payload)?;
-
-            while curr_offset + 1 < payload.len() {
-                let nalu_size =
-                    ((payload[curr_offset] as usize) << 8) | payload[curr_offset + 1] as usize;
-                curr_offset += STAPA_NALU_LENGTH_SIZE;
-
-                if curr_offset + nalu_size > payload.len() {
-                    return Err(Error::StapASizeLargerThanBuffer(
-                        nalu_size,
-                        payload.len() - curr_offset,
-                    ));
-                }
-                self.payload.append(&mut ANNEXB_NALUSTART_CODE.to_vec());
-                self.payload
-                    .append(&mut payload[curr_offset..curr_offset + nalu_size].to_vec());
-                curr_offset += nalu_size;
-            }
-
-            Ok(())
-        } else if nalu_type == FUA_NALU_TYPE {
-            let b1 = reader.read_u8()?;
-            if b1 & FUA_START_BITMASK != 0 {
-                let nalu_ref_idc = b0 & NALU_REF_IDC_BITMASK;
-                let fragmented_nalu_type = b1 & NALU_TYPE_BITMASK;
-
-                self.payload.append(&mut ANNEXB_NALUSTART_CODE.to_vec());
-                self.payload.push(nalu_ref_idc | fragmented_nalu_type);
-                reader.read_to_end(&mut self.payload)?;
-
-                Ok(())
+            if next_ind_start != -1 {
+                emit(&nals[prev_start as usize..next_ind_start as usize].into());
             } else {
                 // Emit until end of stream, no end indicator found
                 emit(&nals[prev_start as usize..].into());
             }
-        } else {
-            Err(Error::NaluTypeIsNotHandled(nalu_type))
         }
     }
 }

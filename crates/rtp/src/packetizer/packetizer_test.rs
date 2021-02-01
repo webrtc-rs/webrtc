@@ -106,9 +106,8 @@ mod test {
 // use std::io::BufReader;
 // use std::time::Duration;
 
-#[test]
-fn test_packetizer() -> Result<(), Error> {
-    let multiplepayload = vec![0; 128];
-    let mut reader = BufReader::new(multiplepayload.as_slice());
+// use util::Error;
+
+// mod test {}
 
 // #[test]

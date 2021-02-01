@@ -13,7 +13,7 @@ pub struct H264Payloader;
 
 // Payload fragments a H264 packet across one or more byte arrays
 impl Payloader for H264Payloader {
-    fn payload(&self, mtu: usize, payload: BytesMut) -> Vec<Vec<u8>> {
+    fn payload(&self, mtu: u16, payload: BytesMut) -> Vec<Vec<u8>> {
         let mut payloads = vec![];
 
         if payload.is_empty() {

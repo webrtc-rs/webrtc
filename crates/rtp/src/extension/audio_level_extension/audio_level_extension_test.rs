@@ -2,71 +2,77 @@
 
 // use std::io::{BufReader, BufWriter};
 
-#[test]
-fn test_audio_level_extension_too_small() -> Result<(), Error> {
-    let raw: Vec<u8> = vec![];
-    let mut reader = BufReader::new(raw.as_slice());
-    let result = AudioLevelExtension::unmarshal(&mut reader);
-    assert!(result.is_err());
+// use util::Error;
+#[cfg(test)]
+mod tests {
+    use crate::extension::audio_level_extension::*;
 
-//     Ok(())
-// }
+    #[test]
+    fn test_audio_level_extension_too_small() {
+        let mut a = AudioLevelExtension::default();
 
-// #[test]
-// fn test_audio_level_extension_voice_true() -> Result<(), Error> {
-//     let raw: Vec<u8> = vec![0x88];
-//     let mut reader = BufReader::new(raw.as_slice());
-//     let a1 = AudioLevelExtension::unmarshal(&mut reader)?;
-//     let a2 = AudioLevelExtension {
-//         level: 8,
-//         voice: true,
-//     };
-//     assert_eq!(a1, a2);
+        let result = a.unmarshal(&mut BytesMut::new());
+        assert_eq!(
+            result.err(),
+            Some(ExtensionError::TooSmall),
+            "err != errTooSmall"
+        );
+    }
 
-//     let mut dst: Vec<u8> = vec![];
-//     {
-//         let mut writer = BufWriter::<&mut Vec<u8>>::new(dst.as_mut());
-//         a2.marshal(&mut writer)?;
-//     }
-//     assert_eq!(raw, dst);
+    #[test]
+    fn test_audio_level_extension_voice_true() -> Result<(), ExtensionError> {
+        let raw: Vec<u8> = vec![0x88];
 
-//     Ok(())
-// }
+        let mut a1 = AudioLevelExtension::default();
 
-// #[test]
-// fn test_audio_level_extension_voice_false() -> Result<(), Error> {
-//     let raw: Vec<u8> = vec![0x8];
-//     let mut reader = BufReader::new(raw.as_slice());
-//     let a1 = AudioLevelExtension::unmarshal(&mut reader)?;
-//     let a2 = AudioLevelExtension {
-//         level: 8,
-//         voice: false,
-//     };
-//     assert_eq!(a1, a2);
+        a1.unmarshal(&mut raw[..].into())?;
+        let a2 = AudioLevelExtension {
+            level: 8,
+            voice: true,
+        };
 
-//     let mut dst: Vec<u8> = vec![];
-//     {
-//         let mut writer = BufWriter::<&mut Vec<u8>>::new(dst.as_mut());
-//         a2.marshal(&mut writer)?;
-//     }
-//     assert_eq!(raw, dst);
+        assert_eq!(a1, a2);
 
-//     Ok(())
-// }
+        let dst = a2.marshal()?;
+        assert_eq!(raw, dst, "Marshal failed");
 
-// #[test]
-// fn test_audio_level_extension_level_overflow() -> Result<(), Error> {
-//     let a = AudioLevelExtension {
-//         level: 128,
-//         voice: false,
-//     };
+        Ok(())
+    }
 
-//     let mut dst: Vec<u8> = vec![];
-//     {
-//         let mut writer = BufWriter::<&mut Vec<u8>>::new(dst.as_mut());
-//         let result = a.marshal(&mut writer);
-//         assert!(result.is_err());
-//     }
+    #[test]
+    fn test_audio_level_extension_voice_false() -> Result<(), ExtensionError> {
+        let raw: Vec<u8> = vec![0x8];
+        let mut a1 = AudioLevelExtension::default();
 
-//     Ok(())
-// }
+        a1.unmarshal(&mut raw[..].into())?;
+
+        let a2 = AudioLevelExtension {
+            level: 8,
+            voice: false,
+        };
+
+        assert_eq!(a1, a2, "unmarshal failed");
+
+        let dst_data = a2.marshal()?;
+        assert_eq!(raw, dst_data);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_audio_level_extension_level_overflow() -> Result<(), ExtensionError> {
+        let a = AudioLevelExtension {
+            level: 128,
+            voice: false,
+        };
+
+        let result = a.marshal();
+        assert_eq!(
+            result.err(),
+            Some(ExtensionError::AudioLevelOverflow),
+            "err != errAudioOverflow"
+        );
+
+        Ok(())
+    }
+}

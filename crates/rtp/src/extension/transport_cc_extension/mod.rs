@@ -1,8 +1,6 @@
-use std::io::{Read, Write};
-
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-
-use crate::error::Error;
+use crate::errors::ExtensionError;
+use byteorder::{BigEndian, ByteOrder};
+use bytes::BytesMut;
 
 #[cfg(test)]
 mod transport_cc_extension_test;

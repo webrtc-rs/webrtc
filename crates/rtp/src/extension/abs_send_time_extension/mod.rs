@@ -2,10 +2,6 @@ use crate::errors::ExtensionError;
 use bytes::BytesMut;
 use std::time::Duration;
 
-use byteorder::{ReadBytesExt, WriteBytesExt};
-
-use crate::error::Error;
-
 #[cfg(test)]
 mod abs_send_time_extension_test;
 

@@ -1,8 +1,5 @@
-use std::io::{Read, Write};
-
-use byteorder::{ReadBytesExt, WriteBytesExt};
-
-use crate::error::Error;
+use crate::errors::ExtensionError;
+use bytes::BytesMut;
 
 #[cfg(test)]
 mod audio_level_extension_test;
@@ -38,7 +35,7 @@ impl AudioLevelExtension {
     // Marshal serializes the members to buffer
     pub fn marshal(&self) -> Result<BytesMut, ExtensionError> {
         if self.level > 127 {
-            return Err(Error::AudioLevelOverflow);
+            return Err(ExtensionError::AudioLevelOverflow);
         }
 
         let voice = if self.voice { 0x80u8 } else { 0u8 };
