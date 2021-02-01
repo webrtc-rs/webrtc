@@ -94,7 +94,7 @@ impl DNSConn {
             .map(|l| l.to_string() + ".")
             .collect();
 
-        let dst_addr: SocketAddr = format!("{}", DEFAULT_DEST_ADDR).parse()?;
+        let dst_addr: SocketAddr = DEFAULT_DEST_ADDR.parse()?;
 
         let is_server_closed = Arc::new(atomic::AtomicBool::new(false));
 
