@@ -1,6 +1,6 @@
 use super::cipher::cipher_aead_aes_gcm::*;
 use super::cipher::cipher_aes_cm_hmac_sha1::*;
-use util::Error;
+use crate::error::Error;
 mod test;
 
 /// ProtectionProfile specifies Cipher and AuthTag details, similar to TLS cipher suite

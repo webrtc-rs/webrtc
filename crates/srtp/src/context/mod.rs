@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 
 use util::replay_detector::*;
-use util::Error;
 
 use super::protection_profile::*;
-use crate::{cipher, option};
+use crate::{cipher, error::Error, option};
 
 mod context_test;
 mod srtcp_test;
@@ -129,17 +128,9 @@ impl Context {
         let salt_len = profile.salt_len()?;
 
         if master_key.len() != key_len {
-            return Err(Error::new(format!(
-                "SRTP Master Key must be len {}, got {}",
-                key_len,
-                master_key.len()
-            )));
+            return Err(Error::SrtpMasterKeyLength(key_len, master_key.len()));
         } else if master_salt.len() != salt_len {
-            return Err(Error::new(format!(
-                "SRTP Salt must be len {}, got {}",
-                salt_len,
-                master_salt.len()
-            )));
+            return Err(Error::SrtpSaltLength(salt_len, master_salt.len()));
         }
 
         let cipher: Box<dyn cipher::Cipher + Send> = match profile {

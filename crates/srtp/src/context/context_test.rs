@@ -1,10 +1,9 @@
 #[cfg(test)]
 mod context_test {
     use crate::{
-        context, context::Context, key_derivation::*, protection_profile::ProtectionProfile,
+        context, context::Context, error::Error, key_derivation::*,
+        protection_profile::ProtectionProfile,
     };
-
-    use util::Error;
 
     const CIPHER_CONTEXT_ALGO: ProtectionProfile = ProtectionProfile::AES128CMHMACSHA1_80;
     const DEFAULT_SSRC: u32 = 0;

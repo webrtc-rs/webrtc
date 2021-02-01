@@ -1,8 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::{context, key_derivation, protection_profile::ProtectionProfile};
-
-    use util::Error;
+    use crate::{context, error::Error, key_derivation, protection_profile::ProtectionProfile};
 
     #[test]
     fn test_valid_session_keys() -> Result<(), Error> {

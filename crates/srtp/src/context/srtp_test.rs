@@ -3,9 +3,8 @@
 //TODO: BenchmarkDecryptRTP
 #[cfg(test)]
 mod srtp_test {
-    use crate::{context::Context, protection_profile::ProtectionProfile};
+    use crate::{context::Context, error::Error, protection_profile::ProtectionProfile};
     use std::io::BufWriter;
-    use util::Error;
 
     use lazy_static::lazy_static;
 

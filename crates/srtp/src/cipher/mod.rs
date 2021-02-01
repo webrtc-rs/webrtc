@@ -5,7 +5,7 @@ mod test;
 pub(crate) use cipher_aead_aes_gcm::CipherAeadAesGcm;
 pub(crate) use cipher_aes_cm_hmac_sha1::CipherAesCmHmacSha1;
 
-use util::Error;
+use crate::error::Error;
 
 /// Cipher represents a implementation of one
 /// of the SRTP Specific ciphers.

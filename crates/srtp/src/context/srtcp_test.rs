@@ -1,11 +1,12 @@
 #[cfg(test)]
 mod test {
-    use crate::{context, context::Context, option, protection_profile::ProtectionProfile};
+    use crate::{
+        context, context::Context, error::Error, option, protection_profile::ProtectionProfile,
+    };
 
     use byteorder::{BigEndian, ReadBytesExt};
     use lazy_static::lazy_static;
     use std::io::Cursor;
-    use util::Error;
 
     pub struct RTCPTestCase {
         ssrc: u32,

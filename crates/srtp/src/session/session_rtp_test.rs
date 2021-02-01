@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod session_rtp_test {
     use crate::{
-        config, config::Config, context::Context, protection_profile::ProtectionProfile,
-        session::Session, stream::Stream,
+        config, config::Config, context::Context, error::Error,
+        protection_profile::ProtectionProfile, session::Session, stream::Stream,
     };
 
     use std::{collections::HashMap, io::BufWriter, sync::Arc};
@@ -11,8 +11,6 @@ mod session_rtp_test {
         net::UdpSocket,
         sync::{mpsc, Mutex},
     };
-
-    use util::Error;
 
     async fn build_session_srtp_pair() -> Result<(Session, Session), Error> {
         let ua = UdpSocket::bind("127.0.0.1:0").await?;
