@@ -4,7 +4,6 @@ use crate::{
 };
 use bytes::BytesMut;
 
-#[cfg(test)]
 mod opus_test;
 
 pub struct OpusPayloader;

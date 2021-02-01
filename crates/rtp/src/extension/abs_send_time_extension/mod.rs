@@ -2,7 +2,6 @@ use crate::errors::ExtensionError;
 use bytes::BytesMut;
 use std::time::Duration;
 
-#[cfg(test)]
 mod abs_send_time_extension_test;
 
 const ABS_SEND_TIME_EXTENSION_SIZE: usize = 3;

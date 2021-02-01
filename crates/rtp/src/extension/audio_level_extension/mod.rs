@@ -1,7 +1,6 @@
 use crate::errors::ExtensionError;
 use bytes::BytesMut;
 
-#[cfg(test)]
 mod audio_level_extension_test;
 
 const AUDIO_LEVEL_EXTENSION_SIZE: usize = 1;

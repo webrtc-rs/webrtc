@@ -2,7 +2,6 @@ use crate::errors::ExtensionError;
 use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
 
-#[cfg(test)]
 mod transport_cc_extension_test;
 
 // transport-wide sequence
