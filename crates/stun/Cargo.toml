@@ -10,9 +10,6 @@ homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/stun"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-[features]
-binaries = ["clap"]
-default = ["binaries"]
 
 [dependencies]
 util = { package = "webrtc-rs-util", version = "0.1.1" }
@@ -25,13 +22,12 @@ subtle = "2.1.1"
 crc32fast = "1.2.1"
 ring = "0.16.19"
 md-5 = "0.9.1"
-clap = { version = "2", optional = true, default-features = false }
 
 [dev-dependencies]
 tokio-test = "0.4"
+clap = "2"
 
 [[example]]
 name = "stun_client"
 path = "examples/stun_client.rs"
-required-features = ["binaries"]
 bench = false

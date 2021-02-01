@@ -12,16 +12,32 @@ use util::Error;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let matches = App::new("STUN Client")
+    let mut app = App::new("STUN Client")
         .version("0.1.0")
-        .author("Rain Liu <yuliu@outlook.com>")
+        .author("Rain Liu <yliu@webrtc.rs>")
         .about("An example of STUN Client")
-        .arg(Arg::with_name("server").required(true).help("STUN Server"))
-        .get_matches();
+        .arg(
+            Arg::with_name("FULLHELP")
+                .help("Prints more detailed help information")
+                .long("fullhelp"),
+        )
+        .arg(
+            Arg::with_name("server")
+                .required_unless("FULLHELP")
+                .takes_value(true)
+                .default_value("stun.l.google.com:19302")
+                .long("server")
+                .help("STUN Server"),
+        );
 
-    let server = matches
-        .value_of("server")
-        .unwrap_or("stun.l.google.com:19302");
+    let matches = app.clone().get_matches();
+
+    if matches.is_present("FULLHELP") {
+        app.print_long_help().unwrap();
+        std::process::exit(0);
+    }
+
+    let server = matches.value_of("server").unwrap();
 
     println!("Connecting {}...", server);
 
