@@ -8,7 +8,7 @@ use std::io::BufWriter;
 
 use byteorder::{BigEndian, WriteBytesExt};
 
-use util::Error;
+use crate::error::Error;
 
 pub(crate) fn aes_cm_key_derivation(
     label: u8,
@@ -19,9 +19,7 @@ pub(crate) fn aes_cm_key_derivation(
 ) -> Result<Vec<u8>, Error> {
     if index_over_kdr != 0 {
         // 24-bit "index DIV kdr" must be xored to prf input.
-        return Err(Error::new(
-            "index_over_kdr > 0 is not supported yet".to_owned(),
-        ));
+        return Err(Error::UnsupportedIndexOverKdr);
     }
 
     // https://tools.ietf.org/html/rfc3711#appendix-B.3

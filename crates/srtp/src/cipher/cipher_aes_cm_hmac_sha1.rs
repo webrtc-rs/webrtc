@@ -1,5 +1,6 @@
 use super::Cipher;
 use crate::context::*;
+use crate::error::Error;
 use crate::key_derivation::*;
 use crate::protection_profile::*;
 
@@ -10,7 +11,6 @@ use hmac::NewMac;
 use hmac::{Hmac, Mac};
 use sha1::Sha1;
 use subtle::ConstantTimeEq;
-use util::Error;
 
 use std::io::BufWriter;
 
@@ -211,11 +211,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         roc: u32,
     ) -> Result<Vec<u8>, Error> {
         if encrypted.len() < self.auth_tag_len() {
-            return Err(Error::new(format!(
-                "too short SRTP packet: only {} bytes, expected > {} bytes",
-                encrypted.len(),
-                self.auth_tag_len()
-            )));
+            return Err(Error::SrtpTooSmall(encrypted.len(), self.auth_tag_len()));
         }
 
         let mut dst: Vec<u8> = Vec::with_capacity(encrypted.len() - self.auth_tag_len());
@@ -230,7 +226,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         // See if the auth tag actually matches.
         // We use a constant time comparison to prevent timing attacks.
         if actual_tag.ct_eq(&expected_tag).unwrap_u8() != 1 {
-            return Err(Error::new("failed to verify auth tag".to_string()));
+            return Err(Error::RtpFailedToVerifyAuthTag);
         }
 
         // Write cipher_text to the destination buffer.
@@ -302,11 +298,10 @@ impl Cipher for CipherAesCmHmacSha1 {
         ssrc: u32,
     ) -> Result<Vec<u8>, Error> {
         if encrypted.len() < self.auth_tag_len() + SRTCP_INDEX_SIZE {
-            return Err(Error::new(format!(
-                "too short SRTCP packet: only {} bytes, expected > {} bytes",
+            return Err(Error::SrtcpTooSmall(
                 encrypted.len(),
                 self.auth_tag_len() + SRTCP_INDEX_SIZE,
-            )));
+            ));
         }
 
         let tail_offset = encrypted.len() - (self.auth_tag_len() + SRTCP_INDEX_SIZE);
@@ -329,7 +324,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         // See if the auth tag actually matches.
         // We use a constant time comparison to prevent timing attacks.
         if actual_tag.ct_eq(&expected_tag).unwrap_u8() != 1 {
-            return Err(Error::new("failed to verify auth tag".to_string()));
+            return Err(Error::RtcpFailedToVerifyAuthTag);
         }
 
         let counter = generate_counter(

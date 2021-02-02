@@ -1,14 +1,13 @@
 #[cfg(test)]
 mod session_rtcp_test {
     use crate::{
-        config, context::Context, protection_profile::ProtectionProfile, session::Session,
-        stream::Stream,
+        config, context::Context, error::Error, protection_profile::ProtectionProfile,
+        session::Session, stream::Stream,
     };
 
     use std::io::{BufReader, BufWriter};
 
     use util::conn::conn_pipe::*;
-    use util::Error;
 
     use std::sync::Arc;
     use tokio::sync::{mpsc, Mutex};

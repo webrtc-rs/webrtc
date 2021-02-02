@@ -4,10 +4,9 @@ use aes_gcm::{
 };
 use byteorder::{BigEndian, ByteOrder};
 use rtp::header;
-use util::Error;
 
 use super::Cipher;
-use crate::{context, key_derivation};
+use crate::{context, error::Error, key_derivation};
 
 pub(crate) const CIPHER_AEAD_AES_GCM_AUTH_TAG_LEN: usize = 16;
 const RTCP_ENCRYPTION_FLAG: u8 = 0x80;

@@ -23,17 +23,11 @@ impl Context {
             if let Some(state) = self.get_srtcp_ssrc_state(ssrc) {
                 if let Some(replay_detector) = &mut state.replay_detector {
                     if !replay_detector.check(index as u64) {
-                        return Err(Error::new(format!(
-                            "srtcp ssrc={} index={}: duplicated",
-                            ssrc, index
-                        )));
+                        return Err(Error::SrtcpSsrcDuplicated(ssrc, index));
                     }
                 }
             } else {
-                return Err(Error::new(format!(
-                    "ssrc {} not exist in srtcp_ssrc_state",
-                    ssrc
-                )));
+                return Err(Error::SsrcMissingFromSrtcp(ssrc));
             }
         }
 
@@ -72,13 +66,10 @@ impl Context {
                 }
                 index = state.srtcp_index;
             } else {
-                return Err(Error::new(format!(
-                    "ssrc {} not exist in srtcp_ssrc_state",
-                    ssrc
-                )));
+                return Err(Error::SsrcMissingFromSrtcp(ssrc));
             }
         }
 
-        self.cipher.encrypt_rtcp(decrypted, index, ssrc)
+        Ok(self.cipher.encrypt_rtcp(decrypted, index, ssrc)?)
     }
 }

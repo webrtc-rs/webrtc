@@ -1,10 +1,9 @@
 mod session_rtcp_test;
 mod session_rtp_test;
 
-use crate::{config::Config, context::Context, option, stream::Stream};
+use crate::{config::Config, context::Context, error::Error, option, stream::Stream};
 
 use util::Conn;
-use util::Error;
 use util::{buffer::ERR_BUFFER_FULL, Buffer};
 
 use std::marker::{Send, Sync};
@@ -131,7 +130,7 @@ impl Session {
     ) -> Result<(), Error> {
         let n = udp_rx.recv(buf).await?;
         if n == 0 {
-            return Err(Error::new("EOF".to_string()));
+            return Err(Error::SessionEof);
         }
 
         let decrypted = if is_rtp {
@@ -160,7 +159,7 @@ impl Session {
                 Err(err) => {
                     // Silently drop data when the buffer is full.
                     if err != ERR_BUFFER_FULL.clone() {
-                        return Err(err);
+                        return Err(Error::Util(err));
                     }
                 }
             }
@@ -175,7 +174,7 @@ impl Session {
         let mut streams = self.streams_map.lock().await;
 
         if streams.contains_key(&ssrc) {
-            Err(Error::new(format!("Stream with ssrc {} exists", ssrc)))
+            Err(Error::StreamWithSsrcExists(ssrc))
         } else {
             let stream = Stream::new(ssrc, self.close_stream_tx.clone(), self.is_rtp);
             streams.insert(ssrc, stream.get_cloned_buffer());
@@ -190,7 +189,7 @@ impl Session {
         if let Some(stream) = result {
             Ok(stream)
         } else {
-            Err(Error::new("SessionSRTP has been closed".to_string()))
+            Err(Error::SessionSrtpAlreadyClosed)
         }
     }
 
@@ -202,9 +201,7 @@ impl Session {
 
     pub async fn write(&mut self, buf: &[u8], is_rtp: bool) -> Result<usize, Error> {
         if self.is_rtp != is_rtp {
-            return Err(Error::new(
-                "Session RTP/RTCP type must be same as input buffer".to_string(),
-            ));
+            return Err(Error::SessionRtpRtcpTypeMismatch);
         }
 
         let mut local_context = self.local_context.lock().await;

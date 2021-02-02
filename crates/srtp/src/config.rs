@@ -1,7 +1,6 @@
-use util::Error;
-
 use super::option::*;
 use super::protection_profile::*;
+use crate::error::Error;
 
 const LABEL_EXTRACTOR_DTLS_SRTP: &str = "EXTRACTOR-dtls_srtp";
 

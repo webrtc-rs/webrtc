@@ -13,19 +13,16 @@ impl Context {
             if let Some(state) = self.get_srtp_ssrc_state(header.ssrc) {
                 if let Some(replay_detector) = &mut state.replay_detector {
                     if !replay_detector.check(header.sequence_number as u64) {
-                        return Err(Error::new(format!(
-                            "srtp ssrc={} index={}: duplicated",
-                            header.ssrc, header.sequence_number
-                        )));
+                        return Err(Error::SrtpSsrcDuplicated(
+                            header.ssrc,
+                            header.sequence_number,
+                        ));
                     }
                 }
 
                 roc = state.next_rollover_count(header.sequence_number);
             } else {
-                return Err(Error::new(format!(
-                    "ssrc {} not exist in srtp_ssrc_state",
-                    header.ssrc
-                )));
+                return Err(Error::SsrcMissingFromSrtp(header.ssrc));
             }
         }
 
@@ -59,10 +56,7 @@ impl Context {
             if let Some(state) = self.get_srtp_ssrc_state(header.ssrc) {
                 roc = state.next_rollover_count(header.sequence_number);
             } else {
-                return Err(Error::new(format!(
-                    "ssrc {} not exist in srtp_ssrc_state",
-                    header.ssrc
-                )));
+                return Err(Error::SsrcMissingFromSrtp(header.ssrc));
             }
         }
 

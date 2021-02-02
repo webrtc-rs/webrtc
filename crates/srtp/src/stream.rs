@@ -1,5 +1,6 @@
+use crate::error::Error;
+
 use util::Buffer;
-use util::Error;
 
 use tokio::sync::mpsc;
 
@@ -12,6 +13,7 @@ pub const SRTP_BUFFER_SIZE: usize = 1000 * 1000;
 pub const SRTCP_BUFFER_SIZE: usize = 100 * 1000;
 
 /// Stream handles decryption for a single RTP/RTCP SSRC
+#[derive(Debug)]
 pub struct Stream {
     ssrc: u32,
     tx: mpsc::Sender<u32>,
@@ -55,7 +57,7 @@ impl Stream {
 
     /// Read reads and decrypts full RTP packet from the nextConn
     pub async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
-        self.buffer.read(buf, None).await
+        Ok(self.buffer.read(buf, None).await?)
     }
 
     /// ReadRTP reads and decrypts full RTP packet and its header from the nextConn
@@ -64,7 +66,7 @@ impl Stream {
         buf: &mut [u8],
     ) -> Result<(usize, rtp::header::Header), Error> {
         if !self.is_rtp {
-            return Err(Error::new("this stream is not RTPStream".to_string()));
+            return Err(Error::InvalidRtpStream);
         }
 
         let n = self.buffer.read(buf, None).await?;
@@ -80,7 +82,7 @@ impl Stream {
         buf: &mut [u8],
     ) -> Result<(usize, rtcp::header::Header), Error> {
         if self.is_rtp {
-            return Err(Error::new("this stream is not RTCPStream".to_string()));
+            return Err(Error::InvalidRtcpStream);
         }
 
         let n = self.buffer.read(buf, None).await?;
