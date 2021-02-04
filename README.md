@@ -32,11 +32,22 @@
  A pure Rust implementation of WebRTC stack. Rewrite Pion WebRTC stack (<a href="http://Pion.ly">http://Pion.ly</a>) in Rust
 </p>
 
+<p align="center">
+<strong>Sponsored with 💖 by</strong><br />
+<a href="https://getstream.io/?utm_source=github.com/webrtc-rs/webrtc&utm_medium=github&utm_campaign=oss_sponsorship" target="_blank">
+<img src="https://stream-blog-v2.imgix.net/blog/wp-content/uploads/f7401112f41742c4e173c30d4f318cb8/stream_logo_white.png?w=350" alt="Stream Chat" />
+</a>
+<br />
+Enterprise Grade APIs for <a href="https://getstream.io/activity-feeds/?utm_source=github.com/webrtc-rs/webrtc&utm_medium=github&utm_campaign=oss_sponsorship" target="_blank">Feeds</a> & <a href="https://getstream.io/chat/?utm_source=github.com/webrtc-rs/webrtc&utm_medium=github&utm_campaign=oss_sponsorship" target="_blank">Chat</a>.<br />
+<a href="https://getstream.io/chat/get_started/?utm_source=github.com/webrtc-rs/webrtc&utm_medium=github&utm_campaign=oss_sponsorship" target="_blank">Try the interactive Chat tutorial</a> 💬
+</p>
+
 # Roadmap
 
 <img src="./doc/webrtc_stack.png" alt="WebRTC.rs">
 
 ### Work in Progress Towards 1.0
+
 [sdp-badge]: https://img.shields.io/crates/v/webrtc-rs-sdp.svg
 [sdp-url]: https://crates.io/crates/webrtc-rs-sdp
 [rtp-badge]: https://img.shields.io/crates/v/webrtc-rs-rtp.svg
@@ -78,6 +89,7 @@
 - [ ] PeerConnection
 
 ### Road Map Towards 2.0
+
 - [ ] SCTP
 - [ ] DataChannel
 
@@ -87,6 +99,6 @@
 - [ ] QUIC
 - [ ] ...
 
+#
 
-# 
 ### Contributors or pull requests are welcome!
