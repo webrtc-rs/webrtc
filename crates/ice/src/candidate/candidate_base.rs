@@ -131,7 +131,7 @@ impl fmt::Display for CandidateBase {
 
 impl Candidate for CandidateBase {
     fn foundation(&self) -> String {
-        if &self.foundation_override != "" {
+        if !self.foundation_override.is_empty() {
             return self.foundation_override.clone();
         }
 

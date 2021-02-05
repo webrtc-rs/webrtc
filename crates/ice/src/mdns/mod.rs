@@ -1,3 +1,15 @@
+#[cfg(test)]
+mod mdns_test;
+
+use mdns::config::*;
+use mdns::conn::*;
+
+use uuid::Uuid;
+
+use std::net::SocketAddr;
+use std::str::FromStr;
+use util::Error;
+
 // MulticastDNSMode represents the different Multicast modes ICE can run in
 // MulticastDNSMode enum
 #[derive(PartialEq, Debug, Copy, Clone)]
@@ -12,42 +24,38 @@ pub enum MulticastDNSMode {
     QueryAndGather,
 }
 
-/*
-func generateMulticastDNSName() (string, error) {
+pub(crate) fn generate_multicast_dns_name() -> String {
     // https://tools.ietf.org/id/draft-ietf-rtcweb-mdns-ice-candidates-02.html#gathering
     // The unique name MUST consist of a version 4 UUID as defined in [RFC4122], followed by “.local”.
-    u, err := uuid.NewRandom()
-    return u.String() + ".local", err
+    let u = Uuid::new_v4();
+    format!("{}.local", u)
 }
 
-func createMulticastDNS(m_dnsmode MulticastDNSMode, mDNSName string, log logging.LeveledLogger) (*mdns.Conn, MulticastDNSMode, error) {
-    if m_dnsmode == MulticastDNSModeDisabled {
-        return nil, m_dnsmode, nil
+pub(crate) fn create_multicast_dns(
+    mdns_mode: MulticastDNSMode,
+    mdns_name: String,
+) -> Result<Option<DNSConn>, Error> {
+    if mdns_mode == MulticastDNSMode::Disabled {
+        return Ok(None);
     }
 
-    addr, mdnsErr := net.ResolveUDPAddr("udp4", mdns.DefaultAddress)
-    if mdnsErr != nil {
-        return nil, m_dnsmode, mdnsErr
-    }
+    let addr = SocketAddr::from_str(DEFAULT_DEST_ADDR)?;
 
-    l, mdnsErr := net.ListenUDP("udp4", addr)
-    if mdnsErr != nil {
-        // If ICE fails to start MulticastDNS server just warn the user and continue
-        log.Errorf("Failed to enable mDNS, continuing in mDNS disabled mode: (%s)", mdnsErr)
-        return nil, MulticastDNSModeDisabled, nil
-    }
-
-    switch m_dnsmode {
-    case MulticastDNSModeQueryOnly:
-        conn, err := mdns.Server(ipv4.NewPacketConn(l), &mdns.Config{})
-        return conn, m_dnsmode, err
-    case MulticastDNSModeQueryAndGather:
-        conn, err := mdns.Server(ipv4.NewPacketConn(l), &mdns.Config{
-            LocalNames: []string{mDNSName},
-        })
-        return conn, m_dnsmode, err
-    default:
-        return nil, m_dnsmode, nil
+    match mdns_mode {
+        MulticastDNSMode::QueryOnly => {
+            let conn = DNSConn::server(addr, Config::default())?;
+            Ok(Some(conn))
+        }
+        MulticastDNSMode::QueryAndGather => {
+            let conn = DNSConn::server(
+                addr,
+                Config {
+                    local_names: vec![mdns_name],
+                    ..Default::default()
+                },
+            )?;
+            Ok(Some(conn))
+        }
+        _ => Ok(None),
     }
 }
-*/
