@@ -4,7 +4,7 @@ use mdns::{config::*, conn::*};
 
 use clap::{App, AppSettings, Arg};
 use signal_hook::iterator::Signals;
-use std::net::{IpAddr, SocketAddr};
+use std::net::SocketAddr;
 use std::str::FromStr;
 use util::Error;
 
@@ -30,19 +30,12 @@ async fn main() -> Result<(), Error> {
                 .long("fullhelp"),
         )
         .arg(
-            Arg::with_name("host")
+            Arg::with_name("server")
                 .required_unless("FULLHELP")
                 .takes_value(true)
-                .default_value("0.0.0.0")
-                .long("host")
+                .default_value(DEFAULT_DEST_ADDR)
+                .long("server")
                 .help("mDNS Server name."),
-        )
-        .arg(
-            Arg::with_name("port")
-                .takes_value(true)
-                .default_value("5353")
-                .long("port")
-                .help("Listening port."),
         )
         .arg(
             Arg::with_name("local-name")
@@ -59,12 +52,11 @@ async fn main() -> Result<(), Error> {
         std::process::exit(0);
     }
 
-    let host = matches.value_of("host").unwrap();
-    let port = matches.value_of("port").unwrap();
+    let server = matches.value_of("server").unwrap();
     let local_name = matches.value_of("local-name").unwrap();
 
     let server = DNSConn::server(
-        SocketAddr::new(IpAddr::from_str(host)?, port.parse()?),
+        SocketAddr::from_str(server)?,
         Config {
             local_names: vec![local_name.to_owned()],
             ..Default::default()
