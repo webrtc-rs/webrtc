@@ -103,7 +103,7 @@ impl CandidatePair {
     }
 }
 
-/*
+/*TODO:
 func (a *Agent) sendSTUN(msg *stun.Message, local, remote Candidate) {
     _, err := local.writeTo(msg.Raw, remote)
     if err != nil {
