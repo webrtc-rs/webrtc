@@ -39,7 +39,7 @@ pub(crate) fn generate_multicast_dns_name() -> String {
 
 pub(crate) fn create_multicast_dns(
     mdns_mode: MulticastDNSMode,
-    mdns_name: String,
+    mdns_name: &str,
 ) -> Result<Option<DNSConn>, Error> {
     if mdns_mode == MulticastDNSMode::Disabled {
         return Ok(None);
@@ -56,7 +56,7 @@ pub(crate) fn create_multicast_dns(
             let conn = DNSConn::server(
                 addr,
                 Config {
-                    local_names: vec![mdns_name],
+                    local_names: vec![mdns_name.to_owned()],
                     ..Default::default()
                 },
             )?;

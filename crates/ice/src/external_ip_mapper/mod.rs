@@ -64,6 +64,7 @@ impl IpMapping {
     }
 }
 
+#[derive(Default)]
 pub(crate) struct ExternalIPMapper {
     pub(crate) ipv4_mapping: IpMapping,
     pub(crate) ipv6_mapping: IpMapping,

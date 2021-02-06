@@ -10,7 +10,7 @@ use std::convert::From;
 use std::fmt;
 
 // SchemeType indicates the type of server used in the ice.URL structure.
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Copy, Clone)]
 pub enum SchemeType {
     // SchemeTypeSTUN indicates the URL represents a STUN server.
     STUN,
@@ -58,7 +58,7 @@ impl fmt::Display for SchemeType {
 
 // ProtoType indicates the transport protocol type that is used in the ice.URL
 // structure.
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Copy, Clone)]
 pub enum ProtoType {
     // ProtoTypeUDP indicates the URL uses a UDP transport.
     UDP,
@@ -95,7 +95,7 @@ impl fmt::Display for ProtoType {
 }
 
 // URL represents a STUN (rfc7064) or TURN (rfc7065) URL
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct URL {
     scheme: SchemeType,
     host: String,

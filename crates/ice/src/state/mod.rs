@@ -25,6 +25,12 @@ pub enum ConnectionState {
     Closed,
 }
 
+impl Default for ConnectionState {
+    fn default() -> Self {
+        ConnectionState::New
+    }
+}
+
 impl fmt::Display for ConnectionState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
@@ -50,6 +56,12 @@ pub enum GatheringState {
 
     // GatheringStateComplete indicates candidate gatering has been completed
     Complete,
+}
+
+impl Default for GatheringState {
+    fn default() -> Self {
+        GatheringState::New
+    }
 }
 
 impl fmt::Display for GatheringState {

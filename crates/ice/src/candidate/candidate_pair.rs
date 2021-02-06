@@ -1,5 +1,6 @@
 use super::*;
 
+use crate::candidate::candidate_base::CandidateBase;
 use std::cmp;
 use std::fmt;
 
@@ -24,6 +25,12 @@ pub enum CandidatePairState {
     Succeeded,
 }
 
+impl Default for CandidatePairState {
+    fn default() -> Self {
+        CandidatePairState::Waiting
+    }
+}
+
 impl fmt::Display for CandidatePairState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
@@ -45,6 +52,19 @@ pub struct CandidatePair {
     binding_request_count: u16,
     state: CandidatePairState,
     nominated: bool,
+}
+
+impl Default for CandidatePair {
+    fn default() -> Self {
+        CandidatePair {
+            ice_role_controlling: false,
+            remote: Box::new(CandidateBase::default()),
+            local: Box::new(CandidateBase::default()),
+            state: CandidatePairState::Waiting,
+            binding_request_count: 0,
+            nominated: false,
+        }
+    }
 }
 
 impl fmt::Display for CandidatePair {
