@@ -1,6 +1,7 @@
 use super::*;
 use crate::candidate::candidate_type::*;
 use crate::errors::*;
+use crate::mdns::*;
 use crate::network_type::*;
 use crate::url::*;
 
@@ -51,61 +52,62 @@ pub(crate) fn default_candidate_types() -> Vec<CandidateType> {
 
 // AgentConfig collects the arguments to ice.Agent construction into
 // a single structure, for future-proofness of the interface
+#[derive(Default)]
 pub struct AgentConfig {
-    urls: Vec<URL>,
+    pub urls: Vec<URL>,
 
     // port_min and port_max are optional. Leave them 0 for the default UDP port allocation strategy.
-    port_min: u16,
-    port_max: u16,
+    pub port_min: u16,
+    pub port_max: u16,
 
     // local_ufrag and local_pwd values used to perform connectivity
     // checks.  The values MUST be unguessable, with at least 128 bits of
     // random number generator output used to generate the password, and
     // at least 24 bits of output to generate the username fragment.
-    local_ufrag: String,
-    local_pwd: String,
+    pub local_ufrag: String,
+    pub local_pwd: String,
 
-    // MulticastDNSMode controls mDNS behavior for the ICE agent
-    //TODO: MulticastDNSMode :MulticastDNSMode,
+    // multicast_dns_mode controls mDNS behavior for the ICE agent
+    pub multicast_dns_mode: MulticastDNSMode,
 
     // multicast_dnshost_name controls the hostname for this agent. If none is specified a random one will be generated
-    multicast_dnshost_name: String,
+    pub multicast_dnshost_name: String,
 
     // disconnected_timeout defaults to 5 seconds when this property is nil.
     // If the duration is 0, the ICE Agent will never go to disconnected
-    disconnected_timeout: Option<Duration>,
+    pub disconnected_timeout: Option<Duration>,
 
     // failed_timeout defaults to 25 seconds when this property is nil.
     // If the duration is 0, we will never go to failed.
-    failed_timeout: Option<Duration>,
+    pub failed_timeout: Option<Duration>,
 
     // keepalive_interval determines how often should we send ICE
     // keepalives (should be less then connectiontimeout above)
     // when this is nil, it defaults to 10 seconds.
     // A keepalive interval of 0 means we never send keepalive packets
-    keepalive_interval: Option<Duration>,
+    pub keepalive_interval: Option<Duration>,
 
     // network_types is an optional configuration for disabling or enabling
     // support for specific network types.
-    network_types: Vec<NetworkType>,
+    pub network_types: Vec<NetworkType>,
 
     // candidate_types is an optional configuration for disabling or enabling
     // support for specific candidate types.
-    candidate_types: Vec<CandidateType>,
+    pub candidate_types: Vec<CandidateType>,
 
     //LoggerFactory logging.LoggerFactory
 
     // check_interval controls how often our internal task loop runs when
     // in the connecting state. Only useful for testing.
-    check_interval: Duration,
+    pub check_interval: Duration,
 
     // max_binding_requests is the max amount of binding requests the agent will send
     // over a candidate pair for validation or nomination, if after max_binding_requests
     // the candidate is yet to answer a binding request or a nomination we set the pair as failed
-    max_binding_requests: Option<u16>,
+    pub max_binding_requests: Option<u16>,
 
     // lite agents do not perform connectivity check and only provide host candidates.
-    lite: bool,
+    pub lite: bool,
 
     // nat1to1ipcandidate_type is used along with nat1to1ips to specify which candidate type
     // the 1:1 NAT IP addresses should be mapped to.
@@ -113,22 +115,22 @@ pub struct AgentConfig {
     // If CandidateTypeServerReflexive, it will insert a srflx candidate (as if it was dervied
     // from a STUN server) with its port number being the one for the actual host candidate.
     // Other values will result in an error.
-    nat_1to1_ip_candidate_type: CandidateType,
+    pub nat_1to1_ip_candidate_type: CandidateType,
 
     // nat1to1ips contains a list of public IP addresses that are to be used as a host
     // candidate or srflx candidate. This is used typically for servers that are behind
     // 1:1 D-NAT (e.g. AWS EC2 instances) and to eliminate the need of server reflexisive
     // candidate gathering.
-    nat_1to1_ips: Vec<String>,
+    pub nat_1to1_ips: Vec<String>,
 
     // host_acceptance_min_wait specify a minimum wait time before selecting host candidates
-    host_acceptance_min_wait: Option<Duration>,
+    pub host_acceptance_min_wait: Option<Duration>,
     // host_acceptance_min_wait specify a minimum wait time before selecting srflx candidates
-    srflx_acceptance_min_wait: Option<Duration>,
+    pub srflx_acceptance_min_wait: Option<Duration>,
     // host_acceptance_min_wait specify a minimum wait time before selecting prflx candidates
-    prflx_acceptance_min_wait: Option<Duration>,
+    pub prflx_acceptance_min_wait: Option<Duration>,
     // host_acceptance_min_wait specify a minimum wait time before selecting relay candidates
-    relay_acceptance_min_wait: Option<Duration>,
+    pub relay_acceptance_min_wait: Option<Duration>,
 
     // Net is the our abstracted network interface for internal development purpose only
     // (see github.com/pion/transport/vnet)
@@ -136,11 +138,11 @@ pub struct AgentConfig {
 
     // interface_filter is a function that you can use in order to  whitelist or blacklist
     // the interfaces which are used to gather ICE candidates.
-    interface_filter: Box<fn(String) -> bool>,
+    pub interface_filter: Option<Box<dyn Fn(String) -> bool>>,
 
     // insecure_skip_verify controls if self-signed certificates are accepted when connecting
     // to TURN servers via TLS or DTLS
-    insecure_skip_verify: bool,
+    pub insecure_skip_verify: bool,
     // TCPMux will be used for multiplexing incoming TCP connections for ICE TCP.
     // Currently only passive candidates are supported. This functionality is
     // experimental and the API might change in the future.

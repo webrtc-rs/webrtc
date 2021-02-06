@@ -24,6 +24,12 @@ pub enum MulticastDNSMode {
     QueryAndGather,
 }
 
+impl Default for MulticastDNSMode {
+    fn default() -> Self {
+        MulticastDNSMode::Disabled
+    }
+}
+
 pub(crate) fn generate_multicast_dns_name() -> String {
     // https://tools.ietf.org/id/draft-ietf-rtcweb-mdns-ice-candidates-02.html#gathering
     // The unique name MUST consist of a version 4 UUID as defined in [RFC4122], followed by “.local”.

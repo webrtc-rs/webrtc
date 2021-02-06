@@ -13,12 +13,16 @@ use crate::network_type::*;
 use crate::state::*;
 use crate::url::*;
 
+use mdns::conn::*;
 use stun::agent::TransactionId;
-//use util::Error;
+use util::Buffer;
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
 
+use crate::selector::PairCandidateSelector;
+use tokio::sync::mpsc;
+use tokio::sync::oneshot;
 use tokio::time::{Duration, Instant};
 
 pub(crate) struct BindingRequest {
@@ -28,9 +32,14 @@ pub(crate) struct BindingRequest {
     is_use_candidate: bool,
 }
 
+struct Task {
+    //TODO: func(context.Context, *Agent)
+    done: mpsc::Sender<()>,
+}
+
 // Agent represents the ICE agent
 pub struct Agent {
-    //TODO: chanTask   chan task
+    chan_task: mpsc::Receiver<Task>,
     //TODO: afterRunFn []func(ctx context.Context)
     //TODO: muAfterRun sync.Mutex
 
@@ -39,11 +48,10 @@ pub struct Agent {
     //TODO: onCandidateHdlr                   atomic.Value // func(Candidate)
 
     // State owned by the taskLoop
-    //TODO: onConnected     chan struct{}
-    //TODO: onConnectedOnce sync.Once
+    on_connected: oneshot::Receiver<()>,
 
     // force candidate to be contacted immediately (instead of waiting for task ticker)
-    //TODO: forceCandidateContact chan bool
+    force_candidate_contact: mpsc::Receiver<bool>,
     tie_breaker: u64,
     lite: bool,
 
@@ -52,19 +60,18 @@ pub struct Agent {
 
     mdns_mode: MulticastDNSMode,
     mdns_name: String,
-    //TODO: mDNSConn *mdns.Conn
+    mdns_conn: DNSConn,
 
-    //TODO: muHaveStarted sync.Mutex
-    //TODO: startedCh     <-chan struct{}
+    started_ch: mpsc::Receiver<()>,
     //TODO: startedFn     func()
     is_controlling: bool,
 
     max_binding_requests: u16,
 
-    host_acceptance_min_wait: Duration,
-    srflx_acceptance_min_wait: Duration,
-    prflx_acceptance_min_wait: Duration,
-    relay_acceptance_min_wait: Duration,
+    pub(crate) host_acceptance_min_wait: Duration,
+    pub(crate) srflx_acceptance_min_wait: Duration,
+    pub(crate) prflx_acceptance_min_wait: Duration,
+    pub(crate) relay_acceptance_min_wait: Duration,
 
     port_min: u16,
     port_max: u16,
@@ -95,13 +102,13 @@ pub struct Agent {
     remote_candidates: HashMap<NetworkType, Vec<Box<dyn Candidate>>>,
 
     checklist: Vec<CandidatePair>,
-    //TODO: selector  pairCandidateSelector
+    selector: Box<dyn PairCandidateSelector>,
 
-    //TODO: selectedPair atomic.Value // *candidatePair
+    selected_pair: CandidatePair, //TODO: atomic.Value
     urls: Vec<URL>,
     network_types: Vec<NetworkType>,
 
-    //TODO: buffer *packetio.Buffer
+    buffer: Buffer,
 
     // LRU of outbound Binding request Transaction IDs
     pending_binding_requests: Vec<BindingRequest>,
@@ -110,17 +117,13 @@ pub struct Agent {
     ext_ip_mapper: ExternalIPMapper,
 
     // State for closing
-    //TODO: done chan struct{}
+    done: mpsc::Receiver<()>,
     //TODO: err  atomicError
 
     //TODO: gatherCandidateCancel func()
-
-    //TODO: chanCandidate     chan Candidate
-    //TODO: chanCandidatePair chan *candidatePair
-    //TODO: chanState         chan ConnectionState
-
-    //TODO: loggerFactory logging.LoggerFactory
-    //TODO: log           logging.LeveledLogger
+    chan_candidate: mpsc::Receiver<Box<dyn Candidate + Send + Sync>>,
+    chan_candidate_pair: mpsc::Receiver<CandidatePair>,
+    chan_state: mpsc::Receiver<ConnectionState>,
 
     //TODO: net    *vnet.Net
     //TODO: tcpMux TCPMux
