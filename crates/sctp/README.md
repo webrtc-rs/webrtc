@@ -12,6 +12,9 @@
  <a href="https://deps.rs/repo/github/webrtc-rs/sctp"> 
   <img src="https://deps.rs/repo/github/webrtc-rs/sctp/status.svg">
  </a>
+ <a href="https://crates.io/crates/webrtc-rs-sctp"> 
+  <img src="https://img.shields.io/crates/v/webrtc-rs-sctp.svg">
+ </a> 
  <a href="https://docs.rs/webrtc-rs-sctp"> 
   <img src="https://docs.rs/webrtc-rs-sctp/badge.svg">
  </a>
