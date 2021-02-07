@@ -65,6 +65,8 @@ Enterprise Grade APIs for <a href="https://getstream.io/activity-feeds/?utm_sour
 [ice-url]: https://crates.io/crates/webrtc-rs-ice
 [turn-badge]: https://img.shields.io/crates/v/webrtc-rs-turn.svg
 [turn-url]: https://crates.io/crates/webrtc-rs-turn
+[sctp-badge]: https://img.shields.io/crates/v/webrtc-rs-sctp.svg
+[sctp-url]: https://crates.io/crates/webrtc-rs-sctp
 
 - [x] SDP: [webrtc-rs/sdp](https://github.com/webrtc-rs/sdp) [![sdp][sdp-badge]][sdp-url]
   - sync up to [pion/sdp/v2.4.0](https://github.com/pion/sdp/tree/b29f0bbd42fc719eabdb027117217b0ddb27abf1)
@@ -89,7 +91,7 @@ Enterprise Grade APIs for <a href="https://getstream.io/activity-feeds/?utm_sour
 
 ### Road Map Towards 2.0
 
-- [ ] SCTP
+- [ ] SCTP: [webrtc-rs/sctp](https://github.com/webrtc-rs/sctp) [![sctp][sctp-badge]][sctp-url]
 - [ ] DataChannel
 
 ### Road Map Towards 3.0
