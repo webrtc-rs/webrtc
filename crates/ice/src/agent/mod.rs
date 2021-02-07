@@ -35,17 +35,10 @@ pub(crate) struct BindingRequest {
     is_use_candidate: bool,
 }
 
-struct Task {
-    //TODO: func(context.Context, *Agent)
-    done: mpsc::Sender<()>,
-}
-
 // Agent represents the ICE agent
 #[derive(Default)]
 pub struct Agent {
-    chan_task: Option<mpsc::Receiver<Task>>,
     //TODO: afterRunFn []func(ctx context.Context)
-    //TODO: muAfterRun sync.Mutex
 
     //TODO: onConnectionStateChangeHdlr       atomic.Value // func(ConnectionState)
     //TODO: onSelectedCandidatePairChangeHdlr atomic.Value // func(Candidate, Candidate)
@@ -125,9 +118,9 @@ pub struct Agent {
     //TODO: err  atomicError
 
     //TODO: gatherCandidateCancel func()
-    chan_candidate: Option<mpsc::Receiver<Box<dyn Candidate + Send + Sync>>>,
-    chan_candidate_pair: Option<mpsc::Receiver<CandidatePair>>,
-    chan_state: Option<mpsc::Receiver<ConnectionState>>,
+    chan_candidate: Option<mpsc::Sender<Box<dyn Candidate + Send + Sync>>>,
+    chan_candidate_pair: Option<mpsc::Sender<CandidatePair>>,
+    chan_state: Option<mpsc::Sender<ConnectionState>>,
 
     //TODO: net    *vnet.Net
     //TODO: tcpMux TCPMux
@@ -168,7 +161,9 @@ impl Agent {
             }
         };
 
-        //startedCtx, startedFn := context.WithCancel(context.Background())
+        let (chan_state_tx, chan_state_rx) = mpsc::channel(1);
+        let (chan_candidate_tx, chan_candidate_rx) = mpsc::channel(1);
+        let (chan_candidate_pair_tx, chan_candidate_pair_rx) = mpsc::channel(1);
 
         let mut a = Agent {
             /*chanTask:          make(chan task),
@@ -185,13 +180,12 @@ impl Agent {
             urls: config.urls.clone(),
             network_types: config.network_types.clone(),
             //TODO: onConnected:       make(chan struct{}),
+
             // Make sure the buffer doesn't grow indefinitely.
             // NOTE: We actually won't get anywhere close to this limit.
             // SRTP will constantly read from the endpoint and drop packets if it's full.
             buffer: Some(Buffer::new(0, MAX_BUFFER_SIZE)),
-            //TODO:done:              make(chan struct{}),
-            //TODO:startedCh:         startedCtx.Done(),
-            //TODO:startedFn:         startedFn,
+
             port_min: config.port_min,
             port_max: config.port_max,
 
@@ -200,6 +194,10 @@ impl Agent {
             mdns_conn,
 
             //TODO: gatherCandidateCancel: func() {},
+            chan_state: Some(chan_state_tx),
+            chan_candidate: Some(chan_candidate_tx),
+            chan_candidate_pair: Some(chan_candidate_pair_tx),
+
             //TODO: forceCandidateContact: make(chan bool, 1),
             interface_filter: config.interface_filter.take(),
             insecure_skip_verify: config.insecure_skip_verify,
@@ -253,10 +251,14 @@ impl Agent {
             return Err(err);
         }
 
-        /* TODO:
-        go a.taskLoop()
-        a.startOnConnectionStateChangeRoutine()
+        let _ = Agent::start_on_connection_state_change_routine(
+            chan_state_rx,
+            chan_candidate_rx,
+            chan_candidate_pair_rx,
+        )
+        .await;
 
+        /* TODO:
         // Restart is also used to initialize the agent for the first time
         if err := a.Restart(config.LocalUfrag, config.LocalPwd); err != nil {
             if let Some(c) = &a.mdns_conn {
@@ -269,5 +271,46 @@ impl Agent {
         }
         */
         Ok(a)
+    }
+
+    async fn start_on_connection_state_change_routine(
+        mut chan_state_rx: mpsc::Receiver<ConnectionState>,
+        mut chan_candidate_rx: mpsc::Receiver<Box<dyn Candidate + Send + Sync>>,
+        mut chan_candidate_pair_rx: mpsc::Receiver<CandidatePair>,
+    ) {
+        tokio::spawn(async move {
+            // CandidatePair and ConnectionState are usually changed at once.
+            // Blocking one by the other one causes deadlock.
+            while let Some(_p) = chan_candidate_pair_rx.recv().await {
+                //TODO: a.onSelectedCandidatePairChange(p)
+            }
+        });
+
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    opt_state = chan_state_rx.recv() => {
+                        if let Some(_s) = opt_state {
+                            //TODO: a.onConnectionStateChange(s)
+                        } else {
+                            /*TODO: for c := range a.chanCandidate {
+                                a.onCandidate(c)
+                            }*/
+                            break;
+                        }
+                    },
+                    opt_cand = chan_candidate_rx.recv() => {
+                        if let Some(_c) = opt_cand {
+                            //TODO: a.onCandidate(c)
+                        } else {
+                            /*TODO: for s := range a.chanState {
+                                a.onConnectionStateChange(s)
+                            }*/
+                            break;
+                        }
+                    }
+                }
+            }
+        });
     }
 }

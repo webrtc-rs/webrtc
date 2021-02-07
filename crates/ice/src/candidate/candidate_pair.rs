@@ -47,8 +47,8 @@ impl fmt::Display for CandidatePairState {
 // candidatePair represents a combination of a local and remote candidate
 pub struct CandidatePair {
     ice_role_controlling: bool,
-    remote: Box<dyn Candidate>,
-    local: Box<dyn Candidate>,
+    remote: Box<dyn Candidate + Send + Sync>,
+    local: Box<dyn Candidate + Send + Sync>,
     binding_request_count: u16,
     state: CandidatePairState,
     nominated: bool,
@@ -88,7 +88,11 @@ impl PartialEq for CandidatePair {
 }
 
 impl CandidatePair {
-    pub fn new(local: Box<dyn Candidate>, remote: Box<dyn Candidate>, controlling: bool) -> Self {
+    pub fn new(
+        local: Box<dyn Candidate + Send + Sync>,
+        remote: Box<dyn Candidate + Send + Sync>,
+        controlling: bool,
+    ) -> Self {
         CandidatePair {
             ice_role_controlling: controlling,
             remote,
