@@ -45,13 +45,13 @@ impl fmt::Display for CandidatePairState {
 }
 
 // candidatePair represents a combination of a local and remote candidate
-pub struct CandidatePair {
-    ice_role_controlling: bool,
-    remote: Box<dyn Candidate + Send + Sync>,
-    local: Box<dyn Candidate + Send + Sync>,
-    binding_request_count: u16,
-    state: CandidatePairState,
-    nominated: bool,
+pub(crate) struct CandidatePair {
+    pub(crate) ice_role_controlling: bool,
+    pub(crate) remote: Box<dyn Candidate + Send + Sync>,
+    pub(crate) local: Box<dyn Candidate + Send + Sync>,
+    pub(crate) binding_request_count: u16,
+    pub(crate) state: CandidatePairState,
+    pub(crate) nominated: bool,
 }
 
 impl Default for CandidatePair {
@@ -64,6 +64,20 @@ impl Default for CandidatePair {
             binding_request_count: 0,
             nominated: false,
         }
+    }
+}
+
+impl fmt::Debug for CandidatePair {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "prio {} (local, prio {}) {} <-> {} (remote, prio {})",
+            self.priority(),
+            self.local.priority(),
+            self.local,
+            self.remote,
+            self.remote.priority()
+        )
     }
 }
 

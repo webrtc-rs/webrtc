@@ -48,8 +48,8 @@ lazy_static! {
     // ErrRemotePwdEmpty indicates agent was started with an empty remote pwd
     pub static ref ERR_REMOTE_PWD_EMPTY:Error = Error::new("remote pwd is empty".to_owned());
 
-    // ErrNoOnCandidateHandler indicates agent was started without OnCandidate
-    pub static ref ERR_NO_ON_CANDIDATE_HANDLER:Error = Error::new("no OnCandidate provided".to_owned());
+    // ErrNoOnCandidateHandler indicates agent was started without on_candidate
+    pub static ref ERR_NO_ON_CANDIDATE_HANDLER:Error = Error::new("no on_candidate provided".to_owned());
 
     // ErrMultipleGatherAttempted indicates GatherCandidates has been called multiple times
     pub static ref ERR_MULTIPLE_GATHER_ATTEMPTED:Error = Error::new("attempting to gather candidates during gathering state".to_owned());
