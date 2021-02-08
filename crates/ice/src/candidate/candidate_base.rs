@@ -5,6 +5,7 @@ use std::fmt;
 
 use crc32fast::Hasher;
 
+#[derive(Debug, Default)]
 pub struct CandidateBaseConfig {
     pub candidate_id: String,
     pub network: String,
@@ -18,7 +19,7 @@ pub struct CandidateBaseConfig {
 pub(crate) type OnClose = fn() -> Result<(), Error>;
 
 #[derive(Debug, Clone)]
-pub(crate) struct CandidateBase {
+pub struct CandidateBase {
     pub(crate) id: String,
     pub(crate) network_type: NetworkType,
     pub(crate) candidate_type: CandidateType,
@@ -333,6 +334,10 @@ impl Candidate for CandidateBase {
             && self.port() == other.port()
             && self.tcp_type() == other.tcp_type()
             && self.related_address() == other.related_address()
+    }
+
+    fn clone(&self) -> Box<dyn Candidate + Send + Sync> {
+        Box::new(Clone::clone(self))
     }
 
     fn set_ip(&mut self, ip: &IpAddr) -> Result<(), Error> {

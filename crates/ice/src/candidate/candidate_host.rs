@@ -1,8 +1,10 @@
 use super::candidate_base::*;
 use super::*;
 use crate::errors::*;
+use crate::rand::generate_cand_id;
 
 // CandidateHostConfig is the config required to create a new CandidateHost
+#[derive(Debug, Default)]
 pub struct CandidateHostConfig {
     pub base_config: CandidateBaseConfig,
 
@@ -10,12 +12,11 @@ pub struct CandidateHostConfig {
 }
 
 // NewCandidateHost creates a new host candidate
-pub fn new_candidate_host(config: CandidateHostConfig) -> Result<Box<dyn Candidate>, Error> {
-    let candidate_id = config.base_config.candidate_id;
-    /*TODO:
-    if candidateID == "" {
-        candidateID = globalCandidateIDGenerator.Generate()
-    }*/
+pub fn new_candidate_host(config: CandidateHostConfig) -> Result<CandidateBase, Error> {
+    let mut candidate_id = config.base_config.candidate_id;
+    if candidate_id.is_empty() {
+        candidate_id = generate_cand_id();
+    }
 
     let mut c = CandidateBase {
         id: candidate_id,
@@ -40,5 +41,5 @@ pub fn new_candidate_host(config: CandidateHostConfig) -> Result<Box<dyn Candida
         c.network_type = NetworkType::UDP4;
     }
 
-    Ok(Box::new(c))
+    Ok(c)
 }

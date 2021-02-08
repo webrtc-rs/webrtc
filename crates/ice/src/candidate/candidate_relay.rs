@@ -1,9 +1,11 @@
 use super::candidate_base::*;
 use super::*;
 use crate::errors::*;
+use crate::rand::generate_cand_id;
 use crate::util::*;
 
 // CandidateRelayConfig is the config required to create a new CandidateRelay
+#[derive(Debug, Default)]
 pub struct CandidateRelayConfig {
     pub base_config: CandidateBaseConfig,
 
@@ -13,11 +15,11 @@ pub struct CandidateRelayConfig {
 }
 
 // new_candidate_relay creates a new relay candidate
-pub fn new_candidate_relay(config: CandidateRelayConfig) -> Result<Box<dyn Candidate>, Error> {
-    let candidate_id = config.base_config.candidate_id;
-    /*TODO:if candidateID == "" {
-        candidateID = globalCandidateIDGenerator.Generate()
-    }*/
+pub fn new_candidate_relay(config: CandidateRelayConfig) -> Result<CandidateBase, Error> {
+    let mut candidate_id = config.base_config.candidate_id;
+    if candidate_id.is_empty() {
+        candidate_id = generate_cand_id();
+    }
 
     let ip: IpAddr = match config.base_config.address.parse() {
         Ok(ip) => ip,
@@ -25,7 +27,7 @@ pub fn new_candidate_relay(config: CandidateRelayConfig) -> Result<Box<dyn Candi
     };
     let network_type = determine_network_type(&config.base_config.network, &ip)?;
 
-    Ok(Box::new(CandidateBase {
+    Ok(CandidateBase {
         id: candidate_id,
         network_type,
         candidate_type: CandidateType::Relay,
@@ -41,5 +43,5 @@ pub fn new_candidate_relay(config: CandidateRelayConfig) -> Result<Box<dyn Candi
         }),
         on_close: config.on_close,
         ..Default::default()
-    }))
+    })
 }

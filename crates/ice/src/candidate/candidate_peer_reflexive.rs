@@ -1,9 +1,11 @@
 use super::candidate_base::*;
 use super::*;
 use crate::errors::*;
+use crate::rand::generate_cand_id;
 use crate::util::*;
 
 // CandidatePeerReflexiveConfig is the config required to create a new CandidatePeerReflexive
+#[derive(Debug, Default)]
 pub struct CandidatePeerReflexiveConfig {
     pub base_config: CandidateBaseConfig,
 
@@ -14,20 +16,19 @@ pub struct CandidatePeerReflexiveConfig {
 // new_candidate_peer_reflexive creates a new peer reflective candidate
 pub fn new_candidate_peer_reflexive(
     config: CandidatePeerReflexiveConfig,
-) -> Result<Box<dyn Candidate>, Error> {
+) -> Result<CandidateBase, Error> {
     let ip: IpAddr = match config.base_config.address.parse() {
         Ok(ip) => ip,
         Err(_) => return Err(ERR_ADDRESS_PARSE_FAILED.to_owned()),
     };
     let network_type = determine_network_type(&config.base_config.network, &ip)?;
 
-    let candidate_id = config.base_config.candidate_id;
-    /*TODO:if candidateID == "" {
-        candidateIDGenerator := newCandidateIDGenerator()
-        candidateID = candidateIDGenerator.Generate()
-    }*/
+    let mut candidate_id = config.base_config.candidate_id;
+    if candidate_id.is_empty() {
+        candidate_id = generate_cand_id();
+    }
 
-    Ok(Box::new(CandidateBase {
+    Ok(CandidateBase {
         id: candidate_id,
         network_type,
         candidate_type: CandidateType::PeerReflexive,
@@ -42,5 +43,5 @@ pub fn new_candidate_peer_reflexive(
             port: config.rel_port,
         }),
         ..Default::default()
-    }))
+    })
 }

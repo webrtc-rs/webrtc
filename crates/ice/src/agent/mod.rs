@@ -2,6 +2,7 @@
 mod agent_test;
 
 pub mod agent_config;
+pub mod agent_gather;
 pub mod agent_stats;
 
 use crate::candidate::candidate_pair::*;
@@ -36,12 +37,11 @@ pub(crate) struct BindingRequest {
     is_use_candidate: bool,
 }
 
-pub type OnConnectionStateChangeHdlrFn = fn(ConnectionState);
+pub type OnConnectionStateChangeHdlrFn = Box<dyn Fn(ConnectionState) + Send + Sync>;
 pub type OnSelectedCandidatePairChangeHdlrFn =
-    fn(&Box<dyn Candidate + Send + Sync>, &Box<dyn Candidate + Send + Sync>);
-pub type OnCandidateHdlrFn = fn(Box<dyn Candidate + Send + Sync>);
-
-pub type GatherCandidateCancelFn = fn();
+    Box<dyn Fn(&(dyn Candidate + Send + Sync), &(dyn Candidate + Send + Sync)) + Send + Sync>;
+pub type OnCandidateHdlrFn = Box<dyn Fn(Box<dyn Candidate + Send + Sync>) + Send + Sync>;
+pub type GatherCandidateCancelFn = Box<dyn Fn() + Send + Sync>;
 
 #[derive(Default)]
 pub struct AgentInternal {
@@ -359,7 +359,7 @@ impl Agent {
                     &ai.on_selected_candidate_pair_change_hdlr,
                     &ai.selected_pair,
                 ) {
-                    on_selected_candidate_pair_change(&p.local, &p.remote);
+                    on_selected_candidate_pair_change(&*p.local, &*p.remote);
                 }
             }
         });
@@ -538,5 +538,72 @@ impl Agent {
             }
         }
         self.remote_candidates.clear();
+    }
+
+    // get_local_user_credentials returns the local user credentials
+    pub fn get_local_user_credentials(&self) -> (String, String) {
+        (self.local_ufrag.clone(), self.local_pwd.clone())
+    }
+
+    // get_remote_user_credentials returns the remote user credentials
+    pub fn get_remote_user_credentials(&self) -> (String, String) {
+        (self.remote_ufrag.clone(), self.remote_pwd.clone())
+    }
+
+    pub(crate) fn get_best_available_candidate_pair(&self) -> Option<&CandidatePair> {
+        let mut best: Option<&CandidatePair> = None;
+
+        for p in &self.checklist {
+            if p.state == CandidatePairState::Failed {
+                continue;
+            }
+
+            if let Some(b) = &mut best {
+                if b.priority() < p.priority() {
+                    *b = p;
+                }
+            } else {
+                best = Some(p);
+            }
+        }
+
+        best
+    }
+
+    pub(crate) fn add_pair(
+        &mut self,
+        local: Box<dyn Candidate + Send + Sync>,
+        remote: Box<dyn Candidate + Send + Sync>,
+    ) /*-> Option<&CandidatePair>*/
+    {
+        let p = CandidatePair::new(local, remote, self.is_controlling);
+        self.checklist.push(p);
+        //return p;
+    }
+
+    pub(crate) fn find_pair(
+        &self,
+        local: &(dyn Candidate + Send + Sync),
+        remote: &(dyn Candidate + Send + Sync),
+    ) -> Option<&CandidatePair> {
+        for p in &self.checklist {
+            if p.local.equal(local) && p.remote.equal(remote) {
+                return Some(p);
+            }
+        }
+        None
+    }
+
+    pub(crate) fn get_pair_mut(
+        &mut self,
+        local: &(dyn Candidate + Send + Sync),
+        remote: &(dyn Candidate + Send + Sync),
+    ) -> Option<&mut CandidatePair> {
+        for p in &mut self.checklist {
+            if p.local.equal(local) && p.remote.equal(remote) {
+                return Some(p);
+            }
+        }
+        None
     }
 }

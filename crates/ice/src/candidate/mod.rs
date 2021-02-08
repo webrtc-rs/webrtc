@@ -73,6 +73,7 @@ pub trait Candidate: fmt::Display {
     //TODO:fn start(&self,a: &Agent, conn: PacketConn, initializedCh <-chan struct{})
     fn write_to(&mut self, raw: &[u8], dst: &dyn Candidate) -> Result<usize, Error>;
     fn equal(&self, other: &dyn Candidate) -> bool;
+    fn clone(&self) -> Box<dyn Candidate + Send + Sync>;
 
     fn set_ip(&mut self, ip: &IpAddr) -> Result<(), Error>;
 }
