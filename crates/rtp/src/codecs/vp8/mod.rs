@@ -12,7 +12,7 @@ const VP8_HEADER_SIZE: usize = 1;
 pub struct VP8Payloader;
 
 impl Payloader for VP8Payloader {
-    fn payload(&self, mtu: u16, payload_data: BytesMut) -> Vec<Vec<u8>> {
+    fn payload(&self, mtu: u16, payload_data: BytesMut) -> Vec<BytesMut> {
         /*
          * https://tools.ietf.org/html/rfc7741#section-4.2
          *
@@ -48,7 +48,9 @@ impl Payloader for VP8Payloader {
 
         while payload_data_remaining > 0 {
             let current_fragment_size = max_fragment_size.min(payload_data_remaining) as usize;
-            let mut out = vec![0u8; VP8_HEADER_SIZE + current_fragment_size];
+            let mut out = BytesMut::new();
+            out.resize(VP8_HEADER_SIZE + current_fragment_size, 0u8);
+
             if payload_data_index == 0 {
                 out[0] = 0x10;
             }
@@ -68,27 +70,27 @@ impl Payloader for VP8Payloader {
 
 #[derive(Debug, Default)]
 // VP8Packet represents the VP8 header that is stored in the payload of an RTP Packet
-struct VP8Packet {
+pub struct VP8Packet {
     // Required Header
-    x: u8,   /* extended controlbits present */
-    n: u8,   /* (non-reference frame)  when set to 1 this frame can be discarded */
-    s: u8,   /* start of VP8 partition */
-    pid: u8, /* partition index */
+    pub x: u8,   /* extended controlbits present */
+    pub n: u8,   /* (non-reference frame)  when set to 1 this frame can be discarded */
+    pub s: u8,   /* start of VP8 partition */
+    pub pid: u8, /* partition index */
 
     // Optional Header
-    i: u8, /* 1 if PictureID is present */
-    l: u8, /* 1 if TL0PICIDX is present */
-    t: u8, /* 1 if TID is present */
-    k: u8, /* 1 if KEYIDX is present */
+    pub i: u8, /* 1 if PictureID is present */
+    pub l: u8, /* 1 if TL0PICIDX is present */
+    pub t: u8, /* 1 if TID is present */
+    pub k: u8, /* 1 if KEYIDX is present */
 
-    picture_id: u16, /* 8 or 16 bits, picture ID */
-    tl0_pic_idx: u8, /* 8 bits temporal level zero index */
+    pub picture_id: u16, /* 8 or 16 bits, picture ID */
+    pub tl0_pic_idx: u8, /* 8 bits temporal level zero index */
 
-    tid: u8,
-    y: u8,
-    key_idx: u8,
+    pub tid: u8,
+    pub y: u8,
+    pub key_idx: u8,
 
-    payload: BytesMut,
+    pub payload: BytesMut,
 }
 
 impl Depacketizer for VP8Packet {

@@ -1,3 +1,5 @@
+use std::usize;
+
 use crate::errors::RTPError;
 use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
@@ -5,7 +7,7 @@ use bytes::BytesMut;
 #[derive(Debug, Eq, Clone, PartialEq, Default)]
 pub struct Extension {
     pub id: u8,
-    pub payload: Vec<u8>,
+    pub payload: BytesMut,
 }
 
 /// Header represents an RTP packet header
@@ -23,8 +25,6 @@ pub struct Header {
     pub csrc: Vec<u32>,
     pub extension_profile: u16,
     pub extensions: Vec<Extension>,
-
-    pub payload_offset: usize,
 }
 
 impl Header {
@@ -100,7 +100,7 @@ impl Header {
             }
             self.extensions.push(Extension {
                 id,
-                payload: payload.to_vec(),
+                payload: payload.to_owned(),
             });
             return Ok(());
         }
@@ -117,7 +117,7 @@ impl Header {
 
         self.extensions.push(Extension {
             id,
-            payload: payload.to_vec(),
+            payload: payload.to_owned(),
         });
 
         Ok(())
@@ -156,7 +156,7 @@ impl Header {
         ids
     }
 
-    // Removes an RTP Header extension
+    /// Removes an RTP Header extension
     pub fn del_extension(&mut self, id: u8) -> Result<(), RTPError> {
         if !self.extension {
             return Err(RTPError::HeaderExtensionNotEnabled);
@@ -171,8 +171,8 @@ impl Header {
         Err(RTPError::HeaderExtensionNotFound)
     }
 
-    // Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
-    pub fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), RTPError> {
+    /// Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
+    pub fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<usize, RTPError> {
         /*
          *  0                   1                   2                   3
          *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -258,7 +258,7 @@ impl Header {
 
                         self.extensions.push(super::Extension {
                             id: ext_id,
-                            payload: raw_packet[current_offset..current_offset + len].to_vec(),
+                            payload: raw_packet[current_offset..current_offset + len].into(),
                         });
 
                         current_offset += len;
@@ -285,7 +285,7 @@ impl Header {
                         self.extensions.push(super::Extension {
                             id: ext_id,
                             payload: raw_packet[current_offset..current_offset + len as usize]
-                                .to_vec(),
+                                .into(),
                         });
 
                         current_offset += len as usize;
@@ -302,7 +302,7 @@ impl Header {
                         id: 0,
                         payload: raw_packet
                             [current_offset..current_offset + extension_length as usize]
-                            .to_vec(),
+                            .into(),
                     });
 
                     current_offset += self.extensions[0].payload.len();
@@ -310,9 +310,7 @@ impl Header {
             }
         }
 
-        self.payload_offset = current_offset;
-
-        Ok(())
+        Ok(current_offset)
     }
 
     /// Marshal serializes the packet into bytes.
@@ -373,7 +371,8 @@ impl Header {
 
         let mut no_alloc = 12usize;
 
-        for n in self.csrc.clone() {
+        let csrc = self.csrc.clone();
+        for n in csrc {
             BigEndian::write_u32(&mut buf[no_alloc..no_alloc + 4], n);
             no_alloc += 4;
         }
@@ -446,8 +445,6 @@ impl Header {
                 no_alloc += 1;
             }
         }
-
-        self.payload_offset = no_alloc;
 
         Ok(no_alloc)
     }

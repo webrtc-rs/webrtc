@@ -9,12 +9,13 @@ mod opus_test;
 pub struct OpusPayloader;
 
 impl Payloader for OpusPayloader {
-    fn payload(&self, _: u16, payload: BytesMut) -> Vec<Vec<u8>> {
+    fn payload(&self, _: u16, payload: BytesMut) -> Vec<BytesMut> {
         if payload.is_empty() {
             return vec![];
         }
 
-        let mut out = vec![0u8; payload.len()];
+        let mut out = BytesMut::new();
+        out.resize(payload.len(), 0u8);
         out.copy_from_slice(&payload);
 
         vec![out]

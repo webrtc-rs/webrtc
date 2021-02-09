@@ -10,7 +10,7 @@ mod packetizer_test;
 
 // Payloader payloads a byte array for use as rtp.Packet payloads
 pub trait Payloader {
-    fn payload(&self, mtu: u16, payload: BytesMut) -> Vec<Vec<u8>>;
+    fn payload(&self, mtu: u16, payload: BytesMut) -> Vec<BytesMut>;
 }
 
 // Packetizer packetizes a payload
@@ -27,15 +27,15 @@ pub trait Depacketizer {
 pub type FnTimeGen = fn() -> Duration;
 
 struct Packetizer {
-    mtu: u16,
-    payload_type: u8,
-    ssrc: u32,
-    payloader: Box<dyn Payloader>,
-    sequencer: Box<dyn Sequencer>,
-    timestamp: u32,
-    clock_rate: u32,
-    abs_send_time: u8, //http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
-    time_gen: Option<FnTimeGen>,
+    pub mtu: u16,
+    pub payload_type: u8,
+    pub ssrc: u32,
+    pub payloader: Box<dyn Payloader>,
+    pub sequencer: Box<dyn Sequencer>,
+    pub timestamp: u32,
+    pub clock_rate: u32,
+    pub abs_send_time: u8, //http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
+    pub time_gen: Option<FnTimeGen>,
 }
 
 pub fn new_packetizer(

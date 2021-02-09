@@ -10,8 +10,7 @@ mod packet_test;
 #[derive(Debug, Eq, PartialEq, Clone, Default)]
 pub struct Packet {
     pub header: Header,
-    pub payload: Vec<u8>,
-    pub raw: BytesMut,
+    pub payload: BytesMut,
 }
 
 impl fmt::Display for Packet {
@@ -36,11 +35,10 @@ impl Packet {
     }
 
     /// Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
-    pub fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), RTPError> {
-        self.header.unmarshal(raw_packet)?;
+    pub fn unmarshal(&mut self, buf: &mut BytesMut) -> Result<(), RTPError> {
+        let size = self.header.unmarshal(buf)?;
 
-        self.payload = raw_packet[self.header.payload_offset..].to_vec();
-        self.raw = raw_packet.clone();
+        self.payload = buf[size..].into();
 
         Ok(())
     }
@@ -59,9 +57,6 @@ impl Packet {
         }
 
         buf[size..size + self.payload.len()].copy_from_slice(&self.payload);
-
-        self.raw = buf.clone();
-        self.raw.truncate(size + self.payload.len());
 
         Ok(size + self.payload.len())
     }

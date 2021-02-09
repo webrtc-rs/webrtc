@@ -43,18 +43,19 @@ fn benchmark_unmarshal(c: &mut Criterion) {
             extensions: vec![
                 header::Extension {
                     id: 1,
-                    payload: vec![3, 4],
+                    payload: [3, 4][..].into(),
                 },
                 header::Extension {
                     id: 2,
-                    payload: vec![5, 6],
+                    payload: [5, 6][..].into(),
                 },
             ],
             ..Default::default()
         },
-        payload: vec![0x07, 0x08, 0x09, 0x0a],
+        payload: [0x07, 0x08, 0x09, 0x0a][..].into(),
         ..Default::default()
     };
+
     let mut raw_pkt = pkt.marshal().unwrap();
 
     let mut raw_pkt_clone = raw_pkt.clone();
@@ -63,7 +64,7 @@ fn benchmark_unmarshal(c: &mut Criterion) {
         b.iter(|| pkt.unmarshal(&mut raw_pkt).unwrap())
     });
 
-    c.bench_function("New Struct", |b| {
+    c.bench_function("New Struct", move |b| {
         b.iter(|| {
             let mut p = Packet::default();
             p.unmarshal(&mut raw_pkt_clone).unwrap();

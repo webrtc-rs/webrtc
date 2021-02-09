@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
 
-    use std::collections::hash_map;
+    use std::collections::HashMap;
 
     use crate::packet::*;
 
@@ -30,13 +30,11 @@ mod tests {
                 extension_profile: 1,
                 extensions: vec![Extension {
                     id: 0,
-                    payload: vec![0xFF, 0xFF, 0xFF, 0xFF],
+                    payload: vec![0xFF, 0xFF, 0xFF, 0xFF].as_slice().into(),
                 }],
-                payload_offset: 20,
                 ..Default::default()
             },
             payload: raw_pkt[20..].into(),
-            raw: raw_pkt[..].into(),
             ..Default::default()
         };
 
@@ -54,12 +52,6 @@ mod tests {
             "wrong computed marshal size"
         );
 
-        assert_eq!(
-            p.header.payload_offset, 20,
-            "wrong payload offset: {} != {}",
-            p.header.payload_offset, 20
-        );
-
         let raw = p.marshal()?;
 
         assert_eq!(
@@ -75,13 +67,6 @@ mod tests {
             "TestBasic marshal: got {:?}, want {:?}",
             raw, raw_pkt
         );
-
-        assert_eq!(
-            p.header.payload_offset, 20,
-            "wrong payload offset: {} != {}",
-            p.header.payload_offset, 20
-        );
-
         Ok(())
     }
 
@@ -116,7 +101,7 @@ mod tests {
                 extension_profile: 3,
                 extensions: vec![Extension {
                     id: 0,
-                    payload: vec![0],
+                    payload: vec![0].as_slice().into(),
                 }],
                 ..Default::default()
             },
@@ -150,10 +135,9 @@ mod tests {
                 extension_profile: 0xBEDE,
                 extensions: vec![Extension {
                     id: 5,
-                    payload: vec![0xAA],
+                    payload: vec![0xAA].as_slice().into(),
                 }],
                 version: 2,
-                payload_offset: 18,
                 payload_type: 96,
                 sequence_number: 27023,
                 timestamp: 3653407706,
@@ -161,7 +145,7 @@ mod tests {
                 csrc: vec![],
                 ..Default::default()
             },
-            payload: raw_pkt[20..].to_vec(),
+            payload: raw_pkt[20..].into(),
             ..Default::default()
         };
 
@@ -219,15 +203,14 @@ mod tests {
                 extensions: vec![
                     Extension {
                         id: 1,
-                        payload: vec![0xAA],
+                        payload: vec![0xAA].as_slice().into(),
                     },
                     Extension {
                         id: 2,
-                        payload: vec![0xBB],
+                        payload: vec![0xBB].as_slice().into(),
                     },
                 ],
                 version: 2,
-                payload_offset: 26,
                 payload_type: 96,
                 sequence_number: 27023,
                 timestamp: 3653407706,
@@ -235,8 +218,7 @@ mod tests {
                 csrc: vec![],
                 ..Default::default()
             },
-            payload: raw_pkt[20..].to_vec(),
-            raw: raw_pkt[..].into(),
+            payload: raw_pkt[20..].into(),
         };
 
         let dst_data = p.marshal()?;
@@ -364,19 +346,18 @@ mod tests {
                 extensions: vec![
                     Extension {
                         id: 1,
-                        payload: vec![0xAA],
+                        payload: vec![0xAA].as_slice().into(),
                     },
                     Extension {
                         id: 2,
-                        payload: vec![0xBB, 0xBB],
+                        payload: vec![0xBB, 0xBB].as_slice().into(),
                     },
                     Extension {
                         id: 3,
-                        payload: vec![0xCC, 0xCC],
+                        payload: vec![0xCC, 0xCC].as_slice().into(),
                     },
                 ],
                 version: 2,
-                payload_offset: 26,
                 payload_type: 96,
                 sequence_number: 27023,
                 timestamp: 3653407706,
@@ -384,7 +365,6 @@ mod tests {
                 ..Default::default()
             },
             payload: raw_pkt[28..].into(),
-            raw: raw_pkt[..].into(),
         };
 
         let dst_data = p.marshal()?;
@@ -420,10 +400,11 @@ mod tests {
                     payload: vec![
                         0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
                         0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
-                    ],
+                    ]
+                    .as_slice()
+                    .into(),
                 }],
                 version: 2,
-                payload_offset: 42,
                 payload_type: 96,
                 sequence_number: 27023,
                 timestamp: 3653407706,
@@ -431,7 +412,6 @@ mod tests {
                 ..Default::default()
             },
             payload: raw_pkt[44..].into(),
-            raw: raw_pkt.clone(),
         };
 
         let dst_data = p.marshal()?;
@@ -534,22 +514,23 @@ mod tests {
                 extensions: vec![
                     Extension {
                         id: 1,
-                        payload: vec![],
+                        payload: BytesMut::new(),
                     },
                     Extension {
                         id: 2,
-                        payload: vec![0xBB],
+                        payload: vec![0xBB].as_slice().into(),
                     },
                     Extension {
                         id: 3,
                         payload: vec![
                             0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
                             0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-                        ],
+                        ]
+                        .as_slice()
+                        .into(),
                     },
                 ],
                 version: 2,
-                payload_offset: 40,
                 payload_type: 96,
                 sequence_number: 27023,
                 timestamp: 3653407706,
@@ -557,7 +538,6 @@ mod tests {
                 ..Default::default()
             },
             payload: raw_pkt[40..].into(),
-            raw: raw_pkt[..].into(),
         };
 
         let dst_data = p.marshal()?;
@@ -573,7 +553,7 @@ mod tests {
     }
 
     fn test_rfc8285_get_extension_returns_nil_when_extension_disabled() -> Result<(), RTPError> {
-        let payload = [
+        let payload = vec![
             // Payload
             0x98u8, 0x36, 0xbe, 0x88, 0x9e,
         ];
@@ -582,14 +562,13 @@ mod tests {
             header: Header {
                 marker: true,
                 version: 2,
-                payload_offset: 26,
                 payload_type: 96,
                 sequence_number: 27023,
                 timestamp: 3653407706,
                 ssrc: 476325762,
                 ..Default::default()
             },
-            payload: payload.into(),
+            payload: payload.as_slice().into(),
             ..Default::default()
         };
 
@@ -603,7 +582,7 @@ mod tests {
     }
 
     fn test_rfc8285_del_extension() -> Result<(), RTPError> {
-        let payload = [
+        let payload = vec![
             // Payload
             0x98u8, 0x36, 0xbe, 0x88, 0x9e,
         ];
@@ -614,17 +593,16 @@ mod tests {
                 extension_profile: 0xBEDE,
                 extensions: vec![Extension {
                     id: 1,
-                    payload: vec![0xAA],
+                    payload: vec![0xAA].as_slice().into(),
                 }],
                 version: 2,
-                payload_offset: 26,
                 payload_type: 96,
                 sequence_number: 27023,
                 timestamp: 3653407706,
                 ssrc: 476325762,
                 ..Default::default()
             },
-            payload: payload.into(),
+            payload: payload.as_slice().into(),
             ..Default::default()
         };
 
@@ -656,15 +634,14 @@ mod tests {
                 extensions: vec![
                     Extension {
                         id: 1,
-                        payload: vec![0xAA],
+                        payload: vec![0xAA].as_slice().into(),
                     },
                     Extension {
                         id: 2,
-                        payload: vec![0xBB],
+                        payload: vec![0xBB].as_slice().into(),
                     },
                 ],
                 version: 2,
-                payload_offset: 26,
                 payload_type: 96,
                 sequence_number: 27023,
                 timestamp: 3653407706,
@@ -700,7 +677,6 @@ mod tests {
                 marker: true,
                 extension: false,
                 version: 2,
-                payload_offset: 26,
                 payload_type: 96,
                 sequence_number: 27023,
                 timestamp: 3653407706,
@@ -723,7 +699,6 @@ mod tests {
                 marker: true,
                 extension: false,
                 version: 2,
-                payload_offset: 26,
                 payload_type: 96,
                 sequence_number: 27023,
                 timestamp: 3653407706,
@@ -749,7 +724,6 @@ mod tests {
                 marker: true,
                 extension: false,
                 version: 2,
-                payload_offset: 26,
                 payload_type: 96,
                 sequence_number: 27023,
                 timestamp: 3653407706,
@@ -789,7 +763,6 @@ mod tests {
                 marker: true,
                 extension: false,
                 version: 2,
-                payload_offset: 26,
                 payload_type: 96,
                 sequence_number: 27023,
                 timestamp: 3653407706,
@@ -824,10 +797,9 @@ mod tests {
                 extension_profile: 0xBEDE,
                 extensions: vec![Extension {
                     id: 1,
-                    payload: vec![0xAA],
+                    payload: vec![0xAA].as_slice().into(),
                 }],
                 version: 2,
-                payload_offset: 26,
                 payload_type: 96,
                 sequence_number: 27023,
                 timestamp: 3653407706,
@@ -866,10 +838,9 @@ mod tests {
                 extension_profile: 0xBEDE,
                 extensions: vec![Extension {
                     id: 1,
-                    payload: vec![0xAA],
+                    payload: vec![0xAA].as_slice().into(),
                 }],
                 version: 2,
-                payload_offset: 26,
                 payload_type: 96,
                 sequence_number: 27023,
                 timestamp: 3653407706,
@@ -927,10 +898,9 @@ mod tests {
                 extension_profile: 0xBEDE,
                 extensions: vec![Extension {
                     id: 1,
-                    payload: vec![0xAA],
+                    payload: vec![0xAAu8].as_slice().into(),
                 }],
                 version: 2,
-                payload_offset: 26,
                 payload_type: 96,
                 sequence_number: 27023,
                 timestamp: 3653407706,
@@ -966,7 +936,6 @@ mod tests {
                 extension: true,
                 extension_profile: 0xBEDE,
                 version: 2,
-                payload_offset: 31,
                 payload_type: 96,
                 sequence_number: 27023,
                 timestamp: 3653407706,
@@ -1014,10 +983,9 @@ mod tests {
                 extension_profile: 0x1000,
                 extensions: vec![Extension {
                     id: 1,
-                    payload: vec![0xAA],
+                    payload: vec![0xAA].as_slice().into(),
                 }],
                 version: 2,
-                payload_offset: 26,
                 payload_type: 96,
                 sequence_number: 27023,
                 timestamp: 3653407706,
@@ -1056,10 +1024,9 @@ mod tests {
                 extension_profile: 0xBEDE,
                 extensions: vec![Extension {
                     id: 1,
-                    payload: vec![0xAA],
+                    payload: vec![0xAA].as_slice().into(),
                 }],
                 version: 2,
-                payload_offset: 26,
                 payload_type: 96,
                 sequence_number: 27023,
                 timestamp: 3653407706,
@@ -1112,10 +1079,9 @@ mod tests {
                 extension_profile: 0x1111,
                 extensions: vec![Extension {
                     id: 1,
-                    payload: vec![0xAA],
+                    payload: vec![0xAA].as_slice().into(),
                 }],
                 version: 2,
-                payload_offset: 26,
                 payload_type: 96,
                 sequence_number: 27023,
                 timestamp: 3653407706,
@@ -1146,7 +1112,6 @@ mod tests {
                 extension: true,
                 extension_profile: 0x1111,
                 version: 2,
-                payload_offset: 26,
                 payload_type: 96,
                 sequence_number: 27023,
                 timestamp: 3653407706,
@@ -1167,7 +1132,7 @@ mod tests {
     }
 
     fn test_unmarshal_error_handling() {
-        let mut cases = hash_map::HashMap::new();
+        let mut cases = HashMap::new();
 
         cases.insert(
             "ShortHeader",
@@ -1257,11 +1222,6 @@ mod tests {
         p.unmarshal(&mut raw_pkt[..].into())?;
 
         assert_eq!(
-            raw_pkt, p.raw,
-            "p.Raw must be same as raw_pkt.\n p.raw: {:?},\nraw_pkt: {:?}",
-            p.raw, raw_pkt
-        );
-        assert_eq!(
             payload, p.payload,
             "p.payload must be same as payload.\n p.payload: {:?},\nraw_pkt: {:?}",
             p.payload, payload
@@ -1273,11 +1233,6 @@ mod tests {
             raw_pkt, buf,
             "buf must be the same as raw_pkt. \n buf: {:?},\nraw_pkt: {:?}",
             buf, raw_pkt,
-        );
-        assert_eq!(
-            raw_pkt, p.raw,
-            "p.raw must be the same as raw_pkt. \n p.raw: {:?},\nraw_pkt: {:?}",
-            p.raw, raw_pkt,
         );
         assert_eq!(
             payload, p.payload,
