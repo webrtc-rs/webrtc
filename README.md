@@ -67,6 +67,11 @@ Enterprise Grade APIs for <a href="https://getstream.io/activity-feeds/?utm_sour
 [turn-url]: https://crates.io/crates/webrtc-rs-turn
 [sctp-badge]: https://img.shields.io/crates/v/webrtc-rs-sctp.svg
 [sctp-url]: https://crates.io/crates/webrtc-rs-sctp
+[media-badge]: https://img.shields.io/crates/v/webrtc-rs-media.svg
+[media-url]: https://crates.io/crates/webrtc-rs-media
+[webrtc-badge]: https://img.shields.io/crates/v/webrtc-rs.svg
+[webrtc-url]: https://crates.io/crates/webrtc-rs
+
 
 - [x] SDP: [webrtc-rs/sdp](https://github.com/webrtc-rs/sdp) [![sdp][sdp-badge]][sdp-url]
   - sync up to [pion/sdp/v2.4.0](https://github.com/pion/sdp/tree/b29f0bbd42fc719eabdb027117217b0ddb27abf1)
@@ -87,12 +92,13 @@ Enterprise Grade APIs for <a href="https://getstream.io/activity-feeds/?utm_sour
 - [ ] ICE: [webrtc-rs/ice](https://github.com/webrtc-rs/ice) [![ice][ice-badge]][ice-url]
   - work in progress
   - catch up [pion/ice/v2.0.14](https://github.com/pion/ice/tree/c0a874421c45ef6bbc51166b9056aa46c201f075)
-- [ ] PeerConnection
+- [ ] PeerConnection [webrtc-rs/webrtc](https://github.com/webrtc-rs/webrtc) [![webrtc][webrtc-badge]][webrtc-url]
 
 ### Road Map Towards 2.0
 
 - [ ] SCTP: [webrtc-rs/sctp](https://github.com/webrtc-rs/sctp) [![sctp][sctp-badge]][sctp-url]
-- [ ] DataChannel
+- [ ] DataChannel [webrtc-rs/webrtc](https://github.com/webrtc-rs/webrtc) [![webrtc][webrtc-badge]][webrtc-url]
+- [ ] Media: [webrtc-rs/media](https://github.com/webrtc-rs/media) [![media][media-badge]][media-url]
 
 ### Road Map Towards 3.0
 
