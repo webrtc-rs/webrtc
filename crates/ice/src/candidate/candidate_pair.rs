@@ -54,6 +54,19 @@ pub(crate) struct CandidatePair {
     pub(crate) nominated: bool,
 }
 
+impl Clone for CandidatePair {
+    fn clone(&self) -> Self {
+        CandidatePair {
+            ice_role_controlling: self.ice_role_controlling,
+            remote: self.remote.clone(),
+            local: self.local.clone(),
+            state: self.state,
+            binding_request_count: self.binding_request_count,
+            nominated: self.nominated,
+        }
+    }
+}
+
 impl Default for CandidatePair {
     fn default() -> Self {
         CandidatePair {

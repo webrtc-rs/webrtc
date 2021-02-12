@@ -155,7 +155,7 @@ pub struct AgentConfig {
 
 impl AgentConfig {
     // init_with_defaults populates an agent and falls back to defaults if fields are unset
-    pub(crate) fn init_with_defaults(&self, a: &mut Agent) {
+    pub(crate) fn init_with_defaults(&self, a: &mut AgentInternal) {
         if let Some(max_binding_requests) = self.max_binding_requests {
             a.max_binding_requests = max_binding_requests;
         } else {
@@ -217,7 +217,7 @@ impl AgentConfig {
         }
     }
 
-    pub(crate) fn init_ext_ip_mapping(&self, a: &mut Agent) -> Result<(), Error> {
+    pub(crate) fn init_ext_ip_mapping(&self, a: &mut AgentInternal) -> Result<(), Error> {
         a.ext_ip_mapper =
             ExternalIPMapper::new(self.nat_1to1_ip_candidate_type, &self.nat_1to1_ips)?;
         if a.ext_ip_mapper.candidate_type == CandidateType::Host {

@@ -16,7 +16,7 @@ use crate::state::*;
 use crate::url::*;
 
 use mdns::conn::*;
-use stun::agent::TransactionId;
+use stun::{agent::*, attributes::*, message::*};
 use util::{Buffer, Error};
 
 use std::collections::HashMap;
@@ -43,25 +43,26 @@ pub type OnSelectedCandidatePairChangeHdlrFn =
 pub type OnCandidateHdlrFn = Box<dyn Fn(Box<dyn Candidate + Send + Sync>) + Send + Sync>;
 pub type GatherCandidateCancelFn = Box<dyn Fn() + Send + Sync>;
 
-#[derive(Default)]
 pub struct AgentInternal {
+    // State owned by the taskLoop
+    on_connected_tx: Option<mpsc::Sender<()>>,
+
+    // State for closing
+    done: Option<mpsc::Sender<()>>,
+    chan_candidate: Option<mpsc::Sender<Box<dyn Candidate + Send + Sync>>>,
+    chan_candidate_pair: Option<mpsc::Sender<()>>,
+    chan_state: Option<mpsc::Sender<ConnectionState>>,
+
     on_connection_state_change_hdlr: Option<OnConnectionStateChangeHdlrFn>,
     on_selected_candidate_pair_change_hdlr: Option<OnSelectedCandidatePairChangeHdlrFn>,
     on_candidate_hdlr: Option<OnCandidateHdlrFn>,
     selected_pair: Option<CandidatePair>,
-}
 
-// Agent represents the ICE agent
-pub struct Agent {
-    agent_internal: Arc<Mutex<AgentInternal>>,
-
-    // State owned by the taskLoop
-    on_connected_tx: Option<mpsc::Sender<()>>,
     on_connected_rx: mpsc::Receiver<()>,
 
     // force candidate to be contacted immediately (instead of waiting for task ticker)
     force_candidate_contact: Option<mpsc::Receiver<bool>>,
-    tie_breaker: u64,
+    pub(crate) tie_breaker: u64,
     lite: bool,
 
     connection_state: ConnectionState,
@@ -100,12 +101,12 @@ pub struct Agent {
     // How often should we run our internal taskLoop to check for state changes when connecting
     check_interval: Duration,
 
-    local_ufrag: String,
+    pub(crate) local_ufrag: String,
     local_pwd: String,
     local_candidates: HashMap<NetworkType, Vec<Box<dyn Candidate + Send + Sync>>>,
 
-    remote_ufrag: String,
-    remote_pwd: String,
+    pub(crate) remote_ufrag: String,
+    pub(crate) remote_pwd: String,
     remote_candidates: HashMap<NetworkType, Vec<Box<dyn Candidate + Send + Sync>>>,
 
     checklist: Vec<CandidatePair>,
@@ -125,18 +126,284 @@ pub struct Agent {
     //TODO: err  atomicError
     gather_candidate_cancel: Option<GatherCandidateCancelFn>,
 
-    // State for closing
-    done: Option<mpsc::Sender<()>>,
-    chan_candidate: Option<mpsc::Sender<Box<dyn Candidate + Send + Sync>>>,
-    chan_candidate_pair: Option<mpsc::Sender<()>>,
-    chan_state: Option<mpsc::Sender<ConnectionState>>,
-
     //TODO: net    *vnet.Net
     //TODO: tcpMux TCPMux
     interface_filter: Option<Box<dyn Fn(String) -> bool>>,
 
     insecure_skip_verify: bool,
     //TODO: proxyDialer proxy.Dialer
+}
+
+//TODO: remove unsafe
+unsafe impl Send for AgentInternal {}
+unsafe impl Sync for AgentInternal {}
+
+impl AgentInternal {
+    fn close(&mut self) -> Result<(), Error> {
+        if self.done.is_none() {
+            return Err(ERR_CLOSED.to_owned());
+        }
+
+        if let Some(gather_candidate_cancel) = &self.gather_candidate_cancel {
+            gather_candidate_cancel();
+        }
+
+        //TODO: ? a.tcpMux.RemoveConnByUfrag(a.localUfrag)
+
+        self.done.take();
+
+        Ok(())
+    }
+
+    pub(crate) fn get_selected_pair(&self) -> Option<&CandidatePair> {
+        self.selected_pair.as_ref()
+    }
+
+    pub(crate) async fn set_selected_pair(&mut self, p: Option<CandidatePair>) {
+        log::trace!("Set selected candidate pair: {:?}", p);
+
+        if let Some(mut p) = p {
+            p.nominated = true;
+            self.selected_pair = Some(p);
+
+            self.update_connection_state(ConnectionState::Connected)
+                .await;
+
+            // Notify when the selected pair changes
+            if let Some(chan_candidate_pair) = &self.chan_candidate_pair {
+                let _ = chan_candidate_pair.send(()).await;
+            }
+
+            // Signal connected
+            self.on_connected_tx.take();
+        } else {
+            self.selected_pair = None;
+        }
+    }
+
+    async fn update_connection_state(&mut self, new_state: ConnectionState) {
+        if self.connection_state != new_state {
+            // Connection has gone to failed, release all gathered candidates
+            if new_state == ConnectionState::Failed {
+                self.delete_all_candidates();
+            }
+
+            log::info!("Setting new connection state: {}", new_state);
+            self.connection_state = new_state;
+
+            // Call handler after finishing current task since we may be holding the agent lock
+            // and the handler may also require it
+            if let Some(chan_state) = &self.chan_state {
+                let _ = chan_state.send(new_state).await;
+            }
+        }
+    }
+
+    // Remove all candidates. This closes any listening sockets
+    // and removes both the local and remote candidate lists.
+    //
+    // This is used for restarts, failures and on close
+    fn delete_all_candidates(&mut self) {
+        for cs in &mut self.local_candidates.values_mut() {
+            for c in cs {
+                if let Err(err) = c.close() {
+                    log::warn!("Failed to close candidate {}: {}", c, err);
+                }
+            }
+        }
+        self.local_candidates.clear();
+
+        for cs in self.remote_candidates.values_mut() {
+            for c in cs {
+                if let Err(err) = c.close() {
+                    log::warn!("Failed to close candidate {}: {}", c, err);
+                }
+            }
+        }
+        self.remote_candidates.clear();
+    }
+
+    pub(crate) fn get_best_available_candidate_pair(&self) -> Option<&CandidatePair> {
+        let mut best: Option<&CandidatePair> = None;
+
+        for p in &self.checklist {
+            if p.state == CandidatePairState::Failed {
+                continue;
+            }
+
+            if let Some(b) = &mut best {
+                if b.priority() < p.priority() {
+                    *b = p;
+                }
+            } else {
+                best = Some(p);
+            }
+        }
+
+        best
+    }
+
+    pub(crate) fn get_best_available_candidate_pair_mut(&mut self) -> Option<&mut CandidatePair> {
+        let mut best: Option<&mut CandidatePair> = None;
+
+        for p in &mut self.checklist {
+            if p.state == CandidatePairState::Failed {
+                continue;
+            }
+
+            if let Some(b) = &mut best {
+                if b.priority() < p.priority() {
+                    *b = p;
+                }
+            } else {
+                best = Some(p);
+            }
+        }
+
+        best
+    }
+
+    pub(crate) fn add_pair(
+        &mut self,
+        local: Box<dyn Candidate + Send + Sync>,
+        remote: Box<dyn Candidate + Send + Sync>,
+    ) /*-> Option<&CandidatePair>*/
+    {
+        let p = CandidatePair::new(local, remote, self.is_controlling);
+        self.checklist.push(p);
+        //return p;
+    }
+
+    pub(crate) fn find_pair(
+        &self,
+        local: &(dyn Candidate + Send + Sync),
+        remote: &(dyn Candidate + Send + Sync),
+    ) -> Option<&CandidatePair> {
+        for p in &self.checklist {
+            if p.local.equal(local) && p.remote.equal(remote) {
+                return Some(p);
+            }
+        }
+        None
+    }
+
+    pub(crate) fn get_pair_mut(
+        &mut self,
+        local: &(dyn Candidate + Send + Sync),
+        remote: &(dyn Candidate + Send + Sync),
+    ) -> Option<&mut CandidatePair> {
+        for p in &mut self.checklist {
+            if p.local.equal(local) && p.remote.equal(remote) {
+                return Some(p);
+            }
+        }
+        None
+    }
+
+    // validate_selected_pair checks if the selected pair is (still) valid
+    // Note: the caller should hold the agent lock.
+    pub(crate) async fn validate_selected_pair(&mut self) -> bool {
+        if let Some(selected_pair) = &self.selected_pair {
+            let disconnected_time =
+                Instant::now().duration_since(selected_pair.remote.last_received());
+
+            // Only allow transitions to failed if a.failedTimeout is non-zero
+            let mut total_time_to_failure = self.failed_timeout;
+            if total_time_to_failure != Duration::from_secs(0) {
+                total_time_to_failure += self.disconnected_timeout;
+            }
+
+            if total_time_to_failure != Duration::from_secs(0)
+                && disconnected_time > total_time_to_failure
+            {
+                self.update_connection_state(ConnectionState::Failed).await;
+            } else if self.disconnected_timeout != Duration::from_secs(0)
+                && disconnected_time > self.disconnected_timeout
+            {
+                self.update_connection_state(ConnectionState::Disconnected)
+                    .await;
+            } else {
+                self.update_connection_state(ConnectionState::Connected)
+                    .await;
+            }
+
+            true
+        } else {
+            false
+        }
+    }
+
+    // checkKeepalive sends STUN Binding Indications to the selected pair
+    // if no packet has been sent on that pair in the last keepaliveInterval
+    // Note: the caller should hold the agent lock.
+    pub(crate) async fn check_keepalive(&self) {
+        if let Some(selected_pair) = &self.selected_pair {
+            if (self.keepalive_interval != Duration::from_secs(0))
+                && ((Instant::now().duration_since(selected_pair.local.last_sent())
+                    > self.keepalive_interval)
+                    || (Instant::now().duration_since(selected_pair.remote.last_received())
+                        > self.keepalive_interval))
+            {
+                // we use binding request instead of indication to support refresh consent schemas
+                // see https://tools.ietf.org/html/rfc7675
+                if let Some(selector) = &self.selector {
+                    selector
+                        .ping_candidate(&*selected_pair.local, &*selected_pair.remote)
+                        .await;
+                }
+            }
+        }
+    }
+
+    pub(crate) async fn ping_all_candidates(&mut self) {
+        log::trace!("pinging all candidates");
+
+        if self.checklist.is_empty() {
+            log::warn!(
+                "pingAllCandidates called with no candidate pairs. Connection is not possible yet."
+            );
+        }
+
+        for p in &mut self.checklist {
+            if p.state == CandidatePairState::Waiting {
+                p.state = CandidatePairState::InProgress;
+            } else if p.state != CandidatePairState::InProgress {
+                continue;
+            }
+
+            if p.binding_request_count > self.max_binding_requests {
+                log::trace!("max requests reached for pair {}, marking it as failed", p);
+                p.state = CandidatePairState::Failed;
+            } else if let Some(selector) = &self.selector {
+                selector.ping_candidate(&*(p.local), &*(p.remote)).await;
+                p.binding_request_count += 1;
+            }
+        }
+    }
+
+    pub(crate) fn send_binding_request(
+        &mut self,
+        m: &Message,
+        local: &(dyn Candidate + Send + Sync),
+        remote: &(dyn Candidate + Send + Sync),
+    ) {
+        log::trace!("ping STUN from {} to {}", local, remote);
+
+        //self.invalidatePendingBindingRequests(time.Now());
+        self.pending_binding_requests.push(BindingRequest {
+            timestamp: Instant::now(),
+            transaction_id: m.transaction_id,
+            destination: remote.addr(),
+            is_use_candidate: m.contains(ATTR_USE_CANDIDATE),
+        });
+
+        //TODO: self.send_stun(m, local, remote).await;
+    }
+}
+
+// Agent represents the ICE agent
+pub struct Agent {
+    agent_internal: Arc<Mutex<AgentInternal>>,
 }
 
 impl Agent {
@@ -174,7 +441,21 @@ impl Agent {
         let (chan_candidate_tx, chan_candidate_rx) = mpsc::channel(1);
         let (chan_candidate_pair_tx, chan_candidate_pair_rx) = mpsc::channel(1);
         let (on_connected_tx, on_connected_rx) = mpsc::channel(1);
-        let mut a = Agent {
+
+        let mut ai = AgentInternal {
+            on_connected_tx: Some(on_connected_tx),
+            on_connected_rx,
+            chan_state: Some(chan_state_tx),
+            chan_candidate: Some(chan_candidate_tx),
+            chan_candidate_pair: Some(chan_candidate_pair_tx),
+            // State for closing
+            done: None,
+
+            on_connection_state_change_hdlr: None,
+            on_selected_candidate_pair_change_hdlr: None,
+            on_candidate_hdlr: None,
+            selected_pair: None,
+
             tie_breaker: rand::random::<u64>(),
             lite: config.lite,
             gathering_state: GatheringState::New,
@@ -183,8 +464,6 @@ impl Agent {
             remote_candidates: HashMap::new(),
             urls: config.urls.clone(),
             network_types: config.network_types.clone(),
-            on_connected_rx,
-            on_connected_tx: Some(on_connected_tx),
 
             // Make sure the buffer doesn't grow indefinitely.
             // NOTE: We actually won't get anywhere close to this limit.
@@ -200,15 +479,10 @@ impl Agent {
 
             gather_candidate_cancel: None,
 
-            chan_state: Some(chan_state_tx),
-            chan_candidate: Some(chan_candidate_tx),
-            chan_candidate_pair: Some(chan_candidate_pair_tx),
-
             //TODO: forceCandidateContact: make(chan bool, 1),
             interface_filter: config.interface_filter.take(),
             insecure_skip_verify: config.insecure_skip_verify,
 
-            agent_internal: Arc::new(Mutex::new(AgentInternal::default())),
             force_candidate_contact: None,
             is_controlling: false,
             max_binding_requests: 0,
@@ -248,32 +522,14 @@ impl Agent {
 
             // 1:1 D-NAT IP address mapping
             ext_ip_mapper: ExternalIPMapper::default(),
-
-            // State for closing
-            done: None,
-            //TODO: err  atomicError
-
-            //TODO: gatherCandidateCancel func()
         };
 
-        /* TODO: ?a.tcpMux = config.TCPMux
-        if a.tcpMux == nil {
-            a.tcpMux = newInvalidTCPMux()
-        }
+        config.init_with_defaults(&mut ai);
 
-        if a.net == nil {
-            a.net = vnet.NewNet(nil)
-        } else if a.net.IsVirtual() {
-            a.log.Warn("vnet is enabled")
-            if a.mDNSMode != MulticastDNSModeDisabled {
-                a.log.Warn("vnet does not support mDNS yet")
-            }
-        }*/
-
-        config.init_with_defaults(&mut a);
-
-        if a.lite && (a.candidate_types.len() != 1 || a.candidate_types[0] != CandidateType::Host) {
-            if let Some(c) = &a.mdns_conn {
+        if ai.lite
+            && (ai.candidate_types.len() != 1 || ai.candidate_types[0] != CandidateType::Host)
+        {
+            if let Some(c) = &ai.mdns_conn {
                 if let Err(err) = c.close().await {
                     log::warn!("Failed to close mDNS: {}", err)
                 }
@@ -282,10 +538,10 @@ impl Agent {
         }
 
         if !config.urls.is_empty()
-            && !contains_candidate_type(CandidateType::ServerReflexive, &a.candidate_types)
-            && !contains_candidate_type(CandidateType::Relay, &a.candidate_types)
+            && !contains_candidate_type(CandidateType::ServerReflexive, &ai.candidate_types)
+            && !contains_candidate_type(CandidateType::Relay, &ai.candidate_types)
         {
-            if let Some(c) = &a.mdns_conn {
+            if let Some(c) = &ai.mdns_conn {
                 if let Err(err) = c.close().await {
                     log::warn!("Failed to close mDNS: {}", err)
                 }
@@ -293,14 +549,18 @@ impl Agent {
             return Err(ERR_USELESS_URLS_PROVIDED.to_owned());
         }
 
-        if let Err(err) = config.init_ext_ip_mapping(&mut a) {
-            if let Some(c) = &a.mdns_conn {
+        if let Err(err) = config.init_ext_ip_mapping(&mut ai) {
+            if let Some(c) = &ai.mdns_conn {
                 if let Err(err) = c.close().await {
                     log::warn!("Failed to close mDNS: {}", err)
                 }
             }
             return Err(err);
         }
+
+        let mut a = Agent {
+            agent_internal: Arc::new(Mutex::new(ai)),
+        };
 
         let agent_internal = Arc::clone(&a.agent_internal);
 
@@ -314,9 +574,12 @@ impl Agent {
 
         // Restart is also used to initialize the agent for the first time
         if let Err(err) = a.restart(config.local_ufrag, config.local_pwd).await {
-            if let Some(c) = &a.mdns_conn {
-                if let Err(err) = c.close().await {
-                    log::warn!("Failed to close mDNS: {}", err)
+            {
+                let ai = a.agent_internal.lock().await;
+                if let Some(c) = &ai.mdns_conn {
+                    if let Err(err) = c.close().await {
+                        log::warn!("Failed to close mDNS: {}", err)
+                    }
                 }
             }
             let _ = a.close();
@@ -327,20 +590,9 @@ impl Agent {
     }
 
     // Close cleans up the Agent
-    pub fn close(&mut self) -> Result<(), Error> {
-        if self.done.is_none() {
-            return Err(ERR_CLOSED.to_owned());
-        }
-
-        if let Some(gather_candidate_cancel) = &self.gather_candidate_cancel {
-            gather_candidate_cancel();
-        }
-
-        //TODO: ? a.tcpMux.RemoveConnByUfrag(a.localUfrag)
-
-        self.done.take();
-
-        Ok(())
+    pub async fn close(&self) -> Result<(), Error> {
+        let mut ai = self.agent_internal.lock().await;
+        ai.close()
     }
 
     async fn start_on_connection_state_change_routine(
@@ -442,168 +694,46 @@ impl Agent {
             return Err(ERR_LOCAL_PWD_INSUFFICIENT_BITS.to_owned());
         }
 
-        if self.gathering_state == GatheringState::Gathering {
+        let mut ai = self.agent_internal.lock().await;
+
+        if ai.gathering_state == GatheringState::Gathering {
             return Err(ERR_RESTART_WHEN_GATHERING.to_owned());
         }
 
         // Clear all agent needed to take back to fresh state
-        self.local_ufrag = ufrag;
-        self.local_pwd = pwd;
-        self.remote_ufrag = String::new();
-        self.remote_pwd = String::new();
+        ai.local_ufrag = ufrag;
+        ai.local_pwd = pwd;
+        ai.remote_ufrag = String::new();
+        ai.remote_pwd = String::new();
 
-        self.gathering_state = GatheringState::New;
-        self.checklist = vec![];
-        self.pending_binding_requests = vec![];
+        ai.gathering_state = GatheringState::New;
+        ai.checklist = vec![];
+        ai.pending_binding_requests = vec![];
 
-        self.set_selected_pair(None).await;
-        self.delete_all_candidates();
-        if let Some(selector) = &mut self.selector {
+        ai.set_selected_pair(None).await;
+        ai.delete_all_candidates();
+        if let Some(selector) = &mut ai.selector {
             selector.start();
         }
 
         // Restart is used by NewAgent. Accept/Connect should be used to move to checking
         // for new Agents
-        if self.connection_state != ConnectionState::New {
-            self.update_connection_state(ConnectionState::Checking)
-                .await;
+        if ai.connection_state != ConnectionState::New {
+            ai.update_connection_state(ConnectionState::Checking).await;
         }
 
         Ok(())
     }
 
-    async fn set_selected_pair(&mut self, p: Option<CandidatePair>) {
-        log::trace!("Set selected candidate pair: {:?}", p);
-
-        if let Some(mut p) = p {
-            p.nominated = true;
-            {
-                let mut ai = self.agent_internal.lock().await;
-                ai.selected_pair = Some(p);
-            }
-
-            self.update_connection_state(ConnectionState::Connected)
-                .await;
-
-            // Notify when the selected pair changes
-            if let Some(chan_candidate_pair) = &self.chan_candidate_pair {
-                let _ = chan_candidate_pair.send(()).await;
-            }
-
-            // Signal connected
-            self.on_connected_tx.take();
-        } else {
-            let mut ai = self.agent_internal.lock().await;
-            ai.selected_pair = None;
-        }
-    }
-
-    async fn update_connection_state(&mut self, new_state: ConnectionState) {
-        if self.connection_state != new_state {
-            // Connection has gone to failed, release all gathered candidates
-            if new_state == ConnectionState::Failed {
-                self.delete_all_candidates();
-            }
-
-            log::info!("Setting new connection state: {}", new_state);
-            self.connection_state = new_state;
-
-            // Call handler after finishing current task since we may be holding the agent lock
-            // and the handler may also require it
-            if let Some(chan_state) = &self.chan_state {
-                let _ = chan_state.send(new_state).await;
-            }
-        }
-    }
-
-    // Remove all candidates. This closes any listening sockets
-    // and removes both the local and remote candidate lists.
-    //
-    // This is used for restarts, failures and on close
-    fn delete_all_candidates(&mut self) {
-        for cs in &mut self.local_candidates.values_mut() {
-            for c in cs {
-                if let Err(err) = c.close() {
-                    log::warn!("Failed to close candidate {}: {}", c, err);
-                }
-            }
-        }
-        self.local_candidates.clear();
-
-        for cs in self.remote_candidates.values_mut() {
-            for c in cs {
-                if let Err(err) = c.close() {
-                    log::warn!("Failed to close candidate {}: {}", c, err);
-                }
-            }
-        }
-        self.remote_candidates.clear();
-    }
-
     // get_local_user_credentials returns the local user credentials
-    pub fn get_local_user_credentials(&self) -> (String, String) {
-        (self.local_ufrag.clone(), self.local_pwd.clone())
+    pub async fn get_local_user_credentials(&self) -> (String, String) {
+        let ai = self.agent_internal.lock().await;
+        (ai.local_ufrag.clone(), ai.local_pwd.clone())
     }
 
     // get_remote_user_credentials returns the remote user credentials
-    pub fn get_remote_user_credentials(&self) -> (String, String) {
-        (self.remote_ufrag.clone(), self.remote_pwd.clone())
-    }
-
-    pub(crate) fn get_best_available_candidate_pair(&self) -> Option<&CandidatePair> {
-        let mut best: Option<&CandidatePair> = None;
-
-        for p in &self.checklist {
-            if p.state == CandidatePairState::Failed {
-                continue;
-            }
-
-            if let Some(b) = &mut best {
-                if b.priority() < p.priority() {
-                    *b = p;
-                }
-            } else {
-                best = Some(p);
-            }
-        }
-
-        best
-    }
-
-    pub(crate) fn add_pair(
-        &mut self,
-        local: Box<dyn Candidate + Send + Sync>,
-        remote: Box<dyn Candidate + Send + Sync>,
-    ) /*-> Option<&CandidatePair>*/
-    {
-        let p = CandidatePair::new(local, remote, self.is_controlling);
-        self.checklist.push(p);
-        //return p;
-    }
-
-    pub(crate) fn find_pair(
-        &self,
-        local: &(dyn Candidate + Send + Sync),
-        remote: &(dyn Candidate + Send + Sync),
-    ) -> Option<&CandidatePair> {
-        for p in &self.checklist {
-            if p.local.equal(local) && p.remote.equal(remote) {
-                return Some(p);
-            }
-        }
-        None
-    }
-
-    pub(crate) fn get_pair_mut(
-        &mut self,
-        local: &(dyn Candidate + Send + Sync),
-        remote: &(dyn Candidate + Send + Sync),
-    ) -> Option<&mut CandidatePair> {
-        for p in &mut self.checklist {
-            if p.local.equal(local) && p.remote.equal(remote) {
-                return Some(p);
-            }
-        }
-        None
+    pub async fn get_remote_user_credentials(&self) -> (String, String) {
+        let ai = self.agent_internal.lock().await;
+        (ai.remote_ufrag.clone(), ai.remote_pwd.clone())
     }
 }

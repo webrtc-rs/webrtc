@@ -9,7 +9,7 @@ use util::Error;
 
 // PriorityAttr represents PRIORITY attribute.
 #[derive(Default, PartialEq, Debug, Copy, Clone)]
-pub struct PriorityAttr(u32);
+pub struct PriorityAttr(pub u32);
 
 const PRIORITY_SIZE: usize = 4; // 32 bit
 

@@ -23,6 +23,7 @@ crc32fast = "1.2.1"
 uuid = { version = "0.8", features = ["v4"] }
 rand = "0.8.3"
 log = "0.4.14"
+async-trait = "0.1.42"
 
 [dev-dependencies]
 tokio-test = "0.4"
