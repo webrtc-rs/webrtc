@@ -1,7 +1,7 @@
 use crate::candidate::*;
 
 use crate::agent::AgentInternal;
-use crate::candidate::candidate_pair::CandidatePair;
+use crate::candidate::candidate_pair::{CandidatePair, CandidatePairState};
 use crate::candidate::candidate_type::CandidateType;
 use crate::control::*;
 use crate::priority::*;
@@ -11,8 +11,6 @@ use stun::{agent::*, attributes::*, fingerprint::*, integrity::*, message::*, te
 
 use async_trait::async_trait;
 use std::net::SocketAddr;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 use tokio::time::Instant;
 
 #[async_trait]
@@ -20,51 +18,49 @@ pub(crate) trait PairCandidateSelector {
     fn start(&mut self);
     async fn contact_candidates(&mut self);
     async fn ping_candidate(
-        &self,
+        &mut self,
         local: &(dyn Candidate + Send + Sync),
         remote: &(dyn Candidate + Send + Sync),
     );
-    fn handle_success_response(
-        &self,
+    async fn handle_success_response(
+        &mut self,
         m: &Message,
         local: &(dyn Candidate + Send + Sync),
         remote: &(dyn Candidate + Send + Sync),
         remote_addr: SocketAddr,
     );
-    fn handle_binding_request(
-        &self,
+    async fn handle_binding_request(
+        &mut self,
         m: &Message,
         local: &(dyn Candidate + Send + Sync),
         remote: &(dyn Candidate + Send + Sync),
     );
 }
 
-pub(crate) struct ControllingSelector {
+pub(crate) struct ControllingSelector<'a> {
     start_time: Instant,
-    agent: Arc<Mutex<AgentInternal>>,
+    agent: &'a mut AgentInternal,
     nominated_pair: Option<CandidatePair>,
 }
 
-impl ControllingSelector {
+impl<'a> ControllingSelector<'a> {
     async fn is_nominatable(&self, c: &(dyn Candidate + Send + Sync)) -> bool {
-        let agent = self.agent.lock().await;
-
         match c.candidate_type() {
             CandidateType::Host => {
                 Instant::now().duration_since(self.start_time).as_nanos()
-                    > agent.host_acceptance_min_wait.as_nanos()
+                    > self.agent.host_acceptance_min_wait.as_nanos()
             }
             CandidateType::ServerReflexive => {
                 Instant::now().duration_since(self.start_time).as_nanos()
-                    > agent.srflx_acceptance_min_wait.as_nanos()
+                    > self.agent.srflx_acceptance_min_wait.as_nanos()
             }
             CandidateType::PeerReflexive => {
                 Instant::now().duration_since(self.start_time).as_nanos()
-                    > agent.prflx_acceptance_min_wait.as_nanos()
+                    > self.agent.prflx_acceptance_min_wait.as_nanos()
             }
             CandidateType::Relay => {
                 Instant::now().duration_since(self.start_time).as_nanos()
-                    > agent.relay_acceptance_min_wait.as_nanos()
+                    > self.agent.relay_acceptance_min_wait.as_nanos()
             }
             _ => {
                 log::error!(
@@ -76,62 +72,65 @@ impl ControllingSelector {
         }
     }
 
-    async fn nominate_pair(&self, agent: &AgentInternal, pair: &CandidatePair) {
-        // The controlling agent MUST include the USE-CANDIDATE attribute in
-        // order to nominate a candidate pair (Section 8.1.1).  The controlled
-        // agent MUST NOT include the USE-CANDIDATE attribute in a Binding
-        // request.
-        let mut msg = Message::new();
-        if let Err(err) = msg.build(&[
-            Box::new(BINDING_REQUEST),
-            Box::new(TransactionId::default()),
-            Box::new(Username::new(
-                ATTR_USERNAME,
-                agent.remote_ufrag.clone() + ":" + agent.local_ufrag.as_str(),
-            )),
-            Box::new(UseCandidateAttr::default()),
-            Box::new(AttrControlling(agent.tie_breaker)),
-            Box::new(PriorityAttr(pair.local.priority())),
-            Box::new(MessageIntegrity::new_short_term_integrity(
-                agent.remote_pwd.clone(),
-            )),
-            Box::new(FINGERPRINT),
-        ]) {
-            log::error!("{}", err);
-            return;
+    async fn nominate_pair(&mut self) {
+        if let Some(pair) = &self.nominated_pair {
+            // The controlling agent MUST include the USE-CANDIDATE attribute in
+            // order to nominate a candidate pair (Section 8.1.1).  The controlled
+            // agent MUST NOT include the USE-CANDIDATE attribute in a Binding
+            // request.
+            let username = self.agent.remote_ufrag.clone() + ":" + self.agent.local_ufrag.as_str();
+            let mut msg = Message::new();
+            if let Err(err) = msg.build(&[
+                Box::new(BINDING_REQUEST),
+                Box::new(TransactionId::default()),
+                Box::new(Username::new(ATTR_USERNAME, username)),
+                Box::new(UseCandidateAttr::default()),
+                Box::new(AttrControlling(self.agent.tie_breaker)),
+                Box::new(PriorityAttr(pair.local.priority())),
+                Box::new(MessageIntegrity::new_short_term_integrity(
+                    self.agent.remote_pwd.clone(),
+                )),
+                Box::new(FINGERPRINT),
+            ]) {
+                log::error!("{}", err);
+            } else {
+                log::trace!(
+                    "ping STUN (nominate candidate pair from {} to {}",
+                    pair.local,
+                    pair.remote
+                );
+                self.agent
+                    .send_binding_request(&msg, &*(pair.local), &*(pair.remote));
+            }
         }
-
-        log::trace!(
-            "ping STUN (nominate candidate pair) from {} to {}",
-            pair.local,
-            pair.remote
-        );
-        //TODO: agent.send_binding_request(&msg, &*(pair.local), &*(pair.remote));
     }
 }
 
 #[async_trait]
-impl PairCandidateSelector for ControllingSelector {
+impl<'a> PairCandidateSelector for ControllingSelector<'a> {
     fn start(&mut self) {
         self.start_time = Instant::now();
         self.nominated_pair = None;
     }
 
     async fn contact_candidates(&mut self) {
-        let mut agent = self.agent.lock().await;
-
-        if agent.get_selected_pair().is_some() {
-            if agent.validate_selected_pair().await {
+        if self.agent.get_selected_pair().is_some() {
+            if self.agent.validate_selected_pair().await {
                 log::trace!("checking keepalive");
-                agent.check_keepalive().await;
+                self.agent.check_keepalive().await;
             }
-        } else if let Some(pair) = &self.nominated_pair {
-            self.nominate_pair(&agent, pair).await;
+        } else if self.nominated_pair.is_some() {
+            self.nominate_pair().await;
         } else {
-            let mut has_nominated_pair = false;
-            if let Some(p) = agent.get_best_available_candidate_pair_mut() {
-                if self.is_nominatable(&*(p.local)).await && self.is_nominatable(&*(p.remote)).await
-                {
+            let has_nominated_pair = if let Some(p) = self.agent.get_best_available_candidate_pair()
+            {
+                self.is_nominatable(&*(p.local)).await && self.is_nominatable(&*(p.remote)).await
+            } else {
+                false
+            };
+
+            if has_nominated_pair {
+                if let Some(p) = self.agent.get_best_available_candidate_pair_mut() {
                     log::trace!(
                         "Nominatable pair found, nominating ({}, {})",
                         p.local.to_string(),
@@ -139,136 +138,114 @@ impl PairCandidateSelector for ControllingSelector {
                     );
                     p.nominated = true;
                     self.nominated_pair = Some(p.clone());
-                    has_nominated_pair = true;
                 }
-            }
 
-            if has_nominated_pair {
-                if let Some(pair) = &self.nominated_pair {
-                    self.nominate_pair(&agent, pair).await;
-                }
+                self.nominate_pair().await;
             } else {
-                agent.ping_all_candidates().await;
+                self.agent.ping_all_candidates().await;
             }
         }
     }
 
     async fn ping_candidate(
-        &self,
-        _local: &(dyn Candidate + Send + Sync),
-        _remote: &(dyn Candidate + Send + Sync),
+        &mut self,
+        local: &(dyn Candidate + Send + Sync),
+        remote: &(dyn Candidate + Send + Sync),
     ) {
-    }
-
-    fn handle_success_response(
-        &self,
-        _m: &Message,
-        _local: &(dyn Candidate + Send + Sync),
-        _remote: &(dyn Candidate + Send + Sync),
-        _remote_addr: SocketAddr,
-    ) {
-    }
-    fn handle_binding_request(
-        &self,
-        _m: &Message,
-        _local: &(dyn Candidate + Send + Sync),
-        _remote: &(dyn Candidate + Send + Sync),
-    ) {
-    }
-
-    /*
-    func (s *ControllingSelector) nominatePair(pair *candidatePair) {
-        // The controlling agent MUST include the USE-CANDIDATE attribute in
-        // order to nominate a candidate pair (Section 8.1.1).  The controlled
-        // agent MUST NOT include the USE-CANDIDATE attribute in a Binding
-        // request.
-        msg, err := stun.Build(stun.BindingRequest, stun.TransactionID,
-            stun.NewUsername(s.agent.remoteUfrag+":"+s.agent.localUfrag),
-            UseCandidate(),
-            AttrControlling(s.agent.tieBreaker),
-            PriorityAttr(pair.local.Priority()),
-            stun.NewShortTermIntegrity(s.agent.remotePwd),
-            stun.Fingerprint,
-        )
-        if err != nil {
-            s.log.Error(err.Error())
-            return
+        let username = self.agent.remote_ufrag.clone() + ":" + self.agent.local_ufrag.as_str();
+        let mut msg = Message::new();
+        if let Err(err) = msg.build(&[
+            Box::new(BINDING_REQUEST),
+            Box::new(TransactionId::default()),
+            Box::new(Username::new(ATTR_USERNAME, username)),
+            Box::new(AttrControlling(self.agent.tie_breaker)),
+            Box::new(PriorityAttr(local.priority())),
+            Box::new(MessageIntegrity::new_short_term_integrity(
+                self.agent.remote_pwd.clone(),
+            )),
+            Box::new(FINGERPRINT),
+        ]) {
+            log::error!("{}", err);
+        } else {
+            self.agent.send_binding_request(&msg, local, remote);
         }
-
-        s.log.Tracef("ping STUN (nominate candidate pair) from %s to %s\n", pair.local.String(), pair.remote.String())
-        s.agent.sendBindingRequest(msg, pair.local, pair.remote)
     }
 
-    func (s *ControllingSelector) handle_binding_request(m *stun.Message, local, remote Candidate) {
-        s.agent.sendBindingSuccess(m, local, remote)
+    async fn handle_success_response(
+        &mut self,
+        m: &Message,
+        local: &(dyn Candidate + Send + Sync),
+        remote: &(dyn Candidate + Send + Sync),
+        remote_addr: SocketAddr,
+    ) {
+        if let Some(pending_request) = self.agent.handle_inbound_binding_success(m.transaction_id) {
+            let transaction_addr = pending_request.destination;
 
-        p := s.agent.findPair(local, remote)
-
-        if p == nil {
-            s.agent.addPair(local, remote)
-            return
-        }
-
-        if p.state == CandidatePairStateSucceeded && s.nominated_pair == nil && s.agent.getSelectedPair() == nil {
-            bestPair := s.agent.getBestAvailableCandidatePair()
-            if bestPair == nil {
-                s.log.Tracef("No best pair available\n")
-            } else if bestPair.Equal(p) && s.is_nominatable(p.local) && s.is_nominatable(p.remote) {
-                s.log.Tracef("The candidate (%s, %s) is the best candidate available, marking it as nominated\n",
-                    p.local.String(), p.remote.String())
-                s.nominated_pair = p
-                s.nominatePair(p)
+            // Assert that NAT is not symmetric
+            // https://tools.ietf.org/html/rfc8445#section-7.2.5.2.1
+            if transaction_addr != remote_addr {
+                log::debug!("discard message: transaction source and destination does not match expected({}), actual({})", transaction_addr, remote);
+                return;
             }
+
+            log::trace!(
+                "inbound STUN (SuccessResponse) from {} to {}",
+                remote,
+                local
+            );
+            let selected_pair_is_none = self.agent.get_selected_pair().is_none();
+
+            if let Some(p) = self.agent.find_pair(local, remote) {
+                let mut p = p.clone();
+                p.state = CandidatePairState::Succeeded;
+                log::trace!("Found valid candidate pair: {}", p);
+                if pending_request.is_use_candidate && selected_pair_is_none {
+                    self.agent.set_selected_pair(Some(p.clone())).await;
+                }
+            } else {
+                // This shouldn't happen
+                log::error!("Success response from invalid candidate pair");
+            }
+        } else {
+            log::warn!(
+                "discard message from ({}), unknown TransactionID 0x{:?}",
+                remote,
+                m.transaction_id
+            );
         }
     }
 
-    func (s *ControllingSelector) handle_success_response(m *stun.Message, local, remote Candidate, remoteAddr net.Addr) {
-        ok, pendingRequest := s.agent.handleInboundBindingSuccess(m.TransactionID)
-        if !ok {
-            s.log.Warnf("discard message from (%s), unknown TransactionID 0x%x", remote, m.TransactionID)
-            return
-        }
+    async fn handle_binding_request(
+        &mut self,
+        m: &Message,
+        local: &(dyn Candidate + Send + Sync),
+        remote: &(dyn Candidate + Send + Sync),
+    ) {
+        self.agent.send_binding_request(m, local, remote);
 
-        transactionAddr := pendingRequest.destination
-
-        // Assert that NAT is not symmetric
-        // https://tools.ietf.org/html/rfc8445#section-7.2.5.2.1
-        if !addrEqual(transactionAddr, remoteAddr) {
-            s.log.Debugf("discard message: transaction source and destination does not match expected(%s), actual(%s)", transactionAddr, remote)
-            return
-        }
-
-        s.log.Tracef("inbound STUN (SuccessResponse) from %s to %s", remote.String(), local.String())
-        p := s.agent.findPair(local, remote)
-
-        if p == nil {
-            // This shouldn't happen
-            s.log.Error("Success response from invalid candidate pair")
-            return
-        }
-
-        p.state = CandidatePairStateSucceeded
-        s.log.Tracef("Found valid candidate pair: %s", p)
-        if pendingRequest.isUseCandidate && s.agent.getSelectedPair() == nil {
-            s.agent.setSelectedPair(p)
+        if let Some(p) = self.agent.find_pair(local, remote) {
+            if p.state == CandidatePairState::Succeeded
+                && self.nominated_pair.is_none()
+                && self.agent.get_selected_pair().is_none()
+            {
+                if let Some(best_pair) = self.agent.get_best_available_candidate_pair() {
+                    if best_pair == p
+                        && self.is_nominatable(&*(p.local)).await
+                        && self.is_nominatable(&*(p.remote)).await
+                    {
+                        log::trace!("The candidate ({}, {}) is the best candidate available, marking it as nominated",
+                            p.local, p.remote);
+                        self.nominated_pair = Some(p.clone());
+                        self.nominate_pair().await;
+                    }
+                } else {
+                    log::trace!("No best pair available");
+                }
+            }
+        } else {
+            self.agent.add_pair(local.clone(), remote.clone());
         }
     }
-
-    func (s *ControllingSelector) ping_candidate(local, remote Candidate) {
-        msg, err := stun.Build(stun.BindingRequest, stun.TransactionID,
-            stun.NewUsername(s.agent.remoteUfrag+":"+s.agent.localUfrag),
-            AttrControlling(s.agent.tieBreaker),
-            PriorityAttr(local.Priority()),
-            stun.NewShortTermIntegrity(s.agent.remotePwd),
-            stun.Fingerprint,
-        )
-        if err != nil {
-            s.log.Error(err.Error())
-            return
-        }
-
-        s.agent.sendBindingRequest(msg, local, remote)
-    }*/
 }
 
 /*

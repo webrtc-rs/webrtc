@@ -16,13 +16,13 @@ use crate::state::*;
 use crate::url::*;
 
 use mdns::conn::*;
-use stun::{agent::*, attributes::*, message::*};
+use stun::{agent::*, attributes::*, fingerprint::*, integrity::*, message::*, xoraddr::*};
 use util::{Buffer, Error};
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
 
-use crate::agent::agent_config::{AgentConfig, MAX_BUFFER_SIZE};
+use crate::agent::agent_config::{AgentConfig, MAX_BINDING_REQUEST_TIMEOUT, MAX_BUFFER_SIZE};
 use crate::rand::*;
 use crate::selector::PairCandidateSelector;
 
@@ -33,8 +33,8 @@ use tokio::time::{Duration, Instant};
 pub(crate) struct BindingRequest {
     timestamp: Instant,
     transaction_id: TransactionId,
-    destination: SocketAddr,
-    is_use_candidate: bool,
+    pub(crate) destination: SocketAddr,
+    pub(crate) is_use_candidate: bool,
 }
 
 pub type OnConnectionStateChangeHdlrFn = Box<dyn Fn(ConnectionState) + Send + Sync>;
@@ -336,7 +336,7 @@ impl AgentInternal {
     // checkKeepalive sends STUN Binding Indications to the selected pair
     // if no packet has been sent on that pair in the last keepaliveInterval
     // Note: the caller should hold the agent lock.
-    pub(crate) async fn check_keepalive(&self) {
+    pub(crate) async fn check_keepalive(&mut self) {
         if let Some(selected_pair) = &self.selected_pair {
             if (self.keepalive_interval != Duration::from_secs(0))
                 && ((Instant::now().duration_since(selected_pair.local.last_sent())
@@ -346,7 +346,7 @@ impl AgentInternal {
             {
                 // we use binding request instead of indication to support refresh consent schemas
                 // see https://tools.ietf.org/html/rfc7675
-                if let Some(selector) = &self.selector {
+                if let Some(selector) = &mut self.selector {
                     selector
                         .ping_candidate(&*selected_pair.local, &*selected_pair.remote)
                         .await;
@@ -374,7 +374,7 @@ impl AgentInternal {
             if p.binding_request_count > self.max_binding_requests {
                 log::trace!("max requests reached for pair {}, marking it as failed", p);
                 p.state = CandidatePairState::Failed;
-            } else if let Some(selector) = &self.selector {
+            } else if let Some(selector) = &mut self.selector {
                 selector.ping_candidate(&*(p.local), &*(p.remote)).await;
                 p.binding_request_count += 1;
             }
@@ -389,7 +389,7 @@ impl AgentInternal {
     ) {
         log::trace!("ping STUN from {} to {}", local, remote);
 
-        //self.invalidatePendingBindingRequests(time.Now());
+        self.invalidate_pending_binding_requests(Instant::now());
         self.pending_binding_requests.push(BindingRequest {
             timestamp: Instant::now(),
             transaction_id: m.transaction_id,
@@ -397,7 +397,88 @@ impl AgentInternal {
             is_use_candidate: m.contains(ATTR_USE_CANDIDATE),
         });
 
-        //TODO: self.send_stun(m, local, remote).await;
+        self.send_stun(m, local, remote);
+    }
+
+    pub(crate) fn send_binding_success(
+        &mut self,
+        m: &Message,
+        local: &(dyn Candidate + Send + Sync),
+        remote: &(dyn Candidate + Send + Sync),
+    ) {
+        let (ip, port) = (remote.addr().ip(), remote.addr().port());
+
+        let mut out = Message::new();
+        if let Err(err) = out.build(&[
+            Box::new(m.clone()),
+            Box::new(BINDING_SUCCESS),
+            Box::new(XORMappedAddress { ip, port }),
+            Box::new(MessageIntegrity::new_short_term_integrity(
+                self.local_pwd.clone(),
+            )),
+            Box::new(FINGERPRINT),
+        ]) {
+            log::warn!(
+                "Failed to handle inbound ICE from: {} to: {} error: {}",
+                local,
+                remote,
+                err
+            );
+        } else {
+            self.send_stun(&out, local, remote);
+        }
+    }
+
+    /* Removes pending binding requests that are over maxBindingRequestTimeout old
+       Let HTO be the transaction timeout, which SHOULD be 2*RTT if
+       RTT is known or 500 ms otherwise.
+       https://tools.ietf.org/html/rfc8445#appendix-B.1
+    */
+    fn invalidate_pending_binding_requests(&mut self, filter_time: Instant) {
+        let initial_size = self.pending_binding_requests.len();
+
+        let mut temp = vec![];
+        for binding_request in self.pending_binding_requests.drain(..) {
+            if filter_time.duration_since(binding_request.timestamp) < MAX_BINDING_REQUEST_TIMEOUT {
+                temp.push(binding_request);
+            }
+        }
+
+        self.pending_binding_requests = temp;
+        let bind_requests_removed = initial_size - self.pending_binding_requests.len();
+        if bind_requests_removed > 0 {
+            log::trace!(
+                "Discarded {} binding requests because they expired",
+                bind_requests_removed
+            );
+        }
+    }
+
+    fn send_stun(
+        &self,
+        _msg: &Message,
+        _local: &(dyn Candidate + Send + Sync),
+        _remote: &(dyn Candidate + Send + Sync),
+    ) {
+        /*TODO: if let Err(err) = local.write_to(&msg.raw, remote) {
+            log::trace!("failed to send STUN message: {}", err);
+        }*/
+    }
+
+    // Assert that the passed TransactionID is in our pendingBindingRequests and returns the destination
+    // If the bindingRequest was valid remove it from our pending cache
+    pub(crate) fn handle_inbound_binding_success(
+        &mut self,
+        id: TransactionId,
+    ) -> Option<BindingRequest> {
+        self.invalidate_pending_binding_requests(Instant::now());
+        for i in 0..self.pending_binding_requests.len() {
+            if self.pending_binding_requests[i].transaction_id == id {
+                let valid_binding_request = self.pending_binding_requests.remove(i);
+                return Some(valid_binding_request);
+            }
+        }
+        None
     }
 }
 
