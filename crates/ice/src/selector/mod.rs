@@ -38,12 +38,22 @@ pub(crate) trait PairCandidateSelector {
 }
 
 pub(crate) struct ControllingSelector<'a> {
+    pub(crate) agent: &'a mut AgentInternal,
+    pub(crate) lite: bool,
     start_time: Instant,
-    agent: &'a mut AgentInternal,
     nominated_pair: Option<CandidatePair>,
 }
 
 impl<'a> ControllingSelector<'a> {
+    pub(crate) fn new(agent: &'a mut AgentInternal, lite: bool) -> Self {
+        ControllingSelector {
+            agent,
+            lite,
+            start_time: Instant::now(),
+            nominated_pair: None,
+        }
+    }
+
     async fn is_nominatable(&self, c: &(dyn Candidate + Send + Sync)) -> bool {
         match c.candidate_type() {
             CandidateType::Host => {
@@ -114,6 +124,13 @@ impl<'a> PairCandidateSelector for ControllingSelector<'a> {
     }
 
     async fn contact_candidates(&mut self) {
+        // A lite selector should not contact candidates
+        if self.lite {
+            // TODO: implement lite controlling agent. For now falling back to full agent.
+            // This only happens if both peers are lite. See RFC 8445 S6.1.1 and S6.2
+            log::trace!("now falling back to full agent");
+        }
+
         if self.agent.get_selected_pair().is_some() {
             if self.agent.validate_selected_pair().await {
                 log::trace!("checking keepalive");
@@ -249,7 +266,14 @@ impl<'a> PairCandidateSelector for ControllingSelector<'a> {
 }
 
 pub(crate) struct ControlledSelector<'a> {
-    agent: &'a mut AgentInternal,
+    pub(crate) agent: &'a mut AgentInternal,
+    pub(crate) lite: bool,
+}
+
+impl<'a> ControlledSelector<'a> {
+    pub(crate) fn new(agent: &'a mut AgentInternal, lite: bool) -> Self {
+        ControlledSelector { agent, lite }
+    }
 }
 
 #[async_trait]
@@ -257,7 +281,10 @@ impl<'a> PairCandidateSelector for ControlledSelector<'a> {
     fn start(&mut self) {}
 
     async fn contact_candidates(&mut self) {
-        if self.agent.get_selected_pair().is_some() {
+        // A lite selector should not contact candidates
+        if self.lite {
+            self.agent.validate_selected_pair().await;
+        } else if self.agent.get_selected_pair().is_some() {
             if self.agent.validate_selected_pair().await {
                 log::trace!("checking keepalive");
                 self.agent.check_keepalive().await;
@@ -380,21 +407,3 @@ impl<'a> PairCandidateSelector for ControlledSelector<'a> {
         }
     }
 }
-/*
-type liteSelector struct {
-    PairCandidateSelector
-}
-
-// A lite selector should not contact candidates
-func (s *liteSelector) contact_candidates() {
-    if _, ok := s.PairCandidateSelector.(*ControllingSelector); ok {
-        // nolint:godox
-        // pion/ice#96
-        // TODO: implement lite controlling agent. For now falling back to full agent.
-        // This only happens if both peers are lite. See RFC 8445 S6.1.1 and S6.2
-        s.PairCandidateSelector.contact_candidates()
-    } else if v, ok := s.PairCandidateSelector.(*controlledSelector); ok {
-        v.agent.validate_selected_pair()
-    }
-}
-*/
