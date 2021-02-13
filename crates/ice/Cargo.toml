@@ -24,6 +24,7 @@ uuid = { version = "0.8", features = ["v4"] }
 rand = "0.8.3"
 log = "0.4.14"
 async-trait = "0.1.42"
+funty = "=1.1.0" # temporary workaround: https://github.com/bitvecto-rs/bitvec/issues/105
 
 [dev-dependencies]
 tokio-test = "0.4"
