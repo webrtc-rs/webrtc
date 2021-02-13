@@ -248,117 +248,139 @@ impl<'a> PairCandidateSelector for ControllingSelector<'a> {
     }
 }
 
-/*
-type controlledSelector struct {
-    agent *Agent
-    log   logging.LeveledLogger
+pub(crate) struct ControlledSelector<'a> {
+    agent: &'a mut AgentInternal,
 }
 
-func (s *controlledSelector) Start() {
-}
+#[async_trait]
+impl<'a> PairCandidateSelector for ControlledSelector<'a> {
+    fn start(&mut self) {}
 
-func (s *controlledSelector) contact_candidates() {
-    if s.agent.getSelectedPair() != nil {
-        if s.agent.validate_selected_pair() {
-            s.log.Trace("checking keepalive")
-            s.agent.checkKeepalive()
-        }
-    } else {
-        s.agent.pingAllCandidates()
-    }
-}
-
-func (s *controlledSelector) ping_candidate(local, remote Candidate) {
-    msg, err := stun.Build(stun.BindingRequest, stun.TransactionID,
-        stun.NewUsername(s.agent.remoteUfrag+":"+s.agent.localUfrag),
-        AttrControlled(s.agent.tieBreaker),
-        PriorityAttr(local.Priority()),
-        stun.NewShortTermIntegrity(s.agent.remotePwd),
-        stun.Fingerprint,
-    )
-    if err != nil {
-        s.log.Error(err.Error())
-        return
-    }
-
-    s.agent.sendBindingRequest(msg, local, remote)
-}
-
-func (s *controlledSelector) handle_success_response(m *stun.Message, local, remote Candidate, remoteAddr net.Addr) {
-    // nolint:godox
-    // TODO according to the standard we should specifically answer a failed nomination:
-    // https://tools.ietf.org/html/rfc8445#section-7.3.1.5
-    // If the controlled agent does not accept the request from the
-    // controlling agent, the controlled agent MUST reject the nomination
-    // request with an appropriate error code response (e.g., 400)
-    // [RFC5389].
-
-    ok, pendingRequest := s.agent.handleInboundBindingSuccess(m.TransactionID)
-    if !ok {
-        s.log.Warnf("discard message from (%s), unknown TransactionID 0x%x", remote, m.TransactionID)
-        return
-    }
-
-    transactionAddr := pendingRequest.destination
-
-    // Assert that NAT is not symmetric
-    // https://tools.ietf.org/html/rfc8445#section-7.2.5.2.1
-    if !addrEqual(transactionAddr, remoteAddr) {
-        s.log.Debugf("discard message: transaction source and destination does not match expected(%s), actual(%s)", transactionAddr, remote)
-        return
-    }
-
-    s.log.Tracef("inbound STUN (SuccessResponse) from %s to %s", remote.String(), local.String())
-
-    p := s.agent.findPair(local, remote)
-    if p == nil {
-        // This shouldn't happen
-        s.log.Error("Success response from invalid candidate pair")
-        return
-    }
-
-    p.state = CandidatePairStateSucceeded
-    s.log.Tracef("Found valid candidate pair: %s", p)
-}
-
-func (s *controlledSelector) handle_binding_request(m *stun.Message, local, remote Candidate) {
-    useCandidate := m.Contains(stun.AttrUseCandidate)
-
-    p := s.agent.findPair(local, remote)
-
-    if p == nil {
-        p = s.agent.addPair(local, remote)
-    }
-
-    if useCandidate {
-        // https://tools.ietf.org/html/rfc8445#section-7.3.1.5
-
-        if p.state == CandidatePairStateSucceeded {
-            // If the state of this pair is Succeeded, it means that the check
-            // previously sent by this pair produced a successful response and
-            // generated a valid pair (Section 7.2.5.3.2).  The agent sets the
-            // nominated flag value of the valid pair to true.
-            if selected_pair := s.agent.getSelectedPair(); selected_pair == nil {
-                s.agent.setSelectedPair(p)
+    async fn contact_candidates(&mut self) {
+        if self.agent.get_selected_pair().is_some() {
+            if self.agent.validate_selected_pair().await {
+                log::trace!("checking keepalive");
+                self.agent.check_keepalive().await;
             }
-            s.agent.sendBindingSuccess(m, local, remote)
         } else {
-            // If the received Binding request triggered a new check to be
-            // enqueued in the triggered-check queue (Section 7.3.1.4), once the
-            // check is sent and if it generates a successful response, and
-            // generates a valid pair, the agent sets the nominated flag of the
-            // pair to true.  If the request fails (Section 7.2.5.2), the agent
-            // MUST remove the candidate pair from the valid list, set the
-            // candidate pair state to Failed, and set the checklist state to
-            // Failed.
-            s.ping_candidate(local, remote)
+            self.agent.ping_all_candidates().await;
         }
-    } else {
-        s.agent.sendBindingSuccess(m, local, remote)
-        s.ping_candidate(local, remote)
+    }
+
+    async fn ping_candidate(
+        &mut self,
+        local: &(dyn Candidate + Send + Sync),
+        remote: &(dyn Candidate + Send + Sync),
+    ) {
+        let username = self.agent.remote_ufrag.clone() + ":" + self.agent.local_ufrag.as_str();
+        let mut msg = Message::new();
+        if let Err(err) = msg.build(&[
+            Box::new(BINDING_REQUEST),
+            Box::new(TransactionId::default()),
+            Box::new(Username::new(ATTR_USERNAME, username)),
+            Box::new(AttrControlled(self.agent.tie_breaker)),
+            Box::new(PriorityAttr(local.priority())),
+            Box::new(MessageIntegrity::new_short_term_integrity(
+                self.agent.remote_pwd.clone(),
+            )),
+            Box::new(FINGERPRINT),
+        ]) {
+            log::error!("{}", err);
+        } else {
+            self.agent.send_binding_request(&msg, local, remote);
+        }
+    }
+
+    async fn handle_success_response(
+        &mut self,
+        m: &Message,
+        local: &(dyn Candidate + Send + Sync),
+        remote: &(dyn Candidate + Send + Sync),
+        remote_addr: SocketAddr,
+    ) {
+        // TODO according to the standard we should specifically answer a failed nomination:
+        // https://tools.ietf.org/html/rfc8445#section-7.3.1.5
+        // If the controlled agent does not accept the request from the
+        // controlling agent, the controlled agent MUST reject the nomination
+        // request with an appropriate error code response (e.g., 400)
+        // [RFC5389].
+
+        if let Some(pending_request) = self.agent.handle_inbound_binding_success(m.transaction_id) {
+            let transaction_addr = pending_request.destination;
+
+            // Assert that NAT is not symmetric
+            // https://tools.ietf.org/html/rfc8445#section-7.2.5.2.1
+            if transaction_addr != remote_addr {
+                log::debug!("discard message: transaction source and destination does not match expected({}), actual({})", transaction_addr, remote);
+                return;
+            }
+
+            log::trace!(
+                "inbound STUN (SuccessResponse) from {} to {}",
+                remote,
+                local
+            );
+
+            if let Some(p) = self.agent.get_pair_mut(local, remote) {
+                p.state = CandidatePairState::Succeeded;
+                log::trace!("Found valid candidate pair: {}", p);
+            } else {
+                // This shouldn't happen
+                log::error!("Success response from invalid candidate pair");
+            }
+        } else {
+            log::warn!(
+                "discard message from ({}), unknown TransactionID 0x{:?}",
+                remote,
+                m.transaction_id
+            );
+        }
+    }
+
+    async fn handle_binding_request(
+        &mut self,
+        m: &Message,
+        local: &(dyn Candidate + Send + Sync),
+        remote: &(dyn Candidate + Send + Sync),
+    ) {
+        if self.agent.find_pair(local, remote).is_none() {
+            self.agent.add_pair(local.clone(), remote.clone());
+        }
+
+        if let Some(p) = self.agent.find_pair(local, remote) {
+            let use_candidate = m.contains(ATTR_USE_CANDIDATE);
+            if use_candidate {
+                // https://tools.ietf.org/html/rfc8445#section-7.3.1.5
+
+                if p.state == CandidatePairState::Succeeded {
+                    // If the state of this pair is Succeeded, it means that the check
+                    // previously sent by this pair produced a successful response and
+                    // generated a valid pair (Section 7.2.5.3.2).  The agent sets the
+                    // nominated flag value of the valid pair to true.
+                    if self.agent.get_selected_pair().is_none() {
+                        let pair = p.clone();
+                        self.agent.set_selected_pair(Some(pair)).await;
+                    }
+                    self.agent.send_binding_success(m, local, remote);
+                } else {
+                    // If the received Binding request triggered a new check to be
+                    // enqueued in the triggered-check queue (Section 7.3.1.4), once the
+                    // check is sent and if it generates a successful response, and
+                    // generates a valid pair, the agent sets the nominated flag of the
+                    // pair to true.  If the request fails (Section 7.2.5.2), the agent
+                    // MUST remove the candidate pair from the valid list, set the
+                    // candidate pair state to Failed, and set the checklist state to
+                    // Failed.
+                    self.ping_candidate(local, remote).await;
+                }
+            } else {
+                self.agent.send_binding_success(m, local, remote);
+                self.ping_candidate(local, remote).await;
+            }
+        }
     }
 }
-
+/*
 type liteSelector struct {
     PairCandidateSelector
 }
