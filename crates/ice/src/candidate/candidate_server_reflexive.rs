@@ -3,6 +3,8 @@ use super::*;
 use crate::errors::*;
 use crate::rand::generate_cand_id;
 use crate::util::*;
+use std::sync::atomic::{AtomicU16, AtomicU8};
+use std::sync::Arc;
 
 // CandidateServerReflexiveConfig is the config required to create a new CandidateServerReflexive
 #[derive(Debug, Default)]
@@ -30,12 +32,12 @@ pub fn new_candidate_server_reflexive(
 
     Ok(CandidateBase {
         id: candidate_id,
-        network_type,
+        network_type: Arc::new(AtomicU8::new(network_type as u8)),
         candidate_type: CandidateType::ServerReflexive,
         address: config.base_config.address,
         port: config.base_config.port,
         resolved_addr: create_addr(network_type, ip, config.base_config.port),
-        component: config.base_config.component,
+        component: Arc::new(AtomicU16::new(config.base_config.component)),
         foundation_override: config.base_config.foundation,
         priority_override: config.base_config.priority,
         related_address: Some(CandidateRelatedAddress {

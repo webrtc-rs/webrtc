@@ -106,6 +106,8 @@ pub struct AgentConfig {
     // the candidate is yet to answer a binding request or a nomination we set the pair as failed
     pub max_binding_requests: Option<u16>,
 
+    pub is_controlling: bool,
+
     // lite agents do not perform connectivity check and only provide host candidates.
     pub lite: bool,
 

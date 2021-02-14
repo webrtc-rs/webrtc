@@ -15,16 +15,27 @@ const TCP: &str = "tcp";
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub enum NetworkType {
     // NetworkTypeUDP4 indicates UDP over IPv4.
-    UDP4,
+    UDP4 = 0,
 
     // NetworkTypeUDP6 indicates UDP over IPv6.
-    UDP6,
+    UDP6 = 1,
 
     // NetworkTypeTCP4 indicates TCP over IPv4.
-    TCP4,
+    TCP4 = 2,
 
     // NetworkTypeTCP6 indicates TCP over IPv6.
-    TCP6,
+    TCP6 = 3,
+}
+
+impl From<u8> for NetworkType {
+    fn from(v: u8) -> NetworkType {
+        match v {
+            0 => NetworkType::UDP4,
+            1 => NetworkType::UDP6,
+            2 => NetworkType::UDP4,
+            _ => NetworkType::TCP6,
+        }
+    }
 }
 
 impl fmt::Display for NetworkType {

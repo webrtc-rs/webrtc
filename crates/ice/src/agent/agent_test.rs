@@ -44,7 +44,7 @@ async fn test_pair_priority() -> Result<(), Error> {
         },
         ..Default::default()
     };
-    let host_local: Box<dyn Candidate + Send + Sync> = Box::new(new_candidate_host(host_config)?);
+    let host_local: Arc<dyn Candidate + Send + Sync> = Arc::new(new_candidate_host(host_config)?);
 
     let relay_config = CandidateRelayConfig {
         base_config: CandidateBaseConfig {
@@ -103,21 +103,21 @@ async fn test_pair_priority() -> Result<(), Error> {
     };
     let host_remote = new_candidate_host(host_config)?;
 
-    let remotes: Vec<Box<dyn Candidate + Send + Sync>> = vec![
-        Box::new(relay_remote),
-        Box::new(srflx_remote),
-        Box::new(prflx_remote),
-        Box::new(host_remote),
+    let remotes: Vec<Arc<dyn Candidate + Send + Sync>> = vec![
+        Arc::new(relay_remote),
+        Arc::new(srflx_remote),
+        Arc::new(prflx_remote),
+        Arc::new(host_remote),
     ];
 
     {
         let mut ai = a.agent_internal.lock().await;
         for remote in remotes {
-            if ai.find_pair(&*host_local, &*remote).is_none() {
+            if ai.find_pair(&host_local, &remote).is_none() {
                 ai.add_pair(host_local.clone(), remote.clone());
             }
 
-            if let Some(p) = ai.get_pair_mut(&*host_local, &*remote) {
+            if let Some(p) = ai.get_pair_mut(&host_local, &remote) {
                 p.state = CandidatePairState::Succeeded;
             }
 
@@ -186,7 +186,7 @@ async fn test_on_selected_candidate_pair_change() -> Result<(), Error> {
     let relay_remote = new_candidate_relay(relay_config)?;
 
     // select the pair
-    let p = CandidatePair::new(Box::new(host_local), Box::new(relay_remote), false);
+    let p = CandidatePair::new(Arc::new(host_local), Arc::new(relay_remote), false);
     {
         let mut ai = a.agent_internal.lock().await;
         ai.set_selected_pair(Some(p)).await;

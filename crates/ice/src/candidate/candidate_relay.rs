@@ -3,6 +3,9 @@ use super::*;
 use crate::errors::*;
 use crate::rand::generate_cand_id;
 use crate::util::*;
+use std::sync::atomic::{AtomicU16, AtomicU8};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 // CandidateRelayConfig is the config required to create a new CandidateRelay
 #[derive(Debug, Default)]
@@ -29,19 +32,19 @@ pub fn new_candidate_relay(config: CandidateRelayConfig) -> Result<CandidateBase
 
     Ok(CandidateBase {
         id: candidate_id,
-        network_type,
+        network_type: Arc::new(AtomicU8::new(network_type as u8)),
         candidate_type: CandidateType::Relay,
         address: config.base_config.address,
         port: config.base_config.port,
         resolved_addr: create_addr(network_type, ip, config.base_config.port),
-        component: config.base_config.component,
+        component: Arc::new(AtomicU16::new(config.base_config.component)),
         foundation_override: config.base_config.foundation,
         priority_override: config.base_config.priority,
         related_address: Some(CandidateRelatedAddress {
             address: config.rel_addr,
             port: config.rel_port,
         }),
-        on_close: config.on_close,
+        on_close: Arc::new(Mutex::new(config.on_close)),
         ..Default::default()
     })
 }

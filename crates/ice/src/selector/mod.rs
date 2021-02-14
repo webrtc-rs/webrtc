@@ -1,7 +1,7 @@
 use crate::candidate::*;
 
 use crate::agent::AgentInternal;
-use crate::candidate::candidate_pair::{CandidatePair, CandidatePairState};
+use crate::candidate::candidate_pair::CandidatePairState;
 use crate::candidate::candidate_type::CandidateType;
 use crate::control::*;
 use crate::priority::*;
@@ -11,66 +11,75 @@ use stun::{agent::*, attributes::*, fingerprint::*, integrity::*, message::*, te
 
 use async_trait::async_trait;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tokio::time::Instant;
 
 #[async_trait]
-pub(crate) trait PairCandidateSelector {
+trait ControllingSelector {
     fn start(&mut self);
     async fn contact_candidates(&mut self);
     async fn ping_candidate(
         &mut self,
-        local: &(dyn Candidate + Send + Sync),
-        remote: &(dyn Candidate + Send + Sync),
+        local: &Arc<dyn Candidate + Send + Sync>,
+        remote: &Arc<dyn Candidate + Send + Sync>,
     );
     async fn handle_success_response(
         &mut self,
         m: &Message,
-        local: &(dyn Candidate + Send + Sync),
-        remote: &(dyn Candidate + Send + Sync),
+        local: &Arc<dyn Candidate + Send + Sync>,
+        remote: &Arc<dyn Candidate + Send + Sync>,
         remote_addr: SocketAddr,
     );
     async fn handle_binding_request(
         &mut self,
         m: &Message,
-        local: &(dyn Candidate + Send + Sync),
-        remote: &(dyn Candidate + Send + Sync),
+        local: &Arc<dyn Candidate + Send + Sync>,
+        remote: &Arc<dyn Candidate + Send + Sync>,
     );
 }
 
-pub(crate) struct ControllingSelector<'a> {
-    pub(crate) agent: &'a mut AgentInternal,
-    pub(crate) lite: bool,
-    start_time: Instant,
-    nominated_pair: Option<CandidatePair>,
+#[async_trait]
+trait ControlledSelector {
+    fn start(&mut self);
+    async fn contact_candidates(&mut self);
+    async fn ping_candidate(
+        &mut self,
+        local: &Arc<dyn Candidate + Send + Sync>,
+        remote: &Arc<dyn Candidate + Send + Sync>,
+    );
+    async fn handle_success_response(
+        &mut self,
+        m: &Message,
+        local: &Arc<dyn Candidate + Send + Sync>,
+        remote: &Arc<dyn Candidate + Send + Sync>,
+        remote_addr: SocketAddr,
+    );
+    async fn handle_binding_request(
+        &mut self,
+        m: &Message,
+        local: &Arc<dyn Candidate + Send + Sync>,
+        remote: &Arc<dyn Candidate + Send + Sync>,
+    );
 }
 
-impl<'a> ControllingSelector<'a> {
-    pub(crate) fn new(agent: &'a mut AgentInternal, lite: bool) -> Self {
-        ControllingSelector {
-            agent,
-            lite,
-            start_time: Instant::now(),
-            nominated_pair: None,
-        }
-    }
-
-    async fn is_nominatable(&self, c: &(dyn Candidate + Send + Sync)) -> bool {
+impl AgentInternal {
+    async fn is_nominatable(&self, c: &Arc<dyn Candidate + Send + Sync>) -> bool {
         match c.candidate_type() {
             CandidateType::Host => {
                 Instant::now().duration_since(self.start_time).as_nanos()
-                    > self.agent.host_acceptance_min_wait.as_nanos()
+                    > self.host_acceptance_min_wait.as_nanos()
             }
             CandidateType::ServerReflexive => {
                 Instant::now().duration_since(self.start_time).as_nanos()
-                    > self.agent.srflx_acceptance_min_wait.as_nanos()
+                    > self.srflx_acceptance_min_wait.as_nanos()
             }
             CandidateType::PeerReflexive => {
                 Instant::now().duration_since(self.start_time).as_nanos()
-                    > self.agent.prflx_acceptance_min_wait.as_nanos()
+                    > self.prflx_acceptance_min_wait.as_nanos()
             }
             CandidateType::Relay => {
                 Instant::now().duration_since(self.start_time).as_nanos()
-                    > self.agent.relay_acceptance_min_wait.as_nanos()
+                    > self.relay_acceptance_min_wait.as_nanos()
             }
             _ => {
                 log::error!(
@@ -88,17 +97,17 @@ impl<'a> ControllingSelector<'a> {
             // order to nominate a candidate pair (Section 8.1.1).  The controlled
             // agent MUST NOT include the USE-CANDIDATE attribute in a Binding
             // request.
-            let username = self.agent.remote_ufrag.clone() + ":" + self.agent.local_ufrag.as_str();
+            let username = self.remote_ufrag.clone() + ":" + self.local_ufrag.as_str();
             let mut msg = Message::new();
             if let Err(err) = msg.build(&[
                 Box::new(BINDING_REQUEST),
                 Box::new(TransactionId::default()),
                 Box::new(Username::new(ATTR_USERNAME, username)),
                 Box::new(UseCandidateAttr::default()),
-                Box::new(AttrControlling(self.agent.tie_breaker)),
+                Box::new(AttrControlling(self.tie_breaker)),
                 Box::new(PriorityAttr(pair.local.priority())),
                 Box::new(MessageIntegrity::new_short_term_integrity(
-                    self.agent.remote_pwd.clone(),
+                    self.remote_pwd.clone(),
                 )),
                 Box::new(FINGERPRINT),
             ]) {
@@ -109,15 +118,69 @@ impl<'a> ControllingSelector<'a> {
                     pair.local,
                     pair.remote
                 );
-                self.agent
-                    .send_binding_request(&msg, &*(pair.local), &*(pair.remote));
+                //TODO: self.send_binding_request(&msg, &*(pair.local), &*(pair.remote));
             }
+        }
+    }
+
+    pub(crate) fn start(&mut self) {
+        if self.is_controlling {
+            ControllingSelector::start(self);
+        } else {
+            ControlledSelector::start(self);
+        }
+    }
+
+    pub(crate) async fn contact_candidates(&mut self) {
+        if self.is_controlling {
+            ControllingSelector::contact_candidates(self).await;
+        } else {
+            ControlledSelector::contact_candidates(self).await;
+        }
+    }
+
+    pub(crate) async fn ping_candidate(
+        &mut self,
+        local: &Arc<dyn Candidate + Send + Sync>,
+        remote: &Arc<dyn Candidate + Send + Sync>,
+    ) {
+        if self.is_controlling {
+            ControllingSelector::ping_candidate(self, local, remote).await;
+        } else {
+            ControlledSelector::ping_candidate(self, local, remote).await;
+        }
+    }
+
+    pub(crate) async fn handle_success_response(
+        &mut self,
+        m: &Message,
+        local: &Arc<dyn Candidate + Send + Sync>,
+        remote: &Arc<dyn Candidate + Send + Sync>,
+        remote_addr: SocketAddr,
+    ) {
+        if self.is_controlling {
+            ControllingSelector::handle_success_response(self, m, local, remote, remote_addr).await;
+        } else {
+            ControlledSelector::handle_success_response(self, m, local, remote, remote_addr).await;
+        }
+    }
+
+    pub(crate) async fn handle_binding_request(
+        &mut self,
+        m: &Message,
+        local: &Arc<dyn Candidate + Send + Sync>,
+        remote: &Arc<dyn Candidate + Send + Sync>,
+    ) {
+        if self.is_controlling {
+            ControllingSelector::handle_binding_request(self, m, local, remote).await;
+        } else {
+            ControlledSelector::handle_binding_request(self, m, local, remote).await;
         }
     }
 }
 
 #[async_trait]
-impl<'a> PairCandidateSelector for ControllingSelector<'a> {
+impl ControllingSelector for AgentInternal {
     fn start(&mut self) {
         self.start_time = Instant::now();
         self.nominated_pair = None;
@@ -131,23 +194,22 @@ impl<'a> PairCandidateSelector for ControllingSelector<'a> {
             log::trace!("now falling back to full agent");
         }
 
-        if self.agent.get_selected_pair().is_some() {
-            if self.agent.validate_selected_pair().await {
+        if self.get_selected_pair().is_some() {
+            if self.validate_selected_pair().await {
                 log::trace!("checking keepalive");
-                self.agent.check_keepalive().await;
+                self.check_keepalive().await;
             }
         } else if self.nominated_pair.is_some() {
             self.nominate_pair().await;
         } else {
-            let has_nominated_pair = if let Some(p) = self.agent.get_best_available_candidate_pair()
-            {
-                self.is_nominatable(&*(p.local)).await && self.is_nominatable(&*(p.remote)).await
+            let has_nominated_pair = if let Some(p) = self.get_best_available_candidate_pair() {
+                self.is_nominatable(&p.local).await && self.is_nominatable(&p.remote).await
             } else {
                 false
             };
 
             if has_nominated_pair {
-                if let Some(p) = self.agent.get_best_available_candidate_pair_mut() {
+                if let Some(p) = self.get_best_available_candidate_pair_mut() {
                     log::trace!(
                         "Nominatable pair found, nominating ({}, {})",
                         p.local.to_string(),
@@ -159,43 +221,43 @@ impl<'a> PairCandidateSelector for ControllingSelector<'a> {
 
                 self.nominate_pair().await;
             } else {
-                self.agent.ping_all_candidates().await;
+                self.ping_all_candidates().await;
             }
         }
     }
 
     async fn ping_candidate(
         &mut self,
-        local: &(dyn Candidate + Send + Sync),
-        remote: &(dyn Candidate + Send + Sync),
+        local: &Arc<dyn Candidate + Send + Sync>,
+        remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
-        let username = self.agent.remote_ufrag.clone() + ":" + self.agent.local_ufrag.as_str();
+        let username = self.remote_ufrag.clone() + ":" + self.local_ufrag.as_str();
         let mut msg = Message::new();
         if let Err(err) = msg.build(&[
             Box::new(BINDING_REQUEST),
             Box::new(TransactionId::default()),
             Box::new(Username::new(ATTR_USERNAME, username)),
-            Box::new(AttrControlling(self.agent.tie_breaker)),
+            Box::new(AttrControlling(self.tie_breaker)),
             Box::new(PriorityAttr(local.priority())),
             Box::new(MessageIntegrity::new_short_term_integrity(
-                self.agent.remote_pwd.clone(),
+                self.remote_pwd.clone(),
             )),
             Box::new(FINGERPRINT),
         ]) {
             log::error!("{}", err);
         } else {
-            self.agent.send_binding_request(&msg, local, remote);
+            self.send_binding_request(&msg, local, remote);
         }
     }
 
     async fn handle_success_response(
         &mut self,
         m: &Message,
-        local: &(dyn Candidate + Send + Sync),
-        remote: &(dyn Candidate + Send + Sync),
+        local: &Arc<dyn Candidate + Send + Sync>,
+        remote: &Arc<dyn Candidate + Send + Sync>,
         remote_addr: SocketAddr,
     ) {
-        if let Some(pending_request) = self.agent.handle_inbound_binding_success(m.transaction_id) {
+        if let Some(pending_request) = self.handle_inbound_binding_success(m.transaction_id) {
             let transaction_addr = pending_request.destination;
 
             // Assert that NAT is not symmetric
@@ -210,14 +272,14 @@ impl<'a> PairCandidateSelector for ControllingSelector<'a> {
                 remote,
                 local
             );
-            let selected_pair_is_none = self.agent.get_selected_pair().is_none();
+            let selected_pair_is_none = self.get_selected_pair().is_none();
 
-            if let Some(p) = self.agent.find_pair(local, remote) {
+            if let Some(p) = self.find_pair(local, remote) {
                 let mut p = p.clone();
                 p.state = CandidatePairState::Succeeded;
                 log::trace!("Found valid candidate pair: {}", p);
                 if pending_request.is_use_candidate && selected_pair_is_none {
-                    self.agent.set_selected_pair(Some(p.clone())).await;
+                    self.set_selected_pair(Some(p.clone())).await;
                 }
             } else {
                 // This shouldn't happen
@@ -235,20 +297,20 @@ impl<'a> PairCandidateSelector for ControllingSelector<'a> {
     async fn handle_binding_request(
         &mut self,
         m: &Message,
-        local: &(dyn Candidate + Send + Sync),
-        remote: &(dyn Candidate + Send + Sync),
+        local: &Arc<dyn Candidate + Send + Sync>,
+        remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
-        self.agent.send_binding_request(m, local, remote);
+        self.send_binding_request(m, local, remote);
 
-        if let Some(p) = self.agent.find_pair(local, remote) {
+        if let Some(p) = self.find_pair(local, remote) {
             if p.state == CandidatePairState::Succeeded
                 && self.nominated_pair.is_none()
-                && self.agent.get_selected_pair().is_none()
+                && self.get_selected_pair().is_none()
             {
-                if let Some(best_pair) = self.agent.get_best_available_candidate_pair() {
+                if let Some(best_pair) = self.get_best_available_candidate_pair() {
                     if best_pair == p
-                        && self.is_nominatable(&*(p.local)).await
-                        && self.is_nominatable(&*(p.remote)).await
+                        && self.is_nominatable(&p.local).await
+                        && self.is_nominatable(&p.remote).await
                     {
                         log::trace!("The candidate ({}, {}) is the best candidate available, marking it as nominated",
                             p.local, p.remote);
@@ -260,69 +322,58 @@ impl<'a> PairCandidateSelector for ControllingSelector<'a> {
                 }
             }
         } else {
-            self.agent.add_pair(local.clone(), remote.clone());
+            self.add_pair(local.clone(), remote.clone());
         }
     }
 }
 
-pub(crate) struct ControlledSelector<'a> {
-    pub(crate) agent: &'a mut AgentInternal,
-    pub(crate) lite: bool,
-}
-
-impl<'a> ControlledSelector<'a> {
-    pub(crate) fn new(agent: &'a mut AgentInternal, lite: bool) -> Self {
-        ControlledSelector { agent, lite }
-    }
-}
-
 #[async_trait]
-impl<'a> PairCandidateSelector for ControlledSelector<'a> {
+impl ControlledSelector for AgentInternal {
     fn start(&mut self) {}
 
     async fn contact_candidates(&mut self) {
         // A lite selector should not contact candidates
         if self.lite {
-            self.agent.validate_selected_pair().await;
-        } else if self.agent.get_selected_pair().is_some() {
-            if self.agent.validate_selected_pair().await {
+            self.validate_selected_pair().await;
+        } else if self.get_selected_pair().is_some() {
+            if self.validate_selected_pair().await {
                 log::trace!("checking keepalive");
-                self.agent.check_keepalive().await;
+                self.check_keepalive().await;
             }
         } else {
-            self.agent.ping_all_candidates().await;
+            self.ping_all_candidates().await;
         }
     }
 
     async fn ping_candidate(
         &mut self,
-        local: &(dyn Candidate + Send + Sync),
-        remote: &(dyn Candidate + Send + Sync),
+        local: &Arc<dyn Candidate + Send + Sync>,
+        remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
-        let username = self.agent.remote_ufrag.clone() + ":" + self.agent.local_ufrag.as_str();
+        let username = self.remote_ufrag.clone() + ":" + self.local_ufrag.as_str();
         let mut msg = Message::new();
         if let Err(err) = msg.build(&[
             Box::new(BINDING_REQUEST),
             Box::new(TransactionId::default()),
             Box::new(Username::new(ATTR_USERNAME, username)),
-            Box::new(AttrControlled(self.agent.tie_breaker)),
+            Box::new(AttrControlled(self.tie_breaker)),
             Box::new(PriorityAttr(local.priority())),
             Box::new(MessageIntegrity::new_short_term_integrity(
-                self.agent.remote_pwd.clone(),
+                self.remote_pwd.clone(),
             )),
             Box::new(FINGERPRINT),
         ]) {
             log::error!("{}", err);
         } else {
-            self.agent.send_binding_request(&msg, local, remote);
+            self.send_binding_request(&msg, local, remote);
         }
     }
 
     async fn handle_success_response(
         &mut self,
         m: &Message,
-        local: &(dyn Candidate + Send + Sync),
-        remote: &(dyn Candidate + Send + Sync),
+        local: &Arc<dyn Candidate + Send + Sync>,
+        remote: &Arc<dyn Candidate + Send + Sync>,
         remote_addr: SocketAddr,
     ) {
         // TODO according to the standard we should specifically answer a failed nomination:
@@ -332,7 +383,7 @@ impl<'a> PairCandidateSelector for ControlledSelector<'a> {
         // request with an appropriate error code response (e.g., 400)
         // [RFC5389].
 
-        if let Some(pending_request) = self.agent.handle_inbound_binding_success(m.transaction_id) {
+        if let Some(pending_request) = self.handle_inbound_binding_success(m.transaction_id) {
             let transaction_addr = pending_request.destination;
 
             // Assert that NAT is not symmetric
@@ -348,7 +399,7 @@ impl<'a> PairCandidateSelector for ControlledSelector<'a> {
                 local
             );
 
-            if let Some(p) = self.agent.get_pair_mut(local, remote) {
+            if let Some(p) = self.get_pair_mut(local, remote) {
                 p.state = CandidatePairState::Succeeded;
                 log::trace!("Found valid candidate pair: {}", p);
             } else {
@@ -367,14 +418,14 @@ impl<'a> PairCandidateSelector for ControlledSelector<'a> {
     async fn handle_binding_request(
         &mut self,
         m: &Message,
-        local: &(dyn Candidate + Send + Sync),
-        remote: &(dyn Candidate + Send + Sync),
+        local: &Arc<dyn Candidate + Send + Sync>,
+        remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
-        if self.agent.find_pair(local, remote).is_none() {
-            self.agent.add_pair(local.clone(), remote.clone());
+        if self.find_pair(local, remote).is_none() {
+            self.add_pair(local.clone(), remote.clone());
         }
 
-        if let Some(p) = self.agent.find_pair(local, remote) {
+        if let Some(p) = self.find_pair(local, remote) {
             let use_candidate = m.contains(ATTR_USE_CANDIDATE);
             if use_candidate {
                 // https://tools.ietf.org/html/rfc8445#section-7.3.1.5
@@ -384,11 +435,11 @@ impl<'a> PairCandidateSelector for ControlledSelector<'a> {
                     // previously sent by this pair produced a successful response and
                     // generated a valid pair (Section 7.2.5.3.2).  The agent sets the
                     // nominated flag value of the valid pair to true.
-                    if self.agent.get_selected_pair().is_none() {
+                    if self.get_selected_pair().is_none() {
                         let pair = p.clone();
-                        self.agent.set_selected_pair(Some(pair)).await;
+                        self.set_selected_pair(Some(pair)).await;
                     }
-                    self.agent.send_binding_success(m, local, remote);
+                    self.send_binding_success(m, local, remote);
                 } else {
                     // If the received Binding request triggered a new check to be
                     // enqueued in the triggered-check queue (Section 7.3.1.4), once the
@@ -401,7 +452,7 @@ impl<'a> PairCandidateSelector for ControlledSelector<'a> {
                     self.ping_candidate(local, remote).await;
                 }
             } else {
-                self.agent.send_binding_success(m, local, remote);
+                self.send_binding_success(m, local, remote);
                 self.ping_candidate(local, remote).await;
             }
         }

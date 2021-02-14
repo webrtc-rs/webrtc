@@ -24,9 +24,9 @@ use std::net::SocketAddr;
 
 use crate::agent::agent_config::{AgentConfig, MAX_BINDING_REQUEST_TIMEOUT, MAX_BUFFER_SIZE};
 use crate::rand::*;
-use crate::selector::PairCandidateSelector;
 
 use std::sync::Arc;
+use std::time::SystemTime;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::{Duration, Instant};
 
@@ -40,7 +40,7 @@ pub(crate) struct BindingRequest {
 pub type OnConnectionStateChangeHdlrFn = Box<dyn Fn(ConnectionState) + Send + Sync>;
 pub type OnSelectedCandidatePairChangeHdlrFn =
     Box<dyn Fn(&(dyn Candidate + Send + Sync), &(dyn Candidate + Send + Sync)) + Send + Sync>;
-pub type OnCandidateHdlrFn = Box<dyn Fn(Box<dyn Candidate + Send + Sync>) + Send + Sync>;
+pub type OnCandidateHdlrFn = Box<dyn Fn(Arc<dyn Candidate + Send + Sync>) + Send + Sync>;
 pub type GatherCandidateCancelFn = Box<dyn Fn() + Send + Sync>;
 
 pub struct AgentInternal {
@@ -49,7 +49,7 @@ pub struct AgentInternal {
 
     // State for closing
     done: Option<mpsc::Sender<()>>,
-    chan_candidate: Option<mpsc::Sender<Box<dyn Candidate + Send + Sync>>>,
+    chan_candidate: Option<mpsc::Sender<Arc<dyn Candidate + Send + Sync>>>,
     chan_candidate_pair: Option<mpsc::Sender<()>>,
     chan_state: Option<mpsc::Sender<ConnectionState>>,
 
@@ -63,7 +63,11 @@ pub struct AgentInternal {
     // force candidate to be contacted immediately (instead of waiting for task ticker)
     force_candidate_contact: Option<mpsc::Receiver<bool>>,
     pub(crate) tie_breaker: u64,
-    lite: bool,
+
+    pub(crate) is_controlling: bool,
+    pub(crate) lite: bool,
+    pub(crate) start_time: Instant,
+    pub(crate) nominated_pair: Option<CandidatePair>,
 
     connection_state: ConnectionState,
     gathering_state: GatheringState,
@@ -71,8 +75,6 @@ pub struct AgentInternal {
     mdns_mode: MulticastDNSMode,
     mdns_name: String,
     mdns_conn: Option<DNSConn>,
-
-    is_controlling: bool,
 
     max_binding_requests: u16,
 
@@ -110,7 +112,6 @@ pub struct AgentInternal {
     remote_candidates: HashMap<NetworkType, Vec<Box<dyn Candidate + Send + Sync>>>,
 
     checklist: Vec<CandidatePair>,
-    selector: Option<Box<dyn PairCandidateSelector + Send + Sync>>,
 
     urls: Vec<URL>,
     network_types: Vec<NetworkType>,
@@ -185,7 +186,7 @@ impl AgentInternal {
         if self.connection_state != new_state {
             // Connection has gone to failed, release all gathered candidates
             if new_state == ConnectionState::Failed {
-                self.delete_all_candidates();
+                self.delete_all_candidates().await;
             }
 
             log::info!("Setting new connection state: {}", new_state);
@@ -203,10 +204,10 @@ impl AgentInternal {
     // and removes both the local and remote candidate lists.
     //
     // This is used for restarts, failures and on close
-    fn delete_all_candidates(&mut self) {
+    async fn delete_all_candidates(&mut self) {
         for cs in &mut self.local_candidates.values_mut() {
             for c in cs {
-                if let Err(err) = c.close() {
+                if let Err(err) = c.close().await {
                     log::warn!("Failed to close candidate {}: {}", c, err);
                 }
             }
@@ -215,7 +216,7 @@ impl AgentInternal {
 
         for cs in self.remote_candidates.values_mut() {
             for c in cs {
-                if let Err(err) = c.close() {
+                if let Err(err) = c.close().await {
                     log::warn!("Failed to close candidate {}: {}", c, err);
                 }
             }
@@ -265,8 +266,8 @@ impl AgentInternal {
 
     pub(crate) fn add_pair(
         &mut self,
-        local: Box<dyn Candidate + Send + Sync>,
-        remote: Box<dyn Candidate + Send + Sync>,
+        local: Arc<dyn Candidate + Send + Sync>,
+        remote: Arc<dyn Candidate + Send + Sync>,
     ) /*-> Option<&CandidatePair>*/
     {
         let p = CandidatePair::new(local, remote, self.is_controlling);
@@ -276,11 +277,11 @@ impl AgentInternal {
 
     pub(crate) fn find_pair(
         &self,
-        local: &(dyn Candidate + Send + Sync),
-        remote: &(dyn Candidate + Send + Sync),
+        local: &Arc<dyn Candidate + Send + Sync>,
+        remote: &Arc<dyn Candidate + Send + Sync>,
     ) -> Option<&CandidatePair> {
         for p in &self.checklist {
-            if p.local.equal(local) && p.remote.equal(remote) {
+            if p.local.equal(&**local) && p.remote.equal(&**remote) {
                 return Some(p);
             }
         }
@@ -289,11 +290,11 @@ impl AgentInternal {
 
     pub(crate) fn get_pair_mut(
         &mut self,
-        local: &(dyn Candidate + Send + Sync),
-        remote: &(dyn Candidate + Send + Sync),
+        local: &Arc<dyn Candidate + Send + Sync>,
+        remote: &Arc<dyn Candidate + Send + Sync>,
     ) -> Option<&mut CandidatePair> {
         for p in &mut self.checklist {
-            if p.local.equal(local) && p.remote.equal(remote) {
+            if p.local.equal(&**local) && p.remote.equal(&**remote) {
                 return Some(p);
             }
         }
@@ -305,7 +306,10 @@ impl AgentInternal {
     pub(crate) async fn validate_selected_pair(&mut self) -> bool {
         if let Some(selected_pair) = &self.selected_pair {
             let disconnected_time =
-                Instant::now().duration_since(selected_pair.remote.last_received());
+                match SystemTime::now().duration_since(selected_pair.remote.last_received()) {
+                    Ok(d) => d,
+                    Err(_) => Duration::from_secs(0),
+                };
 
             // Only allow transitions to failed if a.failedTimeout is non-zero
             let mut total_time_to_failure = self.failed_timeout;
@@ -338,19 +342,25 @@ impl AgentInternal {
     // Note: the caller should hold the agent lock.
     pub(crate) async fn check_keepalive(&mut self) {
         if let Some(selected_pair) = &self.selected_pair {
+            let last_sent = match SystemTime::now().duration_since(selected_pair.local.last_sent())
+            {
+                Ok(d) => d,
+                Err(_) => Duration::from_secs(0),
+            };
+
+            let last_received =
+                match SystemTime::now().duration_since(selected_pair.remote.last_received()) {
+                    Ok(d) => d,
+                    Err(_) => Duration::from_secs(0),
+                };
+
             if (self.keepalive_interval != Duration::from_secs(0))
-                && ((Instant::now().duration_since(selected_pair.local.last_sent())
-                    > self.keepalive_interval)
-                    || (Instant::now().duration_since(selected_pair.remote.last_received())
-                        > self.keepalive_interval))
+                && ((last_sent > self.keepalive_interval)
+                    || (last_received > self.keepalive_interval))
             {
                 // we use binding request instead of indication to support refresh consent schemas
                 // see https://tools.ietf.org/html/rfc7675
-                if let Some(selector) = &mut self.selector {
-                    selector
-                        .ping_candidate(&*selected_pair.local, &*selected_pair.remote)
-                        .await;
-                }
+                //TODO: self.ping_candidate(&*(selected_pair.local), &*(selected_pair.remote)).await;
             }
         }
     }
@@ -374,8 +384,8 @@ impl AgentInternal {
             if p.binding_request_count > self.max_binding_requests {
                 log::trace!("max requests reached for pair {}, marking it as failed", p);
                 p.state = CandidatePairState::Failed;
-            } else if let Some(selector) = &mut self.selector {
-                selector.ping_candidate(&*(p.local), &*(p.remote)).await;
+            } else {
+                //TODO: self.ping_candidate(&*(p.local), &*(p.remote)).await;
                 p.binding_request_count += 1;
             }
         }
@@ -384,8 +394,8 @@ impl AgentInternal {
     pub(crate) fn send_binding_request(
         &mut self,
         m: &Message,
-        local: &(dyn Candidate + Send + Sync),
-        remote: &(dyn Candidate + Send + Sync),
+        local: &Arc<dyn Candidate + Send + Sync>,
+        remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
         log::trace!("ping STUN from {} to {}", local, remote);
 
@@ -403,10 +413,11 @@ impl AgentInternal {
     pub(crate) fn send_binding_success(
         &mut self,
         m: &Message,
-        local: &(dyn Candidate + Send + Sync),
-        remote: &(dyn Candidate + Send + Sync),
+        local: &Arc<dyn Candidate + Send + Sync>,
+        remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
-        let (ip, port) = (remote.addr().ip(), remote.addr().port());
+        let addr = remote.addr();
+        let (ip, port) = (addr.ip(), addr.port());
 
         let mut out = Message::new();
         if let Err(err) = out.build(&[
@@ -457,8 +468,8 @@ impl AgentInternal {
     fn send_stun(
         &self,
         _msg: &Message,
-        _local: &(dyn Candidate + Send + Sync),
-        _remote: &(dyn Candidate + Send + Sync),
+        _local: &Arc<dyn Candidate + Send + Sync>,
+        _remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
         /*TODO: if let Err(err) = local.write_to(&msg.raw, remote) {
             log::trace!("failed to send STUN message: {}", err);
@@ -538,7 +549,12 @@ impl Agent {
             selected_pair: None,
 
             tie_breaker: rand::random::<u64>(),
+
             lite: config.lite,
+            is_controlling: config.is_controlling,
+            start_time: Instant::now(),
+            nominated_pair: None,
+
             gathering_state: GatheringState::New,
             connection_state: ConnectionState::New,
             local_candidates: HashMap::new(),
@@ -565,7 +581,6 @@ impl Agent {
             insecure_skip_verify: config.insecure_skip_verify,
 
             force_candidate_contact: None,
-            is_controlling: false,
             max_binding_requests: 0,
 
             host_acceptance_min_wait: Duration::from_secs(0),
@@ -596,7 +611,6 @@ impl Agent {
             remote_pwd: String::new(),
 
             checklist: vec![],
-            selector: None,
 
             // LRU of outbound Binding request Transaction IDs
             pending_binding_requests: vec![],
@@ -679,7 +693,7 @@ impl Agent {
     async fn start_on_connection_state_change_routine(
         agent_internal: Arc<Mutex<AgentInternal>>,
         mut chan_state_rx: mpsc::Receiver<ConnectionState>,
-        mut chan_candidate_rx: mpsc::Receiver<Box<dyn Candidate + Send + Sync>>,
+        mut chan_candidate_rx: mpsc::Receiver<Arc<dyn Candidate + Send + Sync>>,
         mut chan_candidate_pair_rx: mpsc::Receiver<()>,
     ) {
         let agent_internal_pair = Arc::clone(&agent_internal);
@@ -792,10 +806,8 @@ impl Agent {
         ai.pending_binding_requests = vec![];
 
         ai.set_selected_pair(None).await;
-        ai.delete_all_candidates();
-        if let Some(selector) = &mut ai.selector {
-            selector.start();
-        }
+        ai.delete_all_candidates().await;
+        ai.start();
 
         // Restart is used by NewAgent. Accept/Connect should be used to move to checking
         // for new Agents

@@ -3,6 +3,7 @@ use super::*;
 use crate::candidate::candidate_base::CandidateBase;
 use std::cmp;
 use std::fmt;
+use std::sync::Arc;
 
 // CandidatePairState represent the ICE candidate pair state
 #[derive(PartialEq, Debug, Copy, Clone)]
@@ -47,8 +48,8 @@ impl fmt::Display for CandidatePairState {
 // candidatePair represents a combination of a local and remote candidate
 pub(crate) struct CandidatePair {
     pub(crate) ice_role_controlling: bool,
-    pub(crate) remote: Box<dyn Candidate + Send + Sync>,
-    pub(crate) local: Box<dyn Candidate + Send + Sync>,
+    pub(crate) remote: Arc<dyn Candidate + Send + Sync>,
+    pub(crate) local: Arc<dyn Candidate + Send + Sync>,
     pub(crate) binding_request_count: u16,
     pub(crate) state: CandidatePairState,
     pub(crate) nominated: bool,
@@ -71,8 +72,8 @@ impl Default for CandidatePair {
     fn default() -> Self {
         CandidatePair {
             ice_role_controlling: false,
-            remote: Box::new(CandidateBase::default()),
-            local: Box::new(CandidateBase::default()),
+            remote: Arc::new(CandidateBase::default()),
+            local: Arc::new(CandidateBase::default()),
             state: CandidatePairState::Waiting,
             binding_request_count: 0,
             nominated: false,
@@ -116,8 +117,8 @@ impl PartialEq for CandidatePair {
 
 impl CandidatePair {
     pub fn new(
-        local: Box<dyn Candidate + Send + Sync>,
-        remote: Box<dyn Candidate + Send + Sync>,
+        local: Arc<dyn Candidate + Send + Sync>,
+        remote: Arc<dyn Candidate + Send + Sync>,
         controlling: bool,
     ) -> Self {
         CandidatePair {
@@ -153,11 +154,3 @@ impl CandidatePair {
         self.local.write_to(b, &*self.remote)
     }
 }
-
-/*TODO:
-func (a *Agent) sendSTUN(msg *stun.Message, local, remote Candidate) {
-    _, err := local.writeTo(msg.Raw, remote)
-    if err != nil {
-        a.log.Tracef("failed to send STUN message: %s", err)
-    }
-}*/

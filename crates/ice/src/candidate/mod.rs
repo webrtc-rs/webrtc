@@ -14,9 +14,11 @@ use candidate_type::*;
 
 use util::Error;
 
+use async_trait::async_trait;
 use std::fmt;
 use std::net::{IpAddr, SocketAddr};
-use tokio::time::Instant;
+use std::sync::Arc;
+use std::time::SystemTime;
 
 pub(crate) const RECEIVE_MTU: usize = 8192;
 pub(crate) const DEFAULT_LOCAL_PREFERENCE: u16 = 65535;
@@ -27,6 +29,7 @@ pub(crate) const COMPONENT_RTP: u16 = 1;
 pub(crate) const COMPONENT_RTCP: u16 = 0;
 
 // Candidate represents an ICE candidate
+#[async_trait]
 pub trait Candidate: fmt::Display {
     // An arbitrary string used in the freezing algorithm to
     // group similar candidates.  It is the same for two candidates that
@@ -41,13 +44,13 @@ pub trait Candidate: fmt::Display {
     // A component is a piece of a data stream.
     // An example is one for RTP, and one for RTCP
     fn component(&self) -> u16;
-    fn set_component(&mut self, c: u16);
+    fn set_component(&self, c: u16);
 
     // The last time this candidate received traffic
-    fn last_received(&self) -> Instant;
+    fn last_received(&self) -> SystemTime;
 
     // The last time this candidate sent traffic
-    fn last_sent(&self) -> Instant;
+    fn last_sent(&self) -> SystemTime;
 
     fn network_type(&self) -> NetworkType;
     fn address(&self) -> String;
@@ -68,12 +71,10 @@ pub trait Candidate: fmt::Display {
     //TODO:fn agent(&self) -> Agent;
     //TODO:fn context(&self) ->Context;
 
-    fn close(&mut self) -> Result<(), Error>;
-    fn seen(&mut self, outbound: bool);
+    async fn close(&self) -> Result<(), Error>;
+    fn seen(&self, outbound: bool);
     //TODO:fn start(&self,a: &Agent, conn: PacketConn, initializedCh <-chan struct{})
-    fn write_to(&mut self, raw: &[u8], dst: &dyn Candidate) -> Result<usize, Error>;
+    fn write_to(&self, raw: &[u8], dst: &dyn Candidate) -> Result<usize, Error>;
     fn equal(&self, other: &dyn Candidate) -> bool;
-    fn clone(&self) -> Box<dyn Candidate + Send + Sync>;
-
-    fn set_ip(&mut self, ip: &IpAddr) -> Result<(), Error>;
+    fn clone(&self) -> Arc<dyn Candidate + Send + Sync>;
 }
