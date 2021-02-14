@@ -1,6 +1,5 @@
 use crate::errors::RTPError;
 use byteorder::{BigEndian, ByteOrder};
-use bytes::BytesMut;
 
 #[derive(Debug, Eq, Clone, PartialEq, Default)]
 pub struct Extension {

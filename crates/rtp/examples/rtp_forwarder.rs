@@ -1,4 +1,3 @@
-use bytes::BytesMut;
 use std::process::{Command, Stdio};
 use std::{net::UdpSocket, sync::mpsc, thread::sleep};
 use webrtc_rs_rtp::codecs::h264::*;
@@ -52,10 +51,9 @@ fn main() {
             .output()
             .unwrap();
 
-        let a = cmd.stdout.as_slice();
-        let mut a = BytesMut::from(a);
+        let mut a = cmd.stdout;
         let sender = send_channel.clone();
-        let packets = packetizer.packetize(&mut a, index).unwrap();
+        let packets = packetizer.packetize(a.as_mut_slice(), index).unwrap();
 
         std::thread::spawn(move || {
             println!("{}", packets.len());

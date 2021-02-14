@@ -1,6 +1,5 @@
 use crate::errors::RTPError;
 use crate::header::*;
-use bytes::BytesMut;
 use std::fmt;
 
 mod packet_test;

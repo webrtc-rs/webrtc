@@ -1,5 +1,3 @@
-use bytes::BytesMut;
-
 mod h264_def;
 mod h264_test;
 
@@ -45,12 +43,10 @@ fn emit_nalus(nals: &[u8], mut emit: impl FnMut(&[u8])) {
             next_ind_len = _next_ind_len;
 
             if next_ind_start != -1 {
-                emit(&BytesMut::from(
-                    &nals[prev_start as usize..next_ind_start as usize],
-                ));
+                emit(&nals[prev_start as usize..next_ind_start as usize]);
             } else {
                 // Emit until end of stream, no end indicator found
-                emit(&BytesMut::from(&nals[prev_start as usize..]));
+                emit(&nals[prev_start as usize..]);
             }
         }
     }

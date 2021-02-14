@@ -1,6 +1,4 @@
 use crate::errors::ExtensionError;
-use bytes::BytesMut;
-
 mod audio_level_extension_test;
 
 const AUDIO_LEVEL_EXTENSION_SIZE: usize = 1;
@@ -32,7 +30,7 @@ pub struct AudioLevelExtension {
 
 impl AudioLevelExtension {
     /// Marshal serializes the members to buffer
-    pub fn marshal(&self) -> Result<BytesMut, ExtensionError> {
+    pub fn marshal(&self) -> Result<Vec<u8>, ExtensionError> {
         if self.level > 127 {
             return Err(ExtensionError::AudioLevelOverflow);
         }
@@ -42,11 +40,11 @@ impl AudioLevelExtension {
         let mut buf = vec![0u8; AUDIO_LEVEL_EXTENSION_SIZE];
         buf[0] = voice | self.level;
 
-        Ok(BytesMut::from(buf.as_slice()))
+        Ok(buf)
     }
 
     /// Unmarshal parses the passed byte slice and stores the result in the members
-    pub fn unmarshal(&mut self, raw_data: &mut BytesMut) -> Result<(), ExtensionError> {
+    pub fn unmarshal(&mut self, raw_data: &mut [u8]) -> Result<(), ExtensionError> {
         if raw_data.len() < AUDIO_LEVEL_EXTENSION_SIZE {
             return Err(ExtensionError::TooSmall);
         }

@@ -1,6 +1,5 @@
 use crate::errors::ExtensionError;
 use byteorder::{BigEndian, ByteOrder};
-use bytes::BytesMut;
 
 mod transport_cc_extension_test;
 
@@ -23,14 +22,14 @@ pub struct TransportCCExtension {
 
 impl TransportCCExtension {
     // Marshal serializes the members to buffer
-    pub fn marshal(&self) -> Result<BytesMut, ExtensionError> {
+    pub fn marshal(&self) -> Result<Vec<u8>, ExtensionError> {
         let mut buf = vec![0u8; TRANSPORT_CC_EXTENSION_SIZE];
         BigEndian::write_u16(&mut buf[0..2], self.transport_sequence);
-        Ok(BytesMut::from(buf.as_slice()))
+        Ok(buf)
     }
 
     // Unmarshal parses the passed byte slice and stores the result in the members
-    pub fn unmarshal(&mut self, raw_data: &mut BytesMut) -> Result<(), ExtensionError> {
+    pub fn unmarshal(&mut self, raw_data: &mut [u8]) -> Result<(), ExtensionError> {
         if raw_data.len() < TRANSPORT_CC_EXTENSION_SIZE {
             return Err(ExtensionError::TooSmall);
         }

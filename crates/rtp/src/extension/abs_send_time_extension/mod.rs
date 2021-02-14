@@ -1,5 +1,4 @@
 use crate::errors::ExtensionError;
-use bytes::BytesMut;
 use std::time::Duration;
 
 mod abs_send_time_extension_test;
@@ -15,18 +14,16 @@ pub struct AbsSendTimeExtension {
 
 impl AbsSendTimeExtension {
     /// Marshal serializes the members to buffer.
-    pub fn marshal(&self) -> Result<BytesMut, ExtensionError> {
-        Ok(BytesMut::from(
-            &[
-                ((self.timestamp & 0xFF0000) >> 16) as u8,
-                ((self.timestamp & 0xFF00) >> 8) as u8,
-                (self.timestamp & 0xFF) as u8,
-            ][..],
-        ))
+    pub fn marshal(&self) -> Result<Vec<u8>, ExtensionError> {
+        Ok(vec![
+            ((self.timestamp & 0xFF0000) >> 16) as u8,
+            ((self.timestamp & 0xFF00) >> 8) as u8,
+            (self.timestamp & 0xFF) as u8,
+        ])
     }
 
     /// Unmarshal parses the passed byte slice and stores the result in the members.
-    pub fn unmarshal(&mut self, raw_data: &mut BytesMut) -> Result<(), ExtensionError> {
+    pub fn unmarshal(&mut self, raw_data: &mut [u8]) -> Result<(), ExtensionError> {
         if raw_data.len() < ABS_SEND_TIME_EXTENSION_SIZE {
             return Err(ExtensionError::TooSmall);
         }

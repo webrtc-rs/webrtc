@@ -2,9 +2,7 @@ use crate::{
     errors::RTPError,
     packetizer::{Depacketizer, Payloader},
 };
-use bytes::BytesMut;
 
-#[cfg(test)]
 mod vp8_test;
 
 const VP8_HEADER_SIZE: usize = 1;
@@ -89,12 +87,12 @@ pub struct VP8Packet {
     pub y: u8,
     pub key_idx: u8,
 
-    pub payload: BytesMut,
+    pub payload: Vec<u8>,
 }
 
 impl Depacketizer for VP8Packet {
     // Unmarshal parses the passed byte slice and stores the result in the VP8Packet this method is called upon
-    fn unmarshal(&mut self, payload: &mut BytesMut) -> Result<BytesMut, RTPError> {
+    fn unmarshal(&mut self, payload: &mut [u8]) -> Result<Vec<u8>, RTPError> {
         let payload_len = payload.len();
         if payload_len < 4 {
             return Err(RTPError::ShortPacket);
@@ -148,7 +146,7 @@ impl Depacketizer for VP8Packet {
 struct VP8PartitionHeadChecker;
 
 impl VP8PartitionHeadChecker {
-    pub fn is_partition_head(&mut self, mut packet: BytesMut) -> bool {
+    pub fn is_partition_head(&mut self, mut packet: &mut [u8]) -> bool {
         let mut p = VP8Packet::default();
         if p.unmarshal(&mut packet).is_err() {
             return false;

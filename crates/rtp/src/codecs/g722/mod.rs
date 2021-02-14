@@ -1,6 +1,4 @@
 use crate::packetizer::Payloader;
-use bytes::BytesMut;
-
 mod g722_test;
 
 pub struct G722Payloader;

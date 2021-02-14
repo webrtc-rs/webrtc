@@ -3,7 +3,6 @@ use crate::packet::Packet;
 use crate::sequence::Sequencer;
 use crate::{extension::abs_send_time_extension::*, header::Header};
 
-use bytes::BytesMut;
 use std::time::Duration;
 
 mod packetizer_test;
@@ -21,7 +20,7 @@ pub trait PacketizerInterface {
 
 /// Depacketizer depacketizes a RTP payload, removing any RTP specific data from the payload
 pub trait Depacketizer {
-    fn unmarshal(&mut self, packet: &mut BytesMut) -> Result<BytesMut, RTPError>;
+    fn unmarshal(&mut self, packet: &mut [u8]) -> Result<Vec<u8>, RTPError>;
 }
 
 pub type FnTimeGen = fn() -> Duration;

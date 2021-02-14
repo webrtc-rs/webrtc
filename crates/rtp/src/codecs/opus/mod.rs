@@ -2,7 +2,6 @@ use crate::{
     errors::RTPError,
     packetizer::{Depacketizer, Payloader},
 };
-use bytes::BytesMut;
 
 mod opus_test;
 
@@ -23,11 +22,11 @@ impl Payloader for OpusPayloader {
 
 #[derive(Debug, Default)]
 pub struct OpusPacket {
-    payload: BytesMut,
+    payload: Vec<u8>,
 }
 
 impl Depacketizer for OpusPacket {
-    fn unmarshal(&mut self, packet: &mut BytesMut) -> Result<BytesMut, RTPError> {
+    fn unmarshal(&mut self, packet: &mut [u8]) -> Result<Vec<u8>, RTPError> {
         if packet.is_empty() {
             return Err(RTPError::ShortPacket);
         }
@@ -42,7 +41,7 @@ pub struct OpusPartitionHeadChecker {}
 
 impl OpusPartitionHeadChecker {
     // IsPartitionHead checks whether if this is a head of the Opus partition
-    pub fn is_partition_head(&mut self, packet: &mut BytesMut) -> bool {
+    pub fn is_partition_head(&mut self, packet: &mut [u8]) -> bool {
         let mut p = OpusPacket::default();
 
         if p.unmarshal(packet).is_err() {

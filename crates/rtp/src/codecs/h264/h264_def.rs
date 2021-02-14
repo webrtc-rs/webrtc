@@ -2,7 +2,6 @@ use std::vec;
 
 use byteorder::BigEndian;
 use byteorder::ByteOrder;
-use bytes::BytesMut;
 
 use crate::{
     errors::RTPError,
@@ -113,7 +112,7 @@ impl Payloader for H264Payloader {
 pub struct H264Packet {}
 
 impl Depacketizer for H264Packet {
-    fn unmarshal(&mut self, payload: &mut BytesMut) -> Result<BytesMut, RTPError> {
+    fn unmarshal(&mut self, payload: &mut [u8]) -> Result<Vec<u8>, RTPError> {
         if payload.len() <= 2 {
             return Err(RTPError::ShortPacket);
         }
@@ -124,10 +123,10 @@ impl Depacketizer for H264Packet {
 
         if nalu_type > 0 && nalu_type < 24 {
             let a = [&super::ANNEXB_NALUSTART_CODE[..], &payload[..]].concat();
-            return Ok(BytesMut::from(a.as_slice()));
+            return Ok(a);
         } else if nalu_type == super::STAPA_NALU_TYPE {
             let mut current_offset = super::STAPA_HEADER_SIZE;
-            let mut result = BytesMut::new();
+            let mut result = vec![];
 
             while current_offset < payload.len() {
                 let nalu_size = BigEndian::read_u16(&payload[current_offset..]);
@@ -155,7 +154,7 @@ impl Depacketizer for H264Packet {
                 let fragmented_nalu_type = payload[1] & super::NALU_TYPE_BITMASK;
 
                 // Take a copy of payload since we are mutating it.
-                let mut payload_copy = payload.clone();
+                let mut payload_copy = payload.to_owned();
                 payload_copy[super::FUA_HEADER_SIZE - 1] = nalu_ref_idc | fragmented_nalu_type;
 
                 let a = [
@@ -164,10 +163,10 @@ impl Depacketizer for H264Packet {
                 ]
                 .concat();
 
-                return Ok(BytesMut::from(a.as_slice()));
+                return Ok(a);
             }
 
-            return Ok(BytesMut::from(&payload[super::FUA_HEADER_SIZE..]));
+            return Ok(payload[super::FUA_HEADER_SIZE..].to_vec());
         }
 
         Err(RTPError::UnhandledNALUType(nalu_type))
