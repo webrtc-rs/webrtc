@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 // CandidateRelayConfig is the config required to create a new CandidateRelay
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct CandidateRelayConfig {
     pub base_config: CandidateBaseConfig,
 
@@ -44,6 +44,7 @@ pub fn new_candidate_relay(config: CandidateRelayConfig) -> Result<CandidateBase
             address: config.rel_addr,
             port: config.rel_port,
         }),
+        conn: config.base_config.conn,
         on_close: Arc::new(Mutex::new(config.on_close)),
         ..Default::default()
     })

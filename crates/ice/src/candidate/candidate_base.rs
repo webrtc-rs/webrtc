@@ -9,9 +9,9 @@ use std::ops::Add;
 use std::sync::atomic::{AtomicU16, AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::Mutex;
+use tokio::sync::{broadcast, Mutex};
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct CandidateBaseConfig {
     pub candidate_id: String,
     pub network: String,
@@ -20,11 +20,13 @@ pub struct CandidateBaseConfig {
     pub component: u16,
     pub priority: u32,
     pub foundation: String,
+    pub conn: Option<Arc<dyn util::Conn + Send + Sync>>,
+    pub initialized_ch: Option<broadcast::Receiver<()>>,
 }
 
 pub(crate) type OnClose = fn() -> Result<(), Error>;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct CandidateBase {
     pub(crate) id: String,
     pub(crate) network_type: Arc<AtomicU8>,
@@ -40,7 +42,7 @@ pub struct CandidateBase {
 
     pub(crate) last_sent: Arc<AtomicU64>, //atomic.Value: Instant
     pub(crate) last_received: Arc<AtomicU64>, //atomic.Value: Instant
-    //TODO:pub(crate) conn         net.PacketConn
+    pub(crate) conn: Option<Arc<dyn util::Conn + Send + Sync>>,
 
     //TODO:pub(crate) currAgent :Option<Agent>,
     //TODO:pub(crate) closeCh   chan struct{}
@@ -98,7 +100,7 @@ impl Default for CandidateBase {
 
             last_sent: Arc::new(AtomicU64::new(0)),
             last_received: Arc::new(AtomicU64::new(0)),
-            //TODO:conn         net.PacketConn
+            conn: None,
             //TODO:currAgent :Option<Agent>,
             //TODO:closeCh   chan struct{}
             //TODO:closedCh  chan struct{}
@@ -448,7 +450,7 @@ impl CandidateBase {
 
 /*
 // start runs the candidate using the provided connection
-func (c *candidateBase) start(a *Agent, conn net.PacketConn, initializedCh <-chan struct{}) {
+func (c *candidateBase) start(a *Agent, conn net.PacketConn, initialized_ch <-chan struct{}) {
     if c.conn != nil {
         c.agent().log.Warn("Can't start already started candidateBase")
         return
@@ -458,16 +460,16 @@ func (c *candidateBase) start(a *Agent, conn net.PacketConn, initializedCh <-cha
     c.closeCh = make(chan struct{})
     c.closedCh = make(chan struct{})
 
-    go c.recvLoop(initializedCh)
+    go c.recvLoop(initialized_ch)
 }
 
-func (c *candidateBase) recvLoop(initializedCh <-chan struct{}) {
+func (c *candidateBase) recvLoop(initialized_ch <-chan struct{}) {
     defer func() {
         close(c.closedCh)
     }()
 
     select {
-    case <-initializedCh:
+    case <-initialized_ch:
     case <-c.closeCh:
         return
     }

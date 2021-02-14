@@ -1,8 +1,5 @@
+use crate::agent::*;
 use crate::candidate::*;
-
-use crate::agent::AgentInternal;
-use crate::candidate::candidate_pair::CandidatePairState;
-use crate::candidate::candidate_type::CandidateType;
 use crate::control::*;
 use crate::priority::*;
 use crate::use_candidate::*;
@@ -118,7 +115,9 @@ impl AgentInternal {
                     pair.local,
                     pair.remote
                 );
-                //TODO: self.send_binding_request(&msg, &*(pair.local), &*(pair.remote));
+                let local = pair.local.clone();
+                let remote = pair.remote.clone();
+                self.send_binding_request(&msg, &local, &remote);
             }
         }
     }

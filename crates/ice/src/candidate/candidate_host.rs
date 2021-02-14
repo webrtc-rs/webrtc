@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicU16, AtomicU8};
 use std::sync::Arc;
 
 // CandidateHostConfig is the config required to create a new CandidateHost
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct CandidateHostConfig {
     pub base_config: CandidateBaseConfig,
 
@@ -45,6 +45,7 @@ pub fn new_candidate_host(config: CandidateHostConfig) -> Result<CandidateBase, 
         network: config.base_config.network,
         network_type: Arc::new(AtomicU8::new(network_type as u8)),
         resolved_addr,
+        conn: config.base_config.conn,
         ..Default::default()
     })
 }

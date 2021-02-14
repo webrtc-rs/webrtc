@@ -5,8 +5,6 @@ pub mod agent_config;
 pub mod agent_gather;
 pub mod agent_stats;
 
-use crate::candidate::candidate_pair::*;
-use crate::candidate::candidate_type::*;
 use crate::candidate::*;
 use crate::errors::*;
 use crate::external_ip_mapper::*;
@@ -27,7 +25,7 @@ use crate::rand::*;
 
 use std::sync::Arc;
 use std::time::SystemTime;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{broadcast, mpsc, Mutex};
 use tokio::time::{Duration, Instant};
 
 pub(crate) struct BindingRequest {
@@ -75,6 +73,8 @@ pub struct AgentInternal {
     mdns_mode: MulticastDNSMode,
     mdns_name: String,
     mdns_conn: Option<DNSConn>,
+
+    started_ch_tx: Option<broadcast::Sender<()>>,
 
     max_binding_requests: u16,
 
@@ -360,7 +360,9 @@ impl AgentInternal {
             {
                 // we use binding request instead of indication to support refresh consent schemas
                 // see https://tools.ietf.org/html/rfc7675
-                //TODO: self.ping_candidate(&*(selected_pair.local), &*(selected_pair.remote)).await;
+                let local = selected_pair.local.clone();
+                let remote = selected_pair.remote.clone();
+                self.ping_candidate(&local, &remote).await;
             }
         }
     }
@@ -374,6 +376,11 @@ impl AgentInternal {
             );
         }
 
+        let mut pairs: Vec<(
+            Arc<dyn Candidate + Send + Sync>,
+            Arc<dyn Candidate + Send + Sync>,
+        )> = vec![];
+
         for p in &mut self.checklist {
             if p.state == CandidatePairState::Waiting {
                 p.state = CandidatePairState::InProgress;
@@ -385,9 +392,15 @@ impl AgentInternal {
                 log::trace!("max requests reached for pair {}, marking it as failed", p);
                 p.state = CandidatePairState::Failed;
             } else {
-                //TODO: self.ping_candidate(&*(p.local), &*(p.remote)).await;
                 p.binding_request_count += 1;
+                let local = p.local.clone();
+                let remote = p.remote.clone();
+                pairs.push((local, remote));
             }
+        }
+
+        for (local, remote) in pairs {
+            self.ping_candidate(&local, &remote).await;
         }
     }
 
@@ -581,6 +594,9 @@ impl Agent {
             insecure_skip_verify: config.insecure_skip_verify,
 
             force_candidate_contact: None,
+
+            started_ch_tx: None,
+
             max_binding_requests: 0,
 
             host_acceptance_min_wait: Duration::from_secs(0),

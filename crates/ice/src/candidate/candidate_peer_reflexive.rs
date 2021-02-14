@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicU16, AtomicU8};
 use std::sync::Arc;
 
 // CandidatePeerReflexiveConfig is the config required to create a new CandidatePeerReflexive
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct CandidatePeerReflexiveConfig {
     pub base_config: CandidateBaseConfig,
 
@@ -44,6 +44,7 @@ pub fn new_candidate_peer_reflexive(
             address: config.rel_addr,
             port: config.rel_port,
         }),
+        conn: config.base_config.conn,
         ..Default::default()
     })
 }
