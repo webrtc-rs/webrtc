@@ -35,9 +35,8 @@ impl Packet {
     }
 
     /// Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
-    pub fn unmarshal(&mut self, buf: &mut BytesMut) -> Result<(), RTPError> {
+    pub fn unmarshal(&mut self, buf: &mut [u8]) -> Result<(), RTPError> {
         let size = self.header.unmarshal(buf)?;
-
         self.payload = buf[size..].to_vec();
 
         Ok(())
@@ -48,7 +47,7 @@ impl Packet {
         self.header.marshal_size() + self.payload.len()
     }
 
-    pub fn marshal_to(&mut self, buf: &mut BytesMut) -> Result<usize, RTPError> {
+    pub fn marshal_to(&mut self, buf: &mut [u8]) -> Result<usize, RTPError> {
         let size = self.header.marshal_to(buf)?;
 
         // Make sure the buffer is large enough to hold the packet.
@@ -62,14 +61,12 @@ impl Packet {
     }
 
     /// Marshal serializes the packet into bytes.
-    pub fn marshal(&mut self) -> Result<BytesMut, RTPError> {
-        let mut buf = BytesMut::new();
-        buf.resize(self.marshal_size(), 0u8);
+    pub fn marshal(&mut self) -> Result<Vec<u8>, RTPError> {
+        let mut buf = vec![0u8; self.marshal_size()];
 
-        let size = self.marshal_to(&mut buf)?;
+        let size = self.marshal_to(buf.as_mut_slice())?;
 
         buf.truncate(size);
-
         Ok(buf)
     }
 }

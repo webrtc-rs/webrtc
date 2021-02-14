@@ -12,7 +12,7 @@ const VP8_HEADER_SIZE: usize = 1;
 pub struct VP8Payloader;
 
 impl Payloader for VP8Payloader {
-    fn payload(&self, mtu: u16, payload_data: BytesMut) -> Vec<BytesMut> {
+    fn payload(&self, mtu: u16, payload_data: &[u8]) -> Vec<Vec<u8>> {
         /*
          * https://tools.ietf.org/html/rfc7741#section-4.2
          *
@@ -48,8 +48,7 @@ impl Payloader for VP8Payloader {
 
         while payload_data_remaining > 0 {
             let current_fragment_size = max_fragment_size.min(payload_data_remaining) as usize;
-            let mut out = BytesMut::new();
-            out.resize(VP8_HEADER_SIZE + current_fragment_size, 0u8);
+            let mut out = vec![0u8; VP8_HEADER_SIZE + current_fragment_size];
 
             if payload_data_index == 0 {
                 out[0] = 0x10;

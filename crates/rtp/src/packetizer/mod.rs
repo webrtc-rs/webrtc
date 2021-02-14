@@ -10,12 +10,12 @@ mod packetizer_test;
 
 // Payloader payloads a byte array for use as rtp.Packet payloads
 pub trait Payloader {
-    fn payload(&self, mtu: u16, payload: BytesMut) -> Vec<BytesMut>;
+    fn payload(&self, mtu: u16, payload: &[u8]) -> Vec<Vec<u8>>;
 }
 
 /// Packetizer packetizes a payload
 pub trait PacketizerInterface {
-    fn packetize(&mut self, payload: &mut BytesMut, samples: u32) -> Result<Vec<Packet>, RTPError>;
+    fn packetize(&mut self, payload: &mut [u8], samples: u32) -> Result<Vec<Packet>, RTPError>;
     fn enable_abs_send_time(&mut self, value: u8);
 }
 
@@ -64,13 +64,13 @@ impl PacketizerInterface for Packetizer {
         self.abs_send_time = value
     }
 
-    fn packetize(&mut self, payload: &mut BytesMut, samples: u32) -> Result<Vec<Packet>, RTPError> {
+    fn packetize(&mut self, payload: &mut [u8], samples: u32) -> Result<Vec<Packet>, RTPError> {
         // Guard against an empty payload
         if payload.is_empty() {
             return Ok(vec![]);
         }
 
-        let payloads = self.payloader.payload(self.mtu - 12, payload.clone());
+        let payloads = self.payloader.payload(self.mtu - 12, payload);
         let mut packets = vec![Packet::default(); payloads.len()];
 
         for (i, pp) in payloads.iter().enumerate() {

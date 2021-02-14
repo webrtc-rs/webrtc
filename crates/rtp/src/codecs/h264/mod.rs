@@ -15,8 +15,8 @@ const NALU_REF_IDC_BITMASK: u8 = 0x60;
 const FUA_START_BITMASK: u8 = 0x80;
 const ANNEXB_NALUSTART_CODE: [u8; 4] = [0x00, 0x00, 0x00, 0x01];
 
-fn emit_nalus(nals: BytesMut, mut emit: impl FnMut(&BytesMut)) {
-    let next_ind = |nalu: &BytesMut, start: usize| -> (isize, isize) {
+fn emit_nalus(nals: &[u8], mut emit: impl FnMut(&[u8])) {
+    let next_ind = |nalu: &[u8], start: usize| -> (isize, isize) {
         let mut zero_count = 0;
 
         for (i, b) in nalu[start..].iter().enumerate() {

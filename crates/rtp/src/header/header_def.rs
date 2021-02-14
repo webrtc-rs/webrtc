@@ -5,7 +5,7 @@ use bytes::BytesMut;
 #[derive(Debug, Eq, Clone, PartialEq, Default)]
 pub struct Extension {
     pub id: u8,
-    pub payload: BytesMut,
+    pub payload: Vec<u8>,
 }
 
 /// Header represents an RTP packet header
@@ -61,7 +61,7 @@ impl Header {
     }
 
     /// Sets an RTP header extension
-    pub fn set_extension(&mut self, id: u8, payload: &BytesMut) -> Result<(), RTPError> {
+    pub fn set_extension(&mut self, id: u8, payload: &[u8]) -> Result<(), RTPError> {
         if self.extension {
             match super::ExtensionProfile::from(self.extension_profile) {
                 super::ExtensionProfile::OneByte => {
@@ -170,7 +170,7 @@ impl Header {
     }
 
     /// Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
-    pub fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<usize, RTPError> {
+    pub fn unmarshal(&mut self, raw_packet: &mut [u8]) -> Result<usize, RTPError> {
         /*
          *  0                   1                   2                   3
          *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -256,9 +256,7 @@ impl Header {
 
                         self.extensions.push(super::Extension {
                             id: ext_id,
-                            payload: BytesMut::from(
-                                &raw_packet[current_offset..current_offset + len],
-                            ),
+                            payload: raw_packet[current_offset..current_offset + len].to_vec(),
                         });
 
                         current_offset += len;
@@ -284,9 +282,8 @@ impl Header {
 
                         self.extensions.push(super::Extension {
                             id: ext_id,
-                            payload: BytesMut::from(
-                                &raw_packet[current_offset..current_offset + len as usize],
-                            ),
+                            payload: raw_packet[current_offset..current_offset + len as usize]
+                                .to_vec(),
                         });
 
                         current_offset += len as usize;
@@ -301,9 +298,9 @@ impl Header {
 
                     self.extensions.push(super::Extension {
                         id: 0,
-                        payload: BytesMut::from(
-                            &raw_packet[current_offset..current_offset + extension_length as usize],
-                        ),
+                        payload: raw_packet
+                            [current_offset..current_offset + extension_length as usize]
+                            .to_vec(),
                     });
 
                     current_offset += self.extensions[0].payload.len();
@@ -315,10 +312,8 @@ impl Header {
     }
 
     /// Marshal serializes the packet into bytes.
-    pub fn marshal(&mut self) -> Result<BytesMut, RTPError> {
-        let mut buf = BytesMut::new();
-
-        buf.resize(self.marshal_size(), 0u8);
+    pub fn marshal(&mut self) -> Result<Vec<u8>, RTPError> {
+        let mut buf = vec![0u8; self.marshal_size()];
 
         let size = self.marshal_to(&mut buf)?;
         buf.truncate(size);
@@ -327,7 +322,7 @@ impl Header {
     }
 
     /// Serializes the header and writes to the buffer. It requires buf length size to have been allocated.
-    pub fn marshal_to(&mut self, buf: &mut BytesMut) -> Result<usize, RTPError> {
+    pub fn marshal_to(&mut self, buf: &mut [u8]) -> Result<usize, RTPError> {
         /*
          *  0                   1                   2                   3
          *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1

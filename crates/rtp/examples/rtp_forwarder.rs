@@ -26,7 +26,7 @@ fn main() {
     std::thread::spawn(move || {
         println!("starting");
         while let Ok(e) = recv_channel.recv() {
-            let payload: BytesMut = e;
+            let payload: Vec<u8> = e;
             socket.send_to(&payload, "127.0.0.1:5004").unwrap();
         }
         println!("exited")
