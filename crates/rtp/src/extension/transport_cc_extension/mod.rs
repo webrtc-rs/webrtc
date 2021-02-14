@@ -26,7 +26,7 @@ impl TransportCCExtension {
     pub fn marshal(&self) -> Result<BytesMut, ExtensionError> {
         let mut buf = vec![0u8; TRANSPORT_CC_EXTENSION_SIZE];
         BigEndian::write_u16(&mut buf[0..2], self.transport_sequence);
-        Ok(buf[..].into())
+        Ok(BytesMut::from(buf.as_slice()))
     }
 
     // Unmarshal parses the passed byte slice and stores the result in the members

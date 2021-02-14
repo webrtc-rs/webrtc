@@ -31,7 +31,7 @@ pub struct AudioLevelExtension {
 }
 
 impl AudioLevelExtension {
-    // Marshal serializes the members to buffer
+    /// Marshal serializes the members to buffer
     pub fn marshal(&self) -> Result<BytesMut, ExtensionError> {
         if self.level > 127 {
             return Err(ExtensionError::AudioLevelOverflow);
@@ -42,10 +42,10 @@ impl AudioLevelExtension {
         let mut buf = vec![0u8; AUDIO_LEVEL_EXTENSION_SIZE];
         buf[0] = voice | self.level;
 
-        Ok(buf.as_slice().into())
+        Ok(BytesMut::from(buf.as_slice()))
     }
 
-    // Unmarshal parses the passed byte slice and stores the result in the members
+    /// Unmarshal parses the passed byte slice and stores the result in the members
     pub fn unmarshal(&mut self, raw_data: &mut BytesMut) -> Result<(), ExtensionError> {
         if raw_data.len() < AUDIO_LEVEL_EXTENSION_SIZE {
             return Err(ExtensionError::TooSmall);

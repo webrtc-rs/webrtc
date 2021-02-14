@@ -1,5 +1,3 @@
-use std::usize;
-
 use crate::errors::RTPError;
 use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
@@ -43,7 +41,7 @@ impl Header {
     fn get_extension_payload_len(&self) -> usize {
         let mut extension_length = 0;
 
-        match self.extension_profile.into() {
+        match super::ExtensionProfile::from(self.extension_profile) {
             super::ExtensionProfile::OneByte => {
                 for extension in &self.extensions {
                     extension_length += 1 + extension.payload.len();
@@ -65,7 +63,7 @@ impl Header {
     /// Sets an RTP header extension
     pub fn set_extension(&mut self, id: u8, payload: &BytesMut) -> Result<(), RTPError> {
         if self.extension {
-            match self.extension_profile.into() {
+            match super::ExtensionProfile::from(self.extension_profile) {
                 super::ExtensionProfile::OneByte => {
                     if !(1..=14).contains(&id) {
                         return Err(RTPError::RFC8285OneByteHeaderIDRange(id));
@@ -110,9 +108,9 @@ impl Header {
 
         let len = payload.len();
         if len <= 16 {
-            self.extension_profile = super::ExtensionProfile::OneByte.into()
+            self.extension_profile = super::ExtensionProfile::OneByte as u16
         } else if len > 16 && len < 256 {
-            self.extension_profile = super::ExtensionProfile::TwoByte.into()
+            self.extension_profile = super::ExtensionProfile::TwoByte as u16
         }
 
         self.extensions.push(Extension {
@@ -236,7 +234,7 @@ impl Header {
                 return Err(RTPError::HeaderSizeInsufficientForExtension);
             }
 
-            match self.extension_profile.into() {
+            match super::ExtensionProfile::from(self.extension_profile) {
                 // RFC 8285 RTP One Byte Header Extension
                 super::ExtensionProfile::OneByte => {
                     let end = current_offset + extension_length as usize;
@@ -258,7 +256,9 @@ impl Header {
 
                         self.extensions.push(super::Extension {
                             id: ext_id,
-                            payload: raw_packet[current_offset..current_offset + len].into(),
+                            payload: BytesMut::from(
+                                &raw_packet[current_offset..current_offset + len],
+                            ),
                         });
 
                         current_offset += len;
@@ -284,8 +284,9 @@ impl Header {
 
                         self.extensions.push(super::Extension {
                             id: ext_id,
-                            payload: raw_packet[current_offset..current_offset + len as usize]
-                                .into(),
+                            payload: BytesMut::from(
+                                &raw_packet[current_offset..current_offset + len as usize],
+                            ),
                         });
 
                         current_offset += len as usize;
@@ -300,9 +301,9 @@ impl Header {
 
                     self.extensions.push(super::Extension {
                         id: 0,
-                        payload: raw_packet
-                            [current_offset..current_offset + extension_length as usize]
-                            .into(),
+                        payload: BytesMut::from(
+                            &raw_packet[current_offset..current_offset + extension_length as usize],
+                        ),
                     });
 
                     current_offset += self.extensions[0].payload.len();
@@ -384,7 +385,7 @@ impl Header {
             no_alloc += 4;
             let start_extensions_pos = no_alloc;
 
-            match self.extension_profile.into() {
+            match super::ExtensionProfile::from(self.extension_profile) {
                 // RFC 8285 RTP One Byte Header Extension
                 super::ExtensionProfile::OneByte => {
                     for extension in &self.extensions {

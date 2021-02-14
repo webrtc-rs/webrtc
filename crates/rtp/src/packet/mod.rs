@@ -5,12 +5,12 @@ use std::fmt;
 
 mod packet_test;
 
-// Packet represents an RTP Packet
-// NOTE: Raw is populated by Marshal/Unmarshal and should not be modified
+/// Packet represents an RTP Packet
+/// NOTE: Raw is populated by Marshal/Unmarshal and should not be modified
 #[derive(Debug, Eq, PartialEq, Clone, Default)]
 pub struct Packet {
     pub header: Header,
-    pub payload: BytesMut,
+    pub payload: Vec<u8>,
 }
 
 impl fmt::Display for Packet {
@@ -38,7 +38,7 @@ impl Packet {
     pub fn unmarshal(&mut self, buf: &mut BytesMut) -> Result<(), RTPError> {
         let size = self.header.unmarshal(buf)?;
 
-        self.payload = buf[size..].into();
+        self.payload = buf[size..].to_vec();
 
         Ok(())
     }

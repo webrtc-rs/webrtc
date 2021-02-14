@@ -43,16 +43,16 @@ fn benchmark_unmarshal(c: &mut Criterion) {
             extensions: vec![
                 header::Extension {
                     id: 1,
-                    payload: [3, 4][..].into(),
+                    payload: BytesMut::from(&[3, 4][..]),
                 },
                 header::Extension {
                     id: 2,
-                    payload: [5, 6][..].into(),
+                    payload: BytesMut::from(&[5, 6][..]),
                 },
             ],
             ..Default::default()
         },
-        payload: [0x07, 0x08, 0x09, 0x0a][..].into(),
+        payload: vec![0x07, 0x08, 0x09, 0x0a],
         ..Default::default()
     };
 

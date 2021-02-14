@@ -11,7 +11,7 @@ use crate::{
 
 pub struct H264Payloader;
 
-// Payload fragments a H264 packet across one or more byte arrays
+/// Payload fragments a H264 packet across one or more byte arrays
 impl Payloader for H264Payloader {
     fn payload(&self, mtu: u16, payload: BytesMut) -> Vec<BytesMut> {
         let mut payloads = vec![];
@@ -21,6 +21,10 @@ impl Payloader for H264Payloader {
         }
 
         super::emit_nalus(payload, |nalu| {
+            if nalu.is_empty() {
+                return;
+            }
+
             let nalu_type = nalu[0] & super::NALU_TYPE_BITMASK;
             let nalu_ref_idc = nalu[0] & super::NALU_REF_IDC_BITMASK;
 
@@ -122,7 +126,7 @@ impl Depacketizer for H264Packet {
 
         if nalu_type > 0 && nalu_type < 24 {
             let a = [&super::ANNEXB_NALUSTART_CODE[..], &payload[..]].concat();
-            return Ok(a.as_slice().into());
+            return Ok(BytesMut::from(a.as_slice()));
         } else if nalu_type == super::STAPA_NALU_TYPE {
             let mut current_offset = super::STAPA_HEADER_SIZE;
             let mut result = BytesMut::new();
@@ -162,10 +166,10 @@ impl Depacketizer for H264Packet {
                 ]
                 .concat();
 
-                return Ok(a.as_slice().into());
+                return Ok(BytesMut::from(a.as_slice()));
             }
 
-            return Ok(payload[super::FUA_HEADER_SIZE..].into());
+            return Ok(BytesMut::from(&payload[super::FUA_HEADER_SIZE..]));
         }
 
         Err(RTPError::UnhandledNALUType(nalu_type))

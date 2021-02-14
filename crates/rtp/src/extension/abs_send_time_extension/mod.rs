@@ -14,18 +14,18 @@ pub struct AbsSendTimeExtension {
 }
 
 impl AbsSendTimeExtension {
-    // Marshal serializes the members to buffer.
+    /// Marshal serializes the members to buffer.
     pub fn marshal(&self) -> Result<BytesMut, ExtensionError> {
-        Ok(vec![
-            ((self.timestamp & 0xFF0000) >> 16) as u8,
-            ((self.timestamp & 0xFF00) >> 8) as u8,
-            (self.timestamp & 0xFF) as u8,
-        ]
-        .as_slice()
-        .into())
+        Ok(BytesMut::from(
+            &[
+                ((self.timestamp & 0xFF0000) >> 16) as u8,
+                ((self.timestamp & 0xFF00) >> 8) as u8,
+                (self.timestamp & 0xFF) as u8,
+            ][..],
+        ))
     }
 
-    // Unmarshal parses the passed byte slice and stores the result in the members.
+    /// Unmarshal parses the passed byte slice and stores the result in the members.
     pub fn unmarshal(&mut self, raw_data: &mut BytesMut) -> Result<(), ExtensionError> {
         if raw_data.len() < ABS_SEND_TIME_EXTENSION_SIZE {
             return Err(ExtensionError::TooSmall);
@@ -36,8 +36,8 @@ impl AbsSendTimeExtension {
         Ok(())
     }
 
-    // Estimate absolute send time according to the receive time.
-    // Note that if the transmission delay is larger than 64 seconds, estimated time will be wrong.
+    /// Estimate absolute send time according to the receive time.
+    /// Note that if the transmission delay is larger than 64 seconds, estimated time will be wrong.
     pub fn estimate(&self, receive: Duration) -> Duration {
         let receive_ntp = unix2ntp(receive);
         let mut ntp = receive_ntp & 0xFFFFFFC000000000 | (self.timestamp & 0xFFFFFF) << 14;
@@ -49,7 +49,7 @@ impl AbsSendTimeExtension {
         ntp2unix(ntp)
     }
 
-    // NewAbsSendTimeExtension makes new AbsSendTimeExtension from time.Time.
+    /// NewAbsSendTimeExtension makes new AbsSendTimeExtension from time.Time.
     pub fn new(send_time: Duration) -> Self {
         AbsSendTimeExtension {
             timestamp: unix2ntp(send_time) >> 14,

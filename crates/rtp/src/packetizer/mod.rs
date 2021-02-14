@@ -13,13 +13,13 @@ pub trait Payloader {
     fn payload(&self, mtu: u16, payload: BytesMut) -> Vec<BytesMut>;
 }
 
-// Packetizer packetizes a payload
+/// Packetizer packetizes a payload
 pub trait PacketizerInterface {
     fn packetize(&mut self, payload: &mut BytesMut, samples: u32) -> Result<Vec<Packet>, RTPError>;
     fn enable_abs_send_time(&mut self, value: u8);
 }
 
-// Depacketizer depacketizes a RTP payload, removing any RTP specific data from the payload
+/// Depacketizer depacketizes a RTP payload, removing any RTP specific data from the payload
 pub trait Depacketizer {
     fn unmarshal(&mut self, packet: &mut BytesMut) -> Result<BytesMut, RTPError>;
 }
@@ -84,7 +84,7 @@ impl PacketizerInterface for Packetizer {
                 ..Default::default()
             };
 
-            packets[i].payload = pp.to_owned();
+            packets[i].payload = pp.to_vec();
         }
 
         self.timestamp += samples;

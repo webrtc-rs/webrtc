@@ -33,21 +33,24 @@ fn emit_nalus(nals: BytesMut, mut emit: impl FnMut(&BytesMut)) {
         (-1, -1)
     };
 
-    let (mut next_ind_start, next_ind_len) = next_ind(&nals, 0);
+    let (mut next_ind_start, mut next_ind_len) = next_ind(&nals, 0);
 
     if next_ind_start == -1 {
         emit(&nals);
     } else {
         while next_ind_start != -1 {
             let prev_start = next_ind_start + next_ind_len;
-            let (a, _) = next_ind(&nals, prev_start as usize);
-            next_ind_start = a;
+            let (_next_ind_start, _next_ind_len) = next_ind(&nals, prev_start as usize);
+            next_ind_start = _next_ind_start;
+            next_ind_len = _next_ind_len;
 
             if next_ind_start != -1 {
-                emit(&nals[prev_start as usize..next_ind_start as usize].into());
+                emit(&BytesMut::from(
+                    &nals[prev_start as usize..next_ind_start as usize],
+                ));
             } else {
                 // Emit until end of stream, no end indicator found
-                emit(&nals[prev_start as usize..].into());
+                emit(&BytesMut::from(&nals[prev_start as usize..]));
             }
         }
     }

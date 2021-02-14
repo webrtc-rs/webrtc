@@ -78,10 +78,10 @@ mod test {
                 extension_profile: 0xBEDE,
                 extensions: vec![Extension {
                     id: 1,
-                    payload: vec![0x40, 0, 0],
+                    payload: vec![0x40, 0, 0][..].into(),
                 }],
             },
-            payload: vec![0x11, 0x12, 0x13, 0x14],
+            payload: vec![0x11, 0x12, 0x13, 0x14][..].into(),
             ..Default::default()
         };
 
