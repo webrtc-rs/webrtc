@@ -19,7 +19,7 @@ pub struct CandidateRelayConfig {
 
 impl CandidateRelayConfig {
     // new_candidate_relay creates a new relay candidate
-    pub fn new_candidate_relay(self) -> Result<CandidateBase, Error> {
+    pub async fn new_candidate_relay(self) -> Result<CandidateBase, Error> {
         let mut candidate_id = self.base_config.candidate_id;
         if candidate_id.is_empty() {
             candidate_id = generate_cand_id();
@@ -31,7 +31,7 @@ impl CandidateRelayConfig {
         };
         let network_type = determine_network_type(&self.base_config.network, &ip)?;
 
-        Ok(CandidateBase {
+        let c = CandidateBase {
             id: candidate_id,
             network_type: Arc::new(AtomicU8::new(network_type as u8)),
             candidate_type: CandidateType::Relay,
@@ -48,6 +48,10 @@ impl CandidateRelayConfig {
             conn: self.base_config.conn,
             on_close: Arc::new(Mutex::new(self.on_close)),
             ..Default::default()
-        })
+        };
+
+        c.start(self.base_config.initialized_ch).await;
+
+        Ok(c)
     }
 }

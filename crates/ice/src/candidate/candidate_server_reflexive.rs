@@ -17,7 +17,7 @@ pub struct CandidateServerReflexiveConfig {
 
 impl CandidateServerReflexiveConfig {
     // new_candidate_server_reflexive creates a new server reflective candidate
-    pub fn new_candidate_server_reflexive(self) -> Result<CandidateBase, Error> {
+    pub async fn new_candidate_server_reflexive(self) -> Result<CandidateBase, Error> {
         let ip: IpAddr = match self.base_config.address.parse() {
             Ok(ip) => ip,
             Err(_) => return Err(ERR_ADDRESS_PARSE_FAILED.to_owned()),
@@ -29,7 +29,7 @@ impl CandidateServerReflexiveConfig {
             candidate_id = generate_cand_id();
         }
 
-        Ok(CandidateBase {
+        let c = CandidateBase {
             id: candidate_id,
             network_type: Arc::new(AtomicU8::new(network_type as u8)),
             candidate_type: CandidateType::ServerReflexive,
@@ -45,6 +45,10 @@ impl CandidateServerReflexiveConfig {
             }),
             conn: self.base_config.conn,
             ..Default::default()
-        })
+        };
+
+        c.start(self.base_config.initialized_ch).await;
+
+        Ok(c)
     }
 }

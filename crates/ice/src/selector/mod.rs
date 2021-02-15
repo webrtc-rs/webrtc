@@ -1,4 +1,4 @@
-use crate::agent::*;
+use crate::agent::agent_internal::*;
 use crate::candidate::*;
 use crate::control::*;
 use crate::priority::*;
@@ -94,20 +94,26 @@ impl AgentInternal {
             // order to nominate a candidate pair (Section 8.1.1).  The controlled
             // agent MUST NOT include the USE-CANDIDATE attribute in a Binding
             // request.
-            let username = self.remote_ufrag.clone() + ":" + self.local_ufrag.as_str();
-            let mut msg = Message::new();
-            if let Err(err) = msg.build(&[
-                Box::new(BINDING_REQUEST),
-                Box::new(TransactionId::default()),
-                Box::new(Username::new(ATTR_USERNAME, username)),
-                Box::new(UseCandidateAttr::default()),
-                Box::new(AttrControlling(self.tie_breaker)),
-                Box::new(PriorityAttr(pair.local.priority())),
-                Box::new(MessageIntegrity::new_short_term_integrity(
-                    self.remote_pwd.clone(),
-                )),
-                Box::new(FINGERPRINT),
-            ]) {
+
+            let (msg, result) = {
+                let username = self.remote_ufrag.clone() + ":" + self.local_ufrag.as_str();
+                let mut msg = Message::new();
+                let result = msg.build(&[
+                    Box::new(BINDING_REQUEST),
+                    Box::new(TransactionId::default()),
+                    Box::new(Username::new(ATTR_USERNAME, username)),
+                    Box::new(UseCandidateAttr::default()),
+                    Box::new(AttrControlling(self.tie_breaker)),
+                    Box::new(PriorityAttr(pair.local.priority())),
+                    Box::new(MessageIntegrity::new_short_term_integrity(
+                        self.remote_pwd.clone(),
+                    )),
+                    Box::new(FINGERPRINT),
+                ]);
+                (msg, result)
+            };
+
+            if let Err(err) = result {
                 log::error!("{}", err);
             } else {
                 log::trace!(
@@ -117,7 +123,7 @@ impl AgentInternal {
                 );
                 let local = pair.local.clone();
                 let remote = pair.remote.clone();
-                self.send_binding_request(&msg, &local, &remote);
+                self.send_binding_request(&msg, &local, &remote).await;
             }
         }
     }
@@ -230,22 +236,27 @@ impl ControllingSelector for AgentInternal {
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
-        let username = self.remote_ufrag.clone() + ":" + self.local_ufrag.as_str();
-        let mut msg = Message::new();
-        if let Err(err) = msg.build(&[
-            Box::new(BINDING_REQUEST),
-            Box::new(TransactionId::default()),
-            Box::new(Username::new(ATTR_USERNAME, username)),
-            Box::new(AttrControlling(self.tie_breaker)),
-            Box::new(PriorityAttr(local.priority())),
-            Box::new(MessageIntegrity::new_short_term_integrity(
-                self.remote_pwd.clone(),
-            )),
-            Box::new(FINGERPRINT),
-        ]) {
+        let (msg, result) = {
+            let username = self.remote_ufrag.clone() + ":" + self.local_ufrag.as_str();
+            let mut msg = Message::new();
+            let result = msg.build(&[
+                Box::new(BINDING_REQUEST),
+                Box::new(TransactionId::default()),
+                Box::new(Username::new(ATTR_USERNAME, username)),
+                Box::new(AttrControlling(self.tie_breaker)),
+                Box::new(PriorityAttr(local.priority())),
+                Box::new(MessageIntegrity::new_short_term_integrity(
+                    self.remote_pwd.clone(),
+                )),
+                Box::new(FINGERPRINT),
+            ]);
+            (msg, result)
+        };
+
+        if let Err(err) = result {
             log::error!("{}", err);
         } else {
-            self.send_binding_request(&msg, local, remote);
+            self.send_binding_request(&msg, local, remote).await;
         }
     }
 
@@ -299,7 +310,7 @@ impl ControllingSelector for AgentInternal {
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
-        self.send_binding_request(m, local, remote);
+        self.send_binding_request(m, local, remote).await;
 
         if let Some(p) = self.find_pair(local, remote) {
             if p.state == CandidatePairState::Succeeded
@@ -349,22 +360,27 @@ impl ControlledSelector for AgentInternal {
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
-        let username = self.remote_ufrag.clone() + ":" + self.local_ufrag.as_str();
-        let mut msg = Message::new();
-        if let Err(err) = msg.build(&[
-            Box::new(BINDING_REQUEST),
-            Box::new(TransactionId::default()),
-            Box::new(Username::new(ATTR_USERNAME, username)),
-            Box::new(AttrControlled(self.tie_breaker)),
-            Box::new(PriorityAttr(local.priority())),
-            Box::new(MessageIntegrity::new_short_term_integrity(
-                self.remote_pwd.clone(),
-            )),
-            Box::new(FINGERPRINT),
-        ]) {
+        let (msg, result) = {
+            let username = self.remote_ufrag.clone() + ":" + self.local_ufrag.as_str();
+            let mut msg = Message::new();
+            let result = msg.build(&[
+                Box::new(BINDING_REQUEST),
+                Box::new(TransactionId::default()),
+                Box::new(Username::new(ATTR_USERNAME, username)),
+                Box::new(AttrControlled(self.tie_breaker)),
+                Box::new(PriorityAttr(local.priority())),
+                Box::new(MessageIntegrity::new_short_term_integrity(
+                    self.remote_pwd.clone(),
+                )),
+                Box::new(FINGERPRINT),
+            ]);
+            (msg, result)
+        };
+
+        if let Err(err) = result {
             log::error!("{}", err);
         } else {
-            self.send_binding_request(&msg, local, remote);
+            self.send_binding_request(&msg, local, remote).await;
         }
     }
 
@@ -438,7 +454,7 @@ impl ControlledSelector for AgentInternal {
                         let pair = p.clone();
                         self.set_selected_pair(Some(pair)).await;
                     }
-                    self.send_binding_success(m, local, remote);
+                    self.send_binding_success(m, local, remote).await;
                 } else {
                     // If the received Binding request triggered a new check to be
                     // enqueued in the triggered-check queue (Section 7.3.1.4), once the
@@ -451,7 +467,7 @@ impl ControlledSelector for AgentInternal {
                     self.ping_candidate(local, remote).await;
                 }
             } else {
-                self.send_binding_success(m, local, remote);
+                self.send_binding_success(m, local, remote).await;
                 self.ping_candidate(local, remote).await;
             }
         }

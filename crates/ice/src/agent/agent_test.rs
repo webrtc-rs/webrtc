@@ -4,6 +4,39 @@ use crate::candidate::candidate_host::*;
 use crate::candidate::candidate_peer_reflexive::*;
 use crate::candidate::candidate_relay::*;
 use crate::candidate::candidate_server_reflexive::*;
+use crate::control::AttrControlling;
+use crate::priority::PriorityAttr;
+
+use crate::use_candidate::UseCandidateAttr;
+use async_trait::async_trait;
+use std::io;
+use std::net::Ipv4Addr;
+use std::str::FromStr;
+use stun::textattrs::Username;
+
+struct MockConn;
+
+#[async_trait]
+impl util::Conn for MockConn {
+    async fn connect(&self, _addr: SocketAddr) -> io::Result<()> {
+        Ok(())
+    }
+    async fn recv(&self, _buf: &mut [u8]) -> io::Result<usize> {
+        Ok(0)
+    }
+    async fn recv_from(&self, _buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
+        Ok((0, SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0)))
+    }
+    async fn send(&self, _buf: &[u8]) -> io::Result<usize> {
+        Ok(0)
+    }
+    async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> io::Result<usize> {
+        Ok(0)
+    }
+    fn local_addr(&self) -> io::Result<SocketAddr> {
+        Ok(SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0))
+    }
+}
 
 #[tokio::test]
 async fn test_pair_search() -> Result<(), Error> {
@@ -39,7 +72,8 @@ async fn test_pair_priority() -> Result<(), Error> {
         },
         ..Default::default()
     };
-    let host_local: Arc<dyn Candidate + Send + Sync> = Arc::new(host_config.new_candidate_host()?);
+    let host_local: Arc<dyn Candidate + Send + Sync> =
+        Arc::new(host_config.new_candidate_host().await?);
 
     let relay_config = CandidateRelayConfig {
         base_config: CandidateBaseConfig {
@@ -54,7 +88,7 @@ async fn test_pair_priority() -> Result<(), Error> {
         ..Default::default()
     };
 
-    let relay_remote = relay_config.new_candidate_relay()?;
+    let relay_remote = relay_config.new_candidate_relay().await?;
 
     let srflx_config = CandidateServerReflexiveConfig {
         base_config: CandidateBaseConfig {
@@ -69,7 +103,7 @@ async fn test_pair_priority() -> Result<(), Error> {
         ..Default::default()
     };
 
-    let srflx_remote = srflx_config.new_candidate_server_reflexive()?;
+    let srflx_remote = srflx_config.new_candidate_server_reflexive().await?;
 
     let prflx_config = CandidatePeerReflexiveConfig {
         base_config: CandidateBaseConfig {
@@ -84,7 +118,7 @@ async fn test_pair_priority() -> Result<(), Error> {
         ..Default::default()
     };
 
-    let prflx_remote = prflx_config.new_candidate_peer_reflexive()?;
+    let prflx_remote = prflx_config.new_candidate_peer_reflexive().await?;
 
     let host_config = CandidateHostConfig {
         base_config: CandidateBaseConfig {
@@ -96,7 +130,7 @@ async fn test_pair_priority() -> Result<(), Error> {
         },
         ..Default::default()
     };
-    let host_remote = host_config.new_candidate_host()?;
+    let host_remote = host_config.new_candidate_host().await?;
 
     let remotes: Vec<Arc<dyn Candidate + Send + Sync>> = vec![
         Arc::new(relay_remote),
@@ -164,7 +198,7 @@ async fn test_on_selected_candidate_pair_change() -> Result<(), Error> {
         },
         ..Default::default()
     };
-    let host_local = host_config.new_candidate_host()?;
+    let host_local = host_config.new_candidate_host().await?;
 
     let relay_config = CandidateRelayConfig {
         base_config: CandidateBaseConfig {
@@ -178,7 +212,7 @@ async fn test_on_selected_candidate_pair_change() -> Result<(), Error> {
         rel_port: 43210,
         ..Default::default()
     };
-    let relay_remote = relay_config.new_candidate_relay()?;
+    let relay_remote = relay_config.new_candidate_relay().await?;
 
     // select the pair
     let p = CandidatePair::new(Arc::new(host_local), Arc::new(relay_remote), false);
@@ -198,68 +232,81 @@ async fn test_on_selected_candidate_pair_change() -> Result<(), Error> {
 async fn test_handle_peer_reflexive_udp_pflx_candidate() -> Result<(), Error> {
     let a = Agent::new(AgentConfig::default()).await?;
 
-    /*a.selector = ControllingSelector{agent: a, log: a.log}
+    let host_config = CandidateHostConfig {
+        base_config: CandidateBaseConfig {
+            network: "udp".to_owned(),
+            address: "192.168.0.2".to_owned(),
+            port: 777,
+            component: 1,
+            conn: Some(Arc::new(MockConn {})),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
 
-    hostConfig := CandidateHostConfig{
-        Network:   "udp",
-        Address:   "192.168.0.2",
-        Port:      777,
-        Component: 1,
+    let local: Arc<dyn Candidate + Send + Sync> = Arc::new(host_config.new_candidate_host().await?);
+    let remote = SocketAddr::from_str("172.17.0.3:999")?;
+
+    let (username, local_pwd, tie_breaker) = {
+        let ai = a.agent_internal.lock().await;
+
+        (
+            ai.local_ufrag.to_owned() + ":" + ai.remote_ufrag.as_str(),
+            ai.local_pwd.clone(),
+            ai.tie_breaker,
+        )
+    };
+
+    let mut msg = Message::new();
+    msg.build(&[
+        Box::new(BINDING_REQUEST),
+        Box::new(TransactionId::default()),
+        Box::new(Username::new(ATTR_USERNAME, username)),
+        Box::new(UseCandidateAttr::new()),
+        Box::new(AttrControlling(tie_breaker)),
+        Box::new(PriorityAttr(local.priority())),
+        Box::new(MessageIntegrity::new_short_term_integrity(local_pwd)),
+        Box::new(FINGERPRINT),
+    ])?;
+
+    {
+        let mut ai = a.agent_internal.lock().await;
+        ai.handle_inbound(&mut msg, &local, remote).await;
+
+        // length of remote candidate list must be one now
+        assert_eq!(
+            ai.remote_candidates.len(),
+            1,
+            "failed to add a network type to the remote candidate list"
+        );
+
+        // length of remote candidate list for a network type must be 1
+        if let Some(cands) = ai.remote_candidates.get(&local.network_type()) {
+            assert_eq!(
+                cands.len(),
+                1,
+                "failed to add prflx candidate to remote candidate list"
+            );
+
+            let c = &cands[0];
+
+            assert_eq!(
+                c.candidate_type(),
+                CandidateType::PeerReflexive,
+                "candidate type must be prflx"
+            );
+
+            assert_eq!(c.address(), "172.17.0.3", "IP address mismatch");
+
+            assert_eq!(c.port(), 999, "Port number mismatch");
+        } else {
+            assert!(
+                false,
+                "expected non-empty remote candidate for network type {}",
+                local.network_type()
+            );
+        }
     }
-    local, err := NewCandidateHost(&hostConfig)
-    local.conn = &mockPacketConn{}
-    if err != nil {
-        t.Fatalf("failed to create a new candidate: %v", err)
-    }
-
-    remote := &net.UDPAddr{IP: net.ParseIP("172.17.0.3"), Port: 999}
-
-    msg, err := stun.Build(stun.BindingRequest, stun.TransactionID,
-        stun.NewUsername(a.localUfrag+":"+a.remoteUfrag),
-        UseCandidate(),
-        AttrControlling(a.tieBreaker),
-        PriorityAttr(local.Priority()),
-        stun.NewShortTermIntegrity(a.localPwd),
-        stun.Fingerprint,
-    )
-    if err != nil {
-        t.Fatal(err)
-    }
-
-    a.handleInbound(msg, local, remote)
-
-    // length of remote candidate list must be one now
-    if len(a.remoteCandidates) != 1 {
-        t.Fatal("failed to add a network type to the remote candidate list")
-    }
-
-    // length of remote candidate list for a network type must be 1
-    set := a.remoteCandidates[local.NetworkType()]
-    if len(set) != 1 {
-        t.Fatal("failed to add prflx candidate to remote candidate list")
-    }
-
-    c := set[0]
-
-    if c.Type() != CandidateTypePeerReflexive {
-        t.Fatal("candidate type must be prflx")
-    }
-
-    if c.Address() != "172.17.0.3" {
-        t.Fatal("IP address mismatch")
-    }
-
-    if c.Port() != 999 {
-        t.Fatal("Port number mismatch")
-    }*/
-
-    let _ = a.close(); //TODO: ?
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_handle_peer_reflexive_bad_network_type() -> Result<(), Error> {
-    let a = Agent::new(AgentConfig::default()).await?;
 
     let _ = a.close(); //TODO: ?
     Ok(())
@@ -268,6 +315,54 @@ async fn test_handle_peer_reflexive_bad_network_type() -> Result<(), Error> {
 #[tokio::test]
 async fn test_handle_peer_reflexive_unknown_remote() -> Result<(), Error> {
     let a = Agent::new(AgentConfig::default()).await?;
+
+    let mut tid = TransactionId::default();
+    tid.0[..3].copy_from_slice("ABC".as_bytes());
+
+    let remote_pwd = {
+        let mut ai = a.agent_internal.lock().await;
+        ai.pending_binding_requests = vec![BindingRequest {
+            timestamp: Instant::now(),
+            transaction_id: tid,
+            destination: SocketAddr::from_str("0.0.0.0:0")?,
+            is_use_candidate: false,
+        }];
+        ai.remote_pwd.clone()
+    };
+
+    let host_config = CandidateHostConfig {
+        base_config: CandidateBaseConfig {
+            network: "udp".to_owned(),
+            address: "192.168.0.2".to_owned(),
+            port: 777,
+            component: 1,
+            conn: Some(Arc::new(MockConn {})),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let local: Arc<dyn Candidate + Send + Sync> = Arc::new(host_config.new_candidate_host().await?);
+    let remote = SocketAddr::from_str("172.17.0.3:999")?;
+
+    let mut msg = Message::new();
+    msg.build(&[
+        Box::new(BINDING_SUCCESS),
+        Box::new(tid),
+        Box::new(MessageIntegrity::new_short_term_integrity(remote_pwd)),
+        Box::new(FINGERPRINT),
+    ])?;
+
+    {
+        let mut ai = a.agent_internal.lock().await;
+        ai.handle_inbound(&mut msg, &local, remote).await;
+
+        assert_eq!(
+            ai.remote_candidates.len(),
+            0,
+            "unknown remote was able to create a candidate"
+        );
+    }
 
     let _ = a.close(); //TODO: ?
     Ok(())

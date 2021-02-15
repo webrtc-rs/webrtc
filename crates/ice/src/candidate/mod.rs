@@ -70,7 +70,11 @@ pub trait Candidate: fmt::Display {
     async fn close(&self) -> Result<(), Error>;
     fn seen(&self, outbound: bool);
 
-    fn write_to(&self, raw: &[u8], dst: &dyn Candidate) -> Result<usize, Error>;
+    async fn write_to(
+        &self,
+        raw: &[u8],
+        dst: &(dyn Candidate + Send + Sync),
+    ) -> Result<usize, Error>;
     fn equal(&self, other: &dyn Candidate) -> bool;
     fn clone(&self) -> Arc<dyn Candidate + Send + Sync>;
 }
@@ -298,7 +302,7 @@ impl CandidatePair {
             + if g > d { 1 } else { 0 }
     }
 
-    pub fn write(&mut self, b: &[u8]) -> Result<usize, Error> {
-        self.local.write_to(b, &*self.remote)
+    pub async fn write(&mut self, b: &[u8]) -> Result<usize, Error> {
+        self.local.write_to(b, &*self.remote).await
     }
 }

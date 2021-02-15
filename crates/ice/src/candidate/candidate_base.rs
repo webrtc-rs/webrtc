@@ -336,12 +336,17 @@ impl Candidate for CandidateBase {
         }
     }
 
-    fn write_to(&self, _raw: &[u8], _dst: &dyn Candidate) -> Result<usize, Error> {
-        let n = 0; //TODO;self.conn.WriteTo(raw, dst.addr())?;
-                   /*if err != nil {
-                       c.agent().log.Warnf("%s: %v", errSendPacket, err)
-                       return n, nil
-                   }*/
+    async fn write_to(
+        &self,
+        raw: &[u8],
+        dst: &(dyn Candidate + Send + Sync),
+    ) -> Result<usize, Error> {
+        let n = if let Some(conn) = &self.conn {
+            let addr = dst.addr();
+            conn.send_to(raw, addr).await?
+        } else {
+            0
+        };
         self.seen(true);
         Ok(n)
     }
@@ -361,18 +366,17 @@ impl Candidate for CandidateBase {
     }
 }
 
-pub(crate) fn get_ip(network: &str, ip: &IpAddr, port: u16) -> (NetworkType, SocketAddr) {
-    let network_type = match determine_network_type(network, ip) {
-        Ok(nt) => nt,
-        Err(_) => NetworkType::UDP4,
-    };
-
-    let resolved_addr = create_addr(network_type, *ip, port);
-
-    (network_type, resolved_addr)
-}
-
 impl CandidateBase {
+    pub fn set_ip(&mut self, ip: &IpAddr) -> Result<(), Error> {
+        let network_type = determine_network_type(&self.network, ip)?;
+
+        self.network_type
+            .store(network_type as u8, Ordering::SeqCst);
+        self.resolved_addr = create_addr(network_type, *ip, self.port);
+
+        Ok(())
+    }
+
     pub fn set_last_received(&self, d: Duration) {
         self.last_received
             .store(d.as_nanos() as u64, Ordering::SeqCst);
@@ -447,7 +451,7 @@ impl CandidateBase {
     }
 
     // start runs the candidate using the provided connection
-    async fn start(&self, initialized_ch: broadcast::Receiver<()>) {
+    pub(crate) async fn start(&self, initialized_ch: Option<broadcast::Receiver<()>>) {
         if let Some(conn) = &self.conn {
             let conn = Arc::clone(conn);
             tokio::spawn(async move {
@@ -459,7 +463,7 @@ impl CandidateBase {
     }
 
     async fn recv_loop(
-        _initialized_ch: broadcast::Receiver<()>,
+        initialized_ch: Option<broadcast::Receiver<()>>,
         conn: Arc<dyn util::Conn + Send + Sync>,
     ) -> Result<(), Error> {
         /*defer func() {
@@ -471,6 +475,9 @@ impl CandidateBase {
         case <-c.closeCh:
             return
         }*/
+        if let Some(mut initialized_ch) = initialized_ch {
+            let _ = initialized_ch.recv().await;
+        }
 
         let mut buffer = vec![0u8; RECEIVE_MTU];
         loop {

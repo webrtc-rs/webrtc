@@ -12,7 +12,7 @@ const UDP: &str = "udp";
 const TCP: &str = "tcp";
 
 // NetworkType represents the type of network
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(PartialEq, Debug, Copy, Clone, Eq, Hash)]
 pub enum NetworkType {
     // NetworkTypeUDP4 indicates UDP over IPv4.
     UDP4 = 0,
