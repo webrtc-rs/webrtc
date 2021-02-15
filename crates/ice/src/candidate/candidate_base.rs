@@ -1,10 +1,9 @@
 use super::*;
 use crate::util::*;
 
-use std::fmt;
-
 use async_trait::async_trait;
 use crc32fast::Hasher;
+use std::fmt;
 use std::ops::Add;
 use std::sync::atomic::{AtomicU16, AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
@@ -40,8 +39,8 @@ pub struct CandidateBase {
 
     pub(crate) resolved_addr: SocketAddr,
 
-    pub(crate) last_sent: Arc<AtomicU64>, //atomic.Value: Instant
-    pub(crate) last_received: Arc<AtomicU64>, //atomic.Value: Instant
+    pub(crate) last_sent: Arc<AtomicU64>,
+    pub(crate) last_received: Arc<AtomicU64>,
     pub(crate) conn: Option<Arc<dyn util::Conn + Send + Sync>>,
 
     //TODO:pub(crate) currAgent :Option<Agent>,
@@ -446,79 +445,75 @@ impl CandidateBase {
             DEFAULT_LOCAL_PREFERENCE
         }
     }
+
+    // start runs the candidate using the provided connection
+    async fn start(&self, initialized_ch: broadcast::Receiver<()>) {
+        if let Some(conn) = &self.conn {
+            let conn = Arc::clone(conn);
+            tokio::spawn(async move {
+                let _ = CandidateBase::recv_loop(initialized_ch, conn).await;
+            });
+        } else {
+            log::error!("Can't start due to conn is_none");
+        }
+    }
+
+    async fn recv_loop(
+        _initialized_ch: broadcast::Receiver<()>,
+        conn: Arc<dyn util::Conn + Send + Sync>,
+    ) -> Result<(), Error> {
+        /*defer func() {
+            close(c.closedCh)
+        }()*/
+
+        /*select {
+        case <-initialized_ch:
+        case <-c.closeCh:
+            return
+        }*/
+
+        let mut buffer = vec![0u8; RECEIVE_MTU];
+        loop {
+            let (n, src_addr) = conn.recv_from(&mut buffer).await?;
+
+            CandidateBase::handle_inbound_candidate_msg(&buffer[..n], src_addr);
+        }
+    }
+
+    fn handle_inbound_candidate_msg(_buffer: &[u8], _src_addr: SocketAddr) {
+        /*TODO: if stun.IsMessage(buffer) {
+            m := &stun.Message{
+                Raw: make([]byte, len(buffer)),
+            }
+            // Explicitly copy raw buffer so Message can own the memory.
+            copy(m.Raw, buffer)
+            if err := m.Decode(); err != nil {
+                log.Warnf("Failed to handle decode ICE from %s to %s: %v", c.addr(), srcAddr, err)
+                return
+            }
+            err := c.agent().run(ctx, func(ctx context.Context, agent *Agent) {
+                agent.handleInbound(m, c, srcAddr)
+            })
+            if err != nil {
+                log.Warnf("Failed to handle message: %v", err)
+            }
+
+            return
+        }
+
+        if !c.agent().validateNonSTUNTraffic(c, srcAddr) {
+            log.Warnf("Discarded message from %s, not a valid remote candidate", c.addr())
+            return
+        }
+
+        // NOTE This will return packetio.ErrFull if the buffer ever manages to fill up.
+        if _, err := c.agent().buffer.Write(buffer); err != nil {
+            log.Warnf("failed to write packet")
+        }*/
+    }
 }
 
 /*
-// start runs the candidate using the provided connection
-func (c *candidateBase) start(a *Agent, conn net.PacketConn, initialized_ch <-chan struct{}) {
-    if c.conn != nil {
-        c.agent().log.Warn("Can't start already started candidateBase")
-        return
-    }
-    c.currAgent = a
-    c.conn = conn
-    c.closeCh = make(chan struct{})
-    c.closedCh = make(chan struct{})
-
-    go c.recvLoop(initialized_ch)
-}
-
-func (c *candidateBase) recvLoop(initialized_ch <-chan struct{}) {
-    defer func() {
-        close(c.closedCh)
-    }()
-
-    select {
-    case <-initialized_ch:
-    case <-c.closeCh:
-        return
-    }
-
-    log := c.agent().log
-    buffer := make([]byte, receiveMTU)
-    for {
-        n, srcAddr, err := c.conn.ReadFrom(buffer)
-        if err != nil {
-            return
-        }
-
-        handleInboundCandidateMsg(c, c, buffer[:n], srcAddr, log)
-    }
-}
-
-func handleInboundCandidateMsg(ctx context.Context, c Candidate, buffer []byte, srcAddr net.Addr, log logging.LeveledLogger) {
-    if stun.IsMessage(buffer) {
-        m := &stun.Message{
-            Raw: make([]byte, len(buffer)),
-        }
-        // Explicitly copy raw buffer so Message can own the memory.
-        copy(m.Raw, buffer)
-        if err := m.Decode(); err != nil {
-            log.Warnf("Failed to handle decode ICE from %s to %s: %v", c.addr(), srcAddr, err)
-            return
-        }
-        err := c.agent().run(ctx, func(ctx context.Context, agent *Agent) {
-            agent.handleInbound(m, c, srcAddr)
-        })
-        if err != nil {
-            log.Warnf("Failed to handle message: %v", err)
-        }
-
-        return
-    }
-
-    if !c.agent().validateNonSTUNTraffic(c, srcAddr) {
-        log.Warnf("Discarded message from %s, not a valid remote candidate", c.addr())
-        return
-    }
-
-    // NOTE This will return packetio.ErrFull if the buffer ever manages to fill up.
-    if _, err := c.agent().buffer.Write(buffer); err != nil {
-        log.Warnf("failed to write packet")
-    }
-}
-
-
 // UnmarshalCandidate creates a Candidate from its string representation
 func UnmarshalCandidate(raw string) (Candidate, error) {
     split := strings.Fields(raw)

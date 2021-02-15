@@ -1,14 +1,9 @@
 use super::*;
-use crate::candidate::candidate_base::CandidateBaseConfig;
-use crate::candidate::candidate_host::{new_candidate_host, CandidateHostConfig};
-use crate::candidate::candidate_peer_reflexive::{
-    new_candidate_peer_reflexive, CandidatePeerReflexiveConfig,
-};
-use crate::candidate::candidate_relay::{new_candidate_relay, CandidateRelayConfig};
-use crate::candidate::candidate_server_reflexive::{
-    new_candidate_server_reflexive, CandidateServerReflexiveConfig,
-};
-//use crate::selector::ControllingSelector;
+use crate::candidate::candidate_base::*;
+use crate::candidate::candidate_host::*;
+use crate::candidate::candidate_peer_reflexive::*;
+use crate::candidate::candidate_relay::*;
+use crate::candidate::candidate_server_reflexive::*;
 
 #[tokio::test]
 async fn test_pair_search() -> Result<(), Error> {
@@ -44,7 +39,7 @@ async fn test_pair_priority() -> Result<(), Error> {
         },
         ..Default::default()
     };
-    let host_local: Arc<dyn Candidate + Send + Sync> = Arc::new(new_candidate_host(host_config)?);
+    let host_local: Arc<dyn Candidate + Send + Sync> = Arc::new(host_config.new_candidate_host()?);
 
     let relay_config = CandidateRelayConfig {
         base_config: CandidateBaseConfig {
@@ -59,7 +54,7 @@ async fn test_pair_priority() -> Result<(), Error> {
         ..Default::default()
     };
 
-    let relay_remote = new_candidate_relay(relay_config)?;
+    let relay_remote = relay_config.new_candidate_relay()?;
 
     let srflx_config = CandidateServerReflexiveConfig {
         base_config: CandidateBaseConfig {
@@ -74,7 +69,7 @@ async fn test_pair_priority() -> Result<(), Error> {
         ..Default::default()
     };
 
-    let srflx_remote = new_candidate_server_reflexive(srflx_config)?;
+    let srflx_remote = srflx_config.new_candidate_server_reflexive()?;
 
     let prflx_config = CandidatePeerReflexiveConfig {
         base_config: CandidateBaseConfig {
@@ -89,7 +84,7 @@ async fn test_pair_priority() -> Result<(), Error> {
         ..Default::default()
     };
 
-    let prflx_remote = new_candidate_peer_reflexive(prflx_config)?;
+    let prflx_remote = prflx_config.new_candidate_peer_reflexive()?;
 
     let host_config = CandidateHostConfig {
         base_config: CandidateBaseConfig {
@@ -101,7 +96,7 @@ async fn test_pair_priority() -> Result<(), Error> {
         },
         ..Default::default()
     };
-    let host_remote = new_candidate_host(host_config)?;
+    let host_remote = host_config.new_candidate_host()?;
 
     let remotes: Vec<Arc<dyn Candidate + Send + Sync>> = vec![
         Arc::new(relay_remote),
@@ -169,7 +164,7 @@ async fn test_on_selected_candidate_pair_change() -> Result<(), Error> {
         },
         ..Default::default()
     };
-    let host_local = new_candidate_host(host_config)?;
+    let host_local = host_config.new_candidate_host()?;
 
     let relay_config = CandidateRelayConfig {
         base_config: CandidateBaseConfig {
@@ -183,7 +178,7 @@ async fn test_on_selected_candidate_pair_change() -> Result<(), Error> {
         rel_port: 43210,
         ..Default::default()
     };
-    let relay_remote = new_candidate_relay(relay_config)?;
+    let relay_remote = relay_config.new_candidate_relay()?;
 
     // select the pair
     let p = CandidatePair::new(Arc::new(host_local), Arc::new(relay_remote), false);
