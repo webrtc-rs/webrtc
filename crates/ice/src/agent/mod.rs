@@ -4,7 +4,9 @@ mod agent_test;
 pub mod agent_config;
 pub mod agent_gather;
 pub(crate) mod agent_internal;
+pub mod agent_selector;
 pub mod agent_stats;
+pub mod agent_transport;
 
 use crate::candidate::*;
 use crate::errors::*;

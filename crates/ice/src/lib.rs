@@ -13,7 +13,6 @@ pub mod mdns;
 pub mod network_type;
 pub mod priority;
 mod rand;
-mod selector;
 pub mod state;
 pub mod stats;
 pub mod tcp_type;

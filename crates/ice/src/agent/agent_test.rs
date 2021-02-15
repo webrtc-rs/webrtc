@@ -367,3 +367,170 @@ async fn test_handle_peer_reflexive_unknown_remote() -> Result<(), Error> {
     let _ = a.close(); //TODO: ?
     Ok(())
 }
+
+// Assert that Agent on startup sends message, and doesn't wait for connectivityTicker to fire
+#[tokio::test]
+async fn test_connectivity_on_startup() -> Result<(), Error> {
+    // Create a network with two interfaces
+    /*TODO: wan, err := vnet.NewRouter(&vnet.RouterConfig{
+        CIDR:          "0.0.0.0/0",
+        LoggerFactory: logging.NewDefaultLoggerFactory(),
+    })
+    assert.NoError(t, err)
+
+    net0 := vnet.NewNet(&vnet.NetConfig{
+        StaticIPs: []string{"192.168.0.1"},
+    })
+    assert.NoError(t, wan.AddNet(net0))
+
+    net1 := vnet.NewNet(&vnet.NetConfig{
+        StaticIPs: []string{"192.168.0.2"},
+    })
+    assert.NoError(t, wan.AddNet(net1))
+
+    assert.NoError(t, wan.Start())
+
+    aNotifier, aConnected := onConnected()
+    bNotifier, bConnected := onConnected()
+
+    KeepaliveInterval := time.Hour
+    cfg0 := &AgentConfig{
+        NetworkTypes:     supportedNetworkTypes(),
+        MulticastDNSMode: MulticastDNSModeDisabled,
+        Net:              net0,
+
+        KeepaliveInterval: &KeepaliveInterval,
+        checkInterval:     time.Hour,
+    }
+
+    aAgent, err := NewAgent(cfg0)
+    require.NoError(t, err)
+    require.NoError(t, aAgent.OnConnectionStateChange(aNotifier))
+
+    cfg1 := &AgentConfig{
+        NetworkTypes:      supportedNetworkTypes(),
+        MulticastDNSMode:  MulticastDNSModeDisabled,
+        Net:               net1,
+        KeepaliveInterval: &KeepaliveInterval,
+        checkInterval:     time.Hour,
+    }
+
+    bAgent, err := NewAgent(cfg1)
+    require.NoError(t, err)
+    require.NoError(t, bAgent.OnConnectionStateChange(bNotifier))
+
+    aConn, bConn := func(aAgent, bAgent *Agent) (*Conn, *Conn) {
+        // Manual signaling
+        aUfrag, aPwd, err := aAgent.GetLocalUserCredentials()
+        assert.NoError(t, err)
+
+        bUfrag, bPwd, err := bAgent.GetLocalUserCredentials()
+        assert.NoError(t, err)
+
+        gatherAndExchangeCandidates(aAgent, bAgent)
+
+        accepted := make(chan struct{})
+        accepting := make(chan struct{})
+        var aConn *Conn
+
+        origHdlr := aAgent.onConnectionStateChangeHdlr.Load()
+        if origHdlr != nil {
+            defer check(aAgent.OnConnectionStateChange(origHdlr.(func(ConnectionState))))
+        }
+        check(aAgent.OnConnectionStateChange(func(s ConnectionState) {
+            if s == ConnectionStateChecking {
+                close(accepting)
+            }
+            if origHdlr != nil {
+                origHdlr.(func(ConnectionState))(s)
+            }
+        }))
+
+        go func() {
+            var acceptErr error
+            aConn, acceptErr = aAgent.Accept(context.TODO(), bUfrag, bPwd)
+            check(acceptErr)
+            close(accepted)
+        }()
+
+        <-accepting
+
+        bConn, err := bAgent.Dial(context.TODO(), aUfrag, aPwd)
+        check(err)
+
+        // Ensure accepted
+        <-accepted
+        return aConn, bConn
+    }(aAgent, bAgent)
+
+    // Ensure pair selected
+    // Note: this assumes ConnectionStateConnected is thrown after selecting the final pair
+    <-aConnected
+    <-bConnected
+
+    assert.NoError(t, wan.Stop())
+    if !closePipe(t, aConn, bConn) {
+        return
+    }*/
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_connectivity_lite() -> Result<(), Error> {
+    /*TODO:
+    stunServerURL := &URL{
+        Scheme: SchemeTypeSTUN,
+        Host:   "1.2.3.4",
+        Port:   3478,
+        Proto:  ProtoTypeUDP,
+    }
+
+    natType := &vnet.NATType{
+        MappingBehavior:   vnet.EndpointIndependent,
+        FilteringBehavior: vnet.EndpointIndependent,
+    }
+    v, err := buildVNet(natType, natType)
+    require.NoError(t, err, "should succeed")
+    defer v.close()
+
+    aNotifier, aConnected := onConnected()
+    bNotifier, bConnected := onConnected()
+
+    cfg0 := &AgentConfig{
+        Urls:             []*URL{stunServerURL},
+        NetworkTypes:     supportedNetworkTypes(),
+        MulticastDNSMode: MulticastDNSModeDisabled,
+        Net:              v.net0,
+    }
+
+    aAgent, err := NewAgent(cfg0)
+    require.NoError(t, err)
+    require.NoError(t, aAgent.OnConnectionStateChange(aNotifier))
+
+    cfg1 := &AgentConfig{
+        Urls:             []*URL{},
+        Lite:             true,
+        CandidateTypes:   []CandidateType{CandidateTypeHost},
+        NetworkTypes:     supportedNetworkTypes(),
+        MulticastDNSMode: MulticastDNSModeDisabled,
+        Net:              v.net1,
+    }
+
+    bAgent, err := NewAgent(cfg1)
+    require.NoError(t, err)
+    require.NoError(t, bAgent.OnConnectionStateChange(bNotifier))
+
+    aConn, bConn := connectWithVNet(aAgent, bAgent)
+
+    // Ensure pair selected
+    // Note: this assumes ConnectionStateConnected is thrown after selecting the final pair
+    <-aConnected
+    <-bConnected
+
+    if !closePipe(t, aConn, bConn) {
+        return
+    }*/
+
+    Ok(())
+}
