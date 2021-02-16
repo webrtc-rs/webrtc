@@ -12,7 +12,7 @@ repository = "https://github.com/webrtc-rs/ice"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-util = { package = "webrtc-rs-util", version = "0.1.5" }
+util = { package = "webrtc-rs-util", version = "0.1.6" }
 mdns = { package = "webrtc-rs-mdns", version = "0.2.1" }
 stun = { package = "webrtc-rs-stun", version = "0.1.13" }
 turn = { package = "webrtc-rs-turn", version = "0.1.0" }

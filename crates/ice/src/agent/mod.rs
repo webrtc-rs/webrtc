@@ -27,6 +27,7 @@ use std::net::SocketAddr;
 use crate::agent::agent_config::{AgentConfig, MAX_BINDING_REQUEST_TIMEOUT, MAX_BUFFER_SIZE};
 use crate::rand::*;
 
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::{broadcast, mpsc, Mutex};
@@ -172,6 +173,8 @@ impl Agent {
 
             // 1:1 D-NAT IP address mapping
             ext_ip_mapper: ExternalIPMapper::default(),
+            bytes_received: Arc::new(AtomicUsize::new(0)),
+            bytes_sent: Arc::new(AtomicUsize::new(0)),
         };
 
         config.init_with_defaults(&mut ai);

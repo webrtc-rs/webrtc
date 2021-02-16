@@ -95,6 +95,8 @@ pub struct AgentInternal {
 
     pub(crate) insecure_skip_verify: bool,
     //TODO: proxyDialer proxy.Dialer
+    pub(crate) bytes_received: Arc<AtomicUsize>,
+    pub(crate) bytes_sent: Arc<AtomicUsize>,
 }
 
 //TODO: remove unsafe
@@ -617,5 +619,64 @@ impl AgentInternal {
         }
 
         //TODO: self.requestConnectivityCheck();
+    }
+
+    // set_remote_credentials sets the credentials of the remote agent
+    pub fn set_remote_credentials(
+        &mut self,
+        remote_ufrag: String,
+        remote_pwd: String,
+    ) -> Result<(), Error> {
+        if remote_ufrag.is_empty() {
+            return Err(ERR_REMOTE_UFRAG_EMPTY.to_owned());
+        } else if remote_pwd.is_empty() {
+            return Err(ERR_REMOTE_PWD_EMPTY.to_owned());
+        }
+
+        self.remote_ufrag = remote_ufrag;
+        self.remote_pwd = remote_pwd;
+        Ok(())
+    }
+
+    pub(crate) async fn start_connectivity_checks(
+        &mut self,
+        is_controlling: bool,
+        remote_ufrag: String,
+        remote_pwd: String,
+    ) -> Result<(), Error> {
+        /*TODO: select {
+        case <-a.startedCh:
+            return ErrMultipleStart
+        default:
+        }*/
+
+        log::debug!(
+            "Started agent: isControlling? {}, remoteUfrag: {}, remotePwd: {}",
+            is_controlling,
+            remote_ufrag,
+            remote_pwd
+        );
+        self.set_remote_credentials(remote_ufrag, remote_pwd)?;
+        self.is_controlling = is_controlling;
+
+        /*TODO: if is_controlling {
+            a.selector = &controllingSelector{agent: a, log: a.log}
+        } else {
+            a.selector = &controlledSelector{agent: a, log: a.log}
+        }
+
+        if a.lite {
+            a.selector = &liteSelector{pairCandidateSelector: a.selector}
+        }
+
+        a.selector.Start()
+        a.startedFn()
+
+        agent.updateConnectionState(ConnectionStateChecking)
+
+        a.requestConnectivityCheck()
+        go a.connectivityChecks()
+        */
+        Ok(())
     }
 }

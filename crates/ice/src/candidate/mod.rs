@@ -302,7 +302,7 @@ impl CandidatePair {
             + if g > d { 1 } else { 0 }
     }
 
-    pub async fn write(&mut self, b: &[u8]) -> Result<usize, Error> {
+    pub async fn write(&self, b: &[u8]) -> Result<usize, Error> {
         self.local.write_to(b, &*self.remote).await
     }
 }
