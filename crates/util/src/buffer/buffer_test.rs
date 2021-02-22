@@ -5,7 +5,7 @@ use tokio_test::assert_ok;
 
 #[tokio::test]
 async fn test_buffer() {
-    let mut buffer = Buffer::new(0, 0);
+    let buffer = Buffer::new(0, 0);
     let mut packet: Vec<u8> = vec![0; 4];
 
     // Write once
@@ -61,7 +61,7 @@ async fn test_buffer() {
 }
 
 async fn test_wraparound(grow: bool) {
-    let mut buffer = Buffer::new(0, 0);
+    let buffer = Buffer::new(0, 0);
     {
         let mut b = buffer.buffer.lock().await;
         let result = b.grow();
@@ -123,11 +123,11 @@ async fn test_buffer_wraparound_grow() {
 
 #[tokio::test]
 async fn test_buffer_async() {
-    let mut buffer = Buffer::new(0, 0);
+    let buffer = Buffer::new(0, 0);
 
     let (done_tx, mut done_rx) = mpsc::channel::<()>(1);
 
-    let mut buffer2 = buffer.clone();
+    let buffer2 = buffer.clone();
     tokio::spawn(async move {
         let mut packet: Vec<u8> = vec![0; 4];
 
@@ -160,7 +160,7 @@ async fn test_buffer_async() {
 
 #[tokio::test]
 async fn test_buffer_limit_count() {
-    let mut buffer = Buffer::new(2, 0);
+    let buffer = Buffer::new(2, 0);
 
     assert_eq!(0, buffer.count().await);
 
@@ -218,7 +218,7 @@ async fn test_buffer_limit_count() {
 
 #[tokio::test]
 async fn test_buffer_limit_size() {
-    let mut buffer = Buffer::new(0, 11);
+    let buffer = Buffer::new(0, 11);
 
     assert_eq!(0, buffer.size().await);
 
@@ -301,7 +301,7 @@ async fn test_buffer_limit_sizes() {
             name = format!("{}kbytes", size / 1024);
         }
 
-        let mut buffer = Buffer::new(0, 0);
+        let buffer = Buffer::new(0, 0);
         if size == 0 {
             size = MAX_SIZE;
         } else {
@@ -331,7 +331,7 @@ async fn test_buffer_limit_sizes() {
 
 #[tokio::test]
 async fn test_buffer_misc() {
-    let mut buffer = Buffer::new(0, 0);
+    let buffer = Buffer::new(0, 0);
 
     // Write once
     let n = assert_ok!(buffer.write(&[0, 1, 2, 3]).await);

@@ -138,7 +138,7 @@ impl Buffer {
     // Returns ErrFull if the packet doesn't fit.
     // Note that the packet size is limited to 65536 bytes since v0.11.0
     // due to the internal data structure.
-    pub async fn write(&mut self, packet: &[u8]) -> Result<usize, Error> {
+    pub async fn write(&self, packet: &[u8]) -> Result<usize, Error> {
         if packet.len() >= 0x10000 {
             return Err(ERR_PACKET_TOO_BIG.clone());
         }
@@ -220,7 +220,7 @@ impl Buffer {
     // Returns io.ErrShortBuffer is the packet is too small to copy the Write.
     // Returns io.EOF if the buffer is closed.
     pub async fn read(
-        &mut self,
+        &self,
         packet: &mut [u8],
         duration: Option<Duration>,
     ) -> Result<usize, Error> {
@@ -305,7 +305,7 @@ impl Buffer {
 
     // Close will unblock any readers and prevent future writes.
     // Data in the buffer can still be read, returning io.EOF when fully depleted.
-    pub async fn close(&mut self) {
+    pub async fn close(&self) {
         // note: We don't use defer so we can close the notify channel after unlocking.
         // This will unblock goroutines that can grab the lock immediately, instead of blocking again.
         let mut b = self.buffer.lock().await;
@@ -318,14 +318,14 @@ impl Buffer {
         b.closed = true;
     }
 
-    pub async fn is_closed(&mut self) -> bool {
+    pub async fn is_closed(&self) -> bool {
         let b = self.buffer.lock().await;
 
         b.closed
     }
 
     // Count returns the number of packets in the buffer.
-    pub async fn count(&mut self) -> usize {
+    pub async fn count(&self) -> usize {
         let b = self.buffer.lock().await;
 
         b.count
@@ -334,14 +334,14 @@ impl Buffer {
     // set_limit_count controls the maximum number of packets that can be buffered.
     // Causes Write to return ErrFull when this limit is reached.
     // A zero value will disable this limit.
-    pub async fn set_limit_count(&mut self, limit: usize) {
+    pub async fn set_limit_count(&self, limit: usize) {
         let mut b = self.buffer.lock().await;
 
         b.limit_count = limit
     }
 
     // Size returns the total byte size of packets in the buffer.
-    pub async fn size(&mut self) -> usize {
+    pub async fn size(&self) -> usize {
         let b = self.buffer.lock().await;
 
         b.size()
@@ -354,7 +354,7 @@ impl Buffer {
     // User can set packetioSizeHardlimit build tag to enable 4MB hardlimit.
     // When packetioSizeHardlimit build tag is set, set_limit_size exceeding
     // the hardlimit will be silently discarded.
-    pub async fn set_limit_size(&mut self, limit: usize) {
+    pub async fn set_limit_size(&self, limit: usize) {
         let mut b = self.buffer.lock().await;
 
         b.limit_size = limit
