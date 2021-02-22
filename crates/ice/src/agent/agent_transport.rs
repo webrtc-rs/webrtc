@@ -20,11 +20,9 @@ impl Agent {
                 .await?;
 
             // block until pair selected
-            /*TODO: select {
-            case <-a.done:
-                return nil, a.getErr()
-            case <-a.onConnected:
-            }*/
+            tokio::select! {
+                _ = ai.on_connected_rx.recv() => {},
+            }
         }
         Ok(Arc::clone(&self.agent_internal))
     }
@@ -42,11 +40,9 @@ impl Agent {
                 .await?;
 
             // block until pair selected
-            /*TODO: select {
-            case <-a.done:
-                return nil, a.getErr()
-            case <-a.onConnected:
-            }*/
+            tokio::select! {
+                _ = ai.on_connected_rx.recv() => {},
+            }
         }
 
         Ok(Arc::clone(&self.agent_internal))
@@ -72,7 +68,7 @@ impl Conn for AgentInternal {
     }
 
     async fn recv(&self, buf: &mut [u8]) -> io::Result<usize> {
-        if self.done.is_none() {
+        if self.done_tx.is_none() {
             return Err(io::Error::new(io::ErrorKind::Other, "Conn is closed"));
         }
 
@@ -93,7 +89,7 @@ impl Conn for AgentInternal {
     }
 
     async fn send(&self, buf: &[u8]) -> io::Result<usize> {
-        if self.done.is_none() {
+        if self.done_tx.is_none() {
             return Err(io::Error::new(io::ErrorKind::Other, "Conn is closed"));
         }
 

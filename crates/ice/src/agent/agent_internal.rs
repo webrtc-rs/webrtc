@@ -6,9 +6,12 @@ use crate::util::*;
 pub struct AgentInternal {
     // State owned by the taskLoop
     pub(crate) on_connected_tx: Option<mpsc::Sender<()>>,
+    pub(crate) on_connected_rx: mpsc::Receiver<()>,
 
     // State for closing
-    pub(crate) done: Option<mpsc::Sender<()>>,
+    pub(crate) done_tx: Option<mpsc::Sender<()>>,
+    pub(crate) done_rx: mpsc::Receiver<()>,
+
     pub(crate) chan_candidate: Option<mpsc::Sender<Arc<dyn Candidate + Send + Sync>>>,
     pub(crate) chan_candidate_pair: Option<mpsc::Sender<()>>,
     pub(crate) chan_state: Option<mpsc::Sender<ConnectionState>>,
@@ -17,8 +20,6 @@ pub struct AgentInternal {
     pub(crate) on_selected_candidate_pair_change_hdlr: Option<OnSelectedCandidatePairChangeHdlrFn>,
     pub(crate) on_candidate_hdlr: Option<OnCandidateHdlrFn>,
     pub(crate) selected_pair: Option<CandidatePair>,
-
-    pub(crate) on_connected_rx: mpsc::Receiver<()>,
 
     // force candidate to be contacted immediately (instead of waiting for task ticker)
     pub(crate) force_candidate_contact: Option<mpsc::Receiver<bool>>,
@@ -105,7 +106,7 @@ unsafe impl Sync for AgentInternal {}
 
 impl AgentInternal {
     pub(crate) fn close(&mut self) -> Result<(), Error> {
-        if self.done.is_none() {
+        if self.done_tx.is_none() {
             return Err(ERR_CLOSED.to_owned());
         }
 
@@ -115,7 +116,7 @@ impl AgentInternal {
 
         //TODO: ? a.tcpMux.RemoveConnByUfrag(a.localUfrag)
 
-        self.done.take();
+        self.done_tx.take();
 
         Ok(())
     }

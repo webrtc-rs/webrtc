@@ -86,15 +86,19 @@ impl Agent {
         let (chan_candidate_tx, chan_candidate_rx) = mpsc::channel(1);
         let (chan_candidate_pair_tx, chan_candidate_pair_rx) = mpsc::channel(1);
         let (on_connected_tx, on_connected_rx) = mpsc::channel(1);
+        let (done_tx, done_rx) = mpsc::channel(1);
 
         let mut ai = AgentInternal {
             on_connected_tx: Some(on_connected_tx),
             on_connected_rx,
+
+            // State for closing
+            done_tx: Some(done_tx),
+            done_rx,
+
             chan_state: Some(chan_state_tx),
             chan_candidate: Some(chan_candidate_tx),
             chan_candidate_pair: Some(chan_candidate_pair_tx),
-            // State for closing
-            done: None,
 
             on_connection_state_change_hdlr: None,
             on_selected_candidate_pair_change_hdlr: None,
