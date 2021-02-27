@@ -16,6 +16,7 @@ use crate::network_type::*;
 use crate::state::*;
 use crate::url::*;
 use agent_internal::*;
+use agent_stats::*;
 
 use mdns::conn::*;
 use stun::{agent::*, attributes::*, fingerprint::*, integrity::*, message::*, xoraddr::*};
@@ -215,7 +216,7 @@ impl Agent {
             return Err(err);
         }
 
-        let mut a = Agent {
+        let a = Agent {
             agent_internal: Arc::new(Mutex::new(ai)),
         };
 
@@ -420,7 +421,7 @@ impl Agent {
     //
     // Restart must only be called when GatheringState is GatheringStateComplete
     // a user must then call GatherCandidates explicitly to start generating new ones
-    pub async fn restart(&mut self, mut ufrag: String, mut pwd: String) -> Result<(), Error> {
+    pub async fn restart(&self, mut ufrag: String, mut pwd: String) -> Result<(), Error> {
         if ufrag.is_empty() {
             ufrag = generate_ufrag();
         }
@@ -489,4 +490,22 @@ impl Agent {
         return gatherErr
     }
     */
+
+    // get_candidate_pairs_stats returns a list of candidate pair stats
+    pub async fn get_candidate_pairs_stats(&self) -> Vec<CandidatePairStats> {
+        let ai = self.agent_internal.lock().await;
+        ai.get_candidate_pairs_stats()
+    }
+
+    // get_local_candidates_stats returns a list of local candidates stats
+    pub async fn get_local_candidates_stats(&self) -> Vec<CandidateStats> {
+        let ai = self.agent_internal.lock().await;
+        ai.get_local_candidates_stats()
+    }
+
+    // get_remote_candidates_stats returns a list of remote candidates stats
+    pub async fn get_remote_candidates_stats(&self) -> Vec<CandidateStats> {
+        let ai = self.agent_internal.lock().await;
+        ai.get_remote_candidates_stats()
+    }
 }
