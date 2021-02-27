@@ -246,10 +246,24 @@ impl Agent {
         Ok(a)
     }
 
-    // Close cleans up the Agent
-    pub async fn close(&self) -> Result<(), Error> {
+    // on_connection_state_change sets a handler that is fired when the connection state changes
+    pub async fn on_connection_state_change(&self, f: OnConnectionStateChangeHdlrFn) {
         let mut ai = self.agent_internal.lock().await;
-        ai.close()
+        ai.on_connection_state_change_hdlr = Some(f);
+    }
+
+    // on_selected_candidate_pair_change sets a handler that is fired when the final candidate
+    // pair is selected
+    pub async fn on_selected_candidate_pair_change(&self, f: OnSelectedCandidatePairChangeHdlrFn) {
+        let mut ai = self.agent_internal.lock().await;
+        ai.on_selected_candidate_pair_change_hdlr = Some(f);
+    }
+
+    // on_candidate sets a handler that is fired when new candidates gathered. When
+    // the gathering process complete the last candidate is nil.
+    pub async fn on_candidate(&self, f: OnCandidateHdlrFn) {
+        let mut ai = self.agent_internal.lock().await;
+        ai.on_candidate_hdlr = Some(f);
     }
 
     async fn start_on_connection_state_change_routine(
@@ -311,24 +325,94 @@ impl Agent {
         });
     }
 
-    // on_candidate sets a handler that is fired when new candidates gathered. When
-    // the gathering process complete the last candidate is nil.
-    pub async fn on_candidate(&self, f: OnCandidateHdlrFn) {
-        let mut ai = self.agent_internal.lock().await;
-        ai.on_candidate_hdlr = Some(f);
+    /*TODO:
+    // AddRemoteCandidate adds a new remote candidate
+    func (a *Agent) AddRemoteCandidate(c Candidate) error {
+        if c == nil {
+            return nil
+        }
+
+        // cannot check for network yet because it might not be applied
+        // when mDNS hostame is used.
+        if c.TCPType() == TCPTypeActive {
+            // TCP Candidates with tcptype active will probe server passive ones, so
+            // no need to do anything with them.
+            a.log.Infof("Ignoring remote candidate with tcpType active: %s", c)
+            return nil
+        }
+
+        // If we have a mDNS Candidate lets fully resolve it before adding it locally
+        if c.Type() == CandidateTypeHost && strings.HasSuffix(c.Address(), ".local") {
+            if a.mDNSMode == MulticastDNSModeDisabled {
+                a.log.Warnf("remote mDNS candidate added, but mDNS is disabled: (%s)", c.Address())
+                return nil
+            }
+
+            hostCandidate, ok := c.(*CandidateHost)
+            if !ok {
+                return ErrAddressParseFailed
+            }
+
+            go a.resolveAndAddMulticastCandidate(hostCandidate)
+            return nil
+        }
+
+        go func() {
+            if err := a.run(a.context(), func(ctx context.Context, agent *Agent) {
+                agent.addRemoteCandidate(c)
+            }); err != nil {
+                a.log.Warnf("Failed to add remote candidate %s: %v", c.Address(), err)
+                return
+            }
+        }()
+        return nil
     }
 
-    // on_connection_state_change sets a handler that is fired when the connection state changes
-    pub async fn on_connection_state_change(&self, f: OnConnectionStateChangeHdlrFn) {
-        let mut ai = self.agent_internal.lock().await;
-        ai.on_connection_state_change_hdlr = Some(f);
+    // GetLocalCandidates returns the local candidates
+    func (a *Agent) GetLocalCandidates() ([]Candidate, error) {
+        var res []Candidate
+
+        err := a.run(a.context(), func(ctx context.Context, agent *Agent) {
+            var candidates []Candidate
+            for _, set := range agent.localCandidates {
+                candidates = append(candidates, set...)
+            }
+            res = candidates
+        })
+        if err != nil {
+            return nil, err
+        }
+
+        return res, nil
+    }
+    */
+
+    // get_local_user_credentials returns the local user credentials
+    pub async fn get_local_user_credentials(&self) -> (String, String) {
+        let ai = self.agent_internal.lock().await;
+        (ai.local_ufrag.clone(), ai.local_pwd.clone())
     }
 
-    // on_selected_candidate_pair_change sets a handler that is fired when the final candidate
-    // pair is selected
-    pub async fn on_selected_candidate_pair_change(&self, f: OnSelectedCandidatePairChangeHdlrFn) {
+    // get_remote_user_credentials returns the remote user credentials
+    pub async fn get_remote_user_credentials(&self) -> (String, String) {
+        let ai = self.agent_internal.lock().await;
+        (ai.remote_ufrag.clone(), ai.remote_pwd.clone())
+    }
+
+    // Close cleans up the Agent
+    pub async fn close(&self) -> Result<(), Error> {
         let mut ai = self.agent_internal.lock().await;
-        ai.on_selected_candidate_pair_change_hdlr = Some(f);
+        ai.close()
+    }
+
+    // set_remote_credentials sets the credentials of the remote agent
+    pub async fn set_remote_credentials(
+        &self,
+        remote_ufrag: String,
+        remote_pwd: String,
+    ) -> Result<(), Error> {
+        let mut ai = self.agent_internal.lock().await;
+        ai.set_remote_credentials(remote_ufrag, remote_pwd)
     }
 
     // Restart restarts the ICE Agent with the provided ufrag/pwd
@@ -380,15 +464,29 @@ impl Agent {
         Ok(())
     }
 
-    // get_local_user_credentials returns the local user credentials
-    pub async fn get_local_user_credentials(&self) -> (String, String) {
-        let ai = self.agent_internal.lock().await;
-        (ai.local_ufrag.clone(), ai.local_pwd.clone())
-    }
+    /*TODO:
+    // GatherCandidates initiates the trickle based gathering process.
+    func (a *Agent) GatherCandidates() error {
+        var gatherErr error
 
-    // get_remote_user_credentials returns the remote user credentials
-    pub async fn get_remote_user_credentials(&self) -> (String, String) {
-        let ai = self.agent_internal.lock().await;
-        (ai.remote_ufrag.clone(), ai.remote_pwd.clone())
+        if runErr := a.run(a.context(), func(ctx context.Context, agent *Agent) {
+            if a.gatheringState != GatheringStateNew {
+                gatherErr = ErrMultipleGatherAttempted
+                return
+            } else if a.onCandidateHdlr.Load() == nil {
+                gatherErr = ErrNoOnCandidateHandler
+                return
+            }
+
+            a.gatherCandidateCancel() // Cancel previous gathering routine
+            ctx, cancel := context.WithCancel(ctx)
+            a.gatherCandidateCancel = cancel
+
+            go a.gatherCandidates(ctx)
+        }); runErr != nil {
+            return runErr
+        }
+        return gatherErr
     }
+    */
 }
