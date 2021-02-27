@@ -46,9 +46,6 @@ pub struct AgentInternal {
     pub(crate) prflx_acceptance_min_wait: Duration,
     pub(crate) relay_acceptance_min_wait: Duration,
 
-    pub(crate) port_min: u16,
-    pub(crate) port_max: u16,
-
     pub(crate) candidate_types: Vec<CandidateType>,
 
     // How long connectivity checks can fail before the ICE Agent
@@ -92,8 +89,6 @@ pub struct AgentInternal {
 
     //TODO: net    *vnet.Net
     //TODO: tcpMux TCPMux
-    pub(crate) interface_filter: Option<Box<dyn Fn(String) -> bool>>,
-
     pub(crate) insecure_skip_verify: bool,
     //TODO: proxyDialer proxy.Dialer
     pub(crate) bytes_received: Arc<AtomicUsize>,

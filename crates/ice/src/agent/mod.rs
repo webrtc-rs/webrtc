@@ -49,7 +49,11 @@ pub type GatherCandidateCancelFn = Box<dyn Fn() + Send + Sync>;
 
 // Agent represents the ICE agent
 pub struct Agent {
-    agent_internal: Arc<Mutex<AgentInternal>>,
+    pub(crate) agent_internal: Arc<Mutex<AgentInternal>>,
+
+    pub(crate) port_min: u16,
+    pub(crate) port_max: u16,
+    pub(crate) interface_filter: Option<Box<dyn Fn(String) -> bool>>,
 }
 
 impl Agent {
@@ -125,9 +129,6 @@ impl Agent {
             // SRTP will constantly read from the endpoint and drop packets if it's full.
             buffer: Some(Buffer::new(0, MAX_BUFFER_SIZE)),
 
-            port_min: config.port_min,
-            port_max: config.port_max,
-
             mdns_mode,
             mdns_name,
             mdns_conn,
@@ -135,7 +136,6 @@ impl Agent {
             gather_candidate_cancel: None,
 
             //TODO: forceCandidateContact: make(chan bool, 1),
-            interface_filter: config.interface_filter.take(),
             insecure_skip_verify: config.insecure_skip_verify,
 
             force_candidate_contact: None,
@@ -217,7 +217,10 @@ impl Agent {
         }
 
         let a = Agent {
+            port_min: config.port_min,
+            port_max: config.port_max,
             agent_internal: Arc::new(Mutex::new(ai)),
+            interface_filter: config.interface_filter.take(),
         };
 
         let agent_internal = Arc::clone(&a.agent_internal);

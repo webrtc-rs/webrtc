@@ -2,16 +2,21 @@ use super::*;
 use crate::errors::*;
 use crate::network_type::NetworkType;
 use crate::url::{ProtoType, SchemeType, URL};
+use crate::util::*;
 
 use util::{Conn, Error};
 
 use crate::candidate::candidate_base::CandidateBaseConfig;
 use crate::candidate::candidate_relay::CandidateRelayConfig;
+use crate::candidate::candidate_server_reflexive::CandidateServerReflexiveConfig;
 use crate::candidate::*;
 use defer::defer;
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::net::UdpSocket;
 use waitgroup::WaitGroup;
+
+const STUN_GATHER_TIMEOUT: Duration = Duration::from_secs(5);
 
 /*TODO:
 func (a *Agent) gatherCandidates(ctx context.Context) {
@@ -26,19 +31,19 @@ func (a *Agent) gatherCandidates(ctx context.Context) {
         case CandidateTypeHost:
             wg.Add(1)
             go func() {
-                a.gatherCandidatesLocal(ctx, a.networkTypes)
+                a.gather_candidates_local(ctx, a.networkTypes)
                 wg.Done()
             }()
         case CandidateTypeServerReflexive:
             wg.Add(1)
             go func() {
-                a.gatherCandidatesSrflx(ctx, a.urls, a.networkTypes)
+                a.gather_candidates_srflx(ctx, a.urls, a.networkTypes)
                 wg.Done()
             }()
             if a.extIPMapper != nil && a.extIPMapper.candidateType == CandidateTypeServerReflexive {
                 wg.Add(1)
                 go func() {
-                    a.gatherCandidatesSrflxMapped(ctx, a.networkTypes)
+                    a.gather_candidates_srflx_mapped(ctx, a.networkTypes)
                     wg.Done()
                 }()
             }
@@ -59,201 +64,84 @@ func (a *Agent) gatherCandidates(ctx context.Context) {
     }
 }
 
-func (a *Agent) gatherCandidatesLocal(ctx context.Context, networkTypes []NetworkType) { //nolint:gocognit
-    networks := map[string]struct{}{}
-    for _, networkType := range networkTypes {
-        if networkType.IsTCP() {
-            networks[tcp] = struct{}{}
-        } else {
-            networks[udp] = struct{}{}
-        }
-    }
 
-    localIPs, err := localInterfaces(a.net, a.interfaceFilter, networkTypes)
-    if err != nil {
-        a.log.Warnf("failed to iterate local interfaces, host candidates will not be gathered %s", err)
-        return
-    }
+*/
 
-    for _, ip := range localIPs {
-        mappedIP := ip
-        if a.mDNSMode != MulticastDNSModeQueryAndGather && a.extIPMapper != nil && a.extIPMapper.candidateType == CandidateTypeHost {
-            if _mappedIP, err := a.extIPMapper.findExternalIP(ip.String()); err == nil {
-                mappedIP = _mappedIP
-            } else {
-                a.log.Warnf("1:1 NAT mapping is enabled but no external IP is found for %s\n", ip.String())
-            }
+impl Agent {
+    pub(crate) async fn gather_candidates_local(&self, _network_types: Vec<NetworkType>) {
+        /*
+
+        localIPs, err := localInterfaces(a.net, a.interfaceFilter, network_types)
+        if err != nil {
+            a.log.Warnf("failed to iterate local interfaces, host candidates will not be gathered %s", err)
+            return
         }
 
-        address := mappedIP.String()
-        if a.mDNSMode == MulticastDNSModeQueryAndGather {
-            address = a.mDNSName
-        }
-
-        for network := range networks {
-            var port int
-            var conn net.PacketConn
-            var err error
-
-            var tcpType TCPType
-            switch network {
-            case tcp:
-                // Handle ICE TCP passive mode
-
-                a.log.Debugf("GetConn by ufrag: %s\n", a.localUfrag)
-                conn, err = a.tcpMux.GetConnByUfrag(a.localUfrag)
-                if err != nil {
-                    if !errors.Is(err, ErrTCPMuxNotInitialized) {
-                        a.log.Warnf("error getting tcp conn by ufrag: %s %s %s\n", network, ip, a.localUfrag)
-                    }
-                    continue
+        for _, ip := range localIPs {
+            mappedIP := ip
+            if a.mDNSMode != MulticastDNSModeQueryAndGather && a.extIPMapper != nil && a.extIPMapper.candidateType == CandidateTypeHost {
+                if _mappedIP, err := a.extIPMapper.findExternalIP(ip.String()); err == nil {
+                    mappedIP = _mappedIP
+                } else {
+                    a.log.Warnf("1:1 NAT mapping is enabled but no external IP is found for %s\n", ip.String())
                 }
-                port = conn.LocalAddr().(*net.TCPAddr).Port
-                tcpType = TCPTypePassive
-                // is there a way to verify that the listen address is even
-                // accessible from the current interface.
-            case udp:
-                conn, err = listenUDPInPortRange(a.net, a.log, int(a.portmax), int(a.portmin), network, &net.UDPAddr{IP: ip, Port: 0})
-                if err != nil {
-                    a.log.Warnf("could not listen %s %s\n", network, ip)
-                    continue
-                }
-
-                port = conn.LocalAddr().(*net.UDPAddr).Port
-            }
-            hostConfig := CandidateHostConfig{
-                Network:   network,
-                Address:   address,
-                Port:      port,
-                Component: ComponentRTP,
-                TCPType:   tcpType,
             }
 
-            c, err := NewCandidateHost(&hostConfig)
-            if err != nil {
-                closeConnAndLog(conn, a.log, fmt.Sprintf("Failed to create host candidate: %s %s %d: %v\n", network, mappedIP, port, err))
-                continue
-            }
-
+            address := mappedIP.String()
             if a.mDNSMode == MulticastDNSModeQueryAndGather {
-                if err = c.setIP(ip); err != nil {
+                address = a.mDNSName
+            }
+
+            for network := range networks {
+                var port int
+                var conn net.PacketConn
+                var err error
+
+                var tcpType TCPType
+                switch network {
+                case tcp:
+                    // Handle ICE TCP passive mode
+
+                    a.log.Debugf("GetConn by ufrag: %s\n", a.localUfrag)
+                    conn, err = a.tcpMux.GetConnByUfrag(a.localUfrag)
+                    if err != nil {
+                        if !errors.Is(err, ErrTCPMuxNotInitialized) {
+                            a.log.Warnf("error getting tcp conn by ufrag: %s %s %s\n", network, ip, a.localUfrag)
+                        }
+                        continue
+                    }
+                    port = conn.LocalAddr().(*net.TCPAddr).Port
+                    tcpType = TCPTypePassive
+                    // is there a way to verify that the listen address is even
+                    // accessible from the current interface.
+                case udp:
+                    conn, err = listen_udpin_port_range(a.net, a.log, int(a.portmax), int(a.portmin), network, &net.UDPAddr{IP: ip, Port: 0})
+                    if err != nil {
+                        a.log.Warnf("could not listen %s %s\n", network, ip)
+                        continue
+                    }
+
+                    port = conn.LocalAddr().(*net.UDPAddr).Port
+                }
+                hostConfig := CandidateHostConfig{
+                    Network:   network,
+                    Address:   address,
+                    Port:      port,
+                    Component: ComponentRTP,
+                    TCPType:   tcpType,
+                }
+
+                c, err := NewCandidateHost(&hostConfig)
+                if err != nil {
                     closeConnAndLog(conn, a.log, fmt.Sprintf("Failed to create host candidate: %s %s %d: %v\n", network, mappedIP, port, err))
                     continue
                 }
-            }
 
-            if err := a.addCandidate(ctx, c, conn); err != nil {
-                if closeErr := c.close(); closeErr != nil {
-                    a.log.Warnf("Failed to close candidate: %v", closeErr)
-                }
-                a.log.Warnf("Failed to append to localCandidates and run onCandidateHdlr: %v\n", err)
-            }
-        }
-    }
-}
-
-func (a *Agent) gatherCandidatesSrflxMapped(ctx context.Context, networkTypes []NetworkType) {
-    var wg sync.WaitGroup
-    defer wg.Wait()
-
-    for _, networkType := range networkTypes {
-        if networkType.IsTCP() {
-            continue
-        }
-
-        network := networkType.String()
-        wg.Add(1)
-        go func() {
-            defer wg.Done()
-            conn, err := listenUDPInPortRange(a.net, a.log, int(a.portmax), int(a.portmin), network, &net.UDPAddr{IP: nil, Port: 0})
-            if err != nil {
-                a.log.Warnf("Failed to listen %s: %v\n", network, err)
-                return
-            }
-
-            laddr := conn.LocalAddr().(*net.UDPAddr)
-            mappedIP, err := a.extIPMapper.findExternalIP(laddr.IP.String())
-            if err != nil {
-                closeConnAndLog(conn, a.log, fmt.Sprintf("1:1 NAT mapping is enabled but no external IP is found for %s\n", laddr.IP.String()))
-                return
-            }
-
-            srflxConfig := CandidateServerReflexiveConfig{
-                Network:   network,
-                Address:   mappedIP.String(),
-                Port:      laddr.Port,
-                Component: ComponentRTP,
-                RelAddr:   laddr.IP.String(),
-                RelPort:   laddr.Port,
-            }
-            c, err := NewCandidateServerReflexive(&srflxConfig)
-            if err != nil {
-                closeConnAndLog(conn, a.log, fmt.Sprintf("Failed to create server reflexive candidate: %s %s %d: %v\n",
-                    network,
-                    mappedIP.String(),
-                    laddr.Port,
-                    err))
-                return
-            }
-
-            if err := a.addCandidate(ctx, c, conn); err != nil {
-                if closeErr := c.close(); closeErr != nil {
-                    a.log.Warnf("Failed to close candidate: %v", closeErr)
-                }
-                a.log.Warnf("Failed to append to localCandidates and run onCandidateHdlr: %v\n", err)
-            }
-        }()
-    }
-}
-
-func (a *Agent) gatherCandidatesSrflx(ctx context.Context, urls []*URL, networkTypes []NetworkType) {
-    var wg sync.WaitGroup
-    defer wg.Wait()
-
-    for _, networkType := range networkTypes {
-        if networkType.IsTCP() {
-            continue
-        }
-
-        for i := range urls {
-            wg.Add(1)
-            go func(url URL, network string) {
-                defer wg.Done()
-                hostPort := fmt.Sprintf("%s:%d", url.Host, url.Port)
-                serverAddr, err := a.net.ResolveUDPAddr(network, hostPort)
-                if err != nil {
-                    a.log.Warnf("failed to resolve stun host: %s: %v", hostPort, err)
-                    return
-                }
-
-                conn, err := listenUDPInPortRange(a.net, a.log, int(a.portmax), int(a.portmin), network, &net.UDPAddr{IP: nil, Port: 0})
-                if err != nil {
-                    closeConnAndLog(conn, a.log, fmt.Sprintf("Failed to listen for %s: %v\n", serverAddr.String(), err))
-                    return
-                }
-
-                xoraddr, err := getXORMappedAddr(conn, serverAddr, stunGatherTimeout)
-                if err != nil {
-                    closeConnAndLog(conn, a.log, fmt.Sprintf("could not get server reflexive address %s %s: %v\n", network, url, err))
-                    return
-                }
-
-                ip := xoraddr.IP
-                port := xoraddr.Port
-
-                laddr := conn.LocalAddr().(*net.UDPAddr)
-                srflxConfig := CandidateServerReflexiveConfig{
-                    Network:   network,
-                    Address:   ip.String(),
-                    Port:      port,
-                    Component: ComponentRTP,
-                    RelAddr:   laddr.IP.String(),
-                    RelPort:   laddr.Port,
-                }
-                c, err := NewCandidateServerReflexive(&srflxConfig)
-                if err != nil {
-                    closeConnAndLog(conn, a.log, fmt.Sprintf("Failed to create server reflexive candidate: %s %s %d: %v\n", network, ip, port, err))
-                    return
+                if a.mDNSMode == MulticastDNSModeQueryAndGather {
+                    if err = c.setIP(ip); err != nil {
+                        closeConnAndLog(conn, a.log, fmt.Sprintf("Failed to create host candidate: %s %s %d: %v\n", network, mappedIP, port, err))
+                        continue
+                    }
                 }
 
                 if err := a.addCandidate(ctx, c, conn); err != nil {
@@ -262,14 +150,220 @@ func (a *Agent) gatherCandidatesSrflx(ctx context.Context, urls []*URL, networkT
                     }
                     a.log.Warnf("Failed to append to localCandidates and run onCandidateHdlr: %v\n", err)
                 }
-            }(*urls[i], networkType.String())
-        }
+            }
+        }*/
     }
-}
 
-*/
+    pub(crate) async fn gather_candidates_srflx_mapped(&self, network_types: Vec<NetworkType>) {
+        let (port_max, port_min) = (self.port_max, self.port_min);
 
-impl Agent {
+        let wg = WaitGroup::new();
+
+        for network_type in network_types {
+            if network_type.is_tcp() {
+                continue;
+            }
+
+            let w = wg.worker();
+            let network = network_type.to_string();
+            let agent_internal = Arc::clone(&self.agent_internal);
+
+            tokio::spawn(async move {
+                let _d = defer(move || {
+                    drop(w);
+                });
+
+                let conn: Arc<dyn Conn + Send + Sync> = match listen_udp_in_port_range(
+                    port_max,
+                    port_min,
+                    SocketAddr::from_str("0.0.0.0:0")?,
+                )
+                .await
+                {
+                    Ok(conn) => Arc::new(conn),
+                    Err(err) => {
+                        log::warn!("Failed to listen {}: {}", network, err);
+                        return Ok(());
+                    }
+                };
+
+                let laddr = conn.local_addr()?;
+                let mapped_ip = {
+                    let ai = agent_internal.lock().await;
+                    match ai.ext_ip_mapper.find_external_ip(&laddr.ip().to_string()) {
+                        Ok(ip) => ip,
+                        Err(err) => {
+                            log::warn!(
+                                "1:1 NAT mapping is enabled but no external IP is found for {}: {}",
+                                laddr,
+                                err
+                            );
+                            return Ok(());
+                        }
+                    }
+                };
+
+                let srflx_config = CandidateServerReflexiveConfig {
+                    base_config: CandidateBaseConfig {
+                        network: network.clone(),
+                        address: mapped_ip.to_string(),
+                        port: laddr.port(),
+                        component: COMPONENT_RTP,
+                        conn: Some(conn),
+                        ..Default::default()
+                    },
+                    rel_addr: laddr.ip().to_string(),
+                    rel_port: laddr.port(),
+                };
+
+                let candidate: Arc<dyn Candidate + Send + Sync> =
+                    match srflx_config.new_candidate_server_reflexive().await {
+                        Ok(candidate) => Arc::new(candidate),
+                        Err(err) => {
+                            log::warn!(
+                                "Failed to create server reflexive candidate: {} {} {}: {}",
+                                network,
+                                mapped_ip,
+                                laddr.port(),
+                                err
+                            );
+                            return Ok(());
+                        }
+                    };
+
+                {
+                    let mut ai = agent_internal.lock().await;
+                    if let Err(err) = ai.add_candidate(&candidate).await {
+                        if let Err(close_err) = candidate.close().await {
+                            log::warn!("Failed to close candidate: {}", close_err);
+                        }
+                        log::warn!(
+                            "Failed to append to localCandidates and run onCandidateHdlr: {}",
+                            err
+                        );
+                    }
+                }
+
+                Ok::<(), Error>(())
+            });
+        }
+
+        wg.wait().await;
+    }
+
+    pub(crate) async fn gather_candidates_srflx(
+        &self,
+        urls: Vec<URL>,
+        network_types: Vec<NetworkType>,
+    ) {
+        let (port_max, port_min) = (self.port_max, self.port_min);
+
+        let wg = WaitGroup::new();
+        for network_type in network_types {
+            if network_type.is_tcp() {
+                continue;
+            }
+
+            for url in &urls {
+                let w = wg.worker();
+                let network = network_type.to_string();
+                let url = url.clone();
+                let agent_internal = Arc::clone(&self.agent_internal);
+
+                tokio::spawn(async move {
+                    let _d = defer(move || {
+                        drop(w);
+                    });
+
+                    let host_port = format!("{}:{}", url.host, url.port);
+                    let server_addr = match SocketAddr::from_str(&host_port) {
+                        Ok(addr) => addr,
+                        Err(err) => {
+                            log::warn!("failed to resolve stun host: {}: {}", host_port, err);
+                            return Ok(());
+                        }
+                    };
+
+                    let conn: Arc<dyn Conn + Send + Sync> = match listen_udp_in_port_range(
+                        port_max,
+                        port_min,
+                        SocketAddr::from_str("0.0.0.0:0")?,
+                    )
+                    .await
+                    {
+                        Ok(conn) => Arc::new(conn),
+                        Err(err) => {
+                            log::warn!("Failed to listen for {}: {}", server_addr, err);
+                            return Ok(());
+                        }
+                    };
+
+                    let xoraddr =
+                        match get_xormapped_addr(&conn, server_addr, STUN_GATHER_TIMEOUT).await {
+                            Ok(xoraddr) => xoraddr,
+                            Err(err) => {
+                                log::warn!(
+                                    "could not get server reflexive address {} {}: {}",
+                                    network,
+                                    url,
+                                    err
+                                );
+                                return Ok(());
+                            }
+                        };
+
+                    let (ip, port) = (xoraddr.ip, xoraddr.port);
+
+                    let laddr = conn.local_addr()?;
+                    let srflx_config = CandidateServerReflexiveConfig {
+                        base_config: CandidateBaseConfig {
+                            network: network.clone(),
+                            address: ip.to_string(),
+                            port,
+                            component: COMPONENT_RTP,
+                            conn: Some(conn),
+                            ..Default::default()
+                        },
+                        rel_addr: laddr.ip().to_string(),
+                        rel_port: laddr.port(),
+                    };
+
+                    let candidate: Arc<dyn Candidate + Send + Sync> =
+                        match srflx_config.new_candidate_server_reflexive().await {
+                            Ok(candidate) => Arc::new(candidate),
+                            Err(err) => {
+                                log::warn!(
+                                    "Failed to create server reflexive candidate: {} {} {}: {}",
+                                    network,
+                                    ip,
+                                    port,
+                                    err
+                                );
+                                return Ok(());
+                            }
+                        };
+
+                    {
+                        let mut ai = agent_internal.lock().await;
+                        if let Err(err) = ai.add_candidate(&candidate).await {
+                            if let Err(close_err) = candidate.close().await {
+                                log::warn!("Failed to close candidate: {}", close_err);
+                            }
+                            log::warn!(
+                                "Failed to append to localCandidates and run onCandidateHdlr: {}",
+                                err
+                            );
+                        }
+                    }
+
+                    Ok::<(), Error>(())
+                });
+            }
+        }
+
+        wg.wait().await;
+    }
+
     pub(crate) async fn gather_candidates_relay(&self, urls: Vec<URL>) {
         let wg = WaitGroup::new();
 
@@ -284,9 +378,10 @@ impl Agent {
                 return;
             }
 
-            let network = NetworkType::UDP4.to_string();
             let w = wg.worker();
+            let network = NetworkType::UDP4.to_string();
             let agent_internal = Arc::clone(&self.agent_internal);
+
             tokio::spawn(async move {
                 let _d = defer(move || {
                     drop(w);
@@ -310,7 +405,7 @@ impl Agent {
                         (loc_conn, rel_addr, rel_port)
                     /*TODO:
                     } else if url.proto == ProtoType::UDP && url.scheme == SchemeType::TURNS{
-                        udpAddr, connectErr := util::conn::lookup_host()ResolveUDPAddr(network, turnserver_addr)
+                        udpAddr, connectErr := ResolveUDPAddr(network, turnserver_addr)
                         if connectErr != nil {
                             a.log.Warnf("Failed to resolve UDP Addr %s: %v\n", turnserver_addr, connectErr)
                             return
