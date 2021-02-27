@@ -97,12 +97,12 @@ impl fmt::Display for ProtoType {
 // URL represents a STUN (rfc7064) or TURN (rfc7065) URL
 #[derive(Debug, Clone)]
 pub struct URL {
-    scheme: SchemeType,
-    host: String,
-    port: u16,
-    username: String,
-    password: String,
-    proto: ProtoType,
+    pub scheme: SchemeType,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub password: String,
+    pub proto: ProtoType,
 }
 
 impl fmt::Display for URL {

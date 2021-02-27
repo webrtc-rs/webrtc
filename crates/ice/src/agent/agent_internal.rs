@@ -524,36 +524,46 @@ impl AgentInternal {
         //TODO: self.requestConnectivityCheck();
     }
 
-    /*TODO:
-    func (a *Agent) addCandidate(ctx context.Context, c Candidate, candidateConn net.PacketConn) error {
-        return a.run(ctx, func(ctx context.Context, agent *Agent) {
-            c.start(a, candidateConn, a.startedCh)
+    pub(crate) async fn add_candidate(
+        &mut self,
+        c: &Arc<dyn Candidate + Send + Sync>,
+    ) -> Result<(), Error> {
+        c.start(None /*TODO:a.started_cn*/).await;
 
-            set := a.localCandidates[c.NetworkType()]
-            for _, candidate := range set {
-                if candidate.Equal(c) {
-                    if err := c.close(); err != nil {
-                        a.log.Warnf("Failed to close duplicate candidate: %v", err)
+        let network_type = c.network_type();
+
+        if let Some(cands) = self.local_candidates.get(&network_type) {
+            for cand in cands {
+                if cand.equal(&**c) {
+                    if let Err(err) = c.close().await {
+                        log::warn!("Failed to close duplicate candidate: {}", err);
                     }
-                    return
+                    //TODO: why return?
+                    return Ok(());
                 }
             }
+        }
 
-            set = append(set, c)
-            a.localCandidates[c.NetworkType()] = set
+        if let Some(cands) = self.local_candidates.get_mut(&network_type) {
+            cands.push(c.clone());
+        } else {
+            self.local_candidates.insert(network_type, vec![c.clone()]);
+        }
 
-            if remoteCandidates, ok := a.remoteCandidates[c.NetworkType()]; ok {
-                for _, remoteCandidate := range remoteCandidates {
-                    a.addPair(c, remoteCandidate)
-                }
-            }
+        let mut remote_cands = vec![];
+        if let Some(cands) = self.remote_candidates.get(&network_type) {
+            remote_cands = cands.clone();
+        }
 
-            a.requestConnectivityCheck()
+        for cand in remote_cands {
+            self.add_pair(c.clone(), cand);
+        }
 
-            a.chanCandidate <- c
-        })
+        //TODO: self.requestConnectivityCheck();
+        // a.chanCandidate <- c
+
+        Ok(())
     }
-     */
 
     pub(crate) fn close(&mut self) -> Result<(), Error> {
         if self.done_tx.is_none() {

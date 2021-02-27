@@ -47,8 +47,6 @@ impl CandidateServerReflexiveConfig {
             ..Default::default()
         };
 
-        c.start(self.base_config.initialized_ch).await;
-
         Ok(c)
     }
 }

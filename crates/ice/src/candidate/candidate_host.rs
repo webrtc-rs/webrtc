@@ -40,8 +40,6 @@ impl CandidateHostConfig {
             c.set_ip(&ip)?;
         };
 
-        c.start(self.base_config.initialized_ch).await;
-
         Ok(c)
     }
 }

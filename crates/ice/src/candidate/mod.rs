@@ -15,6 +15,7 @@ use std::fmt;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::SystemTime;
+use tokio::sync::broadcast;
 
 pub(crate) const RECEIVE_MTU: usize = 8192;
 pub(crate) const DEFAULT_LOCAL_PREFERENCE: u16 = 65535;
@@ -77,6 +78,8 @@ pub trait Candidate: fmt::Display {
     ) -> Result<usize, Error>;
     fn equal(&self, other: &dyn Candidate) -> bool;
     fn clone(&self) -> Arc<dyn Candidate + Send + Sync>;
+
+    async fn start(&self, initialized_ch: Option<broadcast::Receiver<()>>);
 }
 
 // CandidateType represents the type of candidate

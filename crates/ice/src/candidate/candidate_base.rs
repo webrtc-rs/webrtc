@@ -364,6 +364,18 @@ impl Candidate for CandidateBase {
     fn clone(&self) -> Arc<dyn Candidate + Send + Sync> {
         Arc::new(Clone::clone(self))
     }
+
+    // start runs the candidate using the provided connection
+    async fn start(&self, initialized_ch: Option<broadcast::Receiver<()>>) {
+        if let Some(conn) = &self.conn {
+            let conn = Arc::clone(conn);
+            tokio::spawn(async move {
+                let _ = CandidateBase::recv_loop(initialized_ch, conn).await;
+            });
+        } else {
+            log::error!("Can't start due to conn is_none");
+        }
+    }
 }
 
 impl CandidateBase {
@@ -447,18 +459,6 @@ impl CandidateBase {
             (1 << 13) * direction_pref + other_pref
         } else {
             DEFAULT_LOCAL_PREFERENCE
-        }
-    }
-
-    // start runs the candidate using the provided connection
-    pub(crate) async fn start(&self, initialized_ch: Option<broadcast::Receiver<()>>) {
-        if let Some(conn) = &self.conn {
-            let conn = Arc::clone(conn);
-            tokio::spawn(async move {
-                let _ = CandidateBase::recv_loop(initialized_ch, conn).await;
-            });
-        } else {
-            log::error!("Can't start due to conn is_none");
         }
     }
 
