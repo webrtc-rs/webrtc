@@ -1,5 +1,4 @@
 use clap::{App, Arg};
-use util::Error;
 
 use webrtc_rs_stun::message::Message;
 
