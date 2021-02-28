@@ -8,8 +8,8 @@ use util::Error;
 use std::fmt;
 use std::net::IpAddr;
 
-const UDP: &str = "udp";
-const TCP: &str = "tcp";
+pub(crate) const UDP: &str = "udp";
+pub(crate) const TCP: &str = "tcp";
 
 // NetworkType represents the type of network
 #[derive(PartialEq, Debug, Copy, Clone, Eq, Hash)]

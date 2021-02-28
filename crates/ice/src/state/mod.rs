@@ -50,14 +50,24 @@ impl fmt::Display for ConnectionState {
 // GatheringState describes the state of the candidate gathering process
 #[derive(PartialEq, Copy, Clone)]
 pub enum GatheringState {
-    // GatheringStateNew indicates candidate gatering is not yet started
-    New,
+    // GatheringStateNew indicates candidate gathering is not yet started
+    New = 0,
 
-    // GatheringStateGathering indicates candidate gatering is ongoing
-    Gathering,
+    // GatheringStateGathering indicates candidate gathering is ongoing
+    Gathering = 1,
 
-    // GatheringStateComplete indicates candidate gatering has been completed
-    Complete,
+    // GatheringStateComplete indicates candidate gathering has been completed
+    Complete = 2,
+}
+
+impl From<u8> for GatheringState {
+    fn from(v: u8) -> Self {
+        match v {
+            0 => GatheringState::New,
+            1 => GatheringState::Gathering,
+            _ => GatheringState::Complete,
+        }
+    }
 }
 
 impl Default for GatheringState {

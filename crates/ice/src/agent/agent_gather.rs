@@ -1,12 +1,13 @@
 use super::*;
 use crate::errors::*;
-use crate::network_type::NetworkType;
+use crate::network_type::*;
 use crate::url::{ProtoType, SchemeType, URL};
 use crate::util::*;
 
 use util::{Conn, Error};
 
 use crate::candidate::candidate_base::CandidateBaseConfig;
+use crate::candidate::candidate_host::CandidateHostConfig;
 use crate::candidate::candidate_relay::CandidateRelayConfig;
 use crate::candidate::candidate_server_reflexive::CandidateServerReflexiveConfig;
 use crate::candidate::*;
@@ -18,87 +19,101 @@ use waitgroup::WaitGroup;
 
 const STUN_GATHER_TIMEOUT: Duration = Duration::from_secs(5);
 
-/*TODO:
-func (a *Agent) gatherCandidates(ctx context.Context) {
-    if err := a.setGatheringState(GatheringStateGathering); err != nil {
-        a.log.Warnf("failed to set gatheringState to GatheringStateGathering: %v", err)
-        return
+impl Agent {
+    fn set_gathering_state(&self, new_state: GatheringState) {
+        if GatheringState::from(self.gathering_state.load(Ordering::SeqCst)) != new_state
+            && new_state == GatheringState::Complete
+        {
+            //TODO: a.chanCandidate <- nil
+        }
+
+        self.gathering_state
+            .store(new_state as u8, Ordering::SeqCst);
     }
 
-    var wg sync.WaitGroup
-    for _, t := range a.candidateTypes {
-        switch t {
-        case CandidateTypeHost:
-            wg.Add(1)
-            go func() {
-                a.gather_candidates_local(ctx, a.networkTypes)
-                wg.Done()
-            }()
-        case CandidateTypeServerReflexive:
-            wg.Add(1)
-            go func() {
-                a.gather_candidates_srflx(ctx, a.urls, a.networkTypes)
-                wg.Done()
-            }()
-            if a.extIPMapper != nil && a.extIPMapper.candidateType == CandidateTypeServerReflexive {
+    pub(crate) fn gather_candidates(&self) {
+        self.set_gathering_state(GatheringState::Gathering);
+        /*
+        var wg sync.WaitGroup
+        for _, t := range a.candidateTypes {
+            switch t {
+            case CandidateTypeHost:
                 wg.Add(1)
                 go func() {
-                    a.gather_candidates_srflx_mapped(ctx, a.networkTypes)
+                    a.gather_candidates_local(ctx, a.networkTypes)
                     wg.Done()
                 }()
+            case CandidateTypeServerReflexive:
+                wg.Add(1)
+                go func() {
+                    a.gather_candidates_srflx(ctx, a.urls, a.networkTypes)
+                    wg.Done()
+                }()
+                if a.extIPMapper != nil && a.extIPMapper.candidateType == CandidateTypeServerReflexive {
+                    wg.Add(1)
+                    go func() {
+                        a.gather_candidates_srflx_mapped(ctx, a.networkTypes)
+                        wg.Done()
+                    }()
+                }
+            case CandidateTypeRelay:
+                wg.Add(1)
+                go func() {
+                    a.gather_candidates_relay(ctx, a.urls)
+                    wg.Done()
+                }()
+            case CandidateTypePeerReflexive, CandidateTypeUnspecified:
             }
-        case CandidateTypeRelay:
-            wg.Add(1)
-            go func() {
-                a.gather_candidates_relay(ctx, a.urls)
-                wg.Done()
-            }()
-        case CandidateTypePeerReflexive, CandidateTypeUnspecified:
         }
+        // Block until all STUN and TURN URLs have been gathered (or timed out)
+        wg.Wait()
+        */
+        self.set_gathering_state(GatheringState::Complete);
     }
-    // Block until all STUN and TURN URLs have been gathered (or timed out)
-    wg.Wait()
 
-    if err := a.setGatheringState(GatheringStateComplete); err != nil {
-        a.log.Warnf("failed to set gatheringState to GatheringStateComplete: %v", err)
-    }
-}
+    pub(crate) async fn gather_candidates_local(&self, network_types: Vec<NetworkType>) {
+        let (port_max, port_min) = (self.port_max, self.port_min);
 
+        let local_ips = match local_interfaces(&self.interface_filter, &network_types) {
+            Ok(ips) => ips,
+            Err(err) => {
+                log::warn!(
+                    "failed to iterate local interfaces, host candidates will not be gathered {}",
+                    err
+                );
+                return;
+            }
+        };
 
-*/
+        for ip in local_ips {
+            let mut mapped_ip = ip;
 
-impl Agent {
-    pub(crate) async fn gather_candidates_local(&self, _network_types: Vec<NetworkType>) {
-        /*
-
-        localIPs, err := localInterfaces(a.net, a.interfaceFilter, network_types)
-        if err != nil {
-            a.log.Warnf("failed to iterate local interfaces, host candidates will not be gathered %s", err)
-            return
-        }
-
-        for _, ip := range localIPs {
-            mappedIP := ip
-            if a.mDNSMode != MulticastDNSModeQueryAndGather && a.extIPMapper != nil && a.extIPMapper.candidateType == CandidateTypeHost {
-                if _mappedIP, err := a.extIPMapper.findExternalIP(ip.String()); err == nil {
-                    mappedIP = _mappedIP
-                } else {
-                    a.log.Warnf("1:1 NAT mapping is enabled but no external IP is found for %s\n", ip.String())
+            {
+                let ai = self.agent_internal.lock().await;
+                if self.mdns_mode != MulticastDNSMode::QueryAndGather
+                    && ai.ext_ip_mapper.candidate_type == CandidateType::Host
+                {
+                    if let Ok(mi) = ai.ext_ip_mapper.find_external_ip(&ip.to_string()) {
+                        mapped_ip = mi;
+                    } else {
+                        log::warn!(
+                            "1:1 NAT mapping is enabled but no external IP is found for {}",
+                            ip
+                        );
+                    }
                 }
             }
 
-            address := mappedIP.String()
-            if a.mDNSMode == MulticastDNSModeQueryAndGather {
-                address = a.mDNSName
-            }
+            let address = if self.mdns_mode == MulticastDNSMode::QueryAndGather {
+                self.mdns_name.clone()
+            } else {
+                mapped_ip.to_string()
+            };
 
-            for network := range networks {
-                var port int
-                var conn net.PacketConn
-                var err error
-
-                var tcpType TCPType
-                switch network {
+            //TODO: for network in networks
+            let network = UDP.to_owned();
+            {
+                /*TODO:switch network {
                 case tcp:
                     // Handle ICE TCP passive mode
 
@@ -114,44 +129,85 @@ impl Agent {
                     tcpType = TCPTypePassive
                     // is there a way to verify that the listen address is even
                     // accessible from the current interface.
-                case udp:
-                    conn, err = listen_udpin_port_range(a.net, a.log, int(a.portmax), int(a.portmin), network, &net.UDPAddr{IP: ip, Port: 0})
-                    if err != nil {
-                        a.log.Warnf("could not listen %s %s\n", network, ip)
-                        continue
+                case udp:*/
+
+                let conn: Arc<dyn Conn + Send + Sync> = match listen_udp_in_port_range(
+                    port_max,
+                    port_min,
+                    SocketAddr::new(ip, 0),
+                )
+                .await
+                {
+                    Ok(conn) => Arc::new(conn),
+                    Err(err) => {
+                        log::warn!("could not listen {} {}: {}", network, ip, err);
+                        continue;
                     }
+                };
 
-                    port = conn.LocalAddr().(*net.UDPAddr).Port
-                }
-                hostConfig := CandidateHostConfig{
-                    Network:   network,
-                    Address:   address,
-                    Port:      port,
-                    Component: ComponentRTP,
-                    TCPType:   tcpType,
-                }
-
-                c, err := NewCandidateHost(&hostConfig)
-                if err != nil {
-                    closeConnAndLog(conn, a.log, fmt.Sprintf("Failed to create host candidate: %s %s %d: %v\n", network, mappedIP, port, err))
-                    continue
-                }
-
-                if a.mDNSMode == MulticastDNSModeQueryAndGather {
-                    if err = c.setIP(ip); err != nil {
-                        closeConnAndLog(conn, a.log, fmt.Sprintf("Failed to create host candidate: %s %s %d: %v\n", network, mappedIP, port, err))
-                        continue
+                let port = match conn.local_addr() {
+                    Ok(addr) => addr.port(),
+                    Err(err) => {
+                        log::warn!("could not get local addr: {}", err);
+                        continue;
                     }
-                }
+                };
 
-                if err := a.addCandidate(ctx, c, conn); err != nil {
-                    if closeErr := c.close(); closeErr != nil {
-                        a.log.Warnf("Failed to close candidate: %v", closeErr)
+                let host_config = CandidateHostConfig {
+                    base_config: CandidateBaseConfig {
+                        network: network.clone(),
+                        address,
+                        port,
+                        component: COMPONENT_RTP,
+                        conn: Some(conn),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                };
+
+                let candidate: Arc<dyn Candidate + Send + Sync> =
+                    match host_config.new_candidate_host().await {
+                        Ok(mut candidate) => {
+                            if self.mdns_mode == MulticastDNSMode::QueryAndGather {
+                                if let Err(err) = candidate.set_ip(&ip) {
+                                    log::warn!(
+                                        "Failed to create host candidate: {} {} {}: {}",
+                                        network,
+                                        mapped_ip,
+                                        port,
+                                        err
+                                    );
+                                    continue;
+                                }
+                            }
+                            Arc::new(candidate)
+                        }
+                        Err(err) => {
+                            log::warn!(
+                                "Failed to create host candidate: {} {} {}: {}",
+                                network,
+                                mapped_ip,
+                                port,
+                                err
+                            );
+                            continue;
+                        }
+                    };
+
+                {
+                    let mut ai = self.agent_internal.lock().await;
+                    if let Err(err) = ai.add_candidate(&candidate).await {
+                        if let Err(close_err) = candidate.close().await {
+                            log::warn!("Failed to close candidate: {}", close_err);
+                        }
+                        log::warn!(
+                            "Failed to append to localCandidates and run onCandidateHdlr: {}",
+                            err
+                        );
                     }
-                    a.log.Warnf("Failed to append to localCandidates and run onCandidateHdlr: %v\n", err)
                 }
             }
-        }*/
+        }
     }
 
     pub(crate) async fn gather_candidates_srflx_mapped(&self, network_types: Vec<NetworkType>) {

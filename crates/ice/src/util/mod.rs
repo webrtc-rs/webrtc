@@ -84,69 +84,55 @@ pub(crate) async fn stun_request(
     Ok(res)
 }
 
-/*
-pub(crate) async fn local_interfaces(interface_filter:&Box<dyn Fn(String)->bool>, networkTypes: &[NetworkType]) -> Result<Vec<IpAddr>, Error> {
-    let mut ips =  vec![];
-    ifaces, err := vnet.Interfaces()
-    if err != nil {
-        return ips, err
+pub(crate) fn local_interfaces(
+    interface_filter: &Option<Box<dyn Fn(String) -> bool>>,
+    network_types: &[NetworkType],
+) -> Result<Vec<IpAddr>, Error> {
+    let mut ips = vec![];
+    let interfaces = match ifaces::Interface::get_all() {
+        Ok(interfaces) => interfaces,
+        Err(e) => {
+            log::error!("Error getting interfaces: {:?}", e);
+            return Err(Error::new(e.to_string()));
+        }
+    };
+
+    let (mut ipv4requested, mut ipv6requested) = (false, false);
+    for typ in network_types {
+        if typ.is_ipv4() {
+            ipv4requested = true;
+        }
+        if typ.is_ipv6() {
+            ipv6requested = true;
+        }
     }
 
-    var IPv4Requested, IPv6Requested bool
-    for _, typ := range networkTypes {
-        if typ.IsIPv4() {
-            IPv4Requested = true
-        }
-
-        if typ.IsIPv6() {
-            IPv6Requested = true
-        }
-    }
-
-    for _, iface := range ifaces {
-        if iface.Flags&net.FlagUp == 0 {
+    for iface in interfaces {
+        log::debug!("local interface: {:?}", iface);
+        /*TODO: if iface.Flags&net.FlagUp == 0 {
             continue // interface down
         }
         if iface.Flags&net.FlagLoopback != 0 {
             continue // loopback interface
+        }*/
+
+        if let Some(filter) = interface_filter {
+            if !filter(iface.name) {
+                continue;
+            }
         }
 
-        if interfaceFilter != nil && !interfaceFilter(iface.Name) {
-            continue
-        }
-
-        addrs, err := iface.Addrs()
-        if err != nil {
-            continue
-        }
-
-        for _, addr := range addrs {
-            var ip net.IP
-            switch addr := addr.(type) {
-            case *net.IPNet:
-                ip = addr.IP
-            case *net.IPAddr:
-                ip = addr.IP
+        if let Some(addr) = iface.addr {
+            if !addr.ip().is_loopback()
+                && ((ipv4requested && addr.is_ipv4()) || (ipv6requested && addr.is_ipv6()))
+            {
+                ips.push(addr.ip());
             }
-            if ip == nil || ip.IsLoopback() {
-                continue
-            }
-
-            if ipv4 := ip.To4(); ipv4 == nil {
-                if !IPv6Requested {
-                    continue
-                } else if !isSupportedIPv6(ip) {
-                    continue
-                }
-            } else if !IPv4Requested {
-                continue
-            }
-
-            ips = append(ips, ip)
         }
     }
-    return ips, nil
-}*/
+
+    Ok(ips)
+}
 
 pub(crate) async fn listen_udp_in_port_range(
     port_max: u16,

@@ -31,7 +31,6 @@ pub struct AgentInternal {
     pub(crate) nominated_pair: Option<CandidatePair>,
 
     pub(crate) connection_state: ConnectionState,
-    pub(crate) gathering_state: GatheringState,
 
     pub(crate) mdns_mode: MulticastDNSMode,
     pub(crate) mdns_name: String,
@@ -843,22 +842,7 @@ impl AgentInternal {
             }
         }
     }
-    func (a *Agent) setGatheringState(newState GatheringState) error {
-        done := make(chan struct{})
-        if err := a.run(a.context(), func(ctx context.Context, agent *Agent) {
-            if a.gatheringState != newState && newState == GatheringStateComplete {
-                a.chanCandidate <- nil
-            }
 
-            a.gatheringState = newState
-            close(done)
-        }); err != nil {
-            return err
-        }
-
-        <-done
-        return nil
-    }
     */
 
     // set_remote_credentials sets the credentials of the remote agent

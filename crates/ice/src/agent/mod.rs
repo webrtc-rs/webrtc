@@ -28,7 +28,7 @@ use std::net::SocketAddr;
 use crate::agent::agent_config::{AgentConfig, MAX_BINDING_REQUEST_TIMEOUT, MAX_BUFFER_SIZE};
 use crate::rand::*;
 
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::{broadcast, mpsc, Mutex};
@@ -54,6 +54,10 @@ pub struct Agent {
     pub(crate) port_min: u16,
     pub(crate) port_max: u16,
     pub(crate) interface_filter: Option<Box<dyn Fn(String) -> bool>>,
+    pub(crate) mdns_mode: MulticastDNSMode,
+    pub(crate) mdns_name: String,
+
+    pub(crate) gathering_state: AtomicU8, //GatheringState,
 }
 
 impl Agent {
@@ -117,7 +121,6 @@ impl Agent {
             start_time: Instant::now(),
             nominated_pair: None,
 
-            gathering_state: GatheringState::New,
             connection_state: ConnectionState::New,
             local_candidates: HashMap::new(),
             remote_candidates: HashMap::new(),
@@ -130,7 +133,7 @@ impl Agent {
             buffer: Some(Buffer::new(0, MAX_BUFFER_SIZE)),
 
             mdns_mode,
-            mdns_name,
+            mdns_name: mdns_name.clone(),
             mdns_conn,
 
             gather_candidate_cancel: None,
@@ -221,6 +224,9 @@ impl Agent {
             port_max: config.port_max,
             agent_internal: Arc::new(Mutex::new(ai)),
             interface_filter: config.interface_filter.take(),
+            mdns_mode,
+            mdns_name,
+            gathering_state: AtomicU8::new(0), //GatheringState::New,
         };
 
         let agent_internal = Arc::clone(&a.agent_internal);
@@ -439,11 +445,15 @@ impl Agent {
             return Err(ERR_LOCAL_PWD_INSUFFICIENT_BITS.to_owned());
         }
 
-        let mut ai = self.agent_internal.lock().await;
-
-        if ai.gathering_state == GatheringState::Gathering {
+        if GatheringState::from(self.gathering_state.load(Ordering::SeqCst))
+            == GatheringState::Gathering
+        {
             return Err(ERR_RESTART_WHEN_GATHERING.to_owned());
         }
+        self.gathering_state
+            .store(GatheringState::New as u8, Ordering::SeqCst);
+
+        let mut ai = self.agent_internal.lock().await;
 
         // Clear all agent needed to take back to fresh state
         ai.local_ufrag = ufrag;
@@ -451,7 +461,6 @@ impl Agent {
         ai.remote_ufrag = String::new();
         ai.remote_pwd = String::new();
 
-        ai.gathering_state = GatheringState::New;
         ai.checklist = vec![];
         ai.pending_binding_requests = vec![];
 
@@ -486,7 +495,7 @@ impl Agent {
             ctx, cancel := context.WithCancel(ctx)
             a.gatherCandidateCancel = cancel
 
-            go a.gatherCandidates(ctx)
+            go a.gather_candidates(ctx)
         }); runErr != nil {
             return runErr
         }
