@@ -319,7 +319,7 @@ async fn run(
                     "Sent answer to local name: {} to dst addr {:?}",
                     local_name,
                     dst_addr
-                )
+                );
             }
         }
     }

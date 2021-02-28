@@ -337,7 +337,7 @@ impl Message {
         };
 
         let compression_off = b.len();
-        let mut msg = h.pack(b)?;
+        let mut msg = h.pack(b);
 
         // RFC 1035 allows (but does not require) compression for packing. RFC
         // 1035 requires unpacking implementations to support compression, so

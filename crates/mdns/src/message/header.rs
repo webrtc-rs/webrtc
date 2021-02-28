@@ -123,14 +123,14 @@ impl HeaderInternal {
     }
 
     // pack appends the wire format of the header to msg.
-    pub(crate) fn pack(&self, mut msg: Vec<u8>) -> Result<Vec<u8>, Error> {
+    pub(crate) fn pack(&self, mut msg: Vec<u8>) -> Vec<u8> {
         msg = pack_uint16(msg, self.id);
         msg = pack_uint16(msg, self.bits);
         msg = pack_uint16(msg, self.questions);
         msg = pack_uint16(msg, self.answers);
         msg = pack_uint16(msg, self.authorities);
         msg = pack_uint16(msg, self.additionals);
-        Ok(msg)
+        msg
     }
 
     pub(crate) fn unpack(&mut self, msg: &[u8], off: usize) -> Result<usize, Error> {

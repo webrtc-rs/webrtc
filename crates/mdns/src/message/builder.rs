@@ -211,7 +211,7 @@ impl Builder {
         self.section = Section::Done;
 
         // Space for the header was allocated in NewBuilder.
-        let buf = self.header.pack(vec![])?;
+        let buf = self.header.pack(vec![]);
         assert_eq!(buf.len(), HEADER_LEN);
         if let Some(mut msg) = self.msg.take() {
             msg[..HEADER_LEN].copy_from_slice(&buf[..HEADER_LEN]);
