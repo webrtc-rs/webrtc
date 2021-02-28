@@ -15,6 +15,7 @@ use crate::mdns::*;
 use crate::network_type::*;
 use crate::state::*;
 use crate::url::*;
+use agent_config::*;
 use agent_internal::*;
 use agent_stats::*;
 
@@ -25,7 +26,6 @@ use util::{Buffer, Error};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 
-use crate::agent::agent_config::{AgentConfig, MAX_BINDING_REQUEST_TIMEOUT, MAX_BUFFER_SIZE};
 use crate::rand::*;
 
 use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
@@ -53,11 +53,14 @@ pub struct Agent {
 
     pub(crate) port_min: u16,
     pub(crate) port_max: u16,
-    pub(crate) interface_filter: Option<Box<dyn Fn(String) -> bool>>,
+    pub(crate) interface_filter: Arc<Option<InterfaceFilterFn>>,
     pub(crate) mdns_mode: MulticastDNSMode,
     pub(crate) mdns_name: String,
-
+    // 1:1 D-NAT IP address mapping
+    pub(crate) ext_ip_mapper: Arc<ExternalIPMapper>,
     pub(crate) gathering_state: AtomicU8, //GatheringState,
+    pub(crate) candidate_types: Vec<CandidateType>,
+    pub(crate) network_types: Vec<NetworkType>,
 }
 
 impl Agent {
@@ -125,7 +128,6 @@ impl Agent {
             local_candidates: HashMap::new(),
             remote_candidates: HashMap::new(),
             urls: config.urls.clone(),
-            network_types: config.network_types.clone(),
 
             // Make sure the buffer doesn't grow indefinitely.
             // NOTE: We actually won't get anywhere close to this limit.
@@ -151,7 +153,6 @@ impl Agent {
             srflx_acceptance_min_wait: Duration::from_secs(0),
             prflx_acceptance_min_wait: Duration::from_secs(0),
             relay_acceptance_min_wait: Duration::from_secs(0),
-            candidate_types: vec![],
 
             // How long connectivity checks can fail before the ICE Agent
             // goes to disconnected
@@ -179,17 +180,19 @@ impl Agent {
             // LRU of outbound Binding request Transaction IDs
             pending_binding_requests: vec![],
 
-            // 1:1 D-NAT IP address mapping
-            ext_ip_mapper: ExternalIPMapper::default(),
             bytes_received: Arc::new(AtomicUsize::new(0)),
             bytes_sent: Arc::new(AtomicUsize::new(0)),
         };
 
         config.init_with_defaults(&mut ai);
 
-        if ai.lite
-            && (ai.candidate_types.len() != 1 || ai.candidate_types[0] != CandidateType::Host)
-        {
+        let candidate_types = if config.candidate_types.is_empty() {
+            default_candidate_types()
+        } else {
+            config.candidate_types.clone()
+        };
+
+        if ai.lite && (candidate_types.len() != 1 || candidate_types[0] != CandidateType::Host) {
             if let Some(c) = &ai.mdns_conn {
                 if let Err(err) = c.close().await {
                     log::warn!("Failed to close mDNS: {}", err)
@@ -199,8 +202,8 @@ impl Agent {
         }
 
         if !config.urls.is_empty()
-            && !contains_candidate_type(CandidateType::ServerReflexive, &ai.candidate_types)
-            && !contains_candidate_type(CandidateType::Relay, &ai.candidate_types)
+            && !contains_candidate_type(CandidateType::ServerReflexive, &candidate_types)
+            && !contains_candidate_type(CandidateType::Relay, &candidate_types)
         {
             if let Some(c) = &ai.mdns_conn {
                 if let Err(err) = c.close().await {
@@ -210,23 +213,29 @@ impl Agent {
             return Err(ERR_USELESS_URLS_PROVIDED.to_owned());
         }
 
-        if let Err(err) = config.init_ext_ip_mapping(&mut ai) {
-            if let Some(c) = &ai.mdns_conn {
-                if let Err(err) = c.close().await {
-                    log::warn!("Failed to close mDNS: {}", err)
+        let ext_ip_mapper = match config.init_ext_ip_mapping(&ai, &candidate_types) {
+            Ok(ext_ip_mapper) => ext_ip_mapper,
+            Err(err) => {
+                if let Some(c) = &ai.mdns_conn {
+                    if let Err(err) = c.close().await {
+                        log::warn!("Failed to close mDNS: {}", err)
+                    }
                 }
+                return Err(err);
             }
-            return Err(err);
-        }
+        };
 
         let a = Agent {
             port_min: config.port_min,
             port_max: config.port_max,
             agent_internal: Arc::new(Mutex::new(ai)),
-            interface_filter: config.interface_filter.take(),
+            interface_filter: Arc::new(config.interface_filter.take()),
             mdns_mode,
             mdns_name,
+            ext_ip_mapper: Arc::new(ext_ip_mapper),
             gathering_state: AtomicU8::new(0), //GatheringState::New,
+            candidate_types,
+            network_types: config.network_types.clone(),
         };
 
         let agent_internal = Arc::clone(&a.agent_internal);

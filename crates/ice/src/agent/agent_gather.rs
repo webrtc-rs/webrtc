@@ -19,6 +19,17 @@ use waitgroup::WaitGroup;
 
 const STUN_GATHER_TIMEOUT: Duration = Duration::from_secs(5);
 
+struct GatherCandidatesLocalParams {
+    network_types: Vec<NetworkType>,
+    port_max: u16,
+    port_min: u16,
+    mdns_mode: MulticastDNSMode,
+    mdns_name: String,
+    interface_filter: Arc<Option<InterfaceFilterFn>>,
+    ext_ip_mapper: Arc<ExternalIPMapper>,
+    agent_internal: Arc<Mutex<AgentInternal>>,
+}
+
 impl Agent {
     fn set_gathering_state(&self, new_state: GatheringState) {
         if GatheringState::from(self.gathering_state.load(Ordering::SeqCst)) != new_state
@@ -31,50 +42,86 @@ impl Agent {
             .store(new_state as u8, Ordering::SeqCst);
     }
 
-    pub(crate) fn gather_candidates(&self) {
+    pub(crate) async fn gather_candidates(&self) {
         self.set_gathering_state(GatheringState::Gathering);
-        /*
-        var wg sync.WaitGroup
-        for _, t := range a.candidateTypes {
-            switch t {
-            case CandidateTypeHost:
-                wg.Add(1)
-                go func() {
-                    a.gather_candidates_local(ctx, a.networkTypes)
-                    wg.Done()
-                }()
-            case CandidateTypeServerReflexive:
-                wg.Add(1)
-                go func() {
-                    a.gather_candidates_srflx(ctx, a.urls, a.networkTypes)
-                    wg.Done()
-                }()
-                if a.extIPMapper != nil && a.extIPMapper.candidateType == CandidateTypeServerReflexive {
-                    wg.Add(1)
+
+        let wg = WaitGroup::new();
+
+        for t in &self.candidate_types {
+            match t {
+                CandidateType::Host => {
+                    let w = wg.worker();
+                    let params = GatherCandidatesLocalParams {
+                        network_types: self.network_types.clone(),
+                        port_max: self.port_max,
+                        port_min: self.port_min,
+                        mdns_mode: self.mdns_mode,
+                        mdns_name: self.mdns_name.clone(),
+                        interface_filter: Arc::clone(&self.interface_filter),
+                        ext_ip_mapper: Arc::clone(&self.ext_ip_mapper),
+                        agent_internal: Arc::clone(&self.agent_internal),
+                    };
+
+                    tokio::spawn(async move {
+                        let _d = defer(move || {
+                            drop(w);
+                        });
+
+                        Agent::gather_candidates_local(params).await;
+                    });
+                }
+                CandidateType::ServerReflexive => {
+                    /*wg.Add(1)
                     go func() {
-                        a.gather_candidates_srflx_mapped(ctx, a.networkTypes)
+                        a.gather_candidates_srflx(ctx, a.urls, a.networkTypes)
                         wg.Done()
                     }()
+                    if a.extIPMapper != nil && a.extIPMapper.candidateType == CandidateTypeServerReflexive {
+                        wg.Add(1)
+                        go func() {
+                            a.gather_candidates_srflx_mapped(ctx, a.networkTypes)
+                            wg.Done()
+                        }()
+                    }*/
                 }
-            case CandidateTypeRelay:
-                wg.Add(1)
-                go func() {
-                    a.gather_candidates_relay(ctx, a.urls)
-                    wg.Done()
-                }()
-            case CandidateTypePeerReflexive, CandidateTypeUnspecified:
+                CandidateType::Relay => {
+                    /*wg.Add(1)
+                    go func() {
+                        a.gather_candidates_relay(ctx, a.urls)
+                        wg.Done()
+                    }()*/
+                }
+                _ => {}
             }
         }
+
         // Block until all STUN and TURN URLs have been gathered (or timed out)
-        wg.Wait()
-        */
+        wg.wait().await;
+
         self.set_gathering_state(GatheringState::Complete);
     }
 
-    pub(crate) async fn gather_candidates_local(&self, network_types: Vec<NetworkType>) {
-        let (port_max, port_min) = (self.port_max, self.port_min);
-
-        let local_ips = match local_interfaces(&self.interface_filter, &network_types) {
+    async fn gather_candidates_local(params: GatherCandidatesLocalParams) {
+        let (
+            network_types,
+            port_max,
+            port_min,
+            mdns_mode,
+            mdns_name,
+            interface_filter,
+            ext_ip_mapper,
+            agent_internal,
+        ) = (
+            params.network_types,
+            params.port_max,
+            params.port_min,
+            params.mdns_mode,
+            params.mdns_name,
+            params.interface_filter,
+            params.ext_ip_mapper,
+            params.agent_internal,
+        );
+        let local_ips = match local_interfaces(&*interface_filter, &network_types) {
             Ok(ips) => ips,
             Err(err) => {
                 log::warn!(
@@ -88,24 +135,21 @@ impl Agent {
         for ip in local_ips {
             let mut mapped_ip = ip;
 
+            if mdns_mode != MulticastDNSMode::QueryAndGather
+                && ext_ip_mapper.candidate_type == CandidateType::Host
             {
-                let ai = self.agent_internal.lock().await;
-                if self.mdns_mode != MulticastDNSMode::QueryAndGather
-                    && ai.ext_ip_mapper.candidate_type == CandidateType::Host
-                {
-                    if let Ok(mi) = ai.ext_ip_mapper.find_external_ip(&ip.to_string()) {
-                        mapped_ip = mi;
-                    } else {
-                        log::warn!(
-                            "1:1 NAT mapping is enabled but no external IP is found for {}",
-                            ip
-                        );
-                    }
+                if let Ok(mi) = ext_ip_mapper.find_external_ip(&ip.to_string()) {
+                    mapped_ip = mi;
+                } else {
+                    log::warn!(
+                        "1:1 NAT mapping is enabled but no external IP is found for {}",
+                        ip
+                    );
                 }
             }
 
-            let address = if self.mdns_mode == MulticastDNSMode::QueryAndGather {
-                self.mdns_name.clone()
+            let address = if mdns_mode == MulticastDNSMode::QueryAndGather {
+                mdns_name.clone()
             } else {
                 mapped_ip.to_string()
             };
@@ -168,7 +212,7 @@ impl Agent {
                 let candidate: Arc<dyn Candidate + Send + Sync> =
                     match host_config.new_candidate_host().await {
                         Ok(mut candidate) => {
-                            if self.mdns_mode == MulticastDNSMode::QueryAndGather {
+                            if mdns_mode == MulticastDNSMode::QueryAndGather {
                                 if let Err(err) = candidate.set_ip(&ip) {
                                     log::warn!(
                                         "Failed to create host candidate: {} {} {}: {}",
@@ -195,7 +239,7 @@ impl Agent {
                     };
 
                 {
-                    let mut ai = self.agent_internal.lock().await;
+                    let mut ai = agent_internal.lock().await;
                     if let Err(err) = ai.add_candidate(&candidate).await {
                         if let Err(close_err) = candidate.close().await {
                             log::warn!("Failed to close candidate: {}", close_err);
@@ -210,7 +254,7 @@ impl Agent {
         }
     }
 
-    pub(crate) async fn gather_candidates_srflx_mapped(&self, network_types: Vec<NetworkType>) {
+    async fn gather_candidates_srflx_mapped(&self, network_types: Vec<NetworkType>) {
         let (port_max, port_min) = (self.port_max, self.port_min);
 
         let wg = WaitGroup::new();
@@ -223,6 +267,7 @@ impl Agent {
             let w = wg.worker();
             let network = network_type.to_string();
             let agent_internal = Arc::clone(&self.agent_internal);
+            let ext_ip_mapper = Arc::clone(&self.ext_ip_mapper);
 
             tokio::spawn(async move {
                 let _d = defer(move || {
@@ -244,18 +289,15 @@ impl Agent {
                 };
 
                 let laddr = conn.local_addr()?;
-                let mapped_ip = {
-                    let ai = agent_internal.lock().await;
-                    match ai.ext_ip_mapper.find_external_ip(&laddr.ip().to_string()) {
-                        Ok(ip) => ip,
-                        Err(err) => {
-                            log::warn!(
-                                "1:1 NAT mapping is enabled but no external IP is found for {}: {}",
-                                laddr,
-                                err
-                            );
-                            return Ok(());
-                        }
+                let mapped_ip = match ext_ip_mapper.find_external_ip(&laddr.ip().to_string()) {
+                    Ok(ip) => ip,
+                    Err(err) => {
+                        log::warn!(
+                            "1:1 NAT mapping is enabled but no external IP is found for {}: {}",
+                            laddr,
+                            err
+                        );
+                        return Ok(());
                     }
                 };
 
@@ -307,11 +349,7 @@ impl Agent {
         wg.wait().await;
     }
 
-    pub(crate) async fn gather_candidates_srflx(
-        &self,
-        urls: Vec<URL>,
-        network_types: Vec<NetworkType>,
-    ) {
+    async fn gather_candidates_srflx(&self, urls: Vec<URL>, network_types: Vec<NetworkType>) {
         let (port_max, port_min) = (self.port_max, self.port_min);
 
         let wg = WaitGroup::new();
@@ -420,7 +458,7 @@ impl Agent {
         wg.wait().await;
     }
 
-    pub(crate) async fn gather_candidates_relay(&self, urls: Vec<URL>) {
+    async fn gather_candidates_relay(&self, urls: Vec<URL>) {
         let wg = WaitGroup::new();
 
         for url in urls {

@@ -49,6 +49,8 @@ pub(crate) fn default_candidate_types() -> Vec<CandidateType> {
     ]
 }
 
+pub(crate) type InterfaceFilterFn = Box<dyn (Fn(String) -> bool) + Send + Sync>;
+
 // AgentConfig collects the arguments to ice.Agent construction into
 // a single structure, for future-proofness of the interface
 #[derive(Default)]
@@ -139,7 +141,7 @@ pub struct AgentConfig {
 
     // interface_filter is a function that you can use in order to  whitelist or blacklist
     // the interfaces which are used to gather ICE candidates.
-    pub interface_filter: Option<Box<dyn Fn(String) -> bool>>,
+    pub interface_filter: Option<InterfaceFilterFn>,
 
     // insecure_skip_verify controls if self-signed certificates are accepted when connecting
     // to TURN servers via TLS or DTLS
@@ -210,23 +212,21 @@ impl AgentConfig {
         } else {
             a.check_interval = self.check_interval;
         }
-
-        if self.candidate_types.is_empty() {
-            a.candidate_types = default_candidate_types();
-        } else {
-            a.candidate_types = self.candidate_types.clone();
-        }
     }
 
-    pub(crate) fn init_ext_ip_mapping(&self, a: &mut AgentInternal) -> Result<(), Error> {
-        a.ext_ip_mapper =
+    pub(crate) fn init_ext_ip_mapping(
+        &self,
+        a: &AgentInternal,
+        candidate_types: &[CandidateType],
+    ) -> Result<ExternalIPMapper, Error> {
+        let ext_ip_mapper =
             ExternalIPMapper::new(self.nat_1to1_ip_candidate_type, &self.nat_1to1_ips)?;
-        if a.ext_ip_mapper.candidate_type == CandidateType::Host {
+        if ext_ip_mapper.candidate_type == CandidateType::Host {
             if a.mdns_mode == MulticastDNSMode::QueryAndGather {
                 return Err(ERR_MULTICAST_DNS_WITH_NAT_1TO1_IP_MAPPING.to_owned());
             }
             let mut candi_host_enabled = false;
-            for candi_type in &a.candidate_types {
+            for candi_type in candidate_types {
                 if *candi_type == CandidateType::Host {
                     candi_host_enabled = true;
                     break;
@@ -235,9 +235,9 @@ impl AgentConfig {
             if !candi_host_enabled {
                 return Err(ERR_INEFFECTIVE_NAT_1TO1_IP_MAPPING_HOST.to_owned());
             }
-        } else if a.ext_ip_mapper.candidate_type == CandidateType::ServerReflexive {
+        } else if ext_ip_mapper.candidate_type == CandidateType::ServerReflexive {
             let mut candi_srflx_enabled = false;
-            for candi_type in &a.candidate_types {
+            for candi_type in candidate_types {
                 if *candi_type == CandidateType::ServerReflexive {
                     candi_srflx_enabled = true;
                     break;
@@ -248,6 +248,6 @@ impl AgentConfig {
             }
         }
 
-        Ok(())
+        Ok(ext_ip_mapper)
     }
 }

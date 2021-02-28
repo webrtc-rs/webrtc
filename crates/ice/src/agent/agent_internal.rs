@@ -45,8 +45,6 @@ pub struct AgentInternal {
     pub(crate) prflx_acceptance_min_wait: Duration,
     pub(crate) relay_acceptance_min_wait: Duration,
 
-    pub(crate) candidate_types: Vec<CandidateType>,
-
     // How long connectivity checks can fail before the ICE Agent
     // goes to disconnected
     pub(crate) disconnected_timeout: Duration,
@@ -73,15 +71,11 @@ pub struct AgentInternal {
     pub(crate) checklist: Vec<CandidatePair>,
 
     pub(crate) urls: Vec<URL>,
-    pub(crate) network_types: Vec<NetworkType>,
 
     pub(crate) buffer: Option<Buffer>,
 
     // LRU of outbound Binding request Transaction IDs
     pub(crate) pending_binding_requests: Vec<BindingRequest>,
-
-    // 1:1 D-NAT IP address mapping
-    pub(crate) ext_ip_mapper: ExternalIPMapper,
 
     //TODO: err  atomicError
     pub(crate) gather_candidate_cancel: Option<GatherCandidateCancelFn>,

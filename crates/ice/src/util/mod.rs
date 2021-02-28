@@ -1,3 +1,4 @@
+use crate::agent::agent_config::InterfaceFilterFn;
 use crate::errors::*;
 use crate::network_type::*;
 
@@ -85,7 +86,7 @@ pub(crate) async fn stun_request(
 }
 
 pub(crate) fn local_interfaces(
-    interface_filter: &Option<Box<dyn Fn(String) -> bool>>,
+    interface_filter: &Option<InterfaceFilterFn>,
     network_types: &[NetworkType],
 ) -> Result<Vec<IpAddr>, Error> {
     let mut ips = vec![];
