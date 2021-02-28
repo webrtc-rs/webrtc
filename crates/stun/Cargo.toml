@@ -31,3 +31,8 @@ clap = "2"
 name = "stun_client"
 path = "examples/stun_client.rs"
 bench = false
+
+[[example]]
+name = "stun_decode"
+path = "examples/stun_decode.rs"
+bench = false
