@@ -5,7 +5,7 @@ use webrtc_rs_stun::message::Message;
 fn main() {
     let mut app = App::new("STUN decode")
         .version("0.1.0")
-        .author("Rain Liu <yliu@webrtc.rs>")
+        .author("Jtplouffe <jtplouffe@gmail.com>")
         .about("An example of STUN decode")
         .arg(
             Arg::with_name("FULLHELP")
@@ -17,7 +17,7 @@ fn main() {
                 .required_unless("FULLHELP")
                 .takes_value(true)
                 .index(1)
-                .help("base64 encoded message"),
+                .help("base64 encoded message, e.g. 'AAEAHCESpEJML0JTQWsyVXkwcmGALwAWaHR0cDovL2xvY2FsaG9zdDozMDAwLwAA'"),
         );
 
     let matches = app.clone().get_matches();
