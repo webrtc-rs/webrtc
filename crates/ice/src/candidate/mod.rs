@@ -78,6 +78,7 @@ pub trait Candidate: fmt::Display {
     ) -> Result<usize, Error>;
     fn equal(&self, other: &dyn Candidate) -> bool;
     fn clone(&self) -> Arc<dyn Candidate + Send + Sync>;
+    fn clone_with_ip(&self, ip: &IpAddr) -> Arc<dyn Candidate + Send + Sync>;
 
     async fn start(&self, initialized_ch: Option<broadcast::Receiver<()>>);
 }

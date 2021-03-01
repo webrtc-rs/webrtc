@@ -75,15 +75,13 @@ pub struct AgentInternal {
     // LRU of outbound Binding request Transaction IDs
     pub(crate) pending_binding_requests: Vec<BindingRequest>,
 
-    //TODO: err  atomicError
-    pub(crate) gather_candidate_cancel: Option<GatherCandidateCancelFn>,
-
-    //TODO: net    *vnet.Net
-    //TODO: tcpMux TCPMux
     pub(crate) insecure_skip_verify: bool,
-    //TODO: proxyDialer proxy.Dialer
     pub(crate) bytes_received: Arc<AtomicUsize>,
     pub(crate) bytes_sent: Arc<AtomicUsize>,
+    //TODO: err  atomicError
+    //TODO: net    *vnet.Net
+    //TODO: tcpMux TCPMux
+    //TODO: proxyDialer proxy.Dialer
 }
 
 //TODO: remove unsafe
@@ -441,12 +439,15 @@ impl AgentInternal {
         }
     }
 
-    /*TODO:
-    func (a *Agent) resolveAndAddMulticastCandidate(c *CandidateHost) {
-        if a.mDNSConn == nil {
-            return
+    pub(crate) async fn resolve_and_add_multicast_candidate(
+        &mut self,
+        _c: &Arc<dyn Candidate + Send + Sync>,
+    ) {
+        if self.mdns_conn.is_none() {
+            return;
         }
-        _, src, err := a.mDNSConn.Query(c.context(), c.Address())
+
+        /*TODO: _, src, err := a.mDNSConn.Query(c.context(), c.Address())
         if err != nil {
             a.log.Warnf("Failed to discover mDNS candidate %s: %v", c.Address(), err)
             return
@@ -468,20 +469,19 @@ impl AgentInternal {
         }); err != nil {
             a.log.Warnf("Failed to add mDNS candidate %s: %v", c.Address(), err)
             return
-        }
+        }*/
     }
 
-    func (a *Agent) requestConnectivityCheck() {
-        select {
-        case a.forceCandidateContact <- true:
-        default:
-        }
+    /*TODO: func (a *Agent) requestConnectivityCheck() {
+    select {
+    case a.forceCandidateContact <- true:
+    default:
     }
-
+    }
      */
 
     // add_remote_candidate assumes you are holding the lock (must be execute using a.run)
-    pub(crate) fn add_remote_candidate(&mut self, c: &Arc<dyn Candidate + Send + Sync>) {
+    pub(crate) async fn add_remote_candidate(&mut self, c: &Arc<dyn Candidate + Send + Sync>) {
         let network_type = c.network_type();
 
         if let Some(cands) = self.remote_candidates.get(&network_type) {
@@ -554,10 +554,6 @@ impl AgentInternal {
     pub(crate) fn close(&mut self) -> Result<(), Error> {
         if self.done_tx.is_none() {
             return Err(ERR_CLOSED.to_owned());
-        }
-
-        if let Some(gather_candidate_cancel) = &self.gather_candidate_cancel {
-            gather_candidate_cancel();
         }
 
         //TODO: ? a.tcpMux.RemoveConnByUfrag(a.localUfrag)
@@ -787,7 +783,7 @@ impl AgentInternal {
 
                 log::debug!("adding a new peer-reflexive candidate: {} ", remote);
                 if let Some(rc) = &remote_candidate {
-                    self.add_remote_candidate(rc);
+                    self.add_remote_candidate(rc).await;
                 }
             }
 

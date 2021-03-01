@@ -19,6 +19,20 @@ use waitgroup::WaitGroup;
 
 const STUN_GATHER_TIMEOUT: Duration = Duration::from_secs(5);
 
+pub(crate) struct GatherCandidatesInternalParams {
+    pub(crate) candidate_types: Vec<CandidateType>,
+    pub(crate) urls: Vec<URL>,
+    pub(crate) network_types: Vec<NetworkType>,
+    pub(crate) port_max: u16,
+    pub(crate) port_min: u16,
+    pub(crate) mdns_mode: MulticastDNSMode,
+    pub(crate) mdns_name: String,
+    pub(crate) interface_filter: Arc<Option<InterfaceFilterFn>>,
+    pub(crate) ext_ip_mapper: Arc<ExternalIPMapper>,
+    pub(crate) agent_internal: Arc<Mutex<AgentInternal>>,
+    pub(crate) gathering_state: Arc<AtomicU8>,
+}
+
 struct GatherCandidatesLocalParams {
     network_types: Vec<NetworkType>,
     port_max: u16,
@@ -47,35 +61,24 @@ struct GatherCandidatesSrflxParams {
 }
 
 impl Agent {
-    fn set_gathering_state(&self, new_state: GatheringState) {
-        if GatheringState::from(self.gathering_state.load(Ordering::SeqCst)) != new_state
-            && new_state == GatheringState::Complete
-        {
-            //TODO: a.chanCandidate <- nil
-        }
-
-        self.gathering_state
-            .store(new_state as u8, Ordering::SeqCst);
-    }
-
-    pub(crate) async fn gather_candidates(&self) {
-        self.set_gathering_state(GatheringState::Gathering);
+    pub(crate) async fn gather_candidates_internal(params: GatherCandidatesInternalParams) {
+        Agent::set_gathering_state(&params.gathering_state, GatheringState::Gathering);
 
         let wg = WaitGroup::new();
 
-        for t in &self.candidate_types {
+        for t in &params.candidate_types {
             match t {
                 CandidateType::Host => {
                     let w = wg.worker();
-                    let params = GatherCandidatesLocalParams {
-                        network_types: self.network_types.clone(),
-                        port_max: self.port_max,
-                        port_min: self.port_min,
-                        mdns_mode: self.mdns_mode,
-                        mdns_name: self.mdns_name.clone(),
-                        interface_filter: Arc::clone(&self.interface_filter),
-                        ext_ip_mapper: Arc::clone(&self.ext_ip_mapper),
-                        agent_internal: Arc::clone(&self.agent_internal),
+                    let local_params = GatherCandidatesLocalParams {
+                        network_types: params.network_types.clone(),
+                        port_max: params.port_max,
+                        port_min: params.port_min,
+                        mdns_mode: params.mdns_mode,
+                        mdns_name: params.mdns_name.clone(),
+                        interface_filter: Arc::clone(&params.interface_filter),
+                        ext_ip_mapper: Arc::clone(&params.ext_ip_mapper),
+                        agent_internal: Arc::clone(&params.agent_internal),
                     };
 
                     tokio::spawn(async move {
@@ -83,47 +86,47 @@ impl Agent {
                             drop(w);
                         });
 
-                        Agent::gather_candidates_local(params).await;
+                        Agent::gather_candidates_local(local_params).await;
                     });
                 }
                 CandidateType::ServerReflexive => {
                     let w1 = wg.worker();
-                    let params = GatherCandidatesSrflxParams {
-                        urls: self.urls.clone(),
-                        network_types: self.network_types.clone(),
-                        port_max: self.port_max,
-                        port_min: self.port_min,
-                        agent_internal: Arc::clone(&self.agent_internal),
+                    let srflx_params = GatherCandidatesSrflxParams {
+                        urls: params.urls.clone(),
+                        network_types: params.network_types.clone(),
+                        port_max: params.port_max,
+                        port_min: params.port_min,
+                        agent_internal: Arc::clone(&params.agent_internal),
                     };
                     tokio::spawn(async move {
                         let _d = defer(move || {
                             drop(w1);
                         });
 
-                        Agent::gather_candidates_srflx(params).await;
+                        Agent::gather_candidates_srflx(srflx_params).await;
                     });
-                    if self.ext_ip_mapper.candidate_type == CandidateType::ServerReflexive {
+                    if params.ext_ip_mapper.candidate_type == CandidateType::ServerReflexive {
                         let w2 = wg.worker();
-                        let params = GatherCandidatesSrflxMappedParasm {
-                            network_types: self.network_types.clone(),
-                            port_max: self.port_max,
-                            port_min: self.port_min,
-                            ext_ip_mapper: Arc::clone(&self.ext_ip_mapper),
-                            agent_internal: Arc::clone(&self.agent_internal),
+                        let srflx_mapped_params = GatherCandidatesSrflxMappedParasm {
+                            network_types: params.network_types.clone(),
+                            port_max: params.port_max,
+                            port_min: params.port_min,
+                            ext_ip_mapper: Arc::clone(&params.ext_ip_mapper),
+                            agent_internal: Arc::clone(&params.agent_internal),
                         };
                         tokio::spawn(async move {
                             let _d = defer(move || {
                                 drop(w2);
                             });
 
-                            Agent::gather_candidates_srflx_mapped(params).await;
+                            Agent::gather_candidates_srflx_mapped(srflx_mapped_params).await;
                         });
                     }
                 }
                 CandidateType::Relay => {
                     let w = wg.worker();
-                    let urls = self.urls.clone();
-                    let agent_internal = Arc::clone(&self.agent_internal);
+                    let urls = params.urls.clone();
+                    let agent_internal = Arc::clone(&params.agent_internal);
                     tokio::spawn(async move {
                         let _d = defer(move || {
                             drop(w);
@@ -139,7 +142,17 @@ impl Agent {
         // Block until all STUN and TURN URLs have been gathered (or timed out)
         wg.wait().await;
 
-        self.set_gathering_state(GatheringState::Complete);
+        Agent::set_gathering_state(&params.gathering_state, GatheringState::Complete);
+    }
+
+    fn set_gathering_state(gathering_state: &Arc<AtomicU8>, new_state: GatheringState) {
+        if GatheringState::from(gathering_state.load(Ordering::SeqCst)) != new_state
+            && new_state == GatheringState::Complete
+        {
+            //TODO: a.chanCandidate <- nil
+        }
+
+        gathering_state.store(new_state as u8, Ordering::SeqCst);
     }
 
     async fn gather_candidates_local(params: GatherCandidatesLocalParams) {

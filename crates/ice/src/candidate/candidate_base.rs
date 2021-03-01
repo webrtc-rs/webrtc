@@ -357,6 +357,46 @@ impl Candidate for CandidateBase {
         Arc::new(Clone::clone(self))
     }
 
+    fn clone_with_ip(&self, ip: &IpAddr) -> Arc<dyn Candidate + Send + Sync> {
+        let network_type = match determine_network_type(&self.network, ip) {
+            Ok(network_type) => network_type,
+            Err(_) => {
+                if ip.is_ipv4() {
+                    NetworkType::UDP4
+                } else {
+                    NetworkType::UDP6
+                }
+            }
+        };
+
+        let resolved_addr = create_addr(network_type, *ip, self.port);
+
+        Arc::new(CandidateBase {
+            id: self.id.clone(),
+            network_type: Arc::new(AtomicU8::new(network_type as u8)),
+            candidate_type: self.candidate_type,
+
+            component: Arc::clone(&self.component),
+            address: self.address.clone(),
+            port: self.port,
+            related_address: self.related_address.clone(),
+            tcp_type: self.tcp_type,
+
+            resolved_addr,
+
+            last_sent: Arc::clone(&self.last_sent),
+            last_received: Arc::clone(&self.last_received),
+            conn: self.conn.clone(),
+            //TODO:currAgent :Option<Agent>,
+            //TODO:closeCh   chan struct{}
+            //TODO:closedCh  chan struct{}
+            foundation_override: self.foundation_override.clone(),
+            priority_override: self.priority_override,
+            network: self.network.clone(),
+            relay_client: self.relay_client.clone(),
+        })
+    }
+
     // start runs the candidate using the provided connection
     async fn start(&self, initialized_ch: Option<broadcast::Receiver<()>>) {
         if let Some(conn) = &self.conn {

@@ -28,6 +28,8 @@ use std::net::SocketAddr;
 
 use crate::rand::*;
 
+use crate::agent::agent_gather::GatherCandidatesInternalParams;
+use crate::tcp_type::TCPType;
 use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -58,10 +60,12 @@ pub struct Agent {
     pub(crate) mdns_name: String,
     // 1:1 D-NAT IP address mapping
     pub(crate) ext_ip_mapper: Arc<ExternalIPMapper>,
-    pub(crate) gathering_state: AtomicU8, //GatheringState,
+    pub(crate) gathering_state: Arc<AtomicU8>, //GatheringState,
     pub(crate) candidate_types: Vec<CandidateType>,
     pub(crate) urls: Vec<URL>,
     pub(crate) network_types: Vec<NetworkType>,
+
+    pub(crate) gather_candidate_cancel: Option<GatherCandidateCancelFn>,
 }
 
 impl Agent {
@@ -137,8 +141,6 @@ impl Agent {
             mdns_mode,
             mdns_name: mdns_name.clone(),
             mdns_conn,
-
-            gather_candidate_cancel: None,
 
             //TODO: forceCandidateContact: make(chan bool, 1),
             insecure_skip_verify: config.insecure_skip_verify,
@@ -233,10 +235,12 @@ impl Agent {
             mdns_mode,
             mdns_name,
             ext_ip_mapper: Arc::new(ext_ip_mapper),
-            gathering_state: AtomicU8::new(0), //GatheringState::New,
+            gathering_state: Arc::new(AtomicU8::new(0)), //GatheringState::New,
             candidate_types,
             urls: config.urls.clone(),
             network_types: config.network_types.clone(),
+
+            gather_candidate_cancel: None,
         };
 
         let agent_internal = Arc::clone(&a.agent_internal);
@@ -345,67 +349,70 @@ impl Agent {
         });
     }
 
-    /*TODO:
-    // AddRemoteCandidate adds a new remote candidate
-    func (a *Agent) AddRemoteCandidate(c Candidate) error {
-        if c == nil {
-            return nil
-        }
-
+    // add_remote_candidate adds a new remote candidate
+    pub async fn add_remote_candidate(
+        &self,
+        c: &Arc<dyn Candidate + Send + Sync>,
+    ) -> Result<(), Error> {
         // cannot check for network yet because it might not be applied
         // when mDNS hostame is used.
-        if c.TCPType() == TCPTypeActive {
+        if c.tcp_type() == TCPType::Active {
             // TCP Candidates with tcptype active will probe server passive ones, so
             // no need to do anything with them.
-            a.log.Infof("Ignoring remote candidate with tcpType active: %s", c)
-            return nil
+            log::info!("Ignoring remote candidate with tcpType active: {}", c);
+            return Ok(());
         }
 
         // If we have a mDNS Candidate lets fully resolve it before adding it locally
-        if c.Type() == CandidateTypeHost && strings.HasSuffix(c.Address(), ".local") {
-            if a.mDNSMode == MulticastDNSModeDisabled {
-                a.log.Warnf("remote mDNS candidate added, but mDNS is disabled: (%s)", c.Address())
-                return nil
+        if c.candidate_type() == CandidateType::Host && c.address().ends_with(".local") {
+            if self.mdns_mode == MulticastDNSMode::Disabled {
+                log::warn!(
+                    "remote mDNS candidate added, but mDNS is disabled: ({})",
+                    c.address()
+                );
+                return Ok(());
             }
 
-            hostCandidate, ok := c.(*CandidateHost)
-            if !ok {
-                return ErrAddressParseFailed
+            if c.candidate_type() != CandidateType::Host {
+                return Err(ERR_ADDRESS_PARSE_FAILED.to_owned());
             }
 
-            go a.resolveAndAddMulticastCandidate(hostCandidate)
-            return nil
+            let agent_internal = Arc::clone(&self.agent_internal);
+            let host_candidate = Arc::clone(c);
+            tokio::spawn(async move {
+                let mut ai = agent_internal.lock().await;
+                ai.resolve_and_add_multicast_candidate(&host_candidate)
+                    .await;
+            });
+        } else {
+            let agent_internal = Arc::clone(&self.agent_internal);
+            let candidate = Arc::clone(c);
+            tokio::spawn(async move {
+                let mut ai = agent_internal.lock().await;
+                ai.add_remote_candidate(&candidate).await;
+            });
         }
 
-        go func() {
-            if err := a.run(a.context(), func(ctx context.Context, agent *Agent) {
-                agent.addRemoteCandidate(c)
-            }); err != nil {
-                a.log.Warnf("Failed to add remote candidate %s: %v", c.Address(), err)
-                return
-            }
-        }()
-        return nil
+        Ok(())
     }
 
-    // GetLocalCandidates returns the local candidates
-    func (a *Agent) GetLocalCandidates() ([]Candidate, error) {
-        var res []Candidate
+    // get_local_candidates returns the local candidates
+    pub async fn get_local_candidates(
+        &self,
+    ) -> Result<Vec<Arc<dyn Candidate + Send + Sync>>, Error> {
+        let mut res = vec![];
 
-        err := a.run(a.context(), func(ctx context.Context, agent *Agent) {
-            var candidates []Candidate
-            for _, set := range agent.localCandidates {
-                candidates = append(candidates, set...)
+        {
+            let ai = self.agent_internal.lock().await;
+            for candidates in ai.local_candidates.values() {
+                for candidate in candidates {
+                    res.push(Arc::clone(candidate));
+                }
             }
-            res = candidates
-        })
-        if err != nil {
-            return nil, err
         }
 
-        return res, nil
+        Ok(res)
     }
-    */
 
     // get_local_user_credentials returns the local user credentials
     pub async fn get_local_user_credentials(&self) -> (String, String) {
@@ -421,6 +428,10 @@ impl Agent {
 
     // Close cleans up the Agent
     pub async fn close(&self) -> Result<(), Error> {
+        if let Some(gather_candidate_cancel) = &self.gather_candidate_cancel {
+            gather_candidate_cancel();
+        }
+
         let mut ai = self.agent_internal.lock().await;
         ai.close()
     }
@@ -487,31 +498,42 @@ impl Agent {
         Ok(())
     }
 
-    /*TODO:
     // GatherCandidates initiates the trickle based gathering process.
-    func (a *Agent) GatherCandidates() error {
-        var gatherErr error
-
-        if runErr := a.run(a.context(), func(ctx context.Context, agent *Agent) {
-            if a.gatheringState != GatheringStateNew {
-                gatherErr = ErrMultipleGatherAttempted
-                return
-            } else if a.onCandidateHdlr.Load() == nil {
-                gatherErr = ErrNoOnCandidateHandler
-                return
+    pub async fn gather_candidates(&self) -> Result<(), Error> {
+        if self.gathering_state.load(Ordering::SeqCst) != GatheringState::New as u8 {
+            return Err(ERR_MULTIPLE_GATHER_ATTEMPTED.to_owned());
+        } else {
+            let ai = self.agent_internal.lock().await;
+            if ai.on_candidate_hdlr.is_none() {
+                return Err(ERR_NO_ON_CANDIDATE_HANDLER.to_owned());
             }
-
-            a.gatherCandidateCancel() // Cancel previous gathering routine
-            ctx, cancel := context.WithCancel(ctx)
-            a.gatherCandidateCancel = cancel
-
-            go a.gather_candidates(ctx)
-        }); runErr != nil {
-            return runErr
         }
-        return gatherErr
+
+        if let Some(gather_candidate_cancel) = &self.gather_candidate_cancel {
+            gather_candidate_cancel(); // Cancel previous gathering routine
+        }
+
+        //TODO: a.gatherCandidateCancel = cancel
+
+        let params = GatherCandidatesInternalParams {
+            candidate_types: self.candidate_types.clone(),
+            urls: self.urls.clone(),
+            network_types: self.network_types.clone(),
+            port_max: self.port_max,
+            port_min: self.port_min,
+            mdns_mode: self.mdns_mode,
+            mdns_name: self.mdns_name.clone(),
+            interface_filter: self.interface_filter.clone(),
+            ext_ip_mapper: Arc::clone(&self.ext_ip_mapper),
+            agent_internal: Arc::clone(&self.agent_internal),
+            gathering_state: Arc::clone(&self.gathering_state),
+        };
+        tokio::spawn(async move {
+            Agent::gather_candidates_internal(params).await;
+        });
+
+        Ok(())
     }
-    */
 
     // get_candidate_pairs_stats returns a list of candidate pair stats
     pub async fn get_candidate_pairs_stats(&self) -> Vec<CandidatePairStats> {
