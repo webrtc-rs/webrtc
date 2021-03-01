@@ -60,6 +60,7 @@ pub struct Agent {
     pub(crate) ext_ip_mapper: Arc<ExternalIPMapper>,
     pub(crate) gathering_state: AtomicU8, //GatheringState,
     pub(crate) candidate_types: Vec<CandidateType>,
+    pub(crate) urls: Vec<URL>,
     pub(crate) network_types: Vec<NetworkType>,
 }
 
@@ -127,7 +128,6 @@ impl Agent {
             connection_state: ConnectionState::New,
             local_candidates: HashMap::new(),
             remote_candidates: HashMap::new(),
-            urls: config.urls.clone(),
 
             // Make sure the buffer doesn't grow indefinitely.
             // NOTE: We actually won't get anywhere close to this limit.
@@ -235,6 +235,7 @@ impl Agent {
             ext_ip_mapper: Arc::new(ext_ip_mapper),
             gathering_state: AtomicU8::new(0), //GatheringState::New,
             candidate_types,
+            urls: config.urls.clone(),
             network_types: config.network_types.clone(),
         };
 

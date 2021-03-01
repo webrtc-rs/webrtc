@@ -30,6 +30,22 @@ struct GatherCandidatesLocalParams {
     agent_internal: Arc<Mutex<AgentInternal>>,
 }
 
+struct GatherCandidatesSrflxMappedParasm {
+    network_types: Vec<NetworkType>,
+    port_max: u16,
+    port_min: u16,
+    ext_ip_mapper: Arc<ExternalIPMapper>,
+    agent_internal: Arc<Mutex<AgentInternal>>,
+}
+
+struct GatherCandidatesSrflxParams {
+    urls: Vec<URL>,
+    network_types: Vec<NetworkType>,
+    port_max: u16,
+    port_min: u16,
+    agent_internal: Arc<Mutex<AgentInternal>>,
+}
+
 impl Agent {
     fn set_gathering_state(&self, new_state: GatheringState) {
         if GatheringState::from(self.gathering_state.load(Ordering::SeqCst)) != new_state
@@ -71,25 +87,50 @@ impl Agent {
                     });
                 }
                 CandidateType::ServerReflexive => {
-                    /*wg.Add(1)
-                    go func() {
-                        a.gather_candidates_srflx(ctx, a.urls, a.networkTypes)
-                        wg.Done()
-                    }()
-                    if a.extIPMapper != nil && a.extIPMapper.candidateType == CandidateTypeServerReflexive {
-                        wg.Add(1)
-                        go func() {
-                            a.gather_candidates_srflx_mapped(ctx, a.networkTypes)
-                            wg.Done()
-                        }()
-                    }*/
+                    let w1 = wg.worker();
+                    let params = GatherCandidatesSrflxParams {
+                        urls: self.urls.clone(),
+                        network_types: self.network_types.clone(),
+                        port_max: self.port_max,
+                        port_min: self.port_min,
+                        agent_internal: Arc::clone(&self.agent_internal),
+                    };
+                    tokio::spawn(async move {
+                        let _d = defer(move || {
+                            drop(w1);
+                        });
+
+                        Agent::gather_candidates_srflx(params).await;
+                    });
+                    if self.ext_ip_mapper.candidate_type == CandidateType::ServerReflexive {
+                        let w2 = wg.worker();
+                        let params = GatherCandidatesSrflxMappedParasm {
+                            network_types: self.network_types.clone(),
+                            port_max: self.port_max,
+                            port_min: self.port_min,
+                            ext_ip_mapper: Arc::clone(&self.ext_ip_mapper),
+                            agent_internal: Arc::clone(&self.agent_internal),
+                        };
+                        tokio::spawn(async move {
+                            let _d = defer(move || {
+                                drop(w2);
+                            });
+
+                            Agent::gather_candidates_srflx_mapped(params).await;
+                        });
+                    }
                 }
                 CandidateType::Relay => {
-                    /*wg.Add(1)
-                    go func() {
-                        a.gather_candidates_relay(ctx, a.urls)
-                        wg.Done()
-                    }()*/
+                    let w = wg.worker();
+                    let urls = self.urls.clone();
+                    let agent_internal = Arc::clone(&self.agent_internal);
+                    tokio::spawn(async move {
+                        let _d = defer(move || {
+                            drop(w);
+                        });
+
+                        Agent::gather_candidates_relay(urls, agent_internal).await;
+                    });
                 }
                 _ => {}
             }
@@ -254,8 +295,14 @@ impl Agent {
         }
     }
 
-    async fn gather_candidates_srflx_mapped(&self, network_types: Vec<NetworkType>) {
-        let (port_max, port_min) = (self.port_max, self.port_min);
+    async fn gather_candidates_srflx_mapped(params: GatherCandidatesSrflxMappedParasm) {
+        let (network_types, port_max, port_min, ext_ip_mapper, agent_internal) = (
+            params.network_types,
+            params.port_max,
+            params.port_min,
+            params.ext_ip_mapper,
+            params.agent_internal,
+        );
 
         let wg = WaitGroup::new();
 
@@ -266,8 +313,8 @@ impl Agent {
 
             let w = wg.worker();
             let network = network_type.to_string();
-            let agent_internal = Arc::clone(&self.agent_internal);
-            let ext_ip_mapper = Arc::clone(&self.ext_ip_mapper);
+            let agent_internal2 = Arc::clone(&agent_internal);
+            let ext_ip_mapper2 = Arc::clone(&ext_ip_mapper);
 
             tokio::spawn(async move {
                 let _d = defer(move || {
@@ -289,7 +336,7 @@ impl Agent {
                 };
 
                 let laddr = conn.local_addr()?;
-                let mapped_ip = match ext_ip_mapper.find_external_ip(&laddr.ip().to_string()) {
+                let mapped_ip = match ext_ip_mapper2.find_external_ip(&laddr.ip().to_string()) {
                     Ok(ip) => ip,
                     Err(err) => {
                         log::warn!(
@@ -330,7 +377,7 @@ impl Agent {
                     };
 
                 {
-                    let mut ai = agent_internal.lock().await;
+                    let mut ai = agent_internal2.lock().await;
                     if let Err(err) = ai.add_candidate(&candidate).await {
                         if let Err(close_err) = candidate.close().await {
                             log::warn!("Failed to close candidate: {}", close_err);
@@ -349,8 +396,14 @@ impl Agent {
         wg.wait().await;
     }
 
-    async fn gather_candidates_srflx(&self, urls: Vec<URL>, network_types: Vec<NetworkType>) {
-        let (port_max, port_min) = (self.port_max, self.port_min);
+    async fn gather_candidates_srflx(params: GatherCandidatesSrflxParams) {
+        let (urls, network_types, port_max, port_min, agent_internal) = (
+            params.urls,
+            params.network_types,
+            params.port_max,
+            params.port_min,
+            params.agent_internal,
+        );
 
         let wg = WaitGroup::new();
         for network_type in network_types {
@@ -362,7 +415,7 @@ impl Agent {
                 let w = wg.worker();
                 let network = network_type.to_string();
                 let url = url.clone();
-                let agent_internal = Arc::clone(&self.agent_internal);
+                let agent_internal2 = Arc::clone(&agent_internal);
 
                 tokio::spawn(async move {
                     let _d = defer(move || {
@@ -438,7 +491,7 @@ impl Agent {
                         };
 
                     {
-                        let mut ai = agent_internal.lock().await;
+                        let mut ai = agent_internal2.lock().await;
                         if let Err(err) = ai.add_candidate(&candidate).await {
                             if let Err(close_err) = candidate.close().await {
                                 log::warn!("Failed to close candidate: {}", close_err);
@@ -458,7 +511,7 @@ impl Agent {
         wg.wait().await;
     }
 
-    async fn gather_candidates_relay(&self, urls: Vec<URL>) {
+    async fn gather_candidates_relay(urls: Vec<URL>, agent_internal: Arc<Mutex<AgentInternal>>) {
         let wg = WaitGroup::new();
 
         for url in urls {
@@ -474,7 +527,7 @@ impl Agent {
 
             let w = wg.worker();
             let network = NetworkType::UDP4.to_string();
-            let agent_internal = Arc::clone(&self.agent_internal);
+            let agent_internal2 = Arc::clone(&agent_internal);
 
             tokio::spawn(async move {
                 let _d = defer(move || {
@@ -497,26 +550,25 @@ impl Agent {
                         let rel_addr = local_addr.ip().to_string();
                         let rel_port = local_addr.port();
                         (loc_conn, rel_addr, rel_port)
-                    /*TODO:
-                    } else if url.proto == ProtoType::UDP && url.scheme == SchemeType::TURNS{
-                        udpAddr, connectErr := ResolveUDPAddr(network, turnserver_addr)
-                        if connectErr != nil {
-                            a.log.Warnf("Failed to resolve UDP Addr %s: %v\n", turnserver_addr, connectErr)
-                            return
-                        }
+                    /*TODO:} else if url.proto == ProtoType::UDP && url.scheme == SchemeType::TURNS{
+                       udpAddr, connectErr := ResolveUDPAddr(network, turnserver_addr)
+                       if connectErr != nil {
+                           a.log.Warnf("Failed to resolve UDP Addr %s: %v\n", turnserver_addr, connectErr)
+                           return
+                       }
 
-                        conn, connectErr := dtls.Dial(network, udpAddr, &dtls.Config{
-                            InsecureSkipVerify: a.insecureSkipVerify, //nolint:gosec
-                        })
-                        if connectErr != nil {
-                            a.log.Warnf("Failed to Dial DTLS Addr %s: %v\n", turnserver_addr, connectErr)
-                            return
-                        }
+                       conn, connectErr := dtls.Dial(network, udpAddr, &dtls.Config{
+                           InsecureSkipVerify: a.insecureSkipVerify, //nolint:gosec
+                       })
+                       if connectErr != nil {
+                           a.log.Warnf("Failed to Dial DTLS Addr %s: %v\n", turnserver_addr, connectErr)
+                           return
+                       }
 
-                        rel_addr = conn.LocalAddr().(*net.UDPAddr).IP.String()
-                        rel_port = conn.LocalAddr().(*net.UDPAddr).Port
-                        loc_conn = &fakePacketConn{conn}
-                     */
+                       rel_addr = conn.LocalAddr().(*net.UDPAddr).IP.String()
+                       rel_port = conn.LocalAddr().(*net.UDPAddr).Port
+                       loc_conn = &fakePacketConn{conn}
+                    */
                     //TODO: case a.proxyDialer != nil && url.Proto == ProtoTypeTCP && (url.Scheme == SchemeTypeTURN || url.Scheme == SchemeTypeTURNS):
                     //TODO: case url.Proto == ProtoTypeTCP && url.Scheme == SchemeTypeTURN:
                     //TODO: case url.Proto == ProtoTypeTCP && url.Scheme == SchemeTypeTURNS:
@@ -536,7 +588,7 @@ impl Agent {
                     conn: Arc::new(loc_conn),
                 };
                 let client = match turn::client::Client::new(cfg).await {
-                    Ok(client) => client,
+                    Ok(client) => Arc::new(client),
                     Err(err) => {
                         log::warn!(
                             "Failed to build new turn.Client {} {}\n",
@@ -581,12 +633,7 @@ impl Agent {
                     },
                     rel_addr,
                     rel_port,
-                    //TODO: on_close: Option<OnClose>,
-                    /*OnClose: func() error {
-                        client.Close()
-                        return locConn.Close()
-                    },*/
-                    ..Default::default()
+                    relay_client: Some(Arc::clone(&client)),
                 };
 
                 let candidate: Arc<dyn Candidate + Send + Sync> =
@@ -605,7 +652,7 @@ impl Agent {
                     };
 
                 {
-                    let mut ai = agent_internal.lock().await;
+                    let mut ai = agent_internal2.lock().await;
                     if let Err(err) = ai.add_candidate(&candidate).await {
                         if let Err(close_err) = candidate.close().await {
                             log::warn!("Failed to close candidate: {}", close_err);

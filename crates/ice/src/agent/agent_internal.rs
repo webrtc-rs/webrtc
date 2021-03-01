@@ -70,8 +70,6 @@ pub struct AgentInternal {
 
     pub(crate) checklist: Vec<CandidatePair>,
 
-    pub(crate) urls: Vec<URL>,
-
     pub(crate) buffer: Option<Buffer>,
 
     // LRU of outbound Binding request Transaction IDs

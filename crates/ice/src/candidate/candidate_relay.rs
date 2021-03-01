@@ -5,7 +5,6 @@ use crate::rand::generate_cand_id;
 use crate::util::*;
 use std::sync::atomic::{AtomicU16, AtomicU8};
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 // CandidateRelayConfig is the config required to create a new CandidateRelay
 #[derive(Default)]
@@ -14,7 +13,7 @@ pub struct CandidateRelayConfig {
 
     pub rel_addr: String,
     pub rel_port: u16,
-    pub on_close: Option<OnClose>,
+    pub relay_client: Option<Arc<turn::client::Client>>,
 }
 
 impl CandidateRelayConfig {
@@ -46,7 +45,7 @@ impl CandidateRelayConfig {
                 port: self.rel_port,
             }),
             conn: self.base_config.conn,
-            on_close: Arc::new(Mutex::new(self.on_close)),
+            relay_client: self.relay_client.clone(),
             ..Default::default()
         };
 

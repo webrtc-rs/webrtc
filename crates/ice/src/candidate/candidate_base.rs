@@ -8,7 +8,7 @@ use std::ops::Add;
 use std::sync::atomic::{AtomicU16, AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::{broadcast, Mutex};
+use tokio::sync::broadcast;
 
 #[derive(Default)]
 pub struct CandidateBaseConfig {
@@ -52,7 +52,7 @@ pub struct CandidateBase {
     //CandidateHost
     pub(crate) network: String,
     //CandidateRelay
-    pub(crate) on_close: Arc<Mutex<Option<OnClose>>>,
+    pub(crate) relay_client: Option<Arc<turn::client::Client>>,
 }
 
 /* TODO:
@@ -106,7 +106,7 @@ impl Default for CandidateBase {
             foundation_override: String::new(),
             priority_override: 0,
             network: String::new(),
-            on_close: Arc::new(Mutex::new(None)),
+            relay_client: None,
         }
     }
 }
@@ -308,19 +308,11 @@ impl Candidate for CandidateBase {
         // Wait until the recvLoop is closed
         <-c.closedCh*/
 
-        let result = {
-            let mut on_close = self.on_close.lock().await;
-            let result = if let Some(close) = &*on_close {
-                close()
-            } else {
-                Ok(())
-            };
-            *on_close = None;
-
-            result
-        };
-
-        result
+        if let Some(relay_client) = &self.relay_client {
+            relay_client.close().await
+        } else {
+            Ok(())
+        }
     }
 
     fn seen(&self, outbound: bool) {
