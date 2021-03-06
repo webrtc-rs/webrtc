@@ -4,6 +4,8 @@ use std::fmt;
 // List of supported States
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ConnectionState {
+    Init,
+
     // ConnectionStateNew ICE agent is gathering addresses
     New,
 
@@ -28,13 +30,14 @@ pub enum ConnectionState {
 
 impl Default for ConnectionState {
     fn default() -> Self {
-        ConnectionState::New
+        ConnectionState::Init
     }
 }
 
 impl fmt::Display for ConnectionState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
+            ConnectionState::Init => "Init",
             ConnectionState::New => "New",
             ConnectionState::Checking => "Checking",
             ConnectionState::Connected => "Connected",

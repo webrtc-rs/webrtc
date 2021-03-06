@@ -10,11 +10,11 @@ pub struct AgentInternal {
 
     // State for closing
     pub(crate) done_tx: Option<mpsc::Sender<()>>,
-    pub(crate) done_rx: mpsc::Receiver<()>,
+    pub(crate) done_rx: Option<mpsc::Receiver<()>>,
 
-    pub(crate) chan_candidate: Option<mpsc::Sender<Arc<dyn Candidate + Send + Sync>>>,
-    pub(crate) chan_candidate_pair: Option<mpsc::Sender<()>>,
-    pub(crate) chan_state: Option<mpsc::Sender<ConnectionState>>,
+    pub(crate) chan_candidate_tx: mpsc::Sender<Arc<dyn Candidate + Send + Sync>>,
+    pub(crate) chan_candidate_pair_tx: mpsc::Sender<()>,
+    pub(crate) chan_state_tx: mpsc::Sender<ConnectionState>,
 
     pub(crate) on_connection_state_change_hdlr: Option<OnConnectionStateChangeHdlrFn>,
     pub(crate) on_selected_candidate_pair_change_hdlr: Option<OnSelectedCandidatePairChangeHdlrFn>,
@@ -22,7 +22,8 @@ pub struct AgentInternal {
     pub(crate) selected_pair: Option<CandidatePair>,
 
     // force candidate to be contacted immediately (instead of waiting for task ticker)
-    pub(crate) force_candidate_contact: Option<mpsc::Receiver<bool>>,
+    pub(crate) force_candidate_contact_tx: mpsc::Sender<bool>,
+    pub(crate) force_candidate_contact_rx: Option<mpsc::Receiver<bool>>,
     pub(crate) tie_breaker: u64,
 
     pub(crate) is_controlling: bool,
@@ -79,9 +80,6 @@ pub struct AgentInternal {
     pub(crate) bytes_received: Arc<AtomicUsize>,
     pub(crate) bytes_sent: Arc<AtomicUsize>,
     //TODO: err  atomicError
-    //TODO: net    *vnet.Net
-    //TODO: tcpMux TCPMux
-    //TODO: proxyDialer proxy.Dialer
 }
 
 //TODO: remove unsafe
@@ -122,84 +120,103 @@ impl AgentInternal {
 
         a.selector.Start()
         a.startedFn()
-
-        agent.updateConnectionState(ConnectionStateChecking)
-
-        a.requestConnectivityCheck()
-        go a.connectivityChecks()
         */
+        self.update_connection_state(ConnectionState::Checking)
+            .await;
+
+        self.request_connectivity_check();
+
+        self.connectivity_checks().await;
+
         Ok(())
     }
 
-    /*TODO:
-    func (a *Agent) connectivityChecks() {
-        lastConnectionState := ConnectionState(0)
-        checkingDuration := time.Time{}
+    async fn contact(
+        ai: &mut AgentInternal,
+        last_connection_state: &mut ConnectionState,
+        checking_duration: &mut Instant,
+    ) {
+        if ai.connection_state == ConnectionState::Failed {
+            // The connection is currently failed so don't send any checks
+            // In the future it may be restarted though
+            *last_connection_state = ai.connection_state;
+            return;
+        }
+        if ai.connection_state == ConnectionState::Checking {
+            // We have just entered checking for the first time so update our checking timer
+            if *last_connection_state != ai.connection_state {
+                *checking_duration = Instant::now();
+            }
 
-        contact := func() {
-            if err := a.run(a.context(), func(ctx context.Context, a *Agent) {
-                defer func() {
-                    lastConnectionState = a.connectionState
-                }()
-
-                switch a.connectionState {
-                case ConnectionStateFailed:
-                    // The connection is currently failed so don't send any checks
-                    // In the future it may be restarted though
-                    return
-                case ConnectionStateChecking:
-                    // We have just entered checking for the first time so update our checking timer
-                    if lastConnectionState != a.connectionState {
-                        checkingDuration = time.Now()
-                    }
-
-                    // We have been in checking longer then Disconnect+Failed timeout, set the connection to Failed
-                    if time.Since(checkingDuration) > a.disconnectedTimeout+a.failedTimeout {
-                        a.updateConnectionState(ConnectionStateFailed)
-                        return
-                    }
-                }
-
-                a.selector.ContactCandidates()
-            }); err != nil {
-                a.log.Warnf("taskLoop failed: %v", err)
+            // We have been in checking longer then Disconnect+Failed timeout, set the connection to Failed
+            if Instant::now().duration_since(*checking_duration)
+                > ai.disconnected_timeout + ai.failed_timeout
+            {
+                ai.update_connection_state(ConnectionState::Failed).await;
+                *last_connection_state = ai.connection_state;
+                return;
             }
         }
 
-        for {
-            interval := defaultKeepaliveInterval
+        ai.contact_candidates().await;
 
-            updateInterval := func(x time.Duration) {
-                if x != 0 && (interval == 0 || interval > x) {
-                    interval = x
-                }
-            }
-
-            switch lastConnectionState {
-            case ConnectionStateNew, ConnectionStateChecking: // While connecting, check candidates more frequently
-                updateInterval(a.checkInterval)
-            case ConnectionStateConnected, ConnectionStateDisconnected:
-                updateInterval(a.keepaliveInterval)
-            default:
-            }
-            // Ensure we run our task loop as quickly as the minimum of our various configured timeouts
-            updateInterval(a.disconnectedTimeout)
-            updateInterval(a.failedTimeout)
-
-            t := time.NewTimer(interval)
-            select {
-            case <-a.forceCandidateContact:
-                t.Stop()
-                contact()
-            case <-t.C:
-                contact()
-            case <-a.done:
-                t.Stop()
-                return
-            }
-        }
+        *last_connection_state = ai.connection_state;
     }
-    */
+
+    async fn connectivity_checks(&mut self) {
+        let last_connection_state = ConnectionState::Init; //mut
+        let mut _checking_duration = Instant::now();
+        const ZERO_DURATION: Duration = Duration::from_secs(0);
+        let (check_interval, keepalive_interval, disconnected_timeout, failed_timeout) = (
+            self.check_interval,
+            self.keepalive_interval,
+            self.disconnected_timeout,
+            self.failed_timeout,
+        );
+        let _force_candidate_contact_rx = self.force_candidate_contact_rx.take();
+        let _done_rx = self.done_rx.take();
+
+        tokio::spawn(async move {
+            loop {
+                let mut interval = DEFAULT_CHECK_INTERVAL;
+
+                let mut update_interval = |x: Duration| {
+                    if x != ZERO_DURATION && (interval == ZERO_DURATION || interval > x) {
+                        interval = x;
+                    }
+                };
+
+                match last_connection_state {
+                    ConnectionState::New | ConnectionState::Checking => {
+                        // While connecting, check candidates more frequently
+                        update_interval(check_interval);
+                    }
+                    ConnectionState::Connected | ConnectionState::Disconnected => {
+                        update_interval(keepalive_interval);
+                    }
+                    _ => {}
+                };
+                // Ensure we run our task loop as quickly as the minimum of our various configured timeouts
+                update_interval(disconnected_timeout);
+                update_interval(failed_timeout);
+
+                let t = tokio::time::sleep(interval);
+                tokio::pin!(t);
+
+                tokio::select! {
+                    _ = t.as_mut() => {
+                        //TODO: AgentInternal::contact(ai, &mut last_connection_state, &mut checking_duration).await;
+                    },
+                    /*TODO:_ = force_candidate_contact_rx.recv() => {
+                        //TODO: AgentInternal::contact(ai, &mut last_connection_state, &mut checking_duration).await;
+                    },
+                    _ = done_rx.recv() => {
+                        return;
+                    }*/
+                }
+            }
+        });
+    }
 
     pub(crate) async fn update_connection_state(&mut self, new_state: ConnectionState) {
         if self.connection_state != new_state {
@@ -213,9 +230,7 @@ impl AgentInternal {
 
             // Call handler after finishing current task since we may be holding the agent lock
             // and the handler may also require it
-            if let Some(chan_state) = &self.chan_state {
-                let _ = chan_state.send(new_state).await;
-            }
+            let _ = self.chan_state_tx.send(new_state).await;
         }
     }
 
@@ -230,9 +245,7 @@ impl AgentInternal {
                 .await;
 
             // Notify when the selected pair changes
-            if let Some(chan_candidate_pair) = &self.chan_candidate_pair {
-                let _ = chan_candidate_pair.send(()).await;
-            }
+            let _ = self.chan_candidate_pair_tx.send(()).await;
 
             // Signal connected
             self.on_connected_tx.take();
@@ -318,23 +331,45 @@ impl AgentInternal {
         best
     }
 
-    /*TODO:
-    func (a *Agent) getBestValidCandidatePair() *candidatePair {
-        var best *candidatePair
-        for _, p := range a.checklist {
-            if p.state != CandidatePairStateSucceeded {
-                continue
+    pub(crate) fn get_best_valid_candidate_pair(&self) -> Option<&CandidatePair> {
+        let mut best: Option<&CandidatePair> = None;
+
+        for p in &self.checklist {
+            if p.state != CandidatePairState::Succeeded {
+                continue;
             }
 
-            if best == nil {
-                best = p
-            } else if best.Priority() < p.Priority() {
-                best = p
+            if let Some(b) = &mut best {
+                if b.priority() < p.priority() {
+                    *b = p;
+                }
+            } else {
+                best = Some(p);
             }
         }
-        return best
+
+        best
     }
-     */
+
+    pub(crate) fn get_best_valid_candidate_pair_mut(&mut self) -> Option<&mut CandidatePair> {
+        let mut best: Option<&mut CandidatePair> = None;
+
+        for p in &mut self.checklist {
+            if p.state != CandidatePairState::Succeeded {
+                continue;
+            }
+
+            if let Some(b) = &mut best {
+                if b.priority() < p.priority() {
+                    *b = p;
+                }
+            } else {
+                best = Some(p);
+            }
+        }
+
+        best
+    }
 
     pub(crate) fn add_pair(
         &mut self,
@@ -472,13 +507,9 @@ impl AgentInternal {
         }*/
     }
 
-    /*TODO: func (a *Agent) requestConnectivityCheck() {
-    select {
-    case a.forceCandidateContact <- true:
-    default:
+    fn request_connectivity_check(&self) {
+        let _ = self.force_candidate_contact_tx.try_send(true);
     }
-    }
-     */
 
     // add_remote_candidate assumes you are holding the lock (must be execute using a.run)
     pub(crate) async fn add_remote_candidate(&mut self, c: &Arc<dyn Candidate + Send + Sync>) {
@@ -507,7 +538,7 @@ impl AgentInternal {
             self.add_pair(cand, c.clone());
         }
 
-        //TODO: self.requestConnectivityCheck();
+        self.request_connectivity_check();
     }
 
     pub(crate) async fn add_candidate(
@@ -545,8 +576,8 @@ impl AgentInternal {
             self.add_pair(c.clone(), cand);
         }
 
-        //TODO: self.requestConnectivityCheck();
-        // a.chanCandidate <- c
+        self.request_connectivity_check();
+        let _ = self.chan_candidate_tx.send(c.clone()).await;
 
         Ok(())
     }
@@ -555,9 +586,6 @@ impl AgentInternal {
         if self.done_tx.is_none() {
             return Err(ERR_CLOSED.to_owned());
         }
-
-        //TODO: ? a.tcpMux.RemoveConnByUfrag(a.localUfrag)
-
         self.done_tx.take();
 
         Ok(())
@@ -799,39 +827,24 @@ impl AgentInternal {
         }
     }
 
-    /* TODO:
-    // validateNonSTUNTraffic processes non STUN traffic from a remote candidate,
+    // validate_non_stuntraffic processes non STUN traffic from a remote candidate,
     // and returns true if it is an actual remote candidate
-    func (a *Agent) validateNonSTUNTraffic(local Candidate, remote net.Addr) bool {
-        var isValidCandidate uint64
-        if err := a.run(local.context(), func(ctx context.Context, agent *Agent) {
-            remoteCandidate := a.findRemoteCandidate(local.NetworkType(), remote)
-            if remoteCandidate != nil {
-                remoteCandidate.seen(false)
-                atomic.AddUint64(&isValidCandidate, 1)
-            }
-        }); err != nil {
-            a.log.Warnf("failed to validate remote candidate: %v", err)
+    pub(crate) async fn validate_non_stun_traffic(
+        &self,
+        local: &Arc<dyn Candidate + Send + Sync>,
+        remote: SocketAddr,
+    ) -> bool {
+        if let Some(remote_candidate) = self.find_remote_candidate(local.network_type(), remote) {
+            remote_candidate.seen(false);
+            true
+        } else {
+            false
         }
-
-        return atomic.LoadUint64(&isValidCandidate) == 1
     }
-    */
 
     pub(crate) fn get_selected_pair(&self) -> Option<&CandidatePair> {
         self.selected_pair.as_ref()
     }
-
-    /*TODO:
-    func (a *Agent) closeMulticastConn() {
-        if a.mDNSConn != nil {
-            if err := a.mDNSConn.Close(); err != nil {
-                a.log.Warnf("failed to close mDNS Conn: %v", err)
-            }
-        }
-    }
-
-    */
 
     // set_remote_credentials sets the credentials of the remote agent
     pub(crate) fn set_remote_credentials(

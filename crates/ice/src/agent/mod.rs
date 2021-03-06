@@ -104,6 +104,7 @@ impl Agent {
         let (chan_candidate_pair_tx, chan_candidate_pair_rx) = mpsc::channel(1);
         let (on_connected_tx, on_connected_rx) = mpsc::channel(1);
         let (done_tx, done_rx) = mpsc::channel(1);
+        let (force_candidate_contact_tx, force_candidate_contact_rx) = mpsc::channel(1);
 
         let mut ai = AgentInternal {
             on_connected_tx: Some(on_connected_tx),
@@ -111,11 +112,14 @@ impl Agent {
 
             // State for closing
             done_tx: Some(done_tx),
-            done_rx,
+            done_rx: Some(done_rx),
 
-            chan_state: Some(chan_state_tx),
-            chan_candidate: Some(chan_candidate_tx),
-            chan_candidate_pair: Some(chan_candidate_pair_tx),
+            force_candidate_contact_tx,
+            force_candidate_contact_rx: Some(force_candidate_contact_rx),
+
+            chan_state_tx,
+            chan_candidate_tx,
+            chan_candidate_pair_tx,
 
             on_connection_state_change_hdlr: None,
             on_selected_candidate_pair_change_hdlr: None,
@@ -144,8 +148,6 @@ impl Agent {
 
             //TODO: forceCandidateContact: make(chan bool, 1),
             insecure_skip_verify: config.insecure_skip_verify,
-
-            force_candidate_contact: None,
 
             started_ch_tx: None,
 

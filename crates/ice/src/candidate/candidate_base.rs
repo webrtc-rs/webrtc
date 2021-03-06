@@ -540,7 +540,7 @@ impl CandidateBase {
             return
         }
 
-        if !c.agent().validateNonSTUNTraffic(c, srcAddr) {
+        if !c.agent().validate_non_stuntraffic(c, srcAddr) {
             log.Warnf("Discarded message from %s, not a valid remote candidate", c.addr())
             return
         }

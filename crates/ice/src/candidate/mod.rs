@@ -65,8 +65,6 @@ pub trait Candidate: fmt::Display {
     fn marshal(&self) -> String;
 
     fn addr(&self) -> SocketAddr;
-    //TODO:fn agent(&self) -> Agent;
-    //TODO:fn context(&self) ->Context;
 
     async fn close(&self) -> Result<(), Error>;
     fn seen(&self, outbound: bool);

@@ -135,10 +135,6 @@ pub struct AgentConfig {
     // host_acceptance_min_wait specify a minimum wait time before selecting relay candidates
     pub relay_acceptance_min_wait: Option<Duration>,
 
-    // Net is the our abstracted network interface for internal development purpose only
-    // (see github.com/pion/transport/vnet)
-    //TODO: Net *vnet.Net
-
     // interface_filter is a function that you can use in order to  whitelist or blacklist
     // the interfaces which are used to gather ICE candidates.
     pub interface_filter: Option<InterfaceFilterFn>,
@@ -146,14 +142,6 @@ pub struct AgentConfig {
     // insecure_skip_verify controls if self-signed certificates are accepted when connecting
     // to TURN servers via TLS or DTLS
     pub insecure_skip_verify: bool,
-    // TCPMux will be used for multiplexing incoming TCP connections for ICE TCP.
-    // Currently only passive candidates are supported. This functionality is
-    // experimental and the API might change in the future.
-    //TODO: TCPMux TCPMux
-
-    // Proxy Dialer is a dialer that should be implemented by the user based on golang.org/x/net/proxy
-    // dial interface in order to support corporate proxies
-    //TODO: ProxyDialer proxy.Dialer
 }
 
 impl AgentConfig {
