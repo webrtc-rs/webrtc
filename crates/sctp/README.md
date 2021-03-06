@@ -12,11 +12,11 @@
  <a href="https://deps.rs/repo/github/webrtc-rs/sctp"> 
   <img src="https://deps.rs/repo/github/webrtc-rs/sctp/status.svg">
  </a>
- <a href="https://crates.io/crates/webrtc-rs-sctp"> 
-  <img src="https://img.shields.io/crates/v/webrtc-rs-sctp.svg">
+ <a href="https://crates.io/crates/webrtc-sctp"> 
+  <img src="https://img.shields.io/crates/v/webrtc-sctp.svg">
  </a> 
- <a href="https://docs.rs/webrtc-rs-sctp"> 
-  <img src="https://docs.rs/webrtc-rs-sctp/badge.svg">
+ <a href="https://docs.rs/webrtc-sctp"> 
+  <img src="https://docs.rs/webrtc-sctp/badge.svg">
  </a>
  <a href="https://discord.gg/4Ju8UHdXMs">
   <img src="https://img.shields.io/discord/800204819540869120?logo=discord" alt="Discord">

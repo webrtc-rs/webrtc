@@ -1,11 +1,11 @@
 [package]
-name = "webrtc-rs-sctp"
+name = "webrtc-sctp"
 version = "0.0.1"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of SCTP"
 license = "MIT"
-documentation = "https://docs.rs/webrtc-rs-sctp"
+documentation = "https://docs.rs/webrtc-sctp"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/sctp"
 
