@@ -65,8 +65,10 @@
 [ice-url]: https://crates.io/crates/webrtc-rs-ice
 [turn-badge]: https://img.shields.io/crates/v/webrtc-rs-turn.svg
 [turn-url]: https://crates.io/crates/webrtc-rs-turn
-[sctp-badge]: https://img.shields.io/crates/v/webrtc-rs-sctp.svg
-[sctp-url]: https://crates.io/crates/webrtc-rs-sctp
+[sctp-badge]: https://img.shields.io/crates/v/webrtc-sctp.svg
+[sctp-url]: https://crates.io/crates/webrtc-sctp
+[data-badge]: https://img.shields.io/crates/v/webrtc-data.svg
+[data-url]: https://crates.io/crates/webrtc-data
 [media-badge]: https://img.shields.io/crates/v/webrtc-media.svg
 [media-url]: https://crates.io/crates/webrtc-media
 [webrtc-badge]: https://img.shields.io/crates/v/webrtc.svg
@@ -97,7 +99,7 @@
 ### Road Map Towards 2.0
 
 - [ ] SCTP: [webrtc-rs/sctp](https://github.com/webrtc-rs/sctp) [![sctp][sctp-badge]][sctp-url]
-- [ ] DataChannel [webrtc-rs/webrtc](https://github.com/webrtc-rs/webrtc) [![webrtc][webrtc-badge]][webrtc-url]
+- [ ] DataChannel [webrtc-rs/data](https://github.com/webrtc-rs/data) [![data][data-badge]][data-url]
 - [ ] Media: [webrtc-rs/media](https://github.com/webrtc-rs/media) [![media][media-badge]][media-url]
 
 ### Road Map Towards 3.0
