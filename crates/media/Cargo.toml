@@ -1,11 +1,11 @@
 [package]
-name = "webrtc-rs-media"
+name = "webrtc-media"
 version = "0.0.1"
-authors = ["Rain Liu <yuliu@webrtc.rs>"]
+authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of WebRTC Media API"
 license = "MIT"
-documentation = "https://docs.rs/webrtc-rs-media"
+documentation = "https://docs.rs/webrtc-media"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/media"
 
