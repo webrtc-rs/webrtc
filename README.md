@@ -12,11 +12,11 @@
  <a href="https://deps.rs/repo/github/webrtc-rs/webrtc"> 
   <img src="https://deps.rs/repo/github/webrtc-rs/webrtc/status.svg">
  </a>
- <a href="https://crates.io/crates/webrtc-rs"> 
-  <img src="https://img.shields.io/crates/v/webrtc-rs.svg">
+ <a href="https://crates.io/crates/webrtc"> 
+  <img src="https://img.shields.io/crates/v/webrtc.svg">
  </a> 
- <a href="https://docs.rs/webrtc-rs"> 
-  <img src="https://docs.rs/webrtc-rs/badge.svg">
+ <a href="https://docs.rs/webrtc"> 
+  <img src="https://docs.rs/webrtc/badge.svg">
  </a>
  <a href="https://github.com/webrtc-rs/webrtc/blob/master/LICENSE">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
@@ -67,10 +67,10 @@
 [turn-url]: https://crates.io/crates/webrtc-rs-turn
 [sctp-badge]: https://img.shields.io/crates/v/webrtc-rs-sctp.svg
 [sctp-url]: https://crates.io/crates/webrtc-rs-sctp
-[media-badge]: https://img.shields.io/crates/v/webrtc-rs-media.svg
-[media-url]: https://crates.io/crates/webrtc-rs-media
-[webrtc-badge]: https://img.shields.io/crates/v/webrtc-rs.svg
-[webrtc-url]: https://crates.io/crates/webrtc-rs
+[media-badge]: https://img.shields.io/crates/v/webrtc-media.svg
+[media-url]: https://crates.io/crates/webrtc-media
+[webrtc-badge]: https://img.shields.io/crates/v/webrtc.svg
+[webrtc-url]: https://crates.io/crates/webrtc
 
 
 - [x] SDP: [webrtc-rs/sdp](https://github.com/webrtc-rs/sdp) [![sdp][sdp-badge]][sdp-url]
