@@ -12,8 +12,8 @@
  <a href="https://deps.rs/repo/github/webrtc-rs/stun"> 
   <img src="https://deps.rs/repo/github/webrtc-rs/stun/status.svg">
  </a>
- <a href="https://docs.rs/webrtc-rs-stun"> 
-  <img src="https://docs.rs/webrtc-rs-stun/badge.svg">
+ <a href="https://docs.rs/webrtc-stun"> 
+  <img src="https://docs.rs/webrtc-stun/badge.svg">
  </a>
  <a href="https://github.com/webrtc-rs/stun/blob/master/LICENSE">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
