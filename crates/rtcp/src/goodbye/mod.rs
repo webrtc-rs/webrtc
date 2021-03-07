@@ -65,7 +65,7 @@ impl Packet for Goodbye {
             BigEndian::write_u32(&mut packet_body[i * header::SSRC_LENGTH..], self.sources[i]);
         }
 
-        if self.reason != "" {
+        if !self.reason.is_empty() {
             let reason = self.reason.as_bytes();
 
             if reason.len() > header::SDES_MAX_OCTET_COUNT {
