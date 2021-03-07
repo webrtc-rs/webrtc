@@ -12,11 +12,11 @@
  <a href="https://deps.rs/repo/github/webrtc-rs/ice"> 
   <img src="https://deps.rs/repo/github/webrtc-rs/ice/status.svg">
  </a>
- <a href="https://crates.io/crates/webrtc-rs-ice"> 
-  <img src="https://img.shields.io/crates/v/webrtc-rs-ice.svg">
+ <a href="https://crates.io/crates/webrtc-ice"> 
+  <img src="https://img.shields.io/crates/v/webrtc-ice.svg">
  </a> 
- <a href="https://docs.rs/webrtc-rs-ice"> 
-  <img src="https://docs.rs/webrtc-rs-ice/badge.svg">
+ <a href="https://docs.rs/webrtc-ice"> 
+  <img src="https://docs.rs/webrtc-ice/badge.svg">
  </a>
  <a href="https://discord.gg/4Ju8UHdXMs">
   <img src="https://img.shields.io/discord/800204819540869120?logo=discord" alt="Discord">
