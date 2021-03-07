@@ -92,7 +92,7 @@ impl Header {
         if self.extension {
             match self.extension_profile {
                 EXTENSION_PROFILE_ONE_BYTE => {
-                    if id < 1 || id > 14 {
+                    if !(1..=14).contains(&id) {
                         return Err(Error::HeaderExtensionIdOneByteLength);
                     }
                     if payload.len() > 16 {

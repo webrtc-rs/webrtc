@@ -1,11 +1,11 @@
 [package]
-name = "webrtc-rs-rtp"
+name = "webrtc-rtp"
 version = "0.1.0"
 authors = ["Rain Liu <yuliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of RTP"
 license = "MIT"
-documentation = "https://docs.rs/webrtc-rs-rtp"
+documentation = "https://docs.rs/webrtc-rtp"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/rtp"
 
