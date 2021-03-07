@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.49.0
+          toolchain: 1.50.0
           profile: minimal
           components: clippy, rustfmt
           override: true
