@@ -58,6 +58,8 @@ pub struct Agent {
     pub(crate) interface_filter: Arc<Option<InterfaceFilterFn>>,
     pub(crate) mdns_mode: MulticastDNSMode,
     pub(crate) mdns_name: String,
+    pub(crate) mdns_conn: Option<Arc<DNSConn>>,
+
     // 1:1 D-NAT IP address mapping
     pub(crate) ext_ip_mapper: Arc<ExternalIPMapper>,
     pub(crate) gathering_state: Arc<AtomicU8>, //GatheringState,
@@ -142,11 +144,6 @@ impl Agent {
             // SRTP will constantly read from the endpoint and drop packets if it's full.
             buffer: Some(Buffer::new(0, MAX_BUFFER_SIZE)),
 
-            mdns_mode,
-            mdns_name: mdns_name.clone(),
-            mdns_conn,
-
-            //TODO: forceCandidateContact: make(chan bool, 1),
             insecure_skip_verify: config.insecure_skip_verify,
 
             started_ch_tx: None,
@@ -197,11 +194,7 @@ impl Agent {
         };
 
         if ai.lite && (candidate_types.len() != 1 || candidate_types[0] != CandidateType::Host) {
-            if let Some(c) = &ai.mdns_conn {
-                if let Err(err) = c.close().await {
-                    log::warn!("Failed to close mDNS: {}", err)
-                }
-            }
+            Agent::close_multicast_conn(&mdns_conn).await;
             return Err(ERR_LITE_USING_NON_HOST_CANDIDATES.to_owned());
         }
 
@@ -209,22 +202,14 @@ impl Agent {
             && !contains_candidate_type(CandidateType::ServerReflexive, &candidate_types)
             && !contains_candidate_type(CandidateType::Relay, &candidate_types)
         {
-            if let Some(c) = &ai.mdns_conn {
-                if let Err(err) = c.close().await {
-                    log::warn!("Failed to close mDNS: {}", err)
-                }
-            }
+            Agent::close_multicast_conn(&mdns_conn).await;
             return Err(ERR_USELESS_URLS_PROVIDED.to_owned());
         }
 
-        let ext_ip_mapper = match config.init_ext_ip_mapping(&ai, &candidate_types) {
+        let ext_ip_mapper = match config.init_ext_ip_mapping(mdns_mode, &candidate_types) {
             Ok(ext_ip_mapper) => ext_ip_mapper,
             Err(err) => {
-                if let Some(c) = &ai.mdns_conn {
-                    if let Err(err) = c.close().await {
-                        log::warn!("Failed to close mDNS: {}", err)
-                    }
-                }
+                Agent::close_multicast_conn(&mdns_conn).await;
                 return Err(err);
             }
         };
@@ -236,6 +221,7 @@ impl Agent {
             interface_filter: Arc::new(config.interface_filter.take()),
             mdns_mode,
             mdns_name,
+            mdns_conn,
             ext_ip_mapper: Arc::new(ext_ip_mapper),
             gathering_state: Arc::new(AtomicU8::new(0)), //GatheringState::New,
             candidate_types,
@@ -257,15 +243,8 @@ impl Agent {
 
         // Restart is also used to initialize the agent for the first time
         if let Err(err) = a.restart(config.local_ufrag, config.local_pwd).await {
-            {
-                let ai = a.agent_internal.lock().await;
-                if let Some(c) = &ai.mdns_conn {
-                    if let Err(err) = c.close().await {
-                        log::warn!("Failed to close mDNS: {}", err)
-                    }
-                }
-            }
-            let _ = a.close();
+            Agent::close_multicast_conn(&a.mdns_conn).await;
+            let _ = a.close().await;
             return Err(err);
         }
 
@@ -381,10 +360,16 @@ impl Agent {
 
             let agent_internal = Arc::clone(&self.agent_internal);
             let host_candidate = Arc::clone(c);
+            let mdns_conn = self.mdns_conn.clone();
             tokio::spawn(async move {
-                let mut ai = agent_internal.lock().await;
-                ai.resolve_and_add_multicast_candidate(&host_candidate)
-                    .await;
+                if let Some(mdns_conn) = mdns_conn {
+                    if let Ok(candidate) =
+                        Agent::resolve_and_add_multicast_candidate(mdns_conn, host_candidate).await
+                    {
+                        let mut ai = agent_internal.lock().await;
+                        ai.add_remote_candidate(&candidate).await;
+                    }
+                }
             });
         } else {
             let agent_internal = Arc::clone(&self.agent_internal);
@@ -553,5 +538,30 @@ impl Agent {
     pub async fn get_remote_candidates_stats(&self) -> Vec<CandidateStats> {
         let ai = self.agent_internal.lock().await;
         ai.get_remote_candidates_stats()
+    }
+
+    async fn resolve_and_add_multicast_candidate(
+        mdns_conn: Arc<DNSConn>,
+        c: Arc<dyn Candidate + Send + Sync>,
+    ) -> Result<Arc<dyn Candidate + Send + Sync>, Error> {
+        //TODO: hook up _close_query_signal_tx to Agent's Close signal
+        let (_close_query_signal_tx, close_query_signal_rx) = mpsc::channel(1);
+        let src = match mdns_conn.query(&c.address(), close_query_signal_rx).await {
+            Ok((_, src)) => src,
+            Err(err) => {
+                log::warn!("Failed to discover mDNS candidate {}: {}", c.address(), err);
+                return Err(err);
+            }
+        };
+
+        Ok(c.clone_with_ip(&src.ip()))
+    }
+
+    async fn close_multicast_conn(mdns_conn: &Option<Arc<DNSConn>>) {
+        if let Some(conn) = mdns_conn {
+            if let Err(err) = conn.close().await {
+                log::warn!("failed to close mDNS Conn: {}", err);
+            }
+        }
     }
 }

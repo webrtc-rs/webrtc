@@ -43,9 +43,6 @@ pub struct CandidateBase {
     pub(crate) last_received: Arc<AtomicU64>,
     pub(crate) conn: Option<Arc<dyn util::Conn + Send + Sync>>,
 
-    //TODO:pub(crate) currAgent :Option<Agent>,
-    //TODO:pub(crate) closeCh   chan struct{}
-    //TODO:pub(crate) closedCh  chan struct{}
     pub(crate) foundation_override: String,
     pub(crate) priority_override: u32,
 
@@ -54,33 +51,6 @@ pub struct CandidateBase {
     //CandidateRelay
     pub(crate) relay_client: Option<Arc<turn::client::Client>>,
 }
-
-/* TODO:
-// Done implements context.Context
-func (c *candidateBase) Done() <-chan struct{} {
-    return c.closeCh
-}
-
-// Err implements context.Context
-func (c *candidateBase) Err() error {
-    select {
-    case <-c.closedCh:
-        return ErrRunCanceled
-    default:
-        return nil
-    }
-}
-
-// Deadline implements context.Context
-func (c *candidateBase) Deadline() (deadline time.Time, ok bool) {
-    return time.Time{}, false
-}
-
-// Value implements context.Context
-func (c *candidateBase) Value(key interface{}) interface{} {
-    return nil
-}
-*/
 
 impl Default for CandidateBase {
     fn default() -> Self {
@@ -100,9 +70,7 @@ impl Default for CandidateBase {
             last_sent: Arc::new(AtomicU64::new(0)),
             last_received: Arc::new(AtomicU64::new(0)),
             conn: None,
-            //TODO:currAgent :Option<Agent>,
-            //TODO:closeCh   chan struct{}
-            //TODO:closedCh  chan struct{}
+
             foundation_override: String::new(),
             priority_override: 0,
             network: String::new(),
@@ -265,14 +233,6 @@ impl Candidate for CandidateBase {
         self.resolved_addr
     }
 
-    /*TODO: func (c *candidateBase) agent() *Agent {
-        return c.currAgent
-    }
-
-    func (c *candidateBase) context() context.Context {
-        return c
-    }*/
-
     // close stops the recvLoop
     async fn close(&self) -> Result<(), Error> {
         //TODO:
@@ -387,9 +347,7 @@ impl Candidate for CandidateBase {
             last_sent: Arc::clone(&self.last_sent),
             last_received: Arc::clone(&self.last_received),
             conn: self.conn.clone(),
-            //TODO:currAgent :Option<Agent>,
-            //TODO:closeCh   chan struct{}
-            //TODO:closedCh  chan struct{}
+
             foundation_override: self.foundation_override.clone(),
             priority_override: self.priority_override,
             network: self.network.clone(),
@@ -502,7 +460,7 @@ impl CandidateBase {
             close(c.closedCh)
         }()*/
 
-        /*select {
+        /*TODO: select {
         case <-initialized_ch:
         case <-c.closeCh:
             return

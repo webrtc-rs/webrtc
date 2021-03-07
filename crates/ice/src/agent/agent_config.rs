@@ -204,13 +204,13 @@ impl AgentConfig {
 
     pub(crate) fn init_ext_ip_mapping(
         &self,
-        a: &AgentInternal,
+        mdns_mode: MulticastDNSMode,
         candidate_types: &[CandidateType],
     ) -> Result<ExternalIPMapper, Error> {
         let ext_ip_mapper =
             ExternalIPMapper::new(self.nat_1to1_ip_candidate_type, &self.nat_1to1_ips)?;
         if ext_ip_mapper.candidate_type == CandidateType::Host {
-            if a.mdns_mode == MulticastDNSMode::QueryAndGather {
+            if mdns_mode == MulticastDNSMode::QueryAndGather {
                 return Err(ERR_MULTICAST_DNS_WITH_NAT_1TO1_IP_MAPPING.to_owned());
             }
             let mut candi_host_enabled = false;

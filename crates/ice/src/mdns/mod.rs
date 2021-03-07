@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 use std::net::SocketAddr;
 use std::str::FromStr;
+use std::sync::Arc;
 use util::Error;
 
 // MulticastDNSMode represents the different Multicast modes ICE can run in
@@ -40,7 +41,7 @@ pub(crate) fn generate_multicast_dns_name() -> String {
 pub(crate) fn create_multicast_dns(
     mdns_mode: MulticastDNSMode,
     mdns_name: &str,
-) -> Result<Option<DNSConn>, Error> {
+) -> Result<Option<Arc<DNSConn>>, Error> {
     if mdns_mode == MulticastDNSMode::Disabled {
         return Ok(None);
     }
@@ -50,7 +51,7 @@ pub(crate) fn create_multicast_dns(
     match mdns_mode {
         MulticastDNSMode::QueryOnly => {
             let conn = DNSConn::server(addr, Config::default())?;
-            Ok(Some(conn))
+            Ok(Some(Arc::new(conn)))
         }
         MulticastDNSMode::QueryAndGather => {
             let conn = DNSConn::server(
@@ -60,7 +61,7 @@ pub(crate) fn create_multicast_dns(
                     ..Default::default()
                 },
             )?;
-            Ok(Some(conn))
+            Ok(Some(Arc::new(conn)))
         }
         _ => Ok(None),
     }

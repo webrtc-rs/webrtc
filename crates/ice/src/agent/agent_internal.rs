@@ -33,10 +33,6 @@ pub struct AgentInternal {
 
     pub(crate) connection_state: ConnectionState,
 
-    pub(crate) mdns_mode: MulticastDNSMode,
-    pub(crate) mdns_name: String,
-    pub(crate) mdns_conn: Option<DNSConn>,
-
     pub(crate) started_ch_tx: Option<broadcast::Sender<()>>,
 
     pub(crate) max_binding_requests: u16,
@@ -79,7 +75,6 @@ pub struct AgentInternal {
     pub(crate) insecure_skip_verify: bool,
     pub(crate) bytes_received: Arc<AtomicUsize>,
     pub(crate) bytes_sent: Arc<AtomicUsize>,
-    //TODO: err  atomicError
 }
 
 //TODO: remove unsafe
@@ -472,39 +467,6 @@ impl AgentInternal {
                 self.ping_candidate(&local, &remote).await;
             }
         }
-    }
-
-    pub(crate) async fn resolve_and_add_multicast_candidate(
-        &mut self,
-        _c: &Arc<dyn Candidate + Send + Sync>,
-    ) {
-        if self.mdns_conn.is_none() {
-            return;
-        }
-
-        /*TODO: _, src, err := a.mDNSConn.Query(c.context(), c.Address())
-        if err != nil {
-            a.log.Warnf("Failed to discover mDNS candidate %s: %v", c.Address(), err)
-            return
-        }
-
-        ip, _, _, _ := parseAddr(src) //nolint:dogsled
-        if ip == nil {
-            a.log.Warnf("Failed to discover mDNS candidate %s: failed to parse IP", c.Address())
-            return
-        }
-
-        if err = c.setIP(ip); err != nil {
-            a.log.Warnf("Failed to discover mDNS candidate %s: %v", c.Address(), err)
-            return
-        }
-
-        if err = a.run(a.context(), func(ctx context.Context, agent *Agent) {
-            agent.addRemoteCandidate(c)
-        }); err != nil {
-            a.log.Warnf("Failed to add mDNS candidate %s: %v", c.Address(), err)
-            return
-        }*/
     }
 
     fn request_connectivity_check(&self) {

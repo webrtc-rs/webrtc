@@ -194,7 +194,6 @@ impl ControllingSelector for AgentInternal {
     async fn contact_candidates(&mut self) {
         // A lite selector should not contact candidates
         if self.lite {
-            // TODO: implement lite controlling agent. For now falling back to full agent.
             // This only happens if both peers are lite. See RFC 8445 S6.1.1 and S6.2
             log::trace!("now falling back to full agent");
         }
@@ -391,7 +390,6 @@ impl ControlledSelector for AgentInternal {
         remote: &Arc<dyn Candidate + Send + Sync>,
         remote_addr: SocketAddr,
     ) {
-        // TODO according to the standard we should specifically answer a failed nomination:
         // https://tools.ietf.org/html/rfc8445#section-7.3.1.5
         // If the controlled agent does not accept the request from the
         // controlling agent, the controlled agent MUST reject the nomination
