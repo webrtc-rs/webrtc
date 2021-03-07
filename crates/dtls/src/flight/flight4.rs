@@ -479,11 +479,11 @@ impl Flight for Flight4 {
                 }
             }
             ClientAuthType::NoClientCert | ClientAuthType::RequestClientCert => {
-                return Ok(Box::new(Flight6 {}));
+                return Ok(Box::new(Flight6 {}) as Box<dyn Flight + Send + Sync>);
             }
         }
 
-        Ok(Box::new(Flight6 {}))
+        Ok(Box::new(Flight6 {}) as Box<dyn Flight + Send + Sync>)
     }
 
     async fn generate(

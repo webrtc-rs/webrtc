@@ -87,7 +87,7 @@ impl Flight for Flight3 {
 
                 state.cookie = h.cookie.clone();
                 state.handshake_recv_sequence = seq;
-                return Ok(Box::new(Flight3 {}));
+                return Ok(Box::new(Flight3 {}) as Box<dyn Flight + Send + Sync>);
             }
         }
 
@@ -312,7 +312,7 @@ impl Flight for Flight3 {
             state.remote_requested_certificate = true;
         }
 
-        Ok(Box::new(Flight5 {}))
+        Ok(Box::new(Flight5 {}) as Box<dyn Flight + Send + Sync>)
     }
 
     async fn generate(
