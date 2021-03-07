@@ -1,4 +1,4 @@
-use webrtc_rs_mdns as mdns;
+use webrtc_mdns as mdns;
 
 use mdns::{config::*, conn::*};
 

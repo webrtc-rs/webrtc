@@ -12,11 +12,11 @@
  <a href="https://deps.rs/repo/github/webrtc-rs/mdns"> 
   <img src="https://deps.rs/repo/github/webrtc-rs/mdns/status.svg">
  </a>
- <a href="https://crates.io/crates/webrtc-rs-mdns"> 
-  <img src="https://img.shields.io/crates/v/webrtc-rs-mdns.svg">
+ <a href="https://crates.io/crates/webrtc-mdns"> 
+  <img src="https://img.shields.io/crates/v/webrtc-mdns.svg">
  </a> 
- <a href="https://docs.rs/webrtc-rs-mdns"> 
-  <img src="https://docs.rs/webrtc-rs-mdns/badge.svg">
+ <a href="https://docs.rs/webrtc-mdns"> 
+  <img src="https://docs.rs/webrtc-mdns/badge.svg">
  </a>
  <a href="https://discord.gg/4Ju8UHdXMs">
   <img src="https://img.shields.io/discord/800204819540869120?logo=discord" alt="Discord">
