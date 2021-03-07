@@ -10,8 +10,8 @@ mod context_test {
 
     #[test]
     fn test_context_roc() -> Result<(), Error> {
-        let key_len = CIPHER_CONTEXT_ALGO.key_len()?;
-        let salt_len = CIPHER_CONTEXT_ALGO.salt_len()?;
+        let key_len = CIPHER_CONTEXT_ALGO.key_len();
+        let salt_len = CIPHER_CONTEXT_ALGO.salt_len();
 
         let mut c = Context::new(
             &vec![0; key_len],
@@ -37,8 +37,8 @@ mod context_test {
 
     #[test]
     fn test_context_index() -> Result<(), Error> {
-        let key_len = CIPHER_CONTEXT_ALGO.key_len()?;
-        let salt_len = CIPHER_CONTEXT_ALGO.salt_len()?;
+        let key_len = CIPHER_CONTEXT_ALGO.key_len();
+        let salt_len = CIPHER_CONTEXT_ALGO.salt_len();
 
         let mut c = Context::new(
             &vec![0; key_len],
@@ -64,8 +64,8 @@ mod context_test {
 
     #[test]
     fn test_key_len() -> Result<(), Error> {
-        let key_len = CIPHER_CONTEXT_ALGO.key_len()?;
-        let salt_len = CIPHER_CONTEXT_ALGO.salt_len()?;
+        let key_len = CIPHER_CONTEXT_ALGO.key_len();
+        let salt_len = CIPHER_CONTEXT_ALGO.salt_len();
 
         let result = Context::new(&vec![], &vec![0; salt_len], CIPHER_CONTEXT_ALGO, None, None);
         assert!(result.is_err(), "CreateContext accepted a 0 length key");

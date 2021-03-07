@@ -63,7 +63,7 @@ impl CipherAesCmHmacSha1 {
             master_salt.len(),
         )?;
 
-        let auth_key_len = ProtectionProfile::AES128CMHMACSHA1_80.auth_key_len()?;
+        let auth_key_len = ProtectionProfile::AES128CMHMACSHA1_80.auth_key_len();
 
         let srtp_session_auth_tag = aes_cm_key_derivation(
             LABEL_SRTP_AUTHENTICATION_TAG,
@@ -130,7 +130,7 @@ impl CipherAesCmHmacSha1 {
         Ok(code_bytes[0..self.auth_tag_len()].to_vec())
     }
 
-    fn generate_srtcp_auth_tag(&mut self, buf: &[u8]) -> Result<Vec<u8>, Error> {
+    fn generate_srtcp_auth_tag(&mut self, buf: &[u8]) -> Vec<u8> {
         // https://tools.ietf.org/html/rfc3711#section-4.2
         //
         // The pre-defined authentication transform for SRTP is HMAC-SHA1
@@ -150,7 +150,7 @@ impl CipherAesCmHmacSha1 {
         let code_bytes = result.into_bytes();
 
         // Truncate the hash to the first AUTH_TAG_SIZE bytes.
-        Ok(code_bytes[0..self.auth_tag_len()].to_vec())
+        code_bytes[0..self.auth_tag_len()].to_vec()
     }
 }
 
@@ -284,7 +284,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         dst.extend_from_slice(&srtcp_index_buffer);
 
         // Generate the auth tag.
-        let auth_tag = self.generate_srtcp_auth_tag(&dst)?;
+        let auth_tag = self.generate_srtcp_auth_tag(&dst);
 
         dst.extend_from_slice(&auth_tag);
 
@@ -319,7 +319,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         let cipher_text = &encrypted[..encrypted.len() - self.auth_tag_len()];
 
         // Generate the auth tag we expect to see from the ciphertext.
-        let expected_tag = self.generate_srtcp_auth_tag(cipher_text)?;
+        let expected_tag = self.generate_srtcp_auth_tag(cipher_text);
 
         // See if the auth tag actually matches.
         // We use a constant time comparison to prevent timing attacks.

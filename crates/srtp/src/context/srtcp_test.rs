@@ -125,7 +125,7 @@ mod test {
 
     #[test]
     fn test_rtcp_invalid_auth_tag() -> Result<(), Error> {
-        let auth_tag_len = ProtectionProfile::AES128CMHMACSHA1_80.auth_tag_len()?;
+        let auth_tag_len = ProtectionProfile::AES128CMHMACSHA1_80.auth_tag_len();
 
         let mut decrypt_context = Context::new(
             &RTCP_TEST_MASTER_KEY,
@@ -211,7 +211,7 @@ mod test {
             None,
         )?;
 
-        let auth_tag_len = ProtectionProfile::AES128CMHMACSHA1_80.auth_tag_len()?;
+        let auth_tag_len = ProtectionProfile::AES128CMHMACSHA1_80.auth_tag_len();
 
         let mut decrypt_context = Context::new(
             &RTCP_TEST_MASTER_KEY,

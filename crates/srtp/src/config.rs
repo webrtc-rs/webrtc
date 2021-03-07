@@ -49,9 +49,8 @@ impl Config {
         exporter: impl KeyingMaterialExporter,
         is_client: bool,
     ) -> Result<(), Error> {
-        let key_len = self.profile.key_len()?;
-
-        let salt_len = self.profile.salt_len()?;
+        let key_len = self.profile.key_len();
+        let salt_len = self.profile.salt_len();
 
         let keying_material = exporter.export_keying_material(
             LABEL_EXTRACTOR_DTLS_SRTP.to_string(),

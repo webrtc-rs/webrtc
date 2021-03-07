@@ -178,7 +178,7 @@ mod session_rtcp_test {
     const PLI_PACKET_SIZE: usize = 8;
 
     async fn get_sender_ssrc(read_stream: &mut Stream) -> Result<u32, Error> {
-        let auth_tag_size = ProtectionProfile::AES128CMHMACSHA1_80.auth_tag_len()?;
+        let auth_tag_size = ProtectionProfile::AES128CMHMACSHA1_80.auth_tag_len();
         let mut read_buffer = vec![0; PLI_PACKET_SIZE + auth_tag_size];
 
         let (n, _) = read_stream.read_rtcp(&mut read_buffer).await?;

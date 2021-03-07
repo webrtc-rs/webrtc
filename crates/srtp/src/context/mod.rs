@@ -124,8 +124,8 @@ impl Context {
         srtp_ctx_opt: Option<option::ContextOption>,
         srtcp_ctx_opt: Option<option::ContextOption>,
     ) -> Result<Context, Error> {
-        let key_len = profile.key_len()?;
-        let salt_len = profile.salt_len()?;
+        let key_len = profile.key_len();
+        let salt_len = profile.salt_len();
 
         if master_key.len() != key_len {
             return Err(Error::SrtpMasterKeyLength(key_len, master_key.len()));

@@ -51,7 +51,7 @@ mod test {
             session_salt, expected_session_salt
         );
 
-        let auth_key_len = ProtectionProfile::AES128CMHMACSHA1_80.auth_key_len()?;
+        let auth_key_len = ProtectionProfile::AES128CMHMACSHA1_80.auth_key_len();
 
         let session_auth_tag = key_derivation::aes_cm_key_derivation(
             context::LABEL_SRTP_AUTHENTICATION_TAG,
