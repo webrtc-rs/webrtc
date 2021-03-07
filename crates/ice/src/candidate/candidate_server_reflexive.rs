@@ -17,7 +17,10 @@ pub struct CandidateServerReflexiveConfig {
 
 impl CandidateServerReflexiveConfig {
     // new_candidate_server_reflexive creates a new server reflective candidate
-    pub async fn new_candidate_server_reflexive(self) -> Result<CandidateBase, Error> {
+    pub async fn new_candidate_server_reflexive(
+        self,
+        agent_internal: Arc<Mutex<AgentInternal>>,
+    ) -> Result<CandidateBase, Error> {
         let ip: IpAddr = match self.base_config.address.parse() {
             Ok(ip) => ip,
             Err(_) => return Err(ERR_ADDRESS_PARSE_FAILED.to_owned()),
@@ -44,6 +47,7 @@ impl CandidateServerReflexiveConfig {
                 port: self.rel_port,
             }),
             conn: self.base_config.conn,
+            agent_internal: Some(agent_internal),
             ..Default::default()
         };
 

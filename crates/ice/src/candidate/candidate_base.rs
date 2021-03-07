@@ -1,5 +1,8 @@
 use super::*;
+use crate::errors::*;
 use crate::util::*;
+
+use stun::message::*;
 
 use async_trait::async_trait;
 use crc32fast::Hasher;
@@ -8,7 +11,7 @@ use std::ops::Add;
 use std::sync::atomic::{AtomicU16, AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, Mutex};
 
 #[derive(Default)]
 pub struct CandidateBaseConfig {
@@ -41,7 +44,10 @@ pub struct CandidateBase {
 
     pub(crate) last_sent: Arc<AtomicU64>,
     pub(crate) last_received: Arc<AtomicU64>,
+
     pub(crate) conn: Option<Arc<dyn util::Conn + Send + Sync>>,
+    pub(crate) agent_internal: Option<Arc<Mutex<AgentInternal>>>,
+    pub(crate) closed_ch: Arc<Mutex<Option<broadcast::Sender<()>>>>,
 
     pub(crate) foundation_override: String,
     pub(crate) priority_override: u32,
@@ -69,7 +75,10 @@ impl Default for CandidateBase {
 
             last_sent: Arc::new(AtomicU64::new(0)),
             last_received: Arc::new(AtomicU64::new(0)),
+
             conn: None,
+            agent_internal: None,
+            closed_ch: Arc::new(Mutex::new(None)),
 
             foundation_override: String::new(),
             priority_override: 0,
@@ -235,38 +244,13 @@ impl Candidate for CandidateBase {
 
     // close stops the recvLoop
     async fn close(&self) -> Result<(), Error> {
-        //TODO:
-        // If conn has never been started will be nil
-        /*if c.Done() == nil {
-            return nil
+        {
+            let mut closed_ch = self.closed_ch.lock().await;
+            if closed_ch.is_none() {
+                return Err(ERR_CLOSED.to_owned());
+            }
+            closed_ch.take();
         }
-
-        // Assert that conn has not already been closed
-        select {
-        case <-c.Done():
-            return nil
-        default:
-        }
-
-        var firstErr error
-
-        // Unblock recvLoop
-        close(c.closeCh)
-        if err := c.conn.SetDeadline(time.Now()); err != nil {
-            firstErr = err
-        }
-
-        // Close the conn
-        if err := c.conn.Close(); err != nil && firstErr == nil {
-            firstErr = err
-        }
-
-        if firstErr != nil {
-            return firstErr
-        }
-
-        // Wait until the recvLoop is closed
-        <-c.closedCh*/
 
         if let Some(relay_client) = &self.relay_client {
             relay_client.close().await
@@ -346,7 +330,10 @@ impl Candidate for CandidateBase {
 
             last_sent: Arc::clone(&self.last_sent),
             last_received: Arc::clone(&self.last_received),
+
             conn: self.conn.clone(),
+            agent_internal: self.agent_internal.clone(),
+            closed_ch: self.closed_ch.clone(),
 
             foundation_override: self.foundation_override.clone(),
             priority_override: self.priority_override,
@@ -355,16 +342,16 @@ impl Candidate for CandidateBase {
         })
     }
 
-    // start runs the candidate using the provided connection
-    async fn start(&self, initialized_ch: Option<broadcast::Receiver<()>>) {
-        if let Some(conn) = &self.conn {
-            let conn = Arc::clone(conn);
-            tokio::spawn(async move {
-                let _ = CandidateBase::recv_loop(initialized_ch, conn).await;
-            });
-        } else {
-            log::error!("Can't start due to conn is_none");
-        }
+    fn get_conn(&self) -> Option<&Arc<dyn util::Conn + Send + Sync>> {
+        self.conn.as_ref()
+    }
+
+    fn get_agent(&self) -> Option<&Arc<Mutex<AgentInternal>>> {
+        self.agent_internal.as_ref()
+    }
+
+    fn get_closed_ch(&self) -> Arc<Mutex<Option<broadcast::Sender<()>>>> {
+        self.closed_ch.clone()
     }
 }
 
@@ -452,61 +439,92 @@ impl CandidateBase {
         }
     }
 
-    async fn recv_loop(
+    pub(crate) async fn recv_loop(
+        candidate: Arc<dyn Candidate + Send + Sync>,
+        agent_internal: Arc<Mutex<AgentInternal>>,
+        mut closed_ch_rx: broadcast::Receiver<()>,
         initialized_ch: Option<broadcast::Receiver<()>>,
         conn: Arc<dyn util::Conn + Send + Sync>,
+        addr: SocketAddr,
     ) -> Result<(), Error> {
-        /*defer func() {
-            close(c.closedCh)
-        }()*/
-
-        /*TODO: select {
-        case <-initialized_ch:
-        case <-c.closeCh:
-            return
-        }*/
         if let Some(mut initialized_ch) = initialized_ch {
-            let _ = initialized_ch.recv().await;
+            tokio::select! {
+                _ = initialized_ch.recv() => {}
+                _ = closed_ch_rx.recv() => return Err(ERR_CLOSED.to_owned()),
+            }
         }
 
         let mut buffer = vec![0u8; RECEIVE_MTU];
+        let mut n;
+        let mut src_addr;
         loop {
-            let (n, src_addr) = conn.recv_from(&mut buffer).await?;
+            tokio::select! {
+               result = conn.recv_from(&mut buffer) => {
+                   match result {
+                       Ok((num, src)) => {
+                            n = num;
+                            src_addr = src;
+                       }
+                       Err(err) => return Err(Error::new(err.to_string())),
+                   }
+               },
+                _  = closed_ch_rx.recv() => return Err(ERR_CLOSED.to_owned()),
+            }
 
-            CandidateBase::handle_inbound_candidate_msg(&buffer[..n], src_addr);
+            CandidateBase::handle_inbound_candidate_msg(
+                &candidate,
+                &agent_internal,
+                &buffer[..n],
+                src_addr,
+                addr,
+            )
+            .await;
         }
     }
 
-    fn handle_inbound_candidate_msg(_buffer: &[u8], _src_addr: SocketAddr) {
-        /*TODO: if stun.IsMessage(buffer) {
-            m := &stun.Message{
-                Raw: make([]byte, len(buffer)),
-            }
+    async fn handle_inbound_candidate_msg(
+        c: &Arc<dyn Candidate + Send + Sync>,
+        agent_internal: &Arc<Mutex<AgentInternal>>,
+        buf: &[u8],
+        src_addr: SocketAddr,
+        addr: SocketAddr,
+    ) {
+        if stun::message::is_message(buf) {
+            let mut m = Message {
+                raw: vec![],
+                ..Default::default()
+            };
             // Explicitly copy raw buffer so Message can own the memory.
-            copy(m.Raw, buffer)
-            if err := m.Decode(); err != nil {
-                log.Warnf("Failed to handle decode ICE from %s to %s: %v", c.addr(), srcAddr, err)
-                return
+            m.raw.extend_from_slice(buf);
+
+            if let Err(err) = m.decode() {
+                log::warn!(
+                    "Failed to handle decode ICE from {} to {}: {}",
+                    addr,
+                    src_addr,
+                    err
+                );
+            } else {
+                let agent_internal_clone = Arc::clone(agent_internal);
+                let mut ai = agent_internal.lock().await;
+                ai.handle_inbound(&mut m, c, src_addr, agent_internal_clone)
+                    .await;
             }
-            err := c.agent().run(ctx, func(ctx context.Context, agent *Agent) {
-                agent.handleInbound(m, c, srcAddr)
-            })
-            if err != nil {
-                log.Warnf("Failed to handle message: %v", err)
+        } else {
+            let ai = agent_internal.lock().await;
+            if !ai.validate_non_stun_traffic(c, src_addr).await {
+                log::warn!(
+                    "Discarded message from {}, not a valid remote candidate",
+                    c.addr()
+                );
+                return;
+            } else if let Some(buffer) = &ai.buffer {
+                if let Err(err) = buffer.write(buf).await {
+                    // NOTE This will return packetio.ErrFull if the buffer ever manages to fill up.
+                    log::warn!("failed to write packet: {}", err);
+                }
             }
-
-            return
         }
-
-        if !c.agent().validate_non_stuntraffic(c, srcAddr) {
-            log.Warnf("Discarded message from %s, not a valid remote candidate", c.addr())
-            return
-        }
-
-        // NOTE This will return packetio.ErrFull if the buffer ever manages to fill up.
-        if _, err := c.agent().buffer.Write(buffer); err != nil {
-            log.Warnf("failed to write packet")
-        }*/
     }
 }
 

@@ -72,8 +72,11 @@ async fn test_pair_priority() -> Result<(), Error> {
         },
         ..Default::default()
     };
-    let host_local: Arc<dyn Candidate + Send + Sync> =
-        Arc::new(host_config.new_candidate_host().await?);
+    let host_local: Arc<dyn Candidate + Send + Sync> = Arc::new(
+        host_config
+            .new_candidate_host(a.agent_internal.clone())
+            .await?,
+    );
 
     let relay_config = CandidateRelayConfig {
         base_config: CandidateBaseConfig {
@@ -88,7 +91,9 @@ async fn test_pair_priority() -> Result<(), Error> {
         ..Default::default()
     };
 
-    let relay_remote = relay_config.new_candidate_relay().await?;
+    let relay_remote = relay_config
+        .new_candidate_relay(a.agent_internal.clone())
+        .await?;
 
     let srflx_config = CandidateServerReflexiveConfig {
         base_config: CandidateBaseConfig {
@@ -103,7 +108,9 @@ async fn test_pair_priority() -> Result<(), Error> {
         ..Default::default()
     };
 
-    let srflx_remote = srflx_config.new_candidate_server_reflexive().await?;
+    let srflx_remote = srflx_config
+        .new_candidate_server_reflexive(a.agent_internal.clone())
+        .await?;
 
     let prflx_config = CandidatePeerReflexiveConfig {
         base_config: CandidateBaseConfig {
@@ -118,7 +125,9 @@ async fn test_pair_priority() -> Result<(), Error> {
         ..Default::default()
     };
 
-    let prflx_remote = prflx_config.new_candidate_peer_reflexive().await?;
+    let prflx_remote = prflx_config
+        .new_candidate_peer_reflexive(a.agent_internal.clone())
+        .await?;
 
     let host_config = CandidateHostConfig {
         base_config: CandidateBaseConfig {
@@ -130,7 +139,9 @@ async fn test_pair_priority() -> Result<(), Error> {
         },
         ..Default::default()
     };
-    let host_remote = host_config.new_candidate_host().await?;
+    let host_remote = host_config
+        .new_candidate_host(a.agent_internal.clone())
+        .await?;
 
     let remotes: Vec<Arc<dyn Candidate + Send + Sync>> = vec![
         Arc::new(relay_remote),
@@ -198,7 +209,9 @@ async fn test_on_selected_candidate_pair_change() -> Result<(), Error> {
         },
         ..Default::default()
     };
-    let host_local = host_config.new_candidate_host().await?;
+    let host_local = host_config
+        .new_candidate_host(a.agent_internal.clone())
+        .await?;
 
     let relay_config = CandidateRelayConfig {
         base_config: CandidateBaseConfig {
@@ -212,7 +225,9 @@ async fn test_on_selected_candidate_pair_change() -> Result<(), Error> {
         rel_port: 43210,
         ..Default::default()
     };
-    let relay_remote = relay_config.new_candidate_relay().await?;
+    let relay_remote = relay_config
+        .new_candidate_relay(a.agent_internal.clone())
+        .await?;
 
     // select the pair
     let p = CandidatePair::new(Arc::new(host_local), Arc::new(relay_remote), false);
@@ -244,7 +259,11 @@ async fn test_handle_peer_reflexive_udp_pflx_candidate() -> Result<(), Error> {
         ..Default::default()
     };
 
-    let local: Arc<dyn Candidate + Send + Sync> = Arc::new(host_config.new_candidate_host().await?);
+    let local: Arc<dyn Candidate + Send + Sync> = Arc::new(
+        host_config
+            .new_candidate_host(a.agent_internal.clone())
+            .await?,
+    );
     let remote = SocketAddr::from_str("172.17.0.3:999")?;
 
     let (username, local_pwd, tie_breaker) = {
@@ -270,8 +289,10 @@ async fn test_handle_peer_reflexive_udp_pflx_candidate() -> Result<(), Error> {
     ])?;
 
     {
+        let agent_internal_clone = Arc::clone(&a.agent_internal);
         let mut ai = a.agent_internal.lock().await;
-        ai.handle_inbound(&mut msg, &local, remote).await;
+        ai.handle_inbound(&mut msg, &local, remote, agent_internal_clone)
+            .await;
 
         // length of remote candidate list must be one now
         assert_eq!(
@@ -342,7 +363,11 @@ async fn test_handle_peer_reflexive_unknown_remote() -> Result<(), Error> {
         ..Default::default()
     };
 
-    let local: Arc<dyn Candidate + Send + Sync> = Arc::new(host_config.new_candidate_host().await?);
+    let local: Arc<dyn Candidate + Send + Sync> = Arc::new(
+        host_config
+            .new_candidate_host(a.agent_internal.clone())
+            .await?,
+    );
     let remote = SocketAddr::from_str("172.17.0.3:999")?;
 
     let mut msg = Message::new();
@@ -354,8 +379,10 @@ async fn test_handle_peer_reflexive_unknown_remote() -> Result<(), Error> {
     ])?;
 
     {
+        let agent_internal_clone = Arc::clone(&a.agent_internal);
         let mut ai = a.agent_internal.lock().await;
-        ai.handle_inbound(&mut msg, &local, remote).await;
+        ai.handle_inbound(&mut msg, &local, remote, agent_internal_clone)
+            .await;
 
         assert_eq!(
             ai.remote_candidates.len(),

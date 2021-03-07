@@ -107,6 +107,7 @@ impl Agent {
         let (on_connected_tx, on_connected_rx) = mpsc::channel(1);
         let (done_tx, done_rx) = mpsc::channel(1);
         let (force_candidate_contact_tx, force_candidate_contact_rx) = mpsc::channel(1);
+        let (started_ch_tx, _) = broadcast::channel(1);
 
         let mut ai = AgentInternal {
             on_connected_tx: Some(on_connected_tx),
@@ -146,7 +147,7 @@ impl Agent {
 
             insecure_skip_verify: config.insecure_skip_verify,
 
-            started_ch_tx: None,
+            started_ch_tx: Some(started_ch_tx),
 
             max_binding_requests: 0,
 

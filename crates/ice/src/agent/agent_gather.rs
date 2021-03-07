@@ -264,7 +264,7 @@ impl Agent {
                 };
 
                 let candidate: Arc<dyn Candidate + Send + Sync> =
-                    match host_config.new_candidate_host().await {
+                    match host_config.new_candidate_host(agent_internal.clone()).await {
                         Ok(mut candidate) => {
                             if mdns_mode == MulticastDNSMode::QueryAndGather {
                                 if let Err(err) = candidate.set_ip(&ip) {
@@ -374,20 +374,22 @@ impl Agent {
                     rel_port: laddr.port(),
                 };
 
-                let candidate: Arc<dyn Candidate + Send + Sync> =
-                    match srflx_config.new_candidate_server_reflexive().await {
-                        Ok(candidate) => Arc::new(candidate),
-                        Err(err) => {
-                            log::warn!(
-                                "Failed to create server reflexive candidate: {} {} {}: {}",
-                                network,
-                                mapped_ip,
-                                laddr.port(),
-                                err
-                            );
-                            return Ok(());
-                        }
-                    };
+                let candidate: Arc<dyn Candidate + Send + Sync> = match srflx_config
+                    .new_candidate_server_reflexive(agent_internal2.clone())
+                    .await
+                {
+                    Ok(candidate) => Arc::new(candidate),
+                    Err(err) => {
+                        log::warn!(
+                            "Failed to create server reflexive candidate: {} {} {}: {}",
+                            network,
+                            mapped_ip,
+                            laddr.port(),
+                            err
+                        );
+                        return Ok(());
+                    }
+                };
 
                 {
                     let mut ai = agent_internal2.lock().await;
@@ -488,20 +490,22 @@ impl Agent {
                         rel_port: laddr.port(),
                     };
 
-                    let candidate: Arc<dyn Candidate + Send + Sync> =
-                        match srflx_config.new_candidate_server_reflexive().await {
-                            Ok(candidate) => Arc::new(candidate),
-                            Err(err) => {
-                                log::warn!(
-                                    "Failed to create server reflexive candidate: {} {} {}: {}",
-                                    network,
-                                    ip,
-                                    port,
-                                    err
-                                );
-                                return Ok(());
-                            }
-                        };
+                    let candidate: Arc<dyn Candidate + Send + Sync> = match srflx_config
+                        .new_candidate_server_reflexive(agent_internal2.clone())
+                        .await
+                    {
+                        Ok(candidate) => Arc::new(candidate),
+                        Err(err) => {
+                            log::warn!(
+                                "Failed to create server reflexive candidate: {} {} {}: {}",
+                                network,
+                                ip,
+                                port,
+                                err
+                            );
+                            return Ok(());
+                        }
+                    };
 
                     {
                         let mut ai = agent_internal2.lock().await;
@@ -563,28 +567,10 @@ impl Agent {
                         let rel_addr = local_addr.ip().to_string();
                         let rel_port = local_addr.port();
                         (loc_conn, rel_addr, rel_port)
-                    /*TODO:} else if url.proto == ProtoType::UDP && url.scheme == SchemeType::TURNS{
-                       udpAddr, connectErr := ResolveUDPAddr(network, turnserver_addr)
-                       if connectErr != nil {
-                           a.log.Warnf("Failed to resolve UDP Addr %s: %v\n", turnserver_addr, connectErr)
-                           return
-                       }
-
-                       conn, connectErr := dtls.Dial(network, udpAddr, &dtls.Config{
-                           InsecureSkipVerify: a.insecureSkipVerify, //nolint:gosec
-                       })
-                       if connectErr != nil {
-                           a.log.Warnf("Failed to Dial DTLS Addr %s: %v\n", turnserver_addr, connectErr)
-                           return
-                       }
-
-                       rel_addr = conn.LocalAddr().(*net.UDPAddr).IP.String()
-                       rel_port = conn.LocalAddr().(*net.UDPAddr).Port
-                       loc_conn = &fakePacketConn{conn}
-                    */
-                    //TODO: case a.proxyDialer != nil && url.Proto == ProtoTypeTCP && (url.Scheme == SchemeTypeTURN || url.Scheme == SchemeTypeTURNS):
-                    //TODO: case url.Proto == ProtoTypeTCP && url.Scheme == SchemeTypeTURN:
-                    //TODO: case url.Proto == ProtoTypeTCP && url.Scheme == SchemeTypeTURNS:
+                    /*TODO: case url.proto == ProtoType::UDP && url.scheme == SchemeType::TURNS{
+                    case a.proxyDialer != nil && url.Proto == ProtoTypeTCP && (url.Scheme == SchemeTypeTURN || url.Scheme == SchemeTypeTURNS):
+                    case url.Proto == ProtoTypeTCP && url.Scheme == SchemeTypeTURN:
+                    case url.Proto == ProtoTypeTCP && url.Scheme == SchemeTypeTURNS:*/
                     } else {
                         log::warn!("Unable to handle URL in gather_candidates_relay {}", url);
                         return Ok(());
@@ -649,20 +635,22 @@ impl Agent {
                     relay_client: Some(Arc::clone(&client)),
                 };
 
-                let candidate: Arc<dyn Candidate + Send + Sync> =
-                    match relay_config.new_candidate_relay().await {
-                        Ok(candidate) => Arc::new(candidate),
-                        Err(err) => {
-                            let _ = client.close().await;
-                            log::warn!(
-                                "Failed to create relay candidate: {} {}: {}",
-                                network,
-                                raddr,
-                                err
-                            );
-                            return Ok(());
-                        }
-                    };
+                let candidate: Arc<dyn Candidate + Send + Sync> = match relay_config
+                    .new_candidate_relay(agent_internal2.clone())
+                    .await
+                {
+                    Ok(candidate) => Arc::new(candidate),
+                    Err(err) => {
+                        let _ = client.close().await;
+                        log::warn!(
+                            "Failed to create relay candidate: {} {}: {}",
+                            network,
+                            raddr,
+                            err
+                        );
+                        return Ok(());
+                    }
+                };
 
                 {
                     let mut ai = agent_internal2.lock().await;

@@ -10,12 +10,13 @@ use crate::tcp_type::*;
 
 use util::Error;
 
+use crate::agent::agent_internal::AgentInternal;
 use async_trait::async_trait;
 use std::fmt;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::SystemTime;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, Mutex};
 
 pub(crate) const RECEIVE_MTU: usize = 8192;
 pub(crate) const DEFAULT_LOCAL_PREFERENCE: u16 = 65535;
@@ -77,8 +78,9 @@ pub trait Candidate: fmt::Display {
     fn equal(&self, other: &dyn Candidate) -> bool;
     fn clone(&self) -> Arc<dyn Candidate + Send + Sync>;
     fn clone_with_ip(&self, ip: &IpAddr) -> Arc<dyn Candidate + Send + Sync>;
-
-    async fn start(&self, initialized_ch: Option<broadcast::Receiver<()>>);
+    fn get_conn(&self) -> Option<&Arc<dyn util::Conn + Send + Sync>>;
+    fn get_agent(&self) -> Option<&Arc<Mutex<AgentInternal>>>;
+    fn get_closed_ch(&self) -> Arc<Mutex<Option<broadcast::Sender<()>>>>;
 }
 
 // CandidateType represents the type of candidate

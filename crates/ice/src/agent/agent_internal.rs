@@ -1,5 +1,5 @@
 use super::*;
-use crate::candidate::candidate_base::CandidateBaseConfig;
+use crate::candidate::candidate_base::{CandidateBase, CandidateBaseConfig};
 use crate::candidate::candidate_peer_reflexive::CandidatePeerReflexiveConfig;
 use crate::util::*;
 
@@ -102,20 +102,9 @@ impl AgentInternal {
         );
         self.set_remote_credentials(remote_ufrag, remote_pwd)?;
         self.is_controlling = is_controlling;
+        self.start();
+        //TODO: a.startedFn()
 
-        /*TODO: if is_controlling {
-            a.selector = &controllingSelector{agent: a, log: a.log}
-        } else {
-            a.selector = &controlledSelector{agent: a, log: a.log}
-        }
-
-        if a.lite {
-            a.selector = &liteSelector{pairCandidateSelector: a.selector}
-        }
-
-        a.selector.Start()
-        a.startedFn()
-        */
         self.update_connection_state(ConnectionState::Checking)
             .await;
 
@@ -507,7 +496,12 @@ impl AgentInternal {
         &mut self,
         c: &Arc<dyn Candidate + Send + Sync>,
     ) -> Result<(), Error> {
-        c.start(None /*TODO:a.started_cn*/).await;
+        let initialized_ch = if let Some(started_ch_tx) = &self.started_ch_tx {
+            Some(started_ch_tx.subscribe())
+        } else {
+            None
+        };
+        self.start_candidate(c, initialized_ch).await;
 
         let network_type = c.network_type();
 
@@ -695,6 +689,7 @@ impl AgentInternal {
         m: &mut Message,
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: SocketAddr,
+        agent_internal: Arc<Mutex<AgentInternal>>,
     ) {
         if m.typ.method != METHOD_BINDING
             || !(m.typ.class == CLASS_SUCCESS_RESPONSE
@@ -763,7 +758,10 @@ impl AgentInternal {
                     rel_port: 0,
                 };
 
-                match prflx_candidate_config.new_candidate_peer_reflexive().await {
+                match prflx_candidate_config
+                    .new_candidate_peer_reflexive(agent_internal)
+                    .await
+                {
                     Ok(prflx_candidate) => remote_candidate = Some(Arc::new(prflx_candidate)),
                     Err(err) => {
                         log::error!("Failed to create new remote prflx candidate ({})", err);
@@ -833,6 +831,40 @@ impl AgentInternal {
     ) {
         if let Err(err) = local.write_to(&msg.raw, &**remote).await {
             log::trace!("failed to send STUN message: {}", err);
+        }
+    }
+
+    // start runs the candidate using the provided connection
+    async fn start_candidate(
+        &self,
+        candidate: &Arc<dyn Candidate + Send + Sync>,
+        initialized_ch: Option<broadcast::Receiver<()>>,
+    ) {
+        let (closed_ch_tx, closed_ch_rx) = broadcast::channel(1);
+        {
+            let closed_ch = candidate.get_closed_ch();
+            let mut closed = closed_ch.lock().await;
+            *closed = Some(closed_ch_tx);
+        }
+
+        let cand = Arc::clone(candidate);
+        if let (Some(conn), Some(ai)) = (candidate.get_conn(), candidate.get_agent()) {
+            let conn = Arc::clone(conn);
+            let addr = candidate.addr();
+            let agent_internal = Arc::clone(ai);
+            tokio::spawn(async move {
+                let _ = CandidateBase::recv_loop(
+                    cand,
+                    agent_internal,
+                    closed_ch_rx,
+                    initialized_ch,
+                    conn,
+                    addr,
+                )
+                .await;
+            });
+        } else {
+            log::error!("Can't start due to conn is_none");
         }
     }
 }
