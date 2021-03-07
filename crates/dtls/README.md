@@ -1,5 +1,5 @@
 <h1 align="center">
- <a href="https://webrtc.rs"><img src="https://github.com/webrtc-rs/webrtc/doc/webrtc.rs.png" alt="WebRTC.rs"></a>
+ <a href="https://webrtc.rs"><img src="./doc/webrtc.rs.png" alt="WebRTC.rs"></a>
  <br>
 </h1>
 <p align="center">

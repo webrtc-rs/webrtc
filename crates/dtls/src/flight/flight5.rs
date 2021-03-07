@@ -58,28 +58,18 @@ impl Flight for Flight5 {
             Err(_) => return Err((None, None)),
         };
 
-        let finished = if let Some(message) = msgs.get(&HandshakeType::Finished) {
-            match message {
-                HandshakeMessage::Finished(h) => h,
-                _ => {
-                    return Err((
-                        Some(Alert {
-                            alert_level: AlertLevel::Fatal,
-                            alert_description: AlertDescription::InternalError,
-                        }),
-                        None,
-                    ))
-                }
-            }
-        } else {
-            return Err((
-                Some(Alert {
-                    alert_level: AlertLevel::Fatal,
-                    alert_description: AlertDescription::InternalError,
-                }),
-                None,
-            ));
-        };
+        let finished =
+            if let Some(HandshakeMessage::Finished(h)) = msgs.get(&HandshakeType::Finished) {
+                h
+            } else {
+                return Err((
+                    Some(Alert {
+                        alert_level: AlertLevel::Fatal,
+                        alert_description: AlertDescription::InternalError,
+                    }),
+                    None,
+                ));
+            };
 
         let plain_text = cache
             .pull_and_merge(&[

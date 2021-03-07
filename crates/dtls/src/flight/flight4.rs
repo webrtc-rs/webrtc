@@ -78,20 +78,10 @@ impl Flight for Flight4 {
             Err(_) => return Err((None, None)),
         };
 
-        let client_key_exchange = if let Some(message) = msgs.get(&HandshakeType::ClientKeyExchange)
+        let client_key_exchange = if let Some(HandshakeMessage::ClientKeyExchange(h)) =
+            msgs.get(&HandshakeType::ClientKeyExchange)
         {
-            match message {
-                HandshakeMessage::ClientKeyExchange(h) => h,
-                _ => {
-                    return Err((
-                        Some(Alert {
-                            alert_level: AlertLevel::Fatal,
-                            alert_description: AlertDescription::InternalError,
-                        }),
-                        None,
-                    ))
-                }
-            }
+            h
         } else {
             return Err((
                 Some(Alert {
@@ -428,19 +418,8 @@ impl Flight for Flight4 {
 
         state.handshake_recv_sequence = seq;
 
-        if let Some(message) = msgs.get(&HandshakeType::Finished) {
-            match message {
-                HandshakeMessage::Finished(h) => h,
-                _ => {
-                    return Err((
-                        Some(Alert {
-                            alert_level: AlertLevel::Fatal,
-                            alert_description: AlertDescription::InternalError,
-                        }),
-                        None,
-                    ))
-                }
-            }
+        if let Some(HandshakeMessage::Finished(h)) = msgs.get(&HandshakeType::Finished) {
+            h
         } else {
             return Err((
                 Some(Alert {
