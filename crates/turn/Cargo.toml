@@ -1,19 +1,19 @@
 [package]
-name = "webrtc-rs-turn"
+name = "webrtc-turn"
 version = "0.1.0"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of TURN"
 license = "MIT"
-documentation = "https://docs.rs/webrtc-rs-turn"
+documentation = "https://docs.rs/webrtc-turn"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/turn"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-util = { package = "webrtc-rs-util", version = "0.1.4" }
-stun = { package = "webrtc-rs-stun", version = "0.1.13" }
+util = { package = "webrtc-util", version = "0.1.6" }
+stun = { package = "webrtc-stun", version = "0.1.13" }
 lazy_static = "1.3.0"
 tokio = { version = "1.0", features = ["full"] }
 async-trait = "0.1"

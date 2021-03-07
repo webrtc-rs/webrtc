@@ -16,7 +16,7 @@ fn test_lt_cred() -> Result<(), Error> {
     let shared_secret = "foobar";
 
     let expected_password = "Tpz/nKkyvX/vMSLKvL4sbtBt8Vs=";
-    let actual_password = long_term_credentials(username, shared_secret)?;
+    let actual_password = long_term_credentials(username, shared_secret);
     assert_eq!(
         expected_password, actual_password,
         "Expected {}, got {}",

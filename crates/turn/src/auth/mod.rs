@@ -25,17 +25,17 @@ pub fn generate_long_term_credentials(
 ) -> Result<(String, String), Error> {
     let t = SystemTime::now().duration_since(UNIX_EPOCH)? + duration;
     let username = format!("{}", t.as_secs());
-    let password = long_term_credentials(&username, shared_secret)?;
+    let password = long_term_credentials(&username, shared_secret);
     Ok((username, password))
 }
 
-fn long_term_credentials(username: &str, shared_secret: &str) -> Result<String, Error> {
+fn long_term_credentials(username: &str, shared_secret: &str) -> String {
     let mac = hmac::Key::new(
         hmac::HMAC_SHA1_FOR_LEGACY_USE_ONLY,
         shared_secret.as_bytes(),
     );
     let password = hmac::sign(&mac, username.as_bytes()).as_ref().to_vec();
-    Ok(base64::encode(&password))
+    base64::encode(&password)
 }
 
 // generate_auth_key is a convince function to easily generate keys in the format used by AuthHandler
@@ -73,7 +73,7 @@ impl AuthHandler for LongTermAuthHandler {
             )));
         }
 
-        let password = long_term_credentials(username, &self.shared_secret)?;
+        let password = long_term_credentials(username, &self.shared_secret);
         Ok(generate_auth_key(username, realm, &password))
     }
 }

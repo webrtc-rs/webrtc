@@ -1,4 +1,4 @@
-use webrtc_rs_turn as turn;
+use webrtc_turn as turn;
 
 use turn::auth::*;
 use turn::errors::*;

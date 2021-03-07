@@ -12,11 +12,11 @@
  <a href="https://deps.rs/repo/github/webrtc-rs/turn"> 
   <img src="https://deps.rs/repo/github/webrtc-rs/turn/status.svg">
  </a>
- <a href="https://crates.io/crates/webrtc-rs-turn"> 
-  <img src="https://img.shields.io/crates/v/webrtc-rs-turn.svg">
+ <a href="https://crates.io/crates/webrtc-turn"> 
+  <img src="https://img.shields.io/crates/v/webrtc-turn.svg">
  </a> 
- <a href="https://docs.rs/webrtc-rs-turn"> 
-  <img src="https://docs.rs/webrtc-rs-turn/badge.svg">
+ <a href="https://docs.rs/webrtc-turn"> 
+  <img src="https://docs.rs/webrtc-turn/badge.svg">
  </a>
  <a href="https://github.com/webrtc-rs/turn/blob/master/LICENSE">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
