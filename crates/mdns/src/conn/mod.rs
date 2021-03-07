@@ -210,21 +210,23 @@ impl DNSConn {
             }
         };
 
-        let mut msg = Message {
-            header: Header::default(),
-            questions: vec![Question {
-                typ: DNSType::A,
-                class: DNSCLASS_INET,
-                name: packed_name,
-            }],
-            ..Default::default()
-        };
+        let raw_query = {
+            let mut msg = Message {
+                header: Header::default(),
+                questions: vec![Question {
+                    typ: DNSType::A,
+                    class: DNSCLASS_INET,
+                    name: packed_name,
+                }],
+                ..Default::default()
+            };
 
-        let raw_query = match msg.pack() {
-            Ok(v) => v,
-            Err(err) => {
-                log::error!("Failed to construct mDNS packet {}", err);
-                return;
+            match msg.pack() {
+                Ok(v) => v,
+                Err(err) => {
+                    log::error!("Failed to construct mDNS packet {}", err);
+                    return;
+                }
             }
         };
 
