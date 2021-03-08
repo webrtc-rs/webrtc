@@ -1,7 +1,8 @@
 use super::*;
 
 use defer::defer;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use util::Error;
 use waitgroup::WaitGroup;
 
@@ -53,26 +54,24 @@ async fn test_random_generator_collision() -> Result<(), Error> {
                         generate_ufrag()
                     };
 
-                    if let Ok(mut r) = rs.lock() {
-                        r.push(s);
-                    }
+                    let mut r = rs.lock().await;
+                    r.push(s);
                 });
             }
             wg.wait().await;
 
-            if let Ok(rs) = rands.lock() {
-                assert_eq!(rs.len(), N, "{} Failed to generate randoms", name);
+            let rs = rands.lock().await;
+            assert_eq!(rs.len(), N, "{} Failed to generate randoms", name);
 
-                for i in 0..N {
-                    for j in i + 1..N {
-                        assert_ne!(
-                            rs[i], rs[j],
-                            "{}: generateRandString caused collision: {} == {}",
-                            name, rs[i], rs[j],
-                        );
-                    }
+            for i in 0..N {
+                for j in i + 1..N {
+                    assert_ne!(
+                        rs[i], rs[j],
+                        "{}: generateRandString caused collision: {} == {}",
+                        name, rs[i], rs[j],
+                    );
                 }
-            };
+            }
         }
     }
 
