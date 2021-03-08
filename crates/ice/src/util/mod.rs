@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod util_test;
+
 use crate::agent::agent_config::InterfaceFilterFn;
 use crate::errors::*;
 use crate::network_type::*;
@@ -110,13 +113,6 @@ pub(crate) fn local_interfaces(
 
     for iface in interfaces {
         log::debug!("local interface: {:?}", iface);
-        /*TODO: if iface.Flags&net.FlagUp == 0 {
-            continue // interface down
-        }
-        if iface.Flags&net.FlagLoopback != 0 {
-            continue // loopback interface
-        }*/
-
         if let Some(filter) = interface_filter {
             if !filter(iface.name) {
                 continue;

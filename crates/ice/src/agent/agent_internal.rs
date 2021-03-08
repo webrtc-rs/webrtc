@@ -6,7 +6,7 @@ use crate::util::*;
 pub struct AgentInternal {
     // State owned by the taskLoop
     pub(crate) on_connected_tx: Option<mpsc::Sender<()>>,
-    pub(crate) on_connected_rx: mpsc::Receiver<()>,
+    pub(crate) on_connected_rx: Option<mpsc::Receiver<()>>,
 
     // State for closing
     pub(crate) done_tx: Option<mpsc::Sender<()>>,
@@ -84,15 +84,14 @@ unsafe impl Sync for AgentInternal {}
 impl AgentInternal {
     pub(crate) async fn start_connectivity_checks(
         &mut self,
+        agent_internal: Arc<Mutex<AgentInternal>>,
         is_controlling: bool,
         remote_ufrag: String,
         remote_pwd: String,
     ) -> Result<(), Error> {
-        /*TODO: select {
-        case <-a.startedCh:
-            return ErrMultipleStart
-        default:
-        }*/
+        if self.started_ch_tx.is_none() {
+            return Err(ERR_MULTIPLE_START.to_owned());
+        }
 
         log::debug!(
             "Started agent: isControlling? {}, remoteUfrag: {}, remotePwd: {}",
@@ -103,23 +102,24 @@ impl AgentInternal {
         self.set_remote_credentials(remote_ufrag, remote_pwd)?;
         self.is_controlling = is_controlling;
         self.start();
-        //TODO: a.startedFn()
+        self.started_ch_tx.take();
 
         self.update_connection_state(ConnectionState::Checking)
             .await;
 
         self.request_connectivity_check();
 
-        self.connectivity_checks().await;
+        self.connectivity_checks(agent_internal).await;
 
         Ok(())
     }
 
     async fn contact(
-        ai: &mut AgentInternal,
+        agent_internal: &Arc<Mutex<AgentInternal>>,
         last_connection_state: &mut ConnectionState,
         checking_duration: &mut Instant,
     ) {
+        let mut ai = agent_internal.lock().await;
         if ai.connection_state == ConnectionState::Failed {
             // The connection is currently failed so don't send any checks
             // In the future it may be restarted though
@@ -147,9 +147,9 @@ impl AgentInternal {
         *last_connection_state = ai.connection_state;
     }
 
-    async fn connectivity_checks(&mut self) {
-        let last_connection_state = ConnectionState::Init; //mut
-        let mut _checking_duration = Instant::now();
+    async fn connectivity_checks(&mut self, agent_internal: Arc<Mutex<AgentInternal>>) {
+        let mut last_connection_state = ConnectionState::Init;
+        let mut checking_duration = Instant::now();
         const ZERO_DURATION: Duration = Duration::from_secs(0);
         let (check_interval, keepalive_interval, disconnected_timeout, failed_timeout) = (
             self.check_interval,
@@ -157,49 +157,51 @@ impl AgentInternal {
             self.disconnected_timeout,
             self.failed_timeout,
         );
-        let _force_candidate_contact_rx = self.force_candidate_contact_rx.take();
-        let _done_rx = self.done_rx.take();
 
-        tokio::spawn(async move {
-            loop {
-                let mut interval = DEFAULT_CHECK_INTERVAL;
+        if let (Some(mut force_candidate_contact_rx), Some(mut done_rx)) =
+            (self.force_candidate_contact_rx.take(), self.done_rx.take())
+        {
+            tokio::spawn(async move {
+                loop {
+                    let mut interval = DEFAULT_CHECK_INTERVAL;
 
-                let mut update_interval = |x: Duration| {
-                    if x != ZERO_DURATION && (interval == ZERO_DURATION || interval > x) {
-                        interval = x;
+                    let mut update_interval = |x: Duration| {
+                        if x != ZERO_DURATION && (interval == ZERO_DURATION || interval > x) {
+                            interval = x;
+                        }
+                    };
+
+                    match last_connection_state {
+                        ConnectionState::New | ConnectionState::Checking => {
+                            // While connecting, check candidates more frequently
+                            update_interval(check_interval);
+                        }
+                        ConnectionState::Connected | ConnectionState::Disconnected => {
+                            update_interval(keepalive_interval);
+                        }
+                        _ => {}
+                    };
+                    // Ensure we run our task loop as quickly as the minimum of our various configured timeouts
+                    update_interval(disconnected_timeout);
+                    update_interval(failed_timeout);
+
+                    let t = tokio::time::sleep(interval);
+                    tokio::pin!(t);
+
+                    tokio::select! {
+                        _ = t.as_mut() => {
+                            AgentInternal::contact(&agent_internal, &mut last_connection_state, &mut checking_duration).await;
+                        },
+                        _ = force_candidate_contact_rx.recv() => {
+                            AgentInternal::contact(&agent_internal, &mut last_connection_state, &mut checking_duration).await;
+                        },
+                        _ = done_rx.recv() => {
+                            return;
+                        }
                     }
-                };
-
-                match last_connection_state {
-                    ConnectionState::New | ConnectionState::Checking => {
-                        // While connecting, check candidates more frequently
-                        update_interval(check_interval);
-                    }
-                    ConnectionState::Connected | ConnectionState::Disconnected => {
-                        update_interval(keepalive_interval);
-                    }
-                    _ => {}
-                };
-                // Ensure we run our task loop as quickly as the minimum of our various configured timeouts
-                update_interval(disconnected_timeout);
-                update_interval(failed_timeout);
-
-                let t = tokio::time::sleep(interval);
-                tokio::pin!(t);
-
-                tokio::select! {
-                    _ = t.as_mut() => {
-                        //TODO: AgentInternal::contact(ai, &mut last_connection_state, &mut checking_duration).await;
-                    },
-                    /*TODO:_ = force_candidate_contact_rx.recv() => {
-                        //TODO: AgentInternal::contact(ai, &mut last_connection_state, &mut checking_duration).await;
-                    },
-                    _ = done_rx.recv() => {
-                        return;
-                    }*/
                 }
-            }
-        });
+            });
+        }
     }
 
     pub(crate) async fn update_connection_state(&mut self, new_state: ConnectionState) {

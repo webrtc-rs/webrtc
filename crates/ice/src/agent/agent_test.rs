@@ -54,7 +54,7 @@ async fn test_pair_search() -> Result<(), Error> {
         assert!(cp.is_none(), "No Candidate pairs should exist");
     }
 
-    let _ = a.close(); //TODO: ?
+    let _ = a.close().await?;
     Ok(())
 }
 
@@ -180,7 +180,7 @@ async fn test_pair_priority() -> Result<(), Error> {
         }
     }
 
-    let _ = a.close(); //TODO: ?
+    let _ = a.close().await?;
     Ok(())
 }
 
@@ -239,7 +239,7 @@ async fn test_on_selected_candidate_pair_change() -> Result<(), Error> {
     // ensure that the callback fired on setting the pair
     let _ = callback_called_rx.recv().await;
 
-    let _ = a.close(); //TODO: ?
+    let _ = a.close().await?;
     Ok(())
 }
 
@@ -329,7 +329,7 @@ async fn test_handle_peer_reflexive_udp_pflx_candidate() -> Result<(), Error> {
         }
     }
 
-    let _ = a.close(); //TODO: ?
+    let _ = a.close().await?;
     Ok(())
 }
 
@@ -391,7 +391,7 @@ async fn test_handle_peer_reflexive_unknown_remote() -> Result<(), Error> {
         );
     }
 
-    let _ = a.close(); //TODO: ?
+    let _ = a.close().await?;
     Ok(())
 }
 

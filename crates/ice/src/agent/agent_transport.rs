@@ -14,14 +14,18 @@ impl Agent {
         remote_ufrag: String,
         remote_pwd: String,
     ) -> Result<Arc<Mutex<impl Conn>>, Error> {
-        {
+        let on_connected_rx = {
+            let agent_internal = Arc::clone(&self.agent_internal);
             let mut ai = self.agent_internal.lock().await;
-            ai.start_connectivity_checks(true, remote_ufrag, remote_pwd)
+            ai.start_connectivity_checks(agent_internal, true, remote_ufrag, remote_pwd)
                 .await?;
+            ai.on_connected_rx.take()
+        };
 
+        if let Some(mut on_connected_rx) = on_connected_rx {
             // block until pair selected
             tokio::select! {
-                _ = ai.on_connected_rx.recv() => {},
+                _ = on_connected_rx.recv() => {},
             }
         }
         Ok(Arc::clone(&self.agent_internal))
@@ -34,14 +38,18 @@ impl Agent {
         remote_ufrag: String,
         remote_pwd: String,
     ) -> Result<Arc<Mutex<impl Conn>>, Error> {
-        {
+        let on_connected_rx = {
+            let agent_internal = Arc::clone(&self.agent_internal);
             let mut ai = self.agent_internal.lock().await;
-            ai.start_connectivity_checks(false, remote_ufrag, remote_pwd)
+            ai.start_connectivity_checks(agent_internal, false, remote_ufrag, remote_pwd)
                 .await?;
+            ai.on_connected_rx.take()
+        };
 
+        if let Some(mut on_connected_rx) = on_connected_rx {
             // block until pair selected
             tokio::select! {
-                _ = ai.on_connected_rx.recv() => {},
+                _ = on_connected_rx.recv() => {},
             }
         }
 

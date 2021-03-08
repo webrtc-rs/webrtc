@@ -111,7 +111,7 @@ impl Agent {
 
         let mut ai = AgentInternal {
             on_connected_tx: Some(on_connected_tx),
-            on_connected_rx,
+            on_connected_rx: Some(on_connected_rx),
 
             // State for closing
             done_tx: Some(done_tx),
