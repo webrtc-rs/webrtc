@@ -1,12 +1,12 @@
 use super::*;
 
-use crossbeam::sync::WaitGroup;
+use defer::defer;
 use std::sync::{Arc, Mutex};
-use std::thread;
 use util::Error;
+use waitgroup::WaitGroup;
 
-#[test]
-fn test_random_generator_collision() -> Result<(), Error> {
+#[tokio::test]
+async fn test_random_generator_collision() -> Result<(), Error> {
     let test_cases = vec![
         (
             "CandidateID",
@@ -37,10 +37,14 @@ fn test_random_generator_collision() -> Result<(), Error> {
             let wg = WaitGroup::new();
 
             for _ in 0..N {
-                let wg = wg.clone();
+                let w = wg.worker();
                 let rs = Arc::clone(&rands);
 
-                thread::spawn(move || {
+                tokio::spawn(async move {
+                    let _d = defer(move || {
+                        drop(w);
+                    });
+
                     let s = if test_case == 0 {
                         generate_cand_id()
                     } else if test_case == 1 {
@@ -52,11 +56,9 @@ fn test_random_generator_collision() -> Result<(), Error> {
                     if let Ok(mut r) = rs.lock() {
                         r.push(s);
                     }
-
-                    drop(wg);
                 });
             }
-            wg.wait();
+            wg.wait().await;
 
             if let Ok(rs) = rands.lock() {
                 assert_eq!(rs.len(), N, "{} Failed to generate randoms", name);
