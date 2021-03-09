@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod chunk_queue_test;
+
 use super::chunk::*;
 
 use std::collections::VecDeque;

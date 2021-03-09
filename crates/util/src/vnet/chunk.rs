@@ -1,8 +1,12 @@
+#[cfg(test)]
+mod chunk_test;
+
 use super::net::*;
 use crate::Error;
 
 use std::fmt;
 use std::net::{IpAddr, SocketAddr};
+use std::ops::{BitAnd, BitOr};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::SystemTime;
@@ -34,33 +38,50 @@ fn assign_chunk_tag() -> String {
     base36(n)
 }
 
-#[derive(Copy, Clone)]
-pub(crate) enum TcpFlag {
-    FIN = 0x01,
-    SYN = 0x02,
-    RST = 0x04,
-    PSH = 0x08,
-    ACK = 0x10,
+#[derive(Copy, Clone, PartialEq)]
+pub(crate) struct TcpFlag(pub(crate) u8);
+
+pub(crate) const TCP_FLAG_ZERO: TcpFlag = TcpFlag(0x00);
+pub(crate) const TCP_FLAG_FIN: TcpFlag = TcpFlag(0x01);
+pub(crate) const TCP_FLAG_SYN: TcpFlag = TcpFlag(0x02);
+pub(crate) const TCP_FLAG_RST: TcpFlag = TcpFlag(0x04);
+pub(crate) const TCP_FLAG_PSH: TcpFlag = TcpFlag(0x08);
+pub(crate) const TCP_FLAG_ACK: TcpFlag = TcpFlag(0x10);
+
+impl BitOr for TcpFlag {
+    type Output = Self;
+
+    // rhs is the "right-hand side" of the expression `a | b`
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self(self.0 | rhs.0)
+    }
+}
+
+impl BitAnd for TcpFlag {
+    type Output = Self;
+
+    // rhs is the "right-hand side" of the expression `a & b`
+    fn bitand(self, rhs: Self) -> Self::Output {
+        Self(self.0 & rhs.0)
+    }
 }
 
 impl fmt::Display for TcpFlag {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut sa = vec![];
-
-        let flag = *self as u8;
-        if flag & TcpFlag::FIN as u8 != 0 {
+        if *self & TCP_FLAG_FIN != TCP_FLAG_ZERO {
             sa.push("FIN");
         }
-        if flag & TcpFlag::SYN as u8 != 0 {
+        if *self & TCP_FLAG_SYN != TCP_FLAG_ZERO {
             sa.push("SYN");
         }
-        if flag & TcpFlag::RST as u8 != 0 {
+        if *self & TCP_FLAG_RST != TCP_FLAG_ZERO {
             sa.push("RST");
         }
-        if flag & TcpFlag::PSH as u8 != 0 {
+        if *self & TCP_FLAG_PSH != TCP_FLAG_ZERO {
             sa.push("PSH");
         }
-        if flag & TcpFlag::ACK as u8 != 0 {
+        if *self & TCP_FLAG_ACK != TCP_FLAG_ZERO {
             sa.push("ACK");
         }
 
