@@ -9,6 +9,7 @@ pub mod conn;
 pub mod error;
 pub mod fixed_big_int;
 pub mod replay_detector;
+pub mod vnet;
 
 pub use crate::buffer::Buffer;
 pub use crate::conn::Conn;
