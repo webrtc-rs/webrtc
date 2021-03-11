@@ -102,10 +102,11 @@ pub trait Chunk: fmt::Display {
     fn destination_addr(&self) -> SocketAddr;
     fn user_data(&self) -> Vec<u8>;
     fn tag(&self) -> String;
-    fn clone_to(&self) -> Box<dyn Chunk>;
     fn network(&self) -> String; // returns "udp" or "tcp"
+    fn clone_to(&self) -> Box<dyn Chunk>;
 }
 
+#[derive(PartialEq)]
 pub(crate) struct ChunkIP {
     pub(crate) timestamp: SystemTime,
     pub(crate) source_ip: IpAddr,
@@ -136,6 +137,7 @@ impl ChunkIP {
     }
 }
 
+#[derive(PartialEq)]
 pub(crate) struct ChunkUDP {
     pub(crate) chunk_ip: ChunkIP,
     pub(crate) source_port: u16,
@@ -238,6 +240,7 @@ impl ChunkUDP {
     }
 }
 
+#[derive(PartialEq)]
 pub(crate) struct ChunkTCP {
     chunk_ip: ChunkIP,
     source_port: u16,
