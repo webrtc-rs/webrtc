@@ -8,4 +8,9 @@ lazy_static! {
     pub static ref ERR_LOC_ADDR: Error = Error::new("something went wrong with locAddr".to_owned());
     pub static ref ERR_ALREADY_CLOSED: Error = Error::new("already closed".to_owned());
     pub static ref ERR_NO_REM_ADDR: Error = Error::new("no remAddr defined".to_owned());
+    pub static ref ERR_ADDRESS_ALREADY_IN_USE: Error =
+        Error::new("address already in use".to_owned());
+    pub static ref ERR_NO_SUCH_UDPCONN: Error = Error::new("no such UDPConn".to_owned());
+    pub static ref ERR_CANNOT_REMOVE_UNSPECIFIED_IP: Error =
+        Error::new("cannot remove unspecified IP by the specified IP".to_owned());
 }
