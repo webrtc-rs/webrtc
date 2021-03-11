@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod conn_test;
+
 use super::errors::*;
 use crate::conn::Conn;
 use crate::vnet::chunk::{Chunk, ChunkUDP};
@@ -16,7 +19,6 @@ const MAX_READ_QUEUE_SIZE: usize = 1024;
 #[async_trait]
 pub(crate) trait ConnObserver {
     async fn write(&self, c: Box<dyn Chunk + Send>) -> Result<(), Error>;
-    //onClosed(addr net.Addr)
     fn determine_source_ip(&self, loc_ip: IpAddr, dst_ip: IpAddr) -> Option<IpAddr>;
 }
 
@@ -24,7 +26,7 @@ pub(crate) trait ConnObserver {
 // comatible with net.PacketConn and net.Conn
 pub(crate) struct UDPConn {
     loc_addr: SocketAddr,
-    rem_addr: Option<SocketAddr>,
+    rem_addr: Mutex<Option<SocketAddr>>,
     read_ch: Mutex<mpsc::Receiver<Box<dyn Chunk + Send>>>,
     obs: Arc<Mutex<Box<dyn ConnObserver + Send + Sync>>>,
 }
@@ -38,7 +40,7 @@ impl UDPConn {
     ) -> Self {
         UDPConn {
             loc_addr,
-            rem_addr,
+            rem_addr: Mutex::new(rem_addr),
             read_ch: Mutex::new(read_ch),
             obs,
         }
@@ -47,8 +49,11 @@ impl UDPConn {
 
 #[async_trait]
 impl Conn for UDPConn {
-    async fn connect(&self, _addr: SocketAddr) -> io::Result<()> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    async fn connect(&self, addr: SocketAddr) -> io::Result<()> {
+        let mut rem_addr = self.rem_addr.lock().await;
+        *rem_addr = Some(addr);
+
+        Ok(())
     }
     async fn recv(&self, buf: &mut [u8]) -> io::Result<usize> {
         let (n, _) = self.recv_from(buf).await?;
@@ -69,9 +74,12 @@ impl Conn for UDPConn {
             let n = std::cmp::min(buf.len(), user_data.len());
             buf[..n].copy_from_slice(&user_data[..n]);
             let addr = chunk.source_addr();
-            if let Some(rem_addr) = &self.rem_addr {
-                if &addr != rem_addr {
-                    continue; // discard (shouldn't happen)
+            {
+                let rem_addr = self.rem_addr.lock().await;
+                if let Some(rem_addr) = &*rem_addr {
+                    if &addr != rem_addr {
+                        continue; // discard (shouldn't happen)
+                    }
                 }
             }
             return Ok((n, addr));
@@ -84,8 +92,12 @@ impl Conn for UDPConn {
     }
 
     async fn send(&self, buf: &[u8]) -> io::Result<usize> {
-        if let Some(rem_addr) = &self.rem_addr {
-            self.send_to(buf, *rem_addr).await
+        let rem_addr = {
+            let rem_addr = self.rem_addr.lock().await;
+            *rem_addr
+        };
+        if let Some(rem_addr) = rem_addr {
+            self.send_to(buf, rem_addr).await
         } else {
             Err(io::Error::new(
                 io::ErrorKind::Other,
