@@ -13,4 +13,15 @@ lazy_static! {
     pub static ref ERR_NO_SUCH_UDPCONN: Error = Error::new("no such UDPConn".to_owned());
     pub static ref ERR_CANNOT_REMOVE_UNSPECIFIED_IP: Error =
         Error::new("cannot remove unspecified IP by the specified IP".to_owned());
+    pub static ref ERR_NO_ADDRESS_ASSIGNED: Error = Error::new("no address assigned".to_owned());
+    pub static ref ERR_NAT_REQURIES_MAPPING: Error =
+        Error::new("1:1 NAT requires more than one mapping".to_owned());
+    pub static ref ERR_MISMATCH_LENGTH_IP: Error =
+        Error::new("length mismtach between mappedIPs and localIPs".to_owned());
+    pub static ref ERR_NON_UDP_TRANSLATION_NOT_SUPPORTED: Error =
+        Error::new("non-udp translation is not supported yet".to_owned());
+    pub static ref ERR_NO_ASSOCIATED_LOCAL_ADDRESS: Error =
+        Error::new("no associated local address".to_owned());
+    pub static ref ERR_NO_NAT_BINDING_FOUND: Error = Error::new("no NAT binding found".to_owned());
+    pub static ref ERR_HAS_NO_PERMISSION: Error = Error::new("has no permission".to_owned());
 }
