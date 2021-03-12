@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod nat_test;
+
 use super::errors::*;
 use crate::Error;
 
@@ -9,7 +12,7 @@ use std::ops::Add;
 use std::time::SystemTime;
 use tokio::time::Duration;
 
-const DEFAULT_NATMAPPING_LIFE_TIME: Duration = Duration::from_secs(30);
+const DEFAULT_NAT_MAPPING_LIFE_TIME: Duration = Duration::from_secs(30);
 
 // EndpointDependencyType defines a type of behavioral dependendency on the
 // remote endpoint's IP address or port number. This is used for the two
@@ -17,7 +20,7 @@ const DEFAULT_NATMAPPING_LIFE_TIME: Duration = Duration::from_secs(30);
 //  - Port Mapping behavior
 //  - Filtering behavior
 // See: https://tools.ietf.org/html/rfc4787
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum EndpointDependencyType {
     // EndpointIndependent means the behavior is independent of the endpoint's address or port
     EndpointIndependent,
@@ -126,7 +129,7 @@ impl NetworkAddressTranslator {
             // Normal (NAPT) behavior
             nat_type.mode = NATMode::Normal;
             if nat_type.mapping_life_time == Duration::from_secs(0) {
-                nat_type.mapping_life_time = DEFAULT_NATMAPPING_LIFE_TIME;
+                nat_type.mapping_life_time = DEFAULT_NAT_MAPPING_LIFE_TIME;
             }
         }
 
