@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod conn_map_test;
+
 use super::errors::*;
 use crate::{Conn, Error};
 
@@ -6,7 +9,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-type PortMap = Mutex<HashMap<u16, Vec<Arc<Mutex<Box<dyn Conn + Send + Sync>>>>>>;
+type PortMap = Mutex<HashMap<u16, Vec<Arc<dyn Conn + Send + Sync>>>>;
 
 pub(crate) struct UDPConnMap {
     port_map: PortMap,
@@ -19,21 +22,18 @@ impl UDPConnMap {
         }
     }
 
-    pub(crate) async fn insert(
-        &self,
-        conn: Arc<Mutex<Box<dyn Conn + Send + Sync>>>,
-    ) -> Result<(), Error> {
-        let addr = {
-            let c = conn.lock().await;
-            c.local_addr()?
-        };
+    pub(crate) async fn insert(&self, conn: Arc<dyn Conn + Send + Sync>) -> Result<(), Error> {
+        let addr = conn.local_addr()?;
 
         let mut port_map = self.port_map.lock().await;
         if let Some(conns) = port_map.get(&addr.port()) {
-            for cs in conns {
-                let c = cs.lock().await;
+            if addr.ip().is_unspecified() {
+                return Err(ERR_ADDRESS_ALREADY_IN_USE.to_owned());
+            }
+
+            for c in conns {
                 let laddr = c.local_addr()?;
-                if laddr.ip() == addr.ip() {
+                if laddr.ip().is_unspecified() || laddr.ip() == addr.ip() {
                     return Err(ERR_ADDRESS_ALREADY_IN_USE.to_owned());
                 }
             }
@@ -47,22 +47,27 @@ impl UDPConnMap {
         Ok(())
     }
 
-    pub(crate) async fn find(
-        &self,
-        addr: &SocketAddr,
-    ) -> Option<Arc<Mutex<Box<dyn Conn + Send + Sync>>>> {
+    pub(crate) async fn find(&self, addr: &SocketAddr) -> Option<Arc<dyn Conn + Send + Sync>> {
         let port_map = self.port_map.lock().await;
         if let Some(conns) = port_map.get(&addr.port()) {
-            for cs in conns {
+            if addr.ip().is_unspecified() {
+                // pick the first one appears in the iteration
+                if let Some(c) = conns.first() {
+                    return Some(Arc::clone(c));
+                } else {
+                    return None;
+                }
+            }
+
+            for c in conns {
                 let laddr = {
-                    let c = cs.lock().await;
                     match c.local_addr() {
                         Ok(laddr) => laddr,
                         Err(_) => return None,
                     }
                 };
-                if laddr.ip() == addr.ip() {
-                    return Some(Arc::clone(&cs));
+                if laddr.ip().is_unspecified() || laddr.ip() == addr.ip() {
+                    return Some(Arc::clone(c));
                 }
             }
         }
@@ -74,14 +79,22 @@ impl UDPConnMap {
         let mut port_map = self.port_map.lock().await;
         let mut new_conns = vec![];
         if let Some(conns) = port_map.get(&addr.port()) {
-            for cs in conns {
-                let c = cs.lock().await;
-                let laddr = c.local_addr()?;
-                if laddr.ip() == addr.ip() {
-                    continue;
+            if !addr.ip().is_unspecified() {
+                for c in conns {
+                    let laddr = c.local_addr()?;
+                    if laddr.ip().is_unspecified() {
+                        // This can't happen!
+                        return Err(ERR_CANNOT_REMOVE_UNSPECIFIED_IP.to_owned());
+                    }
+
+                    if laddr.ip() == addr.ip() {
+                        continue;
+                    }
+                    new_conns.push(Arc::clone(c));
                 }
-                new_conns.push(Arc::clone(cs));
             }
+        } else {
+            return Err(ERR_NO_SUCH_UDPCONN.to_owned());
         }
 
         if new_conns.is_empty() {
