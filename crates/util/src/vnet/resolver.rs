@@ -9,6 +9,7 @@ use std::net::IpAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 
+#[derive(Default)]
 pub(crate) struct Resolver {
     parent: Option<Arc<Resolver>>,  // read-only
     hosts: HashMap<String, IpAddr>, // TODO: requires mutex

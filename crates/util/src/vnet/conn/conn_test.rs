@@ -2,12 +2,12 @@ use super::*;
 use std::str::FromStr;
 
 struct DummyObserver {
-    read_ch_tx: mpsc::Sender<Box<dyn Chunk + Send>>,
+    read_ch_tx: mpsc::Sender<Box<dyn Chunk + Send + Sync>>,
 }
 
 #[async_trait]
 impl ConnObserver for DummyObserver {
-    async fn write(&self, c: Box<dyn Chunk + Send>) -> Result<(), Error> {
+    async fn write(&self, c: Box<dyn Chunk + Send + Sync>) -> Result<(), Error> {
         self.read_ch_tx.send(c).await?;
         Ok(())
     }

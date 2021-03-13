@@ -1,6 +1,6 @@
 use super::conn_map::*;
-use super::interface::*;
 
+use ifaces::*;
 use std::net::IpAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 

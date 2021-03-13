@@ -37,9 +37,9 @@ fn test_nat_type_default() -> Result<(), Error> {
     Ok(())
 }
 
-#[test]
-fn test_nat_mapping_behavior_full_cone_nat() -> Result<(), Error> {
-    let mut nat = NetworkAddressTranslator::new(NatConfig {
+#[tokio::test]
+async fn test_nat_mapping_behavior_full_cone_nat() -> Result<(), Error> {
+    let nat = NetworkAddressTranslator::new(NatConfig {
         nat_type: NATType {
             mapping_behavior: EndpointDependencyType::EndpointIndependent,
             filtering_behavior: EndpointDependencyType::EndpointIndependent,
@@ -56,9 +56,9 @@ fn test_nat_mapping_behavior_full_cone_nat() -> Result<(), Error> {
 
     let oic = ChunkUDP::new(src, dst);
 
-    let oec = nat.translate_outbound(&oic)?.unwrap();
-    assert_eq!(1, nat.outbound_map.len(), "should match");
-    assert_eq!(1, nat.inbound_map.len(), "should match");
+    let oec = nat.translate_outbound(&oic).await?.unwrap();
+    assert_eq!(1, nat.outbound_map_len().await, "should match");
+    assert_eq!(1, nat.inbound_map_len().await, "should match");
 
     log::debug!("o-original  : {}", oic);
     log::debug!("o-translated: {}", oec);
@@ -70,7 +70,7 @@ fn test_nat_mapping_behavior_full_cone_nat() -> Result<(), Error> {
 
     log::debug!("i-original  : {}", iec);
 
-    let iic = nat.translate_inbound(&iec)?.unwrap();
+    let iic = nat.translate_inbound(&iec).await?.unwrap();
 
     log::debug!("i-translated: {}", iic);
 
@@ -83,7 +83,7 @@ fn test_nat_mapping_behavior_full_cone_nat() -> Result<(), Error> {
         SocketAddr::new(oec.source_addr().ip(), oec.source_addr().port() + 1),
     );
 
-    let result = nat.translate_inbound(&iec);
+    let result = nat.translate_inbound(&iec).await;
     assert!(result.is_err(), "should fail (dropped)");
 
     // packet from any addr will be accepted (full-cone)
@@ -92,15 +92,15 @@ fn test_nat_mapping_behavior_full_cone_nat() -> Result<(), Error> {
         SocketAddr::new(oec.source_addr().ip(), oec.source_addr().port()),
     );
 
-    let result = nat.translate_inbound(&iec);
+    let result = nat.translate_inbound(&iec).await;
     assert!(result.is_ok(), "should succeed");
 
     Ok(())
 }
 
-#[test]
-fn test_nat_mapping_behavior_addr_restricted_cone_nat() -> Result<(), Error> {
-    let mut nat = NetworkAddressTranslator::new(NatConfig {
+#[tokio::test]
+async fn test_nat_mapping_behavior_addr_restricted_cone_nat() -> Result<(), Error> {
+    let nat = NetworkAddressTranslator::new(NatConfig {
         nat_type: NATType {
             mapping_behavior: EndpointDependencyType::EndpointIndependent,
             filtering_behavior: EndpointDependencyType::EndpointAddrDependent,
@@ -118,9 +118,9 @@ fn test_nat_mapping_behavior_addr_restricted_cone_nat() -> Result<(), Error> {
     let oic = ChunkUDP::new(src, dst);
     log::debug!("o-original  : {}", oic);
 
-    let oec = nat.translate_outbound(&oic)?.unwrap();
-    assert_eq!(1, nat.outbound_map.len(), "should match");
-    assert_eq!(1, nat.inbound_map.len(), "should match");
+    let oec = nat.translate_outbound(&oic).await?.unwrap();
+    assert_eq!(1, nat.outbound_map_len().await, "should match");
+    assert_eq!(1, nat.inbound_map_len().await, "should match");
     log::debug!("o-translated: {}", oec);
 
     // sending different (IP: 5.6.7.9) won't create a new mapping
@@ -128,9 +128,9 @@ fn test_nat_mapping_behavior_addr_restricted_cone_nat() -> Result<(), Error> {
         SocketAddr::from_str("192.168.0.2:1234")?,
         SocketAddr::from_str("5.6.7.9:9000")?,
     );
-    let oec2 = nat.translate_outbound(&oic2)?.unwrap();
-    assert_eq!(1, nat.outbound_map.len(), "should match");
-    assert_eq!(1, nat.inbound_map.len(), "should match");
+    let oec2 = nat.translate_outbound(&oic2).await?.unwrap();
+    assert_eq!(1, nat.outbound_map_len().await, "should match");
+    assert_eq!(1, nat.inbound_map_len().await, "should match");
     log::debug!("o-translated: {}", oec2);
 
     let iec = ChunkUDP::new(
@@ -140,7 +140,7 @@ fn test_nat_mapping_behavior_addr_restricted_cone_nat() -> Result<(), Error> {
 
     log::debug!("i-original  : {}", iec);
 
-    let iic = nat.translate_inbound(&iec)?.unwrap();
+    let iic = nat.translate_inbound(&iec).await?.unwrap();
 
     log::debug!("i-translated: {}", iic);
 
@@ -153,7 +153,7 @@ fn test_nat_mapping_behavior_addr_restricted_cone_nat() -> Result<(), Error> {
         SocketAddr::new(oec.source_addr().ip(), oec.source_addr().port() + 1),
     );
 
-    let result = nat.translate_inbound(&iec);
+    let result = nat.translate_inbound(&iec).await;
     assert!(result.is_err(), "should fail (dropped)");
 
     // packet from any port will be accepted (restricted-cone)
@@ -162,7 +162,7 @@ fn test_nat_mapping_behavior_addr_restricted_cone_nat() -> Result<(), Error> {
         SocketAddr::new(oec.source_addr().ip(), oec.source_addr().port()),
     );
 
-    let result = nat.translate_inbound(&iec);
+    let result = nat.translate_inbound(&iec).await;
     assert!(result.is_ok(), "should succeed");
 
     // packet from different addr will be droped (restricted-cone)
@@ -171,15 +171,15 @@ fn test_nat_mapping_behavior_addr_restricted_cone_nat() -> Result<(), Error> {
         SocketAddr::new(oec.source_addr().ip(), oec.source_addr().port()),
     );
 
-    let result = nat.translate_inbound(&iec);
+    let result = nat.translate_inbound(&iec).await;
     assert!(result.is_err(), "should fail (dropped)");
 
     Ok(())
 }
 
-#[test]
-fn test_nat_mapping_behavior_port_restricted_cone_nat() -> Result<(), Error> {
-    let mut nat = NetworkAddressTranslator::new(NatConfig {
+#[tokio::test]
+async fn test_nat_mapping_behavior_port_restricted_cone_nat() -> Result<(), Error> {
+    let nat = NetworkAddressTranslator::new(NatConfig {
         nat_type: NATType {
             mapping_behavior: EndpointDependencyType::EndpointIndependent,
             filtering_behavior: EndpointDependencyType::EndpointAddrPortDependent,
@@ -197,9 +197,9 @@ fn test_nat_mapping_behavior_port_restricted_cone_nat() -> Result<(), Error> {
     let oic = ChunkUDP::new(src, dst);
     log::debug!("o-original  : {}", oic);
 
-    let oec = nat.translate_outbound(&oic)?.unwrap();
-    assert_eq!(1, nat.outbound_map.len(), "should match");
-    assert_eq!(1, nat.inbound_map.len(), "should match");
+    let oec = nat.translate_outbound(&oic).await?.unwrap();
+    assert_eq!(1, nat.outbound_map_len().await, "should match");
+    assert_eq!(1, nat.inbound_map_len().await, "should match");
     log::debug!("o-translated: {}", oec);
 
     // sending different (IP: 5.6.7.9) won't create a new mapping
@@ -207,9 +207,9 @@ fn test_nat_mapping_behavior_port_restricted_cone_nat() -> Result<(), Error> {
         SocketAddr::from_str("192.168.0.2:1234")?,
         SocketAddr::from_str("5.6.7.9:9000")?,
     );
-    let oec2 = nat.translate_outbound(&oic2)?.unwrap();
-    assert_eq!(1, nat.outbound_map.len(), "should match");
-    assert_eq!(1, nat.inbound_map.len(), "should match");
+    let oec2 = nat.translate_outbound(&oic2).await?.unwrap();
+    assert_eq!(1, nat.outbound_map_len().await, "should match");
+    assert_eq!(1, nat.inbound_map_len().await, "should match");
     log::debug!("o-translated: {}", oec2);
 
     let iec = ChunkUDP::new(
@@ -219,7 +219,7 @@ fn test_nat_mapping_behavior_port_restricted_cone_nat() -> Result<(), Error> {
 
     log::debug!("i-original  : {}", iec);
 
-    let iic = nat.translate_inbound(&iec)?.unwrap();
+    let iic = nat.translate_inbound(&iec).await?.unwrap();
 
     log::debug!("i-translated: {}", iic);
 
@@ -232,7 +232,7 @@ fn test_nat_mapping_behavior_port_restricted_cone_nat() -> Result<(), Error> {
         SocketAddr::new(oec.source_addr().ip(), oec.source_addr().port() + 1),
     );
 
-    let result = nat.translate_inbound(&iec);
+    let result = nat.translate_inbound(&iec).await;
     assert!(result.is_err(), "should fail (dropped)");
 
     // packet from different port will be dropped (port-restricted-cone)
@@ -241,7 +241,7 @@ fn test_nat_mapping_behavior_port_restricted_cone_nat() -> Result<(), Error> {
         SocketAddr::new(oec.source_addr().ip(), oec.source_addr().port()),
     );
 
-    let result = nat.translate_inbound(&iec);
+    let result = nat.translate_inbound(&iec).await;
     assert!(result.is_err(), "should fail (dropped)");
 
     // packet from different addr will be droped (restricted-cone)
@@ -250,15 +250,15 @@ fn test_nat_mapping_behavior_port_restricted_cone_nat() -> Result<(), Error> {
         SocketAddr::new(oec.source_addr().ip(), oec.source_addr().port()),
     );
 
-    let result = nat.translate_inbound(&iec);
+    let result = nat.translate_inbound(&iec).await;
     assert!(result.is_err(), "should fail (dropped)");
 
     Ok(())
 }
 
-#[test]
-fn test_nat_mapping_behavior_symmetric_nat_addr_dependent_mapping() -> Result<(), Error> {
-    let mut nat = NetworkAddressTranslator::new(NatConfig {
+#[tokio::test]
+async fn test_nat_mapping_behavior_symmetric_nat_addr_dependent_mapping() -> Result<(), Error> {
+    let nat = NetworkAddressTranslator::new(NatConfig {
         nat_type: NATType {
             mapping_behavior: EndpointDependencyType::EndpointAddrDependent,
             filtering_behavior: EndpointDependencyType::EndpointAddrDependent,
@@ -283,12 +283,12 @@ fn test_nat_mapping_behavior_symmetric_nat_addr_dependent_mapping() -> Result<()
     log::debug!("o-original  : {}", oic2);
     log::debug!("o-original  : {}", oic3);
 
-    let oec1 = nat.translate_outbound(&oic1)?.unwrap();
-    let oec2 = nat.translate_outbound(&oic2)?.unwrap();
-    let oec3 = nat.translate_outbound(&oic3)?.unwrap();
+    let oec1 = nat.translate_outbound(&oic1).await?.unwrap();
+    let oec2 = nat.translate_outbound(&oic2).await?.unwrap();
+    let oec3 = nat.translate_outbound(&oic3).await?.unwrap();
 
-    assert_eq!(2, nat.outbound_map.len(), "should match");
-    assert_eq!(2, nat.inbound_map.len(), "should match");
+    assert_eq!(2, nat.outbound_map_len().await, "should match");
+    assert_eq!(2, nat.inbound_map_len().await, "should match");
 
     log::debug!("o-translated: {}", oec1);
     log::debug!("o-translated: {}", oec2);
@@ -308,9 +308,9 @@ fn test_nat_mapping_behavior_symmetric_nat_addr_dependent_mapping() -> Result<()
     Ok(())
 }
 
-#[test]
-fn test_nat_mapping_behavior_symmetric_nat_port_dependent_mapping() -> Result<(), Error> {
-    let mut nat = NetworkAddressTranslator::new(NatConfig {
+#[tokio::test]
+async fn test_nat_mapping_behavior_symmetric_nat_port_dependent_mapping() -> Result<(), Error> {
+    let nat = NetworkAddressTranslator::new(NatConfig {
         nat_type: NATType {
             mapping_behavior: EndpointDependencyType::EndpointAddrPortDependent,
             filtering_behavior: EndpointDependencyType::EndpointAddrPortDependent,
@@ -335,12 +335,12 @@ fn test_nat_mapping_behavior_symmetric_nat_port_dependent_mapping() -> Result<()
     log::debug!("o-original  : {}", oic2);
     log::debug!("o-original  : {}", oic3);
 
-    let oec1 = nat.translate_outbound(&oic1)?.unwrap();
-    let oec2 = nat.translate_outbound(&oic2)?.unwrap();
-    let oec3 = nat.translate_outbound(&oic3)?.unwrap();
+    let oec1 = nat.translate_outbound(&oic1).await?.unwrap();
+    let oec2 = nat.translate_outbound(&oic2).await?.unwrap();
+    let oec3 = nat.translate_outbound(&oic3).await?.unwrap();
 
-    assert_eq!(3, nat.outbound_map.len(), "should match");
-    assert_eq!(3, nat.inbound_map.len(), "should match");
+    assert_eq!(3, nat.outbound_map_len().await, "should match");
+    assert_eq!(3, nat.inbound_map_len().await, "should match");
 
     log::debug!("o-translated: {}", oec1);
     log::debug!("o-translated: {}", oec2);
@@ -362,7 +362,7 @@ fn test_nat_mapping_behavior_symmetric_nat_port_dependent_mapping() -> Result<()
 
 #[tokio::test]
 async fn test_nat_mapping_timeout_refresh_on_outbound() -> Result<(), Error> {
-    let mut nat = NetworkAddressTranslator::new(NatConfig {
+    let nat = NetworkAddressTranslator::new(NatConfig {
         nat_type: NATType {
             mapping_behavior: EndpointDependencyType::EndpointIndependent,
             filtering_behavior: EndpointDependencyType::EndpointIndependent,
@@ -379,9 +379,9 @@ async fn test_nat_mapping_timeout_refresh_on_outbound() -> Result<(), Error> {
 
     let oic = ChunkUDP::new(src, dst);
 
-    let oec = nat.translate_outbound(&oic)?.unwrap();
-    assert_eq!(1, nat.outbound_map.len(), "should match");
-    assert_eq!(1, nat.inbound_map.len(), "should match");
+    let oec = nat.translate_outbound(&oic).await?.unwrap();
+    assert_eq!(1, nat.outbound_map_len().await, "should match");
+    assert_eq!(1, nat.inbound_map_len().await, "should match");
 
     log::debug!("o-original  : {}", oic);
     log::debug!("o-translated: {}", oec);
@@ -392,9 +392,9 @@ async fn test_nat_mapping_timeout_refresh_on_outbound() -> Result<(), Error> {
     tokio::time::sleep(Duration::from_millis(75)).await;
 
     // refresh
-    let oec = nat.translate_outbound(&oic)?.unwrap();
-    assert_eq!(1, nat.outbound_map.len(), "should match");
-    assert_eq!(1, nat.inbound_map.len(), "should match");
+    let oec = nat.translate_outbound(&oic).await?.unwrap();
+    assert_eq!(1, nat.outbound_map_len().await, "should match");
+    assert_eq!(1, nat.inbound_map_len().await, "should match");
 
     log::debug!("o-original  : {}", oic);
     log::debug!("o-translated: {}", oec);
@@ -409,9 +409,9 @@ async fn test_nat_mapping_timeout_refresh_on_outbound() -> Result<(), Error> {
     tokio::time::sleep(Duration::from_millis(125)).await;
 
     // refresh after expiration
-    let oec = nat.translate_outbound(&oic)?.unwrap();
-    assert_eq!(1, nat.outbound_map.len(), "should match");
-    assert_eq!(1, nat.inbound_map.len(), "should match");
+    let oec = nat.translate_outbound(&oic).await?.unwrap();
+    assert_eq!(1, nat.outbound_map_len().await, "should match");
+    assert_eq!(1, nat.inbound_map_len().await, "should match");
 
     log::debug!("o-original  : {}", oic);
     log::debug!("o-translated: {}", oec);
@@ -427,7 +427,7 @@ async fn test_nat_mapping_timeout_refresh_on_outbound() -> Result<(), Error> {
 
 #[tokio::test]
 async fn test_nat_mapping_timeout_outbound_detects_timeout() -> Result<(), Error> {
-    let mut nat = NetworkAddressTranslator::new(NatConfig {
+    let nat = NetworkAddressTranslator::new(NatConfig {
         nat_type: NATType {
             mapping_behavior: EndpointDependencyType::EndpointIndependent,
             filtering_behavior: EndpointDependencyType::EndpointIndependent,
@@ -444,9 +444,9 @@ async fn test_nat_mapping_timeout_outbound_detects_timeout() -> Result<(), Error
 
     let oic = ChunkUDP::new(src, dst);
 
-    let oec = nat.translate_outbound(&oic)?.unwrap();
-    assert_eq!(1, nat.outbound_map.len(), "should match");
-    assert_eq!(1, nat.inbound_map.len(), "should match");
+    let oec = nat.translate_outbound(&oic).await?.unwrap();
+    assert_eq!(1, nat.outbound_map_len().await, "should match");
+    assert_eq!(1, nat.inbound_map_len().await, "should match");
 
     log::debug!("o-original  : {}", oic);
     log::debug!("o-translated: {}", oec);
@@ -461,17 +461,17 @@ async fn test_nat_mapping_timeout_outbound_detects_timeout() -> Result<(), Error
 
     log::debug!("i-original  : {}", iec);
 
-    let result = nat.translate_inbound(&iec);
+    let result = nat.translate_inbound(&iec).await;
     assert!(result.is_err(), "should drop");
-    assert_eq!(0, nat.outbound_map.len(), "should match");
-    assert_eq!(0, nat.inbound_map.len(), "should match");
+    assert_eq!(0, nat.outbound_map_len().await, "should match");
+    assert_eq!(0, nat.inbound_map_len().await, "should match");
 
     Ok(())
 }
 
-#[test]
-fn test_nat1to1_bahavior_one_mapping() -> Result<(), Error> {
-    let mut nat = NetworkAddressTranslator::new(NatConfig {
+#[tokio::test]
+async fn test_nat1to1_bahavior_one_mapping() -> Result<(), Error> {
+    let nat = NetworkAddressTranslator::new(NatConfig {
         nat_type: NATType {
             mode: NATMode::NAT1To1,
             ..Default::default()
@@ -486,9 +486,9 @@ fn test_nat1to1_bahavior_one_mapping() -> Result<(), Error> {
 
     let oic = ChunkUDP::new(src, dst);
 
-    let oec = nat.translate_outbound(&oic)?.unwrap();
-    assert_eq!(0, nat.outbound_map.len(), "should match");
-    assert_eq!(0, nat.inbound_map.len(), "should match");
+    let oec = nat.translate_outbound(&oic).await?.unwrap();
+    assert_eq!(0, nat.outbound_map_len().await, "should match");
+    assert_eq!(0, nat.inbound_map_len().await, "should match");
 
     log::debug!("o-original  : {}", oic);
     log::debug!("o-translated: {}", oec);
@@ -506,7 +506,7 @@ fn test_nat1to1_bahavior_one_mapping() -> Result<(), Error> {
 
     log::debug!("i-original  : {}", iec);
 
-    let iic = nat.translate_inbound(&iec)?.unwrap();
+    let iic = nat.translate_inbound(&iec).await?.unwrap();
 
     log::debug!("i-translated: {}", iic);
 
@@ -515,9 +515,9 @@ fn test_nat1to1_bahavior_one_mapping() -> Result<(), Error> {
     Ok(())
 }
 
-#[test]
-fn test_nat1to1_bahavior_more_mapping() -> Result<(), Error> {
-    let mut nat = NetworkAddressTranslator::new(NatConfig {
+#[tokio::test]
+async fn test_nat1to1_bahavior_more_mapping() -> Result<(), Error> {
+    let nat = NetworkAddressTranslator::new(NatConfig {
         nat_type: NATType {
             mode: NATMode::NAT1To1,
             ..Default::default()
@@ -534,7 +534,7 @@ fn test_nat1to1_bahavior_more_mapping() -> Result<(), Error> {
         SocketAddr::from_str("5.6.7.8:5678")?,
     );
 
-    let after = nat.translate_outbound(&before)?.unwrap();
+    let after = nat.translate_outbound(&before).await?.unwrap();
     assert_eq!(
         "1.2.3.4:1234",
         after.source_addr().to_string(),
@@ -546,7 +546,7 @@ fn test_nat1to1_bahavior_more_mapping() -> Result<(), Error> {
         SocketAddr::from_str("5.6.7.8:5678")?,
     );
 
-    let after = nat.translate_outbound(&before)?.unwrap();
+    let after = nat.translate_outbound(&before).await?.unwrap();
     assert_eq!(
         "1.2.3.5:1234",
         after.source_addr().to_string(),
@@ -560,7 +560,7 @@ fn test_nat1to1_bahavior_more_mapping() -> Result<(), Error> {
         SocketAddr::from_str(&format!("{}:{}", DEMO_IP, 2525))?,
     );
 
-    let after = nat.translate_inbound(&before)?.unwrap();
+    let after = nat.translate_inbound(&before).await?.unwrap();
     assert_eq!(
         "10.0.0.1:2525",
         after.destination_addr().to_string(),
@@ -572,7 +572,7 @@ fn test_nat1to1_bahavior_more_mapping() -> Result<(), Error> {
         SocketAddr::from_str("1.2.3.5:9847")?,
     );
 
-    let after = nat.translate_inbound(&before)?.unwrap();
+    let after = nat.translate_inbound(&before).await?.unwrap();
     assert_eq!(
         "10.0.0.2:9847",
         after.destination_addr().to_string(),
@@ -582,8 +582,8 @@ fn test_nat1to1_bahavior_more_mapping() -> Result<(), Error> {
     Ok(())
 }
 
-#[test]
-fn test_nat1to1_bahavior_failure() -> Result<(), Error> {
+#[tokio::test]
+async fn test_nat1to1_bahavior_failure() -> Result<(), Error> {
     // 1:1 NAT requires more than one mapping
     let result = NetworkAddressTranslator::new(NatConfig {
         nat_type: NATType {
@@ -607,7 +607,7 @@ fn test_nat1to1_bahavior_failure() -> Result<(), Error> {
     assert!(result.is_err(), "should fail");
 
     // drop outbound or inbound chunk with no route in 1:1 NAT
-    let mut nat = NetworkAddressTranslator::new(NatConfig {
+    let nat = NetworkAddressTranslator::new(NatConfig {
         nat_type: NATType {
             mode: NATMode::NAT1To1,
             ..Default::default()
@@ -622,7 +622,7 @@ fn test_nat1to1_bahavior_failure() -> Result<(), Error> {
         SocketAddr::from_str("5.6.7.8:5678")?,
     );
 
-    let after = nat.translate_outbound(&before)?;
+    let after = nat.translate_outbound(&before).await?;
     assert!(after.is_none(), "should be nil");
 
     let before = ChunkUDP::new(
@@ -630,7 +630,7 @@ fn test_nat1to1_bahavior_failure() -> Result<(), Error> {
         SocketAddr::from_str("10.0.0.2:1234")?, // no local mapping for this
     );
 
-    let result = nat.translate_inbound(&before);
+    let result = nat.translate_inbound(&before).await;
     assert!(result.is_err(), "should fail");
 
     Ok(())

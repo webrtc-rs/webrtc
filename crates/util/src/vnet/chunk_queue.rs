@@ -6,8 +6,9 @@ use super::chunk::*;
 use std::collections::VecDeque;
 use tokio::sync::RwLock;
 
+#[derive(Default)]
 pub(crate) struct ChunkQueue {
-    chunks: RwLock<VecDeque<Box<dyn Chunk>>>,
+    chunks: RwLock<VecDeque<Box<dyn Chunk + Send + Sync>>>,
     max_size: usize, // 0 or negative value: unlimited
 }
 
@@ -19,7 +20,7 @@ impl ChunkQueue {
         }
     }
 
-    pub(crate) async fn push(&self, c: Box<dyn Chunk>) -> bool {
+    pub(crate) async fn push(&self, c: Box<dyn Chunk + Send + Sync>) -> bool {
         let mut chunks = self.chunks.write().await;
 
         if self.max_size > 0 && chunks.len() >= self.max_size {
@@ -30,12 +31,12 @@ impl ChunkQueue {
         }
     }
 
-    pub(crate) async fn pop(&self) -> Option<Box<dyn Chunk>> {
+    pub(crate) async fn pop(&self) -> Option<Box<dyn Chunk + Send + Sync>> {
         let mut chunks = self.chunks.write().await;
         chunks.pop_front()
     }
 
-    pub(crate) async fn peek(&self) -> Option<Box<dyn Chunk>> {
+    pub(crate) async fn peek(&self) -> Option<Box<dyn Chunk + Send + Sync>> {
         let chunks = self.chunks.write().await;
         if let Some(chunk) = chunks.front() {
             Some(chunk.clone_to())

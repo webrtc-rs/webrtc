@@ -9,7 +9,10 @@ use crate::vnet::net::UDP_STR;
 use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
 use std::ops::Add;
+use std::sync::atomic::{AtomicU16, Ordering};
+use std::sync::Arc;
 use std::time::SystemTime;
+use tokio::sync::Mutex;
 use tokio::time::Duration;
 
 const DEFAULT_NAT_MAPPING_LIFE_TIME: Duration = Duration::from_secs(30);
@@ -75,23 +78,23 @@ pub(crate) struct NatConfig {
 
 #[derive(Debug, Clone)]
 pub(crate) struct Mapping {
-    proto: String,            // "udp" or "tcp"
-    local: String,            // "<local-ip>:<local-port>"
-    mapped: String,           // "<mapped-ip>:<mapped-port>"
-    bound: String,            // key: "[<remote-ip>[:<remote-port>]]"
-    filters: HashSet<String>, // key: "[<remote-ip>[:<remote-port>]]"
-    expires: SystemTime,      // time to expire
+    proto: String,                        // "udp" or "tcp"
+    local: String,                        // "<local-ip>:<local-port>"
+    mapped: String,                       // "<mapped-ip>:<mapped-port>"
+    bound: String,                        // key: "[<remote-ip>[:<remote-port>]]"
+    filters: Arc<Mutex<HashSet<String>>>, // key: "[<remote-ip>[:<remote-port>]]"
+    expires: Arc<Mutex<SystemTime>>,      // time to expire
 }
 
 impl Default for Mapping {
     fn default() -> Self {
         Mapping {
-            proto: String::new(),       // "udp" or "tcp"
-            local: String::new(),       // "<local-ip>:<local-port>"
-            mapped: String::new(),      // "<mapped-ip>:<mapped-port>"
-            bound: String::new(),       // key: "[<remote-ip>[:<remote-port>]]"
-            filters: HashSet::new(),    // key: "[<remote-ip>[:<remote-port>]]"
-            expires: SystemTime::now(), // time to expire
+            proto: String::new(),                             // "udp" or "tcp"
+            local: String::new(),                             // "<local-ip>:<local-port>"
+            mapped: String::new(),                            // "<mapped-ip>:<mapped-port>"
+            bound: String::new(), // key: "[<remote-ip>[:<remote-port>]]"
+            filters: Arc::new(Mutex::new(HashSet::new())), // key: "[<remote-ip>[:<remote-port>]]"
+            expires: Arc::new(Mutex::new(SystemTime::now())), // time to expire
         }
     }
 }
@@ -100,12 +103,11 @@ impl Default for Mapping {
 pub(crate) struct NetworkAddressTranslator {
     name: String,
     nat_type: NATType,
-    mapped_ips: Vec<IpAddr>,                // mapped IPv4
+    mapped_ips: Vec<IpAddr>,                                 // mapped IPv4
     local_ips: Vec<IpAddr>, // local IPv4, required only when the mode is NATModeNAT1To1
-    outbound_map: HashMap<String, Mapping>, // key: "<proto>:<local-ip>:<local-port>[:remote-ip[:remote-port]]
-    inbound_map: HashMap<String, Mapping>,  // key: "<proto>:<mapped-ip>:<mapped-port>"
-    udp_port_counter: u16,
-    //mutex          sync.RWMutex
+    outbound_map: Arc<Mutex<HashMap<String, Arc<Mapping>>>>, // key: "<proto>:<local-ip>:<local-port>[:remote-ip[:remote-port]]
+    inbound_map: Arc<Mutex<HashMap<String, Arc<Mapping>>>>, // key: "<proto>:<mapped-ip>:<mapped-port>"
+    udp_port_counter: Arc<AtomicU16>,
 }
 
 impl NetworkAddressTranslator {
@@ -138,9 +140,9 @@ impl NetworkAddressTranslator {
             nat_type,
             mapped_ips: config.mapped_ips,
             local_ips: config.local_ips,
-            outbound_map: HashMap::new(),
-            inbound_map: HashMap::new(),
-            udp_port_counter: 0,
+            outbound_map: Arc::new(Mutex::new(HashMap::new())),
+            inbound_map: Arc::new(Mutex::new(HashMap::new())),
+            udp_port_counter: Arc::new(AtomicU16::new(0)),
         })
     }
 
@@ -162,13 +164,10 @@ impl NetworkAddressTranslator {
         None
     }
 
-    pub(crate) fn translate_outbound(
-        &mut self,
-        from: &dyn Chunk,
-    ) -> Result<Option<Box<dyn Chunk>>, Error> {
-        //TODO: n.mutex.Lock()
-        //defer n.mutex.Unlock()
-
+    pub(crate) async fn translate_outbound(
+        &self,
+        from: &(dyn Chunk + Send + Sync),
+    ) -> Result<Option<Box<dyn Chunk + Send + Sync>>, Error> {
         let mut to = from.clone_to();
 
         if from.network() == UDP_STR {
@@ -210,40 +209,47 @@ impl NetworkAddressTranslator {
                 let o_key = format!("udp:{}:{}", from.source_addr(), bound);
                 let name = self.name.clone();
 
-                let m_mapped = if let Some(m) = self.find_outbound_mapping(&o_key) {
-                    if !m.filters.contains(&filter_key) {
+                let m_mapped = if let Some(m) = self.find_outbound_mapping(&o_key).await {
+                    let mut filters = m.filters.lock().await;
+                    if !filters.contains(&filter_key) {
                         log::debug!(
                             "[{}] permit access from {} to {}",
                             name,
                             filter_key,
                             m.mapped
                         );
-                        m.filters.insert(filter_key);
+                        filters.insert(filter_key);
                     }
                     m.mapped.clone()
                 } else {
                     // Create a new Mapping
-                    let mapped_port = 0xC000 + self.udp_port_counter;
-                    if self.udp_port_counter == 0xFFFF - 0xC000 {
-                        self.udp_port_counter = 0;
+                    let udp_port_counter = self.udp_port_counter.load(Ordering::SeqCst);
+                    let mapped_port = 0xC000 + udp_port_counter;
+                    if udp_port_counter == 0xFFFF - 0xC000 {
+                        self.udp_port_counter.store(0, Ordering::SeqCst);
                     } else {
-                        self.udp_port_counter += 1;
+                        self.udp_port_counter.fetch_add(1, Ordering::SeqCst);
                     }
 
-                    let mut m = if let Some(mapped_ips_first) = self.mapped_ips.first() {
+                    let m = if let Some(mapped_ips_first) = self.mapped_ips.first() {
                         Mapping {
                             proto: "udp".to_owned(),
                             local: from.source_addr().to_string(),
                             bound,
                             mapped: format!("{}:{}", mapped_ips_first, mapped_port),
-                            filters: HashSet::new(),
-                            expires: SystemTime::now().add(self.nat_type.mapping_life_time),
+                            filters: Arc::new(Mutex::new(HashSet::new())),
+                            expires: Arc::new(Mutex::new(
+                                SystemTime::now().add(self.nat_type.mapping_life_time),
+                            )),
                         }
                     } else {
                         return Err(ERR_NAT_REQURIES_MAPPING.to_owned());
                     };
 
-                    self.outbound_map.insert(o_key.clone(), m.clone());
+                    {
+                        let mut outbound_map = self.outbound_map.lock().await;
+                        outbound_map.insert(o_key.clone(), Arc::new(m.clone()));
+                    }
 
                     let i_key = format!("udp:{}", m.mapped);
 
@@ -260,10 +266,16 @@ impl NetworkAddressTranslator {
                         m.mapped
                     );
 
-                    m.filters.insert(filter_key);
+                    {
+                        let mut filters = m.filters.lock().await;
+                        filters.insert(filter_key);
+                    }
 
                     let m_mapped = m.mapped.clone();
-                    self.inbound_map.insert(i_key, m);
+                    {
+                        let mut inbound_map = self.inbound_map.lock().await;
+                        inbound_map.insert(i_key, Arc::new(m));
+                    }
                     m_mapped
                 };
 
@@ -283,10 +295,10 @@ impl NetworkAddressTranslator {
         Err(ERR_NON_UDP_TRANSLATION_NOT_SUPPORTED.to_owned())
     }
 
-    pub(crate) fn translate_inbound(
-        &mut self,
-        from: &dyn Chunk,
-    ) -> Result<Option<Box<dyn Chunk>>, Error> {
+    pub(crate) async fn translate_inbound(
+        &self,
+        from: &(dyn Chunk + Send + Sync),
+    ) -> Result<Option<Box<dyn Chunk + Send + Sync>>, Error> {
         //TODO: n.mutex.Lock()
         //defer n.mutex.Unlock()
 
@@ -318,12 +330,15 @@ impl NetworkAddressTranslator {
                 };
 
                 let i_key = format!("udp:{}", from.destination_addr());
-                if let Some(m) = self.find_inbound_mapping(&i_key) {
-                    if !m.filters.contains(&filter_key) {
-                        return Err(Error::new(format!(
-                            "drop {} as the remote {} {}",
-                            from, filter_key, *ERR_HAS_NO_PERMISSION
-                        )));
+                if let Some(m) = self.find_inbound_mapping(&i_key).await {
+                    {
+                        let filters = m.filters.lock().await;
+                        if !filters.contains(&filter_key) {
+                            return Err(Error::new(format!(
+                                "drop {} as the remote {} {}",
+                                from, filter_key, *ERR_HAS_NO_PERMISSION
+                            )));
+                        }
                     }
 
                     // See RFC 4847 Section 4.3.  Mapping Refresh
@@ -357,58 +372,92 @@ impl NetworkAddressTranslator {
     }
 
     // caller must hold the mutex
-    pub(crate) fn find_outbound_mapping(&mut self, o_key: &str) -> Option<&mut Mapping> {
+    pub(crate) async fn find_outbound_mapping(&self, o_key: &str) -> Option<Arc<Mapping>> {
         let mapping_life_time = self.nat_type.mapping_life_time;
         let mut expired = false;
-        let (in_key, out_key) = if let Some(m) = self.outbound_map.get_mut(o_key) {
-            let now = SystemTime::now();
+        let (in_key, out_key) = {
+            let outbound_map = self.outbound_map.lock().await;
+            if let Some(m) = outbound_map.get(o_key) {
+                let now = SystemTime::now();
 
-            // check if this Mapping is expired
-            if now.duration_since(m.expires).is_ok() {
-                expired = true;
+                {
+                    let mut expires = m.expires.lock().await;
+                    // check if this Mapping is expired
+                    if now.duration_since(*expires).is_ok() {
+                        expired = true;
+                    } else {
+                        *expires = now.add(mapping_life_time);
+                    }
+                }
+                (
+                    NetworkAddressTranslator::get_inbound_map_key(m),
+                    NetworkAddressTranslator::get_outbound_map_key(m),
+                )
             } else {
-                m.expires = now.add(mapping_life_time);
+                (String::new(), String::new())
             }
-            (
-                NetworkAddressTranslator::get_inbound_map_key(m),
-                NetworkAddressTranslator::get_outbound_map_key(m),
-            )
-        } else {
-            (String::new(), String::new())
         };
 
         if expired {
-            self.inbound_map.remove(&in_key);
-            self.outbound_map.remove(&out_key);
+            {
+                let mut inbound_map = self.inbound_map.lock().await;
+                inbound_map.remove(&in_key);
+            }
+            {
+                let mut outbound_map = self.outbound_map.lock().await;
+                outbound_map.remove(&out_key);
+            }
         }
 
-        self.outbound_map.get_mut(o_key)
+        let outbound_map = self.outbound_map.lock().await;
+        if let Some(m) = outbound_map.get(o_key) {
+            Some(Arc::clone(m))
+        } else {
+            None
+        }
     }
 
     // caller must hold the mutex
-    pub(crate) fn find_inbound_mapping(&mut self, i_key: &str) -> Option<&Mapping> {
+    pub(crate) async fn find_inbound_mapping(&self, i_key: &str) -> Option<Arc<Mapping>> {
         let mut expired = false;
-        let (in_key, out_key) = if let Some(m) = self.inbound_map.get(i_key) {
-            let now = SystemTime::now();
+        let (in_key, out_key) = {
+            let inbound_map = self.inbound_map.lock().await;
+            if let Some(m) = inbound_map.get(i_key) {
+                let now = SystemTime::now();
 
-            // check if this Mapping is expired
-            if now.duration_since(m.expires).is_ok() {
-                expired = true;
+                {
+                    let expires = m.expires.lock().await;
+                    // check if this Mapping is expired
+                    if now.duration_since(*expires).is_ok() {
+                        expired = true;
+                    }
+                }
+                (
+                    NetworkAddressTranslator::get_inbound_map_key(m),
+                    NetworkAddressTranslator::get_outbound_map_key(m),
+                )
+            } else {
+                (String::new(), String::new())
             }
-            (
-                NetworkAddressTranslator::get_inbound_map_key(m),
-                NetworkAddressTranslator::get_outbound_map_key(m),
-            )
-        } else {
-            (String::new(), String::new())
         };
 
         if expired {
-            self.inbound_map.remove(&in_key);
-            self.outbound_map.remove(&out_key);
+            {
+                let mut inbound_map = self.inbound_map.lock().await;
+                inbound_map.remove(&in_key);
+            }
+            {
+                let mut outbound_map = self.outbound_map.lock().await;
+                outbound_map.remove(&out_key);
+            }
         }
 
-        self.inbound_map.get(i_key)
+        let inbound_map = self.inbound_map.lock().await;
+        if let Some(m) = inbound_map.get(i_key) {
+            Some(Arc::clone(m))
+        } else {
+            None
+        }
     }
 
     // caller must hold the mutex
@@ -418,5 +467,15 @@ impl NetworkAddressTranslator {
 
     fn get_inbound_map_key(m: &Mapping) -> String {
         format!("{}:{}", m.proto, m.mapped)
+    }
+
+    async fn inbound_map_len(&self) -> usize {
+        let inbound_map = self.inbound_map.lock().await;
+        inbound_map.len()
+    }
+
+    async fn outbound_map_len(&self) -> usize {
+        let outbound_map = self.outbound_map.lock().await;
+        outbound_map.len()
     }
 }

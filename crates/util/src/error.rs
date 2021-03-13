@@ -168,6 +168,14 @@ impl From<AddrParseError> for Error {
     }
 }
 
+impl From<ipnet::AddrParseError> for Error {
+    fn from(error: ipnet::AddrParseError) -> Self {
+        Error {
+            message: error.to_string(),
+        }
+    }
+}
+
 impl Error {
     pub fn new(message: String) -> Self {
         Error { message }

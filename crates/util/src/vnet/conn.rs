@@ -18,7 +18,7 @@ const MAX_READ_QUEUE_SIZE: usize = 1024;
 // vNet implements this
 #[async_trait]
 pub(crate) trait ConnObserver {
-    async fn write(&self, c: Box<dyn Chunk + Send>) -> Result<(), Error>;
+    async fn write(&self, c: Box<dyn Chunk + Send + Sync>) -> Result<(), Error>;
     fn determine_source_ip(&self, loc_ip: IpAddr, dst_ip: IpAddr) -> Option<IpAddr>;
 }
 
@@ -27,7 +27,7 @@ pub(crate) trait ConnObserver {
 pub(crate) struct UDPConn {
     loc_addr: SocketAddr,
     rem_addr: Mutex<Option<SocketAddr>>,
-    read_ch: Mutex<mpsc::Receiver<Box<dyn Chunk + Send>>>,
+    read_ch: Mutex<mpsc::Receiver<Box<dyn Chunk + Send + Sync>>>,
     obs: Arc<Mutex<Box<dyn ConnObserver + Send + Sync>>>,
 }
 
@@ -35,7 +35,7 @@ impl UDPConn {
     pub(crate) fn new(
         loc_addr: SocketAddr,
         rem_addr: Option<SocketAddr>,
-        read_ch: mpsc::Receiver<Box<dyn Chunk + Send>>,
+        read_ch: mpsc::Receiver<Box<dyn Chunk + Send + Sync>>,
         obs: Arc<Mutex<Box<dyn ConnObserver + Send + Sync>>>,
     ) -> Self {
         UDPConn {
@@ -127,7 +127,7 @@ impl Conn for UDPConn {
         let mut chunk = ChunkUDP::new(src_addr, target);
         chunk.user_data = buf.to_vec();
         let result = {
-            let c: Box<dyn Chunk + Send> = Box::new(chunk);
+            let c: Box<dyn Chunk + Send + Sync> = Box::new(chunk);
             let obs = self.obs.lock().await;
             obs.write(c).await
         };

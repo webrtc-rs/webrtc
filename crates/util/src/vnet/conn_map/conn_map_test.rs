@@ -11,7 +11,7 @@ struct DummyObserver;
 
 #[async_trait]
 impl ConnObserver for DummyObserver {
-    async fn write(&self, _c: Box<dyn Chunk + Send>) -> Result<(), Error> {
+    async fn write(&self, _c: Box<dyn Chunk + Send + Sync>) -> Result<(), Error> {
         Ok(())
     }
 
