@@ -27,4 +27,35 @@ lazy_static! {
     pub static ref ERR_HOSTNAME_EMPTY: Error = Error::new("host name must not be empty".to_owned());
     pub static ref ERR_FAILEDTO_PARSE_IPADDR: Error =
         Error::new("failed to parse IP address".to_owned());
+    pub static ref ERR_NO_INTERFACE: Error = Error::new("no interface is available".to_owned());
+    pub static ref ERR_NOT_FOUND: Error = Error::new("not found".to_owned());
+    pub static ref ERR_UNEXPECTED_NETWORK: Error = Error::new("unexpected network".to_owned());
+    pub static ref ERR_CANT_ASSIGN_REQUESTED_ADDR: Error =
+        Error::new("can't assign requested address".to_owned());
+    pub static ref ERR_UNKNOWN_NETWORK: Error = Error::new("unknown network".to_owned());
+    pub static ref ERR_NO_ROUTER_LINKED: Error = Error::new("no router linked".to_owned());
+    pub static ref ERR_INVALID_PORT_NUMBER: Error = Error::new("invalid port number".to_owned());
+    pub static ref ERR_UNEXPECTED_TYPE_SWITCH_FAILURE: Error =
+        Error::new("unexpected type-switch failure".to_owned());
+    pub static ref ERR_BIND_FAILER_FOR: Error = Error::new("bind failed for".to_owned());
+    pub static ref ERR_END_PORT_LESS_THAN_START: Error =
+        Error::new("end port is less than the start".to_owned());
+    pub static ref ERR_PORT_SPACE_EXHAUSTED: Error = Error::new("port space exhausted".to_owned());
+    pub static ref ERR_VNET_DISABLED: Error = Error::new("vnet is not enabled".to_owned());
+    pub static ref ERR_INVALID_LOCAL_IPIN_STATIC_IPS: Error =
+        Error::new("invalid local IP in StaticIPs".to_owned());
+    pub static ref ERR_LOCAL_IP_BEYOND_STATIC_IPS_SUBSET: Error =
+        Error::new("mapped in StaticIPs is beyond subnet".to_owned());
+    pub static ref ERR_LOCAL_IP_NO_STATICS_IPS_ASSOCIATED: Error =
+        Error::new("all StaticIPs must have associated local IPs".to_owned());
+    pub static ref ERR_ROUTER_ALREADY_STARTED: Error =
+        Error::new("router already started".to_owned());
+    pub static ref ERR_ROUTER_ALREADY_STOPPED: Error =
+        Error::new("router already stopped".to_owned());
+    pub static ref ERR_STATIC_IP_IS_BEYOND_SUBNET: Error =
+        Error::new("static IP is beyond subnet".to_owned());
+    pub static ref ERR_ADDRESS_SPACE_EXHAUSTED: Error =
+        Error::new("address space exhausted".to_owned());
+    pub static ref ERR_NO_IPADDR_ETH0: Error =
+        Error::new("no IP address is assigned for eth0".to_owned());
 }

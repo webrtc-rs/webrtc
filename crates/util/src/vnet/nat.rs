@@ -66,7 +66,7 @@ pub struct NATType {
 }
 
 #[derive(Default, Debug, Clone)]
-struct NatConfig {
+pub(crate) struct NatConfig {
     name: String,
     nat_type: NATType,
     mapped_ips: Vec<IpAddr>, // mapped IPv4
@@ -74,7 +74,7 @@ struct NatConfig {
 }
 
 #[derive(Debug, Clone)]
-struct Mapping {
+pub(crate) struct Mapping {
     proto: String,            // "udp" or "tcp"
     local: String,            // "<local-ip>:<local-port>"
     mapped: String,           // "<mapped-ip>:<mapped-port>"
@@ -97,7 +97,7 @@ impl Default for Mapping {
 }
 
 #[derive(Default, Debug, Clone)]
-struct NetworkAddressTranslator {
+pub(crate) struct NetworkAddressTranslator {
     name: String,
     nat_type: NATType,
     mapped_ips: Vec<IpAddr>,                // mapped IPv4
