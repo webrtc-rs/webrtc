@@ -359,3 +359,279 @@ fn test_nat_mapping_behavior_symmetric_nat_port_dependent_mapping() -> Result<()
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_nat_mapping_timeout_refresh_on_outbound() -> Result<(), Error> {
+    let mut nat = NetworkAddressTranslator::new(NatConfig {
+        nat_type: NATType {
+            mapping_behavior: EndpointDependencyType::EndpointIndependent,
+            filtering_behavior: EndpointDependencyType::EndpointIndependent,
+            hair_pining: false,
+            mapping_life_time: Duration::from_millis(100),
+            ..Default::default()
+        },
+        mapped_ips: vec![IpAddr::from_str(DEMO_IP)?],
+        ..Default::default()
+    })?;
+
+    let src = SocketAddr::from_str("192.168.0.2:1234")?;
+    let dst = SocketAddr::from_str("5.6.7.8:5678")?;
+
+    let oic = ChunkUDP::new(src, dst);
+
+    let oec = nat.translate_outbound(&oic)?.unwrap();
+    assert_eq!(1, nat.outbound_map.len(), "should match");
+    assert_eq!(1, nat.inbound_map.len(), "should match");
+
+    log::debug!("o-original  : {}", oic);
+    log::debug!("o-translated: {}", oec);
+
+    // record mapped addr
+    let mapped = oec.source_addr().to_string();
+
+    tokio::time::sleep(Duration::from_millis(75)).await;
+
+    // refresh
+    let oec = nat.translate_outbound(&oic)?.unwrap();
+    assert_eq!(1, nat.outbound_map.len(), "should match");
+    assert_eq!(1, nat.inbound_map.len(), "should match");
+
+    log::debug!("o-original  : {}", oic);
+    log::debug!("o-translated: {}", oec);
+
+    assert_eq!(
+        mapped,
+        oec.source_addr().to_string(),
+        "mapped addr should match"
+    );
+
+    // sleep long enough for the mapping to expire
+    tokio::time::sleep(Duration::from_millis(125)).await;
+
+    // refresh after expiration
+    let oec = nat.translate_outbound(&oic)?.unwrap();
+    assert_eq!(1, nat.outbound_map.len(), "should match");
+    assert_eq!(1, nat.inbound_map.len(), "should match");
+
+    log::debug!("o-original  : {}", oic);
+    log::debug!("o-translated: {}", oec);
+
+    assert_ne!(
+        mapped,
+        oec.source_addr().to_string(),
+        "mapped addr should not match"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_nat_mapping_timeout_outbound_detects_timeout() -> Result<(), Error> {
+    let mut nat = NetworkAddressTranslator::new(NatConfig {
+        nat_type: NATType {
+            mapping_behavior: EndpointDependencyType::EndpointIndependent,
+            filtering_behavior: EndpointDependencyType::EndpointIndependent,
+            hair_pining: false,
+            mapping_life_time: Duration::from_millis(100),
+            ..Default::default()
+        },
+        mapped_ips: vec![IpAddr::from_str(DEMO_IP)?],
+        ..Default::default()
+    })?;
+
+    let src = SocketAddr::from_str("192.168.0.2:1234")?;
+    let dst = SocketAddr::from_str("5.6.7.8:5678")?;
+
+    let oic = ChunkUDP::new(src, dst);
+
+    let oec = nat.translate_outbound(&oic)?.unwrap();
+    assert_eq!(1, nat.outbound_map.len(), "should match");
+    assert_eq!(1, nat.inbound_map.len(), "should match");
+
+    log::debug!("o-original  : {}", oic);
+    log::debug!("o-translated: {}", oec);
+
+    // sleep long enough for the mapping to expire
+    tokio::time::sleep(Duration::from_millis(125)).await;
+
+    let iec = ChunkUDP::new(
+        SocketAddr::new(dst.ip(), dst.port()),
+        SocketAddr::new(oec.source_addr().ip(), oec.source_addr().port()),
+    );
+
+    log::debug!("i-original  : {}", iec);
+
+    let result = nat.translate_inbound(&iec);
+    assert!(result.is_err(), "should drop");
+    assert_eq!(0, nat.outbound_map.len(), "should match");
+    assert_eq!(0, nat.inbound_map.len(), "should match");
+
+    Ok(())
+}
+
+#[test]
+fn test_nat1to1_bahavior_one_mapping() -> Result<(), Error> {
+    let mut nat = NetworkAddressTranslator::new(NatConfig {
+        nat_type: NATType {
+            mode: NATMode::NAT1To1,
+            ..Default::default()
+        },
+        mapped_ips: vec![IpAddr::from_str(DEMO_IP)?],
+        local_ips: vec![IpAddr::from_str("10.0.0.1")?],
+        ..Default::default()
+    })?;
+
+    let src = SocketAddr::from_str("10.0.0.1:1234")?;
+    let dst = SocketAddr::from_str("5.6.7.8:5678")?;
+
+    let oic = ChunkUDP::new(src, dst);
+
+    let oec = nat.translate_outbound(&oic)?.unwrap();
+    assert_eq!(0, nat.outbound_map.len(), "should match");
+    assert_eq!(0, nat.inbound_map.len(), "should match");
+
+    log::debug!("o-original  : {}", oic);
+    log::debug!("o-translated: {}", oec);
+
+    assert_eq!(
+        "1.2.3.4:1234",
+        oec.source_addr().to_string(),
+        "should match"
+    );
+
+    let iec = ChunkUDP::new(
+        SocketAddr::new(dst.ip(), dst.port()),
+        SocketAddr::new(oec.source_addr().ip(), oec.source_addr().port()),
+    );
+
+    log::debug!("i-original  : {}", iec);
+
+    let iic = nat.translate_inbound(&iec)?.unwrap();
+
+    log::debug!("i-translated: {}", iic);
+
+    assert_eq!(oic.source_addr(), iic.destination_addr(), "should match");
+
+    Ok(())
+}
+
+#[test]
+fn test_nat1to1_bahavior_more_mapping() -> Result<(), Error> {
+    let mut nat = NetworkAddressTranslator::new(NatConfig {
+        nat_type: NATType {
+            mode: NATMode::NAT1To1,
+            ..Default::default()
+        },
+        mapped_ips: vec![IpAddr::from_str(DEMO_IP)?, IpAddr::from_str("1.2.3.5")?],
+        local_ips: vec![IpAddr::from_str("10.0.0.1")?, IpAddr::from_str("10.0.0.2")?],
+        ..Default::default()
+    })?;
+
+    // outbound translation
+
+    let before = ChunkUDP::new(
+        SocketAddr::from_str("10.0.0.1:1234")?,
+        SocketAddr::from_str("5.6.7.8:5678")?,
+    );
+
+    let after = nat.translate_outbound(&before)?.unwrap();
+    assert_eq!(
+        "1.2.3.4:1234",
+        after.source_addr().to_string(),
+        "should match"
+    );
+
+    let before = ChunkUDP::new(
+        SocketAddr::from_str("10.0.0.2:1234")?,
+        SocketAddr::from_str("5.6.7.8:5678")?,
+    );
+
+    let after = nat.translate_outbound(&before)?.unwrap();
+    assert_eq!(
+        "1.2.3.5:1234",
+        after.source_addr().to_string(),
+        "should match"
+    );
+
+    // inbound translation
+
+    let before = ChunkUDP::new(
+        SocketAddr::from_str("5.6.7.8:5678")?,
+        SocketAddr::from_str(&format!("{}:{}", DEMO_IP, 2525))?,
+    );
+
+    let after = nat.translate_inbound(&before)?.unwrap();
+    assert_eq!(
+        "10.0.0.1:2525",
+        after.destination_addr().to_string(),
+        "should match"
+    );
+
+    let before = ChunkUDP::new(
+        SocketAddr::from_str("5.6.7.8:5678")?,
+        SocketAddr::from_str("1.2.3.5:9847")?,
+    );
+
+    let after = nat.translate_inbound(&before)?.unwrap();
+    assert_eq!(
+        "10.0.0.2:9847",
+        after.destination_addr().to_string(),
+        "should match"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_nat1to1_bahavior_failure() -> Result<(), Error> {
+    // 1:1 NAT requires more than one mapping
+    let result = NetworkAddressTranslator::new(NatConfig {
+        nat_type: NATType {
+            mode: NATMode::NAT1To1,
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+    assert!(result.is_err(), "should fail");
+
+    // 1:1 NAT requires the same number of mappedIPs and localIPs
+    let result = NetworkAddressTranslator::new(NatConfig {
+        nat_type: NATType {
+            mode: NATMode::NAT1To1,
+            ..Default::default()
+        },
+        mapped_ips: vec![IpAddr::from_str(DEMO_IP)?, IpAddr::from_str("1.2.3.5")?],
+        local_ips: vec![IpAddr::from_str("10.0.0.1")?],
+        ..Default::default()
+    });
+    assert!(result.is_err(), "should fail");
+
+    // drop outbound or inbound chunk with no route in 1:1 NAT
+    let mut nat = NetworkAddressTranslator::new(NatConfig {
+        nat_type: NATType {
+            mode: NATMode::NAT1To1,
+            ..Default::default()
+        },
+        mapped_ips: vec![IpAddr::from_str(DEMO_IP)?],
+        local_ips: vec![IpAddr::from_str("10.0.0.1")?],
+        ..Default::default()
+    })?;
+
+    let before = ChunkUDP::new(
+        SocketAddr::from_str("10.0.0.2:1234")?, // no external mapping for this
+        SocketAddr::from_str("5.6.7.8:5678")?,
+    );
+
+    let after = nat.translate_outbound(&before)?;
+    assert!(after.is_none(), "should be nil");
+
+    let before = ChunkUDP::new(
+        SocketAddr::from_str("5.6.7.8:5678")?,
+        SocketAddr::from_str("10.0.0.2:1234")?, // no local mapping for this
+    );
+
+    let result = nat.translate_inbound(&before);
+    assert!(result.is_err(), "should fail");
+
+    Ok(())
+}
