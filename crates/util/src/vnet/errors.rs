@@ -24,4 +24,7 @@ lazy_static! {
         Error::new("no associated local address".to_owned());
     pub static ref ERR_NO_NAT_BINDING_FOUND: Error = Error::new("no NAT binding found".to_owned());
     pub static ref ERR_HAS_NO_PERMISSION: Error = Error::new("has no permission".to_owned());
+    pub static ref ERR_HOSTNAME_EMPTY: Error = Error::new("host name must not be empty".to_owned());
+    pub static ref ERR_FAILEDTO_PARSE_IPADDR: Error =
+        Error::new("failed to parse IP address".to_owned());
 }

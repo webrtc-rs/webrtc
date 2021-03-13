@@ -6,3 +6,4 @@ pub(crate) mod errors;
 pub mod interface;
 pub mod nat;
 pub mod net;
+pub(crate) mod resolver;
