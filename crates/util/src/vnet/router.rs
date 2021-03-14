@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod router_test;
+
 use crate::vnet::chunk::*;
 use crate::vnet::chunk_queue::*;
 use crate::vnet::errors::*;
@@ -12,10 +15,12 @@ use ipnet::*;
 use std::collections::HashMap;
 use std::future::Future;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::ops::{Add, Sub};
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::SystemTime;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::Duration;
 
@@ -61,39 +66,41 @@ pub trait NIC {
     fn get_interface(&self, if_name: &str) -> Option<&Interface>;
     async fn on_inbound_chunk(&self, c: &(dyn Chunk + Send + Sync));
     fn get_static_ips(&self) -> &[IpAddr];
-    async fn set_parent(&mut self, r: Arc<Mutex<Router>>) -> Result<(), Error>;
+    async fn set_parent(&self, r: Arc<Mutex<Router>>) -> Result<(), Error>;
 }
 
 // ChunkFilter is a handler users can add to filter chunks.
 // If the filter returns false, the packet will be dropped.
-pub type ChunkFilterFn = fn(c: &dyn Chunk) -> bool;
+pub type ChunkFilterFn = fn(c: &(dyn Chunk + Send + Sync)) -> bool;
+
+#[derive(Default)]
+pub struct RouterInternal {
+    nat_type: Option<NATType>,                                // read-only
+    ipv4net: IpNet,                                           // read-only
+    parent: Option<Arc<Mutex<Router>>>,                       // read-only
+    nat: NetworkAddressTranslator,                            // read-only
+    nics: HashMap<String, Arc<Mutex<dyn NIC + Send + Sync>>>, // read-only
+    chunk_filters: Vec<ChunkFilterFn>,                        // requires mutex [x]
+    last_id: u8, // requires mutex [x], used to assign the last digit of IPv4 address
+}
 
 // Router ...
 #[derive(Default)]
 pub struct Router {
-    name: String,                               // read-only
-    interfaces: Vec<Interface>,                 // read-only
-    ipv4net: IpNet,                             // read-only
-    static_ips: Vec<IpAddr>,                    // read-only
-    static_local_ips: HashMap<String, IpAddr>,  // read-only,
-    last_id: u8, // requires mutex [x], used to assign the last digit of IPv4 address
-    queue: ChunkQueue, // read-only
-    parent: Option<Arc<Mutex<Router>>>, // read-only
-    children: Vec<Arc<Mutex<Router>>>, // read-only
-    nat_type: Option<NATType>, // read-only
-    nat: NetworkAddressTranslator, // read-only
-    nics: HashMap<String, Arc<Mutex<dyn NIC>>>, // read-only
-    done: Option<mpsc::Sender<()>>, // requires mutex [x]
-    resolver: Arc<Mutex<Resolver>>, // read-only
-    chunk_filters: Vec<ChunkFilterFn>, // requires mutex [x]
-    min_delay: Duration, // requires mutex [x]
-    max_jitter: Duration, // requires mutex [x]
-    push_ch: Option<mpsc::Sender<()>>, // writer requires mutex
+    name: String,                              // read-only
+    ipv4net: IpNet,                            // read-only
+    min_delay: Duration,                       // requires mutex [x]
+    max_jitter: Duration,                      // requires mutex [x]
+    queue: Arc<ChunkQueue>,                    // read-only
+    interfaces: Vec<Interface>,                // read-only
+    static_ips: Vec<IpAddr>,                   // read-only
+    static_local_ips: HashMap<String, IpAddr>, // read-only,
+    children: Vec<Arc<Mutex<Router>>>,         // read-only
+    done: Option<mpsc::Sender<()>>,            // requires mutex [x]
+    resolver: Arc<Mutex<Resolver>>,            // read-only
+    push_ch: Option<mpsc::Sender<()>>,         // writer requires mutex
+    router_internal: Arc<Mutex<RouterInternal>>,
 }
-
-//TODO: remove unsafe
-unsafe impl Send for Router {}
-unsafe impl Sync for Router {}
 
 #[async_trait]
 impl NIC for Router {
@@ -107,17 +114,20 @@ impl NIC for Router {
     }
 
     async fn on_inbound_chunk(&self, c: &(dyn Chunk + Send + Sync)) {
-        let from_parent: Box<dyn Chunk + Send + Sync> = match self.nat.translate_inbound(c).await {
-            Ok(from) => {
-                if let Some(from) = from {
-                    from
-                } else {
+        let from_parent: Box<dyn Chunk + Send + Sync> = {
+            let router_internal = self.router_internal.lock().await;
+            match router_internal.nat.translate_inbound(c).await {
+                Ok(from) => {
+                    if let Some(from) = from {
+                        from
+                    } else {
+                        return;
+                    }
+                }
+                Err(err) => {
+                    log::warn!("[{}] {}", self.name, err);
                     return;
                 }
-            }
-            Err(err) => {
-                log::warn!("[{}] {}", self.name, err);
-                return;
             }
         };
 
@@ -129,8 +139,11 @@ impl NIC for Router {
     }
 
     // caller must hold the mutex
-    async fn set_parent(&mut self, parent: Arc<Mutex<Router>>) -> Result<(), Error> {
-        self.parent = Some(Arc::clone(&parent));
+    async fn set_parent(&self, parent: Arc<Mutex<Router>>) -> Result<(), Error> {
+        {
+            let mut router_internal = self.router_internal.lock().await;
+            router_internal.parent = Some(Arc::clone(&parent));
+        }
 
         let parent_resolver = {
             let p = parent.lock().await;
@@ -162,23 +175,26 @@ impl NIC for Router {
         }
 
         // Set up NAT here
-        if self.nat_type.is_none() {
-            self.nat_type = Some(NATType {
-                mapping_behavior: EndpointDependencyType::EndpointIndependent,
-                filtering_behavior: EndpointDependencyType::EndpointAddrPortDependent,
-                hair_pining: false,
-                port_preservation: false,
-                mapping_life_time: Duration::from_secs(30),
-                ..Default::default()
-            });
-        }
+        {
+            let mut router_internal = self.router_internal.lock().await;
+            if router_internal.nat_type.is_none() {
+                router_internal.nat_type = Some(NATType {
+                    mapping_behavior: EndpointDependencyType::EndpointIndependent,
+                    filtering_behavior: EndpointDependencyType::EndpointAddrPortDependent,
+                    hair_pining: false,
+                    port_preservation: false,
+                    mapping_life_time: Duration::from_secs(30),
+                    ..Default::default()
+                });
+            }
 
-        self.nat = NetworkAddressTranslator::new(NatConfig {
-            name: self.name.clone(),
-            nat_type: self.nat_type.unwrap(),
-            mapped_ips,
-            local_ips,
-        })?;
+            router_internal.nat = NetworkAddressTranslator::new(NatConfig {
+                name: self.name.clone(),
+                nat_type: router_internal.nat_type.unwrap(),
+                mapped_ips,
+                local_ips,
+            })?;
+        }
 
         Ok(())
     }
@@ -248,16 +264,22 @@ impl Router {
             return Err(ERR_LOCAL_IP_NO_STATICS_IPS_ASSOCIATED.to_owned());
         }
 
+        let router_internal = RouterInternal {
+            nat_type: config.nat_type,
+            ipv4net,
+            nics: HashMap::new(),
+            ..Default::default()
+        };
+
         Ok(Router {
             name,
-            interfaces: vec![lo0, eth0],
             ipv4net,
+            interfaces: vec![lo0, eth0],
             static_ips,
             static_local_ips,
-            queue: ChunkQueue::new(queue_size),
-            nat_type: config.nat_type,
-            nics: HashMap::new(),
             resolver,
+            router_internal: Arc::new(Mutex::new(router_internal)),
+            queue: Arc::new(ChunkQueue::new(queue_size)),
             min_delay: config.min_delay,
             max_jitter: config.max_jitter,
             ..Default::default()
@@ -280,8 +302,24 @@ impl Router {
         self.done = Some(done_tx);
         self.push_ch = Some(push_ch_tx);
 
+        let router_internal = Arc::clone(&self.router_internal);
+        let queue = Arc::clone(&self.queue);
+        let max_jitter = self.max_jitter;
+        let min_delay = self.min_delay;
+        let name = self.name.clone();
+        let ipv4net = self.ipv4net;
+
         tokio::spawn(async move {
-            while let Ok(d) = Router::process_chunks() {
+            while let Ok(d) = Router::process_chunks(
+                &name,
+                ipv4net,
+                max_jitter,
+                min_delay,
+                &queue,
+                &router_internal,
+            )
+            .await
+            {
                 if d == Duration::from_secs(0) {
                     tokio::select! {
                      _ = push_ch_rx.recv() =>{},
@@ -350,8 +388,166 @@ impl Router {
         })
     }
 
+    // AddRouter adds a chile Router.
+    pub async fn add_router(&mut self, router: Arc<Mutex<Router>>) -> Result<(), Error> {
+        // Router is a NIC. Add it as a NIC so that packets are routed to this child
+        // router.
+        let router2 = Arc::clone(&router);
+
+        {
+            let mut router_internal = self.router_internal.lock().await;
+            router_internal
+                .add_nic(router as Arc<Mutex<dyn NIC + Send + Sync>>)
+                .await?;
+        }
+
+        //TODO: router.set_parent(r)?; MOVE it outside
+
+        self.children.push(router2);
+
+        Ok(())
+    }
+
+    // AddNet ...
+    pub async fn add_net(&mut self, nic: Arc<Mutex<dyn NIC + Send + Sync>>) -> Result<(), Error> {
+        let mut router_internal = self.router_internal.lock().await;
+        router_internal.add_nic(nic).await
+    }
+
+    // AddHost adds a mapping of hostname and an IP address to the local resolver.
+    pub async fn add_host(&mut self, host_name: String, ip_addr: String) -> Result<(), Error> {
+        let mut resolver = self.resolver.lock().await;
+        resolver.add_host(host_name, ip_addr)
+    }
+
+    // AddChunkFilter adds a filter for chunks traversing this router.
+    // You may add more than one filter. The filters are called in the order of this method call.
+    // If a chunk is dropped by a filter, subsequent filter will not receive the chunk.
+    pub async fn add_chunk_filter(&self, filter: ChunkFilterFn) {
+        let mut router_internal = self.router_internal.lock().await;
+        router_internal.chunk_filters.push(filter);
+    }
+
+    async fn push(&self, mut c: Box<dyn Chunk + Send + Sync>) {
+        log::debug!("[{}] route {}", self.name, c);
+        if self.done.is_some() {
+            c.set_timestamp();
+
+            if self.queue.push(c).await {
+                if let Some(push_ch) = &self.push_ch {
+                    let _ = push_ch.try_send(());
+                }
+            } else {
+                log::warn!("[{}] queue was full. dropped a chunk", self.name);
+            }
+        }
+    }
+
+    async fn process_chunks(
+        name: &str,
+        ipv4net: IpNet,
+        max_jitter: Duration,
+        min_delay: Duration,
+        queue: &Arc<ChunkQueue>,
+        router_internal: &Arc<Mutex<RouterInternal>>,
+    ) -> Result<Duration, Error> {
+        // Introduce jitter by delaying the processing of chunks.
+        let mj = max_jitter.as_nanos() as u64;
+        if mj > 0 {
+            let jitter = Duration::from_nanos(rand::random::<u64>() % mj);
+            tokio::time::sleep(jitter).await;
+        }
+
+        //      cut_off
+        //         v min delay
+        //         |<--->|
+        //  +------------:--
+        //  |OOOOOOXXXXX :   --> time
+        //  +------------:--
+        //  |<--->|     now
+        //    due
+
+        let entered_at = SystemTime::now();
+        let cut_off = entered_at.sub(min_delay);
+
+        // the next sleep duration
+        let mut d;
+
+        loop {
+            d = Duration::from_secs(0);
+            if let Some(c) = queue.peek().await {
+                // check timestamp to find if the chunk is due
+                if c.get_timestamp().duration_since(cut_off).is_ok() {
+                    // There is one or more chunk in the queue but none of them are due.
+                    // Calculate the next sleep duration here.
+                    let next_expire = c.get_timestamp().add(min_delay);
+                    if let Ok(diff) = next_expire.duration_since(entered_at) {
+                        d = diff;
+                        break;
+                    }
+                }
+            } else {
+                break; // no more chunk in the queue
+            }
+
+            if let Some(c) = queue.pop().await {
+                let ri = router_internal.lock().await;
+                let mut blocked = false;
+                for filter in &ri.chunk_filters {
+                    if !filter(&*c) {
+                        blocked = true;
+                        break;
+                    }
+                }
+                if blocked {
+                    continue; // discard
+                }
+
+                let dst_ip = c.get_destination_ip();
+
+                // check if the desination is in our subnet
+                if ipv4net.contains(&dst_ip) {
+                    // search for the destination NIC
+                    if let Some(nic) = ri.nics.get(&dst_ip.to_string()) {
+                        // found the NIC, forward the chunk to the NIC.
+                        // call to NIC must unlock mutex
+                        let ni = nic.lock().await;
+                        ni.on_inbound_chunk(&*c).await;
+                    } else {
+                        // NIC not found. drop it.
+                        log::debug!("[{}] {} unreachable", name, c.to_string());
+                    }
+                    continue;
+                }
+
+                // the destination is outside of this subnet
+                // is this WAN?
+                if let Some(parent) = &ri.parent {
+                    // Pass it to the parent via NAT
+                    if let Some(to_parent) = ri.nat.translate_outbound(&*c).await? {
+                        // call to parent router mutex unlock mutex
+                        let p = parent.lock().await;
+                        p.push(to_parent).await;
+                    }
+                } else {
+                    // this WAN. No route for this chunk
+                    log::debug!("[{}] no route found for {}", name, c.to_string());
+                }
+            } else {
+                break; // no more chunk in the queue
+            }
+        }
+
+        Ok(d)
+    }
+}
+
+impl RouterInternal {
     // caller must hold the mutex
-    pub(crate) async fn add_nic(&mut self, nic: Arc<Mutex<dyn NIC>>) -> Result<(), Error> {
+    pub(crate) async fn add_nic(
+        &mut self,
+        nic: Arc<Mutex<dyn NIC + Send + Sync>>,
+    ) -> Result<(), Error> {
         let mut ips = {
             let ni = nic.lock().await;
             let _ifc = ni.get_interface("eth0");
@@ -382,39 +578,6 @@ impl Router {
         Ok(())
     }
 
-    // AddRouter adds a chile Router.
-    pub async fn add_router(&mut self, router: Arc<Mutex<Router>>) -> Result<(), Error> {
-        // Router is a NIC. Add it as a NIC so that packets are routed to this child
-        // router.
-        let router2 = Arc::clone(&router);
-
-        self.add_nic(router as Arc<Mutex<dyn NIC>>).await?;
-
-        //TODO: router.set_parent(r)?; MOVE it outside
-
-        self.children.push(router2);
-
-        Ok(())
-    }
-
-    // AddNet ...
-    pub async fn add_net(&mut self, nic: Arc<Mutex<dyn NIC>>) -> Result<(), Error> {
-        self.add_nic(nic).await
-    }
-
-    // AddHost adds a mapping of hostname and an IP address to the local resolver.
-    pub async fn add_host(&mut self, host_name: String, ip_addr: String) -> Result<(), Error> {
-        let mut resolver = self.resolver.lock().await;
-        resolver.add_host(host_name, ip_addr)
-    }
-
-    // AddChunkFilter adds a filter for chunks traversing this router.
-    // You may add more than one filter. The filters are called in the order of this method call.
-    // If a chunk is dropped by a filter, subsequent filter will not receive the chunk.
-    pub fn add_chunk_filter(&mut self, filter: ChunkFilterFn) {
-        self.chunk_filters.push(filter);
-    }
-
     // caller should hold the mutex
     fn assign_ip_address(&mut self) -> Result<IpAddr, Error> {
         // See: https://stackoverflow.com/questions/14915188/ip-address-ending-with-zero
@@ -435,145 +598,6 @@ impl Router {
                 ip[15] += 1;
                 Ok(IpAddr::V6(Ipv6Addr::from(ip)))
             }
-        }
-    }
-
-    async fn push(&self, mut c: Box<dyn Chunk + Send + Sync>) {
-        log::debug!("[{}] route {}", self.name, c);
-        if self.done.is_some() {
-            c.set_timestamp();
-            if self.queue.push(c).await {
-                if let Some(push_ch) = &self.push_ch {
-                    let _ = push_ch.try_send(());
-                }
-            } else {
-                log::warn!("[{}] queue was full. dropped a chunk", self.name);
-            }
-        }
-    }
-
-    fn process_chunks() -> Result<Duration, Error> {
-        //TODO:r.mutex.Lock()
-        //defer r.mutex.Unlock()
-        /*
-        // Introduce jitter by delaying the processing of chunks.
-        if r.max_jitter > 0 {
-            jitter := time.Duration(rand.Int63n(int64(r.max_jitter))) //nolint:gosec
-            time.Sleep(jitter)
-        }
-
-        //      cutOff
-        //         v min delay
-        //         |<--->|
-        //  +------------:--
-        //  |OOOOOOXXXXX :   --> time
-        //  +------------:--
-        //  |<--->|     now
-        //    due
-
-        enteredAt := time.Now()
-        cutOff := enteredAt.Add(-r.min_delay)
-
-        var d time.Duration // the next sleep duration
-
-        for {
-            d = 0
-
-            c := r.queue.peek()
-            if c == nil {
-                break // no more chunk in the queue
-            }
-
-            // check timestamp to find if the chunk is due
-            if c.getTimestamp().After(cutOff) {
-                // There is one or more chunk in the queue but none of them are due.
-                // Calculate the next sleep duration here.
-                nextExpire := c.getTimestamp().Add(r.min_delay)
-                d = nextExpire.Sub(enteredAt)
-                break
-            }
-
-            var ok bool
-            if c, ok = r.queue.pop(); !ok {
-                break // no more chunk in the queue
-            }
-
-            blocked := false
-            for i := 0; i < len(r.chunk_filters); i++ {
-                filter := r.chunk_filters[i]
-                if !filter(c) {
-                    blocked = true
-                    break
-                }
-            }
-            if blocked {
-                continue // discard
-            }
-
-            dstIP := c.getDestinationIP()
-
-            // check if the desination is in our subnet
-            if r.ipv4net.Contains(dstIP) {
-                // search for the destination NIC
-                var nic NIC
-                if nic, ok = r.nics[dstIP.String()]; !ok {
-                    // NIC not found. drop it.
-                    r.log.Debugf("[%s] %s unreachable", r.name, c.String())
-                    continue
-                }
-
-                // found the NIC, forward the chunk to the NIC.
-                // call to NIC must unlock mutex
-                r.mutex.Unlock()
-                nic.on_inbound_chunk(c)
-                r.mutex.Lock()
-                continue
-            }
-
-            // the destination is outside of this subnet
-            // is this WAN?
-            if r.parent == nil {
-                // this WAN. No route for this chunk
-                r.log.Debugf("[%s] no route found for %s", r.name, c.String())
-                continue
-            }
-
-            // Pass it to the parent via NAT
-            toParent, err := r.nat.translateOutbound(c)
-            if err != nil {
-                return 0, err
-            }
-
-            if toParent == nil {
-                continue
-            }
-
-            //nolint:godox
-            /* FIXME: this implementation would introduce a duplicate packet!
-            if r.nat.nat_type.Hairpining {
-                hairpinned, err := r.nat.translateInbound(toParent)
-                if err != nil {
-                    r.log.Warnf("[%s] %s", r.name, err.Error())
-                } else {
-                    go func() {
-                        r.push(hairpinned)
-                    }()
-                }
-            }
-            */
-
-            // call to parent router mutex unlock mutex
-            r.mutex.Unlock()
-            r.parent.push(toParent)
-            r.mutex.Lock()
-        }
-
-        return d, nil*/
-        let a = true;
-        if a {
-            Ok(Duration::from_secs(0))
-        } else {
-            Err(ERR_NOT_FOUND.to_owned())
         }
     }
 }

@@ -27,6 +27,7 @@ async-trait = "0.1"
 ifaces = "0.1.0"
 ipnet = "2.3.0"
 log = "0.4.14"
+rand = "0.8.3"
 
 [dev-dependencies]
 tokio-test = "0.4"
