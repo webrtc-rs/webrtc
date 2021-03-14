@@ -299,9 +299,6 @@ impl NetworkAddressTranslator {
         &self,
         from: &(dyn Chunk + Send + Sync),
     ) -> Result<Option<Box<dyn Chunk + Send + Sync>>, Error> {
-        //TODO: n.mutex.Lock()
-        //defer n.mutex.Unlock()
-
         let mut to = from.clone_to();
 
         if from.network() == UDP_STR {

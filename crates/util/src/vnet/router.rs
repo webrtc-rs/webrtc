@@ -1,22 +1,23 @@
-use crate::vnet::chunk::Chunk;
-use crate::vnet::chunk_queue::ChunkQueue;
+use crate::vnet::chunk::*;
+use crate::vnet::chunk_queue::*;
 use crate::vnet::errors::*;
 use crate::vnet::nat::*;
+use crate::vnet::net::*;
+use crate::vnet::resolver::*;
 use crate::Error;
 
+use async_trait::async_trait;
 use ifaces::*;
 use ipnet::*;
 use std::collections::HashMap;
+use std::future::Future;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::pin::Pin;
+use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::Duration;
-
-use crate::vnet::net::LO0_STR;
-use crate::vnet::resolver::Resolver;
-use async_trait::async_trait;
-use std::str::FromStr;
-use std::sync::Arc;
 
 const DEFAULT_ROUTER_QUEUE_SIZE: usize = 0; // unlimited
 
@@ -60,7 +61,7 @@ pub trait NIC {
     fn get_interface(&self, if_name: &str) -> Option<&Interface>;
     async fn on_inbound_chunk(&self, c: &(dyn Chunk + Send + Sync));
     fn get_static_ips(&self) -> &[IpAddr];
-    async fn set_router(&mut self, r: Arc<Router>) -> Result<(), Error>;
+    async fn set_parent(&mut self, r: Arc<Mutex<Router>>) -> Result<(), Error>;
 }
 
 // ChunkFilter is a handler users can add to filter chunks.
@@ -70,18 +71,18 @@ pub type ChunkFilterFn = fn(c: &dyn Chunk) -> bool;
 // Router ...
 #[derive(Default)]
 pub struct Router {
-    name: String,                              // read-only
-    interfaces: Vec<Interface>,                // read-only
-    ipv4net: IpNet,                            // read-only
-    static_ips: Vec<IpAddr>,                   // read-only
-    static_local_ips: HashMap<String, IpAddr>, // read-only,
+    name: String,                               // read-only
+    interfaces: Vec<Interface>,                 // read-only
+    ipv4net: IpNet,                             // read-only
+    static_ips: Vec<IpAddr>,                    // read-only
+    static_local_ips: HashMap<String, IpAddr>,  // read-only,
     last_id: u8, // requires mutex [x], used to assign the last digit of IPv4 address
     queue: ChunkQueue, // read-only
-    parent: Option<Arc<Router>>, // read-only
-    children: Vec<Arc<Router>>, // read-only
+    parent: Option<Arc<Mutex<Router>>>, // read-only
+    children: Vec<Arc<Mutex<Router>>>, // read-only
     nat_type: Option<NATType>, // read-only
     nat: NetworkAddressTranslator, // read-only
-    nics: HashMap<String, Arc<dyn NIC>>, // read-only
+    nics: HashMap<String, Arc<Mutex<dyn NIC>>>, // read-only
     done: Option<mpsc::Sender<()>>, // requires mutex [x]
     resolver: Arc<Mutex<Resolver>>, // read-only
     chunk_filters: Vec<ChunkFilterFn>, // requires mutex [x]
@@ -128,11 +129,16 @@ impl NIC for Router {
     }
 
     // caller must hold the mutex
-    async fn set_router(&mut self, parent: Arc<Router>) -> Result<(), Error> {
+    async fn set_parent(&mut self, parent: Arc<Mutex<Router>>) -> Result<(), Error> {
         self.parent = Some(Arc::clone(&parent));
+
+        let parent_resolver = {
+            let p = parent.lock().await;
+            Arc::clone(&p.resolver)
+        };
         {
             let mut resolver = self.resolver.lock().await;
-            resolver.set_parent(Arc::clone(&parent.resolver));
+            resolver.set_parent(parent_resolver);
         }
 
         let mut mapped_ips = vec![];
@@ -264,9 +270,9 @@ impl Router {
     }
 
     // Start ...
-    pub async fn start(&mut self) -> Result<(), Error> {
+    pub fn start(&mut self) -> Pin<Box<dyn Future<Output = Result<(), Error>>>> {
         if self.done.is_some() {
-            return Err(ERR_ROUTER_ALREADY_STARTED.to_owned());
+            return Box::pin(async move { Err(ERR_ROUTER_ALREADY_STARTED.to_owned()) });
         }
 
         let (done_tx, mut done_rx) = mpsc::channel(1);
@@ -293,43 +299,72 @@ impl Router {
             }
         });
 
-        for _child in &self.children {
-            //TODO: let mut c = child.lock().await;
-            // c.start().await?;
+        let child_result = Arc::new(AtomicBool::new(false));
+        for child in &self.children {
+            let child2 = Arc::clone(child);
+            let child_result2 = Arc::clone(&child_result);
+            Box::pin(async move {
+                let mut c = child2.lock().await;
+                if c.start().await.is_err() {
+                    child_result2.store(true, Ordering::SeqCst);
+                }
+            });
         }
 
-        Ok(())
+        Box::pin(async move {
+            if child_result.load(Ordering::SeqCst) {
+                Err(ERR_ROUTER_ALREADY_STARTED.to_owned())
+            } else {
+                Ok(())
+            }
+        })
     }
 
     // Stop ...
-    pub async fn stop(&mut self) -> Result<(), Error> {
+    pub fn stop(&mut self) -> Pin<Box<dyn Future<Output = Result<(), Error>>>> {
         if self.done.is_none() {
-            return Err(ERR_ROUTER_ALREADY_STOPPED.to_owned());
+            return Box::pin(async move { Err(ERR_ROUTER_ALREADY_STOPPED.to_owned()) });
         }
 
-        for _child in &self.children {
-            //TODO: let mut c = c.lock().await;
-            // c.stop().await?;
+        let child_result = Arc::new(AtomicBool::new(false));
+        for child in &self.children {
+            let child2 = Arc::clone(child);
+            let child_result2 = Arc::clone(&child_result);
+            Box::pin(async move {
+                let mut c = child2.lock().await;
+                if c.stop().await.is_err() {
+                    child_result2.store(true, Ordering::SeqCst);
+                }
+            });
         }
 
         self.push_ch.take();
         self.done.take();
 
-        Ok(())
+        Box::pin(async move {
+            if child_result.load(Ordering::SeqCst) {
+                Err(ERR_ROUTER_ALREADY_STOPPED.to_owned())
+            } else {
+                Ok(())
+            }
+        })
     }
 
     // caller must hold the mutex
-    pub(crate) fn add_nic(&mut self, nic: Arc<dyn NIC>) -> Result<(), Error> {
-        let _ifc = nic.get_interface("eth0");
+    pub(crate) async fn add_nic(&mut self, nic: Arc<Mutex<dyn NIC>>) -> Result<(), Error> {
+        let mut ips = {
+            let ni = nic.lock().await;
+            let _ifc = ni.get_interface("eth0");
+            ni.get_static_ips().to_vec()
+        };
 
-        let mut ips = nic.get_static_ips().to_vec();
         if ips.is_empty() {
             // assign an IP address
             let ip = self.assign_ip_address()?;
             ips.push(ip);
         }
 
-        //TODO: nic.set_router(r)?;
+        //TODO: nic.set_parent(r)?; MOVE it outside
 
         for ip in &ips {
             if !self.ipv4net.contains(ip) {
@@ -348,17 +383,14 @@ impl Router {
     }
 
     // AddRouter adds a chile Router.
-    pub fn add_router(&mut self, router: Arc<Router>) -> Result<(), Error> {
-        //r.mutex.Lock()
-        //defer r.mutex.Unlock()
-
+    pub async fn add_router(&mut self, router: Arc<Mutex<Router>>) -> Result<(), Error> {
         // Router is a NIC. Add it as a NIC so that packets are routed to this child
         // router.
         let router2 = Arc::clone(&router);
 
-        self.add_nic(router as Arc<dyn NIC>)?;
+        self.add_nic(router as Arc<Mutex<dyn NIC>>).await?;
 
-        //TODO: router.set_router(r)?;
+        //TODO: router.set_parent(r)?; MOVE it outside
 
         self.children.push(router2);
 
@@ -366,10 +398,8 @@ impl Router {
     }
 
     // AddNet ...
-    pub fn add_net(&mut self, nic: Arc<dyn NIC>) -> Result<(), Error> {
-        //r.mutex.Lock()
-        //defer r.mutex.Unlock()
-        self.add_nic(nic)
+    pub async fn add_net(&mut self, nic: Arc<Mutex<dyn NIC>>) -> Result<(), Error> {
+        self.add_nic(nic).await
     }
 
     // AddHost adds a mapping of hostname and an IP address to the local resolver.
@@ -382,9 +412,6 @@ impl Router {
     // You may add more than one filter. The filters are called in the order of this method call.
     // If a chunk is dropped by a filter, subsequent filter will not receive the chunk.
     pub fn add_chunk_filter(&mut self, filter: ChunkFilterFn) {
-        //r.mutex.Lock()
-        //defer r.mutex.Unlock()
-
         self.chunk_filters.push(filter);
     }
 

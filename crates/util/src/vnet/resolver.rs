@@ -14,8 +14,8 @@ use tokio::sync::Mutex;
 
 #[derive(Default)]
 pub(crate) struct Resolver {
-    parent: Option<Arc<Mutex<Resolver>>>, // read-only
-    hosts: HashMap<String, IpAddr>,       // TODO: requires mutex
+    parent: Option<Arc<Mutex<Resolver>>>,
+    hosts: HashMap<String, IpAddr>,
 }
 
 impl Resolver {

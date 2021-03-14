@@ -1,5 +1,6 @@
 use super::conn_map::*;
 
+use crate::vnet::router::Router;
 use ifaces::*;
 use std::net::IpAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -23,9 +24,9 @@ pub(crate) fn new_mac_address() -> HardwareAddr {
 pub(crate) struct VNet {
     interfaces: Vec<Interface>, // read-only
     static_ips: Vec<IpAddr>,    // read-only
-    //TODO: router     :Router,      // read-only
-    udp_conns: UDPConnMap, // read-only
-                           //mutex      sync.RWMutex
+    router: Router,             // read-only
+    udp_conns: UDPConnMap,      // read-only
+                                //mutex      sync.RWMutex
 }
 /*
 
