@@ -1,14 +1,17 @@
 use super::*;
 use std::str::FromStr;
 
+#[derive(Default)]
 struct DummyObserver {
-    read_ch_tx: mpsc::Sender<Box<dyn Chunk + Send + Sync>>,
+    read_ch_tx: Option<Arc<mpsc::Sender<Box<dyn Chunk + Send + Sync>>>>,
 }
 
 #[async_trait]
 impl ConnObserver for DummyObserver {
     async fn write(&self, c: Box<dyn Chunk + Send + Sync>) -> Result<(), Error> {
-        self.read_ch_tx.send(c).await?;
+        if let Some(read_ch_tx) = &self.read_ch_tx {
+            read_ch_tx.send(c).await?;
+        }
         Ok(())
     }
 
@@ -22,11 +25,16 @@ async fn test_udp_conn_send_to_recv_from() -> Result<(), Error> {
     let data = b"Hello".to_vec();
     let src_addr = SocketAddr::from_str("127.0.0.1:1234")?;
     let dst_addr = SocketAddr::from_str("127.0.0.1:5678")?;
-    let (read_ch_tx, read_ch_rx) = mpsc::channel(1);
-    let obs: Arc<Mutex<Box<dyn ConnObserver + Send + Sync>>> =
-        Arc::new(Mutex::new(Box::new(DummyObserver { read_ch_tx })));
 
-    let conn = Arc::new(UDPConn::new(src_addr, None, read_ch_rx, obs));
+    let dummy_obs = Arc::new(Mutex::new(DummyObserver::default()));
+    let dummy_obs2 = Arc::clone(&dummy_obs);
+    let obs = dummy_obs2 as Arc<Mutex<dyn ConnObserver + Send + Sync>>;
+
+    let conn = Arc::new(UDPConn::new(src_addr, None, obs));
+    {
+        let mut dummy = dummy_obs.lock().await;
+        dummy.read_ch_tx = Some(conn.get_read_ch());
+    }
 
     let conn_rx = Arc::clone(&conn);
     let data_rx = data.clone();
@@ -67,11 +75,17 @@ async fn test_udp_conn_send_recv() -> Result<(), Error> {
     let data = b"Hello".to_vec();
     let src_addr = SocketAddr::from_str("127.0.0.1:1234")?;
     let dst_addr = SocketAddr::from_str("127.0.0.1:5678")?;
-    let (read_ch_tx, read_ch_rx) = mpsc::channel(1);
-    let obs: Arc<Mutex<Box<dyn ConnObserver + Send + Sync>>> =
-        Arc::new(Mutex::new(Box::new(DummyObserver { read_ch_tx })));
 
-    let conn = Arc::new(UDPConn::new(src_addr, None, read_ch_rx, obs));
+    let dummy_obs = Arc::new(Mutex::new(DummyObserver::default()));
+    let dummy_obs2 = Arc::clone(&dummy_obs);
+    let obs = dummy_obs2 as Arc<Mutex<dyn ConnObserver + Send + Sync>>;
+
+    let conn = Arc::new(UDPConn::new(src_addr, None, obs));
+    {
+        let mut dummy = dummy_obs.lock().await;
+        dummy.read_ch_tx = Some(conn.get_read_ch());
+    }
+
     conn.connect(dst_addr).await?;
 
     let conn_rx = Arc::clone(&conn);

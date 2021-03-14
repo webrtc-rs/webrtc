@@ -1,9 +1,14 @@
 use super::conn_map::*;
+use crate::vnet::router::*;
+use crate::Error;
 
-use crate::vnet::router::Router;
+use crate::vnet::chunk::Chunk;
+use async_trait::async_trait;
 use ifaces::*;
 use std::net::IpAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub(crate) const LO0_STR: &str = "lo0";
 pub(crate) const UDP_STR: &str = "udp";
@@ -24,98 +29,61 @@ pub(crate) fn new_mac_address() -> HardwareAddr {
 pub(crate) struct VNet {
     interfaces: Vec<Interface>, // read-only
     static_ips: Vec<IpAddr>,    // read-only
-    router: Router,             // read-only
+    router: Arc<Mutex<Router>>, // read-only
     udp_conns: UDPConnMap,      // read-only
                                 //mutex      sync.RWMutex
 }
-/*
 
-func (v *vNet) _getInterfaces() ([]*Interface, error) {
-    if len(v.interfaces) == 0 {
-        return nil, errNoInterface
-    }
-
-    return v.interfaces, nil
-}
-
-func (v *vNet) getInterfaces() ([]*Interface, error) {
-    v.mutex.RLock()
-    defer v.mutex.RUnlock()
-
-    return v._getInterfaces()
-}
-
-// caller must hold the mutex (read)
-func (v *vNet) _getInterface(ifName string) (*Interface, error) {
-    ifs, err := v._getInterfaces()
-    if err != nil {
-        return nil, err
-    }
-    for _, ifc := range ifs {
-        if ifc.Name == ifName {
-            return ifc, nil
-        }
-    }
-
-    return nil, fmt.Errorf("interface %s %w", ifName, errNotFound)
-}
-
-func (v *vNet) get_interface(ifName string) (*Interface, error) {
-    v.mutex.RLock()
-    defer v.mutex.RUnlock()
-
-    return v._getInterface(ifName)
-}
-
-// caller must hold the mutex
-func (v *vNet) getAllIPAddrs(ipv6 bool) []net.IP {
-    ips := []net.IP{}
-
-    for _, ifc := range v.interfaces {
-        addrs, err := ifc.Addrs()
-        if err != nil {
-            continue
-        }
-
-        for _, addr := range addrs {
-            var ip net.IP
-            if ipNet, ok := addr.(*net.IPNet); ok {
-                ip = ipNet.IP
-            } else if ipAddr, ok := addr.(*net.IPAddr); ok {
-                ip = ipAddr.IP
-            } else {
-                continue
+#[async_trait]
+impl NIC for VNet {
+    fn get_interface(&self, ifc_name: &str) -> Option<&Interface> {
+        for ifc in &self.interfaces {
+            if ifc.name == ifc_name {
+                return Some(ifc);
             }
+        }
+        None
+    }
 
-            if !ipv6 {
-                if ip.To4() != nil {
-                    ips = append(ips, ip)
+    async fn set_parent(&self, _r: Arc<Mutex<Router>>) -> Result<(), Error> {
+        Ok(())
+    }
+
+    async fn on_inbound_chunk(&self, _c: &(dyn Chunk + Send + Sync)) {
+        /*TODO: if c.network() == UDP_STR {
+            if conn, ok := v.udp_conns.find(c.DestinationAddr()); ok {
+                conn.on_inbound_chunk(c)
+            }
+        }*/
+    }
+
+    fn get_static_ips(&self) -> &[IpAddr] {
+        &[]
+    }
+}
+
+impl VNet {
+    pub(crate) fn get_interfaces(&self) -> &[Interface] {
+        &self.interfaces
+    }
+
+    // caller must hold the mutex
+    pub(crate) fn get_all_ip_addrs(&self, ipv6: bool) -> Vec<IpAddr> {
+        let mut ips = vec![];
+
+        for ifc in &self.interfaces {
+            if let Some(addr) = ifc.addr {
+                if (ipv6 && addr.is_ipv6()) || (!ipv6 && addr.is_ipv4()) {
+                    ips.push(addr.ip());
                 }
             }
         }
-    }
 
-    return ips
-}
-
-func (v *vNet) set_router(r *Router) error {
-    v.mutex.Lock()
-    defer v.mutex.Unlock()
-
-    v.router = r
-    return nil
-}
-
-func (v *vNet) on_inbound_chunk(c Chunk) {
-    v.mutex.Lock()
-    defer v.mutex.Unlock()
-
-    if c.Network() == udpString {
-        if conn, ok := v.udp_conns.find(c.DestinationAddr()); ok {
-            conn.on_inbound_chunk(c)
-        }
+        ips
     }
 }
+/*
+
 
 // caller must hold the mutex
 func (v *vNet) _dialUDP(network string, locAddr, remAddr *net.UDPAddr) (UDPPacketConn, error) {

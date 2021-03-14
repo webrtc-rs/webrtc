@@ -393,25 +393,18 @@ impl Router {
         // Router is a NIC. Add it as a NIC so that packets are routed to this child
         // router.
         let router2 = Arc::clone(&router);
-
-        {
-            let mut router_internal = self.router_internal.lock().await;
-            router_internal
-                .add_nic(router as Arc<Mutex<dyn NIC + Send + Sync>>)
-                .await?;
-        }
-
-        //TODO: router.set_parent(r)?; MOVE it outside
-
         self.children.push(router2);
 
-        Ok(())
+        let nic = router as Arc<Mutex<dyn NIC + Send + Sync>>;
+        self.add_net(nic).await
     }
 
     // AddNet ...
     pub async fn add_net(&mut self, nic: Arc<Mutex<dyn NIC + Send + Sync>>) -> Result<(), Error> {
         let mut router_internal = self.router_internal.lock().await;
         router_internal.add_nic(nic).await
+
+        //TODO: nic.set_parent(r)?;
     }
 
     // AddHost adds a mapping of hostname and an IP address to the local resolver.
@@ -559,8 +552,6 @@ impl RouterInternal {
             let ip = self.assign_ip_address()?;
             ips.push(ip);
         }
-
-        //TODO: nic.set_parent(r)?; MOVE it outside
 
         for ip in &ips {
             if !self.ipv4net.contains(ip) {

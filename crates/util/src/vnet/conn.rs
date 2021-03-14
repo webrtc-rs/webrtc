@@ -27,23 +27,30 @@ pub(crate) trait ConnObserver {
 pub(crate) struct UDPConn {
     loc_addr: SocketAddr,
     rem_addr: Mutex<Option<SocketAddr>>,
-    read_ch: Mutex<mpsc::Receiver<Box<dyn Chunk + Send + Sync>>>,
-    obs: Arc<Mutex<Box<dyn ConnObserver + Send + Sync>>>,
+    read_ch_tx: Arc<mpsc::Sender<Box<dyn Chunk + Send + Sync>>>,
+    read_ch_rx: Mutex<mpsc::Receiver<Box<dyn Chunk + Send + Sync>>>,
+    obs: Arc<Mutex<dyn ConnObserver + Send + Sync>>,
 }
 
 impl UDPConn {
     pub(crate) fn new(
         loc_addr: SocketAddr,
         rem_addr: Option<SocketAddr>,
-        read_ch: mpsc::Receiver<Box<dyn Chunk + Send + Sync>>,
-        obs: Arc<Mutex<Box<dyn ConnObserver + Send + Sync>>>,
+        obs: Arc<Mutex<dyn ConnObserver + Send + Sync>>,
     ) -> Self {
+        let (read_ch_tx, read_ch_rx) = mpsc::channel(MAX_READ_QUEUE_SIZE);
+
         UDPConn {
             loc_addr,
             rem_addr: Mutex::new(rem_addr),
-            read_ch: Mutex::new(read_ch),
+            read_ch_tx: Arc::new(read_ch_tx),
+            read_ch_rx: Mutex::new(read_ch_rx),
             obs,
         }
+    }
+
+    pub(crate) fn get_read_ch(&self) -> Arc<mpsc::Sender<Box<dyn Chunk + Send + Sync>>> {
+        Arc::clone(&self.read_ch_tx)
     }
 }
 
@@ -68,7 +75,7 @@ impl Conn for UDPConn {
     // and any error encountered. Callers should always process
     // the n > 0 bytes returned before considering the error err.
     async fn recv_from(&self, buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
-        let mut read_ch = self.read_ch.lock().await;
+        let mut read_ch = self.read_ch_rx.lock().await;
         while let Some(chunk) = read_ch.recv().await {
             let user_data = chunk.user_data();
             let n = std::cmp::min(buf.len(), user_data.len());
