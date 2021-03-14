@@ -2,8 +2,8 @@ use super::*;
 
 const DEMO_IP: &str = "1.2.3.4";
 
-#[test]
-fn test_resolver_standalone() -> Result<(), Error> {
+#[tokio::test]
+async fn test_resolver_standalone() -> Result<(), Error> {
     let mut r = Resolver::new();
 
     // should have localhost by default
@@ -11,7 +11,7 @@ fn test_resolver_standalone() -> Result<(), Error> {
     let ip_addr = "127.0.0.1";
     let ip = IpAddr::from_str(ip_addr)?;
 
-    if let Some(resolved) = r.lookup(name.to_owned()) {
+    if let Some(resolved) = r.lookup(name.to_owned()).await {
         assert_eq!(resolved, ip, "should match");
     } else {
         assert!(false, "should Some, but got None");
@@ -24,7 +24,7 @@ fn test_resolver_standalone() -> Result<(), Error> {
 
     r.add_host(name.to_owned(), ip_addr.to_owned())?;
 
-    if let Some(resolved) = r.lookup(name.to_owned()) {
+    if let Some(resolved) = r.lookup(name.to_owned()).await {
         assert_eq!(resolved, ip, "should match");
     } else {
         assert!(false, "should Some, but got None");
@@ -33,8 +33,8 @@ fn test_resolver_standalone() -> Result<(), Error> {
     Ok(())
 }
 
-#[test]
-fn test_resolver_cascaded() -> Result<(), Error> {
+#[tokio::test]
+async fn test_resolver_cascaded() -> Result<(), Error> {
     let mut r0 = Resolver::new();
 
     let name0 = "abc.com";
@@ -49,22 +49,22 @@ fn test_resolver_cascaded() -> Result<(), Error> {
     let ip1 = IpAddr::from_str(ip_addr1)?;
     r1.add_host(name1.to_owned(), ip_addr1.to_owned())?;
 
-    r1.set_parent(Arc::new(r0));
+    r1.set_parent(Arc::new(Mutex::new(r0)));
 
-    if let Some(resolved) = r1.lookup(name0.to_owned()) {
+    if let Some(resolved) = r1.lookup(name0.to_owned()).await {
         assert_eq!(resolved, ip0, "should match");
     } else {
         assert!(false, "should Some, but got None");
     }
 
-    if let Some(resolved) = r1.lookup(name1.to_owned()) {
+    if let Some(resolved) = r1.lookup(name1.to_owned()).await {
         assert_eq!(resolved, ip1, "should match");
     } else {
         assert!(false, "should Some, but got None");
     }
 
     // should fail if the name does not exist
-    let result = r1.lookup("bad.com".to_owned());
+    let result = r1.lookup("bad.com".to_owned()).await;
     assert!(result.is_none(), "should fail");
 
     Ok(())

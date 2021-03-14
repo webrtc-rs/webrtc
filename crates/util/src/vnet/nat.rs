@@ -60,20 +60,20 @@ impl Default for NATMode {
 // NATType has a set of parameters that define the behavior of NAT.
 #[derive(Default, Debug, Copy, Clone)]
 pub struct NATType {
-    mode: NATMode,
-    mapping_behavior: EndpointDependencyType,
-    filtering_behavior: EndpointDependencyType,
-    hair_pining: bool,       // Not implemented yet
-    port_preservation: bool, // Not implemented yet
-    mapping_life_time: Duration,
+    pub mode: NATMode,
+    pub mapping_behavior: EndpointDependencyType,
+    pub filtering_behavior: EndpointDependencyType,
+    pub hair_pining: bool,       // Not implemented yet
+    pub port_preservation: bool, // Not implemented yet
+    pub mapping_life_time: Duration,
 }
 
 #[derive(Default, Debug, Clone)]
 pub(crate) struct NatConfig {
-    name: String,
-    nat_type: NATType,
-    mapped_ips: Vec<IpAddr>, // mapped IPv4
-    local_ips: Vec<IpAddr>,  // local IPv4, required only when the mode is NATModeNAT1To1
+    pub(crate) name: String,
+    pub(crate) nat_type: NATType,
+    pub(crate) mapped_ips: Vec<IpAddr>, // mapped IPv4
+    pub(crate) local_ips: Vec<IpAddr>,  // local IPv4, required only when the mode is NATModeNAT1To1
 }
 
 #[derive(Debug, Clone)]

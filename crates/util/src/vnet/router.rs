@@ -9,7 +9,7 @@ use ipnet::*;
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::atomic::{AtomicU64, Ordering};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 use tokio::time::Duration;
 
 use crate::vnet::net::LO0_STR;
@@ -47,7 +47,7 @@ pub struct RouterConfig {
     // Internal queue size
     queue_size: usize,
     // Effective only when this router has a parent router
-    nat_type: NATType,
+    nat_type: Option<NATType>,
     // Minimum Delay
     min_delay: Duration,
     // Max Jitter
@@ -60,7 +60,7 @@ pub trait NIC {
     fn get_interface(&self, if_name: &str) -> Option<&Interface>;
     async fn on_inbound_chunk(&self, c: &(dyn Chunk + Send + Sync));
     fn get_static_ips(&self) -> &[IpAddr];
-    fn set_router(&mut self, r: Arc<Router>) -> Result<(), Error>;
+    async fn set_router(&mut self, r: Arc<Router>) -> Result<(), Error>;
 }
 
 // ChunkFilter is a handler users can add to filter chunks.
@@ -79,11 +79,11 @@ pub struct Router {
     queue: ChunkQueue, // read-only
     parent: Option<Arc<Router>>, // read-only
     children: Vec<Arc<Router>>, // read-only
-    nat_type: NATType, // read-only
+    nat_type: Option<NATType>, // read-only
     nat: NetworkAddressTranslator, // read-only
     nics: HashMap<String, Arc<dyn NIC>>, // read-only
     done: Option<mpsc::Sender<()>>, // requires mutex [x]
-    resolver: Resolver, // read-only
+    resolver: Arc<Mutex<Resolver>>, // read-only
     chunk_filters: Vec<ChunkFilterFn>, // requires mutex [x]
     min_delay: Duration, // requires mutex [x]
     max_jitter: Duration, // requires mutex [x]
@@ -128,66 +128,52 @@ impl NIC for Router {
     }
 
     // caller must hold the mutex
-    fn set_router(&mut self, _parent: Arc<Router>) -> Result<(), Error> {
-        /*r.parent = parent
-        r.resolver.setParent(parent.resolver)
+    async fn set_router(&mut self, parent: Arc<Router>) -> Result<(), Error> {
+        self.parent = Some(Arc::clone(&parent));
+        {
+            let mut resolver = self.resolver.lock().await;
+            resolver.set_parent(Arc::clone(&parent.resolver));
+        }
+
+        let mut mapped_ips = vec![];
+        let mut local_ips = vec![];
 
         // when this method is called, one or more IP address has already been assigned by
         // the parent router.
-        ifc, err := r.get_interface("eth0")
-        if err != nil {
-            return err
-        }
+        if let Some(ifc) = self.get_interface("eth0") {
+            if let Some(ifc_addr) = &ifc.addr {
+                let ip = ifc_addr.ip();
+                mapped_ips.push(ip);
 
-        if len(ifc.addrs) == 0 {
-            return errNoIPAddrEth0
-        }
-
-        mappedIPs := []net.IP{}
-        localIPs := []net.IP{}
-
-        for _, ifcAddr := range ifc.addrs {
-            var ip net.IP
-            switch addr := ifcAddr.(type) {
-            case *net.IPNet:
-                ip = addr.IP
-            case *net.IPAddr: // Do we really need this case?
-                ip = addr.IP
-            default:
+                if let Some(loc_ip) = self.static_local_ips.get(&ip.to_string()) {
+                    local_ips.push(*loc_ip);
+                }
+            } else {
+                return Err(ERR_NO_IPADDR_ETH0.to_owned());
             }
-
-            if ip == nil {
-                continue
-            }
-
-            mappedIPs = append(mappedIPs, ip)
-
-            if locIP := r.static_local_ips[ip.String()]; locIP != nil {
-                localIPs = append(localIPs, locIP)
-            }
+        } else {
+            return Err(ERR_NO_IPADDR_ETH0.to_owned());
         }
 
         // Set up NAT here
-        if r.nat_type == nil {
-            r.nat_type = &nattype{
-                MappingBehavior:   EndpointIndependent,
-                FilteringBehavior: EndpointAddrPortDependent,
-                Hairpining:        false,
-                PortPreservation:  false,
-                MappingLifeTime:   30 * time.Second,
-            }
+        if self.nat_type.is_none() {
+            self.nat_type = Some(NATType {
+                mapping_behavior: EndpointDependencyType::EndpointIndependent,
+                filtering_behavior: EndpointDependencyType::EndpointAddrPortDependent,
+                hair_pining: false,
+                port_preservation: false,
+                mapping_life_time: Duration::from_secs(30),
+                ..Default::default()
+            });
         }
-        r.nat, err = newNAT(&natConfig{
-            name:          r.name,
-            nat_type:       *r.nat_type,
-            mappedIPs:     mappedIPs,
-            localIPs:      localIPs,
-            loggerFactory: r.loggerFactory,
-        })
-        if err != nil {
-            return err
-        }
-        */
+
+        self.nat = NetworkAddressTranslator::new(NatConfig {
+            name: self.name.clone(),
+            nat_type: self.nat_type.unwrap(),
+            mapped_ips,
+            local_ips,
+        })?;
+
         Ok(())
     }
 }
@@ -221,7 +207,7 @@ impl Router {
         };
 
         // local host name resolver
-        let resolver = Resolver::new();
+        let resolver = Arc::new(Mutex::new(Resolver::new()));
 
         let name = if config.name.is_empty() {
             assign_router_name()
@@ -387,8 +373,9 @@ impl Router {
     }
 
     // AddHost adds a mapping of hostname and an IP address to the local resolver.
-    pub fn add_host(&mut self, host_name: String, ip_addr: String) -> Result<(), Error> {
-        self.resolver.add_host(host_name, ip_addr)
+    pub async fn add_host(&mut self, host_name: String, ip_addr: String) -> Result<(), Error> {
+        let mut resolver = self.resolver.lock().await;
+        resolver.add_host(host_name, ip_addr)
     }
 
     // AddChunkFilter adds a filter for chunks traversing this router.

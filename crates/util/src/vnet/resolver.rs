@@ -5,14 +5,17 @@ use super::errors::*;
 use crate::Error;
 
 use std::collections::HashMap;
+use std::future::Future;
 use std::net::IpAddr;
+use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[derive(Default)]
 pub(crate) struct Resolver {
-    parent: Option<Arc<Resolver>>,  // read-only
-    hosts: HashMap<String, IpAddr>, // TODO: requires mutex
+    parent: Option<Arc<Mutex<Resolver>>>, // read-only
+    hosts: HashMap<String, IpAddr>,       // TODO: requires mutex
 }
 
 impl Resolver {
@@ -28,7 +31,7 @@ impl Resolver {
         r
     }
 
-    pub(crate) fn set_parent(&mut self, p: Arc<Resolver>) {
+    pub(crate) fn set_parent(&mut self, p: Arc<Mutex<Resolver>>) {
         self.parent = Some(p);
     }
 
@@ -42,16 +45,24 @@ impl Resolver {
         Ok(())
     }
 
-    pub(crate) fn lookup(&self, host_name: String) -> Option<IpAddr> {
+    pub(crate) fn lookup(
+        &self,
+        host_name: String,
+    ) -> Pin<Box<dyn Future<Output = Option<IpAddr>>>> {
         if let Some(ip) = self.hosts.get(&host_name) {
-            return Some(*ip);
+            let ip2 = *ip;
+            return Box::pin(async move { Some(ip2) });
         }
 
         // mutex must be unlocked before calling into parent Resolver
         if let Some(parent) = &self.parent {
-            parent.lookup(host_name)
+            let parent2 = Arc::clone(parent);
+            Box::pin(async move {
+                let p = parent2.lock().await;
+                p.lookup(host_name).await
+            })
         } else {
-            None
+            Box::pin(async move { None })
         }
     }
 }
