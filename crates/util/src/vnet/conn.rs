@@ -49,7 +49,7 @@ impl UDPConn {
         }
     }
 
-    pub(crate) fn get_read_ch(&self) -> Arc<mpsc::Sender<Box<dyn Chunk + Send + Sync>>> {
+    pub(crate) fn get_inbound_ch(&self) -> Arc<mpsc::Sender<Box<dyn Chunk + Send + Sync>>> {
         Arc::clone(&self.read_ch_tx)
     }
 }

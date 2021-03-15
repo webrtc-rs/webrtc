@@ -1,11 +1,17 @@
+#[cfg(test)]
+mod net_test;
+
 use super::conn_map::*;
+use super::errors::*;
+use crate::vnet::chunk::Chunk;
+use crate::vnet::conn::ConnObserver;
 use crate::vnet::router::*;
 use crate::Error;
 
-use crate::vnet::chunk::Chunk;
 use async_trait::async_trait;
 use ifaces::*;
 use std::net::IpAddr;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -27,11 +33,11 @@ pub(crate) fn new_mac_address() -> HardwareAddr {
 }
 
 pub(crate) struct VNet {
-    interfaces: Vec<Interface>, // read-only
-    static_ips: Vec<IpAddr>,    // read-only
-    router: Arc<Mutex<Router>>, // read-only
-    udp_conns: UDPConnMap,      // read-only
-                                //mutex      sync.RWMutex
+    interfaces: Vec<Interface>,                // read-only
+    static_ips: Vec<IpAddr>,                   // read-only
+    router: Mutex<Option<Arc<Mutex<Router>>>>, // read-only
+    udp_conns: UDPConnMap,                     // read-only
+                                               //mutex      sync.RWMutex
 }
 
 #[async_trait]
@@ -45,20 +51,76 @@ impl NIC for VNet {
         None
     }
 
-    async fn set_parent(&self, _r: Arc<Mutex<Router>>) -> Result<(), Error> {
+    async fn set_router(&self, r: Arc<Mutex<Router>>) -> Result<(), Error> {
+        let mut router = self.router.lock().await;
+        *router = Some(r);
+
         Ok(())
     }
 
-    async fn on_inbound_chunk(&self, _c: &(dyn Chunk + Send + Sync)) {
-        /*TODO: if c.network() == UDP_STR {
-            if conn, ok := v.udp_conns.find(c.DestinationAddr()); ok {
-                conn.on_inbound_chunk(c)
+    async fn on_inbound_chunk(&self, c: Box<dyn Chunk + Send + Sync>) {
+        if c.network() == UDP_STR {
+            if let Some(conn) = self.udp_conns.find(&c.destination_addr()).await {
+                let tx = conn.get_inbound_ch();
+                let _ = tx.send(c).await;
             }
-        }*/
+        }
     }
 
     fn get_static_ips(&self) -> &[IpAddr] {
         &[]
+    }
+}
+
+#[async_trait]
+impl ConnObserver for VNet {
+    async fn write(&self, c: Box<dyn Chunk + Send + Sync>) -> Result<(), Error> {
+        if c.network() == UDP_STR && c.get_destination_ip().is_loopback() {
+            if let Some(conn) = self.udp_conns.find(&c.destination_addr()).await {
+                let tx = conn.get_inbound_ch();
+                let _ = tx.send(c).await;
+            }
+            return Ok(());
+        }
+
+        let router = self.router.lock().await;
+        if let Some(r) = &*router {
+            let p = r.lock().await;
+            p.push(c).await;
+            Ok(())
+        } else {
+            Err(ERR_NO_ROUTER_LINKED.to_owned())
+        }
+    }
+
+    // This method determines the srcIP based on the dstIP when locIP
+    // is any IP address ("0.0.0.0" or "::"). If locIP is a non-any addr,
+    // this method simply returns locIP.
+    // caller must hold the mutex
+    fn determine_source_ip(&self, loc_ip: IpAddr, dst_ip: IpAddr) -> Option<IpAddr> {
+        if !loc_ip.is_unspecified() {
+            return Some(loc_ip);
+        }
+
+        if dst_ip.is_loopback() {
+            let src_ip = if let Ok(src_ip) = IpAddr::from_str("127.0.0.1") {
+                Some(src_ip)
+            } else {
+                None
+            };
+            return src_ip;
+        }
+
+        if let Some(ifc) = self.get_interface("eth0") {
+            if let Some(addr) = ifc.addr {
+                //TODO: ipv4 vs ipv6?
+                Some(addr.ip())
+            } else {
+                None
+            }
+        } else {
+            None
+        }
     }
 }
 
@@ -229,87 +291,12 @@ func (v *vNet) resolveUDPAddr(network, address string) (*net.UDPAddr, error) {
     return udpAddr, nil
 }
 
-func (v *vNet) write(c Chunk) error {
-    if c.Network() == udpString {
-        if udp, ok := c.(*chunkUDP); ok {
-            if c.getDestinationIP().IsLoopback() {
-                if conn, ok := v.udp_conns.find(udp.DestinationAddr()); ok {
-                    conn.on_inbound_chunk(udp)
-                }
-                return nil
-            }
-        } else {
-            return errUnexpectedTypeSwitchFailure
-        }
-    }
-
-    if v.router == nil {
-        return errNoRouterLinked
-    }
-
-    v.router.push(c)
-    return nil
-}
 
 func (v *vNet) onClosed(addr net.Addr) {
     if addr.Network() == udpString {
         //nolint:errcheck
         v.udp_conns.delete(addr) // #nosec
     }
-}
-
-// This method determines the srcIP based on the dstIP when locIP
-// is any IP address ("0.0.0.0" or "::"). If locIP is a non-any addr,
-// this method simply returns locIP.
-// caller must hold the mutex
-func (v *vNet) determineSourceIP(locIP, dstIP net.IP) net.IP {
-    if locIP != nil && !locIP.IsUnspecified() {
-        return locIP
-    }
-
-    var srcIP net.IP
-
-    if dstIP.IsLoopback() {
-        srcIP = net.ParseIP("127.0.0.1")
-    } else {
-        ifc, err2 := v._getInterface("eth0")
-        if err2 != nil {
-            return nil
-        }
-
-        addrs, err2 := ifc.Addrs()
-        if err2 != nil {
-            return nil
-        }
-
-        if len(addrs) == 0 {
-            return nil
-        }
-
-        var findIPv4 bool
-        if locIP != nil {
-            findIPv4 = (locIP.To4() != nil)
-        } else {
-            findIPv4 = (dstIP.To4() != nil)
-        }
-
-        for _, addr := range addrs {
-            ip := addr.(*net.IPNet).IP
-            if findIPv4 {
-                if ip.To4() != nil {
-                    srcIP = ip
-                    break
-                }
-            } else {
-                if ip.To4() == nil {
-                    srcIP = ip
-                    break
-                }
-            }
-        }
-    }
-
-    return srcIP
 }
 
 // caller must hold the mutex

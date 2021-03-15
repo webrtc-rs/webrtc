@@ -64,9 +64,9 @@ pub struct RouterConfig {
 #[async_trait]
 pub trait NIC {
     fn get_interface(&self, if_name: &str) -> Option<&Interface>;
-    async fn on_inbound_chunk(&self, c: &(dyn Chunk + Send + Sync));
+    async fn on_inbound_chunk(&self, c: Box<dyn Chunk + Send + Sync>);
     fn get_static_ips(&self) -> &[IpAddr];
-    async fn set_parent(&self, r: Arc<Mutex<Router>>) -> Result<(), Error>;
+    async fn set_router(&self, r: Arc<Mutex<Router>>) -> Result<(), Error>;
 }
 
 // ChunkFilter is a handler users can add to filter chunks.
@@ -113,10 +113,10 @@ impl NIC for Router {
         None
     }
 
-    async fn on_inbound_chunk(&self, c: &(dyn Chunk + Send + Sync)) {
+    async fn on_inbound_chunk(&self, c: Box<dyn Chunk + Send + Sync>) {
         let from_parent: Box<dyn Chunk + Send + Sync> = {
             let router_internal = self.router_internal.lock().await;
-            match router_internal.nat.translate_inbound(c).await {
+            match router_internal.nat.translate_inbound(&*c).await {
                 Ok(from) => {
                     if let Some(from) = from {
                         from
@@ -139,7 +139,7 @@ impl NIC for Router {
     }
 
     // caller must hold the mutex
-    async fn set_parent(&self, parent: Arc<Mutex<Router>>) -> Result<(), Error> {
+    async fn set_router(&self, parent: Arc<Mutex<Router>>) -> Result<(), Error> {
         {
             let mut router_internal = self.router_internal.lock().await;
             router_internal.parent = Some(Arc::clone(&parent));
@@ -421,7 +421,7 @@ impl Router {
         router_internal.chunk_filters.push(filter);
     }
 
-    async fn push(&self, mut c: Box<dyn Chunk + Send + Sync>) {
+    pub(crate) async fn push(&self, mut c: Box<dyn Chunk + Send + Sync>) {
         log::debug!("[{}] route {}", self.name, c);
         if self.done.is_some() {
             c.set_timestamp();
@@ -505,7 +505,7 @@ impl Router {
                         // found the NIC, forward the chunk to the NIC.
                         // call to NIC must unlock mutex
                         let ni = nic.lock().await;
-                        ni.on_inbound_chunk(&*c).await;
+                        ni.on_inbound_chunk(c).await;
                     } else {
                         // NIC not found. drop it.
                         log::debug!("[{}] {} unreachable", name, c.to_string());
