@@ -43,11 +43,11 @@ lazy_static! {
     pub static ref ERR_PORT_SPACE_EXHAUSTED: Error = Error::new("port space exhausted".to_owned());
     pub static ref ERR_VNET_DISABLED: Error = Error::new("vnet is not enabled".to_owned());
     pub static ref ERR_INVALID_LOCAL_IPIN_STATIC_IPS: Error =
-        Error::new("invalid local IP in StaticIPs".to_owned());
+        Error::new("invalid local IP in static_ips".to_owned());
     pub static ref ERR_LOCAL_IP_BEYOND_STATIC_IPS_SUBSET: Error =
-        Error::new("mapped in StaticIPs is beyond subnet".to_owned());
+        Error::new("mapped in static_ips is beyond subnet".to_owned());
     pub static ref ERR_LOCAL_IP_NO_STATICS_IPS_ASSOCIATED: Error =
-        Error::new("all StaticIPs must have associated local IPs".to_owned());
+        Error::new("all static_ips must have associated local IPs".to_owned());
     pub static ref ERR_ROUTER_ALREADY_STARTED: Error =
         Error::new("router already started".to_owned());
     pub static ref ERR_ROUTER_ALREADY_STOPPED: Error =

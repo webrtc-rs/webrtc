@@ -10,7 +10,7 @@ use crate::Error;
 
 use async_trait::async_trait;
 use ifaces::*;
-use std::net::IpAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -32,12 +32,11 @@ pub(crate) fn new_mac_address() -> HardwareAddr {
     b[2..].to_vec()
 }
 
-pub(crate) struct VNet {
+pub struct VNet {
     interfaces: Vec<Interface>,                // read-only
     static_ips: Vec<IpAddr>,                   // read-only
     router: Mutex<Option<Arc<Mutex<Router>>>>, // read-only
     udp_conns: UDPConnMap,                     // read-only
-                                               //mutex      sync.RWMutex
 }
 
 #[async_trait]
@@ -142,6 +141,80 @@ impl VNet {
         }
 
         ips
+    }
+
+    // caller must hold the mutex
+    pub(crate) fn has_ip_addr(&self, ip: IpAddr) -> bool {
+        for ifc in &self.interfaces {
+            if let Some(addr) = &ifc.addr {
+                let loc_ip = addr.ip();
+
+                match ip.to_string().as_str() {
+                    "0.0.0.0" => {
+                        if loc_ip.is_ipv4() {
+                            return true;
+                        }
+                    }
+                    "::" => {
+                        if loc_ip.is_ipv6() {
+                            return true;
+                        }
+                    }
+                    _ => {
+                        if loc_ip == ip {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
+    // caller must hold the mutex
+    pub(crate) async fn allocate_local_addr(&self, ip: IpAddr, port: u16) -> Result<(), Error> {
+        // gather local IP addresses to bind
+        let mut ips = vec![];
+        if ip.is_unspecified() {
+            ips = self.get_all_ip_addrs(ip.is_ipv6());
+        } else if self.has_ip_addr(ip) {
+            ips.push(ip);
+        }
+
+        if ips.is_empty() {
+            return Err(ERR_BIND_FAILER_FOR.to_owned());
+        }
+
+        // check if all these transport addresses are not in use
+        for ip2 in ips {
+            let addr = SocketAddr::new(ip2, port);
+            if self.udp_conns.find(&addr).await.is_some() {
+                return Err(ERR_ADDRESS_ALREADY_IN_USE.to_owned());
+            }
+        }
+
+        Ok(())
+    }
+
+    // caller must hold the mutex
+    pub(crate) async fn assign_port(&self, ip: IpAddr, start: u16, end: u16) -> Result<u16, Error> {
+        // choose randomly from the range between start and end (inclusive)
+        if end < start {
+            return Err(ERR_END_PORT_LESS_THAN_START.to_owned());
+        }
+
+        let space = end + 1 - start;
+        let offset = rand::random::<u16>() % space;
+        for i in 0..space {
+            let port = ((offset + i) % space) + start;
+            let result = self.allocate_local_addr(ip, port).await;
+            if result.is_ok() {
+                return Ok(port);
+            }
+        }
+
+        Err(ERR_PORT_SPACE_EXHAUSTED.to_owned())
     }
 }
 /*
@@ -298,182 +371,82 @@ func (v *vNet) onClosed(addr net.Addr) {
         v.udp_conns.delete(addr) // #nosec
     }
 }
-
-// caller must hold the mutex
-func (v *vNet) hasIPAddr(ip net.IP) bool { //nolint:gocognit
-    for _, ifc := range v.interfaces {
-        if addrs, err := ifc.Addrs(); err == nil {
-            for _, addr := range addrs {
-                var locIP net.IP
-                if ipNet, ok := addr.(*net.IPNet); ok {
-                    locIP = ipNet.IP
-                } else if ipAddr, ok := addr.(*net.IPAddr); ok {
-                    locIP = ipAddr.IP
-                } else {
-                    continue
-                }
-
-                switch ip.String() {
-                case "0.0.0.0":
-                    if locIP.To4() != nil {
-                        return true
-                    }
-                case "::":
-                    if locIP.To4() == nil {
-                        return true
-                    }
-                default:
-                    if locIP.Equal(ip) {
-                        return true
-                    }
-                }
-            }
-        }
-    }
-
-    return false
-}
-
-// caller must hold the mutex
-func (v *vNet) allocateLocalAddr(ip net.IP, port int) error {
-    // gather local IP addresses to bind
-    var ips []net.IP
-    if ip.IsUnspecified() {
-        ips = v.getAllIPAddrs(ip.To4() == nil)
-    } else if v.hasIPAddr(ip) {
-        ips = []net.IP{ip}
-    }
-
-    if len(ips) == 0 {
-        return fmt.Errorf("%w %s", errBindFailerFor, ip.String())
-    }
-
-    // check if all these transport addresses are not in use
-    for _, ip2 := range ips {
-        addr := &net.UDPAddr{
-            IP:   ip2,
-            Port: port,
-        }
-        if _, ok := v.udp_conns.find(addr); ok {
-            return &net.OpError{
-                Op:   "bind",
-                Net:  udpString,
-                Addr: addr,
-                Err:  fmt.Errorf("bind: %w", errAddressAlreadyInUse),
-            }
-        }
-    }
-
-    return nil
-}
-
-// caller must hold the mutex
-func (v *vNet) assignPort(ip net.IP, start, end int) (int, error) {
-    // choose randomly from the range between start and end (inclusive)
-    if end < start {
-        return -1, errEndPortLessThanStart
-    }
-
-    space := end + 1 - start
-    offset := rand.Intn(space) //nolint:gosec
-    for i := 0; i < space; i++ {
-        port := ((offset + i) % space) + start
-
-        err := v.allocateLocalAddr(ip, port)
-        if err == nil {
-            return port, nil
-        }
-    }
-
-    return -1, errPortSpaceExhausted
-}
+*/
 
 // NetConfig is a bag of configuration parameters passed to NewNet().
-type NetConfig struct {
-    // StaticIPs is an array of static IP addresses to be assigned for this Net.
+pub struct NetConfig {
+    // static_ips is an array of static IP addresses to be assigned for this Net.
     // If no static IP address is given, the router will automatically assign
     // an IP address.
-    StaticIPs []string
+    static_ips: Vec<String>,
 
-    // StaticIP is deprecated. Use StaticIPs.
-    StaticIP string
+    // static_ip is deprecated. Use static_ips.
+    static_ip: String,
 }
 
 // Net represents a local network stack euivalent to a set of layers from NIC
 // up to the transport (UDP / TCP) layer.
-type Net struct {
-    v   *vNet
-    ifs []*Interface
+pub enum Net {
+    VNet(VNet),
+    IFS(Vec<Interface>),
 }
 
-// NewNet creates an instance of Net.
-// If config is nil, the virtual network is disabled. (uses corresponding
-// net.Xxxx() operations.
-// By design, it always have lo0 and eth0 interfaces.
-// The lo0 has the address 127.0.0.1 assigned by default.
-// IP address for eth0 will be assigned when this Net is added to a router.
-func NewNet(config *NetConfig) *Net {
-    if config == nil {
-        ifs := []*Interface{}
-        if orgIfs, err := net.Interfaces(); err == nil {
-            for _, orgIfc := range orgIfs {
-                ifc := NewInterface(orgIfc)
-                if addrs, err := orgIfc.Addrs(); err == nil {
-                    for _, addr := range addrs {
-                        ifc.AddAddr(addr)
-                    }
+impl Net {
+    // NewNet creates an instance of Net.
+    // If config is nil, the virtual network is disabled. (uses corresponding
+    // net.Xxxx() operations.
+    // By design, it always have lo0 and eth0 interfaces.
+    // The lo0 has the address 127.0.0.1 assigned by default.
+    // IP address for eth0 will be assigned when this Net is added to a router.
+    pub fn new(config: Option<NetConfig>) -> Self {
+        if let Some(config) = config {
+            let lo0 = Interface {
+                name: LO0_STR.to_owned(),
+                kind: Kind::Ipv4,
+                addr: Some(SocketAddr::from_str("127.0.0.1").unwrap()),
+                mask: Some(SocketAddr::from_str("255.0.0.0").unwrap()),
+                hop: None,
+            };
+
+            let eth0 = Interface {
+                name: "eth0".to_owned(),
+                kind: Kind::Ipv4,
+                addr: None,
+                mask: None,
+                hop: None,
+            };
+
+            let mut static_ips = vec![];
+            for ip_str in &config.static_ips {
+                if let Ok(ip) = IpAddr::from_str(ip_str) {
+                    static_ips.push(ip);
                 }
-
-                ifs = append(ifs, ifc)
             }
+            if !config.static_ip.is_empty() {
+                if let Ok(ip) = IpAddr::from_str(&config.static_ip) {
+                    static_ips.push(ip);
+                }
+            }
+
+            let vnet = VNet {
+                interfaces: vec![lo0, eth0],
+                static_ips,
+                router: Mutex::new(None),
+                udp_conns: UDPConnMap::new(),
+            };
+
+            Net::VNet(vnet)
+        } else {
+            let ifs = match ifaces::Interface::get_all() {
+                Ok(ifs) => ifs,
+                Err(_) => vec![],
+            };
+
+            Net::IFS(ifs)
         }
-
-        return &Net{ifs: ifs}
-    }
-
-    lo0 := NewInterface(net.Interface{
-        Index:        1,
-        MTU:          16384,
-        Name:         lo0String,
-        HardwareAddr: nil,
-        Flags:        net.FlagUp | net.FlagLoopback | net.FlagMulticast,
-    })
-    lo0.AddAddr(&net.IPNet{
-        IP:   net.ParseIP("127.0.0.1"),
-        Mask: net.CIDRMask(8, 32),
-    })
-
-    eth0 := NewInterface(net.Interface{
-        Index:        2,
-        MTU:          1500,
-        Name:         "eth0",
-        HardwareAddr: newMACAddress(),
-        Flags:        net.FlagUp | net.FlagMulticast,
-    })
-
-    var static_ips []net.IP
-    for _, ipStr := range config.StaticIPs {
-        if ip := net.ParseIP(ipStr); ip != nil {
-            static_ips = append(static_ips, ip)
-        }
-    }
-    if len(config.StaticIP) > 0 {
-        if ip := net.ParseIP(config.StaticIP); ip != nil {
-            static_ips = append(static_ips, ip)
-        }
-    }
-
-    v := &vNet{
-        interfaces: []*Interface{lo0, eth0},
-        static_ips:  static_ips,
-        udp_conns:   newUDPConnMap(),
-    }
-
-    return &Net{
-        v: v,
     }
 }
-
+/*
 // Interfaces returns a list of the system's network interfaces.
 func (n *Net) Interfaces() ([]*Interface, error) {
     if n.v == nil {
