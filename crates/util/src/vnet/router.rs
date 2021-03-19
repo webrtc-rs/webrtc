@@ -4,13 +4,13 @@ mod router_test;
 use crate::vnet::chunk::*;
 use crate::vnet::chunk_queue::*;
 use crate::vnet::errors::*;
+use crate::vnet::interface::*;
 use crate::vnet::nat::*;
 use crate::vnet::net::*;
 use crate::vnet::resolver::*;
 use crate::Error;
 
 use async_trait::async_trait;
-use ifaces::*;
 use ipnet::*;
 use std::collections::HashMap;
 use std::future::Future;
@@ -160,15 +160,13 @@ impl NIC for Router {
         // when this method is called, one or more IP address has already been assigned by
         // the parent router.
         if let Some(ifc) = self.get_interface("eth0") {
-            if let Some(ifc_addr) = &ifc.addr {
-                let ip = ifc_addr.ip();
+            for ifc_addr in ifc.addrs() {
+                let ip = ifc_addr.addr();
                 mapped_ips.push(ip);
 
                 if let Some(loc_ip) = self.static_local_ips.get(&ip.to_string()) {
                     local_ips.push(*loc_ip);
                 }
-            } else {
-                return Err(ERR_NO_IPADDR_ETH0.to_owned());
             }
         } else {
             return Err(ERR_NO_IPADDR_ETH0.to_owned());
@@ -211,22 +209,16 @@ impl Router {
         };
 
         // set up network interface, lo0
-        let lo0 = Interface {
-            name: LO0_STR.to_owned(),
-            kind: Kind::Ipv4,
-            addr: Some(SocketAddr::from_str("127.0.0.1")?),
-            mask: None,
-            hop: None,
-        };
+        let mut lo0 = Interface::new(LO0_STR.to_owned(), vec![]);
+        if let Ok(ipnet) = Interface::convert(
+            SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
+            Some(SocketAddr::new(Ipv4Addr::new(255, 0, 0, 0).into(), 0)),
+        ) {
+            lo0.add_addr(ipnet);
+        }
 
         // set up network interface, eth0
-        let eth0 = Interface {
-            name: "eth0".to_owned(),
-            kind: Kind::Ipv4,
-            addr: None,
-            mask: None,
-            hop: None,
-        };
+        let eth0 = Interface::new("eth0".to_owned(), vec![]);
 
         // local host name resolver
         let resolver = Arc::new(Mutex::new(Resolver::new()));

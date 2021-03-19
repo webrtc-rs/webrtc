@@ -3,14 +3,16 @@ mod net_test;
 
 use super::conn_map::*;
 use super::errors::*;
+use super::interface::*;
 use crate::vnet::chunk::Chunk;
 use crate::vnet::conn::ConnObserver;
 use crate::vnet::router::*;
 use crate::Error;
 
 use async_trait::async_trait;
-use ifaces::*;
-use std::net::{IpAddr, SocketAddr};
+use ipnet::IpNet;
+use std::collections::HashMap;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -111,15 +113,16 @@ impl ConnObserver for VNet {
         }
 
         if let Some(ifc) = self.get_interface("eth0") {
-            if let Some(addr) = ifc.addr {
-                //TODO: ipv4 vs ipv6?
-                Some(addr.ip())
-            } else {
-                None
+            for ipnet in ifc.addrs() {
+                if (ipnet.addr().is_ipv4() && loc_ip.is_ipv4())
+                    || (ipnet.addr().is_ipv6() && loc_ip.is_ipv6())
+                {
+                    return Some(ipnet.addr());
+                }
             }
-        } else {
-            None
         }
+
+        None
     }
 }
 
@@ -129,13 +132,13 @@ impl VNet {
     }
 
     // caller must hold the mutex
-    pub(crate) fn get_all_ip_addrs(&self, ipv6: bool) -> Vec<IpAddr> {
+    pub(crate) fn get_all_ipaddrs(&self, ipv6: bool) -> Vec<IpAddr> {
         let mut ips = vec![];
 
         for ifc in &self.interfaces {
-            if let Some(addr) = ifc.addr {
-                if (ipv6 && addr.is_ipv6()) || (!ipv6 && addr.is_ipv4()) {
-                    ips.push(addr.ip());
+            for ipnet in ifc.addrs() {
+                if (ipv6 && ipnet.addr().is_ipv6()) || (!ipv6 && ipnet.addr().is_ipv4()) {
+                    ips.push(ipnet.addr());
                 }
             }
         }
@@ -144,10 +147,10 @@ impl VNet {
     }
 
     // caller must hold the mutex
-    pub(crate) fn has_ip_addr(&self, ip: IpAddr) -> bool {
+    pub(crate) fn has_ipaddr(&self, ip: IpAddr) -> bool {
         for ifc in &self.interfaces {
-            if let Some(addr) = &ifc.addr {
-                let loc_ip = addr.ip();
+            for ipnet in ifc.addrs() {
+                let loc_ip = ipnet.addr();
 
                 match ip.to_string().as_str() {
                     "0.0.0.0" => {
@@ -177,8 +180,8 @@ impl VNet {
         // gather local IP addresses to bind
         let mut ips = vec![];
         if ip.is_unspecified() {
-            ips = self.get_all_ip_addrs(ip.is_ipv6());
-        } else if self.has_ip_addr(ip) {
+            ips = self.get_all_ipaddrs(ip.is_ipv6());
+        } else if self.has_ipaddr(ip) {
             ips.push(ip);
         }
 
@@ -400,21 +403,15 @@ impl Net {
     // IP address for eth0 will be assigned when this Net is added to a router.
     pub fn new(config: Option<NetConfig>) -> Self {
         if let Some(config) = config {
-            let lo0 = Interface {
-                name: LO0_STR.to_owned(),
-                kind: Kind::Ipv4,
-                addr: Some(SocketAddr::from_str("127.0.0.1").unwrap()),
-                mask: Some(SocketAddr::from_str("255.0.0.0").unwrap()),
-                hop: None,
-            };
+            let mut lo0 = Interface::new(LO0_STR.to_owned(), vec![]);
+            if let Ok(ipnet) = Interface::convert(
+                SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
+                Some(SocketAddr::new(Ipv4Addr::new(255, 0, 0, 0).into(), 0)),
+            ) {
+                lo0.add_addr(ipnet);
+            }
 
-            let eth0 = Interface {
-                name: "eth0".to_owned(),
-                kind: Kind::Ipv4,
-                addr: None,
-                mask: None,
-                hop: None,
-            };
+            let eth0 = Interface::new("eth0".to_owned(), vec![]);
 
             let mut static_ips = vec![];
             for ip_str in &config.static_ips {
@@ -437,10 +434,30 @@ impl Net {
 
             Net::VNet(vnet)
         } else {
-            let ifs = match ifaces::Interface::get_all() {
+            let ifaces = match ifaces::Interface::get_all() {
                 Ok(ifs) => ifs,
                 Err(_) => vec![],
             };
+
+            let mut m: HashMap<String, Vec<IpNet>> = HashMap::new();
+            for iface in ifaces {
+                if let Some(addrs) = m.get_mut(&iface.name) {
+                    if let Some(addr) = iface.addr {
+                        if let Ok(inet) = Interface::convert(addr, iface.mask) {
+                            addrs.push(inet);
+                        }
+                    }
+                } else if let Some(addr) = iface.addr {
+                    if let Ok(inet) = Interface::convert(addr, iface.mask) {
+                        m.insert(iface.name, vec![inet]);
+                    }
+                }
+            }
+
+            let mut ifs = vec![];
+            for (name, addrs) in m.into_iter() {
+                ifs.push(Interface::new(name, addrs));
+            }
 
             Net::IFS(ifs)
         }
