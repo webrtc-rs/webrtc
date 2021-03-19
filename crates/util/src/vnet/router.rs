@@ -64,6 +64,7 @@ pub struct RouterConfig {
 #[async_trait]
 pub trait NIC {
     fn get_interface(&self, if_name: &str) -> Option<&Interface>;
+    fn get_interface_mut(&mut self, if_name: &str) -> Option<&mut Interface>;
     async fn on_inbound_chunk(&self, c: Box<dyn Chunk + Send + Sync>);
     fn get_static_ips(&self) -> &[IpAddr];
     async fn set_router(&self, r: Arc<Mutex<Router>>) -> Result<(), Error>;
@@ -106,6 +107,15 @@ pub struct Router {
 impl NIC for Router {
     fn get_interface(&self, ifc_name: &str) -> Option<&Interface> {
         for ifc in &self.interfaces {
+            if ifc.name == ifc_name {
+                return Some(ifc);
+            }
+        }
+        None
+    }
+
+    fn get_interface_mut(&mut self, ifc_name: &str) -> Option<&mut Interface> {
+        for ifc in &mut self.interfaces {
             if ifc.name == ifc_name {
                 return Some(ifc);
             }
@@ -381,22 +391,20 @@ impl Router {
     }
 
     // AddRouter adds a chile Router.
-    pub async fn add_router(&mut self, router: Arc<Mutex<Router>>) -> Result<(), Error> {
+    // after parent.add_router(child), also call child.set_router(parent) to set child's parent router
+    pub async fn add_router(&mut self, child: Arc<Mutex<Router>>) -> Result<(), Error> {
         // Router is a NIC. Add it as a NIC so that packets are routed to this child
         // router.
-        let router2 = Arc::clone(&router);
-        self.children.push(router2);
-
-        let nic = router as Arc<Mutex<dyn NIC + Send + Sync>>;
+        let nic = Arc::clone(&child) as Arc<Mutex<dyn NIC + Send + Sync>>;
+        self.children.push(child);
         self.add_net(nic).await
     }
 
     // AddNet ...
+    // after router.add_net(nic), also call nic.set_router(router) to set nic's router
     pub async fn add_net(&mut self, nic: Arc<Mutex<dyn NIC + Send + Sync>>) -> Result<(), Error> {
         let mut router_internal = self.router_internal.lock().await;
         router_internal.add_nic(nic).await
-
-        //TODO: nic.set_parent(r)?;
     }
 
     // AddHost adds a mapping of hostname and an IP address to the local resolver.
@@ -535,7 +543,6 @@ impl RouterInternal {
     ) -> Result<(), Error> {
         let mut ips = {
             let ni = nic.lock().await;
-            let _ifc = ni.get_interface("eth0");
             ni.get_static_ips().to_vec()
         };
 
@@ -549,13 +556,20 @@ impl RouterInternal {
             if !self.ipv4net.contains(ip) {
                 return Err(ERR_STATIC_IP_IS_BEYOND_SUBNET.to_owned());
             }
-
-            /*TODO: ifc.AddAddr(&net.IPNet{
-                IP:   ip,
-                Mask: r.ipv4net.Mask,
-            })*/
-
             self.nics.insert(ip.to_string(), Arc::clone(&nic));
+        }
+
+        {
+            let mut ni = nic.lock().await;
+            if let Some(ifc) = ni.get_interface_mut("eth0") {
+                for ip in ips {
+                    ifc.add_addr(IpNet::from_str(&format!(
+                        "{}/{}",
+                        ip,
+                        self.ipv4net.prefix_len()
+                    ))?);
+                }
+            }
         }
 
         Ok(())

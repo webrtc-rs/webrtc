@@ -52,6 +52,15 @@ impl NIC for VNet {
         None
     }
 
+    fn get_interface_mut(&mut self, ifc_name: &str) -> Option<&mut Interface> {
+        for ifc in &mut self.interfaces {
+            if ifc.name == ifc_name {
+                return Some(ifc);
+            }
+        }
+        None
+    }
+
     async fn set_router(&self, r: Arc<Mutex<Router>>) -> Result<(), Error> {
         let mut router = self.router.lock().await;
         *router = Some(r);
