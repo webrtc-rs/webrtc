@@ -27,7 +27,7 @@ md-5 = "0.9.1"
 tokio-test = "0.4"
 env_logger = "0.8"
 hex = "0.4.2"
-signal-hook = "0.3.2"
+ctrlc = "3.1.8"
 clap = "2"
 
 [[example]]

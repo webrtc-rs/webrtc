@@ -9,14 +9,13 @@ use clap::{App, AppSettings, Arg};
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use tokio::net::UdpSocket;
 use tokio::time::Duration;
 
 use util::Error;
-
-use signal_hook::iterator::Signals;
 
 struct MyAuthHandler {
     cred_map: HashMap<String, Vec<u8>>,
@@ -44,7 +43,7 @@ impl AuthHandler for MyAuthHandler {
     }
 }
 
-// RUST_LOG=trace cargo run --color=always --package webrtc-rs-turn --example turn_server_udp -- --public-ip 0.0.0.0 --users user=pass
+// RUST_LOG=trace cargo run --color=always --package webrtc-turn --example turn_server_udp -- --public-ip 0.0.0.0 --users user=pass
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -132,15 +131,18 @@ async fn main() -> Result<(), Error> {
     })
     .await?;
 
-    let mut signals = Signals::new(&[signal_hook::consts::SIGINT]).unwrap();
-    let close_handle = signals.handle();
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
 
-    for _sig in signals.forever() {
-        println!("closing connection now");
-        server.close()?;
-        close_handle.close();
-        return Ok(());
-    }
+    ctrlc::set_handler(move || {
+        r.store(false, Ordering::SeqCst);
+    })
+    .expect("Error setting Ctrl-C handler");
+
+    println!("Waiting for Ctrl-C...");
+    while running.load(Ordering::SeqCst) {}
+    println!("\nClosing connection now...");
+    server.close()?;
 
     Ok(())
 }
