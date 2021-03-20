@@ -61,7 +61,7 @@ impl DNSConn {
 
         {
             let mut join_error_count = 0;
-            let interfaces = match ifaces::Interface::get_all() {
+            let interfaces = match ifaces::ifaces() {
                 Ok(e) => e,
                 Err(e) => {
                     log::error!("Error getting interfaces: {:?}", e);

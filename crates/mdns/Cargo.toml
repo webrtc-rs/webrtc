@@ -17,7 +17,7 @@ lazy_static = "1.3.0"
 tokio = { version = "^1.0", features = ["full"] }
 log = "0.4"
 socket2 = { version = "^0.3", features = ["reuseport"] }
-ifaces = "0.1.0"
+ifaces = { git = "https://github.com/misuzu/rust-interfaces", rev = "37789631bdf122dd6a5d1dfde818ef9a944fc303"}
 
 [dev-dependencies]
 env_logger = "0.8"
