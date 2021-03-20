@@ -11,7 +11,7 @@ use stun::{agent::*, attributes::*, integrity::*, message::*, textattrs::*, xora
 use std::sync::Arc;
 use tokio::net::UdpSocket;
 use tokio::time::Duration;
-use util::{Conn, Error};
+use util::{ifaces, Conn, Error};
 
 pub(crate) fn create_addr(_network: NetworkType, ip: IpAddr, port: u16) -> SocketAddr {
     /*if network.is_tcp(){
