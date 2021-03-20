@@ -93,7 +93,7 @@ pub(crate) fn local_interfaces(
     network_types: &[NetworkType],
 ) -> Result<Vec<IpAddr>, Error> {
     let mut ips = vec![];
-    let interfaces = match ifaces::Interface::get_all() {
+    let interfaces = match ifaces::ifaces() {
         Ok(interfaces) => interfaces,
         Err(e) => {
             log::error!("Error getting interfaces: {:?}", e);

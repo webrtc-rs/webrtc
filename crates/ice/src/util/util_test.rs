@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn test_local_interfaces() -> Result<(), Error> {
-    let interfaces = match ifaces::Interface::get_all() {
+    let interfaces = match ifaces::ifaces() {
         Ok(interfaces) => interfaces,
         Err(err) => return Err(Error::new(err.to_string())),
     };
