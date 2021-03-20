@@ -3,16 +3,17 @@ use webrtc_mdns as mdns;
 use mdns::{config::*, conn::*};
 
 use clap::{App, AppSettings, Arg};
-use signal_hook::iterator::Signals;
 use std::net::SocketAddr;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use util::Error;
 
 // For interop with webrtc-rs/mdns_server
-// cargo run --color=always --package webrtc-rs-mdns --example mdns_server
+// cargo run --color=always --package webrtc-mdns --example mdns_server
 
 // For interop with pion/mdns_client:
-// cargo run --color=always --package webrtc-rs-mdns --example mdns_server -- --local-name pion-test.local
+// cargo run --color=always --package webrtc-mdns --example mdns_server -- --local-name pion-test.local
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -64,15 +65,18 @@ async fn main() -> Result<(), Error> {
     )
     .unwrap();
 
-    let mut signals = Signals::new(&[signal_hook::consts::SIGINT]).unwrap();
-    let close_handle = signals.handle();
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
 
-    for _sig in signals.forever() {
-        println!("closing connection now");
-        server.close().await.unwrap();
-        close_handle.close();
-        return Ok(());
-    }
+    ctrlc::set_handler(move || {
+        r.store(false, Ordering::SeqCst);
+    })
+    .expect("Error setting Ctrl-C handler");
+
+    println!("Waiting for Ctrl-C...");
+    while running.load(Ordering::SeqCst) {}
+    println!("\nClosing connection now...");
+    server.close().await.unwrap();
 
     Ok(())
 }

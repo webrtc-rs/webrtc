@@ -9,10 +9,10 @@ use tokio::sync::mpsc;
 use util::Error;
 
 // For interop with webrtc-rs/mdns_server
-// cargo run --color=always --package webrtc-rs-mdns --example mdns_query
+// cargo run --color=always --package webrtc-mdns --example mdns_query
 
 // For interop with pion/mdns_server:
-// cargo run --color=always --package webrtc-rs-mdns --example mdns_query -- --local-name pion-test.local
+// cargo run --color=always --package webrtc-mdns --example mdns_query -- --local-name pion-test.local
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
