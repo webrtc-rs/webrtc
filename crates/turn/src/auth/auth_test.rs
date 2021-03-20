@@ -3,6 +3,8 @@ use crate::client::*;
 use crate::relay::relay_static::*;
 use crate::server::{config::*, *};
 
+use std::net::IpAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::net::UdpSocket;
 use util::Error;
@@ -42,6 +44,7 @@ fn test_generate_auth_key() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(target_family = "unix")]
 #[tokio::test]
 async fn test_new_long_term_auth_handler() -> Result<(), Error> {
     //env_logger::init();
@@ -58,7 +61,7 @@ async fn test_new_long_term_auth_handler() -> Result<(), Error> {
         conn_configs: vec![ConnConfig {
             conn,
             relay_addr_generator: Box::new(RelayAddressGeneratorStatic {
-                relay_address: util::conn::lookup_host(true, "localhost:0").await?.ip(),
+                relay_address: IpAddr::from_str("127.0.0.1")?,
                 address: "0.0.0.0".to_owned(),
             }),
         }],
