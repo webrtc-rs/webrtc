@@ -47,7 +47,7 @@ fn test_generate_auth_key() -> Result<(), Error> {
 
 #[tokio::test]
 async fn test_new_long_term_auth_handler() -> Result<(), Error> {
-    // env_logger::init();
+    env_logger::init();
 
     const SHARED_SECRET: &str = "HELLO_WORLD";
 
