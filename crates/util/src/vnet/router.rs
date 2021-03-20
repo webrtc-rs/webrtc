@@ -63,8 +63,12 @@ pub struct RouterConfig {
 // NIC is a network interface controller that interfaces Router
 #[async_trait]
 pub trait NIC {
-    fn get_interface(&self, if_name: &str) -> Option<&Interface>;
-    fn get_interface_mut(&mut self, if_name: &str) -> Option<&mut Interface>;
+    fn get_interface(&self, ifc_name: &str) -> Option<&Interface>;
+    async fn add_addrs_to_interface(
+        &mut self,
+        ifc_name: &str,
+        addrs: &[IpNet],
+    ) -> Result<(), Error>;
     async fn on_inbound_chunk(&self, c: Box<dyn Chunk + Send + Sync>);
     fn get_static_ips(&self) -> &[IpAddr];
     async fn set_router(&self, r: Arc<Mutex<Router>>) -> Result<(), Error>;
@@ -114,13 +118,21 @@ impl NIC for Router {
         None
     }
 
-    fn get_interface_mut(&mut self, ifc_name: &str) -> Option<&mut Interface> {
+    async fn add_addrs_to_interface(
+        &mut self,
+        ifc_name: &str,
+        addrs: &[IpNet],
+    ) -> Result<(), Error> {
         for ifc in &mut self.interfaces {
             if ifc.name == ifc_name {
-                return Some(ifc);
+                for addr in addrs {
+                    ifc.add_addr(*addr);
+                }
+                return Ok(());
             }
         }
-        None
+
+        Err(ERR_NOT_FOUND.to_owned())
     }
 
     async fn on_inbound_chunk(&self, c: Box<dyn Chunk + Send + Sync>) {
@@ -552,24 +564,22 @@ impl RouterInternal {
             ips.push(ip);
         }
 
+        let mut ipnets = vec![];
         for ip in &ips {
             if !self.ipv4net.contains(ip) {
                 return Err(ERR_STATIC_IP_IS_BEYOND_SUBNET.to_owned());
             }
             self.nics.insert(ip.to_string(), Arc::clone(&nic));
+            ipnets.push(IpNet::from_str(&format!(
+                "{}/{}",
+                ip,
+                self.ipv4net.prefix_len()
+            ))?);
         }
 
         {
             let mut ni = nic.lock().await;
-            if let Some(ifc) = ni.get_interface_mut("eth0") {
-                for ip in ips {
-                    ifc.add_addr(IpNet::from_str(&format!(
-                        "{}/{}",
-                        ip,
-                        self.ipv4net.prefix_len()
-                    ))?);
-                }
-            }
+            let _ = ni.add_addrs_to_interface("eth0", &ipnets).await;
         }
 
         Ok(())

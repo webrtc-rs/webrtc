@@ -3,6 +3,7 @@ use ipnet::*;
 use std::net::SocketAddr;
 use std::str::FromStr;
 
+#[derive(Clone)]
 pub struct Interface {
     pub(crate) name: String,
     pub(crate) addrs: Vec<IpNet>,

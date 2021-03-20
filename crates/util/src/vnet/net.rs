@@ -4,11 +4,11 @@ mod net_test;
 use super::conn_map::*;
 use super::errors::*;
 use super::interface::*;
-use crate::ifaces;
 use crate::vnet::chunk::Chunk;
-use crate::vnet::conn::ConnObserver;
+use crate::vnet::conn::{ConnObserver, UDPConn};
 use crate::vnet::router::*;
 use crate::Error;
+use crate::{ifaces, Conn};
 
 use async_trait::async_trait;
 use ipnet::IpNet;
@@ -17,6 +17,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use tokio::net::UdpSocket;
 use tokio::sync::Mutex;
 
 pub(crate) const LO0_STR: &str = "lo0";
@@ -35,15 +36,13 @@ pub(crate) fn new_mac_address() -> HardwareAddr {
     b[2..].to_vec()
 }
 
-pub struct VNet {
-    interfaces: Vec<Interface>,                // read-only
-    static_ips: Vec<IpAddr>,                   // read-only
-    router: Mutex<Option<Arc<Mutex<Router>>>>, // read-only
-    udp_conns: UDPConnMap,                     // read-only
+struct VNetInternal {
+    interfaces: Vec<Interface>,         // read-only
+    router: Option<Arc<Mutex<Router>>>, // read-only
+    udp_conns: UDPConnMap,              // read-only
 }
 
-#[async_trait]
-impl NIC for VNet {
+impl VNetInternal {
     fn get_interface(&self, ifc_name: &str) -> Option<&Interface> {
         for ifc in &self.interfaces {
             if ifc.name == ifc_name {
@@ -52,39 +51,10 @@ impl NIC for VNet {
         }
         None
     }
-
-    fn get_interface_mut(&mut self, ifc_name: &str) -> Option<&mut Interface> {
-        for ifc in &mut self.interfaces {
-            if ifc.name == ifc_name {
-                return Some(ifc);
-            }
-        }
-        None
-    }
-
-    async fn set_router(&self, r: Arc<Mutex<Router>>) -> Result<(), Error> {
-        let mut router = self.router.lock().await;
-        *router = Some(r);
-
-        Ok(())
-    }
-
-    async fn on_inbound_chunk(&self, c: Box<dyn Chunk + Send + Sync>) {
-        if c.network() == UDP_STR {
-            if let Some(conn) = self.udp_conns.find(&c.destination_addr()).await {
-                let tx = conn.get_inbound_ch();
-                let _ = tx.send(c).await;
-            }
-        }
-    }
-
-    fn get_static_ips(&self) -> &[IpAddr] {
-        &[]
-    }
 }
 
 #[async_trait]
-impl ConnObserver for VNet {
+impl ConnObserver for VNetInternal {
     async fn write(&self, c: Box<dyn Chunk + Send + Sync>) -> Result<(), Error> {
         if c.network() == UDP_STR && c.get_destination_ip().is_loopback() {
             if let Some(conn) = self.udp_conns.find(&c.destination_addr()).await {
@@ -94,8 +64,7 @@ impl ConnObserver for VNet {
             return Ok(());
         }
 
-        let router = self.router.lock().await;
-        if let Some(r) = &*router {
+        if let Some(r) = &self.router {
             let p = r.lock().await;
             p.push(c).await;
             Ok(())
@@ -133,6 +102,74 @@ impl ConnObserver for VNet {
         }
 
         None
+    }
+}
+
+pub struct VNet {
+    interfaces: Vec<Interface>, // read-only
+    static_ips: Vec<IpAddr>,    // read-only
+    vi: Arc<Mutex<VNetInternal>>,
+}
+
+#[async_trait]
+impl NIC for VNet {
+    fn get_interface(&self, ifc_name: &str) -> Option<&Interface> {
+        for ifc in &self.interfaces {
+            if ifc.name == ifc_name {
+                return Some(ifc);
+            }
+        }
+        None
+    }
+
+    async fn add_addrs_to_interface(
+        &mut self,
+        ifc_name: &str,
+        addrs: &[IpNet],
+    ) -> Result<(), Error> {
+        {
+            let mut vi = self.vi.lock().await;
+            for ifc in &mut vi.interfaces {
+                if ifc.name == ifc_name {
+                    for addr in addrs {
+                        ifc.add_addr(*addr);
+                    }
+                    return Ok(());
+                }
+            }
+        }
+
+        for ifc in &mut self.interfaces {
+            if ifc.name == ifc_name {
+                for addr in addrs {
+                    ifc.add_addr(*addr);
+                }
+                return Ok(());
+            }
+        }
+
+        Err(ERR_NOT_FOUND.to_owned())
+    }
+
+    async fn set_router(&self, r: Arc<Mutex<Router>>) -> Result<(), Error> {
+        let mut vi = self.vi.lock().await;
+        vi.router = Some(r);
+
+        Ok(())
+    }
+
+    async fn on_inbound_chunk(&self, c: Box<dyn Chunk + Send + Sync>) {
+        if c.network() == UDP_STR {
+            let vi = self.vi.lock().await;
+            if let Some(conn) = vi.udp_conns.find(&c.destination_addr()).await {
+                let tx = conn.get_inbound_ch();
+                let _ = tx.send(c).await;
+            }
+        }
+    }
+
+    fn get_static_ips(&self) -> &[IpAddr] {
+        &[]
     }
 }
 
@@ -202,7 +239,8 @@ impl VNet {
         // check if all these transport addresses are not in use
         for ip2 in ips {
             let addr = SocketAddr::new(ip2, port);
-            if self.udp_conns.find(&addr).await.is_some() {
+            let vi = self.vi.lock().await;
+            if vi.udp_conns.find(&addr).await.is_some() {
                 return Err(ERR_ADDRESS_ALREADY_IN_USE.to_owned());
             }
         }
@@ -246,8 +284,8 @@ impl VNet {
                     Ipv4Addr::new(127, 0, 0, 1).into()
                 } else {
                     // host is a domain name. resolve IP address by the name
-                    let router_opt = self.router.lock().await;
-                    if let Some(router) = &*router_opt {
+                    let vi = self.vi.lock().await;
+                    if let Some(router) = &vi.router {
                         let r = router.lock().await;
                         let resolver = r.resolver.lock().await;
                         if let Some(ip) = resolver.lookup(host).await {
@@ -266,121 +304,38 @@ impl VNet {
 
         Ok(SocketAddr::new(ip, port))
     }
-}
-/*
 
-
-// caller must hold the mutex
-func (v *vNet) _dialUDP(network string, locAddr, remAddr *net.UDPAddr) (UDPPacketConn, error) {
-    // validate network
-    if network != udpString && network != "udp4" {
-        return nil, fmt.Errorf("%w: %s", errUnexpectedNetwork, network)
-    }
-
-    if locAddr == nil {
-        locAddr = &net.UDPAddr{
-            IP: net.IPv4zero,
+    // caller must hold the mutex
+    pub(crate) async fn bind(
+        &self,
+        mut addr: SocketAddr,
+    ) -> Result<Arc<dyn Conn + Send + Sync>, Error> {
+        // validate address. do we have that address?
+        if !self.has_ipaddr(addr.ip()) {
+            return Err(ERR_CANT_ASSIGN_REQUESTED_ADDR.to_owned());
         }
-    } else if locAddr.IP == nil {
-        locAddr.IP = net.IPv4zero
-    }
 
-    // validate address. do we have that address?
-    if !v.hasIPAddr(locAddr.IP) {
-        return nil, &net.OpError{
-            Op:   "listen",
-            Net:  network,
-            Addr: locAddr,
-            Err:  fmt.Errorf("bind: %w", errCantAssignRequestedAddr),
-        }
-    }
-
-    if locAddr.Port == 0 {
-        // choose randomly from the range between 5000 and 5999
-        port, err := v.assignPort(locAddr.IP, 5000, 5999)
-        if err != nil {
-            return nil, &net.OpError{
-                Op:   "listen",
-                Net:  network,
-                Addr: locAddr,
-                Err:  err,
+        if addr.port() == 0 {
+            // choose randomly from the range between 5000 and 5999
+            addr.set_port(self.assign_port(addr.ip(), 5000, 5999).await?);
+        } else {
+            let vi = self.vi.lock().await;
+            if vi.udp_conns.find(&addr).await.is_some() {
+                return Err(ERR_ADDRESS_ALREADY_IN_USE.to_owned());
             }
         }
-        locAddr.Port = port
-    } else if _, ok := v.udp_conns.find(locAddr); ok {
-        return nil, &net.OpError{
-            Op:   "listen",
-            Net:  network,
-            Addr: locAddr,
-            Err:  fmt.Errorf("bind: %w", errAddressAlreadyInUse),
+
+        let v = Arc::clone(&self.vi) as Arc<Mutex<dyn ConnObserver + Send + Sync>>;
+        let conn = Arc::new(UDPConn::new(addr, None, v));
+
+        {
+            let vi = self.vi.lock().await;
+            vi.udp_conns.insert(Arc::clone(&conn)).await?;
         }
-    }
 
-    conn, err := newUDPConn(locAddr, remAddr, v)
-    if err != nil {
-        return nil, err
-    }
-
-    err = v.udp_conns.insert(conn)
-    if err != nil {
-        return nil, err
-    }
-
-    return conn, nil
-}
-
-func (v *vNet) listenPacket(network string, address string) (UDPPacketConn, error) {
-    v.mutex.Lock()
-    defer v.mutex.Unlock()
-
-    locAddr, err := v.resolveUDPAddr(network, address)
-    if err != nil {
-        return nil, err
-    }
-
-    return v._dialUDP(network, locAddr, nil)
-}
-
-func (v *vNet) listenUDP(network string, locAddr *net.UDPAddr) (UDPPacketConn, error) {
-    v.mutex.Lock()
-    defer v.mutex.Unlock()
-
-    return v._dialUDP(network, locAddr, nil)
-}
-
-func (v *vNet) dialUDP(network string, locAddr, remAddr *net.UDPAddr) (UDPPacketConn, error) {
-    v.mutex.Lock()
-    defer v.mutex.Unlock()
-
-    return v._dialUDP(network, locAddr, remAddr)
-}
-
-func (v *vNet) dial(network string, address string) (UDPPacketConn, error) {
-    v.mutex.Lock()
-    defer v.mutex.Unlock()
-
-    remAddr, err := v.resolveUDPAddr(network, address)
-    if err != nil {
-        return nil, err
-    }
-
-    // Determine source address
-    srcIP := v.determineSourceIP(nil, remAddr.IP)
-
-    locAddr := &net.UDPAddr{IP: srcIP, Port: 0}
-
-    return v._dialUDP(network, locAddr, remAddr)
-}
-
-
-
-func (v *vNet) onClosed(addr net.Addr) {
-    if addr.Network() == udpString {
-        //nolint:errcheck
-        v.udp_conns.delete(addr) // #nosec
+        Ok(conn)
     }
 }
-*/
 
 // NetConfig is a bag of configuration parameters passed to NewNet().
 pub struct NetConfig {
@@ -432,10 +387,13 @@ impl Net {
             }
 
             let vnet = VNet {
-                interfaces: vec![lo0, eth0],
+                interfaces: vec![lo0.clone(), eth0.clone()],
                 static_ips,
-                router: Mutex::new(None),
-                udp_conns: UDPConnMap::new(),
+                vi: Arc::new(Mutex::new(VNetInternal {
+                    interfaces: vec![lo0, eth0],
+                    router: None,
+                    udp_conns: UDPConnMap::new(),
+                })),
             };
 
             Net::VNet(vnet)
@@ -484,6 +442,13 @@ impl Net {
             Net::IFS(_) => false,
         }
     }
+
+    pub async fn bind(&self, addr: SocketAddr) -> Result<Arc<dyn Conn + Send + Sync>, Error> {
+        match self {
+            Net::VNet(vnet) => vnet.bind(addr).await,
+            Net::IFS(_) => Ok(Arc::new(UdpSocket::bind(addr).await?)),
+        }
+    }
 }
 
 #[async_trait]
@@ -502,16 +467,23 @@ impl NIC for Net {
         }
     }
 
-    fn get_interface_mut(&mut self, ifc_name: &str) -> Option<&mut Interface> {
+    async fn add_addrs_to_interface(
+        &mut self,
+        ifc_name: &str,
+        addrs: &[IpNet],
+    ) -> Result<(), Error> {
         match self {
-            Net::VNet(vnet) => vnet.get_interface_mut(ifc_name),
+            Net::VNet(vnet) => vnet.add_addrs_to_interface(ifc_name, addrs).await,
             Net::IFS(ifs) => {
                 for ifc in ifs {
                     if ifc.name == ifc_name {
-                        return Some(ifc);
+                        for addr in addrs {
+                            ifc.add_addr(*addr);
+                        }
+                        return Ok(());
                     }
                 }
-                None
+                Err(ERR_NOT_FOUND.to_owned())
             }
         }
     }
@@ -537,85 +509,3 @@ impl NIC for Net {
         }
     }
 }
-
-/*
-TODO: revisit Net APIs
-// ListenPacket announces on the local network address.
-func (n *Net) ListenPacket(network string, address string) (net.PacketConn, error) {
-    if n.v == nil {
-        return net.ListenPacket(network, address)
-    }
-
-    return n.v.listenPacket(network, address)
-}
-
-// ListenUDP acts like ListenPacket for UDP networks.
-func (n *Net) ListenUDP(network string, locAddr *net.UDPAddr) (UDPPacketConn, error) {
-    if n.v == nil {
-        return net.ListenUDP(network, locAddr)
-    }
-
-    return n.v.listenUDP(network, locAddr)
-}
-
-// Dial connects to the address on the named network.
-func (n *Net) Dial(network, address string) (net.Conn, error) {
-    if n.v == nil {
-        return net.Dial(network, address)
-    }
-
-    return n.v.dial(network, address)
-}
-
-// CreateDialer creates an instance of vnet.Dialer
-func (n *Net) CreateDialer(dialer *net.Dialer) Dialer {
-    if n.v == nil {
-        return &vDialer{
-            dialer: dialer,
-        }
-    }
-
-    return &vDialer{
-        dialer: dialer,
-        v:      n.v,
-    }
-}
-
-// DialUDP acts like Dial for UDP networks.
-func (n *Net) DialUDP(network string, laddr, raddr *net.UDPAddr) (UDPPacketConn, error) {
-    if n.v == nil {
-        return net.DialUDP(network, laddr, raddr)
-    }
-
-    return n.v.dialUDP(network, laddr, raddr)
-}
-
-// ResolveUDPAddr returns an address of UDP end point.
-func (n *Net) ResolveUDPAddr(network, address string) (*net.UDPAddr, error) {
-    if n.v == nil {
-        return net.ResolveUDPAddr(network, address)
-    }
-
-    return n.v.resolveUDPAddr(network, address)
-}
-
-// Dialer is identical to net.Dialer excepts that its methods
-// (Dial, DialContext) are overridden to use virtual network.
-// Use vnet.CreateDialer() to create an instance of this Dialer.
-type Dialer interface {
-    Dial(network, address string) (net.Conn, error)
-}
-
-type vDialer struct {
-    dialer *net.Dialer
-    v      *vNet
-}
-
-func (d *vDialer) Dial(network, address string) (net.Conn, error) {
-    if d.v == nil {
-        return d.dialer.Dial(network, address)
-    }
-
-    return d.v.dial(network, address)
-}
-*/
