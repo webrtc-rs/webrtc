@@ -1,9 +1,3 @@
-#[cfg(target_family = "windows")]
-#[macro_use]
-extern crate bitflags;
-#[cfg(target_family = "windows")]
-extern crate winapi;
-
 pub mod ffi;
 pub use ffi::ifaces;
 

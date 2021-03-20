@@ -4,6 +4,10 @@
 #[macro_use]
 extern crate lazy_static;
 
+#[cfg(target_family = "windows")]
+#[macro_use]
+extern crate bitflags;
+
 pub mod buffer;
 pub mod conn;
 pub mod error;
