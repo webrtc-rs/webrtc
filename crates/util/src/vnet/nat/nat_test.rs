@@ -367,7 +367,7 @@ async fn test_nat_mapping_timeout_refresh_on_outbound() -> Result<(), Error> {
             mapping_behavior: EndpointDependencyType::EndpointIndependent,
             filtering_behavior: EndpointDependencyType::EndpointIndependent,
             hair_pining: false,
-            mapping_life_time: Duration::from_millis(100),
+            mapping_life_time: Duration::from_millis(200),
             ..Default::default()
         },
         mapped_ips: vec![IpAddr::from_str(DEMO_IP)?],
@@ -389,7 +389,7 @@ async fn test_nat_mapping_timeout_refresh_on_outbound() -> Result<(), Error> {
     // record mapped addr
     let mapped = oec.source_addr().to_string();
 
-    tokio::time::sleep(Duration::from_millis(75)).await;
+    tokio::time::sleep(Duration::from_millis(5)).await;
 
     // refresh
     let oec = nat.translate_outbound(&oic).await?.unwrap();
@@ -406,7 +406,7 @@ async fn test_nat_mapping_timeout_refresh_on_outbound() -> Result<(), Error> {
     );
 
     // sleep long enough for the mapping to expire
-    tokio::time::sleep(Duration::from_millis(125)).await;
+    tokio::time::sleep(Duration::from_millis(225)).await;
 
     // refresh after expiration
     let oec = nat.translate_outbound(&oic).await?.unwrap();
