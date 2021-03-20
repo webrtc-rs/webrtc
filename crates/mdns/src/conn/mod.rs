@@ -13,7 +13,9 @@ use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 
+use util::ifaces;
 use util::Error;
+
 mod conn_test;
 
 pub const DEFAULT_DEST_ADDR: &str = "224.0.0.251:5353";
@@ -49,13 +51,20 @@ impl DNSConn {
     /// server establishes a mDNS connection over an existing connection
     pub fn server(addr: SocketAddr, config: Config) -> Result<Self, Error> {
         let socket = socket2::Socket::new(
-            socket2::Domain::ipv4(),
-            socket2::Type::dgram(),
-            Some(socket2::Protocol::udp()),
+            socket2::Domain::IPV4,
+            socket2::Type::DGRAM,
+            Some(socket2::Protocol::UDP),
         )?;
 
         socket.set_reuse_address(true)?;
+
+        #[cfg(target_family = "unix")]
         socket.set_reuse_port(true)?;
+
+        //TODO: implement set_reuse_port for windows platform
+        #[cfg(target_family = "windows")]
+        log::warn!("socket.set_reuse_port(true) is not implemented in windows yet");
+
         socket.set_read_timeout(Some(Duration::from_millis(100)))?;
         socket.bind(&SockAddr::from(addr))?;
 
@@ -87,7 +96,7 @@ impl DNSConn {
             }
         }
 
-        let socket = UdpSocket::from_std(socket.into_udp_socket())?;
+        let socket = UdpSocket::from_std(socket.into())?;
 
         let local_names = config
             .local_names
@@ -278,7 +287,7 @@ impl DNSConn {
 
             let mut p = Parser::default();
             if let Err(err) = p.start(&b[..n]) {
-                log::error!("Failed tsssso parse mDNS packet {}", err);
+                log::error!("Failed to parse mDNS packet {}", err);
                 continue;
             }
 

@@ -12,12 +12,11 @@ repository = "https://github.com/webrtc-rs/mdns"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-util = { package = "webrtc-util", version = "0.1.6" }
+util = { package = "webrtc-util", version = "0.1.7" }
 lazy_static = "1.3.0"
 tokio = { version = "^1.0", features = ["full"] }
 log = "0.4"
-socket2 = { version = "^0.3", features = ["reuseport"] }
-ifaces = { git = "https://github.com/misuzu/rust-interfaces", rev = "37789631bdf122dd6a5d1dfde818ef9a944fc303"}
+socket2 = { version = "^0.4", features = ["all"] }
 
 [dev-dependencies]
 env_logger = "0.8"
