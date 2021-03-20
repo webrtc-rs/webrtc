@@ -8,6 +8,7 @@ pub mod buffer;
 pub mod conn;
 pub mod error;
 pub mod fixed_big_int;
+pub mod ifaces;
 pub mod replay_detector;
 pub mod vnet;
 

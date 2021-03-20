@@ -4,6 +4,7 @@ mod net_test;
 use super::conn_map::*;
 use super::errors::*;
 use super::interface::*;
+use crate::ifaces;
 use crate::vnet::chunk::Chunk;
 use crate::vnet::conn::ConnObserver;
 use crate::vnet::router::*;
