@@ -228,6 +228,43 @@ impl VNet {
 
         Err(ERR_PORT_SPACE_EXHAUSTED.to_owned())
     }
+
+    pub(crate) async fn resolve_addr(&self, address: &str) -> Result<SocketAddr, Error> {
+        let v: Vec<&str> = address.splitn(2, ':').collect();
+        if v.len() != 2 {
+            return Err(ERR_ADDR_NOT_UDPADDR.to_owned());
+        }
+        let (host, port) = (v[0], v[1]);
+
+        // Check if host is a domain name
+        let ip: IpAddr = match host.parse() {
+            Ok(ip) => ip,
+            Err(_) => {
+                let host = host.to_lowercase();
+                if host == "localhost" {
+                    Ipv4Addr::new(127, 0, 0, 1).into()
+                } else {
+                    // host is a domain name. resolve IP address by the name
+                    let router_opt = self.router.lock().await;
+                    if let Some(router) = &*router_opt {
+                        let r = router.lock().await;
+                        let resolver = r.resolver.lock().await;
+                        if let Some(ip) = resolver.lookup(host).await {
+                            ip
+                        } else {
+                            return Err(ERR_NOT_FOUND.to_owned());
+                        }
+                    } else {
+                        return Err(ERR_NO_ROUTER_LINKED.to_owned());
+                    }
+                }
+            }
+        };
+
+        let port: u16 = port.parse()?;
+
+        Ok(SocketAddr::new(ip, port))
+    }
 }
 /*
 
@@ -334,47 +371,6 @@ func (v *vNet) dial(network string, address string) (UDPPacketConn, error) {
     return v._dialUDP(network, locAddr, remAddr)
 }
 
-func (v *vNet) resolveUDPAddr(network, address string) (*net.UDPAddr, error) {
-    if network != udpString && network != "udp4" {
-        return nil, fmt.Errorf("%w %s", errUnknownNetwork, network)
-    }
-
-    host, sPort, err := net.SplitHostPort(address)
-    if err != nil {
-        return nil, err
-    }
-
-    // Check if host is a domain name
-    ip := net.ParseIP(host)
-    if ip == nil {
-        host = strings.ToLower(host)
-        if host == "localhost" {
-            ip = net.IPv4(127, 0, 0, 1)
-        } else {
-            // host is a domain name. resolve IP address by the name
-            if v.router == nil {
-                return nil, errNoRouterLinked
-            }
-
-            ip, err = v.router.resolver.lookUp(host)
-            if err != nil {
-                return nil, err
-            }
-        }
-    }
-
-    port, err := strconv.Atoi(sPort)
-    if err != nil {
-        return nil, errInvalidPortNumber
-    }
-
-    udpAddr := &net.UDPAddr{
-        IP:   ip,
-        Port: port,
-    }
-
-    return udpAddr, nil
-}
 
 
 func (v *vNet) onClosed(addr net.Addr) {
@@ -443,13 +439,13 @@ impl Net {
 
             Net::VNet(vnet)
         } else {
-            let ifaces = match ifaces::Interface::get_all() {
+            let interfaces = match ifaces::ifaces() {
                 Ok(ifs) => ifs,
                 Err(_) => vec![],
             };
 
             let mut m: HashMap<String, Vec<IpNet>> = HashMap::new();
-            for iface in ifaces {
+            for iface in interfaces {
                 if let Some(addrs) = m.get_mut(&iface.name) {
                     if let Some(addr) = iface.addr {
                         if let Ok(inet) = Interface::convert(addr, iface.mask) {
@@ -471,32 +467,78 @@ impl Net {
             Net::IFS(ifs)
         }
     }
-}
-/*
-// Interfaces returns a list of the system's network interfaces.
-func (n *Net) Interfaces() ([]*Interface, error) {
-    if n.v == nil {
-        return n.ifs, nil
+
+    // Interfaces returns a list of the system's network interfaces.
+    pub fn get_interfaces(&self) -> &[Interface] {
+        match self {
+            Net::VNet(vnet) => &vnet.interfaces,
+            Net::IFS(ifs) => &ifs,
+        }
     }
 
-    return n.v.getInterfaces()
+    // IsVirtual tests if the virtual network is enabled.
+    pub fn is_virtual(&self) -> bool {
+        match self {
+            Net::VNet(_) => true,
+            Net::IFS(_) => false,
+        }
+    }
 }
 
-// InterfaceByName returns the interface specified by name.
-func (n *Net) InterfaceByName(name string) (*Interface, error) {
-    if n.v == nil {
-        for _, ifc := range n.ifs {
-            if ifc.Name == name {
-                return ifc, nil
+#[async_trait]
+impl NIC for Net {
+    fn get_interface(&self, ifc_name: &str) -> Option<&Interface> {
+        match self {
+            Net::VNet(vnet) => vnet.get_interface(ifc_name),
+            Net::IFS(ifs) => {
+                for ifc in ifs {
+                    if ifc.name == ifc_name {
+                        return Some(ifc);
+                    }
+                }
+                None
             }
         }
-
-        return nil, fmt.Errorf("interface %s %w", name, errNotFound)
     }
 
-    return n.v.get_interface(name)
+    fn get_interface_mut(&mut self, ifc_name: &str) -> Option<&mut Interface> {
+        match self {
+            Net::VNet(vnet) => vnet.get_interface_mut(ifc_name),
+            Net::IFS(ifs) => {
+                for ifc in ifs {
+                    if ifc.name == ifc_name {
+                        return Some(ifc);
+                    }
+                }
+                None
+            }
+        }
+    }
+
+    async fn set_router(&self, r: Arc<Mutex<Router>>) -> Result<(), Error> {
+        match self {
+            Net::VNet(vnet) => vnet.set_router(r).await,
+            Net::IFS(_) => Err(ERR_VNET_DISABLED.to_owned()),
+        }
+    }
+
+    async fn on_inbound_chunk(&self, c: Box<dyn Chunk + Send + Sync>) {
+        match self {
+            Net::VNet(vnet) => vnet.on_inbound_chunk(c).await,
+            Net::IFS(_) => {}
+        }
+    }
+
+    fn get_static_ips(&self) -> &[IpAddr] {
+        match self {
+            Net::VNet(vnet) => vnet.get_static_ips(),
+            Net::IFS(_) => &[],
+        }
+    }
 }
 
+/*
+TODO: revisit Net APIs
 // ListenPacket announces on the local network address.
 func (n *Net) ListenPacket(network string, address string) (net.PacketConn, error) {
     if n.v == nil {
@@ -554,43 +596,6 @@ func (n *Net) ResolveUDPAddr(network, address string) (*net.UDPAddr, error) {
     }
 
     return n.v.resolveUDPAddr(network, address)
-}
-
-func (n *Net) get_interface(ifName string) (*Interface, error) {
-    if n.v == nil {
-        return nil, errVNetDisabled
-    }
-
-    return n.v.get_interface(ifName)
-}
-
-func (n *Net) set_router(r *Router) error {
-    if n.v == nil {
-        return errVNetDisabled
-    }
-
-    return n.v.set_router(r)
-}
-
-func (n *Net) on_inbound_chunk(c Chunk) {
-    if n.v == nil {
-        return
-    }
-
-    n.v.on_inbound_chunk(c)
-}
-
-func (n *Net) get_static_ips() []net.IP {
-    if n.v == nil {
-        return nil
-    }
-
-    return n.v.static_ips
-}
-
-// IsVirtual tests if the virtual network is enabled.
-func (n *Net) IsVirtual() bool {
-    return n.v != nil
 }
 
 // Dialer is identical to net.Dialer excepts that its methods

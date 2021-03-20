@@ -98,7 +98,7 @@ pub struct Router {
     static_local_ips: HashMap<String, IpAddr>, // read-only,
     children: Vec<Arc<Mutex<Router>>>,         // read-only
     done: Option<mpsc::Sender<()>>,            // requires mutex [x]
-    resolver: Arc<Mutex<Resolver>>,            // read-only
+    pub(crate) resolver: Arc<Mutex<Resolver>>, // read-only
     push_ch: Option<mpsc::Sender<()>>,         // writer requires mutex
     router_internal: Arc<Mutex<RouterInternal>>,
 }
