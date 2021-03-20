@@ -26,7 +26,7 @@ log = "0.4.14"
 async-trait = "0.1.42"
 waitgroup = "0.1.2"
 defer = "0.1.0"
-ifaces = { git = "https://github.com/misuzu/rust-interfaces", rev = "37789631bdf122dd6a5d1dfde818ef9a944fc303"}
+ifaces = { git = "https://github.com/misuzu/rust-interfaces" } #, rev = "37789631bdf122dd6a5d1dfde818ef9a944fc303"}
 
 [dev-dependencies]
 tokio-test = "0.4"
