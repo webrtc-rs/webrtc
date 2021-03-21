@@ -133,7 +133,7 @@ impl NIC for VNet {
                     for addr in addrs {
                         ifc.add_addr(*addr);
                     }
-                    return Ok(());
+                    break;
                 }
             }
         }
@@ -345,6 +345,7 @@ impl VNet {
 }
 
 // NetConfig is a bag of configuration parameters passed to NewNet().
+#[derive(Debug, Default)]
 pub struct NetConfig {
     // static_ips is an array of static IP addresses to be assigned for this Net.
     // If no static IP address is given, the router will automatically assign

@@ -40,24 +40,24 @@ fn assign_router_name() -> String {
 #[derive(Default)]
 pub struct RouterConfig {
     // name of router. If not specified, a unique name will be assigned.
-    name: String,
+    pub name: String,
     // cidr notation, like "192.0.2.0/24"
-    cidr: String,
+    pub cidr: String,
     // static_ips is an array of static IP addresses to be assigned for this router.
     // If no static IP address is given, the router will automatically assign
     // an IP address.
     // This will be ignored if this router is the root.
-    static_ips: Vec<String>,
+    pub static_ips: Vec<String>,
     // static_ip is deprecated. Use static_ips.
-    static_ip: String,
+    pub static_ip: String,
     // Internal queue size
-    queue_size: usize,
+    pub queue_size: usize,
     // Effective only when this router has a parent router
-    nat_type: Option<NATType>,
+    pub nat_type: Option<NATType>,
     // Minimum Delay
-    min_delay: Duration,
+    pub min_delay: Duration,
     // Max Jitter
-    max_jitter: Duration,
+    pub max_jitter: Duration,
 }
 
 // NIC is a network interface controller that interfaces Router
