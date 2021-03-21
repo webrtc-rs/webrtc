@@ -1,4 +1,7 @@
 use super::*;
+use crate::vnet::chunk::ChunkUDP;
+
+use tokio::sync::{broadcast, mpsc};
 
 const DEMO_IP: &str = "1.2.3.4";
 
@@ -50,23 +53,32 @@ async fn test_net_native_bind() -> Result<(), Error> {
     let nw = Net::new(None);
     assert!(!nw.is_virtual(), "should be false");
 
-    let conn = nw.bind(SocketAddr::from_str("0.0.0.0:0")?).await?;
+    let conn = nw.bind(SocketAddr::from_str("127.0.0.1:0")?).await?;
     let laddr = conn.local_addr()?;
+    assert_eq!(
+        laddr.ip().to_string(),
+        "127.0.0.1",
+        "local_addr ip should match 127.0.0.1"
+    );
     log::debug!("laddr: {}", laddr);
 
     Ok(())
 }
 
 #[tokio::test]
-async fn test_net_native_connect() -> Result<(), Error> {
+async fn test_net_native_dail() -> Result<(), Error> {
     let nw = Net::new(None);
     assert!(!nw.is_virtual(), "should be false");
 
-    let conn = nw.bind(SocketAddr::from_str("0.0.0.0:0")?).await?;
+    let conn = nw.dail(true, "127.0.0.1:1234").await?;
     let laddr = conn.local_addr()?;
-
-    let result = conn.connect(SocketAddr::from_str("0.0.0.0:1234")?).await;
-    log::debug!("laddr: {}, result: {:?}", laddr, result);
+    assert_eq!(
+        laddr.ip().to_string(),
+        "127.0.0.1",
+        "local_addr should match 127.0.0.1"
+    );
+    assert_ne!(laddr.port(), 1234, "local_addr port should match 1234");
+    log::debug!("laddr: {}", laddr);
 
     Ok(())
 }
@@ -368,7 +380,7 @@ async fn test_net_virtual_resolve_addr() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_net_virtual_loopback() -> Result<(), Error> {
+async fn test_net_virtual_loopback1() -> Result<(), Error> {
     let nw = Net::new(Some(NetConfig::default()));
     assert!(nw.is_virtual(), "should be true");
 
@@ -412,11 +424,11 @@ async fn test_net_virtual_bind_specific_port() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_net_virtual_connect_lo0() -> Result<(), Error> {
+async fn test_net_virtual_dail_lo0() -> Result<(), Error> {
     let nw = Net::new(Some(NetConfig::default()));
     assert!(nw.is_virtual(), "should be true");
 
-    let conn = nw.bind(SocketAddr::from_str("127.0.0.1:1234")?).await?;
+    let conn = nw.dail(true, "127.0.0.1:1234").await?;
     let laddr = conn.local_addr()?;
     assert_eq!(
         laddr.ip().to_string().as_str(),
@@ -424,13 +436,13 @@ async fn test_net_virtual_connect_lo0() -> Result<(), Error> {
         "{} should match 127.0.0.1",
         laddr.ip()
     );
-    assert_eq!(laddr.port(), 1234, "{} should match 1234", laddr.port());
+    assert_ne!(laddr.port(), 1234, "{} should != 1234", laddr.port());
 
     Ok(())
 }
 
 #[tokio::test]
-async fn test_net_virtual_connect_eth0() -> Result<(), Error> {
+async fn test_net_virtual_dail_eth0() -> Result<(), Error> {
     let wan = Arc::new(Mutex::new(Router::new(RouterConfig {
         cidr: "1.2.3.0/24".to_string(),
         ..Default::default()
@@ -448,20 +460,10 @@ async fn test_net_virtual_connect_eth0() -> Result<(), Error> {
         n.set_router(Arc::clone(&wan)).await?;
     }
 
-    let (conn, raddr) = {
+    let conn = {
         let n = nw.lock().await;
-        let raddr = SocketAddr::from_str("27.3.4.5:1234")?;
-        let laddr = if let Net::VNet(vnet) = &*n {
-            let vi = vnet.vi.lock().await;
-            let any_ip = IpAddr::from_str("0.0.0.0")?;
-            vi.determine_source_ip(any_ip, raddr.ip()).unwrap()
-        } else {
-            IpAddr::from_str("0.0.0.0")?
-        };
-
-        (n.bind(SocketAddr::new(laddr, 0)).await?, raddr)
+        n.dail(true, "27.3.4.5:1234").await?
     };
-
     let laddr = conn.local_addr()?;
     assert_eq!(
         laddr.ip().to_string().as_str(),
@@ -469,7 +471,7 @@ async fn test_net_virtual_connect_eth0() -> Result<(), Error> {
         "{} should match 1.2.3.1",
         laddr.ip()
     );
-    conn.connect(raddr).await?;
+    assert!(laddr.port() != 0, "{} should != 0", laddr.port());
 
     Ok(())
 }
@@ -498,17 +500,8 @@ async fn test_net_virtual_resolver() -> Result<(), Error> {
     let (conn, raddr) = {
         let n = nw.lock().await;
         let raddr = n.resolve_addr(true, "test.webrtc.rs:1234").await?;
-        let laddr = if let Net::VNet(vnet) = &*n {
-            let vi = vnet.vi.lock().await;
-            let any_ip = IpAddr::from_str("0.0.0.0")?;
-            vi.determine_source_ip(any_ip, raddr.ip()).unwrap()
-        } else {
-            IpAddr::from_str("0.0.0.0")?
-        };
-
-        (n.bind(SocketAddr::new(laddr, 0)).await?, raddr)
+        (n.dail(true, "test.webrtc.rs:1234").await?, raddr)
     };
-    conn.connect(raddr).await?;
 
     let laddr = conn.local_addr()?;
     assert_eq!(
@@ -525,5 +518,370 @@ async fn test_net_virtual_resolver() -> Result<(), Error> {
         raddr
     );
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_net_virtual_loopback2() -> Result<(), Error> {
+    let nw = Net::new(Some(NetConfig::default()));
+
+    let conn = nw.bind(SocketAddr::from_str("127.0.0.1:50916")?).await?;
+    let laddr = conn.local_addr()?;
+    assert_eq!(
+        laddr.to_string().as_str(),
+        "127.0.0.1:50916",
+        "{} should match 127.0.0.1:50916",
+        laddr
+    );
+
+    let mut c = ChunkUDP::new(
+        SocketAddr::from_str("127.0.0.1:4000")?,
+        SocketAddr::from_str("127.0.0.1:50916")?,
+    );
+    c.user_data = b"Hello!".to_vec();
+
+    let (recv_ch_tx, mut recv_ch_rx) = mpsc::channel(1);
+    let (done_ch_tx, mut done_ch_rx) = mpsc::channel::<bool>(1);
+    let (close_ch_tx, mut close_ch_rx) = mpsc::channel::<bool>(1);
+    let conn_rx = Arc::clone(&conn);
+
+    tokio::spawn(async move {
+        let mut buf = vec![0u8; 1500];
+        loop {
+            tokio::select! {
+                result = conn_rx.recv_from(&mut buf) => {
+                    let (n, addr) = match result {
+                        Ok((n, addr)) => (n, addr),
+                        Err(err) => {
+                            log::debug!("ReadFrom returned: {}", err);
+                            break;
+                        }
+                    };
+
+                    assert_eq!(6, n, "{} should match 6", n);
+                    assert_eq!("127.0.0.1:4000", addr.to_string(), "addr should match");
+                    assert_eq!(b"Hello!", &buf[..n], "buf should match");
+
+                    let _ = recv_ch_tx.send(true).await;
+                }
+                _ = close_ch_rx.recv() => {
+                    break;
+                }
+            }
+        }
+
+        drop(done_ch_tx);
+    });
+
+    if let Net::VNet(vnet) = &nw {
+        vnet.on_inbound_chunk(Box::new(c)).await;
+    } else {
+        assert!(false, "must be virtual net");
+    }
+
+    let _ = recv_ch_rx.recv().await;
+    drop(close_ch_tx);
+
+    let _ = done_ch_rx.recv().await;
+
+    Ok(())
+}
+
+async fn get_ipaddr(nic: &Arc<Mutex<dyn NIC + Send + Sync>>) -> Result<IpAddr, Error> {
+    let n = nic.lock().await;
+    let eth0 = n
+        .get_interface("eth0")
+        .ok_or_else(|| ERR_NO_INTERFACE.to_owned())?;
+    let addrs = eth0.addrs();
+    if addrs.is_empty() {
+        Err(ERR_NO_ADDRESS_ASSIGNED.to_owned())
+    } else {
+        Ok(addrs[0].addr())
+    }
+}
+
+//use std::io::Write;
+
+#[tokio::test]
+async fn test_net_virtual_end2end() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
+
+    let wan = Arc::new(Mutex::new(Router::new(RouterConfig {
+        cidr: "1.2.3.0/24".to_string(),
+        ..Default::default()
+    })?));
+
+    let net1 = Arc::new(Mutex::new(Net::new(Some(NetConfig::default()))));
+    {
+        let n = Arc::clone(&net1) as Arc<Mutex<dyn NIC + Send + Sync>>;
+        let mut w = wan.lock().await;
+        w.add_net(n).await?;
+    }
+    {
+        let n = net1.lock().await;
+        n.set_router(Arc::clone(&wan)).await?;
+    }
+    let ip1 = {
+        let nic = Arc::clone(&net1) as Arc<Mutex<dyn NIC + Send + Sync>>;
+        get_ipaddr(&nic).await?
+    };
+
+    let net2 = Arc::new(Mutex::new(Net::new(Some(NetConfig::default()))));
+    {
+        let n = Arc::clone(&net2) as Arc<Mutex<dyn NIC + Send + Sync>>;
+        let mut w = wan.lock().await;
+        w.add_net(n).await?;
+    }
+    {
+        let n = net2.lock().await;
+        n.set_router(Arc::clone(&wan)).await?;
+    }
+    let ip2 = {
+        let nic = Arc::clone(&net2) as Arc<Mutex<dyn NIC + Send + Sync>>;
+        get_ipaddr(&nic).await?
+    };
+
+    let conn1 = {
+        let n = net1.lock().await;
+        n.bind(SocketAddr::new(ip1, 1234)).await?
+    };
+
+    let conn2 = {
+        let n = net2.lock().await;
+        n.bind(SocketAddr::new(ip2, 5678)).await?
+    };
+
+    {
+        let mut w = wan.lock().await;
+        w.start().await?;
+    }
+
+    let (close_ch_tx, mut close_ch_rx1) = broadcast::channel::<bool>(1);
+    let (done_ch_tx, mut done_ch_rx) = mpsc::channel::<bool>(1);
+    let (conn1_recv_ch_tx, mut conn1_recv_ch_rx) = mpsc::channel(1);
+    let conn1_rx = Arc::clone(&conn1);
+    let conn2_tr = Arc::clone(&conn2);
+    let mut close_ch_rx2 = close_ch_tx.subscribe();
+
+    // conn1
+    tokio::spawn(async move {
+        let mut buf = vec![0u8; 1500];
+        loop {
+            log::debug!("conn1: wait for a message..");
+            tokio::select! {
+                result = conn1_rx.recv_from(&mut buf) =>{
+                    let n = match result{
+                        Ok((n, _)) => n,
+                        Err(err) => {
+                            log::debug!("ReadFrom returned: {}", err);
+                            break;
+                        }
+                    };
+
+                    log::debug!("conn1 received {:?}", &buf[..n]);
+                    let _ = conn1_recv_ch_tx.send(true).await;
+                }
+                _ = close_ch_rx1.recv() => {
+                    log::debug!("conn1 received close_ch_rx1");
+                    break;
+                }
+            }
+        }
+        drop(done_ch_tx);
+        log::debug!("conn1 drop done_ch_tx, exit spawn");
+    });
+
+    // conn2
+    tokio::spawn(async move {
+        let mut buf = vec![0u8; 1500];
+        loop {
+            log::debug!("conn2: wait for a message..");
+            tokio::select! {
+                result = conn2_tr.recv_from(&mut buf) =>{
+                    let (n, addr) = match result{
+                        Ok((n, addr)) => (n, addr),
+                        Err(err) => {
+                            log::debug!("ReadFrom returned: {}", err);
+                            break;
+                        }
+                    };
+
+                    log::debug!("conn2 received {:?}", &buf[..n]);
+
+                    // echo back to conn1
+                    let n = conn2_tr.send_to(b"Good-bye!", addr).await?;
+                    assert_eq!( 9, n, "should match");
+                }
+                _ = close_ch_rx2.recv() => {
+                    log::debug!("conn1 received close_ch_rx2");
+                    break;
+                }
+            }
+        }
+
+        log::debug!("conn2 exit spawn");
+
+        Ok::<(), Error>(())
+    });
+
+    log::debug!("conn1: sending");
+    let n = conn1.send_to(b"Hello!", conn2.local_addr()?).await?;
+    assert_eq!(6, n, "should match");
+
+    let _ = conn1_recv_ch_rx.recv().await;
+    log::debug!("main recv conn1_recv_ch_rx");
+    drop(close_ch_tx);
+    log::debug!("main drop close_ch_tx");
+    let _ = done_ch_rx.recv().await;
+    log::debug!("main recv done_ch_rx");
+    Ok(())
+}
+
+//use std::io::Write;
+
+#[tokio::test]
+async fn test_net_virtual_two_ips_on_a_nic() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
+
+    let wan = Arc::new(Mutex::new(Router::new(RouterConfig {
+        cidr: "1.2.3.0/24".to_string(),
+        ..Default::default()
+    })?));
+
+    let net = Arc::new(Mutex::new(Net::new(Some(NetConfig {
+        static_ips: vec![DEMO_IP.to_owned(), "1.2.3.5".to_owned()],
+        ..Default::default()
+    }))));
+
+    {
+        let n = Arc::clone(&net) as Arc<Mutex<dyn NIC + Send + Sync>>;
+        let mut w = wan.lock().await;
+        w.add_net(n).await?;
+    }
+    {
+        let n = net.lock().await;
+        n.set_router(Arc::clone(&wan)).await?;
+    }
+
+    // start the router
+    {
+        let mut w = wan.lock().await;
+        w.start().await?;
+    }
+
+    let (conn1, conn2) = {
+        let n = net.lock().await;
+        (
+            n.bind(SocketAddr::new(Ipv4Addr::from_str(DEMO_IP)?.into(), 1234))
+                .await?,
+            n.bind(SocketAddr::new(Ipv4Addr::from_str("1.2.3.5")?.into(), 1234))
+                .await?,
+        )
+    };
+
+    let (close_ch_tx, mut close_ch_rx1) = broadcast::channel::<bool>(1);
+    let (done_ch_tx, mut done_ch_rx) = mpsc::channel::<bool>(1);
+    let (conn1_recv_ch_tx, mut conn1_recv_ch_rx) = mpsc::channel(1);
+    let conn1_rx = Arc::clone(&conn1);
+    let conn2_tr = Arc::clone(&conn2);
+    let mut close_ch_rx2 = close_ch_tx.subscribe();
+
+    // conn1
+    tokio::spawn(async move {
+        let mut buf = vec![0u8; 1500];
+        loop {
+            log::debug!("conn1: wait for a message..");
+            tokio::select! {
+                result = conn1_rx.recv_from(&mut buf) =>{
+                    let n = match result{
+                        Ok((n, _)) => n,
+                        Err(err) => {
+                            log::debug!("ReadFrom returned: {}", err);
+                            break;
+                        }
+                    };
+
+                    log::debug!("conn1 received {:?}", &buf[..n]);
+                    let _ = conn1_recv_ch_tx.send(true).await;
+                }
+                _ = close_ch_rx1.recv() => {
+                    log::debug!("conn1 received close_ch_rx1");
+                    break;
+                }
+            }
+        }
+        drop(done_ch_tx);
+        log::debug!("conn1 drop done_ch_tx, exit spawn");
+    });
+
+    // conn2
+    tokio::spawn(async move {
+        let mut buf = vec![0u8; 1500];
+        loop {
+            log::debug!("conn2: wait for a message..");
+            tokio::select! {
+                result = conn2_tr.recv_from(&mut buf) =>{
+                    let (n, addr) = match result{
+                        Ok((n, addr)) => (n, addr),
+                        Err(err) => {
+                            log::debug!("ReadFrom returned: {}", err);
+                            break;
+                        }
+                    };
+
+                    log::debug!("conn2 received {:?}", &buf[..n]);
+
+                    // echo back to conn1
+                    let n = conn2_tr.send_to(b"Good-bye!", addr).await?;
+                    assert_eq!( 9, n, "should match");
+                }
+                _ = close_ch_rx2.recv() => {
+                    log::debug!("conn1 received close_ch_rx2");
+                    break;
+                }
+            }
+        }
+
+        log::debug!("conn2 exit spawn");
+
+        Ok::<(), Error>(())
+    });
+
+    log::debug!("conn1: sending");
+    let n = conn1.send_to(b"Hello!", conn2.local_addr()?).await?;
+    assert_eq!(6, n, "should match");
+
+    let _ = conn1_recv_ch_rx.recv().await;
+    log::debug!("main recv conn1_recv_ch_rx");
+    drop(close_ch_tx);
+    log::debug!("main drop close_ch_tx");
+    let _ = done_ch_rx.recv().await;
+    log::debug!("main recv done_ch_rx");
     Ok(())
 }

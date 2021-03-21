@@ -168,7 +168,7 @@ impl NIC for VNet {
     }
 
     fn get_static_ips(&self) -> &[IpAddr] {
-        &[]
+        &self.static_ips
     }
 }
 
@@ -315,30 +315,60 @@ impl VNet {
     // caller must hold the mutex
     pub(crate) async fn bind(
         &self,
-        mut addr: SocketAddr,
+        mut local_addr: SocketAddr,
     ) -> Result<Arc<dyn Conn + Send + Sync>, Error> {
         // validate address. do we have that address?
-        if !self.has_ipaddr(addr.ip()) {
+        if !self.has_ipaddr(local_addr.ip()) {
             return Err(ERR_CANT_ASSIGN_REQUESTED_ADDR.to_owned());
         }
 
-        if addr.port() == 0 {
+        if local_addr.port() == 0 {
             // choose randomly from the range between 5000 and 5999
-            addr.set_port(self.assign_port(addr.ip(), 5000, 5999).await?);
+            local_addr.set_port(self.assign_port(local_addr.ip(), 5000, 5999).await?);
         } else {
             let vi = self.vi.lock().await;
-            if vi.udp_conns.find(&addr).await.is_some() {
+            if vi.udp_conns.find(&local_addr).await.is_some() {
                 return Err(ERR_ADDRESS_ALREADY_IN_USE.to_owned());
             }
         }
 
         let v = Arc::clone(&self.vi) as Arc<Mutex<dyn ConnObserver + Send + Sync>>;
-        let conn = Arc::new(UDPConn::new(addr, None, v));
+        let conn = Arc::new(UDPConn::new(local_addr, None, v));
 
         {
             let vi = self.vi.lock().await;
             vi.udp_conns.insert(Arc::clone(&conn)).await?;
         }
+
+        Ok(conn)
+    }
+
+    pub(crate) async fn dail(
+        &self,
+        use_ipv4: bool,
+        remote_addr: &str,
+    ) -> Result<Arc<dyn Conn + Send + Sync>, Error> {
+        let rem_addr = self.resolve_addr(use_ipv4, remote_addr).await?;
+
+        // Determine source address
+        let src_ip = {
+            let vi = self.vi.lock().await;
+            let any_ip = if use_ipv4 {
+                Ipv4Addr::new(0, 0, 0, 0).into()
+            } else {
+                Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0).into()
+            };
+            if let Some(src_ip) = vi.determine_source_ip(any_ip, rem_addr.ip()) {
+                src_ip
+            } else {
+                any_ip
+            }
+        };
+
+        let loc_addr = SocketAddr::new(src_ip, 0);
+
+        let conn = self.bind(loc_addr).await?;
+        conn.connect(rem_addr).await?;
 
         Ok(conn)
     }
@@ -466,6 +496,29 @@ impl Net {
         match self {
             Net::VNet(vnet) => vnet.bind(addr).await,
             Net::IFS(_) => Ok(Arc::new(UdpSocket::bind(addr).await?)),
+        }
+    }
+
+    pub(crate) async fn dail(
+        &self,
+        use_ipv4: bool,
+        remote_addr: &str,
+    ) -> Result<Arc<dyn Conn + Send + Sync>, Error> {
+        match self {
+            Net::VNet(vnet) => vnet.dail(use_ipv4, remote_addr).await,
+            Net::IFS(_) => {
+                let any_ip = if use_ipv4 {
+                    Ipv4Addr::new(0, 0, 0, 0).into()
+                } else {
+                    Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0).into()
+                };
+                let local_addr = SocketAddr::new(any_ip, 0);
+
+                let conn = UdpSocket::bind(local_addr).await?;
+                conn.connect(remote_addr).await?;
+
+                Ok(Arc::new(conn))
+            }
         }
     }
 }
