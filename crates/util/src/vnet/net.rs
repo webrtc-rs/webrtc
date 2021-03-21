@@ -7,13 +7,12 @@ use super::interface::*;
 use crate::vnet::chunk::Chunk;
 use crate::vnet::conn::{ConnObserver, UDPConn};
 use crate::vnet::router::*;
-use crate::Error;
-use crate::{ifaces, Conn};
+use crate::{conn, ifaces, Conn, Error};
 
 use async_trait::async_trait;
 use ipnet::IpNet;
 use std::collections::HashMap;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -268,7 +267,11 @@ impl VNet {
         Err(ERR_PORT_SPACE_EXHAUSTED.to_owned())
     }
 
-    pub(crate) async fn resolve_addr(&self, address: &str) -> Result<SocketAddr, Error> {
+    pub(crate) async fn resolve_addr(
+        &self,
+        use_ipv4: bool,
+        address: &str,
+    ) -> Result<SocketAddr, Error> {
         let v: Vec<&str> = address.splitn(2, ':').collect();
         if v.len() != 2 {
             return Err(ERR_ADDR_NOT_UDPADDR.to_owned());
@@ -281,7 +284,11 @@ impl VNet {
             Err(_) => {
                 let host = host.to_lowercase();
                 if host == "localhost" {
-                    Ipv4Addr::new(127, 0, 0, 1).into()
+                    if use_ipv4 {
+                        Ipv4Addr::new(127, 0, 0, 1).into()
+                    } else {
+                        Ipv6Addr::from_str("::1")?.into()
+                    }
                 } else {
                     // host is a domain name. resolve IP address by the name
                     let vi = self.vi.lock().await;
@@ -440,6 +447,17 @@ impl Net {
         match self {
             Net::VNet(_) => true,
             Net::IFS(_) => false,
+        }
+    }
+
+    pub(crate) async fn resolve_addr(
+        &self,
+        use_ipv4: bool,
+        address: &str,
+    ) -> Result<SocketAddr, Error> {
+        match self {
+            Net::VNet(vnet) => vnet.resolve_addr(use_ipv4, address).await,
+            Net::IFS(_) => Ok(conn::lookup_host(use_ipv4, address).await?),
         }
     }
 

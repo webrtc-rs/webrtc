@@ -3,7 +3,7 @@ use ipnet::*;
 use std::net::SocketAddr;
 use std::str::FromStr;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Interface {
     pub(crate) name: String,
     pub(crate) addrs: Vec<IpNet>,
@@ -50,7 +50,7 @@ impl Interface {
         } else {
             32
         };
-        let s = format!("{}/{}", addr, prefix);
+        let s = format!("{}/{}", addr.ip(), prefix);
 
         Ok(IpNet::from_str(&s)?)
     }
