@@ -101,13 +101,13 @@ impl Default for Mapping {
 
 #[derive(Default, Debug, Clone)]
 pub(crate) struct NetworkAddressTranslator {
-    name: String,
-    nat_type: NATType,
-    mapped_ips: Vec<IpAddr>,                                 // mapped IPv4
-    local_ips: Vec<IpAddr>, // local IPv4, required only when the mode is NATModeNAT1To1
-    outbound_map: Arc<Mutex<HashMap<String, Arc<Mapping>>>>, // key: "<proto>:<local-ip>:<local-port>[:remote-ip[:remote-port]]
-    inbound_map: Arc<Mutex<HashMap<String, Arc<Mapping>>>>, // key: "<proto>:<mapped-ip>:<mapped-port>"
-    udp_port_counter: Arc<AtomicU16>,
+    pub(crate) name: String,
+    pub(crate) nat_type: NATType,
+    pub(crate) mapped_ips: Vec<IpAddr>, // mapped IPv4
+    pub(crate) local_ips: Vec<IpAddr>,  // local IPv4, required only when the mode is NATModeNAT1To1
+    pub(crate) outbound_map: Arc<Mutex<HashMap<String, Arc<Mapping>>>>, // key: "<proto>:<local-ip>:<local-port>[:remote-ip[:remote-port]]
+    pub(crate) inbound_map: Arc<Mutex<HashMap<String, Arc<Mapping>>>>, // key: "<proto>:<mapped-ip>:<mapped-port>"
+    pub(crate) udp_port_counter: Arc<AtomicU16>,
 }
 
 impl NetworkAddressTranslator {

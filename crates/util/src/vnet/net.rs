@@ -35,10 +35,10 @@ pub(crate) fn new_mac_address() -> HardwareAddr {
     b[2..].to_vec()
 }
 
-struct VNetInternal {
-    interfaces: Vec<Interface>,         // read-only
-    router: Option<Arc<Mutex<Router>>>, // read-only
-    udp_conns: UDPConnMap,              // read-only
+pub(crate) struct VNetInternal {
+    pub(crate) interfaces: Vec<Interface>,         // read-only
+    pub(crate) router: Option<Arc<Mutex<Router>>>, // read-only
+    pub(crate) udp_conns: UDPConnMap,              // read-only
 }
 
 impl VNetInternal {
@@ -105,9 +105,9 @@ impl ConnObserver for VNetInternal {
 }
 
 pub struct VNet {
-    interfaces: Vec<Interface>, // read-only
-    static_ips: Vec<IpAddr>,    // read-only
-    vi: Arc<Mutex<VNetInternal>>,
+    pub(crate) interfaces: Vec<Interface>, // read-only
+    pub(crate) static_ips: Vec<IpAddr>,    // read-only
+    pub(crate) vi: Arc<Mutex<VNetInternal>>,
 }
 
 #[async_trait]
@@ -380,10 +380,10 @@ pub struct NetConfig {
     // static_ips is an array of static IP addresses to be assigned for this Net.
     // If no static IP address is given, the router will automatically assign
     // an IP address.
-    static_ips: Vec<String>,
+    pub(crate) static_ips: Vec<String>,
 
     // static_ip is deprecated. Use static_ips.
-    static_ip: String,
+    pub(crate) static_ip: String,
 }
 
 // Net represents a local network stack euivalent to a set of layers from NIC

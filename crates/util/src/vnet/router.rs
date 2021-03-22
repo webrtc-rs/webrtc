@@ -18,7 +18,7 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::ops::{Add, Sub};
 use std::pin::Pin;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::{mpsc, Mutex};
@@ -76,17 +76,17 @@ pub trait NIC {
 
 // ChunkFilter is a handler users can add to filter chunks.
 // If the filter returns false, the packet will be dropped.
-pub type ChunkFilterFn = fn(c: &(dyn Chunk + Send + Sync)) -> bool;
+pub type ChunkFilterFn = Box<dyn (Fn(&(dyn Chunk + Send + Sync)) -> bool) + Send + Sync>;
 
 #[derive(Default)]
 pub struct RouterInternal {
-    nat_type: Option<NATType>,                                // read-only
-    ipv4net: IpNet,                                           // read-only
-    parent: Option<Arc<Mutex<Router>>>,                       // read-only
-    nat: NetworkAddressTranslator,                            // read-only
-    nics: HashMap<String, Arc<Mutex<dyn NIC + Send + Sync>>>, // read-only
-    chunk_filters: Vec<ChunkFilterFn>,                        // requires mutex [x]
-    last_id: u8, // requires mutex [x], used to assign the last digit of IPv4 address
+    pub(crate) nat_type: Option<NATType>,          // read-only
+    pub(crate) ipv4net: IpNet,                     // read-only
+    pub(crate) parent: Option<Arc<Mutex<Router>>>, // read-only
+    pub(crate) nat: NetworkAddressTranslator,      // read-only
+    pub(crate) nics: HashMap<String, Arc<Mutex<dyn NIC + Send + Sync>>>, // read-only
+    pub(crate) chunk_filters: Vec<ChunkFilterFn>,  // requires mutex [x]
+    pub(crate) last_id: u8, // requires mutex [x], used to assign the last digit of IPv4 address
 }
 
 // Router ...
@@ -351,25 +351,8 @@ impl Router {
             }
         });
 
-        let child_result = Arc::new(AtomicBool::new(false));
-        for child in &self.children {
-            let child2 = Arc::clone(child);
-            let child_result2 = Arc::clone(&child_result);
-            Box::pin(async move {
-                let mut c = child2.lock().await;
-                if c.start().await.is_err() {
-                    child_result2.store(true, Ordering::SeqCst);
-                }
-            });
-        }
-
-        Box::pin(async move {
-            if child_result.load(Ordering::SeqCst) {
-                Err(ERR_ROUTER_ALREADY_STARTED.to_owned())
-            } else {
-                Ok(())
-            }
-        })
+        let children = self.children.clone();
+        Box::pin(async move { Router::start_childen(children).await })
     }
 
     // Stop ...
@@ -377,29 +360,29 @@ impl Router {
         if self.done.is_none() {
             return Box::pin(async move { Err(ERR_ROUTER_ALREADY_STOPPED.to_owned()) });
         }
-
-        let child_result = Arc::new(AtomicBool::new(false));
-        for child in &self.children {
-            let child2 = Arc::clone(child);
-            let child_result2 = Arc::clone(&child_result);
-            Box::pin(async move {
-                let mut c = child2.lock().await;
-                if c.stop().await.is_err() {
-                    child_result2.store(true, Ordering::SeqCst);
-                }
-            });
-        }
-
         self.push_ch.take();
         self.done.take();
 
-        Box::pin(async move {
-            if child_result.load(Ordering::SeqCst) {
-                Err(ERR_ROUTER_ALREADY_STOPPED.to_owned())
-            } else {
-                Ok(())
-            }
-        })
+        let children = self.children.clone();
+        Box::pin(async move { Router::stop_childen(children).await })
+    }
+
+    async fn start_childen(children: Vec<Arc<Mutex<Router>>>) -> Result<(), Error> {
+        for child in children {
+            let mut c = child.lock().await;
+            c.start().await?;
+        }
+
+        Ok(())
+    }
+
+    async fn stop_childen(children: Vec<Arc<Mutex<Router>>>) -> Result<(), Error> {
+        for child in children {
+            let mut c = child.lock().await;
+            c.stop().await?;
+        }
+
+        Ok(())
     }
 
     // AddRouter adds a chile Router.
