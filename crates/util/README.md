@@ -26,5 +26,5 @@
  </a>
 </p>
 <p align="center">
- A pure Rust implementation of Util. Rewrite Pion Util (<a href="http://Pion.ly">http://Pion.ly</a>) in Rust
+ A pure Rust implementation of Utilities for WebRTC.rs stack. Rewrite Pion Util/Transport (<a href="http://Pion.ly">http://Pion.ly</a>) in Rust
 </p>
