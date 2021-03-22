@@ -26,5 +26,5 @@
  </a>
 </p>
 <p align="center">
- A pure Rust implementation of SDP. Rewrite Pion SDP (<a href="http://Pion.ly">http://Pion.ly</a>) in Rust
+ A pure Rust implementation of Util. Rewrite Pion Util (<a href="http://Pion.ly">http://Pion.ly</a>) in Rust
 </p>
