@@ -58,13 +58,9 @@ impl DNSConn {
 
         socket.set_reuse_address(true)?;
 
+        //TODO: implement set_reuse_port for windows platform
         #[cfg(target_family = "unix")]
         socket.set_reuse_port(true)?;
-
-        //TODO: implement set_reuse_port for windows platform
-        // use unimplemented!() to intentionally break it
-        #[cfg(target_family = "windows")]
-        unimplemented!();
 
         socket.set_read_timeout(Some(Duration::from_millis(100)))?;
         socket.bind(&SockAddr::from(addr))?;
