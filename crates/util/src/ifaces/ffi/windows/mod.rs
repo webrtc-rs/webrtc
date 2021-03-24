@@ -176,10 +176,10 @@ pub struct IpAdapterDnsSuffix {
 }
 
 bitflags! {
-    flags IfLuid: ULONG64 {
-        const Reserved = 0x0000000000FFFFFF,
-        const NetLuidIndex = 0x0000FFFFFF000000,
-        const IfType = 0xFFFF000000000000
+    struct IfLuid: ULONG64 {
+        const Reserved = 0x0000000000FFFFFF;
+        const NetLuidIndex = 0x0000FFFFFF000000;
+        const IfType = 0xFFFF00000000000;
     }
 }
 
@@ -247,11 +247,11 @@ pub enum TunnelType {
 unsafe fn v4_socket_from_adapter(unicast_addr: &IpAdapterUnicastAddress) -> SocketAddrV4 {
     let socket_addr = &unicast_addr.address;
 
-    let in_addr: SOCKADDR_IN = mem::transmute((*socket_addr.lpSockaddr));
+    let in_addr: SOCKADDR_IN = mem::transmute(*socket_addr.lpSockaddr);
     let sin_addr = in_addr.sin_addr.S_un;
 
     let v4_addr = Ipv4Addr::new(
-        (sin_addr >> 0) as u8,
+        sin_addr as u8,
         (sin_addr >> 8) as u8,
         (sin_addr >> 16) as u8,
         (sin_addr >> 24) as u8,
@@ -263,7 +263,7 @@ unsafe fn v4_socket_from_adapter(unicast_addr: &IpAdapterUnicastAddress) -> Sock
 unsafe fn v6_socket_from_adapter(unicast_addr: &IpAdapterUnicastAddress) -> SocketAddrV6 {
     let socket_addr = &unicast_addr.address;
 
-    let sock_addr6: *const sockaddr_in6 = mem::transmute(socket_addr.lpSockaddr);
+    let sock_addr6: *const sockaddr_in6 = socket_addr.lpSockaddr as *const winapi::sockaddr_in6;
     let in6_addr: sockaddr_in6 = *sock_addr6;
 
     let v6_addr = in6_addr.sin6_addr.s6_addr.into();
@@ -314,57 +314,39 @@ unsafe fn local_ifaces_with_buffer(buffer: &mut Vec<u8>) -> io::Result<()> {
 unsafe fn map_adapter_addresses(mut adapter_addr: *const IpAdapterAddresses) -> Vec<Interface> {
     let mut adapter_addresses = Vec::new();
 
-    loop {
-        if adapter_addr.is_null() {
-            break;
-        }
-
+    while !adapter_addr.is_null() {
         let curr_adapter_addr = &*adapter_addr;
-        let mut unicast_addr = curr_adapter_addr.all.first_unicast_address;
 
-        loop {
-            if unicast_addr.is_null() {
-                break;
-            }
+        let mut unicast_addr = curr_adapter_addr.all.first_unicast_address;
+        while !unicast_addr.is_null() {
             let curr_unicast_addr = &*unicast_addr;
+
             // For some reason, some IpDadState::IpDadStateDeprecated addresses are return
             // These contain BOGUS interface indices and will cause problesm if used
-            match curr_unicast_addr.dad_state {
-                IpDadState::IpDadStateDeprecated => match curr_unicast_addr.length {
-                    0 => {}
-                    _ => {
-                        let socket_addr = &curr_unicast_addr.address;
-                        let sa_family = (*socket_addr.lpSockaddr).sa_family as i32;
-                        match sa_family {
-                            AF_INET => {
-                                adapter_addresses.push(Interface {
-                                    name: "".to_string(),
-                                    kind: Kind::Ipv4,
-                                    addr: Some(SocketAddr::V4(v4_socket_from_adapter(
-                                        &curr_unicast_addr,
-                                    ))),
-                                    mask: None,
-                                    hop: None,
-                                });
-                            }
-                            AF_INET6 => {
-                                let mut v6_sock = v6_socket_from_adapter(&curr_unicast_addr);
-                                // Make sure the scope id is set for ALL interfaces, not just link-local
-                                v6_sock.set_scope_id(curr_adapter_addr.xp.ipv6_if_index);
-                                adapter_addresses.push(Interface {
-                                    name: "".to_string(),
-                                    kind: Kind::Ipv4,
-                                    addr: Some(SocketAddr::V6(v6_sock)),
-                                    mask: None,
-                                    hop: None,
-                                });
-                            }
-                            _ => {}
-                        }
-                    }
-                },
-                _ => {}
-            };
+            if curr_unicast_addr.dad_state != IpDadState::IpDadStateDeprecated {
+                if is_ipv4_enabled(&curr_unicast_addr) {
+                    adapter_addresses.push(Interface {
+                        name: "".to_string(),
+                        kind: Kind::Ipv4,
+                        addr: Some(SocketAddr::V4(v4_socket_from_adapter(&curr_unicast_addr))),
+                        mask: None,
+                        hop: None,
+                    });
+                } else if is_ipv6_enabled(&curr_unicast_addr) {
+                    let mut v6_sock = v6_socket_from_adapter(&curr_unicast_addr);
+                    // Make sure the scope id is set for ALL interfaces, not just link-local
+                    v6_sock.set_scope_id(curr_adapter_addr.xp.ipv6_if_index);
+                    adapter_addresses.push(Interface {
+                        name: "".to_string(),
+                        kind: Kind::Ipv6,
+                        addr: Some(SocketAddr::V6(v6_sock)),
+                        mask: None,
+                        hop: None,
+                    });
+                }
+            }
+
+            unicast_addr = curr_unicast_addr.next;
         }
 
         adapter_addr = curr_adapter_addr.all.next;
@@ -377,14 +359,32 @@ unsafe fn map_adapter_addresses(mut adapter_addr: *const IpAdapterAddresses) -> 
 pub fn ifaces() -> Result<Vec<Interface>, ::std::io::Error> {
     let mut adapters_list = Vec::with_capacity(PREALLOC_ADAPTERS_LEN);
     unsafe {
-        match local_ifaces_with_buffer(&mut adapters_list) {
-            Ok(_) => Ok(map_adapter_addresses(mem::transmute(
-                adapters_list.as_ptr(),
-            ))),
-            Err(_) => Err(::std::io::Error::new(
-                ::std::io::ErrorKind::Other,
-                "Oh, no ...",
-            )),
-        }
+        local_ifaces_with_buffer(&mut adapters_list)?;
+
+        Ok(map_adapter_addresses(
+            adapters_list.as_ptr() as *const IpAdapterAddresses
+        ))
+    }
+}
+
+unsafe fn is_ipv4_enabled(unicast_addr: &IpAdapterUnicastAddress) -> bool {
+    if unicast_addr.length != 0 {
+        let socket_addr = &unicast_addr.address;
+        let sa_family = (*socket_addr.lpSockaddr).sa_family;
+
+        sa_family == AF_INET as u16
+    } else {
+        false
+    }
+}
+
+unsafe fn is_ipv6_enabled(unicast_addr: &IpAdapterUnicastAddress) -> bool {
+    if unicast_addr.length != 0 {
+        let socket_addr = &unicast_addr.address;
+        let sa_family = (*socket_addr.lpSockaddr).sa_family;
+
+        sa_family == AF_INET6 as u16
+    } else {
+        false
     }
 }
