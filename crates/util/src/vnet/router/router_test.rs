@@ -464,7 +464,7 @@ async fn delay_sub_test(
 }
 
 //use std::io::Write;
-
+#[cfg(target_os = "linux")]
 #[tokio::test]
 async fn test_router_delay() -> Result<(), Error> {
     /*env_logger::Builder::new()
