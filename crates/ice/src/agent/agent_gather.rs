@@ -4,7 +4,7 @@ use crate::network_type::*;
 use crate::url::{ProtoType, SchemeType, URL};
 use crate::util::*;
 
-use util::{Conn, Error};
+use util::{vnet::net::*, Conn, Error};
 
 use crate::candidate::candidate_base::CandidateBaseConfig;
 use crate::candidate::candidate_host::CandidateHostConfig;
@@ -12,9 +12,9 @@ use crate::candidate::candidate_relay::CandidateRelayConfig;
 use crate::candidate::candidate_server_reflexive::CandidateServerReflexiveConfig;
 use crate::candidate::*;
 use defer::defer;
+use std::net::{Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 use std::sync::Arc;
-use tokio::net::UdpSocket;
 use waitgroup::WaitGroup;
 
 const STUN_GATHER_TIMEOUT: Duration = Duration::from_secs(5);
@@ -27,6 +27,7 @@ pub(crate) struct GatherCandidatesInternalParams {
     pub(crate) port_min: u16,
     pub(crate) mdns_mode: MulticastDNSMode,
     pub(crate) mdns_name: String,
+    pub(crate) net: Arc<Mutex<Net>>,
     pub(crate) interface_filter: Arc<Option<InterfaceFilterFn>>,
     pub(crate) ext_ip_mapper: Arc<ExternalIPMapper>,
     pub(crate) agent_internal: Arc<Mutex<AgentInternal>>,
@@ -41,6 +42,7 @@ struct GatherCandidatesLocalParams {
     mdns_name: String,
     interface_filter: Arc<Option<InterfaceFilterFn>>,
     ext_ip_mapper: Arc<ExternalIPMapper>,
+    net: Arc<Mutex<Net>>,
     agent_internal: Arc<Mutex<AgentInternal>>,
 }
 
@@ -49,6 +51,7 @@ struct GatherCandidatesSrflxMappedParasm {
     port_max: u16,
     port_min: u16,
     ext_ip_mapper: Arc<ExternalIPMapper>,
+    net: Arc<Mutex<Net>>,
     agent_internal: Arc<Mutex<AgentInternal>>,
 }
 
@@ -57,6 +60,7 @@ struct GatherCandidatesSrflxParams {
     network_types: Vec<NetworkType>,
     port_max: u16,
     port_min: u16,
+    net: Arc<Mutex<Net>>,
     agent_internal: Arc<Mutex<AgentInternal>>,
 }
 
@@ -78,6 +82,7 @@ impl Agent {
                         mdns_name: params.mdns_name.clone(),
                         interface_filter: Arc::clone(&params.interface_filter),
                         ext_ip_mapper: Arc::clone(&params.ext_ip_mapper),
+                        net: Arc::clone(&params.net),
                         agent_internal: Arc::clone(&params.agent_internal),
                     };
 
@@ -96,6 +101,7 @@ impl Agent {
                         network_types: params.network_types.clone(),
                         port_max: params.port_max,
                         port_min: params.port_min,
+                        net: Arc::clone(&params.net),
                         agent_internal: Arc::clone(&params.agent_internal),
                     };
                     tokio::spawn(async move {
@@ -112,6 +118,7 @@ impl Agent {
                             port_max: params.port_max,
                             port_min: params.port_min,
                             ext_ip_mapper: Arc::clone(&params.ext_ip_mapper),
+                            net: Arc::clone(&params.net),
                             agent_internal: Arc::clone(&params.agent_internal),
                         };
                         tokio::spawn(async move {
@@ -126,13 +133,14 @@ impl Agent {
                 CandidateType::Relay => {
                     let w = wg.worker();
                     let urls = params.urls.clone();
+                    let net = Arc::clone(&params.net);
                     let agent_internal = Arc::clone(&params.agent_internal);
                     tokio::spawn(async move {
                         let _d = defer(move || {
                             drop(w);
                         });
 
-                        Agent::gather_candidates_relay(urls, agent_internal).await;
+                        Agent::gather_candidates_relay(urls, net, agent_internal).await;
                     });
                 }
                 _ => {}
@@ -164,6 +172,7 @@ impl Agent {
             mdns_name,
             interface_filter,
             ext_ip_mapper,
+            net,
             agent_internal,
         ) = (
             params.network_types,
@@ -173,20 +182,12 @@ impl Agent {
             params.mdns_name,
             params.interface_filter,
             params.ext_ip_mapper,
+            params.net,
             params.agent_internal,
         );
-        let local_ips = match local_interfaces(&*interface_filter, &network_types) {
-            Ok(ips) => ips,
-            Err(err) => {
-                log::warn!(
-                    "failed to iterate local interfaces, host candidates will not be gathered {}",
-                    err
-                );
-                return;
-            }
-        };
 
-        for ip in local_ips {
+        let ips = local_interfaces(&net, &*interface_filter, &network_types).await;
+        for ip in ips {
             let mut mapped_ip = ip;
 
             if mdns_mode != MulticastDNSMode::QueryAndGather
@@ -230,13 +231,14 @@ impl Agent {
                 case udp:*/
 
                 let conn: Arc<dyn Conn + Send + Sync> = match listen_udp_in_port_range(
+                    &net,
                     port_max,
                     port_min,
                     SocketAddr::new(ip, 0),
                 )
                 .await
                 {
-                    Ok(conn) => Arc::new(conn),
+                    Ok(conn) => conn,
                     Err(err) => {
                         log::warn!("could not listen {} {}: {}", network, ip, err);
                         continue;
@@ -309,11 +311,12 @@ impl Agent {
     }
 
     async fn gather_candidates_srflx_mapped(params: GatherCandidatesSrflxMappedParasm) {
-        let (network_types, port_max, port_min, ext_ip_mapper, agent_internal) = (
+        let (network_types, port_max, port_min, ext_ip_mapper, net, agent_internal) = (
             params.network_types,
             params.port_max,
             params.port_min,
             params.ext_ip_mapper,
+            params.net,
             params.agent_internal,
         );
 
@@ -326,6 +329,7 @@ impl Agent {
 
             let w = wg.worker();
             let network = network_type.to_string();
+            let net2 = Arc::clone(&net);
             let agent_internal2 = Arc::clone(&agent_internal);
             let ext_ip_mapper2 = Arc::clone(&ext_ip_mapper);
 
@@ -335,13 +339,18 @@ impl Agent {
                 });
 
                 let conn: Arc<dyn Conn + Send + Sync> = match listen_udp_in_port_range(
+                    &net2,
                     port_max,
                     port_min,
-                    SocketAddr::from_str("0.0.0.0:0")?,
+                    if network_type.is_ipv4() {
+                        SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0)
+                    } else {
+                        SocketAddr::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0).into(), 0)
+                    },
                 )
                 .await
                 {
-                    Ok(conn) => Arc::new(conn),
+                    Ok(conn) => conn,
                     Err(err) => {
                         log::warn!("Failed to listen {}: {}", network, err);
                         return Ok(());
@@ -412,11 +421,12 @@ impl Agent {
     }
 
     async fn gather_candidates_srflx(params: GatherCandidatesSrflxParams) {
-        let (urls, network_types, port_max, port_min, agent_internal) = (
+        let (urls, network_types, port_max, port_min, net, agent_internal) = (
             params.urls,
             params.network_types,
             params.port_max,
             params.port_min,
+            params.net,
             params.agent_internal,
         );
 
@@ -429,7 +439,9 @@ impl Agent {
             for url in &urls {
                 let w = wg.worker();
                 let network = network_type.to_string();
+                let is_ipv4 = network_type.is_ipv4();
                 let url = url.clone();
+                let net2 = Arc::clone(&net);
                 let agent_internal2 = Arc::clone(&agent_internal);
 
                 tokio::spawn(async move {
@@ -438,22 +450,30 @@ impl Agent {
                     });
 
                     let host_port = format!("{}:{}", url.host, url.port);
-                    let server_addr = match SocketAddr::from_str(&host_port) {
-                        Ok(addr) => addr,
-                        Err(err) => {
-                            log::warn!("failed to resolve stun host: {}: {}", host_port, err);
-                            return Ok(());
+                    let server_addr = {
+                        let n = net2.lock().await;
+                        match n.resolve_addr(is_ipv4, &host_port).await {
+                            Ok(addr) => addr,
+                            Err(err) => {
+                                log::warn!("failed to resolve stun host: {}: {}", host_port, err);
+                                return Ok(());
+                            }
                         }
                     };
 
                     let conn: Arc<dyn Conn + Send + Sync> = match listen_udp_in_port_range(
+                        &net2,
                         port_max,
                         port_min,
-                        SocketAddr::from_str("0.0.0.0:0")?,
+                        if is_ipv4 {
+                            SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0)
+                        } else {
+                            SocketAddr::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0).into(), 0)
+                        },
                     )
                     .await
                     {
-                        Ok(conn) => Arc::new(conn),
+                        Ok(conn) => conn,
                         Err(err) => {
                             log::warn!("Failed to listen for {}: {}", server_addr, err);
                             return Ok(());
@@ -528,7 +548,11 @@ impl Agent {
         wg.wait().await;
     }
 
-    async fn gather_candidates_relay(urls: Vec<URL>, agent_internal: Arc<Mutex<AgentInternal>>) {
+    async fn gather_candidates_relay(
+        urls: Vec<URL>,
+        net: Arc<Mutex<Net>>,
+        agent_internal: Arc<Mutex<AgentInternal>>,
+    ) {
         let wg = WaitGroup::new();
 
         for url in urls {
@@ -544,6 +568,7 @@ impl Agent {
 
             let w = wg.worker();
             let network = NetworkType::UDP4.to_string();
+            let net2 = Arc::clone(&net);
             let agent_internal2 = Arc::clone(&agent_internal);
 
             tokio::spawn(async move {
@@ -555,11 +580,14 @@ impl Agent {
 
                 let (loc_conn, rel_addr, rel_port) =
                     if url.proto == ProtoType::UDP && url.scheme == SchemeType::TURN {
-                        let loc_conn = match UdpSocket::bind("0.0.0.0:0").await {
-                            Ok(c) => c,
-                            Err(err) => {
-                                log::warn!("Failed to listen due to error: {}", err);
-                                return Ok(());
+                        let loc_conn = {
+                            let n = net2.lock().await;
+                            match n.bind(SocketAddr::from_str("0.0.0.0:0")?).await {
+                                Ok(c) => c,
+                                Err(err) => {
+                                    log::warn!("Failed to listen due to error: {}", err);
+                                    return Ok(());
+                                }
                             }
                         };
 
@@ -584,7 +612,8 @@ impl Agent {
                     realm: String::new(),
                     software: String::new(),
                     rto_in_ms: 0,
-                    conn: Arc::new(loc_conn),
+                    conn: loc_conn,
+                    //TODO: add VNet support in TURN?
                 };
                 let client = match turn::client::Client::new(cfg).await {
                     Ok(client) => Arc::new(client),

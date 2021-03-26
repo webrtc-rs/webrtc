@@ -4,6 +4,7 @@ use crate::mdns::*;
 use crate::network_type::*;
 use crate::url::*;
 
+use util::vnet::net::*;
 use util::Error;
 
 use std::time::Duration;
@@ -49,7 +50,7 @@ pub(crate) fn default_candidate_types() -> Vec<CandidateType> {
     ]
 }
 
-pub(crate) type InterfaceFilterFn = Box<dyn (Fn(String) -> bool) + Send + Sync>;
+pub(crate) type InterfaceFilterFn = Box<dyn (Fn(&str) -> bool) + Send + Sync>;
 
 // AgentConfig collects the arguments to ice.Agent construction into
 // a single structure, for future-proofness of the interface
@@ -134,6 +135,10 @@ pub struct AgentConfig {
     pub prflx_acceptance_min_wait: Option<Duration>,
     // host_acceptance_min_wait specify a minimum wait time before selecting relay candidates
     pub relay_acceptance_min_wait: Option<Duration>,
+
+    // Net is the our abstracted network interface for internal development purpose only
+    // (see github.com/pion/transport/vnet)
+    pub net: Option<Arc<Mutex<Net>>>,
 
     // interface_filter is a function that you can use in order to  whitelist or blacklist
     // the interfaces which are used to gather ICE candidates.

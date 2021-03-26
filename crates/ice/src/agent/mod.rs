@@ -21,7 +21,7 @@ use agent_stats::*;
 
 use mdns::conn::*;
 use stun::{agent::*, attributes::*, fingerprint::*, integrity::*, message::*, xoraddr::*};
-use util::{Buffer, Error};
+use util::{vnet::net::*, Buffer, Error};
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -59,6 +59,7 @@ pub struct Agent {
     pub(crate) mdns_mode: MulticastDNSMode,
     pub(crate) mdns_name: String,
     pub(crate) mdns_conn: Option<Arc<DNSConn>>,
+    pub(crate) net: Arc<Mutex<Net>>,
 
     // 1:1 D-NAT IP address mapping
     pub(crate) ext_ip_mapper: Arc<ExternalIPMapper>,
@@ -215,6 +216,22 @@ impl Agent {
             }
         };
 
+        let net = if let Some(net) = config.net {
+            {
+                let n = net.lock().await;
+                if n.is_virtual() {
+                    log::warn!("vnet is enabled");
+                    if mdns_mode != MulticastDNSMode::Disabled {
+                        log::warn!("vnet does not support mDNS yet");
+                    }
+                }
+            }
+
+            net
+        } else {
+            Arc::new(Mutex::new(Net::new(None)))
+        };
+
         let a = Agent {
             port_min: config.port_min,
             port_max: config.port_max,
@@ -223,6 +240,7 @@ impl Agent {
             mdns_mode,
             mdns_name,
             mdns_conn,
+            net,
             ext_ip_mapper: Arc::new(ext_ip_mapper),
             gathering_state: Arc::new(AtomicU8::new(0)), //GatheringState::New,
             candidate_types,
@@ -511,6 +529,7 @@ impl Agent {
             port_min: self.port_min,
             mdns_mode: self.mdns_mode,
             mdns_name: self.mdns_name.clone(),
+            net: Arc::clone(&self.net),
             interface_filter: self.interface_filter.clone(),
             ext_ip_mapper: Arc::clone(&self.ext_ip_mapper),
             agent_internal: Arc::clone(&self.agent_internal),

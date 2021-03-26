@@ -1,12 +1,13 @@
 use super::*;
 
-#[test]
-fn test_local_interfaces() -> Result<(), Error> {
-    let interfaces = match ifaces::ifaces() {
-        Ok(interfaces) => interfaces,
-        Err(err) => return Err(Error::new(err.to_string())),
+#[tokio::test]
+async fn test_local_interfaces() -> Result<(), Error> {
+    let vnet = Arc::new(Mutex::new(Net::new(None)));
+    let interfaces = {
+        let n = vnet.lock().await;
+        n.get_interfaces().to_vec()
     };
-    let ips = local_interfaces(&None, &[NetworkType::UDP4, NetworkType::UDP6])?;
+    let ips = local_interfaces(&vnet, &None, &[NetworkType::UDP4, NetworkType::UDP6]).await;
     log::info!("interfaces: {:?}, ips: {:?}", interfaces, ips);
     Ok(())
 }
