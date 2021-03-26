@@ -497,26 +497,35 @@ async fn test_net_virtual_resolver() -> Result<(), Error> {
         n.set_router(Arc::clone(&wan)).await?;
     }
 
-    let (conn, raddr) = {
-        let n = nw.lock().await;
-        let raddr = n.resolve_addr(true, "test.webrtc.rs:1234").await?;
-        (n.dail(true, "test.webrtc.rs:1234").await?, raddr)
-    };
+    let (done_tx, mut done_rx) = mpsc::channel::<()>(1);
+    tokio::spawn(async move {
+        let (conn, raddr) = {
+            let n = nw.lock().await;
+            let raddr = n.resolve_addr(true, "test.webrtc.rs:1234").await?;
+            (n.dail(true, "test.webrtc.rs:1234").await?, raddr)
+        };
 
-    let laddr = conn.local_addr()?;
-    assert_eq!(
-        laddr.ip().to_string().as_str(),
-        "1.2.3.1",
-        "{} should match  1.2.3.1",
-        laddr.ip()
-    );
+        let laddr = conn.local_addr()?;
+        assert_eq!(
+            laddr.ip().to_string().as_str(),
+            "1.2.3.1",
+            "{} should match  1.2.3.1",
+            laddr.ip()
+        );
 
-    assert_eq!(
-        raddr.to_string(),
-        "30.31.32.33:1234",
-        "{} should match 30.31.32.33:1234",
-        raddr
-    );
+        assert_eq!(
+            raddr.to_string(),
+            "30.31.32.33:1234",
+            "{} should match 30.31.32.33:1234",
+            raddr
+        );
+
+        drop(done_tx);
+
+        Ok::<(), Error>(())
+    });
+
+    let _ = done_rx.recv().await;
 
     Ok(())
 }
