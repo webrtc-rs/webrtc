@@ -18,6 +18,9 @@ impl Interface {
         self.addrs.push(addr);
     }
 
+    pub fn name(&self) -> &str {
+        &self.name
+    }
     pub fn addrs(&self) -> &[IpNet] {
         &self.addrs
     }

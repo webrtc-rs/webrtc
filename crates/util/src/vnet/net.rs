@@ -481,11 +481,7 @@ impl Net {
         }
     }
 
-    pub(crate) async fn resolve_addr(
-        &self,
-        use_ipv4: bool,
-        address: &str,
-    ) -> Result<SocketAddr, Error> {
+    pub async fn resolve_addr(&self, use_ipv4: bool, address: &str) -> Result<SocketAddr, Error> {
         match self {
             Net::VNet(vnet) => vnet.resolve_addr(use_ipv4, address).await,
             Net::IFS(_) => Ok(conn::lookup_host(use_ipv4, address).await?),
