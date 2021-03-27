@@ -27,7 +27,7 @@ pub(crate) struct GatherCandidatesInternalParams {
     pub(crate) port_min: u16,
     pub(crate) mdns_mode: MulticastDNSMode,
     pub(crate) mdns_name: String,
-    pub(crate) net: Arc<Mutex<Net>>,
+    pub(crate) net: Arc<Net>,
     pub(crate) interface_filter: Arc<Option<InterfaceFilterFn>>,
     pub(crate) ext_ip_mapper: Arc<ExternalIPMapper>,
     pub(crate) agent_internal: Arc<Mutex<AgentInternal>>,
@@ -42,7 +42,7 @@ struct GatherCandidatesLocalParams {
     mdns_name: String,
     interface_filter: Arc<Option<InterfaceFilterFn>>,
     ext_ip_mapper: Arc<ExternalIPMapper>,
-    net: Arc<Mutex<Net>>,
+    net: Arc<Net>,
     agent_internal: Arc<Mutex<AgentInternal>>,
 }
 
@@ -51,7 +51,7 @@ struct GatherCandidatesSrflxMappedParasm {
     port_max: u16,
     port_min: u16,
     ext_ip_mapper: Arc<ExternalIPMapper>,
-    net: Arc<Mutex<Net>>,
+    net: Arc<Net>,
     agent_internal: Arc<Mutex<AgentInternal>>,
 }
 
@@ -60,7 +60,7 @@ struct GatherCandidatesSrflxParams {
     network_types: Vec<NetworkType>,
     port_max: u16,
     port_min: u16,
-    net: Arc<Mutex<Net>>,
+    net: Arc<Net>,
     agent_internal: Arc<Mutex<AgentInternal>>,
 }
 
@@ -450,14 +450,11 @@ impl Agent {
                     });
 
                     let host_port = format!("{}:{}", url.host, url.port);
-                    let server_addr = {
-                        let n = net2.lock().await;
-                        match n.resolve_addr(is_ipv4, &host_port).await {
-                            Ok(addr) => addr,
-                            Err(err) => {
-                                log::warn!("failed to resolve stun host: {}: {}", host_port, err);
-                                return Ok(());
-                            }
+                    let server_addr = match net2.resolve_addr(is_ipv4, &host_port).await {
+                        Ok(addr) => addr,
+                        Err(err) => {
+                            log::warn!("failed to resolve stun host: {}: {}", host_port, err);
+                            return Ok(());
                         }
                     };
 
@@ -550,7 +547,7 @@ impl Agent {
 
     async fn gather_candidates_relay(
         urls: Vec<URL>,
-        net: Arc<Mutex<Net>>,
+        net: Arc<Net>,
         agent_internal: Arc<Mutex<AgentInternal>>,
     ) {
         let wg = WaitGroup::new();
@@ -580,14 +577,11 @@ impl Agent {
 
                 let (loc_conn, rel_addr, rel_port) =
                     if url.proto == ProtoType::UDP && url.scheme == SchemeType::TURN {
-                        let loc_conn = {
-                            let n = net2.lock().await;
-                            match n.bind(SocketAddr::from_str("0.0.0.0:0")?).await {
-                                Ok(c) => c,
-                                Err(err) => {
-                                    log::warn!("Failed to listen due to error: {}", err);
-                                    return Ok(());
-                                }
+                        let loc_conn = match net2.bind(SocketAddr::from_str("0.0.0.0:0")?).await {
+                            Ok(c) => c,
+                            Err(err) => {
+                                log::warn!("Failed to listen due to error: {}", err);
+                                return Ok(());
                             }
                         };
 

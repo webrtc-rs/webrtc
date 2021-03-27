@@ -59,7 +59,7 @@ pub struct Agent {
     pub(crate) mdns_mode: MulticastDNSMode,
     pub(crate) mdns_name: String,
     pub(crate) mdns_conn: Option<Arc<DNSConn>>,
-    pub(crate) net: Arc<Mutex<Net>>,
+    pub(crate) net: Arc<Net>,
 
     // 1:1 D-NAT IP address mapping
     pub(crate) ext_ip_mapper: Arc<ExternalIPMapper>,
@@ -217,19 +217,16 @@ impl Agent {
         };
 
         let net = if let Some(net) = config.net {
-            {
-                let n = net.lock().await;
-                if n.is_virtual() {
-                    log::warn!("vnet is enabled");
-                    if mdns_mode != MulticastDNSMode::Disabled {
-                        log::warn!("vnet does not support mDNS yet");
-                    }
+            if net.is_virtual() {
+                log::warn!("vnet is enabled");
+                if mdns_mode != MulticastDNSMode::Disabled {
+                    log::warn!("vnet does not support mDNS yet");
                 }
             }
 
             net
         } else {
-            Arc::new(Mutex::new(Net::new(None)))
+            Arc::new(Net::new(None))
         };
 
         let a = Agent {

@@ -138,7 +138,7 @@ pub struct AgentConfig {
 
     // Net is the our abstracted network interface for internal development purpose only
     // (see github.com/pion/transport/vnet)
-    pub net: Option<Arc<Mutex<Net>>>,
+    pub net: Option<Arc<Net>>,
 
     // interface_filter is a function that you can use in order to  whitelist or blacklist
     // the interfaces which are used to gather ICE candidates.

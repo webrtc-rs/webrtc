@@ -9,7 +9,6 @@ use std::net::{IpAddr, SocketAddr};
 use stun::{agent::*, attributes::*, integrity::*, message::*, textattrs::*, xoraddr::*};
 
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use tokio::time::Duration;
 use util::{vnet::net::*, Conn, Error};
 
@@ -89,15 +88,12 @@ pub(crate) async fn stun_request(
 }
 
 pub(crate) async fn local_interfaces(
-    vnet: &Arc<Mutex<Net>>,
+    vnet: &Arc<Net>,
     interface_filter: &Option<InterfaceFilterFn>,
     network_types: &[NetworkType],
 ) -> Vec<IpAddr> {
     let mut ips = vec![];
-    let interfaces = {
-        let n = vnet.lock().await;
-        n.get_interfaces().to_vec()
-    };
+    let interfaces = vnet.get_interfaces().await;
 
     let (mut ipv4requested, mut ipv6requested) = (false, false);
     for typ in network_types {
@@ -131,14 +127,13 @@ pub(crate) async fn local_interfaces(
 }
 
 pub(crate) async fn listen_udp_in_port_range(
-    vnet: &Arc<Mutex<Net>>,
+    vnet: &Arc<Net>,
     port_max: u16,
     port_min: u16,
     laddr: SocketAddr,
 ) -> Result<Arc<dyn Conn + Send + Sync>, Error> {
     if laddr.port() != 0 || (port_min == 0 && port_max == 0) {
-        let n = vnet.lock().await;
-        return n.bind(laddr).await;
+        return vnet.bind(laddr).await;
     }
     let i = if port_min == 0 { 1 } else { port_min };
     let j = if port_max == 0 { 0xFFFF } else { port_max };
@@ -150,13 +145,10 @@ pub(crate) async fn listen_udp_in_port_range(
     let mut port_current = port_start;
     loop {
         let laddr = SocketAddr::new(laddr.ip(), port_current);
-        {
-            let n = vnet.lock().await;
-            match n.bind(laddr).await {
-                Ok(c) => return Ok(c),
-                Err(err) => log::debug!("failed to listen {}: {}", laddr, err),
-            };
-        }
+        match vnet.bind(laddr).await {
+            Ok(c) => return Ok(c),
+            Err(err) => log::debug!("failed to listen {}: {}", laddr, err),
+        };
 
         port_current += 1;
         if port_current > j {
