@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use webrtc_rs_rtp::{
+use webrtc_rtp::{
     header::{self, ExtensionProfile, Header},
     packet::Packet,
 };

@@ -1,5 +1,5 @@
 use crate::errors::RTPError;
-use crate::header::*;
+use crate::header;
 use std::fmt;
 
 mod packet_test;
@@ -8,7 +8,7 @@ mod packet_test;
 /// NOTE: Raw is populated by Marshal/Unmarshal and should not be modified
 #[derive(Debug, Eq, PartialEq, Clone, Default)]
 pub struct Packet {
-    pub header: Header,
+    pub header: header::Header,
     pub payload: Vec<u8>,
 }
 

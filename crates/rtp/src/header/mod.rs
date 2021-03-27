@@ -1,5 +1,4 @@
 mod header_def;
-
 pub use header_def::{Extension, Header};
 
 pub(super) const HEADER_LENGTH: usize = 4;
