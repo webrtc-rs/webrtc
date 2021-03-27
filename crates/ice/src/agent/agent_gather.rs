@@ -32,6 +32,7 @@ pub(crate) struct GatherCandidatesInternalParams {
     pub(crate) ext_ip_mapper: Arc<ExternalIPMapper>,
     pub(crate) agent_internal: Arc<Mutex<AgentInternal>>,
     pub(crate) gathering_state: Arc<AtomicU8>,
+    pub(crate) chan_candidate_tx: Arc<mpsc::Sender<Option<Arc<dyn Candidate + Send + Sync>>>>,
 }
 
 struct GatherCandidatesLocalParams {
@@ -66,7 +67,12 @@ struct GatherCandidatesSrflxParams {
 
 impl Agent {
     pub(crate) async fn gather_candidates_internal(params: GatherCandidatesInternalParams) {
-        Agent::set_gathering_state(&params.gathering_state, GatheringState::Gathering);
+        Agent::set_gathering_state(
+            &params.chan_candidate_tx,
+            &params.gathering_state,
+            GatheringState::Gathering,
+        )
+        .await;
 
         let wg = WaitGroup::new();
 
@@ -150,14 +156,23 @@ impl Agent {
         // Block until all STUN and TURN URLs have been gathered (or timed out)
         wg.wait().await;
 
-        Agent::set_gathering_state(&params.gathering_state, GatheringState::Complete);
+        Agent::set_gathering_state(
+            &params.chan_candidate_tx,
+            &params.gathering_state,
+            GatheringState::Complete,
+        )
+        .await;
     }
 
-    fn set_gathering_state(gathering_state: &Arc<AtomicU8>, new_state: GatheringState) {
+    async fn set_gathering_state(
+        chan_candidate_tx: &Arc<mpsc::Sender<Option<Arc<dyn Candidate + Send + Sync>>>>,
+        gathering_state: &Arc<AtomicU8>,
+        new_state: GatheringState,
+    ) {
         if GatheringState::from(gathering_state.load(Ordering::SeqCst)) != new_state
             && new_state == GatheringState::Complete
         {
-            //TODO: a.chanCandidate <- nil
+            let _ = chan_candidate_tx.send(None).await;
         }
 
         gathering_state.store(new_state as u8, Ordering::SeqCst);

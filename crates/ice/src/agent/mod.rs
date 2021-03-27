@@ -43,10 +43,10 @@ pub(crate) struct BindingRequest {
     pub(crate) is_use_candidate: bool,
 }
 
-pub type OnConnectionStateChangeHdlrFn = Box<dyn Fn(ConnectionState) + Send + Sync>;
+pub type OnConnectionStateChangeHdlrFn = Box<dyn FnMut(ConnectionState) + Send + Sync>;
 pub type OnSelectedCandidatePairChangeHdlrFn =
     Box<dyn Fn(&(dyn Candidate + Send + Sync), &(dyn Candidate + Send + Sync)) + Send + Sync>;
-pub type OnCandidateHdlrFn = Box<dyn Fn(Arc<dyn Candidate + Send + Sync>) + Send + Sync>;
+pub type OnCandidateHdlrFn = Box<dyn FnMut(Option<Arc<dyn Candidate + Send + Sync>>) + Send + Sync>;
 pub type GatherCandidateCancelFn = Box<dyn Fn() + Send + Sync>;
 
 // Agent represents the ICE agent
@@ -122,7 +122,7 @@ impl Agent {
             force_candidate_contact_rx: Some(force_candidate_contact_rx),
 
             chan_state_tx,
-            chan_candidate_tx,
+            chan_candidate_tx: Arc::new(chan_candidate_tx),
             chan_candidate_pair_tx,
 
             on_connection_state_change_hdlr: None,
@@ -290,7 +290,7 @@ impl Agent {
     async fn start_on_connection_state_change_routine(
         agent_internal: Arc<Mutex<AgentInternal>>,
         mut chan_state_rx: mpsc::Receiver<ConnectionState>,
-        mut chan_candidate_rx: mpsc::Receiver<Arc<dyn Candidate + Send + Sync>>,
+        mut chan_candidate_rx: mpsc::Receiver<Option<Arc<dyn Candidate + Send + Sync>>>,
         mut chan_candidate_pair_rx: mpsc::Receiver<()>,
     ) {
         let agent_internal_pair = Arc::clone(&agent_internal);
@@ -312,14 +312,14 @@ impl Agent {
             loop {
                 tokio::select! {
                     opt_state = chan_state_rx.recv() => {
-                        let ai = agent_internal.lock().await;
+                        let mut ai = agent_internal.lock().await;
                         if let Some(s) = opt_state {
-                            if let Some(on_connection_state_change) = &ai.on_connection_state_change_hdlr{
+                            if let Some(on_connection_state_change) = &mut ai.on_connection_state_change_hdlr{
                                 on_connection_state_change(s);
                             }
                         } else {
                             while let Some(c) = chan_candidate_rx.recv().await {
-                                if let Some(on_candidate) = &ai.on_candidate_hdlr {
+                                if let Some(on_candidate) = &mut ai.on_candidate_hdlr {
                                     on_candidate(c);
                                 }
                             }
@@ -327,14 +327,14 @@ impl Agent {
                         }
                     },
                     opt_cand = chan_candidate_rx.recv() => {
-                        let ai = agent_internal.lock().await;
+                        let mut ai = agent_internal.lock().await;
                         if let Some(c) = opt_cand {
-                            if let Some(on_candidate) = &ai.on_candidate_hdlr{
+                            if let Some(on_candidate) = &mut ai.on_candidate_hdlr{
                                 on_candidate(c);
                             }
                         } else {
                             while let Some(s) = chan_state_rx.recv().await {
-                                if let Some(on_connection_state_change) = &ai.on_connection_state_change_hdlr{
+                                if let Some(on_connection_state_change) = &mut ai.on_connection_state_change_hdlr{
                                     on_connection_state_change(s);
                                 }
                             }
@@ -505,12 +505,15 @@ impl Agent {
     pub async fn gather_candidates(&self) -> Result<(), Error> {
         if self.gathering_state.load(Ordering::SeqCst) != GatheringState::New as u8 {
             return Err(ERR_MULTIPLE_GATHER_ATTEMPTED.to_owned());
-        } else {
+        }
+
+        let chan_candidate_tx = {
             let ai = self.agent_internal.lock().await;
             if ai.on_candidate_hdlr.is_none() {
                 return Err(ERR_NO_ON_CANDIDATE_HANDLER.to_owned());
             }
-        }
+            Arc::clone(&ai.chan_candidate_tx)
+        };
 
         if let Some(gather_candidate_cancel) = &self.gather_candidate_cancel {
             gather_candidate_cancel(); // Cancel previous gathering routine
@@ -531,6 +534,7 @@ impl Agent {
             ext_ip_mapper: Arc::clone(&self.ext_ip_mapper),
             agent_internal: Arc::clone(&self.agent_internal),
             gathering_state: Arc::clone(&self.gathering_state),
+            chan_candidate_tx,
         };
         tokio::spawn(async move {
             Agent::gather_candidates_internal(params).await;

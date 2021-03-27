@@ -12,7 +12,7 @@ pub struct AgentInternal {
     pub(crate) done_tx: Option<mpsc::Sender<()>>,
     pub(crate) done_rx: Option<mpsc::Receiver<()>>,
 
-    pub(crate) chan_candidate_tx: mpsc::Sender<Arc<dyn Candidate + Send + Sync>>,
+    pub(crate) chan_candidate_tx: Arc<mpsc::Sender<Option<Arc<dyn Candidate + Send + Sync>>>>,
     pub(crate) chan_candidate_pair_tx: mpsc::Sender<()>,
     pub(crate) chan_state_tx: mpsc::Sender<ConnectionState>,
 
@@ -535,7 +535,7 @@ impl AgentInternal {
         }
 
         self.request_connectivity_check();
-        let _ = self.chan_candidate_tx.send(c.clone()).await;
+        let _ = self.chan_candidate_tx.send(Some(c.clone())).await;
 
         Ok(())
     }

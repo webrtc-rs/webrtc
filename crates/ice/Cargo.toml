@@ -30,6 +30,8 @@ defer = "0.1.0"
 [dev-dependencies]
 tokio-test = "0.4"
 regex = "1.4.3"
+env_logger = "0.8"
+chrono = "0.4.19"
 
 [profile.dev]
 opt-level = 0

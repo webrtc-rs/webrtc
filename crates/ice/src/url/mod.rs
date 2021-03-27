@@ -29,6 +29,12 @@ pub enum SchemeType {
     Unknown,
 }
 
+impl Default for SchemeType {
+    fn default() -> Self {
+        SchemeType::STUN
+    }
+}
+
 impl From<&str> for SchemeType {
     // NewSchemeType defines a procedure for creating a new SchemeType from a raw
     // string naming the scheme type.
@@ -69,6 +75,12 @@ pub enum ProtoType {
     Unknown,
 }
 
+impl Default for ProtoType {
+    fn default() -> Self {
+        ProtoType::UDP
+    }
+}
+
 // defines a procedure for creating a new ProtoType from a raw
 // string naming the transport protocol type.
 impl From<&str> for ProtoType {
@@ -95,7 +107,7 @@ impl fmt::Display for ProtoType {
 }
 
 // URL represents a STUN (rfc7064) or TURN (rfc7065) URL
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct URL {
     pub scheme: SchemeType,
     pub host: String,
