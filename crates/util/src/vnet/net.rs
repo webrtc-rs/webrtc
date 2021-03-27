@@ -382,10 +382,10 @@ pub struct NetConfig {
     // static_ips is an array of static IP addresses to be assigned for this Net.
     // If no static IP address is given, the router will automatically assign
     // an IP address.
-    pub(crate) static_ips: Vec<String>,
+    pub static_ips: Vec<String>,
 
     // static_ip is deprecated. Use static_ips.
-    pub(crate) static_ip: String,
+    pub static_ip: String,
 }
 
 // Net represents a local network stack euivalent to a set of layers from NIC
