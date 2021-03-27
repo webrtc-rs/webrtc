@@ -7,7 +7,7 @@ use std::net::IpAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::net::UdpSocket;
-use util::Error;
+use util::{vnet::net::*, Error};
 
 #[test]
 fn test_lt_cred() -> Result<(), Error> {
@@ -63,6 +63,7 @@ async fn test_new_long_term_auth_handler() -> Result<(), Error> {
             relay_addr_generator: Box::new(RelayAddressGeneratorStatic {
                 relay_address: IpAddr::from_str("127.0.0.1")?,
                 address: "0.0.0.0".to_owned(),
+                net: Arc::new(Net::new(None)),
             }),
         }],
         realm: "webrtc.rs".to_owned(),
@@ -87,6 +88,7 @@ async fn test_new_long_term_auth_handler() -> Result<(), Error> {
         software: String::new(),
         rto_in_ms: 0,
         conn,
+        vnet: None,
     })
     .await?;
 

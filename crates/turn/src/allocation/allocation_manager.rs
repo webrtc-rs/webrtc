@@ -69,7 +69,7 @@ impl Manager {
 
         let (relay_socket, relay_addr) = self
             .relay_addr_generator
-            .allocate_conn("udp4", requested_port)
+            .allocate_conn(true, requested_port)
             .await?;
         let mut a = Allocation::new(turn_socket, relay_socket, relay_addr, five_tuple.clone());
         a.allocations = Some(Arc::clone(&self.allocations));
@@ -133,7 +133,7 @@ impl Manager {
 
     // get_random_even_port returns a random un-allocated udp4 port
     pub async fn get_random_even_port(&self) -> Result<u16, Error> {
-        let (_, addr) = self.relay_addr_generator.allocate_conn("udp4", 0).await?;
+        let (_, addr) = self.relay_addr_generator.allocate_conn(true, 0).await?;
         Ok(addr.port())
     }
 }

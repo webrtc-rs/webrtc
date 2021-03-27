@@ -29,7 +29,7 @@ use std::sync::Arc;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use tokio::sync::{mpsc, Mutex};
-use util::{conn::*, Error};
+use util::{conn::*, vnet::net::*, Error};
 
 use async_trait::async_trait;
 
@@ -57,6 +57,7 @@ pub struct ClientConfig {
     pub software: String,
     pub rto_in_ms: u16,
     pub conn: Arc<dyn Conn + Send + Sync>,
+    pub vnet: Option<Arc<Net>>,
 }
 
 struct ClientInternal {
@@ -154,12 +155,23 @@ impl RelayConnObserver for ClientInternal {
 impl ClientInternal {
     // new returns a new Client instance. listeningAddress is the address and port to listen on, default "0.0.0.0:0"
     async fn new(config: ClientConfig) -> Result<Self, Error> {
+        let net = if let Some(vnet) = config.vnet {
+            if vnet.is_virtual() {
+                log::warn!("vnet is enabled");
+            }
+            vnet
+        } else {
+            Arc::new(Net::new(None))
+        };
+
         let stun_serv_addr = if config.stun_serv_addr.is_empty() {
             String::new()
         } else {
             log::debug!("resolving {}", config.stun_serv_addr);
             let local_addr = config.conn.local_addr()?;
-            let stun_serv = lookup_host(local_addr.is_ipv4(), config.stun_serv_addr).await?;
+            let stun_serv = net
+                .resolve_addr(local_addr.is_ipv4(), &config.stun_serv_addr)
+                .await?;
             log::debug!("stunServ: {}", stun_serv);
             stun_serv.to_string()
         };
@@ -169,7 +181,9 @@ impl ClientInternal {
         } else {
             log::debug!("resolving {}", config.turn_serv_addr);
             let local_addr = config.conn.local_addr()?;
-            let turn_serv = lookup_host(local_addr.is_ipv4(), config.turn_serv_addr).await?;
+            let turn_serv = net
+                .resolve_addr(local_addr.is_ipv4(), &config.turn_serv_addr)
+                .await?;
             log::debug!("turnServ: {}", turn_serv);
             turn_serv.to_string()
         };

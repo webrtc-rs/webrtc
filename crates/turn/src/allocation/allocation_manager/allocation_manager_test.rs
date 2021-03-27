@@ -5,12 +5,13 @@ use crate::proto::lifetime::DEFAULT_LIFETIME;
 use std::net::Ipv4Addr;
 use std::str::FromStr;
 use tokio::net::UdpSocket;
-use util::Error;
+use util::{vnet::net::*, Error};
 
 fn new_test_manager() -> Manager {
     let config = ManagerConfig {
         relay_addr_generator: Box::new(RelayAddressGeneratorNone {
             address: "0.0.0.0".to_owned(),
+            net: Arc::new(Net::new(None)),
         }),
     };
     Manager::new(config)

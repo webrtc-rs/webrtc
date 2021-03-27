@@ -19,7 +19,7 @@ pub trait RelayAddressGenerator {
     // Allocate a RelayAddress
     async fn allocate_conn(
         &self,
-        network: &str,
+        use_ipv4: bool,
         requested_port: u16,
     ) -> Result<(Arc<dyn Conn + Send + Sync>, SocketAddr), Error>;
 }

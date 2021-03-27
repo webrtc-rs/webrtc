@@ -1,7 +1,7 @@
 use super::*;
 use crate::relay::relay_none::*;
 
-use util::Error;
+use util::{vnet::net::*, Error};
 
 use std::net::IpAddr;
 use std::str::FromStr;
@@ -73,6 +73,7 @@ async fn test_allocation_lifetime_deletion_zero_lifetime() -> Result<(), Error> 
     let allocation_manager = Arc::new(Manager::new(ManagerConfig {
         relay_addr_generator: Box::new(RelayAddressGeneratorNone {
             address: "0.0.0.0".to_owned(),
+            net: Arc::new(Net::new(None)),
         }),
     }));
 

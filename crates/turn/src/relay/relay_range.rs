@@ -2,7 +2,7 @@ use super::*;
 use crate::errors::*;
 
 use std::net::IpAddr;
-use tokio::net::UdpSocket;
+use util::vnet::net::*;
 
 use async_trait::async_trait;
 
@@ -22,6 +22,8 @@ pub struct RelayAddressGeneratorRanges {
 
     // Address is passed to Listen/ListenPacket when creating the Relay
     pub address: String,
+
+    pub net: Arc<Net>,
 }
 
 #[async_trait]
@@ -44,7 +46,7 @@ impl RelayAddressGenerator for RelayAddressGeneratorRanges {
     // Allocate a PacketConn (UDP) relay_address
     async fn allocate_conn(
         &self,
-        _network: &str,
+        use_ipv4: bool,
         requested_port: u16,
     ) -> Result<(Arc<dyn Conn + Send + Sync>, SocketAddr), Error> {
         let max_retries = if self.max_retries == 0 {
@@ -54,22 +56,30 @@ impl RelayAddressGenerator for RelayAddressGeneratorRanges {
         };
 
         if requested_port != 0 {
-            let conn = UdpSocket::bind(format!("{}:{}", self.address, requested_port)).await?;
+            let addr = self
+                .net
+                .resolve_addr(use_ipv4, &format!("{}:{}", self.address, requested_port))
+                .await?;
+            let conn = self.net.bind(addr).await?;
             let mut relay_addr = conn.local_addr()?;
             relay_addr.set_ip(self.relay_address);
-            return Ok((Arc::new(conn), relay_addr));
+            return Ok((conn, relay_addr));
         }
 
         for _ in 0..max_retries {
             let port = self.min_port + rand::random::<u16>() % (self.max_port + 1 - self.min_port);
-            let conn = match UdpSocket::bind(format!("{}:{}", self.address, port)).await {
+            let addr = self
+                .net
+                .resolve_addr(use_ipv4, &format!("{}:{}", self.address, port))
+                .await?;
+            let conn = match self.net.bind(addr).await {
                 Ok(conn) => conn,
                 Err(_) => continue,
             };
 
             let mut relay_addr = conn.local_addr()?;
             relay_addr.set_ip(self.relay_address);
-            return Ok((Arc::new(conn), relay_addr));
+            return Ok((conn, relay_addr));
         }
 
         Err(ERR_MAX_RETRIES_EXCEEDED.to_owned())

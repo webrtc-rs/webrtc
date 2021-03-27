@@ -15,7 +15,7 @@ use std::sync::Arc;
 use tokio::net::UdpSocket;
 use tokio::time::Duration;
 
-use util::Error;
+use util::{vnet::net::*, Error};
 
 struct MyAuthHandler {
     cred_map: HashMap<String, Vec<u8>>,
@@ -123,6 +123,7 @@ async fn main() -> Result<(), Error> {
             relay_addr_generator: Box::new(RelayAddressGeneratorStatic {
                 relay_address: IpAddr::from_str(public_ip)?,
                 address: "0.0.0.0".to_owned(),
+                net: Arc::new(Net::new(None)),
             }),
         }],
         realm: realm.to_owned(),

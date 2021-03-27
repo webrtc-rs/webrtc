@@ -88,6 +88,7 @@ async fn main() -> Result<(), Error> {
         software: String::new(),
         rto_in_ms: 0,
         conn: Arc::new(conn),
+        vnet: None,
     };
 
     let client = Client::new(cfg).await?;

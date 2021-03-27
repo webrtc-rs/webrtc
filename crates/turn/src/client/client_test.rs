@@ -7,7 +7,7 @@ use std::net::IpAddr;
 use tokio::net::UdpSocket;
 use tokio::time::Duration;
 
-use util::Error;
+use util::{vnet::net::*, Error};
 
 async fn create_listening_test_client(rto_in_ms: u16) -> Result<Client, Error> {
     let conn = UdpSocket::bind("0.0.0.0:0").await?;
@@ -21,6 +21,7 @@ async fn create_listening_test_client(rto_in_ms: u16) -> Result<Client, Error> {
         software: "TEST SOFTWARE".to_owned(),
         rto_in_ms,
         conn: Arc::new(conn),
+        vnet: None,
     })
     .await?;
 
@@ -41,6 +42,7 @@ async fn create_listening_test_client_with_stun_serv() -> Result<Client, Error> 
         software: "TEST SOFTWARE".to_owned(),
         rto_in_ms: 0,
         conn: Arc::new(conn),
+        vnet: None,
     })
     .await?;
 
@@ -147,6 +149,7 @@ async fn test_client_nonce_expiration() -> Result<(), Error> {
             relay_addr_generator: Box::new(RelayAddressGeneratorStatic {
                 relay_address: IpAddr::from_str("127.0.0.1")?,
                 address: "0.0.0.0".to_owned(),
+                net: Arc::new(Net::new(None)),
             }),
         }],
         realm: "webrtc.rs".to_owned(),
@@ -166,6 +169,7 @@ async fn test_client_nonce_expiration() -> Result<(), Error> {
         software: String::new(),
         rto_in_ms: 0,
         conn,
+        vnet: None,
     })
     .await?;
 

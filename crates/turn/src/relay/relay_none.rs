@@ -1,7 +1,7 @@
 use super::*;
 use crate::errors::*;
 
-use tokio::net::UdpSocket;
+use util::vnet::net::*;
 
 use async_trait::async_trait;
 
@@ -9,6 +9,7 @@ use async_trait::async_trait;
 pub struct RelayAddressGeneratorNone {
     // Address is passed to Listen/ListenPacket when creating the Relay
     pub address: String,
+    pub net: Arc<Net>,
 }
 
 #[async_trait]
@@ -25,11 +26,15 @@ impl RelayAddressGenerator for RelayAddressGeneratorNone {
     // Allocate a PacketConn (UDP) RelayAddress
     async fn allocate_conn(
         &self,
-        _network: &str,
+        use_ipv4: bool,
         requested_port: u16,
     ) -> Result<(Arc<dyn Conn + Send + Sync>, SocketAddr), Error> {
-        let conn = UdpSocket::bind(format!("{}:{}", self.address, requested_port)).await?;
+        let addr = self
+            .net
+            .resolve_addr(use_ipv4, &format!("{}:{}", self.address, requested_port))
+            .await?;
+        let conn = self.net.bind(addr).await?;
         let relay_addr = conn.local_addr()?;
-        Ok((Arc::new(conn), relay_addr))
+        Ok((conn, relay_addr))
     }
 }
