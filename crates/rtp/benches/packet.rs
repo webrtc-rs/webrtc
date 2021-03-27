@@ -25,11 +25,10 @@ fn benchmark_marshal_to(c: &mut Criterion) {
     let mut p = Packet::default();
     p.unmarshal(&mut raw_pkt).unwrap();
 
-    let mut buf = vec![0u8; 100];
-    //buf.resize(100, 0u8);
+    let buf = &mut [0u8; 100];
 
     c.bench_function("Marshal_To Benchmark", move |b| {
-        b.iter(|| p.marshal_to(&mut buf).unwrap())
+        b.iter(|| p.marshal_to(buf).unwrap())
     });
 }
 
@@ -56,7 +55,6 @@ fn benchmark_unmarshal(c: &mut Criterion) {
     };
 
     let mut raw_pkt = pkt.marshal().unwrap();
-
     let mut raw_pkt_clone = raw_pkt.clone();
 
     c.bench_function("Shared Struct", move |b| {

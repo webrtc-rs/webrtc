@@ -41,31 +41,61 @@ mod tests {
         let raw_bytes = &mut [0x80, 0x00, 0x00, 0x00];
         let result = pck.unmarshal(raw_bytes)?;
         assert!(!result.is_empty(), "Payload must be not empty");
+        assert_eq!(pck.x, 1, "X must be 1");
+        assert_eq!(pck.i, 0, "I must be 0");
+        assert_eq!(pck.l, 0, "L must be 0");
+        assert_eq!(pck.t, 0, "T must be 0");
+        assert_eq!(pck.k, 0, "K must be 0");
 
         // Header size, only X and I
         let raw_bytes = &mut [0x80, 0x80, 0x00, 0x00];
         let result = pck.unmarshal(raw_bytes)?;
         assert!(!result.is_empty(), "Payload must be not empty");
+        assert_eq!(pck.x, 1, "X must be 1");
+        assert_eq!(pck.i, 1, "I must be 1");
+        assert_eq!(pck.l, 0, "L must be 0");
+        assert_eq!(pck.t, 0, "T must be 0");
+        assert_eq!(pck.k, 0, "K must be 0");
 
         // Header size, X and I, PID 16bits
         let raw_bytes = &mut [0x80, 0x80, 0x81, 0x00, 0x00];
         let result = pck.unmarshal(raw_bytes)?;
         assert!(!result.is_empty(), "Payload must be not empty");
+        assert_eq!(pck.x, 1, "X must be 1");
+        assert_eq!(pck.i, 1, "I must be 1");
+        assert_eq!(pck.l, 0, "L must be 0");
+        assert_eq!(pck.t, 0, "T must be 0");
+        assert_eq!(pck.k, 0, "K must be 0");
 
         // Header size, X and L
         let raw_bytes = &mut [0x80, 0x40, 0x00, 0x00];
         let result = pck.unmarshal(raw_bytes)?;
         assert!(!result.is_empty(), "Payload must be not empty");
+        assert_eq!(pck.x, 1, "X must be 1");
+        assert_eq!(pck.i, 0, "I must be 0");
+        assert_eq!(pck.l, 1, "L must be 1");
+        assert_eq!(pck.t, 0, "T must be 0");
+        assert_eq!(pck.k, 0, "K must be 0");
 
         // Header size, X and T
         let raw_bytes = &mut [0x80, 0x20, 0x00, 0x00];
         let result = pck.unmarshal(raw_bytes)?;
         assert!(!result.is_empty(), "Payload must be not empty");
+        assert_eq!(pck.x, 1, "X must be 1");
+        assert_eq!(pck.i, 0, "I must be 0");
+        assert_eq!(pck.l, 0, "L must be 0");
+        assert_eq!(pck.t, 1, "T must be 1");
+        assert_eq!(pck.k, 0, "K must be 0");
 
         // Header size, X and K
         let raw_bytes = &mut [0x80, 0x10, 0x00, 0x00];
         let result = pck.unmarshal(raw_bytes)?;
         assert!(!result.is_empty(), "Payload must be not empty");
+        assert_eq!(pck.x, 1, "X must be 1");
+        assert_eq!(pck.i, 0, "I must be 0");
+        assert_eq!(pck.l, 0, "L must be 0");
+        assert_eq!(pck.t, 0, "T must be 0");
+        assert_eq!(pck.k, 1, "K must be 1");
 
         // Header size, all flags and 16bit picture_id
         let raw_bytes = &mut [0xff, 0xff, 0x00, 0x00];
@@ -75,6 +105,11 @@ mod tests {
             Some(RTPError::ShortPacket),
             "Payload must be not empty"
         );
+        assert_eq!(pck.x, 1, "X must be 1");
+        assert_eq!(pck.i, 1, "I must be 1");
+        assert_eq!(pck.l, 1, "L must be 1");
+        assert_eq!(pck.t, 1, "T must be 1");
+        assert_eq!(pck.k, 1, "K must be 1");
 
         Ok(())
     }
