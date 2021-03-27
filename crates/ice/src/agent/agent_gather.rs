@@ -607,7 +607,7 @@ impl Agent {
                     software: String::new(),
                     rto_in_ms: 0,
                     conn: loc_conn,
-                    //TODO: add VNet support in TURN?
+                    vnet: Some(Arc::clone(&net2)),
                 };
                 let client = match turn::client::Client::new(cfg).await {
                     Ok(client) => Arc::new(client),
