@@ -28,8 +28,8 @@ impl Default for DummyNic {
 
 #[async_trait]
 impl NIC for DummyNic {
-    fn get_interface(&self, ifc_name: &str) -> Option<&Interface> {
-        self.net.get_interface(ifc_name)
+    async fn get_interface(&self, ifc_name: &str) -> Option<Interface> {
+        self.net.get_interface(ifc_name).await
     }
 
     async fn add_addrs_to_interface(
@@ -37,11 +37,15 @@ impl NIC for DummyNic {
         ifc_name: &str,
         addrs: &[IpNet],
     ) -> Result<(), Error> {
-        self.net.add_addrs_to_interface(ifc_name, addrs).await
+        let nic = self.net.get_nic()?;
+        let mut net = nic.lock().await;
+        net.add_addrs_to_interface(ifc_name, addrs).await
     }
 
     async fn set_router(&self, r: Arc<Mutex<Router>>) -> Result<(), Error> {
-        self.net.set_router(r).await
+        let nic = self.net.get_nic()?;
+        let net = nic.lock().await;
+        net.set_router(r).await
     }
 
     async fn on_inbound_chunk(&self, c: Box<dyn Chunk + Send + Sync>) {
@@ -79,17 +83,13 @@ impl NIC for DummyNic {
                 assert!(result.is_ok(), "should succeed");
 
                 log::debug!("wan.push being called..");
-                {
-                    match &self.net {
-                        Net::VNet(vnet) => {
-                            let vi = vnet.vi.lock().await;
-                            if let Some(r) = &vi.router {
-                                let wan = r.lock().await;
-                                wan.push(echo).await;
-                            }
-                        }
-                        _ => assert!(false, "must be virtual"),
-                    };
+                if let Net::VNet(vnet) = &self.net {
+                    let net = vnet.lock().await;
+                    let vi = net.vi.lock().await;
+                    if let Some(r) = &vi.router {
+                        let wan = r.lock().await;
+                        wan.push(echo).await;
+                    }
                 }
                 log::debug!("wan.push called!");
             }
@@ -97,8 +97,13 @@ impl NIC for DummyNic {
         };
     }
 
-    fn get_static_ips(&self) -> &[IpAddr] {
-        self.net.get_static_ips()
+    async fn get_static_ips(&self) -> Vec<IpAddr> {
+        let nic = match self.net.get_nic() {
+            Ok(nic) => nic,
+            Err(_) => return vec![],
+        };
+        let net = nic.lock().await;
+        net.get_static_ips().await
     }
 }
 
@@ -106,6 +111,7 @@ async fn get_ipaddr(nic: &Arc<Mutex<dyn NIC + Send + Sync>>) -> Result<IpAddr, E
     let n = nic.lock().await;
     let eth0 = n
         .get_interface("eth0")
+        .await
         .ok_or_else(|| ERR_NO_INTERFACE.to_owned())?;
     let addrs = eth0.addrs();
     if addrs.is_empty() {
@@ -164,18 +170,19 @@ async fn test_router_standalone_add_net() -> Result<(), Error> {
         ..Default::default()
     })?));
 
-    let net = Arc::new(Mutex::new(Net::new(Some(NetConfig::default()))));
+    let net = Net::new(Some(NetConfig::default()));
+
+    let nic = net.get_nic()?;
 
     {
-        let n = Arc::clone(&net) as Arc<Mutex<dyn NIC + Send + Sync>>;
         let mut w = wan.lock().await;
-        w.add_net(n).await?;
+        w.add_net(Arc::clone(&nic)).await?;
     }
 
-    let nic = net.lock().await;
-    nic.set_router(Arc::clone(&wan)).await?;
+    let n = nic.lock().await;
+    n.set_router(Arc::clone(&wan)).await?;
 
-    let eth0 = nic.get_interface("eth0");
+    let eth0 = n.get_interface("eth0").await;
     assert!(eth0.is_some(), "should succeed");
     if let Some(eth0) = eth0 {
         let addrs = eth0.addrs();
@@ -224,7 +231,7 @@ async fn test_router_standalone_routing() -> Result<(), Error> {
         {
             // Now, eth0 must have one address assigned
             let n = nic.lock().await;
-            if let Some(eth0) = n.get_interface("eth0") {
+            if let Some(eth0) = n.get_interface("eth0").await {
                 let addrs = eth0.addrs();
                 assert_eq!(1, addrs.len(), "should match");
                 ips.push(SocketAddr::new(addrs[0].addr(), 1111 * (i + 1)));
@@ -304,7 +311,7 @@ async fn test_router_standalone_add_chunk_filter() -> Result<(), Error> {
         {
             // Now, eth0 must have one address assigned
             let n = nic.lock().await;
-            if let Some(eth0) = n.get_interface("eth0") {
+            if let Some(eth0) = n.get_interface("eth0").await {
                 let addrs = eth0.addrs();
                 assert_eq!(1, addrs.len(), "should match");
                 ips.push(SocketAddr::new(addrs[0].addr(), 1111 * (i + 1)));
@@ -411,7 +418,7 @@ async fn delay_sub_test(
         {
             // Now, eth0 must have one address assigned
             let n = nic.lock().await;
-            if let Some(eth0) = n.get_interface("eth0") {
+            if let Some(eth0) = n.get_interface("eth0").await {
                 let addrs = eth0.addrs();
                 assert_eq!(1, addrs.len(), "should match");
                 ips.push(SocketAddr::new(addrs[0].addr(), 1111 * (i + 1)));
@@ -774,17 +781,17 @@ async fn test_router_failures_add_net() -> Result<(), Error> {
         ..Default::default()
     })?));
 
-    let net = Arc::new(Mutex::new(Net::new(Some(NetConfig {
+    let net = Net::new(Some(NetConfig {
         static_ips: vec![
             "5.6.7.8".to_owned(), // out of parent router'c CIDR
         ],
         ..Default::default()
-    }))));
+    }));
 
     {
-        let n = Arc::clone(&net) as Arc<Mutex<dyn NIC + Send + Sync>>;
+        let nic = net.get_nic()?;
         let mut w = wan.lock().await;
-        let result = w.add_net(n).await;
+        let result = w.add_net(nic).await;
         assert!(result.is_err(), "should fail");
     }
 

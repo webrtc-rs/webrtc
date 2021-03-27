@@ -35,6 +35,7 @@ pub(crate) fn new_mac_address() -> HardwareAddr {
     b[2..].to_vec()
 }
 
+#[derive(Default)]
 pub(crate) struct VNetInternal {
     pub(crate) interfaces: Vec<Interface>,         // read-only
     pub(crate) router: Option<Arc<Mutex<Router>>>, // read-only
@@ -104,6 +105,7 @@ impl ConnObserver for VNetInternal {
     }
 }
 
+#[derive(Default)]
 pub struct VNet {
     pub(crate) interfaces: Vec<Interface>, // read-only
     pub(crate) static_ips: Vec<IpAddr>,    // read-only
@@ -112,10 +114,10 @@ pub struct VNet {
 
 #[async_trait]
 impl NIC for VNet {
-    fn get_interface(&self, ifc_name: &str) -> Option<&Interface> {
+    async fn get_interface(&self, ifc_name: &str) -> Option<Interface> {
         for ifc in &self.interfaces {
             if ifc.name == ifc_name {
-                return Some(ifc);
+                return Some(ifc.clone());
             }
         }
         None
@@ -167,8 +169,8 @@ impl NIC for VNet {
         }
     }
 
-    fn get_static_ips(&self) -> &[IpAddr] {
-        &self.static_ips
+    async fn get_static_ips(&self) -> Vec<IpAddr> {
+        self.static_ips.clone()
     }
 }
 
@@ -389,7 +391,7 @@ pub struct NetConfig {
 // Net represents a local network stack euivalent to a set of layers from NIC
 // up to the transport (UDP / TCP) layer.
 pub enum Net {
-    VNet(VNet),
+    VNet(Arc<Mutex<VNet>>),
     IFS(Vec<Interface>),
 }
 
@@ -434,7 +436,7 @@ impl Net {
                 })),
             };
 
-            Net::VNet(vnet)
+            Net::VNet(Arc::new(Mutex::new(vnet)))
         } else {
             let interfaces = match ifaces::ifaces() {
                 Ok(ifs) => ifs,
@@ -466,10 +468,31 @@ impl Net {
     }
 
     // Interfaces returns a list of the system's network interfaces.
-    pub fn get_interfaces(&self) -> &[Interface] {
+    pub async fn get_interfaces(&self) -> Vec<Interface> {
         match self {
-            Net::VNet(vnet) => &vnet.interfaces,
-            Net::IFS(ifs) => &ifs,
+            Net::VNet(vnet) => {
+                let net = vnet.lock().await;
+                net.get_interfaces().to_vec()
+            }
+            Net::IFS(ifs) => ifs.clone(),
+        }
+    }
+
+    // InterfaceByName returns the interface specified by name.
+    pub async fn get_interface(&self, ifc_name: &str) -> Option<Interface> {
+        match self {
+            Net::VNet(vnet) => {
+                let net = vnet.lock().await;
+                net.get_interface(ifc_name).await
+            }
+            Net::IFS(ifs) => {
+                for ifc in ifs {
+                    if ifc.name == ifc_name {
+                        return Some(ifc.clone());
+                    }
+                }
+                None
+            }
         }
     }
 
@@ -483,25 +506,34 @@ impl Net {
 
     pub async fn resolve_addr(&self, use_ipv4: bool, address: &str) -> Result<SocketAddr, Error> {
         match self {
-            Net::VNet(vnet) => vnet.resolve_addr(use_ipv4, address).await,
+            Net::VNet(vnet) => {
+                let net = vnet.lock().await;
+                net.resolve_addr(use_ipv4, address).await
+            }
             Net::IFS(_) => Ok(conn::lookup_host(use_ipv4, address).await?),
         }
     }
 
     pub async fn bind(&self, addr: SocketAddr) -> Result<Arc<dyn Conn + Send + Sync>, Error> {
         match self {
-            Net::VNet(vnet) => vnet.bind(addr).await,
+            Net::VNet(vnet) => {
+                let net = vnet.lock().await;
+                net.bind(addr).await
+            }
             Net::IFS(_) => Ok(Arc::new(UdpSocket::bind(addr).await?)),
         }
     }
 
-    pub(crate) async fn dail(
+    pub async fn dail(
         &self,
         use_ipv4: bool,
         remote_addr: &str,
     ) -> Result<Arc<dyn Conn + Send + Sync>, Error> {
         match self {
-            Net::VNet(vnet) => vnet.dail(use_ipv4, remote_addr).await,
+            Net::VNet(vnet) => {
+                let net = vnet.lock().await;
+                net.dail(use_ipv4, remote_addr).await
+            }
             Net::IFS(_) => {
                 let any_ip = if use_ipv4 {
                     Ipv4Addr::new(0, 0, 0, 0).into()
@@ -517,63 +549,11 @@ impl Net {
             }
         }
     }
-}
 
-#[async_trait]
-impl NIC for Net {
-    fn get_interface(&self, ifc_name: &str) -> Option<&Interface> {
+    pub fn get_nic(&self) -> Result<Arc<Mutex<dyn NIC + Send + Sync>>, Error> {
         match self {
-            Net::VNet(vnet) => vnet.get_interface(ifc_name),
-            Net::IFS(ifs) => {
-                for ifc in ifs {
-                    if ifc.name == ifc_name {
-                        return Some(ifc);
-                    }
-                }
-                None
-            }
-        }
-    }
-
-    async fn add_addrs_to_interface(
-        &mut self,
-        ifc_name: &str,
-        addrs: &[IpNet],
-    ) -> Result<(), Error> {
-        match self {
-            Net::VNet(vnet) => vnet.add_addrs_to_interface(ifc_name, addrs).await,
-            Net::IFS(ifs) => {
-                for ifc in ifs {
-                    if ifc.name == ifc_name {
-                        for addr in addrs {
-                            ifc.add_addr(*addr);
-                        }
-                        return Ok(());
-                    }
-                }
-                Err(ERR_NOT_FOUND.to_owned())
-            }
-        }
-    }
-
-    async fn set_router(&self, r: Arc<Mutex<Router>>) -> Result<(), Error> {
-        match self {
-            Net::VNet(vnet) => vnet.set_router(r).await,
+            Net::VNet(vnet) => Ok(Arc::clone(vnet) as Arc<Mutex<dyn NIC + Send + Sync>>),
             Net::IFS(_) => Err(ERR_VNET_DISABLED.to_owned()),
-        }
-    }
-
-    async fn on_inbound_chunk(&self, c: Box<dyn Chunk + Send + Sync>) {
-        match self {
-            Net::VNet(vnet) => vnet.on_inbound_chunk(c).await,
-            Net::IFS(_) => {}
-        }
-    }
-
-    fn get_static_ips(&self) -> &[IpAddr] {
-        match self {
-            Net::VNet(vnet) => vnet.get_static_ips(),
-            Net::IFS(_) => &[],
         }
     }
 }

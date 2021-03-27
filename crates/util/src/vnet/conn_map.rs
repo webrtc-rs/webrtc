@@ -12,6 +12,7 @@ use tokio::sync::Mutex;
 
 type PortMap = Mutex<HashMap<u16, Vec<Arc<UDPConn>>>>;
 
+#[derive(Default)]
 pub(crate) struct UDPConnMap {
     port_map: PortMap,
 }

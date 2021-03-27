@@ -19,12 +19,12 @@ impl ConnObserver for DummyObserver {
     }
 }
 
-#[test]
-fn test_net_native_interfaces() -> Result<(), Error> {
+#[tokio::test]
+async fn test_net_native_interfaces() -> Result<(), Error> {
     let nw = Net::new(None);
     assert!(!nw.is_virtual(), "should be false");
 
-    let interfaces = nw.get_interfaces();
+    let interfaces = nw.get_interfaces().await;
     log::debug!("interfaces: {:?}", interfaces);
     for ifc in interfaces {
         let addrs = ifc.addrs();
@@ -124,19 +124,20 @@ async fn test_net_native_unexpected_operations() -> Result<(), Error> {
 
     let nw = Net::new(None);
     assert!(!nw.is_virtual(), "should be false");
+
     if !lo_name.is_empty() {
-        if let Some(ifc) = nw.get_interface(&lo_name) {
+        if let Some(ifc) = nw.get_interface(&lo_name).await {
             assert_eq!(lo_name, ifc.name, "should match ifc name");
         } else {
             assert!(false, "should succeed");
         }
     }
 
-    let result = nw.get_interface("foo0");
+    let result = nw.get_interface("foo0").await;
     assert!(result.is_none(), "should be none");
 
-    let ips = nw.get_static_ips();
-    assert!(ips.is_empty(), "should empty");
+    //let ips = nw.get_static_ips();
+    //assert!(ips.is_empty(), "should empty");
 
     Ok(())
 }
@@ -146,7 +147,7 @@ async fn test_net_virtual_interfaces() -> Result<(), Error> {
     let nw = Net::new(Some(NetConfig::default()));
     assert!(nw.is_virtual(), "should be true");
 
-    let interfaces = nw.get_interfaces();
+    let interfaces = nw.get_interfaces().await;
     assert_eq!(2, interfaces.len(), "should be one interface");
 
     for ifc in interfaces {
@@ -173,10 +174,12 @@ async fn test_net_virtual_interface_by_name() -> Result<(), Error> {
     let nw = Net::new(Some(NetConfig::default()));
     assert!(nw.is_virtual(), "should be true");
 
-    let interfaces = nw.get_interfaces();
+    let interfaces = nw.get_interfaces().await;
     assert_eq!(2, interfaces.len(), "should be one interface");
 
-    if let Some(ifc) = nw.get_interface(LO0_STR) {
+    let nic = nw.get_nic()?;
+    let nic = nic.lock().await;
+    if let Some(ifc) = nic.get_interface(LO0_STR).await {
         assert_eq!(LO0_STR, ifc.name.as_str(), "should match");
         let addrs = ifc.addrs();
         assert_eq!(1, addrs.len(), "should be one address");
@@ -184,7 +187,7 @@ async fn test_net_virtual_interface_by_name() -> Result<(), Error> {
         assert!(false, "should got ifc");
     }
 
-    if let Some(ifc) = nw.get_interface("eth0") {
+    if let Some(ifc) = nic.get_interface("eth0").await {
         assert_eq!("eth0", ifc.name.as_str(), "should match");
         let addrs = ifc.addrs();
         assert!(addrs.is_empty(), "should empty");
@@ -192,7 +195,7 @@ async fn test_net_virtual_interface_by_name() -> Result<(), Error> {
         assert!(false, "should got ifc");
     }
 
-    let result = nw.get_interface("foo0");
+    let result = nic.get_interface("foo0").await;
     assert!(result.is_none(), "should fail");
 
     Ok(())
@@ -200,52 +203,61 @@ async fn test_net_virtual_interface_by_name() -> Result<(), Error> {
 
 #[tokio::test]
 async fn test_net_virtual_has_ipaddr() -> Result<(), Error> {
-    let mut nw = Net::new(Some(NetConfig::default()));
+    let nw = Net::new(Some(NetConfig::default()));
     assert!(nw.is_virtual(), "should be true");
 
-    let interfaces = nw.get_interfaces();
+    let interfaces = nw.get_interfaces().await;
     assert_eq!(2, interfaces.len(), "should be one interface");
 
-    let ipnet = IpNet::from_str("10.1.2.3/24")?;
-    nw.add_addrs_to_interface("eth0", &[ipnet]).await?;
+    {
+        let nic = nw.get_nic()?;
+        let mut nic = nic.lock().await;
+        let ipnet = IpNet::from_str("10.1.2.3/24")?;
+        nic.add_addrs_to_interface("eth0", &[ipnet]).await?;
 
-    if let Some(ifc) = nw.get_interface("eth0") {
-        let addrs = ifc.addrs();
-        assert!(!addrs.is_empty(), "should not empty");
+        if let Some(ifc) = nic.get_interface("eth0").await {
+            let addrs = ifc.addrs();
+            assert!(!addrs.is_empty(), "should not empty");
+        }
     }
 
     if let Net::VNet(vnet) = &nw {
+        let net = vnet.lock().await;
         let ip = Ipv4Addr::from_str("127.0.0.1")?.into();
-        assert!(vnet.has_ipaddr(ip), "the IP addr {} should exist", ip);
+        assert!(net.has_ipaddr(ip), "the IP addr {} should exist", ip);
 
         let ip = Ipv4Addr::from_str("10.1.2.3")?.into();
-        assert!(vnet.has_ipaddr(ip), "the IP addr {} should exist", ip);
+        assert!(net.has_ipaddr(ip), "the IP addr {} should exist", ip);
 
         let ip = Ipv4Addr::from_str("192.168.1.1")?.into();
-        assert!(!vnet.has_ipaddr(ip), "the IP addr {} should exist", ip);
+        assert!(!net.has_ipaddr(ip), "the IP addr {} should exist", ip);
     }
-
     Ok(())
 }
 
 #[tokio::test]
 async fn test_net_virtual_get_all_ipaddrs() -> Result<(), Error> {
-    let mut nw = Net::new(Some(NetConfig::default()));
+    let nw = Net::new(Some(NetConfig::default()));
     assert!(nw.is_virtual(), "should be true");
 
-    let interfaces = nw.get_interfaces();
+    let interfaces = nw.get_interfaces().await;
     assert_eq!(2, interfaces.len(), "should be one interface");
 
-    let ipnet = IpNet::from_str("10.1.2.3/24")?;
-    nw.add_addrs_to_interface("eth0", &[ipnet]).await?;
+    {
+        let nic = nw.get_nic()?;
+        let mut nic = nic.lock().await;
+        let ipnet = IpNet::from_str("10.1.2.3/24")?;
+        nic.add_addrs_to_interface("eth0", &[ipnet]).await?;
 
-    if let Some(ifc) = nw.get_interface("eth0") {
-        let addrs = ifc.addrs();
-        assert!(!addrs.is_empty(), "should not empty");
+        if let Some(ifc) = nic.get_interface("eth0").await {
+            let addrs = ifc.addrs();
+            assert!(!addrs.is_empty(), "should not empty");
+        }
     }
 
     if let Net::VNet(vnet) = &nw {
-        let ips = vnet.get_all_ipaddrs(false);
+        let net = vnet.lock().await;
+        let ips = net.get_all_ipaddrs(false);
         assert_eq!(2, ips.len(), "ips should match size {} == 2", ips.len())
     }
 
@@ -262,13 +274,18 @@ async fn test_net_virtual_assign_port() -> Result<(), Error> {
     let end = 1002u16;
     let space = end + 1 - start;
 
-    let interfaces = nw.get_interfaces();
+    let interfaces = nw.get_interfaces().await;
     assert_eq!(2, interfaces.len(), "should be one interface");
 
-    let ipnet = IpNet::from_str(&format!("{}/24", addr))?;
-    nw.add_addrs_to_interface("eth0", &[ipnet]).await?;
+    {
+        let nic = nw.get_nic()?;
+        let mut nic = nic.lock().await;
+        let ipnet = IpNet::from_str(&format!("{}/24", addr))?;
+        nic.add_addrs_to_interface("eth0", &[ipnet]).await?;
+    }
 
     if let Net::VNet(vnet) = &mut nw {
+        let vnet = vnet.lock().await;
         // attempt to assign port with start > end should fail
         let ip = IpAddr::from_str(addr)?;
         let result = vnet.assign_port(ip, 3000, 2999).await;
@@ -309,16 +326,21 @@ async fn test_net_virtual_determine_source_ip() -> Result<(), Error> {
     let mut nw = Net::new(Some(NetConfig::default()));
     assert!(nw.is_virtual(), "should be true");
 
-    let interfaces = nw.get_interfaces();
+    let interfaces = nw.get_interfaces().await;
     assert_eq!(2, interfaces.len(), "should be one interface");
 
-    let ipnet = IpNet::from_str(&format!("{}/24", DEMO_IP))?;
-    nw.add_addrs_to_interface("eth0", &[ipnet]).await?;
+    {
+        let nic = nw.get_nic()?;
+        let mut nic = nic.lock().await;
+        let ipnet = IpNet::from_str(&format!("{}/24", DEMO_IP))?;
+        nic.add_addrs_to_interface("eth0", &[ipnet]).await?;
+    }
 
     // Any IP turned into non-loopback IP
     let any_ip = IpAddr::from_str("0.0.0.0")?;
     let dst_ip = IpAddr::from_str("27.1.7.135")?;
     if let Net::VNet(vnet) = &mut nw {
+        let vnet = vnet.lock().await;
         let vi = vnet.vi.lock().await;
         let src_ip = vi.determine_source_ip(any_ip, dst_ip);
         log::debug!("any_ip: {} => {:?}", any_ip, src_ip);
@@ -332,6 +354,7 @@ async fn test_net_virtual_determine_source_ip() -> Result<(), Error> {
     let any_ip = IpAddr::from_str("0.0.0.0")?;
     let dst_ip = IpAddr::from_str("127.0.0.2")?;
     if let Net::VNet(vnet) = &mut nw {
+        let vnet = vnet.lock().await;
         let vi = vnet.vi.lock().await;
         let src_ip = vi.determine_source_ip(any_ip, dst_ip);
         log::debug!("any_ip: {} => {:?}", any_ip, src_ip);
@@ -345,6 +368,7 @@ async fn test_net_virtual_determine_source_ip() -> Result<(), Error> {
     let any_ip = IpAddr::from_str(DEMO_IP)?;
     let dst_ip = IpAddr::from_str("127.0.0.2")?;
     if let Net::VNet(vnet) = &mut nw {
+        let vnet = vnet.lock().await;
         let vi = vnet.vi.lock().await;
         let src_ip = vi.determine_source_ip(any_ip, dst_ip);
         log::debug!("any_ip: {} => {:?}", any_ip, src_ip);
@@ -448,22 +472,19 @@ async fn test_net_virtual_dail_eth0() -> Result<(), Error> {
         ..Default::default()
     })?));
 
-    let nw = Arc::new(Mutex::new(Net::new(Some(NetConfig::default()))));
+    let nw = Net::new(Some(NetConfig::default()));
 
     {
-        let n = Arc::clone(&nw) as Arc<Mutex<dyn NIC + Send + Sync>>;
+        let nic = nw.get_nic()?;
+
         let mut w = wan.lock().await;
-        w.add_net(n).await?;
-    }
-    {
-        let n = nw.lock().await;
-        n.set_router(Arc::clone(&wan)).await?;
-    }
+        w.add_net(Arc::clone(&nic)).await?;
 
-    let conn = {
-        let n = nw.lock().await;
-        n.dail(true, "27.3.4.5:1234").await?
+        let n = nic.lock().await;
+        n.set_router(Arc::clone(&wan)).await?;
     };
+
+    let conn = nw.dail(true, "27.3.4.5:1234").await?;
     let laddr = conn.local_addr()?;
     assert_eq!(
         laddr.ip().to_string().as_str(),
@@ -483,26 +504,25 @@ async fn test_net_virtual_resolver() -> Result<(), Error> {
         ..Default::default()
     })?));
 
-    let nw = Arc::new(Mutex::new(Net::new(Some(NetConfig::default()))));
+    let nw = Net::new(Some(NetConfig::default()));
 
     {
-        let n = Arc::clone(&nw) as Arc<Mutex<dyn NIC + Send + Sync>>;
+        let nic = nw.get_nic()?;
+
         let mut w = wan.lock().await;
-        w.add_net(n).await?;
+        w.add_net(Arc::clone(&nic)).await?;
         w.add_host("test.webrtc.rs".to_owned(), "30.31.32.33".to_owned())
             .await?;
-    }
-    {
-        let n = nw.lock().await;
+
+        let n = nic.lock().await;
         n.set_router(Arc::clone(&wan)).await?;
     }
 
     let (done_tx, mut done_rx) = mpsc::channel::<()>(1);
     tokio::spawn(async move {
         let (conn, raddr) = {
-            let n = nw.lock().await;
-            let raddr = n.resolve_addr(true, "test.webrtc.rs:1234").await?;
-            (n.dail(true, "test.webrtc.rs:1234").await?, raddr)
+            let raddr = nw.resolve_addr(true, "test.webrtc.rs:1234").await?;
+            (nw.dail(true, "test.webrtc.rs:1234").await?, raddr)
         };
 
         let laddr = conn.local_addr()?;
@@ -583,6 +603,7 @@ async fn test_net_virtual_loopback2() -> Result<(), Error> {
     });
 
     if let Net::VNet(vnet) = &nw {
+        let vnet = vnet.lock().await;
         vnet.on_inbound_chunk(Box::new(c)).await;
     } else {
         assert!(false, "must be virtual net");
@@ -600,6 +621,7 @@ async fn get_ipaddr(nic: &Arc<Mutex<dyn NIC + Send + Sync>>) -> Result<IpAddr, E
     let n = nic.lock().await;
     let eth0 = n
         .get_interface("eth0")
+        .await
         .ok_or_else(|| ERR_NO_INTERFACE.to_owned())?;
     let addrs = eth0.addrs();
     if addrs.is_empty() {
@@ -633,45 +655,38 @@ async fn test_net_virtual_end2end() -> Result<(), Error> {
         ..Default::default()
     })?));
 
-    let net1 = Arc::new(Mutex::new(Net::new(Some(NetConfig::default()))));
-    {
-        let n = Arc::clone(&net1) as Arc<Mutex<dyn NIC + Send + Sync>>;
-        let mut w = wan.lock().await;
-        w.add_net(n).await?;
-    }
-    {
-        let n = net1.lock().await;
-        n.set_router(Arc::clone(&wan)).await?;
-    }
+    let net1 = Net::new(Some(NetConfig::default()));
     let ip1 = {
-        let nic = Arc::clone(&net1) as Arc<Mutex<dyn NIC + Send + Sync>>;
-        get_ipaddr(&nic).await?
-    };
+        let nic = net1.get_nic()?;
 
-    let net2 = Arc::new(Mutex::new(Net::new(Some(NetConfig::default()))));
-    {
-        let n = Arc::clone(&net2) as Arc<Mutex<dyn NIC + Send + Sync>>;
         let mut w = wan.lock().await;
-        w.add_net(n).await?;
-    }
-    {
-        let n = net2.lock().await;
-        n.set_router(Arc::clone(&wan)).await?;
-    }
-    let ip2 = {
-        let nic = Arc::clone(&net2) as Arc<Mutex<dyn NIC + Send + Sync>>;
+        w.add_net(Arc::clone(&nic)).await?;
+
+        {
+            let n = nic.lock().await;
+            n.set_router(Arc::clone(&wan)).await?;
+        }
+
         get_ipaddr(&nic).await?
     };
 
-    let conn1 = {
-        let n = net1.lock().await;
-        n.bind(SocketAddr::new(ip1, 1234)).await?
+    let net2 = Net::new(Some(NetConfig::default()));
+    let ip2 = {
+        let nic = net2.get_nic()?;
+
+        let mut w = wan.lock().await;
+        w.add_net(Arc::clone(&nic)).await?;
+
+        {
+            let n = nic.lock().await;
+            n.set_router(Arc::clone(&wan)).await?;
+        }
+
+        get_ipaddr(&nic).await?
     };
 
-    let conn2 = {
-        let n = net2.lock().await;
-        n.bind(SocketAddr::new(ip2, 5678)).await?
-    };
+    let conn1 = net1.bind(SocketAddr::new(ip1, 1234)).await?;
+    let conn2 = net2.bind(SocketAddr::new(ip2, 5678)).await?;
 
     {
         let mut w = wan.lock().await;
@@ -783,18 +798,17 @@ async fn test_net_virtual_two_ips_on_a_nic() -> Result<(), Error> {
         ..Default::default()
     })?));
 
-    let net = Arc::new(Mutex::new(Net::new(Some(NetConfig {
+    let net = Net::new(Some(NetConfig {
         static_ips: vec![DEMO_IP.to_owned(), "1.2.3.5".to_owned()],
         ..Default::default()
-    }))));
+    }));
+    {
+        let nic = net.get_nic()?;
 
-    {
-        let n = Arc::clone(&net) as Arc<Mutex<dyn NIC + Send + Sync>>;
         let mut w = wan.lock().await;
-        w.add_net(n).await?;
-    }
-    {
-        let n = net.lock().await;
+        w.add_net(Arc::clone(&nic)).await?;
+
+        let n = nic.lock().await;
         n.set_router(Arc::clone(&wan)).await?;
     }
 
@@ -804,15 +818,12 @@ async fn test_net_virtual_two_ips_on_a_nic() -> Result<(), Error> {
         w.start().await?;
     }
 
-    let (conn1, conn2) = {
-        let n = net.lock().await;
-        (
-            n.bind(SocketAddr::new(Ipv4Addr::from_str(DEMO_IP)?.into(), 1234))
-                .await?,
-            n.bind(SocketAddr::new(Ipv4Addr::from_str("1.2.3.5")?.into(), 1234))
-                .await?,
-        )
-    };
+    let (conn1, conn2) = (
+        net.bind(SocketAddr::new(Ipv4Addr::from_str(DEMO_IP)?.into(), 1234))
+            .await?,
+        net.bind(SocketAddr::new(Ipv4Addr::from_str("1.2.3.5")?.into(), 1234))
+            .await?,
+    );
 
     let (close_ch_tx, mut close_ch_rx1) = broadcast::channel::<bool>(1);
     let (done_ch_tx, mut done_ch_rx) = mpsc::channel::<bool>(1);

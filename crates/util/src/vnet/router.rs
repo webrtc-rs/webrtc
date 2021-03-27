@@ -63,14 +63,14 @@ pub struct RouterConfig {
 // NIC is a network interface controller that interfaces Router
 #[async_trait]
 pub trait NIC {
-    fn get_interface(&self, ifc_name: &str) -> Option<&Interface>;
+    async fn get_interface(&self, ifc_name: &str) -> Option<Interface>;
     async fn add_addrs_to_interface(
         &mut self,
         ifc_name: &str,
         addrs: &[IpNet],
     ) -> Result<(), Error>;
     async fn on_inbound_chunk(&self, c: Box<dyn Chunk + Send + Sync>);
-    fn get_static_ips(&self) -> &[IpAddr];
+    async fn get_static_ips(&self) -> Vec<IpAddr>;
     async fn set_router(&self, r: Arc<Mutex<Router>>) -> Result<(), Error>;
 }
 
@@ -109,10 +109,10 @@ pub struct Router {
 
 #[async_trait]
 impl NIC for Router {
-    fn get_interface(&self, ifc_name: &str) -> Option<&Interface> {
+    async fn get_interface(&self, ifc_name: &str) -> Option<Interface> {
         for ifc in &self.interfaces {
             if ifc.name == ifc_name {
-                return Some(ifc);
+                return Some(ifc.clone());
             }
         }
         None
@@ -156,8 +156,8 @@ impl NIC for Router {
         self.push(from_parent).await;
     }
 
-    fn get_static_ips(&self) -> &[IpAddr] {
-        &self.static_ips
+    async fn get_static_ips(&self) -> Vec<IpAddr> {
+        self.static_ips.clone()
     }
 
     // caller must hold the mutex
@@ -181,7 +181,7 @@ impl NIC for Router {
 
         // when this method is called, one or more IP address has already been assigned by
         // the parent router.
-        if let Some(ifc) = self.get_interface("eth0") {
+        if let Some(ifc) = self.get_interface("eth0").await {
             for ifc_addr in ifc.addrs() {
                 let ip = ifc_addr.addr();
                 mapped_ips.push(ip);
@@ -554,7 +554,7 @@ impl RouterInternal {
     ) -> Result<(), Error> {
         let mut ips = {
             let ni = nic.lock().await;
-            ni.get_static_ips().to_vec()
+            ni.get_static_ips().await
         };
 
         if ips.is_empty() {
