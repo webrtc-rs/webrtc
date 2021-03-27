@@ -1,0 +1,398 @@
+use super::*;
+
+use async_trait::async_trait;
+use std::io;
+use std::net::{IpAddr, Ipv4Addr};
+use std::str::FromStr;
+use util::{vnet::router::NIC, vnet::*, Conn};
+use waitgroup::WaitGroup;
+
+pub(crate) struct MockConn;
+
+#[async_trait]
+impl Conn for MockConn {
+    async fn connect(&self, _addr: SocketAddr) -> io::Result<()> {
+        Ok(())
+    }
+    async fn recv(&self, _buf: &mut [u8]) -> io::Result<usize> {
+        Ok(0)
+    }
+    async fn recv_from(&self, _buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
+        Ok((0, SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0)))
+    }
+    async fn send(&self, _buf: &[u8]) -> io::Result<usize> {
+        Ok(0)
+    }
+    async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> io::Result<usize> {
+        Ok(0)
+    }
+    fn local_addr(&self) -> io::Result<SocketAddr> {
+        Ok(SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0))
+    }
+}
+
+struct VNet {
+    wan: Arc<Mutex<router::Router>>,
+    net0: Arc<net::Net>,
+    net1: Arc<net::Net>,
+    server: turn::server::Server,
+}
+
+impl VNet {
+    async fn close(&self) -> Result<(), Error> {
+        self.server.close()?;
+        let mut w = self.wan.lock().await;
+        w.stop().await?;
+        Ok(())
+    }
+}
+
+const VNET_GLOBAL_IPA: &str = "27.1.1.1";
+const VNET_LOCAL_IPA: &str = "192.168.0.1";
+const VNET_LOCAL_SUBNET_MASK_A: &str = "24";
+const VNET_GLOBAL_IPB: &str = "28.1.1.1";
+const VNET_LOCAL_IPB: &str = "10.2.0.1";
+const VNET_LOCAL_SUBNET_MASK_B: &str = "24";
+const VNET_STUNSERVER_IP: &str = "1.2.3.4";
+const VNET_STUNSERVER_PORT: u16 = 3478;
+
+async fn build_vnet(nat_type0: nat::NATType, nat_type1: nat::NATType) -> Result<VNet, Error> {
+    // WAN
+    let wan = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
+        cidr: "0.0.0.0/0".to_owned(),
+        ..Default::default()
+    })?));
+
+    let wnet = Arc::new(net::Net::new(Some(net::NetConfig {
+        static_ip: VNET_STUNSERVER_IP.to_owned(), // will be assigned to eth0
+        ..Default::default()
+    })));
+
+    {
+        let nic = wnet.get_nic()?;
+
+        {
+            let mut w = wan.lock().await;
+            w.add_net(Arc::clone(&nic)).await?;
+        }
+
+        let n = nic.lock().await;
+        n.set_router(Arc::clone(&wan)).await?;
+    }
+
+    // LAN 0
+    let lan0 = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
+        static_ips: if nat_type0.mode == nat::NATMode::NAT1To1 {
+            vec![format!("{}/{}", VNET_GLOBAL_IPA, VNET_LOCAL_IPA)]
+        } else {
+            vec![VNET_GLOBAL_IPA.to_owned()]
+        },
+        cidr: format!("{}/{}", VNET_LOCAL_IPA, VNET_LOCAL_SUBNET_MASK_A),
+        nat_type: Some(nat_type0),
+        ..Default::default()
+    })?));
+
+    let net0 = Arc::new(net::Net::new(Some(net::NetConfig {
+        static_ips: vec![VNET_LOCAL_IPA.to_owned()],
+        ..Default::default()
+    })));
+
+    {
+        let nic = net0.get_nic()?;
+
+        {
+            let mut l = lan0.lock().await;
+            l.add_net(Arc::clone(&nic)).await?;
+        }
+
+        let n = nic.lock().await;
+        n.set_router(Arc::clone(&lan0)).await?;
+    }
+
+    {
+        {
+            let mut w = wan.lock().await;
+            w.add_router(Arc::clone(&lan0)).await?;
+        }
+
+        {
+            let l = lan0.lock().await;
+            l.set_router(Arc::clone(&wan)).await?;
+        }
+    }
+
+    // LAN 1
+    let lan1 = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
+        static_ips: if nat_type1.mode == nat::NATMode::NAT1To1 {
+            vec![format!("{}/{}", VNET_GLOBAL_IPB, VNET_LOCAL_IPB)]
+        } else {
+            vec![VNET_GLOBAL_IPB.to_owned()]
+        },
+        cidr: format!("{}/{}", VNET_LOCAL_IPB, VNET_LOCAL_SUBNET_MASK_B),
+        nat_type: Some(nat_type1),
+        ..Default::default()
+    })?));
+
+    let net1 = Arc::new(net::Net::new(Some(net::NetConfig {
+        static_ips: vec![VNET_LOCAL_IPB.to_owned()],
+        ..Default::default()
+    })));
+
+    {
+        let nic = net1.get_nic()?;
+
+        {
+            let mut l = lan1.lock().await;
+            l.add_net(Arc::clone(&nic)).await?;
+        }
+
+        let n = nic.lock().await;
+        n.set_router(Arc::clone(&lan1)).await?;
+    }
+
+    {
+        {
+            let mut w = wan.lock().await;
+            w.add_router(Arc::clone(&lan1)).await?;
+        }
+
+        {
+            let l = lan1.lock().await;
+            l.set_router(Arc::clone(&wan)).await?;
+        }
+    }
+
+    // start routers...
+    {
+        let mut w = wan.lock().await;
+        w.start().await?;
+    }
+
+    let server = add_vnet_stun(wnet).await?;
+
+    Ok(VNet {
+        wan,
+        net0,
+        net1,
+        server,
+    })
+}
+
+struct TestAuthHandler {
+    cred_map: HashMap<String, Vec<u8>>,
+}
+
+impl TestAuthHandler {
+    fn new() -> Self {
+        let mut cred_map = HashMap::new();
+        cred_map.insert(
+            "user".to_owned(),
+            turn::auth::generate_auth_key("user", "webrtc.rs", "pass"),
+        );
+
+        TestAuthHandler { cred_map }
+    }
+}
+
+impl turn::auth::AuthHandler for TestAuthHandler {
+    fn auth_handle(
+        &self,
+        username: &str,
+        _realm: &str,
+        _src_addr: SocketAddr,
+    ) -> Result<Vec<u8>, Error> {
+        if let Some(pw) = self.cred_map.get(username) {
+            Ok(pw.to_vec())
+        } else {
+            Err(Error::new("fake error".to_owned()))
+        }
+    }
+}
+
+async fn add_vnet_stun(wan_net: Arc<net::Net>) -> Result<turn::server::Server, Error> {
+    // Run TURN(STUN) server
+    let conn = wan_net
+        .bind(SocketAddr::from_str(&format!(
+            "{}:{}",
+            VNET_STUNSERVER_IP, VNET_STUNSERVER_PORT
+        ))?)
+        .await?;
+
+    let server = turn::server::Server::new(turn::server::config::ServerConfig {
+        conn_configs: vec![turn::server::config::ConnConfig {
+            conn,
+            relay_addr_generator: Box::new(
+                turn::relay::relay_static::RelayAddressGeneratorStatic {
+                    relay_address: IpAddr::from_str(VNET_STUNSERVER_IP)?,
+                    address: "0.0.0.0".to_owned(),
+                    net: wan_net,
+                },
+            ),
+        }],
+        realm: "webrtc.rs".to_owned(),
+        auth_handler: Arc::new(Box::new(TestAuthHandler::new())),
+        channel_bind_timeout: Duration::from_secs(0),
+    })
+    .await?;
+
+    Ok(server)
+}
+
+async fn connect_with_vnet(
+    a_agent: &Arc<Agent>,
+    b_agent: &Arc<Agent>,
+) -> Result<(Arc<Mutex<impl Conn>>, Arc<Mutex<impl Conn>>), Error> {
+    // Manual signaling
+    let (a_ufrag, a_pwd) = a_agent.get_local_user_credentials().await;
+    let (b_ufrag, b_pwd) = b_agent.get_local_user_credentials().await;
+
+    gather_and_exchange_candidates(a_agent, b_agent).await?;
+
+    let (accepted_tx, mut accepted_rx) = mpsc::channel(1);
+
+    let agent_a = Arc::clone(a_agent);
+    tokio::spawn(async move {
+        let a_conn = agent_a.accept(b_ufrag, b_pwd).await?;
+        let _ = accepted_tx.send(a_conn).await;
+
+        Ok::<(), Error>(())
+    });
+
+    let b_conn = b_agent.dial(a_ufrag, a_pwd).await?;
+
+    // Ensure accepted
+    if let Some(a_conn) = accepted_rx.recv().await {
+        Ok((a_conn, b_conn))
+    } else {
+        Err(Error::new("no a_conn".to_owned()))
+    }
+}
+
+struct AgentTestConfig {
+    urls: Vec<URL>,
+    nat_1to1_ip_candidate_type: CandidateType,
+}
+
+async fn pipe_with_vnet(
+    v: &VNet,
+    a0test_config: AgentTestConfig,
+    a1test_config: AgentTestConfig,
+) -> Result<(Arc<Mutex<impl Conn>>, Arc<Mutex<impl Conn>>), Error> {
+    let (a_notifier, mut a_connected) = on_connected();
+    let (b_notifier, mut b_connected) = on_connected();
+
+    let nat_1to1_ips = if a0test_config.nat_1to1_ip_candidate_type != CandidateType::Unspecified {
+        vec![VNET_GLOBAL_IPA.to_owned()]
+    } else {
+        vec![]
+    };
+
+    let cfg0 = AgentConfig {
+        urls: a0test_config.urls,
+        network_types: vec![NetworkType::UDP4, NetworkType::UDP6],
+        multicast_dns_mode: MulticastDNSMode::Disabled,
+        nat_1to1_ips,
+        nat_1to1_ip_candidate_type: a0test_config.nat_1to1_ip_candidate_type,
+        net: Some(Arc::clone(&v.net0)),
+        ..Default::default()
+    };
+
+    let a_agent = Arc::new(Agent::new(cfg0).await?);
+    a_agent.on_connection_state_change(a_notifier).await;
+
+    let nat_1to1_ips = if a1test_config.nat_1to1_ip_candidate_type != CandidateType::Unspecified {
+        vec![VNET_GLOBAL_IPB.to_owned()]
+    } else {
+        vec![]
+    };
+    let cfg1 = AgentConfig {
+        urls: a1test_config.urls,
+        network_types: vec![NetworkType::UDP4, NetworkType::UDP6],
+        multicast_dns_mode: MulticastDNSMode::Disabled,
+        nat_1to1_ips,
+        nat_1to1_ip_candidate_type: a1test_config.nat_1to1_ip_candidate_type,
+        net: Some(Arc::clone(&v.net1)),
+        ..Default::default()
+    };
+
+    let b_agent = Arc::new(Agent::new(cfg1).await?);
+    b_agent.on_connection_state_change(b_notifier).await;
+
+    let (a_conn, b_conn) = connect_with_vnet(&a_agent, &b_agent).await?;
+
+    // Ensure pair selected
+    // Note: this assumes ConnectionStateConnected is thrown after selecting the final pair
+    let _ = a_connected.recv().await;
+    let _ = b_connected.recv().await;
+
+    Ok((a_conn, b_conn))
+}
+
+fn on_connected() -> (OnConnectionStateChangeHdlrFn, mpsc::Receiver<()>) {
+    let (done_tx, done_rx) = mpsc::channel::<()>(1);
+    let mut done_tx = Some(done_tx);
+    let hdlr_fn = Box::new(move |state: ConnectionState| {
+        if state == ConnectionState::Connected {
+            done_tx.take();
+        }
+    });
+    (hdlr_fn, done_rx)
+}
+
+async fn copy_candidate(
+    o: Arc<dyn Candidate + Send + Sync>,
+) -> Result<Arc<dyn Candidate + Send + Sync>, Error> {
+    if let Some(ai) = o.get_agent() {
+        Ok(Arc::new(
+            unmarshal_remote_candidate(Arc::clone(ai), o.marshal()).await?,
+        ))
+    } else {
+        Err(Error::new("No AgentIntenal".to_owned()))
+    }
+}
+
+async fn gather_and_exchange_candidates(a_agent: &Agent, b_agent: &Agent) -> Result<(), Error> {
+    let wg = WaitGroup::new();
+
+    let mut w1 = Some(wg.worker());
+    a_agent
+        .on_candidate(Box::new(
+            move |candidate: Option<Arc<dyn Candidate + Send + Sync>>| {
+                if candidate.is_none() {
+                    w1.take();
+                }
+            },
+        ))
+        .await;
+    a_agent.gather_candidates().await?;
+
+    let mut w2 = Some(wg.worker());
+    b_agent
+        .on_candidate(Box::new(
+            move |candidate: Option<Arc<dyn Candidate + Send + Sync>>| {
+                if candidate.is_none() {
+                    w2.take();
+                }
+            },
+        ))
+        .await;
+    b_agent.gather_candidates().await?;
+
+    wg.wait().await;
+
+    let candidates = a_agent.get_local_candidates().await?;
+    for c in candidates {
+        b_agent
+            .add_remote_candidate(&copy_candidate(c).await?)
+            .await?;
+    }
+
+    let candidates = b_agent.get_local_candidates().await?;
+    for c in candidates {
+        a_agent
+            .add_remote_candidate(&copy_candidate(c).await?)
+            .await?;
+    }
+
+    Ok(())
+}
