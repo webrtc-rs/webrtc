@@ -53,8 +53,6 @@ impl Payloader for H264Payloader {
             // the FU header.  An FU payload MAY have any number of octets and MAY
             // be empty.
 
-            let nalu_data = nalu.clone();
-
             // According to the RFC, the first octet is skipped due to redundant information
             let mut nalu_data_index = 1;
             let nalu_data_length = nalu.len() - nalu_data_index;
@@ -94,7 +92,7 @@ impl Payloader for H264Payloader {
                 out[super::FUA_HEADER_SIZE as usize
                     ..super::FUA_HEADER_SIZE as usize + current_fragment_size]
                     .copy_from_slice(
-                        &nalu_data[nalu_data_index..nalu_data_index + current_fragment_size],
+                        &nalu[nalu_data_index..nalu_data_index + current_fragment_size],
                     );
 
                 payloads.push(out);
