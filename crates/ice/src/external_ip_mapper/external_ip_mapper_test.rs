@@ -20,12 +20,10 @@ fn test_external_ip_mapper_validate_ip_string() -> Result<(), Error> {
 fn test_external_ip_mapper_new_external_ip_mapper() -> Result<(), Error> {
     // ips being empty should succeed but mapper will still be nil
     let m = ExternalIPMapper::new(CandidateType::Unspecified, &[])?;
-    assert_eq!(m.candidate_type, CandidateType::Host);
-    assert_eq!(m.ipv4_mapping, IpMapping::default());
-    assert_eq!(m.ipv6_mapping, IpMapping::default());
+    assert!(m.is_none(), "should be none");
 
     // IPv4 with no explicit local IP, defaults to CandidateTypeHost
-    let m = ExternalIPMapper::new(CandidateType::Unspecified, &["1.2.3.4".to_owned()])?;
+    let m = ExternalIPMapper::new(CandidateType::Unspecified, &["1.2.3.4".to_owned()])?.unwrap();
     assert_eq!(m.candidate_type, CandidateType::Host, "should match");
     assert!(m.ipv4_mapping.ip_sole.is_some());
     assert!(m.ipv6_mapping.ip_sole.is_none());
@@ -33,7 +31,8 @@ fn test_external_ip_mapper_new_external_ip_mapper() -> Result<(), Error> {
     assert_eq!(0, m.ipv6_mapping.ip_map.len(), "should match");
 
     // IPv4 with no explicit local IP, using CandidateTypeServerReflexive
-    let m = ExternalIPMapper::new(CandidateType::ServerReflexive, &["1.2.3.4".to_owned()])?;
+    let m =
+        ExternalIPMapper::new(CandidateType::ServerReflexive, &["1.2.3.4".to_owned()])?.unwrap();
     assert_eq!(
         CandidateType::ServerReflexive,
         m.candidate_type,
@@ -45,7 +44,8 @@ fn test_external_ip_mapper_new_external_ip_mapper() -> Result<(), Error> {
     assert_eq!(0, m.ipv6_mapping.ip_map.len(), "should match");
 
     // IPv4 with no explicit local IP, defaults to CandidateTypeHost
-    let m = ExternalIPMapper::new(CandidateType::Unspecified, &["2601:4567::5678".to_owned()])?;
+    let m = ExternalIPMapper::new(CandidateType::Unspecified, &["2601:4567::5678".to_owned()])?
+        .unwrap();
     assert_eq!(CandidateType::Host, m.candidate_type, "should match");
     assert!(m.ipv4_mapping.ip_sole.is_none());
     assert!(m.ipv6_mapping.ip_sole.is_some());
@@ -56,7 +56,8 @@ fn test_external_ip_mapper_new_external_ip_mapper() -> Result<(), Error> {
     let m = ExternalIPMapper::new(
         CandidateType::Unspecified,
         &["1.2.3.4".to_owned(), "2601:4567::5678".to_owned()],
-    )?;
+    )?
+    .unwrap();
     assert_eq!(CandidateType::Host, m.candidate_type, "should match");
     assert!(m.ipv4_mapping.ip_sole.is_some());
     assert!(m.ipv6_mapping.ip_sole.is_some());
@@ -102,7 +103,8 @@ fn test_external_ip_mapper_new_external_ip_mapper() -> Result<(), Error> {
 #[test]
 fn test_external_ip_mapper_new_external_ip_mapper_with_explicit_local_ip() -> Result<(), Error> {
     // IPv4 with  explicit local IP, defaults to CandidateTypeHost
-    let m = ExternalIPMapper::new(CandidateType::Unspecified, &["1.2.3.4/10.0.0.1".to_owned()])?;
+    let m = ExternalIPMapper::new(CandidateType::Unspecified, &["1.2.3.4/10.0.0.1".to_owned()])?
+        .unwrap();
     assert_eq!(CandidateType::Host, m.candidate_type, "should match");
     assert!(m.ipv4_mapping.ip_sole.is_none());
     assert!(m.ipv6_mapping.ip_sole.is_none());
@@ -170,7 +172,8 @@ fn test_external_ip_mapper_find_external_ip_without_explicit_local_ip() -> Resul
     let m = ExternalIPMapper::new(
         CandidateType::Unspecified,
         &["1.2.3.4".to_owned(), "2200::1".to_owned()],
-    )?;
+    )?
+    .unwrap();
     assert!(m.ipv4_mapping.ip_sole.is_some());
     assert!(m.ipv6_mapping.ip_sole.is_some());
 
@@ -200,7 +203,8 @@ fn test_external_ip_mapper_find_external_ip_with_explicit_local_ip() -> Result<(
             "2200::1/fe80::1".to_owned(),
             "2200::2/fe80::2".to_owned(),
         ],
-    )?;
+    )?
+    .unwrap();
 
     // find external IPv4
     let ext_ip = m.find_external_ip("10.0.0.1")?;
@@ -231,13 +235,13 @@ fn test_external_ip_mapper_find_external_ip_with_explicit_local_ip() -> Result<(
 
 #[test]
 fn test_external_ip_mapper_find_external_ip_with_empty_map() -> Result<(), Error> {
-    let m = ExternalIPMapper::new(CandidateType::Unspecified, &["1.2.3.4".to_owned()])?;
+    let m = ExternalIPMapper::new(CandidateType::Unspecified, &["1.2.3.4".to_owned()])?.unwrap();
 
     // attempt to find IPv6 that does not exist in the map
     let result = m.find_external_ip("fe80::1");
     assert!(result.is_err(), "should fail");
 
-    let m = ExternalIPMapper::new(CandidateType::Unspecified, &["2200::1".to_owned()])?;
+    let m = ExternalIPMapper::new(CandidateType::Unspecified, &["2200::1".to_owned()])?.unwrap();
 
     // attempt to find IPv4 that does not exist in the map
     let result = m.find_external_ip("10.0.0.1");

@@ -11,6 +11,7 @@ use crate::use_candidate::UseCandidateAttr;
 
 use std::str::FromStr;
 use stun::textattrs::Username;
+use util::vnet::*;
 
 #[tokio::test]
 async fn test_pair_search() -> Result<(), Error> {
@@ -131,8 +132,9 @@ async fn test_pair_priority() -> Result<(), Error> {
                 ai.add_pair(host_local.clone(), remote.clone());
             }
 
-            if let Some(p) = ai.get_pair_mut(&host_local, &remote) {
-                p.state = CandidatePairState::Succeeded;
+            if let Some(p) = ai.find_pair(&host_local, &remote) {
+                p.state
+                    .store(CandidatePairState::Succeeded as u8, Ordering::SeqCst);
             }
 
             if let Some(best_pair) = ai.get_best_available_candidate_pair() {
@@ -204,7 +206,11 @@ async fn test_on_selected_candidate_pair_change() -> Result<(), Error> {
         .await?;
 
     // select the pair
-    let p = CandidatePair::new(Arc::new(host_local), Arc::new(relay_remote), false);
+    let p = Arc::new(CandidatePair::new(
+        Arc::new(host_local),
+        Arc::new(relay_remote),
+        false,
+    ));
     {
         let mut ai = a.agent_internal.lock().await;
         ai.set_selected_pair(Some(p)).await;
@@ -369,26 +375,25 @@ async fn test_handle_peer_reflexive_unknown_remote() -> Result<(), Error> {
     Ok(())
 }
 
-/*
-use std::io::Write;
+//use std::io::Write;
 
 // Assert that Agent on startup sends message, and doesn't wait for connectivityTicker to fire
 #[tokio::test]
 async fn test_connectivity_on_startup() -> Result<(), Error> {
-    env_logger::Builder::new()
-        .format(|buf, record| {
-            writeln!(
-                buf,
-                "{}:{} [{}] {} - {}",
-                record.file().unwrap_or("unknown"),
-                record.line().unwrap_or(0),
-                record.level(),
-                chrono::Local::now().format("%H:%M:%S.%6f"),
-                record.args()
-            )
-        })
-        .filter(None, log::LevelFilter::Trace)
-        .init();
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
 
     // Create a network with two interfaces
     let wan = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
@@ -435,7 +440,7 @@ async fn test_connectivity_on_startup() -> Result<(), Error> {
     let keepalive_interval = Some(Duration::from_secs(3600)); //time.Hour
     let check_interval = Duration::from_secs(3600); //time.Hour
     let cfg0 = AgentConfig {
-        network_types: vec![NetworkType::UDP4, NetworkType::UDP6],
+        network_types: supported_network_types(),
         multicast_dns_mode: MulticastDNSMode::Disabled,
         net: Some(net0),
 
@@ -448,7 +453,7 @@ async fn test_connectivity_on_startup() -> Result<(), Error> {
     a_agent.on_connection_state_change(a_notifier).await;
 
     let cfg1 = AgentConfig {
-        network_types: vec![NetworkType::UDP4, NetworkType::UDP6],
+        network_types: supported_network_types(),
         multicast_dns_mode: MulticastDNSMode::Disabled,
         net: Some(net1),
 
@@ -510,27 +515,23 @@ async fn test_connectivity_on_startup() -> Result<(), Error> {
 
     Ok(())
 }
-*/
-
-/*
-use std::io::Write;
 
 #[tokio::test]
 async fn test_connectivity_lite() -> Result<(), Error> {
-    env_logger::Builder::new()
-        .format(|buf, record| {
-            writeln!(
-                buf,
-                "{}:{} [{}] {} - {}",
-                record.file().unwrap_or("unknown"),
-                record.line().unwrap_or(0),
-                record.level(),
-                chrono::Local::now().format("%H:%M:%S.%6f"),
-                record.args()
-            )
-        })
-        .filter(None, log::LevelFilter::Trace)
-        .init();
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
 
     let stun_server_url = URL {
         scheme: SchemeType::STUN,
@@ -553,7 +554,7 @@ async fn test_connectivity_lite() -> Result<(), Error> {
 
     let cfg0 = AgentConfig {
         urls: vec![stun_server_url],
-        network_types: vec![NetworkType::UDP4, NetworkType::UDP6],
+        network_types: supported_network_types(),
         multicast_dns_mode: MulticastDNSMode::Disabled,
         net: Some(Arc::clone(&v.net0)),
         ..Default::default()
@@ -566,7 +567,7 @@ async fn test_connectivity_lite() -> Result<(), Error> {
         urls: vec![],
         lite: true,
         candidate_types: vec![CandidateType::Host],
-        network_types: vec![NetworkType::UDP4, NetworkType::UDP6],
+        network_types: supported_network_types(),
         multicast_dns_mode: MulticastDNSMode::Disabled,
         net: Some(Arc::clone(&v.net1)),
         ..Default::default()
@@ -586,4 +587,3 @@ async fn test_connectivity_lite() -> Result<(), Error> {
 
     Ok(())
 }
-*/

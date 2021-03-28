@@ -4,7 +4,7 @@ use std::fmt;
 // List of supported States
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ConnectionState {
-    Init,
+    Unspecified,
 
     // ConnectionStateNew ICE agent is gathering addresses
     New,
@@ -30,14 +30,14 @@ pub enum ConnectionState {
 
 impl Default for ConnectionState {
     fn default() -> Self {
-        ConnectionState::Init
+        ConnectionState::Unspecified
     }
 }
 
 impl fmt::Display for ConnectionState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
-            ConnectionState::Init => "Init",
+            ConnectionState::Unspecified => "Unspecified",
             ConnectionState::New => "New",
             ConnectionState::Checking => "Checking",
             ConnectionState::Connected => "Connected",
@@ -53,29 +53,32 @@ impl fmt::Display for ConnectionState {
 // GatheringState describes the state of the candidate gathering process
 #[derive(PartialEq, Copy, Clone)]
 pub enum GatheringState {
+    Unspecified,
+
     // GatheringStateNew indicates candidate gathering is not yet started
-    New = 0,
+    New,
 
     // GatheringStateGathering indicates candidate gathering is ongoing
-    Gathering = 1,
+    Gathering,
 
     // GatheringStateComplete indicates candidate gathering has been completed
-    Complete = 2,
+    Complete,
 }
 
 impl From<u8> for GatheringState {
     fn from(v: u8) -> Self {
         match v {
-            0 => GatheringState::New,
-            1 => GatheringState::Gathering,
-            _ => GatheringState::Complete,
+            1 => GatheringState::New,
+            2 => GatheringState::Gathering,
+            3 => GatheringState::Complete,
+            _ => GatheringState::Unspecified,
         }
     }
 }
 
 impl Default for GatheringState {
     fn default() -> Self {
-        GatheringState::New
+        GatheringState::Unspecified
     }
 }
 
@@ -85,6 +88,7 @@ impl fmt::Display for GatheringState {
             GatheringState::New => "new",
             GatheringState::Gathering => "gathering",
             GatheringState::Complete => "complete",
+            GatheringState::Unspecified => "unspecified",
         };
         write!(f, "{}", s)
     }

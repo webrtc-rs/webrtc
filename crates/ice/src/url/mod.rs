@@ -31,7 +31,7 @@ pub enum SchemeType {
 
 impl Default for SchemeType {
     fn default() -> Self {
-        SchemeType::STUN
+        SchemeType::Unknown
     }
 }
 

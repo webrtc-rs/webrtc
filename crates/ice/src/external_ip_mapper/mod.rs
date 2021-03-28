@@ -75,7 +75,10 @@ impl ExternalIPMapper {
     pub(crate) fn new(
         mut candidate_type: CandidateType,
         ips: &[String],
-    ) -> Result<ExternalIPMapper, Error> {
+    ) -> Result<Option<ExternalIPMapper>, Error> {
+        if ips.is_empty() {
+            return Ok(None);
+        }
         if candidate_type == CandidateType::Unspecified {
             candidate_type = CandidateType::Host; // defaults to host
         } else if candidate_type != CandidateType::Host
@@ -121,7 +124,7 @@ impl ExternalIPMapper {
             }
         }
 
-        Ok(m)
+        Ok(Some(m))
     }
 
     pub(crate) fn find_external_ip(&self, local_ip_str: &str) -> Result<IpAddr, Error> {

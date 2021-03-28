@@ -2,6 +2,7 @@ use crate::candidate::{CandidatePairState, CandidateType};
 
 use crate::agent::agent_internal::AgentInternal;
 use crate::network_type::NetworkType;
+use std::sync::atomic::Ordering;
 use tokio::time::Instant;
 
 // CandidatePairStats contains ICE candidate pair statistics
@@ -236,8 +237,8 @@ impl AgentInternal {
                 timestamp: Instant::now(),
                 local_candidate_id: cp.local.id(),
                 remote_candidate_id: cp.remote.id(),
-                state: cp.state,
-                nominated: cp.nominated,
+                state: cp.state.load(Ordering::SeqCst).into(),
+                nominated: cp.nominated.load(Ordering::SeqCst),
                 ..Default::default()
             };
             res.push(stat);

@@ -19,6 +19,7 @@ use crate::agent::agent_internal::AgentInternal;
 use async_trait::async_trait;
 use std::fmt;
 use std::net::{IpAddr, SocketAddr};
+use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::{broadcast, Mutex};
@@ -169,27 +170,41 @@ impl fmt::Display for CandidateRelatedAddress {
 // CandidatePairState represent the ICE candidate pair state
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub enum CandidatePairState {
+    Unspecified = 0,
+
     // CandidatePairStateWaiting means a check has not been performed for
     // this pair
-    Waiting,
+    Waiting = 1,
 
     // CandidatePairStateInProgress means a check has been sent for this pair,
     // but the transaction is in progress.
-    InProgress,
+    InProgress = 2,
 
     // CandidatePairStateFailed means a check for this pair was already done
     // and failed, either never producing any response or producing an unrecoverable
     // failure response.
-    Failed,
+    Failed = 3,
 
     // CandidatePairStateSucceeded means a check for this pair was already
     // done and produced a successful result.
-    Succeeded,
+    Succeeded = 4,
+}
+
+impl From<u8> for CandidatePairState {
+    fn from(v: u8) -> Self {
+        match v {
+            1 => CandidatePairState::Waiting,
+            2 => CandidatePairState::InProgress,
+            3 => CandidatePairState::Failed,
+            4 => CandidatePairState::Succeeded,
+            _ => CandidatePairState::Unspecified,
+        }
+    }
 }
 
 impl Default for CandidatePairState {
     fn default() -> Self {
-        CandidatePairState::Waiting
+        CandidatePairState::Unspecified
     }
 }
 
@@ -200,6 +215,7 @@ impl fmt::Display for CandidatePairState {
             CandidatePairState::InProgress => "in-progress",
             CandidatePairState::Failed => "failed",
             CandidatePairState::Succeeded => "succeeded",
+            CandidatePairState::Unspecified => "unspecified",
         };
 
         write!(f, "{}", s)
@@ -208,36 +224,23 @@ impl fmt::Display for CandidatePairState {
 
 // candidatePair represents a combination of a local and remote candidate
 pub(crate) struct CandidatePair {
-    pub(crate) ice_role_controlling: bool,
+    pub(crate) ice_role_controlling: AtomicBool,
     pub(crate) remote: Arc<dyn Candidate + Send + Sync>,
     pub(crate) local: Arc<dyn Candidate + Send + Sync>,
-    pub(crate) binding_request_count: u16,
-    pub(crate) state: CandidatePairState,
-    pub(crate) nominated: bool,
-}
-
-impl Clone for CandidatePair {
-    fn clone(&self) -> Self {
-        CandidatePair {
-            ice_role_controlling: self.ice_role_controlling,
-            remote: self.remote.clone(),
-            local: self.local.clone(),
-            state: self.state,
-            binding_request_count: self.binding_request_count,
-            nominated: self.nominated,
-        }
-    }
+    pub(crate) binding_request_count: AtomicU16,
+    pub(crate) state: AtomicU8, // convert it to CandidatePairState,
+    pub(crate) nominated: AtomicBool,
 }
 
 impl Default for CandidatePair {
     fn default() -> Self {
         CandidatePair {
-            ice_role_controlling: false,
+            ice_role_controlling: AtomicBool::new(false),
             remote: Arc::new(CandidateBase::default()),
             local: Arc::new(CandidateBase::default()),
-            state: CandidatePairState::Waiting,
-            binding_request_count: 0,
-            nominated: false,
+            state: AtomicU8::new(CandidatePairState::Waiting as u8),
+            binding_request_count: AtomicU16::new(0),
+            nominated: AtomicBool::new(false),
         }
     }
 }
@@ -283,12 +286,12 @@ impl CandidatePair {
         controlling: bool,
     ) -> Self {
         CandidatePair {
-            ice_role_controlling: controlling,
+            ice_role_controlling: AtomicBool::new(controlling),
             remote,
             local,
-            state: CandidatePairState::Waiting,
-            binding_request_count: 0,
-            nominated: false,
+            state: AtomicU8::new(CandidatePairState::Waiting as u8),
+            binding_request_count: AtomicU16::new(0),
+            nominated: AtomicBool::new(false),
         }
     }
 
@@ -298,7 +301,7 @@ impl CandidatePair {
     // controlled agent.
     // pair priority = 2^32*MIN(G,D) + 2*MAX(G,D) + (G>D?1:0)
     pub fn priority(&self) -> u64 {
-        let (g, d) = if self.ice_role_controlling {
+        let (g, d) = if self.ice_role_controlling.load(Ordering::SeqCst) {
             (self.local.priority(), self.remote.priority())
         } else {
             (self.remote.priority(), self.local.priority())

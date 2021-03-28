@@ -64,7 +64,7 @@ pub struct Agent {
     pub(crate) net: Arc<Net>,
 
     // 1:1 D-NAT IP address mapping
-    pub(crate) ext_ip_mapper: Arc<ExternalIPMapper>,
+    pub(crate) ext_ip_mapper: Arc<Option<ExternalIPMapper>>,
     pub(crate) gathering_state: Arc<AtomicU8>, //GatheringState,
     pub(crate) candidate_types: Vec<CandidateType>,
     pub(crate) urls: Vec<URL>,
@@ -90,7 +90,7 @@ impl Agent {
         }
 
         let mut mdns_mode = config.multicast_dns_mode;
-        if mdns_mode == MulticastDNSMode::Disabled {
+        if mdns_mode == MulticastDNSMode::Unspecified {
             mdns_mode = MulticastDNSMode::QueryOnly;
         }
 

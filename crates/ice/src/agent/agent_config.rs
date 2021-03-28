@@ -211,36 +211,40 @@ impl AgentConfig {
         &self,
         mdns_mode: MulticastDNSMode,
         candidate_types: &[CandidateType],
-    ) -> Result<ExternalIPMapper, Error> {
-        let ext_ip_mapper =
-            ExternalIPMapper::new(self.nat_1to1_ip_candidate_type, &self.nat_1to1_ips)?;
-        if ext_ip_mapper.candidate_type == CandidateType::Host {
-            if mdns_mode == MulticastDNSMode::QueryAndGather {
-                return Err(ERR_MULTICAST_DNS_WITH_NAT_1TO1_IP_MAPPING.to_owned());
-            }
-            let mut candi_host_enabled = false;
-            for candi_type in candidate_types {
-                if *candi_type == CandidateType::Host {
-                    candi_host_enabled = true;
-                    break;
+    ) -> Result<Option<ExternalIPMapper>, Error> {
+        if let Some(ext_ip_mapper) =
+            ExternalIPMapper::new(self.nat_1to1_ip_candidate_type, &self.nat_1to1_ips)?
+        {
+            if ext_ip_mapper.candidate_type == CandidateType::Host {
+                if mdns_mode == MulticastDNSMode::QueryAndGather {
+                    return Err(ERR_MULTICAST_DNS_WITH_NAT_1TO1_IP_MAPPING.to_owned());
+                }
+                let mut candi_host_enabled = false;
+                for candi_type in candidate_types {
+                    if *candi_type == CandidateType::Host {
+                        candi_host_enabled = true;
+                        break;
+                    }
+                }
+                if !candi_host_enabled {
+                    return Err(ERR_INEFFECTIVE_NAT_1TO1_IP_MAPPING_HOST.to_owned());
+                }
+            } else if ext_ip_mapper.candidate_type == CandidateType::ServerReflexive {
+                let mut candi_srflx_enabled = false;
+                for candi_type in candidate_types {
+                    if *candi_type == CandidateType::ServerReflexive {
+                        candi_srflx_enabled = true;
+                        break;
+                    }
+                }
+                if !candi_srflx_enabled {
+                    return Err(ERR_INEFFECTIVE_NAT_1TO1_IP_MAPPING_SRFLX.to_owned());
                 }
             }
-            if !candi_host_enabled {
-                return Err(ERR_INEFFECTIVE_NAT_1TO1_IP_MAPPING_HOST.to_owned());
-            }
-        } else if ext_ip_mapper.candidate_type == CandidateType::ServerReflexive {
-            let mut candi_srflx_enabled = false;
-            for candi_type in candidate_types {
-                if *candi_type == CandidateType::ServerReflexive {
-                    candi_srflx_enabled = true;
-                    break;
-                }
-            }
-            if !candi_srflx_enabled {
-                return Err(ERR_INEFFECTIVE_NAT_1TO1_IP_MAPPING_SRFLX.to_owned());
-            }
-        }
 
-        Ok(ext_ip_mapper)
+            Ok(Some(ext_ip_mapper))
+        } else {
+            Ok(None)
+        }
     }
 }

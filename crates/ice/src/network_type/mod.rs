@@ -11,29 +11,41 @@ use std::net::IpAddr;
 pub(crate) const UDP: &str = "udp";
 pub(crate) const TCP: &str = "tcp";
 
+pub fn supported_network_types() -> Vec<NetworkType> {
+    vec![
+        NetworkType::UDP4,
+        NetworkType::UDP6,
+        //NetworkType::TCP4,
+        //NetworkType::TCP6,
+    ]
+}
+
 // NetworkType represents the type of network
 #[derive(PartialEq, Debug, Copy, Clone, Eq, Hash)]
 pub enum NetworkType {
+    Unspecified,
+
     // NetworkTypeUDP4 indicates UDP over IPv4.
-    UDP4 = 0,
+    UDP4,
 
     // NetworkTypeUDP6 indicates UDP over IPv6.
-    UDP6 = 1,
+    UDP6,
 
     // NetworkTypeTCP4 indicates TCP over IPv4.
-    TCP4 = 2,
+    TCP4,
 
     // NetworkTypeTCP6 indicates TCP over IPv6.
-    TCP6 = 3,
+    TCP6,
 }
 
 impl From<u8> for NetworkType {
     fn from(v: u8) -> NetworkType {
         match v {
-            0 => NetworkType::UDP4,
-            1 => NetworkType::UDP6,
-            2 => NetworkType::UDP4,
-            _ => NetworkType::TCP6,
+            1 => NetworkType::UDP4,
+            2 => NetworkType::UDP6,
+            3 => NetworkType::UDP4,
+            4 => NetworkType::TCP6,
+            _ => NetworkType::Unspecified,
         }
     }
 }
@@ -45,6 +57,7 @@ impl fmt::Display for NetworkType {
             NetworkType::UDP6 => "udp6",
             NetworkType::TCP4 => "tcp4",
             NetworkType::TCP6 => "tcp6",
+            NetworkType::Unspecified => "unspecified",
         };
         write!(f, "{}", s)
     }
@@ -52,7 +65,7 @@ impl fmt::Display for NetworkType {
 
 impl Default for NetworkType {
     fn default() -> Self {
-        NetworkType::UDP4
+        NetworkType::Unspecified
     }
 }
 
@@ -72,6 +85,7 @@ impl NetworkType {
         match *self {
             NetworkType::UDP4 | NetworkType::UDP6 => UDP.to_owned(),
             NetworkType::TCP4 | NetworkType::TCP6 => TCP.to_owned(),
+            _ => "Unspecified".to_owned(),
         }
     }
 
@@ -80,6 +94,7 @@ impl NetworkType {
         match *self {
             NetworkType::UDP4 | NetworkType::UDP6 => false,
             NetworkType::TCP4 | NetworkType::TCP6 => true,
+            _ => false,
         }
     }
 
@@ -88,6 +103,7 @@ impl NetworkType {
         match *self {
             NetworkType::UDP4 | NetworkType::TCP4 => true,
             NetworkType::UDP6 | NetworkType::TCP6 => false,
+            _ => false,
         }
     }
 
@@ -96,6 +112,7 @@ impl NetworkType {
         match *self {
             NetworkType::UDP4 | NetworkType::TCP4 => false,
             NetworkType::UDP6 | NetworkType::TCP6 => true,
+            _ => false,
         }
     }
 }

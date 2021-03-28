@@ -15,6 +15,8 @@ use util::Error;
 // MulticastDNSMode enum
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub enum MulticastDNSMode {
+    Unspecified,
+
     // MulticastDNSModeDisabled means remote mDNS candidates will be discarded, and local host candidates will use IPs
     Disabled,
 
@@ -27,7 +29,7 @@ pub enum MulticastDNSMode {
 
 impl Default for MulticastDNSMode {
     fn default() -> Self {
-        MulticastDNSMode::Disabled
+        MulticastDNSMode::Unspecified
     }
 }
 

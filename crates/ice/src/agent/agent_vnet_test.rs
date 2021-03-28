@@ -31,15 +31,15 @@ impl Conn for MockConn {
     }
 }
 
-struct VNet {
-    wan: Arc<Mutex<router::Router>>,
-    net0: Arc<net::Net>,
-    net1: Arc<net::Net>,
-    server: turn::server::Server,
+pub(crate) struct VNet {
+    pub(crate) wan: Arc<Mutex<router::Router>>,
+    pub(crate) net0: Arc<net::Net>,
+    pub(crate) net1: Arc<net::Net>,
+    pub(crate) server: turn::server::Server,
 }
 
 impl VNet {
-    async fn close(&self) -> Result<(), Error> {
+    pub(crate) async fn close(&self) -> Result<(), Error> {
         self.server.close()?;
         let mut w = self.wan.lock().await;
         w.stop().await?;
@@ -47,16 +47,19 @@ impl VNet {
     }
 }
 
-const VNET_GLOBAL_IPA: &str = "27.1.1.1";
-const VNET_LOCAL_IPA: &str = "192.168.0.1";
-const VNET_LOCAL_SUBNET_MASK_A: &str = "24";
-const VNET_GLOBAL_IPB: &str = "28.1.1.1";
-const VNET_LOCAL_IPB: &str = "10.2.0.1";
-const VNET_LOCAL_SUBNET_MASK_B: &str = "24";
-const VNET_STUNSERVER_IP: &str = "1.2.3.4";
-const VNET_STUNSERVER_PORT: u16 = 3478;
+pub(crate) const VNET_GLOBAL_IPA: &str = "27.1.1.1";
+pub(crate) const VNET_LOCAL_IPA: &str = "192.168.0.1";
+pub(crate) const VNET_LOCAL_SUBNET_MASK_A: &str = "24";
+pub(crate) const VNET_GLOBAL_IPB: &str = "28.1.1.1";
+pub(crate) const VNET_LOCAL_IPB: &str = "10.2.0.1";
+pub(crate) const VNET_LOCAL_SUBNET_MASK_B: &str = "24";
+pub(crate) const VNET_STUN_SERVER_IP: &str = "1.2.3.4";
+pub(crate) const VNET_STUN_SERVER_PORT: u16 = 3478;
 
-async fn build_vnet(nat_type0: nat::NATType, nat_type1: nat::NATType) -> Result<VNet, Error> {
+pub(crate) async fn build_simple_vnet(
+    _nat_type0: nat::NATType,
+    _nat_type1: nat::NATType,
+) -> Result<VNet, Error> {
     // WAN
     let wan = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
         cidr: "0.0.0.0/0".to_owned(),
@@ -64,7 +67,98 @@ async fn build_vnet(nat_type0: nat::NATType, nat_type1: nat::NATType) -> Result<
     })?));
 
     let wnet = Arc::new(net::Net::new(Some(net::NetConfig {
-        static_ip: VNET_STUNSERVER_IP.to_owned(), // will be assigned to eth0
+        static_ip: VNET_STUN_SERVER_IP.to_owned(), // will be assigned to eth0
+        ..Default::default()
+    })));
+
+    {
+        let nic = wnet.get_nic()?;
+
+        {
+            let mut w = wan.lock().await;
+            w.add_net(Arc::clone(&nic)).await?;
+        }
+
+        let n = nic.lock().await;
+        n.set_router(Arc::clone(&wan)).await?;
+    }
+
+    // LAN
+    let lan = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
+        cidr: format!("{}/{}", VNET_LOCAL_IPA, VNET_LOCAL_SUBNET_MASK_A),
+        ..Default::default()
+    })?));
+
+    let net0 = Arc::new(net::Net::new(Some(net::NetConfig {
+        static_ips: vec!["192.168.0.1".to_owned()],
+        ..Default::default()
+    })));
+    let net1 = Arc::new(net::Net::new(Some(net::NetConfig {
+        static_ips: vec!["192.168.0.2".to_owned()],
+        ..Default::default()
+    })));
+
+    {
+        let nic0 = net0.get_nic()?;
+        let nic1 = net1.get_nic()?;
+
+        {
+            let mut l = lan.lock().await;
+            l.add_net(Arc::clone(&nic0)).await?;
+            l.add_net(Arc::clone(&nic1)).await?;
+        }
+
+        {
+            let n0 = nic0.lock().await;
+            n0.set_router(Arc::clone(&lan)).await?;
+        }
+
+        {
+            let n1 = nic1.lock().await;
+            n1.set_router(Arc::clone(&lan)).await?;
+        }
+    }
+
+    {
+        {
+            let mut w = wan.lock().await;
+            w.add_router(Arc::clone(&lan)).await?;
+        }
+
+        {
+            let l = lan.lock().await;
+            l.set_router(Arc::clone(&wan)).await?;
+        }
+    }
+
+    // start routers...
+    {
+        let mut w = wan.lock().await;
+        w.start().await?;
+    }
+
+    let server = add_vnet_stun(wnet).await?;
+
+    Ok(VNet {
+        wan,
+        net0,
+        net1,
+        server,
+    })
+}
+
+pub(crate) async fn build_vnet(
+    nat_type0: nat::NATType,
+    nat_type1: nat::NATType,
+) -> Result<VNet, Error> {
+    // WAN
+    let wan = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
+        cidr: "0.0.0.0/0".to_owned(),
+        ..Default::default()
+    })?));
+
+    let wnet = Arc::new(net::Net::new(Some(net::NetConfig {
+        static_ip: VNET_STUN_SERVER_IP.to_owned(), // will be assigned to eth0
         ..Default::default()
     })));
 
@@ -178,12 +272,12 @@ async fn build_vnet(nat_type0: nat::NATType, nat_type1: nat::NATType) -> Result<
     })
 }
 
-struct TestAuthHandler {
-    cred_map: HashMap<String, Vec<u8>>,
+pub(crate) struct TestAuthHandler {
+    pub(crate) cred_map: HashMap<String, Vec<u8>>,
 }
 
 impl TestAuthHandler {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let mut cred_map = HashMap::new();
         cred_map.insert(
             "user".to_owned(),
@@ -209,12 +303,12 @@ impl turn::auth::AuthHandler for TestAuthHandler {
     }
 }
 
-async fn add_vnet_stun(wan_net: Arc<net::Net>) -> Result<turn::server::Server, Error> {
+pub(crate) async fn add_vnet_stun(wan_net: Arc<net::Net>) -> Result<turn::server::Server, Error> {
     // Run TURN(STUN) server
     let conn = wan_net
         .bind(SocketAddr::from_str(&format!(
             "{}:{}",
-            VNET_STUNSERVER_IP, VNET_STUNSERVER_PORT
+            VNET_STUN_SERVER_IP, VNET_STUN_SERVER_PORT
         ))?)
         .await?;
 
@@ -223,7 +317,7 @@ async fn add_vnet_stun(wan_net: Arc<net::Net>) -> Result<turn::server::Server, E
             conn,
             relay_addr_generator: Box::new(
                 turn::relay::relay_static::RelayAddressGeneratorStatic {
-                    relay_address: IpAddr::from_str(VNET_STUNSERVER_IP)?,
+                    relay_address: IpAddr::from_str(VNET_STUN_SERVER_IP)?,
                     address: "0.0.0.0".to_owned(),
                     net: wan_net,
                 },
@@ -238,7 +332,7 @@ async fn add_vnet_stun(wan_net: Arc<net::Net>) -> Result<turn::server::Server, E
     Ok(server)
 }
 
-async fn connect_with_vnet(
+pub(crate) async fn connect_with_vnet(
     a_agent: &Arc<Agent>,
     b_agent: &Arc<Agent>,
 ) -> Result<(Arc<Mutex<impl Conn>>, Arc<Mutex<impl Conn>>), Error> {
@@ -250,30 +344,32 @@ async fn connect_with_vnet(
 
     let (accepted_tx, mut accepted_rx) = mpsc::channel(1);
 
-    let agent_a = Arc::clone(a_agent);
+    let agent_b = Arc::clone(b_agent);
     tokio::spawn(async move {
-        let a_conn = agent_a.accept(b_ufrag, b_pwd).await?;
-        let _ = accepted_tx.send(a_conn).await;
+        let b_conn = agent_b.dial(a_ufrag, a_pwd).await?;
+
+        let _ = accepted_tx.send(b_conn).await;
 
         Ok::<(), Error>(())
     });
 
-    let b_conn = b_agent.dial(a_ufrag, a_pwd).await?;
+    let a_conn = a_agent.accept(b_ufrag, b_pwd).await?;
 
     // Ensure accepted
-    if let Some(a_conn) = accepted_rx.recv().await {
+    if let Some(b_conn) = accepted_rx.recv().await {
         Ok((a_conn, b_conn))
     } else {
         Err(Error::new("no a_conn".to_owned()))
     }
 }
 
-struct AgentTestConfig {
-    urls: Vec<URL>,
-    nat_1to1_ip_candidate_type: CandidateType,
+#[derive(Default)]
+pub(crate) struct AgentTestConfig {
+    pub(crate) urls: Vec<URL>,
+    pub(crate) nat_1to1_ip_candidate_type: CandidateType,
 }
 
-async fn pipe_with_vnet(
+pub(crate) async fn pipe_with_vnet(
     v: &VNet,
     a0test_config: AgentTestConfig,
     a1test_config: AgentTestConfig,
@@ -289,7 +385,7 @@ async fn pipe_with_vnet(
 
     let cfg0 = AgentConfig {
         urls: a0test_config.urls,
-        network_types: vec![NetworkType::UDP4, NetworkType::UDP6],
+        network_types: supported_network_types(),
         multicast_dns_mode: MulticastDNSMode::Disabled,
         nat_1to1_ips,
         nat_1to1_ip_candidate_type: a0test_config.nat_1to1_ip_candidate_type,
@@ -307,7 +403,7 @@ async fn pipe_with_vnet(
     };
     let cfg1 = AgentConfig {
         urls: a1test_config.urls,
-        network_types: vec![NetworkType::UDP4, NetworkType::UDP6],
+        network_types: supported_network_types(),
         multicast_dns_mode: MulticastDNSMode::Disabled,
         nat_1to1_ips,
         nat_1to1_ip_candidate_type: a1test_config.nat_1to1_ip_candidate_type,
@@ -328,7 +424,7 @@ async fn pipe_with_vnet(
     Ok((a_conn, b_conn))
 }
 
-fn on_connected() -> (OnConnectionStateChangeHdlrFn, mpsc::Receiver<()>) {
+pub(crate) fn on_connected() -> (OnConnectionStateChangeHdlrFn, mpsc::Receiver<()>) {
     let (done_tx, done_rx) = mpsc::channel::<()>(1);
     let mut done_tx = Some(done_tx);
     let hdlr_fn = Box::new(move |state: ConnectionState| {
@@ -339,7 +435,7 @@ fn on_connected() -> (OnConnectionStateChangeHdlrFn, mpsc::Receiver<()>) {
     (hdlr_fn, done_rx)
 }
 
-async fn copy_candidate(
+pub(crate) async fn copy_candidate(
     o: Arc<dyn Candidate + Send + Sync>,
 ) -> Result<Arc<dyn Candidate + Send + Sync>, Error> {
     if let Some(ai) = o.get_agent() {
@@ -351,7 +447,10 @@ async fn copy_candidate(
     }
 }
 
-async fn gather_and_exchange_candidates(a_agent: &Agent, b_agent: &Agent) -> Result<(), Error> {
+pub(crate) async fn gather_and_exchange_candidates(
+    a_agent: &Agent,
+    b_agent: &Agent,
+) -> Result<(), Error> {
     let wg = WaitGroup::new();
 
     let mut w1 = Some(wg.worker());
@@ -393,6 +492,124 @@ async fn gather_and_exchange_candidates(a_agent: &Agent, b_agent: &Agent) -> Res
             .add_remote_candidate(&copy_candidate(c).await?)
             .await?;
     }
+
+    Ok(())
+}
+
+//use std::io::Write;
+
+#[tokio::test]
+async fn test_connectivity_simple_vnet_full_cone_nats_on_both_ends() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
+
+    let stun_server_url = URL {
+        scheme: SchemeType::STUN,
+        host: VNET_STUN_SERVER_IP.to_owned(),
+        port: VNET_STUN_SERVER_PORT,
+        proto: ProtoType::UDP,
+        ..Default::default()
+    };
+
+    // buildVNet with a Full-cone NATs both LANs
+    let nat_type = nat::NATType {
+        mapping_behavior: nat::EndpointDependencyType::EndpointIndependent,
+        filtering_behavior: nat::EndpointDependencyType::EndpointIndependent,
+        ..Default::default()
+    };
+
+    let v = build_simple_vnet(nat_type, nat_type).await?;
+
+    log::debug!("Connecting...");
+    let a0test_config = AgentTestConfig {
+        urls: vec![stun_server_url.clone()],
+        ..Default::default()
+    };
+    let a1test_config = AgentTestConfig {
+        urls: vec![stun_server_url.clone()],
+        ..Default::default()
+    };
+    let (_ca, _cb) = pipe_with_vnet(&v, a0test_config, a1test_config).await?;
+
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    log::debug!("Closing...");
+    v.close().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_connectivity_vnet_full_cone_nats_on_both_ends() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
+
+    let stun_server_url = URL {
+        scheme: SchemeType::STUN,
+        host: VNET_STUN_SERVER_IP.to_owned(),
+        port: VNET_STUN_SERVER_PORT,
+        proto: ProtoType::UDP,
+        ..Default::default()
+    };
+
+    let _turn_server_url = URL {
+        scheme: SchemeType::TURN,
+        host: VNET_STUN_SERVER_IP.to_owned(),
+        port: VNET_STUN_SERVER_PORT,
+        username: "user".to_owned(),
+        password: "pass".to_owned(),
+        proto: ProtoType::UDP,
+        ..Default::default()
+    };
+
+    // buildVNet with a Full-cone NATs both LANs
+    let nat_type = nat::NATType {
+        mapping_behavior: nat::EndpointDependencyType::EndpointIndependent,
+        filtering_behavior: nat::EndpointDependencyType::EndpointIndependent,
+        ..Default::default()
+    };
+
+    let v = build_vnet(nat_type, nat_type).await?;
+
+    log::debug!("Connecting...");
+    let a0test_config = AgentTestConfig {
+        urls: vec![stun_server_url.clone()],
+        ..Default::default()
+    };
+    let a1test_config = AgentTestConfig {
+        urls: vec![stun_server_url.clone()],
+        ..Default::default()
+    };
+    let (_ca, _cb) = pipe_with_vnet(&v, a0test_config, a1test_config).await?;
+
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    log::debug!("Closing...");
+    v.close().await?;
 
     Ok(())
 }

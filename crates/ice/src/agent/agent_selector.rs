@@ -8,6 +8,7 @@ use stun::{agent::*, attributes::*, fingerprint::*, integrity::*, message::*, te
 
 use async_trait::async_trait;
 use std::net::SocketAddr;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use tokio::time::Instant;
 
@@ -206,20 +207,20 @@ impl ControllingSelector for AgentInternal {
         } else if self.nominated_pair.is_some() {
             self.nominate_pair().await;
         } else {
-            let has_nominated_pair = if let Some(p) = self.get_best_available_candidate_pair() {
+            let has_nominated_pair = if let Some(p) = self.get_best_valid_candidate_pair() {
                 self.is_nominatable(&p.local).await && self.is_nominatable(&p.remote).await
             } else {
                 false
             };
 
             if has_nominated_pair {
-                if let Some(p) = self.get_best_available_candidate_pair_mut() {
+                if let Some(p) = self.get_best_valid_candidate_pair() {
                     log::trace!(
                         "Nominatable pair found, nominating ({}, {})",
                         p.local.to_string(),
                         p.remote.to_string()
                     );
-                    p.nominated = true;
+                    p.nominated.store(true, Ordering::SeqCst);
                     self.nominated_pair = Some(p.clone());
                 }
 
@@ -284,11 +285,18 @@ impl ControllingSelector for AgentInternal {
             let selected_pair_is_none = self.get_selected_pair().is_none();
 
             if let Some(p) = self.find_pair(local, remote) {
-                let mut p = p.clone();
-                p.state = CandidatePairState::Succeeded;
-                log::trace!("Found valid candidate pair: {}", p);
+                p.state
+                    .store(CandidatePairState::Succeeded as u8, Ordering::SeqCst);
+                log::trace!(
+                    "Found valid candidate pair: {}, p.state: {}, isUseCandidate: {}, {}",
+                    p,
+                    p.state.load(Ordering::SeqCst),
+                    pending_request.is_use_candidate,
+                    selected_pair_is_none
+                );
                 if pending_request.is_use_candidate && selected_pair_is_none {
-                    self.set_selected_pair(Some(p.clone())).await;
+                    let p2 = Arc::clone(p);
+                    self.set_selected_pair(Some(p2)).await;
                 }
             } else {
                 // This shouldn't happen
@@ -309,14 +317,26 @@ impl ControllingSelector for AgentInternal {
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
-        self.send_binding_request(m, local, remote).await;
+        self.send_binding_success(m, local, remote).await;
+        log::trace!("controllingSelector: sendBindingSuccess");
 
         if let Some(p) = self.find_pair(local, remote) {
-            if p.state == CandidatePairState::Succeeded
+            log::trace!(
+                "controllingSelector: after findPair {}, p.state: {}, {}, {}",
+                p,
+                p.state.load(Ordering::SeqCst),
+                self.nominated_pair.is_none(),
+                self.get_selected_pair().is_none()
+            );
+            if p.state.load(Ordering::SeqCst) == CandidatePairState::Succeeded as u8
                 && self.nominated_pair.is_none()
                 && self.get_selected_pair().is_none()
             {
                 if let Some(best_pair) = self.get_best_available_candidate_pair() {
+                    log::trace!(
+                        "controllingSelector: getBestAvailableCandidatePair {}",
+                        best_pair
+                    );
                     if best_pair == p
                         && self.is_nominatable(&p.local).await
                         && self.is_nominatable(&p.remote).await
@@ -331,6 +351,7 @@ impl ControllingSelector for AgentInternal {
                 }
             }
         } else {
+            log::trace!("controllingSelector: addPair");
             self.add_pair(local.clone(), remote.clone());
         }
     }
@@ -412,8 +433,9 @@ impl ControlledSelector for AgentInternal {
                 local
             );
 
-            if let Some(p) = self.get_pair_mut(local, remote) {
-                p.state = CandidatePairState::Succeeded;
+            if let Some(p) = self.find_pair(local, remote) {
+                p.state
+                    .store(CandidatePairState::Succeeded as u8, Ordering::SeqCst);
                 log::trace!("Found valid candidate pair: {}", p);
             } else {
                 // This shouldn't happen
@@ -443,7 +465,7 @@ impl ControlledSelector for AgentInternal {
             if use_candidate {
                 // https://tools.ietf.org/html/rfc8445#section-7.3.1.5
 
-                if p.state == CandidatePairState::Succeeded {
+                if p.state.load(Ordering::SeqCst) == CandidatePairState::Succeeded as u8 {
                     // If the state of this pair is Succeeded, it means that the check
                     // previously sent by this pair produced a successful response and
                     // generated a valid pair (Section 7.2.5.3.2).  The agent sets the

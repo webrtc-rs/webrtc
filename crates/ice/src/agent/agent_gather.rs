@@ -29,7 +29,7 @@ pub(crate) struct GatherCandidatesInternalParams {
     pub(crate) mdns_name: String,
     pub(crate) net: Arc<Net>,
     pub(crate) interface_filter: Arc<Option<InterfaceFilterFn>>,
-    pub(crate) ext_ip_mapper: Arc<ExternalIPMapper>,
+    pub(crate) ext_ip_mapper: Arc<Option<ExternalIPMapper>>,
     pub(crate) agent_internal: Arc<Mutex<AgentInternal>>,
     pub(crate) gathering_state: Arc<AtomicU8>,
     pub(crate) chan_candidate_tx: Arc<mpsc::Sender<Option<Arc<dyn Candidate + Send + Sync>>>>,
@@ -42,7 +42,7 @@ struct GatherCandidatesLocalParams {
     mdns_mode: MulticastDNSMode,
     mdns_name: String,
     interface_filter: Arc<Option<InterfaceFilterFn>>,
-    ext_ip_mapper: Arc<ExternalIPMapper>,
+    ext_ip_mapper: Arc<Option<ExternalIPMapper>>,
     net: Arc<Net>,
     agent_internal: Arc<Mutex<AgentInternal>>,
 }
@@ -51,7 +51,7 @@ struct GatherCandidatesSrflxMappedParasm {
     network_types: Vec<NetworkType>,
     port_max: u16,
     port_min: u16,
-    ext_ip_mapper: Arc<ExternalIPMapper>,
+    ext_ip_mapper: Arc<Option<ExternalIPMapper>>,
     net: Arc<Net>,
     agent_internal: Arc<Mutex<AgentInternal>>,
 }
@@ -117,23 +117,25 @@ impl Agent {
 
                         Agent::gather_candidates_srflx(srflx_params).await;
                     });
-                    if params.ext_ip_mapper.candidate_type == CandidateType::ServerReflexive {
-                        let w2 = wg.worker();
-                        let srflx_mapped_params = GatherCandidatesSrflxMappedParasm {
-                            network_types: params.network_types.clone(),
-                            port_max: params.port_max,
-                            port_min: params.port_min,
-                            ext_ip_mapper: Arc::clone(&params.ext_ip_mapper),
-                            net: Arc::clone(&params.net),
-                            agent_internal: Arc::clone(&params.agent_internal),
-                        };
-                        tokio::spawn(async move {
-                            let _d = defer(move || {
-                                drop(w2);
-                            });
+                    if let Some(ext_ip_mapper) = &*params.ext_ip_mapper {
+                        if ext_ip_mapper.candidate_type == CandidateType::ServerReflexive {
+                            let w2 = wg.worker();
+                            let srflx_mapped_params = GatherCandidatesSrflxMappedParasm {
+                                network_types: params.network_types.clone(),
+                                port_max: params.port_max,
+                                port_min: params.port_min,
+                                ext_ip_mapper: Arc::clone(&params.ext_ip_mapper),
+                                net: Arc::clone(&params.net),
+                                agent_internal: Arc::clone(&params.agent_internal),
+                            };
+                            tokio::spawn(async move {
+                                let _d = defer(move || {
+                                    drop(w2);
+                                });
 
-                            Agent::gather_candidates_srflx_mapped(srflx_mapped_params).await;
-                        });
+                                Agent::gather_candidates_srflx_mapped(srflx_mapped_params).await;
+                            });
+                        }
                     }
                 }
                 CandidateType::Relay => {
@@ -205,16 +207,18 @@ impl Agent {
         for ip in ips {
             let mut mapped_ip = ip;
 
-            if mdns_mode != MulticastDNSMode::QueryAndGather
-                && ext_ip_mapper.candidate_type == CandidateType::Host
-            {
-                if let Ok(mi) = ext_ip_mapper.find_external_ip(&ip.to_string()) {
-                    mapped_ip = mi;
-                } else {
-                    log::warn!(
-                        "1:1 NAT mapping is enabled but no external IP is found for {}",
-                        ip
-                    );
+            if mdns_mode != MulticastDNSMode::QueryAndGather && ext_ip_mapper.is_some() {
+                if let Some(ext_ip_mapper2) = &*ext_ip_mapper {
+                    if ext_ip_mapper2.candidate_type == CandidateType::Host {
+                        if let Ok(mi) = ext_ip_mapper2.find_external_ip(&ip.to_string()) {
+                            mapped_ip = mi;
+                        } else {
+                            log::warn!(
+                                "1:1 NAT mapping is enabled but no external IP is found for {}",
+                                ip
+                            );
+                        }
+                    }
                 }
             }
 
@@ -373,14 +377,21 @@ impl Agent {
                 };
 
                 let laddr = conn.local_addr()?;
-                let mapped_ip = match ext_ip_mapper2.find_external_ip(&laddr.ip().to_string()) {
-                    Ok(ip) => ip,
-                    Err(err) => {
-                        log::warn!(
-                            "1:1 NAT mapping is enabled but no external IP is found for {}: {}",
-                            laddr,
-                            err
-                        );
+                let mapped_ip = {
+                    if let Some(ext_ip_mapper3) = &*ext_ip_mapper2 {
+                        match ext_ip_mapper3.find_external_ip(&laddr.ip().to_string()) {
+                            Ok(ip) => ip,
+                            Err(err) => {
+                                log::warn!(
+                                    "1:1 NAT mapping is enabled but no external IP is found for {}: {}",
+                                    laddr,
+                                    err
+                                );
+                                return Ok(());
+                            }
+                        }
+                    } else {
+                        log::error!("ext_ip_mapper is None in gather_candidates_srflx_mapped");
                         return Ok(());
                     }
                 };

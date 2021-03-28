@@ -19,7 +19,7 @@ pub struct AgentInternal {
     pub(crate) on_connection_state_change_hdlr: Option<OnConnectionStateChangeHdlrFn>,
     pub(crate) on_selected_candidate_pair_change_hdlr: Option<OnSelectedCandidatePairChangeHdlrFn>,
     pub(crate) on_candidate_hdlr: Option<OnCandidateHdlrFn>,
-    pub(crate) selected_pair: Option<CandidatePair>,
+    pub(crate) selected_pair: Option<Arc<CandidatePair>>,
 
     // force candidate to be contacted immediately (instead of waiting for task ticker)
     pub(crate) force_candidate_contact_tx: mpsc::Sender<bool>,
@@ -29,7 +29,7 @@ pub struct AgentInternal {
     pub(crate) is_controlling: bool,
     pub(crate) lite: bool,
     pub(crate) start_time: Instant,
-    pub(crate) nominated_pair: Option<CandidatePair>,
+    pub(crate) nominated_pair: Option<Arc<CandidatePair>>,
 
     pub(crate) connection_state: ConnectionState,
 
@@ -65,7 +65,7 @@ pub struct AgentInternal {
     pub(crate) remote_pwd: String,
     pub(crate) remote_candidates: HashMap<NetworkType, Vec<Arc<dyn Candidate + Send + Sync>>>,
 
-    pub(crate) checklist: Vec<CandidatePair>,
+    pub(crate) checklist: Vec<Arc<CandidatePair>>,
 
     pub(crate) buffer: Option<Buffer>,
 
@@ -148,7 +148,7 @@ impl AgentInternal {
     }
 
     async fn connectivity_checks(&mut self, agent_internal: Arc<Mutex<AgentInternal>>) {
-        let mut last_connection_state = ConnectionState::Init;
+        let mut last_connection_state = ConnectionState::Unspecified;
         let mut checking_duration = Instant::now();
         const ZERO_DURATION: Duration = Duration::from_secs(0);
         let (check_interval, keepalive_interval, disconnected_timeout, failed_timeout) = (
@@ -220,11 +220,11 @@ impl AgentInternal {
         }
     }
 
-    pub(crate) async fn set_selected_pair(&mut self, p: Option<CandidatePair>) {
+    pub(crate) async fn set_selected_pair(&mut self, p: Option<Arc<CandidatePair>>) {
         log::trace!("Set selected candidate pair: {:?}", p);
 
-        if let Some(mut p) = p {
-            p.nominated = true;
+        if let Some(p) = p {
+            p.nominated.store(true, Ordering::SeqCst);
             self.selected_pair = Some(p);
 
             self.update_connection_state(ConnectionState::Connected)
@@ -255,17 +255,20 @@ impl AgentInternal {
         )> = vec![];
 
         for p in &mut self.checklist {
-            if p.state == CandidatePairState::Waiting {
-                p.state = CandidatePairState::InProgress;
-            } else if p.state != CandidatePairState::InProgress {
+            let p_state = p.state.load(Ordering::SeqCst);
+            if p_state == CandidatePairState::Waiting as u8 {
+                p.state
+                    .store(CandidatePairState::InProgress as u8, Ordering::SeqCst);
+            } else if p_state != CandidatePairState::InProgress as u8 {
                 continue;
             }
 
-            if p.binding_request_count > self.max_binding_requests {
+            if p.binding_request_count.load(Ordering::SeqCst) > self.max_binding_requests {
                 log::trace!("max requests reached for pair {}, marking it as failed", p);
-                p.state = CandidatePairState::Failed;
+                p.state
+                    .store(CandidatePairState::Failed as u8, Ordering::SeqCst);
             } else {
-                p.binding_request_count += 1;
+                p.binding_request_count.fetch_add(1, Ordering::SeqCst);
                 let local = p.local.clone();
                 let remote = p.remote.clone();
                 pairs.push((local, remote));
@@ -277,11 +280,11 @@ impl AgentInternal {
         }
     }
 
-    pub(crate) fn get_best_available_candidate_pair(&self) -> Option<&CandidatePair> {
-        let mut best: Option<&CandidatePair> = None;
+    pub(crate) fn get_best_available_candidate_pair(&self) -> Option<&Arc<CandidatePair>> {
+        let mut best: Option<&Arc<CandidatePair>> = None;
 
         for p in &self.checklist {
-            if p.state == CandidatePairState::Failed {
+            if p.state.load(Ordering::SeqCst) == CandidatePairState::Failed as u8 {
                 continue;
             }
 
@@ -297,51 +300,11 @@ impl AgentInternal {
         best
     }
 
-    pub(crate) fn get_best_available_candidate_pair_mut(&mut self) -> Option<&mut CandidatePair> {
-        let mut best: Option<&mut CandidatePair> = None;
-
-        for p in &mut self.checklist {
-            if p.state == CandidatePairState::Failed {
-                continue;
-            }
-
-            if let Some(b) = &mut best {
-                if b.priority() < p.priority() {
-                    *b = p;
-                }
-            } else {
-                best = Some(p);
-            }
-        }
-
-        best
-    }
-
-    pub(crate) fn get_best_valid_candidate_pair(&self) -> Option<&CandidatePair> {
-        let mut best: Option<&CandidatePair> = None;
+    pub(crate) fn get_best_valid_candidate_pair(&self) -> Option<&Arc<CandidatePair>> {
+        let mut best: Option<&Arc<CandidatePair>> = None;
 
         for p in &self.checklist {
-            if p.state != CandidatePairState::Succeeded {
-                continue;
-            }
-
-            if let Some(b) = &mut best {
-                if b.priority() < p.priority() {
-                    *b = p;
-                }
-            } else {
-                best = Some(p);
-            }
-        }
-
-        best
-    }
-
-    pub(crate) fn get_best_valid_candidate_pair_mut(&mut self) -> Option<&mut CandidatePair> {
-        let mut best: Option<&mut CandidatePair> = None;
-
-        for p in &mut self.checklist {
-            if p.state != CandidatePairState::Succeeded {
+            if p.state.load(Ordering::SeqCst) != CandidatePairState::Succeeded as u8 {
                 continue;
             }
 
@@ -361,9 +324,9 @@ impl AgentInternal {
         &mut self,
         local: Arc<dyn Candidate + Send + Sync>,
         remote: Arc<dyn Candidate + Send + Sync>,
-    ) /*-> Option<&CandidatePair>*/
+    ) /*-> Option<&Arc<CandidatePair>>*/
     {
-        let p = CandidatePair::new(local, remote, self.is_controlling);
+        let p = Arc::new(CandidatePair::new(local, remote, self.is_controlling));
         self.checklist.push(p);
         //return p;
     }
@@ -372,21 +335,8 @@ impl AgentInternal {
         &self,
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
-    ) -> Option<&CandidatePair> {
+    ) -> Option<&Arc<CandidatePair>> {
         for p in &self.checklist {
-            if p.local.equal(&**local) && p.remote.equal(&**remote) {
-                return Some(p);
-            }
-        }
-        None
-    }
-
-    pub(crate) fn get_pair_mut(
-        &mut self,
-        local: &Arc<dyn Candidate + Send + Sync>,
-        remote: &Arc<dyn Candidate + Send + Sync>,
-    ) -> Option<&mut CandidatePair> {
-        for p in &mut self.checklist {
             if p.local.equal(&**local) && p.remote.equal(&**remote) {
                 return Some(p);
             }
@@ -804,7 +754,7 @@ impl AgentInternal {
         }
     }
 
-    pub(crate) fn get_selected_pair(&self) -> Option<&CandidatePair> {
+    pub(crate) fn get_selected_pair(&self) -> Option<&Arc<CandidatePair>> {
         self.selected_pair.as_ref()
     }
 
