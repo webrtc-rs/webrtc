@@ -467,7 +467,6 @@ impl Router {
             d = Duration::from_secs(0);
 
             if let Some(c) = queue.peek().await {
-                log::debug!("[{}] queue.peek(): {}", name, c);
                 // check timestamp to find if the chunk is due
                 if c.get_timestamp().duration_since(cut_off).is_ok() {
                     // There is one or more chunk in the queue but none of them are due.
@@ -479,12 +478,10 @@ impl Router {
                     }
                 }
             } else {
-                log::debug!("[{}] queue.peek(): no more chunk in the queue", name);
                 break; // no more chunk in the queue
             }
 
             if let Some(c) = queue.pop().await {
-                log::debug!("[{}] queue.pop(): {}", name, c);
                 let ri = router_internal.lock().await;
                 let mut blocked = false;
                 for filter in &ri.chunk_filters {
@@ -494,21 +491,17 @@ impl Router {
                     }
                 }
                 if blocked {
-                    log::debug!("[{}] discard {} due to blocked", name, c);
                     continue; // discard
                 }
 
                 let dst_ip = c.get_destination_ip();
-                log::debug!("[{}] dst_ip: {}", name, dst_ip);
 
                 // check if the destination is in our subnet
                 if ipv4net.contains(&dst_ip) {
-                    log::debug!("[{}] dst_ip {} in ipv4net", name, dst_ip);
                     // search for the destination NIC
                     if let Some(nic) = ri.nics.get(&dst_ip.to_string()) {
                         // found the NIC, forward the chunk to the NIC.
                         // call to NIC must unlock mutex
-                        log::debug!("[{}] {} on_inbound_chunk", name, c);
                         let ni = nic.lock().await;
                         ni.on_inbound_chunk(c).await;
                     } else {
@@ -519,15 +512,9 @@ impl Router {
                     // the destination is outside of this subnet
                     // is this WAN?
                     if let Some(parent) = &ri.parent {
-                        log::debug!("[{}] destination in parent router", name);
                         // Pass it to the parent via NAT
                         if let Some(to_parent) = ri.nat.translate_outbound(&*c).await? {
                             // call to parent router mutex unlock mutex
-                            log::debug!(
-                                "[{}] translate_outbound {} is pushed to parent router",
-                                name,
-                                to_parent
-                            );
                             let p = parent.lock().await;
                             p.push(to_parent).await;
                         }
@@ -537,7 +524,6 @@ impl Router {
                     }
                 }
             } else {
-                log::debug!("[{}] queue.pop(): no more chunk in the queue", name);
                 break; // no more chunk in the queue
             }
         }
