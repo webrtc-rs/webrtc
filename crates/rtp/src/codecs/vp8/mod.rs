@@ -135,8 +135,11 @@ impl Depacketizer for VP8Packet {
         if self.i == 1 {
             // M == 1, PID is 16bit
             if payload[payload_index] & 0x80 > 0 {
+                self.picture_id = (((payload[payload_index] & 0x7f) as u16) << 8)
+                    | (payload[payload_index + 1] as u16);
                 payload_index += 2;
             } else {
+                self.picture_id = payload[payload_index] as u16;
                 payload_index += 1;
             }
         }
