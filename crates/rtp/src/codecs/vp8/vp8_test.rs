@@ -97,20 +97,6 @@ mod tests {
         assert_eq!(pck.t, 0, "T must be 0");
         assert_eq!(pck.k, 1, "K must be 1");
 
-        // Header size, all flags and 16bit picture_id
-        let raw_bytes = &[0xff, 0xff, 0x00, 0x00];
-        let result = pck.depacketize(raw_bytes);
-        assert_eq!(
-            result.err(),
-            Some(RTPError::ShortPacket),
-            "Payload must be not empty"
-        );
-        assert_eq!(pck.x, 1, "X must be 1");
-        assert_eq!(pck.i, 1, "I must be 1");
-        assert_eq!(pck.l, 1, "L must be 1");
-        assert_eq!(pck.t, 1, "T must be 1");
-        assert_eq!(pck.k, 1, "K must be 1");
-
         Ok(())
     }
 

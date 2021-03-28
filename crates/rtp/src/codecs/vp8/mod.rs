@@ -145,10 +145,17 @@ impl Depacketizer for VP8Packet {
         }
 
         if self.l == 1 {
+            self.tl0_pic_idx = payload[payload_index];
             payload_index += 1;
         }
 
         if self.t == 1 || self.k == 1 {
+            let b = payload[payload_index];
+
+            self.tid = (b & 0b11000000) >> 6;
+            self.y = (b & 0b00100000) >> 5;
+            self.key_idx = b & 0b00011111;
+
             payload_index += 1;
         }
 
