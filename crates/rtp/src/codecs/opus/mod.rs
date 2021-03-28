@@ -26,7 +26,7 @@ pub struct OpusPacket {
 }
 
 impl Depacketizer for OpusPacket {
-    fn depacketize(&mut self, packet: &mut [u8]) -> Result<Vec<u8>, RTPError> {
+    fn depacketize(&mut self, packet: &[u8]) -> Result<Vec<u8>, RTPError> {
         if packet.is_empty() {
             return Err(RTPError::ShortPacket);
         }

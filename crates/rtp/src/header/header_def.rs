@@ -169,7 +169,7 @@ impl Header {
     }
 
     /// Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
-    pub fn unmarshal(&mut self, raw_packet: &mut [u8]) -> Result<usize, RTPError> {
+    pub fn unmarshal(&mut self, raw_packet: &[u8]) -> Result<usize, RTPError> {
         /*
          *  0                   1                   2                   3
          *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -314,8 +314,8 @@ impl Header {
     pub fn marshal(&mut self) -> Result<Vec<u8>, RTPError> {
         let mut buf = vec![0u8; self.marshal_size()];
 
-        let size = self.marshal_to(&mut buf)?;
-        buf.truncate(size);
+        self.marshal_to(&mut buf)?;
+        // buf.truncate(size);
 
         Ok(buf)
     }

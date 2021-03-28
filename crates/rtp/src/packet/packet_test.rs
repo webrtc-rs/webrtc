@@ -9,10 +9,10 @@ mod tests {
     fn test_basic() -> Result<(), RTPError> {
         let mut p = Packet::default();
 
-        let result = p.unmarshal(&mut []);
+        let result = p.unmarshal(&[]);
         assert!(result.is_err());
 
-        let raw_pkt = &mut [
+        let raw_pkt = &[
             0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0x00, 0x01,
             0x00, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0x98, 0x36, 0xbe, 0x88, 0x9e,
         ];
@@ -74,7 +74,7 @@ mod tests {
 
     #[test]
     fn test_extension() -> Result<(), RTPError> {
-        let missing_extension_pkt = &mut [
+        let missing_extension_pkt = &[
             0x90, 0x60, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82,
         ];
 
@@ -86,7 +86,7 @@ mod tests {
             "Unmarshal did not error on packet with missing extension data"
         );
 
-        let invalid_extension_length_pkt = &mut [
+        let invalid_extension_length_pkt = &[
             0x90, 0x60, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0x99, 0x99,
             0x99, 0x99,
         ];
@@ -121,7 +121,7 @@ mod tests {
 
     #[test]
     fn test_rfc8285_one_byte_extension() -> Result<(), RTPError> {
-        let raw_pkt = &mut [
+        let raw_pkt = &[
             0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0xBE, 0xDE,
             0x00, 0x01, 0x50, 0xAA, 0x00, 0x00, 0x98, 0x36, 0xbe, 0x88, 0x9e,
         ];
@@ -166,7 +166,7 @@ mod tests {
         // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
         // |  ID   | L=0   |     data      |  ID   |  L=0  |   data...
         // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-        let raw_pkt = &mut [
+        let raw_pkt = &[
             0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0xBE, 0xDE,
             0x00, 0x01, 0x10, 0xAA, 0x20, 0xBB, // Payload
             0x98, 0x36, 0xbe, 0x88, 0x9e,
@@ -205,11 +205,11 @@ mod tests {
                 extensions: vec![
                     Extension {
                         id: 1,
-                        payload: vec![0xAA].as_slice().into(),
+                        payload: vec![0xAA],
                     },
                     Extension {
                         id: 2,
-                        payload: vec![0xBB].as_slice().into(),
+                        payload: vec![0xBB],
                     },
                 ],
                 version: 2,
@@ -250,7 +250,7 @@ mod tests {
         // |                          data                                 |
         // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
-        let raw_pkt = &mut [
+        let raw_pkt = &[
             0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0xBE, 0xDE,
             0x00, 0x03, 0x10, 0xAA, 0x21, 0xBB, 0xBB, 0x00, 0x00, 0x33, 0xCC, 0xCC, 0xCC, 0xCC,
             // Payload
@@ -306,7 +306,6 @@ mod tests {
 
         let checker = |name: &str, buf: &mut [u8], p: &mut Packet| -> Result<(), RTPError> {
             let size = p.marshal_to(buf)?;
-            //println!("{:?}", &buf[..raw_pkg_marshal.len()]);
 
             assert_eq!(
                 &buf[..size],
@@ -334,7 +333,7 @@ mod tests {
         // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
         //             ...data             |
         // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-        let raw_pkt = &mut [
+        let raw_pkt = &[
             0x90u8, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0xBE, 0xDE,
             0x00, 0x03, 0x10, 0xAA, 0x21, 0xBB, 0xBB, 0x33, 0xCC, 0xCC, 0xCC, 0xCC, 0x00, 0x00,
             // Payload
@@ -349,15 +348,15 @@ mod tests {
                 extensions: vec![
                     Extension {
                         id: 1,
-                        payload: vec![0xAA].as_slice().into(),
+                        payload: vec![0xAA],
                     },
                     Extension {
                         id: 2,
-                        payload: vec![0xBB, 0xBB].as_slice().into(),
+                        payload: vec![0xBB, 0xBB],
                     },
                     Extension {
                         id: 3,
-                        payload: vec![0xCC, 0xCC].as_slice().into(),
+                        payload: vec![0xCC, 0xCC],
                     },
                 ],
                 version: 2,
@@ -385,14 +384,14 @@ mod tests {
     fn test_rfc_8285_two_byte_extension() -> Result<(), RTPError> {
         let mut p = Packet::default();
 
-        let raw_pkt = &mut [
+        let raw_pkt = &[
             0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0x10, 0x00,
             0x00, 0x07, 0x05, 0x18, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
             0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
             0x00, 0x00, 0x98, 0x36, 0xbe, 0x88, 0x9e,
         ];
 
-        p.unmarshal(&mut raw_pkt.clone())?;
+        p.unmarshal(raw_pkt)?;
 
         let mut p = Packet {
             header: Header {
@@ -404,9 +403,7 @@ mod tests {
                     payload: vec![
                         0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
                         0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
-                    ]
-                    .as_slice()
-                    .into(),
+                    ],
                 }],
                 version: 2,
                 payload_type: 96,
@@ -444,7 +441,7 @@ mod tests {
         // |                          data                                 |
         // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
-        let raw_pkt = &mut [
+        let raw_pkt = &[
             0x90u8, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0x10, 0x00,
             0x00, 0x03, 0x01, 0x00, 0x02, 0x01, 0xBB, 0x00, 0x03, 0x04, 0xCC, 0xCC, 0xCC, 0xCC,
             0x98, 0x36, 0xbe, 0x88, 0x9e,
@@ -531,9 +528,7 @@ mod tests {
                         payload: vec![
                             0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
                             0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-                        ]
-                        .as_slice()
-                        .into(),
+                        ],
                     },
                 ],
                 version: 2,
@@ -640,11 +635,11 @@ mod tests {
                 extensions: vec![
                     Extension {
                         id: 1,
-                        payload: vec![0xAA].as_slice().into(),
+                        payload: vec![0xAA],
                     },
                     Extension {
                         id: 2,
-                        payload: vec![0xBB].as_slice().into(),
+                        payload: vec![0xBB],
                     },
                 ],
                 version: 2,
@@ -871,7 +866,7 @@ mod tests {
     ) -> Result<(), RTPError> {
         let mut p = Packet::default();
 
-        let reserved_id_pkt = &mut [
+        let reserved_id_pkt = &[
             0x90u8, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0xBE, 0xDE,
             0x00, 0x01, 0xF0, 0xAA, 0x98, 0x36, 0xbe, 0x88, 0x9e,
         ];
@@ -919,7 +914,7 @@ mod tests {
 
         let res = p.header.set_extension(
             1,
-            &mut [
+            &[
                 0xBBu8, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB,
                 0xBB, 0xBB, 0xBB, 0xBB,
             ],
@@ -1198,9 +1193,9 @@ mod tests {
             },
         );
 
-        for (name, mut test_case) in cases.drain() {
+        for (name, test_case) in cases.drain() {
             let mut h = Header::default();
-            let result = h.unmarshal(&mut test_case.input);
+            let result = h.unmarshal(&test_case.input);
 
             assert_eq!(
                 result.err(),
@@ -1214,7 +1209,7 @@ mod tests {
     }
 
     fn test_round_trip() -> Result<(), RTPError> {
-        let raw_pkt = &mut [
+        let raw_pkt = &[
             0x00u8, 0x10, 0x23, 0x45, 0x12, 0x34, 0x45, 0x67, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11,
             0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
         ];

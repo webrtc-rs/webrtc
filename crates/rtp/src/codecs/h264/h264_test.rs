@@ -72,67 +72,67 @@ mod tests {
 
     #[test]
     fn test_h264packet_unmarshal() -> Result<(), RTPError> {
-        let mut single_payload: Vec<u8> = vec![0x90, 0x90, 0x90];
-        let single_payload_unmarshaled: Vec<u8> = vec![0x00, 0x00, 0x00, 0x01, 0x90, 0x90, 0x90];
+        let single_payload = &[0x90, 0x90, 0x90];
+        let single_payload_unmarshaled = &[0x00, 0x00, 0x00, 0x01, 0x90, 0x90, 0x90];
 
-        let large_payload: Vec<u8> = vec![
+        let large_payload = &[
             0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09,
             0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
         ];
-        let large_payload_packetized: Vec<Vec<u8>> = vec![
-            vec![0x1c, 0x80, 0x01, 0x02, 0x03],
-            vec![0x1c, 0x00, 0x04, 0x05, 0x06],
-            vec![0x1c, 0x00, 0x07, 0x08, 0x09],
-            vec![0x1c, 0x00, 0x10, 0x11, 0x12],
-            vec![0x1c, 0x40, 0x13, 0x14, 0x15],
+        let large_payload_packetized = vec![
+            &[0x1c, 0x80, 0x01, 0x02, 0x03],
+            &[0x1c, 0x00, 0x04, 0x05, 0x06],
+            &[0x1c, 0x00, 0x07, 0x08, 0x09],
+            &[0x1c, 0x00, 0x10, 0x11, 0x12],
+            &[0x1c, 0x40, 0x13, 0x14, 0x15],
         ];
 
-        let mut single_payload_multi_nalu: Vec<u8> = vec![
+        let single_payload_multi_nalu = &[
             0x78, 0x00, 0x0f, 0x67, 0x42, 0xc0, 0x1f, 0x1a, 0x32, 0x35, 0x01, 0x40, 0x7a, 0x40,
             0x3c, 0x22, 0x11, 0xa8, 0x00, 0x05, 0x68, 0x1a, 0x34, 0xe3, 0xc8,
         ];
-        let single_payload_multi_nalu_unmarshaled: Vec<u8> = vec![
+        let single_payload_multi_nalu_unmarshaled = &[
             0x00, 0x00, 0x00, 0x01, 0x67, 0x42, 0xc0, 0x1f, 0x1a, 0x32, 0x35, 0x01, 0x40, 0x7a,
             0x40, 0x3c, 0x22, 0x11, 0xa8, 0x00, 0x00, 0x00, 0x01, 0x68, 0x1a, 0x34, 0xe3, 0xc8,
         ];
 
-        let mut incomplete_single_payload_multi_nalu: Vec<u8> = vec![
+        let incomplete_single_payload_multi_nalu = &[
             0x78, 0x00, 0x0f, 0x67, 0x42, 0xc0, 0x1f, 0x1a, 0x32, 0x35, 0x01, 0x40, 0x7a, 0x40,
             0x3c, 0x22, 0x11,
         ];
 
         let mut pkt = H264Packet::default();
 
-        let result = pkt.depacketize(&mut []);
+        let result = pkt.depacketize(&[]);
         assert!(result.is_err(), "Unmarshal did not fail on nil payload");
 
-        let result = pkt.depacketize(&mut [0x00u8, 0x00][..]);
+        let result = pkt.depacketize(&[0x00u8, 0x00][..]);
         assert!(
             result.is_err(),
             "Unmarshal accepted a packet that is too small for a payload and header"
         );
 
-        let result = pkt.depacketize(&mut [0xFF, 0x00, 0x00][..]);
+        let result = pkt.depacketize(&[0xFF, 0x00, 0x00][..]);
         assert!(
             result.is_err(),
             "Unmarshal accepted a packet with a NALU Type we don't handle"
         );
 
-        let result = pkt.depacketize(incomplete_single_payload_multi_nalu.as_mut_slice());
+        let result = pkt.depacketize(incomplete_single_payload_multi_nalu);
         assert!(
             result.is_err(),
             "Unmarshal accepted a STAP-A packet with insufficient data"
         );
 
-        let res = pkt.depacketize(single_payload.as_mut_slice())?;
+        let res = pkt.depacketize(single_payload)?;
         assert_eq!(
             res, single_payload_unmarshaled,
             "Unmarshaling a single payload shouldn't modify the payload"
         );
 
         let mut large_payload_result = vec![];
-        for mut p in large_payload_packetized {
-            let res = pkt.depacketize(p.as_mut_slice())?;
+        for p in large_payload_packetized {
+            let res = pkt.depacketize(p)?;
             large_payload_result.extend_from_slice(&res);
         }
 
@@ -141,7 +141,7 @@ mod tests {
             "Failed to unmarshal a large payload"
         );
 
-        let res = pkt.depacketize(single_payload_multi_nalu.as_mut_slice())?;
+        let res = pkt.depacketize(single_payload_multi_nalu)?;
         assert_eq!(
             res, single_payload_multi_nalu_unmarshaled,
             "Failed to unmarshal a single packet with multiple NALUs"

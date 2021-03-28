@@ -7,7 +7,7 @@ mod tests {
     fn test_transport_cc_extension_too_small() -> Result<(), ExtensionError> {
         let mut t1 = TransportCCExtension::default();
 
-        let result = t1.unmarshal(&mut []);
+        let result = t1.unmarshal(&[]);
 
         assert_eq!(
             result.err(),
@@ -20,7 +20,7 @@ mod tests {
 
     #[test]
     fn test_transport_cc_extension() -> Result<(), ExtensionError> {
-        let raw = &mut [0x00, 0x02];
+        let raw = &[0x00, 0x02];
 
         let mut t1 = TransportCCExtension::default();
 
@@ -32,16 +32,16 @@ mod tests {
 
         assert_eq!(t1, t2);
 
-        let mut dst_data = t2.marshal()?;
+        let dst_data = t2.marshal()?;
 
-        assert_eq!(raw, dst_data.as_mut_slice(), "Marshal failed");
+        assert_eq!(raw, dst_data.as_slice(), "Marshal failed");
 
         Ok(())
     }
 
     #[test]
     fn test_transport_cc_extension_extra_bytes() -> Result<(), ExtensionError> {
-        let raw = &mut [0x00, 0x02, 0x00, 0xff, 0xff];
+        let raw = &[0x00, 0x02, 0x00, 0xff, 0xff];
 
         let mut t1 = TransportCCExtension::default();
 

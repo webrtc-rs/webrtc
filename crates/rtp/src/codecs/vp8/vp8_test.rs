@@ -7,7 +7,7 @@ mod tests {
         let mut pck = VP8Packet::default();
 
         // Empty packet
-        let result = pck.depacketize(&mut []);
+        let result = pck.depacketize(&[]);
         assert_eq!(
             result.err(),
             Some(RTPError::ShortPacket),
@@ -15,7 +15,7 @@ mod tests {
         );
 
         // Payload smaller than header size
-        let small_bytes = &mut [0x00, 0x11, 0x22];
+        let small_bytes = &[0x00, 0x11, 0x22];
         let result = pck.depacketize(small_bytes);
         assert_eq!(
             result.err(),
@@ -33,12 +33,12 @@ mod tests {
         );
 
         // Normal packet
-        let raw_bytes = &mut [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x90];
+        let raw_bytes = &[0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x90];
         let result = pck.depacketize(raw_bytes)?;
         assert!(!result.is_empty(), "Payload must be not empty");
 
         // Header size, only X
-        let raw_bytes = &mut [0x80, 0x00, 0x00, 0x00];
+        let raw_bytes = &[0x80, 0x00, 0x00, 0x00];
         let result = pck.depacketize(raw_bytes)?;
         assert!(!result.is_empty(), "Payload must be not empty");
         assert_eq!(pck.x, 1, "X must be 1");
@@ -48,7 +48,7 @@ mod tests {
         assert_eq!(pck.k, 0, "K must be 0");
 
         // Header size, only X and I
-        let raw_bytes = &mut [0x80, 0x80, 0x00, 0x00];
+        let raw_bytes = &[0x80, 0x80, 0x00, 0x00];
         let result = pck.depacketize(raw_bytes)?;
         assert!(!result.is_empty(), "Payload must be not empty");
         assert_eq!(pck.x, 1, "X must be 1");
@@ -58,7 +58,7 @@ mod tests {
         assert_eq!(pck.k, 0, "K must be 0");
 
         // Header size, X and I, PID 16bits
-        let raw_bytes = &mut [0x80, 0x80, 0x81, 0x00, 0x00];
+        let raw_bytes = &[0x80, 0x80, 0x81, 0x00, 0x00];
         let result = pck.depacketize(raw_bytes)?;
         assert!(!result.is_empty(), "Payload must be not empty");
         assert_eq!(pck.x, 1, "X must be 1");
@@ -68,7 +68,7 @@ mod tests {
         assert_eq!(pck.k, 0, "K must be 0");
 
         // Header size, X and L
-        let raw_bytes = &mut [0x80, 0x40, 0x00, 0x00];
+        let raw_bytes = &[0x80, 0x40, 0x00, 0x00];
         let result = pck.depacketize(raw_bytes)?;
         assert!(!result.is_empty(), "Payload must be not empty");
         assert_eq!(pck.x, 1, "X must be 1");
@@ -78,7 +78,7 @@ mod tests {
         assert_eq!(pck.k, 0, "K must be 0");
 
         // Header size, X and T
-        let raw_bytes = &mut [0x80, 0x20, 0x00, 0x00];
+        let raw_bytes = &[0x80, 0x20, 0x00, 0x00];
         let result = pck.depacketize(raw_bytes)?;
         assert!(!result.is_empty(), "Payload must be not empty");
         assert_eq!(pck.x, 1, "X must be 1");
@@ -88,7 +88,7 @@ mod tests {
         assert_eq!(pck.k, 0, "K must be 0");
 
         // Header size, X and K
-        let raw_bytes = &mut [0x80, 0x10, 0x00, 0x00];
+        let raw_bytes = &[0x80, 0x10, 0x00, 0x00];
         let result = pck.depacketize(raw_bytes)?;
         assert!(!result.is_empty(), "Payload must be not empty");
         assert_eq!(pck.x, 1, "X must be 1");
@@ -98,7 +98,7 @@ mod tests {
         assert_eq!(pck.k, 1, "K must be 1");
 
         // Header size, all flags and 16bit picture_id
-        let raw_bytes = &mut [0xff, 0xff, 0x00, 0x00];
+        let raw_bytes = &[0xff, 0xff, 0x00, 0x00];
         let result = pck.depacketize(raw_bytes);
         assert_eq!(
             result.err(),
@@ -141,17 +141,17 @@ mod tests {
         let mut checker = VP8PartitionHeadChecker;
 
         assert!(
-            !checker.is_partition_head(&mut [0x00]),
+            !checker.is_partition_head(&[0x00]),
             "Small packet should not be the head of a new partition"
         );
 
         assert!(
-            checker.is_partition_head(&mut [0x10, 0x00, 0x00, 0x00]),
+            checker.is_partition_head(&[0x10, 0x00, 0x00, 0x00]),
             "Packet with S flag should be the head of a new partition"
         );
 
         assert!(
-            !checker.is_partition_head(&mut [0x00, 0x00, 0x00, 0x00][..]),
+            !checker.is_partition_head(&[0x00, 0x00, 0x00, 0x00][..]),
             "Packet without S flag should not be the head of a new partition"
         );
     }

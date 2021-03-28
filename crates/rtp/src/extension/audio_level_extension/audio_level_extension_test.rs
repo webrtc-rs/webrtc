@@ -6,7 +6,7 @@ mod tests {
     fn test_audio_level_extension_too_small() {
         let mut a = AudioLevelExtension::default();
 
-        let result = a.unmarshal(&mut []);
+        let result = a.unmarshal(&[]);
         assert_eq!(
             result.err(),
             Some(ExtensionError::TooSmall),
@@ -16,7 +16,7 @@ mod tests {
 
     #[test]
     fn test_audio_level_extension_voice_true() -> Result<(), ExtensionError> {
-        let raw = &mut [0x88];
+        let raw = &[0x88];
 
         let mut a1 = AudioLevelExtension::default();
 
@@ -28,15 +28,15 @@ mod tests {
 
         assert_eq!(a1, a2);
 
-        let mut dst = a2.marshal()?;
-        assert_eq!(raw, dst.as_mut_slice(), "Marshal failed");
+        let dst = a2.marshal()?;
+        assert_eq!(raw, dst.as_slice(), "Marshal failed");
 
         Ok(())
     }
 
     #[test]
     fn test_audio_level_extension_voice_false() -> Result<(), ExtensionError> {
-        let raw = &mut [0x8];
+        let raw = &[0x8];
         let mut a1 = AudioLevelExtension::default();
 
         a1.unmarshal(raw)?;
@@ -48,8 +48,8 @@ mod tests {
 
         assert_eq!(a1, a2, "unmarshal failed");
 
-        let mut dst_data = a2.marshal()?;
-        assert_eq!(raw, dst_data.as_mut_slice());
+        let dst_data = a2.marshal()?;
+        assert_eq!(raw, dst_data.as_slice());
 
         Ok(())
     }

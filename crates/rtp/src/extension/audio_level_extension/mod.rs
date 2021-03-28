@@ -44,7 +44,7 @@ impl AudioLevelExtension {
     }
 
     /// Unmarshal parses the passed byte slice and stores the result in the members
-    pub fn unmarshal(&mut self, raw_data: &mut [u8]) -> Result<(), ExtensionError> {
+    pub fn unmarshal(&mut self, raw_data: &[u8]) -> Result<(), ExtensionError> {
         if raw_data.len() < AUDIO_LEVEL_EXTENSION_SIZE {
             return Err(ExtensionError::TooSmall);
         }

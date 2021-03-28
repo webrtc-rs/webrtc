@@ -34,7 +34,7 @@ impl Packet {
     }
 
     /// Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
-    pub fn unmarshal(&mut self, buf: &mut [u8]) -> Result<(), RTPError> {
+    pub fn unmarshal(&mut self, buf: &[u8]) -> Result<(), RTPError> {
         let size = self.header.unmarshal(buf)?;
         self.payload = buf[size..].to_vec();
 

@@ -92,7 +92,7 @@ pub struct VP8Packet {
 
 impl Depacketizer for VP8Packet {
     // Unmarshal parses the passed byte slice and stores the result in the VP8Packet this method is called upon
-    fn depacketize(&mut self, payload: &mut [u8]) -> Result<Vec<u8>, RTPError> {
+    fn depacketize(&mut self, payload: &[u8]) -> Result<Vec<u8>, RTPError> {
         /*      0 1 2 3 4 5 6 7                      0 1 2 3 4 5 6 7
          *      +-+-+-+-+-+-+-+-+                   +-+-+-+-+-+-+-+-+
          *      |X|R|N|S|R| PID | (REQUIRED)        |X|R|N|S|R| PID | (REQUIRED)
@@ -162,9 +162,9 @@ impl Depacketizer for VP8Packet {
 struct VP8PartitionHeadChecker;
 
 impl VP8PartitionHeadChecker {
-    pub fn is_partition_head(&mut self, mut packet: &mut [u8]) -> bool {
+    pub fn is_partition_head(&mut self, packet: &[u8]) -> bool {
         let mut p = VP8Packet::default();
-        if p.depacketize(&mut packet).is_err() {
+        if p.depacketize(&packet).is_err() {
             return false;
         }
 

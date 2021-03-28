@@ -20,7 +20,7 @@ pub trait Packetizer {
 
 /// Depacketizer depacketizes a RTP payload, removing any RTP specific data from the payload
 pub trait Depacketizer {
-    fn depacketize(&mut self, packet: &mut [u8]) -> Result<Vec<u8>, RTPError>;
+    fn depacketize(&mut self, packet: &[u8]) -> Result<Vec<u8>, RTPError>;
 }
 
 pub type FnTimeGen = fn() -> Duration;

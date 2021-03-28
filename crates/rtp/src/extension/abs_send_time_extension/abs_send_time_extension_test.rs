@@ -57,11 +57,11 @@ mod tests {
         ];
 
         for (i, test) in tests.iter().enumerate() {
-            let mut b = test.marshal()?;
+            let b = test.marshal()?;
 
             let mut out = AbsSendTimeExtension::default();
 
-            out.unmarshal(&mut b)?;
+            out.unmarshal(&b)?;
             assert_eq!(
                 test.timestamp, out.timestamp,
                 "[{}] Timestamp differs, expected: {}, got: {}",
@@ -86,10 +86,10 @@ mod tests {
                 timestamp: send_ntp >> 14,
             };
 
-            let mut b = send.marshal()?;
+            let b = send.marshal()?;
 
             let mut received = AbsSendTimeExtension::default();
-            received.unmarshal(&mut b)?;
+            received.unmarshal(&b)?;
 
             let estimated = received.estimate(ntp2unix(*receive_ntp));
             let diff = estimated.sub(in_time).as_nanos() as i128;

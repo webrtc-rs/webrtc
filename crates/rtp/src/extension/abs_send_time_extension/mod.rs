@@ -23,7 +23,7 @@ impl AbsSendTimeExtension {
     }
 
     /// Unmarshal parses the passed byte slice and stores the result in the members.
-    pub fn unmarshal(&mut self, raw_data: &mut [u8]) -> Result<(), ExtensionError> {
+    pub fn unmarshal(&mut self, raw_data: &[u8]) -> Result<(), ExtensionError> {
         if raw_data.len() < ABS_SEND_TIME_EXTENSION_SIZE {
             return Err(ExtensionError::TooSmall);
         }

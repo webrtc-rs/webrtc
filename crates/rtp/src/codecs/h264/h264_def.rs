@@ -110,7 +110,7 @@ impl Payloader for H264Payloader {
 pub struct H264Packet {}
 
 impl Depacketizer for H264Packet {
-    fn depacketize(&mut self, payload: &mut [u8]) -> Result<Vec<u8>, RTPError> {
+    fn depacketize(&mut self, payload: &[u8]) -> Result<Vec<u8>, RTPError> {
         if payload.len() <= 2 {
             return Err(RTPError::ShortPacket);
         }

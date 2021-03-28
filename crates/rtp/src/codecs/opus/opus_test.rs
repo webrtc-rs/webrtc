@@ -12,7 +12,7 @@ mod tests {
 
         // Normal packet
         let raw_bytes = &mut [0x00u8, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x90];
-        let raw = pck.depacketize(raw_bytes.as_mut())?;
+        let raw = pck.depacketize(raw_bytes)?;
         assert!(!raw.is_empty(), "Payload must be same");
 
         Ok(())
