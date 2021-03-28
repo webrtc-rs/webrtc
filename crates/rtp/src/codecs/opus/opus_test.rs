@@ -7,12 +7,12 @@ mod tests {
         let mut pck = OpusPacket::default();
 
         // Empty packet
-        let result = pck.unmarshal(&mut []);
+        let result = pck.depacketize(&mut []);
         assert!(result.is_err(), "Result should be err in case of error");
 
         // Normal packet
         let raw_bytes = &mut [0x00u8, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x90];
-        let raw = pck.unmarshal(raw_bytes.as_mut())?;
+        let raw = pck.depacketize(raw_bytes.as_mut())?;
         assert!(!raw.is_empty(), "Payload must be same");
 
         Ok(())

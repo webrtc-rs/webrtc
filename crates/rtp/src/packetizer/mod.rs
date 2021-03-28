@@ -13,19 +13,19 @@ pub trait Payloader {
 }
 
 /// Packetizer packetizes a payload
-pub trait PacketizerInterface {
+pub trait Packetizer {
     fn packetize(&mut self, payload: &mut [u8], samples: u32) -> Result<Vec<Packet>, RTPError>;
     fn enable_abs_send_time(&mut self, value: u8);
 }
 
 /// Depacketizer depacketizes a RTP payload, removing any RTP specific data from the payload
 pub trait Depacketizer {
-    fn unmarshal(&mut self, packet: &mut [u8]) -> Result<Vec<u8>, RTPError>;
+    fn depacketize(&mut self, packet: &mut [u8]) -> Result<Vec<u8>, RTPError>;
 }
 
 pub type FnTimeGen = fn() -> Duration;
 
-struct Packetizer {
+struct PacketizerImpl {
     pub mtu: u16,
     pub payload_type: u8,
     pub ssrc: u32,
@@ -44,8 +44,8 @@ pub fn new_packetizer(
     clock_rate: u32,
     payloader: Box<dyn Payloader>,
     sequencer: Box<dyn Sequencer>,
-) -> impl PacketizerInterface {
-    Packetizer {
+) -> impl Packetizer {
+    PacketizerImpl {
         mtu,
         payload_type,
         ssrc,
@@ -58,7 +58,7 @@ pub fn new_packetizer(
     }
 }
 
-impl PacketizerInterface for Packetizer {
+impl Packetizer for PacketizerImpl {
     fn enable_abs_send_time(&mut self, value: u8) {
         self.abs_send_time = value
     }

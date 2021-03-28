@@ -40,7 +40,8 @@ mod tests {
             let input = Duration::from_nanos(t.timestamp_nanos() as u64);
             let diff = input.sub(output).as_nanos() as i128;
             if diff < -ABS_SEND_TIME_RESOLUTION || ABS_SEND_TIME_RESOLUTION < diff {
-                panic!(
+                assert!(
+                    false,
                     "Converted time.Time from NTP time differs, expected: {:?}, got: {:?}",
                     input, output,
                 );
@@ -93,7 +94,8 @@ mod tests {
             let estimated = received.estimate(ntp2unix(*receive_ntp));
             let diff = estimated.sub(in_time).as_nanos() as i128;
             if diff < -ABS_SEND_TIME_RESOLUTION || ABS_SEND_TIME_RESOLUTION < diff {
-                panic!(
+                assert!(
+                    false,
                     "[{}] Estimated time differs, expected: {:?}, estimated: {:?} (receive time: {})",
                     i, in_time, estimated,receive_ntp,
                 );

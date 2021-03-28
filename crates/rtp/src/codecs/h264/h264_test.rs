@@ -103,28 +103,28 @@ mod tests {
 
         let mut pkt = H264Packet::default();
 
-        let result = pkt.unmarshal(&mut []);
+        let result = pkt.depacketize(&mut []);
         assert!(result.is_err(), "Unmarshal did not fail on nil payload");
 
-        let result = pkt.unmarshal(&mut [0x00u8, 0x00][..]);
+        let result = pkt.depacketize(&mut [0x00u8, 0x00][..]);
         assert!(
             result.is_err(),
             "Unmarshal accepted a packet that is too small for a payload and header"
         );
 
-        let result = pkt.unmarshal(&mut [0xFF, 0x00, 0x00][..]);
+        let result = pkt.depacketize(&mut [0xFF, 0x00, 0x00][..]);
         assert!(
             result.is_err(),
             "Unmarshal accepted a packet with a NALU Type we don't handle"
         );
 
-        let result = pkt.unmarshal(incomplete_single_payload_multi_nalu.as_mut_slice());
+        let result = pkt.depacketize(incomplete_single_payload_multi_nalu.as_mut_slice());
         assert!(
             result.is_err(),
             "Unmarshal accepted a STAP-A packet with insufficient data"
         );
 
-        let res = pkt.unmarshal(single_payload.as_mut_slice())?;
+        let res = pkt.depacketize(single_payload.as_mut_slice())?;
         assert_eq!(
             res, single_payload_unmarshaled,
             "Unmarshaling a single payload shouldn't modify the payload"
@@ -132,7 +132,7 @@ mod tests {
 
         let mut large_payload_result = vec![];
         for mut p in large_payload_packetized {
-            let res = pkt.unmarshal(p.as_mut_slice())?;
+            let res = pkt.depacketize(p.as_mut_slice())?;
             large_payload_result.extend_from_slice(&res);
         }
 
@@ -141,7 +141,7 @@ mod tests {
             "Failed to unmarshal a large payload"
         );
 
-        let res = pkt.unmarshal(single_payload_multi_nalu.as_mut_slice())?;
+        let res = pkt.depacketize(single_payload_multi_nalu.as_mut_slice())?;
         assert_eq!(
             res, single_payload_multi_nalu_unmarshaled,
             "Failed to unmarshal a single packet with multiple NALUs"

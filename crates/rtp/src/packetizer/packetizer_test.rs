@@ -27,7 +27,8 @@ mod test {
                     format!("Packet {} length {}\n", i, packets[i].payload.len()).as_str();
             }
 
-            panic!(
+            assert!(
+                false,
                 "Generated {} packets instead of 2\n{}",
                 packets.len(),
                 packet_lengths,
@@ -47,15 +48,15 @@ mod test {
             Box::new(sequence::new_fixed_sequencer(1234)),
         );
 
-        match (&mut pktizer as &mut dyn Any).downcast_mut::<Packetizer>() {
+        match (&mut pktizer as &mut dyn Any).downcast_mut::<PacketizerImpl>() {
             Some(e) => {
-                let mut e: &mut Packetizer = e;
+                let mut e: &mut PacketizerImpl = e;
 
                 e.timestamp = 45678;
                 e.time_gen = Some(|| fixed_time_gen())
             }
 
-            None => panic!("failed to cast to packet type"),
+            None => assert!(false, "failed to cast to packet type"),
         };
 
         pktizer.enable_abs_send_time(1);

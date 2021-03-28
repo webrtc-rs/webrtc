@@ -26,7 +26,7 @@ pub struct OpusPacket {
 }
 
 impl Depacketizer for OpusPacket {
-    fn unmarshal(&mut self, packet: &mut [u8]) -> Result<Vec<u8>, RTPError> {
+    fn depacketize(&mut self, packet: &mut [u8]) -> Result<Vec<u8>, RTPError> {
         if packet.is_empty() {
             return Err(RTPError::ShortPacket);
         }
@@ -44,7 +44,7 @@ impl OpusPartitionHeadChecker {
     pub fn is_partition_head(&mut self, packet: &mut [u8]) -> bool {
         let mut p = OpusPacket::default();
 
-        if p.unmarshal(packet).is_err() {
+        if p.depacketize(packet).is_err() {
             return false;
         }
 

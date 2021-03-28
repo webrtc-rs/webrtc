@@ -66,15 +66,15 @@ impl Payloader for VP8Payloader {
 }
 
 #[derive(Debug, Default)]
-// VP8Packet represents the VP8 header that is stored in the payload of an RTP Packet
+/// VP8Packet represents the VP8 header that is stored in the payload of an RTP Packet
 pub struct VP8Packet {
-    // Required Header
-    pub x: u8,   /* extended controlbits present */
+    /// Required Header
+    pub x: u8, /* extended controlbits present */
     pub n: u8,   /* (non-reference frame)  when set to 1 this frame can be discarded */
     pub s: u8,   /* start of VP8 partition */
     pub pid: u8, /* partition index */
 
-    // Optional Header
+    /// Optional Header
     pub i: u8, /* 1 if PictureID is present */
     pub l: u8, /* 1 if TL0PICIDX is present */
     pub t: u8, /* 1 if TID is present */
@@ -92,7 +92,23 @@ pub struct VP8Packet {
 
 impl Depacketizer for VP8Packet {
     // Unmarshal parses the passed byte slice and stores the result in the VP8Packet this method is called upon
-    fn unmarshal(&mut self, payload: &mut [u8]) -> Result<Vec<u8>, RTPError> {
+    fn depacketize(&mut self, payload: &mut [u8]) -> Result<Vec<u8>, RTPError> {
+        /*      0 1 2 3 4 5 6 7                      0 1 2 3 4 5 6 7
+         *      +-+-+-+-+-+-+-+-+                   +-+-+-+-+-+-+-+-+
+         *      |X|R|N|S|R| PID | (REQUIRED)        |X|R|N|S|R| PID | (REQUIRED)
+         *      +-+-+-+-+-+-+-+-+                   +-+-+-+-+-+-+-+-+
+         * X:   |I|L|T|K| RSV   | (OPTIONAL)   X:   |I|L|T|K| RSV   | (OPTIONAL)
+         *      +-+-+-+-+-+-+-+-+                   +-+-+-+-+-+-+-+-+
+         * I:   |M| PictureID   | (OPTIONAL)   I:   |M| PictureID   | (OPTIONAL)
+         *      +-+-+-+-+-+-+-+-+                   +-+-+-+-+-+-+-+-+
+         * L:   |   TL0PICIDX   | (OPTIONAL)        |   PictureID   |
+         *      +-+-+-+-+-+-+-+-+                   +-+-+-+-+-+-+-+-+
+         * T/K: |TID|Y| KEYIDX  | (OPTIONAL)   L:   |   TL0PICIDX   | (OPTIONAL)
+         *      +-+-+-+-+-+-+-+-+                   +-+-+-+-+-+-+-+-+
+         * T/K: |TID|Y| KEYIDX  | (OPTIONAL)
+         *      +-+-+-+-+-+-+-+-+
+         */
+
         let payload_len = payload.len();
         if payload_len < 4 {
             return Err(RTPError::ShortPacket);
@@ -148,7 +164,7 @@ struct VP8PartitionHeadChecker;
 impl VP8PartitionHeadChecker {
     pub fn is_partition_head(&mut self, mut packet: &mut [u8]) -> bool {
         let mut p = VP8Packet::default();
-        if p.unmarshal(&mut packet).is_err() {
+        if p.depacketize(&mut packet).is_err() {
             return false;
         }
 
