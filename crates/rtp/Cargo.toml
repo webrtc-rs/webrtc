@@ -1,7 +1,7 @@
 [package]
 name = "webrtc-rtp"
 version = "0.1.0"
-authors = ["Rain Liu <yuliu@webrtc.rs>"]
+authors = ["Rain Liu <yuliu@outlook.com>", "Michael Uti <utimichael9@gmail.com>"]
 edition = "2018"
 description = "A pure Rust implementation of RTP"
 license = "MIT"
@@ -14,7 +14,12 @@ repository = "https://github.com/webrtc-rs/rtp"
 [dependencies]
 byteorder = "1.3.2"
 rand = "0.8.0"
-thiserror = "1.0.23"
+thiserror = "1"
 
 [dev-dependencies]
 chrono = "0.4.7"
+criterion = "0.3"
+
+[[bench]]
+name = "packet"
+harness = false

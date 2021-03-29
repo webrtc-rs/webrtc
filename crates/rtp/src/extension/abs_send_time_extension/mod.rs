@@ -1,43 +1,40 @@
-use std::io::{Read, Write};
+use crate::errors::ExtensionError;
 use std::time::Duration;
 
-use byteorder::{ReadBytesExt, WriteBytesExt};
-
-use crate::error::Error;
-
-#[cfg(test)]
 mod abs_send_time_extension_test;
 
 const ABS_SEND_TIME_EXTENSION_SIZE: usize = 3;
 
-// AbsSendTimeExtension is a extension payload format in
-// http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
+/// AbsSendTimeExtension is a extension payload format in
+/// http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
+#[derive(Debug, Default)]
 pub struct AbsSendTimeExtension {
-    timestamp: u64,
+    pub timestamp: u64,
 }
 
 impl AbsSendTimeExtension {
-    // Marshal serializes the members to buffer.
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        writer.write_u8(((self.timestamp & 0xFF0000) >> 16) as u8)?;
-        writer.write_u8(((self.timestamp & 0xFF00) >> 8) as u8)?;
-        writer.write_u8((self.timestamp & 0xFF) as u8)?;
-
-        Ok(writer.flush()?)
+    /// Marshal serializes the members to buffer.
+    pub fn marshal(&self) -> Result<Vec<u8>, ExtensionError> {
+        Ok(vec![
+            ((self.timestamp & 0xFF0000) >> 16) as u8,
+            ((self.timestamp & 0xFF00) >> 8) as u8,
+            (self.timestamp & 0xFF) as u8,
+        ])
     }
 
-    // Unmarshal parses the passed byte slice and stores the result in the members.
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let b0 = reader.read_u8()?;
-        let b1 = reader.read_u8()?;
-        let b2 = reader.read_u8()?;
-        let timestamp = (b0 as u64) << 16 | (b1 as u64) << 8 | b2 as u64;
+    /// Unmarshal parses the passed byte slice and stores the result in the members.
+    pub fn unmarshal(&mut self, raw_data: &[u8]) -> Result<(), ExtensionError> {
+        if raw_data.len() < ABS_SEND_TIME_EXTENSION_SIZE {
+            return Err(ExtensionError::TooSmall);
+        }
+        self.timestamp =
+            (raw_data[0] as u64) << 16 | (raw_data[1] as u64) << 8 | raw_data[2] as u64;
 
-        Ok(AbsSendTimeExtension { timestamp })
+        Ok(())
     }
 
-    // Estimate absolute send time according to the receive time.
-    // Note that if the transmission delay is larger than 64 seconds, estimated time will be wrong.
+    /// Estimate absolute send time according to the receive time.
+    /// Note that if the transmission delay is larger than 64 seconds, estimated time will be wrong.
     pub fn estimate(&self, receive: Duration) -> Duration {
         let receive_ntp = unix2ntp(receive);
         let mut ntp = receive_ntp & 0xFFFFFFC000000000 | (self.timestamp & 0xFFFFFF) << 14;
@@ -49,7 +46,7 @@ impl AbsSendTimeExtension {
         ntp2unix(ntp)
     }
 
-    // NewAbsSendTimeExtension makes new AbsSendTimeExtension from time.Time.
+    /// NewAbsSendTimeExtension makes new AbsSendTimeExtension from time.Time.
     pub fn new(send_time: Duration) -> Self {
         AbsSendTimeExtension {
             timestamp: unix2ntp(send_time) >> 14,

@@ -1,17 +1,14 @@
+use crate::errors::RTPError;
+use crate::header;
 use std::fmt;
-use std::io::{Read, Write};
 
-use crate::error::Error;
-use crate::header::*;
-
-#[cfg(test)]
 mod packet_test;
 
-// Packet represents an RTP Packet
-// NOTE: Raw is populated by Marshal/Unmarshal and should not be modified
-#[derive(Debug, Eq, PartialEq, Default)]
+/// Packet represents an RTP Packet
+/// NOTE: Raw is populated by Marshal/Unmarshal and should not be modified
+#[derive(Debug, Eq, PartialEq, Clone, Default)]
 pub struct Packet {
-    pub header: Header,
+    pub header: header::Header,
     pub payload: Vec<u8>,
 }
 
@@ -32,26 +29,43 @@ impl fmt::Display for Packet {
 }
 
 impl Packet {
-    // MarshalSize returns the size of the packet once marshaled.
-    pub fn size(&self) -> usize {
-        self.header.size() + self.payload.len()
+    pub fn new() -> Self {
+        Packet::default()
     }
 
-    // Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let header = Header::unmarshal(reader)?;
+    /// Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
+    pub fn unmarshal(&mut self, buf: &[u8]) -> Result<(), RTPError> {
+        let size = self.header.unmarshal(buf)?;
+        self.payload = buf[size..].to_vec();
 
-        let mut payload = vec![];
-        reader.read_to_end(&mut payload)?;
-
-        Ok(Packet { header, payload })
+        Ok(())
     }
 
-    // Marshal serializes the header and writes to the buffer.
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.header.marshal(writer)?;
-        writer.write_all(&self.payload)?;
+    /// MarshalSize returns the size of the packet once marshaled.
+    pub fn marshal_size(&mut self) -> usize {
+        self.header.marshal_size() + self.payload.len()
+    }
 
-        Ok(writer.flush()?)
+    pub fn marshal_to(&mut self, buf: &mut [u8]) -> Result<usize, RTPError> {
+        let size = self.header.marshal_to(buf)?;
+
+        // Make sure the buffer is large enough to hold the packet.
+        if size + self.payload.len() > buf.len() {
+            return Err(RTPError::ShortBuffer);
+        }
+
+        buf[size..size + self.payload.len()].copy_from_slice(&self.payload);
+
+        Ok(size + self.payload.len())
+    }
+
+    /// Marshal serializes the packet into bytes.
+    pub fn marshal(&mut self) -> Result<Vec<u8>, RTPError> {
+        let mut buf = vec![0u8; self.marshal_size()];
+
+        let size = self.marshal_to(buf.as_mut_slice())?;
+
+        buf.truncate(size);
+        Ok(buf)
     }
 }

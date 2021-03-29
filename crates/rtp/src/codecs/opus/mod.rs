@@ -1,22 +1,22 @@
-use crate::error::Error;
-use crate::packetizer::{Depacketizer, Payloader};
+use crate::{
+    errors::RTPError,
+    packetizer::{Depacketizer, Payloader},
+};
 
-use std::io::Read;
-
-#[cfg(test)]
 mod opus_test;
 
 pub struct OpusPayloader;
 
 impl Payloader for OpusPayloader {
-    fn payload<R: Read>(&self, _mtu: isize, reader: &mut R) -> Result<Vec<Vec<u8>>, Error> {
-        let mut payload = vec![];
-        reader.read_to_end(&mut payload)?;
+    fn payload(&self, _: u16, payload: &[u8]) -> Vec<Vec<u8>> {
         if payload.is_empty() {
-            Ok(vec![])
-        } else {
-            Ok(vec![payload])
+            return vec![];
         }
+
+        let mut out = vec![0u8; payload.len()];
+        out.copy_from_slice(&payload);
+
+        vec![out]
     }
 }
 
@@ -26,13 +26,28 @@ pub struct OpusPacket {
 }
 
 impl Depacketizer for OpusPacket {
-    fn depacketize<R: Read>(&mut self, reader: &mut R) -> Result<(), Error> {
-        self.payload.clear();
-        reader.read_to_end(&mut self.payload)?;
-        if self.payload.is_empty() {
-            Err(Error::PayloadIsNotLargeEnough)
-        } else {
-            Ok(())
+    fn depacketize(&mut self, packet: &[u8]) -> Result<Vec<u8>, RTPError> {
+        if packet.is_empty() {
+            return Err(RTPError::ShortPacket);
         }
+
+        self.payload = packet.to_owned();
+        Ok(packet.to_owned())
+    }
+}
+/// OpusPartitionHeadChecker checks Opus partition head
+#[derive(Debug, Default)]
+pub struct OpusPartitionHeadChecker {}
+
+impl OpusPartitionHeadChecker {
+    // IsPartitionHead checks whether if this is a head of the Opus partition
+    pub fn is_partition_head(&mut self, packet: &mut [u8]) -> bool {
+        let mut p = OpusPacket::default();
+
+        if p.depacketize(packet).is_err() {
+            return false;
+        }
+
+        true
     }
 }

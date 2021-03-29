@@ -1,11 +1,7 @@
-use std::io::{Read, Write};
-
-use byteorder::{ReadBytesExt, WriteBytesExt};
-
-use crate::error::Error;
-
-#[cfg(test)]
+use crate::errors::ExtensionError;
 mod audio_level_extension_test;
+
+const AUDIO_LEVEL_EXTENSION_SIZE: usize = 1;
 
 // AudioLevelExtension is a extension payload format described in
 // https://tools.ietf.org/html/rfc6464
@@ -26,32 +22,35 @@ mod audio_level_extension_test;
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 // |      ID       |     len=1     |V|    level    |    0 (pad)    |
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Default)]
 pub struct AudioLevelExtension {
-    level: u8,
-    voice: bool,
+    pub level: u8,
+    pub voice: bool,
 }
 
 impl AudioLevelExtension {
-    // Marshal serializes the members to buffer
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    /// Marshal serializes the members to buffer
+    pub fn marshal(&self) -> Result<Vec<u8>, ExtensionError> {
         if self.level > 127 {
-            return Err(Error::AudioLevelOverflow);
+            return Err(ExtensionError::AudioLevelOverflow);
         }
+
         let voice = if self.voice { 0x80u8 } else { 0u8 };
 
-        writer.write_u8(voice | self.level)?;
+        let mut buf = vec![0u8; AUDIO_LEVEL_EXTENSION_SIZE];
+        buf[0] = voice | self.level;
 
-        Ok(writer.flush()?)
+        Ok(buf)
     }
 
-    // Unmarshal parses the passed byte slice and stores the result in the members
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let b = reader.read_u8()?;
+    /// Unmarshal parses the passed byte slice and stores the result in the members
+    pub fn unmarshal(&mut self, raw_data: &[u8]) -> Result<(), ExtensionError> {
+        if raw_data.len() < AUDIO_LEVEL_EXTENSION_SIZE {
+            return Err(ExtensionError::TooSmall);
+        }
 
-        Ok(AudioLevelExtension {
-            level: b & 0x7F,
-            voice: (b & 0x80) != 0,
-        })
+        self.level = raw_data[0] & 0x7F;
+        self.voice = (raw_data[0] & 0x80) != 0;
+        Ok(())
     }
 }
