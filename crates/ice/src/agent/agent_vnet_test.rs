@@ -613,3 +613,174 @@ async fn test_connectivity_vnet_full_cone_nats_on_both_ends() -> Result<(), Erro
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_connectivity_vnet_symmetric_nats_on_both_ends() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
+
+    let stun_server_url = URL {
+        scheme: SchemeType::STUN,
+        host: VNET_STUN_SERVER_IP.to_owned(),
+        port: VNET_STUN_SERVER_PORT,
+        proto: ProtoType::UDP,
+        ..Default::default()
+    };
+
+    let turn_server_url = URL {
+        scheme: SchemeType::TURN,
+        host: VNET_STUN_SERVER_IP.to_owned(),
+        port: VNET_STUN_SERVER_PORT,
+        username: "user".to_owned(),
+        password: "pass".to_owned(),
+        proto: ProtoType::UDP,
+        ..Default::default()
+    };
+
+    // buildVNet with a Symmetric NATs for both LANs
+    let nat_type = nat::NATType {
+        mapping_behavior: nat::EndpointDependencyType::EndpointAddrPortDependent,
+        filtering_behavior: nat::EndpointDependencyType::EndpointAddrPortDependent,
+        ..Default::default()
+    };
+
+    let v = build_vnet(nat_type, nat_type).await?;
+
+    log::debug!("Connecting...");
+    let a0test_config = AgentTestConfig {
+        urls: vec![stun_server_url.clone(), turn_server_url.clone()],
+        ..Default::default()
+    };
+    let a1test_config = AgentTestConfig {
+        urls: vec![stun_server_url.clone()],
+        ..Default::default()
+    };
+    let (_ca, _cb) = pipe_with_vnet(&v, a0test_config, a1test_config).await?;
+
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    log::debug!("Closing...");
+    v.close().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_connectivity_vnet_1to1_nat_with_host_candidate_vs_symmetric_nats() -> Result<(), Error>
+{
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
+
+    // Agent0 is behind 1:1 NAT
+    let nat_type0 = nat::NATType {
+        mode: nat::NATMode::NAT1To1,
+        ..Default::default()
+    };
+    // Agent1 is behind a symmetric NAT
+    let nat_type1 = nat::NATType {
+        mapping_behavior: nat::EndpointDependencyType::EndpointAddrPortDependent,
+        filtering_behavior: nat::EndpointDependencyType::EndpointAddrPortDependent,
+        ..Default::default()
+    };
+    log::debug!("natType0: {:?}", nat_type0);
+    log::debug!("natType1: {:?}", nat_type1);
+
+    let v = build_vnet(nat_type0, nat_type1).await?;
+
+    log::debug!("Connecting...");
+    let a0test_config = AgentTestConfig {
+        urls: vec![],
+        nat_1to1_ip_candidate_type: CandidateType::Host, // Use 1:1 NAT IP as a host candidate
+        ..Default::default()
+    };
+    let a1test_config = AgentTestConfig {
+        urls: vec![],
+        ..Default::default()
+    };
+    let (_ca, _cb) = pipe_with_vnet(&v, a0test_config, a1test_config).await?;
+
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    log::debug!("Closing...");
+    v.close().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_connectivity_vnet_1to1_nat_with_srflx_candidate_vs_symmetric_nats(
+) -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
+
+    // Agent0 is behind 1:1 NAT
+    let nat_type0 = nat::NATType {
+        mode: nat::NATMode::NAT1To1,
+        ..Default::default()
+    };
+    // Agent1 is behind a symmetric NAT
+    let nat_type1 = nat::NATType {
+        mapping_behavior: nat::EndpointDependencyType::EndpointAddrPortDependent,
+        filtering_behavior: nat::EndpointDependencyType::EndpointAddrPortDependent,
+        ..Default::default()
+    };
+    log::debug!("natType0: {:?}", nat_type0);
+    log::debug!("natType1: {:?}", nat_type1);
+
+    let v = build_vnet(nat_type0, nat_type1).await?;
+
+    log::debug!("Connecting...");
+    let a0test_config = AgentTestConfig {
+        urls: vec![],
+        nat_1to1_ip_candidate_type: CandidateType::ServerReflexive, // Use 1:1 NAT IP as a srflx candidate
+        ..Default::default()
+    };
+    let a1test_config = AgentTestConfig {
+        urls: vec![],
+        ..Default::default()
+    };
+    let (_ca, _cb) = pipe_with_vnet(&v, a0test_config, a1test_config).await?;
+
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    log::debug!("Closing...");
+    v.close().await?;
+
+    Ok(())
+}
