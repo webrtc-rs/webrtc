@@ -101,7 +101,7 @@ impl AgentInternal {
                 let mut msg = Message::new();
                 let result = msg.build(&[
                     Box::new(BINDING_REQUEST),
-                    Box::new(TransactionId::default()),
+                    Box::new(TransactionId::new()),
                     Box::new(Username::new(ATTR_USERNAME, username)),
                     Box::new(UseCandidateAttr::default()),
                     Box::new(AttrControlling(self.tie_breaker)),
@@ -241,7 +241,7 @@ impl ControllingSelector for AgentInternal {
             let mut msg = Message::new();
             let result = msg.build(&[
                 Box::new(BINDING_REQUEST),
-                Box::new(TransactionId::default()),
+                Box::new(TransactionId::new()),
                 Box::new(Username::new(ATTR_USERNAME, username)),
                 Box::new(AttrControlling(self.tie_breaker)),
                 Box::new(PriorityAttr(local.priority())),
@@ -385,7 +385,7 @@ impl ControlledSelector for AgentInternal {
             let mut msg = Message::new();
             let result = msg.build(&[
                 Box::new(BINDING_REQUEST),
-                Box::new(TransactionId::default()),
+                Box::new(TransactionId::new()),
                 Box::new(Username::new(ATTR_USERNAME, username)),
                 Box::new(AttrControlled(self.tie_breaker)),
                 Box::new(PriorityAttr(local.priority())),

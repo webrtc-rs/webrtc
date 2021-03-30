@@ -259,7 +259,7 @@ async fn test_handle_peer_reflexive_udp_pflx_candidate() -> Result<(), Error> {
     let mut msg = Message::new();
     msg.build(&[
         Box::new(BINDING_REQUEST),
-        Box::new(TransactionId::default()),
+        Box::new(TransactionId::new()),
         Box::new(Username::new(ATTR_USERNAME, username)),
         Box::new(UseCandidateAttr::new()),
         Box::new(AttrControlling(tie_breaker)),
