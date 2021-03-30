@@ -449,7 +449,7 @@ async fn test_connectivity_on_startup() -> Result<(), Error> {
         ..Default::default()
     };
 
-    let a_agent = Agent::new(cfg0).await?;
+    let a_agent = Arc::new(Agent::new(cfg0).await?);
     a_agent.on_connection_state_change(a_notifier).await;
 
     let cfg1 = AgentConfig {
@@ -462,7 +462,7 @@ async fn test_connectivity_on_startup() -> Result<(), Error> {
         ..Default::default()
     };
 
-    let b_agent = Agent::new(cfg1).await?;
+    let b_agent = Arc::new(Agent::new(cfg1).await?);
     b_agent.on_connection_state_change(b_notifier).await;
 
     // Manual signaling

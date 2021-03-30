@@ -4,6 +4,8 @@ use async_trait::async_trait;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr};
 use std::str::FromStr;
+use std::sync::atomic::AtomicU64;
+use util::vnet::chunk::Chunk;
 use util::{vnet::router::NIC, vnet::*, Conn};
 use waitgroup::WaitGroup;
 
@@ -448,8 +450,8 @@ pub(crate) async fn copy_candidate(
 }
 
 pub(crate) async fn gather_and_exchange_candidates(
-    a_agent: &Agent,
-    b_agent: &Agent,
+    a_agent: &Arc<Agent>,
+    b_agent: &Arc<Agent>,
 ) -> Result<(), Error> {
     let wg = WaitGroup::new();
 
@@ -495,8 +497,6 @@ pub(crate) async fn gather_and_exchange_candidates(
 
     Ok(())
 }
-
-//use std::io::Write;
 
 #[tokio::test]
 async fn test_connectivity_simple_vnet_full_cone_nats_on_both_ends() -> Result<(), Error> {
@@ -784,3 +784,342 @@ async fn test_connectivity_vnet_1to1_nat_with_srflx_candidate_vs_symmetric_nats(
 
     Ok(())
 }
+
+async fn block_until_state_seen(
+    expected_state: ConnectionState,
+    state_queue: &mut mpsc::Receiver<ConnectionState>,
+) {
+    while let Some(s) = state_queue.recv().await {
+        if s == expected_state {
+            return;
+        }
+    }
+}
+
+// test_disconnected_to_connected asserts that an agent can go to disconnected, and then return to connected successfully
+#[tokio::test]
+async fn test_disconnected_to_connected() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
+
+    // Create a network with two interfaces
+    let wan = router::Router::new(router::RouterConfig {
+        cidr: "0.0.0.0/0".to_owned(),
+        ..Default::default()
+    })?;
+
+    let drop_all_data = Arc::new(AtomicU64::new(0));
+    let drop_all_data2 = Arc::clone(&drop_all_data);
+    wan.add_chunk_filter(Box::new(move |_c: &(dyn Chunk + Send + Sync)| -> bool {
+        drop_all_data2.load(Ordering::SeqCst) != 1
+    }))
+    .await;
+    let wan = Arc::new(Mutex::new(wan));
+
+    let net0 = Arc::new(net::Net::new(Some(net::NetConfig {
+        static_ips: vec!["192.168.0.1".to_owned()],
+        ..Default::default()
+    })));
+    let net1 = Arc::new(net::Net::new(Some(net::NetConfig {
+        static_ips: vec!["192.168.0.2".to_owned()],
+        ..Default::default()
+    })));
+
+    {
+        let nic0 = net0.get_nic()?;
+        let nic1 = net1.get_nic()?;
+
+        {
+            let mut w = wan.lock().await;
+            w.add_net(Arc::clone(&nic0)).await?;
+            w.add_net(Arc::clone(&nic1)).await?;
+        }
+        {
+            let n0 = nic0.lock().await;
+            n0.set_router(Arc::clone(&wan)).await?;
+        }
+        {
+            let n1 = nic1.lock().await;
+            n1.set_router(Arc::clone(&wan)).await?;
+        }
+    }
+
+    {
+        let mut w = wan.lock().await;
+        w.start().await?;
+    }
+
+    let disconnected_timeout = Duration::from_secs(1);
+    let keepalive_interval = Duration::from_millis(20);
+
+    // Create two agents and connect them
+    let controlling_agent = Arc::new(
+        Agent::new(AgentConfig {
+            network_types: supported_network_types(),
+            multicast_dns_mode: MulticastDNSMode::Disabled,
+            net: Some(Arc::clone(&net0)),
+            disconnected_timeout: Some(disconnected_timeout.clone()),
+            keepalive_interval: Some(keepalive_interval.clone()),
+            check_interval: keepalive_interval.clone(),
+            ..Default::default()
+        })
+        .await?,
+    );
+
+    let controlled_agent = Arc::new(
+        Agent::new(AgentConfig {
+            network_types: supported_network_types(),
+            multicast_dns_mode: MulticastDNSMode::Disabled,
+            net: Some(Arc::clone(&net1)),
+            disconnected_timeout: Some(disconnected_timeout.clone()),
+            keepalive_interval: Some(keepalive_interval.clone()),
+            check_interval: keepalive_interval.clone(),
+            ..Default::default()
+        })
+        .await?,
+    );
+
+    let (controlling_state_changes_tx, mut controlling_state_changes_rx) =
+        mpsc::channel::<ConnectionState>(100);
+    controlling_agent
+        .on_connection_state_change(Box::new(move |c: ConnectionState| {
+            let _ = controlling_state_changes_tx.try_send(c);
+        }))
+        .await;
+
+    let (controlled_state_changes_tx, mut controlled_state_changes_rx) =
+        mpsc::channel::<ConnectionState>(100);
+    controlled_agent
+        .on_connection_state_change(Box::new(move |c: ConnectionState| {
+            let _ = controlled_state_changes_tx.try_send(c);
+        }))
+        .await;
+
+    connect_with_vnet(&controlling_agent, &controlled_agent).await?;
+
+    // Assert we have gone to connected
+    block_until_state_seen(
+        ConnectionState::Connected,
+        &mut controlling_state_changes_rx,
+    )
+    .await;
+    block_until_state_seen(ConnectionState::Connected, &mut controlled_state_changes_rx).await;
+
+    // Drop all packets, and block until we have gone to disconnected
+    drop_all_data.store(1, Ordering::SeqCst);
+    block_until_state_seen(
+        ConnectionState::Disconnected,
+        &mut controlling_state_changes_rx,
+    )
+    .await;
+    block_until_state_seen(
+        ConnectionState::Disconnected,
+        &mut controlled_state_changes_rx,
+    )
+    .await;
+
+    // Allow all packets through again, block until we have gone to connected
+    drop_all_data.store(0, Ordering::SeqCst);
+    block_until_state_seen(
+        ConnectionState::Connected,
+        &mut controlling_state_changes_rx,
+    )
+    .await;
+    block_until_state_seen(ConnectionState::Connected, &mut controlled_state_changes_rx).await;
+
+    {
+        let mut w = wan.lock().await;
+        w.stop().await?;
+    }
+
+    controlling_agent.close().await?;
+    controlled_agent.close().await?;
+
+    Ok(())
+}
+
+/*
+use std::io::Write;
+
+// Agent.Write should use the best valid pair if a selected pair is not yet available
+#[tokio::test]
+async fn test_write_use_valid_pair() -> Result<(), Error> {
+    env_logger::Builder::new()
+        .format(|buf, record| {
+            writeln!(
+                buf,
+                "{}:{} [{}] {} - {}",
+                record.file().unwrap_or("unknown"),
+                record.line().unwrap_or(0),
+                record.level(),
+                chrono::Local::now().format("%H:%M:%S.%6f"),
+                record.args()
+            )
+        })
+        .filter(None, log::LevelFilter::Trace)
+        .init();
+
+    // Create a network with two interfaces
+    let wan = router::Router::new(router::RouterConfig {
+        cidr: "0.0.0.0/0".to_owned(),
+        ..Default::default()
+    })?;
+
+    wan.add_chunk_filter(Box::new(move |c: &(dyn Chunk + Send + Sync)| -> bool {
+        let raw = c.user_data();
+        if stun::message::is_message(&raw) {
+            let mut m = stun::message::Message {
+                raw,
+                ..Default::default()
+            };
+            let result = m.decode();
+            if result.is_err() {
+                return false;
+            } else if m.contains(stun::attributes::ATTR_USE_CANDIDATE) {
+                return false;
+            }
+        }
+
+        true
+    }))
+    .await;
+    let wan = Arc::new(Mutex::new(wan));
+
+    let net0 = Arc::new(net::Net::new(Some(net::NetConfig {
+        static_ips: vec!["192.168.0.1".to_owned()],
+        ..Default::default()
+    })));
+    let net1 = Arc::new(net::Net::new(Some(net::NetConfig {
+        static_ips: vec!["192.168.0.2".to_owned()],
+        ..Default::default()
+    })));
+
+    {
+        let nic0 = net0.get_nic()?;
+        let nic1 = net1.get_nic()?;
+
+        {
+            let mut w = wan.lock().await;
+            w.add_net(Arc::clone(&nic0)).await?;
+            w.add_net(Arc::clone(&nic1)).await?;
+        }
+        {
+            let n0 = nic0.lock().await;
+            n0.set_router(Arc::clone(&wan)).await?;
+        }
+        {
+            let n1 = nic1.lock().await;
+            n1.set_router(Arc::clone(&wan)).await?;
+        }
+    }
+
+    {
+        let mut w = wan.lock().await;
+        w.start().await?;
+    }
+
+    // Create two agents and connect them
+    let controlling_agent = Arc::new(
+        Agent::new(AgentConfig {
+            network_types: supported_network_types(),
+            multicast_dns_mode: MulticastDNSMode::Disabled,
+            net: Some(Arc::clone(&net0)),
+            ..Default::default()
+        })
+        .await?,
+    );
+
+    let controlled_agent = Arc::new(
+        Agent::new(AgentConfig {
+            network_types: supported_network_types(),
+            multicast_dns_mode: MulticastDNSMode::Disabled,
+            net: Some(Arc::clone(&net1)),
+            ..Default::default()
+        })
+        .await?,
+    );
+
+    gather_and_exchange_candidates(&controlling_agent, &controlled_agent).await?;
+
+    let (controlling_ufrag, controlling_pwd) = controlling_agent.get_local_user_credentials().await;
+    let (controlled_ufrag, controlled_pwd) = controlled_agent.get_local_user_credentials().await;
+
+    let controlling_agent_tx = Arc::clone(&controlling_agent);
+    tokio::spawn(async move {
+        let test_message = "Test Message";
+        let controlling_agent_conn = controlling_agent_tx
+            .dial(controlled_ufrag, controlled_pwd)
+            .await?;
+        /*{
+            let agent_internal = Arc::clone(&controlling_agent_tx.agent_internal);
+            let mut ai = controlling_agent_tx.agent_internal.lock().await;
+            ai.start_connectivity_checks(agent_internal, true, controlled_ufrag, controlled_pwd)
+                .await?;
+        }
+        let controlling_agent_conn =
+            Arc::clone(&controlling_agent_tx.agent_internal) as Arc<Mutex<dyn Conn + Send + Sync>>;
+         */
+        log::debug!("controlling_agent start_connectivity_checks done...");
+        loop {
+            {
+                let conn = controlling_agent_conn.lock().await;
+                let result = conn.send(test_message.as_bytes()).await;
+                if result.is_err() {
+                    break;
+                }
+            }
+
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+
+        Ok::<(), Error>(())
+    });
+
+    /*
+    {
+        let agent_internal = Arc::clone(&controlled_agent.agent_internal);
+        let mut ai = controlled_agent.agent_internal.lock().await;
+        ai.start_connectivity_checks(agent_internal, false, controlling_ufrag, controlling_pwd)
+            .await?;
+    }*/
+    let controlled_agent_conn = controlled_agent
+        .accept(controlling_ufrag, controlling_pwd)
+        .await?;
+
+    log::debug!("controlled_agent start_connectivity_checks done...");
+
+    let test_message = "Test Message";
+    let mut read_buf = vec![0u8; test_message.as_bytes().len()];
+
+    {
+        //let controlled_agent_conn =
+        //    Arc::clone(&controlled_agent.agent_internal) as Arc<Mutex<dyn Conn + Send + Sync>>;
+        let conn = controlled_agent_conn.lock().await;
+        conn.recv(&mut read_buf).await?;
+    }
+
+    assert_eq!(read_buf, test_message.as_bytes(), "should match");
+
+    {
+        let mut w = wan.lock().await;
+        w.stop().await?;
+    }
+
+    controlling_agent.close().await?;
+    controlled_agent.close().await?;
+
+    Ok(())
+}
+*/
