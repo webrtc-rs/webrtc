@@ -311,7 +311,15 @@ impl VNet {
 
         let port: u16 = port.parse()?;
 
-        Ok(SocketAddr::new(ip, port))
+        let remote_addr = SocketAddr::new(ip, port);
+        if (use_ipv4 && remote_addr.is_ipv4()) || (!use_ipv4 && remote_addr.is_ipv6()) {
+            Ok(remote_addr)
+        } else {
+            Err(Error::new(format!(
+                "No available {} IP address found!",
+                if use_ipv4 { "ipv4" } else { "ipv6" },
+            )))
+        }
     }
 
     // caller must hold the mutex

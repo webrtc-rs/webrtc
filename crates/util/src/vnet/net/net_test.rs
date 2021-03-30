@@ -45,6 +45,9 @@ async fn test_net_native_resolve_addr() -> Result<(), Error> {
     assert_eq!("127.0.0.1", udp_addr.ip().to_string(), "should match");
     assert_eq!(1234, udp_addr.port(), "should match");
 
+    let result = nw.resolve_addr(false, "127.0.0.1:1234").await;
+    assert!(result.is_err(), "should not match");
+
     Ok(())
 }
 
@@ -505,6 +508,12 @@ async fn test_net_virtual_resolver() -> Result<(), Error> {
     })?));
 
     let nw = Net::new(Some(NetConfig::default()));
+
+    let remote_addr = nw.resolve_addr(true, "127.0.0.1:1234").await?;
+    assert_eq!(remote_addr.to_string(), "127.0.0.1:1234", "should match");
+
+    let result = nw.resolve_addr(false, "127.0.0.1:1234").await;
+    assert!(result.is_err(), "should not match");
 
     {
         let nic = nw.get_nic()?;
