@@ -20,12 +20,15 @@ async fn test_pair_search() -> Result<(), Error> {
 
     {
         let ai = a.agent_internal.lock().await;
-        assert!(
-            ai.checklist.is_empty(),
-            "TestPairSearch is only a valid test if a.validPairs is empty on construction"
-        );
+        {
+            let checklist = ai.agent_conn.checklist.lock().await;
+            assert!(
+                checklist.is_empty(),
+                "TestPairSearch is only a valid test if a.validPairs is empty on construction"
+            );
+        }
 
-        let cp = ai.get_best_available_candidate_pair();
+        let cp = ai.agent_conn.get_best_available_candidate_pair().await;
         assert!(cp.is_none(), "No Candidate pairs should exist");
     }
 
@@ -128,16 +131,16 @@ async fn test_pair_priority() -> Result<(), Error> {
     {
         let mut ai = a.agent_internal.lock().await;
         for remote in remotes {
-            if ai.find_pair(&host_local, &remote).is_none() {
-                ai.add_pair(host_local.clone(), remote.clone());
+            if ai.find_pair(&host_local, &remote).await.is_none() {
+                ai.add_pair(host_local.clone(), remote.clone()).await;
             }
 
-            if let Some(p) = ai.find_pair(&host_local, &remote) {
+            if let Some(p) = ai.find_pair(&host_local, &remote).await {
                 p.state
                     .store(CandidatePairState::Succeeded as u8, Ordering::SeqCst);
             }
 
-            if let Some(best_pair) = ai.get_best_available_candidate_pair() {
+            if let Some(best_pair) = ai.agent_conn.get_best_available_candidate_pair().await {
                 assert_eq!(
                     best_pair.to_string(),
                     CandidatePair {
@@ -441,7 +444,7 @@ async fn test_connectivity_on_startup() -> Result<(), Error> {
     let check_interval = Duration::from_secs(3600); //time.Hour
     let cfg0 = AgentConfig {
         network_types: supported_network_types(),
-        multicast_dns_mode: MulticastDNSMode::Disabled,
+        multicast_dns_mode: MulticastDnsMode::Disabled,
         net: Some(net0),
 
         keepalive_interval,
@@ -454,7 +457,7 @@ async fn test_connectivity_on_startup() -> Result<(), Error> {
 
     let cfg1 = AgentConfig {
         network_types: supported_network_types(),
-        multicast_dns_mode: MulticastDNSMode::Disabled,
+        multicast_dns_mode: MulticastDnsMode::Disabled,
         net: Some(net1),
 
         keepalive_interval,
@@ -533,11 +536,11 @@ async fn test_connectivity_lite() -> Result<(), Error> {
     .filter(None, log::LevelFilter::Trace)
     .init();*/
 
-    let stun_server_url = URL {
-        scheme: SchemeType::STUN,
+    let stun_server_url = Url {
+        scheme: SchemeType::Stun,
         host: "1.2.3.4".to_owned(),
         port: 3478,
-        proto: ProtoType::UDP,
+        proto: ProtoType::Udp,
         ..Default::default()
     };
 
@@ -555,7 +558,7 @@ async fn test_connectivity_lite() -> Result<(), Error> {
     let cfg0 = AgentConfig {
         urls: vec![stun_server_url],
         network_types: supported_network_types(),
-        multicast_dns_mode: MulticastDNSMode::Disabled,
+        multicast_dns_mode: MulticastDnsMode::Disabled,
         net: Some(Arc::clone(&v.net0)),
         ..Default::default()
     };
@@ -568,7 +571,7 @@ async fn test_connectivity_lite() -> Result<(), Error> {
         lite: true,
         candidate_types: vec![CandidateType::Host],
         network_types: supported_network_types(),
-        multicast_dns_mode: MulticastDNSMode::Disabled,
+        multicast_dns_mode: MulticastDnsMode::Disabled,
         net: Some(Arc::clone(&v.net1)),
         ..Default::default()
     };

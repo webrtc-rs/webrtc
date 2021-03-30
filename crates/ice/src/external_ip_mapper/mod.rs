@@ -65,17 +65,17 @@ impl IpMapping {
 }
 
 #[derive(Default)]
-pub(crate) struct ExternalIPMapper {
+pub(crate) struct ExternalIpMapper {
     pub(crate) ipv4_mapping: IpMapping,
     pub(crate) ipv6_mapping: IpMapping,
     pub(crate) candidate_type: CandidateType,
 }
 
-impl ExternalIPMapper {
+impl ExternalIpMapper {
     pub(crate) fn new(
         mut candidate_type: CandidateType,
         ips: &[String],
-    ) -> Result<Option<ExternalIPMapper>, Error> {
+    ) -> Result<Option<ExternalIpMapper>, Error> {
         if ips.is_empty() {
             return Ok(None);
         }
@@ -87,7 +87,7 @@ impl ExternalIPMapper {
             return Err(ERR_UNSUPPORTED_NAT_1TO1_IP_CANDIDATE_TYPE.to_owned());
         }
 
-        let mut m = ExternalIPMapper {
+        let mut m = ExternalIpMapper {
             ipv4_mapping: IpMapping::default(),
             ipv6_mapping: IpMapping::default(),
             candidate_type,

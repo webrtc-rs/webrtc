@@ -9,7 +9,7 @@ use std::sync::Arc;
 pub struct CandidateHostConfig {
     pub base_config: CandidateBaseConfig,
 
-    pub tcp_type: TCPType,
+    pub tcp_type: TcpType,
 }
 
 impl CandidateHostConfig {
@@ -33,7 +33,7 @@ impl CandidateHostConfig {
             foundation_override: self.base_config.foundation,
             priority_override: self.base_config.priority,
             network: self.base_config.network,
-            network_type: Arc::new(AtomicU8::new(NetworkType::UDP4 as u8)),
+            network_type: Arc::new(AtomicU8::new(NetworkType::Udp4 as u8)),
             conn: self.base_config.conn,
             agent_internal: Some(agent_internal),
             ..Default::default()

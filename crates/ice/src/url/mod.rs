@@ -13,16 +13,16 @@ use std::fmt;
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub enum SchemeType {
     // SchemeTypeSTUN indicates the URL represents a STUN server.
-    STUN,
+    Stun,
 
     // SchemeTypeSTUNS indicates the URL represents a STUNS (secure) server.
-    STUNS,
+    Stuns,
 
     // SchemeTypeTURN indicates the URL represents a TURN server.
-    TURN,
+    Turn,
 
     // SchemeTypeTURNS indicates the URL represents a TURNS (secure) server.
-    TURNS,
+    Turns,
 
     // Unknown defines default public constant to use for "enum" like struct
     // comparisons when no value was defined.
@@ -40,10 +40,10 @@ impl From<&str> for SchemeType {
     // string naming the scheme type.
     fn from(raw: &str) -> Self {
         match raw {
-            "stun" => SchemeType::STUN,
-            "stuns" => SchemeType::STUNS,
-            "turn" => SchemeType::TURN,
-            "turns" => SchemeType::TURNS,
+            "stun" => SchemeType::Stun,
+            "stuns" => SchemeType::Stuns,
+            "turn" => SchemeType::Turn,
+            "turns" => SchemeType::Turns,
             _ => SchemeType::Unknown,
         }
     }
@@ -52,10 +52,10 @@ impl From<&str> for SchemeType {
 impl fmt::Display for SchemeType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
-            SchemeType::STUN => "stun",
-            SchemeType::STUNS => "stuns",
-            SchemeType::TURN => "turn",
-            SchemeType::TURNS => "turns",
+            SchemeType::Stun => "stun",
+            SchemeType::Stuns => "stuns",
+            SchemeType::Turn => "turn",
+            SchemeType::Turns => "turns",
             _ => "unknown",
         };
         write!(f, "{}", s)
@@ -67,17 +67,17 @@ impl fmt::Display for SchemeType {
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub enum ProtoType {
     // ProtoTypeUDP indicates the URL uses a UDP transport.
-    UDP,
+    Udp,
 
     // ProtoTypeTCP indicates the URL uses a TCP transport.
-    TCP,
+    Tcp,
 
     Unknown,
 }
 
 impl Default for ProtoType {
     fn default() -> Self {
-        ProtoType::UDP
+        ProtoType::Udp
     }
 }
 
@@ -88,8 +88,8 @@ impl From<&str> for ProtoType {
     // string naming the scheme type.
     fn from(raw: &str) -> Self {
         match raw {
-            "udp" => ProtoType::UDP,
-            "tcp" => ProtoType::TCP,
+            "udp" => ProtoType::Udp,
+            "tcp" => ProtoType::Tcp,
             _ => ProtoType::Unknown,
         }
     }
@@ -98,8 +98,8 @@ impl From<&str> for ProtoType {
 impl fmt::Display for ProtoType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
-            ProtoType::UDP => "udp",
-            ProtoType::TCP => "tcp",
+            ProtoType::Udp => "udp",
+            ProtoType::Tcp => "tcp",
             _ => "unknown",
         };
         write!(f, "{}", s)
@@ -108,7 +108,7 @@ impl fmt::Display for ProtoType {
 
 // URL represents a STUN (rfc7064) or TURN (rfc7065) URL
 #[derive(Debug, Clone, Default)]
-pub struct URL {
+pub struct Url {
     pub scheme: SchemeType,
     pub host: String,
     pub port: u16,
@@ -117,14 +117,14 @@ pub struct URL {
     pub proto: ProtoType,
 }
 
-impl fmt::Display for URL {
+impl fmt::Display for Url {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let host = if self.host.contains("::") {
             "[".to_owned() + self.host.as_str() + "]"
         } else {
             self.host.clone()
         };
-        if self.scheme == SchemeType::TURN || self.scheme == SchemeType::TURNS {
+        if self.scheme == SchemeType::Turn || self.scheme == SchemeType::Turns {
             write!(
                 f,
                 "{}:{}:{}?transport={}",
@@ -136,11 +136,11 @@ impl fmt::Display for URL {
     }
 }
 
-impl URL {
+impl Url {
     // ParseURL parses a STUN or TURN urls following the ABNF syntax described in
     // https://tools.ietf.org/html/rfc7064 and https://tools.ietf.org/html/rfc7065
     // respectively.
-    pub fn parse_url(raw: &str) -> Result<URL, Error> {
+    pub fn parse_url(raw: &str) -> Result<Url, Error> {
         // work around for url crate
         if raw.contains("//") {
             return Err(ERR_INVALID_URL.to_owned());
@@ -169,7 +169,7 @@ impl URL {
 
         let port = if let Some(port) = raw_parts.port() {
             port
-        } else if scheme == SchemeType::STUN || scheme == SchemeType::TURN {
+        } else if scheme == SchemeType::Stun || scheme == SchemeType::Turn {
             3478
         } else {
             5349
@@ -177,19 +177,19 @@ impl URL {
 
         let mut q_args = raw_parts.query_pairs();
         let proto = match scheme {
-            SchemeType::STUN => {
+            SchemeType::Stun => {
                 if q_args.count() > 0 {
                     return Err(ERR_STUN_QUERY.to_owned());
                 }
-                ProtoType::UDP
+                ProtoType::Udp
             }
-            SchemeType::STUNS => {
+            SchemeType::Stuns => {
                 if q_args.count() > 0 {
                     return Err(ERR_STUN_QUERY.to_owned());
                 }
-                ProtoType::TCP
+                ProtoType::Tcp
             }
-            SchemeType::TURN => {
+            SchemeType::Turn => {
                 if q_args.count() > 1 {
                     return Err(ERR_INVALID_QUERY.to_owned());
                 }
@@ -205,10 +205,10 @@ impl URL {
                         return Err(ERR_INVALID_QUERY.to_owned());
                     }
                 } else {
-                    ProtoType::UDP
+                    ProtoType::Udp
                 }
             }
-            SchemeType::TURNS => {
+            SchemeType::Turns => {
                 if q_args.count() > 1 {
                     return Err(ERR_INVALID_QUERY.to_owned());
                 }
@@ -224,7 +224,7 @@ impl URL {
                         return Err(ERR_INVALID_QUERY.to_owned());
                     }
                 } else {
-                    ProtoType::TCP
+                    ProtoType::Tcp
                 }
             }
             _ => {
@@ -232,7 +232,7 @@ impl URL {
             }
         };
 
-        Ok(URL {
+        Ok(Url {
             scheme,
             host,
             port,
@@ -266,6 +266,6 @@ impl URL {
 
     // is_secure returns whether the this URL's scheme describes secure scheme or not.
     pub fn is_secure(&self) -> bool {
-        self.scheme == SchemeType::STUNS || self.scheme == SchemeType::TURNS
+        self.scheme == SchemeType::Stuns || self.scheme == SchemeType::Turns
     }
 }

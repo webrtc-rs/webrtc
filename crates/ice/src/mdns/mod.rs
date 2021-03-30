@@ -14,7 +14,7 @@ use util::Error;
 // MulticastDNSMode represents the different Multicast modes ICE can run in
 // MulticastDNSMode enum
 #[derive(PartialEq, Debug, Copy, Clone)]
-pub enum MulticastDNSMode {
+pub enum MulticastDnsMode {
     Unspecified,
 
     // MulticastDNSModeDisabled means remote mDNS candidates will be discarded, and local host candidates will use IPs
@@ -27,9 +27,9 @@ pub enum MulticastDNSMode {
     QueryAndGather,
 }
 
-impl Default for MulticastDNSMode {
+impl Default for MulticastDnsMode {
     fn default() -> Self {
-        MulticastDNSMode::Unspecified
+        MulticastDnsMode::Unspecified
     }
 }
 
@@ -41,21 +41,21 @@ pub(crate) fn generate_multicast_dns_name() -> String {
 }
 
 pub(crate) fn create_multicast_dns(
-    mdns_mode: MulticastDNSMode,
+    mdns_mode: MulticastDnsMode,
     mdns_name: &str,
 ) -> Result<Option<Arc<DNSConn>>, Error> {
-    if mdns_mode == MulticastDNSMode::Disabled {
+    if mdns_mode == MulticastDnsMode::Disabled {
         return Ok(None);
     }
 
     let addr = SocketAddr::from_str(DEFAULT_DEST_ADDR)?;
 
     match mdns_mode {
-        MulticastDNSMode::QueryOnly => {
+        MulticastDnsMode::QueryOnly => {
             let conn = DNSConn::server(addr, Config::default())?;
             Ok(Some(Arc::new(conn)))
         }
-        MulticastDNSMode::QueryAndGather => {
+        MulticastDnsMode::QueryAndGather => {
             let conn = DNSConn::server(
                 addr,
                 Config {

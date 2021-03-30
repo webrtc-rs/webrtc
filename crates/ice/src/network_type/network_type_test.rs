@@ -6,10 +6,10 @@ fn test_network_type_parsing_success() -> Result<(), Error> {
     let ipv6: IpAddr = "fe80::a3:6ff:fec4:5454".parse().unwrap();
 
     let tests = vec![
-        ("lowercase UDP4", "udp", ipv4, NetworkType::UDP4),
-        ("uppercase UDP4", "UDP", ipv4, NetworkType::UDP4),
-        ("lowercase UDP6", "udp", ipv6, NetworkType::UDP6),
-        ("uppercase UDP6", "UDP", ipv6, NetworkType::UDP6),
+        ("lowercase UDP4", "udp", ipv4, NetworkType::Udp4),
+        ("uppercase UDP4", "UDP", ipv4, NetworkType::Udp4),
+        ("lowercase UDP6", "udp", ipv6, NetworkType::Udp6),
+        ("uppercase UDP6", "UDP", ipv6, NetworkType::Udp6),
     ];
 
     for (name, in_network, in_ip, expected) in tests {
@@ -45,20 +45,20 @@ fn test_network_type_parsing_failure() -> Result<(), Error> {
 
 #[test]
 fn test_network_type_is_udp() -> Result<(), Error> {
-    assert!(NetworkType::UDP4.is_udp());
-    assert!(NetworkType::UDP6.is_udp());
-    assert!(!NetworkType::UDP4.is_tcp());
-    assert!(!NetworkType::UDP6.is_tcp());
+    assert!(NetworkType::Udp4.is_udp());
+    assert!(NetworkType::Udp6.is_udp());
+    assert!(!NetworkType::Udp4.is_tcp());
+    assert!(!NetworkType::Udp6.is_tcp());
 
     Ok(())
 }
 
 #[test]
 fn test_network_type_is_tcp() -> Result<(), Error> {
-    assert!(NetworkType::TCP4.is_tcp());
-    assert!(NetworkType::TCP6.is_tcp());
-    assert!(!NetworkType::TCP4.is_udp());
-    assert!(!NetworkType::TCP6.is_udp());
+    assert!(NetworkType::Tcp4.is_tcp());
+    assert!(NetworkType::Tcp6.is_tcp());
+    assert!(!NetworkType::Tcp4.is_udp());
+    assert!(!NetworkType::Tcp6.is_udp());
 
     Ok(())
 }

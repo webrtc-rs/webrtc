@@ -6,74 +6,74 @@ fn test_parse_url_success() -> Result<(), Error> {
         (
             "stun:google.de",
             "stun:google.de:3478",
-            SchemeType::STUN,
+            SchemeType::Stun,
             false,
             "google.de",
             3478,
-            ProtoType::UDP,
+            ProtoType::Udp,
         ),
         (
             "stun:google.de:1234",
             "stun:google.de:1234",
-            SchemeType::STUN,
+            SchemeType::Stun,
             false,
             "google.de",
             1234,
-            ProtoType::UDP,
+            ProtoType::Udp,
         ),
         (
             "stuns:google.de",
             "stuns:google.de:5349",
-            SchemeType::STUNS,
+            SchemeType::Stuns,
             true,
             "google.de",
             5349,
-            ProtoType::TCP,
+            ProtoType::Tcp,
         ),
         (
             "stun:[::1]:123",
             "stun:[::1]:123",
-            SchemeType::STUN,
+            SchemeType::Stun,
             false,
             "::1",
             123,
-            ProtoType::UDP,
+            ProtoType::Udp,
         ),
         (
             "turn:google.de",
             "turn:google.de:3478?transport=udp",
-            SchemeType::TURN,
+            SchemeType::Turn,
             false,
             "google.de",
             3478,
-            ProtoType::UDP,
+            ProtoType::Udp,
         ),
         (
             "turns:google.de",
             "turns:google.de:5349?transport=tcp",
-            SchemeType::TURNS,
+            SchemeType::Turns,
             true,
             "google.de",
             5349,
-            ProtoType::TCP,
+            ProtoType::Tcp,
         ),
         (
             "turn:google.de?transport=udp",
             "turn:google.de:3478?transport=udp",
-            SchemeType::TURN,
+            SchemeType::Turn,
             false,
             "google.de",
             3478,
-            ProtoType::UDP,
+            ProtoType::Udp,
         ),
         (
             "turns:google.de?transport=tcp",
             "turns:google.de:5349?transport=tcp",
-            SchemeType::TURNS,
+            SchemeType::Turns,
             true,
             "google.de",
             5349,
-            ProtoType::TCP,
+            ProtoType::Tcp,
         ),
     ];
 
@@ -87,7 +87,7 @@ fn test_parse_url_success() -> Result<(), Error> {
         expected_proto,
     ) in tests
     {
-        let url = URL::parse_url(raw_url)?;
+        let url = Url::parse_url(raw_url)?;
 
         assert_eq!(expected_scheme, url.scheme, "testCase: {:?}", raw_url);
         assert_eq!(
@@ -127,7 +127,7 @@ fn test_parse_url_failure() -> Result<(), Error> {
     ];
 
     for (raw_url, expected_err) in tests {
-        let result = URL::parse_url(raw_url);
+        let result = Url::parse_url(raw_url);
         if let Err(err) = result {
             assert_eq!(err, expected_err, "testCase:{}", raw_url);
         } else {

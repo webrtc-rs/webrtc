@@ -3,7 +3,7 @@ use crate::errors::*;
 
 use async_trait::async_trait;
 use std::io;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use util::Conn;
 
 impl Agent {
@@ -13,13 +13,13 @@ impl Agent {
         &self,
         remote_ufrag: String,
         remote_pwd: String,
-    ) -> Result<Arc<Mutex<impl Conn>>, Error> {
-        let on_connected_rx = {
+    ) -> Result<Arc<impl Conn>, Error> {
+        let (on_connected_rx, agent_conn) = {
             let agent_internal = Arc::clone(&self.agent_internal);
             let mut ai = self.agent_internal.lock().await;
             ai.start_connectivity_checks(agent_internal, true, remote_ufrag, remote_pwd)
                 .await?;
-            ai.on_connected_rx.take()
+            (ai.on_connected_rx.take(), Arc::clone(&ai.agent_conn))
         };
 
         if let Some(mut on_connected_rx) = on_connected_rx {
@@ -28,7 +28,7 @@ impl Agent {
                 _ = on_connected_rx.recv() => {},
             }
         }
-        Ok(Arc::clone(&self.agent_internal))
+        Ok(agent_conn)
     }
 
     // Accept connects to the remote agent, acting as the controlled ice agent.
@@ -37,13 +37,13 @@ impl Agent {
         &self,
         remote_ufrag: String,
         remote_pwd: String,
-    ) -> Result<Arc<Mutex<impl Conn>>, Error> {
-        let on_connected_rx = {
+    ) -> Result<Arc<impl Conn>, Error> {
+        let (on_connected_rx, agent_conn) = {
             let agent_internal = Arc::clone(&self.agent_internal);
             let mut ai = self.agent_internal.lock().await;
             ai.start_connectivity_checks(agent_internal, false, remote_ufrag, remote_pwd)
                 .await?;
-            ai.on_connected_rx.take()
+            (ai.on_connected_rx.take(), Arc::clone(&ai.agent_conn))
         };
 
         if let Some(mut on_connected_rx) = on_connected_rx {
@@ -53,11 +53,89 @@ impl Agent {
             }
         }
 
-        Ok(Arc::clone(&self.agent_internal))
+        Ok(agent_conn)
     }
 }
 
-impl AgentInternal {
+pub(crate) struct AgentConn {
+    pub(crate) selected_pair: Arc<Mutex<Option<Arc<CandidatePair>>>>,
+    pub(crate) checklist: Arc<Mutex<Vec<Arc<CandidatePair>>>>,
+
+    pub(crate) buffer: Buffer,
+    pub(crate) bytes_received: AtomicUsize,
+    pub(crate) bytes_sent: AtomicUsize,
+    pub(crate) done: AtomicBool,
+}
+
+impl AgentConn {
+    pub(crate) fn new() -> Self {
+        AgentConn {
+            selected_pair: Arc::new(Mutex::new(None)),
+            checklist: Arc::new(Mutex::new(vec![])),
+            // Make sure the buffer doesn't grow indefinitely.
+            // NOTE: We actually won't get anywhere close to this limit.
+            // SRTP will constantly read from the endpoint and drop packets if it's full.
+            buffer: Buffer::new(0, MAX_BUFFER_SIZE),
+            bytes_received: AtomicUsize::new(0),
+            bytes_sent: AtomicUsize::new(0),
+            done: AtomicBool::new(false),
+        }
+    }
+    pub(crate) async fn get_selected_pair(&self) -> Option<Arc<CandidatePair>> {
+        let selected_pair = self.selected_pair.lock().await;
+        selected_pair.clone()
+    }
+
+    pub(crate) async fn get_best_available_candidate_pair(&self) -> Option<Arc<CandidatePair>> {
+        let mut best: Option<&Arc<CandidatePair>> = None;
+
+        let checklist = self.checklist.lock().await;
+        for p in &*checklist {
+            if p.state.load(Ordering::SeqCst) == CandidatePairState::Failed as u8 {
+                continue;
+            }
+
+            if let Some(b) = &mut best {
+                if b.priority() < p.priority() {
+                    *b = p;
+                }
+            } else {
+                best = Some(p);
+            }
+        }
+
+        if let Some(b) = best {
+            Some(b.clone())
+        } else {
+            None
+        }
+    }
+
+    pub(crate) async fn get_best_valid_candidate_pair(&self) -> Option<Arc<CandidatePair>> {
+        let mut best: Option<&Arc<CandidatePair>> = None;
+
+        let checklist = self.checklist.lock().await;
+        for p in &*checklist {
+            if p.state.load(Ordering::SeqCst) != CandidatePairState::Succeeded as u8 {
+                continue;
+            }
+
+            if let Some(b) = &mut best {
+                if b.priority() < p.priority() {
+                    *b = p;
+                }
+            } else {
+                best = Some(p);
+            }
+        }
+
+        if let Some(b) = best {
+            Some(b.clone())
+        } else {
+            None
+        }
+    }
+
     // bytes_sent returns the number of bytes sent
     pub fn bytes_sent(&self) -> usize {
         self.bytes_sent.load(Ordering::SeqCst)
@@ -70,24 +148,21 @@ impl AgentInternal {
 }
 
 #[async_trait]
-impl Conn for AgentInternal {
+impl Conn for AgentConn {
     async fn connect(&self, _addr: SocketAddr) -> io::Result<()> {
         Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
     }
 
     async fn recv(&self, buf: &mut [u8]) -> io::Result<usize> {
-        if self.done_tx.is_none() {
+        if self.done.load(Ordering::SeqCst) {
             return Err(io::Error::new(io::ErrorKind::Other, "Conn is closed"));
         }
 
-        let mut n = 0;
-        if let Some(buffer) = &self.buffer {
-            n = match buffer.read(buf, None).await {
-                Ok(n) => n,
-                Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.to_string())),
-            };
-            self.bytes_received.fetch_add(n, Ordering::SeqCst);
-        }
+        let n = match self.buffer.read(buf, None).await {
+            Ok(n) => n,
+            Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.to_string())),
+        };
+        self.bytes_received.fetch_add(n, Ordering::SeqCst);
 
         Ok(n)
     }
@@ -97,7 +172,7 @@ impl Conn for AgentInternal {
     }
 
     async fn send(&self, buf: &[u8]) -> io::Result<usize> {
-        if self.done_tx.is_none() {
+        if self.done.load(Ordering::SeqCst) {
             return Err(io::Error::new(io::ErrorKind::Other, "Conn is closed"));
         }
 
@@ -108,12 +183,12 @@ impl Conn for AgentInternal {
             ));
         }
 
-        let result = if let Some(pair) = self.get_selected_pair() {
+        let result = if let Some(pair) = self.get_selected_pair().await {
             pair.write(buf).await
-        } else if let Some(pair) = self.get_best_available_candidate_pair() {
+        } else if let Some(pair) = self.get_best_available_candidate_pair().await {
             pair.write(buf).await
         } else {
-            Err(ERR_NO_CANDIDATE_PAIRS.to_owned())
+            Ok(0)
         };
 
         match result {
@@ -129,8 +204,8 @@ impl Conn for AgentInternal {
         Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
     }
 
-    fn local_addr(&self) -> io::Result<SocketAddr> {
-        if let Some(pair) = self.get_selected_pair() {
+    async fn local_addr(&self) -> io::Result<SocketAddr> {
+        if let Some(pair) = self.get_selected_pair().await {
             Ok(pair.local.addr())
         } else {
             Err(io::Error::new(

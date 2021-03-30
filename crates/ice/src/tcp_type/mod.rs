@@ -6,7 +6,7 @@ use std::fmt;
 // TCPType is the type of ICE TCP candidate as described in
 // ttps://tools.ietf.org/html/rfc6544#section-4.5
 #[derive(PartialEq, Debug, Copy, Clone)]
-pub enum TCPType {
+pub enum TcpType {
     // TCPTypeUnspecified is the default value. For example UDP candidates do not
     // need this field.
     Unspecified,
@@ -19,31 +19,31 @@ pub enum TCPType {
 }
 
 // from creates a new TCPType from string.
-impl From<&str> for TCPType {
+impl From<&str> for TcpType {
     fn from(raw: &str) -> Self {
         match raw {
-            "active" => TCPType::Active,
-            "passive" => TCPType::Passive,
-            "so" => TCPType::SimultaneousOpen,
-            _ => TCPType::Unspecified,
+            "active" => TcpType::Active,
+            "passive" => TcpType::Passive,
+            "so" => TcpType::SimultaneousOpen,
+            _ => TcpType::Unspecified,
         }
     }
 }
 
-impl fmt::Display for TCPType {
+impl fmt::Display for TcpType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
-            TCPType::Active => "active",
-            TCPType::Passive => "passive",
-            TCPType::SimultaneousOpen => "so",
-            TCPType::Unspecified => "unspecified",
+            TcpType::Active => "active",
+            TcpType::Passive => "passive",
+            TcpType::SimultaneousOpen => "so",
+            TcpType::Unspecified => "unspecified",
         };
         write!(f, "{}", s)
     }
 }
 
-impl Default for TCPType {
+impl Default for TcpType {
     fn default() -> Self {
-        TCPType::Unspecified
+        TcpType::Unspecified
     }
 }

@@ -56,7 +56,7 @@ pub(crate) type InterfaceFilterFn = Box<dyn (Fn(&str) -> bool) + Send + Sync>;
 // a single structure, for future-proofness of the interface
 #[derive(Default)]
 pub struct AgentConfig {
-    pub urls: Vec<URL>,
+    pub urls: Vec<Url>,
 
     // port_min and port_max are optional. Leave them 0 for the default UDP port allocation strategy.
     pub port_min: u16,
@@ -70,7 +70,7 @@ pub struct AgentConfig {
     pub local_pwd: String,
 
     // multicast_dns_mode controls mDNS behavior for the ICE agent
-    pub multicast_dns_mode: MulticastDNSMode,
+    pub multicast_dns_mode: MulticastDnsMode,
 
     // multicast_dnshost_name controls the hostname for this agent. If none is specified a random one will be generated
     pub multicast_dnshost_name: String,
@@ -209,14 +209,14 @@ impl AgentConfig {
 
     pub(crate) fn init_ext_ip_mapping(
         &self,
-        mdns_mode: MulticastDNSMode,
+        mdns_mode: MulticastDnsMode,
         candidate_types: &[CandidateType],
-    ) -> Result<Option<ExternalIPMapper>, Error> {
+    ) -> Result<Option<ExternalIpMapper>, Error> {
         if let Some(ext_ip_mapper) =
-            ExternalIPMapper::new(self.nat_1to1_ip_candidate_type, &self.nat_1to1_ips)?
+            ExternalIpMapper::new(self.nat_1to1_ip_candidate_type, &self.nat_1to1_ips)?
         {
             if ext_ip_mapper.candidate_type == CandidateType::Host {
-                if mdns_mode == MulticastDNSMode::QueryAndGather {
+                if mdns_mode == MulticastDnsMode::QueryAndGather {
                     return Err(ERR_MULTICAST_DNS_WITH_NAT_1TO1_IP_MAPPING.to_owned());
                 }
                 let mut candi_host_enabled = false;

@@ -67,7 +67,7 @@ pub trait Candidate: fmt::Display {
     fn related_address(&self) -> Option<CandidateRelatedAddress>;
 
     fn candidate_type(&self) -> CandidateType;
-    fn tcp_type(&self) -> TCPType;
+    fn tcp_type(&self) -> TcpType;
 
     fn marshal(&self) -> String;
 
@@ -83,7 +83,7 @@ pub trait Candidate: fmt::Display {
     ) -> Result<usize, Error>;
     fn equal(&self, other: &dyn Candidate) -> bool;
     fn clone(&self) -> Arc<dyn Candidate + Send + Sync>;
-    fn clone_with_ip(&self, ip: &IpAddr) -> Arc<dyn Candidate + Send + Sync>;
+    fn clone_with_ip(&self, ip: &IpAddr) -> Arc<dyn Candidate + Send + Sync>; //TODO: remove
     fn get_conn(&self) -> Option<&Arc<dyn util::Conn + Send + Sync>>;
     fn get_agent(&self) -> Option<&Arc<Mutex<AgentInternal>>>;
     fn get_closed_ch(&self) -> Arc<Mutex<Option<broadcast::Sender<()>>>>;
@@ -355,7 +355,7 @@ pub async fn unmarshal_remote_candidate(
 
     let mut rel_addr = String::new();
     let mut rel_port = 0;
-    let mut tcp_type = TCPType::Unspecified;
+    let mut tcp_type = TcpType::Unspecified;
 
     if split.len() > 8 {
         let split2 = &split[8..];
@@ -378,7 +378,7 @@ pub async fn unmarshal_remote_candidate(
                 return Err(Error::new(format!("{}: incorrect length", *ERR_PARSE_TYPE)));
             }
 
-            tcp_type = TCPType::from(split[1]);
+            tcp_type = TcpType::from(split[1]);
         }
     }
 

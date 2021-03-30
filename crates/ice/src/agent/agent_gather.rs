@@ -1,7 +1,7 @@
 use super::*;
 use crate::errors::*;
 use crate::network_type::*;
-use crate::url::{ProtoType, SchemeType, URL};
+use crate::url::{ProtoType, SchemeType, Url};
 use crate::util::*;
 
 use util::{vnet::net::*, Conn, Error};
@@ -21,15 +21,15 @@ const STUN_GATHER_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub(crate) struct GatherCandidatesInternalParams {
     pub(crate) candidate_types: Vec<CandidateType>,
-    pub(crate) urls: Vec<URL>,
+    pub(crate) urls: Vec<Url>,
     pub(crate) network_types: Vec<NetworkType>,
     pub(crate) port_max: u16,
     pub(crate) port_min: u16,
-    pub(crate) mdns_mode: MulticastDNSMode,
+    pub(crate) mdns_mode: MulticastDnsMode,
     pub(crate) mdns_name: String,
     pub(crate) net: Arc<Net>,
     pub(crate) interface_filter: Arc<Option<InterfaceFilterFn>>,
-    pub(crate) ext_ip_mapper: Arc<Option<ExternalIPMapper>>,
+    pub(crate) ext_ip_mapper: Arc<Option<ExternalIpMapper>>,
     pub(crate) agent_internal: Arc<Mutex<AgentInternal>>,
     pub(crate) gathering_state: Arc<AtomicU8>,
     pub(crate) chan_candidate_tx: Arc<mpsc::Sender<Option<Arc<dyn Candidate + Send + Sync>>>>,
@@ -39,10 +39,10 @@ struct GatherCandidatesLocalParams {
     network_types: Vec<NetworkType>,
     port_max: u16,
     port_min: u16,
-    mdns_mode: MulticastDNSMode,
+    mdns_mode: MulticastDnsMode,
     mdns_name: String,
     interface_filter: Arc<Option<InterfaceFilterFn>>,
-    ext_ip_mapper: Arc<Option<ExternalIPMapper>>,
+    ext_ip_mapper: Arc<Option<ExternalIpMapper>>,
     net: Arc<Net>,
     agent_internal: Arc<Mutex<AgentInternal>>,
 }
@@ -51,13 +51,13 @@ struct GatherCandidatesSrflxMappedParasm {
     network_types: Vec<NetworkType>,
     port_max: u16,
     port_min: u16,
-    ext_ip_mapper: Arc<Option<ExternalIPMapper>>,
+    ext_ip_mapper: Arc<Option<ExternalIpMapper>>,
     net: Arc<Net>,
     agent_internal: Arc<Mutex<AgentInternal>>,
 }
 
 struct GatherCandidatesSrflxParams {
-    urls: Vec<URL>,
+    urls: Vec<Url>,
     network_types: Vec<NetworkType>,
     port_max: u16,
     port_min: u16,
@@ -207,7 +207,7 @@ impl Agent {
         for ip in ips {
             let mut mapped_ip = ip;
 
-            if mdns_mode != MulticastDNSMode::QueryAndGather && ext_ip_mapper.is_some() {
+            if mdns_mode != MulticastDnsMode::QueryAndGather && ext_ip_mapper.is_some() {
                 if let Some(ext_ip_mapper2) = &*ext_ip_mapper {
                     if ext_ip_mapper2.candidate_type == CandidateType::Host {
                         if let Ok(mi) = ext_ip_mapper2.find_external_ip(&ip.to_string()) {
@@ -222,7 +222,7 @@ impl Agent {
                 }
             }
 
-            let address = if mdns_mode == MulticastDNSMode::QueryAndGather {
+            let address = if mdns_mode == MulticastDnsMode::QueryAndGather {
                 mdns_name.clone()
             } else {
                 mapped_ip.to_string()
@@ -264,7 +264,7 @@ impl Agent {
                     }
                 };
 
-                let port = match conn.local_addr() {
+                let port = match conn.local_addr().await {
                     Ok(addr) => addr.port(),
                     Err(err) => {
                         log::warn!("could not get local addr: {}", err);
@@ -287,7 +287,7 @@ impl Agent {
                 let candidate: Arc<dyn Candidate + Send + Sync> =
                     match host_config.new_candidate_host(agent_internal.clone()).await {
                         Ok(mut candidate) => {
-                            if mdns_mode == MulticastDNSMode::QueryAndGather {
+                            if mdns_mode == MulticastDnsMode::QueryAndGather {
                                 if let Err(err) = candidate.set_ip(&ip) {
                                     log::warn!(
                                         "Failed to create host candidate: {} {} {}: {}",
@@ -376,7 +376,7 @@ impl Agent {
                     }
                 };
 
-                let laddr = conn.local_addr()?;
+                let laddr = conn.local_addr().await?;
                 let mapped_ip = {
                     if let Some(ext_ip_mapper3) = &*ext_ip_mapper2 {
                         match ext_ip_mapper3.find_external_ip(&laddr.ip().to_string()) {
@@ -519,7 +519,7 @@ impl Agent {
 
                     let (ip, port) = (xoraddr.ip, xoraddr.port);
 
-                    let laddr = conn.local_addr()?;
+                    let laddr = conn.local_addr().await?;
                     let srflx_config = CandidateServerReflexiveConfig {
                         base_config: CandidateBaseConfig {
                             network: network.clone(),
@@ -572,14 +572,14 @@ impl Agent {
     }
 
     async fn gather_candidates_relay(
-        urls: Vec<URL>,
+        urls: Vec<Url>,
         net: Arc<Net>,
         agent_internal: Arc<Mutex<AgentInternal>>,
     ) {
         let wg = WaitGroup::new();
 
         for url in urls {
-            if url.scheme != SchemeType::TURN && url.scheme != SchemeType::TURNS {
+            if url.scheme != SchemeType::Turn && url.scheme != SchemeType::Turns {
                 continue;
             } else if url.username.is_empty() {
                 log::error!("Failed to gather relay candidates: {}", *ERR_USERNAME_EMPTY);
@@ -590,7 +590,7 @@ impl Agent {
             }
 
             let w = wg.worker();
-            let network = NetworkType::UDP4.to_string();
+            let network = NetworkType::Udp4.to_string();
             let net2 = Arc::clone(&net);
             let agent_internal2 = Arc::clone(&agent_internal);
 
@@ -602,7 +602,7 @@ impl Agent {
                 let turn_server_addr = format!("{}:{}", url.host, url.port);
 
                 let (loc_conn, rel_addr, rel_port) =
-                    if url.proto == ProtoType::UDP && url.scheme == SchemeType::TURN {
+                    if url.proto == ProtoType::Udp && url.scheme == SchemeType::Turn {
                         let loc_conn = match net2.bind(SocketAddr::from_str("0.0.0.0:0")?).await {
                             Ok(c) => c,
                             Err(err) => {
@@ -611,7 +611,7 @@ impl Agent {
                             }
                         };
 
-                        let local_addr = loc_conn.local_addr()?;
+                        let local_addr = loc_conn.local_addr().await?;
                         let rel_addr = local_addr.ip().to_string();
                         let rel_port = local_addr.port();
                         (loc_conn, rel_addr, rel_port)
@@ -669,7 +669,7 @@ impl Agent {
                     }
                 };
 
-                let raddr = relay_conn.local_addr()?;
+                let raddr = relay_conn.local_addr().await?;
                 let relay_config = CandidateRelayConfig {
                     base_config: CandidateBaseConfig {
                         network: network.clone(),

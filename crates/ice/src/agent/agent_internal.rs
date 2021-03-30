@@ -1,3 +1,4 @@
+use super::agent_transport::*;
 use super::*;
 use crate::candidate::candidate_base::{CandidateBase, CandidateBaseConfig};
 use crate::candidate::candidate_peer_reflexive::CandidatePeerReflexiveConfig;
@@ -19,7 +20,6 @@ pub struct AgentInternal {
     pub(crate) on_connection_state_change_hdlr: Option<OnConnectionStateChangeHdlrFn>,
     pub(crate) on_selected_candidate_pair_change_hdlr: Option<OnSelectedCandidatePairChangeHdlrFn>,
     pub(crate) on_candidate_hdlr: Option<OnCandidateHdlrFn>,
-    pub(crate) selected_pair: Option<Arc<CandidatePair>>,
 
     // force candidate to be contacted immediately (instead of waiting for task ticker)
     pub(crate) force_candidate_contact_tx: mpsc::Sender<bool>,
@@ -65,16 +65,12 @@ pub struct AgentInternal {
     pub(crate) remote_pwd: String,
     pub(crate) remote_candidates: HashMap<NetworkType, Vec<Arc<dyn Candidate + Send + Sync>>>,
 
-    pub(crate) checklist: Vec<Arc<CandidatePair>>,
-
-    pub(crate) buffer: Option<Buffer>,
-
     // LRU of outbound Binding request Transaction IDs
     pub(crate) pending_binding_requests: Vec<BindingRequest>,
 
     pub(crate) insecure_skip_verify: bool,
-    pub(crate) bytes_received: Arc<AtomicUsize>,
-    pub(crate) bytes_sent: Arc<AtomicUsize>,
+
+    pub(crate) agent_conn: Arc<AgentConn>,
 }
 
 //TODO: remove unsafe
@@ -225,7 +221,10 @@ impl AgentInternal {
 
         if let Some(p) = p {
             p.nominated.store(true, Ordering::SeqCst);
-            self.selected_pair = Some(p);
+            {
+                let mut selected_pair = self.agent_conn.selected_pair.lock().await;
+                *selected_pair = Some(p);
+            }
 
             self.update_connection_state(ConnectionState::Connected)
                 .await;
@@ -236,42 +235,45 @@ impl AgentInternal {
             // Signal connected
             self.on_connected_tx.take();
         } else {
-            self.selected_pair = None;
+            let mut selected_pair = self.agent_conn.selected_pair.lock().await;
+            *selected_pair = None;
         }
     }
 
     pub(crate) async fn ping_all_candidates(&mut self) {
         log::trace!("pinging all candidates");
 
-        if self.checklist.is_empty() {
-            log::warn!(
-                "pingAllCandidates called with no candidate pairs. Connection is not possible yet."
-            );
-        }
-
         let mut pairs: Vec<(
             Arc<dyn Candidate + Send + Sync>,
             Arc<dyn Candidate + Send + Sync>,
         )> = vec![];
 
-        for p in &mut self.checklist {
-            let p_state = p.state.load(Ordering::SeqCst);
-            if p_state == CandidatePairState::Waiting as u8 {
-                p.state
-                    .store(CandidatePairState::InProgress as u8, Ordering::SeqCst);
-            } else if p_state != CandidatePairState::InProgress as u8 {
-                continue;
+        {
+            let mut checklist = self.agent_conn.checklist.lock().await;
+            if checklist.is_empty() {
+                log::warn!(
+                    "pingAllCandidates called with no candidate pairs. Connection is not possible yet."
+                );
             }
+            for p in &mut *checklist {
+                let p_state = p.state.load(Ordering::SeqCst);
+                if p_state == CandidatePairState::Waiting as u8 {
+                    p.state
+                        .store(CandidatePairState::InProgress as u8, Ordering::SeqCst);
+                } else if p_state != CandidatePairState::InProgress as u8 {
+                    continue;
+                }
 
-            if p.binding_request_count.load(Ordering::SeqCst) > self.max_binding_requests {
-                log::trace!("max requests reached for pair {}, marking it as failed", p);
-                p.state
-                    .store(CandidatePairState::Failed as u8, Ordering::SeqCst);
-            } else {
-                p.binding_request_count.fetch_add(1, Ordering::SeqCst);
-                let local = p.local.clone();
-                let remote = p.remote.clone();
-                pairs.push((local, remote));
+                if p.binding_request_count.load(Ordering::SeqCst) > self.max_binding_requests {
+                    log::trace!("max requests reached for pair {}, marking it as failed", p);
+                    p.state
+                        .store(CandidatePairState::Failed as u8, Ordering::SeqCst);
+                } else {
+                    p.binding_request_count.fetch_add(1, Ordering::SeqCst);
+                    let local = p.local.clone();
+                    let remote = p.remote.clone();
+                    pairs.push((local, remote));
+                }
             }
         }
 
@@ -280,65 +282,25 @@ impl AgentInternal {
         }
     }
 
-    pub(crate) fn get_best_available_candidate_pair(&self) -> Option<&Arc<CandidatePair>> {
-        let mut best: Option<&Arc<CandidatePair>> = None;
-
-        for p in &self.checklist {
-            if p.state.load(Ordering::SeqCst) == CandidatePairState::Failed as u8 {
-                continue;
-            }
-
-            if let Some(b) = &mut best {
-                if b.priority() < p.priority() {
-                    *b = p;
-                }
-            } else {
-                best = Some(p);
-            }
-        }
-
-        best
-    }
-
-    pub(crate) fn get_best_valid_candidate_pair(&self) -> Option<&Arc<CandidatePair>> {
-        let mut best: Option<&Arc<CandidatePair>> = None;
-
-        for p in &self.checklist {
-            if p.state.load(Ordering::SeqCst) != CandidatePairState::Succeeded as u8 {
-                continue;
-            }
-
-            if let Some(b) = &mut best {
-                if b.priority() < p.priority() {
-                    *b = p;
-                }
-            } else {
-                best = Some(p);
-            }
-        }
-
-        best
-    }
-
-    pub(crate) fn add_pair(
+    pub(crate) async fn add_pair(
         &mut self,
         local: Arc<dyn Candidate + Send + Sync>,
         remote: Arc<dyn Candidate + Send + Sync>,
-    ) /*-> Option<&Arc<CandidatePair>>*/
-    {
+    ) {
         let p = Arc::new(CandidatePair::new(local, remote, self.is_controlling));
-        self.checklist.push(p);
-        //return p;
+        let mut checklist = self.agent_conn.checklist.lock().await;
+        checklist.push(p);
     }
 
-    pub(crate) fn find_pair(
+    pub(crate) async fn find_pair(
         &self,
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
-    ) -> Option<&Arc<CandidatePair>> {
-        for p in &self.checklist {
+    ) -> Option<Arc<CandidatePair>> {
+        let checklist = self.agent_conn.checklist.lock().await;
+        for p in &*checklist {
             if p.local.equal(&**local) && p.remote.equal(&**remote) {
-                return Some(p);
+                return Some(p.clone());
             }
         }
         None
@@ -347,13 +309,21 @@ impl AgentInternal {
     // validate_selected_pair checks if the selected pair is (still) valid
     // Note: the caller should hold the agent lock.
     pub(crate) async fn validate_selected_pair(&mut self) -> bool {
-        if let Some(selected_pair) = &self.selected_pair {
-            let disconnected_time =
-                match SystemTime::now().duration_since(selected_pair.remote.last_received()) {
-                    Ok(d) => d,
-                    Err(_) => Duration::from_secs(0),
-                };
+        let (valid, disconnected_time) = {
+            let selected_pair = self.agent_conn.selected_pair.lock().await;
+            if let Some(selected_pair) = &*selected_pair {
+                let disconnected_time =
+                    match SystemTime::now().duration_since(selected_pair.remote.last_received()) {
+                        Ok(d) => d,
+                        Err(_) => Duration::from_secs(0),
+                    };
+                (true, disconnected_time)
+            } else {
+                (false, Duration::from_secs(0))
+            }
+        };
 
+        if valid {
             // Only allow transitions to failed if a.failedTimeout is non-zero
             let mut total_time_to_failure = self.failed_timeout;
             if total_time_to_failure != Duration::from_secs(0) {
@@ -373,29 +343,37 @@ impl AgentInternal {
                 self.update_connection_state(ConnectionState::Connected)
                     .await;
             }
-
-            true
-        } else {
-            false
         }
+
+        valid
     }
 
     // checkKeepalive sends STUN Binding Indications to the selected pair
     // if no packet has been sent on that pair in the last keepaliveInterval
     // Note: the caller should hold the agent lock.
     pub(crate) async fn check_keepalive(&mut self) {
-        if let Some(selected_pair) = &self.selected_pair {
-            let last_sent = match SystemTime::now().duration_since(selected_pair.local.last_sent())
-            {
+        let (local, remote) = {
+            let selected_pair = self.agent_conn.selected_pair.lock().await;
+            if let Some(selected_pair) = &*selected_pair {
+                (
+                    Some(selected_pair.local.clone()),
+                    Some(selected_pair.remote.clone()),
+                )
+            } else {
+                (None, None)
+            }
+        };
+
+        if let (Some(local), Some(remote)) = (local, remote) {
+            let last_sent = match SystemTime::now().duration_since(local.last_sent()) {
                 Ok(d) => d,
                 Err(_) => Duration::from_secs(0),
             };
 
-            let last_received =
-                match SystemTime::now().duration_since(selected_pair.remote.last_received()) {
-                    Ok(d) => d,
-                    Err(_) => Duration::from_secs(0),
-                };
+            let last_received = match SystemTime::now().duration_since(remote.last_received()) {
+                Ok(d) => d,
+                Err(_) => Duration::from_secs(0),
+            };
 
             if (self.keepalive_interval != Duration::from_secs(0))
                 && ((last_sent > self.keepalive_interval)
@@ -403,8 +381,6 @@ impl AgentInternal {
             {
                 // we use binding request instead of indication to support refresh consent schemas
                 // see https://tools.ietf.org/html/rfc7675
-                let local = selected_pair.local.clone();
-                let remote = selected_pair.remote.clone();
                 self.ping_candidate(&local, &remote).await;
             }
         }
@@ -438,7 +414,7 @@ impl AgentInternal {
         }
 
         for cand in local_cands {
-            self.add_pair(cand, c.clone());
+            self.add_pair(cand, c.clone()).await;
         }
 
         self.request_connectivity_check();
@@ -481,7 +457,7 @@ impl AgentInternal {
         }
 
         for cand in remote_cands {
-            self.add_pair(c.clone(), cand);
+            self.add_pair(c.clone(), cand).await;
         }
 
         self.request_connectivity_check();
@@ -495,6 +471,7 @@ impl AgentInternal {
             return Err(ERR_CLOSED.to_owned());
         }
         self.done_tx.take();
+        self.agent_conn.done.store(true, Ordering::SeqCst);
 
         Ok(())
     }
@@ -696,7 +673,7 @@ impl AgentInternal {
             }
 
             if remote_candidate.is_none() {
-                let (ip, port, network_type) = (remote.ip(), remote.port(), NetworkType::UDP4);
+                let (ip, port, network_type) = (remote.ip(), remote.port(), NetworkType::Udp4);
 
                 let prflx_candidate_config = CandidatePeerReflexiveConfig {
                     base_config: CandidateBaseConfig {
@@ -752,10 +729,6 @@ impl AgentInternal {
         } else {
             false
         }
-    }
-
-    pub(crate) fn get_selected_pair(&self) -> Option<&Arc<CandidatePair>> {
-        self.selected_pair.as_ref()
     }
 
     // set_remote_credentials sets the credentials of the remote agent

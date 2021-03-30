@@ -38,7 +38,7 @@ pub struct CandidateBase {
     pub(crate) address: String,
     pub(crate) port: u16,
     pub(crate) related_address: Option<CandidateRelatedAddress>,
-    pub(crate) tcp_type: TCPType,
+    pub(crate) tcp_type: TcpType,
 
     pub(crate) resolved_addr: SocketAddr,
 
@@ -69,7 +69,7 @@ impl Default for CandidateBase {
             address: String::new(),
             port: 0,
             related_address: None,
-            tcp_type: TCPType::default(),
+            tcp_type: TcpType::default(),
 
             resolved_addr: SocketAddr::new(IpAddr::from([0, 0, 0, 0]), 0),
 
@@ -206,7 +206,7 @@ impl Candidate for CandidateBase {
         self.candidate_type
     }
 
-    fn tcp_type(&self) -> TCPType {
+    fn tcp_type(&self) -> TcpType {
         self.tcp_type
     }
 
@@ -223,7 +223,7 @@ impl Candidate for CandidateBase {
             self.candidate_type()
         );
 
-        if self.tcp_type != TCPType::Unspecified {
+        if self.tcp_type != TcpType::Unspecified {
             val += format!(" tcptype {}", self.tcp_type()).as_str();
         }
 
@@ -306,9 +306,9 @@ impl Candidate for CandidateBase {
             Ok(network_type) => network_type,
             Err(_) => {
                 if ip.is_ipv4() {
-                    NetworkType::UDP4
+                    NetworkType::Udp4
                 } else {
-                    NetworkType::UDP6
+                    NetworkType::Udp6
                 }
             }
         };
@@ -417,17 +417,17 @@ impl CandidateBase {
 
             let direction_pref: u16 = match self.candidate_type() {
                 CandidateType::Host | CandidateType::Relay => match self.tcp_type() {
-                    TCPType::Active => 6,
-                    TCPType::Passive => 4,
-                    TCPType::SimultaneousOpen => 2,
-                    TCPType::Unspecified => 0,
+                    TcpType::Active => 6,
+                    TcpType::Passive => 4,
+                    TcpType::SimultaneousOpen => 2,
+                    TcpType::Unspecified => 0,
                 },
                 CandidateType::PeerReflexive | CandidateType::ServerReflexive => {
                     match self.tcp_type() {
-                        TCPType::SimultaneousOpen => 6,
-                        TCPType::Active => 4,
-                        TCPType::Passive => 2,
-                        TCPType::Unspecified => 0,
+                        TcpType::SimultaneousOpen => 6,
+                        TcpType::Active => 4,
+                        TcpType::Passive => 2,
+                        TcpType::Unspecified => 0,
                     }
                 }
                 CandidateType::Unspecified => 0,
@@ -518,11 +518,9 @@ impl CandidateBase {
                     c.addr()
                 );
                 return;
-            } else if let Some(buffer) = &ai.buffer {
-                if let Err(err) = buffer.write(buf).await {
-                    // NOTE This will return packetio.ErrFull if the buffer ever manages to fill up.
-                    log::warn!("failed to write packet: {}", err);
-                }
+            } else if let Err(err) = ai.agent_conn.buffer.write(buf).await {
+                // NOTE This will return packetio.ErrFull if the buffer ever manages to fill up.
+                log::warn!("failed to write packet: {}", err);
             }
         }
     }

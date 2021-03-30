@@ -28,7 +28,7 @@ impl Conn for MockConn {
     async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> io::Result<usize> {
         Ok(0)
     }
-    fn local_addr(&self) -> io::Result<SocketAddr> {
+    async fn local_addr(&self) -> io::Result<SocketAddr> {
         Ok(SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0))
     }
 }
@@ -337,7 +337,7 @@ pub(crate) async fn add_vnet_stun(wan_net: Arc<net::Net>) -> Result<turn::server
 pub(crate) async fn connect_with_vnet(
     a_agent: &Arc<Agent>,
     b_agent: &Arc<Agent>,
-) -> Result<(Arc<Mutex<impl Conn>>, Arc<Mutex<impl Conn>>), Error> {
+) -> Result<(Arc<impl Conn>, Arc<impl Conn>), Error> {
     // Manual signaling
     let (a_ufrag, a_pwd) = a_agent.get_local_user_credentials().await;
     let (b_ufrag, b_pwd) = b_agent.get_local_user_credentials().await;
@@ -367,7 +367,7 @@ pub(crate) async fn connect_with_vnet(
 
 #[derive(Default)]
 pub(crate) struct AgentTestConfig {
-    pub(crate) urls: Vec<URL>,
+    pub(crate) urls: Vec<Url>,
     pub(crate) nat_1to1_ip_candidate_type: CandidateType,
 }
 
@@ -375,7 +375,7 @@ pub(crate) async fn pipe_with_vnet(
     v: &VNet,
     a0test_config: AgentTestConfig,
     a1test_config: AgentTestConfig,
-) -> Result<(Arc<Mutex<impl Conn>>, Arc<Mutex<impl Conn>>), Error> {
+) -> Result<(Arc<impl Conn>, Arc<impl Conn>), Error> {
     let (a_notifier, mut a_connected) = on_connected();
     let (b_notifier, mut b_connected) = on_connected();
 
@@ -388,7 +388,7 @@ pub(crate) async fn pipe_with_vnet(
     let cfg0 = AgentConfig {
         urls: a0test_config.urls,
         network_types: supported_network_types(),
-        multicast_dns_mode: MulticastDNSMode::Disabled,
+        multicast_dns_mode: MulticastDnsMode::Disabled,
         nat_1to1_ips,
         nat_1to1_ip_candidate_type: a0test_config.nat_1to1_ip_candidate_type,
         net: Some(Arc::clone(&v.net0)),
@@ -406,7 +406,7 @@ pub(crate) async fn pipe_with_vnet(
     let cfg1 = AgentConfig {
         urls: a1test_config.urls,
         network_types: supported_network_types(),
-        multicast_dns_mode: MulticastDNSMode::Disabled,
+        multicast_dns_mode: MulticastDnsMode::Disabled,
         nat_1to1_ips,
         nat_1to1_ip_candidate_type: a1test_config.nat_1to1_ip_candidate_type,
         net: Some(Arc::clone(&v.net1)),
@@ -515,11 +515,11 @@ async fn test_connectivity_simple_vnet_full_cone_nats_on_both_ends() -> Result<(
     .filter(None, log::LevelFilter::Trace)
     .init();*/
 
-    let stun_server_url = URL {
-        scheme: SchemeType::STUN,
+    let stun_server_url = Url {
+        scheme: SchemeType::Stun,
         host: VNET_STUN_SERVER_IP.to_owned(),
         port: VNET_STUN_SERVER_PORT,
-        proto: ProtoType::UDP,
+        proto: ProtoType::Udp,
         ..Default::default()
     };
 
@@ -568,21 +568,21 @@ async fn test_connectivity_vnet_full_cone_nats_on_both_ends() -> Result<(), Erro
     .filter(None, log::LevelFilter::Trace)
     .init();*/
 
-    let stun_server_url = URL {
-        scheme: SchemeType::STUN,
+    let stun_server_url = Url {
+        scheme: SchemeType::Stun,
         host: VNET_STUN_SERVER_IP.to_owned(),
         port: VNET_STUN_SERVER_PORT,
-        proto: ProtoType::UDP,
+        proto: ProtoType::Udp,
         ..Default::default()
     };
 
-    let _turn_server_url = URL {
-        scheme: SchemeType::TURN,
+    let _turn_server_url = Url {
+        scheme: SchemeType::Turn,
         host: VNET_STUN_SERVER_IP.to_owned(),
         port: VNET_STUN_SERVER_PORT,
         username: "user".to_owned(),
         password: "pass".to_owned(),
-        proto: ProtoType::UDP,
+        proto: ProtoType::Udp,
         ..Default::default()
     };
 
@@ -631,21 +631,21 @@ async fn test_connectivity_vnet_symmetric_nats_on_both_ends() -> Result<(), Erro
     .filter(None, log::LevelFilter::Trace)
     .init();*/
 
-    let stun_server_url = URL {
-        scheme: SchemeType::STUN,
+    let stun_server_url = Url {
+        scheme: SchemeType::Stun,
         host: VNET_STUN_SERVER_IP.to_owned(),
         port: VNET_STUN_SERVER_PORT,
-        proto: ProtoType::UDP,
+        proto: ProtoType::Udp,
         ..Default::default()
     };
 
-    let turn_server_url = URL {
-        scheme: SchemeType::TURN,
+    let turn_server_url = Url {
+        scheme: SchemeType::Turn,
         host: VNET_STUN_SERVER_IP.to_owned(),
         port: VNET_STUN_SERVER_PORT,
         username: "user".to_owned(),
         password: "pass".to_owned(),
-        proto: ProtoType::UDP,
+        proto: ProtoType::Udp,
         ..Default::default()
     };
 
@@ -868,7 +868,7 @@ async fn test_disconnected_to_connected() -> Result<(), Error> {
     let controlling_agent = Arc::new(
         Agent::new(AgentConfig {
             network_types: supported_network_types(),
-            multicast_dns_mode: MulticastDNSMode::Disabled,
+            multicast_dns_mode: MulticastDnsMode::Disabled,
             net: Some(Arc::clone(&net0)),
             disconnected_timeout: Some(disconnected_timeout.clone()),
             keepalive_interval: Some(keepalive_interval.clone()),
@@ -881,7 +881,7 @@ async fn test_disconnected_to_connected() -> Result<(), Error> {
     let controlled_agent = Arc::new(
         Agent::new(AgentConfig {
             network_types: supported_network_types(),
-            multicast_dns_mode: MulticastDNSMode::Disabled,
+            multicast_dns_mode: MulticastDnsMode::Disabled,
             net: Some(Arc::clone(&net1)),
             disconnected_timeout: Some(disconnected_timeout.clone()),
             keepalive_interval: Some(keepalive_interval.clone()),
@@ -950,26 +950,25 @@ async fn test_disconnected_to_connected() -> Result<(), Error> {
     Ok(())
 }
 
-/*
-use std::io::Write;
+//use std::io::Write;
 
 // Agent.Write should use the best valid pair if a selected pair is not yet available
 #[tokio::test]
 async fn test_write_use_valid_pair() -> Result<(), Error> {
-    env_logger::Builder::new()
-        .format(|buf, record| {
-            writeln!(
-                buf,
-                "{}:{} [{}] {} - {}",
-                record.file().unwrap_or("unknown"),
-                record.line().unwrap_or(0),
-                record.level(),
-                chrono::Local::now().format("%H:%M:%S.%6f"),
-                record.args()
-            )
-        })
-        .filter(None, log::LevelFilter::Trace)
-        .init();
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
 
     // Create a network with two interfaces
     let wan = router::Router::new(router::RouterConfig {
@@ -1034,7 +1033,7 @@ async fn test_write_use_valid_pair() -> Result<(), Error> {
     let controlling_agent = Arc::new(
         Agent::new(AgentConfig {
             network_types: supported_network_types(),
-            multicast_dns_mode: MulticastDNSMode::Disabled,
+            multicast_dns_mode: MulticastDnsMode::Disabled,
             net: Some(Arc::clone(&net0)),
             ..Default::default()
         })
@@ -1044,7 +1043,7 @@ async fn test_write_use_valid_pair() -> Result<(), Error> {
     let controlled_agent = Arc::new(
         Agent::new(AgentConfig {
             network_types: supported_network_types(),
-            multicast_dns_mode: MulticastDNSMode::Disabled,
+            multicast_dns_mode: MulticastDnsMode::Disabled,
             net: Some(Arc::clone(&net1)),
             ..Default::default()
         })
@@ -1059,26 +1058,19 @@ async fn test_write_use_valid_pair() -> Result<(), Error> {
     let controlling_agent_tx = Arc::clone(&controlling_agent);
     tokio::spawn(async move {
         let test_message = "Test Message";
-        let controlling_agent_conn = controlling_agent_tx
-            .dial(controlled_ufrag, controlled_pwd)
-            .await?;
-        /*{
+        let controlling_agent_conn = {
             let agent_internal = Arc::clone(&controlling_agent_tx.agent_internal);
             let mut ai = controlling_agent_tx.agent_internal.lock().await;
             ai.start_connectivity_checks(agent_internal, true, controlled_ufrag, controlled_pwd)
                 .await?;
-        }
-        let controlling_agent_conn =
-            Arc::clone(&controlling_agent_tx.agent_internal) as Arc<Mutex<dyn Conn + Send + Sync>>;
-         */
+            Arc::clone(&ai.agent_conn) as Arc<dyn Conn + Send + Sync>
+        };
+
         log::debug!("controlling_agent start_connectivity_checks done...");
         loop {
-            {
-                let conn = controlling_agent_conn.lock().await;
-                let result = conn.send(test_message.as_bytes()).await;
-                if result.is_err() {
-                    break;
-                }
+            let result = controlling_agent_conn.send(test_message.as_bytes()).await;
+            if result.is_err() {
+                break;
             }
 
             tokio::time::sleep(Duration::from_millis(20)).await;
@@ -1087,28 +1079,19 @@ async fn test_write_use_valid_pair() -> Result<(), Error> {
         Ok::<(), Error>(())
     });
 
-    /*
-    {
+    let controlled_agent_conn = {
         let agent_internal = Arc::clone(&controlled_agent.agent_internal);
         let mut ai = controlled_agent.agent_internal.lock().await;
         ai.start_connectivity_checks(agent_internal, false, controlling_ufrag, controlling_pwd)
             .await?;
-    }*/
-    let controlled_agent_conn = controlled_agent
-        .accept(controlling_ufrag, controlling_pwd)
-        .await?;
+        Arc::clone(&ai.agent_conn) as Arc<dyn Conn + Send + Sync>
+    };
 
     log::debug!("controlled_agent start_connectivity_checks done...");
 
     let test_message = "Test Message";
     let mut read_buf = vec![0u8; test_message.as_bytes().len()];
-
-    {
-        //let controlled_agent_conn =
-        //    Arc::clone(&controlled_agent.agent_internal) as Arc<Mutex<dyn Conn + Send + Sync>>;
-        let conn = controlled_agent_conn.lock().await;
-        conn.recv(&mut read_buf).await?;
-    }
+    controlled_agent_conn.recv(&mut read_buf).await?;
 
     assert_eq!(read_buf, test_message.as_bytes(), "should match");
 
@@ -1122,4 +1105,3 @@ async fn test_write_use_valid_pair() -> Result<(), Error> {
 
     Ok(())
 }
-*/

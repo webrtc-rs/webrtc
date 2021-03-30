@@ -199,7 +199,7 @@ impl ControllingSelector for AgentInternal {
             log::trace!("now falling back to full agent");
         }
 
-        if self.get_selected_pair().is_some() {
+        if self.agent_conn.get_selected_pair().await.is_some() {
             if self.validate_selected_pair().await {
                 log::trace!("checking keepalive");
                 self.check_keepalive().await;
@@ -207,21 +207,22 @@ impl ControllingSelector for AgentInternal {
         } else if self.nominated_pair.is_some() {
             self.nominate_pair().await;
         } else {
-            let has_nominated_pair = if let Some(p) = self.get_best_valid_candidate_pair() {
-                self.is_nominatable(&p.local).await && self.is_nominatable(&p.remote).await
-            } else {
-                false
-            };
+            let has_nominated_pair =
+                if let Some(p) = self.agent_conn.get_best_valid_candidate_pair().await {
+                    self.is_nominatable(&p.local).await && self.is_nominatable(&p.remote).await
+                } else {
+                    false
+                };
 
             if has_nominated_pair {
-                if let Some(p) = self.get_best_valid_candidate_pair() {
+                if let Some(p) = self.agent_conn.get_best_valid_candidate_pair().await {
                     log::trace!(
                         "Nominatable pair found, nominating ({}, {})",
                         p.local.to_string(),
                         p.remote.to_string()
                     );
                     p.nominated.store(true, Ordering::SeqCst);
-                    self.nominated_pair = Some(p.clone());
+                    self.nominated_pair = Some(p);
                 }
 
                 self.nominate_pair().await;
@@ -282,9 +283,9 @@ impl ControllingSelector for AgentInternal {
                 remote,
                 local
             );
-            let selected_pair_is_none = self.get_selected_pair().is_none();
+            let selected_pair_is_none = self.agent_conn.get_selected_pair().await.is_none();
 
-            if let Some(p) = self.find_pair(local, remote) {
+            if let Some(p) = self.find_pair(local, remote).await {
                 p.state
                     .store(CandidatePairState::Succeeded as u8, Ordering::SeqCst);
                 log::trace!(
@@ -295,8 +296,7 @@ impl ControllingSelector for AgentInternal {
                     selected_pair_is_none
                 );
                 if pending_request.is_use_candidate && selected_pair_is_none {
-                    let p2 = Arc::clone(p);
-                    self.set_selected_pair(Some(p2)).await;
+                    self.set_selected_pair(Some(Arc::clone(&p))).await;
                 }
             } else {
                 // This shouldn't happen
@@ -320,19 +320,19 @@ impl ControllingSelector for AgentInternal {
         self.send_binding_success(m, local, remote).await;
         log::trace!("controllingSelector: sendBindingSuccess");
 
-        if let Some(p) = self.find_pair(local, remote) {
+        if let Some(p) = self.find_pair(local, remote).await {
             log::trace!(
                 "controllingSelector: after findPair {}, p.state: {}, {}, {}",
                 p,
                 p.state.load(Ordering::SeqCst),
                 self.nominated_pair.is_none(),
-                self.get_selected_pair().is_none()
+                self.agent_conn.get_selected_pair().await.is_none()
             );
             if p.state.load(Ordering::SeqCst) == CandidatePairState::Succeeded as u8
                 && self.nominated_pair.is_none()
-                && self.get_selected_pair().is_none()
+                && self.agent_conn.get_selected_pair().await.is_none()
             {
-                if let Some(best_pair) = self.get_best_available_candidate_pair() {
+                if let Some(best_pair) = self.agent_conn.get_best_available_candidate_pair().await {
                     log::trace!(
                         "controllingSelector: getBestAvailableCandidatePair {}",
                         best_pair
@@ -343,7 +343,7 @@ impl ControllingSelector for AgentInternal {
                     {
                         log::trace!("The candidate ({}, {}) is the best candidate available, marking it as nominated",
                             p.local, p.remote);
-                        self.nominated_pair = Some(p.clone());
+                        self.nominated_pair = Some(p);
                         self.nominate_pair().await;
                     }
                 } else {
@@ -352,7 +352,7 @@ impl ControllingSelector for AgentInternal {
             }
         } else {
             log::trace!("controllingSelector: addPair");
-            self.add_pair(local.clone(), remote.clone());
+            self.add_pair(local.clone(), remote.clone()).await;
         }
     }
 }
@@ -365,7 +365,7 @@ impl ControlledSelector for AgentInternal {
         // A lite selector should not contact candidates
         if self.lite {
             self.validate_selected_pair().await;
-        } else if self.get_selected_pair().is_some() {
+        } else if self.agent_conn.get_selected_pair().await.is_some() {
             if self.validate_selected_pair().await {
                 log::trace!("checking keepalive");
                 self.check_keepalive().await;
@@ -433,7 +433,7 @@ impl ControlledSelector for AgentInternal {
                 local
             );
 
-            if let Some(p) = self.find_pair(local, remote) {
+            if let Some(p) = self.find_pair(local, remote).await {
                 p.state
                     .store(CandidatePairState::Succeeded as u8, Ordering::SeqCst);
                 log::trace!("Found valid candidate pair: {}", p);
@@ -456,11 +456,11 @@ impl ControlledSelector for AgentInternal {
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
-        if self.find_pair(local, remote).is_none() {
-            self.add_pair(local.clone(), remote.clone());
+        if self.find_pair(local, remote).await.is_none() {
+            self.add_pair(local.clone(), remote.clone()).await;
         }
 
-        if let Some(p) = self.find_pair(local, remote) {
+        if let Some(p) = self.find_pair(local, remote).await {
             let use_candidate = m.contains(ATTR_USE_CANDIDATE);
             if use_candidate {
                 // https://tools.ietf.org/html/rfc8445#section-7.3.1.5
@@ -470,9 +470,8 @@ impl ControlledSelector for AgentInternal {
                     // previously sent by this pair produced a successful response and
                     // generated a valid pair (Section 7.2.5.3.2).  The agent sets the
                     // nominated flag value of the valid pair to true.
-                    if self.get_selected_pair().is_none() {
-                        let pair = p.clone();
-                        self.set_selected_pair(Some(pair)).await;
+                    if self.agent_conn.get_selected_pair().await.is_none() {
+                        self.set_selected_pair(Some(Arc::clone(&p))).await;
                     }
                     self.send_binding_success(m, local, remote).await;
                 } else {

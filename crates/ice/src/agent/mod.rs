@@ -31,7 +31,8 @@ use std::net::SocketAddr;
 use crate::rand::*;
 
 use crate::agent::agent_gather::GatherCandidatesInternalParams;
-use crate::tcp_type::TCPType;
+use crate::agent::agent_transport::AgentConn;
+use crate::tcp_type::TcpType;
 use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -58,16 +59,16 @@ pub struct Agent {
     pub(crate) port_min: u16,
     pub(crate) port_max: u16,
     pub(crate) interface_filter: Arc<Option<InterfaceFilterFn>>,
-    pub(crate) mdns_mode: MulticastDNSMode,
+    pub(crate) mdns_mode: MulticastDnsMode,
     pub(crate) mdns_name: String,
     pub(crate) mdns_conn: Option<Arc<DNSConn>>,
     pub(crate) net: Arc<Net>,
 
     // 1:1 D-NAT IP address mapping
-    pub(crate) ext_ip_mapper: Arc<Option<ExternalIPMapper>>,
+    pub(crate) ext_ip_mapper: Arc<Option<ExternalIpMapper>>,
     pub(crate) gathering_state: Arc<AtomicU8>, //GatheringState,
     pub(crate) candidate_types: Vec<CandidateType>,
-    pub(crate) urls: Vec<URL>,
+    pub(crate) urls: Vec<Url>,
     pub(crate) network_types: Vec<NetworkType>,
 
     pub(crate) gather_candidate_cancel: Option<GatherCandidateCancelFn>,
@@ -90,8 +91,8 @@ impl Agent {
         }
 
         let mut mdns_mode = config.multicast_dns_mode;
-        if mdns_mode == MulticastDNSMode::Unspecified {
-            mdns_mode = MulticastDNSMode::QueryOnly;
+        if mdns_mode == MulticastDnsMode::Unspecified {
+            mdns_mode = MulticastDnsMode::QueryOnly;
         }
 
         let mdns_conn = match create_multicast_dns(mdns_mode, &mdns_name) {
@@ -130,7 +131,6 @@ impl Agent {
             on_connection_state_change_hdlr: None,
             on_selected_candidate_pair_change_hdlr: None,
             on_candidate_hdlr: None,
-            selected_pair: None,
 
             tie_breaker: rand::random::<u64>(),
 
@@ -142,11 +142,6 @@ impl Agent {
             connection_state: ConnectionState::New,
             local_candidates: HashMap::new(),
             remote_candidates: HashMap::new(),
-
-            // Make sure the buffer doesn't grow indefinitely.
-            // NOTE: We actually won't get anywhere close to this limit.
-            // SRTP will constantly read from the endpoint and drop packets if it's full.
-            buffer: Some(Buffer::new(0, MAX_BUFFER_SIZE)),
 
             insecure_skip_verify: config.insecure_skip_verify,
 
@@ -180,13 +175,11 @@ impl Agent {
             remote_ufrag: String::new(),
             remote_pwd: String::new(),
 
-            checklist: vec![],
-
             // LRU of outbound Binding request Transaction IDs
             pending_binding_requests: vec![],
 
-            bytes_received: Arc::new(AtomicUsize::new(0)),
-            bytes_sent: Arc::new(AtomicUsize::new(0)),
+            // AgentConn
+            agent_conn: Arc::new(AgentConn::new()),
         };
 
         config.init_with_defaults(&mut ai);
@@ -221,7 +214,7 @@ impl Agent {
         let net = if let Some(net) = config.net {
             if net.is_virtual() {
                 log::warn!("vnet is enabled");
-                if mdns_mode != MulticastDNSMode::Disabled {
+                if mdns_mode != MulticastDnsMode::Disabled {
                     log::warn!("vnet does not support mDNS yet");
                 }
             }
@@ -301,10 +294,10 @@ impl Agent {
             // Blocking one by the other one causes deadlock.
             while chan_candidate_pair_rx.recv().await.is_some() {
                 let ai = agent_internal_pair.lock().await;
-                if let (Some(on_selected_candidate_pair_change), Some(p)) = (
-                    &ai.on_selected_candidate_pair_change_hdlr,
-                    &ai.selected_pair,
-                ) {
+                let selected_pair = ai.agent_conn.selected_pair.lock().await;
+                if let (Some(on_selected_candidate_pair_change), Some(p)) =
+                    (&ai.on_selected_candidate_pair_change_hdlr, &*selected_pair)
+                {
                     on_selected_candidate_pair_change(&*p.local, &*p.remote);
                 }
             }
@@ -355,7 +348,7 @@ impl Agent {
     ) -> Result<(), Error> {
         // cannot check for network yet because it might not be applied
         // when mDNS hostame is used.
-        if c.tcp_type() == TCPType::Active {
+        if c.tcp_type() == TcpType::Active {
             // TCP Candidates with tcptype active will probe server passive ones, so
             // no need to do anything with them.
             log::info!("Ignoring remote candidate with tcpType active: {}", c);
@@ -364,7 +357,7 @@ impl Agent {
 
         // If we have a mDNS Candidate lets fully resolve it before adding it locally
         if c.candidate_type() == CandidateType::Host && c.address().ends_with(".local") {
-            if self.mdns_mode == MulticastDNSMode::Disabled {
+            if self.mdns_mode == MulticastDnsMode::Disabled {
                 log::warn!(
                     "remote mDNS candidate added, but mDNS is disabled: ({})",
                     c.address()
@@ -486,9 +479,12 @@ impl Agent {
         ai.local_pwd = pwd;
         ai.remote_ufrag = String::new();
         ai.remote_pwd = String::new();
-
-        ai.checklist = vec![];
         ai.pending_binding_requests = vec![];
+
+        {
+            let mut checklist = ai.agent_conn.checklist.lock().await;
+            *checklist = vec![];
+        }
 
         ai.set_selected_pair(None).await;
         ai.delete_all_candidates().await;
@@ -548,7 +544,7 @@ impl Agent {
     // get_candidate_pairs_stats returns a list of candidate pair stats
     pub async fn get_candidate_pairs_stats(&self) -> Vec<CandidatePairStats> {
         let ai = self.agent_internal.lock().await;
-        ai.get_candidate_pairs_stats()
+        ai.get_candidate_pairs_stats().await
     }
 
     // get_local_candidates_stats returns a list of local candidates stats

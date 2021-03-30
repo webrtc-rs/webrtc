@@ -230,9 +230,10 @@ impl Default for CandidateStats {
 
 impl AgentInternal {
     // get_candidate_pairs_stats returns a list of candidate pair stats
-    pub(crate) fn get_candidate_pairs_stats(&self) -> Vec<CandidatePairStats> {
-        let mut res = Vec::with_capacity(self.checklist.len());
-        for cp in &self.checklist {
+    pub(crate) async fn get_candidate_pairs_stats(&self) -> Vec<CandidatePairStats> {
+        let checklist = self.agent_conn.checklist.lock().await;
+        let mut res = Vec::with_capacity(checklist.len());
+        for cp in &*checklist {
             let stat = CandidatePairStats {
                 timestamp: Instant::now(),
                 local_candidate_id: cp.local.id(),
