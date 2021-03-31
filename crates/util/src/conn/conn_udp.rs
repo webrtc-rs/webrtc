@@ -24,7 +24,7 @@ impl Conn for UdpSocket {
         self.send_to(buf, target).await
     }
 
-    fn local_addr(&self) -> Result<SocketAddr> {
+    async fn local_addr(&self) -> Result<SocketAddr> {
         self.local_addr()
     }
 }

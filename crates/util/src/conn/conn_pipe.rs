@@ -60,7 +60,7 @@ impl Conn for Pipe {
         Err(Error::new(ErrorKind::Other, "Not applicable"))
     }
 
-    fn local_addr(&self) -> Result<SocketAddr> {
+    async fn local_addr(&self) -> Result<SocketAddr> {
         Err(Error::new(
             ErrorKind::AddrNotAvailable,
             "Addr Not Available",

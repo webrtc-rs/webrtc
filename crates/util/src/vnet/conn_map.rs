@@ -25,7 +25,7 @@ impl UDPConnMap {
     }
 
     pub(crate) async fn insert(&self, conn: Arc<UDPConn>) -> Result<(), Error> {
-        let addr = conn.local_addr()?;
+        let addr = conn.local_addr().await?;
 
         let mut port_map = self.port_map.lock().await;
         if let Some(conns) = port_map.get(&addr.port()) {
@@ -34,7 +34,7 @@ impl UDPConnMap {
             }
 
             for c in conns {
-                let laddr = c.local_addr()?;
+                let laddr = c.local_addr().await?;
                 if laddr.ip().is_unspecified() || laddr.ip() == addr.ip() {
                     return Err(ERR_ADDRESS_ALREADY_IN_USE.to_owned());
                 }
@@ -63,7 +63,7 @@ impl UDPConnMap {
 
             for c in conns {
                 let laddr = {
-                    match c.local_addr() {
+                    match c.local_addr().await {
                         Ok(laddr) => laddr,
                         Err(_) => return None,
                     }
@@ -83,7 +83,7 @@ impl UDPConnMap {
         if let Some(conns) = port_map.get(&addr.port()) {
             if !addr.ip().is_unspecified() {
                 for c in conns {
-                    let laddr = c.local_addr()?;
+                    let laddr = c.local_addr().await?;
                     if laddr.ip().is_unspecified() {
                         // This can't happen!
                         return Err(ERR_CANNOT_REMOVE_UNSPECIFIED_IP.to_owned());

@@ -144,7 +144,8 @@ impl Conn for UDPConn {
 
         Ok(buf.len())
     }
-    fn local_addr(&self) -> io::Result<SocketAddr> {
+
+    async fn local_addr(&self) -> io::Result<SocketAddr> {
         Ok(self.loc_addr)
     }
 }
