@@ -93,7 +93,7 @@ async fn test_allocation_lifetime_deletion_zero_lifetime() -> Result<(), Error> 
 
     let five_tuple = FiveTuple {
         src_addr: r.src_addr,
-        dst_addr: r.conn.local_addr()?,
+        dst_addr: r.conn.local_addr().await?,
         protocol: PROTO_UDP,
     };
 

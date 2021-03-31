@@ -103,7 +103,10 @@ async fn main() -> Result<(), Error> {
 
     // The relayConn's local address is actually the transport
     // address assigned on the TURN server.
-    println!("relayed-address={}", relay_conn.local_addr()?.to_string());
+    println!(
+        "relayed-address={}",
+        relay_conn.local_addr().await?.to_string()
+    );
 
     // If you provided `-ping`, perform a ping test agaist the
     // relayConn we have just allocated.
@@ -133,7 +136,7 @@ async fn do_ping_test(
     // the TURN server.
     //println!("relay_conn send hello to mapped_addr {}", mapped_addr);
     relay_conn.send_to("Hello".as_bytes(), mapped_addr).await?;
-    let relay_addr = relay_conn.local_addr()?;
+    let relay_addr = relay_conn.local_addr().await?;
 
     let pinger_conn_rx = Arc::clone(&pinger_conn_tx);
 

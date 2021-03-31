@@ -168,7 +168,7 @@ impl ClientInternal {
             String::new()
         } else {
             log::debug!("resolving {}", config.stun_serv_addr);
-            let local_addr = config.conn.local_addr()?;
+            let local_addr = config.conn.local_addr().await?;
             let stun_serv = net
                 .resolve_addr(local_addr.is_ipv4(), &config.stun_serv_addr)
                 .await?;
@@ -180,7 +180,7 @@ impl ClientInternal {
             String::new()
         } else {
             log::debug!("resolving {}", config.turn_serv_addr);
-            let local_addr = config.conn.local_addr()?;
+            let local_addr = config.conn.local_addr().await?;
             let turn_serv = net
                 .resolve_addr(local_addr.is_ipv4(), &config.turn_serv_addr)
                 .await?;

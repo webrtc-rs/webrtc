@@ -34,7 +34,7 @@ impl RelayAddressGenerator for RelayAddressGeneratorNone {
             .resolve_addr(use_ipv4, &format!("{}:{}", self.address, requested_port))
             .await?;
         let conn = self.net.bind(addr).await?;
-        let relay_addr = conn.local_addr()?;
+        let relay_addr = conn.local_addr().await?;
         Ok((conn, relay_addr))
     }
 }
