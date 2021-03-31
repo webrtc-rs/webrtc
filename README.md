@@ -67,6 +67,8 @@
 [turn-url]: https://crates.io/crates/webrtc-turn
 [sctp-badge]: https://img.shields.io/crates/v/webrtc-sctp.svg
 [sctp-url]: https://crates.io/crates/webrtc-sctp
+[sip-badge]: https://img.shields.io/crates/v/webrtc-sip.svg
+[sip-url]: https://crates.io/crates/webrtc-sip
 [data-badge]: https://img.shields.io/crates/v/webrtc-data.svg
 [data-url]: https://crates.io/crates/webrtc-data
 [media-badge]: https://img.shields.io/crates/v/webrtc-media.svg
@@ -104,7 +106,7 @@
 
 ### Road Map Towards 3.0
 
-- [ ] SIP
+- [ ] SIP: [webrtc-rs/sip](https://github.com/webrtc-rs/sip) [![sip][sip-badge]][sip-url]
 - [ ] QUIC
 - [ ] ...
 
