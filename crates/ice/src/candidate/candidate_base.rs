@@ -40,7 +40,7 @@ pub struct CandidateBase {
     pub(crate) related_address: Option<CandidateRelatedAddress>,
     pub(crate) tcp_type: TcpType,
 
-    pub(crate) resolved_addr: SocketAddr,
+    pub(crate) resolved_addr: Arc<Mutex<SocketAddr>>,
 
     pub(crate) last_sent: Arc<AtomicU64>,
     pub(crate) last_received: Arc<AtomicU64>,
@@ -71,7 +71,7 @@ impl Default for CandidateBase {
             related_address: None,
             tcp_type: TcpType::default(),
 
-            resolved_addr: SocketAddr::new(IpAddr::from([0, 0, 0, 0]), 0),
+            resolved_addr: Arc::new(Mutex::new(SocketAddr::new(IpAddr::from([0, 0, 0, 0]), 0))),
 
             last_sent: Arc::new(AtomicU64::new(0)),
             last_received: Arc::new(AtomicU64::new(0)),
@@ -238,8 +238,9 @@ impl Candidate for CandidateBase {
         val
     }
 
-    fn addr(&self) -> SocketAddr {
-        self.resolved_addr
+    async fn addr(&self) -> SocketAddr {
+        let resolved_addr = self.resolved_addr.lock().await;
+        *resolved_addr
     }
 
     // close stops the recvLoop
@@ -278,7 +279,7 @@ impl Candidate for CandidateBase {
         dst: &(dyn Candidate + Send + Sync),
     ) -> Result<usize, Error> {
         let n = if let Some(conn) = &self.conn {
-            let addr = dst.addr();
+            let addr = dst.addr().await;
             conn.send_to(raw, addr).await?
         } else {
             0
@@ -301,45 +302,16 @@ impl Candidate for CandidateBase {
         Arc::new(Clone::clone(self))
     }
 
-    fn clone_with_ip(&self, ip: &IpAddr) -> Arc<dyn Candidate + Send + Sync> {
-        let network_type = match determine_network_type(&self.network, ip) {
-            Ok(network_type) => network_type,
-            Err(_) => {
-                if ip.is_ipv4() {
-                    NetworkType::Udp4
-                } else {
-                    NetworkType::Udp6
-                }
-            }
-        };
+    async fn set_ip(&self, ip: &IpAddr) -> Result<(), Error> {
+        let network_type = determine_network_type(&self.network, ip)?;
 
-        let resolved_addr = create_addr(network_type, *ip, self.port);
+        self.network_type
+            .store(network_type as u8, Ordering::SeqCst);
 
-        Arc::new(CandidateBase {
-            id: self.id.clone(),
-            network_type: Arc::new(AtomicU8::new(network_type as u8)),
-            candidate_type: self.candidate_type,
+        let mut resolved_addr = self.resolved_addr.lock().await;
+        *resolved_addr = create_addr(network_type, *ip, self.port);
 
-            component: Arc::clone(&self.component),
-            address: self.address.clone(),
-            port: self.port,
-            related_address: self.related_address.clone(),
-            tcp_type: self.tcp_type,
-
-            resolved_addr,
-
-            last_sent: Arc::clone(&self.last_sent),
-            last_received: Arc::clone(&self.last_received),
-
-            conn: self.conn.clone(),
-            agent_internal: self.agent_internal.clone(),
-            closed_ch: self.closed_ch.clone(),
-
-            foundation_override: self.foundation_override.clone(),
-            priority_override: self.priority_override,
-            network: self.network.clone(),
-            relay_client: self.relay_client.clone(),
-        })
+        Ok(())
     }
 
     fn get_conn(&self) -> Option<&Arc<dyn util::Conn + Send + Sync>> {
@@ -356,16 +328,6 @@ impl Candidate for CandidateBase {
 }
 
 impl CandidateBase {
-    pub fn set_ip(&mut self, ip: &IpAddr) -> Result<(), Error> {
-        let network_type = determine_network_type(&self.network, ip)?;
-
-        self.network_type
-            .store(network_type as u8, Ordering::SeqCst);
-        self.resolved_addr = create_addr(network_type, *ip, self.port);
-
-        Ok(())
-    }
-
     pub fn set_last_received(&self, d: Duration) {
         self.last_received
             .store(d.as_nanos() as u64, Ordering::SeqCst);
@@ -515,7 +477,7 @@ impl CandidateBase {
             if !ai.validate_non_stun_traffic(c, src_addr).await {
                 log::warn!(
                     "Discarded message from {}, not a valid remote candidate",
-                    c.addr()
+                    c.addr().await
                 );
                 return;
             } else if let Err(err) = ai.agent_conn.buffer.write(buf).await {

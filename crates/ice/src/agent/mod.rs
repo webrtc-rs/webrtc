@@ -573,7 +573,9 @@ impl Agent {
             }
         };
 
-        Ok(c.clone_with_ip(&src.ip()))
+        c.set_ip(&src.ip()).await?;
+
+        Ok(c)
     }
 
     async fn close_multicast_conn(mdns_conn: &Option<Arc<DNSConn>>) {

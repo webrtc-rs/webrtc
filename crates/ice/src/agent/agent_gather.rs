@@ -286,9 +286,9 @@ impl Agent {
 
                 let candidate: Arc<dyn Candidate + Send + Sync> =
                     match host_config.new_candidate_host(agent_internal.clone()).await {
-                        Ok(mut candidate) => {
+                        Ok(candidate) => {
                             if mdns_mode == MulticastDnsMode::QueryAndGather {
-                                if let Err(err) = candidate.set_ip(&ip) {
+                                if let Err(err) = candidate.set_ip(&ip).await {
                                     log::warn!(
                                         "Failed to create host candidate: {} {} {}: {}",
                                         network,

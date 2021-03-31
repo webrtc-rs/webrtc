@@ -529,7 +529,7 @@ impl AgentInternal {
         self.pending_binding_requests.push(BindingRequest {
             timestamp: Instant::now(),
             transaction_id: m.transaction_id,
-            destination: remote.addr(),
+            destination: remote.addr().await,
             is_use_candidate: m.contains(ATTR_USE_CANDIDATE),
         });
 
@@ -542,7 +542,7 @@ impl AgentInternal {
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
-        let addr = remote.addr();
+        let addr = remote.addr().await;
         let (ip, port) = (addr.ip(), addr.port());
 
         let (out, result) = {
@@ -775,7 +775,7 @@ impl AgentInternal {
         let cand = Arc::clone(candidate);
         if let (Some(conn), Some(ai)) = (candidate.get_conn(), candidate.get_agent()) {
             let conn = Arc::clone(conn);
-            let addr = candidate.addr();
+            let addr = candidate.addr().await;
             let agent_internal = Arc::clone(ai);
             tokio::spawn(async move {
                 let _ = CandidateBase::recv_loop(

@@ -71,7 +71,7 @@ pub trait Candidate: fmt::Display {
 
     fn marshal(&self) -> String;
 
-    fn addr(&self) -> SocketAddr;
+    async fn addr(&self) -> SocketAddr;
 
     async fn close(&self) -> Result<(), Error>;
     fn seen(&self, outbound: bool);
@@ -83,7 +83,7 @@ pub trait Candidate: fmt::Display {
     ) -> Result<usize, Error>;
     fn equal(&self, other: &dyn Candidate) -> bool;
     fn clone(&self) -> Arc<dyn Candidate + Send + Sync>;
-    fn clone_with_ip(&self, ip: &IpAddr) -> Arc<dyn Candidate + Send + Sync>; //TODO: remove
+    async fn set_ip(&self, ip: &IpAddr) -> Result<(), Error>;
     fn get_conn(&self) -> Option<&Arc<dyn util::Conn + Send + Sync>>;
     fn get_agent(&self) -> Option<&Arc<Mutex<AgentInternal>>>;
     fn get_closed_ch(&self) -> Arc<Mutex<Option<broadcast::Sender<()>>>>;

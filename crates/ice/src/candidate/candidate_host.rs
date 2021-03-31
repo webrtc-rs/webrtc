@@ -23,7 +23,7 @@ impl CandidateHostConfig {
             candidate_id = generate_cand_id();
         }
 
-        let mut c = CandidateBase {
+        let c = CandidateBase {
             id: candidate_id,
             address: self.base_config.address.clone(),
             candidate_type: CandidateType::Host,
@@ -41,7 +41,7 @@ impl CandidateHostConfig {
 
         if !self.base_config.address.ends_with(".local") {
             let ip = self.base_config.address.parse()?;
-            c.set_ip(&ip)?;
+            c.set_ip(&ip).await?;
         };
 
         Ok(c)

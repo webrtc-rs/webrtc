@@ -39,7 +39,11 @@ impl CandidateRelayConfig {
             candidate_type: CandidateType::Relay,
             address: self.base_config.address,
             port: self.base_config.port,
-            resolved_addr: create_addr(network_type, ip, self.base_config.port),
+            resolved_addr: Arc::new(Mutex::new(create_addr(
+                network_type,
+                ip,
+                self.base_config.port,
+            ))),
             component: Arc::new(AtomicU16::new(self.base_config.component)),
             foundation_override: self.base_config.foundation,
             priority_override: self.base_config.priority,

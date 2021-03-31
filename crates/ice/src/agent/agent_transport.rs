@@ -206,7 +206,7 @@ impl Conn for AgentConn {
 
     async fn local_addr(&self) -> io::Result<SocketAddr> {
         if let Some(pair) = self.get_selected_pair().await {
-            Ok(pair.local.addr())
+            Ok(pair.local.addr().await)
         } else {
             Err(io::Error::new(
                 io::ErrorKind::AddrNotAvailable,
