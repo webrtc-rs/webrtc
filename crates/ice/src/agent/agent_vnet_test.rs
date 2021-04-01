@@ -73,17 +73,7 @@ pub(crate) async fn build_simple_vnet(
         ..Default::default()
     })));
 
-    {
-        let nic = wnet.get_nic()?;
-
-        {
-            let mut w = wan.lock().await;
-            w.add_net(Arc::clone(&nic)).await?;
-        }
-
-        let n = nic.lock().await;
-        n.set_router(Arc::clone(&wan)).await?;
-    }
+    connect_net2router(&wnet, &wan).await?;
 
     // LAN
     let lan = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
@@ -100,44 +90,12 @@ pub(crate) async fn build_simple_vnet(
         ..Default::default()
     })));
 
-    {
-        let nic0 = net0.get_nic()?;
-        let nic1 = net1.get_nic()?;
-
-        {
-            let mut l = lan.lock().await;
-            l.add_net(Arc::clone(&nic0)).await?;
-            l.add_net(Arc::clone(&nic1)).await?;
-        }
-
-        {
-            let n0 = nic0.lock().await;
-            n0.set_router(Arc::clone(&lan)).await?;
-        }
-
-        {
-            let n1 = nic1.lock().await;
-            n1.set_router(Arc::clone(&lan)).await?;
-        }
-    }
-
-    {
-        {
-            let mut w = wan.lock().await;
-            w.add_router(Arc::clone(&lan)).await?;
-        }
-
-        {
-            let l = lan.lock().await;
-            l.set_router(Arc::clone(&wan)).await?;
-        }
-    }
+    connect_net2router(&net0, &lan).await?;
+    connect_net2router(&net1, &lan).await?;
+    connect_router2router(&lan, &wan).await?;
 
     // start routers...
-    {
-        let mut w = wan.lock().await;
-        w.start().await?;
-    }
+    start_router(&wan).await?;
 
     let server = add_vnet_stun(wnet).await?;
 
@@ -164,17 +122,7 @@ pub(crate) async fn build_vnet(
         ..Default::default()
     })));
 
-    {
-        let nic = wnet.get_nic()?;
-
-        {
-            let mut w = wan.lock().await;
-            w.add_net(Arc::clone(&nic)).await?;
-        }
-
-        let n = nic.lock().await;
-        n.set_router(Arc::clone(&wan)).await?;
-    }
+    connect_net2router(&wnet, &wan).await?;
 
     // LAN 0
     let lan0 = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
@@ -193,29 +141,8 @@ pub(crate) async fn build_vnet(
         ..Default::default()
     })));
 
-    {
-        let nic = net0.get_nic()?;
-
-        {
-            let mut l = lan0.lock().await;
-            l.add_net(Arc::clone(&nic)).await?;
-        }
-
-        let n = nic.lock().await;
-        n.set_router(Arc::clone(&lan0)).await?;
-    }
-
-    {
-        {
-            let mut w = wan.lock().await;
-            w.add_router(Arc::clone(&lan0)).await?;
-        }
-
-        {
-            let l = lan0.lock().await;
-            l.set_router(Arc::clone(&wan)).await?;
-        }
-    }
+    connect_net2router(&net0, &lan0).await?;
+    connect_router2router(&lan0, &wan).await?;
 
     // LAN 1
     let lan1 = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
@@ -234,35 +161,11 @@ pub(crate) async fn build_vnet(
         ..Default::default()
     })));
 
-    {
-        let nic = net1.get_nic()?;
-
-        {
-            let mut l = lan1.lock().await;
-            l.add_net(Arc::clone(&nic)).await?;
-        }
-
-        let n = nic.lock().await;
-        n.set_router(Arc::clone(&lan1)).await?;
-    }
-
-    {
-        {
-            let mut w = wan.lock().await;
-            w.add_router(Arc::clone(&lan1)).await?;
-        }
-
-        {
-            let l = lan1.lock().await;
-            l.set_router(Arc::clone(&wan)).await?;
-        }
-    }
+    connect_net2router(&net1, &lan1).await?;
+    connect_router2router(&lan1, &wan).await?;
 
     // start routers...
-    {
-        let mut w = wan.lock().await;
-        w.start().await?;
-    }
+    start_router(&wan).await?;
 
     let server = add_vnet_stun(wnet).await?;
 
@@ -493,6 +396,46 @@ pub(crate) async fn gather_and_exchange_candidates(
         a_agent
             .add_remote_candidate(&copy_candidate(c).await?)
             .await?;
+    }
+
+    Ok(())
+}
+
+pub(crate) async fn start_router(router: &Arc<Mutex<router::Router>>) -> Result<(), Error> {
+    let mut w = router.lock().await;
+    w.start().await
+}
+
+pub(crate) async fn connect_net2router(
+    net: &Arc<net::Net>,
+    router: &Arc<Mutex<router::Router>>,
+) -> Result<(), Error> {
+    let nic = net.get_nic()?;
+
+    {
+        let mut w = router.lock().await;
+        w.add_net(Arc::clone(&nic)).await?;
+    }
+    {
+        let n = nic.lock().await;
+        n.set_router(Arc::clone(router)).await?;
+    }
+
+    Ok(())
+}
+
+pub(crate) async fn connect_router2router(
+    child: &Arc<Mutex<router::Router>>,
+    parent: &Arc<Mutex<router::Router>>,
+) -> Result<(), Error> {
+    {
+        let mut w = parent.lock().await;
+        w.add_router(Arc::clone(child)).await?;
+    }
+
+    {
+        let l = child.lock().await;
+        l.set_router(Arc::clone(parent)).await?;
     }
 
     Ok(())
@@ -837,29 +780,9 @@ async fn test_disconnected_to_connected() -> Result<(), Error> {
         ..Default::default()
     })));
 
-    {
-        let nic0 = net0.get_nic()?;
-        let nic1 = net1.get_nic()?;
-
-        {
-            let mut w = wan.lock().await;
-            w.add_net(Arc::clone(&nic0)).await?;
-            w.add_net(Arc::clone(&nic1)).await?;
-        }
-        {
-            let n0 = nic0.lock().await;
-            n0.set_router(Arc::clone(&wan)).await?;
-        }
-        {
-            let n1 = nic1.lock().await;
-            n1.set_router(Arc::clone(&wan)).await?;
-        }
-    }
-
-    {
-        let mut w = wan.lock().await;
-        w.start().await?;
-    }
+    connect_net2router(&net0, &wan).await?;
+    connect_net2router(&net1, &wan).await?;
+    start_router(&wan).await?;
 
     let disconnected_timeout = Duration::from_secs(1);
     let keepalive_interval = Duration::from_millis(20);
@@ -1005,29 +928,9 @@ async fn test_write_use_valid_pair() -> Result<(), Error> {
         ..Default::default()
     })));
 
-    {
-        let nic0 = net0.get_nic()?;
-        let nic1 = net1.get_nic()?;
-
-        {
-            let mut w = wan.lock().await;
-            w.add_net(Arc::clone(&nic0)).await?;
-            w.add_net(Arc::clone(&nic1)).await?;
-        }
-        {
-            let n0 = nic0.lock().await;
-            n0.set_router(Arc::clone(&wan)).await?;
-        }
-        {
-            let n1 = nic1.lock().await;
-            n1.set_router(Arc::clone(&wan)).await?;
-        }
-    }
-
-    {
-        let mut w = wan.lock().await;
-        w.start().await?;
-    }
+    connect_net2router(&net0, &wan).await?;
+    connect_net2router(&net1, &wan).await?;
+    start_router(&wan).await?;
 
     // Create two agents and connect them
     let controlling_agent = Arc::new(

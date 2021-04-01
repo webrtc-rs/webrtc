@@ -413,29 +413,9 @@ async fn test_connectivity_on_startup() -> Result<(), Error> {
         ..Default::default()
     })));
 
-    {
-        let nic0 = net0.get_nic()?;
-        let nic1 = net1.get_nic()?;
-
-        {
-            let mut w = wan.lock().await;
-            w.add_net(Arc::clone(&nic0)).await?;
-            w.add_net(Arc::clone(&nic1)).await?;
-        }
-
-        {
-            let n0 = nic0.lock().await;
-            n0.set_router(Arc::clone(&wan)).await?;
-
-            let n1 = nic1.lock().await;
-            n1.set_router(Arc::clone(&wan)).await?;
-        }
-
-        {
-            let mut w = wan.lock().await;
-            w.start().await?;
-        }
-    }
+    connect_net2router(&net0, &wan).await?;
+    connect_net2router(&net1, &wan).await?;
+    start_router(&wan).await?;
 
     let (a_notifier, mut a_connected) = on_connected();
     let (b_notifier, mut b_connected) = on_connected();
