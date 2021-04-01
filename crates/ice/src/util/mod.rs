@@ -106,7 +106,6 @@ pub(crate) async fn local_interfaces(
     }
 
     for iface in interfaces {
-        log::debug!("local interface: {:?}", iface);
         if let Some(filter) = interface_filter {
             if !filter(iface.name()) {
                 continue;

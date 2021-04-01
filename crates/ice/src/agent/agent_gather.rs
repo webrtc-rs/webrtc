@@ -571,7 +571,7 @@ impl Agent {
         wg.wait().await;
     }
 
-    async fn gather_candidates_relay(
+    pub(crate) async fn gather_candidates_relay(
         urls: Vec<Url>,
         net: Arc<Net>,
         agent_internal: Arc<Mutex<AgentInternal>>,

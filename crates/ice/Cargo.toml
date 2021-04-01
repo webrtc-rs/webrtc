@@ -32,6 +32,7 @@ tokio-test = "0.4"
 regex = "1.4.3"
 env_logger = "0.8"
 chrono = "0.4.19"
+ipnet = "2.3.0"
 
 [profile.dev]
 opt-level = 0
