@@ -72,8 +72,8 @@ pub struct AgentConfig {
     // multicast_dns_mode controls mDNS behavior for the ICE agent
     pub multicast_dns_mode: MulticastDnsMode,
 
-    // multicast_dnshost_name controls the hostname for this agent. If none is specified a random one will be generated
-    pub multicast_dnshost_name: String,
+    // multicast_dns_host_name controls the hostname for this agent. If none is specified a random one will be generated
+    pub multicast_dns_host_name: String,
 
     // disconnected_timeout defaults to 5 seconds when this property is nil.
     // If the duration is 0, the ICE Agent will never go to disconnected

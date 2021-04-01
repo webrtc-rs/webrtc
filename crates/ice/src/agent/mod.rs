@@ -3,7 +3,7 @@ mod agent_gather_vnet_test;
 #[cfg(test)]
 mod agent_test;
 #[cfg(test)]
-mod agent_vnet_test;
+pub(crate) mod agent_vnet_test;
 
 pub mod agent_config;
 pub mod agent_gather;
@@ -83,7 +83,7 @@ impl Agent {
             return Err(ERR_PORT.to_owned());
         }
 
-        let mut mdns_name = config.multicast_dnshost_name.clone();
+        let mut mdns_name = config.multicast_dns_host_name.clone();
         if mdns_name.is_empty() {
             mdns_name = generate_multicast_dns_name();
         }
