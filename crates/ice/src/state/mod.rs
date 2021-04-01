@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod state_test;
+
 use std::fmt;
 
 // ConnectionState is an enum showing the state of a ICE Connection
