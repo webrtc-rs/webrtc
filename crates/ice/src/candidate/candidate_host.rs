@@ -16,7 +16,7 @@ impl CandidateHostConfig {
     // NewCandidateHost creates a new host candidate
     pub async fn new_candidate_host(
         self,
-        agent_internal: Arc<Mutex<AgentInternal>>,
+        agent_internal: Option<Arc<Mutex<AgentInternal>>>,
     ) -> Result<CandidateBase, Error> {
         let mut candidate_id = self.base_config.candidate_id;
         if candidate_id.is_empty() {
@@ -35,7 +35,7 @@ impl CandidateHostConfig {
             network: self.base_config.network,
             network_type: Arc::new(AtomicU8::new(NetworkType::Udp4 as u8)),
             conn: self.base_config.conn,
-            agent_internal: Some(agent_internal),
+            agent_internal,
             ..Default::default()
         };
 

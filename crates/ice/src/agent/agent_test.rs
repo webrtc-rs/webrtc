@@ -52,7 +52,7 @@ async fn test_pair_priority() -> Result<(), Error> {
     };
     let host_local: Arc<dyn Candidate + Send + Sync> = Arc::new(
         host_config
-            .new_candidate_host(a.agent_internal.clone())
+            .new_candidate_host(Some(a.agent_internal.clone()))
             .await?,
     );
 
@@ -70,7 +70,7 @@ async fn test_pair_priority() -> Result<(), Error> {
     };
 
     let relay_remote = relay_config
-        .new_candidate_relay(a.agent_internal.clone())
+        .new_candidate_relay(Some(a.agent_internal.clone()))
         .await?;
 
     let srflx_config = CandidateServerReflexiveConfig {
@@ -87,7 +87,7 @@ async fn test_pair_priority() -> Result<(), Error> {
     };
 
     let srflx_remote = srflx_config
-        .new_candidate_server_reflexive(a.agent_internal.clone())
+        .new_candidate_server_reflexive(Some(a.agent_internal.clone()))
         .await?;
 
     let prflx_config = CandidatePeerReflexiveConfig {
@@ -104,7 +104,7 @@ async fn test_pair_priority() -> Result<(), Error> {
     };
 
     let prflx_remote = prflx_config
-        .new_candidate_peer_reflexive(a.agent_internal.clone())
+        .new_candidate_peer_reflexive(Some(a.agent_internal.clone()))
         .await?;
 
     let host_config = CandidateHostConfig {
@@ -118,7 +118,7 @@ async fn test_pair_priority() -> Result<(), Error> {
         ..Default::default()
     };
     let host_remote = host_config
-        .new_candidate_host(a.agent_internal.clone())
+        .new_candidate_host(Some(a.agent_internal.clone()))
         .await?;
 
     let remotes: Vec<Arc<dyn Candidate + Send + Sync>> = vec![
@@ -189,7 +189,7 @@ async fn test_on_selected_candidate_pair_change() -> Result<(), Error> {
         ..Default::default()
     };
     let host_local = host_config
-        .new_candidate_host(a.agent_internal.clone())
+        .new_candidate_host(Some(a.agent_internal.clone()))
         .await?;
 
     let relay_config = CandidateRelayConfig {
@@ -205,7 +205,7 @@ async fn test_on_selected_candidate_pair_change() -> Result<(), Error> {
         ..Default::default()
     };
     let relay_remote = relay_config
-        .new_candidate_relay(a.agent_internal.clone())
+        .new_candidate_relay(Some(a.agent_internal.clone()))
         .await?;
 
     // select the pair
@@ -244,7 +244,7 @@ async fn test_handle_peer_reflexive_udp_pflx_candidate() -> Result<(), Error> {
 
     let local: Arc<dyn Candidate + Send + Sync> = Arc::new(
         host_config
-            .new_candidate_host(a.agent_internal.clone())
+            .new_candidate_host(Some(a.agent_internal.clone()))
             .await?,
     );
     let remote = SocketAddr::from_str("172.17.0.3:999")?;
@@ -348,7 +348,7 @@ async fn test_handle_peer_reflexive_unknown_remote() -> Result<(), Error> {
 
     let local: Arc<dyn Candidate + Send + Sync> = Arc::new(
         host_config
-            .new_candidate_host(a.agent_internal.clone())
+            .new_candidate_host(Some(a.agent_internal.clone()))
             .await?,
     );
     let remote = SocketAddr::from_str("172.17.0.3:999")?;

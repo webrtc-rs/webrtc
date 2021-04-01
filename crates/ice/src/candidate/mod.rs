@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod candidate_pair_test;
+
 pub mod candidate_base;
 pub mod candidate_host;
 pub mod candidate_peer_reflexive;
@@ -396,7 +399,7 @@ pub async fn unmarshal_remote_candidate(
                 },
                 tcp_type,
             };
-            config.new_candidate_host(agent_internal).await
+            config.new_candidate_host(Some(agent_internal)).await
         }
         "srflx" => {
             let config = CandidateServerReflexiveConfig {
@@ -412,7 +415,9 @@ pub async fn unmarshal_remote_candidate(
                 rel_addr,
                 rel_port,
             };
-            config.new_candidate_server_reflexive(agent_internal).await
+            config
+                .new_candidate_server_reflexive(Some(agent_internal))
+                .await
         }
         "prflx" => {
             let config = CandidatePeerReflexiveConfig {
@@ -429,7 +434,9 @@ pub async fn unmarshal_remote_candidate(
                 rel_port,
             };
 
-            config.new_candidate_peer_reflexive(agent_internal).await
+            config
+                .new_candidate_peer_reflexive(Some(agent_internal))
+                .await
         }
         "relay" => {
             let config = CandidateRelayConfig {
@@ -446,7 +453,7 @@ pub async fn unmarshal_remote_candidate(
                 rel_port,
                 ..Default::default()
             };
-            config.new_candidate_relay(agent_internal).await
+            config.new_candidate_relay(Some(agent_internal)).await
         }
         _ => Err(Error::new(format!(
             "{} ({})",

@@ -284,34 +284,36 @@ impl Agent {
                     ..Default::default()
                 };
 
-                let candidate: Arc<dyn Candidate + Send + Sync> =
-                    match host_config.new_candidate_host(agent_internal.clone()).await {
-                        Ok(candidate) => {
-                            if mdns_mode == MulticastDnsMode::QueryAndGather {
-                                if let Err(err) = candidate.set_ip(&ip).await {
-                                    log::warn!(
-                                        "Failed to create host candidate: {} {} {}: {}",
-                                        network,
-                                        mapped_ip,
-                                        port,
-                                        err
-                                    );
-                                    continue;
-                                }
+                let candidate: Arc<dyn Candidate + Send + Sync> = match host_config
+                    .new_candidate_host(Some(agent_internal.clone()))
+                    .await
+                {
+                    Ok(candidate) => {
+                        if mdns_mode == MulticastDnsMode::QueryAndGather {
+                            if let Err(err) = candidate.set_ip(&ip).await {
+                                log::warn!(
+                                    "Failed to create host candidate: {} {} {}: {}",
+                                    network,
+                                    mapped_ip,
+                                    port,
+                                    err
+                                );
+                                continue;
                             }
-                            Arc::new(candidate)
                         }
-                        Err(err) => {
-                            log::warn!(
-                                "Failed to create host candidate: {} {} {}: {}",
-                                network,
-                                mapped_ip,
-                                port,
-                                err
-                            );
-                            continue;
-                        }
-                    };
+                        Arc::new(candidate)
+                    }
+                    Err(err) => {
+                        log::warn!(
+                            "Failed to create host candidate: {} {} {}: {}",
+                            network,
+                            mapped_ip,
+                            port,
+                            err
+                        );
+                        continue;
+                    }
+                };
 
                 {
                     let mut ai = agent_internal.lock().await;
@@ -410,7 +412,7 @@ impl Agent {
                 };
 
                 let candidate: Arc<dyn Candidate + Send + Sync> = match srflx_config
-                    .new_candidate_server_reflexive(agent_internal2.clone())
+                    .new_candidate_server_reflexive(Some(agent_internal2.clone()))
                     .await
                 {
                     Ok(candidate) => Arc::new(candidate),
@@ -534,7 +536,7 @@ impl Agent {
                     };
 
                     let candidate: Arc<dyn Candidate + Send + Sync> = match srflx_config
-                        .new_candidate_server_reflexive(agent_internal2.clone())
+                        .new_candidate_server_reflexive(Some(agent_internal2.clone()))
                         .await
                     {
                         Ok(candidate) => Arc::new(candidate),
@@ -685,7 +687,7 @@ impl Agent {
                 };
 
                 let candidate: Arc<dyn Candidate + Send + Sync> = match relay_config
-                    .new_candidate_relay(agent_internal2.clone())
+                    .new_candidate_relay(Some(agent_internal2.clone()))
                     .await
                 {
                     Ok(candidate) => Arc::new(candidate),

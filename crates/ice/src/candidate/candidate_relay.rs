@@ -20,7 +20,7 @@ impl CandidateRelayConfig {
     // new_candidate_relay creates a new relay candidate
     pub async fn new_candidate_relay(
         self,
-        agent_internal: Arc<Mutex<AgentInternal>>,
+        agent_internal: Option<Arc<Mutex<AgentInternal>>>,
     ) -> Result<CandidateBase, Error> {
         let mut candidate_id = self.base_config.candidate_id;
         if candidate_id.is_empty() {
@@ -52,7 +52,7 @@ impl CandidateRelayConfig {
                 port: self.rel_port,
             }),
             conn: self.base_config.conn,
-            agent_internal: Some(agent_internal),
+            agent_internal,
             relay_client: self.relay_client.clone(),
             ..Default::default()
         };

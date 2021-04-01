@@ -19,7 +19,7 @@ impl CandidateServerReflexiveConfig {
     // new_candidate_server_reflexive creates a new server reflective candidate
     pub async fn new_candidate_server_reflexive(
         self,
-        agent_internal: Arc<Mutex<AgentInternal>>,
+        agent_internal: Option<Arc<Mutex<AgentInternal>>>,
     ) -> Result<CandidateBase, Error> {
         let ip: IpAddr = match self.base_config.address.parse() {
             Ok(ip) => ip,
@@ -51,7 +51,7 @@ impl CandidateServerReflexiveConfig {
                 port: self.rel_port,
             }),
             conn: self.base_config.conn,
-            agent_internal: Some(agent_internal),
+            agent_internal,
             ..Default::default()
         };
 

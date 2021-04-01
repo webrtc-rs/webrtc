@@ -688,7 +688,7 @@ impl AgentInternal {
                 };
 
                 match prflx_candidate_config
-                    .new_candidate_peer_reflexive(agent_internal)
+                    .new_candidate_peer_reflexive(Some(agent_internal))
                     .await
                 {
                     Ok(prflx_candidate) => remote_candidate = Some(Arc::new(prflx_candidate)),
