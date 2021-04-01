@@ -7,6 +7,7 @@ use crate::network_type::*;
 use regex::Regex;
 use tokio::sync::mpsc;
 
+#[cfg(target_os = "linux")]
 #[tokio::test]
 async fn test_multicast_dns_only_connection() -> Result<(), Error> {
     let cfg0 = AgentConfig {
@@ -41,6 +42,7 @@ async fn test_multicast_dns_only_connection() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
 #[tokio::test]
 async fn test_multicast_dns_mixed_connection() -> Result<(), Error> {
     let cfg0 = AgentConfig {
@@ -75,6 +77,7 @@ async fn test_multicast_dns_mixed_connection() -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
 #[tokio::test]
 async fn test_multicast_dns_static_host_name() -> Result<(), Error> {
     let cfg0 = AgentConfig {
