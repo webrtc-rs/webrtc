@@ -345,7 +345,7 @@ pub(crate) async fn copy_candidate(
 ) -> Result<Arc<dyn Candidate + Send + Sync>, Error> {
     if let Some(ai) = o.get_agent() {
         Ok(Arc::new(
-            unmarshal_remote_candidate(Arc::clone(ai), o.marshal()).await?,
+            unmarshal_remote_candidate(Some(Arc::clone(ai)), o.marshal()).await?,
         ))
     } else {
         Err(Error::new("No AgentIntenal".to_owned()))

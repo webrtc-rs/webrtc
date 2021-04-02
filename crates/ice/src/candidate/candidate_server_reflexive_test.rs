@@ -1,30 +1,12 @@
+use super::candidate_relay_test::OptimisticAuthHandler;
 use super::*;
-
 use crate::agent::agent_config::AgentConfig;
 use crate::agent::agent_vnet_test::{connect_with_vnet, on_connected};
 use crate::agent::Agent;
 use crate::url::{SchemeType, Url};
 use std::time::Duration;
 use tokio::net::UdpSocket;
-use turn::auth::AuthHandler;
 use util::Error;
-
-struct OptimisticAuthHandler;
-
-impl AuthHandler for OptimisticAuthHandler {
-    fn auth_handle(
-        &self,
-        _username: &str,
-        _realm: &str,
-        _src_addr: SocketAddr,
-    ) -> Result<Vec<u8>, Error> {
-        Ok(turn::auth::generate_auth_key(
-            "username",
-            "webrtc.rs",
-            "password",
-        ))
-    }
-}
 
 //use std::io::Write;
 

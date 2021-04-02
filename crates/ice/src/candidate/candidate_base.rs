@@ -123,6 +123,7 @@ impl Candidate for CandidateBase {
 
         let mut buf = vec![];
         buf.extend_from_slice(self.candidate_type().to_string().as_bytes());
+        buf.extend_from_slice(self.address.as_bytes());
         buf.extend_from_slice(self.network_type().to_string().as_bytes());
 
         let mut hasher = Hasher::new();

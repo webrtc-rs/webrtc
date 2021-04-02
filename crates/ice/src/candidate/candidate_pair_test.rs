@@ -2,7 +2,7 @@ use super::*;
 
 use util::Error;
 
-async fn host_candidate() -> Result<CandidateBase, Error> {
+pub(crate) async fn host_candidate() -> Result<CandidateBase, Error> {
     CandidateHostConfig {
         base_config: CandidateBaseConfig {
             network: "udp".to_owned(),
@@ -16,7 +16,7 @@ async fn host_candidate() -> Result<CandidateBase, Error> {
     .await
 }
 
-async fn prflx_candidate() -> Result<CandidateBase, Error> {
+pub(crate) async fn prflx_candidate() -> Result<CandidateBase, Error> {
     CandidatePeerReflexiveConfig {
         base_config: CandidateBaseConfig {
             network: "udp".to_owned(),
@@ -30,7 +30,7 @@ async fn prflx_candidate() -> Result<CandidateBase, Error> {
     .await
 }
 
-async fn srflx_candidate() -> Result<CandidateBase, Error> {
+pub(crate) async fn srflx_candidate() -> Result<CandidateBase, Error> {
     CandidateServerReflexiveConfig {
         base_config: CandidateBaseConfig {
             network: "udp".to_owned(),
@@ -44,7 +44,7 @@ async fn srflx_candidate() -> Result<CandidateBase, Error> {
     .await
 }
 
-async fn relay_candidate() -> Result<CandidateBase, Error> {
+pub(crate) async fn relay_candidate() -> Result<CandidateBase, Error> {
     CandidateRelayConfig {
         base_config: CandidateBaseConfig {
             network: "udp".to_owned(),

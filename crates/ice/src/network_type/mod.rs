@@ -43,7 +43,7 @@ impl From<u8> for NetworkType {
         match v {
             1 => NetworkType::Udp4,
             2 => NetworkType::Udp6,
-            3 => NetworkType::Udp4,
+            3 => NetworkType::Tcp4,
             4 => NetworkType::Tcp6,
             _ => NetworkType::Unspecified,
         }

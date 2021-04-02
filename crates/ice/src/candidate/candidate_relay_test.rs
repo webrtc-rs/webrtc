@@ -9,7 +9,7 @@ use tokio::net::UdpSocket;
 use turn::auth::AuthHandler;
 use util::Error;
 
-struct OptimisticAuthHandler;
+pub(crate) struct OptimisticAuthHandler;
 
 impl AuthHandler for OptimisticAuthHandler {
     fn auth_handle(
