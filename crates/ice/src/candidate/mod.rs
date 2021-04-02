@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod candidate_pair_test;
 #[cfg(test)]
+mod candidate_relay_test;
+#[cfg(test)]
 mod candidate_test;
 
 pub mod candidate_base;
