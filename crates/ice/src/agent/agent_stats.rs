@@ -161,6 +161,7 @@ impl Default for CandidatePairStats {
 }
 
 // CandidateStats contains ICE candidate statistics related to the ICETransport objects.
+#[derive(Debug, Clone)]
 pub struct CandidateStats {
     // timestamp is the timestamp associated with this object.
     pub timestamp: Instant,

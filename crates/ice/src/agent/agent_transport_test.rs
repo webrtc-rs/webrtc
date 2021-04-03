@@ -8,7 +8,7 @@ use waitgroup::WaitGroup;
 pub(crate) async fn pipe(
     default_config0: Option<AgentConfig>,
     default_config1: Option<AgentConfig>,
-) -> Result<(Arc<impl Conn>, Arc<impl Conn>), Error> {
+) -> Result<(Arc<impl Conn>, Arc<impl Conn>, Arc<Agent>, Arc<Agent>), Error> {
     let (a_notifier, mut a_connected) = on_connected();
     let (b_notifier, mut b_connected) = on_connected();
 
@@ -41,7 +41,7 @@ pub(crate) async fn pipe(
     let _ = a_connected.recv().await;
     let _ = b_connected.recv().await;
 
-    Ok((a_conn, b_conn))
+    Ok((a_conn, b_conn, a_agent, b_agent))
 }
 
 #[tokio::test]
@@ -108,7 +108,7 @@ async fn test_remote_local_addr() -> Result<(), Error> {
 
 #[tokio::test]
 async fn test_conn_stats() -> Result<(), Error> {
-    let (ca, cb) = pipe(None, None).await?;
+    let (ca, cb, _, _) = pipe(None, None).await?;
     let na = ca.send(&vec![0u8; 10]).await?;
 
     let wg = WaitGroup::new();

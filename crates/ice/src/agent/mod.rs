@@ -30,7 +30,7 @@ use stun::{agent::*, attributes::*, fingerprint::*, integrity::*, message::*, xo
 use util::{vnet::net::*, Buffer, Error};
 
 use std::collections::HashMap;
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, SocketAddr};
 
 use crate::rand::*;
 
@@ -43,6 +43,7 @@ use std::time::SystemTime;
 use tokio::sync::{broadcast, mpsc, Mutex};
 use tokio::time::{Duration, Instant};
 
+#[derive(Debug, Clone)]
 pub(crate) struct BindingRequest {
     pub(crate) timestamp: Instant,
     pub(crate) transaction_id: TransactionId,
@@ -50,9 +51,20 @@ pub(crate) struct BindingRequest {
     pub(crate) is_use_candidate: bool,
 }
 
+impl Default for BindingRequest {
+    fn default() -> Self {
+        BindingRequest {
+            timestamp: Instant::now(),
+            transaction_id: TransactionId::default(),
+            destination: SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0),
+            is_use_candidate: false,
+        }
+    }
+}
+
 pub type OnConnectionStateChangeHdlrFn = Box<dyn FnMut(ConnectionState) + Send + Sync>;
 pub type OnSelectedCandidatePairChangeHdlrFn =
-    Box<dyn Fn(&(dyn Candidate + Send + Sync), &(dyn Candidate + Send + Sync)) + Send + Sync>;
+    Box<dyn FnMut(&(dyn Candidate + Send + Sync), &(dyn Candidate + Send + Sync)) + Send + Sync>;
 pub type OnCandidateHdlrFn = Box<dyn FnMut(Option<Arc<dyn Candidate + Send + Sync>>) + Send + Sync>;
 pub type GatherCandidateCancelFn = Box<dyn Fn() + Send + Sync>;
 
@@ -297,11 +309,16 @@ impl Agent {
             // CandidatePair and ConnectionState are usually changed at once.
             // Blocking one by the other one causes deadlock.
             while chan_candidate_pair_rx.recv().await.is_some() {
-                let ai = agent_internal_pair.lock().await;
-                let selected_pair = ai.agent_conn.selected_pair.lock().await;
-                if let (Some(on_selected_candidate_pair_change), Some(p)) =
-                    (&ai.on_selected_candidate_pair_change_hdlr, &*selected_pair)
-                {
+                let mut ai = agent_internal_pair.lock().await;
+                let selected_pair = {
+                    let selected_pair = ai.agent_conn.selected_pair.lock().await;
+                    selected_pair.clone()
+                };
+
+                if let (Some(on_selected_candidate_pair_change), Some(p)) = (
+                    &mut ai.on_selected_candidate_pair_change_hdlr,
+                    &selected_pair,
+                ) {
                     on_selected_candidate_pair_change(&*p.local, &*p.remote);
                 }
             }
@@ -477,6 +494,10 @@ impl Agent {
             .store(GatheringState::New as u8, Ordering::SeqCst);
 
         let mut ai = self.agent_internal.lock().await;
+
+        if ai.done_tx.is_none() {
+            return Err(ERR_CLOSED.to_owned());
+        }
 
         // Clear all agent needed to take back to fresh state
         ai.local_ufrag = ufrag;

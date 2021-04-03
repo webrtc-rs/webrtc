@@ -9,13 +9,16 @@ use crate::control::AttrControlling;
 use crate::priority::PriorityAttr;
 use crate::use_candidate::UseCandidateAttr;
 
+use crate::agent::agent_transport_test::pipe;
 use async_trait::async_trait;
 use std::io;
 use std::net::Ipv4Addr;
+use std::ops::Sub;
 use std::str::FromStr;
 use stun::message::*;
 use stun::textattrs::Username;
 use util::{vnet::*, Conn, Error};
+use waitgroup::{WaitGroup, Worker};
 
 #[tokio::test]
 async fn test_pair_search() -> Result<(), Error> {
@@ -982,6 +985,1148 @@ async fn test_connection_state_callback() -> Result<(), Error> {
 
     log::debug!("wait is_closed_rx");
     let _ = is_closed_rx.recv().await;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_invalid_gather() -> Result<(), Error> {
+    //"Gather with no OnCandidate should error"
+    let a = Agent::new(AgentConfig::default()).await?;
+
+    if let Err(err) = a.gather_candidates().await {
+        assert_eq!(
+            err, *ERR_NO_ON_CANDIDATE_HANDLER,
+            "trickle GatherCandidates succeeded without OnCandidate"
+        );
+    }
+
+    a.close().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_candidate_pair_stats() -> Result<(), Error> {
+    let a = Agent::new(AgentConfig::default()).await?;
+
+    let host_local: Arc<dyn Candidate + Send + Sync> = Arc::new(
+        CandidateHostConfig {
+            base_config: CandidateBaseConfig {
+                network: "udp".to_owned(),
+                address: "192.168.1.1".to_owned(),
+                port: 19216,
+                component: 1,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+        .new_candidate_host(Some(Arc::clone(&a.agent_internal)))
+        .await?,
+    );
+
+    let relay_remote: Arc<dyn Candidate + Send + Sync> = Arc::new(
+        CandidateRelayConfig {
+            base_config: CandidateBaseConfig {
+                network: "udp".to_owned(),
+                address: "1.2.3.4".to_owned(),
+                port: 2340,
+                component: 1,
+                ..Default::default()
+            },
+            rel_addr: "4.3.2.1".to_owned(),
+            rel_port: 43210,
+            ..Default::default()
+        }
+        .new_candidate_relay(Some(Arc::clone(&a.agent_internal)))
+        .await?,
+    );
+
+    let srflx_remote: Arc<dyn Candidate + Send + Sync> = Arc::new(
+        CandidateServerReflexiveConfig {
+            base_config: CandidateBaseConfig {
+                network: "udp".to_owned(),
+                address: "10.10.10.2".to_owned(),
+                port: 19218,
+                component: 1,
+                ..Default::default()
+            },
+            rel_addr: "4.3.2.1".to_owned(),
+            rel_port: 43212,
+            ..Default::default()
+        }
+        .new_candidate_server_reflexive(Some(Arc::clone(&a.agent_internal)))
+        .await?,
+    );
+
+    let prflx_remote: Arc<dyn Candidate + Send + Sync> = Arc::new(
+        CandidatePeerReflexiveConfig {
+            base_config: CandidateBaseConfig {
+                network: "udp".to_owned(),
+                address: "10.10.10.2".to_owned(),
+                port: 19217,
+                component: 1,
+                ..Default::default()
+            },
+            rel_addr: "4.3.2.1".to_owned(),
+            rel_port: 43211,
+            ..Default::default()
+        }
+        .new_candidate_peer_reflexive(Some(Arc::clone(&a.agent_internal)))
+        .await?,
+    );
+
+    let host_remote: Arc<dyn Candidate + Send + Sync> = Arc::new(
+        CandidateHostConfig {
+            base_config: CandidateBaseConfig {
+                network: "udp".to_owned(),
+                address: "1.2.3.5".to_owned(),
+                port: 12350,
+                component: 1,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+        .new_candidate_host(Some(Arc::clone(&a.agent_internal)))
+        .await?,
+    );
+
+    for remote in &[
+        Arc::clone(&relay_remote),
+        Arc::clone(&srflx_remote),
+        Arc::clone(&prflx_remote),
+        Arc::clone(&host_remote),
+    ] {
+        let mut ai = a.agent_internal.lock().await;
+        let p = ai.find_pair(&host_local, &remote).await;
+
+        if p.is_none() {
+            ai.add_pair(Arc::clone(&host_local), Arc::clone(&remote))
+                .await;
+        }
+    }
+
+    {
+        let ai = a.agent_internal.lock().await;
+        if let Some(p) = ai.find_pair(&host_local, &prflx_remote).await {
+            p.state
+                .store(CandidatePairState::Failed as u8, Ordering::SeqCst);
+        }
+    }
+
+    let stats = a.get_candidate_pairs_stats().await;
+    assert_eq!(stats.len(), 4, "expected 4 candidate pairs stats");
+
+    let (mut relay_pair_stat, mut srflx_pair_stat, mut prflx_pair_stat, mut host_pair_stat) = (
+        CandidatePairStats::default(),
+        CandidatePairStats::default(),
+        CandidatePairStats::default(),
+        CandidatePairStats::default(),
+    );
+
+    for cps in stats {
+        assert_eq!(
+            cps.local_candidate_id,
+            host_local.id(),
+            "invalid local candidate id"
+        );
+
+        if cps.remote_candidate_id == relay_remote.id() {
+            relay_pair_stat = cps;
+        } else if cps.remote_candidate_id == srflx_remote.id() {
+            srflx_pair_stat = cps;
+        } else if cps.remote_candidate_id == prflx_remote.id() {
+            prflx_pair_stat = cps;
+        } else if cps.remote_candidate_id == host_remote.id() {
+            host_pair_stat = cps;
+        } else {
+            assert!(false, "invalid remote candidate ID");
+        }
+    }
+
+    assert_eq!(
+        relay_pair_stat.remote_candidate_id,
+        relay_remote.id(),
+        "missing host-relay pair stat"
+    );
+    assert_eq!(
+        srflx_pair_stat.remote_candidate_id,
+        srflx_remote.id(),
+        "missing host-srflx pair stat"
+    );
+    assert_eq!(
+        prflx_pair_stat.remote_candidate_id,
+        prflx_remote.id(),
+        "missing host-prflx pair stat"
+    );
+    assert_eq!(
+        host_pair_stat.remote_candidate_id,
+        host_remote.id(),
+        "missing host-host pair stat"
+    );
+    assert_eq!(
+        prflx_pair_stat.state,
+        CandidatePairState::Failed,
+        "expected host-prfflx pair to have state failed, it has state {} instead",
+        prflx_pair_stat.state
+    );
+
+    a.close().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_local_candidate_stats() -> Result<(), Error> {
+    let a = Agent::new(AgentConfig::default()).await?;
+
+    let host_local: Arc<dyn Candidate + Send + Sync> = Arc::new(
+        CandidateHostConfig {
+            base_config: CandidateBaseConfig {
+                network: "udp".to_owned(),
+                address: "192.168.1.1".to_owned(),
+                port: 19216,
+                component: 1,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+        .new_candidate_host(Some(Arc::clone(&a.agent_internal)))
+        .await?,
+    );
+
+    let srflx_local: Arc<dyn Candidate + Send + Sync> = Arc::new(
+        CandidateServerReflexiveConfig {
+            base_config: CandidateBaseConfig {
+                network: "udp".to_owned(),
+                address: "192.168.1.1".to_owned(),
+                port: 19217,
+                component: 1,
+                ..Default::default()
+            },
+            rel_addr: "4.3.2.1".to_owned(),
+            rel_port: 43212,
+            ..Default::default()
+        }
+        .new_candidate_server_reflexive(Some(Arc::clone(&a.agent_internal)))
+        .await?,
+    );
+
+    {
+        let mut ai = a.agent_internal.lock().await;
+        ai.local_candidates.insert(
+            NetworkType::Udp4,
+            vec![Arc::clone(&host_local), Arc::clone(&srflx_local)],
+        );
+    }
+
+    let local_stats = a.get_local_candidates_stats().await;
+    assert_eq!(
+        local_stats.len(),
+        2,
+        "expected 2 local candidates stats, got {} instead",
+        local_stats.len()
+    );
+
+    let (mut host_local_stat, mut srflx_local_stat) =
+        (CandidateStats::default(), CandidateStats::default());
+    for stats in local_stats {
+        let candidate = if stats.id == host_local.id() {
+            host_local_stat = stats.clone();
+            Arc::clone(&host_local)
+        } else if stats.id == srflx_local.id() {
+            srflx_local_stat = stats.clone();
+            Arc::clone(&srflx_local)
+        } else {
+            assert!(false, "invalid local candidate ID");
+            Arc::clone(&srflx_local)
+        };
+
+        assert_eq!(
+            stats.candidate_type,
+            candidate.candidate_type(),
+            "invalid stats CandidateType"
+        );
+        assert_eq!(
+            stats.priority,
+            candidate.priority(),
+            "invalid stats CandidateType"
+        );
+        assert_eq!(stats.ip, candidate.address(), "invalid stats IP");
+    }
+
+    assert_eq!(
+        host_local_stat.id,
+        host_local.id(),
+        "missing host local stat"
+    );
+    assert_eq!(
+        srflx_local_stat.id,
+        srflx_local.id(),
+        "missing srflx local stat"
+    );
+
+    a.close().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_remote_candidate_stats() -> Result<(), Error> {
+    let a = Agent::new(AgentConfig::default()).await?;
+
+    let relay_remote: Arc<dyn Candidate + Send + Sync> = Arc::new(
+        CandidateRelayConfig {
+            base_config: CandidateBaseConfig {
+                network: "udp".to_owned(),
+                address: "1.2.3.4".to_owned(),
+                port: 12340,
+                component: 1,
+                ..Default::default()
+            },
+            rel_addr: "4.3.2.1".to_owned(),
+            rel_port: 43210,
+            ..Default::default()
+        }
+        .new_candidate_relay(Some(Arc::clone(&a.agent_internal)))
+        .await?,
+    );
+
+    let srflx_remote: Arc<dyn Candidate + Send + Sync> = Arc::new(
+        CandidateServerReflexiveConfig {
+            base_config: CandidateBaseConfig {
+                network: "udp".to_owned(),
+                address: "10.10.10.2".to_owned(),
+                port: 19218,
+                component: 1,
+                ..Default::default()
+            },
+            rel_addr: "4.3.2.1".to_owned(),
+            rel_port: 43212,
+            ..Default::default()
+        }
+        .new_candidate_server_reflexive(Some(Arc::clone(&a.agent_internal)))
+        .await?,
+    );
+
+    let prflx_remote: Arc<dyn Candidate + Send + Sync> = Arc::new(
+        CandidatePeerReflexiveConfig {
+            base_config: CandidateBaseConfig {
+                network: "udp".to_owned(),
+                address: "10.10.10.2".to_owned(),
+                port: 19217,
+                component: 1,
+                ..Default::default()
+            },
+            rel_addr: "4.3.2.1".to_owned(),
+            rel_port: 43211,
+            ..Default::default()
+        }
+        .new_candidate_peer_reflexive(Some(Arc::clone(&a.agent_internal)))
+        .await?,
+    );
+
+    let host_remote: Arc<dyn Candidate + Send + Sync> = Arc::new(
+        CandidateHostConfig {
+            base_config: CandidateBaseConfig {
+                network: "udp".to_owned(),
+                address: "1.2.3.5".to_owned(),
+                port: 12350,
+                component: 1,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+        .new_candidate_host(Some(Arc::clone(&a.agent_internal)))
+        .await?,
+    );
+
+    {
+        let mut ai = a.agent_internal.lock().await;
+        ai.remote_candidates.insert(
+            NetworkType::Udp4,
+            vec![
+                Arc::clone(&relay_remote),
+                Arc::clone(&srflx_remote),
+                Arc::clone(&prflx_remote),
+                Arc::clone(&host_remote),
+            ],
+        );
+    }
+
+    let remote_stats = a.get_remote_candidates_stats().await;
+    assert_eq!(
+        remote_stats.len(),
+        4,
+        "expected 4 remote candidates stats, got {} instead",
+        remote_stats.len()
+    );
+
+    let (mut relay_remote_stat, mut srflx_remote_stat, mut prflx_remote_stat, mut host_remote_stat) = (
+        CandidateStats::default(),
+        CandidateStats::default(),
+        CandidateStats::default(),
+        CandidateStats::default(),
+    );
+    for stats in remote_stats {
+        let candidate = if stats.id == relay_remote.id() {
+            relay_remote_stat = stats.clone();
+            Arc::clone(&relay_remote)
+        } else if stats.id == srflx_remote.id() {
+            srflx_remote_stat = stats.clone();
+            Arc::clone(&srflx_remote)
+        } else if stats.id == prflx_remote.id() {
+            prflx_remote_stat = stats.clone();
+            Arc::clone(&prflx_remote)
+        } else if stats.id == host_remote.id() {
+            host_remote_stat = stats.clone();
+            Arc::clone(&host_remote)
+        } else {
+            assert!(false, "invalid remote candidate ID");
+            Arc::clone(&host_remote)
+        };
+
+        assert_eq!(
+            stats.candidate_type,
+            candidate.candidate_type(),
+            "invalid stats CandidateType"
+        );
+        assert_eq!(
+            stats.priority,
+            candidate.priority(),
+            "invalid stats CandidateType"
+        );
+        assert_eq!(stats.ip, candidate.address(), "invalid stats IP");
+    }
+
+    assert_eq!(
+        relay_remote_stat.id,
+        relay_remote.id(),
+        "missing relay remote stat"
+    );
+    assert_eq!(
+        srflx_remote_stat.id,
+        srflx_remote.id(),
+        "missing srflx remote stat"
+    );
+    assert_eq!(
+        prflx_remote_stat.id,
+        prflx_remote.id(),
+        "missing prflx remote stat"
+    );
+    assert_eq!(
+        host_remote_stat.id,
+        host_remote.id(),
+        "missing host remote stat"
+    );
+
+    a.close().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_init_ext_ip_mapping() -> Result<(), Error> {
+    // a.extIPMapper should be nil by default
+    let a = Agent::new(AgentConfig::default()).await?;
+    assert!(
+        a.ext_ip_mapper.is_none(),
+        "a.extIPMapper should be none by default"
+    );
+    a.close().await?;
+
+    // a.extIPMapper should be nil when NAT1To1IPs is a non-nil empty array
+    let a = Agent::new(AgentConfig {
+        nat_1to1_ips: vec![],
+        nat_1to1_ip_candidate_type: CandidateType::Host,
+        ..Default::default()
+    })
+    .await?;
+    assert!(
+        a.ext_ip_mapper.is_none(),
+        "a.extIPMapper should be none by default"
+    );
+    a.close().await?;
+
+    // NewAgent should return an error when 1:1 NAT for host candidate is enabled
+    // but the candidate type does not appear in the CandidateTypes.
+    if let Err(err) = Agent::new(AgentConfig {
+        nat_1to1_ips: vec!["1.2.3.4".to_owned()],
+        nat_1to1_ip_candidate_type: CandidateType::Host,
+        candidate_types: vec![CandidateType::Relay],
+        ..Default::default()
+    })
+    .await
+    {
+        assert_eq!(
+            err, *ERR_INEFFECTIVE_NAT_1TO1_IP_MAPPING_HOST,
+            "Unexpected error: {}",
+            err
+        );
+    } else {
+        assert!(false, "expected error, but got ok");
+    }
+
+    // NewAgent should return an error when 1:1 NAT for srflx candidate is enabled
+    // but the candidate type does not appear in the CandidateTypes.
+    if let Err(err) = Agent::new(AgentConfig {
+        nat_1to1_ips: vec!["1.2.3.4".to_owned()],
+        nat_1to1_ip_candidate_type: CandidateType::ServerReflexive,
+        candidate_types: vec![CandidateType::Relay],
+        ..Default::default()
+    })
+    .await
+    {
+        assert_eq!(
+            err, *ERR_INEFFECTIVE_NAT_1TO1_IP_MAPPING_SRFLX,
+            "Unexpected error: {}",
+            err
+        );
+    } else {
+        assert!(false, "expected error, but got ok");
+    }
+
+    // NewAgent should return an error when 1:1 NAT for host candidate is enabled
+    // along with mDNS with MulticastDNSModeQueryAndGather
+    if let Err(err) = Agent::new(AgentConfig {
+        nat_1to1_ips: vec!["1.2.3.4".to_owned()],
+        nat_1to1_ip_candidate_type: CandidateType::Host,
+        multicast_dns_mode: MulticastDnsMode::QueryAndGather,
+        ..Default::default()
+    })
+    .await
+    {
+        assert_eq!(
+            err, *ERR_MULTICAST_DNS_WITH_NAT_1TO1_IP_MAPPING,
+            "Unexpected error: {}",
+            err
+        );
+    } else {
+        assert!(false, "expected error, but got ok");
+    }
+
+    // NewAgent should return if newExternalIPMapper() returns an error.
+    if let Err(err) = Agent::new(AgentConfig {
+        nat_1to1_ips: vec!["bad.2.3.4".to_owned()], // bad IP
+        nat_1to1_ip_candidate_type: CandidateType::Host,
+        ..Default::default()
+    })
+    .await
+    {
+        assert_eq!(
+            err, *ERR_INVALID_NAT_1TO1_IP_MAPPING,
+            "Unexpected error: {}",
+            err
+        );
+    } else {
+        assert!(false, "expected error, but got ok");
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_binding_request_timeout() -> Result<(), Error> {
+    const EXPECTED_REMOVAL_COUNT: usize = 2;
+
+    let a = Agent::new(AgentConfig::default()).await?;
+
+    let now = Instant::now();
+    {
+        let mut ai = a.agent_internal.lock().await;
+        ai.pending_binding_requests.push(BindingRequest {
+            timestamp: now, // valid
+            ..Default::default()
+        });
+        ai.pending_binding_requests.push(BindingRequest {
+            timestamp: now.sub(Duration::from_millis(3900)), // valid
+            ..Default::default()
+        });
+        ai.pending_binding_requests.push(BindingRequest {
+            timestamp: now.sub(Duration::from_millis(4100)), // invalid
+            ..Default::default()
+        });
+        ai.pending_binding_requests.push(BindingRequest {
+            timestamp: now.sub(Duration::from_secs(75)), // invalid
+            ..Default::default()
+        });
+
+        ai.invalidate_pending_binding_requests(now);
+        assert_eq!(EXPECTED_REMOVAL_COUNT, ai.pending_binding_requests.len(), "Binding invalidation due to timeout did not remove the correct number of binding requests")
+    }
+
+    a.close().await?;
+
+    Ok(())
+}
+
+// test_agent_credentials checks if local username fragments and passwords (if set) meet RFC standard
+// and ensure it's backwards compatible with previous versions of the pion/ice
+#[tokio::test]
+async fn test_agent_credentials() -> Result<(), Error> {
+    // Agent should not require any of the usernames and password to be set
+    // If set, they should follow the default 16/128 bits random number generator strategy
+
+    let a = Agent::new(AgentConfig::default()).await?;
+    {
+        let ai = a.agent_internal.lock().await;
+        assert!(ai.local_ufrag.as_bytes().len() * 8 >= 24);
+        assert!(ai.local_pwd.as_bytes().len() * 8 >= 128);
+    }
+    a.close().await?;
+
+    // Should honor RFC standards
+    // Local values MUST be unguessable, with at least 128 bits of
+    // random number generator output used to generate the password, and
+    // at least 24 bits of output to generate the username fragment.
+
+    if let Err(err) = Agent::new(AgentConfig {
+        local_ufrag: "xx".to_owned(),
+        ..Default::default()
+    })
+    .await
+    {
+        assert_eq!(err, *ERR_LOCAL_UFRAG_INSUFFICIENT_BITS);
+    } else {
+        assert!(false, "expected error, but got ok");
+    }
+
+    if let Err(err) = Agent::new(AgentConfig {
+        local_pwd: "xxxxxx".to_owned(),
+        ..Default::default()
+    })
+    .await
+    {
+        assert_eq!(err, *ERR_LOCAL_PWD_INSUFFICIENT_BITS);
+    } else {
+        assert!(false, "expected error, but got ok");
+    }
+
+    Ok(())
+}
+
+// Assert that Agent on Failure deletes all existing candidates
+// User can then do an ICE Restart to bring agent back
+#[tokio::test]
+async fn test_connection_state_failed_delete_all_candidates() -> Result<(), Error> {
+    let one_second = Duration::from_secs(1);
+    let keepalive_interval = Duration::from_secs(0);
+
+    let cfg0 = AgentConfig {
+        network_types: supported_network_types(),
+        disconnected_timeout: Some(one_second.clone()),
+        failed_timeout: Some(one_second.clone()),
+        keepalive_interval: Some(keepalive_interval.clone()),
+        ..Default::default()
+    };
+    let cfg1 = AgentConfig {
+        network_types: supported_network_types(),
+        disconnected_timeout: Some(one_second.clone()),
+        failed_timeout: Some(one_second.clone()),
+        keepalive_interval: Some(keepalive_interval.clone()),
+        ..Default::default()
+    };
+
+    let a_agent = Arc::new(Agent::new(cfg0).await?);
+    let b_agent = Arc::new(Agent::new(cfg1).await?);
+
+    let (is_failed_tx, mut is_failed_rx) = mpsc::channel::<()>(1);
+    let mut is_failed_tx = Some(is_failed_tx);
+    a_agent
+        .on_connection_state_change(Box::new(move |c: ConnectionState| {
+            if c == ConnectionState::Failed {
+                is_failed_tx.take();
+            }
+        }))
+        .await;
+
+    connect_with_vnet(&a_agent, &b_agent).await?;
+    let _ = is_failed_rx.recv().await;
+
+    {
+        let ai = a_agent.agent_internal.lock().await;
+        assert_eq!(ai.remote_candidates.len(), 0);
+        assert_eq!(ai.local_candidates.len(), 0);
+    }
+
+    a_agent.close().await?;
+    b_agent.close().await?;
+
+    Ok(())
+}
+
+// Assert that the ICE Agent can go directly from Connecting -> Failed on both sides
+#[tokio::test]
+async fn test_connection_state_connecting_to_failed() -> Result<(), Error> {
+    let one_second = Duration::from_secs(1);
+    let keepalive_interval = Duration::from_secs(0);
+
+    let cfg0 = AgentConfig {
+        disconnected_timeout: Some(one_second.clone()),
+        failed_timeout: Some(one_second.clone()),
+        keepalive_interval: Some(keepalive_interval.clone()),
+        ..Default::default()
+    };
+    let cfg1 = AgentConfig {
+        disconnected_timeout: Some(one_second.clone()),
+        failed_timeout: Some(one_second.clone()),
+        keepalive_interval: Some(keepalive_interval.clone()),
+        ..Default::default()
+    };
+
+    let a_agent = Arc::new(Agent::new(cfg0).await?);
+    let b_agent = Arc::new(Agent::new(cfg1).await?);
+
+    let is_failed = WaitGroup::new();
+    let is_checking = WaitGroup::new();
+
+    let connection_state_check = move |wf: Worker, wc: Worker| {
+        let mut wf = Some(wf);
+        let mut wc = Some(wc);
+        Box::new(move |c: ConnectionState| {
+            if c == ConnectionState::Failed {
+                wf.take();
+            } else if c == ConnectionState::Checking {
+                wc.take();
+            } else if c == ConnectionState::Connected || c == ConnectionState::Completed {
+                assert!(false, "Unexpected ConnectionState: {}", c);
+            }
+        })
+    };
+
+    let (wf1, wc1) = (is_failed.worker(), is_checking.worker());
+    a_agent
+        .on_connection_state_change(connection_state_check(wf1, wc1))
+        .await;
+
+    let (wf2, wc2) = (is_failed.worker(), is_checking.worker());
+    b_agent
+        .on_connection_state_change(connection_state_check(wf2, wc2))
+        .await;
+
+    let agent_a = Arc::clone(&a_agent);
+    tokio::spawn(async move {
+        let (_cancel_tx, cancel_rx) = mpsc::channel(1);
+        let result = agent_a
+            .accept(cancel_rx, "InvalidFrag".to_owned(), "InvalidPwd".to_owned())
+            .await;
+        assert!(result.is_err());
+    });
+
+    let agent_b = Arc::clone(&b_agent);
+    tokio::spawn(async move {
+        let (_cancel_tx, cancel_rx) = mpsc::channel(1);
+        let result = agent_b
+            .dial(cancel_rx, "InvalidFrag".to_owned(), "InvalidPwd".to_owned())
+            .await;
+        assert!(result.is_err());
+    });
+
+    is_checking.wait().await;
+    is_failed.wait().await;
+
+    a_agent.close().await?;
+    b_agent.close().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_agent_restart() -> Result<(), Error> {
+    let one_second = Duration::from_secs(1);
+
+    //"Restart During Gather"
+    {
+        let agent = Agent::new(AgentConfig::default()).await?;
+
+        agent
+            .gathering_state
+            .store(GatheringState::Gathering as u8, Ordering::SeqCst);
+
+        if let Err(err) = agent.restart("".to_owned(), "".to_owned()).await {
+            assert_eq!(err, *ERR_RESTART_WHEN_GATHERING);
+        } else {
+            assert!(false, "expected error, but got ok");
+        }
+
+        agent.close().await?;
+    }
+
+    //"Restart When Closed"
+    {
+        let agent = Agent::new(AgentConfig::default()).await?;
+        agent.close().await?;
+
+        if let Err(err) = agent.restart("".to_owned(), "".to_owned()).await {
+            assert_eq!(err, *ERR_CLOSED);
+        } else {
+            assert!(false, "expected error, but got ok");
+        }
+    }
+
+    //"Restart One Side"
+    {
+        let (_, _, agent_a, agent_b) = pipe(
+            Some(AgentConfig {
+                disconnected_timeout: Some(one_second.clone()),
+                failed_timeout: Some(one_second.clone()),
+                ..Default::default()
+            }),
+            Some(AgentConfig {
+                disconnected_timeout: Some(one_second.clone()),
+                failed_timeout: Some(one_second.clone()),
+                ..Default::default()
+            }),
+        )
+        .await?;
+
+        let (cancel_tx, mut cancel_rx) = mpsc::channel::<()>(1);
+        let mut cancel_tx = Some(cancel_tx);
+        agent_b
+            .on_connection_state_change(Box::new(move |c: ConnectionState| {
+                if c == ConnectionState::Failed || c == ConnectionState::Disconnected {
+                    cancel_tx.take();
+                }
+            }))
+            .await;
+
+        agent_a.restart("".to_owned(), "".to_owned()).await?;
+
+        let _ = cancel_rx.recv().await;
+
+        agent_a.close().await?;
+        agent_b.close().await?;
+    }
+
+    //"Restart Both Sides"
+    {
+        // Get all addresses of candidates concatenated
+        let generate_candidate_address_strings =
+            |res: Result<Vec<Arc<dyn Candidate + Send + Sync>>, Error>| -> String {
+                assert!(res.is_ok());
+
+                let mut out = String::new();
+                if let Ok(candidates) = res {
+                    for c in candidates {
+                        out += c.address().as_str();
+                        out += ":";
+                        out += c.port().to_string().as_str();
+                    }
+                }
+                out
+            };
+
+        // Store the original candidates, confirm that after we reconnect we have new pairs
+        let (_, _, agent_a, agent_b) = pipe(
+            Some(AgentConfig {
+                disconnected_timeout: Some(one_second.clone()),
+                failed_timeout: Some(one_second.clone()),
+                ..Default::default()
+            }),
+            Some(AgentConfig {
+                disconnected_timeout: Some(one_second.clone()),
+                failed_timeout: Some(one_second.clone()),
+                ..Default::default()
+            }),
+        )
+        .await?;
+
+        let conn_afirst_candidates =
+            generate_candidate_address_strings(agent_a.get_local_candidates().await);
+        let conn_bfirst_candidates =
+            generate_candidate_address_strings(agent_b.get_local_candidates().await);
+
+        let (a_notifier, mut a_connected) = on_connected();
+        agent_a.on_connection_state_change(a_notifier).await;
+
+        let (b_notifier, mut b_connected) = on_connected();
+        agent_b.on_connection_state_change(b_notifier).await;
+
+        // Restart and Re-Signal
+        agent_a.restart("".to_owned(), "".to_owned()).await?;
+        agent_b.restart("".to_owned(), "".to_owned()).await?;
+
+        // Exchange Candidates and Credentials
+        let (ufrag, pwd) = agent_b.get_local_user_credentials().await;
+        agent_a.set_remote_credentials(ufrag, pwd).await?;
+
+        let (ufrag, pwd) = agent_a.get_local_user_credentials().await;
+        agent_b.set_remote_credentials(ufrag, pwd).await?;
+
+        gather_and_exchange_candidates(&agent_a, &agent_b).await?;
+
+        // Wait until both have gone back to connected
+        let _ = a_connected.recv().await;
+        let _ = b_connected.recv().await;
+
+        // Assert that we have new candiates each time
+        assert_ne!(
+            conn_afirst_candidates,
+            generate_candidate_address_strings(agent_a.get_local_candidates().await)
+        );
+        assert_ne!(
+            conn_bfirst_candidates,
+            generate_candidate_address_strings(agent_b.get_local_candidates().await)
+        );
+
+        agent_a.close().await?;
+        agent_b.close().await?;
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_remote_credentials() -> Result<(), Error> {
+    let a = Agent::new(AgentConfig::default()).await?;
+
+    let (remote_ufrag, remote_pwd) = {
+        let mut ai = a.agent_internal.lock().await;
+        ai.remote_ufrag = "remoteUfrag".to_owned();
+        ai.remote_pwd = "remotePwd".to_owned();
+        (ai.remote_ufrag.to_owned(), ai.remote_pwd.to_owned())
+    };
+
+    let (actual_ufrag, actual_pwd) = a.get_remote_user_credentials().await;
+
+    assert_eq!(actual_ufrag, remote_ufrag);
+    assert_eq!(actual_pwd, remote_pwd);
+
+    a.close().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_close_in_connection_state_callback() -> Result<(), Error> {
+    let disconnected_duration = Duration::from_secs(1);
+    let failed_duration = Duration::from_secs(1);
+    let keepalive_interval = Duration::from_secs(0);
+
+    let cfg0 = AgentConfig {
+        urls: vec![],
+        network_types: supported_network_types(),
+        disconnected_timeout: Some(disconnected_duration),
+        failed_timeout: Some(failed_duration),
+        keepalive_interval: Some(keepalive_interval),
+        check_interval: Duration::from_millis(500),
+        ..Default::default()
+    };
+
+    let cfg1 = AgentConfig {
+        urls: vec![],
+        network_types: supported_network_types(),
+        disconnected_timeout: Some(disconnected_duration),
+        failed_timeout: Some(failed_duration),
+        keepalive_interval: Some(keepalive_interval),
+        check_interval: Duration::from_millis(500),
+        ..Default::default()
+    };
+
+    let a_agent = Arc::new(Agent::new(cfg0).await?);
+    let b_agent = Arc::new(Agent::new(cfg1).await?);
+
+    let (is_closed_tx, mut is_closed_rx) = mpsc::channel::<()>(1);
+    let (is_connected_tx, mut is_connected_rx) = mpsc::channel::<()>(1);
+    let mut is_closed_tx = Some(is_closed_tx);
+    let mut is_connected_tx = Some(is_connected_tx);
+    a_agent
+        .on_connection_state_change(Box::new(move |c: ConnectionState| {
+            if c == ConnectionState::Connected {
+                is_connected_tx.take();
+            } else if c == ConnectionState::Closed {
+                is_closed_tx.take();
+            }
+        }))
+        .await;
+
+    connect_with_vnet(&a_agent, &b_agent).await?;
+
+    let _ = is_connected_rx.recv().await;
+    a_agent.close().await?;
+
+    let _ = is_closed_rx.recv().await;
+    b_agent.close().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_run_task_in_connection_state_callback() -> Result<(), Error> {
+    let one_second = Duration::from_secs(1);
+    let keepalive_interval = Duration::from_secs(0);
+
+    let cfg0 = AgentConfig {
+        urls: vec![],
+        network_types: supported_network_types(),
+        disconnected_timeout: Some(one_second),
+        failed_timeout: Some(one_second),
+        keepalive_interval: Some(keepalive_interval),
+        check_interval: Duration::from_millis(50),
+        ..Default::default()
+    };
+
+    let cfg1 = AgentConfig {
+        urls: vec![],
+        network_types: supported_network_types(),
+        disconnected_timeout: Some(one_second),
+        failed_timeout: Some(one_second),
+        keepalive_interval: Some(keepalive_interval),
+        check_interval: Duration::from_millis(50),
+        ..Default::default()
+    };
+
+    let a_agent = Arc::new(Agent::new(cfg0).await?);
+    let b_agent = Arc::new(Agent::new(cfg1).await?);
+
+    let (is_complete_tx, mut is_complete_rx) = mpsc::channel::<()>(1);
+    let mut is_complete_tx = Some(is_complete_tx);
+    a_agent
+        .on_connection_state_change(Box::new(move |c: ConnectionState| {
+            if c == ConnectionState::Connected {
+                is_complete_tx.take();
+            }
+        }))
+        .await;
+
+    connect_with_vnet(&a_agent, &b_agent).await?;
+
+    let _ = is_complete_rx.recv().await;
+    let _ = a_agent.get_local_user_credentials().await;
+    a_agent.restart("".to_owned(), "".to_owned()).await?;
+
+    a_agent.close().await?;
+    b_agent.close().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_run_task_in_selected_candidate_pair_change_callback() -> Result<(), Error> {
+    let one_second = Duration::from_secs(1);
+    let keepalive_interval = Duration::from_secs(0);
+
+    let cfg0 = AgentConfig {
+        urls: vec![],
+        network_types: supported_network_types(),
+        disconnected_timeout: Some(one_second),
+        failed_timeout: Some(one_second),
+        keepalive_interval: Some(keepalive_interval),
+        check_interval: Duration::from_millis(50),
+        ..Default::default()
+    };
+
+    let cfg1 = AgentConfig {
+        urls: vec![],
+        network_types: supported_network_types(),
+        disconnected_timeout: Some(one_second),
+        failed_timeout: Some(one_second),
+        keepalive_interval: Some(keepalive_interval),
+        check_interval: Duration::from_millis(50),
+        ..Default::default()
+    };
+
+    let a_agent = Arc::new(Agent::new(cfg0).await?);
+    let b_agent = Arc::new(Agent::new(cfg1).await?);
+
+    let (is_tested_tx, mut is_tested_rx) = mpsc::channel::<()>(1);
+    let mut is_tested_tx = Some(is_tested_tx);
+    let (is_complete_tx, mut is_complete_rx) = mpsc::channel::<()>(1);
+    let mut is_complete_tx = Some(is_complete_tx);
+
+    a_agent
+        .on_selected_candidate_pair_change(Box::new(
+            move |_: &(dyn Candidate + Send + Sync), _: &(dyn Candidate + Send + Sync)| {
+                is_tested_tx.take();
+            },
+        ))
+        .await;
+
+    a_agent
+        .on_connection_state_change(Box::new(move |c: ConnectionState| {
+            if c == ConnectionState::Connected {
+                is_complete_tx.take();
+            }
+        }))
+        .await;
+
+    connect_with_vnet(&a_agent, &b_agent).await?;
+
+    let _ = is_complete_rx.recv().await;
+    let _ = is_tested_rx.recv().await;
+
+    let _ = a_agent.get_local_user_credentials().await;
+
+    a_agent.close().await?;
+    b_agent.close().await?;
+
+    Ok(())
+}
+
+// Assert that a Lite agent goes to disconnected and failed
+#[tokio::test]
+async fn test_lite_lifecycle() -> Result<(), Error> {
+    let (a_notifier, mut a_connected_rx) = on_connected();
+
+    let a_agent = Arc::new(
+        Agent::new(AgentConfig {
+            network_types: supported_network_types(),
+            multicast_dns_mode: MulticastDnsMode::Disabled,
+            ..Default::default()
+        })
+        .await?,
+    );
+
+    a_agent.on_connection_state_change(a_notifier).await;
+
+    let disconnected_duration = Duration::from_secs(1);
+    let failed_duration = Duration::from_secs(1);
+    let keepalive_interval = Duration::from_secs(0);
+
+    let b_agent = Arc::new(
+        Agent::new(AgentConfig {
+            lite: true,
+            candidate_types: vec![CandidateType::Host],
+            network_types: supported_network_types(),
+            multicast_dns_mode: MulticastDnsMode::Disabled,
+            disconnected_timeout: Some(disconnected_duration),
+            failed_timeout: Some(failed_duration),
+            keepalive_interval: Some(keepalive_interval),
+            check_interval: Duration::from_millis(500),
+            ..Default::default()
+        })
+        .await?,
+    );
+
+    let (b_connected_tx, mut b_connected_rx) = mpsc::channel::<()>(1);
+    let (b_disconnected_tx, mut b_disconnected_rx) = mpsc::channel::<()>(1);
+    let (b_failed_tx, mut b_failed_rx) = mpsc::channel::<()>(1);
+    let mut b_connected_tx = Some(b_connected_tx);
+    let mut b_disconnected_tx = Some(b_disconnected_tx);
+    let mut b_failed_tx = Some(b_failed_tx);
+
+    b_agent
+        .on_connection_state_change(Box::new(move |c: ConnectionState| {
+            if c == ConnectionState::Connected {
+                b_connected_tx.take();
+            } else if c == ConnectionState::Disconnected {
+                b_disconnected_tx.take();
+            } else if c == ConnectionState::Failed {
+                b_failed_tx.take();
+            }
+        }))
+        .await;
+
+    connect_with_vnet(&b_agent, &a_agent).await?;
+
+    let _ = a_connected_rx.recv().await;
+    let _ = b_connected_rx.recv().await;
+    a_agent.close().await?;
+
+    let _ = b_disconnected_rx.recv().await;
+    let _ = b_failed_rx.recv().await;
+
+    b_agent.close().await?;
 
     Ok(())
 }
