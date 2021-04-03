@@ -11,6 +11,7 @@ impl Agent {
     // Dial blocks until at least one ice candidate pair has successfully connected.
     pub async fn dial(
         &self,
+        mut cancel_rx: mpsc::Receiver<()>,
         remote_ufrag: String,
         remote_pwd: String,
     ) -> Result<Arc<impl Conn>, Error> {
@@ -26,6 +27,9 @@ impl Agent {
             // block until pair selected
             tokio::select! {
                 _ = on_connected_rx.recv() => {},
+                _ = cancel_rx.recv() => {
+                    return Err(ERR_CANCELED_BY_CALLER.to_owned());
+                }
             }
         }
         Ok(agent_conn)
@@ -35,6 +39,7 @@ impl Agent {
     // Accept blocks until at least one ice candidate pair has successfully connected.
     pub async fn accept(
         &self,
+        mut cancel_rx: mpsc::Receiver<()>,
         remote_ufrag: String,
         remote_pwd: String,
     ) -> Result<Arc<impl Conn>, Error> {
@@ -50,6 +55,9 @@ impl Agent {
             // block until pair selected
             tokio::select! {
                 _ = on_connected_rx.recv() => {},
+                _ = cancel_rx.recv() => {
+                    return Err(ERR_CANCELED_BY_CALLER.to_owned());
+                }
             }
         }
 

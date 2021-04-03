@@ -248,20 +248,22 @@ pub(crate) async fn connect_with_vnet(
     gather_and_exchange_candidates(a_agent, b_agent).await?;
 
     let (accepted_tx, mut accepted_rx) = mpsc::channel(1);
+    let (_a_cancel_tx, a_cancel_rx) = mpsc::channel(1);
 
-    let agent_b = Arc::clone(b_agent);
+    let agent_a = Arc::clone(a_agent);
     tokio::spawn(async move {
-        let b_conn = agent_b.dial(a_ufrag, a_pwd).await?;
+        let a_conn = agent_a.accept(a_cancel_rx, b_ufrag, b_pwd).await?;
 
-        let _ = accepted_tx.send(b_conn).await;
+        let _ = accepted_tx.send(a_conn).await;
 
         Ok::<(), Error>(())
     });
 
-    let a_conn = a_agent.accept(b_ufrag, b_pwd).await?;
+    let (_b_cancel_tx, b_cancel_rx) = mpsc::channel(1);
+    let b_conn = b_agent.dial(b_cancel_rx, a_ufrag, a_pwd).await?;
 
     // Ensure accepted
-    if let Some(b_conn) = accepted_rx.recv().await {
+    if let Some(a_conn) = accepted_rx.recv().await {
         Ok((a_conn, b_conn))
     } else {
         Err(Error::new("no a_conn".to_owned()))

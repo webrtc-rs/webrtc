@@ -9,9 +9,13 @@ use crate::control::AttrControlling;
 use crate::priority::PriorityAttr;
 use crate::use_candidate::UseCandidateAttr;
 
+use async_trait::async_trait;
+use std::io;
+use std::net::Ipv4Addr;
 use std::str::FromStr;
+use stun::message::*;
 use stun::textattrs::Username;
-use util::vnet::*;
+use util::{vnet::*, Conn, Error};
 
 #[tokio::test]
 async fn test_pair_search() -> Result<(), Error> {
@@ -456,32 +460,27 @@ async fn test_connectivity_on_startup() -> Result<(), Error> {
 
     let (accepted_tx, mut accepted_rx) = mpsc::channel::<()>(1);
     let (accepting_tx, mut accepting_rx) = mpsc::channel::<()>(1);
+    let (_a_cancel_tx, a_cancel_rx) = mpsc::channel(1);
+    let (_b_cancel_tx, b_cancel_rx) = mpsc::channel(1);
 
     let mut accepting_tx = Some(accepting_tx);
-    //origHdlr := a_agent.onConnectionStateChangeHdlr.Load()
-    //if origHdlr != nil {
-    //    defer check(a_agent.OnConnectionStateChange(origHdlr.(func(ConnectionState))))
-    //}
     a_agent
         .on_connection_state_change(Box::new(move |s: ConnectionState| {
             if s == ConnectionState::Checking {
                 accepting_tx.take();
             }
-            //if origHdlr != nil {
-            //    origHdlr.(func(ConnectionState))(s)
-            //}
         }))
         .await;
 
     tokio::spawn(async move {
-        let result = a_agent.accept(b_ufrag, b_pwd).await;
+        let result = a_agent.accept(a_cancel_rx, b_ufrag, b_pwd).await;
         assert!(result.is_ok(), "agent accept expected OK");
         drop(accepted_tx);
     });
 
     let _ = accepting_rx.recv().await;
 
-    let _ = b_agent.dial(a_ufrag, a_pwd).await?;
+    let _ = b_agent.dial(b_cancel_rx, a_ufrag, a_pwd).await?;
 
     // Ensure accepted
     let _ = accepted_rx.recv().await;
@@ -567,6 +566,317 @@ async fn test_connectivity_lite() -> Result<(), Error> {
     let _ = b_connected.recv().await;
 
     v.close().await?;
+
+    Ok(())
+}
+
+struct MockPacketConn;
+
+#[async_trait]
+impl Conn for MockPacketConn {
+    async fn connect(&self, _addr: SocketAddr) -> io::Result<()> {
+        Ok(())
+    }
+
+    async fn recv(&self, _buf: &mut [u8]) -> io::Result<usize> {
+        Ok(0)
+    }
+
+    async fn recv_from(&self, _buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
+        Ok((0, SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0)))
+    }
+
+    async fn send(&self, _buf: &[u8]) -> io::Result<usize> {
+        Ok(0)
+    }
+
+    async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> io::Result<usize> {
+        Ok(0)
+    }
+
+    async fn local_addr(&self) -> io::Result<SocketAddr> {
+        Ok(SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0))
+    }
+}
+
+fn build_msg(c: MessageClass, username: String, key: String) -> Result<Message, Error> {
+    let mut msg = Message::new();
+    msg.build(&[
+        Box::new(MessageType::new(METHOD_BINDING, c)),
+        Box::new(TransactionId::new()),
+        Box::new(Username::new(ATTR_USERNAME, username)),
+        Box::new(MessageIntegrity::new_short_term_integrity(key)),
+        Box::new(FINGERPRINT),
+    ])?;
+    Ok(msg)
+}
+
+#[tokio::test]
+async fn test_inbound_validity() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
+
+    let remote = SocketAddr::from_str("172.17.0.3:999")?;
+    let local: Arc<dyn Candidate + Send + Sync> = Arc::new(
+        CandidateHostConfig {
+            base_config: CandidateBaseConfig {
+                network: "udp".to_owned(),
+                address: "192.168.0.2".to_owned(),
+                port: 777,
+                component: 1,
+                conn: Some(Arc::new(MockPacketConn {})),
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+        .new_candidate_host(None)
+        .await?,
+    );
+
+    //"Invalid Binding requests should be discarded"
+    {
+        let a = Agent::new(AgentConfig::default()).await?;
+
+        {
+            let agent_internal1 = Arc::clone(&a.agent_internal);
+            let agent_internal2 = Arc::clone(&a.agent_internal);
+
+            let mut ai = a.agent_internal.lock().await;
+
+            let local_pwd = ai.local_pwd.clone();
+            ai.handle_inbound(
+                &mut build_msg(CLASS_REQUEST, "invalid".to_owned(), local_pwd)?,
+                &local,
+                remote,
+                agent_internal1,
+            )
+            .await;
+            assert_ne!(
+                ai.remote_candidates.len(),
+                1,
+                "Binding with invalid Username was able to create prflx candidate"
+            );
+
+            let username = format!("{}:{}", ai.local_ufrag, ai.remote_ufrag);
+            ai.handle_inbound(
+                &mut build_msg(CLASS_REQUEST, username, "Invalid".to_owned())?,
+                &local,
+                remote,
+                agent_internal2,
+            )
+            .await;
+            assert_ne!(
+                ai.remote_candidates.len(),
+                1,
+                "Binding with invalid MessageIntegrity was able to create prflx candidate"
+            );
+        }
+
+        a.close().await?;
+    }
+
+    //"Invalid Binding success responses should be discarded"
+    {
+        let a = Agent::new(AgentConfig::default()).await?;
+
+        {
+            let agent_internal1 = Arc::clone(&a.agent_internal);
+
+            let mut ai = a.agent_internal.lock().await;
+
+            let username = format!("{}:{}", ai.local_ufrag, ai.remote_ufrag);
+            ai.handle_inbound(
+                &mut build_msg(CLASS_SUCCESS_RESPONSE, username, "Invalid".to_owned())?,
+                &local,
+                remote,
+                agent_internal1,
+            )
+            .await;
+            assert_ne!(
+                ai.remote_candidates.len(),
+                1,
+                "Binding with invalid Username was able to create prflx candidate"
+            );
+        }
+
+        a.close().await?;
+    }
+
+    //"Discard non-binding messages"
+    {
+        let a = Agent::new(AgentConfig::default()).await?;
+
+        {
+            let agent_internal1 = Arc::clone(&a.agent_internal);
+
+            let mut ai = a.agent_internal.lock().await;
+
+            let username = format!("{}:{}", ai.local_ufrag, ai.remote_ufrag);
+            ai.handle_inbound(
+                &mut build_msg(CLASS_ERROR_RESPONSE, username, "Invalid".to_owned())?,
+                &local,
+                remote,
+                agent_internal1,
+            )
+            .await;
+            assert_ne!(
+                ai.remote_candidates.len(),
+                1,
+                "non-binding message was able to create prflxRemote"
+            );
+        }
+
+        a.close().await?;
+    }
+
+    //"Valid bind request"
+    {
+        let a = Agent::new(AgentConfig::default()).await?;
+
+        {
+            let agent_internal1 = Arc::clone(&a.agent_internal);
+
+            let mut ai = a.agent_internal.lock().await;
+
+            let username = format!("{}:{}", ai.local_ufrag, ai.remote_ufrag);
+            let local_pwd = ai.local_pwd.clone();
+            ai.handle_inbound(
+                &mut build_msg(CLASS_REQUEST, username, local_pwd)?,
+                &local,
+                remote,
+                agent_internal1,
+            )
+            .await;
+            assert_eq!(
+                ai.remote_candidates.len(),
+                1,
+                "Binding with valid values was unable to create prflx candidate"
+            );
+        }
+
+        a.close().await?;
+    }
+
+    //"Valid bind without fingerprint"
+    {
+        let a = Agent::new(AgentConfig::default()).await?;
+
+        {
+            let agent_internal1 = Arc::clone(&a.agent_internal);
+
+            let mut ai = a.agent_internal.lock().await;
+
+            let username = format!("{}:{}", ai.local_ufrag, ai.remote_ufrag);
+            let local_pwd = ai.local_pwd.clone();
+
+            let mut msg = Message::new();
+            msg.build(&[
+                Box::new(BINDING_REQUEST),
+                Box::new(TransactionId::new()),
+                Box::new(Username::new(ATTR_USERNAME, username)),
+                Box::new(MessageIntegrity::new_short_term_integrity(local_pwd)),
+            ])?;
+
+            ai.handle_inbound(&mut msg, &local, remote, agent_internal1)
+                .await;
+            assert_eq!(
+                ai.remote_candidates.len(),
+                1,
+                "Binding with valid values (but no fingerprint) was unable to create prflx candidate"
+            );
+        }
+
+        a.close().await?;
+    }
+
+    //"Success with invalid TransactionID"
+    {
+        let a = Agent::new(AgentConfig::default()).await?;
+
+        {
+            let agent_internal1 = Arc::clone(&a.agent_internal);
+
+            let mut ai = a.agent_internal.lock().await;
+            let remote = SocketAddr::from_str("172.17.0.3:999")?;
+
+            let mut t_id = TransactionId::default();
+            t_id.0[..3].copy_from_slice(b"ABC");
+
+            let remote_pwd = ai.remote_pwd.clone();
+
+            let mut msg = Message::new();
+            msg.build(&[
+                Box::new(BINDING_SUCCESS),
+                Box::new(t_id),
+                Box::new(MessageIntegrity::new_short_term_integrity(remote_pwd)),
+                Box::new(FINGERPRINT),
+            ])?;
+
+            ai.handle_inbound(&mut msg, &local, remote, agent_internal1)
+                .await;
+            assert_eq!(
+                ai.remote_candidates.len(),
+                0,
+                "unknown remote was able to create a candidate"
+            );
+        }
+
+        a.close().await?;
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_invalid_agent_starts() -> Result<(), Error> {
+    let a = Agent::new(AgentConfig::default()).await?;
+
+    let (_cancel_tx1, cancel_rx1) = mpsc::channel(1);
+    let result = a.dial(cancel_rx1, "".to_owned(), "bar".to_owned()).await;
+    assert!(result.is_err());
+    if let Err(err) = result {
+        assert_eq!(err, *ERR_REMOTE_UFRAG_EMPTY);
+    }
+
+    let (_cancel_tx2, cancel_rx2) = mpsc::channel(1);
+    let result = a.dial(cancel_rx2, "foo".to_owned(), "".to_owned()).await;
+    assert!(result.is_err());
+    if let Err(err) = result {
+        assert_eq!(err, *ERR_REMOTE_PWD_EMPTY);
+    }
+
+    let (cancel_tx3, cancel_rx3) = mpsc::channel(1);
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        drop(cancel_tx3);
+    });
+
+    let result = a.dial(cancel_rx3, "foo".to_owned(), "bar".to_owned()).await;
+    assert!(result.is_err());
+    if let Err(err) = result {
+        assert_eq!(err, *ERR_CANCELED_BY_CALLER);
+    }
+
+    let (_cancel_tx4, cancel_rx4) = mpsc::channel(1);
+    let result = a.dial(cancel_rx4, "foo".to_owned(), "bar".to_owned()).await;
+    assert!(result.is_err());
+    if let Err(err) = result {
+        assert_eq!(err, *ERR_MULTIPLE_START);
+    }
+
+    a.close().await?;
 
     Ok(())
 }
