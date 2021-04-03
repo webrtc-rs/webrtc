@@ -478,6 +478,10 @@ impl AgentInternal {
             return Err(ERR_CLOSED.to_owned());
         }
         self.delete_all_candidates().await;
+        self.started_ch_tx.take();
+
+        self.agent_conn.buffer.close().await;
+
         self.update_connection_state(ConnectionState::Closed).await;
 
         self.done_tx.take();
