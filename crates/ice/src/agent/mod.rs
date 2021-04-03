@@ -128,9 +128,9 @@ impl Agent {
             force_candidate_contact_tx,
             force_candidate_contact_rx: Some(force_candidate_contact_rx),
 
-            chan_state_tx,
-            chan_candidate_tx: Arc::new(chan_candidate_tx),
-            chan_candidate_pair_tx,
+            chan_state_tx: Some(chan_state_tx),
+            chan_candidate_tx: Some(Arc::new(chan_candidate_tx)),
+            chan_candidate_pair_tx: Some(chan_candidate_pair_tx),
 
             on_connection_state_change_hdlr: None,
             on_selected_candidate_pair_change_hdlr: None,
@@ -435,7 +435,7 @@ impl Agent {
         }
 
         let mut ai = self.agent_internal.lock().await;
-        ai.close()
+        ai.close().await
     }
 
     // set_remote_credentials sets the credentials of the remote agent
@@ -514,7 +514,7 @@ impl Agent {
             if ai.on_candidate_hdlr.is_none() {
                 return Err(ERR_NO_ON_CANDIDATE_HANDLER.to_owned());
             }
-            Arc::clone(&ai.chan_candidate_tx)
+            ai.chan_candidate_tx.clone()
         };
 
         if let Some(gather_candidate_cancel) = &self.gather_candidate_cancel {
@@ -567,7 +567,7 @@ impl Agent {
         mdns_conn: Arc<DNSConn>,
         c: Arc<dyn Candidate + Send + Sync>,
     ) -> Result<Arc<dyn Candidate + Send + Sync>, Error> {
-        //TODO: hook up _close_query_signal_tx to Agent's Close signal
+        //TODO: hook up _close_query_signal_tx to Agent or Candidate's Close signal?
         let (_close_query_signal_tx, close_query_signal_rx) = mpsc::channel(1);
         let src = match mdns_conn.query(&c.address(), close_query_signal_rx).await {
             Ok((_, src)) => src,

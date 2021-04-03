@@ -880,3 +880,108 @@ async fn test_invalid_agent_starts() -> Result<(), Error> {
 
     Ok(())
 }
+
+//use std::io::Write;
+
+// Assert that Agent emits Connecting/Connected/Disconnected/Failed/Closed messages
+#[tokio::test]
+async fn test_connection_state_callback() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
+
+    let disconnected_duration = Duration::from_secs(1);
+    let failed_duration = Duration::from_secs(1);
+    let keepalive_interval = Duration::from_secs(0);
+
+    let cfg0 = AgentConfig {
+        urls: vec![],
+        network_types: supported_network_types(),
+        disconnected_timeout: Some(disconnected_duration.clone()),
+        failed_timeout: Some(failed_duration.clone()),
+        keepalive_interval: Some(keepalive_interval.clone()),
+        ..Default::default()
+    };
+
+    let cfg1 = AgentConfig {
+        urls: vec![],
+        network_types: supported_network_types(),
+        disconnected_timeout: Some(disconnected_duration.clone()),
+        failed_timeout: Some(failed_duration.clone()),
+        keepalive_interval: Some(keepalive_interval.clone()),
+        ..Default::default()
+    };
+
+    let a_agent = Arc::new(Agent::new(cfg0).await?);
+    let b_agent = Arc::new(Agent::new(cfg1).await?);
+
+    let (is_checking_tx, mut is_checking_rx) = mpsc::channel::<()>(1);
+    let (is_connected_tx, mut is_connected_rx) = mpsc::channel::<()>(1);
+    let (is_disconnected_tx, mut is_disconnected_rx) = mpsc::channel::<()>(1);
+    let (is_failed_tx, mut is_failed_rx) = mpsc::channel::<()>(1);
+    let (is_closed_tx, mut is_closed_rx) = mpsc::channel::<()>(1);
+
+    let mut is_checking_tx = Some(is_checking_tx);
+    let mut is_connected_tx = Some(is_connected_tx);
+    let mut is_disconnected_tx = Some(is_disconnected_tx);
+    let mut is_failed_tx = Some(is_failed_tx);
+    let mut is_closed_tx = Some(is_closed_tx);
+
+    a_agent
+        .on_connection_state_change(Box::new(move |c: ConnectionState| {
+            match c {
+                ConnectionState::Checking => {
+                    log::debug!("drop is_checking_tx");
+                    is_checking_tx.take();
+                }
+                ConnectionState::Connected => {
+                    log::debug!("drop is_connected_tx");
+                    is_connected_tx.take();
+                }
+                ConnectionState::Disconnected => {
+                    log::debug!("drop is_disconnected_tx");
+                    is_disconnected_tx.take();
+                }
+                ConnectionState::Failed => {
+                    log::debug!("drop is_failed_tx");
+                    is_failed_tx.take();
+                }
+                ConnectionState::Closed => {
+                    log::debug!("drop is_closed_tx");
+                    is_closed_tx.take();
+                }
+                _ => {}
+            };
+        }))
+        .await;
+
+    connect_with_vnet(&a_agent, &b_agent).await?;
+
+    log::debug!("wait is_checking_tx");
+    let _ = is_checking_rx.recv().await;
+    log::debug!("wait is_connected_rx");
+    let _ = is_connected_rx.recv().await;
+    log::debug!("wait is_disconnected_rx");
+    let _ = is_disconnected_rx.recv().await;
+    log::debug!("wait is_failed_rx");
+    let _ = is_failed_rx.recv().await;
+
+    a_agent.close().await?;
+    b_agent.close().await?;
+
+    log::debug!("wait is_closed_rx");
+    let _ = is_closed_rx.recv().await;
+
+    Ok(())
+}

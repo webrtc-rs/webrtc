@@ -32,7 +32,8 @@ pub(crate) struct GatherCandidatesInternalParams {
     pub(crate) ext_ip_mapper: Arc<Option<ExternalIpMapper>>,
     pub(crate) agent_internal: Arc<Mutex<AgentInternal>>,
     pub(crate) gathering_state: Arc<AtomicU8>,
-    pub(crate) chan_candidate_tx: Arc<mpsc::Sender<Option<Arc<dyn Candidate + Send + Sync>>>>,
+    pub(crate) chan_candidate_tx:
+        Option<Arc<mpsc::Sender<Option<Arc<dyn Candidate + Send + Sync>>>>>,
 }
 
 struct GatherCandidatesLocalParams {
@@ -167,14 +168,16 @@ impl Agent {
     }
 
     async fn set_gathering_state(
-        chan_candidate_tx: &Arc<mpsc::Sender<Option<Arc<dyn Candidate + Send + Sync>>>>,
+        chan_candidate_tx: &Option<Arc<mpsc::Sender<Option<Arc<dyn Candidate + Send + Sync>>>>>,
         gathering_state: &Arc<AtomicU8>,
         new_state: GatheringState,
     ) {
         if GatheringState::from(gathering_state.load(Ordering::SeqCst)) != new_state
             && new_state == GatheringState::Complete
         {
-            let _ = chan_candidate_tx.send(None).await;
+            if let Some(tx) = chan_candidate_tx {
+                let _ = tx.send(None).await;
+            }
         }
 
         gathering_state.store(new_state as u8, Ordering::SeqCst);

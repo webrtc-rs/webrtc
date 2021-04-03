@@ -13,9 +13,10 @@ pub struct AgentInternal {
     pub(crate) done_tx: Option<mpsc::Sender<()>>,
     pub(crate) done_rx: Option<mpsc::Receiver<()>>,
 
-    pub(crate) chan_candidate_tx: Arc<mpsc::Sender<Option<Arc<dyn Candidate + Send + Sync>>>>,
-    pub(crate) chan_candidate_pair_tx: mpsc::Sender<()>,
-    pub(crate) chan_state_tx: mpsc::Sender<ConnectionState>,
+    pub(crate) chan_candidate_tx:
+        Option<Arc<mpsc::Sender<Option<Arc<dyn Candidate + Send + Sync>>>>>,
+    pub(crate) chan_candidate_pair_tx: Option<mpsc::Sender<()>>,
+    pub(crate) chan_state_tx: Option<mpsc::Sender<ConnectionState>>,
 
     pub(crate) on_connection_state_change_hdlr: Option<OnConnectionStateChangeHdlrFn>,
     pub(crate) on_selected_candidate_pair_change_hdlr: Option<OnSelectedCandidatePairChangeHdlrFn>,
@@ -212,7 +213,9 @@ impl AgentInternal {
 
             // Call handler after finishing current task since we may be holding the agent lock
             // and the handler may also require it
-            let _ = self.chan_state_tx.send(new_state).await;
+            if let Some(chan_state_tx) = &self.chan_state_tx {
+                let _ = chan_state_tx.send(new_state).await;
+            }
         }
     }
 
@@ -230,7 +233,9 @@ impl AgentInternal {
                 .await;
 
             // Notify when the selected pair changes
-            let _ = self.chan_candidate_pair_tx.send(()).await;
+            if let Some(chan_candidate_pair_tx) = &self.chan_candidate_pair_tx {
+                let _ = chan_candidate_pair_tx.send(()).await;
+            }
 
             // Signal connected
             self.on_connected_tx.take();
@@ -461,16 +466,25 @@ impl AgentInternal {
         }
 
         self.request_connectivity_check();
-        let _ = self.chan_candidate_tx.send(Some(c.clone())).await;
+        if let Some(chan_candidate_tx) = &self.chan_candidate_tx {
+            let _ = chan_candidate_tx.send(Some(c.clone())).await;
+        }
 
         Ok(())
     }
 
-    pub(crate) fn close(&mut self) -> Result<(), Error> {
+    pub(crate) async fn close(&mut self) -> Result<(), Error> {
         if self.done_tx.is_none() {
             return Err(ERR_CLOSED.to_owned());
         }
+        self.delete_all_candidates().await;
+        self.update_connection_state(ConnectionState::Closed).await;
+
         self.done_tx.take();
+        self.chan_candidate_tx.take();
+        self.chan_candidate_pair_tx.take();
+        self.chan_state_tx.take();
+
         self.agent_conn.done.store(true, Ordering::SeqCst);
 
         Ok(())
