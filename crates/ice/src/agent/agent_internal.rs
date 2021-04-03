@@ -4,6 +4,9 @@ use crate::candidate::candidate_base::{CandidateBase, CandidateBaseConfig};
 use crate::candidate::candidate_peer_reflexive::CandidatePeerReflexiveConfig;
 use crate::util::*;
 
+pub(crate) type ChanCandidateTx =
+    Option<Arc<mpsc::Sender<Option<Arc<dyn Candidate + Send + Sync>>>>>;
+
 pub struct AgentInternal {
     // State owned by the taskLoop
     pub(crate) on_connected_tx: Option<mpsc::Sender<()>>,
@@ -13,8 +16,7 @@ pub struct AgentInternal {
     pub(crate) done_tx: Option<mpsc::Sender<()>>,
     pub(crate) done_rx: Option<mpsc::Receiver<()>>,
 
-    pub(crate) chan_candidate_tx:
-        Option<Arc<mpsc::Sender<Option<Arc<dyn Candidate + Send + Sync>>>>>,
+    pub(crate) chan_candidate_tx: ChanCandidateTx,
     pub(crate) chan_candidate_pair_tx: Option<mpsc::Sender<()>>,
     pub(crate) chan_state_tx: Option<mpsc::Sender<ConnectionState>>,
 
