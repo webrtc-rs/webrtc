@@ -1732,146 +1732,157 @@ async fn test_connection_state_connecting_to_failed() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_agent_restart() -> Result<(), Error> {
+async fn test_agent_restart_during_gather() -> Result<(), Error> {
+    //"Restart During Gather"
+
+    let agent = Agent::new(AgentConfig::default()).await?;
+
+    agent
+        .gathering_state
+        .store(GatheringState::Gathering as u8, Ordering::SeqCst);
+
+    if let Err(err) = agent.restart("".to_owned(), "".to_owned()).await {
+        assert_eq!(err, *ERR_RESTART_WHEN_GATHERING);
+    } else {
+        assert!(false, "expected error, but got ok");
+    }
+
+    agent.close().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_agent_restart_when_closed() -> Result<(), Error> {
+    //"Restart When Closed"
+
+    let agent = Agent::new(AgentConfig::default()).await?;
+    agent.close().await?;
+
+    if let Err(err) = agent.restart("".to_owned(), "".to_owned()).await {
+        assert_eq!(err, *ERR_CLOSED);
+    } else {
+        assert!(false, "expected error, but got ok");
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_agent_restart_one_side() -> Result<(), Error> {
     let one_second = Duration::from_secs(1);
 
-    //"Restart During Gather"
-    {
-        let agent = Agent::new(AgentConfig::default()).await?;
-
-        agent
-            .gathering_state
-            .store(GatheringState::Gathering as u8, Ordering::SeqCst);
-
-        if let Err(err) = agent.restart("".to_owned(), "".to_owned()).await {
-            assert_eq!(err, *ERR_RESTART_WHEN_GATHERING);
-        } else {
-            assert!(false, "expected error, but got ok");
-        }
-
-        agent.close().await?;
-    }
-
-    //"Restart When Closed"
-    {
-        let agent = Agent::new(AgentConfig::default()).await?;
-        agent.close().await?;
-
-        if let Err(err) = agent.restart("".to_owned(), "".to_owned()).await {
-            assert_eq!(err, *ERR_CLOSED);
-        } else {
-            assert!(false, "expected error, but got ok");
-        }
-    }
-
     //"Restart One Side"
-    {
-        let (_, _, agent_a, agent_b) = pipe(
-            Some(AgentConfig {
-                disconnected_timeout: Some(one_second.clone()),
-                failed_timeout: Some(one_second.clone()),
-                ..Default::default()
-            }),
-            Some(AgentConfig {
-                disconnected_timeout: Some(one_second.clone()),
-                failed_timeout: Some(one_second.clone()),
-                ..Default::default()
-            }),
-        )
-        .await?;
+    let (_, _, agent_a, agent_b) = pipe(
+        Some(AgentConfig {
+            disconnected_timeout: Some(one_second.clone()),
+            failed_timeout: Some(one_second.clone()),
+            ..Default::default()
+        }),
+        Some(AgentConfig {
+            disconnected_timeout: Some(one_second.clone()),
+            failed_timeout: Some(one_second.clone()),
+            ..Default::default()
+        }),
+    )
+    .await?;
 
-        let (cancel_tx, mut cancel_rx) = mpsc::channel::<()>(1);
-        let mut cancel_tx = Some(cancel_tx);
-        agent_b
-            .on_connection_state_change(Box::new(move |c: ConnectionState| {
-                if c == ConnectionState::Failed || c == ConnectionState::Disconnected {
-                    cancel_tx.take();
-                }
-            }))
-            .await;
+    let (cancel_tx, mut cancel_rx) = mpsc::channel::<()>(1);
+    let mut cancel_tx = Some(cancel_tx);
+    agent_b
+        .on_connection_state_change(Box::new(move |c: ConnectionState| {
+            if c == ConnectionState::Failed || c == ConnectionState::Disconnected {
+                cancel_tx.take();
+            }
+        }))
+        .await;
 
-        agent_a.restart("".to_owned(), "".to_owned()).await?;
+    agent_a.restart("".to_owned(), "".to_owned()).await?;
 
-        let _ = cancel_rx.recv().await;
+    let _ = cancel_rx.recv().await;
 
-        agent_a.close().await?;
-        agent_b.close().await?;
-    }
+    agent_a.close().await?;
+    agent_b.close().await?;
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_agent_restart_both_side() -> Result<(), Error> {
+    let one_second = Duration::from_secs(1);
     //"Restart Both Sides"
-    {
-        // Get all addresses of candidates concatenated
-        let generate_candidate_address_strings =
-            |res: Result<Vec<Arc<dyn Candidate + Send + Sync>>, Error>| -> String {
-                assert!(res.is_ok());
 
-                let mut out = String::new();
-                if let Ok(candidates) = res {
-                    for c in candidates {
-                        out += c.address().as_str();
-                        out += ":";
-                        out += c.port().to_string().as_str();
-                    }
+    // Get all addresses of candidates concatenated
+    let generate_candidate_address_strings =
+        |res: Result<Vec<Arc<dyn Candidate + Send + Sync>>, Error>| -> String {
+            assert!(res.is_ok());
+
+            let mut out = String::new();
+            if let Ok(candidates) = res {
+                for c in candidates {
+                    out += c.address().as_str();
+                    out += ":";
+                    out += c.port().to_string().as_str();
                 }
-                out
-            };
+            }
+            out
+        };
 
-        // Store the original candidates, confirm that after we reconnect we have new pairs
-        let (_, _, agent_a, agent_b) = pipe(
-            Some(AgentConfig {
-                disconnected_timeout: Some(one_second.clone()),
-                failed_timeout: Some(one_second.clone()),
-                ..Default::default()
-            }),
-            Some(AgentConfig {
-                disconnected_timeout: Some(one_second.clone()),
-                failed_timeout: Some(one_second.clone()),
-                ..Default::default()
-            }),
-        )
-        .await?;
+    // Store the original candidates, confirm that after we reconnect we have new pairs
+    let (_, _, agent_a, agent_b) = pipe(
+        Some(AgentConfig {
+            disconnected_timeout: Some(one_second.clone()),
+            failed_timeout: Some(one_second.clone()),
+            ..Default::default()
+        }),
+        Some(AgentConfig {
+            disconnected_timeout: Some(one_second.clone()),
+            failed_timeout: Some(one_second.clone()),
+            ..Default::default()
+        }),
+    )
+    .await?;
 
-        let conn_afirst_candidates =
-            generate_candidate_address_strings(agent_a.get_local_candidates().await);
-        let conn_bfirst_candidates =
-            generate_candidate_address_strings(agent_b.get_local_candidates().await);
+    let conn_afirst_candidates =
+        generate_candidate_address_strings(agent_a.get_local_candidates().await);
+    let conn_bfirst_candidates =
+        generate_candidate_address_strings(agent_b.get_local_candidates().await);
 
-        let (a_notifier, mut a_connected) = on_connected();
-        agent_a.on_connection_state_change(a_notifier).await;
+    let (a_notifier, mut a_connected) = on_connected();
+    agent_a.on_connection_state_change(a_notifier).await;
 
-        let (b_notifier, mut b_connected) = on_connected();
-        agent_b.on_connection_state_change(b_notifier).await;
+    let (b_notifier, mut b_connected) = on_connected();
+    agent_b.on_connection_state_change(b_notifier).await;
 
-        // Restart and Re-Signal
-        agent_a.restart("".to_owned(), "".to_owned()).await?;
-        agent_b.restart("".to_owned(), "".to_owned()).await?;
+    // Restart and Re-Signal
+    agent_a.restart("".to_owned(), "".to_owned()).await?;
+    agent_b.restart("".to_owned(), "".to_owned()).await?;
 
-        // Exchange Candidates and Credentials
-        let (ufrag, pwd) = agent_b.get_local_user_credentials().await;
-        agent_a.set_remote_credentials(ufrag, pwd).await?;
+    // Exchange Candidates and Credentials
+    let (ufrag, pwd) = agent_b.get_local_user_credentials().await;
+    agent_a.set_remote_credentials(ufrag, pwd).await?;
 
-        let (ufrag, pwd) = agent_a.get_local_user_credentials().await;
-        agent_b.set_remote_credentials(ufrag, pwd).await?;
+    let (ufrag, pwd) = agent_a.get_local_user_credentials().await;
+    agent_b.set_remote_credentials(ufrag, pwd).await?;
 
-        gather_and_exchange_candidates(&agent_a, &agent_b).await?;
+    gather_and_exchange_candidates(&agent_a, &agent_b).await?;
 
-        // Wait until both have gone back to connected
-        let _ = a_connected.recv().await;
-        let _ = b_connected.recv().await;
+    // Wait until both have gone back to connected
+    let _ = a_connected.recv().await;
+    let _ = b_connected.recv().await;
 
-        // Assert that we have new candiates each time
-        assert_ne!(
-            conn_afirst_candidates,
-            generate_candidate_address_strings(agent_a.get_local_candidates().await)
-        );
-        assert_ne!(
-            conn_bfirst_candidates,
-            generate_candidate_address_strings(agent_b.get_local_candidates().await)
-        );
+    // Assert that we have new candiates each time
+    assert_ne!(
+        conn_afirst_candidates,
+        generate_candidate_address_strings(agent_a.get_local_candidates().await)
+    );
+    assert_ne!(
+        conn_bfirst_candidates,
+        generate_candidate_address_strings(agent_b.get_local_candidates().await)
+    );
 
-        agent_a.close().await?;
-        agent_b.close().await?;
-    }
+    agent_a.close().await?;
+    agent_b.close().await?;
 
     Ok(())
 }
