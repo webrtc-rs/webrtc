@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod agent_gather_vnet_test;
+mod agent_gather_test;
 #[cfg(test)]
 mod agent_test;
 #[cfg(test)]

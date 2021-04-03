@@ -1,1 +1,134 @@
+use super::agent_vnet_test::*;
+use super::*;
 
+use defer::defer;
+use util::{vnet::*, Conn, Error};
+use waitgroup::WaitGroup;
+
+pub(crate) async fn pipe(
+    default_config0: Option<AgentConfig>,
+    default_config1: Option<AgentConfig>,
+) -> Result<(Arc<impl Conn>, Arc<impl Conn>), Error> {
+    let (a_notifier, mut a_connected) = on_connected();
+    let (b_notifier, mut b_connected) = on_connected();
+
+    let mut cfg0 = if let Some(cfg) = default_config0 {
+        cfg
+    } else {
+        AgentConfig::default()
+    };
+    cfg0.urls = vec![];
+    cfg0.network_types = supported_network_types();
+
+    let a_agent = Arc::new(Agent::new(cfg0).await?);
+    a_agent.on_connection_state_change(a_notifier).await;
+
+    let mut cfg1 = if let Some(cfg) = default_config1 {
+        cfg
+    } else {
+        AgentConfig::default()
+    };
+    cfg1.urls = vec![];
+    cfg1.network_types = supported_network_types();
+
+    let b_agent = Arc::new(Agent::new(cfg1).await?);
+    b_agent.on_connection_state_change(b_notifier).await;
+
+    let (a_conn, b_conn) = connect_with_vnet(&a_agent, &b_agent).await?;
+
+    // Ensure pair selected
+    // Note: this assumes ConnectionStateConnected is thrown after selecting the final pair
+    let _ = a_connected.recv().await;
+    let _ = b_connected.recv().await;
+
+    Ok((a_conn, b_conn))
+}
+
+#[tokio::test]
+async fn test_remote_local_addr() -> Result<(), Error> {
+    // Agent0 is behind 1:1 NAT
+    let nat_type0 = nat::NATType {
+        mode: nat::NATMode::NAT1To1,
+        ..Default::default()
+    };
+    // Agent1 is behind 1:1 NAT
+    let nat_type1 = nat::NATType {
+        mode: nat::NATMode::NAT1To1,
+        ..Default::default()
+    };
+
+    let v = build_vnet(nat_type0, nat_type1).await?;
+
+    let stun_server_url = Url {
+        scheme: SchemeType::Stun,
+        host: VNET_STUN_SERVER_IP.to_owned(),
+        port: VNET_STUN_SERVER_PORT,
+        proto: ProtoType::Udp,
+        ..Default::default()
+    };
+
+    //"Disconnected Returns nil"
+    {
+        let disconnected_conn = AgentConn::new();
+        let result = disconnected_conn.local_addr().await;
+        assert!(result.is_err(), "Disconnected Returns nil");
+    }
+
+    //"Remote/Local Pair Match between Agents"
+    {
+        let (ca, cb) = pipe_with_vnet(
+            &v,
+            AgentTestConfig {
+                urls: vec![stun_server_url.clone()],
+                ..Default::default()
+            },
+            AgentTestConfig {
+                urls: vec![stun_server_url],
+                ..Default::default()
+            },
+        )
+        .await?;
+
+        let a_laddr = ca.local_addr().await?;
+        let b_laddr = cb.local_addr().await?;
+
+        // Assert addresses
+        assert_eq!(a_laddr.ip().to_string(), format!("{}", VNET_LOCAL_IPA),);
+        assert_eq!(b_laddr.ip().to_string(), format!("{}", VNET_LOCAL_IPB),);
+
+        // Close
+        //ca.close().await?;
+        //cb.close().await?;
+    }
+
+    v.close().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_conn_stats() -> Result<(), Error> {
+    let (ca, cb) = pipe(None, None).await?;
+    let na = ca.send(&vec![0u8; 10]).await?;
+
+    let wg = WaitGroup::new();
+
+    let w = wg.worker();
+    tokio::spawn(async move {
+        let _d = defer(move || {
+            drop(w);
+        });
+
+        let mut buf = vec![0u8; 10];
+        let nb = cb.recv(&mut buf).await?;
+        assert_eq!(nb, 10, "bytes received don't match");
+
+        Ok::<(), Error>(())
+    });
+
+    wg.wait().await;
+
+    assert_eq!(na, 10, "bytes sent don't match");
+
+    Ok(())
+}
