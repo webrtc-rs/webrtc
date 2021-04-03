@@ -58,8 +58,8 @@ impl Agent {
 }
 
 pub(crate) struct AgentConn {
-    pub(crate) selected_pair: Arc<Mutex<Option<Arc<CandidatePair>>>>,
-    pub(crate) checklist: Arc<Mutex<Vec<Arc<CandidatePair>>>>,
+    pub(crate) selected_pair: Mutex<Option<Arc<CandidatePair>>>,
+    pub(crate) checklist: Mutex<Vec<Arc<CandidatePair>>>,
 
     pub(crate) buffer: Buffer,
     pub(crate) bytes_received: AtomicUsize,
@@ -70,8 +70,8 @@ pub(crate) struct AgentConn {
 impl AgentConn {
     pub(crate) fn new() -> Self {
         AgentConn {
-            selected_pair: Arc::new(Mutex::new(None)),
-            checklist: Arc::new(Mutex::new(vec![])),
+            selected_pair: Mutex::new(None),
+            checklist: Mutex::new(vec![]),
             // Make sure the buffer doesn't grow indefinitely.
             // NOTE: We actually won't get anywhere close to this limit.
             // SRTP will constantly read from the endpoint and drop packets if it's full.

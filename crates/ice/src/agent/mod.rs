@@ -3,6 +3,8 @@ mod agent_gather_vnet_test;
 #[cfg(test)]
 mod agent_test;
 #[cfg(test)]
+mod agent_transport_test;
+#[cfg(test)]
 pub(crate) mod agent_vnet_test;
 
 pub mod agent_config;

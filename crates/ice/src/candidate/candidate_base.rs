@@ -28,22 +28,21 @@ pub struct CandidateBaseConfig {
 
 pub(crate) type OnClose = fn() -> Result<(), Error>;
 
-#[derive(Clone)]
 pub struct CandidateBase {
     pub(crate) id: String,
-    pub(crate) network_type: Arc<AtomicU8>,
+    pub(crate) network_type: AtomicU8,
     pub(crate) candidate_type: CandidateType,
 
-    pub(crate) component: Arc<AtomicU16>,
+    pub(crate) component: AtomicU16,
     pub(crate) address: String,
     pub(crate) port: u16,
     pub(crate) related_address: Option<CandidateRelatedAddress>,
     pub(crate) tcp_type: TcpType,
 
-    pub(crate) resolved_addr: Arc<Mutex<SocketAddr>>,
+    pub(crate) resolved_addr: Mutex<SocketAddr>,
 
-    pub(crate) last_sent: Arc<AtomicU64>,
-    pub(crate) last_received: Arc<AtomicU64>,
+    pub(crate) last_sent: AtomicU64,
+    pub(crate) last_received: AtomicU64,
 
     pub(crate) conn: Option<Arc<dyn util::Conn + Send + Sync>>,
     pub(crate) agent_internal: Option<Arc<Mutex<AgentInternal>>>,
@@ -62,19 +61,19 @@ impl Default for CandidateBase {
     fn default() -> Self {
         CandidateBase {
             id: String::new(),
-            network_type: Arc::new(AtomicU8::new(0)),
+            network_type: AtomicU8::new(0),
             candidate_type: CandidateType::default(),
 
-            component: Arc::new(AtomicU16::new(0)),
+            component: AtomicU16::new(0),
             address: String::new(),
             port: 0,
             related_address: None,
             tcp_type: TcpType::default(),
 
-            resolved_addr: Arc::new(Mutex::new(SocketAddr::new(IpAddr::from([0, 0, 0, 0]), 0))),
+            resolved_addr: Mutex::new(SocketAddr::new(IpAddr::from([0, 0, 0, 0]), 0)),
 
-            last_sent: Arc::new(AtomicU64::new(0)),
-            last_received: Arc::new(AtomicU64::new(0)),
+            last_sent: AtomicU64::new(0),
+            last_received: AtomicU64::new(0),
 
             conn: None,
             agent_internal: None,
@@ -297,10 +296,6 @@ impl Candidate for CandidateBase {
             && self.port() == other.port()
             && self.tcp_type() == other.tcp_type()
             && self.related_address() == other.related_address()
-    }
-
-    fn clone(&self) -> Arc<dyn Candidate + Send + Sync> {
-        Arc::new(Clone::clone(self))
     }
 
     async fn set_ip(&self, ip: &IpAddr) -> Result<(), Error> {

@@ -34,16 +34,12 @@ impl CandidateServerReflexiveConfig {
 
         let c = CandidateBase {
             id: candidate_id,
-            network_type: Arc::new(AtomicU8::new(network_type as u8)),
+            network_type: AtomicU8::new(network_type as u8),
             candidate_type: CandidateType::ServerReflexive,
             address: self.base_config.address,
             port: self.base_config.port,
-            resolved_addr: Arc::new(Mutex::new(create_addr(
-                network_type,
-                ip,
-                self.base_config.port,
-            ))),
-            component: Arc::new(AtomicU16::new(self.base_config.component)),
+            resolved_addr: Mutex::new(create_addr(network_type, ip, self.base_config.port)),
+            component: AtomicU16::new(self.base_config.component),
             foundation_override: self.base_config.foundation,
             priority_override: self.base_config.priority,
             related_address: Some(CandidateRelatedAddress {

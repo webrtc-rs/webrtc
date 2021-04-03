@@ -91,7 +91,6 @@ pub trait Candidate: fmt::Display {
         dst: &(dyn Candidate + Send + Sync),
     ) -> Result<usize, Error>;
     fn equal(&self, other: &dyn Candidate) -> bool;
-    fn clone(&self) -> Arc<dyn Candidate + Send + Sync>;
     async fn set_ip(&self, ip: &IpAddr) -> Result<(), Error>;
     fn get_conn(&self) -> Option<&Arc<dyn util::Conn + Send + Sync>>;
     fn get_agent(&self) -> Option<&Arc<Mutex<AgentInternal>>>;
