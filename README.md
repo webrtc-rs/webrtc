@@ -93,9 +93,8 @@
   - sync up to [pion/mdns/v0.0.4](https://github.com/pion/mdns/tree/2e1665e5f21a89afc152bb4b3791b30eda9b28cf)
 - [x] TURN: [webrtc-rs/turn](https://github.com/webrtc-rs/turn) [![turn][turn-badge]][turn-url]
   - sync up to [pion/turn/v2.0.2](https://github.com/pion/turn/tree/502d01577bf86a442ab9b9fa23f78987e7f1e1cd)
-- [ ] ICE: [webrtc-rs/ice](https://github.com/webrtc-rs/ice) [![ice][ice-badge]][ice-url]
-  - work in progress
-  - catch up [pion/ice/v2.0.14](https://github.com/pion/ice/tree/c0a874421c45ef6bbc51166b9056aa46c201f075)
+- [x] ICE: [webrtc-rs/ice](https://github.com/webrtc-rs/ice) [![ice][ice-badge]][ice-url]
+  - sync up to [pion/ice/v2.0.14](https://github.com/pion/ice/tree/c0a874421c45ef6bbc51166b9056aa46c201f075)
 - [ ] PeerConnection [webrtc-rs/webrtc](https://github.com/webrtc-rs/webrtc) [![webrtc][webrtc-badge]][webrtc-url]
 
 ### Road Map Towards 2.0
