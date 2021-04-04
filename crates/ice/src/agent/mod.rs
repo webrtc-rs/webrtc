@@ -36,6 +36,11 @@ use crate::rand::*;
 
 use crate::agent::agent_gather::GatherCandidatesInternalParams;
 use crate::agent::agent_transport::AgentConn;
+use crate::candidate::candidate_base::CandidateBaseConfig;
+use crate::candidate::candidate_host::CandidateHostConfig;
+use crate::candidate::candidate_peer_reflexive::CandidatePeerReflexiveConfig;
+use crate::candidate::candidate_relay::CandidateRelayConfig;
+use crate::candidate::candidate_server_reflexive::CandidateServerReflexiveConfig;
 use crate::tcp_type::TcpType;
 use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -582,6 +587,147 @@ impl Agent {
     pub async fn get_remote_candidates_stats(&self) -> Vec<CandidateStats> {
         let ai = self.agent_internal.lock().await;
         ai.get_remote_candidates_stats()
+    }
+
+    // unmarshal_remote_candidate creates a Remote Candidate from its string representation
+    pub async fn unmarshal_remote_candidate(&self, raw: String) -> Result<impl Candidate, Error> {
+        let split: Vec<&str> = raw.split_whitespace().collect();
+        if split.len() < 8 {
+            return Err(Error::new(format!(
+                "{} ({})",
+                *ERR_ATTRIBUTE_TOO_SHORT_ICE_CANDIDATE,
+                split.len()
+            )));
+        }
+
+        // Foundation
+        let foundation = split[0].to_owned();
+
+        // Component
+        let component: u16 = split[1].parse()?;
+
+        // Network
+        let network = split[2].to_owned();
+
+        // Priority
+        let priority: u32 = split[3].parse()?;
+
+        // Address
+        let address = split[4].to_owned();
+
+        // Port
+        let port: u16 = split[5].parse()?;
+
+        let typ = split[7];
+
+        let mut rel_addr = String::new();
+        let mut rel_port = 0;
+        let mut tcp_type = TcpType::Unspecified;
+
+        if split.len() > 8 {
+            let split2 = &split[8..];
+
+            if split2[0] == "raddr" {
+                if split2.len() < 4 {
+                    return Err(Error::new(format!(
+                        "{}: incorrect length",
+                        *ERR_PARSE_RELATED_ADDR
+                    )));
+                }
+
+                // RelatedAddress
+                rel_addr = split2[1].to_owned();
+
+                // RelatedPort
+                rel_port = split2[3].parse()?;
+            } else if split2[0] == "tcptype" {
+                if split2.len() < 2 {
+                    return Err(Error::new(format!("{}: incorrect length", *ERR_PARSE_TYPE)));
+                }
+
+                tcp_type = TcpType::from(split2[1]);
+            }
+        }
+
+        match typ {
+            "host" => {
+                let config = CandidateHostConfig {
+                    base_config: CandidateBaseConfig {
+                        network,
+                        address,
+                        port,
+                        component,
+                        priority,
+                        foundation,
+                        ..Default::default()
+                    },
+                    tcp_type,
+                };
+                config
+                    .new_candidate_host(Some(Arc::clone(&self.agent_internal)))
+                    .await
+            }
+            "srflx" => {
+                let config = CandidateServerReflexiveConfig {
+                    base_config: CandidateBaseConfig {
+                        network,
+                        address,
+                        port,
+                        component,
+                        priority,
+                        foundation,
+                        ..Default::default()
+                    },
+                    rel_addr,
+                    rel_port,
+                };
+                config
+                    .new_candidate_server_reflexive(Some(Arc::clone(&self.agent_internal)))
+                    .await
+            }
+            "prflx" => {
+                let config = CandidatePeerReflexiveConfig {
+                    base_config: CandidateBaseConfig {
+                        network,
+                        address,
+                        port,
+                        component,
+                        priority,
+                        foundation,
+                        ..Default::default()
+                    },
+                    rel_addr,
+                    rel_port,
+                };
+
+                config
+                    .new_candidate_peer_reflexive(Some(Arc::clone(&self.agent_internal)))
+                    .await
+            }
+            "relay" => {
+                let config = CandidateRelayConfig {
+                    base_config: CandidateBaseConfig {
+                        network,
+                        address,
+                        port,
+                        component,
+                        priority,
+                        foundation,
+                        ..Default::default()
+                    },
+                    rel_addr,
+                    rel_port,
+                    ..Default::default()
+                };
+                config
+                    .new_candidate_relay(Some(Arc::clone(&self.agent_internal)))
+                    .await
+            }
+            _ => Err(Error::new(format!(
+                "{} ({})",
+                *ERR_UNKNOWN_CANDIDATE_TYPE, typ
+            ))),
+        }
     }
 
     async fn resolve_and_add_multicast_candidate(

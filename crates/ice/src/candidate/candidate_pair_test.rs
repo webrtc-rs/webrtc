@@ -1,5 +1,9 @@
 use super::*;
 
+use crate::candidate::candidate_host::CandidateHostConfig;
+use crate::candidate::candidate_peer_reflexive::CandidatePeerReflexiveConfig;
+use crate::candidate::candidate_relay::CandidateRelayConfig;
+use crate::candidate::candidate_server_reflexive::CandidateServerReflexiveConfig;
 use util::Error;
 
 pub(crate) async fn host_candidate() -> Result<CandidateBase, Error> {

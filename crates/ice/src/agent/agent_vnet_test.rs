@@ -342,18 +342,6 @@ pub(crate) fn on_connected() -> (OnConnectionStateChangeHdlrFn, mpsc::Receiver<(
     (hdlr_fn, done_rx)
 }
 
-pub(crate) async fn copy_candidate(
-    o: Arc<dyn Candidate + Send + Sync>,
-) -> Result<Arc<dyn Candidate + Send + Sync>, Error> {
-    if let Some(ai) = o.get_agent() {
-        Ok(Arc::new(
-            unmarshal_remote_candidate(Some(Arc::clone(ai)), o.marshal()).await?,
-        ))
-    } else {
-        Err(Error::new("No AgentIntenal".to_owned()))
-    }
-}
-
 pub(crate) async fn gather_and_exchange_candidates(
     a_agent: &Arc<Agent>,
     b_agent: &Arc<Agent>,
@@ -388,16 +376,16 @@ pub(crate) async fn gather_and_exchange_candidates(
 
     let candidates = a_agent.get_local_candidates().await?;
     for c in candidates {
-        b_agent
-            .add_remote_candidate(&copy_candidate(c).await?)
-            .await?;
+        let c2: Arc<dyn Candidate + Send + Sync> =
+            Arc::new(b_agent.unmarshal_remote_candidate(c.marshal()).await?);
+        b_agent.add_remote_candidate(&c2).await?;
     }
 
     let candidates = b_agent.get_local_candidates().await?;
     for c in candidates {
-        a_agent
-            .add_remote_candidate(&copy_candidate(c).await?)
-            .await?;
+        let c2: Arc<dyn Candidate + Send + Sync> =
+            Arc::new(a_agent.unmarshal_remote_candidate(c.marshal()).await?);
+        a_agent.add_remote_candidate(&c2).await?;
     }
 
     Ok(())

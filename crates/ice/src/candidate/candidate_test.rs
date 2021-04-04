@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::agent::agent_config::AgentConfig;
+use crate::agent::Agent;
 use std::time::UNIX_EPOCH;
 use util::Error;
 
@@ -324,8 +326,9 @@ async fn test_candidate_marshal() -> Result<(), Error> {
         (None, "4207374051 1 udp 2130706431 10.0.75.1 53634 typ INVALID"),
     ];
 
+    let agent = Agent::new(AgentConfig::default()).await?;
     for (candidate, marshaled) in tests {
-        let actual_candidate = unmarshal_remote_candidate(None, marshaled.to_owned()).await;
+        let actual_candidate = agent.unmarshal_remote_candidate(marshaled.to_owned()).await;
         if let Some(candidate) = candidate {
             if let Ok(actual_candidate) = actual_candidate {
                 assert!(
