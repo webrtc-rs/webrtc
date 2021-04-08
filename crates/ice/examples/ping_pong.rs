@@ -6,7 +6,7 @@ use ice::state::*;
 
 use clap::{App, AppSettings, Arg};
 use std::io;
-use std::io::Write;
+//use std::io::Write;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use util::{Conn, Error};
@@ -84,20 +84,20 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    env_logger::Builder::new()
-        .format(|buf, record| {
-            writeln!(
-                buf,
-                "{}:{} [{}] {} - {}",
-                record.file().unwrap_or("unknown"),
-                record.line().unwrap_or(0),
-                record.level(),
-                chrono::Local::now().format("%H:%M:%S.%6f"),
-                record.args()
-            )
-        })
-        .filter(None, log::LevelFilter::Trace)
-        .init();
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
 
     let mut app = App::new("ICE Demo")
         .version("0.1.0")
@@ -168,10 +168,11 @@ async fn main() -> Result<(), Error> {
     ice_agent
         .on_candidate(Box::new(
             move |c: Option<Arc<dyn Candidate + Send + Sync>>| {
-                if let Some(c) = c {
-                    println!("{}", c.marshal());
-                    let client3 = Arc::clone(&client2);
-                    tokio::spawn(async move {
+                let client3 = Arc::clone(&client2);
+                Box::pin(async move {
+                    if let Some(c) = c {
+                        println!("{}", c.marshal());
+
                         let req = match Request::builder()
                             .method(Method::POST)
                             .uri(format!(
@@ -195,8 +196,8 @@ async fn main() -> Result<(), Error> {
                             }
                         };
                         println!("Response from remoteCandidate: {}", resp.status());
-                    });
-                }
+                    }
+                })
             },
         ))
         .await;

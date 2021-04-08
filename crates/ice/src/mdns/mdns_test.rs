@@ -5,7 +5,7 @@ use crate::errors::*;
 use crate::network_type::*;
 
 use regex::Regex;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 
 #[cfg(target_os = "linux")]
 #[tokio::test]
@@ -104,12 +104,16 @@ async fn test_multicast_dns_static_host_name() -> Result<(), Error> {
     let a = Agent::new(cfg1).await?;
 
     let (done_tx, mut done_rx) = mpsc::channel::<()>(1);
-    let mut done_tx = Some(done_tx);
+    let done_tx = Arc::new(Mutex::new(Some(done_tx)));
     a.on_candidate(Box::new(
         move |c: Option<Arc<dyn Candidate + Send + Sync>>| {
-            if c.is_none() {
-                done_tx.take();
-            }
+            let done_tx_clone = Arc::clone(&done_tx);
+            Box::pin(async move {
+                if c.is_none() {
+                    let mut tx = done_tx_clone.lock().await;
+                    tx.take();
+                }
+            })
         },
     ))
     .await;

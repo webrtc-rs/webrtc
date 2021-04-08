@@ -352,25 +352,33 @@ pub(crate) async fn gather_and_exchange_candidates(
 ) -> Result<(), Error> {
     let wg = WaitGroup::new();
 
-    let mut w1 = Some(wg.worker());
+    let w1 = Arc::new(Mutex::new(Some(wg.worker())));
     a_agent
         .on_candidate(Box::new(
             move |candidate: Option<Arc<dyn Candidate + Send + Sync>>| {
-                if candidate.is_none() {
-                    w1.take();
-                }
+                let w3 = Arc::clone(&w1);
+                Box::pin(async move {
+                    if candidate.is_none() {
+                        let mut w = w3.lock().await;
+                        w.take();
+                    }
+                })
             },
         ))
         .await;
     a_agent.gather_candidates().await?;
 
-    let mut w2 = Some(wg.worker());
+    let w2 = Arc::new(Mutex::new(Some(wg.worker())));
     b_agent
         .on_candidate(Box::new(
             move |candidate: Option<Arc<dyn Candidate + Send + Sync>>| {
-                if candidate.is_none() {
-                    w2.take();
-                }
+                let w3 = Arc::clone(&w2);
+                Box::pin(async move {
+                    if candidate.is_none() {
+                        let mut w = w3.lock().await;
+                        w.take();
+                    }
+                })
             },
         ))
         .await;

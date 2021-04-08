@@ -70,17 +70,25 @@ impl Default for BindingRequest {
 }
 
 pub type OnConnectionStateChangeHdlrFn = Box<
-    dyn (FnMut(ConnectionState) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>) + Send + Sync,
+    dyn (FnMut(ConnectionState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+        + Send
+        + Sync,
 >;
 pub type OnSelectedCandidatePairChangeHdlrFn = Box<
     dyn (FnMut(
             &(dyn Candidate + Send + Sync),
             &(dyn Candidate + Send + Sync),
-        ) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>)
+        ) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
-pub type OnCandidateHdlrFn = Box<dyn FnMut(Option<Arc<dyn Candidate + Send + Sync>>) + Send + Sync>;
+pub type OnCandidateHdlrFn = Box<
+    dyn (FnMut(
+            Option<Arc<dyn Candidate + Send + Sync>>,
+        ) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+        + Send
+        + Sync,
+>;
 pub type GatherCandidateCancelFn = Box<dyn Fn() + Send + Sync>;
 
 // Agent represents the ICE agent
@@ -351,7 +359,7 @@ impl Agent {
                         } else {
                             while let Some(c) = chan_candidate_rx.recv().await {
                                 if let Some(on_candidate) = &mut ai.on_candidate_hdlr {
-                                    on_candidate(c);
+                                    on_candidate(c).await;
                                 }
                             }
                             break;
@@ -361,7 +369,7 @@ impl Agent {
                         let mut ai = agent_internal.lock().await;
                         if let Some(c) = opt_cand {
                             if let Some(on_candidate) = &mut ai.on_candidate_hdlr{
-                                on_candidate(c);
+                                on_candidate(c).await;
                             }
                         } else {
                             while let Some(s) = chan_state_rx.recv().await {
