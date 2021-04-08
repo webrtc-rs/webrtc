@@ -72,8 +72,14 @@ impl Default for BindingRequest {
 pub type OnConnectionStateChangeHdlrFn = Box<
     dyn (FnMut(ConnectionState) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>) + Send + Sync,
 >;
-pub type OnSelectedCandidatePairChangeHdlrFn =
-    Box<dyn FnMut(&(dyn Candidate + Send + Sync), &(dyn Candidate + Send + Sync)) + Send + Sync>;
+pub type OnSelectedCandidatePairChangeHdlrFn = Box<
+    dyn (FnMut(
+            &(dyn Candidate + Send + Sync),
+            &(dyn Candidate + Send + Sync),
+        ) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>)
+        + Send
+        + Sync,
+>;
 pub type OnCandidateHdlrFn = Box<dyn FnMut(Option<Arc<dyn Candidate + Send + Sync>>) + Send + Sync>;
 pub type GatherCandidateCancelFn = Box<dyn Fn() + Send + Sync>;
 
@@ -328,7 +334,7 @@ impl Agent {
                     &mut ai.on_selected_candidate_pair_change_hdlr,
                     &selected_pair,
                 ) {
-                    on_selected_candidate_pair_change(&*p.local, &*p.remote);
+                    on_selected_candidate_pair_change(&*p.local, &*p.remote).await;
                 }
             }
         });

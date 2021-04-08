@@ -174,14 +174,13 @@ async fn test_pair_priority() -> Result<(), Error> {
 async fn test_on_selected_candidate_pair_change() -> Result<(), Error> {
     let a = Agent::new(AgentConfig::default()).await?;
     let (callback_called_tx, mut callback_called_rx) = mpsc::channel::<()>(1);
-
-    // use std::sync::Mutex, instead of tokio::sync::Mutex, because of async closure is not stable yet
-    // DON'T mix the usage of std::sync::Mutex and tokio async in Production!!!
-    let arc_tx = Arc::new(std::sync::Mutex::new(Some(callback_called_tx)));
+    let callback_called_tx = Arc::new(Mutex::new(Some(callback_called_tx)));
     let cb: OnSelectedCandidatePairChangeHdlrFn = Box::new(move |_, _| {
-        if let Ok(mut tx) = arc_tx.lock() {
+        let callback_called_tx_clone = Arc::clone(&callback_called_tx);
+        Box::pin(async move {
+            let mut tx = callback_called_tx_clone.lock().await;
             tx.take();
-        }
+        })
     });
     a.on_selected_candidate_pair_change(cb).await;
 
@@ -2082,11 +2081,15 @@ async fn test_run_task_in_selected_candidate_pair_change_callback() -> Result<()
     let b_agent = Arc::new(Agent::new(cfg1).await?);
 
     let (is_tested_tx, mut is_tested_rx) = mpsc::channel::<()>(1);
-    let mut is_tested_tx = Some(is_tested_tx);
+    let is_tested_tx = Arc::new(Mutex::new(Some(is_tested_tx)));
     a_agent
         .on_selected_candidate_pair_change(Box::new(
             move |_: &(dyn Candidate + Send + Sync), _: &(dyn Candidate + Send + Sync)| {
-                is_tested_tx.take();
+                let is_tested_tx_clone = Arc::clone(&is_tested_tx);
+                Box::pin(async move {
+                    let mut tx = is_tested_tx_clone.lock().await;
+                    tx.take();
+                })
             },
         ))
         .await;
