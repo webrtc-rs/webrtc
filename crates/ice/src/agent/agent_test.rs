@@ -466,12 +466,16 @@ async fn test_connectivity_on_startup() -> Result<(), Error> {
     let (_a_cancel_tx, a_cancel_rx) = mpsc::channel(1);
     let (_b_cancel_tx, b_cancel_rx) = mpsc::channel(1);
 
-    let mut accepting_tx = Some(accepting_tx);
+    let accepting_tx = Arc::new(Mutex::new(Some(accepting_tx)));
     a_agent
         .on_connection_state_change(Box::new(move |s: ConnectionState| {
-            if s == ConnectionState::Checking {
-                accepting_tx.take();
-            }
+            let accepted_tx_clone = Arc::clone(&accepting_tx);
+            Box::pin(async move {
+                if s == ConnectionState::Checking {
+                    let mut tx = accepted_tx_clone.lock().await;
+                    tx.take();
+                }
+            })
         }))
         .await;
 
@@ -935,37 +939,49 @@ async fn test_connection_state_callback() -> Result<(), Error> {
     let (is_failed_tx, mut is_failed_rx) = mpsc::channel::<()>(1);
     let (is_closed_tx, mut is_closed_rx) = mpsc::channel::<()>(1);
 
-    let mut is_checking_tx = Some(is_checking_tx);
-    let mut is_connected_tx = Some(is_connected_tx);
-    let mut is_disconnected_tx = Some(is_disconnected_tx);
-    let mut is_failed_tx = Some(is_failed_tx);
-    let mut is_closed_tx = Some(is_closed_tx);
+    let is_checking_tx = Arc::new(Mutex::new(Some(is_checking_tx)));
+    let is_connected_tx = Arc::new(Mutex::new(Some(is_connected_tx)));
+    let is_disconnected_tx = Arc::new(Mutex::new(Some(is_disconnected_tx)));
+    let is_failed_tx = Arc::new(Mutex::new(Some(is_failed_tx)));
+    let is_closed_tx = Arc::new(Mutex::new(Some(is_closed_tx)));
 
     a_agent
         .on_connection_state_change(Box::new(move |c: ConnectionState| {
-            match c {
-                ConnectionState::Checking => {
-                    log::debug!("drop is_checking_tx");
-                    is_checking_tx.take();
-                }
-                ConnectionState::Connected => {
-                    log::debug!("drop is_connected_tx");
-                    is_connected_tx.take();
-                }
-                ConnectionState::Disconnected => {
-                    log::debug!("drop is_disconnected_tx");
-                    is_disconnected_tx.take();
-                }
-                ConnectionState::Failed => {
-                    log::debug!("drop is_failed_tx");
-                    is_failed_tx.take();
-                }
-                ConnectionState::Closed => {
-                    log::debug!("drop is_closed_tx");
-                    is_closed_tx.take();
-                }
-                _ => {}
-            };
+            let is_checking_tx_clone = Arc::clone(&is_checking_tx);
+            let is_connected_tx_clone = Arc::clone(&is_connected_tx);
+            let is_disconnected_tx_clone = Arc::clone(&is_disconnected_tx);
+            let is_failed_tx_clone = Arc::clone(&is_failed_tx);
+            let is_closed_tx_clone = Arc::clone(&is_closed_tx);
+            Box::pin(async move {
+                match c {
+                    ConnectionState::Checking => {
+                        log::debug!("drop is_checking_tx");
+                        let mut tx = is_checking_tx_clone.lock().await;
+                        tx.take();
+                    }
+                    ConnectionState::Connected => {
+                        log::debug!("drop is_connected_tx");
+                        let mut tx = is_connected_tx_clone.lock().await;
+                        tx.take();
+                    }
+                    ConnectionState::Disconnected => {
+                        log::debug!("drop is_disconnected_tx");
+                        let mut tx = is_disconnected_tx_clone.lock().await;
+                        tx.take();
+                    }
+                    ConnectionState::Failed => {
+                        log::debug!("drop is_failed_tx");
+                        let mut tx = is_failed_tx_clone.lock().await;
+                        tx.take();
+                    }
+                    ConnectionState::Closed => {
+                        log::debug!("drop is_closed_tx");
+                        let mut tx = is_closed_tx_clone.lock().await;
+                        tx.take();
+                    }
+                    _ => {}
+                };
+            })
         }))
         .await;
 
@@ -1631,12 +1647,16 @@ async fn test_connection_state_failed_delete_all_candidates() -> Result<(), Erro
     let b_agent = Arc::new(Agent::new(cfg1).await?);
 
     let (is_failed_tx, mut is_failed_rx) = mpsc::channel::<()>(1);
-    let mut is_failed_tx = Some(is_failed_tx);
+    let is_failed_tx = Arc::new(Mutex::new(Some(is_failed_tx)));
     a_agent
         .on_connection_state_change(Box::new(move |c: ConnectionState| {
-            if c == ConnectionState::Failed {
-                is_failed_tx.take();
-            }
+            let is_failed_tx_clone = Arc::clone(&is_failed_tx);
+            Box::pin(async move {
+                if c == ConnectionState::Failed {
+                    let mut tx = is_failed_tx_clone.lock().await;
+                    tx.take();
+                }
+            })
         }))
         .await;
 
@@ -1681,17 +1701,24 @@ async fn test_connection_state_connecting_to_failed() -> Result<(), Error> {
     let is_checking = WaitGroup::new();
 
     let connection_state_check = move |wf: Worker, wc: Worker| {
-        let mut wf = Some(wf);
-        let mut wc = Some(wc);
-        Box::new(move |c: ConnectionState| {
-            if c == ConnectionState::Failed {
-                wf.take();
-            } else if c == ConnectionState::Checking {
-                wc.take();
-            } else if c == ConnectionState::Connected || c == ConnectionState::Completed {
-                assert!(false, "Unexpected ConnectionState: {}", c);
-            }
-        })
+        let wf = Arc::new(Mutex::new(Some(wf)));
+        let wc = Arc::new(Mutex::new(Some(wc)));
+        let hdlr_fn: OnConnectionStateChangeHdlrFn = Box::new(move |c: ConnectionState| {
+            let wf_clone = Arc::clone(&wf);
+            let wc_clone = Arc::clone(&wc);
+            Box::pin(async move {
+                if c == ConnectionState::Failed {
+                    let mut f = wf_clone.lock().await;
+                    f.take();
+                } else if c == ConnectionState::Checking {
+                    let mut c = wc_clone.lock().await;
+                    c.take();
+                } else if c == ConnectionState::Connected || c == ConnectionState::Completed {
+                    assert!(false, "Unexpected ConnectionState: {}", c);
+                }
+            })
+        });
+        hdlr_fn
     };
 
     let (wf1, wc1) = (is_failed.worker(), is_checking.worker());
@@ -1788,12 +1815,16 @@ async fn test_agent_restart_one_side() -> Result<(), Error> {
     .await?;
 
     let (cancel_tx, mut cancel_rx) = mpsc::channel::<()>(1);
-    let mut cancel_tx = Some(cancel_tx);
+    let cancel_tx = Arc::new(Mutex::new(Some(cancel_tx)));
     agent_b
         .on_connection_state_change(Box::new(move |c: ConnectionState| {
-            if c == ConnectionState::Failed || c == ConnectionState::Disconnected {
-                cancel_tx.take();
-            }
+            let cancel_tx_clone = Arc::clone(&cancel_tx);
+            Box::pin(async move {
+                if c == ConnectionState::Failed || c == ConnectionState::Disconnected {
+                    let mut tx = cancel_tx_clone.lock().await;
+                    tx.take();
+                }
+            })
         }))
         .await;
 
@@ -1939,15 +1970,21 @@ async fn test_close_in_connection_state_callback() -> Result<(), Error> {
 
     let (is_closed_tx, mut is_closed_rx) = mpsc::channel::<()>(1);
     let (is_connected_tx, mut is_connected_rx) = mpsc::channel::<()>(1);
-    let mut is_closed_tx = Some(is_closed_tx);
-    let mut is_connected_tx = Some(is_connected_tx);
+    let is_closed_tx = Arc::new(Mutex::new(Some(is_closed_tx)));
+    let is_connected_tx = Arc::new(Mutex::new(Some(is_connected_tx)));
     a_agent
         .on_connection_state_change(Box::new(move |c: ConnectionState| {
-            if c == ConnectionState::Connected {
-                is_connected_tx.take();
-            } else if c == ConnectionState::Closed {
-                is_closed_tx.take();
-            }
+            let is_closed_tx_clone = Arc::clone(&is_closed_tx);
+            let is_connected_tx_clone = Arc::clone(&is_connected_tx);
+            Box::pin(async move {
+                if c == ConnectionState::Connected {
+                    let mut tx = is_connected_tx_clone.lock().await;
+                    tx.take();
+                } else if c == ConnectionState::Closed {
+                    let mut tx = is_closed_tx_clone.lock().await;
+                    tx.take();
+                }
+            })
         }))
         .await;
 
@@ -1991,12 +2028,16 @@ async fn test_run_task_in_connection_state_callback() -> Result<(), Error> {
     let b_agent = Arc::new(Agent::new(cfg1).await?);
 
     let (is_complete_tx, mut is_complete_rx) = mpsc::channel::<()>(1);
-    let mut is_complete_tx = Some(is_complete_tx);
+    let is_complete_tx = Arc::new(Mutex::new(Some(is_complete_tx)));
     a_agent
         .on_connection_state_change(Box::new(move |c: ConnectionState| {
-            if c == ConnectionState::Connected {
-                is_complete_tx.take();
-            }
+            let is_complete_tx_clone = Arc::clone(&is_complete_tx);
+            Box::pin(async move {
+                if c == ConnectionState::Connected {
+                    let mut tx = is_complete_tx_clone.lock().await;
+                    tx.take();
+                }
+            })
         }))
         .await;
 
@@ -2042,9 +2083,6 @@ async fn test_run_task_in_selected_candidate_pair_change_callback() -> Result<()
 
     let (is_tested_tx, mut is_tested_rx) = mpsc::channel::<()>(1);
     let mut is_tested_tx = Some(is_tested_tx);
-    let (is_complete_tx, mut is_complete_rx) = mpsc::channel::<()>(1);
-    let mut is_complete_tx = Some(is_complete_tx);
-
     a_agent
         .on_selected_candidate_pair_change(Box::new(
             move |_: &(dyn Candidate + Send + Sync), _: &(dyn Candidate + Send + Sync)| {
@@ -2053,11 +2091,17 @@ async fn test_run_task_in_selected_candidate_pair_change_callback() -> Result<()
         ))
         .await;
 
+    let (is_complete_tx, mut is_complete_rx) = mpsc::channel::<()>(1);
+    let is_complete_tx = Arc::new(Mutex::new(Some(is_complete_tx)));
     a_agent
         .on_connection_state_change(Box::new(move |c: ConnectionState| {
-            if c == ConnectionState::Connected {
-                is_complete_tx.take();
-            }
+            let is_complete_tx_clone = Arc::clone(&is_complete_tx);
+            Box::pin(async move {
+                if c == ConnectionState::Connected {
+                    let mut tx = is_complete_tx_clone.lock().await;
+                    tx.take();
+                }
+            })
         }))
         .await;
 
@@ -2112,19 +2156,28 @@ async fn test_lite_lifecycle() -> Result<(), Error> {
     let (b_connected_tx, mut b_connected_rx) = mpsc::channel::<()>(1);
     let (b_disconnected_tx, mut b_disconnected_rx) = mpsc::channel::<()>(1);
     let (b_failed_tx, mut b_failed_rx) = mpsc::channel::<()>(1);
-    let mut b_connected_tx = Some(b_connected_tx);
-    let mut b_disconnected_tx = Some(b_disconnected_tx);
-    let mut b_failed_tx = Some(b_failed_tx);
+    let b_connected_tx = Arc::new(Mutex::new(Some(b_connected_tx)));
+    let b_disconnected_tx = Arc::new(Mutex::new(Some(b_disconnected_tx)));
+    let b_failed_tx = Arc::new(Mutex::new(Some(b_failed_tx)));
 
     b_agent
         .on_connection_state_change(Box::new(move |c: ConnectionState| {
-            if c == ConnectionState::Connected {
-                b_connected_tx.take();
-            } else if c == ConnectionState::Disconnected {
-                b_disconnected_tx.take();
-            } else if c == ConnectionState::Failed {
-                b_failed_tx.take();
-            }
+            let b_connected_tx_clone = Arc::clone(&b_connected_tx);
+            let b_disconnected_tx_clone = Arc::clone(&b_disconnected_tx);
+            let b_failed_tx_clone = Arc::clone(&b_failed_tx);
+
+            Box::pin(async move {
+                if c == ConnectionState::Connected {
+                    let mut tx = b_connected_tx_clone.lock().await;
+                    tx.take();
+                } else if c == ConnectionState::Disconnected {
+                    let mut tx = b_disconnected_tx_clone.lock().await;
+                    tx.take();
+                } else if c == ConnectionState::Failed {
+                    let mut tx = b_failed_tx_clone.lock().await;
+                    tx.take();
+                }
+            })
         }))
         .await;
 

@@ -333,11 +333,15 @@ pub(crate) async fn pipe_with_vnet(
 
 pub(crate) fn on_connected() -> (OnConnectionStateChangeHdlrFn, mpsc::Receiver<()>) {
     let (done_tx, done_rx) = mpsc::channel::<()>(1);
-    let mut done_tx = Some(done_tx);
-    let hdlr_fn = Box::new(move |state: ConnectionState| {
-        if state == ConnectionState::Connected {
-            done_tx.take();
-        }
+    let done_tx = Arc::new(Mutex::new(Some(done_tx)));
+    let hdlr_fn: OnConnectionStateChangeHdlrFn = Box::new(move |state: ConnectionState| {
+        let done_tx_clone = Arc::clone(&done_tx);
+        Box::pin(async move {
+            if state == ConnectionState::Connected {
+                let mut tx = done_tx_clone.lock().await;
+                tx.take();
+            }
+        })
     });
     (hdlr_fn, done_rx)
 }
@@ -806,17 +810,25 @@ async fn test_disconnected_to_connected() -> Result<(), Error> {
 
     let (controlling_state_changes_tx, mut controlling_state_changes_rx) =
         mpsc::channel::<ConnectionState>(100);
+    let controlling_state_changes_tx = Arc::new(controlling_state_changes_tx);
     controlling_agent
         .on_connection_state_change(Box::new(move |c: ConnectionState| {
-            let _ = controlling_state_changes_tx.try_send(c);
+            let controlling_state_changes_tx_clone = Arc::clone(&controlling_state_changes_tx);
+            Box::pin(async move {
+                let _ = controlling_state_changes_tx_clone.try_send(c);
+            })
         }))
         .await;
 
     let (controlled_state_changes_tx, mut controlled_state_changes_rx) =
         mpsc::channel::<ConnectionState>(100);
+    let controlled_state_changes_tx = Arc::new(controlled_state_changes_tx);
     controlled_agent
         .on_connection_state_change(Box::new(move |c: ConnectionState| {
-            let _ = controlled_state_changes_tx.try_send(c);
+            let controlled_state_changes_tx_clone = Arc::clone(&controlled_state_changes_tx);
+            Box::pin(async move {
+                let _ = controlled_state_changes_tx_clone.try_send(c);
+            })
         }))
         .await;
 

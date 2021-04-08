@@ -42,6 +42,8 @@ use crate::candidate::candidate_peer_reflexive::CandidatePeerReflexiveConfig;
 use crate::candidate::candidate_relay::CandidateRelayConfig;
 use crate::candidate::candidate_server_reflexive::CandidateServerReflexiveConfig;
 use crate::tcp_type::TcpType;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -67,7 +69,9 @@ impl Default for BindingRequest {
     }
 }
 
-pub type OnConnectionStateChangeHdlrFn = Box<dyn FnMut(ConnectionState) + Send + Sync>;
+pub type OnConnectionStateChangeHdlrFn = Box<
+    dyn (FnMut(ConnectionState) -> Pin<Box<dyn Future<Output = ()> + Send + Sync>>) + Send + Sync,
+>;
 pub type OnSelectedCandidatePairChangeHdlrFn =
     Box<dyn FnMut(&(dyn Candidate + Send + Sync), &(dyn Candidate + Send + Sync)) + Send + Sync>;
 pub type OnCandidateHdlrFn = Box<dyn FnMut(Option<Arc<dyn Candidate + Send + Sync>>) + Send + Sync>;
@@ -336,7 +340,7 @@ impl Agent {
                         let mut ai = agent_internal.lock().await;
                         if let Some(s) = opt_state {
                             if let Some(on_connection_state_change) = &mut ai.on_connection_state_change_hdlr{
-                                on_connection_state_change(s);
+                                on_connection_state_change(s).await;
                             }
                         } else {
                             while let Some(c) = chan_candidate_rx.recv().await {
@@ -356,7 +360,7 @@ impl Agent {
                         } else {
                             while let Some(s) = chan_state_rx.recv().await {
                                 if let Some(on_connection_state_change) = &mut ai.on_connection_state_change_hdlr{
-                                    on_connection_state_change(s);
+                                    on_connection_state_change(s).await;
                                 }
                             }
                             break;

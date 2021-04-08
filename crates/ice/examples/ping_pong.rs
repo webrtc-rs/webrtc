@@ -203,8 +203,10 @@ async fn main() -> Result<(), Error> {
 
     // When ICE Connection state has change print to stdout
     ice_agent
-        .on_connection_state_change(Box::new(move |c: ConnectionState| {
-            println!("ICE Connection State has changed: {}", c);
+        .on_connection_state_change(Box::new(|c: ConnectionState| {
+            Box::pin(async move {
+                println!("ICE Connection State has changed: {}", c);
+            })
         }))
         .await;
 
