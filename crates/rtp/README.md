@@ -12,6 +12,15 @@
  <a href="https://deps.rs/repo/github/webrtc-rs/rtp"> 
   <img src="https://deps.rs/repo/github/webrtc-rs/rtp/status.svg">
  </a>
+ <a href="https://crates.io/crates/webrtc-rtp"> 
+  <img src="https://img.shields.io/crates/v/webrtc-rtp.svg">
+ </a> 
+ <a href="https://docs.rs/webrtc-rtp"> 
+  <img src="https://docs.rs/webrtc-rtp/badge.svg">
+ </a>
+ <a href="https://discord.gg/4Ju8UHdXMs">
+  <img src="https://img.shields.io/discord/800204819540869120?logo=discord" alt="Discord">
+ </a>
  <a href="https://github.com/webrtc-rs/rtp/blob/master/LICENSE">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
  </a>
