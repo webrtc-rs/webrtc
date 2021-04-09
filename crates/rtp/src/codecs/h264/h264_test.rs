@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::{
-        codecs::h264::h264_def::*,
+        codecs::h264::*,
         errors::RTPError,
         packetizer::{Depacketizer, Payloader},
     };

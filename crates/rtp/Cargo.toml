@@ -1,7 +1,7 @@
 [package]
 name = "webrtc-rtp"
 version = "0.1.0"
-authors = ["Rain Liu <yuliu@outlook.com>", "Michael Uti <utimichael9@gmail.com>"]
+authors = ["Rain Liu <yliu@webrtc.rs>", "Michael Uti <utimichael9@gmail.com>"]
 edition = "2018"
 description = "A pure Rust implementation of RTP"
 license = "MIT"
