@@ -4,35 +4,7 @@ use webrtc_rtp::{
     packet::Packet,
 };
 
-fn benchmark_marshal(c: &mut Criterion) {
-    let raw_pkt = vec![
-        0x90u8, 0x60, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0x00, 0x01, 0x00,
-        0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0x98, 0x36, 0xbe, 0x88, 0x9e,
-    ];
-
-    let mut p = Packet::default();
-    p.unmarshal(raw_pkt.as_slice()).unwrap();
-
-    c.bench_function("Marshal Benchmark", |b| b.iter(|| p.marshal().unwrap()));
-}
-
-fn benchmark_marshal_to(c: &mut Criterion) {
-    let raw_pkt = vec![
-        0x90, 0x60, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0x00, 0x01, 0x00,
-        0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0x98, 0x36, 0xbe, 0x88, 0x9e,
-    ];
-
-    let mut p = Packet::default();
-    p.unmarshal(&raw_pkt).unwrap();
-
-    let buf = &mut [0u8; 100];
-
-    c.bench_function("Marshal_To Benchmark", move |b| {
-        b.iter(|| p.marshal_to(buf).unwrap())
-    });
-}
-
-fn benchmark_unmarshal(c: &mut Criterion) {
+fn benchmark_packet(c: &mut Criterion) {
     let mut pkt = Packet {
         header: Header {
             extension: true,
@@ -50,12 +22,28 @@ fn benchmark_unmarshal(c: &mut Criterion) {
             ],
             ..Default::default()
         },
-        payload: vec![0xFFu8; 1500], //vec![0x07, 0x08, 0x09, 0x0a],
+        payload: vec![0xFFu8; 1500], //MTU=1500
         ..Default::default()
     };
 
     let raw_pkt = pkt.marshal().unwrap();
     let raw_pkt_clone = raw_pkt.clone();
+    let mut p = Packet::default();
+    p.unmarshal(&raw_pkt_clone).unwrap();
+
+    if pkt != p {
+        panic!(
+            "marshal or unmarshal not correct: \npkt: {:?} \nvs \np: {:?}",
+            pkt, p
+        );
+    }
+
+    c.bench_function("Marshal Benchmark", |b| b.iter(|| p.marshal().unwrap()));
+
+    let buf = &mut [0u8; 1600];
+    c.bench_function("Marshal_To Benchmark", move |b| {
+        b.iter(|| p.marshal_to(buf).unwrap())
+    });
 
     c.bench_function("Shared Struct", move |b| {
         b.iter(|| pkt.unmarshal(&raw_pkt).unwrap())
@@ -69,10 +57,5 @@ fn benchmark_unmarshal(c: &mut Criterion) {
     });
 }
 
-criterion_group!(
-    benches,
-    benchmark_marshal,
-    benchmark_marshal_to,
-    benchmark_unmarshal
-);
+criterion_group!(benches, benchmark_packet);
 criterion_main!(benches);
