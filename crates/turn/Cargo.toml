@@ -28,7 +28,6 @@ tokio-test = "0.4"
 env_logger = "0.8"
 chrono = "0.4.19"
 hex = "0.4.2"
-ctrlc = "3.1.8"
 clap = "2"
 
 [[example]]

@@ -9,10 +9,10 @@ use clap::{App, AppSettings, Arg};
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use tokio::net::UdpSocket;
+use tokio::signal;
 use tokio::time::Duration;
 
 use util::{vnet::net::*, Error};
@@ -132,16 +132,8 @@ async fn main() -> Result<(), Error> {
     })
     .await?;
 
-    let running = Arc::new(AtomicBool::new(true));
-    let r = running.clone();
-
-    ctrlc::set_handler(move || {
-        r.store(false, Ordering::SeqCst);
-    })
-    .expect("Error setting Ctrl-C handler");
-
     println!("Waiting for Ctrl-C...");
-    while running.load(Ordering::SeqCst) {}
+    signal::ctrl_c().await.expect("failed to listen for event");
     println!("\nClosing connection now...");
     server.close()?;
 
