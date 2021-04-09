@@ -37,7 +37,7 @@ fn benchmark_unmarshal(c: &mut Criterion) {
         header: Header {
             extension: true,
             csrc: vec![1, 2],
-            extension_profile: ExtensionProfile::TwoByte.into(),
+            extension_profile: ExtensionProfile::TwoByte as u16,
             extensions: vec![
                 header::Extension {
                     id: 1,
@@ -50,7 +50,7 @@ fn benchmark_unmarshal(c: &mut Criterion) {
             ],
             ..Default::default()
         },
-        payload: vec![0x07, 0x08, 0x09, 0x0a],
+        payload: vec![0xFFu8; 1500], //vec![0x07, 0x08, 0x09, 0x0a],
         ..Default::default()
     };
 
