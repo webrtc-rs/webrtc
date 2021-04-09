@@ -357,8 +357,8 @@ impl Header {
     pub fn marshal(&mut self) -> Result<Vec<u8>, RTPError> {
         let mut buf = vec![0u8; self.marshal_size()];
 
-        self.marshal_to(&mut buf)?;
-        // buf.truncate(size);
+        let n = self.marshal_to(&mut buf)?;
+        assert_eq!(n, buf.len(), "buf size should be exactly allocated");
 
         Ok(buf)
     }
