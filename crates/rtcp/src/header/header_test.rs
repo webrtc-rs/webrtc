@@ -46,7 +46,7 @@ mod test {
                     packet_type: PacketType::Unsupported,
                     length: 0,
                 },
-                Err(Error::BadVersion("".to_string())),
+                Err(Error::BadVersion),
             ),
         ];
 

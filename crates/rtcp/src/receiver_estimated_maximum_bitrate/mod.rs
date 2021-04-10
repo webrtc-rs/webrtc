@@ -113,27 +113,18 @@ impl Packet for ReceiverEstimatedMaximumBitrate {
         // padding must be unset
         let padding = (buf[0] >> 5) & 1;
         if padding != 0 {
-            return Err(Error::WrongPadding(format!(
-                "expected(0) actual({})",
-                padding
-            )));
+            return Err(Error::WrongPadding);
         }
 
         // fmt must be 15
         let fmt_val = buf[0] & 31;
         if fmt_val != 15 {
-            return Err(Error::WrongFeedbackType(format!(
-                "expected(15) actual({})",
-                fmt_val
-            )));
+            return Err(Error::WrongFeedbackType);
         }
 
         // Must be payload specific feedback
         if buf[1] != 206 {
-            return Err(Error::WrongPayloadType(format!(
-                "expected(206) actual({})",
-                buf[1]
-            )));
+            return Err(Error::WrongPayloadType);
         }
 
         // length is the number of 32-bit words, minus 1

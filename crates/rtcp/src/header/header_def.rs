@@ -71,7 +71,7 @@ impl Header {
         let version = raw_packet[0] >> super::VERSION_SHIFT & super::VERSION_MASK;
 
         if version != super::RTP_VERSION {
-            return Err(Error::BadVersion("".to_string()));
+            return Err(Error::BadVersion);
         }
 
         self.padding = (raw_packet[0] >> super::PADDING_SHIFT & super::PADDING_MASK) > 0;

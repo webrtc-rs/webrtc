@@ -32,7 +32,7 @@ mod test {
                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 ],
                 PictureLossIndication::default(),
-                Err(Error::BadVersion("".to_string())),
+                Err(Error::BadVersion),
             ),
             (
                 "wrong type",

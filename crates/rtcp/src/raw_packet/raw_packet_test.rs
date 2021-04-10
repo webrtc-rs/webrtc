@@ -28,7 +28,7 @@ mod test {
                     vec![0x00, 0xc9, 0x00, 0x04],
                 ),
                 Ok(()),
-                Err(Error::BadVersion("".to_string())),
+                Err(Error::BadVersion),
             ),
         ];
 

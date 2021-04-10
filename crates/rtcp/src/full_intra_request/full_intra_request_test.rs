@@ -64,7 +64,7 @@ mod test {
                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 ],
                 FullIntraRequest::default(),
-                Err(Error::BadVersion("".to_string())),
+                Err(Error::BadVersion),
             ),
             (
                 "wrong type",

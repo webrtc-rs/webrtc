@@ -668,9 +668,7 @@ mod test {
                 .unmarshal(&mut data[..].into())
                 .expect("Unmarshal error");
 
-            if chunk != want {
-                panic!(format!("Packets are not same {}", name));
-            }
+            assert!(chunk == want, "Packets are not same {}", name);
         }
     }
 

@@ -34,13 +34,13 @@ pub enum Error {
     /// Reason is too long.
     ReasonTooLong,
     /// Invalid packet version.
-    BadVersion(String),
+    BadVersion,
     /// Invalid padding value.
-    WrongPadding(String),
+    WrongPadding,
     /// Wrong feedback message type.
-    WrongFeedbackType(String),
+    WrongFeedbackType,
     /// Wrong payload type.
-    WrongPayloadType(String),
+    WrongPayloadType,
     /// Header length is too small.
     HeaderTooSmall,
     /// Media ssrc was defined as zero.
@@ -63,10 +63,7 @@ impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
             Error::BadFirstPacket => write!(f, "First packet in compound must be SR or RR"),
-            Error::BadVersion(ref e) => match e.is_empty() {
-                true => write!(f, "Invalid packet version"),
-                _ => write!(f, "Invalid packet version, {}", e),
-            },
+            Error::BadVersion => write!(f, "Invalid packet version"),
             Error::DeltaExceedLimit => write!(f, "Delta exceed limit"),
             Error::EmptyCompound => write!(f, "Empty compound packet"),
             Error::HeaderTooSmall => write!(f, "Header length is too small"),
@@ -94,19 +91,10 @@ impl std::fmt::Display for Error {
             Error::TooManyChunks => write!(f, "Too many chunks"),
             Error::TooManyReports => write!(f, "Too many reports"),
             Error::TooManySources => write!(f, "too many sources"),
-            Error::WrongFeedbackType(ref e) => match e.is_empty() {
-                true => write!(f, "Wrong feedback message type"),
-                _ => write!(f, "Wrong feedback message type, {}", e),
-            },
+            Error::WrongFeedbackType => write!(f, "Wrong feedback message type"),
             Error::WrongMarshalSize => write!(f, "Wrong marshal size"),
-            Error::WrongPadding(ref e) => match e.is_empty() {
-                false => write!(f, "Invalid padding value, {}", e),
-                _ => write!(f, "Invalid padding value"),
-            },
-            Error::WrongPayloadType(ref e) => match e.is_empty() {
-                false => write!(f, "Wrong payload type, {}", e),
-                _ => write!(f, "Wrong payload type"),
-            },
+            Error::WrongPadding => write!(f, "Invalid padding value"),
+            Error::WrongPayloadType => write!(f, "Wrong payload type"),
             Error::WrongType => write!(f, "Wrong packet type"),
             Error::Other(ref e) => write!(f, "{}", e),
         }
