@@ -4,7 +4,7 @@ use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
 use std::fmt;
 
-use crate::{errors::Error, header, packet::Packet, receiver_report, util};
+use crate::{error::Error, header, packet::Packet, receiver_report, util};
 
 /// https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-5
 /// 0                   1                   2                   3

@@ -2,7 +2,7 @@
 mod test {
     use crate::compound_packet::*;
     use crate::{
-        errors::Error, goodbye, packet, receiver_report, sender_report, source_description,
+        error::Error, goodbye, packet, receiver_report, sender_report, source_description,
     };
 
     // An RTCP packet from a packet dump

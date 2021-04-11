@@ -4,7 +4,7 @@ use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
 
 use crate::{
-    errors::Error, header, header::Header, header::PacketType, packet::Packet, util::get_padding,
+    error::Error, header, header::Header, header::PacketType, packet::Packet, util::get_padding,
 };
 
 mod receiver_estimated_maximum_bitrate_test;

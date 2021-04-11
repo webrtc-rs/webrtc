@@ -3,7 +3,7 @@ use std::fmt;
 use bytes::BytesMut;
 use header::Header;
 
-use crate::{errors::Error, header, packet::Packet};
+use crate::{error::Error, header, packet::Packet};
 
 mod raw_packet_test;
 

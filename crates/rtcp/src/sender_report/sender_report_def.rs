@@ -3,7 +3,7 @@ use bytes::BytesMut;
 use header::{Header, PacketType};
 use std::fmt;
 
-use crate::{errors::Error, packet::Packet, reception_report::ReceptionReport};
+use crate::{error::Error, packet::Packet, reception_report::ReceptionReport};
 use crate::{header, util::get_padding};
 
 // A SenderReport (SR) packet provides reception quality feedback for an RTP stream

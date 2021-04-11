@@ -1,7 +1,7 @@
 use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
 
-use crate::errors::Error;
+use crate::error::Error;
 
 use super::PacketType;
 

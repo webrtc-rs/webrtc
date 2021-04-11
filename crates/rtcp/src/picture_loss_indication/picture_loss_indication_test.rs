@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::errors::Error;
+    use crate::error::Error;
     use crate::header::Header;
     use crate::picture_loss_indication::*;
 

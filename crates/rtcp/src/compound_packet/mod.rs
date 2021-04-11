@@ -1,6 +1,6 @@
 use super::packet::Packet;
 use super::source_description::SDESType;
-use crate::{errors::Error, receiver_report::ReceiverReport, sender_report::SenderReport};
+use crate::{error::Error, receiver_report::ReceiverReport, sender_report::SenderReport};
 use bytes::BytesMut;
 
 mod compound_packet_test;

@@ -4,7 +4,7 @@ use std::fmt;
 
 use super::{header, receiver_report};
 use crate::util::get_padding;
-use crate::{errors::Error, packet::Packet};
+use crate::{error::Error, packet::Packet};
 
 mod picture_loss_indication_test;
 

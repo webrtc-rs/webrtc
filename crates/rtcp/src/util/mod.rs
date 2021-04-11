@@ -1,6 +1,6 @@
 mod util_test;
 
-use crate::errors::Error;
+use crate::error::Error;
 
 // getPadding Returns the padding required to make the length a multiple of 4
 pub(crate) fn get_padding(len: usize) -> usize {

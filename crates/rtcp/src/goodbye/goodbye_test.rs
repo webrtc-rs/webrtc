@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::{errors::Error, goodbye::*};
+    use crate::{error::Error, goodbye::*};
 
     #[test]
     fn test_goodbye_unmarshal() {

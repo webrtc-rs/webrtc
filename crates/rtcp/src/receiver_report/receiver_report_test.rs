@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod test {
     use crate::{
-        errors::Error, packet::Packet, receiver_report::*, reception_report::ReceptionReport,
+        error::Error, packet::Packet, receiver_report::*, reception_report::ReceptionReport,
     };
 
     #[test]

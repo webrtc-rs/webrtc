@@ -4,7 +4,7 @@ use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
 use std::fmt;
 
-use crate::{errors::Error, header, header::Header, packet::Packet, util::get_padding};
+use crate::{error::Error, header, header::Header, packet::Packet, util::get_padding};
 
 /// A FIREntry is a (ssrc, seqno) pair, as carried by FullIntraRequest.
 #[derive(Debug, PartialEq, Default, Clone)]

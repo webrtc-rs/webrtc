@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod test {
     use crate::{
-        errors::Error, goodbye, packet::*, picture_loss_indication,
+        error::Error, goodbye, packet::*, picture_loss_indication,
         rapid_resynchronization_request, reception_report, source_description,
     };
 

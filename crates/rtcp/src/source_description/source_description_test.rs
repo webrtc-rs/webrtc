@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::{errors::Error, packet::Packet, source_description::*};
+    use crate::{error::Error, packet::Packet, source_description::*};
 
     #[test]
     fn test_source_description_unmarshal() {

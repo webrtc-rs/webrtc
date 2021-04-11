@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::errors::Error;
+    use crate::error::Error;
     use crate::util::{get_padding, set_nbits_of_uint16};
 
     #[test]

@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::{errors::Error, full_intra_request::*};
+    use crate::{error::Error, full_intra_request::*};
 
     #[test]
     fn test_full_intra_request_unmarshal() {

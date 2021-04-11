@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::{errors::Error, raw_packet::*};
+    use crate::{error::Error, raw_packet::*};
 
     #[test]
     fn test_raw_packet_roundtrip() {

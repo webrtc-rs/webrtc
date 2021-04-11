@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::{errors::Error, transport_layer_nack::*};
+    use crate::{error::Error, transport_layer_nack::*};
 
     #[test]
     fn test_transport_layer_nack_unmarshal() {

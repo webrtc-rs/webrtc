@@ -5,7 +5,7 @@ use bytes::BytesMut;
 use header::Header;
 
 use super::{header, receiver_report};
-use crate::errors::Error;
+use crate::error::Error;
 use crate::packet::Packet;
 use crate::util::get_padding;
 

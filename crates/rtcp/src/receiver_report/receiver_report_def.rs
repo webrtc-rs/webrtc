@@ -4,7 +4,7 @@ use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
 
 use crate::{
-    errors::Error, header, header::Header, header::PacketType, receiver_report, reception_report,
+    error::Error, header, header::Header, header::PacketType, receiver_report, reception_report,
     util::get_padding,
 };
 use crate::{packet::Packet, reception_report::ReceptionReport};

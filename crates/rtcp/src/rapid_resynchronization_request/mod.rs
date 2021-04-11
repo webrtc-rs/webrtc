@@ -2,7 +2,7 @@ use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
 use std::fmt;
 
-use super::errors::Error;
+use super::error::Error;
 use super::{header, receiver_report};
 use crate::{packet::Packet, util::get_padding};
 

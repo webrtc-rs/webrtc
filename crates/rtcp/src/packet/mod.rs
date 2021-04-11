@@ -1,7 +1,7 @@
 use bytes::BytesMut;
 use full_intra_request::FullIntraRequest;
 
-use crate::{errors::Error, raw_packet};
+use crate::{error::Error, raw_packet};
 
 use super::{
     full_intra_request, goodbye, header, header::Header, header::PacketType,

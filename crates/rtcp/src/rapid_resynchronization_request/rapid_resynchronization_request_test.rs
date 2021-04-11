@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::{errors::Error, rapid_resynchronization_request::*};
+    use crate::{error::Error, rapid_resynchronization_request::*};
 
     #[test]
     fn test_rapid_resynchronization_request_unmarshal() {

@@ -3,7 +3,7 @@ use bytes::BytesMut;
 use std::fmt;
 
 use crate::{
-    errors::Error,
+    error::Error,
     header,
     header::{Header, PacketType},
     packet::Packet,
