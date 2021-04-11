@@ -1,10 +1,10 @@
+#[cfg(test)]
 mod full_intra_request_test;
 
-use byteorder::{BigEndian, ByteOrder};
-use bytes::BytesMut;
-use std::fmt;
+use crate::{error::Error, header::*, packet::*, util::*};
 
-use crate::{error::Error, header, header::Header, packet::Packet, util::get_padding};
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+use std::fmt;
 
 /// A FIREntry is a (ssrc, seqno) pair, as carried by FullIntraRequest.
 #[derive(Debug, PartialEq, Default, Clone)]
@@ -37,70 +37,6 @@ impl fmt::Display for FullIntraRequest {
 }
 
 impl Packet for FullIntraRequest {
-    /// Marshal encodes the FullIntraRequest
-    fn marshal(&self) -> Result<BytesMut, Error> {
-        let mut raw_packet = BytesMut::new();
-        raw_packet.resize(FIR_OFFSET + (self.fir.len() * 8), 0u8);
-
-        BigEndian::write_u32(&mut raw_packet, self.sender_ssrc);
-        BigEndian::write_u32(&mut raw_packet[4..], self.media_ssrc);
-
-        for (i, fir) in self.fir.iter().enumerate() {
-            BigEndian::write_u32(&mut raw_packet[FIR_OFFSET + 8 * i..], fir.ssrc);
-            raw_packet[FIR_OFFSET + 8 * i + 4] = fir.sequence_number;
-        }
-
-        let header = self.header();
-
-        let mut header_data = header.marshal()?;
-
-        header_data.extend_from_slice(&raw_packet);
-
-        Ok(header_data)
-    }
-
-    /// Unmarshal decodes the TransportLayerNack
-    fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
-        if raw_packet.len() < (header::HEADER_LENGTH + header::SSRC_LENGTH) {
-            return Err(Error::PacketTooShort);
-        }
-
-        let mut header = Header::default();
-
-        header.unmarshal(raw_packet)?;
-
-        if raw_packet.len() < (header::HEADER_LENGTH + (4 * header.length) as usize) {
-            return Err(Error::PacketTooShort);
-        }
-
-        if header.packet_type != header::PacketType::PayloadSpecificFeedback
-            || header.count != header::FORMAT_FIR
-        {
-            return Err(Error::WrongType);
-        }
-
-        self.sender_ssrc = BigEndian::read_u32(&raw_packet[header::HEADER_LENGTH..]);
-        self.media_ssrc =
-            BigEndian::read_u32(&raw_packet[header::HEADER_LENGTH + header::SSRC_LENGTH..]);
-
-        let mut i = header::HEADER_LENGTH + FIR_OFFSET;
-
-        while i < header::HEADER_LENGTH + (header.length * 4) as usize {
-            self.fir.push(FirEntry {
-                ssrc: BigEndian::read_u32(&raw_packet[i..]),
-                sequence_number: raw_packet[i + 4],
-            });
-
-            i += 8;
-        }
-
-        Ok(())
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     /// destination_ssrc returns an array of SSRC values that this packet refers to.
     fn destination_ssrc(&self) -> Vec<u32> {
         let mut ssrcs: Vec<u32> = Vec::with_capacity(self.fir.len());
@@ -110,26 +46,84 @@ impl Packet for FullIntraRequest {
         ssrcs
     }
 
-    fn trait_eq(&self, other: &dyn Packet) -> bool {
-        other
-            .as_any()
-            .downcast_ref::<FullIntraRequest>()
-            .map_or(false, |a| self == a)
+    fn marshal_size(&self) -> usize {
+        let l = HEADER_LENGTH + FIR_OFFSET + self.fir.len() * 8;
+
+        // align to 32-bit boundary
+        l + get_padding(l)
+    }
+
+    /// Marshal encodes the FullIntraRequest
+    fn marshal(&self) -> Result<Bytes, Error> {
+        let mut raw_packet = BytesMut::with_capacity(self.marshal_size());
+
+        let h = self.header();
+        let data = h.marshal()?;
+        raw_packet.extend(data);
+
+        raw_packet.put_u32(self.sender_ssrc);
+        raw_packet.put_u32(self.media_ssrc);
+
+        for (_, fir) in self.fir.iter().enumerate() {
+            raw_packet.put_u32(fir.ssrc);
+            raw_packet.put_u8(fir.sequence_number);
+            raw_packet.put_u8(0);
+            raw_packet.put_u16(0);
+        }
+
+        Ok(raw_packet.freeze())
+    }
+
+    /// Unmarshal decodes the FullIntraRequest
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+        if raw_packet.len() < (HEADER_LENGTH + SSRC_LENGTH) {
+            return Err(Error::PacketTooShort);
+        }
+
+        let h = Header::unmarshal(raw_packet)?;
+
+        if raw_packet.len() < (HEADER_LENGTH + (4 * h.length) as usize) {
+            return Err(Error::PacketTooShort);
+        }
+
+        if h.packet_type != PacketType::PayloadSpecificFeedback || h.count != FORMAT_FIR {
+            return Err(Error::WrongType);
+        }
+
+        let reader = &mut raw_packet.slice(HEADER_LENGTH..);
+
+        let sender_ssrc = reader.get_u32();
+        let media_ssrc = reader.get_u32();
+
+        let mut i = HEADER_LENGTH + FIR_OFFSET;
+        let mut fir = vec![];
+        while i < HEADER_LENGTH + (h.length * 4) as usize {
+            fir.push(FirEntry {
+                ssrc: reader.get_u32(),
+                sequence_number: reader.get_u8(),
+            });
+            reader.get_u8();
+            reader.get_u16();
+
+            i += 8;
+        }
+
+        Ok(FullIntraRequest {
+            sender_ssrc,
+            media_ssrc,
+
+            fir,
+        })
     }
 }
 
 impl FullIntraRequest {
-    fn size(&self) -> usize {
-        header::HEADER_LENGTH + FIR_OFFSET + self.fir.len() * 8
-    }
-
-    pub fn header(&self) -> crate::header::Header {
-        let l = self.size() + get_padding(self.size());
+    pub fn header(&self) -> Header {
         Header {
-            padding: get_padding(self.size()) != 0,
-            count: header::FORMAT_FIR,
-            packet_type: header::PacketType::PayloadSpecificFeedback,
-            length: ((l / 4) - 1) as u16,
+            padding: get_padding(self.marshal_size()) != 0,
+            count: FORMAT_FIR,
+            packet_type: PacketType::PayloadSpecificFeedback,
+            length: ((self.marshal_size() / 4) - 1) as u16,
         }
     }
 }

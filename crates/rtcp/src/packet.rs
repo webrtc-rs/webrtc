@@ -1,34 +1,34 @@
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 
-use crate::{
-    error::Error, full_intra_request, goodbye, header, header::Header, header::PacketType,
-    picture_loss_indication, rapid_resynchronization_request, raw_packet, raw_packet::RawPacket,
-    receiver_estimated_maximum_bitrate, receiver_report, sender_report, slice_loss_indication,
-    source_description, transport_layer_cc, transport_layer_nack,
-};
+use crate::{error::Error, header::*, raw_packet::*};
+
+/* full_intra_request, goodbye,
+picture_loss_indication, rapid_resynchronization_request, raw_packet, raw_packet::RawPacket,
+receiver_estimated_maximum_bitrate, receiver_report, sender_report, slice_loss_indication,
+source_description, transport_layer_cc, transport_layer_nack,*/
 
 /// Packet represents an RTCP packet, a protocol used for out-of-band statistics and control information for an RTP session
 pub trait Packet {
-    fn trait_eq(&self, other: &dyn Packet) -> bool;
-    fn as_any(&self) -> &dyn std::any::Any;
-
+    /// DestinationSSRC returns an array of SSRC values that this packet refers to.
     fn destination_ssrc(&self) -> Vec<u32>;
-
-    fn marshal(&self) -> Result<BytesMut, Error>;
-    fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error>;
+    fn marshal_size(&self) -> usize;
+    fn marshal(&self) -> Result<Bytes, Error>;
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error>
+    where
+        Self: Sized;
 }
 
-impl PartialEq for dyn Packet {
-    fn eq(&self, other: &Self) -> bool {
-        self.trait_eq(other)
-    }
-}
-
-pub fn unmarshal(mut raw_data: BytesMut) -> Result<Vec<Box<dyn Packet>>, Error> {
+/// Unmarshal takes an entire udp datagram (which may consist of multiple RTCP packets) and
+/// returns the unmarshaled packets it contains.
+///
+/// If this is a reduced-size RTCP packet a feedback packet (Goodbye, SliceLossIndication, etc)
+/// will be returned. Otherwise, the underlying type of the returned packet will be
+/// CompoundPacket.
+pub fn unmarshal(mut raw_data: Bytes) -> Result<Vec<Box<dyn Packet>>, Error> {
     let mut packets = vec![];
 
     while !raw_data.is_empty() {
-        let (p, processed) = unmarshaller(&mut raw_data)?;
+        let (p, processed) = unmarshaller(&raw_data)?;
 
         packets.push(p);
         raw_data = raw_data.split_off(processed);
@@ -44,7 +44,7 @@ pub fn unmarshal(mut raw_data: BytesMut) -> Result<Vec<Box<dyn Packet>>, Error> 
 }
 
 /// Marshal takes an array of Packets and serializes them to a single buffer
-pub fn marshal(packets: &[Box<dyn Packet>]) -> Result<BytesMut, Error> {
+pub fn marshal(packets: &[Box<dyn Packet>]) -> Result<Bytes, Error> {
     let mut out = BytesMut::new();
 
     for packet in packets {
@@ -53,25 +53,23 @@ pub fn marshal(packets: &[Box<dyn Packet>]) -> Result<BytesMut, Error> {
         out.extend(a);
     }
 
-    Ok(out)
+    Ok(out.freeze())
 }
 
 /// unmarshaller is a factory which pulls the first RTCP packet from a bytestream,
 /// and returns it's parsed representation, and the amount of data that was processed.
-pub(crate) fn unmarshaller(mut raw_data: &mut BytesMut) -> Result<(Box<dyn Packet>, usize), Error> {
-    let mut h = Header::default();
-
-    h.unmarshal(&mut raw_data)?;
+pub(crate) fn unmarshaller(raw_data: &Bytes) -> Result<(Box<dyn Packet>, usize), Error> {
+    let h = Header::unmarshal(&raw_data)?;
 
     let bytes_processed = (h.length as usize + 1) * 4;
     if bytes_processed > raw_data.len() {
         return Err(Error::PacketTooShort);
     }
 
-    let mut in_packet = raw_data[..bytes_processed].into();
+    let in_packet = raw_data.slice(..bytes_processed);
 
-    let mut packet: Box<dyn Packet> = match h.packet_type {
-        PacketType::SenderReport => Box::new(sender_report::SenderReport::default()),
+    let p = match h.packet_type {
+        /*PacketType::SenderReport => Box::new(sender_report::SenderReport::default()),
 
         PacketType::ReceiverReport => Box::new(receiver_report::ReceiverReport::default()),
 
@@ -104,16 +102,13 @@ pub(crate) fn unmarshaller(mut raw_data: &mut BytesMut) -> Result<(Box<dyn Packe
             header::FORMAT_FIR => Box::new(full_intra_request::FullIntraRequest::default()),
 
             _ => Box::new(RawPacket::default()),
-        },
-
-        _ => Box::new(RawPacket::default()),
+        },*/
+        _ => Box::new(RawPacket::unmarshal(&in_packet)?),
     };
 
-    packet.unmarshal(&mut in_packet)?;
-
-    Ok((packet, bytes_processed))
+    Ok((p, bytes_processed))
 }
-
+/*
 #[cfg(test)]
 mod test {
     use crate::{
@@ -245,3 +240,4 @@ mod test {
         Ok(())
     }
 }
+*/

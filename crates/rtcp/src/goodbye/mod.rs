@@ -1,16 +1,10 @@
-use byteorder::{BigEndian, ByteOrder};
+#[cfg(test)]
+mod goodbye_test;
+
+use crate::{error::Error, header::*, packet::*, util::*};
+
 use bytes::BytesMut;
 use std::fmt;
-
-use crate::{
-    error::Error,
-    header,
-    header::{Header, PacketType},
-    packet::Packet,
-    util::get_padding,
-};
-
-mod goodbye_test;
 
 /// The Goodbye packet indicates that one or more sources are no longer active.
 #[derive(Debug, PartialEq, Default, Clone)]
@@ -34,6 +28,16 @@ impl fmt::Display for Goodbye {
 }
 
 impl Packet for Goodbye {
+    fn marshal_size(&self) -> usize {
+        let srcs_length = self.sources.len() * SSRC_LENGTH;
+        let reason_length = self.reason.len() + 1;
+
+        let l = HEADER_LENGTH + srcs_length + reason_length;
+
+        // align to 32-bit boundary
+        l + get_padding(l)
+    }
+
     /// Marshal encodes the packet in binary.
     fn marshal(&self) -> Result<BytesMut, Error> {
         /*
@@ -50,29 +54,29 @@ impl Packet for Goodbye {
          *       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
 
-        if self.sources.len() > header::COUNT_MAX {
+        if self.sources.len() > COUNT_MAX {
             return Err(Error::TooManySources);
         }
 
         let mut raw_packet = vec![0u8; self.len()];
-        let packet_body = &mut raw_packet[header::HEADER_LENGTH..];
+        let packet_body = &mut raw_packet[HEADER_LENGTH..];
 
-        if self.sources.len() > header::COUNT_MAX {
+        if self.sources.len() > COUNT_MAX {
             return Err(Error::TooManySources);
         }
 
         for i in 0..self.sources.len() {
-            BigEndian::write_u32(&mut packet_body[i * header::SSRC_LENGTH..], self.sources[i]);
+            BigEndian::write_u32(&mut packet_body[i * SSRC_LENGTH..], self.sources[i]);
         }
 
         if !self.reason.is_empty() {
             let reason = self.reason.as_bytes();
 
-            if reason.len() > header::SDES_MAX_OCTET_COUNT {
+            if reason.len() > SDES_MAX_OCTET_COUNT {
                 return Err(Error::ReasonTooLong);
             }
 
-            let reason_offset = self.sources.len() * header::SSRC_LENGTH;
+            let reason_offset = self.sources.len() * SSRC_LENGTH;
 
             packet_body[reason_offset] = reason.len() as u8;
 
@@ -116,15 +120,14 @@ impl Packet for Goodbye {
 
         self.sources = vec![0u32; header.count as usize];
 
-        let reason_offset =
-            (header::HEADER_LENGTH + header.count as usize * header::SSRC_LENGTH) as usize;
+        let reason_offset = (HEADER_LENGTH + header.count as usize * SSRC_LENGTH) as usize;
 
         if reason_offset > raw_packet.len() {
             return Err(Error::PacketTooShort);
         }
 
         for i in 0..header.count as usize {
-            let offset = header::HEADER_LENGTH + i * header::SSRC_LENGTH;
+            let offset = HEADER_LENGTH + i * SSRC_LENGTH;
 
             self.sources[i] = BigEndian::read_u32(&raw_packet[offset..]);
         }
@@ -175,17 +178,7 @@ impl Goodbye {
             padding: false,
             count: self.sources.len() as u8,
             packet_type: PacketType::Goodbye,
-            length: ((self.len() / 4) - 1) as u16,
+            length: ((self.marshal_size() / 4) - 1) as u16,
         }
-    }
-
-    fn len(&self) -> usize {
-        let srcs_length = self.sources.len() * header::SSRC_LENGTH;
-        let reason_length = self.reason.len() + 1;
-
-        let l = header::HEADER_LENGTH + srcs_length + reason_length;
-
-        // align to 32-bit boundary
-        l + get_padding(l)
     }
 }

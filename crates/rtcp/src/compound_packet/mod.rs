@@ -1,9 +1,10 @@
+#[cfg(test)]
+mod compound_packet_test;
+
 use super::packet::Packet;
 use super::source_description::SdesType;
 use crate::{error::Error, receiver_report::ReceiverReport, sender_report::SenderReport};
 use bytes::BytesMut;
-
-mod compound_packet_test;
 
 /// A CompoundPacket is a collection of RTCP packets transmitted as a single packet with
 /// the underlying protocol (for example UDP).

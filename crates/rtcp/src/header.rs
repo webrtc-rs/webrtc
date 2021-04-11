@@ -1,7 +1,6 @@
 use crate::error::Error;
 
-use byteorder::{BigEndian, ByteOrder};
-use bytes::BytesMut;
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 /// PacketType specifies the type of an RTCP packet
 /// RTCP packet types registered with IANA. See: https://www.iana.org/assignments/rtp-parameters/rtp-parameters.xhtml#rtp-parameters-4
@@ -37,7 +36,6 @@ pub const FORMAT_RRR: u8 = 5;
 /// Transport and Payload specific feedback messages overload the count field to act as a message type. those are listed here
 pub const FORMAT_REMB: u8 = 15;
 /// Transport and Payload specific feedback messages overload the count field to act as a message type. those are listed here.
-///
 /// https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-5
 pub const FORMAT_TCC: u8 = 15;
 
@@ -103,7 +101,15 @@ pub struct Header {
 
 /// Marshal encodes the Header in binary
 impl Header {
-    pub fn marshal(&self) -> Result<BytesMut, Error> {
+    fn size(&self) -> usize {
+        HEADER_LENGTH
+    }
+
+    pub fn marshal(&self) -> Result<Bytes, Error> {
+        if self.count > 31 {
+            return Err(Error::InvalidHeader);
+        }
+
         /*
          *  0                   1                   2                   3
          *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -111,31 +117,25 @@ impl Header {
          * |V=2|P|    RC   |   PT=SR=200   |             length            |
          * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
+        let mut raw_packet = BytesMut::with_capacity(HEADER_LENGTH);
 
-        let mut raw_packet = BytesMut::new();
-        raw_packet.resize(HEADER_LENGTH, 0u8);
+        let b0 = (RTP_VERSION << VERSION_SHIFT)
+            | ((self.padding as u8) << PADDING_SHIFT)
+            | (self.count << COUNT_SHIFT);
 
-        raw_packet[0] |= RTP_VERSION << VERSION_SHIFT;
+        raw_packet.put_u8(b0);
+        raw_packet.put_u8(self.packet_type as u8);
+        raw_packet.put_u16(self.length);
 
-        if self.padding {
-            raw_packet[0] |= 1 << PADDING_SHIFT
-        }
-
-        if self.count > 31 {
-            return Err(Error::InvalidHeader);
-        }
-
-        raw_packet[0] |= self.count << COUNT_SHIFT;
-
-        raw_packet[1] = self.packet_type as u8;
-
-        BigEndian::write_u16(&mut raw_packet[2..], self.length);
-
-        Ok(raw_packet)
+        Ok(raw_packet.freeze())
     }
 
     /// Unmarshal decodes the Header from binary
-    pub fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
+    pub fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+        if raw_packet.len() < HEADER_LENGTH {
+            return Err(Error::PacketTooShort);
+        }
+
         /*
          *  0                   1                   2                   3
          *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -143,29 +143,28 @@ impl Header {
          * |V=2|P|    RC   |      PT       |             length            |
          * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
-
-        if raw_packet.len() < HEADER_LENGTH {
-            return Err(Error::PacketTooShort);
-        }
-
-        let version = raw_packet[0] >> VERSION_SHIFT & VERSION_MASK;
-
+        let reader = &mut raw_packet.clone();
+        let b0 = reader.get_u8();
+        let version = (b0 >> VERSION_SHIFT) & VERSION_MASK;
         if version != RTP_VERSION {
             return Err(Error::BadVersion);
         }
 
-        self.padding = (raw_packet[0] >> PADDING_SHIFT & PADDING_MASK) > 0;
+        let padding = ((b0 >> PADDING_SHIFT) & PADDING_MASK) > 0;
+        let count = (b0 >> COUNT_SHIFT) & COUNT_MASK;
+        let packet_type = PacketType::from(reader.get_u8());
+        let length = reader.get_u16();
 
-        self.count = raw_packet[0] >> COUNT_SHIFT & COUNT_MASK;
-
-        self.packet_type = PacketType::from(raw_packet[1]);
-
-        self.length = BigEndian::read_u16(&raw_packet[2..]);
-
-        Ok(())
+        Ok(Header {
+            padding,
+            count,
+            packet_type,
+            length,
+        })
     }
 }
 
+/*
 #[cfg(test)]
 mod test {
     use super::*;
@@ -218,9 +217,7 @@ mod test {
         ];
 
         for (name, data, want, want_error) in tests {
-            let mut h = Header::default();
-
-            let got_error = h.unmarshal(&mut data.as_slice().into());
+            let got_error = Header::unmarshal(&mut data.as_slice().into());
 
             assert_eq!(
                 got_error, want_error,
@@ -309,3 +306,4 @@ mod test {
         }
     }
 }
+*/
