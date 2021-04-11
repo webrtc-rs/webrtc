@@ -14,7 +14,7 @@ repository = "https://github.com/webrtc-rs/rtp"
 [dependencies]
 bytes = "1"
 rand = "0.8.0"
-thiserror = "1.0.23"
+thiserror = "1"
 
 [dev-dependencies]
 chrono = "0.4.7"
