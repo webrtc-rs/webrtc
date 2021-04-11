@@ -1,56 +1,73 @@
-use crate::errors::RTPError;
-use crate::packet::Packet;
-use crate::sequence::Sequencer;
-use crate::{extension::abs_send_time_extension::*, header::Header};
+use crate::error::Error;
+use crate::extension::abs_send_time_extension::*;
+use crate::header::*;
+use crate::packet::*;
+use crate::sequence::*;
 
-use std::time::Duration;
+use bytes::{Bytes, BytesMut};
+use std::marker::Sized;
+use std::time::{Duration, SystemTime};
 
+#[cfg(test)]
 mod packetizer_test;
 
-// Payloader payloads a byte array for use as rtp.Packet payloads
+pub trait Marshaller {
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error>
+    where
+        Self: Sized;
+    fn marshal_size(&self) -> usize;
+    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error>;
+    fn marshal(&self) -> Result<Bytes, Error> {
+        let mut buf = BytesMut::with_capacity(self.marshal_size());
+        let _ = self.marshal_to(&mut buf)?;
+        Ok(buf.freeze())
+    }
+}
+
+/// Payloader payloads a byte array for use as rtp.Packet payloads
 pub trait Payloader {
-    fn payload(&self, mtu: u16, payload: &[u8]) -> Vec<Vec<u8>>;
+    fn payload(&self, mtu: usize, b: &Bytes) -> Result<Vec<Bytes>, Error>;
 }
 
 /// Packetizer packetizes a payload
 pub trait Packetizer {
-    fn packetize(&mut self, payload: &mut [u8], samples: u32) -> Result<Vec<Packet>, RTPError>;
     fn enable_abs_send_time(&mut self, value: u8);
+    fn packetize(&mut self, payload: &Bytes, samples: u32) -> Result<Vec<Packet>, Error>;
 }
 
 /// Depacketizer depacketizes a RTP payload, removing any RTP specific data from the payload
 pub trait Depacketizer {
-    fn depacketize(&mut self, packet: &[u8]) -> Result<Vec<u8>, RTPError>;
+    fn depacketize(&mut self, b: &Bytes) -> Result<(), Error>;
 }
 
 pub type FnTimeGen = fn() -> Duration;
 
-struct PacketizerImpl {
-    pub mtu: u16,
-    pub payload_type: u8,
-    pub ssrc: u32,
-    pub payloader: Box<dyn Payloader>,
-    pub sequencer: Box<dyn Sequencer>,
-    pub timestamp: u32,
-    pub clock_rate: u32,
-    pub abs_send_time: u8, //http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
-    pub time_gen: Option<FnTimeGen>,
+pub(crate) struct PacketizerImpl<P: Payloader, S: Sequencer> {
+    pub(crate) mtu: usize,
+    pub(crate) payload_type: u8,
+    pub(crate) ssrc: u32,
+    pub(crate) payloader: P,
+    pub(crate) sequencer: S,
+    pub(crate) timestamp: u32,
+    pub(crate) clock_rate: u32,
+    pub(crate) abs_send_time: u8, //http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
+    pub(crate) time_gen: Option<FnTimeGen>,
 }
 
-pub fn new_packetizer(
-    mtu: u16,
+pub fn new_packetizer<P: Payloader, S: Sequencer>(
+    mtu: usize,
     payload_type: u8,
     ssrc: u32,
+    payloader: P,
+    sequencer: S,
     clock_rate: u32,
-    payloader: Box<dyn Payloader>,
-    sequencer: Box<dyn Sequencer>,
 ) -> impl Packetizer {
     PacketizerImpl {
         mtu,
         payload_type,
         ssrc,
-        sequencer,
         payloader,
+        sequencer,
         timestamp: rand::random::<u32>(),
         clock_rate,
         abs_send_time: 0,
@@ -58,51 +75,48 @@ pub fn new_packetizer(
     }
 }
 
-impl Packetizer for PacketizerImpl {
+impl<P: Payloader, S: Sequencer> Packetizer for PacketizerImpl<P, S> {
     fn enable_abs_send_time(&mut self, value: u8) {
         self.abs_send_time = value
     }
 
-    fn packetize(&mut self, payload: &mut [u8], samples: u32) -> Result<Vec<Packet>, RTPError> {
-        // Guard against an empty payload
-        if payload.is_empty() {
-            return Ok(vec![]);
-        }
-
-        let payloads = self.payloader.payload(self.mtu - 12, payload);
-        let mut packets = vec![Packet::default(); payloads.len()];
-
-        for (i, pp) in payloads.iter().enumerate() {
-            packets[i].header = Header {
-                version: 2,
-                marker: i == payloads.len() - 1,
-                payload_type: self.payload_type,
-                sequence_number: self.sequencer.next_sequence_number(),
-                timestamp: self.timestamp,
-                ssrc: self.ssrc,
-                ..Default::default()
-            };
-
-            packets[i].payload = pp.to_vec();
+    fn packetize(&mut self, payload: &Bytes, samples: u32) -> Result<Vec<Packet>, Error> {
+        let payloads = self.payloader.payload(self.mtu - 12, payload)?;
+        let mut packets = vec![];
+        let (mut i, l) = (0, payloads.len());
+        for payload in payloads {
+            packets.push(Packet {
+                header: Header {
+                    version: 2,
+                    padding: false,
+                    extension: false,
+                    marker: i == l - 1,
+                    payload_type: self.payload_type,
+                    sequence_number: self.sequencer.next_sequence_number(),
+                    timestamp: self.timestamp, //TODO: Figure out how to do timestamps
+                    ssrc: self.ssrc,
+                    ..Default::default()
+                },
+                payload,
+            });
+            i += 1;
         }
 
         self.timestamp += samples;
 
-        if !packets.is_empty() && self.abs_send_time != 0 {
-            let send_time =
-                AbsSendTimeExtension::new(self.time_gen.map_or(Duration::default(), |v| v()));
-
-            // apply http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
-            let b = match send_time.marshal() {
-                Ok(e) => e,
-                Err(e) => return Err(RTPError::ExtensionError(e)),
+        if l != 0 && self.abs_send_time != 0 {
+            let d = if let Some(fn_time_gen) = &self.time_gen {
+                fn_time_gen()
+            } else {
+                SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?
             };
-
-            let len = packets.len() - 1;
-
-            if let Err(e) = packets[len].header.set_extension(self.abs_send_time, &b) {
-                return Err(e);
-            }
+            let send_time = AbsSendTimeExtension::new(d);
+            //apply http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
+            let mut raw = BytesMut::with_capacity(send_time.marshal_size());
+            let _ = send_time.marshal_to(&mut raw)?;
+            packets[l - 1]
+                .header
+                .set_extension(self.abs_send_time, raw.freeze())?;
         }
 
         Ok(packets)

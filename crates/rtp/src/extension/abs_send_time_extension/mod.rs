@@ -1,38 +1,51 @@
-use crate::errors::ExtensionError;
+use crate::error::Error;
+use crate::packetizer::Marshaller;
+
+use bytes::{BufMut, Bytes, BytesMut};
 use std::time::Duration;
 
+#[cfg(test)]
 mod abs_send_time_extension_test;
 
 const ABS_SEND_TIME_EXTENSION_SIZE: usize = 3;
 
 /// AbsSendTimeExtension is a extension payload format in
 /// http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
-#[derive(Debug, Default)]
 pub struct AbsSendTimeExtension {
     pub timestamp: u64,
 }
 
-impl AbsSendTimeExtension {
-    /// Marshal serializes the members to buffer.
-    pub fn marshal(&self) -> Result<Vec<u8>, ExtensionError> {
-        Ok(vec![
-            ((self.timestamp & 0xFF0000) >> 16) as u8,
-            ((self.timestamp & 0xFF00) >> 8) as u8,
-            (self.timestamp & 0xFF) as u8,
-        ])
-    }
-
+impl Marshaller for AbsSendTimeExtension {
     /// Unmarshal parses the passed byte slice and stores the result in the members.
-    pub fn unmarshal(&mut self, raw_data: &[u8]) -> Result<(), ExtensionError> {
-        if raw_data.len() < ABS_SEND_TIME_EXTENSION_SIZE {
-            return Err(ExtensionError::TooSmall);
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+        if raw_packet.len() < ABS_SEND_TIME_EXTENSION_SIZE {
+            return Err(Error::ErrTooSmall);
         }
-        self.timestamp =
-            (raw_data[0] as u64) << 16 | (raw_data[1] as u64) << 8 | raw_data[2] as u64;
 
-        Ok(())
+        let b0 = raw_packet[0];
+        let b1 = raw_packet[1];
+        let b2 = raw_packet[2];
+        let timestamp = (b0 as u64) << 16 | (b1 as u64) << 8 | b2 as u64;
+
+        Ok(AbsSendTimeExtension { timestamp })
     }
 
+    /// MarshalSize returns the size of the AbsSendTimeExtension once marshaled.
+    fn marshal_size(&self) -> usize {
+        ABS_SEND_TIME_EXTENSION_SIZE
+    }
+
+    /// MarshalTo serializes the members to buffer.
+    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error> {
+        buf.put_u8(((self.timestamp & 0xFF0000) >> 16) as u8);
+        buf.put_u8(((self.timestamp & 0xFF00) >> 8) as u8);
+        buf.put_u8((self.timestamp & 0xFF) as u8);
+
+        Ok(ABS_SEND_TIME_EXTENSION_SIZE)
+    }
+}
+
+impl AbsSendTimeExtension {
     /// Estimate absolute send time according to the receive time.
     /// Note that if the transmission delay is larger than 64 seconds, estimated time will be wrong.
     pub fn estimate(&self, receive: Duration) -> Duration {

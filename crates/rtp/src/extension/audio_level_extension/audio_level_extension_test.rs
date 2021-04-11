@@ -1,73 +1,58 @@
-#[cfg(test)]
-mod tests {
-    use crate::extension::audio_level_extension::*;
+use super::*;
 
-    #[test]
-    fn test_audio_level_extension_too_small() {
-        let mut a = AudioLevelExtension::default();
+#[test]
+fn test_audio_level_extension_too_small() -> Result<(), Error> {
+    let raw = Bytes::from_static(&[]);
+    let result = AudioLevelExtension::unmarshal(&raw);
+    assert!(result.is_err());
 
-        let result = a.unmarshal(&[]);
-        assert_eq!(
-            result.err(),
-            Some(ExtensionError::TooSmall),
-            "err != errTooSmall"
-        );
-    }
+    Ok(())
+}
 
-    #[test]
-    fn test_audio_level_extension_voice_true() -> Result<(), ExtensionError> {
-        let raw = &[0x88];
+#[test]
+fn test_audio_level_extension_voice_true() -> Result<(), Error> {
+    let raw = Bytes::from_static(&[0x88]);
+    let a1 = AudioLevelExtension::unmarshal(&raw)?;
+    let a2 = AudioLevelExtension {
+        level: 8,
+        voice: true,
+    };
+    assert_eq!(a1, a2);
 
-        let mut a1 = AudioLevelExtension::default();
+    let mut dst = BytesMut::with_capacity(a2.marshal_size());
+    a2.marshal_to(&mut dst)?;
+    assert_eq!(raw, dst.freeze());
 
-        a1.unmarshal(raw)?;
-        let a2 = AudioLevelExtension {
-            level: 8,
-            voice: true,
-        };
+    Ok(())
+}
 
-        assert_eq!(a1, a2);
+#[test]
+fn test_audio_level_extension_voice_false() -> Result<(), Error> {
+    let raw = Bytes::from_static(&[0x8]);
+    let a1 = AudioLevelExtension::unmarshal(&raw)?;
+    let a2 = AudioLevelExtension {
+        level: 8,
+        voice: false,
+    };
+    assert_eq!(a1, a2);
 
-        let dst = a2.marshal()?;
-        assert_eq!(raw, dst.as_slice(), "Marshal failed");
+    let mut dst = BytesMut::with_capacity(a2.marshal_size());
+    a2.marshal_to(&mut dst)?;
+    assert_eq!(raw, dst.freeze());
 
-        Ok(())
-    }
+    Ok(())
+}
 
-    #[test]
-    fn test_audio_level_extension_voice_false() -> Result<(), ExtensionError> {
-        let raw = &[0x8];
-        let mut a1 = AudioLevelExtension::default();
+#[test]
+fn test_audio_level_extension_level_overflow() -> Result<(), Error> {
+    let a = AudioLevelExtension {
+        level: 128,
+        voice: false,
+    };
 
-        a1.unmarshal(raw)?;
+    let mut dst = BytesMut::with_capacity(a.marshal_size());
+    let result = a.marshal_to(&mut dst);
+    assert!(result.is_err());
 
-        let a2 = AudioLevelExtension {
-            level: 8,
-            voice: false,
-        };
-
-        assert_eq!(a1, a2, "unmarshal failed");
-
-        let dst_data = a2.marshal()?;
-        assert_eq!(raw, dst_data.as_slice());
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_audio_level_extension_level_overflow() -> Result<(), ExtensionError> {
-        let a = AudioLevelExtension {
-            level: 128,
-            voice: false,
-        };
-
-        let result = a.marshal();
-        assert_eq!(
-            result.err(),
-            Some(ExtensionError::AudioLevelOverflow),
-            "err != errAudioOverflow"
-        );
-
-        Ok(())
-    }
+    Ok(())
 }

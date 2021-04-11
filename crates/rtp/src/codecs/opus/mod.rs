@@ -1,53 +1,36 @@
-use crate::{
-    errors::RTPError,
-    packetizer::{Depacketizer, Payloader},
-};
+use crate::error::Error;
+use crate::packetizer::{Depacketizer, Payloader};
 
+use bytes::Bytes;
+
+#[cfg(test)]
 mod opus_test;
 
 pub struct OpusPayloader;
 
 impl Payloader for OpusPayloader {
-    fn payload(&self, _: u16, payload: &[u8]) -> Vec<Vec<u8>> {
-        if payload.is_empty() {
-            return vec![];
+    fn payload(&self, mtu: usize, payload: &Bytes) -> Result<Vec<Bytes>, Error> {
+        if payload.is_empty() || mtu == 0 {
+            return Ok(vec![]);
         }
 
-        let mut out = vec![0u8; payload.len()];
-        out.copy_from_slice(&payload);
-
-        vec![out]
+        Ok(vec![payload.clone()])
     }
 }
 
+/// OpusPacket represents the Opus header that is stored in the payload of an RTP Packet
 #[derive(Debug, Default)]
 pub struct OpusPacket {
-    payload: Vec<u8>,
+    pub payload: Bytes,
 }
 
 impl Depacketizer for OpusPacket {
-    fn depacketize(&mut self, packet: &[u8]) -> Result<Vec<u8>, RTPError> {
+    fn depacketize(&mut self, packet: &Bytes) -> Result<(), Error> {
         if packet.is_empty() {
-            return Err(RTPError::ShortPacket);
+            Err(Error::ErrShortPacket)
+        } else {
+            self.payload = packet.clone();
+            Ok(())
         }
-
-        self.payload = packet.to_owned();
-        Ok(packet.to_owned())
-    }
-}
-/// OpusPartitionHeadChecker checks Opus partition head
-#[derive(Debug, Default)]
-pub struct OpusPartitionHeadChecker {}
-
-impl OpusPartitionHeadChecker {
-    // IsPartitionHead checks whether if this is a head of the Opus partition
-    pub fn is_partition_head(&mut self, packet: &mut [u8]) -> bool {
-        let mut p = OpusPacket::default();
-
-        if p.depacketize(packet).is_err() {
-            return false;
-        }
-
-        true
     }
 }

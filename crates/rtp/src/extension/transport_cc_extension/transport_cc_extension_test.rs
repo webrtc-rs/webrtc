@@ -1,58 +1,38 @@
-#[cfg(test)]
-mod tests {
-    use crate::errors::ExtensionError;
-    use crate::extension::transport_cc_extension::*;
+use super::*;
 
-    #[test]
-    fn test_transport_cc_extension_too_small() -> Result<(), ExtensionError> {
-        let mut t1 = TransportCCExtension::default();
+#[test]
+fn test_transport_cc_extension_too_small() -> Result<(), Error> {
+    let raw = Bytes::from_static(&[]);
+    let result = TransportCcExtension::unmarshal(&raw);
+    assert!(result.is_err());
 
-        let result = t1.unmarshal(&[]);
+    Ok(())
+}
 
-        assert_eq!(
-            result.err(),
-            Some(ExtensionError::TooSmall),
-            "err != errTooSmall"
-        );
+#[test]
+fn test_transport_cc_extension() -> Result<(), Error> {
+    let raw = Bytes::from_static(&[0x00, 0x02]);
+    let t1 = TransportCcExtension::unmarshal(&raw)?;
+    let t2 = TransportCcExtension {
+        transport_sequence: 2,
+    };
+    assert_eq!(t1, t2);
 
-        Ok(())
-    }
+    let mut dst = BytesMut::with_capacity(t2.marshal_size());
+    t2.marshal_to(&mut dst)?;
+    assert_eq!(raw, dst.freeze());
 
-    #[test]
-    fn test_transport_cc_extension() -> Result<(), ExtensionError> {
-        let raw = &[0x00, 0x02];
+    Ok(())
+}
 
-        let mut t1 = TransportCCExtension::default();
+#[test]
+fn test_transport_cc_extension_extra_bytes() -> Result<(), Error> {
+    let raw = Bytes::from_static(&[0x00, 0x02, 0x00, 0xff, 0xff]);
+    let t1 = TransportCcExtension::unmarshal(&raw)?;
+    let t2 = TransportCcExtension {
+        transport_sequence: 2,
+    };
+    assert_eq!(t1, t2);
 
-        t1.unmarshal(raw)?;
-
-        let t2 = TransportCCExtension {
-            transport_sequence: 2,
-        };
-
-        assert_eq!(t1, t2);
-
-        let dst_data = t2.marshal()?;
-
-        assert_eq!(raw, dst_data.as_slice(), "Marshal failed");
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_transport_cc_extension_extra_bytes() -> Result<(), ExtensionError> {
-        let raw = &[0x00, 0x02, 0x00, 0xff, 0xff];
-
-        let mut t1 = TransportCCExtension::default();
-
-        t1.unmarshal(raw)?;
-
-        let t2 = TransportCCExtension {
-            transport_sequence: 2,
-        };
-
-        assert_eq!(t1, t2);
-
-        Ok(())
-    }
+    Ok(())
 }

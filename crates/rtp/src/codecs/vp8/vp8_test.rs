@@ -1,144 +1,125 @@
-#[cfg(test)]
-mod tests {
-    use crate::codecs::vp8::*;
+use super::*;
 
-    #[test]
-    fn test_vp8_unmarshal() -> Result<(), RTPError> {
-        let mut pck = VP8Packet::default();
+#[test]
+fn test_vp8_unmarshal() -> Result<(), Error> {
+    let mut pck = Vp8Packet::default();
 
-        // Empty packet
-        let result = pck.depacketize(&[]);
-        assert_eq!(
-            result.err(),
-            Some(RTPError::ShortPacket),
-            "Result should be err in case of error"
-        );
+    // Empty packet
+    let empty_bytes = Bytes::from_static(&[]);
+    let result = pck.depacketize(&empty_bytes);
+    assert!(result.is_err(), "Result should be err in case of error");
 
-        // Payload smaller than header size
-        let small_bytes = &[0x00, 0x11, 0x22];
-        let result = pck.depacketize(small_bytes);
-        assert_eq!(
-            result.err(),
-            Some(RTPError::ShortPacket),
-            "Result should be err in case of error"
-        );
+    // Payload smaller than header size
+    let small_bytes = Bytes::from_static(&[0x00, 0x11, 0x22]);
+    let result = pck.depacketize(&small_bytes);
+    assert!(result.is_err(), "Result should be err in case of error");
 
-        // Payload smaller than header size
-        let small_bytes = &mut [0x00u8, 0x11];
-        let result = pck.depacketize(small_bytes);
-        assert_eq!(
-            result.err(),
-            Some(RTPError::ShortPacket),
-            "Result should be err in case of error",
-        );
+    // Payload smaller than header size
+    let small_bytes = Bytes::from_static(&[0x00, 0x11]);
+    let result = pck.depacketize(&small_bytes);
+    assert!(result.is_err(), "Result should be err in case of error");
 
-        // Normal packet
-        let raw_bytes = &[0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x90];
-        let result = pck.depacketize(raw_bytes)?;
-        assert!(!result.is_empty(), "Payload must be not empty");
+    // Normal packet
+    let raw_bytes = Bytes::from_static(&[0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x90]);
+    pck.depacketize(&raw_bytes).expect("Normal packet");
+    assert!(!pck.payload.is_empty(), "Payload must be not empty");
 
-        // Header size, only X
-        let raw_bytes = &[0x80, 0x00, 0x00, 0x00];
-        let result = pck.depacketize(raw_bytes)?;
-        assert!(!result.is_empty(), "Payload must be not empty");
-        assert_eq!(pck.x, 1, "X must be 1");
-        assert_eq!(pck.i, 0, "I must be 0");
-        assert_eq!(pck.l, 0, "L must be 0");
-        assert_eq!(pck.t, 0, "T must be 0");
-        assert_eq!(pck.k, 0, "K must be 0");
+    // Header size, only X
+    let raw_bytes = Bytes::from_static(&[0x80, 0x00, 0x00, 0x00]);
+    pck.depacketize(&raw_bytes).expect("Only X");
+    assert!(!pck.payload.is_empty(), "Payload must be not empty");
+    assert_eq!(pck.x, 1, "X must be 1");
+    assert_eq!(pck.i, 0, "I must be 0");
+    assert_eq!(pck.l, 0, "L must be 0");
+    assert_eq!(pck.t, 0, "T must be 0");
+    assert_eq!(pck.k, 0, "K must be 0");
 
-        // Header size, only X and I
-        let raw_bytes = &[0x80, 0x80, 0x00, 0x00];
-        let result = pck.depacketize(raw_bytes)?;
-        assert!(!result.is_empty(), "Payload must be not empty");
-        assert_eq!(pck.x, 1, "X must be 1");
-        assert_eq!(pck.i, 1, "I must be 1");
-        assert_eq!(pck.l, 0, "L must be 0");
-        assert_eq!(pck.t, 0, "T must be 0");
-        assert_eq!(pck.k, 0, "K must be 0");
+    // Header size, X and I, PID 16bits
+    let raw_bytes = Bytes::from_static(&[0x80, 0x80, 0x81, 0x00, 0x00]);
+    pck.depacketize(&raw_bytes).expect("X and I, PID 16bits");
+    assert!(!pck.payload.is_empty(), "Payload must be not empty");
+    assert_eq!(pck.x, 1, "X must be 1");
+    assert_eq!(pck.i, 1, "I must be 1");
+    assert_eq!(pck.l, 0, "L must be 0");
+    assert_eq!(pck.t, 0, "T must be 0");
+    assert_eq!(pck.k, 0, "K must be 0");
 
-        // Header size, X and I, PID 16bits
-        let raw_bytes = &[0x80, 0x80, 0x81, 0x00, 0x00];
-        let result = pck.depacketize(raw_bytes)?;
-        assert!(!result.is_empty(), "Payload must be not empty");
-        assert_eq!(pck.x, 1, "X must be 1");
-        assert_eq!(pck.i, 1, "I must be 1");
-        assert_eq!(pck.l, 0, "L must be 0");
-        assert_eq!(pck.t, 0, "T must be 0");
-        assert_eq!(pck.k, 0, "K must be 0");
+    // Header size, X and L
+    let raw_bytes = Bytes::from_static(&[0x80, 0x40, 0x00, 0x00]);
+    pck.depacketize(&raw_bytes).expect("X and L");
+    assert!(!pck.payload.is_empty(), "Payload must be not empty");
+    assert_eq!(pck.x, 1, "X must be 1");
+    assert_eq!(pck.i, 0, "I must be 0");
+    assert_eq!(pck.l, 1, "L must be 1");
+    assert_eq!(pck.t, 0, "T must be 0");
+    assert_eq!(pck.k, 0, "K must be 0");
 
-        // Header size, X and L
-        let raw_bytes = &[0x80, 0x40, 0x00, 0x00];
-        let result = pck.depacketize(raw_bytes)?;
-        assert!(!result.is_empty(), "Payload must be not empty");
-        assert_eq!(pck.x, 1, "X must be 1");
-        assert_eq!(pck.i, 0, "I must be 0");
-        assert_eq!(pck.l, 1, "L must be 1");
-        assert_eq!(pck.t, 0, "T must be 0");
-        assert_eq!(pck.k, 0, "K must be 0");
+    // Header size, X and T
+    let raw_bytes = Bytes::from_static(&[0x80, 0x20, 0x00, 0x00]);
+    pck.depacketize(&raw_bytes).expect("X and T");
+    assert!(!pck.payload.is_empty(), "Payload must be not empty");
+    assert_eq!(pck.x, 1, "X must be 1");
+    assert_eq!(pck.i, 0, "I must be 0");
+    assert_eq!(pck.l, 0, "L must be 0");
+    assert_eq!(pck.t, 1, "T must be 1");
+    assert_eq!(pck.k, 0, "K must be 0");
 
-        // Header size, X and T
-        let raw_bytes = &[0x80, 0x20, 0x00, 0x00];
-        let result = pck.depacketize(raw_bytes)?;
-        assert!(!result.is_empty(), "Payload must be not empty");
-        assert_eq!(pck.x, 1, "X must be 1");
-        assert_eq!(pck.i, 0, "I must be 0");
-        assert_eq!(pck.l, 0, "L must be 0");
-        assert_eq!(pck.t, 1, "T must be 1");
-        assert_eq!(pck.k, 0, "K must be 0");
+    // Header size, X and K
+    let raw_bytes = Bytes::from_static(&[0x80, 0x10, 0x00, 0x00]);
+    pck.depacketize(&raw_bytes).expect("X and K");
+    assert!(!pck.payload.is_empty(), "Payload must be not empty");
+    assert_eq!(pck.x, 1, "X must be 1");
+    assert_eq!(pck.i, 0, "I must be 0");
+    assert_eq!(pck.l, 0, "L must be 0");
+    assert_eq!(pck.t, 0, "T must be 0");
+    assert_eq!(pck.k, 1, "K must be 1");
 
-        // Header size, X and K
-        let raw_bytes = &[0x80, 0x10, 0x00, 0x00];
-        let result = pck.depacketize(raw_bytes)?;
-        assert!(!result.is_empty(), "Payload must be not empty");
-        assert_eq!(pck.x, 1, "X must be 1");
-        assert_eq!(pck.i, 0, "I must be 0");
-        assert_eq!(pck.l, 0, "L must be 0");
-        assert_eq!(pck.t, 0, "T must be 0");
-        assert_eq!(pck.k, 1, "K must be 1");
+    // Header size, all flags and 8bit picture_id
+    let raw_bytes = Bytes::from_static(&[0xff, 0xff, 0x00, 0x00, 0x00, 0x00]);
+    pck.depacketize(&raw_bytes)
+        .expect("all flags and 8bit picture_id");
+    assert!(!pck.payload.is_empty(), "Payload must be not empty");
+    assert_eq!(pck.x, 1, "X must be 1");
+    assert_eq!(pck.i, 1, "I must be 1");
+    assert_eq!(pck.l, 1, "L must be 1");
+    assert_eq!(pck.t, 1, "T must be 1");
+    assert_eq!(pck.k, 1, "K must be 1");
 
-        Ok(())
-    }
+    // Header size, all flags and 16bit picture_id
+    let raw_bytes = Bytes::from_static(&[0xff, 0xff, 0x80, 0x00, 0x00, 0x00, 0x00]);
+    pck.depacketize(&raw_bytes)
+        .expect("all flags and 16bit picture_id");
+    assert!(!pck.payload.is_empty(), "Payload must be not empty");
+    assert_eq!(pck.x, 1, "X must be 1");
+    assert_eq!(pck.i, 1, "I must be 1");
+    assert_eq!(pck.l, 1, "L must be 1");
+    assert_eq!(pck.t, 1, "T must be 1");
+    assert_eq!(pck.k, 1, "K must be 1");
 
-    #[test]
-    fn test_vp8_payload() {
-        let pck = VP8Payloader;
-        let payload = vec![0x90, 0x90, 0x90];
+    Ok(())
+}
 
-        // Positive MTU, empty payload
-        let result = pck.payload(1, &[]);
-        assert!(result.is_empty(), "Generated payload should be empty");
+#[test]
+fn test_vp8_payload() -> Result<(), Error> {
+    let pck = Vp8Payloader;
+    let empty = Bytes::from_static(&[]);
+    let payload = Bytes::from_static(&[0x90, 0x90, 0x90]);
 
-        // Positive MTU, small payload
-        let result = pck.payload(1, payload[..].into());
-        assert!(result.is_empty(), "Generated payload should be empty");
+    // Positive MTU, empty payload
+    let result = pck.payload(1, &empty)?;
+    assert!(result.is_empty(), "Generated payload should be empty");
 
-        // Positive MTU, small payload
-        let result = pck.payload(2, payload[..].into());
-        assert_eq!(
-            result.len(),
-            payload.len(),
-            "Generated payload should be the same size as original payload size"
-        );
-    }
+    // Positive MTU, small payload
+    let result = pck.payload(1, &payload)?;
+    assert_eq!(result.len(), 0, "Generated payload should be empty");
 
-    #[test]
-    fn test_vp8_partition_head_checker_is_partitioned() {
-        let mut checker = VP8PartitionHeadChecker;
+    // Positive MTU, small payload
+    let result = pck.payload(2, &payload)?;
+    assert_eq!(
+        result.len(),
+        payload.len(),
+        "Generated payload should be the same size as original payload size"
+    );
 
-        assert!(
-            !checker.is_partition_head(&[0x00]),
-            "Small packet should not be the head of a new partition"
-        );
-
-        assert!(
-            checker.is_partition_head(&[0x10, 0x00, 0x00, 0x00]),
-            "Packet with S flag should be the head of a new partition"
-        );
-
-        assert!(
-            !checker.is_partition_head(&[0x00, 0x00, 0x00, 0x00][..]),
-            "Packet without S flag should not be the head of a new partition"
-        );
-    }
+    Ok(())
 }
