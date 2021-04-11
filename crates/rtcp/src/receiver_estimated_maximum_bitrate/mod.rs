@@ -147,12 +147,12 @@ impl Packet for ReceiverEstimatedMaximumBitrate {
         // The destination SSRC must be 0
         let media = BigEndian::read_u32(&buf[8..12]);
         if media != 0 {
-            return Err(Error::SSRCMustBeZero);
+            return Err(Error::SsrcMustBeZero);
         }
 
         // REMB rules all around me
         if !buf[12..16].eq(&[b'R', b'E', b'M', b'B']) {
-            return Err(Error::MissingREMBIdentifier);
+            return Err(Error::MissingRembIdentifier);
         }
 
         // The next byte is the number of SSRC entries at the end.
@@ -160,7 +160,7 @@ impl Packet for ReceiverEstimatedMaximumBitrate {
 
         // Now we know the expected size, make sure they match.
         if size != 20 + 4 * num {
-            return Err(Error::SSRCNumAndLengthMismatch);
+            return Err(Error::SsrcNumAndLengthMismatch);
         }
 
         // Get the 6-bit exponent value.

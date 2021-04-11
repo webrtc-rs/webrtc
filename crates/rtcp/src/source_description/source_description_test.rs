@@ -124,7 +124,7 @@ mod test {
                     chunks: vec![SourceDescriptionChunk {
                         source: 0x01020304,
                         items: vec![SourceDescriptionItem {
-                            sdes_type: SDESType::SDESCNAME,
+                            sdes_type: SdesType::SdesCname,
                             text: "".to_string(),
                         }],
                     }],
@@ -146,11 +146,11 @@ mod test {
                         source: 0x10000000,
                         items: vec![
                             SourceDescriptionItem {
-                                sdes_type: SDESType::SDESCNAME,
+                                sdes_type: SdesType::SdesCname,
                                 text: "A".to_string(),
                             },
                             SourceDescriptionItem {
-                                sdes_type: SDESType::SDESPhone,
+                                sdes_type: SdesType::SdesPhone,
                                 text: "B".to_string(),
                             },
                         ],
@@ -178,14 +178,14 @@ mod test {
                         SourceDescriptionChunk {
                             source: 0x01020304,
                             items: vec![SourceDescriptionItem {
-                                sdes_type: SDESType::SDESCNAME,
+                                sdes_type: SdesType::SdesCname,
                                 text: "A".to_string(),
                             }],
                         },
                         SourceDescriptionChunk {
                             source: 0x05060708,
                             items: vec![SourceDescriptionItem {
-                                sdes_type: SDESType::SDESCNAME,
+                                sdes_type: SdesType::SdesCname,
                                 text: "BCD".to_string(),
                             }],
                         },
@@ -243,7 +243,7 @@ mod test {
                         SourceDescriptionChunk {
                             source: 1,
                             items: vec![SourceDescriptionItem {
-                                sdes_type: SDESType::SDESCNAME,
+                                sdes_type: SdesType::SdesCname,
                                 text: "test@example.com".to_string(),
                             }],
                         },
@@ -251,11 +251,11 @@ mod test {
                             source: 2,
                             items: vec![
                                 SourceDescriptionItem {
-                                    sdes_type: SDESType::SDESNote,
+                                    sdes_type: SdesType::SdesNote,
                                     text: "some note".to_string(),
                                 },
                                 SourceDescriptionItem {
-                                    sdes_type: SDESType::SDESNote,
+                                    sdes_type: SdesType::SdesNote,
                                     text: "another note".to_string(),
                                 },
                             ],
@@ -270,12 +270,12 @@ mod test {
                     chunks: vec![SourceDescriptionChunk {
                         source: 1,
                         items: vec![SourceDescriptionItem {
-                            sdes_type: SDESType::SDESEnd,
+                            sdes_type: SdesType::SdesEnd,
                             text: "test@example.com".to_string(),
                         }],
                     }],
                 },
-                Some(Error::SDESMissingType),
+                Some(Error::SdesMissingType),
             ),
             (
                 "zero items",
@@ -293,7 +293,7 @@ mod test {
                     chunks: vec![SourceDescriptionChunk {
                         source: 1,
                         items: vec![SourceDescriptionItem {
-                            sdes_type: SDESType::SDESEmail,
+                            sdes_type: SdesType::SdesEmail,
                             text: "test@example.com".to_string(),
                         }],
                     }],
@@ -306,7 +306,7 @@ mod test {
                     chunks: vec![SourceDescriptionChunk {
                         source: 1,
                         items: vec![SourceDescriptionItem {
-                            sdes_type: SDESType::SDESCNAME,
+                            sdes_type: SdesType::SdesCname,
                             text: "".to_string(),
                         }],
                     }],
@@ -319,12 +319,12 @@ mod test {
                     chunks: vec![SourceDescriptionChunk {
                         source: 1,
                         items: vec![SourceDescriptionItem {
-                            sdes_type: SDESType::SDESCNAME,
+                            sdes_type: SdesType::SdesCname,
                             text: too_long_text,
                         }],
                     }],
                 },
-                Some(Error::SDESTextTooLong),
+                Some(Error::SdesTextTooLong),
             ),
             (
                 "count overflow",

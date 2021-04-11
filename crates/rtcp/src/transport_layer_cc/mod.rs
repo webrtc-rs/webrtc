@@ -37,7 +37,7 @@ use crate::{error::Error, header, packet::Packet, receiver_report, util};
 /// type of packet status chunk
 #[derive(PartialEq, Debug, Clone)]
 #[repr(u16)]
-pub enum StatusChunkTypeTCC {
+pub enum StatusChunkTypeTcc {
     RunLengthChunk = 0,
     StatusVectorChunk = 1,
 }
@@ -45,7 +45,7 @@ pub enum StatusChunkTypeTCC {
 /// type of packet status symbol and recv delta
 #[derive(PartialEq, Debug, Clone)]
 #[repr(u16)]
-pub enum SymbolTypeTCC {
+pub enum SymbolTypeTcc {
     /// https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.1
     PacketNotReceived = 0,
     /// https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.1
@@ -60,56 +60,56 @@ pub enum SymbolTypeTCC {
 /// for status vector chunk
 #[derive(PartialEq, Debug, Clone)]
 #[repr(u16)]
-pub enum SymbolSizeTypeTCC {
+pub enum SymbolSizeTypeTcc {
     /// https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.4
     OneBit = 0,
     TwoBit = 1,
 }
 
-impl From<u16> for SymbolSizeTypeTCC {
+impl From<u16> for SymbolSizeTypeTcc {
     fn from(val: u16) -> Self {
         match val {
-            0 => SymbolSizeTypeTCC::OneBit,
-            _ => SymbolSizeTypeTCC::TwoBit,
+            0 => SymbolSizeTypeTcc::OneBit,
+            _ => SymbolSizeTypeTcc::TwoBit,
         }
     }
 }
 
-impl Default for SymbolSizeTypeTCC {
+impl Default for SymbolSizeTypeTcc {
     fn default() -> Self {
-        SymbolSizeTypeTCC::OneBit
+        SymbolSizeTypeTcc::OneBit
     }
 }
 
-impl From<u16> for StatusChunkTypeTCC {
+impl From<u16> for StatusChunkTypeTcc {
     fn from(val: u16) -> Self {
         match val {
-            0 => StatusChunkTypeTCC::RunLengthChunk,
-            _ => StatusChunkTypeTCC::StatusVectorChunk,
+            0 => StatusChunkTypeTcc::RunLengthChunk,
+            _ => StatusChunkTypeTcc::StatusVectorChunk,
         }
     }
 }
 
-impl Default for StatusChunkTypeTCC {
+impl Default for StatusChunkTypeTcc {
     fn default() -> Self {
-        StatusChunkTypeTCC::RunLengthChunk
+        StatusChunkTypeTcc::RunLengthChunk
     }
 }
 
-impl From<u16> for SymbolTypeTCC {
+impl From<u16> for SymbolTypeTcc {
     fn from(val: u16) -> Self {
         match val {
-            0 => SymbolTypeTCC::PacketNotReceived,
-            1 => SymbolTypeTCC::PacketReceivedSmallDelta,
-            2 => SymbolTypeTCC::PacketReceivedLargeDelta,
-            _ => SymbolTypeTCC::PacketReceivedWithoutDelta,
+            0 => SymbolTypeTcc::PacketNotReceived,
+            1 => SymbolTypeTcc::PacketReceivedSmallDelta,
+            2 => SymbolTypeTcc::PacketReceivedLargeDelta,
+            _ => SymbolTypeTcc::PacketReceivedWithoutDelta,
         }
     }
 }
 
-impl Default for SymbolTypeTCC {
+impl Default for SymbolTypeTcc {
     fn default() -> Self {
-        SymbolTypeTCC::PacketNotReceived
+        SymbolTypeTcc::PacketNotReceived
     }
 }
 
@@ -137,10 +137,10 @@ impl PartialEq for dyn PacketStatusChunk {
 #[derive(Debug, Clone, PartialEq, Default)]
 struct RunLengthChunk {
     /// T = TypeTCCRunLengthChunk
-    type_tcc: StatusChunkTypeTCC,
+    type_tcc: StatusChunkTypeTcc,
     /// S: type of packet status
     /// kind: TypeTCCPacketNotReceived or...
-    packet_status_symbol: SymbolTypeTCC,
+    packet_status_symbol: SymbolTypeTcc,
     /// run_length: count of S
     run_length: u16,
 }
@@ -171,7 +171,7 @@ impl PacketStatusChunk for RunLengthChunk {
         }
 
         // record type
-        self.type_tcc = StatusChunkTypeTCC::RunLengthChunk;
+        self.type_tcc = StatusChunkTypeTcc::RunLengthChunk;
 
         // get PacketStatusSymbol
         // r.PacketStatusSymbol = uint16(rawPacket[0] >> 5 & 0x03)
@@ -206,16 +206,16 @@ impl PacketStatusChunk for RunLengthChunk {
 #[derive(Debug, Clone, PartialEq, Default)]
 struct StatusVectorChunk {
     // T = TypeTCCRunLengthChunk
-    type_tcc: StatusChunkTypeTCC,
+    type_tcc: StatusChunkTypeTcc,
 
     // TypeTCCSymbolSizeOneBit or TypeTCCSymbolSizeTwoBit
-    symbol_size: SymbolSizeTypeTCC,
+    symbol_size: SymbolSizeTypeTcc,
 
     // when symbol_size = TypeTCCSymbolSizeOneBit, symbol_list is 14*1bit:
     // TypeTCCSymbolListPacketReceived or TypeTCCSymbolListPacketNotReceived
     // when symbol_size = TypeTCCSymbolSizeTwoBit, symbol_list is 7*2bit:
     // TypeTCCPacketNotReceived TypeTCCPacketReceivedSmallDelta TypeTCCPacketReceivedLargeDelta or typePacketReserved
-    symbol_list: Vec<SymbolTypeTCC>,
+    symbol_list: Vec<SymbolTypeTcc>,
 }
 
 impl PacketStatusChunk for StatusVectorChunk {
@@ -246,14 +246,14 @@ impl PacketStatusChunk for StatusVectorChunk {
     // Unmarshal ..
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         if raw_packet.len() != PACKET_STATUS_CHUNK_LENGTH {
-            return Err(Error::PacketBeforeCNAME);
+            return Err(Error::PacketBeforeCname);
         }
 
-        self.type_tcc = StatusChunkTypeTCC::StatusVectorChunk;
+        self.type_tcc = StatusChunkTypeTcc::StatusVectorChunk;
         self.symbol_size = util::get_nbits_from_byte(raw_packet[0], 1, 1).into();
 
         match self.symbol_size {
-            SymbolSizeTypeTCC::OneBit => {
+            SymbolSizeTypeTcc::OneBit => {
                 for i in 0..6u16 {
                     self.symbol_list
                         .push(util::get_nbits_from_byte(raw_packet[0], 2 + i, 1).into());
@@ -267,7 +267,7 @@ impl PacketStatusChunk for StatusVectorChunk {
                 Ok(())
             }
 
-            SymbolSizeTypeTCC::TwoBit => {
+            SymbolSizeTypeTcc::TwoBit => {
                 for i in 0..3u16 {
                     self.symbol_list
                         .push(util::get_nbits_from_byte(raw_packet[0], 2 + i * 2, 2).into());
@@ -301,7 +301,7 @@ impl PacketStatusChunk for StatusVectorChunk {
 /// https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#section-3.1.5
 #[derive(Debug, Clone, PartialEq, Default)]
 struct RecvDelta {
-    type_tcc_packet: SymbolTypeTCC,
+    type_tcc_packet: SymbolTypeTcc,
     /// us
     delta: i64,
 }
@@ -312,7 +312,7 @@ impl RecvDelta {
         let delta = self.delta / TYPE_TCC_DELTA_SCALE_FACTOR;
 
         // small delta
-        if self.type_tcc_packet == SymbolTypeTCC::PacketReceivedSmallDelta
+        if self.type_tcc_packet == SymbolTypeTcc::PacketReceivedSmallDelta
             && delta >= 0
             && delta <= std::u8::MAX as i64
         {
@@ -322,7 +322,7 @@ impl RecvDelta {
         }
 
         // big delta
-        if self.type_tcc_packet == SymbolTypeTCC::PacketReceivedLargeDelta
+        if self.type_tcc_packet == SymbolTypeTcc::PacketReceivedLargeDelta
             && delta >= std::i16::MIN as i64
             && delta <= std::u16::MAX as i64
         {
@@ -345,12 +345,12 @@ impl RecvDelta {
         }
 
         if chunk_len == 1 {
-            self.type_tcc_packet = SymbolTypeTCC::PacketReceivedSmallDelta;
+            self.type_tcc_packet = SymbolTypeTcc::PacketReceivedSmallDelta;
             self.delta = TYPE_TCC_DELTA_SCALE_FACTOR * raw_packet[0] as i64;
             return Ok(());
         }
 
-        self.type_tcc_packet = SymbolTypeTCC::PacketReceivedLargeDelta;
+        self.type_tcc_packet = SymbolTypeTcc::PacketReceivedLargeDelta;
         self.delta = TYPE_TCC_DELTA_SCALE_FACTOR * BigEndian::read_i16(raw_packet) as i64;
 
         Ok(())
@@ -385,7 +385,7 @@ const PACKET_STATUS_CHUNK_LENGTH: usize = 2;
 /// TransportLayerCC for sender-BWE
 /// https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-5
 #[derive(Default, PartialEq)]
-pub struct TransportLayerCC {
+pub struct TransportLayerCc {
     /// header
     header: header::Header,
     /// SSRC of sender
@@ -406,7 +406,7 @@ pub struct TransportLayerCC {
     recv_deltas: Vec<RecvDelta>,
 }
 
-impl fmt::Display for TransportLayerCC {
+impl fmt::Display for TransportLayerCc {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut out = format!("TransportLayerCC:\n\tHeader {:?}\n", self.header);
         out += format!("TransportLayerCC:\n\tSender Ssrc {}\n", self.sender_ssrc).as_str();
@@ -426,7 +426,7 @@ impl fmt::Display for TransportLayerCC {
     }
 }
 
-impl Packet for TransportLayerCC {
+impl Packet for TransportLayerCc {
     /// Unmarshal ..
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
         if raw_packet.len() < (header::HEADER_LENGTH + receiver_report::SSRC_LENGTH) {
@@ -489,7 +489,7 @@ impl Packet for TransportLayerCC {
             let initial_packet_status: Box<dyn PacketStatusChunk>;
 
             match typ.into() {
-                StatusChunkTypeTCC::RunLengthChunk => {
+                StatusChunkTypeTcc::RunLengthChunk => {
                     let mut packet_status = RunLengthChunk {
                         type_tcc: typ.into(),
                         ..Default::default()
@@ -503,9 +503,9 @@ impl Packet for TransportLayerCC {
                         - processed_packet_num)
                         .min(packet_status.run_length);
 
-                    if packet_status.packet_status_symbol == SymbolTypeTCC::PacketReceivedSmallDelta
+                    if packet_status.packet_status_symbol == SymbolTypeTcc::PacketReceivedSmallDelta
                         || packet_status.packet_status_symbol
-                            == SymbolTypeTCC::PacketReceivedLargeDelta
+                            == SymbolTypeTcc::PacketReceivedLargeDelta
                     {
                         let mut j = 0u16;
 
@@ -523,7 +523,7 @@ impl Packet for TransportLayerCC {
                     processed_packet_num += packet_number_to_process;
                 }
 
-                StatusChunkTypeTCC::StatusVectorChunk => {
+                StatusChunkTypeTcc::StatusVectorChunk => {
                     let mut packet_status = StatusVectorChunk {
                         type_tcc: typ.into(),
                         ..Default::default()
@@ -534,21 +534,21 @@ impl Packet for TransportLayerCC {
                     )?;
 
                     match packet_status.symbol_size {
-                        SymbolSizeTypeTCC::OneBit => {
+                        SymbolSizeTypeTcc::OneBit => {
                             for sym in &packet_status.symbol_list {
-                                if *sym == SymbolTypeTCC::PacketReceivedSmallDelta {
+                                if *sym == SymbolTypeTcc::PacketReceivedSmallDelta {
                                     self.recv_deltas.push(RecvDelta {
-                                        type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                                        type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                                         ..Default::default()
                                     })
                                 }
                             }
                         }
 
-                        SymbolSizeTypeTCC::TwoBit => {
+                        SymbolSizeTypeTcc::TwoBit => {
                             for sym in &packet_status.symbol_list {
-                                if *sym == SymbolTypeTCC::PacketReceivedSmallDelta
-                                    || *sym == SymbolTypeTCC::PacketReceivedLargeDelta
+                                if *sym == SymbolTypeTcc::PacketReceivedSmallDelta
+                                    || *sym == SymbolTypeTcc::PacketReceivedLargeDelta
                                 {
                                     self.recv_deltas.push(RecvDelta {
                                         type_tcc_packet: sym.clone(),
@@ -575,13 +575,13 @@ impl Packet for TransportLayerCC {
                 return Err(Error::PacketTooShort);
             }
 
-            if delta.type_tcc_packet == SymbolTypeTCC::PacketReceivedSmallDelta {
+            if delta.type_tcc_packet == SymbolTypeTcc::PacketReceivedSmallDelta {
                 delta.unmarshal(&mut raw_packet[recv_deltas_pos..recv_deltas_pos + 1].into())?;
 
                 recv_deltas_pos += 1;
             }
 
-            if delta.type_tcc_packet == SymbolTypeTCC::PacketReceivedLargeDelta {
+            if delta.type_tcc_packet == SymbolTypeTcc::PacketReceivedLargeDelta {
                 delta.unmarshal(&mut raw_packet[recv_deltas_pos..recv_deltas_pos + 2].into())?;
 
                 recv_deltas_pos += 2;
@@ -637,7 +637,7 @@ impl Packet for TransportLayerCC {
             payload[recv_delta_offset + i..b.len() + recv_delta_offset + i].copy_from_slice(&b);
             i += 1;
 
-            if delta.type_tcc_packet == SymbolTypeTCC::PacketReceivedLargeDelta {
+            if delta.type_tcc_packet == SymbolTypeTcc::PacketReceivedLargeDelta {
                 i += 1;
             }
         }
@@ -661,7 +661,7 @@ impl Packet for TransportLayerCC {
     fn trait_eq(&self, other: &dyn Packet) -> bool {
         other
             .as_any()
-            .downcast_ref::<TransportLayerCC>()
+            .downcast_ref::<TransportLayerCc>()
             .map_or(false, |a| self == a)
     }
 
@@ -670,21 +670,21 @@ impl Packet for TransportLayerCC {
     }
 }
 
-impl TransportLayerCC {
+impl TransportLayerCc {
     fn packet_len(&self) -> usize {
         let mut n = header::HEADER_LENGTH + PACKET_CHUNK_OFFSET + self.packet_chunks.len() * 2;
         for d in &self.recv_deltas {
             let delta = d.delta / TYPE_TCC_DELTA_SCALE_FACTOR;
 
             // small delta
-            if d.type_tcc_packet == SymbolTypeTCC::PacketReceivedSmallDelta
+            if d.type_tcc_packet == SymbolTypeTcc::PacketReceivedSmallDelta
                 && delta >= 0
                 && delta <= u8::MAX as i64
             {
                 n += 1;
             }
 
-            if d.type_tcc_packet == SymbolTypeTCC::PacketReceivedLargeDelta
+            if d.type_tcc_packet == SymbolTypeTcc::PacketReceivedLargeDelta
                 && delta >= i16::MIN as i64
                 && delta <= i16::MAX as i64
             {

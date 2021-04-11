@@ -17,7 +17,7 @@ mod test {
                 FullIntraRequest {
                     sender_ssrc: 0x0,
                     media_ssrc: 0x4bc4fcb4,
-                    fir: vec![FIREntry {
+                    fir: vec![FirEntry {
                         ssrc: 0x12345678,
                         sequence_number: 0x42,
                     }],
@@ -39,11 +39,11 @@ mod test {
                     sender_ssrc: 0x0,
                     media_ssrc: 0x4bc4fcb4,
                     fir: vec![
-                        FIREntry {
+                        FirEntry {
                             ssrc: 0x12345678,
                             sequence_number: 0x42,
                         },
-                        FIREntry {
+                        FirEntry {
                             ssrc: 0x98765432,
                             sequence_number: 0x57,
                         },
@@ -118,7 +118,7 @@ mod test {
                 FullIntraRequest {
                     sender_ssrc: 1,
                     media_ssrc: 2,
-                    fir: vec![FIREntry {
+                    fir: vec![FirEntry {
                         ssrc: 3,
                         sequence_number: 42,
                     }],
@@ -130,7 +130,7 @@ mod test {
                 FullIntraRequest {
                     sender_ssrc: 5000,
                     media_ssrc: 6000,
-                    fir: vec![FIREntry {
+                    fir: vec![FirEntry {
                         ssrc: 3,
                         sequence_number: 57,
                     }],

@@ -1,5 +1,5 @@
 use super::packet::Packet;
-use super::source_description::SDESType;
+use super::source_description::SdesType;
 use crate::{error::Error, receiver_report::ReceiverReport, sender_report::SenderReport};
 use bytes::BytesMut;
 
@@ -56,26 +56,26 @@ impl CompoundPacket {
                 let mut has_cname = false;
                 for c in &e.chunks {
                     for it in &c.items {
-                        if it.sdes_type == SDESType::SDESCNAME {
+                        if it.sdes_type == SdesType::SdesCname {
                             has_cname = true
                         }
                     }
                 }
 
                 if !has_cname {
-                    return Err(Error::MissingCNAME);
+                    return Err(Error::MissingCname);
                 }
 
                 return Ok(());
 
             // Other packets are not permitted before the CNAME
             } else {
-                return Err(Error::PacketBeforeCNAME);
+                return Err(Error::PacketBeforeCname);
             }
         }
 
         // CNAME never reached
-        Err(Error::MissingCNAME)
+        Err(Error::MissingCname)
     }
 
     /// CNAME returns the CNAME that *must* be present in every CompoundPacket
@@ -93,7 +93,7 @@ impl CompoundPacket {
 
                 for c in &sdes.chunks {
                     for it in &c.items {
-                        if it.sdes_type == SDESType::SDESCNAME {
+                        if it.sdes_type == SdesType::SdesCname {
                             return Ok(it.text.to_owned());
                         }
                     }
@@ -103,11 +103,11 @@ impl CompoundPacket {
                 .downcast_ref::<crate::receiver_report::ReceiverReport>()
                 .is_none()
             {
-                return Err(Error::PacketBeforeCNAME);
+                return Err(Error::PacketBeforeCname);
             }
         }
 
-        Err(Error::MissingCNAME)
+        Err(Error::MissingCname)
     }
 
     /// Marshal encodes the CompoundPacket as binary.

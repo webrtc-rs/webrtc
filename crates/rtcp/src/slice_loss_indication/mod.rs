@@ -17,7 +17,7 @@ const SLI_OFFSET: usize = 8;
 /// SLIEntry represents a single entry to the SLI packet's
 /// list of lost slices.
 #[derive(Debug, PartialEq, Default, Clone)]
-pub struct SLIEntry {
+pub struct SliEntry {
     /// ID of first lost slice
     pub first: u16,
     /// Number of lost slices
@@ -34,7 +34,7 @@ pub struct SliceLossIndication {
     /// SSRC of the media source
     pub media_ssrc: u32,
 
-    pub sli_entries: Vec<SLIEntry>,
+    pub sli_entries: Vec<SliEntry>,
 }
 
 impl fmt::Display for SliceLossIndication {
@@ -77,7 +77,7 @@ impl Packet for SliceLossIndication {
         while i < header::HEADER_LENGTH + h.length as usize * 4 {
             let sli = BigEndian::read_u32(&raw_packet[i..]);
 
-            self.sli_entries.push(SLIEntry {
+            self.sli_entries.push(SliEntry {
                 first: ((sli >> 19) & 0x1FFF) as u16,
                 number: ((sli >> 6) & 0x1FFF) as u16,
                 picture: (sli & 0x3F) as u8,

@@ -25,8 +25,7 @@ pub struct NackPair {
 impl NackPair {
     /// PacketList returns a list of Nack'd packets that's referenced by a NackPair
     pub fn packet_list(&self) -> Vec<u16> {
-        let mut out = vec![];
-        out.push(self.packet_id);
+        let mut out = vec![self.packet_id];
 
         let mut b = self.lost_packets;
         let mut i = 0;

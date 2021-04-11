@@ -16,7 +16,7 @@ mod test {
                 SliceLossIndication {
                     sender_ssrc: 0x902f9e2e,
                     media_ssrc: 0x902f9e2e,
-                    sli_entries: vec![SLIEntry {
+                    sli_entries: vec![SliEntry {
                         first: 0xaaa,
                         number: 0,
                         picture: 0x2C,
@@ -94,12 +94,12 @@ mod test {
                 sender_ssrc: 0x902f9e2e,
                 media_ssrc: 0x902f9e2e,
                 sli_entries: vec![
-                    SLIEntry {
+                    SliEntry {
                         first: 1,
                         number: 0xAA,
                         picture: 0x1F,
                     },
-                    SLIEntry {
+                    SliEntry {
                         first: 1034,
                         number: 0x05,
                         picture: 0x6,

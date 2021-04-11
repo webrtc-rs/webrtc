@@ -11,53 +11,53 @@ pub use source_description_def::{
 /// RTP SDES item types registered with IANA. See: https://www.iana.org/assignments/rtp-parameters/rtp-parameters.xhtml#rtp-parameters-5
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(u8)]
-pub enum SDESType {
-    SDESEnd = 0,      // end of SDES list                RFC 3550, 6.5
-    SDESCNAME = 1,    // canonical name                  RFC 3550, 6.5.1
-    SDESName = 2,     // user name                       RFC 3550, 6.5.2
-    SDESEmail = 3,    // user's electronic mail address  RFC 3550, 6.5.3
-    SDESPhone = 4,    // user's phone number             RFC 3550, 6.5.4
-    SDESLocation = 5, // geographic user location        RFC 3550, 6.5.5
-    SDESTool = 6,     // name of application or tool     RFC 3550, 6.5.6
-    SDESNote = 7,     // notice about the source         RFC 3550, 6.5.7
-    SDESPrivate = 8,  // private extensions              RFC 3550, 6.5.8  (not implemented)
+pub enum SdesType {
+    SdesEnd = 0,      // end of SDES list                RFC 3550, 6.5
+    SdesCname = 1,    // canonical name                  RFC 3550, 6.5.1
+    SdesName = 2,     // user name                       RFC 3550, 6.5.2
+    SdesEmail = 3,    // user's electronic mail address  RFC 3550, 6.5.3
+    SdesPhone = 4,    // user's phone number             RFC 3550, 6.5.4
+    SdesLocation = 5, // geographic user location        RFC 3550, 6.5.5
+    SdesTool = 6,     // name of application or tool     RFC 3550, 6.5.6
+    SdesNote = 7,     // notice about the source         RFC 3550, 6.5.7
+    SdesPrivate = 8,  // private extensions              RFC 3550, 6.5.8  (not implemented)
 }
 
-impl Default for SDESType {
+impl Default for SdesType {
     fn default() -> Self {
-        SDESType::SDESEnd
+        SdesType::SdesEnd
     }
 }
 
-impl fmt::Display for SDESType {
+impl fmt::Display for SdesType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
-            SDESType::SDESEnd => "END",
-            SDESType::SDESCNAME => "CNAME",
-            SDESType::SDESName => "NAME",
-            SDESType::SDESEmail => "EMAIL",
-            SDESType::SDESPhone => "PHONE",
-            SDESType::SDESLocation => "LOC",
-            SDESType::SDESTool => "TOOL",
-            SDESType::SDESNote => "NOTE",
-            SDESType::SDESPrivate => "PRIV",
+            SdesType::SdesEnd => "END",
+            SdesType::SdesCname => "CNAME",
+            SdesType::SdesName => "NAME",
+            SdesType::SdesEmail => "EMAIL",
+            SdesType::SdesPhone => "PHONE",
+            SdesType::SdesLocation => "LOC",
+            SdesType::SdesTool => "TOOL",
+            SdesType::SdesNote => "NOTE",
+            SdesType::SdesPrivate => "PRIV",
         };
         write!(f, "{}", s)
     }
 }
 
-impl From<u8> for SDESType {
+impl From<u8> for SdesType {
     fn from(b: u8) -> Self {
         match b {
-            1 => SDESType::SDESCNAME,
-            2 => SDESType::SDESName,
-            3 => SDESType::SDESEmail,
-            4 => SDESType::SDESPhone,
-            5 => SDESType::SDESLocation,
-            6 => SDESType::SDESTool,
-            7 => SDESType::SDESNote,
-            8 => SDESType::SDESPrivate,
-            _ => SDESType::SDESEnd,
+            1 => SdesType::SdesCname,
+            2 => SdesType::SdesName,
+            3 => SdesType::SdesEmail,
+            4 => SdesType::SdesPhone,
+            5 => SdesType::SdesLocation,
+            6 => SdesType::SdesTool,
+            7 => SdesType::SdesNote,
+            8 => SdesType::SdesPrivate,
+            _ => SdesType::SdesEnd,
         }
     }
 }

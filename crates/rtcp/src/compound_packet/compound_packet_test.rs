@@ -105,7 +105,7 @@ mod test {
             chunks: vec![source_description::SourceDescriptionChunk {
                 source: 1234,
                 items: vec![source_description::SourceDescriptionItem {
-                    sdes_type: source_description::SDESType::SDESCNAME,
+                    sdes_type: source_description::SdesType::SdesCname,
                     text: "cname".to_owned(),
                 }],
             }],
@@ -115,7 +115,7 @@ mod test {
             (
                 "no cname",
                 CompoundPacket(vec![Box::new(sender_report::SenderReport::default())]),
-                Err(Error::MissingCNAME),
+                Err(Error::MissingCname),
             ),
             (
                 "SDES / no cname",
@@ -123,7 +123,7 @@ mod test {
                     Box::new(sender_report::SenderReport::default()),
                     Box::new(source_description::SourceDescription::default()),
                 ]),
-                Err(Error::MissingCNAME),
+                Err(Error::MissingCname),
             ),
             (
                 "just SR",
@@ -140,7 +140,7 @@ mod test {
                     Box::new(sender_report::SenderReport::default()),
                     Box::new(cname.clone()),
                 ]),
-                Err(Error::PacketBeforeCNAME),
+                Err(Error::PacketBeforeCname),
             ),
             (
                 "just RR",
@@ -186,7 +186,7 @@ mod test {
             chunks: vec![source_description::SourceDescriptionChunk {
                 source: 1234,
                 items: vec![source_description::SourceDescriptionItem {
-                    sdes_type: SDESType::SDESCNAME,
+                    sdes_type: SdesType::SdesCname,
                     text: "cname".to_string(),
                 }],
             }],
@@ -196,7 +196,7 @@ mod test {
             (
                 "no cname",
                 CompoundPacket(vec![Box::new(SenderReport::default())]),
-                Some(Error::MissingCNAME),
+                Some(Error::MissingCname),
                 "",
             ),
             (
@@ -205,7 +205,7 @@ mod test {
                     Box::new(SenderReport::default()),
                     Box::new(source_description::SourceDescription::default()),
                 ]),
-                Some(Error::MissingCNAME),
+                Some(Error::MissingCname),
                 "",
             ),
             (
@@ -224,7 +224,7 @@ mod test {
                     Box::new(SenderReport::default()),
                     Box::new(cname.clone()),
                 ]),
-                Some(Error::PacketBeforeCNAME),
+                Some(Error::PacketBeforeCname),
                 "",
             ),
             (
@@ -304,7 +304,7 @@ mod test {
             chunks: vec![source_description::SourceDescriptionChunk {
                 source: 1234,
                 items: vec![source_description::SourceDescriptionItem {
-                    sdes_type: SDESType::SDESCNAME,
+                    sdes_type: SdesType::SdesCname,
                     text: "cname".to_string(),
                 }],
             }],
@@ -323,7 +323,7 @@ mod test {
             (
                 "no cname",
                 CompoundPacket(vec![Box::new(ReceiverReport::default())]),
-                Some(Error::MissingCNAME),
+                Some(Error::MissingCname),
             ),
         ];
 

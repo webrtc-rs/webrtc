@@ -10,8 +10,8 @@ mod test {
                 "example1",
                 vec![0, 0xDD],
                 RunLengthChunk {
-                    type_tcc: StatusChunkTypeTCC::RunLengthChunk,
-                    packet_status_symbol: SymbolTypeTCC::PacketNotReceived,
+                    type_tcc: StatusChunkTypeTcc::RunLengthChunk,
+                    packet_status_symbol: SymbolTypeTcc::PacketNotReceived,
                     run_length: 221,
                 },
                 //None,
@@ -21,8 +21,8 @@ mod test {
                 "example2",
                 vec![0x60, 0x18],
                 RunLengthChunk {
-                    type_tcc: StatusChunkTypeTCC::RunLengthChunk,
-                    packet_status_symbol: SymbolTypeTCC::PacketReceivedWithoutDelta,
+                    type_tcc: StatusChunkTypeTcc::RunLengthChunk,
+                    packet_status_symbol: SymbolTypeTcc::PacketReceivedWithoutDelta,
                     run_length: 24,
                 },
             ),
@@ -49,8 +49,8 @@ mod test {
                 // 3.1.3 example1: https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-7
                 "example1",
                 RunLengthChunk {
-                    type_tcc: StatusChunkTypeTCC::RunLengthChunk,
-                    packet_status_symbol: SymbolTypeTCC::PacketNotReceived,
+                    type_tcc: StatusChunkTypeTcc::RunLengthChunk,
+                    packet_status_symbol: SymbolTypeTcc::PacketNotReceived,
                     run_length: 221,
                 },
                 vec![0, 0xDD],
@@ -59,8 +59,8 @@ mod test {
                 // 3.1.3 example2: https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-7
                 "example2",
                 RunLengthChunk {
-                    type_tcc: StatusChunkTypeTCC::RunLengthChunk,
-                    packet_status_symbol: SymbolTypeTCC::PacketReceivedWithoutDelta,
+                    type_tcc: StatusChunkTypeTcc::RunLengthChunk,
+                    packet_status_symbol: SymbolTypeTcc::PacketReceivedWithoutDelta,
                     run_length: 24,
                 },
                 vec![0x60, 0x18],
@@ -88,23 +88,23 @@ mod test {
                 "example1",
                 vec![0x9F, 0x1C],
                 StatusVectorChunk {
-                    type_tcc: StatusChunkTypeTCC::StatusVectorChunk,
-                    symbol_size: SymbolSizeTypeTCC::OneBit,
+                    type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
+                    symbol_size: SymbolSizeTypeTcc::OneBit,
                     symbol_list: vec![
-                        SymbolTypeTCC::PacketNotReceived,
-                        SymbolTypeTCC::PacketReceivedSmallDelta,
-                        SymbolTypeTCC::PacketReceivedSmallDelta,
-                        SymbolTypeTCC::PacketReceivedSmallDelta,
-                        SymbolTypeTCC::PacketReceivedSmallDelta,
-                        SymbolTypeTCC::PacketReceivedSmallDelta,
-                        SymbolTypeTCC::PacketNotReceived,
-                        SymbolTypeTCC::PacketNotReceived,
-                        SymbolTypeTCC::PacketNotReceived,
-                        SymbolTypeTCC::PacketReceivedSmallDelta,
-                        SymbolTypeTCC::PacketReceivedSmallDelta,
-                        SymbolTypeTCC::PacketReceivedSmallDelta,
-                        SymbolTypeTCC::PacketNotReceived,
-                        SymbolTypeTCC::PacketNotReceived,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketNotReceived,
                     ],
                 },
             ),
@@ -113,16 +113,16 @@ mod test {
                 "example2",
                 vec![0xCD, 0x50],
                 StatusVectorChunk {
-                    type_tcc: StatusChunkTypeTCC::StatusVectorChunk,
-                    symbol_size: SymbolSizeTypeTCC::TwoBit,
+                    type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
+                    symbol_size: SymbolSizeTypeTcc::TwoBit,
                     symbol_list: vec![
-                        SymbolTypeTCC::PacketNotReceived,
-                        SymbolTypeTCC::PacketReceivedWithoutDelta,
-                        SymbolTypeTCC::PacketReceivedSmallDelta,
-                        SymbolTypeTCC::PacketReceivedSmallDelta,
-                        SymbolTypeTCC::PacketReceivedSmallDelta,
-                        SymbolTypeTCC::PacketNotReceived,
-                        SymbolTypeTCC::PacketNotReceived,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketReceivedWithoutDelta,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketNotReceived,
                     ],
                 },
             ),
@@ -150,23 +150,23 @@ mod test {
                 //3.1.4 example1: https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-7
                 "example1",
                 StatusVectorChunk {
-                    type_tcc: StatusChunkTypeTCC::StatusVectorChunk,
-                    symbol_size: SymbolSizeTypeTCC::OneBit,
+                    type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
+                    symbol_size: SymbolSizeTypeTcc::OneBit,
                     symbol_list: vec![
-                        SymbolTypeTCC::PacketNotReceived,
-                        SymbolTypeTCC::PacketReceivedSmallDelta,
-                        SymbolTypeTCC::PacketReceivedSmallDelta,
-                        SymbolTypeTCC::PacketReceivedSmallDelta,
-                        SymbolTypeTCC::PacketReceivedSmallDelta,
-                        SymbolTypeTCC::PacketReceivedSmallDelta,
-                        SymbolTypeTCC::PacketNotReceived,
-                        SymbolTypeTCC::PacketNotReceived,
-                        SymbolTypeTCC::PacketNotReceived,
-                        SymbolTypeTCC::PacketReceivedSmallDelta,
-                        SymbolTypeTCC::PacketReceivedSmallDelta,
-                        SymbolTypeTCC::PacketReceivedSmallDelta,
-                        SymbolTypeTCC::PacketNotReceived,
-                        SymbolTypeTCC::PacketNotReceived,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketNotReceived,
                     ],
                 },
                 vec![0x9F, 0x1C],
@@ -175,16 +175,16 @@ mod test {
                 //3.1.4 example2: https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-7
                 "example2",
                 StatusVectorChunk {
-                    type_tcc: StatusChunkTypeTCC::StatusVectorChunk,
-                    symbol_size: SymbolSizeTypeTCC::TwoBit,
+                    type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
+                    symbol_size: SymbolSizeTypeTcc::TwoBit,
                     symbol_list: vec![
-                        SymbolTypeTCC::PacketNotReceived,
-                        SymbolTypeTCC::PacketReceivedWithoutDelta,
-                        SymbolTypeTCC::PacketReceivedSmallDelta,
-                        SymbolTypeTCC::PacketReceivedSmallDelta,
-                        SymbolTypeTCC::PacketReceivedSmallDelta,
-                        SymbolTypeTCC::PacketNotReceived,
-                        SymbolTypeTCC::PacketNotReceived,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketReceivedWithoutDelta,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketReceivedSmallDelta,
+                        SymbolTypeTcc::PacketNotReceived,
+                        SymbolTypeTcc::PacketNotReceived,
                     ],
                 },
                 vec![0xCD, 0x50],
@@ -212,7 +212,7 @@ mod test {
                 "small delta 63.75ms",
                 vec![0xFF],
                 RecvDelta {
-                    type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                    type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                     // 255 * 250
                     delta: 63750,
                 },
@@ -221,7 +221,7 @@ mod test {
                 "big delta 8191.75ms",
                 vec![0x7F, 0xFF],
                 RecvDelta {
-                    type_tcc_packet: SymbolTypeTCC::PacketReceivedLargeDelta,
+                    type_tcc_packet: SymbolTypeTcc::PacketReceivedLargeDelta,
                     // 32767 * 250
                     delta: 8191750,
                 },
@@ -230,7 +230,7 @@ mod test {
                 "big delta -8192ms",
                 vec![0x80, 0x00],
                 RecvDelta {
-                    type_tcc_packet: SymbolTypeTCC::PacketReceivedLargeDelta,
+                    type_tcc_packet: SymbolTypeTcc::PacketReceivedLargeDelta,
                     // -32768 * 250
                     delta: -8192000,
                 },
@@ -258,7 +258,7 @@ mod test {
             (
                 "small delta 63.75ms",
                 RecvDelta {
-                    type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                    type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                     // 255 * 250
                     delta: 63750,
                 },
@@ -267,7 +267,7 @@ mod test {
             (
                 "big delta 8191.75ms",
                 RecvDelta {
-                    type_tcc_packet: SymbolTypeTCC::PacketReceivedLargeDelta,
+                    type_tcc_packet: SymbolTypeTcc::PacketReceivedLargeDelta,
                     // 32767 * 250
                     delta: 8191750,
                 },
@@ -276,7 +276,7 @@ mod test {
             (
                 "big delta -8192ms",
                 RecvDelta {
-                    type_tcc_packet: SymbolTypeTCC::PacketReceivedLargeDelta,
+                    type_tcc_packet: SymbolTypeTcc::PacketReceivedLargeDelta,
                     // -32768 * 250
                     delta: -8192000,
                 },
@@ -328,7 +328,7 @@ mod test {
                     0xaf, 0xcd, 0x0, 0x5, 0xfa, 0x17, 0xfa, 0x17, 0x43, 0x3, 0x2f, 0xa0, 0x0, 0x99,
                     0x0, 0x1, 0x3d, 0xe8, 0x2, 0x17, 0x20, 0x1, 0x94, 0x1,
                 ],
-                TransportLayerCC {
+                TransportLayerCc {
                     header: Header {
                         padding: true,
                         count: header::FORMAT_TCC,
@@ -343,13 +343,13 @@ mod test {
                     fb_pkt_count: 23,
                     // 0b00100000, 0b00000001
                     packet_chunks: vec![Box::new(RunLengthChunk {
-                        type_tcc: StatusChunkTypeTCC::RunLengthChunk,
-                        packet_status_symbol: SymbolTypeTCC::PacketReceivedSmallDelta,
+                        type_tcc: StatusChunkTypeTcc::RunLengthChunk,
+                        packet_status_symbol: SymbolTypeTcc::PacketReceivedSmallDelta,
                         run_length: 1,
                     })],
                     // 0b10010100
                     recv_deltas: vec![RecvDelta {
-                        type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                        type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                         delta: 37000,
                     }],
                 },
@@ -361,7 +361,7 @@ mod test {
                     0x74, 0x0, 0xe, 0x45, 0xb1, 0x5a, 0x40, 0xd8, 0x0, 0xf0, 0xff, 0xd0, 0x0, 0x0,
                     0x3,
                 ],
-                TransportLayerCC {
+                TransportLayerCc {
                     header: Header {
                         padding: true,
                         count: header::FORMAT_TCC,
@@ -376,40 +376,40 @@ mod test {
                     fb_pkt_count: 64,
                     packet_chunks: vec![
                         Box::new(StatusVectorChunk {
-                            type_tcc: StatusChunkTypeTCC::StatusVectorChunk,
-                            symbol_size: SymbolSizeTypeTCC::TwoBit,
+                            type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
+                            symbol_size: SymbolSizeTypeTcc::TwoBit,
                             symbol_list: vec![
-                                SymbolTypeTCC::PacketReceivedSmallDelta,
-                                SymbolTypeTCC::PacketReceivedLargeDelta,
-                                SymbolTypeTCC::PacketNotReceived,
-                                SymbolTypeTCC::PacketNotReceived,
-                                SymbolTypeTCC::PacketNotReceived,
-                                SymbolTypeTCC::PacketNotReceived,
-                                SymbolTypeTCC::PacketNotReceived,
+                                SymbolTypeTcc::PacketReceivedSmallDelta,
+                                SymbolTypeTcc::PacketReceivedLargeDelta,
+                                SymbolTypeTcc::PacketNotReceived,
+                                SymbolTypeTcc::PacketNotReceived,
+                                SymbolTypeTcc::PacketNotReceived,
+                                SymbolTypeTcc::PacketNotReceived,
+                                SymbolTypeTcc::PacketNotReceived,
                             ],
                         }),
                         Box::new(StatusVectorChunk {
-                            type_tcc: StatusChunkTypeTCC::StatusVectorChunk,
-                            symbol_size: SymbolSizeTypeTCC::TwoBit,
+                            type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
+                            symbol_size: SymbolSizeTypeTcc::TwoBit,
                             symbol_list: vec![
-                                SymbolTypeTCC::PacketReceivedWithoutDelta,
-                                SymbolTypeTCC::PacketNotReceived,
-                                SymbolTypeTCC::PacketNotReceived,
-                                SymbolTypeTCC::PacketReceivedWithoutDelta,
-                                SymbolTypeTCC::PacketReceivedWithoutDelta,
-                                SymbolTypeTCC::PacketReceivedWithoutDelta,
-                                SymbolTypeTCC::PacketReceivedWithoutDelta,
+                                SymbolTypeTcc::PacketReceivedWithoutDelta,
+                                SymbolTypeTcc::PacketNotReceived,
+                                SymbolTypeTcc::PacketNotReceived,
+                                SymbolTypeTcc::PacketReceivedWithoutDelta,
+                                SymbolTypeTcc::PacketReceivedWithoutDelta,
+                                SymbolTypeTcc::PacketReceivedWithoutDelta,
+                                SymbolTypeTcc::PacketReceivedWithoutDelta,
                             ],
                         }),
                     ],
                     // 0b10010100
                     recv_deltas: vec![
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 52000,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedLargeDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedLargeDelta,
                             delta: 0,
                         },
                     ],
@@ -422,7 +422,7 @@ mod test {
                     0x74, 0x0, 0x6, 0x45, 0xb1, 0x5a, 0x40, 0x40, 0x2, 0x20, 0x04, 0x1f, 0xfe,
                     0x1f, 0x9a, 0xd0, 0x0, 0xd0, 0x0,
                 ],
-                TransportLayerCC {
+                TransportLayerCc {
                     header: Header {
                         padding: true,
                         count: header::FORMAT_TCC,
@@ -437,39 +437,39 @@ mod test {
                     fb_pkt_count: 64,
                     packet_chunks: vec![
                         Box::new(RunLengthChunk {
-                            type_tcc: StatusChunkTypeTCC::RunLengthChunk,
-                            packet_status_symbol: SymbolTypeTCC::PacketReceivedLargeDelta,
+                            type_tcc: StatusChunkTypeTcc::RunLengthChunk,
+                            packet_status_symbol: SymbolTypeTcc::PacketReceivedLargeDelta,
                             run_length: 2,
                         }),
                         Box::new(RunLengthChunk {
-                            type_tcc: StatusChunkTypeTCC::RunLengthChunk,
-                            packet_status_symbol: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc: StatusChunkTypeTcc::RunLengthChunk,
+                            packet_status_symbol: SymbolTypeTcc::PacketReceivedSmallDelta,
                             run_length: 4,
                         }),
                     ],
                     recv_deltas: vec![
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedLargeDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedLargeDelta,
                             delta: 2047500,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedLargeDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedLargeDelta,
                             delta: 2022500,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 52000,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 0,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 52000,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 0,
                         },
                     ],
@@ -482,7 +482,7 @@ mod test {
                     0x0, 0x7, 0x10, 0x63, 0x6e, 0x1, 0x20, 0x7, 0x4c, 0x24, 0x24, 0x10, 0xc, 0xc,
                     0x10, 0x0, 0x0, 0x3,
                 ],
-                TransportLayerCC {
+                TransportLayerCc {
                     header: Header {
                         padding: true,
                         count: header::FORMAT_TCC,
@@ -496,37 +496,37 @@ mod test {
                     reference_time: 1074030,
                     fb_pkt_count: 1,
                     packet_chunks: vec![Box::new(RunLengthChunk {
-                        type_tcc: StatusChunkTypeTCC::RunLengthChunk,
-                        packet_status_symbol: SymbolTypeTCC::PacketReceivedSmallDelta,
+                        type_tcc: StatusChunkTypeTcc::RunLengthChunk,
+                        packet_status_symbol: SymbolTypeTcc::PacketReceivedSmallDelta,
                         run_length: 7,
                     })],
                     recv_deltas: vec![
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 19000,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 9000,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 9000,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 4000,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 3000,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 3000,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 4000,
                         },
                     ],
@@ -538,7 +538,7 @@ mod test {
                     0xaf, 0xcd, 0x0, 0x6, 0xfa, 0x17, 0xfa, 0x17, 0x19, 0x3d, 0xd8, 0xbb, 0x0, 0x1,
                     0x0, 0xe, 0x10, 0x63, 0x6d, 0x0, 0xba, 0x0, 0x10, 0xc, 0xc, 0x10, 0x0, 0x3,
                 ],
-                TransportLayerCC {
+                TransportLayerCc {
                     header: Header {
                         padding: true,
                         count: header::FORMAT_TCC,
@@ -552,40 +552,40 @@ mod test {
                     reference_time: 1074029,
                     fb_pkt_count: 0,
                     packet_chunks: vec![Box::new(StatusVectorChunk {
-                        type_tcc: StatusChunkTypeTCC::StatusVectorChunk,
-                        symbol_size: SymbolSizeTypeTCC::OneBit,
+                        type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
+                        symbol_size: SymbolSizeTypeTcc::OneBit,
                         symbol_list: vec![
-                            SymbolTypeTCC::PacketReceivedSmallDelta,
-                            SymbolTypeTCC::PacketReceivedSmallDelta,
-                            SymbolTypeTCC::PacketReceivedSmallDelta,
-                            SymbolTypeTCC::PacketNotReceived,
-                            SymbolTypeTCC::PacketReceivedSmallDelta,
-                            SymbolTypeTCC::PacketNotReceived,
-                            SymbolTypeTCC::PacketNotReceived,
-                            SymbolTypeTCC::PacketNotReceived,
-                            SymbolTypeTCC::PacketNotReceived,
-                            SymbolTypeTCC::PacketNotReceived,
-                            SymbolTypeTCC::PacketNotReceived,
-                            SymbolTypeTCC::PacketNotReceived,
-                            SymbolTypeTCC::PacketNotReceived,
-                            SymbolTypeTCC::PacketNotReceived,
+                            SymbolTypeTcc::PacketReceivedSmallDelta,
+                            SymbolTypeTcc::PacketReceivedSmallDelta,
+                            SymbolTypeTcc::PacketReceivedSmallDelta,
+                            SymbolTypeTcc::PacketNotReceived,
+                            SymbolTypeTcc::PacketReceivedSmallDelta,
+                            SymbolTypeTcc::PacketNotReceived,
+                            SymbolTypeTcc::PacketNotReceived,
+                            SymbolTypeTcc::PacketNotReceived,
+                            SymbolTypeTcc::PacketNotReceived,
+                            SymbolTypeTcc::PacketNotReceived,
+                            SymbolTypeTcc::PacketNotReceived,
+                            SymbolTypeTcc::PacketNotReceived,
+                            SymbolTypeTcc::PacketNotReceived,
+                            SymbolTypeTcc::PacketNotReceived,
                         ],
                     })],
                     recv_deltas: vec![
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 4000,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 3000,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 3000,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 4000,
                         },
                     ],
@@ -598,7 +598,7 @@ mod test {
                     0x3c, 0x0, 0x9, 0x63, 0xf9, 0x16, 0xb3, 0xd5, 0x52, 0x0, 0x30, 0x9b, 0xaa,
                     0x6a, 0xaa, 0x7b, 0x1, 0x9, 0x1,
                 ],
-                TransportLayerCC {
+                TransportLayerCc {
                     header: Header {
                         padding: true,
                         count: header::FORMAT_TCC,
@@ -613,47 +613,47 @@ mod test {
                     fb_pkt_count: 179,
                     packet_chunks: vec![
                         Box::new(StatusVectorChunk {
-                            type_tcc: StatusChunkTypeTCC::StatusVectorChunk,
-                            symbol_size: SymbolSizeTypeTCC::TwoBit,
+                            type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
+                            symbol_size: SymbolSizeTypeTcc::TwoBit,
                             symbol_list: vec![
-                                SymbolTypeTCC::PacketReceivedSmallDelta,
-                                SymbolTypeTCC::PacketReceivedSmallDelta,
-                                SymbolTypeTCC::PacketReceivedSmallDelta,
-                                SymbolTypeTCC::PacketReceivedSmallDelta,
-                                SymbolTypeTCC::PacketReceivedSmallDelta,
-                                SymbolTypeTCC::PacketNotReceived,
-                                SymbolTypeTCC::PacketReceivedLargeDelta,
+                                SymbolTypeTcc::PacketReceivedSmallDelta,
+                                SymbolTypeTcc::PacketReceivedSmallDelta,
+                                SymbolTypeTcc::PacketReceivedSmallDelta,
+                                SymbolTypeTcc::PacketReceivedSmallDelta,
+                                SymbolTypeTcc::PacketReceivedSmallDelta,
+                                SymbolTypeTcc::PacketNotReceived,
+                                SymbolTypeTcc::PacketReceivedLargeDelta,
                             ],
                         }),
                         Box::new(RunLengthChunk {
-                            type_tcc: StatusChunkTypeTCC::RunLengthChunk,
-                            packet_status_symbol: SymbolTypeTCC::PacketNotReceived,
+                            type_tcc: StatusChunkTypeTcc::RunLengthChunk,
+                            packet_status_symbol: SymbolTypeTcc::PacketNotReceived,
                             run_length: 48,
                         }),
                     ],
                     recv_deltas: vec![
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 38750,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 42500,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 26500,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 42500,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 30750,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedLargeDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedLargeDelta,
                             delta: 66250,
                         },
                     ],
@@ -662,7 +662,7 @@ mod test {
         ];
 
         for (name, data, want) in tests {
-            let mut chunk = TransportLayerCC::default();
+            let mut chunk = TransportLayerCc::default();
 
             chunk
                 .unmarshal(&mut data[..].into())
@@ -677,7 +677,7 @@ mod test {
         let tests = vec![
             (
                 "example1",
-                TransportLayerCC {
+                TransportLayerCc {
                     header: Header {
                         padding: true,
                         count: header::FORMAT_TCC,
@@ -692,13 +692,13 @@ mod test {
                     fb_pkt_count: 23,
                     // 0b00100000, 0b00000001
                     packet_chunks: vec![Box::new(RunLengthChunk {
-                        type_tcc: StatusChunkTypeTCC::RunLengthChunk,
-                        packet_status_symbol: SymbolTypeTCC::PacketReceivedSmallDelta,
+                        type_tcc: StatusChunkTypeTcc::RunLengthChunk,
+                        packet_status_symbol: SymbolTypeTcc::PacketReceivedSmallDelta,
                         run_length: 1,
                     })],
                     // 0b10010100
                     recv_deltas: vec![RecvDelta {
-                        type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                        type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                         delta: 37000,
                     }],
                 },
@@ -709,7 +709,7 @@ mod test {
             ),
             (
                 "example2",
-                TransportLayerCC {
+                TransportLayerCc {
                     header: Header {
                         padding: true,
                         count: header::FORMAT_TCC,
@@ -724,40 +724,40 @@ mod test {
                     fb_pkt_count: 64,
                     packet_chunks: vec![
                         Box::new(StatusVectorChunk {
-                            type_tcc: StatusChunkTypeTCC::StatusVectorChunk,
-                            symbol_size: SymbolSizeTypeTCC::TwoBit,
+                            type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
+                            symbol_size: SymbolSizeTypeTcc::TwoBit,
                             symbol_list: vec![
-                                SymbolTypeTCC::PacketReceivedSmallDelta,
-                                SymbolTypeTCC::PacketReceivedLargeDelta,
-                                SymbolTypeTCC::PacketNotReceived,
-                                SymbolTypeTCC::PacketNotReceived,
-                                SymbolTypeTCC::PacketNotReceived,
-                                SymbolTypeTCC::PacketNotReceived,
-                                SymbolTypeTCC::PacketNotReceived,
+                                SymbolTypeTcc::PacketReceivedSmallDelta,
+                                SymbolTypeTcc::PacketReceivedLargeDelta,
+                                SymbolTypeTcc::PacketNotReceived,
+                                SymbolTypeTcc::PacketNotReceived,
+                                SymbolTypeTcc::PacketNotReceived,
+                                SymbolTypeTcc::PacketNotReceived,
+                                SymbolTypeTcc::PacketNotReceived,
                             ],
                         }),
                         Box::new(StatusVectorChunk {
-                            type_tcc: StatusChunkTypeTCC::StatusVectorChunk,
-                            symbol_size: SymbolSizeTypeTCC::TwoBit,
+                            type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
+                            symbol_size: SymbolSizeTypeTcc::TwoBit,
                             symbol_list: vec![
-                                SymbolTypeTCC::PacketReceivedWithoutDelta,
-                                SymbolTypeTCC::PacketNotReceived,
-                                SymbolTypeTCC::PacketNotReceived,
-                                SymbolTypeTCC::PacketReceivedWithoutDelta,
-                                SymbolTypeTCC::PacketReceivedWithoutDelta,
-                                SymbolTypeTCC::PacketReceivedWithoutDelta,
-                                SymbolTypeTCC::PacketReceivedWithoutDelta,
+                                SymbolTypeTcc::PacketReceivedWithoutDelta,
+                                SymbolTypeTcc::PacketNotReceived,
+                                SymbolTypeTcc::PacketNotReceived,
+                                SymbolTypeTcc::PacketReceivedWithoutDelta,
+                                SymbolTypeTcc::PacketReceivedWithoutDelta,
+                                SymbolTypeTcc::PacketReceivedWithoutDelta,
+                                SymbolTypeTcc::PacketReceivedWithoutDelta,
                             ],
                         }),
                     ],
                     // 0b10010100
                     recv_deltas: vec![
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 52000,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedLargeDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedLargeDelta,
                             delta: 0,
                         },
                     ],
@@ -770,7 +770,7 @@ mod test {
             ),
             (
                 "example3",
-                TransportLayerCC {
+                TransportLayerCc {
                     header: Header {
                         padding: true,
                         count: header::FORMAT_TCC,
@@ -785,39 +785,39 @@ mod test {
                     fb_pkt_count: 64,
                     packet_chunks: vec![
                         Box::new(RunLengthChunk {
-                            type_tcc: StatusChunkTypeTCC::RunLengthChunk,
-                            packet_status_symbol: SymbolTypeTCC::PacketReceivedLargeDelta,
+                            type_tcc: StatusChunkTypeTcc::RunLengthChunk,
+                            packet_status_symbol: SymbolTypeTcc::PacketReceivedLargeDelta,
                             run_length: 2,
                         }),
                         Box::new(RunLengthChunk {
-                            type_tcc: StatusChunkTypeTCC::RunLengthChunk,
-                            packet_status_symbol: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc: StatusChunkTypeTcc::RunLengthChunk,
+                            packet_status_symbol: SymbolTypeTcc::PacketReceivedSmallDelta,
                             run_length: 4,
                         }),
                     ],
                     recv_deltas: vec![
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedLargeDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedLargeDelta,
                             delta: 2047500,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedLargeDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedLargeDelta,
                             delta: 2022500,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 52000,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 0,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 52000,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 0,
                         },
                     ],
@@ -830,7 +830,7 @@ mod test {
             ),
             (
                 "example4",
-                TransportLayerCC {
+                TransportLayerCc {
                     header: Header {
                         padding: true,
                         count: header::FORMAT_TCC,
@@ -844,37 +844,37 @@ mod test {
                     reference_time: 1074030,
                     fb_pkt_count: 1,
                     packet_chunks: vec![Box::new(RunLengthChunk {
-                        type_tcc: StatusChunkTypeTCC::RunLengthChunk,
-                        packet_status_symbol: SymbolTypeTCC::PacketReceivedSmallDelta,
+                        type_tcc: StatusChunkTypeTcc::RunLengthChunk,
+                        packet_status_symbol: SymbolTypeTcc::PacketReceivedSmallDelta,
                         run_length: 7,
                     })],
                     recv_deltas: vec![
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 19000,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 9000,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 9000,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 4000,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 3000,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 3000,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 4000,
                         },
                     ],
@@ -887,7 +887,7 @@ mod test {
             ),
             (
                 "example5",
-                TransportLayerCC {
+                TransportLayerCc {
                     header: Header {
                         padding: true,
                         count: header::FORMAT_TCC,
@@ -901,40 +901,40 @@ mod test {
                     reference_time: 1074029,
                     fb_pkt_count: 0,
                     packet_chunks: vec![Box::new(StatusVectorChunk {
-                        type_tcc: StatusChunkTypeTCC::StatusVectorChunk,
-                        symbol_size: SymbolSizeTypeTCC::OneBit,
+                        type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
+                        symbol_size: SymbolSizeTypeTcc::OneBit,
                         symbol_list: vec![
-                            SymbolTypeTCC::PacketReceivedSmallDelta,
-                            SymbolTypeTCC::PacketReceivedSmallDelta,
-                            SymbolTypeTCC::PacketReceivedSmallDelta,
-                            SymbolTypeTCC::PacketNotReceived,
-                            SymbolTypeTCC::PacketReceivedSmallDelta,
-                            SymbolTypeTCC::PacketNotReceived,
-                            SymbolTypeTCC::PacketNotReceived,
-                            SymbolTypeTCC::PacketNotReceived,
-                            SymbolTypeTCC::PacketNotReceived,
-                            SymbolTypeTCC::PacketNotReceived,
-                            SymbolTypeTCC::PacketNotReceived,
-                            SymbolTypeTCC::PacketNotReceived,
-                            SymbolTypeTCC::PacketNotReceived,
-                            SymbolTypeTCC::PacketNotReceived,
+                            SymbolTypeTcc::PacketReceivedSmallDelta,
+                            SymbolTypeTcc::PacketReceivedSmallDelta,
+                            SymbolTypeTcc::PacketReceivedSmallDelta,
+                            SymbolTypeTcc::PacketNotReceived,
+                            SymbolTypeTcc::PacketReceivedSmallDelta,
+                            SymbolTypeTcc::PacketNotReceived,
+                            SymbolTypeTcc::PacketNotReceived,
+                            SymbolTypeTcc::PacketNotReceived,
+                            SymbolTypeTcc::PacketNotReceived,
+                            SymbolTypeTcc::PacketNotReceived,
+                            SymbolTypeTcc::PacketNotReceived,
+                            SymbolTypeTcc::PacketNotReceived,
+                            SymbolTypeTcc::PacketNotReceived,
+                            SymbolTypeTcc::PacketNotReceived,
                         ],
                     })],
                     recv_deltas: vec![
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 4000,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 3000,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 3000,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 4000,
                         },
                     ],
@@ -946,7 +946,7 @@ mod test {
             ),
             (
                 "example6",
-                TransportLayerCC {
+                TransportLayerCc {
                     header: Header {
                         padding: true,
                         count: header::FORMAT_TCC,
@@ -960,50 +960,50 @@ mod test {
                     reference_time: 7701536,
                     fb_pkt_count: 0,
                     packet_chunks: vec![Box::new(StatusVectorChunk {
-                        type_tcc: StatusChunkTypeTCC::StatusVectorChunk,
-                        symbol_size: SymbolSizeTypeTCC::OneBit,
+                        type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
+                        symbol_size: SymbolSizeTypeTcc::OneBit,
                         symbol_list: vec![
-                            SymbolTypeTCC::PacketReceivedSmallDelta,
-                            SymbolTypeTCC::PacketReceivedSmallDelta,
-                            SymbolTypeTCC::PacketReceivedSmallDelta,
-                            SymbolTypeTCC::PacketReceivedSmallDelta,
-                            SymbolTypeTCC::PacketReceivedSmallDelta,
-                            SymbolTypeTCC::PacketNotReceived,
-                            SymbolTypeTCC::PacketReceivedSmallDelta,
-                            SymbolTypeTCC::PacketReceivedSmallDelta,
-                            SymbolTypeTCC::PacketNotReceived,
-                            SymbolTypeTCC::PacketNotReceived,
-                            SymbolTypeTCC::PacketNotReceived,
-                            SymbolTypeTCC::PacketNotReceived,
+                            SymbolTypeTcc::PacketReceivedSmallDelta,
+                            SymbolTypeTcc::PacketReceivedSmallDelta,
+                            SymbolTypeTcc::PacketReceivedSmallDelta,
+                            SymbolTypeTcc::PacketReceivedSmallDelta,
+                            SymbolTypeTcc::PacketReceivedSmallDelta,
+                            SymbolTypeTcc::PacketNotReceived,
+                            SymbolTypeTcc::PacketReceivedSmallDelta,
+                            SymbolTypeTcc::PacketReceivedSmallDelta,
+                            SymbolTypeTcc::PacketNotReceived,
+                            SymbolTypeTcc::PacketNotReceived,
+                            SymbolTypeTcc::PacketNotReceived,
+                            SymbolTypeTcc::PacketNotReceived,
                         ],
                     })],
                     recv_deltas: vec![
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 48250,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 15750,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 14750,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 15750,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 20750,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 36000,
                         },
                         RecvDelta {
-                            type_tcc_packet: SymbolTypeTCC::PacketReceivedSmallDelta,
+                            type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
                             delta: 14750,
                         },
                     ],

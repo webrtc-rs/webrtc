@@ -39,7 +39,7 @@ impl SourceDescriptionChunk {
         }
 
         // The list of items in each chunk MUST be terminated by one or more null octets
-        raw_packet.extend(&[super::SDESType::SDESEnd as u8]);
+        raw_packet.extend(&[super::SdesType::SdesEnd as u8]);
 
         // additional null octets MUST be included if needed to pad until the next 32-bit boundary
         raw_packet.extend(vec![0u8; get_padding(raw_packet.len())]);
@@ -67,9 +67,9 @@ impl SourceDescriptionChunk {
         let mut i = 4;
 
         while i < raw_packet.len() {
-            let pkt_type = super::SDESType::from(raw_packet[i]);
+            let pkt_type = super::SdesType::from(raw_packet[i]);
 
-            if pkt_type == super::SDESType::SDESEnd {
+            if pkt_type == super::SdesType::SdesEnd {
                 return Ok(());
             }
 
@@ -105,7 +105,7 @@ pub struct SourceDescriptionItem {
     /// The type identifier for this item. eg, SDESCNAME for canonical name description.
     ///
     /// Type zero or SDESEnd is interpreted as the end of an item list and cannot be used.
-    pub sdes_type: super::SDESType,
+    pub sdes_type: super::SdesType,
     /// Text is a unicode text blob associated with the item. Its meaning varies based on the item's Type.
     pub text: String,
 }
@@ -132,8 +132,8 @@ impl SourceDescriptionItem {
          *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
 
-        if self.sdes_type == super::SDESType::SDESEnd {
-            return Err(Error::SDESMissingType);
+        if self.sdes_type == super::SdesType::SdesEnd {
+            return Err(Error::SdesMissingType);
         }
 
         let mut raw_packet = BytesMut::new();
@@ -146,7 +146,7 @@ impl SourceDescriptionItem {
         let octet_count = text_bytes.len();
 
         if octet_count > super::SDES_MAX_OCTET_COUNT {
-            return Err(Error::SDESTextTooLong);
+            return Err(Error::SdesTextTooLong);
         }
 
         raw_packet[super::SDES_OCTET_COUNT_OFFSET] = octet_count as u8;
@@ -170,7 +170,7 @@ impl SourceDescriptionItem {
             return Err(Error::PacketTooShort);
         }
 
-        self.sdes_type = super::SDESType::from(raw_packet[super::SDES_TYPE_OFFSET]);
+        self.sdes_type = super::SdesType::from(raw_packet[super::SDES_TYPE_OFFSET]);
 
         let octet_count = raw_packet[super::SDES_OCTET_COUNT_OFFSET] as usize;
         if super::SDES_TEXT_OFFSET + octet_count as usize > raw_packet.len() {

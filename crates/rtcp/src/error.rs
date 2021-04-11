@@ -11,10 +11,10 @@ pub enum Error {
     #[error("Invalid total lost count")]
     InvalidTotalLost,
     /// Packet contains an invalid header.
-    #[error( "Invalid header")]
+    #[error("Invalid header")]
     InvalidHeader,
     /// Packet contains empty compound.
-    #[error( "Empty compound packet")]
+    #[error("Empty compound packet")]
     EmptyCompound,
     /// Invalid first packet in compound packets. First packet
     /// should either be a SenderReport packet or ReceiverReport
@@ -22,10 +22,10 @@ pub enum Error {
     BadFirstPacket,
     /// CNAME was not defined.
     #[error("Compound missing SourceDescription with CNAME")]
-    MissingCNAME,
+    MissingCname,
     /// Packet was defined before CNAME.
     #[error("Feedback packet seen before CNAME")]
-    PacketBeforeCNAME,
+    PacketBeforeCname,
     /// Too many reports.
     #[error("Too many reports")]
     TooManyReports,
@@ -43,10 +43,10 @@ pub enum Error {
     WrongType,
     /// SDES received is too long.
     #[error("SDES must be < 255 octets long")]
-    SDESTextTooLong,
+    SdesTextTooLong,
     /// SDES type is missing.
     #[error("SDES item missing type")]
-    SDESMissingType,
+    SdesMissingType,
     /// Reason is too long.
     #[error("Reason must be < 255 octets long")]
     ReasonTooLong,
@@ -67,13 +67,13 @@ pub enum Error {
     HeaderTooSmall,
     /// Media ssrc was defined as zero.
     #[error("Media SSRC must be 0")]
-    SSRCMustBeZero,
+    SsrcMustBeZero,
     /// Missing REMB identifier.
     #[error("Missing REMB identifier")]
-    MissingREMBIdentifier,
+    MissingRembIdentifier,
     /// SSRC number and length mismatches.
     #[error("SSRC num and length do not match")]
-    SSRCNumAndLengthMismatch,
+    SsrcNumAndLengthMismatch,
     /// Invalid size or start index.
     #[error("Invalid size or startIndex")]
     InvalidSizeOrStartIndex,

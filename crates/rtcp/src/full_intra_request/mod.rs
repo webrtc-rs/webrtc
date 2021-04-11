@@ -8,7 +8,7 @@ use crate::{error::Error, header, header::Header, packet::Packet, util::get_padd
 
 /// A FIREntry is a (ssrc, seqno) pair, as carried by FullIntraRequest.
 #[derive(Debug, PartialEq, Default, Clone)]
-pub struct FIREntry {
+pub struct FirEntry {
     ssrc: u32,
     sequence_number: u8,
 }
@@ -21,7 +21,7 @@ pub struct FullIntraRequest {
     sender_ssrc: u32,
     media_ssrc: u32,
 
-    fir: Vec<FIREntry>,
+    fir: Vec<FirEntry>,
 }
 
 const FIR_OFFSET: usize = 8;
@@ -86,7 +86,7 @@ impl Packet for FullIntraRequest {
         let mut i = header::HEADER_LENGTH + FIR_OFFSET;
 
         while i < header::HEADER_LENGTH + (header.length * 4) as usize {
-            self.fir.push(FIREntry {
+            self.fir.push(FirEntry {
                 ssrc: BigEndian::read_u32(&raw_packet[i..]),
                 sequence_number: raw_packet[i + 4],
             });
