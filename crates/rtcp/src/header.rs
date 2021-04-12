@@ -164,7 +164,6 @@ impl Header {
     }
 }
 
-/*
 #[cfg(test)]
 mod test {
     use super::*;
@@ -174,67 +173,74 @@ mod test {
         let tests = vec![
             (
                 "valid",
-                vec![
+                Bytes::from_static(&[
                     // v=2, p=0, count=1, RR, len=7
                     0x81u8, 0xc9, 0x00, 0x07,
-                ],
+                ]),
                 Header {
                     padding: false,
                     count: 1,
                     packet_type: PacketType::ReceiverReport,
                     length: 7,
                 },
-                Ok(()),
+                None,
             ),
             (
                 "also valid",
-                vec![
+                Bytes::from_static(&[
                     // v=2, p=1, count=1, BYE, len=7
                     0xa1, 0xcc, 0x00, 0x07,
-                ],
+                ]),
                 Header {
                     padding: true,
                     count: 1,
                     packet_type: PacketType::ApplicationDefined,
                     length: 7,
                 },
-                Ok(()),
+                None,
             ),
             (
                 "bad version",
-                vec![
+                Bytes::from_static(&[
                     // v=0, p=0, count=0, RR, len=4
                     0x00, 0xc9, 0x00, 0x04,
-                ],
+                ]),
                 Header {
                     padding: false,
                     count: 0,
                     packet_type: PacketType::Unsupported,
                     length: 0,
                 },
-                Err(Error::BadVersion),
+                Some(Error::BadVersion),
             ),
         ];
 
         for (name, data, want, want_error) in tests {
-            let got_error = Header::unmarshal(&mut data.as_slice().into());
+            let got = Header::unmarshal(&data);
 
             assert_eq!(
-                got_error, want_error,
-                "Unmarshal {} header: err = {:?}, want {:?}",
-                name, got_error, want_error
+                got.is_err(),
+                want_error.is_some(),
+                "Unmarshal {}: err = {:?}, want {:?}",
+                name,
+                got,
+                want_error
             );
 
-            match got_error {
-                Ok(_) => {
-                    assert_eq!(
-                        h, want,
-                        "Unmarshal {} header: got {:?}, want {:?}",
-                        name, h, want
-                    )
-                }
-
-                Err(_) => continue,
+            if let Some(err) = want_error {
+                let got_err = got.err().unwrap();
+                assert_eq!(
+                    got_err, err,
+                    "Unmarshal {}: err = {:?}, want {:?}",
+                    name, got_err, err,
+                );
+            } else {
+                let actual = got.unwrap();
+                assert_eq!(
+                    actual, want,
+                    "Unmarshal {}: got {:?}, want {:?}",
+                    name, actual, want
+                );
             }
         }
     }
@@ -250,7 +256,7 @@ mod test {
                     packet_type: PacketType::SenderReport,
                     length: 4,
                 },
-                Ok(()),
+                None,
             ),
             (
                 "also valid",
@@ -260,7 +266,7 @@ mod test {
                     packet_type: PacketType::ReceiverReport,
                     length: 65535,
                 },
-                Ok(()),
+                None,
             ),
             (
                 "invalid count",
@@ -270,40 +276,40 @@ mod test {
                     packet_type: PacketType::Unsupported,
                     length: 0,
                 },
-                Err(Error::InvalidHeader),
+                Some(Error::InvalidHeader),
             ),
         ];
 
-        for (name, header, want_error) in tests {
-            let data = header.marshal();
+        for (name, want, want_error) in tests {
+            let got = want.marshal();
 
             assert_eq!(
-                data.clone().err(),
-                want_error.clone().err(),
+                got.is_ok(),
+                want_error.is_none(),
                 "Marshal {}: err = {:?}, want {:?}",
                 name,
-                data,
+                got,
                 want_error
             );
 
-            match data {
-                Ok(mut e) => {
-                    let mut decoded = Header::default();
+            if let Some(err) = want_error {
+                let got_err = got.err().unwrap();
+                assert_eq!(
+                    got_err, err,
+                    "Unmarshal {} rr: err = {:?}, want {:?}",
+                    name, got_err, err,
+                );
+            } else {
+                let data = got.ok().unwrap();
+                let actual =
+                    Header::unmarshal(&data).expect(format!("Unmarshal {}", name).as_str());
 
-                    decoded
-                        .unmarshal(&mut e)
-                        .expect(format!("Unmarshal {}", name).as_str());
-
-                    assert_eq!(
-                        decoded, header,
-                        "{} header round trip: got {:?}, want {:?}",
-                        name, decoded, header
-                    )
-                }
-
-                Err(_) => continue,
+                assert_eq!(
+                    actual, want,
+                    "{} round trip: got {:?}, want {:?}",
+                    name, actual, want
+                )
             }
         }
     }
 }
-*/
