@@ -47,7 +47,7 @@ impl Packet for FullIntraRequest {
     }
 
     fn marshal_size(&self) -> usize {
-        let l = HEADER_LENGTH + FIR_OFFSET + self.fir.len() * 8;
+        let l = self.size();
 
         // align to 32-bit boundary
         l + get_padding(l)
@@ -131,9 +131,13 @@ impl Packet for FullIntraRequest {
 }
 
 impl FullIntraRequest {
+    fn size(&self) -> usize {
+        HEADER_LENGTH + FIR_OFFSET + self.fir.len() * 8
+    }
+
     pub fn header(&self) -> Header {
         Header {
-            padding: get_padding(self.marshal_size()) != 0,
+            padding: get_padding(self.size()) != 0,
             count: FORMAT_FIR,
             packet_type: PacketType::PayloadSpecificFeedback,
             length: ((self.marshal_size() / 4) - 1) as u16,

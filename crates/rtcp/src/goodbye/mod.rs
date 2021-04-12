@@ -34,10 +34,7 @@ impl Packet for Goodbye {
     }
 
     fn marshal_size(&self) -> usize {
-        let srcs_length = self.sources.len() * SSRC_LENGTH;
-        let reason_length = self.reason.len() + 1;
-
-        let l = HEADER_LENGTH + srcs_length + reason_length;
+        let l = self.size();
 
         // align to 32-bit boundary
         l + get_padding(l)
@@ -152,10 +149,17 @@ impl Packet for Goodbye {
 }
 
 impl Goodbye {
+    fn size(&self) -> usize {
+        let srcs_length = self.sources.len() * SSRC_LENGTH;
+        let reason_length = self.reason.len() + 1;
+
+        HEADER_LENGTH + srcs_length + reason_length
+    }
+
     /// Header returns the Header associated with this packet.
     pub fn header(&self) -> Header {
         Header {
-            padding: false,
+            padding: get_padding(self.size()) != 0,
             count: self.sources.len() as u8,
             packet_type: PacketType::Goodbye,
             length: ((self.marshal_size() / 4) - 1) as u16,

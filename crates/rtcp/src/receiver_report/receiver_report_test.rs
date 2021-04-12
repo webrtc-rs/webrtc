@@ -102,7 +102,7 @@ fn test_receiver_report_unmarshal() {
                 0x0, 0x2, 0x4a, 0x79, // delay=150137
             ]),
             ReceiverReport::default(),
-            Some(Error::InvalidHeader),
+            Some(Error::PacketTooShort),
         ),
         (
             "nil",
@@ -118,7 +118,7 @@ fn test_receiver_report_unmarshal() {
         assert_eq!(
             got.is_err(),
             want_error.is_some(),
-            "Unmarshal {} bye: err = {:?}, want {:?}",
+            "Unmarshal {}: err = {:?}, want {:?}",
             name,
             got,
             want_error
@@ -128,15 +128,15 @@ fn test_receiver_report_unmarshal() {
             let got_err = got.err().unwrap();
             assert_eq!(
                 got_err, err,
-                "Unmarshal {} rr: err = {:?}, want {:?}",
+                "Unmarshal {}: err = {:?}, want {:?}",
                 name, got_err, err,
             );
         } else {
-            let bye = got.unwrap();
+            let actual = got.unwrap();
             assert_eq!(
-                bye, want,
-                "Unmarshal {} rr: got {:?}, want {:?}",
-                name, bye, want
+                actual, want,
+                "Unmarshal {}: got {:?}, want {:?}",
+                name, actual, want
             );
         }
     }

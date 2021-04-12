@@ -52,8 +52,8 @@ pub mod raw_packet;
 //pub mod receiver_estimated_maximum_bitrate;
 pub mod receiver_report;
 pub mod reception_report;
-/*pub mod sender_report;
-pub mod slice_loss_indication;
+pub mod sender_report;
+/*pub mod slice_loss_indication;
 pub mod source_description;
 pub mod transport_layer_cc;
 pub mod transport_layer_nack;*/

@@ -48,12 +48,7 @@ impl Packet for ReceiverReport {
     }
 
     fn marshal_size(&self) -> usize {
-        let mut reps_length = 0;
-        for rep in &self.reports {
-            reps_length += rep.marshal_size();
-        }
-
-        let l = HEADER_LENGTH + SSRC_LENGTH + reps_length + self.profile_extensions.len();
+        let l = self.size();
 
         // align to 32-bit boundary
         l + get_padding(l)
@@ -146,7 +141,6 @@ impl Packet for ReceiverReport {
         }
 
         let header = Header::unmarshal(raw_packet)?;
-
         if header.packet_type != PacketType::ReceiverReport {
             return Err(Error::WrongType);
         }
@@ -155,20 +149,17 @@ impl Packet for ReceiverReport {
 
         let ssrc = reader.get_u32();
 
-        let mut i = RR_REPORT_OFFSET;
-        let mut reports = vec![];
-        while i < raw_packet.len() && reports.len() < header.count as usize {
-            let rr = ReceptionReport::unmarshal(&raw_packet.slice(i..))?;
-            reports.push(rr);
-            i += RECEPTION_REPORT_LENGTH;
+        let mut offset = RR_REPORT_OFFSET;
+        let mut reports = Vec::with_capacity(header.count as usize);
+        for _ in 0..header.count {
+            if offset + RECEPTION_REPORT_LENGTH > raw_packet.len() {
+                return Err(Error::PacketTooShort);
+            }
+            let reception_report = ReceptionReport::unmarshal(&raw_packet.slice(offset..))?;
+            reports.push(reception_report);
+            offset += RECEPTION_REPORT_LENGTH;
         }
-
-        let profile_extensions =
-            raw_packet.slice(RR_REPORT_OFFSET + (reports.len() * RECEPTION_REPORT_LENGTH)..);
-
-        if reports.len() != header.count as usize {
-            return Err(Error::InvalidHeader);
-        }
+        let profile_extensions = raw_packet.slice(offset..);
 
         Ok(ReceiverReport {
             ssrc,
@@ -190,10 +181,19 @@ impl Packet for ReceiverReport {
 }
 
 impl ReceiverReport {
-    // Header returns the Header associated with this packet.
+    fn size(&self) -> usize {
+        let mut reps_length = 0;
+        for rep in &self.reports {
+            reps_length += rep.marshal_size();
+        }
+
+        HEADER_LENGTH + SSRC_LENGTH + reps_length + self.profile_extensions.len()
+    }
+
+    /// Header returns the Header associated with this packet.
     pub fn header(&self) -> Header {
         Header {
-            padding: false,
+            padding: get_padding(self.size()) != 0,
             count: self.reports.len() as u8,
             packet_type: PacketType::ReceiverReport,
             length: ((self.marshal_size() / 4) - 1) as u16,
