@@ -66,23 +66,23 @@ impl Packet for Goodbye {
          * (opt) |     length    |               reason for leaving            ...
          *       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
-        let mut raw_packet = BytesMut::with_capacity(self.marshal_size());
+        let mut writer = BytesMut::with_capacity(self.marshal_size());
 
         let h = self.header();
         let data = h.marshal()?;
-        raw_packet.extend(data);
+        writer.extend(data);
 
         for source in &self.sources {
-            raw_packet.put_u32(*source);
+            writer.put_u32(*source);
         }
 
         if !self.reason.is_empty() {
-            raw_packet.put_u8(self.reason.len() as u8);
-            raw_packet.extend(self.reason.clone());
+            writer.put_u8(self.reason.len() as u8);
+            writer.extend(self.reason.clone());
         }
 
-        put_padding(&mut raw_packet);
-        Ok(raw_packet.freeze())
+        put_padding(&mut writer);
+        Ok(writer.freeze())
     }
 
     fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {

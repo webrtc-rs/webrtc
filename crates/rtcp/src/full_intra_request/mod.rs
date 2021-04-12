@@ -55,24 +55,24 @@ impl Packet for FullIntraRequest {
 
     /// Marshal encodes the FullIntraRequest
     fn marshal(&self) -> Result<Bytes, Error> {
-        let mut raw_packet = BytesMut::with_capacity(self.marshal_size());
+        let mut writer = BytesMut::with_capacity(self.marshal_size());
 
         let h = self.header();
         let data = h.marshal()?;
-        raw_packet.extend(data);
+        writer.extend(data);
 
-        raw_packet.put_u32(self.sender_ssrc);
-        raw_packet.put_u32(self.media_ssrc);
+        writer.put_u32(self.sender_ssrc);
+        writer.put_u32(self.media_ssrc);
 
         for (_, fir) in self.fir.iter().enumerate() {
-            raw_packet.put_u32(fir.ssrc);
-            raw_packet.put_u8(fir.sequence_number);
-            raw_packet.put_u8(0);
-            raw_packet.put_u16(0);
+            writer.put_u32(fir.ssrc);
+            writer.put_u8(fir.sequence_number);
+            writer.put_u8(0);
+            writer.put_u16(0);
         }
 
-        put_padding(&mut raw_packet);
-        Ok(raw_packet.freeze())
+        put_padding(&mut writer);
+        Ok(writer.freeze())
     }
 
     /// Unmarshal decodes the FullIntraRequest

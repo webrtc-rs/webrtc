@@ -1,12 +1,10 @@
-use byteorder::{BigEndian, ByteOrder};
+#[cfg(test)]
+mod picture_loss_indication_test;
+
+use crate::{error::Error, header::*, packet::*, receiver_report::*, util::*};
+
 use bytes::BytesMut;
 use std::fmt;
-
-use super::{header, receiver_report};
-use crate::util::get_padding;
-use crate::{error::Error, packet::Packet};
-
-mod picture_loss_indication_test;
 
 const PLI_LENGTH: usize = 2;
 
