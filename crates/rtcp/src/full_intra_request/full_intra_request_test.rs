@@ -196,16 +196,16 @@ fn test_full_intra_request_unmarshal_header() {
     )];
 
     for (name, data, want) in tests {
-        let data = FullIntraRequest::unmarshal(&data);
+        let result = FullIntraRequest::unmarshal(&data);
 
         assert!(
-            data.is_ok(),
+            result.is_ok(),
             "Unmarshal header {} rr: want {:?}",
             name,
-            data,
+            result,
         );
 
-        match data {
+        match result {
             Err(_) => continue,
 
             Ok(fir) => {

@@ -50,7 +50,7 @@ pub mod packet;
 //TODO:pub mod rapid_resynchronization_request;
 pub mod raw_packet;
 //pub mod receiver_estimated_maximum_bitrate;
-//pub mod receiver_report;
+pub mod receiver_report;
 pub mod reception_report;
 /*pub mod sender_report;
 pub mod slice_loss_indication;

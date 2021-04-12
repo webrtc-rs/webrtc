@@ -112,7 +112,6 @@ impl Packet for FullIntraRequest {
         Ok(FullIntraRequest {
             sender_ssrc,
             media_ssrc,
-
             fir,
         })
     }

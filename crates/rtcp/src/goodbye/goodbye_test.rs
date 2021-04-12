@@ -201,8 +201,8 @@ fn test_goodbye_round_trip() {
         ),
     ];
 
-    for (name, want_bye, want_error) in tests {
-        let got = want_bye.marshal();
+    for (name, want, want_error) in tests {
+        let got = want.marshal();
 
         assert_eq!(
             got.is_ok(),
@@ -222,12 +222,12 @@ fn test_goodbye_round_trip() {
             );
         } else {
             let data = got.ok().unwrap();
-            let bye = Goodbye::unmarshal(&data).expect(format!("Unmarshal {}", name).as_str());
+            let actual = Goodbye::unmarshal(&data).expect(format!("Unmarshal {}", name).as_str());
 
             assert_eq!(
-                bye, want_bye,
-                "{} goodbye round trip: got {:?}, want {:?}",
-                name, bye, want_bye
+                actual, want,
+                "{} round trip: got {:?}, want {:?}",
+                name, actual, want
             )
         }
     }
