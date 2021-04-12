@@ -43,7 +43,7 @@
 //TODO: pub mod compound_packet;
 pub mod error;
 pub mod full_intra_request;
-//pub mod goodbye;
+pub mod goodbye;
 pub mod header;
 pub mod packet;
 //TODO:pub mod picture_loss_indication;

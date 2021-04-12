@@ -1,4 +1,3 @@
-
 use super::*;
 
 #[test]
@@ -6,125 +5,130 @@ fn test_goodbye_unmarshal() {
     let tests = vec![
         (
             "valid",
-            vec![
+            Bytes::from_static(&[
                 0x81, 0xcb, 0x00, 0x0c, // v=2, p=0, count=1, BYE, len=12
                 0x90, 0x2f, 0x9e, 0x2e, // ssrc=0x902f9e2e
                 0x03, 0x46, 0x4f, 0x4f, // len=3, text=FOO
-            ],
+            ]),
             Goodbye {
                 sources: vec![0x902f9e2e],
-                reason: "FOO".to_string(),
+                reason: Bytes::from_static(b"FOO"),
             },
-            Ok(()),
+            None,
         ),
         (
             "invalid octet count",
-            vec![
+            Bytes::from_static(&[
                 0x81, 0xcb, 0x00, 0x0c, // v=2, p=0, count=1, BYE, len=12
                 0x90, 0x2f, 0x9e, 0x2e, // ssrc=0x902f9e2e
                 0x04, 0x46, 0x4f, 0x4f, // len=4, text=FOO
-            ],
+            ]),
             Goodbye {
                 sources: vec![],
-                reason: "".to_string(),
+                reason: Bytes::from_static(b""),
             },
-            Err(Error::PacketTooShort),
+            Some(Error::PacketTooShort),
         ),
         (
             "wrong type",
-            vec![
+            Bytes::from_static(&[
                 0x81, 0xca, 0x00, 0x0c, // v=2, p=0, count=1, SDES, len=12
                 0x90, 0x2f, 0x9e, 0x2e, // ssrc=0x902f9e2e
                 0x03, 0x46, 0x4f, 0x4f, // len=3, text=FOO
-            ],
+            ]),
             Goodbye {
                 sources: vec![],
-                reason: "".to_string(),
+                reason: Bytes::from_static(b""),
             },
-            Err(Error::WrongType),
+            Some(Error::WrongType),
         ),
         (
             "short reason",
-            vec![
+            Bytes::from_static(&[
                 0x81, 0xcb, 0x00, 0x0c, // v=2, p=0, count=1, BYE, len=12
                 0x90, 0x2f, 0x9e, 0x2e, // ssrc=0x902f9e2e
                 0x01, 0x46, 0x00, 0x00, // len=3, text=F + padding
-            ],
+            ]),
             Goodbye {
                 sources: vec![0x902f9e2e],
-                reason: "F".to_string(),
+                reason: Bytes::from_static(b"F"),
             },
-            Ok(()),
+            None,
         ),
         (
             "not byte aligned",
-            vec![
+            Bytes::from_static(&[
                 0x81, 0xcb, 0x00, 0x0a, // v=2, p=0, count=1, BYE, len=10
                 0x90, 0x2f, 0x9e, 0x2e, // ssrc=0x902f9e2e
                 0x01, 0x46, // len=1, text=F
-            ],
+            ]),
             Goodbye {
                 sources: vec![],
-                reason: "".to_string(),
+                reason: Bytes::from_static(b""),
             },
-            Err(Error::PacketTooShort),
+            Some(Error::PacketTooShort),
         ),
         (
             "bad count in header",
-            vec![
+            Bytes::from_static(&[
                 0x82, 0xcb, 0x00, 0x0c, // v=2, p=0, count=2, BYE, len=8
                 0x90, 0x2f, 0x9e, 0x2e, // ssrc=0x902f9e2e
-            ],
+            ]),
             Goodbye {
                 sources: vec![],
-                reason: "".to_string(),
+                reason: Bytes::from_static(b""),
             },
-            Err(Error::PacketTooShort),
+            Some(Error::PacketTooShort),
         ),
         (
             "empty packet",
-            vec![
+            Bytes::from_static(&[
                 // v=2, p=0, count=0, BYE, len=4
                 0x80, 0xcb, 0x00, 0x04,
-            ],
+            ]),
             Goodbye {
                 sources: vec![],
-                reason: "".to_string(),
+                reason: Bytes::from_static(b""),
             },
-            Ok(()),
+            None,
         ),
         (
             "nil",
-            vec![],
+            Bytes::from_static(&[]),
             Goodbye {
                 sources: vec![],
-                reason: "".to_string(),
+                reason: Bytes::from_static(b""),
             },
-            Err(Error::PacketTooShort),
+            Some(Error::PacketTooShort),
         ),
     ];
 
     for (name, data, want, want_error) in tests {
-        let mut bye = Goodbye::default();
-
-        let got = bye.unmarshal(&mut data.as_slice().into());
+        let got = Goodbye::unmarshal(&data);
 
         assert_eq!(
-            got, want_error,
+            got.is_err(),
+            want_error.is_some(),
             "Unmarshal {} bye: err = {:?}, want {:?}",
-            name, got, want_error
+            name,
+            got,
+            want_error
         );
 
-        match got {
-            Ok(_) => {
-                assert_eq!(
-                    bye, want,
-                    "Unmarshal {} bye: got {:?}, want {:?}",
-                    name, bye, want
-                )
-            }
-
-            Err(_) => continue,
+        if let Some(err) = want_error {
+            let got_err = got.err().unwrap();
+            assert_eq!(
+                got_err, err,
+                "Unmarshal {} rr: err = {:?}, want {:?}",
+                name, got_err, err,
+            );
+        } else {
+            let bye = got.unwrap();
+            assert_eq!(
+                bye, want,
+                "Unmarshal {} rr: got {:?}, want {:?}",
+                name, bye, want
+            );
         }
     }
 }
@@ -145,84 +149,86 @@ fn test_goodbye_round_trip() {
                 sources: vec![],
                 ..Default::default()
             },
-            Ok(()),
+            None,
         ),
         (
             "valid",
             Goodbye {
                 sources: vec![0x01020304, 0x05060708],
-                reason: "because".to_owned(),
+                reason: Bytes::from_static(b"because"),
             },
-            Ok(()),
+            None,
         ),
         (
             "empty reason",
             Goodbye {
                 sources: vec![0x01020304],
-                reason: "".to_owned(),
+                reason: Bytes::from_static(b""),
             },
-            Ok(()),
+            None,
         ),
         (
             "reason no source",
             Goodbye {
                 sources: vec![],
-                reason: "foo".to_owned(),
+                reason: Bytes::from_static(b"foo"),
             },
-            Ok(()),
+            None,
         ),
         (
             "short reason",
             Goodbye {
                 sources: vec![],
-                reason: "f".to_owned(),
+                reason: Bytes::from_static(b"f"),
             },
-            Ok(()),
+            None,
         ),
         (
             "count overflow",
             Goodbye {
                 sources: too_many_sources.clone(),
-                reason: "".to_owned(),
+                reason: Bytes::from_static(b""),
             },
-            Err(Error::TooManySources),
+            Some(Error::TooManySources),
         ),
         (
             "reason too long",
             Goodbye {
                 sources: vec![],
-                reason: too_long_text,
+                reason: Bytes::copy_from_slice(too_long_text.as_bytes()),
             },
-            Err(Error::ReasonTooLong),
+            Some(Error::ReasonTooLong),
         ),
     ];
 
     for (name, want_bye, want_error) in tests {
-        let want = want_bye.marshal();
+        let got = want_bye.marshal();
 
         assert_eq!(
-            want.clone().err(),
-            want_error.clone().err(),
+            got.is_ok(),
+            want_error.is_none(),
             "Marshal {}: err = {:?}, want {:?}",
             name,
-            want,
+            got,
             want_error
         );
 
-        match want {
-            Ok(mut e) => {
-                let mut bye = Goodbye::default();
-                bye.unmarshal(&mut e)
-                    .expect(format!("Unmarshal {}", name).as_str());
+        if let Some(err) = want_error {
+            let got_err = got.err().unwrap();
+            assert_eq!(
+                got_err, err,
+                "Unmarshal {} rr: err = {:?}, want {:?}",
+                name, got_err, err,
+            );
+        } else {
+            let data = got.ok().unwrap();
+            let bye = Goodbye::unmarshal(&data).expect(format!("Unmarshal {}", name).as_str());
 
-                assert_eq!(
-                    bye, want_bye,
-                    "{} sdes round trip: got {:?}, want {:?}",
-                    name, bye, want_bye
-                )
-            }
-
-            Err(_) => continue,
+            assert_eq!(
+                bye, want_bye,
+                "{} goodbye round trip: got {:?}, want {:?}",
+                name, bye, want_bye
+            )
         }
     }
 }

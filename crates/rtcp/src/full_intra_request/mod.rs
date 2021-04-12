@@ -71,6 +71,7 @@ impl Packet for FullIntraRequest {
             raw_packet.put_u16(0);
         }
 
+        put_padding(&mut raw_packet);
         Ok(raw_packet.freeze())
     }
 
@@ -115,6 +116,19 @@ impl Packet for FullIntraRequest {
             fir,
         })
     }
+
+    /*
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn equal(&self, other: &dyn Packet) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<FullIntraRequest>()
+            .map_or(false, |a| self == a)
+    }
+     */
 }
 
 impl FullIntraRequest {

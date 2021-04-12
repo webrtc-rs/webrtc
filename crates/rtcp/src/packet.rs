@@ -16,7 +16,18 @@ pub trait Packet {
     fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error>
     where
         Self: Sized;
+
+    /*fn as_any(&self) -> &dyn std::any::Any;
+    fn equal(&self, other: &dyn Packet) -> bool;*/
 }
+
+/*
+impl PartialEq for dyn Packet {
+    fn eq(&self, other: &Self) -> bool {
+        self.equal(other)
+    }
+}
+ */
 
 /// Unmarshal takes an entire udp datagram (which may consist of multiple RTCP packets) and
 /// returns the unmarshaled packets it contains.
