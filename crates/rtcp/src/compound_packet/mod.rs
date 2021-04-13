@@ -3,7 +3,7 @@ mod compound_packet_test;
 
 use crate::{error::Error, packet::*, receiver_report::*, sender_report::*, source_description::*};
 
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use std::any::Any;
 
 /// A CompoundPacket is a collection of RTCP packets transmitted as a single packet with
@@ -44,8 +44,12 @@ impl Packet for CompoundPacket {
     fn marshal(&self) -> Result<Bytes, Error> {
         self.validate()?;
 
-        // use packet::marshal function
-        marshal(&self.0)
+        let mut out = BytesMut::new();
+        for packet in &self.0 {
+            let a = packet.marshal()?;
+            out.extend(a);
+        }
+        Ok(out.freeze())
     }
 
     fn unmarshal(raw_data: &Bytes) -> Result<Self, Error> {

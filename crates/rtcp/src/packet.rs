@@ -3,7 +3,7 @@ use crate::{
     sender_report::*, source_description::*,
 };
 
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use std::any::Any;
 
 /* full_intra_request,
@@ -36,19 +36,6 @@ impl Clone for Box<dyn Packet> {
     fn clone(&self) -> Box<dyn Packet> {
         self.clone_to()
     }
-}
-
-/// Marshal takes an array of Packets and serializes them to a single buffer
-pub fn marshal(packets: &[Box<dyn Packet>]) -> Result<Bytes, Error> {
-    let mut out = BytesMut::new();
-
-    for packet in packets {
-        let a = packet.marshal()?;
-
-        out.extend(a);
-    }
-
-    Ok(out.freeze())
 }
 
 /// Unmarshal takes an entire udp datagram (which may consist of multiple RTCP packets) and

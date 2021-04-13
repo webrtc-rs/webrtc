@@ -16,28 +16,28 @@
 //!
 //! Decoding RTCP packets:
 //!```nobuild
-//!     let pkt = rtcp.Unmarshal(rtcpData).unwrap();
+//!     let pkt = rtcp::unmarshal(&rtcp_data).unwrap();
 //!
-//!     if let Some(e) = packet
+//!     if let Some(e) = pkt
 //!          .as_any()
-//!          .downcast_ref::<crate::picture_loss_indication::PictureLossIndication>()
+//!          .downcast_ref::<PictureLossIndication>()
 //!      {
 //!    
 //!      }
 //!     else if let Some(e) = packet
 //!          .as_any()
-//!          .downcast_ref::<crate::goodbye::Goodbye>(){}
+//!          .downcast_ref::<Goodbye>(){}
 //!     ....
 //!
 //!
 //! Encoding RTCP packets:
 //!```nobuild
-//!     let pkt = crate::picture_loss_indication::PictureLossIndication{
+//!     let pkt = PictureLossIndication{
 //!         sender_ssrc: sender_ssrc,
 //!         media_ssrc: media_ssrc
 //!     };
 //!
-//!     let pliData = pkt.marshal().unwrap();
+//!     let pli_data = pkt.marshal().unwrap();
 //!     // ...
 
 pub mod compound_packet;
