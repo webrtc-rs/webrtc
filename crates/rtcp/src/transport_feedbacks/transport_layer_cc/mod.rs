@@ -116,7 +116,7 @@ impl Default for SymbolTypeTcc {
 /// PacketStatusChunk has two kinds:
 /// RunLengthChunk and StatusVectorChunk
 pub trait PacketStatusChunk {
-    fn as_any(&self) -> &dyn std::any::Any;
+    fn as_any(&self) -> &dyn Any {
     fn trait_eq(&self, other: &dyn PacketStatusChunk) -> bool;
     fn marshal(&self) -> Result<BytesMut, Error>;
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error>;
@@ -192,7 +192,7 @@ impl PacketStatusChunk for RunLengthChunk {
             .map_or(false, |a| self == a)
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }
@@ -290,7 +290,7 @@ impl PacketStatusChunk for StatusVectorChunk {
             .map_or(false, |a| self == a)
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }
@@ -665,7 +665,7 @@ impl Packet for TransportLayerCc {
             .map_or(false, |a| self == a)
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }

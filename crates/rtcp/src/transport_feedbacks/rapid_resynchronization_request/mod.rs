@@ -83,7 +83,7 @@ impl Packet for RapidResynchronizationRequest {
         vec![self.media_ssrc]
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 

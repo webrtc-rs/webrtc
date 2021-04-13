@@ -4,6 +4,7 @@ mod receiver_report_test;
 use crate::{error::Error, header::*, packet::*, reception_report::*, util::*};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use std::any::Any;
 use std::fmt;
 
 pub(super) const RR_SSRC_OFFSET: usize = HEADER_LENGTH;
@@ -179,7 +180,7 @@ impl Packet for ReceiverReport {
         Box::new(self.clone())
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }

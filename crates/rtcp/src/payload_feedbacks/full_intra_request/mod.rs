@@ -4,6 +4,7 @@ mod full_intra_request_test;
 use crate::{error::Error, header::*, packet::*, util::*};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use std::any::Any;
 use std::fmt;
 
 /// A FIREntry is a (ssrc, seqno) pair, as carried by FullIntraRequest.
@@ -127,7 +128,7 @@ impl Packet for FullIntraRequest {
         Box::new(self.clone())
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }

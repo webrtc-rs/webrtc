@@ -153,7 +153,7 @@ impl Packet for TransportLayerNack {
             .map_or(false, |a| self == a)
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }

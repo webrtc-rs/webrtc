@@ -1,6 +1,7 @@
 use crate::{error::Error, header::*, packet::Packet};
 
 use bytes::Bytes;
+use std::any::Any;
 use std::fmt;
 
 /// RawPacket represents an unparsed RTCP packet. It's returned by Unmarshal when
@@ -51,7 +52,7 @@ impl Packet for RawPacket {
         Box::new(self.clone())
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }

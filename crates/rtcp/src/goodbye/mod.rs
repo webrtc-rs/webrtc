@@ -4,6 +4,7 @@ mod goodbye_test;
 use crate::{error::Error, header::*, packet::*, util::*};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use std::any::Any;
 use std::fmt;
 
 /// The Goodbye packet indicates that one or more sources are no longer active.
@@ -147,7 +148,7 @@ impl Packet for Goodbye {
         Box::new(self.clone())
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }

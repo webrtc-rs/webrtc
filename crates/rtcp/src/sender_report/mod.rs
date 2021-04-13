@@ -4,6 +4,7 @@ mod sender_report_test;
 use crate::{error::Error, header::*, packet::*, reception_report::*, util::*};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use std::any::Any;
 use std::fmt;
 
 pub(crate) const SR_HEADER_LENGTH: usize = 24;
@@ -228,7 +229,7 @@ impl Packet for SenderReport {
         Box::new(self.clone())
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }

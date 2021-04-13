@@ -1,6 +1,7 @@
 use crate::{error::Error, packet::*, util::*};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use std::any::Any;
 
 pub(crate) const RECEPTION_REPORT_LENGTH: usize = 24;
 pub(crate) const FRACTION_LOST_OFFSET: usize = 4;
@@ -157,7 +158,7 @@ impl Packet for ReceptionReport {
         Box::new(self.clone())
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }

@@ -4,6 +4,7 @@ mod source_description_test;
 use crate::{error::Error, header::*, packet::*, util::*};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use std::any::Any;
 use std::fmt;
 
 const SDES_SOURCE_LEN: usize = 4;
@@ -357,7 +358,7 @@ impl Packet for SourceDescription {
         Box::new(self.clone())
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }

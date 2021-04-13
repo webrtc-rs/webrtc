@@ -4,6 +4,7 @@ mod compound_packet_test;
 use crate::{error::Error, packet::*, receiver_report::*, sender_report::*, source_description::*};
 
 use bytes::Bytes;
+use std::any::Any;
 
 /// A CompoundPacket is a collection of RTCP packets transmitted as a single packet with
 /// the underlying protocol (for example UDP).
@@ -74,7 +75,7 @@ impl Packet for CompoundPacket {
         Box::new(self.clone())
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }

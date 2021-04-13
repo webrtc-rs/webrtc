@@ -1,10 +1,10 @@
-use bytes::{Bytes, BytesMut};
-
-use crate::compound_packet::CompoundPacket;
 use crate::{
-    error::Error, goodbye::*, header::*, raw_packet::*, receiver_report::*, sender_report::*,
-    source_description::*,
+    compound_packet::*, error::Error, goodbye::*, header::*, raw_packet::*, receiver_report::*,
+    sender_report::*, source_description::*,
 };
+
+use bytes::{Bytes, BytesMut};
+use std::any::Any;
 
 /* full_intra_request,
 picture_loss_indication, rapid_resynchronization_request,
@@ -23,7 +23,7 @@ pub trait Packet {
 
     fn equal_to(&self, other: &dyn Packet) -> bool;
     fn clone_to(&self) -> Box<dyn Packet>;
-    fn as_any(&self) -> &dyn std::any::Any;
+    fn as_any(&self) -> &dyn Any;
 }
 
 impl PartialEq for dyn Packet {
