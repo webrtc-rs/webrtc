@@ -1,11 +1,15 @@
 use bytes::{Bytes, BytesMut};
 
-use crate::{error::Error, header::*, raw_packet::*};
+use crate::compound_packet::CompoundPacket;
+use crate::{
+    error::Error, goodbye::*, header::*, raw_packet::*, receiver_report::*, sender_report::*,
+    source_description::*,
+};
 
-/* full_intra_request, goodbye,
-picture_loss_indication, rapid_resynchronization_request, raw_packet, raw_packet::RawPacket,
-receiver_estimated_maximum_bitrate, receiver_report, sender_report, slice_loss_indication,
-source_description, transport_layer_cc, transport_layer_nack,*/
+/* full_intra_request,
+picture_loss_indication, rapid_resynchronization_request,
+receiver_estimated_maximum_bitrate, , slice_loss_indication,
+, transport_layer_cc, transport_layer_nack,*/
 
 /// Packet represents an RTCP packet, a protocol used for out-of-band statistics and control information for an RTP session
 pub trait Packet {
@@ -17,40 +21,20 @@ pub trait Packet {
     where
         Self: Sized;
 
-    /*fn as_any(&self) -> &dyn std::any::Any;
-    fn equal(&self, other: &dyn Packet) -> bool;*/
+    fn equal_to(&self, other: &dyn Packet) -> bool;
+    fn clone_to(&self) -> Box<dyn Packet>;
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
-/*
 impl PartialEq for dyn Packet {
     fn eq(&self, other: &Self) -> bool {
-        self.equal(other)
+        self.equal_to(other)
     }
 }
- */
 
-/// Unmarshal takes an entire udp datagram (which may consist of multiple RTCP packets) and
-/// returns the unmarshaled packets it contains.
-///
-/// If this is a reduced-size RTCP packet a feedback packet (Goodbye, SliceLossIndication, etc)
-/// will be returned. Otherwise, the underlying type of the returned packet will be
-/// CompoundPacket.
-pub fn unmarshal(mut raw_data: Bytes) -> Result<Vec<Box<dyn Packet>>, Error> {
-    let mut packets = vec![];
-
-    while !raw_data.is_empty() {
-        let (p, processed) = unmarshaller(&raw_data)?;
-
-        packets.push(p);
-        raw_data = raw_data.split_off(processed);
-    }
-
-    match packets.len() {
-        // Empty packet
-        0 => Err(Error::InvalidHeader),
-
-        // Multiple packets
-        _ => Ok(packets),
+impl Clone for Box<dyn Packet> {
+    fn clone(&self) -> Box<dyn Packet> {
+        self.clone_to()
     }
 }
 
@@ -67,6 +51,34 @@ pub fn marshal(packets: &[Box<dyn Packet>]) -> Result<Bytes, Error> {
     Ok(out.freeze())
 }
 
+/// Unmarshal takes an entire udp datagram (which may consist of multiple RTCP packets) and
+/// returns the unmarshaled packets it contains.
+///
+/// If this is a reduced-size RTCP packet a feedback packet (Goodbye, SliceLossIndication, etc)
+/// will be returned. Otherwise, the underlying type of the returned packet will be
+/// CompoundPacket.
+pub fn unmarshal(raw_data: &Bytes) -> Result<Box<dyn Packet>, Error> {
+    let mut packets = vec![];
+
+    let mut raw_data = raw_data.clone();
+    while !raw_data.is_empty() {
+        let (p, processed) = unmarshaller(&raw_data)?;
+        packets.push(p);
+        raw_data = raw_data.split_off(processed);
+    }
+
+    match packets.len() {
+        // Empty Packet
+        0 => Err(Error::InvalidHeader),
+
+        // Single Packet
+        1 => packets.pop().ok_or(Error::BadFirstPacket),
+
+        // Compound Packet
+        _ => Ok(Box::new(CompoundPacket(packets))),
+    }
+}
+
 /// unmarshaller is a factory which pulls the first RTCP packet from a bytestream,
 /// and returns it's parsed representation, and the amount of data that was processed.
 pub(crate) fn unmarshaller(raw_data: &Bytes) -> Result<(Box<dyn Packet>, usize), Error> {
@@ -79,14 +91,12 @@ pub(crate) fn unmarshaller(raw_data: &Bytes) -> Result<(Box<dyn Packet>, usize),
 
     let in_packet = raw_data.slice(..bytes_processed);
 
-    let p = match h.packet_type {
-        /*PacketType::SenderReport => Box::new(sender_report::SenderReport::default()),
-
-        PacketType::ReceiverReport => Box::new(receiver_report::ReceiverReport::default()),
-
-        PacketType::SourceDescription => Box::new(source_description::SourceDescription::default()),
-        PacketType::Goodbye => Box::new(goodbye::Goodbye::default()),
-
+    let p: Box<dyn Packet> = match h.packet_type {
+        PacketType::SenderReport => Box::new(SenderReport::unmarshal(&in_packet)?),
+        PacketType::ReceiverReport => Box::new(ReceiverReport::unmarshal(&in_packet)?),
+        PacketType::SourceDescription => Box::new(SourceDescription::unmarshal(&in_packet)?),
+        PacketType::Goodbye => Box::new(Goodbye::unmarshal(&in_packet)?),
+        /*TODO:
         PacketType::TransportSpecificFeedback => match h.count {
             header::FORMAT_TLN => Box::new(transport_layer_nack::TransportLayerNack::default()),
 

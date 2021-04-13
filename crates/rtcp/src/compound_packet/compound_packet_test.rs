@@ -1,5 +1,5 @@
 use super::*;
-use crate::{error::Error, goodbye, packet, receiver_report, sender_report, source_description};
+use crate::goodbye::Goodbye;
 
 // An RTCP packet from a packet dump
 const REAL_PACKET: [u8; 116] = [
@@ -33,27 +33,24 @@ const REAL_PACKET: [u8; 116] = [
 
 #[test]
 fn test_read_eof() {
-    let short_header = vec![
+    let short_header = Bytes::from_static(&[
         0x81, 0xc9, // missing type & len
-    ]
-    .as_slice()
-    .into();
+    ]);
 
-    let result = packet::unmarshal(short_header);
+    let result = unmarshal(&short_header);
     assert!(result.is_err(), "missing type & len");
 }
 
 #[test]
 fn test_bad_compound() {
-    let bad_compound = REAL_PACKET[..34].into();
-    let result = packet::unmarshal(bad_compound);
+    let bad_compound = Bytes::copy_from_slice(&REAL_PACKET[..34]);
+    let result = unmarshal(&bad_compound);
     assert!(result.is_err(), "trailing data!");
 
-    let bad_compound = REAL_PACKET[84..104].into();
+    let bad_compound = Bytes::copy_from_slice(&REAL_PACKET[84..104]);
 
-    let packets = packet::unmarshal(bad_compound).expect("Error unmarshalling packet");
-
-    let compound = CompoundPacket(packets);
+    let p = unmarshal(&bad_compound).expect("Error unmarshalling packet");
+    let compound = p.as_any().downcast_ref::<CompoundPacket>().unwrap();
 
     // this should return an error,
     // it violates the "must start with RR or SR" rule
@@ -79,29 +76,26 @@ fn test_bad_compound() {
         compound_len, 2
     );
 
-    if let None = compound.0[0]
-        .as_any()
-        .downcast_ref::<crate::goodbye::Goodbye>()
-    {
+    if let None = compound.0[0].as_any().downcast_ref::<Goodbye>() {
         panic!("Unmarshal(badcompound), want Goodbye")
     }
 
-    if let None = compound.0[1]
+    /*TODO: if let None = compound.0[1]
         .as_any()
-        .downcast_ref::<crate::picture_loss_indication::PictureLossIndication>()
+        .downcast_ref::<PictureLossIndication>()
     {
         panic!("Unmarshal(badcompound), want PictureLossIndication")
-    }
+    }*/
 }
 
 #[test]
 fn test_valid_packet() {
-    let cname = source_description::SourceDescription {
-        chunks: vec![source_description::SourceDescriptionChunk {
+    let cname = SourceDescription {
+        chunks: vec![SourceDescriptionChunk {
             source: 1234,
-            items: vec![source_description::SourceDescriptionItem {
-                sdes_type: source_description::SdesType::SdesCname,
-                text: "cname".to_owned(),
+            items: vec![SourceDescriptionItem {
+                sdes_type: SdesType::SdesCname,
+                text: Bytes::from_static(b"cname"),
             }],
         }],
     };
@@ -109,21 +103,21 @@ fn test_valid_packet() {
     let tests = vec![
         (
             "no cname",
-            CompoundPacket(vec![Box::new(sender_report::SenderReport::default())]),
+            CompoundPacket(vec![Box::new(SenderReport::default())]),
             Err(Error::MissingCname),
         ),
         (
             "SDES / no cname",
             CompoundPacket(vec![
-                Box::new(sender_report::SenderReport::default()),
-                Box::new(source_description::SourceDescription::default()),
+                Box::new(SenderReport::default()),
+                Box::new(SourceDescription::default()),
             ]),
             Err(Error::MissingCname),
         ),
         (
             "just SR",
             CompoundPacket(vec![
-                Box::new(sender_report::SenderReport::default()),
+                Box::new(SenderReport::default()),
                 Box::new(cname.to_owned()),
             ]),
             Ok(()),
@@ -131,8 +125,8 @@ fn test_valid_packet() {
         (
             "multiple SRs",
             CompoundPacket(vec![
-                Box::new(sender_report::SenderReport::default()),
-                Box::new(sender_report::SenderReport::default()),
+                Box::new(SenderReport::default()),
+                Box::new(SenderReport::default()),
                 Box::new(cname.clone()),
             ]),
             Err(Error::PacketBeforeCname),
@@ -140,7 +134,7 @@ fn test_valid_packet() {
         (
             "just RR",
             CompoundPacket(vec![
-                Box::new(receiver_report::ReceiverReport::default()),
+                Box::new(ReceiverReport::default()),
                 Box::new(cname.clone()),
             ]),
             Ok(()),
@@ -148,18 +142,18 @@ fn test_valid_packet() {
         (
             "multiple RRs",
             CompoundPacket(vec![
-                Box::new(receiver_report::ReceiverReport::default()),
+                Box::new(ReceiverReport::default()),
                 Box::new(cname.clone()),
-                Box::new(receiver_report::ReceiverReport::default()),
+                Box::new(ReceiverReport::default()),
             ]),
             Ok(()),
         ),
         (
             "goodbye",
             CompoundPacket(vec![
-                Box::new(receiver_report::ReceiverReport::default()),
+                Box::new(ReceiverReport::default()),
                 Box::new(cname.clone()),
-                Box::new(goodbye::Goodbye::default()),
+                Box::new(Goodbye::default()),
             ]),
             Ok(()),
         ),
@@ -177,12 +171,12 @@ fn test_valid_packet() {
 
 #[test]
 fn test_cname() {
-    let cname = source_description::SourceDescription {
-        chunks: vec![source_description::SourceDescriptionChunk {
+    let cname = SourceDescription {
+        chunks: vec![SourceDescriptionChunk {
             source: 1234,
-            items: vec![source_description::SourceDescriptionItem {
+            items: vec![SourceDescriptionItem {
                 sdes_type: SdesType::SdesCname,
-                text: "cname".to_string(),
+                text: Bytes::from_static(b"cname"),
             }],
         }],
     };
@@ -198,7 +192,7 @@ fn test_cname() {
             "SDES / no cname",
             CompoundPacket(vec![
                 Box::new(SenderReport::default()),
-                Box::new(source_description::SourceDescription::default()),
+                Box::new(SourceDescription::default()),
             ]),
             Some(Error::MissingCname),
             "",
@@ -246,7 +240,7 @@ fn test_cname() {
             CompoundPacket(vec![
                 Box::new(ReceiverReport::default()),
                 Box::new(cname.clone()),
-                Box::new(goodbye::Goodbye::default()),
+                Box::new(Goodbye::default()),
             ]),
             None,
             "cname",
@@ -278,14 +272,7 @@ fn test_cname() {
 
         match name_result {
             Ok(e) => {
-                assert_eq!(
-                    e.as_str(),
-                    text,
-                    "CNAME({}) = {}, want {}",
-                    name,
-                    e.as_str(),
-                    text,
-                );
+                assert_eq!(e, text, "CNAME({}) = {:?}, want {}", name, e, text,);
             }
 
             Err(_) => continue,
@@ -295,12 +282,12 @@ fn test_cname() {
 
 #[test]
 fn test_compound_packet_roundtrip() {
-    let cname = source_description::SourceDescription {
-        chunks: vec![source_description::SourceDescriptionChunk {
+    let cname = SourceDescription {
+        chunks: vec![SourceDescriptionChunk {
             source: 1234,
-            items: vec![source_description::SourceDescriptionItem {
+            items: vec![SourceDescriptionItem {
                 sdes_type: SdesType::SdesCname,
-                text: "cname".to_string(),
+                text: Bytes::from_static(b"cname"),
             }],
         }],
     };
@@ -311,7 +298,10 @@ fn test_compound_packet_roundtrip() {
             CompoundPacket(vec![
                 Box::new(ReceiverReport::default()),
                 Box::new(cname.clone()),
-                Box::new(goodbye::Goodbye::default()),
+                Box::new(Goodbye {
+                    sources: vec![1234],
+                    ..Default::default()
+                }),
             ]),
             None,
         ),
@@ -339,14 +329,11 @@ fn test_compound_packet_roundtrip() {
             assert!(result.is_ok(), "must no error in test {}", name);
         }
 
-        let mut c = CompoundPacket::default();
-
         let data1 = result.unwrap();
 
-        c.unmarshal(data1.clone())
-            .expect("Unmarshall should be nil");
+        let c = CompoundPacket::unmarshal(&data1).expect("Unmarshall should be nil");
 
-        let data2 = packet.marshal().expect("Marshal should be nil");
+        let data2 = c.marshal().expect("Marshal should be nil");
 
         assert_eq!(
             data1, data2,

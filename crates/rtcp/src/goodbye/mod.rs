@@ -73,8 +73,8 @@ impl Packet for Goodbye {
             writer.put_u32(*source);
         }
 
+        writer.put_u8(self.reason.len() as u8);
         if !self.reason.is_empty() {
-            writer.put_u8(self.reason.len() as u8);
             writer.extend(self.reason.clone());
         }
 
@@ -136,16 +136,20 @@ impl Packet for Goodbye {
         Ok(Goodbye { sources, reason })
     }
 
-    /*fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn equal(&self, other: &dyn Packet) -> bool {
+    fn equal_to(&self, other: &dyn Packet) -> bool {
         other
             .as_any()
             .downcast_ref::<Goodbye>()
             .map_or(false, |a| self == a)
-    }*/
+    }
+
+    fn clone_to(&self) -> Box<dyn Packet> {
+        Box::new(self.clone())
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 impl Goodbye {

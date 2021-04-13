@@ -39,6 +39,21 @@ impl Packet for RawPacket {
 
         Ok(RawPacket(raw_packet.clone()))
     }
+
+    fn equal_to(&self, other: &dyn Packet) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<RawPacket>()
+            .map_or(false, |a| self == a)
+    }
+
+    fn clone_to(&self) -> Box<dyn Packet> {
+        Box::new(self.clone())
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 impl RawPacket {

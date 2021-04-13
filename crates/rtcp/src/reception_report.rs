@@ -145,4 +145,19 @@ impl Packet for ReceptionReport {
             delay,
         })
     }
+
+    fn equal_to(&self, other: &dyn Packet) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<ReceptionReport>()
+            .map_or(false, |a| self == a)
+    }
+
+    fn clone_to(&self) -> Box<dyn Packet> {
+        Box::new(self.clone())
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
