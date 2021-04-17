@@ -56,11 +56,11 @@ impl DNSConn {
             Some(socket2::Protocol::UDP),
         )?;
 
-        socket.set_reuse_address(true)?;
-
-        //TODO: implement set_reuse_port for windows platform
         #[cfg(target_family = "unix")]
         socket.set_reuse_port(true)?;
+
+        socket.set_broadcast(true)?;
+        socket.set_reuse_address(true)?;
 
         socket.set_read_timeout(Some(Duration::from_millis(100)))?;
         socket.bind(&SockAddr::from(addr))?;
@@ -79,12 +79,12 @@ impl DNSConn {
                 if let Some(SocketAddr::V4(e)) = interface.addr {
                     if let Err(e) = socket.join_multicast_v4(&Ipv4Addr::new(224, 0, 0, 251), e.ip())
                     {
-                        log::error!("Error connecting multicast, error: {:?}", e);
+                        log::error!("error connecting multicast, error: {:?}", e);
                         join_error_count += 1;
                         continue;
                     }
 
-                    log::trace!("Connected to interface address {:?}", e);
+                    log::trace!("connected to interface address {:?}", e);
                 }
             }
 
@@ -141,14 +141,12 @@ impl DNSConn {
 
     /// Close closes the mDNS Conn
     pub async fn close(&self) -> Result<(), Error> {
-        {
-            log::info!("Closing connection");
-            if self.is_server_closed.load(atomic::Ordering::SeqCst) {
-                return Err(ERR_CONNECTION_CLOSED.to_owned());
-            }
+        log::info!("closing connection");
+        if self.is_server_closed.load(atomic::Ordering::SeqCst) {
+            return Err(ERR_CONNECTION_CLOSED.to_owned());
         }
 
-        log::info!("Sending close command to server");
+        log::trace!("sending close command to server");
         match self.close_server.send(()).await {
             Ok(_) => Ok(()),
             Err(e) => {
@@ -165,11 +163,9 @@ impl DNSConn {
         name: &str,
         mut close_query_signal: mpsc::Receiver<()>,
     ) -> Result<(ResourceHeader, SocketAddr), Error> {
-        {
             if self.is_server_closed.load(atomic::Ordering::SeqCst) {
                 return Err(ERR_CONNECTION_CLOSED.to_owned());
             }
-        }
 
         let name_with_suffix = name.to_owned() + ".";
 
@@ -322,12 +318,6 @@ async fn run(
                     log::error!("Error sending answer to client: {:?}", e);
                     continue;
                 };
-
-                log::trace!(
-                    "Sent answer to local name: {} to dst addr {:?}",
-                    local_name,
-                    dst_addr
-                );
             }
         }
     }
@@ -365,12 +355,6 @@ async fn run(
     }
 }
 
-async fn interface_for_remote(remote: String) -> Result<std::net::IpAddr, Error> {
-    let conn = UdpSocket::bind(remote).await?;
-    let local_addr = conn.local_addr()?;
-
-    Ok(local_addr.ip())
-}
 
 async fn send_answer(
     socket: &Arc<UdpSocket>,
@@ -408,7 +392,7 @@ async fn send_answer(
     };
 
     socket.send_to(&raw_answer, dst_addr).await?;
-    log::trace!("sent answer from {} to {}", dst, dst_addr);
+    log::trace!("sent answer to IP {}", dst);
 
     Ok(())
 }
