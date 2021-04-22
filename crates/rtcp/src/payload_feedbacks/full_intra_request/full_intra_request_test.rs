@@ -122,7 +122,7 @@ fn test_full_intra_request_unmarshal() {
 
 #[test]
 fn test_full_intra_request_round_trip() {
-    let tests: Vec<(&str, FullIntraRequest, Result<(), Error>)> = vec![
+    let tests = vec![
         (
             "valid",
             FullIntraRequest {
@@ -133,7 +133,7 @@ fn test_full_intra_request_round_trip() {
                     sequence_number: 42,
                 }],
             },
-            Ok(()),
+            None,
         ),
         (
             "also valid",
@@ -145,35 +145,39 @@ fn test_full_intra_request_round_trip() {
                     sequence_number: 57,
                 }],
             },
-            Ok(()),
+            None,
         ),
     ];
 
-    for (name, fir, marshal_error) in tests {
-        let data = fir.marshal();
+    for (name, want, want_error) in tests {
+        let got = want.marshal();
 
         assert_eq!(
-            data.is_ok(),
-            marshal_error.is_ok(),
+            got.is_ok(),
+            want_error.is_none(),
             "Marshal {}: err = {:?}, want {:?}",
             name,
-            data,
-            marshal_error
+            got,
+            want_error
         );
 
-        match data {
-            Ok(e) => {
-                let decoded =
-                    FullIntraRequest::unmarshal(&e).expect(format!("Unmarshal {}", name).as_str());
+        if let Some(err) = want_error {
+            let got_err = got.err().unwrap();
+            assert_eq!(
+                got_err, err,
+                "Unmarshal {} rr: err = {:?}, want {:?}",
+                name, got_err, err,
+            );
+        } else {
+            let data = got.ok().unwrap();
+            let actual =
+                FullIntraRequest::unmarshal(&data).expect(format!("Unmarshal {}", name).as_str());
 
-                assert_eq!(
-                    decoded, fir,
-                    "{} rr round trip: got {:?}, want {:?}",
-                    name, decoded, fir
-                );
-            }
-
-            Err(_) => continue,
+            assert_eq!(
+                actual, want,
+                "{} round trip: got {:?}, want {:?}",
+                name, actual, want
+            )
         }
     }
 }
