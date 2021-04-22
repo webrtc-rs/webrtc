@@ -32,7 +32,7 @@ impl Packet for CompoundPacket {
         }
     }
 
-    fn marshal_size(&self) -> usize {
+    fn size(&self) -> usize {
         let mut l = 0;
         for packet in &self.0 {
             l += packet.marshal_size();

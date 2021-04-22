@@ -3,7 +3,8 @@ mod picture_loss_indication_test;
 
 use crate::{error::Error, header::*, packet::*, receiver_report::*, util::*};
 
-use bytes::BytesMut;
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+use std::any::Any;
 use std::fmt;
 
 const PLI_LENGTH: usize = 2;
@@ -28,26 +29,32 @@ impl fmt::Display for PictureLossIndication {
 }
 
 impl Packet for PictureLossIndication {
+    /// destination_ssrc returns an array of SSRC values that this packet refers to.
+    fn destination_ssrc(&self) -> Vec<u32> {
+        vec![self.media_ssrc]
+    }
+
+    fn marshal_size(&self) -> usize {
+        HEADER_LENGTH + SSRC_LENGTH * 2
+    }
+
     /// Unmarshal decodes the PictureLossIndication from binary
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
-        if raw_packet.len() < (header::HEADER_LENGTH + (receiver_report::SSRC_LENGTH * 2)) {
+        if raw_packet.len() < (HEADER_LENGTH + (receiver_report::SSRC_LENGTH * 2)) {
             return Err(Error::PacketTooShort);
         }
 
-        let mut h = header::Header::default();
+        let mut h = Header::default();
 
         h.unmarshal(raw_packet)?;
 
-        if h.packet_type != header::PacketType::PayloadSpecificFeedback
-            || h.count != header::FORMAT_PLI
-        {
+        if h.packet_type != PacketType::PayloadSpecificFeedback || h.count != FORMAT_PLI {
             return Err(Error::WrongType);
         }
 
-        self.sender_ssrc = BigEndian::read_u32(&raw_packet[header::HEADER_LENGTH..]);
-        self.media_ssrc = BigEndian::read_u32(
-            &raw_packet[header::HEADER_LENGTH + receiver_report::SSRC_LENGTH..],
-        );
+        self.sender_ssrc = BigEndian::read_u32(&raw_packet[HEADER_LENGTH..]);
+        self.media_ssrc =
+            BigEndian::read_u32(&raw_packet[HEADER_LENGTH + receiver_report::SSRC_LENGTH..]);
 
         Ok(())
     }
@@ -64,14 +71,14 @@ impl Packet for PictureLossIndication {
         let mut raw_packet = BytesMut::new();
         raw_packet.resize(self.len(), 0u8);
 
-        let mut packet_body = &mut raw_packet[header::HEADER_LENGTH..];
+        let mut packet_body = &mut raw_packet[HEADER_LENGTH..];
 
         BigEndian::write_u32(&mut packet_body, self.sender_ssrc);
         BigEndian::write_u32(&mut packet_body[4..], self.media_ssrc);
 
-        let h = header::Header {
-            count: header::FORMAT_PLI,
-            packet_type: header::PacketType::PayloadSpecificFeedback,
+        let h = Header {
+            count: FORMAT_PLI,
+            packet_type: PacketType::PayloadSpecificFeedback,
             length: PLI_LENGTH as u16,
             ..Default::default()
         };
@@ -87,11 +94,6 @@ impl Packet for PictureLossIndication {
         self
     }
 
-    // destination_ssrc returns an array of SSRC values that this packet refers to.
-    fn destination_ssrc(&self) -> Vec<u32> {
-        vec![self.media_ssrc]
-    }
-
     fn trait_eq(&self, other: &dyn Packet) -> bool {
         other
             .as_any()
@@ -101,18 +103,18 @@ impl Packet for PictureLossIndication {
 }
 
 impl PictureLossIndication {
-    fn len(&self) -> usize {
-        header::HEADER_LENGTH + receiver_report::SSRC_LENGTH * 2
+    fn size(&self) -> usize {
+        HEADER_LENGTH + receiver_report::SSRC_LENGTH * 2
     }
 
     /// Header returns the Header associated with this packet.
-    pub fn header(&self) -> header::Header {
+    pub fn header(&self) -> Header {
         let l = self.len() + get_padding(self.len());
 
-        header::Header {
+        Header {
             padding: get_padding(self.len()) != 0,
-            count: header::FORMAT_PLI,
-            packet_type: header::PacketType::PayloadSpecificFeedback,
+            count: FORMAT_PLI,
+            packet_type: PacketType::PayloadSpecificFeedback,
             length: ((l / 4) - 1) as u16,
         }
     }

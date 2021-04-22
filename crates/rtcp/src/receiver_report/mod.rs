@@ -48,11 +48,13 @@ impl Packet for ReceiverReport {
         self.reports.iter().map(|x| x.ssrc).collect()
     }
 
-    fn marshal_size(&self) -> usize {
-        let l = self.size();
+    fn size(&self) -> usize {
+        let mut reps_length = 0;
+        for rep in &self.reports {
+            reps_length += rep.marshal_size();
+        }
 
-        // align to 32-bit boundary
-        l + get_padding(l)
+        HEADER_LENGTH + SSRC_LENGTH + reps_length + self.profile_extensions.len()
     }
 
     /// Marshal encodes the packet in binary.
@@ -186,15 +188,6 @@ impl Packet for ReceiverReport {
 }
 
 impl ReceiverReport {
-    fn size(&self) -> usize {
-        let mut reps_length = 0;
-        for rep in &self.reports {
-            reps_length += rep.marshal_size();
-        }
-
-        HEADER_LENGTH + SSRC_LENGTH + reps_length + self.profile_extensions.len()
-    }
-
     /// Header returns the Header associated with this packet.
     pub fn header(&self) -> Header {
         Header {

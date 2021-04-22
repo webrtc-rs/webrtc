@@ -260,11 +260,13 @@ impl Packet for SourceDescription {
         self.chunks.iter().map(|x| x.source).collect()
     }
 
-    fn marshal_size(&self) -> usize {
-        let l = self.size();
+    fn size(&self) -> usize {
+        let mut chunks_length = 0;
+        for c in &self.chunks {
+            chunks_length += c.marshal_size();
+        }
 
-        // align to 32-bit boundary
-        l + get_padding(l)
+        HEADER_LENGTH + chunks_length
     }
 
     /// Marshal encodes the SourceDescription in binary
@@ -364,15 +366,6 @@ impl Packet for SourceDescription {
 }
 
 impl SourceDescription {
-    fn size(&self) -> usize {
-        let mut chunks_length = 0;
-        for c in &self.chunks {
-            chunks_length += c.marshal_size();
-        }
-
-        HEADER_LENGTH + chunks_length
-    }
-
     /// Header returns the Header associated with this packet.
     pub fn header(&self) -> Header {
         Header {

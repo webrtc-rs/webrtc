@@ -21,7 +21,7 @@ impl Packet for RawPacket {
         vec![]
     }
 
-    fn marshal_size(&self) -> usize {
+    fn size(&self) -> usize {
         self.0.len()
     }
 

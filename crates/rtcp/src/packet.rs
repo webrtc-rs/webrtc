@@ -1,6 +1,6 @@
 use crate::{
     compound_packet::*, error::Error, goodbye::*, header::*, raw_packet::*, receiver_report::*,
-    sender_report::*, source_description::*,
+    sender_report::*, source_description::*, util::*,
 };
 
 use bytes::Bytes;
@@ -15,7 +15,7 @@ receiver_estimated_maximum_bitrate, , slice_loss_indication,
 pub trait Packet {
     /// DestinationSSRC returns an array of SSRC values that this packet refers to.
     fn destination_ssrc(&self) -> Vec<u32>;
-    fn marshal_size(&self) -> usize;
+    fn size(&self) -> usize;
     fn marshal(&self) -> Result<Bytes, Error>;
     fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error>
     where
@@ -24,6 +24,12 @@ pub trait Packet {
     fn equal_to(&self, other: &dyn Packet) -> bool;
     fn clone_to(&self) -> Box<dyn Packet>;
     fn as_any(&self) -> &dyn Any;
+
+    fn marshal_size(&self) -> usize {
+        let l = self.size();
+        // align to 32-bit boundary
+        l + get_padding(l)
+    }
 }
 
 impl PartialEq for dyn Packet {

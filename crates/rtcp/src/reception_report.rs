@@ -49,7 +49,7 @@ impl Packet for ReceptionReport {
         vec![]
     }
 
-    fn marshal_size(&self) -> usize {
+    fn size(&self) -> usize {
         RECEPTION_REPORT_LENGTH
     }
 

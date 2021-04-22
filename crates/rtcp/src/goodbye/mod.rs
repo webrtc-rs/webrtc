@@ -34,11 +34,11 @@ impl Packet for Goodbye {
         self.sources.to_vec()
     }
 
-    fn marshal_size(&self) -> usize {
-        let l = self.size();
+    fn size(&self) -> usize {
+        let srcs_length = self.sources.len() * SSRC_LENGTH;
+        let reason_length = self.reason.len() + 1;
 
-        // align to 32-bit boundary
-        l + get_padding(l)
+        HEADER_LENGTH + srcs_length + reason_length
     }
 
     /// Marshal encodes the packet in binary.
@@ -154,13 +154,6 @@ impl Packet for Goodbye {
 }
 
 impl Goodbye {
-    fn size(&self) -> usize {
-        let srcs_length = self.sources.len() * SSRC_LENGTH;
-        let reason_length = self.reason.len() + 1;
-
-        HEADER_LENGTH + srcs_length + reason_length
-    }
-
     /// Header returns the Header associated with this packet.
     pub fn header(&self) -> Header {
         Header {

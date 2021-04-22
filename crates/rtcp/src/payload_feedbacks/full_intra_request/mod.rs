@@ -47,11 +47,8 @@ impl Packet for FullIntraRequest {
         ssrcs
     }
 
-    fn marshal_size(&self) -> usize {
-        let l = self.size();
-
-        // align to 32-bit boundary
-        l + get_padding(l)
+    fn size(&self) -> usize {
+        HEADER_LENGTH + FIR_OFFSET + self.fir.len() * 8
     }
 
     /// Marshal encodes the FullIntraRequest
@@ -134,10 +131,6 @@ impl Packet for FullIntraRequest {
 }
 
 impl FullIntraRequest {
-    fn size(&self) -> usize {
-        HEADER_LENGTH + FIR_OFFSET + self.fir.len() * 8
-    }
-
     pub fn header(&self) -> Header {
         Header {
             padding: get_padding(self.size()) != 0,
