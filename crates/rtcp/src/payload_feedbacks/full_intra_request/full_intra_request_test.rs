@@ -90,7 +90,7 @@ fn test_full_intra_request_unmarshal() {
         ),
     ];
 
-    for (name, data, want_fir, want_error) in tests {
+    for (name, data, want, want_error) in tests {
         let got = FullIntraRequest::unmarshal(&data);
 
         assert_eq!(
@@ -110,11 +110,11 @@ fn test_full_intra_request_unmarshal() {
                 name, got_err, err,
             );
         } else {
-            let fir = got.unwrap();
+            let actual = got.unwrap();
             assert_eq!(
-                fir, want_fir,
+                actual, want,
                 "Unmarshal {} rr: got {:?}, want {:?}",
-                name, fir, want_fir
+                name, actual, want
             );
         }
     }

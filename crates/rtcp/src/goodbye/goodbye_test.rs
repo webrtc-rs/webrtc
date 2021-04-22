@@ -123,11 +123,11 @@ fn test_goodbye_unmarshal() {
                 name, got_err, err,
             );
         } else {
-            let bye = got.unwrap();
+            let actual = got.unwrap();
             assert_eq!(
-                bye, want,
+                actual, want,
                 "Unmarshal {} rr: got {:?}, want {:?}",
-                name, bye, want
+                name, actual, want
             );
         }
     }

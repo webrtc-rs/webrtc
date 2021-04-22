@@ -1,4 +1,3 @@
-
 use super::*;
 
 #[test]
@@ -6,87 +5,93 @@ fn test_picture_loss_indication_unmarshal() {
     let tests = vec![
         (
             "valid",
-            vec![
+            Bytes::from_static(&[
                 0x81, 0xce, 0x00, 0x02, // v=2, p=0, FMT=1, PSFB, len=1
                 0x00, 0x00, 0x00, 0x00, // ssrc=0x0
                 0x4b, 0xc4, 0xfc, 0xb4, // ssrc=0x4bc4fcb4
-            ],
+            ]),
             PictureLossIndication {
                 sender_ssrc: 0x0,
                 media_ssrc: 0x4bc4fcb4,
             },
-            Ok(()),
+            None,
         ),
         (
             "packet too short",
-            vec![0x81, 0xce, 0x00, 0x00],
+            Bytes::from_static(&[0x81, 0xce, 0x00, 0x00]),
             PictureLossIndication::default(),
-            Err(Error::PacketTooShort),
+            Some(Error::PacketTooShort),
         ),
         (
             "invalid header",
-            vec![
+            Bytes::from_static(&[
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            ],
+            ]),
             PictureLossIndication::default(),
-            Err(Error::BadVersion),
+            Some(Error::BadVersion),
         ),
         (
             "wrong type",
-            vec![
+            Bytes::from_static(&[
                 0x81, 0xc9, 0x00, 0x02, // v=2, p=0, FMT=1, RR, len=1
                 0x00, 0x00, 0x00, 0x00, // ssrc=0x0
                 0x4b, 0xc4, 0xfc, 0xb4, // ssrc=0x4bc4fcb4
-            ],
+            ]),
             PictureLossIndication::default(),
-            Err(Error::WrongType),
+            Some(Error::WrongType),
         ),
         (
             "wrong fmt",
-            vec![
+            Bytes::from_static(&[
                 0x82, 0xc9, 0x00, 0x02, // v=2, p=0, FMT=2, RR, len=1
                 0x00, 0x00, 0x00, 0x00, // ssrc=0x0
                 0x4b, 0xc4, 0xfc, 0xb4, // ssrc=0x4bc4fcb4
-            ],
+            ]),
             PictureLossIndication::default(),
-            Err(Error::WrongType),
+            Some(Error::WrongType),
         ),
     ];
 
     for (name, data, want, want_error) in tests {
-        let mut p = PictureLossIndication::default();
-        let result = p.unmarshal(&mut data[..].into());
+        let got = PictureLossIndication::unmarshal(&data);
 
         assert_eq!(
-            result, want_error,
-            "Unmarshal {} header: err = {:?}, want {:?}",
-            name, result, want_error
+            got.is_err(),
+            want_error.is_some(),
+            "Unmarshal {} rr: err = {:?}, want {:?}",
+            name,
+            got,
+            want_error
         );
 
-        match result {
-            Err(_) => continue,
-
-            Ok(_) => {
-                assert_eq!(
-                    p, want,
-                    "Unmarshal {} rr: got {:?}, want {:?}",
-                    name, p, want
-                )
-            }
+        if let Some(err) = want_error {
+            let got_err = got.err().unwrap();
+            assert_eq!(
+                got_err, err,
+                "Unmarshal {} rr: err = {:?}, want {:?}",
+                name, got_err, err,
+            );
+        } else {
+            let actual = got.unwrap();
+            assert_eq!(
+                actual, want,
+                "Unmarshal {} rr: got {:?}, want {:?}",
+                name, actual, want
+            );
         }
     }
 }
 
 #[test]
 fn test_picture_loss_indication_roundtrip() {
-    let tests: Vec<(&str, PictureLossIndication, Result<(), Error>)> = vec![
+    let tests = vec![
         (
             "valid",
             PictureLossIndication {
                 sender_ssrc: 1,
                 media_ssrc: 2,
             },
-            Ok(()),
+            None,
         ),
         (
             "also valid",
@@ -94,83 +99,72 @@ fn test_picture_loss_indication_roundtrip() {
                 sender_ssrc: 5000,
                 media_ssrc: 6000,
             },
-            Ok(()),
+            None,
         ),
     ];
 
-    for (name, report, marshal_error) in tests {
-        let data = report.marshal();
+    for (name, want, want_error) in tests {
+        let got = want.marshal();
 
         assert_eq!(
-            data.is_ok(),
-            marshal_error.is_ok(),
+            got.is_ok(),
+            want_error.is_none(),
             "Marshal {}: err = {:?}, want {:?}",
             name,
-            data,
-            marshal_error
+            got,
+            want_error
         );
 
-        match data {
-            Err(_) => continue,
-            Ok(mut e) => {
-                let mut decoded = PictureLossIndication::default();
+        if let Some(err) = want_error {
+            let got_err = got.err().unwrap();
+            assert_eq!(
+                got_err, err,
+                "Unmarshal {} rr: err = {:?}, want {:?}",
+                name, got_err, err,
+            );
+        } else {
+            let data = got.ok().unwrap();
+            let actual = PictureLossIndication::unmarshal(&data)
+                .expect(format!("Unmarshal {}", name).as_str());
 
-                decoded
-                    .unmarshal(&mut e)
-                    .expect(format!("Unmarshal {}", name).as_str());
-
-                assert_eq!(
-                    decoded, report,
-                    "{} rr round trip: got {:?}, want {:?}",
-                    name, decoded, report
-                );
-            }
+            assert_eq!(
+                actual, want,
+                "{} round trip: got {:?}, want {:?}",
+                name, actual, want
+            )
         }
     }
 }
 
 #[test]
-fn test_picture_loss_indication_unmarshal_header() {
-    let test: Vec<(&str, Vec<u8>, Header, Result<(), Error>)> = vec![(
+fn test_picture_loss_indication_unmarshal_header() -> Result<(), Error> {
+    let tests = vec![(
         "valid header",
-        vec![
+        Bytes::from_static(&[
             0x81u8, 0xce, 0x00, 0x02, // v=2, p=0, FMT=1, PSFB, len=1
             0x00, 0x00, 0x00, 0x00, // ssrc=0x0
             0x4b, 0xc4, 0xfc, 0xb4, // ssrc=0x4bc4fcb4
-        ],
+        ]),
         Header {
-            count: header::FORMAT_PLI,
-            packet_type: header::PacketType::PayloadSpecificFeedback,
+            count: FORMAT_PLI,
+            packet_type: PacketType::PayloadSpecificFeedback,
             length: PLI_LENGTH as u16,
             ..Default::default()
         },
-        Ok(()),
     )];
 
-    for (name, bytes, header, want_error) in test {
-        let mut pli = PictureLossIndication::default();
-
-        let result = pli.unmarshal(&mut bytes[..].into());
+    for (name, bytes, header) in tests {
+        let pli = PictureLossIndication::unmarshal(&bytes)?;
 
         assert_eq!(
-            result, want_error,
-            "Unmarshal header {} rr: err = {:?}, want {:?}",
-            name, result, want_error
+            pli.header(),
+            header,
+            "Unmarshal header {} rr: got {:?}, want {:?}",
+            name,
+            pli.header(),
+            header
         );
-
-        match result {
-            Ok(_) => {
-                assert_eq!(
-                    pli.header(),
-                    header,
-                    "Unmarshal header {} rr: got {:?}, want {:?}",
-                    name,
-                    pli.header(),
-                    header
-                )
-            }
-
-            Err(_) => continue,
-        }
     }
+
+    Ok(())
 }

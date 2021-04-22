@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod picture_loss_indication_test;
 
-use crate::{error::Error, header::*, packet::*, receiver_report::*, util::*};
+use crate::{error::Error, header::*, packet::*, util::*};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::any::Any;
@@ -34,33 +34,12 @@ impl Packet for PictureLossIndication {
         vec![self.media_ssrc]
     }
 
-    fn marshal_size(&self) -> usize {
+    fn size(&self) -> usize {
         HEADER_LENGTH + SSRC_LENGTH * 2
     }
 
-    /// Unmarshal decodes the PictureLossIndication from binary
-    fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
-        if raw_packet.len() < (HEADER_LENGTH + (receiver_report::SSRC_LENGTH * 2)) {
-            return Err(Error::PacketTooShort);
-        }
-
-        let mut h = Header::default();
-
-        h.unmarshal(raw_packet)?;
-
-        if h.packet_type != PacketType::PayloadSpecificFeedback || h.count != FORMAT_PLI {
-            return Err(Error::WrongType);
-        }
-
-        self.sender_ssrc = BigEndian::read_u32(&raw_packet[HEADER_LENGTH..]);
-        self.media_ssrc =
-            BigEndian::read_u32(&raw_packet[HEADER_LENGTH + receiver_report::SSRC_LENGTH..]);
-
-        Ok(())
-    }
-
     /// Marshal encodes the PictureLossIndication in binary
-    fn marshal(&self) -> Result<BytesMut, Error> {
+    fn marshal(&self) -> Result<Bytes, Error> {
         /*
          * PLI does not require parameters.  Therefore, the length field MUST be
          * 2, and there MUST NOT be any Feedback Control Information.
@@ -68,54 +47,66 @@ impl Packet for PictureLossIndication {
          * The semantics of this FB message is independent of the payload type.
          */
 
-        let mut raw_packet = BytesMut::new();
-        raw_packet.resize(self.len(), 0u8);
+        let mut writer = BytesMut::with_capacity(self.marshal_size());
 
-        let mut packet_body = &mut raw_packet[HEADER_LENGTH..];
+        let h = self.header();
+        let data = h.marshal()?;
+        writer.extend(data);
 
-        BigEndian::write_u32(&mut packet_body, self.sender_ssrc);
-        BigEndian::write_u32(&mut packet_body[4..], self.media_ssrc);
+        writer.put_u32(self.sender_ssrc);
+        writer.put_u32(self.media_ssrc);
 
-        let h = Header {
-            count: FORMAT_PLI,
-            packet_type: PacketType::PayloadSpecificFeedback,
-            length: PLI_LENGTH as u16,
-            ..Default::default()
-        };
-
-        let header_data = h.marshal()?;
-
-        raw_packet[..header_data.len()].copy_from_slice(&header_data);
-
-        Ok(raw_packet)
+        put_padding(&mut writer);
+        Ok(writer.freeze())
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
+    /// Unmarshal decodes the PictureLossIndication from binary
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+        if raw_packet.len() < (HEADER_LENGTH + (SSRC_LENGTH * 2)) {
+            return Err(Error::PacketTooShort);
+        }
+
+        let h = Header::unmarshal(raw_packet)?;
+
+        if h.packet_type != PacketType::PayloadSpecificFeedback || h.count != FORMAT_PLI {
+            return Err(Error::WrongType);
+        }
+
+        let reader = &mut raw_packet.slice(HEADER_LENGTH..);
+
+        let sender_ssrc = reader.get_u32();
+        let media_ssrc = reader.get_u32();
+
+        Ok(PictureLossIndication {
+            sender_ssrc,
+            media_ssrc,
+        })
     }
 
-    fn trait_eq(&self, other: &dyn Packet) -> bool {
+    fn equal_to(&self, other: &dyn Packet) -> bool {
         other
             .as_any()
             .downcast_ref::<PictureLossIndication>()
             .map_or(false, |a| self == a)
     }
+
+    fn clone_to(&self) -> Box<dyn Packet> {
+        Box::new(self.clone())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl PictureLossIndication {
-    fn size(&self) -> usize {
-        HEADER_LENGTH + receiver_report::SSRC_LENGTH * 2
-    }
-
     /// Header returns the Header associated with this packet.
     pub fn header(&self) -> Header {
-        let l = self.len() + get_padding(self.len());
-
         Header {
-            padding: get_padding(self.len()) != 0,
+            padding: get_padding(self.size()) != 0,
             count: FORMAT_PLI,
             packet_type: PacketType::PayloadSpecificFeedback,
-            length: ((l / 4) - 1) as u16,
+            length: ((self.marshal_size() / 4) - 1) as u16,
         }
     }
 }
