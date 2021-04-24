@@ -1,12 +1,11 @@
-use byteorder::{BigEndian, ByteOrder};
-use bytes::BytesMut;
-use std::fmt;
-
-use super::error::Error;
-use super::header;
-use crate::{packet::Packet, receiver_report, util as utility};
-
+#[cfg(test)]
 mod transport_layer_nack_test;
+
+use crate::{error::Error, header::*, packet::*, util::*};
+
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+use std::any::Any;
+use std::fmt;
 
 /// PacketBitmap shouldn't be used like a normal integral,
 /// so it's type is masked here. Access it with PacketList().
@@ -70,108 +69,99 @@ impl fmt::Display for TransportLayerNack {
 }
 
 impl Packet for TransportLayerNack {
-    /// Marshal encodes the packet in binary.
-    fn marshal(&self) -> Result<BytesMut, Error> {
-        if self.nacks.len() + TLN_LENGTH > std::u8::MAX as usize {
-            return Err(Error::TooManyReports);
-        }
-
-        let mut raw_packet = BytesMut::new();
-        raw_packet.resize(NACK_OFFSET + (self.nacks.len() * 4), 0u8);
-
-        BigEndian::write_u32(&mut raw_packet, self.sender_ssrc);
-        BigEndian::write_u32(&mut raw_packet[4..], self.media_ssrc);
-
-        for i in 0..self.nacks.len() {
-            BigEndian::write_u16(
-                &mut raw_packet[NACK_OFFSET + (4 * i)..],
-                self.nacks[i].packet_id,
-            );
-
-            BigEndian::write_u16(
-                &mut raw_packet[NACK_OFFSET + (4 * i) + 2..],
-                self.nacks[i].lost_packets,
-            );
-        }
-
-        let h = self.header();
-
-        let mut header_data = h.marshal()?;
-        header_data.extend(&raw_packet);
-
-        Ok(header_data)
-    }
-
-    /// Unmarshal decodes the ReceptionReport from binary
-    fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
-        if raw_packet.len() < (header::HEADER_LENGTH + receiver_report::SSRC_LENGTH) {
-            return Err(Error::PacketTooShort);
-        }
-
-        let mut h = header::Header::default();
-
-        h.unmarshal(raw_packet)?;
-
-        if raw_packet.len() < (header::HEADER_LENGTH + (4 * h.length) as usize) {
-            return Err(Error::PacketTooShort);
-        }
-
-        if h.packet_type != header::PacketType::TransportSpecificFeedback
-            || h.count != header::FORMAT_TLN
-        {
-            return Err(Error::WrongType);
-        }
-
-        self.sender_ssrc = BigEndian::read_u32(&raw_packet[header::HEADER_LENGTH..]);
-        self.media_ssrc = BigEndian::read_u32(
-            &raw_packet[header::HEADER_LENGTH + receiver_report::SSRC_LENGTH..],
-        );
-
-        let mut i = header::HEADER_LENGTH + NACK_OFFSET;
-
-        while i < (header::HEADER_LENGTH + (h.length * 4) as usize) {
-            self.nacks.push(NackPair {
-                packet_id: BigEndian::read_u16(&raw_packet[i..]),
-                lost_packets: BigEndian::read_u16(&raw_packet[i + 2..]),
-            });
-
-            i += 4
-        }
-
-        Ok(())
-    }
-
     /// destination_ssrc returns an array of SSRC values that this packet refers to.
     fn destination_ssrc(&self) -> Vec<u32> {
         vec![self.media_ssrc]
     }
 
-    fn trait_eq(&self, other: &dyn Packet) -> bool {
+    fn size(&self) -> usize {
+        HEADER_LENGTH + NACK_OFFSET + self.nacks.len() * 4
+    }
+
+    /// Marshal encodes the packet in binary.
+    fn marshal(&self) -> Result<Bytes, Error> {
+        if self.nacks.len() + TLN_LENGTH > std::u8::MAX as usize {
+            return Err(Error::TooManyReports);
+        }
+
+        let mut writer = BytesMut::with_capacity(self.marshal_size());
+
+        let h = self.header();
+        let data = h.marshal()?;
+        writer.extend(data);
+
+        writer.put_u32(self.sender_ssrc);
+        writer.put_u32(self.media_ssrc);
+
+        for i in 0..self.nacks.len() {
+            writer.put_u16(self.nacks[i].packet_id);
+            writer.put_u16(self.nacks[i].lost_packets);
+        }
+
+        put_padding(&mut writer);
+        Ok(writer.freeze())
+    }
+
+    /// Unmarshal decodes the ReceptionReport from binary
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+        if raw_packet.len() < (HEADER_LENGTH + SSRC_LENGTH) {
+            return Err(Error::PacketTooShort);
+        }
+
+        let h = Header::unmarshal(raw_packet)?;
+
+        if raw_packet.len() < (HEADER_LENGTH + (4 * h.length) as usize) {
+            return Err(Error::PacketTooShort);
+        }
+
+        if h.packet_type != PacketType::TransportSpecificFeedback || h.count != FORMAT_TLN {
+            return Err(Error::WrongType);
+        }
+
+        let reader = &mut raw_packet.slice(HEADER_LENGTH..);
+
+        let sender_ssrc = reader.get_u32();
+        let media_ssrc = reader.get_u32();
+
+        let mut nacks = vec![];
+        for _i in 0..(h.length as i32 - NACK_OFFSET as i32 / 4) {
+            nacks.push(NackPair {
+                packet_id: reader.get_u16(),
+                lost_packets: reader.get_u16(),
+            });
+        }
+
+        Ok(TransportLayerNack {
+            sender_ssrc,
+            media_ssrc,
+            nacks,
+        })
+    }
+
+    fn equal_to(&self, other: &dyn Packet) -> bool {
         other
             .as_any()
             .downcast_ref::<TransportLayerNack>()
             .map_or(false, |a| self == a)
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn clone_to(&self) -> Box<dyn Packet> {
+        Box::new(self.clone())
+    }
+
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }
 
 impl TransportLayerNack {
-    fn size(&self) -> usize {
-        header::HEADER_LENGTH + NACK_OFFSET + self.nacks.len() * 4
-    }
-
     // Header returns the Header associated with this packet.
-    pub fn header(&self) -> header::Header {
-        let l = self.size() + utility::get_padding(self.size());
-
-        header::Header {
-            padding: utility::get_padding(self.size()) != 0,
-            count: header::FORMAT_TLN,
-            packet_type: header::PacketType::TransportSpecificFeedback,
-            length: ((l / 4) - 1) as u16,
+    pub fn header(&self) -> Header {
+        Header {
+            padding: get_padding(self.size()) != 0,
+            count: FORMAT_TLN,
+            packet_type: PacketType::TransportSpecificFeedback,
+            length: ((self.marshal_size() / 4) - 1) as u16,
         }
     }
 }

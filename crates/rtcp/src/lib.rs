@@ -16,45 +16,40 @@
 //!
 //! Decoding RTCP packets:
 //!```nobuild
-//!     let pkt = rtcp.Unmarshal(rtcpData).unwrap();
+//!     let pkt = rtcp::unmarshal(&rtcp_data).unwrap();
 //!
-//!     if let Some(e) = packet
+//!     if let Some(e) = pkt
 //!          .as_any()
-//!          .downcast_ref::<crate::picture_loss_indication::PictureLossIndication>()
+//!          .downcast_ref::<PictureLossIndication>()
 //!      {
 //!    
 //!      }
 //!     else if let Some(e) = packet
 //!          .as_any()
-//!          .downcast_ref::<crate::goodbye::Goodbye>(){}
+//!          .downcast_ref::<Goodbye>(){}
 //!     ....
 //!
 //!
 //! Encoding RTCP packets:
 //!```nobuild
-//!     let pkt = crate::picture_loss_indication::PictureLossIndication{
+//!     let pkt = PictureLossIndication{
 //!         sender_ssrc: sender_ssrc,
 //!         media_ssrc: media_ssrc
 //!     };
 //!
-//!     let pliData = pkt.marshal().unwrap();
+//!     let pli_data = pkt.marshal().unwrap();
 //!     // ...
 
 pub mod compound_packet;
 pub mod error;
-pub mod full_intra_request;
 pub mod goodbye;
 pub mod header;
 pub mod packet;
-pub mod picture_loss_indication;
-pub mod rapid_resynchronization_request;
+pub mod payload_feedbacks;
 pub mod raw_packet;
-pub mod receiver_estimated_maximum_bitrate;
 pub mod receiver_report;
 pub mod reception_report;
 pub mod sender_report;
-pub mod slice_loss_indication;
 pub mod source_description;
-pub mod transport_layer_cc;
-pub mod transport_layer_nack;
+pub mod transport_feedbacks;
 mod util;

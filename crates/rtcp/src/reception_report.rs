@@ -1,7 +1,15 @@
-use crate::error::Error;
+use crate::{error::Error, packet::*, util::*};
 
-use byteorder::{BigEndian, ByteOrder};
-use bytes::BytesMut;
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+use std::any::Any;
+
+pub(crate) const RECEPTION_REPORT_LENGTH: usize = 24;
+pub(crate) const FRACTION_LOST_OFFSET: usize = 4;
+pub(crate) const TOTAL_LOST_OFFSET: usize = 5;
+pub(crate) const LAST_SEQ_OFFSET: usize = 8;
+pub(crate) const JITTER_OFFSET: usize = 12;
+pub(crate) const LAST_SR_OFFSET: usize = 16;
+pub(crate) const DELAY_OFFSET: usize = 20;
 
 /// A ReceptionReport block conveys statistics on the reception of RTP packets
 /// from a single synchronization source.
@@ -36,14 +44,17 @@ pub struct ReceptionReport {
     pub delay: u32,
 }
 
-#[allow(clippy::len_without_is_empty)]
-impl ReceptionReport {
-    pub fn len(&self) -> usize {
-        super::RECEPTION_REPORT_LENGTH
+impl Packet for ReceptionReport {
+    fn destination_ssrc(&self) -> Vec<u32> {
+        vec![]
+    }
+
+    fn size(&self) -> usize {
+        RECEPTION_REPORT_LENGTH
     }
 
     /// Marshal encodes the ReceptionReport in binary
-    pub fn marshal(&self) -> Result<BytesMut, Error> {
+    fn marshal(&self) -> Result<Bytes, Error> {
         /*
          *  0                   1                   2                   3
          *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -62,42 +73,33 @@ impl ReceptionReport {
          * +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
          */
 
-        let mut raw_packet = vec![0u8; super::RECEPTION_REPORT_LENGTH];
+        let mut writer = BytesMut::with_capacity(self.marshal_size());
 
-        BigEndian::write_u32(&mut raw_packet, self.ssrc);
+        writer.put_u32(self.ssrc);
 
-        raw_packet[super::FRACTION_LOST_OFFSET as usize] = self.fraction_lost;
+        writer.put_u8(self.fraction_lost);
 
         // pack TotalLost into 24 bits
         if self.total_lost >= (1 << 25) {
             return Err(Error::InvalidTotalLost);
         }
 
-        let tl_bytes = &mut raw_packet[super::TOTAL_LOST_OFFSET..];
-        tl_bytes[0] = (self.total_lost >> 16) as u8;
-        tl_bytes[1] = (self.total_lost >> 8) as u8;
-        tl_bytes[2] = (self.total_lost) as u8;
+        writer.put_u8(((self.total_lost >> 16) & 0xFF) as u8);
+        writer.put_u8(((self.total_lost >> 8) & 0xFF) as u8);
+        writer.put_u8((self.total_lost & 0xFF) as u8);
 
-        BigEndian::write_u32(
-            &mut raw_packet[super::LAST_SEQ_OFFSET..],
-            self.last_sequence_number,
-        );
+        writer.put_u32(self.last_sequence_number);
+        writer.put_u32(self.jitter);
+        writer.put_u32(self.last_sender_report);
+        writer.put_u32(self.delay);
 
-        BigEndian::write_u32(&mut raw_packet[super::JITTER_OFFSET..], self.jitter);
-
-        BigEndian::write_u32(
-            &mut raw_packet[super::LAST_SR_OFFSET..],
-            self.last_sender_report,
-        );
-
-        BigEndian::write_u32(&mut raw_packet[super::DELAY_OFFSET..], self.delay);
-
-        Ok(raw_packet[..].into())
+        put_padding(&mut writer);
+        Ok(writer.freeze())
     }
 
     /// Unmarshal decodes the ReceptionReport from binary
-    pub fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
-        if raw_packet.len() < super::RECEPTION_REPORT_LENGTH {
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+        if raw_packet.len() < RECEPTION_REPORT_LENGTH {
             return Err(Error::PacketTooShort);
         }
 
@@ -119,18 +121,44 @@ impl ReceptionReport {
          * +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
          */
 
-        self.ssrc = BigEndian::read_u32(raw_packet);
-        self.fraction_lost = raw_packet[super::FRACTION_LOST_OFFSET];
+        let reader = &mut raw_packet.clone();
 
-        let tl_bytes = &mut raw_packet[super::TOTAL_LOST_OFFSET..];
-        self.total_lost =
-            (tl_bytes[2] as u32) | (tl_bytes[1] as u32) << 8 | (tl_bytes[0] as u32) << 16;
+        let ssrc = reader.get_u32();
+        let fraction_lost = reader.get_u8();
 
-        self.last_sequence_number = BigEndian::read_u32(&raw_packet[super::LAST_SEQ_OFFSET..]);
-        self.jitter = BigEndian::read_u32(&raw_packet[super::JITTER_OFFSET..]);
-        self.last_sender_report = BigEndian::read_u32(&raw_packet[super::LAST_SR_OFFSET..]);
-        self.delay = BigEndian::read_u32(&raw_packet[super::DELAY_OFFSET..]);
+        let t0 = reader.get_u8();
+        let t1 = reader.get_u8();
+        let t2 = reader.get_u8();
+        let total_lost = (t2 as u32) | (t1 as u32) << 8 | (t0 as u32) << 16;
 
-        Ok(())
+        let last_sequence_number = reader.get_u32();
+        let jitter = reader.get_u32();
+        let last_sender_report = reader.get_u32();
+        let delay = reader.get_u32();
+
+        Ok(ReceptionReport {
+            ssrc,
+            fraction_lost,
+            total_lost,
+            last_sequence_number,
+            jitter,
+            last_sender_report,
+            delay,
+        })
+    }
+
+    fn equal_to(&self, other: &dyn Packet) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<ReceptionReport>()
+            .map_or(false, |a| self == a)
+    }
+
+    fn clone_to(&self) -> Box<dyn Packet> {
+        Box::new(self.clone())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
