@@ -138,7 +138,7 @@ impl Packet for SliceLossIndication {
 }
 
 impl SliceLossIndication {
-    // Header returns the Header associated with this packet.
+    /// Header returns the Header associated with this packet.
     pub fn header(&self) -> Header {
         Header {
             padding: get_padding(self.size()) != 0,

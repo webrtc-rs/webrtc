@@ -104,32 +104,28 @@ impl Packet for TransportLayerNack {
 
     /// Unmarshal decodes the ReceptionReport from binary
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
-        if raw_packet.len() < (header::HEADER_LENGTH + receiver_report::SSRC_LENGTH) {
+        if raw_packet.len() < (HEADER_LENGTH + SSRC_LENGTH) {
             return Err(Error::PacketTooShort);
         }
 
-        let mut h = header::Header::default();
+        let mut h = Header::default();
 
         h.unmarshal(raw_packet)?;
 
-        if raw_packet.len() < (header::HEADER_LENGTH + (4 * h.length) as usize) {
+        if raw_packet.len() < (HEADER_LENGTH + (4 * h.length) as usize) {
             return Err(Error::PacketTooShort);
         }
 
-        if h.packet_type != header::PacketType::TransportSpecificFeedback
-            || h.count != header::FORMAT_TLN
-        {
+        if h.packet_type != PacketType::TransportSpecificFeedback || h.count != FORMAT_TLN {
             return Err(Error::WrongType);
         }
 
-        self.sender_ssrc = BigEndian::read_u32(&raw_packet[header::HEADER_LENGTH..]);
-        self.media_ssrc = BigEndian::read_u32(
-            &raw_packet[header::HEADER_LENGTH + receiver_report::SSRC_LENGTH..],
-        );
+        self.sender_ssrc = BigEndian::read_u32(&raw_packet[HEADER_LENGTH..]);
+        self.media_ssrc = BigEndian::read_u32(&raw_packet[HEADER_LENGTH + SSRC_LENGTH..]);
 
-        let mut i = header::HEADER_LENGTH + NACK_OFFSET;
+        let mut i = HEADER_LENGTH + NACK_OFFSET;
 
-        while i < (header::HEADER_LENGTH + (h.length * 4) as usize) {
+        while i < (HEADER_LENGTH + (h.length * 4) as usize) {
             self.nacks.push(NackPair {
                 packet_id: BigEndian::read_u16(&raw_packet[i..]),
                 lost_packets: BigEndian::read_u16(&raw_packet[i + 2..]),
@@ -160,17 +156,17 @@ impl Packet for TransportLayerNack {
 
 impl TransportLayerNack {
     fn size(&self) -> usize {
-        header::HEADER_LENGTH + NACK_OFFSET + self.nacks.len() * 4
+        HEADER_LENGTH + NACK_OFFSET + self.nacks.len() * 4
     }
 
     // Header returns the Header associated with this packet.
-    pub fn header(&self) -> header::Header {
+    pub fn header(&self) -> Header {
         let l = self.size() + utility::get_padding(self.size());
 
-        header::Header {
+        Header {
             padding: utility::get_padding(self.size()) != 0,
-            count: header::FORMAT_TLN,
-            packet_type: header::PacketType::TransportSpecificFeedback,
+            count: FORMAT_TLN,
+            packet_type: PacketType::TransportSpecificFeedback,
             length: ((l / 4) - 1) as u16,
         }
     }

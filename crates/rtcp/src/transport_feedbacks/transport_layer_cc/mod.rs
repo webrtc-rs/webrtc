@@ -387,7 +387,7 @@ const PACKET_STATUS_CHUNK_LENGTH: usize = 2;
 #[derive(Default, PartialEq)]
 pub struct TransportLayerCc {
     /// header
-    header: header::Header,
+    header: Header,
     /// SSRC of sender
     sender_ssrc: u32,
     /// SSRC of the media source
@@ -429,7 +429,7 @@ impl fmt::Display for TransportLayerCc {
 impl Packet for TransportLayerCc {
     /// Unmarshal ..
     fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
-        if raw_packet.len() < (header::HEADER_LENGTH + receiver_report::SSRC_LENGTH) {
+        if raw_packet.len() < (HEADER_LENGTH + SSRC_LENGTH) {
             return Err(Error::PacketTooShort);
         }
 
@@ -440,7 +440,7 @@ impl Packet for TransportLayerCc {
         // header's length + payload's length
         let total_length = 4 * (self.header.length + 1);
 
-        if total_length as usize <= header::HEADER_LENGTH + PACKET_CHUNK_OFFSET {
+        if total_length as usize <= HEADER_LENGTH + PACKET_CHUNK_OFFSET {
             return Err(Error::PacketTooShort);
         }
 
@@ -448,30 +448,30 @@ impl Packet for TransportLayerCc {
             return Err(Error::PacketTooShort);
         }
 
-        if self.header.packet_type != header::PacketType::TransportSpecificFeedback
-            || self.header.count != header::FORMAT_TCC
+        if self.header.packet_type != PacketType::TransportSpecificFeedback
+            || self.header.count != FORMAT_TCC
         {
             return Err(Error::WrongType);
         }
 
-        self.sender_ssrc = BigEndian::read_u32(&raw_packet[header::HEADER_LENGTH..]);
+        self.sender_ssrc = BigEndian::read_u32(&raw_packet[HEADER_LENGTH..]);
         self.media_ssrc = BigEndian::read_u32(
-            &raw_packet[header::HEADER_LENGTH + receiver_report::SSRC_LENGTH..],
+            &raw_packet[HEADER_LENGTH + SSRC_LENGTH..],
         );
         self.base_sequence_number =
-            BigEndian::read_u16(&raw_packet[header::HEADER_LENGTH + BASE_SEQUENCE_NUMBER_OFFSET..]);
+            BigEndian::read_u16(&raw_packet[HEADER_LENGTH + BASE_SEQUENCE_NUMBER_OFFSET..]);
 
         self.packet_status_count =
-            BigEndian::read_u16(&raw_packet[header::HEADER_LENGTH + PACKET_STATUS_COUNT_OFFSET..]);
+            BigEndian::read_u16(&raw_packet[HEADER_LENGTH + PACKET_STATUS_COUNT_OFFSET..]);
 
         self.reference_time = util::get_24bits_from_bytes(
-            &raw_packet[header::HEADER_LENGTH + REFERENCE_TIME_OFFSET
-                ..header::HEADER_LENGTH + REFERENCE_TIME_OFFSET + 3],
+            &raw_packet[HEADER_LENGTH + REFERENCE_TIME_OFFSET
+                ..HEADER_LENGTH + REFERENCE_TIME_OFFSET + 3],
         );
 
-        self.fb_pkt_count = raw_packet[header::HEADER_LENGTH + FB_PKT_COUNT_OFFSET];
+        self.fb_pkt_count = raw_packet[HEADER_LENGTH + FB_PKT_COUNT_OFFSET];
 
-        let mut packet_status_pos = header::HEADER_LENGTH + PACKET_CHUNK_OFFSET;
+        let mut packet_status_pos = HEADER_LENGTH + PACKET_CHUNK_OFFSET;
 
         let mut processed_packet_num = 0u16;
 
@@ -595,7 +595,7 @@ impl Packet for TransportLayerCc {
         let mut header = self.header.marshal()?;
 
         let mut payload = BytesMut::new();
-        payload.resize(self.len() - header::HEADER_LENGTH, 0u8);
+        payload.resize(self.len() - HEADER_LENGTH, 0u8);
 
         BigEndian::write_u32(&mut payload, self.sender_ssrc);
         BigEndian::write_u32(&mut payload[4..], self.media_ssrc);
@@ -672,7 +672,7 @@ impl Packet for TransportLayerCc {
 
 impl TransportLayerCc {
     fn packet_len(&self) -> usize {
-        let mut n = header::HEADER_LENGTH + PACKET_CHUNK_OFFSET + self.packet_chunks.len() * 2;
+        let mut n = HEADER_LENGTH + PACKET_CHUNK_OFFSET + self.packet_chunks.len() * 2;
         for d in &self.recv_deltas {
             let delta = d.delta / TYPE_TCC_DELTA_SCALE_FACTOR;
 

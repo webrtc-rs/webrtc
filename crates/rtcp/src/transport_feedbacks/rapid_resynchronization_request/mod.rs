@@ -1,15 +1,14 @@
-use byteorder::{BigEndian, ByteOrder};
-use bytes::BytesMut;
-use std::fmt;
-
-use super::error::Error;
-use super::{header, receiver_report};
-use crate::{packet::Packet, util::get_padding};
-
+#[cfg(test)]
 mod rapid_resynchronization_request_test;
 
+use crate::{error::Error, header::*, packet::*, util::*};
+
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+use std::any::Any;
+use std::fmt;
+
 const RRR_LENGTH: usize = 2;
-const RRR_HEADER_LENGTH: usize = receiver_report::SSRC_LENGTH * 2;
+const RRR_HEADER_LENGTH: usize = SSRC_LENGTH * 2;
 const RRR_MEDIA_OFFSET: usize = 4;
 
 /// The RapidResynchronizationRequest packet informs the encoder about the loss of an undefined amount of coded video data belonging to one or more pictures
@@ -32,83 +31,83 @@ impl fmt::Display for RapidResynchronizationRequest {
 }
 
 impl Packet for RapidResynchronizationRequest {
-    /// Unmarshal decodes the RapidResynchronizationRequest from binary
-    fn unmarshal(&mut self, raw_packet: &mut BytesMut) -> Result<(), Error> {
-        if raw_packet.len() < (header::HEADER_LENGTH + (receiver_report::SSRC_LENGTH * 2)) {
-            return Err(Error::PacketTooShort);
-        }
+    /// Destination SSRC returns an array of SSRC values that this packet refers to.
+    fn destination_ssrc(&self) -> Vec<u32> {
+        vec![self.media_ssrc]
+    }
 
-        let mut h = header::Header::default();
-
-        h.unmarshal(raw_packet)?;
-
-        if h.packet_type != header::PacketType::TransportSpecificFeedback
-            || h.count != header::FORMAT_RRR
-        {
-            return Err(Error::WrongType);
-        }
-
-        self.sender_ssrc = BigEndian::read_u32(&raw_packet[header::HEADER_LENGTH..]);
-        self.media_ssrc = BigEndian::read_u32(
-            &raw_packet[header::HEADER_LENGTH + receiver_report::SSRC_LENGTH..],
-        );
-
-        Ok(())
+    fn size(&self) -> usize {
+        HEADER_LENGTH + RRR_HEADER_LENGTH
     }
 
     /// Marshal encodes the RapidResynchronizationRequest in binary
-    fn marshal(&self) -> Result<BytesMut, Error> {
+    fn marshal(&self) -> Result<Bytes, Error> {
         /*
          * RRR does not require parameters.  Therefore, the length field MUST be
          * 2, and there MUST NOT be any Feedback Control Information.
          *
          * The semantics of this FB message is independent of the payload type.
          */
-        let mut raw_packet = BytesMut::new();
-        raw_packet.resize(self.len(), 0u8);
+        let mut writer = BytesMut::with_capacity(self.marshal_size());
 
-        let packet_body = &mut raw_packet[header::HEADER_LENGTH..];
+        let h = self.header();
+        let data = h.marshal()?;
+        writer.extend(data);
 
-        BigEndian::write_u32(packet_body, self.sender_ssrc);
-        BigEndian::write_u32(&mut packet_body[RRR_MEDIA_OFFSET..], self.media_ssrc);
+        writer.put_u32(self.sender_ssrc);
+        writer.put_u32(self.media_ssrc);
 
-        let header_data = self.header().marshal()?;
-
-        raw_packet[..header_data.len()].copy_from_slice(&header_data);
-        Ok(raw_packet)
+        put_padding(&mut writer);
+        Ok(writer.freeze())
     }
 
-    /// Destination SSRC returns an array of SSRC values that this packet refers to.
-    fn destination_ssrc(&self) -> Vec<u32> {
-        vec![self.media_ssrc]
+    /// Unmarshal decodes the RapidResynchronizationRequest from binary
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+        if raw_packet.len() < (HEADER_LENGTH + (SSRC_LENGTH * 2)) {
+            return Err(Error::PacketTooShort);
+        }
+
+        let h = Header::unmarshal(raw_packet)?;
+
+        if h.packet_type != PacketType::TransportSpecificFeedback || h.count != FORMAT_RRR {
+            return Err(Error::WrongType);
+        }
+
+        let reader = &mut raw_packet.slice(HEADER_LENGTH..);
+
+        let sender_ssrc = reader.get_u32();
+        let media_ssrc = reader.get_u32();
+
+        Ok(RapidResynchronizationRequest {
+            sender_ssrc,
+            media_ssrc,
+        })
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn trait_eq(&self, other: &dyn Packet) -> bool {
+    fn equal_to(&self, other: &dyn Packet) -> bool {
         other
             .as_any()
             .downcast_ref::<RapidResynchronizationRequest>()
             .map_or(false, |a| self == a)
     }
+
+    fn clone_to(&self) -> Box<dyn Packet> {
+        Box::new(self.clone())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl RapidResynchronizationRequest {
-    fn len(&self) -> usize {
-        header::HEADER_LENGTH + RRR_HEADER_LENGTH
-    }
-
-    // Header returns the Header associated with this packet.
-    pub fn header(&self) -> header::Header {
-        let l = self.len() + get_padding(self.len());
-
-        header::Header {
-            padding: get_padding(self.len()) != 0,
-            count: header::FORMAT_RRR,
-            packet_type: header::PacketType::TransportSpecificFeedback,
-            length: ((l / 4) - 1) as u16,
+    /// Header returns the Header associated with this packet.
+    pub fn header(&self) -> Header {
+        Header {
+            padding: get_padding(self.size()) != 0,
+            count: FORMAT_RRR,
+            packet_type: PacketType::TransportSpecificFeedback,
+            length: ((self.marshal_size() / 4) - 1) as u16,
         }
     }
 }
