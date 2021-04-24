@@ -1,7 +1,7 @@
 #![warn(rust_2018_idioms)]
 #![allow(dead_code)]
 
-//mod cipher;
+mod cipher;
 pub mod config;
 //pub mod context;
 pub mod error;

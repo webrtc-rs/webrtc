@@ -15,6 +15,8 @@ pub const LABEL_SRTCP_ENCRYPTION: u8 = 0x03;
 pub const LABEL_SRTCP_AUTHENTICATION_TAG: u8 = 0x04;
 pub const LABEL_SRTCP_SALT: u8 = 0x05;
 
+pub(crate) const SRTCP_INDEX_SIZE: usize = 4;
+
 pub(crate) fn aes_cm_key_derivation(
     label: u8,
     master_key: &[u8],

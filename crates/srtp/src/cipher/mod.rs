@@ -1,11 +1,5 @@
-#[cfg(test)]
-mod cipher_test;
-
 pub mod cipher_aead_aes_gcm;
 pub mod cipher_aes_cm_hmac_sha1;
-
-pub(crate) use cipher_aead_aes_gcm::CipherAeadAesGcm;
-pub(crate) use cipher_aes_cm_hmac_sha1::CipherAesCmHmacSha1;
 
 use crate::error::Error;
 
@@ -34,7 +28,7 @@ pub(crate) trait Cipher {
         encrypted: &[u8],
         header: &rtp::header::Header,
         roc: u32,
-    ) -> Result<Vec<u8>, Error>;
+    ) -> Result<Bytes, Error>;
 
     /// Encrypt RTCP payload.
     fn encrypt_rtcp(
@@ -42,7 +36,7 @@ pub(crate) trait Cipher {
         decrypted: &[u8],
         srtcp_index: usize,
         ssrc: u32,
-    ) -> Result<Vec<u8>, Error>;
+    ) -> Result<Bytes, Error>;
 
     /// Decrypt RTCP encrypted payload.
     fn decrypt_rtcp(
@@ -50,5 +44,5 @@ pub(crate) trait Cipher {
         encrypted: &[u8],
         srtcp_index: usize,
         ssrc: u32,
-    ) -> Result<Vec<u8>, Error>;
+    ) -> Result<Bytes, Error>;
 }

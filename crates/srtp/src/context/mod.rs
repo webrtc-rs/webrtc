@@ -1,3 +1,8 @@
+#[cfg(test)]
+mod context_test;
+mod srtcp_test;
+mod srtp_test;
+
 use std::collections::HashMap;
 
 use util::replay_detector::*;
@@ -5,15 +10,10 @@ use util::replay_detector::*;
 use super::protection_profile::*;
 use crate::{cipher, error::Error, option};
 
-mod context_test;
-mod srtcp_test;
-mod srtp_test;
-
 pub mod srtcp;
 pub mod srtp;
 
 const MAX_ROC_DISORDER: u16 = 100;
-pub(crate) const SRTCP_INDEX_SIZE: usize = 4;
 
 // Encrypt/Decrypt state for a single SRTP SSRC
 #[derive(Default)]
