@@ -1,11 +1,11 @@
 [package]
 name = "rtcp"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Rain Liu <yliu@webrtc.rs>", "Michael Uti <utimichael9@gmail.com>"]
 edition = "2018"
 description = "A pure Rust implementation of RTCP"
 license = "MIT"
-documentation = "https://docs.rs/webrtc-rtcp"
+documentation = "https://docs.rs/rtcp"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/rtcp"
 
