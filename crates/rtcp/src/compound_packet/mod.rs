@@ -91,8 +91,6 @@ impl CompoundPacket {
             return Err(Error::EmptyCompound);
         }
 
-        // ToDo: Any way to match types cleanly???? @metaclips
-        // ToDo: We need proper error handling. @metaclips
         // SenderReport and ReceiverReport are the only types that
         // are allowed to be the first packet in a compound datagram
         if self.0[0].as_any().downcast_ref::<SenderReport>().is_none()

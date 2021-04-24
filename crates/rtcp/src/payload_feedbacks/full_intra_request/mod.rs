@@ -10,8 +10,8 @@ use std::fmt;
 /// A FIREntry is a (ssrc, seqno) pair, as carried by FullIntraRequest.
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct FirEntry {
-    ssrc: u32,
-    sequence_number: u8,
+    pub ssrc: u32,
+    pub sequence_number: u8,
 }
 
 /// The FullIntraRequest packet is used to reliably request an Intra frame
@@ -19,10 +19,9 @@ pub struct FirEntry {
 /// recovery, which should use PictureLossIndication (PLI) instead.
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct FullIntraRequest {
-    sender_ssrc: u32,
-    media_ssrc: u32,
-
-    fir: Vec<FirEntry>,
+    pub sender_ssrc: u32,
+    pub media_ssrc: u32,
+    pub fir: Vec<FirEntry>,
 }
 
 const FIR_OFFSET: usize = 8;

@@ -143,7 +143,7 @@ impl SourceDescriptionChunk {
         Err(Error::PacketTooShort)
     }
 
-    fn marshal_size(&self) -> usize {
+    pub fn marshal_size(&self) -> usize {
         let mut len = SDES_SOURCE_LEN;
         for it in &self.items {
             len += it.marshal_size();
@@ -168,7 +168,7 @@ pub struct SourceDescriptionItem {
 }
 
 impl SourceDescriptionItem {
-    fn marshal_size(&self) -> usize {
+    pub fn marshal_size(&self) -> usize {
         /*
          *   0                   1                   2                   3
          *   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1

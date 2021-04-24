@@ -1,5 +1,6 @@
 use super::*;
 use crate::goodbye::Goodbye;
+use crate::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 
 // An RTCP packet from a packet dump
 const REAL_PACKET: [u8; 116] = [
@@ -80,12 +81,12 @@ fn test_bad_compound() {
         panic!("Unmarshal(badcompound), want Goodbye")
     }
 
-    /*TODO: if let None = compound.0[1]
+    if let None = compound.0[1]
         .as_any()
         .downcast_ref::<PictureLossIndication>()
     {
         panic!("Unmarshal(badcompound), want PictureLossIndication")
-    }*/
+    }
 }
 
 #[test]

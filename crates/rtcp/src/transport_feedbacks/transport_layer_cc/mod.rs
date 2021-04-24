@@ -350,7 +350,7 @@ impl RecvDelta {
     }
 
     /// Unmarshal ..
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+    pub fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
         let chunk_len = raw_packet.len();
 
         // must be 1 or 2 bytes
@@ -512,7 +512,7 @@ impl Packet for TransportLayerCc {
                 }
             }
         }
-        //TODO: why not using put_padding(&mut writer); like others?
+        //FIXME: why not using put_padding(&mut writer); like others?
         Ok(writer.freeze())
     }
 
