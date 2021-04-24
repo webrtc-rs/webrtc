@@ -1,6 +1,6 @@
 use bytes::{Bytes, BytesMut};
 use criterion::{criterion_group, criterion_main, Criterion};
-use webrtc_rtp::{header::*, packet::*, packetizer::*};
+use rtp::{header::*, packet::*, packetizer::*};
 
 fn benchmark_packet(c: &mut Criterion) {
     let pkt = Packet {

@@ -1,13 +1,12 @@
-use crate::error::Error;
-use crate::packetizer::Marshaller;
+#[cfg(test)]
+mod abs_send_time_extension_test;
+
+use crate::{error::Error, packetizer::Marshaller};
 
 use bytes::{BufMut, Bytes, BytesMut};
 use std::time::Duration;
 
-#[cfg(test)]
-mod abs_send_time_extension_test;
-
-const ABS_SEND_TIME_EXTENSION_SIZE: usize = 3;
+pub const ABS_SEND_TIME_EXTENSION_SIZE: usize = 3;
 
 /// AbsSendTimeExtension is a extension payload format in
 /// http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time

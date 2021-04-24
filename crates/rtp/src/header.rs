@@ -3,28 +3,28 @@ use crate::error::*;
 use crate::packetizer::Marshaller;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
-const HEADER_LENGTH: usize = 4;
-const VERSION_SHIFT: u8 = 6;
-const VERSION_MASK: u8 = 0x3;
-const PADDING_SHIFT: u8 = 5;
-const PADDING_MASK: u8 = 0x1;
-const EXTENSION_SHIFT: u8 = 4;
-const EXTENSION_MASK: u8 = 0x1;
+pub const HEADER_LENGTH: usize = 4;
+pub const VERSION_SHIFT: u8 = 6;
+pub const VERSION_MASK: u8 = 0x3;
+pub const PADDING_SHIFT: u8 = 5;
+pub const PADDING_MASK: u8 = 0x1;
+pub const EXTENSION_SHIFT: u8 = 4;
+pub const EXTENSION_MASK: u8 = 0x1;
 pub const EXTENSION_PROFILE_ONE_BYTE: u16 = 0xBEDE;
 pub const EXTENSION_PROFILE_TWO_BYTE: u16 = 0x1000;
-const EXTENSION_ID_RESERVED: u8 = 0xF;
-const CC_MASK: u8 = 0xF;
-const MARKER_SHIFT: u8 = 7;
-const MARKER_MASK: u8 = 0x1;
-const PT_MASK: u8 = 0x7F;
-const SEQ_NUM_OFFSET: usize = 2;
-const SEQ_NUM_LENGTH: usize = 2;
-const TIMESTAMP_OFFSET: usize = 4;
-const TIMESTAMP_LENGTH: usize = 4;
-const SSRC_OFFSET: usize = 8;
-const SSRC_LENGTH: usize = 4;
-const CSRC_OFFSET: usize = 12;
-const CSRC_LENGTH: usize = 4;
+pub const EXTENSION_ID_RESERVED: u8 = 0xF;
+pub const CC_MASK: u8 = 0xF;
+pub const MARKER_SHIFT: u8 = 7;
+pub const MARKER_MASK: u8 = 0x1;
+pub const PT_MASK: u8 = 0x7F;
+pub const SEQ_NUM_OFFSET: usize = 2;
+pub const SEQ_NUM_LENGTH: usize = 2;
+pub const TIMESTAMP_OFFSET: usize = 4;
+pub const TIMESTAMP_LENGTH: usize = 4;
+pub const SSRC_OFFSET: usize = 8;
+pub const SSRC_LENGTH: usize = 4;
+pub const CSRC_OFFSET: usize = 12;
+pub const CSRC_LENGTH: usize = 4;
 
 #[derive(Debug, Eq, PartialEq, Default)]
 pub struct Extension {
@@ -322,7 +322,7 @@ impl Marshaller for Header {
 }
 
 impl Header {
-    fn get_extension_payload_len(&self) -> usize {
+    pub fn get_extension_payload_len(&self) -> usize {
         let mut extension_length = 0;
         match self.extension_profile {
             EXTENSION_PROFILE_ONE_BYTE => {

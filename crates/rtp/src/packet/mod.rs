@@ -1,12 +1,10 @@
-use crate::error::Error;
-use crate::header::*;
-
-use crate::packetizer::Marshaller;
-use bytes::{BufMut, Bytes, BytesMut};
-use std::fmt;
-
 #[cfg(test)]
 mod packet_test;
+
+use crate::{error::Error, header::*, packetizer::Marshaller};
+
+use bytes::{BufMut, Bytes, BytesMut};
+use std::fmt;
 
 /// Packet represents an RTP Packet
 /// NOTE: Raw is populated by Marshal/Unmarshal and should not be modified

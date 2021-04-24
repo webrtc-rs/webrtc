@@ -1,26 +1,28 @@
-use crate::error::Error;
-use crate::packetizer::{Depacketizer, Payloader};
-
-use bytes::{BufMut, Bytes, BytesMut};
-
 #[cfg(test)]
 mod h264_test;
+
+use crate::{
+    error::Error,
+    packetizer::{Depacketizer, Payloader},
+};
+
+use bytes::{BufMut, Bytes, BytesMut};
 
 /// H264Payloader payloads H264 packets
 pub struct H264Payloader;
 
-const STAPA_NALU_TYPE: u8 = 24;
-const FUA_NALU_TYPE: u8 = 28;
+pub const STAPA_NALU_TYPE: u8 = 24;
+pub const FUA_NALU_TYPE: u8 = 28;
 
-const FUA_HEADER_SIZE: isize = 2;
-const STAPA_HEADER_SIZE: usize = 1;
-const STAPA_NALU_LENGTH_SIZE: usize = 2;
+pub const FUA_HEADER_SIZE: isize = 2;
+pub const STAPA_HEADER_SIZE: usize = 1;
+pub const STAPA_NALU_LENGTH_SIZE: usize = 2;
 
-const NALU_TYPE_BITMASK: u8 = 0x1F;
-const NALU_REF_IDC_BITMASK: u8 = 0x60;
-const FUA_START_BITMASK: u8 = 0x80;
+pub const NALU_TYPE_BITMASK: u8 = 0x1F;
+pub const NALU_REF_IDC_BITMASK: u8 = 0x60;
+pub const FUA_START_BITMASK: u8 = 0x80;
 
-static ANNEXB_NALUSTART_CODE: Bytes = Bytes::from_static(&[0x00, 0x00, 0x00, 0x01]);
+pub static ANNEXB_NALUSTART_CODE: Bytes = Bytes::from_static(&[0x00, 0x00, 0x00, 0x01]);
 
 fn next_ind(nalu: &Bytes, start: usize) -> (isize, isize) {
     let mut zero_count = 0;

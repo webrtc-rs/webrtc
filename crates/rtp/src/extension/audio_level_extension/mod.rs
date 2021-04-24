@@ -1,13 +1,12 @@
-use crate::error::Error;
-use crate::packetizer::Marshaller;
-
-use bytes::{BufMut, Bytes, BytesMut};
-
 #[cfg(test)]
 mod audio_level_extension_test;
 
+use crate::{error::Error, packetizer::Marshaller};
+
+use bytes::{BufMut, Bytes, BytesMut};
+
 // AUDIO_LEVEL_EXTENSION_SIZE One byte header size
-const AUDIO_LEVEL_EXTENSION_SIZE: usize = 1;
+pub const AUDIO_LEVEL_EXTENSION_SIZE: usize = 1;
 
 /// AudioLevelExtension is a extension payload format described in
 /// https://tools.ietf.org/html/rfc6464

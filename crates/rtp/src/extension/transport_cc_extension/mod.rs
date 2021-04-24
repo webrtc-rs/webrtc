@@ -1,13 +1,12 @@
-use crate::error::Error;
-use crate::packetizer::Marshaller;
+#[cfg(test)]
+mod transport_cc_extension_test;
+
+use crate::{error::Error, packetizer::Marshaller};
 
 use bytes::{BufMut, Bytes, BytesMut};
 
 // transport-wide sequence
-const TRANSPORT_CC_EXTENSION_SIZE: usize = 2;
-
-#[cfg(test)]
-mod transport_cc_extension_test;
+pub const TRANSPORT_CC_EXTENSION_SIZE: usize = 2;
 
 /// TransportCCExtension is a extension payload format in
 /// https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01

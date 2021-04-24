@@ -1,15 +1,13 @@
-use crate::error::Error;
-use crate::extension::abs_send_time_extension::*;
-use crate::header::*;
-use crate::packet::*;
-use crate::sequence::*;
+#[cfg(test)]
+mod packetizer_test;
+
+use crate::{
+    error::Error, extension::abs_send_time_extension::*, header::*, packet::*, sequence::*,
+};
 
 use bytes::{Bytes, BytesMut};
 use std::marker::Sized;
 use std::time::{Duration, SystemTime};
-
-#[cfg(test)]
-mod packetizer_test;
 
 pub trait Marshaller {
     fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error>

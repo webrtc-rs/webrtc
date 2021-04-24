@@ -1,12 +1,14 @@
-use crate::error::Error;
-use crate::packetizer::{Depacketizer, Payloader};
-
-use bytes::{Buf, BufMut, Bytes, BytesMut};
-
 #[cfg(test)]
 mod vp8_test;
 
-const VP8HEADER_SIZE: isize = 1;
+use crate::{
+    error::Error,
+    packetizer::{Depacketizer, Payloader},
+};
+
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+
+pub const VP8_HEADER_SIZE: isize = 1;
 
 /// Vp8Payloader payloads VP8 packets
 pub struct Vp8Payloader;
@@ -39,7 +41,7 @@ impl Payloader for Vp8Payloader {
          *     first packet of each encoded frame.
          */
 
-        let max_fragment_size = mtu as isize - VP8HEADER_SIZE;
+        let max_fragment_size = mtu as isize - VP8_HEADER_SIZE;
         let mut payload_data_remaining = payload.len() as isize;
         let mut payload_data_index: usize = 0;
         let mut payloads = vec![];
@@ -52,7 +54,7 @@ impl Payloader for Vp8Payloader {
         while payload_data_remaining > 0 {
             let current_fragment_size =
                 std::cmp::min(max_fragment_size, payload_data_remaining) as usize;
-            let mut out = BytesMut::with_capacity(VP8HEADER_SIZE as usize + current_fragment_size);
+            let mut out = BytesMut::with_capacity(VP8_HEADER_SIZE as usize + current_fragment_size);
             if payload_data_remaining == payload.len() as isize {
                 out.put_u8(0x10);
             }
