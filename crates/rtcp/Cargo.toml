@@ -1,5 +1,5 @@
 [package]
-name = "webrtc-rtcp"
+name = "rtcp"
 version = "0.2.0"
 authors = ["Rain Liu <yliu@webrtc.rs>", "Michael Uti <utimichael9@gmail.com>"]
 edition = "2018"
