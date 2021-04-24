@@ -1,11 +1,15 @@
+#[cfg(test)]
+mod cipher_test;
+
 pub mod cipher_aead_aes_gcm;
 pub mod cipher_aes_cm_hmac_sha1;
-mod test;
 
 pub(crate) use cipher_aead_aes_gcm::CipherAeadAesGcm;
 pub(crate) use cipher_aes_cm_hmac_sha1::CipherAesCmHmacSha1;
 
 use crate::error::Error;
+
+use bytes::Bytes;
 
 /// Cipher represents a implementation of one
 /// of the SRTP Specific ciphers.
@@ -22,7 +26,7 @@ pub(crate) trait Cipher {
         payload: &[u8],
         header: &rtp::header::Header,
         roc: u32,
-    ) -> Result<Vec<u8>, Error>;
+    ) -> Result<Bytes, Error>;
 
     /// Decrypt RTP encrypted payload.
     fn decrypt_rtp(

@@ -1,7 +1,5 @@
 use thiserror::Error;
 
-use crate::stream::Stream;
-
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("index_over_kdr > 0 is not supported yet")]
@@ -40,8 +38,12 @@ pub enum Error {
     InvalidRtpStream,
     #[error("this stream is not a RTCPStream")]
     InvalidRtcpStream,
-    #[error("WebRtcUtilError: {0}")]
-    Util(#[from] util::Error),
+    #[error("UtilError: {0}")]
+    UtilError(#[from] util::error::Error),
+    #[error("RtpError: {0}")]
+    RtpError(#[from] rtp::error::Error),
+    #[error("RtcpError: {0}")]
+    RtcpError(#[from] rtcp::error::Error),
     #[error("IoError: {0}")]
     Io(#[from] std::io::Error),
     #[error("AesGcm: {0}")]
@@ -52,6 +54,6 @@ pub enum Error {
     SendUnit(#[from] tokio::sync::mpsc::error::SendError<()>),
     #[error("SendError: {0}")]
     SendU32(#[from] tokio::sync::mpsc::error::SendError<u32>),
-    #[error("SendError: {0}")]
-    SendStream(#[from] tokio::sync::mpsc::error::SendError<Stream>),
+    //#[error("SendError: {0}")]
+    //SendStream(#[from] tokio::sync::mpsc::error::SendError<Stream>),
 }

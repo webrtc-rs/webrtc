@@ -1,7 +1,7 @@
 [package]
 name = "webrtc-srtp"
-version = "0.1.1"
-authors = ["Rain Liu <yuliu@webrtc.rs>"]
+version = "0.2.0"
+authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of SRTP"
 license = "MIT"
@@ -12,21 +12,22 @@ repository = "https://github.com/webrtc-rs/srtp"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-util = { package = "webrtc-rs-util", version = "0.1.5" }
-rtp = { package = "webrtc-rs-rtp", version = "0.1.0" }
-rtcp = { package = "webrtc-rs-rtcp", version = "0.1.0" }
+util = { package = "webrtc-util", version = "0.1.17" }
+rtp = "0.2.1"
+rtcp = "0.2.1"
 byteorder = "1.3.2"
+bytes = "1"
+thiserror = "1"
 hmac = { version = "0.10.1", features = ["std"] }
 sha-1 = "0.9.1"
 ctr = "0.6.0"
 aes = "0.6.0"
 subtle = "2.1.1"
-tokio = { version = "1.0", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
 async-trait = "0.1"
 log = "0.4"
-aead = { version = "^0.3", features = ["std"] }
+aead = { version = "^0.3", features = ["std"] } #TODO: upgrade to 0.4.0
 aes-gcm = "^0.8"
-thiserror = "1.0.23"
 
 [dev-dependencies]
 tokio-test = "0.4"

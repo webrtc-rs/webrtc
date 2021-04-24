@@ -12,15 +12,7 @@ mod srtp_test;
 pub mod srtcp;
 pub mod srtp;
 
-pub const LABEL_SRTP_ENCRYPTION: u8 = 0x00;
-pub const LABEL_SRTP_AUTHENTICATION_TAG: u8 = 0x01;
-pub const LABEL_SRTP_SALT: u8 = 0x02;
-pub const LABEL_SRTCP_ENCRYPTION: u8 = 0x03;
-pub const LABEL_SRTCP_AUTHENTICATION_TAG: u8 = 0x04;
-pub const LABEL_SRTCP_SALT: u8 = 0x05;
-
 const MAX_ROC_DISORDER: u16 = 100;
-pub(crate) const MAX_SEQUENCE_NUMBER: u16 = 65535;
 pub(crate) const SRTCP_INDEX_SIZE: usize = 4;
 
 // Encrypt/Decrypt state for a single SRTP SSRC

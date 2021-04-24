@@ -1,10 +1,9 @@
 use crate::error::Error;
-
+use rtp::packetizer::Marshaller;
 use util::Buffer;
 
+use bytes::{Bytes, BytesMut};
 use tokio::sync::mpsc;
-
-use std::io::Cursor;
 
 /// Limit the buffer size to 1MB
 pub const SRTP_BUFFER_SIZE: usize = 1000 * 1000;
@@ -63,15 +62,15 @@ impl Stream {
     /// ReadRTP reads and decrypts full RTP packet and its header from the nextConn
     pub async fn read_rtp(
         &mut self,
-        buf: &mut [u8],
+        buf: &mut BytesMut,
     ) -> Result<(usize, rtp::header::Header), Error> {
         if !self.is_rtp {
             return Err(Error::InvalidRtpStream);
         }
 
         let n = self.buffer.read(buf, None).await?;
-        let mut reader = Cursor::new(buf);
-        let header = rtp::header::Header::unmarshal(&mut reader)?;
+        let b = Bytes::from(buf[..std::cmp::min(4 /*rtp::header::HEADER_LENGTH*/, n)].to_vec());
+        let header = rtp::header::Header::unmarshal(&b)?;
 
         Ok((n, header))
     }
@@ -79,15 +78,15 @@ impl Stream {
     /// ReadRTCP reads and decrypts full RTP packet and its header from the nextConn
     pub async fn read_rtcp(
         &mut self,
-        buf: &mut [u8],
+        buf: &mut BytesMut,
     ) -> Result<(usize, rtcp::header::Header), Error> {
         if self.is_rtp {
             return Err(Error::InvalidRtcpStream);
         }
 
         let n = self.buffer.read(buf, None).await?;
-        let mut reader = Cursor::new(buf);
-        let header = rtcp::header::Header::unmarshal(&mut reader)?;
+        let b = Bytes::from(buf[..std::cmp::min(rtcp::header::HEADER_LENGTH, n)].to_vec());
+        let header = rtcp::header::Header::unmarshal(&b)?;
 
         Ok((n, header))
     }

@@ -3,7 +3,8 @@ use aes_gcm::{
     Aes128Gcm,
 };
 use byteorder::{BigEndian, ByteOrder};
-use rtp::header;
+use bytes::{Bytes, BytesMut};
+use rtp::packetizer::Marshaller;
 
 use super::Cipher;
 use crate::{context, error::Error, key_derivation};
@@ -29,13 +30,15 @@ impl Cipher for CipherAeadAesGcm {
         payload: &[u8],
         header: &rtp::header::Header,
         roc: u32,
-    ) -> Result<Vec<u8>, Error> {
-        let mut writer: Vec<u8> = Vec::new();
+    ) -> Result<Bytes, Error> {
+        let mut writer =
+            BytesMut::with_capacity(header.marshal_size() + payload.len() + self.auth_tag_len());
 
-        header.marshal(&mut writer)?;
+        header.marshal_to(&mut writer)?;
+
         let nonce = self.rtp_initialization_vector(header, roc);
 
-        let mut encrypted = self.srtp_cipher.encrypt(
+        let encrypted = self.srtp_cipher.encrypt(
             Nonce::from_slice(&nonce),
             Payload {
                 msg: &payload,
@@ -43,14 +46,14 @@ impl Cipher for CipherAeadAesGcm {
             },
         )?;
 
-        writer.append(&mut encrypted);
-        Ok(writer)
+        writer.extend(encrypted);
+        Ok(writer.freeze())
     }
 
     fn decrypt_rtp(
         &mut self,
         ciphertext: &[u8],
-        header: &header::Header,
+        header: &rtp::header::Header,
         roc: u32,
     ) -> Result<Vec<u8>, Error> {
         let nonce = self.rtp_initialization_vector(header, roc);

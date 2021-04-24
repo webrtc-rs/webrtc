@@ -3,8 +3,6 @@ use super::*;
 use byteorder::{BigEndian, ReadBytesExt};
 use std::io::BufReader;
 
-pub(crate) const MAX_SRTCP_INDEX: usize = 0x7FFFFFFF;
-
 impl Context {
     /// DecryptRTCP decrypts a RTCP packet with an encrypted payload
     pub fn decrypt_rtcp(&mut self, encrypted: &[u8]) -> Result<Vec<u8>, Error> {

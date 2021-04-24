@@ -12,6 +12,9 @@ use hmac::{Hmac, Mac};
 use sha1::Sha1;
 use subtle::ConstantTimeEq;
 
+use bytes::{Bytes, BytesMut};
+use rtp::packetizer::Marshaller;
+
 use std::io::BufWriter;
 
 type HmacSha1 = Hmac<Sha1>;
@@ -170,18 +173,15 @@ impl Cipher for CipherAesCmHmacSha1 {
         payload: &[u8],
         header: &rtp::header::Header,
         roc: u32,
-    ) -> Result<Vec<u8>, Error> {
-        let mut dst: Vec<u8> =
-            Vec::with_capacity(header.size() + payload.len() + self.auth_tag_len());
+    ) -> Result<Bytes, Error> {
+        let mut writer =
+            BytesMut::with_capacity(header.marshal_size() + payload.len() + self.auth_tag_len());
 
         // Copy the header unencrypted.
-        {
-            let mut writer = BufWriter::<&mut Vec<u8>>::new(dst.as_mut());
-            header.marshal(&mut writer)?;
-        }
+        header.marshal_to(&mut writer)?;
 
         // Write the plaintext header to the destination buffer.
-        dst.extend_from_slice(payload);
+        writer.extend_from_slice(payload);
 
         // Encrypt the payload
         let counter = generate_counter(
@@ -199,7 +199,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         // Generate the auth tag.
         let auth_tag = self.generate_srtp_auth_tag(&dst, roc)?;
 
-        dst.extend_from_slice(&auth_tag);
+        writer.extend_from_slice(&auth_tag);
 
         Ok(dst)
     }
