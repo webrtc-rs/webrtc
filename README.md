@@ -47,12 +47,12 @@
 
 ### Work in Progress Towards 1.0
 
-[sdp-badge]: https://img.shields.io/crates/v/webrtc-rs-sdp.svg
-[sdp-url]: https://crates.io/crates/webrtc-rs-sdp
-[rtp-badge]: https://img.shields.io/crates/v/webrtc-rtp.svg
-[rtp-url]: https://crates.io/crates/webrtc-rtp
-[rtcp-badge]: https://img.shields.io/crates/v/webrtc-rtcp.svg
-[rtcp-url]: https://crates.io/crates/webrtc-rtcp
+[sdp-badge]: https://img.shields.io/crates/v/sdp.svg
+[sdp-url]: https://crates.io/crates/sdp
+[rtp-badge]: https://img.shields.io/crates/v/rtp.svg
+[rtp-url]: https://crates.io/crates/rtp
+[rtcp-badge]: https://img.shields.io/crates/v/rtcp.svg
+[rtcp-url]: https://crates.io/crates/rtcp
 [srtp-badge]: https://img.shields.io/crates/v/webrtc-srtp.svg
 [srtp-url]: https://crates.io/crates/webrtc-srtp
 [dtls-badge]: https://img.shields.io/crates/v/webrtc-dtls.svg
@@ -81,10 +81,11 @@
   - sync up to [pion/sdp/v2.4.0](https://github.com/pion/sdp/tree/b29f0bbd42fc719eabdb027117217b0ddb27abf1)
   - [ ] TODO: catch up with pion/sdp/v3 v3.0.4
 - [x] RTP: [webrtc-rs/rtp](https://github.com/webrtc-rs/rtp) [![rtp][rtp-badge]][rtp-url]
-  - sync up to [pion/rtp/v1.6.2](https://github.com/pion/rtp/tree/0d8026ebf7c048a65f30b053f3ce22e7d5e738ee)
+  - sync up to [pion/rtp/v1.6.1](https://github.com/pion/rtp/tree/0d8026ebf7c048a65f30b053f3ce22e7d5e738ee)
+  - [x] Done: catch up with pion/rtp v1.6.2
 - [x] RTCP: [webrtc-rs/rtcp](https://github.com/webrtc-rs/rtcp) [![rtcp][rtcp-badge]][rtcp-url]
   - sync up to [pion/rtcp/v1.2.4](https://github.com/pion/rtcp/tree/d136b4927f135b17cb15c9b287e22a9e053bd498)
-  - [ ] TODO: catch up with pion/rtcp v1.2.6
+  - [x] Done: catch up with pion/rtcp v1.2.6
 - [x] SRTP: [webrtc-rs/srtp](https://github.com/webrtc-rs/srtp) [![srtp][srtp-badge]][srtp-url]
   - sync up to [pion/srtp/v1.5.2](https://github.com/pion/srtp/tree/071a6b95ab38e9eab9324dacd608dde1ec0c7cd3)
   - [ ] TODO: catch up with pion/srtp/v2 v2.0.2
@@ -93,6 +94,7 @@
   - [ ] TODO: catch up with pion/dtls/v2 v2.0.8
 - [x] STUN: [webrtc-rs/stun](https://github.com/webrtc-rs/stun) [![stun][stun-badge]][stun-url]
   - sync up to [pion/stun/v0.3.5](https://github.com/pion/stun/tree/7b20b792b7e18b3846032aaa80e8c0e2d412d0f8)
+  - [x] Done: catch up with pion/stun v0.3.5
 - [x] mDNS: [webrtc-rs/mdns](https://github.com/webrtc-rs/mdns) [![mdns][mdns-badge]][mdns-url]
   - sync up to [pion/mdns/v0.0.4](https://github.com/pion/mdns/tree/2e1665e5f21a89afc152bb4b3791b30eda9b28cf)
   - [ ] TODO: catch up with pion/mdns v0.0.5
