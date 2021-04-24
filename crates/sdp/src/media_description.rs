@@ -121,7 +121,7 @@ impl MediaDescription {
             rtpmap += format!("/{}", channels).as_str();
         }
 
-        if &fmtp != "" {
+        if !fmtp.is_empty() {
             self.with_value_attribute("rtpmap".to_string(), rtpmap)
                 .with_value_attribute("fmtp".to_string(), format!("{} {}", payload_type, fmtp))
         } else {

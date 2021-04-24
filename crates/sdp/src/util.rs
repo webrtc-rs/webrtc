@@ -157,16 +157,16 @@ pub(crate) fn merge_codecs(mut codec: Codec, codecs: &mut HashMap<u8, Codec>) {
         if saved_codec.payload_type == 0 {
             saved_codec.payload_type = codec.payload_type
         }
-        if &saved_codec.name == "" {
+        if saved_codec.name.is_empty() {
             saved_codec.name = codec.name
         }
         if saved_codec.clock_rate == 0 {
             saved_codec.clock_rate = codec.clock_rate
         }
-        if &saved_codec.encoding_parameters == "" {
+        if saved_codec.encoding_parameters.is_empty() {
             saved_codec.encoding_parameters = codec.encoding_parameters
         }
-        if &saved_codec.fmtp == "" {
+        if saved_codec.fmtp.is_empty() {
             saved_codec.fmtp = codec.fmtp
         }
         saved_codec.rtcp_feedback.append(&mut codec.rtcp_feedback);
@@ -198,16 +198,18 @@ fn equivalent_fmtp(want: &str, got: &str) -> bool {
 }
 
 pub(crate) fn codecs_match(wanted: &Codec, got: &Codec) -> bool {
-    if &wanted.name != "" && wanted.name.to_lowercase() != got.name.to_lowercase() {
+    if !wanted.name.is_empty() && wanted.name.to_lowercase() != got.name.to_lowercase() {
         return false;
     }
     if wanted.clock_rate != 0 && wanted.clock_rate != got.clock_rate {
         return false;
     }
-    if &wanted.encoding_parameters != "" && wanted.encoding_parameters != got.encoding_parameters {
+    if !wanted.encoding_parameters.is_empty()
+        && wanted.encoding_parameters != got.encoding_parameters
+    {
         return false;
     }
-    if &wanted.fmtp != "" && !equivalent_fmtp(&wanted.fmtp, &got.fmtp) {
+    if !wanted.fmtp.is_empty() && !equivalent_fmtp(&wanted.fmtp, &got.fmtp) {
         return false;
     }
 

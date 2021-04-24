@@ -76,7 +76,7 @@ impl ExtMap {
 
         let valdir: Vec<&str> = fields[0].split('/').collect();
         let value = valdir[0].parse::<isize>()?;
-        if value < 1 || value > 246 {
+        if !(1..=246).contains(&value) {
             return Err(Error::ExtMapParse(format!(
                 "{} -- extmap key must be in the range 1-256",
                 valdir[0]

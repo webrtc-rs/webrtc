@@ -147,9 +147,7 @@ pub struct RepeatTime {
 
 impl fmt::Display for RepeatTime {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut fields = vec![];
-        fields.push(format!("{}", self.interval));
-        fields.push(format!("{}", self.duration));
+        let mut fields = vec![format!("{}", self.interval), format!("{}", self.duration)];
         for value in &self.offsets {
             fields.push(format!("{}", value));
         }
@@ -672,7 +670,7 @@ fn s9<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
 ) -> Result<Option<StateFn<'a, R>>, Error> {
     let (key, num_bytes) = read_type(lexer.reader)?;
-    if &key == "" && num_bytes == 0 {
+    if key.is_empty() && num_bytes == 0 {
         return Ok(None);
     }
 
@@ -723,7 +721,7 @@ fn s11<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
 ) -> Result<Option<StateFn<'a, R>>, Error> {
     let (key, num_bytes) = read_type(lexer.reader)?;
-    if &key == "" && num_bytes == 0 {
+    if key.is_empty() && num_bytes == 0 {
         return Ok(None);
     }
 
@@ -742,7 +740,7 @@ fn s12<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
 ) -> Result<Option<StateFn<'a, R>>, Error> {
     let (key, num_bytes) = read_type(lexer.reader)?;
-    if &key == "" && num_bytes == 0 {
+    if key.is_empty() && num_bytes == 0 {
         return Ok(None);
     }
 
@@ -773,7 +771,7 @@ fn s13<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
 ) -> Result<Option<StateFn<'a, R>>, Error> {
     let (key, num_bytes) = read_type(lexer.reader)?;
-    if &key == "" && num_bytes == 0 {
+    if key.is_empty() && num_bytes == 0 {
         return Ok(None);
     }
 
@@ -795,7 +793,7 @@ fn s14<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
 ) -> Result<Option<StateFn<'a, R>>, Error> {
     let (key, num_bytes) = read_type(lexer.reader)?;
-    if &key == "" && num_bytes == 0 {
+    if key.is_empty() && num_bytes == 0 {
         return Ok(None);
     }
 
@@ -830,7 +828,7 @@ fn s15<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
 ) -> Result<Option<StateFn<'a, R>>, Error> {
     let (key, num_bytes) = read_type(lexer.reader)?;
-    if &key == "" && num_bytes == 0 {
+    if key.is_empty() && num_bytes == 0 {
         return Ok(None);
     }
 
@@ -862,7 +860,7 @@ fn s16<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
 ) -> Result<Option<StateFn<'a, R>>, Error> {
     let (key, num_bytes) = read_type(lexer.reader)?;
-    if &key == "" && num_bytes == 0 {
+    if key.is_empty() && num_bytes == 0 {
         return Ok(None);
     }
 

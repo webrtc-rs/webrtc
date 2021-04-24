@@ -1,11 +1,11 @@
 [package]
-name = "webrtc-rs-sdp"
-version = "0.1.0"
-authors = ["Rain Liu <yuliu@webrtc.rs>"]
+name = "sdp"
+version = "0.1.1"
+authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of SDP"
 license = "MIT"
-documentation = "https://docs.rs/webrtc-rs-sdp"
+documentation = "https://docs.rs/sdp"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/sdp"
 
@@ -14,4 +14,4 @@ repository = "https://github.com/webrtc-rs/sdp"
 [dependencies]
 url = "2.1.0"
 rand = "0.8.0"
-thiserror = "1.0.23"
+thiserror = "1"
