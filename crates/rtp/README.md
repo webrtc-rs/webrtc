@@ -12,11 +12,11 @@
  <a href="https://deps.rs/repo/github/webrtc-rs/rtp"> 
   <img src="https://deps.rs/repo/github/webrtc-rs/rtp/status.svg">
  </a>
- <a href="https://crates.io/crates/webrtc-rtp"> 
-  <img src="https://img.shields.io/crates/v/webrtc-rtp.svg">
+ <a href="https://crates.io/crates/rtp"> 
+  <img src="https://img.shields.io/crates/v/rtp.svg">
  </a> 
- <a href="https://docs.rs/webrtc-rtp"> 
-  <img src="https://docs.rs/webrtc-rtp/badge.svg">
+ <a href="https://docs.rs/rtp"> 
+  <img src="https://docs.rs/rtp/badge.svg">
  </a>
  <a href="https://discord.gg/4Ju8UHdXMs">
   <img src="https://img.shields.io/discord/800204819540869120?logo=discord" alt="Discord">
@@ -26,5 +26,5 @@
  </a>
 </p>
 <p align="center">
- A pure Rust implementation of RTP. Rewrite Pion RTP (<a href="http://Pion.ly">http://Pion.ly</a>) in Rust
+ A pure Rust implementation of RTP. Rewrite <a href="https://Pion.ly">Pion</a> RTP in Rust
 </p>
