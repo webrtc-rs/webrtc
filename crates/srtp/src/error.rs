@@ -4,6 +4,39 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("duplicated packet")]
+    ErrDuplicated,
+    #[error("SRTP master key is not long enough")]
+    ErrShortSrtpMasterKey,
+    #[error("SRTP master salt is not long enough")]
+    ErrShortSrtpMasterSalt,
+    #[error("no such SRTP Profile")]
+    ErrNoSuchSrtpProfile,
+    #[error("indexOverKdr > 0 is not supported yet")]
+    ErrNonZeroKdrNotSupported,
+    #[error("exporter called with wrong label")]
+    ErrExporterWrongLabel,
+    #[error("no config provided")]
+    ErrNoConfig,
+    #[error("no conn provided")]
+    ErrNoConn,
+    #[error("failed to verify auth tag")]
+    ErrFailedToVerifyAuthTag,
+    #[error("packet is too short to be rtcp packet")]
+    ErrTooShortRtcp,
+    #[error("payload differs")]
+    ErrPayloadDiffers,
+    #[error("started channel used incorrectly, should only be closed")]
+    ErrStartedChannelUsedIncorrectly,
+    #[error("stream has not been inited, unable to close")]
+    ErrStreamNotInited,
+    #[error("stream is already closed")]
+    ErrStreamAlreadyClosed,
+    #[error("stream is already inited")]
+    ErrStreamAlreadyInited,
+    #[error("failed to cast child")]
+    ErrFailedTypeAssertion,
+
     #[error("index_over_kdr > 0 is not supported yet")]
     UnsupportedIndexOverKdr,
     #[error("SRTP Master Key must be len {0}, got {1}")]

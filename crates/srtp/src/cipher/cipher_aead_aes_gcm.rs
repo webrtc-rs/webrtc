@@ -32,6 +32,7 @@ impl Cipher for CipherAeadAesGcm {
         header: &rtp::header::Header,
         roc: u32,
     ) -> Result<Bytes, Error> {
+        // Grow the given buffer to fit the output.
         let mut writer =
             BytesMut::with_capacity(header.marshal_size() + payload.len() + self.auth_tag_len());
 
@@ -57,6 +58,10 @@ impl Cipher for CipherAeadAesGcm {
         header: &rtp::header::Header,
         roc: u32,
     ) -> Result<Bytes, Error> {
+        if ciphertext.len() < self.auth_tag_len() {
+            return Err(Error::ErrFailedToVerifyAuthTag);
+        }
+
         let nonce = self.rtp_initialization_vector(header, roc);
         let payload_offset = header.marshal_size();
         let decrypted_msg: Vec<u8> = self.srtp_cipher.decrypt(
@@ -81,7 +86,6 @@ impl Cipher for CipherAeadAesGcm {
         ssrc: u32,
     ) -> Result<Bytes, Error> {
         let iv = self.rtcp_initialization_vector(srtcp_index, ssrc);
-
         let aad = self.rtcp_additional_authenticated_data(decrypted, srtcp_index);
 
         let encrypted_data = self.srtcp_cipher.encrypt(
@@ -106,8 +110,11 @@ impl Cipher for CipherAeadAesGcm {
         srtcp_index: usize,
         ssrc: u32,
     ) -> Result<Bytes, Error> {
-        let nonce = self.rtcp_initialization_vector(srtcp_index, ssrc);
+        if encrypted.len() < self.auth_tag_len() + SRTCP_INDEX_SIZE {
+            return Err(Error::ErrFailedToVerifyAuthTag);
+        }
 
+        let nonce = self.rtcp_initialization_vector(srtcp_index, ssrc);
         let aad = self.rtcp_additional_authenticated_data(&encrypted, srtcp_index);
 
         let decrypted_data = self.srtcp_cipher.decrypt(
