@@ -5,8 +5,8 @@ use super::common_description::*;
 use super::extmap::*;
 
 /// Constants for extmap key
-const EXT_MAP_VALUE_TRANSPORT_CC_KEY: isize = 3;
-const EXT_MAP_VALUE_TRANSPORT_CC_URI: &str =
+pub const EXT_MAP_VALUE_TRANSPORT_CC_KEY: isize = 3;
+pub const EXT_MAP_VALUE_TRANSPORT_CC_URI: &str =
     "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
 
 /// MediaDescription represents a media type.

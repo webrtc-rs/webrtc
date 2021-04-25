@@ -13,30 +13,30 @@ use super::util::*;
 mod session_description_test;
 
 /// Constants for SDP attributes used in JSEP
-const ATTR_KEY_CANDIDATE: &str = "candidate";
-const ATTR_KEY_END_OF_CANDIDATES: &str = "end-of-candidates";
-const ATTR_KEY_IDENTITY: &str = "identity";
-const ATTR_KEY_GROUP: &str = "group";
-const ATTR_KEY_SSRC: &str = "ssrc";
-const ATTR_KEY_SSRCGROUP: &str = "ssrc-group";
-const ATTR_KEY_MSID: &str = "msid";
-const ATTR_KEY_MSID_SEMANTIC: &str = "msid-semantic";
-const ATTR_KEY_CONNECTION_SETUP: &str = "setup";
-const ATTR_KEY_MID: &str = "mid";
-const ATTR_KEY_ICELITE: &str = "ice-lite";
-const ATTR_KEY_RTCPMUX: &str = "rtcp-mux";
-const ATTR_KEY_RTCPRSIZE: &str = "rtcp-rsize";
-const ATTR_KEY_INACTIVE: &str = "inactive";
-const ATTR_KEY_RECV_ONLY: &str = "recvonly";
-const ATTR_KEY_SEND_ONLY: &str = "sendonly";
-const ATTR_KEY_SEND_RECV: &str = "sendrecv";
-const ATTR_KEY_EXT_MAP: &str = "extmap";
+pub const ATTR_KEY_CANDIDATE: &str = "candidate";
+pub const ATTR_KEY_END_OF_CANDIDATES: &str = "end-of-candidates";
+pub const ATTR_KEY_IDENTITY: &str = "identity";
+pub const ATTR_KEY_GROUP: &str = "group";
+pub const ATTR_KEY_SSRC: &str = "ssrc";
+pub const ATTR_KEY_SSRCGROUP: &str = "ssrc-group";
+pub const ATTR_KEY_MSID: &str = "msid";
+pub const ATTR_KEY_MSID_SEMANTIC: &str = "msid-semantic";
+pub const ATTR_KEY_CONNECTION_SETUP: &str = "setup";
+pub const ATTR_KEY_MID: &str = "mid";
+pub const ATTR_KEY_ICELITE: &str = "ice-lite";
+pub const ATTR_KEY_RTCPMUX: &str = "rtcp-mux";
+pub const ATTR_KEY_RTCPRSIZE: &str = "rtcp-rsize";
+pub const ATTR_KEY_INACTIVE: &str = "inactive";
+pub const ATTR_KEY_RECV_ONLY: &str = "recvonly";
+pub const ATTR_KEY_SEND_ONLY: &str = "sendonly";
+pub const ATTR_KEY_SEND_RECV: &str = "sendrecv";
+pub const ATTR_KEY_EXT_MAP: &str = "extmap";
 
 /// Constants for semantic tokens used in JSEP
-const SEMANTIC_TOKEN_LIP_SYNCHRONIZATION: &str = "LS";
-const SEMANTIC_TOKEN_FLOW_IDENTIFICATION: &str = "FID";
-const SEMANTIC_TOKEN_FORWARD_ERROR_CORRECTION: &str = "FEC";
-const SEMANTIC_TOKEN_WEB_RTCMEDIA_STREAMS: &str = "WMS";
+pub const SEMANTIC_TOKEN_LIP_SYNCHRONIZATION: &str = "LS";
+pub const SEMANTIC_TOKEN_FLOW_IDENTIFICATION: &str = "FID";
+pub const SEMANTIC_TOKEN_FORWARD_ERROR_CORRECTION: &str = "FEC";
+pub const SEMANTIC_TOKEN_WEB_RTCMEDIA_STREAMS: &str = "WMS";
 
 /// Version describes the value provided by the "v=" field which gives
 /// the version of the Session Description Protocol.
@@ -46,12 +46,12 @@ pub type Version = isize;
 /// originator of the session plus a session identifier and version number.
 #[derive(Debug, Default)]
 pub struct Origin {
-    username: String,
-    session_id: u64,
-    session_version: u64,
-    network_type: String,
-    address_type: String,
-    unicast_address: String,
+    pub username: String,
+    pub session_id: u64,
+    pub session_version: u64,
+    pub network_type: String,
+    pub address_type: String,
+    pub unicast_address: String,
 }
 
 impl fmt::Display for Origin {
@@ -100,8 +100,8 @@ pub type PhoneNumber = String;
 /// repeated sessions scheduling.
 #[derive(Debug, Default)]
 pub struct TimeZone {
-    adjustment_time: u64,
-    offset: i64,
+    pub adjustment_time: u64,
+    pub offset: i64,
 }
 
 impl fmt::Display for TimeZone {
@@ -117,19 +117,19 @@ impl fmt::Display for TimeZone {
 pub struct TimeDescription {
     /// t=<start-time> <stop-time>
     /// https://tools.ietf.org/html/rfc4566#section-5.9
-    timing: Timing,
+    pub timing: Timing,
 
     /// r=<repeat interval> <active duration> <offsets from start-time>
     /// https://tools.ietf.org/html/rfc4566#section-5.10
-    repeat_times: Vec<RepeatTime>,
+    pub repeat_times: Vec<RepeatTime>,
 }
 
 /// Timing defines the "t=" field's structured representation for the start and
 /// stop times.
 #[derive(Debug, Default)]
 pub struct Timing {
-    start_time: u64,
-    stop_time: u64,
+    pub start_time: u64,
+    pub stop_time: u64,
 }
 
 impl fmt::Display for Timing {
@@ -142,9 +142,9 @@ impl fmt::Display for Timing {
 /// represents the intervals and durations for repeated scheduled sessions.
 #[derive(Debug, Default)]
 pub struct RepeatTime {
-    interval: i64,
-    duration: i64,
-    offsets: Vec<i64>,
+    pub interval: i64,
+    pub duration: i64,
+    pub offsets: Vec<i64>,
 }
 
 impl fmt::Display for RepeatTime {

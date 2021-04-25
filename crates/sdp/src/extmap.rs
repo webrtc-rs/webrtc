@@ -26,10 +26,10 @@ pub const AUDIO_LEVEL_URI: &str = "urn:ietf:params:rtp-hdrext:ssrc-audio-level";
 /// ExtMap represents the activation of a single RTP header extension
 #[derive(Debug, Clone, Default)]
 pub struct ExtMap {
-    pub(crate) value: isize,
-    pub(crate) direction: Direction,
-    pub(crate) uri: Option<Url>,
-    pub(crate) ext_attr: Option<String>,
+    pub value: isize,
+    pub direction: Direction,
+    pub uri: Option<Url>,
+    pub ext_attr: Option<String>,
 }
 
 impl fmt::Display for ExtMap {
