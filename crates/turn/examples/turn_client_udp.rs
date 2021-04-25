@@ -1,5 +1,3 @@
-use webrtc_turn as turn;
-
 use turn::client::*;
 
 use clap::{App, AppSettings, Arg};

@@ -1,5 +1,3 @@
-use webrtc_turn as turn;
-
 use turn::auth::*;
 use turn::errors::*;
 use turn::relay::relay_static::*;
