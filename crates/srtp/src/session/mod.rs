@@ -1,15 +1,17 @@
+#[cfg(test)]
 mod session_rtcp_test;
+#[cfg(test)]
 mod session_rtp_test;
 
-use crate::{config::Config, context::Context, error::Error, option, stream::Stream};
+use crate::{config::*, context::*, error::Error, option::*, stream::*};
 
-use util::Conn;
-use util::{buffer::ERR_BUFFER_FULL, Buffer};
+use rtp::packetizer::Marshaller;
+use util::{buffer::*, conn::Conn};
 
-use std::marker::{Send, Sync};
+use bytes::{Bytes, BytesMut};
 use std::{
     collections::HashMap,
-    io::{BufWriter, Cursor},
+    marker::{Send, Sync},
     sync::Arc,
 };
 use tokio::sync::{mpsc, Mutex};
@@ -50,14 +52,14 @@ impl Session {
             &config.keys.remote_master_salt,
             config.profile,
             if config.remote_rtp_options.is_none() {
-                Some(option::srtp_replay_protection(
+                Some(srtp_replay_protection(
                     DEFAULT_SESSION_SRTP_REPLAY_PROTECTION_WINDOW,
                 ))
             } else {
                 config.remote_rtp_options
             },
             if config.remote_rtcp_options.is_none() {
-                Some(option::srtcp_replay_protection(
+                Some(srtcp_replay_protection(
                     DEFAULT_SESSION_SRTCP_REPLAY_PROTECTION_WINDOW,
                 ))
             } else {
@@ -75,7 +77,8 @@ impl Session {
         let cloned_close_stream_tx = close_stream_tx.clone();
 
         tokio::spawn(async move {
-            let mut buf: Vec<u8> = vec![0; 8192];
+            let mut buf = BytesMut::with_capacity(8192);
+            buf.resize(8192, 0u8);
 
             loop {
                 let incoming_stream = Session::incoming(
@@ -121,7 +124,7 @@ impl Session {
 
     async fn incoming(
         udp_rx: &Arc<dyn Conn + Send + Sync>,
-        buf: &mut [u8],
+        buf: &mut BytesMut,
         streams_map: &Arc<Mutex<HashMap<u32, Buffer>>>,
         close_stream_tx: &mpsc::Sender<u32>,
         new_stream_tx: &mut mpsc::Sender<Stream>,
@@ -133,15 +136,15 @@ impl Session {
             return Err(Error::SessionEof);
         }
 
+        let encrypted = Bytes::from(buf[0..n].to_vec()); //TODO: how to avoid this memory allocation
         let decrypted = if is_rtp {
-            remote_context.decrypt_rtp(&buf[0..n])?
+            remote_context.decrypt_rtp(&encrypted)?
         } else {
-            remote_context.decrypt_rtcp(&buf[0..n])?
+            remote_context.decrypt_rtcp(&encrypted)?
         };
 
         let ssrcs = if is_rtp {
-            let mut reader = Cursor::new(&decrypted);
-            vec![rtp::header::Header::unmarshal(&mut reader)?.ssrc]
+            vec![rtp::header::Header::unmarshal(&decrypted)?.ssrc]
         } else {
             rtcp::packet::unmarshal(&decrypted)?.destination_ssrc()
         };
@@ -159,7 +162,7 @@ impl Session {
                 Err(err) => {
                     // Silently drop data when the buffer is full.
                     if err != ERR_BUFFER_FULL.clone() {
-                        return Err(Error::Util(err));
+                        return Err(Error::UtilError(err));
                     }
                 }
             }
@@ -168,8 +171,8 @@ impl Session {
         Ok(())
     }
 
-    // listen on the given SSRC to create a stream, it can be used
-    // if you want a certain SSRC, but don't want to wait for Accept
+    /// listen on the given SSRC to create a stream, it can be used
+    /// if you want a certain SSRC, but don't want to wait for Accept
     pub async fn listen(&mut self, ssrc: u32) -> Result<Stream, Error> {
         let mut streams = self.streams_map.lock().await;
 
@@ -183,7 +186,7 @@ impl Session {
         }
     }
 
-    // accept returns a stream to handle RTCP for a single SSRC
+    /// accept returns a stream to handle RTCP for a single SSRC
     pub async fn accept(&mut self) -> Result<Stream, Error> {
         let result = self.new_stream_rx.recv().await;
         if let Some(stream) = result {
@@ -199,7 +202,7 @@ impl Session {
         Ok(())
     }
 
-    pub async fn write(&mut self, buf: &[u8], is_rtp: bool) -> Result<usize, Error> {
+    pub async fn write(&mut self, buf: &Bytes, is_rtp: bool) -> Result<usize, Error> {
         if self.is_rtp != is_rtp {
             return Err(Error::SessionRtpRtcpTypeMismatch);
         }
@@ -219,20 +222,12 @@ impl Session {
     }
 
     pub async fn write_rtp(&mut self, packet: &rtp::packet::Packet) -> Result<usize, Error> {
-        let mut raw: Vec<u8> = vec![];
-        {
-            let mut writer = BufWriter::<&mut Vec<u8>>::new(raw.as_mut());
-            packet.marshal(&mut writer)?;
-        }
+        let raw = packet.marshal()?;
         self.write(&raw, true).await
     }
 
-    pub async fn write_rtcp(&mut self, packet: &rtcp::packet::Packet) -> Result<usize, Error> {
-        let mut raw: Vec<u8> = vec![];
-        {
-            let mut writer = BufWriter::<&mut Vec<u8>>::new(raw.as_mut());
-            packet.marshal(&mut writer)?;
-        }
+    pub async fn write_rtcp(&mut self, packet: &dyn rtcp::packet::Packet) -> Result<usize, Error> {
+        let raw = packet.marshal()?;
         self.write(&raw, false).await
     }
 }

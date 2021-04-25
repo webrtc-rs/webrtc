@@ -1,8 +1,5 @@
 use super::Cipher;
-use crate::context::*;
-use crate::error::Error;
-use crate::key_derivation::*;
-use crate::protection_profile::*;
+use crate::{error::Error, key_derivation::*, protection_profile::*};
 
 use aes::cipher::generic_array::GenericArray;
 use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
@@ -12,14 +9,16 @@ use hmac::{Hmac, Mac};
 use sha1::Sha1;
 use subtle::ConstantTimeEq;
 
+use bytes::{BufMut, Bytes, BytesMut};
+use rtp::packetizer::Marshaller;
+
 use std::io::BufWriter;
 
 type HmacSha1 = Hmac<Sha1>;
 type Aes128Ctr = ctr::Ctr128<aes::Aes128>;
 
-pub(crate) const CIPHER_AES_CM_HMAC_SHA1AUTH_TAG_LEN: usize = 10;
+pub const CIPHER_AES_CM_HMAC_SHA1AUTH_TAG_LEN: usize = 10;
 
-// ToDo: @rainliu whats a use case for srtp_session_auth and srtcp_session_auth
 pub(crate) struct CipherAesCmHmacSha1 {
     srtp_session_key: Vec<u8>,
     srtp_session_salt: Vec<u8>,
@@ -63,7 +62,7 @@ impl CipherAesCmHmacSha1 {
             master_salt.len(),
         )?;
 
-        let auth_key_len = ProtectionProfile::AES128CMHMACSHA1_80.auth_key_len();
+        let auth_key_len = ProtectionProfile::Aes128CmHmacSha1_80.auth_key_len();
 
         let srtp_session_auth_tag = aes_cm_key_derivation(
             LABEL_SRTP_AUTHENTICATION_TAG,
@@ -95,21 +94,21 @@ impl CipherAesCmHmacSha1 {
         })
     }
 
+    /// https://tools.ietf.org/html/rfc3711#section-4.2
+    /// In the case of SRTP, M SHALL consist of the Authenticated
+    /// Portion of the packet (as specified in Figure 1) concatenated with
+    /// the roc, M = Authenticated Portion || roc;
+    ///
+    /// The pre-defined authentication transform for SRTP is HMAC-SHA1
+    /// [RFC2104].  With HMAC-SHA1, the SRTP_PREFIX_LENGTH (Figure 3) SHALL
+    /// be 0.  For SRTP (respectively SRTCP), the HMAC SHALL be applied to
+    /// the session authentication key and M as specified above, i.e.,
+    /// HMAC(k_a, M).  The HMAC output SHALL then be truncated to the n_tag
+    /// left-most bits.
+    /// - Authenticated portion of the packet is everything BEFORE MKI
+    /// - k_a is the session message authentication key
+    /// - n_tag is the bit-length of the output authentication tag
     fn generate_srtp_auth_tag(&mut self, buf: &[u8], roc: u32) -> Result<Vec<u8>, Error> {
-        // https://tools.ietf.org/html/rfc3711#section-4.2
-        // In the case of SRTP, M SHALL consist of the Authenticated
-        // Portion of the packet (as specified in Figure 1) concatenated with
-        // the roc, M = Authenticated Portion || roc;
-        //
-        // The pre-defined authentication transform for SRTP is HMAC-SHA1
-        // [RFC2104].  With HMAC-SHA1, the SRTP_PREFIX_LENGTH (Figure 3) SHALL
-        // be 0.  For SRTP (respectively SRTCP), the HMAC SHALL be applied to
-        // the session authentication key and M as specified above, i.e.,
-        // HMAC(k_a, M).  The HMAC output SHALL then be truncated to the n_tag
-        // left-most bits.
-        // - Authenticated portion of the packet is everything BEFORE MKI
-        // - k_a is the session message authentication key
-        // - n_tag is the bit-length of the output authentication tag
         self.srtp_session_auth.reset();
 
         self.srtp_session_auth.update(buf);
@@ -130,18 +129,18 @@ impl CipherAesCmHmacSha1 {
         Ok(code_bytes[0..self.auth_tag_len()].to_vec())
     }
 
+    /// https://tools.ietf.org/html/rfc3711#section-4.2
+    ///
+    /// The pre-defined authentication transform for SRTP is HMAC-SHA1
+    /// [RFC2104].  With HMAC-SHA1, the SRTP_PREFIX_LENGTH (Figure 3) SHALL
+    /// be 0.  For SRTP (respectively SRTCP), the HMAC SHALL be applied to
+    /// the session authentication key and M as specified above, i.e.,
+    /// HMAC(k_a, M).  The HMAC output SHALL then be truncated to the n_tag
+    /// left-most bits.
+    /// - Authenticated portion of the packet is everything BEFORE MKI
+    /// - k_a is the session message authentication key
+    /// - n_tag is the bit-length of the output authentication tag
     fn generate_srtcp_auth_tag(&mut self, buf: &[u8]) -> Vec<u8> {
-        // https://tools.ietf.org/html/rfc3711#section-4.2
-        //
-        // The pre-defined authentication transform for SRTP is HMAC-SHA1
-        // [RFC2104].  With HMAC-SHA1, the SRTP_PREFIX_LENGTH (Figure 3) SHALL
-        // be 0.  For SRTP (respectively SRTCP), the HMAC SHALL be applied to
-        // the session authentication key and M as specified above, i.e.,
-        // HMAC(k_a, M).  The HMAC output SHALL then be truncated to the n_tag
-        // left-most bits.
-        // - Authenticated portion of the packet is everything BEFORE MKI
-        // - k_a is the session message authentication key
-        // - n_tag is the bit-length of the output authentication tag
         self.srtcp_session_auth.reset();
 
         self.srtcp_session_auth.update(buf);
@@ -159,7 +158,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         CIPHER_AES_CM_HMAC_SHA1AUTH_TAG_LEN
     }
 
-    fn get_rtcp_index(&self, input: &[u8]) -> usize {
+    fn get_rtcp_index(&self, input: &Bytes) -> usize {
         let tail_offset = input.len() - (self.auth_tag_len() + SRTCP_INDEX_SIZE);
         (BigEndian::read_u32(&input[tail_offset..tail_offset + SRTCP_INDEX_SIZE]) & !(1 << 31))
             as usize
@@ -167,21 +166,18 @@ impl Cipher for CipherAesCmHmacSha1 {
 
     fn encrypt_rtp(
         &mut self,
-        payload: &[u8],
+        payload: &Bytes,
         header: &rtp::header::Header,
         roc: u32,
-    ) -> Result<Vec<u8>, Error> {
-        let mut dst: Vec<u8> =
-            Vec::with_capacity(header.size() + payload.len() + self.auth_tag_len());
+    ) -> Result<Bytes, Error> {
+        let mut writer =
+            BytesMut::with_capacity(header.marshal_size() + payload.len() + self.auth_tag_len());
 
         // Copy the header unencrypted.
-        {
-            let mut writer = BufWriter::<&mut Vec<u8>>::new(dst.as_mut());
-            header.marshal(&mut writer)?;
-        }
+        header.marshal_to(&mut writer)?;
 
         // Write the plaintext header to the destination buffer.
-        dst.extend_from_slice(payload);
+        writer.extend_from_slice(payload);
 
         // Encrypt the payload
         let counter = generate_counter(
@@ -193,28 +189,27 @@ impl Cipher for CipherAesCmHmacSha1 {
         let key = GenericArray::from_slice(&self.srtp_session_key);
         let nonce = GenericArray::from_slice(&counter);
         let mut stream = Aes128Ctr::new(&key, &nonce);
-
-        stream.encrypt(&mut dst[header.payload_offset..]);
+        let payload_offset = header.marshal_size();
+        stream.encrypt(&mut writer[payload_offset..]);
 
         // Generate the auth tag.
-        let auth_tag = self.generate_srtp_auth_tag(&dst, roc)?;
+        let auth_tag = self.generate_srtp_auth_tag(&writer, roc)?;
+        writer.extend(auth_tag);
 
-        dst.extend_from_slice(&auth_tag);
-
-        Ok(dst)
+        Ok(writer.freeze())
     }
 
     fn decrypt_rtp(
         &mut self,
-        encrypted: &[u8],
+        encrypted: &Bytes,
         header: &rtp::header::Header,
         roc: u32,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Bytes, Error> {
         if encrypted.len() < self.auth_tag_len() {
             return Err(Error::SrtpTooSmall(encrypted.len(), self.auth_tag_len()));
         }
 
-        let mut dst: Vec<u8> = Vec::with_capacity(encrypted.len() - self.auth_tag_len());
+        let mut writer = BytesMut::with_capacity(encrypted.len() - self.auth_tag_len());
 
         // Split the auth tag and the cipher text into two parts.
         let actual_tag = &encrypted[encrypted.len() - self.auth_tag_len()..];
@@ -230,7 +225,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         }
 
         // Write cipher_text to the destination buffer.
-        dst.extend_from_slice(cipher_text);
+        writer.extend_from_slice(cipher_text);
 
         // Decrypt the ciphertext for the payload.
         let counter = generate_counter(
@@ -243,23 +238,23 @@ impl Cipher for CipherAesCmHmacSha1 {
         let key = GenericArray::from_slice(&self.srtp_session_key);
         let nonce = GenericArray::from_slice(&counter);
         let mut stream = Aes128Ctr::new(&key, &nonce);
+        let payload_offset = header.marshal_size();
+        stream.decrypt(&mut writer[payload_offset..]);
 
-        stream.decrypt(&mut dst[header.payload_offset..]);
-
-        Ok(dst)
+        Ok(writer.freeze())
     }
 
     fn encrypt_rtcp(
         &mut self,
-        decrypted: &[u8],
+        decrypted: &Bytes,
         srtcp_index: usize,
         ssrc: u32,
-    ) -> Result<Vec<u8>, Error> {
-        let mut dst: Vec<u8> =
-            Vec::with_capacity(decrypted.len() + SRTCP_INDEX_SIZE + self.auth_tag_len());
+    ) -> Result<Bytes, Error> {
+        let mut writer =
+            BytesMut::with_capacity(decrypted.len() + SRTCP_INDEX_SIZE + self.auth_tag_len());
 
         // Write the decrypted to the destination buffer.
-        dst.extend_from_slice(decrypted);
+        writer.extend_from_slice(decrypted);
 
         // Encrypt everything after header
         let counter = generate_counter(
@@ -273,30 +268,24 @@ impl Cipher for CipherAesCmHmacSha1 {
         let nonce = GenericArray::from_slice(&counter);
         let mut stream = Aes128Ctr::new(&key, &nonce);
 
-        stream.encrypt(&mut dst[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH..]);
+        stream.encrypt(&mut writer[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH..]);
 
         // Add SRTCP index and set Encryption bit
-        let mut srtcp_index_buffer: Vec<u8> = vec![];
-        {
-            let mut writer = BufWriter::<&mut Vec<u8>>::new(srtcp_index_buffer.as_mut());
-            writer.write_u32::<BigEndian>(srtcp_index as u32 | (1u32 << 31))?;
-        }
-        dst.extend_from_slice(&srtcp_index_buffer);
+        writer.put_u32(srtcp_index as u32 | (1u32 << 31));
 
         // Generate the auth tag.
-        let auth_tag = self.generate_srtcp_auth_tag(&dst);
+        let auth_tag = self.generate_srtcp_auth_tag(&writer);
+        writer.extend(auth_tag);
 
-        dst.extend_from_slice(&auth_tag);
-
-        Ok(dst)
+        Ok(writer.freeze())
     }
 
     fn decrypt_rtcp(
         &mut self,
-        encrypted: &[u8],
+        encrypted: &Bytes,
         srtcp_index: usize,
         ssrc: u32,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Bytes, Error> {
         if encrypted.len() < self.auth_tag_len() + SRTCP_INDEX_SIZE {
             return Err(Error::SrtcpTooSmall(
                 encrypted.len(),
@@ -305,13 +294,14 @@ impl Cipher for CipherAesCmHmacSha1 {
         }
 
         let tail_offset = encrypted.len() - (self.auth_tag_len() + SRTCP_INDEX_SIZE);
-        let mut dst: Vec<u8> = Vec::with_capacity(tail_offset);
 
-        dst.extend_from_slice(&encrypted[0..tail_offset]);
+        let mut writer = BytesMut::with_capacity(tail_offset);
+
+        writer.extend_from_slice(&encrypted[0..tail_offset]);
 
         let is_encrypted = encrypted[tail_offset] >> 7;
         if is_encrypted == 0 {
-            return Ok(dst);
+            return Ok(writer.freeze());
         }
 
         // Split the auth tag and the cipher text into two parts.
@@ -338,8 +328,8 @@ impl Cipher for CipherAesCmHmacSha1 {
         let nonce = GenericArray::from_slice(&counter);
         let mut stream = Aes128Ctr::new(&key, &nonce);
 
-        stream.decrypt(&mut dst[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH..]);
+        stream.decrypt(&mut writer[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH..]);
 
-        Ok(dst)
+        Ok(writer.freeze())
     }
 }

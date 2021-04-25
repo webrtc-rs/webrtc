@@ -1,22 +1,16 @@
 use super::*;
 
-use byteorder::{BigEndian, ReadBytesExt};
-use std::io::BufReader;
-
-pub(crate) const MAX_SRTCP_INDEX: usize = 0x7FFFFFFF;
+use bytes::{Buf, Bytes};
 
 impl Context {
     /// DecryptRTCP decrypts a RTCP packet with an encrypted payload
-    pub fn decrypt_rtcp(&mut self, encrypted: &[u8]) -> Result<Vec<u8>, Error> {
-        {
-            let mut reader = BufReader::new(encrypted);
-            rtcp::header::Header::unmarshal(&mut reader)?;
-        }
+    pub fn decrypt_rtcp(&mut self, encrypted: &Bytes) -> Result<Bytes, Error> {
+        rtcp::header::Header::unmarshal(encrypted)?;
 
         let index = self.cipher.get_rtcp_index(encrypted);
         let ssrc = {
-            let mut reader = BufReader::new(&encrypted[4..]);
-            reader.read_u32::<BigEndian>()?
+            let reader = &mut encrypted.slice(4..);
+            reader.get_u32()
         };
 
         {
@@ -46,15 +40,12 @@ impl Context {
 
     /// EncryptRTCP marshals and encrypts an RTCP packet, writing to the dst buffer provided.
     /// If the dst buffer does not have the capacity to hold `len(plaintext) + 14` bytes, a new one will be allocated and returned.
-    pub fn encrypt_rtcp(&mut self, decrypted: &[u8]) -> Result<Vec<u8>, Error> {
-        {
-            let mut reader = BufReader::new(decrypted);
-            rtcp::header::Header::unmarshal(&mut reader)?;
-        }
+    pub fn encrypt_rtcp(&mut self, decrypted: &Bytes) -> Result<Bytes, Error> {
+        rtcp::header::Header::unmarshal(decrypted)?;
 
         let ssrc = {
-            let mut reader = BufReader::new(&decrypted[4..]);
-            reader.read_u32::<BigEndian>()?
+            let reader = &mut decrypted.slice(4..);
+            reader.get_u32()
         };
 
         let index;
@@ -70,6 +61,6 @@ impl Context {
             }
         }
 
-        Ok(self.cipher.encrypt_rtcp(decrypted, index, ssrc)?)
+        self.cipher.encrypt_rtcp(decrypted, index, ssrc)
     }
 }

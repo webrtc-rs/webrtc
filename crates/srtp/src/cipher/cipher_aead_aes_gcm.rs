@@ -3,12 +3,14 @@ use aes_gcm::{
     Aes128Gcm,
 };
 use byteorder::{BigEndian, ByteOrder};
-use rtp::header;
+use bytes::{Bytes, BytesMut};
+use rtp::packetizer::Marshaller;
 
 use super::Cipher;
-use crate::{context, error::Error, key_derivation};
+use crate::{error::Error, key_derivation::*};
 
-pub(crate) const CIPHER_AEAD_AES_GCM_AUTH_TAG_LEN: usize = 16;
+pub const CIPHER_AEAD_AES_GCM_AUTH_TAG_LEN: usize = 16;
+
 const RTCP_ENCRYPTION_FLAG: u8 = 0x80;
 
 /// AEAD Cipher based on AES.
@@ -26,16 +28,18 @@ impl Cipher for CipherAeadAesGcm {
 
     fn encrypt_rtp(
         &mut self,
-        payload: &[u8],
+        payload: &Bytes,
         header: &rtp::header::Header,
         roc: u32,
-    ) -> Result<Vec<u8>, Error> {
-        let mut writer: Vec<u8> = Vec::new();
+    ) -> Result<Bytes, Error> {
+        let mut writer =
+            BytesMut::with_capacity(header.marshal_size() + payload.len() + self.auth_tag_len());
 
-        header.marshal(&mut writer)?;
+        header.marshal_to(&mut writer)?;
+
         let nonce = self.rtp_initialization_vector(header, roc);
 
-        let mut encrypted = self.srtp_cipher.encrypt(
+        let encrypted = self.srtp_cipher.encrypt(
             Nonce::from_slice(&nonce),
             Payload {
                 msg: &payload,
@@ -43,40 +47,39 @@ impl Cipher for CipherAeadAesGcm {
             },
         )?;
 
-        writer.append(&mut encrypted);
-        Ok(writer)
+        writer.extend(encrypted);
+        Ok(writer.freeze())
     }
 
     fn decrypt_rtp(
         &mut self,
-        ciphertext: &[u8],
-        header: &header::Header,
+        ciphertext: &Bytes,
+        header: &rtp::header::Header,
         roc: u32,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Bytes, Error> {
         let nonce = self.rtp_initialization_vector(header, roc);
-
+        let payload_offset = header.marshal_size();
         let decrypted_msg: Vec<u8> = self.srtp_cipher.decrypt(
             Nonce::from_slice(&nonce),
             Payload {
-                msg: &ciphertext[header.payload_offset..],
-                aad: &ciphertext[..header.payload_offset],
+                msg: &ciphertext[payload_offset..],
+                aad: &ciphertext[..payload_offset],
             },
         )?;
 
-        let mut decrypted_msg = [vec![0; header.payload_offset], decrypted_msg].concat();
+        let mut writer = BytesMut::with_capacity(payload_offset + decrypted_msg.len());
+        writer.extend_from_slice(&ciphertext[..payload_offset]);
+        writer.extend(decrypted_msg);
 
-        decrypted_msg[..header.payload_offset]
-            .copy_from_slice(&ciphertext[..header.payload_offset]);
-
-        Ok(decrypted_msg)
+        Ok(writer.freeze())
     }
 
     fn encrypt_rtcp(
         &mut self,
-        decrypted: &[u8],
+        decrypted: &Bytes,
         srtcp_index: usize,
         ssrc: u32,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Bytes, Error> {
         let iv = self.rtcp_initialization_vector(srtcp_index, ssrc);
 
         let aad = self.rtcp_additional_authenticated_data(decrypted, srtcp_index);
@@ -89,20 +92,20 @@ impl Cipher for CipherAeadAesGcm {
             },
         )?;
 
-        let mut encrypted_data = [vec![0; 8], encrypted_data].concat();
+        let mut writer = BytesMut::with_capacity(encrypted_data.len() + aad.len());
+        writer.extend_from_slice(&decrypted[..8]);
+        writer.extend(encrypted_data);
+        writer.extend_from_slice(&aad[8..]);
 
-        encrypted_data[..8].copy_from_slice(&decrypted[..8]);
-        encrypted_data.append(&mut aad[8..].to_vec());
-
-        Ok(encrypted_data)
+        Ok(writer.freeze())
     }
 
     fn decrypt_rtcp(
         &mut self,
-        encrypted: &[u8],
+        encrypted: &Bytes,
         srtcp_index: usize,
         ssrc: u32,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Bytes, Error> {
         let nonce = self.rtcp_initialization_vector(srtcp_index, ssrc);
 
         let aad = self.rtcp_additional_authenticated_data(&encrypted, srtcp_index);
@@ -110,16 +113,19 @@ impl Cipher for CipherAeadAesGcm {
         let decrypted_data = self.srtcp_cipher.decrypt(
             Nonce::from_slice(&nonce),
             Payload {
-                msg: &encrypted[8..(encrypted.len() - context::SRTCP_INDEX_SIZE)],
+                msg: &encrypted[8..(encrypted.len() - SRTCP_INDEX_SIZE)],
                 aad: &aad,
             },
         )?;
 
-        let decrypted_data = [encrypted[..8].to_vec(), decrypted_data].concat();
-        Ok(decrypted_data)
+        let mut writer = BytesMut::with_capacity(8 + decrypted_data.len());
+        writer.extend_from_slice(&encrypted[..8]);
+        writer.extend(decrypted_data);
+
+        Ok(writer.freeze())
     }
 
-    fn get_rtcp_index(&self, input: &[u8]) -> usize {
+    fn get_rtcp_index(&self, input: &Bytes) -> usize {
         let pos = input.len() - 4;
         let val = BigEndian::read_u32(&input[pos..]);
 
@@ -130,8 +136,8 @@ impl Cipher for CipherAeadAesGcm {
 impl CipherAeadAesGcm {
     /// Create a new AEAD instance.
     pub(crate) fn new(master_key: &[u8], master_salt: &[u8]) -> Result<CipherAeadAesGcm, Error> {
-        let srtp_session_key = key_derivation::aes_cm_key_derivation(
-            context::LABEL_SRTP_ENCRYPTION,
+        let srtp_session_key = aes_cm_key_derivation(
+            LABEL_SRTP_ENCRYPTION,
             master_key,
             master_salt,
             0,
@@ -142,8 +148,8 @@ impl CipherAeadAesGcm {
 
         let srtp_cipher = Aes128Gcm::new(srtp_block);
 
-        let srtcp_session_key = key_derivation::aes_cm_key_derivation(
-            context::LABEL_SRTCP_ENCRYPTION,
+        let srtcp_session_key = aes_cm_key_derivation(
+            LABEL_SRTCP_ENCRYPTION,
             master_key,
             master_salt,
             0,
@@ -154,16 +160,16 @@ impl CipherAeadAesGcm {
 
         let srtcp_cipher = Aes128Gcm::new(srtcp_block);
 
-        let srtp_session_salt = key_derivation::aes_cm_key_derivation(
-            context::LABEL_SRTP_SALT,
+        let srtp_session_salt = aes_cm_key_derivation(
+            LABEL_SRTP_SALT,
             master_key,
             master_salt,
             0,
             master_key.len(),
         )?;
 
-        let srtcp_session_salt = key_derivation::aes_cm_key_derivation(
-            context::LABEL_SRTCP_SALT,
+        let srtcp_session_salt = aes_cm_key_derivation(
+            LABEL_SRTCP_SALT,
             master_key,
             master_salt,
             0,

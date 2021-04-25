@@ -1,6 +1,6 @@
-use thiserror::Error;
-
 use crate::stream::Stream;
+
+use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -40,8 +40,12 @@ pub enum Error {
     InvalidRtpStream,
     #[error("this stream is not a RTCPStream")]
     InvalidRtcpStream,
-    #[error("WebRtcUtilError: {0}")]
-    Util(#[from] util::Error),
+    #[error("UtilError: {0}")]
+    UtilError(#[from] util::error::Error),
+    #[error("RtpError: {0}")]
+    RtpError(#[from] rtp::error::Error),
+    #[error("RtcpError: {0}")]
+    RtcpError(#[from] rtcp::error::Error),
     #[error("IoError: {0}")]
     Io(#[from] std::io::Error),
     #[error("AesGcm: {0}")]
