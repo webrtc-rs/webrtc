@@ -1,14 +1,18 @@
 #[cfg(test)]
 mod context_test;
+#[cfg(test)]
 mod srtcp_test;
+#[cfg(test)]
 mod srtp_test;
 
-use std::collections::HashMap;
+use crate::{
+    cipher::cipher_aead_aes_gcm::*, cipher::cipher_aes_cm_hmac_sha1::*, cipher::*, error::Error,
+    option::*, protection_profile::*,
+};
 
 use util::replay_detector::*;
 
-use super::protection_profile::*;
-use crate::{cipher, error::Error, option};
+use std::collections::HashMap;
 
 pub mod srtcp;
 pub mod srtp;
@@ -17,7 +21,7 @@ const MAX_ROC_DISORDER: u16 = 100;
 
 // Encrypt/Decrypt state for a single SRTP SSRC
 #[derive(Default)]
-pub struct SrtpSsrcState {
+pub(crate) struct SrtpSsrcState {
     ssrc: u32,
     rollover_counter: u32,
     rollover_has_processed: bool,
@@ -27,7 +31,7 @@ pub struct SrtpSsrcState {
 
 // Encrypt/Decrypt state for a single SRTCP SSRC
 #[derive(Default)]
-pub struct SrtcpSsrcState {
+pub(crate) struct SrtcpSsrcState {
     srtcp_index: usize,
     ssrc: u32,
     replay_detector: Option<Box<dyn ReplayDetector>>,
@@ -96,13 +100,13 @@ impl SrtpSsrcState {
 // Context can only be used for one-way operations
 // it must either used ONLY for encryption or ONLY for decryption
 pub struct Context {
-    cipher: Box<dyn cipher::Cipher + Send>,
+    cipher: Box<dyn Cipher + Send>,
 
     srtp_ssrc_states: HashMap<u32, SrtpSsrcState>,
     srtcp_ssrc_states: HashMap<u32, SrtcpSsrcState>,
 
-    new_srtp_replay_detector: option::ContextOption,
-    new_srtcp_replay_detector: option::ContextOption,
+    new_srtp_replay_detector: ContextOption,
+    new_srtcp_replay_detector: ContextOption,
 }
 
 unsafe impl Send for Context {}
@@ -113,8 +117,8 @@ impl Context {
         master_key: &[u8],
         master_salt: &[u8],
         profile: ProtectionProfile,
-        srtp_ctx_opt: Option<option::ContextOption>,
-        srtcp_ctx_opt: Option<option::ContextOption>,
+        srtp_ctx_opt: Option<ContextOption>,
+        srtcp_ctx_opt: Option<ContextOption>,
     ) -> Result<Context, Error> {
         let key_len = profile.key_len();
         let salt_len = profile.salt_len();
@@ -125,26 +129,26 @@ impl Context {
             return Err(Error::SrtpSaltLength(salt_len, master_salt.len()));
         }
 
-        let cipher: Box<dyn cipher::Cipher + Send> = match profile {
-            ProtectionProfile::AES128CMHMACSHA1_80 => {
-                Box::new(cipher::CipherAesCmHmacSha1::new(master_key, master_salt)?)
+        let cipher: Box<dyn Cipher + Send> = match profile {
+            ProtectionProfile::Aes128CmHmacSha1_80 => {
+                Box::new(CipherAesCmHmacSha1::new(master_key, master_salt)?)
             }
 
-            ProtectionProfile::AEADAES128GCM => {
-                Box::new(cipher::CipherAeadAesGcm::new(master_key, master_salt)?)
+            ProtectionProfile::AeadAes128Gcm => {
+                Box::new(CipherAeadAesGcm::new(master_key, master_salt)?)
             }
         };
 
         let srtp_ctx_opt = if let Some(ctx_opt) = srtp_ctx_opt {
             ctx_opt
         } else {
-            option::srtp_no_replay_protection()
+            srtp_no_replay_protection()
         };
 
         let srtcp_ctx_opt = if let Some(ctx_opt) = srtcp_ctx_opt {
             ctx_opt
         } else {
-            option::srtcp_no_replay_protection()
+            srtcp_no_replay_protection()
         };
 
         Ok(Context {

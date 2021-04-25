@@ -55,7 +55,7 @@ impl Stream {
     }
 
     /// Read reads and decrypts full RTP packet from the nextConn
-    pub async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Error> {
+    pub async fn read(&mut self, buf: &mut BytesMut) -> Result<usize, Error> {
         Ok(self.buffer.read(buf, None).await?)
     }
 

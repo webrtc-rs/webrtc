@@ -3,7 +3,7 @@
 
 mod cipher;
 pub mod config;
-//pub mod context;
+pub mod context;
 pub mod error;
 mod key_derivation;
 pub mod option;

@@ -28,7 +28,7 @@ impl Cipher for CipherAeadAesGcm {
 
     fn encrypt_rtp(
         &mut self,
-        payload: &[u8],
+        payload: &Bytes,
         header: &rtp::header::Header,
         roc: u32,
     ) -> Result<Bytes, Error> {
@@ -53,7 +53,7 @@ impl Cipher for CipherAeadAesGcm {
 
     fn decrypt_rtp(
         &mut self,
-        ciphertext: &[u8],
+        ciphertext: &Bytes,
         header: &rtp::header::Header,
         roc: u32,
     ) -> Result<Bytes, Error> {
@@ -76,7 +76,7 @@ impl Cipher for CipherAeadAesGcm {
 
     fn encrypt_rtcp(
         &mut self,
-        decrypted: &[u8],
+        decrypted: &Bytes,
         srtcp_index: usize,
         ssrc: u32,
     ) -> Result<Bytes, Error> {
@@ -102,7 +102,7 @@ impl Cipher for CipherAeadAesGcm {
 
     fn decrypt_rtcp(
         &mut self,
-        encrypted: &[u8],
+        encrypted: &Bytes,
         srtcp_index: usize,
         ssrc: u32,
     ) -> Result<Bytes, Error> {
@@ -125,7 +125,7 @@ impl Cipher for CipherAeadAesGcm {
         Ok(writer.freeze())
     }
 
-    fn get_rtcp_index(&self, input: &[u8]) -> usize {
+    fn get_rtcp_index(&self, input: &Bytes) -> usize {
         let pos = input.len() - 4;
         let val = BigEndian::read_u32(&input[pos..]);
 

@@ -159,7 +159,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         CIPHER_AES_CM_HMAC_SHA1AUTH_TAG_LEN
     }
 
-    fn get_rtcp_index(&self, input: &[u8]) -> usize {
+    fn get_rtcp_index(&self, input: &Bytes) -> usize {
         let tail_offset = input.len() - (self.auth_tag_len() + SRTCP_INDEX_SIZE);
         (BigEndian::read_u32(&input[tail_offset..tail_offset + SRTCP_INDEX_SIZE]) & !(1 << 31))
             as usize
@@ -167,7 +167,7 @@ impl Cipher for CipherAesCmHmacSha1 {
 
     fn encrypt_rtp(
         &mut self,
-        payload: &[u8],
+        payload: &Bytes,
         header: &rtp::header::Header,
         roc: u32,
     ) -> Result<Bytes, Error> {
@@ -202,7 +202,7 @@ impl Cipher for CipherAesCmHmacSha1 {
 
     fn decrypt_rtp(
         &mut self,
-        encrypted: &[u8],
+        encrypted: &Bytes,
         header: &rtp::header::Header,
         roc: u32,
     ) -> Result<Bytes, Error> {
@@ -247,7 +247,7 @@ impl Cipher for CipherAesCmHmacSha1 {
 
     fn encrypt_rtcp(
         &mut self,
-        decrypted: &[u8],
+        decrypted: &Bytes,
         srtcp_index: usize,
         ssrc: u32,
     ) -> Result<Bytes, Error> {
@@ -283,7 +283,7 @@ impl Cipher for CipherAesCmHmacSha1 {
 
     fn decrypt_rtcp(
         &mut self,
-        encrypted: &[u8],
+        encrypted: &Bytes,
         srtcp_index: usize,
         ssrc: u32,
     ) -> Result<Bytes, Error> {

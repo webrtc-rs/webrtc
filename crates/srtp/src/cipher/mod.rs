@@ -12,12 +12,12 @@ pub(crate) trait Cipher {
     fn auth_tag_len(&self) -> usize;
 
     /// Retrieved RTCP index.
-    fn get_rtcp_index(&self, input: &[u8]) -> usize;
+    fn get_rtcp_index(&self, input: &Bytes) -> usize;
 
     /// Encrypt RTP payload.
     fn encrypt_rtp(
         &mut self,
-        payload: &[u8],
+        payload: &Bytes,
         header: &rtp::header::Header,
         roc: u32,
     ) -> Result<Bytes, Error>;
@@ -25,7 +25,7 @@ pub(crate) trait Cipher {
     /// Decrypt RTP encrypted payload.
     fn decrypt_rtp(
         &mut self,
-        encrypted: &[u8],
+        encrypted: &Bytes,
         header: &rtp::header::Header,
         roc: u32,
     ) -> Result<Bytes, Error>;
@@ -33,7 +33,7 @@ pub(crate) trait Cipher {
     /// Encrypt RTCP payload.
     fn encrypt_rtcp(
         &mut self,
-        decrypted: &[u8],
+        decrypted: &Bytes,
         srtcp_index: usize,
         ssrc: u32,
     ) -> Result<Bytes, Error>;
@@ -41,7 +41,7 @@ pub(crate) trait Cipher {
     /// Decrypt RTCP encrypted payload.
     fn decrypt_rtcp(
         &mut self,
-        encrypted: &[u8],
+        encrypted: &Bytes,
         srtcp_index: usize,
         ssrc: u32,
     ) -> Result<Bytes, Error>;
