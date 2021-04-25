@@ -63,8 +63,8 @@
 [mdns-url]: https://crates.io/crates/webrtc-mdns
 [ice-badge]: https://img.shields.io/crates/v/webrtc-ice.svg
 [ice-url]: https://crates.io/crates/webrtc-ice
-[turn-badge]: https://img.shields.io/crates/v/webrtc-turn.svg
-[turn-url]: https://crates.io/crates/webrtc-turn
+[turn-badge]: https://img.shields.io/crates/v/turn.svg
+[turn-url]: https://crates.io/crates/turn
 [sctp-badge]: https://img.shields.io/crates/v/webrtc-sctp.svg
 [sctp-url]: https://crates.io/crates/webrtc-sctp
 [sip-badge]: https://img.shields.io/crates/v/webrtc-sip.svg
