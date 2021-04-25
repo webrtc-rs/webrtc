@@ -1,3 +1,5 @@
+use crate::stream::Stream;
+
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -54,6 +56,6 @@ pub enum Error {
     SendUnit(#[from] tokio::sync::mpsc::error::SendError<()>),
     #[error("SendError: {0}")]
     SendU32(#[from] tokio::sync::mpsc::error::SendError<u32>),
-    //#[error("SendError: {0}")]
-    //SendStream(#[from] tokio::sync::mpsc::error::SendError<Stream>),
+    #[error("SendError: {0}")]
+    SendStream(#[from] tokio::sync::mpsc::error::SendError<Stream>),
 }

@@ -41,7 +41,7 @@ impl Context {
         Ok(dst)
     }
 
-    // DecryptRTP decrypts a RTP packet with an encrypted payload
+    /// DecryptRTP decrypts a RTP packet with an encrypted payload
     pub fn decrypt_rtp(&mut self, encrypted: &Bytes) -> Result<Bytes, Error> {
         let header = rtp::header::Header::unmarshal(encrypted)?;
         self.decrypt_rtp_with_header(encrypted, &header)
@@ -74,8 +74,8 @@ impl Context {
         Ok(dst)
     }
 
-    // EncryptRTP marshals and encrypts an RTP packet, writing to the dst buffer provided.
-    // If the dst buffer does not have the capacity to hold `len(plaintext) + 10` bytes, a new one will be allocated and returned.
+    /// EncryptRTP marshals and encrypts an RTP packet, writing to the dst buffer provided.
+    /// If the dst buffer does not have the capacity to hold `len(plaintext) + 10` bytes, a new one will be allocated and returned.
     pub fn encrypt_rtp(&mut self, plaintext: &Bytes) -> Result<Bytes, Error> {
         let header = rtp::header::Header::unmarshal(plaintext)?;
         self.encrypt_rtp_with_header(plaintext, &header)

@@ -8,5 +8,5 @@ pub mod error;
 mod key_derivation;
 pub mod option;
 mod protection_profile;
-//TODO:pub mod session;
+pub mod session;
 pub mod stream;

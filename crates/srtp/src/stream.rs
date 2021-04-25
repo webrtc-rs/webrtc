@@ -69,7 +69,7 @@ impl Stream {
         }
 
         let n = self.buffer.read(buf, None).await?;
-        let b = Bytes::from(buf[..std::cmp::min(rtp::header::HEADER_LENGTH, n)].to_vec());
+        let b = Bytes::from(buf[..n].to_vec()); //TODO: how to avoid this memory allocation
         let header = rtp::header::Header::unmarshal(&b)?;
 
         Ok((n, header))
@@ -85,7 +85,7 @@ impl Stream {
         }
 
         let n = self.buffer.read(buf, None).await?;
-        let b = Bytes::from(buf[..std::cmp::min(rtcp::header::HEADER_LENGTH, n)].to_vec());
+        let b = Bytes::from(buf[..n].to_vec()); //TODO: how to avoid this memory allocation
         let header = rtcp::header::Header::unmarshal(&b)?;
 
         Ok((n, header))

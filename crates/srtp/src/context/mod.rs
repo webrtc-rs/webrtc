@@ -19,7 +19,7 @@ pub mod srtp;
 
 const MAX_ROC_DISORDER: u16 = 100;
 
-// Encrypt/Decrypt state for a single SRTP SSRC
+/// Encrypt/Decrypt state for a single SRTP SSRC
 #[derive(Default)]
 pub(crate) struct SrtpSsrcState {
     ssrc: u32,
@@ -29,7 +29,7 @@ pub(crate) struct SrtpSsrcState {
     replay_detector: Option<Box<dyn ReplayDetector>>,
 }
 
-// Encrypt/Decrypt state for a single SRTCP SSRC
+/// Encrypt/Decrypt state for a single SRTCP SSRC
 #[derive(Default)]
 pub(crate) struct SrtcpSsrcState {
     srtcp_index: usize,
@@ -67,7 +67,7 @@ impl SrtpSsrcState {
         roc
     }
 
-    // https://tools.ietf.org/html/rfc3550#appendix-A.1
+    /// https://tools.ietf.org/html/rfc3550#appendix-A.1
     pub fn update_rollover_count(&mut self, sequence_number: u16) {
         if !self.rollover_has_processed {
             self.rollover_has_processed = true;
@@ -96,9 +96,9 @@ impl SrtpSsrcState {
     }
 }
 
-// Context represents a SRTP cryptographic context
-// Context can only be used for one-way operations
-// it must either used ONLY for encryption or ONLY for decryption
+/// Context represents a SRTP cryptographic context
+/// Context can only be used for one-way operations
+/// it must either used ONLY for encryption or ONLY for decryption
 pub struct Context {
     cipher: Box<dyn Cipher + Send>,
 
@@ -112,7 +112,7 @@ pub struct Context {
 unsafe impl Send for Context {}
 
 impl Context {
-    // CreateContext creates a new SRTP Context
+    /// CreateContext creates a new SRTP Context
     pub fn new(
         master_key: &[u8],
         master_salt: &[u8],
@@ -160,7 +160,6 @@ impl Context {
         })
     }
 
-    // ToDo: We shouldnt be using an optional return as we can send a cloned "s".
     fn get_srtp_ssrc_state(&mut self, ssrc: u32) -> Option<&mut SrtpSsrcState> {
         let s = SrtpSsrcState {
             ssrc,
@@ -182,7 +181,7 @@ impl Context {
         self.srtcp_ssrc_states.get_mut(&ssrc)
     }
 
-    // roc returns SRTP rollover counter value of specified SSRC.
+    /// roc returns SRTP rollover counter value of specified SSRC.
     fn get_roc(&self, ssrc: u32) -> Option<u32> {
         if let Some(s) = self.srtp_ssrc_states.get(&ssrc) {
             Some(s.rollover_counter)
@@ -191,14 +190,14 @@ impl Context {
         }
     }
 
-    // set_roc sets SRTP rollover counter value of specified SSRC.
+    /// set_roc sets SRTP rollover counter value of specified SSRC.
     fn set_roc(&mut self, ssrc: u32, roc: u32) {
         if let Some(s) = self.get_srtp_ssrc_state(ssrc) {
             s.rollover_counter = roc;
         }
     }
 
-    // index returns SRTCP index value of specified SSRC.
+    /// index returns SRTCP index value of specified SSRC.
     fn get_index(&self, ssrc: u32) -> Option<usize> {
         if let Some(s) = self.srtcp_ssrc_states.get(&ssrc) {
             Some(s.srtcp_index)
@@ -207,7 +206,7 @@ impl Context {
         }
     }
 
-    // set_index sets SRTCP index value of specified SSRC.
+    /// set_index sets SRTCP index value of specified SSRC.
     fn set_index(&mut self, ssrc: u32, index: usize) {
         if let Some(s) = self.get_srtcp_ssrc_state(ssrc) {
             s.srtcp_index = index;

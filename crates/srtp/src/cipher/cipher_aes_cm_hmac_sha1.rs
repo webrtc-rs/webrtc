@@ -19,7 +19,6 @@ type Aes128Ctr = ctr::Ctr128<aes::Aes128>;
 
 pub const CIPHER_AES_CM_HMAC_SHA1AUTH_TAG_LEN: usize = 10;
 
-// ToDo: @rainliu whats a use case for srtp_session_auth and srtcp_session_auth
 pub(crate) struct CipherAesCmHmacSha1 {
     srtp_session_key: Vec<u8>,
     srtp_session_salt: Vec<u8>,
@@ -95,21 +94,21 @@ impl CipherAesCmHmacSha1 {
         })
     }
 
+    /// https://tools.ietf.org/html/rfc3711#section-4.2
+    /// In the case of SRTP, M SHALL consist of the Authenticated
+    /// Portion of the packet (as specified in Figure 1) concatenated with
+    /// the roc, M = Authenticated Portion || roc;
+    ///
+    /// The pre-defined authentication transform for SRTP is HMAC-SHA1
+    /// [RFC2104].  With HMAC-SHA1, the SRTP_PREFIX_LENGTH (Figure 3) SHALL
+    /// be 0.  For SRTP (respectively SRTCP), the HMAC SHALL be applied to
+    /// the session authentication key and M as specified above, i.e.,
+    /// HMAC(k_a, M).  The HMAC output SHALL then be truncated to the n_tag
+    /// left-most bits.
+    /// - Authenticated portion of the packet is everything BEFORE MKI
+    /// - k_a is the session message authentication key
+    /// - n_tag is the bit-length of the output authentication tag
     fn generate_srtp_auth_tag(&mut self, buf: &[u8], roc: u32) -> Result<Vec<u8>, Error> {
-        // https://tools.ietf.org/html/rfc3711#section-4.2
-        // In the case of SRTP, M SHALL consist of the Authenticated
-        // Portion of the packet (as specified in Figure 1) concatenated with
-        // the roc, M = Authenticated Portion || roc;
-        //
-        // The pre-defined authentication transform for SRTP is HMAC-SHA1
-        // [RFC2104].  With HMAC-SHA1, the SRTP_PREFIX_LENGTH (Figure 3) SHALL
-        // be 0.  For SRTP (respectively SRTCP), the HMAC SHALL be applied to
-        // the session authentication key and M as specified above, i.e.,
-        // HMAC(k_a, M).  The HMAC output SHALL then be truncated to the n_tag
-        // left-most bits.
-        // - Authenticated portion of the packet is everything BEFORE MKI
-        // - k_a is the session message authentication key
-        // - n_tag is the bit-length of the output authentication tag
         self.srtp_session_auth.reset();
 
         self.srtp_session_auth.update(buf);
@@ -130,18 +129,18 @@ impl CipherAesCmHmacSha1 {
         Ok(code_bytes[0..self.auth_tag_len()].to_vec())
     }
 
+    /// https://tools.ietf.org/html/rfc3711#section-4.2
+    ///
+    /// The pre-defined authentication transform for SRTP is HMAC-SHA1
+    /// [RFC2104].  With HMAC-SHA1, the SRTP_PREFIX_LENGTH (Figure 3) SHALL
+    /// be 0.  For SRTP (respectively SRTCP), the HMAC SHALL be applied to
+    /// the session authentication key and M as specified above, i.e.,
+    /// HMAC(k_a, M).  The HMAC output SHALL then be truncated to the n_tag
+    /// left-most bits.
+    /// - Authenticated portion of the packet is everything BEFORE MKI
+    /// - k_a is the session message authentication key
+    /// - n_tag is the bit-length of the output authentication tag
     fn generate_srtcp_auth_tag(&mut self, buf: &[u8]) -> Vec<u8> {
-        // https://tools.ietf.org/html/rfc3711#section-4.2
-        //
-        // The pre-defined authentication transform for SRTP is HMAC-SHA1
-        // [RFC2104].  With HMAC-SHA1, the SRTP_PREFIX_LENGTH (Figure 3) SHALL
-        // be 0.  For SRTP (respectively SRTCP), the HMAC SHALL be applied to
-        // the session authentication key and M as specified above, i.e.,
-        // HMAC(k_a, M).  The HMAC output SHALL then be truncated to the n_tag
-        // left-most bits.
-        // - Authenticated portion of the packet is everything BEFORE MKI
-        // - k_a is the session message authentication key
-        // - n_tag is the bit-length of the output authentication tag
         self.srtcp_session_auth.reset();
 
         self.srtcp_session_auth.update(buf);
