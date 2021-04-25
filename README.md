@@ -79,7 +79,7 @@
 
 - [x] SDP: [webrtc-rs/sdp](https://github.com/webrtc-rs/sdp) [![sdp][sdp-badge]][sdp-url]
   - sync up to [pion/sdp/v2.4.0](https://github.com/pion/sdp/tree/b29f0bbd42fc719eabdb027117217b0ddb27abf1)
-  - [ ] TODO: catch up with pion/sdp/v3 v3.0.4
+  - [x] Done: catch up with pion/sdp/v3 v3.0.4
 - [x] RTP: [webrtc-rs/rtp](https://github.com/webrtc-rs/rtp) [![rtp][rtp-badge]][rtp-url]
   - sync up to [pion/rtp/v1.6.1](https://github.com/pion/rtp/tree/0d8026ebf7c048a65f30b053f3ce22e7d5e738ee)
   - [x] Done: catch up with pion/rtp v1.6.2
