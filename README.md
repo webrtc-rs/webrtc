@@ -88,7 +88,7 @@
   - [x] Done: catch up with pion/rtcp v1.2.6
 - [x] SRTP: [webrtc-rs/srtp](https://github.com/webrtc-rs/srtp) [![srtp][srtp-badge]][srtp-url]
   - sync up to [pion/srtp/v1.5.2](https://github.com/pion/srtp/tree/071a6b95ab38e9eab9324dacd608dde1ec0c7cd3)
-  - [ ] TODO: catch up with pion/srtp/v2 v2.0.2
+  - [x] Done: catch up with pion/srtp/v2 v2.0.2
 - [x] DTLS: [webrtc-rs/dtls](https://github.com/webrtc-rs/dtls) [![dtls][dtls-badge]][dtls-url]
   - sync up to [pion/dtls/v2.0.0](https://github.com/pion/dtls/tree/789798433596e4dd92451b66984dddb2f8a9f165)
   - [ ] TODO: catch up with pion/dtls/v2 v2.0.8
