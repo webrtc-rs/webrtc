@@ -7,7 +7,7 @@ description = "A pure Rust implementation of TURN"
 license = "MIT"
 documentation = "https://docs.rs/turn"
 homepage = "https://webrtc.rs"
-repository = "https://github.com/rs/turn"
+repository = "https://github.com/webrtc-rs/turn"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
