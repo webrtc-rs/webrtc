@@ -12,7 +12,7 @@ use super::util::*;
 #[cfg(test)]
 mod session_description_test;
 
-// Constants for SDP attributes used in JSEP
+/// Constants for SDP attributes used in JSEP
 const ATTR_KEY_CANDIDATE: &str = "candidate";
 const ATTR_KEY_END_OF_CANDIDATES: &str = "end-of-candidates";
 const ATTR_KEY_IDENTITY: &str = "identity";
@@ -32,18 +32,18 @@ const ATTR_KEY_SEND_ONLY: &str = "sendonly";
 const ATTR_KEY_SEND_RECV: &str = "sendrecv";
 const ATTR_KEY_EXT_MAP: &str = "extmap";
 
-// Constants for semantic tokens used in JSEP
+/// Constants for semantic tokens used in JSEP
 const SEMANTIC_TOKEN_LIP_SYNCHRONIZATION: &str = "LS";
 const SEMANTIC_TOKEN_FLOW_IDENTIFICATION: &str = "FID";
 const SEMANTIC_TOKEN_FORWARD_ERROR_CORRECTION: &str = "FEC";
 const SEMANTIC_TOKEN_WEB_RTCMEDIA_STREAMS: &str = "WMS";
 
-// Version describes the value provided by the "v=" field which gives
-// the version of the Session Description Protocol.
+/// Version describes the value provided by the "v=" field which gives
+/// the version of the Session Description Protocol.
 pub type Version = isize;
 
-// Origin defines the structure for the "o=" field which provides the
-// originator of the session plus a session identifier and version number.
+/// Origin defines the structure for the "o=" field which provides the
+/// originator of the session plus a session identifier and version number.
 #[derive(Debug, Default)]
 pub struct Origin {
     username: String,
@@ -82,22 +82,22 @@ impl Origin {
     }
 }
 
-// SessionName describes a structured representations for the "s=" field
-// and is the textual session name.
+/// SessionName describes a structured representations for the "s=" field
+/// and is the textual session name.
 pub type SessionName = String;
 
-// EmailAddress describes a structured representations for the "e=" line
-// which specifies email contact information for the person responsible for
-// the conference.
+/// EmailAddress describes a structured representations for the "e=" line
+/// which specifies email contact information for the person responsible for
+/// the conference.
 pub type EmailAddress = String;
 
-// PhoneNumber describes a structured representations for the "p=" line
-// specify phone contact information for the person responsible for the
-// conference.
+/// PhoneNumber describes a structured representations for the "p=" line
+/// specify phone contact information for the person responsible for the
+/// conference.
 pub type PhoneNumber = String;
 
-// TimeZone defines the structured object for "z=" line which describes
-// repeated sessions scheduling.
+/// TimeZone defines the structured object for "z=" line which describes
+/// repeated sessions scheduling.
 #[derive(Debug, Default)]
 pub struct TimeZone {
     adjustment_time: u64,
@@ -110,22 +110,22 @@ impl fmt::Display for TimeZone {
     }
 }
 
-// TimeDescription describes "t=", "r=" fields of the session description
-// which are used to specify the start and stop times for a session as well as
-// repeat intervals and durations for the scheduled session.
+/// TimeDescription describes "t=", "r=" fields of the session description
+/// which are used to specify the start and stop times for a session as well as
+/// repeat intervals and durations for the scheduled session.
 #[derive(Debug, Default)]
 pub struct TimeDescription {
-    // t=<start-time> <stop-time>
-    // https://tools.ietf.org/html/rfc4566#section-5.9
+    /// t=<start-time> <stop-time>
+    /// https://tools.ietf.org/html/rfc4566#section-5.9
     timing: Timing,
 
-    // r=<repeat interval> <active duration> <offsets from start-time>
-    // https://tools.ietf.org/html/rfc4566#section-5.10
+    /// r=<repeat interval> <active duration> <offsets from start-time>
+    /// https://tools.ietf.org/html/rfc4566#section-5.10
     repeat_times: Vec<RepeatTime>,
 }
 
-// Timing defines the "t=" field's structured representation for the start and
-// stop times.
+/// Timing defines the "t=" field's structured representation for the start and
+/// stop times.
 #[derive(Debug, Default)]
 pub struct Timing {
     start_time: u64,
@@ -138,8 +138,8 @@ impl fmt::Display for Timing {
     }
 }
 
-// RepeatTime describes the "r=" fields of the session description which
-// represents the intervals and durations for repeated scheduled sessions.
+/// RepeatTime describes the "r=" fields of the session description which
+/// represents the intervals and durations for repeated scheduled sessions.
 #[derive(Debug, Default)]
 pub struct RepeatTime {
     interval: i64,
@@ -157,75 +157,75 @@ impl fmt::Display for RepeatTime {
     }
 }
 
-// SessionDescription is a a well-defined format for conveying sufficient
-// information to discover and participate in a multimedia session.
+/// SessionDescription is a a well-defined format for conveying sufficient
+/// information to discover and participate in a multimedia session.
 #[derive(Debug, Default)]
 pub struct SessionDescription {
-    // v=0
-    // https://tools.ietf.org/html/rfc4566#section-5.1
+    /// v=0
+    /// https://tools.ietf.org/html/rfc4566#section-5.1
     pub version: Version,
 
-    // o=<username> <sess-id> <sess-version> <nettype> <addrtype> <unicast-address>
-    // https://tools.ietf.org/html/rfc4566#section-5.2
+    /// o=<username> <sess-id> <sess-version> <nettype> <addrtype> <unicast-address>
+    /// https://tools.ietf.org/html/rfc4566#section-5.2
     pub origin: Origin,
 
-    // s=<session name>
-    // https://tools.ietf.org/html/rfc4566#section-5.3
+    /// s=<session name>
+    /// https://tools.ietf.org/html/rfc4566#section-5.3
     pub session_name: SessionName,
 
-    // i=<session description>
-    // https://tools.ietf.org/html/rfc4566#section-5.4
+    /// i=<session description>
+    /// https://tools.ietf.org/html/rfc4566#section-5.4
     pub session_information: Option<Information>,
 
-    // u=<uri>
-    // https://tools.ietf.org/html/rfc4566#section-5.5
+    /// u=<uri>
+    /// https://tools.ietf.org/html/rfc4566#section-5.5
     pub uri: Option<Url>,
 
-    // e=<email-address>
-    // https://tools.ietf.org/html/rfc4566#section-5.6
+    /// e=<email-address>
+    /// https://tools.ietf.org/html/rfc4566#section-5.6
     pub email_address: Option<EmailAddress>,
 
-    // p=<phone-number>
-    // https://tools.ietf.org/html/rfc4566#section-5.6
+    /// p=<phone-number>
+    /// https://tools.ietf.org/html/rfc4566#section-5.6
     pub phone_number: Option<PhoneNumber>,
 
-    // c=<nettype> <addrtype> <connection-address>
-    // https://tools.ietf.org/html/rfc4566#section-5.7
+    /// c=<nettype> <addrtype> <connection-address>
+    /// https://tools.ietf.org/html/rfc4566#section-5.7
     pub connection_information: Option<ConnectionInformation>,
 
-    // b=<bwtype>:<bandwidth>
-    // https://tools.ietf.org/html/rfc4566#section-5.8
+    /// b=<bwtype>:<bandwidth>
+    /// https://tools.ietf.org/html/rfc4566#section-5.8
     pub bandwidth: Vec<Bandwidth>,
 
-    // https://tools.ietf.org/html/rfc4566#section-5.9
-    // https://tools.ietf.org/html/rfc4566#section-5.10
+    /// https://tools.ietf.org/html/rfc4566#section-5.9
+    /// https://tools.ietf.org/html/rfc4566#section-5.10
     pub time_descriptions: Vec<TimeDescription>,
 
-    // z=<adjustment time> <offset> <adjustment time> <offset> ...
-    // https://tools.ietf.org/html/rfc4566#section-5.11
+    /// z=<adjustment time> <offset> <adjustment time> <offset> ...
+    /// https://tools.ietf.org/html/rfc4566#section-5.11
     pub time_zones: Vec<TimeZone>,
 
-    // k=<method>
-    // k=<method>:<encryption key>
-    // https://tools.ietf.org/html/rfc4566#section-5.12
+    /// k=<method>
+    /// k=<method>:<encryption key>
+    /// https://tools.ietf.org/html/rfc4566#section-5.12
     pub encryption_key: Option<EncryptionKey>,
 
-    // a=<attribute>
-    // a=<attribute>:<value>
-    // https://tools.ietf.org/html/rfc4566#section-5.13
+    /// a=<attribute>
+    /// a=<attribute>:<value>
+    /// https://tools.ietf.org/html/rfc4566#section-5.13
     pub attributes: Vec<Attribute>,
 
-    // https://tools.ietf.org/html/rfc4566#section-5.14
+    /// https://tools.ietf.org/html/rfc4566#section-5.14
     pub media_descriptions: Vec<MediaDescription>,
 }
 
-// Reset cleans the SessionDescription, and sets all fields back to their default values
+/// Reset cleans the SessionDescription, and sets all fields back to their default values
 impl SessionDescription {
-    // API to match draft-ietf-rtcweb-jsep
-    // Move to webrtc or its own package?
+    /// API to match draft-ietf-rtcweb-jsep
+    /// Move to webrtc or its own package?
 
-    // NewJSEPSessionDescription creates a new SessionDescription with
-    // some settings that are required by the JSEP spec.
+    /// NewJSEPSessionDescription creates a new SessionDescription with
+    /// some settings that are required by the JSEP spec.
     pub fn new_jsep_session_description(identity: bool) -> Self {
         let d = SessionDescription {
             version: 0,
@@ -267,24 +267,24 @@ impl SessionDescription {
         }
     }
 
-    // WithPropertyAttribute adds a property attribute 'a=key' to the session description
+    /// WithPropertyAttribute adds a property attribute 'a=key' to the session description
     pub fn with_property_attribute(mut self, key: String) -> Self {
         self.attributes.push(Attribute::new(key, None));
         self
     }
 
-    // WithValueAttribute adds a value attribute 'a=key:value' to the session description
+    /// WithValueAttribute adds a value attribute 'a=key:value' to the session description
     pub fn with_value_attribute(mut self, key: String, value: String) -> Self {
         self.attributes.push(Attribute::new(key, Some(value)));
         self
     }
 
-    // WithFingerprint adds a fingerprint to the session description
+    /// WithFingerprint adds a fingerprint to the session description
     pub fn with_fingerprint(self, algorithm: String, value: String) -> Self {
         self.with_value_attribute("fingerprint".to_string(), algorithm + " " + value.as_str())
     }
 
-    // WithMedia adds a media description to the session description
+    /// WithMedia adds a media description to the session description
     pub fn with_media(mut self, md: MediaDescription) -> Self {
         self.media_descriptions.push(md);
         self
@@ -315,7 +315,7 @@ impl SessionDescription {
         codecs
     }
 
-    // get_codec_for_payload_type scans the SessionDescription for the given payload type and returns the codec
+    /// get_codec_for_payload_type scans the SessionDescription for the given payload type and returns the codec
     pub fn get_codec_for_payload_type(&self, payload_type: u8) -> Result<Codec, Error> {
         let codecs = self.build_codec_map();
 
@@ -326,8 +326,8 @@ impl SessionDescription {
         }
     }
 
-    // get_payload_type_for_codec scans the SessionDescription for a codec that matches the provided codec
-    // as closely as possible and returns its payload type
+    /// get_payload_type_for_codec scans the SessionDescription for a codec that matches the provided codec
+    /// as closely as possible and returns its payload type
     pub fn get_payload_type_for_codec(&self, wanted: &Codec) -> Result<u8, Error> {
         let codecs = self.build_codec_map();
 
@@ -339,37 +339,38 @@ impl SessionDescription {
 
         Err(Error::CodecNotFound)
     }
-    // Marshal takes a SDP struct to text
-    // https://tools.ietf.org/html/rfc4566#section-5
-    // Session description
-    //    v=  (protocol version)
-    //    o=  (originator and session identifier)
-    //    s=  (session name)
-    //    i=* (session information)
-    //    u=* (URI of description)
-    //    e=* (email address)
-    //    p=* (phone number)
-    //    c=* (connection information -- not required if included in
-    //         all media)
-    //    b=* (zero or more bandwidth information lines)
-    //    One or more time descriptions ("t=" and "r=" lines; see below)
-    //    z=* (time zone adjustments)
-    //    k=* (encryption key)
-    //    a=* (zero or more session attribute lines)
-    //    Zero or more media descriptions
-    //
-    // Time description
-    //    t=  (time the session is active)
-    //    r=* (zero or more repeat times)
-    //
-    // Media description, if present
-    //    m=  (media name and transport address)
-    //    i=* (media title)
-    //    c=* (connection information -- optional if included at
-    //         session level)
-    //    b=* (zero or more bandwidth information lines)
-    //    k=* (encryption key)
-    //    a=* (zero or more media attribute lines)
+
+    /// Marshal takes a SDP struct to text
+    /// https://tools.ietf.org/html/rfc4566#section-5
+    /// Session description
+    ///    v=  (protocol version)
+    ///    o=  (originator and session identifier)
+    ///    s=  (session name)
+    ///    i=* (session information)
+    ///    u=* (URI of description)
+    ///    e=* (email address)
+    ///    p=* (phone number)
+    ///    c=* (connection information -- not required if included in
+    ///         all media)
+    ///    b=* (zero or more bandwidth information lines)
+    ///    One or more time descriptions ("t=" and "r=" lines; see below)
+    ///    z=* (time zone adjustments)
+    ///    k=* (encryption key)
+    ///    a=* (zero or more session attribute lines)
+    ///    Zero or more media descriptions
+    ///
+    /// Time description
+    ///    t=  (time the session is active)
+    ///    r=* (zero or more repeat times)
+    ///
+    /// Media description, if present
+    ///    m=  (media name and transport address)
+    ///    i=* (media title)
+    ///    c=* (connection information -- optional if included at
+    ///         session level)
+    ///    b=* (zero or more bandwidth information lines)
+    ///    k=* (encryption key)
+    ///    a=* (zero or more media attribute lines)
     pub fn marshal(&self) -> String {
         let mut result = String::new();
 
@@ -428,80 +429,80 @@ impl SessionDescription {
         result
     }
 
-    // Unmarshal is the primary function that deserializes the session description
-    // message and stores it inside of a structured SessionDescription object.
-    //
-    // The States Transition Table describes the computation flow between functions
-    // (namely s1, s2, s3, ...) for a parsing procedure that complies with the
-    // specifications laid out by the rfc4566#section-5 as well as by JavaScript
-    // Session Establishment Protocol draft. Links:
-    // 		https://tools.ietf.org/html/rfc4566#section-5
-    // 		https://tools.ietf.org/html/draft-ietf-rtcweb-jsep-24
-    //
-    // https://tools.ietf.org/html/rfc4566#section-5
-    // Session description
-    //    v=  (protocol version)
-    //    o=  (originator and session identifier)
-    //    s=  (session name)
-    //    i=* (session information)
-    //    u=* (URI of description)
-    //    e=* (email address)
-    //    p=* (phone number)
-    //    c=* (connection information -- not required if included in
-    //         all media)
-    //    b=* (zero or more bandwidth information lines)
-    //    One or more time descriptions ("t=" and "r=" lines; see below)
-    //    z=* (time zone adjustments)
-    //    k=* (encryption key)
-    //    a=* (zero or more session attribute lines)
-    //    Zero or more media descriptions
-    //
-    // Time description
-    //    t=  (time the session is active)
-    //    r=* (zero or more repeat times)
-    //
-    // Media description, if present
-    //    m=  (media name and transport address)
-    //    i=* (media title)
-    //    c=* (connection information -- optional if included at
-    //         session level)
-    //    b=* (zero or more bandwidth information lines)
-    //    k=* (encryption key)
-    //    a=* (zero or more media attribute lines)
-    //
-    // In order to generate the following state table and draw subsequent
-    // deterministic finite-state automota ("DFA") the following regex was used to
-    // derive the DFA:
-    //    vosi?u?e?p?c?b*(tr*)+z?k?a*(mi?c?b*k?a*)*
-    // possible place and state to exit:
-    //                    **   * * *  ** * * * *
-    //                    99   1 1 1  11 1 1 1 1
-    //                         3 1 1  26 5 5 4 4
-    //
-    // Please pay close attention to the `k`, and `a` parsing states. In the table
-    // below in order to distinguish between the states belonging to the media
-    // description as opposed to the session description, the states are marked
-    // with an asterisk ("a*", "k*").
-    // +--------+----+-------+----+-----+----+-----+---+----+----+---+---+-----+---+---+----+---+----+
-    // | STATES | a* | a*,k* | a  | a,k | b  | b,c | e | i  | m  | o | p | r,t | s | t | u  | v | z  |
-    // +--------+----+-------+----+-----+----+-----+---+----+----+---+---+-----+---+---+----+---+----+
-    // |   s1   |    |       |    |     |    |     |   |    |    |   |   |     |   |   |    | 2 |    |
-    // |   s2   |    |       |    |     |    |     |   |    |    | 3 |   |     |   |   |    |   |    |
-    // |   s3   |    |       |    |     |    |     |   |    |    |   |   |     | 4 |   |    |   |    |
-    // |   s4   |    |       |    |     |    |   5 | 6 |  7 |    |   | 8 |     |   | 9 | 10 |   |    |
-    // |   s5   |    |       |    |     |  5 |     |   |    |    |   |   |     |   | 9 |    |   |    |
-    // |   s6   |    |       |    |     |    |   5 |   |    |    |   | 8 |     |   | 9 |    |   |    |
-    // |   s7   |    |       |    |     |    |   5 | 6 |    |    |   | 8 |     |   | 9 | 10 |   |    |
-    // |   s8   |    |       |    |     |    |   5 |   |    |    |   |   |     |   | 9 |    |   |    |
-    // |   s9   |    |       |    |  11 |    |     |   |    | 12 |   |   |   9 |   |   |    |   | 13 |
-    // |   s10  |    |       |    |     |    |   5 | 6 |    |    |   | 8 |     |   | 9 |    |   |    |
-    // |   s11  |    |       | 11 |     |    |     |   |    | 12 |   |   |     |   |   |    |   |    |
-    // |   s12  |    |    14 |    |     |    |  15 |   | 16 | 12 |   |   |     |   |   |    |   |    |
-    // |   s13  |    |       |    |  11 |    |     |   |    | 12 |   |   |     |   |   |    |   |    |
-    // |   s14  | 14 |       |    |     |    |     |   |    | 12 |   |   |     |   |   |    |   |    |
-    // |   s15  |    |    14 |    |     | 15 |     |   |    | 12 |   |   |     |   |   |    |   |    |
-    // |   s16  |    |    14 |    |     |    |  15 |   |    | 12 |   |   |     |   |   |    |   |    |
-    // +--------+----+-------+----+-----+----+-----+---+----+----+---+---+-----+---+---+----+---+----+
+    /// Unmarshal is the primary function that deserializes the session description
+    /// message and stores it inside of a structured SessionDescription object.
+    ///
+    /// The States Transition Table describes the computation flow between functions
+    /// (namely s1, s2, s3, ...) for a parsing procedure that complies with the
+    /// specifications laid out by the rfc4566#section-5 as well as by JavaScript
+    /// Session Establishment Protocol draft. Links:
+    ///     https://tools.ietf.org/html/rfc4566#section-5
+    ///     https://tools.ietf.org/html/draft-ietf-rtcweb-jsep-24
+    ///
+    /// https://tools.ietf.org/html/rfc4566#section-5
+    /// Session description
+    ///    v=  (protocol version)
+    ///    o=  (originator and session identifier)
+    ///    s=  (session name)
+    ///    i=* (session information)
+    ///    u=* (URI of description)
+    ///    e=* (email address)
+    ///    p=* (phone number)
+    ///    c=* (connection information -- not required if included in
+    ///         all media)
+    ///    b=* (zero or more bandwidth information lines)
+    ///    One or more time descriptions ("t=" and "r=" lines; see below)
+    ///    z=* (time zone adjustments)
+    ///    k=* (encryption key)
+    ///    a=* (zero or more session attribute lines)
+    ///    Zero or more media descriptions
+    ///
+    /// Time description
+    ///    t=  (time the session is active)
+    ///    r=* (zero or more repeat times)
+    ///
+    /// Media description, if present
+    ///    m=  (media name and transport address)
+    ///    i=* (media title)
+    ///    c=* (connection information -- optional if included at
+    ///         session level)
+    ///    b=* (zero or more bandwidth information lines)
+    ///    k=* (encryption key)
+    ///    a=* (zero or more media attribute lines)
+    ///
+    /// In order to generate the following state table and draw subsequent
+    /// deterministic finite-state automota ("DFA") the following regex was used to
+    /// derive the DFA:
+    ///    vosi?u?e?p?c?b*(tr*)+z?k?a*(mi?c?b*k?a*)*
+    /// possible place and state to exit:
+    ///                    **   * * *  ** * * * *
+    ///                    99   1 1 1  11 1 1 1 1
+    ///                         3 1 1  26 5 5 4 4
+    ///
+    /// Please pay close attention to the `k`, and `a` parsing states. In the table
+    /// below in order to distinguish between the states belonging to the media
+    /// description as opposed to the session description, the states are marked
+    /// with an asterisk ("a*", "k*").
+    /// +--------+----+-------+----+-----+----+-----+---+----+----+---+---+-----+---+---+----+---+----+
+    /// | STATES | a* | a*,k* | a  | a,k | b  | b,c | e | i  | m  | o | p | r,t | s | t | u  | v | z  |
+    /// +--------+----+-------+----+-----+----+-----+---+----+----+---+---+-----+---+---+----+---+----+
+    /// |   s1   |    |       |    |     |    |     |   |    |    |   |   |     |   |   |    | 2 |    |
+    /// |   s2   |    |       |    |     |    |     |   |    |    | 3 |   |     |   |   |    |   |    |
+    /// |   s3   |    |       |    |     |    |     |   |    |    |   |   |     | 4 |   |    |   |    |
+    /// |   s4   |    |       |    |     |    |   5 | 6 |  7 |    |   | 8 |     |   | 9 | 10 |   |    |
+    /// |   s5   |    |       |    |     |  5 |     |   |    |    |   |   |     |   | 9 |    |   |    |
+    /// |   s6   |    |       |    |     |    |   5 |   |    |    |   | 8 |     |   | 9 |    |   |    |
+    /// |   s7   |    |       |    |     |    |   5 | 6 |    |    |   | 8 |     |   | 9 | 10 |   |    |
+    /// |   s8   |    |       |    |     |    |   5 |   |    |    |   |   |     |   | 9 |    |   |    |
+    /// |   s9   |    |       |    |  11 |    |     |   |    | 12 |   |   |   9 |   |   |    |   | 13 |
+    /// |   s10  |    |       |    |     |    |   5 | 6 |    |    |   | 8 |     |   | 9 |    |   |    |
+    /// |   s11  |    |       | 11 |     |    |     |   |    | 12 |   |   |     |   |   |    |   |    |
+    /// |   s12  |    |    14 |    |     |    |  15 |   | 16 | 12 |   |   |     |   |   |    |   |    |
+    /// |   s13  |    |       |    |  11 |    |     |   |    | 12 |   |   |     |   |   |    |   |    |
+    /// |   s14  | 14 |       |    |     |    |     |   |    | 12 |   |   |     |   |   |    |   |    |
+    /// |   s15  |    |    14 |    |     | 15 |     |   |    | 12 |   |   |     |   |   |    |   |    |
+    /// |   s16  |    |    14 |    |     |    |  15 |   |    | 12 |   |   |     |   |   |    |   |    |
+    /// +--------+----+-------+----+-----+----+-----+---+----+----+---+---+-----+---+---+----+---+----+
     pub fn unmarshal<R: io::BufRead + io::Seek>(reader: &mut R) -> Result<Self, Error> {
         let mut lexer = Lexer {
             desc: SessionDescription {

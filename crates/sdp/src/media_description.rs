@@ -4,45 +4,45 @@ use url::Url;
 use super::common_description::*;
 use super::extmap::*;
 
-// Constants for extmap key
+/// Constants for extmap key
 const EXT_MAP_VALUE_TRANSPORT_CC_KEY: isize = 3;
 const EXT_MAP_VALUE_TRANSPORT_CC_URI: &str =
     "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
 
-// MediaDescription represents a media type.
-// https://tools.ietf.org/html/rfc4566#section-5.14
+/// MediaDescription represents a media type.
+/// https://tools.ietf.org/html/rfc4566#section-5.14
 #[derive(Debug, Default)]
 pub struct MediaDescription {
-    // m=<media> <port>/<number of ports> <proto> <fmt> ...
-    // https://tools.ietf.org/html/rfc4566#section-5.14
+    /// m=<media> <port>/<number of ports> <proto> <fmt> ...
+    /// https://tools.ietf.org/html/rfc4566#section-5.14
     pub media_name: MediaName,
 
-    // i=<session description>
-    // https://tools.ietf.org/html/rfc4566#section-5.4
+    /// i=<session description>
+    /// https://tools.ietf.org/html/rfc4566#section-5.4
     pub media_title: Option<Information>,
 
-    // c=<nettype> <addrtype> <connection-address>
-    // https://tools.ietf.org/html/rfc4566#section-5.7
+    /// c=<nettype> <addrtype> <connection-address>
+    /// https://tools.ietf.org/html/rfc4566#section-5.7
     pub connection_information: Option<ConnectionInformation>,
 
-    // b=<bwtype>:<bandwidth>
-    // https://tools.ietf.org/html/rfc4566#section-5.8
+    /// b=<bwtype>:<bandwidth>
+    /// https://tools.ietf.org/html/rfc4566#section-5.8
     pub bandwidth: Vec<Bandwidth>,
 
-    // k=<method>
-    // k=<method>:<encryption key>
-    // https://tools.ietf.org/html/rfc4566#section-5.12
+    /// k=<method>
+    /// k=<method>:<encryption key>
+    /// https://tools.ietf.org/html/rfc4566#section-5.12
     pub encryption_key: Option<EncryptionKey>,
 
-    // Attributes are the primary means for extending SDP.  Attributes may
-    // be defined to be used as "session-level" attributes, "media-level"
-    // attributes, or both.
-    // https://tools.ietf.org/html/rfc4566#section-5.12
+    /// Attributes are the primary means for extending SDP.  Attributes may
+    /// be defined to be used as "session-level" attributes, "media-level"
+    /// attributes, or both.
+    /// https://tools.ietf.org/html/rfc4566#section-5.12
     pub attributes: Vec<Attribute>,
 }
 
 impl MediaDescription {
-    // Attribute returns the value of an attribute and if it exists
+    /// Attribute returns the value of an attribute and if it exists
     pub fn attribute(&self, key: &str) -> Option<&String> {
         for a in &self.attributes {
             if a.key == key {
@@ -52,11 +52,9 @@ impl MediaDescription {
         None
     }
 
-    // New JSEPMediaDescription creates a new MediaName with
-    // some settings that are required by the JSEP spec.
-    // TODO: use codec_prefs
+    /// New JSEPMediaDescription creates a new MediaName with
+    /// some settings that are required by the JSEP spec.
     pub fn new(codec_type: String, _codec_prefs: Vec<&str>) -> Self {
-        // TODO: handle codec_prefs
         MediaDescription {
             media_name: MediaName {
                 media: codec_type,
@@ -88,25 +86,25 @@ impl MediaDescription {
         }
     }
 
-    // WithPropertyAttribute adds a property attribute 'a=key' to the media description
+    /// WithPropertyAttribute adds a property attribute 'a=key' to the media description
     pub fn with_property_attribute(mut self, key: String) -> Self {
         self.attributes.push(Attribute::new(key, None));
         self
     }
 
-    // WithValueAttribute adds a value attribute 'a=key:value' to the media description
+    /// WithValueAttribute adds a value attribute 'a=key:value' to the media description
     pub fn with_value_attribute(mut self, key: String, value: String) -> Self {
         self.attributes.push(Attribute::new(key, Some(value)));
         self
     }
 
-    // WithICECredentials adds ICE credentials to the media description
+    /// WithICECredentials adds ICE credentials to the media description
     pub fn with_ice_credentials(self, username: String, password: String) -> Self {
         self.with_value_attribute("ice-ufrag".to_string(), username)
             .with_value_attribute("ice-pwd".to_string(), password)
     }
 
-    // WithCodec adds codec information to the media description
+    /// WithCodec adds codec information to the media description
     pub fn with_codec(
         mut self,
         payload_type: u8,
@@ -129,7 +127,7 @@ impl MediaDescription {
         }
     }
 
-    // WithMediaSource adds media source information to the media description
+    /// WithMediaSource adds media source information to the media description
     pub fn with_media_source(
         self,
         ssrc: u32,
@@ -145,8 +143,8 @@ impl MediaDescription {
         // Deprecated but not phased out?
     }
 
-    // WithCandidate adds an ICE candidate to the media description
-    // Deprecated: use WithICECandidate instead
+    /// WithCandidate adds an ICE candidate to the media description
+    /// Deprecated: use WithICECandidate instead
     pub fn with_candidate(self, value: String) -> Self {
         self.with_value_attribute("candidate".to_string(), value)
     }
@@ -155,7 +153,7 @@ impl MediaDescription {
         self.with_property_attribute(e.marshal())
     }
 
-    // WithTransportCCExtMap adds an extmap to the media description
+    /// WithTransportCCExtMap adds an extmap to the media description
     pub fn with_transport_cc_extmap(self) -> Self {
         let uri = match Url::parse(EXT_MAP_VALUE_TRANSPORT_CC_URI) {
             Ok(uri) => Some(uri),
@@ -172,10 +170,10 @@ impl MediaDescription {
     }
 }
 
-// RangedPort supports special format for the media field "m=" port value. If
-// it may be necessary to specify multiple transport ports, the protocol allows
-// to write it as: <port>/<number of ports> where number of ports is a an
-// offsetting range.
+/// RangedPort supports special format for the media field "m=" port value. If
+/// it may be necessary to specify multiple transport ports, the protocol allows
+/// to write it as: <port>/<number of ports> where number of ports is a an
+/// offsetting range.
 #[derive(Debug, Default)]
 pub struct RangedPort {
     pub value: isize,
@@ -192,7 +190,7 @@ impl fmt::Display for RangedPort {
     }
 }
 
-// MediaName describes the "m=" field storage structure.
+/// MediaName describes the "m=" field storage structure.
 #[derive(Debug, Default)]
 pub struct MediaName {
     pub media: String,

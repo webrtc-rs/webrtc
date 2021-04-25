@@ -4,8 +4,8 @@ use std::fmt;
 // about the session.
 pub type Information = String;
 
-// ConnectionInformation defines the representation for the "c=" field
-// containing connection data.
+/// ConnectionInformation defines the representation for the "c=" field
+/// containing connection data.
 #[derive(Debug, Default)]
 pub struct ConnectionInformation {
     pub network_type: String,
@@ -23,7 +23,7 @@ impl fmt::Display for ConnectionInformation {
     }
 }
 
-// Address desribes a structured address token from within the "c=" field.
+/// Address desribes a structured address token from within the "c=" field.
 #[derive(Debug, Default)]
 pub struct Address {
     pub address: String,
@@ -44,8 +44,8 @@ impl fmt::Display for Address {
     }
 }
 
-// Bandwidth describes an optional field which denotes the proposed bandwidth
-// to be used by the session or media.
+/// Bandwidth describes an optional field which denotes the proposed bandwidth
+/// to be used by the session or media.
 #[derive(Debug, Default)]
 pub struct Bandwidth {
     pub experimental: bool,
@@ -60,11 +60,11 @@ impl fmt::Display for Bandwidth {
     }
 }
 
-// EncryptionKey describes the "k=" which conveys encryption key information.
+/// EncryptionKey describes the "k=" which conveys encryption key information.
 pub type EncryptionKey = String;
 
-// Attribute describes the "a=" field which represents the primary means for
-// extending SDP.
+/// Attribute describes the "a=" field which represents the primary means for
+/// extending SDP.
 #[derive(Debug, Default)]
 pub struct Attribute {
     pub key: String,
@@ -82,12 +82,12 @@ impl fmt::Display for Attribute {
 }
 
 impl Attribute {
-    // constructs a new attribute
+    /// constructs a new attribute
     pub fn new(key: String, value: Option<String>) -> Self {
         Attribute { key, value }
     }
 
-    // IsICECandidate returns true if the attribute key equals "candidate".
+    /// IsICECandidate returns true if the attribute key equals "candidate".
     pub fn is_ice_candidate(&self) -> bool {
         self.key.as_str() == "candidate"
     }

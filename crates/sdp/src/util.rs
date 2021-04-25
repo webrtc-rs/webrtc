@@ -11,19 +11,19 @@ use std::io::SeekFrom;
 pub const END_LINE: &str = "\r\n";
 pub const ATTRIBUTE_KEY: &str = "a=";
 
-// ConnectionRole indicates which of the end points should initiate the connection establishment
+/// ConnectionRole indicates which of the end points should initiate the connection establishment
 #[derive(Debug)]
 pub enum ConnectionRole {
-    // ConnectionRoleActive indicates the endpoint will initiate an outgoing connection.
+    /// ConnectionRoleActive indicates the endpoint will initiate an outgoing connection.
     ConnectionRoleActive = 1,
 
-    // ConnectionRolePassive indicates the endpoint will accept an incoming connection.
+    /// ConnectionRolePassive indicates the endpoint will accept an incoming connection.
     ConnectionRolePassive = 2,
 
-    // ConnectionRoleActpass indicates the endpoint is willing to accept an incoming connection or to initiate an outgoing connection.
+    /// ConnectionRoleActpass indicates the endpoint is willing to accept an incoming connection or to initiate an outgoing connection.
     ConnectionRoleActpass = 3,
 
-    // ConnectionRoleHoldconn indicates the endpoint does not want the connection to be established for the time being.
+    /// ConnectionRoleHoldconn indicates the endpoint does not want the connection to be established for the time being.
     ConnectionRoleHoldconn = 4,
 }
 
@@ -40,11 +40,11 @@ impl fmt::Display for ConnectionRole {
     }
 }
 
+/// https://tools.ietf.org/html/draft-ietf-rtcweb-jsep-26#section-5.2.1
+/// Session ID is recommended to be constructed by generating a 64-bit
+/// quantity with the highest bit set to zero and the remaining 63-bits
+/// being cryptographically random.
 pub(crate) fn new_session_id() -> u64 {
-    // https://tools.ietf.org/html/draft-ietf-rtcweb-jsep-26#section-5.2.1
-    // Session ID is recommended to be constructed by generating a 64-bit
-    // quantity with the highest bit set to zero and the remaining 63-bits
-    // being cryptographically random.
     let c = u64::MAX ^ (1u64 << 63);
     rand::random::<u64>() & c
 }

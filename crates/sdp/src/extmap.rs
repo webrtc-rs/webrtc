@@ -10,7 +10,7 @@ use super::error::Error;
 #[cfg(test)]
 mod extmap_test;
 
-// Default ext values
+/// Default ext values
 pub const DEF_EXT_MAP_VALUE_ABS_SEND_TIME: usize = 1;
 pub const DEF_EXT_MAP_VALUE_TRANSPORT_CC: usize = 2;
 pub const DEF_EXT_MAP_VALUE_SDES_MID: usize = 3;
@@ -23,7 +23,7 @@ pub const SDES_MID_URI: &str = "urn:ietf:params:rtp-hdrext:sdes:mid";
 pub const SDES_RTP_STREAM_ID_URI: &str = "urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id";
 pub const AUDIO_LEVEL_URI: &str = "urn:ietf:params:rtp-hdrext:ssrc-audio-level";
 
-//ExtMap represents the activation of a single RTP header extension
+/// ExtMap represents the activation of a single RTP header extension
 #[derive(Debug, Clone, Default)]
 pub struct ExtMap {
     pub(crate) value: isize,
@@ -53,7 +53,7 @@ impl fmt::Display for ExtMap {
 }
 
 impl ExtMap {
-    //Clone converts this object to an Attribute
+    /// converts this object to an Attribute
     pub fn convert(&self) -> Attribute {
         Attribute {
             key: "extmap".to_string(),
@@ -61,7 +61,7 @@ impl ExtMap {
         }
     }
 
-    //Unmarshal creates an Extmap from a string
+    /// unmarshal creates an Extmap from a string
     pub fn unmarshal<R: io::BufRead>(reader: &mut R) -> Result<Self, Error> {
         let mut line = String::new();
         reader.read_line(&mut line)?;
@@ -111,7 +111,7 @@ impl ExtMap {
         })
     }
 
-    //Marshal creates a string from an ExtMap
+    /// marshal creates a string from an ExtMap
     pub fn marshal(&self) -> String {
         "extmap:".to_string() + self.to_string().as_str()
     }

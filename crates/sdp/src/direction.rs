@@ -3,17 +3,17 @@ use std::fmt;
 #[cfg(test)]
 mod direction_test;
 
-//Direction is a marker for transmission direction of an endpoint
+/// Direction is a marker for transmission direction of an endpoint
 #[derive(Debug, PartialEq, Clone)]
 pub enum Direction {
     DirectionUnknown = 0,
-    //DirectionSendRecv is for bidirectional communication
+    /// DirectionSendRecv is for bidirectional communication
     DirectionSendRecv = 1,
-    //DirectionSendOnly is for outgoing communication
+    /// DirectionSendOnly is for outgoing communication
     DirectionSendOnly = 2,
-    //DirectionRecvOnly is for incoming communication
+    /// DirectionRecvOnly is for incoming communication
     DirectionRecvOnly = 3,
-    //DirectionInactive is for no communication
+    /// DirectionInactive is for no communication
     DirectionInactive = 4,
 }
 
@@ -41,7 +41,7 @@ impl Default for Direction {
         Direction::DirectionUnknown
     }
 }
-// NewDirection defines a procedure for creating a new direction from a raw string.
+/// NewDirection defines a procedure for creating a new direction from a raw string.
 impl Direction {
     pub fn new(raw: &str) -> Self {
         match raw {
