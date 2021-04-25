@@ -12,16 +12,16 @@
  <a href="https://deps.rs/repo/github/webrtc-rs/turn"> 
   <img src="https://deps.rs/repo/github/webrtc-rs/turn/status.svg">
  </a>
- <a href="https://crates.io/crates/webrtc-turn"> 
-  <img src="https://img.shields.io/crates/v/webrtc-turn.svg">
+ <a href="https://crates.io/crates/turn"> 
+  <img src="https://img.shields.io/crates/v/turn.svg">
  </a> 
- <a href="https://docs.rs/webrtc-turn"> 
-  <img src="https://docs.rs/webrtc-turn/badge.svg">
+ <a href="https://docs.rs/turn"> 
+  <img src="https://docs.rs/turn/badge.svg">
  </a>
  <a href="https://github.com/webrtc-rs/turn/blob/master/LICENSE">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
  </a>
 </p>
 <p align="center">
- A pure Rust implementation of TURN. Rewrite <a href="https://github.com/pion/turn">Pion TURN</a> in Rust
+ A pure Rust implementation of TURN. Rewrite <a href="https://github.com/pion">Pion</a> TURN in Rust
 </p>
