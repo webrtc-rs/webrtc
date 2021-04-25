@@ -13,6 +13,8 @@ use super::util::*;
 mod session_description_test;
 
 // Constants for SDP attributes used in JSEP
+const ATTR_KEY_CANDIDATE: &str = "candidate";
+const ATTR_KEY_END_OF_CANDIDATES: &str = "end-of-candidates";
 const ATTR_KEY_IDENTITY: &str = "identity";
 const ATTR_KEY_GROUP: &str = "group";
 const ATTR_KEY_SSRC: &str = "ssrc";
