@@ -112,7 +112,7 @@
 - [ ] WebRTC: [webrtc-rs/webrtc](https://github.com/webrtc-rs/webrtc) [![webrtc][webrtc-badge]][webrtc-url]
   - catch up with [pion/webrtc/v3.0.20](https://github.com/pion/webrtc/tree/v3.0.20)
   - [ ] DataChannel: [webrtc-rs/data](https://github.com/webrtc-rs/data) [![data][data-badge]][data-url]
-  - [ ] PeerConnection: [webrtc-rs/PeerConnection](https://github.com/webrtc-rs/PeerConnection) [![pc][pc-badge]][pc-url]
+  - [ ] PeerConnection: [webrtc-rs/pc](https://github.com/webrtc-rs/pc) [![pc][pc-badge]][pc-url]
   - [ ] Media: [webrtc-rs/media](https://github.com/webrtc-rs/media) [![media][media-badge]][media-url]
 
 #
