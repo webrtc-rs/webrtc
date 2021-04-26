@@ -109,7 +109,9 @@
   - [ ] TODO: catch up with pion/sctp v1.7.12
 - [ ] WebRTC [webrtc-rs/webrtc](https://github.com/webrtc-rs/webrtc) [![webrtc][webrtc-badge]][webrtc-url]
   - catch up with [pion/webrtc/v3.0.20](https://github.com/pion/webrtc/tree/v3.0.20)
-  - [ ] TODO: update dependent webrtc-rs crates
+  - [ ] DataChannel
+  - [ ] PeerConnection
+  - [ ] Media
 
 ### Others
 
