@@ -104,17 +104,14 @@
 - [x] ICE: [webrtc-rs/ice](https://github.com/webrtc-rs/ice) [![ice][ice-badge]][ice-url]
   - sync up to [pion/ice/v2.0.14](https://github.com/pion/ice/tree/c0a874421c45ef6bbc51166b9056aa46c201f075)
   - [ ] TODO: catch up with pion/ice/v2 v2.0.16
-- [ ] PeerConnection [webrtc-rs/webrtc](https://github.com/webrtc-rs/webrtc) [![webrtc][webrtc-badge]][webrtc-url]
+- [ ] SCTP: [webrtc-rs/sctp](https://github.com/webrtc-rs/sctp) [![sctp][sctp-badge]][sctp-url]
+  - catch up with [pion/sctp/v1.7.12](https://github.com/pion/sctp/tree/v1.7.12)
+  - [ ] TODO: catch up with pion/sctp v1.7.12
+- [ ] WebRTC [webrtc-rs/webrtc](https://github.com/webrtc-rs/webrtc) [![webrtc][webrtc-badge]][webrtc-url]
   - catch up with [pion/webrtc/v3.0.20](https://github.com/pion/webrtc/tree/v3.0.20)
   - [ ] TODO: update dependent webrtc-rs crates
 
-### Road Map Towards 2.0
-
-- [ ] SCTP: [webrtc-rs/sctp](https://github.com/webrtc-rs/sctp) [![sctp][sctp-badge]][sctp-url]
-- [ ] DataChannel [webrtc-rs/data](https://github.com/webrtc-rs/data) [![data][data-badge]][data-url]
-- [ ] Media: [webrtc-rs/media](https://github.com/webrtc-rs/media) [![media][media-badge]][media-url]
-
-### Road Map Towards 3.0
+### Others
 
 - [ ] SIP: [webrtc-rs/sip](https://github.com/webrtc-rs/sip) [![sip][sip-badge]][sip-url]
 - [ ] QUIC
