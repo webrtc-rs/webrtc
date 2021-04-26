@@ -69,6 +69,8 @@
 [sctp-url]: https://crates.io/crates/webrtc-sctp
 [sip-badge]: https://img.shields.io/crates/v/webrtc-sip.svg
 [sip-url]: https://crates.io/crates/webrtc-sip
+[pc-badge]: https://img.shields.io/crates/v/webrtc-pc.svg
+[pc-url]: https://crates.io/crates/webrtc-pc
 [data-badge]: https://img.shields.io/crates/v/webrtc-data.svg
 [data-url]: https://crates.io/crates/webrtc-data
 [media-badge]: https://img.shields.io/crates/v/webrtc-media.svg
@@ -109,9 +111,9 @@
   - [ ] TODO: catch up with pion/sctp v1.7.12
 - [ ] WebRTC [webrtc-rs/webrtc](https://github.com/webrtc-rs/webrtc) [![webrtc][webrtc-badge]][webrtc-url]
   - catch up with [pion/webrtc/v3.0.20](https://github.com/pion/webrtc/tree/v3.0.20)
-  - [ ] DataChannel
-  - [ ] PeerConnection
-  - [ ] Media
+  - [ ] DataChannel [![data][data-badge]][data-url]
+  - [ ] PeerConnection [![pc][pc-badge]][pc-url]
+  - [ ] Media [![media][media-badge]][media-url]
 
 #
 
