@@ -113,12 +113,6 @@
   - [ ] PeerConnection
   - [ ] Media
 
-### Others
-
-- [ ] SIP: [webrtc-rs/sip](https://github.com/webrtc-rs/sip) [![sip][sip-badge]][sip-url]
-- [ ] QUIC
-- [ ] ...
-
 #
 
 ### Contributors or pull requests are welcome!
