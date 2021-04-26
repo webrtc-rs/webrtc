@@ -109,11 +109,11 @@
 - [ ] SCTP: [webrtc-rs/sctp](https://github.com/webrtc-rs/sctp) [![sctp][sctp-badge]][sctp-url]
   - catch up with [pion/sctp/v1.7.12](https://github.com/pion/sctp/tree/v1.7.12)
   - [ ] TODO: catch up with pion/sctp v1.7.12
-- [ ] WebRTC [webrtc-rs/webrtc](https://github.com/webrtc-rs/webrtc) [![webrtc][webrtc-badge]][webrtc-url]
+- [ ] WebRTC: [webrtc-rs/webrtc](https://github.com/webrtc-rs/webrtc) [![webrtc][webrtc-badge]][webrtc-url]
   - catch up with [pion/webrtc/v3.0.20](https://github.com/pion/webrtc/tree/v3.0.20)
-  - [ ] DataChannel [![data][data-badge]][data-url]
-  - [ ] PeerConnection [![pc][pc-badge]][pc-url]
-  - [ ] Media [![media][media-badge]][media-url]
+  - [ ] DataChannel: [webrtc-rs/data](https://github.com/webrtc-rs/data) [![data][data-badge]][data-url]
+  - [ ] PeerConnection: [webrtc-rs/PeerConnection](https://github.com/webrtc-rs/PeerConnection) [![pc][pc-badge]][pc-url]
+  - [ ] Media: [webrtc-rs/media](https://github.com/webrtc-rs/media) [![media][media-badge]][media-url]
 
 #
 
