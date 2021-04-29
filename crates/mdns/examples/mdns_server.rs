@@ -5,8 +5,6 @@ use mdns::{config::*, conn::*};
 use clap::{App, AppSettings, Arg};
 use std::net::SocketAddr;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use util::Error;
 
 // For interop with webrtc-rs/mdns_server
@@ -34,7 +32,7 @@ async fn main() -> Result<(), Error> {
             Arg::with_name("server")
                 .required_unless("FULLHELP")
                 .takes_value(true)
-                .default_value(DEFAULT_DEST_ADDR)
+                .default_value("0.0.0.0:5353")
                 .long("server")
                 .help("mDNS Server name."),
         )
@@ -65,16 +63,9 @@ async fn main() -> Result<(), Error> {
     )
     .unwrap();
 
-    let running = Arc::new(AtomicBool::new(true));
-    let r = running.clone();
-
-    ctrlc::set_handler(move || {
-        r.store(false, Ordering::SeqCst);
-    })
-    .expect("Error setting Ctrl-C handler");
-
     println!("Waiting for Ctrl-C...");
-    while running.load(Ordering::SeqCst) {}
+    tokio::signal::ctrl_c().await?;
+
     println!("\nClosing connection now...");
     server.close().await.unwrap();
 
