@@ -1,6 +1,6 @@
 use clap::{App, Arg};
 
-use webrtc_stun::message::Message;
+use stun::message::Message;
 
 fn main() {
     let mut app = App::new("STUN decode")

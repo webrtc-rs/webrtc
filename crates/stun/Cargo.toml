@@ -1,11 +1,11 @@
 [package]
-name = "webrtc-stun"
-version = "0.1.13"
+name = "stun"
+version = "0.1.14"
 authors = ["Rain Liu <yuliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of STUN"
 license = "MIT"
-documentation = "https://docs.rs/webrtc-stun"
+documentation = "https://docs.rs/stun"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/stun"
 
