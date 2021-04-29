@@ -73,3 +73,41 @@ impl From<u8> for ChunkType {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_chunk_type_string() {
+        let tests = vec![
+            (ChunkType::PayloadData, "DATA"),
+            (ChunkType::Init, "INIT"),
+            (ChunkType::InitAck, "INIT-ACK"),
+            (ChunkType::Sack, "SACK"),
+            (ChunkType::Heartbeat, "HEARTBEAT"),
+            (ChunkType::HeartbeatAck, "HEARTBEAT-ACK"),
+            (ChunkType::Abort, "ABORT"),
+            (ChunkType::Shutdown, "SHUTDOWN"),
+            (ChunkType::ShutdownAck, "SHUTDOWN-ACK"),
+            (ChunkType::Error, "ERROR"),
+            (ChunkType::CookieEcho, "COOKIE-ECHO"),
+            (ChunkType::CookieAck, "COOKIE-ACK"),
+            (ChunkType::Cwr, "ECNE"),
+            (ChunkType::ShutdownComplete, "SHUTDOWN-COMPLETE"),
+            (ChunkType::Reconfig, "RECONFIG"),
+            (ChunkType::ForwardTsn, "FORWARD-TSN"),
+            (ChunkType::Unknown, "Unknown ChunkType"),
+        ];
+
+        for (ct, expected) in tests {
+            assert_eq!(
+                ct.to_string(),
+                expected,
+                "failed to stringify chunkType {}, expected {}",
+                ct,
+                expected
+            );
+        }
+    }
+}
