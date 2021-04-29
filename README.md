@@ -57,8 +57,8 @@
 [srtp-url]: https://crates.io/crates/webrtc-srtp
 [dtls-badge]: https://img.shields.io/crates/v/webrtc-dtls.svg
 [dtls-url]: https://crates.io/crates/webrtc-dtls
-[stun-badge]: https://img.shields.io/crates/v/webrtc-stun.svg
-[stun-url]: https://crates.io/crates/webrtc-stun
+[stun-badge]: https://img.shields.io/crates/v/stun.svg
+[stun-url]: https://crates.io/crates/stun
 [mdns-badge]: https://img.shields.io/crates/v/webrtc-mdns.svg
 [mdns-url]: https://crates.io/crates/webrtc-mdns
 [ice-badge]: https://img.shields.io/crates/v/webrtc-ice.svg
