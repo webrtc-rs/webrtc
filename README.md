@@ -1,8 +1,8 @@
-<center> 
+<div style="text-align: center;"> 
 
 ![webrtc-rs][webrtc-rs] 
 
-</center>
+</div>
 
 
 <p align="center">
@@ -74,7 +74,7 @@
 [rtc-badge]: https://img.shields.io/crates/v/rtc.svg
 [rtc-url]: https://crates.io/crates/rtc
 
-<center>
+<div style="text-align: center;">
 
 ![uncheck][uncheck]RTC[![rtc][rtc-badge]][rtc-url]
 ![uncheck][uncheck]Media[![media][media-badge]][media-url]
@@ -96,15 +96,15 @@
 ![check][check]SDP[![sdp][sdp-badge]][sdp-url]
 ![check][check]Util[![sdp][util-badge]][util-url] 
 
-</center>
+</div>
 
 #
 
-<center> 
+<div style="text-align: center;"> 
 
 ![webrtc-stack][webrtc-stack] 
 
-</center>
+</div>
 
 #
 
