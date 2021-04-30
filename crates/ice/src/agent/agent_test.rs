@@ -529,7 +529,7 @@ async fn test_connectivity_lite() -> Result<(), Error> {
         ..Default::default()
     };
 
-    let nat_type = nat::NATType {
+    let nat_type = nat::NatType {
         mapping_behavior: nat::EndpointDependencyType::EndpointIndependent,
         filtering_behavior: nat::EndpointDependencyType::EndpointIndependent,
         ..Default::default()

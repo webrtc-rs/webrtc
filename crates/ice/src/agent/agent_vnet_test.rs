@@ -6,7 +6,7 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::str::FromStr;
 use std::sync::atomic::AtomicU64;
 use util::vnet::chunk::Chunk;
-use util::{vnet::router::NIC, vnet::*, Conn};
+use util::{vnet::router::Nic, vnet::*, Conn};
 use waitgroup::WaitGroup;
 
 pub(crate) struct MockConn;
@@ -59,8 +59,8 @@ pub(crate) const VNET_STUN_SERVER_IP: &str = "1.2.3.4";
 pub(crate) const VNET_STUN_SERVER_PORT: u16 = 3478;
 
 pub(crate) async fn build_simple_vnet(
-    _nat_type0: nat::NATType,
-    _nat_type1: nat::NATType,
+    _nat_type0: nat::NatType,
+    _nat_type1: nat::NatType,
 ) -> Result<VNet, Error> {
     // WAN
     let wan = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
@@ -108,8 +108,8 @@ pub(crate) async fn build_simple_vnet(
 }
 
 pub(crate) async fn build_vnet(
-    nat_type0: nat::NATType,
-    nat_type1: nat::NATType,
+    nat_type0: nat::NatType,
+    nat_type1: nat::NatType,
 ) -> Result<VNet, Error> {
     // WAN
     let wan = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
@@ -126,7 +126,7 @@ pub(crate) async fn build_vnet(
 
     // LAN 0
     let lan0 = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
-        static_ips: if nat_type0.mode == nat::NATMode::NAT1To1 {
+        static_ips: if nat_type0.mode == nat::NatMode::Nat1To1 {
             vec![format!("{}/{}", VNET_GLOBAL_IPA, VNET_LOCAL_IPA)]
         } else {
             vec![VNET_GLOBAL_IPA.to_owned()]
@@ -146,7 +146,7 @@ pub(crate) async fn build_vnet(
 
     // LAN 1
     let lan1 = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
-        static_ips: if nat_type1.mode == nat::NATMode::NAT1To1 {
+        static_ips: if nat_type1.mode == nat::NatMode::Nat1To1 {
             vec![format!("{}/{}", VNET_GLOBAL_IPB, VNET_LOCAL_IPB)]
         } else {
             vec![VNET_GLOBAL_IPB.to_owned()]
@@ -469,7 +469,7 @@ async fn test_connectivity_simple_vnet_full_cone_nats_on_both_ends() -> Result<(
     };
 
     // buildVNet with a Full-cone NATs both LANs
-    let nat_type = nat::NATType {
+    let nat_type = nat::NatType {
         mapping_behavior: nat::EndpointDependencyType::EndpointIndependent,
         filtering_behavior: nat::EndpointDependencyType::EndpointIndependent,
         ..Default::default()
@@ -532,7 +532,7 @@ async fn test_connectivity_vnet_full_cone_nats_on_both_ends() -> Result<(), Erro
     };
 
     // buildVNet with a Full-cone NATs both LANs
-    let nat_type = nat::NATType {
+    let nat_type = nat::NatType {
         mapping_behavior: nat::EndpointDependencyType::EndpointIndependent,
         filtering_behavior: nat::EndpointDependencyType::EndpointIndependent,
         ..Default::default()
@@ -595,7 +595,7 @@ async fn test_connectivity_vnet_symmetric_nats_on_both_ends() -> Result<(), Erro
     };
 
     // buildVNet with a Symmetric NATs for both LANs
-    let nat_type = nat::NATType {
+    let nat_type = nat::NatType {
         mapping_behavior: nat::EndpointDependencyType::EndpointAddrPortDependent,
         filtering_behavior: nat::EndpointDependencyType::EndpointAddrPortDependent,
         ..Default::default()
@@ -641,12 +641,12 @@ async fn test_connectivity_vnet_1to1_nat_with_host_candidate_vs_symmetric_nats()
     .init();*/
 
     // Agent0 is behind 1:1 NAT
-    let nat_type0 = nat::NATType {
-        mode: nat::NATMode::NAT1To1,
+    let nat_type0 = nat::NatType {
+        mode: nat::NatMode::Nat1To1,
         ..Default::default()
     };
     // Agent1 is behind a symmetric NAT
-    let nat_type1 = nat::NATType {
+    let nat_type1 = nat::NatType {
         mapping_behavior: nat::EndpointDependencyType::EndpointAddrPortDependent,
         filtering_behavior: nat::EndpointDependencyType::EndpointAddrPortDependent,
         ..Default::default()
@@ -695,12 +695,12 @@ async fn test_connectivity_vnet_1to1_nat_with_srflx_candidate_vs_symmetric_nats(
     .init();*/
 
     // Agent0 is behind 1:1 NAT
-    let nat_type0 = nat::NATType {
-        mode: nat::NATMode::NAT1To1,
+    let nat_type0 = nat::NatType {
+        mode: nat::NatMode::Nat1To1,
         ..Default::default()
     };
     // Agent1 is behind a symmetric NAT
-    let nat_type1 = nat::NATType {
+    let nat_type1 = nat::NatType {
         mapping_behavior: nat::EndpointDependencyType::EndpointAddrPortDependent,
         filtering_behavior: nat::EndpointDependencyType::EndpointAddrPortDependent,
         ..Default::default()

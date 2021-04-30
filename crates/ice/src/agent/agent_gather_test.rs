@@ -118,8 +118,8 @@ async fn test_vnet_gather_with_nat_1to1_as_host_candidates() -> Result<(), Error
     let lan = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
         cidr: "10.0.0.0/24".to_owned(),
         static_ips: vec![map0.clone(), map1.clone()],
-        nat_type: Some(nat::NATType {
-            mode: nat::NATMode::NAT1To1,
+        nat_type: Some(nat::NatType {
+            mode: nat::NatMode::Nat1To1,
             ..Default::default()
         }),
         ..Default::default()
@@ -235,8 +235,8 @@ async fn test_vnet_gather_with_nat_1to1_as_srflx_candidates() -> Result<(), Erro
     let lan = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
         cidr: "10.0.0.0/24".to_owned(),
         static_ips: vec!["1.2.3.4/10.0.0.1".to_owned()],
-        nat_type: Some(nat::NATType {
-            mode: nat::NATMode::NAT1To1,
+        nat_type: Some(nat::NatType {
+            mode: nat::NatMode::Nat1To1,
             ..Default::default()
         }),
         ..Default::default()
@@ -382,7 +382,7 @@ async fn test_vnet_gather_turn_connection_leak() -> Result<(), Error> {
     };
 
     // buildVNet with a Symmetric NATs for both LANs
-    let nat_type = nat::NATType {
+    let nat_type = nat::NatType {
         mapping_behavior: nat::EndpointDependencyType::EndpointAddrPortDependent,
         filtering_behavior: nat::EndpointDependencyType::EndpointAddrPortDependent,
         ..Default::default()

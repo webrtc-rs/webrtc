@@ -47,13 +47,13 @@ pub(crate) async fn pipe(
 #[tokio::test]
 async fn test_remote_local_addr() -> Result<(), Error> {
     // Agent0 is behind 1:1 NAT
-    let nat_type0 = nat::NATType {
-        mode: nat::NATMode::NAT1To1,
+    let nat_type0 = nat::NatType {
+        mode: nat::NatMode::Nat1To1,
         ..Default::default()
     };
     // Agent1 is behind 1:1 NAT
-    let nat_type1 = nat::NATType {
-        mode: nat::NATMode::NAT1To1,
+    let nat_type1 = nat::NatType {
+        mode: nat::NatMode::Nat1To1,
         ..Default::default()
     };
 
