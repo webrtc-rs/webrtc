@@ -256,7 +256,7 @@ impl Client {
 
         if let Some(handler_tx) = &mut self.handler_tx {
             handler_tx.send(Event {
-                event_type: EventType::INSERT(ct),
+                event_type: EventType::Insert(ct),
                 ..Default::default()
             })?;
         }
@@ -271,7 +271,7 @@ impl Client {
 
         if let Some(handler_tx) = &mut self.handler_tx {
             handler_tx.send(Event {
-                event_type: EventType::REMOVE(id),
+                event_type: EventType::Remove(id),
                 ..Default::default()
             })?;
         }
@@ -289,19 +289,19 @@ impl Client {
         tokio::spawn(async move {
             while let Some(event) = handler_rx.recv().await {
                 match event.event_type {
-                    EventType::CLOSE => {
+                    EventType::Close => {
                         break;
                     }
-                    EventType::INSERT(ct) => {
+                    EventType::Insert(ct) => {
                         if t.contains_key(&ct.id) {
                             continue;
                         }
                         t.insert(ct.id, ct);
                     }
-                    EventType::REMOVE(id) => {
+                    EventType::Remove(id) => {
                         t.remove(&id);
                     }
-                    EventType::CALLBACK(id) => {
+                    EventType::Callback(id) => {
                         let mut ct;
                         if t.contains_key(&id) {
                             ct = t.remove(&id).unwrap();

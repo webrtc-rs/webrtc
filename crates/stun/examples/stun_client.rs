@@ -59,7 +59,7 @@ async fn main() -> Result<(), Error> {
     if let Some(event) = handler_rx.recv().await {
         match event.event_body {
             Ok(msg) => {
-                let mut xor_addr = XORMappedAddress::default();
+                let mut xor_addr = XorMappedAddress::default();
                 xor_addr.get_from(&msg)?;
                 println!("{}", xor_addr);
             }

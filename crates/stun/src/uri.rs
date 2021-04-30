@@ -14,13 +14,13 @@ pub const SCHEME_SECURE: &str = "stuns";
 
 // URI as defined in RFC 7064.
 #[derive(PartialEq, Debug)]
-pub struct URI {
+pub struct Uri {
     pub scheme: String,
     pub host: String,
     pub port: Option<u16>,
 }
 
-impl fmt::Display for URI {
+impl fmt::Display for Uri {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let host = if self.host.contains("::") {
             "[".to_owned() + self.host.as_str() + "]"
@@ -36,7 +36,7 @@ impl fmt::Display for URI {
     }
 }
 
-impl URI {
+impl Uri {
     // parse_uri parses URI from string.
     pub fn parse_uri(raw: &str) -> Result<Self, Error> {
         // work around for url crate
@@ -70,6 +70,6 @@ impl URI {
 
         let port = raw_parts.port();
 
-        Ok(URI { scheme, host, port })
+        Ok(Uri { scheme, host, port })
     }
 }

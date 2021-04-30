@@ -729,7 +729,7 @@ fn test_message_marshal_binary() -> Result<(), Error> {
     let mut m = Message::new();
     m.build(&[
         Box::new(TextAttribute::new(ATTR_SOFTWARE, "software".to_owned())),
-        Box::new(XORMappedAddress {
+        Box::new(XorMappedAddress {
             ip: "213.1.223.5".parse().unwrap(),
             port: 0,
         }),

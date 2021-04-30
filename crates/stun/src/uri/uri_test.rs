@@ -8,7 +8,7 @@ fn test_parse_uri() -> Result<(), Error> {
         (
             "default",
             "stun:example.org",
-            URI {
+            Uri {
                 host: "example.org".to_owned(),
                 scheme: SCHEME.to_owned(),
                 port: None,
@@ -18,7 +18,7 @@ fn test_parse_uri() -> Result<(), Error> {
         (
             "secure",
             "stuns:example.org",
-            URI {
+            Uri {
                 host: "example.org".to_owned(),
                 scheme: SCHEME_SECURE.to_owned(),
                 port: None,
@@ -28,7 +28,7 @@ fn test_parse_uri() -> Result<(), Error> {
         (
             "with port",
             "stun:example.org:8000",
-            URI {
+            Uri {
                 host: "example.org".to_owned(),
                 scheme: SCHEME.to_owned(),
                 port: Some(8000),
@@ -38,7 +38,7 @@ fn test_parse_uri() -> Result<(), Error> {
         (
             "ipv6 address",
             "stun:[::1]:123",
-            URI {
+            Uri {
                 host: "::1".to_owned(),
                 scheme: SCHEME.to_owned(),
                 port: Some(123),
@@ -48,7 +48,7 @@ fn test_parse_uri() -> Result<(), Error> {
     ];
 
     for (name, input, output, expected_str) in tests {
-        let out = URI::parse_uri(input)?;
+        let out = Uri::parse_uri(input)?;
         assert_eq!(out, output, "{}: {} != {}", name, out, output);
         assert_eq!(out.to_string(), expected_str, "{}", name);
     }
@@ -61,7 +61,7 @@ fn test_parse_uri() -> Result<(), Error> {
             ("invalid uri scheme", "stun_s:test"),
         ];
         for (name, input) in tests {
-            let result = URI::parse_uri(input);
+            let result = Uri::parse_uri(input);
             assert!(result.is_err(), "{} should fail, but did not", name);
         }
     }

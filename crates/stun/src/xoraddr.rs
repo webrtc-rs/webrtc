@@ -69,21 +69,21 @@ fn xor_bytes(dst: &mut [u8], a: &[u8], b: &[u8]) -> usize {
 // XORMappedAddress implements XOR-MAPPED-ADDRESS attribute.
 //
 // RFC 5389 Section 15.2
-pub struct XORMappedAddress {
+pub struct XorMappedAddress {
     pub ip: IpAddr,
     pub port: u16,
 }
 
-impl Default for XORMappedAddress {
+impl Default for XorMappedAddress {
     fn default() -> Self {
-        XORMappedAddress {
+        XorMappedAddress {
             ip: IpAddr::V4(Ipv4Addr::from(0)),
             port: 0,
         }
     }
 }
 
-impl fmt::Display for XORMappedAddress {
+impl fmt::Display for XorMappedAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let family = match self.ip {
             IpAddr::V4(_) => FAMILY_IPV4,
@@ -97,7 +97,7 @@ impl fmt::Display for XORMappedAddress {
     }
 }
 
-impl Setter for XORMappedAddress {
+impl Setter for XorMappedAddress {
     // AddTo adds XOR-MAPPED-ADDRESS to m. Can return ErrBadIPLength
     // if len(a.IP) is invalid.
     fn add_to(&self, m: &mut Message) -> Result<(), Error> {
@@ -105,7 +105,7 @@ impl Setter for XORMappedAddress {
     }
 }
 
-impl Getter for XORMappedAddress {
+impl Getter for XorMappedAddress {
     // GetFrom decodes XOR-MAPPED-ADDRESS attribute in message and returns
     // error if any. While decoding, a.IP is reused if possible and can be
     // rendered to invalid state (e.g. if a.IP was set to IPv6 and then
@@ -132,7 +132,7 @@ impl Getter for XORMappedAddress {
     }
 }
 
-impl XORMappedAddress {
+impl XorMappedAddress {
     // AddToAs adds XOR-MAPPED-ADDRESS value to m as t attribute.
     pub fn add_to_as(&self, m: &mut Message, t: AttrType) -> Result<(), Error> {
         let (family, ip_len, ip) = match self.ip {

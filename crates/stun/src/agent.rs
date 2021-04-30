@@ -42,15 +42,15 @@ pub struct Agent {
 
 #[derive(Debug, Clone)]
 pub enum EventType {
-    CALLBACK(TransactionId),
-    INSERT(ClientTransaction),
-    REMOVE(TransactionId),
-    CLOSE,
+    Callback(TransactionId),
+    Insert(ClientTransaction),
+    Remove(TransactionId),
+    Close,
 }
 
 impl Default for EventType {
     fn default() -> Self {
-        EventType::CALLBACK(TransactionId::default())
+        EventType::Callback(TransactionId::default())
     }
 }
 
@@ -135,7 +135,7 @@ impl Agent {
         if let Some(t) = v {
             if let Some(handler) = &self.handler {
                 handler.send(Event {
-                    event_type: EventType::CALLBACK(t.id),
+                    event_type: EventType::Callback(t.id),
                     event_body: Err(error),
                 })?;
             }
@@ -154,7 +154,7 @@ impl Agent {
         self.transactions.remove(&message.transaction_id);
 
         let e = Event {
-            event_type: EventType::CALLBACK(message.transaction_id),
+            event_type: EventType::Callback(message.transaction_id),
             event_body: Ok(message),
         };
 
@@ -174,7 +174,7 @@ impl Agent {
 
         for id in self.transactions.keys() {
             let e = Event {
-                event_type: EventType::CALLBACK(*id),
+                event_type: EventType::Callback(*id),
                 event_body: Err(ERR_AGENT_CLOSED.clone()),
             };
             if let Some(handler) = &self.handler {
@@ -243,7 +243,7 @@ impl Agent {
 
         for id in to_remove {
             let event = Event {
-                event_type: EventType::CALLBACK(id),
+                event_type: EventType::Callback(id),
                 event_body: Err(ERR_TRANSACTION_TIME_OUT.clone()),
             };
             if let Some(handler) = &self.handler {

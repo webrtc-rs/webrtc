@@ -41,7 +41,7 @@ fn test_xormapped_address_get_from() -> Result<(), Error> {
     m.transaction_id.0.copy_from_slice(&transaction_id);
     let addr_value = vec![0x00, 0x01, 0x9c, 0xd5, 0xf4, 0x9f, 0x38, 0xae];
     m.add(ATTR_XORMAPPED_ADDRESS, &addr_value);
-    let mut addr = XORMappedAddress {
+    let mut addr = XorMappedAddress {
         ip: "0.0.0.0".parse().unwrap(),
         port: 0,
     };
@@ -59,7 +59,7 @@ fn test_xormapped_address_get_from() -> Result<(), Error> {
         let mut m = Message::new();
         // {0, 1} is correct addr family.
         m.add(ATTR_XORMAPPED_ADDRESS, &[0, 1, 3, 4]);
-        let mut addr = XORMappedAddress {
+        let mut addr = XorMappedAddress {
             ip: "0.0.0.0".parse().unwrap(),
             port: 0,
         };
@@ -84,7 +84,7 @@ fn test_xormapped_address_get_from() -> Result<(), Error> {
             ATTR_XORMAPPED_ADDRESS,
             &[0, 1, 3, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1, 2, 3, 4],
         );
-        let mut addr = XORMappedAddress {
+        let mut addr = XorMappedAddress {
             ip: "0.0.0.0".parse().unwrap(),
             port: 0,
         };
@@ -110,7 +110,7 @@ fn test_xormapped_address_get_from_invalid() -> Result<(), Error> {
     m.transaction_id.0.copy_from_slice(&transaction_id);
     let expected_ip: IpAddr = "213.141.156.236".parse().unwrap();
     let expected_port = 21254u16;
-    let mut addr = XORMappedAddress {
+    let mut addr = XorMappedAddress {
         ip: "0.0.0.0".parse().unwrap(),
         port: 0,
     };
@@ -140,7 +140,7 @@ fn test_xormapped_address_add_to() -> Result<(), Error> {
     m.transaction_id.0.copy_from_slice(&transaction_id);
     let expected_ip: IpAddr = "213.141.156.236".parse().unwrap();
     let expected_port = 21254u16;
-    let mut addr = XORMappedAddress {
+    let mut addr = XorMappedAddress {
         ip: "213.141.156.236".parse().unwrap(),
         port: expected_port,
     };
@@ -172,7 +172,7 @@ fn test_xormapped_address_add_to_ipv6() -> Result<(), Error> {
     m.transaction_id.0.copy_from_slice(&transaction_id);
     let expected_ip: IpAddr = "fe80::dc2b:44ff:fe20:6009".parse().unwrap();
     let expected_port = 21254u16;
-    let addr = XORMappedAddress {
+    let addr = XorMappedAddress {
         ip: "fe80::dc2b:44ff:fe20:6009".parse().unwrap(),
         port: 21254,
     };
@@ -183,7 +183,7 @@ fn test_xormapped_address_add_to_ipv6() -> Result<(), Error> {
     let mut reader = BufReader::new(m.raw.as_slice());
     m_res.read_from(&mut reader)?;
 
-    let mut got_addr = XORMappedAddress {
+    let mut got_addr = XorMappedAddress {
         ip: "0.0.0.0".parse().unwrap(),
         port: 0,
     };
@@ -221,7 +221,7 @@ fn test_xormapped_address_string() -> Result<(), Error> {
     let tests = vec![
         (
             // 0
-            XORMappedAddress {
+            XorMappedAddress {
                 ip: "fe80::dc2b:44ff:fe20:6009".parse().unwrap(),
                 port: 124,
             },
@@ -229,7 +229,7 @@ fn test_xormapped_address_string() -> Result<(), Error> {
         ),
         (
             // 1
-            XORMappedAddress {
+            XorMappedAddress {
                 ip: "213.141.156.236".parse().unwrap(),
                 port: 8147,
             },
