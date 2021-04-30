@@ -45,13 +45,14 @@ async fn main() -> Result<(), Error> {
         );
 
     let matches = app.clone().get_matches();
+    let server = matches.value_of("server").unwrap();
 
     if matches.is_present("FULLHELP") {
         app.print_long_help().unwrap();
         std::process::exit(0);
     }
 
-    let server = matches.value_of("server").unwrap();
+    //  let server = matches.value_of("server").unwrap();
     let local_name = matches.value_of("local-name").unwrap();
 
     let server = DNSConn::server(
@@ -63,11 +64,8 @@ async fn main() -> Result<(), Error> {
     )
     .unwrap();
 
-    println!("Waiting for Ctrl-C...");
-    tokio::signal::ctrl_c().await?;
-
-    println!("\nClosing connection now...");
+    println!("Press ctlr-c to stop server");
+    tokio::signal::ctrl_c().await.unwrap();
     server.close().await.unwrap();
-
     Ok(())
 }

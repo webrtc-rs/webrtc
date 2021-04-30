@@ -59,13 +59,10 @@ impl DNSConn {
         #[cfg(target_family = "unix")]
         socket.set_reuse_port(true)?;
 
-        socket.set_broadcast(true)?;
         socket.set_reuse_address(true)?;
         socket.set_broadcast(true)?;
-        
-        socket.set_read_timeout(Some(Duration::from_millis(100)))?;
-        socket.bind(&SockAddr::from(addr))?;
 
+        socket.bind(&SockAddr::from(addr))?;
         {
             let mut join_error_count = 0;
             let interfaces = match ifaces::ifaces() {
@@ -80,7 +77,7 @@ impl DNSConn {
                 if let Some(SocketAddr::V4(e)) = interface.addr {
                     if let Err(e) = socket.join_multicast_v4(&Ipv4Addr::new(224, 0, 0, 251), e.ip())
                     {
-                        log::error!("error connecting multicast, error: {:?}", e);
+                        log::trace!("error connecting multicast, error: {:?}", e);
                         join_error_count += 1;
                         continue;
                     }
@@ -149,7 +146,10 @@ impl DNSConn {
 
         log::trace!("sending close command to server");
         match self.close_server.send(()).await {
-            Ok(_) => Ok(()),
+            Ok(_) => {
+                log::trace!("close command sent");
+                Ok(())
+            }
             Err(e) => {
                 log::warn!("error sending close command to server: {:?}", e);
                 Err(ERR_CONNECTION_CLOSED.to_owned())
@@ -158,15 +158,15 @@ impl DNSConn {
     }
 
     /// Query sends mDNS Queries for the following name until
-    /// either there's a close signalling or we get a result
+    /// either there's a close signal or we get a result
     pub async fn query(
         &self,
         name: &str,
         mut close_query_signal: mpsc::Receiver<()>,
     ) -> Result<(ResourceHeader, SocketAddr), Error> {
-            if self.is_server_closed.load(atomic::Ordering::SeqCst) {
-                return Err(ERR_CONNECTION_CLOSED.to_owned());
-            }
+        if self.is_server_closed.load(atomic::Ordering::SeqCst) {
+            return Err(ERR_CONNECTION_CLOSED.to_owned());
+        }
 
         let name_with_suffix = name.to_owned() + ".";
 
@@ -271,7 +271,7 @@ impl DNSConn {
 
                         Err(err) => {
                             log::error!("Error receiving from socket connection: {:?}", err);
-                            return Err(Error::new(err.to_string()))
+                            continue;
                         },
                     }
                 }
@@ -313,8 +313,12 @@ async fn run(
         };
 
         for local_name in local_names {
-            if local_name == &q.name.data {
-                log::trace!("Found local name: {} to send answer", local_name);
+            if *local_name == q.name.data {
+                log::trace!(
+                    "Found local name: {} to send answer, IP {}",
+                    local_name,
+                    src.ip()
+                );
                 if let Err(e) = send_answer(socket, &q.name.data, src.ip(), dst_addr).await {
                     log::error!("Error sending answer to client: {:?}", e);
                     continue;
@@ -355,7 +359,6 @@ async fn run(
         }
     }
 }
-
 
 async fn send_answer(
     socket: &Arc<UdpSocket>,

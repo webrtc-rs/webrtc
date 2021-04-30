@@ -33,7 +33,7 @@ async fn main() -> Result<(), Error> {
             Arg::with_name("server")
                 .required_unless("FULLHELP")
                 .takes_value(true)
-                .default_value(DEFAULT_DEST_ADDR)
+                .default_value("0.0.0.0:5353")
                 .long("server")
                 .help("mDNS Server name."),
         )
@@ -72,6 +72,5 @@ async fn main() -> Result<(), Error> {
     println!("answer = {}, src = {}", answer, src);
 
     server.close().await.unwrap();
-
     Ok(())
 }
