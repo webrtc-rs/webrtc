@@ -43,7 +43,7 @@ impl fmt::Display for RelayedAddress {
 impl Setter for RelayedAddress {
     // AddTo adds XOR-PEER-ADDRESS to message.
     fn add_to(&self, m: &mut Message) -> Result<(), Error> {
-        let a = XORMappedAddress {
+        let a = XorMappedAddress {
             ip: self.ip,
             port: self.port,
         };
@@ -54,7 +54,7 @@ impl Setter for RelayedAddress {
 impl Getter for RelayedAddress {
     // GetFrom decodes XOR-PEER-ADDRESS from message.
     fn get_from(&mut self, m: &Message) -> Result<(), Error> {
-        let mut a = XORMappedAddress::default();
+        let mut a = XorMappedAddress::default();
         a.get_from_as(m, ATTR_XOR_RELAYED_ADDRESS)?;
         self.ip = a.ip;
         self.port = a.port;

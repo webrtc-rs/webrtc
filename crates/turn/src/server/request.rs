@@ -265,7 +265,7 @@ impl Request {
             m.transaction_id,
             BINDING_SUCCESS,
             vec![
-                Box::new(XORMappedAddress { ip, port }),
+                Box::new(XorMappedAddress { ip, port }),
                 Box::new(FINGERPRINT),
             ],
         )?;
@@ -524,7 +524,7 @@ impl Request {
                     port: relay_port,
                 }),
                 Box::new(Lifetime(lifetime_duration)),
-                Box::new(XORMappedAddress {
+                Box::new(XorMappedAddress {
                     ip: src_ip,
                     port: src_port,
                 }),

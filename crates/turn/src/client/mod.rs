@@ -455,7 +455,7 @@ impl ClientInternal {
         log::debug!("client.SendBindingRequestTo call PerformTransaction 1");
         let tr_res = self.perform_transaction(&msg, to, false).await?;
 
-        let mut refl_addr = XORMappedAddress::default();
+        let mut refl_addr = XorMappedAddress::default();
         refl_addr.get_from(&tr_res.msg)?;
 
         Ok(SocketAddr::new(refl_addr.ip, refl_addr.port))
