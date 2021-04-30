@@ -71,7 +71,7 @@
 [rtc-badge]: https://img.shields.io/crates/v/rtc.svg
 [rtc-url]: https://crates.io/crates/rtc
 
-<div style="text-align: center;">
+<p align="center">
 
 ![uncheck][uncheck]RTC[![rtc][rtc-badge]][rtc-url]
 ![uncheck][uncheck]Media[![media][media-badge]][media-url]
@@ -93,7 +93,7 @@
 ![check][check]SDP[![sdp][sdp-badge]][sdp-url]
 ![check][check]Util[![sdp][util-badge]][util-url] 
 
-</div>
+</p>
 
 #
 
