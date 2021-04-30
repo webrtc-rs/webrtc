@@ -78,13 +78,6 @@ impl Chunk for ChunkHeader {
         Ok(ChunkHeader { typ, flags, raw })
     }
 
-    fn marshal(&self) -> Result<Bytes, Error> {
-        let capacity = 4 + self.raw.len();
-        let mut buf = BytesMut::with_capacity(capacity);
-        self.marshal_to(&mut buf)?;
-        Ok(buf.freeze())
-    }
-
     fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize, Error> {
         writer.put_u8(self.typ as u8);
         writer.put_u8(self.flags);
@@ -94,7 +87,7 @@ impl Chunk for ChunkHeader {
     }
 
     fn check(&self) -> Result<bool, Error> {
-        Ok(true)
+        Ok(false)
     }
 
     fn value_length(&self) -> usize {
