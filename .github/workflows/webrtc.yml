@@ -1,4 +1,4 @@
-name: WebRTC
+name: webrtc
 
 on:
   push:
