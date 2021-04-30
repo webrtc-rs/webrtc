@@ -101,8 +101,6 @@
  <img src="./doc/webrtc_stack.png" alt="WebRTC Stack">
 </h1>
 
-#
-
 <p align="center">
 <strong>Sponsored with 💖 by</strong><br>
 </p>
@@ -111,7 +109,5 @@
 <img src="https://stream-blog-v2.imgix.net/blog/wp-content/uploads/f7401112f41742c4e173c30d4f318cb8/stream_logo_white.png?h=50" alt="Stream Chat">
 </a> <a href="https://www.embark-studios.com/" target="_blank"><img src="./doc/embark.jpg" alt="embark"></a>
 </p>
-
-#
 
 
