@@ -107,14 +107,14 @@ pub trait Chunk: fmt::Display {
 }
 
 #[derive(PartialEq)]
-pub(crate) struct ChunkIP {
+pub(crate) struct ChunkIp {
     pub(crate) timestamp: SystemTime,
     pub(crate) source_ip: IpAddr,
     pub(crate) destination_ip: IpAddr,
     pub(crate) tag: String,
 }
 
-impl ChunkIP {
+impl ChunkIp {
     fn set_timestamp(&mut self) -> SystemTime {
         self.timestamp = SystemTime::now();
         self.timestamp
@@ -138,14 +138,14 @@ impl ChunkIP {
 }
 
 #[derive(PartialEq)]
-pub(crate) struct ChunkUDP {
-    pub(crate) chunk_ip: ChunkIP,
+pub(crate) struct ChunkUdp {
+    pub(crate) chunk_ip: ChunkIp,
     pub(crate) source_port: u16,
     pub(crate) destination_port: u16,
     pub(crate) user_data: Vec<u8>,
 }
 
-impl fmt::Display for ChunkUDP {
+impl fmt::Display for ChunkUdp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -158,7 +158,7 @@ impl fmt::Display for ChunkUDP {
     }
 }
 
-impl Chunk for ChunkUDP {
+impl Chunk for ChunkUdp {
     fn set_timestamp(&mut self) -> SystemTime {
         self.chunk_ip.set_timestamp()
     }
@@ -192,8 +192,8 @@ impl Chunk for ChunkUDP {
     }
 
     fn clone_to(&self) -> Box<dyn Chunk + Send + Sync> {
-        Box::new(ChunkUDP {
-            chunk_ip: ChunkIP {
+        Box::new(ChunkUdp {
+            chunk_ip: ChunkIp {
                 timestamp: self.chunk_ip.timestamp,
                 source_ip: self.chunk_ip.source_ip,
                 destination_ip: self.chunk_ip.destination_ip,
@@ -224,10 +224,10 @@ impl Chunk for ChunkUDP {
     }
 }
 
-impl ChunkUDP {
+impl ChunkUdp {
     pub(crate) fn new(src_addr: SocketAddr, dst_addr: SocketAddr) -> Self {
-        ChunkUDP {
-            chunk_ip: ChunkIP {
+        ChunkUdp {
+            chunk_ip: ChunkIp {
                 timestamp: SystemTime::now(),
                 source_ip: src_addr.ip(),
                 destination_ip: dst_addr.ip(),
@@ -241,8 +241,8 @@ impl ChunkUDP {
 }
 
 #[derive(PartialEq)]
-pub(crate) struct ChunkTCP {
-    chunk_ip: ChunkIP,
+pub(crate) struct ChunkTcp {
+    chunk_ip: ChunkIp,
     source_port: u16,
     destination_port: u16,
     flags: TcpFlag, // control bits
@@ -251,7 +251,7 @@ pub(crate) struct ChunkTCP {
                     // ack             :u32,  // always starts with 0
 }
 
-impl fmt::Display for ChunkTCP {
+impl fmt::Display for ChunkTcp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -265,7 +265,7 @@ impl fmt::Display for ChunkTCP {
     }
 }
 
-impl Chunk for ChunkTCP {
+impl Chunk for ChunkTcp {
     fn set_timestamp(&mut self) -> SystemTime {
         self.chunk_ip.set_timestamp()
     }
@@ -299,8 +299,8 @@ impl Chunk for ChunkTCP {
     }
 
     fn clone_to(&self) -> Box<dyn Chunk + Send + Sync> {
-        Box::new(ChunkTCP {
-            chunk_ip: ChunkIP {
+        Box::new(ChunkTcp {
+            chunk_ip: ChunkIp {
                 timestamp: self.chunk_ip.timestamp,
                 source_ip: self.chunk_ip.source_ip,
                 destination_ip: self.chunk_ip.destination_ip,
@@ -332,10 +332,10 @@ impl Chunk for ChunkTCP {
     }
 }
 
-impl ChunkTCP {
+impl ChunkTcp {
     pub(crate) fn new(src_addr: SocketAddr, dst_addr: SocketAddr, flags: TcpFlag) -> Self {
-        ChunkTCP {
-            chunk_ip: ChunkIP {
+        ChunkTcp {
+            chunk_ip: ChunkIp {
                 timestamp: SystemTime::now(),
                 source_ip: src_addr.ip(),
                 destination_ip: dst_addr.ip(),

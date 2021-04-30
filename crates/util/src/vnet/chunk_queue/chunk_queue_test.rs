@@ -8,7 +8,7 @@ const DEMO_IP: &str = "1.2.3.4";
 
 #[tokio::test]
 async fn test_chunk_queue() -> Result<(), Error> {
-    let c: Box<dyn Chunk> = Box::new(ChunkUDP::new(
+    let c: Box<dyn Chunk> = Box::new(ChunkUdp::new(
         SocketAddr::from_str("192.188.0.2:1234")?,
         SocketAddr::from_str(&(DEMO_IP.to_owned() + ":5678"))?,
     ));

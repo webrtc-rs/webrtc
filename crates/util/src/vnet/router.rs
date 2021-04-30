@@ -53,7 +53,7 @@ pub struct RouterConfig {
     // Internal queue size
     pub queue_size: usize,
     // Effective only when this router has a parent router
-    pub nat_type: Option<NATType>,
+    pub nat_type: Option<NatType>,
     // Minimum Delay
     pub min_delay: Duration,
     // Max Jitter
@@ -62,7 +62,7 @@ pub struct RouterConfig {
 
 // NIC is a network interface controller that interfaces Router
 #[async_trait]
-pub trait NIC {
+pub trait Nic {
     async fn get_interface(&self, ifc_name: &str) -> Option<Interface>;
     async fn add_addrs_to_interface(
         &mut self,
@@ -80,11 +80,11 @@ pub type ChunkFilterFn = Box<dyn (Fn(&(dyn Chunk + Send + Sync)) -> bool) + Send
 
 #[derive(Default)]
 pub struct RouterInternal {
-    pub(crate) nat_type: Option<NATType>,          // read-only
+    pub(crate) nat_type: Option<NatType>,          // read-only
     pub(crate) ipv4net: IpNet,                     // read-only
     pub(crate) parent: Option<Arc<Mutex<Router>>>, // read-only
     pub(crate) nat: NetworkAddressTranslator,      // read-only
-    pub(crate) nics: HashMap<String, Arc<Mutex<dyn NIC + Send + Sync>>>, // read-only
+    pub(crate) nics: HashMap<String, Arc<Mutex<dyn Nic + Send + Sync>>>, // read-only
     pub(crate) chunk_filters: Vec<ChunkFilterFn>,  // requires mutex [x]
     pub(crate) last_id: u8, // requires mutex [x], used to assign the last digit of IPv4 address
 }
@@ -108,7 +108,7 @@ pub struct Router {
 }
 
 #[async_trait]
-impl NIC for Router {
+impl Nic for Router {
     async fn get_interface(&self, ifc_name: &str) -> Option<Interface> {
         for ifc in &self.interfaces {
             if ifc.name == ifc_name {
@@ -198,7 +198,7 @@ impl NIC for Router {
         {
             let mut router_internal = self.router_internal.lock().await;
             if router_internal.nat_type.is_none() {
-                router_internal.nat_type = Some(NATType {
+                router_internal.nat_type = Some(NatType {
                     mapping_behavior: EndpointDependencyType::EndpointIndependent,
                     filtering_behavior: EndpointDependencyType::EndpointAddrPortDependent,
                     hair_pining: false,
@@ -390,14 +390,14 @@ impl Router {
     pub async fn add_router(&mut self, child: Arc<Mutex<Router>>) -> Result<(), Error> {
         // Router is a NIC. Add it as a NIC so that packets are routed to this child
         // router.
-        let nic = Arc::clone(&child) as Arc<Mutex<dyn NIC + Send + Sync>>;
+        let nic = Arc::clone(&child) as Arc<Mutex<dyn Nic + Send + Sync>>;
         self.children.push(child);
         self.add_net(nic).await
     }
 
     // AddNet ...
     // after router.add_net(nic), also call nic.set_router(router) to set nic's router
-    pub async fn add_net(&mut self, nic: Arc<Mutex<dyn NIC + Send + Sync>>) -> Result<(), Error> {
+    pub async fn add_net(&mut self, nic: Arc<Mutex<dyn Nic + Send + Sync>>) -> Result<(), Error> {
         let mut router_internal = self.router_internal.lock().await;
         router_internal.add_nic(nic).await
     }
@@ -536,7 +536,7 @@ impl RouterInternal {
     // caller must hold the mutex
     pub(crate) async fn add_nic(
         &mut self,
-        nic: Arc<Mutex<dyn NIC + Send + Sync>>,
+        nic: Arc<Mutex<dyn Nic + Send + Sync>>,
     ) -> Result<(), Error> {
         let mut ips = {
             let ni = nic.lock().await;

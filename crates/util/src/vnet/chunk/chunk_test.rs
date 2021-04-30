@@ -23,7 +23,7 @@ fn test_chunk_udp() -> Result<(), Error> {
     let src = SocketAddr::from_str("192.168.0.2:1234")?;
     let dst = SocketAddr::from_str(&(DEMO_IP.to_owned() + ":5678"))?;
 
-    let mut c = ChunkUDP::new(src, dst);
+    let mut c = ChunkUdp::new(src, dst);
     let s = c.to_string();
     log::debug!("chunk: {}", s);
     assert_eq!(UDP_STR, c.network(), "should match");

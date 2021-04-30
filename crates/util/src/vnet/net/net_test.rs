@@ -1,5 +1,5 @@
 use super::*;
-use crate::vnet::chunk::ChunkUDP;
+use crate::vnet::chunk::ChunkUdp;
 
 use tokio::sync::{broadcast, mpsc};
 
@@ -301,7 +301,7 @@ async fn test_net_virtual_assign_port() -> Result<(), Error> {
             let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
                 Arc::new(Mutex::new(DummyObserver::default()));
 
-            let conn = Arc::new(UDPConn::new(SocketAddr::new(ip, port), None, obs));
+            let conn = Arc::new(UdpConn::new(SocketAddr::new(ip, port), None, obs));
 
             let vi = vnet.vi.lock().await;
             let _ = vi.udp_conns.insert(conn).await;
@@ -572,7 +572,7 @@ async fn test_net_virtual_loopback2() -> Result<(), Error> {
         laddr
     );
 
-    let mut c = ChunkUDP::new(
+    let mut c = ChunkUdp::new(
         SocketAddr::from_str("127.0.0.1:4000")?,
         SocketAddr::from_str("127.0.0.1:50916")?,
     );
@@ -626,7 +626,7 @@ async fn test_net_virtual_loopback2() -> Result<(), Error> {
     Ok(())
 }
 
-async fn get_ipaddr(nic: &Arc<Mutex<dyn NIC + Send + Sync>>) -> Result<IpAddr, Error> {
+async fn get_ipaddr(nic: &Arc<Mutex<dyn Nic + Send + Sync>>) -> Result<IpAddr, Error> {
     let n = nic.lock().await;
     let eth0 = n
         .get_interface("eth0")

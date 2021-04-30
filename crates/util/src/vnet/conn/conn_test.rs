@@ -30,7 +30,7 @@ async fn test_udp_conn_send_to_recv_from() -> Result<(), Error> {
     let dummy_obs2 = Arc::clone(&dummy_obs);
     let obs = dummy_obs2 as Arc<Mutex<dyn ConnObserver + Send + Sync>>;
 
-    let conn = Arc::new(UDPConn::new(src_addr, None, obs));
+    let conn = Arc::new(UdpConn::new(src_addr, None, obs));
     {
         let mut dummy = dummy_obs.lock().await;
         dummy.read_ch_tx = Some(conn.get_inbound_ch());
@@ -80,7 +80,7 @@ async fn test_udp_conn_send_recv() -> Result<(), Error> {
     let dummy_obs2 = Arc::clone(&dummy_obs);
     let obs = dummy_obs2 as Arc<Mutex<dyn ConnObserver + Send + Sync>>;
 
-    let conn = Arc::new(UDPConn::new(src_addr, None, obs));
+    let conn = Arc::new(UdpConn::new(src_addr, None, obs));
     {
         let mut dummy = dummy_obs.lock().await;
         dummy.read_ch_tx = Some(conn.get_inbound_ch());

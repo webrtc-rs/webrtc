@@ -5,7 +5,7 @@ use super::conn_map::*;
 use super::errors::*;
 use super::interface::*;
 use crate::vnet::chunk::Chunk;
-use crate::vnet::conn::{ConnObserver, UDPConn};
+use crate::vnet::conn::{ConnObserver, UdpConn};
 use crate::vnet::router::*;
 use crate::{conn, ifaces, Conn, Error};
 
@@ -39,7 +39,7 @@ pub(crate) fn new_mac_address() -> HardwareAddr {
 pub(crate) struct VNetInternal {
     pub(crate) interfaces: Vec<Interface>,         // read-only
     pub(crate) router: Option<Arc<Mutex<Router>>>, // read-only
-    pub(crate) udp_conns: UDPConnMap,              // read-only
+    pub(crate) udp_conns: UdpConnMap,              // read-only
 }
 
 impl VNetInternal {
@@ -113,7 +113,7 @@ pub struct VNet {
 }
 
 #[async_trait]
-impl NIC for VNet {
+impl Nic for VNet {
     async fn get_interface(&self, ifc_name: &str) -> Option<Interface> {
         for ifc in &self.interfaces {
             if ifc.name == ifc_name {
@@ -343,7 +343,7 @@ impl VNet {
         }
 
         let v = Arc::clone(&self.vi) as Arc<Mutex<dyn ConnObserver + Send + Sync>>;
-        let conn = Arc::new(UDPConn::new(local_addr, None, v));
+        let conn = Arc::new(UdpConn::new(local_addr, None, v));
 
         {
             let vi = self.vi.lock().await;
@@ -400,7 +400,7 @@ pub struct NetConfig {
 // up to the transport (UDP / TCP) layer.
 pub enum Net {
     VNet(Arc<Mutex<VNet>>),
-    IFS(Vec<Interface>),
+    Ifs(Vec<Interface>),
 }
 
 impl Net {
@@ -440,7 +440,7 @@ impl Net {
                 vi: Arc::new(Mutex::new(VNetInternal {
                     interfaces: vec![lo0, eth0],
                     router: None,
-                    udp_conns: UDPConnMap::new(),
+                    udp_conns: UdpConnMap::new(),
                 })),
             };
 
@@ -471,7 +471,7 @@ impl Net {
                 ifs.push(Interface::new(name, addrs));
             }
 
-            Net::IFS(ifs)
+            Net::Ifs(ifs)
         }
     }
 
@@ -482,7 +482,7 @@ impl Net {
                 let net = vnet.lock().await;
                 net.get_interfaces().to_vec()
             }
-            Net::IFS(ifs) => ifs.clone(),
+            Net::Ifs(ifs) => ifs.clone(),
         }
     }
 
@@ -493,7 +493,7 @@ impl Net {
                 let net = vnet.lock().await;
                 net.get_interface(ifc_name).await
             }
-            Net::IFS(ifs) => {
+            Net::Ifs(ifs) => {
                 for ifc in ifs {
                     if ifc.name == ifc_name {
                         return Some(ifc.clone());
@@ -508,7 +508,7 @@ impl Net {
     pub fn is_virtual(&self) -> bool {
         match self {
             Net::VNet(_) => true,
-            Net::IFS(_) => false,
+            Net::Ifs(_) => false,
         }
     }
 
@@ -518,7 +518,7 @@ impl Net {
                 let net = vnet.lock().await;
                 net.resolve_addr(use_ipv4, address).await
             }
-            Net::IFS(_) => Ok(conn::lookup_host(use_ipv4, address).await?),
+            Net::Ifs(_) => Ok(conn::lookup_host(use_ipv4, address).await?),
         }
     }
 
@@ -528,7 +528,7 @@ impl Net {
                 let net = vnet.lock().await;
                 net.bind(addr).await
             }
-            Net::IFS(_) => Ok(Arc::new(UdpSocket::bind(addr).await?)),
+            Net::Ifs(_) => Ok(Arc::new(UdpSocket::bind(addr).await?)),
         }
     }
 
@@ -542,7 +542,7 @@ impl Net {
                 let net = vnet.lock().await;
                 net.dail(use_ipv4, remote_addr).await
             }
-            Net::IFS(_) => {
+            Net::Ifs(_) => {
                 let any_ip = if use_ipv4 {
                     Ipv4Addr::new(0, 0, 0, 0).into()
                 } else {
@@ -558,10 +558,10 @@ impl Net {
         }
     }
 
-    pub fn get_nic(&self) -> Result<Arc<Mutex<dyn NIC + Send + Sync>>, Error> {
+    pub fn get_nic(&self) -> Result<Arc<Mutex<dyn Nic + Send + Sync>>, Error> {
         match self {
-            Net::VNet(vnet) => Ok(Arc::clone(vnet) as Arc<Mutex<dyn NIC + Send + Sync>>),
-            Net::IFS(_) => Err(ERR_VNET_DISABLED.to_owned()),
+            Net::VNet(vnet) => Ok(Arc::clone(vnet) as Arc<Mutex<dyn Nic + Send + Sync>>),
+            Net::Ifs(_) => Err(ERR_VNET_DISABLED.to_owned()),
         }
     }
 }

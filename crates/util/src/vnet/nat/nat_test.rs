@@ -1,5 +1,5 @@
 use super::*;
-use crate::vnet::chunk::ChunkUDP;
+use crate::vnet::chunk::ChunkUdp;
 use std::net::SocketAddr;
 use std::str::FromStr;
 
@@ -40,7 +40,7 @@ fn test_nat_type_default() -> Result<(), Error> {
 #[tokio::test]
 async fn test_nat_mapping_behavior_full_cone_nat() -> Result<(), Error> {
     let nat = NetworkAddressTranslator::new(NatConfig {
-        nat_type: NATType {
+        nat_type: NatType {
             mapping_behavior: EndpointDependencyType::EndpointIndependent,
             filtering_behavior: EndpointDependencyType::EndpointIndependent,
             hair_pining: false,
@@ -54,7 +54,7 @@ async fn test_nat_mapping_behavior_full_cone_nat() -> Result<(), Error> {
     let src = SocketAddr::from_str("192.168.0.2:1234")?;
     let dst = SocketAddr::from_str("5.6.7.8:5678")?;
 
-    let oic = ChunkUDP::new(src, dst);
+    let oic = ChunkUdp::new(src, dst);
 
     let oec = nat.translate_outbound(&oic).await?.unwrap();
     assert_eq!(1, nat.outbound_map_len().await, "should match");
@@ -63,7 +63,7 @@ async fn test_nat_mapping_behavior_full_cone_nat() -> Result<(), Error> {
     log::debug!("o-original  : {}", oic);
     log::debug!("o-translated: {}", oec);
 
-    let iec = ChunkUDP::new(
+    let iec = ChunkUdp::new(
         SocketAddr::new(dst.ip(), dst.port()),
         SocketAddr::new(oec.source_addr().ip(), oec.source_addr().port()),
     );
@@ -78,7 +78,7 @@ async fn test_nat_mapping_behavior_full_cone_nat() -> Result<(), Error> {
 
     // packet with dest addr that does not exist in the mapping table
     // will be dropped
-    let iec = ChunkUDP::new(
+    let iec = ChunkUdp::new(
         SocketAddr::new(dst.ip(), dst.port()),
         SocketAddr::new(oec.source_addr().ip(), oec.source_addr().port() + 1),
     );
@@ -87,7 +87,7 @@ async fn test_nat_mapping_behavior_full_cone_nat() -> Result<(), Error> {
     assert!(result.is_err(), "should fail (dropped)");
 
     // packet from any addr will be accepted (full-cone)
-    let iec = ChunkUDP::new(
+    let iec = ChunkUdp::new(
         SocketAddr::new(dst.ip(), 7777),
         SocketAddr::new(oec.source_addr().ip(), oec.source_addr().port()),
     );
@@ -101,7 +101,7 @@ async fn test_nat_mapping_behavior_full_cone_nat() -> Result<(), Error> {
 #[tokio::test]
 async fn test_nat_mapping_behavior_addr_restricted_cone_nat() -> Result<(), Error> {
     let nat = NetworkAddressTranslator::new(NatConfig {
-        nat_type: NATType {
+        nat_type: NatType {
             mapping_behavior: EndpointDependencyType::EndpointIndependent,
             filtering_behavior: EndpointDependencyType::EndpointAddrDependent,
             hair_pining: false,
@@ -115,7 +115,7 @@ async fn test_nat_mapping_behavior_addr_restricted_cone_nat() -> Result<(), Erro
     let src = SocketAddr::from_str("192.168.0.2:1234")?;
     let dst = SocketAddr::from_str("5.6.7.8:5678")?;
 
-    let oic = ChunkUDP::new(src, dst);
+    let oic = ChunkUdp::new(src, dst);
     log::debug!("o-original  : {}", oic);
 
     let oec = nat.translate_outbound(&oic).await?.unwrap();
@@ -124,7 +124,7 @@ async fn test_nat_mapping_behavior_addr_restricted_cone_nat() -> Result<(), Erro
     log::debug!("o-translated: {}", oec);
 
     // sending different (IP: 5.6.7.9) won't create a new mapping
-    let oic2 = ChunkUDP::new(
+    let oic2 = ChunkUdp::new(
         SocketAddr::from_str("192.168.0.2:1234")?,
         SocketAddr::from_str("5.6.7.9:9000")?,
     );
@@ -133,7 +133,7 @@ async fn test_nat_mapping_behavior_addr_restricted_cone_nat() -> Result<(), Erro
     assert_eq!(1, nat.inbound_map_len().await, "should match");
     log::debug!("o-translated: {}", oec2);
 
-    let iec = ChunkUDP::new(
+    let iec = ChunkUdp::new(
         SocketAddr::new(dst.ip(), dst.port()),
         SocketAddr::new(oec.source_addr().ip(), oec.source_addr().port()),
     );
@@ -148,7 +148,7 @@ async fn test_nat_mapping_behavior_addr_restricted_cone_nat() -> Result<(), Erro
 
     // packet with dest addr that does not exist in the mapping table
     // will be dropped
-    let iec = ChunkUDP::new(
+    let iec = ChunkUdp::new(
         SocketAddr::new(dst.ip(), dst.port()),
         SocketAddr::new(oec.source_addr().ip(), oec.source_addr().port() + 1),
     );
@@ -157,7 +157,7 @@ async fn test_nat_mapping_behavior_addr_restricted_cone_nat() -> Result<(), Erro
     assert!(result.is_err(), "should fail (dropped)");
 
     // packet from any port will be accepted (restricted-cone)
-    let iec = ChunkUDP::new(
+    let iec = ChunkUdp::new(
         SocketAddr::new(dst.ip(), 7777),
         SocketAddr::new(oec.source_addr().ip(), oec.source_addr().port()),
     );
@@ -166,7 +166,7 @@ async fn test_nat_mapping_behavior_addr_restricted_cone_nat() -> Result<(), Erro
     assert!(result.is_ok(), "should succeed");
 
     // packet from different addr will be droped (restricted-cone)
-    let iec = ChunkUDP::new(
+    let iec = ChunkUdp::new(
         SocketAddr::from_str(&format!("{}:{}", "6.6.6.6", dst.port()))?,
         SocketAddr::new(oec.source_addr().ip(), oec.source_addr().port()),
     );
@@ -180,7 +180,7 @@ async fn test_nat_mapping_behavior_addr_restricted_cone_nat() -> Result<(), Erro
 #[tokio::test]
 async fn test_nat_mapping_behavior_port_restricted_cone_nat() -> Result<(), Error> {
     let nat = NetworkAddressTranslator::new(NatConfig {
-        nat_type: NATType {
+        nat_type: NatType {
             mapping_behavior: EndpointDependencyType::EndpointIndependent,
             filtering_behavior: EndpointDependencyType::EndpointAddrPortDependent,
             hair_pining: false,
@@ -194,7 +194,7 @@ async fn test_nat_mapping_behavior_port_restricted_cone_nat() -> Result<(), Erro
     let src = SocketAddr::from_str("192.168.0.2:1234")?;
     let dst = SocketAddr::from_str("5.6.7.8:5678")?;
 
-    let oic = ChunkUDP::new(src, dst);
+    let oic = ChunkUdp::new(src, dst);
     log::debug!("o-original  : {}", oic);
 
     let oec = nat.translate_outbound(&oic).await?.unwrap();
@@ -203,7 +203,7 @@ async fn test_nat_mapping_behavior_port_restricted_cone_nat() -> Result<(), Erro
     log::debug!("o-translated: {}", oec);
 
     // sending different (IP: 5.6.7.9) won't create a new mapping
-    let oic2 = ChunkUDP::new(
+    let oic2 = ChunkUdp::new(
         SocketAddr::from_str("192.168.0.2:1234")?,
         SocketAddr::from_str("5.6.7.9:9000")?,
     );
@@ -212,7 +212,7 @@ async fn test_nat_mapping_behavior_port_restricted_cone_nat() -> Result<(), Erro
     assert_eq!(1, nat.inbound_map_len().await, "should match");
     log::debug!("o-translated: {}", oec2);
 
-    let iec = ChunkUDP::new(
+    let iec = ChunkUdp::new(
         SocketAddr::new(dst.ip(), dst.port()),
         SocketAddr::new(oec.source_addr().ip(), oec.source_addr().port()),
     );
@@ -227,7 +227,7 @@ async fn test_nat_mapping_behavior_port_restricted_cone_nat() -> Result<(), Erro
 
     // packet with dest addr that does not exist in the mapping table
     // will be dropped
-    let iec = ChunkUDP::new(
+    let iec = ChunkUdp::new(
         SocketAddr::new(dst.ip(), dst.port()),
         SocketAddr::new(oec.source_addr().ip(), oec.source_addr().port() + 1),
     );
@@ -236,7 +236,7 @@ async fn test_nat_mapping_behavior_port_restricted_cone_nat() -> Result<(), Erro
     assert!(result.is_err(), "should fail (dropped)");
 
     // packet from different port will be dropped (port-restricted-cone)
-    let iec = ChunkUDP::new(
+    let iec = ChunkUdp::new(
         SocketAddr::new(dst.ip(), 7777),
         SocketAddr::new(oec.source_addr().ip(), oec.source_addr().port()),
     );
@@ -245,7 +245,7 @@ async fn test_nat_mapping_behavior_port_restricted_cone_nat() -> Result<(), Erro
     assert!(result.is_err(), "should fail (dropped)");
 
     // packet from different addr will be droped (restricted-cone)
-    let iec = ChunkUDP::new(
+    let iec = ChunkUdp::new(
         SocketAddr::from_str(&format!("{}:{}", "6.6.6.6", dst.port()))?,
         SocketAddr::new(oec.source_addr().ip(), oec.source_addr().port()),
     );
@@ -259,7 +259,7 @@ async fn test_nat_mapping_behavior_port_restricted_cone_nat() -> Result<(), Erro
 #[tokio::test]
 async fn test_nat_mapping_behavior_symmetric_nat_addr_dependent_mapping() -> Result<(), Error> {
     let nat = NetworkAddressTranslator::new(NatConfig {
-        nat_type: NATType {
+        nat_type: NatType {
             mapping_behavior: EndpointDependencyType::EndpointAddrDependent,
             filtering_behavior: EndpointDependencyType::EndpointAddrDependent,
             hair_pining: false,
@@ -275,9 +275,9 @@ async fn test_nat_mapping_behavior_symmetric_nat_addr_dependent_mapping() -> Res
     let dst2 = SocketAddr::from_str("5.6.7.100:5678")?;
     let dst3 = SocketAddr::from_str("5.6.7.8:6000")?;
 
-    let oic1 = ChunkUDP::new(src, dst1);
-    let oic2 = ChunkUDP::new(src, dst2);
-    let oic3 = ChunkUDP::new(src, dst3);
+    let oic1 = ChunkUdp::new(src, dst1);
+    let oic2 = ChunkUdp::new(src, dst2);
+    let oic3 = ChunkUdp::new(src, dst3);
 
     log::debug!("o-original  : {}", oic1);
     log::debug!("o-original  : {}", oic2);
@@ -311,7 +311,7 @@ async fn test_nat_mapping_behavior_symmetric_nat_addr_dependent_mapping() -> Res
 #[tokio::test]
 async fn test_nat_mapping_behavior_symmetric_nat_port_dependent_mapping() -> Result<(), Error> {
     let nat = NetworkAddressTranslator::new(NatConfig {
-        nat_type: NATType {
+        nat_type: NatType {
             mapping_behavior: EndpointDependencyType::EndpointAddrPortDependent,
             filtering_behavior: EndpointDependencyType::EndpointAddrPortDependent,
             hair_pining: false,
@@ -327,9 +327,9 @@ async fn test_nat_mapping_behavior_symmetric_nat_port_dependent_mapping() -> Res
     let dst2 = SocketAddr::from_str("5.6.7.100:5678")?;
     let dst3 = SocketAddr::from_str("5.6.7.8:6000")?;
 
-    let oic1 = ChunkUDP::new(src, dst1);
-    let oic2 = ChunkUDP::new(src, dst2);
-    let oic3 = ChunkUDP::new(src, dst3);
+    let oic1 = ChunkUdp::new(src, dst1);
+    let oic2 = ChunkUdp::new(src, dst2);
+    let oic3 = ChunkUdp::new(src, dst3);
 
     log::debug!("o-original  : {}", oic1);
     log::debug!("o-original  : {}", oic2);
@@ -363,7 +363,7 @@ async fn test_nat_mapping_behavior_symmetric_nat_port_dependent_mapping() -> Res
 #[tokio::test]
 async fn test_nat_mapping_timeout_refresh_on_outbound() -> Result<(), Error> {
     let nat = NetworkAddressTranslator::new(NatConfig {
-        nat_type: NATType {
+        nat_type: NatType {
             mapping_behavior: EndpointDependencyType::EndpointIndependent,
             filtering_behavior: EndpointDependencyType::EndpointIndependent,
             hair_pining: false,
@@ -377,7 +377,7 @@ async fn test_nat_mapping_timeout_refresh_on_outbound() -> Result<(), Error> {
     let src = SocketAddr::from_str("192.168.0.2:1234")?;
     let dst = SocketAddr::from_str("5.6.7.8:5678")?;
 
-    let oic = ChunkUDP::new(src, dst);
+    let oic = ChunkUdp::new(src, dst);
 
     let oec = nat.translate_outbound(&oic).await?.unwrap();
     assert_eq!(1, nat.outbound_map_len().await, "should match");
@@ -428,7 +428,7 @@ async fn test_nat_mapping_timeout_refresh_on_outbound() -> Result<(), Error> {
 #[tokio::test]
 async fn test_nat_mapping_timeout_outbound_detects_timeout() -> Result<(), Error> {
     let nat = NetworkAddressTranslator::new(NatConfig {
-        nat_type: NATType {
+        nat_type: NatType {
             mapping_behavior: EndpointDependencyType::EndpointIndependent,
             filtering_behavior: EndpointDependencyType::EndpointIndependent,
             hair_pining: false,
@@ -442,7 +442,7 @@ async fn test_nat_mapping_timeout_outbound_detects_timeout() -> Result<(), Error
     let src = SocketAddr::from_str("192.168.0.2:1234")?;
     let dst = SocketAddr::from_str("5.6.7.8:5678")?;
 
-    let oic = ChunkUDP::new(src, dst);
+    let oic = ChunkUdp::new(src, dst);
 
     let oec = nat.translate_outbound(&oic).await?.unwrap();
     assert_eq!(1, nat.outbound_map_len().await, "should match");
@@ -454,7 +454,7 @@ async fn test_nat_mapping_timeout_outbound_detects_timeout() -> Result<(), Error
     // sleep long enough for the mapping to expire
     tokio::time::sleep(Duration::from_millis(125)).await;
 
-    let iec = ChunkUDP::new(
+    let iec = ChunkUdp::new(
         SocketAddr::new(dst.ip(), dst.port()),
         SocketAddr::new(oec.source_addr().ip(), oec.source_addr().port()),
     );
@@ -472,8 +472,8 @@ async fn test_nat_mapping_timeout_outbound_detects_timeout() -> Result<(), Error
 #[tokio::test]
 async fn test_nat1to1_bahavior_one_mapping() -> Result<(), Error> {
     let nat = NetworkAddressTranslator::new(NatConfig {
-        nat_type: NATType {
-            mode: NATMode::NAT1To1,
+        nat_type: NatType {
+            mode: NatMode::Nat1To1,
             ..Default::default()
         },
         mapped_ips: vec![IpAddr::from_str(DEMO_IP)?],
@@ -484,7 +484,7 @@ async fn test_nat1to1_bahavior_one_mapping() -> Result<(), Error> {
     let src = SocketAddr::from_str("10.0.0.1:1234")?;
     let dst = SocketAddr::from_str("5.6.7.8:5678")?;
 
-    let oic = ChunkUDP::new(src, dst);
+    let oic = ChunkUdp::new(src, dst);
 
     let oec = nat.translate_outbound(&oic).await?.unwrap();
     assert_eq!(0, nat.outbound_map_len().await, "should match");
@@ -499,7 +499,7 @@ async fn test_nat1to1_bahavior_one_mapping() -> Result<(), Error> {
         "should match"
     );
 
-    let iec = ChunkUDP::new(
+    let iec = ChunkUdp::new(
         SocketAddr::new(dst.ip(), dst.port()),
         SocketAddr::new(oec.source_addr().ip(), oec.source_addr().port()),
     );
@@ -518,8 +518,8 @@ async fn test_nat1to1_bahavior_one_mapping() -> Result<(), Error> {
 #[tokio::test]
 async fn test_nat1to1_bahavior_more_mapping() -> Result<(), Error> {
     let nat = NetworkAddressTranslator::new(NatConfig {
-        nat_type: NATType {
-            mode: NATMode::NAT1To1,
+        nat_type: NatType {
+            mode: NatMode::Nat1To1,
             ..Default::default()
         },
         mapped_ips: vec![IpAddr::from_str(DEMO_IP)?, IpAddr::from_str("1.2.3.5")?],
@@ -529,7 +529,7 @@ async fn test_nat1to1_bahavior_more_mapping() -> Result<(), Error> {
 
     // outbound translation
 
-    let before = ChunkUDP::new(
+    let before = ChunkUdp::new(
         SocketAddr::from_str("10.0.0.1:1234")?,
         SocketAddr::from_str("5.6.7.8:5678")?,
     );
@@ -541,7 +541,7 @@ async fn test_nat1to1_bahavior_more_mapping() -> Result<(), Error> {
         "should match"
     );
 
-    let before = ChunkUDP::new(
+    let before = ChunkUdp::new(
         SocketAddr::from_str("10.0.0.2:1234")?,
         SocketAddr::from_str("5.6.7.8:5678")?,
     );
@@ -555,7 +555,7 @@ async fn test_nat1to1_bahavior_more_mapping() -> Result<(), Error> {
 
     // inbound translation
 
-    let before = ChunkUDP::new(
+    let before = ChunkUdp::new(
         SocketAddr::from_str("5.6.7.8:5678")?,
         SocketAddr::from_str(&format!("{}:{}", DEMO_IP, 2525))?,
     );
@@ -567,7 +567,7 @@ async fn test_nat1to1_bahavior_more_mapping() -> Result<(), Error> {
         "should match"
     );
 
-    let before = ChunkUDP::new(
+    let before = ChunkUdp::new(
         SocketAddr::from_str("5.6.7.8:5678")?,
         SocketAddr::from_str("1.2.3.5:9847")?,
     );
@@ -586,8 +586,8 @@ async fn test_nat1to1_bahavior_more_mapping() -> Result<(), Error> {
 async fn test_nat1to1_bahavior_failure() -> Result<(), Error> {
     // 1:1 NAT requires more than one mapping
     let result = NetworkAddressTranslator::new(NatConfig {
-        nat_type: NATType {
-            mode: NATMode::NAT1To1,
+        nat_type: NatType {
+            mode: NatMode::Nat1To1,
             ..Default::default()
         },
         ..Default::default()
@@ -596,8 +596,8 @@ async fn test_nat1to1_bahavior_failure() -> Result<(), Error> {
 
     // 1:1 NAT requires the same number of mappedIPs and localIPs
     let result = NetworkAddressTranslator::new(NatConfig {
-        nat_type: NATType {
-            mode: NATMode::NAT1To1,
+        nat_type: NatType {
+            mode: NatMode::Nat1To1,
             ..Default::default()
         },
         mapped_ips: vec![IpAddr::from_str(DEMO_IP)?, IpAddr::from_str("1.2.3.5")?],
@@ -608,8 +608,8 @@ async fn test_nat1to1_bahavior_failure() -> Result<(), Error> {
 
     // drop outbound or inbound chunk with no route in 1:1 NAT
     let nat = NetworkAddressTranslator::new(NatConfig {
-        nat_type: NATType {
-            mode: NATMode::NAT1To1,
+        nat_type: NatType {
+            mode: NatMode::Nat1To1,
             ..Default::default()
         },
         mapped_ips: vec![IpAddr::from_str(DEMO_IP)?],
@@ -617,7 +617,7 @@ async fn test_nat1to1_bahavior_failure() -> Result<(), Error> {
         ..Default::default()
     })?;
 
-    let before = ChunkUDP::new(
+    let before = ChunkUdp::new(
         SocketAddr::from_str("10.0.0.2:1234")?, // no external mapping for this
         SocketAddr::from_str("5.6.7.8:5678")?,
     );
@@ -625,7 +625,7 @@ async fn test_nat1to1_bahavior_failure() -> Result<(), Error> {
     let after = nat.translate_outbound(&before).await?;
     assert!(after.is_none(), "should be nil");
 
-    let before = ChunkUDP::new(
+    let before = ChunkUdp::new(
         SocketAddr::from_str("5.6.7.8:5678")?,
         SocketAddr::from_str("10.0.0.2:1234")?, // no local mapping for this
     );

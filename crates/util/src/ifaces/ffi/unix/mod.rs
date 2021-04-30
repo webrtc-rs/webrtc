@@ -35,28 +35,28 @@ pub const AF_PACKET: i32 = nix::libc::AF_PACKET;
 
 #[allow(dead_code, non_camel_case_types)]
 #[repr(C)]
-pub enum SIOCGIFFLAGS {
-    IFF_UP = 0x1,           /* Interface is up.  */
-    IFF_BROADCAST = 0x2,    /* Broadcast address valid.  */
-    IFF_DEBUG = 0x4,        /* Turn on debugging.  */
-    IFF_LOOPBACK = 0x8,     /* Is a loopback net.  */
-    IFF_POINTOPOINT = 0x10, /* Interface is point-to-point link.  */
-    IFF_NOTRAILERS = 0x20,  /* Avoid use of trailers.  */
-    IFF_RUNNING = 0x40,     /* Resources allocated.  */
-    IFF_NOARP = 0x80,       /* No address resolution protocol.  */
-    IFF_PROMISC = 0x100,    /* Receive all packets.  */
+pub enum SiocgifFlags {
+    Iff_Up = 0x1,           /* Interface is up.  */
+    Iff_Broadcast = 0x2,    /* Broadcast address valid.  */
+    Iff_Debug = 0x4,        /* Turn on debugging.  */
+    Iff_Loopback = 0x8,     /* Is a loopback net.  */
+    Iff_Pointopoint = 0x10, /* Interface is point-to-point link.  */
+    Iff_Notrailers = 0x20,  /* Avoid use of trailers.  */
+    Iff_Running = 0x40,     /* Resources allocated.  */
+    Iff_Noarp = 0x80,       /* No address resolution protocol.  */
+    Iff_Promisc = 0x100,    /* Receive all packets.  */
 
     /* Not supported */
-    IFF_ALLMULTI = 0x200, /* Receive all multicast packets.  */
+    Iff_Allmulti = 0x200, /* Receive all multicast packets.  */
 
-    IFF_MASTER = 0x400, /* Master of a load balancer.  */
-    IFF_SLAVE = 0x800,  /* Slave of a load balancer.  */
+    Iff_Master = 0x400, /* Master of a load balancer.  */
+    Iff_Slave = 0x800,  /* Slave of a load balancer.  */
 
-    IFF_MULTICAST = 0x1000, /* Supports multicast.  */
+    Iff_Multicast = 0x1000, /* Supports multicast.  */
 
-    IFF_PORTSEL = 0x2000,   /* Can set media type.  */
-    IFF_AUTOMEDIA = 0x4000, /* Auto media select active.  */
-    IFF_DYNAMIC = 0x8000,   /* Dialup device with changing addresses.  */
+    Iff_Portsel = 0x2000,   /* Can set media type.  */
+    Iff_Automedia = 0x4000, /* Auto media select active.  */
+    Iff_Dynamic = 0x8000,   /* Dialup device with changing addresses.  */
 }
 
 #[repr(C)]
@@ -168,8 +168,8 @@ pub fn ifaces() -> Result<Vec<Interface>, Error> {
                 let addr = nix_socketaddr_to_sockaddr(unsafe { (*item).ifa_addr });
                 let mask = nix_socketaddr_to_sockaddr(unsafe { (*item).ifa_netmask });
                 let hop = unsafe {
-                    if (*item).ifa_flags & SIOCGIFFLAGS::IFF_BROADCAST as ::std::os::raw::c_uint
-                        == SIOCGIFFLAGS::IFF_BROADCAST as ::std::os::raw::c_uint
+                    if (*item).ifa_flags & SiocgifFlags::Iff_Broadcast as ::std::os::raw::c_uint
+                        == SiocgifFlags::Iff_Broadcast as ::std::os::raw::c_uint
                     {
                         match nix_socketaddr_to_sockaddr((*item).ifa_ifu.ifu_broadaddr()) {
                             Some(x) => Some(NextHop::Broadcast(x)),

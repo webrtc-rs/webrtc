@@ -2,7 +2,7 @@
 mod conn_map_test;
 
 use super::errors::*;
-use crate::vnet::conn::UDPConn;
+use crate::vnet::conn::UdpConn;
 use crate::{Conn, Error};
 
 use std::collections::HashMap;
@@ -10,21 +10,21 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-type PortMap = Mutex<HashMap<u16, Vec<Arc<UDPConn>>>>;
+type PortMap = Mutex<HashMap<u16, Vec<Arc<UdpConn>>>>;
 
 #[derive(Default)]
-pub(crate) struct UDPConnMap {
+pub(crate) struct UdpConnMap {
     port_map: PortMap,
 }
 
-impl UDPConnMap {
+impl UdpConnMap {
     pub(crate) fn new() -> Self {
-        UDPConnMap {
+        UdpConnMap {
             port_map: Mutex::new(HashMap::new()),
         }
     }
 
-    pub(crate) async fn insert(&self, conn: Arc<UDPConn>) -> Result<(), Error> {
+    pub(crate) async fn insert(&self, conn: Arc<UdpConn>) -> Result<(), Error> {
         let addr = conn.local_addr().await?;
 
         let mut port_map = self.port_map.lock().await;
@@ -49,7 +49,7 @@ impl UDPConnMap {
         Ok(())
     }
 
-    pub(crate) async fn find(&self, addr: &SocketAddr) -> Option<Arc<UDPConn>> {
+    pub(crate) async fn find(&self, addr: &SocketAddr) -> Option<Arc<UdpConn>> {
         let port_map = self.port_map.lock().await;
         if let Some(conns) = port_map.get(&addr.port()) {
             if addr.ip().is_unspecified() {

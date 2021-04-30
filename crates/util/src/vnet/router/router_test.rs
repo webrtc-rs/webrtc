@@ -16,7 +16,7 @@ struct DummyNic {
 impl Default for DummyNic {
     fn default() -> Self {
         DummyNic {
-            net: Net::IFS(vec![]),
+            net: Net::Ifs(vec![]),
             on_inbound_chunk_handler: 0,
             cbs0: AtomicI32::new(0),
             done_ch_tx: Arc::new(Mutex::new(None)),
@@ -27,7 +27,7 @@ impl Default for DummyNic {
 }
 
 #[async_trait]
-impl NIC for DummyNic {
+impl Nic for DummyNic {
     async fn get_interface(&self, ifc_name: &str) -> Option<Interface> {
         self.net.get_interface(ifc_name).await
     }
@@ -107,7 +107,7 @@ impl NIC for DummyNic {
     }
 }
 
-async fn get_ipaddr(nic: &Arc<Mutex<dyn NIC + Send + Sync>>) -> Result<IpAddr, Error> {
+async fn get_ipaddr(nic: &Arc<Mutex<dyn Nic + Send + Sync>>) -> Result<IpAddr, Error> {
     let n = nic.lock().await;
     let eth0 = n
         .get_interface("eth0")
@@ -219,7 +219,7 @@ async fn test_router_standalone_routing() -> Result<(), Error> {
         let nic = Arc::new(Mutex::new(dn));
 
         {
-            let n = Arc::clone(&nic) as Arc<Mutex<dyn NIC + Send + Sync>>;
+            let n = Arc::clone(&nic) as Arc<Mutex<dyn Nic + Send + Sync>>;
             let mut w = wan.lock().await;
             w.add_net(n).await?;
         }
@@ -242,7 +242,7 @@ async fn test_router_standalone_routing() -> Result<(), Error> {
     }
 
     {
-        let c = Box::new(ChunkUDP::new(ips[0], ips[1]));
+        let c = Box::new(ChunkUdp::new(ips[0], ips[1]));
 
         let mut r = wan.lock().await;
         r.start().await?;
@@ -299,7 +299,7 @@ async fn test_router_standalone_add_chunk_filter() -> Result<(), Error> {
         let nic = Arc::new(Mutex::new(dn));
 
         {
-            let n = Arc::clone(&nic) as Arc<Mutex<dyn NIC + Send + Sync>>;
+            let n = Arc::clone(&nic) as Arc<Mutex<dyn Nic + Send + Sync>>;
             let mut w = wan.lock().await;
             w.add_net(n).await?;
         }
@@ -346,7 +346,7 @@ async fn test_router_standalone_add_chunk_filter() -> Result<(), Error> {
 
         // send 3 packets
         for i in 0..3u8 {
-            let mut c = ChunkUDP::new(ips[0], ips[1]);
+            let mut c = ChunkUdp::new(ips[0], ips[1]);
             c.user_data = vec![i]; // 1-byte seq num
             r.push(Box::new(c)).await;
         }
@@ -406,7 +406,7 @@ async fn delay_sub_test(
         let nic = Arc::new(Mutex::new(dn));
 
         {
-            let n = Arc::clone(&nic) as Arc<Mutex<dyn NIC + Send + Sync>>;
+            let n = Arc::clone(&nic) as Arc<Mutex<dyn Nic + Send + Sync>>;
             let mut w = wan.lock().await;
             w.add_net(n).await?;
         }
@@ -433,7 +433,7 @@ async fn delay_sub_test(
         r.start().await?;
 
         for _ in 0..npkts {
-            let c = Box::new(ChunkUDP::new(ips[0], ips[1]));
+            let c = Box::new(ChunkUdp::new(ips[0], ips[1]));
             r.push(c).await;
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
@@ -560,7 +560,7 @@ async fn test_router_one_child() -> Result<(), Error> {
         let nic = Arc::new(Mutex::new(dn));
 
         {
-            let n = Arc::clone(&nic) as Arc<Mutex<dyn NIC + Send + Sync>>;
+            let n = Arc::clone(&nic) as Arc<Mutex<dyn Nic + Send + Sync>>;
             let mut w = r.lock().await;
             w.add_net(n).await?;
         }
@@ -570,7 +570,7 @@ async fn test_router_one_child() -> Result<(), Error> {
         }
 
         {
-            let n = Arc::clone(&nic) as Arc<Mutex<dyn NIC + Send + Sync>>;
+            let n = Arc::clone(&nic) as Arc<Mutex<dyn Nic + Send + Sync>>;
             let ip = get_ipaddr(&n).await?;
             ips.push(ip);
         }
@@ -596,7 +596,7 @@ async fn test_router_one_child() -> Result<(), Error> {
     }
 
     {
-        let c = Box::new(ChunkUDP::new(
+        let c = Box::new(ChunkUdp::new(
             SocketAddr::new(ips[1], 1234), //lanIP
             SocketAddr::new(ips[0], 5678), //wanIP
         ));
@@ -715,8 +715,8 @@ async fn test_router_static_ips_1to1_nat() -> Result<(), Error> {
             "1.2.3.2/192.168.0.2".to_owned(),
             "1.2.3.3/192.168.0.3".to_owned(),
         ],
-        nat_type: Some(NATType {
-            mode: NATMode::NAT1To1,
+        nat_type: Some(NatType {
+            mode: NatMode::Nat1To1,
             ..Default::default()
         }),
         ..Default::default()

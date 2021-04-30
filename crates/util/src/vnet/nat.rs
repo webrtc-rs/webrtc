@@ -41,26 +41,26 @@ impl Default for EndpointDependencyType {
 
 // NATMode defines basic behavior of the NAT
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum NATMode {
+pub enum NatMode {
     // NATModeNormal means the NAT behaves as a standard NAPT (RFC 2663).
     Normal,
     // NATModeNAT1To1 exhibits 1:1 DNAT where the external IP address is statically mapped to
     // a specific local IP address with port number is preserved always between them.
     // When this mode is selected, mapping_behavior, filtering_behavior, port_preservation and
     // mapping_life_time of NATType are ignored.
-    NAT1To1,
+    Nat1To1,
 }
 
-impl Default for NATMode {
+impl Default for NatMode {
     fn default() -> Self {
-        NATMode::Normal
+        NatMode::Normal
     }
 }
 
 // NATType has a set of parameters that define the behavior of NAT.
 #[derive(Default, Debug, Copy, Clone)]
-pub struct NATType {
-    pub mode: NATMode,
+pub struct NatType {
+    pub mode: NatMode,
     pub mapping_behavior: EndpointDependencyType,
     pub filtering_behavior: EndpointDependencyType,
     pub hair_pining: bool,       // Not implemented yet
@@ -71,7 +71,7 @@ pub struct NATType {
 #[derive(Default, Debug, Clone)]
 pub(crate) struct NatConfig {
     pub(crate) name: String,
-    pub(crate) nat_type: NATType,
+    pub(crate) nat_type: NatType,
     pub(crate) mapped_ips: Vec<IpAddr>, // mapped IPv4
     pub(crate) local_ips: Vec<IpAddr>,  // local IPv4, required only when the mode is NATModeNAT1To1
 }
@@ -102,7 +102,7 @@ impl Default for Mapping {
 #[derive(Default, Debug, Clone)]
 pub(crate) struct NetworkAddressTranslator {
     pub(crate) name: String,
-    pub(crate) nat_type: NATType,
+    pub(crate) nat_type: NatType,
     pub(crate) mapped_ips: Vec<IpAddr>, // mapped IPv4
     pub(crate) local_ips: Vec<IpAddr>,  // local IPv4, required only when the mode is NATModeNAT1To1
     pub(crate) outbound_map: Arc<Mutex<HashMap<String, Arc<Mapping>>>>, // key: "<proto>:<local-ip>:<local-port>[:remote-ip[:remote-port]]
@@ -114,7 +114,7 @@ impl NetworkAddressTranslator {
     pub(crate) fn new(config: NatConfig) -> Result<Self, Error> {
         let mut nat_type = config.nat_type;
 
-        if nat_type.mode == NATMode::NAT1To1 {
+        if nat_type.mode == NatMode::Nat1To1 {
             // 1:1 NAT behavior
             nat_type.mapping_behavior = EndpointDependencyType::EndpointIndependent;
             nat_type.filtering_behavior = EndpointDependencyType::EndpointIndependent;
@@ -129,7 +129,7 @@ impl NetworkAddressTranslator {
             }
         } else {
             // Normal (NAPT) behavior
-            nat_type.mode = NATMode::Normal;
+            nat_type.mode = NatMode::Normal;
             if nat_type.mapping_life_time == Duration::from_secs(0) {
                 nat_type.mapping_life_time = DEFAULT_NAT_MAPPING_LIFE_TIME;
             }
@@ -171,7 +171,7 @@ impl NetworkAddressTranslator {
         let mut to = from.clone_to();
 
         if from.network() == UDP_STR {
-            if self.nat_type.mode == NATMode::NAT1To1 {
+            if self.nat_type.mode == NatMode::Nat1To1 {
                 // 1:1 NAT behavior
                 let src_addr = from.source_addr();
                 if let Some(src_ip) = self.get_paired_mapped_ip(&src_addr.ip()) {
@@ -302,7 +302,7 @@ impl NetworkAddressTranslator {
         let mut to = from.clone_to();
 
         if from.network() == UDP_STR {
-            if self.nat_type.mode == NATMode::NAT1To1 {
+            if self.nat_type.mode == NatMode::Nat1To1 {
                 // 1:1 NAT behavior
                 let dst_addr = from.destination_addr();
                 if let Some(dst_ip) = self.get_paired_local_ip(&dst_addr.ip()) {

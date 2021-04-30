@@ -22,12 +22,12 @@ impl ConnObserver for DummyObserver {
 
 #[tokio::test]
 async fn test_udp_conn_map_insert_remove() -> Result<(), Error> {
-    let conn_map = UDPConnMap::new();
+    let conn_map = UdpConnMap::new();
 
     let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
         Arc::new(Mutex::new(DummyObserver::default()));
 
-    let conn_in = Arc::new(UDPConn::new(
+    let conn_in = Arc::new(UdpConn::new(
         SocketAddr::from_str("127.0.0.1:1234")?,
         None,
         obs,
@@ -61,12 +61,12 @@ async fn test_udp_conn_map_insert_remove() -> Result<(), Error> {
 
 #[tokio::test]
 async fn test_udp_conn_map_insert_0_remove() -> Result<(), Error> {
-    let conn_map = UDPConnMap::new();
+    let conn_map = UdpConnMap::new();
 
     let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
         Arc::new(Mutex::new(DummyObserver::default()));
 
-    let conn_in = Arc::new(UDPConn::new(
+    let conn_in = Arc::new(UdpConn::new(
         SocketAddr::from_str("0.0.0.0:1234")?,
         None,
         obs,
@@ -100,12 +100,12 @@ async fn test_udp_conn_map_insert_0_remove() -> Result<(), Error> {
 
 #[tokio::test]
 async fn test_udp_conn_map_find_0() -> Result<(), Error> {
-    let conn_map = UDPConnMap::new();
+    let conn_map = UdpConnMap::new();
 
     let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
         Arc::new(Mutex::new(DummyObserver::default()));
 
-    let conn_in = Arc::new(UDPConn::new(
+    let conn_in = Arc::new(UdpConn::new(
         SocketAddr::from_str("0.0.0.0:1234")?,
         None,
         obs,
@@ -129,18 +129,18 @@ async fn test_udp_conn_map_find_0() -> Result<(), Error> {
 
 #[tokio::test]
 async fn test_udp_conn_map_insert_many_ips_with_same_port() -> Result<(), Error> {
-    let conn_map = UDPConnMap::new();
+    let conn_map = UdpConnMap::new();
 
     let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
         Arc::new(Mutex::new(DummyObserver::default()));
 
-    let conn_in1 = Arc::new(UDPConn::new(
+    let conn_in1 = Arc::new(UdpConn::new(
         SocketAddr::from_str("10.1.2.1:5678")?,
         None,
         Arc::clone(&obs),
     ));
 
-    let conn_in2 = Arc::new(UDPConn::new(
+    let conn_in2 = Arc::new(UdpConn::new(
         SocketAddr::from_str("10.1.2.2:5678")?,
         None,
         Arc::clone(&obs),
@@ -176,17 +176,17 @@ async fn test_udp_conn_map_insert_many_ips_with_same_port() -> Result<(), Error>
 
 #[tokio::test]
 async fn test_udp_conn_map_already_inuse_when_insert_0() -> Result<(), Error> {
-    let conn_map = UDPConnMap::new();
+    let conn_map = UdpConnMap::new();
 
     let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
         Arc::new(Mutex::new(DummyObserver::default()));
 
-    let conn_in1 = Arc::new(UDPConn::new(
+    let conn_in1 = Arc::new(UdpConn::new(
         SocketAddr::from_str("10.1.2.1:5678")?,
         None,
         Arc::clone(&obs),
     ));
-    let conn_in2 = Arc::new(UDPConn::new(
+    let conn_in2 = Arc::new(UdpConn::new(
         SocketAddr::from_str("0.0.0.0:5678")?,
         None,
         Arc::clone(&obs),
@@ -201,17 +201,17 @@ async fn test_udp_conn_map_already_inuse_when_insert_0() -> Result<(), Error> {
 
 #[tokio::test]
 async fn test_udp_conn_map_already_inuse_when_insert_a_specified_ip() -> Result<(), Error> {
-    let conn_map = UDPConnMap::new();
+    let conn_map = UdpConnMap::new();
 
     let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
         Arc::new(Mutex::new(DummyObserver::default()));
 
-    let conn_in1 = Arc::new(UDPConn::new(
+    let conn_in1 = Arc::new(UdpConn::new(
         SocketAddr::from_str("0.0.0.0:5678")?,
         None,
         Arc::clone(&obs),
     ));
-    let conn_in2 = Arc::new(UDPConn::new(
+    let conn_in2 = Arc::new(UdpConn::new(
         SocketAddr::from_str("192.168.0.1:5678")?,
         None,
         Arc::clone(&obs),
@@ -226,17 +226,17 @@ async fn test_udp_conn_map_already_inuse_when_insert_a_specified_ip() -> Result<
 
 #[tokio::test]
 async fn test_udp_conn_map_already_inuse_when_insert_same_specified_ip() -> Result<(), Error> {
-    let conn_map = UDPConnMap::new();
+    let conn_map = UdpConnMap::new();
 
     let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
         Arc::new(Mutex::new(DummyObserver::default()));
 
-    let conn_in1 = Arc::new(UDPConn::new(
+    let conn_in1 = Arc::new(UdpConn::new(
         SocketAddr::from_str("192.168.0.1:5678")?,
         None,
         Arc::clone(&obs),
     ));
-    let conn_in2 = Arc::new(UDPConn::new(
+    let conn_in2 = Arc::new(UdpConn::new(
         SocketAddr::from_str("192.168.0.1:5678")?,
         None,
         Arc::clone(&obs),
@@ -251,12 +251,12 @@ async fn test_udp_conn_map_already_inuse_when_insert_same_specified_ip() -> Resu
 
 #[tokio::test]
 async fn test_udp_conn_map_find_failure_1() -> Result<(), Error> {
-    let conn_map = UDPConnMap::new();
+    let conn_map = UdpConnMap::new();
 
     let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
         Arc::new(Mutex::new(DummyObserver::default()));
 
-    let conn_in = Arc::new(UDPConn::new(
+    let conn_in = Arc::new(UdpConn::new(
         SocketAddr::from_str("192.168.0.1:5678")?,
         None,
         obs,
@@ -273,12 +273,12 @@ async fn test_udp_conn_map_find_failure_1() -> Result<(), Error> {
 
 #[tokio::test]
 async fn test_udp_conn_map_find_failure_2() -> Result<(), Error> {
-    let conn_map = UDPConnMap::new();
+    let conn_map = UdpConnMap::new();
 
     let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
         Arc::new(Mutex::new(DummyObserver::default()));
 
-    let conn_in = Arc::new(UDPConn::new(
+    let conn_in = Arc::new(UdpConn::new(
         SocketAddr::from_str("192.168.0.1:5678")?,
         None,
         obs,
@@ -295,17 +295,17 @@ async fn test_udp_conn_map_find_failure_2() -> Result<(), Error> {
 
 #[tokio::test]
 async fn test_udp_conn_map_insert_two_on_same_port_then_remove() -> Result<(), Error> {
-    let conn_map = UDPConnMap::new();
+    let conn_map = UdpConnMap::new();
 
     let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
         Arc::new(Mutex::new(DummyObserver::default()));
 
-    let conn_in1 = Arc::new(UDPConn::new(
+    let conn_in1 = Arc::new(UdpConn::new(
         SocketAddr::from_str("192.168.0.1:5678")?,
         None,
         Arc::clone(&obs),
     ));
-    let conn_in2 = Arc::new(UDPConn::new(
+    let conn_in2 = Arc::new(UdpConn::new(
         SocketAddr::from_str("192.168.0.2:5678")?,
         None,
         Arc::clone(&obs),

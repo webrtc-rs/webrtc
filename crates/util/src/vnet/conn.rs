@@ -3,7 +3,7 @@ mod conn_test;
 
 use super::errors::*;
 use crate::conn::Conn;
-use crate::vnet::chunk::{Chunk, ChunkUDP};
+use crate::vnet::chunk::{Chunk, ChunkUdp};
 use crate::Error;
 
 use std::io;
@@ -24,7 +24,7 @@ pub(crate) trait ConnObserver {
 
 // UDPConn is the implementation of the Conn and PacketConn interfaces for UDP network connections.
 // comatible with net.PacketConn and net.Conn
-pub(crate) struct UDPConn {
+pub(crate) struct UdpConn {
     loc_addr: SocketAddr,
     rem_addr: Mutex<Option<SocketAddr>>,
     read_ch_tx: Arc<mpsc::Sender<Box<dyn Chunk + Send + Sync>>>,
@@ -32,7 +32,7 @@ pub(crate) struct UDPConn {
     obs: Arc<Mutex<dyn ConnObserver + Send + Sync>>,
 }
 
-impl UDPConn {
+impl UdpConn {
     pub(crate) fn new(
         loc_addr: SocketAddr,
         rem_addr: Option<SocketAddr>,
@@ -40,7 +40,7 @@ impl UDPConn {
     ) -> Self {
         let (read_ch_tx, read_ch_rx) = mpsc::channel(MAX_READ_QUEUE_SIZE);
 
-        UDPConn {
+        UdpConn {
             loc_addr,
             rem_addr: Mutex::new(rem_addr),
             read_ch_tx: Arc::new(read_ch_tx),
@@ -55,7 +55,7 @@ impl UDPConn {
 }
 
 #[async_trait]
-impl Conn for UDPConn {
+impl Conn for UdpConn {
     async fn connect(&self, addr: SocketAddr) -> io::Result<()> {
         let mut rem_addr = self.rem_addr.lock().await;
         *rem_addr = Some(addr);
@@ -131,7 +131,7 @@ impl Conn for UDPConn {
 
         let src_addr = SocketAddr::new(src_ip, self.loc_addr.port());
 
-        let mut chunk = ChunkUDP::new(src_addr, target);
+        let mut chunk = ChunkUdp::new(src_addr, target);
         chunk.user_data = buf.to_vec();
         let result = {
             let c: Box<dyn Chunk + Send + Sync> = Box::new(chunk);
