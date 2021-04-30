@@ -49,9 +49,9 @@ pub(crate) async fn get_xormapped_addr(
     conn: &Arc<dyn Conn + Send + Sync>,
     server_addr: SocketAddr,
     deadline: Duration,
-) -> Result<XORMappedAddress, Error> {
+) -> Result<XorMappedAddress, Error> {
     let resp = stun_request(conn, server_addr, deadline).await?;
-    let mut addr = XORMappedAddress::default();
+    let mut addr = XorMappedAddress::default();
     addr.get_from(&resp)?;
     Ok(addr)
 }

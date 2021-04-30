@@ -100,7 +100,7 @@ pub struct Agent {
     pub(crate) interface_filter: Arc<Option<InterfaceFilterFn>>,
     pub(crate) mdns_mode: MulticastDnsMode,
     pub(crate) mdns_name: String,
-    pub(crate) mdns_conn: Option<Arc<DNSConn>>,
+    pub(crate) mdns_conn: Option<Arc<DnsConn>>,
     pub(crate) net: Arc<Net>,
 
     // 1:1 D-NAT IP address mapping
@@ -749,7 +749,7 @@ impl Agent {
     }
 
     async fn resolve_and_add_multicast_candidate(
-        mdns_conn: Arc<DNSConn>,
+        mdns_conn: Arc<DnsConn>,
         c: Arc<dyn Candidate + Send + Sync>,
     ) -> Result<Arc<dyn Candidate + Send + Sync>, Error> {
         //TODO: hook up _close_query_signal_tx to Agent or Candidate's Close signal?
@@ -767,7 +767,7 @@ impl Agent {
         Ok(c)
     }
 
-    async fn close_multicast_conn(mdns_conn: &Option<Arc<DNSConn>>) {
+    async fn close_multicast_conn(mdns_conn: &Option<Arc<DnsConn>>) {
         if let Some(conn) = mdns_conn {
             if let Err(err) = conn.close().await {
                 log::warn!("failed to close mDNS Conn: {}", err);

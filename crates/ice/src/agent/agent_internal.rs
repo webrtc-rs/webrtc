@@ -570,7 +570,7 @@ impl AgentInternal {
             let result = out.build(&[
                 Box::new(m.clone()),
                 Box::new(BINDING_SUCCESS),
-                Box::new(XORMappedAddress { ip, port }),
+                Box::new(XorMappedAddress { ip, port }),
                 Box::new(MessageIntegrity::new_short_term_integrity(
                     self.local_pwd.clone(),
                 )),

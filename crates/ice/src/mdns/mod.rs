@@ -43,7 +43,7 @@ pub(crate) fn generate_multicast_dns_name() -> String {
 pub(crate) fn create_multicast_dns(
     mdns_mode: MulticastDnsMode,
     mdns_name: &str,
-) -> Result<Option<Arc<DNSConn>>, Error> {
+) -> Result<Option<Arc<DnsConn>>, Error> {
     if mdns_mode == MulticastDnsMode::Disabled {
         return Ok(None);
     }
@@ -52,11 +52,11 @@ pub(crate) fn create_multicast_dns(
 
     match mdns_mode {
         MulticastDnsMode::QueryOnly => {
-            let conn = DNSConn::server(addr, Config::default())?;
+            let conn = DnsConn::server(addr, Config::default())?;
             Ok(Some(Arc::new(conn)))
         }
         MulticastDnsMode::QueryAndGather => {
-            let conn = DNSConn::server(
+            let conn = DnsConn::server(
                 addr,
                 Config {
                     local_names: vec![mdns_name.to_owned()],
