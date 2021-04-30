@@ -14,8 +14,8 @@ impl fmt::Display for AResource {
 }
 
 impl ResourceBody for AResource {
-    fn real_type(&self) -> DNSType {
-        DNSType::A
+    fn real_type(&self) -> DnsType {
+        DnsType::A
     }
 
     // pack appends the wire format of the AResource to msg.

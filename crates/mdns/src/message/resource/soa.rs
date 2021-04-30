@@ -4,7 +4,7 @@ use crate::message::packer::*;
 
 // An SOAResource is an SOA Resource record.
 #[derive(Default, Debug, Clone, PartialEq)]
-pub struct SOAResource {
+pub struct SoaResource {
     pub ns: Name,
     pub mbox: Name,
     pub serial: u32,
@@ -18,7 +18,7 @@ pub struct SOAResource {
     pub min_ttl: u32,
 }
 
-impl fmt::Display for SOAResource {
+impl fmt::Display for SoaResource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -34,9 +34,9 @@ impl fmt::Display for SOAResource {
     }
 }
 
-impl ResourceBody for SOAResource {
-    fn real_type(&self) -> DNSType {
-        DNSType::SOA
+impl ResourceBody for SoaResource {
+    fn real_type(&self) -> DnsType {
+        DnsType::Soa
     }
 
     // pack appends the wire format of the SOAResource to msg.

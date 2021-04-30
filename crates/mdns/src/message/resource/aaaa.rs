@@ -3,19 +3,19 @@ use crate::message::packer::*;
 
 // An AAAAResource is an aaaa Resource record.
 #[derive(Default, Debug, Clone, PartialEq)]
-pub struct AAAAResource {
+pub struct AaaaResource {
     pub aaaa: [u8; 16],
 }
 
-impl fmt::Display for AAAAResource {
+impl fmt::Display for AaaaResource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "dnsmessage.AAAAResource{{aaaa: {:?}}}", self.aaaa)
     }
 }
 
-impl ResourceBody for AAAAResource {
-    fn real_type(&self) -> DNSType {
-        DNSType::AAAA
+impl ResourceBody for AaaaResource {
+    fn real_type(&self) -> DnsType {
+        DnsType::Aaaa
     }
 
     // pack appends the wire format of the AAAAResource to msg.

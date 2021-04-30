@@ -10,8 +10,8 @@ use util::Error;
 #[derive(Default, Debug, PartialEq, Clone)]
 pub struct Question {
     pub name: Name,
-    pub typ: DNSType,
-    pub class: DNSClass,
+    pub typ: DnsType,
+    pub class: DnsClass,
 }
 
 impl fmt::Display for Question {

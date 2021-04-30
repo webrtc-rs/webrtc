@@ -7,8 +7,8 @@ use crate::message::packer::*;
 // The pseudo resource record is part of the extension mechanisms for DNS
 // as defined in RFC 6891.
 #[derive(Default, Debug, Clone, PartialEq)]
-pub struct OPTResource {
-    pub options: Vec<DNSOption>,
+pub struct OptResource {
+    pub options: Vec<DnsOption>,
 }
 
 // An Option represents a DNS message option within OPTResource.
@@ -16,12 +16,12 @@ pub struct OPTResource {
 // The message option is part of the extension mechanisms for DNS as
 // defined in RFC 6891.
 #[derive(Default, Debug, Clone, PartialEq)]
-pub struct DNSOption {
+pub struct DnsOption {
     pub code: u16, // option code
     pub data: Vec<u8>,
 }
 
-impl fmt::Display for DNSOption {
+impl fmt::Display for DnsOption {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -31,16 +31,16 @@ impl fmt::Display for DNSOption {
     }
 }
 
-impl fmt::Display for OPTResource {
+impl fmt::Display for OptResource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s: Vec<String> = self.options.iter().map(|o| o.to_string()).collect();
         write!(f, "dnsmessage.OPTResource{{options: {}}}", s.join(","))
     }
 }
 
-impl ResourceBody for OPTResource {
-    fn real_type(&self) -> DNSType {
-        DNSType::OPT
+impl ResourceBody for OptResource {
+    fn real_type(&self) -> DnsType {
+        DnsType::Opt
     }
 
     fn pack(
@@ -67,7 +67,7 @@ impl ResourceBody for OPTResource {
             let (l, new_off) = unpack_uint16(msg, off)?;
             off = new_off;
 
-            let mut opt = DNSOption {
+            let mut opt = DnsOption {
                 code,
                 data: vec![0; l as usize],
             };

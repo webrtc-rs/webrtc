@@ -6,7 +6,7 @@ mod test {
 
     #[tokio::test]
     async fn test_multiple_close() -> Result<(), Error> {
-        let server_a = DNSConn::server(
+        let server_a = DnsConn::server(
             SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 5353),
             Config::default(),
         )?;
@@ -24,7 +24,7 @@ mod test {
 
     #[tokio::test]
     async fn test_query_respect_timeout() -> Result<(), Error> {
-        let server_a = DNSConn::server(
+        let server_a = DnsConn::server(
             SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 5353),
             Config::default(),
         )?;

@@ -56,7 +56,7 @@ async fn main() -> Result<(), Error> {
     let server = matches.value_of("server").unwrap();
     let local_name = matches.value_of("local-name").unwrap();
 
-    let server = DNSConn::server(
+    let server = DnsConn::server(
         SocketAddr::from_str(server)?,
         Config {
             local_names: vec![local_name.to_owned()],

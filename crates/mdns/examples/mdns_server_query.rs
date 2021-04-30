@@ -8,7 +8,7 @@ async fn main() {
 
     log::trace!("server a created");
 
-    let server_a = DNSConn::server(
+    let server_a = DnsConn::server(
         SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 5353),
         Config {
             local_names: vec![
@@ -20,7 +20,7 @@ async fn main() {
     )
     .unwrap();
 
-    let server_b = DNSConn::server(
+    let server_b = DnsConn::server(
         SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 5353),
         Config {
             ..Default::default()
