@@ -75,8 +75,8 @@
 [data-url]: https://crates.io/crates/webrtc-data
 [media-badge]: https://img.shields.io/crates/v/webrtc-media.svg
 [media-url]: https://crates.io/crates/webrtc-media
-[webrtc-badge]: https://img.shields.io/crates/v/webrtc.svg
-[webrtc-url]: https://crates.io/crates/webrtc
+[rtc-badge]: https://img.shields.io/crates/v/rtc.svg
+[rtc-url]: https://crates.io/crates/rtc
 
 
 - [x] SDP: [webrtc-rs/sdp](https://github.com/webrtc-rs/sdp) [![sdp][sdp-badge]][sdp-url]
@@ -109,7 +109,7 @@
 - [ ] SCTP: [webrtc-rs/sctp](https://github.com/webrtc-rs/sctp) [![sctp][sctp-badge]][sctp-url]
   - catch up with [pion/sctp/v1.7.12](https://github.com/pion/sctp/tree/v1.7.12)
   - [ ] TODO: catch up with pion/sctp v1.7.12
-- [ ] WebRTC: [webrtc-rs/webrtc](https://github.com/webrtc-rs/webrtc) [![webrtc][webrtc-badge]][webrtc-url]
+- [ ] RTC: [webrtc-rs/rtc](https://github.com/webrtc-rs/rtc) [![rtc][rtc-badge]][rtc-url]
   - catch up with [pion/webrtc/v3.0.20](https://github.com/pion/webrtc/tree/v3.0.20)
   - [ ] DataChannel: [webrtc-rs/data](https://github.com/webrtc-rs/data) [![data][data-badge]][data-url]
   - [ ] PeerConnection: [webrtc-rs/pc](https://github.com/webrtc-rs/pc) [![pc][pc-badge]][pc-url]
