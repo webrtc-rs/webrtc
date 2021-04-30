@@ -1,14 +1,18 @@
-[package]
-name = "webrtc"
-version = "0.0.4"
-authors = ["Rain Liu <yliu@webrtc.rs>"]
-edition = "2018"
-description = "A pure Rust implementation of WebRTC API"
-license = "MIT"
-documentation = "https://docs.rs/webrtc"
-homepage = "https://webrtc.rs"
-repository = "https://github.com/webrtc-rs/webrtc"
+[workspace]
+members = [
+    "crates/dtls",
+    "crates/ice",
+    "crates/mdns",
+    "crates/rtc",
+    "crates/rtcp",
+    "crates/rtp",
+    "crates/sctp",
+    "crates/sdp",
+    "crates/srtp",
+    "crates/stun",
+    "crates/turn",
+    "crates/util",
+]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
+[profile.dev]
+opt-level = 0
