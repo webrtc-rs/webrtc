@@ -14,33 +14,33 @@ fn test_handshake_message_certificate_request() -> Result<(), Error> {
 
     let parsed_certificate_request = HandshakeMessageCertificateRequest {
         certificate_types: vec![
-            ClientCertificateType::RSASign,
-            ClientCertificateType::ECDSASign,
+            ClientCertificateType::RsaSign,
+            ClientCertificateType::EcdsaSign,
         ],
         signature_hash_algorithms: vec![
             SignatureHashAlgorithm {
-                hash: HashAlgorithm::SHA256,
-                signature: SignatureAlgorithm::ECDSA,
+                hash: HashAlgorithm::Sha256,
+                signature: SignatureAlgorithm::Ecdsa,
             },
             SignatureHashAlgorithm {
-                hash: HashAlgorithm::SHA256,
-                signature: SignatureAlgorithm::RSA,
+                hash: HashAlgorithm::Sha256,
+                signature: SignatureAlgorithm::Rsa,
             },
             SignatureHashAlgorithm {
-                hash: HashAlgorithm::SHA384,
-                signature: SignatureAlgorithm::ECDSA,
+                hash: HashAlgorithm::Sha384,
+                signature: SignatureAlgorithm::Ecdsa,
             },
             SignatureHashAlgorithm {
-                hash: HashAlgorithm::SHA384,
-                signature: SignatureAlgorithm::RSA,
+                hash: HashAlgorithm::Sha384,
+                signature: SignatureAlgorithm::Rsa,
             },
             SignatureHashAlgorithm {
-                hash: HashAlgorithm::SHA512,
-                signature: SignatureAlgorithm::RSA,
+                hash: HashAlgorithm::Sha512,
+                signature: SignatureAlgorithm::Rsa,
             },
             SignatureHashAlgorithm {
-                hash: HashAlgorithm::SHA1,
-                signature: SignatureAlgorithm::RSA,
+                hash: HashAlgorithm::Sha1,
+                signature: SignatureAlgorithm::Rsa,
             },
         ],
     };

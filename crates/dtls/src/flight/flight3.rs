@@ -190,7 +190,7 @@ impl Flight for Flight3 {
 
             for extension in &h.extensions {
                 match extension {
-                    Extension::UseSRTP(e) => {
+                    Extension::UseSrtp(e) => {
                         let profile = match find_matching_srtp_profile(
                             &e.protection_profiles,
                             &cfg.local_srtp_protection_profiles,
@@ -229,7 +229,7 @@ impl Flight for Flight3 {
                 ));
             }
             if !cfg.local_srtp_protection_profiles.is_empty()
-                && state.srtp_protection_profile == SRTPProtectionProfile::Unsupported
+                && state.srtp_protection_profile == SrtpProtectionProfile::Unsupported
             {
                 return Err((
                     Some(Alert {
@@ -339,7 +339,7 @@ impl Flight for Flight3 {
         }
 
         if !cfg.local_srtp_protection_profiles.is_empty() {
-            extensions.push(Extension::UseSRTP(ExtensionUseSRTP {
+            extensions.push(Extension::UseSrtp(ExtensionUseSrtp {
                 protection_profiles: cfg.local_srtp_protection_profiles.clone(),
             }));
         }

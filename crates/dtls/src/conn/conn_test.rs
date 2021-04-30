@@ -51,7 +51,7 @@ async fn pipe_conn(
         let client = create_test_client(
             ca,
             Config {
-                srtp_protection_profiles: vec![SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_80],
+                srtp_protection_profiles: vec![SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_80],
                 ..Default::default()
             },
             true,
@@ -65,7 +65,7 @@ async fn pipe_conn(
     let sever = create_test_server(
         cb,
         Config {
-            srtp_protection_profiles: vec![SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_80],
+            srtp_protection_profiles: vec![SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_80],
             ..Default::default()
         },
         true,
@@ -263,7 +263,7 @@ async fn test_sequence_number_overflow_on_handshake() -> Result<(), Error> {
                         random: HandshakeRandom::default(),
                         cookie: vec![0; 64],
 
-                        cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256],
+                        cipher_suites: vec![CipherSuiteId::Tls_Psk_With_Aes_128_Gcm_Sha256],
                         compression_methods: default_compression_methods(),
                         extensions: vec![],
                     },
@@ -314,12 +314,12 @@ async fn test_handshake_with_alert() -> Result<(), Error> {
             "CipherSuiteNoIntersection",
             Config {
                 // Server
-                cipher_suites: vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256],
+                cipher_suites: vec![CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256],
                 ..Default::default()
             },
             Config {
                 // Client
-                cipher_suites: vec![CipherSuiteID::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256],
+                cipher_suites: vec![CipherSuiteId::Tls_Ecdhe_Rsa_With_Aes_128_Gcm_Sha256],
                 ..Default::default()
             },
             ERR_CIPHER_SUITE_NO_INTERSECTION.clone(),
@@ -329,14 +329,14 @@ async fn test_handshake_with_alert() -> Result<(), Error> {
             "SignatureSchemesNoIntersection",
             Config {
                 // Server
-                cipher_suites: vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256],
-                signature_schemes: vec![SignatureScheme::ECDSAWithP256AndSHA256],
+                cipher_suites: vec![CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256],
+                signature_schemes: vec![SignatureScheme::EcdsaWithP256AndSha256],
                 ..Default::default()
             },
             Config {
                 // Client
-                cipher_suites: vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256],
-                signature_schemes: vec![SignatureScheme::ECDSAWithP521AndSHA512],
+                cipher_suites: vec![CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256],
+                signature_schemes: vec![SignatureScheme::EcdsaWithP521AndSha512],
                 ..Default::default()
             },
             ERR_ALERT_FATAL_OR_CLOSE.clone(), //errServer: &errAlert{&alert{alertLevelFatal, alertInsufficientSecurity}},
@@ -538,7 +538,7 @@ async fn test_psk() -> Result<(), Error> {
             let conf = Config {
                 psk: Some(psk_callback_client),
                 psk_identity_hint: Some(client_identity.to_vec()),
-                cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_CCM_8],
+                cipher_suites: vec![CipherSuiteId::Tls_Psk_With_Aes_128_Ccm_8],
                 ..Default::default()
             };
 
@@ -549,7 +549,7 @@ async fn test_psk() -> Result<(), Error> {
         let config = Config {
             psk: Some(psk_callback_server),
             psk_identity_hint: server_identity,
-            cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_CCM_8],
+            cipher_suites: vec![CipherSuiteId::Tls_Psk_With_Aes_128_Ccm_8],
             ..Default::default()
         };
 
@@ -597,7 +597,7 @@ async fn test_psk_hint_fail() -> Result<(), Error> {
         let conf = Config {
             psk: Some(psk_callback_hint_fail),
             psk_identity_hint: Some(vec![]),
-            cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_CCM_8],
+            cipher_suites: vec![CipherSuiteId::Tls_Psk_With_Aes_128_Ccm_8],
             ..Default::default()
         };
 
@@ -608,7 +608,7 @@ async fn test_psk_hint_fail() -> Result<(), Error> {
     let config = Config {
         psk: Some(psk_callback_hint_fail),
         psk_identity_hint: Some(vec![]),
-        cipher_suites: vec![CipherSuiteID::TLS_PSK_WITH_AES_128_CCM_8],
+        cipher_suites: vec![CipherSuiteId::Tls_Psk_With_Aes_128_Ccm_8],
         ..Default::default()
     };
 
@@ -711,59 +711,59 @@ async fn test_srtp_configuration() -> Result<(), Error> {
             "No SRTP in use",
             vec![],
             vec![],
-            SRTPProtectionProfile::Unsupported,
+            SrtpProtectionProfile::Unsupported,
             None,
             None,
         ),
         (
             "SRTP both ends",
-            vec![SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_80],
-            vec![SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_80],
-            SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_80,
+            vec![SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_80],
+            vec![SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_80],
+            SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_80,
             None,
             None,
         ),
         (
             "SRTP client only",
-            vec![SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_80],
+            vec![SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_80],
             vec![],
-            SRTPProtectionProfile::Unsupported,
+            SrtpProtectionProfile::Unsupported,
             Some(ERR_ALERT_FATAL_OR_CLOSE.clone()),
             Some(ERR_SERVER_NO_MATCHING_SRTP_PROFILE.clone()),
         ),
         (
             "SRTP server only",
             vec![],
-            vec![SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_80],
-            SRTPProtectionProfile::Unsupported,
+            vec![SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_80],
+            SrtpProtectionProfile::Unsupported,
             None,
             None,
         ),
         (
             "Multiple Suites",
             vec![
-                SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_80,
-                SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_32,
+                SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_80,
+                SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_32,
             ],
             vec![
-                SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_80,
-                SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_32,
+                SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_80,
+                SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_32,
             ],
-            SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_80,
+            SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_80,
             None,
             None,
         ),
         (
             "Multiple Suites, Client Chooses",
             vec![
-                SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_80,
-                SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_32,
+                SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_80,
+                SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_32,
             ],
             vec![
-                SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_32,
-                SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_80,
+                SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_32,
+                SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_80,
             ],
-            SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_80,
+            SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_80,
             None,
             None,
         ),
@@ -1526,54 +1526,54 @@ async fn test_cipher_suite_configuration() -> Result<(), Error> {
         ),
         (
             "Invalid CipherSuite",
-            vec![CipherSuiteID::Unsupported],
-            vec![CipherSuiteID::Unsupported],
+            vec![CipherSuiteId::Unsupported],
+            vec![CipherSuiteId::Unsupported],
             Some(ERR_INVALID_CIPHER_SUITE.clone()),
             Some(ERR_INVALID_CIPHER_SUITE.clone()),
             None,
         ),
         (
             "Valid CipherSuites specified",
-            vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256],
-            vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256],
+            vec![CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256],
+            vec![CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256],
             None,
             None,
-            Some(CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256),
+            Some(CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256),
         ),
         (
             "CipherSuites mismatch",
-            vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256],
-            vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA],
+            vec![CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256],
+            vec![CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_256_Cbc_Sha],
             Some(ERR_ALERT_FATAL_OR_CLOSE.clone()),
             Some(ERR_CIPHER_SUITE_NO_INTERSECTION.clone()),
             None,
         ),
         (
             "Valid CipherSuites CCM specified",
-            vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM],
-            vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM],
+            vec![CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Ccm],
+            vec![CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Ccm],
             None,
             None,
-            Some(CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM),
+            Some(CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Ccm),
         ),
         (
             "Valid CipherSuites CCM-8 specified",
-            vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8],
-            vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8],
+            vec![CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Ccm_8],
+            vec![CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Ccm_8],
             None,
             None,
-            Some(CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8),
+            Some(CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Ccm_8),
         ),
         (
             "Server supports subset of client suites",
             vec![
-                CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-                CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+                CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256,
+                CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_256_Cbc_Sha,
             ],
-            vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA],
+            vec![CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_256_Cbc_Sha],
             None,
             None,
-            Some(CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA),
+            Some(CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_256_Cbc_Sha),
         ),
     ];
 
@@ -1822,36 +1822,36 @@ async fn test_server_timeout() -> Result<(), Error> {
     };
 
     let cipher_suites = vec![
-        CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, //&cipherSuiteTLSEcdheEcdsaWithAes128GcmSha256{},
-        CipherSuiteID::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256, //&cipherSuiteTLSEcdheRsaWithAes128GcmSha256{},
+        CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256, //&cipherSuiteTLSEcdheEcdsaWithAes128GcmSha256{},
+        CipherSuiteId::Tls_Ecdhe_Rsa_With_Aes_128_Gcm_Sha256, //&cipherSuiteTLSEcdheRsaWithAes128GcmSha256{},
     ];
 
     let extensions = vec![
         Extension::SupportedSignatureAlgorithms(ExtensionSupportedSignatureAlgorithms {
             signature_hash_algorithms: vec![
                 SignatureHashAlgorithm {
-                    hash: HashAlgorithm::SHA256,
-                    signature: SignatureAlgorithm::ECDSA,
+                    hash: HashAlgorithm::Sha256,
+                    signature: SignatureAlgorithm::Ecdsa,
                 },
                 SignatureHashAlgorithm {
-                    hash: HashAlgorithm::SHA384,
-                    signature: SignatureAlgorithm::ECDSA,
+                    hash: HashAlgorithm::Sha384,
+                    signature: SignatureAlgorithm::Ecdsa,
                 },
                 SignatureHashAlgorithm {
-                    hash: HashAlgorithm::SHA512,
-                    signature: SignatureAlgorithm::ECDSA,
+                    hash: HashAlgorithm::Sha512,
+                    signature: SignatureAlgorithm::Ecdsa,
                 },
                 SignatureHashAlgorithm {
-                    hash: HashAlgorithm::SHA256,
-                    signature: SignatureAlgorithm::RSA,
+                    hash: HashAlgorithm::Sha256,
+                    signature: SignatureAlgorithm::Rsa,
                 },
                 SignatureHashAlgorithm {
-                    hash: HashAlgorithm::SHA384,
-                    signature: SignatureAlgorithm::RSA,
+                    hash: HashAlgorithm::Sha384,
+                    signature: SignatureAlgorithm::Rsa,
                 },
                 SignatureHashAlgorithm {
-                    hash: HashAlgorithm::SHA512,
-                    signature: SignatureAlgorithm::RSA,
+                    hash: HashAlgorithm::Sha512,
+                    signature: SignatureAlgorithm::Rsa,
                 },
             ],
         }),
@@ -1926,7 +1926,7 @@ async fn test_server_timeout() -> Result<(), Error> {
     });
 
     let config = Config {
-        cipher_suites: vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256],
+        cipher_suites: vec![CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256],
         flight_interval: Duration::from_millis(100),
         ..Default::default()
     };
@@ -2006,7 +2006,7 @@ async fn test_protocol_version_validation() -> Result<(), Error> {
                             cookie: cookie.clone(),
                             random: random.clone(),
                             cipher_suites: vec![
-                                CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+                                CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256,
                             ],
                             compression_methods: default_compression_methods(),
                             extensions: vec![],
@@ -2026,7 +2026,7 @@ async fn test_protocol_version_validation() -> Result<(), Error> {
                                 cookie: cookie.clone(),
                                 random: random.clone(),
                                 cipher_suites: vec![
-                                    CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+                                    CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256,
                                 ],
                                 compression_methods: default_compression_methods(),
                                 extensions: vec![],
@@ -2043,7 +2043,7 @@ async fn test_protocol_version_validation() -> Result<(), Error> {
                                 cookie: cookie.clone(),
                                 random: random.clone(),
                                 cipher_suites: vec![
-                                    CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+                                    CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256,
                                 ],
                                 compression_methods: default_compression_methods(),
                                 extensions: vec![],
@@ -2066,7 +2066,7 @@ async fn test_protocol_version_validation() -> Result<(), Error> {
 
             tokio::spawn(async move {
                 let config = Config {
-                    cipher_suites: vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256],
+                    cipher_suites: vec![CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256],
                     flight_interval: Duration::from_millis(100),
                     ..Default::default()
                 };
@@ -2144,7 +2144,7 @@ async fn test_protocol_version_validation() -> Result<(), Error> {
                                 minor: 0xff,
                             }, // try to downgrade
                             random: random.clone(),
-                            cipher_suite: CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+                            cipher_suite: CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256,
                             compression_method: default_compression_methods().ids[0],
                             extensions: vec![],
                         },
@@ -2174,8 +2174,8 @@ async fn test_protocol_version_validation() -> Result<(), Error> {
                             elliptic_curve_type: EllipticCurveType::NamedCurve,
                             named_curve: NamedCurve::X25519,
                             public_key: local_keypair.public_key.clone(),
-                            hash_algorithm: HashAlgorithm::SHA256,
-                            signature_algorithm: SignatureAlgorithm::ECDSA,
+                            hash_algorithm: HashAlgorithm::Sha256,
+                            signature_algorithm: SignatureAlgorithm::Ecdsa,
                             signature: vec![0; 64],
                         },
                     ));
@@ -2204,7 +2204,7 @@ async fn test_protocol_version_validation() -> Result<(), Error> {
 
             tokio::spawn(async move {
                 let config = Config {
-                    cipher_suites: vec![CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256],
+                    cipher_suites: vec![CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256],
                     flight_interval: Duration::from_millis(100),
                     ..Default::default()
                 };

@@ -63,7 +63,7 @@ fn test_master_secret() -> Result<(), Error> {
         &pre_master_secret,
         &client_random,
         &server_random,
-        CipherSuiteHash::SHA256,
+        CipherSuiteHash::Sha256,
     )?;
 
     assert_eq!(
@@ -117,7 +117,7 @@ fn test_encryption_keys() -> Result<(), Error> {
         0,
         16,
         4,
-        CipherSuiteHash::SHA256,
+        CipherSuiteHash::Sha256,
     )?;
 
     assert_eq!(
@@ -255,7 +255,7 @@ fn test_verify_data() -> Result<(), Error> {
         0xcf, 0x91, 0x96, 0x26, 0xf1, 0x36, 0x0c, 0x53, 0x6a, 0xaa, 0xd7, 0x3a,
     ];
 
-    let verify_data = prf_verify_data_client(&master_secret, &final_msg, CipherSuiteHash::SHA256)?;
+    let verify_data = prf_verify_data_client(&master_secret, &final_msg, CipherSuiteHash::Sha256)?;
 
     assert_eq!(
         expected_verify_data, verify_data,

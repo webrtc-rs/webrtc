@@ -77,12 +77,12 @@ pub(crate) type VerifyPeerCertificateFn =
     fn(rawCerts: &[Vec<u8>], verifiedChains: &[rustls::Certificate]) -> Result<(), Error>;
 
 pub(crate) struct HandshakeConfig {
-    pub(crate) local_psk_callback: Option<PSKCallback>,
+    pub(crate) local_psk_callback: Option<PskCallback>,
     pub(crate) local_psk_identity_hint: Option<Vec<u8>>,
-    pub(crate) local_cipher_suites: Vec<CipherSuiteID>, // Available CipherSuites
+    pub(crate) local_cipher_suites: Vec<CipherSuiteId>, // Available CipherSuites
     pub(crate) local_signature_schemes: Vec<SignatureHashAlgorithm>, // Available signature schemes
     pub(crate) extended_master_secret: ExtendedMasterSecretType, // Policy for the Extended Master Support extension
-    pub(crate) local_srtp_protection_profiles: Vec<SRTPProtectionProfile>, // Available SRTPProtectionProfiles, if empty no SRTP support
+    pub(crate) local_srtp_protection_profiles: Vec<SrtpProtectionProfile>, // Available SRTPProtectionProfiles, if empty no SRTP support
     pub(crate) server_name: String,
     pub(crate) client_auth: ClientAuthType, // If we are a client should we request a client certificate
     pub(crate) local_certificates: Vec<Certificate>,

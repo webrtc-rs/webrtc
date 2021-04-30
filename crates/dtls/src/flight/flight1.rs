@@ -146,7 +146,7 @@ impl Flight for Flight1 {
         }
 
         if !cfg.local_srtp_protection_profiles.is_empty() {
-            extensions.push(Extension::UseSRTP(ExtensionUseSRTP {
+            extensions.push(Extension::UseSrtp(ExtensionUseSrtp {
                 protection_profiles: cfg.local_srtp_protection_profiles.clone(),
             }));
         }

@@ -2,7 +2,7 @@ use super::cipher_suite::*;
 use super::conn::*;
 use super::curve::named_curve::*;
 use super::errors::*;
-use super::extension::extension_use_srtp::SRTPProtectionProfile;
+use super::extension::extension_use_srtp::SrtpProtectionProfile;
 use super::handshake::handshake_random::*;
 use super::prf::*;
 
@@ -25,7 +25,7 @@ pub(crate) struct State {
     pub(crate) master_secret: Vec<u8>,
     pub(crate) cipher_suite: Arc<Mutex<Option<Box<dyn CipherSuite + Send + Sync>>>>, // nil if a cipher_suite hasn't been chosen
 
-    pub(crate) srtp_protection_profile: SRTPProtectionProfile, // Negotiated srtp_protection_profile
+    pub(crate) srtp_protection_profile: SrtpProtectionProfile, // Negotiated srtp_protection_profile
     pub(crate) peer_certificates: Vec<Vec<u8>>,
 
     pub(crate) is_client: bool,
@@ -72,7 +72,7 @@ impl Default for State {
             master_secret: vec![],
             cipher_suite: Arc::new(Mutex::new(None)), // nil if a cipher_suite hasn't been chosen
 
-            srtp_protection_profile: SRTPProtectionProfile::Unsupported, // Negotiated srtp_protection_profile
+            srtp_protection_profile: SrtpProtectionProfile::Unsupported, // Negotiated srtp_protection_profile
             peer_certificates: vec![],
 
             is_client: false,

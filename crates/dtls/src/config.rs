@@ -1,7 +1,7 @@
 use crate::cipher_suite::*;
 use crate::crypto::*;
 use crate::errors::*;
-use crate::extension::extension_use_srtp::SRTPProtectionProfile;
+use crate::extension::extension_use_srtp::SrtpProtectionProfile;
 use crate::handshaker::VerifyPeerCertificateFn;
 use crate::signature_hash_algorithm::SignatureScheme;
 
@@ -22,7 +22,7 @@ pub struct Config {
 
     // cipher_suites is a list of supported cipher suites.
     // If cipher_suites is nil, a default list is used
-    pub(crate) cipher_suites: Vec<CipherSuiteID>,
+    pub(crate) cipher_suites: Vec<CipherSuiteId>,
 
     // SignatureSchemes contains the signature and hash schemes that the peer requests to verify.
     pub(crate) signature_schemes: Vec<SignatureScheme>,
@@ -30,7 +30,7 @@ pub struct Config {
     // srtp_protection_profiles are the supported protection profiles
     // Clients will send this via use_srtp and assert that the server properly responds
     // Servers will assert that clients send one of these profiles and will respond as needed
-    pub(crate) srtp_protection_profiles: Vec<SRTPProtectionProfile>,
+    pub(crate) srtp_protection_profiles: Vec<SrtpProtectionProfile>,
 
     // client_auth determines the server's policy for
     // TLS Client Authentication. The default is NoClientCert.
@@ -46,7 +46,7 @@ pub struct Config {
 
     // psk sets the pre-shared key used by this DTLS connection
     // If psk is non-nil only psk cipher_suites will be used
-    pub(crate) psk: Option<PSKCallback>,
+    pub(crate) psk: Option<PskCallback>,
     pub(crate) psk_identity_hint: Option<Vec<u8>>,
 
     // insecure_skip_verify controls whether a client verifies the
@@ -140,7 +140,7 @@ pub(crate) const DEFAULT_MTU: usize = 1200; // bytes
 
 // PSKCallback is called once we have the remote's psk_identity_hint.
 // If the remote provided none it will be nil
-pub(crate) type PSKCallback = fn(&[u8]) -> Result<Vec<u8>, Error>;
+pub(crate) type PskCallback = fn(&[u8]) -> Result<Vec<u8>, Error>;
 
 // ClientAuthType declares the policy the server will follow for
 // TLS Client Authentication.
@@ -193,8 +193,8 @@ pub(crate) fn validate_config(is_client: bool, config: &Config) -> Result<(), Er
 
     for cert in &config.certificates {
         match cert.private_key.kind {
-            CryptoPrivateKeyKind::ED25519(_) => {}
-            CryptoPrivateKeyKind::ECDSA256(_) => {}
+            CryptoPrivateKeyKind::Ed25519(_) => {}
+            CryptoPrivateKeyKind::Ecdsa256(_) => {}
             _ => return Err(ERR_INVALID_PRIVATE_KEY.clone()),
         }
     }

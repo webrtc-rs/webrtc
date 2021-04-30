@@ -231,7 +231,7 @@ impl HandshakeCache {
         merged.extend_from_slice(additional);
 
         let mut hasher = match hf {
-            CipherSuiteHash::SHA256 => Sha256::new(),
+            CipherSuiteHash::Sha256 => Sha256::new(),
         };
         hasher.update(&merged);
         let result = hasher.finalize();

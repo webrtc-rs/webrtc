@@ -7,22 +7,22 @@ use super::*;
 // https://tools.ietf.org/html/rfc5764#section-4.1.2
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub enum SRTPProtectionProfile {
-    SRTP_AES128_CM_HMAC_SHA1_80 = 0x0001,
-    SRTP_AES128_CM_HMAC_SHA1_32 = 0x0002,
-    SRTP_AEAD_AES_128_GCM = 0x0007,
-    SRTP_AEAD_AES_256_GCM = 0x0008,
+pub enum SrtpProtectionProfile {
+    Srtp_Aes128_Cm_Hmac_Sha1_80 = 0x0001,
+    Srtp_Aes128_Cm_Hmac_Sha1_32 = 0x0002,
+    Srtp_Aead_Aes_128_Gcm = 0x0007,
+    Srtp_Aead_Aes_256_Gcm = 0x0008,
     Unsupported,
 }
 
-impl From<u16> for SRTPProtectionProfile {
+impl From<u16> for SrtpProtectionProfile {
     fn from(val: u16) -> Self {
         match val {
-            0x0001 => SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_80,
-            0x0002 => SRTPProtectionProfile::SRTP_AES128_CM_HMAC_SHA1_32,
-            0x0007 => SRTPProtectionProfile::SRTP_AEAD_AES_128_GCM,
-            0x0008 => SRTPProtectionProfile::SRTP_AEAD_AES_256_GCM,
-            _ => SRTPProtectionProfile::Unsupported,
+            0x0001 => SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_80,
+            0x0002 => SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_32,
+            0x0007 => SrtpProtectionProfile::Srtp_Aead_Aes_128_Gcm,
+            0x0008 => SrtpProtectionProfile::Srtp_Aead_Aes_256_Gcm,
+            _ => SrtpProtectionProfile::Unsupported,
         }
     }
 }
@@ -32,13 +32,13 @@ const EXTENSION_USE_SRTPHEADER_SIZE: usize = 6;
 // https://tools.ietf.org/html/rfc8422
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, PartialEq)]
-pub struct ExtensionUseSRTP {
-    pub(crate) protection_profiles: Vec<SRTPProtectionProfile>,
+pub struct ExtensionUseSrtp {
+    pub(crate) protection_profiles: Vec<SrtpProtectionProfile>,
 }
 
-impl ExtensionUseSRTP {
+impl ExtensionUseSrtp {
     pub fn extension_value(&self) -> ExtensionValue {
-        ExtensionValue::UseSRTP
+        ExtensionValue::UseSrtp
     }
 
     pub fn size(&self) -> usize {
@@ -73,7 +73,7 @@ impl ExtensionUseSRTP {
         /* MKI Length */
         let _ = reader.read_u8()?;
 
-        Ok(ExtensionUseSRTP {
+        Ok(ExtensionUseSrtp {
             protection_profiles,
         })
     }

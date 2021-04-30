@@ -117,7 +117,7 @@ impl Conn {
     ) -> Result<Self, Error> {
         validate_config(is_client, &config)?;
 
-        let local_cipher_suites: Vec<CipherSuiteID> = parse_cipher_suites(
+        let local_cipher_suites: Vec<CipherSuiteId> = parse_cipher_suites(
             &config.cipher_suites,
             config.psk.is_none(),
             config.psk.is_some(),
@@ -440,7 +440,7 @@ impl Conn {
     }
 
     // selected_srtpprotection_profile returns the selected SRTPProtectionProfile
-    pub fn selected_srtpprotection_profile(&self) -> SRTPProtectionProfile {
+    pub fn selected_srtpprotection_profile(&self) -> SrtpProtectionProfile {
         //c.lock.RLock()
         //defer c.lock.RUnlock()
 

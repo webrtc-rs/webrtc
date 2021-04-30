@@ -502,8 +502,8 @@ impl Flight for Flight4 {
             ));
         }
 
-        if state.srtp_protection_profile != SRTPProtectionProfile::Unsupported {
-            extensions.push(Extension::UseSRTP(ExtensionUseSRTP {
+        if state.srtp_protection_profile != SrtpProtectionProfile::Unsupported {
+            extensions.push(Extension::UseSrtp(ExtensionUseSrtp {
                 protection_profiles: vec![state.srtp_protection_profile],
             }));
         }
@@ -532,7 +532,7 @@ impl Flight for Flight4 {
                             if let Some(cipher_suite) = &*cipher_suite {
                                 cipher_suite.id()
                             } else {
-                                CipherSuiteID::Unsupported
+                                CipherSuiteId::Unsupported
                             }
                         },
                         compression_method: default_compression_methods().ids[0],
@@ -651,8 +651,8 @@ impl Flight for Flight4 {
                         Content::Handshake(Handshake::new(HandshakeMessage::CertificateRequest(
                             HandshakeMessageCertificateRequest {
                                 certificate_types: vec![
-                                    ClientCertificateType::RSASign,
-                                    ClientCertificateType::ECDSASign,
+                                    ClientCertificateType::RsaSign,
+                                    ClientCertificateType::EcdsaSign,
                                 ],
                                 signature_hash_algorithms: cfg.local_signature_schemes.clone(),
                             },

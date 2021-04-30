@@ -3,29 +3,29 @@ use crate::crypto::crypto_gcm::*;
 use crate::prf::*;
 
 #[derive(Clone)]
-pub struct CipherSuiteTLSPskWithAes128GcmSha256 {
+pub struct CipherSuiteTlsPskWithAes128GcmSha256 {
     gcm: Option<CryptoGcm>,
 }
 
-impl CipherSuiteTLSPskWithAes128GcmSha256 {
+impl CipherSuiteTlsPskWithAes128GcmSha256 {
     const PRF_MAC_LEN: usize = 0;
     const PRF_KEY_LEN: usize = 16;
     const PRF_IV_LEN: usize = 4;
 }
 
-impl Default for CipherSuiteTLSPskWithAes128GcmSha256 {
+impl Default for CipherSuiteTlsPskWithAes128GcmSha256 {
     fn default() -> Self {
-        CipherSuiteTLSPskWithAes128GcmSha256 { gcm: None }
+        CipherSuiteTlsPskWithAes128GcmSha256 { gcm: None }
     }
 }
 
-impl CipherSuite for CipherSuiteTLSPskWithAes128GcmSha256 {
+impl CipherSuite for CipherSuiteTlsPskWithAes128GcmSha256 {
     fn to_string(&self) -> String {
         "TLS_PSK_WITH_AES_128_GCM_SHA256".to_owned()
     }
 
-    fn id(&self) -> CipherSuiteID {
-        CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256
+    fn id(&self) -> CipherSuiteId {
+        CipherSuiteId::Tls_Psk_With_Aes_128_Gcm_Sha256
     }
 
     fn certificate_type(&self) -> ClientCertificateType {
@@ -33,7 +33,7 @@ impl CipherSuite for CipherSuiteTLSPskWithAes128GcmSha256 {
     }
 
     fn hash_func(&self) -> CipherSuiteHash {
-        CipherSuiteHash::SHA256
+        CipherSuiteHash::Sha256
     }
 
     fn is_psk(&self) -> bool {
@@ -55,9 +55,9 @@ impl CipherSuite for CipherSuiteTLSPskWithAes128GcmSha256 {
             master_secret,
             client_random,
             server_random,
-            CipherSuiteTLSPskWithAes128GcmSha256::PRF_MAC_LEN,
-            CipherSuiteTLSPskWithAes128GcmSha256::PRF_KEY_LEN,
-            CipherSuiteTLSPskWithAes128GcmSha256::PRF_IV_LEN,
+            CipherSuiteTlsPskWithAes128GcmSha256::PRF_MAC_LEN,
+            CipherSuiteTlsPskWithAes128GcmSha256::PRF_KEY_LEN,
+            CipherSuiteTlsPskWithAes128GcmSha256::PRF_IV_LEN,
             self.hash_func(),
         )?;
 

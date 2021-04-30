@@ -13,13 +13,13 @@ use util::Error;
 // Supported hash hash algorithms
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum HashAlgorithm {
-    MD2 = 0,  // Blacklisted
-    MD5 = 1,  // Blacklisted
-    SHA1 = 2, // Blacklisted
-    SHA224 = 3,
-    SHA256 = 4,
-    SHA384 = 5,
-    SHA512 = 6,
+    Md2 = 0,  // Blacklisted
+    Md5 = 1,  // Blacklisted
+    Sha1 = 2, // Blacklisted
+    Sha224 = 3,
+    Sha256 = 4,
+    Sha384 = 5,
+    Sha512 = 6,
     Ed25519 = 8,
     Unsupported,
 }
@@ -27,13 +27,13 @@ pub enum HashAlgorithm {
 impl From<u8> for HashAlgorithm {
     fn from(val: u8) -> Self {
         match val {
-            0 => HashAlgorithm::MD2,
-            1 => HashAlgorithm::MD5,
-            2 => HashAlgorithm::SHA1,
-            3 => HashAlgorithm::SHA224,
-            4 => HashAlgorithm::SHA256,
-            5 => HashAlgorithm::SHA384,
-            6 => HashAlgorithm::SHA512,
+            0 => HashAlgorithm::Md2,
+            1 => HashAlgorithm::Md5,
+            2 => HashAlgorithm::Sha1,
+            3 => HashAlgorithm::Sha224,
+            4 => HashAlgorithm::Sha256,
+            5 => HashAlgorithm::Sha384,
+            6 => HashAlgorithm::Sha512,
             8 => HashAlgorithm::Ed25519,
             _ => HashAlgorithm::Unsupported,
         }
@@ -43,13 +43,13 @@ impl From<u8> for HashAlgorithm {
 impl fmt::Display for HashAlgorithm {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            HashAlgorithm::MD2 => write!(f, "md2"),
-            HashAlgorithm::MD5 => write!(f, "md5"), // [RFC3279]
-            HashAlgorithm::SHA1 => write!(f, "sha-1"), // [RFC3279]
-            HashAlgorithm::SHA224 => write!(f, "sha-224"), // [RFC4055]
-            HashAlgorithm::SHA256 => write!(f, "sha-256"), // [RFC4055]
-            HashAlgorithm::SHA384 => write!(f, "sha-384"), // [RFC4055]
-            HashAlgorithm::SHA512 => write!(f, "sha-512"), // [RFC4055]
+            HashAlgorithm::Md2 => write!(f, "md2"),
+            HashAlgorithm::Md5 => write!(f, "md5"), // [RFC3279]
+            HashAlgorithm::Sha1 => write!(f, "sha-1"), // [RFC3279]
+            HashAlgorithm::Sha224 => write!(f, "sha-224"), // [RFC4055]
+            HashAlgorithm::Sha256 => write!(f, "sha-256"), // [RFC4055]
+            HashAlgorithm::Sha384 => write!(f, "sha-384"), // [RFC4055]
+            HashAlgorithm::Sha512 => write!(f, "sha-512"), // [RFC4055]
             HashAlgorithm::Ed25519 => write!(f, "null"), // [RFC4055]
             _ => write!(f, "unknown or unsupported hash algorithm"),
         }
@@ -60,20 +60,20 @@ impl HashAlgorithm {
     pub(crate) fn insecure(&self) -> bool {
         matches!(
             *self,
-            HashAlgorithm::MD2 | HashAlgorithm::MD5 | HashAlgorithm::SHA1
+            HashAlgorithm::Md2 | HashAlgorithm::Md5 | HashAlgorithm::Sha1
         )
     }
 
     pub(crate) fn invalid(&self) -> bool {
-        matches!(*self, HashAlgorithm::MD2)
+        matches!(*self, HashAlgorithm::Md2)
     }
 }
 
 // https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-16
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum SignatureAlgorithm {
-    RSA = 1,
-    ECDSA = 3,
+    Rsa = 1,
+    Ecdsa = 3,
     Ed25519 = 7,
     Unsupported,
 }
@@ -81,8 +81,8 @@ pub enum SignatureAlgorithm {
 impl From<u8> for SignatureAlgorithm {
     fn from(val: u8) -> Self {
         match val {
-            1 => SignatureAlgorithm::RSA,
-            3 => SignatureAlgorithm::ECDSA,
+            1 => SignatureAlgorithm::Rsa,
+            3 => SignatureAlgorithm::Ecdsa,
             7 => SignatureAlgorithm::Ed25519,
             _ => SignatureAlgorithm::Unsupported,
         }
@@ -99,9 +99,9 @@ impl SignatureHashAlgorithm {
     // is_compatible checks that given private key is compatible with the signature scheme.
     pub(crate) fn is_compatible(&self, private_key: &CryptoPrivateKey) -> bool {
         match &private_key.kind {
-            CryptoPrivateKeyKind::ED25519(_) => self.signature == SignatureAlgorithm::Ed25519,
-            CryptoPrivateKeyKind::ECDSA256(_) => self.signature == SignatureAlgorithm::ECDSA,
-            CryptoPrivateKeyKind::RSA256(_) => self.signature == SignatureAlgorithm::RSA,
+            CryptoPrivateKeyKind::Ed25519(_) => self.signature == SignatureAlgorithm::Ed25519,
+            CryptoPrivateKeyKind::Ecdsa256(_) => self.signature == SignatureAlgorithm::Ecdsa,
+            CryptoPrivateKeyKind::Rsa256(_) => self.signature == SignatureAlgorithm::Rsa,
         }
     }
 }
@@ -109,28 +109,28 @@ impl SignatureHashAlgorithm {
 pub(crate) fn default_signature_schemes() -> Vec<SignatureHashAlgorithm> {
     vec![
         SignatureHashAlgorithm {
-            hash: HashAlgorithm::SHA256,
-            signature: SignatureAlgorithm::ECDSA,
+            hash: HashAlgorithm::Sha256,
+            signature: SignatureAlgorithm::Ecdsa,
         },
         SignatureHashAlgorithm {
-            hash: HashAlgorithm::SHA384,
-            signature: SignatureAlgorithm::ECDSA,
+            hash: HashAlgorithm::Sha384,
+            signature: SignatureAlgorithm::Ecdsa,
         },
         SignatureHashAlgorithm {
-            hash: HashAlgorithm::SHA512,
-            signature: SignatureAlgorithm::ECDSA,
+            hash: HashAlgorithm::Sha512,
+            signature: SignatureAlgorithm::Ecdsa,
         },
         SignatureHashAlgorithm {
-            hash: HashAlgorithm::SHA256,
-            signature: SignatureAlgorithm::RSA,
+            hash: HashAlgorithm::Sha256,
+            signature: SignatureAlgorithm::Rsa,
         },
         SignatureHashAlgorithm {
-            hash: HashAlgorithm::SHA384,
-            signature: SignatureAlgorithm::RSA,
+            hash: HashAlgorithm::Sha384,
+            signature: SignatureAlgorithm::Rsa,
         },
         SignatureHashAlgorithm {
-            hash: HashAlgorithm::SHA512,
-            signature: SignatureAlgorithm::RSA,
+            hash: HashAlgorithm::Sha512,
+            signature: SignatureAlgorithm::Rsa,
         },
         SignatureHashAlgorithm {
             hash: HashAlgorithm::Ed25519,
@@ -158,26 +158,26 @@ pub(crate) fn select_signature_scheme(
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub(crate) enum SignatureScheme {
     // RSASSA-PKCS1-v1_5 algorithms.
-    PKCS1WithSHA256 = 0x0401,
-    PKCS1WithSHA384 = 0x0501,
-    PKCS1WithSHA512 = 0x0601,
+    Pkcs1WithSha256 = 0x0401,
+    Pkcs1WithSha384 = 0x0501,
+    Pkcs1WithSha512 = 0x0601,
 
     // RSASSA-PSS algorithms with public key OID rsaEncryption.
-    PSSWithSHA256 = 0x0804,
-    PSSWithSHA384 = 0x0805,
-    PSSWithSHA512 = 0x0806,
+    PssWithSha256 = 0x0804,
+    PssWithSha384 = 0x0805,
+    PssWithSha512 = 0x0806,
 
     // ECDSA algorithms. Only constrained to a specific curve in TLS 1.3.
-    ECDSAWithP256AndSHA256 = 0x0403,
-    ECDSAWithP384AndSHA384 = 0x0503,
-    ECDSAWithP521AndSHA512 = 0x0603,
+    EcdsaWithP256AndSha256 = 0x0403,
+    EcdsaWithP384AndSha384 = 0x0503,
+    EcdsaWithP521AndSha512 = 0x0603,
 
     // EdDSA algorithms.
     Ed25519 = 0x0807,
 
     // Legacy signature and hash algorithms for TLS 1.2.
-    PKCS1WithSHA1 = 0x0201,
-    ECDSAWithSHA1 = 0x0203,
+    Pkcs1WithSha1 = 0x0201,
+    EcdsaWithSha1 = 0x0203,
 }
 
 // parse_signature_schemes translates []tls.SignatureScheme to []signatureHashAlgorithm.

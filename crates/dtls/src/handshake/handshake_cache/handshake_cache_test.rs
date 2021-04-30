@@ -649,7 +649,7 @@ async fn test_handshake_cache_session_hash() -> Result<(), Error> {
                 .await;
         }
 
-        let verify_data = h.session_hash(CipherSuiteHash::SHA256, 0, &[]).await?;
+        let verify_data = h.session_hash(CipherSuiteHash::Sha256, 0, &[]).await?;
 
         assert_eq!(
             verify_data, expected,

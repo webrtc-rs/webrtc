@@ -26,7 +26,7 @@ pub struct HandshakeMessageClientHello {
     pub(crate) random: HandshakeRandom,
     pub(crate) cookie: Vec<u8>,
 
-    pub(crate) cipher_suites: Vec<CipherSuiteID>,
+    pub(crate) cipher_suites: Vec<CipherSuiteId>,
     pub(crate) compression_methods: CompressionMethods,
     pub(crate) extensions: Vec<Extension>,
 }
@@ -152,7 +152,7 @@ impl HandshakeMessageClientHello {
         let cipher_suites_len = reader.read_u16::<BigEndian>()? as usize / 2;
         let mut cipher_suites = vec![];
         for _ in 0..cipher_suites_len {
-            let id: CipherSuiteID = reader.read_u16::<BigEndian>()?.into();
+            let id: CipherSuiteId = reader.read_u16::<BigEndian>()?.into();
             //let cipher_suite = cipher_suite_for_id(id)?;
             cipher_suites.push(id);
         }

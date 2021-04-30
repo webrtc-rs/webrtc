@@ -11,16 +11,16 @@ fn test_extension_supported_signature_algorithms() -> Result<(), Error> {
     let parsed_extension_supported_signature_algorithms = ExtensionSupportedSignatureAlgorithms {
         signature_hash_algorithms: vec![
             SignatureHashAlgorithm {
-                hash: HashAlgorithm::SHA256,
-                signature: SignatureAlgorithm::ECDSA,
+                hash: HashAlgorithm::Sha256,
+                signature: SignatureAlgorithm::Ecdsa,
             },
             SignatureHashAlgorithm {
-                hash: HashAlgorithm::SHA384,
-                signature: SignatureAlgorithm::ECDSA,
+                hash: HashAlgorithm::Sha384,
+                signature: SignatureAlgorithm::Ecdsa,
             },
             SignatureHashAlgorithm {
-                hash: HashAlgorithm::SHA512,
-                signature: SignatureAlgorithm::ECDSA,
+                hash: HashAlgorithm::Sha512,
+                signature: SignatureAlgorithm::Ecdsa,
             },
         ],
     };

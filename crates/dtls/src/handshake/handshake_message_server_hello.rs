@@ -25,7 +25,7 @@ pub struct HandshakeMessageServerHello {
     pub(crate) version: ProtocolVersion,
     pub(crate) random: HandshakeRandom,
 
-    pub(crate) cipher_suite: CipherSuiteID,
+    pub(crate) cipher_suite: CipherSuiteId,
     pub(crate) compression_method: CompressionMethodId,
     pub(crate) extensions: Vec<Extension>,
 }
@@ -109,7 +109,7 @@ impl HandshakeMessageServerHello {
         // Session ID
         reader.read_u8()?;
 
-        let cipher_suite: CipherSuiteID = reader.read_u16::<BigEndian>()?.into();
+        let cipher_suite: CipherSuiteId = reader.read_u16::<BigEndian>()?.into();
 
         let compression_method = reader.read_u8()?.into();
         let mut extensions = vec![];

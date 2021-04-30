@@ -23,8 +23,8 @@ fn test_handshake_message_server_key_exchange() -> Result<(), Error> {
         elliptic_curve_type: EllipticCurveType::NamedCurve,
         named_curve: NamedCurve::X25519,
         public_key: raw_server_key_exchange[4..69].to_vec(),
-        hash_algorithm: HashAlgorithm::SHA1,
-        signature_algorithm: SignatureAlgorithm::ECDSA,
+        hash_algorithm: HashAlgorithm::Sha1,
+        signature_algorithm: SignatureAlgorithm::Ecdsa,
         signature: raw_server_key_exchange[73..144].to_vec(),
     };
 

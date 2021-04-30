@@ -28,50 +28,50 @@ use cipher_suite_tls_psk_with_aes_128_gcm_sha256::*;
 // Supported Cipher Suites
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub enum CipherSuiteID {
+pub enum CipherSuiteId {
     // AES-128-CCM
-    TLS_ECDHE_ECDSA_WITH_AES_128_CCM = 0xc0ac,
-    TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 = 0xc0ae,
+    Tls_Ecdhe_Ecdsa_With_Aes_128_Ccm = 0xc0ac,
+    Tls_Ecdhe_Ecdsa_With_Aes_128_Ccm_8 = 0xc0ae,
 
     // AES-128-GCM-SHA256
-    TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 = 0xc02b,
-    TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 = 0xc02f,
+    Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256 = 0xc02b,
+    Tls_Ecdhe_Rsa_With_Aes_128_Gcm_Sha256 = 0xc02f,
 
     // AES-256-CBC-SHA
-    TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA = 0xc00a,
-    TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA = 0xc014,
+    Tls_Ecdhe_Ecdsa_With_Aes_256_Cbc_Sha = 0xc00a,
+    Tls_Ecdhe_Rsa_With_Aes_256_Cbc_Sha = 0xc014,
 
-    TLS_PSK_WITH_AES_128_CCM = 0xc0a4,
-    TLS_PSK_WITH_AES_128_CCM_8 = 0xc0a8,
-    TLS_PSK_WITH_AES_128_GCM_SHA256 = 0x00a8,
+    Tls_Psk_With_Aes_128_Ccm = 0xc0a4,
+    Tls_Psk_With_Aes_128_Ccm_8 = 0xc0a8,
+    Tls_Psk_With_Aes_128_Gcm_Sha256 = 0x00a8,
 
     Unsupported,
 }
 
-impl fmt::Display for CipherSuiteID {
+impl fmt::Display for CipherSuiteId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM => {
+            CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Ccm => {
                 write!(f, "TLS_ECDHE_ECDSA_WITH_AES_128_CCM")
             }
-            CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 => {
+            CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Ccm_8 => {
                 write!(f, "TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8")
             }
-            CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 => {
+            CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256 => {
                 write!(f, "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256")
             }
-            CipherSuiteID::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 => {
+            CipherSuiteId::Tls_Ecdhe_Rsa_With_Aes_128_Gcm_Sha256 => {
                 write!(f, "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256")
             }
-            CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA => {
+            CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_256_Cbc_Sha => {
                 write!(f, "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA")
             }
-            CipherSuiteID::TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA => {
+            CipherSuiteId::Tls_Ecdhe_Rsa_With_Aes_256_Cbc_Sha => {
                 write!(f, "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA")
             }
-            CipherSuiteID::TLS_PSK_WITH_AES_128_CCM => write!(f, "TLS_PSK_WITH_AES_128_CCM"),
-            CipherSuiteID::TLS_PSK_WITH_AES_128_CCM_8 => write!(f, "TLS_PSK_WITH_AES_128_CCM_8"),
-            CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256 => {
+            CipherSuiteId::Tls_Psk_With_Aes_128_Ccm => write!(f, "TLS_PSK_WITH_AES_128_CCM"),
+            CipherSuiteId::Tls_Psk_With_Aes_128_Ccm_8 => write!(f, "TLS_PSK_WITH_AES_128_CCM_8"),
+            CipherSuiteId::Tls_Psk_With_Aes_128_Gcm_Sha256 => {
                 write!(f, "TLS_PSK_WITH_AES_128_GCM_SHA256")
             }
             _ => write!(f, "Unsupported CipherSuiteID"),
@@ -79,46 +79,46 @@ impl fmt::Display for CipherSuiteID {
     }
 }
 
-impl From<u16> for CipherSuiteID {
+impl From<u16> for CipherSuiteId {
     fn from(val: u16) -> Self {
         match val {
             // AES-128-CCM
-            0xc0ac => CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM,
-            0xc0ae => CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8,
+            0xc0ac => CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Ccm,
+            0xc0ae => CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Ccm_8,
 
             // AES-128-GCM-SHA256
-            0xc02b => CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-            0xc02f => CipherSuiteID::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+            0xc02b => CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256,
+            0xc02f => CipherSuiteId::Tls_Ecdhe_Rsa_With_Aes_128_Gcm_Sha256,
 
             // AES-256-CBC-SHA
-            0xc00a => CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-            0xc014 => CipherSuiteID::TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+            0xc00a => CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_256_Cbc_Sha,
+            0xc014 => CipherSuiteId::Tls_Ecdhe_Rsa_With_Aes_256_Cbc_Sha,
 
-            0xc0a4 => CipherSuiteID::TLS_PSK_WITH_AES_128_CCM,
-            0xc0a8 => CipherSuiteID::TLS_PSK_WITH_AES_128_CCM_8,
-            0x00a8 => CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256,
+            0xc0a4 => CipherSuiteId::Tls_Psk_With_Aes_128_Ccm,
+            0xc0a8 => CipherSuiteId::Tls_Psk_With_Aes_128_Ccm_8,
+            0x00a8 => CipherSuiteId::Tls_Psk_With_Aes_128_Gcm_Sha256,
 
-            _ => CipherSuiteID::Unsupported,
+            _ => CipherSuiteId::Unsupported,
         }
     }
 }
 
 #[derive(Copy, Clone, Debug)]
 pub enum CipherSuiteHash {
-    SHA256,
+    Sha256,
 }
 
 impl CipherSuiteHash {
     pub(crate) fn size(&self) -> usize {
         match *self {
-            CipherSuiteHash::SHA256 => 32,
+            CipherSuiteHash::Sha256 => 32,
         }
     }
 }
 
 pub trait CipherSuite {
     fn to_string(&self) -> String;
-    fn id(&self) -> CipherSuiteID;
+    fn id(&self) -> CipherSuiteId;
     fn certificate_type(&self) -> ClientCertificateType;
     fn hash_func(&self) -> CipherSuiteHash;
     fn is_psk(&self) -> bool;
@@ -140,34 +140,34 @@ pub trait CipherSuite {
 // Taken from https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
 // A cipher_suite is a specific combination of key agreement, cipher and MAC
 // function.
-pub fn cipher_suite_for_id(id: CipherSuiteID) -> Result<Box<dyn CipherSuite + Send + Sync>, Error> {
+pub fn cipher_suite_for_id(id: CipherSuiteId) -> Result<Box<dyn CipherSuite + Send + Sync>, Error> {
     match id {
-        CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM => {
+        CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Ccm => {
             Ok(Box::new(new_cipher_suite_tls_ecdhe_ecdsa_with_aes_128_ccm()))
         }
-        CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 => Ok(Box::new(
+        CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Ccm_8 => Ok(Box::new(
             new_cipher_suite_tls_ecdhe_ecdsa_with_aes_128_ccm8(),
         )),
-        CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 => {
+        CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256 => {
             Ok(Box::new(CipherSuiteAes128GcmSha256::new(false)))
         }
-        CipherSuiteID::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 => {
+        CipherSuiteId::Tls_Ecdhe_Rsa_With_Aes_128_Gcm_Sha256 => {
             Ok(Box::new(CipherSuiteAes128GcmSha256::new(true)))
         }
-        CipherSuiteID::TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA => {
+        CipherSuiteId::Tls_Ecdhe_Rsa_With_Aes_256_Cbc_Sha => {
             Ok(Box::new(CipherSuiteAes256CbcSha::new(true)))
         }
-        CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA => {
+        CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_256_Cbc_Sha => {
             Ok(Box::new(CipherSuiteAes256CbcSha::new(false)))
         }
-        CipherSuiteID::TLS_PSK_WITH_AES_128_CCM => {
+        CipherSuiteId::Tls_Psk_With_Aes_128_Ccm => {
             Ok(Box::new(new_cipher_suite_tls_psk_with_aes_128_ccm()))
         }
-        CipherSuiteID::TLS_PSK_WITH_AES_128_CCM_8 => {
+        CipherSuiteId::Tls_Psk_With_Aes_128_Ccm_8 => {
             Ok(Box::new(new_cipher_suite_tls_psk_with_aes_128_ccm8()))
         }
-        CipherSuiteID::TLS_PSK_WITH_AES_128_GCM_SHA256 => {
-            Ok(Box::new(CipherSuiteTLSPskWithAes128GcmSha256::default()))
+        CipherSuiteId::Tls_Psk_With_Aes_128_Gcm_Sha256 => {
+            Ok(Box::new(CipherSuiteTlsPskWithAes128GcmSha256::default()))
         }
         _ => Err(ERR_INVALID_CIPHER_SUITE.clone()),
     }
@@ -193,12 +193,12 @@ fn all_cipher_suites() -> Vec<Box<dyn CipherSuite + Send + Sync>> {
         Box::new(CipherSuiteAes256CbcSha::new(true)),
         Box::new(new_cipher_suite_tls_psk_with_aes_128_ccm()),
         Box::new(new_cipher_suite_tls_psk_with_aes_128_ccm8()),
-        Box::new(CipherSuiteTLSPskWithAes128GcmSha256::default()),
+        Box::new(CipherSuiteTlsPskWithAes128GcmSha256::default()),
     ]
 }
 
 fn cipher_suites_for_ids(
-    ids: &[CipherSuiteID],
+    ids: &[CipherSuiteId],
 ) -> Result<Vec<Box<dyn CipherSuite + Send + Sync>>, Error> {
     let mut cipher_suites = vec![];
     for id in ids {
@@ -208,7 +208,7 @@ fn cipher_suites_for_ids(
 }
 
 pub(crate) fn parse_cipher_suites(
-    user_selected_suites: &[CipherSuiteID],
+    user_selected_suites: &[CipherSuiteId],
     exclude_psk: bool,
     exclude_non_psk: bool,
 ) -> Result<Vec<Box<dyn CipherSuite + Send + Sync>>, Error> {

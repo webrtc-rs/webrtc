@@ -36,12 +36,12 @@ impl Certificate {
         let serialized_der = key_pair.serialize_der();
         let private_key = if key_pair.is_compatible(&rcgen::PKCS_ED25519) {
             CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::ED25519(Ed25519KeyPair::from_pkcs8(&serialized_der)?),
+                kind: CryptoPrivateKeyKind::Ed25519(Ed25519KeyPair::from_pkcs8(&serialized_der)?),
                 serialized_der,
             }
         } else if key_pair.is_compatible(&rcgen::PKCS_ECDSA_P256_SHA256) {
             CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::ECDSA256(EcdsaKeyPair::from_pkcs8(
+                kind: CryptoPrivateKeyKind::Ecdsa256(EcdsaKeyPair::from_pkcs8(
                     &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
                     &serialized_der,
                 )?),
@@ -49,7 +49,7 @@ impl Certificate {
             }
         } else if key_pair.is_compatible(&rcgen::PKCS_RSA_SHA256) {
             CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::RSA256(RsaKeyPair::from_pkcs8(&serialized_der)?),
+                kind: CryptoPrivateKeyKind::Rsa256(RsaKeyPair::from_pkcs8(&serialized_der)?),
                 serialized_der,
             }
         } else {
@@ -74,12 +74,12 @@ impl Certificate {
         let serialized_der = key_pair.serialize_der();
         let private_key = if key_pair.is_compatible(&rcgen::PKCS_ED25519) {
             CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::ED25519(Ed25519KeyPair::from_pkcs8(&serialized_der)?),
+                kind: CryptoPrivateKeyKind::Ed25519(Ed25519KeyPair::from_pkcs8(&serialized_der)?),
                 serialized_der,
             }
         } else if key_pair.is_compatible(&rcgen::PKCS_ECDSA_P256_SHA256) {
             CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::ECDSA256(EcdsaKeyPair::from_pkcs8(
+                kind: CryptoPrivateKeyKind::Ecdsa256(EcdsaKeyPair::from_pkcs8(
                     &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
                     &serialized_der,
                 )?),
@@ -87,7 +87,7 @@ impl Certificate {
             }
         } else if key_pair.is_compatible(&rcgen::PKCS_RSA_SHA256) {
             CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::RSA256(RsaKeyPair::from_pkcs8(&serialized_der)?),
+                kind: CryptoPrivateKeyKind::Rsa256(RsaKeyPair::from_pkcs8(&serialized_der)?),
                 serialized_der,
             }
         } else {
@@ -122,9 +122,9 @@ pub(crate) fn value_key_message(
 }
 
 pub(crate) enum CryptoPrivateKeyKind {
-    ED25519(Ed25519KeyPair),
-    ECDSA256(EcdsaKeyPair),
-    RSA256(RsaKeyPair),
+    Ed25519(Ed25519KeyPair),
+    Ecdsa256(EcdsaKeyPair),
+    Rsa256(RsaKeyPair),
 }
 
 pub struct CryptoPrivateKey {
@@ -135,14 +135,14 @@ pub struct CryptoPrivateKey {
 impl Clone for CryptoPrivateKey {
     fn clone(&self) -> Self {
         match self.kind {
-            CryptoPrivateKeyKind::ED25519(_) => CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::ED25519(
+            CryptoPrivateKeyKind::Ed25519(_) => CryptoPrivateKey {
+                kind: CryptoPrivateKeyKind::Ed25519(
                     Ed25519KeyPair::from_pkcs8(&self.serialized_der).unwrap(),
                 ),
                 serialized_der: self.serialized_der.clone(),
             },
-            CryptoPrivateKeyKind::ECDSA256(_) => CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::ECDSA256(
+            CryptoPrivateKeyKind::Ecdsa256(_) => CryptoPrivateKey {
+                kind: CryptoPrivateKeyKind::Ecdsa256(
                     EcdsaKeyPair::from_pkcs8(
                         &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
                         &self.serialized_der,
@@ -151,8 +151,8 @@ impl Clone for CryptoPrivateKey {
                 ),
                 serialized_der: self.serialized_der.clone(),
             },
-            CryptoPrivateKeyKind::RSA256(_) => CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::RSA256(
+            CryptoPrivateKeyKind::Rsa256(_) => CryptoPrivateKey {
+                kind: CryptoPrivateKeyKind::Rsa256(
                     RsaKeyPair::from_pkcs8(&self.serialized_der).unwrap(),
                 ),
                 serialized_der: self.serialized_der.clone(),
@@ -175,12 +175,12 @@ pub(crate) fn generate_key_signature(
 ) -> Result<Vec<u8>, Error> {
     let msg = value_key_message(client_random, server_random, public_key, named_curve);
     let signature = match &private_key.kind {
-        CryptoPrivateKeyKind::ED25519(kp) => kp.sign(&msg).as_ref().to_vec(),
-        CryptoPrivateKeyKind::ECDSA256(kp) => {
+        CryptoPrivateKeyKind::Ed25519(kp) => kp.sign(&msg).as_ref().to_vec(),
+        CryptoPrivateKeyKind::Ecdsa256(kp) => {
             let system_random = SystemRandom::new();
             kp.sign(&system_random, &msg)?.as_ref().to_vec()
         }
-        CryptoPrivateKeyKind::RSA256(kp) => {
+        CryptoPrivateKeyKind::Rsa256(kp) => {
             let system_random = SystemRandom::new();
             let mut signature = vec![0; kp.public_modulus_len()];
             kp.sign(
@@ -273,14 +273,14 @@ pub(crate) fn generate_certificate_verify(
     let hashed = h.finalize();
 
     let signature = match &private_key.kind {
-        CryptoPrivateKeyKind::ED25519(kp) => kp.sign(hashed.as_slice()).as_ref().to_vec(),
-        CryptoPrivateKeyKind::ECDSA256(kp) => {
+        CryptoPrivateKeyKind::Ed25519(kp) => kp.sign(hashed.as_slice()).as_ref().to_vec(),
+        CryptoPrivateKeyKind::Ecdsa256(kp) => {
             let system_random = SystemRandom::new();
             kp.sign(&system_random, hashed.as_slice())?
                 .as_ref()
                 .to_vec()
         }
-        CryptoPrivateKeyKind::RSA256(kp) => {
+        CryptoPrivateKeyKind::Rsa256(kp) => {
             let system_random = SystemRandom::new();
             let mut signature = vec![0; kp.public_modulus_len()];
             kp.sign(

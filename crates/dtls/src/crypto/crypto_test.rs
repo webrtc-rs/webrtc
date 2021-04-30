@@ -91,7 +91,7 @@ fn test_generate_key_signature() -> Result<(), Error> {
         &public_key,
         NamedCurve::X25519,
         &CryptoPrivateKey {
-            kind: CryptoPrivateKeyKind::RSA256(RsaKeyPair::from_der(&pem.contents)?),
+            kind: CryptoPrivateKeyKind::Rsa256(RsaKeyPair::from_der(&pem.contents)?),
             serialized_der: pem.contents.clone(),
         }, //hashAlgorithmSHA256,
     )?;

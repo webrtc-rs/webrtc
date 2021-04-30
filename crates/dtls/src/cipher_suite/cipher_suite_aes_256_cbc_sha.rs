@@ -27,24 +27,24 @@ impl CipherSuite for CipherSuiteAes256CbcSha {
         }
     }
 
-    fn id(&self) -> CipherSuiteID {
+    fn id(&self) -> CipherSuiteId {
         if self.rsa {
-            CipherSuiteID::TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA
+            CipherSuiteId::Tls_Ecdhe_Rsa_With_Aes_256_Cbc_Sha
         } else {
-            CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA
+            CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_256_Cbc_Sha
         }
     }
 
     fn certificate_type(&self) -> ClientCertificateType {
         if self.rsa {
-            ClientCertificateType::RSASign
+            ClientCertificateType::RsaSign
         } else {
-            ClientCertificateType::ECDSASign
+            ClientCertificateType::EcdsaSign
         }
     }
 
     fn hash_func(&self) -> CipherSuiteHash {
-        CipherSuiteHash::SHA256
+        CipherSuiteHash::Sha256
     }
 
     fn is_psk(&self) -> bool {

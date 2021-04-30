@@ -8,37 +8,37 @@ fn test_parse_signature_schemes() -> Result<(), Error> {
         (
             "Translate",
             vec![
-                SignatureScheme::ECDSAWithP256AndSHA256 as u16,
-                SignatureScheme::ECDSAWithP384AndSHA384 as u16,
-                SignatureScheme::ECDSAWithP521AndSHA512 as u16,
-                SignatureScheme::PKCS1WithSHA256 as u16,
-                SignatureScheme::PKCS1WithSHA384 as u16,
-                SignatureScheme::PKCS1WithSHA512 as u16,
+                SignatureScheme::EcdsaWithP256AndSha256 as u16,
+                SignatureScheme::EcdsaWithP384AndSha384 as u16,
+                SignatureScheme::EcdsaWithP521AndSha512 as u16,
+                SignatureScheme::Pkcs1WithSha256 as u16,
+                SignatureScheme::Pkcs1WithSha384 as u16,
+                SignatureScheme::Pkcs1WithSha512 as u16,
             ],
             vec![
                 SignatureHashAlgorithm {
-                    hash: HashAlgorithm::SHA256,
-                    signature: SignatureAlgorithm::ECDSA,
+                    hash: HashAlgorithm::Sha256,
+                    signature: SignatureAlgorithm::Ecdsa,
                 },
                 SignatureHashAlgorithm {
-                    hash: HashAlgorithm::SHA384,
-                    signature: SignatureAlgorithm::ECDSA,
+                    hash: HashAlgorithm::Sha384,
+                    signature: SignatureAlgorithm::Ecdsa,
                 },
                 SignatureHashAlgorithm {
-                    hash: HashAlgorithm::SHA512,
-                    signature: SignatureAlgorithm::ECDSA,
+                    hash: HashAlgorithm::Sha512,
+                    signature: SignatureAlgorithm::Ecdsa,
                 },
                 SignatureHashAlgorithm {
-                    hash: HashAlgorithm::SHA256,
-                    signature: SignatureAlgorithm::RSA,
+                    hash: HashAlgorithm::Sha256,
+                    signature: SignatureAlgorithm::Rsa,
                 },
                 SignatureHashAlgorithm {
-                    hash: HashAlgorithm::SHA384,
-                    signature: SignatureAlgorithm::RSA,
+                    hash: HashAlgorithm::Sha384,
+                    signature: SignatureAlgorithm::Rsa,
                 },
                 SignatureHashAlgorithm {
-                    hash: HashAlgorithm::SHA512,
-                    signature: SignatureAlgorithm::RSA,
+                    hash: HashAlgorithm::Sha512,
+                    signature: SignatureAlgorithm::Rsa,
                 },
             ],
             false,
@@ -47,7 +47,7 @@ fn test_parse_signature_schemes() -> Result<(), Error> {
         (
             "InvalidSignatureAlgorithm",
             vec![
-                SignatureScheme::ECDSAWithP256AndSHA256 as u16, // Valid
+                SignatureScheme::EcdsaWithP256AndSha256 as u16, // Valid
                 0x04FF, // Invalid: unknown signature with SHA-256
             ],
             vec![],
@@ -57,7 +57,7 @@ fn test_parse_signature_schemes() -> Result<(), Error> {
         (
             "InvalidHashAlgorithm",
             vec![
-                SignatureScheme::ECDSAWithP256AndSHA256 as u16, // Valid
+                SignatureScheme::EcdsaWithP256AndSha256 as u16, // Valid
                 0x0003,                                         // Invalid: ECDSA with MD2
             ],
             vec![],
@@ -67,12 +67,12 @@ fn test_parse_signature_schemes() -> Result<(), Error> {
         (
             "InsecureHashAlgorithmDenied",
             vec![
-                SignatureScheme::ECDSAWithP256AndSHA256 as u16, // Valid
-                SignatureScheme::ECDSAWithSHA1 as u16,          // Insecure
+                SignatureScheme::EcdsaWithP256AndSha256 as u16, // Valid
+                SignatureScheme::EcdsaWithSha1 as u16,          // Insecure
             ],
             vec![SignatureHashAlgorithm {
-                hash: HashAlgorithm::SHA256,
-                signature: SignatureAlgorithm::ECDSA,
+                hash: HashAlgorithm::Sha256,
+                signature: SignatureAlgorithm::Ecdsa,
             }],
             false,
             None,
@@ -80,17 +80,17 @@ fn test_parse_signature_schemes() -> Result<(), Error> {
         (
             "InsecureHashAlgorithmAllowed",
             vec![
-                SignatureScheme::ECDSAWithP256AndSHA256 as u16, // Valid
-                SignatureScheme::ECDSAWithSHA1 as u16,          // Insecure
+                SignatureScheme::EcdsaWithP256AndSha256 as u16, // Valid
+                SignatureScheme::EcdsaWithSha1 as u16,          // Insecure
             ],
             vec![
                 SignatureHashAlgorithm {
-                    hash: HashAlgorithm::SHA256,
-                    signature: SignatureAlgorithm::ECDSA,
+                    hash: HashAlgorithm::Sha256,
+                    signature: SignatureAlgorithm::Ecdsa,
                 },
                 SignatureHashAlgorithm {
-                    hash: HashAlgorithm::SHA1,
-                    signature: SignatureAlgorithm::ECDSA,
+                    hash: HashAlgorithm::Sha1,
+                    signature: SignatureAlgorithm::Ecdsa,
                 },
             ],
             true,
@@ -99,7 +99,7 @@ fn test_parse_signature_schemes() -> Result<(), Error> {
         (
             "OnlyInsecureHashAlgorithm",
             vec![
-                SignatureScheme::ECDSAWithSHA1 as u16, // Insecure
+                SignatureScheme::EcdsaWithSha1 as u16, // Insecure
             ],
             vec![],
             false,

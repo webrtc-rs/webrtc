@@ -27,7 +27,7 @@ pub enum ExtensionValue {
     SupportedEllipticCurves = 10,
     SupportedPointFormats = 11,
     SupportedSignatureAlgorithms = 13,
-    UseSRTP = 14,
+    UseSrtp = 14,
     UseExtendedMasterSecret = 23,
     Unsupported,
 }
@@ -39,7 +39,7 @@ impl From<u16> for ExtensionValue {
             10 => ExtensionValue::SupportedEllipticCurves,
             11 => ExtensionValue::SupportedPointFormats,
             13 => ExtensionValue::SupportedSignatureAlgorithms,
-            14 => ExtensionValue::UseSRTP,
+            14 => ExtensionValue::UseSrtp,
             23 => ExtensionValue::UseExtendedMasterSecret,
             _ => ExtensionValue::Unsupported,
         }
@@ -52,7 +52,7 @@ pub enum Extension {
     SupportedEllipticCurves(ExtensionSupportedEllipticCurves),
     SupportedPointFormats(ExtensionSupportedPointFormats),
     SupportedSignatureAlgorithms(ExtensionSupportedSignatureAlgorithms),
-    UseSRTP(ExtensionUseSRTP),
+    UseSrtp(ExtensionUseSrtp),
     UseExtendedMasterSecret(ExtensionUseExtendedMasterSecret),
 }
 
@@ -63,7 +63,7 @@ impl Extension {
             Extension::SupportedEllipticCurves(ext) => ext.extension_value(),
             Extension::SupportedPointFormats(ext) => ext.extension_value(),
             Extension::SupportedSignatureAlgorithms(ext) => ext.extension_value(),
-            Extension::UseSRTP(ext) => ext.extension_value(),
+            Extension::UseSrtp(ext) => ext.extension_value(),
             Extension::UseExtendedMasterSecret(ext) => ext.extension_value(),
         }
     }
@@ -76,7 +76,7 @@ impl Extension {
             Extension::SupportedEllipticCurves(ext) => ext.size(),
             Extension::SupportedPointFormats(ext) => ext.size(),
             Extension::SupportedSignatureAlgorithms(ext) => ext.size(),
-            Extension::UseSRTP(ext) => ext.size(),
+            Extension::UseSrtp(ext) => ext.size(),
             Extension::UseExtendedMasterSecret(ext) => ext.size(),
         };
 
@@ -90,7 +90,7 @@ impl Extension {
             Extension::SupportedEllipticCurves(ext) => ext.marshal(writer),
             Extension::SupportedPointFormats(ext) => ext.marshal(writer),
             Extension::SupportedSignatureAlgorithms(ext) => ext.marshal(writer),
-            Extension::UseSRTP(ext) => ext.marshal(writer),
+            Extension::UseSrtp(ext) => ext.marshal(writer),
             Extension::UseExtendedMasterSecret(ext) => ext.marshal(writer),
         }
     }
@@ -112,7 +112,7 @@ impl Extension {
                     ExtensionSupportedSignatureAlgorithms::unmarshal(reader)?,
                 ))
             }
-            ExtensionValue::UseSRTP => Ok(Extension::UseSRTP(ExtensionUseSRTP::unmarshal(reader)?)),
+            ExtensionValue::UseSrtp => Ok(Extension::UseSrtp(ExtensionUseSrtp::unmarshal(reader)?)),
             ExtensionValue::UseExtendedMasterSecret => Ok(Extension::UseExtendedMasterSecret(
                 ExtensionUseExtendedMasterSecret::unmarshal(reader)?,
             )),

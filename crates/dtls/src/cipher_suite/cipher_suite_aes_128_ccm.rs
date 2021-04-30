@@ -7,7 +7,7 @@ use crate::prf::*;
 pub struct CipherSuiteAes128Ccm {
     ccm: Option<CryptoCcm>,
     client_certificate_type: ClientCertificateType,
-    id: CipherSuiteID,
+    id: CipherSuiteId,
     psk: bool,
     crypto_ccm_tag_len: CryptoCcmTagLen,
 }
@@ -19,7 +19,7 @@ impl CipherSuiteAes128Ccm {
 
     pub fn new(
         client_certificate_type: ClientCertificateType,
-        id: CipherSuiteID,
+        id: CipherSuiteId,
         psk: bool,
         crypto_ccm_tag_len: CryptoCcmTagLen,
     ) -> Self {
@@ -38,7 +38,7 @@ impl CipherSuite for CipherSuiteAes128Ccm {
         format!("{}", self.id)
     }
 
-    fn id(&self) -> CipherSuiteID {
+    fn id(&self) -> CipherSuiteId {
         self.id
     }
 
@@ -47,7 +47,7 @@ impl CipherSuite for CipherSuiteAes128Ccm {
     }
 
     fn hash_func(&self) -> CipherSuiteHash {
-        CipherSuiteHash::SHA256
+        CipherSuiteHash::Sha256
     }
 
     fn is_psk(&self) -> bool {

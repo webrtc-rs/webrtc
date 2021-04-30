@@ -133,7 +133,7 @@ fn elliptic_curve_pre_master_secret(
 // https://tools.ietf.org/html/rfc4346w
 fn hmac_sha(h: CipherSuiteHash, key: &[u8], data: &[u8]) -> Result<Vec<u8>, Error> {
     let mut mac = match h {
-        CipherSuiteHash::SHA256 => HmacSha256::new_varkey(key)?,
+        CipherSuiteHash::Sha256 => HmacSha256::new_varkey(key)?,
     };
     mac.update(data);
     let result = mac.finalize();
@@ -242,7 +242,7 @@ pub(crate) fn prf_verify_data(
     h: CipherSuiteHash,
 ) -> Result<Vec<u8>, Error> {
     let mut hasher = match h {
-        CipherSuiteHash::SHA256 => Sha256::new(),
+        CipherSuiteHash::Sha256 => Sha256::new(),
     };
     hasher.update(handshake_bodies);
     let result = hasher.finalize();

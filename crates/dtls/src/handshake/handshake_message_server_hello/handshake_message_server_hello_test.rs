@@ -32,7 +32,7 @@ fn test_handshake_message_server_hello() -> Result<(), Error> {
                 0x7f, 0x7c, 0x78, 0xf1, 0x5f, 0x7e, 0x1c, 0xb7, 0xa1, 0x1e, 0xcf, 0x63, 0x84, 0x28,
             ],
         },
-        cipher_suite: CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+        cipher_suite: CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256,
         compression_method: CompressionMethodId::Null,
         extensions: vec![],
     };

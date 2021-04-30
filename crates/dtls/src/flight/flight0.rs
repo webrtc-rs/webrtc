@@ -107,7 +107,7 @@ impl Flight for Flight0 {
                         }
                         state.named_curve = e.elliptic_curves[0];
                     }
-                    Extension::UseSRTP(e) => {
+                    Extension::UseSrtp(e) => {
                         if let Ok(profile) = find_matching_srtp_profile(
                             &e.protection_profiles,
                             &cfg.local_srtp_protection_profiles,

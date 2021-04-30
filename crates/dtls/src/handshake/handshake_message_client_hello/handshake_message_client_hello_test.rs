@@ -41,8 +41,8 @@ fn test_handshake_message_client_hello() -> Result<(), Error> {
             0x32, 0x85, 0x76, 0x18, 0xde, 0xd8,
         ],
         cipher_suites: vec![
-            CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-            CipherSuiteID::TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+            CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256,
+            CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_256_Cbc_Sha,
             //Box::new(CipherSuiteTLSEcdheEcdsaWithAes128GcmSha256::default()),
             //Box::new(CipherSuiteTLSEcdheEcdsaWithAes256CbcSha::default()),
         ],
