@@ -3,19 +3,19 @@ use crate::message::name::*;
 
 // A cnameresource is a cname Resource record.
 #[derive(Default, Debug, Clone, PartialEq)]
-pub struct CNAMEResource {
+pub struct CnameResource {
     pub cname: Name,
 }
 
-impl fmt::Display for CNAMEResource {
+impl fmt::Display for CnameResource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "dnsmessage.cnameresource{{cname: {}}}", self.cname)
     }
 }
 
-impl ResourceBody for CNAMEResource {
-    fn real_type(&self) -> DNSType {
-        DNSType::CNAME
+impl ResourceBody for CnameResource {
+    fn real_type(&self) -> DnsType {
+        DnsType::Cname
     }
 
     // pack appends the wire format of the cnameresource to msg.

@@ -26,7 +26,7 @@ const MAX_MESSAGE_RECORDS: usize = 3;
 const RESPONSE_TTL: u32 = 120;
 
 // Conn represents a mDNS Server
-pub struct DNSConn {
+pub struct DnsConn {
     socket: Arc<UdpSocket>,
     dst_addr: SocketAddr,
 
@@ -47,7 +47,7 @@ struct QueryResult {
     addr: SocketAddr,
 }
 
-impl DNSConn {
+impl DnsConn {
     /// server establishes a mDNS connection over an existing connection
     pub fn server(addr: SocketAddr, config: Config) -> Result<Self, Error> {
         let socket = socket2::Socket::new(
@@ -105,7 +105,7 @@ impl DNSConn {
 
         let (close_server_send, close_server_rcv) = mpsc::channel(1);
 
-        let c = DNSConn {
+        let c = DnsConn {
             query_interval: if config.query_interval != Duration::from_secs(0) {
                 config.query_interval
             } else {
@@ -123,7 +123,7 @@ impl DNSConn {
         let socket = Arc::clone(&c.socket);
 
         tokio::spawn(async move {
-            DNSConn::start(
+            DnsConn::start(
                 close_server_rcv,
                 is_server_closed,
                 socket,
@@ -217,7 +217,7 @@ impl DNSConn {
             let mut msg = Message {
                 header: Header::default(),
                 questions: vec![Question {
-                    typ: DNSType::A,
+                    typ: DnsType::A,
                     class: DNSCLASS_INET,
                     name: packed_name,
                 }],
@@ -340,7 +340,7 @@ async fn run(
             }
         };
 
-        if a.typ != DNSType::A && a.typ != DNSType::AAAA {
+        if a.typ != DnsType::A && a.typ != DnsType::Aaaa {
             continue;
         }
 
@@ -376,7 +376,7 @@ async fn send_answer(
 
             answers: vec![Resource {
                 header: ResourceHeader {
-                    typ: DNSType::A,
+                    typ: DnsType::A,
                     class: DNSCLASS_INET,
                     name: Name::new(name)?,
                     ttl: RESPONSE_TTL,

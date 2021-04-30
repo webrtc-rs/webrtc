@@ -3,19 +3,19 @@ use crate::message::name::*;
 
 // An NSResource is an NS Resource record.
 #[derive(Default, Debug, Clone, PartialEq)]
-pub struct NSResource {
+pub struct NsResource {
     pub ns: Name,
 }
 
-impl fmt::Display for NSResource {
+impl fmt::Display for NsResource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "dnsmessage.NSResource{{NS: {}}}", self.ns)
     }
 }
 
-impl ResourceBody for NSResource {
-    fn real_type(&self) -> DNSType {
-        DNSType::NS
+impl ResourceBody for NsResource {
+    fn real_type(&self) -> DnsType {
+        DnsType::Ns
     }
 
     // pack appends the wire format of the NSResource to msg.

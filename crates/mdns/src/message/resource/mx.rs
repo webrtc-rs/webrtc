@@ -4,12 +4,12 @@ use crate::message::packer::*;
 
 // An MXResource is an mx Resource record.
 #[derive(Default, Debug, Clone, PartialEq)]
-pub struct MXResource {
+pub struct MxResource {
     pub pref: u16,
     pub mx: Name,
 }
 
-impl fmt::Display for MXResource {
+impl fmt::Display for MxResource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -19,9 +19,9 @@ impl fmt::Display for MXResource {
     }
 }
 
-impl ResourceBody for MXResource {
-    fn real_type(&self) -> DNSType {
-        DNSType::MX
+impl ResourceBody for MxResource {
+    fn real_type(&self) -> DnsType {
+        DnsType::Mx
     }
 
     // pack appends the wire format of the MXResource to msg.

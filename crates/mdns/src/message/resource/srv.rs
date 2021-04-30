@@ -4,14 +4,14 @@ use crate::message::packer::*;
 
 // An SRVResource is an SRV Resource record.
 #[derive(Default, Debug, Clone, PartialEq)]
-pub struct SRVResource {
+pub struct SrvResource {
     pub priority: u16,
     pub weight: u16,
     pub port: u16,
     pub target: Name, // Not compressed as per RFC 2782.
 }
 
-impl fmt::Display for SRVResource {
+impl fmt::Display for SrvResource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -21,9 +21,9 @@ impl fmt::Display for SRVResource {
     }
 }
 
-impl ResourceBody for SRVResource {
-    fn real_type(&self) -> DNSType {
-        DNSType::SRV
+impl ResourceBody for SrvResource {
+    fn real_type(&self) -> DnsType {
+        DnsType::Srv
     }
 
     // pack appends the wire format of the SRVResource to msg.

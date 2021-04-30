@@ -4,11 +4,11 @@ use crate::message::packer::*;
 
 // A TXTResource is a txt Resource record.
 #[derive(Default, Debug, Clone, PartialEq)]
-pub struct TXTResource {
+pub struct TxtResource {
     pub txt: Vec<String>,
 }
 
-impl fmt::Display for TXTResource {
+impl fmt::Display for TxtResource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.txt.is_empty() {
             write!(f, "dnsmessage.TXTResource{{txt: {{}}}}",)
@@ -18,9 +18,9 @@ impl fmt::Display for TXTResource {
     }
 }
 
-impl ResourceBody for TXTResource {
-    fn real_type(&self) -> DNSType {
-        DNSType::TXT
+impl ResourceBody for TxtResource {
+    fn real_type(&self) -> DnsType {
+        DnsType::Txt
     }
 
     // pack appends the wire format of the TXTResource to msg.

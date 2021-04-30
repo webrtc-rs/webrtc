@@ -3,19 +3,19 @@ use crate::message::name::*;
 
 // A PTRResource is a PTR Resource record.
 #[derive(Default, Debug, Clone, PartialEq)]
-pub struct PTRResource {
+pub struct PtrResource {
     pub ptr: Name,
 }
 
-impl fmt::Display for PTRResource {
+impl fmt::Display for PtrResource {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "dnsmessage.PTRResource{{PTR: {}}}", self.ptr)
     }
 }
 
-impl ResourceBody for PTRResource {
-    fn real_type(&self) -> DNSType {
-        DNSType::PTR
+impl ResourceBody for PtrResource {
+    fn real_type(&self) -> DnsType {
+        DnsType::Ptr
     }
 
     // pack appends the wire format of the PTRResource to msg.

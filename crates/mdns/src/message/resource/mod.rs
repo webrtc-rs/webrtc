@@ -91,8 +91,8 @@ impl Resource {
 
     pub(crate) fn skip(msg: &[u8], off: usize) -> Result<usize, Error> {
         let mut new_off = Name::skip(msg, off)?;
-        new_off = DNSType::skip(msg, new_off)?;
-        new_off = DNSClass::skip(msg, new_off)?;
+        new_off = DnsType::skip(msg, new_off)?;
+        new_off = DnsClass::skip(msg, new_off)?;
         new_off = skip_uint32(msg, new_off)?;
         let (length, mut new_off) = unpack_uint16(msg, new_off)?;
         new_off += length as usize;
@@ -113,11 +113,11 @@ pub struct ResourceHeader {
     // Type is the type of DNS resource record.
     //
     // This field will be set automatically during packing.
-    pub typ: DNSType,
+    pub typ: DnsType,
 
     // Class is the class of network to which this DNS resource record
     // pertains.
-    pub class: DNSClass,
+    pub class: DnsClass,
 
     // TTL is the length of time (measured in seconds) which this resource
     // record is valid for (time to live). All Resources in a set should
@@ -205,8 +205,8 @@ impl ResourceHeader {
         self.name = Name {
             data: ".".to_owned(),
         }; // RFC 6891 section 6.1.2
-        self.typ = DNSType::OPT;
-        self.class = DNSClass(udp_payload_len);
+        self.typ = DnsType::Opt;
+        self.class = DnsClass(udp_payload_len);
         self.ttl = (ext_rcode >> 4) << 24;
         if dnssec_ok {
             self.ttl |= EDNS0_DNSSEC_OK;
@@ -236,7 +236,7 @@ impl ResourceHeader {
 pub trait ResourceBody: fmt::Display + fmt::Debug {
     // real_type returns the actual type of the Resource. This is used to
     // fill in the header Type field.
-    fn real_type(&self) -> DNSType;
+    fn real_type(&self) -> DnsType;
 
     // pack packs a Resource except for its header.
     fn pack(
@@ -250,22 +250,22 @@ pub trait ResourceBody: fmt::Display + fmt::Debug {
 }
 
 pub fn unpack_resource_body(
-    typ: DNSType,
+    typ: DnsType,
     msg: &[u8],
     mut off: usize,
     length: usize,
 ) -> Result<(Box<dyn ResourceBody>, usize), Error> {
     let mut rb: Box<dyn ResourceBody> = match typ {
-        DNSType::A => Box::new(AResource::default()),
-        DNSType::NS => Box::new(NSResource::default()),
-        DNSType::CNAME => Box::new(CNAMEResource::default()),
-        DNSType::SOA => Box::new(SOAResource::default()),
-        DNSType::PTR => Box::new(PTRResource::default()),
-        DNSType::MX => Box::new(MXResource::default()),
-        DNSType::TXT => Box::new(TXTResource::default()),
-        DNSType::AAAA => Box::new(AAAAResource::default()),
-        DNSType::SRV => Box::new(SRVResource::default()),
-        DNSType::OPT => Box::new(OPTResource::default()),
+        DnsType::A => Box::new(AResource::default()),
+        DnsType::Ns => Box::new(NsResource::default()),
+        DnsType::Cname => Box::new(CnameResource::default()),
+        DnsType::Soa => Box::new(SoaResource::default()),
+        DnsType::Ptr => Box::new(PtrResource::default()),
+        DnsType::Mx => Box::new(MxResource::default()),
+        DnsType::Txt => Box::new(TxtResource::default()),
+        DnsType::Aaaa => Box::new(AaaaResource::default()),
+        DnsType::Srv => Box::new(SrvResource::default()),
+        DnsType::Opt => Box::new(OptResource::default()),
         _ => return Err(ERR_NIL_RESOURCE_BODY.to_owned()),
     };
 

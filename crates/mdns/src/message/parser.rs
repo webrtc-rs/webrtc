@@ -4,7 +4,7 @@ use crate::message::resource::{unpack_resource_body, Resource, ResourceBody, Res
 
 use crate::message::name::Name;
 use crate::message::question::Question;
-use crate::message::{DNSClass, DNSType};
+use crate::message::{DnsClass, DnsType};
 use util::Error;
 
 // A Parser allows incrementally parsing a DNS message.
@@ -109,9 +109,9 @@ impl<'a> Parser<'a> {
         self.check_advance(Section::Questions)?;
         let mut name = Name::new("")?;
         let mut off = name.unpack(self.msg, self.off)?;
-        let mut typ = DNSType::Unsupported;
+        let mut typ = DnsType::Unsupported;
         off = typ.unpack(self.msg, off)?;
-        let mut class = DNSClass::default();
+        let mut class = DnsClass::default();
         off = class.unpack(self.msg, off)?;
         self.off = off;
         self.index += 1;
@@ -145,8 +145,8 @@ impl<'a> Parser<'a> {
     pub fn skip_question(&mut self) -> Result<(), Error> {
         self.check_advance(Section::Questions)?;
         let mut off = Name::skip(self.msg, self.off)?;
-        off = DNSType::skip(self.msg, off)?;
-        off = DNSClass::skip(self.msg, off)?;
+        off = DnsType::skip(self.msg, off)?;
+        off = DnsClass::skip(self.msg, off)?;
         self.off = off;
         self.index += 1;
         Ok(())

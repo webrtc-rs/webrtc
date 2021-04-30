@@ -26,86 +26,86 @@ use util::Error;
 
 // A Type is a type of DNS request and response.
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub enum DNSType {
+pub enum DnsType {
     // ResourceHeader.Type and question.Type
     A = 1,
-    NS = 2,
-    CNAME = 5,
-    SOA = 6,
-    PTR = 12,
-    MX = 15,
-    TXT = 16,
-    AAAA = 28,
-    SRV = 33,
-    OPT = 41,
+    Ns = 2,
+    Cname = 5,
+    Soa = 6,
+    Ptr = 12,
+    Mx = 15,
+    Txt = 16,
+    Aaaa = 28,
+    Srv = 33,
+    Opt = 41,
 
     // question.Type
-    WKS = 11,
-    HINFO = 13,
-    MINFO = 14,
-    AXFR = 252,
-    ALL = 255,
+    Wks = 11,
+    Hinfo = 13,
+    Minfo = 14,
+    Axfr = 252,
+    All = 255,
 
     Unsupported = 0,
 }
 
-impl Default for DNSType {
+impl Default for DnsType {
     fn default() -> Self {
-        DNSType::Unsupported
+        DnsType::Unsupported
     }
 }
 
-impl From<u16> for DNSType {
+impl From<u16> for DnsType {
     fn from(v: u16) -> Self {
         match v {
-            1 => DNSType::A,
-            2 => DNSType::NS,
-            5 => DNSType::CNAME,
-            6 => DNSType::SOA,
-            12 => DNSType::PTR,
-            15 => DNSType::MX,
-            16 => DNSType::TXT,
-            28 => DNSType::AAAA,
-            33 => DNSType::SRV,
-            41 => DNSType::OPT,
+            1 => DnsType::A,
+            2 => DnsType::Ns,
+            5 => DnsType::Cname,
+            6 => DnsType::Soa,
+            12 => DnsType::Ptr,
+            15 => DnsType::Mx,
+            16 => DnsType::Txt,
+            28 => DnsType::Aaaa,
+            33 => DnsType::Srv,
+            41 => DnsType::Opt,
 
             // question.Type
-            11 => DNSType::WKS,
-            13 => DNSType::HINFO,
-            14 => DNSType::MINFO,
-            252 => DNSType::AXFR,
-            255 => DNSType::ALL,
+            11 => DnsType::Wks,
+            13 => DnsType::Hinfo,
+            14 => DnsType::Minfo,
+            252 => DnsType::Axfr,
+            255 => DnsType::All,
 
-            _ => DNSType::Unsupported,
+            _ => DnsType::Unsupported,
         }
     }
 }
 
-impl fmt::Display for DNSType {
+impl fmt::Display for DnsType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
-            DNSType::A => "A",
-            DNSType::NS => "NS",
-            DNSType::CNAME => "CNAME",
-            DNSType::SOA => "SOA",
-            DNSType::PTR => "PTR",
-            DNSType::MX => "MX",
-            DNSType::TXT => "TXT",
-            DNSType::AAAA => "AAAA",
-            DNSType::SRV => "SRV",
-            DNSType::OPT => "OPT",
-            DNSType::WKS => "WKS",
-            DNSType::HINFO => "HINFO",
-            DNSType::MINFO => "MINFO",
-            DNSType::AXFR => "AXFR",
-            DNSType::ALL => "ALL",
+            DnsType::A => "A",
+            DnsType::Ns => "NS",
+            DnsType::Cname => "CNAME",
+            DnsType::Soa => "SOA",
+            DnsType::Ptr => "PTR",
+            DnsType::Mx => "MX",
+            DnsType::Txt => "TXT",
+            DnsType::Aaaa => "AAAA",
+            DnsType::Srv => "SRV",
+            DnsType::Opt => "OPT",
+            DnsType::Wks => "WKS",
+            DnsType::Hinfo => "HINFO",
+            DnsType::Minfo => "MINFO",
+            DnsType::Axfr => "AXFR",
+            DnsType::All => "ALL",
             _ => "Unsupported",
         };
         write!(f, "{}", s)
     }
 }
 
-impl DNSType {
+impl DnsType {
     // pack_type appends the wire format of field to msg.
     pub(crate) fn pack(&self, msg: Vec<u8>) -> Vec<u8> {
         pack_uint16(msg, *self as u16)
@@ -113,7 +113,7 @@ impl DNSType {
 
     pub(crate) fn unpack(&mut self, msg: &[u8], off: usize) -> Result<usize, Error> {
         let (t, o) = unpack_uint16(msg, off)?;
-        *self = DNSType::from(t);
+        *self = DnsType::from(t);
         Ok(o)
     }
 
@@ -124,23 +124,23 @@ impl DNSType {
 
 // A Class is a type of network.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct DNSClass(pub u16);
+pub struct DnsClass(pub u16);
 
 // ResourceHeader.Class and question.Class
-pub const DNSCLASS_INET: DNSClass = DNSClass(1);
-pub const DNSCLASS_CSNET: DNSClass = DNSClass(2);
-pub const DNSCLASS_CHAOS: DNSClass = DNSClass(3);
-pub const DNSCLASS_HESIOD: DNSClass = DNSClass(4);
+pub const DNSCLASS_INET: DnsClass = DnsClass(1);
+pub const DNSCLASS_CSNET: DnsClass = DnsClass(2);
+pub const DNSCLASS_CHAOS: DnsClass = DnsClass(3);
+pub const DNSCLASS_HESIOD: DnsClass = DnsClass(4);
 // question.Class
-pub const DNSCLASS_ANY: DNSClass = DNSClass(255);
+pub const DNSCLASS_ANY: DnsClass = DnsClass(255);
 
-impl Default for DNSClass {
+impl Default for DnsClass {
     fn default() -> Self {
-        DNSClass(0)
+        DnsClass(0)
     }
 }
 
-impl fmt::Display for DNSClass {
+impl fmt::Display for DnsClass {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let other = format!("{}", self.0);
         let s = match *self {
@@ -155,7 +155,7 @@ impl fmt::Display for DNSClass {
     }
 }
 
-impl DNSClass {
+impl DnsClass {
     // pack_class appends the wire format of field to msg.
     pub(crate) fn pack(&self, msg: Vec<u8>) -> Vec<u8> {
         pack_uint16(msg, self.0)
@@ -163,7 +163,7 @@ impl DNSClass {
 
     pub(crate) fn unpack(&mut self, msg: &[u8], off: usize) -> Result<usize, Error> {
         let (c, o) = unpack_uint16(msg, off)?;
-        *self = DNSClass(c);
+        *self = DnsClass(c);
         Ok(o)
     }
 
