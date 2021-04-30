@@ -34,65 +34,26 @@
 
 #
 
-[webrtc-rs]: ./doc/webrtc.rs.png
-[webrtc-stack]: ./doc/webrtc_stack.png
-[check]: ./doc/check.png
-[uncheck]: ./doc/uncheck.png
-[util-badge]: https://img.shields.io/crates/v/webrtc-util.svg
-[util-url]: https://crates.io/crates/webrtc-util
-[sdp-badge]: https://img.shields.io/crates/v/sdp.svg
-[sdp-url]: https://crates.io/crates/sdp
-[rtp-badge]: https://img.shields.io/crates/v/rtp.svg
-[rtp-url]: https://crates.io/crates/rtp
-[rtcp-badge]: https://img.shields.io/crates/v/rtcp.svg
-[rtcp-url]: https://crates.io/crates/rtcp
-[srtp-badge]: https://img.shields.io/crates/v/webrtc-srtp.svg
-[srtp-url]: https://crates.io/crates/webrtc-srtp
-[dtls-badge]: https://img.shields.io/crates/v/webrtc-dtls.svg
-[dtls-url]: https://crates.io/crates/webrtc-dtls
-[stun-badge]: https://img.shields.io/crates/v/stun.svg
-[stun-url]: https://crates.io/crates/stun
-[mdns-badge]: https://img.shields.io/crates/v/webrtc-mdns.svg
-[mdns-url]: https://crates.io/crates/webrtc-mdns
-[ice-badge]: https://img.shields.io/crates/v/webrtc-ice.svg
-[ice-url]: https://crates.io/crates/webrtc-ice
-[turn-badge]: https://img.shields.io/crates/v/turn.svg
-[turn-url]: https://crates.io/crates/turn
-[sctp-badge]: https://img.shields.io/crates/v/webrtc-sctp.svg
-[sctp-url]: https://crates.io/crates/webrtc-sctp
-[sip-badge]: https://img.shields.io/crates/v/webrtc-sip.svg
-[sip-url]: https://crates.io/crates/webrtc-sip
-[pc-badge]: https://img.shields.io/crates/v/webrtc-pc.svg
-[pc-url]: https://crates.io/crates/webrtc-pc
-[data-badge]: https://img.shields.io/crates/v/webrtc-data.svg
-[data-url]: https://crates.io/crates/webrtc-data
-[media-badge]: https://img.shields.io/crates/v/webrtc-media.svg
-[media-url]: https://crates.io/crates/webrtc-media
-[rtc-badge]: https://img.shields.io/crates/v/rtc.svg
-[rtc-url]: https://crates.io/crates/rtc
-
 <p align="center">
-
-![uncheck][uncheck]RTC[![rtc][rtc-badge]][rtc-url]
-![uncheck][uncheck]Media[![media][media-badge]][media-url]
-![uncheck][uncheck]PeerConnection[![pc][pc-badge]][pc-url]
-![uncheck][uncheck]DataChannel[![data][data-badge]][data-url]
-
-![check][check]RTP[![rtp][rtp-badge]][rtp-url] 
-![check][check]RTCP[![rtcp][rtcp-badge]][rtcp-url]
-![check][check]SRTP[![srtp][srtp-badge]][srtp-url]
-![uncheck][uncheck]SCTP[![sctp][sctp-badge]][sctp-url]
-
-![check][check]DTLS[![dtls][dtls-badge]][dtls-url]
-
-![check][check]ICE[![ice][ice-badge]][ice-url]
-![check][check]STUN[![stun][stun-badge]][stun-url]
-![check][check]TURN[![turn][turn-badge]][turn-url]
-![check][check]mDNS[![mdns][mdns-badge]][mdns-url]
- 
-![check][check]SDP[![sdp][sdp-badge]][sdp-url]
-![check][check]Util[![sdp][util-badge]][util-url] 
-
+    <img src="./doc/uncheck.png">RTC<a href="https://crates.io/crates/rtc"><img src="https://img.shields.io/crates/v/rtc.svg"></a>
+    <img src="./doc/uncheck.png">Media<a href="https://crates.io/crates/webrtc-media"><img src="https://img.shields.io/crates/v/webrtc-media.svg"></a>
+    <img src="./doc/uncheck.png">PeerConnection<a href="https://crates.io/crates/webrtc-pc"><img src="https://img.shields.io/crates/v/webrtc-pc.svg"></a>
+    <img src="./doc/uncheck.png">DataChannel<a href="https://crates.io/crates/webrtc-data"><img src="https://img.shields.io/crates/v/webrtc-data.svg"></a>
+    <br>
+    <img src="./doc/check.png">RTP<a href="https://crates.io/crates/rtp"><img src="https://img.shields.io/crates/v/rtp.svg"></a>
+    <img src="./doc/check.png">RTCP<a href="https://crates.io/crates/rtcp"><img src="https://img.shields.io/crates/v/rtcp.svg"></a>
+    <img src="./doc/check.png">SRTP<a href="https://crates.io/crates/webrtc-srtp"><img src="https://img.shields.io/crates/v/webrtc-srtp.svg"></a>
+    <img src="./doc/uncheck.png">SCTP<a href="https://crates.io/crates/webrtc-sctp"><img src="https://img.shields.io/crates/v/webrtc-sctp.svg"></a>
+    <br>
+    <img src="./doc/check.png">DTLS<a href="https://crates.io/crates/webrtc-dtls"><img src="https://img.shields.io/crates/v/webrtc-dtls.svg"></a>
+    <br>
+    <img src="./doc/check.png">ICE<a href="https://crates.io/crates/webrtc-ice"><img src="https://img.shields.io/crates/v/webrtc-ice.svg"></a>
+    <img src="./doc/check.png">STUN<a href="https://crates.io/crates/stun"><img src="https://img.shields.io/crates/v/stun.svg"></a>
+    <img src="./doc/check.png">TURN<a href="https://crates.io/crates/turn"><img src="https://img.shields.io/crates/v/turn.svg"></a>
+    <img src="./doc/check.png">mDNS<a href="https://crates.io/crates/webrtc-mdns"><img src="https://img.shields.io/crates/v/webrtc-mdns.svg"></a>
+    <br>
+    <img src="./doc/check.png">SDP<a href="https://crates.io/crates/sdp"><img src="https://img.shields.io/crates/v/sdp.svg"></a>
+    <img src="./doc/check.png">Util<a href="https://crates.io/crates/webrtc-util"><img src="https://img.shields.io/crates/v/webrtc-util.svg"></a>
 </p>
 
 #
