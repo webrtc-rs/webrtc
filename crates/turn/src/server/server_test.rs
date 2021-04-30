@@ -10,7 +10,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
-use util::{vnet::router::NIC, vnet::*, Error};
+use util::{vnet::router::Nic, vnet::*, Error};
 
 struct TestAuthHandler {
     cred_map: HashMap<String, Vec<u8>>,
@@ -144,7 +144,7 @@ async fn build_vnet() -> Result<VNet, Error> {
     let lan = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
         static_ip: "5.6.7.8".to_owned(), // this router's external IP on eth0
         cidr: "192.168.0.0/24".to_owned(),
-        nat_type: Some(nat::NATType {
+        nat_type: Some(nat::NatType {
             mapping_behavior: nat::EndpointDependencyType::EndpointIndependent,
             filtering_behavior: nat::EndpointDependencyType::EndpointIndependent,
             ..Default::default()
