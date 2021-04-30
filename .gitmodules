@@ -31,3 +31,6 @@
 [submodule "crates/mdns"]
 	path = crates/mdns
 	url = https://github.com/webrtc-rs/mdns
+[submodule "crates/rtc"]
+	path = crates/rtc
+	url = https://github.com/webrtc-rs/rtc
