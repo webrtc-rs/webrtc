@@ -1,10 +1,7 @@
-<div style="text-align: center;"> 
-
-![webrtc-rs][webrtc-rs] 
-
-</div>
-
-
+<h1 align="center">
+ <a href="https://webrtc.rs"><img src="./doc/webrtc.rs.png" alt="WebRTC.rs"></a>
+ <br>
+</h1>
 <p align="center">
  <a href="https://github.com/webrtc-rs/webrtc/actions"> 
   <img src="https://github.com/webrtc-rs/webrtc/workflows/webrtc/badge.svg?branch=master">
@@ -100,11 +97,9 @@
 
 #
 
-<div style="text-align: center;"> 
-
-![webrtc-stack][webrtc-stack] 
-
-</div>
+<h1 align="center">
+ <img src="./doc/webrtc_stack.png" alt="WebRTC Stack">
+</h1>
 
 #
 
