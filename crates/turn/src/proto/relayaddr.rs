@@ -68,4 +68,4 @@ impl Getter for RelayedAddress {
 // client. It is encoded in the same way as XOR-MAPPED-ADDRESS.
 //
 // RFC 5766 Section 14.5
-pub type XORRelayedAddress = RelayedAddress;
+pub type XorRelayedAddress = RelayedAddress;

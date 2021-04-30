@@ -70,4 +70,4 @@ impl Getter for PeerAddress {
 // transport address if the peer is behind a NAT.)
 //
 // RFC 5766 Section 14.3
-pub type XORPeerAddress = PeerAddress;
+pub type XorPeerAddress = PeerAddress;
