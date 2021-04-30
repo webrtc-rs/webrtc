@@ -35,7 +35,6 @@
 #
 
 <p align="center">
-    <img src="./doc/uncheck.png">RTC<a href="https://crates.io/crates/rtc"><img src="https://img.shields.io/crates/v/rtc.svg"></a>
     <img src="./doc/uncheck.png">Media<a href="https://crates.io/crates/webrtc-media"><img src="https://img.shields.io/crates/v/webrtc-media.svg"></a>
     <img src="./doc/uncheck.png">PeerConnection<a href="https://crates.io/crates/webrtc-pc"><img src="https://img.shields.io/crates/v/webrtc-pc.svg"></a>
     <img src="./doc/uncheck.png">DataChannel<a href="https://crates.io/crates/webrtc-data"><img src="https://img.shields.io/crates/v/webrtc-data.svg"></a>
