@@ -1,18 +1,7 @@
 use crate::error::Error;
 
-use bytes::{Bytes, BytesMut};
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
-
-pub(crate) trait ErrorCause: fmt::Display {
-    fn unmarshal(raw: &Bytes) -> Result<Self, Error>
-    where
-        Self: Sized;
-    fn marshal(&self) -> Result<Bytes, Error>;
-    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error>;
-    fn length(&self) -> usize;
-
-    fn error_cause_code(&self) -> ErrorCauseCode;
-}
 
 /// buildErrorCause delegates the building of a error cause from raw bytes to the correct structure
 /*TODO: func buildErrorCause(raw []byte) (errorCause, error) {
@@ -76,5 +65,89 @@ impl fmt::Display for ErrorCauseCode {
             _ => others.as_str(),
         };
         write!(f, "{}", s)
+    }
+}
+
+/// ErrorCauseHeader represents the shared header that is shared by all error causes
+#[derive(Debug, Clone)]
+pub(crate) struct ErrorCause {
+    pub(crate) code: ErrorCauseCode,
+    pub(crate) raw: Bytes,
+}
+
+/// ErrorCauseInvalidMandatoryParameter represents an SCTP error cause
+pub(crate) type ErrorCauseInvalidMandatoryParameter = ErrorCause;
+
+/// ErrorCauseUnrecognizedChunkType represents an SCTP error cause
+pub(crate) type ErrorCauseUnrecognizedChunkType = ErrorCause;
+
+///
+/// This error cause MAY be included in ABORT chunks that are sent
+/// because an SCTP endpoint detects a protocol violation of the peer
+/// that is not covered by the error causes described in Section 3.3.10.1
+/// to Section 3.3.10.12.  An implementation MAY provide additional
+/// information specifying what kind of protocol violation has been
+/// detected.
+///      0                   1                   2                   3
+///      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+///     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///     |         Cause Code=13         |      Cause Length=Variable    |
+///     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///     /                    Additional Information                     /
+///     \                                                               \
+///     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///
+pub(crate) type ErrorCauseProtocolViolation = ErrorCause;
+
+pub(crate) const ERROR_CAUSE_HEADER_LENGTH: usize = 4;
+
+/// makes ErrorCauseHeader printable
+impl fmt::Display for ErrorCause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.code)
+    }
+}
+
+impl ErrorCause {
+    fn unmarshal(buf: &Bytes) -> Result<Self, Error> {
+        if buf.len() < ERROR_CAUSE_HEADER_LENGTH {
+            return Err(Error::ErrErrorCauseTooSmall);
+        }
+
+        let reader = &mut buf.clone();
+
+        let code = ErrorCauseCode(reader.get_u16());
+        let len = reader.get_u16();
+
+        if len < ERROR_CAUSE_HEADER_LENGTH as u16 {
+            return Err(Error::ErrErrorCauseTooSmall);
+        }
+
+        let value_length = len as usize - ERROR_CAUSE_HEADER_LENGTH;
+        let raw = buf.slice(ERROR_CAUSE_HEADER_LENGTH..ERROR_CAUSE_HEADER_LENGTH + value_length);
+
+        Ok(ErrorCause { code, raw })
+    }
+
+    fn marshal(&self) -> Bytes {
+        let mut buf = BytesMut::with_capacity(self.length());
+        let _ = self.marshal_to(&mut buf);
+        buf.freeze()
+    }
+
+    fn marshal_to(&self, writer: &mut BytesMut) -> usize {
+        let len = self.raw.len() + ERROR_CAUSE_HEADER_LENGTH;
+        writer.put_u16(self.code.0);
+        writer.put_u16(len as u16);
+        writer.extend(self.raw.clone());
+        writer.len()
+    }
+
+    fn length(&self) -> usize {
+        self.raw.len() + ERROR_CAUSE_HEADER_LENGTH
+    }
+
+    fn error_cause_code(&self) -> ErrorCauseCode {
+        self.code
     }
 }

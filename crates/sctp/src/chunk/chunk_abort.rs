@@ -1,5 +1,6 @@
-use super::chunk_header::*;
+use super::chunk_header::*; //, *
 use crate::error_cause::*;
+//use crate::chunk::chunk_type::ChunkType;
 
 //use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
@@ -26,7 +27,7 @@ use std::fmt;
 
 pub(crate) struct ChunkAbort {
     header: ChunkHeader,
-    error_causes: Vec<Box<dyn ErrorCause>>,
+    error_causes: Vec<ErrorCause>,
 }
 
 // String makes chunkAbort printable
@@ -44,30 +45,25 @@ impl fmt::Display for ChunkAbort {
 
 /*
 impl Chunk for ChunkAbort {
-    fn unmarshal(buf: &Bytes) -> Result<Self, Error> {
-        if err := a.chunkHeader.unmarshal(raw); err != nil {
-            return err
+    fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
+        let header  = ChunkHeader::unmarshal(raw)?;
+
+        if header.typ != ChunkType::Abort {
+            return Err(Error::ErrChunkTypeNotAbort);
         }
 
-        if a.typ != ctAbort {
-            return fmt.Errorf("%w: actually is %s", errChunkTypeNotAbort, a.typ.String())
+        let mut error_causes = vec![];
+        let mut offset = CHUNK_HEADER_SIZE;
+        while offset + 4 <= raw.len() {
+            let e = BuildErrorCause(&raw.slice(offset..))?;
+            offset += e.length();
+            error_causes.push(e);
         }
 
-        offset := chunkHeaderSize
-        for {
-            if len(raw)-offset < 4 {
-                break
-            }
-
-            e, err := buildErrorCause(raw[offset:])
-            if err != nil {
-                return fmt.Errorf("%w: %v", errBuildAbortChunkFailed, err)
-            }
-
-            offset += int(e.length())
-            a.error_causes = append(a.error_causes, e)
-        }
-        return nil
+        Ok(ChunkAbort{
+            header,
+            error_causes,
+        })
     }
 
     func (a *chunkAbort) marshal() ([]byte, error) {

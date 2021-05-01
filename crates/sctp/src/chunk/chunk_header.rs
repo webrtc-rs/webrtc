@@ -20,12 +20,12 @@ use std::fmt;
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 #[derive(Debug, Clone)]
 pub(crate) struct ChunkHeader {
-    typ: ChunkType,
-    flags: u8,
-    raw: Bytes,
+    pub(crate) typ: ChunkType,
+    pub(crate) flags: u8,
+    pub(crate) raw: Bytes,
 }
 
-const CHUNK_HEADER_SIZE: usize = 4;
+pub(crate) const CHUNK_HEADER_SIZE: usize = 4;
 
 // makes ChunkHeader printable
 impl fmt::Display for ChunkHeader {

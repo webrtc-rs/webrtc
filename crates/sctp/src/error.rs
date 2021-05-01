@@ -18,4 +18,7 @@ pub enum Error {
     ErrChunkTypeNotAbort,
     #[error("failed build Abort Chunk")]
     ErrBuildAbortChunkFailed,
+
+    #[error("raw is too small for error cause")]
+    ErrErrorCauseTooSmall,
 }
