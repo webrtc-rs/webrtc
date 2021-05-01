@@ -1,5 +1,6 @@
 mod chunk_abort;
 mod chunk_cookie_ack;
+mod chunk_cookie_echo;
 mod chunk_header;
 mod chunk_type;
 

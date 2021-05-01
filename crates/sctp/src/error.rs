@@ -12,11 +12,12 @@ pub enum Error {
     ErrChunkHeaderInvalidLength,
     #[error("ChunkType is not of type COOKIEACK")]
     ErrChunkTypeNotCookieAck,
+    #[error("ChunkType is not of type COOKIEECHO")]
+    ErrChunkTypeNotCookieEcho,
     #[error("ChunkType is not of type ABORT")]
     ErrChunkTypeNotAbort,
     #[error("failed build Abort Chunk")]
     ErrBuildAbortChunkFailed,
-
     #[error("raw is too small for error cause")]
     ErrErrorCauseTooSmall,
 }
