@@ -54,7 +54,8 @@ impl Chunk for ChunkHeartbeat {
         }
 
         let params = vec![];
-        /*pType, err := parseParamType(raw[chunkHeaderSize:])
+        /*TODO:
+        pType, err := parseParamType(raw[chunkHeaderSize:])
         if err != nil {
             return fmt.Errorf("%w: %v", errParseParamTypeFailed, err)
         }

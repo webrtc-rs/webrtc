@@ -5,6 +5,7 @@ mod chunk_error;
 mod chunk_forward_tsn;
 mod chunk_header;
 mod chunk_heartbeat;
+mod chunk_heartbeat_ack;
 mod chunk_type;
 
 use crate::error::Error;

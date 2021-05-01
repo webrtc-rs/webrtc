@@ -39,6 +39,14 @@ pub enum Error {
     ErrHeartbeatParam,
     #[error("failed unmarshalling param in Heartbeat Chunk")]
     ErrHeartbeatChunkUnmarshal,
+    #[error("unimplemented")]
+    ErrUnimplemented,
+    #[error("heartbeat Ack must have one param")]
+    ErrHeartbeatAckParams,
+    #[error("heartbeat Ack must have one param, and it should be a HeartbeatInfo")]
+    ErrHeartbeatAckNotHeartbeatInfo,
+    #[error("unable to marshal parameter for Heartbeat Ack")]
+    ErrHeartbeatAckMarshalParam,
 
     #[error("raw is too small for error cause")]
     ErrErrorCauseTooSmall,
