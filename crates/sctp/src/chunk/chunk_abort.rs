@@ -28,7 +28,7 @@ pub(crate) struct ChunkAbort {
     error_causes: Vec<ErrorCause>,
 }
 
-// String makes chunkAbort printable
+/// String makes chunkAbort printable
 impl fmt::Display for ChunkAbort {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut res = vec![self.header().to_string()];
