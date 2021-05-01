@@ -10,10 +10,8 @@ pub enum Error {
     ErrChunkHeaderPaddingNonZero,
     #[error("chunk has invalid length")]
     ErrChunkHeaderInvalidLength,
-
-    #[error("BuildErrorCause does not handle")]
-    ErrBuildErrorCaseHandle,
-
+    #[error("ChunkType is not of type COOKIEACK")]
+    ErrChunkTypeNotCookieAck,
     #[error("ChunkType is not of type ABORT")]
     ErrChunkTypeNotAbort,
     #[error("failed build Abort Chunk")]

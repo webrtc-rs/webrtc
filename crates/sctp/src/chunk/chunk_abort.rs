@@ -23,7 +23,7 @@ use std::fmt;
 ///|                   zero or more Error Causes                   |
 ///|                                                               |
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-
+#[derive(Debug, Clone)]
 pub(crate) struct ChunkAbort {
     error_causes: Vec<ErrorCause>,
 }
