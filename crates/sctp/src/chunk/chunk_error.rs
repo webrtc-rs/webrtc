@@ -4,31 +4,30 @@ use crate::error_cause::*;
 use bytes::{Bytes, BytesMut};
 use std::fmt;
 
-///   Operation Error (ERROR) (9)
+///Operation Error (ERROR) (9)
 ///
-///   An endpoint sends this chunk to its peer endpoint to notify it of
-///   certain error conditions.  It contains one or more error causes.  An
-///   Operation Error is not considered fatal in and of itself, but may be
-///   used with an ERROR chunk to report a fatal condition.  It has the
-///   following parameters:
-///
-///  0                   1                   2                   3
-///  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-/// |   Type = 9    | Chunk  Flags  |           Length              |
-/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-/// |                                                               |
-/// |                    one or more Error Causes                   |
-/// |                                                               |
-/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-///   Chunk Flags: 8 bits
-///      Set to 0 on transmit and ignored on receipt.
-///   Length: 16 bits (unsigned integer)
-///      Set to the size of the chunk in bytes, including the chunk header
-///      and all the Error Cause fields present.
+///An endpoint sends this chunk to its peer endpoint to notify it of
+///certain error conditions.  It contains one or more error causes.  An
+///Operation Error is not considered fatal in and of itself, but may be
+///used with an ERROR chunk to report a fatal condition.  It has the
+///following parameters:
+/// 0                   1                   2                   3
+/// 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///|   Type = 9    | Chunk  Flags  |           Length              |
+///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///|                                                               |
+///|                    one or more Error Causes                   |
+///|                                                               |
+///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///Chunk Flags: 8 bits
+///  Set to 0 on transmit and ignored on receipt.
+///Length: 16 bits (unsigned integer)
+///  Set to the size of the chunk in bytes, including the chunk header
+///  and all the Error Cause fields present.
 #[derive(Debug, Clone)]
 pub(crate) struct ChunkError {
-    error_causes: Vec<ErrorCause>,
+    pub(crate) error_causes: Vec<ErrorCause>,
 }
 
 /// makes ChunkError printable

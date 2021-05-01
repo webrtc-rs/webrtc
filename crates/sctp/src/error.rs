@@ -23,6 +23,12 @@ pub enum Error {
     ErrChunkTypeNotCtError,
     #[error("failed build Error Chunk")]
     ErrBuildErrorChunkFailed,
+    #[error("failed to marshal stream")]
+    ErrMarshalStreamFailed,
+    #[error("chunk too short")]
+    ErrChunkTooShort,
+    #[error("ChunkType is not of type ForwardTsn")]
+    ErrChunkTypeNotForwardTsn,
 
     #[error("raw is too small for error cause")]
     ErrErrorCauseTooSmall,
