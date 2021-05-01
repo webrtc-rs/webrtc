@@ -12,22 +12,18 @@ use std::fmt;
 ///   used with an ERROR chunk to report a fatal condition.  It has the
 ///   following parameters:
 ///
-///        0                   1                   2                   3
-///        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-///       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-///       |   Type = 9    | Chunk  Flags  |           Length              |
-///       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-///       \                                                               \
-///       /                    one or more Error Causes                   /
-///       \                                                               \
-///       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-///
+///  0                   1                   2                   3
+///  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |   Type = 9    | Chunk  Flags  |           Length              |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// |                                                               |
+/// |                    one or more Error Causes                   |
+/// |                                                               |
+/// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///   Chunk Flags: 8 bits
-///
 ///      Set to 0 on transmit and ignored on receipt.
-///
 ///   Length: 16 bits (unsigned integer)
-///
 ///      Set to the size of the chunk in bytes, including the chunk header
 ///      and all the Error Cause fields present.
 #[derive(Debug, Clone)]
