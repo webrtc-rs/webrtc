@@ -1,8 +1,11 @@
 [workspace]
 members = [
+    "crates/data",
     "crates/dtls",
     "crates/ice",
     "crates/mdns",
+    "crates/media",
+    "crates/pc",
     "crates/rtc",
     "crates/rtcp",
     "crates/rtp",
