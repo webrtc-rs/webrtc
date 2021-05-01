@@ -3,28 +3,6 @@ use crate::error::Error;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 
-/// buildErrorCause delegates the building of a error cause from raw bytes to the correct structure
-/*TODO: func buildErrorCause(raw []byte) (errorCause, error) {
-    var e errorCause
-
-    c := errorCauseCode(binary.BigEndian.Uint16(raw[0:]))
-    switch c {
-    case INVALID_MANDATORY_PARAMETER:
-        e = &errorCauseInvalidMandatoryParameter{}
-    case UNRECOGNIZED_CHUNK_TYPE:
-        e = &errorCauseUnrecognizedChunkType{}
-    case PROTOCOL_VIOLATION:
-        e = &errorCauseProtocolViolation{}
-    default:
-        return nil, fmt.Errorf("%w: %s", errBuildErrorCaseHandle, c.String())
-    }
-
-    if err := e.unmarshal(raw); err != nil {
-        return nil, err
-    }
-    return e, nil
-}*/
-
 /// errorCauseCode is a cause code that appears in either a ERROR or ABORT chunk
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub(crate) struct ErrorCauseCode(pub(crate) u16);
@@ -109,7 +87,7 @@ impl fmt::Display for ErrorCause {
 }
 
 impl ErrorCause {
-    fn unmarshal(buf: &Bytes) -> Result<Self, Error> {
+    pub(crate) fn unmarshal(buf: &Bytes) -> Result<Self, Error> {
         if buf.len() < ERROR_CAUSE_HEADER_LENGTH {
             return Err(Error::ErrErrorCauseTooSmall);
         }
@@ -129,13 +107,13 @@ impl ErrorCause {
         Ok(ErrorCause { code, raw })
     }
 
-    fn marshal(&self) -> Bytes {
+    pub(crate) fn marshal(&self) -> Bytes {
         let mut buf = BytesMut::with_capacity(self.length());
         let _ = self.marshal_to(&mut buf);
         buf.freeze()
     }
 
-    fn marshal_to(&self, writer: &mut BytesMut) -> usize {
+    pub(crate) fn marshal_to(&self, writer: &mut BytesMut) -> usize {
         let len = self.raw.len() + ERROR_CAUSE_HEADER_LENGTH;
         writer.put_u16(self.code.0);
         writer.put_u16(len as u16);
@@ -143,11 +121,11 @@ impl ErrorCause {
         writer.len()
     }
 
-    fn length(&self) -> usize {
+    pub(crate) fn length(&self) -> usize {
         self.raw.len() + ERROR_CAUSE_HEADER_LENGTH
     }
 
-    fn error_cause_code(&self) -> ErrorCauseCode {
+    pub(crate) fn error_cause_code(&self) -> ErrorCauseCode {
         self.code
     }
 }

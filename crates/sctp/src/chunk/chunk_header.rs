@@ -22,7 +22,7 @@ use std::fmt;
 pub(crate) struct ChunkHeader {
     pub(crate) typ: ChunkType,
     pub(crate) flags: u8,
-    pub(crate) raw: Bytes,
+    pub(crate) value_length: u16,
 }
 
 pub(crate) const CHUNK_HEADER_SIZE: usize = 4;
@@ -73,16 +73,17 @@ impl Chunk for ChunkHeader {
             return Err(Error::ErrChunkHeaderInvalidLength);
         }
 
-        let raw = buf.slice(CHUNK_HEADER_SIZE..length as usize);
-
-        Ok(ChunkHeader { typ, flags, raw })
+        Ok(ChunkHeader {
+            typ,
+            flags,
+            value_length: length - CHUNK_HEADER_SIZE as u16,
+        })
     }
 
     fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize, Error> {
         writer.put_u8(self.typ as u8);
         writer.put_u8(self.flags);
-        writer.put_u16((self.raw.len() + CHUNK_HEADER_SIZE) as u16);
-        writer.put(self.raw.clone());
+        writer.put_u16(self.value_length + CHUNK_HEADER_SIZE as u16);
         Ok(writer.len())
     }
 
@@ -91,6 +92,6 @@ impl Chunk for ChunkHeader {
     }
 
     fn value_length(&self) -> usize {
-        self.raw.len()
+        self.value_length as usize
     }
 }

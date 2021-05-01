@@ -1,8 +1,7 @@
-use super::chunk_header::*; //, *
+use super::{chunk_header::*, chunk_type::*, *};
 use crate::error_cause::*;
-//use crate::chunk::chunk_type::ChunkType;
 
-//use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{Bytes, BytesMut};
 use std::fmt;
 
 ///Abort represents an SCTP Chunk of type ABORT
@@ -26,14 +25,13 @@ use std::fmt;
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
 pub(crate) struct ChunkAbort {
-    header: ChunkHeader,
     error_causes: Vec<ErrorCause>,
 }
 
 // String makes chunkAbort printable
 impl fmt::Display for ChunkAbort {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut res = vec![self.header.to_string()];
+        let mut res = vec![self.header().to_string()];
 
         for cause in &self.error_causes {
             res.push(format!(" - {}", cause.to_string()));
@@ -43,10 +41,9 @@ impl fmt::Display for ChunkAbort {
     }
 }
 
-/*
 impl Chunk for ChunkAbort {
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
-        let header  = ChunkHeader::unmarshal(raw)?;
+        let header = ChunkHeader::unmarshal(raw)?;
 
         if header.typ != ChunkType::Abort {
             return Err(Error::ErrChunkTypeNotAbort);
@@ -55,36 +52,39 @@ impl Chunk for ChunkAbort {
         let mut error_causes = vec![];
         let mut offset = CHUNK_HEADER_SIZE;
         while offset + 4 <= raw.len() {
-            let e = BuildErrorCause(&raw.slice(offset..))?;
+            let e = ErrorCause::unmarshal(&raw.slice(offset..))?;
             offset += e.length();
             error_causes.push(e);
         }
 
-        Ok(ChunkAbort{
-            header,
-            error_causes,
-        })
+        Ok(ChunkAbort { error_causes })
     }
 
-    func (a *chunkAbort) marshal() ([]byte, error) {
-        a.chunkHeader.typ = ctAbort
-        a.flags = 0x00
-        a.raw = []byte{}
-        for _, ec := range a.error_causes {
-            raw, err := ec.marshal()
-            if err != nil {
-                return nil, err
-            }
-            a.raw = append(a.raw, raw...)
+    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error> {
+        self.header().marshal_to(buf)?;
+        for ec in &self.error_causes {
+            buf.extend(ec.marshal());
         }
-        return a.chunkHeader.marshal()
+        Ok(buf.len())
     }
 
-    fn check(&self) ->Result<bool, Error> {
+    fn check(&self) -> Result<bool, Error> {
         Ok(false)
     }
 
     fn value_length(&self) -> usize {
-        self.header.value_length()
+        self.error_causes
+            .iter()
+            .fold(0, |length, ec| length + ec.length())
     }
-}*/
+}
+
+impl ChunkAbort {
+    pub(crate) fn header(&self) -> ChunkHeader {
+        ChunkHeader {
+            typ: ChunkType::Abort,
+            flags: 0,
+            value_length: self.value_length() as u16,
+        }
+    }
+}

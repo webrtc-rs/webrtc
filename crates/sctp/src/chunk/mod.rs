@@ -3,6 +3,7 @@ mod chunk_header;
 mod chunk_type;
 
 use crate::error::Error;
+use chunk_header::*;
 
 use bytes::{Bytes, BytesMut};
 use std::marker::Sized;
@@ -16,7 +17,7 @@ pub(crate) trait Chunk {
     fn value_length(&self) -> usize;
 
     fn marshal(&self) -> Result<Bytes, Error> {
-        let capacity = 4 + self.value_length();
+        let capacity = CHUNK_HEADER_SIZE + self.value_length();
         let mut buf = BytesMut::with_capacity(capacity);
         self.marshal_to(&mut buf)?;
         Ok(buf.freeze())
