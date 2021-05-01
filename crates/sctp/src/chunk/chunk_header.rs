@@ -27,7 +27,7 @@ pub(crate) struct ChunkHeader {
 
 pub(crate) const CHUNK_HEADER_SIZE: usize = 4;
 
-// makes ChunkHeader printable
+/// makes ChunkHeader printable
 impl fmt::Display for ChunkHeader {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.typ)

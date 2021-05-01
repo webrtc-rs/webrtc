@@ -29,6 +29,16 @@ pub enum Error {
     ErrChunkTooShort,
     #[error("ChunkType is not of type ForwardTsn")]
     ErrChunkTypeNotForwardTsn,
+    #[error("ChunkType is not of type HEARTBEAT")]
+    ErrChunkTypeNotHeartbeat,
+    #[error("heartbeat is not long enough to contain Heartbeat Info")]
+    ErrHeartbeatNotLongEnoughInfo,
+    #[error("failed to parse param type")]
+    ErrParseParamTypeFailed,
+    #[error("heartbeat should only have HEARTBEAT param")]
+    ErrHeartbeatParam,
+    #[error("failed unmarshalling param in Heartbeat Chunk")]
+    ErrHeartbeatChunkUnmarshal,
 
     #[error("raw is too small for error cause")]
     ErrErrorCauseTooSmall,
