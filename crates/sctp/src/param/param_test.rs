@@ -1,6 +1,73 @@
 use super::*;
 
 ///////////////////////////////////////////////////////////////////
+//param_type_test
+///////////////////////////////////////////////////////////////////
+use super::param_type::*;
+
+#[test]
+fn test_parse_param_type_success() -> Result<(), Error> {
+    let tests = vec![
+        (Bytes::from_static(&[0x0, 0x1]), ParamType::HeartbeatInfo),
+        (Bytes::from_static(&[0x0, 0xd]), ParamType::OutSsnResetReq),
+    ];
+
+    for (mut binary, expected) in tests {
+        let pt: ParamType = binary.get_u16().into();
+        assert_eq!(expected, pt);
+    }
+
+    Ok(())
+}
+
+///////////////////////////////////////////////////////////////////
+//param_header_test
+///////////////////////////////////////////////////////////////////
+use super::param_header::*;
+
+static PARAM_HEADER_BYTES: Bytes = Bytes::from_static(&[0x0, 0x1, 0x0, 0x4]);
+
+#[test]
+fn test_param_header_success() -> Result<(), Error> {
+    let tests = vec![(
+        PARAM_HEADER_BYTES.clone(),
+        ParamHeader {
+            typ: ParamType::HeartbeatInfo,
+            value_length: 0,
+        },
+    )];
+
+    for (binary, parsed) in tests {
+        let actual = ParamHeader::unmarshal(&binary)?;
+        assert_eq!(parsed, actual);
+        let b = actual.marshal()?;
+        assert_eq!(binary, b);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_param_header_unmarshal_failure() -> Result<(), Error> {
+    let tests = vec![
+        ("header too short", PARAM_HEADER_BYTES.slice(..2)),
+        // {"wrong param type", []byte{0x0, 0x0, 0x0, 0x4}}, // Not possible to fail parseParamType atm.
+        (
+            "reported length below header length",
+            Bytes::from_static(&[0x0, 0xd, 0x0, 0x3]),
+        ),
+        ("wrong reported length", CHUNK_RECONFIG_PARAM_A.slice(0..4)),
+    ];
+
+    for (name, binary) in tests {
+        let result = ParamHeader::unmarshal(&binary);
+        assert!(result.is_err(), "expected unmarshal: {} to fail.", name);
+    }
+
+    Ok(())
+}
+
+///////////////////////////////////////////////////////////////////
 //param_forward_tsn_supported_test
 ///////////////////////////////////////////////////////////////////
 use super::param_forward_tsn_supported::*;
@@ -101,6 +168,7 @@ fn test_param_outgoing_reset_request_failure() -> Result<(), Error> {
 //param_reconfig_response_test
 ///////////////////////////////////////////////////////////////////
 use super::param_reconfig_response::*;
+use bytes::Buf;
 
 static CHUNK_RECONFIG_RESPONCE: Bytes =
     Bytes::from_static(&[0x0, 0x10, 0x0, 0xc, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1]);
