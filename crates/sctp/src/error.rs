@@ -72,4 +72,6 @@ pub enum Error {
     ErrSsnResetRequestParamTooShort,
     #[error("reconfig response parameter too short")]
     ErrReconfigRespParamTooShort,
+    #[error("invalid algorithm type")]
+    ErrInvalidAlgorithmType,
 }
