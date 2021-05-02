@@ -40,11 +40,11 @@ impl From<u16> for HmacAlgorithm {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct ParamRequestedHMACAlgorithm {
+pub(crate) struct ParamRequestedHmacAlgorithm {
     available_algorithms: Vec<HmacAlgorithm>,
 }
 
-impl Param for ParamRequestedHMACAlgorithm {
+impl Param for ParamRequestedHmacAlgorithm {
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let _ = ParamHeader::unmarshal(raw)?;
 
@@ -63,7 +63,7 @@ impl Param for ParamRequestedHMACAlgorithm {
             offset += 2;
         }
 
-        Ok(ParamRequestedHMACAlgorithm {
+        Ok(ParamRequestedHmacAlgorithm {
             available_algorithms,
         })
     }
@@ -81,7 +81,7 @@ impl Param for ParamRequestedHMACAlgorithm {
     }
 }
 
-impl ParamRequestedHMACAlgorithm {
+impl ParamRequestedHmacAlgorithm {
     pub(crate) fn header(&self) -> ParamHeader {
         ParamHeader {
             typ: ParamType::ReqHmacAlgo,

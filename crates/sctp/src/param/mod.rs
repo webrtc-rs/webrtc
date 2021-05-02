@@ -6,6 +6,7 @@ pub(crate) mod param_outgoing_reset_request;
 pub(crate) mod param_random;
 pub(crate) mod param_reconfig_response;
 pub(crate) mod param_requested_hmac_algorithm;
+pub(crate) mod param_state_cookie;
 pub(crate) mod param_type;
 
 use crate::error::Error;
