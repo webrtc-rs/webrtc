@@ -100,4 +100,9 @@ pub enum Error {
     ErrInitOutboundStreamRequestZero,
     #[error("INIT ACK Advertised Receiver Window Credit (a_rwnd) must be >= 1500")]
     ErrInitAdvertisedReceiver1500,
+
+    #[error("packet is smaller than the header size")]
+    ErrChunkPayloadSmall,
+    #[error("ChunkType is not of type PayloadData")]
+    ErrChunkTypeNotPayloadData,
 }
