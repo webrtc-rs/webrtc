@@ -7,7 +7,6 @@ pub(crate) mod chunk_header;
 pub(crate) mod chunk_heartbeat;
 pub(crate) mod chunk_heartbeat_ack;
 pub(crate) mod chunk_init;
-pub(crate) mod chunk_init_common;
 pub(crate) mod chunk_type;
 
 use crate::error::Error;
@@ -22,7 +21,7 @@ pub(crate) trait Chunk {
     where
         Self: Sized;
     fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error>;
-    fn check(&self) -> Result<bool, Error>;
+    fn check(&self) -> Result<(), Error>;
     fn value_length(&self) -> usize;
 
     fn marshal(&self) -> Result<Bytes, Error> {

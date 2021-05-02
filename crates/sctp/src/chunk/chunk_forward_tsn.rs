@@ -98,8 +98,8 @@ impl Chunk for ChunkForwardTsn {
         Ok(writer.len())
     }
 
-    fn check(&self) -> Result<bool, Error> {
-        Ok(true)
+    fn check(&self) -> Result<(), Error> {
+        Ok(())
     }
 
     fn value_length(&self) -> usize {
@@ -154,8 +154,8 @@ impl Chunk for ChunkForwardTsnStream {
         Ok(writer.len())
     }
 
-    fn check(&self) -> Result<bool, Error> {
-        Ok(true)
+    fn check(&self) -> Result<(), Error> {
+        Ok(())
     }
 
     fn value_length(&self) -> usize {

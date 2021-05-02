@@ -44,8 +44,8 @@ impl Chunk for ChunkCookieAck {
         Ok(buf.len())
     }
 
-    fn check(&self) -> Result<bool, Error> {
-        Ok(false)
+    fn check(&self) -> Result<(), Error> {
+        Ok(())
     }
 
     fn value_length(&self) -> usize {

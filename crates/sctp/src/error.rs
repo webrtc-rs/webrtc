@@ -81,4 +81,23 @@ pub enum Error {
     ErrInitChunkUnmarshalParam,
     #[error("unable to marshal parameter for INIT/INITACK")]
     ErrInitAckMarshalParam,
+
+    #[error("ChunkType is not of type INIT")]
+    ErrChunkTypeNotTypeInit,
+    #[error("chunk Value isn't long enough for mandatory parameters exp")]
+    ErrChunkValueNotLongEnough,
+    #[error("ChunkType of type INIT flags must be all 0")]
+    ErrChunkTypeInitFlagZero,
+    #[error("failed to unmarshal INIT body")]
+    ErrChunkTypeInitUnmarshalFailed,
+    #[error("failed marshaling INIT common data")]
+    ErrChunkTypeInitMarshalFailed,
+    #[error("ChunkType of type INIT ACK InitiateTag must not be 0")]
+    ErrChunkTypeInitInitateTagZero,
+    #[error("INIT ACK inbound stream request must be > 0")]
+    ErrInitInboundStreamRequestZero,
+    #[error("INIT ACK outbound stream request must be > 0")]
+    ErrInitOutboundStreamRequestZero,
+    #[error("INIT ACK Advertised Receiver Window Credit (a_rwnd) must be >= 1500")]
+    ErrInitAdvertisedReceiver1500,
 }
