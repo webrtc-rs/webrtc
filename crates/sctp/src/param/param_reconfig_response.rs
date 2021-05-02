@@ -18,7 +18,6 @@ pub(crate) enum ReconfigResult {
 
 impl fmt::Display for ReconfigResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let others = format!("Unknown reconfigResult: {}", self);
         let s = match *self {
             ReconfigResult::SuccessNop => "0: Success - Nothing to do",
             ReconfigResult::SuccessPerformed => "1: Success - Performed",
@@ -29,7 +28,7 @@ impl fmt::Display for ReconfigResult {
             }
             ReconfigResult::ErrorBadSequenceNumber => "5: Error - Bad Sequence Number",
             ReconfigResult::InProgress => "6: In progress",
-            _ => others.as_str(),
+            _ => "Unknown ReconfigResult",
         };
         write!(f, "{}", s)
     }

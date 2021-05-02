@@ -15,13 +15,12 @@ pub(crate) enum HmacAlgorithm {
 
 impl fmt::Display for HmacAlgorithm {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let others = format!("Unknown HMAC Algorithm type: {}", self);
         let s = match *self {
             HmacAlgorithm::HmacResv1 => "HMAC Reserved (0x00)",
             HmacAlgorithm::HmacSha128 => "HMAC SHA-128",
             HmacAlgorithm::HmacResv2 => "HMAC Reserved (0x02)",
             HmacAlgorithm::HmacSha256 => "HMAC SHA-256",
-            _ => others.as_str(),
+            _ => "Unknown HMAC Algorithm",
         };
         write!(f, "{}", s)
     }

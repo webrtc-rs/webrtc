@@ -68,7 +68,6 @@ pub(crate) enum ParamType {
 
 impl fmt::Display for ParamType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let others = format!("Unknown ParamType: {}", self);
         let s = match *self {
             ParamType::HeartbeatInfo => "Heartbeat Info",
             ParamType::Ipv4Addr => "IPv4 IP",
@@ -96,7 +95,7 @@ impl fmt::Display for ParamType {
             ParamType::SetPriAddr => "Set Primary IP",
             ParamType::SuccessInd => "Success Indication",
             ParamType::AdaptLayerInd => "Adaptation Layer Indication",
-            _ => others.as_str(),
+            _ => "Unknown ParamType",
         };
         write!(f, "{}", s)
     }

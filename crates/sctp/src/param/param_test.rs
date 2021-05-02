@@ -96,3 +96,75 @@ fn test_param_outgoing_reset_request_failure() -> Result<(), Error> {
 
     Ok(())
 }
+
+///////////////////////////////////////////////////////////////////
+//param_reconfig_response_test
+///////////////////////////////////////////////////////////////////
+use super::param_reconfig_response::*;
+
+static CHUNK_RECONFIG_RESPONCE: Bytes =
+    Bytes::from_static(&[0x0, 0x10, 0x0, 0xc, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1]);
+
+#[test]
+fn test_param_reconfig_response_success() -> Result<(), Error> {
+    let tests = vec![(
+        CHUNK_RECONFIG_RESPONCE.clone(),
+        ParamReconfigResponse {
+            reconfig_response_sequence_number: 1,
+            result: ReconfigResult::SuccessPerformed,
+        },
+    )];
+
+    for (binary, parsed) in tests {
+        let actual = ParamReconfigResponse::unmarshal(&binary)?;
+        assert_eq!(parsed, actual);
+        let b = actual.marshal()?;
+        assert_eq!(binary, b);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_param_reconfig_response_failure() -> Result<(), Error> {
+    let tests = vec![
+        ("packet too short", CHUNK_RECONFIG_RESPONCE.slice(..8)),
+        (
+            "param too short",
+            Bytes::from_static(&[0x0, 0x10, 0x0, 0x4]),
+        ),
+    ];
+
+    for (name, binary) in tests {
+        let result = ParamReconfigResponse::unmarshal(&binary);
+        assert!(result.is_err(), "expected unmarshal: {} to fail.", name);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_reconfig_result_stringer() -> Result<(), Error> {
+    let tests = vec![
+        (ReconfigResult::SuccessNop, "0: Success - Nothing to do"),
+        (ReconfigResult::SuccessPerformed, "1: Success - Performed"),
+        (ReconfigResult::Denied, "2: Denied"),
+        (ReconfigResult::ErrorWrongSsn, "3: Error - Wrong SSN"),
+        (
+            ReconfigResult::ErrorRequestAlreadyInProgress,
+            "4: Error - Request already in progress",
+        ),
+        (
+            ReconfigResult::ErrorBadSequenceNumber,
+            "5: Error - Bad Sequence Number",
+        ),
+        (ReconfigResult::InProgress, "6: In progress"),
+    ];
+
+    for (result, expected) in tests {
+        let actual = result.to_string();
+        assert_eq!(expected, actual, "Test case {}", expected);
+    }
+
+    Ok(())
+}
