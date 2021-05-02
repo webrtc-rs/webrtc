@@ -68,4 +68,6 @@ pub enum Error {
 
     #[error("packet to short")]
     ErrParamPacketTooShort,
+    #[error("outgoing SSN reset request parameter too short")]
+    ErrSsnResetRequestParamTooShort,
 }
