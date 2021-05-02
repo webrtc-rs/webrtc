@@ -8,6 +8,7 @@ pub(crate) mod chunk_heartbeat;
 pub(crate) mod chunk_heartbeat_ack;
 pub(crate) mod chunk_init;
 pub(crate) mod chunk_payload_data;
+pub(crate) mod chunk_reconfig;
 pub(crate) mod chunk_type;
 
 use crate::error::Error;

@@ -105,4 +105,13 @@ pub enum Error {
     ErrChunkPayloadSmall,
     #[error("ChunkType is not of type PayloadData")]
     ErrChunkTypeNotPayloadData,
+    #[error("ChunkType is not of type Reconfig")]
+    ErrChunkTypeNotReconfig,
+
+    #[error("failed to parse param type")]
+    ErrChunkParseParamTypeFailed,
+    #[error("unable to marshal parameter A for reconfig")]
+    ErrChunkMarshalParamAReconfigFailed,
+    #[error("unable to marshal parameter B for reconfig")]
+    ErrChunkMarshalParamBReconfigFailed,
 }
