@@ -1,12 +1,12 @@
-mod chunk_abort;
-mod chunk_cookie_ack;
-mod chunk_cookie_echo;
-mod chunk_error;
-mod chunk_forward_tsn;
-mod chunk_header;
-mod chunk_heartbeat;
-mod chunk_heartbeat_ack;
-mod chunk_type;
+pub(crate) mod chunk_abort;
+pub(crate) mod chunk_cookie_ack;
+pub(crate) mod chunk_cookie_echo;
+pub(crate) mod chunk_error;
+pub(crate) mod chunk_forward_tsn;
+pub(crate) mod chunk_header;
+pub(crate) mod chunk_heartbeat;
+pub(crate) mod chunk_heartbeat_ack;
+pub(crate) mod chunk_type;
 
 use crate::error::Error;
 use chunk_header::*;

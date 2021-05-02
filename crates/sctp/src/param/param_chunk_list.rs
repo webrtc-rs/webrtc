@@ -1,30 +1,49 @@
-/*use super::*;
+use super::{param_header::*, param_type::*, *};
+use crate::chunk::chunk_type::*;
 
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 
-pub(crate) struct ParamChunkList{
-    paramHeader
-    chunkTypes []chunkType
+#[derive(Debug, Clone)]
+pub(crate) struct ParamChunkList {
+    chunk_types: Vec<ChunkType>,
 }
 
-func (c *paramChunkList) marshal() ([]byte, error) {
-    c.typ = CHUNK_LIST
-    c.raw = make([]byte, len(c.chunkTypes))
-    for i, t := range c.chunkTypes {
-        c.raw[i] = byte(t)
+impl Param for ParamChunkList {
+    fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
+        let header = ParamHeader::unmarshal(raw)?;
+
+        if header.typ != ParamType::ChunkList {
+            return Err(Error::ErrParamTypeUnexpected);
+        }
+
+        let reader = &mut raw.slice(PARAM_HEADER_LENGTH..);
+
+        let mut chunk_types = vec![];
+        while reader.has_remaining() {
+            chunk_types.push(reader.get_u8().into())
+        }
+
+        Ok(ParamChunkList { chunk_types })
     }
 
-    return c.paramHeader.marshal()
+    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error> {
+        self.header().marshal_to(buf)?;
+        for ct in &self.chunk_types {
+            buf.put_u8(*ct as u8);
+        }
+        Ok(buf.len())
+    }
+
+    fn value_length(&self) -> usize {
+        self.chunk_types.len()
+    }
 }
 
-func (c *paramChunkList) unmarshal(raw []byte) (param, error) {
-    err := c.paramHeader.unmarshal(raw)
-    if err != nil {
-        return nil, err
+impl ParamChunkList {
+    pub(crate) fn header(&self) -> ParamHeader {
+        ParamHeader {
+            typ: ParamType::ChunkList,
+            value_length: self.value_length() as u16,
+        }
     }
-    for _, t := range c.raw {
-        c.chunkTypes = append(c.chunkTypes, chunkType(t))
-    }
-
-    return c, nil
 }
-*/

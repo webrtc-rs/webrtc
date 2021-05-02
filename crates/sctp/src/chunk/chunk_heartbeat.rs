@@ -1,5 +1,5 @@
 use super::{chunk_header::*, chunk_type::*, *};
-use crate::param::*;
+use crate::param::{param_header::*, *};
 
 use bytes::{Bytes, BytesMut};
 use std::fmt;
@@ -85,7 +85,9 @@ impl Chunk for ChunkHeartbeat {
     }
 
     fn value_length(&self) -> usize {
-        self.params.iter().fold(0, |length, p| length + p.length())
+        self.params.iter().fold(0, |length, p| {
+            length + PARAM_HEADER_LENGTH + p.value_length()
+        })
     }
 }
 

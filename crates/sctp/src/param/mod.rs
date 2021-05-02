@@ -1,6 +1,8 @@
 mod param_chunk_list;
-mod param_header;
+pub(crate) mod param_header;
 mod param_type;
+
+use param_header::*;
 
 use crate::error::Error;
 
@@ -11,10 +13,11 @@ pub(crate) trait Param {
     where
         Self: Sized;
     fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error>;
-    fn length(&self) -> usize;
+    fn value_length(&self) -> usize;
 
     fn marshal(&self) -> Result<Bytes, Error> {
-        let mut buf = BytesMut::with_capacity(self.length());
+        let capacity = PARAM_HEADER_LENGTH + self.value_length();
+        let mut buf = BytesMut::with_capacity(capacity);
         self.marshal_to(&mut buf)?;
         Ok(buf.freeze())
     }

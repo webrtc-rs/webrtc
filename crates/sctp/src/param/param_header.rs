@@ -4,8 +4,8 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 
 pub(crate) struct ParamHeader {
-    typ: ParamType,
-    len: usize,
+    pub(crate) typ: ParamType,
+    pub(crate) value_length: u16,
 }
 
 pub(crate) const PARAM_HEADER_LENGTH: usize = 4;
@@ -13,7 +13,7 @@ pub(crate) const PARAM_HEADER_LENGTH: usize = 4;
 /// String makes paramHeader printable
 impl fmt::Display for ParamHeader {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {}", self.typ, self.len)
+        write!(f, "{}", self.typ)
     }
 }
 
@@ -25,23 +25,26 @@ impl Param for ParamHeader {
 
         let reader = &mut raw.clone();
 
-        let typ = ParamType(reader.get_u16());
+        let typ: ParamType = reader.get_u16().into();
 
         let len = reader.get_u16() as usize;
         if len < PARAM_HEADER_LENGTH || raw.len() < len {
             return Err(Error::ErrParamHeaderTooShort);
         }
 
-        Ok(ParamHeader { typ, len })
+        Ok(ParamHeader {
+            typ,
+            value_length: (len - PARAM_HEADER_LENGTH) as u16,
+        })
     }
 
     fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize, Error> {
-        writer.put_u16(self.typ.0);
-        writer.put_u16(self.len as u16);
+        writer.put_u16(self.typ as u16);
+        writer.put_u16(self.value_length + PARAM_HEADER_LENGTH as u16);
         Ok(writer.len())
     }
 
-    fn length(&self) -> usize {
-        self.len
+    fn value_length(&self) -> usize {
+        self.value_length as usize
     }
 }

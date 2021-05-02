@@ -54,6 +54,9 @@ pub enum Error {
     #[error("unhandled ParamType")]
     ErrParamTypeUnhandled,
 
+    #[error("unexpected ParamType")]
+    ErrParamTypeUnexpected,
+
     #[error("param header too short")]
     ErrParamHeaderTooShort,
     #[error("param self reported length is shorter than header length")]
