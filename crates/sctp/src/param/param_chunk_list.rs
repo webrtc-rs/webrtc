@@ -8,6 +8,21 @@ pub(crate) struct ParamChunkList {
     pub(crate) chunk_types: Vec<ChunkType>,
 }
 
+impl fmt::Display for ParamChunkList {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} {}",
+            self.header(),
+            self.chunk_types
+                .iter()
+                .map(|ct| ct.to_string())
+                .collect::<Vec<String>>()
+                .join(" ")
+        )
+    }
+}
+
 impl Param for ParamChunkList {
     fn header(&self) -> ParamHeader {
         ParamHeader {

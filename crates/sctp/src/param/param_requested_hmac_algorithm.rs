@@ -43,6 +43,21 @@ pub(crate) struct ParamRequestedHmacAlgorithm {
     pub(crate) available_algorithms: Vec<HmacAlgorithm>,
 }
 
+impl fmt::Display for ParamRequestedHmacAlgorithm {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} {}",
+            self.header(),
+            self.available_algorithms
+                .iter()
+                .map(|ct| ct.to_string())
+                .collect::<Vec<String>>()
+                .join(" "),
+        )
+    }
+}
+
 impl Param for ParamRequestedHmacAlgorithm {
     fn header(&self) -> ParamHeader {
         ParamHeader {

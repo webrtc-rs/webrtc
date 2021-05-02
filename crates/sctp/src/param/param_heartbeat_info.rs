@@ -7,6 +7,12 @@ pub(crate) struct ParamHeartbeatInfo {
     pub(crate) heartbeat_information: Bytes,
 }
 
+impl fmt::Display for ParamHeartbeatInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {:?}", self.header(), self.heartbeat_information)
+    }
+}
+
 impl Param for ParamHeartbeatInfo {
     fn header(&self) -> ParamHeader {
         ParamHeader {

@@ -46,6 +46,20 @@ pub(crate) struct ParamOutgoingResetRequest {
     pub(crate) stream_identifiers: Vec<u16>,
 }
 
+impl fmt::Display for ParamOutgoingResetRequest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} {} {} {} {:?}",
+            self.header(),
+            self.reconfig_request_sequence_number,
+            self.reconfig_request_sequence_number,
+            self.reconfig_response_sequence_number,
+            self.stream_identifiers
+        )
+    }
+}
+
 impl Param for ParamOutgoingResetRequest {
     fn header(&self) -> ParamHeader {
         ParamHeader {

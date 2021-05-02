@@ -13,6 +13,12 @@ use bytes::{Bytes, BytesMut};
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ParamForwardTsnSupported;
 
+impl fmt::Display for ParamForwardTsnSupported {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.header())
+    }
+}
+
 impl Param for ParamForwardTsnSupported {
     fn header(&self) -> ParamHeader {
         ParamHeader {

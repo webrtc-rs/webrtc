@@ -7,6 +7,12 @@ pub(crate) struct ParamRandom {
     pub(crate) random_data: Bytes,
 }
 
+impl fmt::Display for ParamRandom {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {:?}", self.header(), self.random_data)
+    }
+}
+
 impl Param for ParamRandom {
     fn header(&self) -> ParamHeader {
         ParamHeader {

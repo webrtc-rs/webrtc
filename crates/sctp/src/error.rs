@@ -74,4 +74,11 @@ pub enum Error {
     ErrReconfigRespParamTooShort,
     #[error("invalid algorithm type")]
     ErrInvalidAlgorithmType,
+
+    #[error("failed to parse param type")]
+    ErrInitChunkParseParamTypeFailed,
+    #[error("failed unmarshalling param in Init Chunk")]
+    ErrInitChunkUnmarshalParam,
+    #[error("unable to marshal parameter for INIT/INITACK")]
+    ErrInitAckMarshalParam,
 }

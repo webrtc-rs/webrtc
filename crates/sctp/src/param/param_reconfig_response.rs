@@ -75,6 +75,18 @@ pub(crate) struct ParamReconfigResponse {
     pub(crate) result: ReconfigResult,
 }
 
+impl fmt::Display for ParamReconfigResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} {} {}",
+            self.header(),
+            self.reconfig_response_sequence_number,
+            self.result
+        )
+    }
+}
+
 impl Param for ParamReconfigResponse {
     fn header(&self) -> ParamHeader {
         ParamHeader {

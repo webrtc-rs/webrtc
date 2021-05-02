@@ -6,6 +6,8 @@ pub(crate) mod chunk_forward_tsn;
 pub(crate) mod chunk_header;
 pub(crate) mod chunk_heartbeat;
 pub(crate) mod chunk_heartbeat_ack;
+pub(crate) mod chunk_init;
+pub(crate) mod chunk_init_common;
 pub(crate) mod chunk_type;
 
 use crate::error::Error;
