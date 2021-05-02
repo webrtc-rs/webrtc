@@ -42,6 +42,14 @@ impl fmt::Display for ChunkAbort {
 }
 
 impl Chunk for ChunkAbort {
+    fn header(&self) -> ChunkHeader {
+        ChunkHeader {
+            typ: ChunkType::Abort,
+            flags: 0,
+            value_length: self.value_length() as u16,
+        }
+    }
+
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let header = ChunkHeader::unmarshal(raw)?;
 
@@ -76,15 +84,5 @@ impl Chunk for ChunkAbort {
         self.error_causes
             .iter()
             .fold(0, |length, ec| length + ec.length())
-    }
-}
-
-impl ChunkAbort {
-    pub(crate) fn header(&self) -> ChunkHeader {
-        ChunkHeader {
-            typ: ChunkType::Abort,
-            flags: 0,
-            value_length: self.value_length() as u16,
-        }
     }
 }

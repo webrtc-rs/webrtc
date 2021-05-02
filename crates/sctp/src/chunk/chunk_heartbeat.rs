@@ -1,6 +1,7 @@
 use super::{chunk_header::*, chunk_type::*, *};
 use crate::param::{param_header::*, *};
 
+use crate::param::param_type::ParamType;
 use bytes::{Bytes, BytesMut};
 use std::fmt;
 
@@ -42,6 +43,14 @@ impl fmt::Display for ChunkHeartbeat {
 }
 
 impl Chunk for ChunkHeartbeat {
+    fn header(&self) -> ChunkHeader {
+        ChunkHeader {
+            typ: ChunkType::Heartbeat,
+            flags: 0,
+            value_length: self.value_length() as u16,
+        }
+    }
+
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let header = ChunkHeader::unmarshal(raw)?;
 
@@ -53,21 +62,11 @@ impl Chunk for ChunkHeartbeat {
             return Err(Error::ErrHeartbeatNotLongEnoughInfo);
         }
 
-        let params = vec![];
-        /*TODO:
-        pType, err := parseParamType(raw[chunkHeaderSize:])
-        if err != nil {
-            return fmt.Errorf("%w: %v", errParseParamTypeFailed, err)
+        let p = build_param(&raw.slice(CHUNK_HEADER_SIZE..))?;
+        if p.header().typ != ParamType::HeartbeatInfo {
+            return Err(Error::ErrHeartbeatParam);
         }
-        if pType != HEARTBEAT_INFO {
-            return fmt.Errorf("%w: instead have %s", errHeartbeatParam, pType.String())
-        }
-
-        p, err := buildParam(pType, raw[chunkHeaderSize:])
-        if err != nil {
-            return fmt.Errorf("%w: %v", errHeartbeatChunkUnmarshal, err)
-        }
-        h.params = append(h.params, p)*/
+        let params = vec![p];
 
         Ok(ChunkHeartbeat { params })
     }
@@ -88,15 +87,5 @@ impl Chunk for ChunkHeartbeat {
         self.params.iter().fold(0, |length, p| {
             length + PARAM_HEADER_LENGTH + p.value_length()
         })
-    }
-}
-
-impl ChunkHeartbeat {
-    pub(crate) fn header(&self) -> ChunkHeader {
-        ChunkHeader {
-            typ: ChunkType::Heartbeat,
-            flags: 0,
-            value_length: self.value_length() as u16,
-        }
     }
 }

@@ -19,6 +19,10 @@ impl fmt::Display for ParamHeader {
 }
 
 impl Param for ParamHeader {
+    fn header(&self) -> ParamHeader {
+        self.clone()
+    }
+
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         if raw.len() < PARAM_HEADER_LENGTH {
             return Err(Error::ErrParamHeaderTooShort);

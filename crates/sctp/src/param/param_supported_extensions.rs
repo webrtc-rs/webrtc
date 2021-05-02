@@ -9,6 +9,13 @@ pub(crate) struct ParamSupportedExtensions {
 }
 
 impl Param for ParamSupportedExtensions {
+    fn header(&self) -> ParamHeader {
+        ParamHeader {
+            typ: ParamType::SupportedExt,
+            value_length: self.value_length() as u16,
+        }
+    }
+
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let _ = ParamHeader::unmarshal(raw)?;
 
@@ -32,14 +39,5 @@ impl Param for ParamSupportedExtensions {
 
     fn value_length(&self) -> usize {
         self.chunk_types.len()
-    }
-}
-
-impl ParamSupportedExtensions {
-    pub(crate) fn header(&self) -> ParamHeader {
-        ParamHeader {
-            typ: ParamType::SupportedExt,
-            value_length: self.value_length() as u16,
-        }
     }
 }

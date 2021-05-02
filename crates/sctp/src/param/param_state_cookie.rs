@@ -17,6 +17,13 @@ impl fmt::Display for ParamStateCookie {
 }
 
 impl Param for ParamStateCookie {
+    fn header(&self) -> ParamHeader {
+        ParamHeader {
+            typ: ParamType::StateCookie,
+            value_length: self.value_length() as u16,
+        }
+    }
+
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let _ = ParamHeader::unmarshal(raw)?;
         let cookie = raw.slice(PARAM_HEADER_LENGTH..);
@@ -35,13 +42,6 @@ impl Param for ParamStateCookie {
 }
 
 impl ParamStateCookie {
-    pub(crate) fn header(&self) -> ParamHeader {
-        ParamHeader {
-            typ: ParamType::StateCookie,
-            value_length: self.value_length() as u16,
-        }
-    }
-
     pub(crate) fn new() -> Self {
         let mut cookie = BytesMut::new();
         cookie.resize(32, 0);

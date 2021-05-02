@@ -48,6 +48,14 @@ impl fmt::Display for ChunkForwardTsn {
 }
 
 impl Chunk for ChunkForwardTsn {
+    fn header(&self) -> ChunkHeader {
+        ChunkHeader {
+            typ: ChunkType::ForwardTsn,
+            flags: 0,
+            value_length: self.value_length() as u16,
+        }
+    }
+
     fn unmarshal(buf: &Bytes) -> Result<Self, Error> {
         let header = ChunkHeader::unmarshal(buf)?;
 
@@ -99,16 +107,6 @@ impl Chunk for ChunkForwardTsn {
     }
 }
 
-impl ChunkForwardTsn {
-    pub(crate) fn header(&self) -> ChunkHeader {
-        ChunkHeader {
-            typ: ChunkType::ForwardTsn,
-            flags: 0,
-            value_length: self.value_length() as u16,
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub(crate) struct ChunkForwardTsnStream {
     /// This field holds a stream number that was skipped by this
@@ -127,6 +125,14 @@ pub(crate) struct ChunkForwardTsnStream {
 }
 
 impl Chunk for ChunkForwardTsnStream {
+    fn header(&self) -> ChunkHeader {
+        ChunkHeader {
+            typ: ChunkType::Unknown,
+            flags: 0,
+            value_length: self.value_length() as u16,
+        }
+    }
+
     fn unmarshal(buf: &Bytes) -> Result<Self, Error> {
         if buf.len() < FORWARD_TSN_STREAM_LENGTH {
             return Err(Error::ErrChunkTooShort);
@@ -149,7 +155,7 @@ impl Chunk for ChunkForwardTsnStream {
     }
 
     fn check(&self) -> Result<bool, Error> {
-        Ok(false)
+        Ok(true)
     }
 
     fn value_length(&self) -> usize {

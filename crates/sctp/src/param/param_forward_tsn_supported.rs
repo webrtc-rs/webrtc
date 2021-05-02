@@ -14,6 +14,13 @@ use bytes::{Bytes, BytesMut};
 pub(crate) struct ParamForwardTsnSupported;
 
 impl Param for ParamForwardTsnSupported {
+    fn header(&self) -> ParamHeader {
+        ParamHeader {
+            typ: ParamType::ForwardTsnSupp,
+            value_length: self.value_length() as u16,
+        }
+    }
+
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let _ = ParamHeader::unmarshal(raw)?;
         Ok(ParamForwardTsnSupported {})
@@ -26,14 +33,5 @@ impl Param for ParamForwardTsnSupported {
 
     fn value_length(&self) -> usize {
         0
-    }
-}
-
-impl ParamForwardTsnSupported {
-    pub(crate) fn header(&self) -> ParamHeader {
-        ParamHeader {
-            typ: ParamType::ForwardTsnSupp,
-            value_length: self.value_length() as u16,
-        }
     }
 }

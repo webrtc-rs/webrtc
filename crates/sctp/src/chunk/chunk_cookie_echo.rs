@@ -26,6 +26,14 @@ impl fmt::Display for ChunkCookieEcho {
 }
 
 impl Chunk for ChunkCookieEcho {
+    fn header(&self) -> ChunkHeader {
+        ChunkHeader {
+            typ: ChunkType::CookieEcho,
+            flags: 0,
+            value_length: self.value_length() as u16,
+        }
+    }
+
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let header = ChunkHeader::unmarshal(raw)?;
 
@@ -49,15 +57,5 @@ impl Chunk for ChunkCookieEcho {
 
     fn value_length(&self) -> usize {
         self.cookie.len()
-    }
-}
-
-impl ChunkCookieEcho {
-    pub(crate) fn header(&self) -> ChunkHeader {
-        ChunkHeader {
-            typ: ChunkType::CookieEcho,
-            flags: 0,
-            value_length: self.value_length() as u16,
-        }
     }
 }

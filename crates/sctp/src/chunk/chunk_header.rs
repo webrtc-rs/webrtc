@@ -35,6 +35,10 @@ impl fmt::Display for ChunkHeader {
 }
 
 impl Chunk for ChunkHeader {
+    fn header(&self) -> ChunkHeader {
+        self.clone()
+    }
+
     fn unmarshal(buf: &Bytes) -> Result<Self, Error> {
         if buf.len() < CHUNK_HEADER_SIZE {
             return Err(Error::ErrChunkHeaderTooSmall);

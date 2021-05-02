@@ -76,6 +76,13 @@ pub(crate) struct ParamReconfigResponse {
 }
 
 impl Param for ParamReconfigResponse {
+    fn header(&self) -> ParamHeader {
+        ParamHeader {
+            typ: ParamType::ReconfigResp,
+            value_length: self.value_length() as u16,
+        }
+    }
+
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let _ = ParamHeader::unmarshal(raw)?;
         if raw.len() < 8 + PARAM_HEADER_LENGTH {
@@ -102,14 +109,5 @@ impl Param for ParamReconfigResponse {
 
     fn value_length(&self) -> usize {
         8
-    }
-}
-
-impl ParamReconfigResponse {
-    pub(crate) fn header(&self) -> ParamHeader {
-        ParamHeader {
-            typ: ParamType::ReconfigResp,
-            value_length: self.value_length() as u16,
-        }
     }
 }

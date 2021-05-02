@@ -8,6 +8,13 @@ pub(crate) struct ParamRandom {
 }
 
 impl Param for ParamRandom {
+    fn header(&self) -> ParamHeader {
+        ParamHeader {
+            typ: ParamType::Random,
+            value_length: self.value_length() as u16,
+        }
+    }
+
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let _ = ParamHeader::unmarshal(raw)?;
         let random_data = raw.slice(PARAM_HEADER_LENGTH..);
@@ -22,14 +29,5 @@ impl Param for ParamRandom {
 
     fn value_length(&self) -> usize {
         self.random_data.len()
-    }
-}
-
-impl ParamRandom {
-    pub(crate) fn header(&self) -> ParamHeader {
-        ParamHeader {
-            typ: ParamType::Random,
-            value_length: self.value_length() as u16,
-        }
     }
 }

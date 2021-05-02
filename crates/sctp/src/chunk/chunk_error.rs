@@ -44,6 +44,14 @@ impl fmt::Display for ChunkError {
 }
 
 impl Chunk for ChunkError {
+    fn header(&self) -> ChunkHeader {
+        ChunkHeader {
+            typ: ChunkType::Error,
+            flags: 0,
+            value_length: self.value_length() as u16,
+        }
+    }
+
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let header = ChunkHeader::unmarshal(raw)?;
 
@@ -78,15 +86,5 @@ impl Chunk for ChunkError {
         self.error_causes
             .iter()
             .fold(0, |length, ec| length + ec.length())
-    }
-}
-
-impl ChunkError {
-    pub(crate) fn header(&self) -> ChunkHeader {
-        ChunkHeader {
-            typ: ChunkType::Error,
-            flags: 0,
-            value_length: self.value_length() as u16,
-        }
     }
 }

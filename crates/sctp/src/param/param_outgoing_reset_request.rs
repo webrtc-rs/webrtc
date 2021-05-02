@@ -47,6 +47,13 @@ pub(crate) struct ParamOutgoingResetRequest {
 }
 
 impl Param for ParamOutgoingResetRequest {
+    fn header(&self) -> ParamHeader {
+        ParamHeader {
+            typ: ParamType::OutSsnResetReq,
+            value_length: self.value_length() as u16,
+        }
+    }
+
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let _ = ParamHeader::unmarshal(raw)?;
         if raw.len() < PARAM_HEADER_LENGTH + PARAM_OUTGOING_RESET_REQUEST_STREAM_IDENTIFIERS_OFFSET
@@ -89,14 +96,5 @@ impl Param for ParamOutgoingResetRequest {
 
     fn value_length(&self) -> usize {
         PARAM_OUTGOING_RESET_REQUEST_STREAM_IDENTIFIERS_OFFSET + self.stream_identifiers.len() * 2
-    }
-}
-
-impl ParamOutgoingResetRequest {
-    pub(crate) fn header(&self) -> ParamHeader {
-        ParamHeader {
-            typ: ParamType::OutSsnResetReq,
-            value_length: self.value_length() as u16,
-        }
     }
 }

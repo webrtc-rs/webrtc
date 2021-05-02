@@ -28,6 +28,7 @@ use param_type::*;
 use bytes::{Buf, Bytes, BytesMut};
 
 pub(crate) trait Param {
+    fn header(&self) -> ParamHeader;
     fn unmarshal(raw: &Bytes) -> Result<Self, Error>
     where
         Self: Sized;

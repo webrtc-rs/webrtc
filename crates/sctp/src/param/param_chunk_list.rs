@@ -9,6 +9,13 @@ pub(crate) struct ParamChunkList {
 }
 
 impl Param for ParamChunkList {
+    fn header(&self) -> ParamHeader {
+        ParamHeader {
+            typ: ParamType::ChunkList,
+            value_length: self.value_length() as u16,
+        }
+    }
+
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let header = ParamHeader::unmarshal(raw)?;
 
@@ -36,14 +43,5 @@ impl Param for ParamChunkList {
 
     fn value_length(&self) -> usize {
         self.chunk_types.len()
-    }
-}
-
-impl ParamChunkList {
-    pub(crate) fn header(&self) -> ParamHeader {
-        ParamHeader {
-            typ: ParamType::ChunkList,
-            value_length: self.value_length() as u16,
-        }
     }
 }

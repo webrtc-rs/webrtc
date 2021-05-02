@@ -1,6 +1,8 @@
 use super::{chunk_header::*, chunk_type::*, *};
 use crate::param::{param_header::*, *};
 
+use crate::param::param_type::ParamType;
+use crate::util::get_padding_size;
 use bytes::{Bytes, BytesMut};
 use std::fmt;
 
@@ -42,6 +44,14 @@ impl fmt::Display for ChunkHeartbeatAck {
 }
 
 impl Chunk for ChunkHeartbeatAck {
+    fn header(&self) -> ChunkHeader {
+        ChunkHeader {
+            typ: ChunkType::HeartbeatAck,
+            flags: 0,
+            value_length: self.value_length() as u16,
+        }
+    }
+
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let header = ChunkHeader::unmarshal(raw)?;
 
@@ -61,29 +71,15 @@ impl Chunk for ChunkHeartbeatAck {
         if self.params.len() != 1 {
             return Err(Error::ErrHeartbeatAckParams);
         }
+        if self.params[0].header().typ != ParamType::HeartbeatInfo {
+            return Err(Error::ErrHeartbeatAckNotHeartbeatInfo);
+        }
 
         self.header().marshal_to(buf)?;
-        for p in &self.params {
-            buf.extend(p.marshal()?);
-        }
-        Ok(buf.len())
-
-        /*TODO:
-        switch h.params[0].(type) {
-        case *paramHeartbeatInfo:
-            // ParamHeartbeatInfo is valid
-        default:
-            return nil, errHeartbeatAckNotHeartbeatInfo
-        }
-
-        out := make([]byte, 0)
-        for idx, p := range h.params {
-            pp, err := p.marshal()
-            if err != nil {
-                return nil, fmt.Errorf("%w: %v", errHeartbeatAckMarshalParam, err)
-            }
-
-            out = append(out, pp...)
+        for (idx, p) in self.params.iter().enumerate() {
+            let pp = p.marshal()?;
+            let pp_len = pp.len();
+            buf.extend(pp);
 
             // Chunks (including Type, Length, and Value fields) are padded out
             // by the sender with all zero bytes to be a multiple of 4 bytes
@@ -92,15 +88,12 @@ impl Chunk for ChunkHeartbeatAck {
             // chunk.  *However, it does include PADDING of any variable-length
             // parameter except the last parameter in the chunk.*  The receiver
             // MUST ignore the PADDING.
-            if idx != len(h.params)-1 {
-                out = padByte(out, getPadding(len(pp)))
+            if idx != self.params.len() - 1 {
+                let cnt = get_padding_size(pp_len);
+                buf.extend(vec![0u8; cnt]);
             }
         }
-
-        h.chunkHeader.typ = ctHeartbeatAck
-        h.chunkHeader.raw = out
-
-        return h.chunkHeader.marshal()*/
+        Ok(buf.len())
     }
 
     fn check(&self) -> Result<bool, Error> {
@@ -111,15 +104,5 @@ impl Chunk for ChunkHeartbeatAck {
         self.params.iter().fold(0, |length, p| {
             length + PARAM_HEADER_LENGTH + p.value_length()
         })
-    }
-}
-
-impl ChunkHeartbeatAck {
-    pub(crate) fn header(&self) -> ChunkHeader {
-        ChunkHeader {
-            typ: ChunkType::HeartbeatAck,
-            flags: 0,
-            value_length: self.value_length() as u16,
-        }
     }
 }

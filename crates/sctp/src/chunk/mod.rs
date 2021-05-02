@@ -15,6 +15,7 @@ use bytes::{Bytes, BytesMut};
 use std::marker::Sized;
 
 pub(crate) trait Chunk {
+    fn header(&self) -> ChunkHeader;
     fn unmarshal(raw: &Bytes) -> Result<Self, Error>
     where
         Self: Sized;

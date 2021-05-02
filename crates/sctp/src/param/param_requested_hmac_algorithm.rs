@@ -44,6 +44,13 @@ pub(crate) struct ParamRequestedHmacAlgorithm {
 }
 
 impl Param for ParamRequestedHmacAlgorithm {
+    fn header(&self) -> ParamHeader {
+        ParamHeader {
+            typ: ParamType::ReqHmacAlgo,
+            value_length: self.value_length() as u16,
+        }
+    }
+
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let _ = ParamHeader::unmarshal(raw)?;
 
@@ -77,14 +84,5 @@ impl Param for ParamRequestedHmacAlgorithm {
 
     fn value_length(&self) -> usize {
         2 * self.available_algorithms.len()
-    }
-}
-
-impl ParamRequestedHmacAlgorithm {
-    pub(crate) fn header(&self) -> ParamHeader {
-        ParamHeader {
-            typ: ParamType::ReqHmacAlgo,
-            value_length: self.value_length() as u16,
-        }
     }
 }
