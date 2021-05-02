@@ -5,7 +5,7 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 #[derive(Debug, Clone)]
 pub(crate) struct ParamChunkList {
-    chunk_types: Vec<ChunkType>,
+    pub(crate) chunk_types: Vec<ChunkType>,
 }
 
 impl Param for ParamChunkList {

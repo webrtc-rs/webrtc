@@ -41,7 +41,7 @@ impl From<u16> for HmacAlgorithm {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ParamRequestedHmacAlgorithm {
-    available_algorithms: Vec<HmacAlgorithm>,
+    pub(crate) available_algorithms: Vec<HmacAlgorithm>,
 }
 
 impl Param for ParamRequestedHmacAlgorithm {

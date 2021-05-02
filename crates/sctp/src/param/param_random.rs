@@ -4,7 +4,7 @@ use bytes::{Bytes, BytesMut};
 
 #[derive(Debug, Clone)]
 pub(crate) struct ParamRandom {
-    random_data: Bytes,
+    pub(crate) random_data: Bytes,
 }
 
 impl Param for ParamRandom {

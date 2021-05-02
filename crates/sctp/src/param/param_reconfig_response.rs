@@ -71,9 +71,9 @@ pub(crate) struct ParamReconfigResponse {
     /// This value is copied from the request parameter and is used by the
     /// receiver of the Re-configuration Response Parameter to tie the
     /// response to the request.
-    reconfig_response_sequence_number: u32,
-    // This value describes the result of the processing of the request.
-    result: ReconfigResult,
+    pub(crate) reconfig_response_sequence_number: u32,
+    /// This value describes the result of the processing of the request.
+    pub(crate) result: ReconfigResult,
 }
 
 impl Param for ParamReconfigResponse {
