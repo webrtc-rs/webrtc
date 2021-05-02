@@ -4,6 +4,7 @@ pub(crate) mod param_header;
 pub(crate) mod param_heartbeat_info;
 pub(crate) mod param_outgoing_reset_request;
 pub(crate) mod param_random;
+pub(crate) mod param_reconfig_response;
 pub(crate) mod param_type;
 
 use crate::error::Error;

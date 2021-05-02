@@ -1,0 +1,116 @@
+use super::{param_header::*, param_type::*, *};
+
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+use std::fmt;
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+#[repr(C)]
+pub(crate) enum ReconfigResult {
+    SuccessNop = 0,
+    SuccessPerformed = 1,
+    Denied = 2,
+    ErrorWrongSsn = 3,
+    ErrorRequestAlreadyInProgress = 4,
+    ErrorBadSequenceNumber = 5,
+    InProgress = 6,
+    Unknown,
+}
+
+impl fmt::Display for ReconfigResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let others = format!("Unknown reconfigResult: {}", self);
+        let s = match *self {
+            ReconfigResult::SuccessNop => "0: Success - Nothing to do",
+            ReconfigResult::SuccessPerformed => "1: Success - Performed",
+            ReconfigResult::Denied => "2: Denied",
+            ReconfigResult::ErrorWrongSsn => "3: Error - Wrong SSN",
+            ReconfigResult::ErrorRequestAlreadyInProgress => {
+                "4: Error - Request already in progress"
+            }
+            ReconfigResult::ErrorBadSequenceNumber => "5: Error - Bad Sequence Number",
+            ReconfigResult::InProgress => "6: In progress",
+            _ => others.as_str(),
+        };
+        write!(f, "{}", s)
+    }
+}
+
+impl From<u32> for ReconfigResult {
+    fn from(v: u32) -> ReconfigResult {
+        match v {
+            0 => ReconfigResult::SuccessNop,
+            1 => ReconfigResult::SuccessPerformed,
+            2 => ReconfigResult::Denied,
+            3 => ReconfigResult::ErrorWrongSsn,
+            4 => ReconfigResult::ErrorRequestAlreadyInProgress,
+            5 => ReconfigResult::ErrorBadSequenceNumber,
+            6 => ReconfigResult::InProgress,
+            _ => ReconfigResult::Unknown,
+        }
+    }
+}
+
+///This parameter is used by the receiver of a Re-configuration Request
+///Parameter to respond to the request.
+///
+///0                   1                   2                   3
+///0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///|     Parameter Type = 16       |      Parameter Length         |
+///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///|         Re-configuration Response Sequence Number             |
+///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///|                            Result                             |
+///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///|                   Sender's Next TSN (optional)                |
+///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///|                  Receiver's Next TSN (optional)               |
+///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+#[derive(Debug, Clone)]
+pub(crate) struct ParamReconfigResponse {
+    /// This value is copied from the request parameter and is used by the
+    /// receiver of the Re-configuration Response Parameter to tie the
+    /// response to the request.
+    reconfig_response_sequence_number: u32,
+    // This value describes the result of the processing of the request.
+    result: ReconfigResult,
+}
+
+impl Param for ParamReconfigResponse {
+    fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
+        let _ = ParamHeader::unmarshal(raw)?;
+        if raw.len() < 8 + PARAM_HEADER_LENGTH {
+            return Err(Error::ErrReconfigRespParamTooShort);
+        }
+
+        let reader = &mut raw.slice(PARAM_HEADER_LENGTH..);
+
+        let reconfig_response_sequence_number = reader.get_u32();
+        let result = reader.get_u32().into();
+
+        Ok(ParamReconfigResponse {
+            reconfig_response_sequence_number,
+            result,
+        })
+    }
+
+    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error> {
+        self.header().marshal_to(buf)?;
+        buf.put_u32(self.reconfig_response_sequence_number);
+        buf.put_u32(self.result as u32);
+        Ok(buf.len())
+    }
+
+    fn value_length(&self) -> usize {
+        8
+    }
+}
+
+impl ParamReconfigResponse {
+    pub(crate) fn header(&self) -> ParamHeader {
+        ParamHeader {
+            typ: ParamType::ReconfigResp,
+            value_length: self.value_length() as u16,
+        }
+    }
+}
