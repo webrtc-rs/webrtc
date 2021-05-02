@@ -59,7 +59,7 @@ impl Chunk for ChunkHeartbeat {
         if err != nil {
             return fmt.Errorf("%w: %v", errParseParamTypeFailed, err)
         }
-        if pType != heartbeatInfo {
+        if pType != HEARTBEAT_INFO {
             return fmt.Errorf("%w: instead have %s", errHeartbeatParam, pType.String())
         }
 

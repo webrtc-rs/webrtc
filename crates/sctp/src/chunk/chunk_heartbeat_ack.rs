@@ -87,11 +87,11 @@ impl Chunk for ChunkHeartbeatAck {
 
             // Chunks (including Type, Length, and Value fields) are padded out
             // by the sender with all zero bytes to be a multiple of 4 bytes
-            // long.  This padding MUST NOT be more than 3 bytes in total.  The
-            // Chunk Length value does not include terminating padding of the
-            // chunk.  *However, it does include padding of any variable-length
+            // long.  This PADDING MUST NOT be more than 3 bytes in total.  The
+            // Chunk Length value does not include terminating PADDING of the
+            // chunk.  *However, it does include PADDING of any variable-length
             // parameter except the last parameter in the chunk.*  The receiver
-            // MUST ignore the padding.
+            // MUST ignore the PADDING.
             if idx != len(h.params)-1 {
                 out = padByte(out, getPadding(len(pp)))
             }

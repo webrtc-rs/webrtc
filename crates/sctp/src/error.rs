@@ -6,7 +6,7 @@ pub enum Error {
     ErrChunkHeaderTooSmall,
     #[error("not enough data left in SCTP packet to satisfy requested length")]
     ErrChunkHeaderNotEnoughSpace,
-    #[error("chunk padding is non-zero at offset")]
+    #[error("chunk PADDING is non-zero at offset")]
     ErrChunkHeaderPaddingNonZero,
     #[error("chunk has invalid length")]
     ErrChunkHeaderInvalidLength,
@@ -50,4 +50,19 @@ pub enum Error {
 
     #[error("raw is too small for error cause")]
     ErrErrorCauseTooSmall,
+
+    #[error("unhandled ParamType")]
+    ErrParamTypeUnhandled,
+
+    #[error("param header too short")]
+    ErrParamHeaderTooShort,
+    #[error("param self reported length is shorter than header length")]
+    ErrParamHeaderSelfReportedLengthShorter,
+    #[error("param self reported length is longer than header length")]
+    ErrParamHeaderSelfReportedLengthLonger,
+    #[error("failed to parse param type")]
+    ErrParamHeaderParseFailed,
+
+    #[error("packet to short")]
+    ErrParamPacketTooShort,
 }
