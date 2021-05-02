@@ -14,9 +14,18 @@ pub(crate) mod param_supported_extensions;
 pub(crate) mod param_type;
 
 use crate::error::Error;
+use crate::param::{
+    param_chunk_list::ParamChunkList, param_forward_tsn_supported::ParamForwardTsnSupported,
+    param_heartbeat_info::ParamHeartbeatInfo,
+    param_outgoing_reset_request::ParamOutgoingResetRequest, param_random::ParamRandom,
+    param_reconfig_response::ParamReconfigResponse,
+    param_requested_hmac_algorithm::ParamRequestedHmacAlgorithm,
+    param_state_cookie::ParamStateCookie, param_supported_extensions::ParamSupportedExtensions,
+};
 use param_header::*;
+use param_type::*;
 
-use bytes::{Bytes, BytesMut};
+use bytes::{Buf, Bytes, BytesMut};
 
 pub(crate) trait Param {
     fn unmarshal(raw: &Bytes) -> Result<Self, Error>
@@ -33,29 +42,22 @@ pub(crate) trait Param {
     }
 }
 
-/*TODO:
-func buildParam(t paramType, rawParam []byte) (param, error) {
-    switch t {
-    case FORWARD_TSNSUPP:
-        return (&paramForwardTSNSupported{}).unmarshal(rawParam)
-    case SUPPORTED_EXT:
-        return (&paramSupportedExtensions{}).unmarshal(rawParam)
-    case RANDOM:
-        return (&paramRandom{}).unmarshal(rawParam)
-    case REQ_HMACALGO:
-        return (&paramRequestedHMACAlgorithm{}).unmarshal(rawParam)
-    case CHUNK_LIST:
-        return (&paramChunkList{}).unmarshal(rawParam)
-    case STATE_COOKIE:
-        return (&paramStateCookie{}).unmarshal(rawParam)
-    case HEARTBEAT_INFO:
-        return (&paramHeartbeatInfo{}).unmarshal(rawParam)
-    case OUT_SSNRESET_REQ:
-        return (&paramOutgoingResetRequest{}).unmarshal(rawParam)
-    case RECONFIG_RESP:
-        return (&paramReconfigResponse{}).unmarshal(rawParam)
-    default:
-        return nil, fmt.Errorf("%w: %v", errParamTypeUnhandled, t)
+pub(crate) fn build_param(raw_param: &Bytes) -> Result<Box<dyn Param>, Error> {
+    if raw_param.len() < PARAM_HEADER_LENGTH {
+        return Err(Error::ErrParamHeaderTooShort);
+    }
+    let reader = &mut raw_param.slice(..2);
+    let t: ParamType = reader.get_u16().into();
+    match t {
+        ParamType::ForwardTsnSupp => Ok(Box::new(ParamForwardTsnSupported::unmarshal(raw_param)?)),
+        ParamType::SupportedExt => Ok(Box::new(ParamSupportedExtensions::unmarshal(raw_param)?)),
+        ParamType::Random => Ok(Box::new(ParamRandom::unmarshal(raw_param)?)),
+        ParamType::ReqHmacAlgo => Ok(Box::new(ParamRequestedHmacAlgorithm::unmarshal(raw_param)?)),
+        ParamType::ChunkList => Ok(Box::new(ParamChunkList::unmarshal(raw_param)?)),
+        ParamType::StateCookie => Ok(Box::new(ParamStateCookie::unmarshal(raw_param)?)),
+        ParamType::HeartbeatInfo => Ok(Box::new(ParamHeartbeatInfo::unmarshal(raw_param)?)),
+        ParamType::OutSsnResetReq => Ok(Box::new(ParamOutgoingResetRequest::unmarshal(raw_param)?)),
+        ParamType::ReconfigResp => Ok(Box::new(ParamReconfigResponse::unmarshal(raw_param)?)),
+        _ => Err(Error::ErrParamTypeUnhandled),
     }
 }
- */

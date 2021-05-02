@@ -236,3 +236,35 @@ fn test_reconfig_result_stringer() -> Result<(), Error> {
 
     Ok(())
 }
+
+///////////////////////////////////////////////////////////////////
+//param_test
+///////////////////////////////////////////////////////////////////
+
+#[test]
+fn test_build_param_success() -> Result<(), Error> {
+    let tests = vec![CHUNK_RECONFIG_PARAM_A.clone()];
+
+    for binary in tests {
+        let p = build_param(&binary)?;
+        let b = p.marshal()?;
+        assert_eq!(binary, b);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_build_param_failure() -> Result<(), Error> {
+    let tests = vec![
+        ("invalid ParamType", Bytes::from_static(&[0x0, 0x0])),
+        ("build failure", CHUNK_RECONFIG_PARAM_A.slice(..8)),
+    ];
+
+    for (name, binary) in tests {
+        let result = build_param(&binary);
+        assert!(result.is_err(), "expected unmarshal: {} to fail.", name);
+    }
+
+    Ok(())
+}
