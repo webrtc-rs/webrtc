@@ -7,6 +7,7 @@ pub(crate) mod param_random;
 pub(crate) mod param_reconfig_response;
 pub(crate) mod param_requested_hmac_algorithm;
 pub(crate) mod param_state_cookie;
+pub(crate) mod param_supported_extensions;
 pub(crate) mod param_type;
 
 use crate::error::Error;
