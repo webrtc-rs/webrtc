@@ -66,7 +66,7 @@ impl From<u32> for ReconfigResult {
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///|                  Receiver's Next TSN (optional)               |
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ParamReconfigResponse {
     /// This value is copied from the request parameter and is used by the
     /// receiver of the Re-configuration Response Parameter to tie the

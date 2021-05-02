@@ -3,6 +3,7 @@ use super::{param_type::*, *};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ParamHeader {
     pub(crate) typ: ParamType,
     pub(crate) value_length: u16,

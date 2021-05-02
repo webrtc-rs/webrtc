@@ -23,7 +23,7 @@ pub(crate) const PARAM_OUTGOING_RESET_REQUEST_STREAM_IDENTIFIERS_OFFSET: usize =
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///|  Stream Number N-1 (optional) |    Stream Number N (optional) |
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ParamOutgoingResetRequest {
     /// reconfig_request_sequence_number is used to identify the request.  It is a monotonically
     /// increasing number that is initialized to the same value as the

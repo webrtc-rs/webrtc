@@ -4,7 +4,7 @@ use bytes::{Bytes, BytesMut};
 use rand::Rng;
 use std::fmt;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ParamStateCookie {
     pub(crate) cookie: Bytes,
 }
