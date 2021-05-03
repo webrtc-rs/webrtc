@@ -73,7 +73,7 @@ impl Chunk for ChunkForwardTsn {
 
         let mut streams = vec![];
         let mut remaining = buf.len() - offset;
-        while remaining >= FORWARD_TSN_STREAM_LENGTH {
+        while remaining > 0 {
             let s = ChunkForwardTsnStream::unmarshal(&buf.slice(offset..))?;
             offset += s.value_length();
             remaining -= s.value_length();

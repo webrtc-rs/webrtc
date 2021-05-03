@@ -152,3 +152,54 @@ fn test_chunk_error_unrecognized_chunk_type_marshal_with_cause_value_being_nil()
 
     Ok(())
 }
+
+///////////////////////////////////////////////////////////////////
+//chunk_forward_tsn_test
+///////////////////////////////////////////////////////////////////
+use super::chunk_forward_tsn::*;
+
+static CHUNK_FORWARD_TSN_BYTES: Bytes =
+    Bytes::from_static(&[0xc0, 0x0, 0x0, 0x8, 0x0, 0x0, 0x0, 0x3]);
+
+#[test]
+fn test_chunk_forward_tsn_success() -> Result<(), Error> {
+    let tests = vec![
+        CHUNK_FORWARD_TSN_BYTES.clone(),
+        Bytes::from_static(&[0xc0, 0x0, 0x0, 0xc, 0x0, 0x0, 0x0, 0x3, 0x0, 0x4, 0x0, 0x5]),
+        Bytes::from_static(&[
+            0xc0, 0x0, 0x0, 0x10, 0x0, 0x0, 0x0, 0x3, 0x0, 0x4, 0x0, 0x5, 0x0, 0x6, 0x0, 0x7,
+        ]),
+    ];
+
+    for binary in tests {
+        let actual = ChunkForwardTsn::unmarshal(&binary)?;
+        let b = actual.marshal()?;
+        assert_eq!(binary, b, "test not equal");
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_chunk_forward_tsn_unmarshal_failure() -> Result<(), Error> {
+    let tests = vec![
+        ("chunk header to short", Bytes::from_static(&[0xc0])),
+        (
+            "missing New Cumulative TSN",
+            Bytes::from_static(&[0xc0, 0x0, 0x0, 0x4]),
+        ),
+        (
+            "missing stream sequence",
+            Bytes::from_static(&[
+                0xc0, 0x0, 0x0, 0xe, 0x0, 0x0, 0x0, 0x3, 0x0, 0x4, 0x0, 0x5, 0x0, 0x6,
+            ]),
+        ),
+    ];
+
+    for (name, binary) in tests {
+        let result = ChunkForwardTsn::unmarshal(&binary);
+        assert!(result.is_err(), "expected unmarshal: {} to fail.", name);
+    }
+
+    Ok(())
+}
