@@ -299,3 +299,96 @@ fn test_chunk_reconfig_unmarshal_failure() -> Result<(), Error> {
 
     Ok(())
 }
+
+///////////////////////////////////////////////////////////////////
+//chunk_shutdown_test
+///////////////////////////////////////////////////////////////////
+use super::chunk_shutdown::*;
+
+#[test]
+fn test_chunk_shutdown_success() -> Result<(), Error> {
+    let tests = vec![Bytes::from_static(&[
+        0x07, 0x00, 0x00, 0x08, 0x12, 0x34, 0x56, 0x78,
+    ])];
+
+    for binary in tests {
+        let actual = ChunkShutdown::unmarshal(&binary)?;
+        let b = actual.marshal()?;
+        assert_eq!(binary, b, "test not equal");
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_chunk_shutdown_failure() -> Result<(), Error> {
+    let tests = vec![
+        (
+            "length too short",
+            Bytes::from_static(&[0x07, 0x00, 0x00, 0x07, 0x12, 0x34, 0x56, 0x78]),
+        ),
+        (
+            "length too long",
+            Bytes::from_static(&[0x07, 0x00, 0x00, 0x09, 0x12, 0x34, 0x56, 0x78]),
+        ),
+        (
+            "payload too short",
+            Bytes::from_static(&[0x07, 0x00, 0x00, 0x08, 0x12, 0x34, 0x56]),
+        ),
+        (
+            "payload too long",
+            Bytes::from_static(&[0x07, 0x00, 0x00, 0x08, 0x12, 0x34, 0x56, 0x78, 0x9f]),
+        ),
+        (
+            "invalid type",
+            Bytes::from_static(&[0x08, 0x00, 0x00, 0x08, 0x12, 0x34, 0x56, 0x78]),
+        ),
+    ];
+
+    for (name, binary) in tests {
+        let result = ChunkShutdown::unmarshal(&binary);
+        assert!(result.is_err(), "expected unmarshal: {} to fail.", name);
+    }
+
+    Ok(())
+}
+
+///////////////////////////////////////////////////////////////////
+//chunk_shutdown_ack_test
+///////////////////////////////////////////////////////////////////
+use super::chunk_shutdown_ack::*;
+
+#[test]
+fn test_chunk_shutdown_ack_success() -> Result<(), Error> {
+    let tests = vec![Bytes::from_static(&[0x08, 0x00, 0x00, 0x04])];
+
+    for binary in tests {
+        let actual = ChunkShutdownAck::unmarshal(&binary)?;
+        let b = actual.marshal()?;
+        assert_eq!(binary, b, "test not equal");
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_chunk_shutdown_ack_failure() -> Result<(), Error> {
+    let tests = vec![
+        ("length too short", Bytes::from_static(&[0x08, 0x00, 0x00])),
+        (
+            "length too long",
+            Bytes::from_static(&[0x08, 0x00, 0x00, 0x04, 0x12]),
+        ),
+        (
+            "invalid type",
+            Bytes::from_static(&[0x0f, 0x00, 0x00, 0x04]),
+        ),
+    ];
+
+    for (name, binary) in tests {
+        let result = ChunkShutdownAck::unmarshal(&binary);
+        assert!(result.is_err(), "expected unmarshal: {} to fail.", name);
+    }
+
+    Ok(())
+}
