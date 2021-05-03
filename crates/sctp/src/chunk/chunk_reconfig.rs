@@ -86,7 +86,8 @@ impl Chunk for ChunkReconfig {
     fn value_length(&self) -> usize {
         let mut l = self.param_a.value_length() + PARAM_HEADER_LENGTH;
         if let Some(param_b) = &self.param_b {
-            l += param_b.value_length() + PARAM_HEADER_LENGTH;
+            let padding = get_padding_size(PARAM_HEADER_LENGTH + self.param_a.value_length());
+            l += PARAM_HEADER_LENGTH + param_b.value_length() + padding;
         }
         l
     }

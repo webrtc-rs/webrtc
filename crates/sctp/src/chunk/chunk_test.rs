@@ -203,3 +203,99 @@ fn test_chunk_forward_tsn_unmarshal_failure() -> Result<(), Error> {
 
     Ok(())
 }
+
+///////////////////////////////////////////////////////////////////
+//chunk_reconfig_test
+///////////////////////////////////////////////////////////////////
+use super::chunk_reconfig::*;
+
+static TEST_CHUNK_RECONFIG_PARAM_A: Bytes = Bytes::from_static(&[
+    0x0, 0xd, 0x0, 0x16, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x2, 0x0, 0x0, 0x0, 0x3, 0x0, 0x4, 0x0,
+    0x5, 0x0, 0x6,
+]);
+
+static TEST_CHUNK_RECONFIG_PARAM_B: Bytes = Bytes::from_static(&[
+    0x0, 0xd, 0x0, 0x10, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x2, 0x0, 0x0, 0x0, 0x3,
+]);
+
+static TEST_CHUNK_RECONFIG_RESPONCE: Bytes =
+    Bytes::from_static(&[0x0, 0x10, 0x0, 0xc, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1]);
+
+lazy_static! {
+    static ref TEST_CHUNK_RECONFIG_BYTES: Vec<Bytes> = {
+        let mut tests = vec![];
+        {
+            let mut test = BytesMut::new();
+            test.extend(vec![0x82, 0x0, 0x0, 0x1a]);
+            test.extend(TEST_CHUNK_RECONFIG_PARAM_A.clone());
+            tests.push(test.freeze());
+        }
+        {
+            let mut test = BytesMut::new();
+            test.extend(vec![0x82, 0x0, 0x0, 0x14]);
+            test.extend(TEST_CHUNK_RECONFIG_PARAM_B.clone());
+            tests.push(test.freeze());
+        }
+        {
+            let mut test = BytesMut::new();
+            test.extend(vec![0x82, 0x0, 0x0, 0x10]);
+            test.extend(TEST_CHUNK_RECONFIG_RESPONCE.clone());
+            tests.push(test.freeze());
+        }
+        {
+            let mut test = BytesMut::new();
+            test.extend(vec![0x82, 0x0, 0x0, 0x2c]);
+            test.extend(TEST_CHUNK_RECONFIG_PARAM_A.clone());
+            test.extend(vec![0u8; 2]);
+            test.extend(TEST_CHUNK_RECONFIG_PARAM_B.clone());
+            tests.push(test.freeze());
+        }
+        {
+            let mut test = BytesMut::new();
+            test.extend(vec![0x82, 0x0, 0x0, 0x2a]);
+            test.extend(TEST_CHUNK_RECONFIG_PARAM_B.clone());
+            test.extend(TEST_CHUNK_RECONFIG_PARAM_A.clone());
+            tests.push(test.freeze());
+        }
+
+        tests
+    };
+}
+
+#[test]
+fn test_chunk_reconfig_success() -> Result<(), Error> {
+    for (i, binary) in TEST_CHUNK_RECONFIG_BYTES.iter().enumerate() {
+        let actual = ChunkReconfig::unmarshal(binary)?;
+        let b = actual.marshal()?;
+        assert_eq!(*binary, b, "test {} not equal: {:?} vs {:?}", i, *binary, b);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_chunk_reconfig_unmarshal_failure() -> Result<(), Error> {
+    let mut test = BytesMut::new();
+    test.extend(vec![0x82, 0x0, 0x0, 0x18]);
+    test.extend(TEST_CHUNK_RECONFIG_PARAM_B.clone());
+    test.extend(vec![0x0, 0xd, 0x0, 0x0]);
+    let tests = vec![
+        ("chunk header to short", Bytes::from_static(&[0x82])),
+        (
+            "missing parse param type (A)",
+            Bytes::from_static(&[0x82, 0x0, 0x0, 0x4]),
+        ),
+        (
+            "wrong param (A)",
+            Bytes::from_static(&[0x82, 0x0, 0x0, 0x8, 0x0, 0xd, 0x0, 0x0]),
+        ),
+        ("wrong param (B)", test.freeze()),
+    ];
+
+    for (name, binary) in tests {
+        let result = ChunkReconfig::unmarshal(&binary);
+        assert!(result.is_err(), "expected unmarshal: {} to fail.", name);
+    }
+
+    Ok(())
+}

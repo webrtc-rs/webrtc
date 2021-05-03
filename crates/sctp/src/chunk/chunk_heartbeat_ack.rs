@@ -101,6 +101,7 @@ impl Chunk for ChunkHeartbeatAck {
     }
 
     fn value_length(&self) -> usize {
+        //FIXME: get_padding_size
         self.params.iter().fold(0, |length, p| {
             length + PARAM_HEADER_LENGTH + p.value_length()
         })

@@ -69,7 +69,7 @@ impl Param for ParamOutgoingResetRequest {
     }
 
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
-        let _ = ParamHeader::unmarshal(raw)?;
+        let header = ParamHeader::unmarshal(raw)?;
         if raw.len() < PARAM_HEADER_LENGTH + PARAM_OUTGOING_RESET_REQUEST_STREAM_IDENTIFIERS_OFFSET
         {
             return Err(Error::ErrSsnResetRequestParamTooShort);
@@ -80,10 +80,8 @@ impl Param for ParamOutgoingResetRequest {
         let reconfig_response_sequence_number = reader.get_u32();
         let sender_last_tsn = reader.get_u32();
 
-        let lim = (raw.len()
-            - PARAM_HEADER_LENGTH
-            - PARAM_OUTGOING_RESET_REQUEST_STREAM_IDENTIFIERS_OFFSET)
-            / 2;
+        let lim =
+            (header.value_length() - PARAM_OUTGOING_RESET_REQUEST_STREAM_IDENTIFIERS_OFFSET) / 2;
         let mut stream_identifiers = vec![];
         for _ in 0..lim {
             stream_identifiers.push(reader.get_u16());
