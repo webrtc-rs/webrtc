@@ -114,4 +114,11 @@ pub enum Error {
     ErrChunkMarshalParamAReconfigFailed,
     #[error("unable to marshal parameter B for reconfig")]
     ErrChunkMarshalParamBReconfigFailed,
+
+    #[error("ChunkType is not of type SACK")]
+    ErrChunkTypeNotSack,
+    #[error("SACK Chunk size is not large enough to contain header")]
+    ErrSackSizeNotLargeEnoughInfo,
+    #[error("SACK Chunk size does not match predicted amount from header values")]
+    ErrSackSizeNotMatchPredicted,
 }
