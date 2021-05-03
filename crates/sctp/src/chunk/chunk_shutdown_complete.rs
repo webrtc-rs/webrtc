@@ -32,7 +32,7 @@ impl Chunk for ChunkShutdownComplete {
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let header = ChunkHeader::unmarshal(raw)?;
 
-        if header.typ != ChunkType::ShutdownAck {
+        if header.typ != ChunkType::ShutdownComplete {
             return Err(Error::ErrChunkTypeNotShutdownComplete);
         }
 

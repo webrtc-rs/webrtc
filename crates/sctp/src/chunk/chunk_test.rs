@@ -392,3 +392,43 @@ fn test_chunk_shutdown_ack_failure() -> Result<(), Error> {
 
     Ok(())
 }
+
+///////////////////////////////////////////////////////////////////
+//chunk_shutdown_complete_test
+///////////////////////////////////////////////////////////////////
+use super::chunk_shutdown_complete::*;
+
+#[test]
+fn test_chunk_shutdown_complete_success() -> Result<(), Error> {
+    let tests = vec![Bytes::from_static(&[0x0e, 0x00, 0x00, 0x04])];
+
+    for binary in tests {
+        let actual = ChunkShutdownComplete::unmarshal(&binary)?;
+        let b = actual.marshal()?;
+        assert_eq!(binary, b, "test not equal");
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_chunk_shutdown_complete_failure() -> Result<(), Error> {
+    let tests = vec![
+        ("length too short", Bytes::from_static(&[0x0e, 0x00, 0x00])),
+        (
+            "length too long",
+            Bytes::from_static(&[0x0e, 0x00, 0x00, 0x04, 0x12]),
+        ),
+        (
+            "invalid type",
+            Bytes::from_static(&[0x0f, 0x00, 0x00, 0x04]),
+        ),
+    ];
+
+    for (name, binary) in tests {
+        let result = ChunkShutdownComplete::unmarshal(&binary);
+        assert!(result.is_err(), "expected unmarshal: {} to fail.", name);
+    }
+
+    Ok(())
+}
