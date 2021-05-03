@@ -4,7 +4,7 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 
 /// errorCauseCode is a cause code that appears in either a ERROR or ABORT chunk
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub(crate) struct ErrorCauseCode(pub(crate) u16);
 
 pub(crate) const INVALID_STREAM_IDENTIFIER: ErrorCauseCode = ErrorCauseCode(1);
@@ -47,7 +47,7 @@ impl fmt::Display for ErrorCauseCode {
 }
 
 /// ErrorCauseHeader represents the shared header that is shared by all error causes
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub(crate) struct ErrorCause {
     pub(crate) code: ErrorCauseCode,
     pub(crate) raw: Bytes,
