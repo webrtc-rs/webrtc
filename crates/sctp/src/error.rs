@@ -129,4 +129,6 @@ pub enum Error {
 
     #[error("ChunkType is not of type SHUTDOWN-ACK")]
     ErrChunkTypeNotShutdownAck,
+    #[error("ChunkType is not of type SHUTDOWN-COMPLETE")]
+    ErrChunkTypeNotShutdownComplete,
 }
