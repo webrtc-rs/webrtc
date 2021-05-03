@@ -11,6 +11,7 @@ pub(crate) mod chunk_payload_data;
 pub(crate) mod chunk_reconfig;
 pub(crate) mod chunk_selective_ack;
 pub(crate) mod chunk_shutdown;
+pub(crate) mod chunk_shutdown_ack;
 pub(crate) mod chunk_type;
 
 use crate::error::Error;

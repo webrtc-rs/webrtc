@@ -126,4 +126,7 @@ pub enum Error {
     ErrInvalidChunkSize,
     #[error("ChunkType is not of type SHUTDOWN")]
     ErrChunkTypeNotShutdown,
+
+    #[error("ChunkType is not of type SHUTDOWN-ACK")]
+    ErrChunkTypeNotShutdownAck,
 }
