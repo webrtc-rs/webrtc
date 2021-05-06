@@ -61,6 +61,7 @@ impl DnsConn {
 
         socket.set_reuse_address(true)?;
         socket.set_broadcast(true)?;
+        socket.set_read_timeout(Some(Duration::from_secs(2)))?;
 
         socket.bind(&SockAddr::from(addr))?;
         {
