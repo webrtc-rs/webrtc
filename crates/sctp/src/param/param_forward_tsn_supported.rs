@@ -40,4 +40,8 @@ impl Param for ParamForwardTsnSupported {
     fn value_length(&self) -> usize {
         0
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

@@ -52,4 +52,8 @@ impl Param for ParamHeader {
     fn value_length(&self) -> usize {
         self.value_length as usize
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

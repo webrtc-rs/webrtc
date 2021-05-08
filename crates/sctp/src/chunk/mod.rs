@@ -22,8 +22,8 @@ use crate::error::Error;
 use chunk_header::*;
 
 use bytes::{Bytes, BytesMut};
-use std::fmt;
 use std::marker::Sized;
+use std::{any::Any, fmt};
 
 pub(crate) trait Chunk: fmt::Display {
     fn header(&self) -> ChunkHeader;
@@ -33,6 +33,7 @@ pub(crate) trait Chunk: fmt::Display {
     fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error>;
     fn check(&self) -> Result<(), Error>;
     fn value_length(&self) -> usize;
+    fn as_any(&self) -> &dyn Any;
 
     fn marshal(&self) -> Result<Bytes, Error> {
         let capacity = CHUNK_HEADER_SIZE + self.value_length();

@@ -23,7 +23,7 @@ impl fmt::Display for ChunkCookieAck {
 impl Chunk for ChunkCookieAck {
     fn header(&self) -> ChunkHeader {
         ChunkHeader {
-            typ: ChunkType::CookieAck,
+            typ: CT_COOKIE_ACK,
             flags: 0,
             value_length: self.value_length() as u16,
         }
@@ -32,7 +32,7 @@ impl Chunk for ChunkCookieAck {
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let header = ChunkHeader::unmarshal(raw)?;
 
-        if header.typ != ChunkType::CookieAck {
+        if header.typ != CT_COOKIE_ACK {
             return Err(Error::ErrChunkTypeNotCookieAck);
         }
 
@@ -50,5 +50,9 @@ impl Chunk for ChunkCookieAck {
 
     fn value_length(&self) -> usize {
         0
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

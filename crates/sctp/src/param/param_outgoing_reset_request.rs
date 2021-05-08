@@ -110,4 +110,8 @@ impl Param for ParamOutgoingResetRequest {
     fn value_length(&self) -> usize {
         PARAM_OUTGOING_RESET_REQUEST_STREAM_IDENTIFIERS_OFFSET + self.stream_identifiers.len() * 2
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

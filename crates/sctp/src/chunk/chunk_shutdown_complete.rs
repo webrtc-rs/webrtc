@@ -23,7 +23,7 @@ impl fmt::Display for ChunkShutdownComplete {
 impl Chunk for ChunkShutdownComplete {
     fn header(&self) -> ChunkHeader {
         ChunkHeader {
-            typ: ChunkType::ShutdownComplete,
+            typ: CT_SHUTDOWN_COMPLETE,
             flags: 0,
             value_length: self.value_length() as u16,
         }
@@ -32,7 +32,7 @@ impl Chunk for ChunkShutdownComplete {
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let header = ChunkHeader::unmarshal(raw)?;
 
-        if header.typ != ChunkType::ShutdownComplete {
+        if header.typ != CT_SHUTDOWN_COMPLETE {
             return Err(Error::ErrChunkTypeNotShutdownComplete);
         }
 
@@ -50,5 +50,9 @@ impl Chunk for ChunkShutdownComplete {
 
     fn value_length(&self) -> usize {
         0
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

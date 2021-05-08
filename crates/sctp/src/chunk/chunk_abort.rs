@@ -44,7 +44,7 @@ impl fmt::Display for ChunkAbort {
 impl Chunk for ChunkAbort {
     fn header(&self) -> ChunkHeader {
         ChunkHeader {
-            typ: ChunkType::Abort,
+            typ: CT_ABORT,
             flags: 0,
             value_length: self.value_length() as u16,
         }
@@ -53,7 +53,7 @@ impl Chunk for ChunkAbort {
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let header = ChunkHeader::unmarshal(raw)?;
 
-        if header.typ != ChunkType::Abort {
+        if header.typ != CT_ABORT {
             return Err(Error::ErrChunkTypeNotAbort);
         }
 
@@ -84,5 +84,9 @@ impl Chunk for ChunkAbort {
         self.error_causes
             .iter()
             .fold(0, |length, ec| length + ec.length())
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

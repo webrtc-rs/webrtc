@@ -3,74 +3,49 @@ use std::fmt;
 // chunkType is an enum for SCTP Chunk Type field
 // This field identifies the type of information contained in the
 // Chunk Value field.
-#[derive(Debug, Copy, Clone, PartialEq)]
-#[repr(C)]
-pub(crate) enum ChunkType {
-    PayloadData = 0,
-    Init = 1,
-    InitAck = 2,
-    Sack = 3,
-    Heartbeat = 4,
-    HeartbeatAck = 5,
-    Abort = 6,
-    Shutdown = 7,
-    ShutdownAck = 8,
-    Error = 9,
-    CookieEcho = 10,
-    CookieAck = 11,
-    Cwr = 13,
-    ShutdownComplete = 14,
-    Reconfig = 130,
-    ForwardTsn = 192,
-    Unknown,
-}
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
+pub(crate) struct ChunkType(pub(crate) u8);
+
+pub(crate) const CT_PAYLOAD_DATA: ChunkType = ChunkType(0);
+pub(crate) const CT_INIT: ChunkType = ChunkType(1);
+pub(crate) const CT_INIT_ACK: ChunkType = ChunkType(2);
+pub(crate) const CT_SACK: ChunkType = ChunkType(3);
+pub(crate) const CT_HEARTBEAT: ChunkType = ChunkType(4);
+pub(crate) const CT_HEARTBEAT_ACK: ChunkType = ChunkType(5);
+pub(crate) const CT_ABORT: ChunkType = ChunkType(6);
+pub(crate) const CT_SHUTDOWN: ChunkType = ChunkType(7);
+pub(crate) const CT_SHUTDOWN_ACK: ChunkType = ChunkType(8);
+pub(crate) const CT_ERROR: ChunkType = ChunkType(9);
+pub(crate) const CT_COOKIE_ECHO: ChunkType = ChunkType(10);
+pub(crate) const CT_COOKIE_ACK: ChunkType = ChunkType(11);
+pub(crate) const CT_CWR: ChunkType = ChunkType(13);
+pub(crate) const CT_SHUTDOWN_COMPLETE: ChunkType = ChunkType(14);
+pub(crate) const CT_RECONFIG: ChunkType = ChunkType(130);
+pub(crate) const CT_FORWARD_TSN: ChunkType = ChunkType(192);
 
 impl fmt::Display for ChunkType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let others = format!("Unknown ChunkType: {}", self.0);
         let s = match *self {
-            ChunkType::PayloadData => "DATA",
-            ChunkType::Init => "INIT",
-            ChunkType::InitAck => "INIT-ACK",
-            ChunkType::Sack => "SACK",
-            ChunkType::Heartbeat => "HEARTBEAT",
-            ChunkType::HeartbeatAck => "HEARTBEAT-ACK",
-            ChunkType::Abort => "ABORT",
-            ChunkType::Shutdown => "SHUTDOWN",
-            ChunkType::ShutdownAck => "SHUTDOWN-ACK",
-            ChunkType::Error => "ERROR",
-            ChunkType::CookieEcho => "COOKIE-ECHO",
-            ChunkType::CookieAck => "COOKIE-ACK",
-            ChunkType::Cwr => "ECNE", // Explicit Congestion Notification Echo
-            ChunkType::ShutdownComplete => "SHUTDOWN-COMPLETE",
-            ChunkType::Reconfig => "RECONFIG", // Re-configuration
-            ChunkType::ForwardTsn => "FORWARD-TSN",
-            _ => "Unknown ChunkType",
+            CT_PAYLOAD_DATA => "DATA",
+            CT_INIT => "INIT",
+            CT_INIT_ACK => "INIT-ACK",
+            CT_SACK => "SACK",
+            CT_HEARTBEAT => "HEARTBEAT",
+            CT_HEARTBEAT_ACK => "HEARTBEAT-ACK",
+            CT_ABORT => "ABORT",
+            CT_SHUTDOWN => "SHUTDOWN",
+            CT_SHUTDOWN_ACK => "SHUTDOWN-ACK",
+            CT_ERROR => "ERROR",
+            CT_COOKIE_ECHO => "COOKIE-ECHO",
+            CT_COOKIE_ACK => "COOKIE-ACK",
+            CT_CWR => "ECNE", // Explicit Congestion Notification Echo
+            CT_SHUTDOWN_COMPLETE => "SHUTDOWN-COMPLETE",
+            CT_RECONFIG => "RECONFIG", // Re-configuration
+            CT_FORWARD_TSN => "FORWARD-TSN",
+            _ => others.as_str(),
         };
         write!(f, "{}", s)
-    }
-}
-
-impl From<u8> for ChunkType {
-    fn from(v: u8) -> ChunkType {
-        match v {
-            0 => ChunkType::PayloadData,
-            1 => ChunkType::Init,
-            2 => ChunkType::InitAck,
-            3 => ChunkType::Sack,
-            4 => ChunkType::Heartbeat,
-            5 => ChunkType::HeartbeatAck,
-            6 => ChunkType::Abort,
-            7 => ChunkType::Shutdown,
-            8 => ChunkType::ShutdownAck,
-            9 => ChunkType::Error,
-            10 => ChunkType::CookieEcho,
-            11 => ChunkType::CookieAck,
-            13 => ChunkType::Cwr,
-            14 => ChunkType::ShutdownComplete,
-            130 => ChunkType::Reconfig,
-            192 => ChunkType::ForwardTsn,
-            _ => ChunkType::Unknown,
-        }
     }
 }
 
@@ -81,23 +56,23 @@ mod test {
     #[test]
     fn test_chunk_type_string() {
         let tests = vec![
-            (ChunkType::PayloadData, "DATA"),
-            (ChunkType::Init, "INIT"),
-            (ChunkType::InitAck, "INIT-ACK"),
-            (ChunkType::Sack, "SACK"),
-            (ChunkType::Heartbeat, "HEARTBEAT"),
-            (ChunkType::HeartbeatAck, "HEARTBEAT-ACK"),
-            (ChunkType::Abort, "ABORT"),
-            (ChunkType::Shutdown, "SHUTDOWN"),
-            (ChunkType::ShutdownAck, "SHUTDOWN-ACK"),
-            (ChunkType::Error, "ERROR"),
-            (ChunkType::CookieEcho, "COOKIE-ECHO"),
-            (ChunkType::CookieAck, "COOKIE-ACK"),
-            (ChunkType::Cwr, "ECNE"),
-            (ChunkType::ShutdownComplete, "SHUTDOWN-COMPLETE"),
-            (ChunkType::Reconfig, "RECONFIG"),
-            (ChunkType::ForwardTsn, "FORWARD-TSN"),
-            (ChunkType::Unknown, "Unknown ChunkType"),
+            (CT_PAYLOAD_DATA, "DATA"),
+            (CT_INIT, "INIT"),
+            (CT_INIT_ACK, "INIT-ACK"),
+            (CT_SACK, "SACK"),
+            (CT_HEARTBEAT, "HEARTBEAT"),
+            (CT_HEARTBEAT_ACK, "HEARTBEAT-ACK"),
+            (CT_ABORT, "ABORT"),
+            (CT_SHUTDOWN, "SHUTDOWN"),
+            (CT_SHUTDOWN_ACK, "SHUTDOWN-ACK"),
+            (CT_ERROR, "ERROR"),
+            (CT_COOKIE_ECHO, "COOKIE-ECHO"),
+            (CT_COOKIE_ACK, "COOKIE-ACK"),
+            (CT_CWR, "ECNE"),
+            (CT_SHUTDOWN_COMPLETE, "SHUTDOWN-COMPLETE"),
+            (CT_RECONFIG, "RECONFIG"),
+            (CT_FORWARD_TSN, "FORWARD-TSN"),
+            (ChunkType(255), "Unknown ChunkType: 255"),
         ];
 
         for (ct, expected) in tests {

@@ -46,7 +46,7 @@ impl fmt::Display for ChunkError {
 impl Chunk for ChunkError {
     fn header(&self) -> ChunkHeader {
         ChunkHeader {
-            typ: ChunkType::Error,
+            typ: CT_ERROR,
             flags: 0,
             value_length: self.value_length() as u16,
         }
@@ -55,7 +55,7 @@ impl Chunk for ChunkError {
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let header = ChunkHeader::unmarshal(raw)?;
 
-        if header.typ != ChunkType::Error {
+        if header.typ != CT_ERROR {
             return Err(Error::ErrChunkTypeNotCtError);
         }
 
@@ -86,5 +86,9 @@ impl Chunk for ChunkError {
         self.error_causes
             .iter()
             .fold(0, |length, ec| length + ec.length())
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

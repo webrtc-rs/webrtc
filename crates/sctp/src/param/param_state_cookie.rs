@@ -39,6 +39,10 @@ impl Param for ParamStateCookie {
     fn value_length(&self) -> usize {
         self.cookie.len()
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 impl ParamStateCookie {

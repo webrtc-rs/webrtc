@@ -22,8 +22,8 @@ use std::fmt;
 ///|                                                               |
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 pub(crate) struct ChunkReconfig {
-    param_a: Box<dyn Param>,
-    param_b: Option<Box<dyn Param>>,
+    pub(crate) param_a: Box<dyn Param>,
+    pub(crate) param_b: Option<Box<dyn Param>>,
 }
 
 /// makes chunkReconfig printable
@@ -40,7 +40,7 @@ impl fmt::Display for ChunkReconfig {
 impl Chunk for ChunkReconfig {
     fn header(&self) -> ChunkHeader {
         ChunkHeader {
-            typ: ChunkType::Reconfig,
+            typ: CT_RECONFIG,
             flags: 0,
             value_length: self.value_length() as u16,
         }
@@ -49,11 +49,12 @@ impl Chunk for ChunkReconfig {
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let header = ChunkHeader::unmarshal(raw)?;
 
-        if header.typ != ChunkType::Reconfig {
+        if header.typ != CT_RECONFIG {
             return Err(Error::ErrChunkTypeNotReconfig);
         }
 
-        let param_a = build_param(&raw.slice(CHUNK_HEADER_SIZE..))?;
+        let param_a =
+            build_param(&raw.slice(CHUNK_HEADER_SIZE..CHUNK_HEADER_SIZE + header.value_length()))?;
 
         let padding = get_padding_size(PARAM_HEADER_LENGTH + param_a.value_length());
         let offset = CHUNK_HEADER_SIZE + PARAM_HEADER_LENGTH + param_a.value_length() + padding;
@@ -90,5 +91,9 @@ impl Chunk for ChunkReconfig {
             l += PARAM_HEADER_LENGTH + param_b.value_length() + padding;
         }
         l
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

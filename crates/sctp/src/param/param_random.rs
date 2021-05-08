@@ -37,4 +37,8 @@ impl Param for ParamRandom {
     fn value_length(&self) -> usize {
         self.random_data.len()
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

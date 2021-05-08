@@ -46,7 +46,7 @@ impl Chunk for ChunkHeader {
 
         let reader = &mut raw.clone();
 
-        let typ: ChunkType = reader.get_u8().into();
+        let typ = ChunkType(reader.get_u8());
         let flags = reader.get_u8();
         let length = reader.get_u16();
 
@@ -75,8 +75,6 @@ impl Chunk for ChunkHeader {
                     return Err(Error::ErrChunkHeaderPaddingNonZero);
                 }
             }
-        } else {
-            return Err(Error::ErrChunkHeaderInvalidLength);
         }
 
         Ok(ChunkHeader {
@@ -87,7 +85,7 @@ impl Chunk for ChunkHeader {
     }
 
     fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize, Error> {
-        writer.put_u8(self.typ as u8);
+        writer.put_u8(self.typ.0);
         writer.put_u8(self.flags);
         writer.put_u16(self.value_length + CHUNK_HEADER_SIZE as u16);
         Ok(writer.len())
@@ -99,5 +97,9 @@ impl Chunk for ChunkHeader {
 
     fn value_length(&self) -> usize {
         self.value_length as usize
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

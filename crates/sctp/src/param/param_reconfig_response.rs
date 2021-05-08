@@ -123,4 +123,8 @@ impl Param for ParamReconfigResponse {
     fn value_length(&self) -> usize {
         8
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

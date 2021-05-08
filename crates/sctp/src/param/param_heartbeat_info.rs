@@ -39,4 +39,8 @@ impl Param for ParamHeartbeatInfo {
     fn value_length(&self) -> usize {
         self.heartbeat_information.len()
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

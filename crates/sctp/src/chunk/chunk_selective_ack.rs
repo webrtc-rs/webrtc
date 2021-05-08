@@ -75,7 +75,7 @@ pub(crate) const SELECTIVE_ACK_HEADER_SIZE: usize = 12;
 impl Chunk for ChunkSelectiveAck {
     fn header(&self) -> ChunkHeader {
         ChunkHeader {
-            typ: ChunkType::Sack,
+            typ: CT_SACK,
             flags: 0,
             value_length: self.value_length() as u16,
         }
@@ -84,7 +84,7 @@ impl Chunk for ChunkSelectiveAck {
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let header = ChunkHeader::unmarshal(raw)?;
 
-        if header.typ != ChunkType::Sack {
+        if header.typ != CT_SACK {
             return Err(Error::ErrChunkTypeNotSack);
         }
 
@@ -92,7 +92,7 @@ impl Chunk for ChunkSelectiveAck {
             return Err(Error::ErrSackSizeNotLargeEnoughInfo);
         }
 
-        let reader = &mut raw.slice(CHUNK_HEADER_SIZE..);
+        let reader = &mut raw.slice(CHUNK_HEADER_SIZE..CHUNK_HEADER_SIZE + header.value_length());
 
         let cumulative_tsn_ack = reader.get_u32();
         let advertised_receiver_window_credit = reader.get_u32();
@@ -150,5 +150,9 @@ impl Chunk for ChunkSelectiveAck {
 
     fn value_length(&self) -> usize {
         SELECTIVE_ACK_HEADER_SIZE + self.gap_ack_blocks.len() * 4 + self.duplicate_tsn.len() * 4
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

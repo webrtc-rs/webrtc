@@ -39,7 +39,7 @@ impl Param for ParamSupportedExtensions {
 
         let mut chunk_types = vec![];
         while reader.has_remaining() {
-            chunk_types.push(reader.get_u8().into())
+            chunk_types.push(ChunkType(reader.get_u8()));
         }
 
         Ok(ParamSupportedExtensions { chunk_types })
@@ -48,12 +48,16 @@ impl Param for ParamSupportedExtensions {
     fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error> {
         self.header().marshal_to(buf)?;
         for ct in &self.chunk_types {
-            buf.put_u8(*ct as u8);
+            buf.put_u8(ct.0);
         }
         Ok(buf.len())
     }
 
     fn value_length(&self) -> usize {
         self.chunk_types.len()
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

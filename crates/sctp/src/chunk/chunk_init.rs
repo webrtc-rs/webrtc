@@ -103,11 +103,7 @@ impl fmt::Display for ChunkInit {
 impl Chunk for ChunkInit {
     fn header(&self) -> ChunkHeader {
         ChunkHeader {
-            typ: if self.is_ack {
-                ChunkType::InitAck
-            } else {
-                ChunkType::Init
-            },
+            typ: if self.is_ack { CT_INIT_ACK } else { CT_INIT },
             flags: 0,
             value_length: self.value_length() as u16,
         }
@@ -132,7 +128,7 @@ impl Chunk for ChunkInit {
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let header = ChunkHeader::unmarshal(raw)?;
 
-        if !(header.typ == ChunkType::Init || header.typ == ChunkType::InitAck) {
+        if !(header.typ == CT_INIT || header.typ == CT_INIT_ACK) {
             return Err(Error::ErrChunkTypeNotTypeInit);
         } else if raw.len() < CHUNK_HEADER_SIZE + INIT_CHUNK_MIN_LENGTH {
             return Err(Error::ErrChunkValueNotLongEnough);
@@ -145,7 +141,7 @@ impl Chunk for ChunkInit {
             return Err(Error::ErrChunkTypeInitFlagZero);
         }
 
-        let reader = &mut raw.slice(CHUNK_HEADER_SIZE..);
+        let reader = &mut raw.slice(CHUNK_HEADER_SIZE..CHUNK_HEADER_SIZE + header.value_length());
 
         let initiate_tag = reader.get_u32();
         let advertised_receiver_window_credit = reader.get_u32();
@@ -166,7 +162,7 @@ impl Chunk for ChunkInit {
         }
 
         Ok(ChunkInit {
-            is_ack: header.typ == ChunkType::InitAck,
+            is_ack: header.typ == CT_INIT_ACK,
             initiate_tag,
             advertised_receiver_window_credit,
             num_outbound_streams,
@@ -267,5 +263,9 @@ impl Chunk for ChunkInit {
             }
         }
         l
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

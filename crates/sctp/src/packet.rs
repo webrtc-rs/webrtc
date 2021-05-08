@@ -5,7 +5,7 @@ use crate::chunk::chunk_cookie_ack::ChunkCookieAck;
 use crate::chunk::chunk_cookie_echo::ChunkCookieEcho;
 use crate::chunk::chunk_error::ChunkError;
 use crate::chunk::chunk_forward_tsn::ChunkForwardTsn;
-use crate::chunk::chunk_header::CHUNK_HEADER_SIZE;
+use crate::chunk::chunk_header::*;
 use crate::chunk::chunk_heartbeat::ChunkHeartbeat;
 use crate::chunk::chunk_init::ChunkInit;
 use crate::chunk::chunk_payload_data::ChunkPayloadData;
@@ -14,7 +14,7 @@ use crate::chunk::chunk_selective_ack::ChunkSelectiveAck;
 use crate::chunk::chunk_shutdown::ChunkShutdown;
 use crate::chunk::chunk_shutdown_ack::ChunkShutdownAck;
 use crate::chunk::chunk_shutdown_complete::ChunkShutdownComplete;
-use crate::chunk::chunk_type::ChunkType;
+use crate::chunk::chunk_type::*;
 use crate::error::Error;
 use crate::util::*;
 
@@ -54,10 +54,10 @@ use std::fmt;
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
 pub(crate) struct Packet {
-    source_port: u16,
-    destination_port: u16,
-    verification_tag: u32,
-    chunks: Vec<Box<dyn Chunk>>,
+    pub(crate) source_port: u16,
+    pub(crate) destination_port: u16,
+    pub(crate) verification_tag: u32,
+    pub(crate) chunks: Vec<Box<dyn Chunk>>,
 }
 
 /// makes packet printable
@@ -103,30 +103,22 @@ impl Packet {
                 return Err(Error::ErrParseSctpChunkNotEnoughData);
             }
 
-            let ct: ChunkType = raw[offset].into();
+            let ct = ChunkType(raw[offset]);
             let c: Box<dyn Chunk> = match ct {
-                ChunkType::Init => Box::new(ChunkInit::unmarshal(&raw.slice(offset..))?),
-                ChunkType::InitAck => Box::new(ChunkInit::unmarshal(&raw.slice(offset..))?),
-                ChunkType::Abort => Box::new(ChunkAbort::unmarshal(&raw.slice(offset..))?),
-                ChunkType::CookieEcho => {
-                    Box::new(ChunkCookieEcho::unmarshal(&raw.slice(offset..))?)
-                }
-                ChunkType::CookieAck => Box::new(ChunkCookieAck::unmarshal(&raw.slice(offset..))?),
-                ChunkType::Heartbeat => Box::new(ChunkHeartbeat::unmarshal(&raw.slice(offset..))?),
-                ChunkType::PayloadData => {
-                    Box::new(ChunkPayloadData::unmarshal(&raw.slice(offset..))?)
-                }
-                ChunkType::Sack => Box::new(ChunkSelectiveAck::unmarshal(&raw.slice(offset..))?),
-                ChunkType::Reconfig => Box::new(ChunkReconfig::unmarshal(&raw.slice(offset..))?),
-                ChunkType::ForwardTsn => {
-                    Box::new(ChunkForwardTsn::unmarshal(&raw.slice(offset..))?)
-                }
-                ChunkType::Error => Box::new(ChunkError::unmarshal(&raw.slice(offset..))?),
-                ChunkType::Shutdown => Box::new(ChunkShutdown::unmarshal(&raw.slice(offset..))?),
-                ChunkType::ShutdownAck => {
-                    Box::new(ChunkShutdownAck::unmarshal(&raw.slice(offset..))?)
-                }
-                ChunkType::ShutdownComplete => {
+                CT_INIT => Box::new(ChunkInit::unmarshal(&raw.slice(offset..))?),
+                CT_INIT_ACK => Box::new(ChunkInit::unmarshal(&raw.slice(offset..))?),
+                CT_ABORT => Box::new(ChunkAbort::unmarshal(&raw.slice(offset..))?),
+                CT_COOKIE_ECHO => Box::new(ChunkCookieEcho::unmarshal(&raw.slice(offset..))?),
+                CT_COOKIE_ACK => Box::new(ChunkCookieAck::unmarshal(&raw.slice(offset..))?),
+                CT_HEARTBEAT => Box::new(ChunkHeartbeat::unmarshal(&raw.slice(offset..))?),
+                CT_PAYLOAD_DATA => Box::new(ChunkPayloadData::unmarshal(&raw.slice(offset..))?),
+                CT_SACK => Box::new(ChunkSelectiveAck::unmarshal(&raw.slice(offset..))?),
+                CT_RECONFIG => Box::new(ChunkReconfig::unmarshal(&raw.slice(offset..))?),
+                CT_FORWARD_TSN => Box::new(ChunkForwardTsn::unmarshal(&raw.slice(offset..))?),
+                CT_ERROR => Box::new(ChunkError::unmarshal(&raw.slice(offset..))?),
+                CT_SHUTDOWN => Box::new(ChunkShutdown::unmarshal(&raw.slice(offset..))?),
+                CT_SHUTDOWN_ACK => Box::new(ChunkShutdownAck::unmarshal(&raw.slice(offset..))?),
+                CT_SHUTDOWN_COMPLETE => {
                     Box::new(ChunkShutdownComplete::unmarshal(&raw.slice(offset..))?)
                 }
                 _ => return Err(Error::ErrUnmarshalUnknownChunkType),

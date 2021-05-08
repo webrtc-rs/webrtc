@@ -29,7 +29,7 @@ impl fmt::Display for ChunkShutdown {
 impl Chunk for ChunkShutdown {
     fn header(&self) -> ChunkHeader {
         ChunkHeader {
-            typ: ChunkType::Shutdown,
+            typ: CT_SHUTDOWN,
             flags: 0,
             value_length: self.value_length() as u16,
         }
@@ -38,7 +38,7 @@ impl Chunk for ChunkShutdown {
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let header = ChunkHeader::unmarshal(raw)?;
 
-        if header.typ != ChunkType::Shutdown {
+        if header.typ != CT_SHUTDOWN {
             return Err(Error::ErrChunkTypeNotShutdown);
         }
 
@@ -46,7 +46,7 @@ impl Chunk for ChunkShutdown {
             return Err(Error::ErrInvalidChunkSize);
         }
 
-        let reader = &mut raw.slice(CHUNK_HEADER_SIZE..);
+        let reader = &mut raw.slice(CHUNK_HEADER_SIZE..CHUNK_HEADER_SIZE + header.value_length());
 
         let cumulative_tsn_ack = reader.get_u32();
 
@@ -65,5 +65,9 @@ impl Chunk for ChunkShutdown {
 
     fn value_length(&self) -> usize {
         CUMULATIVE_TSN_ACK_LENGTH
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

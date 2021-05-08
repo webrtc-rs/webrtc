@@ -46,7 +46,7 @@ impl fmt::Display for ChunkHeartbeatAck {
 impl Chunk for ChunkHeartbeatAck {
     fn header(&self) -> ChunkHeader {
         ChunkHeader {
-            typ: ChunkType::HeartbeatAck,
+            typ: CT_HEARTBEAT_ACK,
             flags: 0,
             value_length: self.value_length() as u16,
         }
@@ -55,7 +55,7 @@ impl Chunk for ChunkHeartbeatAck {
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let header = ChunkHeader::unmarshal(raw)?;
 
-        if header.typ != ChunkType::HeartbeatAck {
+        if header.typ != CT_HEARTBEAT_ACK {
             return Err(Error::ErrChunkTypeNotHeartbeatAck);
         }
 
@@ -63,7 +63,8 @@ impl Chunk for ChunkHeartbeatAck {
             return Err(Error::ErrHeartbeatNotLongEnoughInfo);
         }
 
-        let p = build_param(&raw.slice(CHUNK_HEADER_SIZE..))?;
+        let p =
+            build_param(&raw.slice(CHUNK_HEADER_SIZE..CHUNK_HEADER_SIZE + header.value_length()))?;
         if p.header().typ != ParamType::HeartbeatInfo {
             return Err(Error::ErrHeartbeatParam);
         }
@@ -115,5 +116,9 @@ impl Chunk for ChunkHeartbeatAck {
             }
         }
         l
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

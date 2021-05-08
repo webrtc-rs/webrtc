@@ -50,7 +50,7 @@ impl fmt::Display for ChunkForwardTsn {
 impl Chunk for ChunkForwardTsn {
     fn header(&self) -> ChunkHeader {
         ChunkHeader {
-            typ: ChunkType::ForwardTsn,
+            typ: CT_FORWARD_TSN,
             flags: 0,
             value_length: self.value_length() as u16,
         }
@@ -59,7 +59,7 @@ impl Chunk for ChunkForwardTsn {
     fn unmarshal(buf: &Bytes) -> Result<Self, Error> {
         let header = ChunkHeader::unmarshal(buf)?;
 
-        if header.typ != ChunkType::ForwardTsn {
+        if header.typ != CT_FORWARD_TSN {
             return Err(Error::ErrChunkTypeNotForwardTsn);
         }
 
@@ -105,6 +105,10 @@ impl Chunk for ChunkForwardTsn {
     fn value_length(&self) -> usize {
         NEW_CUMULATIVE_TSN_LENGTH + FORWARD_TSN_STREAM_LENGTH * self.streams.len()
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -134,7 +138,7 @@ impl fmt::Display for ChunkForwardTsnStream {
 impl Chunk for ChunkForwardTsnStream {
     fn header(&self) -> ChunkHeader {
         ChunkHeader {
-            typ: ChunkType::Unknown,
+            typ: ChunkType(0),
             flags: 0,
             value_length: self.value_length() as u16,
         }
@@ -167,5 +171,9 @@ impl Chunk for ChunkForwardTsnStream {
 
     fn value_length(&self) -> usize {
         FORWARD_TSN_STREAM_LENGTH
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

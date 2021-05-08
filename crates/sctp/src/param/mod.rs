@@ -35,6 +35,7 @@ pub(crate) trait Param: fmt::Display {
         Self: Sized;
     fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error>;
     fn value_length(&self) -> usize;
+    fn as_any(&self) -> &dyn std::any::Any;
 
     fn marshal(&self) -> Result<Bytes, Error> {
         let capacity = PARAM_HEADER_LENGTH + self.value_length();

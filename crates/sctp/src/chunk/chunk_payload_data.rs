@@ -140,7 +140,7 @@ impl Chunk for ChunkPayloadData {
         }
 
         ChunkHeader {
-            typ: ChunkType::PayloadData,
+            typ: CT_PAYLOAD_DATA,
             flags,
             value_length: self.value_length() as u16,
         }
@@ -149,7 +149,7 @@ impl Chunk for ChunkPayloadData {
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let header = ChunkHeader::unmarshal(raw)?;
 
-        if header.typ != ChunkType::PayloadData {
+        if header.typ != CT_PAYLOAD_DATA {
             return Err(Error::ErrChunkTypeNotPayloadData);
         }
 
@@ -162,7 +162,7 @@ impl Chunk for ChunkPayloadData {
             return Err(Error::ErrChunkPayloadSmall);
         }
 
-        let reader = &mut raw.slice(CHUNK_HEADER_SIZE..);
+        let reader = &mut raw.slice(CHUNK_HEADER_SIZE..CHUNK_HEADER_SIZE + header.value_length());
 
         let tsn = reader.get_u32();
         let stream_identifier = reader.get_u16();
@@ -219,6 +219,10 @@ impl Chunk for ChunkPayloadData {
 
     fn value_length(&self) -> usize {
         PAYLOAD_DATA_HEADER_SIZE + self.user_data.len()
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

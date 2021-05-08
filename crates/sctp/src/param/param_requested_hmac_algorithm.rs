@@ -101,4 +101,8 @@ impl Param for ParamRequestedHmacAlgorithm {
     fn value_length(&self) -> usize {
         2 * self.available_algorithms.len()
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
