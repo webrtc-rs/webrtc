@@ -4,5 +4,6 @@
 pub mod chunk;
 pub mod error;
 pub mod error_cause;
+pub mod packet;
 pub mod param;
 pub(crate) mod util;

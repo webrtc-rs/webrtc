@@ -32,9 +32,10 @@ impl Param for ParamSupportedExtensions {
     }
 
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
-        let _ = ParamHeader::unmarshal(raw)?;
+        let header = ParamHeader::unmarshal(raw)?;
 
-        let reader = &mut raw.slice(PARAM_HEADER_LENGTH..);
+        let reader =
+            &mut raw.slice(PARAM_HEADER_LENGTH..PARAM_HEADER_LENGTH + header.value_length());
 
         let mut chunk_types = vec![];
         while reader.has_remaining() {

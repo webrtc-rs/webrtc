@@ -59,13 +59,6 @@ pub(crate) enum ParamType {
     Unknown,
 }
 
-/*TODO: func parseParamType(raw []byte) (paramType, error) {
-    if len(raw) < 2 {
-        return paramType(0), errParamPacketTooShort
-    }
-    return paramType(binary.BigEndian.Uint16(raw)), nil
-}*/
-
 impl fmt::Display for ParamType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {

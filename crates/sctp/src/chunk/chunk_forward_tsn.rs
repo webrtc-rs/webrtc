@@ -124,6 +124,13 @@ pub(crate) struct ChunkForwardTsnStream {
     pub(crate) sequence: u16,
 }
 
+/// makes ChunkForwardTsnStream printable
+impl fmt::Display for ChunkForwardTsnStream {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}, {}", self.identifier, self.sequence)
+    }
+}
+
 impl Chunk for ChunkForwardTsnStream {
     fn header(&self) -> ChunkHeader {
         ChunkHeader {

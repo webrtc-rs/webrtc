@@ -22,9 +22,10 @@ use crate::error::Error;
 use chunk_header::*;
 
 use bytes::{Bytes, BytesMut};
+use std::fmt;
 use std::marker::Sized;
 
-pub(crate) trait Chunk {
+pub(crate) trait Chunk: fmt::Display {
     fn header(&self) -> ChunkHeader;
     fn unmarshal(raw: &Bytes) -> Result<Self, Error>
     where

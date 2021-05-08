@@ -75,7 +75,8 @@ impl Param for ParamOutgoingResetRequest {
             return Err(Error::ErrSsnResetRequestParamTooShort);
         }
 
-        let reader = &mut raw.slice(PARAM_HEADER_LENGTH..);
+        let reader =
+            &mut raw.slice(PARAM_HEADER_LENGTH..PARAM_HEADER_LENGTH + header.value_length());
         let reconfig_request_sequence_number = reader.get_u32();
         let reconfig_response_sequence_number = reader.get_u32();
         let sender_last_tsn = reader.get_u32();

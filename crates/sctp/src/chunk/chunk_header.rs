@@ -39,12 +39,12 @@ impl Chunk for ChunkHeader {
         self.clone()
     }
 
-    fn unmarshal(buf: &Bytes) -> Result<Self, Error> {
-        if buf.len() < CHUNK_HEADER_SIZE {
+    fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
+        if raw.len() < CHUNK_HEADER_SIZE {
             return Err(Error::ErrChunkHeaderTooSmall);
         }
 
-        let reader = &mut buf.clone();
+        let reader = &mut raw.clone();
 
         let typ: ChunkType = reader.get_u8().into();
         let flags = reader.get_u8();
@@ -55,7 +55,8 @@ impl Chunk for ChunkHeader {
         }
 
         // Length includes Chunk header
-        let length_after_value = buf.len() as isize - length as isize;
+        let value_length = length as isize - CHUNK_HEADER_SIZE as isize;
+        let length_after_value = raw.len() as isize - length as isize;
         if length_after_value < 0 {
             return Err(Error::ErrChunkHeaderNotEnoughSpace);
         } else if length_after_value < 4 {
@@ -68,8 +69,9 @@ impl Chunk for ChunkHeader {
             // chunk.  However, it does include PADDING of any variable-length
             // parameter except the last parameter in the chunk.  The receiver
             // MUST ignore the PADDING.
-            for _ in 0..length_after_value {
-                if reader.get_u8() != 0 {
+            for i in (1..=length_after_value).rev() {
+                let padding_offset = CHUNK_HEADER_SIZE + (value_length + i - 1) as usize;
+                if raw[padding_offset] != 0 {
                     return Err(Error::ErrChunkHeaderPaddingNonZero);
                 }
             }

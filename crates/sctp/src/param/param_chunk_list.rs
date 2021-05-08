@@ -38,7 +38,8 @@ impl Param for ParamChunkList {
             return Err(Error::ErrParamTypeUnexpected);
         }
 
-        let reader = &mut raw.slice(PARAM_HEADER_LENGTH..);
+        let reader =
+            &mut raw.slice(PARAM_HEADER_LENGTH..PARAM_HEADER_LENGTH + header.value_length());
 
         let mut chunk_types = vec![];
         while reader.has_remaining() {

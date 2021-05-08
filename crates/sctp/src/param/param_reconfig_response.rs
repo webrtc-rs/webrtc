@@ -96,12 +96,13 @@ impl Param for ParamReconfigResponse {
     }
 
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
-        let _ = ParamHeader::unmarshal(raw)?;
+        let header = ParamHeader::unmarshal(raw)?;
         if raw.len() < 8 + PARAM_HEADER_LENGTH {
             return Err(Error::ErrReconfigRespParamTooShort);
         }
 
-        let reader = &mut raw.slice(PARAM_HEADER_LENGTH..);
+        let reader =
+            &mut raw.slice(PARAM_HEADER_LENGTH..PARAM_HEADER_LENGTH + header.value_length());
 
         let reconfig_response_sequence_number = reader.get_u32();
         let result = reader.get_u32().into();

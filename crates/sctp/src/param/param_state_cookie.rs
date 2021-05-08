@@ -25,8 +25,8 @@ impl Param for ParamStateCookie {
     }
 
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
-        let _ = ParamHeader::unmarshal(raw)?;
-        let cookie = raw.slice(PARAM_HEADER_LENGTH..);
+        let header = ParamHeader::unmarshal(raw)?;
+        let cookie = raw.slice(PARAM_HEADER_LENGTH..PARAM_HEADER_LENGTH + header.value_length());
         Ok(ParamStateCookie { cookie })
     }
 

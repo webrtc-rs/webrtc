@@ -67,13 +67,14 @@ impl Param for ParamRequestedHmacAlgorithm {
     }
 
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
-        let _ = ParamHeader::unmarshal(raw)?;
+        let header = ParamHeader::unmarshal(raw)?;
 
-        let reader = &mut raw.slice(PARAM_HEADER_LENGTH..);
+        let reader =
+            &mut raw.slice(PARAM_HEADER_LENGTH..PARAM_HEADER_LENGTH + header.value_length());
 
         let mut available_algorithms = vec![];
-        let mut offset = PARAM_HEADER_LENGTH;
-        while offset + 1 < raw.len() {
+        let mut offset = 0;
+        while offset + 1 < header.value_length() {
             let a: HmacAlgorithm = reader.get_u16().into();
             if a == HmacAlgorithm::HmacSha128 || a == HmacAlgorithm::HmacSha256 {
                 available_algorithms.push(a);

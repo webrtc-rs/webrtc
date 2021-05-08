@@ -154,15 +154,15 @@ impl Chunk for ChunkInit {
         let initial_tsn = reader.get_u32();
 
         let mut params = vec![];
-        let mut offset = INIT_CHUNK_MIN_LENGTH;
-        let mut remaining = raw.len() - offset;
-        while remaining > INIT_OPTIONAL_VAR_HEADER_LENGTH {
+        let mut offset = CHUNK_HEADER_SIZE + INIT_CHUNK_MIN_LENGTH;
+        let mut remaining = raw.len() as isize - offset as isize;
+        while remaining > INIT_OPTIONAL_VAR_HEADER_LENGTH as isize {
             let p = build_param(&raw.slice(offset..))?;
             let p_len = PARAM_HEADER_LENGTH + p.value_length();
             let len_plus_padding = p_len + get_padding_size(p_len);
             params.push(p);
             offset += len_plus_padding;
-            remaining -= len_plus_padding;
+            remaining -= len_plus_padding as isize;
         }
 
         Ok(ChunkInit {
@@ -258,6 +258,14 @@ impl Chunk for ChunkInit {
     }
 
     fn value_length(&self) -> usize {
-        0 //FIXME: get_padding_size
+        let mut l = 4 + 4 + 2 + 2 + 4;
+        for (idx, p) in self.params.iter().enumerate() {
+            let p_len = PARAM_HEADER_LENGTH + p.value_length();
+            l += p_len;
+            if idx != self.params.len() - 1 {
+                l += get_padding_size(p_len);
+            }
+        }
+        l
     }
 }

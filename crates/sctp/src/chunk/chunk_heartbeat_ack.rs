@@ -55,15 +55,20 @@ impl Chunk for ChunkHeartbeatAck {
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
         let header = ChunkHeader::unmarshal(raw)?;
 
-        if header.typ != ChunkType::Heartbeat {
-            return Err(Error::ErrChunkTypeNotHeartbeat);
+        if header.typ != ChunkType::HeartbeatAck {
+            return Err(Error::ErrChunkTypeNotHeartbeatAck);
         }
 
         if raw.len() <= CHUNK_HEADER_SIZE {
             return Err(Error::ErrHeartbeatNotLongEnoughInfo);
         }
-        let params = vec![];
-        //TODO
+
+        let p = build_param(&raw.slice(CHUNK_HEADER_SIZE..))?;
+        if p.header().typ != ParamType::HeartbeatInfo {
+            return Err(Error::ErrHeartbeatParam);
+        }
+        let params = vec![p];
+
         Ok(ChunkHeartbeatAck { params })
     }
 
@@ -101,9 +106,14 @@ impl Chunk for ChunkHeartbeatAck {
     }
 
     fn value_length(&self) -> usize {
-        //FIXME: get_padding_size
-        self.params.iter().fold(0, |length, p| {
-            length + PARAM_HEADER_LENGTH + p.value_length()
-        })
+        let mut l = 0;
+        for (idx, p) in self.params.iter().enumerate() {
+            let p_len = PARAM_HEADER_LENGTH + p.value_length();
+            l += p_len;
+            if idx != self.params.len() - 1 {
+                l += get_padding_size(p_len);
+            }
+        }
+        l
     }
 }

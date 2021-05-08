@@ -31,6 +31,8 @@ pub enum Error {
     ErrChunkTypeNotForwardTsn,
     #[error("ChunkType is not of type HEARTBEAT")]
     ErrChunkTypeNotHeartbeat,
+    #[error("ChunkType is not of type HEARTBEATACK")]
+    ErrChunkTypeNotHeartbeatAck,
     #[error("heartbeat is not long enough to contain Heartbeat Info")]
     ErrHeartbeatNotLongEnoughInfo,
     #[error("failed to parse param type")]
@@ -131,4 +133,13 @@ pub enum Error {
     ErrChunkTypeNotShutdownAck,
     #[error("ChunkType is not of type SHUTDOWN-COMPLETE")]
     ErrChunkTypeNotShutdownComplete,
+
+    #[error("raw is smaller than the minimum length for a SCTP packet")]
+    ErrPacketRawTooSmall,
+    #[error("unable to parse SCTP chunk, not enough data for complete header")]
+    ErrParseSctpChunkNotEnoughData,
+    #[error("failed to unmarshal, contains unknown chunk type")]
+    ErrUnmarshalUnknownChunkType,
+    #[error("checksum mismatch theirs")]
+    ErrChecksumMismatch,
 }

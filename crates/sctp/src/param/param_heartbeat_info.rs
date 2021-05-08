@@ -22,8 +22,9 @@ impl Param for ParamHeartbeatInfo {
     }
 
     fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
-        let _ = ParamHeader::unmarshal(raw)?;
-        let heartbeat_information = raw.slice(PARAM_HEADER_LENGTH..);
+        let header = ParamHeader::unmarshal(raw)?;
+        let heartbeat_information =
+            raw.slice(PARAM_HEADER_LENGTH..PARAM_HEADER_LENGTH + header.value_length());
         Ok(ParamHeartbeatInfo {
             heartbeat_information,
         })
