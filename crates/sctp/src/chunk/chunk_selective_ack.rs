@@ -35,9 +35,10 @@ use std::fmt;
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///|                       Duplicate TSN X                         |
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+#[derive(Debug, Default, Copy, Clone)]
 pub(crate) struct GapAckBlock {
-    start: u16,
-    end: u16,
+    pub(crate) start: u16,
+    pub(crate) end: u16,
 }
 
 /// makes gapAckBlock printable
@@ -48,10 +49,10 @@ impl fmt::Display for GapAckBlock {
 }
 
 pub(crate) struct ChunkSelectiveAck {
-    cumulative_tsn_ack: u32,
-    advertised_receiver_window_credit: u32,
-    gap_ack_blocks: Vec<GapAckBlock>,
-    duplicate_tsn: Vec<u32>,
+    pub(crate) cumulative_tsn_ack: u32,
+    pub(crate) advertised_receiver_window_credit: u32,
+    pub(crate) gap_ack_blocks: Vec<GapAckBlock>,
+    pub(crate) duplicate_tsn: Vec<u32>,
 }
 
 /// makes chunkSelectiveAck printable

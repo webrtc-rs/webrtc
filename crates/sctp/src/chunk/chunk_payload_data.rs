@@ -87,32 +87,32 @@ impl From<u32> for PayloadProtocolIdentifier {
 ///============================================================
 #[derive(Debug, Clone)]
 pub(crate) struct ChunkPayloadData {
-    unordered: bool,
-    beginning_fragment: bool,
-    ending_fragment: bool,
-    immediate_sack: bool,
+    pub(crate) unordered: bool,
+    pub(crate) beginning_fragment: bool,
+    pub(crate) ending_fragment: bool,
+    pub(crate) immediate_sack: bool,
 
-    tsn: u32,
-    stream_identifier: u16,
-    stream_sequence_number: u16,
-    payload_type: PayloadProtocolIdentifier,
-    user_data: Bytes,
+    pub(crate) tsn: u32,
+    pub(crate) stream_identifier: u16,
+    pub(crate) stream_sequence_number: u16,
+    pub(crate) payload_type: PayloadProtocolIdentifier,
+    pub(crate) user_data: Bytes,
 
     /// Whether this data chunk was acknowledged (received by peer)
-    acked: bool,
-    miss_indicator: u32,
+    pub(crate) acked: bool,
+    pub(crate) miss_indicator: u32,
 
     /// Partial-reliability parameters used only by sender
-    since: SystemTime,
-    nsent: u32,
+    pub(crate) since: SystemTime,
+    pub(crate) nsent: u32,
     /// number of transmission made for this chunk
-    abandoned: bool,
-    all_inflight: bool,
+    pub(crate) abandoned: bool,
+    pub(crate) all_inflight: bool,
     /// valid only with the first fragment
 
     /// Retransmission flag set when T1-RTX timeout occurred and this
     /// chunk is still in the inflight queue
-    retransmit: bool,
+    pub(crate) retransmit: bool,
     //TODO: head :ChunkPayloadData, // link to the head of the fragment
 }
 
@@ -226,30 +226,34 @@ impl Chunk for ChunkPayloadData {
     }
 }
 
-/*TODO:
-impl ChunkPayloadData{
+impl ChunkPayloadData {
     pub(crate) fn abandoned(&self) -> bool {
+        /*TODO:
         if p.head != nil {
             return p.head._abandoned && p.head._allInflight
         }
         return p._abandoned && p._allInflight
+
+         */
+        false
     }
 
-    pub(crate) fn setAbandoned(&mut self, abandoned :bool) {
-        if p.head != nil {
+    pub(crate) fn set_abandoned(&mut self, _abandoned: bool) {
+        /*TODO: if p.head != nil {
             p.head._abandoned = abandoned
             return
         }
-        p._abandoned = abandoned
+        p._abandoned = abandoned*/
     }
 
-    pub(crate) fn setAllInflight(&mut self) {
+    pub(crate) fn set_all_inflight(&mut self) {
+        /*TODO:
         if p.ending_fragment {
             if p.head != nil {
                 p.head._allInflight = true
             } else {
                 p._allInflight = true
             }
-        }
+        }*/
     }
-}*/
+}
