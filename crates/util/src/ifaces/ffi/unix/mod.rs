@@ -151,7 +151,8 @@ pub fn ifaces() -> Result<Vec<Interface>, Error> {
                 );
                 unsafe {
                     if name.is_err() || (*item).ifa_addr.is_null() {
-                        break;
+                        item = (*item).ifa_next;
+                        continue;
                     }
                 }
                 let kind = match unsafe { (*(*item).ifa_addr).sa_family as i32 } {
@@ -162,7 +163,8 @@ pub fn ifaces() -> Result<Vec<Interface>, Error> {
                     code => Some(Kind::Unknow(code)),
                 };
                 if kind.is_none() {
-                    break;
+                    item = unsafe { (*item).ifa_next };
+                    continue;
                 }
 
                 let addr = nix_socketaddr_to_sockaddr(unsafe { (*item).ifa_addr });
