@@ -20,8 +20,6 @@ socket2 = { version = "^0.4", features = ["all"] }
 
 [dev-dependencies]
 env_logger = "0.8"
-chrono = "0.4.19"
-ctrlc = "3.1.8"
 clap = "2"
 
 
