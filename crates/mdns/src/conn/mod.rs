@@ -61,7 +61,7 @@ impl DnsConn {
 
         socket.set_reuse_address(true)?;
         socket.set_broadcast(true)?;
-        socket.set_read_timeout(Some(Duration::from_secs(2)))?;
+        socket.set_nonblocking(true)?;
 
         socket.bind(&SockAddr::from(addr))?;
         {
@@ -78,12 +78,12 @@ impl DnsConn {
                 if let Some(SocketAddr::V4(e)) = interface.addr {
                     if let Err(e) = socket.join_multicast_v4(&Ipv4Addr::new(224, 0, 0, 251), e.ip())
                     {
-                        log::trace!("error connecting multicast, error: {:?}", e);
+                        log::trace!("Error connecting multicast, error: {:?}", e);
                         join_error_count += 1;
                         continue;
                     }
 
-                    log::trace!("connected to interface address {:?}", e);
+                    log::trace!("Connected to interface address {:?}", e);
                 }
             }
 
@@ -140,19 +140,19 @@ impl DnsConn {
 
     /// Close closes the mDNS Conn
     pub async fn close(&self) -> Result<(), Error> {
-        log::info!("closing connection");
+        log::info!("Closing connection");
         if self.is_server_closed.load(atomic::Ordering::SeqCst) {
             return Err(ERR_CONNECTION_CLOSED.to_owned());
         }
 
-        log::trace!("sending close command to server");
+        log::trace!("Sending close command to server");
         match self.close_server.send(()).await {
             Ok(_) => {
-                log::trace!("close command sent");
+                log::trace!("Close command sent");
                 Ok(())
             }
             Err(e) => {
-                log::warn!("error sending close command to server: {:?}", e);
+                log::warn!("Error sending close command to server: {:?}", e);
                 Err(ERR_CONNECTION_CLOSED.to_owned())
             }
         }
@@ -248,7 +248,7 @@ impl DnsConn {
         dst_addr: SocketAddr,
         queries: Arc<Mutex<Vec<Query>>>,
     ) -> Result<(), Error> {
-        log::info!("enter loop and listening {:?}", socket.local_addr());
+        log::info!("Looping and listening {:?}", socket.local_addr());
 
         let mut b = vec![0u8; INBOUND_BUFFER_SIZE];
         let (mut n, mut src);
@@ -278,7 +278,7 @@ impl DnsConn {
                 }
             }
 
-            log::trace!("recv bytes {:?} from {}", &b[..n], src);
+            log::trace!("Recv bytes {:?} from {}", &b[..n], src);
 
             let mut p = Parser::default();
             if let Err(err) = p.start(&b[..n]) {
@@ -386,7 +386,7 @@ async fn send_answer(
                 body: Some(Box::new(AResource {
                     a: match dst {
                         IpAddr::V4(ip) => ip.octets(),
-                        IpAddr::V6(_) => return Err(Error::new("unexpected IpV6 addr".to_owned())),
+                        IpAddr::V6(_) => return Err(Error::new("Unexpected IpV6 addr".to_owned())),
                     },
                 })),
             }],
@@ -397,7 +397,7 @@ async fn send_answer(
     };
 
     socket.send_to(&raw_answer, dst_addr).await?;
-    log::trace!("sent answer to IP {}", dst);
+    log::trace!("Sent answer to IP {}", dst);
 
     Ok(())
 }
