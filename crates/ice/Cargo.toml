@@ -1,6 +1,6 @@
 [package]
 name = "webrtc-ice"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of ICE"
@@ -13,7 +13,7 @@ repository = "https://github.com/webrtc-rs/ice"
 
 [dependencies]
 util = { package = "webrtc-util", version = "0.1.18" }
-mdns = { package = "webrtc-mdns", version = "0.2.6" }
+mdns = { package = "webrtc-mdns", version = "0.2.7" }
 stun = "0.1.15"
 turn = "0.1.7"
 lazy_static = "1.3.0"
