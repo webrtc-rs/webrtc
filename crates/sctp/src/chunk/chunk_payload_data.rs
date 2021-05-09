@@ -24,6 +24,12 @@ pub(crate) enum PayloadProtocolIdentifier {
     Unknown,
 }
 
+impl Default for PayloadProtocolIdentifier {
+    fn default() -> Self {
+        PayloadProtocolIdentifier::Unknown
+    }
+}
+
 impl fmt::Display for PayloadProtocolIdentifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
@@ -114,6 +120,39 @@ pub(crate) struct ChunkPayloadData {
     /// chunk is still in the inflight queue
     pub(crate) retransmit: bool,
     //TODO: head :ChunkPayloadData, // link to the head of the fragment
+}
+
+impl Default for ChunkPayloadData {
+    fn default() -> Self {
+        ChunkPayloadData {
+            unordered: false,
+            beginning_fragment: false,
+            ending_fragment: false,
+            immediate_sack: false,
+
+            tsn: 0,
+            stream_identifier: 0,
+            stream_sequence_number: 0,
+            payload_type: PayloadProtocolIdentifier::default(),
+            user_data: Bytes::new(),
+
+            /// Whether this data chunk was acknowledged (received by peer)
+            acked: false,
+            miss_indicator: 0,
+
+            /// Partial-reliability parameters used only by sender
+            since: SystemTime::now(),
+            nsent: 0,
+            /// number of transmission made for this chunk
+            abandoned: false,
+            all_inflight: false,
+            /// valid only with the first fragment
+
+            /// Retransmission flag set when T1-RTX timeout occurred and this
+            /// chunk is still in the inflight queue
+            retransmit: false,
+        }
+    }
 }
 
 /// makes chunkPayloadData printable

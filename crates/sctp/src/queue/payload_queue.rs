@@ -7,10 +7,10 @@ use std::collections::HashMap;
 
 #[derive(Default, Debug)]
 pub(crate) struct PayloadQueue {
-    chunk_map: HashMap<u32, ChunkPayloadData>,
-    sorted: Vec<u32>,
-    dup_tsn: Vec<u32>,
-    n_bytes: usize,
+    pub(crate) chunk_map: HashMap<u32, ChunkPayloadData>,
+    pub(crate) sorted: Vec<u32>,
+    pub(crate) dup_tsn: Vec<u32>,
+    pub(crate) n_bytes: usize,
 }
 
 impl PayloadQueue {
