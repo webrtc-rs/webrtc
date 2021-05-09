@@ -1,11 +1,11 @@
 use crate::error::Error;
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 
 ///////////////////////////////////////////////////////////////////
 //payload_queue_test
 ///////////////////////////////////////////////////////////////////
 use super::payload_queue::*;
-use crate::chunk::chunk_payload_data::ChunkPayloadData;
+use crate::chunk::chunk_payload_data::{ChunkPayloadData, PayloadProtocolIdentifier};
 use crate::chunk::chunk_selective_ack::GapAckBlock;
 
 fn make_payload(tsn: u32, n_bytes: usize) -> ChunkPayloadData {
@@ -391,7 +391,7 @@ fn test_pending_queue_fragments() -> Result<(), Error> {
 }
 
 // Once decided ordered or unordered, the decision should persist until
-// it pops a chunk with endingFragment flags set to true.
+// it pops a chunk with ending_fragment flags set to true.
 #[test]
 fn test_pending_queue_selection_persistence() -> Result<(), Error> {
     let mut pq = PendingQueue::new();
@@ -421,5 +421,551 @@ fn test_pending_queue_selection_persistence() -> Result<(), Error> {
         assert!(result.is_some(), "should not error: {}", exp);
     }
 
+    Ok(())
+}
+
+///////////////////////////////////////////////////////////////////
+//reassembly_queue_test
+///////////////////////////////////////////////////////////////////
+use super::reassembly_queue::*;
+
+#[test]
+fn test_reassembly_queue_ordered_fragments() -> Result<(), Error> {
+    let mut rq = ReassemblyQueue::new(0);
+
+    let org_ppi = PayloadProtocolIdentifier::Binary;
+
+    let chunk = ChunkPayloadData {
+        payload_type: org_ppi,
+        beginning_fragment: true,
+        tsn: 1,
+        stream_sequence_number: 0,
+        user_data: Bytes::from_static(b"ABC"),
+        ..Default::default()
+    };
+
+    let complete = rq.push(chunk);
+    assert!(!complete, "chunk set should not be complete yet");
+    assert_eq!(3, rq.get_num_bytes(), "num bytes mismatch");
+
+    let chunk = ChunkPayloadData {
+        payload_type: org_ppi,
+        ending_fragment: true,
+        tsn: 2,
+        stream_sequence_number: 0,
+        user_data: Bytes::from_static(b"DEFG"),
+        ..Default::default()
+    };
+
+    let complete = rq.push(chunk);
+    assert!(complete, "chunk set should be complete");
+    assert_eq!(7, rq.get_num_bytes(), "num bytes mismatch");
+
+    let mut buf = vec![0u8; 16];
+
+    let (n, ppi) = rq.read(&mut buf)?;
+    assert_eq!(7, n, "should received 7 bytes");
+    assert_eq!(0, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(ppi, org_ppi, "should have valid ppi");
+    assert_eq!(&buf[..n], b"ABCDEFG", "data should match");
+
+    Ok(())
+}
+
+#[test]
+fn test_reassembly_queue_unordered_fragments() -> Result<(), Error> {
+    let mut rq = ReassemblyQueue::new(0);
+
+    let org_ppi = PayloadProtocolIdentifier::Binary;
+
+    let chunk = ChunkPayloadData {
+        payload_type: org_ppi,
+        unordered: true,
+        beginning_fragment: true,
+        tsn: 1,
+        stream_sequence_number: 0,
+        user_data: Bytes::from_static(b"ABC"),
+        ..Default::default()
+    };
+
+    let complete = rq.push(chunk);
+    assert!(!complete, "chunk set should not be complete yet");
+    assert_eq!(3, rq.get_num_bytes(), "num bytes mismatch");
+
+    let chunk = ChunkPayloadData {
+        payload_type: org_ppi,
+        unordered: true,
+        tsn: 2,
+        stream_sequence_number: 0,
+        user_data: Bytes::from_static(b"DEFG"),
+        ..Default::default()
+    };
+
+    let complete = rq.push(chunk);
+    assert!(!complete, "chunk set should not be complete yet");
+    assert_eq!(7, rq.get_num_bytes(), "num bytes mismatch");
+
+    let chunk = ChunkPayloadData {
+        payload_type: org_ppi,
+        unordered: true,
+        ending_fragment: true,
+        tsn: 3,
+        stream_sequence_number: 0,
+        user_data: Bytes::from_static(b"H"),
+        ..Default::default()
+    };
+
+    let complete = rq.push(chunk);
+    assert!(complete, "chunk set should be complete");
+    assert_eq!(8, rq.get_num_bytes(), "num bytes mismatch");
+
+    let mut buf = vec![0u8; 16];
+
+    let (n, ppi) = rq.read(&mut buf)?;
+    assert_eq!(8, n, "should received 8 bytes");
+    assert_eq!(0, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(ppi, org_ppi, "should have valid ppi");
+    assert_eq!(&buf[..n], b"ABCDEFGH", "data should match");
+
+    Ok(())
+}
+
+#[test]
+fn test_reassembly_queue_ordered_and_unordered_fragments() -> Result<(), Error> {
+    let mut rq = ReassemblyQueue::new(0);
+    let org_ppi = PayloadProtocolIdentifier::Binary;
+    let chunk = ChunkPayloadData {
+        payload_type: org_ppi,
+        beginning_fragment: true,
+        ending_fragment: true,
+        tsn: 1,
+        stream_sequence_number: 0,
+        user_data: Bytes::from_static(b"ABC"),
+        ..Default::default()
+    };
+
+    let complete = rq.push(chunk);
+    assert!(complete, "chunk set should be complete");
+    assert_eq!(3, rq.get_num_bytes(), "num bytes mismatch");
+
+    let chunk = ChunkPayloadData {
+        payload_type: org_ppi,
+        unordered: true,
+        beginning_fragment: true,
+        ending_fragment: true,
+        tsn: 2,
+        stream_sequence_number: 1,
+        user_data: Bytes::from_static(b"DEF"),
+        ..Default::default()
+    };
+
+    let complete = rq.push(chunk);
+    assert!(complete, "chunk set should be complete");
+    assert_eq!(6, rq.get_num_bytes(), "num bytes mismatch");
+
+    //
+    // Now we have two complete chunks ready to read in the reassemblyQueue.
+    //
+
+    let mut buf = vec![0u8; 16];
+
+    // Should read unordered chunks first
+    let (n, ppi) = rq.read(&mut buf)?;
+    assert_eq!(3, n, "should received 3 bytes");
+    assert_eq!(3, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(ppi, org_ppi, "should have valid ppi");
+    assert_eq!(&buf[..n], b"DEF", "data should match");
+
+    // Next should read ordered chunks
+    let (n, ppi) = rq.read(&mut buf)?;
+    assert_eq!(3, n, "should received 3 bytes");
+    assert_eq!(0, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(ppi, org_ppi, "should have valid ppi");
+    assert_eq!(&buf[..n], b"ABC", "data should match");
+
+    Ok(())
+}
+
+#[test]
+fn test_reassembly_queue_unordered_complete_skips_incomplete() -> Result<(), Error> {
+    let mut rq = ReassemblyQueue::new(0);
+
+    let org_ppi = PayloadProtocolIdentifier::Binary;
+
+    let chunk = ChunkPayloadData {
+        payload_type: org_ppi,
+        unordered: true,
+        beginning_fragment: true,
+        tsn: 10,
+        stream_sequence_number: 0,
+        user_data: Bytes::from_static(b"IN"),
+        ..Default::default()
+    };
+
+    let complete = rq.push(chunk);
+    assert!(!complete, "chunk set should not be complete yet");
+    assert_eq!(2, rq.get_num_bytes(), "num bytes mismatch");
+
+    let chunk = ChunkPayloadData {
+        payload_type: org_ppi,
+        unordered: true,
+        ending_fragment: true,
+        tsn: 12, // <- incongiguous
+        stream_sequence_number: 1,
+        user_data: Bytes::from_static(b"COMPLETE"),
+        ..Default::default()
+    };
+
+    let complete = rq.push(chunk);
+    assert!(!complete, "chunk set should not be complete yet");
+    assert_eq!(10, rq.get_num_bytes(), "num bytes mismatch");
+
+    let chunk = ChunkPayloadData {
+        payload_type: org_ppi,
+        unordered: true,
+        beginning_fragment: true,
+        ending_fragment: true,
+        tsn: 13,
+        stream_sequence_number: 1,
+        user_data: Bytes::from_static(b"GOOD"),
+        ..Default::default()
+    };
+
+    let complete = rq.push(chunk);
+    assert!(complete, "chunk set should be complete");
+    assert_eq!(14, rq.get_num_bytes(), "num bytes mismatch");
+
+    //
+    // Now we have two complete chunks ready to read in the reassemblyQueue.
+    //
+
+    let mut buf = vec![0u8; 16];
+
+    // Should pick the one that has "GOOD"
+    let (n, ppi) = rq.read(&mut buf)?;
+    assert_eq!(4, n, "should receive 4 bytes");
+    assert_eq!(10, rq.get_num_bytes(), "num bytes mismatch");
+    assert_eq!(ppi, org_ppi, "should have valid ppi");
+    assert_eq!(&buf[..n], b"GOOD", "data should match");
+
+    Ok(())
+}
+
+#[test]
+fn test_reassembly_queue_ignores_chunk_with_wrong_si() -> Result<(), Error> {
+    let mut rq = ReassemblyQueue::new(123);
+
+    let org_ppi = PayloadProtocolIdentifier::Binary;
+
+    let chunk = ChunkPayloadData {
+        payload_type: org_ppi,
+        stream_identifier: 124,
+        beginning_fragment: true,
+        ending_fragment: true,
+        tsn: 10,
+        stream_sequence_number: 0,
+        user_data: Bytes::from_static(b"IN"),
+        ..Default::default()
+    };
+
+    let complete = rq.push(chunk);
+    assert!(!complete, "chunk should be ignored");
+    assert_eq!(0, rq.get_num_bytes(), "num bytes mismatch");
+    Ok(())
+}
+
+#[test]
+fn test_reassembly_queue_ignores_chunk_with_stale_ssn() -> Result<(), Error> {
+    let mut rq = ReassemblyQueue::new(0);
+    rq.next_ssn = 7; // forcibly set expected SSN to 7
+
+    let org_ppi = PayloadProtocolIdentifier::Binary;
+
+    let chunk = ChunkPayloadData {
+        payload_type: org_ppi,
+        beginning_fragment: true,
+        ending_fragment: true,
+        tsn: 10,
+        stream_sequence_number: 6, // <-- stale
+        user_data: Bytes::from_static(b"IN"),
+        ..Default::default()
+    };
+
+    let complete = rq.push(chunk);
+    assert!(!complete, "chunk should not be ignored");
+    assert_eq!(0, rq.get_num_bytes(), "num bytes mismatch");
+
+    Ok(())
+}
+
+#[test]
+fn test_reassembly_queue_should_fail_to_read_incomplete_chunk() -> Result<(), Error> {
+    let mut rq = ReassemblyQueue::new(0);
+
+    let org_ppi = PayloadProtocolIdentifier::Binary;
+
+    let chunk = ChunkPayloadData {
+        payload_type: org_ppi,
+        beginning_fragment: true,
+        tsn: 123,
+        stream_sequence_number: 0,
+        user_data: Bytes::from_static(b"IN"),
+        ..Default::default()
+    };
+
+    let complete = rq.push(chunk);
+    assert!(!complete, "the set should not be complete");
+    assert_eq!(2, rq.get_num_bytes(), "num bytes mismatch");
+
+    let mut buf = vec![0u8; 16];
+    let result = rq.read(&mut buf);
+    assert!(result.is_err(), "read() should not succeed");
+    assert_eq!(2, rq.get_num_bytes(), "num bytes mismatch");
+
+    Ok(())
+}
+
+#[test]
+fn test_reassembly_queue_should_fail_to_read_if_the_nex_ssn_is_not_ready() -> Result<(), Error> {
+    let mut rq = ReassemblyQueue::new(0);
+
+    let org_ppi = PayloadProtocolIdentifier::Binary;
+
+    let chunk = ChunkPayloadData {
+        payload_type: org_ppi,
+        beginning_fragment: true,
+        ending_fragment: true,
+        tsn: 123,
+        stream_sequence_number: 1,
+        user_data: Bytes::from_static(b"IN"),
+        ..Default::default()
+    };
+
+    let complete = rq.push(chunk);
+    assert!(complete, "the set should be complete");
+    assert_eq!(2, rq.get_num_bytes(), "num bytes mismatch");
+
+    let mut buf = vec![0u8; 16];
+    let result = rq.read(&mut buf);
+    assert!(result.is_err(), "read() should not succeed");
+    assert_eq!(2, rq.get_num_bytes(), "num bytes mismatch");
+
+    Ok(())
+}
+
+#[test]
+fn test_reassembly_queue_detect_buffer_too_short() -> Result<(), Error> {
+    let mut rq = ReassemblyQueue::new(0);
+
+    let org_ppi = PayloadProtocolIdentifier::Binary;
+
+    let chunk = ChunkPayloadData {
+        payload_type: org_ppi,
+        beginning_fragment: true,
+        ending_fragment: true,
+        tsn: 123,
+        stream_sequence_number: 0,
+        user_data: Bytes::from_static(b"0123456789"),
+        ..Default::default()
+    };
+
+    let complete = rq.push(chunk);
+    assert!(complete, "the set should be complete");
+    assert_eq!(10, rq.get_num_bytes(), "num bytes mismatch");
+
+    let mut buf = vec![0u8; 8]; // <- passing buffer too short
+    let (n, _) = rq.read(&mut buf)?;
+    assert_eq!(8, n, "read() should not succeed");
+    assert_eq!(0, rq.get_num_bytes(), "num bytes mismatch");
+
+    Ok(())
+}
+
+#[test]
+fn test_reassembly_queue_forward_tsn_for_ordered_framents() -> Result<(), Error> {
+    let mut rq = ReassemblyQueue::new(0);
+
+    let org_ppi = PayloadProtocolIdentifier::Binary;
+
+    let ssn_complete = 5u16;
+    let ssn_dropped = 6u16;
+
+    let chunk = ChunkPayloadData {
+        payload_type: org_ppi,
+        beginning_fragment: true,
+        ending_fragment: true,
+        tsn: 10,
+        stream_sequence_number: ssn_complete,
+        user_data: Bytes::from_static(b"123"),
+        ..Default::default()
+    };
+
+    let complete = rq.push(chunk);
+    assert!(complete, "chunk set should be complete");
+    assert_eq!(3, rq.get_num_bytes(), "num bytes mismatch");
+
+    let chunk = ChunkPayloadData {
+        payload_type: org_ppi,
+        beginning_fragment: true,
+        tsn: 11,
+        stream_sequence_number: ssn_dropped,
+        user_data: Bytes::from_static(b"ABC"),
+        ..Default::default()
+    };
+
+    let complete = rq.push(chunk);
+    assert!(!complete, "chunk set should not be complete yet");
+    assert_eq!(6, rq.get_num_bytes(), "num bytes mismatch");
+
+    let chunk = ChunkPayloadData {
+        payload_type: org_ppi,
+        tsn: 12,
+        stream_sequence_number: ssn_dropped,
+        user_data: Bytes::from_static(b"DEF"),
+        ..Default::default()
+    };
+
+    let complete = rq.push(chunk);
+    assert!(!complete, "chunk set should not be complete yet");
+    assert_eq!(9, rq.get_num_bytes(), "num bytes mismatch");
+
+    rq.forward_tsn_for_ordered(ssn_dropped);
+
+    assert_eq!(1, rq.ordered.len(), "there should be one chunk left");
+    assert_eq!(3, rq.get_num_bytes(), "num bytes mismatch");
+
+    Ok(())
+}
+
+#[test]
+fn test_reassembly_queue_forward_tsn_for_unordered_framents() -> Result<(), Error> {
+    let mut rq = ReassemblyQueue::new(0);
+
+    let org_ppi = PayloadProtocolIdentifier::Binary;
+
+    let ssn_dropped = 6u16;
+    let ssn_kept = 7u16;
+
+    let chunk = ChunkPayloadData {
+        payload_type: org_ppi,
+        unordered: true,
+        beginning_fragment: true,
+        tsn: 11,
+        stream_sequence_number: ssn_dropped,
+        user_data: Bytes::from_static(b"ABC"),
+        ..Default::default()
+    };
+
+    let complete = rq.push(chunk);
+    assert!(!complete, "chunk set should not be complete yet");
+    assert_eq!(3, rq.get_num_bytes(), "num bytes mismatch");
+
+    let chunk = ChunkPayloadData {
+        payload_type: org_ppi,
+        unordered: true,
+        tsn: 12,
+        stream_sequence_number: ssn_dropped,
+        user_data: Bytes::from_static(b"DEF"),
+        ..Default::default()
+    };
+
+    let complete = rq.push(chunk);
+    assert!(!complete, "chunk set should not be complete yet");
+    assert_eq!(6, rq.get_num_bytes(), "num bytes mismatch");
+
+    let chunk = ChunkPayloadData {
+        payload_type: org_ppi,
+        unordered: true,
+        tsn: 14,
+        beginning_fragment: true,
+        stream_sequence_number: ssn_kept,
+        user_data: Bytes::from_static(b"SOS"),
+        ..Default::default()
+    };
+
+    let complete = rq.push(chunk);
+    assert!(!complete, "chunk set should not be complete yet");
+    assert_eq!(9, rq.get_num_bytes(), "num bytes mismatch");
+
+    // At this point, there are 3 chunks in the rq.unorderedChunks.
+    // This call should remove chunks with tsn equals to 13 or older.
+    rq.forward_tsn_for_unordered(13);
+
+    // As a result, there should be one chunk (tsn=14)
+    assert_eq!(
+        1,
+        rq.unordered_chunks.len(),
+        "there should be one chunk kept"
+    );
+    assert_eq!(3, rq.get_num_bytes(), "num bytes mismatch");
+
+    Ok(())
+}
+
+#[test]
+fn test_chunk_set_empty_chunk_set() -> Result<(), Error> {
+    let cset = ChunkSet::new(0, PayloadProtocolIdentifier::default());
+    assert!(!cset.is_complete(), "empty chunkSet cannot be complete");
+    Ok(())
+}
+
+#[test]
+fn test_chunk_set_push_dup_chunks_to_chunk_set() -> Result<(), Error> {
+    let mut cset = ChunkSet::new(0, PayloadProtocolIdentifier::default());
+    cset.push(ChunkPayloadData {
+        tsn: 100,
+        beginning_fragment: true,
+        ..Default::default()
+    });
+    let complete = cset.push(ChunkPayloadData {
+        tsn: 100,
+        ending_fragment: true,
+        ..Default::default()
+    });
+    assert!(!complete, "chunk with dup TSN is not complete");
+    assert_eq!(1, cset.chunks.len(), "chunk with dup TSN should be ignored");
+    Ok(())
+}
+
+#[test]
+fn test_chunk_set_incomplete_chunk_set_no_beginning() -> Result<(), Error> {
+    let cset = ChunkSet {
+        ssn: 0,
+        ppi: PayloadProtocolIdentifier::default(),
+        chunks: vec![],
+    };
+    assert!(
+        !cset.is_complete(),
+        "chunkSet not starting with B=1 cannot be complete"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_chunk_set_incomplete_chunk_set_no_contiguous_tsn() -> Result<(), Error> {
+    let cset = ChunkSet {
+        ssn: 0,
+        ppi: PayloadProtocolIdentifier::default(),
+        chunks: vec![
+            ChunkPayloadData {
+                tsn: 100,
+                beginning_fragment: true,
+                ..Default::default()
+            },
+            ChunkPayloadData {
+                tsn: 101,
+                ..Default::default()
+            },
+            ChunkPayloadData {
+                tsn: 103,
+                ending_fragment: true,
+                ..Default::default()
+            },
+        ],
+    };
+    assert!(
+        !cset.is_complete(),
+        "chunkSet not starting with incontiguous tsn cannot be complete"
+    );
     Ok(())
 }

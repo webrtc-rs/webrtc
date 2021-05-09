@@ -28,9 +28,9 @@ fn sort_chunks_by_ssn(c: &mut Vec<ChunkSet>) {
 #[derive(Debug, Clone)]
 pub(crate) struct ChunkSet {
     /// used only with the ordered chunks
-    ssn: u16,
-    ppi: PayloadProtocolIdentifier,
-    chunks: Vec<ChunkPayloadData>,
+    pub(crate) ssn: u16,
+    pub(crate) ppi: PayloadProtocolIdentifier,
+    pub(crate) chunks: Vec<ChunkPayloadData>,
 }
 
 impl ChunkSet {
@@ -105,13 +105,13 @@ impl ChunkSet {
 }
 
 pub(crate) struct ReassemblyQueue {
-    si: u16,
-    next_ssn: u16,
+    pub(crate) si: u16,
+    pub(crate) next_ssn: u16,
     /// expected SSN for next ordered chunk
-    ordered: Vec<ChunkSet>,
-    unordered: Vec<ChunkSet>,
-    unordered_chunks: Vec<ChunkPayloadData>,
-    n_bytes: usize,
+    pub(crate) ordered: Vec<ChunkSet>,
+    pub(crate) unordered: Vec<ChunkSet>,
+    pub(crate) unordered_chunks: Vec<ChunkPayloadData>,
+    pub(crate) n_bytes: usize,
 }
 
 impl ReassemblyQueue {
