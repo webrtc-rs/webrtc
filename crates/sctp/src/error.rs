@@ -142,4 +142,11 @@ pub enum Error {
     ErrUnmarshalUnknownChunkType,
     #[error("checksum mismatch theirs")]
     ErrChecksumMismatch,
+
+    #[error("unexpected chunk popped (unordered)")]
+    ErrUnexpectedChuckPoppedUnordered,
+    #[error("unexpected chunk popped (ordered)")]
+    ErrUnexpectedChuckPoppedOrdered,
+    #[error("unexpected q state (should've been selected)")]
+    ErrUnexpectedQState,
 }

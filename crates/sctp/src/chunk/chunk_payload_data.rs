@@ -85,7 +85,7 @@ impl From<u32> for PayloadProtocolIdentifier {
 ///============================================================
 ///|             Table 1: Fragment Description Flags          |
 ///============================================================
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ChunkPayloadData {
     pub(crate) unordered: bool,
     pub(crate) beginning_fragment: bool,
