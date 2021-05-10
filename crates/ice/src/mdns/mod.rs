@@ -48,7 +48,9 @@ pub(crate) fn create_multicast_dns(
         return Ok(None);
     }
 
-    let addr = SocketAddr::from_str(DEFAULT_DEST_ADDR)?;
+    //TODO: make it configurable
+    //TODO: why DEFAULT_DEST_ADDR doesn't work on Mac/Win?
+    let addr = SocketAddr::from_str("0.0.0.0:5353")?;
 
     match mdns_mode {
         MulticastDnsMode::QueryOnly => {
