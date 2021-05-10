@@ -14,8 +14,8 @@ pub(crate) trait AckTimerObserver {
 /// ackTimer provides the retnransmission timer conforms with RFC 4960 Sec 6.3.1
 #[derive(Default)]
 pub(crate) struct AckTimer {
-    interval: Duration,
-    close_tx: Option<mpsc::Sender<()>>,
+    pub(crate) interval: Duration,
+    pub(crate) close_tx: Option<mpsc::Sender<()>>,
 }
 
 impl AckTimer {
@@ -59,13 +59,13 @@ impl AckTimer {
 
     /// stops the timer. this is similar to stop() but subsequent start() call
     /// will fail (the timer is no longer usable)
-    pub fn stop(&mut self) {
+    pub(crate) fn stop(&mut self) {
         self.close_tx.take();
     }
 
     /// isRunning tests if the timer is running.
     /// Debug purpose only
-    pub fn is_running(&self) -> bool {
+    pub(crate) fn is_running(&self) -> bool {
         self.close_tx.is_some()
     }
 }
