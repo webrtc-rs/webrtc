@@ -18,8 +18,6 @@ pub(crate) struct AckTimer {
     close_tx: Option<mpsc::Sender<()>>,
 }
 
-type StopAckTimerLoopFn = fn();
-
 impl AckTimer {
     /// newAckTimer creates a new acknowledgement timer used to enable delayed ack.
     pub(crate) fn new(interval: Duration) -> Self {
