@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::Duration;
 
-const ACK_INTERVAL: Duration = Duration::from_millis(200);
+pub(crate) const ACK_INTERVAL: Duration = Duration::from_millis(200);
 
 /// ackTimerObserver is the inteface to an ack timer observer.
 #[async_trait]
