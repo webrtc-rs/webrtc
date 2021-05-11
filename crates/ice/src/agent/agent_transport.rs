@@ -112,11 +112,7 @@ impl AgentConn {
             }
         }
 
-        if let Some(b) = best {
-            Some(b.clone())
-        } else {
-            None
-        }
+        best.cloned()
     }
 
     pub(crate) async fn get_best_valid_candidate_pair(&self) -> Option<Arc<CandidatePair>> {
@@ -137,11 +133,7 @@ impl AgentConn {
             }
         }
 
-        if let Some(b) = best {
-            Some(b.clone())
-        } else {
-            None
-        }
+        best.cloned()
     }
 
     // bytes_sent returns the number of bytes sent

@@ -194,11 +194,7 @@ impl Candidate for CandidateBase {
 
     // RelatedAddress returns *CandidateRelatedAddress
     fn related_address(&self) -> Option<CandidateRelatedAddress> {
-        if let Some(related_address) = &self.related_address {
-            Some(related_address.clone())
-        } else {
-            None
-        }
+        self.related_address.as_ref().cloned()
     }
 
     // Type returns candidate type

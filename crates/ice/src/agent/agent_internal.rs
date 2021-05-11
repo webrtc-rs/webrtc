@@ -431,11 +431,10 @@ impl AgentInternal {
         &mut self,
         c: &Arc<dyn Candidate + Send + Sync>,
     ) -> Result<(), Error> {
-        let initialized_ch = if let Some(started_ch_tx) = &self.started_ch_tx {
-            Some(started_ch_tx.subscribe())
-        } else {
-            None
-        };
+        let initialized_ch = self
+            .started_ch_tx
+            .as_ref()
+            .map(|started_ch_tx| started_ch_tx.subscribe());
         self.start_candidate(c, initialized_ch).await;
 
         let network_type = c.network_type();
