@@ -173,15 +173,11 @@ pub fn ifaces() -> Result<Vec<Interface>, Error> {
                     if (*item).ifa_flags & SiocgifFlags::Iff_Broadcast as ::std::os::raw::c_uint
                         == SiocgifFlags::Iff_Broadcast as ::std::os::raw::c_uint
                     {
-                        match nix_socketaddr_to_sockaddr((*item).ifa_ifu.ifu_broadaddr()) {
-                            Some(x) => Some(NextHop::Broadcast(x)),
-                            None => None,
-                        }
+                        nix_socketaddr_to_sockaddr((*item).ifa_ifu.ifu_broadaddr())
+                            .map(NextHop::Broadcast)
                     } else {
-                        match nix_socketaddr_to_sockaddr((*item).ifa_ifu.ifu_dstaddr()) {
-                            Some(x) => Some(NextHop::Destination(x)),
-                            None => None,
-                        }
+                        nix_socketaddr_to_sockaddr((*item).ifa_ifu.ifu_dstaddr())
+                            .map(NextHop::Destination)
                     }
                 };
 

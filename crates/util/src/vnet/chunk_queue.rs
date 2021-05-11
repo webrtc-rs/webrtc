@@ -38,10 +38,6 @@ impl ChunkQueue {
 
     pub(crate) async fn peek(&self) -> Option<Box<dyn Chunk + Send + Sync>> {
         let chunks = self.chunks.read().await;
-        if let Some(chunk) = chunks.front() {
-            Some(chunk.clone_to())
-        } else {
-            None
-        }
+        chunks.front().map(|chunk| chunk.clone_to())
     }
 }

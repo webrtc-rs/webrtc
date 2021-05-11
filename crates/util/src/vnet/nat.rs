@@ -407,11 +407,7 @@ impl NetworkAddressTranslator {
         }
 
         let outbound_map = self.outbound_map.lock().await;
-        if let Some(m) = outbound_map.get(o_key) {
-            Some(Arc::clone(m))
-        } else {
-            None
-        }
+        outbound_map.get(o_key).map(|m| Arc::clone(m))
     }
 
     // caller must hold the mutex
@@ -450,11 +446,7 @@ impl NetworkAddressTranslator {
         }
 
         let inbound_map = self.inbound_map.lock().await;
-        if let Some(m) = inbound_map.get(i_key) {
-            Some(Arc::clone(m))
-        } else {
-            None
-        }
+        inbound_map.get(i_key).map(|m| Arc::clone(m))
     }
 
     // caller must hold the mutex
