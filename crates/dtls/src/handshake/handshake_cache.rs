@@ -57,11 +57,11 @@ impl HandshakeCache {
         }
 
         cache.push(HandshakeCacheItem {
-            data,
-            epoch,
-            message_sequence,
             typ,
             is_client,
+            epoch,
+            message_sequence,
+            data,
         });
 
         true
