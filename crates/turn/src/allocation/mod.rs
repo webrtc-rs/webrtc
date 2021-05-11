@@ -164,11 +164,7 @@ impl Allocation {
     // get_channel_addr gets the ChannelBind's addr
     pub async fn get_channel_addr(&self, number: &ChannelNumber) -> Option<SocketAddr> {
         let channel_bindings = self.channel_bindings.lock().await;
-        if let Some(cb) = channel_bindings.get(number) {
-            Some(cb.peer)
-        } else {
-            None
-        }
+        channel_bindings.get(number).map(|cb| cb.peer)
     }
 
     // GetChannelByAddr gets the ChannelBind's number from this allocation by net.Addr

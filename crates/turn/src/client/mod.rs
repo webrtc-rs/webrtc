@@ -478,11 +478,7 @@ impl ClientInternal {
         ch_num: u16,
     ) -> Option<SocketAddr> {
         let bm = binding_mgr.lock().await;
-        if let Some(b) = bm.find_by_number(ch_num) {
-            Some(b.addr)
-        } else {
-            None
-        }
+        bm.find_by_number(ch_num).map(|b| b.addr)
     }
 
     // Allocate sends a TURN allocation request to the given transport address

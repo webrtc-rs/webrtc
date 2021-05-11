@@ -44,11 +44,9 @@ impl Manager {
     // get_allocation fetches the allocation matching the passed FiveTuple
     pub async fn get_allocation(&self, five_tuple: &FiveTuple) -> Option<Arc<Mutex<Allocation>>> {
         let allocations = self.allocations.lock().await;
-        if let Some(a) = allocations.get(&five_tuple.fingerprint()) {
-            Some(Arc::clone(a))
-        } else {
-            None
-        }
+        allocations
+            .get(&five_tuple.fingerprint())
+            .map(|a| Arc::clone(a))
     }
 
     // create_allocation creates a new allocation and starts relaying
@@ -124,11 +122,7 @@ impl Manager {
     // get_reservation returns the port for a given reservation if it exists
     pub async fn get_reservation(&self, reservation_token: &str) -> Option<u16> {
         let reservations = self.reservations.lock().await;
-        if let Some(port) = reservations.get(reservation_token) {
-            Some(*port)
-        } else {
-            None
-        }
+        reservations.get(reservation_token).copied()
     }
 
     // get_random_even_port returns a random un-allocated udp4 port
