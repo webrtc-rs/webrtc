@@ -151,4 +151,47 @@ pub enum Error {
     ErrUnexpectedQState,
     #[error("try again")]
     ErrTryAgain,
+
+    #[error("abort chunk, with following errors")]
+    ErrChunk,
+    #[error("shutdown called in non-established state")]
+    ErrShutdownNonEstablished,
+    #[error("association closed before connecting")]
+    ErrAssociationClosedBeforeConn,
+    #[error("silently discard")]
+    ErrSilentlyDiscard,
+    #[error("the init not stored to send")]
+    ErrInitNotStoredToSend,
+    #[error("cookieEcho not stored to send")]
+    ErrCookieEchoNotStoredToSend,
+    #[error("sctp packet must not have a source port of 0")]
+    ErrSctpPacketSourcePortZero,
+    #[error("sctp packet must not have a destination port of 0")]
+    ErrSctpPacketDestinationPortZero,
+    #[error("init chunk must not be bundled with any other chunk")]
+    ErrInitChunkBundled,
+    #[error("init chunk expects a verification tag of 0 on the packet when out-of-the-blue")]
+    ErrInitChunkVerifyTagNotZero,
+    #[error("todo: handle Init when in state")]
+    ErrHandleInitState,
+    #[error("no cookie in InitAck")]
+    ErrInitAckNoCookie,
+    #[error("there already exists a stream with identifier")]
+    ErrStreamAlreadyExist,
+    #[error("unable to be popped from inflight queue TSN")]
+    ErrInflightQueueTsnPop,
+    #[error("requested non-existent TSN")]
+    ErrTsnRequestNotExist,
+    #[error("sending reset packet in non-established state")]
+    ErrResetPacketInStateNotExist,
+    #[error("unexpected parameter type")]
+    ErrParamterType,
+    #[error("sending payload data in non-established state")]
+    ErrPayloadDataStateNotExist,
+    #[error("unhandled chunk type")]
+    ErrChunkTypeUnhandled,
+    #[error("handshake failed (INIT ACK)")]
+    ErrHandshakeInitAck,
+    #[error("handshake failed (COOKIE ECHO)")]
+    ErrHandshakeCookieEcho,
 }
