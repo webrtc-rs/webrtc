@@ -183,11 +183,7 @@ impl Context {
 
     /// roc returns SRTP rollover counter value of specified SSRC.
     fn get_roc(&self, ssrc: u32) -> Option<u32> {
-        if let Some(s) = self.srtp_ssrc_states.get(&ssrc) {
-            Some(s.rollover_counter)
-        } else {
-            None
-        }
+        self.srtp_ssrc_states.get(&ssrc).map(|s| s.rollover_counter)
     }
 
     /// set_roc sets SRTP rollover counter value of specified SSRC.
@@ -199,11 +195,7 @@ impl Context {
 
     /// index returns SRTCP index value of specified SSRC.
     fn get_index(&self, ssrc: u32) -> Option<usize> {
-        if let Some(s) = self.srtcp_ssrc_states.get(&ssrc) {
-            Some(s.srtcp_index)
-        } else {
-            None
-        }
+        self.srtcp_ssrc_states.get(&ssrc).map(|s| s.srtcp_index)
     }
 
     /// set_index sets SRTCP index value of specified SSRC.
