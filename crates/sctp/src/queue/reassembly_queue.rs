@@ -117,7 +117,7 @@ pub(crate) struct ReassemblyQueue {
 impl ReassemblyQueue {
     /// From RFC 4960 Sec 6.5:
     ///   The Stream Sequence Number in all the streams MUST start from 0 when
-    ///   the association is established.  Also, when the Stream Sequence
+    ///   the association is Established.  Also, when the Stream Sequence
     ///   Number reaches the value 65535 the next Stream Sequence Number MUST
     ///   be set to 0.
     pub(crate) fn new(si: u16) -> Self {

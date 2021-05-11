@@ -154,7 +154,7 @@ pub enum Error {
 
     #[error("abort chunk, with following errors")]
     ErrChunk,
-    #[error("shutdown called in non-established state")]
+    #[error("shutdown called in non-Established state")]
     ErrShutdownNonEstablished,
     #[error("association closed before connecting")]
     ErrAssociationClosedBeforeConn,
@@ -182,11 +182,11 @@ pub enum Error {
     ErrInflightQueueTsnPop,
     #[error("requested non-existent TSN")]
     ErrTsnRequestNotExist,
-    #[error("sending reset packet in non-established state")]
+    #[error("sending reset packet in non-Established state")]
     ErrResetPacketInStateNotExist,
     #[error("unexpected parameter type")]
     ErrParamterType,
-    #[error("sending payload data in non-established state")]
+    #[error("sending payload data in non-Established state")]
     ErrPayloadDataStateNotExist,
     #[error("unhandled chunk type")]
     ErrChunkTypeUnhandled,
