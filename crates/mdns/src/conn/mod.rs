@@ -132,7 +132,7 @@ impl DnsConn {
                 dst_addr,
                 queries,
             )
-                .await
+            .await
         });
 
         Ok(c)
@@ -384,6 +384,7 @@ async fn send_answer(
                 authoritative: true,
                 ..Default::default()
             },
+
             answers: vec![Resource {
                 header: ResourceHeader {
                     typ: DnsType::A,
