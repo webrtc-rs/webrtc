@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use core::sync::atomic;
 use socket2::SockAddr;
-use tokio::net::UdpSocket;
+use tokio::net::{ToSocketAddrs, UdpSocket};
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 
@@ -240,6 +240,12 @@ impl DnsConn {
         }
     }
 
+    async fn get_interface_addr_for_ip(addr: impl ToSocketAddrs) -> std::io::Result<SocketAddr> {
+        let socket = UdpSocket::bind("0.0.0.0:0").await?;
+        socket.connect(addr).await?;
+        socket.local_addr()
+    }
+
     async fn start(
         mut closed_rx: mpsc::Receiver<()>,
         close_server: Arc<atomic::AtomicBool>,
@@ -286,7 +292,17 @@ impl DnsConn {
                 continue;
             }
 
-            run(&mut p, &socket, &local_names, src, dst_addr, &queries).await
+            let interface_addr = Self::get_interface_addr_for_ip(src).await?;
+            run(
+                &mut p,
+                &socket,
+                &interface_addr,
+                &local_names,
+                src,
+                dst_addr,
+                &queries,
+            )
+            .await
         }
     }
 }
@@ -294,6 +310,7 @@ impl DnsConn {
 async fn run(
     p: &mut Parser<'_>,
     socket: &Arc<UdpSocket>,
+    interface_addr: &SocketAddr,
     local_names: &[String],
     src: SocketAddr,
     dst_addr: SocketAddr,
@@ -316,11 +333,14 @@ async fn run(
         for local_name in local_names {
             if *local_name == q.name.data {
                 log::trace!(
-                    "Found local name: {} to send answer, IP {}",
+                    "Found local name: {} to send answer, IP {}, interface addr {}",
                     local_name,
-                    src.ip()
+                    src.ip(),
+                    interface_addr
                 );
-                if let Err(e) = send_answer(socket, &q.name.data, src.ip(), dst_addr).await {
+                if let Err(e) =
+                    send_answer(socket, interface_addr, &q.name.data, src.ip(), dst_addr).await
+                {
                     log::error!("Error sending answer to client: {:?}", e);
                     continue;
                 };
@@ -363,6 +383,7 @@ async fn run(
 
 async fn send_answer(
     socket: &Arc<UdpSocket>,
+    interface_addr: &SocketAddr,
     name: &str,
     dst: IpAddr,
     dst_addr: SocketAddr,
@@ -384,7 +405,7 @@ async fn send_answer(
                     ..Default::default()
                 },
                 body: Some(Box::new(AResource {
-                    a: match dst {
+                    a: match interface_addr.ip() {
                         IpAddr::V4(ip) => ip.octets(),
                         IpAddr::V6(_) => return Err(Error::new("Unexpected IpV6 addr".to_owned())),
                     },
