@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use core::sync::atomic;
 use socket2::SockAddr;
-use tokio::net::{ UdpSocket, ToSocketAddrs };
+use tokio::net::{ToSocketAddrs, UdpSocket};
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 
@@ -293,7 +293,16 @@ impl DnsConn {
             }
 
             let interface_addr = Self::get_interface_addr_for_ip(src).await?;
-            run(&mut p, &socket, &interface_addr, &local_names, src, dst_addr, &queries).await
+            run(
+                &mut p,
+                &socket,
+                &interface_addr,
+                &local_names,
+                src,
+                dst_addr,
+                &queries,
+            )
+            .await
         }
     }
 }
@@ -329,7 +338,9 @@ async fn run(
                     src.ip(),
                     interface_addr
                 );
-                if let Err(e) = send_answer(socket, interface_addr, &q.name.data, src.ip(), dst_addr).await {
+                if let Err(e) =
+                    send_answer(socket, interface_addr, &q.name.data, src.ip(), dst_addr).await
+                {
                     log::error!("Error sending answer to client: {:?}", e);
                     continue;
                 };
