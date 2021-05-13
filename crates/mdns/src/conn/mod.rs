@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use core::sync::atomic;
 use socket2::SockAddr;
-use tokio::net::UdpSocket;
+use tokio::net::{ UdpSocket, ToSocketAddrs };
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 
@@ -64,7 +64,6 @@ impl DnsConn {
         socket.set_nonblocking(true)?;
 
         socket.bind(&SockAddr::from(addr))?;
-        let mut local_ips = vec![];
         {
             let mut join_error_count = 0;
             let interfaces = match ifaces::ifaces() {
@@ -76,18 +75,15 @@ impl DnsConn {
             };
 
             for interface in &interfaces {
-                if let Some(addr) = interface.addr {
-                    local_ips.push(addr.ip());
-                    if let SocketAddr::V4(e) = addr {
-                        if let Err(e) = socket.join_multicast_v4(&Ipv4Addr::new(224, 0, 0, 251), e.ip())
-                        {
-                            log::trace!("Error connecting multicast, error: {:?}", e);
-                            join_error_count += 1;
-                            continue;
-                        }
-
-                        log::trace!("Connected to interface address {:?}", e);
+                if let Some(SocketAddr::V4(e)) = interface.addr {
+                    if let Err(e) = socket.join_multicast_v4(&Ipv4Addr::new(224, 0, 0, 251), e.ip())
+                    {
+                        log::trace!("Error connecting multicast, error: {:?}", e);
+                        join_error_count += 1;
+                        continue;
                     }
+
+                    log::trace!("Connected to interface address {:?}", e);
                 }
             }
 
@@ -132,12 +128,11 @@ impl DnsConn {
                 close_server_rcv,
                 is_server_closed,
                 socket,
-                local_ips,
                 local_names,
                 dst_addr,
                 queries,
             )
-            .await
+                .await
         });
 
         Ok(c)
@@ -245,11 +240,16 @@ impl DnsConn {
         }
     }
 
+    async fn get_interface_addr_for_ip(addr: impl ToSocketAddrs) -> std::io::Result<SocketAddr> {
+        let socket = UdpSocket::bind("0.0.0.0:0").await?;
+        socket.connect(addr).await?;
+        socket.local_addr()
+    }
+
     async fn start(
         mut closed_rx: mpsc::Receiver<()>,
         close_server: Arc<atomic::AtomicBool>,
         socket: Arc<UdpSocket>,
-        local_ips: Vec<IpAddr>,
         local_names: Vec<String>,
         dst_addr: SocketAddr,
         queries: Arc<Mutex<Vec<Query>>>,
@@ -292,7 +292,8 @@ impl DnsConn {
                 continue;
             }
 
-            run(&mut p, &socket, &local_ips, &local_names, src, dst_addr, &queries).await
+            let interface_addr = Self::get_interface_addr_for_ip(src).await?;
+            run(&mut p, &socket, &interface_addr, &local_names, src, dst_addr, &queries).await
         }
     }
 }
@@ -300,7 +301,7 @@ impl DnsConn {
 async fn run(
     p: &mut Parser<'_>,
     socket: &Arc<UdpSocket>,
-    local_ips: &[IpAddr],
+    interface_addr: &SocketAddr,
     local_names: &[String],
     src: SocketAddr,
     dst_addr: SocketAddr,
@@ -323,11 +324,12 @@ async fn run(
         for local_name in local_names {
             if *local_name == q.name.data {
                 log::trace!(
-                    "Found local name: {} to send answer, IP {}",
+                    "Found local name: {} to send answer, IP {}, interface addr {}",
                     local_name,
-                    src.ip()
+                    src.ip(),
+                    interface_addr
                 );
-                if let Err(e) = send_answer(socket, local_ips, &q.name.data, src.ip(), dst_addr).await {
+                if let Err(e) = send_answer(socket, interface_addr, &q.name.data, src.ip(), dst_addr).await {
                     log::error!("Error sending answer to client: {:?}", e);
                     continue;
                 };
@@ -370,18 +372,19 @@ async fn run(
 
 async fn send_answer(
     socket: &Arc<UdpSocket>,
-    local_ips: &[IpAddr],
+    interface_addr: &SocketAddr,
     name: &str,
     dst: IpAddr,
     dst_addr: SocketAddr,
 ) -> Result<(), Error> {
     let raw_answer = {
-        let mut answers = vec![];
-        for local_ip in local_ips {
-            if local_ip.is_loopback() && !dst.is_loopback() {
-                continue
-            }
-            answers.push(Resource {
+        let mut msg = Message {
+            header: Header {
+                response: true,
+                authoritative: true,
+                ..Default::default()
+            },
+            answers: vec![Resource {
                 header: ResourceHeader {
                     typ: DnsType::A,
                     class: DNSCLASS_INET,
@@ -390,21 +393,12 @@ async fn send_answer(
                     ..Default::default()
                 },
                 body: Some(Box::new(AResource {
-                    a: match local_ip {
+                    a: match interface_addr.ip() {
                         IpAddr::V4(ip) => ip.octets(),
                         IpAddr::V6(_) => return Err(Error::new("Unexpected IpV6 addr".to_owned())),
                     },
                 })),
-            });
-        }
-
-        let mut msg = Message {
-            header: Header {
-                response: true,
-                authoritative: true,
-                ..Default::default()
-            },
-            answers,
+            }],
             ..Default::default()
         };
 
