@@ -81,7 +81,7 @@ impl Message {
 mod tests {
     use bytes::{Bytes, BytesMut};
 
-    use crate::{error::MessageTypeError, channel_type::ChannelType};
+    use crate::{channel_type::ChannelType, error::MessageTypeError};
 
     use super::*;
 
