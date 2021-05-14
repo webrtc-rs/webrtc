@@ -9,7 +9,7 @@ mod data_channel_ack;
 mod data_channel_open;
 mod message_type;
 
-pub use data_channel_ack::{DataChannelAck, Error as DataChannelAckError};
+pub use data_channel_ack::DataChannelAck;
 pub use data_channel_open::{DataChannelOpen, Error as DataChannelOpenError};
 pub use message_type::MessageType;
 

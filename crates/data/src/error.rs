@@ -27,6 +27,9 @@ impl std::fmt::Display for ChannelTypeError {
 }
 
 #[derive(Error, Eq, PartialEq, Clone, Debug)]
+pub enum DataChannelAckError {}
+
+#[derive(Error, Eq, PartialEq, Clone, Debug)]
 pub enum MessageTypeError {
     // Marshal buffer was too short
     UnexpectedEndOfBuffer { expected: usize, actual: usize },

@@ -1,9 +1,9 @@
 use bytes::{Buf, BufMut};
 
-use crate::marshal::{Marshal, MarshalSize, Unmarshal};
-
-#[derive(Eq, PartialEq, Clone, Debug)]
-pub enum Error {}
+use crate::{
+    error::DataChannelAckError,
+    marshal::{Marshal, MarshalSize, Unmarshal},
+};
 
 /// The data-part of an data-channel OPEN message without the message type.
 ///
@@ -26,7 +26,7 @@ impl MarshalSize for DataChannelAck {
 }
 
 impl Unmarshal for DataChannelAck {
-    type Error = Error;
+    type Error = DataChannelAckError;
 
     fn unmarshal_from<B>(_buf: &mut B) -> Result<Self, Self::Error>
     where
@@ -37,7 +37,7 @@ impl Unmarshal for DataChannelAck {
 }
 
 impl Marshal for DataChannelAck {
-    type Error = Error;
+    type Error = DataChannelAckError;
 
     fn marshal_to<B>(&self, _buf: &mut B) -> Result<usize, Self::Error>
     where
