@@ -1,5 +1,6 @@
 mod channel_type;
 pub mod data_channel;
+pub mod error;
 pub mod exact_size_buf;
 pub mod marshal;
 pub mod message;
