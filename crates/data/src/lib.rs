@@ -1,3 +1,4 @@
+pub mod marshal;
 #[cfg(test)]
 mod tests {
     #[test]
