@@ -15,4 +15,5 @@ repository = "https://github.com/webrtc-rs/data"
 bytes = "1.0.1"
 derive_builder = "0.10.2"
 log = "0.4.14"
+thiserror = "1.0.24"
 # sctp = { git = "https://github.com/webrtc-rs/sctp", branch = "main", package = "webrtc-sctp" }
