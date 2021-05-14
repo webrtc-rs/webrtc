@@ -1,10 +1,6 @@
+mod channel_type;
 pub mod exact_size_buf;
 pub mod marshal;
 pub mod message;
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+
+pub use channel_type::ChannelType;
