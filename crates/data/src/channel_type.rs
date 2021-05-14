@@ -1,6 +1,9 @@
 use bytes::{Buf, BufMut};
 
-use crate::marshal::{Marshal, MarshalSize, Unmarshal};
+use crate::{
+    error::ChannelTypeError,
+    marshal::{Marshal, MarshalSize, Unmarshal},
+};
 
 const CHANNEL_TYPE_RELIABLE: u8 = 0x00;
 const CHANNEL_TYPE_RELIABLE_UNORDERED: u8 = 0x80;
@@ -10,32 +13,6 @@ const CHANNEL_TYPE_PARTIAL_RELIABLE_TIMED: u8 = 0x02;
 const CHANNEL_TYPE_PARTIAL_RELIABLE_TIMED_UNORDERED: u8 = 0x82;
 
 const CHANNEL_TYPE_LEN: usize = 1;
-
-#[derive(Eq, PartialEq, Clone, Debug)]
-pub enum Error {
-    // Marshal buffer was too short
-    UnexpectedEndOfBuffer { expected: usize, actual: usize },
-
-    // Remote requested a channel type that we don't support
-    InvalidChannelType { invalid_type: u8 },
-}
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::UnexpectedEndOfBuffer { expected, actual } => {
-                writeln!(
-                    f,
-                    "Marshal buffer was too short: (expected: {:?}, actual: {:?})",
-                    expected, actual
-                )
-            }
-            Self::InvalidChannelType { invalid_type } => {
-                writeln!(f, "Invalid channel type: {:?}", invalid_type)
-            }
-        }
-    }
-}
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub enum ChannelType {
@@ -79,7 +56,7 @@ impl MarshalSize for ChannelType {
 }
 
 impl Unmarshal for ChannelType {
-    type Error = Error;
+    type Error = ChannelTypeError;
 
     fn unmarshal_from<B>(buf: &mut B) -> Result<Self, Self::Error>
     where
@@ -113,7 +90,7 @@ impl Unmarshal for ChannelType {
 }
 
 impl Marshal for ChannelType {
-    type Error = Error;
+    type Error = ChannelTypeError;
 
     fn marshal_to<B>(&self, buf: &mut B) -> Result<usize, Self::Error>
     where
@@ -161,7 +138,7 @@ mod tests {
         let result = ChannelType::unmarshal_from(&mut bytes);
         assert_eq!(
             result,
-            Err(Error::InvalidChannelType { invalid_type: 0x11 })
+            Err(ChannelTypeError::InvalidChannelType { invalid_type: 0x11 })
         );
     }
 
@@ -171,7 +148,7 @@ mod tests {
         let result = ChannelType::unmarshal_from(&mut bytes);
         assert_eq!(
             result,
-            Err(Error::UnexpectedEndOfBuffer {
+            Err(ChannelTypeError::UnexpectedEndOfBuffer {
                 expected: 1,
                 actual: 0
             })

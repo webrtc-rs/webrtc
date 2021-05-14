@@ -1,7 +1,8 @@
 use bytes::{Buf, BufMut};
 
 use crate::{
-    channel_type::{ChannelType, Error as ChannelTypeError},
+    channel_type::ChannelType,
+    error::ChannelTypeError,
     marshal::{Marshal, MarshalSize, Unmarshal},
 };
 
