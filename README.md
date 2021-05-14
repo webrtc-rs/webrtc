@@ -32,6 +32,15 @@
  A pure Rust implementation of WebRTC stack. Rewrite <a href="http://Pion.ly">Pion</a> WebRTC stack in Rust
 </p>
 
+<p align="center">
+<strong>Sponsored with 💖 by</strong><br>
+</p>
+<p align="center">
+<a href="https://getstream.io/?utm_source=github.com/webrtc-rs/webrtc&utm_medium=github&utm_campaign=oss_sponsorship" target="_blank">
+<img src="https://stream-blog-v2.imgix.net/blog/wp-content/uploads/f7401112f41742c4e173c30d4f318cb8/stream_logo_white.png?h=50" alt="Stream Chat">
+</a> <a href="https://www.embark-studios.com/" target="_blank"><img src="./doc/embark.jpg" alt="embark"></a>
+</p>
+
 #
 
 <p align="center">
@@ -61,13 +70,18 @@
  <img src="./doc/webrtc_stack.png" alt="WebRTC Stack">
 </h1>
 
-<p align="center">
-<strong>Sponsored with 💖 by</strong><br>
-</p>
-<p align="center">
-<a href="https://getstream.io/?utm_source=github.com/webrtc-rs/webrtc&utm_medium=github&utm_campaign=oss_sponsorship" target="_blank">
-<img src="https://stream-blog-v2.imgix.net/blog/wp-content/uploads/f7401112f41742c4e173c30d4f318cb8/stream_logo_white.png?h=50" alt="Stream Chat">
-</a> <a href="https://www.embark-studios.com/" target="_blank"><img src="./doc/embark.jpg" alt="embark"></a>
-</p>
+## Building
 
+### Toolchain: Rust
 
+webrtc-rs currently requires Rust 1.52.1+ to build.
+
+### Single Mono-Repo Setup
+
+All webrtc-rs crates are added as [submodules](https://git-scm.com/book/en/v2/Git-Tools-Submodules) of this repository under /crates/.
+
+```
+git clone https://github.com/webrtc-rs/webrtc
+cd webrtc
+git submodule update --init --recursive
+```
