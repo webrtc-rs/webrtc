@@ -2,58 +2,11 @@ use bytes::{Buf, BufMut};
 
 use crate::{
     channel_type::ChannelType,
-    error::ChannelTypeError,
+    error::DataChannelOpenError,
     marshal::{Marshal, MarshalSize, Unmarshal},
 };
 
 const CHANNEL_OPEN_HEADER_LEN: usize = 11;
-
-#[derive(Eq, PartialEq, Clone, Debug)]
-pub enum Error {
-    // Marshal buffer was too short
-    UnexpectedEndOfBuffer { expected: usize, actual: usize },
-
-    // Declared length and actual length don't match
-    ExpectedAndActualLengthMismatch { expected: usize, actual: usize },
-
-    // DataChannel messages with a Payload Protocol Identifier we don't know how to handle
-    InvalidPayloadProtocolIdentifier,
-
-    // Remote requested a channel type that we don't support
-    ChannelType(ChannelTypeError),
-}
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::UnexpectedEndOfBuffer { expected, actual } => {
-                writeln!(
-                    f,
-                    "Marshal buffer was too short: (expected: {:?}, actual: {:?})",
-                    expected, actual
-                )
-            }
-            Self::InvalidPayloadProtocolIdentifier => writeln!(
-                f,
-                "DataChannel message payload protocol identifier is value we can't handle"
-            ),
-            Self::ExpectedAndActualLengthMismatch { expected, actual } => {
-                writeln!(
-                    f,
-                    "Expected and actual length do not match: (expected: {:?}, actual: {:?})",
-                    expected, actual
-                )
-            }
-            Self::ChannelType(error) => error.fmt(f),
-        }
-    }
-}
-
-impl From<ChannelTypeError> for Error {
-    fn from(error: ChannelTypeError) -> Self {
-        Self::ChannelType(error)
-    }
-}
 
 /// The data-part of an data-channel OPEN message without the message type.
 ///
@@ -97,7 +50,7 @@ impl MarshalSize for DataChannelOpen {
 }
 
 impl Unmarshal for DataChannelOpen {
-    type Error = Error;
+    type Error = DataChannelOpenError;
 
     fn unmarshal_from<B>(buf: &mut B) -> Result<Self, Self::Error>
     where
@@ -142,7 +95,7 @@ impl Unmarshal for DataChannelOpen {
 }
 
 impl Marshal for DataChannelOpen {
-    type Error = Error;
+    type Error = DataChannelOpenError;
 
     fn marshal_to<B>(&self, buf: &mut B) -> Result<usize, Self::Error>
     where
@@ -170,6 +123,8 @@ impl Marshal for DataChannelOpen {
 #[cfg(test)]
 mod tests {
     use bytes::{Bytes, BytesMut};
+
+    use crate::error::ChannelTypeError;
 
     use super::*;
 
@@ -208,9 +163,9 @@ mod tests {
         let result = DataChannelOpen::unmarshal_from(&mut bytes);
         assert_eq!(
             result,
-            Err(Error::ChannelType(ChannelTypeError::InvalidChannelType {
-                invalid_type: 0x11
-            }))
+            Err(DataChannelOpenError::ChannelType(
+                ChannelTypeError::InvalidChannelType { invalid_type: 0x11 }
+            ))
         );
     }
 
@@ -220,7 +175,7 @@ mod tests {
         let result = DataChannelOpen::unmarshal_from(&mut bytes);
         assert_eq!(
             result,
-            Err(Error::UnexpectedEndOfBuffer {
+            Err(DataChannelOpenError::UnexpectedEndOfBuffer {
                 expected: 11,
                 actual: 5
             })
@@ -239,7 +194,7 @@ mod tests {
         let result = DataChannelOpen::unmarshal_from(&mut bytes);
         assert_eq!(
             result,
-            Err(Error::ExpectedAndActualLengthMismatch {
+            Err(DataChannelOpenError::ExpectedAndActualLengthMismatch {
                 expected: 5 + 8,
                 actual: 0
             })

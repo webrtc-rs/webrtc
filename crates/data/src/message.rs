@@ -1,7 +1,7 @@
 use bytes::{Buf, BufMut};
 
 use crate::{
-    error::MessageTypeError,
+    error::{DataChannelOpenError, MessageTypeError},
     marshal::{Marshal, MarshalSize, Unmarshal},
 };
 
@@ -10,7 +10,7 @@ mod data_channel_open;
 mod message_type;
 
 pub use data_channel_ack::DataChannelAck;
-pub use data_channel_open::{DataChannelOpen, Error as DataChannelOpenError};
+pub use data_channel_open::DataChannelOpen;
 pub use message_type::MessageType;
 
 #[derive(Eq, PartialEq, Clone, Debug)]
