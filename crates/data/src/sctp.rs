@@ -1,11 +1,15 @@
+use thiserror::Error;
+
 mod stream;
 
 pub use stream::{Error as StreamError, Stream};
 
 pub mod association {
+    use super::*;
+
     use crate::sctp::{PayloadType, Stream};
 
-    #[derive(Eq, PartialEq, Clone, Debug)]
+    #[derive(Error, Eq, PartialEq, Clone, Debug)]
     pub enum Error {}
 
     #[derive(Debug)]

@@ -1,10 +1,19 @@
 use bytes::{Buf, BytesMut};
+use thiserror::Error;
 
 use crate::sctp::{PayloadType, ReliabilityType};
 
-#[derive(Eq, PartialEq, Clone, Debug)]
+#[derive(Error, Eq, PartialEq, Clone, Debug)]
 pub enum Error {
     Eof,
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::Eof => writeln!(f, "Unexpected end of file"),
+        }
+    }
 }
 
 #[derive(Debug)]
