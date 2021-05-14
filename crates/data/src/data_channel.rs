@@ -115,7 +115,7 @@ pub struct Config {
 impl DataChannel {
     /// Dial opens a data channels over SCTP
     pub fn dial(association: &Association, identifier: u16, config: Config) -> Result<Self, Error> {
-        let stream = association.open_stream(identifier, PayloadType::WebRTCBinary)?;
+        let stream = association.open_stream(identifier, PayloadType::WebRtcBinary)?;
 
         Self::client(stream, config)
     }
@@ -124,7 +124,7 @@ impl DataChannel {
     pub fn accept(association: &Association, config: Config) -> Result<Self, Error> {
         let mut stream = association.accept_stream()?;
 
-        stream.set_default_payload_type(PayloadType::WebRTCBinary);
+        stream.set_default_payload_type(PayloadType::WebRtcBinary);
 
         Self::server(stream, config)
     }
@@ -140,7 +140,7 @@ impl DataChannel {
                 protocol: config.protocol.bytes().collect(),
             });
             let mut open_bytes = open.marshal()?;
-            stream.write_sctp(&mut open_bytes, PayloadType::WebRTCDCEP)?;
+            stream.write_sctp(&mut open_bytes, PayloadType::WebRtcDcep)?;
         }
         Ok(DataChannel::new(stream, config))
     }
@@ -151,7 +151,7 @@ impl DataChannel {
 
         let (n, ppi) = stream.read_sctp(&mut buf)?;
 
-        if ppi != sctp::PayloadType::WebRTCDCEP {
+        if ppi != sctp::PayloadType::WebRtcDcep {
             return Err(Error::InvalidPayloadProtocolIdentifier {
                 invalid_identifier: ppi,
             });
@@ -201,7 +201,7 @@ impl DataChannel {
             };
 
             let bytes_len = match (n, &ppi) {
-                (n, &PayloadType::WebRTCDCEP) => {
+                (n, &PayloadType::WebRtcDcep) => {
                     let mut buf = Bytes::copy_from_slice(buf.get(..n).unwrap());
                     match self.handle_dcep(&mut buf) {
                         Ok(()) => {}
@@ -290,10 +290,10 @@ impl DataChannel {
         // message with one of these PPIDs, the receiver MUST ignore the SCTP
         // user message and process it as an empty message.
         let ppi = match (is_string, bytes_len) {
-            (false, 0) => sctp::PayloadType::WebRTCBinaryEmpty,
-            (false, _) => sctp::PayloadType::WebRTCBinary,
-            (true, 0) => sctp::PayloadType::WebRTCStringEmpty,
-            (true, _) => sctp::PayloadType::WebRTCString,
+            (false, 0) => sctp::PayloadType::WebRtcBinaryEmpty,
+            (false, _) => sctp::PayloadType::WebRtcBinary,
+            (true, 0) => sctp::PayloadType::WebRtcStringEmpty,
+            (true, _) => sctp::PayloadType::WebRtcString,
         };
 
         self.messages_sent.fetch_add(1, Ordering::Relaxed);
@@ -307,7 +307,7 @@ impl DataChannel {
         let mut ack_bytes = ack.marshal()?;
 
         self.stream
-            .write_sctp(&mut ack_bytes, PayloadType::WebRTCDCEP)
+            .write_sctp(&mut ack_bytes, PayloadType::WebRtcDcep)
             .map_err(From::from)
     }
 

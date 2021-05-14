@@ -26,41 +26,41 @@ pub use association::{Association, Error as AssociationError};
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub enum PayloadType {
-    WebRTCBinary,
-    WebRTCBinaryEmpty,
-    WebRTCDCEP,
-    WebRTCString,
-    WebRTCStringEmpty,
+    WebRtcBinary,
+    WebRtcBinaryEmpty,
+    WebRtcDcep,
+    WebRtcString,
+    WebRtcStringEmpty,
 }
 
 impl PayloadType {
     pub fn is_empty(&self) -> bool {
         match self {
-            PayloadType::WebRTCBinary => false,
-            PayloadType::WebRTCBinaryEmpty => true,
-            PayloadType::WebRTCDCEP => false,
-            PayloadType::WebRTCString => false,
-            PayloadType::WebRTCStringEmpty => true,
+            PayloadType::WebRtcBinary => false,
+            PayloadType::WebRtcBinaryEmpty => true,
+            PayloadType::WebRtcDcep => false,
+            PayloadType::WebRtcString => false,
+            PayloadType::WebRtcStringEmpty => true,
         }
     }
 
     pub fn is_binary(&self) -> bool {
         match self {
-            PayloadType::WebRTCBinary => true,
-            PayloadType::WebRTCBinaryEmpty => true,
-            PayloadType::WebRTCDCEP => false,
-            PayloadType::WebRTCString => false,
-            PayloadType::WebRTCStringEmpty => false,
+            PayloadType::WebRtcBinary => true,
+            PayloadType::WebRtcBinaryEmpty => true,
+            PayloadType::WebRtcDcep => false,
+            PayloadType::WebRtcString => false,
+            PayloadType::WebRtcStringEmpty => false,
         }
     }
 
     pub fn is_string(&self) -> bool {
         match self {
-            PayloadType::WebRTCBinary => false,
-            PayloadType::WebRTCBinaryEmpty => false,
-            PayloadType::WebRTCDCEP => false,
-            PayloadType::WebRTCString => true,
-            PayloadType::WebRTCStringEmpty => true,
+            PayloadType::WebRtcBinary => false,
+            PayloadType::WebRtcBinaryEmpty => false,
+            PayloadType::WebRtcDcep => false,
+            PayloadType::WebRtcString => true,
+            PayloadType::WebRtcStringEmpty => true,
         }
     }
 }
