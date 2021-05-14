@@ -1,4 +1,4 @@
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{Buf, BufMut};
 
 use crate::marshal::{Marshal, MarshalSize, Unmarshal};
 
@@ -144,6 +144,8 @@ impl Marshal for ChannelType {
 
 #[cfg(test)]
 mod tests {
+    use bytes::{Bytes, BytesMut};
+
     use super::*;
 
     #[test]

@@ -89,8 +89,8 @@ impl DataChannel {
             messages_received,
             bytes_sent,
             bytes_received,
-            config,
             stream,
+            config,
         }
     }
 }
@@ -163,7 +163,7 @@ impl DataChannel {
         if let Message::DataChannelOpen(open) = open {
             config.channel_type = open.channel_type;
             config.priority = open.priority;
-            config.reliability_parameter = open.reliability_parameter.into();
+            config.reliability_parameter = open.reliability_parameter;
             config.label = String::from_utf8(open.label)?;
             config.protocol = String::from_utf8(open.protocol)?;
         } else {
@@ -196,9 +196,6 @@ impl DataChannel {
                     // reset, it also resets its corresponding outgoing stream.
                     self.stream.close()?;
 
-                    return Err(error.into());
-                }
-                Err(error) => {
                     return Err(error.into());
                 }
             };

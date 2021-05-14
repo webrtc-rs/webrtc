@@ -8,20 +8,6 @@ use bytes::{
 };
 
 /// A trait for buffers that know their exact length.
-///
-/// # Example
-///
-/// ```
-/// use bytes::{Bytes, buf::ExactSizeBuf};
-///
-/// fn test<B: ExactSizeBuf>(buf: &B) {
-///    assert_eq!(buf.len(), 11);
-///    assert_eq!(buf.is_empty(), false);     
-/// }
-///
-/// let buf = Bytes::from("Hello world");
-/// test(&buf);
-/// ```
 pub trait ExactSizeBuf {
     /// Returns the exact length of the buffer.
     fn len(&self) -> usize;
