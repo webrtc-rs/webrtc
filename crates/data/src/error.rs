@@ -1,4 +1,11 @@
+use std::string::FromUtf8Error;
+
 use thiserror::Error;
+
+use crate::{
+    message::MessageType,
+    sctp::{AssociationError, PayloadType, StreamError},
+};
 
 #[derive(Error, Eq, PartialEq, Clone, Debug)]
 pub enum ChannelTypeError {
@@ -66,6 +73,37 @@ impl std::fmt::Display for DataChannelOpenError {
                 )
             }
             Self::ChannelType(error) => error.fmt(f),
+        }
+    }
+}
+
+#[derive(Error, Eq, PartialEq, Clone, Debug)]
+pub enum DataChannelError {
+    InvalidMessageType { invalid_type: MessageType },
+    InvalidPayloadProtocolIdentifier { invalid_identifier: PayloadType },
+    Message(#[from] MessageError),
+    Stream(#[from] StreamError),
+    String(#[from] FromUtf8Error),
+    Association(#[from] AssociationError),
+}
+
+impl std::fmt::Display for DataChannelError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DataChannelError::InvalidMessageType { invalid_type } => {
+                writeln!(f, "Invalid message type: {:?}", invalid_type)
+            }
+            DataChannelError::InvalidPayloadProtocolIdentifier { invalid_identifier } => {
+                writeln!(
+                    f,
+                    "Invalid payload protocol identifier: {:?}",
+                    invalid_identifier
+                )
+            }
+            DataChannelError::Message(error) => error.fmt(f),
+            DataChannelError::Stream(error) => error.fmt(f),
+            DataChannelError::String(error) => error.fmt(f),
+            DataChannelError::Association(error) => error.fmt(f),
         }
     }
 }

@@ -1,6 +1,5 @@
 use std::{
     io::{Read, Write},
-    string::FromUtf8Error,
     sync::atomic::{AtomicUsize, Ordering},
 };
 
@@ -8,46 +7,13 @@ use bytes::{Buf, Bytes, BytesMut};
 use derive_builder::Builder;
 
 use crate::{
+    error::DataChannelError,
     exact_size_buf::ExactSizeBuf,
     marshal::{Marshal, Unmarshal},
-    message::{DataChannelOpen, Error as MessageError, Message, MessageType},
-    sctp::{self, Association, AssociationError, PayloadType, StreamError},
+    message::{DataChannelOpen, Message},
+    sctp::{self, Association, PayloadType, StreamError},
     ChannelType,
 };
-
-#[derive(Eq, PartialEq, Clone, Debug)]
-pub enum Error {
-    InvalidMessageType { invalid_type: MessageType },
-    InvalidPayloadProtocolIdentifier { invalid_identifier: PayloadType },
-    Message(MessageError),
-    Stream(StreamError),
-    String(FromUtf8Error),
-    Association(AssociationError),
-}
-
-impl From<MessageError> for Error {
-    fn from(error: MessageError) -> Self {
-        Self::Message(error)
-    }
-}
-
-impl From<StreamError> for Error {
-    fn from(error: StreamError) -> Self {
-        Self::Stream(error)
-    }
-}
-
-impl From<FromUtf8Error> for Error {
-    fn from(error: FromUtf8Error) -> Self {
-        Self::String(error)
-    }
-}
-
-impl From<AssociationError> for Error {
-    fn from(error: AssociationError) -> Self {
-        Self::Association(error)
-    }
-}
 
 const RECEIVE_MTU: usize = 8192;
 
@@ -114,14 +80,18 @@ pub struct Config {
 
 impl DataChannel {
     /// Dial opens a data channels over SCTP
-    pub fn dial(association: &Association, identifier: u16, config: Config) -> Result<Self, Error> {
+    pub fn dial(
+        association: &Association,
+        identifier: u16,
+        config: Config,
+    ) -> Result<Self, DataChannelError> {
         let stream = association.open_stream(identifier, PayloadType::WebRtcBinary)?;
 
         Self::client(stream, config)
     }
 
     /// Accept is used to accept incoming data channels over SCTP
-    pub fn accept(association: &Association, config: Config) -> Result<Self, Error> {
+    pub fn accept(association: &Association, config: Config) -> Result<Self, DataChannelError> {
         let mut stream = association.accept_stream()?;
 
         stream.set_default_payload_type(PayloadType::WebRtcBinary);
@@ -130,7 +100,7 @@ impl DataChannel {
     }
 
     /// Client opens a data channel over an SCTP stream
-    pub fn client(mut stream: sctp::Stream, config: Config) -> Result<Self, Error> {
+    pub fn client(mut stream: sctp::Stream, config: Config) -> Result<Self, DataChannelError> {
         if !config.negotiated {
             let open = Message::DataChannelOpen(DataChannelOpen {
                 channel_type: config.channel_type,
@@ -146,13 +116,13 @@ impl DataChannel {
     }
 
     // Server accepts a data channel over an SCTP stream
-    pub fn server(mut stream: sctp::Stream, mut config: Config) -> Result<Self, Error> {
+    pub fn server(mut stream: sctp::Stream, mut config: Config) -> Result<Self, DataChannelError> {
         let mut buf = BytesMut::with_capacity(RECEIVE_MTU);
 
         let (n, ppi) = stream.read_sctp(&mut buf)?;
 
         if ppi != sctp::PayloadType::WebRtcDcep {
-            return Err(Error::InvalidPayloadProtocolIdentifier {
+            return Err(DataChannelError::InvalidPayloadProtocolIdentifier {
                 invalid_identifier: ppi,
             });
         }
@@ -167,7 +137,7 @@ impl DataChannel {
             config.label = String::from_utf8(open.label)?;
             config.protocol = String::from_utf8(open.protocol)?;
         } else {
-            return Err(Error::InvalidMessageType {
+            return Err(DataChannelError::InvalidMessageType {
                 invalid_type: open.message_type(),
             });
         };
@@ -182,12 +152,15 @@ impl DataChannel {
     }
 
     /// Read reads a packet of len(p) bytes as binary data
-    pub fn read(&mut self, buf: &mut BytesMut) -> Result<usize, Error> {
+    pub fn read(&mut self, buf: &mut BytesMut) -> Result<usize, DataChannelError> {
         self.read_data_channel(buf).map(|(n, _)| n)
     }
 
     /// ReadDataChannel reads a packet of len(p) bytes
-    pub fn read_data_channel(&mut self, buf: &mut BytesMut) -> Result<(usize, bool), Error> {
+    pub fn read_data_channel(
+        &mut self,
+        buf: &mut BytesMut,
+    ) -> Result<(usize, bool), DataChannelError> {
         loop {
             let (n, ppi) = match self.stream.read_sctp(buf) {
                 Ok((n, ppi)) => (n, ppi),
@@ -249,7 +222,7 @@ impl DataChannel {
         self.stream.stream_identifier()
     }
 
-    pub fn handle_dcep<B>(&mut self, bytes: &mut B) -> Result<(), Error>
+    pub fn handle_dcep<B>(&mut self, bytes: &mut B) -> Result<(), DataChannelError>
     where
         B: Buf,
     {
@@ -261,14 +234,14 @@ impl DataChannel {
 
                 self.commit_reliability_params()
             }
-            message => Err(Error::InvalidMessageType {
+            message => Err(DataChannelError::InvalidMessageType {
                 invalid_type: message.message_type(),
             }),
         }
     }
 
     /// Write writes len(p) bytes from p as binary data
-    pub fn write<B>(&mut self, bytes: &mut B) -> Result<usize, Error>
+    pub fn write<B>(&mut self, bytes: &mut B) -> Result<usize, DataChannelError>
     where
         B: Buf + ExactSizeBuf,
     {
@@ -276,7 +249,11 @@ impl DataChannel {
     }
 
     /// WriteDataChannel writes len(p) bytes from p
-    pub fn write_data_channel<B>(&mut self, bytes: &mut B, is_string: bool) -> Result<usize, Error>
+    pub fn write_data_channel<B>(
+        &mut self,
+        bytes: &mut B,
+        is_string: bool,
+    ) -> Result<usize, DataChannelError>
     where
         B: Buf + ExactSizeBuf,
     {
@@ -302,7 +279,7 @@ impl DataChannel {
         self.stream.write_sctp(bytes, ppi).map_err(From::from)
     }
 
-    pub fn write_data_channel_ack(&mut self) -> Result<usize, Error> {
+    pub fn write_data_channel_ack(&mut self) -> Result<usize, DataChannelError> {
         let ack = Message::DataChannelAck;
         let mut ack_bytes = ack.marshal()?;
 
@@ -312,7 +289,7 @@ impl DataChannel {
     }
 
     /// Close closes the DataChannel and the underlying SCTP stream.
-    pub fn close(&mut self) -> Result<(), Error> {
+    pub fn close(&mut self) -> Result<(), DataChannelError> {
         // https://tools.ietf.org/html/draft-ietf-rtcweb-data-channel-13#section-6.7
         // Closing of a data channel MUST be signaled by resetting the
         // corresponding outgoing streams [RFC6525].  This means that if one
@@ -351,7 +328,7 @@ impl DataChannel {
         self.stream.on_buffered_amount_low(f)
     }
 
-    pub fn commit_reliability_params(&mut self) -> Result<(), Error> {
+    pub fn commit_reliability_params(&mut self) -> Result<(), DataChannelError> {
         let (unordered, reliability_type) = match self.config.channel_type {
             ChannelType::Reliable => (false, sctp::ReliabilityType::Reliable),
             ChannelType::ReliableUnordered => (true, sctp::ReliabilityType::Reliable),
