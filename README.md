@@ -49,6 +49,9 @@
 - [Overview](#overview)
 - [Features](#features)
 - [Building](#building)
+  - [Toolchain: Rust](#toolchain-rust)
+  - [Single Mono-Repo Setup](#single-mono-repo-setup)
+  - [Testing with Local Dependencies](#testing-with-local-dependencies)
 - [Contributing](#contributing)
 </details>
 
@@ -99,6 +102,11 @@ git clone https://github.com/webrtc-rs/webrtc
 cd webrtc
 git submodule update --init --recursive
 ```
+
+### Testing with Local Dependencies
+Follows this instruction about how to replace dependencies with patch for local testing:
+https://doc.rust-lang.org/edition-guide/rust-2018/cargo-and-crates-io/replacing-dependencies-with-patch.html
+
 
 ## Contributing
 Contributors or Pull Requests are Welcome!!!
