@@ -95,3 +95,48 @@ impl std::fmt::Display for MessageTypeError {
         }
     }
 }
+
+#[derive(Error, Eq, PartialEq, Clone, Debug)]
+pub enum MessageError {
+    // Marshal buffer was too short
+    UnexpectedEndOfBuffer { expected: usize, actual: usize },
+
+    // Declared length and actual length don't match
+    ExpectedAndActualLengthMismatch { expected: usize, actual: usize },
+
+    // DataChannel messages with a Payload Protocol Identifier we don't know how to handle
+    InvalidPayloadProtocolIdentifier,
+
+    // DataChannel message has a type we don't support
+    MessageType(#[from] MessageTypeError),
+
+    // Invalid DATA_CHANNEL_OPEN message body
+    DataChannelOpen(#[from] DataChannelOpenError),
+}
+
+impl std::fmt::Display for MessageError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnexpectedEndOfBuffer { expected, actual } => {
+                writeln!(
+                    f,
+                    "Marshal buffer was too short: (expected: {:?}, actual: {:?})",
+                    expected, actual
+                )
+            }
+            Self::InvalidPayloadProtocolIdentifier => writeln!(
+                f,
+                "DataChannel message payload protocol identifier is value we can't handle"
+            ),
+            Self::ExpectedAndActualLengthMismatch { expected, actual } => {
+                writeln!(
+                    f,
+                    "Expected and actual length do not match: (expected: {:?}, actual: {:?})",
+                    expected, actual
+                )
+            }
+            Self::MessageType(error) => error.fmt(f),
+            Self::DataChannelOpen(error) => error.fmt(f),
+        }
+    }
+}
