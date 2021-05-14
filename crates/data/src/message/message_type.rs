@@ -1,38 +1,15 @@
 use bytes::{Buf, BufMut};
 
-use crate::marshal::{Marshal, MarshalSize, Unmarshal};
+use crate::{
+    error::MessageTypeError,
+    marshal::{Marshal, MarshalSize, Unmarshal},
+};
 
 // The first byte in a `Message` that specifies its type:
 const MESSAGE_TYPE_ACK: u8 = 0x02;
 const MESSAGE_TYPE_OPEN: u8 = 0x03;
 
 const MESSAGE_TYPE_LEN: usize = 1;
-
-#[derive(Eq, PartialEq, Clone, Debug)]
-pub enum Error {
-    // Marshal buffer was too short
-    UnexpectedEndOfBuffer { expected: usize, actual: usize },
-
-    // DataChannel message has a type we don't support
-    InvalidMessageType { invalid_type: u8 },
-}
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::UnexpectedEndOfBuffer { expected, actual } => {
-                writeln!(
-                    f,
-                    "Marshal buffer was too short: (expected: {:?}, actual: {:?})",
-                    expected, actual
-                )
-            }
-            Self::InvalidMessageType { invalid_type } => {
-                writeln!(f, "Invalid message type: {:?}", invalid_type)
-            }
-        }
-    }
-}
 
 // A parsed DataChannel message
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
@@ -48,9 +25,9 @@ impl MarshalSize for MessageType {
 }
 
 impl Unmarshal for MessageType {
-    type Error = Error;
+    type Error = MessageTypeError;
 
-    fn unmarshal_from<B>(buf: &mut B) -> Result<Self, Error>
+    fn unmarshal_from<B>(buf: &mut B) -> Result<Self, Self::Error>
     where
         B: Buf,
     {
@@ -73,9 +50,9 @@ impl Unmarshal for MessageType {
 }
 
 impl Marshal for MessageType {
-    type Error = Error;
+    type Error = MessageTypeError;
 
-    fn marshal_to<B>(&self, buf: &mut B) -> Result<usize, Error>
+    fn marshal_to<B>(&self, buf: &mut B) -> Result<usize, Self::Error>
     where
         B: BufMut,
     {
@@ -119,7 +96,7 @@ mod tests {
 
         assert_eq!(
             result,
-            Err(Error::InvalidMessageType { invalid_type: 0x01 })
+            Err(MessageTypeError::InvalidMessageType { invalid_type: 0x01 })
         );
     }
 

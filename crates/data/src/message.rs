@@ -1,6 +1,9 @@
 use bytes::{Buf, BufMut};
 
-use crate::marshal::{Marshal, MarshalSize, Unmarshal};
+use crate::{
+    error::MessageTypeError,
+    marshal::{Marshal, MarshalSize, Unmarshal},
+};
 
 mod data_channel_ack;
 mod data_channel_open;
@@ -8,7 +11,7 @@ mod message_type;
 
 pub use data_channel_ack::{DataChannelAck, Error as DataChannelAckError};
 pub use data_channel_open::{DataChannelOpen, Error as DataChannelOpenError};
-pub use message_type::{Error as MessageTypeError, MessageType};
+pub use message_type::MessageType;
 
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub enum Error {
