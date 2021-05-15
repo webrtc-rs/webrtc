@@ -104,6 +104,7 @@ impl ChunkSet {
     }
 }
 
+#[derive(Default, Debug)]
 pub(crate) struct ReassemblyQueue {
     pub(crate) si: u16,
     pub(crate) next_ssn: u16,
