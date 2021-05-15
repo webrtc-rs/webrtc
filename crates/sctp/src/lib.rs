@@ -9,5 +9,6 @@ pub mod error_cause;
 pub mod packet;
 pub mod param;
 pub(crate) mod queue;
+pub mod stream;
 pub(crate) mod timer;
 pub(crate) mod util;

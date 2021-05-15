@@ -167,7 +167,7 @@ pub struct Association {
     t1cookie: RtxTimer,
     t2shutdown: RtxTimer,
     t3rtx: RtxTimer,
-    t_reconfig: RtxTimer,
+    treconfig: RtxTimer,
     ack_timer: AckTimer,
 
     // Chunks stored for retransmission
