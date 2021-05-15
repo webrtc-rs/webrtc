@@ -11,6 +11,14 @@ repository = "https://github.com/webrtc-rs/util"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["buffer", "conn", "error", "ifaces", "vnet"]
+buffer = []
+conn = []
+error = []
+ifaces = []
+vnet = []
+
 [dependencies]
 url = "2.1.0"
 tokio = { version = "1.0", features = ["full"] }
