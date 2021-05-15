@@ -13,7 +13,7 @@ use std::fmt;
 /// |                     Cookie                                    |
 /// |                                                               |
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub(crate) struct ChunkCookieEcho {
     pub(crate) cookie: Bytes,
 }

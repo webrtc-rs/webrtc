@@ -93,6 +93,11 @@ pub(crate) enum AckMode {
     NoDelay,
     AlwaysDelay,
 }
+impl Default for AckMode {
+    fn default() -> Self {
+        AckMode::Normal
+    }
+}
 
 /// ack transmission state
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -100,6 +105,12 @@ pub(crate) enum AckState {
     Idle,      // ack timer is off
     Immediate, // will send ack immediately
     Delay,     // ack timer is on (ack is being delayed)
+}
+
+impl Default for AckState {
+    fn default() -> Self {
+        AckState::Idle
+    }
 }
 
 /// Config collects the arguments to create_association construction into
@@ -127,13 +138,13 @@ pub struct Config {
 //
 ///              Note: No "CLOSED" state is illustrated since if a
 ///              association is "CLOSED" its TCB SHOULD be removed.
-//#[derive(Default, Debug)]
+#[derive(Default)]
 pub struct Association {
     bytes_received: u64,
     bytes_sent: u64,
 
     //lock sync.RWMutex
-    net_conn: Arc<dyn Conn + Send + Sync>,
+    net_conn: Option<Arc<dyn Conn + Send + Sync>>,
 
     peer_verification_tag: u32,
     my_verification_tag: u32,
