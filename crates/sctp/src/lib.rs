@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 pub mod association;
+pub(crate) mod association_stats;
 pub mod chunk;
 pub mod error;
 pub mod error_cause;
