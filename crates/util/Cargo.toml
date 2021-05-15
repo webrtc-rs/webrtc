@@ -1,6 +1,6 @@
 [package]
 name = "webrtc-util"
-version = "0.1.18"
+version = "0.1.19"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2018"
 description = "Utilities for WebRTC.rs stack"
