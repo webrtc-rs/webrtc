@@ -50,7 +50,7 @@
 - [Features](#features)
 - [Building](#building)
   - [Toolchain](#toolchain)
-  - [Single Mono-Repo Setup](#single-mono-repo-setup)
+  - [Monorepo Setup](#monorepo-setup)
   - [Testing with Local Dependencies](#testing-with-local-dependencies)
 - [Contributing](#contributing)
 </details>
@@ -93,7 +93,7 @@ WebRTC.rs is a pure Rust implementation of WebRTC stack, which rewrites <a href=
 
 webrtc-rs currently requires Rust 1.52.1+ to build.
 
-### Single Mono-Repo Setup
+### Monorepo Setup
 
 All webrtc dependent crates are added as [submodules](https://git-scm.com/book/en/v2/Git-Tools-Submodules) of this repository under /crates/.
 
