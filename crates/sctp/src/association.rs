@@ -508,7 +508,7 @@ loop:
         rawPackets, ok := a.gatherOutbound()
 
         for _, raw := range rawPackets {
-            _, err := a.net_conn.Write(raw)
+            _, err := a.net_conn.write(raw)
             if err != nil {
                 if err != io.EOF {
                     a.log.Warnf("[%s] failed to write packets on net_conn: %v", a.name, err)
@@ -1152,7 +1152,7 @@ func (a *Association) handleCookieAck() {
 }
 
 // The caller should hold the lock.
-func (a *Association) handleData(d *chunkPayloadData) []*packet {
+func (a *Association) handle_data(d *chunkPayloadData) []*packet {
     a.log.Tracef("[%s] DATA: tsn=%d immediateSack=%v len=%d",
         a.name, d.tsn, d.immediateSack, len(d.userData))
     a.stats.inc_datas()
@@ -1170,14 +1170,14 @@ func (a *Association) handleData(d *chunkPayloadData) []*packet {
         if a.getMyReceiverWindowCredit() > 0 {
             // Pass the new chunk to stream level as soon as it arrives
             a.payload_queue.push(d, a.peer_last_tsn)
-            s.handleData(d)
+            s.handle_data(d)
         } else {
             // Receive buffer is full
             lastTSN, ok := a.payload_queue.getLastTSNReceived()
             if ok && sna32LT(d.tsn, lastTSN) {
                 a.log.Debugf("[%s] receive buffer full, but accepted as this is a missing chunk with tsn=%d ssn=%d", a.name, d.tsn, d.streamSequenceNumber)
                 a.payload_queue.push(d, a.peer_last_tsn)
-                s.handleData(d)
+                s.handle_data(d)
             } else {
                 a.log.Debugf("[%s] receive buffer full. dropping DATA with tsn=%d ssn=%d", a.name, d.tsn, d.streamSequenceNumber)
             }
@@ -1187,7 +1187,7 @@ func (a *Association) handleData(d *chunkPayloadData) []*packet {
     return a.handlePeerLastTSNAndAcknowledgement(d.immediateSack)
 }
 
-// A common routine for handleData and handleForwardTSN routines
+// A common routine for handle_data and handleForwardTSN routines
 // The caller should hold the lock.
 func (a *Association) handlePeerLastTSNAndAcknowledgement(sackImmediately bool) []*packet {
     var reply []*packet
@@ -1833,7 +1833,7 @@ func (a *Association) handleForwardTSN(c *chunkForwardTSN) []*packet {
     // from the reassemblyQueue.
     for _, forwarded := range c.streams {
         if s, ok := a.streams[forwarded.identifier]; ok {
-            s.handleForwardTSNForOrdered(forwarded.sequence)
+            s.handle_forward_tsnfor_ordered(forwarded.sequence)
         }
     }
 
@@ -1843,7 +1843,7 @@ func (a *Association) handleForwardTSN(c *chunkForwardTSN) []*packet {
     // unordered chunks.
     // See https://github.com/pion/sctp/issues/106
     for _, s := range a.streams {
-        s.handleForwardTSNForUnordered(c.newCumulativeTSN)
+        s.handle_forward_tsnfor_unordered(c.newCumulativeTSN)
     }
 
     return a.handlePeerLastTSNAndAcknowledgement(false)
@@ -2235,7 +2235,7 @@ func (a *Association) handleChunk(p *packet, c chunk) error {
         a.handleCookieAck()
 
     case *chunkPayloadData:
-        packets = a.handleData(c)
+        packets = a.handle_data(c)
 
     case *chunkSelectiveAck:
         err = a.handleSack(c)

@@ -1,7 +1,8 @@
-use crate::chunk::chunk_payload_data::PayloadProtocolIdentifier;
+use crate::chunk::chunk_payload_data::{ChunkPayloadData, PayloadProtocolIdentifier};
 use crate::error::Error;
 use crate::queue::reassembly_queue::ReassemblyQueue;
 
+use bytes::Bytes;
 use std::fmt;
 use tokio::sync::Notify;
 
@@ -32,6 +33,7 @@ pub type OnBufferedAmountLowFn = Box<dyn Fn()>;
 /// Stream represents an SCTP stream
 pub struct Stream {
     //TODO: association         :*Association
+    max_payload_size: usize,
     //lock                :sync.RWMutex
     stream_identifier: u16,
     default_payload_type: PayloadProtocolIdentifier,
@@ -56,7 +58,7 @@ impl Stream {
         self.stream_identifier
     }
 
-    /// set_default_payload_type sets the default payload type used by Write.
+    /// set_default_payload_type sets the default payload type used by write.
     pub fn set_default_payload_type(&mut self, default_payload_type: PayloadProtocolIdentifier) {
         self.default_payload_type = default_payload_type;
     }
@@ -113,163 +115,148 @@ impl Stream {
             self.read_notifier.notified().await;
         }
     }
+
+    pub(crate) fn handle_data(&mut self, pd: ChunkPayloadData) {
+        if self.reassembly_queue.push(pd) {
+            let readable = self.reassembly_queue.is_readable();
+            log::debug!("[{}] reassembly_queue readable={}", self.name, readable);
+            if readable {
+                log::debug!("[{}] read_notifier.signal()", self.name);
+                self.read_notifier.notify_one();
+                log::debug!("[{}] read_notifier.signal() done", self.name);
+            }
+        }
+    }
+
+    pub(crate) fn handle_forward_tsn_for_ordered(&mut self, ssn: u16) {
+        if self.unordered {
+            return; // unordered chunks are handled by handleForwardUnordered method
+        }
+
+        // Remove all chunks older than or equal to the new TSN from
+        // the reassembly_queue.
+        self.reassembly_queue.forward_tsn_for_ordered(ssn);
+        let readable = self.reassembly_queue.is_readable();
+
+        // Notify the reader asynchronously if there's a data chunk to read.
+        if readable {
+            self.read_notifier.notify_one();
+        }
+    }
+
+    pub(crate) fn handle_forward_tsn_for_unordered(&mut self, new_cumulative_tsn: u32) {
+        if !self.unordered {
+            return; // ordered chunks are handled by handleForwardTSNOrdered method
+        }
+
+        // Remove all chunks older than or equal to the new TSN from
+        // the reassembly_queue.
+        self.reassembly_queue
+            .forward_tsn_for_unordered(new_cumulative_tsn);
+        let readable = self.reassembly_queue.is_readable();
+
+        // Notify the reader asynchronously if there's a data chunk to read.
+        if readable {
+            self.read_notifier.notify_one();
+        }
+    }
+
+    /// write writes len(p) bytes from p with the default Payload Protocol Identifier
+    pub async fn write(&mut self, p: &[u8]) -> Result<usize, Error> {
+        self.write_sctp(p, self.default_payload_type).await
+    }
+
+    // write_sctp writes len(p) bytes from p to the DTLS connection
+    pub async fn write_sctp(
+        &mut self,
+        p: &[u8],
+        _ppi: PayloadProtocolIdentifier,
+    ) -> Result<usize, Error> {
+        /*maxMessageSize := s.association.MaxMessageSize()
+        if len(p) > int(maxMessageSize) {
+            return 0, fmt.Errorf("%w: %v", errOutboundPacketTooLarge, math.MaxUint16)
+        }
+
+        switch s.association.getState() {
+        case shutdownSent, shutdownAckSent, shutdownPending, shutdownReceived:
+            s.lock.Lock()
+            if s.write_err == nil {
+                s.write_err = errStreamClosed
+            }
+            s.lock.Unlock()
+        default:
+        }
+
+        s.lock.RLock()
+        err = s.write_err
+        s.lock.RUnlock()
+        if err != nil {
+            return 0, err
+        }
+
+        chunks := s.packetize(p, ppi)*/
+
+        //TODO: return len(p), s.association.sendPayloadData(chunks)
+        Ok(p.len())
+    }
+
+    fn packetize(&mut self, raw: &Bytes, ppi: PayloadProtocolIdentifier) -> Vec<ChunkPayloadData> {
+        let mut i = 0;
+        let mut remaining = raw.len();
+
+        // From draft-ietf-rtcweb-data-protocol-09, section 6:
+        //   All Data Channel Establishment Protocol messages MUST be sent using
+        //   ordered delivery and reliable transmission.
+        let unordered = ppi != PayloadProtocolIdentifier::Dcep && self.unordered;
+
+        let mut chunks = vec![];
+        //var head *chunkPayloadData
+        while remaining != 0 {
+            let fragment_size = std::cmp::min(self.max_payload_size, remaining); //self.association.max_payload_size
+
+            // Copy the userdata since we'll have to store it until acked
+            // and the caller may re-use the buffer in the mean time
+            let user_data = raw.slice(i..i + fragment_size);
+
+            let chunk = ChunkPayloadData {
+                stream_identifier: self.stream_identifier,
+                user_data,
+                unordered,
+                beginning_fragment: i == 0,
+                ending_fragment: remaining - fragment_size == 0,
+                immediate_sack: false,
+                payload_type: ppi,
+                stream_sequence_number: self.sequence_number,
+                //head:                 head,
+                ..Default::default()
+            };
+
+            //TODO: if head == nil {
+            //    head = chunk
+            // }
+
+            chunks.push(chunk);
+
+            remaining -= fragment_size;
+            i += fragment_size;
+        }
+
+        // RFC 4960 Sec 6.6
+        // Note: When transmitting ordered and unordered data, an endpoint does
+        // not increment its Stream Sequence Number when transmitting a DATA
+        // chunk with U flag set to 1.
+        if !unordered {
+            self.sequence_number += 1;
+        }
+
+        self.buffered_amount += raw.len() as u64;
+        log::trace!("[{}] buffered_amount = {}", self.name, self.buffered_amount);
+
+        chunks
+    }
     /*
-        func (s *Stream) handleData(pd *chunkPayloadData) {
-            s.lock.Lock()
-            defer s.lock.Unlock()
-
-            var readable bool
-            if s.reassembly_queue.push(pd) {
-                readable = s.reassembly_queue.isReadable()
-                s.log.Debugf("[%s] reassembly_queue readable=%v", s.name, readable)
-                if readable {
-                    s.log.Debugf("[%s] read_notifier.signal()", s.name)
-                    s.read_notifier.Signal()
-                    s.log.Debugf("[%s] read_notifier.signal() done", s.name)
-                }
-            }
-        }
-
-        func (s *Stream) handleForwardTSNForOrdered(ssn uint16) {
-            var readable bool
-
-            func() {
-                s.lock.Lock()
-                defer s.lock.Unlock()
-
-                if s.unordered {
-                    return // unordered chunks are handled by handleForwardUnordered method
-                }
-
-                // Remove all chunks older than or equal to the new TSN from
-                // the reassembly_queue.
-                s.reassembly_queue.forwardTSNForOrdered(ssn)
-                readable = s.reassembly_queue.isReadable()
-            }()
-
-            // Notify the reader asynchronously if there's a data chunk to read.
-            if readable {
-                s.read_notifier.Signal()
-            }
-        }
-
-        func (s *Stream) handleForwardTSNForUnordered(newCumulativeTSN uint32) {
-            var readable bool
-
-            func() {
-                s.lock.Lock()
-                defer s.lock.Unlock()
-
-                if !s.unordered {
-                    return // ordered chunks are handled by handleForwardTSNOrdered method
-                }
-
-                // Remove all chunks older than or equal to the new TSN from
-                // the reassembly_queue.
-                s.reassembly_queue.forwardTSNForUnordered(newCumulativeTSN)
-                readable = s.reassembly_queue.isReadable()
-            }()
-
-            // Notify the reader asynchronously if there's a data chunk to read.
-            if readable {
-                s.read_notifier.Signal()
-            }
-        }
-
-        // Write writes len(p) bytes from p with the default Payload Protocol Identifier
-        func (s *Stream) Write(p []byte) (n int, err error) {
-            return s.WriteSCTP(p, s.default_payload_type)
-        }
-
-        // WriteSCTP writes len(p) bytes from p to the DTLS connection
-        func (s *Stream) WriteSCTP(p []byte, ppi PayloadProtocolIdentifier) (n int, err error) {
-            maxMessageSize := s.association.MaxMessageSize()
-            if len(p) > int(maxMessageSize) {
-                return 0, fmt.Errorf("%w: %v", errOutboundPacketTooLarge, math.MaxUint16)
-            }
-
-            switch s.association.getState() {
-            case shutdownSent, shutdownAckSent, shutdownPending, shutdownReceived:
-                s.lock.Lock()
-                if s.write_err == nil {
-                    s.write_err = errStreamClosed
-                }
-                s.lock.Unlock()
-            default:
-            }
-
-            s.lock.RLock()
-            err = s.write_err
-            s.lock.RUnlock()
-            if err != nil {
-                return 0, err
-            }
-
-            chunks := s.packetize(p, ppi)
-
-            return len(p), s.association.sendPayloadData(chunks)
-        }
-
-        func (s *Stream) packetize(raw []byte, ppi PayloadProtocolIdentifier) []*chunkPayloadData {
-            s.lock.Lock()
-            defer s.lock.Unlock()
-
-            i := uint32(0)
-            remaining := uint32(len(raw))
-
-            // From draft-ietf-rtcweb-data-protocol-09, section 6:
-            //   All Data Channel Establishment Protocol messages MUST be sent using
-            //   ordered delivery and reliable transmission.
-            unordered := ppi != PayloadTypeWebRTCDCEP && s.unordered
-
-            var chunks []*chunkPayloadData
-            var head *chunkPayloadData
-            for remaining != 0 {
-                fragmentSize := min32(s.association.maxPayloadSize, remaining)
-
-                // Copy the userdata since we'll have to store it until acked
-                // and the caller may re-use the buffer in the mean time
-                userData := make([]byte, fragmentSize)
-                copy(userData, raw[i:i+fragmentSize])
-
-                chunk := &chunkPayloadData{
-                    stream_identifier:     s.stream_identifier,
-                    userData:             userData,
-                    unordered:            unordered,
-                    beginningFragment:    i == 0,
-                    endingFragment:       remaining-fragmentSize == 0,
-                    immediateSack:        false,
-                    payloadType:          ppi,
-                    streamSequenceNumber: s.sequence_number,
-                    head:                 head,
-                }
-
-                if head == nil {
-                    head = chunk
-                }
-
-                chunks = append(chunks, chunk)
-
-                remaining -= fragmentSize
-                i += fragmentSize
-            }
-
-            // RFC 4960 Sec 6.6
-            // Note: When transmitting ordered and unordered data, an endpoint does
-            // not increment its Stream Sequence Number when transmitting a DATA
-            // chunk with U flag set to 1.
-            if !unordered {
-                s.sequence_number++
-            }
-
-            s.buffered_amount += uint64(len(raw))
-            s.log.Tracef("[%s] buffered_amount = %d", s.name, s.buffered_amount)
-
-            return chunks
-        }
-
         // Close closes the write-direction of the stream.
-        // Future calls to Write are not permitted after calling Close.
+        // Future calls to write are not permitted after calling Close.
         func (s *Stream) Close() error {
             if sid, isOpen := func() (uint16, bool) {
                 s.lock.Lock()
