@@ -49,7 +49,7 @@
 - [Overview](#overview)
 - [Features](#features)
 - [Building](#building)
-  - [Toolchain: Rust](#toolchain-rust)
+  - [Toolchain](#toolchain)
   - [Single Mono-Repo Setup](#single-mono-repo-setup)
   - [Testing with Local Dependencies](#testing-with-local-dependencies)
 - [Contributing](#contributing)
@@ -89,7 +89,7 @@ WebRTC.rs is a pure Rust implementation of WebRTC stack, which rewrites <a href=
 
 ## Building
 
-### Toolchain: Rust
+### Toolchain
 
 webrtc-rs currently requires Rust 1.52.1+ to build.
 
