@@ -478,7 +478,7 @@ func (a *Association) readLoop() {
     buffer := make([]byte, RECEIVE_MTU)
 
     for {
-        n, err := a.net_conn.Read(buffer)
+        n, err := a.net_conn.read(buffer)
         if err != nil {
             closeErr = err
             break
@@ -1236,7 +1236,7 @@ func (a *Association) handlePeerLastTSNAndAcknowledgement(sackImmediately bool) 
 func (a *Association) getMyReceiverWindowCredit() uint32 {
     var bytesQueued uint32
     for _, s := range a.streams {
-        bytesQueued += uint32(s.getNumBytesInReassemblyQueue())
+        bytesQueued += uint32(s.get_num_bytes_in_reassembly_queue())
     }
 
     if bytesQueued >= a.max_receive_buffer_size {

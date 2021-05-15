@@ -774,8 +774,11 @@ fn test_reassembly_queue_detect_buffer_too_short() -> Result<(), Error> {
     assert_eq!(10, rq.get_num_bytes(), "num bytes mismatch");
 
     let mut buf = vec![0u8; 8]; // <- passing buffer too short
-    let (n, _) = rq.read(&mut buf)?;
-    assert_eq!(8, n, "read() should not succeed");
+    let result = rq.read(&mut buf);
+    assert!(result.is_err(), "read() should not succeed");
+    if let Err(err) = result {
+        assert_eq!(Error::ErrShortBuffer, err, "read() should not succeed");
+    }
     assert_eq!(0, rq.get_num_bytes(), "num bytes mismatch");
 
     Ok(())

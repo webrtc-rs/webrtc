@@ -15,7 +15,7 @@ pub(crate) const PAYLOAD_DATA_HEADER_SIZE: usize = 12;
 /// https://www.iana.org/assignments/sctp-parameters/sctp-parameters.xhtml#sctp-parameters-25
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(C)]
-pub(crate) enum PayloadProtocolIdentifier {
+pub enum PayloadProtocolIdentifier {
     Dcep = 50,
     String = 51,
     Binary = 53,

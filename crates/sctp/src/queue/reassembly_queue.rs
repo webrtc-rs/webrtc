@@ -277,17 +277,25 @@ impl ReassemblyQueue {
 
         // Concat all fragments into the buffer
         let mut n_written = 0;
+        let mut err = None;
         for c in &cset.chunks {
             let to_copy = c.user_data.len();
             self.subtract_num_bytes(to_copy);
-            if n_written < buf.len() {
+            if err.is_none() {
                 let n = std::cmp::min(to_copy, buf.len() - n_written);
                 buf[n_written..n_written + n].copy_from_slice(&c.user_data[..n]);
                 n_written += n;
+                if n < to_copy {
+                    err = Some(Error::ErrShortBuffer);
+                }
             }
         }
 
-        Ok((n_written, cset.ppi))
+        if let Some(err) = err {
+            Err(err)
+        } else {
+            Ok((n_written, cset.ppi))
+        }
     }
 
     /// Use last_ssn to locate a chunkSet then remove it if the set has

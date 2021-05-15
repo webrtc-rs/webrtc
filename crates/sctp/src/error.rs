@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq)]
 pub enum Error {
     #[error("raw is too small for a SCTP chunk")]
     ErrChunkHeaderTooSmall,
@@ -194,4 +194,11 @@ pub enum Error {
     ErrHandshakeInitAck,
     #[error("handshake failed (COOKIE ECHO)")]
     ErrHandshakeCookieEcho,
+
+    #[error("outbound packet larger than maximum message size")]
+    ErrOutboundPacketTooLarge,
+    #[error("Stream closed")]
+    ErrStreamClosed,
+    #[error("Short buffer to be filled")]
+    ErrShortBuffer,
 }
