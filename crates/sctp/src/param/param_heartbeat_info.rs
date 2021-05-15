@@ -2,7 +2,7 @@ use super::{param_header::*, param_type::*, *};
 
 use bytes::{Bytes, BytesMut};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub(crate) struct ParamHeartbeatInfo {
     pub(crate) heartbeat_information: Bytes,
 }

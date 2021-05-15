@@ -59,6 +59,12 @@ pub(crate) enum ParamType {
     Unknown,
 }
 
+impl Default for ParamType {
+    fn default() -> Self {
+        ParamType::Unknown
+    }
+}
+
 impl fmt::Display for ParamType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {

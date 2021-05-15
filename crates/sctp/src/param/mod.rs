@@ -28,7 +28,7 @@ use param_type::*;
 use bytes::{Buf, Bytes, BytesMut};
 use std::fmt;
 
-pub(crate) trait Param: fmt::Display {
+pub(crate) trait Param: fmt::Display + fmt::Debug {
     fn header(&self) -> ParamHeader;
     fn unmarshal(raw: &Bytes) -> Result<Self, Error>
     where

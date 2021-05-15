@@ -25,7 +25,7 @@ use bytes::{Bytes, BytesMut};
 use std::marker::Sized;
 use std::{any::Any, fmt};
 
-pub(crate) trait Chunk: fmt::Display {
+pub(crate) trait Chunk: fmt::Display + fmt::Debug {
     fn header(&self) -> ChunkHeader;
     fn unmarshal(raw: &Bytes) -> Result<Self, Error>
     where

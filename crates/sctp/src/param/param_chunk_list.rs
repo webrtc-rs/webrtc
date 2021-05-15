@@ -3,7 +3,7 @@ use crate::chunk::chunk_type::*;
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub(crate) struct ParamChunkList {
     pub(crate) chunk_types: Vec<ChunkType>,
 }

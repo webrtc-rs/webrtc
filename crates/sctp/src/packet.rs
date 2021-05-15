@@ -52,7 +52,7 @@ use std::fmt;
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///|                           Checksum                            |
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-
+#[derive(Default, Debug)]
 pub(crate) struct Packet {
     pub(crate) source_port: u16,
     pub(crate) destination_port: u16,

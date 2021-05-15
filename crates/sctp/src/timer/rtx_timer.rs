@@ -104,7 +104,7 @@ pub(crate) trait RtxTimerObserver {
 }
 
 /// rtxTimer provides the retnransmission timer conforms with RFC 4960 Sec 6.3.1
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct RtxTimer {
     pub(crate) id: usize,
     pub(crate) max_retrans: usize,

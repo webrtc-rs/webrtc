@@ -10,7 +10,7 @@ use bytes::{Bytes, BytesMut};
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///|    Parameter Type = 49152     |  Parameter Length = 4         |
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub(crate) struct ParamForwardTsnSupported;
 
 impl fmt::Display for ParamForwardTsnSupported {

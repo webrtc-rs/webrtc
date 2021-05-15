@@ -1,3 +1,4 @@
+#[derive(Default, Debug, Copy, Clone)]
 pub(crate) struct AssociationStats {
     n_datas: u64,
     n_sacks: u64,

@@ -62,6 +62,7 @@ use std::fmt;
 ///Unrecognized Parameter              Optional    8
 ///Reserved for ECN Capable (Note 2)   Optional    32768 (0x8000)
 ///Host Name IP (Note 3)          Optional    11<Paste>
+#[derive(Default, Debug)]
 pub(crate) struct ChunkInit {
     pub(crate) is_ack: bool,
     pub(crate) initiate_tag: u32,

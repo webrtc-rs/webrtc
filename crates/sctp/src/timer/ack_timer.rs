@@ -12,7 +12,7 @@ pub(crate) trait AckTimerObserver {
 }
 
 /// ackTimer provides the retnransmission timer conforms with RFC 4960 Sec 6.3.1
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct AckTimer {
     pub(crate) interval: Duration,
     pub(crate) close_tx: Option<mpsc::Sender<()>>,

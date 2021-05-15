@@ -30,6 +30,7 @@ use std::fmt;
 ///Variable Parameters                  Status     Type Value
 ///-------------------------------------------------------------
 ///heartbeat Info                       Mandatory   1
+#[derive(Default, Debug)]
 pub(crate) struct ChunkHeartbeat {
     pub(crate) params: Vec<Box<dyn Param>>,
 }

@@ -681,8 +681,11 @@ fn test_reconfig_chunk() -> Result<(), Error> {
     ]);
     let pkt = Packet::unmarshal(&raw_pkt)?;
     if let Some(c) = pkt.chunks[0].as_any().downcast_ref::<ChunkReconfig>() {
+        assert!(c.param_a.is_some(), "param_a must not be none");
         assert_eq!(
             c.param_a
+                .as_ref()
+                .unwrap()
                 .as_any()
                 .downcast_ref::<ParamOutgoingResetRequest>()
                 .unwrap()

@@ -2,8 +2,11 @@ use crate::chunk::chunk_payload_data::{ChunkPayloadData, PayloadProtocolIdentifi
 use crate::error::Error;
 use crate::queue::reassembly_queue::ReassemblyQueue;
 
+use crate::association::AssociationState;
 use bytes::Bytes;
 use std::fmt;
+use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
+use std::sync::Arc;
 use tokio::sync::Notify;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -39,9 +42,10 @@ pub type OnBufferedAmountLowFn = Box<dyn Fn()>;
 /// Stream represents an SCTP stream
 #[derive(Default)]
 pub struct Stream {
-    //TODO: association         :*Association
-    max_payload_size: usize,
-    //lock                :sync.RWMutex
+    max_payload_size: u32,
+    max_message_size: Arc<AtomicU32>, // clone from association
+    state: Arc<AtomicU8>,             // clone from association
+
     stream_identifier: u16,
     default_payload_type: PayloadProtocolIdentifier,
     reassembly_queue: ReassemblyQueue,
@@ -59,7 +63,58 @@ pub struct Stream {
     name: String,
 }
 
+impl fmt::Debug for Stream {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Stream")
+            .field("max_payload_size", &self.max_payload_size)
+            .field("max_message_size", &self.max_message_size)
+            .field("state", &self.state)
+            .field("stream_identifier", &self.stream_identifier)
+            .field("default_payload_type", &self.default_payload_type)
+            .field("reassembly_queue", &self.reassembly_queue)
+            .field("sequence_number", &self.sequence_number)
+            .field("read_err", &self.read_err)
+            .field("write_err", &self.write_err)
+            .field("unordered", &self.unordered)
+            .field("reliability_type", &self.reliability_type)
+            .field("reliability_value", &self.reliability_value)
+            .field("buffered_amount", &self.buffered_amount)
+            .field("buffered_amount_low", &self.buffered_amount_low)
+            .field("name", &self.name)
+            .finish()
+    }
+}
+
 impl Stream {
+    pub fn new(
+        name: String,
+        stream_identifier: u16,
+        max_payload_size: u32,
+        max_message_size: Arc<AtomicU32>,
+        state: Arc<AtomicU8>,
+    ) -> Self {
+        Stream {
+            max_payload_size,
+            max_message_size,
+            state,
+
+            stream_identifier,
+            default_payload_type: PayloadProtocolIdentifier::Unknown,
+            reassembly_queue: ReassemblyQueue::new(stream_identifier),
+            sequence_number: 0,
+            read_notifier: Notify::new(),
+            read_err: None,
+            write_err: None,
+            unordered: false,
+            reliability_type: ReliabilityType::Reliable,
+            reliability_value: 0,
+            buffered_amount: 0,
+            buffered_amount_low: 0,
+            on_buffered_amount_low: None,
+            name,
+        }
+    }
+
     /// stream_identifier returns the Stream identifier associated to the stream.
     pub fn stream_identifier(&self) -> u16 {
         self.stream_identifier
@@ -169,39 +224,38 @@ impl Stream {
     }
 
     /// write writes len(p) bytes from p with the default Payload Protocol Identifier
-    pub async fn write(&mut self, p: &[u8]) -> Result<usize, Error> {
+    pub async fn write(&mut self, p: &Bytes) -> Result<usize, Error> {
         self.write_sctp(p, self.default_payload_type).await
     }
 
-    // write_sctp writes len(p) bytes from p to the DTLS connection
+    /// write_sctp writes len(p) bytes from p to the DTLS connection
     pub async fn write_sctp(
         &mut self,
-        p: &[u8],
-        _ppi: PayloadProtocolIdentifier,
+        p: &Bytes,
+        ppi: PayloadProtocolIdentifier,
     ) -> Result<usize, Error> {
-        /*maxMessageSize := s.association.MaxMessageSize()
-        if len(p) > int(maxMessageSize) {
-            return 0, fmt.Errorf("%w: %v", errOutboundPacketTooLarge, math.MaxUint16)
+        if p.len() > self.max_message_size.load(Ordering::SeqCst) as usize {
+            return Err(Error::ErrOutboundPacketTooLarge);
         }
 
-        switch s.association.getState() {
-        case shutdownSent, shutdownAckSent, shutdownPending, shutdownReceived:
-            s.lock.Lock()
-            if s.write_err == nil {
-                s.write_err = errStreamClosed
+        let state: AssociationState = self.state.load(Ordering::SeqCst).into();
+        match state {
+            AssociationState::ShutdownSent
+            | AssociationState::ShutdownAckSent
+            | AssociationState::ShutdownPending
+            | AssociationState::ShutdownReceived => {
+                if self.write_err.is_none() {
+                    self.write_err = Some(Error::ErrStreamClosed);
+                }
             }
-            s.lock.Unlock()
-        default:
+            _ => {}
+        };
+
+        if let Some(err) = &self.write_err {
+            return Err(*err);
         }
 
-        s.lock.RLock()
-        err = s.write_err
-        s.lock.RUnlock()
-        if err != nil {
-            return 0, err
-        }
-
-        chunks := s.packetize(p, ppi)*/
+        let _chunks = self.packetize(p, ppi);
 
         //TODO: return len(p), s.association.sendPayloadData(chunks)
         Ok(p.len())
@@ -219,7 +273,7 @@ impl Stream {
         let mut chunks = vec![];
         //var head *chunkPayloadData
         while remaining != 0 {
-            let fragment_size = std::cmp::min(self.max_payload_size, remaining); //self.association.max_payload_size
+            let fragment_size = std::cmp::min(self.max_payload_size as usize, remaining); //self.association.max_payload_size
 
             // Copy the userdata since we'll have to store it until acked
             // and the caller may re-use the buffer in the mean time

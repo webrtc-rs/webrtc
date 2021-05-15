@@ -16,6 +16,12 @@ pub(crate) enum ReconfigResult {
     Unknown,
 }
 
+impl Default for ReconfigResult {
+    fn default() -> Self {
+        ReconfigResult::Unknown
+    }
+}
+
 impl fmt::Display for ReconfigResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
@@ -65,7 +71,7 @@ impl From<u32> for ReconfigResult {
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///|                  Receiver's Next TSN (optional)               |
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub(crate) struct ParamReconfigResponse {
     /// This value is copied from the request parameter and is used by the
     /// receiver of the Re-configuration Response Parameter to tie the

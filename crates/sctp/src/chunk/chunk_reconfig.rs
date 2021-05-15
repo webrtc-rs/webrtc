@@ -21,15 +21,19 @@ use std::fmt;
 ///|             Re-configuration Parameter (optional)             |
 ///|                                                               |
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+#[derive(Default, Debug)]
 pub(crate) struct ChunkReconfig {
-    pub(crate) param_a: Box<dyn Param>,
+    pub(crate) param_a: Option<Box<dyn Param>>,
     pub(crate) param_b: Option<Box<dyn Param>>,
 }
 
 /// makes chunkReconfig printable
 impl fmt::Display for ChunkReconfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut res = format!("Param A:\n {}", self.param_a);
+        let mut res = String::new();
+        if let Some(param_a) = &self.param_a {
+            res += format!("Param A:\n {}", param_a).as_str();
+        }
         if let Some(param_b) = &self.param_b {
             res += format!("Param B:\n {}", param_b).as_str()
         }
@@ -64,16 +68,26 @@ impl Chunk for ChunkReconfig {
             None
         };
 
-        Ok(ChunkReconfig { param_a, param_b })
+        Ok(ChunkReconfig {
+            param_a: Some(param_a),
+            param_b,
+        })
     }
 
     fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize, Error> {
         self.header().marshal_to(writer)?;
 
-        writer.extend(self.param_a.marshal()?);
+        let param_a_value_length = if let Some(param_a) = &self.param_a {
+            writer.extend(param_a.marshal()?);
+            param_a.value_length()
+        } else {
+            //TODO: return Error?
+            0
+        };
+
         if let Some(param_b) = &self.param_b {
             // Pad param A
-            let padding = get_padding_size(PARAM_HEADER_LENGTH + self.param_a.value_length());
+            let padding = get_padding_size(PARAM_HEADER_LENGTH + param_a_value_length);
             writer.extend(vec![0u8; padding]);
             writer.extend(param_b.marshal()?);
         }
@@ -85,9 +99,15 @@ impl Chunk for ChunkReconfig {
     }
 
     fn value_length(&self) -> usize {
-        let mut l = self.param_a.value_length() + PARAM_HEADER_LENGTH;
+        let mut l = PARAM_HEADER_LENGTH;
+        let param_a_value_length = if let Some(param_a) = &self.param_a {
+            l += param_a.value_length();
+            param_a.value_length()
+        } else {
+            0
+        };
         if let Some(param_b) = &self.param_b {
-            let padding = get_padding_size(PARAM_HEADER_LENGTH + self.param_a.value_length());
+            let padding = get_padding_size(PARAM_HEADER_LENGTH + param_a_value_length);
             l += PARAM_HEADER_LENGTH + param_b.value_length() + padding;
         }
         l
