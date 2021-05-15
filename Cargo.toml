@@ -12,27 +12,3 @@ repository = "https://github.com/webrtc-rs/webrtc"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-
-
-[profile.dev]
-opt-level = 0
-
-
-[workspace]
-members = [
-    "crates/data",
-    "crates/dtls",
-    "crates/ice",
-    "crates/mdns",
-    "crates/media",
-    "crates/pc",
-    "crates/rtc",
-    "crates/rtcp",
-    "crates/rtp",
-    "crates/sctp",
-    "crates/sdp",
-    "crates/srtp",
-    "crates/stun",
-    "crates/turn",
-    "crates/util",
-]

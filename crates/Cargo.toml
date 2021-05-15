@@ -1,0 +1,21 @@
+[workspace]
+members = [
+    "data",
+    "dtls",
+    "ice",
+    "mdns",
+    "media",
+    "pc",
+    "rtc",
+    "rtcp",
+    "rtp",
+    "sctp",
+    "sdp",
+    "srtp",
+    "stun",
+    "turn",
+    "util",
+]
+
+[profile.dev]
+opt-level = 0

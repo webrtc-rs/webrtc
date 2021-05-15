@@ -95,13 +95,28 @@ webrtc-rs currently requires Rust 1.52.1+ to build.
 
 ### Single Mono-Repo Setup
 
-All webrtc-rs crates are added as [submodules](https://git-scm.com/book/en/v2/Git-Tools-Submodules) of this repository under /crates/.
+All webrtc dependent crates are added as [submodules](https://git-scm.com/book/en/v2/Git-Tools-Submodules) of this repository under /crates/.
 
 ```
 git clone https://github.com/webrtc-rs/webrtc
 cd webrtc
 git submodule update --init --recursive
 ```
+
+To build all webrtc dependent crates:
+
+```
+cd webrtc/crates
+cargo build [or clippy or test or fmt]
+```
+
+To build webrtc crate:
+
+```
+cd webrtc
+cargo build [or clippy or test or fmt]
+```
+
 
 ### Testing with Local Dependencies
 Follows this instruction about how to replace dependencies with patch for local testing:
