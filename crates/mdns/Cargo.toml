@@ -12,7 +12,7 @@ repository = "https://github.com/webrtc-rs/mdns"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = []
+default = [ "reuse_port" ]
 reuse_port = []
 
 [dependencies]
