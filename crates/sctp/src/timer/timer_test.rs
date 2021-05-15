@@ -1,495 +1,501 @@
 use crate::error::Error;
 
+use async_trait::async_trait;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
+use std::time::SystemTime;
+use tokio::sync::{mpsc, Mutex};
+use tokio::time::{sleep, Duration};
+
 ///////////////////////////////////////////////////////////////////
 //ack_timer_test
 ///////////////////////////////////////////////////////////////////
 use super::ack_timer::*;
 
-use async_trait::async_trait;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
-use tokio::time::{sleep, Duration};
+mod test_ack_timer {
+    use super::*;
 
-struct TestAckTimerObserver {
-    ncbs: Arc<AtomicU32>,
-}
-
-#[async_trait]
-impl AckTimerObserver for TestAckTimerObserver {
-    async fn on_ack_timeout(&mut self) {
-        log::trace!("ack timed out");
-        self.ncbs.fetch_add(1, Ordering::SeqCst);
+    struct TestAckTimerObserver {
+        ncbs: Arc<AtomicU32>,
     }
-}
 
-#[tokio::test]
-async fn test_ack_timer_start_and_stop() -> Result<(), Error> {
-    let mut rt = AckTimer::new(ACK_INTERVAL);
+    #[async_trait]
+    impl AckTimerObserver for TestAckTimerObserver {
+        async fn on_ack_timeout(&mut self) {
+            log::trace!("ack timed out");
+            self.ncbs.fetch_add(1, Ordering::SeqCst);
+        }
+    }
 
-    let ncbs = Arc::new(AtomicU32::new(0));
-    let obs = Arc::new(Mutex::new(TestAckTimerObserver { ncbs: ncbs.clone() }));
+    #[tokio::test]
+    async fn test_ack_timer_start_and_stop() -> Result<(), Error> {
+        let mut rt = AckTimer::new(ACK_INTERVAL);
 
-    // should start ok
-    let ok = rt.start(obs.clone());
-    assert!(ok, "start() should succeed");
-    assert!(rt.is_running(), "should be running");
+        let ncbs = Arc::new(AtomicU32::new(0));
+        let obs = Arc::new(Mutex::new(TestAckTimerObserver { ncbs: ncbs.clone() }));
 
-    // stop immedidately
-    rt.stop();
-    assert!(!rt.is_running(), "should not be running");
+        // should start ok
+        let ok = rt.start(obs.clone());
+        assert!(ok, "start() should succeed");
+        assert!(rt.is_running(), "should be running");
 
-    // Sleep more than 200msec of interval to test if it never times out
-    sleep(ACK_INTERVAL + Duration::from_millis(50)).await;
+        // stop immedidately
+        rt.stop();
+        assert!(!rt.is_running(), "should not be running");
 
-    assert_eq!(
-        0,
-        ncbs.load(Ordering::SeqCst),
-        "should not be timed out (actual: {})",
-        ncbs.load(Ordering::SeqCst)
-    );
+        // Sleep more than 200msec of interval to test if it never times out
+        sleep(ACK_INTERVAL + Duration::from_millis(50)).await;
 
-    // can start again
-    let ok = rt.start(obs);
-    assert!(ok, "start() should succeed again");
-    assert!(rt.is_running(), "should be running");
+        assert_eq!(
+            0,
+            ncbs.load(Ordering::SeqCst),
+            "should not be timed out (actual: {})",
+            ncbs.load(Ordering::SeqCst)
+        );
 
-    // should close ok
-    rt.stop();
-    assert!(!rt.is_running(), "should not be running");
+        // can start again
+        let ok = rt.start(obs);
+        assert!(ok, "start() should succeed again");
+        assert!(rt.is_running(), "should be running");
 
-    Ok(())
+        // should close ok
+        rt.stop();
+        assert!(!rt.is_running(), "should not be running");
+
+        Ok(())
+    }
 }
 
 ///////////////////////////////////////////////////////////////////
 //rtx_timer_test
 ///////////////////////////////////////////////////////////////////
 use super::rtx_timer::*;
-use std::time::SystemTime;
 
-#[tokio::test]
-async fn test_rto_manager_initial_values() -> Result<(), Error> {
-    let m = RtoManager::new();
-    assert_eq!(RTO_INITIAL, m.rto, "should be rtoInitial");
-    assert_eq!(RTO_INITIAL, m.get_rto(), "should be rtoInitial");
-    assert_eq!(0, m.srtt, "should be 0");
-    assert_eq!(0.0, m.rttvar, "should be 0.0");
+mod test_rto_manager {
+    use super::*;
 
-    Ok(())
-}
+    #[tokio::test]
+    async fn test_rto_manager_initial_values() -> Result<(), Error> {
+        let m = RtoManager::new();
+        assert_eq!(RTO_INITIAL, m.rto, "should be rtoInitial");
+        assert_eq!(RTO_INITIAL, m.get_rto(), "should be rtoInitial");
+        assert_eq!(0, m.srtt, "should be 0");
+        assert_eq!(0.0, m.rttvar, "should be 0.0");
 
-#[tokio::test]
-async fn test_rto_manager_rto_calculation_small_rtt() -> Result<(), Error> {
-    let mut m = RtoManager::new();
-    let exp = vec![
-        1800, 1500, 1275, 1106, 1000, // capped at RTO.Min
-    ];
-
-    for i in 0..5 {
-        m.set_new_rtt(600);
-        let rto = m.get_rto();
-        assert_eq!(exp[i], rto, "should be equal: {}", i);
+        Ok(())
     }
 
-    Ok(())
-}
+    #[tokio::test]
+    async fn test_rto_manager_rto_calculation_small_rtt() -> Result<(), Error> {
+        let mut m = RtoManager::new();
+        let exp = vec![
+            1800, 1500, 1275, 1106, 1000, // capped at RTO.Min
+        ];
 
-#[tokio::test]
-async fn test_rto_manager_rto_calculation_large_rtt() -> Result<(), Error> {
-    let mut m = RtoManager::new();
-    let exp = vec![
-        60000, // capped at RTO.Max
-        60000, // capped at RTO.Max
-        60000, // capped at RTO.Max
-        55312, 48984,
-    ];
-
-    for i in 0..5 {
-        m.set_new_rtt(30000);
-        let rto = m.get_rto();
-        assert_eq!(exp[i], rto, "should be equal: {}", i);
-    }
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_rto_manager_calculate_next_timeout() -> Result<(), Error> {
-    let rto = calculate_next_timeout(1, 0);
-    assert_eq!(1, rto, "should match");
-    let rto = calculate_next_timeout(1, 1);
-    assert_eq!(2, rto, "should match");
-    let rto = calculate_next_timeout(1, 2);
-    assert_eq!(4, rto, "should match");
-    let rto = calculate_next_timeout(1, 30);
-    assert_eq!(60000, rto, "should match");
-    let rto = calculate_next_timeout(1, 63);
-    assert_eq!(60000, rto, "should match");
-    let rto = calculate_next_timeout(1, 64);
-    assert_eq!(60000, rto, "should match");
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_rto_manager_reset() -> Result<(), Error> {
-    let mut m = RtoManager::new();
-    for _ in 0..10 {
-        m.set_new_rtt(200);
-    }
-
-    m.reset();
-    assert_eq!(RTO_INITIAL, m.get_rto(), "should be rtoInitial");
-    assert_eq!(0, m.srtt, "should be 0");
-    assert_eq!(0.0, m.rttvar, "should be 0");
-
-    Ok(())
-}
-
-struct TestTimerObserver {
-    ncbs: Arc<AtomicU32>,
-    timer_id: usize,
-    done_tx: Option<mpsc::Sender<SystemTime>>,
-    max_rtos: usize,
-}
-
-impl Default for TestTimerObserver {
-    fn default() -> Self {
-        TestTimerObserver {
-            ncbs: Arc::new(AtomicU32::new(0)),
-            timer_id: 0,
-            done_tx: None,
-            max_rtos: 0,
+        for i in 0..5 {
+            m.set_new_rtt(600);
+            let rto = m.get_rto();
+            assert_eq!(exp[i], rto, "should be equal: {}", i);
         }
-    }
-}
 
-#[async_trait]
-impl RtxTimerObserver for TestTimerObserver {
-    async fn on_retransmission_timeout(&mut self, timer_id: usize, n_rtos: usize) {
-        self.ncbs.fetch_add(1, Ordering::SeqCst);
-        // 30 : 1 (30)
-        // 60 : 2 (90)
-        // 120: 3 (210)
-        // 240: 4 (550) <== expected in 650 msec
-        assert_eq!(self.timer_id, timer_id, "unexpected timer ID: {}", timer_id);
-        if (self.max_rtos > 0 && n_rtos == self.max_rtos) || self.max_rtos == usize::MAX {
-            if let Some(done) = &self.done_tx {
-                let elapsed = SystemTime::now();
-                let _ = done.send(elapsed).await;
-            }
-        }
+        Ok(())
     }
 
-    async fn on_retransmission_failure(&mut self, timer_id: usize) {
-        if self.max_rtos == 0 {
-            if let Some(done) = &self.done_tx {
-                assert_eq!(self.timer_id, timer_id, "unexpted timer ID: {}", timer_id);
-                let elapsed = SystemTime::now();
-                //t.Logf("onRtxFailure: elapsed=%.03f\n", elapsed)
-                let _ = done.send(elapsed).await;
-            }
-        } else {
-            assert!(false, "timer should not fail");
+    #[tokio::test]
+    async fn test_rto_manager_rto_calculation_large_rtt() -> Result<(), Error> {
+        let mut m = RtoManager::new();
+        let exp = vec![
+            60000, // capped at RTO.Max
+            60000, // capped at RTO.Max
+            60000, // capped at RTO.Max
+            55312, 48984,
+        ];
+
+        for i in 0..5 {
+            m.set_new_rtt(30000);
+            let rto = m.get_rto();
+            assert_eq!(exp[i], rto, "should be equal: {}", i);
         }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_rto_manager_calculate_next_timeout() -> Result<(), Error> {
+        let rto = calculate_next_timeout(1, 0);
+        assert_eq!(1, rto, "should match");
+        let rto = calculate_next_timeout(1, 1);
+        assert_eq!(2, rto, "should match");
+        let rto = calculate_next_timeout(1, 2);
+        assert_eq!(4, rto, "should match");
+        let rto = calculate_next_timeout(1, 30);
+        assert_eq!(60000, rto, "should match");
+        let rto = calculate_next_timeout(1, 63);
+        assert_eq!(60000, rto, "should match");
+        let rto = calculate_next_timeout(1, 64);
+        assert_eq!(60000, rto, "should match");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_rto_manager_reset() -> Result<(), Error> {
+        let mut m = RtoManager::new();
+        for _ in 0..10 {
+            m.set_new_rtt(200);
+        }
+
+        m.reset();
+        assert_eq!(RTO_INITIAL, m.get_rto(), "should be rtoInitial");
+        assert_eq!(0, m.srtt, "should be 0");
+        assert_eq!(0.0, m.rttvar, "should be 0");
+
+        Ok(())
     }
 }
 
 //TODO: remove this conditional test
 #[cfg(not(target_os = "macos"))]
-#[tokio::test]
-async fn test_rtx_timer_callback_interval() -> Result<(), Error> {
-    let timer_id = 0;
-    let ncbs = Arc::new(AtomicU32::new(0));
-    let obs = Arc::new(Mutex::new(TestTimerObserver {
-        ncbs: ncbs.clone(),
-        timer_id,
-        ..Default::default()
-    }));
-    let mut rt = RtxTimer::new(timer_id, PATH_MAX_RETRANS);
+mod test_rtx_timer {
+    use super::*;
 
-    assert!(!rt.is_running().await, "should not be running");
+    struct TestTimerObserver {
+        ncbs: Arc<AtomicU32>,
+        timer_id: usize,
+        done_tx: Option<mpsc::Sender<SystemTime>>,
+        max_rtos: usize,
+    }
 
-    // since := time.Now()
-    let ok = rt.start(obs, 30).await;
-    assert!(ok, "should be true");
-    assert!(rt.is_running().await, "should be running");
+    impl Default for TestTimerObserver {
+        fn default() -> Self {
+            TestTimerObserver {
+                ncbs: Arc::new(AtomicU32::new(0)),
+                timer_id: 0,
+                done_tx: None,
+                max_rtos: 0,
+            }
+        }
+    }
 
-    sleep(Duration::from_millis(650)).await;
-    rt.stop().await;
-    assert!(!rt.is_running().await, "should not be running");
+    #[async_trait]
+    impl RtxTimerObserver for TestTimerObserver {
+        async fn on_retransmission_timeout(&mut self, timer_id: usize, n_rtos: usize) {
+            self.ncbs.fetch_add(1, Ordering::SeqCst);
+            // 30 : 1 (30)
+            // 60 : 2 (90)
+            // 120: 3 (210)
+            // 240: 4 (550) <== expected in 650 msec
+            assert_eq!(self.timer_id, timer_id, "unexpected timer ID: {}", timer_id);
+            if (self.max_rtos > 0 && n_rtos == self.max_rtos) || self.max_rtos == usize::MAX {
+                if let Some(done) = &self.done_tx {
+                    let elapsed = SystemTime::now();
+                    let _ = done.send(elapsed).await;
+                }
+            }
+        }
 
-    assert_eq!(4, ncbs.load(Ordering::SeqCst), "should be called 4 times");
+        async fn on_retransmission_failure(&mut self, timer_id: usize) {
+            if self.max_rtos == 0 {
+                if let Some(done) = &self.done_tx {
+                    assert_eq!(self.timer_id, timer_id, "unexpted timer ID: {}", timer_id);
+                    let elapsed = SystemTime::now();
+                    //t.Logf("onRtxFailure: elapsed=%.03f\n", elapsed)
+                    let _ = done.send(elapsed).await;
+                }
+            } else {
+                assert!(false, "timer should not fail");
+            }
+        }
+    }
 
-    Ok(())
-}
+    #[tokio::test]
+    async fn test_rtx_timer_callback_interval() -> Result<(), Error> {
+        let timer_id = 0;
+        let ncbs = Arc::new(AtomicU32::new(0));
+        let obs = Arc::new(Mutex::new(TestTimerObserver {
+            ncbs: ncbs.clone(),
+            timer_id,
+            ..Default::default()
+        }));
+        let mut rt = RtxTimer::new(timer_id, PATH_MAX_RETRANS);
 
-#[tokio::test]
-async fn test_rtx_timer_last_start_wins() -> Result<(), Error> {
-    let timer_id = 3;
-    let ncbs = Arc::new(AtomicU32::new(0));
-    let obs = Arc::new(Mutex::new(TestTimerObserver {
-        ncbs: ncbs.clone(),
-        timer_id,
-        ..Default::default()
-    }));
-    let mut rt = RtxTimer::new(timer_id, PATH_MAX_RETRANS);
+        assert!(!rt.is_running().await, "should not be running");
 
-    let interval = 30;
-    let ok = rt.start(obs.clone(), interval).await;
-    assert!(ok, "should be accepted");
-    let ok = rt.start(obs.clone(), interval * 99).await; // should ignored
-    assert!(!ok, "should be ignored");
-    let ok = rt.start(obs.clone(), interval * 99).await; // should ignored
-    assert!(!ok, "should be ignored");
-
-    sleep(Duration::from_millis((interval * 3) / 2)).await;
-    rt.stop().await;
-
-    assert!(!rt.is_running().await, "should not be running");
-    assert_eq!(1, ncbs.load(Ordering::SeqCst), "must be called once");
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_rtx_timer_stop_right_after_start() -> Result<(), Error> {
-    let timer_id = 3;
-    let ncbs = Arc::new(AtomicU32::new(0));
-    let obs = Arc::new(Mutex::new(TestTimerObserver {
-        ncbs: ncbs.clone(),
-        timer_id,
-        ..Default::default()
-    }));
-    let mut rt = RtxTimer::new(timer_id, PATH_MAX_RETRANS);
-
-    let interval = 30;
-    let ok = rt.start(obs, interval).await;
-    assert!(ok, "should be accepted");
-    rt.stop().await;
-
-    sleep(Duration::from_millis((interval * 3) / 2)).await;
-    rt.stop().await;
-
-    assert!(!rt.is_running().await, "should not be running");
-    assert_eq!(0, ncbs.load(Ordering::SeqCst), "no callback should be made");
-
-    Ok(())
-}
-
-//TODO: remove this conditional test
-#[cfg(not(target_os = "macos"))]
-#[tokio::test]
-async fn test_rtx_timer_start_stop_then_start() -> Result<(), Error> {
-    let timer_id = 1;
-    let ncbs = Arc::new(AtomicU32::new(0));
-    let obs = Arc::new(Mutex::new(TestTimerObserver {
-        ncbs: ncbs.clone(),
-        timer_id,
-        ..Default::default()
-    }));
-    let mut rt = RtxTimer::new(timer_id, PATH_MAX_RETRANS);
-
-    let interval = 30;
-    let ok = rt.start(obs.clone(), interval).await;
-    assert!(ok, "should be accepted");
-    rt.stop().await;
-    assert!(!rt.is_running().await, "should NOT be running");
-    let ok = rt.start(obs.clone(), interval).await;
-    assert!(ok, "should be accepted");
-    assert!(rt.is_running().await, "should be running");
-
-    sleep(Duration::from_millis((interval * 3) / 2)).await;
-    rt.stop().await;
-
-    assert!(!rt.is_running().await, "should NOT be running");
-    assert_eq!(1, ncbs.load(Ordering::SeqCst), "must be called once");
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_rtx_timer_start_and_stop_in_atight_loop() -> Result<(), Error> {
-    let timer_id = 2;
-    let ncbs = Arc::new(AtomicU32::new(0));
-    let obs = Arc::new(Mutex::new(TestTimerObserver {
-        ncbs: ncbs.clone(),
-        timer_id,
-        ..Default::default()
-    }));
-    let mut rt = RtxTimer::new(timer_id, PATH_MAX_RETRANS);
-
-    for _ in 0..1000 {
-        let ok = rt.start(obs.clone(), 30).await;
-        assert!(ok, "should be accepted");
+        // since := time.Now()
+        let ok = rt.start(obs, 30).await;
+        assert!(ok, "should be true");
         assert!(rt.is_running().await, "should be running");
+
+        sleep(Duration::from_millis(650)).await;
+        rt.stop().await;
+        assert!(!rt.is_running().await, "should not be running");
+
+        assert_eq!(4, ncbs.load(Ordering::SeqCst), "should be called 4 times");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_rtx_timer_last_start_wins() -> Result<(), Error> {
+        let timer_id = 3;
+        let ncbs = Arc::new(AtomicU32::new(0));
+        let obs = Arc::new(Mutex::new(TestTimerObserver {
+            ncbs: ncbs.clone(),
+            timer_id,
+            ..Default::default()
+        }));
+        let mut rt = RtxTimer::new(timer_id, PATH_MAX_RETRANS);
+
+        let interval = 30;
+        let ok = rt.start(obs.clone(), interval).await;
+        assert!(ok, "should be accepted");
+        let ok = rt.start(obs.clone(), interval * 99).await; // should ignored
+        assert!(!ok, "should be ignored");
+        let ok = rt.start(obs.clone(), interval * 99).await; // should ignored
+        assert!(!ok, "should be ignored");
+
+        sleep(Duration::from_millis((interval * 3) / 2)).await;
+        rt.stop().await;
+
+        assert!(!rt.is_running().await, "should not be running");
+        assert_eq!(1, ncbs.load(Ordering::SeqCst), "must be called once");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_rtx_timer_stop_right_after_start() -> Result<(), Error> {
+        let timer_id = 3;
+        let ncbs = Arc::new(AtomicU32::new(0));
+        let obs = Arc::new(Mutex::new(TestTimerObserver {
+            ncbs: ncbs.clone(),
+            timer_id,
+            ..Default::default()
+        }));
+        let mut rt = RtxTimer::new(timer_id, PATH_MAX_RETRANS);
+
+        let interval = 30;
+        let ok = rt.start(obs, interval).await;
+        assert!(ok, "should be accepted");
+        rt.stop().await;
+
+        sleep(Duration::from_millis((interval * 3) / 2)).await;
+        rt.stop().await;
+
+        assert!(!rt.is_running().await, "should not be running");
+        assert_eq!(0, ncbs.load(Ordering::SeqCst), "no callback should be made");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_rtx_timer_start_stop_then_start() -> Result<(), Error> {
+        let timer_id = 1;
+        let ncbs = Arc::new(AtomicU32::new(0));
+        let obs = Arc::new(Mutex::new(TestTimerObserver {
+            ncbs: ncbs.clone(),
+            timer_id,
+            ..Default::default()
+        }));
+        let mut rt = RtxTimer::new(timer_id, PATH_MAX_RETRANS);
+
+        let interval = 30;
+        let ok = rt.start(obs.clone(), interval).await;
+        assert!(ok, "should be accepted");
         rt.stop().await;
         assert!(!rt.is_running().await, "should NOT be running");
-    }
+        let ok = rt.start(obs.clone(), interval).await;
+        assert!(ok, "should be accepted");
+        assert!(rt.is_running().await, "should be running");
 
-    assert_eq!(0, ncbs.load(Ordering::SeqCst), "no callback should be made");
-
-    Ok(())
-}
-
-//TODO: remove this conditional test
-#[cfg(not(target_os = "macos"))]
-#[tokio::test]
-async fn test_rtx_timer_should_stop_after_rtx_failure() -> Result<(), Error> {
-    let (done_tx, mut done_rx) = mpsc::channel(1);
-
-    let timer_id = 4;
-    let ncbs = Arc::new(AtomicU32::new(0));
-    let obs = Arc::new(Mutex::new(TestTimerObserver {
-        ncbs: ncbs.clone(),
-        timer_id,
-        done_tx: Some(done_tx),
-        ..Default::default()
-    }));
-
-    let since = SystemTime::now();
-    let mut rt = RtxTimer::new(timer_id, PATH_MAX_RETRANS);
-
-    // RTO(msec) Total(msec)
-    //  10          10    1st RTO
-    //  20          30    2nd RTO
-    //  40          70    3rd RTO
-    //  80         150    4th RTO
-    // 160         310    5th RTO (== Path.Max.Retrans)
-    // 320         630    Failure
-
-    let interval = 10;
-    let ok = rt.start(obs, interval).await;
-    assert!(ok, "should be accepted");
-    assert!(rt.is_running().await, "should be running");
-
-    let elapsed = done_rx.recv().await;
-
-    assert!(!rt.is_running().await, "should not be running");
-    assert_eq!(5, ncbs.load(Ordering::SeqCst), "should be called 5 times");
-
-    if let Some(elapsed) = elapsed {
-        let diff = elapsed.duration_since(since).unwrap();
-        assert!(
-            diff > Duration::from_millis(600),
-            "must have taken more than 600 msec"
-        );
-        assert!(
-            diff < Duration::from_millis(700),
-            "must fail in less than 700 msec"
-        );
-    }
-
-    Ok(())
-}
-
-//TODO: remove this conditional test
-#[cfg(not(target_os = "macos"))]
-#[tokio::test]
-async fn test_rtx_timer_should_not_stop_if_max_retrans_is_zero() -> Result<(), Error> {
-    let (done_tx, mut done_rx) = mpsc::channel(1);
-
-    let timer_id = 4;
-    let max_rtos = 6;
-    let ncbs = Arc::new(AtomicU32::new(0));
-    let obs = Arc::new(Mutex::new(TestTimerObserver {
-        ncbs: ncbs.clone(),
-        timer_id,
-        done_tx: Some(done_tx),
-        max_rtos,
-        ..Default::default()
-    }));
-
-    let since = SystemTime::now();
-    let mut rt = RtxTimer::new(timer_id, 0);
-
-    // RTO(msec) Total(msec)
-    //  10          10    1st RTO
-    //  20          30    2nd RTO
-    //  40          70    3rd RTO
-    //  80         150    4th RTO
-    // 160         310    5th RTO
-    // 320         630    6th RTO => exit test (timer should still be running)
-
-    let interval = 10;
-    let ok = rt.start(obs, interval).await;
-    assert!(ok, "should be accepted");
-    assert!(rt.is_running().await, "should be running");
-
-    let elapsed = done_rx.recv().await;
-
-    assert!(rt.is_running().await, "should still be running");
-    assert_eq!(6, ncbs.load(Ordering::SeqCst), "should be called 6 times");
-
-    if let Some(elapsed) = elapsed {
-        let diff = elapsed.duration_since(since).unwrap();
-        assert!(
-            diff > Duration::from_millis(600),
-            "must have taken more than 600 msec"
-        );
-        assert!(
-            diff < Duration::from_millis(700),
-            "must fail in less than 700 msec"
-        );
-    }
-
-    rt.stop().await;
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_rtx_timer_stop_timer_that_is_not_running_is_noop() -> Result<(), Error> {
-    let (done_tx, mut done_rx) = mpsc::channel(1);
-
-    let timer_id = 5;
-    let obs = Arc::new(Mutex::new(TestTimerObserver {
-        timer_id,
-        done_tx: Some(done_tx),
-        max_rtos: usize::MAX,
-        ..Default::default()
-    }));
-    let mut rt = RtxTimer::new(timer_id, PATH_MAX_RETRANS);
-
-    for _ in 0..10 {
+        sleep(Duration::from_millis((interval * 3) / 2)).await;
         rt.stop().await;
+
+        assert!(!rt.is_running().await, "should NOT be running");
+        assert_eq!(1, ncbs.load(Ordering::SeqCst), "must be called once");
+
+        Ok(())
     }
 
-    let ok = rt.start(obs, 20).await;
-    assert!(ok, "should be accepted");
-    assert!(rt.is_running().await, "must be running");
+    #[tokio::test]
+    async fn test_rtx_timer_start_and_stop_in_atight_loop() -> Result<(), Error> {
+        let timer_id = 2;
+        let ncbs = Arc::new(AtomicU32::new(0));
+        let obs = Arc::new(Mutex::new(TestTimerObserver {
+            ncbs: ncbs.clone(),
+            timer_id,
+            ..Default::default()
+        }));
+        let mut rt = RtxTimer::new(timer_id, PATH_MAX_RETRANS);
 
-    let _ = done_rx.recv().await;
-    rt.stop().await;
-    assert!(!rt.is_running().await, "must be false");
+        for _ in 0..1000 {
+            let ok = rt.start(obs.clone(), 30).await;
+            assert!(ok, "should be accepted");
+            assert!(rt.is_running().await, "should be running");
+            rt.stop().await;
+            assert!(!rt.is_running().await, "should NOT be running");
+        }
 
-    Ok(())
-}
+        assert_eq!(0, ncbs.load(Ordering::SeqCst), "no callback should be made");
 
-#[tokio::test]
-async fn test_rtx_timer_closed_timer_wont_start() -> Result<(), Error> {
-    let timer_id = 6;
-    let ncbs = Arc::new(AtomicU32::new(0));
-    let obs = Arc::new(Mutex::new(TestTimerObserver {
-        ncbs: ncbs.clone(),
-        timer_id,
-        ..Default::default()
-    }));
-    let mut rt = RtxTimer::new(timer_id, PATH_MAX_RETRANS);
+        Ok(())
+    }
 
-    let ok = rt.start(obs.clone(), 20).await;
-    assert!(ok, "should be accepted");
-    assert!(rt.is_running().await, "must be running");
+    #[tokio::test]
+    async fn test_rtx_timer_should_stop_after_rtx_failure() -> Result<(), Error> {
+        let (done_tx, mut done_rx) = mpsc::channel(1);
 
-    rt.stop().await;
-    assert!(!rt.is_running().await, "must be false");
+        let timer_id = 4;
+        let ncbs = Arc::new(AtomicU32::new(0));
+        let obs = Arc::new(Mutex::new(TestTimerObserver {
+            ncbs: ncbs.clone(),
+            timer_id,
+            done_tx: Some(done_tx),
+            ..Default::default()
+        }));
 
-    //let ok = rt.start(obs.clone(), 20).await;
-    //assert!(!ok, "should not start");
-    assert!(!rt.is_running().await, "must not be running");
+        let since = SystemTime::now();
+        let mut rt = RtxTimer::new(timer_id, PATH_MAX_RETRANS);
 
-    sleep(Duration::from_millis(100)).await;
-    assert_eq!(0, ncbs.load(Ordering::SeqCst), "RTO should not occur");
+        // RTO(msec) Total(msec)
+        //  10          10    1st RTO
+        //  20          30    2nd RTO
+        //  40          70    3rd RTO
+        //  80         150    4th RTO
+        // 160         310    5th RTO (== Path.Max.Retrans)
+        // 320         630    Failure
 
-    Ok(())
+        let interval = 10;
+        let ok = rt.start(obs, interval).await;
+        assert!(ok, "should be accepted");
+        assert!(rt.is_running().await, "should be running");
+
+        let elapsed = done_rx.recv().await;
+
+        assert!(!rt.is_running().await, "should not be running");
+        assert_eq!(5, ncbs.load(Ordering::SeqCst), "should be called 5 times");
+
+        if let Some(elapsed) = elapsed {
+            let diff = elapsed.duration_since(since).unwrap();
+            assert!(
+                diff > Duration::from_millis(600),
+                "must have taken more than 600 msec"
+            );
+            assert!(
+                diff < Duration::from_millis(700),
+                "must fail in less than 700 msec"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_rtx_timer_should_not_stop_if_max_retrans_is_zero() -> Result<(), Error> {
+        let (done_tx, mut done_rx) = mpsc::channel(1);
+
+        let timer_id = 4;
+        let max_rtos = 6;
+        let ncbs = Arc::new(AtomicU32::new(0));
+        let obs = Arc::new(Mutex::new(TestTimerObserver {
+            ncbs: ncbs.clone(),
+            timer_id,
+            done_tx: Some(done_tx),
+            max_rtos,
+            ..Default::default()
+        }));
+
+        let since = SystemTime::now();
+        let mut rt = RtxTimer::new(timer_id, 0);
+
+        // RTO(msec) Total(msec)
+        //  10          10    1st RTO
+        //  20          30    2nd RTO
+        //  40          70    3rd RTO
+        //  80         150    4th RTO
+        // 160         310    5th RTO
+        // 320         630    6th RTO => exit test (timer should still be running)
+
+        let interval = 10;
+        let ok = rt.start(obs, interval).await;
+        assert!(ok, "should be accepted");
+        assert!(rt.is_running().await, "should be running");
+
+        let elapsed = done_rx.recv().await;
+
+        assert!(rt.is_running().await, "should still be running");
+        assert_eq!(6, ncbs.load(Ordering::SeqCst), "should be called 6 times");
+
+        if let Some(elapsed) = elapsed {
+            let diff = elapsed.duration_since(since).unwrap();
+            assert!(
+                diff > Duration::from_millis(600),
+                "must have taken more than 600 msec"
+            );
+            assert!(
+                diff < Duration::from_millis(700),
+                "must fail in less than 700 msec"
+            );
+        }
+
+        rt.stop().await;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_rtx_timer_stop_timer_that_is_not_running_is_noop() -> Result<(), Error> {
+        let (done_tx, mut done_rx) = mpsc::channel(1);
+
+        let timer_id = 5;
+        let obs = Arc::new(Mutex::new(TestTimerObserver {
+            timer_id,
+            done_tx: Some(done_tx),
+            max_rtos: usize::MAX,
+            ..Default::default()
+        }));
+        let mut rt = RtxTimer::new(timer_id, PATH_MAX_RETRANS);
+
+        for _ in 0..10 {
+            rt.stop().await;
+        }
+
+        let ok = rt.start(obs, 20).await;
+        assert!(ok, "should be accepted");
+        assert!(rt.is_running().await, "must be running");
+
+        let _ = done_rx.recv().await;
+        rt.stop().await;
+        assert!(!rt.is_running().await, "must be false");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_rtx_timer_closed_timer_wont_start() -> Result<(), Error> {
+        let timer_id = 6;
+        let ncbs = Arc::new(AtomicU32::new(0));
+        let obs = Arc::new(Mutex::new(TestTimerObserver {
+            ncbs: ncbs.clone(),
+            timer_id,
+            ..Default::default()
+        }));
+        let mut rt = RtxTimer::new(timer_id, PATH_MAX_RETRANS);
+
+        let ok = rt.start(obs.clone(), 20).await;
+        assert!(ok, "should be accepted");
+        assert!(rt.is_running().await, "must be running");
+
+        rt.stop().await;
+        assert!(!rt.is_running().await, "must be false");
+
+        //let ok = rt.start(obs.clone(), 20).await;
+        //assert!(!ok, "should not start");
+        assert!(!rt.is_running().await, "must not be running");
+
+        sleep(Duration::from_millis(100)).await;
+        assert_eq!(0, ncbs.load(Ordering::SeqCst), "RTO should not occur");
+
+        Ok(())
+    }
 }

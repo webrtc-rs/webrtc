@@ -38,8 +38,8 @@ pub struct Stream {
     reassembly_queue: ReassemblyQueue,
     sequence_number: u16,
     read_notifier: Notify,
-    read_err: Error,
-    write_err: Error,
+    read_err: Option<Error>,
+    write_err: Option<Error>,
     unordered: bool,
     reliability_type: ReliabilityType,
     reliability_value: u32,
@@ -83,7 +83,7 @@ impl Stream {
     /// read reads a packet of len(p) bytes, dropping the Payload Protocol Identifier.
     /// Returns EOF when the stream is reset or an error if the stream is closed
     /// otherwise.
-    pub async fn read(&self, p: &mut [u8]) -> Result<usize, Error> {
+    pub async fn read(&mut self, p: &mut [u8]) -> Result<usize, Error> {
         let (n, _) = self.read_sctp(p).await?;
         Ok(n)
     }
@@ -93,26 +93,25 @@ impl Stream {
     /// Returns EOF when the stream is reset or an error if the stream is closed
     /// otherwise.
     pub async fn read_sctp(
-        &self,
-        _p: &mut [u8],
+        &mut self,
+        p: &mut [u8],
     ) -> Result<(usize, PayloadProtocolIdentifier), Error> {
-        /*loop {
-            let result = s.reassembly_queue.read(p);
+        loop {
+            let result = self.reassembly_queue.read(p);
             if result.is_ok() {
                 return result;
-            } else if errors.Is(err, io.ErrShortBuffer) {
-                return 0, PayloadProtocolIdentifier(0), err
+            } else if let Err(err) = result {
+                if err == Error::ErrShortBuffer {
+                    return Err(err);
+                }
             }
 
-            err = s.read_err
-            if err != nil {
-                return 0, PayloadProtocolIdentifier(0), err
+            if let Some(err) = self.read_err {
+                return Err(err);
             }
 
             self.read_notifier.notified().await;
-        }*/
-
-        Ok((0, PayloadProtocolIdentifier::Unknown))
+        }
     }
     /*
         func (s *Stream) handleData(pd *chunkPayloadData) {

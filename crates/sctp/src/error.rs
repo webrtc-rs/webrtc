@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-#[derive(Debug, Error, PartialEq)]
+#[derive(Debug, Error, PartialEq, Copy, Clone)]
 pub enum Error {
     #[error("raw is too small for a SCTP chunk")]
     ErrChunkHeaderTooSmall,
