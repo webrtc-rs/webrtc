@@ -14,6 +14,8 @@ pub mod error;
 pub mod fixed_big_int;
 pub mod ifaces;
 pub mod replay_detector;
+
+#[cfg(feature = "vnet")]
 pub mod vnet;
 
 pub use crate::buffer::Buffer;
