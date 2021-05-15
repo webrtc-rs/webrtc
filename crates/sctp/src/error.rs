@@ -201,4 +201,6 @@ pub enum Error {
     ErrStreamClosed,
     #[error("Short buffer to be filled")]
     ErrShortBuffer,
+    #[error("Io EOF")]
+    ErrEof,
 }

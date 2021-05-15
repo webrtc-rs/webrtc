@@ -47,7 +47,7 @@ pub struct Stream {
     reliability_value: u32,
     buffered_amount: u64,
     buffered_amount_low: u64,
-    on_buffered_amount_low: OnBufferedAmountLowFn,
+    on_buffered_amount_low: Option<OnBufferedAmountLowFn>,
     //log                 :logging.LeveledLogger
     name: String,
 }
@@ -254,104 +254,94 @@ impl Stream {
 
         chunks
     }
-    /*
-        // Close closes the write-direction of the stream.
-        // Future calls to write are not permitted after calling Close.
-        func (s *Stream) Close() error {
-            if sid, isOpen := func() (uint16, bool) {
-                s.lock.Lock()
-                defer s.lock.Unlock()
 
-                isOpen := true
-                if s.write_err == nil {
-                    s.write_err = errStreamClosed
-                } else {
-                    isOpen = false
-                }
-
-                if s.read_err == nil {
-                    s.read_err = io.EOF
-                } else {
-                    isOpen = false
-                }
-                s.read_notifier.Broadcast() // broadcast regardless
-
-                return s.stream_identifier, isOpen
-            }(); isOpen {
-                // Reset the outgoing stream
-                // https://tools.ietf.org/html/rfc6525
-                return s.association.sendResetRequest(sid)
-            }
-
-            return nil
-        }
-
-        // BufferedAmount returns the number of bytes of data currently queued to be sent over this stream.
-        func (s *Stream) BufferedAmount() uint64 {
-            s.lock.RLock()
-            defer s.lock.RUnlock()
-
-            return s.buffered_amount
-        }
-
-        // BufferedAmountLowThreshold returns the number of bytes of buffered outgoing data that is
-        // considered "low." Defaults to 0.
-        func (s *Stream) BufferedAmountLowThreshold() uint64 {
-            s.lock.RLock()
-            defer s.lock.RUnlock()
-
-            return s.buffered_amount_low
-        }
-
-        // SetBufferedAmountLowThreshold is used to update the threshold.
-        // See BufferedAmountLowThreshold().
-        func (s *Stream) SetBufferedAmountLowThreshold(th uint64) {
-            s.lock.Lock()
-            defer s.lock.Unlock()
-
-            s.buffered_amount_low = th
-        }
-
-        // OnBufferedAmountLow sets the callback handler which would be called when the number of
-        // bytes of outgoing data buffered is lower than the threshold.
-        func (s *Stream) OnBufferedAmountLow(f func()) {
-            s.lock.Lock()
-            defer s.lock.Unlock()
-
-            s.on_buffered_amount_low = f
-        }
-
-        // This method is called by association's readLoop (go-)routine to notify this stream
-        // of the specified amount of outgoing data has been delivered to the peer.
-        func (s *Stream) onBufferReleased(nBytesReleased int) {
-            if nBytesReleased <= 0 {
-                return
-            }
-
-            s.lock.Lock()
-
-            fromAmount := s.buffered_amount
-
-            if s.buffered_amount < uint64(nBytesReleased) {
-                s.buffered_amount = 0
-                s.log.Errorf("[%s] released buffer size %d should be <= %d",
-                    s.name, nBytesReleased, s.buffered_amount)
+    /// Close closes the write-direction of the stream.
+    /// Future calls to write are not permitted after calling Close.
+    pub fn close(&mut self) -> Result<(), Error> {
+        let (_sid, _is_open) = {
+            let mut is_open = true;
+            if self.write_err.is_none() {
+                self.write_err = Some(Error::ErrStreamClosed);
             } else {
-                s.buffered_amount -= uint64(nBytesReleased)
+                is_open = false;
             }
 
-            s.log.Tracef("[%s] buffered_amount = %d", s.name, s.buffered_amount)
-
-            if s.on_buffered_amount_low != nil && fromAmount > s.buffered_amount_low && s.buffered_amount <= s.buffered_amount_low {
-                f := s.on_buffered_amount_low
-                s.lock.Unlock()
-                f()
-                return
+            if self.read_err.is_none() {
+                self.read_err = Some(Error::ErrEof);
+            } else {
+                is_open = false;
             }
+            self.read_notifier.notify_waiters(); // broadcast regardless
 
-            s.lock.Unlock()
+            (self.stream_identifier, is_open)
+        };
+
+        //if is_open {
+        // Reset the outgoing stream
+        // https://tools.ietf.org/html/rfc6525
+        //TODO: self.association.sendResetRequest(sid)
+
+        //} else {
+        Ok(())
+        //}
+    }
+
+    /// buffered_amount returns the number of bytes of data currently queued to be sent over this stream.
+    pub fn buffered_amount(&self) -> u64 {
+        self.buffered_amount
+    }
+
+    /// buffered_amount_low_threshold returns the number of bytes of buffered outgoing data that is
+    /// considered "low." Defaults to 0.
+    pub fn buffered_amount_low_threshold(&self) -> u64 {
+        self.buffered_amount_low
+    }
+
+    /// set_buffered_amount_low_threshold is used to update the threshold.
+    /// See buffered_amount_low_threshold().
+    pub fn set_buffered_amount_low_threshold(&mut self, th: u64) {
+        self.buffered_amount_low = th;
+    }
+
+    /// on_buffered_amount_low sets the callback handler which would be called when the number of
+    /// bytes of outgoing data buffered is lower than the threshold.
+    pub fn on_buffered_amount_low(&mut self, f: OnBufferedAmountLowFn) {
+        self.on_buffered_amount_low = Some(f);
+    }
+
+    /// This method is called by association's readLoop (go-)routine to notify this stream
+    /// of the specified amount of outgoing data has been delivered to the peer.
+    fn on_buffer_released(&mut self, n_bytes_released: i64) {
+        if n_bytes_released <= 0 {
+            return;
         }
-    */
+
+        let from_amount = self.buffered_amount;
+
+        if self.buffered_amount < n_bytes_released as u64 {
+            self.buffered_amount = 0;
+            log::error!(
+                "[{}] released buffer size {} should be <= {}",
+                self.name,
+                n_bytes_released,
+                self.buffered_amount
+            )
+        } else {
+            self.buffered_amount -= n_bytes_released as u64;
+        }
+
+        log::trace!("[{}] buffered_amount = {}", self.name, self.buffered_amount);
+
+        if let Some(f) = &self.on_buffered_amount_low {
+            if from_amount > self.buffered_amount_low
+                && self.buffered_amount <= self.buffered_amount_low
+            {
+                f();
+                return;
+            }
+        }
+    }
+
     pub(crate) fn get_num_bytes_in_reassembly_queue(&self) -> usize {
         // No lock is required as it reads the size with atomic load function.
         self.reassembly_queue.get_num_bytes()
