@@ -158,10 +158,11 @@ mod test_rto_manager {
 #[cfg(not(target_os = "macos"))]
 mod test_rtx_timer {
     use super::*;
+    use crate::association::RtxTimerId;
 
     struct TestTimerObserver {
         ncbs: Arc<AtomicU32>,
-        timer_id: usize,
+        timer_id: RtxTimerId,
         done_tx: Option<mpsc::Sender<SystemTime>>,
         max_rtos: usize,
     }
@@ -170,7 +171,7 @@ mod test_rtx_timer {
         fn default() -> Self {
             TestTimerObserver {
                 ncbs: Arc::new(AtomicU32::new(0)),
-                timer_id: 0,
+                timer_id: RtxTimerId::T1Init,
                 done_tx: None,
                 max_rtos: 0,
             }
@@ -179,7 +180,7 @@ mod test_rtx_timer {
 
     #[async_trait]
     impl RtxTimerObserver for TestTimerObserver {
-        async fn on_retransmission_timeout(&mut self, timer_id: usize, n_rtos: usize) {
+        async fn on_retransmission_timeout(&mut self, timer_id: RtxTimerId, n_rtos: usize) {
             self.ncbs.fetch_add(1, Ordering::SeqCst);
             // 30 : 1 (30)
             // 60 : 2 (90)
@@ -194,7 +195,7 @@ mod test_rtx_timer {
             }
         }
 
-        async fn on_retransmission_failure(&mut self, timer_id: usize) {
+        async fn on_retransmission_failure(&mut self, timer_id: RtxTimerId) {
             if self.max_rtos == 0 {
                 if let Some(done) = &self.done_tx {
                     assert_eq!(self.timer_id, timer_id, "unexpted timer ID: {}", timer_id);
@@ -210,7 +211,7 @@ mod test_rtx_timer {
 
     #[tokio::test]
     async fn test_rtx_timer_callback_interval() -> Result<(), Error> {
-        let timer_id = 0;
+        let timer_id = RtxTimerId::T1Init;
         let ncbs = Arc::new(AtomicU32::new(0));
         let obs = Arc::new(Mutex::new(TestTimerObserver {
             ncbs: ncbs.clone(),
@@ -237,7 +238,7 @@ mod test_rtx_timer {
 
     #[tokio::test]
     async fn test_rtx_timer_last_start_wins() -> Result<(), Error> {
-        let timer_id = 3;
+        let timer_id = RtxTimerId::T3RTX;
         let ncbs = Arc::new(AtomicU32::new(0));
         let obs = Arc::new(Mutex::new(TestTimerObserver {
             ncbs: ncbs.clone(),
@@ -265,7 +266,7 @@ mod test_rtx_timer {
 
     #[tokio::test]
     async fn test_rtx_timer_stop_right_after_start() -> Result<(), Error> {
-        let timer_id = 3;
+        let timer_id = RtxTimerId::T3RTX;
         let ncbs = Arc::new(AtomicU32::new(0));
         let obs = Arc::new(Mutex::new(TestTimerObserver {
             ncbs: ncbs.clone(),
@@ -290,7 +291,7 @@ mod test_rtx_timer {
 
     #[tokio::test]
     async fn test_rtx_timer_start_stop_then_start() -> Result<(), Error> {
-        let timer_id = 1;
+        let timer_id = RtxTimerId::T1Cookie;
         let ncbs = Arc::new(AtomicU32::new(0));
         let obs = Arc::new(Mutex::new(TestTimerObserver {
             ncbs: ncbs.clone(),
@@ -319,7 +320,7 @@ mod test_rtx_timer {
 
     #[tokio::test]
     async fn test_rtx_timer_start_and_stop_in_atight_loop() -> Result<(), Error> {
-        let timer_id = 2;
+        let timer_id = RtxTimerId::T2Shutdown;
         let ncbs = Arc::new(AtomicU32::new(0));
         let obs = Arc::new(Mutex::new(TestTimerObserver {
             ncbs: ncbs.clone(),
@@ -345,7 +346,7 @@ mod test_rtx_timer {
     async fn test_rtx_timer_should_stop_after_rtx_failure() -> Result<(), Error> {
         let (done_tx, mut done_rx) = mpsc::channel(1);
 
-        let timer_id = 4;
+        let timer_id = RtxTimerId::Reconfig;
         let ncbs = Arc::new(AtomicU32::new(0));
         let obs = Arc::new(Mutex::new(TestTimerObserver {
             ncbs: ncbs.clone(),
@@ -394,7 +395,7 @@ mod test_rtx_timer {
     async fn test_rtx_timer_should_not_stop_if_max_retrans_is_zero() -> Result<(), Error> {
         let (done_tx, mut done_rx) = mpsc::channel(1);
 
-        let timer_id = 4;
+        let timer_id = RtxTimerId::Reconfig;
         let max_rtos = 6;
         let ncbs = Arc::new(AtomicU32::new(0));
         let obs = Arc::new(Mutex::new(TestTimerObserver {
@@ -447,7 +448,7 @@ mod test_rtx_timer {
     async fn test_rtx_timer_stop_timer_that_is_not_running_is_noop() -> Result<(), Error> {
         let (done_tx, mut done_rx) = mpsc::channel(1);
 
-        let timer_id = 5;
+        let timer_id = RtxTimerId::Reconfig;
         let obs = Arc::new(Mutex::new(TestTimerObserver {
             timer_id,
             done_tx: Some(done_tx),
@@ -473,7 +474,7 @@ mod test_rtx_timer {
 
     #[tokio::test]
     async fn test_rtx_timer_closed_timer_wont_start() -> Result<(), Error> {
-        let timer_id = 6;
+        let timer_id = RtxTimerId::Reconfig;
         let ncbs = Arc::new(AtomicU32::new(0));
         let obs = Arc::new(Mutex::new(TestTimerObserver {
             ncbs: ncbs.clone(),

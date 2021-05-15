@@ -1,3 +1,4 @@
+use crate::association::RtxTimerId;
 use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
@@ -99,14 +100,14 @@ pub(crate) fn calculate_next_timeout(rto: u64, n_rtos: usize) -> u64 {
 /// from within these callbacks.
 #[async_trait]
 pub(crate) trait RtxTimerObserver {
-    async fn on_retransmission_timeout(&mut self, timer_id: usize, n: usize);
-    async fn on_retransmission_failure(&mut self, timer_id: usize);
+    async fn on_retransmission_timeout(&mut self, timer_id: RtxTimerId, n: usize);
+    async fn on_retransmission_failure(&mut self, timer_id: RtxTimerId);
 }
 
 /// rtxTimer provides the retnransmission timer conforms with RFC 4960 Sec 6.3.1
 #[derive(Default, Debug)]
 pub(crate) struct RtxTimer {
-    pub(crate) id: usize,
+    pub(crate) id: RtxTimerId,
     pub(crate) max_retrans: usize,
     pub(crate) close_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
 }
@@ -115,7 +116,7 @@ impl RtxTimer {
     /// newRTXTimer creates a new retransmission timer.
     /// if max_retrans is set to 0, it will keep retransmitting until stop() is called.
     /// (it will never make on_retransmission_failure() callback.
-    pub(crate) fn new(id: usize, max_retrans: usize) -> Self {
+    pub(crate) fn new(id: RtxTimerId, max_retrans: usize) -> Self {
         RtxTimer {
             id,
             max_retrans,
