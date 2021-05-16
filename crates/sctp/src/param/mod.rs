@@ -35,6 +35,7 @@ pub(crate) trait Param: fmt::Display + fmt::Debug {
         Self: Sized;
     fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error>;
     fn value_length(&self) -> usize;
+    fn clone_to(&self) -> Box<dyn Param>;
     fn as_any(&self) -> &dyn std::any::Any;
 
     fn marshal(&self) -> Result<Bytes, Error> {
@@ -42,6 +43,12 @@ pub(crate) trait Param: fmt::Display + fmt::Debug {
         let mut buf = BytesMut::with_capacity(capacity);
         self.marshal_to(&mut buf)?;
         Ok(buf.freeze())
+    }
+}
+
+impl Clone for Box<dyn Param> {
+    fn clone(&self) -> Box<dyn Param> {
+        self.clone_to()
     }
 }
 

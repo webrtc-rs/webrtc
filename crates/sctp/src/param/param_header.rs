@@ -53,6 +53,10 @@ impl Param for ParamHeader {
         self.value_length as usize
     }
 
+    fn clone_to(&self) -> Box<dyn Param> {
+        Box::new(self.clone())
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

@@ -38,6 +38,10 @@ impl Param for ParamRandom {
         self.random_data.len()
     }
 
+    fn clone_to(&self) -> Box<dyn Param> {
+        Box::new(self.clone())
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

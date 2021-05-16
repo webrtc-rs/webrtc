@@ -61,6 +61,10 @@ impl Param for ParamChunkList {
         self.chunk_types.len()
     }
 
+    fn clone_to(&self) -> Box<dyn Param> {
+        Box::new(self.clone())
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
