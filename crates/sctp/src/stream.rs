@@ -5,7 +5,7 @@ use crate::queue::reassembly_queue::ReassemblyQueue;
 use crate::association::AssociationState;
 use bytes::Bytes;
 use std::fmt;
-use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 use std::sync::Arc;
 use tokio::sync::Notify;
 
@@ -42,25 +42,25 @@ pub type OnBufferedAmountLowFn = Box<dyn Fn()>;
 /// Stream represents an SCTP stream
 #[derive(Default)]
 pub struct Stream {
-    max_payload_size: u32,
-    max_message_size: Arc<AtomicU32>, // clone from association
-    state: Arc<AtomicU8>,             // clone from association
+    pub(crate) max_payload_size: u32,
+    pub(crate) max_message_size: Arc<AtomicU32>, // clone from association
+    pub(crate) state: Arc<AtomicU8>,             // clone from association
 
-    stream_identifier: u16,
-    default_payload_type: PayloadProtocolIdentifier,
-    reassembly_queue: ReassemblyQueue,
-    sequence_number: u16,
-    read_notifier: Notify,
-    read_err: Option<Error>,
-    write_err: Option<Error>,
-    unordered: bool,
-    reliability_type: ReliabilityType,
-    reliability_value: u32,
-    buffered_amount: u64,
-    buffered_amount_low: u64,
-    on_buffered_amount_low: Option<OnBufferedAmountLowFn>,
+    pub(crate) stream_identifier: u16,
+    pub(crate) default_payload_type: PayloadProtocolIdentifier,
+    pub(crate) reassembly_queue: ReassemblyQueue,
+    pub(crate) sequence_number: u16,
+    pub(crate) read_notifier: Notify,
+    pub(crate) read_err: Option<Error>,
+    pub(crate) write_err: Option<Error>,
+    pub(crate) unordered: bool,
+    pub(crate) reliability_type: ReliabilityType,
+    pub(crate) reliability_value: u32,
+    pub(crate) buffered_amount: u64,
+    pub(crate) buffered_amount_low: u64,
+    pub(crate) on_buffered_amount_low: Option<OnBufferedAmountLowFn>,
     //log                 :logging.LeveledLogger
-    name: String,
+    pub(crate) name: String,
 }
 
 impl fmt::Debug for Stream {
@@ -271,7 +271,9 @@ impl Stream {
         let unordered = ppi != PayloadProtocolIdentifier::Dcep && self.unordered;
 
         let mut chunks = vec![];
-        //var head *chunkPayloadData
+
+        let head_abandoned = Arc::new(AtomicBool::new(false));
+        let head_all_inflight = Arc::new(AtomicBool::new(false));
         while remaining != 0 {
             let fragment_size = std::cmp::min(self.max_payload_size as usize, remaining); //self.association.max_payload_size
 
@@ -288,13 +290,10 @@ impl Stream {
                 immediate_sack: false,
                 payload_type: ppi,
                 stream_sequence_number: self.sequence_number,
-                //head:                 head,
+                abandoned: head_abandoned.clone(), // all fragmented chunks use the same abandoned
+                all_inflight: head_all_inflight.clone(), // all fragmented chunks use the same all_inflight
                 ..Default::default()
             };
-
-            //TODO: if head == nil {
-            //    head = chunk
-            // }
 
             chunks.push(chunk);
 

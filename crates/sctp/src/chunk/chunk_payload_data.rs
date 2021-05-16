@@ -2,6 +2,8 @@ use super::{chunk_header::*, chunk_type::*, *};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::SystemTime;
 
 pub(crate) const PAYLOAD_DATA_ENDING_FRAGMENT_BITMASK: u8 = 1;
@@ -91,7 +93,7 @@ impl From<u32> for PayloadProtocolIdentifier {
 ///============================================================
 ///|             Table 1: Fragment Description Flags          |
 ///============================================================
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct ChunkPayloadData {
     pub(crate) unordered: bool,
     pub(crate) beginning_fragment: bool,
@@ -110,11 +112,13 @@ pub struct ChunkPayloadData {
 
     /// Partial-reliability parameters used only by sender
     pub(crate) since: SystemTime,
-    pub(crate) nsent: u32,
     /// number of transmission made for this chunk
-    pub(crate) abandoned: bool,
-    pub(crate) all_inflight: bool,
+    pub(crate) nsent: u32,
+
     /// valid only with the first fragment
+    pub(crate) abandoned: Arc<AtomicBool>,
+    /// valid only with the first fragment
+    pub(crate) all_inflight: Arc<AtomicBool>,
 
     /// Retransmission flag set when T1-RTX timeout occurred and this
     /// chunk is still in the inflight queue
@@ -129,27 +133,17 @@ impl Default for ChunkPayloadData {
             beginning_fragment: false,
             ending_fragment: false,
             immediate_sack: false,
-
             tsn: 0,
             stream_identifier: 0,
             stream_sequence_number: 0,
             payload_type: PayloadProtocolIdentifier::default(),
             user_data: Bytes::new(),
-
-            /// Whether this data chunk was acknowledged (received by peer)
             acked: false,
             miss_indicator: 0,
-
-            /// Partial-reliability parameters used only by sender
             since: SystemTime::now(),
             nsent: 0,
-            /// number of transmission made for this chunk
-            abandoned: false,
-            all_inflight: false,
-            /// valid only with the first fragment
-
-            /// Retransmission flag set when T1-RTX timeout occurred and this
-            /// chunk is still in the inflight queue
+            abandoned: Arc::new(AtomicBool::new(false)),
+            all_inflight: Arc::new(AtomicBool::new(false)),
             retransmit: false,
         }
     }
@@ -220,23 +214,13 @@ impl Chunk for ChunkPayloadData {
             stream_sequence_number,
             payload_type,
             user_data,
-
-            /// Whether this data chunk was acknowledged (received by peer)
             acked: false,
             miss_indicator: 0,
-
-            /// Partial-reliability parameters used only by sender
             since: SystemTime::now(),
             nsent: 0,
-            /// number of transmission made for this chunk
-            abandoned: false,
-            all_inflight: false,
-            /// valid only with the first fragment
-
-            /// Retransmission flag set when T1-RTX timeout occurred and this
-            /// chunk is still in the inflight queue
+            abandoned: Arc::new(AtomicBool::new(false)),
+            all_inflight: Arc::new(AtomicBool::new(false)),
             retransmit: false,
-            //TODO: head :ChunkPayloadData, // link to the head of the fragment
         })
     }
 
@@ -267,32 +251,21 @@ impl Chunk for ChunkPayloadData {
 
 impl ChunkPayloadData {
     pub(crate) fn abandoned(&self) -> bool {
-        /*TODO:
-        if p.head != nil {
-            return p.head._abandoned && p.head._allInflight
-        }
-        return p._abandoned && p._allInflight
+        let (abandoned, all_inflight) = (
+            self.abandoned.load(Ordering::SeqCst),
+            self.all_inflight.load(Ordering::SeqCst),
+        );
 
-         */
-        false
+        abandoned && all_inflight
     }
 
-    pub(crate) fn set_abandoned(&mut self, _abandoned: bool) {
-        /*TODO: if p.head != nil {
-            p.head._abandoned = abandoned
-            return
-        }
-        p._abandoned = abandoned*/
+    pub(crate) fn set_abandoned(&self, abandoned: bool) {
+        self.abandoned.store(abandoned, Ordering::SeqCst);
     }
 
     pub(crate) fn set_all_inflight(&mut self) {
-        /*TODO:
-        if p.ending_fragment {
-            if p.head != nil {
-                p.head._allInflight = true
-            } else {
-                p._allInflight = true
-            }
-        }*/
+        if self.ending_fragment {
+            self.all_inflight.store(true, Ordering::SeqCst);
+        }
     }
 }

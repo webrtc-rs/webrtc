@@ -8,11 +8,14 @@ use crate::param::param_state_cookie::ParamStateCookie;
 use crate::queue::control_queue::ControlQueue;
 use crate::queue::payload_queue::PayloadQueue;
 use crate::queue::pending_queue::PendingQueue;
-use crate::stream::Stream;
+use crate::stream::{ReliabilityType, Stream};
 use crate::timer::ack_timer::{AckTimer, ACK_INTERVAL};
 use crate::timer::rtx_timer::{RtoManager, RtxTimer, MAX_INIT_RETRANS, NO_MAX_RETRANS};
 use util::Conn;
 
+use crate::chunk::chunk_payload_data::{ChunkPayloadData, PayloadProtocolIdentifier};
+use crate::chunk::chunk_selective_ack::ChunkSelectiveAck;
+use crate::chunk::Chunk;
 use crate::packet::Packet;
 use crate::util::sna32gt;
 use rand::random;
@@ -20,6 +23,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 use std::sync::Arc;
+use std::time::SystemTime;
 use tokio::sync::Notify;
 
 pub(crate) const RECEIVE_MTU: u32 = 8192;
@@ -456,7 +460,7 @@ impl Association {
     // Shutdown initiates the shutdown sequence. The method blocks until the
     // shutdown sequence is completed and the connection is closed, or until the
     // passed context is done, in which case the context's error is returned.
-    func (a *Association) Shutdown(ctx context.Context) error {
+    fn Shutdown(ctx context.Context) error {
         a.log.Debugf("[%s] closing association..", a.name)
 
         state := a.get_state()
@@ -488,7 +492,7 @@ impl Association {
     }
 
     // Close ends the SCTP Association and cleans up any state
-    func (a *Association) Close() error {
+    fn Close() error {
         a.log.Debugf("[%s] closing association..", a.name)
 
         err := a.close()
@@ -506,7 +510,7 @@ impl Association {
         return err
     }
 
-    func (a *Association) close() error {
+    fn close() error {
         a.log.Debugf("[%s] closing association..", a.name)
 
         a.setState(closed)
@@ -521,7 +525,7 @@ impl Association {
         return err
     }
 
-    func (a *Association) closeAllTimers() {
+    fn closeAllTimers() {
         // Close all retransmission & ack timers
         a.t1init.close()
         a.t1cookie.close()
@@ -531,7 +535,7 @@ impl Association {
         a.ack_timer.close()
     }
 
-    func (a *Association) readLoop() {
+    fn readLoop() {
         var closeErr error
         defer func() {
             // also stop writeLoop, otherwise writeLoop can be leaked
@@ -579,7 +583,7 @@ impl Association {
         a.log.Debugf("[%s] readLoop exited %s", a.name, closeErr)
     }
 
-    func (a *Association) writeLoop() {
+    fn writeLoop() {
         a.log.Debugf("[%s] writeLoop entered", a.name)
         defer a.log.Debugf("[%s] writeLoop exited", a.name)
 
@@ -624,7 +628,7 @@ impl Association {
 
                   // unregisterStream un-registers a stream from the association
                   // The caller should hold the association write lock.
-                  func (a *Association) unregisterStream(s *Stream, err error) {
+                  fn unregisterStream(s *Stream, err error) {
                       s.lock.Lock()
                       defer s.lock.Unlock()
 
@@ -634,7 +638,7 @@ impl Association {
                   }
 
                   // handleInbound parses incoming raw packets
-                  func (a *Association) handleInbound(raw []byte) error {
+                  fn handleInbound(raw []byte) error {
                       p := &packet{}
                       if err := p.unmarshal(raw); err != nil {
                           a.log.Warnf("[%s] unable to parse SCTP packet %s", a.name, err)
@@ -660,8 +664,8 @@ impl Association {
                   }
 
                   // The caller should hold the lock
-                  func (a *Association) gatherDataPacketsToRetransmit(rawPackets [][]byte) [][]byte {
-                      for _, p := range a.getDataPacketsToRetransmit() {
+                  fn gatherDataPacketsToRetransmit(rawPackets [][]byte) [][]byte {
+                      for _, p := range a.get_data_packets_to_retransmit() {
                           raw, err := p.marshal()
                           if err != nil {
                               a.log.Warnf("[%s] failed to serialize a DATA packet to be retransmitted", a.name)
@@ -674,7 +678,7 @@ impl Association {
                   }
 
                   // The caller should hold the lock
-                  func (a *Association) gatherOutboundDataAndReconfigPackets(rawPackets [][]byte) [][]byte {
+                  fn gatherOutboundDataAndReconfigPackets(rawPackets [][]byte) [][]byte {
                       // Pop unsent data chunks from the pending queue to send as much as
                       // cwnd and rwnd allow.
                       chunks, sisToReset := a.popPendingDataChunksToSend()
@@ -682,7 +686,7 @@ impl Association {
                           // Start timer. (noop if already started)
                           a.log.Tracef("[%s] T3-rtx timer start (pt1)", a.name)
                           a.t3rtx.start(a.rto_mgr.getRTO())
-                          for _, p := range a.bundleDataChunksIntoPackets(chunks) {
+                          for _, p := range a.bundle_data_chunks_into_packets(chunks) {
                               raw, err := p.marshal()
                               if err != nil {
                                   a.log.Warnf("[%s] failed to serialize a DATA packet", a.name)
@@ -697,7 +701,7 @@ impl Association {
                               a.will_retransmit_reconfig = false
                               a.log.Debugf("[%s] retransmit %d RECONFIG chunk(s)", a.name, len(a.reconfigs))
                               for _, c := range a.reconfigs {
-                                  p := a.createPacket([]chunk{c})
+                                  p := a.create_packet([]chunk{c})
                                   raw, err := p.marshal()
                                   if err != nil {
                                       a.log.Warnf("[%s] failed to serialize a RECONFIG packet to be retransmitted", a.name)
@@ -708,7 +712,7 @@ impl Association {
                           }
 
                           if len(sisToReset) > 0 {
-                              rsn := a.generateNextRSN()
+                              rsn := a.generate_next_rsn()
                               tsn := a.my_next_tsn - 1
                               c := &chunkReconfig{
                                   paramA: &paramOutgoingResetRequest{
@@ -720,7 +724,7 @@ impl Association {
                               a.reconfigs[rsn] = c // store in the map for retransmission
                               a.log.Debugf("[%s] sending RECONFIG: rsn=%d tsn=%d streams=%v",
                                   a.name, rsn, a.my_next_tsn-1, sisToReset)
-                              p := a.createPacket([]chunk{c})
+                              p := a.create_packet([]chunk{c})
                               raw, err := p.marshal()
                               if err != nil {
                                   a.log.Warnf("[%s] failed to serialize a RECONFIG packet to be transmitted", a.name)
@@ -738,7 +742,7 @@ impl Association {
                   }
 
                   // The caller should hold the lock
-                  func (a *Association) gatherOutboundFastRetransmissionPackets(rawPackets [][]byte) [][]byte {
+                  fn gatherOutboundFastRetransmissionPackets(rawPackets [][]byte) [][]byte {
                       if a.will_retransmit_fast {
                           a.will_retransmit_fast = false
 
@@ -777,14 +781,14 @@ impl Association {
                               fastRetransSize += dataChunkSize
                               a.stats.inc_fast_retrans()
                               c.nSent++
-                              a.checkPartialReliabilityStatus(c)
+                              a.check_partial_reliability_status(c)
                               toFastRetrans = append(toFastRetrans, c)
                               a.log.Tracef("[%s] fast-retransmit: tsn=%d sent=%d htna=%d",
                                   a.name, c.tsn, c.nSent, a.fast_recover_exit_point)
                           }
 
                           if len(toFastRetrans) > 0 {
-                              raw, err := a.createPacket(toFastRetrans).marshal()
+                              raw, err := a.create_packet(toFastRetrans).marshal()
                               if err != nil {
                                   a.log.Warnf("[%s] failed to serialize a DATA packet to be fast-retransmitted", a.name)
                               } else {
@@ -797,12 +801,12 @@ impl Association {
                   }
 
                   // The caller should hold the lock
-                  func (a *Association) gatherOutboundSackPackets(rawPackets [][]byte) [][]byte {
+                  fn gatherOutboundSackPackets(rawPackets [][]byte) [][]byte {
                       if a.ack_state == ackStateImmediate {
                           a.ack_state = ackStateIdle
-                          sack := a.createSelectiveAckChunk()
+                          sack := a.create_selective_ack_chunk()
                           a.log.Debugf("[%s] sending SACK: %s", a.name, sack.String())
-                          raw, err := a.createPacket([]chunk{sack}).marshal()
+                          raw, err := a.create_packet([]chunk{sack}).marshal()
                           if err != nil {
                               a.log.Warnf("[%s] failed to serialize a SACK packet", a.name)
                           } else {
@@ -814,12 +818,12 @@ impl Association {
                   }
 
                   // The caller should hold the lock
-                  func (a *Association) gatherOutboundForwardTSNPackets(rawPackets [][]byte) [][]byte {
+                  fn gatherOutboundForwardTSNPackets(rawPackets [][]byte) [][]byte {
                       if a.will_send_forward_tsn {
                           a.will_send_forward_tsn = false
                           if sna32GT(a.advanced_peer_tsnack_point, a.cumulative_tsnack_point) {
                               fwdtsn := a.createForwardTSN()
-                              raw, err := a.createPacket([]chunk{fwdtsn}).marshal()
+                              raw, err := a.create_packet([]chunk{fwdtsn}).marshal()
                               if err != nil {
                                   a.log.Warnf("[%s] failed to serialize a Forward TSN packet", a.name)
                               } else {
@@ -831,7 +835,7 @@ impl Association {
                       return rawPackets
                   }
 
-                  func (a *Association) gatherOutboundShutdownPackets(rawPackets [][]byte) ([][]byte, bool) {
+                  fn gatherOutboundShutdownPackets(rawPackets [][]byte) ([][]byte, bool) {
                       ok := true
 
                       switch {
@@ -842,7 +846,7 @@ impl Association {
                               cumulativeTSNAck: a.cumulative_tsnack_point,
                           }
 
-                          raw, err := a.createPacket([]chunk{shutdown}).marshal()
+                          raw, err := a.create_packet([]chunk{shutdown}).marshal()
                           if err != nil {
                               a.log.Warnf("[%s] failed to serialize a Shutdown packet", a.name)
                           } else {
@@ -854,7 +858,7 @@ impl Association {
 
                           shutdownAck := &chunkShutdownAck{}
 
-                          raw, err := a.createPacket([]chunk{shutdownAck}).marshal()
+                          raw, err := a.create_packet([]chunk{shutdownAck}).marshal()
                           if err != nil {
                               a.log.Warnf("[%s] failed to serialize a ShutdownAck packet", a.name)
                           } else {
@@ -866,7 +870,7 @@ impl Association {
 
                           shutdownComplete := &chunkShutdownComplete{}
 
-                          raw, err := a.createPacket([]chunk{shutdownComplete}).marshal()
+                          raw, err := a.create_packet([]chunk{shutdownComplete}).marshal()
                           if err != nil {
                               a.log.Warnf("[%s] failed to serialize a ShutdownComplete packet", a.name)
                           } else {
@@ -880,7 +884,7 @@ impl Association {
 
                   // gatherOutbound gathers outgoing packets. The returned bool value set to
                   // false means the association should be closed down after the final send.
-                  func (a *Association) gatherOutbound() ([][]byte, bool) {
+                  fn gatherOutbound() ([][]byte, bool) {
                       a.lock.Lock()
                       defer a.lock.Unlock()
 
@@ -964,7 +968,7 @@ impl Association {
 
                   // setState atomically sets the state of the Association.
                   // The caller should hold the lock.
-                  func (a *Association) setState(newState uint32) {
+                  fn setState(newState uint32) {
                       oldState := atomic.SwapUint32(&a.state, newState)
                       if newState != oldState {
                           a.log.Debugf("[%s] state change: '%s' => '%s'",
@@ -991,1264 +995,1285 @@ impl Association {
         //return atomic.LoadUint64(&a.bytes_received)
     }
     /*
-                  func setSupportedExtensions(init *chunkInitCommon) {
-                      // nolint:godox
-                      // TODO RFC5061 https://tools.ietf.org/html/rfc6525#section-5.2
-                      // An implementation supporting this (Supported Extensions Parameter)
-                      // extension MUST list the ASCONF, the ASCONF-ACK, and the AUTH chunks
-                      // in its INIT and INIT-ACK parameters.
-                      init.params = append(init.params, &paramSupportedExtensions{
-                          ChunkTypes: []chunkType{ctReconfig, ctForwardTSN},
-                      })
-                  }
-
-                  // The caller should hold the lock.
-                  func (a *Association) handleInit(p *packet, i *chunkInit) ([]*packet, error) {
-                      state := a.get_state()
-                      a.log.Debugf("[%s] chunkInit received in state '%s'", a.name, getAssociationStateString(state))
-
-                      // https://tools.ietf.org/html/rfc4960#section-5.2.1
-                      // Upon receipt of an INIT in the COOKIE-WAIT state, an endpoint MUST
-                      // respond with an INIT ACK using the same parameters it sent in its
-                      // original INIT chunk (including its Initiate Tag, unchanged).  When
-                      // responding, the endpoint MUST send the INIT ACK back to the same
-                      // address that the original INIT (sent by this endpoint) was sent.
-
-                      if state != closed && state != CookieWait && state != CookieEchoed {
-                          // 5.2.2.  Unexpected INIT in States Other than CLOSED, COOKIE-ECHOED,
-                          //        COOKIE-WAIT, and SHUTDOWN-ACK-SENT
-                          return nil, fmt.Errorf("%w: %s", errHandleInitState, getAssociationStateString(state))
-                      }
-
-                      // Should we be setting any of these permanently until we've ACKed further?
-                      a.my_max_num_inbound_streams = min16(i.numInboundStreams, a.my_max_num_inbound_streams)
-                      a.my_max_num_outbound_streams = min16(i.numOutboundStreams, a.my_max_num_outbound_streams)
-                      a.peer_verification_tag = i.initiateTag
-                      a.source_port = p.destination_port
-                      a.destination_port = p.source_port
-
-                      // 13.2 This is the last TSN received in sequence.  This value
-                      // is set initially by taking the peer's initial TSN,
-                      // received in the INIT or INIT ACK chunk, and
-                      // subtracting one from it.
-                      a.peer_last_tsn = i.initialTSN - 1
-
-                      for _, param := range i.params {
-                          switch v := param.(type) { // nolint:gocritic
-                          case *paramSupportedExtensions:
-                              for _, t := range v.ChunkTypes {
-                                  if t == ctForwardTSN {
-                                      a.log.Debugf("[%s] use ForwardTSN (on init)\n", a.name)
-                                      a.use_forward_tsn = true
-                                  }
-                              }
-                          }
-                      }
-                      if !a.use_forward_tsn {
-                          a.log.Warnf("[%s] not using ForwardTSN (on init)\n", a.name)
-                      }
-
-                      outbound := &packet{}
-                      outbound.verificationTag = a.peer_verification_tag
-                      outbound.source_port = a.source_port
-                      outbound.destination_port = a.destination_port
-
-                      initAck := &chunkInitAck{}
-
-                      initAck.initialTSN = a.my_next_tsn
-                      initAck.numOutboundStreams = a.my_max_num_outbound_streams
-                      initAck.numInboundStreams = a.my_max_num_inbound_streams
-                      initAck.initiateTag = a.my_verification_tag
-                      initAck.advertisedReceiverWindowCredit = a.max_receive_buffer_size
-
-                      if a.my_cookie == nil {
-                          var err error
-                          if a.my_cookie, err = newRandomStateCookie(); err != nil {
-                              return nil, err
-                          }
-                      }
-
-                      initAck.params = []param{a.my_cookie}
-
-                      setSupportedExtensions(&initAck.chunkInitCommon)
-
-                      outbound.chunks = []chunk{initAck}
-
-                      return pack(outbound), nil
-                  }
-
-                  // The caller should hold the lock.
-                  func (a *Association) handleInitAck(p *packet, i *chunkInitAck) error {
-                      state := a.get_state()
-                      a.log.Debugf("[%s] chunkInitAck received in state '%s'", a.name, getAssociationStateString(state))
-                      if state != CookieWait {
-                          // RFC 4960
-                          // 5.2.3.  Unexpected INIT ACK
-                          //   If an INIT ACK is received by an endpoint in any state other than the
-                          //   COOKIE-WAIT state, the endpoint should discard the INIT ACK chunk.
-                          //   An unexpected INIT ACK usually indicates the processing of an old or
-                          //   duplicated INIT chunk.
-                          return nil
-                      }
-
-                      a.my_max_num_inbound_streams = min16(i.numInboundStreams, a.my_max_num_inbound_streams)
-                      a.my_max_num_outbound_streams = min16(i.numOutboundStreams, a.my_max_num_outbound_streams)
-                      a.peer_verification_tag = i.initiateTag
-                      a.peer_last_tsn = i.initialTSN - 1
-                      if a.source_port != p.destination_port ||
-                          a.destination_port != p.source_port {
-                          a.log.Warnf("[%s] handleInitAck: port mismatch", a.name)
-                          return nil
-                      }
-
-                      a.rwnd = i.advertisedReceiverWindowCredit
-                      a.log.Debugf("[%s] initial rwnd=%d", a.name, a.rwnd)
-
-                      // RFC 4690 Sec 7.2.1
-                      //  o  The initial value of ssthresh MAY be arbitrarily high (for
-                      //     example, implementations MAY use the size of the receiver
-                      //     advertised window).
-                      a.ssthresh = a.rwnd
-                      a.log.Tracef("[%s] updated cwnd=%d ssthresh=%d inflight=%d (INI)",
-                          a.name, a.cwnd, a.ssthresh, a.inflight_queue.getNumBytes())
-
-                      a.t1init.stop()
-                      a.stored_init = nil
-
-                      var cookieParam *paramStateCookie
-                      for _, param := range i.params {
-                          switch v := param.(type) {
-                          case *paramStateCookie:
-                              cookieParam = v
-                          case *paramSupportedExtensions:
-                              for _, t := range v.ChunkTypes {
-                                  if t == ctForwardTSN {
-                                      a.log.Debugf("[%s] use ForwardTSN (on initAck)\n", a.name)
-                                      a.use_forward_tsn = true
-                                  }
-                              }
-                          }
-                      }
-                      if !a.use_forward_tsn {
-                          a.log.Warnf("[%s] not using ForwardTSN (on initAck)\n", a.name)
-                      }
-                      if cookieParam == nil {
-                          return errInitAckNoCookie
-                      }
-
-                      a.stored_cookie_echo = &chunkCookieEcho{}
-                      a.stored_cookie_echo.cookie = cookieParam.cookie
-
-                      err := a.send_cookie_echo()
-                      if err != nil {
-                          a.log.Errorf("[%s] failed to send init: %s", a.name, err.Error())
-                      }
-
-                      a.t1cookie.start(a.rto_mgr.getRTO())
-                      a.setState(CookieEchoed)
-                      return nil
-                  }
-
-                  // The caller should hold the lock.
-                  func (a *Association) handleHeartbeat(c *chunkHeartbeat) []*packet {
-                      a.log.Tracef("[%s] chunkHeartbeat", a.name)
-                      hbi, ok := c.params[0].(*paramHeartbeatInfo)
-                      if !ok {
-                          a.log.Warnf("[%s] failed to handle Heartbeat, no ParamHeartbeatInfo", a.name)
-                      }
-
-                      return pack(&packet{
-                          verificationTag: a.peer_verification_tag,
-                          source_port:      a.source_port,
-                          destination_port: a.destination_port,
-                          chunks: []chunk{&chunkHeartbeatAck{
-                              params: []param{
-                                  &paramHeartbeatInfo{
-                                      heartbeatInformation: hbi.heartbeatInformation,
-                                  },
-                              },
-                          }},
-                      })
-                  }
-
-                  // The caller should hold the lock.
-                  func (a *Association) handleCookieEcho(c *chunkCookieEcho) []*packet {
-                      state := a.get_state()
-                      a.log.Debugf("[%s] COOKIE-ECHO received in state '%s'", a.name, getAssociationStateString(state))
-
-                      if a.my_cookie == nil {
-                          a.log.Debugf("[%s] COOKIE-ECHO received before initialization", a.name)
-                          return nil
-                      }
-                      switch state {
-                      default:
-                          return nil
-                      case Established:
-                          if !bytes.Equal(a.my_cookie.cookie, c.cookie) {
-                              return nil
-                          }
-                      case closed, CookieWait, CookieEchoed:
-                          if !bytes.Equal(a.my_cookie.cookie, c.cookie) {
-                              return nil
+                          func setSupportedExtensions(init *chunkInitCommon) {
+                              // nolint:godox
+                              // TODO RFC5061 https://tools.ietf.org/html/rfc6525#section-5.2
+                              // An implementation supporting this (Supported Extensions Parameter)
+                              // extension MUST list the ASCONF, the ASCONF-ACK, and the AUTH chunks
+                              // in its INIT and INIT-ACK parameters.
+                              init.params = append(init.params, &paramSupportedExtensions{
+                                  ChunkTypes: []chunkType{ctReconfig, ctForwardTSN},
+                              })
                           }
 
-                          a.t1init.stop()
-                          a.stored_init = nil
+                          // The caller should hold the lock.
+                          fn handleInit(p *packet, i *chunkInit) ([]*packet, error) {
+                              state := a.get_state()
+                              a.log.Debugf("[%s] chunkInit received in state '%s'", a.name, getAssociationStateString(state))
 
-                          a.t1cookie.stop()
-                          a.stored_cookie_echo = nil
+                              // https://tools.ietf.org/html/rfc4960#section-5.2.1
+                              // Upon receipt of an INIT in the COOKIE-WAIT state, an endpoint MUST
+                              // respond with an INIT ACK using the same parameters it sent in its
+                              // original INIT chunk (including its Initiate Tag, unchanged).  When
+                              // responding, the endpoint MUST send the INIT ACK back to the same
+                              // address that the original INIT (sent by this endpoint) was sent.
 
-                          a.setState(Established)
-                          a.handshakeCompletedCh <- nil
-                      }
-
-                      p := &packet{
-                          verificationTag: a.peer_verification_tag,
-                          source_port:      a.source_port,
-                          destination_port: a.destination_port,
-                          chunks:          []chunk{&chunkCookieAck{}},
-                      }
-                      return pack(p)
-                  }
-
-                  // The caller should hold the lock.
-                  func (a *Association) handleCookieAck() {
-                      state := a.get_state()
-                      a.log.Debugf("[%s] COOKIE-ACK received in state '%s'", a.name, getAssociationStateString(state))
-                      if state != CookieEchoed {
-                          // RFC 4960
-                          // 5.2.5.  Handle Duplicate COOKIE-ACK.
-                          //   At any state other than COOKIE-ECHOED, an endpoint should silently
-                          //   discard a received COOKIE ACK chunk.
-                          return
-                      }
-
-                      a.t1cookie.stop()
-                      a.stored_cookie_echo = nil
-
-                      a.setState(Established)
-                      a.handshakeCompletedCh <- nil
-                  }
-
-                  // The caller should hold the lock.
-                  func (a *Association) handle_data(d *chunkPayloadData) []*packet {
-                      a.log.Tracef("[%s] DATA: tsn=%d immediateSack=%v len=%d",
-                          a.name, d.tsn, d.immediateSack, len(d.userData))
-                      a.stats.inc_datas()
-
-                      canPush := a.payload_queue.canPush(d, a.peer_last_tsn)
-                      if canPush {
-                          s := a.getOrCreateStream(d.streamIdentifier)
-                          if s == nil {
-                              // silentely discard the data. (sender will retry on T3-rtx timeout)
-                              // see pion/sctp#30
-                              a.log.Debugf("discard %d", d.streamSequenceNumber)
-                              return nil
-                          }
-
-                          if a.getMyReceiverWindowCredit() > 0 {
-                              // Pass the new chunk to stream level as soon as it arrives
-                              a.payload_queue.push(d, a.peer_last_tsn)
-                              s.handle_data(d)
-                          } else {
-                              // Receive buffer is full
-                              lastTSN, ok := a.payload_queue.getLastTSNReceived()
-                              if ok && sna32LT(d.tsn, lastTSN) {
-                                  a.log.Debugf("[%s] receive buffer full, but accepted as this is a missing chunk with tsn=%d ssn=%d", a.name, d.tsn, d.streamSequenceNumber)
-                                  a.payload_queue.push(d, a.peer_last_tsn)
-                                  s.handle_data(d)
-                              } else {
-                                  a.log.Debugf("[%s] receive buffer full. dropping DATA with tsn=%d ssn=%d", a.name, d.tsn, d.streamSequenceNumber)
-                              }
-                          }
-                      }
-
-                      return a.handlePeerLastTSNAndAcknowledgement(d.immediateSack)
-                  }
-
-                  // A common routine for handle_data and handleForwardTSN routines
-                  // The caller should hold the lock.
-                  func (a *Association) handlePeerLastTSNAndAcknowledgement(sackImmediately bool) []*packet {
-                      var reply []*packet
-
-                      // Try to advance peer_last_tsn
-
-                      // From RFC 3758 Sec 3.6:
-                      //   .. and then MUST further advance its cumulative TSN point locally
-                      //   if possible
-                      // Meaning, if peer_last_tsn+1 points to a chunk that is received,
-                      // advance peer_last_tsn until peer_last_tsn+1 points to unreceived chunk.
-                      for {
-                          if _, popOk := a.payload_queue.pop(a.peer_last_tsn + 1); !popOk {
-                              break
-                          }
-                          a.peer_last_tsn++
-
-                          for _, rstReq := range a.reconfig_requests {
-                              resp := a.resetStreamsIfAny(rstReq)
-                              if resp != nil {
-                                  a.log.Debugf("[%s] RESET RESPONSE: %+v", a.name, resp)
-                                  reply = append(reply, resp)
-                              }
-                          }
-                      }
-
-                      hasPacketLoss := (a.payload_queue.size() > 0)
-                      if hasPacketLoss {
-                          a.log.Tracef("[%s] packetloss: %s", a.name, a.payload_queue.getGapAckBlocksString(a.peer_last_tsn))
-                      }
-
-                      if (a.ack_state != ackStateImmediate && !sackImmediately && !hasPacketLoss && a.ack_mode == ackModeNormal) || a.ack_mode == ackModeAlwaysDelay {
-                          if a.ack_state == ackStateIdle {
-                              a.delayed_ack_triggered = true
-                          } else {
-                              a.immediate_ack_triggered = true
-                          }
-                      } else {
-                          a.immediate_ack_triggered = true
-                      }
-
-                      return reply
-                  }
-
-                  // The caller should hold the lock.
-                  func (a *Association) getMyReceiverWindowCredit() uint32 {
-                      var bytesQueued uint32
-                      for _, s := range a.streams {
-                          bytesQueued += uint32(s.get_num_bytes_in_reassembly_queue())
-                      }
-
-                      if bytesQueued >= a.max_receive_buffer_size {
-                          return 0
-                      }
-                      return a.max_receive_buffer_size - bytesQueued
-                  }
-
-                  // OpenStream opens a stream
-                  func (a *Association) OpenStream(streamIdentifier uint16, defaultPayloadType PayloadProtocolIdentifier) (*Stream, error) {
-                      a.lock.Lock()
-                      defer a.lock.Unlock()
-
-                      if _, ok := a.streams[streamIdentifier]; ok {
-                          return nil, fmt.Errorf("%w: %d", errStreamAlreadyExist, streamIdentifier)
-                      }
-
-                      s := a.createStream(streamIdentifier, false)
-                      s.setDefaultPayloadType(defaultPayloadType)
-
-                      return s, nil
-                  }
-
-                  // AcceptStream accepts a stream
-                  func (a *Association) AcceptStream() (*Stream, error) {
-                      s, ok := <-a.acceptCh
-                      if !ok {
-                          return nil, io.EOF // no more incoming streams
-                      }
-                      return s, nil
-                  }
-
-                  // createStream creates a stream. The caller should hold the lock and check no stream exists for this id.
-                  func (a *Association) createStream(streamIdentifier uint16, accept bool) *Stream {
-                      s := &Stream{
-                          association:      a,
-                          streamIdentifier: streamIdentifier,
-                          reassemblyQueue:  newReassemblyQueue(streamIdentifier),
-                          log:              a.log,
-                          name:             fmt.Sprintf("%d:%s", streamIdentifier, a.name),
-                      }
-
-                      s.readNotifier = sync.NewCond(&s.lock)
-
-                      if accept {
-                          select {
-                          case a.acceptCh <- s:
-                              a.streams[streamIdentifier] = s
-                              a.log.Debugf("[%s] accepted a new stream (streamIdentifier: %d)",
-                                  a.name, streamIdentifier)
-                          default:
-                              a.log.Debugf("[%s] dropped a new stream (acceptCh size: %d)",
-                                  a.name, len(a.acceptCh))
-                              return nil
-                          }
-                      } else {
-                          a.streams[streamIdentifier] = s
-                      }
-
-                      return s
-                  }
-
-                  // getOrCreateStream gets or creates a stream. The caller should hold the lock.
-                  func (a *Association) getOrCreateStream(streamIdentifier uint16) *Stream {
-                      if s, ok := a.streams[streamIdentifier]; ok {
-                          return s
-                      }
-
-                      return a.createStream(streamIdentifier, true)
-                  }
-
-                  // The caller should hold the lock.
-                  func (a *Association) processSelectiveAck(d *chunkSelectiveAck) (map[uint16]int, uint32, error) { // nolint:gocognit
-                      bytesAckedPerStream := map[uint16]int{}
-
-                      // New ack point, so pop all ACKed packets from inflight_queue
-                      // We add 1 because the "currentAckPoint" has already been popped from the inflight queue
-                      // For the first SACK we take care of this by setting the ackpoint to cumAck - 1
-                      for i := a.cumulative_tsnack_point + 1; sna32LTE(i, d.cumulativeTSNAck); i++ {
-                          c, ok := a.inflight_queue.pop(i)
-                          if !ok {
-                              return nil, 0, fmt.Errorf("%w: %v", errInflightQueueTSNPop, i)
-                          }
-
-                          if !c.acked {
-                              // RFC 4096 sec 6.3.2.  Retransmission Timer Rules
-                              //   R3)  Whenever a SACK is received that acknowledges the DATA chunk
-                              //        with the earliest outstanding TSN for that address, restart the
-                              //        T3-rtx timer for that address with its current RTO (if there is
-                              //        still outstanding data on that address).
-                              if i == a.cumulative_tsnack_point+1 {
-                                  // T3 timer needs to be reset. Stop it for now.
-                                  a.t3rtx.stop()
+                              if state != closed && state != CookieWait && state != CookieEchoed {
+                                  // 5.2.2.  Unexpected INIT in States Other than CLOSED, COOKIE-ECHOED,
+                                  //        COOKIE-WAIT, and SHUTDOWN-ACK-SENT
+                                  return nil, fmt.Errorf("%w: %s", errHandleInitState, getAssociationStateString(state))
                               }
 
-                              nBytesAcked := len(c.userData)
+                              // Should we be setting any of these permanently until we've ACKed further?
+                              a.my_max_num_inbound_streams = min16(i.numInboundStreams, a.my_max_num_inbound_streams)
+                              a.my_max_num_outbound_streams = min16(i.numOutboundStreams, a.my_max_num_outbound_streams)
+                              a.peer_verification_tag = i.initiateTag
+                              a.source_port = p.destination_port
+                              a.destination_port = p.source_port
 
-                              // Sum the number of bytes acknowledged per stream
-                              if amount, ok := bytesAckedPerStream[c.streamIdentifier]; ok {
-                                  bytesAckedPerStream[c.streamIdentifier] = amount + nBytesAcked
-                              } else {
-                                  bytesAckedPerStream[c.streamIdentifier] = nBytesAcked
-                              }
+                              // 13.2 This is the last TSN received in sequence.  This value
+                              // is set initially by taking the peer's initial TSN,
+                              // received in the INIT or INIT ACK chunk, and
+                              // subtracting one from it.
+                              a.peer_last_tsn = i.initialTSN - 1
 
-                              // RFC 4960 sec 6.3.1.  RTO Calculation
-                              //   C4)  When data is in flight and when allowed by rule C5 below, a new
-                              //        RTT measurement MUST be made each round trip.  Furthermore, new
-                              //        RTT measurements SHOULD be made no more than once per round trip
-                              //        for a given destination transport address.
-                              //   C5)  Karn's algorithm: RTT measurements MUST NOT be made using
-                              //        packets that were retransmitted (and thus for which it is
-                              //        ambiguous whether the reply was for the first instance of the
-                              //        chunk or for a later instance)
-                              if c.nSent == 1 && sna32GTE(c.tsn, a.min_tsn2measure_rtt) {
-                                  a.min_tsn2measure_rtt = a.my_next_tsn
-                                  rtt := time.Since(c.since).Seconds() * 1000.0
-                                  srtt := a.rto_mgr.setNewRTT(rtt)
-                                  a.log.Tracef("[%s] SACK: measured-rtt=%f srtt=%f new-rto=%f",
-                                      a.name, rtt, srtt, a.rto_mgr.getRTO())
-                              }
-                          }
-
-                          if a.in_fast_recovery && c.tsn == a.fast_recover_exit_point {
-                              a.log.Debugf("[%s] exit fast-recovery", a.name)
-                              a.in_fast_recovery = false
-                          }
-                      }
-
-                      htna := d.cumulativeTSNAck
-
-                      // Mark selectively acknowledged chunks as "acked"
-                      for _, g := range d.gapAckBlocks {
-                          for i := g.start; i <= g.end; i++ {
-                              tsn := d.cumulativeTSNAck + uint32(i)
-                              c, ok := a.inflight_queue.get(tsn)
-                              if !ok {
-                                  return nil, 0, fmt.Errorf("%w: %v", errTSNRequestNotExist, tsn)
-                              }
-
-                              if !c.acked {
-                                  nBytesAcked := a.inflight_queue.markAsAcked(tsn)
-
-                                  // Sum the number of bytes acknowledged per stream
-                                  if amount, ok := bytesAckedPerStream[c.streamIdentifier]; ok {
-                                      bytesAckedPerStream[c.streamIdentifier] = amount + nBytesAcked
-                                  } else {
-                                      bytesAckedPerStream[c.streamIdentifier] = nBytesAcked
-                                  }
-
-                                  a.log.Tracef("[%s] tsn=%d has been sacked", a.name, c.tsn)
-
-                                  if c.nSent == 1 {
-                                      a.min_tsn2measure_rtt = a.my_next_tsn
-                                      rtt := time.Since(c.since).Seconds() * 1000.0
-                                      srtt := a.rto_mgr.setNewRTT(rtt)
-                                      a.log.Tracef("[%s] SACK: measured-rtt=%f srtt=%f new-rto=%f",
-                                          a.name, rtt, srtt, a.rto_mgr.getRTO())
-                                  }
-
-                                  if sna32LT(htna, tsn) {
-                                      htna = tsn
-                                  }
-                              }
-                          }
-                      }
-
-                      return bytesAckedPerStream, htna, nil
-                  }
-
-                  // The caller should hold the lock.
-                  func (a *Association) onCumulativeTSNAckPointAdvanced(totalBytesAcked int) {
-                      // RFC 4096, sec 6.3.2.  Retransmission Timer Rules
-                      //   R2)  Whenever all outstanding data sent to an address have been
-                      //        acknowledged, turn off the T3-rtx timer of that address.
-                      if a.inflight_queue.size() == 0 {
-                          a.log.Tracef("[%s] SACK: no more packet in-flight (pending=%d)", a.name, a.pending_queue.size())
-                          a.t3rtx.stop()
-                      } else {
-                          a.log.Tracef("[%s] T3-rtx timer start (pt2)", a.name)
-                          a.t3rtx.start(a.rto_mgr.getRTO())
-                      }
-
-                      // Update congestion control parameters
-                      if a.cwnd <= a.ssthresh {
-                          // RFC 4096, sec 7.2.1.  Slow-Start
-                          //   o  When cwnd is less than or equal to ssthresh, an SCTP endpoint MUST
-                          //		use the slow-start algorithm to increase cwnd only if the current
-                          //      congestion window is being fully utilized, an incoming SACK
-                          //      advances the Cumulative TSN Ack Point, and the data sender is not
-                          //      in Fast Recovery.  Only when these three conditions are met can
-                          //      the cwnd be increased; otherwise, the cwnd MUST not be increased.
-                          //		If these conditions are met, then cwnd MUST be increased by, at
-                          //      most, the lesser of 1) the total size of the previously
-                          //      outstanding DATA chunk(s) acknowledged, and 2) the destination's
-                          //      path MTU.
-                          if !a.in_fast_recovery &&
-                              a.pending_queue.size() > 0 {
-                              a.cwnd += min32(uint32(totalBytesAcked), a.cwnd) // TCP way
-                              // a.cwnd += min32(uint32(totalBytesAcked), a.mtu) // SCTP way (slow)
-                              a.log.Tracef("[%s] updated cwnd=%d ssthresh=%d acked=%d (SS)",
-                                  a.name, a.cwnd, a.ssthresh, totalBytesAcked)
-                          } else {
-                              a.log.Tracef("[%s] cwnd did not grow: cwnd=%d ssthresh=%d acked=%d FR=%v pending=%d",
-                                  a.name, a.cwnd, a.ssthresh, totalBytesAcked, a.in_fast_recovery, a.pending_queue.size())
-                          }
-                      } else {
-                          // RFC 4096, sec 7.2.2.  Congestion Avoidance
-                          //   o  Whenever cwnd is greater than ssthresh, upon each SACK arrival
-                          //      that advances the Cumulative TSN Ack Point, increase
-                          //      partial_bytes_acked by the total number of bytes of all new chunks
-                          //      acknowledged in that SACK including chunks acknowledged by the new
-                          //      Cumulative TSN Ack and by Gap Ack Blocks.
-                          a.partial_bytes_acked += uint32(totalBytesAcked)
-
-                          //   o  When partial_bytes_acked is equal to or greater than cwnd and
-                          //      before the arrival of the SACK the sender had cwnd or more bytes
-                          //      of data outstanding (i.e., before arrival of the SACK, flight size
-                          //      was greater than or equal to cwnd), increase cwnd by MTU, and
-                          //      reset partial_bytes_acked to (partial_bytes_acked - cwnd).
-                          if a.partial_bytes_acked >= a.cwnd && a.pending_queue.size() > 0 {
-                              a.partial_bytes_acked -= a.cwnd
-                              a.cwnd += a.mtu
-                              a.log.Tracef("[%s] updated cwnd=%d ssthresh=%d acked=%d (CA)",
-                                  a.name, a.cwnd, a.ssthresh, totalBytesAcked)
-                          }
-                      }
-                  }
-
-                  // The caller should hold the lock.
-                  func (a *Association) processFastRetransmission(cumTSNAckPoint, htna uint32, cumTSNAckPointAdvanced bool) error {
-                      // HTNA algorithm - RFC 4960 Sec 7.2.4
-                      // Increment missIndicator of each chunks that the SACK reported missing
-                      // when either of the following is met:
-                      // a)  Not in fast-recovery
-                      //     miss indications are incremented only for missing TSNs prior to the
-                      //     highest TSN newly acknowledged in the SACK.
-                      // b)  In fast-recovery AND the Cumulative TSN Ack Point advanced
-                      //     the miss indications are incremented for all TSNs reported missing
-                      //     in the SACK.
-                      if !a.in_fast_recovery || (a.in_fast_recovery && cumTSNAckPointAdvanced) {
-                          var maxTSN uint32
-                          if !a.in_fast_recovery {
-                              // a) increment only for missing TSNs prior to the HTNA
-                              maxTSN = htna
-                          } else {
-                              // b) increment for all TSNs reported missing
-                              maxTSN = cumTSNAckPoint + uint32(a.inflight_queue.size()) + 1
-                          }
-
-                          for tsn := cumTSNAckPoint + 1; sna32LT(tsn, maxTSN); tsn++ {
-                              c, ok := a.inflight_queue.get(tsn)
-                              if !ok {
-                                  return fmt.Errorf("%w: %v", errTSNRequestNotExist, tsn)
-                              }
-                              if !c.acked && !c.abandoned() && c.missIndicator < 3 {
-                                  c.missIndicator++
-                                  if c.missIndicator == 3 {
-                                      if !a.in_fast_recovery {
-                                          // 2)  If not in Fast Recovery, adjust the ssthresh and cwnd of the
-                                          //     destination address(es) to which the missing DATA chunks were
-                                          //     last sent, according to the formula described in Section 7.2.3.
-                                          a.in_fast_recovery = true
-                                          a.fast_recover_exit_point = htna
-                                          a.ssthresh = max32(a.cwnd/2, 4*a.mtu)
-                                          a.cwnd = a.ssthresh
-                                          a.partial_bytes_acked = 0
-                                          a.will_retransmit_fast = true
-
-                                          a.log.Tracef("[%s] updated cwnd=%d ssthresh=%d inflight=%d (FR)",
-                                              a.name, a.cwnd, a.ssthresh, a.inflight_queue.getNumBytes())
+                              for _, param := range i.params {
+                                  switch v := param.(type) { // nolint:gocritic
+                                  case *paramSupportedExtensions:
+                                      for _, t := range v.ChunkTypes {
+                                          if t == ctForwardTSN {
+                                              a.log.Debugf("[%s] use ForwardTSN (on init)\n", a.name)
+                                              a.use_forward_tsn = true
+                                          }
                                       }
                                   }
                               }
-                          }
-                      }
-
-                      if a.in_fast_recovery && cumTSNAckPointAdvanced {
-                          a.will_retransmit_fast = true
-                      }
-
-                      return nil
-                  }
-
-                  // The caller should hold the lock.
-                  func (a *Association) handleSack(d *chunkSelectiveAck) error {
-                      a.log.Tracef("[%s] SACK: cumTSN=%d a_rwnd=%d", a.name, d.cumulativeTSNAck, d.advertisedReceiverWindowCredit)
-                      state := a.get_state()
-                      if state != Established && state != ShutdownPending && state != ShutdownReceived {
-                          return nil
-                      }
-
-                      a.stats.inc_sacks()
-
-                      if sna32GT(a.cumulative_tsnack_point, d.cumulativeTSNAck) {
-                          // RFC 4960 sec 6.2.1.  Processing a Received SACK
-                          // D)
-                          //   i) If Cumulative TSN Ack is less than the Cumulative TSN Ack
-                          //      Point, then drop the SACK.  Since Cumulative TSN Ack is
-                          //      monotonically increasing, a SACK whose Cumulative TSN Ack is
-                          //      less than the Cumulative TSN Ack Point indicates an out-of-
-                          //      order SACK.
-
-                          a.log.Debugf("[%s] SACK Cumulative ACK %v is older than ACK point %v",
-                              a.name,
-                              d.cumulativeTSNAck,
-                              a.cumulative_tsnack_point)
-
-                          return nil
-                      }
-
-                      // Process selective ack
-                      bytesAckedPerStream, htna, err := a.processSelectiveAck(d)
-                      if err != nil {
-                          return err
-                      }
-
-                      var totalBytesAcked int
-                      for _, nBytesAcked := range bytesAckedPerStream {
-                          totalBytesAcked += nBytesAcked
-                      }
-
-                      cumTSNAckPointAdvanced := false
-                      if sna32LT(a.cumulative_tsnack_point, d.cumulativeTSNAck) {
-                          a.log.Tracef("[%s] SACK: cumTSN advanced: %d -> %d",
-                              a.name,
-                              a.cumulative_tsnack_point,
-                              d.cumulativeTSNAck)
-
-                          a.cumulative_tsnack_point = d.cumulativeTSNAck
-                          cumTSNAckPointAdvanced = true
-                          a.onCumulativeTSNAckPointAdvanced(totalBytesAcked)
-                      }
-
-                      for si, nBytesAcked := range bytesAckedPerStream {
-                          if s, ok := a.streams[si]; ok {
-                              a.lock.Unlock()
-                              s.onBufferReleased(nBytesAcked)
-                              a.lock.Lock()
-                          }
-                      }
-
-                      // New rwnd value
-                      // RFC 4960 sec 6.2.1.  Processing a Received SACK
-                      // D)
-                      //   ii) Set rwnd equal to the newly received a_rwnd minus the number
-                      //       of bytes still outstanding after processing the Cumulative
-                      //       TSN Ack and the Gap Ack Blocks.
-
-                      // bytes acked were already subtracted by markAsAcked() method
-                      bytesOutstanding := uint32(a.inflight_queue.getNumBytes())
-                      if bytesOutstanding >= d.advertisedReceiverWindowCredit {
-                          a.rwnd = 0
-                      } else {
-                          a.rwnd = d.advertisedReceiverWindowCredit - bytesOutstanding
-                      }
-
-                      err = a.processFastRetransmission(d.cumulativeTSNAck, htna, cumTSNAckPointAdvanced)
-                      if err != nil {
-                          return err
-                      }
-
-                      if a.use_forward_tsn {
-                          // RFC 3758 Sec 3.5 C1
-                          if sna32LT(a.advanced_peer_tsnack_point, a.cumulative_tsnack_point) {
-                              a.advanced_peer_tsnack_point = a.cumulative_tsnack_point
-                          }
-
-                          // RFC 3758 Sec 3.5 C2
-                          for i := a.advanced_peer_tsnack_point + 1; ; i++ {
-                              c, ok := a.inflight_queue.get(i)
-                              if !ok {
-                                  break
-                              }
-                              if !c.abandoned() {
-                                  break
-                              }
-                              a.advanced_peer_tsnack_point = i
-                          }
-
-                          // RFC 3758 Sec 3.5 C3
-                          if sna32GT(a.advanced_peer_tsnack_point, a.cumulative_tsnack_point) {
-                              a.will_send_forward_tsn = true
-                          }
-                          a.awake_write_loop()
-                      }
-
-                      a.postprocessSack(state, cumTSNAckPointAdvanced)
-
-                      return nil
-                  }
-
-                  // The caller must hold the lock. This method was only added because the
-                  // linter was complaining about the "cognitive complexity" of handleSack.
-                  func (a *Association) postprocessSack(state uint32, shouldAwakeWriteLoop bool) {
-                      switch {
-                      case a.inflight_queue.size() > 0:
-                          // Start timer. (noop if already started)
-                          a.log.Tracef("[%s] T3-rtx timer start (pt3)", a.name)
-                          a.t3rtx.start(a.rto_mgr.getRTO())
-                      case state == ShutdownPending:
-                          // No more outstanding, send shutdown.
-                          shouldAwakeWriteLoop = true
-                          a.will_send_shutdown = true
-                          a.setState(ShutdownSent)
-                      case state == ShutdownReceived:
-                          // No more outstanding, send shutdown ack.
-                          shouldAwakeWriteLoop = true
-                          a.will_send_shutdown_ack = true
-                          a.setState(ShutdownAckSent)
-                      }
-
-                      if shouldAwakeWriteLoop {
-                          a.awake_write_loop()
-                      }
-                  }
-
-                  // The caller should hold the lock.
-                  func (a *Association) handleShutdown(_ *chunkShutdown) {
-                      state := a.get_state()
-
-                      switch state {
-                      case Established:
-                          if a.inflight_queue.size() > 0 {
-                              a.setState(ShutdownReceived)
-                          } else {
-                              // No more outstanding, send shutdown ack.
-                              a.will_send_shutdown_ack = true
-                              a.setState(ShutdownAckSent)
-
-                              a.awake_write_loop()
-                          }
-
-                          // a.cumulative_tsnack_point = c.cumulativeTSNAck
-                      case ShutdownSent:
-                          a.will_send_shutdown_ack = true
-                          a.setState(ShutdownAckSent)
-
-                          a.awake_write_loop()
-                      }
-                  }
-
-                  // The caller should hold the lock.
-                  func (a *Association) handleShutdownAck(_ *chunkShutdownAck) {
-                      state := a.get_state()
-                      if state == ShutdownSent || state == ShutdownAckSent {
-                          a.t2shutdown.stop()
-                          a.will_send_shutdown_complete = true
-
-                          a.awake_write_loop()
-                      }
-                  }
-
-                  func (a *Association) handleShutdownComplete(_ *chunkShutdownComplete) error {
-                      state := a.get_state()
-                      if state == ShutdownAckSent {
-                          a.t2shutdown.stop()
-
-                          return a.close()
-                      }
-
-                      return nil
-                  }
-
-                  // createForwardTSN generates ForwardTSN chunk.
-                  // This method will be be called if use_forward_tsn is set to false.
-                  // The caller should hold the lock.
-                  func (a *Association) createForwardTSN() *chunkForwardTSN {
-                      // RFC 3758 Sec 3.5 C4
-                      streamMap := map[uint16]uint16{} // to report only once per SI
-                      for i := a.cumulative_tsnack_point + 1; sna32LTE(i, a.advanced_peer_tsnack_point); i++ {
-                          c, ok := a.inflight_queue.get(i)
-                          if !ok {
-                              break
-                          }
-
-                          ssn, ok := streamMap[c.streamIdentifier]
-                          if !ok {
-                              streamMap[c.streamIdentifier] = c.streamSequenceNumber
-                          } else if sna16LT(ssn, c.streamSequenceNumber) {
-                              // to report only once with greatest SSN
-                              streamMap[c.streamIdentifier] = c.streamSequenceNumber
-                          }
-                      }
-
-                      fwdtsn := &chunkForwardTSN{
-                          newCumulativeTSN: a.advanced_peer_tsnack_point,
-                          streams:          []chunkForwardTSNStream{},
-                      }
-
-                      var streamStr string
-                      for si, ssn := range streamMap {
-                          streamStr += fmt.Sprintf("(si=%d ssn=%d)", si, ssn)
-                          fwdtsn.streams = append(fwdtsn.streams, chunkForwardTSNStream{
-                              identifier: si,
-                              sequence:   ssn,
-                          })
-                      }
-                      a.log.Tracef("[%s] building fwdtsn: newCumulativeTSN=%d cumTSN=%d - %s", a.name, fwdtsn.newCumulativeTSN, a.cumulative_tsnack_point, streamStr)
-
-                      return fwdtsn
-                  }
-
-                  // createPacket wraps chunks in a packet.
-                  // The caller should hold the read lock.
-                  func (a *Association) createPacket(cs []chunk) *packet {
-                      return &packet{
-                          verificationTag: a.peer_verification_tag,
-                          source_port:      a.source_port,
-                          destination_port: a.destination_port,
-                          chunks:          cs,
-                      }
-                  }
-
-                  // The caller should hold the lock.
-                  func (a *Association) handleReconfig(c *chunkReconfig) ([]*packet, error) {
-                      a.log.Tracef("[%s] handleReconfig", a.name)
-
-                      pp := make([]*packet, 0)
-
-                      p, err := a.handleReconfigParam(c.paramA)
-                      if err != nil {
-                          return nil, err
-                      }
-                      if p != nil {
-                          pp = append(pp, p)
-                      }
-
-                      if c.paramB != nil {
-                          p, err = a.handleReconfigParam(c.paramB)
-                          if err != nil {
-                              return nil, err
-                          }
-                          if p != nil {
-                              pp = append(pp, p)
-                          }
-                      }
-                      return pp, nil
-                  }
-
-                  // The caller should hold the lock.
-                  func (a *Association) handleForwardTSN(c *chunkForwardTSN) []*packet {
-                      a.log.Tracef("[%s] FwdTSN: %s", a.name, c.String())
-
-                      if !a.use_forward_tsn {
-                          a.log.Warn("[%s] received FwdTSN but not enabled")
-                          // Return an error chunk
-                          cerr := &chunkError{
-                              errorCauses: []errorCause{&errorCauseUnrecognizedChunkType{}},
-                          }
-                          outbound := &packet{}
-                          outbound.verificationTag = a.peer_verification_tag
-                          outbound.source_port = a.source_port
-                          outbound.destination_port = a.destination_port
-                          outbound.chunks = []chunk{cerr}
-                          return []*packet{outbound}
-                      }
-
-                      // From RFC 3758 Sec 3.6:
-                      //   Note, if the "New Cumulative TSN" value carried in the arrived
-                      //   FORWARD TSN chunk is found to be behind or at the current cumulative
-                      //   TSN point, the data receiver MUST treat this FORWARD TSN as out-of-
-                      //   date and MUST NOT update its Cumulative TSN.  The receiver SHOULD
-                      //   send a SACK to its peer (the sender of the FORWARD TSN) since such a
-                      //   duplicate may indicate the previous SACK was lost in the network.
-
-                      a.log.Tracef("[%s] should send ack? newCumTSN=%d peer_last_tsn=%d\n",
-                          a.name, c.newCumulativeTSN, a.peer_last_tsn)
-                      if sna32LTE(c.newCumulativeTSN, a.peer_last_tsn) {
-                          a.log.Tracef("[%s] sending ack on Forward TSN", a.name)
-                          a.ack_state = ackStateImmediate
-                          a.ack_timer.stop()
-                          a.awake_write_loop()
-                          return nil
-                      }
-
-                      // From RFC 3758 Sec 3.6:
-                      //   the receiver MUST perform the same TSN handling, including duplicate
-                      //   detection, gap detection, SACK generation, cumulative TSN
-                      //   advancement, etc. as defined in RFC 2960 [2]---with the following
-                      //   exceptions and additions.
-
-                      //   When a FORWARD TSN chunk arrives, the data receiver MUST first update
-                      //   its cumulative TSN point to the value carried in the FORWARD TSN
-                      //   chunk,
-
-                      // Advance peer_last_tsn
-                      for sna32LT(a.peer_last_tsn, c.newCumulativeTSN) {
-                          a.payload_queue.pop(a.peer_last_tsn + 1) // may not exist
-                          a.peer_last_tsn++
-                      }
-
-                      // Report new peer_last_tsn value and abandoned largest SSN value to
-                      // corresponding streams so that the abandoned chunks can be removed
-                      // from the reassemblyQueue.
-                      for _, forwarded := range c.streams {
-                          if s, ok := a.streams[forwarded.identifier]; ok {
-                              s.handle_forward_tsnfor_ordered(forwarded.sequence)
-                          }
-                      }
-
-                      // TSN may be forewared for unordered chunks. ForwardTSN chunk does not
-                      // report which stream identifier it skipped for unordered chunks.
-                      // Therefore, we need to broadcast this event to all existing streams for
-                      // unordered chunks.
-                      // See https://github.com/pion/sctp/issues/106
-                      for _, s := range a.streams {
-                          s.handle_forward_tsnfor_unordered(c.newCumulativeTSN)
-                      }
-
-                      return a.handlePeerLastTSNAndAcknowledgement(false)
-                  }
-
-                  func (a *Association) sendResetRequest(streamIdentifier uint16) error {
-                      a.lock.Lock()
-                      defer a.lock.Unlock()
-
-                      state := a.get_state()
-                      if state != Established {
-                          return fmt.Errorf("%w: state=%s", errResetPacketInStateNotExist,
-                              getAssociationStateString(state))
-                      }
-
-                      // Create DATA chunk which only contains valid stream identifier with
-                      // nil userData and use it as a EOS from the stream.
-                      c := &chunkPayloadData{
-                          streamIdentifier:  streamIdentifier,
-                          beginningFragment: true,
-                          endingFragment:    true,
-                          userData:          nil,
-                      }
-
-                      a.pending_queue.push(c)
-                      a.awake_write_loop()
-                      return nil
-                  }
-
-                  // The caller should hold the lock.
-                  func (a *Association) handleReconfigParam(raw param) (*packet, error) {
-                      switch p := raw.(type) {
-                      case *paramOutgoingResetRequest:
-                          a.reconfig_requests[p.reconfigRequestSequenceNumber] = p
-                          resp := a.resetStreamsIfAny(p)
-                          if resp != nil {
-                              return resp, nil
-                          }
-                          return nil, nil
-
-                      case *paramReconfigResponse:
-                          delete(a.reconfigs, p.reconfigResponseSequenceNumber)
-                          if len(a.reconfigs) == 0 {
-                              a.t_reconfig.stop()
-                          }
-                          return nil, nil
-                      default:
-                          return nil, fmt.Errorf("%w: %t", errParamterType, p)
-                      }
-                  }
-
-                  // The caller should hold the lock.
-                  func (a *Association) resetStreamsIfAny(p *paramOutgoingResetRequest) *packet {
-                      result := reconfigResultSuccessPerformed
-                      if sna32LTE(p.senderLastTSN, a.peer_last_tsn) {
-                          a.log.Debugf("[%s] resetStream(): senderLastTSN=%d <= peer_last_tsn=%d",
-                              a.name, p.senderLastTSN, a.peer_last_tsn)
-                          for _, id := range p.streamIdentifiers {
-                              s, ok := a.streams[id]
-                              if !ok {
-                                  continue
-                              }
-                              a.unregisterStream(s, io.EOF)
-                          }
-                          delete(a.reconfig_requests, p.reconfigRequestSequenceNumber)
-                      } else {
-                          a.log.Debugf("[%s] resetStream(): senderLastTSN=%d > peer_last_tsn=%d",
-                              a.name, p.senderLastTSN, a.peer_last_tsn)
-                          result = reconfigResultInProgress
-                      }
-
-                      return a.createPacket([]chunk{&chunkReconfig{
-                          paramA: &paramReconfigResponse{
-                              reconfigResponseSequenceNumber: p.reconfigRequestSequenceNumber,
-                              result:                         result,
-                          },
-                      }})
-                  }
-
-                  // Move the chunk peeked with a.pending_queue.peek() to the inflight_queue.
-                  // The caller should hold the lock.
-                  func (a *Association) movePendingDataChunkToInflightQueue(c *chunkPayloadData) {
-                      if err := a.pending_queue.pop(c); err != nil {
-                          a.log.Errorf("[%s] failed to pop from pending queue: %s", a.name, err.Error())
-                      }
-
-                      // Mark all fragements are in-flight now
-                      if c.endingFragment {
-                          c.setAllInflight()
-                      }
-
-                      // Assign TSN
-                      c.tsn = a.generateNextTSN()
-
-                      c.since = time.Now() // use to calculate RTT and also for maxPacketLifeTime
-                      c.nSent = 1          // being sent for the first time
-
-                      a.checkPartialReliabilityStatus(c)
-
-                      a.log.Tracef("[%s] sending ppi=%d tsn=%d ssn=%d sent=%d len=%d (%v,%v)",
-                          a.name, c.payloadType, c.tsn, c.streamSequenceNumber, c.nSent, len(c.userData), c.beginningFragment, c.endingFragment)
-
-                      a.inflight_queue.pushNoCheck(c)
-                  }
-
-                  // popPendingDataChunksToSend pops chunks from the pending queues as many as
-                  // the cwnd and rwnd allows to send.
-                  // The caller should hold the lock.
-                  func (a *Association) popPendingDataChunksToSend() ([]*chunkPayloadData, []uint16) {
-                      chunks := []*chunkPayloadData{}
-                      var sisToReset []uint16 // stream identifieres to reset
-
-                      if a.pending_queue.size() > 0 {
-                          // RFC 4960 sec 6.1.  Transmission of DATA Chunks
-                          //   A) At any given time, the data sender MUST NOT transmit new data to
-                          //      any destination transport address if its peer's rwnd indicates
-                          //      that the peer has no buffer space (i.e., rwnd is 0; see Section
-                          //      6.2.1).  However, regardless of the value of rwnd (including if it
-                          //      is 0), the data sender can always have one DATA chunk in flight to
-                          //      the receiver if allowed by cwnd (see rule B, below).
-
-                          for {
-                              c := a.pending_queue.peek()
-                              if c == nil {
-                                  break // no more pending data
+                              if !a.use_forward_tsn {
+                                  a.log.Warnf("[%s] not using ForwardTSN (on init)\n", a.name)
                               }
 
-                              dataLen := uint32(len(c.userData))
-                              if dataLen == 0 {
-                                  sisToReset = append(sisToReset, c.streamIdentifier)
-                                  err := a.pending_queue.pop(c)
-                                  if err != nil {
-                                      a.log.Errorf("failed to pop from pending queue: %s", err.Error())
+                              outbound := &packet{}
+                              outbound.verificationTag = a.peer_verification_tag
+                              outbound.source_port = a.source_port
+                              outbound.destination_port = a.destination_port
+
+                              initAck := &chunkInitAck{}
+
+                              initAck.initialTSN = a.my_next_tsn
+                              initAck.numOutboundStreams = a.my_max_num_outbound_streams
+                              initAck.numInboundStreams = a.my_max_num_inbound_streams
+                              initAck.initiateTag = a.my_verification_tag
+                              initAck.advertisedReceiverWindowCredit = a.max_receive_buffer_size
+
+                              if a.my_cookie == nil {
+                                  var err error
+                                  if a.my_cookie, err = newRandomStateCookie(); err != nil {
+                                      return nil, err
                                   }
-                                  continue
                               }
 
-                              if uint32(a.inflight_queue.getNumBytes())+dataLen > a.cwnd {
-                                  break // would exceeds cwnd
+                              initAck.params = []param{a.my_cookie}
+
+                              setSupportedExtensions(&initAck.chunkInitCommon)
+
+                              outbound.chunks = []chunk{initAck}
+
+                              return pack(outbound), nil
+                          }
+
+                          // The caller should hold the lock.
+                          fn handleInitAck(p *packet, i *chunkInitAck) error {
+                              state := a.get_state()
+                              a.log.Debugf("[%s] chunkInitAck received in state '%s'", a.name, getAssociationStateString(state))
+                              if state != CookieWait {
+                                  // RFC 4960
+                                  // 5.2.3.  Unexpected INIT ACK
+                                  //   If an INIT ACK is received by an endpoint in any state other than the
+                                  //   COOKIE-WAIT state, the endpoint should discard the INIT ACK chunk.
+                                  //   An unexpected INIT ACK usually indicates the processing of an old or
+                                  //   duplicated INIT chunk.
+                                  return nil
                               }
 
-                              if dataLen > a.rwnd {
-                                  break // no more rwnd
+                              a.my_max_num_inbound_streams = min16(i.numInboundStreams, a.my_max_num_inbound_streams)
+                              a.my_max_num_outbound_streams = min16(i.numOutboundStreams, a.my_max_num_outbound_streams)
+                              a.peer_verification_tag = i.initiateTag
+                              a.peer_last_tsn = i.initialTSN - 1
+                              if a.source_port != p.destination_port ||
+                                  a.destination_port != p.source_port {
+                                  a.log.Warnf("[%s] handleInitAck: port mismatch", a.name)
+                                  return nil
                               }
 
-                              a.rwnd -= dataLen
+                              a.rwnd = i.advertisedReceiverWindowCredit
+                              a.log.Debugf("[%s] initial rwnd=%d", a.name, a.rwnd)
 
-                              a.movePendingDataChunkToInflightQueue(c)
-                              chunks = append(chunks, c)
-                          }
+                              // RFC 4690 Sec 7.2.1
+                              //  o  The initial value of ssthresh MAY be arbitrarily high (for
+                              //     example, implementations MAY use the size of the receiver
+                              //     advertised window).
+                              a.ssthresh = a.rwnd
+                              a.log.Tracef("[%s] updated cwnd=%d ssthresh=%d inflight=%d (INI)",
+                                  a.name, a.cwnd, a.ssthresh, a.inflight_queue.getNumBytes())
 
-                          // the data sender can always have one DATA chunk in flight to the receiver
-                          if len(chunks) == 0 && a.inflight_queue.size() == 0 {
-                              // Send zero window probe
-                              c := a.pending_queue.peek()
-                              if c != nil {
-                                  a.movePendingDataChunkToInflightQueue(c)
-                                  chunks = append(chunks, c)
+                              a.t1init.stop()
+                              a.stored_init = nil
+
+                              var cookieParam *paramStateCookie
+                              for _, param := range i.params {
+                                  switch v := param.(type) {
+                                  case *paramStateCookie:
+                                      cookieParam = v
+                                  case *paramSupportedExtensions:
+                                      for _, t := range v.ChunkTypes {
+                                          if t == ctForwardTSN {
+                                              a.log.Debugf("[%s] use ForwardTSN (on initAck)\n", a.name)
+                                              a.use_forward_tsn = true
+                                          }
+                                      }
+                                  }
                               }
-                          }
-                      }
-
-                      return chunks, sisToReset
-                  }
-
-                  // bundleDataChunksIntoPackets packs DATA chunks into packets. It tries to bundle
-                  // DATA chunks into a packet so long as the resulting packet size does not exceed
-                  // the path MTU.
-                  // The caller should hold the lock.
-                  func (a *Association) bundleDataChunksIntoPackets(chunks []*chunkPayloadData) []*packet {
-                      packets := []*packet{}
-                      chunksToSend := []chunk{}
-                      bytesInPacket := int(COMMON_HEADER_SIZE)
-
-                      for _, c := range chunks {
-                          // RFC 4960 sec 6.1.  Transmission of DATA Chunks
-                          //   Multiple DATA chunks committed for transmission MAY be bundled in a
-                          //   single packet.  Furthermore, DATA chunks being retransmitted MAY be
-                          //   bundled with new DATA chunks, as long as the resulting packet size
-                          //   does not exceed the path MTU.
-                          if bytesInPacket+len(c.userData) > int(a.mtu) {
-                              packets = append(packets, a.createPacket(chunksToSend))
-                              chunksToSend = []chunk{}
-                              bytesInPacket = int(COMMON_HEADER_SIZE)
-                          }
-
-                          chunksToSend = append(chunksToSend, c)
-                          bytesInPacket += int(DATA_CHUNK_HEADER_SIZE) + len(c.userData)
-                      }
-
-                      if len(chunksToSend) > 0 {
-                          packets = append(packets, a.createPacket(chunksToSend))
-                      }
-
-                      return packets
-                  }
-
-                  // sendPayloadData sends the data chunks.
-                  func (a *Association) sendPayloadData(chunks []*chunkPayloadData) error {
-                      a.lock.Lock()
-                      defer a.lock.Unlock()
-
-                      state := a.get_state()
-                      if state != Established {
-                          return fmt.Errorf("%w: state=%s", errPayloadDataStateNotExist,
-                              getAssociationStateString(state))
-                      }
-
-                      // Push the chunks into the pending queue first.
-                      for _, c := range chunks {
-                          a.pending_queue.push(c)
-                      }
-
-                      a.awake_write_loop()
-                      return nil
-                  }
-
-                  // The caller should hold the lock.
-                  func (a *Association) checkPartialReliabilityStatus(c *chunkPayloadData) {
-                      if !a.use_forward_tsn {
-                          return
-                      }
-
-                      // draft-ietf-rtcweb-data-protocol-09.txt section 6
-                      //	6.  Procedures
-                      //		All Data Channel Establishment Protocol messages MUST be sent using
-                      //		ordered delivery and reliable transmission.
-                      //
-                      if c.payloadType == PayloadTypeWebRTCDCEP {
-                          return
-                      }
-
-                      // PR-SCTP
-                      if s, ok := a.streams[c.streamIdentifier]; ok {
-                          s.lock.RLock()
-                          if s.reliabilityType == ReliabilityTypeRexmit {
-                              if c.nSent >= s.reliabilityValue {
-                                  c.setAbandoned(true)
-                                  a.log.Tracef("[%s] marked as abandoned: tsn=%d ppi=%d (remix: %d)", a.name, c.tsn, c.payloadType, c.nSent)
+                              if !a.use_forward_tsn {
+                                  a.log.Warnf("[%s] not using ForwardTSN (on initAck)\n", a.name)
                               }
-                          } else if s.reliabilityType == ReliabilityTypeTimed {
-                              elapsed := int64(time.Since(c.since).Seconds() * 1000)
-                              if elapsed >= int64(s.reliabilityValue) {
-                                  c.setAbandoned(true)
-                                  a.log.Tracef("[%s] marked as abandoned: tsn=%d ppi=%d (timed: %d)", a.name, c.tsn, c.payloadType, elapsed)
+                              if cookieParam == nil {
+                                  return errInitAckNoCookie
                               }
-                          }
-                          s.lock.RUnlock()
-                      } else {
-                          a.log.Errorf("[%s] stream %d not found)", a.name, c.streamIdentifier)
-                      }
-                  }
 
-                  // getDataPacketsToRetransmit is called when T3-rtx is timed out and retransmit outstanding data chunks
-                  // that are not acked or abandoned yet.
-                  // The caller should hold the lock.
-                  func (a *Association) getDataPacketsToRetransmit() []*packet {
-                      awnd := min32(a.cwnd, a.rwnd)
-                      chunks := []*chunkPayloadData{}
-                      var bytesToSend int
-                      var done bool
+                              a.stored_cookie_echo = &chunkCookieEcho{}
+                              a.stored_cookie_echo.cookie = cookieParam.cookie
 
-                      for i := 0; !done; i++ {
-                          c, ok := a.inflight_queue.get(a.cumulative_tsnack_point + uint32(i) + 1)
-                          if !ok {
-                              break // end of pending data
+                              err := a.send_cookie_echo()
+                              if err != nil {
+                                  a.log.Errorf("[%s] failed to send init: %s", a.name, err.Error())
+                              }
+
+                              a.t1cookie.start(a.rto_mgr.getRTO())
+                              a.setState(CookieEchoed)
+                              return nil
                           }
 
-                          if !c.retransmit {
-                              continue
+                          // The caller should hold the lock.
+                          fn handleHeartbeat(c *chunkHeartbeat) []*packet {
+                              a.log.Tracef("[%s] chunkHeartbeat", a.name)
+                              hbi, ok := c.params[0].(*paramHeartbeatInfo)
+                              if !ok {
+                                  a.log.Warnf("[%s] failed to handle Heartbeat, no ParamHeartbeatInfo", a.name)
+                              }
+
+                              return pack(&packet{
+                                  verificationTag: a.peer_verification_tag,
+                                  source_port:      a.source_port,
+                                  destination_port: a.destination_port,
+                                  chunks: []chunk{&chunkHeartbeatAck{
+                                      params: []param{
+                                          &paramHeartbeatInfo{
+                                              heartbeatInformation: hbi.heartbeatInformation,
+                                          },
+                                      },
+                                  }},
+                              })
                           }
 
-                          if i == 0 && int(a.rwnd) < len(c.userData) {
-                              // Send it as a zero window probe
-                              done = true
-                          } else if bytesToSend+len(c.userData) > int(awnd) {
-                              break
+                          // The caller should hold the lock.
+                          fn handleCookieEcho(c *chunkCookieEcho) []*packet {
+                              state := a.get_state()
+                              a.log.Debugf("[%s] COOKIE-ECHO received in state '%s'", a.name, getAssociationStateString(state))
+
+                              if a.my_cookie == nil {
+                                  a.log.Debugf("[%s] COOKIE-ECHO received before initialization", a.name)
+                                  return nil
+                              }
+                              switch state {
+                              default:
+                                  return nil
+                              case Established:
+                                  if !bytes.Equal(a.my_cookie.cookie, c.cookie) {
+                                      return nil
+                                  }
+                              case closed, CookieWait, CookieEchoed:
+                                  if !bytes.Equal(a.my_cookie.cookie, c.cookie) {
+                                      return nil
+                                  }
+
+                                  a.t1init.stop()
+                                  a.stored_init = nil
+
+                                  a.t1cookie.stop()
+                                  a.stored_cookie_echo = nil
+
+                                  a.setState(Established)
+                                  a.handshakeCompletedCh <- nil
+                              }
+
+                              p := &packet{
+                                  verificationTag: a.peer_verification_tag,
+                                  source_port:      a.source_port,
+                                  destination_port: a.destination_port,
+                                  chunks:          []chunk{&chunkCookieAck{}},
+                              }
+                              return pack(p)
                           }
 
-                          // reset the retransmit flag not to retransmit again before the next
-                          // t3-rtx timer fires
-                          c.retransmit = false
-                          bytesToSend += len(c.userData)
+                          // The caller should hold the lock.
+                          fn handleCookieAck() {
+                              state := a.get_state()
+                              a.log.Debugf("[%s] COOKIE-ACK received in state '%s'", a.name, getAssociationStateString(state))
+                              if state != CookieEchoed {
+                                  // RFC 4960
+                                  // 5.2.5.  Handle Duplicate COOKIE-ACK.
+                                  //   At any state other than COOKIE-ECHOED, an endpoint should silently
+                                  //   discard a received COOKIE ACK chunk.
+                                  return
+                              }
 
-                          c.nSent++
+                              a.t1cookie.stop()
+                              a.stored_cookie_echo = nil
 
-                          a.checkPartialReliabilityStatus(c)
+                              a.setState(Established)
+                              a.handshakeCompletedCh <- nil
+                          }
 
-                          a.log.Tracef("[%s] retransmitting tsn=%d ssn=%d sent=%d", a.name, c.tsn, c.streamSequenceNumber, c.nSent)
+                          // The caller should hold the lock.
+                          fn handle_data(d *chunkPayloadData) []*packet {
+                              a.log.Tracef("[%s] DATA: tsn=%d immediateSack=%v len=%d",
+                                  a.name, d.tsn, d.immediateSack, len(d.userData))
+                              a.stats.inc_datas()
 
-                          chunks = append(chunks, c)
-                      }
+                              canPush := a.payload_queue.canPush(d, a.peer_last_tsn)
+                              if canPush {
+                                  s := a.getOrCreateStream(d.streamIdentifier)
+                                  if s == nil {
+                                      // silentely discard the data. (sender will retry on T3-rtx timeout)
+                                      // see pion/sctp#30
+                                      a.log.Debugf("discard %d", d.streamSequenceNumber)
+                                      return nil
+                                  }
 
-                      return a.bundleDataChunksIntoPackets(chunks)
-                  }
+                                  if a.get_my_receiver_window_credit() > 0 {
+                                      // Pass the new chunk to stream level as soon as it arrives
+                                      a.payload_queue.push(d, a.peer_last_tsn)
+                                      s.handle_data(d)
+                                  } else {
+                                      // Receive buffer is full
+                                      lastTSN, ok := a.payload_queue.getLastTSNReceived()
+                                      if ok && sna32LT(d.tsn, lastTSN) {
+                                          a.log.Debugf("[%s] receive buffer full, but accepted as this is a missing chunk with tsn=%d ssn=%d", a.name, d.tsn, d.streamSequenceNumber)
+                                          a.payload_queue.push(d, a.peer_last_tsn)
+                                          s.handle_data(d)
+                                      } else {
+                                          a.log.Debugf("[%s] receive buffer full. dropping DATA with tsn=%d ssn=%d", a.name, d.tsn, d.streamSequenceNumber)
+                                      }
+                                  }
+                              }
 
-                  // generateNextTSN returns the my_next_tsn and increases it. The caller should hold the lock.
-                  // The caller should hold the lock.
-                  func (a *Association) generateNextTSN() uint32 {
-                      tsn := a.my_next_tsn
-                      a.my_next_tsn++
-                      return tsn
-                  }
+                              return a.handlePeerLastTSNAndAcknowledgement(d.immediateSack)
+                          }
 
-                  // generateNextRSN returns the my_next_rsn and increases it. The caller should hold the lock.
-                  // The caller should hold the lock.
-                  func (a *Association) generateNextRSN() uint32 {
-                      rsn := a.my_next_rsn
-                      a.my_next_rsn++
-                      return rsn
-                  }
+                          // A common routine for handle_data and handleForwardTSN routines
+                          // The caller should hold the lock.
+                          fn handlePeerLastTSNAndAcknowledgement(sackImmediately bool) []*packet {
+                              var reply []*packet
 
-                  func (a *Association) createSelectiveAckChunk() *chunkSelectiveAck {
-                      sack := &chunkSelectiveAck{}
-                      sack.cumulativeTSNAck = a.peer_last_tsn
-                      sack.advertisedReceiverWindowCredit = a.getMyReceiverWindowCredit()
-                      sack.duplicateTSN = a.payload_queue.popDuplicates()
-                      sack.gapAckBlocks = a.payload_queue.getGapAckBlocks(a.peer_last_tsn)
-                      return sack
-                  }
+                              // Try to advance peer_last_tsn
 
-                  func pack(p *packet) []*packet {
-                      return []*packet{p}
-                  }
+                              // From RFC 3758 Sec 3.6:
+                              //   .. and then MUST further advance its cumulative TSN point locally
+                              //   if possible
+                              // Meaning, if peer_last_tsn+1 points to a chunk that is received,
+                              // advance peer_last_tsn until peer_last_tsn+1 points to unreceived chunk.
+                              for {
+                                  if _, popOk := a.payload_queue.pop(a.peer_last_tsn + 1); !popOk {
+                                      break
+                                  }
+                                  a.peer_last_tsn++
 
-                  func (a *Association) handleChunkStart() {
+                                  for _, rstReq := range a.reconfig_requests {
+                                      resp := a.resetStreamsIfAny(rstReq)
+                                      if resp != nil {
+                                          a.log.Debugf("[%s] RESET RESPONSE: %+v", a.name, resp)
+                                          reply = append(reply, resp)
+                                      }
+                                  }
+                              }
+
+                              hasPacketLoss := (a.payload_queue.size() > 0)
+                              if hasPacketLoss {
+                                  a.log.Tracef("[%s] packetloss: %s", a.name, a.payload_queue.getGapAckBlocksString(a.peer_last_tsn))
+                              }
+
+                              if (a.ack_state != ackStateImmediate && !sackImmediately && !hasPacketLoss && a.ack_mode == ackModeNormal) || a.ack_mode == ackModeAlwaysDelay {
+                                  if a.ack_state == ackStateIdle {
+                                      a.delayed_ack_triggered = true
+                                  } else {
+                                      a.immediate_ack_triggered = true
+                                  }
+                              } else {
+                                  a.immediate_ack_triggered = true
+                              }
+
+                              return reply
+                          }
+    */
+    /// The caller should hold the lock.
+    fn get_my_receiver_window_credit(&self) -> u32 {
+        let mut bytes_queued = 0;
+        for s in self.streams.values() {
+            bytes_queued += s.get_num_bytes_in_reassembly_queue() as u32;
+        }
+
+        if bytes_queued >= self.max_receive_buffer_size {
+            0
+        } else {
+            self.max_receive_buffer_size - bytes_queued
+        }
+    }
+    /*
+                                     // OpenStream opens a stream
+                                     fn OpenStream(streamIdentifier uint16, defaultPayloadType PayloadProtocolIdentifier) (*Stream, error) {
+                                         a.lock.Lock()
+                                         defer a.lock.Unlock()
+
+                                         if _, ok := a.streams[streamIdentifier]; ok {
+                                             return nil, fmt.Errorf("%w: %d", errStreamAlreadyExist, streamIdentifier)
+                                         }
+
+                                         s := a.createStream(streamIdentifier, false)
+                                         s.setDefaultPayloadType(defaultPayloadType)
+
+                                         return s, nil
+                                     }
+
+                                     // AcceptStream accepts a stream
+                                     fn AcceptStream() (*Stream, error) {
+                                         s, ok := <-a.acceptCh
+                                         if !ok {
+                                             return nil, io.EOF // no more incoming streams
+                                         }
+                                         return s, nil
+                                     }
+
+                                     // createStream creates a stream. The caller should hold the lock and check no stream exists for this id.
+                                     fn createStream(streamIdentifier uint16, accept bool) *Stream {
+                                         s := &Stream{
+                                             association:      a,
+                                             streamIdentifier: streamIdentifier,
+                                             reassemblyQueue:  newReassemblyQueue(streamIdentifier),
+                                             log:              a.log,
+                                             name:             fmt.Sprintf("%d:%s", streamIdentifier, a.name),
+                                         }
+
+                                         s.readNotifier = sync.NewCond(&s.lock)
+
+                                         if accept {
+                                             select {
+                                             case a.acceptCh <- s:
+                                                 a.streams[streamIdentifier] = s
+                                                 a.log.Debugf("[%s] accepted a new stream (streamIdentifier: %d)",
+                                                     a.name, streamIdentifier)
+                                             default:
+                                                 a.log.Debugf("[%s] dropped a new stream (acceptCh size: %d)",
+                                                     a.name, len(a.acceptCh))
+                                                 return nil
+                                             }
+                                         } else {
+                                             a.streams[streamIdentifier] = s
+                                         }
+
+                                         return s
+                                     }
+
+                                     // getOrCreateStream gets or creates a stream. The caller should hold the lock.
+                                     fn getOrCreateStream(streamIdentifier uint16) *Stream {
+                                         if s, ok := a.streams[streamIdentifier]; ok {
+                                             return s
+                                         }
+
+                                         return a.createStream(streamIdentifier, true)
+                                     }
+
+                                     // The caller should hold the lock.
+                                     fn processSelectiveAck(d *chunkSelectiveAck) (map[uint16]int, uint32, error) { // nolint:gocognit
+                                         bytesAckedPerStream := map[uint16]int{}
+
+                                         // New ack point, so pop all ACKed packets from inflight_queue
+                                         // We add 1 because the "currentAckPoint" has already been popped from the inflight queue
+                                         // For the first SACK we take care of this by setting the ackpoint to cumAck - 1
+                                         for i := a.cumulative_tsnack_point + 1; sna32LTE(i, d.cumulativeTSNAck); i++ {
+                                             c, ok := a.inflight_queue.pop(i)
+                                             if !ok {
+                                                 return nil, 0, fmt.Errorf("%w: %v", errInflightQueueTSNPop, i)
+                                             }
+
+                                             if !c.acked {
+                                                 // RFC 4096 sec 6.3.2.  Retransmission Timer Rules
+                                                 //   R3)  Whenever a SACK is received that acknowledges the DATA chunk
+                                                 //        with the earliest outstanding TSN for that address, restart the
+                                                 //        T3-rtx timer for that address with its current RTO (if there is
+                                                 //        still outstanding data on that address).
+                                                 if i == a.cumulative_tsnack_point+1 {
+                                                     // T3 timer needs to be reset. Stop it for now.
+                                                     a.t3rtx.stop()
+                                                 }
+
+                                                 nBytesAcked := len(c.userData)
+
+                                                 // Sum the number of bytes acknowledged per stream
+                                                 if amount, ok := bytesAckedPerStream[c.streamIdentifier]; ok {
+                                                     bytesAckedPerStream[c.streamIdentifier] = amount + nBytesAcked
+                                                 } else {
+                                                     bytesAckedPerStream[c.streamIdentifier] = nBytesAcked
+                                                 }
+
+                                                 // RFC 4960 sec 6.3.1.  RTO Calculation
+                                                 //   C4)  When data is in flight and when allowed by rule C5 below, a new
+                                                 //        RTT measurement MUST be made each round trip.  Furthermore, new
+                                                 //        RTT measurements SHOULD be made no more than once per round trip
+                                                 //        for a given destination transport address.
+                                                 //   C5)  Karn's algorithm: RTT measurements MUST NOT be made using
+                                                 //        packets that were retransmitted (and thus for which it is
+                                                 //        ambiguous whether the reply was for the first instance of the
+                                                 //        chunk or for a later instance)
+                                                 if c.nSent == 1 && sna32GTE(c.tsn, a.min_tsn2measure_rtt) {
+                                                     a.min_tsn2measure_rtt = a.my_next_tsn
+                                                     rtt := time.Since(c.since).Seconds() * 1000.0
+                                                     srtt := a.rto_mgr.setNewRTT(rtt)
+                                                     a.log.Tracef("[%s] SACK: measured-rtt=%f srtt=%f new-rto=%f",
+                                                         a.name, rtt, srtt, a.rto_mgr.getRTO())
+                                                 }
+                                             }
+
+                                             if a.in_fast_recovery && c.tsn == a.fast_recover_exit_point {
+                                                 a.log.Debugf("[%s] exit fast-recovery", a.name)
+                                                 a.in_fast_recovery = false
+                                             }
+                                         }
+
+                                         htna := d.cumulativeTSNAck
+
+                                         // Mark selectively acknowledged chunks as "acked"
+                                         for _, g := range d.gapAckBlocks {
+                                             for i := g.start; i <= g.end; i++ {
+                                                 tsn := d.cumulativeTSNAck + uint32(i)
+                                                 c, ok := a.inflight_queue.get(tsn)
+                                                 if !ok {
+                                                     return nil, 0, fmt.Errorf("%w: %v", errTSNRequestNotExist, tsn)
+                                                 }
+
+                                                 if !c.acked {
+                                                     nBytesAcked := a.inflight_queue.markAsAcked(tsn)
+
+                                                     // Sum the number of bytes acknowledged per stream
+                                                     if amount, ok := bytesAckedPerStream[c.streamIdentifier]; ok {
+                                                         bytesAckedPerStream[c.streamIdentifier] = amount + nBytesAcked
+                                                     } else {
+                                                         bytesAckedPerStream[c.streamIdentifier] = nBytesAcked
+                                                     }
+
+                                                     a.log.Tracef("[%s] tsn=%d has been sacked", a.name, c.tsn)
+
+                                                     if c.nSent == 1 {
+                                                         a.min_tsn2measure_rtt = a.my_next_tsn
+                                                         rtt := time.Since(c.since).Seconds() * 1000.0
+                                                         srtt := a.rto_mgr.setNewRTT(rtt)
+                                                         a.log.Tracef("[%s] SACK: measured-rtt=%f srtt=%f new-rto=%f",
+                                                             a.name, rtt, srtt, a.rto_mgr.getRTO())
+                                                     }
+
+                                                     if sna32LT(htna, tsn) {
+                                                         htna = tsn
+                                                     }
+                                                 }
+                                             }
+                                         }
+
+                                         return bytesAckedPerStream, htna, nil
+                                     }
+
+                                     // The caller should hold the lock.
+                                     fn onCumulativeTSNAckPointAdvanced(totalBytesAcked int) {
+                                         // RFC 4096, sec 6.3.2.  Retransmission Timer Rules
+                                         //   R2)  Whenever all outstanding data sent to an address have been
+                                         //        acknowledged, turn off the T3-rtx timer of that address.
+                                         if a.inflight_queue.size() == 0 {
+                                             a.log.Tracef("[%s] SACK: no more packet in-flight (pending=%d)", a.name, a.pending_queue.size())
+                                             a.t3rtx.stop()
+                                         } else {
+                                             a.log.Tracef("[%s] T3-rtx timer start (pt2)", a.name)
+                                             a.t3rtx.start(a.rto_mgr.getRTO())
+                                         }
+
+                                         // Update congestion control parameters
+                                         if a.cwnd <= a.ssthresh {
+                                             // RFC 4096, sec 7.2.1.  Slow-Start
+                                             //   o  When cwnd is less than or equal to ssthresh, an SCTP endpoint MUST
+                                             //		use the slow-start algorithm to increase cwnd only if the current
+                                             //      congestion window is being fully utilized, an incoming SACK
+                                             //      advances the Cumulative TSN Ack Point, and the data sender is not
+                                             //      in Fast Recovery.  Only when these three conditions are met can
+                                             //      the cwnd be increased; otherwise, the cwnd MUST not be increased.
+                                             //		If these conditions are met, then cwnd MUST be increased by, at
+                                             //      most, the lesser of 1) the total size of the previously
+                                             //      outstanding DATA chunk(s) acknowledged, and 2) the destination's
+                                             //      path MTU.
+                                             if !a.in_fast_recovery &&
+                                                 a.pending_queue.size() > 0 {
+                                                 a.cwnd += min32(uint32(totalBytesAcked), a.cwnd) // TCP way
+                                                 // a.cwnd += min32(uint32(totalBytesAcked), a.mtu) // SCTP way (slow)
+                                                 a.log.Tracef("[%s] updated cwnd=%d ssthresh=%d acked=%d (SS)",
+                                                     a.name, a.cwnd, a.ssthresh, totalBytesAcked)
+                                             } else {
+                                                 a.log.Tracef("[%s] cwnd did not grow: cwnd=%d ssthresh=%d acked=%d FR=%v pending=%d",
+                                                     a.name, a.cwnd, a.ssthresh, totalBytesAcked, a.in_fast_recovery, a.pending_queue.size())
+                                             }
+                                         } else {
+                                             // RFC 4096, sec 7.2.2.  Congestion Avoidance
+                                             //   o  Whenever cwnd is greater than ssthresh, upon each SACK arrival
+                                             //      that advances the Cumulative TSN Ack Point, increase
+                                             //      partial_bytes_acked by the total number of bytes of all new chunks
+                                             //      acknowledged in that SACK including chunks acknowledged by the new
+                                             //      Cumulative TSN Ack and by Gap Ack Blocks.
+                                             a.partial_bytes_acked += uint32(totalBytesAcked)
+
+                                             //   o  When partial_bytes_acked is equal to or greater than cwnd and
+                                             //      before the arrival of the SACK the sender had cwnd or more bytes
+                                             //      of data outstanding (i.e., before arrival of the SACK, flight size
+                                             //      was greater than or equal to cwnd), increase cwnd by MTU, and
+                                             //      reset partial_bytes_acked to (partial_bytes_acked - cwnd).
+                                             if a.partial_bytes_acked >= a.cwnd && a.pending_queue.size() > 0 {
+                                                 a.partial_bytes_acked -= a.cwnd
+                                                 a.cwnd += a.mtu
+                                                 a.log.Tracef("[%s] updated cwnd=%d ssthresh=%d acked=%d (CA)",
+                                                     a.name, a.cwnd, a.ssthresh, totalBytesAcked)
+                                             }
+                                         }
+                                     }
+
+                                     // The caller should hold the lock.
+                                     fn processFastRetransmission(cumTSNAckPoint, htna uint32, cumTSNAckPointAdvanced bool) error {
+                                         // HTNA algorithm - RFC 4960 Sec 7.2.4
+                                         // Increment missIndicator of each chunks that the SACK reported missing
+                                         // when either of the following is met:
+                                         // a)  Not in fast-recovery
+                                         //     miss indications are incremented only for missing TSNs prior to the
+                                         //     highest TSN newly acknowledged in the SACK.
+                                         // b)  In fast-recovery AND the Cumulative TSN Ack Point advanced
+                                         //     the miss indications are incremented for all TSNs reported missing
+                                         //     in the SACK.
+                                         if !a.in_fast_recovery || (a.in_fast_recovery && cumTSNAckPointAdvanced) {
+                                             var maxTSN uint32
+                                             if !a.in_fast_recovery {
+                                                 // a) increment only for missing TSNs prior to the HTNA
+                                                 maxTSN = htna
+                                             } else {
+                                                 // b) increment for all TSNs reported missing
+                                                 maxTSN = cumTSNAckPoint + uint32(a.inflight_queue.size()) + 1
+                                             }
+
+                                             for tsn := cumTSNAckPoint + 1; sna32LT(tsn, maxTSN); tsn++ {
+                                                 c, ok := a.inflight_queue.get(tsn)
+                                                 if !ok {
+                                                     return fmt.Errorf("%w: %v", errTSNRequestNotExist, tsn)
+                                                 }
+                                                 if !c.acked && !c.abandoned() && c.missIndicator < 3 {
+                                                     c.missIndicator++
+                                                     if c.missIndicator == 3 {
+                                                         if !a.in_fast_recovery {
+                                                             // 2)  If not in Fast Recovery, adjust the ssthresh and cwnd of the
+                                                             //     destination address(es) to which the missing DATA chunks were
+                                                             //     last sent, according to the formula described in Section 7.2.3.
+                                                             a.in_fast_recovery = true
+                                                             a.fast_recover_exit_point = htna
+                                                             a.ssthresh = max32(a.cwnd/2, 4*a.mtu)
+                                                             a.cwnd = a.ssthresh
+                                                             a.partial_bytes_acked = 0
+                                                             a.will_retransmit_fast = true
+
+                                                             a.log.Tracef("[%s] updated cwnd=%d ssthresh=%d inflight=%d (FR)",
+                                                                 a.name, a.cwnd, a.ssthresh, a.inflight_queue.getNumBytes())
+                                                         }
+                                                     }
+                                                 }
+                                             }
+                                         }
+
+                                         if a.in_fast_recovery && cumTSNAckPointAdvanced {
+                                             a.will_retransmit_fast = true
+                                         }
+
+                                         return nil
+                                     }
+
+                                     // The caller should hold the lock.
+                                     fn handleSack(d *chunkSelectiveAck) error {
+                                         a.log.Tracef("[%s] SACK: cumTSN=%d a_rwnd=%d", a.name, d.cumulativeTSNAck, d.advertisedReceiverWindowCredit)
+                                         state := a.get_state()
+                                         if state != Established && state != ShutdownPending && state != ShutdownReceived {
+                                             return nil
+                                         }
+
+                                         a.stats.inc_sacks()
+
+                                         if sna32GT(a.cumulative_tsnack_point, d.cumulativeTSNAck) {
+                                             // RFC 4960 sec 6.2.1.  Processing a Received SACK
+                                             // D)
+                                             //   i) If Cumulative TSN Ack is less than the Cumulative TSN Ack
+                                             //      Point, then drop the SACK.  Since Cumulative TSN Ack is
+                                             //      monotonically increasing, a SACK whose Cumulative TSN Ack is
+                                             //      less than the Cumulative TSN Ack Point indicates an out-of-
+                                             //      order SACK.
+
+                                             a.log.Debugf("[%s] SACK Cumulative ACK %v is older than ACK point %v",
+                                                 a.name,
+                                                 d.cumulativeTSNAck,
+                                                 a.cumulative_tsnack_point)
+
+                                             return nil
+                                         }
+
+                                         // Process selective ack
+                                         bytesAckedPerStream, htna, err := a.processSelectiveAck(d)
+                                         if err != nil {
+                                             return err
+                                         }
+
+                                         var totalBytesAcked int
+                                         for _, nBytesAcked := range bytesAckedPerStream {
+                                             totalBytesAcked += nBytesAcked
+                                         }
+
+                                         cumTSNAckPointAdvanced := false
+                                         if sna32LT(a.cumulative_tsnack_point, d.cumulativeTSNAck) {
+                                             a.log.Tracef("[%s] SACK: cumTSN advanced: %d -> %d",
+                                                 a.name,
+                                                 a.cumulative_tsnack_point,
+                                                 d.cumulativeTSNAck)
+
+                                             a.cumulative_tsnack_point = d.cumulativeTSNAck
+                                             cumTSNAckPointAdvanced = true
+                                             a.onCumulativeTSNAckPointAdvanced(totalBytesAcked)
+                                         }
+
+                                         for si, nBytesAcked := range bytesAckedPerStream {
+                                             if s, ok := a.streams[si]; ok {
+                                                 a.lock.Unlock()
+                                                 s.onBufferReleased(nBytesAcked)
+                                                 a.lock.Lock()
+                                             }
+                                         }
+
+                                         // New rwnd value
+                                         // RFC 4960 sec 6.2.1.  Processing a Received SACK
+                                         // D)
+                                         //   ii) Set rwnd equal to the newly received a_rwnd minus the number
+                                         //       of bytes still outstanding after processing the Cumulative
+                                         //       TSN Ack and the Gap Ack Blocks.
+
+                                         // bytes acked were already subtracted by markAsAcked() method
+                                         bytesOutstanding := uint32(a.inflight_queue.getNumBytes())
+                                         if bytesOutstanding >= d.advertisedReceiverWindowCredit {
+                                             a.rwnd = 0
+                                         } else {
+                                             a.rwnd = d.advertisedReceiverWindowCredit - bytesOutstanding
+                                         }
+
+                                         err = a.processFastRetransmission(d.cumulativeTSNAck, htna, cumTSNAckPointAdvanced)
+                                         if err != nil {
+                                             return err
+                                         }
+
+                                         if a.use_forward_tsn {
+                                             // RFC 3758 Sec 3.5 C1
+                                             if sna32LT(a.advanced_peer_tsnack_point, a.cumulative_tsnack_point) {
+                                                 a.advanced_peer_tsnack_point = a.cumulative_tsnack_point
+                                             }
+
+                                             // RFC 3758 Sec 3.5 C2
+                                             for i := a.advanced_peer_tsnack_point + 1; ; i++ {
+                                                 c, ok := a.inflight_queue.get(i)
+                                                 if !ok {
+                                                     break
+                                                 }
+                                                 if !c.abandoned() {
+                                                     break
+                                                 }
+                                                 a.advanced_peer_tsnack_point = i
+                                             }
+
+                                             // RFC 3758 Sec 3.5 C3
+                                             if sna32GT(a.advanced_peer_tsnack_point, a.cumulative_tsnack_point) {
+                                                 a.will_send_forward_tsn = true
+                                             }
+                                             a.awake_write_loop()
+                                         }
+
+                                         a.postprocessSack(state, cumTSNAckPointAdvanced)
+
+                                         return nil
+                                     }
+
+                                     // The caller must hold the lock. This method was only added because the
+                                     // linter was complaining about the "cognitive complexity" of handleSack.
+                                     fn postprocessSack(state uint32, shouldAwakeWriteLoop bool) {
+                                         switch {
+                                         case a.inflight_queue.size() > 0:
+                                             // Start timer. (noop if already started)
+                                             a.log.Tracef("[%s] T3-rtx timer start (pt3)", a.name)
+                                             a.t3rtx.start(a.rto_mgr.getRTO())
+                                         case state == ShutdownPending:
+                                             // No more outstanding, send shutdown.
+                                             shouldAwakeWriteLoop = true
+                                             a.will_send_shutdown = true
+                                             a.setState(ShutdownSent)
+                                         case state == ShutdownReceived:
+                                             // No more outstanding, send shutdown ack.
+                                             shouldAwakeWriteLoop = true
+                                             a.will_send_shutdown_ack = true
+                                             a.setState(ShutdownAckSent)
+                                         }
+
+                                         if shouldAwakeWriteLoop {
+                                             a.awake_write_loop()
+                                         }
+                                     }
+
+                                     // The caller should hold the lock.
+                                     fn handleShutdown(_ *chunkShutdown) {
+                                         state := a.get_state()
+
+                                         switch state {
+                                         case Established:
+                                             if a.inflight_queue.size() > 0 {
+                                                 a.setState(ShutdownReceived)
+                                             } else {
+                                                 // No more outstanding, send shutdown ack.
+                                                 a.will_send_shutdown_ack = true
+                                                 a.setState(ShutdownAckSent)
+
+                                                 a.awake_write_loop()
+                                             }
+
+                                             // a.cumulative_tsnack_point = c.cumulativeTSNAck
+                                         case ShutdownSent:
+                                             a.will_send_shutdown_ack = true
+                                             a.setState(ShutdownAckSent)
+
+                                             a.awake_write_loop()
+                                         }
+                                     }
+
+                                     // The caller should hold the lock.
+                                     fn handleShutdownAck(_ *chunkShutdownAck) {
+                                         state := a.get_state()
+                                         if state == ShutdownSent || state == ShutdownAckSent {
+                                             a.t2shutdown.stop()
+                                             a.will_send_shutdown_complete = true
+
+                                             a.awake_write_loop()
+                                         }
+                                     }
+
+                                     fn handleShutdownComplete(_ *chunkShutdownComplete) error {
+                                         state := a.get_state()
+                                         if state == ShutdownAckSent {
+                                             a.t2shutdown.stop()
+
+                                             return a.close()
+                                         }
+
+                                         return nil
+                                     }
+
+                                     // createForwardTSN generates ForwardTSN chunk.
+                                     // This method will be be called if use_forward_tsn is set to false.
+                                     // The caller should hold the lock.
+                                     fn createForwardTSN() *chunkForwardTSN {
+                                         // RFC 3758 Sec 3.5 C4
+                                         streamMap := map[uint16]uint16{} // to report only once per SI
+                                         for i := a.cumulative_tsnack_point + 1; sna32LTE(i, a.advanced_peer_tsnack_point); i++ {
+                                             c, ok := a.inflight_queue.get(i)
+                                             if !ok {
+                                                 break
+                                             }
+
+                                             ssn, ok := streamMap[c.streamIdentifier]
+                                             if !ok {
+                                                 streamMap[c.streamIdentifier] = c.streamSequenceNumber
+                                             } else if sna16LT(ssn, c.streamSequenceNumber) {
+                                                 // to report only once with greatest SSN
+                                                 streamMap[c.streamIdentifier] = c.streamSequenceNumber
+                                             }
+                                         }
+
+                                         fwdtsn := &chunkForwardTSN{
+                                             newCumulativeTSN: a.advanced_peer_tsnack_point,
+                                             streams:          []chunkForwardTSNStream{},
+                                         }
+
+                                         var streamStr string
+                                         for si, ssn := range streamMap {
+                                             streamStr += fmt.Sprintf("(si=%d ssn=%d)", si, ssn)
+                                             fwdtsn.streams = append(fwdtsn.streams, chunkForwardTSNStream{
+                                                 identifier: si,
+                                                 sequence:   ssn,
+                                             })
+                                         }
+                                         a.log.Tracef("[%s] building fwdtsn: newCumulativeTSN=%d cumTSN=%d - %s", a.name, fwdtsn.newCumulativeTSN, a.cumulative_tsnack_point, streamStr)
+
+                                         return fwdtsn
+                                     }
+    */
+    // create_packet wraps chunks in a packet.
+    // The caller should hold the read lock.
+    fn create_packet(&self, chunks: Vec<Box<dyn Chunk>>) -> Packet {
+        Packet {
+            verification_tag: self.peer_verification_tag,
+            source_port: self.source_port,
+            destination_port: self.destination_port,
+            chunks,
+        }
+    }
+    /*
+                                 // The caller should hold the lock.
+                                 fn handleReconfig(c *chunkReconfig) ([]*packet, error) {
+                                     a.log.Tracef("[%s] handleReconfig", a.name)
+
+                                     pp := make([]*packet, 0)
+
+                                     p, err := a.handleReconfigParam(c.paramA)
+                                     if err != nil {
+                                         return nil, err
+                                     }
+                                     if p != nil {
+                                         pp = append(pp, p)
+                                     }
+
+                                     if c.paramB != nil {
+                                         p, err = a.handleReconfigParam(c.paramB)
+                                         if err != nil {
+                                             return nil, err
+                                         }
+                                         if p != nil {
+                                             pp = append(pp, p)
+                                         }
+                                     }
+                                     return pp, nil
+                                 }
+
+                                 // The caller should hold the lock.
+                                 fn handleForwardTSN(c *chunkForwardTSN) []*packet {
+                                     a.log.Tracef("[%s] FwdTSN: %s", a.name, c.String())
+
+                                     if !a.use_forward_tsn {
+                                         a.log.Warn("[%s] received FwdTSN but not enabled")
+                                         // Return an error chunk
+                                         cerr := &chunkError{
+                                             errorCauses: []errorCause{&errorCauseUnrecognizedChunkType{}},
+                                         }
+                                         outbound := &packet{}
+                                         outbound.verificationTag = a.peer_verification_tag
+                                         outbound.source_port = a.source_port
+                                         outbound.destination_port = a.destination_port
+                                         outbound.chunks = []chunk{cerr}
+                                         return []*packet{outbound}
+                                     }
+
+                                     // From RFC 3758 Sec 3.6:
+                                     //   Note, if the "New Cumulative TSN" value carried in the arrived
+                                     //   FORWARD TSN chunk is found to be behind or at the current cumulative
+                                     //   TSN point, the data receiver MUST treat this FORWARD TSN as out-of-
+                                     //   date and MUST NOT update its Cumulative TSN.  The receiver SHOULD
+                                     //   send a SACK to its peer (the sender of the FORWARD TSN) since such a
+                                     //   duplicate may indicate the previous SACK was lost in the network.
+
+                                     a.log.Tracef("[%s] should send ack? newCumTSN=%d peer_last_tsn=%d\n",
+                                         a.name, c.newCumulativeTSN, a.peer_last_tsn)
+                                     if sna32LTE(c.newCumulativeTSN, a.peer_last_tsn) {
+                                         a.log.Tracef("[%s] sending ack on Forward TSN", a.name)
+                                         a.ack_state = ackStateImmediate
+                                         a.ack_timer.stop()
+                                         a.awake_write_loop()
+                                         return nil
+                                     }
+
+                                     // From RFC 3758 Sec 3.6:
+                                     //   the receiver MUST perform the same TSN handling, including duplicate
+                                     //   detection, gap detection, SACK generation, cumulative TSN
+                                     //   advancement, etc. as defined in RFC 2960 [2]---with the following
+                                     //   exceptions and additions.
+
+                                     //   When a FORWARD TSN chunk arrives, the data receiver MUST first update
+                                     //   its cumulative TSN point to the value carried in the FORWARD TSN
+                                     //   chunk,
+
+                                     // Advance peer_last_tsn
+                                     for sna32LT(a.peer_last_tsn, c.newCumulativeTSN) {
+                                         a.payload_queue.pop(a.peer_last_tsn + 1) // may not exist
+                                         a.peer_last_tsn++
+                                     }
+
+                                     // Report new peer_last_tsn value and abandoned largest SSN value to
+                                     // corresponding streams so that the abandoned chunks can be removed
+                                     // from the reassemblyQueue.
+                                     for _, forwarded := range c.streams {
+                                         if s, ok := a.streams[forwarded.identifier]; ok {
+                                             s.handle_forward_tsnfor_ordered(forwarded.sequence)
+                                         }
+                                     }
+
+                                     // TSN may be forewared for unordered chunks. ForwardTSN chunk does not
+                                     // report which stream identifier it skipped for unordered chunks.
+                                     // Therefore, we need to broadcast this event to all existing streams for
+                                     // unordered chunks.
+                                     // See https://github.com/pion/sctp/issues/106
+                                     for _, s := range a.streams {
+                                         s.handle_forward_tsnfor_unordered(c.newCumulativeTSN)
+                                     }
+
+                                     return a.handlePeerLastTSNAndAcknowledgement(false)
+                                 }
+
+                                 fn sendResetRequest(streamIdentifier uint16) error {
+                                     a.lock.Lock()
+                                     defer a.lock.Unlock()
+
+                                     state := a.get_state()
+                                     if state != Established {
+                                         return fmt.Errorf("%w: state=%s", errResetPacketInStateNotExist,
+                                             getAssociationStateString(state))
+                                     }
+
+                                     // Create DATA chunk which only contains valid stream identifier with
+                                     // nil userData and use it as a EOS from the stream.
+                                     c := &chunkPayloadData{
+                                         streamIdentifier:  streamIdentifier,
+                                         beginningFragment: true,
+                                         endingFragment:    true,
+                                         userData:          nil,
+                                     }
+
+                                     a.pending_queue.push(c)
+                                     a.awake_write_loop()
+                                     return nil
+                                 }
+
+                                 // The caller should hold the lock.
+                                 fn handleReconfigParam(raw param) (*packet, error) {
+                                     switch p := raw.(type) {
+                                     case *paramOutgoingResetRequest:
+                                         a.reconfig_requests[p.reconfigRequestSequenceNumber] = p
+                                         resp := a.resetStreamsIfAny(p)
+                                         if resp != nil {
+                                             return resp, nil
+                                         }
+                                         return nil, nil
+
+                                     case *paramReconfigResponse:
+                                         delete(a.reconfigs, p.reconfigResponseSequenceNumber)
+                                         if len(a.reconfigs) == 0 {
+                                             a.t_reconfig.stop()
+                                         }
+                                         return nil, nil
+                                     default:
+                                         return nil, fmt.Errorf("%w: %t", errParamterType, p)
+                                     }
+                                 }
+
+                                 // The caller should hold the lock.
+                                 fn resetStreamsIfAny(p *paramOutgoingResetRequest) *packet {
+                                     result := reconfigResultSuccessPerformed
+                                     if sna32LTE(p.senderLastTSN, a.peer_last_tsn) {
+                                         a.log.Debugf("[%s] resetStream(): senderLastTSN=%d <= peer_last_tsn=%d",
+                                             a.name, p.senderLastTSN, a.peer_last_tsn)
+                                         for _, id := range p.streamIdentifiers {
+                                             s, ok := a.streams[id]
+                                             if !ok {
+                                                 continue
+                                             }
+                                             a.unregisterStream(s, io.EOF)
+                                         }
+                                         delete(a.reconfig_requests, p.reconfigRequestSequenceNumber)
+                                     } else {
+                                         a.log.Debugf("[%s] resetStream(): senderLastTSN=%d > peer_last_tsn=%d",
+                                             a.name, p.senderLastTSN, a.peer_last_tsn)
+                                         result = reconfigResultInProgress
+                                     }
+
+                                     return a.create_packet([]chunk{&chunkReconfig{
+                                         paramA: &paramReconfigResponse{
+                                             reconfigResponseSequenceNumber: p.reconfigRequestSequenceNumber,
+                                             result:                         result,
+                                         },
+                                     }})
+                                 }
+
+                                 // Move the chunk peeked with a.pending_queue.peek() to the inflight_queue.
+                                 // The caller should hold the lock.
+                                 fn movePendingDataChunkToInflightQueue(c *chunkPayloadData) {
+                                     if err := a.pending_queue.pop(c); err != nil {
+                                         a.log.Errorf("[%s] failed to pop from pending queue: %s", a.name, err.Error())
+                                     }
+
+                                     // Mark all fragements are in-flight now
+                                     if c.endingFragment {
+                                         c.setAllInflight()
+                                     }
+
+                                     // Assign TSN
+                                     c.tsn = a.generate_next_tsn()
+
+                                     c.since = time.Now() // use to calculate RTT and also for maxPacketLifeTime
+                                     c.nSent = 1          // being sent for the first time
+
+                                     a.check_partial_reliability_status(c)
+
+                                     a.log.Tracef("[%s] sending ppi=%d tsn=%d ssn=%d sent=%d len=%d (%v,%v)",
+                                         a.name, c.payloadType, c.tsn, c.streamSequenceNumber, c.nSent, len(c.userData), c.beginningFragment, c.endingFragment)
+
+                                     a.inflight_queue.pushNoCheck(c)
+                                 }
+
+                                 // popPendingDataChunksToSend pops chunks from the pending queues as many as
+                                 // the cwnd and rwnd allows to send.
+                                 // The caller should hold the lock.
+                                 fn popPendingDataChunksToSend() ([]*chunkPayloadData, []uint16) {
+                                     chunks := []*chunkPayloadData{}
+                                     var sisToReset []uint16 // stream identifieres to reset
+
+                                     if a.pending_queue.size() > 0 {
+                                         // RFC 4960 sec 6.1.  Transmission of DATA Chunks
+                                         //   A) At any given time, the data sender MUST NOT transmit new data to
+                                         //      any destination transport address if its peer's rwnd indicates
+                                         //      that the peer has no buffer space (i.e., rwnd is 0; see Section
+                                         //      6.2.1).  However, regardless of the value of rwnd (including if it
+                                         //      is 0), the data sender can always have one DATA chunk in flight to
+                                         //      the receiver if allowed by cwnd (see rule B, below).
+
+                                         for {
+                                             c := a.pending_queue.peek()
+                                             if c == nil {
+                                                 break // no more pending data
+                                             }
+
+                                             dataLen := uint32(len(c.userData))
+                                             if dataLen == 0 {
+                                                 sisToReset = append(sisToReset, c.streamIdentifier)
+                                                 err := a.pending_queue.pop(c)
+                                                 if err != nil {
+                                                     a.log.Errorf("failed to pop from pending queue: %s", err.Error())
+                                                 }
+                                                 continue
+                                             }
+
+                                             if uint32(a.inflight_queue.getNumBytes())+dataLen > a.cwnd {
+                                                 break // would exceeds cwnd
+                                             }
+
+                                             if dataLen > a.rwnd {
+                                                 break // no more rwnd
+                                             }
+
+                                             a.rwnd -= dataLen
+
+                                             a.movePendingDataChunkToInflightQueue(c)
+                                             chunks = append(chunks, c)
+                                         }
+
+                                         // the data sender can always have one DATA chunk in flight to the receiver
+                                         if len(chunks) == 0 && a.inflight_queue.size() == 0 {
+                                             // Send zero window probe
+                                             c := a.pending_queue.peek()
+                                             if c != nil {
+                                                 a.movePendingDataChunkToInflightQueue(c)
+                                                 chunks = append(chunks, c)
+                                             }
+                                         }
+                                     }
+
+                                     return chunks, sisToReset
+                                 }
+    */
+    /// bundle_data_chunks_into_packets packs DATA chunks into packets. It tries to bundle
+    /// DATA chunks into a packet so long as the resulting packet size does not exceed
+    /// the path MTU.
+    /// The caller should hold the lock.
+    fn bundle_data_chunks_into_packets(&self, chunks: Vec<ChunkPayloadData>) -> Vec<Packet> {
+        let mut packets = vec![];
+        let mut chunks_to_send = vec![];
+        let mut bytes_in_packet = COMMON_HEADER_SIZE;
+
+        for c in chunks {
+            // RFC 4960 sec 6.1.  Transmission of DATA Chunks
+            //   Multiple DATA chunks committed for transmission MAY be bundled in a
+            //   single packet.  Furthermore, DATA chunks being retransmitted MAY be
+            //   bundled with new DATA chunks, as long as the resulting packet size
+            //   does not exceed the path MTU.
+            if bytes_in_packet + c.user_data.len() as u32 > self.mtu {
+                packets.push(self.create_packet(chunks_to_send));
+                chunks_to_send = vec![];
+                bytes_in_packet = COMMON_HEADER_SIZE;
+            }
+
+            bytes_in_packet += DATA_CHUNK_HEADER_SIZE + c.user_data.len() as u32;
+            chunks_to_send.push(Box::new(c));
+        }
+
+        if !chunks_to_send.is_empty() {
+            packets.push(self.create_packet(chunks_to_send));
+        }
+
+        packets
+    }
+    /*
+                             // sendPayloadData sends the data chunks.
+                             fn sendPayloadData(chunks []*chunkPayloadData) error {
+                                 a.lock.Lock()
+                                 defer a.lock.Unlock()
+
+                                 state := a.get_state()
+                                 if state != Established {
+                                     return fmt.Errorf("%w: state=%s", errPayloadDataStateNotExist,
+                                         getAssociationStateString(state))
+                                 }
+
+                                 // Push the chunks into the pending queue first.
+                                 for _, c := range chunks {
+                                     a.pending_queue.push(c)
+                                 }
+
+                                 a.awake_write_loop()
+                                 return nil
+                             }
+    */
+    /// The caller should hold the lock.
+    fn check_partial_reliability_status(&self, c: &ChunkPayloadData) {
+        if !self.use_forward_tsn {
+            return;
+        }
+
+        // draft-ietf-rtcweb-data-protocol-09.txt section 6
+        //	6.  Procedures
+        //		All Data Channel Establishment Protocol messages MUST be sent using
+        //		ordered delivery and reliable transmission.
+        //
+        if c.payload_type == PayloadProtocolIdentifier::Dcep {
+            return;
+        }
+
+        // PR-SCTP
+        if let Some(s) = self.streams.get(&c.stream_identifier) {
+            if s.reliability_type == ReliabilityType::Rexmit {
+                if c.nsent >= s.reliability_value {
+                    c.set_abandoned(true);
+                    log::trace!(
+                        "[{}] marked as abandoned: tsn={} ppi={} (remix: {})",
+                        self.name,
+                        c.tsn,
+                        c.payload_type,
+                        c.nsent
+                    );
+                }
+            } else if s.reliability_type == ReliabilityType::Timed {
+                if let Ok(elapsed) = SystemTime::now().duration_since(c.since) {
+                    if elapsed.as_millis() as u32 >= s.reliability_value {
+                        c.set_abandoned(true);
+                        log::trace!(
+                            "[{}] marked as abandoned: tsn={} ppi={} (timed: {:?})",
+                            self.name,
+                            c.tsn,
+                            c.payload_type,
+                            elapsed
+                        );
+                    }
+                }
+            }
+        } else {
+            log::error!("[{}] stream {} not found)", self.name, c.stream_identifier);
+        }
+    }
+
+    /// get_data_packets_to_retransmit is called when T3-rtx is timed out and retransmit outstanding data chunks
+    /// that are not acked or abandoned yet.
+    /// The caller should hold the lock.
+    fn get_data_packets_to_retransmit(&mut self) -> Vec<Packet> {
+        let awnd = std::cmp::min(self.cwnd, self.rwnd);
+        let mut chunks = vec![];
+        let mut bytes_to_send = 0;
+        let mut done = false;
+        let mut i = 0;
+        while !done {
+            let tsn = self.cumulative_tsnack_point + i + 1;
+            if let Some(c) = self.inflight_queue.get_mut(tsn) {
+                if !c.retransmit {
+                    continue;
+                }
+
+                if i == 0 && self.rwnd < c.user_data.len() as u32 {
+                    // Send it as a zero window probe
+                    done = true;
+                } else if bytes_to_send + c.user_data.len() > awnd as usize {
+                    break;
+                }
+
+                // reset the retransmit flag not to retransmit again before the next
+                // t3-rtx timer fires
+                c.retransmit = false;
+                bytes_to_send += c.user_data.len();
+
+                c.nsent += 1;
+            } else {
+                break; // end of pending data
+            }
+
+            if let Some(c) = self.inflight_queue.get(tsn) {
+                self.check_partial_reliability_status(c);
+
+                log::trace!(
+                    "[{}] retransmitting tsn={} ssn={} sent={}",
+                    self.name,
+                    c.tsn,
+                    c.stream_sequence_number,
+                    c.nsent
+                );
+
+                chunks.push(c.clone());
+            }
+            i += 1;
+        }
+
+        self.bundle_data_chunks_into_packets(chunks)
+    }
+
+    /// generate_next_tsn returns the my_next_tsn and increases it. The caller should hold the lock.
+    /// The caller should hold the lock.
+    fn generate_next_tsn(&mut self) -> u32 {
+        let tsn = self.my_next_tsn;
+        self.my_next_tsn += 1;
+        tsn
+    }
+
+    /// generate_next_rsn returns the my_next_rsn and increases it. The caller should hold the lock.
+    /// The caller should hold the lock.
+    fn generate_next_rsn(&mut self) -> u32 {
+        let rsn = self.my_next_rsn;
+        self.my_next_rsn += 1;
+        rsn
+    }
+
+    fn create_selective_ack_chunk(&mut self) -> ChunkSelectiveAck {
+        ChunkSelectiveAck {
+            cumulative_tsn_ack: self.peer_last_tsn,
+            advertised_receiver_window_credit: self.get_my_receiver_window_credit(),
+            gap_ack_blocks: self.payload_queue.get_gap_ack_blocks(self.peer_last_tsn),
+            duplicate_tsn: self.payload_queue.pop_duplicates(),
+        }
+    }
+
+    fn pack(p: Packet) -> Vec<Packet> {
+        vec![p]
+    }
+    /*
+                  fn handleChunkStart() {
                       a.lock.Lock()
                       defer a.lock.Unlock()
 
@@ -2256,7 +2281,7 @@ impl Association {
                       a.immediate_ack_triggered = false
                   }
 
-                  func (a *Association) handleChunkEnd() {
+                  fn handleChunkEnd() {
                       a.lock.Lock()
                       defer a.lock.Unlock()
 
@@ -2271,7 +2296,7 @@ impl Association {
                       }
                   }
 
-                  func (a *Association) handleChunk(p *packet, c chunk) error {
+                  fn handleChunk(p *packet, c chunk) error {
                       a.lock.Lock()
                       defer a.lock.Unlock()
 
@@ -2367,7 +2392,7 @@ impl Association {
             RtxTimerId::T1Cookie => {
                 if let Err(err) = self.send_cookie_echo() {
                     log::debug!(
-                        "[{}] failed to retransmit cookie-echo (n_rtos={}): {}",
+                        "[{}] failed to retransmit cookie-echo (n_rtos={}): {:?}",
                         self.name,
                         n_rtos,
                         err

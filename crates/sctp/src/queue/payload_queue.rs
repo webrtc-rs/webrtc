@@ -75,6 +75,9 @@ impl PayloadQueue {
     pub(crate) fn get(&self, tsn: u32) -> Option<&ChunkPayloadData> {
         self.chunk_map.get(&tsn)
     }
+    pub(crate) fn get_mut(&mut self, tsn: u32) -> Option<&mut ChunkPayloadData> {
+        self.chunk_map.get_mut(&tsn)
+    }
 
     /// popDuplicates returns an array of TSN values that were found duplicate.
     pub(crate) fn pop_duplicates(&mut self) -> Vec<u32> {
