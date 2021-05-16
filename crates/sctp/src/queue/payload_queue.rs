@@ -28,7 +28,7 @@ impl PayloadQueue {
         });
     }
 
-    pub(crate) fn can_push(&self, p: ChunkPayloadData, cumulative_tsn: u32) -> bool {
+    pub(crate) fn can_push(&self, p: &ChunkPayloadData, cumulative_tsn: u32) -> bool {
         !(self.chunk_map.contains_key(&p.tsn) || sna32lte(p.tsn, cumulative_tsn))
     }
 

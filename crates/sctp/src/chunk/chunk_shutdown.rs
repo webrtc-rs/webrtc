@@ -14,7 +14,7 @@ use std::fmt;
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 #[derive(Debug, Clone)]
 pub(crate) struct ChunkShutdown {
-    cumulative_tsn_ack: u32,
+    pub(crate) cumulative_tsn_ack: u32,
 }
 
 pub(crate) const CUMULATIVE_TSN_ACK_LENGTH: usize = 4;
