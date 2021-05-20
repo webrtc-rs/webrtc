@@ -1,4 +1,5 @@
 use crate::association_stats::AssociationStats;
+use crate::chunk::chunk_cookie_ack::ChunkCookieAck;
 use crate::chunk::chunk_cookie_echo::ChunkCookieEcho;
 use crate::chunk::chunk_init::ChunkInit;
 use crate::chunk::chunk_payload_data::{ChunkPayloadData, PayloadProtocolIdentifier};
@@ -26,6 +27,11 @@ use util::Conn;
 //use async_trait::async_trait;
 use crate::chunk::chunk_error::ChunkError;
 use crate::chunk::chunk_forward_tsn::{ChunkForwardTsn, ChunkForwardTsnStream};
+use crate::chunk::chunk_heartbeat::ChunkHeartbeat;
+use crate::chunk::chunk_heartbeat_ack::ChunkHeartbeatAck;
+use crate::chunk::chunk_type::*;
+use crate::param::param_heartbeat_info::ParamHeartbeatInfo;
+use crate::param::param_supported_extensions::ParamSupportedExtensions;
 use crate::param::Param;
 use bytes::Bytes;
 use rand::random;
@@ -227,7 +233,7 @@ pub struct Association {
     destination_port: u16,
     my_max_num_inbound_streams: u16,
     my_max_num_outbound_streams: u16,
-    my_cookie: ParamStateCookie,
+    my_cookie: Option<ParamStateCookie>,
     payload_queue: PayloadQueue,
     inflight_queue: PayloadQueue,
     pending_queue: PendingQueue,
@@ -410,7 +416,7 @@ impl Association {
                      init.numInboundStreams = self.my_max_num_inbound_streams
                      init.initiateTag = self.my_verification_tag
                      init.advertisedReceiverWindowCredit = self.max_receive_buffer_size
-                     setSupportedExtensions(&init.chunkInitCommon)
+                     set_supported_extensions(&init.chunkInitCommon)
                      self.stored_init = init
 
                      err := self.sendInit()
@@ -1014,247 +1020,265 @@ impl Association {
         self.bytes_received
         //return atomic.LoadUint64(&self.bytes_received)
     }
-    /*
-                                 func setSupportedExtensions(init *chunkInitCommon) {
-                                     // nolint:godox
-                                     // TODO RFC5061 https://tools.ietf.org/html/rfc6525#section-5.2
-                                     // An implementation supporting this (Supported Extensions Parameter)
-                                     // extension MUST list the ASCONF, the ASCONF-ACK, and the AUTH chunks
-                                     // in its INIT and INIT-ACK parameters.
-                                     init.params = append(init.params, &paramSupportedExtensions{
-                                         ChunkTypes: []chunkType{ctReconfig, ctForwardTSN},
-                                     })
-                                 }
 
-                                 // The caller should hold the lock.
-                                 fn handleInit(p *packet, i *chunkInit) ([]*packet, error) {
-                                     state := self.get_state()
-                                     self.log.Debugf("[%s] chunkInit received in state '%s'", self.name, getAssociationStateString(state))
+    fn set_supported_extensions(init: &mut ChunkInit) {
+        // TODO RFC5061 https://tools.ietf.org/html/rfc6525#section-5.2
+        // An implementation supporting this (Supported Extensions Parameter)
+        // extension MUST list the ASCONF, the ASCONF-ACK, and the AUTH chunks
+        // in its INIT and INIT-ACK parameters.
+        init.params.push(Box::new(ParamSupportedExtensions {
+            chunk_types: vec![CT_RECONFIG, CT_FORWARD_TSN],
+        }));
+    }
 
-                                     // https://tools.ietf.org/html/rfc4960#section-5.2.1
-                                     // Upon receipt of an INIT in the COOKIE-WAIT state, an endpoint MUST
-                                     // respond with an INIT ACK using the same parameters it sent in its
-                                     // original INIT chunk (including its Initiate Tag, unchanged).  When
-                                     // responding, the endpoint MUST send the INIT ACK back to the same
-                                     // address that the original INIT (sent by this endpoint) was sent.
-
-                                     if state != closed && state != CookieWait && state != CookieEchoed {
-                                         // 5.2.2.  Unexpected INIT in States Other than CLOSED, COOKIE-ECHOED,
-                                         //        COOKIE-WAIT, and SHUTDOWN-ACK-SENT
-                                         return nil, fmt.Errorf("%w: %s", errHandleInitState, getAssociationStateString(state))
-                                     }
-
-                                     // Should we be setting any of these permanently until we've ACKed further?
-                                     self.my_max_num_inbound_streams = min16(i.numInboundStreams, self.my_max_num_inbound_streams)
-                                     self.my_max_num_outbound_streams = min16(i.numOutboundStreams, self.my_max_num_outbound_streams)
-                                     self.peer_verification_tag = i.initiateTag
-                                     self.source_port = p.destination_port
-                                     self.destination_port = p.source_port
-
-                                     // 13.2 This is the last TSN received in sequence.  This value
-                                     // is set initially by taking the peer's initial TSN,
-                                     // received in the INIT or INIT ACK chunk, and
-                                     // subtracting one from it.
-                                     self.peer_last_tsn = i.initialTSN - 1
-
-                                     for _, param := range i.params {
-                                         switch v := param.(type) { // nolint:gocritic
-                                         case *paramSupportedExtensions:
-                                             for _, t := range v.ChunkTypes {
-                                                 if t == ctForwardTSN {
-                                                     self.log.Debugf("[%s] use ForwardTSN (on init)\n", self.name)
-                                                     self.use_forward_tsn = true
-                                                 }
-                                             }
-                                         }
-                                     }
-                                     if !self.use_forward_tsn {
-                                         self.log.Warnf("[%s] not using ForwardTSN (on init)\n", self.name)
-                                     }
-
-                                     outbound := &packet{}
-                                     outbound.verificationTag = self.peer_verification_tag
-                                     outbound.source_port = self.source_port
-                                     outbound.destination_port = self.destination_port
-
-                                     initAck := &chunkInitAck{}
-
-                                     initAck.initialTSN = self.my_next_tsn
-                                     initAck.numOutboundStreams = self.my_max_num_outbound_streams
-                                     initAck.numInboundStreams = self.my_max_num_inbound_streams
-                                     initAck.initiateTag = self.my_verification_tag
-                                     initAck.advertisedReceiverWindowCredit = self.max_receive_buffer_size
-
-                                     if self.my_cookie == nil {
-                                         var err error
-                                         if self.my_cookie, err = newRandomStateCookie(); err != nil {
-                                             return nil, err
-                                         }
-                                     }
-
-                                     initAck.params = []param{self.my_cookie}
-
-                                     setSupportedExtensions(&initAck.chunkInitCommon)
-
-                                     outbound.chunks = []chunk{initAck}
-
-                                     return pack(outbound), nil
-                                 }
-
-                                 // The caller should hold the lock.
-                                 fn handleInitAck(p *packet, i *chunkInitAck) error {
-                                     state := self.get_state()
-                                     self.log.Debugf("[%s] chunkInitAck received in state '%s'", self.name, getAssociationStateString(state))
-                                     if state != CookieWait {
-                                         // RFC 4960
-                                         // 5.2.3.  Unexpected INIT ACK
-                                         //   If an INIT ACK is received by an endpoint in any state other than the
-                                         //   COOKIE-WAIT state, the endpoint should discard the INIT ACK chunk.
-                                         //   An unexpected INIT ACK usually indicates the processing of an old or
-                                         //   duplicated INIT chunk.
-                                         return nil
-                                     }
-
-                                     self.my_max_num_inbound_streams = min16(i.numInboundStreams, self.my_max_num_inbound_streams)
-                                     self.my_max_num_outbound_streams = min16(i.numOutboundStreams, self.my_max_num_outbound_streams)
-                                     self.peer_verification_tag = i.initiateTag
-                                     self.peer_last_tsn = i.initialTSN - 1
-                                     if self.source_port != p.destination_port ||
-                                         self.destination_port != p.source_port {
-                                         self.log.Warnf("[%s] handleInitAck: port mismatch", self.name)
-                                         return nil
-                                     }
-
-                                     self.rwnd = i.advertisedReceiverWindowCredit
-                                     self.log.Debugf("[%s] initial rwnd=%d", self.name, self.rwnd)
-
-                                     // RFC 4690 Sec 7.2.1
-                                     //  o  The initial value of ssthresh MAY be arbitrarily high (for
-                                     //     example, implementations MAY use the size of the receiver
-                                     //     advertised window).
-                                     self.ssthresh = self.rwnd
-                                     self.log.Tracef("[%s] updated cwnd=%d ssthresh=%d inflight=%d (INI)",
-                                         self.name, self.cwnd, self.ssthresh, self.inflight_queue.getNumBytes())
-
-                                     self.t1init.stop()
-                                     self.stored_init = nil
-
-                                     var cookieParam *paramStateCookie
-                                     for _, param := range i.params {
-                                         switch v := param.(type) {
-                                         case *paramStateCookie:
-                                             cookieParam = v
-                                         case *paramSupportedExtensions:
-                                             for _, t := range v.ChunkTypes {
-                                                 if t == ctForwardTSN {
-                                                     self.log.Debugf("[%s] use ForwardTSN (on initAck)\n", self.name)
-                                                     self.use_forward_tsn = true
-                                                 }
-                                             }
-                                         }
-                                     }
-                                     if !self.use_forward_tsn {
-                                         self.log.Warnf("[%s] not using ForwardTSN (on initAck)\n", self.name)
-                                     }
-                                     if cookieParam == nil {
-                                         return errInitAckNoCookie
-                                     }
-
-                                     self.stored_cookie_echo = &chunkCookieEcho{}
-                                     self.stored_cookie_echo.cookie = cookieParam.cookie
-
-                                     err := self.send_cookie_echo()
-                                     if err != nil {
-                                         self.log.Errorf("[%s] failed to send init: %s", self.name, err.Error())
-                                     }
-
-                                     self.t1cookie.start(self.rto_mgr.getRTO())
-                                     self.set_state(CookieEchoed)
-                                     return nil
-                                 }
-
-                                 // The caller should hold the lock.
-                                 fn handleHeartbeat(c *chunkHeartbeat) []*packet {
-                                     self.log.Tracef("[%s] chunkHeartbeat", self.name)
-                                     hbi, ok := c.params[0].(*paramHeartbeatInfo)
-                                     if !ok {
-                                         self.log.Warnf("[%s] failed to handle Heartbeat, no ParamHeartbeatInfo", self.name)
-                                     }
-
-                                     return pack(&packet{
-                                         verificationTag: self.peer_verification_tag,
-                                         source_port:      self.source_port,
-                                         destination_port: self.destination_port,
-                                         chunks: []chunk{&chunkHeartbeatAck{
-                                             params: []param{
-                                                 &paramHeartbeatInfo{
-                                                     heartbeatInformation: hbi.heartbeatInformation,
-                                                 },
-                                             },
-                                         }},
-                                     })
-                                 }
-
-                                 // The caller should hold the lock.
-                                 fn handleCookieEcho(c *chunkCookieEcho) []*packet {
-                                     state := self.get_state()
-                                     self.log.Debugf("[%s] COOKIE-ECHO received in state '%s'", self.name, getAssociationStateString(state))
-
-                                     if self.my_cookie == nil {
-                                         self.log.Debugf("[%s] COOKIE-ECHO received before initialization", self.name)
-                                         return nil
-                                     }
-                                     switch state {
-                                     default:
-                                         return nil
-                                     case Established:
-                                         if !bytes.Equal(self.my_cookie.cookie, c.cookie) {
-                                             return nil
-                                         }
-                                     case closed, CookieWait, CookieEchoed:
-                                         if !bytes.Equal(self.my_cookie.cookie, c.cookie) {
-                                             return nil
-                                         }
-
-                                         self.t1init.stop()
-                                         self.stored_init = nil
-
-                                         self.t1cookie.stop()
-                                         self.stored_cookie_echo = nil
-
-                                         self.set_state(Established)
-                                         self.handshakeCompletedCh <- nil
-                                     }
-
-                                     p := &packet{
-                                         verificationTag: self.peer_verification_tag,
-                                         source_port:      self.source_port,
-                                         destination_port: self.destination_port,
-                                         chunks:          []chunk{&chunkCookieAck{}},
-                                     }
-                                     return pack(p)
-                                 }
-
-                                 // The caller should hold the lock.
-                                 fn handleCookieAck() {
-                                     state := self.get_state()
-                                     self.log.Debugf("[%s] COOKIE-ACK received in state '%s'", self.name, getAssociationStateString(state))
-                                     if state != CookieEchoed {
-                                         // RFC 4960
-                                         // 5.2.5.  Handle Duplicate COOKIE-ACK.
-                                         //   At any state other than COOKIE-ECHOED, an endpoint should silently
-                                         //   discard a received COOKIE ACK chunk.
-                                         return
-                                     }
-
-                                     self.t1cookie.stop()
-                                     self.stored_cookie_echo = nil
-
-                                     self.set_state(Established)
-                                     self.handshakeCompletedCh <- nil
-                                 }
-    */
     // The caller should hold the lock.
+    fn handle_init(&mut self, p: Packet, i: ChunkInit) -> Result<Vec<Packet>, Error> {
+        let state = self.get_state();
+        log::debug!("[{}] chunkInit received in state '{}'", self.name, state);
+
+        // https://tools.ietf.org/html/rfc4960#section-5.2.1
+        // Upon receipt of an INIT in the COOKIE-WAIT state, an endpoint MUST
+        // respond with an INIT ACK using the same parameters it sent in its
+        // original INIT chunk (including its Initiate Tag, unchanged).  When
+        // responding, the endpoint MUST send the INIT ACK back to the same
+        // address that the original INIT (sent by this endpoint) was sent.
+
+        if state != AssociationState::Closed
+            && state != AssociationState::CookieWait
+            && state != AssociationState::CookieEchoed
+        {
+            // 5.2.2.  Unexpected INIT in States Other than CLOSED, COOKIE-ECHOED,
+            //        COOKIE-WAIT, and SHUTDOWN-ACK-SENT
+            return Err(Error::ErrHandleInitState);
+        }
+
+        // Should we be setting any of these permanently until we've ACKed further?
+        self.my_max_num_inbound_streams =
+            std::cmp::min(i.num_inbound_streams, self.my_max_num_inbound_streams);
+        self.my_max_num_outbound_streams =
+            std::cmp::min(i.num_outbound_streams, self.my_max_num_outbound_streams);
+        self.peer_verification_tag = i.initiate_tag;
+        self.source_port = p.destination_port;
+        self.destination_port = p.source_port;
+
+        // 13.2 This is the last TSN received in sequence.  This value
+        // is set initially by taking the peer's initial TSN,
+        // received in the INIT or INIT ACK chunk, and
+        // subtracting one from it.
+        self.peer_last_tsn = i.initial_tsn - 1;
+
+        for param in &i.params {
+            if let Some(v) = param.as_any().downcast_ref::<ParamSupportedExtensions>() {
+                for t in &v.chunk_types {
+                    if *t == CT_FORWARD_TSN {
+                        log::debug!("[{}] use ForwardTSN (on init)\n", self.name);
+                        self.use_forward_tsn = true;
+                    }
+                }
+            }
+        }
+        if !self.use_forward_tsn {
+            log::warn!("[{}] not using ForwardTSN (on init)\n", self.name);
+        }
+
+        let mut outbound = Packet {
+            verification_tag: self.peer_verification_tag,
+            source_port: self.source_port,
+            destination_port: self.destination_port,
+            ..Default::default()
+        };
+
+        let mut init_ack = ChunkInit {
+            is_ack: true,
+            initial_tsn: self.my_next_tsn,
+            num_outbound_streams: self.my_max_num_outbound_streams,
+            num_inbound_streams: self.my_max_num_inbound_streams,
+            initiate_tag: self.my_verification_tag,
+            advertised_receiver_window_credit: self.max_receive_buffer_size,
+            ..Default::default()
+        };
+
+        if self.my_cookie.is_none() {
+            self.my_cookie = Some(ParamStateCookie::new());
+        }
+
+        if let Some(my_cookie) = &self.my_cookie {
+            init_ack.params = vec![Box::new(my_cookie.clone())];
+        }
+
+        Association::set_supported_extensions(&mut init_ack);
+
+        outbound.chunks = vec![Box::new(init_ack)];
+
+        Ok(vec![outbound])
+    }
+
+    // The caller should hold the lock.
+    async fn handle_init_ack(&mut self, p: Packet, i: ChunkInit) -> Result<(), Error> {
+        let state = self.get_state();
+        log::debug!("[{}] chunkInitAck received in state '{}'", self.name, state);
+        if state != AssociationState::CookieWait {
+            // RFC 4960
+            // 5.2.3.  Unexpected INIT ACK
+            //   If an INIT ACK is received by an endpoint in any state other than the
+            //   COOKIE-WAIT state, the endpoint should discard the INIT ACK chunk.
+            //   An unexpected INIT ACK usually indicates the processing of an old or
+            //   duplicated INIT chunk.
+            return Ok(());
+        }
+
+        self.my_max_num_inbound_streams =
+            std::cmp::min(i.num_inbound_streams, self.my_max_num_inbound_streams);
+        self.my_max_num_outbound_streams =
+            std::cmp::min(i.num_outbound_streams, self.my_max_num_outbound_streams);
+        self.peer_verification_tag = i.initiate_tag;
+        self.peer_last_tsn = i.initial_tsn - 1;
+        if self.source_port != p.destination_port || self.destination_port != p.source_port {
+            log::warn!("[{}] handle_init_ack: port mismatch", self.name);
+            return Ok(());
+        }
+
+        self.rwnd = i.advertised_receiver_window_credit;
+        log::debug!("[{}] initial rwnd={}", self.name, self.rwnd);
+
+        // RFC 4690 Sec 7.2.1
+        //  o  The initial value of ssthresh MAY be arbitrarily high (for
+        //     example, implementations MAY use the size of the receiver
+        //     advertised window).
+        self.ssthresh = self.rwnd;
+        log::trace!(
+            "[{}] updated cwnd={} ssthresh={} inflight={} (INI)",
+            self.name,
+            self.cwnd,
+            self.ssthresh,
+            self.inflight_queue.get_num_bytes()
+        );
+
+        self.t1init.stop().await;
+        self.stored_init = None;
+
+        let mut cookie_param = None;
+        for param in &i.params {
+            if let Some(v) = param.as_any().downcast_ref::<ParamStateCookie>() {
+                cookie_param = Some(v);
+            } else if let Some(v) = param.as_any().downcast_ref::<ParamSupportedExtensions>() {
+                for t in &v.chunk_types {
+                    if *t == CT_FORWARD_TSN {
+                        log::debug!("[{}] use ForwardTSN (on initAck)\n", self.name);
+                        self.use_forward_tsn = true;
+                    }
+                }
+            }
+        }
+        if !self.use_forward_tsn {
+            log::warn!("[{}] not using ForwardTSN (on initAck)\n", self.name);
+        }
+
+        if let Some(v) = cookie_param {
+            self.stored_cookie_echo = Some(ChunkCookieEcho {
+                cookie: v.cookie.clone(),
+            });
+
+            self.send_cookie_echo()?;
+
+            //TODO: self.t1cookie.start(self.rto_mgr.get_rto());
+            self.set_state(AssociationState::CookieEchoed);
+
+            Ok(())
+        } else {
+            Err(Error::ErrInitAckNoCookie)
+        }
+    }
+
+    // The caller should hold the lock.
+    fn handle_heartbeat(&self, c: ChunkHeartbeat) -> Option<Vec<Packet>> {
+        log::trace!("[{}] chunkHeartbeat", self.name);
+        if let Some(p) = c.params.first() {
+            if let Some(hbi) = p.as_any().downcast_ref::<ParamHeartbeatInfo>() {
+                return Some(vec![Packet {
+                    verification_tag: self.peer_verification_tag,
+                    source_port: self.source_port,
+                    destination_port: self.destination_port,
+                    chunks: vec![Box::new(ChunkHeartbeatAck {
+                        params: vec![Box::new(ParamHeartbeatInfo {
+                            heartbeat_information: hbi.heartbeat_information.clone(),
+                        })],
+                    })],
+                }]);
+            } else {
+                log::warn!(
+                    "[{}] failed to handle Heartbeat, no ParamHeartbeatInfo",
+                    self.name,
+                );
+            }
+        }
+
+        None
+    }
+
+    // The caller should hold the lock.
+    async fn handle_cookie_echo(&mut self, c: ChunkCookieEcho) -> Option<Vec<Packet>> {
+        let state = self.get_state();
+        log::debug!("[{}] COOKIE-ECHO received in state '{}'", self.name, state);
+
+        if let Some(my_cookie) = &self.my_cookie {
+            match state {
+                AssociationState::Established => {
+                    if my_cookie.cookie != c.cookie {
+                        return None;
+                    }
+                }
+                AssociationState::Closed
+                | AssociationState::CookieWait
+                | AssociationState::CookieEchoed => {
+                    if my_cookie.cookie != c.cookie {
+                        return None;
+                    }
+
+                    self.t1init.stop().await;
+                    self.stored_init = None;
+
+                    self.t1cookie.stop().await;
+                    self.stored_cookie_echo = None;
+
+                    self.set_state(AssociationState::Established);
+                    //TODO: self.handshakeCompletedCh < -nil
+                }
+                _ => return None,
+            };
+        } else {
+            log::debug!("[{}] COOKIE-ECHO received before initialization", self.name);
+            return None;
+        }
+
+        Some(vec![Packet {
+            verification_tag: self.peer_verification_tag,
+            source_port: self.source_port,
+            destination_port: self.destination_port,
+            chunks: vec![Box::new(ChunkCookieAck {})],
+        }])
+    }
+
+    /// The caller should hold the lock.
+    async fn handle_cookie_ack(&mut self) {
+        let state = self.get_state();
+        log::debug!("[{}] COOKIE-ACK received in state '{}'", self.name, state);
+        if state != AssociationState::CookieEchoed {
+            // RFC 4960
+            // 5.2.5.  Handle Duplicate COOKIE-ACK.
+            //   At any state other than COOKIE-ECHOED, an endpoint should silently
+            //   discard a received COOKIE ACK chunk.
+            return;
+        }
+
+        self.t1cookie.stop().await;
+        self.stored_cookie_echo = None;
+
+        self.set_state(AssociationState::Established);
+        //TODO: self.handshakeCompletedCh <- nil
+    }
+
+    /// The caller should hold the lock.
     fn handle_data(&mut self, d: ChunkPayloadData) -> Option<Vec<Packet>> {
         log::trace!(
             "[{}] DATA: tsn={} immediateSack={} len={}",
@@ -1378,30 +1402,30 @@ impl Association {
             self.max_receive_buffer_size - bytes_queued
         }
     }
-    /*
-                                             // OpenStream opens a stream
-                                             fn OpenStream(streamIdentifier uint16, defaultPayloadType PayloadProtocolIdentifier) (*Stream, error) {
-                                                 self.lock.Lock()
-                                                 defer self.lock.Unlock()
 
-                                                 if _, ok := self.streams[streamIdentifier]; ok {
-                                                     return nil, fmt.Errorf("%w: %d", errStreamAlreadyExist, streamIdentifier)
-                                                 }
+    /*TODO: // OpenStream opens a stream
+     fn OpenStream(streamIdentifier uint16, defaultPayloadType PayloadProtocolIdentifier) (*Stream, error) {
+         self.lock.Lock()
+         defer self.lock.Unlock()
 
-                                                 s := self.create_stream(streamIdentifier, false)
-                                                 s.setDefaultPayloadType(defaultPayloadType)
+         if _, ok := self.streams[streamIdentifier]; ok {
+             return nil, fmt.Errorf("%w: %d", errStreamAlreadyExist, streamIdentifier)
+         }
 
-                                                 return s, nil
-                                             }
+         s := self.create_stream(streamIdentifier, false)
+         s.setDefaultPayloadType(defaultPayloadType)
 
-                                             // AcceptStream accepts a stream
-                                             fn AcceptStream() (*Stream, error) {
-                                                 s, ok := <-self.acceptCh
-                                                 if !ok {
-                                                     return nil, io.EOF // no more incoming streams
-                                                 }
-                                                 return s, nil
-                                             }
+         return s, nil
+     }
+
+     // AcceptStream accepts a stream
+     fn AcceptStream() (*Stream, error) {
+         s, ok := <-self.acceptCh
+         if !ok {
+             return nil, io.EOF // no more incoming streams
+         }
+         return s, nil
+     }
     */
     /// create_stream creates a stream. The caller should hold the lock and check no stream exists for this id.
     fn create_stream(&mut self, stream_identifier: u16, _accept: bool) -> Option<&Stream> {
@@ -2461,10 +2485,10 @@ impl Association {
 
                       switch c := c.(type) {
                       case *chunkInit:
-                          packets, err = self.handleInit(p, c)
+                          packets, err = self.handle_init(p, c)
 
                       case *chunkInitAck:
-                          err = self.handleInitAck(p, c)
+                          err = self.handle_init_ack(p, c)
 
                       case *chunkAbort:
                           var errStr string
@@ -2481,13 +2505,13 @@ impl Association {
                           self.log.Debugf("[%s] Error chunk, with following errors: %s", self.name, errStr)
 
                       case *chunkHeartbeat:
-                          packets = self.handleHeartbeat(c)
+                          packets = self.handle_heartbeat(c)
 
                       case *chunkCookieEcho:
-                          packets = self.handleCookieEcho(c)
+                          packets = self.handle_cookie_echo(c)
 
                       case *chunkCookieAck:
-                          self.handleCookieAck()
+                          self.handle_cookie_ack()
 
                       case *chunkPayloadData:
                           packets = self.handle_data(c)
