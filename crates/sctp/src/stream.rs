@@ -251,8 +251,8 @@ impl Stream {
             _ => {}
         };
 
-        if let Some(err) = &self.write_err {
-            return Err(*err);
+        if let Some(err) = self.write_err {
+            return Err(err);
         }
 
         let _chunks = self.packetize(p, ppi);
@@ -371,7 +371,7 @@ impl Stream {
 
     /// This method is called by association's readLoop (go-)routine to notify this stream
     /// of the specified amount of outgoing data has been delivered to the peer.
-    fn on_buffer_released(&mut self, n_bytes_released: i64) {
+    pub(crate) fn on_buffer_released(&mut self, n_bytes_released: i64) {
         if n_bytes_released <= 0 {
             return;
         }

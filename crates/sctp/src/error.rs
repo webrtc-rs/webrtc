@@ -203,4 +203,6 @@ pub enum Error {
     ErrShortBuffer,
     #[error("Io EOF")]
     ErrEof,
+    #[error("Invalid SystemTime")]
+    ErrInvalidSystemTime,
 }
