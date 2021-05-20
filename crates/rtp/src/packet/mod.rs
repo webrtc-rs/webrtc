@@ -35,19 +35,60 @@ impl Marshaller for Packet {
     fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
         let header = Header::unmarshal(raw_packet)?;
         let payload = raw_packet.slice(header.marshal_size()..);
-
-        Ok(Packet { header, payload })
+        if header.padding && !payload.is_empty() {
+            let payload_len = payload.len();
+            let padding_len = payload[payload_len - 1] as usize;
+            if padding_len <= payload_len {
+                Ok(Packet {
+                    header,
+                    payload: payload.slice(..payload_len - padding_len),
+                })
+            } else {
+                Err(Error::ErrShortPacket)
+            }
+        } else {
+            Ok(Packet { header, payload })
+        }
     }
 
     /// MarshalSize returns the size of the packet once marshaled.
     fn marshal_size(&self) -> usize {
-        self.header.marshal_size() + self.payload.len()
+        let payload_len = self.payload.len();
+        let padding_len = if self.header.padding {
+            get_padding(payload_len)
+        } else {
+            0
+        };
+        self.header.marshal_size() + payload_len + padding_len
     }
 
     /// MarshalTo serializes the packet and writes to the buffer.
     fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error> {
         let n = self.header.marshal_to(buf)?;
         buf.put(&*self.payload);
-        Ok(n + self.payload.len())
+        let padding_len = if self.header.padding {
+            let padding_len = get_padding(self.payload.len());
+            for i in 0..padding_len {
+                if i != padding_len - 1 {
+                    buf.put_u8(0);
+                } else {
+                    buf.put_u8(padding_len as u8);
+                }
+            }
+            padding_len
+        } else {
+            0
+        };
+
+        Ok(n + self.payload.len() + padding_len)
+    }
+}
+
+/// getPadding Returns the padding required to make the length a multiple of 4
+fn get_padding(len: usize) -> usize {
+    if len % 4 == 0 {
+        0
+    } else {
+        4 - (len % 4)
     }
 }
