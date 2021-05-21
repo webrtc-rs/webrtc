@@ -170,53 +170,55 @@ impl Depacketizer for H264Packet {
         // https://tools.ietf.org/html/rfc6184#section-5.4
         let b0 = packet[0];
         let nalu_type = b0 & NALU_TYPE_BITMASK;
-        if nalu_type > 0 && nalu_type < 24 {
-            payload.put(&*ANNEXB_NALUSTART_CODE);
-            payload.put(&*packet.clone());
-            self.payload = payload.freeze();
-            Ok(())
-        } else if nalu_type == STAPA_NALU_TYPE {
-            let mut curr_offset = STAPA_HEADER_SIZE;
-            while curr_offset < packet.len() {
-                let nalu_size =
-                    ((packet[curr_offset] as usize) << 8) | packet[curr_offset + 1] as usize;
-                curr_offset += STAPA_NALU_LENGTH_SIZE;
 
-                if packet.len() < curr_offset + nalu_size {
-                    return Err(Error::StapASizeLargerThanBuffer(
-                        nalu_size,
-                        packet.len() - curr_offset,
-                    ));
+        match nalu_type {
+            1..=23 => {
+                payload.put(&*ANNEXB_NALUSTART_CODE);
+                payload.put(&*packet.clone());
+                self.payload = payload.freeze();
+            }
+            STAPA_NALU_TYPE => {
+                let mut curr_offset = STAPA_HEADER_SIZE;
+                while curr_offset < packet.len() {
+                    let nalu_size =
+                        ((packet[curr_offset] as usize) << 8) | packet[curr_offset + 1] as usize;
+                    curr_offset += STAPA_NALU_LENGTH_SIZE;
+
+                    if packet.len() < curr_offset + nalu_size {
+                        return Err(Error::StapASizeLargerThanBuffer(
+                            nalu_size,
+                            packet.len() - curr_offset,
+                        ));
+                    }
+                    payload.put(&*ANNEXB_NALUSTART_CODE);
+                    payload.put(&*packet.slice(curr_offset..curr_offset + nalu_size));
+                    curr_offset += nalu_size;
                 }
-                payload.put(&*ANNEXB_NALUSTART_CODE);
-                payload.put(&*packet.slice(curr_offset..curr_offset + nalu_size));
-                curr_offset += nalu_size;
-            }
-
-            self.payload = payload.freeze();
-            Ok(())
-        } else if nalu_type == FUA_NALU_TYPE {
-            if packet.len() < FUA_HEADER_SIZE as usize {
-                return Err(Error::ErrShortPacket);
-            }
-
-            let b1 = packet[1];
-            if b1 & FUA_START_BITMASK != 0 {
-                let nalu_ref_idc = b0 & NALU_REF_IDC_BITMASK;
-                let fragmented_nalu_type = b1 & NALU_TYPE_BITMASK;
-
-                payload.put(&*ANNEXB_NALUSTART_CODE);
-                payload.put_u8(nalu_ref_idc | fragmented_nalu_type);
-                payload.put_slice(&*packet.slice(FUA_HEADER_SIZE as usize..));
 
                 self.payload = payload.freeze();
-                Ok(())
-            } else {
-                self.payload = packet.slice(FUA_HEADER_SIZE as usize..);
-                Ok(())
             }
-        } else {
-            Err(Error::NaluTypeIsNotHandled(nalu_type))
+            FUA_NALU_TYPE => {
+                if packet.len() < FUA_HEADER_SIZE as usize {
+                    return Err(Error::ErrShortPacket);
+                }
+
+                let b1 = packet[1];
+                if b1 & FUA_START_BITMASK != 0 {
+                    let nalu_ref_idc = b0 & NALU_REF_IDC_BITMASK;
+                    let fragmented_nalu_type = b1 & NALU_TYPE_BITMASK;
+
+                    payload.put(&*ANNEXB_NALUSTART_CODE);
+                    payload.put_u8(nalu_ref_idc | fragmented_nalu_type);
+                    payload.put_slice(&*packet.slice(FUA_HEADER_SIZE as usize..));
+
+                    self.payload = payload.freeze();
+                } else {
+                    self.payload = packet.slice(FUA_HEADER_SIZE as usize..);
+                }
+            }
+            _ => return Err(Error::NaluTypeIsNotHandled(nalu_type)),
         }
+
+        Ok(())
     }
 }
