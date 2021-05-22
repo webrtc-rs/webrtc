@@ -21,7 +21,7 @@ use std::fmt;
 ///|             Re-configuration Parameter (optional)             |
 ///|                                                               |
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub(crate) struct ChunkReconfig {
     pub(crate) param_a: Option<Box<dyn Param>>,
     pub(crate) param_b: Option<Box<dyn Param>>,
@@ -81,8 +81,7 @@ impl Chunk for ChunkReconfig {
             writer.extend(param_a.marshal()?);
             param_a.value_length()
         } else {
-            //TODO: return Error?
-            0
+            return Err(Error::ErrChunkReconfigInvalidParamA);
         };
 
         if let Some(param_b) = &self.param_b {

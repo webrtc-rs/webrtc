@@ -25,6 +25,7 @@ use crate::util::*;
 
 use util::Conn;
 //use async_trait::async_trait;
+use crate::chunk::chunk_abort::ChunkAbort;
 use crate::chunk::chunk_error::ChunkError;
 use crate::chunk::chunk_forward_tsn::{ChunkForwardTsn, ChunkForwardTsnStream};
 use crate::chunk::chunk_heartbeat::ChunkHeartbeat;
@@ -35,7 +36,7 @@ use crate::param::param_supported_extensions::ParamSupportedExtensions;
 use crate::param::Param;
 use bytes::Bytes;
 use rand::random;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fmt;
 use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 use std::sync::Arc;
@@ -590,7 +591,7 @@ impl Association {
             inbound := make([]byte, n)
             copy(inbound, buffer[:n])
             atomic.AddUint64(&self.bytes_received, uint64(n))
-            if err = self.handleInbound(inbound); err != nil {
+            if err = self.handle_inbound(inbound); err != nil {
                 closeErr = err
                 break
             }
@@ -651,188 +652,202 @@ impl Association {
             s.read_notifier.notify_waiters();
         }
     }
-    /*
-                                  // handleInbound parses incoming raw packets
-                                  fn handleInbound(raw []byte) error {
-                                      p := &packet{}
-                                      if err := p.unmarshal(raw); err != nil {
-                                          self.log.Warnf("[%s] unable to parse SCTP packet %s", self.name, err)
-                                          return nil
-                                      }
 
-                                      if err := check_packet(p); err != nil {
-                                          self.log.Warnf("[%s] failed validating packet %s", self.name, err)
-                                          return nil
-                                      }
+    // handle_inbound parses incoming raw packets
+    async fn handle_inbound(&mut self, raw: &Bytes) -> Result<(), Error> {
+        let p = Packet::unmarshal(raw)?;
+        Association::check_packet(&p)?;
 
-                                      self.handle_chunk_start()
+        self.handle_chunk_start();
 
-                                      for _, c := range p.chunks {
-                                          if err := self.handleChunk(p, c); err != nil {
-                                              return err
-                                          }
-                                      }
+        for c in &p.chunks {
+            self.handle_chunk(&p, c).await?;
+        }
 
-                                      self.handleChunkEnd()
+        self.handle_chunk_end();
 
-                                      return nil
-                                  }
+        return Ok(());
+    }
 
-                                  // The caller should hold the lock
-                                  fn gatherDataPacketsToRetransmit(rawPackets [][]byte) [][]byte {
-                                      for _, p := range self.get_data_packets_to_retransmit() {
-                                          raw, err := p.marshal()
-                                          if err != nil {
-                                              self.log.Warnf("[%s] failed to serialize a DATA packet to be retransmitted", self.name)
-                                              continue
-                                          }
-                                          rawPackets = append(rawPackets, raw)
-                                      }
+    fn gather_data_packets_to_retransmit(&mut self, mut raw_packets: Vec<Bytes>) -> Vec<Bytes> {
+        for p in &self.get_data_packets_to_retransmit() {
+            if let Ok(raw) = p.marshal() {
+                raw_packets.push(raw);
+            } else {
+                log::warn!(
+                    "[{}] failed to serialize a DATA packet to be retransmitted",
+                    self.name
+                );
+            }
+        }
 
-                                      return rawPackets
-                                  }
+        raw_packets
+    }
 
-                                  // The caller should hold the lock
-                                  fn gatherOutboundDataAndReconfigPackets(rawPackets [][]byte) [][]byte {
-                                      // Pop unsent data chunks from the pending queue to send as much as
-                                      // cwnd and rwnd allow.
-                                      chunks, sisToReset := self.pop_pending_data_chunks_to_send()
-                                      if len(chunks) > 0 {
-                                          // Start timer. (noop if already started)
-                                          self.log.Tracef("[%s] T3-rtx timer start (pt1)", self.name)
-                                          self.t3rtx.start(self.rto_mgr.getRTO())
-                                          for _, p := range self.bundle_data_chunks_into_packets(chunks) {
-                                              raw, err := p.marshal()
-                                              if err != nil {
-                                                  self.log.Warnf("[%s] failed to serialize a DATA packet", self.name)
-                                                  continue
-                                              }
-                                              rawPackets = append(rawPackets, raw)
-                                          }
-                                      }
+    fn gather_outbound_data_and_reconfig_packets(
+        &mut self,
+        mut raw_packets: Vec<Bytes>,
+    ) -> Vec<Bytes> {
+        // Pop unsent data chunks from the pending queue to send as much as
+        // cwnd and rwnd allow.
+        let (chunks, sis_to_reset) = self.pop_pending_data_chunks_to_send();
+        if !chunks.is_empty() {
+            // Start timer. (noop if already started)
+            log::trace!("[{}] T3-rtx timer start (pt1)", self.name);
+            //TODO: self.t3rtx.start(self.rto_mgr.get_rto());
+            for p in &self.bundle_data_chunks_into_packets(chunks) {
+                if let Ok(raw) = p.marshal() {
+                    raw_packets.push(raw);
+                } else {
+                    log::warn!("[{}] failed to serialize a DATA packet", self.name);
+                }
+            }
+        }
 
-                                      if len(sisToReset) > 0 || self.will_retransmit_reconfig {
-                                          if self.will_retransmit_reconfig {
-                                              self.will_retransmit_reconfig = false
-                                              self.log.Debugf("[%s] retransmit %d RECONFIG chunk(s)", self.name, len(self.reconfigs))
-                                              for _, c := range self.reconfigs {
-                                                  p := self.create_packet([]chunk{c})
-                                                  raw, err := p.marshal()
-                                                  if err != nil {
-                                                      self.log.Warnf("[%s] failed to serialize a RECONFIG packet to be retransmitted", self.name)
-                                                  } else {
-                                                      rawPackets = append(rawPackets, raw)
-                                                  }
-                                              }
-                                          }
+        if !sis_to_reset.is_empty() || self.will_retransmit_reconfig {
+            if self.will_retransmit_reconfig {
+                self.will_retransmit_reconfig = false;
+                log::debug!(
+                    "[{}] retransmit {} RECONFIG chunk(s)",
+                    self.name,
+                    self.reconfigs.len()
+                );
+                for c in self.reconfigs.values() {
+                    let p = self.create_packet(vec![Box::new(c.clone())]);
+                    if let Ok(raw) = p.marshal() {
+                        raw_packets.push(raw);
+                    } else {
+                        log::warn!(
+                            "[{}] failed to serialize a RECONFIG packet to be retransmitted",
+                            self.name,
+                        );
+                    }
+                }
+            }
 
-                                          if len(sisToReset) > 0 {
-                                              rsn := self.generate_next_rsn()
-                                              tsn := self.my_next_tsn - 1
-                                              c := &chunkReconfig{
-                                                  paramA: &paramOutgoingResetRequest{
-                                                      reconfigRequestSequenceNumber: rsn,
-                                                      senderLastTSN:                 tsn,
-                                                      streamIdentifiers:             sisToReset,
-                                                  },
-                                              }
-                                              self.reconfigs[rsn] = c // store in the map for retransmission
-                                              self.log.Debugf("[%s] sending RECONFIG: rsn=%d tsn=%d streams=%v",
-                                                  self.name, rsn, self.my_next_tsn-1, sisToReset)
-                                              p := self.create_packet([]chunk{c})
-                                              raw, err := p.marshal()
-                                              if err != nil {
-                                                  self.log.Warnf("[%s] failed to serialize a RECONFIG packet to be transmitted", self.name)
-                                              } else {
-                                                  rawPackets = append(rawPackets, raw)
-                                              }
-                                          }
+            if !sis_to_reset.is_empty() {
+                let rsn = self.generate_next_rsn();
+                let tsn = self.my_next_tsn - 1;
+                log::debug!(
+                    "[{}] sending RECONFIG: rsn={} tsn={} streams={}",
+                    self.name,
+                    rsn,
+                    self.my_next_tsn - 1,
+                    sis_to_reset.len()
+                );
 
-                                          if len(self.reconfigs) > 0 {
-                                              self.t_reconfig.start(self.rto_mgr.getRTO())
-                                          }
-                                      }
+                let c = ChunkReconfig {
+                    param_a: Some(Box::new(ParamOutgoingResetRequest {
+                        reconfig_request_sequence_number: rsn,
+                        sender_last_tsn: tsn,
+                        stream_identifiers: sis_to_reset,
+                        ..Default::default()
+                    })),
+                    ..Default::default()
+                };
+                self.reconfigs.insert(rsn, c.clone()); // store in the map for retransmission
 
-                                      return rawPackets
-                                  }
+                let p = self.create_packet(vec![Box::new(c)]);
+                if let Ok(raw) = p.marshal() {
+                    raw_packets.push(raw);
+                } else {
+                    log::warn!(
+                        "[{}] failed to serialize a RECONFIG packet to be transmitted",
+                        self.name
+                    );
+                }
+            }
 
-                                  // The caller should hold the lock
-                                  fn gatherOutboundFastRetransmissionPackets(rawPackets [][]byte) [][]byte {
-                                      if self.will_retransmit_fast {
-                                          self.will_retransmit_fast = false
+            if !self.reconfigs.is_empty() {
+                //TODO: self.treconfig.start(self.rto_mgr.get_rto());
+            }
+        }
 
-                                          toFastRetrans := []chunk{}
-                                          fastRetransSize := COMMON_HEADER_SIZE
+        raw_packets
+    }
 
-                                          for i := 0; ; i++ {
-                                              c, ok := self.inflight_queue.get(self.cumulative_tsn_ack_point + uint32(i) + 1)
-                                              if !ok {
-                                                  break // end of pending data
-                                              }
+    fn gather_outbound_fast_retransmission_packets(
+        &mut self,
+        mut raw_packets: Vec<Bytes>,
+    ) -> Vec<Bytes> {
+        if self.will_retransmit_fast {
+            self.will_retransmit_fast = false;
 
-                                              if c.acked || c.abandoned() {
-                                                  continue
-                                              }
+            let mut to_fast_retrans: Vec<Box<dyn Chunk>> = vec![];
+            let mut fast_retrans_size = COMMON_HEADER_SIZE;
 
-                                              if c.nSent > 1 || c.missIndicator < 3 {
-                                                  continue
-                                              }
+            let mut i = 0;
+            loop {
+                let tsn = self.cumulative_tsn_ack_point + i + 1;
+                if let Some(c) = self.inflight_queue.get_mut(tsn) {
+                    if c.acked || c.abandoned() || c.nsent > 1 || c.miss_indicator < 3 {
+                        continue;
+                    }
 
-                                              // RFC 4960 Sec 7.2.4 Fast Retransmit on Gap Reports
-                                              //  3)  Determine how many of the earliest (i.e., lowest TSN) DATA chunks
-                                              //      marked for retransmission will fit into a single packet, subject
-                                              //      to constraint of the path MTU of the destination transport
-                                              //      address to which the packet is being sent.  Call this value K.
-                                              //      Retransmit those K DATA chunks in a single packet.  When a Fast
-                                              //      Retransmit is being performed, the sender SHOULD ignore the value
-                                              //      of cwnd and SHOULD NOT delay retransmission for this single
-                                              //		packet.
+                    // RFC 4960 Sec 7.2.4 Fast Retransmit on Gap Reports
+                    //  3)  Determine how many of the earliest (i.e., lowest TSN) DATA chunks
+                    //      marked for retransmission will fit into a single packet, subject
+                    //      to constraint of the path MTU of the destination transport
+                    //      address to which the packet is being sent.  Call this value K.
+                    //      Retransmit those K DATA chunks in a single packet.  When a Fast
+                    //      Retransmit is being performed, the sender SHOULD ignore the value
+                    //      of cwnd and SHOULD NOT delay retransmission for this single
+                    //		packet.
 
-                                              dataChunkSize := DATA_CHUNK_HEADER_SIZE + uint32(len(c.userData))
-                                              if self.mtu < fastRetransSize+dataChunkSize {
-                                                  break
-                                              }
+                    let data_chunk_size = DATA_CHUNK_HEADER_SIZE + c.user_data.len() as u32;
+                    if self.mtu < fast_retrans_size + data_chunk_size {
+                        break;
+                    }
 
-                                              fastRetransSize += dataChunkSize
-                                              self.stats.inc_fast_retrans()
-                                              c.nSent++
-                                              self.check_partial_reliability_status(c)
-                                              toFastRetrans = append(toFastRetrans, c)
-                                              self.log.Tracef("[%s] fast-retransmit: tsn=%d sent=%d htna=%d",
-                                                  self.name, c.tsn, c.nSent, self.fast_recover_exit_point)
-                                          }
+                    fast_retrans_size += data_chunk_size;
+                    self.stats.inc_fast_retrans();
+                    c.nsent += 1;
+                }
 
-                                          if len(toFastRetrans) > 0 {
-                                              raw, err := self.create_packet(toFastRetrans).marshal()
-                                              if err != nil {
-                                                  self.log.Warnf("[%s] failed to serialize a DATA packet to be fast-retransmitted", self.name)
-                                              } else {
-                                                  rawPackets = append(rawPackets, raw)
-                                              }
-                                          }
-                                      }
+                if let Some(c) = self.inflight_queue.get(tsn) {
+                    self.check_partial_reliability_status(c);
+                    to_fast_retrans.push(Box::new(c.clone()));
+                    log::trace!(
+                        "[{}] fast-retransmit: tsn={} sent={} htna={}",
+                        self.name,
+                        c.tsn,
+                        c.nsent,
+                        self.fast_recover_exit_point
+                    );
+                }
+                i += 1;
+            }
 
-                                      return rawPackets
-                                  }
+            if !to_fast_retrans.is_empty() {
+                if let Ok(raw) = self.create_packet(to_fast_retrans).marshal() {
+                    raw_packets.push(raw);
+                } else {
+                    log::warn!(
+                        "[{}] failed to serialize a DATA packet to be fast-retransmitted",
+                        self.name
+                    );
+                }
+            }
+        }
 
-                                  // The caller should hold the lock
-                                  fn gatherOutboundSackPackets(rawPackets [][]byte) [][]byte {
-                                      if self.ack_state == ackStateImmediate {
-                                          self.ack_state = ackStateIdle
-                                          sack := self.create_selective_ack_chunk()
-                                          self.log.Debugf("[%s] sending SACK: %s", self.name, sack.String())
-                                          raw, err := self.create_packet([]chunk{sack}).marshal()
-                                          if err != nil {
-                                              self.log.Warnf("[%s] failed to serialize a SACK packet", self.name)
-                                          } else {
-                                              rawPackets = append(rawPackets, raw)
-                                          }
-                                      }
+        raw_packets
+    }
 
-                                      return rawPackets
-                                  }
-    */
-    /// The caller should hold the lock
+    fn gather_outbound_sack_packets(&mut self, mut raw_packets: Vec<Bytes>) -> Vec<Bytes> {
+        if self.ack_state == AckState::Immediate {
+            self.ack_state = AckState::Idle;
+            let sack = self.create_selective_ack_chunk();
+            log::debug!("[{}] sending SACK: {}", self.name, sack);
+            if let Ok(raw) = self.create_packet(vec![Box::new(sack)]).marshal() {
+                raw_packets.push(raw);
+            } else {
+                log::warn!("[{}] failed to serialize a SACK packet", self.name);
+            }
+        }
+
+        raw_packets
+    }
+
     fn gather_outbound_forward_tsn_packets(&mut self, mut raw_packets: Vec<Bytes>) -> Vec<Bytes> {
         if self.will_send_forward_tsn {
             self.will_send_forward_tsn = false;
@@ -920,33 +935,27 @@ impl Association {
             }
         }
 
-        let ok = true;
-
-        /*TODO:
         let state = self.get_state();
-           match state {
-            AssociationState::Established=> {
-                raw_packets = self.gatherDataPacketsToRetransmit(raw_packets)
-                raw_packets = self.gatherOutboundDataAndReconfigPackets(raw_packets)
-                raw_packets = self.gatherOutboundFastRetransmissionPackets(raw_packets)
-                raw_packets = self.gatherOutboundSackPackets(raw_packets)
-                raw_packets = self.gather_outbound_forward_tsnpackets(raw_packets)
+        match state {
+            AssociationState::Established => {
+                raw_packets = self.gather_data_packets_to_retransmit(raw_packets);
+                raw_packets = self.gather_outbound_data_and_reconfig_packets(raw_packets);
+                raw_packets = self.gather_outbound_fast_retransmission_packets(raw_packets);
+                raw_packets = self.gather_outbound_sack_packets(raw_packets);
+                raw_packets = self.gather_outbound_forward_tsn_packets(raw_packets);
+                (raw_packets, true)
             }
-            AssociationState::ShutdownPending|
-            AssociationState::ShutdownSent|
-            AssociationState::ShutdownReceived => {
-                raw_packets = self.gatherDataPacketsToRetransmit(raw_packets)
-                raw_packets = self.gatherOutboundFastRetransmissionPackets(raw_packets)
-                raw_packets = self.gatherOutboundSackPackets(raw_packets)
-                raw_packets, ok = self.gather_outbound_shutdown_packets(raw_packets)
+            AssociationState::ShutdownPending
+            | AssociationState::ShutdownSent
+            | AssociationState::ShutdownReceived => {
+                raw_packets = self.gather_data_packets_to_retransmit(raw_packets);
+                raw_packets = self.gather_outbound_fast_retransmission_packets(raw_packets);
+                raw_packets = self.gather_outbound_sack_packets(raw_packets);
+                self.gather_outbound_shutdown_packets(raw_packets)
             }
-            AssociationState::ShutdownAckSent => {
-                raw_packets, ok = self.gather_outbound_shutdown_packets(raw_packets)
-            }
-            _=>{}
-        };*/
-
-        (raw_packets, ok)
+            AssociationState::ShutdownAckSent => self.gather_outbound_shutdown_packets(raw_packets),
+            _ => (raw_packets, true),
+        }
     }
 
     fn check_packet(p: &Packet) -> Result<(), Error> {
@@ -991,7 +1000,6 @@ impl Association {
     }
 
     /// set_state atomically sets the state of the Association.
-    /// The caller should hold the lock.
     fn set_state(&self, new_state: AssociationState) {
         let old_state = AssociationState::from(self.state.swap(new_state as u8, Ordering::SeqCst));
         if new_state != old_state {
@@ -1031,8 +1039,7 @@ impl Association {
         }));
     }
 
-    // The caller should hold the lock.
-    fn handle_init(&mut self, p: Packet, i: ChunkInit) -> Result<Vec<Packet>, Error> {
+    async fn handle_init(&mut self, p: &Packet, i: &ChunkInit) -> Result<Vec<Packet>, Error> {
         let state = self.get_state();
         log::debug!("[{}] chunkInit received in state '{}'", self.name, state);
 
@@ -1113,8 +1120,7 @@ impl Association {
         Ok(vec![outbound])
     }
 
-    // The caller should hold the lock.
-    async fn handle_init_ack(&mut self, p: Packet, i: ChunkInit) -> Result<(), Error> {
+    async fn handle_init_ack(&mut self, p: &Packet, i: &ChunkInit) -> Result<Vec<Packet>, Error> {
         let state = self.get_state();
         log::debug!("[{}] chunkInitAck received in state '{}'", self.name, state);
         if state != AssociationState::CookieWait {
@@ -1124,7 +1130,7 @@ impl Association {
             //   COOKIE-WAIT state, the endpoint should discard the INIT ACK chunk.
             //   An unexpected INIT ACK usually indicates the processing of an old or
             //   duplicated INIT chunk.
-            return Ok(());
+            return Ok(vec![]);
         }
 
         self.my_max_num_inbound_streams =
@@ -1135,7 +1141,7 @@ impl Association {
         self.peer_last_tsn = i.initial_tsn - 1;
         if self.source_port != p.destination_port || self.destination_port != p.source_port {
             log::warn!("[{}] handle_init_ack: port mismatch", self.name);
-            return Ok(());
+            return Ok(vec![]);
         }
 
         self.rwnd = i.advertised_receiver_window_credit;
@@ -1184,18 +1190,17 @@ impl Association {
             //TODO: self.t1cookie.start(self.rto_mgr.get_rto());
             self.set_state(AssociationState::CookieEchoed);
 
-            Ok(())
+            Ok(vec![])
         } else {
             Err(Error::ErrInitAckNoCookie)
         }
     }
 
-    // The caller should hold the lock.
-    fn handle_heartbeat(&self, c: ChunkHeartbeat) -> Option<Vec<Packet>> {
+    async fn handle_heartbeat(&self, c: &ChunkHeartbeat) -> Result<Vec<Packet>, Error> {
         log::trace!("[{}] chunkHeartbeat", self.name);
         if let Some(p) = c.params.first() {
             if let Some(hbi) = p.as_any().downcast_ref::<ParamHeartbeatInfo>() {
-                return Some(vec![Packet {
+                return Ok(vec![Packet {
                     verification_tag: self.peer_verification_tag,
                     source_port: self.source_port,
                     destination_port: self.destination_port,
@@ -1213,11 +1218,10 @@ impl Association {
             }
         }
 
-        None
+        Ok(vec![])
     }
 
-    // The caller should hold the lock.
-    async fn handle_cookie_echo(&mut self, c: ChunkCookieEcho) -> Option<Vec<Packet>> {
+    async fn handle_cookie_echo(&mut self, c: &ChunkCookieEcho) -> Result<Vec<Packet>, Error> {
         let state = self.get_state();
         log::debug!("[{}] COOKIE-ECHO received in state '{}'", self.name, state);
 
@@ -1225,14 +1229,14 @@ impl Association {
             match state {
                 AssociationState::Established => {
                     if my_cookie.cookie != c.cookie {
-                        return None;
+                        return Ok(vec![]);
                     }
                 }
                 AssociationState::Closed
                 | AssociationState::CookieWait
                 | AssociationState::CookieEchoed => {
                     if my_cookie.cookie != c.cookie {
-                        return None;
+                        return Ok(vec![]);
                     }
 
                     self.t1init.stop().await;
@@ -1244,14 +1248,14 @@ impl Association {
                     self.set_state(AssociationState::Established);
                     //TODO: self.handshakeCompletedCh < -nil
                 }
-                _ => return None,
+                _ => return Ok(vec![]),
             };
         } else {
             log::debug!("[{}] COOKIE-ECHO received before initialization", self.name);
-            return None;
+            return Ok(vec![]);
         }
 
-        Some(vec![Packet {
+        Ok(vec![Packet {
             verification_tag: self.peer_verification_tag,
             source_port: self.source_port,
             destination_port: self.destination_port,
@@ -1259,8 +1263,7 @@ impl Association {
         }])
     }
 
-    /// The caller should hold the lock.
-    async fn handle_cookie_ack(&mut self) {
+    async fn handle_cookie_ack(&mut self) -> Result<Vec<Packet>, Error> {
         let state = self.get_state();
         log::debug!("[{}] COOKIE-ACK received in state '{}'", self.name, state);
         if state != AssociationState::CookieEchoed {
@@ -1268,7 +1271,7 @@ impl Association {
             // 5.2.5.  Handle Duplicate COOKIE-ACK.
             //   At any state other than COOKIE-ECHOED, an endpoint should silently
             //   discard a received COOKIE ACK chunk.
-            return;
+            return Ok(vec![]);
         }
 
         self.t1cookie.stop().await;
@@ -1276,10 +1279,11 @@ impl Association {
 
         self.set_state(AssociationState::Established);
         //TODO: self.handshakeCompletedCh <- nil
+
+        Ok(vec![])
     }
 
-    /// The caller should hold the lock.
-    fn handle_data(&mut self, d: ChunkPayloadData) -> Option<Vec<Packet>> {
+    async fn handle_data(&mut self, d: &ChunkPayloadData) -> Result<Vec<Packet>, Error> {
         log::trace!(
             "[{}] DATA: tsn={} immediateSack={} len={}",
             self.name,
@@ -1318,7 +1322,7 @@ impl Association {
                 // silently discard the data. (sender will retry on T3-rtx timeout)
                 // see pion/sctp#30
                 log::debug!("discard {}", d.stream_sequence_number);
-                return None;
+                return Ok(vec![]);
             }
         }
 
@@ -1326,7 +1330,7 @@ impl Association {
 
         if stream_handle_data {
             if let Some(s) = self.streams.get_mut(&d.stream_identifier) {
-                s.handle_data(d);
+                s.handle_data(d.clone());
             }
         }
 
@@ -1334,11 +1338,10 @@ impl Association {
     }
 
     /// A common routine for handle_data and handle_forward_tsn routines
-    /// The caller should hold the lock.
     fn handle_peer_last_tsn_and_acknowledgement(
         &mut self,
         sack_immediately: bool,
-    ) -> Option<Vec<Packet>> {
+    ) -> Result<Vec<Packet>, Error> {
         let mut reply = vec![];
 
         // Try to advance peer_last_tsn
@@ -1386,10 +1389,9 @@ impl Association {
             self.immediate_ack_triggered = true;
         }
 
-        Some(reply)
+        Ok(reply)
     }
 
-    /// The caller should hold the lock.
     fn get_my_receiver_window_credit(&self) -> u32 {
         let mut bytes_queued = 0;
         for s in self.streams.values() {
@@ -1468,7 +1470,6 @@ impl Association {
         }
     }
 
-    /// The caller should hold the lock.
     async fn process_selective_ack(
         &mut self,
         d: &ChunkSelectiveAck,
@@ -1596,7 +1597,6 @@ impl Association {
         Ok((bytes_acked_per_stream, htna))
     }
 
-    /// The caller should hold the lock.
     async fn on_cumulative_tsn_ack_point_advanced(&mut self, total_bytes_acked: i64) {
         // RFC 4096, sec 6.3.2.  Retransmission Timer Rules
         //   R2)  Whenever all outstanding data sent to an address have been
@@ -1675,7 +1675,6 @@ impl Association {
         }
     }
 
-    /// The caller should hold the lock.
     fn process_fast_retransmission(
         &mut self,
         cum_tsn_ack_point: u32,
@@ -1740,8 +1739,7 @@ impl Association {
         Ok(())
     }
 
-    /// The caller should hold the lock.
-    async fn handle_sack(&mut self, d: ChunkSelectiveAck) -> Result<(), Error> {
+    async fn handle_sack(&mut self, d: &ChunkSelectiveAck) -> Result<Vec<Packet>, Error> {
         log::trace!(
             "[{}] SACK: cumTSN={} a_rwnd={}",
             self.name,
@@ -1753,7 +1751,7 @@ impl Association {
             && state != AssociationState::ShutdownPending
             && state != AssociationState::ShutdownReceived
         {
-            return Ok(());
+            return Ok(vec![]);
         }
 
         self.stats.inc_sacks();
@@ -1774,7 +1772,7 @@ impl Association {
                 self.cumulative_tsn_ack_point
             );
 
-            return Ok(());
+            return Ok(vec![]);
         }
 
         // Process selective ack
@@ -1854,7 +1852,7 @@ impl Association {
 
         self.postprocess_sack(state, cum_tsn_ack_point_advanced);
 
-        Ok(())
+        Ok(vec![])
     }
 
     /// The caller must hold the lock. This method was only added because the
@@ -1881,8 +1879,7 @@ impl Association {
         }
     }
 
-    /// The caller should hold the lock.
-    fn handle_shutdown(&mut self, _: ChunkShutdown) {
+    async fn handle_shutdown(&mut self, _: &ChunkShutdown) -> Result<Vec<Packet>, Error> {
         let state = self.get_state();
 
         if state == AssociationState::Established {
@@ -1903,10 +1900,11 @@ impl Association {
 
             self.awake_write_loop();
         }
+
+        Ok(vec![])
     }
 
-    /// The caller should hold the lock.
-    async fn handle_shutdown_ack(&mut self, _: ChunkShutdownAck) {
+    async fn handle_shutdown_ack(&mut self, _: &ChunkShutdownAck) -> Result<Vec<Packet>, Error> {
         let state = self.get_state();
         if state == AssociationState::ShutdownSent || state == AssociationState::ShutdownAckSent {
             self.t2shutdown.stop().await;
@@ -1914,22 +1912,25 @@ impl Association {
 
             self.awake_write_loop();
         }
+
+        Ok(vec![])
     }
 
-    async fn handle_shutdown_complete(&mut self, _: ChunkShutdownComplete) -> Result<(), Error> {
+    async fn handle_shutdown_complete(
+        &mut self,
+        _: &ChunkShutdownComplete,
+    ) -> Result<Vec<Packet>, Error> {
         let state = self.get_state();
         if state == AssociationState::ShutdownAckSent {
             self.t2shutdown.stop().await;
-
-            self.close().await
-        } else {
-            Ok(())
+            self.close().await?;
         }
+
+        Ok(vec![])
     }
 
     /// create_forward_tsn generates ForwardTSN chunk.
     /// This method will be be called if use_forward_tsn is set to false.
-    /// The caller should hold the lock.
     fn create_forward_tsn(&self) -> ChunkForwardTsn {
         // RFC 3758 Sec 3.5 C4
         let mut stream_map: HashMap<u16, u16> = HashMap::new(); // to report only once per SI
@@ -1986,8 +1987,7 @@ impl Association {
         }
     }
 
-    /// The caller should hold the lock.
-    async fn handle_reconfig(&mut self, c: ChunkReconfig) -> Result<Vec<Packet>, Error> {
+    async fn handle_reconfig(&mut self, c: &ChunkReconfig) -> Result<Vec<Packet>, Error> {
         log::trace!("[{}] handle_reconfig", self.name);
 
         let mut pp = vec![];
@@ -2007,8 +2007,7 @@ impl Association {
         Ok(pp)
     }
 
-    /// The caller should hold the lock.
-    fn handle_forward_tsn(&mut self, c: ChunkForwardTsn) -> Option<Vec<Packet>> {
+    async fn handle_forward_tsn(&mut self, c: &ChunkForwardTsn) -> Result<Vec<Packet>, Error> {
         log::trace!("[{}] FwdTSN: {}", self.name, c.to_string());
 
         if !self.use_forward_tsn {
@@ -2024,7 +2023,7 @@ impl Association {
                 destination_port: self.destination_port,
                 chunks: vec![Box::new(cerr)],
             };
-            return Some(vec![outbound]);
+            return Ok(vec![outbound]);
         }
 
         // From RFC 3758 Sec 3.6:
@@ -2046,7 +2045,7 @@ impl Association {
             self.ack_state = AckState::Immediate;
             self.ack_timer.stop();
             self.awake_write_loop();
-            return None;
+            return Ok(vec![]);
         }
 
         // From RFC 3758 Sec 3.6:
@@ -2108,7 +2107,6 @@ impl Association {
         Ok(())
     }
 
-    /// The caller should hold the lock.
     #[allow(clippy::borrowed_box)]
     async fn handle_reconfig_param(
         &mut self,
@@ -2129,7 +2127,6 @@ impl Association {
         }
     }
 
-    /// The caller should hold the lock.
     fn reset_streams_if_any(&mut self, p: &ParamOutgoingResetRequest) -> Packet {
         let mut result = ReconfigResult::SuccessPerformed;
         if sna32lte(p.sender_last_tsn, self.peer_last_tsn) {
@@ -2167,7 +2164,6 @@ impl Association {
     }
 
     /// Move the chunk peeked with self.pending_queue.peek() to the inflight_queue.
-    /// The caller should hold the lock.
     fn move_pending_data_chunk_to_inflight_queue(
         &mut self,
         beginning_fragment: bool,
@@ -2210,7 +2206,6 @@ impl Association {
 
     /// pop_pending_data_chunks_to_send pops chunks from the pending queues as many as
     /// the cwnd and rwnd allows to send.
-    /// The caller should hold the lock.
     fn pop_pending_data_chunks_to_send(&mut self) -> (Vec<ChunkPayloadData>, Vec<u16>) {
         let mut chunks = vec![];
         let mut sis_to_reset = vec![]; // stream identifiers to reset
@@ -2282,7 +2277,6 @@ impl Association {
     /// bundle_data_chunks_into_packets packs DATA chunks into packets. It tries to bundle
     /// DATA chunks into a packet so long as the resulting packet size does not exceed
     /// the path MTU.
-    /// The caller should hold the lock.
     fn bundle_data_chunks_into_packets(&self, chunks: Vec<ChunkPayloadData>) -> Vec<Packet> {
         let mut packets = vec![];
         let mut chunks_to_send = vec![];
@@ -2327,7 +2321,6 @@ impl Association {
         Ok(())
     }
 
-    /// The caller should hold the lock.
     fn check_partial_reliability_status(&self, c: &ChunkPayloadData) {
         if !self.use_forward_tsn {
             return;
@@ -2376,7 +2369,6 @@ impl Association {
 
     /// get_data_packets_to_retransmit is called when T3-rtx is timed out and retransmit outstanding data chunks
     /// that are not acked or abandoned yet.
-    /// The caller should hold the lock.
     fn get_data_packets_to_retransmit(&mut self) -> Vec<Packet> {
         let awnd = std::cmp::min(self.cwnd, self.rwnd);
         let mut chunks = vec![];
@@ -2427,7 +2419,6 @@ impl Association {
     }
 
     /// generate_next_tsn returns the my_next_tsn and increases it. The caller should hold the lock.
-    /// The caller should hold the lock.
     fn generate_next_tsn(&mut self) -> u32 {
         let tsn = self.my_next_tsn;
         self.my_next_tsn += 1;
@@ -2435,7 +2426,6 @@ impl Association {
     }
 
     /// generate_next_rsn returns the my_next_rsn and increases it. The caller should hold the lock.
-    /// The caller should hold the lock.
     fn generate_next_rsn(&mut self) -> u32 {
         let rsn = self.my_next_rsn;
         self.my_next_rsn += 1;
@@ -2460,7 +2450,7 @@ impl Association {
         self.immediate_ack_triggered = false;
     }
 
-    /*fn handleChunkEnd(&mut self) {
+    fn handle_chunk_end(&mut self) {
         if self.immediate_ack_triggered {
             self.ack_state = AckState::Immediate;
             self.ack_timer.stop();
@@ -2468,89 +2458,57 @@ impl Association {
         } else if self.delayed_ack_triggered {
             // Will send delayed ack in the next ack timeout
             self.ack_state = AckState::Delay;
-            self.ack_timer.start(); //TODO:
+            //TODO: self.ack_timer.start();
         }
     }
-                  fn handleChunk(p *packet, c chunk) error {
-                      self.lock.Lock()
-                      defer self.lock.Unlock()
 
-                      var packets []*packet
-                      var err error
+    #[allow(clippy::borrowed_box)]
+    async fn handle_chunk(&mut self, p: &Packet, chunk: &Box<dyn Chunk>) -> Result<(), Error> {
+        chunk.check()?;
 
-                      if _, err = c.check(); err != nil {
-                          self.log.Errorf("[ %s ] failed validating chunk: %s ", self.name, err)
-                          return nil
-                      }
+        let packets = if let Some(c) = chunk.as_any().downcast_ref::<ChunkInit>() {
+            if c.is_ack {
+                self.handle_init_ack(p, c).await?
+            } else {
+                self.handle_init(p, c).await?
+            }
+        } else if chunk.as_any().downcast_ref::<ChunkAbort>().is_some()
+            || chunk.as_any().downcast_ref::<ChunkError>().is_some()
+        {
+            return Err(Error::ErrChunk);
+        } else if let Some(c) = chunk.as_any().downcast_ref::<ChunkHeartbeat>() {
+            self.handle_heartbeat(c).await?
+        } else if let Some(c) = chunk.as_any().downcast_ref::<ChunkCookieEcho>() {
+            self.handle_cookie_echo(c).await?
+        } else if chunk.as_any().downcast_ref::<ChunkCookieAck>().is_some() {
+            self.handle_cookie_ack().await?
+        } else if let Some(c) = chunk.as_any().downcast_ref::<ChunkPayloadData>() {
+            self.handle_data(c).await?
+        } else if let Some(c) = chunk.as_any().downcast_ref::<ChunkSelectiveAck>() {
+            self.handle_sack(c).await?
+        } else if let Some(c) = chunk.as_any().downcast_ref::<ChunkReconfig>() {
+            self.handle_reconfig(c).await?
+        } else if let Some(c) = chunk.as_any().downcast_ref::<ChunkForwardTsn>() {
+            self.handle_forward_tsn(c).await?
+        } else if let Some(c) = chunk.as_any().downcast_ref::<ChunkShutdown>() {
+            self.handle_shutdown(c).await?
+        } else if let Some(c) = chunk.as_any().downcast_ref::<ChunkShutdownAck>() {
+            self.handle_shutdown_ack(c).await?
+        } else if let Some(c) = chunk.as_any().downcast_ref::<ChunkShutdownComplete>() {
+            self.handle_shutdown_complete(c).await?
+        } else {
+            return Err(Error::ErrChunkTypeUnhandled);
+        };
 
-                      switch c := c.(type) {
-                      case *chunkInit:
-                          packets, err = self.handle_init(p, c)
+        if !packets.is_empty() {
+            let mut buf: VecDeque<_> = packets.into_iter().collect();
+            self.control_queue.append(&mut buf);
+            self.awake_write_loop();
+        }
 
-                      case *chunkInitAck:
-                          err = self.handle_init_ack(p, c)
+        Ok(())
+    }
 
-                      case *chunkAbort:
-                          var errStr string
-                          for _, e := range c.errorCauses {
-                              errStr += fmt.Sprintf("(%s)", e)
-                          }
-                          return fmt.Errorf("[%s] %w: %s", self.name, errChunk, errStr)
-
-                      case *chunkError:
-                          var errStr string
-                          for _, e := range c.errorCauses {
-                              errStr += fmt.Sprintf("(%s)", e)
-                          }
-                          self.log.Debugf("[%s] Error chunk, with following errors: %s", self.name, errStr)
-
-                      case *chunkHeartbeat:
-                          packets = self.handle_heartbeat(c)
-
-                      case *chunkCookieEcho:
-                          packets = self.handle_cookie_echo(c)
-
-                      case *chunkCookieAck:
-                          self.handle_cookie_ack()
-
-                      case *chunkPayloadData:
-                          packets = self.handle_data(c)
-
-                      case *chunkSelectiveAck:
-                          err = self.handle_sack(c)
-
-                      case *chunkReconfig:
-                          packets, err = self.handle_reconfig(c)
-
-                      case *chunkForwardTSN:
-                          packets = self.handle_forward_tsn(c)
-
-                      case *chunkShutdown:
-                          self.handle_shutdown(c)
-                      case *chunkShutdownAck:
-                          self.handle_shutdown_ack(c)
-                      case *chunkShutdownComplete:
-                          err = self.handle_shutdown_complete(c)
-
-                      default:
-                          err = errChunkTypeUnhandled
-                      }
-
-                      // Log and return, the only condition that is fatal is a ABORT chunk
-                      if err != nil {
-                          self.log.Errorf("Failed to handle chunk: %v", err)
-                          return nil
-                      }
-
-                      if len(packets) > 0 {
-                          self.control_queue.pushAll(packets)
-                          self.awake_write_loop()
-                      }
-
-                      return nil
-                  }
-
-    */
     fn on_retransmission_timeout(&mut self, id: RtxTimerId, n_rtos: usize) {
         match id {
             RtxTimerId::T1Init => {

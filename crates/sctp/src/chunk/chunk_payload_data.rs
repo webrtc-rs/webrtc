@@ -123,7 +123,6 @@ pub struct ChunkPayloadData {
     /// Retransmission flag set when T1-RTX timeout occurred and this
     /// chunk is still in the inflight queue
     pub(crate) retransmit: bool,
-    //TODO: head :ChunkPayloadData, // link to the head of the fragment
 }
 
 impl Default for ChunkPayloadData {

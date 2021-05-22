@@ -109,6 +109,8 @@ pub enum Error {
     ErrChunkTypeNotPayloadData,
     #[error("ChunkType is not of type Reconfig")]
     ErrChunkTypeNotReconfig,
+    #[error("ChunkReconfig has invalid ParamA")]
+    ErrChunkReconfigInvalidParamA,
 
     #[error("failed to parse param type")]
     ErrChunkParseParamTypeFailed,
