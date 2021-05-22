@@ -242,7 +242,7 @@ pub struct Association {
     my_cookie: Option<ParamStateCookie>,
     payload_queue: PayloadQueue,
     inflight_queue: PayloadQueue,
-    pending_queue: PendingQueue,
+    pending_queue: Arc<PendingQueue>,
     control_queue: ControlQueue,
     mtu: u32,
     max_payload_size: u32, // max DATA chunk payload size
@@ -273,7 +273,7 @@ pub struct Association {
     stored_init: Option<ChunkInit>,
     stored_cookie_echo: Option<ChunkCookieEcho>,
 
-    streams: HashMap<u16, Stream>, //Arc<>
+    streams: HashMap<u16, Arc<Stream>>,
     /*TODO:     acceptCh             chan *Stream
         readLoopCloseCh      chan struct{}
 
@@ -295,7 +295,7 @@ pub struct Association {
 
     //TODO: to be deleted:
     name: String,
-    awake_write_loop_ch: Notify,
+    awake_write_loop_ch: Arc<Notify>,
     stats: Arc<AssociationStats>,
     ack_state: AckState,
     ack_mode: AckMode, // for testing
@@ -359,7 +359,7 @@ impl Association {
             my_max_num_inbound_streams: u16::MAX,
             payload_queue: PayloadQueue::new(),
             inflight_queue: PayloadQueue::new(),
-            pending_queue: PendingQueue::new(),
+            pending_queue: Arc::new(PendingQueue::new()),
             control_queue: ControlQueue::new(),
             mtu: INITIAL_MTU,
             max_payload_size: INITIAL_MTU - (COMMON_HEADER_SIZE + DATA_CHUNK_HEADER_SIZE),
@@ -374,14 +374,13 @@ impl Association {
             reconfig_requests: HashMap::new(),
             /*acceptCh:                make(chan *Stream, ACCEPT_CH_SIZE),
             readLoopCloseCh:         make(chan struct{}),
-            awake_write_loop_ch:        make(chan struct{}, 1),
             closeWriteLoopCh:        make(chan struct{}),
             handshakeCompletedCh:    make(chan error),*/
             cumulative_tsn_ack_point: tsn - 1,
             advanced_peer_tsn_ack_point: tsn - 1,
             silent_error: Some(Error::ErrSilentlyDiscard),
             stats: Arc::new(AssociationStats::default()),
-            //log:                     config.LoggerFactory.NewLogger("sctp"),
+            awake_write_loop_ch: Arc::new(Notify::new()),
             ..Default::default()
         };
 
@@ -494,7 +493,7 @@ impl Association {
         // Attempt a graceful shutdown.
         self.set_state(AssociationState::ShutdownPending);
 
-        if self.inflight_queue.len() == 0 {
+        if self.inflight_queue.is_empty() {
             // No more outstanding, send shutdown.
             self.will_send_shutdown = true;
             self.awake_write_loop();
@@ -712,13 +711,13 @@ impl Association {
         raw_packets
     }
 
-    fn gather_outbound_data_and_reconfig_packets(
+    async fn gather_outbound_data_and_reconfig_packets(
         &mut self,
         mut raw_packets: Vec<Bytes>,
     ) -> Vec<Bytes> {
         // Pop unsent data chunks from the pending queue to send as much as
         // cwnd and rwnd allow.
-        let (chunks, sis_to_reset) = self.pop_pending_data_chunks_to_send();
+        let (chunks, sis_to_reset) = self.pop_pending_data_chunks_to_send().await;
         if !chunks.is_empty() {
             // Start timer. (noop if already started)
             log::trace!("[{}] T3-rtx timer start (pt1)", self.name);
@@ -967,7 +966,9 @@ impl Association {
         match state {
             AssociationState::Established => {
                 raw_packets = self.gather_data_packets_to_retransmit(raw_packets);
-                raw_packets = self.gather_outbound_data_and_reconfig_packets(raw_packets);
+                raw_packets = self
+                    .gather_outbound_data_and_reconfig_packets(raw_packets)
+                    .await;
                 raw_packets = self.gather_outbound_fast_retransmission_packets(raw_packets);
                 raw_packets = self.gather_outbound_sack_packets(raw_packets).await;
                 raw_packets = self.gather_outbound_forward_tsn_packets(raw_packets);
@@ -1392,7 +1393,7 @@ impl Association {
             }
         }
 
-        let has_packet_loss = self.payload_queue.len() > 0;
+        let has_packet_loss = !self.payload_queue.is_empty();
         if has_packet_loss {
             log::trace!(
                 "[{}] packetloss: {}",
@@ -1437,23 +1438,23 @@ impl Association {
     pub fn open_stream(
         &mut self,
         stream_identifier: u16,
-        _default_payload_type: PayloadProtocolIdentifier,
-    ) -> Result<&Stream, Error> {
+        default_payload_type: PayloadProtocolIdentifier,
+    ) -> Result<Arc<Stream>, Error> {
         if self.streams.contains_key(&stream_identifier) {
             return Err(Error::ErrStreamAlreadyExist);
         }
 
         let stream = self.create_stream(stream_identifier, false);
         if let Some(s) = stream {
-            //TODO: s.set_default_payload_type(default_payload_type);
-            Ok(s)
+            s.set_default_payload_type(default_payload_type);
+            Ok(Arc::clone(s))
         } else {
             Err(Error::ErrStreamCreateFailed)
         }
     }
 
     /// accept_stream accepts a stream
-    pub fn accept_stream(&self) -> Result<Stream, Error> {
+    pub fn accept_stream(&self) -> Result<Arc<Stream>, Error> {
         /*TODO: s, ok := <-self.acceptCh
         if !ok {
             return nil, io.EOF // no more incoming streams
@@ -1464,7 +1465,7 @@ impl Association {
     }
 
     /// create_stream creates a stream. The caller should hold the lock and check no stream exists for this id.
-    fn create_stream(&mut self, stream_identifier: u16, _accept: bool) -> Option<&Stream> {
+    fn create_stream(&mut self, stream_identifier: u16, _accept: bool) -> Option<&Arc<Stream>> {
         /* TODO: let s = Stream{
             //TODO: association:      a,
             stream_identifier: stream_identifier,
@@ -1496,7 +1497,7 @@ impl Association {
     }
 
     /// get_or_create_stream gets or creates a stream. The caller should hold the lock.
-    fn get_or_create_stream(&mut self, stream_identifier: u16) -> Option<&Stream> {
+    fn get_or_create_stream(&mut self, stream_identifier: u16) -> Option<&Arc<Stream>> {
         if self.streams.contains_key(&stream_identifier) {
             self.streams.get(&stream_identifier)
         } else {
@@ -1635,7 +1636,7 @@ impl Association {
         // RFC 4096, sec 6.3.2.  Retransmission Timer Rules
         //   R2)  Whenever all outstanding data sent to an address have been
         //        acknowledged, turn off the T3-rtx timer of that address.
-        if self.inflight_queue.len() == 0 {
+        if self.inflight_queue.is_empty() {
             log::trace!(
                 "[{}] SACK: no more packet in-flight (pending={})",
                 self.name,
@@ -1892,7 +1893,7 @@ impl Association {
     /// The caller must hold the lock. This method was only added because the
     /// linter was complaining about the "cognitive complexity" of handle_sack.
     fn postprocess_sack(&mut self, state: AssociationState, mut should_awake_write_loop: bool) {
-        if self.inflight_queue.len() > 0 {
+        if !self.inflight_queue.is_empty() {
             // Start timer. (noop if already started)
             log::trace!("[{}] T3-rtx timer start (pt3)", self.name);
             //TODO: self.t3rtx.start(self.rto_mgr.get_rto());
@@ -1917,7 +1918,7 @@ impl Association {
         let state = self.get_state();
 
         if state == AssociationState::Established {
-            if self.inflight_queue.len() > 0 {
+            if !self.inflight_queue.is_empty() {
                 self.set_state(AssociationState::ShutdownReceived);
             } else {
                 // No more outstanding, send shutdown ack.
@@ -2120,7 +2121,7 @@ impl Association {
         self.handle_peer_last_tsn_and_acknowledgement(false)
     }
 
-    fn send_reset_request(&mut self, stream_identifier: u16) -> Result<(), Error> {
+    async fn send_reset_request(&mut self, stream_identifier: u16) -> Result<(), Error> {
         let state = self.get_state();
         if state != AssociationState::Established {
             return Err(Error::ErrResetPacketInStateNotExist);
@@ -2136,7 +2137,7 @@ impl Association {
             ..Default::default()
         };
 
-        self.pending_queue.push(c);
+        self.pending_queue.push(c).await;
         self.awake_write_loop();
 
         Ok(())
@@ -2199,12 +2200,12 @@ impl Association {
     }
 
     /// Move the chunk peeked with self.pending_queue.peek() to the inflight_queue.
-    fn move_pending_data_chunk_to_inflight_queue(
+    async fn move_pending_data_chunk_to_inflight_queue(
         &mut self,
         beginning_fragment: bool,
         unordered: bool,
     ) -> Option<ChunkPayloadData> {
-        if let Some(mut c) = self.pending_queue.pop(beginning_fragment, unordered) {
+        if let Some(mut c) = self.pending_queue.pop(beginning_fragment, unordered).await {
             // Mark all fragements are in-flight now
             if c.ending_fragment {
                 c.set_all_inflight();
@@ -2241,7 +2242,7 @@ impl Association {
 
     /// pop_pending_data_chunks_to_send pops chunks from the pending queues as many as
     /// the cwnd and rwnd allows to send.
-    fn pop_pending_data_chunks_to_send(&mut self) -> (Vec<ChunkPayloadData>, Vec<u16>) {
+    async fn pop_pending_data_chunks_to_send(&mut self) -> (Vec<ChunkPayloadData>, Vec<u16>) {
         let mut chunks = vec![];
         let mut sis_to_reset = vec![]; // stream identifiers to reset
         let is_empty = self.pending_queue.len() == 0;
@@ -2254,7 +2255,7 @@ impl Association {
             //      is 0), the data sender can always have one DATA chunk in flight to
             //      the receiver if allowed by cwnd (see rule B, below).
 
-            while let Some(c) = self.pending_queue.peek() {
+            while let Some(c) = self.pending_queue.peek().await {
                 let (beginning_fragment, unordered, data_len, stream_identifier) = (
                     c.beginning_fragment,
                     c.unordered,
@@ -2267,6 +2268,7 @@ impl Association {
                     if self
                         .pending_queue
                         .pop(beginning_fragment, unordered)
+                        .await
                         .is_none()
                     {
                         log::error!("failed to pop from pending queue");
@@ -2284,21 +2286,23 @@ impl Association {
 
                 self.rwnd -= data_len as u32;
 
-                if let Some(chunk) =
-                    self.move_pending_data_chunk_to_inflight_queue(beginning_fragment, unordered)
+                if let Some(chunk) = self
+                    .move_pending_data_chunk_to_inflight_queue(beginning_fragment, unordered)
+                    .await
                 {
                     chunks.push(chunk);
                 }
             }
 
             // the data sender can always have one DATA chunk in flight to the receiver
-            if chunks.is_empty() && self.inflight_queue.len() == 0 {
+            if chunks.is_empty() && self.inflight_queue.is_empty() {
                 // Send zero window probe
-                if let Some(c) = self.pending_queue.peek() {
+                if let Some(c) = self.pending_queue.peek().await {
                     let (beginning_fragment, unordered) = (c.beginning_fragment, c.unordered);
 
                     if let Some(chunk) = self
                         .move_pending_data_chunk_to_inflight_queue(beginning_fragment, unordered)
+                        .await
                     {
                         chunks.push(chunk);
                     }
@@ -2341,7 +2345,7 @@ impl Association {
     }
 
     /// send_payload_data sends the data chunks.
-    fn send_payload_data(&mut self, chunks: Vec<ChunkPayloadData>) -> Result<(), Error> {
+    async fn send_payload_data(&mut self, chunks: Vec<ChunkPayloadData>) -> Result<(), Error> {
         let state = self.get_state();
         if state != AssociationState::Established {
             return Err(Error::ErrPayloadDataStateNotExist);
@@ -2349,7 +2353,7 @@ impl Association {
 
         // Push the chunks into the pending queue first.
         for c in chunks {
-            self.pending_queue.push(c);
+            self.pending_queue.push(c).await;
         }
 
         self.awake_write_loop();

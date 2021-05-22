@@ -6,6 +6,7 @@ use crate::chunk::chunk_payload_data::{ChunkPayloadData, PayloadProtocolIdentifi
 use crate::error::Error;
 use crate::queue::reassembly_queue::ReassemblyQueue;
 
+use crate::queue::pending_queue::PendingQueue;
 use bytes::Bytes;
 use std::fmt;
 use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, AtomicUsize, Ordering};
@@ -58,6 +59,8 @@ pub struct Stream {
     pub(crate) max_payload_size: u32,
     pub(crate) max_message_size: Arc<AtomicU32>, // clone from association
     pub(crate) state: Arc<AtomicU8>,             // clone from association
+    pub(crate) awake_write_loop_ch: Arc<Notify>,
+    pub(crate) pending_queue: Arc<PendingQueue>,
 
     pub(crate) stream_identifier: u16,
     pub(crate) default_payload_type: AtomicU32, //PayloadProtocolIdentifier,
@@ -80,6 +83,7 @@ impl fmt::Debug for Stream {
             .field("max_payload_size", &self.max_payload_size)
             .field("max_message_size", &self.max_message_size)
             .field("state", &self.state)
+            .field("awake_write_loop_ch", &self.awake_write_loop_ch)
             .field("stream_identifier", &self.stream_identifier)
             .field("default_payload_type", &self.default_payload_type)
             .field("reassembly_queue", &self.reassembly_queue)
@@ -96,17 +100,21 @@ impl fmt::Debug for Stream {
 }
 
 impl Stream {
-    pub fn new(
+    pub(crate) fn new(
         name: String,
         stream_identifier: u16,
         max_payload_size: u32,
         max_message_size: Arc<AtomicU32>,
         state: Arc<AtomicU8>,
+        awake_write_loop_ch: Arc<Notify>,
+        pending_queue: Arc<PendingQueue>,
     ) -> Self {
         Stream {
             max_payload_size,
             max_message_size,
             state,
+            awake_write_loop_ch,
+            pending_queue,
 
             stream_identifier,
             default_payload_type: AtomicU32::new(0), //PayloadProtocolIdentifier::Unknown,
@@ -268,9 +276,9 @@ impl Stream {
             _ => {}
         };
 
-        let _chunks = self.packetize(p, ppi);
+        let chunks = self.packetize(p, ppi);
+        self.send_payload_data(chunks).await?;
 
-        //TODO: return len(p), s.association.sendPayloadData(chunks)
         Ok(p.len())
     }
 
@@ -339,7 +347,7 @@ impl Stream {
         if !self.closed.load(Ordering::SeqCst) {
             // Reset the outgoing stream
             // https://tools.ietf.org/html/rfc6525
-            //TODO: self.association.sendResetRequest(self.stream_identifier)
+            self.send_reset_request(self.stream_identifier).await?;
         }
         self.closed.store(true, Ordering::SeqCst);
         self.read_notifier.notify_waiters(); // broadcast regardless
@@ -410,5 +418,51 @@ impl Stream {
         // No lock is required as it reads the size with atomic load function.
         let reassembly_queue = self.reassembly_queue.lock().await;
         reassembly_queue.get_num_bytes()
+    }
+
+    /// get_state atomically returns the state of the Association.
+    fn get_state(&self) -> AssociationState {
+        self.state.load(Ordering::SeqCst).into()
+    }
+
+    fn awake_write_loop(&self) {
+        self.awake_write_loop_ch.notify_one();
+    }
+
+    async fn send_payload_data(&self, chunks: Vec<ChunkPayloadData>) -> Result<(), Error> {
+        let state = self.get_state();
+        if state != AssociationState::Established {
+            return Err(Error::ErrPayloadDataStateNotExist);
+        }
+
+        // Push the chunks into the pending queue first.
+        for c in chunks {
+            self.pending_queue.push(c).await;
+        }
+
+        self.awake_write_loop();
+        Ok(())
+    }
+
+    async fn send_reset_request(&self, stream_identifier: u16) -> Result<(), Error> {
+        let state = self.get_state();
+        if state != AssociationState::Established {
+            return Err(Error::ErrResetPacketInStateNotExist);
+        }
+
+        // Create DATA chunk which only contains valid stream identifier with
+        // nil userData and use it as a EOS from the stream.
+        let c = ChunkPayloadData {
+            stream_identifier,
+            beginning_fragment: true,
+            ending_fragment: true,
+            user_data: Bytes::new(),
+            ..Default::default()
+        };
+
+        self.pending_queue.push(c).await;
+
+        self.awake_write_loop();
+        Ok(())
     }
 }

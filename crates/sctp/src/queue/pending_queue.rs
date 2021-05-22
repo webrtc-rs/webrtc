@@ -1,6 +1,8 @@
 use crate::chunk::chunk_payload_data::ChunkPayloadData;
 
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use tokio::sync::Mutex;
 
 /// pendingBaseQueue
 pub(crate) type PendingBaseQueue = VecDeque<ChunkPayloadData>;
@@ -8,11 +10,12 @@ pub(crate) type PendingBaseQueue = VecDeque<ChunkPayloadData>;
 /// pendingQueue
 #[derive(Debug, Default)]
 pub(crate) struct PendingQueue {
-    unordered_queue: PendingBaseQueue,
-    ordered_queue: PendingBaseQueue,
-    n_bytes: usize,
-    selected: bool,
-    unordered_is_selected: bool,
+    unordered_queue: Mutex<PendingBaseQueue>,
+    ordered_queue: Mutex<PendingBaseQueue>,
+    queue_len: AtomicUsize,
+    n_bytes: AtomicUsize,
+    selected: AtomicBool,
+    unordered_is_selected: AtomicBool,
 }
 
 impl PendingQueue {
@@ -20,44 +23,58 @@ impl PendingQueue {
         PendingQueue::default()
     }
 
-    pub(crate) fn push(&mut self, c: ChunkPayloadData) {
-        self.n_bytes += c.user_data.len();
+    pub(crate) async fn push(&self, c: ChunkPayloadData) {
+        self.n_bytes.fetch_add(c.user_data.len(), Ordering::SeqCst);
         if c.unordered {
-            self.unordered_queue.push_back(c);
+            let mut unordered_queue = self.unordered_queue.lock().await;
+            unordered_queue.push_back(c);
         } else {
-            self.ordered_queue.push_back(c);
+            let mut ordered_queue = self.ordered_queue.lock().await;
+            ordered_queue.push_back(c);
         }
+        self.queue_len.fetch_add(1, Ordering::SeqCst);
     }
 
-    pub(crate) fn peek(&self) -> Option<&ChunkPayloadData> {
-        if self.selected {
-            if self.unordered_is_selected {
-                return self.unordered_queue.get(0);
+    pub(crate) async fn peek(&self) -> Option<ChunkPayloadData> {
+        if self.selected.load(Ordering::SeqCst) {
+            if self.unordered_is_selected.load(Ordering::SeqCst) {
+                let unordered_queue = self.unordered_queue.lock().await;
+                return unordered_queue.get(0).cloned();
+            } else {
+                let ordered_queue = self.ordered_queue.lock().await;
+                return ordered_queue.get(0).cloned();
             }
-            return self.ordered_queue.get(0);
         }
 
-        let c = self.unordered_queue.get(0);
+        let c = {
+            let unordered_queue = self.unordered_queue.lock().await;
+            unordered_queue.get(0).cloned()
+        };
+
         if c.is_some() {
             return c;
         }
-        self.ordered_queue.get(0)
+
+        let ordered_queue = self.ordered_queue.lock().await;
+        ordered_queue.get(0).cloned()
     }
 
-    pub(crate) fn pop(
-        &mut self,
+    pub(crate) async fn pop(
+        &self,
         beginning_fragment: bool,
         unordered: bool,
     ) -> Option<ChunkPayloadData> {
-        let popped = if self.selected {
-            let popped = if self.unordered_is_selected {
-                self.unordered_queue.pop_front()
+        let popped = if self.selected.load(Ordering::SeqCst) {
+            let popped = if self.unordered_is_selected.load(Ordering::SeqCst) {
+                let mut unordered_queue = self.unordered_queue.lock().await;
+                unordered_queue.pop_front()
             } else {
-                self.ordered_queue.pop_front()
+                let mut ordered_queue = self.ordered_queue.lock().await;
+                ordered_queue.pop_front()
             };
             if let Some(p) = &popped {
                 if p.ending_fragment {
-                    self.selected = false;
+                    self.selected.store(false, Ordering::SeqCst);
                 }
             }
             popped
@@ -66,20 +83,26 @@ impl PendingQueue {
                 return None;
             }
             if unordered {
-                let popped = self.unordered_queue.pop_front();
+                let popped = {
+                    let mut unordered_queue = self.unordered_queue.lock().await;
+                    unordered_queue.pop_front()
+                };
                 if let Some(p) = &popped {
                     if !p.ending_fragment {
-                        self.selected = true;
-                        self.unordered_is_selected = true;
+                        self.selected.store(true, Ordering::SeqCst);
+                        self.unordered_is_selected.store(true, Ordering::SeqCst);
                     }
                 }
                 popped
             } else {
-                let popped = self.ordered_queue.pop_front();
+                let popped = {
+                    let mut ordered_queue = self.ordered_queue.lock().await;
+                    ordered_queue.pop_front()
+                };
                 if let Some(p) = &popped {
                     if !p.ending_fragment {
-                        self.selected = true;
-                        self.unordered_is_selected = false;
+                        self.selected.store(true, Ordering::SeqCst);
+                        self.unordered_is_selected.store(false, Ordering::SeqCst);
                     }
                 }
                 popped
@@ -87,17 +110,22 @@ impl PendingQueue {
         };
 
         if let Some(p) = &popped {
-            self.n_bytes -= p.user_data.len();
+            self.n_bytes.fetch_sub(p.user_data.len(), Ordering::SeqCst);
+            self.queue_len.fetch_sub(1, Ordering::SeqCst);
         }
 
         popped
     }
 
     pub(crate) fn get_num_bytes(&self) -> usize {
-        self.n_bytes
+        self.n_bytes.load(Ordering::SeqCst)
     }
 
     pub(crate) fn len(&self) -> usize {
-        self.unordered_queue.len() + self.ordered_queue.len()
+        self.queue_len.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }

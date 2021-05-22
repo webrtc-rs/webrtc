@@ -84,7 +84,7 @@ pub struct AssociationInternal {
     immediate_ack_triggered: bool,
     */
     name: String,
-    awake_write_loop_ch: Notify,
+    awake_write_loop_ch: Arc<Notify>,
     stats: Arc<AssociationStats>,
     ack_state: AckState,
     ack_mode: AckMode, // for testing
