@@ -1,8 +1,6 @@
 #[cfg(test)]
 mod stream_test;
 
-mod stream_internal;
-
 use crate::association::AssociationState;
 use crate::chunk::chunk_payload_data::{ChunkPayloadData, PayloadProtocolIdentifier};
 use crate::error::Error;
@@ -10,9 +8,9 @@ use crate::queue::reassembly_queue::ReassemblyQueue;
 
 use bytes::Bytes;
 use std::fmt;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, AtomicUsize, Ordering};
 use std::sync::Arc;
-use tokio::sync::Notify;
+use tokio::sync::{Mutex, Notify};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(C)]
@@ -63,17 +61,16 @@ pub struct Stream {
 
     pub(crate) stream_identifier: u16,
     pub(crate) default_payload_type: AtomicU32, //PayloadProtocolIdentifier,
-    pub(crate) reassembly_queue: ReassemblyQueue,
-    pub(crate) sequence_number: u16,
+    pub(crate) reassembly_queue: Mutex<ReassemblyQueue>,
+    pub(crate) sequence_number: AtomicU16,
     pub(crate) read_notifier: Notify,
-    pub(crate) read_err: Option<Error>,
-    pub(crate) write_err: Option<Error>,
+    pub(crate) closed: AtomicBool,
     pub(crate) unordered: AtomicBool,
     pub(crate) reliability_type: AtomicU8, //ReliabilityType,
     pub(crate) reliability_value: AtomicU32,
-    pub(crate) buffered_amount: usize,
+    pub(crate) buffered_amount: AtomicUsize,
     pub(crate) buffered_amount_low: AtomicUsize,
-    pub(crate) on_buffered_amount_low: Option<OnBufferedAmountLowFn>,
+    pub(crate) on_buffered_amount_low: Mutex<Option<OnBufferedAmountLowFn>>,
     pub(crate) name: String,
 }
 
@@ -87,8 +84,7 @@ impl fmt::Debug for Stream {
             .field("default_payload_type", &self.default_payload_type)
             .field("reassembly_queue", &self.reassembly_queue)
             .field("sequence_number", &self.sequence_number)
-            .field("read_err", &self.read_err)
-            .field("write_err", &self.write_err)
+            .field("closed", &self.closed)
             .field("unordered", &self.unordered)
             .field("reliability_type", &self.reliability_type)
             .field("reliability_value", &self.reliability_value)
@@ -114,17 +110,16 @@ impl Stream {
 
             stream_identifier,
             default_payload_type: AtomicU32::new(0), //PayloadProtocolIdentifier::Unknown,
-            reassembly_queue: ReassemblyQueue::new(stream_identifier),
-            sequence_number: 0,
+            reassembly_queue: Mutex::new(ReassemblyQueue::new(stream_identifier)),
+            sequence_number: AtomicU16::new(0),
             read_notifier: Notify::new(),
-            read_err: None,
-            write_err: None,
+            closed: AtomicBool::new(false),
             unordered: AtomicBool::new(false),
             reliability_type: AtomicU8::new(0), //ReliabilityType::Reliable,
             reliability_value: AtomicU32::new(0),
-            buffered_amount: 0,
+            buffered_amount: AtomicUsize::new(0),
             buffered_amount_low: AtomicUsize::new(0),
-            on_buffered_amount_low: None,
+            on_buffered_amount_low: Mutex::new(None),
             name,
         }
     }
@@ -158,7 +153,7 @@ impl Stream {
     /// read reads a packet of len(p) bytes, dropping the Payload Protocol Identifier.
     /// Returns EOF when the stream is reset or an error if the stream is closed
     /// otherwise.
-    pub async fn read(&mut self, p: &mut [u8]) -> Result<usize, Error> {
+    pub async fn read(&self, p: &mut [u8]) -> Result<usize, Error> {
         let (n, _) = self.read_sctp(p).await?;
         Ok(n)
     }
@@ -168,11 +163,15 @@ impl Stream {
     /// Returns EOF when the stream is reset or an error if the stream is closed
     /// otherwise.
     pub async fn read_sctp(
-        &mut self,
+        &self,
         p: &mut [u8],
     ) -> Result<(usize, PayloadProtocolIdentifier), Error> {
-        loop {
-            let result = self.reassembly_queue.read(p);
+        while !self.closed.load(Ordering::SeqCst) {
+            let result = {
+                let mut reassembly_queue = self.reassembly_queue.lock().await;
+                reassembly_queue.read(p)
+            };
+
             if result.is_ok() {
                 return result;
             } else if let Err(err) = result {
@@ -181,35 +180,43 @@ impl Stream {
                 }
             }
 
-            if let Some(err) = self.read_err {
-                return Err(err);
-            }
-
             self.read_notifier.notified().await;
         }
+
+        Err(Error::ErrStreamClosed)
     }
 
-    pub(crate) fn handle_data(&mut self, pd: ChunkPayloadData) {
-        if self.reassembly_queue.push(pd) {
-            let readable = self.reassembly_queue.is_readable();
-            log::debug!("[{}] reassembly_queue readable={}", self.name, readable);
-            if readable {
-                log::debug!("[{}] read_notifier.signal()", self.name);
-                self.read_notifier.notify_one();
-                log::debug!("[{}] read_notifier.signal() done", self.name);
+    pub(crate) async fn handle_data(&self, pd: ChunkPayloadData) {
+        let readable = {
+            let mut reassembly_queue = self.reassembly_queue.lock().await;
+            if reassembly_queue.push(pd) {
+                let readable = reassembly_queue.is_readable();
+                log::debug!("[{}] reassembly_queue readable={}", self.name, readable);
+                readable
+            } else {
+                false
             }
+        };
+
+        if readable {
+            log::debug!("[{}] read_notifier.signal()", self.name);
+            self.read_notifier.notify_one();
+            log::debug!("[{}] read_notifier.signal() done", self.name);
         }
     }
 
-    pub(crate) fn handle_forward_tsn_for_ordered(&mut self, ssn: u16) {
+    pub(crate) async fn handle_forward_tsn_for_ordered(&self, ssn: u16) {
         if self.unordered.load(Ordering::SeqCst) {
             return; // unordered chunks are handled by handleForwardUnordered method
         }
 
         // Remove all chunks older than or equal to the new TSN from
         // the reassembly_queue.
-        self.reassembly_queue.forward_tsn_for_ordered(ssn);
-        let readable = self.reassembly_queue.is_readable();
+        let readable = {
+            let mut reassembly_queue = self.reassembly_queue.lock().await;
+            reassembly_queue.forward_tsn_for_ordered(ssn);
+            reassembly_queue.is_readable()
+        };
 
         // Notify the reader asynchronously if there's a data chunk to read.
         if readable {
@@ -217,16 +224,18 @@ impl Stream {
         }
     }
 
-    pub(crate) fn handle_forward_tsn_for_unordered(&mut self, new_cumulative_tsn: u32) {
+    pub(crate) async fn handle_forward_tsn_for_unordered(&self, new_cumulative_tsn: u32) {
         if !self.unordered.load(Ordering::SeqCst) {
             return; // ordered chunks are handled by handleForwardTSNOrdered method
         }
 
         // Remove all chunks older than or equal to the new TSN from
         // the reassembly_queue.
-        self.reassembly_queue
-            .forward_tsn_for_unordered(new_cumulative_tsn);
-        let readable = self.reassembly_queue.is_readable();
+        let readable = {
+            let mut reassembly_queue = self.reassembly_queue.lock().await;
+            reassembly_queue.forward_tsn_for_unordered(new_cumulative_tsn);
+            reassembly_queue.is_readable()
+        };
 
         // Notify the reader asynchronously if there's a data chunk to read.
         if readable {
@@ -235,14 +244,14 @@ impl Stream {
     }
 
     /// write writes len(p) bytes from p with the default Payload Protocol Identifier
-    pub async fn write(&mut self, p: &Bytes) -> Result<usize, Error> {
+    pub async fn write(&self, p: &Bytes) -> Result<usize, Error> {
         self.write_sctp(p, self.default_payload_type.load(Ordering::SeqCst).into())
             .await
     }
 
     /// write_sctp writes len(p) bytes from p to the DTLS connection
     pub async fn write_sctp(
-        &mut self,
+        &self,
         p: &Bytes,
         ppi: PayloadProtocolIdentifier,
     ) -> Result<usize, Error> {
@@ -255,17 +264,9 @@ impl Stream {
             AssociationState::ShutdownSent
             | AssociationState::ShutdownAckSent
             | AssociationState::ShutdownPending
-            | AssociationState::ShutdownReceived => {
-                if self.write_err.is_none() {
-                    self.write_err = Some(Error::ErrStreamClosed);
-                }
-            }
+            | AssociationState::ShutdownReceived => return Err(Error::ErrStreamClosed),
             _ => {}
         };
-
-        if let Some(err) = self.write_err {
-            return Err(err);
-        }
 
         let _chunks = self.packetize(p, ppi);
 
@@ -273,7 +274,7 @@ impl Stream {
         Ok(p.len())
     }
 
-    fn packetize(&mut self, raw: &Bytes, ppi: PayloadProtocolIdentifier) -> Vec<ChunkPayloadData> {
+    fn packetize(&self, raw: &Bytes, ppi: PayloadProtocolIdentifier) -> Vec<ChunkPayloadData> {
         let mut i = 0;
         let mut remaining = raw.len();
 
@@ -302,7 +303,7 @@ impl Stream {
                 ending_fragment: remaining - fragment_size == 0,
                 immediate_sack: false,
                 payload_type: ppi,
-                stream_sequence_number: self.sequence_number,
+                stream_sequence_number: self.sequence_number.load(Ordering::SeqCst),
                 abandoned: head_abandoned.clone(), // all fragmented chunks use the same abandoned
                 all_inflight: head_all_inflight.clone(), // all fragmented chunks use the same all_inflight
                 ..Default::default()
@@ -319,49 +320,36 @@ impl Stream {
         // not increment its Stream Sequence Number when transmitting a DATA
         // chunk with U flag set to 1.
         if !unordered {
-            self.sequence_number += 1;
+            self.sequence_number.fetch_add(1, Ordering::SeqCst);
         }
 
-        self.buffered_amount += raw.len();
-        log::trace!("[{}] buffered_amount = {}", self.name, self.buffered_amount);
+        let old_value = self.buffered_amount.fetch_add(raw.len(), Ordering::SeqCst);
+        log::trace!(
+            "[{}] buffered_amount = {}",
+            self.name,
+            old_value + raw.len()
+        );
 
         chunks
     }
 
     /// Close closes the write-direction of the stream.
     /// Future calls to write are not permitted after calling Close.
-    pub fn close(&mut self) -> Result<(), Error> {
-        let (_sid, _is_open) = {
-            let mut is_open = true;
-            if self.write_err.is_none() {
-                self.write_err = Some(Error::ErrStreamClosed);
-            } else {
-                is_open = false;
-            }
+    pub async fn close(&self) -> Result<(), Error> {
+        if !self.closed.load(Ordering::SeqCst) {
+            // Reset the outgoing stream
+            // https://tools.ietf.org/html/rfc6525
+            //TODO: self.association.sendResetRequest(self.stream_identifier)
+        }
+        self.closed.store(true, Ordering::SeqCst);
+        self.read_notifier.notify_waiters(); // broadcast regardless
 
-            if self.read_err.is_none() {
-                self.read_err = Some(Error::ErrEof);
-            } else {
-                is_open = false;
-            }
-            self.read_notifier.notify_waiters(); // broadcast regardless
-
-            (self.stream_identifier, is_open)
-        };
-
-        //if is_open {
-        // Reset the outgoing stream
-        // https://tools.ietf.org/html/rfc6525
-        //TODO: self.association.sendResetRequest(sid)
-
-        //} else {
         Ok(())
-        //}
     }
 
     /// buffered_amount returns the number of bytes of data currently queued to be sent over this stream.
     pub fn buffered_amount(&self) -> usize {
-        self.buffered_amount
+        self.buffered_amount.load(Ordering::SeqCst)
     }
 
     /// buffered_amount_low_threshold returns the number of bytes of buffered outgoing data that is
@@ -378,44 +366,49 @@ impl Stream {
 
     /// on_buffered_amount_low sets the callback handler which would be called when the number of
     /// bytes of outgoing data buffered is lower than the threshold.
-    pub fn on_buffered_amount_low(&mut self, f: OnBufferedAmountLowFn) {
-        self.on_buffered_amount_low = Some(f);
+    pub async fn on_buffered_amount_low(&self, f: OnBufferedAmountLowFn) {
+        let mut on_buffered_amount_low = self.on_buffered_amount_low.lock().await;
+        *on_buffered_amount_low = Some(f);
     }
 
     /// This method is called by association's read_loop (go-)routine to notify this stream
     /// of the specified amount of outgoing data has been delivered to the peer.
-    pub(crate) fn on_buffer_released(&mut self, n_bytes_released: i64) {
+    pub(crate) async fn on_buffer_released(&self, n_bytes_released: i64) {
         if n_bytes_released <= 0 {
             return;
         }
 
-        let from_amount = self.buffered_amount;
-
-        if self.buffered_amount < n_bytes_released as usize {
-            self.buffered_amount = 0;
+        let from_amount = self.buffered_amount.load(Ordering::SeqCst);
+        let new_amount = if from_amount < n_bytes_released as usize {
+            self.buffered_amount.store(0, Ordering::SeqCst);
             log::error!(
                 "[{}] released buffer size {} should be <= {}",
                 self.name,
                 n_bytes_released,
-                self.buffered_amount
-            )
+                0,
+            );
+            0
         } else {
-            self.buffered_amount -= n_bytes_released as usize;
-        }
+            self.buffered_amount
+                .fetch_sub(n_bytes_released as usize, Ordering::SeqCst);
 
-        log::trace!("[{}] buffered_amount = {}", self.name, self.buffered_amount);
+            from_amount - n_bytes_released as usize
+        };
 
-        if let Some(f) = &self.on_buffered_amount_low {
+        log::trace!("[{}] buffered_amount = {}", self.name, new_amount);
+
+        let on_buffered_amount_low = self.on_buffered_amount_low.lock().await;
+        if let Some(f) = &*on_buffered_amount_low {
             let buffered_amount_low = self.buffered_amount_low.load(Ordering::SeqCst);
-            if from_amount > buffered_amount_low && self.buffered_amount <= buffered_amount_low {
+            if from_amount > buffered_amount_low && new_amount <= buffered_amount_low {
                 f();
-                return;
             }
         }
     }
 
-    pub(crate) fn get_num_bytes_in_reassembly_queue(&self) -> usize {
+    pub(crate) async fn get_num_bytes_in_reassembly_queue(&self) -> usize {
         // No lock is required as it reads the size with atomic load function.
-        self.reassembly_queue.get_num_bytes()
+        let reassembly_queue = self.reassembly_queue.lock().await;
+        reassembly_queue.get_num_bytes()
     }
 }

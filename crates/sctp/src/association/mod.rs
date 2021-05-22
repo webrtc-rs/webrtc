@@ -861,10 +861,10 @@ impl Association {
         raw_packets
     }
 
-    fn gather_outbound_sack_packets(&mut self, mut raw_packets: Vec<Bytes>) -> Vec<Bytes> {
+    async fn gather_outbound_sack_packets(&mut self, mut raw_packets: Vec<Bytes>) -> Vec<Bytes> {
         if self.ack_state == AckState::Immediate {
             self.ack_state = AckState::Idle;
-            let sack = self.create_selective_ack_chunk();
+            let sack = self.create_selective_ack_chunk().await;
             log::debug!("[{}] sending SACK: {}", self.name, sack);
             if let Ok(raw) = self.create_packet(vec![Box::new(sack)]).marshal() {
                 raw_packets.push(raw);
@@ -949,7 +949,7 @@ impl Association {
 
     /// gather_outbound gathers outgoing packets. The returned bool value set to
     /// false means the association should be closed down after the final send.
-    fn gather_outbound(&mut self) -> (Vec<Bytes>, bool) {
+    async fn gather_outbound(&mut self) -> (Vec<Bytes>, bool) {
         let mut raw_packets = vec![];
 
         if !self.control_queue.is_empty() {
@@ -969,7 +969,7 @@ impl Association {
                 raw_packets = self.gather_data_packets_to_retransmit(raw_packets);
                 raw_packets = self.gather_outbound_data_and_reconfig_packets(raw_packets);
                 raw_packets = self.gather_outbound_fast_retransmission_packets(raw_packets);
-                raw_packets = self.gather_outbound_sack_packets(raw_packets);
+                raw_packets = self.gather_outbound_sack_packets(raw_packets).await;
                 raw_packets = self.gather_outbound_forward_tsn_packets(raw_packets);
                 (raw_packets, true)
             }
@@ -978,7 +978,7 @@ impl Association {
             | AssociationState::ShutdownReceived => {
                 raw_packets = self.gather_data_packets_to_retransmit(raw_packets);
                 raw_packets = self.gather_outbound_fast_retransmission_packets(raw_packets);
-                raw_packets = self.gather_outbound_sack_packets(raw_packets);
+                raw_packets = self.gather_outbound_sack_packets(raw_packets).await;
                 self.gather_outbound_shutdown_packets(raw_packets)
             }
             AssociationState::ShutdownAckSent => self.gather_outbound_shutdown_packets(raw_packets),
@@ -1325,7 +1325,7 @@ impl Association {
         let mut stream_handle_data = false;
         if can_push {
             if let Some(_s) = self.get_or_create_stream(d.stream_identifier) {
-                if self.get_my_receiver_window_credit() > 0 {
+                if self.get_my_receiver_window_credit().await > 0 {
                     // Pass the new chunk to stream level as soon as it arrives
                     self.payload_queue.push(d.clone(), self.peer_last_tsn);
                     stream_handle_data = true; //s.handle_data(d.clone());
@@ -1358,7 +1358,7 @@ impl Association {
 
         if stream_handle_data {
             if let Some(s) = self.streams.get_mut(&d.stream_identifier) {
-                s.handle_data(d.clone());
+                s.handle_data(d.clone()).await;
             }
         }
 
@@ -1420,10 +1420,10 @@ impl Association {
         Ok(reply)
     }
 
-    fn get_my_receiver_window_credit(&self) -> u32 {
+    async fn get_my_receiver_window_credit(&self) -> u32 {
         let mut bytes_queued = 0;
         for s in self.streams.values() {
-            bytes_queued += s.get_num_bytes_in_reassembly_queue() as u32;
+            bytes_queued += s.get_num_bytes_in_reassembly_queue().await as u32;
         }
 
         if bytes_queued >= self.max_receive_buffer_size {
@@ -1834,7 +1834,7 @@ impl Association {
 
         for (si, n_bytes_acked) in &bytes_acked_per_stream {
             if let Some(s) = self.streams.get_mut(si) {
-                s.on_buffer_released(*n_bytes_acked);
+                s.on_buffer_released(*n_bytes_acked).await;
             }
         }
 
@@ -2103,7 +2103,7 @@ impl Association {
         // from the reassemblyQueue.
         for forwarded in &c.streams {
             if let Some(s) = self.streams.get_mut(&forwarded.identifier) {
-                s.handle_forward_tsn_for_ordered(forwarded.sequence);
+                s.handle_forward_tsn_for_ordered(forwarded.sequence).await;
             }
         }
 
@@ -2113,7 +2113,8 @@ impl Association {
         // unordered chunks.
         // See https://github.com/pion/sctp/issues/106
         for s in self.streams.values_mut() {
-            s.handle_forward_tsn_for_unordered(c.new_cumulative_tsn);
+            s.handle_forward_tsn_for_unordered(c.new_cumulative_tsn)
+                .await;
         }
 
         self.handle_peer_last_tsn_and_acknowledgement(false)
@@ -2470,10 +2471,10 @@ impl Association {
         rsn
     }
 
-    fn create_selective_ack_chunk(&mut self) -> ChunkSelectiveAck {
+    async fn create_selective_ack_chunk(&mut self) -> ChunkSelectiveAck {
         ChunkSelectiveAck {
             cumulative_tsn_ack: self.peer_last_tsn,
-            advertised_receiver_window_credit: self.get_my_receiver_window_credit(),
+            advertised_receiver_window_credit: self.get_my_receiver_window_credit().await,
             gap_ack_blocks: self.payload_queue.get_gap_ack_blocks(self.peer_last_tsn),
             duplicate_tsn: self.payload_queue.pop_duplicates(),
         }
