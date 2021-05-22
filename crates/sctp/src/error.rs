@@ -180,6 +180,8 @@ pub enum Error {
     ErrInitAckNoCookie,
     #[error("there already exists a stream with identifier")]
     ErrStreamAlreadyExist,
+    #[error("Failed to create a stream with identifier")]
+    ErrStreamCreateFailed,
     #[error("unable to be popped from inflight queue TSN")]
     ErrInflightQueueTsnPop,
     #[error("requested non-existent TSN")]

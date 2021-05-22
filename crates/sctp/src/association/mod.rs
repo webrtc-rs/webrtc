@@ -1,6 +1,13 @@
-use crate::association_stats::AssociationStats;
+mod association_internal;
+mod association_stats;
+
+use crate::chunk::chunk_abort::ChunkAbort;
 use crate::chunk::chunk_cookie_ack::ChunkCookieAck;
 use crate::chunk::chunk_cookie_echo::ChunkCookieEcho;
+use crate::chunk::chunk_error::ChunkError;
+use crate::chunk::chunk_forward_tsn::{ChunkForwardTsn, ChunkForwardTsnStream};
+use crate::chunk::chunk_heartbeat::ChunkHeartbeat;
+use crate::chunk::chunk_heartbeat_ack::ChunkHeartbeatAck;
 use crate::chunk::chunk_init::ChunkInit;
 use crate::chunk::chunk_payload_data::{ChunkPayloadData, PayloadProtocolIdentifier};
 use crate::chunk::chunk_reconfig::ChunkReconfig;
@@ -8,32 +15,30 @@ use crate::chunk::chunk_selective_ack::ChunkSelectiveAck;
 use crate::chunk::chunk_shutdown::ChunkShutdown;
 use crate::chunk::chunk_shutdown_ack::ChunkShutdownAck;
 use crate::chunk::chunk_shutdown_complete::ChunkShutdownComplete;
+use crate::chunk::chunk_type::*;
 use crate::chunk::Chunk;
 use crate::error::Error;
 use crate::error_cause::*;
 use crate::packet::Packet;
+use crate::param::param_heartbeat_info::ParamHeartbeatInfo;
 use crate::param::param_outgoing_reset_request::ParamOutgoingResetRequest;
 use crate::param::param_reconfig_response::{ParamReconfigResponse, ReconfigResult};
 use crate::param::param_state_cookie::ParamStateCookie;
+use crate::param::param_supported_extensions::ParamSupportedExtensions;
+use crate::param::Param;
 use crate::queue::control_queue::ControlQueue;
 use crate::queue::payload_queue::PayloadQueue;
 use crate::queue::pending_queue::PendingQueue;
-use crate::stream::{ReliabilityType, Stream};
-use crate::timer::ack_timer::{AckTimer, ACK_INTERVAL};
-use crate::timer::rtx_timer::{RtoManager, RtxTimer, MAX_INIT_RETRANS, NO_MAX_RETRANS};
+use crate::stream::*;
+use crate::timer::ack_timer::*;
+use crate::timer::rtx_timer::*;
 use crate::util::*;
+
+use association_internal::*;
+use association_stats::*;
 
 use util::Conn;
 //use async_trait::async_trait;
-use crate::chunk::chunk_abort::ChunkAbort;
-use crate::chunk::chunk_error::ChunkError;
-use crate::chunk::chunk_forward_tsn::{ChunkForwardTsn, ChunkForwardTsnStream};
-use crate::chunk::chunk_heartbeat::ChunkHeartbeat;
-use crate::chunk::chunk_heartbeat_ack::ChunkHeartbeatAck;
-use crate::chunk::chunk_type::*;
-use crate::param::param_heartbeat_info::ParamHeartbeatInfo;
-use crate::param::param_supported_extensions::ParamSupportedExtensions;
-use crate::param::Param;
 use bytes::Bytes;
 use rand::random;
 use std::collections::{HashMap, VecDeque};
@@ -41,7 +46,7 @@ use std::fmt;
 use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
-use tokio::sync::Notify;
+use tokio::sync::{Mutex, Notify};
 
 pub(crate) const RECEIVE_MTU: u32 = 8192;
 /// MTU for inbound packet (from DTLS)
@@ -268,42 +273,41 @@ pub struct Association {
     stored_init: Option<ChunkInit>,
     stored_cookie_echo: Option<ChunkCookieEcho>,
 
-    streams: HashMap<u16, Stream>,
+    streams: HashMap<u16, Stream>, //Arc<>
     /*TODO:     acceptCh             chan *Stream
         readLoopCloseCh      chan struct{}
 
         closeWriteLoopCh     chan struct{}
 
     */
-    awake_write_loop_ch: Notify,
-
     //TODO: handshakeCompletedCh : mpsc:: chan error
     //TODO: closeWriteLoopOnce sync.Once
 
     // local error
     silent_error: Option<Error>,
 
-    ack_state: AckState,
-    ack_mode: AckMode, // for testing
-
-    // stats
-    stats: AssociationStats,
-
     // per inbound packet context
     delayed_ack_triggered: bool,
     immediate_ack_triggered: bool,
 
+    // AssociationInternal
+    association_internal: Arc<Mutex<AssociationInternal>>,
+
+    //TODO: to be deleted:
     name: String,
-    //log  logging.LeveledLogger
+    awake_write_loop_ch: Notify,
+    stats: Arc<AssociationStats>,
+    ack_state: AckState,
+    ack_mode: AckMode, // for testing
 }
 
 impl Association {
-    /*/// Server accepts a SCTP stream over a conn
-    pub fn Server(config: Config) ->Result<Self, Error> {
-        a := create_association(config)
-        self.init(false)
+    /// server accepts a SCTP stream over a conn
+    pub fn server(config: Config) -> Result<Self, Error> {
+        let mut a = Association::create_association(config);
+        a.init(false)?;
 
-        select {
+        /*TODO: select {
         case err := <-self.handshakeCompletedCh:
             if err != nil {
                 return nil, err
@@ -311,15 +315,17 @@ impl Association {
             return a, nil
         case <-self.readLoopCloseCh:
             return nil, errAssociationClosedBeforeConn
-        }
+        }*/
+
+        Ok(a)
     }
 
     /// Client opens a SCTP stream over a conn
-    func Client(config Config) (*Association, error) {
-        a := create_association(config)
-        self.init(true)
+    pub fn client(config: Config) -> Result<Self, Error> {
+        let mut a = Association::create_association(config);
+        a.init(true)?;
 
-        select {
+        /*TODO: select {
         case err := <-self.handshakeCompletedCh:
             if err != nil {
                 return nil, err
@@ -327,8 +333,9 @@ impl Association {
             return a, nil
         case <-self.readLoopCloseCh:
             return nil, errAssociationClosedBeforeConn
-        }
-    }*/
+        }*/
+        Ok(a)
+    }
 
     fn create_association(config: Config) -> Self {
         let max_receive_buffer_size = if config.max_receive_buffer_size == 0 {
@@ -373,7 +380,7 @@ impl Association {
             cumulative_tsn_ack_point: tsn - 1,
             advanced_peer_tsn_ack_point: tsn - 1,
             silent_error: Some(Error::ErrSilentlyDiscard),
-            stats: AssociationStats::default(),
+            stats: Arc::new(AssociationStats::default()),
             //log:                     config.LoggerFactory.NewLogger("sctp"),
             ..Default::default()
         };
@@ -403,32 +410,31 @@ impl Association {
         a
     }
 
-    /*
-            fn init(&self, isClient: bool) {
+    fn init(&mut self, is_client: bool) -> Result<(), Error> {
+        //TODO: go self.read_loop()
+        //TODO: go self.write_loop()
 
-                 //TODO: go self.readLoop()
-                 //TODO: go self.writeLoop()
+        if is_client {
+            self.set_state(AssociationState::CookieWait);
+            let mut init = ChunkInit {
+                initial_tsn: self.my_next_tsn,
+                num_outbound_streams: self.my_max_num_outbound_streams,
+                num_inbound_streams: self.my_max_num_inbound_streams,
+                initiate_tag: self.my_verification_tag,
+                advertised_receiver_window_credit: self.max_receive_buffer_size,
+                ..Default::default()
+            };
+            Association::set_supported_extensions(&mut init);
 
-                 if isClient {
-                     self.set_state(CookieWait)
-                     init := &chunkInit{}
-                     init.initialTSN = self.my_next_tsn
-                     init.numOutboundStreams = self.my_max_num_outbound_streams
-                     init.numInboundStreams = self.my_max_num_inbound_streams
-                     init.initiateTag = self.my_verification_tag
-                     init.advertisedReceiverWindowCredit = self.max_receive_buffer_size
-                     set_supported_extensions(&init.chunkInitCommon)
-                     self.stored_init = init
+            self.stored_init = Some(init);
 
-                     err := self.sendInit()
-                     if err != nil {
-                         self.log.Errorf("[%s] failed to send init: %s", self.name, err.Error())
-                     }
+            self.send_init()?;
 
-                     self.t1init.start(self.rto_mgr.getRTO())
-                 }
-             }
-    */
+            //TODO: self.t1init.start(self.rto_mgr.get_rto());
+        }
+
+        Ok(())
+    }
 
     /// caller must hold self.lock
     fn send_init(&mut self) -> Result<(), Error> {
@@ -473,61 +479,78 @@ impl Association {
             Err(Error::ErrCookieEchoNotStoredToSend)
         }
     }
-    /*
-        // Shutdown initiates the shutdown sequence. The method blocks until the
-        // shutdown sequence is completed and the connection is closed, or until the
-        // passed context is done, in which case the context's error is returned.
-        fn Shutdown(ctx context.Context) error {
-            self.log.Debugf("[%s] closing association..", self.name)
 
-            state := self.get_state()
+    /// Shutdown initiates the shutdown sequence. The method blocks until the
+    /// shutdown sequence is completed and the connection is closed, or until the
+    /// passed context is done, in which case the context's error is returned.
+    pub fn shutdown(&mut self) -> Result<(), Error> {
+        log::debug!("[{}] closing association..", self.name);
 
-            if state != Established {
-                return fmt.Errorf("%w: shutdown %s", errShutdownNonEstablished, self.name)
-            }
-
-            // Attempt a graceful shutdown.
-            self.set_state(ShutdownPending)
-
-            self.lock.Lock()
-
-            if self.inflight_queue.size() == 0 {
-                // No more outstanding, send shutdown.
-                self.will_send_shutdown = true
-                self.awake_write_loop()
-                self.set_state(ShutdownSent)
-            }
-
-            self.lock.Unlock()
-
-            select {
-            case <-self.closeWriteLoopCh:
-                return nil
-            case <-ctx.Done():
-                return ctx.Err()
-            }
+        let state = self.get_state();
+        if state != AssociationState::Established {
+            return Err(Error::ErrShutdownNonEstablished);
         }
 
-        // Close ends the SCTP Association and cleans up any state
-        fn Close() error {
-            self.log.Debugf("[%s] closing association..", self.name)
+        // Attempt a graceful shutdown.
+        self.set_state(AssociationState::ShutdownPending);
 
-            err := self.close()
-
-            // Wait for readLoop to end
-            <-self.readLoopCloseCh
-
-            self.log.Debugf("[%s] association closed", self.name)
-            self.log.Debugf("[%s] stats nDATAs (in) : %d", self.name, self.stats.get_num_datas())
-            self.log.Debugf("[%s] stats nSACKs (in) : %d", self.name, self.stats.get_num_sacks())
-            self.log.Debugf("[%s] stats nT3Timeouts : %d", self.name, self.stats.get_num_t3timeouts())
-            self.log.Debugf("[%s] stats nAckTimeouts: %d", self.name, self.stats.get_num_ack_timeouts())
-            self.log.Debugf("[%s] stats nFastRetrans: %d", self.name, self.stats.get_num_fast_retrans())
-
-            return err
+        if self.inflight_queue.len() == 0 {
+            // No more outstanding, send shutdown.
+            self.will_send_shutdown = true;
+            self.awake_write_loop();
+            self.set_state(AssociationState::ShutdownSent);
         }
-    */
-    async fn close(&mut self) -> Result<(), Error> {
+
+        /*select {
+        case <-self.closeWriteLoopCh:
+            return nil
+        case <-ctx.Done():
+            return ctx.Err()
+        }*/
+
+        Ok(())
+    }
+
+    /// Close ends the SCTP Association and cleans up any state
+    pub async fn close(&mut self) -> Result<(), Error> {
+        log::debug!("[{}] closing association..", self.name);
+
+        self.close_internal().await?;
+
+        // Wait for read_loop to end
+        //TODO: <-self.readLoopCloseCh
+
+        log::debug!("[{}] association closed", self.name);
+        log::debug!(
+            "[{}] stats nDATAs (in) : {}",
+            self.name,
+            self.stats.get_num_datas()
+        );
+        log::debug!(
+            "[{}] stats nSACKs (in) : {}",
+            self.name,
+            self.stats.get_num_sacks()
+        );
+        log::debug!(
+            "[{}] stats nT3Timeouts : {}",
+            self.name,
+            self.stats.get_num_t3timeouts()
+        );
+        log::debug!(
+            "[{}] stats nAckTimeouts: {}",
+            self.name,
+            self.stats.get_num_ack_timeouts()
+        );
+        log::debug!(
+            "[{}] stats nFastRetrans: {}",
+            self.name,
+            self.stats.get_num_fast_retrans()
+        );
+
+        Ok(())
+    }
+
+    async fn close_internal(&mut self) -> Result<(), Error> {
         log::debug!("[{}] closing association..", self.name);
 
         self.set_state(AssociationState::Closed);
@@ -536,7 +559,7 @@ impl Association {
 
         self.close_all_timers().await;
 
-        // awake writeLoop to exit
+        // awake write_loop to exit
         //TODO: self.closeWriteLoopOnce.Do(func() { close(self.closeWriteLoopCh) })
 
         Ok(())
@@ -551,11 +574,12 @@ impl Association {
         self.treconfig.stop().await;
         self.ack_timer.stop();
     }
-    /*
-    fn readLoop() {
+
+    fn read_loop() {
+        /*TODO:
         var closeErr error
         defer func() {
-            // also stop writeLoop, otherwise writeLoop can be leaked
+            // also stop write_loop, otherwise write_loop can be leaked
             // if connection is lost when there is no writing packet.
             self.closeWriteLoopOnce.Do(func() { close(self.closeWriteLoopCh) })
 
@@ -567,16 +591,16 @@ impl Association {
             close(self.acceptCh)
             close(self.readLoopCloseCh)
 
-            self.log.Debugf("[%s] association closed", self.name)
-            self.log.Debugf("[%s] stats nDATAs (in) : %d", self.name, self.stats.get_num_datas())
-            self.log.Debugf("[%s] stats nSACKs (in) : %d", self.name, self.stats.get_num_sacks())
-            self.log.Debugf("[%s] stats nT3Timeouts : %d", self.name, self.stats.get_num_t3timeouts())
-            self.log.Debugf("[%s] stats nAckTimeouts: %d", self.name, self.stats.get_num_ack_timeouts())
-            self.log.Debugf("[%s] stats nFastRetrans: %d", self.name, self.stats.get_num_fast_retrans())
+            log::debug!("[{}] association closed", self.name);
+            log::debug!("[{}] stats nDATAs (in) : {}", self.name, self.stats.get_num_datas());
+            log::debug!("[{}] stats nSACKs (in) : {}", self.name, self.stats.get_num_sacks());
+            log::debug!("[{}] stats nT3Timeouts : {}", self.name, self.stats.get_num_t3timeouts());
+            log::debug!("[{}] stats nAckTimeouts: {}", self.name, self.stats.get_num_ack_timeouts());
+            log::debug!("[{}] stats nFastRetrans: {}", self.name, self.stats.get_num_fast_retrans());
         }()
 
-        self.log.Debugf("[%s] readLoop entered", self.name)
-        buffer := make([]byte, RECEIVE_MTU)
+        log::debug!("[{}] read_loop entered", self.name);
+        buffer := make([]byte, RECEIVE_MTU);
 
         for {
             n, err := self.net_conn.read(buffer)
@@ -597,47 +621,51 @@ impl Association {
             }
         }
 
-        self.log.Debugf("[%s] readLoop exited %s", self.name, closeErr)
+        log::debug!("[{}] read_loop exited {}", self.name, closeErr);
+        */
     }
 
-    fn writeLoop() {
-        self.log.Debugf("[%s] writeLoop entered", self.name)
-        defer self.log.Debugf("[%s] writeLoop exited", self.name)
+    fn write_loop() {
+        /*TODO:
+            log::debug!("[{}] write_loop entered", self.name);
+            defer log::debug!("[{}] write_loop exited", self.name);
 
-    loop:
-        for {
-            rawPackets, ok := self.gather_outbound()
+        loop:
+            for {
+                rawPackets, ok := self.gather_outbound()
 
-            for _, raw := range rawPackets {
-                _, err := self.net_conn.write(raw)
-                if err != nil {
-                    if err != io.EOF {
-                        self.log.Warnf("[%s] failed to write packets on net_conn: %v", self.name, err)
+                for _, raw := range rawPackets {
+                    _, err := self.net_conn.write(raw)
+                    if err != nil {
+                        if err != io.EOF {
+                            self.log.Warnf("[%s] failed to write packets on net_conn: %v", self.name, err)
+                        }
+                        self.log.Debugf("[%s] write_loop ended", self.name)
+                        break loop
                     }
-                    self.log.Debugf("[%s] writeLoop ended", self.name)
+                    atomic.AddUint64(&self.bytes_sent, uint64(len(raw)))
+                }
+
+                if !ok {
+                    if err := self.close(); err != nil {
+                        self.log.Warnf("[%s] failed to close association: %v", self.name, err)
+                    }
+
+                    return
+                }
+
+                select {
+                case <-self.awake_write_loop_ch:
+                case <-self.closeWriteLoopCh:
                     break loop
                 }
-                atomic.AddUint64(&self.bytes_sent, uint64(len(raw)))
             }
 
-            if !ok {
-                if err := self.close(); err != nil {
-                    self.log.Warnf("[%s] failed to close association: %v", self.name, err)
-                }
+            self.set_state(closed)
+            self.close_all_timers()
 
-                return
-            }
-
-            select {
-            case <-self.awake_write_loop_ch:
-            case <-self.closeWriteLoopCh:
-                break loop
-            }
-        }
-
-        self.set_state(closed)
-        self.close_all_timers()
-    }*/
+             */
+    }
 
     fn awake_write_loop(&self) {
         self.awake_write_loop_ch.notify_one();
@@ -653,7 +681,7 @@ impl Association {
         }
     }
 
-    // handle_inbound parses incoming raw packets
+    /// handle_inbound parses incoming raw packets
     async fn handle_inbound(&mut self, raw: &Bytes) -> Result<(), Error> {
         let p = Packet::unmarshal(raw)?;
         Association::check_packet(&p)?;
@@ -1405,30 +1433,36 @@ impl Association {
         }
     }
 
-    /*TODO: // OpenStream opens a stream
-     fn OpenStream(streamIdentifier uint16, defaultPayloadType PayloadProtocolIdentifier) (*Stream, error) {
-         self.lock.Lock()
-         defer self.lock.Unlock()
+    /// open_stream opens a stream
+    pub fn open_stream(
+        &mut self,
+        stream_identifier: u16,
+        _default_payload_type: PayloadProtocolIdentifier,
+    ) -> Result<&Stream, Error> {
+        if self.streams.contains_key(&stream_identifier) {
+            return Err(Error::ErrStreamAlreadyExist);
+        }
 
-         if _, ok := self.streams[streamIdentifier]; ok {
-             return nil, fmt.Errorf("%w: %d", errStreamAlreadyExist, streamIdentifier)
-         }
+        let stream = self.create_stream(stream_identifier, false);
+        if let Some(s) = stream {
+            //TODO: s.set_default_payload_type(default_payload_type);
+            Ok(s)
+        } else {
+            Err(Error::ErrStreamCreateFailed)
+        }
+    }
 
-         s := self.create_stream(streamIdentifier, false)
-         s.setDefaultPayloadType(defaultPayloadType)
+    /// accept_stream accepts a stream
+    pub fn accept_stream(&self) -> Result<Stream, Error> {
+        /*TODO: s, ok := <-self.acceptCh
+        if !ok {
+            return nil, io.EOF // no more incoming streams
+        }
+        return s, nil
+         */
+        Err(Error::ErrStreamCreateFailed)
+    }
 
-         return s, nil
-     }
-
-     // AcceptStream accepts a stream
-     fn AcceptStream() (*Stream, error) {
-         s, ok := <-self.acceptCh
-         if !ok {
-             return nil, io.EOF // no more incoming streams
-         }
-         return s, nil
-     }
-    */
     /// create_stream creates a stream. The caller should hold the lock and check no stream exists for this id.
     fn create_stream(&mut self, stream_identifier: u16, _accept: bool) -> Option<&Stream> {
         /* TODO: let s = Stream{
@@ -2337,8 +2371,12 @@ impl Association {
 
         // PR-SCTP
         if let Some(s) = self.streams.get(&c.stream_identifier) {
-            if s.reliability_type == ReliabilityType::Rexmit {
-                if c.nsent >= s.reliability_value {
+            let reliability_type: ReliabilityType =
+                s.reliability_type.load(Ordering::SeqCst).into();
+            let reliability_value = s.reliability_value.load(Ordering::SeqCst);
+
+            if reliability_type == ReliabilityType::Rexmit {
+                if c.nsent >= reliability_value {
                     c.set_abandoned(true);
                     log::trace!(
                         "[{}] marked as abandoned: tsn={} ppi={} (remix: {})",
@@ -2348,9 +2386,9 @@ impl Association {
                         c.nsent
                     );
                 }
-            } else if s.reliability_type == ReliabilityType::Timed {
+            } else if reliability_type == ReliabilityType::Timed {
                 if let Ok(elapsed) = SystemTime::now().duration_since(c.since) {
-                    if elapsed.as_millis() as u32 >= s.reliability_value {
+                    if elapsed.as_millis() as u32 >= reliability_value {
                         c.set_abandoned(true);
                         log::trace!(
                             "[{}] marked as abandoned: tsn={} ppi={} (timed: {:?})",

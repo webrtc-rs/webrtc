@@ -1,11 +1,16 @@
+#[cfg(test)]
+mod stream_test;
+
+mod stream_internal;
+
+use crate::association::AssociationState;
 use crate::chunk::chunk_payload_data::{ChunkPayloadData, PayloadProtocolIdentifier};
 use crate::error::Error;
 use crate::queue::reassembly_queue::ReassemblyQueue;
 
-use crate::association::AssociationState;
 use bytes::Bytes;
 use std::fmt;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::Notify;
 
@@ -37,6 +42,16 @@ impl fmt::Display for ReliabilityType {
     }
 }
 
+impl From<u8> for ReliabilityType {
+    fn from(v: u8) -> ReliabilityType {
+        match v {
+            1 => ReliabilityType::Rexmit,
+            2 => ReliabilityType::Timed,
+            _ => ReliabilityType::Reliable,
+        }
+    }
+}
+
 pub type OnBufferedAmountLowFn = Box<dyn Fn()>;
 
 /// Stream represents an SCTP stream
@@ -47,19 +62,18 @@ pub struct Stream {
     pub(crate) state: Arc<AtomicU8>,             // clone from association
 
     pub(crate) stream_identifier: u16,
-    pub(crate) default_payload_type: PayloadProtocolIdentifier,
+    pub(crate) default_payload_type: AtomicU32, //PayloadProtocolIdentifier,
     pub(crate) reassembly_queue: ReassemblyQueue,
     pub(crate) sequence_number: u16,
     pub(crate) read_notifier: Notify,
     pub(crate) read_err: Option<Error>,
     pub(crate) write_err: Option<Error>,
-    pub(crate) unordered: bool,
-    pub(crate) reliability_type: ReliabilityType,
-    pub(crate) reliability_value: u32,
-    pub(crate) buffered_amount: u64,
-    pub(crate) buffered_amount_low: u64,
+    pub(crate) unordered: AtomicBool,
+    pub(crate) reliability_type: AtomicU8, //ReliabilityType,
+    pub(crate) reliability_value: AtomicU32,
+    pub(crate) buffered_amount: usize,
+    pub(crate) buffered_amount_low: AtomicUsize,
     pub(crate) on_buffered_amount_low: Option<OnBufferedAmountLowFn>,
-    //log                 :logging.LeveledLogger
     pub(crate) name: String,
 }
 
@@ -99,17 +113,17 @@ impl Stream {
             state,
 
             stream_identifier,
-            default_payload_type: PayloadProtocolIdentifier::Unknown,
+            default_payload_type: AtomicU32::new(0), //PayloadProtocolIdentifier::Unknown,
             reassembly_queue: ReassemblyQueue::new(stream_identifier),
             sequence_number: 0,
             read_notifier: Notify::new(),
             read_err: None,
             write_err: None,
-            unordered: false,
-            reliability_type: ReliabilityType::Reliable,
-            reliability_value: 0,
+            unordered: AtomicBool::new(false),
+            reliability_type: AtomicU8::new(0), //ReliabilityType::Reliable,
+            reliability_value: AtomicU32::new(0),
             buffered_amount: 0,
-            buffered_amount_low: 0,
+            buffered_amount_low: AtomicUsize::new(0),
             on_buffered_amount_low: None,
             name,
         }
@@ -121,17 +135,13 @@ impl Stream {
     }
 
     /// set_default_payload_type sets the default payload type used by write.
-    pub fn set_default_payload_type(&mut self, default_payload_type: PayloadProtocolIdentifier) {
-        self.default_payload_type = default_payload_type;
+    pub fn set_default_payload_type(&self, default_payload_type: PayloadProtocolIdentifier) {
+        self.default_payload_type
+            .store(default_payload_type as u32, Ordering::SeqCst);
     }
 
     /// set_reliability_params sets reliability parameters for this stream.
-    pub fn set_reliability_params(
-        &mut self,
-        unordered: bool,
-        rel_type: ReliabilityType,
-        rel_val: u32,
-    ) {
+    pub fn set_reliability_params(&self, unordered: bool, rel_type: ReliabilityType, rel_val: u32) {
         log::debug!(
             "[{}] reliability params: ordered={} type={} value={}",
             self.name,
@@ -139,9 +149,10 @@ impl Stream {
             rel_type,
             rel_val
         );
-        self.unordered = unordered;
-        self.reliability_type = rel_type;
-        self.reliability_value = rel_val;
+        self.unordered.store(unordered, Ordering::SeqCst);
+        self.reliability_type
+            .store(rel_type as u8, Ordering::SeqCst);
+        self.reliability_value.store(rel_val, Ordering::SeqCst);
     }
 
     /// read reads a packet of len(p) bytes, dropping the Payload Protocol Identifier.
@@ -191,7 +202,7 @@ impl Stream {
     }
 
     pub(crate) fn handle_forward_tsn_for_ordered(&mut self, ssn: u16) {
-        if self.unordered {
+        if self.unordered.load(Ordering::SeqCst) {
             return; // unordered chunks are handled by handleForwardUnordered method
         }
 
@@ -207,7 +218,7 @@ impl Stream {
     }
 
     pub(crate) fn handle_forward_tsn_for_unordered(&mut self, new_cumulative_tsn: u32) {
-        if !self.unordered {
+        if !self.unordered.load(Ordering::SeqCst) {
             return; // ordered chunks are handled by handleForwardTSNOrdered method
         }
 
@@ -225,7 +236,8 @@ impl Stream {
 
     /// write writes len(p) bytes from p with the default Payload Protocol Identifier
     pub async fn write(&mut self, p: &Bytes) -> Result<usize, Error> {
-        self.write_sctp(p, self.default_payload_type).await
+        self.write_sctp(p, self.default_payload_type.load(Ordering::SeqCst).into())
+            .await
     }
 
     /// write_sctp writes len(p) bytes from p to the DTLS connection
@@ -268,7 +280,8 @@ impl Stream {
         // From draft-ietf-rtcweb-data-protocol-09, section 6:
         //   All Data Channel Establishment Protocol messages MUST be sent using
         //   ordered delivery and reliable transmission.
-        let unordered = ppi != PayloadProtocolIdentifier::Dcep && self.unordered;
+        let unordered =
+            ppi != PayloadProtocolIdentifier::Dcep && self.unordered.load(Ordering::SeqCst);
 
         let mut chunks = vec![];
 
@@ -309,7 +322,7 @@ impl Stream {
             self.sequence_number += 1;
         }
 
-        self.buffered_amount += raw.len() as u64;
+        self.buffered_amount += raw.len();
         log::trace!("[{}] buffered_amount = {}", self.name, self.buffered_amount);
 
         chunks
@@ -347,20 +360,20 @@ impl Stream {
     }
 
     /// buffered_amount returns the number of bytes of data currently queued to be sent over this stream.
-    pub fn buffered_amount(&self) -> u64 {
+    pub fn buffered_amount(&self) -> usize {
         self.buffered_amount
     }
 
     /// buffered_amount_low_threshold returns the number of bytes of buffered outgoing data that is
     /// considered "low." Defaults to 0.
-    pub fn buffered_amount_low_threshold(&self) -> u64 {
-        self.buffered_amount_low
+    pub fn buffered_amount_low_threshold(&self) -> usize {
+        self.buffered_amount_low.load(Ordering::SeqCst)
     }
 
     /// set_buffered_amount_low_threshold is used to update the threshold.
     /// See buffered_amount_low_threshold().
-    pub fn set_buffered_amount_low_threshold(&mut self, th: u64) {
-        self.buffered_amount_low = th;
+    pub fn set_buffered_amount_low_threshold(&self, th: usize) {
+        self.buffered_amount_low.store(th, Ordering::SeqCst);
     }
 
     /// on_buffered_amount_low sets the callback handler which would be called when the number of
@@ -369,7 +382,7 @@ impl Stream {
         self.on_buffered_amount_low = Some(f);
     }
 
-    /// This method is called by association's readLoop (go-)routine to notify this stream
+    /// This method is called by association's read_loop (go-)routine to notify this stream
     /// of the specified amount of outgoing data has been delivered to the peer.
     pub(crate) fn on_buffer_released(&mut self, n_bytes_released: i64) {
         if n_bytes_released <= 0 {
@@ -378,7 +391,7 @@ impl Stream {
 
         let from_amount = self.buffered_amount;
 
-        if self.buffered_amount < n_bytes_released as u64 {
+        if self.buffered_amount < n_bytes_released as usize {
             self.buffered_amount = 0;
             log::error!(
                 "[{}] released buffer size {} should be <= {}",
@@ -387,15 +400,14 @@ impl Stream {
                 self.buffered_amount
             )
         } else {
-            self.buffered_amount -= n_bytes_released as u64;
+            self.buffered_amount -= n_bytes_released as usize;
         }
 
         log::trace!("[{}] buffered_amount = {}", self.name, self.buffered_amount);
 
         if let Some(f) = &self.on_buffered_amount_low {
-            if from_amount > self.buffered_amount_low
-                && self.buffered_amount <= self.buffered_amount_low
-            {
+            let buffered_amount_low = self.buffered_amount_low.load(Ordering::SeqCst);
+            if from_amount > buffered_amount_low && self.buffered_amount <= buffered_amount_low {
                 f();
                 return;
             }
@@ -405,78 +417,5 @@ impl Stream {
     pub(crate) fn get_num_bytes_in_reassembly_queue(&self) -> usize {
         // No lock is required as it reads the size with atomic load function.
         self.reassembly_queue.get_num_bytes()
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use std::sync::atomic::{AtomicU32, Ordering};
-    use std::sync::Arc;
-
-    #[test]
-    fn test_stream_buffered_amount() -> Result<(), Error> {
-        let mut s = Stream::default();
-
-        assert_eq!(0, s.buffered_amount());
-        assert_eq!(0, s.buffered_amount_low_threshold());
-
-        s.buffered_amount = 8192;
-        s.set_buffered_amount_low_threshold(2048);
-        assert_eq!(8192, s.buffered_amount(), "unexpected bufferedAmount");
-        assert_eq!(
-            2048,
-            s.buffered_amount_low_threshold(),
-            "unexpected threshold"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_stream_amount_on_buffered_amount_low() -> Result<(), Error> {
-        let mut s = Stream::default();
-
-        s.buffered_amount = 4096;
-        s.set_buffered_amount_low_threshold(2048);
-
-        let n_cbs = Arc::new(AtomicU32::new(0));
-        let n_cbs2 = n_cbs.clone();
-
-        s.on_buffered_amount_low(Box::new(move || {
-            n_cbs2.fetch_add(1, Ordering::SeqCst);
-        }));
-
-        // Negative value should be ignored (by design)
-        s.on_buffer_released(-32); // bufferedAmount = 3072
-        assert_eq!(4096, s.buffered_amount(), "unexpected bufferedAmount");
-        assert_eq!(0, n_cbs.load(Ordering::SeqCst), "callback count mismatch");
-
-        // Above to above, no callback
-        s.on_buffer_released(1024); // bufferedAmount = 3072
-        assert_eq!(3072, s.buffered_amount(), "unexpected bufferedAmount");
-        assert_eq!(0, n_cbs.load(Ordering::SeqCst), "callback count mismatch");
-
-        // Above to equal, callback should be made
-        s.on_buffer_released(1024); // bufferedAmount = 2048
-        assert_eq!(2048, s.buffered_amount(), "unexpected bufferedAmount");
-        assert_eq!(1, n_cbs.load(Ordering::SeqCst), "callback count mismatch");
-
-        // Eaual to below, no callback
-        s.on_buffer_released(1024); // bufferedAmount = 1024
-        assert_eq!(1024, s.buffered_amount(), "unexpected bufferedAmount");
-        assert_eq!(1, n_cbs.load(Ordering::SeqCst), "callback count mismatch");
-
-        // Blow to below, no callback
-        s.on_buffer_released(1024); // bufferedAmount = 0
-        assert_eq!(0, s.buffered_amount(), "unexpected bufferedAmount");
-        assert_eq!(1, n_cbs.load(Ordering::SeqCst), "callback count mismatch");
-
-        // Capped at 0, no callback
-        s.on_buffer_released(1024); // bufferedAmount = 0
-        assert_eq!(0, s.buffered_amount(), "unexpected bufferedAmount");
-        assert_eq!(1, n_cbs.load(Ordering::SeqCst), "callback count mismatch");
-
-        Ok(())
     }
 }
