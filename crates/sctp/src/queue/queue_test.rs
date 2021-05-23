@@ -22,7 +22,7 @@ fn make_payload(tsn: u32, n_bytes: usize) -> ChunkPayloadData {
 
 #[test]
 fn test_payload_queue_push_no_check() -> Result<(), Error> {
-    let mut pq = PayloadQueue::new();
+    let mut pq = PayloadQueue::new(Arc::new(AtomicUsize::new(0)));
 
     pq.push_no_check(make_payload(0, 10));
     assert_eq!(10, pq.get_num_bytes(), "total bytes mismatch");
@@ -69,7 +69,7 @@ fn test_payload_queue_push_no_check() -> Result<(), Error> {
 
 #[test]
 fn test_payload_queue_get_gap_ack_block() -> Result<(), Error> {
-    let mut pq = PayloadQueue::new();
+    let mut pq = PayloadQueue::new(Arc::new(AtomicUsize::new(0)));
 
     pq.push(make_payload(1, 0), 0);
     pq.push(make_payload(2, 0), 0);
@@ -107,7 +107,7 @@ fn test_payload_queue_get_gap_ack_block() -> Result<(), Error> {
 
 #[test]
 fn test_payload_queue_get_last_tsn_received() -> Result<(), Error> {
-    let mut pq = PayloadQueue::new();
+    let mut pq = PayloadQueue::new(Arc::new(AtomicUsize::new(0)));
 
     // empty queie should return false
     let ok = pq.get_last_tsn_received();
@@ -138,7 +138,7 @@ fn test_payload_queue_get_last_tsn_received() -> Result<(), Error> {
 
 #[test]
 fn test_payload_queue_mark_all_to_retrasmit() -> Result<(), Error> {
-    let mut pq = PayloadQueue::new();
+    let mut pq = PayloadQueue::new(Arc::new(AtomicUsize::new(0)));
 
     for i in 0..3 {
         pq.push(make_payload(i + 1, 10), 0);
@@ -161,7 +161,7 @@ fn test_payload_queue_mark_all_to_retrasmit() -> Result<(), Error> {
 
 #[test]
 fn test_payload_queue_reset_retransmit_flag_on_ack() -> Result<(), Error> {
-    let mut pq = PayloadQueue::new();
+    let mut pq = PayloadQueue::new(Arc::new(AtomicUsize::new(0)));
 
     for i in 0..4 {
         pq.push(make_payload(i + 1, 10), 0);
@@ -428,6 +428,8 @@ async fn test_pending_queue_selection_persistence() -> Result<(), Error> {
 //reassembly_queue_test
 ///////////////////////////////////////////////////////////////////
 use super::reassembly_queue::*;
+use std::sync::atomic::AtomicUsize;
+use std::sync::Arc;
 
 #[test]
 fn test_reassembly_queue_ordered_fragments() -> Result<(), Error> {

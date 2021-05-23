@@ -183,6 +183,49 @@ impl Packet {
     }
 }
 
+impl Packet {
+    pub(crate) fn check_packet(&self) -> Result<(), Error> {
+        // All packets must adhere to these rules
+
+        // This is the SCTP sender's port number.  It can be used by the
+        // receiver in combination with the source IP address, the SCTP
+        // destination port, and possibly the destination IP address to
+        // identify the association to which this packet belongs.  The port
+        // number 0 MUST NOT be used.
+        if self.source_port == 0 {
+            return Err(Error::ErrSctpPacketSourcePortZero);
+        }
+
+        // This is the SCTP port number to which this packet is destined.
+        // The receiving host will use this port number to de-multiplex the
+        // SCTP packet to the correct receiving endpoint/application.  The
+        // port number 0 MUST NOT be used.
+        if self.destination_port == 0 {
+            return Err(Error::ErrSctpPacketDestinationPortZero);
+        }
+
+        // Check values on the packet that are specific to a particular chunk type
+        for c in &self.chunks {
+            if c.as_any().downcast_ref::<ChunkInit>().is_some() {
+                // An INIT or INIT ACK chunk MUST NOT be bundled with any other chunk.
+                // They MUST be the only chunks present in the SCTP packets that carry
+                // them.
+                if self.chunks.len() != 1 {
+                    return Err(Error::ErrInitChunkBundled);
+                }
+
+                // A packet containing an INIT chunk MUST have a zero Verification
+                // Tag.
+                if self.verification_tag != 0 {
+                    return Err(Error::ErrInitChunkVerifyTagNotZero);
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

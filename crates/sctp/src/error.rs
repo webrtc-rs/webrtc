@@ -211,4 +211,6 @@ pub enum Error {
     ErrEof,
     #[error("Invalid SystemTime")]
     ErrInvalidSystemTime,
+    #[error("Net Conn read error")]
+    ErrNetConnReadError,
 }

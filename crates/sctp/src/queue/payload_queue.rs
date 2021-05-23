@@ -1,12 +1,14 @@
 use crate::chunk::chunk_payload_data::ChunkPayloadData;
+use crate::chunk::chunk_selective_ack::GapAckBlock;
 use crate::util::*;
 
-use crate::chunk::chunk_selective_ack::GapAckBlock;
-use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 #[derive(Default, Debug)]
 pub(crate) struct PayloadQueue {
+    pub(crate) length: Arc<AtomicUsize>,
     pub(crate) chunk_map: HashMap<u32, ChunkPayloadData>,
     pub(crate) sorted: Vec<u32>,
     pub(crate) dup_tsn: Vec<u32>,
@@ -14,16 +16,20 @@ pub(crate) struct PayloadQueue {
 }
 
 impl PayloadQueue {
-    pub(crate) fn new() -> Self {
-        PayloadQueue::default()
+    pub(crate) fn new(length: Arc<AtomicUsize>) -> Self {
+        length.store(0, Ordering::SeqCst);
+        PayloadQueue {
+            length,
+            ..Default::default()
+        }
     }
 
     pub(crate) fn update_sorted_keys(&mut self) {
         self.sorted.sort_by(|a, b| {
             if sna32lt(*a, *b) {
-                Ordering::Less
+                std::cmp::Ordering::Less
             } else {
-                Ordering::Greater
+                std::cmp::Ordering::Greater
             }
         });
     }
@@ -36,6 +42,7 @@ impl PayloadQueue {
         self.n_bytes += p.user_data.len();
         self.sorted.push(p.tsn);
         self.chunk_map.insert(p.tsn, p);
+        self.length.fetch_add(1, Ordering::SeqCst);
         self.update_sorted_keys();
     }
 
@@ -53,6 +60,7 @@ impl PayloadQueue {
         self.n_bytes += p.user_data.len();
         self.sorted.push(p.tsn);
         self.chunk_map.insert(p.tsn, p);
+        self.length.fetch_add(1, Ordering::SeqCst);
         self.update_sorted_keys();
 
         true
@@ -63,6 +71,7 @@ impl PayloadQueue {
         if !self.sorted.is_empty() && tsn == self.sorted[0] {
             self.sorted.remove(0);
             if let Some(c) = self.chunk_map.remove(&tsn) {
+                self.length.fetch_sub(1, Ordering::SeqCst);
                 self.n_bytes -= c.user_data.len();
                 return Some(c);
             }
@@ -157,6 +166,7 @@ impl PayloadQueue {
     }
 
     pub(crate) fn len(&self) -> usize {
+        assert_eq!(self.chunk_map.len(), self.length.load(Ordering::SeqCst));
         self.chunk_map.len()
     }
 
