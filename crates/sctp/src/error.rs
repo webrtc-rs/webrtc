@@ -160,6 +160,8 @@ pub enum Error {
     ErrShutdownNonEstablished,
     #[error("association closed before connecting")]
     ErrAssociationClosedBeforeConn,
+    #[error("association init failed")]
+    ErrAssociationInitFailed,
     #[error("silently discard")]
     ErrSilentlyDiscard,
     #[error("the init not stored to send")]

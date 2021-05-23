@@ -34,11 +34,9 @@ use crate::timer::ack_timer::*;
 use crate::timer::rtx_timer::*;
 use crate::util::*;
 
-use association_internal::*;
+//use association_internal::*;
 use association_stats::*;
 
-use util::Conn;
-//use async_trait::async_trait;
 use bytes::Bytes;
 use rand::random;
 use std::collections::{HashMap, VecDeque};
@@ -46,7 +44,9 @@ use std::fmt;
 use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
-use tokio::sync::{Mutex, Notify};
+use tokio::sync::{broadcast, mpsc, Notify};
+use util::Conn;
+//use async_trait::async_trait;
 
 pub(crate) const RECEIVE_MTU: u32 = 8192;
 /// MTU for inbound packet (from DTLS)
@@ -274,14 +274,12 @@ pub struct Association {
     stored_cookie_echo: Option<ChunkCookieEcho>,
 
     streams: HashMap<u16, Arc<Stream>>,
-    /*TODO:     acceptCh             chan *Stream
-        readLoopCloseCh      chan struct{}
 
-        closeWriteLoopCh     chan struct{}
-
-    */
-    //TODO: handshakeCompletedCh : mpsc:: chan error
-    //TODO: closeWriteLoopOnce sync.Once
+    accept_ch_rx: Option<mpsc::Receiver<Arc<Stream>>>,
+    accept_ch_tx: Option<mpsc::Sender<Arc<Stream>>>,
+    read_loop_close_ch: Option<mpsc::Receiver<()>>,
+    close_loop_ch: Option<broadcast::Sender<()>>,
+    handshake_completed_ch_tx: Option<mpsc::Sender<Option<Error>>>,
 
     // local error
     silent_error: Option<Error>,
@@ -291,9 +289,7 @@ pub struct Association {
     immediate_ack_triggered: bool,
 
     // AssociationInternal
-    association_internal: Arc<Mutex<AssociationInternal>>,
-
-    //TODO: to be deleted:
+    // association_internal: Arc<Mutex<AssociationInternal>>,
     name: String,
     awake_write_loop_ch: Arc<Notify>,
     stats: Arc<AssociationStats>,
@@ -303,41 +299,16 @@ pub struct Association {
 
 impl Association {
     /// server accepts a SCTP stream over a conn
-    pub fn server(config: Config) -> Result<Self, Error> {
-        let mut a = Association::create_association(config);
-        a.init(false)?;
-
-        /*TODO: select {
-        case err := <-self.handshakeCompletedCh:
-            if err != nil {
-                return nil, err
-            }
-            return a, nil
-        case <-self.readLoopCloseCh:
-            return nil, errAssociationClosedBeforeConn
-        }*/
-
-        Ok(a)
+    pub async fn server(config: Config) -> Result<Self, Error> {
+        Association::create_association(config, false).await
     }
 
     /// Client opens a SCTP stream over a conn
-    pub fn client(config: Config) -> Result<Self, Error> {
-        let mut a = Association::create_association(config);
-        a.init(true)?;
-
-        /*TODO: select {
-        case err := <-self.handshakeCompletedCh:
-            if err != nil {
-                return nil, err
-            }
-            return a, nil
-        case <-self.readLoopCloseCh:
-            return nil, errAssociationClosedBeforeConn
-        }*/
-        Ok(a)
+    pub async fn client(config: Config) -> Result<Self, Error> {
+        Association::create_association(config, true).await
     }
 
-    fn create_association(config: Config) -> Self {
+    async fn create_association(config: Config, is_client: bool) -> Result<Self, Error> {
         let max_receive_buffer_size = if config.max_receive_buffer_size == 0 {
             INITIAL_RECV_BUF_SIZE
         } else {
@@ -349,6 +320,9 @@ impl Association {
         } else {
             config.max_message_size
         };
+
+        let (accept_ch_tx, accept_ch_rx) = mpsc::channel(ACCEPT_CH_SIZE);
+        let (handshake_completed_ch_tx, mut handshake_completed_ch_rx) = mpsc::channel(1);
 
         let tsn = random::<u32>();
         let mut a = Association {
@@ -372,10 +346,11 @@ impl Association {
             streams: HashMap::new(),
             reconfigs: HashMap::new(),
             reconfig_requests: HashMap::new(),
-            /*acceptCh:                make(chan *Stream, ACCEPT_CH_SIZE),
-            readLoopCloseCh:         make(chan struct{}),
-            closeWriteLoopCh:        make(chan struct{}),
-            handshakeCompletedCh:    make(chan error),*/
+            accept_ch_tx: Some(accept_ch_tx),
+            accept_ch_rx: Some(accept_ch_rx),
+            //read_loop_close_ch:         make(chan struct{}),
+            //close_write_loop_ch:        make(chan struct{}),
+            handshake_completed_ch_tx: Some(handshake_completed_ch_tx),
             cumulative_tsn_ack_point: tsn - 1,
             advanced_peer_tsn_ack_point: tsn - 1,
             silent_error: Some(Error::ErrSilentlyDiscard),
@@ -406,33 +381,44 @@ impl Association {
         a.treconfig = RtxTimer::new(RtxTimerId::Reconfig, NO_MAX_RETRANS); // retransmit forever
         a.ack_timer = AckTimer::new(ACK_INTERVAL);
 
-        a
-    }
-
-    fn init(&mut self, is_client: bool) -> Result<(), Error> {
         //TODO: go self.read_loop()
         //TODO: go self.write_loop()
 
         if is_client {
-            self.set_state(AssociationState::CookieWait);
+            a.set_state(AssociationState::CookieWait);
             let mut init = ChunkInit {
-                initial_tsn: self.my_next_tsn,
-                num_outbound_streams: self.my_max_num_outbound_streams,
-                num_inbound_streams: self.my_max_num_inbound_streams,
-                initiate_tag: self.my_verification_tag,
-                advertised_receiver_window_credit: self.max_receive_buffer_size,
+                initial_tsn: a.my_next_tsn,
+                num_outbound_streams: a.my_max_num_outbound_streams,
+                num_inbound_streams: a.my_max_num_inbound_streams,
+                initiate_tag: a.my_verification_tag,
+                advertised_receiver_window_credit: a.max_receive_buffer_size,
                 ..Default::default()
             };
-            Association::set_supported_extensions(&mut init);
+            init.set_supported_extensions();
 
-            self.stored_init = Some(init);
+            a.stored_init = Some(init);
 
-            self.send_init()?;
+            a.send_init()?;
 
-            //TODO: self.t1init.start(self.rto_mgr.get_rto());
+            //TODO: a.t1init.start(self.rto_mgr.get_rto());
         }
 
-        Ok(())
+        tokio::select! {
+            result = handshake_completed_ch_rx.recv() => {
+                if let Some(err_opt) = result {
+                    if let Some(err) = err_opt {
+                        Err(err)
+                    }else{
+                        Ok(a)
+                    }
+                }else{
+                    Err(Error::ErrAssociationInitFailed)
+                }
+            }
+            //TODO:_ = read_loop_close_ch.recv() => {
+            //    Err(Error::ErrAssociationClosedBeforeConn)
+            //}
+        }
     }
 
     /// caller must hold self.lock
@@ -501,7 +487,7 @@ impl Association {
         }
 
         /*select {
-        case <-self.closeWriteLoopCh:
+        case <-self.close_write_loop_ch:
             return nil
         case <-ctx.Done():
             return ctx.Err()
@@ -517,7 +503,9 @@ impl Association {
         self.close_internal().await?;
 
         // Wait for read_loop to end
-        //TODO: <-self.readLoopCloseCh
+        if let Some(read_loop_close_ch) = &mut self.read_loop_close_ch {
+            let _ = read_loop_close_ch.recv().await;
+        }
 
         log::debug!("[{}] association closed", self.name);
         log::debug!(
@@ -554,12 +542,10 @@ impl Association {
 
         self.set_state(AssociationState::Closed);
 
-        //self.net_conn.Close()
-
         self.close_all_timers().await;
 
-        // awake write_loop to exit
-        //TODO: self.closeWriteLoopOnce.Do(func() { close(self.closeWriteLoopCh) })
+        // awake read/write_loop to exit
+        self.close_loop_ch.take();
 
         Ok(())
     }
@@ -574,13 +560,12 @@ impl Association {
         self.ack_timer.stop();
     }
 
-    fn read_loop() {
-        /*TODO:
-        var closeErr error
+    async fn read_loop() {
+        /*var closeErr error
         defer func() {
             // also stop write_loop, otherwise write_loop can be leaked
             // if connection is lost when there is no writing packet.
-            self.closeWriteLoopOnce.Do(func() { close(self.closeWriteLoopCh) })
+            self.closeWriteLoopOnce.Do(func() { close(self.close_write_loop_ch) })
 
             self.lock.Lock()
             for _, s := range self.streams {
@@ -588,7 +573,7 @@ impl Association {
             }
             self.lock.Unlock()
             close(self.acceptCh)
-            close(self.readLoopCloseCh)
+            close(self.read_loop_close_ch)
 
             log::debug!("[{}] association closed", self.name);
             log::debug!("[{}] stats nDATAs (in) : {}", self.name, self.stats.get_num_datas());
@@ -624,7 +609,7 @@ impl Association {
         */
     }
 
-    fn write_loop() {
+    async fn write_loop() {
         /*TODO:
             log::debug!("[{}] write_loop entered", self.name);
             defer log::debug!("[{}] write_loop exited", self.name);
@@ -655,7 +640,7 @@ impl Association {
 
                 select {
                 case <-self.awake_write_loop_ch:
-                case <-self.closeWriteLoopCh:
+                case <-self.close_write_loop_ch:
                     break loop
                 }
             }
@@ -675,7 +660,6 @@ impl Association {
     fn unregister_stream(&mut self, stream_identifier: u16, _err: Error) {
         let s = self.streams.remove(&stream_identifier);
         if let Some(s) = s {
-            //TODO: s.readErr = err
             s.read_notifier.notify_waiters();
         }
     }
@@ -1058,16 +1042,6 @@ impl Association {
         //return atomic.LoadUint64(&self.bytes_received)
     }
 
-    fn set_supported_extensions(init: &mut ChunkInit) {
-        // TODO RFC5061 https://tools.ietf.org/html/rfc6525#section-5.2
-        // An implementation supporting this (Supported Extensions Parameter)
-        // extension MUST list the ASCONF, the ASCONF-ACK, and the AUTH chunks
-        // in its INIT and INIT-ACK parameters.
-        init.params.push(Box::new(ParamSupportedExtensions {
-            chunk_types: vec![CT_RECONFIG, CT_FORWARD_TSN],
-        }));
-    }
-
     async fn handle_init(&mut self, p: &Packet, i: &ChunkInit) -> Result<Vec<Packet>, Error> {
         let state = self.get_state();
         log::debug!("[{}] chunkInit received in state '{}'", self.name, state);
@@ -1142,7 +1116,7 @@ impl Association {
             init_ack.params = vec![Box::new(my_cookie.clone())];
         }
 
-        Association::set_supported_extensions(&mut init_ack);
+        init_ack.set_supported_extensions();
 
         outbound.chunks = vec![Box::new(init_ack)];
 
@@ -1275,7 +1249,9 @@ impl Association {
                     self.stored_cookie_echo = None;
 
                     self.set_state(AssociationState::Established);
-                    //TODO: self.handshakeCompletedCh < -nil
+                    if let Some(handshake_completed_ch) = &self.handshake_completed_ch_tx {
+                        let _ = handshake_completed_ch.send(None).await;
+                    }
                 }
                 _ => return Ok(vec![]),
             };
@@ -1307,7 +1283,9 @@ impl Association {
         self.stored_cookie_echo = None;
 
         self.set_state(AssociationState::Established);
-        //TODO: self.handshakeCompletedCh <- nil
+        if let Some(handshake_completed_ch) = &self.handshake_completed_ch_tx {
+            let _ = handshake_completed_ch.send(None).await;
+        }
 
         Ok(vec![])
     }
@@ -1329,7 +1307,7 @@ impl Association {
                 if self.get_my_receiver_window_credit().await > 0 {
                     // Pass the new chunk to stream level as soon as it arrives
                     self.payload_queue.push(d.clone(), self.peer_last_tsn);
-                    stream_handle_data = true; //s.handle_data(d.clone());
+                    stream_handle_data = true;
                 } else {
                     // Receive buffer is full
                     if let Some(last_tsn) = self.payload_queue.get_last_tsn_received() {
@@ -1383,7 +1361,6 @@ impl Association {
         while self.payload_queue.pop(self.peer_last_tsn + 1).is_none() {
             self.peer_last_tsn += 1;
 
-            //TODO: optimize it without clone?
             let rst_reqs: Vec<ParamOutgoingResetRequest> =
                 self.reconfig_requests.values().cloned().collect();
             for rst_req in rst_reqs {
@@ -1444,62 +1421,67 @@ impl Association {
             return Err(Error::ErrStreamAlreadyExist);
         }
 
-        let stream = self.create_stream(stream_identifier, false);
-        if let Some(s) = stream {
+        if let Some(s) = self.create_stream(stream_identifier, false) {
             s.set_default_payload_type(default_payload_type);
-            Ok(Arc::clone(s))
+            Ok(Arc::clone(&s))
         } else {
             Err(Error::ErrStreamCreateFailed)
         }
     }
 
     /// accept_stream accepts a stream
-    pub fn accept_stream(&self) -> Result<Arc<Stream>, Error> {
-        /*TODO: s, ok := <-self.acceptCh
-        if !ok {
-            return nil, io.EOF // no more incoming streams
+    pub async fn accept_stream(&mut self) -> Result<Arc<Stream>, Error> {
+        if let Some(accept_ch) = &mut self.accept_ch_rx {
+            if let Some(s) = accept_ch.recv().await {
+                Ok(s)
+            } else {
+                Err(Error::ErrEof)
+            }
+        } else {
+            Err(Error::ErrAssociationInitFailed)
         }
-        return s, nil
-         */
-        Err(Error::ErrStreamCreateFailed)
     }
 
     /// create_stream creates a stream. The caller should hold the lock and check no stream exists for this id.
-    fn create_stream(&mut self, stream_identifier: u16, _accept: bool) -> Option<&Arc<Stream>> {
-        /* TODO: let s = Stream{
-            //TODO: association:      a,
-            stream_identifier: stream_identifier,
-            reassemblyQueue:  newReassemblyQueue(stream_identifier),
-            log:              self.log,
-            name:             fmt.Sprintf("%d:%s", stream_identifier, self.name),
-        }
-
-        //TODO: s.readNotifier = sync.NewCond(&s.lock)
+    fn create_stream(&mut self, stream_identifier: u16, accept: bool) -> Option<Arc<Stream>> {
+        let s = Arc::new(Stream::new(
+            format!("{}:{}", stream_identifier, self.name),
+            stream_identifier,
+            self.max_payload_size,
+            Arc::clone(&self.max_message_size),
+            Arc::clone(&self.state),
+            Arc::clone(&self.awake_write_loop_ch),
+            Arc::clone(&self.pending_queue),
+        ));
 
         if accept {
-            select {
-            case self.acceptCh <- s:
-                self.streams[stream_identifier] = s
-                self.log.Debugf("[%s] accepted a new stream (stream_identifier: %d)",
-                    self.name, stream_identifier)
-            default:
-                self.log.Debugf("[%s] dropped a new stream (acceptCh size: %d)",
-                    self.name, len(self.acceptCh))
-                return nil
+            if let Some(accept_ch) = &self.accept_ch_tx {
+                if accept_ch.try_send(Arc::clone(&s)).is_ok() {
+                    log::debug!(
+                        "[{}] accepted a new stream (stream_identifier: {})",
+                        self.name,
+                        stream_identifier
+                    );
+                } else {
+                    log::debug!("[{}] dropped a new stream due to accept_ch full", self.name);
+                    return None;
+                }
+            } else {
+                log::debug!(
+                    "[{}] dropped a new stream due to accept_ch_tx is None",
+                    self.name
+                );
+                return None;
             }
-        } else {
-            self.streams[stream_identifier] = s
         }
-
-        return s
-         */
-        self.streams.get(&stream_identifier)
+        self.streams.insert(stream_identifier, Arc::clone(&s));
+        Some(s)
     }
 
     /// get_or_create_stream gets or creates a stream. The caller should hold the lock.
-    fn get_or_create_stream(&mut self, stream_identifier: u16) -> Option<&Arc<Stream>> {
+    fn get_or_create_stream(&mut self, stream_identifier: u16) -> Option<Arc<Stream>> {
         if self.streams.contains_key(&stream_identifier) {
-            self.streams.get(&stream_identifier)
+            self.streams.get(&stream_identifier).cloned()
         } else {
             self.create_stream(stream_identifier, true)
         }
@@ -2662,15 +2644,23 @@ impl Association {
         }
     }
 
-    fn on_retransmission_failure(&self, id: RtxTimerId) {
+    async fn on_retransmission_failure(&self, id: RtxTimerId) {
         match id {
             RtxTimerId::T1Init => {
                 log::error!("[{}] retransmission failure: T1-init", self.name);
-                //TODO: self.handshakeCompletedCh < -errHandshakeInitAck;
+                if let Some(handshake_completed_ch) = &self.handshake_completed_ch_tx {
+                    let _ = handshake_completed_ch
+                        .send(Some(Error::ErrHandshakeInitAck))
+                        .await;
+                }
             }
             RtxTimerId::T1Cookie => {
                 log::error!("[{}] retransmission failure: T1-cookie", self.name);
-                //TODO: self.handshakeCompletedCh < -errHandshakeCookieEcho;
+                if let Some(handshake_completed_ch) = &self.handshake_completed_ch_tx {
+                    let _ = handshake_completed_ch
+                        .send(Some(Error::ErrHandshakeCookieEcho))
+                        .await;
+                }
             }
 
             RtxTimerId::T2Shutdown => {

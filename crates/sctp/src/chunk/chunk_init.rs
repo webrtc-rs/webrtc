@@ -2,6 +2,7 @@ use super::{chunk_header::*, chunk_type::*, *};
 use crate::param::{param_header::*, *};
 use crate::util::get_padding_size;
 
+use crate::param::param_supported_extensions::ParamSupportedExtensions;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 
@@ -268,5 +269,17 @@ impl Chunk for ChunkInit {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+impl ChunkInit {
+    pub(crate) fn set_supported_extensions(&mut self) {
+        // TODO RFC5061 https://tools.ietf.org/html/rfc6525#section-5.2
+        // An implementation supporting this (Supported Extensions Parameter)
+        // extension MUST list the ASCONF, the ASCONF-ACK, and the AUTH chunks
+        // in its INIT and INIT-ACK parameters.
+        self.params.push(Box::new(ParamSupportedExtensions {
+            chunk_types: vec![CT_RECONFIG, CT_FORWARD_TSN],
+        }));
     }
 }

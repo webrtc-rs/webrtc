@@ -53,6 +53,8 @@ impl From<u8> for ReliabilityType {
 
 pub type OnBufferedAmountLowFn = Box<dyn Fn()>;
 
+// TODO: benchmark performance between multiple Atomic+Mutex vs one Mutex<StreamInternal>
+
 /// Stream represents an SCTP stream
 #[derive(Default)]
 pub struct Stream {
