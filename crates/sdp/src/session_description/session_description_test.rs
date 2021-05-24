@@ -267,6 +267,13 @@ t=2873397496 2873404696\r\n\
 r=604800 3600 0 90000\r\n\
 r=259200 7200 0 75600\r\n";
 
+const REPEAT_TIMES_OVERFLOW_SDP: &'static str = "v=0\r\n\
+o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
+s=SDP Seminar\r\n\
+t=2873397496 2873404696\r\n\
+r=604800 3600 0 90000\r\n\
+r=106751991167301d 2h 0 21h\r\n";
+
 const REPEAT_TIMES_SDPEXTRA_CRLF: &'static str = "v=0\r\n\
 o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\r\n\
 s=SDP Seminar\r\n\
@@ -544,6 +551,16 @@ fn test_unmarshal_repeat_times() -> Result<(), Error> {
     let sdp = SessionDescription::unmarshal(&mut reader)?;
     let actual = sdp.marshal();
     assert_eq!(actual.as_str(), REPEAT_TIMES_SDPEXPECTED);
+    Ok(())
+}
+
+#[test]
+fn test_unmarshal_repeat_times_overflow() -> Result<(), Error> {
+    let mut reader = Cursor::new(REPEAT_TIMES_OVERFLOW_SDP.as_bytes());
+    assert!(matches!(
+        SessionDescription::unmarshal(&mut reader),
+        Err(Error::SdpInvalidValue(_))
+    ));
     Ok(())
 }
 

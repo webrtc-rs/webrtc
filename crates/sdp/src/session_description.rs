@@ -1333,18 +1333,16 @@ fn unmarshal_media_attribute<'a, R: io::BufRead + io::Seek>(
 fn parse_time_units(value: &str) -> Result<i64, Error> {
     // Some time offsets in the protocol can be provided with a shorthand
     // notation. This code ensures to convert it to NTP timestamp format.
-    //      d - days (86400 seconds)
-    //      h - hours (3600 seconds)
-    //      m - minutes (60 seconds)
-    //      s - seconds (allowed for completeness)
     let val = value.as_bytes();
     let len = val.len();
-    let num = match val[len - 1] {
-        b'd' => value.trim_end_matches('d').parse::<i64>()? * 86400,
-        b'h' => value.trim_end_matches('h').parse::<i64>()? * 3600,
-        b'm' => value.trim_end_matches('m').parse::<i64>()? * 60,
-        _ => value.trim_end_matches('m').parse::<i64>()?,
+    let (num, factor) = match val.last() {
+        Some(b'd') => (&value[..len - 1], 86400), // days
+        Some(b'h') => (&value[..len - 1], 3600),  // hours
+        Some(b'm') => (&value[..len - 1], 60),    // minutes
+        Some(b's') => (&value[..len - 1], 1),     // seconds (allowed for completeness)
+        _ => (value, 1),
     };
-
-    Ok(num)
+    num.parse::<i64>()?
+        .checked_mul(factor)
+        .ok_or_else(|| Error::SdpInvalidValue(value.to_owned()))
 }
