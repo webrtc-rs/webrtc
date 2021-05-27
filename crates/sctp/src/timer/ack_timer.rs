@@ -13,25 +13,24 @@ pub(crate) trait AckTimerObserver {
 
 /// ackTimer provides the retnransmission timer conforms with RFC 4960 Sec 6.3.1
 #[derive(Default, Debug)]
-pub(crate) struct AckTimer {
+pub(crate) struct AckTimer<T: 'static + AckTimerObserver + Send> {
+    pub(crate) timeout_observer: Arc<Mutex<T>>,
     pub(crate) interval: Duration,
     pub(crate) close_tx: Option<mpsc::Sender<()>>,
 }
 
-impl AckTimer {
+impl<T: 'static + AckTimerObserver + Send> AckTimer<T> {
     /// newAckTimer creates a new acknowledgement timer used to enable delayed ack.
-    pub(crate) fn new(interval: Duration) -> Self {
+    pub(crate) fn new(timeout_observer: Arc<Mutex<T>>, interval: Duration) -> Self {
         AckTimer {
+            timeout_observer,
             interval,
             close_tx: None,
         }
     }
 
     /// start starts the timer.
-    pub(crate) fn start<T: 'static + AckTimerObserver + std::marker::Send>(
-        &mut self,
-        timeout_observer: Arc<Mutex<T>>,
-    ) -> bool {
+    pub(crate) fn start(&mut self) -> bool {
         // this timer is already closed
         if self.close_tx.is_some() {
             return false;
@@ -39,6 +38,7 @@ impl AckTimer {
 
         let (close_tx, mut close_rx) = mpsc::channel(1);
         let interval = self.interval;
+        let timeout_observer = Arc::clone(&self.timeout_observer);
 
         tokio::spawn(async move {
             let timer = tokio::time::sleep(interval);

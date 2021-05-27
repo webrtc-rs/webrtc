@@ -46,7 +46,6 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::{broadcast, mpsc, Mutex, Notify};
 use util::Conn;
-//use async_trait::async_trait;
 
 pub(crate) const RECEIVE_MTU: usize = 8192;
 /// MTU for inbound packet (from DTLS)
@@ -317,6 +316,38 @@ impl Association {
         let association_internal = Arc::new(Mutex::new(ai));
         let association_internal1 = Arc::clone(&association_internal);
         let association_internal2 = Arc::clone(&association_internal);
+
+        {
+            let association_internal3 = Arc::clone(&association_internal);
+
+            let mut ai = association_internal.lock().await;
+            ai.t1init = RtxTimer::new(
+                Arc::clone(&association_internal3),
+                RtxTimerId::T1Init,
+                MAX_INIT_RETRANS,
+            );
+            ai.t1cookie = RtxTimer::new(
+                Arc::clone(&association_internal3),
+                RtxTimerId::T1Cookie,
+                MAX_INIT_RETRANS,
+            );
+            ai.t2shutdown = RtxTimer::new(
+                Arc::clone(&association_internal3),
+                RtxTimerId::T2Shutdown,
+                NO_MAX_RETRANS,
+            ); // retransmit forever
+            ai.t3rtx = RtxTimer::new(
+                Arc::clone(&association_internal3),
+                RtxTimerId::T3RTX,
+                NO_MAX_RETRANS,
+            ); // retransmit forever
+            ai.treconfig = RtxTimer::new(
+                Arc::clone(&association_internal3),
+                RtxTimerId::Reconfig,
+                NO_MAX_RETRANS,
+            ); // retransmit forever
+            ai.ack_timer = AckTimer::new(association_internal3, ACK_INTERVAL);
+        }
 
         tokio::spawn(async move {
             Association::read_loop(

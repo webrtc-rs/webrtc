@@ -29,13 +29,13 @@ mod test_ack_timer {
 
     #[tokio::test]
     async fn test_ack_timer_start_and_stop() -> Result<(), Error> {
-        let mut rt = AckTimer::new(ACK_INTERVAL);
-
         let ncbs = Arc::new(AtomicU32::new(0));
         let obs = Arc::new(Mutex::new(TestAckTimerObserver { ncbs: ncbs.clone() }));
 
+        let mut rt = AckTimer::new(obs, ACK_INTERVAL);
+
         // should start ok
-        let ok = rt.start(obs.clone());
+        let ok = rt.start();
         assert!(ok, "start() should succeed");
         assert!(rt.is_running(), "should be running");
 
@@ -54,7 +54,7 @@ mod test_ack_timer {
         );
 
         // can start again
-        let ok = rt.start(obs);
+        let ok = rt.start();
         assert!(ok, "start() should succeed again");
         assert!(rt.is_running(), "should be running");
 
@@ -218,12 +218,12 @@ mod test_rtx_timer {
             timer_id,
             ..Default::default()
         }));
-        let mut rt = RtxTimer::new(timer_id, PATH_MAX_RETRANS);
+        let mut rt = RtxTimer::new(obs, timer_id, PATH_MAX_RETRANS);
 
         assert!(!rt.is_running().await, "should not be running");
 
         // since := time.Now()
-        let ok = rt.start(obs, 30).await;
+        let ok = rt.start(30).await;
         assert!(ok, "should be true");
         assert!(rt.is_running().await, "should be running");
 
@@ -245,14 +245,14 @@ mod test_rtx_timer {
             timer_id,
             ..Default::default()
         }));
-        let mut rt = RtxTimer::new(timer_id, PATH_MAX_RETRANS);
+        let mut rt = RtxTimer::new(obs, timer_id, PATH_MAX_RETRANS);
 
         let interval = 30;
-        let ok = rt.start(obs.clone(), interval).await;
+        let ok = rt.start(interval).await;
         assert!(ok, "should be accepted");
-        let ok = rt.start(obs.clone(), interval * 99).await; // should ignored
+        let ok = rt.start(interval * 99).await; // should ignored
         assert!(!ok, "should be ignored");
-        let ok = rt.start(obs.clone(), interval * 99).await; // should ignored
+        let ok = rt.start(interval * 99).await; // should ignored
         assert!(!ok, "should be ignored");
 
         sleep(Duration::from_millis((interval * 3) / 2)).await;
@@ -273,10 +273,10 @@ mod test_rtx_timer {
             timer_id,
             ..Default::default()
         }));
-        let mut rt = RtxTimer::new(timer_id, PATH_MAX_RETRANS);
+        let mut rt = RtxTimer::new(obs, timer_id, PATH_MAX_RETRANS);
 
         let interval = 30;
-        let ok = rt.start(obs, interval).await;
+        let ok = rt.start(interval).await;
         assert!(ok, "should be accepted");
         rt.stop().await;
 
@@ -298,14 +298,14 @@ mod test_rtx_timer {
             timer_id,
             ..Default::default()
         }));
-        let mut rt = RtxTimer::new(timer_id, PATH_MAX_RETRANS);
+        let mut rt = RtxTimer::new(obs, timer_id, PATH_MAX_RETRANS);
 
         let interval = 30;
-        let ok = rt.start(obs.clone(), interval).await;
+        let ok = rt.start(interval).await;
         assert!(ok, "should be accepted");
         rt.stop().await;
         assert!(!rt.is_running().await, "should NOT be running");
-        let ok = rt.start(obs.clone(), interval).await;
+        let ok = rt.start(interval).await;
         assert!(ok, "should be accepted");
         assert!(rt.is_running().await, "should be running");
 
@@ -327,10 +327,10 @@ mod test_rtx_timer {
             timer_id,
             ..Default::default()
         }));
-        let mut rt = RtxTimer::new(timer_id, PATH_MAX_RETRANS);
+        let mut rt = RtxTimer::new(obs, timer_id, PATH_MAX_RETRANS);
 
         for _ in 0..1000 {
-            let ok = rt.start(obs.clone(), 30).await;
+            let ok = rt.start(30).await;
             assert!(ok, "should be accepted");
             assert!(rt.is_running().await, "should be running");
             rt.stop().await;
@@ -356,7 +356,7 @@ mod test_rtx_timer {
         }));
 
         let since = SystemTime::now();
-        let mut rt = RtxTimer::new(timer_id, PATH_MAX_RETRANS);
+        let mut rt = RtxTimer::new(obs, timer_id, PATH_MAX_RETRANS);
 
         // RTO(msec) Total(msec)
         //  10          10    1st RTO
@@ -367,7 +367,7 @@ mod test_rtx_timer {
         // 320         630    Failure
 
         let interval = 10;
-        let ok = rt.start(obs, interval).await;
+        let ok = rt.start(interval).await;
         assert!(ok, "should be accepted");
         assert!(rt.is_running().await, "should be running");
 
@@ -407,7 +407,7 @@ mod test_rtx_timer {
         }));
 
         let since = SystemTime::now();
-        let mut rt = RtxTimer::new(timer_id, 0);
+        let mut rt = RtxTimer::new(obs, timer_id, 0);
 
         // RTO(msec) Total(msec)
         //  10          10    1st RTO
@@ -418,7 +418,7 @@ mod test_rtx_timer {
         // 320         630    6th RTO => exit test (timer should still be running)
 
         let interval = 10;
-        let ok = rt.start(obs, interval).await;
+        let ok = rt.start(interval).await;
         assert!(ok, "should be accepted");
         assert!(rt.is_running().await, "should be running");
 
@@ -455,13 +455,13 @@ mod test_rtx_timer {
             max_rtos: usize::MAX,
             ..Default::default()
         }));
-        let mut rt = RtxTimer::new(timer_id, PATH_MAX_RETRANS);
+        let mut rt = RtxTimer::new(obs, timer_id, PATH_MAX_RETRANS);
 
         for _ in 0..10 {
             rt.stop().await;
         }
 
-        let ok = rt.start(obs, 20).await;
+        let ok = rt.start(20).await;
         assert!(ok, "should be accepted");
         assert!(rt.is_running().await, "must be running");
 
@@ -481,9 +481,9 @@ mod test_rtx_timer {
             timer_id,
             ..Default::default()
         }));
-        let mut rt = RtxTimer::new(timer_id, PATH_MAX_RETRANS);
+        let mut rt = RtxTimer::new(obs, timer_id, PATH_MAX_RETRANS);
 
-        let ok = rt.start(obs.clone(), 20).await;
+        let ok = rt.start(20).await;
         assert!(ok, "should be accepted");
         assert!(rt.is_running().await, "must be running");
 
