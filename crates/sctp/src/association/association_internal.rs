@@ -10,8 +10,6 @@ pub struct AssociationInternal {
     pub(crate) inflight_queue_length: Arc<AtomicUsize>,
     pub(crate) will_send_shutdown: Arc<AtomicBool>,
     pub(crate) awake_write_loop_ch: Arc<Notify>,
-    pub(crate) close_loop_ch_tx: Option<broadcast::Sender<()>>,
-    pub(crate) accept_ch_rx: Option<mpsc::Receiver<Arc<Stream>>>,
 
     peer_verification_tag: u32,
     pub(crate) my_verification_tag: u32,
@@ -71,10 +69,9 @@ pub struct AssociationInternal {
 
     streams: HashMap<u16, Arc<Stream>>,
 
+    close_loop_ch_tx: Option<broadcast::Sender<()>>,
     accept_ch_tx: Option<mpsc::Sender<Arc<Stream>>>,
-    read_loop_close_ch: Option<mpsc::Receiver<()>>,
     handshake_completed_ch_tx: Option<mpsc::Sender<Option<Error>>>,
-    pub(crate) handshake_completed_ch_rx: Option<mpsc::Receiver<Option<Error>>>,
 
     // local error
     silent_error: Option<Error>,
@@ -89,7 +86,12 @@ pub struct AssociationInternal {
 }
 
 impl AssociationInternal {
-    pub(crate) async fn new(config: Config) -> Result<Self, Error> {
+    pub(crate) async fn new(
+        config: Config,
+        close_loop_ch_tx: broadcast::Sender<()>,
+        accept_ch_tx: mpsc::Sender<Arc<Stream>>,
+        handshake_completed_ch_tx: mpsc::Sender<Option<Error>>,
+    ) -> Result<Self, Error> {
         let max_receive_buffer_size = if config.max_receive_buffer_size == 0 {
             INITIAL_RECV_BUF_SIZE
         } else {
@@ -103,10 +105,6 @@ impl AssociationInternal {
         };
 
         let inflight_queue_length = Arc::new(AtomicUsize::new(0));
-
-        let (accept_ch_tx, accept_ch_rx) = mpsc::channel(ACCEPT_CH_SIZE);
-        let (handshake_completed_ch_tx, handshake_completed_ch_rx) = mpsc::channel(1);
-        let (close_loop_ch_tx, _close_loop_ch_rx) = broadcast::channel(1);
 
         let tsn = random::<u32>();
         let mut a = AssociationInternal {
@@ -132,10 +130,8 @@ impl AssociationInternal {
             reconfigs: HashMap::new(),
             reconfig_requests: HashMap::new(),
             accept_ch_tx: Some(accept_ch_tx),
-            accept_ch_rx: Some(accept_ch_rx),
             close_loop_ch_tx: Some(close_loop_ch_tx),
             handshake_completed_ch_tx: Some(handshake_completed_ch_tx),
-            handshake_completed_ch_rx: Some(handshake_completed_ch_rx),
             cumulative_tsn_ack_point: tsn - 1,
             advanced_peer_tsn_ack_point: tsn - 1,
             silent_error: Some(Error::ErrSilentlyDiscard),

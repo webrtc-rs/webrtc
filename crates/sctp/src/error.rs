@@ -162,6 +162,8 @@ pub enum Error {
     ErrAssociationClosedBeforeConn,
     #[error("association init failed")]
     ErrAssociationInitFailed,
+    #[error("association handshake closed")]
+    ErrAssociationHandshakeClosed,
     #[error("silently discard")]
     ErrSilentlyDiscard,
     #[error("the init not stored to send")]

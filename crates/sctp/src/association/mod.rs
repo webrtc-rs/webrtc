@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod association_test;
+
 mod association_internal;
 mod association_stats;
 
@@ -214,7 +217,7 @@ pub struct Association {
     will_send_shutdown: Arc<AtomicBool>,
     awake_write_loop_ch: Arc<Notify>,
     close_loop_ch_rx: broadcast::Receiver<()>,
-    accept_ch_rx: Option<mpsc::Receiver<Arc<Stream>>>,
+    accept_ch_rx: mpsc::Receiver<Arc<Stream>>,
 
     net_conn: Arc<dyn Conn + Send + Sync>,
     bytes_received: Arc<AtomicUsize>,
@@ -270,17 +273,20 @@ impl Association {
 
     async fn start(config: Config, is_client: bool) -> Result<Self, Error> {
         let net_conn = Arc::clone(&config.net_conn);
-        let mut ai = AssociationInternal::new(config).await?;
-        let (close_loop_ch_rx1, close_loop_ch_rx2, close_loop_ch_rx) =
-            if let Some(close_loop_ch_tx) = &ai.close_loop_ch_tx {
-                (
-                    close_loop_ch_tx.subscribe(),
-                    close_loop_ch_tx.subscribe(),
-                    close_loop_ch_tx.subscribe(),
-                )
-            } else {
-                return Err(Error::ErrAssociationInitFailed);
-            };
+
+        let (accept_ch_tx, accept_ch_rx) = mpsc::channel(ACCEPT_CH_SIZE);
+        let (handshake_completed_ch_tx, mut handshake_completed_ch_rx) = mpsc::channel(1);
+        let (close_loop_ch_tx, close_loop_ch_rx) = broadcast::channel(1);
+        let (close_loop_ch_rx1, close_loop_ch_rx2) =
+            (close_loop_ch_tx.subscribe(), close_loop_ch_tx.subscribe());
+
+        let ai = AssociationInternal::new(
+            config,
+            close_loop_ch_tx,
+            accept_ch_tx,
+            handshake_completed_ch_tx,
+        )
+        .await?;
 
         let bytes_received = Arc::new(AtomicUsize::new(0));
         let bytes_sent = Arc::new(AtomicUsize::new(0));
@@ -290,8 +296,6 @@ impl Association {
         let inflight_queue_length = Arc::clone(&ai.inflight_queue_length);
         let will_send_shutdown = Arc::clone(&ai.will_send_shutdown);
         let awake_write_loop_ch = Arc::clone(&ai.awake_write_loop_ch);
-        let accept_ch_rx = ai.accept_ch_rx.take();
-        let mut handshake_completed_ch_rx = ai.handshake_completed_ch_rx.take();
 
         let mut init = ChunkInit {
             initial_tsn: ai.my_next_tsn,
@@ -381,23 +385,12 @@ impl Association {
             ai.t1init.start(rto).await;
         }
 
-        if let Some(handshake_completed_ch_rx) = &mut handshake_completed_ch_rx {
-            tokio::select! {
-                result = handshake_completed_ch_rx.recv() => {
-                    if let Some(err_opt) = result {
-                        if let Some(err) = err_opt {
-                            return Err(err);
-                        }
-                    }else{
-                        return Err(Error::ErrAssociationInitFailed);
-                    }
-                }
-                //TODO:_ = read_loop_close_ch.recv() => {
-                //    Err(Error::ErrAssociationClosedBeforeConn)
-                //}
-            };
+        if let Some(err_opt) = handshake_completed_ch_rx.recv().await {
+            if let Some(err) = err_opt {
+                return Err(err);
+            }
         } else {
-            return Err(Error::ErrAssociationInitFailed);
+            return Err(Error::ErrAssociationHandshakeClosed);
         }
 
         Ok(Association {
@@ -539,16 +532,8 @@ impl Association {
     }
 
     /// accept_stream accepts a stream
-    pub async fn accept_stream(&mut self) -> Result<Arc<Stream>, Error> {
-        if let Some(accept_ch) = &mut self.accept_ch_rx {
-            if let Some(s) = accept_ch.recv().await {
-                Ok(s)
-            } else {
-                Err(Error::ErrEof)
-            }
-        } else {
-            Err(Error::ErrAssociationInitFailed)
-        }
+    pub async fn accept_stream(&mut self) -> Option<Arc<Stream>> {
+        self.accept_ch_rx.recv().await
     }
 
     /// max_message_size returns the maximum message size you can send.
