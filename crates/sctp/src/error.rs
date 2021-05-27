@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-#[derive(Debug, Error, PartialEq, Copy, Clone)]
+#[derive(Debug, Error, PartialEq, Clone)]
 pub enum Error {
     #[error("raw is too small for a SCTP chunk")]
     ErrChunkHeaderTooSmall,
@@ -215,4 +215,7 @@ pub enum Error {
     ErrInvalidSystemTime,
     #[error("Net Conn read error")]
     ErrNetConnReadError,
+
+    #[error("Other errors:{0}")]
+    ErrOthers(String),
 }

@@ -56,12 +56,12 @@ pub struct AssociationInternal {
 
     // RTX & Ack timer
     pub(crate) rto_mgr: RtoManager,
-    pub(crate) t1init: RtxTimer<AssociationInternal>,
-    pub(crate) t1cookie: RtxTimer<AssociationInternal>,
-    pub(crate) t2shutdown: RtxTimer<AssociationInternal>,
-    pub(crate) t3rtx: RtxTimer<AssociationInternal>,
-    pub(crate) treconfig: RtxTimer<AssociationInternal>,
-    pub(crate) ack_timer: AckTimer<AssociationInternal>,
+    pub(crate) t1init: Option<RtxTimer<AssociationInternal>>,
+    pub(crate) t1cookie: Option<RtxTimer<AssociationInternal>>,
+    pub(crate) t2shutdown: Option<RtxTimer<AssociationInternal>>,
+    pub(crate) t3rtx: Option<RtxTimer<AssociationInternal>>,
+    pub(crate) treconfig: Option<RtxTimer<AssociationInternal>>,
+    pub(crate) ack_timer: Option<AckTimer<AssociationInternal>>,
 
     // Chunks stored for retransmission
     pub(crate) stored_init: Option<ChunkInit>,
@@ -82,7 +82,7 @@ pub struct AssociationInternal {
 
     stats: Arc<AssociationStats>,
     ack_state: AckState,
-    ack_mode: AckMode, // for testing
+    pub(crate) ack_mode: AckMode, // for testing
 }
 
 impl AssociationInternal {
@@ -255,12 +255,24 @@ impl AssociationInternal {
 
     async fn close_all_timers(&mut self) {
         // Close all retransmission & ack timers
-        self.t1init.stop().await;
-        self.t1cookie.stop().await;
-        self.t2shutdown.stop().await;
-        self.t3rtx.stop().await;
-        self.treconfig.stop().await;
-        self.ack_timer.stop();
+        if let Some(t1init) = &self.t1init {
+            t1init.stop().await;
+        }
+        if let Some(t1cookie) = &self.t1cookie {
+            t1cookie.stop().await;
+        }
+        if let Some(t2shutdown) = &self.t2shutdown {
+            t2shutdown.stop().await;
+        }
+        if let Some(t3rtx) = &self.t3rtx {
+            t3rtx.stop().await;
+        }
+        if let Some(treconfig) = &self.treconfig {
+            treconfig.stop().await;
+        }
+        if let Some(ack_timer) = &mut self.ack_timer {
+            ack_timer.stop();
+        }
     }
 
     fn awake_write_loop(&self) {
@@ -317,7 +329,9 @@ impl AssociationInternal {
         if !chunks.is_empty() {
             // Start timer. (noop if already started)
             log::trace!("[{}] T3-rtx timer start (pt1)", self.name);
-            self.t3rtx.start(self.rto_mgr.get_rto()).await;
+            if let Some(t3rtx) = &self.t3rtx {
+                t3rtx.start(self.rto_mgr.get_rto()).await;
+            }
             for p in &self.bundle_data_chunks_into_packets(chunks) {
                 if let Ok(raw) = p.marshal() {
                     raw_packets.push(raw);
@@ -382,7 +396,9 @@ impl AssociationInternal {
             }
 
             if !self.reconfigs.is_empty() {
-                self.treconfig.start(self.rto_mgr.get_rto()).await;
+                if let Some(treconfig) = &self.treconfig {
+                    treconfig.start(self.rto_mgr.get_rto()).await;
+                }
             }
         }
 
@@ -504,7 +520,9 @@ impl AssociationInternal {
             };
 
             if let Ok(raw) = self.create_packet(vec![Box::new(shutdown)]).marshal() {
-                self.t2shutdown.start(self.rto_mgr.get_rto()).await;
+                if let Some(t2shutdown) = &self.t2shutdown {
+                    t2shutdown.start(self.rto_mgr.get_rto()).await;
+                }
                 raw_packets.push(raw);
             } else {
                 log::warn!("[{}] failed to serialize a Shutdown packet", self.name);
@@ -515,7 +533,9 @@ impl AssociationInternal {
             let shutdown_ack = ChunkShutdownAck {};
 
             if let Ok(raw) = self.create_packet(vec![Box::new(shutdown_ack)]).marshal() {
-                self.t2shutdown.start(self.rto_mgr.get_rto()).await;
+                if let Some(t2shutdown) = &self.t2shutdown {
+                    t2shutdown.start(self.rto_mgr.get_rto()).await;
+                }
                 raw_packets.push(raw);
             } else {
                 log::warn!("[{}] failed to serialize a ShutdownAck packet", self.name);
@@ -724,7 +744,9 @@ impl AssociationInternal {
             self.inflight_queue.get_num_bytes()
         );
 
-        self.t1init.stop().await;
+        if let Some(t1init) = &self.t1init {
+            t1init.stop().await;
+        }
         self.stored_init = None;
 
         let mut cookie_param = None;
@@ -751,7 +773,9 @@ impl AssociationInternal {
 
             self.send_cookie_echo()?;
 
-            self.t1cookie.start(self.rto_mgr.get_rto()).await;
+            if let Some(t1cookie) = &self.t1cookie {
+                t1cookie.start(self.rto_mgr.get_rto()).await;
+            }
 
             self.set_state(AssociationState::CookieEchoed);
 
@@ -804,10 +828,14 @@ impl AssociationInternal {
                         return Ok(vec![]);
                     }
 
-                    self.t1init.stop().await;
+                    if let Some(t1init) = &self.t1init {
+                        t1init.stop().await;
+                    }
                     self.stored_init = None;
 
-                    self.t1cookie.stop().await;
+                    if let Some(t1cookie) = &self.t1cookie {
+                        t1cookie.stop().await;
+                    }
                     self.stored_cookie_echo = None;
 
                     self.set_state(AssociationState::Established);
@@ -841,7 +869,9 @@ impl AssociationInternal {
             return Ok(vec![]);
         }
 
-        self.t1cookie.stop().await;
+        if let Some(t1cookie) = &self.t1cookie {
+            t1cookie.stop().await;
+        }
         self.stored_cookie_echo = None;
 
         self.set_state(AssociationState::Established);
@@ -1055,7 +1085,9 @@ impl AssociationInternal {
                     //        still outstanding data on that address).
                     if i == self.cumulative_tsn_ack_point + 1 {
                         // T3 timer needs to be reset. Stop it for now.
-                        self.t3rtx.stop().await;
+                        if let Some(t3rtx) = &self.t3rtx {
+                            t3rtx.stop().await;
+                        }
                     }
 
                     let n_bytes_acked = c.user_data.len() as i64;
@@ -1172,10 +1204,14 @@ impl AssociationInternal {
                 self.name,
                 self.pending_queue.len()
             );
-            self.t3rtx.stop().await;
+            if let Some(t3rtx) = &self.t3rtx {
+                t3rtx.stop().await;
+            }
         } else {
             log::trace!("[{}] T3-rtx timer start (pt2)", self.name);
-            self.t3rtx.start(self.rto_mgr.get_rto()).await;
+            if let Some(t3rtx) = &self.t3rtx {
+                t3rtx.start(self.rto_mgr.get_rto()).await;
+            }
         }
 
         // Update congestion control parameters
@@ -1431,7 +1467,9 @@ impl AssociationInternal {
         if !self.inflight_queue.is_empty() {
             // Start timer. (noop if already started)
             log::trace!("[{}] T3-rtx timer start (pt3)", self.name);
-            self.t3rtx.start(self.rto_mgr.get_rto()).await;
+            if let Some(t3rtx) = &self.t3rtx {
+                t3rtx.start(self.rto_mgr.get_rto()).await;
+            }
         } else if state == AssociationState::ShutdownPending {
             // No more outstanding, send shutdown.
             should_awake_write_loop = true;
@@ -1477,7 +1515,9 @@ impl AssociationInternal {
     async fn handle_shutdown_ack(&mut self, _: &ChunkShutdownAck) -> Result<Vec<Packet>, Error> {
         let state = self.get_state();
         if state == AssociationState::ShutdownSent || state == AssociationState::ShutdownAckSent {
-            self.t2shutdown.stop().await;
+            if let Some(t2shutdown) = &self.t2shutdown {
+                t2shutdown.stop().await;
+            }
             self.will_send_shutdown_complete = true;
 
             self.awake_write_loop();
@@ -1492,7 +1532,9 @@ impl AssociationInternal {
     ) -> Result<Vec<Packet>, Error> {
         let state = self.get_state();
         if state == AssociationState::ShutdownAckSent {
-            self.t2shutdown.stop().await;
+            if let Some(t2shutdown) = &self.t2shutdown {
+                t2shutdown.stop().await;
+            }
             self.close().await?;
         }
 
@@ -1613,7 +1655,9 @@ impl AssociationInternal {
         if sna32lte(c.new_cumulative_tsn, self.peer_last_tsn) {
             log::trace!("[{}] sending ack on Forward TSN", self.name);
             self.ack_state = AckState::Immediate;
-            self.ack_timer.stop();
+            if let Some(ack_timer) = &mut self.ack_timer {
+                ack_timer.stop();
+            }
             self.awake_write_loop();
             return Ok(vec![]);
         }
@@ -1690,7 +1734,9 @@ impl AssociationInternal {
         } else if let Some(p) = raw.as_any().downcast_ref::<ParamReconfigResponse>() {
             self.reconfigs.remove(&p.reconfig_response_sequence_number);
             if self.reconfigs.is_empty() {
-                self.treconfig.stop().await;
+                if let Some(treconfig) = &self.treconfig {
+                    treconfig.stop().await;
+                }
             }
             Ok(None)
         } else {
@@ -2031,12 +2077,16 @@ impl AssociationInternal {
     fn handle_chunk_end(&mut self) {
         if self.immediate_ack_triggered {
             self.ack_state = AckState::Immediate;
-            self.ack_timer.stop();
+            if let Some(ack_timer) = &mut self.ack_timer {
+                ack_timer.stop();
+            }
             self.awake_write_loop();
         } else if self.delayed_ack_triggered {
             // Will send delayed ack in the next ack timeout
             self.ack_state = AckState::Delay;
-            self.ack_timer.start();
+            if let Some(ack_timer) = &mut self.ack_timer {
+                ack_timer.start();
+            }
         }
     }
 
@@ -2093,7 +2143,7 @@ impl AssociationInternal {
 
     /// buffered_amount returns total amount (in bytes) of currently buffered user data.
     /// This is used only by testing.
-    fn buffered_amount(&self) -> usize {
+    pub(crate) fn buffered_amount(&self) -> usize {
         self.pending_queue.get_num_bytes() + self.inflight_queue.get_num_bytes()
     }
 }

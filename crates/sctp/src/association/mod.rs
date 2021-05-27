@@ -223,7 +223,7 @@ pub struct Association {
     bytes_received: Arc<AtomicUsize>,
     bytes_sent: Arc<AtomicUsize>,
 
-    association_internal: Arc<Mutex<AssociationInternal>>,
+    pub(crate) association_internal: Arc<Mutex<AssociationInternal>>,
 }
 
 impl Association {
@@ -325,32 +325,32 @@ impl Association {
             let association_internal3 = Arc::clone(&association_internal);
 
             let mut ai = association_internal.lock().await;
-            ai.t1init = RtxTimer::new(
+            ai.t1init = Some(RtxTimer::new(
                 Arc::clone(&association_internal3),
                 RtxTimerId::T1Init,
                 MAX_INIT_RETRANS,
-            );
-            ai.t1cookie = RtxTimer::new(
+            ));
+            ai.t1cookie = Some(RtxTimer::new(
                 Arc::clone(&association_internal3),
                 RtxTimerId::T1Cookie,
                 MAX_INIT_RETRANS,
-            );
-            ai.t2shutdown = RtxTimer::new(
+            ));
+            ai.t2shutdown = Some(RtxTimer::new(
                 Arc::clone(&association_internal3),
                 RtxTimerId::T2Shutdown,
                 NO_MAX_RETRANS,
-            ); // retransmit forever
-            ai.t3rtx = RtxTimer::new(
+            )); // retransmit forever
+            ai.t3rtx = Some(RtxTimer::new(
                 Arc::clone(&association_internal3),
                 RtxTimerId::T3RTX,
                 NO_MAX_RETRANS,
-            ); // retransmit forever
-            ai.treconfig = RtxTimer::new(
+            )); // retransmit forever
+            ai.treconfig = Some(RtxTimer::new(
                 Arc::clone(&association_internal3),
                 RtxTimerId::Reconfig,
                 NO_MAX_RETRANS,
-            ); // retransmit forever
-            ai.ack_timer = AckTimer::new(association_internal3, ACK_INTERVAL);
+            )); // retransmit forever
+            ai.ack_timer = Some(AckTimer::new(association_internal3, ACK_INTERVAL));
         }
 
         tokio::spawn(async move {
@@ -382,7 +382,9 @@ impl Association {
             ai.stored_init = Some(init);
             ai.send_init()?;
             let rto = ai.rto_mgr.get_rto();
-            ai.t1init.start(rto).await;
+            if let Some(t1init) = &ai.t1init {
+                t1init.start(rto).await;
+            }
         }
 
         if let Some(err_opt) = handshake_completed_ch_rx.recv().await {
