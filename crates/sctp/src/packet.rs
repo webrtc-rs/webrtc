@@ -57,7 +57,7 @@ pub(crate) struct Packet {
     pub(crate) source_port: u16,
     pub(crate) destination_port: u16,
     pub(crate) verification_tag: u32,
-    pub(crate) chunks: Vec<Box<dyn Chunk>>,
+    pub(crate) chunks: Vec<Box<dyn Chunk + Send + Sync>>,
 }
 
 /// makes packet printable
@@ -104,7 +104,7 @@ impl Packet {
             }
 
             let ct = ChunkType(raw[offset]);
-            let c: Box<dyn Chunk> = match ct {
+            let c: Box<dyn Chunk + Send + Sync> = match ct {
                 CT_INIT => Box::new(ChunkInit::unmarshal(&raw.slice(offset..))?),
                 CT_INIT_ACK => Box::new(ChunkInit::unmarshal(&raw.slice(offset..))?),
                 CT_ABORT => Box::new(ChunkAbort::unmarshal(&raw.slice(offset..))?),

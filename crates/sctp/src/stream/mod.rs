@@ -51,7 +51,7 @@ impl From<u8> for ReliabilityType {
     }
 }
 
-pub type OnBufferedAmountLowFn = Box<dyn Fn()>;
+pub type OnBufferedAmountLowFn = Box<dyn Fn() + Send + Sync>;
 
 // TODO: benchmark performance between multiple Atomic+Mutex vs one Mutex<StreamInternal>
 

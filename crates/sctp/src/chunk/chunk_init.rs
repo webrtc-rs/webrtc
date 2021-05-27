@@ -63,7 +63,7 @@ use std::fmt;
 ///Unrecognized Parameter              Optional    8
 ///Reserved for ECN Capable (Note 2)   Optional    32768 (0x8000)
 ///Host Name IP (Note 3)          Optional    11<Paste>
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug)]
 pub(crate) struct ChunkInit {
     pub(crate) is_ack: bool,
     pub(crate) initiate_tag: u32,
@@ -71,7 +71,7 @@ pub(crate) struct ChunkInit {
     pub(crate) num_outbound_streams: u16,
     pub(crate) num_inbound_streams: u16,
     pub(crate) initial_tsn: u32,
-    pub(crate) params: Vec<Box<dyn Param>>,
+    pub(crate) params: Vec<Box<dyn Param + Send + Sync>>,
 }
 
 pub(crate) const INIT_CHUNK_MIN_LENGTH: usize = 16;
@@ -267,7 +267,7 @@ impl Chunk for ChunkInit {
         l
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &(dyn Any + Send + Sync) {
         self
     }
 }

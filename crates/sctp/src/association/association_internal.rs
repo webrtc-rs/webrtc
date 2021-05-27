@@ -13,11 +13,11 @@ pub struct AssociationInternal {
     pub(crate) accept_ch_rx: Option<mpsc::Receiver<Arc<Stream>>>,
 
     peer_verification_tag: u32,
-    my_verification_tag: u32,
+    pub(crate) my_verification_tag: u32,
 
-    my_next_tsn: u32,         // nextTSN
-    peer_last_tsn: u32,       // lastRcvdTSN
-    min_tsn2measure_rtt: u32, // for RTT measurement
+    pub(crate) my_next_tsn: u32, // nextTSN
+    peer_last_tsn: u32,          // lastRcvdTSN
+    min_tsn2measure_rtt: u32,    // for RTT measurement
     will_send_forward_tsn: bool,
     will_retransmit_fast: bool,
     will_retransmit_reconfig: bool,
@@ -33,8 +33,8 @@ pub struct AssociationInternal {
     // Non-RFC internal data
     source_port: u16,
     destination_port: u16,
-    my_max_num_inbound_streams: u16,
-    my_max_num_outbound_streams: u16,
+    pub(crate) my_max_num_inbound_streams: u16,
+    pub(crate) my_max_num_outbound_streams: u16,
     my_cookie: Option<ParamStateCookie>,
     payload_queue: PayloadQueue,
     inflight_queue: PayloadQueue,
@@ -47,7 +47,7 @@ pub struct AssociationInternal {
     use_forward_tsn: bool,
 
     // Congestion control parameters
-    max_receive_buffer_size: u32,
+    pub(crate) max_receive_buffer_size: u32,
     cwnd: u32,     // my congestion window size
     rwnd: u32,     // calculated peer's receiver windows size
     ssthresh: u32, // slow start threshold
@@ -65,7 +65,7 @@ pub struct AssociationInternal {
     ack_timer: AckTimer,
 
     // Chunks stored for retransmission
-    stored_init: Option<ChunkInit>,
+    pub(crate) stored_init: Option<ChunkInit>,
     stored_cookie_echo: Option<ChunkCookieEcho>,
 
     streams: HashMap<u16, Arc<Stream>>,
@@ -73,6 +73,7 @@ pub struct AssociationInternal {
     accept_ch_tx: Option<mpsc::Sender<Arc<Stream>>>,
     read_loop_close_ch: Option<mpsc::Receiver<()>>,
     handshake_completed_ch_tx: Option<mpsc::Sender<Option<Error>>>,
+    pub(crate) handshake_completed_ch_rx: Option<mpsc::Receiver<Option<Error>>>,
 
     // local error
     silent_error: Option<Error>,
@@ -87,7 +88,7 @@ pub struct AssociationInternal {
 }
 
 impl AssociationInternal {
-    pub(crate) async fn new(config: Config, is_client: bool) -> Result<Self, Error> {
+    pub(crate) async fn new(config: Config) -> Result<Self, Error> {
         let max_receive_buffer_size = if config.max_receive_buffer_size == 0 {
             INITIAL_RECV_BUF_SIZE
         } else {
@@ -103,7 +104,7 @@ impl AssociationInternal {
         let inflight_queue_length = Arc::new(AtomicUsize::new(0));
 
         let (accept_ch_tx, accept_ch_rx) = mpsc::channel(ACCEPT_CH_SIZE);
-        let (handshake_completed_ch_tx, mut handshake_completed_ch_rx) = mpsc::channel(1);
+        let (handshake_completed_ch_tx, handshake_completed_ch_rx) = mpsc::channel(1);
         let (close_loop_ch_tx, _close_loop_ch_rx) = broadcast::channel(1);
 
         let tsn = random::<u32>();
@@ -133,6 +134,7 @@ impl AssociationInternal {
             accept_ch_rx: Some(accept_ch_rx),
             close_loop_ch_tx: Some(close_loop_ch_tx),
             handshake_completed_ch_tx: Some(handshake_completed_ch_tx),
+            handshake_completed_ch_rx: Some(handshake_completed_ch_rx),
             cumulative_tsn_ack_point: tsn - 1,
             advanced_peer_tsn_ack_point: tsn - 1,
             silent_error: Some(Error::ErrSilentlyDiscard),
@@ -163,49 +165,12 @@ impl AssociationInternal {
         a.treconfig = RtxTimer::new(RtxTimerId::Reconfig, NO_MAX_RETRANS); // retransmit forever
         a.ack_timer = AckTimer::new(ACK_INTERVAL);
 
-        //TODO: go self.read_loop()
-        //TODO: go self.write_loop()
-
-        if is_client {
-            a.set_state(AssociationState::CookieWait);
-            let mut init = ChunkInit {
-                initial_tsn: a.my_next_tsn,
-                num_outbound_streams: a.my_max_num_outbound_streams,
-                num_inbound_streams: a.my_max_num_inbound_streams,
-                initiate_tag: a.my_verification_tag,
-                advertised_receiver_window_credit: a.max_receive_buffer_size,
-                ..Default::default()
-            };
-            init.set_supported_extensions();
-
-            a.stored_init = Some(init);
-
-            a.send_init()?;
-
-            //TODO: a.t1init.start(self.rto_mgr.get_rto());
-        }
-
-        tokio::select! {
-            result = handshake_completed_ch_rx.recv() => {
-                if let Some(err_opt) = result {
-                    if let Some(err) = err_opt {
-                        Err(err)
-                    }else{
-                        Ok(a)
-                    }
-                }else{
-                    Err(Error::ErrAssociationInitFailed)
-                }
-            }
-            //TODO:_ = read_loop_close_ch.recv() => {
-            //    Err(Error::ErrAssociationClosedBeforeConn)
-            //}
-        }
+        Ok(a)
     }
 
     /// caller must hold self.lock
-    fn send_init(&mut self) -> Result<(), Error> {
-        if let Some(stored_init) = &self.stored_init {
+    pub(crate) fn send_init(&mut self) -> Result<(), Error> {
+        if let Some(stored_init) = self.stored_init.take() {
             log::debug!("[{}] sending INIT", self.name);
 
             self.source_port = 5000; // Spec??
@@ -215,7 +180,7 @@ impl AssociationInternal {
                 source_port: self.source_port,
                 destination_port: self.destination_port,
                 verification_tag: self.peer_verification_tag,
-                chunks: vec![Box::new(stored_init.clone())],
+                chunks: vec![Box::new(stored_init)],
             };
 
             self.control_queue.push_back(outbound);
@@ -441,7 +406,7 @@ impl AssociationInternal {
         if self.will_retransmit_fast {
             self.will_retransmit_fast = false;
 
-            let mut to_fast_retrans: Vec<Box<dyn Chunk>> = vec![];
+            let mut to_fast_retrans: Vec<Box<dyn Chunk + Send + Sync>> = vec![];
             let mut fast_retrans_size = COMMON_HEADER_SIZE;
 
             let mut i = 0;
@@ -629,7 +594,7 @@ impl AssociationInternal {
     }
 
     /// set_state atomically sets the state of the Association.
-    fn set_state(&self, new_state: AssociationState) {
+    pub(crate) fn set_state(&self, new_state: AssociationState) {
         let old_state = AssociationState::from(self.state.swap(new_state as u8, Ordering::SeqCst));
         if new_state != old_state {
             log::debug!(
@@ -1585,7 +1550,7 @@ impl AssociationInternal {
 
     /// create_packet wraps chunks in a packet.
     /// The caller should hold the read lock.
-    fn create_packet(&self, chunks: Vec<Box<dyn Chunk>>) -> Packet {
+    fn create_packet(&self, chunks: Vec<Box<dyn Chunk + Send + Sync>>) -> Packet {
         Packet {
             verification_tag: self.peer_verification_tag,
             source_port: self.source_port,
@@ -1718,7 +1683,7 @@ impl AssociationInternal {
     #[allow(clippy::borrowed_box)]
     async fn handle_reconfig_param(
         &mut self,
-        raw: &Box<dyn Param>,
+        raw: &Box<dyn Param + Send + Sync>,
     ) -> Result<Option<Packet>, Error> {
         if let Some(p) = raw.as_any().downcast_ref::<ParamOutgoingResetRequest>() {
             self.reconfig_requests
@@ -2078,38 +2043,42 @@ impl AssociationInternal {
     }
 
     #[allow(clippy::borrowed_box)]
-    async fn handle_chunk(&mut self, p: &Packet, chunk: &Box<dyn Chunk>) -> Result<(), Error> {
+    async fn handle_chunk(
+        &mut self,
+        p: &Packet,
+        chunk: &Box<dyn Chunk + Send + Sync>,
+    ) -> Result<(), Error> {
         chunk.check()?;
-
-        let packets = if let Some(c) = chunk.as_any().downcast_ref::<ChunkInit>() {
+        let chunk_any = chunk.as_any();
+        let packets = if let Some(c) = chunk_any.downcast_ref::<ChunkInit>() {
             if c.is_ack {
                 self.handle_init_ack(p, c).await?
             } else {
                 self.handle_init(p, c).await?
             }
-        } else if chunk.as_any().downcast_ref::<ChunkAbort>().is_some()
-            || chunk.as_any().downcast_ref::<ChunkError>().is_some()
+        } else if chunk_any.downcast_ref::<ChunkAbort>().is_some()
+            || chunk_any.downcast_ref::<ChunkError>().is_some()
         {
             return Err(Error::ErrChunk);
-        } else if let Some(c) = chunk.as_any().downcast_ref::<ChunkHeartbeat>() {
+        } else if let Some(c) = chunk_any.downcast_ref::<ChunkHeartbeat>() {
             self.handle_heartbeat(c).await?
-        } else if let Some(c) = chunk.as_any().downcast_ref::<ChunkCookieEcho>() {
+        } else if let Some(c) = chunk_any.downcast_ref::<ChunkCookieEcho>() {
             self.handle_cookie_echo(c).await?
-        } else if chunk.as_any().downcast_ref::<ChunkCookieAck>().is_some() {
+        } else if chunk_any.downcast_ref::<ChunkCookieAck>().is_some() {
             self.handle_cookie_ack().await?
-        } else if let Some(c) = chunk.as_any().downcast_ref::<ChunkPayloadData>() {
+        } else if let Some(c) = chunk_any.downcast_ref::<ChunkPayloadData>() {
             self.handle_data(c).await?
-        } else if let Some(c) = chunk.as_any().downcast_ref::<ChunkSelectiveAck>() {
+        } else if let Some(c) = chunk_any.downcast_ref::<ChunkSelectiveAck>() {
             self.handle_sack(c).await?
-        } else if let Some(c) = chunk.as_any().downcast_ref::<ChunkReconfig>() {
+        } else if let Some(c) = chunk_any.downcast_ref::<ChunkReconfig>() {
             self.handle_reconfig(c).await?
-        } else if let Some(c) = chunk.as_any().downcast_ref::<ChunkForwardTsn>() {
+        } else if let Some(c) = chunk_any.downcast_ref::<ChunkForwardTsn>() {
             self.handle_forward_tsn(c).await?
-        } else if let Some(c) = chunk.as_any().downcast_ref::<ChunkShutdown>() {
+        } else if let Some(c) = chunk_any.downcast_ref::<ChunkShutdown>() {
             self.handle_shutdown(c).await?
-        } else if let Some(c) = chunk.as_any().downcast_ref::<ChunkShutdownAck>() {
+        } else if let Some(c) = chunk_any.downcast_ref::<ChunkShutdownAck>() {
             self.handle_shutdown_ack(c).await?
-        } else if let Some(c) = chunk.as_any().downcast_ref::<ChunkShutdownComplete>() {
+        } else if let Some(c) = chunk_any.downcast_ref::<ChunkShutdownComplete>() {
             self.handle_shutdown_complete(c).await?
         } else {
             return Err(Error::ErrChunkTypeUnhandled);

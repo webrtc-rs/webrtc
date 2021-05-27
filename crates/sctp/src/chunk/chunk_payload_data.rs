@@ -243,7 +243,7 @@ impl Chunk for ChunkPayloadData {
         PAYLOAD_DATA_HEADER_SIZE + self.user_data.len()
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &(dyn Any + Send + Sync) {
         self
     }
 }

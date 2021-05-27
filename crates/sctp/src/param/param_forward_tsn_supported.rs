@@ -41,11 +41,11 @@ impl Param for ParamForwardTsnSupported {
         0
     }
 
-    fn clone_to(&self) -> Box<dyn Param> {
+    fn clone_to(&self) -> Box<dyn Param + Send + Sync> {
         Box::new(self.clone())
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &(dyn Any + Send + Sync) {
         self
     }
 }

@@ -32,7 +32,7 @@ use std::fmt;
 ///heartbeat Info                       Mandatory   1
 #[derive(Default, Debug)]
 pub(crate) struct ChunkHeartbeat {
-    pub(crate) params: Vec<Box<dyn Param>>,
+    pub(crate) params: Vec<Box<dyn Param + Send + Sync>>,
 }
 
 /// makes ChunkHeartbeat printable
@@ -90,7 +90,7 @@ impl Chunk for ChunkHeartbeat {
         })
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &(dyn Any + Send + Sync) {
         self
     }
 }

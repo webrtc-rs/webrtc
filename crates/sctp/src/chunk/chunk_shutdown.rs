@@ -67,7 +67,7 @@ impl Chunk for ChunkShutdown {
         CUMULATIVE_TSN_ACK_LENGTH
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &(dyn Any + Send + Sync) {
         self
     }
 }

@@ -26,7 +26,7 @@ use param_header::*;
 use param_type::*;
 
 use bytes::{Buf, Bytes, BytesMut};
-use std::fmt;
+use std::{any::Any, fmt};
 
 pub(crate) trait Param: fmt::Display + fmt::Debug {
     fn header(&self) -> ParamHeader;
@@ -35,8 +35,8 @@ pub(crate) trait Param: fmt::Display + fmt::Debug {
         Self: Sized;
     fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error>;
     fn value_length(&self) -> usize;
-    fn clone_to(&self) -> Box<dyn Param>;
-    fn as_any(&self) -> &dyn std::any::Any;
+    fn clone_to(&self) -> Box<dyn Param + Send + Sync>;
+    fn as_any(&self) -> &(dyn Any + Send + Sync);
 
     fn marshal(&self) -> Result<Bytes, Error> {
         let capacity = PARAM_HEADER_LENGTH + self.value_length();
@@ -46,13 +46,13 @@ pub(crate) trait Param: fmt::Display + fmt::Debug {
     }
 }
 
-impl Clone for Box<dyn Param> {
-    fn clone(&self) -> Box<dyn Param> {
+impl Clone for Box<dyn Param + Send + Sync> {
+    fn clone(&self) -> Box<dyn Param + Send + Sync> {
         self.clone_to()
     }
 }
 
-pub(crate) fn build_param(raw_param: &Bytes) -> Result<Box<dyn Param>, Error> {
+pub(crate) fn build_param(raw_param: &Bytes) -> Result<Box<dyn Param + Send + Sync>, Error> {
     if raw_param.len() < PARAM_HEADER_LENGTH {
         return Err(Error::ErrParamHeaderTooShort);
     }

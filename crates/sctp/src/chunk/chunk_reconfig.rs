@@ -21,10 +21,19 @@ use std::fmt;
 ///|             Re-configuration Parameter (optional)             |
 ///|                                                               |
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug)]
 pub(crate) struct ChunkReconfig {
-    pub(crate) param_a: Option<Box<dyn Param>>,
-    pub(crate) param_b: Option<Box<dyn Param>>,
+    pub(crate) param_a: Option<Box<dyn Param + Send + Sync>>,
+    pub(crate) param_b: Option<Box<dyn Param + Send + Sync>>,
+}
+
+impl Clone for ChunkReconfig {
+    fn clone(&self) -> Self {
+        ChunkReconfig {
+            param_a: self.param_a.as_ref().cloned(),
+            param_b: self.param_b.as_ref().cloned(),
+        }
+    }
 }
 
 /// makes chunkReconfig printable
@@ -112,7 +121,7 @@ impl Chunk for ChunkReconfig {
         l
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &(dyn Any + Send + Sync) {
         self
     }
 }

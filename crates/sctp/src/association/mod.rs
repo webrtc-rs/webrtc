@@ -227,56 +227,12 @@ pub struct Association {
 impl Association {
     /// server accepts a SCTP stream over a conn
     pub async fn server(config: Config) -> Result<Self, Error> {
-        let net_conn = Arc::clone(&config.net_conn);
-        let mut ai = AssociationInternal::new(config, false).await?;
-        let close_loop_ch_rx = if let Some(close_loop_ch_tx) = &ai.close_loop_ch_tx {
-            close_loop_ch_tx.subscribe()
-        } else {
-            return Err(Error::ErrAssociationInitFailed);
-        };
-
-        Ok(Association {
-            name: ai.name.clone(),
-            state: ai.state.clone(),
-            max_message_size: ai.max_message_size.clone(),
-            inflight_queue_length: ai.inflight_queue_length.clone(),
-            will_send_shutdown: ai.will_send_shutdown.clone(),
-            awake_write_loop_ch: ai.awake_write_loop_ch.clone(),
-            close_loop_ch_rx,
-            accept_ch_rx: ai.accept_ch_rx.take(),
-            net_conn,
-            bytes_received: Arc::new(AtomicUsize::new(0)),
-            bytes_sent: Arc::new(AtomicUsize::new(0)),
-
-            association_internal: Arc::new(Mutex::new(ai)),
-        })
+        Association::start(config, false).await
     }
 
     /// Client opens a SCTP stream over a conn
     pub async fn client(config: Config) -> Result<Self, Error> {
-        let net_conn = Arc::clone(&config.net_conn);
-        let mut ai = AssociationInternal::new(config, true).await?;
-        let close_loop_ch_rx = if let Some(close_loop_ch_tx) = &ai.close_loop_ch_tx {
-            close_loop_ch_tx.subscribe()
-        } else {
-            return Err(Error::ErrAssociationInitFailed);
-        };
-
-        Ok(Association {
-            name: ai.name.clone(),
-            state: ai.state.clone(),
-            max_message_size: ai.max_message_size.clone(),
-            inflight_queue_length: ai.inflight_queue_length.clone(),
-            will_send_shutdown: ai.will_send_shutdown.clone(),
-            awake_write_loop_ch: ai.awake_write_loop_ch.clone(),
-            close_loop_ch_rx,
-            accept_ch_rx: ai.accept_ch_rx.take(),
-            net_conn,
-            bytes_received: Arc::new(AtomicUsize::new(0)),
-            bytes_sent: Arc::new(AtomicUsize::new(0)),
-
-            association_internal: Arc::new(Mutex::new(ai)),
-        })
+        Association::start(config, true).await
     }
 
     /// Shutdown initiates the shutdown sequence. The method blocks until the
@@ -311,6 +267,121 @@ impl Association {
 
         let mut ai = self.association_internal.lock().await;
         ai.close().await
+    }
+
+    async fn start(config: Config, is_client: bool) -> Result<Self, Error> {
+        let net_conn = Arc::clone(&config.net_conn);
+        let mut ai = AssociationInternal::new(config).await?;
+        let (close_loop_ch_rx1, close_loop_ch_rx2, close_loop_ch_rx) =
+            if let Some(close_loop_ch_tx) = &ai.close_loop_ch_tx {
+                (
+                    close_loop_ch_tx.subscribe(),
+                    close_loop_ch_tx.subscribe(),
+                    close_loop_ch_tx.subscribe(),
+                )
+            } else {
+                return Err(Error::ErrAssociationInitFailed);
+            };
+
+        let bytes_received = Arc::new(AtomicUsize::new(0));
+        let bytes_sent = Arc::new(AtomicUsize::new(0));
+        let name = ai.name.clone();
+        let state = Arc::clone(&ai.state);
+        let max_message_size = Arc::clone(&ai.max_message_size);
+        let inflight_queue_length = Arc::clone(&ai.inflight_queue_length);
+        let will_send_shutdown = Arc::clone(&ai.will_send_shutdown);
+        let awake_write_loop_ch = Arc::clone(&ai.awake_write_loop_ch);
+        let accept_ch_rx = ai.accept_ch_rx.take();
+        let mut handshake_completed_ch_rx = ai.handshake_completed_ch_rx.take();
+
+        let mut init = ChunkInit {
+            initial_tsn: ai.my_next_tsn,
+            num_outbound_streams: ai.my_max_num_outbound_streams,
+            num_inbound_streams: ai.my_max_num_inbound_streams,
+            initiate_tag: ai.my_verification_tag,
+            advertised_receiver_window_credit: ai.max_receive_buffer_size,
+            ..Default::default()
+        };
+        init.set_supported_extensions();
+
+        let name1 = name.clone();
+        let name2 = name.clone();
+
+        let bytes_received1 = Arc::clone(&bytes_received);
+        let bytes_sent2 = Arc::clone(&bytes_sent);
+
+        let net_conn1 = Arc::clone(&net_conn);
+        let net_conn2 = Arc::clone(&net_conn);
+        let awake_write_loop_ch2 = Arc::clone(&awake_write_loop_ch);
+
+        let association_internal = Arc::new(Mutex::new(ai));
+        let association_internal1 = Arc::clone(&association_internal);
+        let association_internal2 = Arc::clone(&association_internal);
+
+        tokio::spawn(async move {
+            Association::read_loop(
+                name1,
+                bytes_received1,
+                net_conn1,
+                close_loop_ch_rx1,
+                association_internal1,
+            )
+            .await;
+        });
+
+        tokio::spawn(async move {
+            Association::write_loop(
+                name2,
+                bytes_sent2,
+                net_conn2,
+                close_loop_ch_rx2,
+                association_internal2,
+                awake_write_loop_ch2,
+            )
+            .await;
+        });
+
+        if is_client {
+            let mut ai = association_internal.lock().await;
+            ai.set_state(AssociationState::CookieWait);
+            ai.stored_init = Some(init);
+            ai.send_init()?;
+            //TODO: a.t1init.start(self.rto_mgr.get_rto());
+        }
+
+        if let Some(handshake_completed_ch_rx) = &mut handshake_completed_ch_rx {
+            tokio::select! {
+                result = handshake_completed_ch_rx.recv() => {
+                    if let Some(err_opt) = result {
+                        if let Some(err) = err_opt {
+                            return Err(err);
+                        }
+                    }else{
+                        return Err(Error::ErrAssociationInitFailed);
+                    }
+                }
+                //TODO:_ = read_loop_close_ch.recv() => {
+                //    Err(Error::ErrAssociationClosedBeforeConn)
+                //}
+            };
+        } else {
+            return Err(Error::ErrAssociationInitFailed);
+        }
+
+        Ok(Association {
+            name,
+            state,
+            max_message_size,
+            inflight_queue_length,
+            will_send_shutdown,
+            awake_write_loop_ch,
+            close_loop_ch_rx,
+            accept_ch_rx,
+            net_conn,
+            bytes_received,
+            bytes_sent,
+            association_internal,
+        })
     }
 
     async fn read_loop(

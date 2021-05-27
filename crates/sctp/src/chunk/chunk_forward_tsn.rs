@@ -106,7 +106,7 @@ impl Chunk for ChunkForwardTsn {
         NEW_CUMULATIVE_TSN_LENGTH + FORWARD_TSN_STREAM_LENGTH * self.streams.len()
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &(dyn Any + Send + Sync) {
         self
     }
 }
@@ -173,7 +173,7 @@ impl Chunk for ChunkForwardTsnStream {
         FORWARD_TSN_STREAM_LENGTH
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &(dyn Any + Send + Sync) {
         self
     }
 }

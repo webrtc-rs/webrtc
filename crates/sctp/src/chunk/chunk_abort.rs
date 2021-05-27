@@ -86,7 +86,7 @@ impl Chunk for ChunkAbort {
             .fold(0, |length, ec| length + ec.length())
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &(dyn Any + Send + Sync) {
         self
     }
 }
