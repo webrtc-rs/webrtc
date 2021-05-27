@@ -150,7 +150,7 @@ impl Bridge {
 
     /// Drop drops the specified number of packets from the given offset index
     /// of the specified queue.
-    pub async fn drop(&self, id: usize, offset: usize, n: usize) {
+    pub async fn drop_offset(&self, id: usize, offset: usize, n: usize) {
         let mut queue = self.queue[id].lock().await;
         queue.drain(offset..offset + n);
     }
@@ -205,7 +205,7 @@ impl Bridge {
     }
 }
 
-fn inverse(s: &mut VecDeque<Bytes>) -> bool {
+pub(crate) fn inverse(s: &mut VecDeque<Bytes>) -> bool {
     if s.len() < 2 {
         return false;
     }

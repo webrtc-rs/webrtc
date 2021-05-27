@@ -3,6 +3,8 @@ pub mod conn_pipe;
 pub mod conn_udp;
 
 #[cfg(test)]
+mod conn_bridge_test;
+#[cfg(test)]
 mod conn_pipe_test;
 #[cfg(test)]
 mod conn_test;
