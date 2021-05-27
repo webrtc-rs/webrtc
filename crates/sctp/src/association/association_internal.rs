@@ -57,7 +57,7 @@ pub struct AssociationInternal {
     fast_recover_exit_point: u32,
 
     // RTX & Ack timer
-    rto_mgr: RtoManager,
+    pub(crate) rto_mgr: RtoManager,
     pub(crate) t1init: RtxTimer<AssociationInternal>,
     pub(crate) t1cookie: RtxTimer<AssociationInternal>,
     pub(crate) t2shutdown: RtxTimer<AssociationInternal>,

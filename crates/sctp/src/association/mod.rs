@@ -377,7 +377,8 @@ impl Association {
             ai.set_state(AssociationState::CookieWait);
             ai.stored_init = Some(init);
             ai.send_init()?;
-            //TODO: a.t1init.start(self.rto_mgr.get_rto());
+            let rto = ai.rto_mgr.get_rto();
+            ai.t1init.start(rto).await;
         }
 
         if let Some(handshake_completed_ch_rx) = &mut handshake_completed_ch_rx {
