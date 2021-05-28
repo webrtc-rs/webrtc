@@ -190,6 +190,7 @@ pub struct Config {
     pub net_conn: Arc<dyn Conn + Send + Sync>,
     pub max_receive_buffer_size: u32,
     pub max_message_size: u32,
+    pub name: String,
 }
 
 ///Association represents an SCTP association
@@ -443,6 +444,7 @@ impl Association {
             // read from the underlying transport. We do this because the
             // user data is passed to the reassembly queue without
             // copying.
+            log::debug!("[{}] recving {} bytes", name, n);
             let inbound = Bytes::from(buffer[..n].to_vec());
             bytes_received.fetch_add(n, Ordering::SeqCst);
 
@@ -482,6 +484,7 @@ impl Association {
             };
 
             for raw in &raw_packets {
+                log::debug!("[{}] sending {} bytes", name, raw.len());
                 if let Err(err) = net_conn.send(raw).await {
                     log::warn!("[{}] failed to write packets on net_conn: {}", name, err);
                     ok = false;

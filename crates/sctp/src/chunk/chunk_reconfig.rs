@@ -71,8 +71,10 @@ impl Chunk for ChunkReconfig {
 
         let padding = get_padding_size(PARAM_HEADER_LENGTH + param_a.value_length());
         let offset = CHUNK_HEADER_SIZE + PARAM_HEADER_LENGTH + param_a.value_length() + padding;
-        let param_b = if raw.len() > offset {
-            Some(build_param(&raw.slice(offset..))?)
+        let param_b = if CHUNK_HEADER_SIZE + header.value_length() > offset {
+            Some(build_param(
+                &raw.slice(offset..CHUNK_HEADER_SIZE + header.value_length()),
+            )?)
         } else {
             None
         };

@@ -206,18 +206,20 @@ impl Packet {
 
         // Check values on the packet that are specific to a particular chunk type
         for c in &self.chunks {
-            if c.as_any().downcast_ref::<ChunkInit>().is_some() {
-                // An INIT or INIT ACK chunk MUST NOT be bundled with any other chunk.
-                // They MUST be the only chunks present in the SCTP packets that carry
-                // them.
-                if self.chunks.len() != 1 {
-                    return Err(Error::ErrInitChunkBundled);
-                }
+            if let Some(ci) = c.as_any().downcast_ref::<ChunkInit>() {
+                if !ci.is_ack {
+                    // An INIT or INIT ACK chunk MUST NOT be bundled with any other chunk.
+                    // They MUST be the only chunks present in the SCTP packets that carry
+                    // them.
+                    if self.chunks.len() != 1 {
+                        return Err(Error::ErrInitChunkBundled);
+                    }
 
-                // A packet containing an INIT chunk MUST have a zero Verification
-                // Tag.
-                if self.verification_tag != 0 {
-                    return Err(Error::ErrInitChunkVerifyTagNotZero);
+                    // A packet containing an INIT chunk MUST have a zero Verification
+                    // Tag.
+                    if self.verification_tag != 0 {
+                        return Err(Error::ErrInitChunkVerifyTagNotZero);
+                    }
                 }
             }
         }

@@ -200,7 +200,9 @@ impl Chunk for ChunkPayloadData {
         let stream_identifier = reader.get_u16();
         let stream_sequence_number = reader.get_u16();
         let payload_type: PayloadProtocolIdentifier = reader.get_u32().into();
-        let user_data = raw.slice(CHUNK_HEADER_SIZE + PAYLOAD_DATA_HEADER_SIZE..);
+        let user_data = raw.slice(
+            CHUNK_HEADER_SIZE + PAYLOAD_DATA_HEADER_SIZE..CHUNK_HEADER_SIZE + header.value_length(),
+        );
 
         Ok(ChunkPayloadData {
             unordered,

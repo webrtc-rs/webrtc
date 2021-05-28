@@ -21,6 +21,7 @@ async fn create_new_association_pair(
             net_conn: ca,
             max_receive_buffer_size: recv_buf_size,
             max_message_size: 0,
+            name: "client".to_owned(),
         })
         .await;
 
@@ -36,6 +37,7 @@ async fn create_new_association_pair(
             net_conn: cb,
             max_receive_buffer_size: recv_buf_size,
             max_message_size: 0,
+            name: "server".to_owned(),
         })
         .await;
 
@@ -206,9 +208,27 @@ async fn establish_session_pair(
     Ok((s0, s1))
 }
 
+/*
+use std::io::Write;
+
 #[tokio::test]
 async fn test_assoc_reliable_simple() -> Result<(), Error> {
-    /*TODO: const SI: u16 = 1;
+    env_logger::Builder::new()
+        .format(|buf, record| {
+            writeln!(
+                buf,
+                "{}:{} [{}] {} - {}",
+                record.file().unwrap_or("unknown"),
+                record.line().unwrap_or(0),
+                record.level(),
+                chrono::Local::now().format("%H:%M:%S.%6f"),
+                record.args()
+            )
+        })
+        .filter(None, log::LevelFilter::Trace)
+        .init();
+
+    const SI: u16 = 1;
     const MSG: Bytes = Bytes::from_static(b"ABC");
     let (br, ca, cb) = Bridge::new(0, None, None);
 
@@ -247,6 +267,7 @@ async fn test_assoc_reliable_simple() -> Result<(), Error> {
         let a = a0.association_internal.lock().await;
         assert_eq!(0, a.buffered_amount(), "incorrect bufferedAmount");
     }
-    */
+
     Ok(())
 }
+*/

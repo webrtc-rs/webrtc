@@ -108,6 +108,7 @@ impl AssociationInternal {
 
         let tsn = random::<u32>();
         let mut a = AssociationInternal {
+            name: config.name,
             max_receive_buffer_size,
             max_message_size: Arc::new(AtomicU32::new(max_message_size)),
 
@@ -139,8 +140,6 @@ impl AssociationInternal {
             awake_write_loop_ch: Arc::new(Notify::new()),
             ..Default::default()
         };
-
-        a.name = format!("{:p}", &a);
 
         // RFC 4690 Sec 7.2.1
         //  o  The initial cwnd before DATA transmission or after a sufficiently
@@ -662,14 +661,14 @@ impl AssociationInternal {
             if let Some(v) = param.as_any().downcast_ref::<ParamSupportedExtensions>() {
                 for t in &v.chunk_types {
                     if *t == CT_FORWARD_TSN {
-                        log::debug!("[{}] use ForwardTSN (on init)\n", self.name);
+                        log::debug!("[{}] use ForwardTSN (on init)", self.name);
                         self.use_forward_tsn = true;
                     }
                 }
             }
         }
         if !self.use_forward_tsn {
-            log::warn!("[{}] not using ForwardTSN (on init)\n", self.name);
+            log::warn!("[{}] not using ForwardTSN (on init)", self.name);
         }
 
         let mut outbound = Packet {
@@ -756,14 +755,14 @@ impl AssociationInternal {
             } else if let Some(v) = param.as_any().downcast_ref::<ParamSupportedExtensions>() {
                 for t in &v.chunk_types {
                     if *t == CT_FORWARD_TSN {
-                        log::debug!("[{}] use ForwardTSN (on initAck)\n", self.name);
+                        log::debug!("[{}] use ForwardTSN (on initAck)", self.name);
                         self.use_forward_tsn = true;
                     }
                 }
             }
         }
         if !self.use_forward_tsn {
-            log::warn!("[{}] not using ForwardTSN (on initAck)\n", self.name);
+            log::warn!("[{}] not using ForwardTSN (on initAck)", self.name);
         }
 
         if let Some(v) = cookie_param {
@@ -1036,7 +1035,7 @@ impl AssociationInternal {
             if let Some(accept_ch) = &self.accept_ch_tx {
                 if accept_ch.try_send(Arc::clone(&s)).is_ok() {
                     log::debug!(
-                        "[{}] accepted a new stream (stream_identifier: {})",
+                        "[{}] accepted a new stream (streamIdentifier: {})",
                         self.name,
                         stream_identifier
                     );
@@ -1803,7 +1802,7 @@ impl AssociationInternal {
             log::trace!(
                 "[{}] sending ppi={} tsn={} ssn={} sent={} len={} ({},{})",
                 self.name,
-                c.payload_type,
+                c.payload_type as u32,
                 c.tsn,
                 c.stream_sequence_number,
                 c.nsent,

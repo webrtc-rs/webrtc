@@ -201,7 +201,7 @@ impl Stream {
             let mut reassembly_queue = self.reassembly_queue.lock().await;
             if reassembly_queue.push(pd) {
                 let readable = reassembly_queue.is_readable();
-                log::debug!("[{}] reassembly_queue readable={}", self.name, readable);
+                log::debug!("[{}] reassemblyQueue readable={}", self.name, readable);
                 readable
             } else {
                 false
@@ -209,9 +209,9 @@ impl Stream {
         };
 
         if readable {
-            log::debug!("[{}] read_notifier.signal()", self.name);
+            log::debug!("[{}] readNotifier.signal()", self.name);
             self.read_notifier.notify_one();
-            log::debug!("[{}] read_notifier.signal() done", self.name);
+            log::debug!("[{}] readNotifier.signal() done", self.name);
         }
     }
 
@@ -334,11 +334,7 @@ impl Stream {
         }
 
         let old_value = self.buffered_amount.fetch_add(raw.len(), Ordering::SeqCst);
-        log::trace!(
-            "[{}] buffered_amount = {}",
-            self.name,
-            old_value + raw.len()
-        );
+        log::trace!("[{}] bufferedAmount = {}", self.name, old_value + raw.len());
 
         chunks
     }

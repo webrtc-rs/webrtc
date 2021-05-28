@@ -60,7 +60,9 @@ impl Chunk for ChunkAbort {
         let mut error_causes = vec![];
         let mut offset = CHUNK_HEADER_SIZE;
         while offset + 4 <= raw.len() {
-            let e = ErrorCause::unmarshal(&raw.slice(offset..))?;
+            let e = ErrorCause::unmarshal(
+                &raw.slice(offset..CHUNK_HEADER_SIZE + header.value_length()),
+            )?;
             offset += e.length();
             error_causes.push(e);
         }
