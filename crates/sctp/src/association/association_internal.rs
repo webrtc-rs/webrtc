@@ -106,7 +106,7 @@ impl AssociationInternal {
 
         let inflight_queue_length = Arc::new(AtomicUsize::new(0));
 
-        let tsn = random::<u32>();
+        let tsn = 1; //TODO: random::<u32>(); //FIXME: fix 0 crash issue
         let mut a = AssociationInternal {
             name: config.name,
             max_receive_buffer_size,
@@ -949,8 +949,10 @@ impl AssociationInternal {
         //   if possible
         // Meaning, if peer_last_tsn+1 points to a chunk that is received,
         // advance peer_last_tsn until peer_last_tsn+1 points to unreceived chunk.
-        while self.payload_queue.pop(self.peer_last_tsn + 1).is_none() {
+        log::debug!("[{}] peer_last_tsn = {}", self.name, self.peer_last_tsn);
+        while self.payload_queue.pop(self.peer_last_tsn + 1).is_some() {
             self.peer_last_tsn += 1;
+            log::debug!("[{}] peer_last_tsn = {}", self.name, self.peer_last_tsn);
 
             let rst_reqs: Vec<ParamOutgoingResetRequest> =
                 self.reconfig_requests.values().cloned().collect();
@@ -1074,6 +1076,7 @@ impl AssociationInternal {
         // We add 1 because the "currentAckPoint" has already been popped from the inflight queue
         // For the first SACK we take care of this by setting the ackpoint to cumAck - 1
         let mut i = self.cumulative_tsn_ack_point + 1;
+        log::debug!("[{}] i={} d={}", self.name, i, d.cumulative_tsn_ack);
         while sna32lte(i, d.cumulative_tsn_ack) {
             if let Some(c) = self.inflight_queue.pop(i) {
                 if !c.acked {
@@ -1341,8 +1344,9 @@ impl AssociationInternal {
 
     async fn handle_sack(&mut self, d: &ChunkSelectiveAck) -> Result<Vec<Packet>, Error> {
         log::trace!(
-            "[{}] SACK: cumTSN={} a_rwnd={}",
+            "[{}] {}, SACK: cumTSN={} a_rwnd={}",
             self.name,
+            self.cumulative_tsn_ack_point,
             d.cumulative_tsn_ack,
             d.advertised_receiver_window_credit
         );

@@ -3,6 +3,9 @@ use super::*;
 use std::time::Duration;
 use util::conn::conn_bridge::*;
 
+const SI: u16 = 1;
+const MSG: Bytes = Bytes::from_static(b"ABC");
+
 async fn create_new_association_pair(
     br: &Arc<Bridge>,
     ca: Arc<dyn Conn + Send + Sync>,
@@ -208,28 +211,25 @@ async fn establish_session_pair(
     Ok((s0, s1))
 }
 
-/*
-use std::io::Write;
+//use std::io::Write;
 
 #[tokio::test]
 async fn test_assoc_reliable_simple() -> Result<(), Error> {
-    env_logger::Builder::new()
-        .format(|buf, record| {
-            writeln!(
-                buf,
-                "{}:{} [{}] {} - {}",
-                record.file().unwrap_or("unknown"),
-                record.line().unwrap_or(0),
-                record.level(),
-                chrono::Local::now().format("%H:%M:%S.%6f"),
-                record.args()
-            )
-        })
-        .filter(None, log::LevelFilter::Trace)
-        .init();
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
 
-    const SI: u16 = 1;
-    const MSG: Bytes = Bytes::from_static(b"ABC");
     let (br, ca, cb) = Bridge::new(0, None, None);
 
     let (a0, mut a1) =
@@ -268,6 +268,7 @@ async fn test_assoc_reliable_simple() -> Result<(), Error> {
         assert_eq!(0, a.buffered_amount(), "incorrect bufferedAmount");
     }
 
+    close_association_pair(&br, a0, a1).await;
+
     Ok(())
 }
-*/
