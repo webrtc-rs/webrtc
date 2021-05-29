@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod association_internal_test;
+
 use super::*;
 use async_trait::async_trait;
 use std::sync::atomic::AtomicBool;
