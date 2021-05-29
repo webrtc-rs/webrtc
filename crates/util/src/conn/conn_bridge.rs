@@ -80,8 +80,8 @@ impl Bridge {
         filter_cb0: Option<Box<dyn Fn(&Bytes) -> bool + Send + Sync>>,
         filter_cb1: Option<Box<dyn Fn(&Bytes) -> bool + Send + Sync>>,
     ) -> (Arc<Bridge>, impl Conn, impl Conn) {
-        let (wr_tx0, rd_rx0) = mpsc::channel(1);
-        let (wr_tx1, rd_rx1) = mpsc::channel(1);
+        let (wr_tx0, rd_rx0) = mpsc::channel(1024);
+        let (wr_tx1, rd_rx1) = mpsc::channel(1024);
 
         let br = Arc::new(Bridge {
             wr_tx: [Some(wr_tx0), Some(wr_tx1)],
@@ -135,8 +135,10 @@ impl Bridge {
                 queue.push_back(d);
             }
         } else {
+            //log::debug!("queue [{}] enter lock", id);
             let mut queue = self.queue[id].lock().await;
             queue.push_back(d);
+            //log::debug!("queue [{}] exit lock", id);
         }
 
         Ok(b.len())
