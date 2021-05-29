@@ -93,3 +93,156 @@ fn test_create_forward_tsn_forward_two_abandoned_with_the_same_si() -> Result<()
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_handle_forward_tsn_forward_3unreceived_chunks() -> Result<(), Error> {
+    let mut a = AssociationInternal::default();
+
+    a.use_forward_tsn = true;
+    let prev_tsn = a.peer_last_tsn;
+
+    let fwdtsn = ChunkForwardTsn {
+        new_cumulative_tsn: a.peer_last_tsn + 3,
+        streams: vec![ChunkForwardTsnStream {
+            identifier: 0,
+            sequence: 0,
+        }],
+    };
+
+    let p = a.handle_forward_tsn(&fwdtsn).await?;
+
+    let delayed_ack_triggered = a.delayed_ack_triggered;
+    let immediate_ack_triggered = a.immediate_ack_triggered;
+    assert_eq!(
+        a.peer_last_tsn,
+        prev_tsn + 3,
+        "peerLastTSN should advance by 3 "
+    );
+    assert!(delayed_ack_triggered, "delayed sack should be triggered");
+    assert!(
+        !immediate_ack_triggered,
+        "immediate sack should NOT be triggered"
+    );
+    assert!(p.is_empty(), "should return empty");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_handle_forward_tsn_forward_1for1_missing() -> Result<(), Error> {
+    let mut a = AssociationInternal::default();
+
+    a.use_forward_tsn = true;
+    let prev_tsn = a.peer_last_tsn;
+
+    // this chunk is blocked by the missing chunk at tsn=1
+    a.payload_queue.push(
+        ChunkPayloadData {
+            beginning_fragment: true,
+            ending_fragment: true,
+            tsn: a.peer_last_tsn + 2,
+            stream_identifier: 0,
+            stream_sequence_number: 1,
+            user_data: Bytes::from_static(b"ABC"),
+            ..Default::default()
+        },
+        a.peer_last_tsn,
+    );
+
+    let fwdtsn = ChunkForwardTsn {
+        new_cumulative_tsn: a.peer_last_tsn + 1,
+        streams: vec![ChunkForwardTsnStream {
+            identifier: 0,
+            sequence: 1,
+        }],
+    };
+
+    let p = a.handle_forward_tsn(&fwdtsn).await?;
+
+    let delayed_ack_triggered = a.delayed_ack_triggered;
+    let immediate_ack_triggered = a.immediate_ack_triggered;
+    assert_eq!(
+        a.peer_last_tsn,
+        prev_tsn + 2,
+        "peerLastTSN should advance by 2"
+    );
+    assert!(delayed_ack_triggered, "delayed sack should be triggered");
+    assert!(
+        !immediate_ack_triggered,
+        "immediate sack should NOT be triggered"
+    );
+    assert!(p.is_empty(), "should return empty");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_handle_forward_tsn_forward_1for2_missing() -> Result<(), Error> {
+    let mut a = AssociationInternal::default();
+
+    a.use_forward_tsn = true;
+    let prev_tsn = a.peer_last_tsn;
+
+    // this chunk is blocked by the missing chunk at tsn=1
+    a.payload_queue.push(
+        ChunkPayloadData {
+            beginning_fragment: true,
+            ending_fragment: true,
+            tsn: a.peer_last_tsn + 3,
+            stream_identifier: 0,
+            stream_sequence_number: 1,
+            user_data: Bytes::from_static(b"ABC"),
+            ..Default::default()
+        },
+        a.peer_last_tsn,
+    );
+
+    let fwdtsn = ChunkForwardTsn {
+        new_cumulative_tsn: a.peer_last_tsn + 1,
+        streams: vec![ChunkForwardTsnStream {
+            identifier: 0,
+            sequence: 1,
+        }],
+    };
+
+    let p = a.handle_forward_tsn(&fwdtsn).await?;
+
+    let immediate_ack_triggered = a.immediate_ack_triggered;
+    assert_eq!(
+        a.peer_last_tsn,
+        prev_tsn + 1,
+        "peerLastTSN should advance by 1"
+    );
+    assert!(
+        immediate_ack_triggered,
+        "immediate sack should be triggered"
+    );
+    assert!(p.is_empty(), "should return empty");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_handle_forward_tsn_dup_forward_tsn_chunk_should_generate_sack() -> Result<(), Error> {
+    let mut a = AssociationInternal::default();
+
+    a.use_forward_tsn = true;
+    let prev_tsn = a.peer_last_tsn;
+
+    let fwdtsn = ChunkForwardTsn {
+        new_cumulative_tsn: a.peer_last_tsn,
+        streams: vec![ChunkForwardTsnStream {
+            identifier: 0,
+            sequence: 1,
+        }],
+    };
+
+    let p = a.handle_forward_tsn(&fwdtsn).await?;
+
+    let ack_state = a.ack_state;
+    assert_eq!(a.peer_last_tsn, prev_tsn, "peerLastTSN should not advance");
+    assert_eq!(AckState::Immediate, ack_state, "sack should be requested");
+    assert!(p.is_empty(), "should return empty");
+
+    Ok(())
+}
