@@ -47,7 +47,7 @@ use std::fmt;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
-use tokio::sync::{broadcast, mpsc, Mutex, Notify};
+use tokio::sync::{broadcast, mpsc, Mutex};
 use util::Conn;
 
 pub(crate) const RECEIVE_MTU: usize = 8192;
@@ -216,7 +216,7 @@ pub struct Association {
     max_message_size: Arc<AtomicU32>,
     inflight_queue_length: Arc<AtomicUsize>,
     will_send_shutdown: Arc<AtomicBool>,
-    awake_write_loop_ch: Arc<Notify>,
+    awake_write_loop_ch: Arc<mpsc::Sender<()>>,
     close_loop_ch_rx: broadcast::Receiver<()>,
     accept_ch_rx: mpsc::Receiver<Arc<Stream>>,
 
@@ -255,7 +255,7 @@ impl Association {
         if self.inflight_queue_length.load(Ordering::SeqCst) == 0 {
             // No more outstanding, send shutdown.
             self.will_send_shutdown.store(true, Ordering::SeqCst);
-            self.awake_write_loop_ch.notify_one();
+            let _ = self.awake_write_loop_ch.try_send(());
             self.set_state(AssociationState::ShutdownSent);
         }
 
@@ -275,17 +275,20 @@ impl Association {
     async fn start(config: Config, is_client: bool) -> Result<Self, Error> {
         let net_conn = Arc::clone(&config.net_conn);
 
+        let (awake_write_loop_ch_tx, awake_write_loop_ch_rx) = mpsc::channel(1);
         let (accept_ch_tx, accept_ch_rx) = mpsc::channel(ACCEPT_CH_SIZE);
         let (handshake_completed_ch_tx, mut handshake_completed_ch_rx) = mpsc::channel(1);
         let (close_loop_ch_tx, close_loop_ch_rx) = broadcast::channel(1);
         let (close_loop_ch_rx1, close_loop_ch_rx2) =
             (close_loop_ch_tx.subscribe(), close_loop_ch_tx.subscribe());
+        let awake_write_loop_ch = Arc::new(awake_write_loop_ch_tx);
 
         let ai = AssociationInternal::new(
             config,
             close_loop_ch_tx,
             accept_ch_tx,
             handshake_completed_ch_tx,
+            Arc::clone(&awake_write_loop_ch),
         )
         .await?;
 
@@ -296,7 +299,6 @@ impl Association {
         let max_message_size = Arc::clone(&ai.max_message_size);
         let inflight_queue_length = Arc::clone(&ai.inflight_queue_length);
         let will_send_shutdown = Arc::clone(&ai.will_send_shutdown);
-        let awake_write_loop_ch = Arc::clone(&ai.awake_write_loop_ch);
 
         let mut init = ChunkInit {
             initial_tsn: ai.my_next_tsn,
@@ -316,7 +318,6 @@ impl Association {
 
         let net_conn1 = Arc::clone(&net_conn);
         let net_conn2 = Arc::clone(&net_conn);
-        let awake_write_loop_ch2 = Arc::clone(&awake_write_loop_ch);
 
         let association_internal = Arc::new(Mutex::new(ai));
         let association_internal1 = Arc::clone(&association_internal);
@@ -372,7 +373,7 @@ impl Association {
                 net_conn2,
                 close_loop_ch_rx2,
                 association_internal2,
-                awake_write_loop_ch2,
+                awake_write_loop_ch_rx,
             )
             .await;
         });
@@ -473,15 +474,17 @@ impl Association {
         net_conn: Arc<dyn Conn + Send + Sync>,
         mut close_loop_ch: broadcast::Receiver<()>,
         association_internal: Arc<Mutex<AssociationInternal>>,
-        awake_write_loop_ch: Arc<Notify>,
+        mut awake_write_loop_ch: mpsc::Receiver<()>,
     ) {
         log::debug!("[{}] write_loop entered", name);
         let mut done = false;
         while !done {
+            //log::debug!("[{}] gather_outbound begin", name);
             let (raw_packets, mut ok) = {
                 let mut ai = association_internal.lock().await;
                 ai.gather_outbound().await
             };
+            //log::debug!("[{}] gather_outbound done with {}", name, raw_packets.len());
 
             for raw in &raw_packets {
                 log::debug!("[{}] sending {} bytes", name, raw.len());
@@ -492,18 +495,21 @@ impl Association {
                 } else {
                     bytes_sent.fetch_add(raw.len(), Ordering::SeqCst);
                 }
+                //log::debug!("[{}] sending {} bytes done", name, raw.len());
             }
 
             if !ok {
                 break;
             }
 
+            //log::debug!("[{}] wait awake_write_loop_ch", name);
             tokio::select! {
-                _ = awake_write_loop_ch.notified() =>{}
+                _ = awake_write_loop_ch.recv() =>{}
                 _ = close_loop_ch.recv() => {
                     done = true;
                 }
             };
+            //log::debug!("[{}] wait awake_write_loop_ch done", name);
         }
 
         {

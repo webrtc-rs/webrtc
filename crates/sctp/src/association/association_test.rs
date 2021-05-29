@@ -3,9 +3,6 @@ use super::*;
 use std::time::Duration;
 use util::conn::conn_bridge::*;
 
-const SI: u16 = 1;
-const MSG: Bytes = Bytes::from_static(b"ABC");
-
 async fn create_new_association_pair(
     br: &Arc<Bridge>,
     ca: Arc<dyn Conn + Send + Sync>,
@@ -230,6 +227,9 @@ async fn test_assoc_reliable_simple() -> Result<(), Error> {
     .filter(None, log::LevelFilter::Trace)
     .init();*/
 
+    const SI: u16 = 1;
+    const MSG: Bytes = Bytes::from_static(b"ABC");
+
     let (br, ca, cb) = Bridge::new(0, None, None);
 
     let (a0, mut a1) =
@@ -266,6 +266,101 @@ async fn test_assoc_reliable_simple() -> Result<(), Error> {
     {
         let a = a0.association_internal.lock().await;
         assert_eq!(0, a.buffered_amount(), "incorrect bufferedAmount");
+    }
+
+    close_association_pair(&br, a0, a1).await;
+
+    Ok(())
+}
+
+//use std::io::Write;
+
+#[tokio::test]
+async fn test_assoc_reliable_ordered_reordered() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
+
+    const SI: u16 = 2;
+    let mut sbuf = vec![0u8; 1000];
+    for i in 0..sbuf.len() {
+        sbuf[i] = (i & 0xff) as u8;
+    }
+    let mut sbufl = vec![0u8; 2000];
+    for i in 0..sbufl.len() {
+        sbufl[i] = (i & 0xff) as u8;
+    }
+
+    let (br, ca, cb) = Bridge::new(0, None, None);
+
+    let (a0, mut a1) =
+        create_new_association_pair(&br, Arc::new(ca), Arc::new(cb), AckMode::NoDelay, 0).await?;
+
+    let (s0, s1) = establish_session_pair(&br, &a0, &mut a1, SI).await?;
+
+    {
+        let a = a0.association_internal.lock().await;
+        assert_eq!(0, a.buffered_amount(), "incorrect bufferedAmount");
+    }
+
+    sbuf[0..4].copy_from_slice(&0u32.to_be_bytes());
+    let n = s0
+        .write_sctp(
+            &Bytes::from(sbuf.clone()),
+            PayloadProtocolIdentifier::Binary,
+        )
+        .await?;
+    assert_eq!(sbuf.len(), n, "unexpected length of received data");
+
+    sbuf[0..4].copy_from_slice(&1u32.to_be_bytes());
+    let n = s0
+        .write_sctp(
+            &Bytes::from(sbuf.clone()),
+            PayloadProtocolIdentifier::Binary,
+        )
+        .await?;
+    assert_eq!(sbuf.len(), n, "unexpected length of received data");
+
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    br.reorder(0).await;
+    br.process().await;
+
+    let mut buf = vec![0u8; 2000];
+
+    let (n, ppi) = s1.read_sctp(&mut buf).await?;
+    assert_eq!(n, sbuf.len(), "unexpected length of received data");
+    assert_eq!(ppi, PayloadProtocolIdentifier::Binary, "unexpected ppi");
+    assert_eq!(
+        u32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]),
+        0,
+        "unexpected received data"
+    );
+
+    let (n, ppi) = s1.read_sctp(&mut buf).await?;
+    assert_eq!(n, sbuf.len(), "unexpected length of received data");
+    assert_eq!(ppi, PayloadProtocolIdentifier::Binary, "unexpected ppi");
+    assert_eq!(
+        u32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]),
+        1,
+        "unexpected received data"
+    );
+
+    br.process().await;
+
+    {
+        let q = s0.reassembly_queue.lock().await;
+        assert!(!q.is_readable(), "should no longer be readable");
     }
 
     close_association_pair(&br, a0, a1).await;

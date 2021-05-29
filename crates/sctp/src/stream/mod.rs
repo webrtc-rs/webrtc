@@ -11,7 +11,7 @@ use bytes::Bytes;
 use std::fmt;
 use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, AtomicUsize, Ordering};
 use std::sync::Arc;
-use tokio::sync::{Mutex, Notify};
+use tokio::sync::{mpsc, Mutex, Notify};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(C)]
@@ -61,7 +61,7 @@ pub struct Stream {
     pub(crate) max_payload_size: u32,
     pub(crate) max_message_size: Arc<AtomicU32>, // clone from association
     pub(crate) state: Arc<AtomicU8>,             // clone from association
-    pub(crate) awake_write_loop_ch: Arc<Notify>,
+    pub(crate) awake_write_loop_ch: Option<Arc<mpsc::Sender<()>>>,
     pub(crate) pending_queue: Arc<PendingQueue>,
 
     pub(crate) stream_identifier: u16,
@@ -108,7 +108,7 @@ impl Stream {
         max_payload_size: u32,
         max_message_size: Arc<AtomicU32>,
         state: Arc<AtomicU8>,
-        awake_write_loop_ch: Arc<Notify>,
+        awake_write_loop_ch: Option<Arc<mpsc::Sender<()>>>,
         pending_queue: Arc<PendingQueue>,
     ) -> Self {
         Stream {
@@ -401,7 +401,7 @@ impl Stream {
             from_amount - n_bytes_released as usize
         };
 
-        log::trace!("[{}] buffered_amount = {}", self.name, new_amount);
+        log::trace!("[{}] bufferedAmount = {}", self.name, new_amount);
 
         let on_buffered_amount_low = self.on_buffered_amount_low.lock().await;
         if let Some(f) = &*on_buffered_amount_low {
@@ -424,7 +424,10 @@ impl Stream {
     }
 
     fn awake_write_loop(&self) {
-        self.awake_write_loop_ch.notify_one();
+        //log::debug!("[{}] awake_write_loop_ch.notify_one", self.name);
+        if let Some(awake_write_loop_ch) = &self.awake_write_loop_ch {
+            let _ = awake_write_loop_ch.try_send(());
+        }
     }
 
     async fn send_payload_data(&self, chunks: Vec<ChunkPayloadData>) -> Result<(), Error> {

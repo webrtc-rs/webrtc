@@ -9,7 +9,7 @@ pub struct AssociationInternal {
     pub(crate) max_message_size: Arc<AtomicU32>,
     pub(crate) inflight_queue_length: Arc<AtomicUsize>,
     pub(crate) will_send_shutdown: Arc<AtomicBool>,
-    pub(crate) awake_write_loop_ch: Arc<Notify>,
+    awake_write_loop_ch: Option<Arc<mpsc::Sender<()>>>,
 
     peer_verification_tag: u32,
     pub(crate) my_verification_tag: u32,
@@ -91,6 +91,7 @@ impl AssociationInternal {
         close_loop_ch_tx: broadcast::Sender<()>,
         accept_ch_tx: mpsc::Sender<Arc<Stream>>,
         handshake_completed_ch_tx: mpsc::Sender<Option<Error>>,
+        awake_write_loop_ch: Arc<mpsc::Sender<()>>,
     ) -> Result<Self, Error> {
         let max_receive_buffer_size = if config.max_receive_buffer_size == 0 {
             INITIAL_RECV_BUF_SIZE
@@ -106,7 +107,10 @@ impl AssociationInternal {
 
         let inflight_queue_length = Arc::new(AtomicUsize::new(0));
 
-        let tsn = 1; //TODO: random::<u32>(); //FIXME: fix 0 crash issue
+        let mut tsn = 1; //TODO: random::<u32>();
+        if tsn == 0 {
+            tsn += 1;
+        }
         let mut a = AssociationInternal {
             name: config.name,
             max_receive_buffer_size,
@@ -137,7 +141,7 @@ impl AssociationInternal {
             advanced_peer_tsn_ack_point: tsn - 1,
             silent_error: Some(Error::ErrSilentlyDiscard),
             stats: Arc::new(AssociationStats::default()),
-            awake_write_loop_ch: Arc::new(Notify::new()),
+            awake_write_loop_ch: Some(awake_write_loop_ch),
             ..Default::default()
         };
 
@@ -275,7 +279,10 @@ impl AssociationInternal {
     }
 
     fn awake_write_loop(&self) {
-        self.awake_write_loop_ch.notify_one();
+        //log::debug!("[{}] awake_write_loop_ch.notify_one", self.name);
+        if let Some(awake_write_loop_ch) = &self.awake_write_loop_ch {
+            let _ = awake_write_loop_ch.try_send(());
+        }
     }
 
     /// unregister_stream un-registers a stream from the association
@@ -1029,7 +1036,7 @@ impl AssociationInternal {
             self.max_payload_size,
             Arc::clone(&self.max_message_size),
             Arc::clone(&self.state),
-            Arc::clone(&self.awake_write_loop_ch),
+            self.awake_write_loop_ch.clone(),
             Arc::clone(&self.pending_queue),
         ));
 
