@@ -426,6 +426,7 @@ impl AssociationInternal {
                 let tsn = self.cumulative_tsn_ack_point + i + 1;
                 if let Some(c) = self.inflight_queue.get_mut(tsn) {
                     if c.acked || c.abandoned() || c.nsent > 1 || c.miss_indicator < 3 {
+                        i += 1;
                         continue;
                     }
 
@@ -494,6 +495,11 @@ impl AssociationInternal {
     }
 
     fn gather_outbound_forward_tsn_packets(&mut self, mut raw_packets: Vec<Bytes>) -> Vec<Bytes> {
+        /*log::debug!(
+            "[{}] gatherOutboundForwardTSNPackets {}",
+            self.name,
+            self.will_send_forward_tsn
+        );*/
         if self.will_send_forward_tsn {
             self.will_send_forward_tsn = false;
             if sna32gt(
@@ -1457,6 +1463,13 @@ impl AssociationInternal {
                 self.cumulative_tsn_ack_point,
             ) {
                 self.will_send_forward_tsn = true;
+                log::debug!(
+                    "[{}] handleSack {}: sna32GT({}, {})",
+                    self.name,
+                    self.will_send_forward_tsn,
+                    self.advanced_peer_tsn_ack_point,
+                    self.cumulative_tsn_ack_point
+                );
             }
             self.awake_write_loop();
         }
@@ -2013,6 +2026,7 @@ impl AssociationInternal {
             let tsn = self.cumulative_tsn_ack_point + i + 1;
             if let Some(c) = self.inflight_queue.get_mut(tsn) {
                 if !c.retransmit {
+                    i += 1;
                     continue;
                 }
 
@@ -2262,6 +2276,13 @@ impl RtxTimerObserver for AssociationInternal {
                         self.cumulative_tsn_ack_point,
                     ) {
                         self.will_send_forward_tsn = true;
+                        log::debug!(
+                            "[{}] on_retransmission_timeout {}: sna32GT({}, {})",
+                            self.name,
+                            self.will_send_forward_tsn,
+                            self.advanced_peer_tsn_ack_point,
+                            self.cumulative_tsn_ack_point
+                        );
                     }
                 }
 
