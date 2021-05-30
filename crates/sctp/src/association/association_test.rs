@@ -1650,3 +1650,120 @@ async fn test_assoc_congestion_control_slow_reader() -> Result<(), Error> {
 
     Ok(())
 }
+
+/*FIXME
+use std::io::Write;
+
+#[tokio::test]
+async fn test_assoc_delayed_ack() -> Result<(), Error> {
+    env_logger::Builder::new()
+        .format(|buf, record| {
+            writeln!(
+                buf,
+                "{}:{} [{}] {} - {}",
+                record.file().unwrap_or("unknown"),
+                record.line().unwrap_or(0),
+                record.level(),
+                chrono::Local::now().format("%H:%M:%S.%6f"),
+                record.args()
+            )
+        })
+        .filter(None, log::LevelFilter::Trace)
+        .init();
+
+    const SI: u16 = 6;
+    let mut sbuf = vec![0u8; 1000];
+    let mut rbuf = vec![0u8; 1500];
+    for i in 0..sbuf.len() {
+        sbuf[i] = (i & 0xff) as u8;
+    }
+
+    let (br, ca, cb) = Bridge::new(0, None, None);
+
+    let (a0, mut a1) =
+        create_new_association_pair(&br, Arc::new(ca), Arc::new(cb), AckMode::AlwaysDelay, 0)
+            .await?;
+
+    let (s0, s1) = establish_session_pair(&br, &a0, &mut a1, SI).await?;
+
+    {
+        let a = a0.association_internal.lock().await;
+        let b = a1.association_internal.lock().await;
+        a.stats.reset();
+        b.stats.reset();
+    }
+
+    let n = s0
+        .write_sctp(
+            &Bytes::from(sbuf.clone()),
+            PayloadProtocolIdentifier::Binary,
+        )
+        .await?;
+    assert_eq!(sbuf.len(), n, "unexpected length of received data");
+
+    // Repeat calling br.Tick() until the buffered amount becomes 0
+    let since = SystemTime::now();
+    let mut n_packets_received = 0;
+    while s0.buffered_amount() > 0 {
+        loop {
+            let n = br.tick().await;
+            if n == 0 {
+                break;
+            }
+        }
+
+        loop {
+            let readable = {
+                let q = s1.reassembly_queue.lock().await;
+                q.is_readable()
+            };
+            if !readable {
+                break;
+            }
+            let (n, ppi) = s1.read_sctp(&mut rbuf).await?;
+            assert_eq!(sbuf.len(), n, "unexpected length of received data");
+            assert_eq!(ppi, PayloadProtocolIdentifier::Binary, "unexpected ppi");
+
+            n_packets_received += 1;
+        }
+    }
+    let delay = (SystemTime::now().duration_since(since).unwrap().as_millis() as f64) / 1000.0;
+    log::debug!("received in {} seconds", delay);
+    assert!(delay >= 0.2, "should be >= 200msec");
+
+    br.process().await;
+
+    assert_eq!(n_packets_received, 1, "unexpected num of packets received");
+    assert_eq!(
+        0,
+        s1.get_num_bytes_in_reassembly_queue().await,
+        "reassembly queue should be empty"
+    );
+
+    {
+        let a = a0.association_internal.lock().await;
+        let b = a1.association_internal.lock().await;
+
+        log::debug!("nDATAs      : {}", b.stats.get_num_datas());
+        log::debug!("nSACKs      : {}", a.stats.get_num_sacks());
+        log::debug!("nAckTimeouts: {}", b.stats.get_num_ack_timeouts());
+
+        assert_eq!(1, b.stats.get_num_datas(), "DATA chunk count mismatch");
+        assert_eq!(
+            a.stats.get_num_sacks(),
+            b.stats.get_num_datas(),
+            "sack count should be equal to the number of data chunks"
+        );
+        assert_eq!(
+            1,
+            b.stats.get_num_ack_timeouts(),
+            "ackTimeout count mismatch"
+        );
+        assert_eq!(0, a.stats.get_num_t3timeouts(), "should be no retransmit");
+    }
+
+    close_association_pair(&br, a0, a1).await;
+
+    Ok(())
+}
+*/
