@@ -419,3 +419,94 @@ async fn test_assoc_handle_init() -> Result<(), Error> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_assoc_max_message_size_default() -> Result<(), Error> {
+    let mut a = create_association_internal(Config {
+        net_conn: Arc::new(DumbConn {}),
+        max_receive_buffer_size: 0,
+        max_message_size: 0,
+        name: "client".to_owned(),
+    });
+    assert_eq!(
+        65536,
+        a.max_message_size.load(Ordering::SeqCst),
+        "should match"
+    );
+
+    let stream = a.create_stream(1, false);
+    assert!(stream.is_some(), "should succeed");
+
+    if let Some(s) = stream {
+        let p = Bytes::from(vec![0u8; 65537]);
+        let ppi = PayloadProtocolIdentifier::from(s.default_payload_type.load(Ordering::SeqCst));
+
+        if let Err(err) = s.write_sctp(&p.slice(..65536), ppi).await {
+            assert_ne!(
+                err,
+                Error::ErrOutboundPacketTooLarge,
+                "should be not Error::ErrOutboundPacketTooLarge"
+            );
+        } else {
+            assert!(false, "should be error");
+        }
+
+        if let Err(err) = s.write_sctp(&p.slice(..65537), ppi).await {
+            assert_eq!(
+                err,
+                Error::ErrOutboundPacketTooLarge,
+                "should be Error::ErrOutboundPacketTooLarge"
+            );
+        } else {
+            assert!(false, "should be error");
+        }
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_assoc_max_message_size_explicit() -> Result<(), Error> {
+    let mut a = create_association_internal(Config {
+        net_conn: Arc::new(DumbConn {}),
+        max_receive_buffer_size: 0,
+        max_message_size: 30000,
+        name: "client".to_owned(),
+    });
+
+    assert_eq!(
+        30000,
+        a.max_message_size.load(Ordering::SeqCst),
+        "should match"
+    );
+
+    let stream = a.create_stream(1, false);
+    assert!(stream.is_some(), "should succeed");
+
+    if let Some(s) = stream {
+        let p = Bytes::from(vec![0u8; 30001]);
+        let ppi = PayloadProtocolIdentifier::from(s.default_payload_type.load(Ordering::SeqCst));
+
+        if let Err(err) = s.write_sctp(&p.slice(..30000), ppi).await {
+            assert_ne!(
+                err,
+                Error::ErrOutboundPacketTooLarge,
+                "should be not Error::ErrOutboundPacketTooLarge"
+            );
+        } else {
+            assert!(false, "should be error");
+        }
+
+        if let Err(err) = s.write_sctp(&p.slice(..30001), ppi).await {
+            assert_eq!(
+                err,
+                Error::ErrOutboundPacketTooLarge,
+                "should be Error::ErrOutboundPacketTooLarge"
+            );
+        } else {
+            assert!(false, "should be error");
+        }
+    }
+
+    Ok(())
+}
