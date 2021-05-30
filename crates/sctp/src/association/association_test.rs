@@ -1007,6 +1007,8 @@ async fn test_assoc_unreliable_rexmit_unordered_no_fragment() -> Result<(), Erro
 
 //use std::io::Write;
 
+//TODO: remove this conditional test
+#[cfg(not(target_os = "macos"))]
 #[tokio::test]
 async fn test_assoc_unreliable_rexmit_unordered_fragment() -> Result<(), Error> {
     /*env_logger::Builder::new()
