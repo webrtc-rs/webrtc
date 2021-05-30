@@ -293,6 +293,7 @@ impl AssociationInternal {
     fn unregister_stream(&mut self, stream_identifier: u16) {
         let s = self.streams.remove(&stream_identifier);
         if let Some(s) = s {
+            s.closed.store(true, Ordering::SeqCst);
             s.read_notifier.notify_waiters();
         }
     }
@@ -375,11 +376,11 @@ impl AssociationInternal {
                 let rsn = self.generate_next_rsn();
                 let tsn = self.my_next_tsn - 1;
                 log::debug!(
-                    "[{}] sending RECONFIG: rsn={} tsn={} streams={}",
+                    "[{}] sending RECONFIG: rsn={} tsn={} streams={:?}",
                     self.name,
                     rsn,
                     self.my_next_tsn - 1,
-                    sis_to_reset.len()
+                    sis_to_reset
                 );
 
                 let c = ChunkReconfig {
