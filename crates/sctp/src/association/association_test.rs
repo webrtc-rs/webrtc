@@ -1,4 +1,5 @@
 use super::*;
+use crate::stream::*;
 
 use std::time::Duration;
 use util::conn::conn_bridge::*;
@@ -1282,3 +1283,370 @@ async fn test_assoc_unreliable_rexmit_timed_unordered() -> Result<(), Error> {
 //TODO: TestAssocT1InitTimer
 //TODO: TestAssocT1CookieTimer
 //TODO: TestAssocT3RtxTimer
+
+//use std::io::Write;
+
+// 1) Send 4 packets. drop the first one.
+// 2) Last 3 packet will be received, which triggers fast-retransmission
+// 3) The first one is retransmitted, which makes s1 readable
+// Above should be done before RTO occurs (fast recovery)
+#[tokio::test]
+async fn test_assoc_congestion_control_fast_retransmission() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
+
+    const SI: u16 = 6;
+    let mut sbuf = vec![0u8; 1000];
+    for i in 0..sbuf.len() {
+        sbuf[i] = (i & 0xff) as u8;
+    }
+
+    let (br, ca, cb) = Bridge::new(0, None, None);
+
+    let (a0, mut a1) =
+        create_new_association_pair(&br, Arc::new(ca), Arc::new(cb), AckMode::Normal, 0).await?;
+
+    let (s0, s1) = establish_session_pair(&br, &a0, &mut a1, SI).await?;
+
+    br.drop_next_nwrites(0, 1).await; // drop the first packet (second one should be sacked)
+
+    for i in 0..4u32 {
+        sbuf[0..4].copy_from_slice(&i.to_be_bytes());
+        let n = s0
+            .write_sctp(
+                &Bytes::from(sbuf.clone()),
+                PayloadProtocolIdentifier::Binary,
+            )
+            .await?;
+        assert_eq!(sbuf.len(), n, "unexpected length of received data");
+    }
+
+    // process packets for 500 msec, assuming that the fast retrans/recover
+    // should complete within 500 msec.
+    for _ in 0..50 {
+        br.tick().await;
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+
+    let mut buf = vec![0u8; 3000];
+
+    // Try to read all 4 packets
+    for i in 0..4 {
+        {
+            let q = s1.reassembly_queue.lock().await;
+            assert!(q.is_readable(), "should be readable");
+        }
+
+        let (n, ppi) = s1.read_sctp(&mut buf).await?;
+        assert_eq!(n, sbuf.len(), "unexpected length of received data");
+        assert_eq!(ppi, PayloadProtocolIdentifier::Binary, "unexpected ppi");
+        assert_eq!(
+            u32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]),
+            i,
+            "unexpected received data"
+        );
+    }
+
+    //br.process().await;
+
+    {
+        let a = a0.association_internal.lock().await;
+        let b = a1.association_internal.lock().await;
+        assert!(!a.in_fast_recovery, "should not be in fast-recovery");
+
+        log::debug!("nDATAs      : {}", b.stats.get_num_datas());
+        log::debug!("nSACKs      : {}", a.stats.get_num_sacks());
+        log::debug!("nAckTimeouts: {}", b.stats.get_num_ack_timeouts());
+        log::debug!("nFastRetrans: {}", a.stats.get_num_fast_retrans());
+
+        assert_eq!(1, a.stats.get_num_fast_retrans(), "should be 1");
+    }
+
+    close_association_pair(&br, a0, a1).await;
+
+    Ok(())
+}
+
+//use std::io::Write;
+
+#[tokio::test]
+async fn test_assoc_congestion_control_congestion_avoidance() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
+
+    const MAX_RECEIVE_BUFFER_SIZE: u32 = 64 * 1024;
+    const SI: u16 = 6;
+    const N_PACKETS_TO_SEND: u32 = 2000;
+
+    let mut sbuf = vec![0u8; 1000];
+    for i in 0..sbuf.len() {
+        sbuf[i] = (i & 0xff) as u8;
+    }
+
+    let (br, ca, cb) = Bridge::new(0, None, None);
+
+    let (a0, mut a1) = create_new_association_pair(
+        &br,
+        Arc::new(ca),
+        Arc::new(cb),
+        AckMode::Normal,
+        MAX_RECEIVE_BUFFER_SIZE,
+    )
+    .await?;
+
+    let (s0, s1) = establish_session_pair(&br, &a0, &mut a1, SI).await?;
+
+    {
+        let a = a0.association_internal.lock().await;
+        let b = a1.association_internal.lock().await;
+        a.stats.reset();
+        b.stats.reset();
+    }
+
+    for i in 0..N_PACKETS_TO_SEND {
+        sbuf[0..4].copy_from_slice(&i.to_be_bytes());
+        let n = s0
+            .write_sctp(
+                &Bytes::from(sbuf.clone()),
+                PayloadProtocolIdentifier::Binary,
+            )
+            .await?;
+        assert_eq!(sbuf.len(), n, "unexpected length of received data");
+    }
+
+    let mut rbuf = vec![0u8; 3000];
+
+    // Repeat calling br.Tick() until the buffered amount becomes 0
+    let mut n_packets_received = 0u32;
+    while s0.buffered_amount() > 0 && n_packets_received < N_PACKETS_TO_SEND {
+        loop {
+            let n = br.tick().await;
+            if n == 0 {
+                break;
+            }
+        }
+
+        loop {
+            let readable = {
+                let q = s1.reassembly_queue.lock().await;
+                q.is_readable()
+            };
+            if !readable {
+                break;
+            }
+            let (n, ppi) = s1.read_sctp(&mut rbuf).await?;
+            assert_eq!(sbuf.len(), n, "unexpected length of received data");
+            assert_eq!(
+                n_packets_received,
+                u32::from_be_bytes([rbuf[0], rbuf[1], rbuf[2], rbuf[3]]),
+                "unexpected length of received data"
+            );
+            assert_eq!(ppi, PayloadProtocolIdentifier::Binary, "unexpected ppi");
+
+            n_packets_received += 1;
+        }
+    }
+
+    br.process().await;
+
+    assert_eq!(
+        n_packets_received, N_PACKETS_TO_SEND,
+        "unexpected num of packets received"
+    );
+
+    {
+        let a = a0.association_internal.lock().await;
+        let b = a1.association_internal.lock().await;
+
+        assert!(!a.in_fast_recovery, "should not be in fast-recovery");
+        assert!(
+            a.cwnd > a.ssthresh,
+            "should be in congestion avoidance mode"
+        );
+        assert!(
+            a.ssthresh >= MAX_RECEIVE_BUFFER_SIZE,
+            "{} should not be less than the initial size of 128KB {}",
+            a.ssthresh,
+            MAX_RECEIVE_BUFFER_SIZE
+        );
+
+        assert_eq!(
+            0,
+            s1.get_num_bytes_in_reassembly_queue().await,
+            "reassembly queue should be empty"
+        );
+
+        log::debug!("nDATAs      : {}", b.stats.get_num_datas());
+        log::debug!("nSACKs      : {}", a.stats.get_num_sacks());
+        log::debug!("nT3Timeouts: {}", a.stats.get_num_t3timeouts());
+
+        assert_eq!(
+            N_PACKETS_TO_SEND as u64,
+            b.stats.get_num_datas(),
+            "packet count mismatch"
+        );
+        assert!(
+            a.stats.get_num_sacks() <= N_PACKETS_TO_SEND as u64 / 2,
+            "too many sacks"
+        );
+        assert_eq!(0, a.stats.get_num_t3timeouts(), "should be no retransmit");
+    }
+
+    close_association_pair(&br, a0, a1).await;
+
+    Ok(())
+}
+
+//use std::io::Write;
+
+#[tokio::test]
+async fn test_assoc_congestion_control_slow_reader() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
+
+    const MAX_RECEIVE_BUFFER_SIZE: u32 = 64 * 1024;
+    const SI: u16 = 6;
+    const N_PACKETS_TO_SEND: u32 = 130;
+
+    let mut sbuf = vec![0u8; 1000];
+    for i in 0..sbuf.len() {
+        sbuf[i] = (i & 0xff) as u8;
+    }
+
+    let (br, ca, cb) = Bridge::new(0, None, None);
+
+    let (a0, mut a1) = create_new_association_pair(
+        &br,
+        Arc::new(ca),
+        Arc::new(cb),
+        AckMode::Normal,
+        MAX_RECEIVE_BUFFER_SIZE,
+    )
+    .await?;
+
+    let (s0, s1) = establish_session_pair(&br, &a0, &mut a1, SI).await?;
+
+    for i in 0..N_PACKETS_TO_SEND {
+        sbuf[0..4].copy_from_slice(&i.to_be_bytes());
+        let n = s0
+            .write_sctp(
+                &Bytes::from(sbuf.clone()),
+                PayloadProtocolIdentifier::Binary,
+            )
+            .await?;
+        assert_eq!(sbuf.len(), n, "unexpected length of received data");
+    }
+
+    let mut rbuf = vec![0u8; 3000];
+
+    // 1. First forward packets to receiver until rwnd becomes 0
+    // 2. Wait until the sender's cwnd becomes 1*MTU (RTO occurred)
+    // 3. Stat reading a1's data
+    let mut n_packets_received = 0u32;
+    let mut has_rtoed = false;
+    while s0.buffered_amount() > 0 && n_packets_received < N_PACKETS_TO_SEND {
+        loop {
+            let n = br.tick().await;
+            if n == 0 {
+                break;
+            }
+        }
+
+        if !has_rtoed {
+            let a = a0.association_internal.lock().await;
+            let b = a1.association_internal.lock().await;
+
+            let rwnd = b.get_my_receiver_window_credit().await;
+            let cwnd = a.cwnd;
+            if cwnd > a.mtu || rwnd > 0 {
+                // Do not read until a1.getMyReceiverWindowCredit() becomes zero
+                continue;
+            }
+
+            has_rtoed = true;
+        }
+
+        loop {
+            let readable = {
+                let q = s1.reassembly_queue.lock().await;
+                q.is_readable()
+            };
+            if !readable {
+                break;
+            }
+            let (n, ppi) = s1.read_sctp(&mut rbuf).await?;
+            assert_eq!(sbuf.len(), n, "unexpected length of received data");
+            assert_eq!(
+                n_packets_received,
+                u32::from_be_bytes([rbuf[0], rbuf[1], rbuf[2], rbuf[3]]),
+                "unexpected length of received data"
+            );
+            assert_eq!(ppi, PayloadProtocolIdentifier::Binary, "unexpected ppi");
+
+            n_packets_received += 1;
+        }
+
+        tokio::time::sleep(Duration::from_millis(4)).await;
+    }
+
+    br.process().await;
+
+    assert_eq!(
+        n_packets_received, N_PACKETS_TO_SEND,
+        "unexpected num of packets received"
+    );
+    assert_eq!(
+        0,
+        s1.get_num_bytes_in_reassembly_queue().await,
+        "reassembly queue should be empty"
+    );
+
+    {
+        let a = a0.association_internal.lock().await;
+        let b = a1.association_internal.lock().await;
+
+        log::debug!("nDATAs      : {}", b.stats.get_num_datas());
+        log::debug!("nSACKs      : {}", a.stats.get_num_sacks());
+        log::debug!("nAckTimeouts: {}", b.stats.get_num_ack_timeouts());
+    }
+
+    close_association_pair(&br, a0, a1).await;
+
+    Ok(())
+}

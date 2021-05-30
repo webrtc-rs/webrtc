@@ -42,7 +42,7 @@ pub struct AssociationInternal {
     inflight_queue: PayloadQueue,
     pending_queue: Arc<PendingQueue>,
     control_queue: ControlQueue,
-    mtu: u32,
+    pub(crate) mtu: u32,
     max_payload_size: u32, // max DATA chunk payload size
     cumulative_tsn_ack_point: u32,
     advanced_peer_tsn_ack_point: u32,
@@ -50,11 +50,11 @@ pub struct AssociationInternal {
 
     // Congestion control parameters
     pub(crate) max_receive_buffer_size: u32,
-    cwnd: u32,     // my congestion window size
-    rwnd: u32,     // calculated peer's receiver windows size
-    ssthresh: u32, // slow start threshold
+    pub(crate) cwnd: u32,     // my congestion window size
+    rwnd: u32,                // calculated peer's receiver windows size
+    pub(crate) ssthresh: u32, // slow start threshold
     partial_bytes_acked: u32,
-    in_fast_recovery: bool,
+    pub(crate) in_fast_recovery: bool,
     fast_recover_exit_point: u32,
 
     // RTX & Ack timer
@@ -83,7 +83,7 @@ pub struct AssociationInternal {
     delayed_ack_triggered: bool,
     immediate_ack_triggered: bool,
 
-    stats: Arc<AssociationStats>,
+    pub(crate) stats: Arc<AssociationStats>,
     ack_state: AckState,
     pub(crate) ack_mode: AckMode, // for testing
 }
@@ -451,6 +451,8 @@ impl AssociationInternal {
                     fast_retrans_size += data_chunk_size;
                     self.stats.inc_fast_retrans();
                     c.nsent += 1;
+                } else {
+                    break; // end of pending data
                 }
 
                 if let Some(c) = self.inflight_queue.get(tsn) {
@@ -1007,7 +1009,7 @@ impl AssociationInternal {
         Ok(reply)
     }
 
-    async fn get_my_receiver_window_credit(&self) -> u32 {
+    pub(crate) async fn get_my_receiver_window_credit(&self) -> u32 {
         let mut bytes_queued = 0;
         for s in self.streams.values() {
             bytes_queued += s.get_num_bytes_in_reassembly_queue().await as u32;
@@ -1092,7 +1094,7 @@ impl AssociationInternal {
         // We add 1 because the "currentAckPoint" has already been popped from the inflight queue
         // For the first SACK we take care of this by setting the ackpoint to cumAck - 1
         let mut i = self.cumulative_tsn_ack_point + 1;
-        log::debug!("[{}] i={} d={}", self.name, i, d.cumulative_tsn_ack);
+        //log::debug!("[{}] i={} d={}", self.name, i, d.cumulative_tsn_ack);
         while sna32lte(i, d.cumulative_tsn_ack) {
             if let Some(c) = self.inflight_queue.pop(i) {
                 if !c.acked {

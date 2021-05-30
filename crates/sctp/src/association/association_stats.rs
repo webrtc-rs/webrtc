@@ -49,4 +49,12 @@ impl AssociationStats {
     pub(crate) fn get_num_fast_retrans(&self) -> u64 {
         self.n_fast_retrans.load(Ordering::SeqCst)
     }
+
+    pub(crate) fn reset(&self) {
+        self.n_datas.store(0, Ordering::SeqCst);
+        self.n_sacks.store(0, Ordering::SeqCst);
+        self.n_t3timeouts.store(0, Ordering::SeqCst);
+        self.n_ack_timeouts.store(0, Ordering::SeqCst);
+        self.n_fast_retrans.store(0, Ordering::SeqCst);
+    }
 }
