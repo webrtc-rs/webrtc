@@ -246,3 +246,42 @@ async fn test_handle_forward_tsn_dup_forward_tsn_chunk_should_generate_sack() ->
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_assoc_create_new_stream() -> Result<(), Error> {
+    let (accept_ch_tx, _accept_ch_rx) = mpsc::channel(ACCEPT_CH_SIZE);
+    let mut a = AssociationInternal {
+        accept_ch_tx: Some(accept_ch_tx),
+        ..Default::default()
+    };
+
+    for i in 0..ACCEPT_CH_SIZE {
+        let s = a.create_stream(i as u16, true);
+        if let Some(s) = s {
+            let result = a.streams.get(&s.stream_identifier);
+            assert!(result.is_some(), "should be in a.streams map");
+        } else {
+            assert!(false, "{} should success", i);
+        }
+    }
+
+    let new_si = ACCEPT_CH_SIZE as u16;
+    let s = a.create_stream(new_si, true);
+    assert!(s.is_none(), "should be none");
+    let result = a.streams.get(&new_si);
+    assert!(result.is_none(), "should NOT be in a.streams map");
+
+    let to_be_ignored = ChunkPayloadData {
+        beginning_fragment: true,
+        ending_fragment: true,
+        tsn: a.peer_last_tsn + 1,
+        stream_identifier: new_si,
+        user_data: Bytes::from_static(b"ABC"),
+        ..Default::default()
+    };
+
+    let p = a.handle_data(&to_be_ignored).await?;
+    assert!(p.is_empty(), "should return empty");
+
+    Ok(())
+}
