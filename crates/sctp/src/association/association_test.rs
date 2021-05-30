@@ -4,7 +4,9 @@ use crate::stream::*;
 use async_trait::async_trait;
 use std::io;
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::time::Duration;
+use tokio::net::UdpSocket;
 use util::conn::conn_bridge::*;
 use util::conn::*;
 
@@ -2185,6 +2187,129 @@ async fn test_stats() -> Result<(), Error> {
     } else {
         assert!(false, "must be FakeEchoConn");
     }
+
+    Ok(())
+}
+
+async fn create_assocs() -> Result<(Association, Association), Error> {
+    let addr1 = SocketAddr::from_str("0.0.0.0:0").unwrap();
+    let addr2 = SocketAddr::from_str("0.0.0.0:0").unwrap();
+
+    let udp1 = UdpSocket::bind(addr1).await.unwrap();
+    let udp2 = UdpSocket::bind(addr2).await.unwrap();
+
+    udp1.connect(udp2.local_addr().unwrap()).await.unwrap();
+    udp2.connect(udp1.local_addr().unwrap()).await.unwrap();
+
+    let (a1chan_tx, mut a1chan_rx) = mpsc::channel(1);
+    let (a2chan_tx, mut a2chan_rx) = mpsc::channel(1);
+
+    tokio::spawn(async move {
+        let a = Association::client(Config {
+            net_conn: Arc::new(udp1),
+            max_receive_buffer_size: 0,
+            max_message_size: 0,
+            name: "client".to_owned(),
+        })
+        .await?;
+
+        let _ = a1chan_tx.send(a).await;
+
+        Ok::<(), Error>(())
+    });
+
+    tokio::spawn(async move {
+        let a = Association::server(Config {
+            net_conn: Arc::new(udp2),
+            max_receive_buffer_size: 0,
+            max_message_size: 0,
+            name: "server".to_owned(),
+        })
+        .await?;
+
+        let _ = a2chan_tx.send(a).await;
+
+        Ok::<(), Error>(())
+    });
+
+    let timer1 = tokio::time::sleep(Duration::from_secs(1));
+    tokio::pin!(timer1);
+    let a1 = tokio::select! {
+        _ = timer1.as_mut() =>{
+            assert!(false,"timed out waiting for a1");
+            return Err(Error::ErrOthers("timed out waiting for a1".to_owned()));
+        },
+        a1 = a1chan_rx.recv() => {
+            a1.unwrap()
+        }
+    };
+
+    let timer2 = tokio::time::sleep(Duration::from_secs(1));
+    tokio::pin!(timer2);
+    let a2 = tokio::select! {
+        _ = timer2.as_mut() =>{
+            assert!(false,"timed out waiting for a2");
+            return Err(Error::ErrOthers("timed out waiting for a2".to_owned()));
+        },
+        a2 = a2chan_rx.recv() => {
+            a2.unwrap()
+        }
+    };
+
+    Ok((a1, a2))
+}
+
+use std::io::Write;
+
+#[tokio::test]
+async fn test_association_shutdown() -> Result<(), Error> {
+    env_logger::Builder::new()
+        .format(|buf, record| {
+            writeln!(
+                buf,
+                "{}:{} [{}] {} - {}",
+                record.file().unwrap_or("unknown"),
+                record.line().unwrap_or(0),
+                record.level(),
+                chrono::Local::now().format("%H:%M:%S.%6f"),
+                record.args()
+            )
+        })
+        .filter(None, log::LevelFilter::Trace)
+        .init();
+
+    let (mut a1, mut a2) = create_assocs().await?;
+
+    let s11 = a1.open_stream(1, PayloadProtocolIdentifier::String).await?;
+    let s21 = a2.open_stream(1, PayloadProtocolIdentifier::String).await?;
+
+    let test_data = Bytes::from_static(b"test");
+
+    let n = s11.write(&test_data).await?;
+    assert_eq!(test_data.len(), n);
+
+    let mut buf = vec![0u8; test_data.len()];
+    let n = s21.read(&mut buf).await?;
+    assert_eq!(test_data.len(), n);
+    assert_eq!(&test_data, &buf[0..n]);
+
+    if let Ok(result) = tokio::time::timeout(Duration::from_secs(1), a1.shutdown()).await {
+        assert!(result.is_ok(), "shutdown should be ok");
+    } else {
+        assert!(false, "shutdown timeout");
+    }
+
+    // Wait for close read loop channels to prevent flaky tests.
+    let timer2 = tokio::time::sleep(Duration::from_secs(1));
+    tokio::pin!(timer2);
+    tokio::select! {
+        _ = timer2.as_mut() =>{
+            assert!(false,"timed out waiting for a2 read loop to close");
+        },
+        _ = a2.close_loop_ch_rx.recv() => {
+            log::debug!("recv a2.close_loop_ch_rx");
+        }
+    };
 
     Ok(())
 }
