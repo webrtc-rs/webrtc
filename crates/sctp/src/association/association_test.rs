@@ -1,8 +1,12 @@
 use super::*;
 use crate::stream::*;
 
+use async_trait::async_trait;
+use std::io;
+use std::net::SocketAddr;
 use std::time::Duration;
 use util::conn::conn_bridge::*;
+use util::conn::*;
 
 async fn create_new_association_pair(
     br: &Arc<Bridge>,
@@ -1007,8 +1011,6 @@ async fn test_assoc_unreliable_rexmit_unordered_no_fragment() -> Result<(), Erro
 
 //use std::io::Write;
 
-//TODO: remove this conditional test
-#[cfg(not(target_os = "macos"))]
 #[tokio::test]
 async fn test_assoc_unreliable_rexmit_unordered_fragment() -> Result<(), Error> {
     /*env_logger::Builder::new()
@@ -2064,6 +2066,125 @@ async fn test_assoc_abort() -> Result<(), Error> {
     assert_eq!(AssociationState::Closed, a1.get_state());
 
     close_association_pair(&br, a0, a1).await;
+
+    Ok(())
+}
+
+struct FakeEchoConn {
+    wr_tx: Mutex<mpsc::Sender<Vec<u8>>>,
+    rd_rx: Mutex<mpsc::Receiver<Vec<u8>>>,
+    bytes_sent: AtomicUsize,
+    bytes_received: AtomicUsize,
+}
+
+impl FakeEchoConn {
+    fn new() -> impl Conn + AsAny {
+        let (wr_tx, rd_rx) = mpsc::channel(1);
+        FakeEchoConn {
+            wr_tx: Mutex::new(wr_tx),
+            rd_rx: Mutex::new(rd_rx),
+            bytes_sent: AtomicUsize::new(0),
+            bytes_received: AtomicUsize::new(0),
+        }
+    }
+}
+
+trait AsAny {
+    fn as_any(&self) -> &(dyn std::any::Any + Send + Sync);
+}
+
+impl AsAny for FakeEchoConn {
+    fn as_any(&self) -> &(dyn std::any::Any + Send + Sync) {
+        self
+    }
+}
+
+#[async_trait]
+impl Conn for FakeEchoConn {
+    async fn connect(&self, _addr: SocketAddr) -> io::Result<()> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    }
+
+    async fn recv(&self, b: &mut [u8]) -> io::Result<usize> {
+        let mut rd_rx = self.rd_rx.lock().await;
+        let v = match rd_rx.recv().await {
+            Some(v) => v,
+            None => {
+                return Err(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "Unexpected EOF",
+                ))
+            }
+        };
+        let l = std::cmp::min(v.len(), b.len());
+        b[..l].copy_from_slice(&v[..l]);
+        self.bytes_received.fetch_add(l, Ordering::SeqCst);
+        Ok(l)
+    }
+
+    async fn recv_from(&self, _buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    }
+
+    async fn send(&self, b: &[u8]) -> io::Result<usize> {
+        let wr_tx = self.wr_tx.lock().await;
+        match wr_tx.send(b.to_vec()).await {
+            Ok(_) => {}
+            Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.to_string())),
+        };
+        self.bytes_sent.fetch_add(b.len(), Ordering::SeqCst);
+        Ok(b.len())
+    }
+
+    async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> io::Result<usize> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    }
+
+    async fn local_addr(&self) -> io::Result<SocketAddr> {
+        Err(io::Error::new(
+            io::ErrorKind::AddrNotAvailable,
+            "Addr Not Available",
+        ))
+    }
+}
+
+//use std::io::Write;
+
+#[tokio::test]
+async fn test_stats() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
+
+    let conn = Arc::new(FakeEchoConn::new());
+    let a = Association::client(Config {
+        net_conn: Arc::clone(&conn) as Arc<dyn Conn + Send + Sync>,
+        max_receive_buffer_size: 0,
+        max_message_size: 0,
+        name: "client".to_owned(),
+    })
+    .await?;
+
+    if let Some(conn) = conn.as_any().downcast_ref::<FakeEchoConn>() {
+        assert_eq!(
+            conn.bytes_received.load(Ordering::SeqCst),
+            a.bytes_received()
+        );
+        assert_eq!(conn.bytes_sent.load(Ordering::SeqCst), a.bytes_sent());
+    } else {
+        assert!(false, "must be FakeEchoConn");
+    }
 
     Ok(())
 }

@@ -1,3 +1,5 @@
+//TODO: remove this conditional test
+#[cfg(not(target_os = "macos"))]
 #[cfg(test)]
 mod association_test;
 
