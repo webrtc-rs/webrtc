@@ -2005,3 +2005,63 @@ async fn test_assoc_reset_close_both_ways() -> Result<(), Error> {
 
     Ok(())
 }
+
+//use std::io::Write;
+
+#[tokio::test]
+async fn test_assoc_abort() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
+
+    const SI: u16 = 1;
+    let (br, ca, cb) = Bridge::new(0, None, None);
+
+    let (a0, mut a1) =
+        create_new_association_pair(&br, Arc::new(ca), Arc::new(cb), AckMode::NoDelay, 0).await?;
+
+    let abort = ChunkAbort {
+        error_causes: vec![ErrorCauseProtocolViolation {
+            code: PROTOCOL_VIOLATION,
+            ..Default::default()
+        }],
+    };
+
+    let packet = {
+        let a = a0.association_internal.lock().await;
+        a.create_packet(vec![Box::new(abort)]).marshal()?
+    };
+
+    let (_s0, _s1) = establish_session_pair(&br, &a0, &mut a1, SI).await?;
+
+    // Both associations are established
+    assert_eq!(AssociationState::Established, a0.get_state());
+    assert_eq!(AssociationState::Established, a1.get_state());
+
+    let result = a0.net_conn.send(&packet).await;
+    assert!(result.is_ok(), "must be ok");
+
+    flush_buffers(&br, &a0, &a1).await;
+
+    // There is a little delay before changing the state to closed
+    tokio::time::sleep(Duration::from_millis(10)).await;
+
+    // The receiving association should be closed because it got an ABORT
+    assert_eq!(AssociationState::Established, a0.get_state());
+    assert_eq!(AssociationState::Closed, a1.get_state());
+
+    close_association_pair(&br, a0, a1).await;
+
+    Ok(())
+}

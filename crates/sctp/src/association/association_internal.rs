@@ -1619,7 +1619,7 @@ impl AssociationInternal {
 
     /// create_packet wraps chunks in a packet.
     /// The caller should hold the read lock.
-    fn create_packet(&self, chunks: Vec<Box<dyn Chunk + Send + Sync>>) -> Packet {
+    pub(crate) fn create_packet(&self, chunks: Vec<Box<dyn Chunk + Send + Sync>>) -> Packet {
         Packet {
             verification_tag: self.peer_verification_tag,
             source_port: self.source_port,
