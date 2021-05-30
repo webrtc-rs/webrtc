@@ -291,8 +291,7 @@ impl Association {
             accept_ch_tx,
             handshake_completed_ch_tx,
             Arc::clone(&awake_write_loop_ch),
-        )
-        .await?;
+        );
 
         let bytes_received = Arc::new(AtomicUsize::new(0));
         let bytes_sent = Arc::new(AtomicUsize::new(0));

@@ -1,4 +1,52 @@
 use super::*;
+use std::io;
+use std::net::SocketAddr;
+
+struct DumbConn;
+
+#[async_trait]
+impl Conn for DumbConn {
+    async fn connect(&self, _addr: SocketAddr) -> io::Result<()> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    }
+
+    async fn recv(&self, _b: &mut [u8]) -> io::Result<usize> {
+        Ok(0)
+    }
+
+    async fn recv_from(&self, _buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    }
+
+    async fn send(&self, _b: &[u8]) -> io::Result<usize> {
+        Ok(0)
+    }
+
+    async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> io::Result<usize> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    }
+
+    async fn local_addr(&self) -> io::Result<SocketAddr> {
+        Err(io::Error::new(
+            io::ErrorKind::AddrNotAvailable,
+            "Addr Not Available",
+        ))
+    }
+}
+
+fn create_association_internal(config: Config) -> AssociationInternal {
+    let (close_loop_ch_tx, _close_loop_ch_rx) = broadcast::channel(1);
+    let (accept_ch_tx, _accept_ch_rx) = mpsc::channel(1);
+    let (handshake_completed_ch_tx, _handshake_completed_ch_rx) = mpsc::channel(1);
+    let (awake_write_loop_ch_tx, _awake_write_loop_ch_rx) = mpsc::channel(1);
+    AssociationInternal::new(
+        config,
+        close_loop_ch_tx,
+        accept_ch_tx,
+        handshake_completed_ch_tx,
+        Arc::new(awake_write_loop_ch_tx),
+    )
+}
 
 #[test]
 fn test_create_forward_tsn_forward_one_abandoned() -> Result<(), Error> {
@@ -282,6 +330,92 @@ async fn test_assoc_create_new_stream() -> Result<(), Error> {
 
     let p = a.handle_data(&to_be_ignored).await?;
     assert!(p.is_empty(), "should return empty");
+
+    Ok(())
+}
+
+async fn handle_init_test(name: &str, initial_state: AssociationState, expect_err: bool) {
+    let mut a = create_association_internal(Config {
+        net_conn: Arc::new(DumbConn {}),
+        max_receive_buffer_size: 0,
+        max_message_size: 0,
+        name: "client".to_owned(),
+    });
+    a.set_state(initial_state);
+    let pkt = Packet {
+        source_port: 5001,
+        destination_port: 5002,
+        ..Default::default()
+    };
+    let mut init = ChunkInit {
+        initial_tsn: 1234,
+        num_outbound_streams: 1001,
+        num_inbound_streams: 1002,
+        initiate_tag: 5678,
+        advertised_receiver_window_credit: 512 * 1024,
+        ..Default::default()
+    };
+    init.set_supported_extensions();
+
+    let result = a.handle_init(&pkt, &init).await;
+    if expect_err {
+        assert!(result.is_err(), "{} should fail", name);
+        return;
+    } else {
+        assert!(result.is_ok(), "{} should be ok", name);
+    }
+    assert_eq!(
+        init.initial_tsn - 1,
+        a.peer_last_tsn,
+        "{} should match",
+        name
+    );
+    assert_eq!(1001, a.my_max_num_outbound_streams, "{} should match", name);
+    assert_eq!(1002, a.my_max_num_inbound_streams, "{} should match", name);
+    assert_eq!(5678, a.peer_verification_tag, "{} should match", name);
+    assert_eq!(pkt.source_port, a.destination_port, "{} should match", name);
+    assert_eq!(pkt.destination_port, a.source_port, "{} should match", name);
+    assert!(a.use_forward_tsn, "{} should be set to true", name);
+}
+
+#[tokio::test]
+async fn test_assoc_handle_init() -> Result<(), Error> {
+    handle_init_test("normal", AssociationState::Closed, false).await;
+
+    handle_init_test(
+        "unexpected state established",
+        AssociationState::Established,
+        true,
+    )
+    .await;
+
+    handle_init_test(
+        "unexpected state shutdownAckSent",
+        AssociationState::ShutdownAckSent,
+        true,
+    )
+    .await;
+
+    handle_init_test(
+        "unexpected state shutdownPending",
+        AssociationState::ShutdownPending,
+        true,
+    )
+    .await;
+
+    handle_init_test(
+        "unexpected state shutdownReceived",
+        AssociationState::ShutdownReceived,
+        true,
+    )
+    .await;
+
+    handle_init_test(
+        "unexpected state shutdownSent",
+        AssociationState::ShutdownSent,
+        true,
+    )
+    .await;
 
     Ok(())
 }

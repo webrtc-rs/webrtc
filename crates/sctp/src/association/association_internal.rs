@@ -89,13 +89,13 @@ pub struct AssociationInternal {
 }
 
 impl AssociationInternal {
-    pub(crate) async fn new(
+    pub(crate) fn new(
         config: Config,
         close_loop_ch_tx: broadcast::Sender<()>,
         accept_ch_tx: mpsc::Sender<Arc<Stream>>,
         handshake_completed_ch_tx: mpsc::Sender<Option<Error>>,
         awake_write_loop_ch: Arc<mpsc::Sender<()>>,
-    ) -> Result<Self, Error> {
+    ) -> Self {
         let max_receive_buffer_size = if config.max_receive_buffer_size == 0 {
             INITIAL_RECV_BUF_SIZE
         } else {
@@ -161,7 +161,7 @@ impl AssociationInternal {
             a.inflight_queue.get_num_bytes()
         );
 
-        Ok(a)
+        a
     }
 
     /// caller must hold self.lock
