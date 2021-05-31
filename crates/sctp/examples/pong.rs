@@ -12,6 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::UdpSocket;
 use tokio::signal;
+use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use util::Conn;
 
@@ -79,36 +80,33 @@ async fn main() -> Result<(), Error> {
     // set unordered = true and 10ms treshold for dropping packets
     stream.set_reliability_params(true, ReliabilityType::Timed, 10);
 
-    let mut buff = vec![0u8; 1024];
-    let mut n = 0;
-    loop {
-        tokio::select! {
-            result = stream.read(&mut buff) => {
-                match result{
-                    Ok(m) => {
-                        n = m;
-                    }
-                    Err(err) =>{
-                        println!("stream.read got error: {:?}", err);
-                        break;
-                    }
-                }
-            }
-            _ = signal::ctrl_c() => {}
-        };
+    let (done_tx, mut done_rx) = mpsc::channel::<()>(1);
+    let stream2 = Arc::clone(&stream);
+    tokio::spawn(async move {
+        let mut buff = vec![0u8; 1024];
+        while let Ok(n) = stream2.read(&mut buff).await {
+            let ping_msg = String::from_utf8(buff[..n].to_vec()).unwrap();
+            println!("received: {}", ping_msg);
 
-        let ping_msg = String::from_utf8(buff[..n].to_vec()).unwrap();
-        println!("received: {}", ping_msg);
+            let pong_msg = format!("pong [{}]", ping_msg);
+            println!("sent: {}", pong_msg);
+            stream2.write(&Bytes::from(pong_msg)).await?;
 
-        let pong_msg = format!("pong [{}]", ping_msg);
-        println!("sent: {}", pong_msg);
-        stream.write(&Bytes::from(pong_msg)).await?;
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+        println!("finished ping-pong");
+        drop(done_tx);
+        Ok::<(), Error>(())
+    });
 
-        tokio::time::sleep(Duration::from_secs(1)).await;
-    }
+    println!("Waiting for Ctrl-C...");
+    signal::ctrl_c().await.expect("failed to listen for event");
+    println!("Closing stream and association...");
 
     stream.close().await?;
     a.close().await?;
+
+    let _ = done_rx.recv().await;
 
     Ok(())
 }

@@ -9,6 +9,7 @@ use clap::{App, AppSettings, Arg};
 use std::sync::Arc;
 use tokio::net::UdpSocket;
 use tokio::signal;
+use tokio::sync::mpsc;
 
 // RUST_LOG=trace cargo run --color=always --package webrtc-sctp --example ping -- --server 0.0.0.0:5678
 
@@ -87,33 +88,31 @@ async fn main() -> Result<(), Error> {
             ping_seq_num += 1;
         }
 
+        println!("finished send ping");
         Ok::<(), Error>(())
     });
 
-    let mut buff = vec![0u8; 1024];
-    let mut n = 0;
-    loop {
-        tokio::select! {
-            result = stream.read(&mut buff) => {
-                match result{
-                    Ok(m) => {
-                        n = m;
-                    }
-                    Err(err) =>{
-                        println!("stream.read got error: {:?}", err);
-                        break;
-                    }
-                }
-            }
-            _ = signal::ctrl_c() => {}
-        };
+    let (done_tx, mut done_rx) = mpsc::channel::<()>(1);
+    let stream_rx = Arc::clone(&stream);
+    tokio::spawn(async move {
+        let mut buff = vec![0u8; 1024];
+        while let Ok(n) = stream_rx.read(&mut buff).await {
+            let pong_msg = String::from_utf8(buff[..n].to_vec()).unwrap();
+            println!("received: {}", pong_msg);
+        }
 
-        let pong_msg = String::from_utf8(buff[..n].to_vec()).unwrap();
-        println!("received: {}", pong_msg);
-    }
+        println!("finished recv pong");
+        drop(done_tx);
+    });
+
+    println!("Waiting for Ctrl-C...");
+    signal::ctrl_c().await.expect("failed to listen for event");
+    println!("Closing stream and association...");
 
     stream.close().await?;
     a.close().await?;
+
+    let _ = done_rx.recv().await;
 
     Ok(())
 }
