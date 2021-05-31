@@ -5,7 +5,7 @@ members = [
     "ice",
     "mdns",
     "media",
-    "pc",
+    "peer",
     "rtc",
     "rtcp",
     "rtp",

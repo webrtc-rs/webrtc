@@ -40,6 +40,6 @@
 [submodule "crates/data"]
 	path = crates/data
 	url = https://github.com/webrtc-rs/data
-[submodule "crates/pc"]
-	path = crates/pc
-	url = https://github.com/webrtc-rs/pc
+[submodule "crates/peer"]
+	path = crates/peer
+	url = https://github.com/webrtc-rs/peer

@@ -65,7 +65,7 @@ WebRTC.rs is a pure Rust implementation of WebRTC stack, which rewrites <a href=
 
 <p align="center">
     <img src="./doc/uncheck.png">Media<a href="https://crates.io/crates/webrtc-media"><img src="https://img.shields.io/crates/v/webrtc-media.svg"></a>
-    <img src="./doc/uncheck.png">PeerConnection<a href="https://crates.io/crates/webrtc-pc"><img src="https://img.shields.io/crates/v/webrtc-pc.svg"></a>
+    <img src="./doc/uncheck.png">PeerConnection<a href="https://crates.io/crates/webrtc-peer"><img src="https://img.shields.io/crates/v/webrtc-peer.svg"></a>
     <img src="./doc/uncheck.png">DataChannel<a href="https://crates.io/crates/webrtc-data"><img src="https://img.shields.io/crates/v/webrtc-data.svg"></a>
     <br>
     <img src="./doc/check.png">RTP<a href="https://crates.io/crates/rtp"><img src="https://img.shields.io/crates/v/rtp.svg"></a>
