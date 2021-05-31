@@ -10,7 +10,7 @@ use std::fmt;
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///|   Type = 14   |Reserved     |T|      Length = 4               |
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub(crate) struct ChunkShutdownComplete;
 
 /// makes chunkShutdownComplete printable

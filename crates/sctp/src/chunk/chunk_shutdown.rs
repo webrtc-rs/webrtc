@@ -12,7 +12,7 @@ use std::fmt;
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///|                      Cumulative TSN Ack                       |
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub(crate) struct ChunkShutdown {
     pub(crate) cumulative_tsn_ack: u32,
 }

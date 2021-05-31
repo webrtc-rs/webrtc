@@ -221,10 +221,10 @@ pub struct Association {
     awake_write_loop_ch: Arc<mpsc::Sender<()>>,
     close_loop_ch_rx: broadcast::Receiver<()>,
     accept_ch_rx: mpsc::Receiver<Arc<Stream>>,
-
     net_conn: Arc<dyn Conn + Send + Sync>,
     bytes_received: Arc<AtomicUsize>,
     bytes_sent: Arc<AtomicUsize>,
+    handshake_completed_ch_rx: mpsc::Receiver<Option<Error>>,
 
     pub(crate) association_internal: Arc<Mutex<AssociationInternal>>,
 }
@@ -232,12 +232,32 @@ pub struct Association {
 impl Association {
     /// server accepts a SCTP stream over a conn
     pub async fn server(config: Config) -> Result<Self, Error> {
-        Association::start(config, false).await
+        let mut a = Association::new(config, false).await?;
+
+        if let Some(err_opt) = &a.handshake_completed_ch_rx.recv().await {
+            if let Some(err) = err_opt {
+                Err(err.clone())
+            } else {
+                Ok(a)
+            }
+        } else {
+            Err(Error::ErrAssociationHandshakeClosed)
+        }
     }
 
     /// Client opens a SCTP stream over a conn
     pub async fn client(config: Config) -> Result<Self, Error> {
-        Association::start(config, true).await
+        let mut a = Association::new(config, true).await?;
+
+        if let Some(err_opt) = &a.handshake_completed_ch_rx.recv().await {
+            if let Some(err) = err_opt {
+                Err(err.clone())
+            } else {
+                Ok(a)
+            }
+        } else {
+            Err(Error::ErrAssociationHandshakeClosed)
+        }
     }
 
     /// Shutdown initiates the shutdown sequence. The method blocks until the
@@ -274,12 +294,12 @@ impl Association {
         ai.close().await
     }
 
-    async fn start(config: Config, is_client: bool) -> Result<Self, Error> {
+    async fn new(config: Config, is_client: bool) -> Result<Self, Error> {
         let net_conn = Arc::clone(&config.net_conn);
 
         let (awake_write_loop_ch_tx, awake_write_loop_ch_rx) = mpsc::channel(1);
         let (accept_ch_tx, accept_ch_rx) = mpsc::channel(ACCEPT_CH_SIZE);
-        let (handshake_completed_ch_tx, mut handshake_completed_ch_rx) = mpsc::channel(1);
+        let (handshake_completed_ch_tx, handshake_completed_ch_rx) = mpsc::channel(1);
         let (close_loop_ch_tx, close_loop_ch_rx) = broadcast::channel(1);
         let (close_loop_ch_rx1, close_loop_ch_rx2) =
             (close_loop_ch_tx.subscribe(), close_loop_ch_tx.subscribe());
@@ -390,14 +410,6 @@ impl Association {
             }
         }
 
-        if let Some(err_opt) = handshake_completed_ch_rx.recv().await {
-            if let Some(err) = err_opt {
-                return Err(err);
-            }
-        } else {
-            return Err(Error::ErrAssociationHandshakeClosed);
-        }
-
         Ok(Association {
             name,
             state,
@@ -410,6 +422,7 @@ impl Association {
             net_conn,
             bytes_received,
             bytes_sent,
+            handshake_completed_ch_rx,
             association_internal,
         })
     }

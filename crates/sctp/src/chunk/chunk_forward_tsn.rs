@@ -21,7 +21,7 @@ use std::fmt;
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///|         Stream-N              |       Stream Sequence-N       |
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub(crate) struct ChunkForwardTsn {
     /// This indicates the new cumulative TSN to the data receiver.  Upon
     /// the reception of this value, the data receiver MUST consider

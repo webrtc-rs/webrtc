@@ -110,7 +110,7 @@ impl AssociationInternal {
 
         let inflight_queue_length = Arc::new(AtomicUsize::new(0));
 
-        let mut tsn = 1; //TODO: random::<u32>();
+        let mut tsn = random::<u32>();
         if tsn == 0 {
             tsn += 1;
         }
@@ -674,7 +674,11 @@ impl AssociationInternal {
         // is set initially by taking the peer's initial TSN,
         // received in the INIT or INIT ACK chunk, and
         // subtracting one from it.
-        self.peer_last_tsn = i.initial_tsn - 1;
+        self.peer_last_tsn = if i.initial_tsn == 0 {
+            u32::MAX
+        } else {
+            i.initial_tsn - 1
+        };
 
         for param in &i.params {
             if let Some(v) = param.as_any().downcast_ref::<ParamSupportedExtensions>() {
@@ -740,7 +744,11 @@ impl AssociationInternal {
         self.my_max_num_outbound_streams =
             std::cmp::min(i.num_outbound_streams, self.my_max_num_outbound_streams);
         self.peer_verification_tag = i.initiate_tag;
-        self.peer_last_tsn = i.initial_tsn - 1;
+        self.peer_last_tsn = if i.initial_tsn == 0 {
+            u32::MAX
+        } else {
+            i.initial_tsn - 1
+        };
         if self.source_port != p.destination_port || self.destination_port != p.source_port {
             log::warn!("[{}] handle_init_ack: port mismatch", self.name);
             return Ok(vec![]);

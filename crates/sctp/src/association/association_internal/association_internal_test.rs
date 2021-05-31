@@ -365,7 +365,11 @@ async fn handle_init_test(name: &str, initial_state: AssociationState, expect_er
         assert!(result.is_ok(), "{} should be ok", name);
     }
     assert_eq!(
-        init.initial_tsn - 1,
+        if init.initial_tsn == 0 {
+            u32::MAX
+        } else {
+            init.initial_tsn - 1
+        },
         a.peer_last_tsn,
         "{} should match",
         name

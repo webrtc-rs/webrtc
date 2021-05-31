@@ -10,7 +10,7 @@ use std::fmt;
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ///|   Type = 8    | Chunk  Flags  |      Length = 4               |
 ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub(crate) struct ChunkShutdownAck;
 
 /// makes chunkShutdownAck printable

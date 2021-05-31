@@ -25,7 +25,7 @@ use std::fmt;
 ///Length: 16 bits (unsigned integer)
 ///  Set to the size of the chunk in bytes, including the chunk header
 ///  and all the Error Cause fields present.
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub(crate) struct ChunkError {
     pub(crate) error_causes: Vec<ErrorCause>,
 }

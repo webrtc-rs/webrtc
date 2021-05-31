@@ -1,6 +1,7 @@
 use super::*;
 use crate::stream::*;
 
+use crate::chunk::chunk_selective_ack::GapAckBlock;
 use async_trait::async_trait;
 use std::io;
 use std::net::SocketAddr;
@@ -8,6 +9,7 @@ use std::str::FromStr;
 use std::time::Duration;
 use tokio::net::UdpSocket;
 use util::conn::conn_bridge::*;
+use util::conn::conn_pipe::pipe;
 use util::conn::*;
 
 async fn create_new_association_pair(
@@ -2393,6 +2395,187 @@ async fn test_association_shutdown_during_write() -> Result<(), Error> {
             log::debug!("recv a2.close_loop_ch_rx");
         }
     };
+
+    Ok(())
+}
+
+//use std::io::Write;
+
+#[tokio::test]
+async fn test_association_handle_packet_before_init() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
+
+    let tests = vec![
+        (
+            "InitAck",
+            Packet {
+                source_port: 1,
+                destination_port: 1,
+                verification_tag: 0,
+                chunks: vec![Box::new(ChunkInit {
+                    is_ack: true,
+                    initiate_tag: 1,
+                    num_inbound_streams: 1,
+                    num_outbound_streams: 1,
+                    advertised_receiver_window_credit: 1500,
+                    ..Default::default()
+                })],
+            },
+        ),
+        (
+            "Abort",
+            Packet {
+                source_port: 1,
+                destination_port: 1,
+                verification_tag: 0,
+                chunks: vec![Box::new(ChunkAbort::default())],
+            },
+        ),
+        (
+            "CoockeEcho",
+            Packet {
+                source_port: 1,
+                destination_port: 1,
+                verification_tag: 0,
+                chunks: vec![Box::new(ChunkCookieEcho::default())],
+            },
+        ),
+        (
+            "HeartBeat",
+            Packet {
+                source_port: 1,
+                destination_port: 1,
+                verification_tag: 0,
+                chunks: vec![Box::new(ChunkHeartbeat::default())],
+            },
+        ),
+        (
+            "PayloadData",
+            Packet {
+                source_port: 1,
+                destination_port: 1,
+                verification_tag: 0,
+                chunks: vec![Box::new(ChunkPayloadData::default())],
+            },
+        ),
+        (
+            "Sack",
+            Packet {
+                source_port: 1,
+                destination_port: 1,
+                verification_tag: 0,
+                chunks: vec![Box::new(ChunkSelectiveAck {
+                    cumulative_tsn_ack: 1000,
+                    advertised_receiver_window_credit: 1500,
+                    gap_ack_blocks: vec![GapAckBlock {
+                        start: 100,
+                        end: 200,
+                    }],
+                    ..Default::default()
+                })],
+            },
+        ),
+        (
+            "Reconfig",
+            Packet {
+                source_port: 1,
+                destination_port: 1,
+                verification_tag: 0,
+                chunks: vec![Box::new(ChunkReconfig {
+                    param_a: Some(Box::new(ParamOutgoingResetRequest::default())),
+                    param_b: Some(Box::new(ParamReconfigResponse::default())),
+                })],
+            },
+        ),
+        (
+            "ForwardTSN",
+            Packet {
+                source_port: 1,
+                destination_port: 1,
+                verification_tag: 0,
+                chunks: vec![Box::new(ChunkForwardTsn {
+                    new_cumulative_tsn: 100,
+                    ..Default::default()
+                })],
+            },
+        ),
+        (
+            "Error",
+            Packet {
+                source_port: 1,
+                destination_port: 1,
+                verification_tag: 0,
+                chunks: vec![Box::new(ChunkError::default())],
+            },
+        ),
+        (
+            "Shutdown",
+            Packet {
+                source_port: 1,
+                destination_port: 1,
+                verification_tag: 0,
+                chunks: vec![Box::new(ChunkShutdown::default())],
+            },
+        ),
+        (
+            "ShutdownAck",
+            Packet {
+                source_port: 1,
+                destination_port: 1,
+                verification_tag: 0,
+                chunks: vec![Box::new(ChunkShutdownAck::default())],
+            },
+        ),
+        (
+            "ShutdownComplete",
+            Packet {
+                source_port: 1,
+                destination_port: 1,
+                verification_tag: 0,
+                chunks: vec![Box::new(ChunkShutdownComplete::default())],
+            },
+        ),
+    ];
+
+    for (name, packet) in tests {
+        log::debug!("testing {}", name);
+
+        let (a_conn, charlie_conn) = pipe();
+
+        let a = Association::new(
+            Config {
+                net_conn: Arc::new(a_conn),
+                max_message_size: 0,
+                max_receive_buffer_size: 0,
+                name: "client".to_owned(),
+            },
+            true,
+        )
+        .await
+        .unwrap();
+
+        let packet = packet.marshal()?;
+        let result = charlie_conn.send(&packet).await;
+        assert!(result.is_ok(), "{} charlie_conn.send should be ok", name);
+
+        // Should not panic.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        a.close().await.unwrap();
+    }
 
     Ok(())
 }
