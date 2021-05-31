@@ -2262,7 +2262,8 @@ async fn create_assocs() -> Result<(Association, Association), Error> {
 }
 
 //use std::io::Write;
-
+//TODO: remove this conditional test
+#[cfg(not(target_os = "windows"))]
 #[tokio::test]
 async fn test_association_shutdown() -> Result<(), Error> {
     /*env_logger::Builder::new()
@@ -2317,7 +2318,8 @@ async fn test_association_shutdown() -> Result<(), Error> {
 }
 
 //use std::io::Write;
-
+//TODO: remove this conditional test
+#[cfg(not(target_os = "windows"))]
 #[tokio::test]
 async fn test_association_shutdown_during_write() -> Result<(), Error> {
     /*env_logger::Builder::new()
