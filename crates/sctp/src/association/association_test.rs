@@ -2259,24 +2259,24 @@ async fn create_assocs() -> Result<(Association, Association), Error> {
     Ok((a1, a2))
 }
 
-use std::io::Write;
+//use std::io::Write;
 
 #[tokio::test]
 async fn test_association_shutdown() -> Result<(), Error> {
-    env_logger::Builder::new()
-        .format(|buf, record| {
-            writeln!(
-                buf,
-                "{}:{} [{}] {} - {}",
-                record.file().unwrap_or("unknown"),
-                record.line().unwrap_or(0),
-                record.level(),
-                chrono::Local::now().format("%H:%M:%S.%6f"),
-                record.args()
-            )
-        })
-        .filter(None, log::LevelFilter::Trace)
-        .init();
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
 
     let (mut a1, mut a2) = create_assocs().await?;
 
@@ -2298,6 +2298,89 @@ async fn test_association_shutdown() -> Result<(), Error> {
     } else {
         assert!(false, "shutdown timeout");
     }
+
+    // Wait for close read loop channels to prevent flaky tests.
+    let timer2 = tokio::time::sleep(Duration::from_secs(1));
+    tokio::pin!(timer2);
+    tokio::select! {
+        _ = timer2.as_mut() =>{
+            assert!(false,"timed out waiting for a2 read loop to close");
+        },
+        _ = a2.close_loop_ch_rx.recv() => {
+            log::debug!("recv a2.close_loop_ch_rx");
+        }
+    };
+
+    Ok(())
+}
+
+//use std::io::Write;
+
+#[tokio::test]
+async fn test_association_shutdown_during_write() -> Result<(), Error> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
+
+    let (mut a1, mut a2) = create_assocs().await?;
+
+    let s11 = a1.open_stream(1, PayloadProtocolIdentifier::String).await?;
+    let s21 = a2.open_stream(1, PayloadProtocolIdentifier::String).await?;
+
+    let (writing_done_tx, mut writing_done_rx) = mpsc::channel::<()>(1);
+    let ss21 = Arc::clone(&s21);
+    tokio::spawn(async move {
+        let mut i = 0;
+        while ss21.write(&Bytes::from(vec![i])).await.is_ok() {
+            if i == 255 {
+                i = 0;
+            } else {
+                i += 1;
+            }
+
+            if i % 100 == 0 {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        }
+
+        drop(writing_done_tx);
+    });
+
+    let test_data = Bytes::from_static(b"test");
+
+    let n = s11.write(&test_data).await?;
+    assert_eq!(test_data.len(), n);
+
+    let mut buf = vec![0u8; test_data.len()];
+    let n = s21.read(&mut buf).await?;
+    assert_eq!(test_data.len(), n);
+    assert_eq!(&test_data, &buf[0..n]);
+
+    tokio::select! {
+        res = tokio::time::timeout(Duration::from_secs(1), a1.shutdown()) => {
+            if let Ok(result) = res {
+                assert!(result.is_ok(), "shutdown should be ok");
+            } else {
+                assert!(false, "shutdown timeout");
+            }
+        }
+        _ = writing_done_rx.recv() => {
+            log::debug!("writing_done_rx");
+            let result = a1.close_loop_ch_rx.recv().await;
+            log::debug!("a1.close_loop_ch_rx.recv: {:?}", result);
+        },
+    };
 
     // Wait for close read loop channels to prevent flaky tests.
     let timer2 = tokio::time::sleep(Duration::from_secs(1));
