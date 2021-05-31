@@ -6,7 +6,6 @@ members = [
     "mdns",
     "media",
     "peer",
-    "rtc",
     "rtcp",
     "rtp",
     "sctp",
