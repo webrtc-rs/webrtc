@@ -1,6 +1,6 @@
 [package]
 name = "webrtc-sctp"
-version = "0.0.1"
+version = "0.1.0"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of SCTP"
@@ -26,6 +26,7 @@ tokio-test = "0.4"
 lazy_static = "^1.4"
 env_logger = "0.8"
 chrono = "0.4.19"
+clap = "2"
 
 [[example]]
 name = "ping"
