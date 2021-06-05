@@ -1,1 +1,53 @@
+pub mod media_engine;
+pub mod setting_engine;
 
+use media_engine::*;
+use setting_engine::*;
+
+/// API bundles the global functions of the WebRTC and ORTC API.
+/// Some of these functions are also exported globally using the
+/// defaultAPI object. Note that the global version of the API
+/// may be phased out in the future.
+#[derive(Default)]
+pub struct Api {
+    setting_engine: SettingEngine,
+    media_engine: MediaEngine,
+    //TODO: interceptor   interceptor.Interceptor
+}
+
+#[derive(Default)]
+pub struct ApiBuilder {
+    api: Api,
+}
+
+impl ApiBuilder {
+    pub fn new() -> Self {
+        ApiBuilder::default()
+    }
+
+    pub fn build(self) -> Api {
+        self.api
+    }
+
+    /// WithSettingEngine allows providing a SettingEngine to the API.
+    /// Settings should not be changed after passing the engine to an API.
+    pub fn with_setting_engine(mut self, setting_engine: SettingEngine) -> Self {
+        self.api.setting_engine = setting_engine;
+        self
+    }
+
+    /// WithMediaEngine allows providing a MediaEngine to the API.
+    /// Settings can be changed after passing the engine to an API.
+    pub fn with_media_engine(mut self, media_engine: MediaEngine) -> Self {
+        self.api.media_engine = media_engine;
+        self
+    }
+
+    // WithInterceptorRegistry allows providing Interceptors to the API.
+    // Settings should not be changed after passing the registry to an API.
+    /*pub WithInterceptorRegistry(interceptorRegistry *interceptor.Registry) func(a *API) {
+        return func(a *API) {
+            a.interceptor = interceptorRegistry.Build()
+        }
+    }*/
+}
