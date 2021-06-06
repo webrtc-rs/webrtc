@@ -3,6 +3,8 @@ pub mod rtp_codec;
 
 use rtp_codec::*;
 
+use serde::{Deserialize, Serialize};
+
 /// SSRC represents a synchronization source
 /// A synchronization source is a randomly chosen
 /// value meant to be globally unique within a particular
@@ -48,7 +50,33 @@ pub struct RTCPFeedback {
 
 /// RTPCapabilities represents the capabilities of a transceiver
 /// https://w3c.github.io/webrtc-pc/#rtcrtpcapabilities
+#[derive(Default, Debug, Clone)]
 pub struct RTPCapabilities {
     pub codecs: Vec<RTPCodecCapability>,
     pub header_extensions: Vec<RTPHeaderExtensionCapability>,
+}
+
+/// RTPCodingParameters provides information relating to both encoding and decoding.
+/// This is a subset of the RFC since Pion WebRTC doesn't implement encoding/decoding itself
+/// http://draft.ortc.org/#dom-rtcrtpcodingparameters
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+pub struct RTPCodingParameters {
+    pub rid: String,
+    pub ssrc: SSRC,
+    pub payload_type: PayloadType,
+}
+
+/// RTPDecodingParameters provides information relating to both encoding and decoding.
+/// This is a subset of the RFC since Pion WebRTC doesn't implement decoding itself
+/// http://draft.ortc.org/#dom-rtcrtpdecodingparameters
+pub type RTPDecodingParameters = RTPCodingParameters;
+
+/// RTPEncodingParameters provides information relating to both encoding and decoding.
+/// This is a subset of the RFC since Pion WebRTC doesn't implement encoding itself
+/// http://draft.ortc.org/#dom-rtcrtpencodingparameters
+pub type RTPEncodingParameters = RTPCodingParameters;
+
+/// RTPReceiveParameters contains the RTP stack settings used by receivers
+pub struct RTPReceiveParameters {
+    pub encodings: Vec<RTPDecodingParameters>,
 }

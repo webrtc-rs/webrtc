@@ -1,6 +1,6 @@
 use super::*;
+use crate::rtp::fmtp::*;
 
-use crate::rtp::fmtp::{fmtp_consist, parse_fmtp};
 use std::fmt;
 
 /// RTPCodecType determines the type of a codec
@@ -55,12 +55,14 @@ pub struct RTPCodecCapability {
 
 /// RTPHeaderExtensionCapability is used to define a RFC5285 RTP header extension supported by the codec.
 /// https://w3c.github.io/webrtc-pc/#dom-rtcrtpcapabilities-headerextensions
+#[derive(Default, Debug, Clone)]
 pub struct RTPHeaderExtensionCapability {
     pub uri: String,
 }
 
 /// RTPHeaderExtensionParameter represents a negotiated RFC5285 RTP header extension.
 /// https://w3c.github.io/webrtc-pc/#dictionary-rtcrtpheaderextensionparameters-members
+#[derive(Default, Debug, Clone)]
 pub struct RTPHeaderExtensionParameter {
     pub uri: String,
     pub id: usize,

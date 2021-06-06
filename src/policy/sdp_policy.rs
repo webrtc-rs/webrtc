@@ -1,3 +1,5 @@
+use std::fmt;
+
 /// SdpPolicy determines which style of SDP offers and answers
 /// can be used
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -26,39 +28,34 @@ impl Default for SdpPolicy {
     }
 }
 
+const SDP_SEMANTICS_UNIFIED_PLAN_WITH_FALLBACK: &str = "unified-plan-with-fallback";
+const SDP_SEMANTICS_UNIFIED_PLAN: &str = "unified-plan";
+const SDP_SEMANTICS_PLAN_B: &str = "plan-b";
+
+impl From<&str> for SdpPolicy {
+    fn from(raw: &str) -> Self {
+        match raw {
+            SDP_SEMANTICS_UNIFIED_PLAN_WITH_FALLBACK => SdpPolicy::UnifiedPlanWithFallback,
+            SDP_SEMANTICS_UNIFIED_PLAN => SdpPolicy::UnifiedPlan,
+            SDP_SEMANTICS_PLAN_B => SdpPolicy::PlanB,
+            _ => SdpPolicy::Unspecified,
+        }
+    }
+}
+
+impl fmt::Display for SdpPolicy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match *self {
+            SdpPolicy::UnifiedPlanWithFallback => SDP_SEMANTICS_UNIFIED_PLAN_WITH_FALLBACK,
+            SdpPolicy::UnifiedPlan => SDP_SEMANTICS_UNIFIED_PLAN,
+            SdpPolicy::PlanB => SDP_SEMANTICS_PLAN_B,
+            SdpPolicy::Unspecified => "unspecified",
+        };
+        write!(f, "{}", s)
+    }
+}
+
 /*
-const (
-    sdpSemanticsUnifiedPlanWithFallback = "unified-plan-with-fallback"
-    sdpSemanticsUnifiedPlan             = "unified-plan"
-    sdpSemanticsPlanB                   = "plan-b"
-)
-
-func newSDPSemantics(raw string) SdpPolicy {
-    switch raw {
-    case sdpSemanticsUnifiedPlan:
-        return SDPSemanticsUnifiedPlan
-    case sdpSemanticsPlanB:
-        return SDPSemanticsPlanB
-    case sdpSemanticsUnifiedPlanWithFallback:
-        return SDPSemanticsUnifiedPlanWithFallback
-    default:
-        return SdpPolicy(Unknown)
-    }
-}
-
-func (s SdpPolicy) String() string {
-    switch s {
-    case SDPSemanticsUnifiedPlanWithFallback:
-        return sdpSemanticsUnifiedPlanWithFallback
-    case SDPSemanticsUnifiedPlan:
-        return sdpSemanticsUnifiedPlan
-    case SDPSemanticsPlanB:
-        return sdpSemanticsPlanB
-    default:
-        return ErrUnknownType.Error()
-    }
-}
-
 // UnmarshalJSON parses the JSON-encoded data and stores the result
 func (s *SdpPolicy) UnmarshalJSON(b []byte) error {
     var val string
@@ -74,5 +71,4 @@ func (s *SdpPolicy) UnmarshalJSON(b []byte) error {
 func (s SdpPolicy) MarshalJSON() ([]byte, error) {
     return json.Marshal(s.String())
 }
-
- */
+*/

@@ -1,3 +1,5 @@
+use std::fmt;
+
 /// ICETransportPolicy defines the ICE candidate policy surface the
 /// permitted candidates. Only these candidates are used for connectivity checks.
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -18,38 +20,35 @@ impl Default for ICETransportPolicy {
     }
 }
 
-//// ICEGatherPolicy is the ORTC equivalent of ICETransportPolicy
+/// ICEGatherPolicy is the ORTC equivalent of ICETransportPolicy
 pub type ICEGatherPolicy = ICETransportPolicy;
+
+const ICE_TRANSPORT_POLICY_RELAY_STR: &str = "relay";
+const ICE_TRANSPORT_POLICY_ALL_STR: &str = "all";
+
+/// takes a string and converts it to ICETransportPolicy
+impl From<&str> for ICETransportPolicy {
+    fn from(raw: &str) -> Self {
+        match raw {
+            ICE_TRANSPORT_POLICY_RELAY_STR => ICETransportPolicy::Relay,
+            ICE_TRANSPORT_POLICY_ALL_STR => ICETransportPolicy::All,
+            _ => ICETransportPolicy::Unspecified,
+        }
+    }
+}
+
+impl fmt::Display for ICETransportPolicy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match *self {
+            ICETransportPolicy::Relay => ICE_TRANSPORT_POLICY_RELAY_STR,
+            ICETransportPolicy::All => ICE_TRANSPORT_POLICY_ALL_STR,
+            ICETransportPolicy::Unspecified => "unspecified",
+        };
+        write!(f, "{}", s)
+    }
+}
+
 /*
-// This is done this way because of a linter.
-const (
-    iceTransportPolicyRelayStr = "relay"
-    iceTransportPolicyAllStr   = "all"
-)
-
-// NewICETransportPolicy takes a string and converts it to ICETransportPolicy
-func NewICETransportPolicy(raw string) ICETransportPolicy {
-    switch raw {
-    case iceTransportPolicyRelayStr:
-        return ICETransportPolicyRelay
-    case iceTransportPolicyAllStr:
-        return ICETransportPolicyAll
-    default:
-        return ICETransportPolicy(Unknown)
-    }
-}
-
-func (t ICETransportPolicy) String() string {
-    switch t {
-    case ICETransportPolicyRelay:
-        return iceTransportPolicyRelayStr
-    case ICETransportPolicyAll:
-        return iceTransportPolicyAllStr
-    default:
-        return ErrUnknownType.Error()
-    }
-}
-
 // UnmarshalJSON parses the JSON-encoded data and stores the result
 func (t *ICETransportPolicy) UnmarshalJSON(b []byte) error {
     var val string
