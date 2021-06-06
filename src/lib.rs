@@ -6,22 +6,15 @@
 
 pub mod api;
 pub mod data;
-mod dtls;
-mod ice;
+pub mod dtls;
+pub mod error;
+pub mod ice;
 pub mod media;
 pub mod peer;
 pub mod policy;
-mod rtcp;
-mod rtp;
-mod sctp;
-mod sdp;
-mod stats;
-mod track;
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+pub mod rtcp;
+pub mod rtp;
+pub mod sctp;
+pub mod sdp;
+pub mod stats;
+pub mod track;
