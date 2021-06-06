@@ -7,7 +7,7 @@ use crate::message::*;
 
 use util::Error;
 
-use crc32fast::Hasher;
+use crc::{Crc, CRC_32_ISCSI};
 
 // FingerprintAttr represents FINGERPRINT attribute.
 //
@@ -32,9 +32,7 @@ const FINGERPRINT_SIZE: usize = 4; // 32 bit
 // the 32-bit value 0x5354554e (the XOR helps in cases where an
 // application packet is also using CRC-32 in it).
 pub fn fingerprint_value(b: &[u8]) -> u32 {
-    let mut hasher = Hasher::new();
-    hasher.update(b);
-    let checksum = hasher.finalize();
+    let checksum = Crc::<u32>::new(&CRC_32_ISCSI).checksum(b);
     checksum ^ FINGERPRINT_XOR_VALUE // XOR
 }
 
