@@ -12,7 +12,6 @@ pub mod ice;
 pub mod media;
 pub mod peer;
 pub mod policy;
-pub mod rtcp;
 pub mod rtp;
 pub mod sctp;
 pub mod sdp;

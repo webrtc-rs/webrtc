@@ -1,7 +1,11 @@
+use std::fmt;
+
 /// RTCPMuxPolicy affects what ICE candidates are gathered to support
 /// non-multiplexed RTCP.
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum RTCPMuxPolicy {
+    Unspecified,
+
     /// RTCPMuxPolicyNegotiate indicates to gather ICE candidates for both
     /// RTP and RTCP candidates. If the remote-endpoint is capable of
     /// multiplexing RTCP, multiplex RTCP on the RTP candidates. If it is not,
@@ -20,35 +24,31 @@ impl Default for RTCPMuxPolicy {
     }
 }
 
+const RTCP_MUX_POLICY_NEGOTIATE_STR: &str = "negotiate";
+const RTCP_MUX_POLICY_REQUIRE_STR: &str = "require";
+
+impl From<&str> for RTCPMuxPolicy {
+    fn from(raw: &str) -> Self {
+        match raw {
+            RTCP_MUX_POLICY_NEGOTIATE_STR => RTCPMuxPolicy::Negotiate,
+            RTCP_MUX_POLICY_REQUIRE_STR => RTCPMuxPolicy::Require,
+            _ => RTCPMuxPolicy::Unspecified,
+        }
+    }
+}
+
+impl fmt::Display for RTCPMuxPolicy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match *self {
+            RTCPMuxPolicy::Negotiate => RTCP_MUX_POLICY_NEGOTIATE_STR,
+            RTCPMuxPolicy::Require => RTCP_MUX_POLICY_REQUIRE_STR,
+            RTCPMuxPolicy::Unspecified => "unspecified",
+        };
+        write!(f, "{}", s)
+    }
+}
+
 /*
-// This is done this way because of a linter.
-const (
-    rtcpMuxPolicyNegotiateStr = "negotiate"
-    rtcpMuxPolicyRequireStr   = "require"
-)
-
-func newRTCPMuxPolicy(raw string) RTCPMuxPolicy {
-    switch raw {
-    case rtcpMuxPolicyNegotiateStr:
-        return RTCPMuxPolicyNegotiate
-    case rtcpMuxPolicyRequireStr:
-        return RTCPMuxPolicyRequire
-    default:
-        return RTCPMuxPolicy(Unknown)
-    }
-}
-
-func (t RTCPMuxPolicy) String() string {
-    switch t {
-    case RTCPMuxPolicyNegotiate:
-        return rtcpMuxPolicyNegotiateStr
-    case RTCPMuxPolicyRequire:
-        return rtcpMuxPolicyRequireStr
-    default:
-        return ErrUnknownType.Error()
-    }
-}
-
 // UnmarshalJSON parses the JSON-encoded data and stores the result
 func (t *RTCPMuxPolicy) UnmarshalJSON(b []byte) error {
     var val string
@@ -65,3 +65,34 @@ func (t RTCPMuxPolicy) MarshalJSON() ([]byte, error) {
     return json.Marshal(t.String())
 }
 */
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_new_rtcp_mux_policy() {
+        let tests = vec![
+            ("unspecified", RTCPMuxPolicy::Unspecified),
+            ("negotiate", RTCPMuxPolicy::Negotiate),
+            ("require", RTCPMuxPolicy::Require),
+        ];
+
+        for (policy_string, expected_policy) in tests {
+            assert_eq!(expected_policy, RTCPMuxPolicy::from(policy_string));
+        }
+    }
+
+    #[test]
+    fn test_rtcp_mux_policy_string() {
+        let tests = vec![
+            (RTCPMuxPolicy::Unspecified, "unspecified"),
+            (RTCPMuxPolicy::Negotiate, "negotiate"),
+            (RTCPMuxPolicy::Require, "require"),
+        ];
+
+        for (policy, expected_string) in tests {
+            assert_eq!(expected_string, policy.to_string());
+        }
+    }
+}
