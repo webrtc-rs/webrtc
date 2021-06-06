@@ -91,4 +91,20 @@ mod test {
             );
         }
     }
+
+    #[test]
+    fn test_dtls_transport_state_string() {
+        let tests = vec![
+            (DTLSTransportState::Unspecified, "unspecified"),
+            (DTLSTransportState::New, "new"),
+            (DTLSTransportState::Connecting, "connecting"),
+            (DTLSTransportState::Connected, "connected"),
+            (DTLSTransportState::Closed, "closed"),
+            (DTLSTransportState::Failed, "failed"),
+        ];
+
+        for (state, expected_string) in tests {
+            assert_eq!(expected_string, state.to_string(),)
+        }
+    }
 }
