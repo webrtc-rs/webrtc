@@ -19,7 +19,7 @@ use crate::error::Error;
 use crate::util::*;
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use crc::{crc32, Hasher32};
+use crc::{Crc, CRC_32_ISCSI};
 use std::fmt;
 
 ///Packet represents an SCTP packet, defined in https://tools.ietf.org/html/rfc4960#section-3
@@ -162,11 +162,12 @@ impl Packet {
         }
         let raw = raw.freeze();
 
-        let mut hasher = crc32::Digest::new(crc32::CASTAGNOLI);
-        hasher.write(&writer.to_vec());
-        hasher.write(&FOUR_ZEROES);
-        hasher.write(&raw[..]);
-        let checksum = hasher.sum32();
+        let hasher = Crc::<u32>::new(&CRC_32_ISCSI);
+        let mut digest = hasher.digest();
+        digest.update(&writer.to_vec());
+        digest.update(&FOUR_ZEROES);
+        digest.update(&raw[..]);
+        let checksum = digest.finalize();
 
         // Checksum is already in BigEndian
         // Using LittleEndian stops it from being flipped
