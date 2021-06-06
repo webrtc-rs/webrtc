@@ -5,7 +5,7 @@ use crate::util::*;
 use stun::message::*;
 
 use async_trait::async_trait;
-use crc32fast::Hasher;
+use crc::{Crc, CRC_32_ISCSI};
 use std::fmt;
 use std::ops::Add;
 use std::sync::atomic::{AtomicU16, AtomicU64, AtomicU8, Ordering};
@@ -125,9 +125,7 @@ impl Candidate for CandidateBase {
         buf.extend_from_slice(self.address.as_bytes());
         buf.extend_from_slice(self.network_type().to_string().as_bytes());
 
-        let mut hasher = Hasher::new();
-        hasher.update(&buf);
-        let checksum = hasher.finalize();
+        let checksum = Crc::<u32>::new(&CRC_32_ISCSI).checksum(&buf);
 
         format!("{}", checksum)
     }
