@@ -1,6 +1,6 @@
 /// SdpPolicy determines which style of SDP offers and answers
 /// can be used
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum SdpPolicy {
     /// UnifiedPlan uses unified-plan offers and answers
     /// (the default in Chrome since M72)

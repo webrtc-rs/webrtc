@@ -1,5 +1,9 @@
+use serde::{Deserialize, Serialize};
+use std::fmt;
+
 /// DtlsRole indicates the role of the DTLS transport.
-pub enum DtlsRole {
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub enum DTLSRole {
     Unspecified,
 
     /// DTLSRoleAuto defines the DTLS role is determined based on
@@ -21,33 +25,31 @@ pub enum DtlsRole {
 /// not begin until the answerer is received, which adds additional
 /// latency. setup:active allows the answer and the DTLS handshake to
 /// occur in parallel.  Thus, setup:active is RECOMMENDED.
-pub(crate) const DEFAULT_DTLS_ROLE_ANSWER: DtlsRole = DtlsRole::Client;
+pub(crate) const DEFAULT_DTLS_ROLE_ANSWER: DTLSRole = DTLSRole::Client;
 
 /// The endpoint that is the offerer MUST use the setup attribute
 /// value of setup:actpass and be prepared to receive a client_hello
 /// before it receives the answer.
-pub(crate) const DEFAULT_DTLS_ROLE_OFFER: DtlsRole = DtlsRole::Auto;
+pub(crate) const DEFAULT_DTLS_ROLE_OFFER: DTLSRole = DTLSRole::Auto;
 
-impl Default for DtlsRole {
+impl Default for DTLSRole {
     fn default() -> Self {
-        DtlsRole::Unspecified
+        DTLSRole::Unspecified
+    }
+}
+
+impl fmt::Display for DTLSRole {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            DTLSRole::Auto => write!(f, "auto"),
+            DTLSRole::Client => write!(f, "client"),
+            DTLSRole::Server => write!(f, "server"),
+            _ => write!(f, "unspecified"),
+        }
     }
 }
 
 /*TODO:
-func (r DTLSRole) String() string {
-    switch r {
-    case DTLSRoleAuto:
-        return "auto"
-    case DTLSRoleClient:
-        return "client"
-    case DTLSRoleServer:
-        return "server"
-    default:
-        return unknownStr
-    }
-}
-
 // Iterate a SessionDescription from a remote to determine if an explicit
 // role can been determined from it. The decision is made from the first role we we parse.
 // If no role can be found we return DTLSRoleAuto
@@ -86,3 +88,75 @@ func connectionRoleFromDtlsRole(d DTLSRole) sdp.ConnectionRole {
         return sdp.ConnectionRole(0)
     }
 }*/
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_dtls_role_string() {
+        let tests = vec![
+            (DTLSRole::Unspecified, "unspecified"),
+            (DTLSRole::Auto, "auto"),
+            (DTLSRole::Client, "client"),
+            (DTLSRole::Server, "server"),
+        ];
+
+        for (role, expected_string) in tests {
+            assert_eq!(expected_string, role.to_string(),)
+        }
+    }
+
+    /*TODO: func TestDTLSRoleFromRemoteSDP(t *testing.T) {
+        parseSDP := func(raw string) *sdp.SessionDescription {
+            parsed := &sdp.SessionDescription{}
+            if err := parsed.Unmarshal([]byte(raw)); err != nil {
+                panic(err)
+            }
+            return parsed
+        }
+
+        const noMedia = `v=0
+    o=- 4596489990601351948 2 IN IP4 127.0.0.1
+    s=-
+    t=0 0
+    `
+
+        const mediaNoSetup = `v=0
+    o=- 4596489990601351948 2 IN IP4 127.0.0.1
+    s=-
+    t=0 0
+    m=application 47299 DTLS/SCTP 5000
+    c=IN IP4 192.168.20.129
+    `
+
+        const mediaSetupDeclared = `v=0
+    o=- 4596489990601351948 2 IN IP4 127.0.0.1
+    s=-
+    t=0 0
+    m=application 47299 DTLS/SCTP 5000
+    c=IN IP4 192.168.20.129
+    a=setup:%s
+    `
+
+        testCases := []struct {
+            test               string
+            sessionDescription *sdp.SessionDescription
+            expectedRole       DTLSRole
+        }{
+            {"nil SessionDescription", nil, DTLSRoleAuto},
+            {"No MediaDescriptions", parseSDP(noMedia), DTLSRoleAuto},
+            {"MediaDescription, no setup", parseSDP(mediaNoSetup), DTLSRoleAuto},
+            {"MediaDescription, setup:actpass", parseSDP(fmt.Sprintf(mediaSetupDeclared, "actpass")), DTLSRoleAuto},
+            {"MediaDescription, setup:passive", parseSDP(fmt.Sprintf(mediaSetupDeclared, "passive")), DTLSRoleServer},
+            {"MediaDescription, setup:active", parseSDP(fmt.Sprintf(mediaSetupDeclared, "active")), DTLSRoleClient},
+        }
+        for _, testCase := range testCases {
+            assert.Equal(t,
+                testCase.expectedRole,
+                dtlsRoleFromRemoteSDP(testCase.sessionDescription),
+                "TestDTLSRoleFromSDP (%s)", testCase.test,
+            )
+        }
+    }*/
+}

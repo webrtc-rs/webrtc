@@ -5,7 +5,6 @@ use std::fmt;
 /// remote endpoint is bundle-aware, all media tracks and data channels are
 /// bundled onto the same transport.
 #[derive(Debug, PartialEq, Copy, Clone)]
-#[repr(C)]
 pub enum BundlePolicy {
     Unspecified,
 

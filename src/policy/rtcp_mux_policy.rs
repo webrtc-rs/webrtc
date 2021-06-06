@@ -1,6 +1,6 @@
 /// RTCPMuxPolicy affects what ICE candidates are gathered to support
 /// non-multiplexed RTCP.
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum RTCPMuxPolicy {
     /// RTCPMuxPolicyNegotiate indicates to gather ICE candidates for both
     /// RTP and RTCP candidates. If the remote-endpoint is capable of

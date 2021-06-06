@@ -1,6 +1,6 @@
 /// ICETransportPolicy defines the ICE candidate policy surface the
 /// permitted candidates. Only these candidates are used for connectivity checks.
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum ICETransportPolicy {
     /// ICETransportPolicyAll indicates any type of candidate is used.
     All,

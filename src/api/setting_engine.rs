@@ -2,7 +2,7 @@ use ice::candidate::CandidateType;
 use ice::mdns::MulticastDnsMode;
 use ice::network_type::NetworkType;
 
-use crate::dtls::dtls_role::DtlsRole;
+use crate::dtls::dtls_role::DTLSRole;
 use dtls::extension::extension_use_srtp::SrtpProtectionProfile;
 use tokio::time::Duration;
 
@@ -54,7 +54,7 @@ pub struct ReplayProtection {
 #[derive(Default)]
 pub struct SettingEngine {
     sdp_media_level_fingerprints: bool,
-    answering_dtls_role: DtlsRole,
+    answering_dtls_role: DTLSRole,
     disable_certificate_fingerprint_verification: bool,
     disable_srtp_replay_protection: bool,
     disable_srtcp_replay_protection: bool,
