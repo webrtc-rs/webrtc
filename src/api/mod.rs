@@ -1,9 +1,8 @@
-pub mod bundle_policy;
-pub mod media_engine;
-pub mod setting_engine;
-
 use media_engine::*;
 use setting_engine::*;
+
+pub mod media_engine;
+pub mod setting_engine;
 
 /// API bundles the global functions of the WebRTC and ORTC API.
 /// Some of these functions are also exported globally using the

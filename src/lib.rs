@@ -10,6 +10,7 @@ mod dtls;
 mod ice;
 pub mod media;
 pub mod peer;
+pub mod policy;
 mod rtcp;
 mod rtp;
 mod sctp;
