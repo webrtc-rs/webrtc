@@ -8,16 +8,25 @@ use setting_engine::*;
 /// Some of these functions are also exported globally using the
 /// defaultAPI object. Note that the global version of the API
 /// may be phased out in the future.
-#[derive(Default)]
 pub struct Api {
     setting_engine: SettingEngine,
     media_engine: MediaEngine,
     //TODO: interceptor   interceptor.Interceptor
 }
 
-#[derive(Default)]
 pub struct ApiBuilder {
     api: Api,
+}
+
+impl Default for ApiBuilder {
+    fn default() -> Self {
+        ApiBuilder {
+            api: Api {
+                setting_engine: SettingEngine::default(),
+                media_engine: MediaEngine::default(),
+            },
+        }
+    }
 }
 
 impl ApiBuilder {
