@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use crc::{crc32, Hasher32};
+use crc::{Crc, CRC_32_ISCSI};
 
 const PADDING_MULTIPLE: usize = 4;
 
@@ -13,11 +13,12 @@ pub(crate) static FOUR_ZEROES: Bytes = Bytes::from_static(&[0, 0, 0, 0]);
 
 /// Fastest way to do a crc32 without allocating.
 pub(crate) fn generate_packet_checksum(raw: &Bytes) -> u32 {
-    let mut hasher = crc32::Digest::new(crc32::CASTAGNOLI);
-    hasher.write(&raw[0..8]);
-    hasher.write(&FOUR_ZEROES[..]);
-    hasher.write(&raw[12..]);
-    hasher.sum32()
+    let hasher = Crc::<u32>::new(&CRC_32_ISCSI);
+    let mut digest = hasher.digest();
+    digest.update(&raw[0..8]);
+    digest.update(&FOUR_ZEROES[..]);
+    digest.update(&raw[12..]);
+    digest.finalize()
 }
 
 /// Serial Number Arithmetic (RFC 1982)
