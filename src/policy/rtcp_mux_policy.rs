@@ -4,18 +4,18 @@ use std::fmt;
 /// non-multiplexed RTCP.
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum RTCPMuxPolicy {
-    Unspecified,
+    Unspecified = 0,
 
     /// RTCPMuxPolicyNegotiate indicates to gather ICE candidates for both
     /// RTP and RTCP candidates. If the remote-endpoint is capable of
     /// multiplexing RTCP, multiplex RTCP on the RTP candidates. If it is not,
     /// use both the RTP and RTCP candidates separately.
-    Negotiate,
+    Negotiate = 1,
 
     /// RTCPMuxPolicyRequire indicates to gather ICE candidates only for
     /// RTP and multiplex RTCP on the RTP candidates. If the remote endpoint is
     /// not capable of rtcp-mux, session negotiation will fail.
-    Require,
+    Require = 2,
 }
 
 impl Default for RTCPMuxPolicy {

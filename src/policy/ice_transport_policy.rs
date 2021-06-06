@@ -2,17 +2,19 @@
 /// permitted candidates. Only these candidates are used for connectivity checks.
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum ICETransportPolicy {
+    Unspecified = 0,
+
     /// ICETransportPolicyAll indicates any type of candidate is used.
-    All,
+    All = 1,
 
     /// ICETransportPolicyRelay indicates only media relay candidates such
     /// as candidates passing through a TURN server are used.
-    Relay,
+    Relay = 2,
 }
 
 impl Default for ICETransportPolicy {
     fn default() -> Self {
-        ICETransportPolicy::All
+        ICETransportPolicy::Unspecified
     }
 }
 

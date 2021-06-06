@@ -4,18 +4,18 @@ use std::fmt;
 /// DtlsRole indicates the role of the DTLS transport.
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum DTLSRole {
-    Unspecified,
+    Unspecified = 0,
 
     /// DTLSRoleAuto defines the DTLS role is determined based on
     /// the resolved ICE role: the ICE controlled role acts as the DTLS
     /// client and the ICE controlling role acts as the DTLS server.
-    Auto,
+    Auto = 1,
 
     /// DTLSRoleClient defines the DTLS client role.
-    Client,
+    Client = 2,
 
     /// DTLSRoleServer defines the DTLS server role.
-    Server,
+    Server = 3,
 }
 
 /// https://tools.ietf.org/html/rfc5763

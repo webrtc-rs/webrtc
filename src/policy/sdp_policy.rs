@@ -2,25 +2,27 @@
 /// can be used
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum SdpPolicy {
+    Unspecified = 0,
+
     /// UnifiedPlan uses unified-plan offers and answers
     /// (the default in Chrome since M72)
     /// https://tools.ietf.org/html/draft-roach-mmusic-unified-plan-00
-    UnifiedPlan,
+    UnifiedPlan = 1,
 
     /// PlanB uses plan-b offers and answers
     /// NB: This format should be considered deprecated
     /// https://tools.ietf.org/html/draft-uberti-rtcweb-plan-00
-    PlanB,
+    PlanB = 2,
 
     /// UnifiedPlanWithFallback prefers unified-plan
     /// offers and answers, but will respond to a plan-b offer
     /// with a plan-b answer
-    UnifiedPlanWithFallback,
+    UnifiedPlanWithFallback = 3,
 }
 
 impl Default for SdpPolicy {
     fn default() -> Self {
-        SdpPolicy::UnifiedPlan
+        SdpPolicy::Unspecified
     }
 }
 

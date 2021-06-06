@@ -6,23 +6,23 @@ use std::fmt;
 /// bundled onto the same transport.
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum BundlePolicy {
-    Unspecified,
+    Unspecified = 0,
 
     /// BundlePolicyBalanced indicates to gather ICE candidates for each
     /// media type in use (audio, video, and data). If the remote endpoint is
     /// not bundle-aware, negotiate only one audio and video track on separate
     /// transports.
-    Balanced,
+    Balanced = 1,
 
     /// BundlePolicyMaxCompat indicates to gather ICE candidates for each
     /// track. If the remote endpoint is not bundle-aware, negotiate all media
-    // tracks on separate transports.
-    MaxCompat,
+    /// tracks on separate transports.
+    MaxCompat = 2,
 
     /// BundlePolicyMaxBundle indicates to gather ICE candidates for only
     /// one track. If the remote endpoint is not bundle-aware, negotiate only
     /// one media track.
-    MaxBundle,
+    MaxBundle = 3,
 }
 
 /// This is done this way because of a linter.

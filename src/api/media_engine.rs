@@ -73,7 +73,7 @@ func (m *MediaEngine) RegisterDefaultCodecs() error {
         }
     }
 
-    videoRTCPFeedback := []RTCPFeedback{{"goog-remb", ""}, {"ccm", "fir"}, {"nack", ""}, {"nack", "pli"}}
+    videoRTCPFeedback := []rtcpfeedback{{"goog-remb", ""}, {"ccm", "fir"}, {"nack", ""}, {"nack", "pli"}}
     for _, codec := range []RTPCodecParameters{
         {
             RTPCodecCapability: RTPCodecCapability{MIME_TYPE_VP8, 90000, 0, "", videoRTCPFeedback},
@@ -172,7 +172,7 @@ func (m *MediaEngine) RegisterDefaultCodecs() error {
 // addCodec will append codec if it not exists
 func (m *MediaEngine) addCodec(codecs []RTPCodecParameters, codec RTPCodecParameters) []RTPCodecParameters {
     for _, c := range codecs {
-        if c.MimeType == codec.MimeType && c.PayloadType == codec.PayloadType {
+        if c.mime_type == codec.mime_type && c.PayloadType == codec.PayloadType {
             return codecs
         }
     }
@@ -237,16 +237,16 @@ func (m *MediaEngine) RegisterHeaderExtension(extension RTPHeaderExtensionCapabi
 }
 
 // RegisterFeedback adds feedback mechanism to already registered codecs.
-func (m *MediaEngine) RegisterFeedback(feedback RTCPFeedback, typ RTPCodecType) {
+func (m *MediaEngine) RegisterFeedback(feedback rtcpfeedback, typ RTPCodecType) {
     switch typ {
     case RTPCodecTypeVideo:
         for i, v := range m.videoCodecs {
-            v.RTCPFeedback = append(v.RTCPFeedback, feedback)
+            v.rtcpfeedback = append(v.rtcpfeedback, feedback)
             m.videoCodecs[i] = v
         }
     case RTPCodecTypeAudio:
         for i, v := range m.audioCodecs {
-            v.RTCPFeedback = append(v.RTCPFeedback, feedback)
+            v.rtcpfeedback = append(v.rtcpfeedback, feedback)
             m.audioCodecs[i] = v
         }
     }
@@ -306,10 +306,10 @@ func (m *MediaEngine) collectStats(collector *statsReportCollector) {
                 Type:        StatsTypeCodec,
                 ID:          codec.statsID,
                 PayloadType: codec.PayloadType,
-                MimeType:    codec.MimeType,
-                ClockRate:   codec.ClockRate,
-                Channels:    uint8(codec.Channels),
-                SDPFmtpLine: codec.SDPFmtpLine,
+                mime_type:    codec.mime_type,
+                clock_rate:   codec.clock_rate,
+                channels:    uint8(codec.channels),
+                sdpfmtp_line: codec.sdpfmtp_line,
             }
 
             collector.Collect(stats.ID, stats)
@@ -327,7 +327,7 @@ func (m *MediaEngine) matchRemoteCodec(remoteCodec RTPCodecParameters, typ RTPCo
         codecs = m.audioCodecs
     }
 
-    remoteFmtp := parse_fmtp(remoteCodec.RTPCodecCapability.SDPFmtpLine)
+    remoteFmtp := parse_fmtp(remoteCodec.RTPCodecCapability.sdpfmtp_line)
     if apt, hasApt := remoteFmtp["apt"]; hasApt {
         payloadType, err := strconv.Atoi(apt)
         if err != nil {
@@ -356,14 +356,14 @@ func (m *MediaEngine) matchRemoteCodec(remoteCodec RTPCodecParameters, typ RTPCo
         }
 
         // if apt's media codec is partial match, then apt codec must be partial match too
-        _, matchType := codecParametersFuzzySearch(remoteCodec, codecs)
+        _, matchType := codec_parameters_fuzzy_search(remoteCodec, codecs)
         if matchType == codecMatchExact && aptMatch == codecMatchPartial {
             matchType = codecMatchPartial
         }
         return matchType, nil
     }
 
-    _, matchType := codecParametersFuzzySearch(remoteCodec, codecs)
+    _, matchType := codec_parameters_fuzzy_search(remoteCodec, codecs)
     return matchType, nil
 }
 
@@ -501,7 +501,7 @@ func (m *MediaEngine) getRTPParametersByKind(typ RTPCodecType, directions []RTPT
     }
 
     return RTPParameters{
-        HeaderExtensions: header_extensions,
+        header_extensions: header_extensions,
         Codecs:           m.getCodecsByKind(typ),
     }
 }
@@ -520,13 +520,13 @@ func (m *MediaEngine) getRTPParametersByPayloadType(payloadType PayloadType) (RT
     }
 
     return RTPParameters{
-        HeaderExtensions: header_extensions,
+        header_extensions: header_extensions,
         Codecs:           []RTPCodecParameters{codec},
     }, nil
 }
 
 func payloaderForCodec(codec RTPCodecCapability) (rtp.Payloader, error) {
-    switch strings.ToLower(codec.MimeType) {
+    switch strings.ToLower(codec.mime_type) {
     case strings.ToLower(MIME_TYPE_H264):
         return &codecs.H264Payloader{}, nil
     case strings.ToLower(MIME_TYPE_OPUS):

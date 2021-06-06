@@ -3,29 +3,29 @@ use std::fmt;
 /// DTLSTransportState indicates the DTLS transport establishment state.
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum DTLSTransportState {
-    Unspecified,
+    Unspecified = 0,
 
     /// DTLSTransportStateNew indicates that DTLS has not started negotiating
     /// yet.
-    New,
+    New = 1,
 
     /// DTLSTransportStateConnecting indicates that DTLS is in the process of
     /// negotiating a secure connection and verifying the remote fingerprint.
-    Connecting,
+    Connecting = 2,
 
     /// DTLSTransportStateConnected indicates that DTLS has completed
     /// negotiation of a secure connection and verified the remote fingerprint.
-    Connected,
+    Connected = 3,
 
     /// DTLSTransportStateClosed indicates that the transport has been closed
     /// intentionally as the result of receipt of a close_notify alert, or
     /// calling close().
-    Closed,
+    Closed = 4,
 
     /// DTLSTransportStateFailed indicates that the transport has failed as
     /// the result of an error (such as receipt of an error alert or failure to
     /// validate the remote fingerprint).
-    Failed,
+    Failed = 5,
 }
 
 impl Default for DTLSTransportState {
