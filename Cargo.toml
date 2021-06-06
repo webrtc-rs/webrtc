@@ -25,6 +25,8 @@ log = "0.4.14"
 #async-trait = "0.1.42"
 #waitgroup = "0.1.2"
 #defer = "0.1.0"
+#serde = { version = "1.0", features = ["derive"] }
+#serde_json = "1.0"
 
 [dev-dependencies]
 tokio-test = "0.4"

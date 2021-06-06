@@ -1,5 +1,6 @@
 /// SdpPolicy determines which style of SDP offers and answers
 /// can be used
+#[derive(Debug, Clone)]
 pub enum SdpPolicy {
     /// UnifiedPlan uses unified-plan offers and answers
     /// (the default in Chrome since M72)
@@ -15,6 +16,12 @@ pub enum SdpPolicy {
     /// offers and answers, but will respond to a plan-b offer
     /// with a plan-b answer
     UnifiedPlanWithFallback,
+}
+
+impl Default for SdpPolicy {
+    fn default() -> Self {
+        SdpPolicy::UnifiedPlan
+    }
 }
 
 /*

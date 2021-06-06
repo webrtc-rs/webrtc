@@ -1,5 +1,6 @@
 /// RTCPMuxPolicy affects what ICE candidates are gathered to support
 /// non-multiplexed RTCP.
+#[derive(Debug, Clone)]
 pub enum RTCPMuxPolicy {
     /// RTCPMuxPolicyNegotiate indicates to gather ICE candidates for both
     /// RTP and RTCP candidates. If the remote-endpoint is capable of
@@ -11,6 +12,12 @@ pub enum RTCPMuxPolicy {
     /// RTP and multiplex RTCP on the RTP candidates. If the remote endpoint is
     /// not capable of rtcp-mux, session negotiation will fail.
     Require,
+}
+
+impl Default for RTCPMuxPolicy {
+    fn default() -> Self {
+        RTCPMuxPolicy::Negotiate
+    }
 }
 
 /*

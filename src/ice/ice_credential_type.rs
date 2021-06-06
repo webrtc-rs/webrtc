@@ -1,5 +1,6 @@
 /// ICECredentialType indicates the type of credentials used to connect to
 /// an ICE server.
+#[derive(Debug, Copy, Clone)]
 pub enum ICECredentialType {
     /// ICECredential::Password describes username and password based
     /// credentials as described in https://tools.ietf.org/html/rfc5389.
@@ -8,6 +9,12 @@ pub enum ICECredentialType {
     // ICECredential::Oauth describes token based credential as described
     // in https://tools.ietf.org/html/rfc7635.
     //Oauth,
+}
+
+impl Default for ICECredentialType {
+    fn default() -> Self {
+        ICECredentialType::Password
+    }
 }
 
 /*

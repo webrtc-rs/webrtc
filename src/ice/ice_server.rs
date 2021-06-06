@@ -2,11 +2,12 @@ use crate::ice::ice_credential_type::ICECredentialType;
 
 /// ICEServer describes a single STUN and TURN server that can be used by
 /// the ICEAgent to establish a connection with a peer.
+#[derive(Default, Debug, Clone)]
 pub struct ICEServer {
-    pub urls: Vec<String>,                  //          `json:"urls"`
-    pub username: String,                   //      `json:"username,omitempty"`
-    pub credential: String,                 //    `json:"credential,omitempty"`
-    pub credential_type: ICECredentialType, // `json:"credentialType,omitempty"`
+    pub urls: Vec<String>,
+    pub username: String,
+    pub credential: String,
+    pub credential_type: ICECredentialType,
 }
 
 /*TODO:
