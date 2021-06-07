@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-#[derive(Debug, Error, PartialEq, Clone)]
+#[derive(Debug, Error)] //, PartialEq, Clone
 pub enum Error {
     // ErrUnknownType indicates an error with Unknown info.
     #[error("unknown")]
@@ -302,4 +302,7 @@ pub enum Error {
     ErrICETransportNotInNew,
     #[error("bad Certificate PEM format")]
     ErrCertificatePEMFormatError,
+
+    #[error("SdpError: {0}")]
+    ErrSdpError(#[from] sdp::error::Error),
 }
