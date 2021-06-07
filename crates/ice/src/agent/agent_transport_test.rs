@@ -93,8 +93,8 @@ async fn test_remote_local_addr() -> Result<(), Error> {
         let b_laddr = cb.local_addr().await?;
 
         // Assert addresses
-        assert_eq!(a_laddr.ip().to_string(), format!("{}", VNET_LOCAL_IPA),);
-        assert_eq!(b_laddr.ip().to_string(), format!("{}", VNET_LOCAL_IPB),);
+        assert_eq!(a_laddr.ip().to_string(), VNET_LOCAL_IPA.to_string());
+        assert_eq!(b_laddr.ip().to_string(), VNET_LOCAL_IPB.to_string());
 
         // Close
         //ca.close().await?;
@@ -109,7 +109,7 @@ async fn test_remote_local_addr() -> Result<(), Error> {
 #[tokio::test]
 async fn test_conn_stats() -> Result<(), Error> {
     let (ca, cb, _, _) = pipe(None, None).await?;
-    let na = ca.send(&vec![0u8; 10]).await?;
+    let na = ca.send(&[0u8; 10]).await?;
 
     let wg = WaitGroup::new();
 

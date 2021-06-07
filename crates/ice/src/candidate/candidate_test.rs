@@ -339,7 +339,7 @@ async fn test_candidate_marshal() -> Result<(), Error> {
                 );
                 assert_eq!(marshaled, actual_candidate.marshal());
             } else {
-                assert!(false, "expected ok");
+                panic!("expected ok");
             }
         } else {
             assert!(actual_candidate.is_err(), "expected error");

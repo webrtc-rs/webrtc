@@ -158,5 +158,5 @@ pub(crate) async fn listen_udp_in_port_range(
         }
     }
 
-    return Err(ERR_PORT.to_owned());
+    Err(ERR_PORT.to_owned())
 }

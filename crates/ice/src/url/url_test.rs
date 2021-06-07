@@ -131,7 +131,7 @@ fn test_parse_url_failure() -> Result<(), Error> {
         if let Err(err) = result {
             assert_eq!(err, expected_err, "testCase:{}", raw_url);
         } else {
-            assert!(false, "expected error, but got ok");
+            panic!("expected error, but got ok");
         }
     }
 

@@ -87,7 +87,7 @@ async fn test_multicast_dns_static_host_name() -> Result<(), Error> {
     if let Err(err) = Agent::new(cfg0).await {
         assert_eq!(err, *ERR_INVALID_MULTICAST_DNSHOST_NAME);
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     let cfg1 = AgentConfig {
@@ -139,7 +139,7 @@ fn test_generate_multicast_dnsname() -> Result<(), Error> {
             name
         );
     } else {
-        assert!(false, "expected ok, but got err");
+        panic!("expected ok, but got err");
     }
 
     Ok(())

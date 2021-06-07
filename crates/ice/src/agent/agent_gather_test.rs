@@ -47,10 +47,10 @@ async fn test_vnet_gather_dynamic_ip_address() -> Result<(), Error> {
 
     for ip in &local_ips {
         if ip.is_loopback() {
-            assert!(false, "should not return loopback IP");
+            panic!("should not return loopback IP");
         }
         if !ipnet.contains(ip) {
-            assert!(false, "{} should be contained in the CIDR {}", ip, ipnet);
+            panic!("{} should be contained in the CIDR {}", ip, ipnet);
         }
     }
 
@@ -180,7 +180,7 @@ async fn test_vnet_gather_with_nat_1to1_as_host_candidates() -> Result<(), Error
         }
     }
 
-    if &candidates[0].address() == external_ip0 {
+    if candidates[0].address() == external_ip0 {
         assert_eq!(
             candidates[1].address(),
             external_ip1,
@@ -199,7 +199,7 @@ async fn test_vnet_gather_with_nat_1to1_as_host_candidates() -> Result<(), Error
             "Unexpected listen IP: {}",
             laddrs[1].ip()
         );
-    } else if &candidates[0].address() == external_ip1 {
+    } else if candidates[0].address() == external_ip1 {
         assert_eq!(
             candidates[1].address(),
             external_ip0,
@@ -296,7 +296,7 @@ async fn test_vnet_gather_with_nat_1to1_as_srflx_candidates() -> Result<(), Erro
                 candi_srflx = Some(candidate);
             }
             _ => {
-                assert!(false, "Unexpected candidate type");
+                panic!("Unexpected candidate type");
             }
         }
     }
@@ -346,11 +346,7 @@ async fn test_vnet_gather_with_interface_filter() -> Result<(), Error> {
         let a = Agent::new(AgentConfig {
             net: Some(Arc::clone(&nw)),
             interface_filter: Some(Box::new(|interface_name: &str| -> bool {
-                if "eth0" == interface_name {
-                    true
-                } else {
-                    false
-                }
+                "eth0" == interface_name
             })),
             ..Default::default()
         })
@@ -378,7 +374,6 @@ async fn test_vnet_gather_turn_connection_leak() -> Result<(), Error> {
         username: "user".to_owned(),
         password: "pass".to_owned(),
         proto: ProtoType::Udp,
-        ..Default::default()
     };
 
     // buildVNet with a Symmetric NATs for both LANs

@@ -90,7 +90,6 @@ async fn test_pair_priority() -> Result<(), Error> {
         },
         rel_addr: "4.3.2.1".to_owned(),
         rel_port: 43212,
-        ..Default::default()
     };
 
     let srflx_remote = srflx_config
@@ -107,7 +106,6 @@ async fn test_pair_priority() -> Result<(), Error> {
         },
         rel_addr: "4.3.2.1".to_owned(),
         rel_port: 43211,
-        ..Default::default()
     };
 
     let prflx_remote = prflx_config
@@ -161,7 +159,7 @@ async fn test_pair_priority() -> Result<(), Error> {
                     remote.to_string(),
                 );
             } else {
-                assert!(false, "expected Some, but got None");
+                panic!("expected Some, but got None");
             }
         }
     }
@@ -310,8 +308,7 @@ async fn test_handle_peer_reflexive_udp_pflx_candidate() -> Result<(), Error> {
 
             assert_eq!(c.port(), 999, "Port number mismatch");
         } else {
-            assert!(
-                false,
+            panic!(
                 "expected non-empty remote candidate for network type {}",
                 local.network_type()
             );
@@ -914,18 +911,18 @@ async fn test_connection_state_callback() -> Result<(), Error> {
     let cfg0 = AgentConfig {
         urls: vec![],
         network_types: supported_network_types(),
-        disconnected_timeout: Some(disconnected_duration.clone()),
-        failed_timeout: Some(failed_duration.clone()),
-        keepalive_interval: Some(keepalive_interval.clone()),
+        disconnected_timeout: Some(disconnected_duration),
+        failed_timeout: Some(failed_duration),
+        keepalive_interval: Some(keepalive_interval),
         ..Default::default()
     };
 
     let cfg1 = AgentConfig {
         urls: vec![],
         network_types: supported_network_types(),
-        disconnected_timeout: Some(disconnected_duration.clone()),
-        failed_timeout: Some(failed_duration.clone()),
-        keepalive_interval: Some(keepalive_interval.clone()),
+        disconnected_timeout: Some(disconnected_duration),
+        failed_timeout: Some(failed_duration),
+        keepalive_interval: Some(keepalive_interval),
         ..Default::default()
     };
 
@@ -1068,7 +1065,6 @@ async fn test_candidate_pair_stats() -> Result<(), Error> {
             },
             rel_addr: "4.3.2.1".to_owned(),
             rel_port: 43212,
-            ..Default::default()
         }
         .new_candidate_server_reflexive(Some(Arc::clone(&a.agent_internal)))
         .await?,
@@ -1085,7 +1081,6 @@ async fn test_candidate_pair_stats() -> Result<(), Error> {
             },
             rel_addr: "4.3.2.1".to_owned(),
             rel_port: 43211,
-            ..Default::default()
         }
         .new_candidate_peer_reflexive(Some(Arc::clone(&a.agent_internal)))
         .await?,
@@ -1113,10 +1108,10 @@ async fn test_candidate_pair_stats() -> Result<(), Error> {
         Arc::clone(&host_remote),
     ] {
         let mut ai = a.agent_internal.lock().await;
-        let p = ai.find_pair(&host_local, &remote).await;
+        let p = ai.find_pair(&host_local, remote).await;
 
         if p.is_none() {
-            ai.add_pair(Arc::clone(&host_local), Arc::clone(&remote))
+            ai.add_pair(Arc::clone(&host_local), Arc::clone(remote))
                 .await;
         }
     }
@@ -1155,7 +1150,7 @@ async fn test_candidate_pair_stats() -> Result<(), Error> {
         } else if cps.remote_candidate_id == host_remote.id() {
             host_pair_stat = cps;
         } else {
-            assert!(false, "invalid remote candidate ID");
+            panic!("invalid remote candidate ID");
         }
     }
 
@@ -1221,7 +1216,6 @@ async fn test_local_candidate_stats() -> Result<(), Error> {
             },
             rel_addr: "4.3.2.1".to_owned(),
             rel_port: 43212,
-            ..Default::default()
         }
         .new_candidate_server_reflexive(Some(Arc::clone(&a.agent_internal)))
         .await?,
@@ -1253,8 +1247,7 @@ async fn test_local_candidate_stats() -> Result<(), Error> {
             srflx_local_stat = stats.clone();
             Arc::clone(&srflx_local)
         } else {
-            assert!(false, "invalid local candidate ID");
-            Arc::clone(&srflx_local)
+            panic!("invalid local candidate ID");
         };
 
         assert_eq!(
@@ -1318,7 +1311,6 @@ async fn test_remote_candidate_stats() -> Result<(), Error> {
             },
             rel_addr: "4.3.2.1".to_owned(),
             rel_port: 43212,
-            ..Default::default()
         }
         .new_candidate_server_reflexive(Some(Arc::clone(&a.agent_internal)))
         .await?,
@@ -1335,7 +1327,6 @@ async fn test_remote_candidate_stats() -> Result<(), Error> {
             },
             rel_addr: "4.3.2.1".to_owned(),
             rel_port: 43211,
-            ..Default::default()
         }
         .new_candidate_peer_reflexive(Some(Arc::clone(&a.agent_internal)))
         .await?,
@@ -1397,8 +1388,7 @@ async fn test_remote_candidate_stats() -> Result<(), Error> {
             host_remote_stat = stats.clone();
             Arc::clone(&host_remote)
         } else {
-            assert!(false, "invalid remote candidate ID");
-            Arc::clone(&host_remote)
+            panic!("invalid remote candidate ID");
         };
 
         assert_eq!(
@@ -1479,7 +1469,7 @@ async fn test_init_ext_ip_mapping() -> Result<(), Error> {
             err
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     // NewAgent should return an error when 1:1 NAT for srflx candidate is enabled
@@ -1498,7 +1488,7 @@ async fn test_init_ext_ip_mapping() -> Result<(), Error> {
             err
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     // NewAgent should return an error when 1:1 NAT for host candidate is enabled
@@ -1517,7 +1507,7 @@ async fn test_init_ext_ip_mapping() -> Result<(), Error> {
             err
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     // NewAgent should return if newExternalIPMapper() returns an error.
@@ -1534,7 +1524,7 @@ async fn test_init_ext_ip_mapping() -> Result<(), Error> {
             err
         );
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     Ok(())
@@ -1603,7 +1593,7 @@ async fn test_agent_credentials() -> Result<(), Error> {
     {
         assert_eq!(err, *ERR_LOCAL_UFRAG_INSUFFICIENT_BITS);
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     if let Err(err) = Agent::new(AgentConfig {
@@ -1614,7 +1604,7 @@ async fn test_agent_credentials() -> Result<(), Error> {
     {
         assert_eq!(err, *ERR_LOCAL_PWD_INSUFFICIENT_BITS);
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     Ok(())
@@ -1629,16 +1619,16 @@ async fn test_connection_state_failed_delete_all_candidates() -> Result<(), Erro
 
     let cfg0 = AgentConfig {
         network_types: supported_network_types(),
-        disconnected_timeout: Some(one_second.clone()),
-        failed_timeout: Some(one_second.clone()),
-        keepalive_interval: Some(keepalive_interval.clone()),
+        disconnected_timeout: Some(one_second),
+        failed_timeout: Some(one_second),
+        keepalive_interval: Some(keepalive_interval),
         ..Default::default()
     };
     let cfg1 = AgentConfig {
         network_types: supported_network_types(),
-        disconnected_timeout: Some(one_second.clone()),
-        failed_timeout: Some(one_second.clone()),
-        keepalive_interval: Some(keepalive_interval.clone()),
+        disconnected_timeout: Some(one_second),
+        failed_timeout: Some(one_second),
+        keepalive_interval: Some(keepalive_interval),
         ..Default::default()
     };
 
@@ -1681,15 +1671,15 @@ async fn test_connection_state_connecting_to_failed() -> Result<(), Error> {
     let keepalive_interval = Duration::from_secs(0);
 
     let cfg0 = AgentConfig {
-        disconnected_timeout: Some(one_second.clone()),
-        failed_timeout: Some(one_second.clone()),
-        keepalive_interval: Some(keepalive_interval.clone()),
+        disconnected_timeout: Some(one_second),
+        failed_timeout: Some(one_second),
+        keepalive_interval: Some(keepalive_interval),
         ..Default::default()
     };
     let cfg1 = AgentConfig {
-        disconnected_timeout: Some(one_second.clone()),
-        failed_timeout: Some(one_second.clone()),
-        keepalive_interval: Some(keepalive_interval.clone()),
+        disconnected_timeout: Some(one_second),
+        failed_timeout: Some(one_second),
+        keepalive_interval: Some(keepalive_interval),
         ..Default::default()
     };
 
@@ -1713,7 +1703,7 @@ async fn test_connection_state_connecting_to_failed() -> Result<(), Error> {
                     let mut c = wc_clone.lock().await;
                     c.take();
                 } else if c == ConnectionState::Connected || c == ConnectionState::Completed {
-                    assert!(false, "Unexpected ConnectionState: {}", c);
+                    panic!("Unexpected ConnectionState: {}", c);
                 }
             })
         });
@@ -1770,7 +1760,7 @@ async fn test_agent_restart_during_gather() -> Result<(), Error> {
     if let Err(err) = agent.restart("".to_owned(), "".to_owned()).await {
         assert_eq!(err, *ERR_RESTART_WHEN_GATHERING);
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     agent.close().await?;
@@ -1788,7 +1778,7 @@ async fn test_agent_restart_when_closed() -> Result<(), Error> {
     if let Err(err) = agent.restart("".to_owned(), "".to_owned()).await {
         assert_eq!(err, *ERR_CLOSED);
     } else {
-        assert!(false, "expected error, but got ok");
+        panic!("expected error, but got ok");
     }
 
     Ok(())
@@ -1801,13 +1791,13 @@ async fn test_agent_restart_one_side() -> Result<(), Error> {
     //"Restart One Side"
     let (_, _, agent_a, agent_b) = pipe(
         Some(AgentConfig {
-            disconnected_timeout: Some(one_second.clone()),
-            failed_timeout: Some(one_second.clone()),
+            disconnected_timeout: Some(one_second),
+            failed_timeout: Some(one_second),
             ..Default::default()
         }),
         Some(AgentConfig {
-            disconnected_timeout: Some(one_second.clone()),
-            failed_timeout: Some(one_second.clone()),
+            disconnected_timeout: Some(one_second),
+            failed_timeout: Some(one_second),
             ..Default::default()
         }),
     )
@@ -1861,13 +1851,13 @@ async fn test_agent_restart_both_side() -> Result<(), Error> {
     // Store the original candidates, confirm that after we reconnect we have new pairs
     let (_, _, agent_a, agent_b) = pipe(
         Some(AgentConfig {
-            disconnected_timeout: Some(one_second.clone()),
-            failed_timeout: Some(one_second.clone()),
+            disconnected_timeout: Some(one_second),
+            failed_timeout: Some(one_second),
             ..Default::default()
         }),
         Some(AgentConfig {
-            disconnected_timeout: Some(one_second.clone()),
-            failed_timeout: Some(one_second.clone()),
+            disconnected_timeout: Some(one_second),
+            failed_timeout: Some(one_second),
             ..Default::default()
         }),
     )

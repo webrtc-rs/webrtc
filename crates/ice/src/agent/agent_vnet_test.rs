@@ -528,7 +528,6 @@ async fn test_connectivity_vnet_full_cone_nats_on_both_ends() -> Result<(), Erro
         username: "user".to_owned(),
         password: "pass".to_owned(),
         proto: ProtoType::Udp,
-        ..Default::default()
     };
 
     // buildVNet with a Full-cone NATs both LANs
@@ -591,7 +590,6 @@ async fn test_connectivity_vnet_symmetric_nats_on_both_ends() -> Result<(), Erro
         username: "user".to_owned(),
         password: "pass".to_owned(),
         proto: ProtoType::Udp,
-        ..Default::default()
     };
 
     // buildVNet with a Symmetric NATs for both LANs
@@ -660,7 +658,6 @@ async fn test_connectivity_vnet_1to1_nat_with_host_candidate_vs_symmetric_nats()
     let a0test_config = AgentTestConfig {
         urls: vec![],
         nat_1to1_ip_candidate_type: CandidateType::Host, // Use 1:1 NAT IP as a host candidate
-        ..Default::default()
     };
     let a1test_config = AgentTestConfig {
         urls: vec![],
@@ -714,7 +711,6 @@ async fn test_connectivity_vnet_1to1_nat_with_srflx_candidate_vs_symmetric_nats(
     let a0test_config = AgentTestConfig {
         urls: vec![],
         nat_1to1_ip_candidate_type: CandidateType::ServerReflexive, // Use 1:1 NAT IP as a srflx candidate
-        ..Default::default()
     };
     let a1test_config = AgentTestConfig {
         urls: vec![],
@@ -795,9 +791,9 @@ async fn test_disconnected_to_connected() -> Result<(), Error> {
             network_types: supported_network_types(),
             multicast_dns_mode: MulticastDnsMode::Disabled,
             net: Some(Arc::clone(&net0)),
-            disconnected_timeout: Some(disconnected_timeout.clone()),
-            keepalive_interval: Some(keepalive_interval.clone()),
-            check_interval: keepalive_interval.clone(),
+            disconnected_timeout: Some(disconnected_timeout),
+            keepalive_interval: Some(keepalive_interval),
+            check_interval: keepalive_interval,
             ..Default::default()
         })
         .await?,
@@ -808,9 +804,9 @@ async fn test_disconnected_to_connected() -> Result<(), Error> {
             network_types: supported_network_types(),
             multicast_dns_mode: MulticastDnsMode::Disabled,
             net: Some(Arc::clone(&net1)),
-            disconnected_timeout: Some(disconnected_timeout.clone()),
-            keepalive_interval: Some(keepalive_interval.clone()),
-            check_interval: keepalive_interval.clone(),
+            disconnected_timeout: Some(disconnected_timeout),
+            keepalive_interval: Some(keepalive_interval),
+            check_interval: keepalive_interval,
             ..Default::default()
         })
         .await?,
@@ -917,9 +913,7 @@ async fn test_write_use_valid_pair() -> Result<(), Error> {
                 ..Default::default()
             };
             let result = m.decode();
-            if result.is_err() {
-                return false;
-            } else if m.contains(stun::attributes::ATTR_USE_CANDIDATE) {
+            if result.is_err() | m.contains(stun::attributes::ATTR_USE_CANDIDATE) {
                 return false;
             }
         }
