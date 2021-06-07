@@ -21,14 +21,17 @@ use webrtc_ice::agent::Agent;
 #[macro_use]
 extern crate lazy_static;
 
+type SenderType = Arc<Mutex<mpsc::Sender<String>>>;
+type ReceiverType = Arc<Mutex<mpsc::Receiver<String>>>;
+
 lazy_static! {
     // ErrUnknownType indicates an error with Unknown info.
-    static ref REMOTE_AUTH_CHANNEL: (Arc<Mutex<mpsc::Sender<String>>>, Arc<Mutex<mpsc::Receiver<String>>>) = {
+    static ref REMOTE_AUTH_CHANNEL: (SenderType, ReceiverType ) = {
         let (tx, rx) = mpsc::channel::<String>(3);
         (Arc::new(Mutex::new(tx)), Arc::new(Mutex::new(rx)))
     };
 
-    static ref REMOTE_CAND_CHANNEL: (Arc<Mutex<mpsc::Sender<String>>>, Arc<Mutex<mpsc::Receiver<String>>>) = {
+    static ref REMOTE_CAND_CHANNEL: (SenderType, ReceiverType) = {
         let (tx, rx) = mpsc::channel::<String>(10);
         (Arc::new(Mutex::new(tx)), Arc::new(Mutex::new(rx)))
     };
@@ -180,7 +183,7 @@ async fn main() -> Result<(), Error> {
                                 remote_http_port
                             ))
                             .header("content-type", "application/json")
-                            .body(Body::from(format!("{}", c.marshal())))
+                            .body(Body::from(c.marshal()))
                         {
                             Ok(req) => req,
                             Err(err) => {

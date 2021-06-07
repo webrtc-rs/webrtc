@@ -469,7 +469,6 @@ impl CandidateBase {
                     "Discarded message from {}, not a valid remote candidate",
                     c.addr().await
                 );
-                return;
             } else if let Err(err) = ai.agent_conn.buffer.write(buf).await {
                 // NOTE This will return packetio.ErrFull if the buffer ever manages to fill up.
                 log::warn!("failed to write packet: {}", err);
