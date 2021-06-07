@@ -41,10 +41,10 @@ impl Default for DTLSRole {
 impl fmt::Display for DTLSRole {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            DTLSRole::Auto => write!(f, "auto"),
-            DTLSRole::Client => write!(f, "client"),
-            DTLSRole::Server => write!(f, "server"),
-            _ => write!(f, "unspecified"),
+            DTLSRole::Auto => write!(f, "Auto"),
+            DTLSRole::Client => write!(f, "Client"),
+            DTLSRole::Server => write!(f, "Server"),
+            _ => write!(f, "Unspecified"),
         }
     }
 }
@@ -96,10 +96,10 @@ mod test {
     #[test]
     fn test_dtls_role_string() {
         let tests = vec![
-            (DTLSRole::Unspecified, "unspecified"),
-            (DTLSRole::Auto, "auto"),
-            (DTLSRole::Client, "client"),
-            (DTLSRole::Server, "server"),
+            (DTLSRole::Unspecified, "Unspecified"),
+            (DTLSRole::Auto, "Auto"),
+            (DTLSRole::Client, "Client"),
+            (DTLSRole::Server, "Server"),
         ];
 
         for (role, expected_string) in tests {

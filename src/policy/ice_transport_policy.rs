@@ -23,8 +23,8 @@ impl Default for ICETransportPolicy {
 /// ICEGatherPolicy is the ORTC equivalent of ICETransportPolicy
 pub type ICEGatherPolicy = ICETransportPolicy;
 
-const ICE_TRANSPORT_POLICY_RELAY_STR: &str = "relay";
-const ICE_TRANSPORT_POLICY_ALL_STR: &str = "all";
+const ICE_TRANSPORT_POLICY_RELAY_STR: &str = "Relay";
+const ICE_TRANSPORT_POLICY_ALL_STR: &str = "All";
 
 /// takes a string and converts it to ICETransportPolicy
 impl From<&str> for ICETransportPolicy {
@@ -42,7 +42,7 @@ impl fmt::Display for ICETransportPolicy {
         let s = match *self {
             ICETransportPolicy::Relay => ICE_TRANSPORT_POLICY_RELAY_STR,
             ICETransportPolicy::All => ICE_TRANSPORT_POLICY_ALL_STR,
-            ICETransportPolicy::Unspecified => "unspecified",
+            ICETransportPolicy::Unspecified => "Unspecified",
         };
         write!(f, "{}", s)
     }

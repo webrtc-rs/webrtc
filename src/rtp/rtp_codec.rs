@@ -24,8 +24,8 @@ impl Default for RTPCodecType {
 impl From<&str> for RTPCodecType {
     fn from(raw: &str) -> Self {
         match raw {
-            "audio" => RTPCodecType::Audio,
-            "video" => RTPCodecType::Video,
+            "Audio" => RTPCodecType::Audio,
+            "Video" => RTPCodecType::Video,
             _ => RTPCodecType::Unspecified,
         }
     }
@@ -34,9 +34,9 @@ impl From<&str> for RTPCodecType {
 impl fmt::Display for RTPCodecType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
-            RTPCodecType::Audio => "audio",
-            RTPCodecType::Video => "video",
-            RTPCodecType::Unspecified => "unspecified",
+            RTPCodecType::Audio => "Audio",
+            RTPCodecType::Video => "Video",
+            RTPCodecType::Unspecified => "Unspecified",
         };
         write!(f, "{}", s)
     }

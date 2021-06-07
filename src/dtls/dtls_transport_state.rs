@@ -34,11 +34,11 @@ impl Default for DTLSTransportState {
     }
 }
 
-const DTLS_TRANSPORT_STATE_NEW_STR: &str = "new";
-const DTLS_TRANSPORT_STATE_CONNECTING_STR: &str = "connecting";
-const DTLS_TRANSPORT_STATE_CONNECTED_STR: &str = "connected";
-const DTLS_TRANSPORT_STATE_CLOSED_STR: &str = "closed";
-const DTLS_TRANSPORT_STATE_FAILED_STR: &str = "failed";
+const DTLS_TRANSPORT_STATE_NEW_STR: &str = "New";
+const DTLS_TRANSPORT_STATE_CONNECTING_STR: &str = "Connecting";
+const DTLS_TRANSPORT_STATE_CONNECTED_STR: &str = "Connected";
+const DTLS_TRANSPORT_STATE_CLOSED_STR: &str = "Closed";
+const DTLS_TRANSPORT_STATE_FAILED_STR: &str = "Failed";
 
 impl From<&str> for DTLSTransportState {
     fn from(raw: &str) -> Self {
@@ -61,7 +61,7 @@ impl fmt::Display for DTLSTransportState {
             DTLSTransportState::Connected => DTLS_TRANSPORT_STATE_CONNECTED_STR,
             DTLSTransportState::Closed => DTLS_TRANSPORT_STATE_CLOSED_STR,
             DTLSTransportState::Failed => DTLS_TRANSPORT_STATE_FAILED_STR,
-            DTLSTransportState::Unspecified => "unspecified",
+            DTLSTransportState::Unspecified => "Unspecified",
         };
         write!(f, "{}", s)
     }
@@ -74,12 +74,12 @@ mod test {
     #[test]
     fn test_new_dtls_transport_state() {
         let tests = vec![
-            ("unspecified", DTLSTransportState::Unspecified),
-            ("new", DTLSTransportState::New),
-            ("connecting", DTLSTransportState::Connecting),
-            ("connected", DTLSTransportState::Connected),
-            ("closed", DTLSTransportState::Closed),
-            ("failed", DTLSTransportState::Failed),
+            ("Unspecified", DTLSTransportState::Unspecified),
+            ("New", DTLSTransportState::New),
+            ("Connecting", DTLSTransportState::Connecting),
+            ("Connected", DTLSTransportState::Connected),
+            ("Closed", DTLSTransportState::Closed),
+            ("Failed", DTLSTransportState::Failed),
         ];
 
         for (state_string, expected_state) in tests {
@@ -95,12 +95,12 @@ mod test {
     #[test]
     fn test_dtls_transport_state_string() {
         let tests = vec![
-            (DTLSTransportState::Unspecified, "unspecified"),
-            (DTLSTransportState::New, "new"),
-            (DTLSTransportState::Connecting, "connecting"),
-            (DTLSTransportState::Connected, "connected"),
-            (DTLSTransportState::Closed, "closed"),
-            (DTLSTransportState::Failed, "failed"),
+            (DTLSTransportState::Unspecified, "Unspecified"),
+            (DTLSTransportState::New, "New"),
+            (DTLSTransportState::Connecting, "Connecting"),
+            (DTLSTransportState::Connected, "Connected"),
+            (DTLSTransportState::Closed, "Closed"),
+            (DTLSTransportState::Failed, "Failed"),
         ];
 
         for (state, expected_string) in tests {

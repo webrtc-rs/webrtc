@@ -35,10 +35,10 @@ impl Default for SDPType {
     }
 }
 
-const SDP_TYPE_OFFER_STR: &str = "offer";
-const SDP_TYPE_PRANSWER_STR: &str = "pranswer";
-const SDP_TYPE_ANSWER_STR: &str = "answer";
-const SDP_TYPE_ROLLBACK_STR: &str = "rollback";
+const SDP_TYPE_OFFER_STR: &str = "Offer";
+const SDP_TYPE_PRANSWER_STR: &str = "Pranswer";
+const SDP_TYPE_ANSWER_STR: &str = "Answer";
+const SDP_TYPE_ROLLBACK_STR: &str = "Rollback";
 
 /// creates an SDPType from a string
 impl From<&str> for SDPType {
@@ -60,39 +60,10 @@ impl fmt::Display for SDPType {
             SDPType::Pranswer => write!(f, "{}", SDP_TYPE_PRANSWER_STR),
             SDPType::Answer => write!(f, "{}", SDP_TYPE_ANSWER_STR),
             SDPType::Rollback => write!(f, "{}", SDP_TYPE_ROLLBACK_STR),
-            _ => write!(f, "unspecified"),
+            _ => write!(f, "Unspecified"),
         }
     }
 }
-
-/*
-// MarshalJSON enables JSON marshaling of a SDPType
-func (t SDPType) MarshalJSON() ([]byte, error) {
-    return json.Marshal(t.String())
-}
-
-// UnmarshalJSON enables JSON unmarshaling of a SDPType
-func (t *SDPType) UnmarshalJSON(b []byte) error {
-    var s string
-    if err := json.Unmarshal(b, &s); err != nil {
-        return err
-    }
-    switch strings.ToLower(s) {
-    default:
-        return ErrUnknownType
-    case "offer":
-        *t = SDPTypeOffer
-    case "pranswer":
-        *t = SDPTypePranswer
-    case "answer":
-        *t = SDPTypeAnswer
-    case "rollback":
-        *t = SDPTypeRollback
-    }
-
-    return nil
-}
-*/
 
 #[cfg(test)]
 mod test {
@@ -101,11 +72,11 @@ mod test {
     #[test]
     fn test_new_sdp_type() {
         let tests = vec![
-            ("unspecified", SDPType::Unspecified),
-            ("offer", SDPType::Offer),
-            ("pranswer", SDPType::Pranswer),
-            ("answer", SDPType::Answer),
-            ("rollback", SDPType::Rollback),
+            ("Unspecified", SDPType::Unspecified),
+            ("Offer", SDPType::Offer),
+            ("Pranswer", SDPType::Pranswer),
+            ("Answer", SDPType::Answer),
+            ("Rollback", SDPType::Rollback),
         ];
 
         for (sdp_type_string, expected_sdp_type) in tests {
@@ -116,11 +87,11 @@ mod test {
     #[test]
     fn test_sdp_type_string() {
         let tests = vec![
-            (SDPType::Unspecified, "unspecified"),
-            (SDPType::Offer, "offer"),
-            (SDPType::Pranswer, "pranswer"),
-            (SDPType::Answer, "answer"),
-            (SDPType::Rollback, "rollback"),
+            (SDPType::Unspecified, "Unspecified"),
+            (SDPType::Offer, "Offer"),
+            (SDPType::Pranswer, "Pranswer"),
+            (SDPType::Answer, "Answer"),
+            (SDPType::Rollback, "Rollback"),
         ];
 
         for (sdp_type, expected_string) in tests {

@@ -24,8 +24,8 @@ impl Default for RTCPMuxPolicy {
     }
 }
 
-const RTCP_MUX_POLICY_NEGOTIATE_STR: &str = "negotiate";
-const RTCP_MUX_POLICY_REQUIRE_STR: &str = "require";
+const RTCP_MUX_POLICY_NEGOTIATE_STR: &str = "Negotiate";
+const RTCP_MUX_POLICY_REQUIRE_STR: &str = "Require";
 
 impl From<&str> for RTCPMuxPolicy {
     fn from(raw: &str) -> Self {
@@ -42,7 +42,7 @@ impl fmt::Display for RTCPMuxPolicy {
         let s = match *self {
             RTCPMuxPolicy::Negotiate => RTCP_MUX_POLICY_NEGOTIATE_STR,
             RTCPMuxPolicy::Require => RTCP_MUX_POLICY_REQUIRE_STR,
-            RTCPMuxPolicy::Unspecified => "unspecified",
+            RTCPMuxPolicy::Unspecified => "Unspecified",
         };
         write!(f, "{}", s)
     }
@@ -73,9 +73,9 @@ mod test {
     #[test]
     fn test_new_rtcp_mux_policy() {
         let tests = vec![
-            ("unspecified", RTCPMuxPolicy::Unspecified),
-            ("negotiate", RTCPMuxPolicy::Negotiate),
-            ("require", RTCPMuxPolicy::Require),
+            ("Unspecified", RTCPMuxPolicy::Unspecified),
+            ("Negotiate", RTCPMuxPolicy::Negotiate),
+            ("Require", RTCPMuxPolicy::Require),
         ];
 
         for (policy_string, expected_policy) in tests {
@@ -86,9 +86,9 @@ mod test {
     #[test]
     fn test_rtcp_mux_policy_string() {
         let tests = vec![
-            (RTCPMuxPolicy::Unspecified, "unspecified"),
-            (RTCPMuxPolicy::Negotiate, "negotiate"),
-            (RTCPMuxPolicy::Require, "require"),
+            (RTCPMuxPolicy::Unspecified, "Unspecified"),
+            (RTCPMuxPolicy::Negotiate, "Negotiate"),
+            (RTCPMuxPolicy::Require, "Require"),
         ];
 
         for (policy, expected_string) in tests {

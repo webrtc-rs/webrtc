@@ -32,9 +32,9 @@ impl Default for BundlePolicy {
 }
 
 /// This is done this way because of a linter.
-const BUNDLE_POLICY_BALANCED_STR: &str = "balanced";
-const BUNDLE_POLICY_MAX_COMPAT_STR: &str = "max-compat";
-const BUNDLE_POLICY_MAX_BUNDLE_STR: &str = "max-bundle";
+const BUNDLE_POLICY_BALANCED_STR: &str = "Balanced";
+const BUNDLE_POLICY_MAX_COMPAT_STR: &str = "MaxCompat";
+const BUNDLE_POLICY_MAX_BUNDLE_STR: &str = "MaxBundle";
 
 impl From<&str> for BundlePolicy {
     /// NewSchemeType defines a procedure for creating a new SchemeType from a raw
@@ -55,7 +55,7 @@ impl fmt::Display for BundlePolicy {
             BundlePolicy::Balanced => write!(f, "{}", BUNDLE_POLICY_BALANCED_STR),
             BundlePolicy::MaxCompat => write!(f, "{}", BUNDLE_POLICY_MAX_COMPAT_STR),
             BundlePolicy::MaxBundle => write!(f, "{}", BUNDLE_POLICY_MAX_BUNDLE_STR),
-            _ => write!(f, "unspecified"),
+            _ => write!(f, "Unspecified"),
         }
     }
 }

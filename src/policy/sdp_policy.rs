@@ -28,9 +28,9 @@ impl Default for SdpPolicy {
     }
 }
 
-const SDP_SEMANTICS_UNIFIED_PLAN_WITH_FALLBACK: &str = "unified-plan-with-fallback";
-const SDP_SEMANTICS_UNIFIED_PLAN: &str = "unified-plan";
-const SDP_SEMANTICS_PLAN_B: &str = "plan-b";
+const SDP_SEMANTICS_UNIFIED_PLAN_WITH_FALLBACK: &str = "UnifiedPlanWithFallback";
+const SDP_SEMANTICS_UNIFIED_PLAN: &str = "UnifiedPlan";
+const SDP_SEMANTICS_PLAN_B: &str = "PlanB";
 
 impl From<&str> for SdpPolicy {
     fn from(raw: &str) -> Self {
@@ -49,7 +49,7 @@ impl fmt::Display for SdpPolicy {
             SdpPolicy::UnifiedPlanWithFallback => SDP_SEMANTICS_UNIFIED_PLAN_WITH_FALLBACK,
             SdpPolicy::UnifiedPlan => SDP_SEMANTICS_UNIFIED_PLAN,
             SdpPolicy::PlanB => SDP_SEMANTICS_PLAN_B,
-            SdpPolicy::Unspecified => "unspecified",
+            SdpPolicy::Unspecified => "Unspecified",
         };
         write!(f, "{}", s)
     }
