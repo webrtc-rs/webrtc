@@ -9,42 +9,41 @@ use std::borrow::Cow;
 use std::convert::From;
 use std::fmt;
 
-// SchemeType indicates the type of server used in the ice.URL structure.
+/// The type of server used in the ice.URL structure.
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub enum SchemeType {
-    // SchemeTypeSTUN indicates the URL represents a STUN server.
+    /// The URL represents a STUN server.
     Stun,
 
-    // SchemeTypeSTUNS indicates the URL represents a STUNS (secure) server.
+    /// The URL represents a STUNS (secure) server.
     Stuns,
 
-    // SchemeTypeTURN indicates the URL represents a TURN server.
+    /// The URL represents a TURN server.
     Turn,
 
-    // SchemeTypeTURNS indicates the URL represents a TURNS (secure) server.
+    /// The URL represents a TURNS (secure) server.
     Turns,
 
-    // Unknown defines default public constant to use for "enum" like struct
-    // comparisons when no value was defined.
+    /// Default public constant to use for "enum" like struct comparisons when no value was defined.
     Unknown,
 }
 
 impl Default for SchemeType {
     fn default() -> Self {
-        SchemeType::Unknown
+        Self::Unknown
     }
 }
 
 impl From<&str> for SchemeType {
-    // NewSchemeType defines a procedure for creating a new SchemeType from a raw
-    // string naming the scheme type.
+    /// Defines a procedure for creating a new `SchemeType` from a raw
+    /// string naming the scheme type.
     fn from(raw: &str) -> Self {
         match raw {
-            "stun" => SchemeType::Stun,
-            "stuns" => SchemeType::Stuns,
-            "turn" => SchemeType::Turn,
-            "turns" => SchemeType::Turns,
-            _ => SchemeType::Unknown,
+            "stun" => Self::Stun,
+            "stuns" => Self::Stuns,
+            "turn" => Self::Turn,
+            "turns" => Self::Turns,
+            _ => Self::Unknown,
         }
     }
 }
@@ -56,20 +55,19 @@ impl fmt::Display for SchemeType {
             SchemeType::Stuns => "stuns",
             SchemeType::Turn => "turn",
             SchemeType::Turns => "turns",
-            _ => "unknown",
+            SchemeType::Unknown => "unknown",
         };
         write!(f, "{}", s)
     }
 }
 
-// ProtoType indicates the transport protocol type that is used in the ice.URL
-// structure.
+/// The transport protocol type that is used in the `ice::url::Url` structure.
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub enum ProtoType {
-    // ProtoTypeUDP indicates the URL uses a UDP transport.
+    /// The URL uses a UDP transport.
     Udp,
 
-    // ProtoTypeTCP indicates the URL uses a TCP transport.
+    /// The URL uses a TCP transport.
     Tcp,
 
     Unknown,
@@ -77,7 +75,7 @@ pub enum ProtoType {
 
 impl Default for ProtoType {
     fn default() -> Self {
-        ProtoType::Udp
+        Self::Udp
     }
 }
 
@@ -88,9 +86,9 @@ impl From<&str> for ProtoType {
     // string naming the scheme type.
     fn from(raw: &str) -> Self {
         match raw {
-            "udp" => ProtoType::Udp,
-            "tcp" => ProtoType::Tcp,
-            _ => ProtoType::Unknown,
+            "udp" => Self::Udp,
+            "tcp" => Self::Tcp,
+            _ => Self::Unknown,
         }
     }
 }
@@ -98,15 +96,15 @@ impl From<&str> for ProtoType {
 impl fmt::Display for ProtoType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
-            ProtoType::Udp => "udp",
-            ProtoType::Tcp => "tcp",
-            _ => "unknown",
+            Self::Udp => "udp",
+            Self::Tcp => "tcp",
+            Self::Unknown => "unknown",
         };
         write!(f, "{}", s)
     }
 }
 
-// URL represents a STUN (rfc7064) or TURN (rfc7065) URL
+/// Represents a STUN (rfc7064) or TURN (rfc7065) URL.
 #[derive(Debug, Clone, Default)]
 pub struct Url {
     pub scheme: SchemeType,
@@ -137,10 +135,10 @@ impl fmt::Display for Url {
 }
 
 impl Url {
-    // ParseURL parses a STUN or TURN urls following the ABNF syntax described in
-    // https://tools.ietf.org/html/rfc7064 and https://tools.ietf.org/html/rfc7065
-    // respectively.
-    pub fn parse_url(raw: &str) -> Result<Url, Error> {
+    /// Parses a STUN or TURN urls following the ABNF syntax described in
+    /// [IETF rfc-7064](https://tools.ietf.org/html/rfc7064) and
+    /// [IETF rfc-7065](https://tools.ietf.org/html/rfc7065) respectively.
+    pub fn parse_url(raw: &str) -> Result<Self, Error> {
         // work around for url crate
         if raw.contains("//") {
             return Err(ERR_INVALID_URL.to_owned());
@@ -149,7 +147,7 @@ impl Url {
         let mut s = raw.to_string();
         let pos = raw.find(':');
         if let Some(p) = pos {
-            s.replace_range(p..p + 1, "://");
+            s.replace_range(p..=p, "://");
         } else {
             return Err(ERR_SCHEME_TYPE.to_owned());
         }
@@ -198,9 +196,8 @@ impl Url {
                         let proto: ProtoType = value.as_ref().into();
                         if proto == ProtoType::Unknown {
                             return Err(ERR_PROTO_TYPE.to_owned());
-                        } else {
-                            proto
                         }
+                        proto
                     } else {
                         return Err(ERR_INVALID_QUERY.to_owned());
                     }
@@ -217,9 +214,8 @@ impl Url {
                         let proto: ProtoType = value.as_ref().into();
                         if proto == ProtoType::Unknown {
                             return Err(ERR_PROTO_TYPE.to_owned());
-                        } else {
-                            proto
                         }
+                        proto
                     } else {
                         return Err(ERR_INVALID_QUERY.to_owned());
                     }
@@ -227,12 +223,12 @@ impl Url {
                     ProtoType::Tcp
                 }
             }
-            _ => {
+            SchemeType::Unknown => {
                 return Err(ERR_SCHEME_TYPE.to_owned());
             }
         };
 
-        Ok(Url {
+        Ok(Self {
             scheme,
             host,
             port,
@@ -264,7 +260,8 @@ impl Url {
         return proto, nil
     }*/
 
-    // is_secure returns whether the this URL's scheme describes secure scheme or not.
+    /// Returns whether the this URL's scheme describes secure scheme or not.
+    #[must_use]
     pub fn is_secure(&self) -> bool {
         self.scheme == SchemeType::Stuns || self.scheme == SchemeType::Turns
     }

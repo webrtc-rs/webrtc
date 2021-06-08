@@ -79,7 +79,7 @@ impl AgentInternal {
                 Instant::now().duration_since(self.start_time).as_nanos()
                     > self.relay_acceptance_min_wait.as_nanos()
             }
-            _ => {
+            CandidateType::Unspecified => {
                 log::error!(
                     "is_nominatable invalid candidate type {}",
                     c.candidate_type()

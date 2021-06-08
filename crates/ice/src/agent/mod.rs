@@ -60,7 +60,7 @@ pub(crate) struct BindingRequest {
 
 impl Default for BindingRequest {
     fn default() -> Self {
-        BindingRequest {
+        Self {
             timestamp: Instant::now(),
             transaction_id: TransactionId::default(),
             destination: SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0),
@@ -91,7 +91,7 @@ pub type OnCandidateHdlrFn = Box<
 >;
 pub type GatherCandidateCancelFn = Box<dyn Fn() + Send + Sync>;
 
-// Agent represents the ICE agent
+/// Represents the ICE agent.
 pub struct Agent {
     pub(crate) agent_internal: Arc<Mutex<AgentInternal>>,
 
@@ -114,8 +114,8 @@ pub struct Agent {
 }
 
 impl Agent {
-    // new creates a new Agent
-    pub async fn new(mut config: AgentConfig) -> Result<Agent, Error> {
+    /// Creates a new Agent.
+    pub async fn new(mut config: AgentConfig) -> Result<Self, Error> {
         if config.port_max < config.port_min {
             return Err(ERR_PORT.to_owned());
         }
@@ -230,7 +230,7 @@ impl Agent {
         };
 
         if ai.lite && (candidate_types.len() != 1 || candidate_types[0] != CandidateType::Host) {
-            Agent::close_multicast_conn(&mdns_conn).await;
+            Self::close_multicast_conn(&mdns_conn).await;
             return Err(ERR_LITE_USING_NON_HOST_CANDIDATES.to_owned());
         }
 
@@ -238,14 +238,14 @@ impl Agent {
             && !contains_candidate_type(CandidateType::ServerReflexive, &candidate_types)
             && !contains_candidate_type(CandidateType::Relay, &candidate_types)
         {
-            Agent::close_multicast_conn(&mdns_conn).await;
+            Self::close_multicast_conn(&mdns_conn).await;
             return Err(ERR_USELESS_URLS_PROVIDED.to_owned());
         }
 
         let ext_ip_mapper = match config.init_ext_ip_mapping(mdns_mode, &candidate_types) {
             Ok(ext_ip_mapper) => ext_ip_mapper,
             Err(err) => {
-                Agent::close_multicast_conn(&mdns_conn).await;
+                Self::close_multicast_conn(&mdns_conn).await;
                 return Err(err);
             }
         };
@@ -263,7 +263,7 @@ impl Agent {
             Arc::new(Net::new(None))
         };
 
-        let a = Agent {
+        let a = Self {
             port_min: config.port_min,
             port_max: config.port_max,
             agent_internal: Arc::new(Mutex::new(ai)),
@@ -283,7 +283,7 @@ impl Agent {
 
         let agent_internal = Arc::clone(&a.agent_internal);
 
-        let _ = Agent::start_on_connection_state_change_routine(
+        Self::start_on_connection_state_change_routine(
             agent_internal,
             chan_state_rx,
             chan_candidate_rx,
@@ -293,7 +293,7 @@ impl Agent {
 
         // Restart is also used to initialize the agent for the first time
         if let Err(err) = a.restart(config.local_ufrag, config.local_pwd).await {
-            Agent::close_multicast_conn(&a.mdns_conn).await;
+            Self::close_multicast_conn(&a.mdns_conn).await;
             let _ = a.close().await;
             return Err(err);
         }
@@ -301,21 +301,20 @@ impl Agent {
         Ok(a)
     }
 
-    // on_connection_state_change sets a handler that is fired when the connection state changes
+    /// Sets a handler that is fired when the connection state changes.
     pub async fn on_connection_state_change(&self, f: OnConnectionStateChangeHdlrFn) {
         let mut ai = self.agent_internal.lock().await;
         ai.on_connection_state_change_hdlr = Some(f);
     }
 
-    // on_selected_candidate_pair_change sets a handler that is fired when the final candidate
-    // pair is selected
+    /// Sets a handler that is fired when the final candidate pair is selected.
     pub async fn on_selected_candidate_pair_change(&self, f: OnSelectedCandidatePairChangeHdlrFn) {
         let mut ai = self.agent_internal.lock().await;
         ai.on_selected_candidate_pair_change_hdlr = Some(f);
     }
 
-    // on_candidate sets a handler that is fired when new candidates gathered. When
-    // the gathering process complete the last candidate is nil.
+    /// Sets a handler that is fired when new candidates gathered. When the gathering process
+    /// complete the last candidate is nil.
     pub async fn on_candidate(&self, f: OnCandidateHdlrFn) {
         let mut ai = self.agent_internal.lock().await;
         ai.on_candidate_hdlr = Some(f);
@@ -385,7 +384,7 @@ impl Agent {
         });
     }
 
-    // add_remote_candidate adds a new remote candidate
+    /// Adds a new remote candidate.
     pub async fn add_remote_candidate(
         &self,
         c: &Arc<dyn Candidate + Send + Sync>,
@@ -419,7 +418,7 @@ impl Agent {
             tokio::spawn(async move {
                 if let Some(mdns_conn) = mdns_conn {
                     if let Ok(candidate) =
-                        Agent::resolve_and_add_multicast_candidate(mdns_conn, host_candidate).await
+                        Self::resolve_and_add_multicast_candidate(mdns_conn, host_candidate).await
                     {
                         let mut ai = agent_internal.lock().await;
                         ai.add_remote_candidate(&candidate).await;
@@ -438,7 +437,7 @@ impl Agent {
         Ok(())
     }
 
-    // get_local_candidates returns the local candidates
+    /// Returns the local candidates.
     pub async fn get_local_candidates(
         &self,
     ) -> Result<Vec<Arc<dyn Candidate + Send + Sync>>, Error> {
@@ -456,19 +455,19 @@ impl Agent {
         Ok(res)
     }
 
-    // get_local_user_credentials returns the local user credentials
+    /// Returns the local user credentials.
     pub async fn get_local_user_credentials(&self) -> (String, String) {
         let ai = self.agent_internal.lock().await;
         (ai.local_ufrag.clone(), ai.local_pwd.clone())
     }
 
-    // get_remote_user_credentials returns the remote user credentials
+    /// Returns the remote user credentials.
     pub async fn get_remote_user_credentials(&self) -> (String, String) {
         let ai = self.agent_internal.lock().await;
         (ai.remote_ufrag.clone(), ai.remote_pwd.clone())
     }
 
-    // Close cleans up the Agent
+    /// Cleans up the Agent.
     pub async fn close(&self) -> Result<(), Error> {
         if let Some(gather_candidate_cancel) = &self.gather_candidate_cancel {
             gather_candidate_cancel();
@@ -478,7 +477,7 @@ impl Agent {
         ai.close().await
     }
 
-    // set_remote_credentials sets the credentials of the remote agent
+    /// Sets the credentials of the remote agent.
     pub async fn set_remote_credentials(
         &self,
         remote_ufrag: String,
@@ -488,11 +487,11 @@ impl Agent {
         ai.set_remote_credentials(remote_ufrag, remote_pwd)
     }
 
-    // Restart restarts the ICE Agent with the provided ufrag/pwd
-    // If no ufrag/pwd is provided the Agent will generate one itself
-    //
-    // Restart must only be called when GatheringState is GatheringStateComplete
-    // a user must then call GatherCandidates explicitly to start generating new ones
+    /// Restarts the ICE Agent with the provided ufrag/pwd
+    /// If no ufrag/pwd is provided the Agent will generate one itself.
+    ///
+    /// Restart must only be called when `GatheringState` is `GatheringStateComplete`
+    /// a user must then call `GatherCandidates` explicitly to start generating new ones.
     pub async fn restart(&self, mut ufrag: String, mut pwd: String) -> Result<(), Error> {
         if ufrag.is_empty() {
             ufrag = generate_ufrag();
@@ -547,7 +546,7 @@ impl Agent {
         Ok(())
     }
 
-    // GatherCandidates initiates the trickle based gathering process.
+    /// Initiates the trickle based gathering process.
     pub async fn gather_candidates(&self) -> Result<(), Error> {
         if self.gathering_state.load(Ordering::SeqCst) != GatheringState::New as u8 {
             return Err(ERR_MULTIPLE_GATHER_ATTEMPTED.to_owned());
@@ -583,31 +582,31 @@ impl Agent {
             chan_candidate_tx,
         };
         tokio::spawn(async move {
-            Agent::gather_candidates_internal(params).await;
+            Self::gather_candidates_internal(params).await;
         });
 
         Ok(())
     }
 
-    // get_candidate_pairs_stats returns a list of candidate pair stats
+    /// Returns a list of candidate pair stats.
     pub async fn get_candidate_pairs_stats(&self) -> Vec<CandidatePairStats> {
         let ai = self.agent_internal.lock().await;
         ai.get_candidate_pairs_stats().await
     }
 
-    // get_local_candidates_stats returns a list of local candidates stats
+    /// Returns a list of local candidates stats.
     pub async fn get_local_candidates_stats(&self) -> Vec<CandidateStats> {
         let ai = self.agent_internal.lock().await;
         ai.get_local_candidates_stats()
     }
 
-    // get_remote_candidates_stats returns a list of remote candidates stats
+    /// Returns a list of remote candidates stats.
     pub async fn get_remote_candidates_stats(&self) -> Vec<CandidateStats> {
         let ai = self.agent_internal.lock().await;
         ai.get_remote_candidates_stats()
     }
 
-    // unmarshal_remote_candidate creates a Remote Candidate from its string representation
+    /// Creates a Remote Candidate from its string representation.
     pub async fn unmarshal_remote_candidate(&self, raw: String) -> Result<impl Candidate, Error> {
         let split: Vec<&str> = raw.split_whitespace().collect();
         if split.len() < 8 {
@@ -677,7 +676,7 @@ impl Agent {
                         component,
                         priority,
                         foundation,
-                        ..Default::default()
+                        ..CandidateBaseConfig::default()
                     },
                     tcp_type,
                 };
@@ -694,7 +693,7 @@ impl Agent {
                         component,
                         priority,
                         foundation,
-                        ..Default::default()
+                        ..CandidateBaseConfig::default()
                     },
                     rel_addr,
                     rel_port,
@@ -712,7 +711,7 @@ impl Agent {
                         component,
                         priority,
                         foundation,
-                        ..Default::default()
+                        ..CandidateBaseConfig::default()
                     },
                     rel_addr,
                     rel_port,
@@ -731,11 +730,11 @@ impl Agent {
                         component,
                         priority,
                         foundation,
-                        ..Default::default()
+                        ..CandidateBaseConfig::default()
                     },
                     rel_addr,
                     rel_port,
-                    ..Default::default()
+                    ..CandidateRelayConfig::default()
                 };
                 config
                     .new_candidate_relay(Some(Arc::clone(&self.agent_internal)))

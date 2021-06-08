@@ -6,7 +6,7 @@ use crate::util::*;
 use std::sync::atomic::{AtomicU16, AtomicU8};
 use std::sync::Arc;
 
-// CandidatePeerReflexiveConfig is the config required to create a new CandidatePeerReflexive
+/// The config required to create a new `CandidatePeerReflexive`.
 #[derive(Default)]
 pub struct CandidatePeerReflexiveConfig {
     pub base_config: CandidateBaseConfig,
@@ -16,7 +16,7 @@ pub struct CandidatePeerReflexiveConfig {
 }
 
 impl CandidatePeerReflexiveConfig {
-    // new_candidate_peer_reflexive creates a new peer reflective candidate
+    /// Creates a new peer reflective candidate.
     pub async fn new_candidate_peer_reflexive(
         self,
         agent_internal: Option<Arc<Mutex<AgentInternal>>>,
@@ -48,7 +48,7 @@ impl CandidatePeerReflexiveConfig {
             }),
             conn: self.base_config.conn,
             agent_internal,
-            ..Default::default()
+            ..CandidateBase::default()
         };
 
         Ok(c)

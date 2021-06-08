@@ -7,14 +7,13 @@ use std::fmt;
 // ttps://tools.ietf.org/html/rfc6544#section-4.5
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub enum TcpType {
-    // TCPTypeUnspecified is the default value. For example UDP candidates do not
-    // need this field.
+    /// The default value. For example UDP candidates do not need this field.
     Unspecified,
-    // TCPTypeActive is active TCP candidate, which initiates TCP connections.
+    /// Active TCP candidate, which initiates TCP connections.
     Active,
-    // TCPTypePassive is passive TCP candidate, only accepts TCP connections.
+    /// Passive TCP candidate, only accepts TCP connections.
     Passive,
-    // TCPTypeSimultaneousOpen is like active and passive at the same time.
+    /// Like `Active` and `Passive` at the same time.
     SimultaneousOpen,
 }
 
@@ -22,10 +21,10 @@ pub enum TcpType {
 impl From<&str> for TcpType {
     fn from(raw: &str) -> Self {
         match raw {
-            "active" => TcpType::Active,
-            "passive" => TcpType::Passive,
-            "so" => TcpType::SimultaneousOpen,
-            _ => TcpType::Unspecified,
+            "active" => Self::Active,
+            "passive" => Self::Passive,
+            "so" => Self::SimultaneousOpen,
+            _ => Self::Unspecified,
         }
     }
 }
@@ -33,10 +32,10 @@ impl From<&str> for TcpType {
 impl fmt::Display for TcpType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
-            TcpType::Active => "active",
-            TcpType::Passive => "passive",
-            TcpType::SimultaneousOpen => "so",
-            TcpType::Unspecified => "unspecified",
+            Self::Active => "active",
+            Self::Passive => "passive",
+            Self::SimultaneousOpen => "so",
+            Self::Unspecified => "unspecified",
         };
         write!(f, "{}", s)
     }
@@ -44,6 +43,6 @@ impl fmt::Display for TcpType {
 
 impl Default for TcpType {
     fn default() -> Self {
-        TcpType::Unspecified
+        Self::Unspecified
     }
 }

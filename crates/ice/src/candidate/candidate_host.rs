@@ -4,7 +4,7 @@ use crate::rand::generate_cand_id;
 use std::sync::atomic::{AtomicU16, AtomicU8};
 use std::sync::Arc;
 
-// CandidateHostConfig is the config required to create a new CandidateHost
+/// The config required to create a new `CandidateHost`.
 #[derive(Default)]
 pub struct CandidateHostConfig {
     pub base_config: CandidateBaseConfig,
@@ -13,7 +13,7 @@ pub struct CandidateHostConfig {
 }
 
 impl CandidateHostConfig {
-    // NewCandidateHost creates a new host candidate
+    /// Creates a new host candidate.
     pub async fn new_candidate_host(
         self,
         agent_internal: Option<Arc<Mutex<AgentInternal>>>,
@@ -36,7 +36,7 @@ impl CandidateHostConfig {
             network_type: AtomicU8::new(NetworkType::Udp4 as u8),
             conn: self.base_config.conn,
             agent_internal,
-            ..Default::default()
+            ..CandidateBase::default()
         };
 
         if !self.base_config.address.ends_with(".local") {

@@ -12,7 +12,7 @@ use std::sync::Arc;
 use tokio::time::Duration;
 use util::{vnet::net::*, Conn, Error};
 
-pub(crate) fn create_addr(_network: NetworkType, ip: IpAddr, port: u16) -> SocketAddr {
+pub fn create_addr(_network: NetworkType, ip: IpAddr, port: u16) -> SocketAddr {
     /*if network.is_tcp(){
         return &net.TCPAddr{IP: ip, Port: port}
     default:
@@ -21,7 +21,7 @@ pub(crate) fn create_addr(_network: NetworkType, ip: IpAddr, port: u16) -> Socke
     SocketAddr::new(ip, port)
 }
 
-pub(crate) fn assert_inbound_username(m: &Message, expected_username: String) -> Result<(), Error> {
+pub fn assert_inbound_username(m: &Message, expected_username: &str) -> Result<(), Error> {
     let mut username = Username::new(ATTR_USERNAME, String::new());
     username.get_from(m)?;
 
@@ -37,15 +37,15 @@ pub(crate) fn assert_inbound_username(m: &Message, expected_username: String) ->
     Ok(())
 }
 
-pub(crate) fn assert_inbound_message_integrity(m: &mut Message, key: &[u8]) -> Result<(), Error> {
+pub fn assert_inbound_message_integrity(m: &mut Message, key: &[u8]) -> Result<(), Error> {
     let message_integrity_attr = MessageIntegrity(key.to_vec());
     message_integrity_attr.check(m)
 }
 
-// get_xormapped_addr initiates a stun requests to server_addr using conn, reads the response and returns
-// the XORMappedAddress returned by the stun server.
-// Adapted from stun v0.2.
-pub(crate) async fn get_xormapped_addr(
+/// Initiates a stun requests to `server_addr` using conn, reads the response and returns the
+/// `XORMappedAddress` returned by the stun server.
+/// Adapted from stun v0.2.
+pub async fn get_xormapped_addr(
     conn: &Arc<dyn Conn + Send + Sync>,
     server_addr: SocketAddr,
     deadline: Duration,
@@ -58,16 +58,16 @@ pub(crate) async fn get_xormapped_addr(
 
 const MAX_MESSAGE_SIZE: usize = 1280;
 
-pub(crate) async fn stun_request(
+pub async fn stun_request(
     conn: &Arc<dyn Conn + Send + Sync>,
     server_addr: SocketAddr,
     deadline: Duration,
 ) -> Result<Message, Error> {
-    let mut req = Message::new();
-    req.build(&[Box::new(BINDING_REQUEST), Box::new(TransactionId::new())])?;
+    let mut request = Message::new();
+    request.build(&[Box::new(BINDING_REQUEST), Box::new(TransactionId::new())])?;
 
-    conn.send_to(&req.raw, server_addr).await?;
-    let mut bs = vec![0u8; MAX_MESSAGE_SIZE];
+    conn.send_to(&request.raw, server_addr).await?;
+    let mut bs = vec![0_u8; MAX_MESSAGE_SIZE];
     let (n, _) = if deadline > Duration::from_secs(0) {
         match tokio::time::timeout(deadline, conn.recv_from(&mut bs)).await {
             Ok(result) => match result {
@@ -87,7 +87,7 @@ pub(crate) async fn stun_request(
     Ok(res)
 }
 
-pub(crate) async fn local_interfaces(
+pub async fn local_interfaces(
     vnet: &Arc<Net>,
     interface_filter: &Option<InterfaceFilterFn>,
     network_types: &[NetworkType],
@@ -125,7 +125,7 @@ pub(crate) async fn local_interfaces(
     ips
 }
 
-pub(crate) async fn listen_udp_in_port_range(
+pub async fn listen_udp_in_port_range(
     vnet: &Arc<Net>,
     port_max: u16,
     port_min: u16,
@@ -151,7 +151,7 @@ pub(crate) async fn listen_udp_in_port_range(
 
         port_current += 1;
         if port_current > j {
-            port_current = i
+            port_current = i;
         }
         if port_current == port_start {
             break;

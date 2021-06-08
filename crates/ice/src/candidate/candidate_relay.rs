@@ -6,7 +6,7 @@ use crate::util::*;
 use std::sync::atomic::{AtomicU16, AtomicU8};
 use std::sync::Arc;
 
-// CandidateRelayConfig is the config required to create a new CandidateRelay
+/// The config required to create a new `CandidateRelay`.
 #[derive(Default)]
 pub struct CandidateRelayConfig {
     pub base_config: CandidateBaseConfig,
@@ -17,7 +17,7 @@ pub struct CandidateRelayConfig {
 }
 
 impl CandidateRelayConfig {
-    // new_candidate_relay creates a new relay candidate
+    /// Creates a new relay candidate.
     pub async fn new_candidate_relay(
         self,
         agent_internal: Option<Arc<Mutex<AgentInternal>>>,
@@ -50,7 +50,7 @@ impl CandidateRelayConfig {
             conn: self.base_config.conn,
             agent_internal,
             relay_client: self.relay_client.clone(),
-            ..Default::default()
+            ..CandidateBase::default()
         };
 
         Ok(c)

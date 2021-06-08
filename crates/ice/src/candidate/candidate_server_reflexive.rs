@@ -6,7 +6,7 @@ use crate::util::*;
 use std::sync::atomic::{AtomicU16, AtomicU8};
 use std::sync::Arc;
 
-// CandidateServerReflexiveConfig is the config required to create a new CandidateServerReflexive
+/// The config required to create a new `CandidateServerReflexive`.
 #[derive(Default)]
 pub struct CandidateServerReflexiveConfig {
     pub base_config: CandidateBaseConfig,
@@ -16,7 +16,7 @@ pub struct CandidateServerReflexiveConfig {
 }
 
 impl CandidateServerReflexiveConfig {
-    // new_candidate_server_reflexive creates a new server reflective candidate
+    /// Creates a new server reflective candidate.
     pub async fn new_candidate_server_reflexive(
         self,
         agent_internal: Option<Arc<Mutex<AgentInternal>>>,
@@ -48,7 +48,7 @@ impl CandidateServerReflexiveConfig {
             }),
             conn: self.base_config.conn,
             agent_internal,
-            ..Default::default()
+            ..CandidateBase::default()
         };
 
         Ok(c)

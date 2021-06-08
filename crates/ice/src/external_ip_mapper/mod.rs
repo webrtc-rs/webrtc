@@ -16,7 +16,7 @@ pub(crate) fn validate_ip_string(ip_str: &str) -> Result<IpAddr, Error> {
     }
 }
 
-// IpMapping holds the mapping of local and external IP address for a particular IP family
+/// Holds the mapping of local and external IP address for a particular IP family.
 #[derive(Default, PartialEq, Debug)]
 pub(crate) struct IpMapping {
     ip_sole: Option<IpAddr>, // when non-nil, this is the sole external IP for one local IP assumed
@@ -56,11 +56,10 @@ impl IpMapping {
             return Ok(*ip_sole);
         }
 
-        if let Some(ext_ip) = self.ip_map.get(&loc_ip.to_string()) {
-            Ok(*ext_ip)
-        } else {
-            Err(ERR_EXTERNAL_MAPPED_IP_NOT_FOUND.to_owned())
-        }
+        self.ip_map.get(&loc_ip.to_string()).map_or_else(
+            || Err(ERR_EXTERNAL_MAPPED_IP_NOT_FOUND.to_owned()),
+            |ext_ip| Ok(*ext_ip),
+        )
     }
 }
 
@@ -75,7 +74,7 @@ impl ExternalIpMapper {
     pub(crate) fn new(
         mut candidate_type: CandidateType,
         ips: &[String],
-    ) -> Result<Option<ExternalIpMapper>, Error> {
+    ) -> Result<Option<Self>, Error> {
         if ips.is_empty() {
             return Ok(None);
         }
@@ -87,7 +86,7 @@ impl ExternalIpMapper {
             return Err(ERR_UNSUPPORTED_NAT_1TO1_IP_CANDIDATE_TYPE.to_owned());
         }
 
-        let mut m = ExternalIpMapper {
+        let mut m = Self {
             ipv4_mapping: IpMapping::default(),
             ipv6_mapping: IpMapping::default(),
             candidate_type,
@@ -119,7 +118,7 @@ impl ExternalIpMapper {
                         return Err(ERR_INVALID_NAT_1TO1_IP_MAPPING.clone());
                     }
 
-                    m.ipv6_mapping.add_ip_mapping(loc_ip, ext_ip)?
+                    m.ipv6_mapping.add_ip_mapping(loc_ip, ext_ip)?;
                 }
             }
         }

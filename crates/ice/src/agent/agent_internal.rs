@@ -4,8 +4,7 @@ use crate::candidate::candidate_base::{CandidateBase, CandidateBaseConfig};
 use crate::candidate::candidate_peer_reflexive::CandidatePeerReflexiveConfig;
 use crate::util::*;
 
-pub(crate) type ChanCandidateTx =
-    Option<Arc<mpsc::Sender<Option<Arc<dyn Candidate + Send + Sync>>>>>;
+pub type ChanCandidateTx = Option<Arc<mpsc::Sender<Option<Arc<dyn Candidate + Send + Sync>>>>>;
 
 pub struct AgentInternal {
     // State owned by the taskLoop
@@ -83,7 +82,7 @@ unsafe impl Sync for AgentInternal {}
 impl AgentInternal {
     pub(crate) async fn start_connectivity_checks(
         &mut self,
-        agent_internal: Arc<Mutex<AgentInternal>>,
+        agent_internal: Arc<Mutex<Self>>,
         is_controlling: bool,
         remote_ufrag: String,
         remote_pwd: String,
@@ -114,7 +113,7 @@ impl AgentInternal {
     }
 
     async fn contact(
-        agent_internal: &Arc<Mutex<AgentInternal>>,
+        agent_internal: &Arc<Mutex<Self>>,
         last_connection_state: &mut ConnectionState,
         checking_duration: &mut Instant,
     ) {
@@ -146,10 +145,10 @@ impl AgentInternal {
         *last_connection_state = ai.connection_state;
     }
 
-    async fn connectivity_checks(&mut self, agent_internal: Arc<Mutex<AgentInternal>>) {
+    async fn connectivity_checks(&mut self, agent_internal: Arc<Mutex<Self>>) {
+        const ZERO_DURATION: Duration = Duration::from_secs(0);
         let mut last_connection_state = ConnectionState::Unspecified;
         let mut checking_duration = Instant::now();
-        const ZERO_DURATION: Duration = Duration::from_secs(0);
         let (check_interval, keepalive_interval, disconnected_timeout, failed_timeout) = (
             self.check_interval,
             self.keepalive_interval,
@@ -189,10 +188,10 @@ impl AgentInternal {
 
                     tokio::select! {
                         _ = t.as_mut() => {
-                            AgentInternal::contact(&agent_internal, &mut last_connection_state, &mut checking_duration).await;
+                            Self::contact(&agent_internal, &mut last_connection_state, &mut checking_duration).await;
                         },
                         _ = force_candidate_contact_rx.recv() => {
-                            AgentInternal::contact(&agent_internal, &mut last_connection_state, &mut checking_duration).await;
+                            Self::contact(&agent_internal, &mut last_connection_state, &mut checking_duration).await;
                         },
                         _ = done_rx.recv() => {
                             return;
@@ -313,21 +312,23 @@ impl AgentInternal {
         None
     }
 
-    // validate_selected_pair checks if the selected pair is (still) valid
-    // Note: the caller should hold the agent lock.
+    /// Checks if the selected pair is (still) valid.
+    /// Note: the caller should hold the agent lock.
     pub(crate) async fn validate_selected_pair(&mut self) -> bool {
         let (valid, disconnected_time) = {
             let selected_pair = self.agent_conn.selected_pair.lock().await;
-            if let Some(selected_pair) = &*selected_pair {
-                let disconnected_time =
-                    match SystemTime::now().duration_since(selected_pair.remote.last_received()) {
+            (*selected_pair).as_ref().map_or_else(
+                || (false, Duration::from_secs(0)),
+                |selected_pair| {
+                    let disconnected_time = match SystemTime::now()
+                        .duration_since(selected_pair.remote.last_received())
+                    {
                         Ok(d) => d,
                         Err(_) => Duration::from_secs(0),
                     };
-                (true, disconnected_time)
-            } else {
-                (false, Duration::from_secs(0))
-            }
+                    (true, disconnected_time)
+                },
+            )
         };
 
         if valid {
@@ -355,20 +356,20 @@ impl AgentInternal {
         valid
     }
 
-    // checkKeepalive sends STUN Binding Indications to the selected pair
-    // if no packet has been sent on that pair in the last keepaliveInterval
-    // Note: the caller should hold the agent lock.
+    /// Sends STUN Binding Indications to the selected pair.
+    /// if no packet has been sent on that pair in the last keepaliveInterval.
+    /// Note: the caller should hold the agent lock.
     pub(crate) async fn check_keepalive(&mut self) {
         let (local, remote) = {
             let selected_pair = self.agent_conn.selected_pair.lock().await;
-            if let Some(selected_pair) = &*selected_pair {
-                (
-                    Some(selected_pair.local.clone()),
-                    Some(selected_pair.remote.clone()),
-                )
-            } else {
-                (None, None)
-            }
+            (*selected_pair)
+                .as_ref()
+                .map_or((None, None), |selected_pair| {
+                    (
+                        Some(selected_pair.local.clone()),
+                        Some(selected_pair.remote.clone()),
+                    )
+                })
         };
 
         if let (Some(local), Some(remote)) = (local, remote) {
@@ -397,7 +398,7 @@ impl AgentInternal {
         let _ = self.force_candidate_contact_tx.try_send(true);
     }
 
-    // add_remote_candidate assumes you are holding the lock (must be execute using a.run)
+    /// Assumes you are holding the lock (must be execute using a.run).
     pub(crate) async fn add_remote_candidate(&mut self, c: &Arc<dyn Candidate + Send + Sync>) {
         let network_type = c.network_type();
 
@@ -434,7 +435,7 @@ impl AgentInternal {
         let initialized_ch = self
             .started_ch_tx
             .as_ref()
-            .map(|started_ch_tx| started_ch_tx.subscribe());
+            .map(tokio::sync::broadcast::Sender::subscribe);
         self.start_candidate(c, initialized_ch).await;
 
         let network_type = c.network_type();
@@ -495,10 +496,10 @@ impl AgentInternal {
         Ok(())
     }
 
-    // Remove all candidates. This closes any listening sockets
-    // and removes both the local and remote candidate lists.
-    //
-    // This is used for restarts, failures and on close
+    /// Remove all candidates.
+    /// This closes any listening sockets and removes both the local and remote candidate lists.
+    ///
+    /// This is used for restarts, failures and on close.
     pub(crate) async fn delete_all_candidates(&mut self) {
         for cs in &mut self.local_candidates.values_mut() {
             for c in cs {
@@ -590,11 +591,10 @@ impl AgentInternal {
         }
     }
 
-    /* Removes pending binding requests that are over maxBindingRequestTimeout old
-       Let HTO be the transaction timeout, which SHOULD be 2*RTT if
-       RTT is known or 500 ms otherwise.
-       https://tools.ietf.org/html/rfc8445#appendix-B.1
-    */
+    /// Removes pending binding requests that are over `maxBindingRequestTimeout` old Let HTO be the
+    /// transaction timeout, which SHOULD be 2*RTT if RTT is known or 500 ms otherwise.
+    ///
+    /// reference: (IETF ref-8445)[https://tools.ietf.org/html/rfc8445#appendix-B.1].
     pub(crate) fn invalidate_pending_binding_requests(&mut self, filter_time: Instant) {
         let initial_size = self.pending_binding_requests.len();
 
@@ -615,8 +615,8 @@ impl AgentInternal {
         }
     }
 
-    // Assert that the passed TransactionID is in our pendingBindingRequests and returns the destination
-    // If the bindingRequest was valid remove it from our pending cache
+    /// Assert that the passed `TransactionID` is in our `pendingBindingRequests` and returns the
+    /// destination, If the bindingRequest was valid remove it from our pending cache.
     pub(crate) fn handle_inbound_binding_success(
         &mut self,
         id: TransactionId,
@@ -631,13 +631,13 @@ impl AgentInternal {
         None
     }
 
-    // handleInbound processes STUN traffic from a remote candidate
+    /// Processes STUN traffic from a remote candidate.
     pub(crate) async fn handle_inbound(
         &mut self,
         m: &mut Message,
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: SocketAddr,
-        agent_internal: Arc<Mutex<AgentInternal>>,
+        agent_internal: Arc<Mutex<Self>>,
     ) {
         if m.typ.method != METHOD_BINDING
             || !(m.typ.class == CLASS_SUCCESS_RESPONSE
@@ -682,7 +682,7 @@ impl AgentInternal {
             }
         } else if m.typ.class == CLASS_REQUEST {
             let username = self.local_ufrag.clone() + ":" + self.remote_ufrag.as_str();
-            if let Err(err) = assert_inbound_username(m, username) {
+            if let Err(err) = assert_inbound_username(m, &username) {
                 log::warn!("discard message from ({}), {}", remote, err);
                 return;
             } else if let Err(err) = assert_inbound_message_integrity(m, self.local_pwd.as_bytes())
@@ -700,7 +700,7 @@ impl AgentInternal {
                         address: ip.to_string(),
                         port,
                         component: local.component(),
-                        ..Default::default()
+                        ..CandidateBaseConfig::default()
                     },
                     rel_addr: "".to_owned(),
                     rel_port: 0,
@@ -735,22 +735,21 @@ impl AgentInternal {
         }
     }
 
-    // validate_non_stuntraffic processes non STUN traffic from a remote candidate,
-    // and returns true if it is an actual remote candidate
+    /// Processes non STUN traffic from a remote candidate, and returns true if it is an actual
+    /// remote candidate.
     pub(crate) async fn validate_non_stun_traffic(
         &self,
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: SocketAddr,
     ) -> bool {
-        if let Some(remote_candidate) = self.find_remote_candidate(local.network_type(), remote) {
-            remote_candidate.seen(false);
-            true
-        } else {
-            false
-        }
+        self.find_remote_candidate(local.network_type(), remote)
+            .map_or(false, |remote_candidate| {
+                remote_candidate.seen(false);
+                true
+            })
     }
 
-    // set_remote_credentials sets the credentials of the remote agent
+    /// Sets the credentials of the remote agent.
     pub(crate) fn set_remote_credentials(
         &mut self,
         remote_ufrag: String,
@@ -778,7 +777,7 @@ impl AgentInternal {
         }
     }
 
-    // start runs the candidate using the provided connection
+    /// Runs the candidate using the provided connection.
     async fn start_candidate(
         &self,
         candidate: &Arc<dyn Candidate + Send + Sync>,
