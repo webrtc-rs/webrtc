@@ -7,8 +7,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use util::Conn;
 
 impl Agent {
-    // Dial connects to the remote agent, acting as the controlling ice agent.
-    // Dial blocks until at least one ice candidate pair has successfully connected.
+    /// Connects to the remote agent, acting as the controlling ice agent.
+    /// The method blocks until at least one ice candidate pair has successfully connected.
     pub async fn dial(
         &self,
         mut cancel_rx: mpsc::Receiver<()>,
@@ -35,8 +35,8 @@ impl Agent {
         Ok(agent_conn)
     }
 
-    // Accept connects to the remote agent, acting as the controlled ice agent.
-    // Accept blocks until at least one ice candidate pair has successfully connected.
+    /// Connects to the remote agent, acting as the controlled ice agent.
+    /// The method blocks until at least one ice candidate pair has successfully connected.
     pub async fn accept(
         &self,
         mut cancel_rx: mpsc::Receiver<()>,
@@ -77,7 +77,7 @@ pub(crate) struct AgentConn {
 
 impl AgentConn {
     pub(crate) fn new() -> Self {
-        AgentConn {
+        Self {
             selected_pair: Mutex::new(None),
             checklist: Mutex::new(vec![]),
             // Make sure the buffer doesn't grow indefinitely.
@@ -136,12 +136,12 @@ impl AgentConn {
         best.cloned()
     }
 
-    // bytes_sent returns the number of bytes sent
+    /// Returns the number of bytes sent.
     pub fn bytes_sent(&self) -> usize {
         self.bytes_sent.load(Ordering::SeqCst)
     }
 
-    // bytes_received returns the number of bytes received
+    /// Returns the number of bytes received.
     pub fn bytes_received(&self) -> usize {
         self.bytes_received.load(Ordering::SeqCst)
     }

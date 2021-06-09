@@ -31,33 +31,33 @@ use tokio::sync::{broadcast, Mutex};
 pub(crate) const RECEIVE_MTU: usize = 8192;
 pub(crate) const DEFAULT_LOCAL_PREFERENCE: u16 = 65535;
 
-// COMPONENT_RTP indicates that the candidate is used for RTP
+/// Indicates that the candidate is used for RTP.
 pub(crate) const COMPONENT_RTP: u16 = 1;
-// COMPONENT_RTCP indicates that the candidate is used for RTCP
+/// Indicates that the candidate is used for RTCP.
 pub(crate) const COMPONENT_RTCP: u16 = 0;
 
-// Candidate represents an ICE candidate
+/// Candidate represents an ICE candidate
 #[async_trait]
 pub trait Candidate: fmt::Display {
-    // An arbitrary string used in the freezing algorithm to
-    // group similar candidates.  It is the same for two candidates that
-    // have the same type, base IP address, protocol (UDP, TCP, etc.),
-    // and STUN or TURN server.
+    /// An arbitrary string used in the freezing algorithm to
+    /// group similar candidates.  It is the same for two candidates that
+    /// have the same type, base IP address, protocol (UDP, TCP, etc.),
+    /// and STUN or TURN server.
     fn foundation(&self) -> String;
 
-    // ID is a unique identifier for just this candidate
-    // Unlike the foundation this is different for each candidate
+    /// A unique identifier for just this candidate
+    /// Unlike the foundation this is different for each candidate.
     fn id(&self) -> String;
 
-    // A component is a piece of a data stream.
-    // An example is one for RTP, and one for RTCP
+    /// A component is a piece of a data stream.
+    /// An example is one for RTP, and one for RTCP
     fn component(&self) -> u16;
     fn set_component(&self, c: u16);
 
-    // The last time this candidate received traffic
+    /// The last time this candidate received traffic
     fn last_received(&self) -> SystemTime;
 
-    // The last time this candidate sent traffic
+    /// The last time this candidate sent traffic
     fn last_sent(&self) -> SystemTime;
 
     fn network_type(&self) -> NetworkType;
@@ -66,8 +66,8 @@ pub trait Candidate: fmt::Display {
 
     fn priority(&self) -> u32;
 
-    // A transport address related to a
-    //  candidate, which is useful for diagnostics and other purposes
+    /// A transport address related to candidate,
+    /// which is useful for diagnostics and other purposes.
     fn related_address(&self) -> Option<CandidateRelatedAddress>;
 
     fn candidate_type(&self) -> CandidateType;
@@ -92,8 +92,7 @@ pub trait Candidate: fmt::Display {
     fn get_closed_ch(&self) -> Arc<Mutex<Option<broadcast::Sender<()>>>>;
 }
 
-// CandidateType represents the type of candidate
-// CandidateType enum
+/// Represents the type of candidate `CandidateType` enum.
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub enum CandidateType {
     Unspecified,
@@ -119,23 +118,24 @@ impl fmt::Display for CandidateType {
 
 impl Default for CandidateType {
     fn default() -> Self {
-        CandidateType::Unspecified
+        Self::Unspecified
     }
 }
 
 impl CandidateType {
-    // preference returns the preference weight of a CandidateType
-    //
-    // 4.1.2.2.  Guidelines for Choosing Type and Local Preferences
-    // The RECOMMENDED values are 126 for host candidates, 100
-    // for server reflexive candidates, 110 for peer reflexive candidates,
-    // and 0 for relayed candidates.
-    pub fn preference(&self) -> u16 {
+    /// Returns the preference weight of a `CandidateType`.
+    ///
+    /// 4.1.2.2.  Guidelines for Choosing Type and Local Preferences
+    /// The RECOMMENDED values are 126 for host candidates, 100
+    /// for server reflexive candidates, 110 for peer reflexive candidates,
+    /// and 0 for relayed candidates.
+    #[must_use]
+    pub const fn preference(&self) -> u16 {
         match *self {
-            CandidateType::Host => 126,
-            CandidateType::PeerReflexive => 110,
-            CandidateType::ServerReflexive => 100,
-            CandidateType::Relay | CandidateType::Unspecified => 0,
+            Self::Host => 126,
+            Self::PeerReflexive => 110,
+            Self::ServerReflexive => 100,
+            Self::Relay | CandidateType::Unspecified => 0,
         }
     }
 }
@@ -155,8 +155,7 @@ pub(crate) fn contains_candidate_type(
     false
 }
 
-// CandidateRelatedAddress convey transport addresses related to the
-// candidate, useful for diagnostics and other purposes.
+/// Convey transport addresses related to the candidate, useful for diagnostics and other purposes.
 #[derive(PartialEq, Debug, Clone)]
 pub struct CandidateRelatedAddress {
     pub address: String,
@@ -170,62 +169,58 @@ impl fmt::Display for CandidateRelatedAddress {
     }
 }
 
-// CandidatePairState represent the ICE candidate pair state
+/// Represent the ICE candidate pair state.
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub enum CandidatePairState {
     Unspecified = 0,
 
-    // CandidatePairStateWaiting means a check has not been performed for
-    // this pair
+    /// Means a check has not been performed for this pair.
     Waiting = 1,
 
-    // CandidatePairStateInProgress means a check has been sent for this pair,
-    // but the transaction is in progress.
+    /// Means a check has been sent for this pair, but the transaction is in progress.
     InProgress = 2,
 
-    // CandidatePairStateFailed means a check for this pair was already done
-    // and failed, either never producing any response or producing an unrecoverable
-    // failure response.
+    /// Means a check for this pair was already done and failed, either never producing any response
+    /// or producing an unrecoverable failure response.
     Failed = 3,
 
-    // CandidatePairStateSucceeded means a check for this pair was already
-    // done and produced a successful result.
+    /// Means a check for this pair was already done and produced a successful result.
     Succeeded = 4,
 }
 
 impl From<u8> for CandidatePairState {
     fn from(v: u8) -> Self {
         match v {
-            1 => CandidatePairState::Waiting,
-            2 => CandidatePairState::InProgress,
-            3 => CandidatePairState::Failed,
-            4 => CandidatePairState::Succeeded,
-            _ => CandidatePairState::Unspecified,
+            1 => Self::Waiting,
+            2 => Self::InProgress,
+            3 => Self::Failed,
+            4 => Self::Succeeded,
+            _ => Self::Unspecified,
         }
     }
 }
 
 impl Default for CandidatePairState {
     fn default() -> Self {
-        CandidatePairState::Unspecified
+        Self::Unspecified
     }
 }
 
 impl fmt::Display for CandidatePairState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
-            CandidatePairState::Waiting => "waiting",
-            CandidatePairState::InProgress => "in-progress",
-            CandidatePairState::Failed => "failed",
-            CandidatePairState::Succeeded => "succeeded",
-            CandidatePairState::Unspecified => "unspecified",
+            Self::Waiting => "waiting",
+            Self::InProgress => "in-progress",
+            Self::Failed => "failed",
+            Self::Succeeded => "succeeded",
+            Self::Unspecified => "unspecified",
         };
 
         write!(f, "{}", s)
     }
 }
 
-// candidatePair represents a combination of a local and remote candidate
+/// Represents a combination of a local and remote candidate.
 pub(crate) struct CandidatePair {
     pub(crate) ice_role_controlling: AtomicBool,
     pub(crate) remote: Arc<dyn Candidate + Send + Sync>,
@@ -237,7 +232,7 @@ pub(crate) struct CandidatePair {
 
 impl Default for CandidatePair {
     fn default() -> Self {
-        CandidatePair {
+        Self {
             ice_role_controlling: AtomicBool::new(false),
             remote: Arc::new(CandidateBase::default()),
             local: Arc::new(CandidateBase::default()),
@@ -277,7 +272,7 @@ impl fmt::Display for CandidatePair {
 }
 
 impl PartialEq for CandidatePair {
-    fn eq(&self, other: &CandidatePair) -> bool {
+    fn eq(&self, other: &Self) -> bool {
         self.local.equal(&*other.local) && self.remote.equal(&*other.remote)
     }
 }
@@ -288,7 +283,7 @@ impl CandidatePair {
         remote: Arc<dyn Candidate + Send + Sync>,
         controlling: bool,
     ) -> Self {
-        CandidatePair {
+        Self {
             ice_role_controlling: AtomicBool::new(controlling),
             remote,
             local,
@@ -298,11 +293,11 @@ impl CandidatePair {
         }
     }
 
-    // RFC 5245 - 5.7.2.  Computing Pair Priority and Ordering Pairs
-    // Let G be the priority for the candidate provided by the controlling
-    // agent.  Let D be the priority for the candidate provided by the
-    // controlled agent.
-    // pair priority = 2^32*MIN(G,D) + 2*MAX(G,D) + (G>D?1:0)
+    /// RFC 5245 - 5.7.2.  Computing Pair Priority and Ordering Pairs
+    /// Let G be the priority for the candidate provided by the controlling
+    /// agent.  Let D be the priority for the candidate provided by the
+    /// controlled agent.
+    /// pair priority = 2^32*MIN(G,D) + 2*MAX(G,D) + (G>D?1:0)
     pub fn priority(&self) -> u64 {
         let (g, d) = if self.ice_role_controlling.load(Ordering::SeqCst) {
             (self.local.priority(), self.remote.priority())
@@ -312,8 +307,8 @@ impl CandidatePair {
 
         // 1<<32 overflows uint32; and if both g && d are
         // maxUint32, this result would overflow uint64
-        ((1 << 32u64) - 1) * std::cmp::min(g, d) as u64
-            + 2 * std::cmp::max(g, d) as u64
+        ((1 << 32_u64) - 1) * u64::from(std::cmp::min(g, d))
+            + 2 * u64::from(std::cmp::max(g, d))
             + if g > d { 1 } else { 0 }
     }
 

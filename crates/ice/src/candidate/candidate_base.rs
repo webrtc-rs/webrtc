@@ -59,7 +59,7 @@ pub struct CandidateBase {
 
 impl Default for CandidateBase {
     fn default() -> Self {
-        CandidateBase {
+        Self {
             id: String::new(),
             network_type: AtomicU8::new(0),
             candidate_type: CandidateType::default(),
@@ -130,12 +130,12 @@ impl Candidate for CandidateBase {
         format!("{}", checksum)
     }
 
-    // ID returns Candidate ID
+    /// Returns Candidate ID.
     fn id(&self) -> String {
         self.id.clone()
     }
 
-    // Component returns candidate component
+    /// Returns candidate component.
     fn component(&self) -> u16 {
         self.component.load(Ordering::SeqCst)
     }
@@ -144,36 +144,34 @@ impl Candidate for CandidateBase {
         self.component.store(component, Ordering::SeqCst);
     }
 
-    // LastReceived returns a time.Time indicating the last time
-    // this candidate was received
+    /// Returns a time indicating the last time this candidate was received.
     fn last_received(&self) -> SystemTime {
         UNIX_EPOCH.add(Duration::from_nanos(
             self.last_received.load(Ordering::SeqCst),
         ))
     }
 
-    // LastSent returns a time.Time indicating the last time
-    // this candidate was sent
+    /// Returns a time indicating the last time this candidate was sent.
     fn last_sent(&self) -> SystemTime {
         UNIX_EPOCH.add(Duration::from_nanos(self.last_sent.load(Ordering::SeqCst)))
     }
 
-    // NetworkType returns candidate NetworkType
+    /// Returns candidate NetworkType.
     fn network_type(&self) -> NetworkType {
         NetworkType::from(self.network_type.load(Ordering::SeqCst))
     }
 
-    // Address returns Candidate Address
+    /// Returns Candidate Address.
     fn address(&self) -> String {
         self.address.clone()
     }
 
-    // Port returns Candidate Port
+    /// Returns Candidate Port.
     fn port(&self) -> u16 {
         self.port
     }
 
-    // Priority computes the priority for this ICE Candidate
+    /// Computes the priority for this ICE Candidate.
     fn priority(&self) -> u32 {
         if self.priority_override != 0 {
             return self.priority_override;
@@ -185,17 +183,17 @@ impl Candidate for CandidateBase {
         // candidates for a particular component for a particular data stream
         // that have the same type, the local preference MUST be unique for each
         // one.
-        (1 << 24) * (self.candidate_type().preference() as u32)
-            + (1 << 8) * (self.local_preference() as u32)
-            + (256 - self.component() as u32)
+        (1 << 24) * u32::from(self.candidate_type().preference())
+            + (1 << 8) * u32::from(self.local_preference())
+            + (256 - u32::from(self.component()))
     }
 
-    // RelatedAddress returns *CandidateRelatedAddress
+    /// Returns `Option<CandidateRelatedAddress>`.
     fn related_address(&self) -> Option<CandidateRelatedAddress> {
         self.related_address.as_ref().cloned()
     }
 
-    // Type returns candidate type
+    /// Returns candidate type.
     fn candidate_type(&self) -> CandidateType {
         self.candidate_type
     }
@@ -204,7 +202,7 @@ impl Candidate for CandidateBase {
         self.tcp_type
     }
 
-    // Marshal returns the string representation of the ICECandidate
+    /// Returns the string representation of the ICECandidate.
     fn marshal(&self) -> String {
         let mut val = format!(
             "{} {} {} {} {} {} typ {}",
@@ -237,7 +235,7 @@ impl Candidate for CandidateBase {
         *resolved_addr
     }
 
-    // close stops the recvLoop
+    /// Stops the recvLoop.
     async fn close(&self) -> Result<(), Error> {
         {
             let mut closed_ch = self.closed_ch.lock().await;
@@ -261,9 +259,9 @@ impl Candidate for CandidateBase {
         };
 
         if outbound {
-            self.set_last_sent(d)
+            self.set_last_sent(d);
         } else {
-            self.set_last_received(d)
+            self.set_last_received(d);
         }
     }
 
@@ -282,7 +280,7 @@ impl Candidate for CandidateBase {
         Ok(n)
     }
 
-    // Equal is used to compare two candidateBases
+    /// Used to compare two candidateBases.
     fn equal(&self, other: &dyn Candidate) -> bool {
         self.network_type() == other.network_type()
             && self.candidate_type() == other.candidate_type()
@@ -319,15 +317,17 @@ impl Candidate for CandidateBase {
 
 impl CandidateBase {
     pub fn set_last_received(&self, d: Duration) {
+        #[allow(clippy::cast_possible_truncation)]
         self.last_received
             .store(d.as_nanos() as u64, Ordering::SeqCst);
     }
 
     pub fn set_last_sent(&self, d: Duration) {
+        #[allow(clippy::cast_possible_truncation)]
         self.last_sent.store(d.as_nanos() as u64, Ordering::SeqCst);
     }
 
-    // LocalPreference returns the local preference for this candidate
+    /// Returns the local preference for this candidate.
     pub fn local_preference(&self) -> u16 {
         if self.network_type().is_tcp() {
             // RFC 6544, section 4.2
@@ -406,7 +406,7 @@ impl CandidateBase {
             }
         }
 
-        let mut buffer = vec![0u8; RECEIVE_MTU];
+        let mut buffer = vec![0_u8; RECEIVE_MTU];
         let mut n;
         let mut src_addr;
         loop {
@@ -423,7 +423,7 @@ impl CandidateBase {
                 _  = closed_ch_rx.recv() => return Err(ERR_CLOSED.to_owned()),
             }
 
-            CandidateBase::handle_inbound_candidate_msg(
+            Self::handle_inbound_candidate_msg(
                 &candidate,
                 &agent_internal,
                 &buffer[..n],
@@ -444,7 +444,7 @@ impl CandidateBase {
         if stun::message::is_message(buf) {
             let mut m = Message {
                 raw: vec![],
-                ..Default::default()
+                ..Message::default()
             };
             // Explicitly copy raw buffer so Message can own the memory.
             m.raw.extend_from_slice(buf);

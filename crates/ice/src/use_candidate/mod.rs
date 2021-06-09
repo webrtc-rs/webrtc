@@ -6,12 +6,12 @@ use stun::message::*;
 
 use util::Error;
 
-// UseCandidateAttr represents USE-CANDIDATE attribute.
+/// Represents USE-CANDIDATE attribute.
 #[derive(Default)]
 pub struct UseCandidateAttr;
 
 impl Setter for UseCandidateAttr {
-    // add_to adds USE-CANDIDATE attribute to message.
+    /// Adds USE-CANDIDATE attribute to message.
     fn add_to(&self, m: &mut Message) -> Result<(), Error> {
         m.add(ATTR_USE_CANDIDATE, &[]);
         Ok(())
@@ -19,12 +19,13 @@ impl Setter for UseCandidateAttr {
 }
 
 impl UseCandidateAttr {
-    // UseCandidate is shorthand for UseCandidateAttr.
-    pub fn new() -> Self {
-        UseCandidateAttr {}
+    #[must_use]
+    pub const fn new() -> Self {
+        Self
     }
 
-    // IsSet returns true if USE-CANDIDATE attribute is set.
+    /// Returns true if USE-CANDIDATE attribute is set.
+    #[must_use]
     pub fn is_set(m: &Message) -> bool {
         let result = m.get(ATTR_USE_CANDIDATE);
         result.is_ok()

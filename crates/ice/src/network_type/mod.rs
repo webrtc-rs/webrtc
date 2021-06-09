@@ -11,6 +11,7 @@ use std::net::IpAddr;
 pub(crate) const UDP: &str = "udp";
 pub(crate) const TCP: &str = "tcp";
 
+#[must_use]
 pub fn supported_network_types() -> Vec<NetworkType> {
     vec![
         NetworkType::Udp4,
@@ -20,32 +21,32 @@ pub fn supported_network_types() -> Vec<NetworkType> {
     ]
 }
 
-// NetworkType represents the type of network
+/// Represents the type of network.
 #[derive(PartialEq, Debug, Copy, Clone, Eq, Hash)]
 pub enum NetworkType {
     Unspecified,
 
-    // NetworkTypeUDP4 indicates UDP over IPv4.
+    /// Indicates UDP over IPv4.
     Udp4,
 
-    // NetworkTypeUDP6 indicates UDP over IPv6.
+    /// Indicates UDP over IPv6.
     Udp6,
 
-    // NetworkTypeTCP4 indicates TCP over IPv4.
+    /// Indicates TCP over IPv4.
     Tcp4,
 
-    // NetworkTypeTCP6 indicates TCP over IPv6.
+    /// Indicates TCP over IPv6.
     Tcp6,
 }
 
 impl From<u8> for NetworkType {
-    fn from(v: u8) -> NetworkType {
+    fn from(v: u8) -> Self {
         match v {
-            1 => NetworkType::Udp4,
-            2 => NetworkType::Udp6,
-            3 => NetworkType::Tcp4,
-            4 => NetworkType::Tcp6,
-            _ => NetworkType::Unspecified,
+            1 => Self::Udp4,
+            2 => Self::Udp6,
+            3 => Self::Tcp4,
+            4 => Self::Tcp6,
+            _ => Self::Unspecified,
         }
     }
 }
@@ -53,11 +54,11 @@ impl From<u8> for NetworkType {
 impl fmt::Display for NetworkType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
-            NetworkType::Udp4 => "udp4",
-            NetworkType::Udp6 => "udp6",
-            NetworkType::Tcp4 => "tcp4",
-            NetworkType::Tcp6 => "tcp6",
-            NetworkType::Unspecified => "unspecified",
+            Self::Udp4 => "udp4",
+            Self::Udp6 => "udp6",
+            Self::Tcp4 => "tcp4",
+            Self::Tcp6 => "tcp6",
+            Self::Unspecified => "unspecified",
         };
         write!(f, "{}", s)
     }
@@ -65,60 +66,62 @@ impl fmt::Display for NetworkType {
 
 impl Default for NetworkType {
     fn default() -> Self {
-        NetworkType::Unspecified
+        Self::Unspecified
     }
 }
 
 impl NetworkType {
-    // is_udp returns true when network is UDP4 or UDP6.
+    /// Returns true when network is UDP4 or UDP6.
+    #[must_use]
     pub fn is_udp(&self) -> bool {
-        *self == NetworkType::Udp4 || *self == NetworkType::Udp6
+        *self == Self::Udp4 || *self == Self::Udp6
     }
 
-    // is_tcp returns true when network is TCP4 or TCP6.
+    /// Returns true when network is TCP4 or TCP6.
+    #[must_use]
     pub fn is_tcp(&self) -> bool {
-        *self == NetworkType::Tcp4 || *self == NetworkType::Tcp6
+        *self == Self::Tcp4 || *self == Self::Tcp6
     }
 
-    // network_short returns the short network description
+    /// Returns the short network description.
+    #[must_use]
     pub fn network_short(&self) -> String {
         match *self {
-            NetworkType::Udp4 | NetworkType::Udp6 => UDP.to_owned(),
-            NetworkType::Tcp4 | NetworkType::Tcp6 => TCP.to_owned(),
-            _ => "Unspecified".to_owned(),
+            Self::Udp4 | Self::Udp6 => UDP.to_owned(),
+            Self::Tcp4 | Self::Tcp6 => TCP.to_owned(),
+            Self::Unspecified => "Unspecified".to_owned(),
         }
     }
 
-    // IsReliable returns true if the network is reliable
-    pub fn is_reliable(&self) -> bool {
+    /// Returns true if the network is reliable.
+    #[must_use]
+    pub const fn is_reliable(&self) -> bool {
         match *self {
-            NetworkType::Udp4 | NetworkType::Udp6 => false,
-            NetworkType::Tcp4 | NetworkType::Tcp6 => true,
-            _ => false,
+            Self::Tcp4 | Self::Tcp6 => true,
+            Self::Udp4 | Self::Udp6 | Self::Unspecified => false,
         }
     }
 
-    // IsIPv4 returns whether the network type is IPv4 or not.
-    pub fn is_ipv4(&self) -> bool {
+    /// Returns whether the network type is IPv4 or not.
+    #[must_use]
+    pub const fn is_ipv4(&self) -> bool {
         match *self {
-            NetworkType::Udp4 | NetworkType::Tcp4 => true,
-            NetworkType::Udp6 | NetworkType::Tcp6 => false,
-            _ => false,
+            Self::Udp4 | Self::Tcp4 => true,
+            Self::Udp6 | Self::Tcp6 | Self::Unspecified => false,
         }
     }
 
-    // IsIPv6 returns whether the network type is IPv6 or not.
-    pub fn is_ipv6(&self) -> bool {
+    /// Returns whether the network type is IPv6 or not.
+    #[must_use]
+    pub const fn is_ipv6(&self) -> bool {
         match *self {
-            NetworkType::Udp4 | NetworkType::Tcp4 => false,
-            NetworkType::Udp6 | NetworkType::Tcp6 => true,
-            _ => false,
+            Self::Udp6 | Self::Tcp6 => true,
+            Self::Udp4 | Self::Tcp4 | Self::Unspecified => false,
         }
     }
 }
 
-// determine_network_type determines the type of network based on
-// the short network string and an IP address.
+/// Determines the type of network based on the short network string and an IP address.
 pub(crate) fn determine_network_type(network: &str, ip: &IpAddr) -> Result<NetworkType, Error> {
     let ipv4 = ip.is_ipv4();
     let net = network.to_lowercase();

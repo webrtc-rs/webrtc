@@ -10,7 +10,7 @@ const RUNES_CANDIDATE_ID_FOUNDATION: &[u8] =
 const LEN_UFRAG: usize = 16;
 const LEN_PWD: usize = 32;
 
-pub(crate) fn generate_cand_id() -> String {
+pub fn generate_cand_id() -> String {
     // https://tools.ietf.org/html/rfc5245#section-15.1
     // candidate-id = "candidate" ":" foundation
     // foundation   = 1*32ice-char
@@ -27,9 +27,9 @@ pub(crate) fn generate_cand_id() -> String {
     format!("candidate:{}", rand_string)
 }
 
-// generate_pwd generates ICE pwd.
-// This internally uses generateCryptoRandomString.
-pub(crate) fn generate_pwd() -> String {
+/// Generates ICE pwd.
+/// This internally uses `generateCryptoRandomString`.
+pub fn generate_pwd() -> String {
     let mut rng = thread_rng();
 
     let rand_pwd: String = (0..LEN_PWD)
@@ -42,9 +42,9 @@ pub(crate) fn generate_pwd() -> String {
     rand_pwd
 }
 
-// generate_ufrag generates ICE user fragment.
-// This internally uses generateCryptoRandomString.
-pub(crate) fn generate_ufrag() -> String {
+/// ICE user fragment.
+/// This internally uses `generateCryptoRandomString`.
+pub fn generate_ufrag() -> String {
     let mut rng = thread_rng();
 
     let rand_ufrag: String = (0..LEN_UFRAG)

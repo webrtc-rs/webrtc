@@ -11,25 +11,24 @@ use std::str::FromStr;
 use std::sync::Arc;
 use util::Error;
 
-// MulticastDNSMode represents the different Multicast modes ICE can run in
-// MulticastDNSMode enum
+/// Represents the different Multicast modes that ICE can run.
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub enum MulticastDnsMode {
     Unspecified,
 
-    // MulticastDNSModeDisabled means remote mDNS candidates will be discarded, and local host candidates will use IPs
+    /// Means remote mDNS candidates will be discarded, and local host candidates will use IPs.
     Disabled,
 
-    // MulticastDNSModeQueryOnly means remote mDNS candidates will be accepted, and local host candidates will use IPs
+    /// Means remote mDNS candidates will be accepted, and local host candidates will use IPs.
     QueryOnly,
 
-    // MulticastDNSModeQueryAndGather means remote mDNS candidates will be accepted, and local host candidates will use mDNS
+    /// Means remote mDNS candidates will be accepted, and local host candidates will use mDNS.
     QueryAndGather,
 }
 
 impl Default for MulticastDnsMode {
     fn default() -> Self {
-        MulticastDnsMode::Unspecified
+        Self::Unspecified
     }
 }
 
@@ -62,7 +61,7 @@ pub(crate) fn create_multicast_dns(
                 addr,
                 Config {
                     local_names: vec![mdns_name.to_owned()],
-                    ..Default::default()
+                    ..Config::default()
                 },
             )?;
             Ok(Some(Arc::new(conn)))

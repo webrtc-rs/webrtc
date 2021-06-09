@@ -67,7 +67,7 @@ struct GatherCandidatesSrflxParams {
 
 impl Agent {
     pub(crate) async fn gather_candidates_internal(params: GatherCandidatesInternalParams) {
-        Agent::set_gathering_state(
+        Self::set_gathering_state(
             &params.chan_candidate_tx,
             &params.gathering_state,
             GatheringState::Gathering,
@@ -97,7 +97,7 @@ impl Agent {
                             drop(w);
                         });
 
-                        Agent::gather_candidates_local(local_params).await;
+                        Self::gather_candidates_local(local_params).await;
                     });
                 }
                 CandidateType::ServerReflexive => {
@@ -115,7 +115,7 @@ impl Agent {
                             drop(w1);
                         });
 
-                        Agent::gather_candidates_srflx(srflx_params).await;
+                        Self::gather_candidates_srflx(srflx_params).await;
                     });
                     if let Some(ext_ip_mapper) = &*params.ext_ip_mapper {
                         if ext_ip_mapper.candidate_type == CandidateType::ServerReflexive {
@@ -133,7 +133,7 @@ impl Agent {
                                     drop(w2);
                                 });
 
-                                Agent::gather_candidates_srflx_mapped(srflx_mapped_params).await;
+                                Self::gather_candidates_srflx_mapped(srflx_mapped_params).await;
                             });
                         }
                     }
@@ -148,7 +148,7 @@ impl Agent {
                             drop(w);
                         });
 
-                        Agent::gather_candidates_relay(urls, net, agent_internal).await;
+                        Self::gather_candidates_relay(urls, net, agent_internal).await;
                     });
                 }
                 _ => {}
@@ -158,7 +158,7 @@ impl Agent {
         // Block until all STUN and TURN URLs have been gathered (or timed out)
         wg.wait().await;
 
-        Agent::set_gathering_state(
+        Self::set_gathering_state(
             &params.chan_candidate_tx,
             &params.gathering_state,
             GatheringState::Complete,
@@ -281,9 +281,9 @@ impl Agent {
                         port,
                         component: COMPONENT_RTP,
                         conn: Some(conn),
-                        ..Default::default()
+                        ..CandidateBaseConfig::default()
                     },
-                    ..Default::default()
+                    ..CandidateHostConfig::default()
                 };
 
                 let candidate: Arc<dyn Candidate + Send + Sync> = match host_config
@@ -407,7 +407,7 @@ impl Agent {
                         port: laddr.port(),
                         component: COMPONENT_RTP,
                         conn: Some(conn),
-                        ..Default::default()
+                        ..CandidateBaseConfig::default()
                     },
                     rel_addr: laddr.ip().to_string(),
                     rel_port: laddr.port(),
@@ -531,7 +531,7 @@ impl Agent {
                             port,
                             component: COMPONENT_RTP,
                             conn: Some(conn),
-                            ..Default::default()
+                            ..CandidateBaseConfig::default()
                         },
                         rel_addr: laddr.ip().to_string(),
                         rel_port: laddr.port(),
@@ -585,10 +585,12 @@ impl Agent {
         for url in urls {
             if url.scheme != SchemeType::Turn && url.scheme != SchemeType::Turns {
                 continue;
-            } else if url.username.is_empty() {
+            }
+            if url.username.is_empty() {
                 log::error!("Failed to gather relay candidates: {}", *ERR_USERNAME_EMPTY);
                 return;
-            } else if url.password.is_empty() {
+            }
+            if url.password.is_empty() {
                 log::error!("Failed to gather relay candidates: {}", *ERR_PASSWORD_EMPTY);
                 return;
             }
@@ -681,7 +683,7 @@ impl Agent {
                         port: raddr.port(),
                         component: COMPONENT_RTP,
                         conn: Some(Arc::new(relay_conn)),
-                        ..Default::default()
+                        ..CandidateBaseConfig::default()
                     },
                     rel_addr,
                     rel_port,
