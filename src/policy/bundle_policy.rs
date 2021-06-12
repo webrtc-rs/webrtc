@@ -55,7 +55,7 @@ impl fmt::Display for BundlePolicy {
             BundlePolicy::Balanced => write!(f, "{}", BUNDLE_POLICY_BALANCED_STR),
             BundlePolicy::MaxCompat => write!(f, "{}", BUNDLE_POLICY_MAX_COMPAT_STR),
             BundlePolicy::MaxBundle => write!(f, "{}", BUNDLE_POLICY_MAX_BUNDLE_STR),
-            _ => write!(f, "Unspecified"),
+            _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }
     }
 }

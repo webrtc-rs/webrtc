@@ -42,7 +42,7 @@ impl fmt::Display for ICETransportPolicy {
         let s = match *self {
             ICETransportPolicy::Relay => ICE_TRANSPORT_POLICY_RELAY_STR,
             ICETransportPolicy::All => ICE_TRANSPORT_POLICY_ALL_STR,
-            ICETransportPolicy::Unspecified => "Unspecified",
+            ICETransportPolicy::Unspecified => crate::UNSPECIFIED_STR,
         };
         write!(f, "{}", s)
     }

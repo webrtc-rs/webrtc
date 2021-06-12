@@ -61,7 +61,7 @@ impl fmt::Display for DTLSTransportState {
             DTLSTransportState::Connected => DTLS_TRANSPORT_STATE_CONNECTED_STR,
             DTLSTransportState::Closed => DTLS_TRANSPORT_STATE_CLOSED_STR,
             DTLSTransportState::Failed => DTLS_TRANSPORT_STATE_FAILED_STR,
-            DTLSTransportState::Unspecified => "Unspecified",
+            DTLSTransportState::Unspecified => crate::UNSPECIFIED_STR,
         };
         write!(f, "{}", s)
     }
@@ -74,7 +74,7 @@ mod test {
     #[test]
     fn test_new_dtls_transport_state() {
         let tests = vec![
-            ("Unspecified", DTLSTransportState::Unspecified),
+            (crate::UNSPECIFIED_STR, DTLSTransportState::Unspecified),
             ("New", DTLSTransportState::New),
             ("Connecting", DTLSTransportState::Connecting),
             ("Connected", DTLSTransportState::Connected),

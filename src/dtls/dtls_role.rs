@@ -44,7 +44,7 @@ impl fmt::Display for DTLSRole {
             DTLSRole::Auto => write!(f, "Auto"),
             DTLSRole::Client => write!(f, "Client"),
             DTLSRole::Server => write!(f, "Server"),
-            _ => write!(f, "Unspecified"),
+            _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }
     }
 }

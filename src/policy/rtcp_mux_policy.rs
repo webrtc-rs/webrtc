@@ -42,7 +42,7 @@ impl fmt::Display for RTCPMuxPolicy {
         let s = match *self {
             RTCPMuxPolicy::Negotiate => RTCP_MUX_POLICY_NEGOTIATE_STR,
             RTCPMuxPolicy::Require => RTCP_MUX_POLICY_REQUIRE_STR,
-            RTCPMuxPolicy::Unspecified => "Unspecified",
+            RTCPMuxPolicy::Unspecified => crate::UNSPECIFIED_STR,
         };
         write!(f, "{}", s)
     }

@@ -19,7 +19,7 @@ impl fmt::Display for StateChangeOp {
         match *self {
             StateChangeOp::SetLocal => write!(f, "SetLocal"),
             StateChangeOp::SetRemote => write!(f, "SetRemote"),
-            //_ => write!(f, "Unspecified"),
+            //_ => write!(f, UNSPECIFIED_STR),
         }
     }
 }
@@ -98,7 +98,7 @@ impl fmt::Display for SignalingState {
                 write!(f, "{}", SIGNALING_STATE_HAVE_REMOTE_PRANSWER_STR)
             }
             SignalingState::Closed => write!(f, "{}", SIGNALING_STATE_CLOSED_STR),
-            _ => write!(f, "Unspecified"),
+            _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }
     }
 }

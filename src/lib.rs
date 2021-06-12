@@ -17,3 +17,5 @@ pub mod sctp;
 pub mod sdp;
 pub mod stats;
 pub mod track;
+
+pub(crate) const UNSPECIFIED_STR: &str = "Unspecified";

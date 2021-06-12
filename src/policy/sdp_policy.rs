@@ -49,7 +49,7 @@ impl fmt::Display for SdpPolicy {
             SdpPolicy::UnifiedPlanWithFallback => SDP_SEMANTICS_UNIFIED_PLAN_WITH_FALLBACK,
             SdpPolicy::UnifiedPlan => SDP_SEMANTICS_UNIFIED_PLAN,
             SdpPolicy::PlanB => SDP_SEMANTICS_PLAN_B,
-            SdpPolicy::Unspecified => "Unspecified",
+            SdpPolicy::Unspecified => crate::UNSPECIFIED_STR,
         };
         write!(f, "{}", s)
     }

@@ -60,7 +60,7 @@ impl fmt::Display for SDPType {
             SDPType::Pranswer => write!(f, "{}", SDP_TYPE_PRANSWER_STR),
             SDPType::Answer => write!(f, "{}", SDP_TYPE_ANSWER_STR),
             SDPType::Rollback => write!(f, "{}", SDP_TYPE_ROLLBACK_STR),
-            _ => write!(f, "Unspecified"),
+            _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }
     }
 }
