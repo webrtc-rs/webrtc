@@ -1,4 +1,5 @@
 pub mod ice_gatherer;
+pub mod ice_gatherer_state;
 pub mod ice_gathering_state;
 
 use crate::ice::ice_server::ICEServer;
