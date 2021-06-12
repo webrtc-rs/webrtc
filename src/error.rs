@@ -305,4 +305,7 @@ pub enum Error {
 
     #[error("SdpError: {0}")]
     ErrSdpError(#[from] sdp::error::Error),
+
+    #[error("UtilError: {0}")]
+    ErrUtilError(#[from] util::error::Error),
 }

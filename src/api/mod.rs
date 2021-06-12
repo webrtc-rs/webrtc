@@ -52,11 +52,37 @@ impl ApiBuilder {
         self
     }
 
+    //TODO:
     // WithInterceptorRegistry allows providing Interceptors to the API.
     // Settings should not be changed after passing the registry to an API.
     /*pub WithInterceptorRegistry(interceptorRegistry *interceptor.Registry) func(a *API) {
         return func(a *API) {
             a.interceptor = interceptorRegistry.Build()
         }
+    }*/
+
+    /*TODO:
+    // NewICEGatherer creates a new NewICEGatherer.
+    // This constructor is part of the ORTC API. It is not
+    // meant to be used together with the basic WebRTC API.
+    func (api *API) NewICEGatherer(opts ICEGatherOptions) (*ICEGatherer, error) {
+        var validatedServers []*ice.URL
+        if len(opts.ICEServers) > 0 {
+            for _, server := range opts.ICEServers {
+                url, err := server.urls()
+                if err != nil {
+                    return nil, err
+                }
+                validatedServers = append(validatedServers, url...)
+            }
+        }
+
+        return &ICEGatherer{
+            state:            ICEGathererStateNew,
+            gatherPolicy:     opts.ICEGatherPolicy,
+            validatedServers: validatedServers,
+            api:              api,
+            log:              api.settingEngine.LoggerFactory.NewLogger("ice"),
+        }, nil
     }*/
 }

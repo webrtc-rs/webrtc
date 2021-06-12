@@ -1,15 +1,17 @@
-use ice::candidate::CandidateType;
 use ice::mdns::MulticastDnsMode;
 use ice::network_type::NetworkType;
 
 use crate::dtls::dtls_role::DTLSRole;
+use crate::ice::ice_candidate_type::ICECandidateType;
 use dtls::extension::extension_use_srtp::SrtpProtectionProfile;
+use std::sync::Arc;
 use tokio::time::Duration;
+use util::vnet::net::*;
 
 #[derive(Default)]
 pub struct EphemeralUDP {
-    port_min: u16,
-    port_max: u16,
+    pub port_min: u16,
+    pub port_max: u16,
 }
 
 #[derive(Default)]
@@ -28,13 +30,15 @@ pub struct Timeout {
     pub ice_relay_acceptance_min_wait: Duration,
 }
 
+pub(crate) type InterfaceFilterFn = Box<dyn (Fn(&str) -> bool) + Send + Sync>;
+
 #[derive(Default)]
 pub struct Candidates {
     pub ice_lite: bool,
     pub ice_network_types: Vec<NetworkType>,
-    pub interface_filter: Option<Box<dyn Fn(String) -> bool>>,
+    pub interface_filter: Option<InterfaceFilterFn>,
     pub nat_1to1_ips: Vec<String>,
-    pub nat_1to1_ip_candidate_type: CandidateType,
+    pub nat_1to1_ip_candidate_type: ICECandidateType,
     pub multicast_dns_mode: MulticastDnsMode,
     pub multicast_dns_host_name: String,
     pub username_fragment: String,
@@ -53,18 +57,23 @@ pub struct ReplayProtection {
 /// use-cases without deviating from the WebRTC API elsewhere.
 #[derive(Default)]
 pub struct SettingEngine {
-    sdp_media_level_fingerprints: bool,
-    answering_dtls_role: DTLSRole,
-    disable_certificate_fingerprint_verification: bool,
-    disable_srtp_replay_protection: bool,
-    disable_srtcp_replay_protection: bool,
-    //TODO: vnet                                      :*vnet.Net,
+    pub(crate) ephemeral_udp: EphemeralUDP,
+    pub(crate) detach: Detach,
+    pub(crate) timeout: Timeout,
+    pub(crate) candidates: Candidates,
+    pub(crate) replay_protection: ReplayProtection,
+    pub(crate) sdp_media_level_fingerprints: bool,
+    pub(crate) answering_dtls_role: DTLSRole,
+    pub(crate) disable_certificate_fingerprint_verification: bool,
+    pub(crate) disable_srtp_replay_protection: bool,
+    pub(crate) disable_srtcp_replay_protection: bool,
+    pub(crate) net: Option<Arc<Net>>,
     //TODO: BufferFactory                             :func(packetType packetio.BufferPacketType, ssrc uint32) io.ReadWriteCloser,
     //TODO:? iceTCPMux                                 :ice.TCPMux,?
     //iceUDPMux                                 :ice.UDPMux,?
     //iceProxyDialer                            :proxy.Dialer,?
-    disable_media_engine_copy: bool,
-    srtp_protection_profiles: Vec<SrtpProtectionProfile>,
+    pub(crate) disable_media_engine_copy: bool,
+    pub(crate) srtp_protection_profiles: Vec<SrtpProtectionProfile>,
 }
 
 /*TODO:
