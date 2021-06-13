@@ -324,10 +324,10 @@ async fn test_vnet_gather_with_interface_filter() -> Result<(), Error> {
     {
         let a = Agent::new(AgentConfig {
             net: Some(Arc::clone(&nw)),
-            interface_filter: Some(Box::new(|_: &str| -> bool {
+            interface_filter: Arc::new(Some(Box::new(|_: &str| -> bool {
                 //assert_eq!("eth0", interface_name);
                 false
-            })),
+            }))),
             ..Default::default()
         })
         .await?;
@@ -345,9 +345,9 @@ async fn test_vnet_gather_with_interface_filter() -> Result<(), Error> {
     {
         let a = Agent::new(AgentConfig {
             net: Some(Arc::clone(&nw)),
-            interface_filter: Some(Box::new(|interface_name: &str| -> bool {
+            interface_filter: Arc::new(Some(Box::new(|interface_name: &str| -> bool {
                 "eth0" == interface_name
-            })),
+            }))),
             ..Default::default()
         })
         .await?;

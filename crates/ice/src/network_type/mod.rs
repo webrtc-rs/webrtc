@@ -73,20 +73,20 @@ impl Default for NetworkType {
 impl NetworkType {
     /// Returns true when network is UDP4 or UDP6.
     #[must_use]
-    pub fn is_udp(&self) -> bool {
-        *self == Self::Udp4 || *self == Self::Udp6
+    pub fn is_udp(self) -> bool {
+        self == Self::Udp4 || self == Self::Udp6
     }
 
     /// Returns true when network is TCP4 or TCP6.
     #[must_use]
-    pub fn is_tcp(&self) -> bool {
-        *self == Self::Tcp4 || *self == Self::Tcp6
+    pub fn is_tcp(self) -> bool {
+        self == Self::Tcp4 || self == Self::Tcp6
     }
 
     /// Returns the short network description.
     #[must_use]
-    pub fn network_short(&self) -> String {
-        match *self {
+    pub fn network_short(self) -> String {
+        match self {
             Self::Udp4 | Self::Udp6 => UDP.to_owned(),
             Self::Tcp4 | Self::Tcp6 => TCP.to_owned(),
             Self::Unspecified => "Unspecified".to_owned(),
@@ -95,8 +95,8 @@ impl NetworkType {
 
     /// Returns true if the network is reliable.
     #[must_use]
-    pub const fn is_reliable(&self) -> bool {
-        match *self {
+    pub const fn is_reliable(self) -> bool {
+        match self {
             Self::Tcp4 | Self::Tcp6 => true,
             Self::Udp4 | Self::Udp6 | Self::Unspecified => false,
         }
@@ -104,8 +104,8 @@ impl NetworkType {
 
     /// Returns whether the network type is IPv4 or not.
     #[must_use]
-    pub const fn is_ipv4(&self) -> bool {
-        match *self {
+    pub const fn is_ipv4(self) -> bool {
+        match self {
             Self::Udp4 | Self::Tcp4 => true,
             Self::Udp6 | Self::Tcp6 | Self::Unspecified => false,
         }
@@ -113,8 +113,8 @@ impl NetworkType {
 
     /// Returns whether the network type is IPv6 or not.
     #[must_use]
-    pub const fn is_ipv6(&self) -> bool {
-        match *self {
+    pub const fn is_ipv6(self) -> bool {
+        match self {
             Self::Udp6 | Self::Tcp6 => true,
             Self::Udp4 | Self::Tcp4 | Self::Unspecified => false,
         }

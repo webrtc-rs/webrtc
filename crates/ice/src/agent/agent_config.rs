@@ -50,7 +50,7 @@ pub(crate) fn default_candidate_types() -> Vec<CandidateType> {
     ]
 }
 
-pub(crate) type InterfaceFilterFn = Box<dyn (Fn(&str) -> bool) + Send + Sync>;
+pub type InterfaceFilterFn = Box<dyn (Fn(&str) -> bool) + Send + Sync>;
 
 /// Collects the arguments to `ice::Agent` construction into a single structure, for
 /// future-proofness of the interface.
@@ -139,7 +139,7 @@ pub struct AgentConfig {
 
     /// A function that you can use in order to whitelist or blacklist the interfaces which are
     /// used to gather ICE candidates.
-    pub interface_filter: Option<InterfaceFilterFn>,
+    pub interface_filter: Arc<Option<InterfaceFilterFn>>,
 
     /// Controls if self-signed certificates are accepted when connecting to TURN servers via TLS or
     /// DTLS.

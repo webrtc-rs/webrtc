@@ -130,8 +130,8 @@ impl CandidateType {
     /// for server reflexive candidates, 110 for peer reflexive candidates,
     /// and 0 for relayed candidates.
     #[must_use]
-    pub const fn preference(&self) -> u16 {
-        match *self {
+    pub const fn preference(self) -> u16 {
+        match self {
             Self::Host => 126,
             Self::PeerReflexive => 110,
             Self::ServerReflexive => 100,

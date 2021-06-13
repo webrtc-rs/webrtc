@@ -9,7 +9,7 @@ pub(crate) mod agent_vnet_test;
 
 pub mod agent_config;
 pub mod agent_gather;
-pub(crate) mod agent_internal;
+pub mod agent_internal;
 pub mod agent_selector;
 pub mod agent_stats;
 pub mod agent_transport;
@@ -115,7 +115,7 @@ pub struct Agent {
 
 impl Agent {
     /// Creates a new Agent.
-    pub async fn new(mut config: AgentConfig) -> Result<Self, Error> {
+    pub async fn new(config: AgentConfig) -> Result<Self, Error> {
         if config.port_max < config.port_min {
             return Err(ERR_PORT.to_owned());
         }
@@ -267,7 +267,7 @@ impl Agent {
             port_min: config.port_min,
             port_max: config.port_max,
             agent_internal: Arc::new(Mutex::new(ai)),
-            interface_filter: Arc::new(config.interface_filter.take()),
+            interface_filter: Arc::clone(&config.interface_filter),
             mdns_mode,
             mdns_name,
             mdns_conn,

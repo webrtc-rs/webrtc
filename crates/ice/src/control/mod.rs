@@ -18,7 +18,7 @@ pub(crate) const TIE_BREAKER_SIZE: usize = 8; // 64 bit
 
 impl TieBreaker {
     /// Adds Tiebreaker value to m as t attribute.
-    pub fn add_to_as(&self, m: &mut Message, t: AttrType) -> Result<(), Error> {
+    pub fn add_to_as(self, m: &mut Message, t: AttrType) -> Result<(), Error> {
         let mut v = vec![0; TIE_BREAKER_SIZE];
         v.copy_from_slice(&(self.0 as u64).to_be_bytes());
         m.add(t, &v);
