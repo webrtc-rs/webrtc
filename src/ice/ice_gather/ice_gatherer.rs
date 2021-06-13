@@ -1,10 +1,12 @@
 use crate::api::setting_engine::SettingEngine;
 use crate::error::Error;
+use crate::ice::ice_candidate::*;
 use crate::ice::ice_gather::ice_gatherer_state::ICEGathererState;
 use crate::policy::ice_transport_policy::ICETransportPolicy;
 use ice::candidate::{Candidate, CandidateType};
 
 use crate::ice::ice_candidate_type::ICECandidateType;
+use crate::ice::ICEParameters;
 use ice::agent::Agent;
 use std::future::Future;
 use std::pin::Pin;
@@ -13,7 +15,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 pub type OnLocalCandidateHdlrFn = Box<
-    dyn (FnMut(&(dyn Candidate + Send + Sync)) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+    dyn (FnMut(Option<ICECandidate>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
@@ -32,18 +34,17 @@ pub type OnGatheringCompleteHdlrFn =
 /// Connectivity Establishment (ICE) parameters which can be
 /// exchanged in signaling.
 pub struct ICEGatherer {
-    state: AtomicU8, //ICEGathererState,
+    state: Arc<AtomicU8>, //ICEGathererState,
 
     validated_servers: Vec<ice::url::Url>,
     gather_policy: ICETransportPolicy,
 
     agent: Option<Arc<ice::agent::Agent>>,
 
-    on_local_candidate_handler: Mutex<Option<OnLocalCandidateHdlrFn>>,
-    on_state_change_handler: Mutex<Option<OnStateChangeHdlrFn>>,
-
+    on_local_candidate_handler: Arc<Mutex<Option<OnLocalCandidateHdlrFn>>>,
+    on_state_change_handler: Arc<Mutex<Option<OnStateChangeHdlrFn>>>,
     // Used for GatheringCompletePromise
-    on_gathering_complete_handler: Mutex<Option<OnGatheringCompleteHdlrFn>>,
+    on_gathering_complete_handler: Arc<Mutex<Option<OnGatheringCompleteHdlrFn>>>,
 
     setting_engine: SettingEngine, //TODO: api *API
 }
@@ -133,40 +134,61 @@ impl ICEGatherer {
     /// Gather ICE candidates.
     pub async fn gather(&mut self) -> Result<(), Error> {
         self.create_agent().await?;
-        self.set_state(ICEGathererState::Gathering);
+        self.set_state(ICEGathererState::Gathering).await;
 
         if let Some(agent) = &self.agent {
+            let state = Arc::clone(&self.state);
+            let on_local_candidate_handler = Arc::clone(&self.on_local_candidate_handler);
+            let on_state_change_handler = Arc::clone(&self.on_state_change_handler);
+            let on_gathering_complete_handler = Arc::clone(&self.on_gathering_complete_handler);
+
             agent
                 .on_candidate(Box::new(
-                    move |_c: Option<Arc<dyn Candidate + Send + Sync>>| {
+                    move |candidate: Option<Arc<dyn Candidate + Send + Sync>>| {
+                        let state_clone = Arc::clone(&state);
+                        let on_local_candidate_handler_clone =
+                            Arc::clone(&on_local_candidate_handler);
+                        let on_state_change_handler_clone = Arc::clone(&on_state_change_handler);
+                        let on_gathering_complete_handler_clone =
+                            Arc::clone(&on_gathering_complete_handler);
+
                         Box::pin(async move {
-                            /*TODO: on_local_candidate_handler: = func(*ICECandidate)
-                            {}
-                            if handler, ok: = g.on_local_candidate_handler.Load().(func(candidate * ICECandidate));
-                            ok && handler != nil {
-                                on_local_candidate_handler = handler
-                            }
+                            if let Some(cand) = candidate {
+                                let c = ICECandidate::from(&cand);
 
-                            on_gathering_complete_handler: = func()
-                            {}
-                            if handler, ok: = g.on_gathering_complete_handler.Load().(func());
-                            ok && handler != nil {
-                                on_gathering_complete_handler = handler
-                            }
-
-                            if candidate != nil {
-                                c, err: = newICECandidateFromICE(candidate)
-                                if err != nil {
-                                    g.log.Warnf("Failed to convert ice.Candidate: %s", err)
-                                    return
+                                let mut on_local_candidate_handler =
+                                    on_local_candidate_handler_clone.lock().await;
+                                if let Some(handler) = &mut *on_local_candidate_handler {
+                                    handler(Some(c)).await;
                                 }
-                                on_local_candidate_handler(&c)
                             } else {
-                                g.setState(ICEGathererStateComplete)
+                                state_clone
+                                    .store(ICEGathererState::Complete as u8, Ordering::SeqCst);
 
-                                on_gathering_complete_handler()
-                                on_local_candidate_handler(nil)
-                            }*/
+                                {
+                                    let mut on_state_change_handler =
+                                        on_state_change_handler_clone.lock().await;
+                                    if let Some(handler) = &mut *on_state_change_handler {
+                                        handler(ICEGathererState::Complete).await;
+                                    }
+                                }
+
+                                {
+                                    let mut on_gathering_complete_handler =
+                                        on_gathering_complete_handler_clone.lock().await;
+                                    if let Some(handler) = &mut *on_gathering_complete_handler {
+                                        handler().await;
+                                    }
+                                }
+
+                                {
+                                    let mut on_local_candidate_handler =
+                                        on_local_candidate_handler_clone.lock().await;
+                                    if let Some(handler) = &mut *on_local_candidate_handler {
+                                        handler(None).await;
+                                    }
+                                }
+                            }
                         })
                     },
                 ))
@@ -177,56 +199,47 @@ impl ICEGatherer {
 
         Ok(())
     }
-    /*
-           // Close prunes all local candidates, and closes the ports.
-           func (g *ICEGatherer) Close() error {
-               g.lock.Lock()
-               defer g.lock.Unlock()
 
-               if g.agent == nil {
-                   return nil
-               } else if err := g.agent.Close(); err != nil {
-                   return err
-               }
+    /// Close prunes all local candidates, and closes the ports.
+    pub async fn close(&mut self) -> Result<(), Error> {
+        if let Some(agent) = self.agent.take() {
+            agent.close().await?;
+            self.set_state(ICEGathererState::Closed).await;
+        }
 
-               g.agent = nil
-               g.setState(ICEGathererStateClosed)
+        Ok(())
+    }
 
-               return nil
-           }
+    /// get_local_parameters returns the ICE parameters of the ICEGatherer.
+    pub async fn get_local_parameters(&mut self) -> Result<ICEParameters, Error> {
+        self.create_agent().await?;
 
-           // GetLocalParameters returns the ICE parameters of the ICEGatherer.
-           func (g *ICEGatherer) GetLocalParameters() (ICEParameters, error) {
-               if err := g.createAgent(); err != nil {
-                   return ICEParameters{}, err
-               }
+        let (frag, pwd) = if let Some(agent) = &self.agent {
+            agent.get_local_user_credentials().await
+        } else {
+            return Err(Error::ErrICEAgentNotExist);
+        };
 
-               frag, pwd, err := g.agent.GetLocalUserCredentials()
-               if err != nil {
-                   return ICEParameters{}, err
-               }
+        Ok(ICEParameters {
+            username_fragment: frag,
+            password: pwd,
+            ice_lite: false,
+        })
+    }
 
-               return ICEParameters{
-                   UsernameFragment: frag,
-                   Password:         pwd,
-                   ICELite:          false,
-               }, nil
-           }
+    /// get_local_candidates returns the sequence of valid local candidates associated with the ICEGatherer.
+    pub async fn get_local_candidates(&mut self) -> Result<Vec<ICECandidate>, Error> {
+        self.create_agent().await?;
 
+        let ice_candidates = if let Some(agent) = &self.agent {
+            agent.get_local_candidates().await?
+        } else {
+            return Err(Error::ErrICEAgentNotExist);
+        };
 
-       /// GetLocalCandidates returns the sequence of valid local candidates associated with the ICEGatherer.
-       pub fn GetLocalCandidates(&mut self) -> Result<Vec<Arc<dyn Candidate + Send + Sync>>, Error> {
-           self.create_agent().await?;
+        Ok(ice_candidates_from_ice(&ice_candidates))
+    }
 
-           let iceCandidates = if let Some(agent) = &self.agent {
-               agent.get_local_candidates().await?
-           } else {
-               vec![]
-           };
-
-           newICECandidatesFromICE(iceCandidates)
-       }
-    */
     /// on_local_candidate sets an event handler which fires when a new local ICE candidate is available
     /// Take note that the handler is gonna be called with a nil pointer when gathering is finished.
     pub async fn on_local_candidate(&self, f: OnLocalCandidateHdlrFn) {
@@ -234,10 +247,16 @@ impl ICEGatherer {
         *on_local_candidate_handler = Some(f);
     }
 
-    /// on_state_change fires any time the ICEGatherer changes
+    /// on_state_change sets an event handler which fires any time the ICEGatherer changes
     pub async fn on_state_change(&self, f: OnStateChangeHdlrFn) {
         let mut on_state_change_handler = self.on_state_change_handler.lock().await;
         *on_state_change_handler = Some(f);
+    }
+
+    /// on_gathering_complete sets an event handler which fires any time the ICEGatherer changes
+    pub async fn on_gathering_complete(&self, f: OnGatheringCompleteHdlrFn) {
+        let mut on_gathering_complete_handler = self.on_gathering_complete_handler.lock().await;
+        *on_gathering_complete_handler = Some(f);
     }
 
     /// State indicates the current state of the ICE gatherer.
@@ -245,12 +264,13 @@ impl ICEGatherer {
         self.state.load(Ordering::SeqCst).into()
     }
 
-    pub(crate) fn set_state(&self, s: ICEGathererState) {
+    pub async fn set_state(&self, s: ICEGathererState) {
         self.state.store(s as u8, Ordering::SeqCst);
 
-        /*TODO: if handler, ok := g.on_state_change_handler.Load().(func(state ICEGathererState)); ok && handler != nil {
-            handler(s)
-        }*/
+        let mut on_state_change_handler = self.on_state_change_handler.lock().await;
+        if let Some(handler) = &mut *on_state_change_handler {
+            handler(s).await;
+        }
     }
 
     pub(crate) fn get_agent(&self) -> Option<Arc<Agent>> {
