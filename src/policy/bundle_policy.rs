@@ -1,10 +1,11 @@
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// BundlePolicy affects which media tracks are negotiated if the remote
 /// endpoint is not bundle-aware, and what ICE candidates are gathered. If the
 /// remote endpoint is bundle-aware, all media tracks and data channels are
 /// bundled onto the same transport.
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
 pub enum BundlePolicy {
     Unspecified = 0,
 
@@ -60,21 +61,35 @@ impl fmt::Display for BundlePolicy {
     }
 }
 
-/*
-impl BundlePolicy{
-    /// unmarshal_json parses the JSON-encoded data and stores the result
-    pub fn unmarshal_json(b []byte) error {
-        var val string
-        if err := json.Unmarshal(b, &val); err != nil {
-            return err
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_new_bundle_policy() {
+        let tests = vec![
+            ("Unspecified", BundlePolicy::Unspecified),
+            ("Balanced", BundlePolicy::Balanced),
+            ("MaxCompat", BundlePolicy::MaxCompat),
+            ("MaxBundle", BundlePolicy::MaxBundle),
+        ];
+
+        for (policy_string, expected_policy) in tests {
+            assert_eq!(expected_policy, BundlePolicy::from(policy_string));
         }
-
-        *t = newBundlePolicy(val)
-        return nil
     }
 
-    /// marshal_json returns the JSON encoding
-    pub fn marshal_json() ([]byte, error) {
-        return json.Marshal(t.String())
+    #[test]
+    fn test_bundle_policy_string() {
+        let tests = vec![
+            (BundlePolicy::Unspecified, "Unspecified"),
+            (BundlePolicy::Balanced, "Balanced"),
+            (BundlePolicy::MaxCompat, "MaxCompat"),
+            (BundlePolicy::MaxBundle, "MaxBundle"),
+        ];
+
+        for (policy, expected_string) in tests {
+            assert_eq!(expected_string, policy.to_string());
+        }
     }
-}*/
+}

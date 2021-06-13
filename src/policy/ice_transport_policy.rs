@@ -1,8 +1,9 @@
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// ICETransportPolicy defines the ICE candidate policy surface the
 /// permitted candidates. Only these candidates are used for connectivity checks.
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
 pub enum ICETransportPolicy {
     Unspecified = 0,
 
@@ -48,19 +49,31 @@ impl fmt::Display for ICETransportPolicy {
     }
 }
 
-/*
-// UnmarshalJSON parses the JSON-encoded data and stores the result
-func (t *ICETransportPolicy) UnmarshalJSON(b []byte) error {
-    var val string
-    if err := json.Unmarshal(b, &val); err != nil {
-        return err
-    }
-    *t = NewICETransportPolicy(val)
-    return nil
-}
+#[cfg(test)]
+mod test {
+    use super::*;
 
-// MarshalJSON returns the JSON encoding
-func (t ICETransportPolicy) MarshalJSON() ([]byte, error) {
-    return json.Marshal(t.String())
+    #[test]
+    fn test_new_ice_transport_policy() {
+        let tests = vec![
+            ("Relay", ICETransportPolicy::Relay),
+            ("All", ICETransportPolicy::All),
+        ];
+
+        for (policy_string, expected_policy) in tests {
+            assert_eq!(expected_policy, ICETransportPolicy::from(policy_string));
+        }
+    }
+
+    #[test]
+    fn test_ice_transport_policy_string() {
+        let tests = vec![
+            (ICETransportPolicy::Relay, "Relay"),
+            (ICETransportPolicy::All, "All"),
+        ];
+
+        for (policy, expected_string) in tests {
+            assert_eq!(expected_string, policy.to_string());
+        }
+    }
 }
-*/

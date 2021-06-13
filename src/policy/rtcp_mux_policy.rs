@@ -1,8 +1,9 @@
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// RTCPMuxPolicy affects what ICE candidates are gathered to support
 /// non-multiplexed RTCP.
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
 pub enum RTCPMuxPolicy {
     Unspecified = 0,
 
@@ -47,24 +48,6 @@ impl fmt::Display for RTCPMuxPolicy {
         write!(f, "{}", s)
     }
 }
-
-/*
-// UnmarshalJSON parses the JSON-encoded data and stores the result
-func (t *RTCPMuxPolicy) UnmarshalJSON(b []byte) error {
-    var val string
-    if err := json.Unmarshal(b, &val); err != nil {
-        return err
-    }
-
-    *t = newRTCPMuxPolicy(val)
-    return nil
-}
-
-// MarshalJSON returns the JSON encoding
-func (t RTCPMuxPolicy) MarshalJSON() ([]byte, error) {
-    return json.Marshal(t.String())
-}
-*/
 
 #[cfg(test)]
 mod test {
