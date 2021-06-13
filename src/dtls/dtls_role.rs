@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// DtlsRole indicates the role of the DTLS transport.
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub enum DTLSRole {
     Unspecified = 0,
 

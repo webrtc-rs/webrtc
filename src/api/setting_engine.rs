@@ -4,22 +4,23 @@ use ice::network_type::NetworkType;
 use crate::dtls::dtls_role::DTLSRole;
 use crate::ice::ice_candidate_type::ICECandidateType;
 use dtls::extension::extension_use_srtp::SrtpProtectionProfile;
+use ice::agent::agent_config::InterfaceFilterFn;
 use std::sync::Arc;
 use tokio::time::Duration;
 use util::vnet::net::*;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct EphemeralUDP {
     pub port_min: u16,
     pub port_max: u16,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Detach {
     pub data_channels: bool,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Timeout {
     pub ice_disconnected_timeout: Duration,
     pub ice_failed_timeout: Duration,
@@ -30,13 +31,11 @@ pub struct Timeout {
     pub ice_relay_acceptance_min_wait: Duration,
 }
 
-pub(crate) type InterfaceFilterFn = Box<dyn (Fn(&str) -> bool) + Send + Sync>;
-
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Candidates {
     pub ice_lite: bool,
     pub ice_network_types: Vec<NetworkType>,
-    pub interface_filter: Option<InterfaceFilterFn>,
+    pub interface_filter: Arc<Option<InterfaceFilterFn>>,
     pub nat_1to1_ips: Vec<String>,
     pub nat_1to1_ip_candidate_type: ICECandidateType,
     pub multicast_dns_mode: MulticastDnsMode,
@@ -45,7 +44,7 @@ pub struct Candidates {
     pub password: String,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ReplayProtection {
     pub dtls: usize,
     pub srtp: usize,
@@ -55,7 +54,7 @@ pub struct ReplayProtection {
 /// SettingEngine allows influencing behavior in ways that are not
 /// supported by the WebRTC API. This allows us to support additional
 /// use-cases without deviating from the WebRTC API elsewhere.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct SettingEngine {
     pub(crate) ephemeral_udp: EphemeralUDP,
     pub(crate) detach: Detach,

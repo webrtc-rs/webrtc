@@ -1,5 +1,11 @@
+use crate::error::Error;
+use crate::ice::ice_gather::ice_gatherer::ICEGatherer;
+use crate::ice::ice_gather::ice_gatherer_state::ICEGathererState;
+use crate::ice::ice_gather::ICEGatherOptions;
 use media_engine::*;
 use setting_engine::*;
+use std::sync::atomic::AtomicU8;
+use std::sync::Arc;
 
 pub mod media_engine;
 pub mod setting_engine;
@@ -12,6 +18,29 @@ pub struct Api {
     setting_engine: SettingEngine,
     media_engine: MediaEngine,
     //TODO: interceptor   interceptor.Interceptor
+}
+
+impl Api {
+    /// new_ice_gatherer creates a new NewICEGatherer.
+    /// This constructor is part of the ORTC API. It is not
+    /// meant to be used together with the basic WebRTC API.
+    pub fn new_ice_gatherer(&self, opts: ICEGatherOptions) -> Result<ICEGatherer, Error> {
+        let mut validated_servers = vec![];
+        if !opts.ice_servers.is_empty() {
+            for server in &opts.ice_servers {
+                let url = server.urls()?;
+                validated_servers.extend(url);
+            }
+        }
+
+        Ok(ICEGatherer {
+            state: Arc::new(AtomicU8::new(ICEGathererState::New as u8)),
+            gather_policy: opts.ice_gather_policy,
+            validated_servers,
+            setting_engine: self.setting_engine.clone(),
+            ..Default::default()
+        })
+    }
 }
 
 pub struct ApiBuilder {
@@ -59,30 +88,5 @@ impl ApiBuilder {
         return func(a *API) {
             a.interceptor = interceptorRegistry.Build()
         }
-    }*/
-
-    /*TODO:
-    // NewICEGatherer creates a new NewICEGatherer.
-    // This constructor is part of the ORTC API. It is not
-    // meant to be used together with the basic WebRTC API.
-    func (api *API) NewICEGatherer(opts ICEGatherOptions) (*ICEGatherer, error) {
-        var validatedServers []*ice.URL
-        if len(opts.ICEServers) > 0 {
-            for _, server := range opts.ICEServers {
-                url, err := server.urls()
-                if err != nil {
-                    return nil, err
-                }
-                validatedServers = append(validatedServers, url...)
-            }
-        }
-
-        return &ICEGatherer{
-            state:            ICEGathererStateNew,
-            gatherPolicy:     opts.ICEGatherPolicy,
-            validatedServers: validatedServers,
-            api:              api,
-            log:              api.settingEngine.LoggerFactory.NewLogger("ice"),
-        }, nil
     }*/
 }

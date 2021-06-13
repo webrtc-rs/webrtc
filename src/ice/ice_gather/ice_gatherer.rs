@@ -33,20 +33,22 @@ pub type OnGatheringCompleteHdlrFn =
 /// candidates, as well as enabling the retrieval of local Interactive
 /// Connectivity Establishment (ICE) parameters which can be
 /// exchanged in signaling.
+#[derive(Default, Clone)]
 pub struct ICEGatherer {
-    state: Arc<AtomicU8>, //ICEGathererState,
+    pub(crate) state: Arc<AtomicU8>, //ICEGathererState,
 
-    validated_servers: Vec<ice::url::Url>,
-    gather_policy: ICETransportPolicy,
+    pub(crate) validated_servers: Vec<ice::url::Url>,
+    pub(crate) gather_policy: ICETransportPolicy,
 
-    agent: Option<Arc<ice::agent::Agent>>,
+    pub(crate) agent: Option<Arc<ice::agent::Agent>>,
 
-    on_local_candidate_handler: Arc<Mutex<Option<OnLocalCandidateHdlrFn>>>,
-    on_state_change_handler: Arc<Mutex<Option<OnStateChangeHdlrFn>>>,
+    pub(crate) on_local_candidate_handler: Arc<Mutex<Option<OnLocalCandidateHdlrFn>>>,
+    pub(crate) on_state_change_handler: Arc<Mutex<Option<OnStateChangeHdlrFn>>>,
+
     // Used for GatheringCompletePromise
-    on_gathering_complete_handler: Arc<Mutex<Option<OnGatheringCompleteHdlrFn>>>,
+    pub(crate) on_gathering_complete_handler: Arc<Mutex<Option<OnGatheringCompleteHdlrFn>>>,
 
-    setting_engine: SettingEngine, //TODO: api *API
+    pub(crate) setting_engine: SettingEngine,
 }
 
 impl ICEGatherer {
@@ -98,7 +100,7 @@ impl ICEGatherer {
             relay_acceptance_min_wait: Some(
                 self.setting_engine.timeout.ice_relay_acceptance_min_wait,
             ),
-            interface_filter: self.setting_engine.candidates.interface_filter.take(),
+            interface_filter: self.setting_engine.candidates.interface_filter.clone(),
             nat_1to1_ips: self.setting_engine.candidates.nat_1to1_ips.clone(),
             nat_1to1_ip_candidate_type: nat_1to1_cand_type,
             net: self.setting_engine.net.take(),
@@ -393,4 +395,67 @@ impl ICEGatherer {
         }(collector, agent)
     }
     */
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::ice::ice_gather::ICEGatherOptions;
+    use crate::ice::ice_server::ICEServer;
+
+    #[tokio::test]
+    async fn test_new_ice_gatherer_success() -> Result<(), Error> {
+        let opts = ICEGatherOptions {
+            ice_servers: vec![ICEServer {
+                urls: vec!["stun:stun.l.google.com:19302".to_owned()],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        /*let gatherer, err := NewAPI().NewICEGatherer(opts)
+        if err != nil {
+            t.Error(err)
+        }
+
+        if gatherer.State() != ICEGathererStateNew {
+            t.Fatalf("Expected gathering state new")
+        }
+
+        gatherFinished := make(chan struct{})
+        gatherer.OnLocalCandidate(func(i *ICECandidate) {
+            if i == nil {
+                close(gatherFinished)
+            }
+        })
+
+        if err = gatherer.Gather(); err != nil {
+            t.Error(err)
+        }
+
+        <-gatherFinished
+
+        params, err := gatherer.GetLocalParameters()
+        if err != nil {
+            t.Error(err)
+        }
+
+        if len(params.UsernameFragment) == 0 ||
+            len(params.Password) == 0 {
+            t.Fatalf("Empty local username or password frag")
+        }
+
+        candidates, err := gatherer.GetLocalCandidates()
+        if err != nil {
+            t.Error(err)
+        }
+
+        if len(candidates) == 0 {
+            t.Fatalf("No candidates gathered")
+        }
+
+        assert.NoError(t, gatherer.Close())*/
+
+        Ok(())
+    }
 }

@@ -6,7 +6,8 @@ use crate::ice::ice_server::ICEServer;
 use crate::policy::ice_transport_policy::ICETransportPolicy;
 
 /// ICEGatherOptions provides options relating to the gathering of ICE candidates.
+#[derive(Default, Debug, Clone)]
 pub struct ICEGatherOptions {
-    ice_servers: Vec<ICEServer>,
-    ice_gather_policy: ICETransportPolicy,
+    pub ice_servers: Vec<ICEServer>,
+    pub ice_gather_policy: ICETransportPolicy,
 }
