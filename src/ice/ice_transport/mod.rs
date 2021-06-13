@@ -1,8 +1,10 @@
+//use crate::ice::ice_role::ICERole;
+
 pub mod ice_transport_state;
 
-// ICETransport allows an application access to information about the ICE
-// transport over which packets are sent and received.
 /*
+/// ICETransport allows an application access to information about the ICE
+/// transport over which packets are sent and received.
 pub struct ICETransport{
     role :ICERole,
 
@@ -15,12 +17,12 @@ pub struct ICETransport{
     conn     *ice.Conn
     mux      *mux.Mux
 
-    ctx       context.Context
-    ctxCancel func()
+    //ctx       context.Context
+    //ctxCancel func()
 
-    loggerFactory logging.LoggerFactory
+    //loggerFactory logging.LoggerFactory
 
-    log logging.LeveledLogger
+    //log logging.LeveledLogger
 }
 
 

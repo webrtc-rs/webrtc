@@ -12,6 +12,7 @@ pub mod dtls;
 pub mod error;
 pub mod ice;
 pub mod media;
+pub mod mux;
 pub mod peer;
 pub mod policy;
 pub mod rtp;
