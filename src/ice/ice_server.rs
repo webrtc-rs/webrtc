@@ -57,3 +57,104 @@ impl ICEServer {
         Ok(urls)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_ice_server_validate_success() {
+        let tests = vec![
+            (
+                ICEServer {
+                    urls: vec!["turn:192.158.29.39?transport=udp".to_owned()],
+                    username: "unittest".to_owned(),
+                    credential: "placeholder".to_owned(),
+                    credential_type: ICECredentialType::Password,
+                },
+                true,
+            ),
+            (
+                ICEServer {
+                    urls: vec!["turn:[2001:db8:1234:5678::1]?transport=udp".to_owned()],
+                    username: "unittest".to_owned(),
+                    credential: "placeholder".to_owned(),
+                    credential_type: ICECredentialType::Password,
+                },
+                true,
+            ),
+            /*TODO:(ICEServer{
+                URLs:     []string{"turn:192.158.29.39?transport=udp"},
+                Username: "unittest".to_owned(),
+                Credential: OAuthCredential{
+                    MACKey:      "WmtzanB3ZW9peFhtdm42NzUzNG0=",
+                    AccessToken: "AAwg3kPHWPfvk9bDFL936wYvkoctMADzQ5VhNDgeMR3+ZlZ35byg972fW8QjpEl7bx91YLBPFsIhsxloWcXPhA==",
+                },
+                CredentialType: ICECredentialTypeOauth,
+            }, true),*/
+        ];
+
+        for (ice_server, expected_validate) in tests {
+            let result = ice_server.urls();
+            assert_eq!(result.is_ok(), expected_validate);
+        }
+    }
+
+    #[test]
+    fn test_ice_server_validate_failure() {
+        let tests = vec![
+            (
+                ICEServer {
+                    urls: vec!["turn:192.158.29.39?transport=udp".to_owned()],
+                    ..Default::default()
+                },
+                Error::ErrNoTurnCredentials.to_string(),
+            ),
+            (
+                ICEServer {
+                    urls: vec!["turn:192.158.29.39?transport=udp".to_owned()],
+                    username: "unittest".to_owned(),
+                    credential: String::new(),
+                    credential_type: ICECredentialType::Password,
+                },
+                Error::ErrNoTurnCredentials.to_string(),
+            ),
+            (
+                ICEServer {
+                    urls: vec!["turn:192.158.29.39?transport=udp".to_owned()],
+                    username: "unittest".to_owned(),
+                    credential: String::new(),
+                    credential_type: ICECredentialType::Oauth,
+                },
+                Error::ErrNoTurnCredentials.to_string(),
+            ),
+            (
+                ICEServer {
+                    urls: vec!["turn:192.158.29.39?transport=udp".to_owned()],
+                    username: "unittest".to_owned(),
+                    credential: String::new(),
+                    credential_type: ICECredentialType::Unspecified,
+                },
+                Error::ErrNoTurnCredentials.to_string(),
+            ),
+            (
+                ICEServer {
+                    urls: vec!["stun:google.de?transport=udp".to_owned()],
+                    username: "unittest".to_owned(),
+                    credential: String::new(),
+                    credential_type: ICECredentialType::Oauth,
+                },
+                //Error::ErrUtilError.to_string(),
+                "UtilError: queries not supported in stun address".to_owned(),
+            ),
+        ];
+
+        for (ice_server, expected_err) in tests {
+            if let Err(err) = ice_server.urls() {
+                assert_eq!(err.to_string(), expected_err, "{:?}", ice_server);
+            } else {
+                assert!(false, "expected error, but got ok");
+            }
+        }
+    }
+}
