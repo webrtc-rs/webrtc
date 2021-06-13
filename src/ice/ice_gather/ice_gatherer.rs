@@ -400,8 +400,10 @@ impl ICEGatherer {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::api::ApiBuilder;
     use crate::ice::ice_gather::ICEGatherOptions;
     use crate::ice::ice_server::ICEServer;
+    use tokio::sync::mpsc;
 
     #[tokio::test]
     async fn test_new_ice_gatherer_success() -> Result<(), Error> {
@@ -413,48 +415,79 @@ mod test {
             ..Default::default()
         };
 
-        /*let gatherer, err := NewAPI().NewICEGatherer(opts)
-        if err != nil {
-            t.Error(err)
-        }
+        let mut gatherer = ApiBuilder::new().build().new_ice_gatherer(opts)?;
 
-        if gatherer.State() != ICEGathererStateNew {
-            t.Fatalf("Expected gathering state new")
-        }
+        assert_eq!(
+            gatherer.state(),
+            ICEGathererState::New,
+            "Expected gathering state new"
+        );
 
-        gatherFinished := make(chan struct{})
-        gatherer.OnLocalCandidate(func(i *ICECandidate) {
-            if i == nil {
-                close(gatherFinished)
-            }
-        })
+        let (gather_finished_tx, mut gather_finished_rx) = mpsc::channel::<()>(1);
+        let gather_finished_tx = Arc::new(Mutex::new(Some(gather_finished_tx)));
+        gatherer
+            .on_local_candidate(Box::new(move |c: Option<ICECandidate>| {
+                let gather_finished_tx_clone = Arc::clone(&gather_finished_tx);
+                Box::pin(async move {
+                    if c.is_none() {
+                        let mut tx = gather_finished_tx_clone.lock().await;
+                        tx.take();
+                    }
+                })
+            }))
+            .await;
 
-        if err = gatherer.Gather(); err != nil {
-            t.Error(err)
-        }
+        gatherer.gather().await?;
 
-        <-gatherFinished
+        let _ = gather_finished_rx.recv().await;
 
-        params, err := gatherer.GetLocalParameters()
-        if err != nil {
-            t.Error(err)
-        }
+        let params = gatherer.get_local_parameters().await?;
 
-        if len(params.UsernameFragment) == 0 ||
-            len(params.Password) == 0 {
-            t.Fatalf("Empty local username or password frag")
-        }
+        assert!(
+            !params.username_fragment.is_empty() && !params.password.is_empty(),
+            "Empty local username or password frag"
+        );
 
-        candidates, err := gatherer.GetLocalCandidates()
-        if err != nil {
-            t.Error(err)
-        }
+        let candidates = gatherer.get_local_candidates().await?;
 
-        if len(candidates) == 0 {
-            t.Fatalf("No candidates gathered")
-        }
+        assert!(!candidates.is_empty(), "No candidates gathered");
 
-        assert.NoError(t, gatherer.Close())*/
+        gatherer.close().await?;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_ice_gather_mdns_candidate_gathering() -> Result<(), Error> {
+        let mut s = SettingEngine::default();
+        s.set_ice_multicast_dns_mode(ice::mdns::MulticastDnsMode::QueryAndGather);
+
+        let mut gatherer = ApiBuilder::new()
+            .with_setting_engine(s)
+            .build()
+            .new_ice_gatherer(ICEGatherOptions::default())?;
+
+        let (done_tx, mut done_rx) = mpsc::channel::<()>(1);
+        let done_tx = Arc::new(Mutex::new(Some(done_tx)));
+        gatherer
+            .on_local_candidate(Box::new(move |c: Option<ICECandidate>| {
+                let done_tx_clone = Arc::clone(&done_tx);
+                Box::pin(async move {
+                    if let Some(c) = c {
+                        if c.address.ends_with(".local") {
+                            let mut tx = done_tx_clone.lock().await;
+                            tx.take();
+                        }
+                    }
+                })
+            }))
+            .await;
+
+        gatherer.gather().await?;
+
+        let _ = done_rx.recv().await;
+
+        gatherer.close().await?;
 
         Ok(())
     }
