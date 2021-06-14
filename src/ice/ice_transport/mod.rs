@@ -292,7 +292,7 @@ func (t *ICETransport) setState(i ICETransportState) {
 func (t *ICETransport) newEndpoint(f mux.MatchFunc) *mux.Endpoint {
     t.lock.Lock()
     defer t.lock.Unlock()
-    return t.mux.NewEndpoint(f)
+    return t.mux.new_endpoint(f)
 }
 
 func (t *ICETransport) ensureGatherer() error {
