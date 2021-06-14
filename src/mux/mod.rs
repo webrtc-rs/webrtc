@@ -1,9 +1,13 @@
+#[cfg(test)]
+mod mux_test;
+
 pub mod endpoint;
 pub mod mux_func;
 
 use crate::error::Error;
 use crate::mux::endpoint::Endpoint;
 use crate::mux::mux_func::MatchFunc;
+
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
