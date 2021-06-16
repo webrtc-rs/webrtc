@@ -36,7 +36,7 @@
 <strong>Sponsored with 💖 by</strong><br>
 </p>
 <p align="center">
-<a href="https://getstream.io/?utm_source=github.com/webrtc-rs/webrtc&utm_medium=github&utm_campaign=oss_sponsorship" target="_blank">
+<a href="https://getstream.io/?utm_source=https://github.com/webrtc-rs/webrtc&utm_medium=github&utm_content=developer&utm_term=webrtc" target="_blank">
 <img src="https://stream-blog-v2.imgix.net/blog/wp-content/uploads/f7401112f41742c4e173c30d4f318cb8/stream_logo_white.png?h=50" alt="Stream Chat">
 </a> <a href="https://www.embark-studios.com/" target="_blank"><img src="./doc/embark.jpg" alt="embark"></a>
 </p>
