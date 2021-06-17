@@ -1,6 +1,5 @@
 use super::*;
 
-use defer::defer;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use util::Error;
@@ -42,9 +41,7 @@ async fn test_random_generator_collision() -> Result<(), Error> {
                 let rs = Arc::clone(&rands);
 
                 tokio::spawn(async move {
-                    let _d = defer(move || {
-                        drop(w);
-                    });
+                    let _d = w;
 
                     let s = if test_case == 0 {
                         generate_cand_id()

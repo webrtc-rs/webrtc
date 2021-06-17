@@ -1,7 +1,6 @@
 use super::agent_vnet_test::*;
 use super::*;
 
-use defer::defer;
 use util::{vnet::*, Conn, Error};
 use waitgroup::WaitGroup;
 
@@ -115,9 +114,7 @@ async fn test_conn_stats() -> Result<(), Error> {
 
     let w = wg.worker();
     tokio::spawn(async move {
-        let _d = defer(move || {
-            drop(w);
-        });
+        let _d = w;
 
         let mut buf = vec![0u8; 10];
         let nb = cb.recv(&mut buf).await?;
