@@ -11,7 +11,6 @@ use crate::candidate::candidate_host::CandidateHostConfig;
 use crate::candidate::candidate_relay::CandidateRelayConfig;
 use crate::candidate::candidate_server_reflexive::CandidateServerReflexiveConfig;
 use crate::candidate::*;
-use defer::defer;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -79,7 +78,6 @@ impl Agent {
         for t in &params.candidate_types {
             match t {
                 CandidateType::Host => {
-                    let w = wg.worker();
                     let local_params = GatherCandidatesLocalParams {
                         network_types: params.network_types.clone(),
                         port_max: params.port_max,
@@ -92,16 +90,14 @@ impl Agent {
                         agent_internal: Arc::clone(&params.agent_internal),
                     };
 
+                    let w = wg.worker();
                     tokio::spawn(async move {
-                        let _d = defer(move || {
-                            drop(w);
-                        });
+                        let _d = w;
 
                         Self::gather_candidates_local(local_params).await;
                     });
                 }
                 CandidateType::ServerReflexive => {
-                    let w1 = wg.worker();
                     let srflx_params = GatherCandidatesSrflxParams {
                         urls: params.urls.clone(),
                         network_types: params.network_types.clone(),
@@ -110,16 +106,14 @@ impl Agent {
                         net: Arc::clone(&params.net),
                         agent_internal: Arc::clone(&params.agent_internal),
                     };
+                    let w1 = wg.worker();
                     tokio::spawn(async move {
-                        let _d = defer(move || {
-                            drop(w1);
-                        });
+                        let _d = w1;
 
                         Self::gather_candidates_srflx(srflx_params).await;
                     });
                     if let Some(ext_ip_mapper) = &*params.ext_ip_mapper {
                         if ext_ip_mapper.candidate_type == CandidateType::ServerReflexive {
-                            let w2 = wg.worker();
                             let srflx_mapped_params = GatherCandidatesSrflxMappedParasm {
                                 network_types: params.network_types.clone(),
                                 port_max: params.port_max,
@@ -128,10 +122,9 @@ impl Agent {
                                 net: Arc::clone(&params.net),
                                 agent_internal: Arc::clone(&params.agent_internal),
                             };
+                            let w2 = wg.worker();
                             tokio::spawn(async move {
-                                let _d = defer(move || {
-                                    drop(w2);
-                                });
+                                let _d = w2;
 
                                 Self::gather_candidates_srflx_mapped(srflx_mapped_params).await;
                             });
@@ -139,14 +132,12 @@ impl Agent {
                     }
                 }
                 CandidateType::Relay => {
-                    let w = wg.worker();
                     let urls = params.urls.clone();
                     let net = Arc::clone(&params.net);
                     let agent_internal = Arc::clone(&params.agent_internal);
+                    let w = wg.worker();
                     tokio::spawn(async move {
-                        let _d = defer(move || {
-                            drop(w);
-                        });
+                        let _d = w;
 
                         Self::gather_candidates_relay(urls, net, agent_internal).await;
                     });
@@ -350,16 +341,14 @@ impl Agent {
                 continue;
             }
 
-            let w = wg.worker();
             let network = network_type.to_string();
             let net2 = Arc::clone(&net);
             let agent_internal2 = Arc::clone(&agent_internal);
             let ext_ip_mapper2 = Arc::clone(&ext_ip_mapper);
 
+            let w = wg.worker();
             tokio::spawn(async move {
-                let _d = defer(move || {
-                    drop(w);
-                });
+                let _d = w;
 
                 let conn: Arc<dyn Conn + Send + Sync> = match listen_udp_in_port_range(
                     &net2,
@@ -467,17 +456,15 @@ impl Agent {
             }
 
             for url in &urls {
-                let w = wg.worker();
                 let network = network_type.to_string();
                 let is_ipv4 = network_type.is_ipv4();
                 let url = url.clone();
                 let net2 = Arc::clone(&net);
                 let agent_internal2 = Arc::clone(&agent_internal);
 
+                let w = wg.worker();
                 tokio::spawn(async move {
-                    let _d = defer(move || {
-                        drop(w);
-                    });
+                    let _d = w;
 
                     let host_port = format!("{}:{}", url.host, url.port);
                     let server_addr = match net2.resolve_addr(is_ipv4, &host_port).await {
@@ -595,15 +582,13 @@ impl Agent {
                 return;
             }
 
-            let w = wg.worker();
             let network = NetworkType::Udp4.to_string();
             let net2 = Arc::clone(&net);
             let agent_internal2 = Arc::clone(&agent_internal);
 
+            let w = wg.worker();
             tokio::spawn(async move {
-                let _d = defer(move || {
-                    drop(w);
-                });
+                let _d = w;
 
                 let turn_server_addr = format!("{}:{}", url.host, url.port);
 
