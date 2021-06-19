@@ -12,31 +12,68 @@ pub const END_LINE: &str = "\r\n";
 pub const ATTRIBUTE_KEY: &str = "a=";
 
 /// ConnectionRole indicates which of the end points should initiate the connection establishment
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ConnectionRole {
+    Unspecified,
+
     /// ConnectionRoleActive indicates the endpoint will initiate an outgoing connection.
-    ConnectionRoleActive = 1,
+    Active,
 
     /// ConnectionRolePassive indicates the endpoint will accept an incoming connection.
-    ConnectionRolePassive = 2,
+    Passive,
 
     /// ConnectionRoleActpass indicates the endpoint is willing to accept an incoming connection or to initiate an outgoing connection.
-    ConnectionRoleActpass = 3,
+    Actpass,
 
     /// ConnectionRoleHoldconn indicates the endpoint does not want the connection to be established for the time being.
-    ConnectionRoleHoldconn = 4,
+    Holdconn,
 }
+
+impl Default for ConnectionRole {
+    fn default() -> Self {
+        ConnectionRole::Unspecified
+    }
+}
+
+const CONNECTION_ROLE_ACTIVE_STR: &str = "active";
+const CONNECTION_ROLE_PASSIVE_STR: &str = "passive";
+const CONNECTION_ROLE_ACTPASS_STR: &str = "actpass";
+const CONNECTION_ROLE_HOLDCONN_STR: &str = "holdconn";
 
 impl fmt::Display for ConnectionRole {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
-            ConnectionRole::ConnectionRoleActive => "active",
-            ConnectionRole::ConnectionRolePassive => "passive",
-            ConnectionRole::ConnectionRoleActpass => "actpass",
-            ConnectionRole::ConnectionRoleHoldconn => "holdconn",
-            //_ => "Unknown",
+            ConnectionRole::Active => CONNECTION_ROLE_ACTIVE_STR,
+            ConnectionRole::Passive => CONNECTION_ROLE_PASSIVE_STR,
+            ConnectionRole::Actpass => CONNECTION_ROLE_ACTPASS_STR,
+            ConnectionRole::Holdconn => CONNECTION_ROLE_HOLDCONN_STR,
+            _ => "Unspecified",
         };
         write!(f, "{}", s)
+    }
+}
+
+impl From<u8> for ConnectionRole {
+    fn from(v: u8) -> Self {
+        match v {
+            1 => ConnectionRole::Active,
+            2 => ConnectionRole::Passive,
+            3 => ConnectionRole::Actpass,
+            4 => ConnectionRole::Holdconn,
+            _ => ConnectionRole::Unspecified,
+        }
+    }
+}
+
+impl From<&str> for ConnectionRole {
+    fn from(raw: &str) -> Self {
+        match raw {
+            CONNECTION_ROLE_ACTIVE_STR => ConnectionRole::Active,
+            CONNECTION_ROLE_PASSIVE_STR => ConnectionRole::Passive,
+            CONNECTION_ROLE_ACTPASS_STR => ConnectionRole::Actpass,
+            CONNECTION_ROLE_HOLDCONN_STR => ConnectionRole::Holdconn,
+            _ => ConnectionRole::Unspecified,
+        }
     }
 }
 
