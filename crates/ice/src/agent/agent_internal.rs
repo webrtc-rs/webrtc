@@ -6,7 +6,7 @@ use crate::util::*;
 
 pub type ChanCandidateTx = Option<Arc<mpsc::Sender<Option<Arc<dyn Candidate + Send + Sync>>>>>;
 
-pub(crate) struct AgentInternal {
+pub struct AgentInternal {
     // State owned by the taskLoop
     pub(crate) on_connected_tx: Option<mpsc::Sender<()>>,
     pub(crate) on_connected_rx: Option<mpsc::Receiver<()>>,
