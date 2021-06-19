@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 /// DTLSFingerprint specifies the hash function algorithm and certificate
 /// fingerprint as described in https://tools.ietf.org/html/rfc4572.
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct DTLSFingerprint {
     /// Algorithm specifies one of the the hash function algorithms defined in
     /// the 'Hash function Textual Names' registry.
@@ -20,7 +20,7 @@ pub struct DTLSFingerprint {
 }
 
 /// DTLSParameters holds information relating to DTLS configuration.
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct DTLSParameters {
     pub role: DTLSRole,
     pub fingerprints: Vec<DTLSFingerprint>,

@@ -1,3 +1,5 @@
+use sdp::session_description::SessionDescription;
+use sdp::util::ConnectionRole;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -49,49 +51,47 @@ impl fmt::Display for DTLSRole {
     }
 }
 
-/*TODO:
-// Iterate a SessionDescription from a remote to determine if an explicit
-// role can been determined from it. The decision is made from the first role we we parse.
-// If no role can be found we return DTLSRoleAuto
-func dtlsRoleFromRemoteSDP(sessionDescription *sdp.SessionDescription) DTLSRole {
-    if sessionDescription == nil {
-        return DTLSRoleAuto
-    }
-
-    for _, mediaSection := range sessionDescription.MediaDescriptions {
-        for _, attribute := range mediaSection.Attributes {
-            if attribute.Key == "setup" {
-                switch attribute.Value {
-                case sdp.ConnectionRoleActive.String():
-                    return DTLSRoleClient
-                case sdp.ConnectionRolePassive.String():
-                    return DTLSRoleServer
-                default:
-                    return DTLSRoleAuto
+/// Iterate a SessionDescription from a remote to determine if an explicit
+/// role can been determined from it. The decision is made from the first role we we parse.
+/// If no role can be found we return DTLSRoleAuto
+impl From<&SessionDescription> for DTLSRole {
+    fn from(session_description: &SessionDescription) -> Self {
+        for media_section in &session_description.media_descriptions {
+            for attribute in &media_section.attributes {
+                if attribute.key == "setup" {
+                    if let Some(value) = &attribute.value {
+                        match value.as_str() {
+                            "active" => return DTLSRole::Client,
+                            "passive" => return DTLSRole::Server,
+                            _ => return DTLSRole::Auto,
+                        };
+                    } else {
+                        return DTLSRole::Auto;
+                    }
                 }
             }
         }
-    }
 
-    return DTLSRoleAuto
+        DTLSRole::Auto
+    }
 }
 
-func connectionRoleFromDtlsRole(d DTLSRole) sdp.ConnectionRole {
-    switch d {
-    case DTLSRoleClient:
-        return sdp.ConnectionRoleActive
-    case DTLSRoleServer:
-        return sdp.ConnectionRolePassive
-    case DTLSRoleAuto:
-        return sdp.ConnectionRoleActpass
-    default:
-        return sdp.ConnectionRole(0)
+impl DTLSRole {
+    pub(crate) fn to_connection_role(self) -> ConnectionRole {
+        match self {
+            DTLSRole::Client => ConnectionRole::Active,
+            DTLSRole::Server => ConnectionRole::Passive,
+            DTLSRole::Auto => ConnectionRole::Actpass,
+            _ => ConnectionRole::Unspecified,
+        }
     }
-}*/
+}
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::error::Error;
+    use std::io::Cursor;
 
     #[test]
     fn test_dtls_role_string() {
@@ -107,56 +107,65 @@ mod test {
         }
     }
 
-    /*TODO: func TestDTLSRoleFromRemoteSDP(t *testing.T) {
-        parseSDP := func(raw string) *sdp.SessionDescription {
-            parsed := &sdp.SessionDescription{}
-            if err := parsed.Unmarshal([]byte(raw)); err != nil {
-                panic(err)
-            }
-            return parsed
+    #[test]
+    fn test_dtls_role_from_remote_sdp() -> Result<(), Error> {
+        const NO_MEDIA: &str = "v=0
+o=- 4596489990601351948 2 IN IP4 127.0.0.1
+s=-
+t=0 0
+";
+
+        const MEDIA_NO_SETUP: &str = "v=0
+o=- 4596489990601351948 2 IN IP4 127.0.0.1
+s=-
+t=0 0
+m=application 47299 DTLS/SCTP 5000
+c=IN IP4 192.168.20.129
+";
+
+        const MEDIA_SETUP_DECLARED: &str = "v=0
+o=- 4596489990601351948 2 IN IP4 127.0.0.1
+s=-
+t=0 0
+m=application 47299 DTLS/SCTP 5000
+c=IN IP4 192.168.20.129
+a=setup:";
+
+        let tests = vec![
+            ("No MediaDescriptions", NO_MEDIA.to_owned(), DTLSRole::Auto),
+            (
+                "MediaDescription, no setup",
+                MEDIA_NO_SETUP.to_owned(),
+                DTLSRole::Auto,
+            ),
+            (
+                "MediaDescription, setup:actpass",
+                format!("{}{}\n", MEDIA_SETUP_DECLARED, "actpass"),
+                DTLSRole::Auto,
+            ),
+            (
+                "MediaDescription, setup:passive",
+                format!("{}{}\n", MEDIA_SETUP_DECLARED, "passive"),
+                DTLSRole::Server,
+            ),
+            (
+                "MediaDescription, setup:active",
+                format!("{}{}\n", MEDIA_SETUP_DECLARED, "active"),
+                DTLSRole::Client,
+            ),
+        ];
+
+        for (name, session_description_str, expected_role) in tests {
+            let mut reader = Cursor::new(session_description_str.as_bytes());
+            let session_description = SessionDescription::unmarshal(&mut reader)?;
+            assert_eq!(
+                expected_role,
+                DTLSRole::from(&session_description),
+                "{} failed",
+                name
+            );
         }
 
-        const noMedia = `v=0
-    o=- 4596489990601351948 2 IN IP4 127.0.0.1
-    s=-
-    t=0 0
-    `
-
-        const mediaNoSetup = `v=0
-    o=- 4596489990601351948 2 IN IP4 127.0.0.1
-    s=-
-    t=0 0
-    m=application 47299 DTLS/SCTP 5000
-    c=IN IP4 192.168.20.129
-    `
-
-        const mediaSetupDeclared = `v=0
-    o=- 4596489990601351948 2 IN IP4 127.0.0.1
-    s=-
-    t=0 0
-    m=application 47299 DTLS/SCTP 5000
-    c=IN IP4 192.168.20.129
-    a=setup:%s
-    `
-
-        testCases := []struct {
-            test               string
-            sessionDescription *sdp.SessionDescription
-            expectedRole       DTLSRole
-        }{
-            {"nil SessionDescription", nil, DTLSRoleAuto},
-            {"No MediaDescriptions", parseSDP(noMedia), DTLSRoleAuto},
-            {"MediaDescription, no setup", parseSDP(mediaNoSetup), DTLSRoleAuto},
-            {"MediaDescription, setup:actpass", parseSDP(fmt.Sprintf(mediaSetupDeclared, "actpass")), DTLSRoleAuto},
-            {"MediaDescription, setup:passive", parseSDP(fmt.Sprintf(mediaSetupDeclared, "passive")), DTLSRoleServer},
-            {"MediaDescription, setup:active", parseSDP(fmt.Sprintf(mediaSetupDeclared, "active")), DTLSRoleClient},
-        }
-        for _, testCase := range testCases {
-            assert.Equal(t,
-                testCase.expectedRole,
-                dtlsRoleFromRemoteSDP(testCase.sessionDescription),
-                "TestDTLSRoleFromSDP (%s)", testCase.test,
-            )
-        }
-    }*/
+        Ok(())
+    }
 }
