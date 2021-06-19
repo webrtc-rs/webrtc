@@ -34,7 +34,7 @@ lazy_static! {
     pub static ref ERR_WRONG_CERT: Error = Error::new("wrong cert".to_owned());
 }
 
-async fn build_pipe() -> Result<(Conn, Conn), Error> {
+async fn build_pipe() -> Result<(DTLSConn, DTLSConn), Error> {
     let (ua, ub) = pipe();
 
     pipe_conn(Arc::new(ua), Arc::new(ub)).await
@@ -43,7 +43,7 @@ async fn build_pipe() -> Result<(Conn, Conn), Error> {
 async fn pipe_conn(
     ca: Arc<dyn util::Conn + Send + Sync>,
     cb: Arc<dyn util::Conn + Send + Sync>,
-) -> Result<(Conn, Conn), Error> {
+) -> Result<(DTLSConn, DTLSConn), Error> {
     let (c_tx, mut c_rx) = mpsc::channel(1);
 
     // Setup client
@@ -105,27 +105,27 @@ async fn create_test_client(
     ca: Arc<dyn util::Conn + Send + Sync>,
     mut cfg: Config,
     generate_certificate: bool,
-) -> Result<Conn, Error> {
+) -> Result<DTLSConn, Error> {
     if generate_certificate {
         let client_cert = Certificate::generate_self_signed(vec!["localhost".to_owned()])?;
         cfg.certificates = vec![client_cert];
     }
 
     cfg.insecure_skip_verify = true;
-    Conn::new(ca, cfg, true, None).await
+    DTLSConn::new(ca, cfg, true, None).await
 }
 
 async fn create_test_server(
     cb: Arc<dyn util::Conn + Send + Sync>,
     mut cfg: Config,
     generate_certificate: bool,
-) -> Result<Conn, Error> {
+) -> Result<DTLSConn, Error> {
     if generate_certificate {
         let server_cert = Certificate::generate_self_signed(vec!["localhost".to_owned()])?;
         cfg.certificates = vec![server_cert];
     }
 
-    Conn::new(cb, cfg, false, None).await
+    DTLSConn::new(cb, cfg, false, None).await
 }
 
 #[tokio::test]
@@ -400,7 +400,7 @@ async fn test_export_keying_material() -> Result<(), Error> {
     let (packet_tx, _packet_rx) = mpsc::channel(1);
     let (handle_queue_tx, _handle_queue_rx) = mpsc::channel(1);
 
-    let mut c = Conn {
+    let mut c = DTLSConn {
         state: State {
             local_random: HandshakeRandom {
                 gmt_unix_time: SystemTime::UNIX_EPOCH
@@ -1035,11 +1035,11 @@ async fn test_client_certificate() -> Result<(), Error> {
         let (ca, cb) = pipe();
         let client_cfg_clone = client_cfg.clone();
         tokio::spawn(async move {
-            let result = Conn::new(Arc::new(ca), client_cfg_clone, true, None).await;
+            let result = DTLSConn::new(Arc::new(ca), client_cfg_clone, true, None).await;
             let _ = client_res_tx.send(result).await;
         });
 
-        let result = Conn::new(Arc::new(cb), server_cfg.clone(), false, None).await;
+        let result = DTLSConn::new(Arc::new(cb), server_cfg.clone(), false, None).await;
         let client_result = client_res_rx.recv().await;
 
         if want_err {
@@ -1475,11 +1475,11 @@ async fn test_server_certificate() -> Result<(), Error> {
         let (ca, cb) = pipe();
 
         tokio::spawn(async move {
-            let result = Conn::new(Arc::new(cb), server_cfg, false, None).await;
+            let result = DTLSConn::new(Arc::new(cb), server_cfg, false, None).await;
             let _ = res_tx.send(result).await;
         });
 
-        let cli_result = Conn::new(Arc::new(ca), client_cfg, true, None).await;
+        let cli_result = DTLSConn::new(Arc::new(ca), client_cfg, true, None).await;
 
         if !want_err && cli_result.is_err() {
             assert!(

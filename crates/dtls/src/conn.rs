@@ -74,7 +74,7 @@ struct ConnReaderContext {
 }
 
 // Conn represents a DTLS connection
-pub(crate) struct Conn {
+pub struct DTLSConn {
     pub(crate) cache: HandshakeCache, // caching of handshake messages for verifyData generation
     decrypted_rx: mpsc::Receiver<Result<Vec<u8>, Error>>, // Decrypted Application Data or error, pull by calling `Read`
     pub(crate) state: State,                              // Internal state
@@ -108,7 +108,7 @@ pub(crate) struct Conn {
     reader_close_tx: Option<mpsc::Sender<()>>,
 }
 
-impl Conn {
+impl DTLSConn {
     pub async fn new(
         conn: Arc<dyn util::Conn + Send + Sync>,
         mut config: Config,
@@ -231,7 +231,7 @@ impl Conn {
         let handshake_completed_successfully = Arc::new(AtomicBool::new(false));
         let handshake_completed_successfully2 = Arc::clone(&handshake_completed_successfully);
 
-        let mut c = Conn {
+        let mut c = DTLSConn {
             cache,
             decrypted_rx,
             state,
@@ -259,7 +259,7 @@ impl Conn {
                 if let Some(r) = rx {
                     let (pkt, result_tx) = r;
 
-                    let result = Conn::handle_outgoing_packets(
+                    let result = DTLSConn::handle_outgoing_packets(
                         &next_conn_tx,
                         pkt,
                         &mut cache1,
@@ -311,7 +311,7 @@ impl Conn {
                             );
                         break;
                     }
-                    result = Conn::read_and_buffer(
+                    result = DTLSConn::read_and_buffer(
                                             &mut ctx,
                                             &next_conn_rx,
                                             &mut handle_queue_rx,
@@ -513,7 +513,7 @@ impl Conn {
                     )
                     .await;
 
-                let raw_handshake_packets = Conn::process_handshake_packet(
+                let raw_handshake_packets = DTLSConn::process_handshake_packet(
                     &local_sequence_number,
                     &cipher_suite,
                     maximum_transmission_unit,
@@ -530,7 +530,7 @@ impl Conn {
                 }*/
 
                 let raw_packet =
-                    Conn::process_packet(&local_sequence_number, &cipher_suite, p).await?;
+                    DTLSConn::process_packet(&local_sequence_number, &cipher_suite, p).await?;
                 raw_packets.push(raw_packet);
             }
         }
@@ -597,7 +597,7 @@ impl Conn {
     ) -> Result<Vec<Vec<u8>>, Error> {
         let mut raw_packets = vec![];
 
-        let handshake_fragments = Conn::fragment_handshake(maximum_transmission_unit, h)?;
+        let handshake_fragments = DTLSConn::fragment_handshake(maximum_transmission_unit, h)?;
 
         let epoch = p.record.record_layer_header.epoch as usize;
 
@@ -718,7 +718,7 @@ impl Conn {
         let pkts = unpack_datagram(&buf[..n])?;
         let mut has_handshake = false;
         for pkt in pkts {
-            let (hs, alert, mut err) = Conn::handle_incoming_packet(ctx, pkt, true).await;
+            let (hs, alert, mut err) = DTLSConn::handle_incoming_packet(ctx, pkt, true).await;
             if let Some(alert) = alert {
                 let alert_err = ctx
                     .packet_tx
@@ -779,7 +779,7 @@ impl Conn {
                                 //trace!("recv handle_queue: {} ", srv_cli_str(ctx.is_client));
 
                                 let pkts = ctx.encrypted_packets.drain(..).collect();
-                                Conn::handle_queued_packets(ctx, local_epoch, handshake_completed_successfully, pkts).await?;
+                                DTLSConn::handle_queued_packets(ctx, local_epoch, handshake_completed_successfully, pkts).await?;
 
                                 drop(done);
                             }
@@ -800,7 +800,7 @@ impl Conn {
         pkts: Vec<Vec<u8>>,
     ) -> Result<(), Error> {
         for p in pkts {
-            let (_, alert, mut err) = Conn::handle_incoming_packet(ctx, p, false).await; // don't re-enqueue
+            let (_, alert, mut err) = DTLSConn::handle_incoming_packet(ctx, p, false).await; // don't re-enqueue
             if let Some(alert) = alert {
                 let alert_err = ctx
                     .packet_tx

@@ -197,7 +197,7 @@ pub(crate) fn srv_cli_str(is_client: bool) -> String {
     "server".to_owned()
 }
 
-impl Conn {
+impl DTLSConn {
     pub(crate) async fn handshake(&mut self, mut state: HandshakeState) -> Result<(), Error> {
         loop {
             trace!(

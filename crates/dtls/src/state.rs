@@ -16,7 +16,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 // State holds the dtls connection state and implements both encoding.BinaryMarshaler and encoding.BinaryUnmarshaler
-pub(crate) struct State {
+pub struct State {
     pub(crate) local_epoch: Arc<AtomicU16>,
     pub(crate) remote_epoch: Arc<AtomicU16>,
     pub(crate) local_sequence_number: Arc<Mutex<Vec<u64>>>, // uint48
