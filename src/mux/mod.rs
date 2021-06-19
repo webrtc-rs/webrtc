@@ -9,6 +9,7 @@ use crate::mux::endpoint::Endpoint;
 use crate::mux::mux_func::MatchFunc;
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use util::{Buffer, Conn};
@@ -21,13 +22,14 @@ const MAX_BUFFER_SIZE: usize = 1000 * 1000; // 1MB
 /// Config collects the arguments to mux.Mux construction into
 /// a single structure
 pub struct Config {
-    conn: Arc<dyn Conn + Send + Sync>,
-    buffer_size: usize,
+    pub conn: Arc<dyn Conn + Send + Sync>,
+    pub buffer_size: usize,
 }
 
 /// Mux allows multiplexing
+#[derive(Clone)]
 pub struct Mux {
-    id: usize,
+    id: Arc<AtomicUsize>,
     next_conn: Arc<dyn Conn + Send + Sync>,
     endpoints: Arc<Mutex<HashMap<usize, Arc<Endpoint>>>>,
     buffer_size: usize,
@@ -38,7 +40,7 @@ impl Mux {
     pub fn new(config: Config) -> Self {
         let (closed_ch_tx, closed_ch_rx) = mpsc::channel(1);
         let m = Mux {
-            id: 0,
+            id: Arc::new(AtomicUsize::new(0)),
             next_conn: Arc::clone(&config.conn),
             endpoints: Arc::new(Mutex::new(HashMap::new())),
             buffer_size: config.buffer_size,
@@ -56,21 +58,20 @@ impl Mux {
     }
 
     /// creates a new Endpoint
-    pub async fn new_endpoint(&mut self, f: MatchFunc) -> Arc<Endpoint> {
+    pub async fn new_endpoint(&self, f: MatchFunc) -> Arc<Endpoint> {
         let mut endpoints = self.endpoints.lock().await;
 
+        let id = self.id.fetch_add(1, Ordering::SeqCst);
         // Set a maximum size of the buffer in bytes.
         // NOTE: We actually won't get anywhere close to this limit.
         // SRTP will constantly read from the endpoint and drop packets if it's full.
         let e = Arc::new(Endpoint {
-            //mux:    m,
-            id: self.id,
+            id,
             buffer: Buffer::new(0, MAX_BUFFER_SIZE),
             match_fn: f,
             next_conn: Arc::clone(&self.next_conn),
             endpoints: Arc::clone(&self.endpoints),
         });
-        self.id += 1;
 
         endpoints.insert(e.id, Arc::clone(&e));
 

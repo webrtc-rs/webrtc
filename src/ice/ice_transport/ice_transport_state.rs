@@ -72,6 +72,21 @@ impl From<&str> for ICETransportState {
     }
 }
 
+impl From<u8> for ICETransportState {
+    fn from(v: u8) -> Self {
+        match v {
+            1 => Self::New,
+            2 => Self::Checking,
+            3 => Self::Connected,
+            4 => Self::Completed,
+            5 => Self::Failed,
+            6 => Self::Disconnected,
+            7 => Self::Closed,
+            _ => Self::Unspecified,
+        }
+    }
+}
+
 impl fmt::Display for ICETransportState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {

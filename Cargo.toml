@@ -16,7 +16,7 @@ util = { package = "webrtc-util", version = "0.1.21" }
 #mdns = { package = "webrtc-mdns", version = "0.2.10" }
 #stun = "0.1.17"
 #turn = "0.1.9"
-ice = { package = "webrtc-ice", version = "0.1.7"} #path= "crates/ice"} #
+ice = { package = "webrtc-ice", version = "0.1.9"} # path= "crates/ice"} #
 dtls = {package = "webrtc-dtls", version = "0.1.3"}
 sdp = "0.1.4"
 #lazy_static = "1.3.0"

@@ -4,7 +4,6 @@ pub mod ice_candidate_type;
 use crate::error::Error;
 use crate::ice::ice_candidate::ice_candidate_type::ICECandidateType;
 use crate::ice::ice_protocol::ICEProtocol;
-use ice::agent::agent_internal::AgentInternal;
 use ice::candidate::candidate_base::CandidateBaseConfig;
 use ice::candidate::candidate_host::CandidateHostConfig;
 use ice::candidate::candidate_peer_reflexive::CandidatePeerReflexiveConfig;
@@ -14,7 +13,6 @@ use ice::candidate::Candidate;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 /// ICECandidate represents a ice candidate
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -66,10 +64,7 @@ impl From<&Arc<dyn Candidate + Send + Sync>> for ICECandidate {
 }
 
 impl ICECandidate {
-    pub(crate) async fn to_ice(
-        &self,
-        agent_internal: Option<Arc<Mutex<AgentInternal>>>,
-    ) -> Result<impl Candidate, Error> {
+    pub(crate) async fn to_ice(&self) -> Result<impl Candidate, Error> {
         let candidate_id = self.stats_id.clone();
         let c = match self.typ {
             ICECandidateType::Host => {
@@ -87,7 +82,7 @@ impl ICECandidate {
                     },
                     ..Default::default()
                 };
-                config.new_candidate_host(agent_internal).await?
+                config.new_candidate_host().await?
             }
             ICECandidateType::Srflx => {
                 let config = CandidateServerReflexiveConfig {
@@ -104,9 +99,7 @@ impl ICECandidate {
                     rel_addr: self.related_address.clone(),
                     rel_port: self.related_port,
                 };
-                config
-                    .new_candidate_server_reflexive(agent_internal)
-                    .await?
+                config.new_candidate_server_reflexive().await?
             }
             ICECandidateType::Prflx => {
                 let config = CandidatePeerReflexiveConfig {
@@ -123,7 +116,7 @@ impl ICECandidate {
                     rel_addr: self.related_address.clone(),
                     rel_port: self.related_port,
                 };
-                config.new_candidate_peer_reflexive(agent_internal).await?
+                config.new_candidate_peer_reflexive().await?
             }
             ICECandidateType::Relay => {
                 let config = CandidateRelayConfig {
@@ -141,7 +134,7 @@ impl ICECandidate {
                     rel_port: self.related_port,
                     relay_client: None, //TODO?
                 };
-                config.new_candidate_relay(agent_internal).await?
+                config.new_candidate_relay().await?
             }
             _ => return Err(Error::ErrICECandidateTypeUnknown),
         };
