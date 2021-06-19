@@ -1,22 +1,44 @@
-//use crate::ice::ice_role::ICERole;
+use crate::ice::ice_role::ICERole;
+use crate::ice::ice_transport::ice_transport_state::ICETransportState;
 
 pub mod ice_transport_state;
 
+use crate::ice::ice_gather::ice_gatherer::ICEGatherer;
+use crate::mux::Mux;
+
+use ice::agent::agent_transport::AgentConn;
+
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::atomic::AtomicU8;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+pub type OnConnectionStateChangeHdlrFn = Box<
+    dyn (FnMut(ICETransportState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+        + Send
+        + Sync,
+>;
+
 /*
+pub type OnSelectedCandidatePairChangeHdlrFn = Box<
+    dyn (FnMut(ICECandidatePair) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+        + Send
+        + Sync,
+>;*/
+
 /// ICETransport allows an application access to information about the ICE
 /// transport over which packets are sent and received.
-pub struct ICETransport{
-    role :ICERole,
+pub struct ICETransport {
+    role: ICERole,
 
-    onConnectionStateChangeHandler       atomic.Value // func(ICETransportState)
-    onSelectedCandidatePairChangeHandler atomic.Value // func(*ICECandidatePair)
+    on_connection_state_change_handler: Arc<Mutex<Option<OnConnectionStateChangeHdlrFn>>>,
+    //onSelectedCandidatePairChangeHandler: Arc<Mutex<Option<OnSelectedCandidatePairChangeHdlrFn>>>,
+    state: Arc<AtomicU8>, // ICETransportState
 
-    state atomic.Value // ICETransportState
-
-    gatherer *ICEGatherer
-    conn     *ice.Conn
-    mux      *mux.Mux
-
+    gatherer: ICEGatherer,
+    conn: AgentConn, //Conn
+    mux: Mux,
     //ctx       context.Context
     //ctxCancel func()
 
@@ -25,7 +47,7 @@ pub struct ICETransport{
     //log logging.LeveledLogger
 }
 
-
+/*
 // GetSelectedCandidatePair returns the selected candidate pair on which packets are sent
 // if there is no selected pair nil is returned
 func (t *ICETransport) GetSelectedCandidatePair() (*ICECandidatePair, error) {
@@ -203,11 +225,11 @@ func (t *ICETransport) onSelectedCandidatePairChange(pair *ICECandidatePair) {
 // OnConnectionStateChange sets a handler that is fired when the ICE
 // connection state changes.
 func (t *ICETransport) OnConnectionStateChange(f func(ICETransportState)) {
-    t.onConnectionStateChangeHandler.Store(f)
+    t.on_connection_state_change_handler.Store(f)
 }
 
 func (t *ICETransport) onConnectionStateChange(state ICETransportState) {
-    handler := t.onConnectionStateChangeHandler.Load()
+    handler := t.on_connection_state_change_handler.Load()
     if handler != nil {
         handler.(func(ICETransportState))(state)
     }

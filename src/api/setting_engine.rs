@@ -2,7 +2,7 @@ use ice::mdns::MulticastDnsMode;
 use ice::network_type::NetworkType;
 
 use crate::dtls::dtls_role::DTLSRole;
-use crate::ice::ice_candidate_type::ICECandidateType;
+use crate::ice::ice_candidate::ice_candidate_type::ICECandidateType;
 use dtls::extension::extension_use_srtp::SrtpProtectionProfile;
 use ice::agent::agent_config::InterfaceFilterFn;
 use std::sync::Arc;

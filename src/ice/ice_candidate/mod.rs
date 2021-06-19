@@ -1,5 +1,8 @@
+pub mod ice_candidate_pair;
+pub mod ice_candidate_type;
+
 use crate::error::Error;
-use crate::ice::ice_candidate_type::ICECandidateType;
+use crate::ice::ice_candidate::ice_candidate_type::ICECandidateType;
 use crate::ice::ice_protocol::ICEProtocol;
 use ice::agent::agent_internal::AgentInternal;
 use ice::candidate::candidate_base::CandidateBaseConfig;
@@ -155,6 +158,15 @@ impl fmt::Display for ICECandidate {
             self.protocol, self.typ, self.address, self.port, self.related_address,
         )
     }
+}
+
+/// ICECandidateInit is used to serialize ice candidates
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ICECandidateInit {
+    pub candidate: String,
+    pub sdp_mid: String,
+    pub sdp_mline_index: u16,
+    pub username_fragment: String,
 }
 
 /*TODO:

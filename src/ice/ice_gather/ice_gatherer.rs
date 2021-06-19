@@ -5,7 +5,7 @@ use crate::ice::ice_gather::ice_gatherer_state::ICEGathererState;
 use crate::policy::ice_transport_policy::ICETransportPolicy;
 use ice::candidate::{Candidate, CandidateType};
 
-use crate::ice::ice_candidate_type::ICECandidateType;
+use crate::ice::ice_candidate::ice_candidate_type::ICECandidateType;
 use crate::ice::ICEParameters;
 use ice::agent::Agent;
 use std::future::Future;
