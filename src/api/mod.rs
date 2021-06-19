@@ -1,7 +1,10 @@
+use crate::dtls::DTLSTransport;
 use crate::error::Error;
 use crate::ice::ice_gather::ice_gatherer::ICEGatherer;
 use crate::ice::ice_gather::ice_gatherer_state::ICEGathererState;
 use crate::ice::ice_gather::ICEGatherOptions;
+use crate::ice::ice_transport::ICETransport;
+use dtls::crypto::Certificate;
 use media_engine::*;
 use setting_engine::*;
 use std::sync::atomic::AtomicU8;
@@ -21,7 +24,7 @@ pub struct Api {
 }
 
 impl Api {
-    /// new_ice_gatherer creates a new NewICEGatherer.
+    /// new_ice_gatherer creates a new ice gatherer.
     /// This constructor is part of the ORTC API. It is not
     /// meant to be used together with the basic WebRTC API.
     pub fn new_ice_gatherer(&self, opts: ICEGatherOptions) -> Result<ICEGatherer, Error> {
@@ -40,6 +43,55 @@ impl Api {
             setting_engine: self.setting_engine.clone(),
             ..Default::default()
         })
+    }
+
+    /// new_ice_transport creates a new ice transport.
+    /// This constructor is part of the ORTC API. It is not
+    /// meant to be used together with the basic WebRTC API.
+    pub fn new_ice_transport(&self, gatherer: Option<ICEGatherer>) -> ICETransport {
+        ICETransport::new(gatherer)
+    }
+
+    /// new_dtls_transport creates a new dtls transport.
+    /// This constructor is part of the ORTC API. It is not
+    /// meant to be used together with the basic WebRTC API.
+    pub fn new_dtls_transport(
+        _transport: Option<ICETransport>,
+        _certificates: &[Certificate],
+    ) -> Result<DTLSTransport, Error> {
+        /*TODO: t := &DTLSTransport{
+            ice_transport: transport,
+            api:          api,
+            state:        DTLSTransportStateNew,
+            dtls_matcher:  mux.MatchDTLS,
+            srtp_ready:    make(chan struct{}),
+            log:          api.settingEngine.LoggerFactory.NewLogger("DTLSTransport"),
+        }
+
+        if len(certificates) > 0 {
+            now := time.Now()
+            for _, x509Cert := range certificates {
+                if !x509Cert.Expires().IsZero() && now.After(x509Cert.Expires()) {
+                    return nil, &rtcerr.InvalidAccessError{Err: ErrCertificateExpired}
+                }
+                t.certificates = append(t.certificates, x509Cert)
+            }
+        } else {
+            sk, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+            if err != nil {
+                return nil, &rtcerr.UnknownError{Err: err}
+            }
+            certificate, err := GenerateCertificate(sk)
+            if err != nil {
+                return nil, err
+            }
+            t.certificates = []Certificate{*certificate}
+        }
+
+        return t, nil
+
+         */
+        Err(Error::ErrCertificateExpired)
     }
 }
 

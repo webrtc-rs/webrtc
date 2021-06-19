@@ -53,7 +53,7 @@ pub struct ICETransport {
 }
 
 impl ICETransport {
-    /// creates a new NewICETransport.
+    /// creates a new new_icetransport.
     pub fn new(gatherer: Option<ICEGatherer>) -> Self {
         ICETransport {
             state: Arc::new(AtomicU8::new(ICETransportState::New as u8)),
@@ -329,7 +329,7 @@ impl ICETransport {
         stats := TransportStats{
             Timestamp: statsTimestampFrom(time.Now()),
             Type:      StatsTypeTransport,
-            ID:        "iceTransport",
+            ID:        "ice_transport",
         }
 
         if conn != nil {

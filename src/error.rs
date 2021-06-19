@@ -256,7 +256,7 @@ pub enum Error {
     ErrPeerConnAddTransceiverFromTrackSupport,
     #[error("TODO SetIdentityProvider")]
     ErrPeerConnSetIdentityProviderNotImplemented,
-    #[error("WriteRTCP failed to open WriteStream")]
+    #[error("write_rtcp failed to open WriteStream")]
     ErrPeerConnWriteRTCPOpenWriteStream,
     #[error("cannot find transceiver with mid")]
     ErrPeerConnTranscieverMidNil,
@@ -305,7 +305,12 @@ pub enum Error {
 
     #[error("SdpError: {0}")]
     ErrSdpError(#[from] sdp::error::Error),
-
     #[error("UtilError: {0}")]
     ErrUtilError(#[from] util::error::Error),
+    #[error("RtcpError: {0}")]
+    ErrRtcpError(#[from] rtcp::error::Error),
+    #[error("RtpError: {0}")]
+    ErrRtpError(#[from] rtp::error::Error),
+    #[error("SrtpError: {0}")]
+    ErrSrtpError(#[from] srtp::error::Error),
 }
