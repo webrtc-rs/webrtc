@@ -2027,7 +2027,7 @@ async fn test_run_task_in_selected_candidate_pair_change_callback() -> Result<()
     let is_tested_tx = Arc::new(Mutex::new(Some(is_tested_tx)));
     a_agent
         .on_selected_candidate_pair_change(Box::new(
-            move |_: &(dyn Candidate + Send + Sync), _: &(dyn Candidate + Send + Sync)| {
+            move |_: &Arc<dyn Candidate + Send + Sync>, _: &Arc<dyn Candidate + Send + Sync>| {
                 let is_tested_tx_clone = Arc::clone(&is_tested_tx);
                 Box::pin(async move {
                     let mut tx = is_tested_tx_clone.lock().await;

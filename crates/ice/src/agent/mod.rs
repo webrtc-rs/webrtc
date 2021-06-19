@@ -76,8 +76,8 @@ pub type OnConnectionStateChangeHdlrFn = Box<
 >;
 pub type OnSelectedCandidatePairChangeHdlrFn = Box<
     dyn (FnMut(
-            &(dyn Candidate + Send + Sync),
-            &(dyn Candidate + Send + Sync),
+            &Arc<dyn Candidate + Send + Sync>,
+            &Arc<dyn Candidate + Send + Sync>,
         ) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
@@ -341,7 +341,7 @@ impl Agent {
                     &mut ai.on_selected_candidate_pair_change_hdlr,
                     &selected_pair,
                 ) {
-                    on_selected_candidate_pair_change(&*p.local, &*p.remote).await;
+                    on_selected_candidate_pair_change(&p.local, &p.remote).await;
                 }
             }
         });
