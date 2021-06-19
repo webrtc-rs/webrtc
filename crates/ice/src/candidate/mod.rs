@@ -88,7 +88,6 @@ pub trait Candidate: fmt::Display {
     fn equal(&self, other: &dyn Candidate) -> bool;
     async fn set_ip(&self, ip: &IpAddr) -> Result<(), Error>;
     fn get_conn(&self) -> Option<&Arc<dyn util::Conn + Send + Sync>>;
-    fn get_agent(&self) -> Option<&Arc<Mutex<AgentInternal>>>;
     fn get_closed_ch(&self) -> Arc<Mutex<Option<broadcast::Sender<()>>>>;
 }
 
@@ -221,10 +220,10 @@ impl fmt::Display for CandidatePairState {
 }
 
 /// Represents a combination of a local and remote candidate.
-pub(crate) struct CandidatePair {
+pub struct CandidatePair {
     pub(crate) ice_role_controlling: AtomicBool,
-    pub(crate) remote: Arc<dyn Candidate + Send + Sync>,
-    pub(crate) local: Arc<dyn Candidate + Send + Sync>,
+    pub remote: Arc<dyn Candidate + Send + Sync>,
+    pub local: Arc<dyn Candidate + Send + Sync>,
     pub(crate) binding_request_count: AtomicU16,
     pub(crate) state: AtomicU8, // convert it to CandidatePairState,
     pub(crate) nominated: AtomicBool,
@@ -278,6 +277,7 @@ impl PartialEq for CandidatePair {
 }
 
 impl CandidatePair {
+    #[must_use]
     pub fn new(
         local: Arc<dyn Candidate + Send + Sync>,
         remote: Arc<dyn Candidate + Send + Sync>,

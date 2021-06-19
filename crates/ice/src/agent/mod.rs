@@ -9,7 +9,7 @@ pub(crate) mod agent_vnet_test;
 
 pub mod agent_config;
 pub mod agent_gather;
-pub mod agent_internal;
+pub(crate) mod agent_internal;
 pub mod agent_selector;
 pub mod agent_stats;
 pub mod agent_transport;
@@ -477,6 +477,12 @@ impl Agent {
         ai.close().await
     }
 
+    /// Returns the selected pair or nil if there is none
+    pub async fn get_selected_candidate_pair(&self) -> Option<Arc<CandidatePair>> {
+        let ai = self.agent_internal.lock().await;
+        ai.agent_conn.get_selected_pair().await
+    }
+
     /// Sets the credentials of the remote agent.
     pub async fn set_remote_credentials(
         &self,
@@ -680,9 +686,7 @@ impl Agent {
                     },
                     tcp_type,
                 };
-                config
-                    .new_candidate_host(Some(Arc::clone(&self.agent_internal)))
-                    .await
+                config.new_candidate_host().await
             }
             "srflx" => {
                 let config = CandidateServerReflexiveConfig {
@@ -698,9 +702,7 @@ impl Agent {
                     rel_addr,
                     rel_port,
                 };
-                config
-                    .new_candidate_server_reflexive(Some(Arc::clone(&self.agent_internal)))
-                    .await
+                config.new_candidate_server_reflexive().await
             }
             "prflx" => {
                 let config = CandidatePeerReflexiveConfig {
@@ -717,9 +719,7 @@ impl Agent {
                     rel_port,
                 };
 
-                config
-                    .new_candidate_peer_reflexive(Some(Arc::clone(&self.agent_internal)))
-                    .await
+                config.new_candidate_peer_reflexive().await
             }
             "relay" => {
                 let config = CandidateRelayConfig {
@@ -736,9 +736,7 @@ impl Agent {
                     rel_port,
                     ..CandidateRelayConfig::default()
                 };
-                config
-                    .new_candidate_relay(Some(Arc::clone(&self.agent_internal)))
-                    .await
+                config.new_candidate_relay().await
             }
             _ => Err(Error::new(format!(
                 "{} ({})",

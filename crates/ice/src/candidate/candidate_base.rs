@@ -45,7 +45,6 @@ pub struct CandidateBase {
     pub(crate) last_received: AtomicU64,
 
     pub(crate) conn: Option<Arc<dyn util::Conn + Send + Sync>>,
-    pub(crate) agent_internal: Option<Arc<Mutex<AgentInternal>>>,
     pub(crate) closed_ch: Arc<Mutex<Option<broadcast::Sender<()>>>>,
 
     pub(crate) foundation_override: String,
@@ -76,7 +75,6 @@ impl Default for CandidateBase {
             last_received: AtomicU64::new(0),
 
             conn: None,
-            agent_internal: None,
             closed_ch: Arc::new(Mutex::new(None)),
 
             foundation_override: String::new(),
@@ -306,10 +304,6 @@ impl Candidate for CandidateBase {
         self.conn.as_ref()
     }
 
-    fn get_agent(&self) -> Option<&Arc<Mutex<AgentInternal>>> {
-        self.agent_internal.as_ref()
-    }
-
     fn get_closed_ch(&self) -> Arc<Mutex<Option<broadcast::Sender<()>>>> {
         self.closed_ch.clone()
     }
@@ -457,10 +451,8 @@ impl CandidateBase {
                     err
                 );
             } else {
-                let agent_internal_clone = Arc::clone(agent_internal);
                 let mut ai = agent_internal.lock().await;
-                ai.handle_inbound(&mut m, c, src_addr, agent_internal_clone)
-                    .await;
+                ai.handle_inbound(&mut m, c, src_addr).await;
             }
         } else {
             let ai = agent_internal.lock().await;

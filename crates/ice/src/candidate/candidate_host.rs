@@ -2,7 +2,6 @@ use super::candidate_base::*;
 use super::*;
 use crate::rand::generate_cand_id;
 use std::sync::atomic::{AtomicU16, AtomicU8};
-use std::sync::Arc;
 
 /// The config required to create a new `CandidateHost`.
 #[derive(Default)]
@@ -14,10 +13,7 @@ pub struct CandidateHostConfig {
 
 impl CandidateHostConfig {
     /// Creates a new host candidate.
-    pub async fn new_candidate_host(
-        self,
-        agent_internal: Option<Arc<Mutex<AgentInternal>>>,
-    ) -> Result<CandidateBase, Error> {
+    pub async fn new_candidate_host(self) -> Result<CandidateBase, Error> {
         let mut candidate_id = self.base_config.candidate_id;
         if candidate_id.is_empty() {
             candidate_id = generate_cand_id();
@@ -35,7 +31,6 @@ impl CandidateHostConfig {
             network: self.base_config.network,
             network_type: AtomicU8::new(NetworkType::Udp4 as u8),
             conn: self.base_config.conn,
-            agent_internal,
             ..CandidateBase::default()
         };
 

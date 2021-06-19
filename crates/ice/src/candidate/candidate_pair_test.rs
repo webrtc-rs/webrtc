@@ -16,7 +16,7 @@ pub(crate) async fn host_candidate() -> Result<CandidateBase, Error> {
         },
         ..Default::default()
     }
-    .new_candidate_host(None)
+    .new_candidate_host()
     .await
 }
 
@@ -30,7 +30,7 @@ pub(crate) async fn prflx_candidate() -> Result<CandidateBase, Error> {
         },
         ..Default::default()
     }
-    .new_candidate_peer_reflexive(None)
+    .new_candidate_peer_reflexive()
     .await
 }
 
@@ -44,7 +44,7 @@ pub(crate) async fn srflx_candidate() -> Result<CandidateBase, Error> {
         },
         ..Default::default()
     }
-    .new_candidate_server_reflexive(None)
+    .new_candidate_server_reflexive()
     .await
 }
 
@@ -58,7 +58,7 @@ pub(crate) async fn relay_candidate() -> Result<CandidateBase, Error> {
         },
         ..Default::default()
     }
-    .new_candidate_relay(None)
+    .new_candidate_relay()
     .await
 }
 

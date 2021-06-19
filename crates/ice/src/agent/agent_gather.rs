@@ -277,40 +277,38 @@ impl Agent {
                     ..CandidateHostConfig::default()
                 };
 
-                let candidate: Arc<dyn Candidate + Send + Sync> = match host_config
-                    .new_candidate_host(Some(agent_internal.clone()))
-                    .await
-                {
-                    Ok(candidate) => {
-                        if mdns_mode == MulticastDnsMode::QueryAndGather {
-                            if let Err(err) = candidate.set_ip(&ip).await {
-                                log::warn!(
-                                    "Failed to create host candidate: {} {} {}: {}",
-                                    network,
-                                    mapped_ip,
-                                    port,
-                                    err
-                                );
-                                continue;
+                let candidate: Arc<dyn Candidate + Send + Sync> =
+                    match host_config.new_candidate_host().await {
+                        Ok(candidate) => {
+                            if mdns_mode == MulticastDnsMode::QueryAndGather {
+                                if let Err(err) = candidate.set_ip(&ip).await {
+                                    log::warn!(
+                                        "Failed to create host candidate: {} {} {}: {}",
+                                        network,
+                                        mapped_ip,
+                                        port,
+                                        err
+                                    );
+                                    continue;
+                                }
                             }
+                            Arc::new(candidate)
                         }
-                        Arc::new(candidate)
-                    }
-                    Err(err) => {
-                        log::warn!(
-                            "Failed to create host candidate: {} {} {}: {}",
-                            network,
-                            mapped_ip,
-                            port,
-                            err
-                        );
-                        continue;
-                    }
-                };
+                        Err(err) => {
+                            log::warn!(
+                                "Failed to create host candidate: {} {} {}: {}",
+                                network,
+                                mapped_ip,
+                                port,
+                                err
+                            );
+                            continue;
+                        }
+                    };
 
                 {
                     let mut ai = agent_internal.lock().await;
-                    if let Err(err) = ai.add_candidate(&candidate).await {
+                    if let Err(err) = ai.add_candidate(&candidate, &agent_internal).await {
                         if let Err(close_err) = candidate.close().await {
                             log::warn!("Failed to close candidate: {}", close_err);
                         }
@@ -402,26 +400,24 @@ impl Agent {
                     rel_port: laddr.port(),
                 };
 
-                let candidate: Arc<dyn Candidate + Send + Sync> = match srflx_config
-                    .new_candidate_server_reflexive(Some(agent_internal2.clone()))
-                    .await
-                {
-                    Ok(candidate) => Arc::new(candidate),
-                    Err(err) => {
-                        log::warn!(
-                            "Failed to create server reflexive candidate: {} {} {}: {}",
-                            network,
-                            mapped_ip,
-                            laddr.port(),
-                            err
-                        );
-                        return Ok(());
-                    }
-                };
+                let candidate: Arc<dyn Candidate + Send + Sync> =
+                    match srflx_config.new_candidate_server_reflexive().await {
+                        Ok(candidate) => Arc::new(candidate),
+                        Err(err) => {
+                            log::warn!(
+                                "Failed to create server reflexive candidate: {} {} {}: {}",
+                                network,
+                                mapped_ip,
+                                laddr.port(),
+                                err
+                            );
+                            return Ok(());
+                        }
+                    };
 
                 {
                     let mut ai = agent_internal2.lock().await;
-                    if let Err(err) = ai.add_candidate(&candidate).await {
+                    if let Err(err) = ai.add_candidate(&candidate, &agent_internal2).await {
                         if let Err(close_err) = candidate.close().await {
                             log::warn!("Failed to close candidate: {}", close_err);
                         }
@@ -524,26 +520,24 @@ impl Agent {
                         rel_port: laddr.port(),
                     };
 
-                    let candidate: Arc<dyn Candidate + Send + Sync> = match srflx_config
-                        .new_candidate_server_reflexive(Some(agent_internal2.clone()))
-                        .await
-                    {
-                        Ok(candidate) => Arc::new(candidate),
-                        Err(err) => {
-                            log::warn!(
-                                "Failed to create server reflexive candidate: {} {} {}: {}",
-                                network,
-                                ip,
-                                port,
-                                err
-                            );
-                            return Ok(());
-                        }
-                    };
+                    let candidate: Arc<dyn Candidate + Send + Sync> =
+                        match srflx_config.new_candidate_server_reflexive().await {
+                            Ok(candidate) => Arc::new(candidate),
+                            Err(err) => {
+                                log::warn!(
+                                    "Failed to create server reflexive candidate: {} {} {}: {}",
+                                    network,
+                                    ip,
+                                    port,
+                                    err
+                                );
+                                return Ok(());
+                            }
+                        };
 
                     {
                         let mut ai = agent_internal2.lock().await;
-                        if let Err(err) = ai.add_candidate(&candidate).await {
+                        if let Err(err) = ai.add_candidate(&candidate, &agent_internal2).await {
                             if let Err(close_err) = candidate.close().await {
                                 log::warn!("Failed to close candidate: {}", close_err);
                             }
@@ -675,26 +669,24 @@ impl Agent {
                     relay_client: Some(Arc::clone(&client)),
                 };
 
-                let candidate: Arc<dyn Candidate + Send + Sync> = match relay_config
-                    .new_candidate_relay(Some(agent_internal2.clone()))
-                    .await
-                {
-                    Ok(candidate) => Arc::new(candidate),
-                    Err(err) => {
-                        let _ = client.close().await;
-                        log::warn!(
-                            "Failed to create relay candidate: {} {}: {}",
-                            network,
-                            raddr,
-                            err
-                        );
-                        return Ok(());
-                    }
-                };
+                let candidate: Arc<dyn Candidate + Send + Sync> =
+                    match relay_config.new_candidate_relay().await {
+                        Ok(candidate) => Arc::new(candidate),
+                        Err(err) => {
+                            let _ = client.close().await;
+                            log::warn!(
+                                "Failed to create relay candidate: {} {}: {}",
+                                network,
+                                raddr,
+                                err
+                            );
+                            return Ok(());
+                        }
+                    };
 
                 {
                     let mut ai = agent_internal2.lock().await;
-                    if let Err(err) = ai.add_candidate(&candidate).await {
+                    if let Err(err) = ai.add_candidate(&candidate, &agent_internal2).await {
                         if let Err(close_err) = candidate.close().await {
                             log::warn!("Failed to close candidate: {}", close_err);
                         }

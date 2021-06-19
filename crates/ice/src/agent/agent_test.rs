@@ -57,11 +57,8 @@ async fn test_pair_priority() -> Result<(), Error> {
         },
         ..Default::default()
     };
-    let host_local: Arc<dyn Candidate + Send + Sync> = Arc::new(
-        host_config
-            .new_candidate_host(Some(a.agent_internal.clone()))
-            .await?,
-    );
+    let host_local: Arc<dyn Candidate + Send + Sync> =
+        Arc::new(host_config.new_candidate_host().await?);
 
     let relay_config = CandidateRelayConfig {
         base_config: CandidateBaseConfig {
@@ -76,9 +73,7 @@ async fn test_pair_priority() -> Result<(), Error> {
         ..Default::default()
     };
 
-    let relay_remote = relay_config
-        .new_candidate_relay(Some(a.agent_internal.clone()))
-        .await?;
+    let relay_remote = relay_config.new_candidate_relay().await?;
 
     let srflx_config = CandidateServerReflexiveConfig {
         base_config: CandidateBaseConfig {
@@ -92,9 +87,7 @@ async fn test_pair_priority() -> Result<(), Error> {
         rel_port: 43212,
     };
 
-    let srflx_remote = srflx_config
-        .new_candidate_server_reflexive(Some(a.agent_internal.clone()))
-        .await?;
+    let srflx_remote = srflx_config.new_candidate_server_reflexive().await?;
 
     let prflx_config = CandidatePeerReflexiveConfig {
         base_config: CandidateBaseConfig {
@@ -108,9 +101,7 @@ async fn test_pair_priority() -> Result<(), Error> {
         rel_port: 43211,
     };
 
-    let prflx_remote = prflx_config
-        .new_candidate_peer_reflexive(Some(a.agent_internal.clone()))
-        .await?;
+    let prflx_remote = prflx_config.new_candidate_peer_reflexive().await?;
 
     let host_config = CandidateHostConfig {
         base_config: CandidateBaseConfig {
@@ -122,9 +113,7 @@ async fn test_pair_priority() -> Result<(), Error> {
         },
         ..Default::default()
     };
-    let host_remote = host_config
-        .new_candidate_host(Some(a.agent_internal.clone()))
-        .await?;
+    let host_remote = host_config.new_candidate_host().await?;
 
     let remotes: Vec<Arc<dyn Candidate + Send + Sync>> = vec![
         Arc::new(relay_remote),
@@ -192,9 +181,7 @@ async fn test_on_selected_candidate_pair_change() -> Result<(), Error> {
         },
         ..Default::default()
     };
-    let host_local = host_config
-        .new_candidate_host(Some(a.agent_internal.clone()))
-        .await?;
+    let host_local = host_config.new_candidate_host().await?;
 
     let relay_config = CandidateRelayConfig {
         base_config: CandidateBaseConfig {
@@ -208,9 +195,7 @@ async fn test_on_selected_candidate_pair_change() -> Result<(), Error> {
         rel_port: 43210,
         ..Default::default()
     };
-    let relay_remote = relay_config
-        .new_candidate_relay(Some(a.agent_internal.clone()))
-        .await?;
+    let relay_remote = relay_config.new_candidate_relay().await?;
 
     // select the pair
     let p = Arc::new(CandidatePair::new(
@@ -246,11 +231,7 @@ async fn test_handle_peer_reflexive_udp_pflx_candidate() -> Result<(), Error> {
         ..Default::default()
     };
 
-    let local: Arc<dyn Candidate + Send + Sync> = Arc::new(
-        host_config
-            .new_candidate_host(Some(a.agent_internal.clone()))
-            .await?,
-    );
+    let local: Arc<dyn Candidate + Send + Sync> = Arc::new(host_config.new_candidate_host().await?);
     let remote = SocketAddr::from_str("172.17.0.3:999")?;
 
     let (username, local_pwd, tie_breaker) = {
@@ -276,10 +257,8 @@ async fn test_handle_peer_reflexive_udp_pflx_candidate() -> Result<(), Error> {
     ])?;
 
     {
-        let agent_internal_clone = Arc::clone(&a.agent_internal);
         let mut ai = a.agent_internal.lock().await;
-        ai.handle_inbound(&mut msg, &local, remote, agent_internal_clone)
-            .await;
+        ai.handle_inbound(&mut msg, &local, remote).await;
 
         // length of remote candidate list must be one now
         assert_eq!(
@@ -349,11 +328,7 @@ async fn test_handle_peer_reflexive_unknown_remote() -> Result<(), Error> {
         ..Default::default()
     };
 
-    let local: Arc<dyn Candidate + Send + Sync> = Arc::new(
-        host_config
-            .new_candidate_host(Some(a.agent_internal.clone()))
-            .await?,
-    );
+    let local: Arc<dyn Candidate + Send + Sync> = Arc::new(host_config.new_candidate_host().await?);
     let remote = SocketAddr::from_str("172.17.0.3:999")?;
 
     let mut msg = Message::new();
@@ -365,10 +340,8 @@ async fn test_handle_peer_reflexive_unknown_remote() -> Result<(), Error> {
     ])?;
 
     {
-        let agent_internal_clone = Arc::clone(&a.agent_internal);
         let mut ai = a.agent_internal.lock().await;
-        ai.handle_inbound(&mut msg, &local, remote, agent_internal_clone)
-            .await;
+        ai.handle_inbound(&mut msg, &local, remote).await;
 
         assert_eq!(
             ai.remote_candidates.len(),
@@ -644,7 +617,7 @@ async fn test_inbound_validity() -> Result<(), Error> {
             },
             ..Default::default()
         }
-        .new_candidate_host(None)
+        .new_candidate_host()
         .await?,
     );
 
@@ -653,9 +626,6 @@ async fn test_inbound_validity() -> Result<(), Error> {
         let a = Agent::new(AgentConfig::default()).await?;
 
         {
-            let agent_internal1 = Arc::clone(&a.agent_internal);
-            let agent_internal2 = Arc::clone(&a.agent_internal);
-
             let mut ai = a.agent_internal.lock().await;
 
             let local_pwd = ai.local_pwd.clone();
@@ -663,7 +633,6 @@ async fn test_inbound_validity() -> Result<(), Error> {
                 &mut build_msg(CLASS_REQUEST, "invalid".to_owned(), local_pwd)?,
                 &local,
                 remote,
-                agent_internal1,
             )
             .await;
             assert_ne!(
@@ -677,7 +646,6 @@ async fn test_inbound_validity() -> Result<(), Error> {
                 &mut build_msg(CLASS_REQUEST, username, "Invalid".to_owned())?,
                 &local,
                 remote,
-                agent_internal2,
             )
             .await;
             assert_ne!(
@@ -695,8 +663,6 @@ async fn test_inbound_validity() -> Result<(), Error> {
         let a = Agent::new(AgentConfig::default()).await?;
 
         {
-            let agent_internal1 = Arc::clone(&a.agent_internal);
-
             let mut ai = a.agent_internal.lock().await;
 
             let username = format!("{}:{}", ai.local_ufrag, ai.remote_ufrag);
@@ -704,7 +670,6 @@ async fn test_inbound_validity() -> Result<(), Error> {
                 &mut build_msg(CLASS_SUCCESS_RESPONSE, username, "Invalid".to_owned())?,
                 &local,
                 remote,
-                agent_internal1,
             )
             .await;
             assert_ne!(
@@ -722,8 +687,6 @@ async fn test_inbound_validity() -> Result<(), Error> {
         let a = Agent::new(AgentConfig::default()).await?;
 
         {
-            let agent_internal1 = Arc::clone(&a.agent_internal);
-
             let mut ai = a.agent_internal.lock().await;
 
             let username = format!("{}:{}", ai.local_ufrag, ai.remote_ufrag);
@@ -731,7 +694,6 @@ async fn test_inbound_validity() -> Result<(), Error> {
                 &mut build_msg(CLASS_ERROR_RESPONSE, username, "Invalid".to_owned())?,
                 &local,
                 remote,
-                agent_internal1,
             )
             .await;
             assert_ne!(
@@ -749,8 +711,6 @@ async fn test_inbound_validity() -> Result<(), Error> {
         let a = Agent::new(AgentConfig::default()).await?;
 
         {
-            let agent_internal1 = Arc::clone(&a.agent_internal);
-
             let mut ai = a.agent_internal.lock().await;
 
             let username = format!("{}:{}", ai.local_ufrag, ai.remote_ufrag);
@@ -759,7 +719,6 @@ async fn test_inbound_validity() -> Result<(), Error> {
                 &mut build_msg(CLASS_REQUEST, username, local_pwd)?,
                 &local,
                 remote,
-                agent_internal1,
             )
             .await;
             assert_eq!(
@@ -777,8 +736,6 @@ async fn test_inbound_validity() -> Result<(), Error> {
         let a = Agent::new(AgentConfig::default()).await?;
 
         {
-            let agent_internal1 = Arc::clone(&a.agent_internal);
-
             let mut ai = a.agent_internal.lock().await;
 
             let username = format!("{}:{}", ai.local_ufrag, ai.remote_ufrag);
@@ -792,8 +749,7 @@ async fn test_inbound_validity() -> Result<(), Error> {
                 Box::new(MessageIntegrity::new_short_term_integrity(local_pwd)),
             ])?;
 
-            ai.handle_inbound(&mut msg, &local, remote, agent_internal1)
-                .await;
+            ai.handle_inbound(&mut msg, &local, remote).await;
             assert_eq!(
                 ai.remote_candidates.len(),
                 1,
@@ -809,8 +765,6 @@ async fn test_inbound_validity() -> Result<(), Error> {
         let a = Agent::new(AgentConfig::default()).await?;
 
         {
-            let agent_internal1 = Arc::clone(&a.agent_internal);
-
             let mut ai = a.agent_internal.lock().await;
             let remote = SocketAddr::from_str("172.17.0.3:999")?;
 
@@ -827,8 +781,7 @@ async fn test_inbound_validity() -> Result<(), Error> {
                 Box::new(FINGERPRINT),
             ])?;
 
-            ai.handle_inbound(&mut msg, &local, remote, agent_internal1)
-                .await;
+            ai.handle_inbound(&mut msg, &local, remote).await;
             assert_eq!(
                 ai.remote_candidates.len(),
                 0,
@@ -1033,7 +986,7 @@ async fn test_candidate_pair_stats() -> Result<(), Error> {
             },
             ..Default::default()
         }
-        .new_candidate_host(Some(Arc::clone(&a.agent_internal)))
+        .new_candidate_host()
         .await?,
     );
 
@@ -1050,7 +1003,7 @@ async fn test_candidate_pair_stats() -> Result<(), Error> {
             rel_port: 43210,
             ..Default::default()
         }
-        .new_candidate_relay(Some(Arc::clone(&a.agent_internal)))
+        .new_candidate_relay()
         .await?,
     );
 
@@ -1066,7 +1019,7 @@ async fn test_candidate_pair_stats() -> Result<(), Error> {
             rel_addr: "4.3.2.1".to_owned(),
             rel_port: 43212,
         }
-        .new_candidate_server_reflexive(Some(Arc::clone(&a.agent_internal)))
+        .new_candidate_server_reflexive()
         .await?,
     );
 
@@ -1082,7 +1035,7 @@ async fn test_candidate_pair_stats() -> Result<(), Error> {
             rel_addr: "4.3.2.1".to_owned(),
             rel_port: 43211,
         }
-        .new_candidate_peer_reflexive(Some(Arc::clone(&a.agent_internal)))
+        .new_candidate_peer_reflexive()
         .await?,
     );
 
@@ -1097,7 +1050,7 @@ async fn test_candidate_pair_stats() -> Result<(), Error> {
             },
             ..Default::default()
         }
-        .new_candidate_host(Some(Arc::clone(&a.agent_internal)))
+        .new_candidate_host()
         .await?,
     );
 
@@ -1201,7 +1154,7 @@ async fn test_local_candidate_stats() -> Result<(), Error> {
             },
             ..Default::default()
         }
-        .new_candidate_host(Some(Arc::clone(&a.agent_internal)))
+        .new_candidate_host()
         .await?,
     );
 
@@ -1217,7 +1170,7 @@ async fn test_local_candidate_stats() -> Result<(), Error> {
             rel_addr: "4.3.2.1".to_owned(),
             rel_port: 43212,
         }
-        .new_candidate_server_reflexive(Some(Arc::clone(&a.agent_internal)))
+        .new_candidate_server_reflexive()
         .await?,
     );
 
@@ -1296,7 +1249,7 @@ async fn test_remote_candidate_stats() -> Result<(), Error> {
             rel_port: 43210,
             ..Default::default()
         }
-        .new_candidate_relay(Some(Arc::clone(&a.agent_internal)))
+        .new_candidate_relay()
         .await?,
     );
 
@@ -1312,7 +1265,7 @@ async fn test_remote_candidate_stats() -> Result<(), Error> {
             rel_addr: "4.3.2.1".to_owned(),
             rel_port: 43212,
         }
-        .new_candidate_server_reflexive(Some(Arc::clone(&a.agent_internal)))
+        .new_candidate_server_reflexive()
         .await?,
     );
 
@@ -1328,7 +1281,7 @@ async fn test_remote_candidate_stats() -> Result<(), Error> {
             rel_addr: "4.3.2.1".to_owned(),
             rel_port: 43211,
         }
-        .new_candidate_peer_reflexive(Some(Arc::clone(&a.agent_internal)))
+        .new_candidate_peer_reflexive()
         .await?,
     );
 
@@ -1343,7 +1296,7 @@ async fn test_remote_candidate_stats() -> Result<(), Error> {
             },
             ..Default::default()
         }
-        .new_candidate_host(Some(Arc::clone(&a.agent_internal)))
+        .new_candidate_host()
         .await?,
     );
 

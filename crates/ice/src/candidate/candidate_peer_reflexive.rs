@@ -4,7 +4,6 @@ use crate::errors::*;
 use crate::rand::generate_cand_id;
 use crate::util::*;
 use std::sync::atomic::{AtomicU16, AtomicU8};
-use std::sync::Arc;
 
 /// The config required to create a new `CandidatePeerReflexive`.
 #[derive(Default)]
@@ -17,10 +16,7 @@ pub struct CandidatePeerReflexiveConfig {
 
 impl CandidatePeerReflexiveConfig {
     /// Creates a new peer reflective candidate.
-    pub async fn new_candidate_peer_reflexive(
-        self,
-        agent_internal: Option<Arc<Mutex<AgentInternal>>>,
-    ) -> Result<CandidateBase, Error> {
+    pub async fn new_candidate_peer_reflexive(self) -> Result<CandidateBase, Error> {
         let ip: IpAddr = match self.base_config.address.parse() {
             Ok(ip) => ip,
             Err(_) => return Err(ERR_ADDRESS_PARSE_FAILED.to_owned()),
@@ -47,7 +43,6 @@ impl CandidatePeerReflexiveConfig {
                 port: self.rel_port,
             }),
             conn: self.base_config.conn,
-            agent_internal,
             ..CandidateBase::default()
         };
 
