@@ -1,10 +1,11 @@
 use crate::error::Error;
 use crate::mux::mux_func::MatchFunc;
+use async_trait::async_trait;
 use std::collections::HashMap;
+use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tokio::time::Duration;
 use util::{Buffer, Conn};
 
 /// Endpoint implements net.Conn. It is used to read muxed packets.
@@ -26,29 +27,35 @@ impl Endpoint {
 
         Ok(())
     }
+}
 
-    /// Read reads a packet of len(p) bytes from the underlying conn
+#[async_trait]
+impl Conn for Endpoint {
+    async fn connect(&self, _addr: SocketAddr) -> io::Result<()> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    }
+
+    /// reads a packet of len(p) bytes from the underlying conn
     /// that are matched by the associated MuxFunc
-    pub async fn read(
-        &self,
-        packet: &mut [u8],
-        duration: Option<Duration>,
-    ) -> Result<usize, Error> {
-        let n = self.buffer.read(packet, duration).await?;
-        Ok(n)
+    async fn recv(&self, buf: &mut [u8]) -> io::Result<usize> {
+        match self.buffer.read(buf, None).await {
+            Ok(n) => Ok(n),
+            Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.to_string())),
+        }
+    }
+    async fn recv_from(&self, _buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
     }
 
     /// writes bytes to the underlying conn
-    pub async fn write(&self, buf: &[u8]) -> std::io::Result<usize> {
+    async fn send(&self, buf: &[u8]) -> io::Result<usize> {
         self.next_conn.send(buf).await
     }
 
-    pub async fn local_addr(&self) -> std::io::Result<SocketAddr> {
+    async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> io::Result<usize> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    }
+    async fn local_addr(&self) -> io::Result<SocketAddr> {
         self.next_conn.local_addr().await
     }
-
-    // RemoteAddr is a stub
-    //func (e *Endpoint) RemoteAddr() net.Addr {
-    //    return e.mux.next_conn.RemoteAddr()
-    // }
 }

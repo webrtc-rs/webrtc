@@ -103,13 +103,13 @@ async fn test_non_fatal_read() -> Result<(), Error> {
     let e = m.new_endpoint(Box::new(match_all)).await;
     let mut buff = vec![0u8; TEST_PIPE_BUFFER_SIZE];
 
-    let n = e.read(&mut buff, None).await?;
+    let n = e.recv(&mut buff).await?;
     assert_eq!(&buff[..n], expected_data);
 
-    let n = e.read(&mut buff, None).await?;
+    let n = e.recv(&mut buff).await?;
     assert_eq!(&buff[..n], expected_data);
 
-    let n = e.read(&mut buff, None).await?;
+    let n = e.recv(&mut buff).await?;
     assert_eq!(&buff[..n], expected_data);
 
     m.close().await;

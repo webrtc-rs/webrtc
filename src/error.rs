@@ -303,6 +303,9 @@ pub enum Error {
     #[error("bad Certificate PEM format")]
     ErrCertificatePEMFormatError,
 
+    #[error("IoError: {0}")]
+    ErrIoError(#[from] std::io::Error),
+
     #[error("SdpError: {0}")]
     ErrSdpError(#[from] sdp::error::Error),
     #[error("UtilError: {0}")]
@@ -313,4 +316,7 @@ pub enum Error {
     ErrRtpError(#[from] rtp::error::Error),
     #[error("SrtpError: {0}")]
     ErrSrtpError(#[from] srtp::error::Error),
+
+    #[error("Other errors: {0}")]
+    ErrOthers(String),
 }

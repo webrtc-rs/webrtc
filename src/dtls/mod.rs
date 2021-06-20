@@ -14,14 +14,15 @@ use crate::mux::mux_func::MatchFunc;
 use bytes::Bytes;
 use dtls::conn::DTLSConn;
 use dtls::crypto::Certificate;
-use dtls::extension::extension_use_srtp::SrtpProtectionProfile;
 use serde::{Deserialize, Serialize};
+use srtp::protection_profile::ProtectionProfile;
 use srtp::session::Session;
 use srtp::stream::Stream;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
+use util::Conn;
 
 /// DTLSFingerprint specifies the hash function algorithm and certificate
 /// fingerprint as described in https://tools.ietf.org/html/rfc4572.
@@ -60,17 +61,17 @@ pub struct DTLSTransport {
     remote_parameters: DTLSParameters,
     remote_certificate: Bytes,
     state: DTLSTransportState,
-    srtp_protection_profile: SrtpProtectionProfile,
+    srtp_protection_profile: ProtectionProfile,
     on_state_change_handler: Arc<Mutex<Option<OnStateChangeHdlrFn>>>,
     conn: DTLSConn,
 
-    srtp_session: Option<Session>, //atomic.Value
+    srtp_session: Option<Session>,
     srtcp_session: Option<Session>,
     srtp_endpoint: Arc<Endpoint>,
-    srctp_endpoint: Arc<Endpoint>,
+    srtcp_endpoint: Arc<Endpoint>,
 
     simulcast_streams: Vec<Stream>,
-    srtp_ready: mpsc::Receiver<()>,
+    srtp_ready_tx: Option<mpsc::Sender<()>>,
 
     dtls_matcher: MatchFunc,
     setting_engine: SettingEngine,
@@ -134,63 +135,59 @@ impl DTLSTransport {
     pub fn get_remote_certificate(&self) -> Bytes {
         self.remote_certificate.clone()
     }
-    /*
-                func (t *DTLSTransport) startSRTP() error {
-                    srtpConfig := &srtp.Config{
-                        Profile:       t.srtp_protection_profile,
-                        BufferFactory: t.api.settingEngine.BufferFactory,
-                        LoggerFactory: t.api.settingEngine.LoggerFactory,
-                    }
-                    if t.api.settingEngine.replayProtection.SRTP != nil {
-                        srtpConfig.RemoteOptions = append(
-                            srtpConfig.RemoteOptions,
-                            srtp.SRTPReplayProtection(*t.api.settingEngine.replayProtection.SRTP),
-                        )
-                    }
 
-                    if t.api.settingEngine.disableSRTPReplayProtection {
-                        srtpConfig.RemoteOptions = append(
-                            srtpConfig.RemoteOptions,
-                            srtp.SRTPNoReplayProtection(),
-                        )
-                    }
+    pub(crate) async fn start_srtp(&mut self) -> Result<(), Error> {
+        let mut srtp_config = srtp::config::Config {
+            profile: self.srtp_protection_profile,
+            ..Default::default()
+        };
+        let mut srtcp_config = srtp::config::Config {
+            profile: self.srtp_protection_profile,
+            ..Default::default()
+        };
 
-                    if t.api.settingEngine.replayProtection.SRTCP != nil {
-                        srtpConfig.RemoteOptions = append(
-                            srtpConfig.RemoteOptions,
-                            srtp.SRTCPReplayProtection(*t.api.settingEngine.replayProtection.SRTCP),
-                        )
-                    }
+        if self.setting_engine.replay_protection.srtp != 0 {
+            srtp_config.remote_rtp_options = Some(srtp::option::srtp_replay_protection(
+                self.setting_engine.replay_protection.srtp,
+            ));
+        } else if self.setting_engine.disable_srtp_replay_protection {
+            srtp_config.remote_rtp_options = Some(srtp::option::srtp_no_replay_protection());
+        }
 
-                    if t.api.settingEngine.disableSRTCPReplayProtection {
-                        srtpConfig.RemoteOptions = append(
-                            srtpConfig.RemoteOptions,
-                            srtp.SRTCPNoReplayProtection(),
-                        )
-                    }
+        if self.setting_engine.replay_protection.srtcp != 0 {
+            srtcp_config.remote_rtcp_options = Some(srtp::option::srtcp_replay_protection(
+                self.setting_engine.replay_protection.srtcp,
+            ));
+        } else if self.setting_engine.disable_srtcp_replay_protection {
+            srtcp_config.remote_rtcp_options = Some(srtp::option::srtcp_no_replay_protection());
+        }
 
-                    connState := t.conn.ConnectionState()
-                    err := srtpConfig.ExtractSessionKeysFromDTLS(&connState, t.role() == DTLSRoleClient)
-                    if err != nil {
-                        return fmt.Errorf("%w: %v", errDtlsKeyExtractionFailed, err)
-                    }
+        let conn_state = self.conn.connection_state().await;
+        srtp_config
+            .extract_session_keys_from_dtls(conn_state, self.role() == DTLSRole::Client)
+            .await?;
 
-                    srtp_session, err := srtp.NewSessionSRTP(t.srtp_endpoint, srtpConfig)
-                    if err != nil {
-                        return fmt.Errorf("%w: %v", errFailedToStartSRTP, err)
-                    }
+        let srtp_session = Session::new(
+            Arc::clone(&self.srtp_endpoint) as Arc<dyn Conn + Send + Sync>,
+            srtp_config,
+            true,
+        )
+        .await?;
 
-                    srtcp_session, err := srtp.NewSessionSRTCP(t.srtcpEndpoint, srtpConfig)
-                    if err != nil {
-                        return fmt.Errorf("%w: %v", errFailedToStartSRTCP, err)
-                    }
+        let srtcp_session = Session::new(
+            Arc::clone(&self.srtcp_endpoint) as Arc<dyn Conn + Send + Sync>,
+            srtcp_config,
+            false,
+        )
+        .await?;
 
-                    t.srtp_session.Store(srtp_session)
-                    t.srtcp_session.Store(srtcp_session)
-                    close(t.srtp_ready)
-                    return nil
-                }
-    */
+        self.srtp_session = Some(srtp_session);
+        self.srtcp_session = Some(srtcp_session);
+        self.srtp_ready_tx.take();
+
+        Ok(())
+    }
+
     fn get_srtp_session(&self) -> Option<&Session> {
         self.srtp_session.as_ref()
     }
