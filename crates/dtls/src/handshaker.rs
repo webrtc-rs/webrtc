@@ -9,8 +9,6 @@ use crate::signature_hash_algorithm::*;
 
 use log::*;
 
-use util::Error;
-
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
@@ -155,7 +153,7 @@ impl HandshakeConfig {
         }*/
 
         if self.local_certificates.is_empty() {
-            return Err(ERR_NO_CERTIFICATES.clone());
+            return Err(Error::ERR_NO_CERTIFICATES);
         }
 
         if self.local_certificates.len() == 1 {
@@ -218,7 +216,7 @@ impl DTLSConn {
                 HandshakeState::Sending => self.send().await?,
                 HandshakeState::Waiting => self.wait().await?,
                 HandshakeState::Finished => self.finish().await?,
-                _ => return Err(ERR_INVALID_FSM_TRANSITION.clone()),
+                _ => return Err(Error::ERR_INVALID_FSM_TRANSITION),
             };
         }
     }
@@ -313,7 +311,7 @@ impl DTLSConn {
                  done = self.handshake_rx.recv() =>{
                     if done.is_none() {
                         trace!("[handshake:{}] {} handshake_tx is dropped", srv_cli_str(self.state.is_client), self.current_flight.to_string());
-                        return Err(ERR_ALERT_FATAL_OR_CLOSE.clone());
+                        return Err(Error::ERR_ALERT_FATAL_OR_CLOSE);
                     }
 
                     //trace!("[handshake:{}] {} received handshake_rx", srv_cli_str(self.state.is_client), self.current_flight.to_string());
@@ -373,7 +371,7 @@ impl DTLSConn {
             done = self.handshake_rx.recv() =>{
                 if done.is_none() {
                     trace!("[handshake:{}] {} handshake_tx is dropped", srv_cli_str(self.state.is_client), self.current_flight.to_string());
-                    return Err(ERR_ALERT_FATAL_OR_CLOSE.clone());
+                    return Err(Error::ERR_ALERT_FATAL_OR_CLOSE);
                 }
                 let result = self.current_flight.parse(&mut self.handle_queue_tx, &mut self.state, &self.cache, &self.cfg).await;
                 drop(done);

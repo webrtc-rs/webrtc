@@ -36,7 +36,6 @@ use tokio::sync::{mpsc, Mutex};
 use tokio::time::Duration;
 
 use util::replay_detector::*;
-use util::Error;
 
 pub(crate) const INITIAL_TICKER_INTERVAL: Duration = Duration::from_secs(1);
 pub(crate) const COOKIE_LENGTH: usize = 20;
@@ -325,7 +324,7 @@ impl DTLSConn {
                                 srv_cli_str(is_client),
                                 err
                             );
-                            if err == *ERR_ALERT_FATAL_OR_CLOSE {
+                            if err.to_string() == Error::ERR_ALERT_FATAL_OR_CLOSE.to_string() {
                                 break;
                             }
                         }
@@ -345,7 +344,7 @@ impl DTLSConn {
     // Read reads data from the connection.
     pub async fn read(&mut self, p: &mut [u8], duration: Option<Duration>) -> Result<usize, Error> {
         if !self.is_handshake_completed_successfully() {
-            return Err(ERR_HANDSHAKE_IN_PROGRESS.clone());
+            return Err(Error::ERR_HANDSHAKE_IN_PROGRESS);
         }
 
         loop {
@@ -355,7 +354,7 @@ impl DTLSConn {
 
                 tokio::select! {
                     r = self.decrypted_rx.recv() => r,
-                    _ = timer.as_mut() => return Err(ERR_DEADLINE_EXCEEDED.clone()),
+                    _ = timer.as_mut() => return Err(Error::ERR_DEADLINE_EXCEEDED),
                 }
             } else {
                 self.decrypted_rx.recv().await
@@ -365,7 +364,7 @@ impl DTLSConn {
                 match out {
                     Ok(val) => {
                         if p.len() < val.len() {
-                            return Err(ERR_BUFFER_TOO_SMALL.clone());
+                            return Err(Error::ERR_BUFFER_TOO_SMALL);
                         }
                         p[..val.len()].copy_from_slice(&val);
                         return Ok(val.len());
@@ -381,11 +380,11 @@ impl DTLSConn {
     // Write writes len(p) bytes from p to the DTLS connection
     pub async fn write(&mut self, p: &[u8], duration: Option<Duration>) -> Result<usize, Error> {
         if self.is_connection_closed() {
-            return Err(ERR_CONN_CLOSED.clone());
+            return Err(Error::ERR_CONN_CLOSED);
         }
 
         if !self.is_handshake_completed_successfully() {
-            return Err(ERR_HANDSHAKE_IN_PROGRESS.clone());
+            return Err(Error::ERR_HANDSHAKE_IN_PROGRESS);
         }
 
         let pkts = vec![Packet {
@@ -408,7 +407,7 @@ impl DTLSConn {
                         return Err(err);
                     }
                 }
-                _ = timer.as_mut() => return Err(ERR_DEADLINE_EXCEEDED.clone()),
+                _ = timer.as_mut() => return Err(Error::ERR_DEADLINE_EXCEEDED),
             }
         } else {
             self.write_packets(pkts).await?;
@@ -568,7 +567,7 @@ impl DTLSConn {
             // RFC 6347 Section 4.1.0
             // The implementation must either abandon an association or rehandshake
             // prior to allowing the sequence number to wrap.
-            return Err(ERR_SEQUENCE_NUMBER_OVERFLOW.clone());
+            return Err(Error::ERR_SEQUENCE_NUMBER_OVERFLOW);
         }
         p.record.record_layer_header.sequence_number = seq;
 
@@ -613,7 +612,7 @@ impl DTLSConn {
             };
             //trace!("seq = {}", seq);
             if seq > MAX_SEQUENCE_NUMBER {
-                return Err(ERR_SEQUENCE_NUMBER_OVERFLOW.clone());
+                return Err(Error::ERR_SEQUENCE_NUMBER_OVERFLOW);
             }
 
             let record_layer_header = RecordLayerHeader {
@@ -742,14 +741,14 @@ impl DTLSConn {
 
                 if let Err(alert_err) = alert_err {
                     if err.is_none() {
-                        err = Some(Error::new(alert_err.to_string()));
+                        err = Some(Error::ErrOthers(alert_err.to_string()));
                     }
                 }
 
                 if alert.alert_level == AlertLevel::Fatal
                     || alert.alert_description == AlertDescription::CloseNotify
                 {
-                    return Err(ERR_ALERT_FATAL_OR_CLOSE.clone());
+                    return Err(Error::ERR_ALERT_FATAL_OR_CLOSE);
                 }
             }
 
@@ -824,13 +823,13 @@ impl DTLSConn {
 
                 if let Err(alert_err) = alert_err {
                     if err.is_none() {
-                        err = Some(Error::new(alert_err.to_string()));
+                        err = Some(Error::ErrOthers(alert_err.to_string()));
                     }
                 }
                 if alert.alert_level == AlertLevel::Fatal
                     || alert.alert_description == AlertDescription::CloseNotify
                 {
-                    return Err(ERR_ALERT_FATAL_OR_CLOSE.clone());
+                    return Err(Error::ERR_ALERT_FATAL_OR_CLOSE);
                 }
             }
 
@@ -1016,7 +1015,10 @@ impl DTLSConn {
                 return (
                     false,
                     Some(a),
-                    Some(Error::new(format!("Error of Alert {}", a.to_string()))),
+                    Some(Error::ErrOthers(format!(
+                        "Error of Alert {}",
+                        a.to_string()
+                    ))),
                 );
             }
             Content::ChangeCipherSpec(_) => {
@@ -1062,7 +1064,7 @@ impl DTLSConn {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::UnexpectedMessage,
                         }),
-                        Some(ERR_APPLICATION_DATA_EPOCH_ZERO.clone()),
+                        Some(Error::ERR_APPLICATION_DATA_EPOCH_ZERO),
                     );
                 }
 
@@ -1082,7 +1084,7 @@ impl DTLSConn {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::UnexpectedMessage,
                     }),
-                    Some(ERR_UNHANDLED_CONTEXT_TYPE.clone()),
+                    Some(Error::ERR_UNHANDLED_CONTEXT_TYPE),
                 );
             }
         };

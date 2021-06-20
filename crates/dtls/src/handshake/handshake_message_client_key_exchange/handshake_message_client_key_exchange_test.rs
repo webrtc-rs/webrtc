@@ -2,8 +2,6 @@ use super::*;
 
 use std::io::{BufReader, BufWriter};
 
-use util::Error;
-
 #[test]
 fn test_handshake_message_client_key_exchange() -> Result<(), Error> {
     let raw_client_key_exchange = vec![

@@ -5,8 +5,6 @@ use super::handshake::*;
 
 use std::io::{Read, Write};
 
-use util::Error;
-
 use crate::error::*;
 
 // https://tools.ietf.org/html/rfc4346#section-6.2.1
@@ -83,7 +81,7 @@ impl Content {
             ContentType::ApplicationData => Ok(Content::ApplicationData(
                 ApplicationData::unmarshal(reader)?,
             )),
-            _ => Err(ERR_INVALID_CONTENT_TYPE.clone()),
+            _ => Err(Error::ERR_INVALID_CONTENT_TYPE),
         }
     }
 }

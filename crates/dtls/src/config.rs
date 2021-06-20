@@ -9,8 +9,6 @@ use tokio::time::Duration;
 
 use std::sync::Arc;
 
-use util::Error;
-
 // Config is used to configure a DTLS client or server.
 // After a Config is passed to a DTLS function it must not be modified.
 #[derive(Clone)]
@@ -176,26 +174,26 @@ impl Default for ExtendedMasterSecretType {
 
 pub(crate) fn validate_config(is_client: bool, config: &Config) -> Result<(), Error> {
     if is_client && config.psk.is_some() && config.psk_identity_hint.is_none() {
-        return Err(ERR_PSK_AND_IDENTITY_MUST_BE_SET_FOR_CLIENT.clone());
+        return Err(Error::ERR_PSK_AND_IDENTITY_MUST_BE_SET_FOR_CLIENT);
     }
 
     if !is_client && config.psk.is_none() && config.certificates.is_empty() {
-        return Err(ERR_SERVER_MUST_HAVE_CERTIFICATE.clone());
+        return Err(Error::ERR_SERVER_MUST_HAVE_CERTIFICATE);
     }
 
     if !config.certificates.is_empty() && config.psk.is_some() {
-        return Err(ERR_PSK_AND_CERTIFICATE.clone());
+        return Err(Error::ERR_PSK_AND_CERTIFICATE);
     }
 
     if config.psk_identity_hint.is_some() && config.psk.is_none() {
-        return Err(ERR_IDENTITY_NO_PSK.clone());
+        return Err(Error::ERR_IDENTITY_NO_PSK);
     }
 
     for cert in &config.certificates {
         match cert.private_key.kind {
             CryptoPrivateKeyKind::Ed25519(_) => {}
             CryptoPrivateKeyKind::Ecdsa256(_) => {}
-            _ => return Err(ERR_INVALID_PRIVATE_KEY.clone()),
+            _ => return Err(Error::ERR_INVALID_PRIVATE_KEY),
         }
     }
 

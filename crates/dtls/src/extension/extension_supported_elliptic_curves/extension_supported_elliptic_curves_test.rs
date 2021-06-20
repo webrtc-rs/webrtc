@@ -2,8 +2,6 @@ use super::*;
 
 use std::io::{BufReader, BufWriter};
 
-use util::Error;
-
 #[test]
 fn test_extension_supported_groups() -> Result<(), Error> {
     let raw_supported_groups = vec![0x0, 0x4, 0x0, 0x2, 0x0, 0x1d]; // 0x0, 0xa,

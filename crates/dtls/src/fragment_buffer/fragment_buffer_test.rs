@@ -1,7 +1,5 @@
 use super::*;
 
-use util::Error;
-
 #[test]
 fn test_fragment_buffer() -> Result<(), Error> {
     let tests = vec![

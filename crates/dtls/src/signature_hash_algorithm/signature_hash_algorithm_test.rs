@@ -1,7 +1,5 @@
 use super::*;
 
-use util::Error;
-
 #[test]
 fn test_parse_signature_schemes() -> Result<(), Error> {
     let tests = vec![
@@ -52,7 +50,7 @@ fn test_parse_signature_schemes() -> Result<(), Error> {
             ],
             vec![],
             false,
-            Some(ERR_INVALID_SIGNATURE_ALGORITHM.clone()),
+            Some(Error::ERR_INVALID_SIGNATURE_ALGORITHM.clone()),
         ),
         (
             "InvalidHashAlgorithm",
@@ -62,7 +60,7 @@ fn test_parse_signature_schemes() -> Result<(), Error> {
             ],
             vec![],
             false,
-            Some(ERR_INVALID_HASH_ALGORITHM.clone()),
+            Some(Error::ERR_INVALID_HASH_ALGORITHM.clone()),
         ),
         (
             "InsecureHashAlgorithmDenied",
@@ -103,7 +101,7 @@ fn test_parse_signature_schemes() -> Result<(), Error> {
             ],
             vec![],
             false,
-            Some(ERR_NO_AVAILABLE_SIGNATURE_SCHEMES.clone()),
+            Some(Error::ERR_NO_AVAILABLE_SIGNATURE_SCHEMES.clone()),
         ),
         (
             "Translate",

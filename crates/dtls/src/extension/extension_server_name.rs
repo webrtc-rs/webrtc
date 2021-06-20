@@ -7,8 +7,6 @@ use std::io::{Read, Write};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-use util::Error;
-
 const EXTENSION_SERVER_NAME_TYPE_DNSHOST_NAME: u8 = 0;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -39,7 +37,7 @@ impl ExtensionServerName {
         //TODO: check how to do cryptobyte?
         //let name_type = reader.read_u8()?;
         //if name_type != EXTENSION_SERVER_NAME_TYPE_DNSHOST_NAME {
-        //    return Err(ERR_INVALID_SNI_FORMAT.clone());
+        //    return Err(Error::ERR_INVALID_SNI_FORMAT.clone());
         //}
 
         let buf_len = reader.read_u16::<BigEndian>()? as usize;

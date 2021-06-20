@@ -3,8 +3,6 @@ use super::*;
 use std::io::{BufReader, BufWriter};
 use std::time::{Duration, SystemTime};
 
-use util::Error;
-
 #[test]
 fn test_handshake_message_server_hello() -> Result<(), Error> {
     let raw_server_hello = vec![

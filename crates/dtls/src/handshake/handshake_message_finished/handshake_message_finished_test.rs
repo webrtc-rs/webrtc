@@ -2,8 +2,6 @@ use super::*;
 
 use std::io::{BufReader, BufWriter};
 
-use util::Error;
-
 #[test]
 fn test_handshake_message_finished() -> Result<(), Error> {
     let raw_finished = vec![

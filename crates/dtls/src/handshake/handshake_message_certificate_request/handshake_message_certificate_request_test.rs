@@ -3,8 +3,6 @@ use crate::signature_hash_algorithm::*;
 
 use std::io::{BufReader, BufWriter};
 
-use util::Error;
-
 #[test]
 fn test_handshake_message_certificate_request() -> Result<(), Error> {
     let raw_certificate_request = vec![

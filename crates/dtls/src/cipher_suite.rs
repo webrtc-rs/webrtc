@@ -14,8 +14,6 @@ use super::client_certificate_type::*;
 use super::error::*;
 use super::record_layer::record_layer_header::*;
 
-use util::Error;
-
 use cipher_suite_aes_128_gcm_sha256::*;
 use cipher_suite_aes_256_cbc_sha::*;
 use cipher_suite_tls_ecdhe_ecdsa_with_aes_128_ccm::*;
@@ -169,7 +167,7 @@ pub fn cipher_suite_for_id(id: CipherSuiteId) -> Result<Box<dyn CipherSuite + Se
         CipherSuiteId::Tls_Psk_With_Aes_128_Gcm_Sha256 => {
             Ok(Box::new(CipherSuiteTlsPskWithAes128GcmSha256::default()))
         }
-        _ => Err(ERR_INVALID_CIPHER_SUITE.clone()),
+        _ => Err(Error::ERR_INVALID_CIPHER_SUITE),
     }
 }
 
@@ -224,7 +222,7 @@ pub(crate) fn parse_cipher_suites(
         .collect();
 
     if filtered_cipher_suites.is_empty() {
-        Err(ERR_NO_AVAILABLE_CIPHER_SUITES.clone())
+        Err(Error::ERR_NO_AVAILABLE_CIPHER_SUITES)
     } else {
         Ok(filtered_cipher_suites)
     }

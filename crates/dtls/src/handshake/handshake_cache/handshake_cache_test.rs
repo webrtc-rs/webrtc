@@ -1,7 +1,5 @@
 use super::*;
 
-use util::Error;
-
 #[tokio::test]
 async fn test_handshake_cache_single_push() -> Result<(), Error> {
     let tests = vec![

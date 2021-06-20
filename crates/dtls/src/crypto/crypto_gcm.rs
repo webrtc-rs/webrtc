@@ -6,8 +6,6 @@
 // https://github.com/RustCrypto/AEADs
 // https://docs.rs/aes-gcm/0.8.0/aes_gcm/
 
-use util::Error;
-
 use rand::Rng;
 
 use std::io::Cursor;
@@ -92,7 +90,7 @@ impl CryptoGcm {
         }
 
         if r.len() <= (RECORD_LAYER_HEADER_SIZE + 8) {
-            return Err(ERR_NOT_ENOUGH_ROOM_FOR_NONCE.clone());
+            return Err(Error::ERR_NOT_ENOUGH_ROOM_FOR_NONCE);
         }
 
         let mut nonce = vec![];

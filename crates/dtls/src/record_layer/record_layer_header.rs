@@ -1,7 +1,5 @@
 use crate::content::*;
 
-use util::Error;
-
 use crate::error::*;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
@@ -48,7 +46,7 @@ pub struct RecordLayerHeader {
 impl RecordLayerHeader {
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         if self.sequence_number > MAX_SEQUENCE_NUMBER {
-            return Err(ERR_SEQUENCE_NUMBER_OVERFLOW.clone());
+            return Err(Error::ERR_SEQUENCE_NUMBER_OVERFLOW);
         }
 
         writer.write_u8(self.content_type as u8)?;
@@ -77,7 +75,7 @@ impl RecordLayerHeader {
 
         let protocol_version = ProtocolVersion { major, minor };
         if protocol_version != PROTOCOL_VERSION1_0 && protocol_version != PROTOCOL_VERSION1_2 {
-            return Err(ERR_UNSUPPORTED_PROTOCOL_VERSION.clone());
+            return Err(Error::ERR_UNSUPPORTED_PROTOCOL_VERSION);
         }
         let content_len = reader.read_u16::<BigEndian>()?;
 

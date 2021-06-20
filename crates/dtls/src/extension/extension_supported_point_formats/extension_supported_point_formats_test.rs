@@ -2,8 +2,6 @@ use super::*;
 
 use std::io::{BufReader, BufWriter};
 
-use util::Error;
-
 #[test]
 fn test_extension_supported_point_formats() -> Result<(), Error> {
     let raw_extension_supported_point_formats = vec![0x00, 0x02, 0x01, 0x00]; // 0x00, 0x0b,

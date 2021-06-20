@@ -1,6 +1,7 @@
 use thiserror::Error;
+use tokio::sync::mpsc::error::SendError;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error)] //PartialEq, Clone
 pub enum Error {
     #[error("conn is closed")]
     ERR_CONN_CLOSED,
@@ -134,4 +135,46 @@ pub enum Error {
     ERR_EMPTY_FRAGMENT,
     #[error("Alert is Fatal or Close Notify")]
     ERR_ALERT_FATAL_OR_CLOSE,
+
+    #[error("Other errors:{0}")]
+    ErrOthers(String),
+
+    #[error("IoError: {0}")]
+    ErrIoError(#[from] std::io::Error),
+    #[error("P256Error: {0}")]
+    ErrP256Error(#[from] p256::elliptic_curve::Error),
+    #[error("TryFromSliceError: {0}")]
+    ErrTryFromSliceError(#[from] std::array::TryFromSliceError),
+    #[error("InvalidKeyLengthError: {0}")]
+    ErrInvalidKeyLengthError(#[from] hmac::crypto_mac::InvalidKeyLength),
+    #[error("FromUtf8Error: {0}")]
+    ErrFromUtf8Error(#[from] std::string::FromUtf8Error),
+    #[error("AesGcmError: {0}")]
+    ErrAesGcmError(#[from] aes_gcm::Error),
+    #[error("InvalidKeyIvLengthError: {0}")]
+    ErrInvalidKeyIvLengthError(#[from] block_modes::InvalidKeyIvLength),
+    #[error("BlockModeErrorError: {0}")]
+    ErrBlockModeErrorError(#[from] block_modes::BlockModeError),
+    #[error("RcgenError: {0}")]
+    ErrRcgenError(#[from] rcgen::RcgenError),
+    #[error("X509Error: {0}")]
+    ErrX509Error(#[from] der_parser::nom::Err<x509_parser::error::X509Error>),
+}
+
+impl<T> From<SendError<T>> for Error {
+    fn from(error: SendError<T>) -> Self {
+        Error::ErrOthers(error.to_string())
+    }
+}
+
+impl From<ring::error::KeyRejected> for Error {
+    fn from(error: ring::error::KeyRejected) -> Self {
+        Error::ErrOthers(error.to_string())
+    }
+}
+
+impl From<ring::error::Unspecified> for Error {
+    fn from(error: ring::error::Unspecified) -> Self {
+        Error::ErrOthers(error.to_string())
+    }
 }

@@ -2,8 +2,6 @@ use super::*;
 
 use std::io::{BufReader, BufWriter};
 
-use util::Error;
-
 #[test]
 fn test_extension_server_name() -> Result<(), Error> {
     let extension = ExtensionServerName {

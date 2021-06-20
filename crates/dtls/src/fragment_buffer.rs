@@ -6,8 +6,6 @@ use crate::error::*;
 use crate::handshake::handshake_header::*;
 use crate::record_layer::record_layer_header::*;
 
-use util::Error;
-
 use std::collections::HashMap;
 use std::io::{BufWriter, Cursor};
 
@@ -79,14 +77,14 @@ impl FragmentBuffer {
     pub fn pop(&mut self) -> Result<(Vec<u8>, u16), Error> {
         let seq_num = self.current_message_sequence_number;
         if !self.cache.contains_key(&seq_num) {
-            return Err(ERR_EMPTY_FRAGMENT.clone());
+            return Err(Error::ERR_EMPTY_FRAGMENT);
         }
 
         let (content, epoch) = if let Some(frags) = self.cache.get_mut(&seq_num) {
             let mut raw_message = vec![];
             // Recursively collect up
             if !append_message(0, frags, &mut raw_message) {
-                return Err(ERR_EMPTY_FRAGMENT.clone());
+                return Err(Error::ERR_EMPTY_FRAGMENT);
             }
 
             let mut first_header = frags[0].handshake_header;
@@ -97,7 +95,7 @@ impl FragmentBuffer {
             {
                 let mut writer = BufWriter::<&mut Vec<u8>>::new(raw_header.as_mut());
                 if first_header.marshal(&mut writer).is_err() {
-                    return Err(ERR_EMPTY_FRAGMENT.clone());
+                    return Err(Error::ERR_EMPTY_FRAGMENT);
                 }
             }
 
@@ -107,7 +105,7 @@ impl FragmentBuffer {
 
             (raw_header, message_epoch)
         } else {
-            return Err(ERR_EMPTY_FRAGMENT.clone());
+            return Err(Error::ERR_EMPTY_FRAGMENT);
         };
 
         self.cache.remove(&seq_num);

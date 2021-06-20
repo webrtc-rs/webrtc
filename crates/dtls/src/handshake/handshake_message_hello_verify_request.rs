@@ -7,8 +7,6 @@ use crate::record_layer::record_layer_header::*;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::io::{Read, Write};
 
-use util::Error;
-
 /*
    The definition of HelloVerifyRequest is as follows:
 
@@ -43,7 +41,7 @@ impl HandshakeMessageHelloVerifyRequest {
 
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         if self.cookie.len() > 255 {
-            return Err(ERR_COOKIE_TOO_LONG.clone());
+            return Err(Error::ERR_COOKIE_TOO_LONG);
         }
 
         writer.write_u8(self.version.major)?;
@@ -62,7 +60,7 @@ impl HandshakeMessageHelloVerifyRequest {
         reader.read_to_end(&mut cookie)?;
 
         if cookie.len() < cookie_length as usize {
-            return Err(ERR_BUFFER_TOO_SMALL.clone());
+            return Err(Error::ERR_BUFFER_TOO_SMALL);
         }
 
         Ok(HandshakeMessageHelloVerifyRequest {

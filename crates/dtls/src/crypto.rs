@@ -11,8 +11,6 @@ use crate::record_layer::record_layer_header::*;
 
 use der_parser::{oid, oid::Oid};
 
-use util::Error;
-
 use ring::rand::SystemRandom;
 use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
 
@@ -53,7 +51,7 @@ impl Certificate {
                 serialized_der,
             }
         } else {
-            return Err(Error::new("Unsupported key_pair".to_owned()));
+            return Err(Error::ErrOthers("Unsupported key_pair".to_owned()));
         };
 
         Ok(Certificate {
@@ -91,7 +89,7 @@ impl Certificate {
                 serialized_der,
             }
         } else {
-            return Err(Error::new("Unsupported key_pair".to_owned()));
+            return Err(Error::ErrOthers("Unsupported key_pair".to_owned()));
         };
 
         Ok(Certificate {
@@ -208,7 +206,7 @@ pub(crate) fn verify_key_signature(
     raw_certificates: &[Vec<u8>],
 ) -> Result<(), Error> {
     if raw_certificates.is_empty() {
-        return Err(ERR_LENGTH_MISMATCH.clone());
+        return Err(Error::ERR_LENGTH_MISMATCH);
     }
 
     let (_, certificate) = x509_parser::parse_x509_certificate(&raw_certificates[0])?;
@@ -224,7 +222,7 @@ pub(crate) fn verify_key_signature(
         } else if *sign_alg == oid_registry::OID_SIG_ECDSA_WITH_SHA384 {
             &ring::signature::ECDSA_P384_SHA384_ASN1
         } else {
-            return Err(ERR_KEY_SIGNATURE_VERIFY_UNIMPLEMENTED.clone());
+            return Err(Error::ERR_KEY_SIGNATURE_VERIFY_UNIMPLEMENTED);
         }
     } else if *pki_alg == oid_registry::OID_PKCS1_RSAENCRYPTION {
         if *sign_alg == oid_registry::OID_PKCS1_SHA1WITHRSA {
@@ -236,10 +234,10 @@ pub(crate) fn verify_key_signature(
         } else if *sign_alg == oid_registry::OID_PKCS1_SHA512WITHRSA {
             &ring::signature::RSA_PKCS1_2048_8192_SHA512
         } else {
-            return Err(ERR_KEY_SIGNATURE_VERIFY_UNIMPLEMENTED.clone());
+            return Err(Error::ERR_KEY_SIGNATURE_VERIFY_UNIMPLEMENTED);
         }
     } else {
-        return Err(ERR_KEY_SIGNATURE_VERIFY_UNIMPLEMENTED.clone());
+        return Err(Error::ERR_KEY_SIGNATURE_VERIFY_UNIMPLEMENTED);
     };
 
     let public_key = ring::signature::UnparsedPublicKey::new(
@@ -312,7 +310,7 @@ pub(crate) fn verify_certificate_verify(
 
 pub(crate) fn load_certs(raw_certificates: &[Vec<u8>]) -> Result<Vec<rustls::Certificate>, Error> {
     if raw_certificates.is_empty() {
-        return Err(ERR_LENGTH_MISMATCH.clone());
+        return Err(Error::ERR_LENGTH_MISMATCH);
     }
 
     let mut certs = vec![];
@@ -332,7 +330,7 @@ pub(crate) fn verify_client_cert(
 
     match cert_verifier.verify_client_cert(&chains, None) {
         Ok(_) => {}
-        Err(err) => return Err(Error::new(err.to_string())),
+        Err(err) => return Err(Error::ErrOthers(err.to_string())),
     };
 
     Ok(chains)
@@ -347,12 +345,12 @@ pub(crate) fn verify_server_cert(
     let chains = load_certs(raw_certificates)?;
     let dns_name = match webpki::DNSNameRef::try_from_ascii_str(server_name) {
         Ok(dns_name) => dns_name,
-        Err(err) => return Err(Error::new(err.to_string())),
+        Err(err) => return Err(Error::ErrOthers(err.to_string())),
     };
 
     match cert_verifier.verify_server_cert(roots, &chains, dns_name, &[]) {
         Ok(_) => {}
-        Err(err) => return Err(Error::new(err.to_string())),
+        Err(err) => return Err(Error::ErrOthers(err.to_string())),
     };
 
     Ok(chains)

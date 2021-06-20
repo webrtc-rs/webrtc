@@ -25,8 +25,6 @@ use crate::record_layer::record_layer_header::*;
 use crate::record_layer::*;
 use crate::signature_hash_algorithm::*;
 
-use util::Error;
-
 use std::io::BufWriter;
 
 use log::*;
@@ -133,7 +131,7 @@ impl Flight for Flight4 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::NoCertificate,
                     }),
-                    Some(ERR_CERTIFICATE_VERIFY_NO_CERTIFICATE.clone()),
+                    Some(Error::ERR_CERTIFICATE_VERIFY_NO_CERTIFICATE),
                 ));
             }
 
@@ -204,7 +202,7 @@ impl Flight for Flight4 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::InsufficientSecurity,
                     }),
-                    Some(ERR_NO_AVAILABLE_SIGNATURE_SCHEMES.clone()),
+                    Some(Error::ERR_NO_AVAILABLE_SIGNATURE_SCHEMES),
                 ));
             }
 
@@ -245,7 +243,7 @@ impl Flight for Flight4 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::BadCertificate,
                         }),
-                        Some(ERR_INVALID_CERTIFICATE.clone()),
+                        Some(Error::ERR_INVALID_CERTIFICATE),
                     ));
                 }
 
@@ -393,7 +391,7 @@ impl Flight for Flight4 {
                     alert_level: AlertLevel::Fatal,
                     alert_description: AlertDescription::InternalError,
                 }),
-                Some(Error::new(err.to_string())),
+                Some(Error::ErrOthers(err.to_string())),
             ));
         }
 
@@ -443,7 +441,7 @@ impl Flight for Flight4 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::NoCertificate,
                         }),
-                        Some(ERR_CLIENT_CERTIFICATE_REQUIRED.clone()),
+                        Some(Error::ERR_CLIENT_CERTIFICATE_REQUIRED),
                     ));
                 }
             }
@@ -454,7 +452,7 @@ impl Flight for Flight4 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::BadCertificate,
                         }),
-                        Some(ERR_CLIENT_CERTIFICATE_NOT_VERIFIED.clone()),
+                        Some(Error::ERR_CLIENT_CERTIFICATE_NOT_VERIFIED),
                     ));
                 }
             }
@@ -465,7 +463,7 @@ impl Flight for Flight4 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::NoCertificate,
                         }),
-                        Some(ERR_CLIENT_CERTIFICATE_REQUIRED.clone()),
+                        Some(Error::ERR_CLIENT_CERTIFICATE_REQUIRED),
                     ));
                 }
                 if !state.peer_certificates_verified {
@@ -474,7 +472,7 @@ impl Flight for Flight4 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::BadCertificate,
                         }),
-                        Some(ERR_CLIENT_CERTIFICATE_NOT_VERIFIED.clone()),
+                        Some(Error::ERR_CLIENT_CERTIFICATE_NOT_VERIFIED),
                     ));
                 }
             }

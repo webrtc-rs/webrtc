@@ -1,12 +1,11 @@
 use super::*;
 use crate::change_cipher_spec::*;
 use crate::content::*;
+use crate::error::Error;
 use crate::handshake::handshake_message_finished::*;
 use crate::handshake::*;
 use crate::prf::*;
 use crate::record_layer::record_layer_header::*;
-
-use util::Error;
 
 use async_trait::async_trait;
 

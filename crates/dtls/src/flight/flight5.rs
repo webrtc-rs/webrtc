@@ -16,8 +16,6 @@ use crate::record_layer::record_layer_header::*;
 use crate::record_layer::*;
 use crate::signature_hash_algorithm::*;
 
-use util::Error;
-
 use crate::change_cipher_spec::ChangeCipherSpec;
 use std::io::{BufReader, BufWriter};
 
@@ -162,7 +160,7 @@ impl Flight for Flight5 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::HandshakeFailure,
                         }),
-                        Some(ERR_VERIFY_DATA_MISMATCH.clone()),
+                        Some(Error::ERR_VERIFY_DATA_MISMATCH),
                     ));
                 }
             }
@@ -289,7 +287,7 @@ impl Flight for Flight5 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::UnexpectedMessage,
                         }),
-                        Some(ERR_INVALID_CONTENT_TYPE.clone()),
+                        Some(Error::ERR_INVALID_CONTENT_TYPE),
                     ))
                 }
             };
@@ -307,7 +305,7 @@ impl Flight for Flight5 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::InternalError,
                         }),
-                        Some(ERR_INVALID_CONTENT_TYPE.clone()),
+                        Some(Error::ERR_INVALID_CONTENT_TYPE),
                     ))
                 }
             };
@@ -454,7 +452,7 @@ impl Flight for Flight5 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::InternalError,
                         }),
-                        Some(ERR_INVALID_CONTENT_TYPE.clone()),
+                        Some(Error::ERR_INVALID_CONTENT_TYPE),
                     ))
                 }
             };
@@ -696,7 +694,7 @@ async fn initalize_cipher_suite(
                     alert_level: AlertLevel::Fatal,
                     alert_description: AlertDescription::InsufficientSecurity,
                 }),
-                Some(ERR_NO_AVAILABLE_SIGNATURE_SCHEMES.clone()),
+                Some(Error::ERR_NO_AVAILABLE_SIGNATURE_SCHEMES),
             ));
         }
 

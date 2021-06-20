@@ -8,12 +8,10 @@
 
 // https://github.com/RustCrypto/block-ciphers
 
-use util::Error;
-
 use std::io::Cursor;
 
 use crate::content::*;
-//use crate::errors::*;
+use crate::error::Error;
 use crate::prf::*;
 use crate::record_layer::record_layer_header::*;
 

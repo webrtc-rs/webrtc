@@ -4,8 +4,6 @@ use std::io::{Read, Write};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-use util::Error;
-
 // msg_len for Handshake messages assumes an extra 12 bytes for
 // sequence, Fragment and version information
 pub(crate) const HANDSHAKE_HEADER_LENGTH: usize = 12;

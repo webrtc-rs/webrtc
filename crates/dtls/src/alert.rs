@@ -4,11 +4,10 @@ mod alert_test;
 use std::fmt;
 use std::io::{Read, Write};
 
-use util::Error;
-
 use byteorder::{ReadBytesExt, WriteBytesExt};
 
 use super::content::*;
+use crate::error::Error;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub(crate) enum AlertLevel {

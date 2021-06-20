@@ -15,8 +15,6 @@ use super::error::*;
 
 use std::io::{Read, Write};
 
-use util::Error;
-
 /*
  The TLS Record Layer which handles all data transport.
  The record layer is assumed to sit directly on top of some
@@ -70,7 +68,7 @@ impl RecordLayer {
                 Content::ChangeCipherSpec(ChangeCipherSpec::unmarshal(reader)?)
             }
             ContentType::Handshake => Content::Handshake(Handshake::unmarshal(reader)?),
-            _ => return Err(Error::new("Invalid Content Type".to_owned())),
+            _ => return Err(Error::ErrOthers("Invalid Content Type".to_owned())),
         };
 
         Ok(RecordLayer {
@@ -92,14 +90,14 @@ pub(crate) fn unpack_datagram(buf: &[u8]) -> Result<Vec<Vec<u8>>, Error> {
     let mut offset = 0;
     while buf.len() != offset {
         if buf.len() - offset <= RECORD_LAYER_HEADER_SIZE {
-            return Err(ERR_INVALID_PACKET_LENGTH.clone());
+            return Err(Error::ERR_INVALID_PACKET_LENGTH);
         }
 
         let pkt_len = RECORD_LAYER_HEADER_SIZE
             + (((buf[offset + RECORD_LAYER_HEADER_SIZE - 2] as usize) << 8)
                 | buf[offset + RECORD_LAYER_HEADER_SIZE - 1] as usize);
         if offset + pkt_len > buf.len() {
-            return Err(ERR_INVALID_PACKET_LENGTH.clone());
+            return Err(Error::ERR_INVALID_PACKET_LENGTH);
         }
 
         out.push(buf[offset..offset + pkt_len].to_vec());

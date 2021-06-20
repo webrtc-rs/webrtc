@@ -6,8 +6,6 @@ use std::fmt;
 use crate::crypto::*;
 use crate::error::*;
 
-use util::Error;
-
 // HashAlgorithm is used to indicate the hash algorithm used
 // https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-18
 // Supported hash hash algorithms
@@ -150,7 +148,7 @@ pub(crate) fn select_signature_scheme(
         }
     }
 
-    Err(ERR_NO_AVAILABLE_SIGNATURE_SCHEMES.clone())
+    Err(Error::ERR_NO_AVAILABLE_SIGNATURE_SCHEMES)
 }
 
 // SignatureScheme identifies a signature algorithm supported by TLS. See
@@ -194,11 +192,11 @@ pub(crate) fn parse_signature_schemes(
     for ss in sigs {
         let sig: SignatureAlgorithm = ((*ss & 0xFF) as u8).into();
         if sig == SignatureAlgorithm::Unsupported {
-            return Err(ERR_INVALID_SIGNATURE_ALGORITHM.clone());
+            return Err(Error::ERR_INVALID_SIGNATURE_ALGORITHM);
         }
         let h: HashAlgorithm = (((*ss >> 8) & 0xFF) as u8).into();
         if h == HashAlgorithm::Unsupported || h.invalid() {
-            return Err(ERR_INVALID_HASH_ALGORITHM.clone());
+            return Err(Error::ERR_INVALID_HASH_ALGORITHM);
         }
         if h.insecure() && !insecure_hashes {
             continue;
@@ -210,7 +208,7 @@ pub(crate) fn parse_signature_schemes(
     }
 
     if out.is_empty() {
-        Err(ERR_NO_AVAILABLE_SIGNATURE_SCHEMES.clone())
+        Err(Error::ERR_NO_AVAILABLE_SIGNATURE_SCHEMES)
     } else {
         Ok(out)
     }

@@ -10,8 +10,6 @@ use std::io::{Read, Write};
 
 use byteorder::{BigEndian, WriteBytesExt};
 
-use util::Error;
-
 // Structure supports ECDH and PSK
 #[derive(Clone, Debug, PartialEq)]
 pub struct HandshakeMessageServerKeyExchange {
@@ -81,40 +79,40 @@ impl HandshakeMessageServerKeyExchange {
 
         let elliptic_curve_type = data[0].into();
         if data[1..].len() < 2 {
-            return Err(ERR_BUFFER_TOO_SMALL.clone());
+            return Err(Error::ERR_BUFFER_TOO_SMALL);
         }
 
         let named_curve = (((data[1] as u16) << 8) | data[2] as u16).into();
         if data.len() < 4 {
-            return Err(ERR_BUFFER_TOO_SMALL.clone());
+            return Err(Error::ERR_BUFFER_TOO_SMALL);
         }
 
         let public_key_length = data[3] as usize;
         let mut offset = 4 + public_key_length;
         if data.len() < offset {
-            return Err(ERR_BUFFER_TOO_SMALL.clone());
+            return Err(Error::ERR_BUFFER_TOO_SMALL);
         }
         let public_key = data[4..offset].to_vec();
         if data.len() <= offset {
-            return Err(ERR_BUFFER_TOO_SMALL.clone());
+            return Err(Error::ERR_BUFFER_TOO_SMALL);
         }
 
         let hash_algorithm = data[offset].into();
         offset += 1;
         if data.len() <= offset {
-            return Err(ERR_BUFFER_TOO_SMALL.clone());
+            return Err(Error::ERR_BUFFER_TOO_SMALL);
         }
 
         let signature_algorithm = data[offset].into();
         offset += 1;
         if data.len() < offset + 2 {
-            return Err(ERR_BUFFER_TOO_SMALL.clone());
+            return Err(Error::ERR_BUFFER_TOO_SMALL);
         }
 
         let signature_length = (((data[offset] as u16) << 8) | data[offset + 1] as u16) as usize;
         offset += 2;
         if data.len() < offset + signature_length {
-            return Err(ERR_BUFFER_TOO_SMALL.clone());
+            return Err(Error::ERR_BUFFER_TOO_SMALL);
         }
         let signature = data[offset..offset + signature_length].to_vec();
 

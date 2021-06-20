@@ -12,8 +12,6 @@ use sha2::Sha256;
 type HmacSha256 = Hmac<Sha256>;
 type HmacSha1 = Hmac<Sha1>;
 
-use util::Error;
-
 use crate::cipher_suite::CipherSuiteHash;
 use crate::content::ContentType;
 use crate::curve::named_curve::*;
@@ -79,7 +77,7 @@ pub(crate) fn prf_pre_master_secret(
     match curve {
         NamedCurve::P256 => elliptic_curve_pre_master_secret(public_key, private_key, curve),
         NamedCurve::X25519 => elliptic_curve_pre_master_secret(public_key, private_key, curve),
-        _ => Err(ERR_INVALID_NAMED_CURVE.clone()),
+        _ => Err(Error::ERR_INVALID_NAMED_CURVE),
     }
 }
 
@@ -103,9 +101,9 @@ fn elliptic_curve_pre_master_secret(
                 return Ok(secret.diffie_hellman(&public).as_bytes().to_vec());
             }
         }
-        _ => return Err(ERR_INVALID_NAMED_CURVE.clone()),
+        _ => return Err(Error::ERR_INVALID_NAMED_CURVE),
     }
-    Err(ERR_NAMED_CURVE_AND_PRIVATE_KEY_MISMATCH.clone())
+    Err(Error::ERR_NAMED_CURVE_AND_PRIVATE_KEY_MISMATCH)
 }
 
 //  This PRF with the SHA-256 hash function is used for all cipher suites

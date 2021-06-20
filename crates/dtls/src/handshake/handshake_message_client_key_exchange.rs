@@ -7,8 +7,6 @@ use std::io::{Read, Write};
 
 use byteorder::{BigEndian, WriteBytesExt};
 
-use util::Error;
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct HandshakeMessageClientKeyExchange {
     pub(crate) identity_hint: Vec<u8>,
@@ -32,7 +30,7 @@ impl HandshakeMessageClientKeyExchange {
         if (!self.identity_hint.is_empty() && !self.public_key.is_empty())
             || (self.identity_hint.is_empty() && self.public_key.is_empty())
         {
-            return Err(ERR_INVALID_CLIENT_KEY_EXCHANGE.clone());
+            return Err(Error::ERR_INVALID_CLIENT_KEY_EXCHANGE);
         }
 
         if !self.public_key.is_empty() {
@@ -61,7 +59,7 @@ impl HandshakeMessageClientKeyExchange {
 
         let public_key_length = data[0] as usize;
         if data.len() != public_key_length + 1 {
-            return Err(ERR_BUFFER_TOO_SMALL.clone());
+            return Err(Error::ERR_BUFFER_TOO_SMALL);
         }
 
         Ok(HandshakeMessageClientKeyExchange {

@@ -7,8 +7,6 @@ use crate::handshake::handshake_message_hello_verify_request::*;
 use crate::handshake::*;
 use crate::record_layer::record_layer_header::*;
 
-use util::Error;
-
 use async_trait::async_trait;
 
 pub(crate) struct Flight2;
@@ -73,7 +71,7 @@ impl Flight for Flight2 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::ProtocolVersion,
                     }),
-                    Some(ERR_UNSUPPORTED_PROTOCOL_VERSION.clone()),
+                    Some(Error::ERR_UNSUPPORTED_PROTOCOL_VERSION),
                 ));
             }
 
@@ -87,7 +85,7 @@ impl Flight for Flight2 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::AccessDenied,
                     }),
-                    Some(ERR_COOKIE_MISMATCH.clone()),
+                    Some(Error::ERR_COOKIE_MISMATCH),
                 ));
             }
 

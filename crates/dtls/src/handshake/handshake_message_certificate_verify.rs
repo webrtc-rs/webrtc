@@ -8,8 +8,6 @@ use std::io::{Read, Write};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-use util::Error;
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct HandshakeMessageCertificateVerify {
     pub(crate) hash_algorithm: HashAlgorithm,

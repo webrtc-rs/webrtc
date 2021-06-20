@@ -4,8 +4,6 @@ use crate::handshake::handshake_message_client_hello::*;
 use crate::handshake::handshake_random::HandshakeRandom;
 use crate::record_layer::record_layer_header::ProtocolVersion;
 
-use util::Error;
-
 use std::time::{Duration, SystemTime};
 
 use std::io::{BufReader, BufWriter};

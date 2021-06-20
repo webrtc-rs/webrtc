@@ -1,11 +1,11 @@
+use crate::error::Error;
+
 use rand::Rng;
 
 use std::io::{Read, Write};
 use std::time::{Duration, SystemTime};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-
-use util::Error;
 
 pub const RANDOM_BYTES_LENGTH: usize = 28;
 pub const HANDSHAKE_RANDOM_LENGTH: usize = RANDOM_BYTES_LENGTH + 4;

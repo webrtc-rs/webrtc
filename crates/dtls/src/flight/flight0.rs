@@ -8,8 +8,6 @@ use crate::handshake::*;
 use crate::record_layer::record_layer_header::*;
 use crate::*;
 
-use util::Error;
-
 use rand::Rng;
 
 use std::sync::atomic::Ordering;
@@ -70,7 +68,7 @@ impl Flight for Flight0 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::ProtocolVersion,
                     }),
-                    Some(ERR_UNSUPPORTED_PROTOCOL_VERSION.clone()),
+                    Some(Error::ERR_UNSUPPORTED_PROTOCOL_VERSION),
                 ));
             }
 
@@ -89,7 +87,7 @@ impl Flight for Flight0 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::InsufficientSecurity,
                     }),
-                    Some(ERR_CIPHER_SUITE_NO_INTERSECTION.clone()),
+                    Some(Error::ERR_CIPHER_SUITE_NO_INTERSECTION),
                 ));
             }
 
@@ -102,7 +100,7 @@ impl Flight for Flight0 {
                                     alert_level: AlertLevel::Fatal,
                                     alert_description: AlertDescription::InsufficientSecurity,
                                 }),
-                                Some(ERR_NO_SUPPORTED_ELLIPTIC_CURVES.clone()),
+                                Some(Error::ERR_NO_SUPPORTED_ELLIPTIC_CURVES),
                             ));
                         }
                         state.named_curve = e.elliptic_curves[0];
@@ -119,7 +117,7 @@ impl Flight for Flight0 {
                                     alert_level: AlertLevel::Fatal,
                                     alert_description: AlertDescription::InsufficientSecurity,
                                 }),
-                                Some(ERR_SERVER_NO_MATCHING_SRTP_PROFILE.clone()),
+                                Some(Error::ERR_SERVER_NO_MATCHING_SRTP_PROFILE),
                             ));
                         }
                     }
@@ -143,7 +141,7 @@ impl Flight for Flight0 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::InsufficientSecurity,
                     }),
-                    Some(ERR_SERVER_REQUIRED_BUT_NO_CLIENT_EMS.clone()),
+                    Some(Error::ERR_SERVER_REQUIRED_BUT_NO_CLIENT_EMS),
                 ));
             }
 

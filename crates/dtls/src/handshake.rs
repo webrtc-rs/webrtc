@@ -18,8 +18,6 @@ mod handshake_test;
 use std::fmt;
 use std::io::{Read, Write};
 
-use util::Error;
-
 use super::content::*;
 use super::error::*;
 
@@ -234,7 +232,7 @@ impl Handshake {
             HandshakeType::Finished => {
                 HandshakeMessage::Finished(HandshakeMessageFinished::unmarshal(reader)?)
             }
-            _ => return Err(ERR_NOT_IMPLEMENTED.clone()),
+            _ => return Err(Error::ERR_NOT_IMPLEMENTED),
         };
 
         Ok(Handshake {

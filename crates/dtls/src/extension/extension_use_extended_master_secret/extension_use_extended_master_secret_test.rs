@@ -2,8 +2,6 @@ use super::*;
 
 use std::io::{BufReader, BufWriter};
 
-use util::Error;
-
 #[test]
 fn test_extension_use_extended_master_secret() -> Result<(), Error> {
     let raw_extension_use_extended_master_secret = vec![0x00, 0x00];

@@ -18,8 +18,6 @@ use crate::handshake::*;
 use crate::record_layer::record_layer_header::*;
 use crate::record_layer::*;
 
-use util::Error;
-
 use std::sync::atomic::Ordering;
 
 use async_trait::async_trait;
@@ -95,7 +93,7 @@ impl Flight for Flight1 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::ProtocolVersion,
                     }),
-                    Some(ERR_UNSUPPORTED_PROTOCOL_VERSION.clone()),
+                    Some(Error::ERR_UNSUPPORTED_PROTOCOL_VERSION),
                 ));
             }
 

@@ -5,8 +5,6 @@ use std::io::{Read, Write};
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
 
-use util::Error;
-
 use super::content::*;
 use super::error::*;
 
@@ -36,7 +34,7 @@ impl ChangeCipherSpec {
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let data = reader.read_u8()?;
         if data != 0x01 {
-            return Err(ERR_INVALID_CIPHER_SPEC.clone());
+            return Err(Error::ERR_INVALID_CIPHER_SPEC);
         }
 
         Ok(ChangeCipherSpec {})

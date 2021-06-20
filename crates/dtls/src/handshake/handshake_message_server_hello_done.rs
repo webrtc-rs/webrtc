@@ -5,8 +5,6 @@ use super::*;
 
 use std::io::{Read, Write};
 
-use util::Error;
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct HandshakeMessageServerHelloDone;
 

@@ -1,8 +1,6 @@
 use super::*;
 use crate::cipher_suite::CipherSuiteHash;
 
-use util::Error;
-
 #[test]
 fn test_pre_master_secret() -> Result<(), Error> {
     let private_key: [u8; 32] = [

@@ -4,8 +4,6 @@ use crate::change_cipher_spec::ChangeCipherSpec;
 
 use std::io::{BufReader, BufWriter};
 
-use util::Error;
-
 #[test]
 fn test_udp_decode() -> Result<(), Error> {
     let tests = vec![
@@ -41,7 +39,7 @@ fn test_udp_decode() -> Result<(), Error> {
             "Invalid packet length",
             vec![0x14, 0xfe],
             vec![],
-            Some(ERR_INVALID_PACKET_LENGTH.clone()),
+            Some(Error::ERR_INVALID_PACKET_LENGTH.clone()),
         ),
         (
             "Packet declared invalid length",
@@ -49,7 +47,7 @@ fn test_udp_decode() -> Result<(), Error> {
                 0x14, 0xfe, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x12, 0x00, 0xFF, 0x01,
             ],
             vec![],
-            Some(ERR_INVALID_PACKET_LENGTH.clone()),
+            Some(Error::ERR_INVALID_PACKET_LENGTH.clone()),
         ),
     ];
 

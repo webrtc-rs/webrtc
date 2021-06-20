@@ -4,8 +4,6 @@ use std::io::{Read, Write};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-use util::Error;
-
 #[cfg(test)]
 mod handshake_message_certificate_test;
 

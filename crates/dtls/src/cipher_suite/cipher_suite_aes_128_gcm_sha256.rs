@@ -95,7 +95,7 @@ impl CipherSuite for CipherSuiteAes128GcmSha256 {
         if let Some(cg) = &self.gcm {
             cg.encrypt(pkt_rlh, raw)
         } else {
-            Err(Error::new(
+            Err(Error::ErrOthers(
                 "CipherSuite has not been initialized, unable to encrypt".to_owned(),
             ))
         }
@@ -105,7 +105,7 @@ impl CipherSuite for CipherSuiteAes128GcmSha256 {
         if let Some(cg) = &self.gcm {
             cg.decrypt(input)
         } else {
-            Err(Error::new(
+            Err(Error::ErrOthers(
                 "CipherSuite has not been initialized, unable to decrypt".to_owned(),
             ))
         }

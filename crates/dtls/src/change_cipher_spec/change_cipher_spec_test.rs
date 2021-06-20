@@ -2,8 +2,6 @@ use super::*;
 
 use std::io::{BufReader, BufWriter};
 
-use util::Error;
-
 #[test]
 fn test_change_cipher_spec_round_trip() -> Result<(), Error> {
     let c = ChangeCipherSpec {};

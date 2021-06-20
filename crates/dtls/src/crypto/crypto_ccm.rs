@@ -8,8 +8,6 @@
 // https://github.com/RustCrypto/AEADs
 // https://docs.rs/ccm/0.3.0/ccm/ Or https://crates.io/crates/aes-ccm?
 
-use util::Error;
-
 use rand::Rng;
 
 use std::io::Cursor;
@@ -152,7 +150,7 @@ impl CryptoCcm {
         }
 
         if r.len() <= (RECORD_LAYER_HEADER_SIZE + 8) {
-            return Err(ERR_NOT_ENOUGH_ROOM_FOR_NONCE.clone());
+            return Err(Error::ERR_NOT_ENOUGH_ROOM_FOR_NONCE);
         }
 
         let mut nonce = vec![];

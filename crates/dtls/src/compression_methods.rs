@@ -1,4 +1,4 @@
-use util::Error;
+use crate::error::Error;
 
 use std::io::{Read, Write};
 

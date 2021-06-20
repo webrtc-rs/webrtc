@@ -9,8 +9,6 @@ use std::io::{Read, Write};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-use util::Error;
-
 /*
 A non-anonymous server can optionally request a certificate from
 the client, if appropriate for the selected cipher suite.  This

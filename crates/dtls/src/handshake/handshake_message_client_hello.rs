@@ -103,7 +103,7 @@ impl HandshakeMessageClientHello {
 
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         if self.cookie.len() > 255 {
-            return Err(ERR_COOKIE_TOO_LONG.clone());
+            return Err(Error::ERR_COOKIE_TOO_LONG);
         }
 
         writer.write_u8(self.version.major)?;

@@ -8,10 +8,8 @@ pub(crate) mod flight6;
 
 //use std::fmt;
 
-use util::Error;
-
 use crate::alert::*;
-//use crate::conn::*;
+use crate::error::Error;
 use crate::handshake::handshake_cache::*;
 use crate::handshaker::*;
 use crate::record_layer::*;

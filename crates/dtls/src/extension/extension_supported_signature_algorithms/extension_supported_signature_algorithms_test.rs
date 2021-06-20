@@ -2,8 +2,6 @@ use super::*;
 
 use std::io::{BufReader, BufWriter};
 
-use util::Error;
-
 #[test]
 fn test_extension_supported_signature_algorithms() -> Result<(), Error> {
     let raw_extension_supported_signature_algorithms =

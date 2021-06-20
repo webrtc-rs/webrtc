@@ -6,8 +6,6 @@ use crate::record_layer::record_layer_header::{ProtocolVersion, RECORD_LAYER_HEA
 
 use std::io::Cursor;
 
-use util::Error;
-
 use x509_parser::pem::Pem;
 
 const RAW_PRIVATE_KEY: &'static str = "

@@ -1,8 +1,7 @@
 use std::io::{Read, Write};
 
-use util::Error;
-
 use super::content::*;
+use crate::error::Error;
 
 // Application data messages are carried by the record layer and are
 // fragmented, compressed, and encrypted based on the current connection

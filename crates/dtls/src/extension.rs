@@ -18,8 +18,6 @@ use std::io::{Read, Write};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
-use util::Error;
-
 // https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml
 #[derive(Clone, Debug, PartialEq)]
 pub enum ExtensionValue {
@@ -116,7 +114,7 @@ impl Extension {
             ExtensionValue::UseExtendedMasterSecret => Ok(Extension::UseExtendedMasterSecret(
                 ExtensionUseExtendedMasterSecret::unmarshal(reader)?,
             )),
-            _ => Err(ERR_INVALID_EXTENSION_TYPE.clone()),
+            _ => Err(Error::ERR_INVALID_EXTENSION_TYPE),
         }
     }
 }
