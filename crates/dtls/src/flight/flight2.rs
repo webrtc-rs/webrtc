@@ -71,7 +71,7 @@ impl Flight for Flight2 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::ProtocolVersion,
                     }),
-                    Some(Error::ERR_UNSUPPORTED_PROTOCOL_VERSION),
+                    Some(Error::ErrUnsupportedProtocolVersion),
                 ));
             }
 
@@ -85,7 +85,7 @@ impl Flight for Flight2 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::AccessDenied,
                     }),
-                    Some(Error::ERR_COOKIE_MISMATCH),
+                    Some(Error::ErrCookieMismatch),
                 ));
             }
 

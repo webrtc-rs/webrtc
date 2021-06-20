@@ -77,14 +77,14 @@ impl FragmentBuffer {
     pub fn pop(&mut self) -> Result<(Vec<u8>, u16), Error> {
         let seq_num = self.current_message_sequence_number;
         if !self.cache.contains_key(&seq_num) {
-            return Err(Error::ERR_EMPTY_FRAGMENT);
+            return Err(Error::ErrEmptyFragment);
         }
 
         let (content, epoch) = if let Some(frags) = self.cache.get_mut(&seq_num) {
             let mut raw_message = vec![];
             // Recursively collect up
             if !append_message(0, frags, &mut raw_message) {
-                return Err(Error::ERR_EMPTY_FRAGMENT);
+                return Err(Error::ErrEmptyFragment);
             }
 
             let mut first_header = frags[0].handshake_header;
@@ -95,7 +95,7 @@ impl FragmentBuffer {
             {
                 let mut writer = BufWriter::<&mut Vec<u8>>::new(raw_header.as_mut());
                 if first_header.marshal(&mut writer).is_err() {
-                    return Err(Error::ERR_EMPTY_FRAGMENT);
+                    return Err(Error::ErrEmptyFragment);
                 }
             }
 
@@ -105,7 +105,7 @@ impl FragmentBuffer {
 
             (raw_header, message_epoch)
         } else {
-            return Err(Error::ERR_EMPTY_FRAGMENT);
+            return Err(Error::ErrEmptyFragment);
         };
 
         self.cache.remove(&seq_num);

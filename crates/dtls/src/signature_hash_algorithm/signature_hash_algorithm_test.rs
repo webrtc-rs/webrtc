@@ -50,7 +50,7 @@ fn test_parse_signature_schemes() -> Result<(), Error> {
             ],
             vec![],
             false,
-            Some(Error::ERR_INVALID_SIGNATURE_ALGORITHM.clone()),
+            Some(Error::ErrInvalidSignatureAlgorithm),
         ),
         (
             "InvalidHashAlgorithm",
@@ -60,7 +60,7 @@ fn test_parse_signature_schemes() -> Result<(), Error> {
             ],
             vec![],
             false,
-            Some(Error::ERR_INVALID_HASH_ALGORITHM.clone()),
+            Some(Error::ErrInvalidHashAlgorithm),
         ),
         (
             "InsecureHashAlgorithmDenied",
@@ -101,7 +101,7 @@ fn test_parse_signature_schemes() -> Result<(), Error> {
             ],
             vec![],
             false,
-            Some(Error::ERR_NO_AVAILABLE_SIGNATURE_SCHEMES.clone()),
+            Some(Error::ErrNoAvailableSignatureSchemes),
         ),
         (
             "Translate",
@@ -120,9 +120,11 @@ fn test_parse_signature_schemes() -> Result<(), Error> {
         if let Some(err) = want_err {
             if let Err(output_err) = output {
                 assert_eq!(
-                    err, output_err,
+                    err.to_string(),
+                    output_err.to_string(),
                     "Expected error: {:?}, got: {:?}",
-                    err, output_err
+                    err,
+                    output_err
                 );
             } else {
                 assert!(false, "expect err, but got non-err for {}", name);

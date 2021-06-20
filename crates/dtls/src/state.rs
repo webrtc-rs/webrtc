@@ -135,7 +135,7 @@ impl State {
             let cipher_suite = self.cipher_suite.lock().await;
             match &*cipher_suite {
                 Some(cipher_suite) => cipher_suite.id() as u16,
-                None => return Err(Error::ERR_CIPHER_SUITE_UNSET),
+                None => return Err(Error::ErrCipherSuiteUnset),
             }
         };
 
@@ -216,7 +216,7 @@ impl State {
                 cipher_suite.init(&self.master_secret, &remote_random, &local_random, false)
             }
         } else {
-            Err(Error::ERR_CIPHER_SUITE_UNSET)
+            Err(Error::ErrCipherSuiteUnset)
         }
     }
 
@@ -257,15 +257,15 @@ impl KeyingMaterialExporter for State {
     ) -> Result<Vec<u8>, srtp::error::Error> {
         if self.local_epoch.load(Ordering::Relaxed) == 0 {
             return Err(srtp::error::Error::ErrOthers(
-                Error::ERR_HANDSHAKE_IN_PROGRESS.to_string(),
+                Error::ErrHandshakeInProgress.to_string(),
             ));
         } else if !context.is_empty() {
             return Err(srtp::error::Error::ErrOthers(
-                Error::ERR_CONTEXT_UNSUPPORTED.to_string(),
+                Error::ErrContextUnsupported.to_string(),
             ));
         } else if INVALID_KEYING_LABELS.contains_key(label) {
             return Err(srtp::error::Error::ErrOthers(
-                Error::ERR_RESERVED_EXPORT_KEYING_MATERIAL.to_string(),
+                Error::ErrReservedExportKeyingMaterial.to_string(),
             ));
         }
 
@@ -301,7 +301,7 @@ impl KeyingMaterialExporter for State {
             }
         } else {
             Err(srtp::error::Error::ErrOthers(
-                Error::ERR_CIPHER_SUITE_UNSET.to_string(),
+                Error::ErrCipherSuiteUnset.to_string(),
             ))
         }
     }

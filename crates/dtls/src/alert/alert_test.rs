@@ -21,7 +21,7 @@ fn test_alert() -> Result<(), Error> {
                 alert_level: AlertLevel::Invalid,
                 alert_description: AlertDescription::Invalid,
             },
-            Some(Error::new("io".to_owned())),
+            Some(Error::ErrOthers("io".to_owned())),
         ),
     ];
 

@@ -41,7 +41,7 @@ impl HandshakeMessageHelloVerifyRequest {
 
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         if self.cookie.len() > 255 {
-            return Err(Error::ERR_COOKIE_TOO_LONG);
+            return Err(Error::ErrCookieTooLong);
         }
 
         writer.write_u8(self.version.major)?;
@@ -60,7 +60,7 @@ impl HandshakeMessageHelloVerifyRequest {
         reader.read_to_end(&mut cookie)?;
 
         if cookie.len() < cookie_length as usize {
-            return Err(Error::ERR_BUFFER_TOO_SMALL);
+            return Err(Error::ErrBufferTooSmall);
         }
 
         Ok(HandshakeMessageHelloVerifyRequest {

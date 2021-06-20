@@ -39,7 +39,7 @@ fn test_udp_decode() -> Result<(), Error> {
             "Invalid packet length",
             vec![0x14, 0xfe],
             vec![],
-            Some(Error::ERR_INVALID_PACKET_LENGTH.clone()),
+            Some(Error::ErrInvalidPacketLength),
         ),
         (
             "Packet declared invalid length",
@@ -47,7 +47,7 @@ fn test_udp_decode() -> Result<(), Error> {
                 0x14, 0xfe, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x12, 0x00, 0xFF, 0x01,
             ],
             vec![],
-            Some(Error::ERR_INVALID_PACKET_LENGTH.clone()),
+            Some(Error::ErrInvalidPacketLength),
         ),
     ];
 
@@ -55,7 +55,7 @@ fn test_udp_decode() -> Result<(), Error> {
         let dtls_pkts = unpack_datagram(&data);
         if let Some(err) = wanted_err {
             if let Err(dtls) = dtls_pkts {
-                assert_eq!(err, dtls);
+                assert_eq!(err.to_string(), dtls.to_string());
             } else {
                 assert!(
                     false,

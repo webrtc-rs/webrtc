@@ -114,7 +114,7 @@ impl Extension {
             ExtensionValue::UseExtendedMasterSecret => Ok(Extension::UseExtendedMasterSecret(
                 ExtensionUseExtendedMasterSecret::unmarshal(reader)?,
             )),
-            _ => Err(Error::ERR_INVALID_EXTENSION_TYPE),
+            _ => Err(Error::ErrInvalidExtensionType),
         }
     }
 }

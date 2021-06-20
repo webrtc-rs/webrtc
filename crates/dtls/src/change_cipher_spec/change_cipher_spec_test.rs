@@ -31,7 +31,7 @@ fn test_change_cipher_spec_invalid() -> Result<(), Error> {
 
     match result {
         Ok(_) => assert!(false, "must be error"),
-        Err(err) => assert_eq!(err, *ERR_INVALID_CIPHER_SPEC),
+        Err(err) => assert_eq!(err.to_string(), Error::ErrInvalidCipherSpec.to_string()),
     };
 
     Ok(())

@@ -13,7 +13,7 @@ repository = "https://github.com/webrtc-rs/dtls"
 
 [dependencies]
 util = { package = "webrtc-util", version = "0.1.21" }
-srtp = { package = "webrtc-srtp", path = "../srtp"} # version = "0.2.4"} #
+srtp = { package = "webrtc-srtp", version = "0.2.5"} #path = "../srtp"} #
 byteorder = "1.3.2"
 lazy_static = "1.3.0"
 rand_core = "0.5"

@@ -19,20 +19,16 @@ use crate::handshake::handshake_random::*;
 use crate::signature_hash_algorithm::*;
 
 use rand::Rng;
+use srtp::config::KeyingMaterialExporter;
 use std::time::SystemTime;
 
 use util::conn::conn_pipe::*;
 
-//use std::io::Write;
-
-lazy_static! {
-    pub static ref ERR_TEST_PSK_INVALID_IDENTITY: Error =
-        Error::new("TestPSK: Server got invalid identity".to_owned());
-    pub static ref ERR_PSK_REJECTED: Error = Error::new("PSK Rejected".to_owned());
-    pub static ref ERR_NOT_EXPECTED_CHAIN: Error = Error::new("not expected chain".to_owned());
-    pub static ref ERR_EXPECTED_CHAIN: Error = Error::new("expected chain".to_owned());
-    pub static ref ERR_WRONG_CERT: Error = Error::new("wrong cert".to_owned());
-}
+const ERR_TEST_PSK_INVALID_IDENTITY: &str = "TestPSK: Server got invalid identity";
+const ERR_PSK_REJECTED: &str = "PSK Rejected";
+const ERR_NOT_EXPECTED_CHAIN: &str = "not expected chain";
+const ERR_EXPECTED_CHAIN: &str = "expected chain";
+const ERR_WRONG_CERT: &str = "wrong cert";
 
 async fn build_pipe() -> Result<(DTLSConn, DTLSConn), Error> {
     let (ua, ub) = pipe();
@@ -98,7 +94,7 @@ fn psk_callback_server(hint: &[u8]) -> Result<Vec<u8>, Error> {
 }
 
 fn psk_callback_hint_fail(_hint: &[u8]) -> Result<Vec<u8>, Error> {
-    Err(ERR_PSK_REJECTED.clone())
+    Err(Error::ErrOthers(ERR_PSK_REJECTED.to_owned()))
 }
 
 async fn create_test_client(
@@ -204,7 +200,10 @@ async fn test_sequence_number_overflow_on_application_data() -> Result<(), Error
 
     let result = ca.write(&buf_a, Some(Duration::from_secs(5))).await;
     if let Err(err) = result {
-        assert_eq!(err, ERR_SEQUENCE_NUMBER_OVERFLOW.clone());
+        assert_eq!(
+            err.to_string(),
+            Error::ErrSequenceNumberOverflow.to_string()
+        );
     } else {
         assert!(false, "Expected error but it is OK");
     }
@@ -212,7 +211,10 @@ async fn test_sequence_number_overflow_on_application_data() -> Result<(), Error
     cb.close().await?;
 
     if let Err(err) = ca.close().await {
-        assert_eq!(err, ERR_SEQUENCE_NUMBER_OVERFLOW.clone());
+        assert_eq!(
+            err.to_string(),
+            Error::ErrSequenceNumberOverflow.to_string()
+        );
     } else {
         assert!(false, "Expected error but it is OK");
     }
@@ -274,7 +276,10 @@ async fn test_sequence_number_overflow_on_handshake() -> Result<(), Error> {
         }])
         .await
     {
-        assert_eq!(err, ERR_SEQUENCE_NUMBER_OVERFLOW.clone());
+        assert_eq!(
+            err.to_string(),
+            Error::ErrSequenceNumberOverflow.to_string()
+        );
     } else {
         assert!(false, "Expected error but it is OK");
     }
@@ -322,8 +327,8 @@ async fn test_handshake_with_alert() -> Result<(), Error> {
                 cipher_suites: vec![CipherSuiteId::Tls_Ecdhe_Rsa_With_Aes_128_Gcm_Sha256],
                 ..Default::default()
             },
-            ERR_CIPHER_SUITE_NO_INTERSECTION.clone(),
-            ERR_ALERT_FATAL_OR_CLOSE.clone(), //errClient: &errAlert{&alert{alertLevelFatal, alertInsufficientSecurity}},
+            Error::ErrCipherSuiteNoIntersection,
+            Error::ErrAlertFatalOrClose, //errClient: &errAlert{&alert{alertLevelFatal, alertInsufficientSecurity}},
         ),
         (
             "SignatureSchemesNoIntersection",
@@ -339,8 +344,8 @@ async fn test_handshake_with_alert() -> Result<(), Error> {
                 signature_schemes: vec![SignatureScheme::EcdsaWithP521AndSha512],
                 ..Default::default()
             },
-            ERR_ALERT_FATAL_OR_CLOSE.clone(), //errServer: &errAlert{&alert{alertLevelFatal, alertInsufficientSecurity}},
-            ERR_NO_AVAILABLE_SIGNATURE_SCHEMES.clone(), //NoAvailableSignatureSchemes,
+            Error::ErrAlertFatalOrClose, //errServer: &errAlert{&alert{alertLevelFatal, alertInsufficientSecurity}},
+            Error::ErrNoAvailableSignatureSchemes, //NoAvailableSignatureSchemes,
         ),
     ];
 
@@ -356,9 +361,12 @@ async fn test_handshake_with_alert() -> Result<(), Error> {
         let result_server = create_test_server(Arc::new(cb), config_server, true).await;
         if let Err(err) = result_server {
             assert_eq!(
-                err, err_server,
+                err.to_string(),
+                err_server.to_string(),
                 "{} Server error exp({}) failed({})",
-                name, err_server, err
+                name,
+                err_server,
+                err
             );
         } else {
             assert!(
@@ -372,9 +380,12 @@ async fn test_handshake_with_alert() -> Result<(), Error> {
         if let Some(result_client) = result_client {
             if let Err(err) = result_client {
                 assert_eq!(
-                    err, err_client,
+                    err.to_string(),
+                    err_client.to_string(),
                     "{} Client error exp({}) failed({})",
-                    name, err_client, err
+                    name,
+                    err_client,
+                    err
                 );
             } else {
                 assert!(
@@ -440,12 +451,12 @@ async fn test_export_keying_material() -> Result<(), Error> {
 
     c.set_local_epoch(0);
     let state = c.connection_state().await;
-    if let Err(err) = state.export_keying_material(&export_label, &[], 0).await {
-        assert_eq!(
-            err,
-            ERR_HANDSHAKE_IN_PROGRESS.clone(),
+    if let Err(err) = state.export_keying_material(export_label, &[], 0).await {
+        assert!(
+            err.to_string()
+                .contains(&Error::ErrHandshakeInProgress.to_string()),
             "ExportKeyingMaterial when epoch == 0: expected '{}' actual '{}'",
-            ERR_HANDSHAKE_IN_PROGRESS.clone(),
+            Error::ErrHandshakeInProgress,
             err,
         );
     } else {
@@ -458,11 +469,11 @@ async fn test_export_keying_material() -> Result<(), Error> {
         .export_keying_material(&export_label, &[0x00], 0)
         .await
     {
-        assert_eq!(
-            err,
-            ERR_CONTEXT_UNSUPPORTED.clone(),
+        assert!(
+            err.to_string()
+                .contains(&Error::ErrContextUnsupported.to_string()),
             "ExportKeyingMaterial with context: expected '{}' actual '{}'",
-            ERR_CONTEXT_UNSUPPORTED.clone(),
+            Error::ErrContextUnsupported,
             err
         );
     } else {
@@ -472,11 +483,11 @@ async fn test_export_keying_material() -> Result<(), Error> {
     for (k, _v) in INVALID_KEYING_LABELS.iter() {
         let state = c.connection_state().await;
         if let Err(err) = state.export_keying_material(k, &[], 0).await {
-            assert_eq!(
-                err,
-                ERR_RESERVED_EXPORT_KEYING_MATERIAL.clone(),
+            assert!(
+                err.to_string()
+                    .contains(&Error::ErrReservedExportKeyingMaterial.to_string()),
                 "ExportKeyingMaterial reserved label: expected '{}' actual '{}'",
-                ERR_RESERVED_EXPORT_KEYING_MATERIAL.clone(),
+                Error::ErrReservedExportKeyingMaterial,
                 err,
             );
         } else {
@@ -614,10 +625,10 @@ async fn test_psk_hint_fail() -> Result<(), Error> {
 
     if let Err(server_err) = create_test_server(Arc::new(cb), config, false).await {
         assert_eq!(
-            server_err,
-            ERR_ALERT_FATAL_OR_CLOSE.clone(),
+            server_err.to_string(),
+            Error::ErrAlertFatalOrClose.to_string(),
             "TestPSK: Server error exp({}) failed({})",
-            ERR_ALERT_FATAL_OR_CLOSE.clone(),
+            Error::ErrAlertFatalOrClose,
             server_err,
         );
     } else {
@@ -627,11 +638,10 @@ async fn test_psk_hint_fail() -> Result<(), Error> {
     let result = client_res_rx.recv().await;
     if let Some(client) = result {
         if let Err(client_err) = client {
-            assert_eq!(
-                client_err,
-                ERR_PSK_REJECTED.clone(),
+            assert!(
+                client_err.to_string().contains(ERR_PSK_REJECTED),
                 "TestPSK: Client error exp({}) failed({})",
-                ERR_PSK_REJECTED.clone(),
+                ERR_PSK_REJECTED,
                 client_err,
             );
         } else {
@@ -728,8 +738,8 @@ async fn test_srtp_configuration() -> Result<(), Error> {
             vec![SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_80],
             vec![],
             SrtpProtectionProfile::Unsupported,
-            Some(ERR_ALERT_FATAL_OR_CLOSE.clone()),
-            Some(ERR_SERVER_NO_MATCHING_SRTP_PROFILE.clone()),
+            Some(Error::ErrAlertFatalOrClose),
+            Some(Error::ErrServerNoMatchingSrtpProfile),
         ),
         (
             "SRTP server only",
@@ -793,9 +803,12 @@ async fn test_srtp_configuration() -> Result<(), Error> {
         if let Some(expected_err) = want_server_err {
             if let Err(err) = result {
                 assert_eq!(
-                    err, expected_err,
+                    err.to_string(),
+                    expected_err.to_string(),
                     "{} TestPSK: Server error exp({}) failed({})",
-                    name, expected_err, err,
+                    name,
+                    expected_err,
+                    err,
                 );
             } else {
                 assert!(false, "{} expected error, but got ok", name);
@@ -816,9 +829,11 @@ async fn test_srtp_configuration() -> Result<(), Error> {
             if let Some(expected_err) = want_client_err {
                 if let Err(err) = result {
                     assert_eq!(
-                        err, expected_err,
+                        err.to_string(),
+                        expected_err.to_string(),
                         "TestPSK: Client error exp({}) failed({})",
-                        expected_err, err,
+                        expected_err,
+                        err,
                     );
                 } else {
                     assert!(false, "{} expected error, but got ok", name);
@@ -864,13 +879,13 @@ async fn test_client_certificate() -> Result<(), Error> {
     let mut srv_ca_pool = rustls::RootCertStore::empty();
     srv_ca_pool
         .add(&srv_cert.certificate)
-        .or_else(|_err| Err(Error::new("add srv_cert error".to_owned())))?;
+        .or_else(|_err| Err(Error::ErrOthers("add srv_cert error".to_owned())))?;
 
     let cert = Certificate::generate_self_signed(vec!["localhost".to_owned()])?;
     let mut roots_cas = rustls::RootCertStore::empty();
     roots_cas
         .add(&cert.certificate)
-        .or_else(|_err| Err(Error::new("add cert error".to_owned())))?;
+        .or_else(|_err| Err(Error::ErrOthers("add cert error".to_owned())))?;
 
     let tests = vec![
         (
@@ -1216,8 +1231,8 @@ async fn test_extended_master_secret() -> Result<(), Error> {
                 extended_master_secret: ExtendedMasterSecretType::Disable,
                 ..Default::default()
             },
-            Some(ERR_CLIENT_REQUIRED_BUT_NO_SERVER_EMS.clone()),
-            Some(ERR_ALERT_FATAL_OR_CLOSE.clone()),
+            Some(Error::ErrClientRequiredButNoServerEms),
+            Some(Error::ErrAlertFatalOrClose),
         ),
         (
             "Disable_Request_ExtendedMasterSecret",
@@ -1242,8 +1257,8 @@ async fn test_extended_master_secret() -> Result<(), Error> {
                 extended_master_secret: ExtendedMasterSecretType::Require,
                 ..Default::default()
             },
-            Some(ERR_ALERT_FATAL_OR_CLOSE.clone()),
-            Some(ERR_SERVER_REQUIRED_BUT_NO_CLIENT_EMS.clone()),
+            Some(Error::ErrAlertFatalOrClose),
+            Some(Error::ErrServerRequiredButNoClientEms),
         ),
         (
             "Disable_Disable_ExtendedMasterSecret",
@@ -1277,9 +1292,11 @@ async fn test_extended_master_secret() -> Result<(), Error> {
         if let Some(client_err) = expected_client_err {
             if let Err(err) = res {
                 assert_eq!(
-                    err, client_err,
+                    err.to_string(),
+                    client_err.to_string(),
                     "Client error expected: \"{}\" but got \"{}\"",
-                    client_err, err,
+                    client_err,
+                    err,
                 );
             } else {
                 assert!(false, "{} expected err, but got ok", name);
@@ -1291,9 +1308,11 @@ async fn test_extended_master_secret() -> Result<(), Error> {
         if let Some(server_err) = expected_server_err {
             if let Err(err) = result {
                 assert_eq!(
-                    err, server_err,
+                    err.to_string(),
+                    server_err.to_string(),
                     "Server error expected: \"{}\" but got \"{}\"",
-                    server_err, err,
+                    server_err,
+                    err,
                 );
             } else {
                 assert!(false, "{} expected err, but got ok", name);
@@ -1308,20 +1327,20 @@ async fn test_extended_master_secret() -> Result<(), Error> {
 
 fn fn_not_expected_chain(_cert: &[Vec<u8>], chain: &[rustls::Certificate]) -> Result<(), Error> {
     if !chain.is_empty() {
-        return Err(ERR_NOT_EXPECTED_CHAIN.clone());
+        return Err(Error::ErrOthers(ERR_NOT_EXPECTED_CHAIN.to_owned()));
     }
     Ok(())
 }
 
 fn fn_expected_chain(_cert: &[Vec<u8>], chain: &[rustls::Certificate]) -> Result<(), Error> {
     if chain.is_empty() {
-        return Err(ERR_EXPECTED_CHAIN.clone());
+        return Err(Error::ErrOthers(ERR_EXPECTED_CHAIN.to_owned()));
     }
     Ok(())
 }
 
 fn fn_wrong_cert(_cert: &[Vec<u8>], _chain: &[rustls::Certificate]) -> Result<(), Error> {
-    Err(ERR_WRONG_CERT.clone())
+    Err(Error::ErrOthers(ERR_WRONG_CERT.to_owned()))
 }
 
 #[tokio::test]
@@ -1346,7 +1365,7 @@ async fn test_server_certificate() -> Result<(), Error> {
     let mut roots_cas = rustls::RootCertStore::empty();
     roots_cas
         .add(&cert.certificate)
-        .or_else(|_err| Err(Error::new("add cert error".to_owned())))?;
+        .or_else(|_err| Err(Error::ErrOthers("add cert error".to_owned())))?;
 
     let tests = vec![
         (
@@ -1528,8 +1547,8 @@ async fn test_cipher_suite_configuration() -> Result<(), Error> {
             "Invalid CipherSuite",
             vec![CipherSuiteId::Unsupported],
             vec![CipherSuiteId::Unsupported],
-            Some(ERR_INVALID_CIPHER_SUITE.clone()),
-            Some(ERR_INVALID_CIPHER_SUITE.clone()),
+            Some(Error::ErrInvalidCipherSuite),
+            Some(Error::ErrInvalidCipherSuite),
             None,
         ),
         (
@@ -1544,8 +1563,8 @@ async fn test_cipher_suite_configuration() -> Result<(), Error> {
             "CipherSuites mismatch",
             vec![CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256],
             vec![CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_256_Cbc_Sha],
-            Some(ERR_ALERT_FATAL_OR_CLOSE.clone()),
-            Some(ERR_CIPHER_SUITE_NO_INTERSECTION.clone()),
+            Some(Error::ErrAlertFatalOrClose),
+            Some(Error::ErrCipherSuiteNoIntersection),
             None,
         ),
         (
@@ -1607,9 +1626,12 @@ async fn test_cipher_suite_configuration() -> Result<(), Error> {
         if let Some(expected_err) = want_server_error {
             if let Err(err) = result {
                 assert_eq!(
-                    err, expected_err,
+                    err.to_string(),
+                    expected_err.to_string(),
                     "{} test_cipher_suite_configuration: Server error exp({}) failed({})",
-                    name, expected_err, err,
+                    name,
+                    expected_err,
+                    err,
                 );
             } else {
                 assert!(false, "{} expected error, but got ok", name);
@@ -1623,9 +1645,12 @@ async fn test_cipher_suite_configuration() -> Result<(), Error> {
             if let Some(expected_err) = want_client_error {
                 if let Err(err) = result {
                     assert_eq!(
-                        err, expected_err,
+                        err.to_string(),
+                        expected_err.to_string(),
                         "{} test_cipher_suite_configuration: Client error exp({}) failed({})",
-                        name, expected_err, err,
+                        name,
+                        expected_err,
+                        err,
                     );
                 } else {
                     assert!(false, "{} expected error, but got ok", name);
@@ -1685,8 +1710,8 @@ async fn test_psk_configuration() -> Result<(), Error> {
             true, //Some(psk_callback),
             Some(vec![0x00]),
             Some(vec![0x00]),
-            Some(ERR_NO_AVAILABLE_CIPHER_SUITES.clone()),
-            Some(ERR_NO_AVAILABLE_CIPHER_SUITES.clone()),
+            Some(Error::ErrNoAvailableCipherSuites),
+            Some(Error::ErrNoAvailableCipherSuites),
         ),
         (
             "PSK and certificate specified",
@@ -1696,8 +1721,8 @@ async fn test_psk_configuration() -> Result<(), Error> {
             true, //Some(psk_callback),
             Some(vec![0x00]),
             Some(vec![0x00]),
-            Some(ERR_PSK_AND_CERTIFICATE.clone()),
-            Some(ERR_PSK_AND_CERTIFICATE.clone()),
+            Some(Error::ErrPskAndCertificate),
+            Some(Error::ErrPskAndCertificate),
         ),
         (
             "PSK and no identity specified",
@@ -1707,8 +1732,8 @@ async fn test_psk_configuration() -> Result<(), Error> {
             true, //Some(psk_callback),
             None,
             None,
-            Some(ERR_PSK_AND_IDENTITY_MUST_BE_SET_FOR_CLIENT.clone()),
-            Some(ERR_NO_AVAILABLE_CIPHER_SUITES.clone()),
+            Some(Error::ErrPskAndIdentityMustBeSetForClient),
+            Some(Error::ErrNoAvailableCipherSuites),
         ),
         (
             "No PSK and identity specified",
@@ -1718,8 +1743,8 @@ async fn test_psk_configuration() -> Result<(), Error> {
             false,
             Some(vec![0x00]),
             Some(vec![0x00]),
-            Some(ERR_IDENTITY_NO_PSK.clone()),
-            Some(ERR_SERVER_MUST_HAVE_CERTIFICATE.clone()),
+            Some(Error::ErrIdentityNoPsk),
+            Some(Error::ErrServerMustHaveCertificate),
         ),
     ];
 
@@ -1758,9 +1783,12 @@ async fn test_psk_configuration() -> Result<(), Error> {
         if let Some(expected_err) = want_server_error {
             if let Err(err) = result {
                 assert_eq!(
-                    err, expected_err,
+                    err.to_string(),
+                    expected_err.to_string(),
                     "{} test_psk_configuration: Server error exp({}) failed({})",
-                    name, expected_err, err,
+                    name,
+                    expected_err,
+                    err,
                 );
             } else {
                 assert!(false, "{} expected error, but got ok", name);
@@ -1774,9 +1802,12 @@ async fn test_psk_configuration() -> Result<(), Error> {
             if let Some(expected_err) = want_client_error {
                 if let Err(err) = result {
                     assert_eq!(
-                        err, expected_err,
+                        err.to_string(),
+                        expected_err.to_string(),
                         "{} test_psk_configuration: Client error exp({}) failed({})",
-                        name, expected_err, err,
+                        name,
+                        expected_err,
+                        err,
                     );
                 } else {
                     assert!(false, "{} expected error, but got ok", name);
@@ -2079,11 +2110,11 @@ async fn test_protocol_version_validation() -> Result<(), Error> {
                     Ok(result) => {
                         if let Err(err) = result {
                             assert_eq!(
-                                err,
-                                ERR_UNSUPPORTED_PROTOCOL_VERSION.clone(),
+                                err.to_string(),
+                                Error::ErrUnsupportedProtocolVersion.to_string(),
                                 "{} Client error exp({}) failed({})",
                                 name,
-                                ERR_UNSUPPORTED_PROTOCOL_VERSION.clone(),
+                                Error::ErrUnsupportedProtocolVersion,
                                 err,
                             );
                         } else {
@@ -2217,11 +2248,11 @@ async fn test_protocol_version_validation() -> Result<(), Error> {
                     Ok(result) => {
                         if let Err(err) = result {
                             assert_eq!(
-                                err,
-                                ERR_UNSUPPORTED_PROTOCOL_VERSION.clone(),
+                                err.to_string(),
+                                Error::ErrUnsupportedProtocolVersion.to_string(),
                                 "{} Server error exp({}) failed({})",
                                 name,
-                                ERR_UNSUPPORTED_PROTOCOL_VERSION.clone(),
+                                Error::ErrUnsupportedProtocolVersion,
                                 err,
                             );
                         } else {

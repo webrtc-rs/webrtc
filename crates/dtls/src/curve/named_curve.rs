@@ -52,7 +52,7 @@ fn elliptic_curve_keypair(curve: NamedCurve) -> Result<NamedCurveKeypair, Error>
             )
         }
         //TODO: add NamedCurve::p384
-        _ => return Err(Error::ERR_INVALID_NAMED_CURVE),
+        _ => return Err(Error::ErrInvalidNamedCurve),
     };
 
     Ok(NamedCurveKeypair {
@@ -69,7 +69,7 @@ impl NamedCurve {
             NamedCurve::X25519 => elliptic_curve_keypair(NamedCurve::X25519),
             NamedCurve::P256 => elliptic_curve_keypair(NamedCurve::P256),
             //NamedCurve::P384 => elliptic_curve_keypair(NamedCurve::P384),
-            _ => Err(Error::ERR_INVALID_NAMED_CURVE),
+            _ => Err(Error::ErrInvalidNamedCurve),
         }
     }
 }

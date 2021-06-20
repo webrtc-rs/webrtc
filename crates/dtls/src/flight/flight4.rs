@@ -131,7 +131,7 @@ impl Flight for Flight4 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::NoCertificate,
                     }),
-                    Some(Error::ERR_CERTIFICATE_VERIFY_NO_CERTIFICATE),
+                    Some(Error::ErrCertificateVerifyNoCertificate),
                 ));
             }
 
@@ -202,7 +202,7 @@ impl Flight for Flight4 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::InsufficientSecurity,
                     }),
-                    Some(Error::ERR_NO_AVAILABLE_SIGNATURE_SCHEMES),
+                    Some(Error::ErrNoAvailableSignatureSchemes),
                 ));
             }
 
@@ -243,7 +243,7 @@ impl Flight for Flight4 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::BadCertificate,
                         }),
-                        Some(Error::ERR_INVALID_CERTIFICATE),
+                        Some(Error::ErrInvalidCertificate),
                     ));
                 }
 
@@ -441,7 +441,7 @@ impl Flight for Flight4 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::NoCertificate,
                         }),
-                        Some(Error::ERR_CLIENT_CERTIFICATE_REQUIRED),
+                        Some(Error::ErrClientCertificateRequired),
                     ));
                 }
             }
@@ -452,7 +452,7 @@ impl Flight for Flight4 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::BadCertificate,
                         }),
-                        Some(Error::ERR_CLIENT_CERTIFICATE_NOT_VERIFIED),
+                        Some(Error::ErrClientCertificateNotVerified),
                     ));
                 }
             }
@@ -463,7 +463,7 @@ impl Flight for Flight4 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::NoCertificate,
                         }),
-                        Some(Error::ERR_CLIENT_CERTIFICATE_REQUIRED),
+                        Some(Error::ErrClientCertificateRequired),
                     ));
                 }
                 if !state.peer_certificates_verified {
@@ -472,7 +472,7 @@ impl Flight for Flight4 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::BadCertificate,
                         }),
-                        Some(Error::ERR_CLIENT_CERTIFICATE_NOT_VERIFIED),
+                        Some(Error::ErrClientCertificateNotVerified),
                     ));
                 }
             }

@@ -43,7 +43,7 @@ fn test_generate_key_signature() -> Result<(), Error> {
     let reader = Cursor::new(RAW_PRIVATE_KEY.as_bytes());
     let pem = match Pem::read(reader) {
         Ok((pem, _)) => pem,
-        Err(_) => return Err(Error::new("Pem::read error".to_owned())),
+        Err(_) => return Err(Error::ErrOthers("Pem::read error".to_owned())),
     };
     //let private_key = rsa::RSAPrivateKey::from_pkcs1(&pem.contents)?;
 

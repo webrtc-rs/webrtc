@@ -81,7 +81,7 @@ impl Content {
             ContentType::ApplicationData => Ok(Content::ApplicationData(
                 ApplicationData::unmarshal(reader)?,
             )),
-            _ => Err(Error::ERR_INVALID_CONTENT_TYPE),
+            _ => Err(Error::ErrInvalidContentType),
         }
     }
 }

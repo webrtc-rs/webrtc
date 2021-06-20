@@ -68,7 +68,7 @@ impl Flight for Flight0 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::ProtocolVersion,
                     }),
-                    Some(Error::ERR_UNSUPPORTED_PROTOCOL_VERSION),
+                    Some(Error::ErrUnsupportedProtocolVersion),
                 ));
             }
 
@@ -87,7 +87,7 @@ impl Flight for Flight0 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::InsufficientSecurity,
                     }),
-                    Some(Error::ERR_CIPHER_SUITE_NO_INTERSECTION),
+                    Some(Error::ErrCipherSuiteNoIntersection),
                 ));
             }
 
@@ -100,7 +100,7 @@ impl Flight for Flight0 {
                                     alert_level: AlertLevel::Fatal,
                                     alert_description: AlertDescription::InsufficientSecurity,
                                 }),
-                                Some(Error::ERR_NO_SUPPORTED_ELLIPTIC_CURVES),
+                                Some(Error::ErrNoSupportedEllipticCurves),
                             ));
                         }
                         state.named_curve = e.elliptic_curves[0];
@@ -117,7 +117,7 @@ impl Flight for Flight0 {
                                     alert_level: AlertLevel::Fatal,
                                     alert_description: AlertDescription::InsufficientSecurity,
                                 }),
-                                Some(Error::ERR_SERVER_NO_MATCHING_SRTP_PROFILE),
+                                Some(Error::ErrServerNoMatchingSrtpProfile),
                             ));
                         }
                     }
@@ -141,7 +141,7 @@ impl Flight for Flight0 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::InsufficientSecurity,
                     }),
-                    Some(Error::ERR_SERVER_REQUIRED_BUT_NO_CLIENT_EMS),
+                    Some(Error::ErrServerRequiredButNoClientEms),
                 ));
             }
 

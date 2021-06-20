@@ -4,140 +4,143 @@ use tokio::sync::mpsc::error::SendError;
 #[derive(Debug, Error)] //PartialEq, Clone
 pub enum Error {
     #[error("conn is closed")]
-    ERR_CONN_CLOSED,
+    ErrConnClosed,
     #[error("read/write timeout")]
-    ERR_DEADLINE_EXCEEDED,
+    ErrDeadlineExceeded,
     #[error("buffer is too small")]
-    ERR_BUFFER_TOO_SMALL,
+    ErrBufferTooSmall,
     #[error("context is not supported for export_keying_material")]
-    ERR_CONTEXT_UNSUPPORTED,
+    ErrContextUnsupported,
     #[error("packet is too short")]
-    ERR_DTLSPACKET_INVALID_LENGTH,
+    ErrDtlspacketInvalidLength,
     #[error("handshake is in progress")]
-    ERR_HANDSHAKE_IN_PROGRESS,
+    ErrHandshakeInProgress,
     #[error("invalid content type")]
-    ERR_INVALID_CONTENT_TYPE,
+    ErrInvalidContentType,
     #[error("invalid mac")]
-    ERR_INVALID_MAC,
+    ErrInvalidMac,
     #[error("packet length and declared length do not match")]
-    ERR_INVALID_PACKET_LENGTH,
+    ErrInvalidPacketLength,
     #[error("export_keying_material can not be used with a reserved label")]
-    ERR_RESERVED_EXPORT_KEYING_MATERIAL,
+    ErrReservedExportKeyingMaterial,
     #[error("client sent certificate verify but we have no certificate to verify")]
-    ERR_CERTIFICATE_VERIFY_NO_CERTIFICATE,
+    ErrCertificateVerifyNoCertificate,
     #[error("client+server do not support any shared cipher suites")]
-    ERR_CIPHER_SUITE_NO_INTERSECTION,
+    ErrCipherSuiteNoIntersection,
     #[error("server hello can not be created without a cipher suite")]
-    ERR_CIPHER_SUITE_UNSET,
+    ErrCipherSuiteUnset,
     #[error("client sent certificate but did not verify it")]
-    ERR_CLIENT_CERTIFICATE_NOT_VERIFIED,
+    ErrClientCertificateNotVerified,
     #[error("server required client verification, but got none")]
-    ERR_CLIENT_CERTIFICATE_REQUIRED,
+    ErrClientCertificateRequired,
     #[error("server responded with SRTP Profile we do not support")]
-    ERR_CLIENT_NO_MATCHING_SRTP_PROFILE,
+    ErrClientNoMatchingSrtpProfile,
     #[error("client required Extended Master Secret extension, but server does not support it")]
-    ERR_CLIENT_REQUIRED_BUT_NO_SERVER_EMS,
+    ErrClientRequiredButNoServerEms,
     #[error("server hello can not be created without a compression method")]
-    ERR_COMPRESSION_METHOD_UNSET,
+    ErrCompressionMethodUnset,
     #[error("client+server cookie does not match")]
-    ERR_COOKIE_MISMATCH,
+    ErrCookieMismatch,
     #[error("cookie must not be longer then 255 bytes")]
-    ERR_COOKIE_TOO_LONG,
+    ErrCookieTooLong,
     #[error("PSK Identity Hint provided but PSK is nil")]
-    ERR_IDENTITY_NO_PSK,
+    ErrIdentityNoPsk,
     #[error("no certificate provided")]
-    ERR_INVALID_CERTIFICATE,
+    ErrInvalidCertificate,
     #[error("cipher spec invalid")]
-    ERR_INVALID_CIPHER_SPEC,
+    ErrInvalidCipherSpec,
     #[error("invalid or unknown cipher suite")]
-    ERR_INVALID_CIPHER_SUITE,
+    ErrInvalidCipherSuite,
     #[error("unable to determine if ClientKeyExchange is a public key or PSK Identity")]
-    ERR_INVALID_CLIENT_KEY_EXCHANGE,
+    ErrInvalidClientKeyExchange,
     #[error("invalid or unknown compression method")]
-    ERR_INVALID_COMPRESSION_METHOD,
+    ErrInvalidCompressionMethod,
     #[error("ECDSA signature contained zero or negative values")]
-    ERR_INVALID_ECDSASIGNATURE,
+    ErrInvalidEcdsasignature,
     #[error("invalid or unknown elliptic curve type")]
-    ERR_INVALID_ELLIPTIC_CURVE_TYPE,
+    ErrInvalidEllipticCurveType,
     #[error("invalid extension type")]
-    ERR_INVALID_EXTENSION_TYPE,
+    ErrInvalidExtensionType,
     #[error("invalid hash algorithm")]
-    ERR_INVALID_HASH_ALGORITHM,
+    ErrInvalidHashAlgorithm,
     #[error("invalid named curve")]
-    ERR_INVALID_NAMED_CURVE,
+    ErrInvalidNamedCurve,
     #[error("invalid private key type")]
-    ERR_INVALID_PRIVATE_KEY,
+    ErrInvalidPrivateKey,
     #[error("named curve and private key type does not match")]
-    ERR_NAMED_CURVE_AND_PRIVATE_KEY_MISMATCH,
+    ErrNamedCurveAndPrivateKeyMismatch,
     #[error("invalid server name format")]
-    ERR_INVALID_SNI_FORMAT,
+    ErrInvalidSniFormat,
     #[error("invalid signature algorithm")]
-    ERR_INVALID_SIGNATURE_ALGORITHM,
+    ErrInvalidSignatureAlgorithm,
     #[error("expected and actual key signature do not match")]
-    ERR_KEY_SIGNATURE_MISMATCH,
+    ErrKeySignatureMismatch,
     #[error("Conn can not be created with a nil nextConn")]
-    ERR_NIL_NEXT_CONN,
+    ErrNilNextConn,
     #[error("connection can not be created, no CipherSuites satisfy this Config")]
-    ERR_NO_AVAILABLE_CIPHER_SUITES,
+    ErrNoAvailableCipherSuites,
     #[error("connection can not be created, no SignatureScheme satisfy this Config")]
-    ERR_NO_AVAILABLE_SIGNATURE_SCHEMES,
+    ErrNoAvailableSignatureSchemes,
     #[error("no certificates configured")]
-    ERR_NO_CERTIFICATES,
+    ErrNoCertificates,
     #[error("no config provided")]
-    ERR_NO_CONFIG_PROVIDED,
+    ErrNoConfigProvided,
     #[error("client requested zero or more elliptic curves that are not supported by the server")]
-    ERR_NO_SUPPORTED_ELLIPTIC_CURVES,
+    ErrNoSupportedEllipticCurves,
     #[error("unsupported protocol version")]
-    ERR_UNSUPPORTED_PROTOCOL_VERSION,
+    ErrUnsupportedProtocolVersion,
     #[error("Certificate and PSK provided")]
-    ERR_PSK_AND_CERTIFICATE,
+    ErrPskAndCertificate,
     #[error("PSK and PSK Identity Hint must both be set for client")]
-    ERR_PSK_AND_IDENTITY_MUST_BE_SET_FOR_CLIENT,
+    ErrPskAndIdentityMustBeSetForClient,
     #[error("SRTP support was requested but server did not respond with use_srtp extension")]
-    ERR_REQUESTED_BUT_NO_SRTP_EXTENSION,
+    ErrRequestedButNoSrtpExtension,
     #[error("Certificate is mandatory for server")]
-    ERR_SERVER_MUST_HAVE_CERTIFICATE,
+    ErrServerMustHaveCertificate,
     #[error("client requested SRTP but we have no matching profiles")]
-    ERR_SERVER_NO_MATCHING_SRTP_PROFILE,
+    ErrServerNoMatchingSrtpProfile,
     #[error(
         "server requires the Extended Master Secret extension, but the client does not support it"
     )]
-    ERR_SERVER_REQUIRED_BUT_NO_CLIENT_EMS,
+    ErrServerRequiredButNoClientEms,
     #[error("expected and actual verify data does not match")]
-    ERR_VERIFY_DATA_MISMATCH,
+    ErrVerifyDataMismatch,
     #[error("handshake message unset, unable to marshal")]
-    ERR_HANDSHAKE_MESSAGE_UNSET,
+    ErrHandshakeMessageUnset,
     #[error("invalid flight number")]
-    ERR_INVALID_FLIGHT,
+    ErrInvalidFlight,
     #[error("unable to generate key signature, unimplemented")]
-    ERR_KEY_SIGNATURE_GENERATE_UNIMPLEMENTED,
+    ErrKeySignatureGenerateUnimplemented,
     #[error("unable to verify key signature, unimplemented")]
-    ERR_KEY_SIGNATURE_VERIFY_UNIMPLEMENTED,
+    ErrKeySignatureVerifyUnimplemented,
     #[error("data length and declared length do not match")]
-    ERR_LENGTH_MISMATCH,
+    ErrLengthMismatch,
     #[error("buffer not long enough to contain nonce")]
-    ERR_NOT_ENOUGH_ROOM_FOR_NONCE,
+    ErrNotEnoughRoomForNonce,
     #[error("feature has not been implemented yet")]
-    ERR_NOT_IMPLEMENTED,
+    ErrNotImplemented,
     #[error("sequence number overflow")]
-    ERR_SEQUENCE_NUMBER_OVERFLOW,
+    ErrSequenceNumberOverflow,
     #[error("unable to marshal fragmented handshakes")]
-    ERR_UNABLE_TO_MARSHAL_FRAGMENTED,
+    ErrUnableToMarshalFragmented,
     #[error("invalid state machine transition")]
-    ERR_INVALID_FSM_TRANSITION,
+    ErrInvalidFsmTransition,
     #[error("ApplicationData with epoch of 0")]
-    ERR_APPLICATION_DATA_EPOCH_ZERO,
+    ErrApplicationDataEpochZero,
     #[error("unhandled contentType")]
-    ERR_UNHANDLED_CONTEXT_TYPE,
+    ErrUnhandledContextType,
     #[error("context canceled")]
-    ERR_CONTEXT_CANCELED,
+    ErrContextCanceled,
     #[error("empty fragment")]
-    ERR_EMPTY_FRAGMENT,
+    ErrEmptyFragment,
     #[error("Alert is Fatal or Close Notify")]
-    ERR_ALERT_FATAL_OR_CLOSE,
+    ErrAlertFatalOrClose,
 
-    #[error("Other errors:{0}")]
+    #[error("Other errors: {0}")]
     ErrOthers(String),
+
+    #[error("SrtpError: {0}")]
+    ErrSrtpError(#[from] srtp::error::Error),
 
     #[error("IoError: {0}")]
     ErrIoError(#[from] std::io::Error),

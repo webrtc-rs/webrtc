@@ -324,7 +324,7 @@ impl DTLSConn {
                                 srv_cli_str(is_client),
                                 err
                             );
-                            if err.to_string() == Error::ERR_ALERT_FATAL_OR_CLOSE.to_string() {
+                            if err.to_string() == Error::ErrAlertFatalOrClose.to_string() {
                                 break;
                             }
                         }
@@ -344,7 +344,7 @@ impl DTLSConn {
     // Read reads data from the connection.
     pub async fn read(&mut self, p: &mut [u8], duration: Option<Duration>) -> Result<usize, Error> {
         if !self.is_handshake_completed_successfully() {
-            return Err(Error::ERR_HANDSHAKE_IN_PROGRESS);
+            return Err(Error::ErrHandshakeInProgress);
         }
 
         loop {
@@ -354,7 +354,7 @@ impl DTLSConn {
 
                 tokio::select! {
                     r = self.decrypted_rx.recv() => r,
-                    _ = timer.as_mut() => return Err(Error::ERR_DEADLINE_EXCEEDED),
+                    _ = timer.as_mut() => return Err(Error::ErrDeadlineExceeded),
                 }
             } else {
                 self.decrypted_rx.recv().await
@@ -364,7 +364,7 @@ impl DTLSConn {
                 match out {
                     Ok(val) => {
                         if p.len() < val.len() {
-                            return Err(Error::ERR_BUFFER_TOO_SMALL);
+                            return Err(Error::ErrBufferTooSmall);
                         }
                         p[..val.len()].copy_from_slice(&val);
                         return Ok(val.len());
@@ -380,11 +380,11 @@ impl DTLSConn {
     // Write writes len(p) bytes from p to the DTLS connection
     pub async fn write(&mut self, p: &[u8], duration: Option<Duration>) -> Result<usize, Error> {
         if self.is_connection_closed() {
-            return Err(Error::ERR_CONN_CLOSED);
+            return Err(Error::ErrConnClosed);
         }
 
         if !self.is_handshake_completed_successfully() {
-            return Err(Error::ERR_HANDSHAKE_IN_PROGRESS);
+            return Err(Error::ErrHandshakeInProgress);
         }
 
         let pkts = vec![Packet {
@@ -407,7 +407,7 @@ impl DTLSConn {
                         return Err(err);
                     }
                 }
-                _ = timer.as_mut() => return Err(Error::ERR_DEADLINE_EXCEEDED),
+                _ = timer.as_mut() => return Err(Error::ErrDeadlineExceeded),
             }
         } else {
             self.write_packets(pkts).await?;
@@ -567,7 +567,7 @@ impl DTLSConn {
             // RFC 6347 Section 4.1.0
             // The implementation must either abandon an association or rehandshake
             // prior to allowing the sequence number to wrap.
-            return Err(Error::ERR_SEQUENCE_NUMBER_OVERFLOW);
+            return Err(Error::ErrSequenceNumberOverflow);
         }
         p.record.record_layer_header.sequence_number = seq;
 
@@ -612,7 +612,7 @@ impl DTLSConn {
             };
             //trace!("seq = {}", seq);
             if seq > MAX_SEQUENCE_NUMBER {
-                return Err(Error::ERR_SEQUENCE_NUMBER_OVERFLOW);
+                return Err(Error::ErrSequenceNumberOverflow);
             }
 
             let record_layer_header = RecordLayerHeader {
@@ -748,7 +748,7 @@ impl DTLSConn {
                 if alert.alert_level == AlertLevel::Fatal
                     || alert.alert_description == AlertDescription::CloseNotify
                 {
-                    return Err(Error::ERR_ALERT_FATAL_OR_CLOSE);
+                    return Err(Error::ErrAlertFatalOrClose);
                 }
             }
 
@@ -829,7 +829,7 @@ impl DTLSConn {
                 if alert.alert_level == AlertLevel::Fatal
                     || alert.alert_description == AlertDescription::CloseNotify
                 {
-                    return Err(Error::ERR_ALERT_FATAL_OR_CLOSE);
+                    return Err(Error::ErrAlertFatalOrClose);
                 }
             }
 
@@ -1064,7 +1064,7 @@ impl DTLSConn {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::UnexpectedMessage,
                         }),
-                        Some(Error::ERR_APPLICATION_DATA_EPOCH_ZERO),
+                        Some(Error::ErrApplicationDataEpochZero),
                     );
                 }
 
@@ -1084,7 +1084,7 @@ impl DTLSConn {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::UnexpectedMessage,
                     }),
-                    Some(Error::ERR_UNHANDLED_CONTEXT_TYPE),
+                    Some(Error::ErrUnhandledContextType),
                 );
             }
         };

@@ -80,7 +80,7 @@ impl Flight for Flight3 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::ProtocolVersion,
                         }),
-                        Some(Error::ERR_UNSUPPORTED_PROTOCOL_VERSION),
+                        Some(Error::ErrUnsupportedProtocolVersion),
                     ));
                 }
 
@@ -183,7 +183,7 @@ impl Flight for Flight3 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::ProtocolVersion,
                     }),
-                    Some(Error::ERR_UNSUPPORTED_PROTOCOL_VERSION),
+                    Some(Error::ErrUnsupportedProtocolVersion),
                 ));
             }
 
@@ -201,7 +201,7 @@ impl Flight for Flight3 {
                                         alert_level: AlertLevel::Fatal,
                                         alert_description: AlertDescription::IllegalParameter,
                                     }),
-                                    Some(Error::ERR_CLIENT_NO_MATCHING_SRTP_PROFILE),
+                                    Some(Error::ErrClientNoMatchingSrtpProfile),
                                 ))
                             }
                         };
@@ -224,7 +224,7 @@ impl Flight for Flight3 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::InsufficientSecurity,
                     }),
-                    Some(Error::ERR_CLIENT_REQUIRED_BUT_NO_SERVER_EMS),
+                    Some(Error::ErrClientRequiredButNoServerEms),
                 ));
             }
             if !cfg.local_srtp_protection_profiles.is_empty()
@@ -235,7 +235,7 @@ impl Flight for Flight3 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::InsufficientSecurity,
                     }),
-                    Some(Error::ERR_REQUESTED_BUT_NO_SRTP_EXTENSION),
+                    Some(Error::ErrRequestedButNoSrtpExtension),
                 ));
             }
             if find_matching_cipher_suite(&[h.cipher_suite], &cfg.local_cipher_suites).is_err() {
@@ -244,7 +244,7 @@ impl Flight for Flight3 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::InsufficientSecurity,
                     }),
-                    Some(Error::ERR_CIPHER_SUITE_NO_INTERSECTION),
+                    Some(Error::ErrCipherSuiteNoIntersection),
                 ));
             }
 

@@ -90,14 +90,14 @@ pub(crate) fn unpack_datagram(buf: &[u8]) -> Result<Vec<Vec<u8>>, Error> {
     let mut offset = 0;
     while buf.len() != offset {
         if buf.len() - offset <= RECORD_LAYER_HEADER_SIZE {
-            return Err(Error::ERR_INVALID_PACKET_LENGTH);
+            return Err(Error::ErrInvalidPacketLength);
         }
 
         let pkt_len = RECORD_LAYER_HEADER_SIZE
             + (((buf[offset + RECORD_LAYER_HEADER_SIZE - 2] as usize) << 8)
                 | buf[offset + RECORD_LAYER_HEADER_SIZE - 1] as usize);
         if offset + pkt_len > buf.len() {
-            return Err(Error::ERR_INVALID_PACKET_LENGTH);
+            return Err(Error::ErrInvalidPacketLength);
         }
 
         out.push(buf[offset..offset + pkt_len].to_vec());

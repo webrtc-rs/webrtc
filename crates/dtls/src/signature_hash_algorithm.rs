@@ -148,7 +148,7 @@ pub(crate) fn select_signature_scheme(
         }
     }
 
-    Err(Error::ERR_NO_AVAILABLE_SIGNATURE_SCHEMES)
+    Err(Error::ErrNoAvailableSignatureSchemes)
 }
 
 // SignatureScheme identifies a signature algorithm supported by TLS. See
@@ -192,11 +192,11 @@ pub(crate) fn parse_signature_schemes(
     for ss in sigs {
         let sig: SignatureAlgorithm = ((*ss & 0xFF) as u8).into();
         if sig == SignatureAlgorithm::Unsupported {
-            return Err(Error::ERR_INVALID_SIGNATURE_ALGORITHM);
+            return Err(Error::ErrInvalidSignatureAlgorithm);
         }
         let h: HashAlgorithm = (((*ss >> 8) & 0xFF) as u8).into();
         if h == HashAlgorithm::Unsupported || h.invalid() {
-            return Err(Error::ERR_INVALID_HASH_ALGORITHM);
+            return Err(Error::ErrInvalidHashAlgorithm);
         }
         if h.insecure() && !insecure_hashes {
             continue;
@@ -208,7 +208,7 @@ pub(crate) fn parse_signature_schemes(
     }
 
     if out.is_empty() {
-        Err(Error::ERR_NO_AVAILABLE_SIGNATURE_SCHEMES)
+        Err(Error::ErrNoAvailableSignatureSchemes)
     } else {
         Ok(out)
     }

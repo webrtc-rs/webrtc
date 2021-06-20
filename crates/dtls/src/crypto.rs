@@ -206,7 +206,7 @@ pub(crate) fn verify_key_signature(
     raw_certificates: &[Vec<u8>],
 ) -> Result<(), Error> {
     if raw_certificates.is_empty() {
-        return Err(Error::ERR_LENGTH_MISMATCH);
+        return Err(Error::ErrLengthMismatch);
     }
 
     let (_, certificate) = x509_parser::parse_x509_certificate(&raw_certificates[0])?;
@@ -222,7 +222,7 @@ pub(crate) fn verify_key_signature(
         } else if *sign_alg == oid_registry::OID_SIG_ECDSA_WITH_SHA384 {
             &ring::signature::ECDSA_P384_SHA384_ASN1
         } else {
-            return Err(Error::ERR_KEY_SIGNATURE_VERIFY_UNIMPLEMENTED);
+            return Err(Error::ErrKeySignatureVerifyUnimplemented);
         }
     } else if *pki_alg == oid_registry::OID_PKCS1_RSAENCRYPTION {
         if *sign_alg == oid_registry::OID_PKCS1_SHA1WITHRSA {
@@ -234,10 +234,10 @@ pub(crate) fn verify_key_signature(
         } else if *sign_alg == oid_registry::OID_PKCS1_SHA512WITHRSA {
             &ring::signature::RSA_PKCS1_2048_8192_SHA512
         } else {
-            return Err(Error::ERR_KEY_SIGNATURE_VERIFY_UNIMPLEMENTED);
+            return Err(Error::ErrKeySignatureVerifyUnimplemented);
         }
     } else {
-        return Err(Error::ERR_KEY_SIGNATURE_VERIFY_UNIMPLEMENTED);
+        return Err(Error::ErrKeySignatureVerifyUnimplemented);
     };
 
     let public_key = ring::signature::UnparsedPublicKey::new(
@@ -310,7 +310,7 @@ pub(crate) fn verify_certificate_verify(
 
 pub(crate) fn load_certs(raw_certificates: &[Vec<u8>]) -> Result<Vec<rustls::Certificate>, Error> {
     if raw_certificates.is_empty() {
-        return Err(Error::ERR_LENGTH_MISMATCH);
+        return Err(Error::ErrLengthMismatch);
     }
 
     let mut certs = vec![];

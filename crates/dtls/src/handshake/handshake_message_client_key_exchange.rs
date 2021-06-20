@@ -30,7 +30,7 @@ impl HandshakeMessageClientKeyExchange {
         if (!self.identity_hint.is_empty() && !self.public_key.is_empty())
             || (self.identity_hint.is_empty() && self.public_key.is_empty())
         {
-            return Err(Error::ERR_INVALID_CLIENT_KEY_EXCHANGE);
+            return Err(Error::ErrInvalidClientKeyExchange);
         }
 
         if !self.public_key.is_empty() {
@@ -59,7 +59,7 @@ impl HandshakeMessageClientKeyExchange {
 
         let public_key_length = data[0] as usize;
         if data.len() != public_key_length + 1 {
-            return Err(Error::ERR_BUFFER_TOO_SMALL);
+            return Err(Error::ErrBufferTooSmall);
         }
 
         Ok(HandshakeMessageClientKeyExchange {
