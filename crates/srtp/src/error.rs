@@ -91,4 +91,7 @@ pub enum Error {
     SendU32(#[from] tokio::sync::mpsc::error::SendError<u32>),
     #[error("SendError: {0}")]
     SendStream(#[from] tokio::sync::mpsc::error::SendError<Stream>),
+
+    #[error("Other errors: {0}")]
+    ErrOthers(String),
 }
