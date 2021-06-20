@@ -1,18 +1,22 @@
 use crate::{error::Error, option::*, protection_profile::*};
 
+use async_trait::async_trait;
+
 const LABEL_EXTRACTOR_DTLS_SRTP: &str = "EXTRACTOR-dtls_srtp";
 
 /// KeyingMaterialExporter allows package SRTP to extract keying material
+#[async_trait]
 pub trait KeyingMaterialExporter {
-    fn export_keying_material(
+    async fn export_keying_material(
         &self,
-        label: String,
+        label: &str,
         context: &[u8],
         length: usize,
     ) -> Result<Vec<u8>, Error>;
 }
 
 /// SessionKeys bundles the keys required to setup an SRTP session
+#[derive(Default, Debug, Clone)]
 pub struct SessionKeys {
     pub local_master_key: Vec<u8>,
     pub local_master_salt: Vec<u8>,
@@ -24,6 +28,7 @@ pub struct SessionKeys {
 /// You can provide either a KeyingMaterialExporter to export keys
 /// or directly pass the keys themselves.
 /// After a Config is passed to a session it must not be modified.
+#[derive(Default)]
 pub struct Config {
     pub keys: SessionKeys,
     pub profile: ProtectionProfile,
@@ -42,7 +47,7 @@ impl Config {
     /// ExtractSessionKeysFromDTLS allows setting the Config SessionKeys by
     /// extracting them from DTLS. This behavior is defined in RFC5764:
     /// https://tools.ietf.org/html/rfc5764
-    pub fn extract_session_keys_from_dtls(
+    pub async fn extract_session_keys_from_dtls(
         &mut self,
         exporter: impl KeyingMaterialExporter,
         is_client: bool,
@@ -50,11 +55,13 @@ impl Config {
         let key_len = self.profile.key_len();
         let salt_len = self.profile.salt_len();
 
-        let keying_material = exporter.export_keying_material(
-            LABEL_EXTRACTOR_DTLS_SRTP.to_string(),
-            &[],
-            (key_len * 2) + (salt_len * 2),
-        )?;
+        let keying_material = exporter
+            .export_keying_material(
+                LABEL_EXTRACTOR_DTLS_SRTP,
+                &[],
+                (key_len * 2) + (salt_len * 2),
+            )
+            .await?;
 
         let mut offset = 0;
         let client_write_key = keying_material[offset..offset + key_len].to_vec();

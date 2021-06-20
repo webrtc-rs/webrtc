@@ -6,6 +6,12 @@ pub enum ProtectionProfile {
     AeadAes128Gcm = 0x0007,
 }
 
+impl Default for ProtectionProfile {
+    fn default() -> Self {
+        ProtectionProfile::Aes128CmHmacSha1_80
+    }
+}
+
 impl ProtectionProfile {
     pub(crate) fn key_len(&self) -> usize {
         match *self {

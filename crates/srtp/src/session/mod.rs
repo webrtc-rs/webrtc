@@ -9,6 +9,7 @@ use rtp::packetizer::Marshaller;
 use util::{buffer::*, conn::Conn};
 
 use bytes::{Bytes, BytesMut};
+use std::collections::hash_map::Entry;
 use std::{
     collections::HashMap,
     marker::{Send, Sync},
@@ -152,11 +153,12 @@ impl Session {
         let mut streams = streams_map.lock().await;
 
         for ssrc in ssrcs {
-            if !streams.contains_key(&ssrc) {
+            if let Entry::Vacant(e) = streams.entry(ssrc) {
                 let stream = Stream::new(ssrc, close_stream_tx.clone(), is_rtp);
-                streams.insert(ssrc, stream.get_cloned_buffer());
+                e.insert(stream.get_cloned_buffer());
                 new_stream_tx.send(stream).await?;
             }
+
             match streams.get_mut(&ssrc).unwrap().write(&decrypted).await {
                 Ok(_) => {}
                 Err(err) => {
@@ -176,13 +178,13 @@ impl Session {
     pub async fn listen(&mut self, ssrc: u32) -> Result<Stream, Error> {
         let mut streams = self.streams_map.lock().await;
 
-        if streams.contains_key(&ssrc) {
-            Err(Error::StreamWithSsrcExists(ssrc))
-        } else {
+        if let Entry::Vacant(e) = streams.entry(ssrc) {
             let stream = Stream::new(ssrc, self.close_stream_tx.clone(), self.is_rtp);
-            streams.insert(ssrc, stream.get_cloned_buffer());
+            e.insert(stream.get_cloned_buffer());
 
             Ok(stream)
+        } else {
+            Err(Error::StreamWithSsrcExists(ssrc))
         }
     }
 

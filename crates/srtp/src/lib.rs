@@ -7,6 +7,6 @@ pub mod context;
 pub mod error;
 mod key_derivation;
 pub mod option;
-mod protection_profile;
+pub mod protection_profile;
 pub mod session;
 pub mod stream;
