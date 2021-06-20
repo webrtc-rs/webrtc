@@ -6,13 +6,14 @@ use super::extension::extension_use_srtp::SrtpProtectionProfile;
 use super::handshake::handshake_random::*;
 use super::prf::*;
 
+use srtp::config::KeyingMaterialExporter;
 use util::Error;
 
+use async_trait::async_trait;
 use std::io::{BufWriter, Cursor};
 use std::marker::{Send, Sync};
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::Arc;
-
 use tokio::sync::Mutex;
 
 // State holds the dtls connection state and implements both encoding.BinaryMarshaler and encoding.BinaryUnmarshaler
@@ -241,12 +242,15 @@ impl State {
 
         Ok(())
     }
+}
 
-    // export_keying_material returns length bytes of exported key material in a new
-    // slice as defined in RFC 5705.
-    // This allows protocols to use DTLS for key establishment, but
-    // then use some of the keying material for their own purposes
-    pub async fn export_keying_material(
+#[async_trait]
+impl KeyingMaterialExporter for State {
+    /// export_keying_material returns length bytes of exported key material in a new
+    /// slice as defined in RFC 5705.
+    /// This allows protocols to use DTLS for key establishment, but
+    /// then use some of the keying material for their own purposes
+    async fn export_keying_material(
         &self,
         label: &str,
         context: &[u8],
