@@ -6,7 +6,7 @@ pub mod crypto_ccm;
 pub mod crypto_gcm;
 
 use crate::curve::named_curve::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::record_layer::record_layer_header::*;
 
 use der_parser::{oid, oid::Oid};

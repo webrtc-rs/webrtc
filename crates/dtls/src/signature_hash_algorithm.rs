@@ -4,7 +4,7 @@ mod signature_hash_algorithm_test;
 use std::fmt;
 
 use crate::crypto::*;
-use crate::errors::*;
+use crate::error::*;
 
 use util::Error;
 

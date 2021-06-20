@@ -17,7 +17,7 @@ use util::Error;
 use crate::cipher_suite::CipherSuiteHash;
 use crate::content::ContentType;
 use crate::curve::named_curve::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::record_layer::record_layer_header::ProtocolVersion;
 
 pub(crate) const PRF_MASTER_SECRET_LABEL: &str = "master secret";

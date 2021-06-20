@@ -21,7 +21,7 @@ use std::io::{Read, Write};
 use util::Error;
 
 use super::content::*;
-use super::errors::*;
+use super::error::*;
 
 use handshake_header::*;
 use handshake_message_certificate::*;

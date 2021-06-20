@@ -2,7 +2,7 @@
 mod fragment_buffer_test;
 
 use crate::content::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::handshake::handshake_header::*;
 use crate::record_layer::record_layer_header::*;
 

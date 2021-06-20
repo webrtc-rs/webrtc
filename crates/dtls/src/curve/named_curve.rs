@@ -2,7 +2,7 @@ use rand_core::OsRng; // requires 'getrandom' feature
 
 use util::Error;
 
-use crate::errors::*;
+use crate::error::*;
 
 // https://www.iana.org/assignments/tls-parameters/tls-parameters.xml#tls-parameters-8
 #[derive(Copy, Clone, PartialEq, Debug)]

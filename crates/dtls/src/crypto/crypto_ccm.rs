@@ -16,7 +16,7 @@ use std::io::Cursor;
 
 use super::*;
 use crate::content::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::record_layer::record_layer_header::*;
 
 use aes::Aes128;

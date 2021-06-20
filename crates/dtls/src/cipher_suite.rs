@@ -11,7 +11,7 @@ use std::fmt;
 use std::marker::{Send, Sync};
 
 use super::client_certificate_type::*;
-use super::errors::*;
+use super::error::*;
 use super::record_layer::record_layer_header::*;
 
 use util::Error;

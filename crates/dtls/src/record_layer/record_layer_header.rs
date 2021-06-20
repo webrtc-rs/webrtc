@@ -2,7 +2,7 @@ use crate::content::*;
 
 use util::Error;
 
-use crate::errors::*;
+use crate::error::*;
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::{Read, Write};

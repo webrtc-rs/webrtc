@@ -8,7 +8,7 @@ use byteorder::{ReadBytesExt, WriteBytesExt};
 use util::Error;
 
 use super::content::*;
-use super::errors::*;
+use super::error::*;
 
 // The change cipher spec protocol exists to signal transitions in
 // ciphering strategies.  The protocol consists of a single message,

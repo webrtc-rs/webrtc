@@ -2,7 +2,7 @@ use super::flight0::*;
 use super::flight4::*;
 use super::*;
 use crate::content::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::handshake::handshake_message_hello_verify_request::*;
 use crate::handshake::*;
 use crate::record_layer::record_layer_header::*;

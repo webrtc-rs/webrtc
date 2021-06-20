@@ -11,7 +11,7 @@ use crate::change_cipher_spec::ChangeCipherSpec;
 use crate::handshake::Handshake;
 
 use super::content::*;
-use super::errors::*;
+use super::error::*;
 
 use std::io::{Read, Write};
 

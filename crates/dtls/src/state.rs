@@ -1,7 +1,7 @@
 use super::cipher_suite::*;
 use super::conn::*;
 use super::curve::named_curve::*;
-use super::errors::*;
+use super::error::*;
 use super::extension::extension_use_srtp::SrtpProtectionProfile;
 use super::handshake::handshake_random::*;
 use super::prf::*;
@@ -244,6 +244,7 @@ impl State {
     }
 }
 
+/*TODO:
 #[async_trait]
 impl KeyingMaterialExporter for State {
     /// export_keying_material returns length bytes of exported key material in a new
@@ -292,3 +293,4 @@ impl KeyingMaterialExporter for State {
         }
     }
 }
+ */

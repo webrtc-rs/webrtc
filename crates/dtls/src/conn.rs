@@ -7,7 +7,7 @@ use crate::cipher_suite::*;
 use crate::config::*;
 use crate::content::*;
 use crate::curve::named_curve::NamedCurve;
-use crate::errors::*;
+use crate::error::*;
 use crate::extension::extension_use_srtp::*;
 use crate::flight::flight0::*;
 use crate::flight::flight1::*;

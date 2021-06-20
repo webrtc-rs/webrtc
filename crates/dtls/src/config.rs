@@ -1,6 +1,6 @@
 use crate::cipher_suite::*;
 use crate::crypto::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::extension::extension_use_srtp::SrtpProtectionProfile;
 use crate::handshaker::VerifyPeerCertificateFn;
 use crate::signature_hash_algorithm::SignatureScheme;

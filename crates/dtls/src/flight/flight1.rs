@@ -5,7 +5,7 @@ use crate::config::*;
 use crate::conn::*;
 use crate::content::*;
 use crate::curve::named_curve::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::extension::extension_server_name::*;
 use crate::extension::extension_supported_elliptic_curves::*;
 use crate::extension::extension_supported_point_formats::*;

@@ -12,7 +12,7 @@ use extension_supported_signature_algorithms::*;
 use extension_use_extended_master_secret::*;
 use extension_use_srtp::*;
 
-use crate::errors::*;
+use crate::error::*;
 
 use std::io::{Read, Write};
 

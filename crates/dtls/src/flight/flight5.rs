@@ -4,7 +4,7 @@ use crate::content::*;
 use crate::crypto::*;
 use crate::curve::named_curve::*;
 use crate::curve::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::handshake::handshake_message_certificate::*;
 use crate::handshake::handshake_message_certificate_verify::*;
 use crate::handshake::handshake_message_client_key_exchange::*;

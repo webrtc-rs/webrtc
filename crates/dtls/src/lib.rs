@@ -19,7 +19,7 @@ pub mod conn;
 pub mod content;
 pub mod crypto;
 pub mod curve;
-pub mod errors;
+pub mod error;
 pub mod extension;
 pub mod flight;
 pub mod fragment_buffer;

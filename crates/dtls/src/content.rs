@@ -7,7 +7,7 @@ use std::io::{Read, Write};
 
 use util::Error;
 
-use crate::errors::*;
+use crate::error::*;
 
 // https://tools.ietf.org/html/rfc4346#section-6.2.1
 #[derive(Copy, Clone, PartialEq, Debug)]

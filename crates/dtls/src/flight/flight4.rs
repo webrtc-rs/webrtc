@@ -8,7 +8,7 @@ use crate::content::*;
 use crate::crypto::*;
 use crate::curve::named_curve::*;
 use crate::curve::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::extension::extension_supported_elliptic_curves::*;
 use crate::extension::extension_supported_point_formats::*;
 use crate::extension::extension_use_extended_master_secret::*;
