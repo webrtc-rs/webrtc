@@ -8,6 +8,7 @@ use ice::candidate::{Candidate, CandidateType};
 use crate::ice::ice_candidate::ice_candidate_type::ICECandidateType;
 use crate::ice::ICEParameters;
 use ice::agent::Agent;
+use ice::url::Url;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -35,11 +36,11 @@ pub type OnGatheringCompleteHdlrFn =
 /// exchanged in signaling.
 #[derive(Default, Clone)]
 pub struct ICEGatherer {
-    pub(crate) state: Arc<AtomicU8>, //ICEGathererState,
-
-    pub(crate) validated_servers: Vec<ice::url::Url>,
+    pub(crate) validated_servers: Vec<Url>,
     pub(crate) gather_policy: ICETransportPolicy,
+    pub(crate) setting_engine: SettingEngine,
 
+    pub(crate) state: Arc<AtomicU8>, //ICEGathererState,
     pub(crate) agent: Option<Arc<ice::agent::Agent>>,
 
     pub(crate) on_local_candidate_handler: Arc<Mutex<Option<OnLocalCandidateHdlrFn>>>,
@@ -47,11 +48,23 @@ pub struct ICEGatherer {
 
     // Used for GatheringCompletePromise
     pub(crate) on_gathering_complete_handler: Arc<Mutex<Option<OnGatheringCompleteHdlrFn>>>,
-
-    pub(crate) setting_engine: SettingEngine,
 }
 
 impl ICEGatherer {
+    pub fn new(
+        validated_servers: Vec<Url>,
+        gather_policy: ICETransportPolicy,
+        setting_engine: SettingEngine,
+    ) -> Self {
+        ICEGatherer {
+            gather_policy,
+            validated_servers,
+            setting_engine,
+            state: Arc::new(AtomicU8::new(ICEGathererState::New as u8)),
+            ..Default::default()
+        }
+    }
+
     pub(crate) async fn create_agent(&mut self) -> Result<(), Error> {
         if self.agent.is_some() || self.state() != ICEGathererState::New {
             return Ok(());

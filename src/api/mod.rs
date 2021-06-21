@@ -1,14 +1,11 @@
 use crate::dtls::dtls_transport::DTLSTransport;
 use crate::error::Error;
 use crate::ice::ice_gather::ice_gatherer::ICEGatherer;
-use crate::ice::ice_gather::ice_gatherer_state::ICEGathererState;
 use crate::ice::ice_gather::ICEGatherOptions;
 use crate::ice::ice_transport::ICETransport;
 use dtls::crypto::Certificate;
 use media_engine::*;
 use setting_engine::*;
-use std::sync::atomic::AtomicU8;
-use std::sync::Arc;
 
 pub mod media_engine;
 pub mod setting_engine;
@@ -36,19 +33,17 @@ impl Api {
             }
         }
 
-        Ok(ICEGatherer {
-            state: Arc::new(AtomicU8::new(ICEGathererState::New as u8)),
-            gather_policy: opts.ice_gather_policy,
+        Ok(ICEGatherer::new(
             validated_servers,
-            setting_engine: self.setting_engine.clone(),
-            ..Default::default()
-        })
+            opts.ice_gather_policy,
+            self.setting_engine.clone(),
+        ))
     }
 
     /// new_ice_transport creates a new ice transport.
     /// This constructor is part of the ORTC API. It is not
     /// meant to be used together with the basic WebRTC API.
-    pub fn new_ice_transport(&self, gatherer: Option<ICEGatherer>) -> ICETransport {
+    pub fn new_ice_transport(&self, gatherer: ICEGatherer) -> ICETransport {
         ICETransport::new(gatherer)
     }
 
@@ -57,7 +52,7 @@ impl Api {
     /// meant to be used together with the basic WebRTC API.
     pub fn new_dtls_transport(
         &self,
-        ice_transport: Option<ICETransport>,
+        ice_transport: ICETransport,
         certificates: Vec<Certificate>,
     ) -> Result<DTLSTransport, Error> {
         /*TODO: if !certificates.is_empty() {

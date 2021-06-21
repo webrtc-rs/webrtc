@@ -6,7 +6,7 @@ use super::*;
 /// and received by data channels.
 #[derive(Default)]
 pub struct DTLSTransport {
-    pub(crate) ice_transport: Option<ICETransport>,
+    pub(crate) ice_transport: ICETransport,
     pub(crate) certificates: Vec<Certificate>,
     pub(crate) setting_engine: SettingEngine,
 
@@ -31,7 +31,7 @@ pub struct DTLSTransport {
 
 impl DTLSTransport {
     pub fn new(
-        ice_transport: Option<ICETransport>,
+        ice_transport: ICETransport,
         certificates: Vec<Certificate>,
         setting_engine: SettingEngine,
     ) -> Self {
@@ -50,8 +50,8 @@ impl DTLSTransport {
 
     /// returns the currently-configured ICETransport or None
     /// if one has not been configured
-    pub fn ice_transport(&self) -> Option<&ICETransport> {
-        self.ice_transport.as_ref()
+    pub fn ice_transport(&self) -> &ICETransport {
+        &self.ice_transport
     }
 
     /// state_change requires the caller holds the lock
@@ -196,10 +196,8 @@ impl DTLSTransport {
         };
 
         // Remote was auto and no explicit role was configured via SettingEngine
-        if let Some(ice_transport) = &self.ice_transport {
-            if ice_transport.role() == ICERole::Controlling {
-                return DTLSRole::Server;
-            }
+        if self.ice_transport.role() == ICERole::Controlling {
+            return DTLSRole::Server;
         }
 
         DEFAULT_DTLS_ROLE_ANSWER
@@ -215,10 +213,8 @@ impl DTLSTransport {
             return Err(Error::ErrInvalidDTLSStart);
         }
 
-        if let Some(ice_transport) = &self.ice_transport {
-            self.srtp_endpoint = ice_transport.new_endpoint(Box::new(match_srtp)).await;
-            self.srtcp_endpoint = ice_transport.new_endpoint(Box::new(match_srtcp)).await;
-        }
+        self.srtp_endpoint = self.ice_transport.new_endpoint(Box::new(match_srtp)).await;
+        self.srtcp_endpoint = self.ice_transport.new_endpoint(Box::new(match_srtcp)).await;
         self.remote_parameters = remote_parameters;
 
         let cert = self.certificates[0].clone();
@@ -246,41 +242,36 @@ impl DTLSTransport {
 
     /// start DTLS transport negotiation with the parameters of the remote DTLS transport
     pub async fn start(&mut self, remote_parameters: DTLSParameters) -> Result<(), Error> {
-        let dtls_conn_result = if let Some(ice_transport) = &self.ice_transport {
-            if let Some(dtls_endpoint) = ice_transport.new_endpoint(Box::new(match_dtls)).await {
-                let (role, mut dtls_config) = self.prepare_transport(remote_parameters).await?;
-                if self.setting_engine.replay_protection.dtls != 0 {
-                    dtls_config.replay_protection_window =
-                        self.setting_engine.replay_protection.dtls;
-                }
+        let dtls_conn_result = if let Some(dtls_endpoint) =
+            self.ice_transport.new_endpoint(Box::new(match_dtls)).await
+        {
+            let (role, mut dtls_config) = self.prepare_transport(remote_parameters).await?;
+            if self.setting_engine.replay_protection.dtls != 0 {
+                dtls_config.replay_protection_window = self.setting_engine.replay_protection.dtls;
+            }
 
-                // Connect as DTLS Client/Server, function is blocking and we
-                // must not hold the DTLSTransport lock
-                if role == DTLSRole::Client {
-                    dtls::conn::DTLSConn::new(
-                        dtls_endpoint as Arc<dyn Conn + Send + Sync>,
-                        dtls_config,
-                        true,
-                        None,
-                    )
-                    .await
-                } else {
-                    dtls::conn::DTLSConn::new(
-                        dtls_endpoint as Arc<dyn Conn + Send + Sync>,
-                        dtls_config,
-                        false,
-                        None,
-                    )
-                    .await
-                }
+            // Connect as DTLS Client/Server, function is blocking and we
+            // must not hold the DTLSTransport lock
+            if role == DTLSRole::Client {
+                dtls::conn::DTLSConn::new(
+                    dtls_endpoint as Arc<dyn Conn + Send + Sync>,
+                    dtls_config,
+                    true,
+                    None,
+                )
+                .await
             } else {
-                Err(dtls::error::Error::ErrOthers(
-                    "ice_transport.new_endpoint failed".to_owned(),
-                ))
+                dtls::conn::DTLSConn::new(
+                    dtls_endpoint as Arc<dyn Conn + Send + Sync>,
+                    dtls_config,
+                    false,
+                    None,
+                )
+                .await
             }
         } else {
             Err(dtls::error::Error::ErrOthers(
-                "ice_transport is None".to_owned(),
+                "ice_transport.new_endpoint failed".to_owned(),
             ))
         };
 
@@ -422,14 +413,10 @@ impl DTLSTransport {
     }
 
     pub(crate) fn ensure_ice_conn(&self) -> Result<(), Error> {
-        if let Some(ice_transport) = &self.ice_transport {
-            if ice_transport.state() == ICETransportState::New {
-                Err(Error::ErrICEConnectionNotStarted)
-            } else {
-                Ok(())
-            }
-        } else {
+        if self.ice_transport.state() == ICETransportState::New {
             Err(Error::ErrICEConnectionNotStarted)
+        } else {
+            Ok(())
         }
     }
 
