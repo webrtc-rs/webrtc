@@ -4,33 +4,54 @@ use super::*;
 /// transport over which RTP and RTCP packets are sent and received by
 /// RTPSender and RTPReceiver, as well other data such as SCTP packets sent
 /// and received by data channels.
+#[derive(Default)]
 pub struct DTLSTransport {
-    ice_transport: Option<Arc<ICETransport>>,
-    certificates: Vec<Certificate>,
-    remote_parameters: DTLSParameters,
-    remote_certificate: Bytes,
-    state: DTLSTransportState,
-    srtp_protection_profile: ProtectionProfile,
-    on_state_change_handler: Arc<Mutex<Option<OnStateChangeHdlrFn>>>,
-    conn: Option<DTLSConn>,
+    pub(crate) ice_transport: Option<ICETransport>,
+    pub(crate) certificates: Vec<Certificate>,
+    pub(crate) setting_engine: SettingEngine,
 
-    srtp_session: Option<Session>,
-    srtcp_session: Option<Session>,
-    srtp_endpoint: Option<Arc<Endpoint>>,
-    srtcp_endpoint: Option<Arc<Endpoint>>,
+    pub(crate) remote_parameters: DTLSParameters,
+    pub(crate) remote_certificate: Bytes,
+    pub(crate) state: DTLSTransportState,
+    pub(crate) srtp_protection_profile: ProtectionProfile,
+    pub(crate) on_state_change_handler: Arc<Mutex<Option<OnStateChangeHdlrFn>>>,
+    pub(crate) conn: Option<DTLSConn>,
 
-    simulcast_streams: Vec<Stream>,
-    srtp_ready_tx: Option<mpsc::Sender<()>>,
+    pub(crate) srtp_session: Option<Session>,
+    pub(crate) srtcp_session: Option<Session>,
+    pub(crate) srtp_endpoint: Option<Arc<Endpoint>>,
+    pub(crate) srtcp_endpoint: Option<Arc<Endpoint>>,
 
-    dtls_matcher: MatchFunc,
-    setting_engine: SettingEngine,
+    pub(crate) simulcast_streams: Vec<Stream>,
+    pub(crate) srtp_ready_tx: Option<mpsc::Sender<()>>,
+    pub(crate) srtp_ready_rx: Option<mpsc::Receiver<()>>,
+
+    pub(crate) dtls_matcher: Option<MatchFunc>,
 }
 
 impl DTLSTransport {
+    pub fn new(
+        ice_transport: Option<ICETransport>,
+        certificates: Vec<Certificate>,
+        setting_engine: SettingEngine,
+    ) -> Self {
+        let (srtp_ready_tx, srtp_ready_rx) = mpsc::channel(1);
+        DTLSTransport {
+            ice_transport,
+            certificates,
+            setting_engine,
+            srtp_ready_tx: Some(srtp_ready_tx),
+            srtp_ready_rx: Some(srtp_ready_rx),
+            state: DTLSTransportState::New,
+            dtls_matcher: Some(Box::new(match_dtls)),
+            ..Default::default()
+        }
+    }
+
     /// returns the currently-configured ICETransport or None
     /// if one has not been configured
-    pub fn ice_transport(&self) -> Option<Arc<ICETransport>> {
-        self.ice_transport.clone()
+    pub fn ice_transport(&self) -> Option<&ICETransport> {
+        self.ice_transport.as_ref()
     }
 
     /// state_change requires the caller holds the lock

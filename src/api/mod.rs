@@ -56,19 +56,11 @@ impl Api {
     /// This constructor is part of the ORTC API. It is not
     /// meant to be used together with the basic WebRTC API.
     pub fn new_dtls_transport(
-        _transport: Option<ICETransport>,
-        _certificates: &[Certificate],
+        &self,
+        ice_transport: Option<ICETransport>,
+        certificates: Vec<Certificate>,
     ) -> Result<DTLSTransport, Error> {
-        /*TODO: t := &DTLSTransport{
-            ice_transport: transport,
-            api:          api,
-            state:        DTLSTransportStateNew,
-            dtls_matcher:  mux.MatchDTLS,
-            srtp_ready:    make(chan struct{}),
-            log:          api.settingEngine.LoggerFactory.NewLogger("DTLSTransport"),
-        }
-
-        if len(certificates) > 0 {
+        /*TODO: if !certificates.is_empty() {
             now := time.Now()
             for _, x509Cert := range certificates {
                 if !x509Cert.Expires().IsZero() && now.After(x509Cert.Expires()) {
@@ -86,12 +78,13 @@ impl Api {
                 return nil, err
             }
             t.certificates = []Certificate{*certificate}
-        }
+        }*/
 
-        return t, nil
-
-         */
-        Err(Error::ErrCertificateExpired)
+        Ok(DTLSTransport::new(
+            ice_transport,
+            certificates,
+            self.setting_engine.clone(),
+        ))
     }
 }
 
