@@ -26,7 +26,8 @@ pub struct State {
     pub(crate) cipher_suite: Arc<Mutex<Option<Box<dyn CipherSuite + Send + Sync>>>>, // nil if a cipher_suite hasn't been chosen
 
     pub(crate) srtp_protection_profile: SrtpProtectionProfile, // Negotiated srtp_protection_profile
-    pub(crate) peer_certificates: Vec<Vec<u8>>,
+    pub peer_certificates: Vec<Vec<u8>>,
+    pub identity_hint: Vec<u8>,
 
     pub(crate) is_client: bool,
 
@@ -58,6 +59,7 @@ struct SerializedState {
     sequence_number: u64,
     srtp_protection_profile: u16,
     peer_certificates: Vec<Vec<u8>>,
+    identity_hint: Vec<u8>,
     is_client: bool,
 }
 
@@ -74,6 +76,7 @@ impl Default for State {
 
             srtp_protection_profile: SrtpProtectionProfile::Unsupported, // Negotiated srtp_protection_profile
             peer_certificates: vec![],
+            identity_hint: vec![],
 
             is_client: false,
 
@@ -149,6 +152,7 @@ impl State {
             sequence_number,
             srtp_protection_profile: self.srtp_protection_profile as u16,
             peer_certificates: self.peer_certificates.clone(),
+            identity_hint: self.identity_hint.clone(),
             is_client: self.is_client,
         })
     }
@@ -188,6 +192,7 @@ impl State {
 
         // Set remote certificate
         self.peer_certificates = serialized.peer_certificates.clone();
+        self.identity_hint = serialized.identity_hint.clone();
 
         Ok(())
     }

@@ -398,6 +398,7 @@ pub(crate) fn handle_server_key_exchange(
             }
         };
 
+        state.identity_hint = h.identity_hint.clone();
         state.pre_master_secret = prf_psk_pre_master_secret(&psk);
     } else {
         let local_keypair = match h.named_curve.generate_keypair() {

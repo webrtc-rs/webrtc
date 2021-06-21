@@ -154,7 +154,7 @@ pub(crate) fn select_signature_scheme(
 // SignatureScheme identifies a signature algorithm supported by TLS. See
 // RFC 8446, Section 4.2.3.
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub(crate) enum SignatureScheme {
+pub enum SignatureScheme {
     // RSASSA-PKCS1-v1_5 algorithms.
     Pkcs1WithSha256 = 0x0401,
     Pkcs1WithSha384 = 0x0501,

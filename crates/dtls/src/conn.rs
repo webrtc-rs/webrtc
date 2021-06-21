@@ -432,17 +432,14 @@ impl DTLSConn {
         Ok(())
     }
 
-    // ConnectionState returns basic DTLS details about the connection.
-    // Note that this replaced the `Export` function of v1.
+    /// connection_state returns basic DTLS details about the connection.
+    /// Note that this replaced the `Export` function of v1.
     pub async fn connection_state(&self) -> State {
         self.state.clone().await
     }
 
-    // selected_srtpprotection_profile returns the selected SRTPProtectionProfile
+    /// selected_srtpprotection_profile returns the selected SRTPProtectionProfile
     pub fn selected_srtpprotection_profile(&self) -> SrtpProtectionProfile {
-        //c.lock.RLock()
-        //defer c.lock.RUnlock()
-
         self.state.srtp_protection_profile
     }
 

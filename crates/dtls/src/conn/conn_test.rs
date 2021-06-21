@@ -566,6 +566,13 @@ async fn test_psk() -> Result<(), Error> {
 
         let mut server = create_test_server(Arc::new(cb), config, false).await?;
 
+        let actual_psk_identity_hint = &server.connection_state().await.identity_hint;
+        assert_eq!(
+            actual_psk_identity_hint, client_identity,
+            "TestPSK: Server ClientPSKIdentity Mismatch '{}': expected({:?}) actual({:?})",
+            name, client_identity, actual_psk_identity_hint,
+        );
+
         if let Some(result) = client_res_rx.recv().await {
             if let Ok(mut client) = result {
                 client.close().await?;

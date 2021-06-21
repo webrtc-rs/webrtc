@@ -293,6 +293,7 @@ impl Flight for Flight4 {
                             }
                         };
 
+                        state.identity_hint = client_key_exchange.identity_hint.clone();
                         pre_master_secret = prf_psk_pre_master_secret(&psk);
                     } else if let Some(local_keypair) = &state.local_keypair {
                         pre_master_secret = match prf_pre_master_secret(
