@@ -316,6 +316,8 @@ pub enum Error {
     ErrRtpError(#[from] rtp::error::Error),
     #[error("SrtpError: {0}")]
     ErrSrtpError(#[from] srtp::error::Error),
+    #[error("DtlsError: {0}")]
+    ErrDtlsError(#[from] dtls::error::Error),
 
     #[error("Other errors: {0}")]
     ErrOthers(String),

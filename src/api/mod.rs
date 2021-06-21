@@ -1,4 +1,4 @@
-use crate::dtls::DTLSTransport;
+use crate::dtls::dtls_transport::DTLSTransport;
 use crate::error::Error;
 use crate::ice::ice_gather::ice_gatherer::ICEGatherer;
 use crate::ice::ice_gather::ice_gatherer_state::ICEGathererState;
