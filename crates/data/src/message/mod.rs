@@ -1,18 +1,31 @@
-use bytes::{Buf, BufMut};
+pub mod message_type;
 
-use crate::{
-    error::MessageError,
-    marshal::{Marshal, MarshalSize, Unmarshal},
-};
+use anyhow::Result;
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 
-mod data_channel_ack;
-mod data_channel_open;
-mod message_type;
+pub trait MarshalSize {
+    fn marshal_size(&self) -> usize;
+}
 
-pub use data_channel_ack::DataChannelAck;
-pub use data_channel_open::DataChannelOpen;
-pub use message_type::MessageType;
+pub trait Marshal: MarshalSize {
+    fn marshal_to<B>(&self, buf: &mut B) -> Result<usize>
+    where
+        B: BufMut;
 
+    fn marshal(&self) -> Result<Bytes> {
+        let mut buf = BytesMut::with_capacity(self.marshal_size());
+        let _ = self.marshal_to(&mut buf)?;
+        Ok(buf.freeze())
+    }
+}
+
+pub trait Unmarshal: Sized + MarshalSize {
+    fn unmarshal<B>(buf: &mut B) -> Result<Self>
+    where
+        B: Buf;
+}
+
+/*
 // A parsed DataChannel message
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub enum Message {
@@ -34,13 +47,11 @@ impl MarshalSize for Message {
 }
 
 impl Unmarshal for Message {
-    type Error = MessageError;
-
-    fn unmarshal_from<B>(buf: &mut B) -> Result<Self, Self::Error>
+    fn unmarshal<B>(buf: &mut B) -> Result<Self>
     where
         B: Buf,
     {
-        match MessageType::unmarshal_from(buf)? {
+        match MessageType::unmarshal(buf)? {
             MessageType::DataChannelAck => Ok(Self::DataChannelAck),
             MessageType::DataChannelOpen => {
                 let info = DataChannelOpen::unmarshal_from(buf)?;
@@ -51,9 +62,7 @@ impl Unmarshal for Message {
 }
 
 impl Marshal for Message {
-    type Error = MessageError;
-
-    fn marshal_to<B>(&self, buf: &mut B) -> Result<usize, Self::Error>
+    fn marshal_to<B>(&self, buf: &mut B) -> Result<usize>
     where
         B: BufMut,
     {
@@ -177,3 +186,4 @@ mod tests {
         assert_eq!(actual, expected);
     }
 }
+*/
