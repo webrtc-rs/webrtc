@@ -1,9 +1,4 @@
-use bytes::{Buf, BufMut};
-
-use crate::{
-    error::DataChannelAckError,
-    marshal::{Marshal, MarshalSize, Unmarshal},
-};
+use super::*;
 
 /// The data-part of an data-channel OPEN message without the message type.
 ///
@@ -17,18 +12,16 @@ use crate::{
 ///+-+-+-+-+-+-+-+-+
 /// ```
 #[derive(Eq, PartialEq, Clone, Debug)]
-pub struct DataChannelAck;
+pub struct MessageChannelAck;
 
-impl MarshalSize for DataChannelAck {
+impl MarshalSize for MessageChannelAck {
     fn marshal_size(&self) -> usize {
         0
     }
 }
 
-impl Unmarshal for DataChannelAck {
-    type Error = DataChannelAckError;
-
-    fn unmarshal_from<B>(_buf: &mut B) -> Result<Self, Self::Error>
+impl Unmarshal for MessageChannelAck {
+    fn unmarshal<B>(_buf: &mut B) -> Result<Self>
     where
         B: Buf,
     {
@@ -36,10 +29,8 @@ impl Unmarshal for DataChannelAck {
     }
 }
 
-impl Marshal for DataChannelAck {
-    type Error = DataChannelAckError;
-
-    fn marshal_to<B>(&self, _buf: &mut B) -> Result<usize, Self::Error>
+impl Marshal for MessageChannelAck {
+    fn marshal_to<B>(&self, _buf: &mut B) -> Result<usize>
     where
         B: BufMut,
     {
@@ -49,37 +40,36 @@ impl Marshal for DataChannelAck {
 
 #[cfg(test)]
 mod tests {
-    use bytes::{Bytes, BytesMut};
-
     use super::*;
 
     #[test]
-    fn unmarshal() {
+    fn unmarshal() -> Result<()> {
         let mut bytes = Bytes::from_static(&[]);
 
-        let data_channel_ack = DataChannelAck::unmarshal_from(&mut bytes).unwrap();
+        let channel_ack = MessageChannelAck::unmarshal(&mut bytes)?;
 
-        assert_eq!(data_channel_ack, DataChannelAck);
+        assert_eq!(channel_ack, MessageChannelAck);
+        Ok(())
     }
 
     #[test]
-    fn marshal_size() {
-        let data_channel_ack = DataChannelAck;
-
-        let marshal_size = data_channel_ack.marshal_size();
+    fn marshal_size() -> Result<()> {
+        let channel_ack = MessageChannelAck;
+        let marshal_size = channel_ack.marshal_size();
 
         assert_eq!(marshal_size, 0);
+        Ok(())
     }
 
     #[test]
-    fn marshal() {
-        let data_channel_ack = DataChannelAck;
-
+    fn marshal() -> Result<()> {
+        let channel_ack = MessageChannelAck;
         let mut buf = BytesMut::with_capacity(0);
-        let bytes_written = data_channel_ack.marshal_to(&mut buf).unwrap();
+        let bytes_written = channel_ack.marshal_to(&mut buf)?;
         let bytes = buf.freeze();
 
-        assert_eq!(bytes_written, data_channel_ack.marshal_size());
+        assert_eq!(bytes_written, channel_ack.marshal_size());
         assert_eq!(&bytes[..], &[]);
+        Ok(())
     }
 }
