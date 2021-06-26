@@ -1,6 +1,6 @@
 use super::*;
 
-/// The data-part of an data-channel OPEN message without the message type.
+/// The data-part of an data-channel ACK message without the message type.
 ///
 /// # Memory layout
 ///

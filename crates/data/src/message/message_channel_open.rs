@@ -1,4 +1,6 @@
+use super::channel_type::*;
 use super::*;
+use crate::error::Error;
 
 const CHANNEL_OPEN_HEADER_LEN: usize = 11;
 
@@ -50,13 +52,14 @@ impl Unmarshal for MessageChannelOpen {
     {
         let required_len = CHANNEL_OPEN_HEADER_LEN;
         if buf.remaining() < required_len {
-            return Err(Self::Error::UnexpectedEndOfBuffer {
+            return Err(Error::UnexpectedEndOfBuffer {
                 expected: required_len,
                 actual: buf.remaining(),
-            });
+            }
+            .into());
         }
 
-        let channel_type = ChannelType::unmarshal_from(buf)?;
+        let channel_type = ChannelType::unmarshal(buf)?;
         let priority = buf.get_u16();
         let reliability_parameter = buf.get_u32();
         let label_len = buf.get_u16() as usize;
@@ -64,10 +67,11 @@ impl Unmarshal for MessageChannelOpen {
 
         let required_len = label_len + protocol_len;
         if buf.remaining() < required_len {
-            return Err(Self::Error::ExpectedAndActualLengthMismatch {
+            return Err(Error::UnexpectedEndOfBuffer {
                 expected: required_len,
                 actual: buf.remaining(),
-            });
+            }
+            .into());
         }
 
         let mut label = vec![0; label_len];
@@ -93,10 +97,11 @@ impl Marshal for MessageChannelOpen {
     {
         let required_len = self.marshal_size();
         if buf.remaining_mut() < required_len {
-            return Err(Self::Error::UnexpectedEndOfBuffer {
+            return Err(Error::UnexpectedEndOfBuffer {
                 expected: required_len,
                 actual: buf.remaining_mut(),
-            });
+            }
+            .into());
         }
 
         self.channel_type.marshal_to(buf)?;
@@ -112,10 +117,6 @@ impl Marshal for MessageChannelOpen {
 
 #[cfg(test)]
 mod tests {
-    use bytes::{Bytes, BytesMut};
-
-    use crate::error::ChannelTypeError;
-
     use super::*;
 
     static MARSHALED_BYTES: [u8; 24] = [
@@ -129,20 +130,21 @@ mod tests {
     ];
 
     #[test]
-    fn unmarshal_success() {
+    fn unmarshal_success() -> Result<()> {
         let mut bytes = Bytes::from_static(&MARSHALED_BYTES);
 
-        let data_channel_open = MessageChannelOpen::unmarshal_from(&mut bytes).unwrap();
+        let channel_open = MessageChannelOpen::unmarshal(&mut bytes)?;
 
-        assert_eq!(data_channel_open.channel_type, ChannelType::Reliable);
-        assert_eq!(data_channel_open.priority, 3893);
-        assert_eq!(data_channel_open.reliability_parameter, 16715573);
-        assert_eq!(data_channel_open.label, b"label");
-        assert_eq!(data_channel_open.protocol, b"protocol");
+        assert_eq!(channel_open.channel_type, ChannelType::Reliable);
+        assert_eq!(channel_open.priority, 3893);
+        assert_eq!(channel_open.reliability_parameter, 16715573);
+        assert_eq!(channel_open.label, b"label");
+        assert_eq!(channel_open.protocol, b"protocol");
+        Ok(())
     }
 
     #[test]
-    fn unmarshal_invalid_channel_type() {
+    fn unmarshal_invalid_channel_type() -> Result<()> {
         let mut bytes = Bytes::from_static(&[
             0x11, // channel type
             0x0f, 0x35, // priority
@@ -150,30 +152,54 @@ mod tests {
             0x00, 0x05, // label length
             0x00, 0x08, // protocol length
         ]);
-        let result = MessageChannelOpen::unmarshal_from(&mut bytes);
-        assert_eq!(
-            result,
-            Err(DataChannelOpenError::ChannelType(
-                ChannelTypeError::InvalidChannelType { invalid_type: 0x11 }
-            ))
-        );
+        match MessageChannelOpen::unmarshal(&mut bytes) {
+            Ok(_) => assert!(false, "expected Error, but got Ok"),
+            Err(err) => {
+                if let Some(err) = err.downcast_ref::<Error>() {
+                    match err {
+                        &Error::InvalidChannelType(0x11) => return Ok(()),
+                        _ => {}
+                    };
+                }
+                assert!(
+                    false,
+                    "unexpected err {:?}, want {:?}",
+                    err,
+                    Error::InvalidMessageType(0x01)
+                );
+            }
+        }
+        Ok(())
     }
 
     #[test]
-    fn unmarshal_unexpected_end_of_buffer() {
+    fn unmarshal_unexpected_end_of_buffer() -> Result<()> {
         let mut bytes = Bytes::from_static(&[0x00; 5]);
-        let result = MessageChannelOpen::unmarshal_from(&mut bytes);
-        assert_eq!(
-            result,
-            Err(DataChannelOpenError::UnexpectedEndOfBuffer {
-                expected: 11,
-                actual: 5
-            })
-        );
+        match MessageChannelOpen::unmarshal(&mut bytes) {
+            Ok(_) => assert!(false, "expected Error, but got Ok"),
+            Err(err) => {
+                if let Some(err) = err.downcast_ref::<Error>() {
+                    match err {
+                        &Error::UnexpectedEndOfBuffer {
+                            expected: 11,
+                            actual: 5,
+                        } => return Ok(()),
+                        _ => {}
+                    };
+                }
+                assert!(
+                    false,
+                    "unexpected err {:?}, want {:?}",
+                    err,
+                    Error::InvalidMessageType(0x01)
+                );
+            }
+        }
+        Ok(())
     }
 
     #[test]
-    fn unmarshal_unexpected_length_mismatch() {
+    fn unmarshal_unexpected_length_mismatch() -> Result<()> {
         let mut bytes = Bytes::from_static(&[
             0x01, // channel type
             0x00, 0x00, // priority
@@ -181,19 +207,32 @@ mod tests {
             0x00, 0x05, // Label length
             0x00, 0x08, // Protocol length
         ]);
-        let result = MessageChannelOpen::unmarshal_from(&mut bytes);
-        assert_eq!(
-            result,
-            Err(DataChannelOpenError::ExpectedAndActualLengthMismatch {
-                expected: 5 + 8,
-                actual: 0
-            })
-        );
+        match MessageChannelOpen::unmarshal(&mut bytes) {
+            Ok(_) => assert!(false, "expected Error, but got Ok"),
+            Err(err) => {
+                if let Some(err) = err.downcast_ref::<Error>() {
+                    match err {
+                        &Error::UnexpectedEndOfBuffer {
+                            expected: 13,
+                            actual: 0,
+                        } => return Ok(()),
+                        _ => {}
+                    };
+                }
+                assert!(
+                    false,
+                    "unexpected err {:?}, want {:?}",
+                    err,
+                    Error::InvalidMessageType(0x01)
+                );
+            }
+        }
+        Ok(())
     }
 
     #[test]
-    fn marshal_size() {
-        let data_channel_open = MessageChannelOpen {
+    fn marshal_size() -> Result<()> {
+        let channel_open = MessageChannelOpen {
             channel_type: ChannelType::Reliable,
             priority: 3893,
             reliability_parameter: 16715573,
@@ -201,14 +240,15 @@ mod tests {
             protocol: b"protocol".iter().cloned().collect(),
         };
 
-        let marshal_size = data_channel_open.marshal_size();
+        let marshal_size = channel_open.marshal_size();
 
         assert_eq!(marshal_size, 11 + 5 + 8);
+        Ok(())
     }
 
     #[test]
-    fn marshal() {
-        let data_channel_open = MessageChannelOpen {
+    fn marshal() -> Result<()> {
+        let channel_open = MessageChannelOpen {
             channel_type: ChannelType::Reliable,
             priority: 3893,
             reliability_parameter: 16715573,
@@ -217,10 +257,11 @@ mod tests {
         };
 
         let mut buf = BytesMut::with_capacity(11 + 5 + 8);
-        let bytes_written = data_channel_open.marshal_to(&mut buf).unwrap();
+        let bytes_written = channel_open.marshal_to(&mut buf).unwrap();
         let bytes = buf.freeze();
 
-        assert_eq!(bytes_written, data_channel_open.marshal_size());
+        assert_eq!(bytes_written, channel_open.marshal_size());
         assert_eq!(&bytes[..], &MARSHALED_BYTES);
+        Ok(())
     }
 }

@@ -1,6 +1,6 @@
-pub mod message_channel_ack;
-//pub mod message_channel_open;
 pub mod channel_type;
+pub mod message_channel_ack;
+pub mod message_channel_open;
 pub mod message_type;
 
 use anyhow::Result;
