@@ -1,10 +1,4 @@
-use bytes::{Buf, BufMut};
-
-use crate::{
-    channel_type::ChannelType,
-    error::DataChannelOpenError,
-    marshal::{Marshal, MarshalSize, Unmarshal},
-};
+use super::*;
 
 const CHANNEL_OPEN_HEADER_LEN: usize = 11;
 
@@ -32,7 +26,7 @@ const CHANNEL_OPEN_HEADER_LEN: usize = 11;
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 /// ```
 #[derive(Eq, PartialEq, Clone, Debug)]
-pub struct DataChannelOpen {
+pub struct MessageChannelOpen {
     pub channel_type: ChannelType,
     pub priority: u16,
     pub reliability_parameter: u32,
@@ -40,7 +34,7 @@ pub struct DataChannelOpen {
     pub protocol: Vec<u8>,
 }
 
-impl MarshalSize for DataChannelOpen {
+impl MarshalSize for MessageChannelOpen {
     fn marshal_size(&self) -> usize {
         let label_len = self.label.len();
         let protocol_len = self.protocol.len();
@@ -49,10 +43,8 @@ impl MarshalSize for DataChannelOpen {
     }
 }
 
-impl Unmarshal for DataChannelOpen {
-    type Error = DataChannelOpenError;
-
-    fn unmarshal_from<B>(buf: &mut B) -> Result<Self, Self::Error>
+impl Unmarshal for MessageChannelOpen {
+    fn unmarshal<B>(buf: &mut B) -> Result<Self>
     where
         B: Buf,
     {
@@ -94,10 +86,8 @@ impl Unmarshal for DataChannelOpen {
     }
 }
 
-impl Marshal for DataChannelOpen {
-    type Error = DataChannelOpenError;
-
-    fn marshal_to<B>(&self, buf: &mut B) -> Result<usize, Self::Error>
+impl Marshal for MessageChannelOpen {
+    fn marshal_to<B>(&self, buf: &mut B) -> Result<usize>
     where
         B: BufMut,
     {
@@ -142,7 +132,7 @@ mod tests {
     fn unmarshal_success() {
         let mut bytes = Bytes::from_static(&MARSHALED_BYTES);
 
-        let data_channel_open = DataChannelOpen::unmarshal_from(&mut bytes).unwrap();
+        let data_channel_open = MessageChannelOpen::unmarshal_from(&mut bytes).unwrap();
 
         assert_eq!(data_channel_open.channel_type, ChannelType::Reliable);
         assert_eq!(data_channel_open.priority, 3893);
@@ -160,7 +150,7 @@ mod tests {
             0x00, 0x05, // label length
             0x00, 0x08, // protocol length
         ]);
-        let result = DataChannelOpen::unmarshal_from(&mut bytes);
+        let result = MessageChannelOpen::unmarshal_from(&mut bytes);
         assert_eq!(
             result,
             Err(DataChannelOpenError::ChannelType(
@@ -172,7 +162,7 @@ mod tests {
     #[test]
     fn unmarshal_unexpected_end_of_buffer() {
         let mut bytes = Bytes::from_static(&[0x00; 5]);
-        let result = DataChannelOpen::unmarshal_from(&mut bytes);
+        let result = MessageChannelOpen::unmarshal_from(&mut bytes);
         assert_eq!(
             result,
             Err(DataChannelOpenError::UnexpectedEndOfBuffer {
@@ -191,7 +181,7 @@ mod tests {
             0x00, 0x05, // Label length
             0x00, 0x08, // Protocol length
         ]);
-        let result = DataChannelOpen::unmarshal_from(&mut bytes);
+        let result = MessageChannelOpen::unmarshal_from(&mut bytes);
         assert_eq!(
             result,
             Err(DataChannelOpenError::ExpectedAndActualLengthMismatch {
@@ -203,7 +193,7 @@ mod tests {
 
     #[test]
     fn marshal_size() {
-        let data_channel_open = DataChannelOpen {
+        let data_channel_open = MessageChannelOpen {
             channel_type: ChannelType::Reliable,
             priority: 3893,
             reliability_parameter: 16715573,
@@ -218,7 +208,7 @@ mod tests {
 
     #[test]
     fn marshal() {
-        let data_channel_open = DataChannelOpen {
+        let data_channel_open = MessageChannelOpen {
             channel_type: ChannelType::Reliable,
             priority: 3893,
             reliability_parameter: 16715573,

@@ -11,4 +11,6 @@ pub enum Error {
     UnexpectedEndOfBuffer { expected: usize, actual: usize },
     #[error("Unknown MessageType {0}")]
     InvalidMessageType(u8),
+    #[error("Unknown ChannelType {0}")]
+    InvalidChannelType(u8),
 }

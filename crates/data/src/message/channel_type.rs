@@ -1,9 +1,5 @@
-use bytes::{Buf, BufMut};
-
-use crate::{
-    error::ChannelTypeError,
-    marshal::{Marshal, MarshalSize, Unmarshal},
-};
+use super::*;
+use crate::error::Error;
 
 const CHANNEL_TYPE_RELIABLE: u8 = 0x00;
 const CHANNEL_TYPE_RELIABLE_UNORDERED: u8 = 0x80;
@@ -11,7 +7,6 @@ const CHANNEL_TYPE_PARTIAL_RELIABLE_REXMIT: u8 = 0x01;
 const CHANNEL_TYPE_PARTIAL_RELIABLE_REXMIT_UNORDERED: u8 = 0x81;
 const CHANNEL_TYPE_PARTIAL_RELIABLE_TIMED: u8 = 0x02;
 const CHANNEL_TYPE_PARTIAL_RELIABLE_TIMED_UNORDERED: u8 = 0x82;
-
 const CHANNEL_TYPE_LEN: usize = 1;
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
@@ -56,19 +51,18 @@ impl MarshalSize for ChannelType {
 }
 
 impl Unmarshal for ChannelType {
-    type Error = ChannelTypeError;
-
-    fn unmarshal_from<B>(buf: &mut B) -> Result<Self, Self::Error>
+    fn unmarshal<B>(buf: &mut B) -> Result<Self>
     where
         Self: Sized,
         B: Buf,
     {
         let required_len = CHANNEL_TYPE_LEN;
         if buf.remaining() < required_len {
-            return Err(Self::Error::UnexpectedEndOfBuffer {
+            return Err(Error::UnexpectedEndOfBuffer {
                 expected: required_len,
                 actual: buf.remaining(),
-            });
+            }
+            .into());
         }
 
         let b0 = buf.get_u8();
@@ -84,24 +78,23 @@ impl Unmarshal for ChannelType {
             CHANNEL_TYPE_PARTIAL_RELIABLE_TIMED_UNORDERED => {
                 Ok(Self::PartialReliableTimedUnordered)
             }
-            _ => Err(Self::Error::InvalidChannelType { invalid_type: b0 }),
+            _ => Err(Error::InvalidChannelType(b0).into()),
         }
     }
 }
 
 impl Marshal for ChannelType {
-    type Error = ChannelTypeError;
-
-    fn marshal_to<B>(&self, buf: &mut B) -> Result<usize, Self::Error>
+    fn marshal_to<B>(&self, buf: &mut B) -> Result<usize>
     where
         B: BufMut,
     {
         let required_len = self.marshal_size();
         if buf.remaining_mut() < required_len {
-            return Err(Self::Error::UnexpectedEndOfBuffer {
+            return Err(Error::UnexpectedEndOfBuffer {
                 expected: required_len,
                 actual: buf.remaining_mut(),
-            });
+            }
+            .into());
         }
 
         let byte = match self {
@@ -121,58 +114,85 @@ impl Marshal for ChannelType {
 
 #[cfg(test)]
 mod tests {
-    use bytes::{Bytes, BytesMut};
-
     use super::*;
 
     #[test]
-    fn unmarshal_success() {
+    fn unmarshal_success() -> Result<()> {
         let mut bytes = Bytes::from_static(&[0x00]);
-        let channel_type = ChannelType::unmarshal_from(&mut bytes).unwrap();
+        let channel_type = ChannelType::unmarshal(&mut bytes)?;
+
         assert_eq!(channel_type, ChannelType::Reliable);
+        Ok(())
     }
 
     #[test]
-    fn unmarshal_invalid_channel_type() {
+    fn unmarshal_invalid_channel_type() -> Result<()> {
         let mut bytes = Bytes::from_static(&[0x11]);
-        let result = ChannelType::unmarshal_from(&mut bytes);
-        assert_eq!(
-            result,
-            Err(ChannelTypeError::InvalidChannelType { invalid_type: 0x11 })
-        );
+        match ChannelType::unmarshal(&mut bytes) {
+            Ok(_) => assert!(false, "expected Error, but got Ok"),
+            Err(err) => {
+                if let Some(err) = err.downcast_ref::<Error>() {
+                    match err {
+                        &Error::InvalidChannelType(0x11) => return Ok(()),
+                        _ => {}
+                    };
+                }
+                assert!(
+                    false,
+                    "unexpected err {:?}, want {:?}",
+                    err,
+                    Error::InvalidMessageType(0x01)
+                );
+            }
+        }
+        Ok(())
     }
 
     #[test]
-    fn unmarshal_unexpected_end_of_buffer() {
+    fn unmarshal_unexpected_end_of_buffer() -> Result<()> {
         let mut bytes = Bytes::from_static(&[]);
-        let result = ChannelType::unmarshal_from(&mut bytes);
-        assert_eq!(
-            result,
-            Err(ChannelTypeError::UnexpectedEndOfBuffer {
-                expected: 1,
-                actual: 0
-            })
-        );
+        match ChannelType::unmarshal(&mut bytes) {
+            Ok(_) => assert!(false, "expected Error, but got Ok"),
+            Err(err) => {
+                if let Some(err) = err.downcast_ref::<Error>() {
+                    match err {
+                        &Error::UnexpectedEndOfBuffer {
+                            expected: 1,
+                            actual: 0,
+                        } => return Ok(()),
+                        _ => {}
+                    };
+                }
+                assert!(
+                    false,
+                    "unexpected err {:?}, want {:?}",
+                    err,
+                    Error::InvalidMessageType(0x01)
+                );
+            }
+        }
+
+        Ok(())
     }
 
     #[test]
-    fn marshal_size() {
+    fn marshal_size() -> Result<()> {
         let channel_type = ChannelType::Reliable;
-
         let marshal_size = channel_type.marshal_size();
 
         assert_eq!(marshal_size, 1);
+        Ok(())
     }
 
     #[test]
-    fn marshal() {
+    fn marshal() -> Result<()> {
         let mut buf = BytesMut::with_capacity(1);
         let channel_type = ChannelType::Reliable;
-
-        let bytes_written = channel_type.marshal_to(&mut buf).unwrap();
+        let bytes_written = channel_type.marshal_to(&mut buf)?;
         assert_eq!(bytes_written, channel_type.marshal_size());
 
         let bytes = buf.freeze();
         assert_eq!(&bytes[..], &[0x00]);
+        Ok(())
     }
 }
