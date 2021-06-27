@@ -32,7 +32,7 @@ impl ResourceBody for SrvResource {
         mut msg: Vec<u8>,
         _compression: &mut Option<HashMap<String, usize>>,
         compression_off: usize,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Vec<u8>> {
         msg = pack_uint16(msg, self.priority);
         msg = pack_uint16(msg, self.weight);
         msg = pack_uint16(msg, self.port);
@@ -40,7 +40,7 @@ impl ResourceBody for SrvResource {
         Ok(msg)
     }
 
-    fn unpack(&mut self, msg: &[u8], off: usize, _length: usize) -> Result<usize, Error> {
+    fn unpack(&mut self, msg: &[u8], off: usize, _length: usize) -> Result<usize> {
         let (priority, off) = unpack_uint16(msg, off)?;
         self.priority = priority;
 

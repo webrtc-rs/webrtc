@@ -45,7 +45,7 @@ impl ResourceBody for SoaResource {
         mut msg: Vec<u8>,
         compression: &mut Option<HashMap<String, usize>>,
         compression_off: usize,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Vec<u8>> {
         msg = self.ns.pack(msg, compression, compression_off)?;
         msg = self.mbox.pack(msg, compression, compression_off)?;
         msg = pack_uint32(msg, self.serial);
@@ -55,7 +55,7 @@ impl ResourceBody for SoaResource {
         Ok(pack_uint32(msg, self.min_ttl))
     }
 
-    fn unpack(&mut self, msg: &[u8], mut off: usize, _length: usize) -> Result<usize, Error> {
+    fn unpack(&mut self, msg: &[u8], mut off: usize, _length: usize) -> Result<usize> {
         off = self.ns.unpack(msg, off)?;
         off = self.mbox.unpack(msg, off)?;
 

@@ -9,18 +9,16 @@ pub mod parser;
 pub mod question;
 pub mod resource;
 
+use crate::error::*;
 use header::*;
 use packer::*;
 use parser::*;
 use question::*;
 use resource::*;
 
-use crate::errors::*;
-
-use std::fmt;
-
+use anyhow::Result;
 use std::collections::HashMap;
-use util::Error;
+use std::fmt;
 
 // Message formats
 
@@ -111,13 +109,13 @@ impl DnsType {
         pack_uint16(msg, *self as u16)
     }
 
-    pub(crate) fn unpack(&mut self, msg: &[u8], off: usize) -> Result<usize, Error> {
+    pub(crate) fn unpack(&mut self, msg: &[u8], off: usize) -> Result<usize> {
         let (t, o) = unpack_uint16(msg, off)?;
         *self = DnsType::from(t);
         Ok(o)
     }
 
-    pub(crate) fn skip(msg: &[u8], off: usize) -> Result<usize, Error> {
+    pub(crate) fn skip(msg: &[u8], off: usize) -> Result<usize> {
         skip_uint16(msg, off)
     }
 }
@@ -161,13 +159,13 @@ impl DnsClass {
         pack_uint16(msg, self.0)
     }
 
-    pub(crate) fn unpack(&mut self, msg: &[u8], off: usize) -> Result<usize, Error> {
+    pub(crate) fn unpack(&mut self, msg: &[u8], off: usize) -> Result<usize> {
         let (c, o) = unpack_uint16(msg, off)?;
         *self = DnsClass(c);
         Ok(o)
     }
 
-    pub(crate) fn skip(msg: &[u8], off: usize) -> Result<usize, Error> {
+    pub(crate) fn skip(msg: &[u8], off: usize) -> Result<usize> {
         skip_uint16(msg, off)
     }
 }
@@ -286,7 +284,7 @@ impl fmt::Display for Message {
 
 impl Message {
     // Unpack parses a full Message.
-    pub fn unpack(&mut self, msg: &[u8]) -> Result<(), Error> {
+    pub fn unpack(&mut self, msg: &[u8]) -> Result<()> {
         let mut p = Parser::default();
         self.header = p.start(msg)?;
         self.questions = p.all_questions()?;
@@ -297,27 +295,27 @@ impl Message {
     }
 
     // Pack packs a full Message.
-    pub fn pack(&mut self) -> Result<Vec<u8>, Error> {
+    pub fn pack(&mut self) -> Result<Vec<u8>> {
         self.append_pack(vec![])
     }
 
     // append_pack is like Pack but appends the full Message to b and returns the
     // extended buffer.
-    pub fn append_pack(&mut self, b: Vec<u8>) -> Result<Vec<u8>, Error> {
+    pub fn append_pack(&mut self, b: Vec<u8>) -> Result<Vec<u8>> {
         // Validate the lengths. It is very unlikely that anyone will try to
         // pack more than 65535 of any particular type, but it is possible and
         // we should fail gracefully.
         if self.questions.len() > u16::MAX as usize {
-            return Err(ERR_TOO_MANY_QUESTIONS.to_owned());
+            return Err(Error::ErrTooManyQuestions.into());
         }
         if self.answers.len() > u16::MAX as usize {
-            return Err(ERR_TOO_MANY_ANSWERS.to_owned());
+            return Err(Error::ErrTooManyAnswers.into());
         }
         if self.authorities.len() > u16::MAX as usize {
-            return Err(ERR_TOO_MANY_AUTHORITIES.to_owned());
+            return Err(Error::ErrTooManyAuthorities.into());
         }
         if self.additionals.len() > u16::MAX as usize {
-            return Err(ERR_TOO_MANY_ADDITIONALS.to_owned());
+            return Err(Error::ErrTooManyAdditionals.into());
         }
 
         let (id, bits) = self.header.pack();

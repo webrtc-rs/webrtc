@@ -1,11 +1,11 @@
-use crate::errors::*;
+use crate::error::*;
 use crate::message::header::{Header, HeaderInternal, Section};
-use crate::message::resource::{unpack_resource_body, Resource, ResourceBody, ResourceHeader};
-
 use crate::message::name::Name;
 use crate::message::question::Question;
+use crate::message::resource::{unpack_resource_body, Resource, ResourceBody, ResourceHeader};
 use crate::message::{DnsClass, DnsType};
-use util::Error;
+
+use anyhow::Result;
 
 // A Parser allows incrementally parsing a DNS message.
 //
@@ -33,7 +33,7 @@ pub struct Parser<'a> {
 
 impl<'a> Parser<'a> {
     // start parses the header and enables the parsing of Questions.
-    pub fn start(&mut self, msg: &'a [u8]) -> Result<Header, Error> {
+    pub fn start(&mut self, msg: &'a [u8]) -> Result<Header> {
         *self = Parser {
             msg,
             ..Default::default()
@@ -43,23 +43,23 @@ impl<'a> Parser<'a> {
         Ok(self.header.header())
     }
 
-    fn check_advance(&mut self, sec: Section) -> Result<(), Error> {
+    fn check_advance(&mut self, sec: Section) -> Result<()> {
         if self.section < sec {
-            return Err(ERR_NOT_STARTED.to_owned());
+            return Err(Error::ErrNotStarted.into());
         }
         if self.section > sec {
-            return Err(ERR_SECTION_DONE.to_owned());
+            return Err(Error::ErrSectionDone.into());
         }
         self.res_header_valid = false;
         if self.index == self.header.count(sec) as usize {
             self.index = 0;
             self.section = Section::from(1 + self.section as u8);
-            return Err(ERR_SECTION_DONE.to_owned());
+            return Err(Error::ErrSectionDone.into());
         }
         Ok(())
     }
 
-    fn resource(&mut self, sec: Section) -> Result<Resource, Error> {
+    fn resource(&mut self, sec: Section) -> Result<Resource> {
         let header = self.resource_header(sec)?;
         self.res_header_valid = false;
         let (body, off) =
@@ -72,7 +72,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn resource_header(&mut self, sec: Section) -> Result<ResourceHeader, Error> {
+    fn resource_header(&mut self, sec: Section) -> Result<ResourceHeader> {
         if self.res_header_valid {
             return Ok(self.res_header.clone());
         }
@@ -86,11 +86,11 @@ impl<'a> Parser<'a> {
         Ok(hdr)
     }
 
-    fn skip_resource(&mut self, sec: Section) -> Result<(), Error> {
+    fn skip_resource(&mut self, sec: Section) -> Result<()> {
         if self.res_header_valid {
             let new_off = self.off + self.res_header.length as usize;
             if new_off > self.msg.len() {
-                return Err(ERR_RESOURCE_LEN.to_owned());
+                return Err(Error::ErrResourceLen.into());
             }
             self.off = new_off;
             self.res_header_valid = false;
@@ -105,7 +105,7 @@ impl<'a> Parser<'a> {
     }
 
     // question parses a single question.
-    pub fn question(&mut self) -> Result<Question, Error> {
+    pub fn question(&mut self) -> Result<Question> {
         self.check_advance(Section::Questions)?;
         let mut name = Name::new("")?;
         let mut off = name.unpack(self.msg, self.off)?;
@@ -119,7 +119,7 @@ impl<'a> Parser<'a> {
     }
 
     // all_questions parses all Questions.
-    pub fn all_questions(&mut self) -> Result<Vec<Question>, Error> {
+    pub fn all_questions(&mut self) -> Result<Vec<Question>> {
         // Multiple questions are valid according to the spec,
         // but servers don't actually support them. There will
         // be at most one question here.
@@ -130,7 +130,7 @@ impl<'a> Parser<'a> {
         loop {
             match self.question() {
                 Err(err) => {
-                    if err == *ERR_SECTION_DONE {
+                    if Error::ErrSectionDone.equal(&err) {
                         return Ok(qs);
                     } else {
                         return Err(err);
@@ -142,7 +142,7 @@ impl<'a> Parser<'a> {
     }
 
     // skip_question skips a single question.
-    pub fn skip_question(&mut self) -> Result<(), Error> {
+    pub fn skip_question(&mut self) -> Result<()> {
         self.check_advance(Section::Questions)?;
         let mut off = Name::skip(self.msg, self.off)?;
         off = DnsType::skip(self.msg, off)?;
@@ -153,10 +153,10 @@ impl<'a> Parser<'a> {
     }
 
     // skip_all_questions skips all Questions.
-    pub fn skip_all_questions(&mut self) -> Result<(), Error> {
+    pub fn skip_all_questions(&mut self) -> Result<()> {
         loop {
             if let Err(err) = self.skip_question() {
-                if err == *ERR_SECTION_DONE {
+                if Error::ErrSectionDone.equal(&err) {
                     return Ok(());
                 } else {
                     return Err(err);
@@ -166,17 +166,17 @@ impl<'a> Parser<'a> {
     }
 
     // answer_header parses a single answer ResourceHeader.
-    pub fn answer_header(&mut self) -> Result<ResourceHeader, Error> {
+    pub fn answer_header(&mut self) -> Result<ResourceHeader> {
         self.resource_header(Section::Answers)
     }
 
     // answer parses a single answer Resource.
-    pub fn answer(&mut self) -> Result<Resource, Error> {
+    pub fn answer(&mut self) -> Result<Resource> {
         self.resource(Section::Answers)
     }
 
     // all_answers parses all answer Resources.
-    pub fn all_answers(&mut self) -> Result<Vec<Resource>, Error> {
+    pub fn all_answers(&mut self) -> Result<Vec<Resource>> {
         // The most common query is for A/AAAA, which usually returns
         // a handful of IPs.
         //
@@ -190,7 +190,7 @@ impl<'a> Parser<'a> {
         loop {
             match self.answer() {
                 Err(err) => {
-                    if err == *ERR_SECTION_DONE {
+                    if Error::ErrSectionDone.equal(&err) {
                         return Ok(a);
                     } else {
                         return Err(err);
@@ -202,15 +202,15 @@ impl<'a> Parser<'a> {
     }
 
     // skip_answer skips a single answer Resource.
-    pub fn skip_answer(&mut self) -> Result<(), Error> {
+    pub fn skip_answer(&mut self) -> Result<()> {
         self.skip_resource(Section::Answers)
     }
 
     // skip_all_answers skips all answer Resources.
-    pub fn skip_all_answers(&mut self) -> Result<(), Error> {
+    pub fn skip_all_answers(&mut self) -> Result<()> {
         loop {
             if let Err(err) = self.skip_answer() {
-                if err == *ERR_SECTION_DONE {
+                if Error::ErrSectionDone.equal(&err) {
                     return Ok(());
                 } else {
                     return Err(err);
@@ -220,17 +220,17 @@ impl<'a> Parser<'a> {
     }
 
     // authority_header parses a single authority ResourceHeader.
-    pub fn authority_header(&mut self) -> Result<ResourceHeader, Error> {
+    pub fn authority_header(&mut self) -> Result<ResourceHeader> {
         self.resource_header(Section::Authorities)
     }
 
     // authority parses a single authority Resource.
-    pub fn authority(&mut self) -> Result<Resource, Error> {
+    pub fn authority(&mut self) -> Result<Resource> {
         self.resource(Section::Authorities)
     }
 
     // all_authorities parses all authority Resources.
-    pub fn all_authorities(&mut self) -> Result<Vec<Resource>, Error> {
+    pub fn all_authorities(&mut self) -> Result<Vec<Resource>> {
         // Authorities contains SOA in case of NXDOMAIN and friends,
         // otherwise it is empty.
         //
@@ -244,7 +244,7 @@ impl<'a> Parser<'a> {
         loop {
             match self.authority() {
                 Err(err) => {
-                    if err == *ERR_SECTION_DONE {
+                    if Error::ErrSectionDone.equal(&err) {
                         return Ok(a);
                     } else {
                         return Err(err);
@@ -256,15 +256,15 @@ impl<'a> Parser<'a> {
     }
 
     // skip_authority skips a single authority Resource.
-    pub fn skip_authority(&mut self) -> Result<(), Error> {
+    pub fn skip_authority(&mut self) -> Result<()> {
         self.skip_resource(Section::Authorities)
     }
 
     // skip_all_authorities skips all authority Resources.
-    pub fn skip_all_authorities(&mut self) -> Result<(), Error> {
+    pub fn skip_all_authorities(&mut self) -> Result<()> {
         loop {
             if let Err(err) = self.skip_authority() {
-                if err == *ERR_SECTION_DONE {
+                if Error::ErrSectionDone.equal(&err) {
                     return Ok(());
                 } else {
                     return Err(err);
@@ -274,17 +274,17 @@ impl<'a> Parser<'a> {
     }
 
     // additional_header parses a single additional ResourceHeader.
-    pub fn additional_header(&mut self) -> Result<ResourceHeader, Error> {
+    pub fn additional_header(&mut self) -> Result<ResourceHeader> {
         self.resource_header(Section::Additionals)
     }
 
     // additional parses a single additional Resource.
-    pub fn additional(&mut self) -> Result<Resource, Error> {
+    pub fn additional(&mut self) -> Result<Resource> {
         self.resource(Section::Additionals)
     }
 
     // all_additionals parses all additional Resources.
-    pub fn all_additionals(&mut self) -> Result<Vec<Resource>, Error> {
+    pub fn all_additionals(&mut self) -> Result<Vec<Resource>> {
         // Additionals usually contain OPT, and sometimes A/AAAA
         // glue records.
         //
@@ -298,7 +298,7 @@ impl<'a> Parser<'a> {
         loop {
             match self.additional() {
                 Err(err) => {
-                    if err == *ERR_SECTION_DONE {
+                    if Error::ErrSectionDone.equal(&err) {
                         return Ok(a);
                     } else {
                         return Err(err);
@@ -310,15 +310,15 @@ impl<'a> Parser<'a> {
     }
 
     // skip_additional skips a single additional Resource.
-    pub fn skip_additional(&mut self) -> Result<(), Error> {
+    pub fn skip_additional(&mut self) -> Result<()> {
         self.skip_resource(Section::Additionals)
     }
 
     // skip_all_additionals skips all additional Resources.
-    pub fn skip_all_additionals(&mut self) -> Result<(), Error> {
+    pub fn skip_all_additionals(&mut self) -> Result<()> {
         loop {
             if let Err(err) = self.skip_additional() {
-                if err == *ERR_SECTION_DONE {
+                if Error::ErrSectionDone.equal(&err) {
                     return Ok(());
                 } else {
                     return Err(err);
@@ -331,9 +331,9 @@ impl<'a> Parser<'a> {
     //
     // One of the XXXHeader methods must have been called before calling this
     // method.
-    pub fn resource_body(&mut self) -> Result<Box<dyn ResourceBody>, Error> {
+    pub fn resource_body(&mut self) -> Result<Box<dyn ResourceBody>> {
         if !self.res_header_valid {
-            return Err(ERR_NOT_STARTED.to_owned());
+            return Err(Error::ErrNotStarted.into());
         }
         let (rb, _off) = unpack_resource_body(
             self.res_header.typ,

@@ -2,10 +2,9 @@ use super::header::*;
 use super::question::*;
 use super::resource::*;
 use super::*;
-use crate::errors::*;
+use crate::error::*;
 
-use util::Error;
-
+use anyhow::Result;
 use std::collections::HashMap;
 
 // A Builder allows incrementally packing a DNS message.
@@ -83,68 +82,59 @@ impl Builder {
         self.compression = Some(HashMap::new());
     }
 
-    fn start_check(&self, section: Section) -> Result<(), Error> {
+    fn start_check(&self, section: Section) -> Result<()> {
         if self.section <= Section::NotStarted {
-            return Err(ERR_NOT_STARTED.to_owned());
+            return Err(Error::ErrNotStarted.into());
         }
         if self.section > section {
-            return Err(ERR_SECTION_DONE.to_owned());
+            return Err(Error::ErrSectionDone.into());
         }
 
         Ok(())
     }
 
     // start_questions prepares the builder for packing Questions.
-    pub fn start_questions(&mut self) -> Result<(), Error> {
+    pub fn start_questions(&mut self) -> Result<()> {
         self.start_check(Section::Questions)?;
         self.section = Section::Questions;
         Ok(())
     }
 
     // start_answers prepares the builder for packing Answers.
-    pub fn start_answers(&mut self) -> Result<(), Error> {
+    pub fn start_answers(&mut self) -> Result<()> {
         self.start_check(Section::Answers)?;
         self.section = Section::Answers;
         Ok(())
     }
 
     // start_authorities prepares the builder for packing Authorities.
-    pub fn start_authorities(&mut self) -> Result<(), Error> {
+    pub fn start_authorities(&mut self) -> Result<()> {
         self.start_check(Section::Authorities)?;
         self.section = Section::Authorities;
         Ok(())
     }
 
     // start_additionals prepares the builder for packing Additionals.
-    pub fn start_additionals(&mut self) -> Result<(), Error> {
+    pub fn start_additionals(&mut self) -> Result<()> {
         self.start_check(Section::Additionals)?;
         self.section = Section::Additionals;
         Ok(())
     }
 
-    fn increment_section_count(&mut self) -> Result<(), Error> {
+    fn increment_section_count(&mut self) -> Result<()> {
         let section = self.section;
         let (count, err) = match section {
-            Section::Questions => (
-                &mut self.header.questions,
-                ERR_TOO_MANY_QUESTIONS.to_owned(),
-            ),
-            Section::Answers => (&mut self.header.answers, ERR_TOO_MANY_ANSWERS.to_owned()),
-            Section::Authorities => (
-                &mut self.header.authorities,
-                ERR_TOO_MANY_AUTHORITIES.to_owned(),
-            ),
-            Section::Additionals => (
-                &mut self.header.additionals,
-                ERR_TOO_MANY_ADDITIONALS.to_owned(),
-            ),
-            Section::NotStarted => return Err(ERR_NOT_STARTED.to_owned()),
-            Section::Done => return Err(ERR_SECTION_DONE.to_owned()),
-            Section::Header => return Err(ERR_SECTION_HEADER.to_owned()),
+            Section::Questions => (&mut self.header.questions, Error::ErrTooManyQuestions),
+            Section::Answers => (&mut self.header.answers, Error::ErrTooManyAnswers),
+            Section::Authorities => (&mut self.header.authorities, Error::ErrTooManyAuthorities),
+            Section::Additionals => (&mut self.header.additionals, Error::ErrTooManyAdditionals),
+            Section::NotStarted => return Err(Error::ErrNotStarted.into()),
+            Section::Done => return Err(Error::ErrSectionDone.into()),
+            Section::Header => return Err(Error::ErrSectionHeader.into()),
         };
 
         if *count == u16::MAX {
-            Err(err)
+            Err(err.into())
         } else {
             *count += 1;
             Ok(())
@@ -152,12 +142,12 @@ impl Builder {
     }
 
     // question adds a single question.
-    pub fn add_question(&mut self, q: &Question) -> Result<(), Error> {
+    pub fn add_question(&mut self, q: &Question) -> Result<()> {
         if self.section < Section::Questions {
-            return Err(ERR_NOT_STARTED.to_owned());
+            return Err(Error::ErrNotStarted.into());
         }
         if self.section > Section::Questions {
-            return Err(ERR_SECTION_DONE.to_owned());
+            return Err(Error::ErrSectionDone.into());
         }
         let msg = self.msg.take();
         if let Some(mut msg) = msg {
@@ -169,24 +159,24 @@ impl Builder {
         Ok(())
     }
 
-    fn check_resource_section(&self) -> Result<(), Error> {
+    fn check_resource_section(&self) -> Result<()> {
         if self.section < Section::Answers {
-            return Err(ERR_NOT_STARTED.to_owned());
+            return Err(Error::ErrNotStarted.into());
         }
         if self.section > Section::Additionals {
-            return Err(ERR_SECTION_DONE.to_owned());
+            return Err(Error::ErrSectionDone.into());
         }
         Ok(())
     }
 
     // Resource adds a single resource.
-    pub fn add_resource(&mut self, r: &mut Resource) -> Result<(), Error> {
+    pub fn add_resource(&mut self, r: &mut Resource) -> Result<()> {
         self.check_resource_section()?;
 
         if let Some(body) = &r.body {
             r.header.typ = body.real_type();
         } else {
-            return Err(ERR_NIL_RESOURCE_BODY.to_owned());
+            return Err(Error::ErrNilResourceBody.into());
         }
 
         if let Some(msg) = self.msg.take() {
@@ -204,9 +194,9 @@ impl Builder {
     }
 
     // Finish ends message building and generates a binary message.
-    pub fn finish(&mut self) -> Result<Vec<u8>, Error> {
+    pub fn finish(&mut self) -> Result<Vec<u8>> {
         if self.section < Section::Header {
-            return Err(ERR_NOT_STARTED.to_owned());
+            return Err(Error::ErrNotStarted.into());
         }
         self.section = Section::Done;
 
@@ -217,7 +207,7 @@ impl Builder {
             msg[..HEADER_LEN].copy_from_slice(&buf[..HEADER_LEN]);
             Ok(msg)
         } else {
-            Err(ERR_EMPTY_BUILDER_MSG.to_owned())
+            Err(Error::ErrEmptyBuilderMsg.into())
         }
     }
 }

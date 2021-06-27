@@ -1,6 +1,8 @@
 use super::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::message::packer::*;
+
+use anyhow::Result;
 
 // An OPTResource is an OPT pseudo Resource record.
 //
@@ -48,7 +50,7 @@ impl ResourceBody for OptResource {
         mut msg: Vec<u8>,
         _compression: &mut Option<HashMap<String, usize>>,
         _compression_off: usize,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Vec<u8>> {
         for opt in &self.options {
             msg = pack_uint16(msg, opt.code);
             msg = pack_uint16(msg, opt.data.len() as u16);
@@ -57,7 +59,7 @@ impl ResourceBody for OptResource {
         Ok(msg)
     }
 
-    fn unpack(&mut self, msg: &[u8], mut off: usize, length: usize) -> Result<usize, Error> {
+    fn unpack(&mut self, msg: &[u8], mut off: usize, length: usize) -> Result<usize> {
         let mut opts = vec![];
         let old_off = off;
         while off < old_off + length {
@@ -72,7 +74,7 @@ impl ResourceBody for OptResource {
                 data: vec![0; l as usize],
             };
             if off + l as usize > msg.len() {
-                return Err(ERR_CALC_LEN.to_owned());
+                return Err(Error::ErrCalcLen.into());
             }
             opt.data.copy_from_slice(&msg[off..off + l as usize]);
             off += l as usize;

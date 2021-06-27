@@ -24,11 +24,11 @@ impl ResourceBody for CnameResource {
         msg: Vec<u8>,
         compression: &mut Option<HashMap<String, usize>>,
         compression_off: usize,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Vec<u8>> {
         self.cname.pack(msg, compression, compression_off)
     }
 
-    fn unpack(&mut self, msg: &[u8], off: usize, _length: usize) -> Result<usize, Error> {
+    fn unpack(&mut self, msg: &[u8], off: usize, _length: usize) -> Result<usize> {
         self.cname.unpack(msg, off)
     }
 }

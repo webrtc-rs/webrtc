@@ -1,5 +1,5 @@
 use crate::config::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::message::name::*;
 use crate::message::{header::*, parser::*, question::*, resource::a::*, resource::*, *};
 
@@ -7,6 +7,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::Result;
 use core::sync::atomic;
 use socket2::SockAddr;
 use tokio::net::{ToSocketAddrs, UdpSocket};
@@ -14,7 +15,6 @@ use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 
 use util::ifaces;
-use util::Error;
 
 mod conn_test;
 
@@ -49,7 +49,7 @@ struct QueryResult {
 
 impl DnsConn {
     /// server establishes a mDNS connection over an existing connection
-    pub fn server(addr: SocketAddr, config: Config) -> Result<Self, Error> {
+    pub fn server(addr: SocketAddr, config: Config) -> Result<Self> {
         let socket = socket2::Socket::new(
             socket2::Domain::IPV4,
             socket2::Type::DGRAM,
@@ -71,7 +71,7 @@ impl DnsConn {
                 Ok(e) => e,
                 Err(e) => {
                     log::error!("Error getting interfaces: {:?}", e);
-                    return Err(Error::new(e.to_string()));
+                    return Err(Error::ErrOthers(e.to_string()).into());
                 }
             };
 
@@ -89,7 +89,7 @@ impl DnsConn {
             }
 
             if join_error_count >= interfaces.len() {
-                return Err(ERR_JOINING_MULTICAST_GROUP.to_owned());
+                return Err(Error::ErrJoiningMulticastGroup.into());
             }
         }
 
@@ -140,10 +140,10 @@ impl DnsConn {
     }
 
     /// Close closes the mDNS Conn
-    pub async fn close(&self) -> Result<(), Error> {
+    pub async fn close(&self) -> Result<()> {
         log::info!("Closing connection");
         if self.is_server_closed.load(atomic::Ordering::SeqCst) {
-            return Err(ERR_CONNECTION_CLOSED.to_owned());
+            return Err(Error::ErrConnectionClosed.into());
         }
 
         log::trace!("Sending close command to server");
@@ -154,7 +154,7 @@ impl DnsConn {
             }
             Err(e) => {
                 log::warn!("Error sending close command to server: {:?}", e);
-                Err(ERR_CONNECTION_CLOSED.to_owned())
+                Err(Error::ErrConnectionClosed.into())
             }
         }
     }
@@ -165,9 +165,9 @@ impl DnsConn {
         &self,
         name: &str,
         mut close_query_signal: mpsc::Receiver<()>,
-    ) -> Result<(ResourceHeader, SocketAddr), Error> {
+    ) -> Result<(ResourceHeader, SocketAddr)> {
         if self.is_server_closed.load(atomic::Ordering::SeqCst) {
-            return Err(ERR_CONNECTION_CLOSED.to_owned());
+            return Err(Error::ErrConnectionClosed.into());
         }
 
         let name_with_suffix = name.to_owned() + ".";
@@ -193,7 +193,7 @@ impl DnsConn {
 
                 _ = close_query_signal.recv() => {
                     log::info!("Query close signal received.");
-                    return Err(ERR_CONNECTION_CLOSED.to_owned())
+                    return Err(Error::ErrConnectionClosed.into())
                 },
 
                 res_opt = query_rx.recv() =>{
@@ -254,7 +254,7 @@ impl DnsConn {
         local_names: Vec<String>,
         dst_addr: SocketAddr,
         queries: Arc<Mutex<Vec<Query>>>,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         log::info!("Looping and listening {:?}", socket.local_addr());
 
         let mut b = vec![0u8; INBOUND_BUFFER_SIZE];
@@ -321,7 +321,7 @@ async fn run(
         let q = match p.question() {
             Ok(q) => q,
             Err(err) => {
-                if err == *ERR_SECTION_DONE {
+                if Error::ErrSectionDone.equal(&err) {
                     log::trace!("Parsing has completed");
                     break;
                 } else {
@@ -353,12 +353,10 @@ async fn run(
         let a = match p.answer_header() {
             Ok(a) => a,
             Err(err) => {
-                if err == *ERR_SECTION_DONE {
-                    return;
-                } else {
+                if !Error::ErrSectionDone.equal(&err) {
                     log::warn!("Failed to parse mDNS packet {}", err);
-                    return;
                 }
+                return;
             }
         };
 
@@ -388,7 +386,7 @@ async fn send_answer(
     name: &str,
     dst: IpAddr,
     dst_addr: SocketAddr,
-) -> Result<(), Error> {
+) -> Result<()> {
     let raw_answer = {
         let mut msg = Message {
             header: Header {
@@ -408,7 +406,9 @@ async fn send_answer(
                 body: Some(Box::new(AResource {
                     a: match interface_addr.ip() {
                         IpAddr::V4(ip) => ip.octets(),
-                        IpAddr::V6(_) => return Err(Error::new("Unexpected IpV6 addr".to_owned())),
+                        IpAddr::V6(_) => {
+                            return Err(Error::ErrOthers("Unexpected IpV6 addr".to_owned()).into())
+                        }
                     },
                 })),
             }],

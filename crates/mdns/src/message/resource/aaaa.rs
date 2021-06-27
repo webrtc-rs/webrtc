@@ -24,11 +24,11 @@ impl ResourceBody for AaaaResource {
         msg: Vec<u8>,
         _compression: &mut Option<HashMap<String, usize>>,
         _compression_off: usize,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Vec<u8>> {
         Ok(pack_bytes(msg, &self.aaaa))
     }
 
-    fn unpack(&mut self, msg: &[u8], off: usize, _length: usize) -> Result<usize, Error> {
+    fn unpack(&mut self, msg: &[u8], off: usize, _length: usize) -> Result<usize> {
         unpack_bytes(msg, off, &mut self.aaaa)
     }
 }

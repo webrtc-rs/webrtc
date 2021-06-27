@@ -4,8 +4,6 @@ use super::*;
 use std::collections::HashMap;
 use std::fmt;
 
-use util::Error;
-
 // A question is a DNS query.
 #[derive(Default, Debug, PartialEq, Clone)]
 pub struct Question {
@@ -31,7 +29,7 @@ impl Question {
         mut msg: Vec<u8>,
         compression: &mut Option<HashMap<String, usize>>,
         compression_off: usize,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Vec<u8>> {
         msg = self.name.pack(msg, compression, compression_off)?;
         msg = self.typ.pack(msg);
         Ok(self.class.pack(msg))

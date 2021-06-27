@@ -16,22 +16,21 @@ default = [ "reuse_port" ]
 reuse_port = []
 
 [dependencies]
-util = { package = "webrtc-util", version = "0.1.21", default-features = false, features = ["error", "ifaces"] }
-lazy_static = "1.3.0"
+util = { package = "webrtc-util", version = "0.2.0", default-features = false, features = ["ifaces"] }
 tokio = { version = "^1.0", features = ["full"] }
-log = "0.4"
 socket2 = { version = "^0.4", features = ["all"] }
+log = "0.4"
+thiserror = "1.0.25"
+anyhow = "1.0.41"
 
 [dev-dependencies]
 env_logger = "0.8"
 clap = "2"
 
-
 [[example]]
 name = "mdns_query"
 path = "examples/mdns_query.rs"
 bench = false
-
 
 [[example]]
 name = "mdns_server"

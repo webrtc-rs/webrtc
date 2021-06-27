@@ -12,7 +12,7 @@ pub mod txt;
 use super::name::*;
 use super::packer::*;
 use super::*;
-use crate::errors::*;
+use crate::error::*;
 
 use a::*;
 use aaaa::*;
@@ -25,10 +25,9 @@ use soa::*;
 use srv::*;
 use txt::*;
 
+use anyhow::Result;
 use std::collections::HashMap;
 use std::fmt;
-
-use util::Error;
 
 // EDNS(0) wire constants.
 
@@ -66,11 +65,11 @@ impl Resource {
         msg: Vec<u8>,
         compression: &mut Option<HashMap<String, usize>>,
         compression_off: usize,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Vec<u8>> {
         if let Some(body) = &self.body {
             self.header.typ = body.real_type();
         } else {
-            return Err(ERR_NIL_RESOURCE_BODY.to_owned());
+            return Err(Error::ErrNilResourceBody.into());
         }
         let (mut msg, len_off) = self.header.pack(msg, compression, compression_off)?;
         let pre_len = msg.len();
@@ -81,7 +80,7 @@ impl Resource {
         Ok(msg)
     }
 
-    pub fn unpack(&mut self, msg: &[u8], mut off: usize) -> Result<usize, Error> {
+    pub fn unpack(&mut self, msg: &[u8], mut off: usize) -> Result<usize> {
         off = self.header.unpack(msg, off, 0)?;
         let (rb, off) =
             unpack_resource_body(self.header.typ, msg, off, self.header.length as usize)?;
@@ -89,7 +88,7 @@ impl Resource {
         Ok(off)
     }
 
-    pub(crate) fn skip(msg: &[u8], off: usize) -> Result<usize, Error> {
+    pub(crate) fn skip(msg: &[u8], off: usize) -> Result<usize> {
         let mut new_off = Name::skip(msg, off)?;
         new_off = DnsType::skip(msg, new_off)?;
         new_off = DnsClass::skip(msg, new_off)?;
@@ -97,7 +96,7 @@ impl Resource {
         let (length, mut new_off) = unpack_uint16(msg, new_off)?;
         new_off += length as usize;
         if new_off > msg.len() {
-            return Err(ERR_RESOURCE_LEN.to_owned());
+            return Err(Error::ErrResourceLen.into());
         }
         Ok(new_off)
     }
@@ -149,7 +148,7 @@ impl ResourceHeader {
         mut msg: Vec<u8>,
         compression: &mut Option<HashMap<String, usize>>,
         compression_off: usize,
-    ) -> Result<(Vec<u8>, usize), Error> {
+    ) -> Result<(Vec<u8>, usize)> {
         msg = self.name.pack(msg, compression, compression_off)?;
         msg = self.typ.pack(msg);
         msg = self.class.pack(msg);
@@ -159,7 +158,7 @@ impl ResourceHeader {
         Ok((msg, len_off))
     }
 
-    pub fn unpack(&mut self, msg: &[u8], off: usize, _length: usize) -> Result<usize, Error> {
+    pub fn unpack(&mut self, msg: &[u8], off: usize, _length: usize) -> Result<usize> {
         let mut new_off = off;
         new_off = self.name.unpack(msg, new_off)?;
         new_off = self.typ.unpack(msg, new_off)?;
@@ -178,9 +177,9 @@ impl ResourceHeader {
     // lenOff is the offset of the ResourceHeader.Length field in msg.
     //
     // preLen is the length that msg was before the ResourceBody was packed.
-    pub fn fix_len(&mut self, msg: &mut [u8], len_off: usize, pre_len: usize) -> Result<(), Error> {
+    pub fn fix_len(&mut self, msg: &mut [u8], len_off: usize, pre_len: usize) -> Result<()> {
         if msg.len() < pre_len || msg.len() > pre_len + u16::MAX as usize {
-            return Err(ERR_RES_TOO_LONG.to_owned());
+            return Err(Error::ErrResTooLong.into());
         }
 
         let con_len = msg.len() - pre_len;
@@ -201,7 +200,7 @@ impl ResourceHeader {
         udp_payload_len: u16,
         ext_rcode: u32,
         dnssec_ok: bool,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         self.name = Name {
             data: ".".to_owned(),
         }; // RFC 6891 section 6.1.2
@@ -244,9 +243,9 @@ pub trait ResourceBody: fmt::Display + fmt::Debug {
         msg: Vec<u8>,
         compression: &mut Option<HashMap<String, usize>>,
         compression_off: usize,
-    ) -> Result<Vec<u8>, Error>;
+    ) -> Result<Vec<u8>>;
 
-    fn unpack(&mut self, msg: &[u8], off: usize, length: usize) -> Result<usize, Error>;
+    fn unpack(&mut self, msg: &[u8], off: usize, length: usize) -> Result<usize>;
 }
 
 pub fn unpack_resource_body(
@@ -254,7 +253,7 @@ pub fn unpack_resource_body(
     msg: &[u8],
     mut off: usize,
     length: usize,
-) -> Result<(Box<dyn ResourceBody>, usize), Error> {
+) -> Result<(Box<dyn ResourceBody>, usize)> {
     let mut rb: Box<dyn ResourceBody> = match typ {
         DnsType::A => Box::new(AResource::default()),
         DnsType::Ns => Box::new(NsResource::default()),
@@ -266,7 +265,7 @@ pub fn unpack_resource_body(
         DnsType::Aaaa => Box::new(AaaaResource::default()),
         DnsType::Srv => Box::new(SrvResource::default()),
         DnsType::Opt => Box::new(OptResource::default()),
-        _ => return Err(ERR_NIL_RESOURCE_BODY.to_owned()),
+        _ => return Err(Error::ErrNilResourceBody.into()),
     };
 
     off = rb.unpack(msg, off, length)?;

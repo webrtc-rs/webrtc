@@ -1,6 +1,8 @@
 use super::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::message::packer::*;
+
+use anyhow::Result;
 
 // A TXTResource is a txt Resource record.
 #[derive(Default, Debug, Clone, PartialEq)]
@@ -29,14 +31,14 @@ impl ResourceBody for TxtResource {
         mut msg: Vec<u8>,
         _compression: &mut Option<HashMap<String, usize>>,
         _compression_off: usize,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Vec<u8>> {
         for s in &self.txt {
             msg = pack_str(msg, s)?
         }
         Ok(msg)
     }
 
-    fn unpack(&mut self, msg: &[u8], mut off: usize, length: usize) -> Result<usize, Error> {
+    fn unpack(&mut self, msg: &[u8], mut off: usize, length: usize) -> Result<usize> {
         let mut txts = vec![];
         let mut n = 0;
         while n < length {
@@ -44,7 +46,7 @@ impl ResourceBody for TxtResource {
             off = new_off;
             // Check if we got too many bytes.
             if length < n + t.as_bytes().len() + 1 {
-                return Err(ERR_CALC_LEN.to_owned());
+                return Err(Error::ErrCalcLen.into());
             }
             n += t.len() + 1;
             txts.push(t);

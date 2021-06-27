@@ -133,7 +133,7 @@ impl HeaderInternal {
         msg
     }
 
-    pub(crate) fn unpack(&mut self, msg: &[u8], off: usize) -> Result<usize, Error> {
+    pub(crate) fn unpack(&mut self, msg: &[u8], off: usize) -> Result<usize> {
         let (id, off) = unpack_uint16(msg, off)?;
         self.id = id;
 

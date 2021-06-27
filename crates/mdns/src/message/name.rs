@@ -1,10 +1,8 @@
-//use super::*;
-use crate::errors::*;
+use crate::error::*;
 
+use anyhow::Result;
 use std::collections::HashMap;
 use std::fmt;
-
-use util::Error;
 
 const NAME_LEN: usize = 255;
 
@@ -23,9 +21,9 @@ impl fmt::Display for Name {
 }
 
 impl Name {
-    pub fn new(data: &str) -> Result<Self, Error> {
+    pub fn new(data: &str) -> Result<Self> {
         if data.len() > NAME_LEN {
-            Err(ERR_CALC_LEN.to_owned())
+            Err(Error::ErrCalcLen.into())
         } else {
             Ok(Name {
                 data: data.to_owned(),
@@ -45,12 +43,12 @@ impl Name {
         mut msg: Vec<u8>,
         compression: &mut Option<HashMap<String, usize>>,
         compression_off: usize,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Vec<u8>> {
         let data = self.data.as_bytes();
 
         // Add a trailing dot to canonicalize name.
         if data.is_empty() || data[data.len() - 1] != b'.' {
-            return Err(ERR_NON_CANONICAL_NAME.to_owned());
+            return Err(Error::ErrNonCanonicalName.into());
         }
 
         // Allow root domain.
@@ -68,12 +66,12 @@ impl Name {
                 // It isn't allowed for segments to be long enough to
                 // need them.
                 if i - begin >= (1 << 6) {
-                    return Err(ERR_SEG_TOO_LONG.to_owned());
+                    return Err(Error::ErrSegTooLong.into());
                 }
 
                 // Segments must have a non-zero length.
                 if i - begin == 0 {
-                    return Err(ERR_ZERO_SEG_LEN.to_owned());
+                    return Err(Error::ErrZeroSegLen.into());
                 }
 
                 msg.push((i - begin) as u8);
@@ -111,7 +109,7 @@ impl Name {
     }
 
     // unpack unpacks a domain name.
-    pub fn unpack(&mut self, msg: &[u8], off: usize) -> Result<usize, Error> {
+    pub fn unpack(&mut self, msg: &[u8], off: usize) -> Result<usize> {
         self.unpack_compressed(msg, off, true /* allowCompression */)
     }
 
@@ -120,7 +118,7 @@ impl Name {
         msg: &[u8],
         off: usize,
         allow_compression: bool,
-    ) -> Result<usize, Error> {
+    ) -> Result<usize> {
         // curr_off is the current working offset.
         let mut curr_off = off;
 
@@ -137,7 +135,7 @@ impl Name {
 
         loop {
             if curr_off >= msg.len() {
-                return Err(ERR_BASE_LEN.to_owned());
+                return Err(Error::ErrBaseLen.into());
             }
             let c = msg[curr_off];
             curr_off += 1;
@@ -150,7 +148,7 @@ impl Name {
                     }
                     let end_off = curr_off + c as usize;
                     if end_off > msg.len() {
-                        return Err(ERR_CALC_LEN.to_owned());
+                        return Err(Error::ErrCalcLen.into());
                     }
                     name.push_str(String::from_utf8(msg[curr_off..end_off].to_vec())?.as_str());
                     name.push('.');
@@ -159,10 +157,10 @@ impl Name {
                 0xC0 => {
                     // Pointer
                     if !allow_compression {
-                        return Err(ERR_COMPRESSED_SRV.to_owned());
+                        return Err(Error::ErrCompressedSrv.into());
                     }
                     if curr_off >= msg.len() {
-                        return Err(ERR_INVALID_PTR.to_owned());
+                        return Err(Error::ErrInvalidPtr.into());
                     }
                     let c1 = msg[curr_off];
                     curr_off += 1;
@@ -172,13 +170,13 @@ impl Name {
                     // Don't follow too many pointers, maybe there's a loop.
                     ptr += 1;
                     if ptr > 10 {
-                        return Err(ERR_TOO_MANY_PTR.to_owned());
+                        return Err(Error::ErrTooManyPtr.into());
                     }
                     curr_off = ((c ^ 0xC0) as usize) << 8 | (c1 as usize);
                 }
                 _ => {
                     // Prefixes 0x80 and 0x40 are reserved.
-                    return Err(ERR_RESERVED.to_owned());
+                    return Err(Error::ErrReserved.into());
                 }
             }
         }
@@ -186,7 +184,7 @@ impl Name {
             name.push('.');
         }
         if name.len() > NAME_LEN {
-            return Err(ERR_CALC_LEN.to_owned());
+            return Err(Error::ErrCalcLen.into());
         }
         self.data = name;
         if ptr == 0 {
@@ -195,7 +193,7 @@ impl Name {
         Ok(new_off)
     }
 
-    pub(crate) fn skip(msg: &[u8], off: usize) -> Result<usize, Error> {
+    pub(crate) fn skip(msg: &[u8], off: usize) -> Result<usize> {
         // new_off is the offset where the next record will start. Pointers lead
         // to data that belongs to other names and thus doesn't count towards to
         // the usage of this name.
@@ -203,7 +201,7 @@ impl Name {
 
         loop {
             if new_off >= msg.len() {
-                return Err(ERR_BASE_LEN.to_owned());
+                return Err(Error::ErrBaseLen.into());
             }
             let c = msg[new_off];
             new_off += 1;
@@ -216,7 +214,7 @@ impl Name {
                     // literal string
                     new_off += c as usize;
                     if new_off > msg.len() {
-                        return Err(ERR_CALC_LEN.to_owned());
+                        return Err(Error::ErrCalcLen.into());
                     }
                 }
                 0xC0 => {
@@ -230,7 +228,7 @@ impl Name {
                 }
                 _ => {
                     // Prefixes 0x80 and 0x40 are reserved.
-                    return Err(ERR_RESERVED.to_owned());
+                    return Err(Error::ErrReserved.into());
                 }
             }
         }

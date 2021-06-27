@@ -2,10 +2,10 @@ use webrtc_mdns as mdns;
 
 use mdns::{config::*, conn::*};
 
+use anyhow::Result;
 use clap::{App, AppSettings, Arg};
 use std::net::SocketAddr;
 use std::str::FromStr;
-use util::Error;
 
 // For interop with webrtc-rs/mdns_server
 // cargo run --color=always --package webrtc-mdns --example mdns_server
@@ -14,7 +14,7 @@ use util::Error;
 // cargo run --color=always --package webrtc-mdns --example mdns_server -- --local-name pion-test.local
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
+async fn main() -> Result<()> {
     env_logger::init();
 
     let mut app = App::new("mDNS Sever")
