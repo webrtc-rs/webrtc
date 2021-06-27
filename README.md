@@ -75,10 +75,10 @@ WebRTC.rs is a pure Rust implementation of WebRTC stack, which rewrites <a href=
     <br>
     <img src="./doc/check.png">DTLS<a href="https://crates.io/crates/webrtc-dtls"><img src="https://img.shields.io/crates/v/webrtc-dtls.svg"></a>
     <br>
-    <img src="./doc/check.png">ICE<a href="https://crates.io/crates/webrtc-ice"><img src="https://img.shields.io/crates/v/webrtc-ice.svg"></a>
+    <img src="./doc/check.png">mDNS<a href="https://crates.io/crates/webrtc-mdns"><img src="https://img.shields.io/crates/v/webrtc-mdns.svg"></a>
     <img src="./doc/check.png">STUN<a href="https://crates.io/crates/stun"><img src="https://img.shields.io/crates/v/stun.svg"></a>
     <img src="./doc/check.png">TURN<a href="https://crates.io/crates/turn"><img src="https://img.shields.io/crates/v/turn.svg"></a>
-    <img src="./doc/check.png">mDNS<a href="https://crates.io/crates/webrtc-mdns"><img src="https://img.shields.io/crates/v/webrtc-mdns.svg"></a>
+    <img src="./doc/check.png">ICE<a href="https://crates.io/crates/webrtc-ice"><img src="https://img.shields.io/crates/v/webrtc-ice.svg"></a>
     <br>
     <img src="./doc/check.png">SDP<a href="https://crates.io/crates/sdp"><img src="https://img.shields.io/crates/v/sdp.svg"></a>
     <img src="./doc/check.png">Util<a href="https://crates.io/crates/webrtc-util"><img src="https://img.shields.io/crates/v/webrtc-util.svg"></a>
