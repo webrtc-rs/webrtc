@@ -29,7 +29,7 @@ const CANONICAL_MARSHAL_SDP: &'static str = "v=0\r\n\
      a=rtpmap:99 h263-1998/90000\r\n";
 
 #[test]
-fn test_unmarshal_marshal() -> Result<(), Error> {
+fn test_unmarshal_marshal() -> Result<()> {
     let input = CANONICAL_MARSHAL_SDP;
     let mut reader = Cursor::new(input.as_bytes());
     let sdp = SessionDescription::unmarshal(&mut reader)?;
@@ -40,7 +40,7 @@ fn test_unmarshal_marshal() -> Result<(), Error> {
 }
 
 #[test]
-fn test_marshal() -> Result<(), Error> {
+fn test_marshal() -> Result<()> {
     let sd = SessionDescription {
         version: 0,
         origin: Origin {
@@ -455,7 +455,7 @@ m=video 51372 RTP/AVP 99\r\n\
 a=rtpmap:99 h263-1998/90000\r\n";
 
 #[test]
-fn test_round_trip() -> Result<(), Error> {
+fn test_round_trip() -> Result<()> {
     let tests = vec![
         (
             "SessionInformationSDPLFOnly",
@@ -546,7 +546,7 @@ fn test_round_trip() -> Result<(), Error> {
 }
 
 #[test]
-fn test_unmarshal_repeat_times() -> Result<(), Error> {
+fn test_unmarshal_repeat_times() -> Result<()> {
     let mut reader = Cursor::new(REPEAT_TIMES_SDP.as_bytes());
     let sdp = SessionDescription::unmarshal(&mut reader)?;
     let actual = sdp.marshal();
@@ -555,17 +555,19 @@ fn test_unmarshal_repeat_times() -> Result<(), Error> {
 }
 
 #[test]
-fn test_unmarshal_repeat_times_overflow() -> Result<(), Error> {
+fn test_unmarshal_repeat_times_overflow() -> Result<()> {
     let mut reader = Cursor::new(REPEAT_TIMES_OVERFLOW_SDP.as_bytes());
-    assert!(matches!(
-        SessionDescription::unmarshal(&mut reader),
-        Err(Error::SdpInvalidValue(_))
-    ));
+    let result = SessionDescription::unmarshal(&mut reader);
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err().to_string(),
+        Error::SdpInvalidValue("106751991167301d".to_owned()).to_string()
+    );
     Ok(())
 }
 
 #[test]
-fn test_unmarshal_time_zones() -> Result<(), Error> {
+fn test_unmarshal_time_zones() -> Result<()> {
     let mut reader = Cursor::new(TIME_ZONES_SDP.as_bytes());
     let sdp = SessionDescription::unmarshal(&mut reader)?;
     let actual = sdp.marshal();
@@ -574,7 +576,7 @@ fn test_unmarshal_time_zones() -> Result<(), Error> {
 }
 
 #[test]
-fn test_unmarshal_non_nil_address() -> Result<(), Error> {
+fn test_unmarshal_non_nil_address() -> Result<()> {
     let input = "v=0\r\no=0 0 0 IN IP4 0\r\ns=0\r\nc=IN IP4\r\nt=0 0\r\n";
     let mut reader = Cursor::new(input);
     let sdp = SessionDescription::unmarshal(&mut reader);

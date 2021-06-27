@@ -37,7 +37,7 @@ fn get_test_session_description() -> SessionDescription {
 }
 
 #[test]
-fn test_get_payload_type_for_vp8() -> Result<(), Error> {
+fn test_get_payload_type_for_vp8() -> Result<()> {
     let tests = vec![
         (
             Codec {
@@ -90,7 +90,7 @@ fn test_get_payload_type_for_vp8() -> Result<(), Error> {
 }
 
 #[test]
-fn test_get_codec_for_payload_type() -> Result<(), Error> {
+fn test_get_codec_for_payload_type() -> Result<()> {
     let tests: Vec<(u8, Codec)> = vec![
         (
             120,
@@ -150,7 +150,7 @@ fn test_get_codec_for_payload_type() -> Result<(), Error> {
 }
 
 #[test]
-fn test_new_session_id() -> Result<(), Error> {
+fn test_new_session_id() -> Result<()> {
     let mut min = 0x7FFFFFFFFFFFFFFFu64;
     let mut max = 0u64;
     for _ in 0..10000 {

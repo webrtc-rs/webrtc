@@ -1,12 +1,13 @@
 #[cfg(test)]
 mod util_test;
 
-use std::collections::HashMap;
-use std::{fmt, io};
-
 use super::error::Error;
 use super::session_description::SessionDescription;
+
+use anyhow::Result;
+use std::collections::HashMap;
 use std::io::SeekFrom;
+use std::{fmt, io};
 
 pub const END_LINE: &str = "\r\n";
 pub const ATTRIBUTE_KEY: &str = "a=";
@@ -112,16 +113,16 @@ impl fmt::Display for Codec {
     }
 }
 
-pub(crate) fn parse_rtpmap(rtpmap: &str) -> Result<Codec, Error> {
+pub(crate) fn parse_rtpmap(rtpmap: &str) -> Result<Codec> {
     // a=rtpmap:<payload type> <encoding name>/<clock rate>[/<encoding parameters>]
     let split: Vec<&str> = rtpmap.split_whitespace().collect();
     if split.len() != 2 {
-        return Err(Error::RtpmapParse);
+        return Err(Error::RtpmapParse.into());
     }
 
     let pt_split: Vec<&str> = split[0].split(':').collect();
     if pt_split.len() != 2 {
-        return Err(Error::RtpmapParse);
+        return Err(Error::RtpmapParse.into());
     }
     let payload_type = pt_split[1].parse::<u8>()?;
 
@@ -148,18 +149,18 @@ pub(crate) fn parse_rtpmap(rtpmap: &str) -> Result<Codec, Error> {
     })
 }
 
-pub(crate) fn parse_fmtp(fmtp: &str) -> Result<Codec, Error> {
+pub(crate) fn parse_fmtp(fmtp: &str) -> Result<Codec> {
     // a=fmtp:<format> <format specific parameters>
     let split: Vec<&str> = fmtp.split_whitespace().collect();
     if split.len() != 2 {
-        return Err(Error::FmtpParse);
+        return Err(Error::FmtpParse.into());
     }
 
     let fmtp = split[1].to_string();
 
     let split: Vec<&str> = split[0].split(':').collect();
     if split.len() != 2 {
-        return Err(Error::FmtpParse);
+        return Err(Error::FmtpParse.into());
     }
     let payload_type = split[1].parse::<u8>()?;
 
@@ -170,16 +171,16 @@ pub(crate) fn parse_fmtp(fmtp: &str) -> Result<Codec, Error> {
     })
 }
 
-pub(crate) fn parse_rtcp_fb(rtcp_fb: &str) -> Result<Codec, Error> {
+pub(crate) fn parse_rtcp_fb(rtcp_fb: &str) -> Result<Codec> {
     // a=ftcp-fb:<payload type> <RTCP feedback type> [<RTCP feedback parameter>]
     let split: Vec<&str> = rtcp_fb.splitn(2, ' ').collect();
     if split.len() != 2 {
-        return Err(Error::RtcpFb);
+        return Err(Error::RtcpFb.into());
     }
 
     let pt_split: Vec<&str> = split[0].split(':').collect();
     if pt_split.len() != 2 {
-        return Err(Error::RtcpFb);
+        return Err(Error::RtcpFb.into());
     }
 
     Ok(Codec {
@@ -258,13 +259,13 @@ pub struct Lexer<'a, R: io::BufRead + io::Seek> {
     pub reader: &'a mut R,
 }
 
-pub type StateFnType<'a, R> = fn(&mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>, Error>;
+pub type StateFnType<'a, R> = fn(&mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>>;
 
 pub struct StateFn<'a, R: io::BufRead + io::Seek> {
     pub f: StateFnType<'a, R>,
 }
 
-pub fn read_type<R: io::BufRead + io::Seek>(reader: &mut R) -> Result<(String, usize), Error> {
+pub fn read_type<R: io::BufRead + io::Seek>(reader: &mut R) -> Result<(String, usize)> {
     loop {
         let mut b = [0; 1];
         if reader.read_exact(&mut b).is_err() {
@@ -285,12 +286,12 @@ pub fn read_type<R: io::BufRead + io::Seek>(reader: &mut R) -> Result<(String, u
         let key = String::from_utf8(buf)?;
         match key.len() {
             2 => return Ok((key, num_bytes)),
-            _ => return Err(Error::SdpInvalidSyntax(format!("{:?}", key))),
+            _ => return Err(Error::SdpInvalidSyntax(format!("{:?}", key)).into()),
         }
     }
 }
 
-pub fn read_value<R: io::BufRead + io::Seek>(reader: &mut R) -> Result<(String, usize), Error> {
+pub fn read_value<R: io::BufRead + io::Seek>(reader: &mut R) -> Result<(String, usize)> {
     let mut value = String::new();
     let num_bytes = reader.read_line(&mut value)?;
     Ok((value.trim().to_string(), num_bytes))

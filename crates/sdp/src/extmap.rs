@@ -1,14 +1,14 @@
-use std::fmt;
-use std::io;
-
-use url::Url;
+#[cfg(test)]
+mod extmap_test;
 
 use super::common_description::*;
 use super::direction::*;
 use super::error::Error;
 
-#[cfg(test)]
-mod extmap_test;
+use anyhow::Result;
+use std::fmt;
+use std::io;
+use url::Url;
 
 /// Default ext values
 pub const DEF_EXT_MAP_VALUE_ABS_SEND_TIME: usize = 1;
@@ -62,17 +62,17 @@ impl ExtMap {
     }
 
     /// unmarshal creates an Extmap from a string
-    pub fn unmarshal<R: io::BufRead>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: io::BufRead>(reader: &mut R) -> Result<Self> {
         let mut line = String::new();
         reader.read_line(&mut line)?;
         let parts: Vec<&str> = line.trim().splitn(2, ':').collect();
         if parts.len() != 2 {
-            return Err(Error::ExtMapParse(line));
+            return Err(Error::ExtMapParse(line).into());
         }
 
         let fields: Vec<&str> = parts[1].split_whitespace().collect();
         if fields.len() < 2 {
-            return Err(Error::ExtMapParse(line));
+            return Err(Error::ExtMapParse(line).into());
         }
 
         let valdir: Vec<&str> = fields[0].split('/').collect();
@@ -81,17 +81,17 @@ impl ExtMap {
             return Err(Error::ExtMapParse(format!(
                 "{} -- extmap key must be in the range 1-256",
                 valdir[0]
-            )));
+            ))
+            .into());
         }
 
         let mut direction = Direction::DirectionUnknown;
         if valdir.len() == 2 {
             direction = Direction::new(valdir[1]);
             if direction == Direction::DirectionUnknown {
-                return Err(Error::ExtMapParse(format!(
-                    "unknown direction from {}",
-                    valdir[1]
-                )));
+                return Err(
+                    Error::ExtMapParse(format!("unknown direction from {}", valdir[1])).into(),
+                );
             }
         }
 

@@ -13,7 +13,7 @@ const FAILING_ATTR_EXTMAP2: &'static str =
     "extmap:2/blorg http://example.com/082005/ext.htm#xmeta short";
 
 #[test]
-fn test_extmap() -> Result<(), Error> {
+fn test_extmap() -> Result<()> {
     let example_attr_extmap1_line = EXAMPLE_ATTR_EXTMAP1;
     let example_attr_extmap2_line = EXAMPLE_ATTR_EXTMAP2;
     let failing_attr_extmap1_line =
@@ -52,7 +52,7 @@ fn test_extmap() -> Result<(), Error> {
 }
 
 #[test]
-fn test_transport_cc_extmap() -> Result<(), Error> {
+fn test_transport_cc_extmap() -> Result<()> {
     //a=extmap:<value>["/"<direction>] <URI> <extensionattributes>
     //a=extmap:3 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01
     let uri = Some(Url::parse(

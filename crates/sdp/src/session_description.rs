@@ -1,16 +1,16 @@
-use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
-use std::{fmt, io};
-
-use url::Url;
+#[cfg(test)]
+mod session_description_test;
 
 use super::common_description::*;
 use super::error::Error;
 use super::media_description::*;
 use super::util::*;
 
-#[cfg(test)]
-mod session_description_test;
+use anyhow::Result;
+use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
+use std::{fmt, io};
+use url::Url;
 
 /// Constants for SDP attributes used in JSEP
 pub const ATTR_KEY_CANDIDATE: &str = "candidate";
@@ -316,19 +316,19 @@ impl SessionDescription {
     }
 
     /// get_codec_for_payload_type scans the SessionDescription for the given payload type and returns the codec
-    pub fn get_codec_for_payload_type(&self, payload_type: u8) -> Result<Codec, Error> {
+    pub fn get_codec_for_payload_type(&self, payload_type: u8) -> Result<Codec> {
         let codecs = self.build_codec_map();
 
         if let Some(codec) = codecs.get(&payload_type) {
             Ok(codec.clone())
         } else {
-            Err(Error::PayloadTypeNotFound)
+            Err(Error::PayloadTypeNotFound.into())
         }
     }
 
     /// get_payload_type_for_codec scans the SessionDescription for a codec that matches the provided codec
     /// as closely as possible and returns its payload type
-    pub fn get_payload_type_for_codec(&self, wanted: &Codec) -> Result<u8, Error> {
+    pub fn get_payload_type_for_codec(&self, wanted: &Codec) -> Result<u8> {
         let codecs = self.build_codec_map();
 
         for (payload_type, codec) in codecs.iter() {
@@ -337,7 +337,7 @@ impl SessionDescription {
             }
         }
 
-        Err(Error::CodecNotFound)
+        Err(Error::CodecNotFound.into())
     }
 
     /// Marshal takes a SDP struct to text
@@ -503,7 +503,7 @@ impl SessionDescription {
     /// |   s15  |    |    14 |    |     | 15 |     |   |    | 12 |   |   |     |   |   |    |   |    |
     /// |   s16  |    |    14 |    |     |    |  15 |   |    | 12 |   |   |     |   |   |    |   |    |
     /// +--------+----+-------+----+-----+----+-----+---+----+----+---+---+-----+---+---+----+---+----+
-    pub fn unmarshal<R: io::BufRead + io::Seek>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: io::BufRead + io::Seek>(reader: &mut R) -> Result<Self> {
         let mut lexer = Lexer {
             desc: SessionDescription {
                 version: 0,
@@ -533,9 +533,7 @@ impl SessionDescription {
     }
 }
 
-fn s1<'a, R: io::BufRead + io::Seek>(
-    lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+fn s1<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>> {
     let (key, _) = read_type(lexer.reader)?;
     if &key == "v=" {
         return Ok(Some(StateFn {
@@ -543,12 +541,10 @@ fn s1<'a, R: io::BufRead + io::Seek>(
         }));
     }
 
-    Err(Error::SdpInvalidSyntax(key))
+    Err(Error::SdpInvalidSyntax(key).into())
 }
 
-fn s2<'a, R: io::BufRead + io::Seek>(
-    lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+fn s2<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>> {
     let (key, _) = read_type(lexer.reader)?;
     if &key == "o=" {
         return Ok(Some(StateFn {
@@ -556,12 +552,10 @@ fn s2<'a, R: io::BufRead + io::Seek>(
         }));
     }
 
-    Err(Error::SdpInvalidSyntax(key))
+    Err(Error::SdpInvalidSyntax(key).into())
 }
 
-fn s3<'a, R: io::BufRead + io::Seek>(
-    lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+fn s3<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>> {
     let (key, _) = read_type(lexer.reader)?;
     if &key == "s=" {
         return Ok(Some(StateFn {
@@ -569,12 +563,10 @@ fn s3<'a, R: io::BufRead + io::Seek>(
         }));
     }
 
-    Err(Error::SdpInvalidSyntax(key))
+    Err(Error::SdpInvalidSyntax(key).into())
 }
 
-fn s4<'a, R: io::BufRead + io::Seek>(
-    lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+fn s4<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>> {
     let (key, _) = read_type(lexer.reader)?;
     match key.as_str() {
         "i=" => Ok(Some(StateFn {
@@ -592,13 +584,11 @@ fn s4<'a, R: io::BufRead + io::Seek>(
         "t=" => Ok(Some(StateFn {
             f: unmarshal_timing,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(key).into()),
     }
 }
 
-fn s5<'a, R: io::BufRead + io::Seek>(
-    lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+fn s5<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>> {
     let (key, _) = read_type(lexer.reader)?;
     match key.as_str() {
         "b=" => Ok(Some(StateFn {
@@ -607,13 +597,11 @@ fn s5<'a, R: io::BufRead + io::Seek>(
         "t=" => Ok(Some(StateFn {
             f: unmarshal_timing,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(key).into()),
     }
 }
 
-fn s6<'a, R: io::BufRead + io::Seek>(
-    lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+fn s6<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>> {
     let (key, _) = read_type(lexer.reader)?;
     match key.as_str() {
         "p=" => Ok(Some(StateFn { f: unmarshal_phone })),
@@ -626,13 +614,11 @@ fn s6<'a, R: io::BufRead + io::Seek>(
         "t=" => Ok(Some(StateFn {
             f: unmarshal_timing,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(key).into()),
     }
 }
 
-fn s7<'a, R: io::BufRead + io::Seek>(
-    lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+fn s7<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>> {
     let (key, _) = read_type(lexer.reader)?;
     match key.as_str() {
         "u=" => Ok(Some(StateFn { f: unmarshal_uri })),
@@ -647,13 +633,11 @@ fn s7<'a, R: io::BufRead + io::Seek>(
         "t=" => Ok(Some(StateFn {
             f: unmarshal_timing,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(key).into()),
     }
 }
 
-fn s8<'a, R: io::BufRead + io::Seek>(
-    lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+fn s8<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>> {
     let (key, _) = read_type(lexer.reader)?;
     match key.as_str() {
         "c=" => Ok(Some(StateFn {
@@ -665,13 +649,11 @@ fn s8<'a, R: io::BufRead + io::Seek>(
         "t=" => Ok(Some(StateFn {
             f: unmarshal_timing,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(key).into()),
     }
 }
 
-fn s9<'a, R: io::BufRead + io::Seek>(
-    lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+fn s9<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>> {
     let (key, num_bytes) = read_type(lexer.reader)?;
     if key.is_empty() && num_bytes == 0 {
         return Ok(None);
@@ -696,13 +678,11 @@ fn s9<'a, R: io::BufRead + io::Seek>(
         "m=" => Ok(Some(StateFn {
             f: unmarshal_media_description,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(key).into()),
     }
 }
 
-fn s10<'a, R: io::BufRead + io::Seek>(
-    lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+fn s10<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>> {
     let (key, _) = read_type(lexer.reader)?;
     match key.as_str() {
         "e=" => Ok(Some(StateFn { f: unmarshal_email })),
@@ -716,13 +696,11 @@ fn s10<'a, R: io::BufRead + io::Seek>(
         "t=" => Ok(Some(StateFn {
             f: unmarshal_timing,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(key).into()),
     }
 }
 
-fn s11<'a, R: io::BufRead + io::Seek>(
-    lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+fn s11<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>> {
     let (key, num_bytes) = read_type(lexer.reader)?;
     if key.is_empty() && num_bytes == 0 {
         return Ok(None);
@@ -735,13 +713,11 @@ fn s11<'a, R: io::BufRead + io::Seek>(
         "m=" => Ok(Some(StateFn {
             f: unmarshal_media_description,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(key).into()),
     }
 }
 
-fn s12<'a, R: io::BufRead + io::Seek>(
-    lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+fn s12<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>> {
     let (key, num_bytes) = read_type(lexer.reader)?;
     if key.is_empty() && num_bytes == 0 {
         return Ok(None);
@@ -766,13 +742,11 @@ fn s12<'a, R: io::BufRead + io::Seek>(
         "m=" => Ok(Some(StateFn {
             f: unmarshal_media_description,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(key).into()),
     }
 }
 
-fn s13<'a, R: io::BufRead + io::Seek>(
-    lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+fn s13<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>> {
     let (key, num_bytes) = read_type(lexer.reader)?;
     if key.is_empty() && num_bytes == 0 {
         return Ok(None);
@@ -788,13 +762,11 @@ fn s13<'a, R: io::BufRead + io::Seek>(
         "m=" => Ok(Some(StateFn {
             f: unmarshal_media_description,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(key).into()),
     }
 }
 
-fn s14<'a, R: io::BufRead + io::Seek>(
-    lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+fn s14<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>> {
     let (key, num_bytes) = read_type(lexer.reader)?;
     if key.is_empty() && num_bytes == 0 {
         return Ok(None);
@@ -823,13 +795,11 @@ fn s14<'a, R: io::BufRead + io::Seek>(
         "m=" => Ok(Some(StateFn {
             f: unmarshal_media_description,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(key).into()),
     }
 }
 
-fn s15<'a, R: io::BufRead + io::Seek>(
-    lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+fn s15<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>> {
     let (key, num_bytes) = read_type(lexer.reader)?;
     if key.is_empty() && num_bytes == 0 {
         return Ok(None);
@@ -855,13 +825,11 @@ fn s15<'a, R: io::BufRead + io::Seek>(
         "m=" => Ok(Some(StateFn {
             f: unmarshal_media_description,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(key).into()),
     }
 }
 
-fn s16<'a, R: io::BufRead + io::Seek>(
-    lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+fn s16<'a, R: io::BufRead + io::Seek>(lexer: &mut Lexer<'a, R>) -> Result<Option<StateFn<'a, R>>> {
     let (key, num_bytes) = read_type(lexer.reader)?;
     if key.is_empty() && num_bytes == 0 {
         return Ok(None);
@@ -887,13 +855,13 @@ fn s16<'a, R: io::BufRead + io::Seek>(
         "m=" => Ok(Some(StateFn {
             f: unmarshal_media_description,
         })),
-        _ => Err(Error::SdpInvalidSyntax(key)),
+        _ => Err(Error::SdpInvalidSyntax(key).into()),
     }
 }
 
 fn unmarshal_protocol_version<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+) -> Result<Option<StateFn<'a, R>>> {
     let (value, _) = read_value(lexer.reader)?;
 
     let version = value.parse::<u32>()?;
@@ -901,7 +869,7 @@ fn unmarshal_protocol_version<'a, R: io::BufRead + io::Seek>(
     // As off the latest draft of the rfc this value is required to be 0.
     // https://tools.ietf.org/html/draft-ietf-rtcweb-jsep-24#section-5.8.1
     if version != 0 {
-        return Err(Error::SdpInvalidSyntax(value));
+        return Err(Error::SdpInvalidSyntax(value).into());
     }
 
     Ok(Some(StateFn { f: s2 }))
@@ -909,12 +877,12 @@ fn unmarshal_protocol_version<'a, R: io::BufRead + io::Seek>(
 
 fn unmarshal_origin<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+) -> Result<Option<StateFn<'a, R>>> {
     let (value, _) = read_value(lexer.reader)?;
 
     let fields: Vec<&str> = value.split_whitespace().collect();
     if fields.len() != 6 {
-        return Err(Error::SdpInvalidSyntax(format!("`o={}`", value)));
+        return Err(Error::SdpInvalidSyntax(format!("`o={}`", value)).into());
     }
 
     let session_id = fields[1].parse::<u64>()?;
@@ -924,14 +892,14 @@ fn unmarshal_origin<'a, R: io::BufRead + io::Seek>(
     // https://tools.ietf.org/html/rfc4566#section-8.2.6
     let i = index_of(fields[3], &["IN"]);
     if i == -1 {
-        return Err(Error::SdpInvalidValue(fields[3].to_owned()));
+        return Err(Error::SdpInvalidValue(fields[3].to_owned()).into());
     }
 
     // Set according to currently registered with IANA
     // https://tools.ietf.org/html/rfc4566#section-8.2.7
     let i = index_of(fields[4], &["IP4", "IP6"]);
     if i == -1 {
-        return Err(Error::SdpInvalidValue(fields[4].to_owned()));
+        return Err(Error::SdpInvalidValue(fields[4].to_owned()).into());
     }
 
     // TODO validated UnicastAddress
@@ -950,7 +918,7 @@ fn unmarshal_origin<'a, R: io::BufRead + io::Seek>(
 
 fn unmarshal_session_name<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+) -> Result<Option<StateFn<'a, R>>> {
     let (value, _) = read_value(lexer.reader)?;
     lexer.desc.session_name = value;
     Ok(Some(StateFn { f: s4 }))
@@ -958,7 +926,7 @@ fn unmarshal_session_name<'a, R: io::BufRead + io::Seek>(
 
 fn unmarshal_session_information<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+) -> Result<Option<StateFn<'a, R>>> {
     let (value, _) = read_value(lexer.reader)?;
     lexer.desc.session_information = Some(value);
     Ok(Some(StateFn { f: s7 }))
@@ -966,7 +934,7 @@ fn unmarshal_session_information<'a, R: io::BufRead + io::Seek>(
 
 fn unmarshal_uri<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+) -> Result<Option<StateFn<'a, R>>> {
     let (value, _) = read_value(lexer.reader)?;
     lexer.desc.uri = Some(Url::parse(&value)?);
     Ok(Some(StateFn { f: s10 }))
@@ -974,7 +942,7 @@ fn unmarshal_uri<'a, R: io::BufRead + io::Seek>(
 
 fn unmarshal_email<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+) -> Result<Option<StateFn<'a, R>>> {
     let (value, _) = read_value(lexer.reader)?;
     lexer.desc.email_address = Some(value);
     Ok(Some(StateFn { f: s6 }))
@@ -982,7 +950,7 @@ fn unmarshal_email<'a, R: io::BufRead + io::Seek>(
 
 fn unmarshal_phone<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+) -> Result<Option<StateFn<'a, R>>> {
     let (value, _) = read_value(lexer.reader)?;
     lexer.desc.phone_number = Some(value);
     Ok(Some(StateFn { f: s8 }))
@@ -990,30 +958,30 @@ fn unmarshal_phone<'a, R: io::BufRead + io::Seek>(
 
 fn unmarshal_session_connection_information<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+) -> Result<Option<StateFn<'a, R>>> {
     let (value, _) = read_value(lexer.reader)?;
     lexer.desc.connection_information = unmarshal_connection_information(&value)?;
     Ok(Some(StateFn { f: s5 }))
 }
 
-fn unmarshal_connection_information(value: &str) -> Result<Option<ConnectionInformation>, Error> {
+fn unmarshal_connection_information(value: &str) -> Result<Option<ConnectionInformation>> {
     let fields: Vec<&str> = value.split_whitespace().collect();
     if fields.len() < 2 {
-        return Err(Error::SdpInvalidSyntax(format!("`c={}`", value)));
+        return Err(Error::SdpInvalidSyntax(format!("`c={}`", value)).into());
     }
 
     // Set according to currently registered with IANA
     // https://tools.ietf.org/html/rfc4566#section-8.2.6
     let i = index_of(fields[0], &["IN"]);
     if i == -1 {
-        return Err(Error::SdpInvalidValue(fields[0].to_owned()));
+        return Err(Error::SdpInvalidValue(fields[0].to_owned()).into());
     }
 
     // Set according to currently registered with IANA
     // https://tools.ietf.org/html/rfc4566#section-8.2.7
     let i = index_of(fields[1], &["IP4", "IP6"]);
     if i == -1 {
-        return Err(Error::SdpInvalidValue(fields[1].to_owned()));
+        return Err(Error::SdpInvalidValue(fields[1].to_owned()).into());
     }
 
     let address = if fields.len() > 2 {
@@ -1035,16 +1003,16 @@ fn unmarshal_connection_information(value: &str) -> Result<Option<ConnectionInfo
 
 fn unmarshal_session_bandwidth<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+) -> Result<Option<StateFn<'a, R>>> {
     let (value, _) = read_value(lexer.reader)?;
     lexer.desc.bandwidth.push(unmarshal_bandwidth(&value)?);
     Ok(Some(StateFn { f: s5 }))
 }
 
-fn unmarshal_bandwidth(value: &str) -> Result<Bandwidth, Error> {
+fn unmarshal_bandwidth(value: &str) -> Result<Bandwidth> {
     let mut parts: Vec<&str> = value.split(':').collect();
     if parts.len() != 2 {
-        return Err(Error::SdpInvalidSyntax(format!("`b={}`", value)));
+        return Err(Error::SdpInvalidSyntax(format!("`b={}`", value)).into());
     }
 
     let experimental = parts[0].starts_with("X-");
@@ -1055,7 +1023,7 @@ fn unmarshal_bandwidth(value: &str) -> Result<Bandwidth, Error> {
         // https://tools.ietf.org/html/rfc4566#section-5.8
         let i = index_of(parts[0], &["CT", "AS"]);
         if i == -1 {
-            return Err(Error::SdpInvalidValue(parts[0].to_owned()));
+            return Err(Error::SdpInvalidValue(parts[0].to_owned()).into());
         }
     }
 
@@ -1070,12 +1038,12 @@ fn unmarshal_bandwidth(value: &str) -> Result<Bandwidth, Error> {
 
 fn unmarshal_timing<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+) -> Result<Option<StateFn<'a, R>>> {
     let (value, _) = read_value(lexer.reader)?;
 
     let fields: Vec<&str> = value.split_whitespace().collect();
     if fields.len() < 2 {
-        return Err(Error::SdpInvalidSyntax(format!("`t={}`", value)));
+        return Err(Error::SdpInvalidSyntax(format!("`t={}`", value)).into());
     }
 
     let start_time = fields[0].parse::<u64>()?;
@@ -1094,12 +1062,12 @@ fn unmarshal_timing<'a, R: io::BufRead + io::Seek>(
 
 fn unmarshal_repeat_times<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+) -> Result<Option<StateFn<'a, R>>> {
     let (value, _) = read_value(lexer.reader)?;
 
     let fields: Vec<&str> = value.split_whitespace().collect();
     if fields.len() < 3 {
-        return Err(Error::SdpInvalidSyntax(format!("`r={}`", value)));
+        return Err(Error::SdpInvalidSyntax(format!("`r={}`", value)).into());
     }
 
     if let Some(latest_time_desc) = lexer.desc.time_descriptions.last_mut() {
@@ -1118,13 +1086,13 @@ fn unmarshal_repeat_times<'a, R: io::BufRead + io::Seek>(
 
         Ok(Some(StateFn { f: s9 }))
     } else {
-        Err(Error::SdpEmptyTimeDescription)
+        Err(Error::SdpEmptyTimeDescription.into())
     }
 }
 
 fn unmarshal_time_zones<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+) -> Result<Option<StateFn<'a, R>>> {
     let (value, _) = read_value(lexer.reader)?;
 
     // These fields are transimitted in pairs
@@ -1132,7 +1100,7 @@ fn unmarshal_time_zones<'a, R: io::BufRead + io::Seek>(
     // so we are making sure that there are actually multiple of 2 total.
     let fields: Vec<&str> = value.split_whitespace().collect();
     if fields.len() % 2 != 0 {
-        return Err(Error::SdpInvalidSyntax(format!("`t={}`", value)));
+        return Err(Error::SdpInvalidSyntax(format!("`t={}`", value)).into());
     }
 
     for i in (0..fields.len()).step_by(2) {
@@ -1150,7 +1118,7 @@ fn unmarshal_time_zones<'a, R: io::BufRead + io::Seek>(
 
 fn unmarshal_session_encryption_key<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+) -> Result<Option<StateFn<'a, R>>> {
     let (value, _) = read_value(lexer.reader)?;
     lexer.desc.encryption_key = Some(value);
     Ok(Some(StateFn { f: s11 }))
@@ -1158,7 +1126,7 @@ fn unmarshal_session_encryption_key<'a, R: io::BufRead + io::Seek>(
 
 fn unmarshal_session_attribute<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+) -> Result<Option<StateFn<'a, R>>> {
     let (value, _) = read_value(lexer.reader)?;
 
     let fields: Vec<&str> = value.splitn(2, ':').collect();
@@ -1180,12 +1148,12 @@ fn unmarshal_session_attribute<'a, R: io::BufRead + io::Seek>(
 
 fn unmarshal_media_description<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+) -> Result<Option<StateFn<'a, R>>> {
     let (value, _) = read_value(lexer.reader)?;
 
     let fields: Vec<&str> = value.split_whitespace().collect();
     if fields.len() < 4 {
-        return Err(Error::SdpInvalidSyntax(format!("`m={}`", value)));
+        return Err(Error::SdpInvalidSyntax(format!("`m={}`", value)).into());
     }
 
     // <media>
@@ -1196,7 +1164,7 @@ fn unmarshal_media_description<'a, R: io::BufRead + io::Seek>(
         &["audio", "video", "text", "application", "message"],
     );
     if i == -1 {
-        return Err(Error::SdpInvalidValue(fields[0].to_owned()));
+        return Err(Error::SdpInvalidValue(fields[0].to_owned()).into());
     }
 
     // <port>
@@ -1220,7 +1188,7 @@ fn unmarshal_media_description<'a, R: io::BufRead + io::Seek>(
             ],
         );
         if i == -1 {
-            return Err(Error::SdpInvalidValue(fields[2].to_owned()));
+            return Err(Error::SdpInvalidValue(fields[2].to_owned()).into());
         }
         protos.push(proto.to_owned());
     }
@@ -1253,33 +1221,33 @@ fn unmarshal_media_description<'a, R: io::BufRead + io::Seek>(
 
 fn unmarshal_media_title<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+) -> Result<Option<StateFn<'a, R>>> {
     let (value, _) = read_value(lexer.reader)?;
 
     if let Some(latest_media_desc) = lexer.desc.media_descriptions.last_mut() {
         latest_media_desc.media_title = Some(value);
         Ok(Some(StateFn { f: s16 }))
     } else {
-        Err(Error::SdpEmptyTimeDescription)
+        Err(Error::SdpEmptyTimeDescription.into())
     }
 }
 
 fn unmarshal_media_connection_information<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+) -> Result<Option<StateFn<'a, R>>> {
     let (value, _) = read_value(lexer.reader)?;
 
     if let Some(latest_media_desc) = lexer.desc.media_descriptions.last_mut() {
         latest_media_desc.connection_information = unmarshal_connection_information(&value)?;
         Ok(Some(StateFn { f: s15 }))
     } else {
-        Err(Error::SdpEmptyTimeDescription)
+        Err(Error::SdpEmptyTimeDescription.into())
     }
 }
 
 fn unmarshal_media_bandwidth<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+) -> Result<Option<StateFn<'a, R>>> {
     let (value, _) = read_value(lexer.reader)?;
 
     if let Some(latest_media_desc) = lexer.desc.media_descriptions.last_mut() {
@@ -1287,26 +1255,26 @@ fn unmarshal_media_bandwidth<'a, R: io::BufRead + io::Seek>(
         latest_media_desc.bandwidth.push(bandwidth);
         Ok(Some(StateFn { f: s15 }))
     } else {
-        Err(Error::SdpEmptyTimeDescription)
+        Err(Error::SdpEmptyTimeDescription.into())
     }
 }
 
 fn unmarshal_media_encryption_key<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+) -> Result<Option<StateFn<'a, R>>> {
     let (value, _) = read_value(lexer.reader)?;
 
     if let Some(latest_media_desc) = lexer.desc.media_descriptions.last_mut() {
         latest_media_desc.encryption_key = Some(value);
         Ok(Some(StateFn { f: s14 }))
     } else {
-        Err(Error::SdpEmptyTimeDescription)
+        Err(Error::SdpEmptyTimeDescription.into())
     }
 }
 
 fn unmarshal_media_attribute<'a, R: io::BufRead + io::Seek>(
     lexer: &mut Lexer<'a, R>,
-) -> Result<Option<StateFn<'a, R>>, Error> {
+) -> Result<Option<StateFn<'a, R>>> {
     let (value, _) = read_value(lexer.reader)?;
 
     let fields: Vec<&str> = value.splitn(2, ':').collect();
@@ -1326,11 +1294,11 @@ fn unmarshal_media_attribute<'a, R: io::BufRead + io::Seek>(
         latest_media_desc.attributes.push(attribute);
         Ok(Some(StateFn { f: s14 }))
     } else {
-        Err(Error::SdpEmptyTimeDescription)
+        Err(Error::SdpEmptyTimeDescription.into())
     }
 }
 
-fn parse_time_units(value: &str) -> Result<i64, Error> {
+fn parse_time_units(value: &str) -> Result<i64> {
     // Some time offsets in the protocol can be provided with a shorthand
     // notation. This code ensures to convert it to NTP timestamp format.
     let val = value.as_bytes();
@@ -1344,5 +1312,5 @@ fn parse_time_units(value: &str) -> Result<i64, Error> {
     };
     num.parse::<i64>()?
         .checked_mul(factor)
-        .ok_or_else(|| Error::SdpInvalidValue(value.to_owned()))
+        .ok_or_else(|| Error::SdpInvalidValue(value.to_owned()).into())
 }

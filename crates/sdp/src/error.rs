@@ -1,5 +1,3 @@
-use std::{num::ParseIntError, string::FromUtf8Error};
-
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -22,12 +20,4 @@ pub enum Error {
     SdpInvalidSyntax(String),
     #[error("SdpInvalidValue: {0}")]
     SdpInvalidValue(String),
-    #[error("FromUtf8Error: {0}")]
-    Utf8Error(#[from] FromUtf8Error),
-    #[error("ParseIntError: {0}")]
-    ParseIntError(#[from] ParseIntError),
-    #[error("UrlParseError: {0}")]
-    UrlParseError(#[from] url::ParseError),
-    #[error("IoError: {0}")]
-    Io(#[from] std::io::Error),
 }
