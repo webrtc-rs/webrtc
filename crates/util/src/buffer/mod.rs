@@ -1,28 +1,21 @@
-use crate::error::Error;
-
-use std::sync::Arc;
-
-use tokio::sync::{mpsc, Mutex};
-use tokio::time::{timeout, Duration};
-
 #[cfg(test)]
 mod buffer_test;
 
-// ErrFull is returned when the buffer has hit the configured limits.
-lazy_static! {
-    pub static ref ERR_BUFFER_FULL: Error = Error::new("buffer: full".to_owned());
-    pub static ref ERR_BUFFER_CLOSED: Error = Error::new("buffer: closed".to_owned());
-    pub static ref ERR_BUFFER_SHORT: Error = Error::new("buffer: short".to_owned());
-    pub static ref ERR_PACKET_TOO_BIG: Error = Error::new("packet too big".to_owned());
-    pub static ref ERR_TIMEOUT: Error = Error::new("i/o timeout".to_owned());
-}
+pub mod error;
+
+use error::Error;
+
+use anyhow::Result;
+use std::sync::Arc;
+use tokio::sync::{mpsc, Mutex};
+use tokio::time::{timeout, Duration};
 
 const MIN_SIZE: usize = 2048;
 const CUTOFF_SIZE: usize = 128 * 1024;
 const MAX_SIZE: usize = 4 * 1024 * 1024;
 
-// Buffer allows writing packets to an intermediate buffer, which can then be read form.
-// This is verify similar to bytes.Buffer but avoids combining multiple writes into a single read.
+/// Buffer allows writing packets to an intermediate buffer, which can then be read form.
+/// This is verify similar to bytes.Buffer but avoids combining multiple writes into a single read.
 #[derive(Debug)]
 struct BufferInternal {
     data: Vec<u8>,
@@ -40,8 +33,8 @@ struct BufferInternal {
 }
 
 impl BufferInternal {
-    // available returns true if the buffer is large enough to fit a packet
-    // of the given size, taking overhead into account.
+    /// available returns true if the buffer is large enough to fit a packet
+    /// of the given size, taking overhead into account.
     fn available(&self, size: usize) -> bool {
         let mut available = self.head as isize - self.tail as isize;
         if available <= 0 {
@@ -51,9 +44,9 @@ impl BufferInternal {
         size as isize + 2 < available
     }
 
-    // grow increases the size of the buffer.  If it returns nil, then the
-    // buffer has been grown.  It returns ErrFull if hits a limit.
-    fn grow(&mut self) -> Result<(), Error> {
+    /// grow increases the size of the buffer.  If it returns nil, then the
+    /// buffer has been grown.  It returns ErrFull if hits a limit.
+    fn grow(&mut self) -> Result<()> {
         let mut newsize = if self.data.len() < CUTOFF_SIZE {
             2 * self.data.len()
         } else {
@@ -73,7 +66,7 @@ impl BufferInternal {
         }
 
         if newsize <= self.data.len() {
-            return Err(ERR_BUFFER_FULL.clone());
+            return Err(Error::ErrBufferFull.into());
         }
 
         let mut newdata: Vec<u8> = vec![0; newsize];
@@ -134,25 +127,25 @@ impl Buffer {
         }
     }
 
-    // Write appends a copy of the packet data to the buffer.
-    // Returns ErrFull if the packet doesn't fit.
-    // Note that the packet size is limited to 65536 bytes since v0.11.0
-    // due to the internal data structure.
-    pub async fn write(&self, packet: &[u8]) -> Result<usize, Error> {
+    /// Write appends a copy of the packet data to the buffer.
+    /// Returns ErrFull if the packet doesn't fit.
+    /// Note that the packet size is limited to 65536 bytes since v0.11.0
+    /// due to the internal data structure.
+    pub async fn write(&self, packet: &[u8]) -> Result<usize> {
         if packet.len() >= 0x10000 {
-            return Err(ERR_PACKET_TOO_BIG.clone());
+            return Err(Error::ErrPacketTooBig.into());
         }
 
         let mut b = self.buffer.lock().await;
 
         if b.closed {
-            return Err(ERR_BUFFER_CLOSED.clone());
+            return Err(Error::ErrBufferClosed.into());
         }
 
         if (b.limit_count > 0 && b.count >= b.limit_count)
             || (b.limit_size > 0 && b.size() + 2 + packet.len() > b.limit_size)
         {
-            return Err(ERR_BUFFER_FULL.clone());
+            return Err(Error::ErrBufferFull.into());
         }
 
         // grow the buffer until the packet fits
@@ -219,11 +212,7 @@ impl Buffer {
     // Blocks until data is available or the buffer is closed.
     // Returns io.ErrShortBuffer is the packet is too small to copy the Write.
     // Returns io.EOF if the buffer is closed.
-    pub async fn read(
-        &self,
-        packet: &mut [u8],
-        duration: Option<Duration>,
-    ) -> Result<usize, Error> {
+    pub async fn read(&self, packet: &mut [u8], duration: Option<Duration>) -> Result<usize> {
         loop {
             let notify;
             {
@@ -275,13 +264,13 @@ impl Buffer {
                     b.count -= 1;
 
                     if copied < count {
-                        return Err(ERR_BUFFER_SHORT.clone());
+                        return Err(Error::ErrBufferShort.into());
                     }
                     return Ok(copied);
                 }
 
                 if b.closed {
-                    return Err(ERR_BUFFER_CLOSED.clone());
+                    return Err(Error::ErrBufferClosed.into());
                 }
 
                 notify = b.notify_rx.take();
@@ -294,7 +283,7 @@ impl Buffer {
             if let Some(mut notify) = notify {
                 if let Some(d) = duration {
                     if timeout(d, notify.recv()).await.is_err() {
-                        return Err(ERR_TIMEOUT.clone());
+                        return Err(Error::ErrTimeout.into());
                     }
                 } else {
                     notify.recv().await;

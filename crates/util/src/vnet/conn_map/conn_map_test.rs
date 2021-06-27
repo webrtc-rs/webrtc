@@ -11,7 +11,7 @@ struct DummyObserver;
 
 #[async_trait]
 impl ConnObserver for DummyObserver {
-    async fn write(&self, _c: Box<dyn Chunk + Send + Sync>) -> Result<(), Error> {
+    async fn write(&self, _c: Box<dyn Chunk + Send + Sync>) -> Result<()> {
         Ok(())
     }
 
@@ -21,7 +21,7 @@ impl ConnObserver for DummyObserver {
 }
 
 #[tokio::test]
-async fn test_udp_conn_map_insert_remove() -> Result<(), Error> {
+async fn test_udp_conn_map_insert_remove() -> Result<()> {
     let conn_map = UdpConnMap::new();
 
     let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
@@ -60,7 +60,7 @@ async fn test_udp_conn_map_insert_remove() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_udp_conn_map_insert_0_remove() -> Result<(), Error> {
+async fn test_udp_conn_map_insert_0_remove() -> Result<()> {
     let conn_map = UdpConnMap::new();
 
     let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
@@ -99,7 +99,7 @@ async fn test_udp_conn_map_insert_0_remove() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_udp_conn_map_find_0() -> Result<(), Error> {
+async fn test_udp_conn_map_find_0() -> Result<()> {
     let conn_map = UdpConnMap::new();
 
     let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
@@ -128,7 +128,7 @@ async fn test_udp_conn_map_find_0() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_udp_conn_map_insert_many_ips_with_same_port() -> Result<(), Error> {
+async fn test_udp_conn_map_insert_many_ips_with_same_port() -> Result<()> {
     let conn_map = UdpConnMap::new();
 
     let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
@@ -175,7 +175,7 @@ async fn test_udp_conn_map_insert_many_ips_with_same_port() -> Result<(), Error>
 }
 
 #[tokio::test]
-async fn test_udp_conn_map_already_inuse_when_insert_0() -> Result<(), Error> {
+async fn test_udp_conn_map_already_inuse_when_insert_0() -> Result<()> {
     let conn_map = UdpConnMap::new();
 
     let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
@@ -200,7 +200,7 @@ async fn test_udp_conn_map_already_inuse_when_insert_0() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_udp_conn_map_already_inuse_when_insert_a_specified_ip() -> Result<(), Error> {
+async fn test_udp_conn_map_already_inuse_when_insert_a_specified_ip() -> Result<()> {
     let conn_map = UdpConnMap::new();
 
     let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
@@ -225,7 +225,7 @@ async fn test_udp_conn_map_already_inuse_when_insert_a_specified_ip() -> Result<
 }
 
 #[tokio::test]
-async fn test_udp_conn_map_already_inuse_when_insert_same_specified_ip() -> Result<(), Error> {
+async fn test_udp_conn_map_already_inuse_when_insert_same_specified_ip() -> Result<()> {
     let conn_map = UdpConnMap::new();
 
     let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
@@ -250,7 +250,7 @@ async fn test_udp_conn_map_already_inuse_when_insert_same_specified_ip() -> Resu
 }
 
 #[tokio::test]
-async fn test_udp_conn_map_find_failure_1() -> Result<(), Error> {
+async fn test_udp_conn_map_find_failure_1() -> Result<()> {
     let conn_map = UdpConnMap::new();
 
     let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
@@ -272,7 +272,7 @@ async fn test_udp_conn_map_find_failure_1() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_udp_conn_map_find_failure_2() -> Result<(), Error> {
+async fn test_udp_conn_map_find_failure_2() -> Result<()> {
     let conn_map = UdpConnMap::new();
 
     let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =
@@ -294,7 +294,7 @@ async fn test_udp_conn_map_find_failure_2() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_udp_conn_map_insert_two_on_same_port_then_remove() -> Result<(), Error> {
+async fn test_udp_conn_map_insert_two_on_same_port_then_remove() -> Result<()> {
     let conn_map = UdpConnMap::new();
 
     let obs: Arc<Mutex<dyn ConnObserver + Send + Sync>> =

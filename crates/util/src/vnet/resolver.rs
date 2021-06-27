@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod resolver_test;
 
-use super::errors::*;
-use crate::Error;
+use super::error::*;
 
+use anyhow::Result;
 use std::collections::HashMap;
 use std::future::Future;
 use std::net::IpAddr;
@@ -35,9 +35,9 @@ impl Resolver {
         self.parent = Some(p);
     }
 
-    pub(crate) fn add_host(&mut self, name: String, ip_addr: String) -> Result<(), Error> {
+    pub(crate) fn add_host(&mut self, name: String, ip_addr: String) -> Result<()> {
         if name.is_empty() {
-            return Err(ERR_HOSTNAME_EMPTY.to_owned());
+            return Err(Error::ErrHostnameEmpty.into());
         }
         let ip = IpAddr::from_str(&ip_addr)?;
         self.hosts.insert(name, ip);

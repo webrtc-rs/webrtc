@@ -2,13 +2,14 @@
 mod net_test;
 
 use super::conn_map::*;
-use super::errors::*;
+use super::error::*;
 use super::interface::*;
 use crate::vnet::chunk::Chunk;
 use crate::vnet::conn::{ConnObserver, UdpConn};
 use crate::vnet::router::*;
-use crate::{conn, ifaces, Conn, Error};
+use crate::{conn, ifaces, Conn};
 
+use anyhow::Result;
 use async_trait::async_trait;
 use ipnet::IpNet;
 use std::collections::HashMap;
@@ -55,7 +56,7 @@ impl VNetInternal {
 
 #[async_trait]
 impl ConnObserver for VNetInternal {
-    async fn write(&self, c: Box<dyn Chunk + Send + Sync>) -> Result<(), Error> {
+    async fn write(&self, c: Box<dyn Chunk + Send + Sync>) -> Result<()> {
         if c.network() == UDP_STR && c.get_destination_ip().is_loopback() {
             if let Some(conn) = self.udp_conns.find(&c.destination_addr()).await {
                 let tx = conn.get_inbound_ch();
@@ -69,7 +70,7 @@ impl ConnObserver for VNetInternal {
             p.push(c).await;
             Ok(())
         } else {
-            Err(ERR_NO_ROUTER_LINKED.to_owned())
+            Err(Error::ErrNoRouterLinked.into())
         }
     }
 
@@ -123,11 +124,7 @@ impl Nic for VNet {
         None
     }
 
-    async fn add_addrs_to_interface(
-        &mut self,
-        ifc_name: &str,
-        addrs: &[IpNet],
-    ) -> Result<(), Error> {
+    async fn add_addrs_to_interface(&mut self, ifc_name: &str, addrs: &[IpNet]) -> Result<()> {
         {
             let mut vi = self.vi.lock().await;
             for ifc in &mut vi.interfaces {
@@ -149,10 +146,10 @@ impl Nic for VNet {
             }
         }
 
-        Err(ERR_NOT_FOUND.to_owned())
+        Err(Error::ErrNotFound.into())
     }
 
-    async fn set_router(&self, r: Arc<Mutex<Router>>) -> Result<(), Error> {
+    async fn set_router(&self, r: Arc<Mutex<Router>>) -> Result<()> {
         let mut vi = self.vi.lock().await;
         vi.router = Some(r);
 
@@ -224,7 +221,7 @@ impl VNet {
     }
 
     // caller must hold the mutex
-    pub(crate) async fn allocate_local_addr(&self, ip: IpAddr, port: u16) -> Result<(), Error> {
+    pub(crate) async fn allocate_local_addr(&self, ip: IpAddr, port: u16) -> Result<()> {
         // gather local IP addresses to bind
         let mut ips = vec![];
         if ip.is_unspecified() {
@@ -234,7 +231,7 @@ impl VNet {
         }
 
         if ips.is_empty() {
-            return Err(ERR_BIND_FAILER_FOR.to_owned());
+            return Err(Error::ErrBindFailed.into());
         }
 
         // check if all these transport addresses are not in use
@@ -242,7 +239,7 @@ impl VNet {
             let addr = SocketAddr::new(ip2, port);
             let vi = self.vi.lock().await;
             if vi.udp_conns.find(&addr).await.is_some() {
-                return Err(ERR_ADDRESS_ALREADY_IN_USE.to_owned());
+                return Err(Error::ErrAddressAlreadyInUse.into());
             }
         }
 
@@ -250,10 +247,10 @@ impl VNet {
     }
 
     // caller must hold the mutex
-    pub(crate) async fn assign_port(&self, ip: IpAddr, start: u16, end: u16) -> Result<u16, Error> {
+    pub(crate) async fn assign_port(&self, ip: IpAddr, start: u16, end: u16) -> Result<u16> {
         // choose randomly from the range between start and end (inclusive)
         if end < start {
-            return Err(ERR_END_PORT_LESS_THAN_START.to_owned());
+            return Err(Error::ErrEndPortLessThanStart.into());
         }
 
         let space = end + 1 - start;
@@ -266,17 +263,13 @@ impl VNet {
             }
         }
 
-        Err(ERR_PORT_SPACE_EXHAUSTED.to_owned())
+        Err(Error::ErrPortSpaceExhausted.into())
     }
 
-    pub(crate) async fn resolve_addr(
-        &self,
-        use_ipv4: bool,
-        address: &str,
-    ) -> Result<SocketAddr, Error> {
+    pub(crate) async fn resolve_addr(&self, use_ipv4: bool, address: &str) -> Result<SocketAddr> {
         let v: Vec<&str> = address.splitn(2, ':').collect();
         if v.len() != 2 {
-            return Err(ERR_ADDR_NOT_UDPADDR.to_owned());
+            return Err(Error::ErrAddrNotUdpAddr.into());
         }
         let (host, port) = (v[0], v[1]);
 
@@ -300,10 +293,10 @@ impl VNet {
                         if let Some(ip) = resolver.lookup(host).await {
                             ip
                         } else {
-                            return Err(ERR_NOT_FOUND.to_owned());
+                            return Err(Error::ErrNotFound.into());
                         }
                     } else {
-                        return Err(ERR_NO_ROUTER_LINKED.to_owned());
+                        return Err(Error::ErrNoRouterLinked.into());
                     }
                 }
             }
@@ -315,10 +308,11 @@ impl VNet {
         if (use_ipv4 && remote_addr.is_ipv4()) || (!use_ipv4 && remote_addr.is_ipv6()) {
             Ok(remote_addr)
         } else {
-            Err(Error::new(format!(
+            Err(Error::ErrOthers(format!(
                 "No available {} IP address found!",
                 if use_ipv4 { "ipv4" } else { "ipv6" },
-            )))
+            ))
+            .into())
         }
     }
 
@@ -326,10 +320,10 @@ impl VNet {
     pub(crate) async fn bind(
         &self,
         mut local_addr: SocketAddr,
-    ) -> Result<Arc<dyn Conn + Send + Sync>, Error> {
+    ) -> Result<Arc<dyn Conn + Send + Sync>> {
         // validate address. do we have that address?
         if !self.has_ipaddr(local_addr.ip()) {
-            return Err(ERR_CANT_ASSIGN_REQUESTED_ADDR.to_owned());
+            return Err(Error::ErrCantAssignRequestedAddr.into());
         }
 
         if local_addr.port() == 0 {
@@ -338,7 +332,7 @@ impl VNet {
         } else {
             let vi = self.vi.lock().await;
             if vi.udp_conns.find(&local_addr).await.is_some() {
-                return Err(ERR_ADDRESS_ALREADY_IN_USE.to_owned());
+                return Err(Error::ErrAddressAlreadyInUse.into());
             }
         }
 
@@ -357,7 +351,7 @@ impl VNet {
         &self,
         use_ipv4: bool,
         remote_addr: &str,
-    ) -> Result<Arc<dyn Conn + Send + Sync>, Error> {
+    ) -> Result<Arc<dyn Conn + Send + Sync>> {
         let rem_addr = self.resolve_addr(use_ipv4, remote_addr).await?;
 
         // Determine source address
@@ -512,7 +506,7 @@ impl Net {
         }
     }
 
-    pub async fn resolve_addr(&self, use_ipv4: bool, address: &str) -> Result<SocketAddr, Error> {
+    pub async fn resolve_addr(&self, use_ipv4: bool, address: &str) -> Result<SocketAddr> {
         match self {
             Net::VNet(vnet) => {
                 let net = vnet.lock().await;
@@ -522,7 +516,7 @@ impl Net {
         }
     }
 
-    pub async fn bind(&self, addr: SocketAddr) -> Result<Arc<dyn Conn + Send + Sync>, Error> {
+    pub async fn bind(&self, addr: SocketAddr) -> Result<Arc<dyn Conn + Send + Sync>> {
         match self {
             Net::VNet(vnet) => {
                 let net = vnet.lock().await;
@@ -536,7 +530,7 @@ impl Net {
         &self,
         use_ipv4: bool,
         remote_addr: &str,
-    ) -> Result<Arc<dyn Conn + Send + Sync>, Error> {
+    ) -> Result<Arc<dyn Conn + Send + Sync>> {
         match self {
             Net::VNet(vnet) => {
                 let net = vnet.lock().await;
@@ -558,10 +552,10 @@ impl Net {
         }
     }
 
-    pub fn get_nic(&self) -> Result<Arc<Mutex<dyn Nic + Send + Sync>>, Error> {
+    pub fn get_nic(&self) -> Result<Arc<Mutex<dyn Nic + Send + Sync>>> {
         match self {
             Net::VNet(vnet) => Ok(Arc::clone(vnet) as Arc<Mutex<dyn Nic + Send + Sync>>),
-            Net::Ifs(_) => Err(ERR_VNET_DISABLED.to_owned()),
+            Net::Ifs(_) => Err(Error::ErrVnetDisabled.into()),
         }
     }
 }

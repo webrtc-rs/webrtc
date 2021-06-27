@@ -10,7 +10,7 @@ struct DummyObserver;
 
 #[async_trait]
 impl ConnObserver for DummyObserver {
-    async fn write(&self, _c: Box<dyn Chunk + Send + Sync>) -> Result<(), Error> {
+    async fn write(&self, _c: Box<dyn Chunk + Send + Sync>) -> Result<()> {
         Ok(())
     }
 
@@ -20,7 +20,7 @@ impl ConnObserver for DummyObserver {
 }
 
 #[tokio::test]
-async fn test_net_native_interfaces() -> Result<(), Error> {
+async fn test_net_native_interfaces() -> Result<()> {
     let nw = Net::new(None);
     assert!(!nw.is_virtual(), "should be false");
 
@@ -37,7 +37,7 @@ async fn test_net_native_interfaces() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_net_native_resolve_addr() -> Result<(), Error> {
+async fn test_net_native_resolve_addr() -> Result<()> {
     let nw = Net::new(None);
     assert!(!nw.is_virtual(), "should be false");
 
@@ -52,7 +52,7 @@ async fn test_net_native_resolve_addr() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_net_native_bind() -> Result<(), Error> {
+async fn test_net_native_bind() -> Result<()> {
     let nw = Net::new(None);
     assert!(!nw.is_virtual(), "should be false");
 
@@ -69,7 +69,7 @@ async fn test_net_native_bind() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_net_native_dail() -> Result<(), Error> {
+async fn test_net_native_dail() -> Result<()> {
     let nw = Net::new(None);
     assert!(!nw.is_virtual(), "should be false");
 
@@ -87,7 +87,7 @@ async fn test_net_native_dail() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_net_native_loopback() -> Result<(), Error> {
+async fn test_net_native_loopback() -> Result<()> {
     let nw = Net::new(None);
     assert!(!nw.is_virtual(), "should be false");
 
@@ -113,7 +113,7 @@ async fn test_net_native_loopback() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_net_native_unexpected_operations() -> Result<(), Error> {
+async fn test_net_native_unexpected_operations() -> Result<()> {
     let mut lo_name = String::new();
     let ifcs = ifaces::ifaces()?;
     for ifc in &ifcs {
@@ -146,7 +146,7 @@ async fn test_net_native_unexpected_operations() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_net_virtual_interfaces() -> Result<(), Error> {
+async fn test_net_virtual_interfaces() -> Result<()> {
     let nw = Net::new(Some(NetConfig::default()));
     assert!(nw.is_virtual(), "should be true");
 
@@ -173,7 +173,7 @@ async fn test_net_virtual_interfaces() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_net_virtual_interface_by_name() -> Result<(), Error> {
+async fn test_net_virtual_interface_by_name() -> Result<()> {
     let nw = Net::new(Some(NetConfig::default()));
     assert!(nw.is_virtual(), "should be true");
 
@@ -205,7 +205,7 @@ async fn test_net_virtual_interface_by_name() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_net_virtual_has_ipaddr() -> Result<(), Error> {
+async fn test_net_virtual_has_ipaddr() -> Result<()> {
     let nw = Net::new(Some(NetConfig::default()));
     assert!(nw.is_virtual(), "should be true");
 
@@ -239,7 +239,7 @@ async fn test_net_virtual_has_ipaddr() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_net_virtual_get_all_ipaddrs() -> Result<(), Error> {
+async fn test_net_virtual_get_all_ipaddrs() -> Result<()> {
     let nw = Net::new(Some(NetConfig::default()));
     assert!(nw.is_virtual(), "should be true");
 
@@ -268,7 +268,7 @@ async fn test_net_virtual_get_all_ipaddrs() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_net_virtual_assign_port() -> Result<(), Error> {
+async fn test_net_virtual_assign_port() -> Result<()> {
     let mut nw = Net::new(Some(NetConfig::default()));
     assert!(nw.is_virtual(), "should be true");
 
@@ -325,7 +325,7 @@ async fn test_net_virtual_assign_port() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_net_virtual_determine_source_ip() -> Result<(), Error> {
+async fn test_net_virtual_determine_source_ip() -> Result<()> {
     let mut nw = Net::new(Some(NetConfig::default()));
     assert!(nw.is_virtual(), "should be true");
 
@@ -385,7 +385,7 @@ async fn test_net_virtual_determine_source_ip() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_net_virtual_resolve_addr() -> Result<(), Error> {
+async fn test_net_virtual_resolve_addr() -> Result<()> {
     let nw = Net::new(Some(NetConfig::default()));
     assert!(nw.is_virtual(), "should be true");
 
@@ -407,7 +407,7 @@ async fn test_net_virtual_resolve_addr() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_net_virtual_loopback1() -> Result<(), Error> {
+async fn test_net_virtual_loopback1() -> Result<()> {
     let nw = Net::new(Some(NetConfig::default()));
     assert!(nw.is_virtual(), "should be true");
 
@@ -433,7 +433,7 @@ async fn test_net_virtual_loopback1() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_net_virtual_bind_specific_port() -> Result<(), Error> {
+async fn test_net_virtual_bind_specific_port() -> Result<()> {
     let nw = Net::new(Some(NetConfig::default()));
     assert!(nw.is_virtual(), "should be true");
 
@@ -451,7 +451,7 @@ async fn test_net_virtual_bind_specific_port() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_net_virtual_dail_lo0() -> Result<(), Error> {
+async fn test_net_virtual_dail_lo0() -> Result<()> {
     let nw = Net::new(Some(NetConfig::default()));
     assert!(nw.is_virtual(), "should be true");
 
@@ -469,7 +469,7 @@ async fn test_net_virtual_dail_lo0() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_net_virtual_dail_eth0() -> Result<(), Error> {
+async fn test_net_virtual_dail_eth0() -> Result<()> {
     let wan = Arc::new(Mutex::new(Router::new(RouterConfig {
         cidr: "1.2.3.0/24".to_string(),
         ..Default::default()
@@ -501,7 +501,7 @@ async fn test_net_virtual_dail_eth0() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_net_virtual_resolver() -> Result<(), Error> {
+async fn test_net_virtual_resolver() -> Result<()> {
     let wan = Arc::new(Mutex::new(Router::new(RouterConfig {
         cidr: "1.2.3.0/24".to_string(),
         ..Default::default()
@@ -551,7 +551,7 @@ async fn test_net_virtual_resolver() -> Result<(), Error> {
 
         drop(done_tx);
 
-        Ok::<(), Error>(())
+        Result::<()>::Ok(())
     });
 
     let _ = done_rx.recv().await;
@@ -560,7 +560,7 @@ async fn test_net_virtual_resolver() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_net_virtual_loopback2() -> Result<(), Error> {
+async fn test_net_virtual_loopback2() -> Result<()> {
     let nw = Net::new(Some(NetConfig::default()));
 
     let conn = nw.bind(SocketAddr::from_str("127.0.0.1:50916")?).await?;
@@ -631,10 +631,10 @@ async fn get_ipaddr(nic: &Arc<Mutex<dyn Nic + Send + Sync>>) -> Result<IpAddr, E
     let eth0 = n
         .get_interface("eth0")
         .await
-        .ok_or_else(|| ERR_NO_INTERFACE.to_owned())?;
+        .ok_or_else(|| Error::ErrNoInterface)?;
     let addrs = eth0.addrs();
     if addrs.is_empty() {
-        Err(ERR_NO_ADDRESS_ASSIGNED.to_owned())
+        Err(Error::ErrNoAddressAssigned)
     } else {
         Ok(addrs[0].addr())
     }
@@ -643,7 +643,7 @@ async fn get_ipaddr(nic: &Arc<Mutex<dyn Nic + Send + Sync>>) -> Result<IpAddr, E
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_net_virtual_end2end() -> Result<(), Error> {
+async fn test_net_virtual_end2end() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -767,7 +767,7 @@ async fn test_net_virtual_end2end() -> Result<(), Error> {
 
         log::debug!("conn2 exit spawn");
 
-        Ok::<(), Error>(())
+        Result::<()>::Ok(())
     });
 
     log::debug!("conn1: sending");
@@ -786,7 +786,7 @@ async fn test_net_virtual_end2end() -> Result<(), Error> {
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_net_virtual_two_ips_on_a_nic() -> Result<(), Error> {
+async fn test_net_virtual_two_ips_on_a_nic() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -899,7 +899,7 @@ async fn test_net_virtual_two_ips_on_a_nic() -> Result<(), Error> {
 
         log::debug!("conn2 exit spawn");
 
-        Ok::<(), Error>(())
+        Result::<()>::Ok(())
     });
 
     log::debug!("conn1: sending");

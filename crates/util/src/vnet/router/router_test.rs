@@ -32,17 +32,13 @@ impl Nic for DummyNic {
         self.net.get_interface(ifc_name).await
     }
 
-    async fn add_addrs_to_interface(
-        &mut self,
-        ifc_name: &str,
-        addrs: &[IpNet],
-    ) -> Result<(), Error> {
+    async fn add_addrs_to_interface(&mut self, ifc_name: &str, addrs: &[IpNet]) -> Result<()> {
         let nic = self.net.get_nic()?;
         let mut net = nic.lock().await;
         net.add_addrs_to_interface(ifc_name, addrs).await
     }
 
-    async fn set_router(&self, r: Arc<Mutex<Router>>) -> Result<(), Error> {
+    async fn set_router(&self, r: Arc<Mutex<Router>>) -> Result<()> {
         let nic = self.net.get_nic()?;
         let net = nic.lock().await;
         net.set_router(r).await
@@ -112,17 +108,17 @@ async fn get_ipaddr(nic: &Arc<Mutex<dyn Nic + Send + Sync>>) -> Result<IpAddr, E
     let eth0 = n
         .get_interface("eth0")
         .await
-        .ok_or_else(|| ERR_NO_INTERFACE.to_owned())?;
+        .ok_or_else(|| Error::ErrNoInterface)?;
     let addrs = eth0.addrs();
     if addrs.is_empty() {
-        Err(ERR_NO_ADDRESS_ASSIGNED.to_owned())
+        Err(Error::ErrNoAddressAssigned)
     } else {
         Ok(addrs[0].addr())
     }
 }
 
 #[test]
-fn test_router_standalone_cidr_parsing() -> Result<(), Error> {
+fn test_router_standalone_cidr_parsing() -> Result<()> {
     let r = Router::new(RouterConfig {
         cidr: "1.2.3.0/24".to_string(),
         ..Default::default()
@@ -139,7 +135,7 @@ fn test_router_standalone_cidr_parsing() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_router_standalone_assign_ip_address() -> Result<(), Error> {
+async fn test_router_standalone_assign_ip_address() -> Result<()> {
     let r = Router::new(RouterConfig {
         cidr: "1.2.3.0/24".to_string(),
         ..Default::default()
@@ -164,7 +160,7 @@ async fn test_router_standalone_assign_ip_address() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_router_standalone_add_net() -> Result<(), Error> {
+async fn test_router_standalone_add_net() -> Result<()> {
     let wan = Arc::new(Mutex::new(Router::new(RouterConfig {
         cidr: "1.2.3.0/24".to_string(),
         ..Default::default()
@@ -195,7 +191,7 @@ async fn test_router_standalone_add_net() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_router_standalone_routing() -> Result<(), Error> {
+async fn test_router_standalone_routing() -> Result<()> {
     let wan = Arc::new(Mutex::new(Router::new(RouterConfig {
         cidr: "1.2.3.0/24".to_string(),
         ..Default::default()
@@ -267,7 +263,7 @@ async fn test_router_standalone_routing() -> Result<(), Error> {
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_router_standalone_add_chunk_filter() -> Result<(), Error> {
+async fn test_router_standalone_add_chunk_filter() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -372,11 +368,7 @@ async fn test_router_standalone_add_chunk_filter() -> Result<(), Error> {
     Ok(())
 }
 
-async fn delay_sub_test(
-    title: String,
-    min_delay: Duration,
-    max_jitter: Duration,
-) -> Result<(), Error> {
+async fn delay_sub_test(title: String, min_delay: Duration, max_jitter: Duration) -> Result<()> {
     let wan = Arc::new(Mutex::new(Router::new(RouterConfig {
         cidr: "1.2.3.0/24".to_string(),
         min_delay,
@@ -473,7 +465,7 @@ async fn delay_sub_test(
 //use std::io::Write;
 #[cfg(target_os = "linux")]
 #[tokio::test]
-async fn test_router_delay() -> Result<(), Error> {
+async fn test_router_delay() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -514,7 +506,7 @@ async fn test_router_delay() -> Result<(), Error> {
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_router_one_child() -> Result<(), Error> {
+async fn test_router_one_child() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -617,7 +609,7 @@ async fn test_router_one_child() -> Result<(), Error> {
 }
 
 #[test]
-fn test_router_static_ips_more_than_one() -> Result<(), Error> {
+fn test_router_static_ips_more_than_one() -> Result<()> {
     let lan = Router::new(RouterConfig {
         cidr: "192.168.0.0/24".to_owned(),
         static_ips: vec![
@@ -637,7 +629,7 @@ fn test_router_static_ips_more_than_one() -> Result<(), Error> {
 }
 
 #[test]
-fn test_router_static_ips_static_ip_local_ip_mapping() -> Result<(), Error> {
+fn test_router_static_ips_static_ip_local_ip_mapping() -> Result<()> {
     let lan = Router::new(RouterConfig {
         cidr: "192.168.0.0/24".to_owned(),
         static_ips: vec![
@@ -702,7 +694,7 @@ fn test_router_static_ips_static_ip_local_ip_mapping() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_router_static_ips_1to1_nat() -> Result<(), Error> {
+async fn test_router_static_ips_1to1_nat() -> Result<()> {
     let wan = Arc::new(Mutex::new(Router::new(RouterConfig {
         cidr: "0.0.0.0/0".to_owned(),
         ..Default::default()
@@ -762,7 +754,7 @@ async fn test_router_static_ips_1to1_nat() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_router_failures_stop() -> Result<(), Error> {
+async fn test_router_failures_stop() -> Result<()> {
     let mut r = Router::new(RouterConfig {
         cidr: "1.2.3.0/24".to_owned(),
         ..Default::default()
@@ -775,7 +767,7 @@ async fn test_router_failures_stop() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_router_failures_add_net() -> Result<(), Error> {
+async fn test_router_failures_add_net() -> Result<()> {
     let wan = Arc::new(Mutex::new(Router::new(RouterConfig {
         cidr: "1.2.3.0/24".to_owned(),
         ..Default::default()
@@ -799,7 +791,7 @@ async fn test_router_failures_add_net() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_router_failures_add_router() -> Result<(), Error> {
+async fn test_router_failures_add_router() -> Result<()> {
     let r1 = Arc::new(Mutex::new(Router::new(RouterConfig {
         cidr: "1.2.3.0/24".to_owned(),
         ..Default::default()

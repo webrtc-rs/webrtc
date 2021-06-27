@@ -22,7 +22,7 @@ async fn test_bridge_normal() -> Result<()> {
         let mut buf = vec![0u8; 256];
         let n = conn1.recv(&mut buf).await?;
         let _ = tx.send(n).await;
-        Ok::<(), std::io::Error>(())
+        Result::<()>::Ok(())
     });
 
     br.process().await;
@@ -48,7 +48,7 @@ async fn test_bridge_drop_1st_packet_from_conn0() -> Result<()> {
         let mut buf = vec![0u8; 256];
         let n = conn1.recv(&mut buf).await?;
         let _ = tx.send(n).await;
-        Ok::<(), std::io::Error>(())
+        Result::<()>::Ok(())
     });
 
     br.drop_offset(0, 0, 1).await;
@@ -75,7 +75,7 @@ async fn test_bridge_drop_2nd_packet_from_conn0() -> Result<()> {
         let mut buf = vec![0u8; 256];
         let n = conn1.recv(&mut buf).await?;
         let _ = tx.send(n).await;
-        Ok::<(), std::io::Error>(())
+        Result::<()>::Ok(())
     });
 
     br.drop_offset(0, 1, 1).await;
@@ -102,7 +102,7 @@ async fn test_bridge_drop_1st_packet_from_conn1() -> Result<()> {
         let mut buf = vec![0u8; 256];
         let n = conn0.recv(&mut buf).await?;
         let _ = tx.send(n).await;
-        Ok::<(), std::io::Error>(())
+        Result::<()>::Ok(())
     });
 
     br.drop_offset(1, 0, 1).await;
@@ -129,7 +129,7 @@ async fn test_bridge_drop_2nd_packet_from_conn1() -> Result<()> {
         let mut buf = vec![0u8; 256];
         let n = conn0.recv(&mut buf).await?;
         let _ = tx.send(n).await;
-        Ok::<(), std::io::Error>(())
+        Result::<()>::Ok(())
     });
 
     br.drop_offset(1, 1, 1).await;
@@ -161,7 +161,7 @@ async fn test_bridge_reorder_packets_from_conn0() -> Result<()> {
 
         let _ = rx.recv().await;
 
-        Ok::<(), std::io::Error>(())
+        Result::<()>::Ok(())
     });
 
     br.reorder(0).await;
@@ -192,7 +192,7 @@ async fn test_bridge_reorder_packets_from_conn1() -> Result<()> {
 
         let _ = rx.recv().await;
 
-        Ok::<(), std::io::Error>(())
+        Result::<()>::Ok(())
     });
 
     br.reorder(1).await;
@@ -229,7 +229,7 @@ async fn test_bridge_drop_next_n_packets() -> Result<()> {
                 let _ = tx.send(buf[..n].to_vec()).await;
             }
 
-            Ok::<(), std::io::Error>(())
+            Result::<()>::Ok(())
         });
 
         let mut msgs = vec![];

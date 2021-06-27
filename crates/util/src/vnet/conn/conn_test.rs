@@ -8,7 +8,7 @@ struct DummyObserver {
 
 #[async_trait]
 impl ConnObserver for DummyObserver {
-    async fn write(&self, c: Box<dyn Chunk + Send + Sync>) -> Result<(), Error> {
+    async fn write(&self, c: Box<dyn Chunk + Send + Sync>) -> Result<()> {
         if let Some(read_ch_tx) = &self.read_ch_tx {
             read_ch_tx.send(c).await?;
         }
@@ -21,7 +21,7 @@ impl ConnObserver for DummyObserver {
 }
 
 #[tokio::test]
-async fn test_udp_conn_send_to_recv_from() -> Result<(), Error> {
+async fn test_udp_conn_send_to_recv_from() -> Result<()> {
     let data = b"Hello".to_vec();
     let src_addr = SocketAddr::from_str("127.0.0.1:1234")?;
     let dst_addr = SocketAddr::from_str("127.0.0.1:5678")?;
@@ -71,7 +71,7 @@ async fn test_udp_conn_send_to_recv_from() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_udp_conn_send_recv() -> Result<(), Error> {
+async fn test_udp_conn_send_recv() -> Result<()> {
     let data = b"Hello".to_vec();
     let src_addr = SocketAddr::from_str("127.0.0.1:1234")?;
     let dst_addr = SocketAddr::from_str("127.0.0.1:5678")?;

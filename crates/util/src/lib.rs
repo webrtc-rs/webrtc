@@ -17,9 +17,6 @@ pub mod buffer;
 #[cfg(feature = "conn")]
 pub mod conn;
 
-#[cfg(feature = "error")]
-pub mod error;
-
 #[cfg(feature = "ifaces")]
 pub mod ifaces;
 
@@ -34,9 +31,6 @@ pub use crate::buffer::Buffer;
 
 #[cfg(feature = "conn")]
 pub use crate::conn::Conn;
-
-#[cfg(feature = "error")]
-pub use crate::error::Error;
 
 #[cfg(feature = "marshal")]
 pub use crate::marshal::{exact_size_buf::ExactSizeBuf, Marshal, MarshalSize, Unmarshal};

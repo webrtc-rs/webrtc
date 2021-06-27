@@ -19,7 +19,7 @@ fn test_tcp_frag_string() {
 const DEMO_IP: &str = "1.2.3.4";
 
 #[test]
-fn test_chunk_udp() -> Result<(), Error> {
+fn test_chunk_udp() -> Result<()> {
     let src = SocketAddr::from_str("192.168.0.2:1234")?;
     let dst = SocketAddr::from_str(&(DEMO_IP.to_owned() + ":5678"))?;
 

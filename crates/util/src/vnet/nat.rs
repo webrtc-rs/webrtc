@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod nat_test;
 
-use super::errors::*;
-use crate::Error;
-
+use super::error::*;
 use crate::vnet::chunk::Chunk;
 use crate::vnet::net::UDP_STR;
+
+use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
 use std::ops::Add;
@@ -111,7 +111,7 @@ pub(crate) struct NetworkAddressTranslator {
 }
 
 impl NetworkAddressTranslator {
-    pub(crate) fn new(config: NatConfig) -> Result<Self, Error> {
+    pub(crate) fn new(config: NatConfig) -> Result<Self> {
         let mut nat_type = config.nat_type;
 
         if nat_type.mode == NatMode::Nat1To1 {
@@ -122,10 +122,10 @@ impl NetworkAddressTranslator {
             nat_type.mapping_life_time = Duration::from_secs(0);
 
             if config.mapped_ips.is_empty() {
-                return Err(ERR_NAT_REQURIES_MAPPING.to_owned());
+                return Err(Error::ErrNatRequriesMapping.into());
             }
             if config.mapped_ips.len() != config.local_ips.len() {
-                return Err(ERR_MISMATCH_LENGTH_IP.to_owned());
+                return Err(Error::ErrMismatchLengthIp.into());
             }
         } else {
             // Normal (NAPT) behavior
@@ -167,7 +167,7 @@ impl NetworkAddressTranslator {
     pub(crate) async fn translate_outbound(
         &self,
         from: &(dyn Chunk + Send + Sync),
-    ) -> Result<Option<Box<dyn Chunk + Send + Sync>>, Error> {
+    ) -> Result<Option<Box<dyn Chunk + Send + Sync>>> {
         let mut to = from.clone_to();
 
         if from.network() == UDP_STR {
@@ -243,7 +243,7 @@ impl NetworkAddressTranslator {
                             )),
                         }
                     } else {
-                        return Err(ERR_NAT_REQURIES_MAPPING.to_owned());
+                        return Err(Error::ErrNatRequriesMapping.into());
                     };
 
                     {
@@ -292,13 +292,13 @@ impl NetworkAddressTranslator {
             return Ok(Some(to));
         }
 
-        Err(ERR_NON_UDP_TRANSLATION_NOT_SUPPORTED.to_owned())
+        Err(Error::ErrNonUdpTranslationNotSupported.into())
     }
 
     pub(crate) async fn translate_inbound(
         &self,
         from: &(dyn Chunk + Send + Sync),
-    ) -> Result<Option<Box<dyn Chunk + Send + Sync>>, Error> {
+    ) -> Result<Option<Box<dyn Chunk + Send + Sync>>> {
         let mut to = from.clone_to();
 
         if from.network() == UDP_STR {
@@ -309,10 +309,12 @@ impl NetworkAddressTranslator {
                     let dst_port = from.destination_addr().port();
                     to.set_destination_addr(&format!("{}:{}", dst_ip, dst_port))?;
                 } else {
-                    return Err(Error::new(format!(
-                        "drop {} as {}",
-                        from, *ERR_NO_ASSOCIATED_LOCAL_ADDRESS
-                    )));
+                    return Err(Error::ErrOthers(format!(
+                        "drop {} as {:?}",
+                        from,
+                        Error::ErrNoAssociatedLocalAddress
+                    ))
+                    .into());
                 }
             } else {
                 // Normal (NAPT) behavior
@@ -331,10 +333,13 @@ impl NetworkAddressTranslator {
                     {
                         let filters = m.filters.lock().await;
                         if !filters.contains(&filter_key) {
-                            return Err(Error::new(format!(
-                                "drop {} as the remote {} {}",
-                                from, filter_key, *ERR_HAS_NO_PERMISSION
-                            )));
+                            return Err(Error::ErrOthers(format!(
+                                "drop {} as the remote {} {:?}",
+                                from,
+                                filter_key,
+                                Error::ErrHasNoPermission
+                            ))
+                            .into());
                         }
                     }
 
@@ -348,10 +353,12 @@ impl NetworkAddressTranslator {
 
                     to.set_destination_addr(&m.local)?;
                 } else {
-                    return Err(Error::new(format!(
-                        "drop {} as {}",
-                        from, *ERR_NO_NAT_BINDING_FOUND
-                    )));
+                    return Err(Error::ErrOthers(format!(
+                        "drop {} as {:?}",
+                        from,
+                        Error::ErrNoNatBindingFound
+                    ))
+                    .into());
                 }
             }
 
@@ -365,7 +372,7 @@ impl NetworkAddressTranslator {
             return Ok(Some(to));
         }
 
-        Err(ERR_NON_UDP_TRANSLATION_NOT_SUPPORTED.to_owned())
+        Err(Error::ErrNonUdpTranslationNotSupported.into())
     }
 
     // caller must hold the mutex

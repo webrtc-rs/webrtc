@@ -9,8 +9,8 @@ mod conn_pipe_test;
 #[cfg(test)]
 mod conn_test;
 
+use anyhow::Result;
 use async_trait::async_trait;
-use std::io::Result;
 use std::net::SocketAddr;
 use tokio::net::ToSocketAddrs;
 
@@ -40,5 +40,6 @@ where
             "No available {} IP address found!",
             if use_ipv4 { "ipv4" } else { "ipv6" },
         ),
-    ))
+    )
+    .into())
 }

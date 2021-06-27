@@ -3,13 +3,13 @@ mod router_test;
 
 use crate::vnet::chunk::*;
 use crate::vnet::chunk_queue::*;
-use crate::vnet::errors::*;
+use crate::vnet::error::*;
 use crate::vnet::interface::*;
 use crate::vnet::nat::*;
 use crate::vnet::net::*;
 use crate::vnet::resolver::*;
-use crate::Error;
 
+use anyhow::Result;
 use async_trait::async_trait;
 use ipnet::*;
 use std::collections::HashMap;
@@ -64,14 +64,10 @@ pub struct RouterConfig {
 #[async_trait]
 pub trait Nic {
     async fn get_interface(&self, ifc_name: &str) -> Option<Interface>;
-    async fn add_addrs_to_interface(
-        &mut self,
-        ifc_name: &str,
-        addrs: &[IpNet],
-    ) -> Result<(), Error>;
+    async fn add_addrs_to_interface(&mut self, ifc_name: &str, addrs: &[IpNet]) -> Result<()>;
     async fn on_inbound_chunk(&self, c: Box<dyn Chunk + Send + Sync>);
     async fn get_static_ips(&self) -> Vec<IpAddr>;
-    async fn set_router(&self, r: Arc<Mutex<Router>>) -> Result<(), Error>;
+    async fn set_router(&self, r: Arc<Mutex<Router>>) -> Result<()>;
 }
 
 // ChunkFilter is a handler users can add to filter chunks.
@@ -118,11 +114,7 @@ impl Nic for Router {
         None
     }
 
-    async fn add_addrs_to_interface(
-        &mut self,
-        ifc_name: &str,
-        addrs: &[IpNet],
-    ) -> Result<(), Error> {
+    async fn add_addrs_to_interface(&mut self, ifc_name: &str, addrs: &[IpNet]) -> Result<()> {
         for ifc in &mut self.interfaces {
             if ifc.name == ifc_name {
                 for addr in addrs {
@@ -132,7 +124,7 @@ impl Nic for Router {
             }
         }
 
-        Err(ERR_NOT_FOUND.to_owned())
+        Err(Error::ErrNotFound.into())
     }
 
     async fn on_inbound_chunk(&self, c: Box<dyn Chunk + Send + Sync>) {
@@ -161,7 +153,7 @@ impl Nic for Router {
     }
 
     // caller must hold the mutex
-    async fn set_router(&self, parent: Arc<Mutex<Router>>) -> Result<(), Error> {
+    async fn set_router(&self, parent: Arc<Mutex<Router>>) -> Result<()> {
         {
             let mut router_internal = self.router_internal.lock().await;
             router_internal.parent = Some(Arc::clone(&parent));
@@ -191,7 +183,7 @@ impl Nic for Router {
                 }
             }
         } else {
-            return Err(ERR_NO_IPADDR_ETH0.to_owned());
+            return Err(Error::ErrNoIpaddrEth0.into());
         }
 
         // Set up NAT here
@@ -221,7 +213,7 @@ impl Nic for Router {
 }
 
 impl Router {
-    pub fn new(config: RouterConfig) -> Result<Self, Error> {
+    pub fn new(config: RouterConfig) -> Result<Self> {
         let ipv4net: IpNet = config.cidr.parse()?;
 
         let queue_size = if config.queue_size > 0 {
@@ -259,7 +251,7 @@ impl Router {
                 if ip_pair.len() > 1 {
                     let loc_ip = IpAddr::from_str(ip_pair[1])?;
                     if !ipv4net.contains(&loc_ip) {
-                        return Err(ERR_LOCAL_IP_BEYOND_STATIC_IPS_SUBSET.to_owned());
+                        return Err(Error::ErrLocalIpBeyondStaticIpsSubset.into());
                     }
                     static_local_ips.insert(ip.to_string(), loc_ip);
                 }
@@ -275,7 +267,7 @@ impl Router {
 
         let n_static_local = static_local_ips.len();
         if n_static_local > 0 && n_static_local != static_ips.len() {
-            return Err(ERR_LOCAL_IP_NO_STATICS_IPS_ASSOCIATED.to_owned());
+            return Err(Error::ErrLocalIpNoStaticsIpsAssociated.into());
         }
 
         let router_internal = RouterInternal {
@@ -306,9 +298,9 @@ impl Router {
     }
 
     // Start ...
-    pub fn start(&mut self) -> Pin<Box<dyn Future<Output = Result<(), Error>>>> {
+    pub fn start(&mut self) -> Pin<Box<dyn Future<Output = Result<()>>>> {
         if self.done.is_some() {
-            return Box::pin(async move { Err(ERR_ROUTER_ALREADY_STARTED.to_owned()) });
+            return Box::pin(async move { Err(Error::ErrRouterAlreadyStarted.into()) });
         }
 
         let (done_tx, mut done_rx) = mpsc::channel(1);
@@ -356,9 +348,9 @@ impl Router {
     }
 
     // Stop ...
-    pub fn stop(&mut self) -> Pin<Box<dyn Future<Output = Result<(), Error>>>> {
+    pub fn stop(&mut self) -> Pin<Box<dyn Future<Output = Result<()>>>> {
         if self.done.is_none() {
-            return Box::pin(async move { Err(ERR_ROUTER_ALREADY_STOPPED.to_owned()) });
+            return Box::pin(async move { Err(Error::ErrRouterAlreadyStopped.into()) });
         }
         self.push_ch.take();
         self.done.take();
@@ -367,7 +359,7 @@ impl Router {
         Box::pin(async move { Router::stop_childen(children).await })
     }
 
-    async fn start_childen(children: Vec<Arc<Mutex<Router>>>) -> Result<(), Error> {
+    async fn start_childen(children: Vec<Arc<Mutex<Router>>>) -> Result<()> {
         for child in children {
             let mut c = child.lock().await;
             c.start().await?;
@@ -376,7 +368,7 @@ impl Router {
         Ok(())
     }
 
-    async fn stop_childen(children: Vec<Arc<Mutex<Router>>>) -> Result<(), Error> {
+    async fn stop_childen(children: Vec<Arc<Mutex<Router>>>) -> Result<()> {
         for child in children {
             let mut c = child.lock().await;
             c.stop().await?;
@@ -387,7 +379,7 @@ impl Router {
 
     // AddRouter adds a chile Router.
     // after parent.add_router(child), also call child.set_router(parent) to set child's parent router
-    pub async fn add_router(&mut self, child: Arc<Mutex<Router>>) -> Result<(), Error> {
+    pub async fn add_router(&mut self, child: Arc<Mutex<Router>>) -> Result<()> {
         // Router is a NIC. Add it as a NIC so that packets are routed to this child
         // router.
         let nic = Arc::clone(&child) as Arc<Mutex<dyn Nic + Send + Sync>>;
@@ -397,13 +389,13 @@ impl Router {
 
     // AddNet ...
     // after router.add_net(nic), also call nic.set_router(router) to set nic's router
-    pub async fn add_net(&mut self, nic: Arc<Mutex<dyn Nic + Send + Sync>>) -> Result<(), Error> {
+    pub async fn add_net(&mut self, nic: Arc<Mutex<dyn Nic + Send + Sync>>) -> Result<()> {
         let mut router_internal = self.router_internal.lock().await;
         router_internal.add_nic(nic).await
     }
 
     // AddHost adds a mapping of hostname and an IP address to the local resolver.
-    pub async fn add_host(&mut self, host_name: String, ip_addr: String) -> Result<(), Error> {
+    pub async fn add_host(&mut self, host_name: String, ip_addr: String) -> Result<()> {
         let mut resolver = self.resolver.lock().await;
         resolver.add_host(host_name, ip_addr)
     }
@@ -440,7 +432,7 @@ impl Router {
         min_delay: Duration,
         queue: &Arc<ChunkQueue>,
         router_internal: &Arc<Mutex<RouterInternal>>,
-    ) -> Result<Duration, Error> {
+    ) -> Result<Duration> {
         // Introduce jitter by delaying the processing of chunks.
         let mj = max_jitter.as_nanos() as u64;
         if mj > 0 {
@@ -534,10 +526,7 @@ impl Router {
 
 impl RouterInternal {
     // caller must hold the mutex
-    pub(crate) async fn add_nic(
-        &mut self,
-        nic: Arc<Mutex<dyn Nic + Send + Sync>>,
-    ) -> Result<(), Error> {
+    pub(crate) async fn add_nic(&mut self, nic: Arc<Mutex<dyn Nic + Send + Sync>>) -> Result<()> {
         let mut ips = {
             let ni = nic.lock().await;
             ni.get_static_ips().await
@@ -553,7 +542,7 @@ impl RouterInternal {
         let mut ipnets = vec![];
         for ip in &ips {
             if !self.ipv4net.contains(ip) {
-                return Err(ERR_STATIC_IP_IS_BEYOND_SUBNET.to_owned());
+                return Err(Error::ErrStaticIpIsBeyondSubnet.into());
             }
             self.nics.insert(ip.to_string(), Arc::clone(&nic));
             ipnets.push(IpNet::from_str(&format!(
@@ -572,11 +561,11 @@ impl RouterInternal {
     }
 
     // caller should hold the mutex
-    fn assign_ip_address(&mut self) -> Result<IpAddr, Error> {
+    fn assign_ip_address(&mut self) -> Result<IpAddr> {
         // See: https://stackoverflow.com/questions/14915188/ip-address-ending-with-zero
 
         if self.last_id == 0xfe {
-            return Err(ERR_ADDRESS_SPACE_EXHAUSTED.to_owned());
+            return Err(Error::ErrAddressSpaceExhausted.into());
         }
 
         self.last_id += 1;

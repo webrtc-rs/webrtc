@@ -2,8 +2,8 @@
 mod chunk_test;
 
 use super::net::*;
-use crate::Error;
 
+use anyhow::Result;
 use std::fmt;
 use std::net::{IpAddr, SocketAddr};
 use std::ops::{BitAnd, BitOr};
@@ -38,7 +38,7 @@ fn assign_chunk_tag() -> String {
     base36(n)
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub(crate) struct TcpFlag(pub(crate) u8);
 
 pub(crate) const TCP_FLAG_ZERO: TcpFlag = TcpFlag(0x00);
@@ -90,13 +90,13 @@ impl fmt::Display for TcpFlag {
 }
 
 // Chunk represents a packet passed around in the vnet
-pub trait Chunk: fmt::Display {
+pub trait Chunk: fmt::Display + fmt::Debug {
     fn set_timestamp(&mut self) -> SystemTime; // used by router
     fn get_timestamp(&self) -> SystemTime; // used by router
     fn get_source_ip(&self) -> IpAddr; // used by routee
     fn get_destination_ip(&self) -> IpAddr; // used by router
-    fn set_source_addr(&mut self, address: &str) -> Result<(), Error>; // used by nat
-    fn set_destination_addr(&mut self, address: &str) -> Result<(), Error>; // used by nat
+    fn set_source_addr(&mut self, address: &str) -> Result<()>; // used by nat
+    fn set_destination_addr(&mut self, address: &str) -> Result<()>; // used by nat
 
     fn source_addr(&self) -> SocketAddr;
     fn destination_addr(&self) -> SocketAddr;
@@ -106,7 +106,7 @@ pub trait Chunk: fmt::Display {
     fn clone_to(&self) -> Box<dyn Chunk + Send + Sync>;
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub(crate) struct ChunkIp {
     pub(crate) timestamp: SystemTime,
     pub(crate) source_ip: IpAddr,
@@ -137,7 +137,7 @@ impl ChunkIp {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub(crate) struct ChunkUdp {
     pub(crate) chunk_ip: ChunkIp,
     pub(crate) source_port: u16,
@@ -209,14 +209,14 @@ impl Chunk for ChunkUdp {
         UDP_STR.to_owned()
     }
 
-    fn set_source_addr(&mut self, address: &str) -> Result<(), Error> {
+    fn set_source_addr(&mut self, address: &str) -> Result<()> {
         let addr = SocketAddr::from_str(address)?;
         self.chunk_ip.source_ip = addr.ip();
         self.source_port = addr.port();
         Ok(())
     }
 
-    fn set_destination_addr(&mut self, address: &str) -> Result<(), Error> {
+    fn set_destination_addr(&mut self, address: &str) -> Result<()> {
         let addr = SocketAddr::from_str(address)?;
         self.chunk_ip.destination_ip = addr.ip();
         self.destination_port = addr.port();
@@ -240,7 +240,7 @@ impl ChunkUdp {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub(crate) struct ChunkTcp {
     chunk_ip: ChunkIp,
     source_port: u16,
@@ -317,14 +317,14 @@ impl Chunk for ChunkTcp {
         "tcp".to_owned()
     }
 
-    fn set_source_addr(&mut self, address: &str) -> Result<(), Error> {
+    fn set_source_addr(&mut self, address: &str) -> Result<()> {
         let addr = SocketAddr::from_str(address)?;
         self.chunk_ip.source_ip = addr.ip();
         self.source_port = addr.port();
         Ok(())
     }
 
-    fn set_destination_addr(&mut self, address: &str) -> Result<(), Error> {
+    fn set_destination_addr(&mut self, address: &str) -> Result<()> {
         let addr = SocketAddr::from_str(address)?;
         self.chunk_ip.destination_ip = addr.ip();
         self.destination_port = addr.port();

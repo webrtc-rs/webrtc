@@ -21,14 +21,14 @@ struct BridgeConn {
 #[async_trait]
 impl Conn for BridgeConn {
     async fn connect(&self, _addr: SocketAddr) -> Result<()> {
-        Err(Error::new(ErrorKind::Other, "Not applicable"))
+        Err(Error::new(ErrorKind::Other, "Not applicable").into())
     }
 
     async fn recv(&self, b: &mut [u8]) -> Result<usize> {
         let mut rd_rx = self.rd_rx.lock().await;
         let v = match rd_rx.recv().await {
             Some(v) => v,
-            None => return Err(Error::new(ErrorKind::UnexpectedEof, "Unexpected EOF")),
+            None => return Err(Error::new(ErrorKind::UnexpectedEof, "Unexpected EOF").into()),
         };
         let l = std::cmp::min(v.len(), b.len());
         b[..l].copy_from_slice(&v[..l]);
@@ -36,7 +36,7 @@ impl Conn for BridgeConn {
     }
 
     async fn recv_from(&self, _buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
-        Err(Error::new(ErrorKind::Other, "Not applicable"))
+        Err(Error::new(ErrorKind::Other, "Not applicable").into())
     }
 
     async fn send(&self, b: &[u8]) -> Result<usize> {
@@ -48,14 +48,11 @@ impl Conn for BridgeConn {
     }
 
     async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> Result<usize> {
-        Err(Error::new(ErrorKind::Other, "Not applicable"))
+        Err(Error::new(ErrorKind::Other, "Not applicable").into())
     }
 
     async fn local_addr(&self) -> Result<SocketAddr> {
-        Err(Error::new(
-            ErrorKind::AddrNotAvailable,
-            "Addr Not Available",
-        ))
+        Err(Error::new(ErrorKind::AddrNotAvailable, "Addr Not Available").into())
     }
 }
 

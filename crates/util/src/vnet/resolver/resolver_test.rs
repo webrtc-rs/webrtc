@@ -3,7 +3,7 @@ use super::*;
 const DEMO_IP: &str = "1.2.3.4";
 
 #[tokio::test]
-async fn test_resolver_standalone() -> Result<(), Error> {
+async fn test_resolver_standalone() -> Result<()> {
     let mut r = Resolver::new();
 
     // should have localhost by default
@@ -34,7 +34,7 @@ async fn test_resolver_standalone() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_resolver_cascaded() -> Result<(), Error> {
+async fn test_resolver_cascaded() -> Result<()> {
     let mut r0 = Resolver::new();
 
     let name0 = "abc.com";

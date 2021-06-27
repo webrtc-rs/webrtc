@@ -11,7 +11,7 @@ use std::str::FromStr;
 const DEMO_IP: &str = "1.2.3.4";
 
 #[test]
-fn test_nat_type_default() -> Result<(), Error> {
+fn test_nat_type_default() -> Result<()> {
     let nat = NetworkAddressTranslator::new(NatConfig {
         mapped_ips: vec![IpAddr::from_str(DEMO_IP)?],
         ..Default::default()
@@ -38,7 +38,7 @@ fn test_nat_type_default() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_nat_mapping_behavior_full_cone_nat() -> Result<(), Error> {
+async fn test_nat_mapping_behavior_full_cone_nat() -> Result<()> {
     let nat = NetworkAddressTranslator::new(NatConfig {
         nat_type: NatType {
             mapping_behavior: EndpointDependencyType::EndpointIndependent,
@@ -99,7 +99,7 @@ async fn test_nat_mapping_behavior_full_cone_nat() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_nat_mapping_behavior_addr_restricted_cone_nat() -> Result<(), Error> {
+async fn test_nat_mapping_behavior_addr_restricted_cone_nat() -> Result<()> {
     let nat = NetworkAddressTranslator::new(NatConfig {
         nat_type: NatType {
             mapping_behavior: EndpointDependencyType::EndpointIndependent,
@@ -178,7 +178,7 @@ async fn test_nat_mapping_behavior_addr_restricted_cone_nat() -> Result<(), Erro
 }
 
 #[tokio::test]
-async fn test_nat_mapping_behavior_port_restricted_cone_nat() -> Result<(), Error> {
+async fn test_nat_mapping_behavior_port_restricted_cone_nat() -> Result<()> {
     let nat = NetworkAddressTranslator::new(NatConfig {
         nat_type: NatType {
             mapping_behavior: EndpointDependencyType::EndpointIndependent,
@@ -257,7 +257,7 @@ async fn test_nat_mapping_behavior_port_restricted_cone_nat() -> Result<(), Erro
 }
 
 #[tokio::test]
-async fn test_nat_mapping_behavior_symmetric_nat_addr_dependent_mapping() -> Result<(), Error> {
+async fn test_nat_mapping_behavior_symmetric_nat_addr_dependent_mapping() -> Result<()> {
     let nat = NetworkAddressTranslator::new(NatConfig {
         nat_type: NatType {
             mapping_behavior: EndpointDependencyType::EndpointAddrDependent,
@@ -309,7 +309,7 @@ async fn test_nat_mapping_behavior_symmetric_nat_addr_dependent_mapping() -> Res
 }
 
 #[tokio::test]
-async fn test_nat_mapping_behavior_symmetric_nat_port_dependent_mapping() -> Result<(), Error> {
+async fn test_nat_mapping_behavior_symmetric_nat_port_dependent_mapping() -> Result<()> {
     let nat = NetworkAddressTranslator::new(NatConfig {
         nat_type: NatType {
             mapping_behavior: EndpointDependencyType::EndpointAddrPortDependent,
@@ -361,7 +361,7 @@ async fn test_nat_mapping_behavior_symmetric_nat_port_dependent_mapping() -> Res
 }
 
 #[tokio::test]
-async fn test_nat_mapping_timeout_refresh_on_outbound() -> Result<(), Error> {
+async fn test_nat_mapping_timeout_refresh_on_outbound() -> Result<()> {
     let nat = NetworkAddressTranslator::new(NatConfig {
         nat_type: NatType {
             mapping_behavior: EndpointDependencyType::EndpointIndependent,
@@ -426,7 +426,7 @@ async fn test_nat_mapping_timeout_refresh_on_outbound() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_nat_mapping_timeout_outbound_detects_timeout() -> Result<(), Error> {
+async fn test_nat_mapping_timeout_outbound_detects_timeout() -> Result<()> {
     let nat = NetworkAddressTranslator::new(NatConfig {
         nat_type: NatType {
             mapping_behavior: EndpointDependencyType::EndpointIndependent,
@@ -470,7 +470,7 @@ async fn test_nat_mapping_timeout_outbound_detects_timeout() -> Result<(), Error
 }
 
 #[tokio::test]
-async fn test_nat1to1_bahavior_one_mapping() -> Result<(), Error> {
+async fn test_nat1to1_bahavior_one_mapping() -> Result<()> {
     let nat = NetworkAddressTranslator::new(NatConfig {
         nat_type: NatType {
             mode: NatMode::Nat1To1,
@@ -516,7 +516,7 @@ async fn test_nat1to1_bahavior_one_mapping() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_nat1to1_bahavior_more_mapping() -> Result<(), Error> {
+async fn test_nat1to1_bahavior_more_mapping() -> Result<()> {
     let nat = NetworkAddressTranslator::new(NatConfig {
         nat_type: NatType {
             mode: NatMode::Nat1To1,
@@ -583,7 +583,7 @@ async fn test_nat1to1_bahavior_more_mapping() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_nat1to1_bahavior_failure() -> Result<(), Error> {
+async fn test_nat1to1_bahavior_failure() -> Result<()> {
     // 1:1 NAT requires more than one mapping
     let result = NetworkAddressTranslator::new(NatConfig {
         nat_type: NatType {

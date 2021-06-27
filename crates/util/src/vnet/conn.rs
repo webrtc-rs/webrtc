@@ -1,12 +1,11 @@
 #[cfg(test)]
 mod conn_test;
 
-use super::errors::*;
+use super::error::*;
 use crate::conn::Conn;
 use crate::vnet::chunk::{Chunk, ChunkUdp};
-use crate::Error;
 
-use std::io;
+use anyhow::Result;
 use std::net::{IpAddr, SocketAddr};
 use tokio::sync::{mpsc, Mutex};
 
@@ -18,7 +17,7 @@ const MAX_READ_QUEUE_SIZE: usize = 1024;
 // vNet implements this
 #[async_trait]
 pub(crate) trait ConnObserver {
-    async fn write(&self, c: Box<dyn Chunk + Send + Sync>) -> Result<(), Error>;
+    async fn write(&self, c: Box<dyn Chunk + Send + Sync>) -> Result<()>;
     fn determine_source_ip(&self, loc_ip: IpAddr, dst_ip: IpAddr) -> Option<IpAddr>;
 }
 
@@ -56,13 +55,13 @@ impl UdpConn {
 
 #[async_trait]
 impl Conn for UdpConn {
-    async fn connect(&self, addr: SocketAddr) -> io::Result<()> {
+    async fn connect(&self, addr: SocketAddr) -> Result<()> {
         let mut rem_addr = self.rem_addr.lock().await;
         *rem_addr = Some(addr);
 
         Ok(())
     }
-    async fn recv(&self, buf: &mut [u8]) -> io::Result<usize> {
+    async fn recv(&self, buf: &mut [u8]) -> Result<usize> {
         let (n, _) = self.recv_from(buf).await?;
         Ok(n)
     }
@@ -74,7 +73,7 @@ impl Conn for UdpConn {
     // It returns the number of bytes read (0 <= n <= len(p))
     // and any error encountered. Callers should always process
     // the n > 0 bytes returned before considering the error err.
-    async fn recv_from(&self, buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
+    async fn recv_from(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
         let mut read_ch = self.read_ch_rx.lock().await;
         while let Some(chunk) = read_ch.recv().await {
             let user_data = chunk.user_data();
@@ -92,13 +91,10 @@ impl Conn for UdpConn {
             return Ok((n, addr));
         }
 
-        Err(io::Error::new(
-            io::ErrorKind::ConnectionAborted,
-            "Connection Aborted",
-        ))
+        Err(std::io::Error::new(std::io::ErrorKind::ConnectionAborted, "Connection Aborted").into())
     }
 
-    async fn send(&self, buf: &[u8]) -> io::Result<usize> {
+    async fn send(&self, buf: &[u8]) -> Result<usize> {
         let rem_addr = {
             let rem_addr = self.rem_addr.lock().await;
             *rem_addr
@@ -106,26 +102,18 @@ impl Conn for UdpConn {
         if let Some(rem_addr) = rem_addr {
             self.send_to(buf, rem_addr).await
         } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                ERR_NO_REM_ADDR.to_string(),
-            ))
+            Err(Error::ErrNoRemAddr.into())
         }
     }
 
     // send_to writes a packet with payload p to addr.
     // send_to can be made to time out and return
-    async fn send_to(&self, buf: &[u8], target: SocketAddr) -> io::Result<usize> {
+    async fn send_to(&self, buf: &[u8], target: SocketAddr) -> Result<usize> {
         let src_ip = {
             let obs = self.obs.lock().await;
             match obs.determine_source_ip(self.loc_addr.ip(), target.ip()) {
                 Some(ip) => ip,
-                None => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        ERR_LOC_ADDR.to_string(),
-                    ))
-                }
+                None => return Err(Error::ErrLocAddr.into()),
             }
         };
 
@@ -133,19 +121,16 @@ impl Conn for UdpConn {
 
         let mut chunk = ChunkUdp::new(src_addr, target);
         chunk.user_data = buf.to_vec();
-        let result = {
+        {
             let c: Box<dyn Chunk + Send + Sync> = Box::new(chunk);
             let obs = self.obs.lock().await;
-            obs.write(c).await
-        };
-        if let Err(err) = result {
-            return Err(io::Error::new(io::ErrorKind::Other, err.to_string()));
+            obs.write(c).await?
         }
 
         Ok(buf.len())
     }
 
-    async fn local_addr(&self) -> io::Result<SocketAddr> {
+    async fn local_addr(&self) -> Result<SocketAddr> {
         Ok(self.loc_addr)
     }
 }

@@ -1,10 +1,11 @@
 #[cfg(test)]
 mod conn_map_test;
 
-use super::errors::*;
+use super::error::*;
 use crate::vnet::conn::UdpConn;
-use crate::{Conn, Error};
+use crate::Conn;
 
+use anyhow::Result;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -24,19 +25,19 @@ impl UdpConnMap {
         }
     }
 
-    pub(crate) async fn insert(&self, conn: Arc<UdpConn>) -> Result<(), Error> {
+    pub(crate) async fn insert(&self, conn: Arc<UdpConn>) -> Result<()> {
         let addr = conn.local_addr().await?;
 
         let mut port_map = self.port_map.lock().await;
         if let Some(conns) = port_map.get(&addr.port()) {
             if addr.ip().is_unspecified() {
-                return Err(ERR_ADDRESS_ALREADY_IN_USE.to_owned());
+                return Err(Error::ErrAddressAlreadyInUse.into());
             }
 
             for c in conns {
                 let laddr = c.local_addr().await?;
                 if laddr.ip().is_unspecified() || laddr.ip() == addr.ip() {
-                    return Err(ERR_ADDRESS_ALREADY_IN_USE.to_owned());
+                    return Err(Error::ErrAddressAlreadyInUse.into());
                 }
             }
         }
@@ -77,7 +78,7 @@ impl UdpConnMap {
         None
     }
 
-    pub(crate) async fn delete(&self, addr: &SocketAddr) -> Result<(), Error> {
+    pub(crate) async fn delete(&self, addr: &SocketAddr) -> Result<()> {
         let mut port_map = self.port_map.lock().await;
         let mut new_conns = vec![];
         if let Some(conns) = port_map.get(&addr.port()) {
@@ -86,7 +87,7 @@ impl UdpConnMap {
                     let laddr = c.local_addr().await?;
                     if laddr.ip().is_unspecified() {
                         // This can't happen!
-                        return Err(ERR_CANNOT_REMOVE_UNSPECIFIED_IP.to_owned());
+                        return Err(Error::ErrCannotRemoveUnspecifiedIp.into());
                     }
 
                     if laddr.ip() == addr.ip() {
@@ -96,7 +97,7 @@ impl UdpConnMap {
                 }
             }
         } else {
-            return Err(ERR_NO_SUCH_UDPCONN.to_owned());
+            return Err(Error::ErrNoSuchUdpConn.into());
         }
 
         if new_conns.is_empty() {

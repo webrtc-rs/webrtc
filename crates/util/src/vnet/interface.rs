@@ -1,4 +1,5 @@
-use crate::Error;
+use super::error::*;
+use anyhow::Result;
 use ipnet::*;
 use std::net::SocketAddr;
 use std::str::FromStr;
@@ -25,7 +26,7 @@ impl Interface {
         &self.addrs
     }
 
-    pub fn convert(addr: SocketAddr, mask: Option<SocketAddr>) -> Result<IpNet, Error> {
+    pub fn convert(addr: SocketAddr, mask: Option<SocketAddr>) -> Result<IpNet> {
         let prefix = if let Some(mask) = mask {
             match (addr, mask) {
                 (SocketAddr::V4(_), SocketAddr::V4(mask)) => {
@@ -48,7 +49,7 @@ impl Interface {
                     }
                     prefix
                 }
-                _ => return Err(Error::new("Invalid mask".to_string())),
+                _ => return Err(Error::ErrInvalidMask.into()),
             }
         } else {
             32
