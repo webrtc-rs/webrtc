@@ -3,7 +3,7 @@ use super::*;
 use stun::message::BINDING_REQUEST;
 
 #[test]
-fn test_use_candidate_attr_add_to() -> Result<(), Error> {
+fn test_use_candidate_attr_add_to() -> Result<()> {
     let mut m = Message::new();
     assert!(!UseCandidateAttr::is_set(&m), "should not be set");
 

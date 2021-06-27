@@ -4,12 +4,11 @@ mod mdns_test;
 use mdns::config::*;
 use mdns::conn::*;
 
-use uuid::Uuid;
-
+use anyhow::Result;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
-use util::Error;
+use uuid::Uuid;
 
 /// Represents the different Multicast modes that ICE can run.
 #[derive(PartialEq, Debug, Copy, Clone)]
@@ -42,7 +41,7 @@ pub(crate) fn generate_multicast_dns_name() -> String {
 pub(crate) fn create_multicast_dns(
     mdns_mode: MulticastDnsMode,
     mdns_name: &str,
-) -> Result<Option<Arc<DnsConn>>, Error> {
+) -> Result<Option<Arc<DnsConn>>> {
     if mdns_mode == MulticastDnsMode::Disabled {
         return Ok(None);
     }

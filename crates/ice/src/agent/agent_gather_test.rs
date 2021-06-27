@@ -7,7 +7,7 @@ use std::str::FromStr;
 use util::vnet::*;
 
 #[tokio::test]
-async fn test_vnet_gather_no_local_ip_address() -> Result<(), Error> {
+async fn test_vnet_gather_no_local_ip_address() -> Result<()> {
     let vnet = Arc::new(net::Net::new(Some(net::NetConfig::default())));
 
     let a = Agent::new(AgentConfig {
@@ -25,7 +25,7 @@ async fn test_vnet_gather_no_local_ip_address() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_vnet_gather_dynamic_ip_address() -> Result<(), Error> {
+async fn test_vnet_gather_dynamic_ip_address() -> Result<()> {
     let cider = "1.2.3.0/24";
     let ipnet = IpNet::from_str(cider)?;
 
@@ -60,7 +60,7 @@ async fn test_vnet_gather_dynamic_ip_address() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_vnet_gather_listen_udp() -> Result<(), Error> {
+async fn test_vnet_gather_listen_udp() -> Result<()> {
     let cider = "1.2.3.0/24";
     let r = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
         cidr: cider.to_owned(),
@@ -102,7 +102,7 @@ async fn test_vnet_gather_listen_udp() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_vnet_gather_with_nat_1to1_as_host_candidates() -> Result<(), Error> {
+async fn test_vnet_gather_with_nat_1to1_as_host_candidates() -> Result<()> {
     let external_ip0 = "1.2.3.4";
     let external_ip1 = "1.2.3.5";
     let local_ip0 = "10.0.0.1";
@@ -226,7 +226,7 @@ async fn test_vnet_gather_with_nat_1to1_as_host_candidates() -> Result<(), Error
 }
 
 #[tokio::test]
-async fn test_vnet_gather_with_nat_1to1_as_srflx_candidates() -> Result<(), Error> {
+async fn test_vnet_gather_with_nat_1to1_as_srflx_candidates() -> Result<()> {
     let wan = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
         cidr: "1.2.3.0/24".to_owned(),
         ..Default::default()
@@ -312,7 +312,7 @@ async fn test_vnet_gather_with_nat_1to1_as_srflx_candidates() -> Result<(), Erro
 }
 
 #[tokio::test]
-async fn test_vnet_gather_with_interface_filter() -> Result<(), Error> {
+async fn test_vnet_gather_with_interface_filter() -> Result<()> {
     let r = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
         cidr: "1.2.3.0/24".to_owned(),
         ..Default::default()
@@ -366,7 +366,7 @@ async fn test_vnet_gather_with_interface_filter() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_vnet_gather_turn_connection_leak() -> Result<(), Error> {
+async fn test_vnet_gather_turn_connection_leak() -> Result<()> {
     let turn_server_url = Url {
         scheme: SchemeType::Turn,
         host: VNET_STUN_SERVER_IP.to_owned(),

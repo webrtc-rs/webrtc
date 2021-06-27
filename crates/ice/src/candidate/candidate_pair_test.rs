@@ -4,9 +4,8 @@ use crate::candidate::candidate_host::CandidateHostConfig;
 use crate::candidate::candidate_peer_reflexive::CandidatePeerReflexiveConfig;
 use crate::candidate::candidate_relay::CandidateRelayConfig;
 use crate::candidate::candidate_server_reflexive::CandidateServerReflexiveConfig;
-use util::Error;
 
-pub(crate) async fn host_candidate() -> Result<CandidateBase, Error> {
+pub(crate) async fn host_candidate() -> Result<CandidateBase> {
     CandidateHostConfig {
         base_config: CandidateBaseConfig {
             network: "udp".to_owned(),
@@ -20,7 +19,7 @@ pub(crate) async fn host_candidate() -> Result<CandidateBase, Error> {
     .await
 }
 
-pub(crate) async fn prflx_candidate() -> Result<CandidateBase, Error> {
+pub(crate) async fn prflx_candidate() -> Result<CandidateBase> {
     CandidatePeerReflexiveConfig {
         base_config: CandidateBaseConfig {
             network: "udp".to_owned(),
@@ -34,7 +33,7 @@ pub(crate) async fn prflx_candidate() -> Result<CandidateBase, Error> {
     .await
 }
 
-pub(crate) async fn srflx_candidate() -> Result<CandidateBase, Error> {
+pub(crate) async fn srflx_candidate() -> Result<CandidateBase> {
     CandidateServerReflexiveConfig {
         base_config: CandidateBaseConfig {
             network: "udp".to_owned(),
@@ -48,7 +47,7 @@ pub(crate) async fn srflx_candidate() -> Result<CandidateBase, Error> {
     .await
 }
 
-pub(crate) async fn relay_candidate() -> Result<CandidateBase, Error> {
+pub(crate) async fn relay_candidate() -> Result<CandidateBase> {
     CandidateRelayConfig {
         base_config: CandidateBaseConfig {
             network: "udp".to_owned(),
@@ -63,7 +62,7 @@ pub(crate) async fn relay_candidate() -> Result<CandidateBase, Error> {
 }
 
 #[tokio::test]
-async fn test_candidate_pair_priority() -> Result<(), Error> {
+async fn test_candidate_pair_priority() -> Result<()> {
     let tests = vec![
         (
             CandidatePair::new(
@@ -144,7 +143,7 @@ async fn test_candidate_pair_priority() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_candidate_pair_equality() -> Result<(), Error> {
+async fn test_candidate_pair_equality() -> Result<()> {
     let pair_a = CandidatePair::new(
         Arc::new(host_candidate().await?),
         Arc::new(srflx_candidate().await?),

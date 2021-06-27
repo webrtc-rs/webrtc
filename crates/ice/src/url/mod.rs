@@ -1,10 +1,9 @@
 #[cfg(test)]
 mod url_test;
 
-use crate::errors::*;
+use crate::error::*;
 
-use util::Error;
-
+use anyhow::Result;
 use std::borrow::Cow;
 use std::convert::From;
 use std::fmt;
@@ -138,10 +137,10 @@ impl Url {
     /// Parses a STUN or TURN urls following the ABNF syntax described in
     /// [IETF rfc-7064](https://tools.ietf.org/html/rfc7064) and
     /// [IETF rfc-7065](https://tools.ietf.org/html/rfc7065) respectively.
-    pub fn parse_url(raw: &str) -> Result<Self, Error> {
+    pub fn parse_url(raw: &str) -> Result<Self> {
         // work around for url crate
         if raw.contains("//") {
-            return Err(ERR_INVALID_URL.to_owned());
+            return Err(Error::ErrInvalidUrl.into());
         }
 
         let mut s = raw.to_string();
@@ -149,7 +148,7 @@ impl Url {
         if let Some(p) = pos {
             s.replace_range(p..=p, "://");
         } else {
-            return Err(ERR_SCHEME_TYPE.to_owned());
+            return Err(Error::ErrSchemeType.into());
         }
 
         let raw_parts = url::Url::parse(&s)?;
@@ -162,7 +161,7 @@ impl Url {
                 .trim_end_matches(']')
                 .to_owned()
         } else {
-            return Err(ERR_HOST.to_owned());
+            return Err(Error::ErrHost.into());
         };
 
         let port = if let Some(port) = raw_parts.port() {
@@ -177,29 +176,29 @@ impl Url {
         let proto = match scheme {
             SchemeType::Stun => {
                 if q_args.count() > 0 {
-                    return Err(ERR_STUN_QUERY.to_owned());
+                    return Err(Error::ErrStunQuery.into());
                 }
                 ProtoType::Udp
             }
             SchemeType::Stuns => {
                 if q_args.count() > 0 {
-                    return Err(ERR_STUN_QUERY.to_owned());
+                    return Err(Error::ErrStunQuery.into());
                 }
                 ProtoType::Tcp
             }
             SchemeType::Turn => {
                 if q_args.count() > 1 {
-                    return Err(ERR_INVALID_QUERY.to_owned());
+                    return Err(Error::ErrInvalidQuery.into());
                 }
                 if let Some((key, value)) = q_args.next() {
                     if key == Cow::Borrowed("transport") {
                         let proto: ProtoType = value.as_ref().into();
                         if proto == ProtoType::Unknown {
-                            return Err(ERR_PROTO_TYPE.to_owned());
+                            return Err(Error::ErrProtoType.into());
                         }
                         proto
                     } else {
-                        return Err(ERR_INVALID_QUERY.to_owned());
+                        return Err(Error::ErrInvalidQuery.into());
                     }
                 } else {
                     ProtoType::Udp
@@ -207,24 +206,24 @@ impl Url {
             }
             SchemeType::Turns => {
                 if q_args.count() > 1 {
-                    return Err(ERR_INVALID_QUERY.to_owned());
+                    return Err(Error::ErrInvalidQuery.into());
                 }
                 if let Some((key, value)) = q_args.next() {
                     if key == Cow::Borrowed("transport") {
                         let proto: ProtoType = value.as_ref().into();
                         if proto == ProtoType::Unknown {
-                            return Err(ERR_PROTO_TYPE.to_owned());
+                            return Err(Error::ErrProtoType.into());
                         }
                         proto
                     } else {
-                        return Err(ERR_INVALID_QUERY.to_owned());
+                        return Err(Error::ErrInvalidQuery.into());
                     }
                 } else {
                     ProtoType::Tcp
                 }
             }
             SchemeType::Unknown => {
-                return Err(ERR_SCHEME_TYPE.to_owned());
+                return Err(Error::ErrSchemeType.into());
             }
         };
 
@@ -239,10 +238,10 @@ impl Url {
     }
 
     /*
-    fn parse_proto(raw:&str) ->Result<ProtoType, Error> {
+    fn parse_proto(raw:&str) ->Result<ProtoType> {
         let qArgs= raw.split('=');
         if qArgs.len() != 2 {
-            return Err(ERR_INVALID_QUERY.to_owned());
+            return Err(Error::ErrInvalidQuery.into());
         }
 
         var proto ProtoType

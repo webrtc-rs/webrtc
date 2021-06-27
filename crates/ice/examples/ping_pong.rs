@@ -1,22 +1,22 @@
 use webrtc_ice as ice;
 
+use ice::agent::agent_config::AgentConfig;
+use ice::agent::Agent;
 use ice::candidate::*;
+use ice::error::Error;
 use ice::network_type::*;
 use ice::state::*;
 
+use anyhow::Result;
 use clap::{App, AppSettings, Arg};
-use std::io;
-//use std::io::Write;
-use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
-use util::{Conn, Error};
-
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Client, Method, Request, Response, Server, StatusCode};
 use rand::{thread_rng, Rng};
+use std::io;
+use std::sync::Arc;
 use std::time::Duration;
-use webrtc_ice::agent::agent_config::AgentConfig;
-use webrtc_ice::agent::Agent;
+use tokio::sync::{mpsc, Mutex};
+use util::Conn;
 
 #[macro_use]
 extern crate lazy_static;
@@ -86,7 +86,7 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
 //      cargo run --color=always --package webrtc-ice --example ping_pong -- --controlling
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
+async fn main() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -224,11 +224,11 @@ async fn main() -> Result<(), Error> {
         .body(Body::from(format!("{}:{}", local_ufrag, local_pwd)))
     {
         Ok(req) => req,
-        Err(err) => return Err(Error::new(format!("{}", err))),
+        Err(err) => return Err(Error::ErrOthers(format!("{}", err)).into()),
     };
     let resp = match client.request(req).await {
         Ok(resp) => resp,
-        Err(err) => return Err(Error::new(format!("{}", err))),
+        Err(err) => return Err(Error::ErrOthers(format!("{}", err)).into()),
     };
     println!("Response from remoteAuth: {}", resp.status());
 

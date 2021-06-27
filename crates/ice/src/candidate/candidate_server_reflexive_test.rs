@@ -6,12 +6,11 @@ use crate::agent::Agent;
 use crate::url::{SchemeType, Url};
 use std::time::Duration;
 use tokio::net::UdpSocket;
-use util::Error;
 
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_server_reflexive_only_connection() -> Result<(), Error> {
+async fn test_server_reflexive_only_connection() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(

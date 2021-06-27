@@ -1,14 +1,14 @@
 use super::*;
 use crate::agent::{agent_config::*, agent_vnet_test::*, *};
 use crate::candidate::*;
-use crate::errors::*;
+use crate::error::Error;
 use crate::network_type::*;
 
 use regex::Regex;
 use tokio::sync::{mpsc, Mutex};
 
 #[tokio::test]
-async fn test_multicast_dns_only_connection() -> Result<(), Error> {
+async fn test_multicast_dns_only_connection() -> Result<()> {
     let cfg0 = AgentConfig {
         network_types: vec![NetworkType::Udp4],
         candidate_types: vec![CandidateType::Host],
@@ -42,7 +42,7 @@ async fn test_multicast_dns_only_connection() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_multicast_dns_mixed_connection() -> Result<(), Error> {
+async fn test_multicast_dns_mixed_connection() -> Result<()> {
     let cfg0 = AgentConfig {
         network_types: vec![NetworkType::Udp4],
         candidate_types: vec![CandidateType::Host],
@@ -76,7 +76,7 @@ async fn test_multicast_dns_mixed_connection() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_multicast_dns_static_host_name() -> Result<(), Error> {
+async fn test_multicast_dns_static_host_name() -> Result<()> {
     let cfg0 = AgentConfig {
         network_types: vec![NetworkType::Udp4],
         candidate_types: vec![CandidateType::Host],
@@ -85,7 +85,7 @@ async fn test_multicast_dns_static_host_name() -> Result<(), Error> {
         ..Default::default()
     };
     if let Err(err) = Agent::new(cfg0).await {
-        assert_eq!(err, *ERR_INVALID_MULTICAST_DNSHOST_NAME);
+        assert!(Error::ErrInvalidMulticastDnshostName.equal(&err));
     } else {
         panic!("expected error, but got ok");
     }
@@ -125,7 +125,7 @@ async fn test_multicast_dns_static_host_name() -> Result<(), Error> {
 }
 
 #[test]
-fn test_generate_multicast_dnsname() -> Result<(), Error> {
+fn test_generate_multicast_dnsname() -> Result<()> {
     let name = generate_multicast_dns_name();
 
     let re = Regex::new(

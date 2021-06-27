@@ -1,12 +1,12 @@
 use super::*;
 
+use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use util::Error;
 use waitgroup::WaitGroup;
 
 #[tokio::test]
-async fn test_random_generator_collision() -> Result<(), Error> {
+async fn test_random_generator_collision() -> Result<()> {
     let test_cases = vec![
         (
             "CandidateID",

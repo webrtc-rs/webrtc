@@ -3,10 +3,9 @@ use super::*;
 use crate::agent::agent_config::AgentConfig;
 use crate::agent::Agent;
 use std::time::UNIX_EPOCH;
-use util::Error;
 
 #[test]
-fn test_candidate_priority() -> Result<(), Error> {
+fn test_candidate_priority() -> Result<()> {
     let tests = vec![
         (
             CandidateBase {
@@ -115,7 +114,7 @@ fn test_candidate_priority() -> Result<(), Error> {
 }
 
 #[test]
-fn test_candidate_last_sent() -> Result<(), Error> {
+fn test_candidate_last_sent() -> Result<()> {
     let candidate = CandidateBase::default();
     assert_eq!(candidate.last_sent(), UNIX_EPOCH);
 
@@ -128,7 +127,7 @@ fn test_candidate_last_sent() -> Result<(), Error> {
 }
 
 #[test]
-fn test_candidate_last_received() -> Result<(), Error> {
+fn test_candidate_last_received() -> Result<()> {
     let candidate = CandidateBase::default();
     assert_eq!(candidate.last_received(), UNIX_EPOCH);
 
@@ -141,7 +140,7 @@ fn test_candidate_last_received() -> Result<(), Error> {
 }
 
 #[test]
-fn test_candidate_foundation() -> Result<(), Error> {
+fn test_candidate_foundation() -> Result<()> {
     // All fields are the same
     assert_eq!(
         (CandidateBase {
@@ -238,7 +237,7 @@ fn test_candidate_foundation() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_candidate_marshal() -> Result<(), Error> {
+async fn test_candidate_marshal() -> Result<()> {
     let tests = vec![
        (
             Some(CandidateBase{

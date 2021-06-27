@@ -1,12 +1,15 @@
 use super::*;
 
 #[test]
-fn test_controlled_get_from() -> Result<(), Error> {
+fn test_controlled_get_from() -> Result<()> {
     let mut m = Message::new();
     let mut c = AttrControlled(4321);
     let result = c.get_from(&m);
     if let Err(err) = result {
-        assert_eq!(err, *ERR_ATTRIBUTE_NOT_FOUND, "unexpected error");
+        assert!(
+            stun::error::Error::ErrAttributeNotFound.equal(&err),
+            "unexpected error"
+        );
     } else {
         panic!("expected error, but got ok");
     }
@@ -38,12 +41,15 @@ fn test_controlled_get_from() -> Result<(), Error> {
 }
 
 #[test]
-fn test_controlling_get_from() -> Result<(), Error> {
+fn test_controlling_get_from() -> Result<()> {
     let mut m = Message::new();
     let mut c = AttrControlling(4321);
     let result = c.get_from(&m);
     if let Err(err) = result {
-        assert_eq!(err, *ERR_ATTRIBUTE_NOT_FOUND, "unexpected error");
+        assert!(
+            stun::error::Error::ErrAttributeNotFound.equal(&err),
+            "unexpected error"
+        );
     } else {
         panic!("expected error, but got ok");
     }
@@ -75,14 +81,17 @@ fn test_controlling_get_from() -> Result<(), Error> {
 }
 
 #[test]
-fn test_control_get_from() -> Result<(), Error> {
+fn test_control_get_from() -> Result<()> {
     //"Blank"
     {
         let m = Message::new();
         let mut c = AttrControl::default();
         let result = c.get_from(&m);
         if let Err(err) = result {
-            assert_eq!(err, *ERR_ATTRIBUTE_NOT_FOUND, "unexpected error");
+            assert!(
+                stun::error::Error::ErrAttributeNotFound.equal(&err),
+                "unexpected error"
+            );
         } else {
             panic!("expected error, but got ok");
         }
@@ -93,7 +102,10 @@ fn test_control_get_from() -> Result<(), Error> {
         let mut c = AttrControl::default();
         let result = c.get_from(&m);
         if let Err(err) = result {
-            assert_eq!(err, *ERR_ATTRIBUTE_NOT_FOUND, "unexpected error");
+            assert!(
+                stun::error::Error::ErrAttributeNotFound.equal(&err),
+                "unexpected error"
+            );
         } else {
             panic!("expected error, but got ok");
         }
@@ -131,7 +143,10 @@ fn test_control_get_from() -> Result<(), Error> {
         let mut c = AttrControl::default();
         let result = c.get_from(&m);
         if let Err(err) = result {
-            assert_eq!(err, *ERR_ATTRIBUTE_NOT_FOUND, "unexpected error");
+            assert!(
+                stun::error::Error::ErrAttributeNotFound.equal(&err),
+                "unexpected error"
+            );
         } else {
             panic!("expected error, but got ok");
         }

@@ -1,13 +1,13 @@
 use super::agent_vnet_test::*;
 use super::*;
 
-use util::{vnet::*, Conn, Error};
+use util::{vnet::*, Conn};
 use waitgroup::WaitGroup;
 
 pub(crate) async fn pipe(
     default_config0: Option<AgentConfig>,
     default_config1: Option<AgentConfig>,
-) -> Result<(Arc<impl Conn>, Arc<impl Conn>, Arc<Agent>, Arc<Agent>), Error> {
+) -> Result<(Arc<impl Conn>, Arc<impl Conn>, Arc<Agent>, Arc<Agent>)> {
     let (a_notifier, mut a_connected) = on_connected();
     let (b_notifier, mut b_connected) = on_connected();
 
@@ -44,7 +44,7 @@ pub(crate) async fn pipe(
 }
 
 #[tokio::test]
-async fn test_remote_local_addr() -> Result<(), Error> {
+async fn test_remote_local_addr() -> Result<()> {
     // Agent0 is behind 1:1 NAT
     let nat_type0 = nat::NatType {
         mode: nat::NatMode::Nat1To1,
@@ -106,7 +106,7 @@ async fn test_remote_local_addr() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_conn_stats() -> Result<(), Error> {
+async fn test_conn_stats() -> Result<()> {
     let (ca, cb, _, _) = pipe(None, None).await?;
     let na = ca.send(&[0u8; 10]).await?;
 
@@ -120,7 +120,7 @@ async fn test_conn_stats() -> Result<(), Error> {
         let nb = cb.recv(&mut buf).await?;
         assert_eq!(nb, 10, "bytes received don't match");
 
-        Ok::<(), Error>(())
+        Result::<()>::Ok(())
     });
 
     wg.wait().await;

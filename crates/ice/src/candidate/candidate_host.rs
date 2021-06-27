@@ -1,6 +1,8 @@
 use super::candidate_base::*;
 use super::*;
 use crate::rand::generate_cand_id;
+
+use anyhow::Result;
 use std::sync::atomic::{AtomicU16, AtomicU8};
 
 /// The config required to create a new `CandidateHost`.
@@ -13,7 +15,7 @@ pub struct CandidateHostConfig {
 
 impl CandidateHostConfig {
     /// Creates a new host candidate.
-    pub async fn new_candidate_host(self) -> Result<CandidateBase, Error> {
+    pub async fn new_candidate_host(self) -> Result<CandidateBase> {
         let mut candidate_id = self.base_config.candidate_id;
         if candidate_id.is_empty() {
             candidate_id = generate_cand_id();

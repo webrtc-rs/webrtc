@@ -1,11 +1,10 @@
 use super::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::mdns::*;
 use crate::network_type::*;
 use crate::url::*;
 
 use util::vnet::net::*;
-use util::Error;
 
 use std::time::Duration;
 
@@ -208,13 +207,13 @@ impl AgentConfig {
         &self,
         mdns_mode: MulticastDnsMode,
         candidate_types: &[CandidateType],
-    ) -> Result<Option<ExternalIpMapper>, Error> {
+    ) -> Result<Option<ExternalIpMapper>> {
         if let Some(ext_ip_mapper) =
             ExternalIpMapper::new(self.nat_1to1_ip_candidate_type, &self.nat_1to1_ips)?
         {
             if ext_ip_mapper.candidate_type == CandidateType::Host {
                 if mdns_mode == MulticastDnsMode::QueryAndGather {
-                    return Err(ERR_MULTICAST_DNS_WITH_NAT_1TO1_IP_MAPPING.to_owned());
+                    return Err(Error::ErrMulticastDnsWithNat1to1IpMapping.into());
                 }
                 let mut candi_host_enabled = false;
                 for candi_type in candidate_types {
@@ -224,7 +223,7 @@ impl AgentConfig {
                     }
                 }
                 if !candi_host_enabled {
-                    return Err(ERR_INEFFECTIVE_NAT_1TO1_IP_MAPPING_HOST.to_owned());
+                    return Err(Error::ErrIneffectiveNat1to1IpMappingHost.into());
                 }
             } else if ext_ip_mapper.candidate_type == CandidateType::ServerReflexive {
                 let mut candi_srflx_enabled = false;
@@ -235,7 +234,7 @@ impl AgentConfig {
                     }
                 }
                 if !candi_srflx_enabled {
-                    return Err(ERR_INEFFECTIVE_NAT_1TO1_IP_MAPPING_SRFLX.to_owned());
+                    return Err(Error::ErrIneffectiveNat1to1IpMappingSrflx.into());
                 }
             }
 

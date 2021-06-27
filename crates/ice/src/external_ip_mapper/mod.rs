@@ -2,17 +2,16 @@
 mod external_ip_mapper_test;
 
 use crate::candidate::*;
-use crate::errors::*;
+use crate::error::*;
 
-use util::Error;
-
+use anyhow::Result;
 use std::collections::HashMap;
 use std::net::IpAddr;
 
-pub(crate) fn validate_ip_string(ip_str: &str) -> Result<IpAddr, Error> {
+pub(crate) fn validate_ip_string(ip_str: &str) -> Result<IpAddr> {
     match ip_str.parse() {
         Ok(ip) => Ok(ip),
-        Err(_) => Err(ERR_INVALID_NAT_1TO1_IP_MAPPING.to_owned()),
+        Err(_) => Err(Error::ErrInvalidNat1to1IpMapping.into()),
     }
 }
 
@@ -24,9 +23,9 @@ pub(crate) struct IpMapping {
 }
 
 impl IpMapping {
-    pub(crate) fn set_sole_ip(&mut self, ip: IpAddr) -> Result<(), Error> {
+    pub(crate) fn set_sole_ip(&mut self, ip: IpAddr) -> Result<()> {
         if self.ip_sole.is_some() || !self.ip_map.is_empty() {
-            return Err(ERR_INVALID_NAT_1TO1_IP_MAPPING.to_owned());
+            return Err(Error::ErrInvalidNat1to1IpMapping.into());
         }
 
         self.ip_sole = Some(ip);
@@ -34,16 +33,16 @@ impl IpMapping {
         Ok(())
     }
 
-    pub(crate) fn add_ip_mapping(&mut self, loc_ip: IpAddr, ext_ip: IpAddr) -> Result<(), Error> {
+    pub(crate) fn add_ip_mapping(&mut self, loc_ip: IpAddr, ext_ip: IpAddr) -> Result<()> {
         if self.ip_sole.is_some() {
-            return Err(ERR_INVALID_NAT_1TO1_IP_MAPPING.to_owned());
+            return Err(Error::ErrInvalidNat1to1IpMapping.into());
         }
 
         let loc_ip_str = loc_ip.to_string();
 
         // check if dup of local IP
         if self.ip_map.contains_key(&loc_ip_str) {
-            return Err(ERR_INVALID_NAT_1TO1_IP_MAPPING.to_owned());
+            return Err(Error::ErrInvalidNat1to1IpMapping.into());
         }
 
         self.ip_map.insert(loc_ip_str, ext_ip);
@@ -51,13 +50,13 @@ impl IpMapping {
         Ok(())
     }
 
-    pub(crate) fn find_external_ip(&self, loc_ip: IpAddr) -> Result<IpAddr, Error> {
+    pub(crate) fn find_external_ip(&self, loc_ip: IpAddr) -> Result<IpAddr> {
         if let Some(ip_sole) = &self.ip_sole {
             return Ok(*ip_sole);
         }
 
         self.ip_map.get(&loc_ip.to_string()).map_or_else(
-            || Err(ERR_EXTERNAL_MAPPED_IP_NOT_FOUND.to_owned()),
+            || Err(Error::ErrExternalMappedIpNotFound.into()),
             |ext_ip| Ok(*ext_ip),
         )
     }
@@ -71,10 +70,7 @@ pub(crate) struct ExternalIpMapper {
 }
 
 impl ExternalIpMapper {
-    pub(crate) fn new(
-        mut candidate_type: CandidateType,
-        ips: &[String],
-    ) -> Result<Option<Self>, Error> {
+    pub(crate) fn new(mut candidate_type: CandidateType, ips: &[String]) -> Result<Option<Self>> {
         if ips.is_empty() {
             return Ok(None);
         }
@@ -83,7 +79,7 @@ impl ExternalIpMapper {
         } else if candidate_type != CandidateType::Host
             && candidate_type != CandidateType::ServerReflexive
         {
-            return Err(ERR_UNSUPPORTED_NAT_1TO1_IP_CANDIDATE_TYPE.to_owned());
+            return Err(Error::ErrUnsupportedNat1to1IpCandidateType.into());
         }
 
         let mut m = Self {
@@ -95,7 +91,7 @@ impl ExternalIpMapper {
         for ext_ip_str in ips {
             let ip_pair: Vec<&str> = ext_ip_str.split('/').collect();
             if ip_pair.is_empty() || ip_pair.len() > 2 {
-                return Err(ERR_INVALID_NAT_1TO1_IP_MAPPING.clone());
+                return Err(Error::ErrInvalidNat1to1IpMapping.into());
             }
 
             let ext_ip = validate_ip_string(ip_pair[0])?;
@@ -109,13 +105,13 @@ impl ExternalIpMapper {
                 let loc_ip = validate_ip_string(ip_pair[1])?;
                 if ext_ip.is_ipv4() {
                     if !loc_ip.is_ipv4() {
-                        return Err(ERR_INVALID_NAT_1TO1_IP_MAPPING.clone());
+                        return Err(Error::ErrInvalidNat1to1IpMapping.into());
                     }
 
                     m.ipv4_mapping.add_ip_mapping(loc_ip, ext_ip)?;
                 } else {
                     if loc_ip.is_ipv4() {
-                        return Err(ERR_INVALID_NAT_1TO1_IP_MAPPING.clone());
+                        return Err(Error::ErrInvalidNat1to1IpMapping.into());
                     }
 
                     m.ipv6_mapping.add_ip_mapping(loc_ip, ext_ip)?;
@@ -126,7 +122,7 @@ impl ExternalIpMapper {
         Ok(Some(m))
     }
 
-    pub(crate) fn find_external_ip(&self, local_ip_str: &str) -> Result<IpAddr, Error> {
+    pub(crate) fn find_external_ip(&self, local_ip_str: &str) -> Result<IpAddr> {
         let loc_ip = validate_ip_string(local_ip_str)?;
 
         if loc_ip.is_ipv4() {

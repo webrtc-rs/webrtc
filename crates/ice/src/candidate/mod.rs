@@ -17,9 +17,8 @@ use crate::network_type::*;
 use crate::tcp_type::*;
 use candidate_base::*;
 
-use util::Error;
-
 use crate::agent::agent_internal::AgentInternal;
+use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt;
 use std::net::{IpAddr, SocketAddr};
@@ -77,16 +76,12 @@ pub trait Candidate: fmt::Display {
 
     async fn addr(&self) -> SocketAddr;
 
-    async fn close(&self) -> Result<(), Error>;
+    async fn close(&self) -> Result<()>;
     fn seen(&self, outbound: bool);
 
-    async fn write_to(
-        &self,
-        raw: &[u8],
-        dst: &(dyn Candidate + Send + Sync),
-    ) -> Result<usize, Error>;
+    async fn write_to(&self, raw: &[u8], dst: &(dyn Candidate + Send + Sync)) -> Result<usize>;
     fn equal(&self, other: &dyn Candidate) -> bool;
-    async fn set_ip(&self, ip: &IpAddr) -> Result<(), Error>;
+    async fn set_ip(&self, ip: &IpAddr) -> Result<()>;
     fn get_conn(&self) -> Option<&Arc<dyn util::Conn + Send + Sync>>;
     fn get_closed_ch(&self) -> Arc<Mutex<Option<broadcast::Sender<()>>>>;
 }
@@ -312,7 +307,7 @@ impl CandidatePair {
             + if g > d { 1 } else { 0 }
     }
 
-    pub async fn write(&self, b: &[u8]) -> Result<usize, Error> {
+    pub async fn write(&self, b: &[u8]) -> Result<usize> {
         self.local.write_to(b, &*self.remote).await
     }
 }

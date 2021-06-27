@@ -1,9 +1,9 @@
 use super::*;
 
-use util::Error;
+use anyhow::Result;
 
 #[test]
-fn test_tcp_type() -> Result<(), Error> {
+fn test_tcp_type() -> Result<()> {
     //assert_eq!(TCPType::Unspecified, tcpType)
     assert_eq!(TcpType::Active, TcpType::from("active"));
     assert_eq!(TcpType::Passive, TcpType::from("passive"));

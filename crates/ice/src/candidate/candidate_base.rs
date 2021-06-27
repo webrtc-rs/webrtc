@@ -1,5 +1,5 @@
 use super::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::util::*;
 
 use stun::message::*;
@@ -26,7 +26,7 @@ pub struct CandidateBaseConfig {
     pub initialized_ch: Option<broadcast::Receiver<()>>,
 }
 
-pub(crate) type OnClose = fn() -> Result<(), Error>;
+pub(crate) type OnClose = fn() -> Result<()>;
 
 pub struct CandidateBase {
     pub(crate) id: String,
@@ -234,11 +234,11 @@ impl Candidate for CandidateBase {
     }
 
     /// Stops the recvLoop.
-    async fn close(&self) -> Result<(), Error> {
+    async fn close(&self) -> Result<()> {
         {
             let mut closed_ch = self.closed_ch.lock().await;
             if closed_ch.is_none() {
-                return Err(ERR_CLOSED.to_owned());
+                return Err(Error::ErrClosed.into());
             }
             closed_ch.take();
         }
@@ -263,11 +263,7 @@ impl Candidate for CandidateBase {
         }
     }
 
-    async fn write_to(
-        &self,
-        raw: &[u8],
-        dst: &(dyn Candidate + Send + Sync),
-    ) -> Result<usize, Error> {
+    async fn write_to(&self, raw: &[u8], dst: &(dyn Candidate + Send + Sync)) -> Result<usize> {
         let n = if let Some(conn) = &self.conn {
             let addr = dst.addr().await;
             conn.send_to(raw, addr).await?
@@ -288,7 +284,7 @@ impl Candidate for CandidateBase {
             && self.related_address() == other.related_address()
     }
 
-    async fn set_ip(&self, ip: &IpAddr) -> Result<(), Error> {
+    async fn set_ip(&self, ip: &IpAddr) -> Result<()> {
         let network_type = determine_network_type(&self.network, ip)?;
 
         self.network_type
@@ -392,11 +388,11 @@ impl CandidateBase {
         initialized_ch: Option<broadcast::Receiver<()>>,
         conn: Arc<dyn util::Conn + Send + Sync>,
         addr: SocketAddr,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         if let Some(mut initialized_ch) = initialized_ch {
             tokio::select! {
                 _ = initialized_ch.recv() => {}
-                _ = closed_ch_rx.recv() => return Err(ERR_CLOSED.to_owned()),
+                _ = closed_ch_rx.recv() => return Err(Error::ErrClosed.into()),
             }
         }
 
@@ -411,10 +407,10 @@ impl CandidateBase {
                             n = num;
                             src_addr = src;
                        }
-                       Err(err) => return Err(Error::new(err.to_string())),
+                       Err(err) => return Err(Error::ErrOthers(err.to_string()).into()),
                    }
                },
-                _  = closed_ch_rx.recv() => return Err(ERR_CLOSED.to_owned()),
+                _  = closed_ch_rx.recv() => return Err(Error::ErrClosed.into()),
             }
 
             Self::handle_inbound_candidate_msg(

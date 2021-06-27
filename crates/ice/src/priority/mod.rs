@@ -5,7 +5,7 @@ use stun::attributes::ATTR_PRIORITY;
 use stun::checks::*;
 use stun::message::*;
 
-use util::Error;
+use anyhow::Result;
 
 /// Represents PRIORITY attribute.
 #[derive(Default, PartialEq, Debug, Copy, Clone)]
@@ -15,7 +15,7 @@ const PRIORITY_SIZE: usize = 4; // 32 bit
 
 impl Setter for PriorityAttr {
     // add_to adds PRIORITY attribute to message.
-    fn add_to(&self, m: &mut Message) -> Result<(), Error> {
+    fn add_to(&self, m: &mut Message) -> Result<()> {
         let mut v = vec![0_u8; PRIORITY_SIZE];
         v.copy_from_slice(&self.0.to_be_bytes());
         m.add(ATTR_PRIORITY, &v);
@@ -25,7 +25,7 @@ impl Setter for PriorityAttr {
 
 impl PriorityAttr {
     /// Decodes PRIORITY attribute from message.
-    pub fn get_from(&mut self, m: &Message) -> Result<(), Error> {
+    pub fn get_from(&mut self, m: &Message) -> Result<()> {
         let v = m.get(ATTR_PRIORITY)?;
 
         check_size(ATTR_PRIORITY, v.len(), PRIORITY_SIZE)?;

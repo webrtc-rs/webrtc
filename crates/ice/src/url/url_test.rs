@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn test_parse_url_success() -> Result<(), Error> {
+fn test_parse_url_success() -> Result<()> {
     let tests = vec![
         (
             "stun:google.de",
@@ -106,30 +106,37 @@ fn test_parse_url_success() -> Result<(), Error> {
 }
 
 #[test]
-fn test_parse_url_failure() -> Result<(), Error> {
+fn test_parse_url_failure() -> Result<()> {
     let tests = vec![
-        ("", ERR_SCHEME_TYPE.to_owned()),
-        (":::", ERR_URL_PARSE_ERROR.to_owned()),
-        ("stun:[::1]:123:", ERR_PORT.to_owned()),
-        ("stun:[::1]:123a", ERR_PORT.to_owned()),
-        ("google.de", ERR_SCHEME_TYPE.to_owned()),
-        ("stun:", ERR_HOST.to_owned()),
-        ("stun:google.de:abc", ERR_PORT.to_owned()),
-        ("stun:google.de?transport=udp", ERR_STUN_QUERY.to_owned()),
-        ("stuns:google.de?transport=udp", ERR_STUN_QUERY.to_owned()),
-        ("turn:google.de?trans=udp", ERR_INVALID_QUERY.to_owned()),
-        ("turns:google.de?trans=udp", ERR_INVALID_QUERY.to_owned()),
+        ("", Error::ErrSchemeType),
+        (":::", Error::ErrUrlParse),
+        ("stun:[::1]:123:", Error::ErrPort),
+        ("stun:[::1]:123a", Error::ErrPort),
+        ("google.de", Error::ErrSchemeType),
+        ("stun:", Error::ErrHost),
+        ("stun:google.de:abc", Error::ErrPort),
+        ("stun:google.de?transport=udp", Error::ErrStunQuery),
+        ("stuns:google.de?transport=udp", Error::ErrStunQuery),
+        ("turn:google.de?trans=udp", Error::ErrInvalidQuery),
+        ("turns:google.de?trans=udp", Error::ErrInvalidQuery),
         (
             "turns:google.de?transport=udp&another=1",
-            ERR_INVALID_QUERY.to_owned(),
+            Error::ErrInvalidQuery,
         ),
-        ("turn:google.de?transport=ip", ERR_PROTO_TYPE.to_owned()),
+        ("turn:google.de?transport=ip", Error::ErrProtoType),
     ];
 
     for (raw_url, expected_err) in tests {
         let result = Url::parse_url(raw_url);
         if let Err(err) = result {
-            assert_eq!(err, expected_err, "testCase:{}", raw_url);
+            assert_eq!(
+                err.to_string(),
+                expected_err.to_string(),
+                "testCase: '{}', expected err '{}', but got err '{}'",
+                raw_url,
+                expected_err,
+                err
+            );
         } else {
             panic!("expected error, but got ok");
         }

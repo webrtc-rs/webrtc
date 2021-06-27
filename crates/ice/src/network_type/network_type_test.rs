@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn test_network_type_parsing_success() -> Result<(), Error> {
+fn test_network_type_parsing_success() -> Result<()> {
     let ipv4: IpAddr = "192.168.0.1".parse().unwrap();
     let ipv6: IpAddr = "fe80::a3:6ff:fec4:5454".parse().unwrap();
 
@@ -26,7 +26,7 @@ fn test_network_type_parsing_success() -> Result<(), Error> {
 }
 
 #[test]
-fn test_network_type_parsing_failure() -> Result<(), Error> {
+fn test_network_type_parsing_failure() -> Result<()> {
     let ipv6: IpAddr = "fe80::a3:6ff:fec4:5454".parse().unwrap();
 
     let tests = vec![("invalid network", "junkNetwork", ipv6)];
@@ -44,7 +44,7 @@ fn test_network_type_parsing_failure() -> Result<(), Error> {
 }
 
 #[test]
-fn test_network_type_is_udp() -> Result<(), Error> {
+fn test_network_type_is_udp() -> Result<()> {
     assert!(NetworkType::Udp4.is_udp());
     assert!(NetworkType::Udp6.is_udp());
     assert!(!NetworkType::Udp4.is_tcp());
@@ -54,7 +54,7 @@ fn test_network_type_is_udp() -> Result<(), Error> {
 }
 
 #[test]
-fn test_network_type_is_tcp() -> Result<(), Error> {
+fn test_network_type_is_tcp() -> Result<()> {
     assert!(NetworkType::Tcp4.is_tcp());
     assert!(NetworkType::Tcp6.is_tcp());
     assert!(!NetworkType::Tcp4.is_udp());

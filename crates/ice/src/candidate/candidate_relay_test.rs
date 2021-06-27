@@ -7,17 +7,11 @@ use crate::url::{ProtoType, SchemeType, Url};
 use std::time::Duration;
 use tokio::net::UdpSocket;
 use turn::auth::AuthHandler;
-use util::Error;
 
 pub(crate) struct OptimisticAuthHandler;
 
 impl AuthHandler for OptimisticAuthHandler {
-    fn auth_handle(
-        &self,
-        _username: &str,
-        _realm: &str,
-        _src_addr: SocketAddr,
-    ) -> Result<Vec<u8>, Error> {
+    fn auth_handle(&self, _username: &str, _realm: &str, _src_addr: SocketAddr) -> Result<Vec<u8>> {
         Ok(turn::auth::generate_auth_key(
             "username",
             "webrtc.rs",
@@ -29,7 +23,7 @@ impl AuthHandler for OptimisticAuthHandler {
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_relay_only_connection() -> Result<(), Error> {
+async fn test_relay_only_connection() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(

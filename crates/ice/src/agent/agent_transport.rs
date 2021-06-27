@@ -1,5 +1,5 @@
 use super::*;
-use crate::errors::*;
+use crate::error::*;
 
 use async_trait::async_trait;
 use std::io;
@@ -14,7 +14,7 @@ impl Agent {
         mut cancel_rx: mpsc::Receiver<()>,
         remote_ufrag: String,
         remote_pwd: String,
-    ) -> Result<Arc<impl Conn>, Error> {
+    ) -> Result<Arc<impl Conn>> {
         let (on_connected_rx, agent_conn) = {
             let agent_internal = Arc::clone(&self.agent_internal);
             let mut ai = self.agent_internal.lock().await;
@@ -28,7 +28,7 @@ impl Agent {
             tokio::select! {
                 _ = on_connected_rx.recv() => {},
                 _ = cancel_rx.recv() => {
-                    return Err(ERR_CANCELED_BY_CALLER.to_owned());
+                    return Err(Error::ErrCanceledByCaller.into());
                 }
             }
         }
@@ -42,7 +42,7 @@ impl Agent {
         mut cancel_rx: mpsc::Receiver<()>,
         remote_ufrag: String,
         remote_pwd: String,
-    ) -> Result<Arc<impl Conn>, Error> {
+    ) -> Result<Arc<impl Conn>> {
         let (on_connected_rx, agent_conn) = {
             let agent_internal = Arc::clone(&self.agent_internal);
             let mut ai = self.agent_internal.lock().await;
@@ -56,7 +56,7 @@ impl Agent {
             tokio::select! {
                 _ = on_connected_rx.recv() => {},
                 _ = cancel_rx.recv() => {
-                    return Err(ERR_CANCELED_BY_CALLER.to_owned());
+                    return Err(Error::ErrCanceledByCaller.into());
                 }
             }
         }
@@ -149,38 +149,35 @@ impl AgentConn {
 
 #[async_trait]
 impl Conn for AgentConn {
-    async fn connect(&self, _addr: SocketAddr) -> io::Result<()> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    async fn connect(&self, _addr: SocketAddr) -> Result<()> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn recv(&self, buf: &mut [u8]) -> io::Result<usize> {
+    async fn recv(&self, buf: &mut [u8]) -> Result<usize> {
         if self.done.load(Ordering::SeqCst) {
-            return Err(io::Error::new(io::ErrorKind::Other, "Conn is closed"));
+            return Err(io::Error::new(io::ErrorKind::Other, "Conn is closed").into());
         }
 
         let n = match self.buffer.read(buf, None).await {
             Ok(n) => n,
-            Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.to_string())),
+            Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.to_string()).into()),
         };
         self.bytes_received.fetch_add(n, Ordering::SeqCst);
 
         Ok(n)
     }
 
-    async fn recv_from(&self, _buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    async fn recv_from(&self, _buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn send(&self, buf: &[u8]) -> io::Result<usize> {
+    async fn send(&self, buf: &[u8]) -> Result<usize> {
         if self.done.load(Ordering::SeqCst) {
-            return Err(io::Error::new(io::ErrorKind::Other, "Conn is closed"));
+            return Err(io::Error::new(io::ErrorKind::Other, "Conn is closed").into());
         }
 
         if is_message(buf) {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                ERR_ICE_WRITE_STUN_MESSAGE.to_string(),
-            ));
+            return Err(Error::ErrIceWriteStunMessage.into());
         }
 
         let result = if let Some(pair) = self.get_selected_pair().await {
@@ -196,22 +193,19 @@ impl Conn for AgentConn {
                 self.bytes_sent.fetch_add(buf.len(), Ordering::SeqCst);
                 Ok(n)
             }
-            Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.to_string())),
+            Err(err) => Err(io::Error::new(io::ErrorKind::Other, err.to_string()).into()),
         }
     }
 
-    async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> io::Result<usize> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> Result<usize> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn local_addr(&self) -> io::Result<SocketAddr> {
+    async fn local_addr(&self) -> Result<SocketAddr> {
         if let Some(pair) = self.get_selected_pair().await {
             Ok(pair.local.addr().await)
         } else {
-            Err(io::Error::new(
-                io::ErrorKind::AddrNotAvailable,
-                "Addr Not Available",
-            ))
+            Err(io::Error::new(io::ErrorKind::AddrNotAvailable, "Addr Not Available").into())
         }
     }
 }

@@ -1,14 +1,15 @@
 use super::*;
 
-use stun::errors::*;
-
 #[test]
-fn test_priority_get_from() -> Result<(), Error> {
+fn test_priority_get_from() -> Result<()> {
     let mut m = Message::new();
     let mut p = PriorityAttr::default();
     let result = p.get_from(&m);
     if let Err(err) = result {
-        assert_eq!(err, ERR_ATTRIBUTE_NOT_FOUND.clone(), "unexpected error");
+        assert!(
+            stun::error::Error::ErrAttributeNotFound.equal(&err),
+            "unexpected error"
+        );
     } else {
         panic!("expected error, but got ok");
     }

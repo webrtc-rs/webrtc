@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn test_external_ip_mapper_validate_ip_string() -> Result<(), Error> {
+fn test_external_ip_mapper_validate_ip_string() -> Result<()> {
     let ip = validate_ip_string("1.2.3.4")?;
     assert!(ip.is_ipv4(), "should be true");
     assert_eq!("1.2.3.4", ip.to_string(), "should be true");
@@ -17,7 +17,7 @@ fn test_external_ip_mapper_validate_ip_string() -> Result<(), Error> {
 }
 
 #[test]
-fn test_external_ip_mapper_new_external_ip_mapper() -> Result<(), Error> {
+fn test_external_ip_mapper_new_external_ip_mapper() -> Result<()> {
     // ips being empty should succeed but mapper will still be nil
     let m = ExternalIpMapper::new(CandidateType::Unspecified, &[])?;
     assert!(m.is_none(), "should be none");
@@ -101,7 +101,7 @@ fn test_external_ip_mapper_new_external_ip_mapper() -> Result<(), Error> {
 }
 
 #[test]
-fn test_external_ip_mapper_new_external_ip_mapper_with_explicit_local_ip() -> Result<(), Error> {
+fn test_external_ip_mapper_new_external_ip_mapper_with_explicit_local_ip() -> Result<()> {
     // IPv4 with  explicit local IP, defaults to CandidateTypeHost
     let m = ExternalIpMapper::new(CandidateType::Unspecified, &["1.2.3.4/10.0.0.1".to_owned()])?
         .unwrap();
@@ -148,7 +148,7 @@ fn test_external_ip_mapper_new_external_ip_mapper_with_explicit_local_ip() -> Re
 }
 
 #[test]
-fn test_external_ip_mapper_new_external_ip_mapper_with_implicit_local_ip() -> Result<(), Error> {
+fn test_external_ip_mapper_new_external_ip_mapper_with_implicit_local_ip() -> Result<()> {
     // Mixing inpicit and explicit local IPs not allowed
     let result = ExternalIpMapper::new(
         CandidateType::Unspecified,
@@ -167,7 +167,7 @@ fn test_external_ip_mapper_new_external_ip_mapper_with_implicit_local_ip() -> Re
 }
 
 #[test]
-fn test_external_ip_mapper_find_external_ip_without_explicit_local_ip() -> Result<(), Error> {
+fn test_external_ip_mapper_find_external_ip_without_explicit_local_ip() -> Result<()> {
     // IPv4 with  explicit local IP, defaults to CandidateTypeHost
     let m = ExternalIpMapper::new(
         CandidateType::Unspecified,
@@ -193,7 +193,7 @@ fn test_external_ip_mapper_find_external_ip_without_explicit_local_ip() -> Resul
 }
 
 #[test]
-fn test_external_ip_mapper_find_external_ip_with_explicit_local_ip() -> Result<(), Error> {
+fn test_external_ip_mapper_find_external_ip_with_explicit_local_ip() -> Result<()> {
     // IPv4 with  explicit local IP, defaults to CandidateTypeHost
     let m = ExternalIpMapper::new(
         CandidateType::Unspecified,
@@ -234,7 +234,7 @@ fn test_external_ip_mapper_find_external_ip_with_explicit_local_ip() -> Result<(
 }
 
 #[test]
-fn test_external_ip_mapper_find_external_ip_with_empty_map() -> Result<(), Error> {
+fn test_external_ip_mapper_find_external_ip_with_empty_map() -> Result<()> {
     let m = ExternalIpMapper::new(CandidateType::Unspecified, &["1.2.3.4".to_owned()])?.unwrap();
 
     // attempt to find IPv6 that does not exist in the map

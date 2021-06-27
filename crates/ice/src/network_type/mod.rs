@@ -1,10 +1,9 @@
 #[cfg(test)]
 mod network_type_test;
 
-use crate::errors::*;
+use crate::error::*;
 
-use util::Error;
-
+use anyhow::Result;
 use std::fmt;
 use std::net::IpAddr;
 
@@ -122,7 +121,7 @@ impl NetworkType {
 }
 
 /// Determines the type of network based on the short network string and an IP address.
-pub(crate) fn determine_network_type(network: &str, ip: &IpAddr) -> Result<NetworkType, Error> {
+pub(crate) fn determine_network_type(network: &str, ip: &IpAddr) -> Result<NetworkType> {
     let ipv4 = ip.is_ipv4();
     let net = network.to_lowercase();
     if net.starts_with(UDP) {
@@ -138,6 +137,6 @@ pub(crate) fn determine_network_type(network: &str, ip: &IpAddr) -> Result<Netwo
             Ok(NetworkType::Tcp6)
         }
     } else {
-        Err(ERR_DETERMINE_NETWORK_TYPE.to_owned())
+        Err(Error::ErrDetermineNetworkType.into())
     }
 }

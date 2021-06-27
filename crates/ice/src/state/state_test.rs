@@ -1,9 +1,9 @@
 use super::*;
 
-use util::Error;
+use anyhow::Result;
 
 #[test]
-fn test_connected_state_string() -> Result<(), Error> {
+fn test_connected_state_string() -> Result<()> {
     let tests = vec![
         (ConnectionState::Unspecified, "Unspecified"),
         (ConnectionState::New, "New"),
@@ -29,7 +29,7 @@ fn test_connected_state_string() -> Result<(), Error> {
 }
 
 #[test]
-fn test_gathering_state_string() -> Result<(), Error> {
+fn test_gathering_state_string() -> Result<()> {
     let tests = vec![
         (GatheringState::Unspecified, "unspecified"),
         (GatheringState::New, "new"),

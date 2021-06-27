@@ -11,17 +11,16 @@ use crate::use_candidate::UseCandidateAttr;
 
 use crate::agent::agent_transport_test::pipe;
 use async_trait::async_trait;
-use std::io;
 use std::net::Ipv4Addr;
 use std::ops::Sub;
 use std::str::FromStr;
 use stun::message::*;
 use stun::textattrs::Username;
-use util::{vnet::*, Conn, Error};
+use util::{vnet::*, Conn};
 use waitgroup::{WaitGroup, Worker};
 
 #[tokio::test]
-async fn test_pair_search() -> Result<(), Error> {
+async fn test_pair_search() -> Result<()> {
     let config = AgentConfig::default();
     let a = Agent::new(config).await?;
 
@@ -44,7 +43,7 @@ async fn test_pair_search() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_pair_priority() -> Result<(), Error> {
+async fn test_pair_priority() -> Result<()> {
     let a = Agent::new(AgentConfig::default()).await?;
 
     let host_config = CandidateHostConfig {
@@ -158,7 +157,7 @@ async fn test_pair_priority() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_on_selected_candidate_pair_change() -> Result<(), Error> {
+async fn test_on_selected_candidate_pair_change() -> Result<()> {
     let a = Agent::new(AgentConfig::default()).await?;
     let (callback_called_tx, mut callback_called_rx) = mpsc::channel::<()>(1);
     let callback_called_tx = Arc::new(Mutex::new(Some(callback_called_tx)));
@@ -216,7 +215,7 @@ async fn test_on_selected_candidate_pair_change() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_handle_peer_reflexive_udp_pflx_candidate() -> Result<(), Error> {
+async fn test_handle_peer_reflexive_udp_pflx_candidate() -> Result<()> {
     let a = Agent::new(AgentConfig::default()).await?;
 
     let host_config = CandidateHostConfig {
@@ -299,7 +298,7 @@ async fn test_handle_peer_reflexive_udp_pflx_candidate() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_handle_peer_reflexive_unknown_remote() -> Result<(), Error> {
+async fn test_handle_peer_reflexive_unknown_remote() -> Result<()> {
     let a = Agent::new(AgentConfig::default()).await?;
 
     let mut tid = TransactionId::default();
@@ -358,7 +357,7 @@ async fn test_handle_peer_reflexive_unknown_remote() -> Result<(), Error> {
 
 // Assert that Agent on startup sends message, and doesn't wait for connectivityTicker to fire
 #[tokio::test]
-async fn test_connectivity_on_startup() -> Result<(), Error> {
+async fn test_connectivity_on_startup() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -475,7 +474,7 @@ async fn test_connectivity_on_startup() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_connectivity_lite() -> Result<(), Error> {
+async fn test_connectivity_lite() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -550,32 +549,32 @@ struct MockPacketConn;
 
 #[async_trait]
 impl Conn for MockPacketConn {
-    async fn connect(&self, _addr: SocketAddr) -> io::Result<()> {
+    async fn connect(&self, _addr: SocketAddr) -> Result<()> {
         Ok(())
     }
 
-    async fn recv(&self, _buf: &mut [u8]) -> io::Result<usize> {
+    async fn recv(&self, _buf: &mut [u8]) -> Result<usize> {
         Ok(0)
     }
 
-    async fn recv_from(&self, _buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
+    async fn recv_from(&self, _buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
         Ok((0, SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0)))
     }
 
-    async fn send(&self, _buf: &[u8]) -> io::Result<usize> {
+    async fn send(&self, _buf: &[u8]) -> Result<usize> {
         Ok(0)
     }
 
-    async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> io::Result<usize> {
+    async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> Result<usize> {
         Ok(0)
     }
 
-    async fn local_addr(&self) -> io::Result<SocketAddr> {
+    async fn local_addr(&self) -> Result<SocketAddr> {
         Ok(SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0))
     }
 }
 
-fn build_msg(c: MessageClass, username: String, key: String) -> Result<Message, Error> {
+fn build_msg(c: MessageClass, username: String, key: String) -> Result<Message> {
     let mut msg = Message::new();
     msg.build(&[
         Box::new(MessageType::new(METHOD_BINDING, c)),
@@ -588,7 +587,7 @@ fn build_msg(c: MessageClass, username: String, key: String) -> Result<Message, 
 }
 
 #[tokio::test]
-async fn test_inbound_validity() -> Result<(), Error> {
+async fn test_inbound_validity() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -796,21 +795,21 @@ async fn test_inbound_validity() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_invalid_agent_starts() -> Result<(), Error> {
+async fn test_invalid_agent_starts() -> Result<()> {
     let a = Agent::new(AgentConfig::default()).await?;
 
     let (_cancel_tx1, cancel_rx1) = mpsc::channel(1);
     let result = a.dial(cancel_rx1, "".to_owned(), "bar".to_owned()).await;
     assert!(result.is_err());
     if let Err(err) = result {
-        assert_eq!(err, *ERR_REMOTE_UFRAG_EMPTY);
+        assert!(Error::ErrRemoteUfragEmpty.equal(&err));
     }
 
     let (_cancel_tx2, cancel_rx2) = mpsc::channel(1);
     let result = a.dial(cancel_rx2, "foo".to_owned(), "".to_owned()).await;
     assert!(result.is_err());
     if let Err(err) = result {
-        assert_eq!(err, *ERR_REMOTE_PWD_EMPTY);
+        assert!(Error::ErrRemotePwdEmpty.equal(&err));
     }
 
     let (cancel_tx3, cancel_rx3) = mpsc::channel(1);
@@ -822,14 +821,14 @@ async fn test_invalid_agent_starts() -> Result<(), Error> {
     let result = a.dial(cancel_rx3, "foo".to_owned(), "bar".to_owned()).await;
     assert!(result.is_err());
     if let Err(err) = result {
-        assert_eq!(err, *ERR_CANCELED_BY_CALLER);
+        assert!(Error::ErrCanceledByCaller.equal(&err));
     }
 
     let (_cancel_tx4, cancel_rx4) = mpsc::channel(1);
     let result = a.dial(cancel_rx4, "foo".to_owned(), "bar".to_owned()).await;
     assert!(result.is_err());
     if let Err(err) = result {
-        assert_eq!(err, *ERR_MULTIPLE_START);
+        assert!(Error::ErrMultipleStart.equal(&err));
     }
 
     a.close().await?;
@@ -841,7 +840,7 @@ async fn test_invalid_agent_starts() -> Result<(), Error> {
 
 // Assert that Agent emits Connecting/Connected/Disconnected/Failed/Closed messages
 #[tokio::test]
-async fn test_connection_state_callback() -> Result<(), Error> {
+async fn test_connection_state_callback() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -955,13 +954,13 @@ async fn test_connection_state_callback() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_invalid_gather() -> Result<(), Error> {
+async fn test_invalid_gather() -> Result<()> {
     //"Gather with no OnCandidate should error"
     let a = Agent::new(AgentConfig::default()).await?;
 
     if let Err(err) = a.gather_candidates().await {
-        assert_eq!(
-            err, *ERR_NO_ON_CANDIDATE_HANDLER,
+        assert!(
+            Error::ErrNoOnCandidateHandler.equal(&err),
             "trickle GatherCandidates succeeded without OnCandidate"
         );
     }
@@ -972,7 +971,7 @@ async fn test_invalid_gather() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_candidate_pair_stats() -> Result<(), Error> {
+async fn test_candidate_pair_stats() -> Result<()> {
     let a = Agent::new(AgentConfig::default()).await?;
 
     let host_local: Arc<dyn Candidate + Send + Sync> = Arc::new(
@@ -1140,7 +1139,7 @@ async fn test_candidate_pair_stats() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_local_candidate_stats() -> Result<(), Error> {
+async fn test_local_candidate_stats() -> Result<()> {
     let a = Agent::new(AgentConfig::default()).await?;
 
     let host_local: Arc<dyn Candidate + Send + Sync> = Arc::new(
@@ -1233,7 +1232,7 @@ async fn test_local_candidate_stats() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_remote_candidate_stats() -> Result<(), Error> {
+async fn test_remote_candidate_stats() -> Result<()> {
     let a = Agent::new(AgentConfig::default()).await?;
 
     let relay_remote: Arc<dyn Candidate + Send + Sync> = Arc::new(
@@ -1384,7 +1383,7 @@ async fn test_remote_candidate_stats() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_init_ext_ip_mapping() -> Result<(), Error> {
+async fn test_init_ext_ip_mapping() -> Result<()> {
     // a.extIPMapper should be nil by default
     let a = Agent::new(AgentConfig::default()).await?;
     assert!(
@@ -1416,8 +1415,8 @@ async fn test_init_ext_ip_mapping() -> Result<(), Error> {
     })
     .await
     {
-        assert_eq!(
-            err, *ERR_INEFFECTIVE_NAT_1TO1_IP_MAPPING_HOST,
+        assert!(
+            Error::ErrIneffectiveNat1to1IpMappingHost.equal(&err),
             "Unexpected error: {}",
             err
         );
@@ -1435,8 +1434,8 @@ async fn test_init_ext_ip_mapping() -> Result<(), Error> {
     })
     .await
     {
-        assert_eq!(
-            err, *ERR_INEFFECTIVE_NAT_1TO1_IP_MAPPING_SRFLX,
+        assert!(
+            Error::ErrIneffectiveNat1to1IpMappingSrflx.equal(&err),
             "Unexpected error: {}",
             err
         );
@@ -1454,8 +1453,8 @@ async fn test_init_ext_ip_mapping() -> Result<(), Error> {
     })
     .await
     {
-        assert_eq!(
-            err, *ERR_MULTICAST_DNS_WITH_NAT_1TO1_IP_MAPPING,
+        assert!(
+            Error::ErrMulticastDnsWithNat1to1IpMapping.equal(&err),
             "Unexpected error: {}",
             err
         );
@@ -1471,8 +1470,8 @@ async fn test_init_ext_ip_mapping() -> Result<(), Error> {
     })
     .await
     {
-        assert_eq!(
-            err, *ERR_INVALID_NAT_1TO1_IP_MAPPING,
+        assert!(
+            Error::ErrInvalidNat1to1IpMapping.equal(&err),
             "Unexpected error: {}",
             err
         );
@@ -1484,7 +1483,7 @@ async fn test_init_ext_ip_mapping() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_binding_request_timeout() -> Result<(), Error> {
+async fn test_binding_request_timeout() -> Result<()> {
     const EXPECTED_REMOVAL_COUNT: usize = 2;
 
     let a = Agent::new(AgentConfig::default()).await?;
@@ -1521,7 +1520,7 @@ async fn test_binding_request_timeout() -> Result<(), Error> {
 // test_agent_credentials checks if local username fragments and passwords (if set) meet RFC standard
 // and ensure it's backwards compatible with previous versions of the pion/ice
 #[tokio::test]
-async fn test_agent_credentials() -> Result<(), Error> {
+async fn test_agent_credentials() -> Result<()> {
     // Agent should not require any of the usernames and password to be set
     // If set, they should follow the default 16/128 bits random number generator strategy
 
@@ -1544,7 +1543,7 @@ async fn test_agent_credentials() -> Result<(), Error> {
     })
     .await
     {
-        assert_eq!(err, *ERR_LOCAL_UFRAG_INSUFFICIENT_BITS);
+        assert!(Error::ErrLocalUfragInsufficientBits.equal(&err));
     } else {
         panic!("expected error, but got ok");
     }
@@ -1555,7 +1554,7 @@ async fn test_agent_credentials() -> Result<(), Error> {
     })
     .await
     {
-        assert_eq!(err, *ERR_LOCAL_PWD_INSUFFICIENT_BITS);
+        assert!(Error::ErrLocalPwdInsufficientBits.equal(&err));
     } else {
         panic!("expected error, but got ok");
     }
@@ -1566,7 +1565,7 @@ async fn test_agent_credentials() -> Result<(), Error> {
 // Assert that Agent on Failure deletes all existing candidates
 // User can then do an ICE Restart to bring agent back
 #[tokio::test]
-async fn test_connection_state_failed_delete_all_candidates() -> Result<(), Error> {
+async fn test_connection_state_failed_delete_all_candidates() -> Result<()> {
     let one_second = Duration::from_secs(1);
     let keepalive_interval = Duration::from_secs(0);
 
@@ -1619,7 +1618,7 @@ async fn test_connection_state_failed_delete_all_candidates() -> Result<(), Erro
 
 // Assert that the ICE Agent can go directly from Connecting -> Failed on both sides
 #[tokio::test]
-async fn test_connection_state_connecting_to_failed() -> Result<(), Error> {
+async fn test_connection_state_connecting_to_failed() -> Result<()> {
     let one_second = Duration::from_secs(1);
     let keepalive_interval = Duration::from_secs(0);
 
@@ -1701,7 +1700,7 @@ async fn test_connection_state_connecting_to_failed() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_agent_restart_during_gather() -> Result<(), Error> {
+async fn test_agent_restart_during_gather() -> Result<()> {
     //"Restart During Gather"
 
     let agent = Agent::new(AgentConfig::default()).await?;
@@ -1711,7 +1710,7 @@ async fn test_agent_restart_during_gather() -> Result<(), Error> {
         .store(GatheringState::Gathering as u8, Ordering::SeqCst);
 
     if let Err(err) = agent.restart("".to_owned(), "".to_owned()).await {
-        assert_eq!(err, *ERR_RESTART_WHEN_GATHERING);
+        assert!(Error::ErrRestartWhenGathering.equal(&err));
     } else {
         panic!("expected error, but got ok");
     }
@@ -1722,14 +1721,14 @@ async fn test_agent_restart_during_gather() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_agent_restart_when_closed() -> Result<(), Error> {
+async fn test_agent_restart_when_closed() -> Result<()> {
     //"Restart When Closed"
 
     let agent = Agent::new(AgentConfig::default()).await?;
     agent.close().await?;
 
     if let Err(err) = agent.restart("".to_owned(), "".to_owned()).await {
-        assert_eq!(err, *ERR_CLOSED);
+        assert!(Error::ErrClosed.equal(&err));
     } else {
         panic!("expected error, but got ok");
     }
@@ -1738,7 +1737,7 @@ async fn test_agent_restart_when_closed() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_agent_restart_one_side() -> Result<(), Error> {
+async fn test_agent_restart_one_side() -> Result<()> {
     let one_second = Duration::from_secs(1);
 
     //"Restart One Side"
@@ -1781,13 +1780,13 @@ async fn test_agent_restart_one_side() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_agent_restart_both_side() -> Result<(), Error> {
+async fn test_agent_restart_both_side() -> Result<()> {
     let one_second = Duration::from_secs(1);
     //"Restart Both Sides"
 
     // Get all addresses of candidates concatenated
     let generate_candidate_address_strings =
-        |res: Result<Vec<Arc<dyn Candidate + Send + Sync>>, Error>| -> String {
+        |res: Result<Vec<Arc<dyn Candidate + Send + Sync>>>| -> String {
             assert!(res.is_ok());
 
             let mut out = String::new();
@@ -1861,7 +1860,7 @@ async fn test_agent_restart_both_side() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_get_remote_credentials() -> Result<(), Error> {
+async fn test_get_remote_credentials() -> Result<()> {
     let a = Agent::new(AgentConfig::default()).await?;
 
     let (remote_ufrag, remote_pwd) = {
@@ -1882,7 +1881,7 @@ async fn test_get_remote_credentials() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_close_in_connection_state_callback() -> Result<(), Error> {
+async fn test_close_in_connection_state_callback() -> Result<()> {
     let disconnected_duration = Duration::from_secs(1);
     let failed_duration = Duration::from_secs(1);
     let keepalive_interval = Duration::from_secs(0);
@@ -1942,7 +1941,7 @@ async fn test_close_in_connection_state_callback() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_run_task_in_connection_state_callback() -> Result<(), Error> {
+async fn test_run_task_in_connection_state_callback() -> Result<()> {
     let one_second = Duration::from_secs(1);
     let keepalive_interval = Duration::from_secs(0);
 
@@ -1996,7 +1995,7 @@ async fn test_run_task_in_connection_state_callback() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_run_task_in_selected_candidate_pair_change_callback() -> Result<(), Error> {
+async fn test_run_task_in_selected_candidate_pair_change_callback() -> Result<()> {
     let one_second = Duration::from_secs(1);
     let keepalive_interval = Duration::from_secs(0);
 
@@ -2066,7 +2065,7 @@ async fn test_run_task_in_selected_candidate_pair_change_callback() -> Result<()
 
 // Assert that a Lite agent goes to disconnected and failed
 #[tokio::test]
-async fn test_lite_lifecycle() -> Result<(), Error> {
+async fn test_lite_lifecycle() -> Result<()> {
     let (a_notifier, mut a_connected_rx) = on_connected();
 
     let a_agent = Arc::new(

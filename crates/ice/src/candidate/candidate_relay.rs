@@ -1,6 +1,6 @@
 use super::candidate_base::*;
 use super::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::rand::generate_cand_id;
 use crate::util::*;
 use std::sync::atomic::{AtomicU16, AtomicU8};
@@ -18,7 +18,7 @@ pub struct CandidateRelayConfig {
 
 impl CandidateRelayConfig {
     /// Creates a new relay candidate.
-    pub async fn new_candidate_relay(self) -> Result<CandidateBase, Error> {
+    pub async fn new_candidate_relay(self) -> Result<CandidateBase> {
         let mut candidate_id = self.base_config.candidate_id;
         if candidate_id.is_empty() {
             candidate_id = generate_cand_id();
@@ -26,7 +26,7 @@ impl CandidateRelayConfig {
 
         let ip: IpAddr = match self.base_config.address.parse() {
             Ok(ip) => ip,
-            Err(_) => return Err(ERR_ADDRESS_PARSE_FAILED.to_owned()),
+            Err(_) => return Err(Error::ErrAddressParseFailed.into()),
         };
         let network_type = determine_network_type(&self.base_config.network, &ip)?;
 

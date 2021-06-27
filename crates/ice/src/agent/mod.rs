@@ -15,7 +15,7 @@ pub mod agent_stats;
 pub mod agent_transport;
 
 use crate::candidate::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::external_ip_mapper::*;
 use crate::mdns::*;
 use crate::network_type::*;
@@ -25,14 +25,12 @@ use agent_config::*;
 use agent_internal::*;
 use agent_stats::*;
 
+use anyhow::Result;
 use mdns::conn::*;
-use stun::{agent::*, attributes::*, fingerprint::*, integrity::*, message::*, xoraddr::*};
-use util::{vnet::net::*, Buffer, Error};
-
 use std::collections::HashMap;
 use std::net::{Ipv4Addr, SocketAddr};
-
-use crate::rand::*;
+use stun::{agent::*, attributes::*, fingerprint::*, integrity::*, message::*, xoraddr::*};
+use util::{vnet::net::*, Buffer};
 
 use crate::agent::agent_gather::GatherCandidatesInternalParams;
 use crate::agent::agent_transport::AgentConn;
@@ -41,6 +39,7 @@ use crate::candidate::candidate_host::CandidateHostConfig;
 use crate::candidate::candidate_peer_reflexive::CandidatePeerReflexiveConfig;
 use crate::candidate::candidate_relay::CandidateRelayConfig;
 use crate::candidate::candidate_server_reflexive::CandidateServerReflexiveConfig;
+use crate::rand::*;
 use crate::tcp_type::TcpType;
 use std::future::Future;
 use std::pin::Pin;
@@ -115,9 +114,9 @@ pub struct Agent {
 
 impl Agent {
     /// Creates a new Agent.
-    pub async fn new(config: AgentConfig) -> Result<Self, Error> {
+    pub async fn new(config: AgentConfig) -> Result<Self> {
         if config.port_max < config.port_min {
-            return Err(ERR_PORT.to_owned());
+            return Err(Error::ErrPort.into());
         }
 
         let mut mdns_name = config.multicast_dns_host_name.clone();
@@ -126,7 +125,7 @@ impl Agent {
         }
 
         if !mdns_name.ends_with(".local") || mdns_name.split('.').count() != 2 {
-            return Err(ERR_INVALID_MULTICAST_DNSHOST_NAME.to_owned());
+            return Err(Error::ErrInvalidMulticastDnshostName.into());
         }
 
         let mut mdns_mode = config.multicast_dns_mode;
@@ -231,7 +230,7 @@ impl Agent {
 
         if ai.lite && (candidate_types.len() != 1 || candidate_types[0] != CandidateType::Host) {
             Self::close_multicast_conn(&mdns_conn).await;
-            return Err(ERR_LITE_USING_NON_HOST_CANDIDATES.to_owned());
+            return Err(Error::ErrLiteUsingNonHostCandidates.into());
         }
 
         if !config.urls.is_empty()
@@ -239,7 +238,7 @@ impl Agent {
             && !contains_candidate_type(CandidateType::Relay, &candidate_types)
         {
             Self::close_multicast_conn(&mdns_conn).await;
-            return Err(ERR_USELESS_URLS_PROVIDED.to_owned());
+            return Err(Error::ErrUselessUrlsProvided.into());
         }
 
         let ext_ip_mapper = match config.init_ext_ip_mapping(mdns_mode, &candidate_types) {
@@ -385,10 +384,7 @@ impl Agent {
     }
 
     /// Adds a new remote candidate.
-    pub async fn add_remote_candidate(
-        &self,
-        c: &Arc<dyn Candidate + Send + Sync>,
-    ) -> Result<(), Error> {
+    pub async fn add_remote_candidate(&self, c: &Arc<dyn Candidate + Send + Sync>) -> Result<()> {
         // cannot check for network yet because it might not be applied
         // when mDNS hostame is used.
         if c.tcp_type() == TcpType::Active {
@@ -409,7 +405,7 @@ impl Agent {
             }
 
             if c.candidate_type() != CandidateType::Host {
-                return Err(ERR_ADDRESS_PARSE_FAILED.to_owned());
+                return Err(Error::ErrAddressParseFailed.into());
             }
 
             let agent_internal = Arc::clone(&self.agent_internal);
@@ -438,9 +434,7 @@ impl Agent {
     }
 
     /// Returns the local candidates.
-    pub async fn get_local_candidates(
-        &self,
-    ) -> Result<Vec<Arc<dyn Candidate + Send + Sync>>, Error> {
+    pub async fn get_local_candidates(&self) -> Result<Vec<Arc<dyn Candidate + Send + Sync>>> {
         let mut res = vec![];
 
         {
@@ -468,7 +462,7 @@ impl Agent {
     }
 
     /// Cleans up the Agent.
-    pub async fn close(&self) -> Result<(), Error> {
+    pub async fn close(&self) -> Result<()> {
         if let Some(gather_candidate_cancel) = &self.gather_candidate_cancel {
             gather_candidate_cancel();
         }
@@ -488,7 +482,7 @@ impl Agent {
         &self,
         remote_ufrag: String,
         remote_pwd: String,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let mut ai = self.agent_internal.lock().await;
         ai.set_remote_credentials(remote_ufrag, remote_pwd)
     }
@@ -498,7 +492,7 @@ impl Agent {
     ///
     /// Restart must only be called when `GatheringState` is `GatheringStateComplete`
     /// a user must then call `GatherCandidates` explicitly to start generating new ones.
-    pub async fn restart(&self, mut ufrag: String, mut pwd: String) -> Result<(), Error> {
+    pub async fn restart(&self, mut ufrag: String, mut pwd: String) -> Result<()> {
         if ufrag.is_empty() {
             ufrag = generate_ufrag();
         }
@@ -507,16 +501,16 @@ impl Agent {
         }
 
         if ufrag.len() * 8 < 24 {
-            return Err(ERR_LOCAL_UFRAG_INSUFFICIENT_BITS.to_owned());
+            return Err(Error::ErrLocalUfragInsufficientBits.into());
         }
         if pwd.len() * 8 < 128 {
-            return Err(ERR_LOCAL_PWD_INSUFFICIENT_BITS.to_owned());
+            return Err(Error::ErrLocalPwdInsufficientBits.into());
         }
 
         if GatheringState::from(self.gathering_state.load(Ordering::SeqCst))
             == GatheringState::Gathering
         {
-            return Err(ERR_RESTART_WHEN_GATHERING.to_owned());
+            return Err(Error::ErrRestartWhenGathering.into());
         }
         self.gathering_state
             .store(GatheringState::New as u8, Ordering::SeqCst);
@@ -524,7 +518,7 @@ impl Agent {
         let mut ai = self.agent_internal.lock().await;
 
         if ai.done_tx.is_none() {
-            return Err(ERR_CLOSED.to_owned());
+            return Err(Error::ErrClosed.into());
         }
 
         // Clear all agent needed to take back to fresh state
@@ -553,15 +547,15 @@ impl Agent {
     }
 
     /// Initiates the trickle based gathering process.
-    pub async fn gather_candidates(&self) -> Result<(), Error> {
+    pub async fn gather_candidates(&self) -> Result<()> {
         if self.gathering_state.load(Ordering::SeqCst) != GatheringState::New as u8 {
-            return Err(ERR_MULTIPLE_GATHER_ATTEMPTED.to_owned());
+            return Err(Error::ErrMultipleGatherAttempted.into());
         }
 
         let chan_candidate_tx = {
             let ai = self.agent_internal.lock().await;
             if ai.on_candidate_hdlr.is_none() {
-                return Err(ERR_NO_ON_CANDIDATE_HANDLER.to_owned());
+                return Err(Error::ErrNoOnCandidateHandler.into());
             }
             ai.chan_candidate_tx.clone()
         };
@@ -613,14 +607,15 @@ impl Agent {
     }
 
     /// Creates a Remote Candidate from its string representation.
-    pub async fn unmarshal_remote_candidate(&self, raw: String) -> Result<impl Candidate, Error> {
+    pub async fn unmarshal_remote_candidate(&self, raw: String) -> Result<impl Candidate> {
         let split: Vec<&str> = raw.split_whitespace().collect();
         if split.len() < 8 {
-            return Err(Error::new(format!(
-                "{} ({})",
-                *ERR_ATTRIBUTE_TOO_SHORT_ICE_CANDIDATE,
+            return Err(Error::ErrOthers(format!(
+                "{:?} ({})",
+                Error::ErrAttributeTooShortIceCandidate,
                 split.len()
-            )));
+            ))
+            .into());
         }
 
         // Foundation
@@ -652,10 +647,11 @@ impl Agent {
 
             if split2[0] == "raddr" {
                 if split2.len() < 4 {
-                    return Err(Error::new(format!(
-                        "{}: incorrect length",
-                        *ERR_PARSE_RELATED_ADDR
-                    )));
+                    return Err(Error::ErrOthers(format!(
+                        "{:?}: incorrect length",
+                        Error::ErrParseRelatedAddr
+                    ))
+                    .into());
                 }
 
                 // RelatedAddress
@@ -665,7 +661,11 @@ impl Agent {
                 rel_port = split2[3].parse()?;
             } else if split2[0] == "tcptype" {
                 if split2.len() < 2 {
-                    return Err(Error::new(format!("{}: incorrect length", *ERR_PARSE_TYPE)));
+                    return Err(Error::ErrOthers(format!(
+                        "{:?}: incorrect length",
+                        Error::ErrParseType
+                    ))
+                    .into());
                 }
 
                 tcp_type = TcpType::from(split2[1]);
@@ -738,17 +738,16 @@ impl Agent {
                 };
                 config.new_candidate_relay().await
             }
-            _ => Err(Error::new(format!(
-                "{} ({})",
-                *ERR_UNKNOWN_CANDIDATE_TYPE, typ
-            ))),
+            _ => Err(
+                Error::ErrOthers(format!("{:?} ({})", Error::ErrUnknownCandidateType, typ)).into(),
+            ),
         }
     }
 
     async fn resolve_and_add_multicast_candidate(
         mdns_conn: Arc<DnsConn>,
         c: Arc<dyn Candidate + Send + Sync>,
-    ) -> Result<Arc<dyn Candidate + Send + Sync>, Error> {
+    ) -> Result<Arc<dyn Candidate + Send + Sync>> {
         //TODO: hook up _close_query_signal_tx to Agent or Candidate's Close signal?
         let (_close_query_signal_tx, close_query_signal_rx) = mpsc::channel(1);
         let src = match mdns_conn.query(&c.address(), close_query_signal_rx).await {

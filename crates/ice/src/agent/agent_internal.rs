@@ -86,9 +86,9 @@ impl AgentInternal {
         is_controlling: bool,
         remote_ufrag: String,
         remote_pwd: String,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         if self.started_ch_tx.is_none() {
-            return Err(ERR_MULTIPLE_START.to_owned());
+            return Err(Error::ErrMultipleStart.into());
         }
 
         log::debug!(
@@ -432,7 +432,7 @@ impl AgentInternal {
         &mut self,
         c: &Arc<dyn Candidate + Send + Sync>,
         ai: &Arc<Mutex<Self>>,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let initialized_ch = self
             .started_ch_tx
             .as_ref()
@@ -476,9 +476,9 @@ impl AgentInternal {
         Ok(())
     }
 
-    pub(crate) async fn close(&mut self) -> Result<(), Error> {
+    pub(crate) async fn close(&mut self) -> Result<()> {
         if self.done_tx.is_none() {
-            return Err(ERR_CLOSED.to_owned());
+            return Err(Error::ErrClosed.into());
         }
         self.delete_all_candidates().await;
         self.started_ch_tx.take();
@@ -751,11 +751,11 @@ impl AgentInternal {
         &mut self,
         remote_ufrag: String,
         remote_pwd: String,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         if remote_ufrag.is_empty() {
-            return Err(ERR_REMOTE_UFRAG_EMPTY.to_owned());
+            return Err(Error::ErrRemoteUfragEmpty.into());
         } else if remote_pwd.is_empty() {
-            return Err(ERR_REMOTE_PWD_EMPTY.to_owned());
+            return Err(Error::ErrRemotePwdEmpty.into());
         }
 
         self.remote_ufrag = remote_ufrag;

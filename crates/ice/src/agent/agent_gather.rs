@@ -1,10 +1,10 @@
 use super::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::network_type::*;
 use crate::url::{ProtoType, SchemeType, Url};
 use crate::util::*;
 
-use util::{vnet::net::*, Conn, Error};
+use util::{vnet::net::*, Conn};
 
 use crate::candidate::candidate_base::CandidateBaseConfig;
 use crate::candidate::candidate_host::CandidateHostConfig;
@@ -283,7 +283,7 @@ impl Agent {
                             if mdns_mode == MulticastDnsMode::QueryAndGather {
                                 if let Err(err) = candidate.set_ip(&ip).await {
                                     log::warn!(
-                                        "Failed to create host candidate: {} {} {}: {}",
+                                        "Failed to create host candidate: {} {} {}: {:?}",
                                         network,
                                         mapped_ip,
                                         port,
@@ -428,7 +428,7 @@ impl Agent {
                     }
                 }
 
-                Ok::<(), Error>(())
+                Result::<()>::Ok(())
             });
         }
 
@@ -525,7 +525,7 @@ impl Agent {
                             Ok(candidate) => Arc::new(candidate),
                             Err(err) => {
                                 log::warn!(
-                                    "Failed to create server reflexive candidate: {} {} {}: {}",
+                                    "Failed to create server reflexive candidate: {} {} {}: {:?}",
                                     network,
                                     ip,
                                     port,
@@ -548,7 +548,7 @@ impl Agent {
                         }
                     }
 
-                    Ok::<(), Error>(())
+                    Result::<()>::Ok(())
                 });
             }
         }
@@ -568,11 +568,17 @@ impl Agent {
                 continue;
             }
             if url.username.is_empty() {
-                log::error!("Failed to gather relay candidates: {}", *ERR_USERNAME_EMPTY);
+                log::error!(
+                    "Failed to gather relay candidates: {:?}",
+                    Error::ErrUsernameEmpty
+                );
                 return;
             }
             if url.password.is_empty() {
-                log::error!("Failed to gather relay candidates: {}", *ERR_PASSWORD_EMPTY);
+                log::error!(
+                    "Failed to gather relay candidates: {:?}",
+                    Error::ErrPasswordEmpty
+                );
                 return;
             }
 
@@ -697,7 +703,7 @@ impl Agent {
                     }
                 }
 
-                Ok::<(), Error>(())
+                Result::<()>::Ok(())
             });
         }
 
