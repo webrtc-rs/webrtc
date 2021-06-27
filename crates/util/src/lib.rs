@@ -26,6 +26,9 @@ pub mod ifaces;
 #[cfg(feature = "vnet")]
 pub mod vnet;
 
+#[cfg(feature = "marshal")]
+pub mod marshal;
+
 #[cfg(feature = "buffer")]
 pub use crate::buffer::Buffer;
 
@@ -34,3 +37,6 @@ pub use crate::conn::Conn;
 
 #[cfg(feature = "error")]
 pub use crate::error::Error;
+
+#[cfg(feature = "marshal")]
+pub use crate::marshal::{exact_size_buf::ExactSizeBuf, Marshal, MarshalSize, Unmarshal};
