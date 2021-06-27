@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq)]
 pub enum Error {
     // from vnet
     #[error("obs cannot be nil")]
@@ -84,4 +84,14 @@ pub enum Error {
 
     #[error("Other errors:{0}")]
     ErrOthers(String),
+}
+
+impl Error {
+    pub fn equal(&self, err: &anyhow::Error) -> bool {
+        if let Some(e) = err.downcast_ref::<Self>() {
+            e == self
+        } else {
+            false
+        }
+    }
 }
