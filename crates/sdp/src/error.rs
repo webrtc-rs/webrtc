@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq)]
 pub enum Error {
     #[error("codec not found")]
     CodecNotFound,
@@ -20,4 +20,17 @@ pub enum Error {
     SdpInvalidSyntax(String),
     #[error("SdpInvalidValue: {0}")]
     SdpInvalidValue(String),
+
+    #[error("Other errors:{0}")]
+    ErrOthers(String),
+}
+
+impl Error {
+    pub fn equal(&self, err: &anyhow::Error) -> bool {
+        if let Some(e) = err.downcast_ref::<Self>() {
+            e == self
+        } else {
+            false
+        }
+    }
 }
