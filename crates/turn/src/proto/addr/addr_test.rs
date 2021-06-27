@@ -1,10 +1,10 @@
 use super::*;
 
+use anyhow::Result;
 use std::net::Ipv4Addr;
-use util::Error;
 
 #[test]
-fn test_addr_from_socket_addr() -> Result<(), Error> {
+fn test_addr_from_socket_addr() -> Result<()> {
     let u = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 1234);
 
     let a = Addr::from_socket_addr(&u);
@@ -18,7 +18,7 @@ fn test_addr_from_socket_addr() -> Result<(), Error> {
 }
 
 #[test]
-fn test_addr_equal_ip() -> Result<(), Error> {
+fn test_addr_equal_ip() -> Result<()> {
     let a = Addr {
         ip: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
         port: 1337,
@@ -34,7 +34,7 @@ fn test_addr_equal_ip() -> Result<(), Error> {
 }
 
 #[test]
-fn test_five_tuple_equal() -> Result<(), Error> {
+fn test_five_tuple_equal() -> Result<()> {
     let tests = vec![
         ("blank", FiveTuple::default(), FiveTuple::default(), true),
         (
@@ -81,7 +81,7 @@ fn test_five_tuple_equal() -> Result<(), Error> {
 }
 
 #[test]
-fn test_five_tuple_string() -> Result<(), Error> {
+fn test_five_tuple_string() -> Result<()> {
     let s = FiveTuple {
         proto: PROTO_UDP,
         server: Addr {

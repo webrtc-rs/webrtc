@@ -3,13 +3,11 @@ mod reqtrans_test;
 
 use super::*;
 
+use anyhow::Result;
+use std::fmt;
 use stun::attributes::*;
 use stun::checks::*;
 use stun::message::*;
-
-use util::Error;
-
-use std::fmt;
 
 // RequestedTransport represents REQUESTED-TRANSPORT attribute.
 //
@@ -33,7 +31,7 @@ const REQUESTED_TRANSPORT_SIZE: usize = 4;
 
 impl Setter for RequestedTransport {
     // AddTo adds REQUESTED-TRANSPORT to message.
-    fn add_to(&self, m: &mut Message) -> Result<(), Error> {
+    fn add_to(&self, m: &mut Message) -> Result<()> {
         let mut v = vec![0; REQUESTED_TRANSPORT_SIZE];
         v[0] = self.protocol.0;
         // b[1:4] is RFFU = 0.
@@ -46,7 +44,7 @@ impl Setter for RequestedTransport {
 
 impl Getter for RequestedTransport {
     // GetFrom decodes REQUESTED-TRANSPORT from message.
-    fn get_from(&mut self, m: &Message) -> Result<(), Error> {
+    fn get_from(&mut self, m: &Message) -> Result<()> {
         let v = m.get(ATTR_REQUESTED_TRANSPORT)?;
 
         check_size(ATTR_REQUESTED_TRANSPORT, v.len(), REQUESTED_TRANSPORT_SIZE)?;

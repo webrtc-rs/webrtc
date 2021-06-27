@@ -2,7 +2,7 @@ use super::config::*;
 use super::*;
 use crate::auth::generate_auth_key;
 use crate::client::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::relay::relay_static::*;
 
 use crate::relay::relay_none::RelayAddressGeneratorNone;
@@ -10,7 +10,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
-use util::{vnet::router::Nic, vnet::*, Error};
+use util::{vnet::router::Nic, vnet::*};
 
 struct TestAuthHandler {
     cred_map: HashMap<String, Vec<u8>>,
@@ -29,22 +29,17 @@ impl TestAuthHandler {
 }
 
 impl AuthHandler for TestAuthHandler {
-    fn auth_handle(
-        &self,
-        username: &str,
-        _realm: &str,
-        _src_addr: SocketAddr,
-    ) -> Result<Vec<u8>, Error> {
+    fn auth_handle(&self, username: &str, _realm: &str, _src_addr: SocketAddr) -> Result<Vec<u8>> {
         if let Some(pw) = self.cred_map.get(username) {
             Ok(pw.to_vec())
         } else {
-            Err(ERR_FAKE_ERR.to_owned())
+            Err(Error::ErrFakeErr.into())
         }
     }
 }
 
 #[tokio::test]
-async fn test_server_simple() -> Result<(), Error> {
+async fn test_server_simple() -> Result<()> {
     // here, it should use static port, like "0.0.0.0:3478",
     // but, due to different test environment, let's fake it by using "0.0.0.0:0"
     // to auto assign a "static" port
@@ -106,7 +101,7 @@ struct VNet {
     server: Server,
 }
 
-async fn build_vnet() -> Result<VNet, Error> {
+async fn build_vnet() -> Result<VNet> {
     // WAN
     let wan = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
         cidr: "0.0.0.0/0".to_owned(),
@@ -221,7 +216,7 @@ async fn build_vnet() -> Result<VNet, Error> {
 }
 
 #[tokio::test]
-async fn test_server_vnet_send_binding_request() -> Result<(), Error> {
+async fn test_server_vnet_send_binding_request() -> Result<()> {
     let v = build_vnet().await?;
 
     let lconn = v.netl0.bind(SocketAddr::from_str("0.0.0.0:0")?).await?;
@@ -258,7 +253,7 @@ async fn test_server_vnet_send_binding_request() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_server_vnet_echo_via_relay() -> Result<(), Error> {
+async fn test_server_vnet_echo_via_relay() -> Result<()> {
     let v = build_vnet().await?;
 
     let lconn = v.netl0.bind(SocketAddr::from_str("0.0.0.0:0")?).await?;

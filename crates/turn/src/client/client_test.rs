@@ -7,9 +7,9 @@ use std::net::IpAddr;
 use tokio::net::UdpSocket;
 use tokio::time::Duration;
 
-use util::{vnet::net::*, Error};
+use util::vnet::net::*;
 
-async fn create_listening_test_client(rto_in_ms: u16) -> Result<Client, Error> {
+async fn create_listening_test_client(rto_in_ms: u16) -> Result<Client> {
     let conn = UdpSocket::bind("0.0.0.0:0").await?;
 
     let c = Client::new(ClientConfig {
@@ -30,7 +30,7 @@ async fn create_listening_test_client(rto_in_ms: u16) -> Result<Client, Error> {
     Ok(c)
 }
 
-async fn create_listening_test_client_with_stun_serv() -> Result<Client, Error> {
+async fn create_listening_test_client_with_stun_serv() -> Result<Client> {
     let conn = UdpSocket::bind("0.0.0.0:0").await?;
 
     let c = Client::new(ClientConfig {
@@ -52,7 +52,7 @@ async fn create_listening_test_client_with_stun_serv() -> Result<Client, Error> 
 }
 
 #[tokio::test]
-async fn test_client_with_stun_send_binding_request() -> Result<(), Error> {
+async fn test_client_with_stun_send_binding_request() -> Result<()> {
     //env_logger::init();
 
     let c = create_listening_test_client_with_stun_serv().await?;
@@ -71,7 +71,7 @@ async fn test_client_with_stun_send_binding_request() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_client_with_stun_send_binding_request_to_parallel() -> Result<(), Error> {
+async fn test_client_with_stun_send_binding_request_to_parallel() -> Result<()> {
     //env_logger::init();
 
     let c1 = create_listening_test_client(0).await?;
@@ -103,7 +103,7 @@ async fn test_client_with_stun_send_binding_request_to_parallel() -> Result<(), 
 }
 
 #[tokio::test]
-async fn test_client_with_stun_send_binding_request_to_timeout() -> Result<(), Error> {
+async fn test_client_with_stun_send_binding_request_to_timeout() -> Result<()> {
     //env_logger::init();
 
     let c = create_listening_test_client(10).await?;
@@ -120,12 +120,7 @@ async fn test_client_with_stun_send_binding_request_to_timeout() -> Result<(), E
 
 struct TestAuthHandler;
 impl AuthHandler for TestAuthHandler {
-    fn auth_handle(
-        &self,
-        username: &str,
-        realm: &str,
-        _src_addr: SocketAddr,
-    ) -> Result<Vec<u8>, Error> {
+    fn auth_handle(&self, username: &str, realm: &str, _src_addr: SocketAddr) -> Result<Vec<u8>> {
         Ok(generate_auth_key(username, realm, "pass"))
     }
 }
@@ -134,7 +129,7 @@ impl AuthHandler for TestAuthHandler {
 // The subsequent Write on the allocation will cause a CreatePermission
 // which will be forced to handle a stale nonce response
 #[tokio::test]
-async fn test_client_nonce_expiration() -> Result<(), Error> {
+async fn test_client_nonce_expiration() -> Result<()> {
     // env_logger::init();
 
     // here, it should use static port, like "0.0.0.0:3478",

@@ -10,12 +10,12 @@ use crate::proto::lifetime::DEFAULT_LIFETIME;
 use config::*;
 use request::*;
 
+use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{Duration, Instant};
-
-use util::{Conn, Error};
+use util::Conn;
 
 const INBOUND_MTU: usize = 1500;
 
@@ -29,7 +29,7 @@ pub struct Server {
 
 impl Server {
     // creates the TURN server
-    pub async fn new(config: ServerConfig) -> Result<Self, Error> {
+    pub async fn new(config: ServerConfig) -> Result<Self> {
         config.validate()?;
 
         let mut s = Server {
@@ -109,7 +109,7 @@ impl Server {
     }
 
     // Close stops the TURN Server. It cleans up any associated state and closes all connections it is managing
-    pub fn close(&self) -> Result<(), Error> {
+    pub fn close(&self) -> Result<()> {
         Ok(())
     }
 }

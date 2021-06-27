@@ -1,9 +1,7 @@
 use super::*;
 
-use util::Error;
-
 #[test]
-fn test_channel_data_encode() -> Result<(), Error> {
+fn test_channel_data_encode() -> Result<()> {
     let mut d = ChannelData {
         data: vec![1, 2, 3, 4],
         number: ChannelNumber(MIN_CHANNEL_NUMBER + 1),
@@ -26,7 +24,7 @@ fn test_channel_data_encode() -> Result<(), Error> {
 }
 
 #[test]
-fn test_channel_data_equal() -> Result<(), Error> {
+fn test_channel_data_equal() -> Result<()> {
     let tests = vec![
         (
             "equal",
@@ -95,23 +93,23 @@ fn test_channel_data_equal() -> Result<(), Error> {
 }
 
 #[test]
-fn test_channel_data_decode() -> Result<(), Error> {
+fn test_channel_data_decode() -> Result<()> {
     let tests = vec![
-        ("small", vec![1, 2, 3], ERR_UNEXPECTED_EOF.to_owned()),
+        ("small", vec![1, 2, 3], Error::ErrUnexpectedEof),
         (
             "zeroes",
             vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            ERR_INVALID_CHANNEL_NUMBER.to_owned(),
+            Error::ErrInvalidChannelNumber,
         ),
         (
             "bad chan number",
             vec![63, 255, 0, 0, 0, 4, 0, 0, 1, 2, 3, 4],
-            ERR_INVALID_CHANNEL_NUMBER.to_owned(),
+            Error::ErrInvalidChannelNumber,
         ),
         (
             "bad length",
             vec![0x40, 0x40, 0x02, 0x23, 0x16, 0, 0, 0, 0, 0, 0, 0],
-            ERR_BAD_CHANNEL_DATA_LENGTH.to_owned(),
+            Error::ErrBadChannelDataLength,
         ),
     ];
 
@@ -121,10 +119,12 @@ fn test_channel_data_decode() -> Result<(), Error> {
             ..Default::default()
         };
         if let Err(err) = m.decode() {
-            assert_eq!(
-                err, want_err,
+            assert!(
+                want_err.equal(&err),
                 "unexpected: ({}) {} != {}",
-                name, want_err, err
+                name,
+                want_err,
+                err
             );
         } else {
             assert!(false, "expected error, but got ok");
@@ -135,7 +135,7 @@ fn test_channel_data_decode() -> Result<(), Error> {
 }
 
 #[test]
-fn test_channel_data_reset() -> Result<(), Error> {
+fn test_channel_data_reset() -> Result<()> {
     let mut d = ChannelData {
         data: vec![1, 2, 3, 4],
         number: ChannelNumber(MIN_CHANNEL_NUMBER + 1),
@@ -152,7 +152,7 @@ fn test_channel_data_reset() -> Result<(), Error> {
 }
 
 #[test]
-fn test_is_channel_data() -> Result<(), Error> {
+fn test_is_channel_data() -> Result<()> {
     let tests = vec![
         ("small", vec![1, 2, 3, 4], false),
         ("zeroes", vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], false),
@@ -172,7 +172,7 @@ const CHANDATA_TEST_HEX: [&str; 2] = [
 ];
 
 #[test]
-fn test_chrome_channel_data() -> Result<(), Error> {
+fn test_chrome_channel_data() -> Result<()> {
     let mut data = vec![];
     let mut messages = vec![];
 
@@ -180,7 +180,7 @@ fn test_chrome_channel_data() -> Result<(), Error> {
     for h in &CHANDATA_TEST_HEX {
         let b = match hex::decode(h) {
             Ok(b) => b,
-            Err(_) => return Err(Error::new("hex decode error".to_owned())),
+            Err(_) => return Err(Error::ErrOthers("hex decode error".to_owned()).into()),
         };
         data.push(b);
     }

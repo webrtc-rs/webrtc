@@ -1,17 +1,15 @@
-use crate::errors::*;
+use crate::error::*;
 
 use stun::message::*;
-
-use tokio::sync::{mpsc, Mutex};
-use tokio::time::Duration;
 
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
-use std::sync::Arc;
-
 use std::sync::atomic::{AtomicU16, Ordering};
-use util::{Conn, Error};
+use std::sync::Arc;
+use tokio::sync::{mpsc, Mutex};
+use tokio::time::Duration;
+use util::Conn;
 
 const MAX_RTX_INTERVAL_IN_MS: u16 = 1600;
 const MAX_RTX_COUNT: u16 = 7; // total 7 requests (Rc)
@@ -33,9 +31,10 @@ async fn on_rtx_timeout(
         if let Some(tr) = tm.delete(tr_key) {
             if !tr
                 .write_result(TransactionResult {
-                    err: Some(Error::new(format!(
-                        "{} {}",
-                        *ERR_ALL_RETRANSMISSIONS_FAILED, tr_key
+                    err: Some(Error::ErrOthers(format!(
+                        "{:?} {}",
+                        Error::ErrAllRetransmissionsFailed,
+                        tr_key
                     ))),
                     ..Default::default()
                 })
@@ -63,9 +62,10 @@ async fn on_rtx_timeout(
         if let Some(tr) = tm.delete(tr_key) {
             if !tr
                 .write_result(TransactionResult {
-                    err: Some(Error::new(format!(
-                        "{} {}",
-                        *ERR_ALL_RETRANSMISSIONS_FAILED, tr_key
+                    err: Some(Error::ErrOthers(format!(
+                        "{:?} {}",
+                        Error::ErrAllRetransmissionsFailed,
+                        tr_key
                     ))),
                     ..Default::default()
                 })
@@ -81,7 +81,7 @@ async fn on_rtx_timeout(
 }
 
 // TransactionResult is a bag of result values of a transaction
-#[derive(Debug, Clone)]
+#[derive(Debug)] //Clone
 pub struct TransactionResult {
     pub msg: Message,
     pub from: SocketAddr,

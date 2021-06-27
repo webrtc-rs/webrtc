@@ -3,10 +3,9 @@ use super::*;
 use crate::proto::lifetime::DEFAULT_LIFETIME;
 use std::str::FromStr;
 use tokio::net::UdpSocket;
-use util::Error;
 
 #[tokio::test]
-async fn test_has_permission() -> Result<(), Error> {
+async fn test_has_permission() -> Result<()> {
     let turn_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     let relay_socket = Arc::clone(&turn_socket);
     let relay_addr = relay_socket.local_addr()?;
@@ -37,7 +36,7 @@ async fn test_has_permission() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_add_permission() -> Result<(), Error> {
+async fn test_add_permission() -> Result<()> {
     let turn_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     let relay_socket = Arc::clone(&turn_socket);
     let relay_addr = relay_socket.local_addr()?;
@@ -54,7 +53,7 @@ async fn test_add_permission() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_remove_permission() -> Result<(), Error> {
+async fn test_remove_permission() -> Result<()> {
     let turn_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     let relay_socket = Arc::clone(&turn_socket);
     let relay_addr = relay_socket.local_addr()?;
@@ -80,7 +79,7 @@ async fn test_remove_permission() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_add_channel_bind() -> Result<(), Error> {
+async fn test_add_channel_bind() -> Result<()> {
     let turn_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     let relay_socket = Arc::clone(&turn_socket);
     let relay_addr = relay_socket.local_addr()?;
@@ -107,7 +106,7 @@ async fn test_add_channel_bind() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_get_channel_by_number() -> Result<(), Error> {
+async fn test_get_channel_by_number() -> Result<()> {
     let turn_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     let relay_socket = Arc::clone(&turn_socket);
     let relay_addr = relay_socket.local_addr()?;
@@ -136,7 +135,7 @@ async fn test_get_channel_by_number() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_get_channel_by_addr() -> Result<(), Error> {
+async fn test_get_channel_by_addr() -> Result<()> {
     let turn_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     let relay_socket = Arc::clone(&turn_socket);
     let relay_addr = relay_socket.local_addr()?;
@@ -161,7 +160,7 @@ async fn test_get_channel_by_addr() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_remove_channel_bind() -> Result<(), Error> {
+async fn test_remove_channel_bind() -> Result<()> {
     let turn_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     let relay_socket = Arc::clone(&turn_socket);
     let relay_addr = relay_socket.local_addr()?;
@@ -191,7 +190,7 @@ async fn test_remove_channel_bind() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_allocation_refresh() -> Result<(), Error> {
+async fn test_allocation_refresh() -> Result<()> {
     let turn_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     let relay_socket = Arc::clone(&turn_socket);
     let relay_addr = relay_socket.local_addr()?;
@@ -206,7 +205,7 @@ async fn test_allocation_refresh() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_allocation_close() -> Result<(), Error> {
+async fn test_allocation_close() -> Result<()> {
     let turn_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     let relay_socket = Arc::clone(&turn_socket);
     let relay_addr = relay_socket.local_addr()?;

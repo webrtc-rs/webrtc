@@ -1,9 +1,9 @@
 use super::*;
-use crate::errors::*;
+use crate::error::*;
 
-use util::vnet::net::*;
-
+use anyhow::Result;
 use async_trait::async_trait;
+use util::vnet::net::*;
 
 // RelayAddressGeneratorNone returns the listener with no modifications
 pub struct RelayAddressGeneratorNone {
@@ -15,9 +15,9 @@ pub struct RelayAddressGeneratorNone {
 #[async_trait]
 impl RelayAddressGenerator for RelayAddressGeneratorNone {
     // validate confirms that the RelayAddressGenerator is properly initialized
-    fn validate(&self) -> Result<(), Error> {
+    fn validate(&self) -> Result<()> {
         if self.address.is_empty() {
-            Err(ERR_LISTENING_ADDRESS_INVALID.to_owned())
+            Err(Error::ErrListeningAddressInvalid.into())
         } else {
             Ok(())
         }
@@ -28,7 +28,7 @@ impl RelayAddressGenerator for RelayAddressGeneratorNone {
         &self,
         use_ipv4: bool,
         requested_port: u16,
-    ) -> Result<(Arc<dyn Conn + Send + Sync>, SocketAddr), Error> {
+    ) -> Result<(Arc<dyn Conn + Send + Sync>, SocketAddr)> {
         let addr = self
             .net
             .resolve_addr(use_ipv4, &format!("{}:{}", self.address, requested_port))

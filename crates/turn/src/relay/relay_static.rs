@@ -1,10 +1,10 @@
 use super::*;
-use crate::errors::*;
+use crate::error::*;
 
+use anyhow::Result;
+use async_trait::async_trait;
 use std::net::IpAddr;
 use util::vnet::net::*;
-
-use async_trait::async_trait;
 
 // RelayAddressGeneratorStatic can be used to return static IP address each time a relay is created.
 // This can be used when you have a single static IP address that you want to use
@@ -21,9 +21,9 @@ pub struct RelayAddressGeneratorStatic {
 #[async_trait]
 impl RelayAddressGenerator for RelayAddressGeneratorStatic {
     // validate confirms that the RelayAddressGenerator is properly initialized
-    fn validate(&self) -> Result<(), Error> {
+    fn validate(&self) -> Result<()> {
         if self.address.is_empty() {
-            Err(ERR_LISTENING_ADDRESS_INVALID.to_owned())
+            Err(Error::ErrListeningAddressInvalid.into())
         } else {
             Ok(())
         }
@@ -34,7 +34,7 @@ impl RelayAddressGenerator for RelayAddressGeneratorStatic {
         &self,
         use_ipv4: bool,
         requested_port: u16,
-    ) -> Result<(Arc<dyn Conn + Send + Sync>, SocketAddr), Error> {
+    ) -> Result<(Arc<dyn Conn + Send + Sync>, SocketAddr)> {
         let addr = self
             .net
             .resolve_addr(use_ipv4, &format!("{}:{}", self.address, requested_port))

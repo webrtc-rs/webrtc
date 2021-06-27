@@ -6,7 +6,7 @@ pub mod channel_bind;
 pub mod five_tuple;
 pub mod permission;
 
-use crate::errors::*;
+use crate::error::*;
 use crate::proto::{chandata::*, channum::*, data::*, peeraddr::*, *};
 use channel_bind::*;
 use five_tuple::*;
@@ -15,15 +15,15 @@ use permission::*;
 use stun::agent::*;
 use stun::message::*;
 
-use util::{Conn, Error};
+use util::Conn;
 
-use tokio::sync::{mpsc, Mutex};
-use tokio::time::{Duration, Instant};
-
+use anyhow::Result;
 use std::collections::HashMap;
 use std::marker::{Send, Sync};
 use std::net::SocketAddr;
 use std::sync::{atomic::AtomicBool, atomic::Ordering, Arc};
+use tokio::sync::{mpsc, Mutex};
+use tokio::time::{Duration, Instant};
 
 const RTP_MTU: usize = 1500;
 
@@ -107,21 +107,17 @@ impl Allocation {
 
     // add_channel_bind adds a new ChannelBind to the allocation, it also updates the
     // permissions needed for this ChannelBind
-    pub async fn add_channel_bind(
-        &self,
-        mut c: ChannelBind,
-        lifetime: Duration,
-    ) -> Result<(), Error> {
+    pub async fn add_channel_bind(&self, mut c: ChannelBind, lifetime: Duration) -> Result<()> {
         {
             if let Some(addr) = self.get_channel_addr(&c.number).await {
                 if addr != c.peer {
-                    return Err(ERR_SAME_CHANNEL_DIFFERENT_PEER.to_owned());
+                    return Err(Error::ErrSameChannelDifferentPeer.into());
                 }
             }
 
             if let Some(number) = self.get_channel_number(&c.peer).await {
                 if number != c.number {
-                    return Err(ERR_SAME_CHANNEL_DIFFERENT_PEER.to_owned());
+                    return Err(Error::ErrSameChannelDifferentPeer.into());
                 }
             }
         }
@@ -179,9 +175,9 @@ impl Allocation {
     }
 
     // Close closes the allocation
-    pub async fn close(&mut self) -> Result<(), Error> {
+    pub async fn close(&mut self) -> Result<()> {
         if self.closed {
-            return Err(ERR_CLOSED.to_owned());
+            return Err(Error::ErrClosed.into());
         }
 
         self.closed = true;

@@ -1,7 +1,7 @@
 use super::*;
 use crate::relay::relay_none::*;
 
-use util::{vnet::net::*, Error};
+use util::vnet::net::*;
 
 use std::net::IpAddr;
 use std::str::FromStr;
@@ -12,7 +12,7 @@ use tokio::time::{Duration, Instant};
 const STATIC_KEY: &str = "ABC";
 
 #[tokio::test]
-async fn test_allocation_lifetime_parsing() -> Result<(), Error> {
+async fn test_allocation_lifetime_parsing() -> Result<()> {
     let lifetime = Lifetime(Duration::from_secs(5));
 
     let mut m = Message::new();
@@ -36,7 +36,7 @@ async fn test_allocation_lifetime_parsing() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_allocation_lifetime_overflow() -> Result<(), Error> {
+async fn test_allocation_lifetime_overflow() -> Result<()> {
     let lifetime = Lifetime(MAXIMUM_ALLOCATION_LIFETIME * 2);
 
     let mut m2 = Message::new();
@@ -54,18 +54,13 @@ async fn test_allocation_lifetime_overflow() -> Result<(), Error> {
 
 struct TestAuthHandler;
 impl AuthHandler for TestAuthHandler {
-    fn auth_handle(
-        &self,
-        _username: &str,
-        _realm: &str,
-        _src_addr: SocketAddr,
-    ) -> Result<Vec<u8>, Error> {
+    fn auth_handle(&self, _username: &str, _realm: &str, _src_addr: SocketAddr) -> Result<Vec<u8>> {
         Ok(STATIC_KEY.as_bytes().to_vec())
     }
 }
 
 #[tokio::test]
-async fn test_allocation_lifetime_deletion_zero_lifetime() -> Result<(), Error> {
+async fn test_allocation_lifetime_deletion_zero_lifetime() -> Result<()> {
     //env_logger::init();
 
     let l = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);

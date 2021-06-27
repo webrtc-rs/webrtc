@@ -1,11 +1,7 @@
 use super::*;
 
-use stun::errors::*;
-
-use util::Error;
-
 #[test]
-fn test_lifetime_string() -> Result<(), Error> {
+fn test_lifetime_string() -> Result<()> {
     let l = Lifetime(Duration::from_secs(10));
     assert_eq!(l.to_string(), "10s", "bad string {}, expected 10s", l);
 
@@ -13,7 +9,7 @@ fn test_lifetime_string() -> Result<(), Error> {
 }
 
 #[test]
-fn test_lifetime_add_to() -> Result<(), Error> {
+fn test_lifetime_add_to() -> Result<()> {
     let mut m = Message::new();
     let l = Lifetime(Duration::from_secs(10));
     l.add_to(&mut m)?;
@@ -33,9 +29,8 @@ fn test_lifetime_add_to() -> Result<(), Error> {
             let mut m = Message::new();
             let mut n_handle = Lifetime::default();
             if let Err(err) = n_handle.get_from(&m) {
-                assert_eq!(
-                    err,
-                    ERR_ATTRIBUTE_NOT_FOUND.to_owned(),
+                assert!(
+                    stun::error::Error::ErrAttributeNotFound.equal(&err),
                     "{} should be not found",
                     err
                 );

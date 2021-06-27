@@ -1,10 +1,10 @@
 use super::*;
-use crate::errors::*;
+use crate::error::*;
 
+use anyhow::Result;
+use async_trait::async_trait;
 use std::net::IpAddr;
 use util::vnet::net::*;
-
-use async_trait::async_trait;
 
 // RelayAddressGeneratorRanges can be used to only allocate connections inside a defined port range
 pub struct RelayAddressGeneratorRanges {
@@ -29,15 +29,15 @@ pub struct RelayAddressGeneratorRanges {
 #[async_trait]
 impl RelayAddressGenerator for RelayAddressGeneratorRanges {
     // validate confirms that the RelayAddressGenerator is properly initialized
-    fn validate(&self) -> Result<(), Error> {
+    fn validate(&self) -> Result<()> {
         if self.min_port == 0 {
-            Err(ERR_MIN_PORT_NOT_ZERO.to_owned())
+            Err(Error::ErrMinPortNotZero.into())
         } else if self.max_port == 0 {
-            Err(ERR_MAX_PORT_NOT_ZERO.to_owned())
+            Err(Error::ErrMaxPortNotZero.into())
         } else if self.max_port < self.min_port {
-            Err(ERR_MAX_PORT_LESS_THAN_MIN_PORT.to_owned())
+            Err(Error::ErrMaxPortLessThanMinPort.into())
         } else if self.address.is_empty() {
-            Err(ERR_LISTENING_ADDRESS_INVALID.to_owned())
+            Err(Error::ErrListeningAddressInvalid.into())
         } else {
             Ok(())
         }
@@ -48,7 +48,7 @@ impl RelayAddressGenerator for RelayAddressGeneratorRanges {
         &self,
         use_ipv4: bool,
         requested_port: u16,
-    ) -> Result<(Arc<dyn Conn + Send + Sync>, SocketAddr), Error> {
+    ) -> Result<(Arc<dyn Conn + Send + Sync>, SocketAddr)> {
         let max_retries = if self.max_retries == 0 {
             10
         } else {
@@ -82,6 +82,6 @@ impl RelayAddressGenerator for RelayAddressGeneratorRanges {
             return Ok((conn, relay_addr));
         }
 
-        Err(ERR_MAX_RETRIES_EXCEEDED.to_owned())
+        Err(Error::ErrMaxRetriesExceeded.into())
     }
 }

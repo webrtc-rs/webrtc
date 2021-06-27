@@ -1,10 +1,10 @@
 use super::*;
 
+use anyhow::Result;
 use std::net::{Ipv4Addr, SocketAddrV4};
-use util::Error;
 
 #[test]
-fn test_binding_manager_number_assignment() -> Result<(), Error> {
+fn test_binding_manager_number_assignment() -> Result<()> {
     let mut m = BindingManager::new();
     let mut n: u16;
     for i in 0..10 {
@@ -25,7 +25,7 @@ fn test_binding_manager_number_assignment() -> Result<(), Error> {
 }
 
 #[test]
-fn test_binding_manager_method() -> Result<(), Error> {
+fn test_binding_manager_method() -> Result<()> {
     let lo = Ipv4Addr::new(127, 0, 0, 1);
     let count = 100;
     let mut m = BindingManager::new();
@@ -66,7 +66,7 @@ fn test_binding_manager_method() -> Result<(), Error> {
 }
 
 #[test]
-fn test_binding_manager_failure() -> Result<(), Error> {
+fn test_binding_manager_failure() -> Result<()> {
     let ipv4 = Ipv4Addr::new(127, 0, 0, 1);
     let addr = SocketAddr::V4(SocketAddrV4::new(ipv4, 7777));
     let mut m = BindingManager::new();

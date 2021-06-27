@@ -1,6 +1,6 @@
 use super::*;
 
-use util::Error;
+use anyhow::Result;
 
 struct DummyPeriodicTimerTimeoutHandler;
 
@@ -12,7 +12,7 @@ impl PeriodicTimerTimeoutHandler for DummyPeriodicTimerTimeoutHandler {
 }
 
 #[tokio::test]
-async fn test_periodic_timer() -> Result<(), Error> {
+async fn test_periodic_timer() -> Result<()> {
     let timer_id = TimerIdRefresh::Perms;
     let mut rt = PeriodicTimer::new(timer_id, Duration::from_millis(50));
     let dummy1 = Arc::new(Mutex::new(DummyPeriodicTimerTimeoutHandler {}));

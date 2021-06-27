@@ -1,11 +1,7 @@
 use super::*;
 
-use stun::errors::*;
-
-use util::Error;
-
 #[test]
-fn test_even_port_string() -> Result<(), Error> {
+fn test_even_port_string() -> Result<()> {
     let mut p = EvenPort::default();
     assert_eq!(
         p.to_string(),
@@ -26,7 +22,7 @@ fn test_even_port_string() -> Result<(), Error> {
 }
 
 #[test]
-fn test_even_port_false() -> Result<(), Error> {
+fn test_even_port_false() -> Result<()> {
     let mut m = Message::new();
     let p = EvenPort {
         reserve_port: false,
@@ -44,7 +40,7 @@ fn test_even_port_false() -> Result<(), Error> {
 }
 
 #[test]
-fn test_even_port_add_to() -> Result<(), Error> {
+fn test_even_port_add_to() -> Result<()> {
     let mut m = Message::new();
     let p = EvenPort { reserve_port: true };
     p.add_to(&mut m)?;
@@ -62,9 +58,8 @@ fn test_even_port_add_to() -> Result<(), Error> {
             let mut m = Message::new();
             let mut handle = EvenPort::default();
             if let Err(err) = handle.get_from(&m) {
-                assert_eq!(
-                    err,
-                    ERR_ATTRIBUTE_NOT_FOUND.to_owned(),
+                assert!(
+                    stun::error::Error::ErrAttributeNotFound.equal(&err),
                     "{} should be not found",
                     err
                 );

@@ -1,10 +1,9 @@
 use super::*;
 
 use std::net::Ipv4Addr;
-use util::Error;
 
 #[test]
-fn test_relayed_address() -> Result<(), Error> {
+fn test_relayed_address() -> Result<()> {
     // Simple tests because already tested in stun.
     let a = RelayedAddress {
         ip: IpAddr::V4(Ipv4Addr::new(111, 11, 1, 2)),

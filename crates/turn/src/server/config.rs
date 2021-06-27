@@ -1,12 +1,12 @@
 use crate::auth::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::relay::*;
 
-use util::{Conn, Error};
+use util::Conn;
 
-use tokio::time::Duration;
-
+use anyhow::Result;
 use std::sync::Arc;
+use tokio::time::Duration;
 
 // ConnConfig is used for UDP listeners
 pub struct ConnConfig {
@@ -18,7 +18,7 @@ pub struct ConnConfig {
 }
 
 impl ConnConfig {
-    pub fn validate(&self) -> Result<(), Error> {
+    pub fn validate(&self) -> Result<()> {
         self.relay_addr_generator.validate()
     }
 }
@@ -40,9 +40,9 @@ pub struct ServerConfig {
 }
 
 impl ServerConfig {
-    pub fn validate(&self) -> Result<(), Error> {
+    pub fn validate(&self) -> Result<()> {
         if self.conn_configs.is_empty() {
-            return Err(ERR_NO_AVAILABLE_CONNS.to_owned());
+            return Err(Error::ErrNoAvailableConns.into());
         }
 
         for cc in &self.conn_configs {

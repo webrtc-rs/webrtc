@@ -1,11 +1,7 @@
 use super::*;
 
-use stun::errors::*;
-
-use util::Error;
-
 #[test]
-fn test_data_add_to() -> Result<(), Error> {
+fn test_data_add_to() -> Result<()> {
     let mut m = Message::new();
     let d = Data(vec![1, 2, 33, 44, 0x13, 0xaf]);
     d.add_to(&mut m)?;
@@ -25,9 +21,8 @@ fn test_data_add_to() -> Result<(), Error> {
             let m = Message::new();
             let mut handle = Data::default();
             if let Err(err) = handle.get_from(&m) {
-                assert_eq!(
-                    err,
-                    ERR_ATTRIBUTE_NOT_FOUND.to_owned(),
+                assert!(
+                    stun::error::Error::ErrAttributeNotFound.equal(&err),
                     "{} should be not found",
                     err
                 );

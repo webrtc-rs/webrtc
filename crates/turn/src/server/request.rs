@@ -6,7 +6,7 @@ use crate::allocation::channel_bind::ChannelBind;
 use crate::allocation::five_tuple::*;
 use crate::allocation::permission::Permission;
 use crate::auth::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::proto::chandata::ChannelData;
 use crate::proto::channum::ChannelNumber;
 use crate::proto::data::Data;
@@ -28,14 +28,14 @@ use stun::textattrs::*;
 use stun::uattrs::*;
 use stun::xoraddr::*;
 
-use util::{Conn, Error};
+use util::Conn;
 
+use anyhow::Result;
 use std::collections::HashMap;
 use std::marker::{Send, Sync};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::SystemTime;
-
 use tokio::sync::Mutex;
 use tokio::time::{Duration, Instant};
 
@@ -81,7 +81,7 @@ impl Request {
     }
 
     // handle_request processes the give Request
-    pub async fn handle_request(&mut self) -> Result<(), Error> {
+    pub async fn handle_request(&mut self) -> Result<()> {
         log::debug!(
             "received {} bytes of udp from {} on {}",
             self.buff.len(),
@@ -96,7 +96,7 @@ impl Request {
         }
     }
 
-    async fn handle_data_packet(&mut self) -> Result<(), Error> {
+    async fn handle_data_packet(&mut self) -> Result<()> {
         log::debug!("received DataPacket from {}", self.src_addr);
         let mut c = ChannelData {
             raw: self.buff.clone(),
@@ -106,7 +106,7 @@ impl Request {
         self.handle_channel_data(&c).await
     }
 
-    async fn handle_turn_packet(&mut self) -> Result<(), Error> {
+    async fn handle_turn_packet(&mut self) -> Result<()> {
         log::debug!("handle_turn_packet");
         let mut m = Message {
             raw: self.buff.clone(),
@@ -117,11 +117,11 @@ impl Request {
         self.process_message_handler(&m).await
     }
 
-    async fn process_message_handler(&mut self, m: &Message) -> Result<(), Error> {
+    async fn process_message_handler(&mut self, m: &Message) -> Result<()> {
         if m.typ.class == CLASS_INDICATION {
             match m.typ.method {
                 METHOD_SEND => self.handle_send_indication(m).await,
-                _ => Err(ERR_UNEXPECTED_CLASS.to_owned()),
+                _ => Err(Error::ErrUnexpectedClass.into()),
             }
         } else if m.typ.class == CLASS_REQUEST {
             match m.typ.method {
@@ -130,10 +130,10 @@ impl Request {
                 METHOD_CREATE_PERMISSION => self.handle_create_permission_request(m).await,
                 METHOD_CHANNEL_BIND => self.handle_channel_bind_request(m).await,
                 METHOD_BINDING => self.handle_binding_request(m).await,
-                _ => Err(ERR_UNEXPECTED_CLASS.to_owned()),
+                _ => Err(Error::ErrUnexpectedClass.into()),
             }
         } else {
-            Err(ERR_UNEXPECTED_CLASS.to_owned())
+            Err(Error::ErrUnexpectedClass.into())
         }
     }
 
@@ -141,7 +141,7 @@ impl Request {
         &mut self,
         m: &Message,
         calling_method: Method,
-    ) -> Result<Option<MessageIntegrity>, Error> {
+    ) -> Result<Option<MessageIntegrity>> {
         if !m.contains(ATTR_MESSAGE_INTEGRITY) {
             self.respond_with_nonce(m, calling_method, CODE_UNAUTHORIZED)
                 .await?;
@@ -207,7 +207,7 @@ impl Request {
                     &self.conn,
                     self.src_addr,
                     bad_request_msg,
-                    ERR_NO_SUCH_USER.to_owned(),
+                    Error::ErrNoSuchUser.into(),
                 )
                 .await?;
                 return Ok(None);
@@ -228,14 +228,14 @@ impl Request {
         m: &Message,
         calling_method: Method,
         response_code: ErrorCode,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let nonce = build_nonce()?;
 
         {
             // Nonce has already been taken
             let mut nonces = self.nonces.lock().await;
             if nonces.contains_key(&nonce) {
-                return Err(ERR_DUPLICATED_NONCE.to_owned());
+                return Err(Error::ErrDuplicatedNonce.into());
             }
             nonces.insert(nonce.clone(), Instant::now());
         }
@@ -256,7 +256,7 @@ impl Request {
         build_and_send(&self.conn, self.src_addr, msg).await
     }
 
-    pub(crate) async fn handle_binding_request(&mut self, m: &Message) -> Result<(), Error> {
+    pub(crate) async fn handle_binding_request(&mut self, m: &Message) -> Result<()> {
         log::debug!("received BindingRequest from {}", self.src_addr);
 
         let (ip, port) = (self.src_addr.ip(), self.src_addr.port());
@@ -274,7 +274,7 @@ impl Request {
     }
 
     // // https://tools.ietf.org/html/rfc5766#section-6.2
-    pub(crate) async fn handle_allocate_request(&mut self, m: &Message) -> Result<(), Error> {
+    pub(crate) async fn handle_allocate_request(&mut self, m: &Message) -> Result<()> {
         log::debug!("received AllocateRequest from {}", self.src_addr);
 
         // 1. The server MUST require that the request be authenticated.  This
@@ -319,7 +319,7 @@ impl Request {
                 &self.conn,
                 self.src_addr,
                 msg,
-                ERR_RELAY_ALREADY_ALLOCATED_FOR_FIVE_TUPLE.to_owned(),
+                Error::ErrRelayAlreadyAllocatedForFiveTuple.into(),
             )
             .await;
         }
@@ -354,7 +354,7 @@ impl Request {
                 &self.conn,
                 self.src_addr,
                 msg,
-                ERR_REQUESTED_TRANSPORT_MUST_BE_UDP.to_owned(),
+                Error::ErrRequestedTransportMustBeUdp.into(),
             )
             .await;
         }
@@ -380,7 +380,7 @@ impl Request {
                 &self.conn,
                 self.src_addr,
                 msg,
-                ERR_NO_DONT_FRAGMENT_SUPPORT.to_owned(),
+                Error::ErrNoDontFragmentSupport.into(),
             )
             .await;
         }
@@ -409,7 +409,7 @@ impl Request {
                     &self.conn,
                     self.src_addr,
                     bad_request_msg,
-                    ERR_REQUEST_WITH_RESERVATION_TOKEN_AND_EVEN_PORT.to_owned(),
+                    Error::ErrRequestWithReservationTokenAndEvenPort.into(),
                 )
                 .await;
             }
@@ -547,7 +547,7 @@ impl Request {
         build_and_send(&self.conn, self.src_addr, msg).await
     }
 
-    pub(crate) async fn handle_refresh_request(&mut self, m: &Message) -> Result<(), Error> {
+    pub(crate) async fn handle_refresh_request(&mut self, m: &Message) -> Result<()> {
         log::debug!("received RefreshRequest from {}", self.src_addr);
 
         let message_integrity =
@@ -571,7 +571,7 @@ impl Request {
                 let a = a.lock().await;
                 a.refresh(lifetime_duration).await;
             } else {
-                return Err(ERR_NO_ALLOCATION_FOUND.to_owned());
+                return Err(Error::ErrNoAllocationFound.into());
             }
         } else {
             self.allocation_manager.delete_allocation(&five_tuple).await;
@@ -589,10 +589,7 @@ impl Request {
         build_and_send(&self.conn, self.src_addr, msg).await
     }
 
-    pub(crate) async fn handle_create_permission_request(
-        &mut self,
-        m: &Message,
-    ) -> Result<(), Error> {
+    pub(crate) async fn handle_create_permission_request(&mut self, m: &Message) -> Result<()> {
         log::debug!("received CreatePermission from {}", self.src_addr);
 
         let a = self
@@ -656,11 +653,11 @@ impl Request {
 
             build_and_send(&self.conn, self.src_addr, msg).await
         } else {
-            Err(ERR_NO_ALLOCATION_FOUND.to_owned())
+            Err(Error::ErrNoAllocationFound.into())
         }
     }
 
-    pub(crate) async fn handle_send_indication(&mut self, m: &Message) -> Result<(), Error> {
+    pub(crate) async fn handle_send_indication(&mut self, m: &Message) -> Result<()> {
         log::debug!("received SendIndication from {}", self.src_addr);
 
         let a = self
@@ -686,22 +683,22 @@ impl Request {
                 a.has_permission(&msg_dst).await
             };
             if !has_perm {
-                return Err(ERR_NO_PERMISSION.to_owned());
+                return Err(Error::ErrNoPermission.into());
             }
 
             let a = a.lock().await;
             let l = a.relay_socket.send_to(&data_attr.0, msg_dst).await?;
             if l != data_attr.0.len() {
-                Err(ERR_SHORT_WRITE.to_owned())
+                Err(Error::ErrShortWrite.into())
             } else {
                 Ok(())
             }
         } else {
-            Err(ERR_NO_ALLOCATION_FOUND.to_owned())
+            Err(Error::ErrNoAllocationFound.into())
         }
     }
 
-    pub(crate) async fn handle_channel_bind_request(&mut self, m: &Message) -> Result<(), Error> {
+    pub(crate) async fn handle_channel_bind_request(&mut self, m: &Message) -> Result<()> {
         log::debug!("received ChannelBindRequest from {}", self.src_addr);
 
         let a = self
@@ -765,11 +762,11 @@ impl Request {
             )?;
             return build_and_send(&self.conn, self.src_addr, msg).await;
         } else {
-            Err(ERR_NO_ALLOCATION_FOUND.to_owned())
+            Err(Error::ErrNoAllocationFound.into())
         }
     }
 
-    pub(crate) async fn handle_channel_data(&mut self, c: &ChannelData) -> Result<(), Error> {
+    pub(crate) async fn handle_channel_data(&mut self, c: &ChannelData) -> Result<()> {
         log::debug!("received ChannelData from {}", self.src_addr);
 
         let a = self
@@ -787,15 +784,15 @@ impl Request {
             if let Some(peer) = channel {
                 let l = a.relay_socket.send_to(&c.data, peer).await?;
                 if l != c.data.len() {
-                    Err(ERR_SHORT_WRITE.to_owned())
+                    Err(Error::ErrShortWrite.into())
                 } else {
                     Ok(())
                 }
             } else {
-                Err(ERR_NO_SUCH_CHANNEL_BIND.to_owned())
+                Err(Error::ErrNoSuchChannelBind.into())
             }
         } else {
-            Err(ERR_NO_ALLOCATION_FOUND.to_owned())
+            Err(Error::ErrNoAllocationFound.into())
         }
     }
 }
@@ -813,7 +810,7 @@ pub(crate) fn rand_seq(n: usize) -> String {
     }
 }
 
-pub(crate) fn build_nonce() -> Result<String, Error> {
+pub(crate) fn build_nonce() -> Result<String> {
     /* #nosec */
     let mut s = String::new();
     s.push_str(
@@ -836,7 +833,7 @@ pub(crate) async fn build_and_send(
     conn: &Arc<dyn Conn + Send + Sync>,
     dst: SocketAddr,
     msg: Message,
-) -> Result<(), Error> {
+) -> Result<()> {
     let _ = conn.send_to(&msg.raw, dst).await?;
     Ok(())
 }
@@ -846,8 +843,8 @@ pub(crate) async fn build_and_send_err(
     conn: &Arc<dyn Conn + Send + Sync>,
     dst: SocketAddr,
     msg: Message,
-    err: Error,
-) -> Result<(), Error> {
+    err: anyhow::Error,
+) -> Result<()> {
     if let Err(send_err) = build_and_send(conn, dst, msg).await {
         Err(send_err)
     } else {
@@ -859,7 +856,7 @@ pub(crate) fn build_msg(
     transaction_id: TransactionId,
     msg_type: MessageType,
     mut additional: Vec<Box<dyn Setter>>,
-) -> Result<Message, Error> {
+) -> Result<Message> {
     let mut attrs: Vec<Box<dyn Setter>> = vec![
         Box::new(Message {
             transaction_id,

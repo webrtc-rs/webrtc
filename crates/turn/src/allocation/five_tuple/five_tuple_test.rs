@@ -1,9 +1,8 @@
 use super::*;
-
-use util::Error;
+use anyhow::Result;
 
 #[test]
-fn test_five_tuple_protocol() -> Result<(), Error> {
+fn test_five_tuple_protocol() -> Result<()> {
     let udp_expect = PROTO_UDP;
     let tcp_expect = PROTO_TCP;
 
@@ -25,7 +24,7 @@ fn test_five_tuple_protocol() -> Result<(), Error> {
 }
 
 #[test]
-fn test_five_tuple_equal() -> Result<(), Error> {
+fn test_five_tuple_equal() -> Result<()> {
     let src_addr1: SocketAddr = "0.0.0.0:3478".parse::<SocketAddr>()?;
     let src_addr2: SocketAddr = "0.0.0.0:3479".parse::<SocketAddr>()?;
 

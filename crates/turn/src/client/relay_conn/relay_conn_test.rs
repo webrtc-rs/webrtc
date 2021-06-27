@@ -1,7 +1,6 @@
 use super::*;
 
 use std::net::Ipv4Addr;
-use util::Error;
 
 struct DummyRelayConnObserver {
     turn_server_addr: String,
@@ -23,7 +22,7 @@ impl RelayConnObserver for DummyRelayConnObserver {
         self.realm.clone()
     }
 
-    async fn write_to(&self, _data: &[u8], _to: &str) -> Result<usize, Error> {
+    async fn write_to(&self, _data: &[u8], _to: &str) -> Result<usize> {
         Ok(0)
     }
 
@@ -32,13 +31,13 @@ impl RelayConnObserver for DummyRelayConnObserver {
         _msg: &Message,
         _to: &str,
         _dont_wait: bool,
-    ) -> Result<TransactionResult, Error> {
-        Err(ERR_FAKE_ERR.to_owned())
+    ) -> Result<TransactionResult> {
+        Err(Error::ErrFakeErr.into())
     }
 }
 
 #[tokio::test]
-async fn test_relay_conn() -> Result<(), Error> {
+async fn test_relay_conn() -> Result<()> {
     let obs = DummyRelayConnObserver {
         turn_server_addr: String::new(),
         username: Username::new(ATTR_USERNAME, "username".to_owned()),
@@ -75,7 +74,7 @@ async fn test_relay_conn() -> Result<(), Error> {
     if let Err(err) =
         RelayConnInternal::bind(rc_obs, bind_addr, bind_number, nonce, integrity).await
     {
-        assert_ne!(err, *ERR_UNEXPECTED_RESPONSE);
+        assert!(!Error::ErrUnexpectedResponse.equal(&err));
     } else {
         assert!(false, "should fail");
     }

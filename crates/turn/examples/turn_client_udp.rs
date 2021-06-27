@@ -1,15 +1,16 @@
 use turn::client::*;
 
+use anyhow::Result;
 use clap::{App, AppSettings, Arg};
 use std::sync::Arc;
 use tokio::net::UdpSocket;
 use tokio::time::Duration;
-use util::{Conn, Error};
+use util::Conn;
 
 // RUST_LOG=trace cargo run --color=always --package webrtc-turn --example turn_client_udp -- --host 0.0.0.0 --user user=pass --ping
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
+async fn main() -> Result<()> {
     env_logger::init();
 
     let mut app = App::new("TURN Client UDP")
@@ -120,7 +121,7 @@ async fn main() -> Result<(), Error> {
 async fn do_ping_test(
     client: &Client,
     relay_conn: impl Conn + std::marker::Send + std::marker::Sync + 'static,
-) -> Result<(), Error> {
+) -> Result<()> {
     // Send BindingRequest to learn our external IP
     let mapped_addr = client.send_binding_request().await?;
 

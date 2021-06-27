@@ -2,10 +2,11 @@ use super::*;
 use crate::relay::relay_none::*;
 
 use crate::proto::lifetime::DEFAULT_LIFETIME;
+use anyhow::Result;
 use std::net::Ipv4Addr;
 use std::str::FromStr;
 use tokio::net::UdpSocket;
-use util::{vnet::net::*, Error};
+use util::vnet::net::*;
 
 fn new_test_manager() -> Manager {
     let config = ManagerConfig {
@@ -27,7 +28,7 @@ fn random_five_tuple() -> FiveTuple {
 }
 
 #[tokio::test]
-async fn test_packet_handler() -> Result<(), Error> {
+async fn test_packet_handler() -> Result<()> {
     //env_logger::init();
 
     // turn server initialization
@@ -96,7 +97,7 @@ async fn test_packet_handler() -> Result<(), Error> {
     let data = data_ch_rx
         .recv()
         .await
-        .ok_or_else(|| Error::new("data ch closed".to_owned()))?;
+        .ok_or(Error::ErrOthers("data ch closed".to_owned()))?;
 
     // resolve stun data message
     assert!(is_message(&data), "should be stun message");
@@ -121,7 +122,7 @@ async fn test_packet_handler() -> Result<(), Error> {
     let data = data_ch_rx
         .recv()
         .await
-        .ok_or_else(|| Error::new("data ch closed".to_owned()))?;
+        .ok_or(Error::ErrOthers("data ch closed".to_owned()))?;
 
     // resolve channel data
     assert!(
@@ -151,7 +152,7 @@ async fn test_packet_handler() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_create_allocation_duplicate_five_tuple() -> Result<(), Error> {
+async fn test_create_allocation_duplicate_five_tuple() -> Result<()> {
     //env_logger::init();
 
     // turn server initialization
@@ -179,7 +180,7 @@ async fn test_create_allocation_duplicate_five_tuple() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_delete_allocation() -> Result<(), Error> {
+async fn test_delete_allocation() -> Result<()> {
     //env_logger::init();
 
     // turn server initialization
@@ -215,7 +216,7 @@ async fn test_delete_allocation() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_allocation_timeout() -> Result<(), Error> {
+async fn test_allocation_timeout() -> Result<()> {
     //env_logger::init();
 
     // turn server initialization
@@ -250,7 +251,7 @@ async fn test_allocation_timeout() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_manager_close() -> Result<(), Error> {
+async fn test_manager_close() -> Result<()> {
     // env_logger::init();
 
     // turn server initialization

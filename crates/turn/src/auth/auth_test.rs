@@ -7,10 +7,10 @@ use std::net::IpAddr;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::net::UdpSocket;
-use util::{vnet::net::*, Error};
+use util::vnet::net::*;
 
 #[test]
-fn test_lt_cred() -> Result<(), Error> {
+fn test_lt_cred() -> Result<()> {
     let username = "1599491771";
     let shared_secret = "foobar";
 
@@ -26,7 +26,7 @@ fn test_lt_cred() -> Result<(), Error> {
 }
 
 #[test]
-fn test_generate_auth_key() -> Result<(), Error> {
+fn test_generate_auth_key() -> Result<()> {
     let username = "60";
     let password = "HWbnm25GwSj6jiHTEDMTO5D7aBw=";
     let realm = "webrtc.rs";
@@ -46,7 +46,7 @@ fn test_generate_auth_key() -> Result<(), Error> {
 
 #[cfg(target_family = "unix")]
 #[tokio::test]
-async fn test_new_long_term_auth_handler() -> Result<(), Error> {
+async fn test_new_long_term_auth_handler() -> Result<()> {
     //env_logger::init();
 
     const SHARED_SECRET: &str = "HELLO_WORLD";

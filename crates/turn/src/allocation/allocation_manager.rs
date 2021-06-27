@@ -2,12 +2,12 @@
 mod allocation_manager_test;
 
 use super::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::relay::*;
 
+use anyhow::Result;
 use std::collections::HashMap;
-
-use util::{Conn, Error};
+use util::Conn;
 
 // ManagerConfig a bag of config params for Manager.
 pub struct ManagerConfig {
@@ -32,7 +32,7 @@ impl Manager {
     }
 
     // Close closes the manager and closes all allocations it manages
-    pub async fn close(&self) -> Result<(), Error> {
+    pub async fn close(&self) -> Result<()> {
         let allocations = self.allocations.lock().await;
         for a in allocations.values() {
             let mut a = a.lock().await;
@@ -56,13 +56,13 @@ impl Manager {
         turn_socket: Arc<dyn Conn + Send + Sync>,
         requested_port: u16,
         lifetime: Duration,
-    ) -> Result<Arc<Mutex<Allocation>>, Error> {
+    ) -> Result<Arc<Mutex<Allocation>>> {
         if lifetime == Duration::from_secs(0) {
-            return Err(ERR_LIFETIME_ZERO.to_owned());
+            return Err(Error::ErrLifetimeZero.into());
         }
 
         if self.get_allocation(&five_tuple).await.is_some() {
-            return Err(ERR_DUPE_FIVE_TUPLE.to_owned());
+            return Err(Error::ErrDupeFiveTuple.into());
         }
 
         let (relay_socket, relay_addr) = self
@@ -126,7 +126,7 @@ impl Manager {
     }
 
     // get_random_even_port returns a random un-allocated udp4 port
-    pub async fn get_random_even_port(&self) -> Result<u16, Error> {
+    pub async fn get_random_even_port(&self) -> Result<u16> {
         let (_, addr) = self.relay_addr_generator.allocate_conn(true, 0).await?;
         Ok(addr.port())
     }

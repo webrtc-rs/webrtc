@@ -1,11 +1,7 @@
 use super::*;
 
-use stun::errors::*;
-
-use util::Error;
-
 #[test]
-fn test_reservation_token() -> Result<(), Error> {
+fn test_reservation_token() -> Result<()> {
     let mut m = Message::new();
     let mut v = vec![0; 8];
     v[2] = 33;
@@ -40,9 +36,8 @@ fn test_reservation_token() -> Result<(), Error> {
             let mut m = Message::new();
             let mut handle = ReservationToken::default();
             if let Err(err) = handle.get_from(&m) {
-                assert_eq!(
-                    err,
-                    ERR_ATTRIBUTE_NOT_FOUND.to_owned(),
+                assert!(
+                    stun::error::Error::ErrAttributeNotFound.equal(&err),
                     "{} should be not found",
                     err
                 );

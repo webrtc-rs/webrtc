@@ -1,28 +1,24 @@
 #[cfg(test)]
 mod auth_test;
 
+use crate::error::Error;
+
 use std::net::SocketAddr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use util::Error;
-
+use anyhow::Result;
 use md5::{Digest, Md5};
 use ring::hmac;
 
 pub trait AuthHandler {
-    fn auth_handle(
-        &self,
-        username: &str,
-        realm: &str,
-        src_addr: SocketAddr,
-    ) -> Result<Vec<u8>, Error>;
+    fn auth_handle(&self, username: &str, realm: &str, src_addr: SocketAddr) -> Result<Vec<u8>>;
 }
 
 // generate_long_term_credentials can be used to create credentials valid for [duration] time
 pub fn generate_long_term_credentials(
     shared_secret: &str,
     duration: Duration,
-) -> Result<(String, String), Error> {
+) -> Result<(String, String)> {
     let t = SystemTime::now().duration_since(UNIX_EPOCH)? + duration;
     let username = format!("{}", t.as_secs());
     let password = long_term_credentials(&username, shared_secret);
@@ -52,12 +48,7 @@ pub struct LongTermAuthHandler {
 }
 
 impl AuthHandler for LongTermAuthHandler {
-    fn auth_handle(
-        &self,
-        username: &str,
-        realm: &str,
-        src_addr: SocketAddr,
-    ) -> Result<Vec<u8>, Error> {
+    fn auth_handle(&self, username: &str, realm: &str, src_addr: SocketAddr) -> Result<Vec<u8>> {
         log::trace!(
             "Authentication username={} realm={} src_addr={}",
             username,
@@ -67,10 +58,9 @@ impl AuthHandler for LongTermAuthHandler {
 
         let t = Duration::from_secs(username.parse::<u64>()?);
         if t < SystemTime::now().duration_since(UNIX_EPOCH)? {
-            return Err(Error::new(format!(
-                "Expired time-windowed username {}",
-                username
-            )));
+            return Err(
+                Error::ErrOthers(format!("Expired time-windowed username {}", username)).into(),
+            );
         }
 
         let password = long_term_credentials(username, &self.shared_secret);

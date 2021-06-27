@@ -1,10 +1,7 @@
 use super::*;
-use stun::errors::*;
-
-use util::Error;
 
 #[test]
-fn test_channel_number_string() -> Result<(), Error> {
+fn test_channel_number_string() -> Result<()> {
     let n = ChannelNumber(112);
     assert_eq!(n.to_string(), "112", "bad string {}, expected 112", n);
     Ok(())
@@ -12,7 +9,7 @@ fn test_channel_number_string() -> Result<(), Error> {
 
 /*
 #[test]
-fn test_channel_number_NoAlloc() -> Result<(), Error> {
+fn test_channel_number_NoAlloc() -> Result<()> {
     let mut m = Message::default();
 
         if wasAllocs(func() {
@@ -38,7 +35,7 @@ fn test_channel_number_NoAlloc() -> Result<(), Error> {
 */
 
 #[test]
-fn test_channel_number_add_to() -> Result<(), Error> {
+fn test_channel_number_add_to() -> Result<()> {
     let mut m = Message::new();
     let n = ChannelNumber(6);
     n.add_to(&mut m)?;
@@ -58,9 +55,8 @@ fn test_channel_number_add_to() -> Result<(), Error> {
             let mut m = Message::new();
             let mut n_handle = ChannelNumber::default();
             if let Err(err) = n_handle.get_from(&m) {
-                assert_eq!(
-                    err,
-                    ERR_ATTRIBUTE_NOT_FOUND.to_owned(),
+                assert!(
+                    stun::error::Error::ErrAttributeNotFound.equal(&err),
                     "{} should be not found",
                     err
                 );

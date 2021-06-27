@@ -1,13 +1,11 @@
 use super::*;
 use crate::allocation::*;
 
-use util::Error;
-
 use tokio::net::UdpSocket;
 
 use std::net::Ipv4Addr;
 
-async fn create_channel_bind(lifetime: Duration) -> Result<Allocation, Error> {
+async fn create_channel_bind(lifetime: Duration) -> Result<Allocation> {
     let turn_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     let relay_socket = Arc::clone(&turn_socket);
     let relay_addr = relay_socket.local_addr()?;
@@ -22,7 +20,7 @@ async fn create_channel_bind(lifetime: Duration) -> Result<Allocation, Error> {
 }
 
 #[tokio::test]
-async fn test_channel_bind() -> Result<(), Error> {
+async fn test_channel_bind() -> Result<()> {
     let a = create_channel_bind(Duration::from_millis(20)).await?;
 
     let result = a.get_channel_addr(&ChannelNumber(MIN_CHANNEL_NUMBER)).await;
@@ -35,7 +33,7 @@ async fn test_channel_bind() -> Result<(), Error> {
     Ok(())
 }
 
-async fn test_channel_bind_start() -> Result<(), Error> {
+async fn test_channel_bind_start() -> Result<()> {
     let a = create_channel_bind(Duration::from_millis(20)).await?;
     tokio::time::sleep(Duration::from_millis(30)).await;
 
@@ -47,7 +45,7 @@ async fn test_channel_bind_start() -> Result<(), Error> {
     Ok(())
 }
 
-async fn test_channel_bind_reset() -> Result<(), Error> {
+async fn test_channel_bind_reset() -> Result<()> {
     let a = create_channel_bind(Duration::from_millis(30)).await?;
 
     tokio::time::sleep(Duration::from_millis(20)).await;

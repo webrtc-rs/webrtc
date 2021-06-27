@@ -1,14 +1,12 @@
 #[cfg(test)]
 mod relayaddr_test;
 
+use anyhow::Result;
+use std::fmt;
+use std::net::{IpAddr, Ipv4Addr};
 use stun::attributes::*;
 use stun::message::*;
 use stun::xoraddr::*;
-
-use util::Error;
-
-use std::fmt;
-use std::net::{IpAddr, Ipv4Addr};
 
 // RelayedAddress implements XOR-RELAYED-ADDRESS attribute.
 //
@@ -42,7 +40,7 @@ impl fmt::Display for RelayedAddress {
 
 impl Setter for RelayedAddress {
     // AddTo adds XOR-PEER-ADDRESS to message.
-    fn add_to(&self, m: &mut Message) -> Result<(), Error> {
+    fn add_to(&self, m: &mut Message) -> Result<()> {
         let a = XorMappedAddress {
             ip: self.ip,
             port: self.port,
@@ -53,7 +51,7 @@ impl Setter for RelayedAddress {
 
 impl Getter for RelayedAddress {
     // GetFrom decodes XOR-PEER-ADDRESS from message.
-    fn get_from(&mut self, m: &Message) -> Result<(), Error> {
+    fn get_from(&mut self, m: &Message) -> Result<()> {
         let mut a = XorMappedAddress::default();
         a.get_from_as(m, ATTR_XOR_RELAYED_ADDRESS)?;
         self.ip = a.ip;
