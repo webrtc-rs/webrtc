@@ -1,13 +1,11 @@
 use super::*;
-use crate::errors::*;
+use crate::error::*;
 
 use std::ops::Add;
 use tokio::time::Duration;
 
-use util::Error;
-
 #[tokio::test]
-async fn test_agent_process_in_transaction() -> Result<(), Error> {
+async fn test_agent_process_in_transaction() -> Result<()> {
     let mut m = Message::new();
     let (handler_tx, mut handler_rx) = tokio::sync::mpsc::unbounded_channel();
     let mut a = Agent::new(Some(Arc::new(handler_tx)));
@@ -33,7 +31,7 @@ async fn test_agent_process_in_transaction() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_agent_process() -> Result<(), Error> {
+async fn test_agent_process() -> Result<()> {
     let mut m = Message::new();
     let (handler_tx, mut handler_rx) = tokio::sync::mpsc::unbounded_channel();
     let mut a = Agent::new(Some(Arc::new(handler_tx)));
@@ -56,11 +54,10 @@ async fn test_agent_process() -> Result<(), Error> {
 
     let result = a.process(m);
     if let Err(err) = result {
-        assert_eq!(
-            err,
-            ERR_AGENT_CLOSED.clone(),
+        assert!(
+            Error::ErrAgentClosed.equal(&err),
             "closed agent should return <{}>, but got <{}>",
-            ERR_AGENT_CLOSED.clone(),
+            Error::ErrAgentClosed,
             err,
         );
     } else {
@@ -71,7 +68,7 @@ async fn test_agent_process() -> Result<(), Error> {
 }
 
 #[test]
-fn test_agent_start() -> Result<(), Error> {
+fn test_agent_start() -> Result<()> {
     let mut a = Agent::new(noop_handler());
     let id = TransactionId::new();
     let deadline = Instant::now().add(Duration::from_secs(3600));
@@ -79,11 +76,10 @@ fn test_agent_start() -> Result<(), Error> {
 
     let result = a.start(id, deadline);
     if let Err(err) = result {
-        assert_eq!(
-            err,
-            ERR_TRANSACTION_EXISTS.clone(),
+        assert!(
+            Error::ErrTransactionExists.equal(&err),
             "duplicate start should return <{}>, got <{}>",
-            ERR_TRANSACTION_EXISTS.clone(),
+            Error::ErrTransactionExists,
             err,
         );
     } else {
@@ -94,11 +90,10 @@ fn test_agent_start() -> Result<(), Error> {
     let id = TransactionId::new();
     let result = a.start(id, deadline);
     if let Err(err) = result {
-        assert_eq!(
-            err,
-            ERR_AGENT_CLOSED.clone(),
+        assert!(
+            Error::ErrAgentClosed.equal(&err),
             "start on closed agent should return <{}>, got <{}>",
-            ERR_AGENT_CLOSED.clone(),
+            Error::ErrAgentClosed,
             err,
         );
     } else {
@@ -107,11 +102,10 @@ fn test_agent_start() -> Result<(), Error> {
 
     let result = a.set_handler(noop_handler());
     if let Err(err) = result {
-        assert_eq!(
-            err,
-            ERR_AGENT_CLOSED.clone(),
+        assert!(
+            Error::ErrAgentClosed.equal(&err),
             "SetHandler on closed agent should return <{}>, got <{}>",
-            ERR_AGENT_CLOSED.clone(),
+            Error::ErrAgentClosed,
             err,
         );
     } else {
@@ -122,17 +116,16 @@ fn test_agent_start() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_agent_stop() -> Result<(), Error> {
+async fn test_agent_stop() -> Result<()> {
     let (handler_tx, mut handler_rx) = tokio::sync::mpsc::unbounded_channel();
     let mut a = Agent::new(Some(Arc::new(handler_tx)));
 
     let result = a.stop(TransactionId::default());
     if let Err(err) = result {
-        assert_eq!(
-            err,
-            ERR_TRANSACTION_NOT_EXISTS.clone(),
+        assert!(
+            Error::ErrTransactionNotExists.equal(&err),
             "unexpected error: {}, should be {}",
-            ERR_TRANSACTION_NOT_EXISTS.clone(),
+            Error::ErrTransactionNotExists,
             err,
         );
     } else {
@@ -150,9 +143,9 @@ async fn test_agent_stop() -> Result<(), Error> {
     tokio::select! {
         evt = handler_rx.recv() => {
             if let Err(err) = evt.unwrap().event_body{
-                assert_eq!(err, ERR_TRANSACTION_STOPPED.clone(),
+                assert!(Error::ErrTransactionStopped.equal(&err),
                     "unexpected error: {}, should be {}",
-                    err, ERR_TRANSACTION_STOPPED.clone());
+                    err, Error::ErrTransactionStopped);
             }else{
                 assert!(false, "expected error, got ok");
             }
@@ -164,11 +157,10 @@ async fn test_agent_stop() -> Result<(), Error> {
 
     let result = a.close();
     if let Err(err) = result {
-        assert_eq!(
-            err,
-            ERR_AGENT_CLOSED.clone(),
+        assert!(
+            Error::ErrAgentClosed.equal(&err),
             "a.Close returned {} instead of {}",
-            ERR_AGENT_CLOSED.clone(),
+            Error::ErrAgentClosed,
             err,
         );
     } else {
@@ -177,11 +169,10 @@ async fn test_agent_stop() -> Result<(), Error> {
 
     let result = a.stop(TransactionId::default());
     if let Err(err) = result {
-        assert_eq!(
-            err,
-            ERR_AGENT_CLOSED.clone(),
+        assert!(
+            Error::ErrAgentClosed.equal(&err),
             "unexpected error: {}, should be {}",
-            ERR_AGENT_CLOSED.clone(),
+            Error::ErrAgentClosed,
             err,
         );
     } else {

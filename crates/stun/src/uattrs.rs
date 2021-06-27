@@ -2,11 +2,10 @@
 mod uattrs_test;
 
 use crate::attributes::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::message::*;
 
-use util::Error;
-
+use anyhow::Result;
 use std::fmt;
 
 // UnknownAttributes represents UNKNOWN-ATTRIBUTES attribute.
@@ -33,7 +32,7 @@ const ATTR_TYPE_SIZE: usize = 2;
 
 impl Setter for UnknownAttributes {
     // add_to adds UNKNOWN-ATTRIBUTES attribute to message.
-    fn add_to(&self, m: &mut Message) -> Result<(), Error> {
+    fn add_to(&self, m: &mut Message) -> Result<()> {
         let mut v = Vec::with_capacity(ATTR_TYPE_SIZE * 20); // 20 should be enough
                                                              // If len(a.Types) > 20, there will be allocations.
         for t in &self.0 {
@@ -46,10 +45,10 @@ impl Setter for UnknownAttributes {
 
 impl Getter for UnknownAttributes {
     // GetFrom parses UNKNOWN-ATTRIBUTES from message.
-    fn get_from(&mut self, m: &Message) -> Result<(), Error> {
+    fn get_from(&mut self, m: &Message) -> Result<()> {
         let v = m.get(ATTR_UNKNOWN_ATTRIBUTES)?;
         if v.len() % ATTR_TYPE_SIZE != 0 {
-            return Err(ERR_BAD_UNKNOWN_ATTRS_SIZE.clone());
+            return Err(Error::ErrBadUnknownAttrsSize.into());
         }
         self.0.clear();
         let mut first = 0usize;

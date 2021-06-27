@@ -1,10 +1,8 @@
 use super::*;
-use crate::errors::*;
-
-use util::Error;
+use crate::error::*;
 
 #[test]
-fn test_mapped_address() -> Result<(), Error> {
+fn test_mapped_address() -> Result<()> {
     let mut m = Message::new();
     let addr = MappedAddress {
         ip: "122.12.34.5".parse().unwrap(),
@@ -27,9 +25,8 @@ fn test_mapped_address() -> Result<(), Error> {
                 let message = Message::new();
                 let result = got.get_from(&message);
                 if let Err(err) = result {
-                    assert_eq!(
-                        err,
-                        ERR_ATTRIBUTE_NOT_FOUND.clone(),
+                    assert!(
+                        Error::ErrAttributeNotFound.equal(&err),
                         "should be not found: {}",
                         err
                     );
@@ -49,12 +46,11 @@ fn test_mapped_address() -> Result<(), Error> {
                 message.add(ATTR_MAPPED_ADDRESS, &[1, 2, 3]);
                 let result = got.get_from(&message);
                 if let Err(err) = result {
-                    assert_eq!(
-                        err,
-                        ERR_UNEXPECTED_EOF.clone(),
+                    assert!(
+                        Error::ErrUnexpectedEof.equal(&err),
                         "<{}> should be <{}>",
                         err,
-                        ERR_UNEXPECTED_EOF.clone()
+                        Error::ErrUnexpectedEof
                     );
                 } else {
                     assert!(false, "expected error, but got ok");
@@ -67,7 +63,7 @@ fn test_mapped_address() -> Result<(), Error> {
 }
 
 #[test]
-fn test_mapped_address_v6() -> Result<(), Error> {
+fn test_mapped_address_v6() -> Result<()> {
     let mut m = Message::new();
     let addr = MappedAddress {
         ip: "::".parse().unwrap(),
@@ -89,12 +85,11 @@ fn test_mapped_address_v6() -> Result<(), Error> {
                 let message = Message::new();
                 let result = got.get_from(&message);
                 if let Err(err) = result {
-                    assert_eq!(
-                        err,
-                        ERR_ATTRIBUTE_NOT_FOUND.clone(),
+                    assert!(
+                        Error::ErrAttributeNotFound.equal(&err),
                         "<{}> should be <{}>",
                         err,
-                        ERR_ATTRIBUTE_NOT_FOUND.clone()
+                        Error::ErrAttributeNotFound,
                     );
                 } else {
                     assert!(false, "expected error, but got ok");
@@ -106,7 +101,7 @@ fn test_mapped_address_v6() -> Result<(), Error> {
 }
 
 #[test]
-fn test_alternate_server() -> Result<(), Error> {
+fn test_alternate_server() -> Result<()> {
     let mut m = Message::new();
     let addr = MappedAddress {
         ip: "122.12.34.5".parse().unwrap(),
@@ -128,12 +123,11 @@ fn test_alternate_server() -> Result<(), Error> {
                 let message = Message::new();
                 let result = got.get_from(&message);
                 if let Err(err) = result {
-                    assert_eq!(
-                        err,
-                        ERR_ATTRIBUTE_NOT_FOUND.clone(),
+                    assert!(
+                        Error::ErrAttributeNotFound.equal(&err),
                         "<{}> should be <{}>",
                         err,
-                        ERR_ATTRIBUTE_NOT_FOUND.clone()
+                        Error::ErrAttributeNotFound,
                     );
                 } else {
                     assert!(false, "expected error, but got ok");
@@ -146,7 +140,7 @@ fn test_alternate_server() -> Result<(), Error> {
 }
 
 #[test]
-fn test_other_address() -> Result<(), Error> {
+fn test_other_address() -> Result<()> {
     let mut m = Message::new();
     let addr = OtherAddress {
         ip: "122.12.34.5".parse().unwrap(),
@@ -168,12 +162,11 @@ fn test_other_address() -> Result<(), Error> {
                 let message = Message::new();
                 let result = got.get_from(&message);
                 if let Err(err) = result {
-                    assert_eq!(
-                        err,
-                        ERR_ATTRIBUTE_NOT_FOUND.clone(),
+                    assert!(
+                        Error::ErrAttributeNotFound.equal(&err),
                         "<{}> should be <{}>",
                         err,
-                        ERR_ATTRIBUTE_NOT_FOUND.clone()
+                        Error::ErrAttributeNotFound,
                     );
                 } else {
                     assert!(false, "expected error, but got ok");

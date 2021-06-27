@@ -1,17 +1,16 @@
 use crate::agent::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::message::*;
 
-use util::{Conn, Error};
+use util::Conn;
 
-use tokio::sync::mpsc;
-
+use anyhow::Result;
 use std::collections::HashMap;
 use std::io::BufReader;
 use std::marker::{Send, Sync};
 use std::ops::Add;
 use std::sync::Arc;
-
+use tokio::sync::mpsc;
 use tokio::time::{self, Duration, Instant};
 
 const DEFAULT_TIMEOUT_RATE: Duration = Duration::from_millis(5);
@@ -27,8 +26,8 @@ pub trait Collector {
         &mut self,
         rate: Duration,
         client_agent_tx: Arc<mpsc::Sender<ClientAgent>>,
-    ) -> Result<(), Error>;
-    fn close(&mut self) -> Result<(), Error>;
+    ) -> Result<()>;
+    fn close(&mut self) -> Result<()>;
 }
 
 #[derive(Default)]
@@ -41,7 +40,7 @@ impl Collector for TickerCollector {
         &mut self,
         rate: Duration,
         client_agent_tx: Arc<mpsc::Sender<ClientAgent>>,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let (close_tx, mut close_rx) = mpsc::channel(1);
         self.close_tx = Some(close_tx);
 
@@ -63,9 +62,9 @@ impl Collector for TickerCollector {
         Ok(())
     }
 
-    fn close(&mut self) -> Result<(), Error> {
+    fn close(&mut self) -> Result<()> {
         if self.close_tx.is_none() {
-            return Err(ERR_COLLECTOR_CLOSED.clone());
+            return Err(Error::ErrCollectorClosed.into());
         }
         self.close_tx.take();
         Ok(())
@@ -88,7 +87,7 @@ pub struct ClientTransaction {
 }
 
 impl ClientTransaction {
-    pub(crate) fn handle(&mut self, e: Event) -> Result<(), Error> {
+    pub(crate) fn handle(&mut self, e: Event) -> Result<()> {
         self.calls += 1;
         if self.calls == 1 {
             if let Some(handler) = &self.handler {
@@ -194,9 +193,9 @@ impl ClientBuilder {
         }
     }
 
-    pub fn build(self) -> Result<Client, Error> {
+    pub fn build(self) -> Result<Client> {
         if self.settings.c.is_none() {
-            return Err(ERR_NO_CONNECTION.clone());
+            return Err(Error::ErrNoConnection.into());
         }
 
         let client = Client {
@@ -249,9 +248,9 @@ impl Client {
 
     // start registers transaction.
     // Could return ErrClientClosed, ErrTransactionExists.
-    fn insert(&mut self, ct: ClientTransaction) -> Result<(), Error> {
+    fn insert(&mut self, ct: ClientTransaction) -> Result<()> {
         if self.settings.closed {
-            return Err(ERR_CLIENT_CLOSED.clone());
+            return Err(Error::ErrClientClosed.into());
         }
 
         if let Some(handler_tx) = &mut self.handler_tx {
@@ -264,9 +263,9 @@ impl Client {
         Ok(())
     }
 
-    fn remove(&mut self, id: TransactionId) -> Result<(), Error> {
+    fn remove(&mut self, id: TransactionId) -> Result<()> {
         if self.settings.closed {
-            return Err(ERR_CLIENT_CLOSED.clone());
+            return Err(Error::ErrClientClosed.into());
         }
 
         if let Some(handler_tx) = &mut self.handler_tx {
@@ -361,9 +360,9 @@ impl Client {
     }
 
     // Close stops internal connection and agent, returning CloseErr on error.
-    pub async fn close(&mut self) -> Result<(), Error> {
+    pub async fn close(&mut self) -> Result<()> {
         if self.settings.closed {
-            return Err(ERR_CLIENT_CLOSED.clone());
+            return Err(Error::ErrClientClosed.into());
         }
 
         self.settings.closed = true;
@@ -382,7 +381,7 @@ impl Client {
         Ok(())
     }
 
-    fn run(mut self) -> Result<Self, Error> {
+    fn run(mut self) -> Result<Self> {
         let (close_tx, close_rx) = mpsc::channel(1);
         let (client_agent_tx, client_agent_rx) = mpsc::channel(self.settings.buffer_size);
         let (handler_tx, handler_rx) = mpsc::unbounded_channel();
@@ -397,7 +396,7 @@ impl Client {
         let conn = if let Some(conn) = &self.settings.c {
             Arc::clone(conn)
         } else {
-            return Err(ERR_NO_CONNECTION.clone());
+            return Err(Error::ErrNoConnection.into());
         };
 
         Client::start(
@@ -426,9 +425,9 @@ impl Client {
         Ok(self)
     }
 
-    pub async fn send(&mut self, m: &Message, handler: Handler) -> Result<(), Error> {
+    pub async fn send(&mut self, m: &Message, handler: Handler) -> Result<()> {
         if self.settings.closed {
-            return Err(ERR_CLIENT_CLOSED.clone());
+            return Err(Error::ErrClientClosed.into());
         }
 
         let has_handler = handler.is_some();
@@ -464,7 +463,7 @@ impl Client {
                         .await?;
                 }
             } else if let Err(err) = result {
-                return Err(Error::new(err.to_string()));
+                return Err(Error::ErrOthers(err.to_string()).into());
             }
         }
 

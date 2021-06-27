@@ -2,10 +2,9 @@ use super::*;
 use crate::textattrs::TextAttribute;
 
 use crate::attributes::ATTR_SOFTWARE;
-use util::Error;
 
 #[test]
-fn test_fingerprint_check() -> Result<(), Error> {
+fn test_fingerprint_check() -> Result<()> {
     let mut m = Message::new();
     let a = TextAttribute {
         attr: ATTR_SOFTWARE,
@@ -26,7 +25,7 @@ fn test_fingerprint_check() -> Result<(), Error> {
 }
 
 #[test]
-fn test_fingerprint_check_bad() -> Result<(), Error> {
+fn test_fingerprint_check_bad() -> Result<()> {
     let mut m = Message::new();
     let a = TextAttribute {
         attr: ATTR_SOFTWARE,

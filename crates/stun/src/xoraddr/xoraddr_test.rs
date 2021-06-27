@@ -2,10 +2,9 @@ use super::*;
 use crate::checks::*;
 
 use std::io::BufReader;
-use util::Error;
 
 #[test]
-fn test_xorsafe() -> Result<(), Error> {
+fn test_xorsafe() -> Result<()> {
     let mut dst = vec![0; 8];
     let a = vec![1, 2, 3, 4, 5, 6, 7, 8];
     let b = vec![8, 7, 7, 6, 6, 3, 4, 1];
@@ -20,7 +19,7 @@ fn test_xorsafe() -> Result<(), Error> {
 }
 
 #[test]
-fn test_xorsafe_bsmaller() -> Result<(), Error> {
+fn test_xorsafe_bsmaller() -> Result<()> {
     let mut dst = vec![0; 5];
     let a = vec![1, 2, 3, 4, 5, 6, 7, 8];
     let b = vec![8, 7, 7, 6, 6];
@@ -35,7 +34,7 @@ fn test_xorsafe_bsmaller() -> Result<(), Error> {
 }
 
 #[test]
-fn test_xormapped_address_get_from() -> Result<(), Error> {
+fn test_xormapped_address_get_from() -> Result<()> {
     let mut m = Message::new();
     let transaction_id = base64::decode("jxhBARZwX+rsC6er").unwrap();
     m.transaction_id.0.copy_from_slice(&transaction_id);
@@ -65,11 +64,10 @@ fn test_xormapped_address_get_from() -> Result<(), Error> {
         };
         let result = addr.get_from(&m);
         if let Err(err) = result {
-            assert_eq!(
-                err,
-                ERR_UNEXPECTED_EOF.clone(),
+            assert!(
+                Error::ErrUnexpectedEof.equal(&err),
                 "len(v) = 4 should render <{}> error, got <{}>",
-                ERR_UNEXPECTED_EOF.clone(),
+                Error::ErrUnexpectedEof,
                 err
             );
         } else {
@@ -104,7 +102,7 @@ fn test_xormapped_address_get_from() -> Result<(), Error> {
 }
 
 #[test]
-fn test_xormapped_address_get_from_invalid() -> Result<(), Error> {
+fn test_xormapped_address_get_from_invalid() -> Result<()> {
     let mut m = Message::new();
     let transaction_id = base64::decode("jxhBARZwX+rsC6er").unwrap();
     m.transaction_id.0.copy_from_slice(&transaction_id);
@@ -134,7 +132,7 @@ fn test_xormapped_address_get_from_invalid() -> Result<(), Error> {
 }
 
 #[test]
-fn test_xormapped_address_add_to() -> Result<(), Error> {
+fn test_xormapped_address_add_to() -> Result<()> {
     let mut m = Message::new();
     let transaction_id = base64::decode("jxhBARZwX+rsC6er").unwrap();
     m.transaction_id.0.copy_from_slice(&transaction_id);
@@ -166,7 +164,7 @@ fn test_xormapped_address_add_to() -> Result<(), Error> {
 }
 
 #[test]
-fn test_xormapped_address_add_to_ipv6() -> Result<(), Error> {
+fn test_xormapped_address_add_to_ipv6() -> Result<()> {
     let mut m = Message::new();
     let transaction_id = base64::decode("jxhBARZwX+rsC6er").unwrap();
     m.transaction_id.0.copy_from_slice(&transaction_id);
@@ -205,7 +203,7 @@ fn test_xormapped_address_add_to_ipv6() -> Result<(), Error> {
 
 /*
 #[test]
-fn TestXORMappedAddress_AddTo_Invalid() -> Result<(), Error> {
+fn TestXORMappedAddress_AddTo_Invalid() -> Result<()> {
     let mut m = Message::new();
     let mut addr = XORMappedAddress{
         ip:   1, 2, 3, 4, 5, 6, 7, 8},
@@ -217,7 +215,7 @@ fn TestXORMappedAddress_AddTo_Invalid() -> Result<(), Error> {
 }*/
 
 #[test]
-fn test_xormapped_address_string() -> Result<(), Error> {
+fn test_xormapped_address_string() -> Result<()> {
     let tests = vec![
         (
             // 0

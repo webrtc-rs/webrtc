@@ -1,11 +1,10 @@
 #[cfg(test)]
 mod uri_test;
 
-use crate::errors::*;
+use crate::error::*;
 
+use anyhow::Result;
 use std::fmt;
-
-use util::Error;
 
 // SCHEME definitions from RFC 7064 Section 3.2.
 
@@ -38,10 +37,10 @@ impl fmt::Display for Uri {
 
 impl Uri {
     // parse_uri parses URI from string.
-    pub fn parse_uri(raw: &str) -> Result<Self, Error> {
+    pub fn parse_uri(raw: &str) -> Result<Self> {
         // work around for url crate
         if raw.contains("//") {
-            return Err(ERR_INVALID_URL.to_owned());
+            return Err(Error::ErrInvalidUrl.into());
         }
 
         let mut s = raw.to_string();
@@ -49,14 +48,14 @@ impl Uri {
         if let Some(p) = pos {
             s.replace_range(p..p + 1, "://");
         } else {
-            return Err(ERR_SCHEME_TYPE.to_owned());
+            return Err(Error::ErrSchemeType.into());
         }
 
         let raw_parts = url::Url::parse(&s)?;
 
         let scheme = raw_parts.scheme().into();
         if scheme != SCHEME && scheme != SCHEME_SECURE {
-            return Err(ERR_SCHEME_TYPE.to_owned());
+            return Err(Error::ErrSchemeType.into());
         }
 
         let host = if let Some(host) = raw_parts.host_str() {
@@ -65,7 +64,7 @@ impl Uri {
                 .trim_end_matches(']')
                 .to_owned()
         } else {
-            return Err(ERR_HOST.to_owned());
+            return Err(Error::ErrHost.into());
         };
 
         let port = raw_parts.port();

@@ -1,17 +1,15 @@
 #[cfg(test)]
 mod integrity_test;
 
+use crate::attributes::*;
 use crate::checks::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::message::*;
 
-use util::Error;
-
-use std::fmt;
-
-use crate::attributes::{nearest_padded_value_length, ATTR_FINGERPRINT, ATTR_MESSAGE_INTEGRITY};
+use anyhow::Result;
 use md5::{Digest, Md5};
 use ring::hmac;
+use std::fmt;
 
 // separator for credentials.
 pub(crate) const CREDENTIALS_SEP: &str = ":";
@@ -40,12 +38,12 @@ impl Setter for MessageIntegrity {
     // add_to adds MESSAGE-INTEGRITY attribute to message.
     //
     // CPU costly, see BenchmarkMessageIntegrity_AddTo.
-    fn add_to(&self, m: &mut Message) -> Result<(), Error> {
+    fn add_to(&self, m: &mut Message) -> Result<()> {
         for a in &m.attributes.0 {
             // Message should not contain FINGERPRINT attribute
             // before MESSAGE-INTEGRITY.
             if a.typ == ATTR_FINGERPRINT {
-                return Err(ERR_FINGERPRINT_BEFORE_INTEGRITY.clone());
+                return Err(Error::ErrFingerprintBeforeIntegrity.into());
             }
         }
         // The text used as input to HMAC is the STUN message,
@@ -87,7 +85,7 @@ impl MessageIntegrity {
     // Check checks MESSAGE-INTEGRITY attribute.
     //
     // CPU costly, see BenchmarkMessageIntegrity_Check.
-    pub fn check(&self, m: &mut Message) -> Result<(), Error> {
+    pub fn check(&self, m: &mut Message) -> Result<()> {
         let v = m.get(ATTR_MESSAGE_INTEGRITY)?;
 
         // Adjusting length in header to match m.Raw that was

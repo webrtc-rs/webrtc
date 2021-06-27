@@ -1,9 +1,7 @@
 use super::*;
 
-use util::Error;
-
 #[test]
-fn test_unknown_attributes() -> Result<(), Error> {
+fn test_unknown_attributes() -> Result<()> {
     let mut m = Message::new();
     let a = UnknownAttributes(vec![ATTR_DONT_FRAGMENT, ATTR_CHANNEL_NUMBER]);
     assert_eq!(

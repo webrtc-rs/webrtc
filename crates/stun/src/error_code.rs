@@ -1,10 +1,9 @@
 use crate::attributes::*;
 use crate::checks::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::message::*;
 
-use util::Error;
-
+use anyhow::Result;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -37,7 +36,7 @@ const ERROR_CODE_MODULO: u16 = 100;
 
 impl Setter for ErrorCodeAttribute {
     // add_to adds ERROR-CODE to m.
-    fn add_to(&self, m: &mut Message) -> Result<(), Error> {
+    fn add_to(&self, m: &mut Message) -> Result<()> {
         check_overflow(
             ATTR_ERROR_CODE,
             self.reason.len() + ERROR_CODE_REASON_START,
@@ -61,11 +60,11 @@ impl Setter for ErrorCodeAttribute {
 
 impl Getter for ErrorCodeAttribute {
     // GetFrom decodes ERROR-CODE from m. Reason is valid until m.Raw is valid.
-    fn get_from(&mut self, m: &Message) -> Result<(), Error> {
+    fn get_from(&mut self, m: &Message) -> Result<()> {
         let v = m.get(ATTR_ERROR_CODE)?;
 
         if v.len() < ERROR_CODE_REASON_START {
-            return Err(ERR_UNEXPECTED_EOF.clone());
+            return Err(Error::ErrUnexpectedEof.into());
         }
 
         let class = v[ERROR_CODE_CLASS_BYTE] as u16;
@@ -85,7 +84,7 @@ pub struct ErrorCode(u16);
 impl Setter for ErrorCode {
     // add_to adds ERROR-CODE with default reason to m. If there
     // is no default reason, returns ErrNoDefaultReason.
-    fn add_to(&self, m: &mut Message) -> Result<(), Error> {
+    fn add_to(&self, m: &mut Message) -> Result<()> {
         if let Some(reason) = ERROR_REASONS.get(self) {
             let a = ErrorCodeAttribute {
                 code: *self,
@@ -93,7 +92,7 @@ impl Setter for ErrorCode {
             };
             a.add_to(m)
         } else {
-            Err(ERR_NO_DEFAULT_REASON.clone())
+            Err(Error::ErrNoDefaultReason.into())
         }
     }
 }

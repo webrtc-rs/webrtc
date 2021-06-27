@@ -3,10 +3,9 @@ mod message_test;
 
 use crate::agent::*;
 use crate::attributes::*;
-use crate::errors::*;
+use crate::error::*;
 
-use util::Error;
-
+use anyhow::Result;
 use rand::Rng;
 use std::fmt;
 use std::io::{Read, Write};
@@ -30,17 +29,17 @@ pub const TRANSACTION_ID_SIZE: usize = 12; // 96 bit
 // or helpers for message fields as type or transaction id.
 pub trait Setter {
     // Setter sets *Message attribute.
-    fn add_to(&self, m: &mut Message) -> Result<(), Error>;
+    fn add_to(&self, m: &mut Message) -> Result<()>;
 }
 
 // Getter parses attribute from *Message.
 pub trait Getter {
-    fn get_from(&mut self, m: &Message) -> Result<(), Error>;
+    fn get_from(&mut self, m: &Message) -> Result<()>;
 }
 
 // Checker checks *Message attribute.
 pub trait Checker {
-    fn check(&self, m: &Message) -> Result<(), Error>;
+    fn check(&self, m: &Message) -> Result<()>;
 }
 
 // is_message returns true if b looks like STUN message.
@@ -104,7 +103,7 @@ impl Setter for Message {
     // add_to sets b.TransactionID to m.TransactionID.
     //
     // Implements Setter to aid in crafting responses.
-    fn add_to(&self, b: &mut Message) -> Result<(), Error> {
+    fn add_to(&self, b: &mut Message) -> Result<()> {
         b.transaction_id = self.transaction_id;
         b.write_transaction_id();
         Ok(())
@@ -125,14 +124,14 @@ impl Message {
     }
 
     // marshal_binary implements the encoding.BinaryMarshaler interface.
-    pub fn marshal_binary(&self) -> Result<Vec<u8>, Error> {
+    pub fn marshal_binary(&self) -> Result<Vec<u8>> {
         // We can't return m.Raw, allocation is expected by implicit interface
         // contract induced by other implementations.
         Ok(self.raw.clone())
     }
 
     // unmarshal_binary implements the encoding.BinaryUnmarshaler interface.
-    pub fn unmarshal_binary(&mut self, data: &[u8]) -> Result<(), Error> {
+    pub fn unmarshal_binary(&mut self, data: &[u8]) -> Result<()> {
         // We can't retain data, copy is expected by interface contract.
         self.raw.clear();
         self.raw.extend_from_slice(data);
@@ -141,7 +140,7 @@ impl Message {
 
     // NewTransactionID sets m.TransactionID to random value from crypto/rand
     // and returns error if any.
-    pub fn new_transaction_id(&mut self) -> Result<(), Error> {
+    pub fn new_transaction_id(&mut self) -> Result<()> {
         rand::thread_rng().fill(&mut self.transaction_id.0);
         self.write_transaction_id();
         Ok(())
@@ -271,11 +270,11 @@ impl Message {
     }
 
     // Decode decodes m.Raw into m.
-    pub fn decode(&mut self) -> Result<(), Error> {
+    pub fn decode(&mut self) -> Result<()> {
         // decoding message header
         let buf = &self.raw;
         if buf.len() < MESSAGE_HEADER_SIZE {
-            return Err(ERR_UNEXPECTED_HEADER_EOF.clone());
+            return Err(Error::ErrUnexpectedHeaderEof.into());
         }
 
         let t = u16::from_be_bytes([buf[0], buf[1]]); // first 2 bytes
@@ -284,17 +283,19 @@ impl Message {
         let full_size = MESSAGE_HEADER_SIZE + size; // len(m.Raw)
 
         if cookie != MAGIC_COOKIE {
-            return Err(Error::new(format!(
+            return Err(Error::ErrOthers(format!(
                 "{:x} is invalid magic cookie (should be {:x})",
                 cookie, MAGIC_COOKIE
-            )));
+            ))
+            .into());
         }
         if buf.len() < full_size {
-            return Err(Error::new(format!(
+            return Err(Error::ErrOthers(format!(
                 "buffer length {} is less than {} (expected message size)",
                 buf.len(),
                 full_size
-            )));
+            ))
+            .into());
         }
 
         // saving header data
@@ -311,11 +312,12 @@ impl Message {
         while offset < size {
             // checking that we have enough bytes to read header
             if b.len() < ATTRIBUTE_HEADER_SIZE {
-                return Err(Error::new(format!(
+                return Err(Error::ErrOthers(format!(
                     "buffer length {} is less than {} (expected header size)",
                     b.len(),
                     ATTRIBUTE_HEADER_SIZE
-                )));
+                ))
+                .into());
             }
 
             let mut a = RawAttribute {
@@ -330,12 +332,13 @@ impl Message {
             offset += ATTRIBUTE_HEADER_SIZE;
             if b.len() < a_buff_l {
                 // checking size
-                return Err(Error::new(format!(
+                return Err(Error::ErrOthers(format!(
                     "buffer length {} is less than {} (expected value size for {})",
                     b.len(),
                     a_buff_l,
                     a.typ
-                )));
+                ))
+                .into());
             }
             a.value = b[..a_l].to_vec();
             offset += a_buff_l;
@@ -349,7 +352,7 @@ impl Message {
 
     // WriteTo implements WriterTo via calling Write(m.Raw) on w and returning
     // call result.
-    pub fn write_to<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+    pub fn write_to<W: Write>(&self, writer: &mut W) -> Result<usize> {
         let n = writer.write(&self.raw)?;
         Ok(n)
     }
@@ -359,7 +362,7 @@ impl Message {
     // ErrUnexpectedEOF, ErrUnexpectedHeaderEOF or *DecodeErr.
     //
     // Can return *DecodeErr while decoding too.
-    pub fn read_from<R: Read>(&mut self, reader: &mut R) -> Result<usize, Error> {
+    pub fn read_from<R: Read>(&mut self, reader: &mut R) -> Result<usize> {
         let mut t_buf = vec![0; DEFAULT_RAW_CAPACITY];
         let n = reader.read(&mut t_buf)?;
         self.raw = t_buf[..n].to_vec();
@@ -370,7 +373,7 @@ impl Message {
     // Write decodes message and return error if any.
     //
     // Any error is unrecoverable, but message could be partially decoded.
-    pub fn write(&mut self, t_buf: &[u8]) -> Result<usize, Error> {
+    pub fn write(&mut self, t_buf: &[u8]) -> Result<usize> {
         self.raw.clear();
         self.raw.extend_from_slice(t_buf);
         self.decode()?;
@@ -378,7 +381,7 @@ impl Message {
     }
 
     // CloneTo clones m to b securing any further m mutations.
-    pub fn clone_to(&self, b: &mut Message) -> Result<(), Error> {
+    pub fn clone_to(&self, b: &mut Message) -> Result<()> {
         b.raw.clear();
         b.raw.extend_from_slice(&self.raw);
         b.decode()
@@ -397,12 +400,12 @@ impl Message {
     // get returns byte slice that represents attribute value,
     // if there is no attribute with such type,
     // ErrAttributeNotFound is returned.
-    pub fn get(&self, t: AttrType) -> Result<Vec<u8>, Error> {
+    pub fn get(&self, t: AttrType) -> Result<Vec<u8>> {
         let (v, ok) = self.attributes.get(t);
         if ok {
             Ok(v.value)
         } else {
-            Err(ERR_ATTRIBUTE_NOT_FOUND.clone())
+            Err(Error::ErrAttributeNotFound.into())
         }
     }
 
@@ -421,7 +424,7 @@ impl Message {
     //  m.Build(&t, &username, &nonce, &realm) // 0 allocations
     //
     // See BenchmarkBuildOverhead.
-    pub fn build(&mut self, setters: &[Box<dyn Setter>]) -> Result<(), Error> {
+    pub fn build(&mut self, setters: &[Box<dyn Setter>]) -> Result<()> {
         self.reset();
         self.write_header();
         for s in setters {
@@ -431,7 +434,7 @@ impl Message {
     }
 
     // Check applies checkers to message in batch, returning on first error.
-    pub fn check<C: Checker>(&self, checkers: &[C]) -> Result<(), Error> {
+    pub fn check<C: Checker>(&self, checkers: &[C]) -> Result<()> {
         for c in checkers {
             c.check(self)?;
         }
@@ -439,7 +442,7 @@ impl Message {
     }
 
     // Parse applies getters to message in batch, returning on first error.
-    pub fn parse<G: Getter>(&self, getters: &mut [G]) -> Result<(), Error> {
+    pub fn parse<G: Getter>(&self, getters: &mut [G]) -> Result<()> {
         for c in getters {
             c.get_from(self)?;
         }
@@ -561,7 +564,7 @@ const CLASS_C1SHIFT: u16 = 7;
 
 impl Setter for MessageType {
     // add_to sets m type to t.
-    fn add_to(&self, m: &mut Message) -> Result<(), Error> {
+    fn add_to(&self, m: &mut Message) -> Result<()> {
         m.set_type(*self);
         Ok(())
     }

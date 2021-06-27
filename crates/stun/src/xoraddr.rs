@@ -4,15 +4,13 @@ mod xoraddr_test;
 use crate::addr::*;
 use crate::attributes::*;
 use crate::checks::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::message::*;
 
-use util::Error;
-
+use anyhow::Result;
 use std::fmt;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-
 use std::mem;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 const WORD_SIZE: usize = mem::size_of::<usize>();
 
@@ -100,7 +98,7 @@ impl fmt::Display for XorMappedAddress {
 impl Setter for XorMappedAddress {
     // AddTo adds XOR-MAPPED-ADDRESS to m. Can return ErrBadIPLength
     // if len(a.IP) is invalid.
-    fn add_to(&self, m: &mut Message) -> Result<(), Error> {
+    fn add_to(&self, m: &mut Message) -> Result<()> {
         self.add_to_as(m, ATTR_XORMAPPED_ADDRESS)
     }
 }
@@ -127,14 +125,14 @@ impl Getter for XorMappedAddress {
     //  addr.IP.String()    // 213.141.156.236, net.IPv4Len
     //  expectedIP.String() // d58d:9cec::ffff:d58d:9cec, 16 bytes, first 4 are IPv4
     //  // now we have len(expectedIP) = 16 and len(addr.IP) = 4.
-    fn get_from(&mut self, m: &Message) -> Result<(), Error> {
+    fn get_from(&mut self, m: &Message) -> Result<()> {
         self.get_from_as(m, ATTR_XORMAPPED_ADDRESS)
     }
 }
 
 impl XorMappedAddress {
     // AddToAs adds XOR-MAPPED-ADDRESS value to m as t attribute.
-    pub fn add_to_as(&self, m: &mut Message, t: AttrType) -> Result<(), Error> {
+    pub fn add_to_as(&self, m: &mut Message, t: AttrType) -> Result<()> {
         let (family, ip_len, ip) = match self.ip {
             IpAddr::V4(ipv4) => (FAMILY_IPV4, IPV4LEN, ipv4.octets().to_vec()),
             IpAddr::V6(ipv6) => (FAMILY_IPV6, IPV6LEN, ipv6.octets().to_vec()),
@@ -154,15 +152,15 @@ impl XorMappedAddress {
 
     // GetFromAs decodes XOR-MAPPED-ADDRESS attribute value in message
     // getting it as for t type.
-    pub fn get_from_as(&mut self, m: &Message, t: AttrType) -> Result<(), Error> {
+    pub fn get_from_as(&mut self, m: &Message, t: AttrType) -> Result<()> {
         let v = m.get(t)?;
         if v.len() <= 4 {
-            return Err(ERR_UNEXPECTED_EOF.clone());
+            return Err(Error::ErrUnexpectedEof.into());
         }
 
         let family = u16::from_be_bytes([v[0], v[1]]);
         if family != FAMILY_IPV6 && family != FAMILY_IPV4 {
-            return Err(Error::new(format!("bad value {}", family)));
+            return Err(Error::ErrOthers(format!("bad value {}", family)).into());
         }
 
         check_overflow(

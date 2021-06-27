@@ -3,10 +3,10 @@ mod textattrs_test;
 
 use crate::attributes::*;
 use crate::checks::*;
+use crate::error::Error;
 use crate::message::*;
 
-use util::Error;
-
+use anyhow::Result;
 use std::fmt;
 
 const MAX_USERNAME_B: usize = 513;
@@ -50,14 +50,16 @@ impl fmt::Display for TextAttribute {
 impl Setter for TextAttribute {
     // add_to_as adds attribute with type t to m, checking maximum length. If max_len
     // is less than 0, no check is performed.
-    fn add_to(&self, m: &mut Message) -> Result<(), Error> {
+    fn add_to(&self, m: &mut Message) -> Result<()> {
         let text = self.text.as_bytes();
         let max_len = match self.attr {
             ATTR_USERNAME => MAX_USERNAME_B,
             ATTR_REALM => MAX_REALM_B,
             ATTR_SOFTWARE => MAX_SOFTWARE_B,
             ATTR_NONCE => MAX_NONCE_B,
-            _ => return Err(Error::new(format!("Unsupported AttrType {}", self.attr))),
+            _ => {
+                return Err(Error::ErrOthers(format!("Unsupported AttrType {}", self.attr)).into())
+            }
         };
 
         check_overflow(self.attr, text.len(), max_len)?;
@@ -67,7 +69,7 @@ impl Setter for TextAttribute {
 }
 
 impl Getter for TextAttribute {
-    fn get_from(&mut self, m: &Message) -> Result<(), Error> {
+    fn get_from(&mut self, m: &Message) -> Result<()> {
         let attr = self.attr;
         *self = TextAttribute::get_from_as(m, attr)?;
         Ok(())
@@ -80,13 +82,13 @@ impl TextAttribute {
     }
 
     // get_from_as gets t attribute from m and appends its value to reseted v.
-    pub fn get_from_as(m: &Message, attr: AttrType) -> Result<Self, Error> {
+    pub fn get_from_as(m: &Message, attr: AttrType) -> Result<Self> {
         match attr {
             ATTR_USERNAME => {}
             ATTR_REALM => {}
             ATTR_SOFTWARE => {}
             ATTR_NONCE => {}
-            _ => return Err(Error::new(format!("Unsupported AttrType {}", attr))),
+            _ => return Err(Error::ErrOthers(format!("Unsupported AttrType {}", attr)).into()),
         };
 
         let a = m.get(attr)?;

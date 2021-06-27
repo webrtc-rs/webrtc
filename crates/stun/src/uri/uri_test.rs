@@ -1,9 +1,7 @@
 use super::*;
 
-use util::Error;
-
 #[test]
-fn test_parse_uri() -> Result<(), Error> {
+fn test_parse_uri() -> Result<()> {
     let tests = vec![
         (
             "default",

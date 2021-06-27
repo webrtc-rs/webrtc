@@ -1,19 +1,16 @@
 #[cfg(test)]
 mod agent_test;
 
-use crate::errors::*;
+use crate::client::ClientTransaction;
+use crate::error::*;
 use crate::message::*;
 
-use util::Error;
-
-use tokio::sync::mpsc;
-use tokio::time::Instant;
-
+use anyhow::Result;
+use rand::Rng;
 use std::collections::HashMap;
 use std::sync::Arc;
-
-use crate::client::ClientTransaction;
-use rand::Rng;
+use tokio::sync::mpsc;
+use tokio::time::Instant;
 
 // Handler handles state changes of transaction.
 // Handler is called on transaction state change.
@@ -56,10 +53,10 @@ impl Default for EventType {
 
 // Event is passed to Handler describing the transaction event.
 // Do not reuse outside Handler.
-#[derive(Debug, Clone)]
+#[derive(Debug)] //Clone
 pub struct Event {
     pub event_type: EventType,
-    pub event_body: Result<Message, Error>,
+    pub event_body: Result<Message>,
 }
 
 impl Default for Event {
@@ -96,7 +93,7 @@ impl TransactionId {
 }
 
 impl Setter for TransactionId {
-    fn add_to(&self, m: &mut Message) -> Result<(), Error> {
+    fn add_to(&self, m: &mut Message) -> Result<()> {
         m.transaction_id = *self;
         m.write_transaction_id();
         Ok(())
@@ -105,6 +102,7 @@ impl Setter for TransactionId {
 
 // ClientAgent is Agent implementation that is used by Client to
 // process transactions.
+#[derive(Debug)]
 pub enum ClientAgent {
     Process(Message),
     Collect(Instant),
@@ -126,9 +124,9 @@ impl Agent {
 
     // stop_with_error removes transaction from list and calls handler with
     // provided error. Can return ErrTransactionNotExists and ErrAgentClosed.
-    fn stop_with_error(&mut self, id: TransactionId, error: Error) -> Result<(), Error> {
+    fn stop_with_error(&mut self, id: TransactionId, error: Error) -> Result<()> {
         if self.closed {
-            return Err(ERR_AGENT_CLOSED.clone());
+            return Err(Error::ErrAgentClosed.into());
         }
 
         let v = self.transactions.remove(&id);
@@ -136,19 +134,19 @@ impl Agent {
             if let Some(handler) = &self.handler {
                 handler.send(Event {
                     event_type: EventType::Callback(t.id),
-                    event_body: Err(error),
+                    event_body: Err(error.into()),
                 })?;
             }
             Ok(())
         } else {
-            Err(ERR_TRANSACTION_NOT_EXISTS.clone())
+            Err(Error::ErrTransactionNotExists.into())
         }
     }
 
     // process incoming message, synchronously passing it to handler.
-    fn process(&mut self, message: Message) -> Result<(), Error> {
+    fn process(&mut self, message: Message) -> Result<()> {
         if self.closed {
-            return Err(ERR_AGENT_CLOSED.clone());
+            return Err(Error::ErrAgentClosed.into());
         }
 
         self.transactions.remove(&message.transaction_id);
@@ -167,15 +165,15 @@ impl Agent {
 
     // Close terminates all transactions with ErrAgentClosed and renders Agent to
     // closed state.
-    fn close(&mut self) -> Result<(), Error> {
+    fn close(&mut self) -> Result<()> {
         if self.closed {
-            return Err(ERR_AGENT_CLOSED.clone());
+            return Err(Error::ErrAgentClosed.into());
         }
 
         for id in self.transactions.keys() {
             let e = Event {
                 event_type: EventType::Callback(*id),
-                event_body: Err(ERR_AGENT_CLOSED.clone()),
+                event_body: Err(Error::ErrAgentClosed.into()),
             };
             if let Some(handler) = &self.handler {
                 handler.send(e)?;
@@ -192,12 +190,12 @@ impl Agent {
     // Could return ErrAgentClosed, ErrTransactionExists.
     //
     // Agent handler is guaranteed to be eventually called.
-    fn start(&mut self, id: TransactionId, deadline: Instant) -> Result<(), Error> {
+    fn start(&mut self, id: TransactionId, deadline: Instant) -> Result<()> {
         if self.closed {
-            return Err(ERR_AGENT_CLOSED.clone());
+            return Err(Error::ErrAgentClosed.into());
         }
         if self.transactions.contains_key(&id) {
-            return Err(ERR_TRANSACTION_EXISTS.clone());
+            return Err(Error::ErrTransactionExists.into());
         }
 
         self.transactions
@@ -208,8 +206,8 @@ impl Agent {
 
     // Stop stops transaction by id with ErrTransactionStopped, blocking
     // until handler returns.
-    fn stop(&mut self, id: TransactionId) -> Result<(), Error> {
-        self.stop_with_error(id, ERR_TRANSACTION_STOPPED.clone())
+    fn stop(&mut self, id: TransactionId) -> Result<()> {
+        self.stop_with_error(id, Error::ErrTransactionStopped)
     }
 
     // Collect terminates all transactions that have deadline before provided
@@ -217,12 +215,12 @@ impl Agent {
     // Will return ErrAgentClosed if agent is already closed.
     //
     // It is safe to call Collect concurrently but makes no sense.
-    fn collect(&mut self, deadline: Instant) -> Result<(), Error> {
+    fn collect(&mut self, deadline: Instant) -> Result<()> {
         if self.closed {
             // Doing nothing if agent is closed.
             // All transactions should be already closed
             // during Close() call.
-            return Err(ERR_AGENT_CLOSED.clone());
+            return Err(Error::ErrAgentClosed.into());
         }
 
         let mut to_remove: Vec<TransactionId> = Vec::with_capacity(AGENT_COLLECT_CAP);
@@ -244,7 +242,7 @@ impl Agent {
         for id in to_remove {
             let event = Event {
                 event_type: EventType::Callback(id),
-                event_body: Err(ERR_TRANSACTION_TIME_OUT.clone()),
+                event_body: Err(Error::ErrTransactionTimeOut.into()),
             };
             if let Some(handler) = &self.handler {
                 handler.send(event)?;
@@ -255,9 +253,9 @@ impl Agent {
     }
 
     // set_handler sets agent handler to h.
-    fn set_handler(&mut self, h: Handler) -> Result<(), Error> {
+    fn set_handler(&mut self, h: Handler) -> Result<()> {
         if self.closed {
-            return Err(ERR_AGENT_CLOSED.clone());
+            return Err(Error::ErrAgentClosed.into());
         }
         self.handler = h;
 
@@ -275,7 +273,7 @@ impl Agent {
             };
 
             if let Err(err) = result {
-                if err == *ERR_AGENT_CLOSED {
+                if Error::ErrAgentClosed.equal(&err) {
                     break;
                 }
             }

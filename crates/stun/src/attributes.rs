@@ -3,8 +3,7 @@ mod attributes_test;
 
 use crate::message::*;
 
-use util::Error;
-
+use anyhow::Result;
 use std::fmt;
 
 // Attributes is list of message attributes.
@@ -176,7 +175,7 @@ impl fmt::Display for RawAttribute {
 impl Setter for RawAttribute {
     // add_to implements Setter, adding attribute as a.Type with a.Value and ignoring
     // the Length field.
-    fn add_to(&self, m: &mut Message) -> Result<(), Error> {
+    fn add_to(&self, m: &mut Message) -> Result<()> {
         m.add(self.typ, &self.value);
         Ok(())
     }

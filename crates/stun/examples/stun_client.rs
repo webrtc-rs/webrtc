@@ -3,13 +3,13 @@ use stun::client::*;
 use stun::message::*;
 use stun::xoraddr::*;
 
+use anyhow::Result;
 use clap::{App, Arg};
 use std::sync::Arc;
 use tokio::net::UdpSocket;
-use util::Error;
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
+async fn main() -> Result<()> {
     let mut app = App::new("STUN Client")
         .version("0.1.0")
         .author("Rain Liu <yliu@webrtc.rs>")

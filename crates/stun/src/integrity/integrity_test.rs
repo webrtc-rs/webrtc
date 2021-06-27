@@ -4,10 +4,8 @@ use crate::attributes::ATTR_SOFTWARE;
 use crate::fingerprint::FINGERPRINT;
 use crate::textattrs::TextAttribute;
 
-use util::Error;
-
 #[test]
-fn test_message_integrity_add_to_simple() -> Result<(), Error> {
+fn test_message_integrity_add_to_simple() -> Result<()> {
     let i = MessageIntegrity::new_long_term_integrity(
         "user".to_owned(),
         "realm".to_owned(),
@@ -17,7 +15,7 @@ fn test_message_integrity_add_to_simple() -> Result<(), Error> {
         0x84, 0x93, 0xfb, 0xc5, 0x3b, 0xa5, 0x82, 0xfb, 0x4c, 0x04, 0x4c, 0x45, 0x6b, 0xdc, 0x40,
         0xeb,
     ];
-    assert_eq!(expected, i.0, "{}", ERR_INTEGRITY_MISMATCH.clone());
+    assert_eq!(expected, i.0, "{}", Error::ErrIntegrityMismatch);
 
     //"Check"
     {
@@ -46,7 +44,7 @@ fn test_message_integrity_add_to_simple() -> Result<(), Error> {
 }
 
 #[test]
-fn test_message_integrity_with_fingerprint() -> Result<(), Error> {
+fn test_message_integrity_with_fingerprint() -> Result<()> {
     let mut m = Message::new();
     m.transaction_id = TransactionId([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0]);
     m.write_header();
@@ -73,7 +71,7 @@ fn test_message_integrity_with_fingerprint() -> Result<(), Error> {
 }
 
 #[test]
-fn test_message_integrity() -> Result<(), Error> {
+fn test_message_integrity() -> Result<()> {
     let mut m = Message::new();
     let i = MessageIntegrity::new_short_term_integrity("password".to_owned());
     m.write_header();
@@ -83,7 +81,7 @@ fn test_message_integrity() -> Result<(), Error> {
 }
 
 #[test]
-fn test_message_integrity_before_fingerprint() -> Result<(), Error> {
+fn test_message_integrity_before_fingerprint() -> Result<()> {
     let mut m = Message::new();
     m.write_header();
     FINGERPRINT.add_to(&mut m)?;

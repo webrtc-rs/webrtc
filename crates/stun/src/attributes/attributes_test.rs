@@ -1,10 +1,8 @@
 use super::*;
 use crate::textattrs::TextAttribute;
 
-use util::Error;
-
 #[test]
-fn test_raw_attribute_add_to() -> Result<(), Error> {
+fn test_raw_attribute_add_to() -> Result<()> {
     let v = vec![1, 2, 3, 4];
     let mut m = Message::new();
     let ra = Box::new(RawAttribute {
@@ -20,7 +18,7 @@ fn test_raw_attribute_add_to() -> Result<(), Error> {
 }
 
 #[test]
-fn test_message_get_no_allocs() -> Result<(), Error> {
+fn test_message_get_no_allocs() -> Result<()> {
     let mut m = Message::new();
     let a = TextAttribute {
         attr: ATTR_SOFTWARE,
@@ -43,7 +41,7 @@ fn test_message_get_no_allocs() -> Result<(), Error> {
 }
 
 #[test]
-fn test_padding() -> Result<(), Error> {
+fn test_padding() -> Result<()> {
     let tt = vec![
         (4, 4),   // 0
         (2, 4),   // 1
@@ -67,7 +65,7 @@ fn test_padding() -> Result<(), Error> {
 }
 
 #[test]
-fn test_attr_type_range() -> Result<(), Error> {
+fn test_attr_type_range() -> Result<()> {
     let tests = vec![
         ATTR_PRIORITY,
         ATTR_ERROR_CODE,

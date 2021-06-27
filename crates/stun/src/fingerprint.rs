@@ -5,8 +5,7 @@ use crate::attributes::ATTR_FINGERPRINT;
 use crate::checks::*;
 use crate::message::*;
 
-use util::Error;
-
+use anyhow::Result;
 use crc::{Crc, CRC_32_ISCSI};
 
 // FingerprintAttr represents FINGERPRINT attribute.
@@ -38,7 +37,7 @@ pub fn fingerprint_value(b: &[u8]) -> u32 {
 
 impl Setter for FingerprintAttr {
     // add_to adds fingerprint to message.
-    fn add_to(&self, m: &mut Message) -> Result<(), Error> {
+    fn add_to(&self, m: &mut Message) -> Result<()> {
         let l = m.length;
         // length in header should include size of fingerprint attribute
         m.length += (FINGERPRINT_SIZE + ATTRIBUTE_HEADER_SIZE) as u32; // increasing length
@@ -54,7 +53,7 @@ impl Setter for FingerprintAttr {
 impl FingerprintAttr {
     // Check reads fingerprint value from m and checks it, returning error if any.
     // Can return *AttrLengthErr, ErrAttributeNotFound, and *CRCMismatch.
-    pub fn check(&self, m: &Message) -> Result<(), Error> {
+    pub fn check(&self, m: &Message) -> Result<()> {
         let b = m.get(ATTR_FINGERPRINT)?;
         check_size(ATTR_FINGERPRINT, b.len(), FINGERPRINT_SIZE)?;
         let val = u32::from_be_bytes([b[0], b[1], b[2], b[3]]);

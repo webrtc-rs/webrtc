@@ -2,11 +2,10 @@
 mod addr_test;
 
 use crate::attributes::*;
-use crate::errors::*;
+use crate::error::*;
 use crate::message::*;
 
-use util::Error;
-
+use anyhow::Result;
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
@@ -51,29 +50,29 @@ impl Default for MappedAddress {
 
 impl Setter for MappedAddress {
     // add_to adds MAPPED-ADDRESS to message.
-    fn add_to(&self, m: &mut Message) -> Result<(), Error> {
+    fn add_to(&self, m: &mut Message) -> Result<()> {
         self.add_to_as(m, ATTR_MAPPED_ADDRESS)
     }
 }
 
 impl Getter for MappedAddress {
     // GetFrom decodes MAPPED-ADDRESS from message.
-    fn get_from(&mut self, m: &Message) -> Result<(), Error> {
+    fn get_from(&mut self, m: &Message) -> Result<()> {
         self.get_from_as(m, ATTR_MAPPED_ADDRESS)
     }
 }
 
 impl MappedAddress {
     // get_from_as decodes MAPPED-ADDRESS value in message m as an attribute of type t.
-    pub fn get_from_as(&mut self, m: &Message, t: AttrType) -> Result<(), Error> {
+    pub fn get_from_as(&mut self, m: &Message, t: AttrType) -> Result<()> {
         let v = m.get(t)?;
         if v.len() <= 4 {
-            return Err(ERR_UNEXPECTED_EOF.clone());
+            return Err(Error::ErrUnexpectedEof.into());
         }
 
         let family = u16::from_be_bytes([v[0], v[1]]);
         if family != FAMILY_IPV6 && family != FAMILY_IPV4 {
-            return Err(Error::new(format!("bad value {}", family)));
+            return Err(Error::ErrOthers(format!("bad value {}", family)).into());
         }
         self.port = u16::from_be_bytes([v[2], v[3]]);
 
@@ -93,7 +92,7 @@ impl MappedAddress {
     }
 
     // add_to_as adds MAPPED-ADDRESS value to m as t attribute.
-    pub fn add_to_as(&self, m: &mut Message, t: AttrType) -> Result<(), Error> {
+    pub fn add_to_as(&self, m: &mut Message, t: AttrType) -> Result<()> {
         let family = match self.ip {
             IpAddr::V4(_) => FAMILY_IPV4,
             IpAddr::V6(_) => FAMILY_IPV6,

@@ -1,13 +1,11 @@
 use super::*;
 use crate::checks::*;
-use crate::errors::*;
-
-use util::Error;
+use crate::error::*;
 
 use std::io::BufReader;
 
 #[test]
-fn test_software_get_from() -> Result<(), Error> {
+fn test_software_get_from() -> Result<()> {
     let mut m = Message::new();
     let v = "Client v0.0.1".to_owned();
     m.add(ATTR_SOFTWARE, v.as_bytes());
@@ -37,7 +35,7 @@ fn test_software_get_from() -> Result<(), Error> {
 }
 
 #[test]
-fn test_software_add_to_invalid() -> Result<(), Error> {
+fn test_software_add_to_invalid() -> Result<()> {
     let mut m = Message::new();
     let s = TextAttribute {
         attr: ATTR_SOFTWARE,
@@ -56,11 +54,10 @@ fn test_software_add_to_invalid() -> Result<(), Error> {
 
     let result = TextAttribute::get_from_as(&m, ATTR_SOFTWARE);
     if let Err(err) = result {
-        assert_eq!(
-            err,
-            ERR_ATTRIBUTE_NOT_FOUND.clone(),
+        assert!(
+            Error::ErrAttributeNotFound.equal(&err),
             "GetFrom should return {}, got: {}",
-            ERR_ATTRIBUTE_NOT_FOUND.clone(),
+            Error::ErrAttributeNotFound,
             err
         );
     } else {
@@ -71,7 +68,7 @@ fn test_software_add_to_invalid() -> Result<(), Error> {
 }
 
 #[test]
-fn test_software_add_to_regression() -> Result<(), Error> {
+fn test_software_add_to_regression() -> Result<()> {
     // s.add_to checked len(m.Raw) instead of len(s.Raw).
     let mut m = Message {
         raw: vec![0u8; 2048],
@@ -87,7 +84,7 @@ fn test_software_add_to_regression() -> Result<(), Error> {
 }
 
 #[test]
-fn test_username() -> Result<(), Error> {
+fn test_username() -> Result<()> {
     let username = "username".to_owned();
     let u = TextAttribute {
         attr: ATTR_USERNAME,
@@ -131,7 +128,7 @@ fn test_username() -> Result<(), Error> {
                 let m = Message::new();
                 let result = TextAttribute::get_from_as(&m, ATTR_USERNAME);
                 if let Err(err) = result {
-                    assert_eq!(err, ERR_ATTRIBUTE_NOT_FOUND.clone(), "Should error");
+                    assert!(Error::ErrAttributeNotFound.equal(&err), "Should error");
                 } else {
                     assert!(false, "expected error, but got ok");
                 }
@@ -156,7 +153,7 @@ fn test_username() -> Result<(), Error> {
 }
 
 #[test]
-fn test_realm_get_from() -> Result<(), Error> {
+fn test_realm_get_from() -> Result<()> {
     let mut m = Message::new();
     let v = "realm".to_owned();
     m.add(ATTR_REALM, v.as_bytes());
@@ -169,11 +166,10 @@ fn test_realm_get_from() -> Result<(), Error> {
 
     let result = TextAttribute::get_from_as(&m2, ATTR_REALM);
     if let Err(err) = result {
-        assert_eq!(
-            err,
-            ERR_ATTRIBUTE_NOT_FOUND.clone(),
+        assert!(
+            Error::ErrAttributeNotFound.equal(&err),
             "GetFrom should return {}, got: {}",
-            ERR_ATTRIBUTE_NOT_FOUND.clone(),
+            Error::ErrAttributeNotFound,
             err
         );
     } else {
@@ -196,7 +192,7 @@ fn test_realm_get_from() -> Result<(), Error> {
 }
 
 #[test]
-fn test_realm_add_to_invalid() -> Result<(), Error> {
+fn test_realm_add_to_invalid() -> Result<()> {
     let mut m = Message::new();
     let s = TextAttribute {
         attr: ATTR_REALM,
@@ -215,11 +211,10 @@ fn test_realm_add_to_invalid() -> Result<(), Error> {
 
     let result = TextAttribute::get_from_as(&m, ATTR_REALM);
     if let Err(err) = result {
-        assert_eq!(
-            err,
-            ERR_ATTRIBUTE_NOT_FOUND.clone(),
+        assert!(
+            Error::ErrAttributeNotFound.equal(&err),
             "GetFrom should return {}, got: {}",
-            ERR_ATTRIBUTE_NOT_FOUND.clone(),
+            Error::ErrAttributeNotFound,
             err
         );
     } else {
@@ -230,7 +225,7 @@ fn test_realm_add_to_invalid() -> Result<(), Error> {
 }
 
 #[test]
-fn test_nonce_get_from() -> Result<(), Error> {
+fn test_nonce_get_from() -> Result<()> {
     let mut m = Message::new();
     let v = "example.org".to_owned();
     m.add(ATTR_NONCE, v.as_bytes());
@@ -243,11 +238,10 @@ fn test_nonce_get_from() -> Result<(), Error> {
 
     let result = TextAttribute::get_from_as(&m2, ATTR_NONCE);
     if let Err(err) = result {
-        assert_eq!(
-            err,
-            ERR_ATTRIBUTE_NOT_FOUND.clone(),
+        assert!(
+            Error::ErrAttributeNotFound.equal(&err),
             "GetFrom should return {}, got: {}",
-            ERR_ATTRIBUTE_NOT_FOUND.clone(),
+            Error::ErrAttributeNotFound,
             err
         );
     } else {
@@ -270,7 +264,7 @@ fn test_nonce_get_from() -> Result<(), Error> {
 }
 
 #[test]
-fn test_nonce_add_to_invalid() -> Result<(), Error> {
+fn test_nonce_add_to_invalid() -> Result<()> {
     let mut m = Message::new();
     let s = TextAttribute {
         attr: ATTR_NONCE,
@@ -289,11 +283,10 @@ fn test_nonce_add_to_invalid() -> Result<(), Error> {
 
     let result = TextAttribute::get_from_as(&m, ATTR_NONCE);
     if let Err(err) = result {
-        assert_eq!(
-            err,
-            ERR_ATTRIBUTE_NOT_FOUND.clone(),
+        assert!(
+            Error::ErrAttributeNotFound.equal(&err),
             "GetFrom should return {}, got: {}",
-            ERR_ATTRIBUTE_NOT_FOUND.clone(),
+            Error::ErrAttributeNotFound,
             err
         );
     } else {
@@ -304,7 +297,7 @@ fn test_nonce_add_to_invalid() -> Result<(), Error> {
 }
 
 #[test]
-fn test_nonce_add_to() -> Result<(), Error> {
+fn test_nonce_add_to() -> Result<()> {
     let mut m = Message::new();
     let n = TextAttribute {
         attr: ATTR_NONCE,

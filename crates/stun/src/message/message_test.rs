@@ -1,15 +1,13 @@
 use super::*;
 use crate::xoraddr::*;
 
-use util::Error;
-
 use crate::fingerprint::FINGERPRINT;
 use crate::integrity::MessageIntegrity;
 use crate::textattrs::TextAttribute;
 use std::io::{BufReader, BufWriter};
 
 #[test]
-fn test_message_buffer() -> Result<(), Error> {
+fn test_message_buffer() -> Result<()> {
     let mut m = Message::new();
     m.typ = MessageType {
         method: METHOD_BINDING,
@@ -29,7 +27,7 @@ fn test_message_buffer() -> Result<(), Error> {
 }
 
 #[test]
-fn test_message_type_value() -> Result<(), Error> {
+fn test_message_type_value() -> Result<()> {
     let tests = vec![
         (
             MessageType {
@@ -70,7 +68,7 @@ fn test_message_type_value() -> Result<(), Error> {
 }
 
 #[test]
-fn test_message_type_read_value() -> Result<(), Error> {
+fn test_message_type_read_value() -> Result<()> {
     let tests = vec![
         (
             0x0001,
@@ -105,7 +103,7 @@ fn test_message_type_read_value() -> Result<(), Error> {
 }
 
 #[test]
-fn test_message_type_read_write_value() -> Result<(), Error> {
+fn test_message_type_read_write_value() -> Result<()> {
     let tests = vec![
         MessageType {
             method: METHOD_BINDING,
@@ -140,7 +138,7 @@ fn test_message_type_read_write_value() -> Result<(), Error> {
 }
 
 #[test]
-fn test_message_write_to() -> Result<(), Error> {
+fn test_message_write_to() -> Result<()> {
     let mut m = Message::new();
     m.typ = MessageType {
         method: METHOD_BINDING,
@@ -164,7 +162,7 @@ fn test_message_write_to() -> Result<(), Error> {
 }
 
 #[test]
-fn test_message_cookie() -> Result<(), Error> {
+fn test_message_cookie() -> Result<()> {
     let buf = vec![0; 20];
     let mut m_decoded = Message::new();
     let mut reader = BufReader::new(buf.as_slice());
@@ -175,7 +173,7 @@ fn test_message_cookie() -> Result<(), Error> {
 }
 
 #[test]
-fn test_message_length_less_header_size() -> Result<(), Error> {
+fn test_message_length_less_header_size() -> Result<()> {
     let buf = vec![0; 8];
     let mut m_decoded = Message::new();
     let mut reader = BufReader::new(buf.as_slice());
@@ -186,7 +184,7 @@ fn test_message_length_less_header_size() -> Result<(), Error> {
 }
 
 #[test]
-fn test_message_bad_length() -> Result<(), Error> {
+fn test_message_bad_length() -> Result<()> {
     let m_type = MessageType {
         method: METHOD_BINDING,
         class: CLASS_REQUEST,
@@ -209,7 +207,7 @@ fn test_message_bad_length() -> Result<(), Error> {
 }
 
 #[test]
-fn test_message_attr_length_less_than_header() -> Result<(), Error> {
+fn test_message_attr_length_less_than_header() -> Result<()> {
     let m_type = MessageType {
         method: METHOD_BINDING,
         class: CLASS_REQUEST,
@@ -239,7 +237,7 @@ fn test_message_attr_length_less_than_header() -> Result<(), Error> {
 }
 
 #[test]
-fn test_message_attr_size_less_than_length() -> Result<(), Error> {
+fn test_message_attr_size_less_than_length() -> Result<()> {
     let m_type = MessageType {
         method: METHOD_BINDING,
         class: CLASS_REQUEST,
@@ -269,7 +267,7 @@ fn test_message_attr_size_less_than_length() -> Result<(), Error> {
 }
 
 #[test]
-fn test_message_read_from_error() -> Result<(), Error> {
+fn test_message_read_from_error() -> Result<()> {
     let mut m_decoded = Message::new();
     let buf = vec![];
     let mut reader = BufReader::new(buf.as_slice());
@@ -280,7 +278,7 @@ fn test_message_read_from_error() -> Result<(), Error> {
 }
 
 #[test]
-fn test_message_class_string() -> Result<(), Error> {
+fn test_message_class_string() -> Result<()> {
     let v = vec![
         CLASS_REQUEST,
         CLASS_ERROR_RESPONSE,
@@ -302,7 +300,7 @@ fn test_message_class_string() -> Result<(), Error> {
 }
 
 #[test]
-fn test_attr_type_string() -> Result<(), Error> {
+fn test_attr_type_string() -> Result<()> {
     let v = vec![
         ATTR_MAPPED_ADDRESS,
         ATTR_USERNAME,
@@ -330,7 +328,7 @@ fn test_attr_type_string() -> Result<(), Error> {
 }
 
 #[test]
-fn test_method_string() -> Result<(), Error> {
+fn test_method_string() -> Result<()> {
     assert_eq!(
         METHOD_BINDING.to_string(),
         "Binding".to_owned(),
@@ -347,7 +345,7 @@ fn test_method_string() -> Result<(), Error> {
 }
 
 #[test]
-fn test_attribute_equal() -> Result<(), Error> {
+fn test_attribute_equal() -> Result<()> {
     let a = RawAttribute {
         length: 2,
         value: vec![0x1, 0x2],
@@ -398,7 +396,7 @@ fn test_attribute_equal() -> Result<(), Error> {
 }
 
 #[test]
-fn test_message_equal() -> Result<(), Error> {
+fn test_message_equal() -> Result<()> {
     let attr = RawAttribute {
         length: 2,
         value: vec![0x1, 0x2],
@@ -549,7 +547,7 @@ fn test_message_equal() -> Result<(), Error> {
 }
 
 #[test]
-fn test_message_grow() -> Result<(), Error> {
+fn test_message_grow() -> Result<()> {
     let mut m = Message::new();
     m.grow(512, false);
     assert_eq!(m.raw.len(), 512, "Bad length {}", m.raw.len());
@@ -558,7 +556,7 @@ fn test_message_grow() -> Result<(), Error> {
 }
 
 #[test]
-fn test_message_grow_smaller() -> Result<(), Error> {
+fn test_message_grow_smaller() -> Result<()> {
     let mut m = Message::new();
     m.grow(2, false);
     assert!(
@@ -573,7 +571,7 @@ fn test_message_grow_smaller() -> Result<(), Error> {
 }
 
 #[test]
-fn test_message_string() -> Result<(), Error> {
+fn test_message_string() -> Result<()> {
     let m = Message::new();
     assert_ne!(m.to_string(), "", "bad string");
 
@@ -581,7 +579,7 @@ fn test_message_string() -> Result<(), Error> {
 }
 
 #[test]
-fn test_is_message() -> Result<(), Error> {
+fn test_is_message() -> Result<()> {
     let mut m = Message::new();
     let a = TextAttribute {
         attr: ATTR_SOFTWARE,
@@ -613,7 +611,7 @@ fn test_is_message() -> Result<(), Error> {
 }
 
 #[test]
-fn test_message_contains() -> Result<(), Error> {
+fn test_message_contains() -> Result<()> {
     let mut m = Message::new();
     m.add(ATTR_SOFTWARE, "value".as_bytes());
 
@@ -624,7 +622,7 @@ fn test_message_contains() -> Result<(), Error> {
 }
 
 #[test]
-fn test_message_full_size() -> Result<(), Error> {
+fn test_message_full_size() -> Result<()> {
     let mut m = Message::new();
     m.build(&[
         Box::new(BINDING_REQUEST),
@@ -650,7 +648,7 @@ fn test_message_full_size() -> Result<(), Error> {
 }
 
 #[test]
-fn test_message_clone_to() -> Result<(), Error> {
+fn test_message_clone_to() -> Result<()> {
     let mut m = Message::new();
     m.build(&[
         Box::new(BINDING_REQUEST),
@@ -680,7 +678,7 @@ fn test_message_clone_to() -> Result<(), Error> {
 }
 
 #[test]
-fn test_message_add_to() -> Result<(), Error> {
+fn test_message_add_to() -> Result<()> {
     let mut m = Message::new();
     m.build(&[
         Box::new(BINDING_REQUEST),
@@ -702,7 +700,7 @@ fn test_message_add_to() -> Result<(), Error> {
 }
 
 #[test]
-fn test_decode() -> Result<(), Error> {
+fn test_decode() -> Result<()> {
     let mut m = Message::new();
     m.typ = MessageType {
         method: METHOD_BINDING,
@@ -725,7 +723,7 @@ fn test_decode() -> Result<(), Error> {
 }
 
 #[test]
-fn test_message_marshal_binary() -> Result<(), Error> {
+fn test_message_marshal_binary() -> Result<()> {
     let mut m = Message::new();
     m.build(&[
         Box::new(TextAttribute::new(ATTR_SOFTWARE, "software".to_owned())),
