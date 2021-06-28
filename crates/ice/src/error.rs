@@ -189,12 +189,7 @@ pub enum Error {
 }
 
 impl Error {
-    #[must_use]
     pub fn equal(&self, err: &anyhow::Error) -> bool {
-        if let Some(e) = err.downcast_ref::<Self>() {
-            e == self
-        } else {
-            false
-        }
+        err.downcast_ref::<Self>().map_or(false, |e| e == self)
     }
 }
