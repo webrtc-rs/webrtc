@@ -313,7 +313,7 @@ impl ClientInternal {
         msg.decode()?;
 
         if msg.typ.class == CLASS_REQUEST {
-            return Err(Error::ErrOthers(format!(
+            return Err(Error::new(format!(
                 "{:?} : {}",
                 Error::ErrUnexpectedStunrequestMessage,
                 msg
@@ -542,9 +542,9 @@ impl ClientInternal {
             let mut code = ErrorCodeAttribute::default();
             let result = code.get_from(&res);
             if result.is_err() {
-                return Err(Error::ErrOthers(format!("{}", res.typ)).into());
+                return Err(Error::new(format!("{}", res.typ)).into());
             } else {
-                return Err(Error::ErrOthers(format!("{} (error {})", res.typ, code)).into());
+                return Err(Error::new(format!("{} (error {})", res.typ, code)).into());
             }
         }
 

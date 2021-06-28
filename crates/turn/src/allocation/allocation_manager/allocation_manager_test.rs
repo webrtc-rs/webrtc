@@ -97,7 +97,7 @@ async fn test_packet_handler() -> Result<()> {
     let data = data_ch_rx
         .recv()
         .await
-        .ok_or(Error::ErrOthers("data ch closed".to_owned()))?;
+        .ok_or(Error::new("data ch closed".to_owned()))?;
 
     // resolve stun data message
     assert!(is_message(&data), "should be stun message");
@@ -122,7 +122,7 @@ async fn test_packet_handler() -> Result<()> {
     let data = data_ch_rx
         .recv()
         .await
-        .ok_or(Error::ErrOthers("data ch closed".to_owned()))?;
+        .ok_or(Error::new("data ch closed".to_owned()))?;
 
     // resolve channel data
     assert!(

@@ -234,7 +234,7 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
                 } else {
                     binding_mgr
                         .create(addr)
-                        .ok_or_else(|| Error::ErrOthers("Addr not found".to_owned()))?
+                        .ok_or_else(|| Error::new("Addr not found".to_owned()))?
                 };
                 (b.state(), b.refreshed_at(), b.number, b.addr)
             };
@@ -421,12 +421,12 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
             let mut code = ErrorCodeAttribute::default();
             let result = code.get_from(&res);
             if result.is_err() {
-                return Err(Error::ErrOthers(format!("{}", res.typ)).into());
+                return Err(Error::new(format!("{}", res.typ)).into());
             } else if code.code == CODE_STALE_NONCE {
                 self.set_nonce_from_msg(&res);
                 return Err(Error::ErrTryAgain.into());
             } else {
-                return Err(Error::ErrOthers(format!("{} (error {})", res.typ, code)).into());
+                return Err(Error::new(format!("{} (error {})", res.typ, code)).into());
             }
         }
 
@@ -487,7 +487,7 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
             let mut code = ErrorCodeAttribute::default();
             let result = code.get_from(&res);
             if result.is_err() {
-                return Err(Error::ErrOthers(format!("{}", res.typ)).into());
+                return Err(Error::new(format!("{}", res.typ)).into());
             } else if code.code == CODE_STALE_NONCE {
                 self.set_nonce_from_msg(&res);
                 return Err(Error::ErrTryAgain.into());

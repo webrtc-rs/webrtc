@@ -180,7 +180,7 @@ fn test_chrome_channel_data() -> Result<()> {
     for h in &CHANDATA_TEST_HEX {
         let b = match hex::decode(h) {
             Ok(b) => b,
-            Err(_) => return Err(Error::ErrOthers("hex decode error".to_owned()).into()),
+            Err(_) => return Err(Error::new("hex decode error".to_owned()).into()),
         };
         data.push(b);
     }

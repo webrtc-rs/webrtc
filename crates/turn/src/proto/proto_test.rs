@@ -19,7 +19,7 @@ fn test_chrome_alloc_request() -> Result<()> {
     for h in &CHROME_ALLOC_REQ_TEST_HEX {
         let b = match hex::decode(h) {
             Ok(b) => b,
-            Err(_) => return Err(Error::ErrOthers("hex decode error".to_owned()).into()),
+            Err(_) => return Err(Error::new("hex decode error".to_owned()).into()),
         };
         data.push(b);
     }
