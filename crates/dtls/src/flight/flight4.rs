@@ -45,7 +45,7 @@ impl Flight for Flight4 {
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<Error>)> {
+    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<anyhow::Error>)> {
         let (seq, msgs) = match cache
             .full_pull_map(
                 state.handshake_recv_sequence,
@@ -131,7 +131,7 @@ impl Flight for Flight4 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::NoCertificate,
                     }),
-                    Some(Error::ErrCertificateVerifyNoCertificate),
+                    Some(Error::ErrCertificateVerifyNoCertificate.into()),
                 ));
             }
 
@@ -202,7 +202,7 @@ impl Flight for Flight4 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::InsufficientSecurity,
                     }),
-                    Some(Error::ErrNoAvailableSignatureSchemes),
+                    Some(Error::ErrNoAvailableSignatureSchemes.into()),
                 ));
             }
 
@@ -243,7 +243,7 @@ impl Flight for Flight4 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::BadCertificate,
                         }),
-                        Some(Error::ErrInvalidCertificate),
+                        Some(Error::ErrInvalidCertificate.into()),
                     ));
                 }
 
@@ -392,7 +392,7 @@ impl Flight for Flight4 {
                     alert_level: AlertLevel::Fatal,
                     alert_description: AlertDescription::InternalError,
                 }),
-                Some(Error::ErrOthers(err.to_string())),
+                Some(Error::ErrOthers(err.to_string()).into()),
             ));
         }
 
@@ -442,7 +442,7 @@ impl Flight for Flight4 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::NoCertificate,
                         }),
-                        Some(Error::ErrClientCertificateRequired),
+                        Some(Error::ErrClientCertificateRequired.into()),
                     ));
                 }
             }
@@ -453,7 +453,7 @@ impl Flight for Flight4 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::BadCertificate,
                         }),
-                        Some(Error::ErrClientCertificateNotVerified),
+                        Some(Error::ErrClientCertificateNotVerified.into()),
                     ));
                 }
             }
@@ -464,7 +464,7 @@ impl Flight for Flight4 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::NoCertificate,
                         }),
-                        Some(Error::ErrClientCertificateRequired),
+                        Some(Error::ErrClientCertificateRequired.into()),
                     ));
                 }
                 if !state.peer_certificates_verified {
@@ -473,7 +473,7 @@ impl Flight for Flight4 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::BadCertificate,
                         }),
-                        Some(Error::ErrClientCertificateNotVerified),
+                        Some(Error::ErrClientCertificateNotVerified.into()),
                     ));
                 }
             }
@@ -490,7 +490,7 @@ impl Flight for Flight4 {
         state: &mut State,
         _cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Vec<Packet>, (Option<Alert>, Option<Error>)> {
+    ) -> Result<Vec<Packet>, (Option<Alert>, Option<anyhow::Error>)> {
         let mut extensions = vec![];
         if (cfg.extended_master_secret == ExtendedMasterSecretType::Request
             || cfg.extended_master_secret == ExtendedMasterSecretType::Require)

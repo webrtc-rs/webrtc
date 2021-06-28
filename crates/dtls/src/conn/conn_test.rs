@@ -17,11 +17,10 @@ use crate::handshake::handshake_message_server_hello_done::*;
 use crate::handshake::handshake_message_server_key_exchange::*;
 use crate::handshake::handshake_random::*;
 use crate::signature_hash_algorithm::*;
+use crate::state::KeyingMaterialExporter;
 
 use rand::Rng;
-use srtp::config::KeyingMaterialExporter;
 use std::time::SystemTime;
-
 use util::conn::conn_pipe::*;
 
 const ERR_TEST_PSK_INVALID_IDENTITY: &str = "TestPSK: Server got invalid identity";
@@ -30,7 +29,7 @@ const ERR_NOT_EXPECTED_CHAIN: &str = "not expected chain";
 const ERR_EXPECTED_CHAIN: &str = "expected chain";
 const ERR_WRONG_CERT: &str = "wrong cert";
 
-async fn build_pipe() -> Result<(DTLSConn, DTLSConn), Error> {
+async fn build_pipe() -> Result<(DTLSConn, DTLSConn)> {
     let (ua, ub) = pipe();
 
     pipe_conn(Arc::new(ua), Arc::new(ub)).await
@@ -39,7 +38,7 @@ async fn build_pipe() -> Result<(DTLSConn, DTLSConn), Error> {
 async fn pipe_conn(
     ca: Arc<dyn util::Conn + Send + Sync>,
     cb: Arc<dyn util::Conn + Send + Sync>,
-) -> Result<(DTLSConn, DTLSConn), Error> {
+) -> Result<(DTLSConn, DTLSConn)> {
     let (c_tx, mut c_rx) = mpsc::channel(1);
 
     // Setup client
@@ -77,7 +76,7 @@ async fn pipe_conn(
     Ok((client, sever))
 }
 
-fn psk_callback_client(hint: &[u8]) -> Result<Vec<u8>, Error> {
+fn psk_callback_client(hint: &[u8]) -> Result<Vec<u8>> {
     trace!(
         "Server's hint: {}",
         String::from_utf8(hint.to_vec()).unwrap()
@@ -85,7 +84,7 @@ fn psk_callback_client(hint: &[u8]) -> Result<Vec<u8>, Error> {
     Ok(vec![0xAB, 0xC1, 0x23])
 }
 
-fn psk_callback_server(hint: &[u8]) -> Result<Vec<u8>, Error> {
+fn psk_callback_server(hint: &[u8]) -> Result<Vec<u8>> {
     trace!(
         "Client's hint: {}",
         String::from_utf8(hint.to_vec()).unwrap()
@@ -93,15 +92,15 @@ fn psk_callback_server(hint: &[u8]) -> Result<Vec<u8>, Error> {
     Ok(vec![0xAB, 0xC1, 0x23])
 }
 
-fn psk_callback_hint_fail(_hint: &[u8]) -> Result<Vec<u8>, Error> {
-    Err(Error::ErrOthers(ERR_PSK_REJECTED.to_owned()))
+fn psk_callback_hint_fail(_hint: &[u8]) -> Result<Vec<u8>> {
+    Err(Error::ErrOthers(ERR_PSK_REJECTED.to_owned()).into())
 }
 
 async fn create_test_client(
     ca: Arc<dyn util::Conn + Send + Sync>,
     mut cfg: Config,
     generate_certificate: bool,
-) -> Result<DTLSConn, Error> {
+) -> Result<DTLSConn> {
     if generate_certificate {
         let client_cert = Certificate::generate_self_signed(vec!["localhost".to_owned()])?;
         cfg.certificates = vec![client_cert];
@@ -115,7 +114,7 @@ async fn create_test_server(
     cb: Arc<dyn util::Conn + Send + Sync>,
     mut cfg: Config,
     generate_certificate: bool,
-) -> Result<DTLSConn, Error> {
+) -> Result<DTLSConn> {
     if generate_certificate {
         let server_cert = Certificate::generate_self_signed(vec!["localhost".to_owned()])?;
         cfg.certificates = vec![server_cert];
@@ -125,7 +124,7 @@ async fn create_test_server(
 }
 
 #[tokio::test]
-async fn test_routine_leak_on_close() -> Result<(), Error> {
+async fn test_routine_leak_on_close() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -166,7 +165,7 @@ async fn test_routine_leak_on_close() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_sequence_number_overflow_on_application_data() -> Result<(), Error> {
+async fn test_sequence_number_overflow_on_application_data() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -230,7 +229,7 @@ async fn test_sequence_number_overflow_on_application_data() -> Result<(), Error
 }
 
 #[tokio::test]
-async fn test_sequence_number_overflow_on_handshake() -> Result<(), Error> {
+async fn test_sequence_number_overflow_on_handshake() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -298,7 +297,7 @@ async fn test_sequence_number_overflow_on_handshake() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_handshake_with_alert() -> Result<(), Error> {
+async fn test_handshake_with_alert() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -401,7 +400,7 @@ async fn test_handshake_with_alert() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_export_keying_material() -> Result<(), Error> {
+async fn test_export_keying_material() -> Result<()> {
     let export_label = "EXTRACTOR-dtls_srtp";
     let expected_server_key = vec![0x61, 0x09, 0x9d, 0x7d, 0xcb, 0x08, 0x52, 0x2c, 0xe7, 0x7b];
     let expected_client_key = vec![0x87, 0xf0, 0x40, 0x02, 0xf6, 0x1c, 0xf1, 0xfe, 0x8c, 0x77];
@@ -516,7 +515,7 @@ async fn test_export_keying_material() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_psk() -> Result<(), Error> {
+async fn test_psk() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -592,7 +591,7 @@ async fn test_psk() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_psk_hint_fail() -> Result<(), Error> {
+async fn test_psk_hint_fail() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -660,7 +659,7 @@ async fn test_psk_hint_fail() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_client_timeout() -> Result<(), Error> {
+async fn test_client_timeout() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -707,7 +706,7 @@ async fn test_client_timeout() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_srtp_configuration() -> Result<(), Error> {
+async fn test_srtp_configuration() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -864,7 +863,7 @@ async fn test_srtp_configuration() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_client_certificate() -> Result<(), Error> {
+async fn test_client_certificate() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -1146,7 +1145,7 @@ async fn test_client_certificate() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_extended_master_secret() -> Result<(), Error> {
+async fn test_extended_master_secret() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -1332,26 +1331,26 @@ async fn test_extended_master_secret() -> Result<(), Error> {
     Ok(())
 }
 
-fn fn_not_expected_chain(_cert: &[Vec<u8>], chain: &[rustls::Certificate]) -> Result<(), Error> {
+fn fn_not_expected_chain(_cert: &[Vec<u8>], chain: &[rustls::Certificate]) -> Result<()> {
     if !chain.is_empty() {
-        return Err(Error::ErrOthers(ERR_NOT_EXPECTED_CHAIN.to_owned()));
+        return Err(Error::ErrOthers(ERR_NOT_EXPECTED_CHAIN.to_owned()).into());
     }
     Ok(())
 }
 
-fn fn_expected_chain(_cert: &[Vec<u8>], chain: &[rustls::Certificate]) -> Result<(), Error> {
+fn fn_expected_chain(_cert: &[Vec<u8>], chain: &[rustls::Certificate]) -> Result<()> {
     if chain.is_empty() {
-        return Err(Error::ErrOthers(ERR_EXPECTED_CHAIN.to_owned()));
+        return Err(Error::ErrOthers(ERR_EXPECTED_CHAIN.to_owned()).into());
     }
     Ok(())
 }
 
-fn fn_wrong_cert(_cert: &[Vec<u8>], _chain: &[rustls::Certificate]) -> Result<(), Error> {
-    Err(Error::ErrOthers(ERR_WRONG_CERT.to_owned()))
+fn fn_wrong_cert(_cert: &[Vec<u8>], _chain: &[rustls::Certificate]) -> Result<()> {
+    Err(Error::ErrOthers(ERR_WRONG_CERT.to_owned()).into())
 }
 
 #[tokio::test]
-async fn test_server_certificate() -> Result<(), Error> {
+async fn test_server_certificate() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -1525,7 +1524,7 @@ async fn test_server_certificate() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_cipher_suite_configuration() -> Result<(), Error> {
+async fn test_cipher_suite_configuration() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -1687,12 +1686,12 @@ async fn test_cipher_suite_configuration() -> Result<(), Error> {
     Ok(())
 }
 
-fn psk_callback(_b: &[u8]) -> Result<Vec<u8>, Error> {
+fn psk_callback(_b: &[u8]) -> Result<Vec<u8>> {
     Ok(vec![0x00, 0x01, 0x02])
 }
 
 #[tokio::test]
-async fn test_psk_configuration() -> Result<(), Error> {
+async fn test_psk_configuration() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -1831,7 +1830,7 @@ async fn test_psk_configuration() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_server_timeout() -> Result<(), Error> {
+async fn test_server_timeout() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -1997,7 +1996,7 @@ async fn test_server_timeout() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_protocol_version_validation() -> Result<(), Error> {
+async fn test_protocol_version_validation() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -2303,7 +2302,7 @@ async fn test_protocol_version_validation() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_multiple_hello_verify_request() -> Result<(), Error> {
+async fn test_multiple_hello_verify_request() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(

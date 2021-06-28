@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn test_parse_signature_schemes() -> Result<(), Error> {
+fn test_parse_signature_schemes() -> Result<()> {
     let tests = vec![
         (
             "Translate",

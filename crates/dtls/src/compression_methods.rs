@@ -1,8 +1,6 @@
-use crate::error::Error;
-
-use std::io::{Read, Write};
-
+use anyhow::Result;
 use byteorder::{ReadBytesExt, WriteBytesExt};
+use std::io::{Read, Write};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum CompressionMethodId {
@@ -29,7 +27,7 @@ impl CompressionMethods {
         1 + self.ids.len()
     }
 
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {
         writer.write_u8(self.ids.len() as u8)?;
 
         for id in &self.ids {
@@ -39,7 +37,7 @@ impl CompressionMethods {
         Ok(writer.flush()?)
     }
 
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self> {
         let compression_methods_count = reader.read_u8()? as usize;
         let mut ids = vec![];
         for _ in 0..compression_methods_count {

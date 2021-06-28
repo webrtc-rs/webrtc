@@ -28,7 +28,7 @@ impl Flight for Flight0 {
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<Error>)> {
+    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<anyhow::Error>)> {
         let (seq, msgs) = match cache
             .full_pull_map(
                 0,
@@ -68,7 +68,7 @@ impl Flight for Flight0 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::ProtocolVersion,
                     }),
-                    Some(Error::ErrUnsupportedProtocolVersion),
+                    Some(Error::ErrUnsupportedProtocolVersion.into()),
                 ));
             }
 
@@ -87,7 +87,7 @@ impl Flight for Flight0 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::InsufficientSecurity,
                     }),
-                    Some(Error::ErrCipherSuiteNoIntersection),
+                    Some(Error::ErrCipherSuiteNoIntersection.into()),
                 ));
             }
 
@@ -100,7 +100,7 @@ impl Flight for Flight0 {
                                     alert_level: AlertLevel::Fatal,
                                     alert_description: AlertDescription::InsufficientSecurity,
                                 }),
-                                Some(Error::ErrNoSupportedEllipticCurves),
+                                Some(Error::ErrNoSupportedEllipticCurves.into()),
                             ));
                         }
                         state.named_curve = e.elliptic_curves[0];
@@ -117,7 +117,7 @@ impl Flight for Flight0 {
                                     alert_level: AlertLevel::Fatal,
                                     alert_description: AlertDescription::InsufficientSecurity,
                                 }),
-                                Some(Error::ErrServerNoMatchingSrtpProfile),
+                                Some(Error::ErrServerNoMatchingSrtpProfile.into()),
                             ));
                         }
                     }
@@ -141,7 +141,7 @@ impl Flight for Flight0 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::InsufficientSecurity,
                     }),
-                    Some(Error::ErrServerRequiredButNoClientEms),
+                    Some(Error::ErrServerRequiredButNoClientEms.into()),
                 ));
             }
 
@@ -177,7 +177,7 @@ impl Flight for Flight0 {
         state: &mut State,
         _cache: &HandshakeCache,
         _cfg: &HandshakeConfig,
-    ) -> Result<Vec<Packet>, (Option<Alert>, Option<Error>)> {
+    ) -> Result<Vec<Packet>, (Option<Alert>, Option<anyhow::Error>)> {
         // Initialize
         state.cookie = vec![0; COOKIE_LENGTH];
         rand::thread_rng().fill(state.cookie.as_mut_slice());

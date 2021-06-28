@@ -5,9 +5,9 @@ use crate::extension::extension_use_srtp::SrtpProtectionProfile;
 use crate::handshaker::VerifyPeerCertificateFn;
 use crate::signature_hash_algorithm::SignatureScheme;
 
-use tokio::time::Duration;
-
+use anyhow::Result;
 use std::sync::Arc;
+use tokio::time::Duration;
 
 /// Config is used to configure a DTLS client or server.
 /// After a Config is passed to a DTLS function it must not be modified.
@@ -127,7 +127,7 @@ pub(crate) const DEFAULT_MTU: usize = 1200; // bytes
 
 // PSKCallback is called once we have the remote's psk_identity_hint.
 // If the remote provided none it will be nil
-pub(crate) type PskCallback = fn(&[u8]) -> Result<Vec<u8>, Error>;
+pub(crate) type PskCallback = fn(&[u8]) -> Result<Vec<u8>>;
 
 // ClientAuthType declares the policy the server will follow for
 // TLS Client Authentication.
@@ -161,28 +161,28 @@ impl Default for ExtendedMasterSecretType {
     }
 }
 
-pub(crate) fn validate_config(is_client: bool, config: &Config) -> Result<(), Error> {
+pub(crate) fn validate_config(is_client: bool, config: &Config) -> Result<()> {
     if is_client && config.psk.is_some() && config.psk_identity_hint.is_none() {
-        return Err(Error::ErrPskAndIdentityMustBeSetForClient);
+        return Err(Error::ErrPskAndIdentityMustBeSetForClient.into());
     }
 
     if !is_client && config.psk.is_none() && config.certificates.is_empty() {
-        return Err(Error::ErrServerMustHaveCertificate);
+        return Err(Error::ErrServerMustHaveCertificate.into());
     }
 
     if !config.certificates.is_empty() && config.psk.is_some() {
-        return Err(Error::ErrPskAndCertificate);
+        return Err(Error::ErrPskAndCertificate.into());
     }
 
     if config.psk_identity_hint.is_some() && config.psk.is_none() {
-        return Err(Error::ErrIdentityNoPsk);
+        return Err(Error::ErrIdentityNoPsk.into());
     }
 
     for cert in &config.certificates {
         match cert.private_key.kind {
             CryptoPrivateKeyKind::Ed25519(_) => {}
             CryptoPrivateKeyKind::Ecdsa256(_) => {}
-            _ => return Err(Error::ErrInvalidPrivateKey),
+            _ => return Err(Error::ErrInvalidPrivateKey.into()),
         }
     }
 

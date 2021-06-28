@@ -3,7 +3,7 @@ use super::*;
 use std::io::{BufReader, BufWriter};
 
 #[test]
-fn test_handshake_message_finished() -> Result<(), Error> {
+fn test_handshake_message_finished() -> Result<()> {
     let raw_finished = vec![
         0x01, 0x01, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
     ];

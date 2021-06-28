@@ -2,6 +2,8 @@ use super::*;
 use crate::crypto::crypto_gcm::*;
 use crate::prf::*;
 
+use anyhow::Result;
+
 #[derive(Clone)]
 pub struct CipherSuiteAes128GcmSha256 {
     gcm: Option<CryptoGcm>,
@@ -61,7 +63,7 @@ impl CipherSuite for CipherSuiteAes128GcmSha256 {
         client_random: &[u8],
         server_random: &[u8],
         is_client: bool,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let keys = prf_encryption_keys(
             master_secret,
             client_random,
@@ -91,23 +93,25 @@ impl CipherSuite for CipherSuiteAes128GcmSha256 {
         Ok(())
     }
 
-    fn encrypt(&self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>, Error> {
+    fn encrypt(&self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>> {
         if let Some(cg) = &self.gcm {
             cg.encrypt(pkt_rlh, raw)
         } else {
             Err(Error::ErrOthers(
                 "CipherSuite has not been initialized, unable to encrypt".to_owned(),
-            ))
+            )
+            .into())
         }
     }
 
-    fn decrypt(&self, input: &[u8]) -> Result<Vec<u8>, Error> {
+    fn decrypt(&self, input: &[u8]) -> Result<Vec<u8>> {
         if let Some(cg) = &self.gcm {
             cg.decrypt(input)
         } else {
             Err(Error::ErrOthers(
                 "CipherSuite has not been initialized, unable to decrypt".to_owned(),
-            ))
+            )
+            .into())
         }
     }
 }

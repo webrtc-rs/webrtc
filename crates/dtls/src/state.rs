@@ -6,14 +6,24 @@ use super::handshake::handshake_random::*;
 use super::prf::*;
 use crate::error::Error;
 
-use srtp::config::KeyingMaterialExporter;
-
+use anyhow::Result;
 use async_trait::async_trait;
 use std::io::{BufWriter, Cursor};
 use std::marker::{Send, Sync};
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
+/// KeyingMaterialExporter allows package SRTP to extract keying material
+#[async_trait]
+pub trait KeyingMaterialExporter {
+    async fn export_keying_material(
+        &self,
+        label: &str,
+        context: &[u8],
+        length: usize,
+    ) -> Result<Vec<u8>>;
+}
 
 // State holds the dtls connection state and implements both encoding.BinaryMarshaler and encoding.BinaryUnmarshaler
 pub struct State {
@@ -110,7 +120,7 @@ impl State {
         state
     }
 
-    async fn serialize(&self) -> Result<SerializedState, Error> {
+    async fn serialize(&self) -> Result<SerializedState> {
         let mut local_rand = vec![];
         {
             let mut writer = BufWriter::<&mut Vec<u8>>::new(local_rand.as_mut());
@@ -138,7 +148,7 @@ impl State {
             let cipher_suite = self.cipher_suite.lock().await;
             match &*cipher_suite {
                 Some(cipher_suite) => cipher_suite.id() as u16,
-                None => return Err(Error::ErrCipherSuiteUnset),
+                None => return Err(Error::ErrCipherSuiteUnset.into()),
             }
         };
 
@@ -157,7 +167,7 @@ impl State {
         })
     }
 
-    async fn deserialize(&mut self, serialized: &SerializedState) -> Result<(), Error> {
+    async fn deserialize(&mut self, serialized: &SerializedState) -> Result<()> {
         // Set epoch values
         self.local_epoch
             .store(serialized.local_epoch, Ordering::Relaxed);
@@ -197,7 +207,7 @@ impl State {
         Ok(())
     }
 
-    pub async fn init_cipher_suite(&mut self) -> Result<(), Error> {
+    pub async fn init_cipher_suite(&mut self) -> Result<()> {
         let mut cipher_suite = self.cipher_suite.lock().await;
         if let Some(cipher_suite) = &mut *cipher_suite {
             if cipher_suite.is_initialized() {
@@ -221,25 +231,25 @@ impl State {
                 cipher_suite.init(&self.master_secret, &remote_random, &local_random, false)
             }
         } else {
-            Err(Error::ErrCipherSuiteUnset)
+            Err(Error::ErrCipherSuiteUnset.into())
         }
     }
 
     // marshal_binary is a binary.BinaryMarshaler.marshal_binary implementation
-    pub async fn marshal_binary(&self) -> Result<Vec<u8>, Error> {
+    pub async fn marshal_binary(&self) -> Result<Vec<u8>> {
         let serialized = self.serialize().await?;
 
         match bincode::serialize(&serialized) {
             Ok(enc) => Ok(enc),
-            Err(err) => Err(Error::ErrOthers(err.to_string())),
+            Err(err) => Err(Error::ErrOthers(err.to_string()).into()),
         }
     }
 
     // unmarshal_binary is a binary.BinaryUnmarshaler.unmarshal_binary implementation
-    pub async fn unmarshal_binary(&mut self, data: &[u8]) -> Result<(), Error> {
+    pub async fn unmarshal_binary(&mut self, data: &[u8]) -> Result<()> {
         let serialized: SerializedState = match bincode::deserialize(data) {
             Ok(dec) => dec,
-            Err(err) => return Err(Error::ErrOthers(err.to_string())),
+            Err(err) => return Err(Error::ErrOthers(err.to_string()).into()),
         };
         self.deserialize(&serialized).await?;
         self.init_cipher_suite().await?;
@@ -259,33 +269,27 @@ impl KeyingMaterialExporter for State {
         label: &str,
         context: &[u8],
         length: usize,
-    ) -> Result<Vec<u8>, srtp::error::Error> {
+    ) -> Result<Vec<u8>> {
         if self.local_epoch.load(Ordering::Relaxed) == 0 {
-            return Err(srtp::error::Error::ErrOthers(
-                Error::ErrHandshakeInProgress.to_string(),
-            ));
+            return Err(Error::ErrHandshakeInProgress.into());
         } else if !context.is_empty() {
-            return Err(srtp::error::Error::ErrOthers(
-                Error::ErrContextUnsupported.to_string(),
-            ));
+            return Err(Error::ErrContextUnsupported.into());
         } else if INVALID_KEYING_LABELS.contains_key(label) {
-            return Err(srtp::error::Error::ErrOthers(
-                Error::ErrReservedExportKeyingMaterial.to_string(),
-            ));
+            return Err(Error::ErrReservedExportKeyingMaterial.into());
         }
 
         let mut local_random = vec![];
         {
             let mut writer = BufWriter::<&mut Vec<u8>>::new(local_random.as_mut());
             if let Err(err) = self.local_random.marshal(&mut writer) {
-                return Err(srtp::error::Error::ErrOthers(err.to_string()));
+                return Err(err);
             }
         }
         let mut remote_random = vec![];
         {
             let mut writer = BufWriter::<&mut Vec<u8>>::new(remote_random.as_mut());
             if let Err(err) = self.remote_random.marshal(&mut writer) {
-                return Err(srtp::error::Error::ErrOthers(err.to_string()));
+                return Err(err);
             }
         }
 
@@ -302,12 +306,10 @@ impl KeyingMaterialExporter for State {
         if let Some(cipher_suite) = &*cipher_suite {
             match prf_p_hash(&self.master_secret, &seed, length, cipher_suite.hash_func()) {
                 Ok(v) => Ok(v),
-                Err(err) => Err(srtp::error::Error::ErrOthers(err.to_string())),
+                Err(err) => Err(err),
             }
         } else {
-            Err(srtp::error::Error::ErrOthers(
-                Error::ErrCipherSuiteUnset.to_string(),
-            ))
+            Err(Error::ErrCipherSuiteUnset.into())
         }
     }
 }

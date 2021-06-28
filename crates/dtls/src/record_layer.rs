@@ -3,16 +3,15 @@ pub mod record_layer_header;
 #[cfg(test)]
 mod record_layer_test;
 
-use record_layer_header::*;
-
+use super::content::*;
+use super::error::*;
 use crate::alert::Alert;
 use crate::application_data::ApplicationData;
 use crate::change_cipher_spec::ChangeCipherSpec;
 use crate::handshake::Handshake;
+use record_layer_header::*;
 
-use super::content::*;
-use super::error::*;
-
+use anyhow::Result;
 use std::io::{Read, Write};
 
 /*
@@ -51,13 +50,13 @@ impl RecordLayer {
         }
     }
 
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {
         self.record_layer_header.marshal(writer)?;
         self.content.marshal(writer)?;
         Ok(())
     }
 
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self> {
         let record_layer_header = RecordLayerHeader::unmarshal(reader)?;
         let content = match record_layer_header.content_type {
             ContentType::Alert => Content::Alert(Alert::unmarshal(reader)?),
@@ -68,7 +67,7 @@ impl RecordLayer {
                 Content::ChangeCipherSpec(ChangeCipherSpec::unmarshal(reader)?)
             }
             ContentType::Handshake => Content::Handshake(Handshake::unmarshal(reader)?),
-            _ => return Err(Error::ErrOthers("Invalid Content Type".to_owned())),
+            _ => return Err(Error::ErrOthers("Invalid Content Type".to_owned()).into()),
         };
 
         Ok(RecordLayer {
@@ -84,20 +83,20 @@ impl RecordLayer {
 // two DTLS messages into the same datagram: in the same record or in
 // separate records.
 // https://tools.ietf.org/html/rfc6347#section-4.2.3
-pub(crate) fn unpack_datagram(buf: &[u8]) -> Result<Vec<Vec<u8>>, Error> {
+pub(crate) fn unpack_datagram(buf: &[u8]) -> Result<Vec<Vec<u8>>> {
     let mut out = vec![];
 
     let mut offset = 0;
     while buf.len() != offset {
         if buf.len() - offset <= RECORD_LAYER_HEADER_SIZE {
-            return Err(Error::ErrInvalidPacketLength);
+            return Err(Error::ErrInvalidPacketLength.into());
         }
 
         let pkt_len = RECORD_LAYER_HEADER_SIZE
             + (((buf[offset + RECORD_LAYER_HEADER_SIZE - 2] as usize) << 8)
                 | buf[offset + RECORD_LAYER_HEADER_SIZE - 1] as usize);
         if offset + pkt_len > buf.len() {
-            return Err(Error::ErrInvalidPacketLength);
+            return Err(Error::ErrInvalidPacketLength.into());
         }
 
         out.push(buf[offset..offset + pkt_len].to_vec());

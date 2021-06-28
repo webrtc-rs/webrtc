@@ -3,9 +3,9 @@ mod extension_server_name_test;
 
 use super::*;
 
-use std::io::{Read, Write};
-
+use anyhow::Result;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use std::io::{Read, Write};
 
 const EXTENSION_SERVER_NAME_TYPE_DNSHOST_NAME: u8 = 0;
 
@@ -24,7 +24,7 @@ impl ExtensionServerName {
         2 + self.server_name.as_bytes().len()
     }
 
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {
         //TODO: check how to do cryptobyte?
         //writer.write_u8(EXTENSION_SERVER_NAME_TYPE_DNSHOST_NAME)?;
         writer.write_u16::<BigEndian>(self.server_name.len() as u16)?;
@@ -33,7 +33,7 @@ impl ExtensionServerName {
         Ok(writer.flush()?)
     }
 
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self> {
         //TODO: check how to do cryptobyte?
         //let name_type = reader.read_u8()?;
         //if name_type != EXTENSION_SERVER_NAME_TYPE_DNSHOST_NAME {

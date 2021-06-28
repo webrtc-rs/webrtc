@@ -7,6 +7,7 @@ pub mod cipher_suite_tls_psk_with_aes_128_ccm;
 pub mod cipher_suite_tls_psk_with_aes_128_ccm8;
 pub mod cipher_suite_tls_psk_with_aes_128_gcm_sha256;
 
+use anyhow::Result;
 use std::fmt;
 use std::marker::{Send, Sync};
 
@@ -129,16 +130,16 @@ pub trait CipherSuite {
         client_random: &[u8],
         server_random: &[u8],
         is_client: bool,
-    ) -> Result<(), Error>;
+    ) -> Result<()>;
 
-    fn encrypt(&self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>, Error>;
-    fn decrypt(&self, input: &[u8]) -> Result<Vec<u8>, Error>;
+    fn encrypt(&self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>>;
+    fn decrypt(&self, input: &[u8]) -> Result<Vec<u8>>;
 }
 
 // Taken from https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
 // A cipher_suite is a specific combination of key agreement, cipher and MAC
 // function.
-pub fn cipher_suite_for_id(id: CipherSuiteId) -> Result<Box<dyn CipherSuite + Send + Sync>, Error> {
+pub fn cipher_suite_for_id(id: CipherSuiteId) -> Result<Box<dyn CipherSuite + Send + Sync>> {
     match id {
         CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Ccm => {
             Ok(Box::new(new_cipher_suite_tls_ecdhe_ecdsa_with_aes_128_ccm()))
@@ -167,7 +168,7 @@ pub fn cipher_suite_for_id(id: CipherSuiteId) -> Result<Box<dyn CipherSuite + Se
         CipherSuiteId::Tls_Psk_With_Aes_128_Gcm_Sha256 => {
             Ok(Box::new(CipherSuiteTlsPskWithAes128GcmSha256::default()))
         }
-        _ => Err(Error::ErrInvalidCipherSuite),
+        _ => Err(Error::ErrInvalidCipherSuite.into()),
     }
 }
 
@@ -195,9 +196,7 @@ fn all_cipher_suites() -> Vec<Box<dyn CipherSuite + Send + Sync>> {
     ]
 }
 
-fn cipher_suites_for_ids(
-    ids: &[CipherSuiteId],
-) -> Result<Vec<Box<dyn CipherSuite + Send + Sync>>, Error> {
+fn cipher_suites_for_ids(ids: &[CipherSuiteId]) -> Result<Vec<Box<dyn CipherSuite + Send + Sync>>> {
     let mut cipher_suites = vec![];
     for id in ids {
         cipher_suites.push(cipher_suite_for_id(*id)?);
@@ -209,7 +208,7 @@ pub(crate) fn parse_cipher_suites(
     user_selected_suites: &[CipherSuiteId],
     exclude_psk: bool,
     exclude_non_psk: bool,
-) -> Result<Vec<Box<dyn CipherSuite + Send + Sync>>, Error> {
+) -> Result<Vec<Box<dyn CipherSuite + Send + Sync>>> {
     let cipher_suites = if !user_selected_suites.is_empty() {
         cipher_suites_for_ids(user_selected_suites)?
     } else {
@@ -222,7 +221,7 @@ pub(crate) fn parse_cipher_suites(
         .collect();
 
     if filtered_cipher_suites.is_empty() {
-        Err(Error::ErrNoAvailableCipherSuites)
+        Err(Error::ErrNoAvailableCipherSuites.into())
     } else {
         Ok(filtered_cipher_suites)
     }

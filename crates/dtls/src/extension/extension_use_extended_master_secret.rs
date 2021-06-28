@@ -3,6 +3,8 @@ mod extension_use_extended_master_secret_test;
 
 use super::*;
 
+use anyhow::Result;
+
 const EXTENSION_USE_EXTENDED_MASTER_SECRET_HEADER_SIZE: usize = 4;
 
 // https://tools.ietf.org/html/rfc8422
@@ -20,14 +22,14 @@ impl ExtensionUseExtendedMasterSecret {
         2
     }
 
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {
         // length
         writer.write_u16::<BigEndian>(0)?;
 
         Ok(writer.flush()?)
     }
 
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self> {
         let _ = reader.read_u16::<BigEndian>()?;
 
         Ok(ExtensionUseExtendedMasterSecret { supported: true })

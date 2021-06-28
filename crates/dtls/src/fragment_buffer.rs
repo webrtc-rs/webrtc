@@ -6,6 +6,7 @@ use crate::error::*;
 use crate::handshake::handshake_header::*;
 use crate::record_layer::record_layer_header::*;
 
+use anyhow::Result;
 use std::collections::HashMap;
 use std::io::{BufWriter, Cursor};
 
@@ -33,7 +34,7 @@ impl FragmentBuffer {
     // Attempts to push a DTLS packet to the FragmentBuffer
     // when it returns true it means the FragmentBuffer has inserted and the buffer shouldn't be handled
     // when an error returns it is fatal, and the DTLS connection should be stopped
-    pub fn push(&mut self, mut buf: &[u8]) -> Result<bool, Error> {
+    pub fn push(&mut self, mut buf: &[u8]) -> Result<bool> {
         let mut reader = Cursor::new(buf);
         let record_layer_header = RecordLayerHeader::unmarshal(&mut reader)?;
 
@@ -74,17 +75,17 @@ impl FragmentBuffer {
         Ok(true)
     }
 
-    pub fn pop(&mut self) -> Result<(Vec<u8>, u16), Error> {
+    pub fn pop(&mut self) -> Result<(Vec<u8>, u16)> {
         let seq_num = self.current_message_sequence_number;
         if !self.cache.contains_key(&seq_num) {
-            return Err(Error::ErrEmptyFragment);
+            return Err(Error::ErrEmptyFragment.into());
         }
 
         let (content, epoch) = if let Some(frags) = self.cache.get_mut(&seq_num) {
             let mut raw_message = vec![];
             // Recursively collect up
             if !append_message(0, frags, &mut raw_message) {
-                return Err(Error::ErrEmptyFragment);
+                return Err(Error::ErrEmptyFragment.into());
             }
 
             let mut first_header = frags[0].handshake_header;
@@ -95,7 +96,7 @@ impl FragmentBuffer {
             {
                 let mut writer = BufWriter::<&mut Vec<u8>>::new(raw_header.as_mut());
                 if first_header.marshal(&mut writer).is_err() {
-                    return Err(Error::ErrEmptyFragment);
+                    return Err(Error::ErrEmptyFragment.into());
                 }
             }
 
@@ -105,7 +106,7 @@ impl FragmentBuffer {
 
             (raw_header, message_epoch)
         } else {
-            return Err(Error::ErrEmptyFragment);
+            return Err(Error::ErrEmptyFragment.into());
         };
 
         self.cache.remove(&seq_num);

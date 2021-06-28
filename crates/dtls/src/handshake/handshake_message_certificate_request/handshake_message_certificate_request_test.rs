@@ -4,7 +4,7 @@ use crate::signature_hash_algorithm::*;
 use std::io::{BufReader, BufWriter};
 
 #[test]
-fn test_handshake_message_certificate_request() -> Result<(), Error> {
+fn test_handshake_message_certificate_request() -> Result<()> {
     let raw_certificate_request = vec![
         0x02, 0x01, 0x40, 0x00, 0x0C, 0x04, 0x03, 0x04, 0x01, 0x05, 0x03, 0x05, 0x01, 0x06, 0x01,
         0x02, 0x01, 0x00, 0x00,

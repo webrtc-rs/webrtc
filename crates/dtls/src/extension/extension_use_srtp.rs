@@ -3,6 +3,8 @@ mod extension_use_srtp_test;
 
 use super::*;
 
+use anyhow::Result;
+
 // SRTPProtectionProfile defines the parameters and options that are in effect for the SRTP processing
 // https://tools.ietf.org/html/rfc5764#section-4.1.2
 #[allow(non_camel_case_types)]
@@ -45,7 +47,7 @@ impl ExtensionUseSrtp {
         2 + 2 + self.protection_profiles.len() * 2 + 1
     }
 
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {
         writer.write_u16::<BigEndian>(
             2 + /* MKI Length */ 1 + 2 * self.protection_profiles.len() as u16,
         )?;
@@ -60,7 +62,7 @@ impl ExtensionUseSrtp {
         Ok(writer.flush()?)
     }
 
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self> {
         let _ = reader.read_u16::<BigEndian>()?;
 
         let profile_count = reader.read_u16::<BigEndian>()? as usize / 2;

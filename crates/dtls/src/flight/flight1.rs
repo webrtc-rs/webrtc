@@ -36,7 +36,7 @@ impl Flight for Flight1 {
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<Error>)> {
+    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<anyhow::Error>)> {
         // HelloVerifyRequest can be skipped by the server,
         // so allow ServerHello during flight1 also
         let (seq, msgs) = match cache
@@ -93,7 +93,7 @@ impl Flight for Flight1 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::ProtocolVersion,
                     }),
-                    Some(Error::ErrUnsupportedProtocolVersion),
+                    Some(Error::ErrUnsupportedProtocolVersion.into()),
                 ));
             }
 
@@ -116,7 +116,7 @@ impl Flight for Flight1 {
         state: &mut State,
         _cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Vec<Packet>, (Option<Alert>, Option<Error>)> {
+    ) -> Result<Vec<Packet>, (Option<Alert>, Option<anyhow::Error>)> {
         //TODO: figure out difference between golang's atom store and rust atom store
         let zero_epoch = 0;
         state.local_epoch.store(zero_epoch, Ordering::Relaxed);

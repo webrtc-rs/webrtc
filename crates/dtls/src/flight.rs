@@ -6,18 +6,14 @@ pub(crate) mod flight4;
 pub(crate) mod flight5;
 pub(crate) mod flight6;
 
-//use std::fmt;
-
 use crate::alert::*;
-use crate::error::Error;
 use crate::handshake::handshake_cache::*;
 use crate::handshaker::*;
 use crate::record_layer::*;
 use crate::state::*;
 
-use tokio::sync::mpsc;
-
 use async_trait::async_trait;
+use tokio::sync::mpsc;
 
 /*
   DTLS messages are grouped into a series of message flights, according
@@ -52,7 +48,7 @@ use async_trait::async_trait;
 
 */
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct Packet {
     pub(crate) record: RecordLayer,
     pub(crate) should_encrypt: bool,
@@ -81,12 +77,12 @@ pub(crate) trait Flight {
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<Error>)>;
+    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<anyhow::Error>)>;
 
     async fn generate(
         &self,
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Vec<Packet>, (Option<Alert>, Option<Error>)>;
+    ) -> Result<Vec<Packet>, (Option<Alert>, Option<anyhow::Error>)>;
 }

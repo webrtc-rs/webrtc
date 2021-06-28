@@ -3,7 +3,7 @@ use super::*;
 use std::io::{BufReader, BufWriter};
 
 #[test]
-fn test_change_cipher_spec_round_trip() -> Result<(), Error> {
+fn test_change_cipher_spec_round_trip() -> Result<()> {
     let c = ChangeCipherSpec {};
     let mut raw = vec![];
     {
@@ -23,7 +23,7 @@ fn test_change_cipher_spec_round_trip() -> Result<(), Error> {
 }
 
 #[test]
-fn test_change_cipher_spec_invalid() -> Result<(), Error> {
+fn test_change_cipher_spec_invalid() -> Result<()> {
     let data = vec![0x00];
 
     let mut reader = BufReader::new(data.as_slice());

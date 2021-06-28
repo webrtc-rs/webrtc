@@ -4,6 +4,7 @@ mod handshake_message_hello_verify_request_test;
 use super::*;
 use crate::record_layer::record_layer_header::*;
 
+use anyhow::Result;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::io::{Read, Write};
 
@@ -39,9 +40,9 @@ impl HandshakeMessageHelloVerifyRequest {
         1 + 1 + 1 + self.cookie.len()
     }
 
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {
         if self.cookie.len() > 255 {
-            return Err(Error::ErrCookieTooLong);
+            return Err(Error::ErrCookieTooLong.into());
         }
 
         writer.write_u8(self.version.major)?;
@@ -52,7 +53,7 @@ impl HandshakeMessageHelloVerifyRequest {
         Ok(writer.flush()?)
     }
 
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self> {
         let major = reader.read_u8()?;
         let minor = reader.read_u8()?;
         let cookie_length = reader.read_u8()?;
@@ -60,7 +61,7 @@ impl HandshakeMessageHelloVerifyRequest {
         reader.read_to_end(&mut cookie)?;
 
         if cookie.len() < cookie_length as usize {
-            return Err(Error::ErrBufferTooSmall);
+            return Err(Error::ErrBufferTooSmall.into());
         }
 
         Ok(HandshakeMessageHelloVerifyRequest {

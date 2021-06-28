@@ -3,9 +3,9 @@ mod handshake_message_client_key_exchange_test;
 
 use super::*;
 
-use std::io::{Read, Write};
-
+use anyhow::Result;
 use byteorder::{BigEndian, WriteBytesExt};
+use std::io::{Read, Write};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct HandshakeMessageClientKeyExchange {
@@ -26,11 +26,11 @@ impl HandshakeMessageClientKeyExchange {
         }
     }
 
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {
         if (!self.identity_hint.is_empty() && !self.public_key.is_empty())
             || (self.identity_hint.is_empty() && self.public_key.is_empty())
         {
-            return Err(Error::ErrInvalidClientKeyExchange);
+            return Err(Error::ErrInvalidClientKeyExchange.into());
         }
 
         if !self.public_key.is_empty() {
@@ -44,7 +44,7 @@ impl HandshakeMessageClientKeyExchange {
         Ok(writer.flush()?)
     }
 
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self> {
         let mut data = vec![];
         reader.read_to_end(&mut data)?;
 
@@ -59,7 +59,7 @@ impl HandshakeMessageClientKeyExchange {
 
         let public_key_length = data[0] as usize;
         if data.len() != public_key_length + 1 {
-            return Err(Error::ErrBufferTooSmall);
+            return Err(Error::ErrBufferTooSmall.into());
         }
 
         Ok(HandshakeMessageClientKeyExchange {

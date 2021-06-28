@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod change_cipher_spec_test;
 
-use std::io::{Read, Write};
-
+use anyhow::Result;
 use byteorder::{ReadBytesExt, WriteBytesExt};
+use std::io::{Read, Write};
 
 use super::content::*;
 use super::error::*;
@@ -25,16 +25,16 @@ impl ChangeCipherSpec {
         1
     }
 
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {
         writer.write_u8(0x01)?;
 
         Ok(writer.flush()?)
     }
 
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self> {
         let data = reader.read_u8()?;
         if data != 0x01 {
-            return Err(Error::ErrInvalidCipherSpec);
+            return Err(Error::ErrInvalidCipherSpec.into());
         }
 
         Ok(ChangeCipherSpec {})

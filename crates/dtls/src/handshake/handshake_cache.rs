@@ -101,7 +101,7 @@ impl HandshakeCache {
         &self,
         start_seq: isize,
         rules: &[HandshakeCachePullRule],
-    ) -> Result<(isize, HashMap<HandshakeType, HandshakeMessage>), Error> {
+    ) -> Result<(isize, HashMap<HandshakeType, HandshakeMessage>)> {
         let cache = self.cache.lock().await;
 
         let mut ci = HashMap::new();
@@ -120,7 +120,7 @@ impl HandshakeCache {
             }
             if !r.optional && item.is_none() {
                 // Missing mandatory message.
-                return Err(Error::ErrOthers("Missing mandatory message".to_owned()));
+                return Err(Error::ErrOthers("Missing mandatory message".to_owned()).into());
             }
 
             if let Some(c) = item {
@@ -139,7 +139,8 @@ impl HandshakeCache {
                     // There is a gap. Some messages are not arrived.
                     return Err(Error::ErrOthers(
                         "There is a gap. Some messages are not arrived.".to_owned(),
-                    ));
+                    )
+                    .into());
                 }
                 seq += 1;
                 out.insert(t, raw_handshake.handshake_message);
@@ -167,7 +168,7 @@ impl HandshakeCache {
         hf: CipherSuiteHash,
         epoch: u16,
         additional: &[u8],
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Vec<u8>> {
         let mut merged = vec![];
 
         // Order defined by https://tools.ietf.org/html/rfc5246#section-7.3

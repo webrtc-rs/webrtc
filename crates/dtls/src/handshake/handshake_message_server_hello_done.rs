@@ -3,6 +3,7 @@ mod handshake_message_server_hello_done_test;
 
 use super::*;
 
+use anyhow::Result;
 use std::io::{Read, Write};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -17,11 +18,11 @@ impl HandshakeMessageServerHelloDone {
         0
     }
 
-    pub fn marshal<W: Write>(&self, _writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, _writer: &mut W) -> Result<()> {
         Ok(())
     }
 
-    pub fn unmarshal<R: Read>(_reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: Read>(_reader: &mut R) -> Result<Self> {
         Ok(HandshakeMessageServerHelloDone {})
     }
 }

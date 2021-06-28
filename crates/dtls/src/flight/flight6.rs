@@ -1,7 +1,6 @@
 use super::*;
 use crate::change_cipher_spec::*;
 use crate::content::*;
-use crate::error::Error;
 use crate::handshake::handshake_message_finished::*;
 use crate::handshake::*;
 use crate::prf::*;
@@ -27,7 +26,7 @@ impl Flight for Flight6 {
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<Error>)> {
+    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<anyhow::Error>)> {
         let (_, msgs) = match cache
             .full_pull_map(
                 state.handshake_recv_sequence - 1,
@@ -69,7 +68,7 @@ impl Flight for Flight6 {
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Vec<Packet>, (Option<Alert>, Option<Error>)> {
+    ) -> Result<Vec<Packet>, (Option<Alert>, Option<anyhow::Error>)> {
         let mut pkts = vec![Packet {
             record: RecordLayer::new(
                 PROTOCOL_VERSION1_2,

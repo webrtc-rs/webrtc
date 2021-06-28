@@ -8,8 +8,8 @@ use crate::compression_methods::*;
 use crate::extension::*;
 use crate::record_layer::record_layer_header::*;
 
+use anyhow::Result;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-
 use std::fmt;
 use std::io::{BufReader, BufWriter};
 
@@ -101,9 +101,9 @@ impl HandshakeMessageClientHello {
         len
     }
 
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {
         if self.cookie.len() > 255 {
-            return Err(Error::ErrCookieTooLong);
+            return Err(Error::ErrCookieTooLong.into());
         }
 
         writer.write_u8(self.version.major)?;
@@ -137,7 +137,7 @@ impl HandshakeMessageClientHello {
         Ok(writer.flush()?)
     }
 
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self> {
         let major = reader.read_u8()?;
         let minor = reader.read_u8()?;
         let random = HandshakeRandom::unmarshal(reader)?;

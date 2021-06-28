@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod signature_hash_algorithm_test;
 
+use anyhow::Result;
 use std::fmt;
 
 use crate::crypto::*;
@@ -141,14 +142,14 @@ pub(crate) fn default_signature_schemes() -> Vec<SignatureHashAlgorithm> {
 pub(crate) fn select_signature_scheme(
     sigs: &[SignatureHashAlgorithm],
     private_key: &CryptoPrivateKey,
-) -> Result<SignatureHashAlgorithm, Error> {
+) -> Result<SignatureHashAlgorithm> {
     for ss in sigs {
         if ss.is_compatible(private_key) {
             return Ok(*ss);
         }
     }
 
-    Err(Error::ErrNoAvailableSignatureSchemes)
+    Err(Error::ErrNoAvailableSignatureSchemes.into())
 }
 
 // SignatureScheme identifies a signature algorithm supported by TLS. See
@@ -183,7 +184,7 @@ pub enum SignatureScheme {
 pub(crate) fn parse_signature_schemes(
     sigs: &[u16],
     insecure_hashes: bool,
-) -> Result<Vec<SignatureHashAlgorithm>, Error> {
+) -> Result<Vec<SignatureHashAlgorithm>> {
     if sigs.is_empty() {
         return Ok(default_signature_schemes());
     }
@@ -192,11 +193,11 @@ pub(crate) fn parse_signature_schemes(
     for ss in sigs {
         let sig: SignatureAlgorithm = ((*ss & 0xFF) as u8).into();
         if sig == SignatureAlgorithm::Unsupported {
-            return Err(Error::ErrInvalidSignatureAlgorithm);
+            return Err(Error::ErrInvalidSignatureAlgorithm.into());
         }
         let h: HashAlgorithm = (((*ss >> 8) & 0xFF) as u8).into();
         if h == HashAlgorithm::Unsupported || h.invalid() {
-            return Err(Error::ErrInvalidHashAlgorithm);
+            return Err(Error::ErrInvalidHashAlgorithm.into());
         }
         if h.insecure() && !insecure_hashes {
             continue;
@@ -208,7 +209,7 @@ pub(crate) fn parse_signature_schemes(
     }
 
     if out.is_empty() {
-        Err(Error::ErrNoAvailableSignatureSchemes)
+        Err(Error::ErrNoAvailableSignatureSchemes.into())
     } else {
         Ok(out)
     }

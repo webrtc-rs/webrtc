@@ -6,9 +6,9 @@ use crate::curve::named_curve::*;
 use crate::curve::*;
 use crate::signature_hash_algorithm::*;
 
-use std::io::{Read, Write};
-
+use anyhow::Result;
 use byteorder::{BigEndian, WriteBytesExt};
+use std::io::{Read, Write};
 
 // Structure supports ECDH and PSK
 #[derive(Clone, Debug, PartialEq)]
@@ -36,7 +36,7 @@ impl HandshakeMessageServerKeyExchange {
         }
     }
 
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {
         if !self.identity_hint.is_empty() {
             writer.write_u16::<BigEndian>(self.identity_hint.len() as u16)?;
             writer.write_all(&self.identity_hint)?;
@@ -58,7 +58,7 @@ impl HandshakeMessageServerKeyExchange {
         Ok(writer.flush()?)
     }
 
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self> {
         let mut data = vec![];
         reader.read_to_end(&mut data)?;
 
@@ -79,40 +79,40 @@ impl HandshakeMessageServerKeyExchange {
 
         let elliptic_curve_type = data[0].into();
         if data[1..].len() < 2 {
-            return Err(Error::ErrBufferTooSmall);
+            return Err(Error::ErrBufferTooSmall.into());
         }
 
         let named_curve = (((data[1] as u16) << 8) | data[2] as u16).into();
         if data.len() < 4 {
-            return Err(Error::ErrBufferTooSmall);
+            return Err(Error::ErrBufferTooSmall.into());
         }
 
         let public_key_length = data[3] as usize;
         let mut offset = 4 + public_key_length;
         if data.len() < offset {
-            return Err(Error::ErrBufferTooSmall);
+            return Err(Error::ErrBufferTooSmall.into());
         }
         let public_key = data[4..offset].to_vec();
         if data.len() <= offset {
-            return Err(Error::ErrBufferTooSmall);
+            return Err(Error::ErrBufferTooSmall.into());
         }
 
         let hash_algorithm = data[offset].into();
         offset += 1;
         if data.len() <= offset {
-            return Err(Error::ErrBufferTooSmall);
+            return Err(Error::ErrBufferTooSmall.into());
         }
 
         let signature_algorithm = data[offset].into();
         offset += 1;
         if data.len() < offset + 2 {
-            return Err(Error::ErrBufferTooSmall);
+            return Err(Error::ErrBufferTooSmall.into());
         }
 
         let signature_length = (((data[offset] as u16) << 8) | data[offset + 1] as u16) as usize;
         offset += 2;
         if data.len() < offset + signature_length {
-            return Err(Error::ErrBufferTooSmall);
+            return Err(Error::ErrBufferTooSmall.into());
         }
         let signature = data[offset..offset + signature_length].to_vec();
 

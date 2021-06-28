@@ -3,7 +3,7 @@ use super::*;
 use std::io::{BufReader, BufWriter};
 
 #[test]
-fn test_handshake_message_server_hello_done() -> Result<(), Error> {
+fn test_handshake_message_server_hello_done() -> Result<()> {
     let raw_server_hello_done = vec![];
     let parsed_server_hello_done = HandshakeMessageServerHelloDone {};
 

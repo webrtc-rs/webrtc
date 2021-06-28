@@ -14,9 +14,9 @@ use extension_use_srtp::*;
 
 use crate::error::*;
 
-use std::io::{Read, Write};
-
+use anyhow::Result;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use std::io::{Read, Write};
 
 // https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml
 #[derive(Clone, Debug, PartialEq)]
@@ -81,7 +81,7 @@ impl Extension {
         len
     }
 
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {
         writer.write_u16::<BigEndian>(self.extension_value() as u16)?;
         match self {
             Extension::ServerName(ext) => ext.marshal(writer),
@@ -93,7 +93,7 @@ impl Extension {
         }
     }
 
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self> {
         let extension_value: ExtensionValue = reader.read_u16::<BigEndian>()?.into();
         match extension_value {
             ExtensionValue::ServerName => Ok(Extension::ServerName(
@@ -114,7 +114,7 @@ impl Extension {
             ExtensionValue::UseExtendedMasterSecret => Ok(Extension::UseExtendedMasterSecret(
                 ExtensionUseExtendedMasterSecret::unmarshal(reader)?,
             )),
-            _ => Err(Error::ErrInvalidExtensionType),
+            _ => Err(Error::ErrInvalidExtensionType.into()),
         }
     }
 }

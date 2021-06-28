@@ -39,11 +39,11 @@ JPhfPySIPG4UmwE4gW8t79vfOKxnUu2fDD1ZXUYopan6EckACNH/
 ";
 
 #[test]
-fn test_generate_key_signature() -> Result<(), Error> {
+fn test_generate_key_signature() -> Result<()> {
     let reader = Cursor::new(RAW_PRIVATE_KEY.as_bytes());
     let pem = match Pem::read(reader) {
         Ok((pem, _)) => pem,
-        Err(_) => return Err(Error::ErrOthers("Pem::read error".to_owned())),
+        Err(_) => return Err(Error::ErrOthers("Pem::read error".to_owned()).into()),
     };
     //let private_key = rsa::RSAPrivateKey::from_pkcs1(&pem.contents)?;
 
@@ -89,7 +89,9 @@ fn test_generate_key_signature() -> Result<(), Error> {
         &public_key,
         NamedCurve::X25519,
         &CryptoPrivateKey {
-            kind: CryptoPrivateKeyKind::Rsa256(RsaKeyPair::from_der(&pem.contents)?),
+            kind: CryptoPrivateKeyKind::Rsa256(
+                RsaKeyPair::from_der(&pem.contents).map_err(|e| Error::ErrOthers(e.to_string()))?,
+            ),
             serialized_der: pem.contents.clone(),
         }, //hashAlgorithmSHA256,
     )?;
@@ -104,7 +106,7 @@ fn test_generate_key_signature() -> Result<(), Error> {
 }
 
 #[test]
-fn test_ccm_encryption_and_decryption() -> Result<(), Error> {
+fn test_ccm_encryption_and_decryption() -> Result<()> {
     let key = vec![
         0x18, 0x78, 0xac, 0xc2, 0x2a, 0xd8, 0xbd, 0xd8, 0xc6, 0x01, 0xa6, 0x17, 0x12, 0x6f, 0x63,
         0x54,
@@ -153,7 +155,7 @@ fn test_ccm_encryption_and_decryption() -> Result<(), Error> {
 }
 
 #[test]
-fn test_certificate_verify() -> Result<(), Error> {
+fn test_certificate_verify() -> Result<()> {
     let plain_text: Vec<u8> = vec![
         0x6f, 0x47, 0x97, 0x85, 0xcc, 0x76, 0x50, 0x93, 0xbd, 0xe2, 0x6a, 0x69, 0x0b, 0xc3, 0x03,
         0xd1, 0xb7, 0xe4, 0xab, 0x88, 0x7b, 0xa6, 0x52, 0x80, 0xdf, 0xaa, 0x25, 0x7a, 0xdb, 0x29,

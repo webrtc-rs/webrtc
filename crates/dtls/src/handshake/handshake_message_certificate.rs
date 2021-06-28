@@ -1,8 +1,8 @@
 use super::*;
 
-use std::io::{Read, Write};
-
+use anyhow::Result;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use std::io::{Read, Write};
 
 #[cfg(test)]
 mod handshake_message_certificate_test;
@@ -29,7 +29,7 @@ impl HandshakeMessageCertificate {
         len
     }
 
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {
         let mut payload_size = 0;
         for r in &self.certificate {
             payload_size += HANDSHAKE_MESSAGE_CERTIFICATE_LENGTH_FIELD_SIZE + r.len();
@@ -49,7 +49,7 @@ impl HandshakeMessageCertificate {
         Ok(writer.flush()?)
     }
 
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self> {
         let mut certificate: Vec<Vec<u8>> = vec![];
 
         let payload_size = reader.read_u24::<BigEndian>()? as usize;

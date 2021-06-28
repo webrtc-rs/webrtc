@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn test_fragment_buffer() -> Result<(), Error> {
+fn test_fragment_buffer() -> Result<()> {
     let tests = vec![
         (
             "Single Fragment",

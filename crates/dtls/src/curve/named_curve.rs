@@ -1,3 +1,4 @@
+use anyhow::Result;
 use rand_core::OsRng; // requires 'getrandom' feature
 
 use crate::error::*;
@@ -33,7 +34,7 @@ pub struct NamedCurveKeypair {
     pub(crate) private_key: NamedCurvePrivateKey,
 }
 
-fn elliptic_curve_keypair(curve: NamedCurve) -> Result<NamedCurveKeypair, Error> {
+fn elliptic_curve_keypair(curve: NamedCurve) -> Result<NamedCurveKeypair> {
     let (public_key, private_key) = match curve {
         NamedCurve::P256 => {
             let secret_key = p256::ecdh::EphemeralSecret::random(&mut OsRng);
@@ -52,7 +53,7 @@ fn elliptic_curve_keypair(curve: NamedCurve) -> Result<NamedCurveKeypair, Error>
             )
         }
         //TODO: add NamedCurve::p384
-        _ => return Err(Error::ErrInvalidNamedCurve),
+        _ => return Err(Error::ErrInvalidNamedCurve.into()),
     };
 
     Ok(NamedCurveKeypair {
@@ -63,13 +64,13 @@ fn elliptic_curve_keypair(curve: NamedCurve) -> Result<NamedCurveKeypair, Error>
 }
 
 impl NamedCurve {
-    pub fn generate_keypair(&self) -> Result<NamedCurveKeypair, Error> {
+    pub fn generate_keypair(&self) -> Result<NamedCurveKeypair> {
         match *self {
             //TODO: add P384
             NamedCurve::X25519 => elliptic_curve_keypair(NamedCurve::X25519),
             NamedCurve::P256 => elliptic_curve_keypair(NamedCurve::P256),
             //NamedCurve::P384 => elliptic_curve_keypair(NamedCurve::P384),
-            _ => Err(Error::ErrInvalidNamedCurve),
+            _ => Err(Error::ErrInvalidNamedCurve.into()),
         }
     }
 }

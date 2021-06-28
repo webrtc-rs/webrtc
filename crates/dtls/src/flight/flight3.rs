@@ -40,7 +40,7 @@ impl Flight for Flight3 {
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<Error>)> {
+    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<anyhow::Error>)> {
         // Clients may receive multiple HelloVerifyRequest messages with different cookies.
         // Clients SHOULD handle this by sending a new ClientHello with a cookie in response
         // to the new HelloVerifyRequest. RFC 6347 Section 4.2.1
@@ -80,7 +80,7 @@ impl Flight for Flight3 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::ProtocolVersion,
                         }),
-                        Some(Error::ErrUnsupportedProtocolVersion),
+                        Some(Error::ErrUnsupportedProtocolVersion.into()),
                     ));
                 }
 
@@ -183,7 +183,7 @@ impl Flight for Flight3 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::ProtocolVersion,
                     }),
-                    Some(Error::ErrUnsupportedProtocolVersion),
+                    Some(Error::ErrUnsupportedProtocolVersion.into()),
                 ));
             }
 
@@ -201,7 +201,7 @@ impl Flight for Flight3 {
                                         alert_level: AlertLevel::Fatal,
                                         alert_description: AlertDescription::IllegalParameter,
                                     }),
-                                    Some(Error::ErrClientNoMatchingSrtpProfile),
+                                    Some(Error::ErrClientNoMatchingSrtpProfile.into()),
                                 ))
                             }
                         };
@@ -224,7 +224,7 @@ impl Flight for Flight3 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::InsufficientSecurity,
                     }),
-                    Some(Error::ErrClientRequiredButNoServerEms),
+                    Some(Error::ErrClientRequiredButNoServerEms.into()),
                 ));
             }
             if !cfg.local_srtp_protection_profiles.is_empty()
@@ -235,7 +235,7 @@ impl Flight for Flight3 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::InsufficientSecurity,
                     }),
-                    Some(Error::ErrRequestedButNoSrtpExtension),
+                    Some(Error::ErrRequestedButNoSrtpExtension.into()),
                 ));
             }
             if find_matching_cipher_suite(&[h.cipher_suite], &cfg.local_cipher_suites).is_err() {
@@ -244,7 +244,7 @@ impl Flight for Flight3 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::InsufficientSecurity,
                     }),
-                    Some(Error::ErrCipherSuiteNoIntersection),
+                    Some(Error::ErrCipherSuiteNoIntersection.into()),
                 ));
             }
 
@@ -319,7 +319,7 @@ impl Flight for Flight3 {
         state: &mut State,
         _cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Vec<Packet>, (Option<Alert>, Option<Error>)> {
+    ) -> Result<Vec<Packet>, (Option<Alert>, Option<anyhow::Error>)> {
         let mut extensions = vec![Extension::SupportedSignatureAlgorithms(
             ExtensionSupportedSignatureAlgorithms {
                 signature_hash_algorithms: cfg.local_signature_schemes.clone(),
@@ -383,7 +383,7 @@ pub(crate) fn handle_server_key_exchange(
     state: &mut State,
     cfg: &HandshakeConfig,
     h: &HandshakeMessageServerKeyExchange,
-) -> Result<(), (Option<Alert>, Option<Error>)> {
+) -> Result<(), (Option<Alert>, Option<anyhow::Error>)> {
     if let Some(local_psk_callback) = &cfg.local_psk_callback {
         let psk = match local_psk_callback(&h.identity_hint) {
             Ok(psk) => psk,

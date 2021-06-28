@@ -15,6 +15,7 @@ pub mod handshake_random;
 #[cfg(test)]
 mod handshake_test;
 
+use anyhow::Result;
 use std::fmt;
 use std::io::{Read, Write};
 
@@ -140,7 +141,7 @@ impl HandshakeMessage {
         }
     }
 
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {
         match self {
             HandshakeMessage::ClientHello(msg) => msg.marshal(writer)?,
             HandshakeMessage::ServerHello(msg) => msg.marshal(writer)?,
@@ -192,13 +193,13 @@ impl Handshake {
         self.handshake_header.size() + self.handshake_message.size()
     }
 
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {
         self.handshake_header.marshal(writer)?;
         self.handshake_message.marshal(writer)?;
         Ok(())
     }
 
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self> {
         let handshake_header = HandshakeHeader::unmarshal(reader)?;
 
         let handshake_message = match handshake_header.handshake_type {
@@ -232,7 +233,7 @@ impl Handshake {
             HandshakeType::Finished => {
                 HandshakeMessage::Finished(HandshakeMessageFinished::unmarshal(reader)?)
             }
-            _ => return Err(Error::ErrNotImplemented),
+            _ => return Err(Error::ErrNotImplemented.into()),
         };
 
         Ok(Handshake {

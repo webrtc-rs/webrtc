@@ -24,13 +24,13 @@ use crate::record_layer::*;
 use crate::signature_hash_algorithm::parse_signature_schemes;
 use crate::state::*;
 
+use anyhow::Result;
+use log::*;
 use std::collections::HashMap;
 use std::io::{BufReader, BufWriter};
 use std::marker::{Send, Sync};
 use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::Arc;
-
-use log::*;
 
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::Duration;
@@ -55,13 +55,13 @@ lazy_static! {
     };
 }
 
-type PacketSendRequest = (Vec<Packet>, Option<mpsc::Sender<Result<(), Error>>>);
+type PacketSendRequest = (Vec<Packet>, Option<mpsc::Sender<Result<()>>>);
 
 struct ConnReaderContext {
     is_client: bool,
     replay_protection_window: usize,
     replay_detector: Vec<Box<dyn ReplayDetector + Send>>,
-    decrypted_tx: mpsc::Sender<Result<Vec<u8>, Error>>,
+    decrypted_tx: mpsc::Sender<Result<Vec<u8>>>,
     encrypted_packets: Vec<Vec<u8>>,
     fragment_buffer: FragmentBuffer,
     cache: HandshakeCache,
@@ -75,8 +75,8 @@ struct ConnReaderContext {
 // Conn represents a DTLS connection
 pub struct DTLSConn {
     pub(crate) cache: HandshakeCache, // caching of handshake messages for verifyData generation
-    decrypted_rx: mpsc::Receiver<Result<Vec<u8>, Error>>, // Decrypted Application Data or error, pull by calling `Read`
-    pub(crate) state: State,                              // Internal state
+    decrypted_rx: mpsc::Receiver<Result<Vec<u8>>>, // Decrypted Application Data or error, pull by calling `Read`
+    pub(crate) state: State,                       // Internal state
 
     handshake_completed_successfully: Arc<AtomicBool>,
     connection_closed_by_user: bool,
@@ -113,7 +113,7 @@ impl DTLSConn {
         mut config: Config,
         is_client: bool,
         initial_state: Option<State>,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self> {
         validate_config(is_client, &config)?;
 
         let local_cipher_suites: Vec<CipherSuiteId> = parse_cipher_suites(
@@ -342,9 +342,9 @@ impl DTLSConn {
     }
 
     // Read reads data from the connection.
-    pub async fn read(&mut self, p: &mut [u8], duration: Option<Duration>) -> Result<usize, Error> {
+    pub async fn read(&mut self, p: &mut [u8], duration: Option<Duration>) -> Result<usize> {
         if !self.is_handshake_completed_successfully() {
-            return Err(Error::ErrHandshakeInProgress);
+            return Err(Error::ErrHandshakeInProgress.into());
         }
 
         loop {
@@ -354,7 +354,7 @@ impl DTLSConn {
 
                 tokio::select! {
                     r = self.decrypted_rx.recv() => r,
-                    _ = timer.as_mut() => return Err(Error::ErrDeadlineExceeded),
+                    _ = timer.as_mut() => return Err(Error::ErrDeadlineExceeded.into()),
                 }
             } else {
                 self.decrypted_rx.recv().await
@@ -364,7 +364,7 @@ impl DTLSConn {
                 match out {
                     Ok(val) => {
                         if p.len() < val.len() {
-                            return Err(Error::ErrBufferTooSmall);
+                            return Err(Error::ErrBufferTooSmall.into());
                         }
                         p[..val.len()].copy_from_slice(&val);
                         return Ok(val.len());
@@ -378,13 +378,13 @@ impl DTLSConn {
     }
 
     // Write writes len(p) bytes from p to the DTLS connection
-    pub async fn write(&mut self, p: &[u8], duration: Option<Duration>) -> Result<usize, Error> {
+    pub async fn write(&mut self, p: &[u8], duration: Option<Duration>) -> Result<usize> {
         if self.is_connection_closed() {
-            return Err(Error::ErrConnClosed);
+            return Err(Error::ErrConnClosed.into());
         }
 
         if !self.is_handshake_completed_successfully() {
-            return Err(Error::ErrHandshakeInProgress);
+            return Err(Error::ErrHandshakeInProgress.into());
         }
 
         let pkts = vec![Packet {
@@ -407,7 +407,7 @@ impl DTLSConn {
                         return Err(err);
                     }
                 }
-                _ = timer.as_mut() => return Err(Error::ErrDeadlineExceeded),
+                _ = timer.as_mut() => return Err(Error::ErrDeadlineExceeded.into()),
             }
         } else {
             self.write_packets(pkts).await?;
@@ -417,7 +417,7 @@ impl DTLSConn {
     }
 
     // Close closes the connection.
-    pub async fn close(&mut self) -> Result<(), Error> {
+    pub async fn close(&mut self) -> Result<()> {
         if !self.closed {
             // Discard error from notify() to return non-error on the first user call of Close()
             // even if the underlying connection is already closed.
@@ -443,11 +443,7 @@ impl DTLSConn {
         self.state.srtp_protection_profile
     }
 
-    pub(crate) async fn notify(
-        &mut self,
-        level: AlertLevel,
-        desc: AlertDescription,
-    ) -> Result<(), Error> {
+    pub(crate) async fn notify(&mut self, level: AlertLevel, desc: AlertDescription) -> Result<()> {
         self.write_packets(vec![Packet {
             record: RecordLayer::new(
                 PROTOCOL_VERSION1_2,
@@ -463,7 +459,7 @@ impl DTLSConn {
         .await
     }
 
-    pub(crate) async fn write_packets(&mut self, pkts: Vec<Packet>) -> Result<(), Error> {
+    pub(crate) async fn write_packets(&mut self, pkts: Vec<Packet>) -> Result<()> {
         let (tx, mut rx) = mpsc::channel(1);
 
         self.packet_tx.send((pkts, Some(tx))).await?;
@@ -483,7 +479,7 @@ impl DTLSConn {
         local_sequence_number: &Arc<Mutex<Vec<u64>>>,
         cipher_suite: &Arc<Mutex<Option<Box<dyn CipherSuite + Send + Sync>>>>,
         maximum_transmission_unit: usize,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let mut raw_packets = vec![];
         for p in &mut pkts {
             if let Content::Handshake(h) = &p.record.content {
@@ -547,7 +543,7 @@ impl DTLSConn {
         local_sequence_number: &Arc<Mutex<Vec<u64>>>,
         cipher_suite: &Arc<Mutex<Option<Box<dyn CipherSuite + Send + Sync>>>>,
         p: &mut Packet,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Vec<u8>> {
         let epoch = p.record.record_layer_header.epoch as usize;
         let seq = {
             let mut lsn = local_sequence_number.lock().await;
@@ -564,7 +560,7 @@ impl DTLSConn {
             // RFC 6347 Section 4.1.0
             // The implementation must either abandon an association or rehandshake
             // prior to allowing the sequence number to wrap.
-            return Err(Error::ErrSequenceNumberOverflow);
+            return Err(Error::ErrSequenceNumberOverflow.into());
         }
         p.record.record_layer_header.sequence_number = seq;
 
@@ -590,7 +586,7 @@ impl DTLSConn {
         maximum_transmission_unit: usize,
         p: &Packet,
         h: &Handshake,
-    ) -> Result<Vec<Vec<u8>>, Error> {
+    ) -> Result<Vec<Vec<u8>>> {
         let mut raw_packets = vec![];
 
         let handshake_fragments = DTLSConn::fragment_handshake(maximum_transmission_unit, h)?;
@@ -609,7 +605,7 @@ impl DTLSConn {
             };
             //trace!("seq = {}", seq);
             if seq > MAX_SEQUENCE_NUMBER {
-                return Err(Error::ErrSequenceNumberOverflow);
+                return Err(Error::ErrSequenceNumberOverflow.into());
             }
 
             let record_layer_header = RecordLayerHeader {
@@ -644,10 +640,7 @@ impl DTLSConn {
         Ok(raw_packets)
     }
 
-    fn fragment_handshake(
-        maximum_transmission_unit: usize,
-        h: &Handshake,
-    ) -> Result<Vec<Vec<u8>>, Error> {
+    fn fragment_handshake(maximum_transmission_unit: usize, h: &Handshake) -> Result<Vec<Vec<u8>>> {
         let mut content = vec![];
         {
             let mut writer = BufWriter::<&mut Vec<u8>>::new(content.as_mut());
@@ -709,7 +702,7 @@ impl DTLSConn {
         buf: &mut [u8],
         local_epoch: &Arc<AtomicU16>,
         handshake_completed_successfully: &Arc<AtomicBool>,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let n = next_conn.recv(buf).await?;
         let pkts = unpack_datagram(&buf[..n])?;
         let mut has_handshake = false;
@@ -738,14 +731,14 @@ impl DTLSConn {
 
                 if let Err(alert_err) = alert_err {
                     if err.is_none() {
-                        err = Some(Error::ErrOthers(alert_err.to_string()));
+                        err = Some(Error::ErrOthers(alert_err.to_string()).into());
                     }
                 }
 
                 if alert.alert_level == AlertLevel::Fatal
                     || alert.alert_description == AlertDescription::CloseNotify
                 {
-                    return Err(Error::ErrAlertFatalOrClose);
+                    return Err(Error::ErrAlertFatalOrClose.into());
                 }
             }
 
@@ -794,7 +787,7 @@ impl DTLSConn {
         local_epoch: &Arc<AtomicU16>,
         handshake_completed_successfully: &Arc<AtomicBool>,
         pkts: Vec<Vec<u8>>,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         for p in pkts {
             let (_, alert, mut err) = DTLSConn::handle_incoming_packet(ctx, p, false).await; // don't re-enqueue
             if let Some(alert) = alert {
@@ -820,13 +813,13 @@ impl DTLSConn {
 
                 if let Err(alert_err) = alert_err {
                     if err.is_none() {
-                        err = Some(Error::ErrOthers(alert_err.to_string()));
+                        err = Some(Error::ErrOthers(alert_err.to_string()).into());
                     }
                 }
                 if alert.alert_level == AlertLevel::Fatal
                     || alert.alert_description == AlertDescription::CloseNotify
                 {
-                    return Err(Error::ErrAlertFatalOrClose);
+                    return Err(Error::ErrAlertFatalOrClose.into());
                 }
             }
 
@@ -842,7 +835,7 @@ impl DTLSConn {
         ctx: &mut ConnReaderContext,
         mut pkt: Vec<u8>,
         enqueue: bool,
-    ) -> (bool, Option<Alert>, Option<Error>) {
+    ) -> (bool, Option<Alert>, Option<anyhow::Error>) {
         let mut reader = BufReader::new(pkt.as_slice());
         let h = match RecordLayerHeader::unmarshal(&mut reader) {
             Ok(h) => h,
@@ -1012,10 +1005,7 @@ impl DTLSConn {
                 return (
                     false,
                     Some(a),
-                    Some(Error::ErrOthers(format!(
-                        "Error of Alert {}",
-                        a.to_string()
-                    ))),
+                    Some(Error::ErrOthers(format!("Error of Alert {}", a.to_string())).into()),
                 );
             }
             Content::ChangeCipherSpec(_) => {
@@ -1061,7 +1051,7 @@ impl DTLSConn {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::UnexpectedMessage,
                         }),
-                        Some(Error::ErrApplicationDataEpochZero),
+                        Some(Error::ErrApplicationDataEpochZero.into()),
                     );
                 }
 
@@ -1081,7 +1071,7 @@ impl DTLSConn {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::UnexpectedMessage,
                     }),
-                    Some(Error::ErrUnhandledContextType),
+                    Some(Error::ErrUnhandledContextType.into()),
                 );
             }
         };

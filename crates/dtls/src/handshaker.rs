@@ -7,8 +7,8 @@ use crate::error::*;
 use crate::extension::extension_use_srtp::*;
 use crate::signature_hash_algorithm::*;
 
+use anyhow::Result;
 use log::*;
-
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
@@ -72,7 +72,7 @@ impl fmt::Display for HandshakeState {
 }
 
 pub(crate) type VerifyPeerCertificateFn =
-    fn(rawCerts: &[Vec<u8>], verifiedChains: &[rustls::Certificate]) -> Result<(), Error>;
+    fn(rawCerts: &[Vec<u8>], verifiedChains: &[rustls::Certificate]) -> Result<()>;
 
 pub(crate) struct HandshakeConfig {
     pub(crate) local_psk_callback: Option<PskCallback>,
@@ -121,7 +121,7 @@ impl Default for HandshakeConfig {
 }
 
 impl HandshakeConfig {
-    pub(crate) fn get_certificate(&self, server_name: &str) -> Result<Certificate, Error> {
+    pub(crate) fn get_certificate(&self, server_name: &str) -> Result<Certificate> {
         //TODO
         /*if self.name_to_certificate.is_empty() {
             let mut name_to_certificate = HashMap::new();
@@ -153,7 +153,7 @@ impl HandshakeConfig {
         }*/
 
         if self.local_certificates.is_empty() {
-            return Err(Error::ErrNoCertificates);
+            return Err(Error::ErrNoCertificates.into());
         }
 
         if self.local_certificates.len() == 1 {
@@ -196,7 +196,7 @@ pub(crate) fn srv_cli_str(is_client: bool) -> String {
 }
 
 impl DTLSConn {
-    pub(crate) async fn handshake(&mut self, mut state: HandshakeState) -> Result<(), Error> {
+    pub(crate) async fn handshake(&mut self, mut state: HandshakeState) -> Result<()> {
         loop {
             trace!(
                 "[handshake:{}] {}: {}",
@@ -216,12 +216,12 @@ impl DTLSConn {
                 HandshakeState::Sending => self.send().await?,
                 HandshakeState::Waiting => self.wait().await?,
                 HandshakeState::Finished => self.finish().await?,
-                _ => return Err(Error::ErrInvalidFsmTransition),
+                _ => return Err(Error::ErrInvalidFsmTransition.into()),
             };
         }
     }
 
-    async fn prepare(&mut self) -> Result<HandshakeState, Error> {
+    async fn prepare(&mut self) -> Result<HandshakeState> {
         self.flights = None;
 
         // Prepare flights
@@ -290,7 +290,7 @@ impl DTLSConn {
 
         Ok(HandshakeState::Sending)
     }
-    async fn send(&mut self) -> Result<HandshakeState, Error> {
+    async fn send(&mut self) -> Result<HandshakeState> {
         // Send flights
         if let Some(pkts) = self.flights.clone() {
             self.write_packets(pkts).await?;
@@ -302,7 +302,7 @@ impl DTLSConn {
             Ok(HandshakeState::Waiting)
         }
     }
-    async fn wait(&mut self) -> Result<HandshakeState, Error> {
+    async fn wait(&mut self) -> Result<HandshakeState> {
         let retransmit_timer = tokio::time::sleep(self.cfg.retransmit_interval);
         tokio::pin!(retransmit_timer);
 
@@ -311,7 +311,7 @@ impl DTLSConn {
                  done = self.handshake_rx.recv() =>{
                     if done.is_none() {
                         trace!("[handshake:{}] {} handshake_tx is dropped", srv_cli_str(self.state.is_client), self.current_flight.to_string());
-                        return Err(Error::ErrAlertFatalOrClose);
+                        return Err(Error::ErrAlertFatalOrClose.into());
                     }
 
                     //trace!("[handshake:{}] {} received handshake_rx", srv_cli_str(self.state.is_client), self.current_flight.to_string());
@@ -364,14 +364,14 @@ impl DTLSConn {
             }
         }
     }
-    async fn finish(&mut self) -> Result<HandshakeState, Error> {
+    async fn finish(&mut self) -> Result<HandshakeState> {
         let retransmit_timer = tokio::time::sleep(self.cfg.retransmit_interval);
 
         tokio::select! {
             done = self.handshake_rx.recv() =>{
                 if done.is_none() {
                     trace!("[handshake:{}] {} handshake_tx is dropped", srv_cli_str(self.state.is_client), self.current_flight.to_string());
-                    return Err(Error::ErrAlertFatalOrClose);
+                    return Err(Error::ErrAlertFatalOrClose.into());
                 }
                 let result = self.current_flight.parse(&mut self.handle_queue_tx, &mut self.state, &self.cache, &self.cfg).await;
                 drop(done);

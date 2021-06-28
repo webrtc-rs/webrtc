@@ -39,7 +39,7 @@ impl Flight for Flight5 {
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<Error>)> {
+    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<anyhow::Error>)> {
         let (_seq, msgs) = match cache
             .full_pull_map(
                 state.handshake_recv_sequence,
@@ -160,7 +160,7 @@ impl Flight for Flight5 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::HandshakeFailure,
                         }),
-                        Some(Error::ErrVerifyDataMismatch),
+                        Some(Error::ErrVerifyDataMismatch.into()),
                     ));
                 }
             }
@@ -174,7 +174,7 @@ impl Flight for Flight5 {
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Vec<Packet>, (Option<Alert>, Option<Error>)> {
+    ) -> Result<Vec<Packet>, (Option<Alert>, Option<anyhow::Error>)> {
         let certificate = if !cfg.local_certificates.is_empty() {
             let cert = match cfg.get_certificate(&cfg.server_name) {
                 Ok(cert) => cert,
@@ -287,7 +287,7 @@ impl Flight for Flight5 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::UnexpectedMessage,
                         }),
-                        Some(Error::ErrInvalidContentType),
+                        Some(Error::ErrInvalidContentType.into()),
                     ))
                 }
             };
@@ -305,7 +305,7 @@ impl Flight for Flight5 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::InternalError,
                         }),
-                        Some(Error::ErrInvalidContentType),
+                        Some(Error::ErrInvalidContentType.into()),
                     ))
                 }
             };
@@ -452,7 +452,7 @@ impl Flight for Flight5 {
                             alert_level: AlertLevel::Fatal,
                             alert_description: AlertDescription::InternalError,
                         }),
-                        Some(Error::ErrInvalidContentType),
+                        Some(Error::ErrInvalidContentType.into()),
                     ))
                 }
             };
@@ -600,7 +600,7 @@ async fn initalize_cipher_suite(
     cfg: &HandshakeConfig,
     h: &HandshakeMessageServerKeyExchange,
     sending_plain_text: &[u8],
-) -> Result<(), (Option<Alert>, Option<Error>)> {
+) -> Result<(), (Option<Alert>, Option<anyhow::Error>)> {
     let mut cipher_suite = state.cipher_suite.lock().await;
 
     if let Some(cipher_suite) = &*cipher_suite {
@@ -694,7 +694,7 @@ async fn initalize_cipher_suite(
                     alert_level: AlertLevel::Fatal,
                     alert_description: AlertDescription::InsufficientSecurity,
                 }),
-                Some(Error::ErrNoAvailableSignatureSchemes),
+                Some(Error::ErrNoAvailableSignatureSchemes.into()),
             ));
         }
 

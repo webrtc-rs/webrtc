@@ -3,7 +3,7 @@ use super::*;
 use std::io::{BufReader, BufWriter};
 
 #[test]
-fn test_handshake_message_certificate() -> Result<(), Error> {
+fn test_handshake_message_certificate() -> Result<()> {
     let raw_certificate = vec![
         0x00, 0x01, 0x8c, 0x00, 0x01, 0x89, 0x30, 0x82, 0x01, 0x85, 0x30, 0x82, 0x01, 0x2b, 0x02,
         0x14, 0x7d, 0x00, 0xcf, 0x07, 0xfc, 0xe2, 0xb6, 0xb8, 0x3f, 0x72, 0xeb, 0x11, 0x36, 0x1b,
@@ -61,7 +61,7 @@ fn test_handshake_message_certificate() -> Result<(), Error> {
 }
 
 #[test]
-fn test_empty_handshake_message_certificate() -> Result<(), Error> {
+fn test_empty_handshake_message_certificate() -> Result<()> {
     let raw_certificate = vec![0x00, 0x00, 0x00];
 
     let expected_certificate = HandshakeMessageCertificate {

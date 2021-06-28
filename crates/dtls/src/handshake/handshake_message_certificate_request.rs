@@ -5,9 +5,9 @@ use super::*;
 use crate::client_certificate_type::*;
 use crate::signature_hash_algorithm::*;
 
-use std::io::{Read, Write};
-
+use anyhow::Result;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use std::io::{Read, Write};
 
 /*
 A non-anonymous server can optionally request a certificate from
@@ -33,7 +33,7 @@ impl HandshakeMessageCertificateRequest {
         1 + self.certificate_types.len() + 2 + self.signature_hash_algorithms.len() * 2 + 2
     }
 
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {
         writer.write_u8(self.certificate_types.len() as u8)?;
         for v in &self.certificate_types {
             writer.write_u8(*v as u8)?;
@@ -50,7 +50,7 @@ impl HandshakeMessageCertificateRequest {
         Ok(writer.flush()?)
     }
 
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self> {
         let certificate_types_length = reader.read_u8()?;
 
         let mut certificate_types = vec![];

@@ -3,7 +3,7 @@ use super::*;
 use std::io::{BufReader, BufWriter};
 
 #[test]
-fn test_extension_supported_point_formats() -> Result<(), Error> {
+fn test_extension_supported_point_formats() -> Result<()> {
     let raw_extension_supported_point_formats = vec![0x00, 0x02, 0x01, 0x00]; // 0x00, 0x0b,
     let parsed_extension_supported_point_formats = ExtensionSupportedPointFormats {
         point_formats: vec![ELLIPTIC_CURVE_POINT_FORMAT_UNCOMPRESSED],

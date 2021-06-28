@@ -3,7 +3,7 @@ use super::*;
 use std::io::{BufReader, BufWriter};
 
 #[test]
-fn test_extension_supported_signature_algorithms() -> Result<(), Error> {
+fn test_extension_supported_signature_algorithms() -> Result<()> {
     let raw_extension_supported_signature_algorithms =
         vec![0x00, 0x08, 0x00, 0x06, 0x04, 0x03, 0x05, 0x03, 0x06, 0x03]; //0x00, 0x0d,
     let parsed_extension_supported_signature_algorithms = ExtensionSupportedSignatureAlgorithms {

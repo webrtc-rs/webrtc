@@ -51,7 +51,7 @@ impl CryptoGcm {
         }
     }
 
-    pub fn encrypt(&self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>, Error> {
+    pub fn encrypt(&self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>> {
         let payload = &raw[RECORD_LAYER_HEADER_SIZE..];
         let raw = &raw[..RECORD_LAYER_HEADER_SIZE];
 
@@ -66,7 +66,8 @@ impl CryptoGcm {
         buffer.extend_from_slice(payload);
 
         self.local_gcm
-            .encrypt_in_place(nonce, &additional_data, &mut buffer)?;
+            .encrypt_in_place(nonce, &additional_data, &mut buffer)
+            .map_err(|e| Error::ErrOthers(e.to_string()))?;
 
         let mut r = Vec::with_capacity(raw.len() + nonce.len() + buffer.len());
         r.extend_from_slice(raw);
@@ -81,7 +82,7 @@ impl CryptoGcm {
         Ok(r)
     }
 
-    pub fn decrypt(&self, r: &[u8]) -> Result<Vec<u8>, Error> {
+    pub fn decrypt(&self, r: &[u8]) -> Result<Vec<u8>> {
         let mut reader = Cursor::new(r);
         let h = RecordLayerHeader::unmarshal(&mut reader)?;
         if h.content_type == ContentType::ChangeCipherSpec {
@@ -90,7 +91,7 @@ impl CryptoGcm {
         }
 
         if r.len() <= (RECORD_LAYER_HEADER_SIZE + 8) {
-            return Err(Error::ErrNotEnoughRoomForNonce);
+            return Err(Error::ErrNotEnoughRoomForNonce.into());
         }
 
         let mut nonce = vec![];
@@ -106,7 +107,8 @@ impl CryptoGcm {
         buffer.extend_from_slice(out);
 
         self.remote_gcm
-            .decrypt_in_place(nonce, &additional_data, &mut buffer)?;
+            .decrypt_in_place(nonce, &additional_data, &mut buffer)
+            .map_err(|e| Error::ErrOthers(e.to_string()))?;
 
         let mut d = Vec::with_capacity(RECORD_LAYER_HEADER_SIZE + buffer.len());
         d.extend_from_slice(&r[..RECORD_LAYER_HEADER_SIZE]);

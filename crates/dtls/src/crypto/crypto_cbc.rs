@@ -11,11 +11,11 @@
 use std::io::Cursor;
 
 use crate::content::*;
-use crate::error::Error;
 use crate::prf::*;
 use crate::record_layer::record_layer_header::*;
 
 use aes::Aes256;
+use anyhow::Result;
 use block_modes::block_padding::Pkcs7;
 use block_modes::{BlockMode, Cbc};
 type Aes256Cbc = Cbc<Aes256, Pkcs7>;
@@ -39,7 +39,7 @@ impl CryptoCbc {
         remote_key: &[u8],
         remote_write_iv: &[u8],
         remote_mac: &[u8],
-    ) -> Result<Self, Error> {
+    ) -> Result<Self> {
         Ok(CryptoCbc {
             write_cbc: Aes256Cbc::new_var(local_key, local_write_iv)?,
             write_mac: local_mac.to_vec(),
@@ -49,7 +49,7 @@ impl CryptoCbc {
         })
     }
 
-    pub fn encrypt(&self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>, Error> {
+    pub fn encrypt(&self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>> {
         let mut payload = raw[RECORD_LAYER_HEADER_SIZE..].to_vec();
         let raw = &raw[..RECORD_LAYER_HEADER_SIZE];
 
@@ -80,7 +80,7 @@ impl CryptoCbc {
         Ok(r)
     }
 
-    pub fn decrypt(&self, r: &[u8]) -> Result<Vec<u8>, Error> {
+    pub fn decrypt(&self, r: &[u8]) -> Result<Vec<u8>> {
         let mut reader = Cursor::new(r);
         let h = RecordLayerHeader::unmarshal(&mut reader)?;
         if h.content_type == ContentType::ChangeCipherSpec {

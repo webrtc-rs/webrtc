@@ -1,7 +1,7 @@
 use super::*;
 
 #[tokio::test]
-async fn test_handshake_cache_single_push() -> Result<(), Error> {
+async fn test_handshake_cache_single_push() -> Result<()> {
     let tests = vec![
         (
             "Single Push",
@@ -337,7 +337,7 @@ async fn test_handshake_cache_single_push() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_handshake_cache_session_hash() -> Result<(), Error> {
+async fn test_handshake_cache_session_hash() -> Result<()> {
     let tests = vec![
         (
             "Standard Handshake",

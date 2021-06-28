@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod prf_test;
 
+use anyhow::Result;
 use std::convert::TryInto;
 use std::fmt;
 
@@ -73,11 +74,11 @@ pub(crate) fn prf_pre_master_secret(
     public_key: &[u8],
     private_key: &NamedCurvePrivateKey,
     curve: NamedCurve,
-) -> Result<Vec<u8>, Error> {
+) -> Result<Vec<u8>> {
     match curve {
         NamedCurve::P256 => elliptic_curve_pre_master_secret(public_key, private_key, curve),
         NamedCurve::X25519 => elliptic_curve_pre_master_secret(public_key, private_key, curve),
-        _ => Err(Error::ErrInvalidNamedCurve),
+        _ => Err(Error::ErrInvalidNamedCurve.into()),
     }
 }
 
@@ -85,7 +86,7 @@ fn elliptic_curve_pre_master_secret(
     public_key: &[u8],
     private_key: &NamedCurvePrivateKey,
     curve: NamedCurve,
-) -> Result<Vec<u8>, Error> {
+) -> Result<Vec<u8>> {
     match curve {
         NamedCurve::P256 => {
             let pub_key = p256::EncodedPoint::from_bytes(public_key)?;
@@ -101,9 +102,9 @@ fn elliptic_curve_pre_master_secret(
                 return Ok(secret.diffie_hellman(&public).as_bytes().to_vec());
             }
         }
-        _ => return Err(Error::ErrInvalidNamedCurve),
+        _ => return Err(Error::ErrInvalidNamedCurve.into()),
     }
-    Err(Error::ErrNamedCurveAndPrivateKeyMismatch)
+    Err(Error::ErrNamedCurveAndPrivateKeyMismatch.into())
 }
 
 //  This PRF with the SHA-256 hash function is used for all cipher suites
@@ -129,9 +130,11 @@ fn elliptic_curve_pre_master_secret(
 //  output data.
 //
 // https://tools.ietf.org/html/rfc4346w
-fn hmac_sha(h: CipherSuiteHash, key: &[u8], data: &[u8]) -> Result<Vec<u8>, Error> {
+fn hmac_sha(h: CipherSuiteHash, key: &[u8], data: &[u8]) -> Result<Vec<u8>> {
     let mut mac = match h {
-        CipherSuiteHash::Sha256 => HmacSha256::new_varkey(key)?,
+        CipherSuiteHash::Sha256 => {
+            HmacSha256::new_varkey(key).map_err(|e| Error::ErrOthers(e.to_string()))?
+        }
     };
     mac.update(data);
     let result = mac.finalize();
@@ -144,7 +147,7 @@ pub(crate) fn prf_p_hash(
     seed: &[u8],
     requested_length: usize,
     h: CipherSuiteHash,
-) -> Result<Vec<u8>, Error> {
+) -> Result<Vec<u8>> {
     let mut last_round = seed.to_vec();
     let mut out = vec![];
 
@@ -166,7 +169,7 @@ pub(crate) fn prf_extended_master_secret(
     pre_master_secret: &[u8],
     session_hash: &[u8],
     h: CipherSuiteHash,
-) -> Result<Vec<u8>, Error> {
+) -> Result<Vec<u8>> {
     let mut seed = PRF_MASTER_SECRET_LABEL.as_bytes().to_vec();
     seed.extend_from_slice(session_hash);
     prf_p_hash(pre_master_secret, &seed, 48, h)
@@ -177,7 +180,7 @@ pub(crate) fn prf_master_secret(
     client_random: &[u8],
     server_random: &[u8],
     h: CipherSuiteHash,
-) -> Result<Vec<u8>, Error> {
+) -> Result<Vec<u8>> {
     let mut seed = PRF_MASTER_SECRET_LABEL.as_bytes().to_vec();
     seed.extend_from_slice(client_random);
     seed.extend_from_slice(server_random);
@@ -192,7 +195,7 @@ pub(crate) fn prf_encryption_keys(
     prf_key_len: usize,
     prf_iv_len: usize,
     h: CipherSuiteHash,
-) -> Result<EncryptionKeys, Error> {
+) -> Result<EncryptionKeys> {
     let mut seed = PRF_KEY_EXPANSION_LABEL.as_bytes().to_vec();
     seed.extend_from_slice(server_random);
     seed.extend_from_slice(client_random);
@@ -238,7 +241,7 @@ pub(crate) fn prf_verify_data(
     handshake_bodies: &[u8],
     label: &str,
     h: CipherSuiteHash,
-) -> Result<Vec<u8>, Error> {
+) -> Result<Vec<u8>> {
     let mut hasher = match h {
         CipherSuiteHash::Sha256 => Sha256::new(),
     };
@@ -254,7 +257,7 @@ pub(crate) fn prf_verify_data_client(
     master_secret: &[u8],
     handshake_bodies: &[u8],
     h: CipherSuiteHash,
-) -> Result<Vec<u8>, Error> {
+) -> Result<Vec<u8>> {
     prf_verify_data(
         master_secret,
         handshake_bodies,
@@ -267,7 +270,7 @@ pub(crate) fn prf_verify_data_server(
     master_secret: &[u8],
     handshake_bodies: &[u8],
     h: CipherSuiteHash,
-) -> Result<Vec<u8>, Error> {
+) -> Result<Vec<u8>> {
     prf_verify_data(
         master_secret,
         handshake_bodies,
@@ -284,8 +287,8 @@ pub(crate) fn prf_mac(
     protocol_version: ProtocolVersion,
     payload: &[u8],
     key: &[u8],
-) -> Result<Vec<u8>, Error> {
-    let mut hmac = HmacSha1::new_varkey(key)?;
+) -> Result<Vec<u8>> {
+    let mut hmac = HmacSha1::new_varkey(key).map_err(|e| Error::ErrOthers(e.to_string()))?;
 
     let mut msg = vec![0u8; 13];
     msg[..2].copy_from_slice(&epoch.to_be_bytes());

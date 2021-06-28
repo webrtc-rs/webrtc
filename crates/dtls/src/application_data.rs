@@ -1,7 +1,8 @@
 use std::io::{Read, Write};
 
 use super::content::*;
-use crate::error::Error;
+
+use anyhow::Result;
 
 // Application data messages are carried by the record layer and are
 // fragmented, compressed, and encrypted based on the current connection
@@ -22,13 +23,13 @@ impl ApplicationData {
         self.data.len()
     }
 
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {
         writer.write_all(&self.data)?;
 
         Ok(writer.flush()?)
     }
 
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self> {
         let mut data: Vec<u8> = vec![];
         reader.read_to_end(&mut data)?;
 

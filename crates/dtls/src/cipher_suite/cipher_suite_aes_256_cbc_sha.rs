@@ -2,6 +2,8 @@ use super::*;
 use crate::crypto::crypto_cbc::*;
 use crate::prf::*;
 
+use anyhow::Result;
+
 #[derive(Clone)]
 pub struct CipherSuiteAes256CbcSha {
     cbc: Option<CryptoCbc>,
@@ -61,7 +63,7 @@ impl CipherSuite for CipherSuiteAes256CbcSha {
         client_random: &[u8],
         server_random: &[u8],
         is_client: bool,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let keys = prf_encryption_keys(
             master_secret,
             client_random,
@@ -95,23 +97,25 @@ impl CipherSuite for CipherSuiteAes256CbcSha {
         Ok(())
     }
 
-    fn encrypt(&self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>, Error> {
+    fn encrypt(&self, pkt_rlh: &RecordLayerHeader, raw: &[u8]) -> Result<Vec<u8>> {
         if let Some(cg) = &self.cbc {
             cg.encrypt(pkt_rlh, raw)
         } else {
             Err(Error::ErrOthers(
                 "CipherSuite has not been initialized, unable to encrypt".to_owned(),
-            ))
+            )
+            .into())
         }
     }
 
-    fn decrypt(&self, input: &[u8]) -> Result<Vec<u8>, Error> {
+    fn decrypt(&self, input: &[u8]) -> Result<Vec<u8>> {
         if let Some(cg) = &self.cbc {
             cg.decrypt(input)
         } else {
             Err(Error::ErrOthers(
                 "CipherSuite has not been initialized, unable to decrypt".to_owned(),
-            ))
+            )
+            .into())
         }
     }
 }

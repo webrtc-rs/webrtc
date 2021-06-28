@@ -3,7 +3,7 @@ use super::*;
 use std::io::{BufReader, BufWriter};
 
 #[test]
-fn test_extension_server_name() -> Result<(), Error> {
+fn test_extension_server_name() -> Result<()> {
     let extension = ExtensionServerName {
         server_name: "test.domain".to_owned(),
     };

@@ -3,6 +3,7 @@ mod handshake_message_finished_test;
 
 use super::*;
 
+use anyhow::Result;
 use std::io::{Read, Write};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -19,13 +20,13 @@ impl HandshakeMessageFinished {
         self.verify_data.len()
     }
 
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {
         writer.write_all(&self.verify_data)?;
 
         Ok(writer.flush()?)
     }
 
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self> {
         let mut verify_data: Vec<u8> = vec![];
         reader.read_to_end(&mut verify_data)?;
 

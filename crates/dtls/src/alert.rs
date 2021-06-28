@@ -1,13 +1,12 @@
 #[cfg(test)]
 mod alert_test;
 
+use super::content::*;
+
+use anyhow::Result;
+use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::fmt;
 use std::io::{Read, Write};
-
-use byteorder::{ReadBytesExt, WriteBytesExt};
-
-use super::content::*;
-use crate::error::Error;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub(crate) enum AlertLevel {
@@ -163,14 +162,14 @@ impl Alert {
         2
     }
 
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {
         writer.write_u8(self.alert_level as u8)?;
         writer.write_u8(self.alert_description as u8)?;
 
         Ok(writer.flush()?)
     }
 
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self> {
         let alert_level = reader.read_u8()?.into();
         let alert_description = reader.read_u8()?.into();
 

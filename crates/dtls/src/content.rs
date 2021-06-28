@@ -2,10 +2,10 @@ use super::alert::*;
 use super::application_data::*;
 use super::change_cipher_spec::*;
 use super::handshake::*;
-
-use std::io::{Read, Write};
-
 use crate::error::*;
+
+use anyhow::Result;
+use std::io::{Read, Write};
 
 // https://tools.ietf.org/html/rfc4346#section-6.2.1
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -62,7 +62,7 @@ impl Content {
         }
     }
 
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {
         match self {
             Content::ChangeCipherSpec(c) => c.marshal(writer),
             Content::Alert(c) => c.marshal(writer),
@@ -71,7 +71,7 @@ impl Content {
         }
     }
 
-    pub fn unmarshal<R: Read>(content_type: ContentType, reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: Read>(content_type: ContentType, reader: &mut R) -> Result<Self> {
         match content_type {
             ContentType::ChangeCipherSpec => Ok(Content::ChangeCipherSpec(
                 ChangeCipherSpec::unmarshal(reader)?,
@@ -81,7 +81,7 @@ impl Content {
             ContentType::ApplicationData => Ok(Content::ApplicationData(
                 ApplicationData::unmarshal(reader)?,
             )),
-            _ => Err(Error::ErrInvalidContentType),
+            _ => Err(Error::ErrInvalidContentType.into()),
         }
     }
 }

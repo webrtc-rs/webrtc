@@ -27,7 +27,7 @@ impl Flight for Flight2 {
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<Error>)> {
+    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<anyhow::Error>)> {
         let (seq, msgs) = match cache
             .full_pull_map(
                 state.handshake_recv_sequence,
@@ -71,7 +71,7 @@ impl Flight for Flight2 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::ProtocolVersion,
                     }),
-                    Some(Error::ErrUnsupportedProtocolVersion),
+                    Some(Error::ErrUnsupportedProtocolVersion.into()),
                 ));
             }
 
@@ -85,7 +85,7 @@ impl Flight for Flight2 {
                         alert_level: AlertLevel::Fatal,
                         alert_description: AlertDescription::AccessDenied,
                     }),
-                    Some(Error::ErrCookieMismatch),
+                    Some(Error::ErrCookieMismatch.into()),
                 ));
             }
 
@@ -106,7 +106,7 @@ impl Flight for Flight2 {
         state: &mut State,
         _cache: &HandshakeCache,
         _cfg: &HandshakeConfig,
-    ) -> Result<Vec<Packet>, (Option<Alert>, Option<Error>)> {
+    ) -> Result<Vec<Packet>, (Option<Alert>, Option<anyhow::Error>)> {
         state.handshake_send_sequence = 0;
         Ok(vec![Packet {
             record: RecordLayer::new(

@@ -1,9 +1,10 @@
 use super::*;
+use crate::error::Error;
 
 use std::io::{BufReader, BufWriter};
 
 #[test]
-fn test_alert() -> Result<(), Error> {
+fn test_alert() -> Result<()> {
     let tests = vec![
         (
             "Valid Alert",

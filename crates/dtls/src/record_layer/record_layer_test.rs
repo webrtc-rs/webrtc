@@ -5,7 +5,7 @@ use crate::change_cipher_spec::ChangeCipherSpec;
 use std::io::{BufReader, BufWriter};
 
 #[test]
-fn test_udp_decode() -> Result<(), Error> {
+fn test_udp_decode() -> Result<()> {
     let tests = vec![
         (
             "Change Cipher Spec, single packet",
@@ -82,7 +82,7 @@ fn test_udp_decode() -> Result<(), Error> {
 }
 
 #[test]
-fn test_record_layer_round_trip() -> Result<(), Error> {
+fn test_record_layer_round_trip() -> Result<()> {
     let tests = vec![(
         "Change Cipher Spec, single packet",
         vec![

@@ -11,14 +11,11 @@ use crate::record_layer::record_layer_header::*;
 
 use der_parser::{oid, oid::Oid};
 
+use anyhow::Result;
 use ring::rand::SystemRandom;
 use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
-
 use sha2::{Digest, Sha256};
-
 use std::sync::Arc;
-
-//use log::*;
 
 #[derive(Clone)]
 pub struct Certificate {
@@ -27,31 +24,40 @@ pub struct Certificate {
 }
 
 impl Certificate {
-    pub fn generate_self_signed(subject_alt_names: impl Into<Vec<String>>) -> Result<Self, Error> {
+    pub fn generate_self_signed(subject_alt_names: impl Into<Vec<String>>) -> Result<Self> {
         let cert = rcgen::generate_simple_self_signed(subject_alt_names)?;
         let certificate = cert.serialize_der()?;
         let key_pair = cert.get_key_pair();
         let serialized_der = key_pair.serialize_der();
         let private_key = if key_pair.is_compatible(&rcgen::PKCS_ED25519) {
             CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::Ed25519(Ed25519KeyPair::from_pkcs8(&serialized_der)?),
+                kind: CryptoPrivateKeyKind::Ed25519(
+                    Ed25519KeyPair::from_pkcs8(&serialized_der)
+                        .map_err(|e| Error::ErrOthers(e.to_string()))?,
+                ),
                 serialized_der,
             }
         } else if key_pair.is_compatible(&rcgen::PKCS_ECDSA_P256_SHA256) {
             CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::Ecdsa256(EcdsaKeyPair::from_pkcs8(
-                    &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
-                    &serialized_der,
-                )?),
+                kind: CryptoPrivateKeyKind::Ecdsa256(
+                    EcdsaKeyPair::from_pkcs8(
+                        &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
+                        &serialized_der,
+                    )
+                    .map_err(|e| Error::ErrOthers(e.to_string()))?,
+                ),
                 serialized_der,
             }
         } else if key_pair.is_compatible(&rcgen::PKCS_RSA_SHA256) {
             CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::Rsa256(RsaKeyPair::from_pkcs8(&serialized_der)?),
+                kind: CryptoPrivateKeyKind::Rsa256(
+                    RsaKeyPair::from_pkcs8(&serialized_der)
+                        .map_err(|e| Error::ErrOthers(e.to_string()))?,
+                ),
                 serialized_der,
             }
         } else {
-            return Err(Error::ErrOthers("Unsupported key_pair".to_owned()));
+            return Err(Error::ErrOthers("Unsupported key_pair".to_owned()).into());
         };
 
         Ok(Certificate {
@@ -63,7 +69,7 @@ impl Certificate {
     pub fn generate_self_signed_with_alg(
         subject_alt_names: impl Into<Vec<String>>,
         alg: &'static rcgen::SignatureAlgorithm,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self> {
         let mut params = rcgen::CertificateParams::new(subject_alt_names);
         params.alg = alg;
         let cert = rcgen::Certificate::from_params(params)?;
@@ -72,24 +78,33 @@ impl Certificate {
         let serialized_der = key_pair.serialize_der();
         let private_key = if key_pair.is_compatible(&rcgen::PKCS_ED25519) {
             CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::Ed25519(Ed25519KeyPair::from_pkcs8(&serialized_der)?),
+                kind: CryptoPrivateKeyKind::Ed25519(
+                    Ed25519KeyPair::from_pkcs8(&serialized_der)
+                        .map_err(|e| Error::ErrOthers(e.to_string()))?,
+                ),
                 serialized_der,
             }
         } else if key_pair.is_compatible(&rcgen::PKCS_ECDSA_P256_SHA256) {
             CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::Ecdsa256(EcdsaKeyPair::from_pkcs8(
-                    &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
-                    &serialized_der,
-                )?),
+                kind: CryptoPrivateKeyKind::Ecdsa256(
+                    EcdsaKeyPair::from_pkcs8(
+                        &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
+                        &serialized_der,
+                    )
+                    .map_err(|e| Error::ErrOthers(e.to_string()))?,
+                ),
                 serialized_der,
             }
         } else if key_pair.is_compatible(&rcgen::PKCS_RSA_SHA256) {
             CryptoPrivateKey {
-                kind: CryptoPrivateKeyKind::Rsa256(RsaKeyPair::from_pkcs8(&serialized_der)?),
+                kind: CryptoPrivateKeyKind::Rsa256(
+                    RsaKeyPair::from_pkcs8(&serialized_der)
+                        .map_err(|e| Error::ErrOthers(e.to_string()))?,
+                ),
                 serialized_der,
             }
         } else {
-            return Err(Error::ErrOthers("Unsupported key_pair".to_owned()));
+            return Err(Error::ErrOthers("Unsupported key_pair".to_owned()).into());
         };
 
         Ok(Certificate {
@@ -170,13 +185,16 @@ pub(crate) fn generate_key_signature(
     public_key: &[u8],
     named_curve: NamedCurve,
     private_key: &CryptoPrivateKey, /*, hash_algorithm: HashAlgorithm*/
-) -> Result<Vec<u8>, Error> {
+) -> Result<Vec<u8>> {
     let msg = value_key_message(client_random, server_random, public_key, named_curve);
     let signature = match &private_key.kind {
         CryptoPrivateKeyKind::Ed25519(kp) => kp.sign(&msg).as_ref().to_vec(),
         CryptoPrivateKeyKind::Ecdsa256(kp) => {
             let system_random = SystemRandom::new();
-            kp.sign(&system_random, &msg)?.as_ref().to_vec()
+            kp.sign(&system_random, &msg)
+                .map_err(|e| Error::ErrOthers(e.to_string()))?
+                .as_ref()
+                .to_vec()
         }
         CryptoPrivateKeyKind::Rsa256(kp) => {
             let system_random = SystemRandom::new();
@@ -186,7 +204,8 @@ pub(crate) fn generate_key_signature(
                 &system_random,
                 &msg,
                 &mut signature,
-            )?;
+            )
+            .map_err(|e| Error::ErrOthers(e.to_string()))?;
 
             signature
         }
@@ -204,9 +223,9 @@ pub(crate) fn verify_key_signature(
     /*_hash_algorithm: HashAlgorithm,*/
     remote_key_signature: &[u8],
     raw_certificates: &[Vec<u8>],
-) -> Result<(), Error> {
+) -> Result<()> {
     if raw_certificates.is_empty() {
-        return Err(Error::ErrLengthMismatch);
+        return Err(Error::ErrLengthMismatch.into());
     }
 
     let (_, certificate) = x509_parser::parse_x509_certificate(&raw_certificates[0])?;
@@ -222,7 +241,7 @@ pub(crate) fn verify_key_signature(
         } else if *sign_alg == oid_registry::OID_SIG_ECDSA_WITH_SHA384 {
             &ring::signature::ECDSA_P384_SHA384_ASN1
         } else {
-            return Err(Error::ErrKeySignatureVerifyUnimplemented);
+            return Err(Error::ErrKeySignatureVerifyUnimplemented.into());
         }
     } else if *pki_alg == oid_registry::OID_PKCS1_RSAENCRYPTION {
         if *sign_alg == oid_registry::OID_PKCS1_SHA1WITHRSA {
@@ -234,10 +253,10 @@ pub(crate) fn verify_key_signature(
         } else if *sign_alg == oid_registry::OID_PKCS1_SHA512WITHRSA {
             &ring::signature::RSA_PKCS1_2048_8192_SHA512
         } else {
-            return Err(Error::ErrKeySignatureVerifyUnimplemented);
+            return Err(Error::ErrKeySignatureVerifyUnimplemented.into());
         }
     } else {
-        return Err(Error::ErrKeySignatureVerifyUnimplemented);
+        return Err(Error::ErrKeySignatureVerifyUnimplemented.into());
     };
 
     let public_key = ring::signature::UnparsedPublicKey::new(
@@ -249,7 +268,9 @@ pub(crate) fn verify_key_signature(
             .data,
     );
 
-    public_key.verify(&message, remote_key_signature)?;
+    public_key
+        .verify(&message, remote_key_signature)
+        .map_err(|e| Error::ErrOthers(e.to_string()))?;
 
     Ok(())
 }
@@ -265,7 +286,7 @@ pub(crate) fn verify_key_signature(
 pub(crate) fn generate_certificate_verify(
     handshake_bodies: &[u8],
     private_key: &CryptoPrivateKey, /*, hashAlgorithm hashAlgorithm*/
-) -> Result<Vec<u8>, Error> {
+) -> Result<Vec<u8>> {
     let mut h = Sha256::new();
     h.update(handshake_bodies);
     let hashed = h.finalize();
@@ -274,7 +295,8 @@ pub(crate) fn generate_certificate_verify(
         CryptoPrivateKeyKind::Ed25519(kp) => kp.sign(hashed.as_slice()).as_ref().to_vec(),
         CryptoPrivateKeyKind::Ecdsa256(kp) => {
             let system_random = SystemRandom::new();
-            kp.sign(&system_random, hashed.as_slice())?
+            kp.sign(&system_random, hashed.as_slice())
+                .map_err(|e| Error::ErrOthers(e.to_string()))?
                 .as_ref()
                 .to_vec()
         }
@@ -286,7 +308,8 @@ pub(crate) fn generate_certificate_verify(
                 &system_random,
                 hashed.as_slice(),
                 &mut signature,
-            )?;
+            )
+            .map_err(|e| Error::ErrOthers(e.to_string()))?;
 
             signature
         }
@@ -300,7 +323,7 @@ pub(crate) fn verify_certificate_verify(
     /*hashAlgorithm hashAlgorithm,*/
     remote_key_signature: &[u8],
     raw_certificates: &[Vec<u8>],
-) -> Result<(), Error> {
+) -> Result<()> {
     let mut h = Sha256::new();
     h.update(handshake_bodies);
     let hashed = h.finalize();
@@ -308,9 +331,9 @@ pub(crate) fn verify_certificate_verify(
     verify_key_signature(&hashed, remote_key_signature, raw_certificates)
 }
 
-pub(crate) fn load_certs(raw_certificates: &[Vec<u8>]) -> Result<Vec<rustls::Certificate>, Error> {
+pub(crate) fn load_certs(raw_certificates: &[Vec<u8>]) -> Result<Vec<rustls::Certificate>> {
     if raw_certificates.is_empty() {
-        return Err(Error::ErrLengthMismatch);
+        return Err(Error::ErrLengthMismatch.into());
     }
 
     let mut certs = vec![];
@@ -325,12 +348,12 @@ pub(crate) fn load_certs(raw_certificates: &[Vec<u8>]) -> Result<Vec<rustls::Cer
 pub(crate) fn verify_client_cert(
     raw_certificates: &[Vec<u8>],
     cert_verifier: &Arc<dyn rustls::ClientCertVerifier>,
-) -> Result<Vec<rustls::Certificate>, Error> {
+) -> Result<Vec<rustls::Certificate>> {
     let chains = load_certs(raw_certificates)?;
 
     match cert_verifier.verify_client_cert(&chains, None) {
         Ok(_) => {}
-        Err(err) => return Err(Error::ErrOthers(err.to_string())),
+        Err(err) => return Err(Error::ErrOthers(err.to_string()).into()),
     };
 
     Ok(chains)
@@ -341,16 +364,16 @@ pub(crate) fn verify_server_cert(
     cert_verifier: &Arc<dyn rustls::ServerCertVerifier>,
     roots: &rustls::RootCertStore,
     server_name: &str,
-) -> Result<Vec<rustls::Certificate>, Error> {
+) -> Result<Vec<rustls::Certificate>> {
     let chains = load_certs(raw_certificates)?;
     let dns_name = match webpki::DNSNameRef::try_from_ascii_str(server_name) {
         Ok(dns_name) => dns_name,
-        Err(err) => return Err(Error::ErrOthers(err.to_string())),
+        Err(err) => return Err(Error::ErrOthers(err.to_string()).into()),
     };
 
     match cert_verifier.verify_server_cert(roots, &chains, dns_name, &[]) {
         Ok(_) => {}
-        Err(err) => return Err(Error::ErrOthers(err.to_string())),
+        Err(err) => return Err(Error::ErrOthers(err.to_string()).into()),
     };
 
     Ok(chains)

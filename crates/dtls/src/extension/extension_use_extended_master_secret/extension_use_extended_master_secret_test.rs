@@ -3,7 +3,7 @@ use super::*;
 use std::io::{BufReader, BufWriter};
 
 #[test]
-fn test_extension_use_extended_master_secret() -> Result<(), Error> {
+fn test_extension_use_extended_master_secret() -> Result<()> {
     let raw_extension_use_extended_master_secret = vec![0x00, 0x00];
     let parsed_extension_use_extended_master_secret =
         ExtensionUseExtendedMasterSecret { supported: true };

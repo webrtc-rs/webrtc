@@ -4,6 +4,8 @@ mod extension_supported_signature_algorithms_test;
 use super::*;
 use crate::signature_hash_algorithm::*;
 
+use anyhow::Result;
+
 const EXTENSION_SUPPORTED_SIGNATURE_ALGORITHMS_HEADER_SIZE: usize = 6;
 
 // https://tools.ietf.org/html/rfc5246#section-7.4.1.4.1
@@ -21,7 +23,7 @@ impl ExtensionSupportedSignatureAlgorithms {
         2 + 2 + self.signature_hash_algorithms.len() * 2
     }
 
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {
         writer.write_u16::<BigEndian>(2 + 2 * self.signature_hash_algorithms.len() as u16)?;
         writer.write_u16::<BigEndian>(2 * self.signature_hash_algorithms.len() as u16)?;
         for v in &self.signature_hash_algorithms {
@@ -32,7 +34,7 @@ impl ExtensionSupportedSignatureAlgorithms {
         Ok(writer.flush()?)
     }
 
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self, Error> {
+    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self> {
         let _ = reader.read_u16::<BigEndian>()?;
 
         let algorithm_count = reader.read_u16::<BigEndian>()? as usize / 2;
