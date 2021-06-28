@@ -463,7 +463,7 @@ impl Client {
                         .await?;
                 }
             } else if let Err(err) = result {
-                return Err(Error::ErrOthers(err.to_string()).into());
+                return Err(Error::new(err.to_string()).into());
             }
         }
 
