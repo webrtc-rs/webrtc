@@ -26,7 +26,7 @@ pub fn assert_inbound_username(m: &Message, expected_username: &str) -> Result<(
     username.get_from(m)?;
 
     if username.to_string() != expected_username {
-        return Err(Error::ErrOthers(format!(
+        return Err(Error::new(format!(
             "{:?} expected({}) actual({})",
             Error::ErrMismatchUsername,
             expected_username,
@@ -73,9 +73,9 @@ pub async fn stun_request(
         match tokio::time::timeout(deadline, conn.recv_from(&mut bs)).await {
             Ok(result) => match result {
                 Ok((n, addr)) => (n, addr),
-                Err(err) => return Err(Error::ErrOthers(err.to_string()).into()),
+                Err(err) => return Err(Error::new(err.to_string()).into()),
             },
-            Err(err) => return Err(Error::ErrOthers(err.to_string()).into()),
+            Err(err) => return Err(Error::new(err.to_string()).into()),
         }
     } else {
         conn.recv_from(&mut bs).await?

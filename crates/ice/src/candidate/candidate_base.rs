@@ -407,7 +407,7 @@ impl CandidateBase {
                             n = num;
                             src_addr = src;
                        }
-                       Err(err) => return Err(Error::ErrOthers(err.to_string()).into()),
+                       Err(err) => return Err(Error::new(err.to_string()).into()),
                    }
                },
                 _  = closed_ch_rx.recv() => return Err(Error::ErrClosed.into()),

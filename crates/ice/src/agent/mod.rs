@@ -610,7 +610,7 @@ impl Agent {
     pub async fn unmarshal_remote_candidate(&self, raw: String) -> Result<impl Candidate> {
         let split: Vec<&str> = raw.split_whitespace().collect();
         if split.len() < 8 {
-            return Err(Error::ErrOthers(format!(
+            return Err(Error::new(format!(
                 "{:?} ({})",
                 Error::ErrAttributeTooShortIceCandidate,
                 split.len()
@@ -647,7 +647,7 @@ impl Agent {
 
             if split2[0] == "raddr" {
                 if split2.len() < 4 {
-                    return Err(Error::ErrOthers(format!(
+                    return Err(Error::new(format!(
                         "{:?}: incorrect length",
                         Error::ErrParseRelatedAddr
                     ))
@@ -661,11 +661,9 @@ impl Agent {
                 rel_port = split2[3].parse()?;
             } else if split2[0] == "tcptype" {
                 if split2.len() < 2 {
-                    return Err(Error::ErrOthers(format!(
-                        "{:?}: incorrect length",
-                        Error::ErrParseType
-                    ))
-                    .into());
+                    return Err(
+                        Error::new(format!("{:?}: incorrect length", Error::ErrParseType)).into(),
+                    );
                 }
 
                 tcp_type = TcpType::from(split2[1]);
@@ -738,9 +736,7 @@ impl Agent {
                 };
                 config.new_candidate_relay().await
             }
-            _ => Err(
-                Error::ErrOthers(format!("{:?} ({})", Error::ErrUnknownCandidateType, typ)).into(),
-            ),
+            _ => Err(Error::new(format!("{:?} ({})", Error::ErrUnknownCandidateType, typ)).into()),
         }
     }
 

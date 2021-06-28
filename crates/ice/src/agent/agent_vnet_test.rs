@@ -194,7 +194,7 @@ impl turn::auth::AuthHandler for TestAuthHandler {
         if let Some(pw) = self.cred_map.get(username) {
             Ok(pw.to_vec())
         } else {
-            Err(Error::ErrOthers("fake error".to_owned()).into())
+            Err(Error::new("fake error".to_owned()).into())
         }
     }
 }
@@ -257,7 +257,7 @@ pub(crate) async fn connect_with_vnet(
     if let Some(a_conn) = accepted_rx.recv().await {
         Ok((a_conn, b_conn))
     } else {
-        Err(Error::ErrOthers("no a_conn".to_owned()).into())
+        Err(Error::new("no a_conn".to_owned()).into())
     }
 }
 

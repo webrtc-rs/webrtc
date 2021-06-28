@@ -184,8 +184,9 @@ pub enum Error {
     #[error("relative URL without a base")]
     ErrUrlParse,
 
-    #[error("Other errors:{0}")]
-    ErrOthers(String),
+    #[allow(non_camel_case_types)]
+    #[error("{0}")]
+    new(String),
 }
 
 impl Error {
