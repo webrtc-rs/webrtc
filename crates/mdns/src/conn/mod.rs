@@ -71,7 +71,7 @@ impl DnsConn {
                 Ok(e) => e,
                 Err(e) => {
                     log::error!("Error getting interfaces: {:?}", e);
-                    return Err(Error::ErrOthers(e.to_string()).into());
+                    return Err(Error::new(e.to_string()).into());
                 }
             };
 
@@ -407,7 +407,7 @@ async fn send_answer(
                     a: match interface_addr.ip() {
                         IpAddr::V4(ip) => ip.octets(),
                         IpAddr::V6(_) => {
-                            return Err(Error::ErrOthers("Unexpected IpV6 addr".to_owned()).into())
+                            return Err(Error::new("Unexpected IpV6 addr".to_owned()).into())
                         }
                     },
                 })),
