@@ -2,7 +2,6 @@ use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq)]
 pub enum Error {
-    // from vnet
     #[error("obs cannot be nil")]
     ErrObsCannotBeNil,
     #[error("se of closed network connection")]
@@ -82,16 +81,13 @@ pub enum Error {
     #[error("Invalid mask")]
     ErrInvalidMask,
 
-    #[error("Other errors:{0}")]
-    ErrOthers(String),
+    #[allow(non_camel_case_types)]
+    #[error("{0}")]
+    new(String),
 }
 
 impl Error {
     pub fn equal(&self, err: &anyhow::Error) -> bool {
-        if let Some(e) = err.downcast_ref::<Self>() {
-            e == self
-        } else {
-            false
-        }
+        err.downcast_ref::<Self>().map_or(false, |e| e == self)
     }
 }

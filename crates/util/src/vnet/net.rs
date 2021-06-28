@@ -308,7 +308,7 @@ impl VNet {
         if (use_ipv4 && remote_addr.is_ipv4()) || (!use_ipv4 && remote_addr.is_ipv6()) {
             Ok(remote_addr)
         } else {
-            Err(Error::ErrOthers(format!(
+            Err(Error::new(format!(
                 "No available {} IP address found!",
                 if use_ipv4 { "ipv4" } else { "ipv6" },
             ))

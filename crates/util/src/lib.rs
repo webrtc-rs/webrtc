@@ -1,6 +1,9 @@
 #![warn(rust_2018_idioms)]
 #![allow(dead_code)]
 
+use anyhow::Result;
+use async_trait::async_trait;
+
 #[macro_use]
 extern crate lazy_static;
 
@@ -10,6 +13,17 @@ extern crate bitflags;
 
 pub mod fixed_big_int;
 pub mod replay_detector;
+
+/// KeyingMaterialExporter to extract keying material
+#[async_trait]
+pub trait KeyingMaterialExporter {
+    async fn export_keying_material(
+        &self,
+        label: &str,
+        context: &[u8],
+        length: usize,
+    ) -> Result<Vec<u8>>;
+}
 
 #[cfg(feature = "buffer")]
 pub mod buffer;
