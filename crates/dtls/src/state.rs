@@ -13,17 +13,7 @@ use std::marker::{Send, Sync};
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-
-/// KeyingMaterialExporter allows package SRTP to extract keying material
-#[async_trait]
-pub trait KeyingMaterialExporter {
-    async fn export_keying_material(
-        &self,
-        label: &str,
-        context: &[u8],
-        length: usize,
-    ) -> Result<Vec<u8>>;
-}
+use util::KeyingMaterialExporter;
 
 // State holds the dtls connection state and implements both encoding.BinaryMarshaler and encoding.BinaryUnmarshaler
 pub struct State {
@@ -241,7 +231,7 @@ impl State {
 
         match bincode::serialize(&serialized) {
             Ok(enc) => Ok(enc),
-            Err(err) => Err(Error::ErrOthers(err.to_string()).into()),
+            Err(err) => Err(Error::new(err.to_string()).into()),
         }
     }
 
@@ -249,7 +239,7 @@ impl State {
     pub async fn unmarshal_binary(&mut self, data: &[u8]) -> Result<()> {
         let serialized: SerializedState = match bincode::deserialize(data) {
             Ok(dec) => dec,
-            Err(err) => return Err(Error::ErrOthers(err.to_string()).into()),
+            Err(err) => return Err(Error::new(err.to_string()).into()),
         };
         self.deserialize(&serialized).await?;
         self.init_cipher_suite().await?;

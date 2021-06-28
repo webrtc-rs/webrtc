@@ -392,7 +392,7 @@ impl Flight for Flight4 {
                     alert_level: AlertLevel::Fatal,
                     alert_description: AlertDescription::InternalError,
                 }),
-                Some(Error::ErrOthers(err.to_string()).into()),
+                Some(Error::new(err.to_string()).into()),
             ));
         }
 

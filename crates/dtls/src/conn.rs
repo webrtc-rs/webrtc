@@ -731,7 +731,7 @@ impl DTLSConn {
 
                 if let Err(alert_err) = alert_err {
                     if err.is_none() {
-                        err = Some(Error::ErrOthers(alert_err.to_string()).into());
+                        err = Some(Error::new(alert_err.to_string()).into());
                     }
                 }
 
@@ -813,7 +813,7 @@ impl DTLSConn {
 
                 if let Err(alert_err) = alert_err {
                     if err.is_none() {
-                        err = Some(Error::ErrOthers(alert_err.to_string()).into());
+                        err = Some(Error::new(alert_err.to_string()).into());
                     }
                 }
                 if alert.alert_level == AlertLevel::Fatal
@@ -1005,7 +1005,7 @@ impl DTLSConn {
                 return (
                     false,
                     Some(a),
-                    Some(Error::ErrOthers(format!("Error of Alert {}", a.to_string())).into()),
+                    Some(Error::new(format!("Error of Alert {}", a.to_string())).into()),
                 );
             }
             Content::ChangeCipherSpec(_) => {

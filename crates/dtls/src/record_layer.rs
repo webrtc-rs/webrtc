@@ -67,7 +67,7 @@ impl RecordLayer {
                 Content::ChangeCipherSpec(ChangeCipherSpec::unmarshal(reader)?)
             }
             ContentType::Handshake => Content::Handshake(Handshake::unmarshal(reader)?),
-            _ => return Err(Error::ErrOthers("Invalid Content Type".to_owned()).into()),
+            _ => return Err(Error::new("Invalid Content Type".to_owned()).into()),
         };
 
         Ok(RecordLayer {

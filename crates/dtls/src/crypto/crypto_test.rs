@@ -43,7 +43,7 @@ fn test_generate_key_signature() -> Result<()> {
     let reader = Cursor::new(RAW_PRIVATE_KEY.as_bytes());
     let pem = match Pem::read(reader) {
         Ok((pem, _)) => pem,
-        Err(_) => return Err(Error::ErrOthers("Pem::read error".to_owned()).into()),
+        Err(_) => return Err(Error::new("Pem::read error".to_owned()).into()),
     };
     //let private_key = rsa::RSAPrivateKey::from_pkcs1(&pem.contents)?;
 
@@ -90,7 +90,7 @@ fn test_generate_key_signature() -> Result<()> {
         NamedCurve::X25519,
         &CryptoPrivateKey {
             kind: CryptoPrivateKeyKind::Rsa256(
-                RsaKeyPair::from_der(&pem.contents).map_err(|e| Error::ErrOthers(e.to_string()))?,
+                RsaKeyPair::from_der(&pem.contents).map_err(|e| Error::new(e.to_string()))?,
             ),
             serialized_der: pem.contents.clone(),
         }, //hashAlgorithmSHA256,

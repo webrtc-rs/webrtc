@@ -121,11 +121,11 @@ impl CryptoCcm {
         match &self.local_ccm {
             CryptoCcmType::CryptoCcm(ccm) => {
                 ccm.encrypt_in_place(nonce, &additional_data, &mut buffer)
-                    .map_err(|e| Error::ErrOthers(e.to_string()))?;
+                    .map_err(|e| Error::new(e.to_string()))?;
             }
             CryptoCcmType::CryptoCcm8(ccm8) => {
                 ccm8.encrypt_in_place(nonce, &additional_data, &mut buffer)
-                    .map_err(|e| Error::ErrOthers(e.to_string()))?;
+                    .map_err(|e| Error::new(e.to_string()))?;
             }
         }
 
@@ -170,13 +170,13 @@ impl CryptoCcm {
                 let additional_data =
                     generate_aead_additional_data(&h, out.len() - CRYPTO_CCM_TAG_LENGTH);
                 ccm.decrypt_in_place(nonce, &additional_data, &mut buffer)
-                    .map_err(|e| Error::ErrOthers(e.to_string()))?;
+                    .map_err(|e| Error::new(e.to_string()))?;
             }
             CryptoCcmType::CryptoCcm8(ccm8) => {
                 let additional_data =
                     generate_aead_additional_data(&h, out.len() - CRYPTO_CCM_8_TAG_LENGTH);
                 ccm8.decrypt_in_place(nonce, &additional_data, &mut buffer)
-                    .map_err(|e| Error::ErrOthers(e.to_string()))?;
+                    .map_err(|e| Error::new(e.to_string()))?;
             }
         }
 

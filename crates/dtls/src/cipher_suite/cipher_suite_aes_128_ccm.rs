@@ -102,10 +102,10 @@ impl CipherSuite for CipherSuiteAes128Ccm {
         if let Some(ccm) = &self.ccm {
             ccm.encrypt(pkt_rlh, raw)
         } else {
-            Err(Error::ErrOthers(
-                "CipherSuite has not been initialized, unable to encrypt".to_owned(),
+            Err(
+                Error::new("CipherSuite has not been initialized, unable to encrypt".to_owned())
+                    .into(),
             )
-            .into())
         }
     }
 
@@ -113,10 +113,10 @@ impl CipherSuite for CipherSuiteAes128Ccm {
         if let Some(ccm) = &self.ccm {
             ccm.decrypt(input)
         } else {
-            Err(Error::ErrOthers(
-                "CipherSuite has not been initialized, unable to decrypt".to_owned(),
+            Err(
+                Error::new("CipherSuite has not been initialized, unable to decrypt".to_owned())
+                    .into(),
             )
-            .into())
         }
     }
 }

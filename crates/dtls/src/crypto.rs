@@ -33,7 +33,7 @@ impl Certificate {
             CryptoPrivateKey {
                 kind: CryptoPrivateKeyKind::Ed25519(
                     Ed25519KeyPair::from_pkcs8(&serialized_der)
-                        .map_err(|e| Error::ErrOthers(e.to_string()))?,
+                        .map_err(|e| Error::new(e.to_string()))?,
                 ),
                 serialized_der,
             }
@@ -44,7 +44,7 @@ impl Certificate {
                         &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
                         &serialized_der,
                     )
-                    .map_err(|e| Error::ErrOthers(e.to_string()))?,
+                    .map_err(|e| Error::new(e.to_string()))?,
                 ),
                 serialized_der,
             }
@@ -52,12 +52,12 @@ impl Certificate {
             CryptoPrivateKey {
                 kind: CryptoPrivateKeyKind::Rsa256(
                     RsaKeyPair::from_pkcs8(&serialized_der)
-                        .map_err(|e| Error::ErrOthers(e.to_string()))?,
+                        .map_err(|e| Error::new(e.to_string()))?,
                 ),
                 serialized_der,
             }
         } else {
-            return Err(Error::ErrOthers("Unsupported key_pair".to_owned()).into());
+            return Err(Error::new("Unsupported key_pair".to_owned()).into());
         };
 
         Ok(Certificate {
@@ -80,7 +80,7 @@ impl Certificate {
             CryptoPrivateKey {
                 kind: CryptoPrivateKeyKind::Ed25519(
                     Ed25519KeyPair::from_pkcs8(&serialized_der)
-                        .map_err(|e| Error::ErrOthers(e.to_string()))?,
+                        .map_err(|e| Error::new(e.to_string()))?,
                 ),
                 serialized_der,
             }
@@ -91,7 +91,7 @@ impl Certificate {
                         &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
                         &serialized_der,
                     )
-                    .map_err(|e| Error::ErrOthers(e.to_string()))?,
+                    .map_err(|e| Error::new(e.to_string()))?,
                 ),
                 serialized_der,
             }
@@ -99,12 +99,12 @@ impl Certificate {
             CryptoPrivateKey {
                 kind: CryptoPrivateKeyKind::Rsa256(
                     RsaKeyPair::from_pkcs8(&serialized_der)
-                        .map_err(|e| Error::ErrOthers(e.to_string()))?,
+                        .map_err(|e| Error::new(e.to_string()))?,
                 ),
                 serialized_der,
             }
         } else {
-            return Err(Error::ErrOthers("Unsupported key_pair".to_owned()).into());
+            return Err(Error::new("Unsupported key_pair".to_owned()).into());
         };
 
         Ok(Certificate {
@@ -192,7 +192,7 @@ pub(crate) fn generate_key_signature(
         CryptoPrivateKeyKind::Ecdsa256(kp) => {
             let system_random = SystemRandom::new();
             kp.sign(&system_random, &msg)
-                .map_err(|e| Error::ErrOthers(e.to_string()))?
+                .map_err(|e| Error::new(e.to_string()))?
                 .as_ref()
                 .to_vec()
         }
@@ -205,7 +205,7 @@ pub(crate) fn generate_key_signature(
                 &msg,
                 &mut signature,
             )
-            .map_err(|e| Error::ErrOthers(e.to_string()))?;
+            .map_err(|e| Error::new(e.to_string()))?;
 
             signature
         }
@@ -270,7 +270,7 @@ pub(crate) fn verify_key_signature(
 
     public_key
         .verify(&message, remote_key_signature)
-        .map_err(|e| Error::ErrOthers(e.to_string()))?;
+        .map_err(|e| Error::new(e.to_string()))?;
 
     Ok(())
 }
@@ -296,7 +296,7 @@ pub(crate) fn generate_certificate_verify(
         CryptoPrivateKeyKind::Ecdsa256(kp) => {
             let system_random = SystemRandom::new();
             kp.sign(&system_random, hashed.as_slice())
-                .map_err(|e| Error::ErrOthers(e.to_string()))?
+                .map_err(|e| Error::new(e.to_string()))?
                 .as_ref()
                 .to_vec()
         }
@@ -309,7 +309,7 @@ pub(crate) fn generate_certificate_verify(
                 hashed.as_slice(),
                 &mut signature,
             )
-            .map_err(|e| Error::ErrOthers(e.to_string()))?;
+            .map_err(|e| Error::new(e.to_string()))?;
 
             signature
         }
@@ -353,7 +353,7 @@ pub(crate) fn verify_client_cert(
 
     match cert_verifier.verify_client_cert(&chains, None) {
         Ok(_) => {}
-        Err(err) => return Err(Error::ErrOthers(err.to_string()).into()),
+        Err(err) => return Err(Error::new(err.to_string()).into()),
     };
 
     Ok(chains)
@@ -368,12 +368,12 @@ pub(crate) fn verify_server_cert(
     let chains = load_certs(raw_certificates)?;
     let dns_name = match webpki::DNSNameRef::try_from_ascii_str(server_name) {
         Ok(dns_name) => dns_name,
-        Err(err) => return Err(Error::ErrOthers(err.to_string()).into()),
+        Err(err) => return Err(Error::new(err.to_string()).into()),
     };
 
     match cert_verifier.verify_server_cert(roots, &chains, dns_name, &[]) {
         Ok(_) => {}
-        Err(err) => return Err(Error::ErrOthers(err.to_string()).into()),
+        Err(err) => return Err(Error::new(err.to_string()).into()),
     };
 
     Ok(chains)

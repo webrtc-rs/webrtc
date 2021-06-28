@@ -17,11 +17,11 @@ use crate::handshake::handshake_message_server_hello_done::*;
 use crate::handshake::handshake_message_server_key_exchange::*;
 use crate::handshake::handshake_random::*;
 use crate::signature_hash_algorithm::*;
-use crate::state::KeyingMaterialExporter;
 
 use rand::Rng;
 use std::time::SystemTime;
 use util::conn::conn_pipe::*;
+use util::KeyingMaterialExporter;
 
 const ERR_TEST_PSK_INVALID_IDENTITY: &str = "TestPSK: Server got invalid identity";
 const ERR_PSK_REJECTED: &str = "PSK Rejected";
@@ -93,7 +93,7 @@ fn psk_callback_server(hint: &[u8]) -> Result<Vec<u8>> {
 }
 
 fn psk_callback_hint_fail(_hint: &[u8]) -> Result<Vec<u8>> {
-    Err(Error::ErrOthers(ERR_PSK_REJECTED.to_owned()).into())
+    Err(Error::new(ERR_PSK_REJECTED.to_owned()).into())
 }
 
 async fn create_test_client(
@@ -885,13 +885,13 @@ async fn test_client_certificate() -> Result<()> {
     let mut srv_ca_pool = rustls::RootCertStore::empty();
     srv_ca_pool
         .add(&srv_cert.certificate)
-        .or_else(|_err| Err(Error::ErrOthers("add srv_cert error".to_owned())))?;
+        .or_else(|_err| Err(Error::new("add srv_cert error".to_owned())))?;
 
     let cert = Certificate::generate_self_signed(vec!["localhost".to_owned()])?;
     let mut roots_cas = rustls::RootCertStore::empty();
     roots_cas
         .add(&cert.certificate)
-        .or_else(|_err| Err(Error::ErrOthers("add cert error".to_owned())))?;
+        .or_else(|_err| Err(Error::new("add cert error".to_owned())))?;
 
     let tests = vec![
         (
@@ -1333,20 +1333,20 @@ async fn test_extended_master_secret() -> Result<()> {
 
 fn fn_not_expected_chain(_cert: &[Vec<u8>], chain: &[rustls::Certificate]) -> Result<()> {
     if !chain.is_empty() {
-        return Err(Error::ErrOthers(ERR_NOT_EXPECTED_CHAIN.to_owned()).into());
+        return Err(Error::new(ERR_NOT_EXPECTED_CHAIN.to_owned()).into());
     }
     Ok(())
 }
 
 fn fn_expected_chain(_cert: &[Vec<u8>], chain: &[rustls::Certificate]) -> Result<()> {
     if chain.is_empty() {
-        return Err(Error::ErrOthers(ERR_EXPECTED_CHAIN.to_owned()).into());
+        return Err(Error::new(ERR_EXPECTED_CHAIN.to_owned()).into());
     }
     Ok(())
 }
 
 fn fn_wrong_cert(_cert: &[Vec<u8>], _chain: &[rustls::Certificate]) -> Result<()> {
-    Err(Error::ErrOthers(ERR_WRONG_CERT.to_owned()).into())
+    Err(Error::new(ERR_WRONG_CERT.to_owned()).into())
 }
 
 #[tokio::test]
@@ -1371,7 +1371,7 @@ async fn test_server_certificate() -> Result<()> {
     let mut roots_cas = rustls::RootCertStore::empty();
     roots_cas
         .add(&cert.certificate)
-        .or_else(|_err| Err(Error::ErrOthers("add cert error".to_owned())))?;
+        .or_else(|_err| Err(Error::new("add cert error".to_owned())))?;
 
     let tests = vec![
         (
