@@ -36,6 +36,7 @@ impl Unmarshal for Packet {
     /// Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
     fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
     where
+        Self: Sized,
         B: Buf,
     {
         let header = Header::unmarshal(raw_packet)?;
