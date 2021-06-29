@@ -1,8 +1,8 @@
 use crate::error::*;
-use crate::packetizer::Marshaller;
+use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
 use anyhow::Result;
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{Buf, BufMut, Bytes};
 
 pub const HEADER_LENGTH: usize = 4;
 pub const VERSION_SHIFT: u8 = 6;
@@ -50,10 +50,15 @@ pub struct Header {
     pub extensions: Vec<Extension>,
 }
 
-impl Marshaller for Header {
+impl Unmarshal for Header {
     /// Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
-        if raw_packet.len() < HEADER_LENGTH {
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    where
+        Self: Sized,
+        B: Buf,
+    {
+        let raw_packet_len = raw_packet.remaining();
+        if raw_packet_len < HEADER_LENGTH {
             return Err(Error::ErrHeaderSizeInsufficient.into());
         }
         /*
@@ -70,44 +75,42 @@ impl Marshaller for Header {
          * |                             ....                              |
          * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
-        let reader = &mut raw_packet.clone();
-
-        let b0 = reader.get_u8();
+        let b0 = raw_packet.get_u8();
         let version = b0 >> VERSION_SHIFT & VERSION_MASK;
         let padding = (b0 >> PADDING_SHIFT & PADDING_MASK) > 0;
         let extension = (b0 >> EXTENSION_SHIFT & EXTENSION_MASK) > 0;
         let cc = (b0 & CC_MASK) as usize;
 
         let mut curr_offset = CSRC_OFFSET + (cc * CSRC_LENGTH);
-        if raw_packet.len() < curr_offset {
+        if raw_packet_len < curr_offset {
             return Err(Error::ErrHeaderSizeInsufficient.into());
         }
 
-        let b1 = reader.get_u8();
+        let b1 = raw_packet.get_u8();
         let marker = (b1 >> MARKER_SHIFT & MARKER_MASK) > 0;
         let payload_type = b1 & PT_MASK;
 
-        let sequence_number = reader.get_u16();
-        let timestamp = reader.get_u32();
-        let ssrc = reader.get_u32();
+        let sequence_number = raw_packet.get_u16();
+        let timestamp = raw_packet.get_u32();
+        let ssrc = raw_packet.get_u32();
 
         let mut csrc = vec![];
         for _ in 0..cc {
-            csrc.push(reader.get_u32());
+            csrc.push(raw_packet.get_u32());
         }
 
         let (extension_profile, extensions) = if extension {
             let expected = curr_offset + 4;
-            if raw_packet.len() < expected {
+            if raw_packet_len < expected {
                 return Err(Error::ErrHeaderSizeInsufficientForExtension.into());
             }
-            let extension_profile = reader.get_u16();
+            let extension_profile = raw_packet.get_u16();
             curr_offset += 2;
-            let extension_length = reader.get_u16() as usize * 4;
+            let extension_length = raw_packet.get_u16() as usize * 4;
             curr_offset += 2;
 
             let expected = curr_offset + extension_length;
-            if raw_packet.len() < expected {
+            if raw_packet_len < expected {
                 return Err(Error::ErrHeaderSizeInsufficientForExtension.into());
             }
 
@@ -117,7 +120,7 @@ impl Marshaller for Header {
                 EXTENSION_PROFILE_ONE_BYTE => {
                     let end = curr_offset + extension_length;
                     while curr_offset < end {
-                        let b = reader.get_u8();
+                        let b = raw_packet.get_u8();
                         if b == 0x00 {
                             // padding
                             curr_offset += 1;
@@ -134,9 +137,8 @@ impl Marshaller for Header {
 
                         extensions.push(Extension {
                             id: extid,
-                            payload: raw_packet.slice(curr_offset..curr_offset + len),
+                            payload: raw_packet.copy_to_bytes(len),
                         });
-                        reader.advance(len);
                         curr_offset += len;
                     }
                 }
@@ -144,7 +146,7 @@ impl Marshaller for Header {
                 EXTENSION_PROFILE_TWO_BYTE => {
                     let end = curr_offset + extension_length;
                     while curr_offset < end {
-                        let b = reader.get_u8();
+                        let b = raw_packet.get_u8();
                         if b == 0x00 {
                             // padding
                             curr_offset += 1;
@@ -154,28 +156,25 @@ impl Marshaller for Header {
                         let extid = b;
                         curr_offset += 1;
 
-                        let len = reader.get_u8() as usize;
+                        let len = raw_packet.get_u8() as usize;
                         curr_offset += 1;
 
                         extensions.push(Extension {
                             id: extid,
-                            payload: raw_packet.slice(curr_offset..curr_offset + len),
+                            payload: raw_packet.copy_to_bytes(len),
                         });
-                        reader.advance(len);
                         curr_offset += len;
                     }
                 }
                 // RFC3550 Extension
                 _ => {
-                    if raw_packet.len() < curr_offset + extension_length {
+                    if raw_packet_len < curr_offset + extension_length {
                         return Err(Error::ErrHeaderSizeInsufficientForExtension.into());
                     }
                     extensions.push(Extension {
                         id: 0,
-                        payload: raw_packet.slice(curr_offset..curr_offset + extension_length),
+                        payload: raw_packet.copy_to_bytes(extension_length),
                     });
-                    reader.advance(extension_length);
-                    //curr_offset += extension_length;
                 }
             };
 
@@ -198,7 +197,9 @@ impl Marshaller for Header {
             extensions,
         })
     }
+}
 
+impl MarshalSize for Header {
     /// MarshalSize returns the size of the packet once marshaled.
     fn marshal_size(&self) -> usize {
         let mut head_size = 12 + (self.csrc.len() * CSRC_LENGTH);
@@ -209,9 +210,14 @@ impl Marshaller for Header {
         }
         head_size
     }
+}
 
+impl Marshal for Header {
     /// Marshal serializes the header and writes to the buffer.
-    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize> {
+    fn marshal_to<B>(&self, buf: &mut B) -> Result<usize>
+    where
+        B: BufMut,
+    {
         /*
          *  0                   1                   2                   3
          *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1

@@ -1,5 +1,6 @@
 use super::*;
 
+use bytes::BytesMut;
 use chrono::prelude::*;
 use std::ops::Sub;
 use std::time::Duration;
@@ -56,7 +57,8 @@ fn test_abs_send_time_extension_roundtrip() -> Result<()> {
         let mut raw = BytesMut::with_capacity(test.marshal_size());
         test.marshal_to(&mut raw)?;
         let raw = raw.freeze();
-        let out = AbsSendTimeExtension::unmarshal(&raw)?;
+        let buf = &mut raw.clone();
+        let out = AbsSendTimeExtension::unmarshal(buf)?;
         assert_eq!(test.timestamp, out.timestamp);
     }
 
@@ -79,7 +81,8 @@ fn test_abs_send_time_extension_estimate() -> Result<()> {
         let mut raw = BytesMut::with_capacity(send.marshal_size());
         send.marshal_to(&mut raw)?;
         let raw = raw.freeze();
-        let receive = AbsSendTimeExtension::unmarshal(&raw)?;
+        let buf = &mut raw.clone();
+        let receive = AbsSendTimeExtension::unmarshal(buf)?;
 
         let estimated = receive.estimate(ntp2unix(receive_ntp));
         let diff = estimated.sub(in_time).as_nanos() as i128;

@@ -1,10 +1,11 @@
 #[cfg(test)]
 mod audio_level_extension_test;
 
-use crate::{error::Error, packetizer::Marshaller};
+use crate::error::Error;
+use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
 use anyhow::Result;
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::{Buf, BufMut};
 
 // AUDIO_LEVEL_EXTENSION_SIZE One byte header size
 pub const AUDIO_LEVEL_EXTENSION_SIZE: usize = 1;
@@ -34,28 +35,39 @@ pub struct AudioLevelExtension {
     pub voice: bool,
 }
 
-impl Marshaller for AudioLevelExtension {
+impl Unmarshal for AudioLevelExtension {
     /// Unmarshal parses the passed byte slice and stores the result in the members
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
-        if raw_packet.len() < AUDIO_LEVEL_EXTENSION_SIZE {
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    where
+        Self: Sized,
+        B: Buf,
+    {
+        if raw_packet.remaining() < AUDIO_LEVEL_EXTENSION_SIZE {
             return Err(Error::ErrTooSmall.into());
         }
 
-        let b = raw_packet[0];
+        let b = raw_packet.get_u8();
 
         Ok(AudioLevelExtension {
             level: b & 0x7F,
             voice: (b & 0x80) != 0,
         })
     }
+}
 
+impl MarshalSize for AudioLevelExtension {
     /// MarshalSize returns the size of the AudioLevelExtension once marshaled.
     fn marshal_size(&self) -> usize {
         AUDIO_LEVEL_EXTENSION_SIZE
     }
+}
 
+impl Marshal for AudioLevelExtension {
     /// MarshalTo serializes the members to buffer
-    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize> {
+    fn marshal_to<B>(&self, buf: &mut B) -> Result<usize>
+    where
+        B: BufMut,
+    {
         if self.level > 127 {
             return Err(Error::AudioLevelOverflow.into());
         }

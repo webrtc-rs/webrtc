@@ -1,9 +1,10 @@
 use super::*;
+use bytes::{Bytes, BytesMut};
 
 #[test]
 fn test_audio_level_extension_too_small() -> Result<()> {
-    let raw = Bytes::from_static(&[]);
-    let result = AudioLevelExtension::unmarshal(&raw);
+    let mut buf = &vec![0u8; 0][..];
+    let result = AudioLevelExtension::unmarshal(&mut buf);
     assert!(result.is_err());
 
     Ok(())
@@ -12,7 +13,8 @@ fn test_audio_level_extension_too_small() -> Result<()> {
 #[test]
 fn test_audio_level_extension_voice_true() -> Result<()> {
     let raw = Bytes::from_static(&[0x88]);
-    let a1 = AudioLevelExtension::unmarshal(&raw)?;
+    let buf = &mut raw.clone();
+    let a1 = AudioLevelExtension::unmarshal(buf)?;
     let a2 = AudioLevelExtension {
         level: 8,
         voice: true,
@@ -29,7 +31,8 @@ fn test_audio_level_extension_voice_true() -> Result<()> {
 #[test]
 fn test_audio_level_extension_voice_false() -> Result<()> {
     let raw = Bytes::from_static(&[0x8]);
-    let a1 = AudioLevelExtension::unmarshal(&raw)?;
+    let buf = &mut raw.clone();
+    let a1 = AudioLevelExtension::unmarshal(buf)?;
     let a2 = AudioLevelExtension {
         level: 8,
         voice: false,

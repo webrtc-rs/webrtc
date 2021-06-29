@@ -1,10 +1,11 @@
 #[cfg(test)]
 mod abs_send_time_extension_test;
 
-use crate::{error::Error, packetizer::Marshaller};
+use crate::error::Error;
+use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
 use anyhow::Result;
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::{Buf, BufMut};
 use std::time::Duration;
 
 pub const ABS_SEND_TIME_EXTENSION_SIZE: usize = 3;
@@ -15,28 +16,39 @@ pub struct AbsSendTimeExtension {
     pub timestamp: u64,
 }
 
-impl Marshaller for AbsSendTimeExtension {
+impl Unmarshal for AbsSendTimeExtension {
     /// Unmarshal parses the passed byte slice and stores the result in the members.
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
-        if raw_packet.len() < ABS_SEND_TIME_EXTENSION_SIZE {
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    where
+        Self: Sized,
+        B: Buf,
+    {
+        if raw_packet.remaining() < ABS_SEND_TIME_EXTENSION_SIZE {
             return Err(Error::ErrTooSmall.into());
         }
 
-        let b0 = raw_packet[0];
-        let b1 = raw_packet[1];
-        let b2 = raw_packet[2];
+        let b0 = raw_packet.get_u8();
+        let b1 = raw_packet.get_u8();
+        let b2 = raw_packet.get_u8();
         let timestamp = (b0 as u64) << 16 | (b1 as u64) << 8 | b2 as u64;
 
         Ok(AbsSendTimeExtension { timestamp })
     }
+}
 
+impl MarshalSize for AbsSendTimeExtension {
     /// MarshalSize returns the size of the AbsSendTimeExtension once marshaled.
     fn marshal_size(&self) -> usize {
         ABS_SEND_TIME_EXTENSION_SIZE
     }
+}
 
+impl Marshal for AbsSendTimeExtension {
     /// MarshalTo serializes the members to buffer.
-    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize> {
+    fn marshal_to<B>(&self, buf: &mut B) -> Result<usize>
+    where
+        B: BufMut,
+    {
         buf.put_u8(((self.timestamp & 0xFF0000) >> 16) as u8);
         buf.put_u8(((self.timestamp & 0xFF00) >> 8) as u8);
         buf.put_u8((self.timestamp & 0xFF) as u8);

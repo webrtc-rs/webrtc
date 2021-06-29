@@ -1,9 +1,10 @@
 use super::*;
+use bytes::{Bytes, BytesMut};
 
 #[test]
 fn test_transport_cc_extension_too_small() -> Result<()> {
-    let raw = Bytes::from_static(&[]);
-    let result = TransportCcExtension::unmarshal(&raw);
+    let mut buf = &vec![0u8; 0][..];
+    let result = TransportCcExtension::unmarshal(&mut buf);
     assert!(result.is_err());
 
     Ok(())
@@ -12,7 +13,8 @@ fn test_transport_cc_extension_too_small() -> Result<()> {
 #[test]
 fn test_transport_cc_extension() -> Result<()> {
     let raw = Bytes::from_static(&[0x00, 0x02]);
-    let t1 = TransportCcExtension::unmarshal(&raw)?;
+    let buf = &mut raw.clone();
+    let t1 = TransportCcExtension::unmarshal(buf)?;
     let t2 = TransportCcExtension {
         transport_sequence: 2,
     };
@@ -28,7 +30,8 @@ fn test_transport_cc_extension() -> Result<()> {
 #[test]
 fn test_transport_cc_extension_extra_bytes() -> Result<()> {
     let raw = Bytes::from_static(&[0x00, 0x02, 0x00, 0xff, 0xff]);
-    let t1 = TransportCcExtension::unmarshal(&raw)?;
+    let buf = &mut raw.clone();
+    let t1 = TransportCcExtension::unmarshal(buf)?;
     let t2 = TransportCcExtension {
         transport_sequence: 2,
     };

@@ -1,10 +1,11 @@
 #[cfg(test)]
 mod packet_test;
 
-use crate::{error::Error, header::*, packetizer::Marshaller};
+use crate::{error::Error, header::*};
+use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
 use anyhow::Result;
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::{Buf, BufMut, Bytes};
 use std::fmt;
 
 /// Packet represents an RTP Packet
@@ -31,11 +32,14 @@ impl fmt::Display for Packet {
     }
 }
 
-impl Marshaller for Packet {
+impl Unmarshal for Packet {
     /// Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    where
+        B: Buf,
+    {
         let header = Header::unmarshal(raw_packet)?;
-        let payload = raw_packet.slice(header.marshal_size()..);
+        let payload = raw_packet.copy_to_bytes(raw_packet.remaining());
         if header.padding && !payload.is_empty() {
             let payload_len = payload.len();
             let padding_len = payload[payload_len - 1] as usize;
@@ -51,7 +55,9 @@ impl Marshaller for Packet {
             Ok(Packet { header, payload })
         }
     }
+}
 
+impl MarshalSize for Packet {
     /// MarshalSize returns the size of the packet once marshaled.
     fn marshal_size(&self) -> usize {
         let payload_len = self.payload.len();
@@ -62,9 +68,14 @@ impl Marshaller for Packet {
         };
         self.header.marshal_size() + payload_len + padding_len
     }
+}
 
+impl Marshal for Packet {
     /// MarshalTo serializes the packet and writes to the buffer.
-    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize> {
+    fn marshal_to<B>(&self, buf: &mut B) -> Result<usize>
+    where
+        B: BufMut,
+    {
         let n = self.header.marshal_to(buf)?;
         buf.put(&*self.payload);
         let padding_len = if self.header.padding {

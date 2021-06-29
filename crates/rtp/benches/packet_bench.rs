@@ -1,6 +1,7 @@
 use bytes::{Bytes, BytesMut};
 use criterion::{criterion_group, criterion_main, Criterion};
-use rtp::{header::*, packet::*, packetizer::*};
+use rtp::{header::*, packet::*};
+use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
 fn benchmark_packet(c: &mut Criterion) {
     let pkt = Packet {
@@ -26,7 +27,8 @@ fn benchmark_packet(c: &mut Criterion) {
     let mut raw = BytesMut::new();
     let _ = pkt.marshal_to(&mut raw).unwrap();
     let raw = raw.freeze();
-    let p = Packet::unmarshal(&raw).unwrap();
+    let buf = &mut raw.clone();
+    let p = Packet::unmarshal(buf).unwrap();
     if pkt != p {
         panic!(
             "marshal or unmarshal not correct: \npkt: {:?} \nvs \np: {:?}",
@@ -51,7 +53,8 @@ fn benchmark_packet(c: &mut Criterion) {
 
     c.bench_function("Benchmark Unmarshal ", |b| {
         b.iter(|| {
-            let _ = Packet::unmarshal(&raw).unwrap();
+            let buf = &mut raw.clone();
+            let _ = Packet::unmarshal(buf).unwrap();
         })
     });
 }

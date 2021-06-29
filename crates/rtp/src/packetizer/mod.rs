@@ -2,24 +2,11 @@
 mod packetizer_test;
 
 use crate::{extension::abs_send_time_extension::*, header::*, packet::*, sequence::*};
+use util::marshal::{Marshal, MarshalSize};
 
 use anyhow::Result;
 use bytes::{Bytes, BytesMut};
-use std::marker::Sized;
 use std::time::{Duration, SystemTime};
-
-pub trait Marshaller {
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self>
-    where
-        Self: Sized;
-    fn marshal_size(&self) -> usize;
-    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize>;
-    fn marshal(&self) -> Result<Bytes> {
-        let mut buf = BytesMut::with_capacity(self.marshal_size());
-        let _ = self.marshal_to(&mut buf)?;
-        Ok(buf.freeze())
-    }
-}
 
 /// Payloader payloads a byte array for use as rtp.Packet payloads
 pub trait Payloader {

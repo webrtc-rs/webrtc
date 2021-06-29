@@ -1,9 +1,10 @@
 use super::*;
+use bytes::{Bytes, BytesMut};
 
 #[test]
 fn test_basic() -> Result<()> {
-    let empty_bytes = Bytes::new();
-    let result = Packet::unmarshal(&empty_bytes);
+    let mut empty_bytes = &vec![0u8; 0][..];
+    let result = Packet::unmarshal(&mut empty_bytes);
     assert!(
         result.is_err(),
         "Unmarshal did not error on zero length packet"
@@ -33,8 +34,8 @@ fn test_basic() -> Result<()> {
         },
         payload: Bytes::from_static(&[0x98, 0x36, 0xbe, 0x88, 0x9e]),
     };
-
-    let packet = Packet::unmarshal(&raw_pkt)?;
+    let buf = &mut raw_pkt.clone();
+    let packet = Packet::unmarshal(buf)?;
     assert_eq!(
         packet, parsed_packet,
         "TestBasic unmarshal: got {}, want {}",
@@ -76,7 +77,8 @@ fn test_extension() -> Result<()> {
     let missing_extension_pkt = Bytes::from_static(&[
         0x90, 0x60, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82,
     ]);
-    let result = Packet::unmarshal(&missing_extension_pkt);
+    let buf = &mut missing_extension_pkt.clone();
+    let result = Packet::unmarshal(buf);
     assert!(
         result.is_err(),
         "Unmarshal did not error on packet with missing extension data"
@@ -86,7 +88,8 @@ fn test_extension() -> Result<()> {
         0x90, 0x60, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0x99, 0x99, 0x99,
         0x99,
     ]);
-    let result = Packet::unmarshal(&invalid_extension_length_pkt);
+    let buf = &mut invalid_extension_length_pkt.clone();
+    let result = Packet::unmarshal(buf);
     assert!(
         result.is_err(),
         "Unmarshal did not error on packet with invalid extension length"
@@ -122,7 +125,8 @@ fn test_padding() -> Result<()> {
         0x29, 0x9a, 0x64, 0x03, 0xc0, 0x11, 0x3f, 0x2c, 0xd4, 0x04, 0x04, 0x05, 0x00, 0x00, 0x03,
         0x03, 0xe8, 0x00, 0x00, 0xea, 0x60, 0x04, 0x00, 0x00, 0x03,
     ]);
-    let packet = Packet::unmarshal(&raw_pkt)?;
+    let buf = &mut raw_pkt.clone();
+    let packet = Packet::unmarshal(buf)?;
     assert_eq!(&packet.payload[..], &raw_pkt[12..12 + 25]);
 
     let raw = packet.marshal()?;
@@ -157,7 +161,8 @@ fn test_packet_marshal_unmarshal() -> Result<()> {
     let _ = pkt.marshal_to(&mut raw)?;
 
     let raw = raw.freeze();
-    let p = Packet::unmarshal(&raw)?;
+    let buf = &mut raw.clone();
+    let p = Packet::unmarshal(buf)?;
 
     assert_eq!(pkt, p);
 
@@ -170,7 +175,8 @@ fn test_rfc8285_one_byte_extension() -> Result<()> {
         0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0xBE, 0xDE, 0x00,
         0x01, 0x50, 0xAA, 0x00, 0x00, 0x98, 0x36, 0xbe, 0x88, 0x9e,
     ]);
-    Packet::unmarshal(&raw_pkt)?;
+    let buf = &mut raw_pkt.clone();
+    Packet::unmarshal(buf)?;
 
     let p = Packet {
         header: Header {
@@ -213,7 +219,8 @@ fn test_rfc8285one_byte_two_extension_of_two_bytes() -> Result<()> {
         0x01, 0x10, 0xAA, 0x20, 0xBB, // Payload
         0x98, 0x36, 0xbe, 0x88, 0x9e,
     ]);
-    let p = Packet::unmarshal(&raw_pkt)?;
+    let buf = &mut raw_pkt.clone();
+    let p = Packet::unmarshal(buf)?;
 
     let ext1 = p.header.get_extension(1);
     let ext1_expect = Bytes::from_static(&[0xAA]);
@@ -285,8 +292,8 @@ fn test_rfc8285_one_byte_multiple_extensions_with_padding() -> Result<()> {
         // Payload
         0x98, 0x36, 0xbe, 0x88, 0x9e,
     ]);
-
-    let packet = Packet::unmarshal(&raw_pkt)?;
+    let buf = &mut raw_pkt.clone();
+    let packet = Packet::unmarshal(buf)?;
     let ext1 = packet
         .header
         .get_extension(1)
