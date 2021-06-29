@@ -18,8 +18,11 @@
  <a href="https://docs.rs/webrtc"> 
   <img src="https://docs.rs/webrtc/badge.svg">
  </a>
- <a href="https://github.com/webrtc-rs/webrtc/blob/master/LICENSE">
+ <a href="https://github.com/webrtc-rs/webrtc/blob/master/LICENSE-MIT">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
+ </a>
+  <a href="https://github.com/webrtc-rs/webrtc/blob/master/LICENSE-APACHE">
+  <img src="https://img.shields.io/badge/License-APACHE-yellow.svg" alt="License: APACHE">
  </a>
  <a href="https://discord.gg/4Ju8UHdXMs">
   <img src="https://img.shields.io/discord/800204819540869120?logo=discord" alt="Discord">
