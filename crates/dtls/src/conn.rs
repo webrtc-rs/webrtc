@@ -324,7 +324,7 @@ impl DTLSConn {
                                 srv_cli_str(is_client),
                                 err
                             );
-                            if err.to_string() == Error::ErrAlertFatalOrClose.to_string() {
+                            if Error::ErrAlertFatalOrClose.equal(&err) {
                                 break;
                             }
                         }
