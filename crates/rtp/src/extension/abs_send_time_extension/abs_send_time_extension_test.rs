@@ -7,7 +7,7 @@ use std::time::Duration;
 const ABS_SEND_TIME_RESOLUTION: i128 = 1000;
 
 #[test]
-fn test_ntp_conversion() -> Result<(), Error> {
+fn test_ntp_conversion() -> Result<()> {
     let loc = FixedOffset::west(5 * 60 * 60); // UTC-5
     let tests = vec![
         (
@@ -46,7 +46,7 @@ fn test_ntp_conversion() -> Result<(), Error> {
 }
 
 #[test]
-fn test_abs_send_time_extension_roundtrip() -> Result<(), Error> {
+fn test_abs_send_time_extension_roundtrip() -> Result<()> {
     let tests = vec![
         AbsSendTimeExtension { timestamp: 123456 },
         AbsSendTimeExtension { timestamp: 654321 },
@@ -64,7 +64,7 @@ fn test_abs_send_time_extension_roundtrip() -> Result<(), Error> {
 }
 
 #[test]
-fn test_abs_send_time_extension_estimate() -> Result<(), Error> {
+fn test_abs_send_time_extension_estimate() -> Result<()> {
     let tests = vec![
         //FFFFFFC000000000 mask of second
         (0xa0c65b1000100000, 0xa0c65b1001000000), // not carried

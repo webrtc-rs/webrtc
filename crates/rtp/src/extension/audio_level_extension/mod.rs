@@ -3,6 +3,7 @@ mod audio_level_extension_test;
 
 use crate::{error::Error, packetizer::Marshaller};
 
+use anyhow::Result;
 use bytes::{BufMut, Bytes, BytesMut};
 
 // AUDIO_LEVEL_EXTENSION_SIZE One byte header size
@@ -35,9 +36,9 @@ pub struct AudioLevelExtension {
 
 impl Marshaller for AudioLevelExtension {
     /// Unmarshal parses the passed byte slice and stores the result in the members
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
         if raw_packet.len() < AUDIO_LEVEL_EXTENSION_SIZE {
-            return Err(Error::ErrTooSmall);
+            return Err(Error::ErrTooSmall.into());
         }
 
         let b = raw_packet[0];
@@ -54,9 +55,9 @@ impl Marshaller for AudioLevelExtension {
     }
 
     /// MarshalTo serializes the members to buffer
-    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error> {
+    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize> {
         if self.level > 127 {
-            return Err(Error::AudioLevelOverflow);
+            return Err(Error::AudioLevelOverflow.into());
         }
         let voice = if self.voice { 0x80u8 } else { 0u8 };
 

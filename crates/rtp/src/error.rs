@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Error, Debug, PartialEq)]
 pub enum Error {
     #[error("RTP header size insufficient")]
     ErrHeaderSizeInsufficient,
@@ -47,8 +47,14 @@ pub enum Error {
     StapASizeLargerThanBuffer(usize, usize),
     #[error("nalu type {0} is currently not handled")]
     NaluTypeIsNotHandled(u8),
-    #[error("SystemTimeError: {0}")]
-    SystemTime(#[from] std::time::SystemTimeError),
-    #[error("IoError: {0}")]
-    Io(#[from] std::io::Error),
+
+    #[allow(non_camel_case_types)]
+    #[error("{0}")]
+    new(String),
+}
+
+impl Error {
+    pub fn equal(&self, err: &anyhow::Error) -> bool {
+        err.downcast_ref::<Self>().map_or(false, |e| e == self)
+    }
 }

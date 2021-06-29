@@ -6,6 +6,7 @@ use crate::{
     packetizer::{Depacketizer, Payloader},
 };
 
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 pub const VP8_HEADER_SIZE: isize = 1;
@@ -15,7 +16,7 @@ pub struct Vp8Payloader;
 
 impl Payloader for Vp8Payloader {
     /// Payload fragments a VP8 packet across one or more byte arrays
-    fn payload(&self, mtu: usize, payload: &Bytes) -> Result<Vec<Bytes>, Error> {
+    fn payload(&self, mtu: usize, payload: &Bytes) -> Result<Vec<Bytes>> {
         if payload.is_empty() || mtu == 0 {
             return Ok(vec![]);
         }
@@ -99,9 +100,9 @@ pub struct Vp8Packet {
 
 impl Depacketizer for Vp8Packet {
     /// depacketize parses the passed byte slice and stores the result in the VP8Packet this method is called upon
-    fn depacketize(&mut self, packet: &Bytes) -> Result<(), Error> {
+    fn depacketize(&mut self, packet: &Bytes) -> Result<()> {
         if packet.len() < 4 {
-            return Err(Error::ErrShortPacket);
+            return Err(Error::ErrShortPacket.into());
         }
         //    0 1 2 3 4 5 6 7                      0 1 2 3 4 5 6 7
         //    +-+-+-+-+-+-+-+-+                   +-+-+-+-+-+-+-+-+
@@ -170,7 +171,7 @@ impl Depacketizer for Vp8Packet {
         }
 
         if payload_index >= packet.len() {
-            return Err(Error::ErrShortPacket);
+            return Err(Error::ErrShortPacket.into());
         }
 
         self.payload = packet.slice(payload_index..);

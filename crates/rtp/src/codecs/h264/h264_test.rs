@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn test_h264_payload() -> Result<(), Error> {
+fn test_h264_payload() -> Result<()> {
     let empty = Bytes::from_static(&[]);
     let small_payload = Bytes::from_static(&[0x90, 0x90, 0x90]);
     let multiple_payload = Bytes::from_static(&[0x00, 0x00, 0x01, 0x90, 0x00, 0x00, 0x01, 0x90]);
@@ -68,7 +68,7 @@ fn test_h264_payload() -> Result<(), Error> {
 }
 
 #[test]
-fn test_h264packet_unmarshal() -> Result<(), Error> {
+fn test_h264packet_unmarshal() -> Result<()> {
     let single_payload = Bytes::from_static(&[0x90, 0x90, 0x90]);
     let single_payload_unmarshaled =
         Bytes::from_static(&[0x00, 0x00, 0x00, 0x01, 0x90, 0x90, 0x90]);

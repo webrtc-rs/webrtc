@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn test_opus_unmarshal() -> Result<(), Error> {
+fn test_opus_unmarshal() -> Result<()> {
     let mut pck = OpusPacket::default();
 
     // Empty packet
@@ -18,7 +18,7 @@ fn test_opus_unmarshal() -> Result<(), Error> {
 }
 
 #[test]
-fn test_opus_payload() -> Result<(), Error> {
+fn test_opus_payload() -> Result<()> {
     let pck = OpusPayloader;
     let empty = Bytes::from_static(&[]);
     let payload = Bytes::from_static(&[0x90, 0x90, 0x90]);

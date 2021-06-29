@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn test_audio_level_extension_too_small() -> Result<(), Error> {
+fn test_audio_level_extension_too_small() -> Result<()> {
     let raw = Bytes::from_static(&[]);
     let result = AudioLevelExtension::unmarshal(&raw);
     assert!(result.is_err());
@@ -10,7 +10,7 @@ fn test_audio_level_extension_too_small() -> Result<(), Error> {
 }
 
 #[test]
-fn test_audio_level_extension_voice_true() -> Result<(), Error> {
+fn test_audio_level_extension_voice_true() -> Result<()> {
     let raw = Bytes::from_static(&[0x88]);
     let a1 = AudioLevelExtension::unmarshal(&raw)?;
     let a2 = AudioLevelExtension {
@@ -27,7 +27,7 @@ fn test_audio_level_extension_voice_true() -> Result<(), Error> {
 }
 
 #[test]
-fn test_audio_level_extension_voice_false() -> Result<(), Error> {
+fn test_audio_level_extension_voice_false() -> Result<()> {
     let raw = Bytes::from_static(&[0x8]);
     let a1 = AudioLevelExtension::unmarshal(&raw)?;
     let a2 = AudioLevelExtension {
@@ -44,7 +44,7 @@ fn test_audio_level_extension_voice_false() -> Result<(), Error> {
 }
 
 #[test]
-fn test_audio_level_extension_level_overflow() -> Result<(), Error> {
+fn test_audio_level_extension_level_overflow() -> Result<()> {
     let a = AudioLevelExtension {
         level: 128,
         voice: false,

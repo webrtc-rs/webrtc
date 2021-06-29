@@ -3,6 +3,7 @@ mod abs_send_time_extension_test;
 
 use crate::{error::Error, packetizer::Marshaller};
 
+use anyhow::Result;
 use bytes::{BufMut, Bytes, BytesMut};
 use std::time::Duration;
 
@@ -16,9 +17,9 @@ pub struct AbsSendTimeExtension {
 
 impl Marshaller for AbsSendTimeExtension {
     /// Unmarshal parses the passed byte slice and stores the result in the members.
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
         if raw_packet.len() < ABS_SEND_TIME_EXTENSION_SIZE {
-            return Err(Error::ErrTooSmall);
+            return Err(Error::ErrTooSmall.into());
         }
 
         let b0 = raw_packet[0];
@@ -35,7 +36,7 @@ impl Marshaller for AbsSendTimeExtension {
     }
 
     /// MarshalTo serializes the members to buffer.
-    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error> {
+    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize> {
         buf.put_u8(((self.timestamp & 0xFF0000) >> 16) as u8);
         buf.put_u8(((self.timestamp & 0xFF00) >> 8) as u8);
         buf.put_u8((self.timestamp & 0xFF) as u8);

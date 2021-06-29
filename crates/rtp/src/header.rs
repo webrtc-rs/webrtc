@@ -1,6 +1,7 @@
 use crate::error::*;
-
 use crate::packetizer::Marshaller;
+
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 pub const HEADER_LENGTH: usize = 4;
@@ -51,9 +52,9 @@ pub struct Header {
 
 impl Marshaller for Header {
     /// Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
         if raw_packet.len() < HEADER_LENGTH {
-            return Err(Error::ErrHeaderSizeInsufficient);
+            return Err(Error::ErrHeaderSizeInsufficient.into());
         }
         /*
          *  0                   1                   2                   3
@@ -79,7 +80,7 @@ impl Marshaller for Header {
 
         let mut curr_offset = CSRC_OFFSET + (cc * CSRC_LENGTH);
         if raw_packet.len() < curr_offset {
-            return Err(Error::ErrHeaderSizeInsufficient);
+            return Err(Error::ErrHeaderSizeInsufficient.into());
         }
 
         let b1 = reader.get_u8();
@@ -98,7 +99,7 @@ impl Marshaller for Header {
         let (extension_profile, extensions) = if extension {
             let expected = curr_offset + 4;
             if raw_packet.len() < expected {
-                return Err(Error::ErrHeaderSizeInsufficientForExtension);
+                return Err(Error::ErrHeaderSizeInsufficientForExtension.into());
             }
             let extension_profile = reader.get_u16();
             curr_offset += 2;
@@ -107,7 +108,7 @@ impl Marshaller for Header {
 
             let expected = curr_offset + extension_length;
             if raw_packet.len() < expected {
-                return Err(Error::ErrHeaderSizeInsufficientForExtension);
+                return Err(Error::ErrHeaderSizeInsufficientForExtension.into());
             }
 
             let mut extensions = vec![];
@@ -167,7 +168,7 @@ impl Marshaller for Header {
                 // RFC3550 Extension
                 _ => {
                     if raw_packet.len() < curr_offset + extension_length {
-                        return Err(Error::ErrHeaderSizeInsufficientForExtension);
+                        return Err(Error::ErrHeaderSizeInsufficientForExtension.into());
                     }
                     extensions.push(Extension {
                         id: 0,
@@ -210,7 +211,7 @@ impl Marshaller for Header {
     }
 
     /// Marshal serializes the header and writes to the buffer.
-    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error> {
+    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize> {
         /*
          *  0                   1                   2                   3
          *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -266,7 +267,7 @@ impl Marshaller for Header {
                 && extension_payload_len % 4 != 0
             {
                 //the payload must be in 32-bit words.
-                return Err(Error::HeaderExtensionPayloadNot32BitWords);
+                return Err(Error::HeaderExtensionPayloadNot32BitWords.into());
             }
             let extension_payload_size = (extension_payload_len as u16 + 3) / 4;
             writer.put_u16(extension_payload_size);
@@ -296,13 +297,13 @@ impl Marshaller for Header {
                 // RFC3550 Extension
                 _ => {
                     if self.extensions.len() != 1 {
-                        return Err(Error::ErrRfc3550headerIdrange);
+                        return Err(Error::ErrRfc3550headerIdrange.into());
                     }
 
                     if let Some(extension) = self.extensions.first() {
                         let ext_len = extension.payload.len();
                         if ext_len % 4 != 0 {
-                            return Err(Error::HeaderExtensionPayloadNot32BitWords);
+                            return Err(Error::HeaderExtensionPayloadNot32BitWords.into());
                         }
                         writer.put(&*extension.payload);
                         n += ext_len;
@@ -346,28 +347,28 @@ impl Header {
     }
 
     /// SetExtension sets an RTP header extension
-    pub fn set_extension(&mut self, id: u8, payload: Bytes) -> Result<(), Error> {
+    pub fn set_extension(&mut self, id: u8, payload: Bytes) -> Result<()> {
         if self.extension {
             match self.extension_profile {
                 EXTENSION_PROFILE_ONE_BYTE => {
                     if !(1..=14).contains(&id) {
-                        return Err(Error::ErrRfc8285oneByteHeaderIdrange);
+                        return Err(Error::ErrRfc8285oneByteHeaderIdrange.into());
                     }
                     if payload.len() > 16 {
-                        return Err(Error::ErrRfc8285oneByteHeaderSize);
+                        return Err(Error::ErrRfc8285oneByteHeaderSize.into());
                     }
                 }
                 EXTENSION_PROFILE_TWO_BYTE => {
                     if id < 1 {
-                        return Err(Error::ErrRfc8285twoByteHeaderIdrange);
+                        return Err(Error::ErrRfc8285twoByteHeaderIdrange.into());
                     }
                     if payload.len() > 255 {
-                        return Err(Error::ErrRfc8285twoByteHeaderSize);
+                        return Err(Error::ErrRfc8285twoByteHeaderSize.into());
                     }
                 }
                 _ => {
                     if id != 0 {
-                        return Err(Error::ErrRfc3550headerIdrange);
+                        return Err(Error::ErrRfc3550headerIdrange.into());
                     }
                 }
             };
@@ -413,9 +414,9 @@ impl Header {
     }
 
     /// Removes an RTP Header extension
-    pub fn del_extension(&mut self, id: u8) -> Result<(), Error> {
+    pub fn del_extension(&mut self, id: u8) -> Result<()> {
         if !self.extension {
-            return Err(Error::ErrHeaderExtensionsNotEnabled);
+            return Err(Error::ErrHeaderExtensionsNotEnabled.into());
         }
         for index in 0..self.extensions.len() {
             if self.extensions[index].id == id {
@@ -423,6 +424,6 @@ impl Header {
                 return Ok(());
             }
         }
-        Err(Error::ErrHeaderExtensionNotFound)
+        Err(Error::ErrHeaderExtensionNotFound.into())
     }
 }

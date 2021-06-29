@@ -3,6 +3,7 @@ mod packet_test;
 
 use crate::{error::Error, header::*, packetizer::Marshaller};
 
+use anyhow::Result;
 use bytes::{BufMut, Bytes, BytesMut};
 use std::fmt;
 
@@ -32,7 +33,7 @@ impl fmt::Display for Packet {
 
 impl Marshaller for Packet {
     /// Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
         let header = Header::unmarshal(raw_packet)?;
         let payload = raw_packet.slice(header.marshal_size()..);
         if header.padding && !payload.is_empty() {
@@ -44,7 +45,7 @@ impl Marshaller for Packet {
                     payload: payload.slice(..payload_len - padding_len),
                 })
             } else {
-                Err(Error::ErrShortPacket)
+                Err(Error::ErrShortPacket.into())
             }
         } else {
             Ok(Packet { header, payload })
@@ -63,7 +64,7 @@ impl Marshaller for Packet {
     }
 
     /// MarshalTo serializes the packet and writes to the buffer.
-    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error> {
+    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize> {
         let n = self.header.marshal_to(buf)?;
         buf.put(&*self.payload);
         let padding_len = if self.header.padding {

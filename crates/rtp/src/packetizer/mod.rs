@@ -1,21 +1,20 @@
 #[cfg(test)]
 mod packetizer_test;
 
-use crate::{
-    error::Error, extension::abs_send_time_extension::*, header::*, packet::*, sequence::*,
-};
+use crate::{extension::abs_send_time_extension::*, header::*, packet::*, sequence::*};
 
+use anyhow::Result;
 use bytes::{Bytes, BytesMut};
 use std::marker::Sized;
 use std::time::{Duration, SystemTime};
 
 pub trait Marshaller {
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error>
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self>
     where
         Self: Sized;
     fn marshal_size(&self) -> usize;
-    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error>;
-    fn marshal(&self) -> Result<Bytes, Error> {
+    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize>;
+    fn marshal(&self) -> Result<Bytes> {
         let mut buf = BytesMut::with_capacity(self.marshal_size());
         let _ = self.marshal_to(&mut buf)?;
         Ok(buf.freeze())
@@ -24,18 +23,18 @@ pub trait Marshaller {
 
 /// Payloader payloads a byte array for use as rtp.Packet payloads
 pub trait Payloader {
-    fn payload(&self, mtu: usize, b: &Bytes) -> Result<Vec<Bytes>, Error>;
+    fn payload(&self, mtu: usize, b: &Bytes) -> Result<Vec<Bytes>>;
 }
 
 /// Packetizer packetizes a payload
 pub trait Packetizer {
     fn enable_abs_send_time(&mut self, value: u8);
-    fn packetize(&mut self, payload: &Bytes, samples: u32) -> Result<Vec<Packet>, Error>;
+    fn packetize(&mut self, payload: &Bytes, samples: u32) -> Result<Vec<Packet>>;
 }
 
 /// Depacketizer depacketizes a RTP payload, removing any RTP specific data from the payload
 pub trait Depacketizer {
-    fn depacketize(&mut self, b: &Bytes) -> Result<(), Error>;
+    fn depacketize(&mut self, b: &Bytes) -> Result<()>;
 }
 
 pub type FnTimeGen = fn() -> Duration;
@@ -78,7 +77,7 @@ impl<P: Payloader, S: Sequencer> Packetizer for PacketizerImpl<P, S> {
         self.abs_send_time = value
     }
 
-    fn packetize(&mut self, payload: &Bytes, samples: u32) -> Result<Vec<Packet>, Error> {
+    fn packetize(&mut self, payload: &Bytes, samples: u32) -> Result<Vec<Packet>> {
         let payloads = self.payloader.payload(self.mtu - 12, payload)?;
         let mut packets = vec![];
         let (mut i, l) = (0, payloads.len());

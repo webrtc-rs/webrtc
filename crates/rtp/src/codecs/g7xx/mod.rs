@@ -1,8 +1,9 @@
 #[cfg(test)]
 mod g7xx_test;
 
-use crate::{error::Error, packetizer::Payloader};
+use crate::packetizer::Payloader;
 
+use anyhow::Result;
 use bytes::Bytes;
 
 /// G711Payloader payloads G711 packets
@@ -14,7 +15,7 @@ pub struct G7xxPayloader;
 
 impl Payloader for G7xxPayloader {
     /// Payload fragments an G7xx packet across one or more byte arrays
-    fn payload(&self, mtu: usize, payload: &Bytes) -> Result<Vec<Bytes>, Error> {
+    fn payload(&self, mtu: usize, payload: &Bytes) -> Result<Vec<Bytes>> {
         if payload.is_empty() || mtu == 0 {
             return Ok(vec![]);
         }

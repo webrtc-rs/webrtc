@@ -6,6 +6,7 @@ use crate::{
     packetizer::{Depacketizer, Payloader},
 };
 
+use anyhow::Result;
 use bytes::{BufMut, Bytes, BytesMut};
 
 /// H264Payloader payloads H264 packets
@@ -118,7 +119,7 @@ fn emit(nalu: &Bytes, mtu: usize, payloads: &mut Vec<Bytes>) {
 
 impl Payloader for H264Payloader {
     /// Payload fragments a H264 packet across one or more byte arrays
-    fn payload(&self, mtu: usize, payload: &Bytes) -> Result<Vec<Bytes>, Error> {
+    fn payload(&self, mtu: usize, payload: &Bytes) -> Result<Vec<Bytes>> {
         if payload.is_empty() || mtu == 0 {
             return Ok(vec![]);
         }
@@ -159,9 +160,9 @@ pub struct H264Packet {
 
 impl Depacketizer for H264Packet {
     /// depacketize parses the passed byte slice and stores the result in the H264Packet this method is called upon
-    fn depacketize(&mut self, packet: &Bytes) -> Result<(), Error> {
+    fn depacketize(&mut self, packet: &Bytes) -> Result<()> {
         if packet.len() <= 2 {
-            return Err(Error::ErrShortPacket);
+            return Err(Error::ErrShortPacket.into());
         }
 
         let mut payload = BytesMut::new();
@@ -188,7 +189,8 @@ impl Depacketizer for H264Packet {
                         return Err(Error::StapASizeLargerThanBuffer(
                             nalu_size,
                             packet.len() - curr_offset,
-                        ));
+                        )
+                        .into());
                     }
                     payload.put(&*ANNEXB_NALUSTART_CODE);
                     payload.put(&*packet.slice(curr_offset..curr_offset + nalu_size));
@@ -199,7 +201,7 @@ impl Depacketizer for H264Packet {
             }
             FUA_NALU_TYPE => {
                 if packet.len() < FUA_HEADER_SIZE as usize {
-                    return Err(Error::ErrShortPacket);
+                    return Err(Error::ErrShortPacket.into());
                 }
 
                 let b1 = packet[1];
@@ -216,7 +218,7 @@ impl Depacketizer for H264Packet {
                     self.payload = packet.slice(FUA_HEADER_SIZE as usize..);
                 }
             }
-            _ => return Err(Error::NaluTypeIsNotHandled(nalu_type)),
+            _ => return Err(Error::NaluTypeIsNotHandled(nalu_type).into()),
         }
 
         Ok(())

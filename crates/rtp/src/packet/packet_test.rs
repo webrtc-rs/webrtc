@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn test_basic() -> Result<(), Error> {
+fn test_basic() -> Result<()> {
     let empty_bytes = Bytes::new();
     let result = Packet::unmarshal(&empty_bytes);
     assert!(
@@ -72,7 +72,7 @@ fn test_basic() -> Result<(), Error> {
 }
 
 #[test]
-fn test_extension() -> Result<(), Error> {
+fn test_extension() -> Result<()> {
     let missing_extension_pkt = Bytes::from_static(&[
         0x90, 0x60, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82,
     ]);
@@ -116,7 +116,7 @@ fn test_extension() -> Result<(), Error> {
 }
 
 #[test]
-fn test_padding() -> Result<(), Error> {
+fn test_padding() -> Result<()> {
     let raw_pkt = Bytes::from_static(&[
         0xa0, 0x60, 0x19, 0x58, 0x63, 0xff, 0x7d, 0x7c, 0x4b, 0x98, 0xd4, 0x0a, 0x67, 0x4d, 0x00,
         0x29, 0x9a, 0x64, 0x03, 0xc0, 0x11, 0x3f, 0x2c, 0xd4, 0x04, 0x04, 0x05, 0x00, 0x00, 0x03,
@@ -132,7 +132,7 @@ fn test_padding() -> Result<(), Error> {
 }
 
 #[test]
-fn test_packet_marshal_unmarshal() -> Result<(), Error> {
+fn test_packet_marshal_unmarshal() -> Result<()> {
     let pkt = Packet {
         header: Header {
             extension: true,
@@ -165,7 +165,7 @@ fn test_packet_marshal_unmarshal() -> Result<(), Error> {
 }
 
 #[test]
-fn test_rfc8285_one_byte_extension() -> Result<(), Error> {
+fn test_rfc8285_one_byte_extension() -> Result<()> {
     let raw_pkt = Bytes::from_static(&[
         0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0xBE, 0xDE, 0x00,
         0x01, 0x50, 0xAA, 0x00, 0x00, 0x98, 0x36, 0xbe, 0x88, 0x9e,
@@ -200,7 +200,7 @@ fn test_rfc8285_one_byte_extension() -> Result<(), Error> {
 }
 
 #[test]
-fn test_rfc8285one_byte_two_extension_of_two_bytes() -> Result<(), Error> {
+fn test_rfc8285one_byte_two_extension_of_two_bytes() -> Result<()> {
     //  0                   1                   2                   3
     //  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
     // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -266,7 +266,7 @@ fn test_rfc8285one_byte_two_extension_of_two_bytes() -> Result<(), Error> {
 }
 
 #[test]
-fn test_rfc8285_one_byte_multiple_extensions_with_padding() -> Result<(), Error> {
+fn test_rfc8285_one_byte_multiple_extensions_with_padding() -> Result<()> {
     //  0                   1                   2                   3
     //  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
     // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+

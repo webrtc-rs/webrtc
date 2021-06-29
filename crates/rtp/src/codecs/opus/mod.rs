@@ -6,12 +6,13 @@ use crate::{
     packetizer::{Depacketizer, Payloader},
 };
 
+use anyhow::Result;
 use bytes::Bytes;
 
 pub struct OpusPayloader;
 
 impl Payloader for OpusPayloader {
-    fn payload(&self, mtu: usize, payload: &Bytes) -> Result<Vec<Bytes>, Error> {
+    fn payload(&self, mtu: usize, payload: &Bytes) -> Result<Vec<Bytes>> {
         if payload.is_empty() || mtu == 0 {
             return Ok(vec![]);
         }
@@ -27,9 +28,9 @@ pub struct OpusPacket {
 }
 
 impl Depacketizer for OpusPacket {
-    fn depacketize(&mut self, packet: &Bytes) -> Result<(), Error> {
+    fn depacketize(&mut self, packet: &Bytes) -> Result<()> {
         if packet.is_empty() {
-            Err(Error::ErrShortPacket)
+            Err(Error::ErrShortPacket.into())
         } else {
             self.payload = packet.clone();
             Ok(())

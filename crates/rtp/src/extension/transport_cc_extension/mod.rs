@@ -3,6 +3,7 @@ mod transport_cc_extension_test;
 
 use crate::{error::Error, packetizer::Marshaller};
 
+use anyhow::Result;
 use bytes::{BufMut, Bytes, BytesMut};
 
 // transport-wide sequence
@@ -24,9 +25,9 @@ pub struct TransportCcExtension {
 
 impl Marshaller for TransportCcExtension {
     /// Unmarshal parses the passed byte slice and stores the result in the members
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
         if raw_packet.len() < TRANSPORT_CC_EXTENSION_SIZE {
-            return Err(Error::ErrTooSmall);
+            return Err(Error::ErrTooSmall.into());
         }
 
         let transport_sequence = ((raw_packet[0] as u16) << 8) | raw_packet[1] as u16;
@@ -39,7 +40,7 @@ impl Marshaller for TransportCcExtension {
     }
 
     /// Marshal serializes the members to buffer
-    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error> {
+    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize> {
         buf.put_u16(self.transport_sequence);
         Ok(TRANSPORT_CC_EXTENSION_SIZE)
     }

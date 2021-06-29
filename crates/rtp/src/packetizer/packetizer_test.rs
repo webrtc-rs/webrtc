@@ -5,7 +5,7 @@ use chrono::prelude::*;
 use std::time::Duration;
 
 #[test]
-fn test_packetizer() -> Result<(), Error> {
+fn test_packetizer() -> Result<()> {
     let multiple_payload = Bytes::from_static(&[0; 128]);
     let g722 = g7xx::G722Payloader {};
     let seq = new_random_sequencer();
@@ -37,7 +37,7 @@ fn fixed_time_gen() -> Duration {
 }
 
 #[test]
-fn test_packetizer_abs_send_time() -> Result<(), Error> {
+fn test_packetizer_abs_send_time() -> Result<()> {
     let g722 = g7xx::G722Payloader {};
     let sequencer = new_fixed_sequencer(1234);
 

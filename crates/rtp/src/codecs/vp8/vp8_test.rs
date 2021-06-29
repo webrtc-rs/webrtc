@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn test_vp8_unmarshal() -> Result<(), Error> {
+fn test_vp8_unmarshal() -> Result<()> {
     let mut pck = Vp8Packet::default();
 
     // Empty packet
@@ -100,7 +100,7 @@ fn test_vp8_unmarshal() -> Result<(), Error> {
 }
 
 #[test]
-fn test_vp8_payload() -> Result<(), Error> {
+fn test_vp8_payload() -> Result<()> {
     let pck = Vp8Payloader;
     let empty = Bytes::from_static(&[]);
     let payload = Bytes::from_static(&[0x90, 0x90, 0x90]);

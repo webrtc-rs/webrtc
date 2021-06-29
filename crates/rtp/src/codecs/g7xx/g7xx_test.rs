@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn test_g7xx_payload() -> Result<(), Error> {
+fn test_g7xx_payload() -> Result<()> {
     let pck = G711Payloader {};
 
     const TEST_LEN: usize = 10000;
