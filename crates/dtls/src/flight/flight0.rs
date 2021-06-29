@@ -8,20 +8,22 @@ use crate::handshake::*;
 use crate::record_layer::record_layer_header::*;
 use crate::*;
 
+use async_trait::async_trait;
 use rand::Rng;
-
+use std::fmt;
 use std::sync::atomic::Ordering;
 
-use async_trait::async_trait;
-
+#[derive(Debug, PartialEq)]
 pub(crate) struct Flight0;
+
+impl fmt::Display for Flight0 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Flight 0")
+    }
+}
 
 #[async_trait]
 impl Flight for Flight0 {
-    fn to_string(&self) -> String {
-        "Flight 0".to_owned()
-    }
-
     async fn parse(
         &self,
         _tx: &mut mpsc::Sender<mpsc::Sender<()>>,

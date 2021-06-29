@@ -18,18 +18,21 @@ use crate::handshake::*;
 use crate::record_layer::record_layer_header::*;
 use crate::record_layer::*;
 
+use async_trait::async_trait;
+use std::fmt;
 use std::sync::atomic::Ordering;
 
-use async_trait::async_trait;
-
+#[derive(Debug, PartialEq)]
 pub(crate) struct Flight1;
+
+impl fmt::Display for Flight1 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Flight 1")
+    }
+}
 
 #[async_trait]
 impl Flight for Flight1 {
-    fn to_string(&self) -> String {
-        "Flight 1".to_owned()
-    }
-
     async fn parse(
         &self,
         tx: &mut mpsc::Sender<mpsc::Sender<()>>,

@@ -25,20 +25,22 @@ use crate::record_layer::record_layer_header::*;
 use crate::record_layer::*;
 use crate::signature_hash_algorithm::*;
 
+use async_trait::async_trait;
+use log::*;
+use std::fmt;
 use std::io::BufWriter;
 
-use log::*;
-
-use async_trait::async_trait;
-
+#[derive(Debug, PartialEq)]
 pub(crate) struct Flight4;
+
+impl fmt::Display for Flight4 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Flight 4")
+    }
+}
 
 #[async_trait]
 impl Flight for Flight4 {
-    fn to_string(&self) -> String {
-        "Flight 4".to_owned()
-    }
-
     async fn parse(
         &self,
         tx: &mut mpsc::Sender<mpsc::Sender<()>>,

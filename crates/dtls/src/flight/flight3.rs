@@ -22,18 +22,21 @@ use crate::cipher_suite::cipher_suite_for_id;
 use crate::prf::{prf_pre_master_secret, prf_psk_pre_master_secret};
 use crate::{find_matching_cipher_suite, find_matching_srtp_profile};
 
-use log::*;
-
 use async_trait::async_trait;
+use log::*;
+use std::fmt;
 
+#[derive(Debug, PartialEq)]
 pub(crate) struct Flight3;
+
+impl fmt::Display for Flight3 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Flight 3")
+    }
+}
 
 #[async_trait]
 impl Flight for Flight3 {
-    fn to_string(&self) -> String {
-        "Flight 3".to_owned()
-    }
-
     async fn parse(
         &self,
         _tx: &mut mpsc::Sender<mpsc::Sender<()>>,

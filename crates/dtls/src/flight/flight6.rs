@@ -7,15 +7,19 @@ use crate::prf::*;
 use crate::record_layer::record_layer_header::*;
 
 use async_trait::async_trait;
+use std::fmt;
 
+#[derive(Debug, PartialEq)]
 pub(crate) struct Flight6;
+
+impl fmt::Display for Flight6 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Flight 6")
+    }
+}
 
 #[async_trait]
 impl Flight for Flight6 {
-    fn to_string(&self) -> String {
-        "Flight 6".to_owned()
-    }
-
     fn is_last_send_flight(&self) -> bool {
         true
     }

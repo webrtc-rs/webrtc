@@ -1,5 +1,6 @@
 use super::flight3::*;
 use super::*;
+use crate::change_cipher_spec::ChangeCipherSpec;
 use crate::content::*;
 use crate::crypto::*;
 use crate::curve::named_curve::*;
@@ -16,19 +17,21 @@ use crate::record_layer::record_layer_header::*;
 use crate::record_layer::*;
 use crate::signature_hash_algorithm::*;
 
-use crate::change_cipher_spec::ChangeCipherSpec;
+use async_trait::async_trait;
+use std::fmt;
 use std::io::{BufReader, BufWriter};
 
-use async_trait::async_trait;
-
+#[derive(Debug, PartialEq)]
 pub(crate) struct Flight5;
+
+impl fmt::Display for Flight5 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Flight 5")
+    }
+}
 
 #[async_trait]
 impl Flight for Flight5 {
-    fn to_string(&self) -> String {
-        "Flight 5".to_owned()
-    }
-
     fn is_last_recv_flight(&self) -> bool {
         true
     }
