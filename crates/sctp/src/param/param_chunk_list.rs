@@ -1,6 +1,7 @@
 use super::{param_header::*, param_type::*, *};
 use crate::chunk::chunk_type::*;
 
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 #[derive(Default, Debug, Clone, PartialEq)]
@@ -31,11 +32,11 @@ impl Param for ParamChunkList {
         }
     }
 
-    fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw: &Bytes) -> Result<Self> {
         let header = ParamHeader::unmarshal(raw)?;
 
         if header.typ != ParamType::ChunkList {
-            return Err(Error::ErrParamTypeUnexpected);
+            return Err(Error::ErrParamTypeUnexpected.into());
         }
 
         let reader =
@@ -49,7 +50,7 @@ impl Param for ParamChunkList {
         Ok(ParamChunkList { chunk_types })
     }
 
-    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error> {
+    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize> {
         self.header().marshal_to(buf)?;
         for ct in &self.chunk_types {
             buf.put_u8(ct.0);

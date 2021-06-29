@@ -1,6 +1,7 @@
 use super::{chunk_header::*, chunk_type::*, *};
 use crate::error_cause::*;
 
+use anyhow::Result;
 use bytes::{Bytes, BytesMut};
 use std::fmt;
 
@@ -50,11 +51,11 @@ impl Chunk for ChunkAbort {
         }
     }
 
-    fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw: &Bytes) -> Result<Self> {
         let header = ChunkHeader::unmarshal(raw)?;
 
         if header.typ != CT_ABORT {
-            return Err(Error::ErrChunkTypeNotAbort);
+            return Err(Error::ErrChunkTypeNotAbort.into());
         }
 
         let mut error_causes = vec![];
@@ -70,7 +71,7 @@ impl Chunk for ChunkAbort {
         Ok(ChunkAbort { error_causes })
     }
 
-    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error> {
+    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize> {
         self.header().marshal_to(buf)?;
         for ec in &self.error_causes {
             buf.extend(ec.marshal());
@@ -78,7 +79,7 @@ impl Chunk for ChunkAbort {
         Ok(buf.len())
     }
 
-    fn check(&self) -> Result<(), Error> {
+    fn check(&self) -> Result<()> {
         Ok(())
     }
 

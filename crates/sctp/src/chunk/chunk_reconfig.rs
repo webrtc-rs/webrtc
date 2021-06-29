@@ -1,7 +1,8 @@
 use super::{chunk_header::*, chunk_type::*, *};
 use crate::param::{param_header::*, *};
-
 use crate::util::get_padding_size;
+
+use anyhow::Result;
 use bytes::{Bytes, BytesMut};
 use std::fmt;
 
@@ -59,11 +60,11 @@ impl Chunk for ChunkReconfig {
         }
     }
 
-    fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw: &Bytes) -> Result<Self> {
         let header = ChunkHeader::unmarshal(raw)?;
 
         if header.typ != CT_RECONFIG {
-            return Err(Error::ErrChunkTypeNotReconfig);
+            return Err(Error::ErrChunkTypeNotReconfig.into());
         }
 
         let param_a =
@@ -85,14 +86,14 @@ impl Chunk for ChunkReconfig {
         })
     }
 
-    fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize, Error> {
+    fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize> {
         self.header().marshal_to(writer)?;
 
         let param_a_value_length = if let Some(param_a) = &self.param_a {
             writer.extend(param_a.marshal()?);
             param_a.value_length()
         } else {
-            return Err(Error::ErrChunkReconfigInvalidParamA);
+            return Err(Error::ErrChunkReconfigInvalidParamA.into());
         };
 
         if let Some(param_b) = &self.param_b {
@@ -104,7 +105,7 @@ impl Chunk for ChunkReconfig {
         Ok(writer.len())
     }
 
-    fn check(&self) -> Result<(), Error> {
+    fn check(&self) -> Result<()> {
         Ok(())
     }
 

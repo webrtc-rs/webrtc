@@ -1,8 +1,9 @@
 use super::{chunk_header::*, chunk_type::*, *};
+use crate::param::param_supported_extensions::ParamSupportedExtensions;
 use crate::param::{param_header::*, *};
 use crate::util::get_padding_size;
 
-use crate::param::param_supported_extensions::ParamSupportedExtensions;
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 
@@ -127,20 +128,20 @@ impl Chunk for ChunkInit {
     ///|                       Parameter Value                         |
     ///|                                                               |
     ///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw: &Bytes) -> Result<Self> {
         let header = ChunkHeader::unmarshal(raw)?;
 
         if !(header.typ == CT_INIT || header.typ == CT_INIT_ACK) {
-            return Err(Error::ErrChunkTypeNotTypeInit);
+            return Err(Error::ErrChunkTypeNotTypeInit.into());
         } else if raw.len() < CHUNK_HEADER_SIZE + INIT_CHUNK_MIN_LENGTH {
-            return Err(Error::ErrChunkValueNotLongEnough);
+            return Err(Error::ErrChunkValueNotLongEnough.into());
         }
 
         // The Chunk Flags field in INIT is reserved, and all bits in it should
         // be set to 0 by the sender and ignored by the receiver.  The sequence
         // of parameters within an INIT can be processed in any order.
         if header.flags != 0 {
-            return Err(Error::ErrChunkTypeInitFlagZero);
+            return Err(Error::ErrChunkTypeInitFlagZero.into());
         }
 
         let reader = &mut raw.slice(CHUNK_HEADER_SIZE..CHUNK_HEADER_SIZE + header.value_length());
@@ -174,7 +175,7 @@ impl Chunk for ChunkInit {
         })
     }
 
-    fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize, Error> {
+    fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize> {
         self.header().marshal_to(writer)?;
 
         writer.put_u32(self.initiate_tag);
@@ -203,7 +204,7 @@ impl Chunk for ChunkInit {
         Ok(writer.len())
     }
 
-    fn check(&self) -> Result<(), Error> {
+    fn check(&self) -> Result<()> {
         // The receiver of the INIT (the responding end) records the value of
         // the Initiate Tag parameter.  This value MUST be placed into the
         // Verification Tag field of every SCTP packet that the receiver of
@@ -216,7 +217,7 @@ impl Chunk for ChunkInit {
         // to be 0, the receiver MUST treat it as an error and close the
         // association by transmitting an ABORT.
         if self.initiate_tag == 0 {
-            return Err(Error::ErrChunkTypeInitInitateTagZero);
+            return Err(Error::ErrChunkTypeInitInitateTagZero.into());
         }
 
         // Defines the maximum number of streams the sender of this INIT
@@ -230,7 +231,7 @@ impl Chunk for ChunkInit {
         // Note: A receiver of an INIT with the MIS value of 0 SHOULD abort
         // the association.
         if self.num_inbound_streams == 0 {
-            return Err(Error::ErrInitInboundStreamRequestZero);
+            return Err(Error::ErrInitInboundStreamRequestZero.into());
         }
 
         // Defines the number of outbound streams the sender of this INIT
@@ -241,7 +242,7 @@ impl Chunk for ChunkInit {
         // abort the association.
 
         if self.num_outbound_streams == 0 {
-            return Err(Error::ErrInitOutboundStreamRequestZero);
+            return Err(Error::ErrInitOutboundStreamRequestZero.into());
         }
 
         // An SCTP receiver MUST be able to receive a minimum of 1500 bytes in
@@ -249,7 +250,7 @@ impl Chunk for ChunkInit {
         // less than 1500 bytes in its initial a_rwnd sent in the INIT or INIT
         // ACK.
         if self.advertised_receiver_window_credit < 1500 {
-            return Err(Error::ErrInitAdvertisedReceiver1500);
+            return Err(Error::ErrInitAdvertisedReceiver1500.into());
         }
 
         Ok(())

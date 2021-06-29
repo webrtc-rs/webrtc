@@ -1,6 +1,7 @@
 use super::{chunk_header::*, chunk_type::*, *};
 use crate::param::{param_header::*, param_type::*, *};
 
+use anyhow::Result;
 use bytes::{Bytes, BytesMut};
 use std::fmt;
 
@@ -51,28 +52,28 @@ impl Chunk for ChunkHeartbeat {
         }
     }
 
-    fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw: &Bytes) -> Result<Self> {
         let header = ChunkHeader::unmarshal(raw)?;
 
         if header.typ != CT_HEARTBEAT {
-            return Err(Error::ErrChunkTypeNotHeartbeat);
+            return Err(Error::ErrChunkTypeNotHeartbeat.into());
         }
 
         if raw.len() <= CHUNK_HEADER_SIZE {
-            return Err(Error::ErrHeartbeatNotLongEnoughInfo);
+            return Err(Error::ErrHeartbeatNotLongEnoughInfo.into());
         }
 
         let p =
             build_param(&raw.slice(CHUNK_HEADER_SIZE..CHUNK_HEADER_SIZE + header.value_length()))?;
         if p.header().typ != ParamType::HeartbeatInfo {
-            return Err(Error::ErrHeartbeatParam);
+            return Err(Error::ErrHeartbeatParam.into());
         }
         let params = vec![p];
 
         Ok(ChunkHeartbeat { params })
     }
 
-    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error> {
+    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize> {
         self.header().marshal_to(buf)?;
         for p in &self.params {
             buf.extend(p.marshal()?);
@@ -80,7 +81,7 @@ impl Chunk for ChunkHeartbeat {
         Ok(buf.len())
     }
 
-    fn check(&self) -> Result<(), Error> {
+    fn check(&self) -> Result<()> {
         Ok(())
     }
 

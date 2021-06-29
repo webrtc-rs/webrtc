@@ -1,5 +1,6 @@
 use super::{chunk_header::*, chunk_type::*, *};
 
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 
@@ -35,15 +36,15 @@ impl Chunk for ChunkShutdown {
         }
     }
 
-    fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw: &Bytes) -> Result<Self> {
         let header = ChunkHeader::unmarshal(raw)?;
 
         if header.typ != CT_SHUTDOWN {
-            return Err(Error::ErrChunkTypeNotShutdown);
+            return Err(Error::ErrChunkTypeNotShutdown.into());
         }
 
         if raw.len() != CHUNK_HEADER_SIZE + CUMULATIVE_TSN_ACK_LENGTH {
-            return Err(Error::ErrInvalidChunkSize);
+            return Err(Error::ErrInvalidChunkSize.into());
         }
 
         let reader = &mut raw.slice(CHUNK_HEADER_SIZE..CHUNK_HEADER_SIZE + header.value_length());
@@ -53,13 +54,13 @@ impl Chunk for ChunkShutdown {
         Ok(ChunkShutdown { cumulative_tsn_ack })
     }
 
-    fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize, Error> {
+    fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize> {
         self.header().marshal_to(writer)?;
         writer.put_u32(self.cumulative_tsn_ack);
         Ok(writer.len())
     }
 
-    fn check(&self) -> Result<(), Error> {
+    fn check(&self) -> Result<()> {
         Ok(())
     }
 

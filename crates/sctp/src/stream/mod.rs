@@ -7,6 +7,7 @@ use crate::error::Error;
 use crate::queue::reassembly_queue::ReassemblyQueue;
 
 use crate::queue::pending_queue::PendingQueue;
+use anyhow::Result;
 use bytes::Bytes;
 use std::fmt;
 use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, AtomicUsize, Ordering};
@@ -163,7 +164,7 @@ impl Stream {
     /// read reads a packet of len(p) bytes, dropping the Payload Protocol Identifier.
     /// Returns EOF when the stream is reset or an error if the stream is closed
     /// otherwise.
-    pub async fn read(&self, p: &mut [u8]) -> Result<usize, Error> {
+    pub async fn read(&self, p: &mut [u8]) -> Result<usize> {
         let (n, _) = self.read_sctp(p).await?;
         Ok(n)
     }
@@ -172,10 +173,7 @@ impl Stream {
     /// Protocol Identifier.
     /// Returns EOF when the stream is reset or an error if the stream is closed
     /// otherwise.
-    pub async fn read_sctp(
-        &self,
-        p: &mut [u8],
-    ) -> Result<(usize, PayloadProtocolIdentifier), Error> {
+    pub async fn read_sctp(&self, p: &mut [u8]) -> Result<(usize, PayloadProtocolIdentifier)> {
         while !self.closed.load(Ordering::SeqCst) {
             let result = {
                 let mut reassembly_queue = self.reassembly_queue.lock().await;
@@ -185,7 +183,7 @@ impl Stream {
             if result.is_ok() {
                 return result;
             } else if let Err(err) = result {
-                if err == Error::ErrShortBuffer {
+                if Error::ErrShortBuffer.equal(&err) {
                     return Err(err);
                 }
             }
@@ -193,7 +191,7 @@ impl Stream {
             self.read_notifier.notified().await;
         }
 
-        Err(Error::ErrStreamClosed)
+        Err(Error::ErrStreamClosed.into())
     }
 
     pub(crate) async fn handle_data(&self, pd: ChunkPayloadData) {
@@ -254,19 +252,15 @@ impl Stream {
     }
 
     /// write writes len(p) bytes from p with the default Payload Protocol Identifier
-    pub async fn write(&self, p: &Bytes) -> Result<usize, Error> {
+    pub async fn write(&self, p: &Bytes) -> Result<usize> {
         self.write_sctp(p, self.default_payload_type.load(Ordering::SeqCst).into())
             .await
     }
 
     /// write_sctp writes len(p) bytes from p to the DTLS connection
-    pub async fn write_sctp(
-        &self,
-        p: &Bytes,
-        ppi: PayloadProtocolIdentifier,
-    ) -> Result<usize, Error> {
+    pub async fn write_sctp(&self, p: &Bytes, ppi: PayloadProtocolIdentifier) -> Result<usize> {
         if p.len() > self.max_message_size.load(Ordering::SeqCst) as usize {
-            return Err(Error::ErrOutboundPacketTooLarge);
+            return Err(Error::ErrOutboundPacketTooLarge.into());
         }
 
         let state: AssociationState = self.state.load(Ordering::SeqCst).into();
@@ -274,7 +268,7 @@ impl Stream {
             AssociationState::ShutdownSent
             | AssociationState::ShutdownAckSent
             | AssociationState::ShutdownPending
-            | AssociationState::ShutdownReceived => return Err(Error::ErrStreamClosed),
+            | AssociationState::ShutdownReceived => return Err(Error::ErrStreamClosed.into()),
             _ => {}
         };
 
@@ -341,7 +335,7 @@ impl Stream {
 
     /// Close closes the write-direction of the stream.
     /// Future calls to write are not permitted after calling Close.
-    pub async fn close(&self) -> Result<(), Error> {
+    pub async fn close(&self) -> Result<()> {
         if !self.closed.load(Ordering::SeqCst) {
             // Reset the outgoing stream
             // https://tools.ietf.org/html/rfc6525
@@ -430,10 +424,10 @@ impl Stream {
         }
     }
 
-    async fn send_payload_data(&self, chunks: Vec<ChunkPayloadData>) -> Result<(), Error> {
+    async fn send_payload_data(&self, chunks: Vec<ChunkPayloadData>) -> Result<()> {
         let state = self.get_state();
         if state != AssociationState::Established {
-            return Err(Error::ErrPayloadDataStateNotExist);
+            return Err(Error::ErrPayloadDataStateNotExist.into());
         }
 
         // Push the chunks into the pending queue first.
@@ -445,10 +439,10 @@ impl Stream {
         Ok(())
     }
 
-    async fn send_reset_request(&self, stream_identifier: u16) -> Result<(), Error> {
+    async fn send_reset_request(&self, stream_identifier: u16) -> Result<()> {
         let state = self.get_state();
         if state != AssociationState::Established {
-            return Err(Error::ErrResetPacketInStateNotExist);
+            return Err(Error::ErrResetPacketInStateNotExist.into());
         }
 
         // Create DATA chunk which only contains valid stream identifier with

@@ -6,7 +6,7 @@ use super::*;
 use super::chunk_type::*;
 
 #[test]
-fn test_chunk_type_string() -> Result<(), Error> {
+fn test_chunk_type_string() -> Result<()> {
     let tests = vec![
         (CT_PAYLOAD_DATA, "DATA"),
         (CT_INIT, "INIT"),
@@ -47,7 +47,7 @@ use super::chunk_abort::*;
 use crate::error_cause::*;
 
 #[test]
-fn test_abort_chunk_one_error_cause() -> Result<(), Error> {
+fn test_abort_chunk_one_error_cause() -> Result<()> {
     let abort1 = ChunkAbort {
         error_causes: vec![ErrorCause {
             code: PROTOCOL_VIOLATION,
@@ -69,7 +69,7 @@ fn test_abort_chunk_one_error_cause() -> Result<(), Error> {
 }
 
 #[test]
-fn test_abort_chunk_many_error_causes() -> Result<(), Error> {
+fn test_abort_chunk_many_error_causes() -> Result<()> {
     let abort1 = ChunkAbort {
         error_causes: vec![
             ErrorCause {
@@ -124,7 +124,7 @@ lazy_static! {
 }
 
 #[test]
-fn test_chunk_error_unrecognized_chunk_type_unmarshal() -> Result<(), Error> {
+fn test_chunk_error_unrecognized_chunk_type_unmarshal() -> Result<()> {
     let c = ChunkError::unmarshal(&RAW_IN)?;
     assert_eq!(CT_ERROR, c.header().typ, "chunk type should be ERROR");
     assert_eq!(1, c.error_causes.len(), "there should be on errorCause");
@@ -144,7 +144,7 @@ fn test_chunk_error_unrecognized_chunk_type_unmarshal() -> Result<(), Error> {
 }
 
 #[test]
-fn test_chunk_error_unrecognized_chunk_type_marshal() -> Result<(), Error> {
+fn test_chunk_error_unrecognized_chunk_type_marshal() -> Result<()> {
     let ec_unrecognized_chunk_type = ErrorCause {
         code: UNRECOGNIZED_CHUNK_TYPE,
         raw: ORG_UNRECOGNIZED_CHUNK.clone(),
@@ -161,8 +161,7 @@ fn test_chunk_error_unrecognized_chunk_type_marshal() -> Result<(), Error> {
 }
 
 #[test]
-fn test_chunk_error_unrecognized_chunk_type_marshal_with_cause_value_being_nil() -> Result<(), Error>
-{
+fn test_chunk_error_unrecognized_chunk_type_marshal_with_cause_value_being_nil() -> Result<()> {
     let expected =
         Bytes::from_static(&[CT_ERROR.0, CHUNK_FLAGS, 0x00, 0x08, 0x00, 0x06, 0x00, 0x04]);
     let ec_unrecognized_chunk_type = ErrorCause {
@@ -189,7 +188,7 @@ static CHUNK_FORWARD_TSN_BYTES: Bytes =
     Bytes::from_static(&[0xc0, 0x0, 0x0, 0x8, 0x0, 0x0, 0x0, 0x3]);
 
 #[test]
-fn test_chunk_forward_tsn_success() -> Result<(), Error> {
+fn test_chunk_forward_tsn_success() -> Result<()> {
     let tests = vec![
         CHUNK_FORWARD_TSN_BYTES.clone(),
         Bytes::from_static(&[0xc0, 0x0, 0x0, 0xc, 0x0, 0x0, 0x0, 0x3, 0x0, 0x4, 0x0, 0x5]),
@@ -208,7 +207,7 @@ fn test_chunk_forward_tsn_success() -> Result<(), Error> {
 }
 
 #[test]
-fn test_chunk_forward_tsn_unmarshal_failure() -> Result<(), Error> {
+fn test_chunk_forward_tsn_unmarshal_failure() -> Result<()> {
     let tests = vec![
         ("chunk header to short", Bytes::from_static(&[0xc0])),
         (
@@ -290,7 +289,7 @@ lazy_static! {
 }
 
 #[test]
-fn test_chunk_reconfig_success() -> Result<(), Error> {
+fn test_chunk_reconfig_success() -> Result<()> {
     for (i, binary) in TEST_CHUNK_RECONFIG_BYTES.iter().enumerate() {
         let actual = ChunkReconfig::unmarshal(binary)?;
         let b = actual.marshal()?;
@@ -301,7 +300,7 @@ fn test_chunk_reconfig_success() -> Result<(), Error> {
 }
 
 #[test]
-fn test_chunk_reconfig_unmarshal_failure() -> Result<(), Error> {
+fn test_chunk_reconfig_unmarshal_failure() -> Result<()> {
     let mut test = BytesMut::new();
     test.extend(vec![0x82, 0x0, 0x0, 0x18]);
     test.extend(TEST_CHUNK_RECONFIG_PARAM_B.clone());
@@ -333,7 +332,7 @@ fn test_chunk_reconfig_unmarshal_failure() -> Result<(), Error> {
 use super::chunk_shutdown::*;
 
 #[test]
-fn test_chunk_shutdown_success() -> Result<(), Error> {
+fn test_chunk_shutdown_success() -> Result<()> {
     let tests = vec![Bytes::from_static(&[
         0x07, 0x00, 0x00, 0x08, 0x12, 0x34, 0x56, 0x78,
     ])];
@@ -348,7 +347,7 @@ fn test_chunk_shutdown_success() -> Result<(), Error> {
 }
 
 #[test]
-fn test_chunk_shutdown_failure() -> Result<(), Error> {
+fn test_chunk_shutdown_failure() -> Result<()> {
     let tests = vec![
         (
             "length too short",
@@ -386,7 +385,7 @@ fn test_chunk_shutdown_failure() -> Result<(), Error> {
 use super::chunk_shutdown_ack::*;
 
 #[test]
-fn test_chunk_shutdown_ack_success() -> Result<(), Error> {
+fn test_chunk_shutdown_ack_success() -> Result<()> {
     let tests = vec![Bytes::from_static(&[0x08, 0x00, 0x00, 0x04])];
 
     for binary in tests {
@@ -399,7 +398,7 @@ fn test_chunk_shutdown_ack_success() -> Result<(), Error> {
 }
 
 #[test]
-fn test_chunk_shutdown_ack_failure() -> Result<(), Error> {
+fn test_chunk_shutdown_ack_failure() -> Result<()> {
     let tests = vec![
         ("length too short", Bytes::from_static(&[0x08, 0x00, 0x00])),
         (
@@ -426,7 +425,7 @@ fn test_chunk_shutdown_ack_failure() -> Result<(), Error> {
 use super::chunk_shutdown_complete::*;
 
 #[test]
-fn test_chunk_shutdown_complete_success() -> Result<(), Error> {
+fn test_chunk_shutdown_complete_success() -> Result<()> {
     let tests = vec![Bytes::from_static(&[0x0e, 0x00, 0x00, 0x04])];
 
     for binary in tests {
@@ -439,7 +438,7 @@ fn test_chunk_shutdown_complete_success() -> Result<(), Error> {
 }
 
 #[test]
-fn test_chunk_shutdown_complete_failure() -> Result<(), Error> {
+fn test_chunk_shutdown_complete_failure() -> Result<()> {
     let tests = vec![
         ("length too short", Bytes::from_static(&[0x0e, 0x00, 0x00])),
         (
@@ -471,7 +470,7 @@ use crate::param::param_outgoing_reset_request::ParamOutgoingResetRequest;
 use crate::param::param_state_cookie::*;
 
 #[test]
-fn test_init_chunk() -> Result<(), Error> {
+fn test_init_chunk() -> Result<()> {
     let raw_pkt = Bytes::from_static(&[
         0x13, 0x88, 0x13, 0x88, 0x00, 0x00, 0x00, 0x00, 0x81, 0x46, 0x9d, 0xfc, 0x01, 0x00, 0x00,
         0x56, 0x55, 0xb9, 0x64, 0xa5, 0x00, 0x02, 0x00, 0x00, 0x04, 0x00, 0x08, 0x00, 0xe8, 0x6d,
@@ -509,7 +508,7 @@ fn test_init_chunk() -> Result<(), Error> {
 }
 
 #[test]
-fn test_init_ack() -> Result<(), Error> {
+fn test_init_ack() -> Result<()> {
     let raw_pkt = Bytes::from_static(&[
         0x13, 0x88, 0x13, 0x88, 0xce, 0x15, 0x79, 0xa2, 0x96, 0x19, 0xe8, 0xb2, 0x02, 0x00, 0x00,
         0x1c, 0xeb, 0x81, 0x4e, 0x01, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x08, 0x00, 0x50, 0xdf,
@@ -525,7 +524,7 @@ fn test_init_ack() -> Result<(), Error> {
 }
 
 #[test]
-fn test_chrome_chunk1_init() -> Result<(), Error> {
+fn test_chrome_chunk1_init() -> Result<()> {
     let raw_pkt = Bytes::from_static(&[
         0x13, 0x88, 0x13, 0x88, 0x00, 0x00, 0x00, 0x00, 0xbc, 0xb3, 0x45, 0xa2, 0x01, 0x00, 0x00,
         0x56, 0xce, 0x15, 0x79, 0xa2, 0x00, 0x02, 0x00, 0x00, 0x04, 0x00, 0x08, 0x00, 0x94, 0x57,
@@ -543,7 +542,7 @@ fn test_chrome_chunk1_init() -> Result<(), Error> {
 }
 
 #[test]
-fn test_chrome_chunk2_init_ack() -> Result<(), Error> {
+fn test_chrome_chunk2_init_ack() -> Result<()> {
     let raw_pkt = Bytes::from_static(&[
         0x13, 0x88, 0x13, 0x88, 0xce, 0x15, 0x79, 0xa2, 0xb5, 0xdb, 0x2d, 0x93, 0x02, 0x00, 0x01,
         0x90, 0x9b, 0xd5, 0xb3, 0x6f, 0x00, 0x02, 0x00, 0x00, 0x04, 0x00, 0x08, 0x00, 0xef, 0xb4,
@@ -582,7 +581,7 @@ fn test_chrome_chunk2_init_ack() -> Result<(), Error> {
 }
 
 #[test]
-fn test_init_marshal_unmarshal() -> Result<(), Error> {
+fn test_init_marshal_unmarshal() -> Result<()> {
     let mut p = Packet {
         destination_port: 1,
         source_port: 1,
@@ -634,7 +633,7 @@ fn test_init_marshal_unmarshal() -> Result<(), Error> {
 }
 
 #[test]
-fn test_payload_data_marshal_unmarshal() -> Result<(), Error> {
+fn test_payload_data_marshal_unmarshal() -> Result<()> {
     let raw_pkt = Bytes::from_static(&[
         0x13, 0x88, 0x13, 0x88, 0xfc, 0xd6, 0x3f, 0xc6, 0xbe, 0xfa, 0xdc, 0x52, 0x0a, 0x00, 0x00,
         0x24, 0x9b, 0x28, 0x7e, 0x48, 0xa3, 0x7b, 0xc1, 0x83, 0xc4, 0x4b, 0x41, 0x04, 0xa4, 0xf7,
@@ -655,7 +654,7 @@ fn test_payload_data_marshal_unmarshal() -> Result<(), Error> {
 }
 
 #[test]
-fn test_select_ack_chunk() -> Result<(), Error> {
+fn test_select_ack_chunk() -> Result<()> {
     let raw_pkt = Bytes::from_static(&[
         0x13, 0x88, 0x13, 0x88, 0xc2, 0x98, 0x98, 0x0f, 0x42, 0x31, 0xea, 0x78, 0x03, 0x00, 0x00,
         0x14, 0x87, 0x73, 0xbd, 0xa4, 0x00, 0x01, 0xfe, 0x74, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02,
@@ -673,7 +672,7 @@ fn test_select_ack_chunk() -> Result<(), Error> {
 }
 
 #[test]
-fn test_reconfig_chunk() -> Result<(), Error> {
+fn test_reconfig_chunk() -> Result<()> {
     let raw_pkt = Bytes::from_static(&[
         0x13, 0x88, 0x13, 0x88, 0xb6, 0xa5, 0x12, 0xe5, 0x75, 0x3b, 0x12, 0xd3, 0x82, 0x0, 0x0,
         0x16, 0x0, 0xd, 0x0, 0x12, 0x4e, 0x1c, 0xb9, 0xe6, 0x3a, 0x74, 0x8d, 0xff, 0x4e, 0x1c,
@@ -701,7 +700,7 @@ fn test_reconfig_chunk() -> Result<(), Error> {
 }
 
 #[test]
-fn test_forward_tsn_chunk() -> Result<(), Error> {
+fn test_forward_tsn_chunk() -> Result<()> {
     let mut raw_pkt = BytesMut::new();
     raw_pkt.extend(vec![
         0x13, 0x88, 0x13, 0x88, 0xb6, 0xa5, 0x12, 0xe5, 0x1f, 0x9d, 0xa0, 0xfb,

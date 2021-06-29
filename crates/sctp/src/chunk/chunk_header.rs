@@ -1,5 +1,6 @@
 use super::{chunk_type::*, *};
 
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 
@@ -39,9 +40,9 @@ impl Chunk for ChunkHeader {
         self.clone()
     }
 
-    fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw: &Bytes) -> Result<Self> {
         if raw.len() < CHUNK_HEADER_SIZE {
-            return Err(Error::ErrChunkHeaderTooSmall);
+            return Err(Error::ErrChunkHeaderTooSmall.into());
         }
 
         let reader = &mut raw.clone();
@@ -51,14 +52,14 @@ impl Chunk for ChunkHeader {
         let length = reader.get_u16();
 
         if length < CHUNK_HEADER_SIZE as u16 {
-            return Err(Error::ErrChunkHeaderInvalidLength);
+            return Err(Error::ErrChunkHeaderInvalidLength.into());
         }
 
         // Length includes Chunk header
         let value_length = length as isize - CHUNK_HEADER_SIZE as isize;
         let length_after_value = raw.len() as isize - length as isize;
         if length_after_value < 0 {
-            return Err(Error::ErrChunkHeaderNotEnoughSpace);
+            return Err(Error::ErrChunkHeaderNotEnoughSpace.into());
         } else if length_after_value < 4 {
             // https://tools.ietf.org/html/rfc4960#section-3.2
             // The Chunk Length field does not count any chunk PADDING.
@@ -72,7 +73,7 @@ impl Chunk for ChunkHeader {
             for i in (1..=length_after_value).rev() {
                 let padding_offset = CHUNK_HEADER_SIZE + (value_length + i - 1) as usize;
                 if raw[padding_offset] != 0 {
-                    return Err(Error::ErrChunkHeaderPaddingNonZero);
+                    return Err(Error::ErrChunkHeaderPaddingNonZero.into());
                 }
             }
         }
@@ -84,14 +85,14 @@ impl Chunk for ChunkHeader {
         })
     }
 
-    fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize, Error> {
+    fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize> {
         writer.put_u8(self.typ.0);
         writer.put_u8(self.flags);
         writer.put_u16(self.value_length + CHUNK_HEADER_SIZE as u16);
         Ok(writer.len())
     }
 
-    fn check(&self) -> Result<(), Error> {
+    fn check(&self) -> Result<()> {
         Ok(())
     }
 

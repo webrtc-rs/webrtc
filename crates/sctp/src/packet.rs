@@ -18,6 +18,7 @@ use crate::chunk::chunk_type::*;
 use crate::error::Error;
 use crate::util::*;
 
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use crc::{Crc, CRC_32_ISCSI};
 use std::fmt;
@@ -81,9 +82,9 @@ impl fmt::Display for Packet {
 pub(crate) const PACKET_HEADER_SIZE: usize = 12;
 
 impl Packet {
-    pub(crate) fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
+    pub(crate) fn unmarshal(raw: &Bytes) -> Result<Self> {
         if raw.len() < PACKET_HEADER_SIZE {
-            return Err(Error::ErrPacketRawTooSmall);
+            return Err(Error::ErrPacketRawTooSmall.into());
         }
 
         let reader = &mut raw.clone();
@@ -100,7 +101,7 @@ impl Packet {
             if offset == raw.len() {
                 break;
             } else if offset + CHUNK_HEADER_SIZE > raw.len() {
-                return Err(Error::ErrParseSctpChunkNotEnoughData);
+                return Err(Error::ErrParseSctpChunkNotEnoughData.into());
             }
 
             let ct = ChunkType(raw[offset]);
@@ -121,7 +122,7 @@ impl Packet {
                 CT_SHUTDOWN_COMPLETE => {
                     Box::new(ChunkShutdownComplete::unmarshal(&raw.slice(offset..))?)
                 }
-                _ => return Err(Error::ErrUnmarshalUnknownChunkType),
+                _ => return Err(Error::ErrUnmarshalUnknownChunkType.into()),
             };
 
             let chunk_value_padding = get_padding_size(c.value_length());
@@ -131,7 +132,7 @@ impl Packet {
 
         let our_checksum = generate_packet_checksum(raw);
         if their_checksum != our_checksum {
-            return Err(Error::ErrChecksumMismatch);
+            return Err(Error::ErrChecksumMismatch.into());
         }
 
         Ok(Packet {
@@ -142,7 +143,7 @@ impl Packet {
         })
     }
 
-    pub(crate) fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize, Error> {
+    pub(crate) fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize> {
         // Populate static headers
         // 8-12 is Checksum which will be populated when packet is complete
         writer.put_u16(self.source_port);
@@ -177,7 +178,7 @@ impl Packet {
         Ok(writer.len())
     }
 
-    pub(crate) fn marshal(&self) -> Result<Bytes, Error> {
+    pub(crate) fn marshal(&self) -> Result<Bytes> {
         let mut buf = BytesMut::with_capacity(PACKET_HEADER_SIZE);
         self.marshal_to(&mut buf)?;
         Ok(buf.freeze())
@@ -185,7 +186,7 @@ impl Packet {
 }
 
 impl Packet {
-    pub(crate) fn check_packet(&self) -> Result<(), Error> {
+    pub(crate) fn check_packet(&self) -> Result<()> {
         // All packets must adhere to these rules
 
         // This is the SCTP sender's port number.  It can be used by the
@@ -194,7 +195,7 @@ impl Packet {
         // identify the association to which this packet belongs.  The port
         // number 0 MUST NOT be used.
         if self.source_port == 0 {
-            return Err(Error::ErrSctpPacketSourcePortZero);
+            return Err(Error::ErrSctpPacketSourcePortZero.into());
         }
 
         // This is the SCTP port number to which this packet is destined.
@@ -202,7 +203,7 @@ impl Packet {
         // SCTP packet to the correct receiving endpoint/application.  The
         // port number 0 MUST NOT be used.
         if self.destination_port == 0 {
-            return Err(Error::ErrSctpPacketDestinationPortZero);
+            return Err(Error::ErrSctpPacketDestinationPortZero.into());
         }
 
         // Check values on the packet that are specific to a particular chunk type
@@ -213,13 +214,13 @@ impl Packet {
                     // They MUST be the only chunks present in the SCTP packets that carry
                     // them.
                     if self.chunks.len() != 1 {
-                        return Err(Error::ErrInitChunkBundled);
+                        return Err(Error::ErrInitChunkBundled.into());
                     }
 
                     // A packet containing an INIT chunk MUST have a zero Verification
                     // Tag.
                     if self.verification_tag != 0 {
-                        return Err(Error::ErrInitChunkVerifyTagNotZero);
+                        return Err(Error::ErrInitChunkVerifyTagNotZero.into());
                     }
                 }
             }
@@ -234,7 +235,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_packet_unmarshal() -> Result<(), Error> {
+    fn test_packet_unmarshal() -> Result<()> {
         let result = Packet::unmarshal(&Bytes::new());
         assert!(
             result.is_err(),
@@ -279,7 +280,7 @@ mod test {
     }
 
     #[test]
-    fn test_packet_marshal() -> Result<(), Error> {
+    fn test_packet_marshal() -> Result<()> {
         let header_only = Bytes::from_static(&[
             0x13, 0x88, 0x13, 0x88, 0x00, 0x00, 0x00, 0x00, 0x06, 0xa9, 0x00, 0xe1,
         ]);

@@ -1,5 +1,6 @@
 use super::{chunk_header::*, chunk_type::*, *};
 
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 
@@ -56,16 +57,16 @@ impl Chunk for ChunkForwardTsn {
         }
     }
 
-    fn unmarshal(buf: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(buf: &Bytes) -> Result<Self> {
         let header = ChunkHeader::unmarshal(buf)?;
 
         if header.typ != CT_FORWARD_TSN {
-            return Err(Error::ErrChunkTypeNotForwardTsn);
+            return Err(Error::ErrChunkTypeNotForwardTsn.into());
         }
 
         let mut offset = CHUNK_HEADER_SIZE + NEW_CUMULATIVE_TSN_LENGTH;
         if buf.len() < offset {
-            return Err(Error::ErrChunkTooShort);
+            return Err(Error::ErrChunkTooShort.into());
         }
 
         let reader = &mut buf.slice(CHUNK_HEADER_SIZE..CHUNK_HEADER_SIZE + header.value_length());
@@ -88,7 +89,7 @@ impl Chunk for ChunkForwardTsn {
         })
     }
 
-    fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize, Error> {
+    fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize> {
         self.header().marshal_to(writer)?;
 
         writer.put_u32(self.new_cumulative_tsn);
@@ -100,7 +101,7 @@ impl Chunk for ChunkForwardTsn {
         Ok(writer.len())
     }
 
-    fn check(&self) -> Result<(), Error> {
+    fn check(&self) -> Result<()> {
         Ok(())
     }
 
@@ -146,9 +147,9 @@ impl Chunk for ChunkForwardTsnStream {
         }
     }
 
-    fn unmarshal(buf: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(buf: &Bytes) -> Result<Self> {
         if buf.len() < FORWARD_TSN_STREAM_LENGTH {
-            return Err(Error::ErrChunkTooShort);
+            return Err(Error::ErrChunkTooShort.into());
         }
 
         let reader = &mut buf.clone();
@@ -161,13 +162,13 @@ impl Chunk for ChunkForwardTsnStream {
         })
     }
 
-    fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize, Error> {
+    fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize> {
         writer.put_u16(self.identifier);
         writer.put_u16(self.sequence);
         Ok(writer.len())
     }
 
-    fn check(&self) -> Result<(), Error> {
+    fn check(&self) -> Result<()> {
         Ok(())
     }
 

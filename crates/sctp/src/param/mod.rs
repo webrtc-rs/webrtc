@@ -25,20 +25,21 @@ use crate::param::{
 use param_header::*;
 use param_type::*;
 
+use anyhow::Result;
 use bytes::{Buf, Bytes, BytesMut};
 use std::{any::Any, fmt};
 
 pub(crate) trait Param: fmt::Display + fmt::Debug {
     fn header(&self) -> ParamHeader;
-    fn unmarshal(raw: &Bytes) -> Result<Self, Error>
+    fn unmarshal(raw: &Bytes) -> Result<Self>
     where
         Self: Sized;
-    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error>;
+    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize>;
     fn value_length(&self) -> usize;
     fn clone_to(&self) -> Box<dyn Param + Send + Sync>;
     fn as_any(&self) -> &(dyn Any + Send + Sync);
 
-    fn marshal(&self) -> Result<Bytes, Error> {
+    fn marshal(&self) -> Result<Bytes> {
         let capacity = PARAM_HEADER_LENGTH + self.value_length();
         let mut buf = BytesMut::with_capacity(capacity);
         self.marshal_to(&mut buf)?;
@@ -52,9 +53,9 @@ impl Clone for Box<dyn Param + Send + Sync> {
     }
 }
 
-pub(crate) fn build_param(raw_param: &Bytes) -> Result<Box<dyn Param + Send + Sync>, Error> {
+pub(crate) fn build_param(raw_param: &Bytes) -> Result<Box<dyn Param + Send + Sync>> {
     if raw_param.len() < PARAM_HEADER_LENGTH {
-        return Err(Error::ErrParamHeaderTooShort);
+        return Err(Error::ErrParamHeaderTooShort.into());
     }
     let reader = &mut raw_param.slice(..2);
     let t: ParamType = reader.get_u16().into();
@@ -68,6 +69,6 @@ pub(crate) fn build_param(raw_param: &Bytes) -> Result<Box<dyn Param + Send + Sy
         ParamType::HeartbeatInfo => Ok(Box::new(ParamHeartbeatInfo::unmarshal(raw_param)?)),
         ParamType::OutSsnResetReq => Ok(Box::new(ParamOutgoingResetRequest::unmarshal(raw_param)?)),
         ParamType::ReconfigResp => Ok(Box::new(ParamReconfigResponse::unmarshal(raw_param)?)),
-        _ => Err(Error::ErrParamTypeUnhandled),
+        _ => Err(Error::ErrParamTypeUnhandled.into()),
     }
 }

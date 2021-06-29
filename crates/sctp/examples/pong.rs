@@ -1,12 +1,10 @@
 use webrtc_sctp::association::*;
-use webrtc_sctp::error::*;
 use webrtc_sctp::stream::*;
 
+use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
 use clap::{App, AppSettings, Arg};
-use std::io;
-//use std::io::Write;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
@@ -19,7 +17,7 @@ use util::Conn;
 // RUST_LOG=trace cargo run --color=always --package webrtc-sctp --example pong -- --host 0.0.0.0:5678
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
+async fn main() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -96,7 +94,8 @@ async fn main() -> Result<(), Error> {
         }
         println!("finished ping-pong");
         drop(done_tx);
-        Ok::<(), Error>(())
+
+        Result::<()>::Ok(())
     });
 
     println!("Waiting for Ctrl-C...");
@@ -131,11 +130,11 @@ impl DisconnectedPacketConn {
 
 #[async_trait]
 impl Conn for DisconnectedPacketConn {
-    async fn connect(&self, addr: SocketAddr) -> io::Result<()> {
+    async fn connect(&self, addr: SocketAddr) -> Result<()> {
         self.pconn.connect(addr).await
     }
 
-    async fn recv(&self, buf: &mut [u8]) -> io::Result<usize> {
+    async fn recv(&self, buf: &mut [u8]) -> Result<usize> {
         let (n, addr) = self.pconn.recv_from(buf).await?;
         {
             let mut raddr = self.raddr.lock().await;
@@ -144,11 +143,11 @@ impl Conn for DisconnectedPacketConn {
         Ok(n)
     }
 
-    async fn recv_from(&self, buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
+    async fn recv_from(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
         self.pconn.recv_from(buf).await
     }
 
-    async fn send(&self, buf: &[u8]) -> io::Result<usize> {
+    async fn send(&self, buf: &[u8]) -> Result<usize> {
         let addr = {
             let raddr = self.raddr.lock().await;
             *raddr
@@ -156,11 +155,11 @@ impl Conn for DisconnectedPacketConn {
         self.pconn.send_to(buf, addr).await
     }
 
-    async fn send_to(&self, buf: &[u8], target: SocketAddr) -> io::Result<usize> {
+    async fn send_to(&self, buf: &[u8], target: SocketAddr) -> Result<usize> {
         self.pconn.send_to(buf, target).await
     }
 
-    async fn local_addr(&self) -> io::Result<SocketAddr> {
+    async fn local_addr(&self) -> Result<SocketAddr> {
         self.pconn.local_addr().await
     }
 }

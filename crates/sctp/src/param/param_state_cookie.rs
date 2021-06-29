@@ -1,5 +1,6 @@
 use super::{param_header::*, param_type::*, *};
 
+use anyhow::Result;
 use bytes::{Bytes, BytesMut};
 use rand::Rng;
 use std::fmt;
@@ -24,13 +25,13 @@ impl Param for ParamStateCookie {
         }
     }
 
-    fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw: &Bytes) -> Result<Self> {
         let header = ParamHeader::unmarshal(raw)?;
         let cookie = raw.slice(PARAM_HEADER_LENGTH..PARAM_HEADER_LENGTH + header.value_length());
         Ok(ParamStateCookie { cookie })
     }
 
-    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error> {
+    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize> {
         self.header().marshal_to(buf)?;
         buf.extend(self.cookie.clone());
         Ok(buf.len())

@@ -1,4 +1,5 @@
 use crate::error::Error;
+use anyhow::Result;
 use bytes::{Bytes, BytesMut};
 
 ///////////////////////////////////////////////////////////////////
@@ -21,7 +22,7 @@ fn make_payload(tsn: u32, n_bytes: usize) -> ChunkPayloadData {
 }
 
 #[test]
-fn test_payload_queue_push_no_check() -> Result<(), Error> {
+fn test_payload_queue_push_no_check() -> Result<()> {
     let mut pq = PayloadQueue::new(Arc::new(AtomicUsize::new(0)));
 
     pq.push_no_check(make_payload(0, 10));
@@ -68,7 +69,7 @@ fn test_payload_queue_push_no_check() -> Result<(), Error> {
 }
 
 #[test]
-fn test_payload_queue_get_gap_ack_block() -> Result<(), Error> {
+fn test_payload_queue_get_gap_ack_block() -> Result<()> {
     let mut pq = PayloadQueue::new(Arc::new(AtomicUsize::new(0)));
 
     pq.push(make_payload(1, 0), 0);
@@ -106,7 +107,7 @@ fn test_payload_queue_get_gap_ack_block() -> Result<(), Error> {
 }
 
 #[test]
-fn test_payload_queue_get_last_tsn_received() -> Result<(), Error> {
+fn test_payload_queue_get_last_tsn_received() -> Result<()> {
     let mut pq = PayloadQueue::new(Arc::new(AtomicUsize::new(0)));
 
     // empty queie should return false
@@ -137,7 +138,7 @@ fn test_payload_queue_get_last_tsn_received() -> Result<(), Error> {
 }
 
 #[test]
-fn test_payload_queue_mark_all_to_retrasmit() -> Result<(), Error> {
+fn test_payload_queue_mark_all_to_retrasmit() -> Result<()> {
     let mut pq = PayloadQueue::new(Arc::new(AtomicUsize::new(0)));
 
     for i in 0..3 {
@@ -160,7 +161,7 @@ fn test_payload_queue_mark_all_to_retrasmit() -> Result<(), Error> {
 }
 
 #[test]
-fn test_payload_queue_reset_retransmit_flag_on_ack() -> Result<(), Error> {
+fn test_payload_queue_reset_retransmit_flag_on_ack() -> Result<()> {
     let mut pq = PayloadQueue::new(Arc::new(AtomicUsize::new(0)));
 
     for i in 0..4 {
@@ -228,7 +229,7 @@ fn make_data_chunk(tsn: u32, unordered: bool, frag: usize) -> ChunkPayloadData {
 }
 
 #[test]
-fn test_pending_base_queue_push_and_pop() -> Result<(), Error> {
+fn test_pending_base_queue_push_and_pop() -> Result<()> {
     let mut pq = PendingBaseQueue::new();
     pq.push_back(make_data_chunk(0, false, NO_FRAGMENT));
     pq.push_back(make_data_chunk(1, false, NO_FRAGMENT));
@@ -258,7 +259,7 @@ fn test_pending_base_queue_push_and_pop() -> Result<(), Error> {
 }
 
 #[test]
-fn test_pending_base_queue_out_of_bounce() -> Result<(), Error> {
+fn test_pending_base_queue_out_of_bounce() -> Result<()> {
     let mut pq = PendingBaseQueue::new();
     assert!(pq.pop_front().is_none(), "should be none");
     assert!(pq.get(0).is_none(), "should be none");
@@ -272,7 +273,7 @@ fn test_pending_base_queue_out_of_bounce() -> Result<(), Error> {
 // NOTE: TSN is not used in pendingQueue in the actual usage.
 //       Following tests use TSN field as a chunk ID.
 #[tokio::test]
-async fn test_pending_queue_push_and_pop() -> Result<(), Error> {
+async fn test_pending_queue_push_and_pop() -> Result<()> {
     let pq = PendingQueue::new();
     pq.push(make_data_chunk(0, false, NO_FRAGMENT)).await;
     assert_eq!(10, pq.get_num_bytes(), "total bytes mismatch");
@@ -316,7 +317,7 @@ async fn test_pending_queue_push_and_pop() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_pending_queue_unordered_wins() -> Result<(), Error> {
+async fn test_pending_queue_unordered_wins() -> Result<()> {
     let pq = PendingQueue::new();
 
     pq.push(make_data_chunk(0, false, NO_FRAGMENT)).await;
@@ -366,7 +367,7 @@ async fn test_pending_queue_unordered_wins() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_pending_queue_fragments() -> Result<(), Error> {
+async fn test_pending_queue_fragments() -> Result<()> {
     let pq = PendingQueue::new();
     pq.push(make_data_chunk(0, false, FRAG_BEGIN)).await;
     pq.push(make_data_chunk(1, false, FRAG_MIDDLE)).await;
@@ -393,7 +394,7 @@ async fn test_pending_queue_fragments() -> Result<(), Error> {
 // Once decided ordered or unordered, the decision should persist until
 // it pops a chunk with ending_fragment flags set to true.
 #[tokio::test]
-async fn test_pending_queue_selection_persistence() -> Result<(), Error> {
+async fn test_pending_queue_selection_persistence() -> Result<()> {
     let pq = PendingQueue::new();
     pq.push(make_data_chunk(0, false, FRAG_BEGIN)).await;
 
@@ -432,7 +433,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 #[test]
-fn test_reassembly_queue_ordered_fragments() -> Result<(), Error> {
+fn test_reassembly_queue_ordered_fragments() -> Result<()> {
     let mut rq = ReassemblyQueue::new(0);
 
     let org_ppi = PayloadProtocolIdentifier::Binary;
@@ -475,7 +476,7 @@ fn test_reassembly_queue_ordered_fragments() -> Result<(), Error> {
 }
 
 #[test]
-fn test_reassembly_queue_unordered_fragments() -> Result<(), Error> {
+fn test_reassembly_queue_unordered_fragments() -> Result<()> {
     let mut rq = ReassemblyQueue::new(0);
 
     let org_ppi = PayloadProtocolIdentifier::Binary;
@@ -533,7 +534,7 @@ fn test_reassembly_queue_unordered_fragments() -> Result<(), Error> {
 }
 
 #[test]
-fn test_reassembly_queue_ordered_and_unordered_fragments() -> Result<(), Error> {
+fn test_reassembly_queue_ordered_and_unordered_fragments() -> Result<()> {
     let mut rq = ReassemblyQueue::new(0);
     let org_ppi = PayloadProtocolIdentifier::Binary;
     let chunk = ChunkPayloadData {
@@ -589,7 +590,7 @@ fn test_reassembly_queue_ordered_and_unordered_fragments() -> Result<(), Error> 
 }
 
 #[test]
-fn test_reassembly_queue_unordered_complete_skips_incomplete() -> Result<(), Error> {
+fn test_reassembly_queue_unordered_complete_skips_incomplete() -> Result<()> {
     let mut rq = ReassemblyQueue::new(0);
 
     let org_ppi = PayloadProtocolIdentifier::Binary;
@@ -654,7 +655,7 @@ fn test_reassembly_queue_unordered_complete_skips_incomplete() -> Result<(), Err
 }
 
 #[test]
-fn test_reassembly_queue_ignores_chunk_with_wrong_si() -> Result<(), Error> {
+fn test_reassembly_queue_ignores_chunk_with_wrong_si() -> Result<()> {
     let mut rq = ReassemblyQueue::new(123);
 
     let org_ppi = PayloadProtocolIdentifier::Binary;
@@ -677,7 +678,7 @@ fn test_reassembly_queue_ignores_chunk_with_wrong_si() -> Result<(), Error> {
 }
 
 #[test]
-fn test_reassembly_queue_ignores_chunk_with_stale_ssn() -> Result<(), Error> {
+fn test_reassembly_queue_ignores_chunk_with_stale_ssn() -> Result<()> {
     let mut rq = ReassemblyQueue::new(0);
     rq.next_ssn = 7; // forcibly set expected SSN to 7
 
@@ -701,7 +702,7 @@ fn test_reassembly_queue_ignores_chunk_with_stale_ssn() -> Result<(), Error> {
 }
 
 #[test]
-fn test_reassembly_queue_should_fail_to_read_incomplete_chunk() -> Result<(), Error> {
+fn test_reassembly_queue_should_fail_to_read_incomplete_chunk() -> Result<()> {
     let mut rq = ReassemblyQueue::new(0);
 
     let org_ppi = PayloadProtocolIdentifier::Binary;
@@ -728,7 +729,7 @@ fn test_reassembly_queue_should_fail_to_read_incomplete_chunk() -> Result<(), Er
 }
 
 #[test]
-fn test_reassembly_queue_should_fail_to_read_if_the_nex_ssn_is_not_ready() -> Result<(), Error> {
+fn test_reassembly_queue_should_fail_to_read_if_the_nex_ssn_is_not_ready() -> Result<()> {
     let mut rq = ReassemblyQueue::new(0);
 
     let org_ppi = PayloadProtocolIdentifier::Binary;
@@ -756,7 +757,7 @@ fn test_reassembly_queue_should_fail_to_read_if_the_nex_ssn_is_not_ready() -> Re
 }
 
 #[test]
-fn test_reassembly_queue_detect_buffer_too_short() -> Result<(), Error> {
+fn test_reassembly_queue_detect_buffer_too_short() -> Result<()> {
     let mut rq = ReassemblyQueue::new(0);
 
     let org_ppi = PayloadProtocolIdentifier::Binary;
@@ -779,7 +780,10 @@ fn test_reassembly_queue_detect_buffer_too_short() -> Result<(), Error> {
     let result = rq.read(&mut buf);
     assert!(result.is_err(), "read() should not succeed");
     if let Err(err) = result {
-        assert_eq!(Error::ErrShortBuffer, err, "read() should not succeed");
+        assert!(
+            Error::ErrShortBuffer.equal(&err),
+            "read() should not succeed"
+        );
     }
     assert_eq!(0, rq.get_num_bytes(), "num bytes mismatch");
 
@@ -787,7 +791,7 @@ fn test_reassembly_queue_detect_buffer_too_short() -> Result<(), Error> {
 }
 
 #[test]
-fn test_reassembly_queue_forward_tsn_for_ordered_framents() -> Result<(), Error> {
+fn test_reassembly_queue_forward_tsn_for_ordered_framents() -> Result<()> {
     let mut rq = ReassemblyQueue::new(0);
 
     let org_ppi = PayloadProtocolIdentifier::Binary;
@@ -843,7 +847,7 @@ fn test_reassembly_queue_forward_tsn_for_ordered_framents() -> Result<(), Error>
 }
 
 #[test]
-fn test_reassembly_queue_forward_tsn_for_unordered_framents() -> Result<(), Error> {
+fn test_reassembly_queue_forward_tsn_for_unordered_framents() -> Result<()> {
     let mut rq = ReassemblyQueue::new(0);
 
     let org_ppi = PayloadProtocolIdentifier::Binary;
@@ -908,14 +912,14 @@ fn test_reassembly_queue_forward_tsn_for_unordered_framents() -> Result<(), Erro
 }
 
 #[test]
-fn test_chunk_set_empty_chunk_set() -> Result<(), Error> {
+fn test_chunk_set_empty_chunk_set() -> Result<()> {
     let cset = ChunkSet::new(0, PayloadProtocolIdentifier::default());
     assert!(!cset.is_complete(), "empty chunkSet cannot be complete");
     Ok(())
 }
 
 #[test]
-fn test_chunk_set_push_dup_chunks_to_chunk_set() -> Result<(), Error> {
+fn test_chunk_set_push_dup_chunks_to_chunk_set() -> Result<()> {
     let mut cset = ChunkSet::new(0, PayloadProtocolIdentifier::default());
     cset.push(ChunkPayloadData {
         tsn: 100,
@@ -933,7 +937,7 @@ fn test_chunk_set_push_dup_chunks_to_chunk_set() -> Result<(), Error> {
 }
 
 #[test]
-fn test_chunk_set_incomplete_chunk_set_no_beginning() -> Result<(), Error> {
+fn test_chunk_set_incomplete_chunk_set_no_beginning() -> Result<()> {
     let cset = ChunkSet {
         ssn: 0,
         ppi: PayloadProtocolIdentifier::default(),
@@ -947,7 +951,7 @@ fn test_chunk_set_incomplete_chunk_set_no_beginning() -> Result<(), Error> {
 }
 
 #[test]
-fn test_chunk_set_incomplete_chunk_set_no_contiguous_tsn() -> Result<(), Error> {
+fn test_chunk_set_incomplete_chunk_set_no_contiguous_tsn() -> Result<()> {
     let cset = ChunkSet {
         ssn: 0,
         ppi: PayloadProtocolIdentifier::default(),

@@ -1,5 +1,6 @@
 use super::{chunk_header::*, chunk_type::*, *};
 
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 
@@ -83,15 +84,15 @@ impl Chunk for ChunkSelectiveAck {
         }
     }
 
-    fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw: &Bytes) -> Result<Self> {
         let header = ChunkHeader::unmarshal(raw)?;
 
         if header.typ != CT_SACK {
-            return Err(Error::ErrChunkTypeNotSack);
+            return Err(Error::ErrChunkTypeNotSack.into());
         }
 
         if raw.len() < CHUNK_HEADER_SIZE + SELECTIVE_ACK_HEADER_SIZE {
-            return Err(Error::ErrSackSizeNotLargeEnoughInfo);
+            return Err(Error::ErrSackSizeNotLargeEnoughInfo.into());
         }
 
         let reader = &mut raw.slice(CHUNK_HEADER_SIZE..CHUNK_HEADER_SIZE + header.value_length());
@@ -106,7 +107,7 @@ impl Chunk for ChunkSelectiveAck {
                 + SELECTIVE_ACK_HEADER_SIZE
                 + (4 * gap_ack_blocks_len + 4 * duplicate_tsn_len)
         {
-            return Err(Error::ErrSackSizeNotMatchPredicted);
+            return Err(Error::ErrSackSizeNotMatchPredicted.into());
         }
 
         let mut gap_ack_blocks = vec![];
@@ -128,7 +129,7 @@ impl Chunk for ChunkSelectiveAck {
         })
     }
 
-    fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize, Error> {
+    fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize> {
         self.header().marshal_to(writer)?;
 
         writer.put_u32(self.cumulative_tsn_ack);
@@ -146,7 +147,7 @@ impl Chunk for ChunkSelectiveAck {
         Ok(writer.len())
     }
 
-    fn check(&self) -> Result<(), Error> {
+    fn check(&self) -> Result<()> {
         Ok(())
     }
 

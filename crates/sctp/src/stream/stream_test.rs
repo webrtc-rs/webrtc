@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 #[test]
-fn test_stream_buffered_amount() -> Result<(), Error> {
+fn test_stream_buffered_amount() -> Result<()> {
     let s = Stream::default();
 
     assert_eq!(0, s.buffered_amount());
@@ -22,7 +22,7 @@ fn test_stream_buffered_amount() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_stream_amount_on_buffered_amount_low() -> Result<(), Error> {
+async fn test_stream_amount_on_buffered_amount_low() -> Result<()> {
     let s = Stream::default();
 
     s.buffered_amount.store(4096, Ordering::SeqCst);

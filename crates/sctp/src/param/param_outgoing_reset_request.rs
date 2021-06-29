@@ -1,5 +1,6 @@
 use super::{param_header::*, param_type::*, *};
 
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 pub(crate) const PARAM_OUTGOING_RESET_REQUEST_STREAM_IDENTIFIERS_OFFSET: usize = 12;
@@ -68,11 +69,11 @@ impl Param for ParamOutgoingResetRequest {
         }
     }
 
-    fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw: &Bytes) -> Result<Self> {
         let header = ParamHeader::unmarshal(raw)?;
         if raw.len() < PARAM_HEADER_LENGTH + PARAM_OUTGOING_RESET_REQUEST_STREAM_IDENTIFIERS_OFFSET
         {
-            return Err(Error::ErrSsnResetRequestParamTooShort);
+            return Err(Error::ErrSsnResetRequestParamTooShort.into());
         }
 
         let reader =
@@ -96,7 +97,7 @@ impl Param for ParamOutgoingResetRequest {
         })
     }
 
-    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error> {
+    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize> {
         self.header().marshal_to(buf)?;
         buf.put_u32(self.reconfig_request_sequence_number);
         buf.put_u32(self.reconfig_response_sequence_number);

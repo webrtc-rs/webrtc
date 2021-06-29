@@ -1,5 +1,6 @@
 use super::{param_header::*, param_type::*, *};
 
+use anyhow::Result;
 use bytes::{Bytes, BytesMut};
 
 #[derive(Default, Debug, Clone, PartialEq)]
@@ -21,14 +22,14 @@ impl Param for ParamRandom {
         }
     }
 
-    fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw: &Bytes) -> Result<Self> {
         let header = ParamHeader::unmarshal(raw)?;
         let random_data =
             raw.slice(PARAM_HEADER_LENGTH..PARAM_HEADER_LENGTH + header.value_length());
         Ok(ParamRandom { random_data })
     }
 
-    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error> {
+    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize> {
         self.header().marshal_to(buf)?;
         buf.extend(self.random_data.clone());
         Ok(buf.len())

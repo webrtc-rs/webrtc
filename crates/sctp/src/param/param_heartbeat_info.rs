@@ -1,5 +1,6 @@
 use super::{param_header::*, param_type::*, *};
 
+use anyhow::Result;
 use bytes::{Bytes, BytesMut};
 
 #[derive(Default, Debug, Clone, PartialEq)]
@@ -21,7 +22,7 @@ impl Param for ParamHeartbeatInfo {
         }
     }
 
-    fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw: &Bytes) -> Result<Self> {
         let header = ParamHeader::unmarshal(raw)?;
         let heartbeat_information =
             raw.slice(PARAM_HEADER_LENGTH..PARAM_HEADER_LENGTH + header.value_length());
@@ -30,7 +31,7 @@ impl Param for ParamHeartbeatInfo {
         })
     }
 
-    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error> {
+    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize> {
         self.header().marshal_to(buf)?;
         buf.extend(self.heartbeat_information.clone());
         Ok(buf.len())

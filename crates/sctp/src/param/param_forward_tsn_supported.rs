@@ -1,5 +1,6 @@
 use super::{param_header::*, param_type::*, *};
 
+use anyhow::Result;
 use bytes::{Bytes, BytesMut};
 
 /// At the initialization of the association, the sender of the INIT or
@@ -27,12 +28,12 @@ impl Param for ParamForwardTsnSupported {
         }
     }
 
-    fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw: &Bytes) -> Result<Self> {
         let _ = ParamHeader::unmarshal(raw)?;
         Ok(ParamForwardTsnSupported {})
     }
 
-    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error> {
+    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize> {
         self.header().marshal_to(buf)?;
         Ok(buf.len())
     }

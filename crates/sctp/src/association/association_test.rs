@@ -18,7 +18,7 @@ async fn create_new_association_pair(
     cb: Arc<dyn Conn + Send + Sync>,
     ack_mode: AckMode,
     recv_buf_size: u32,
-) -> Result<(Association, Association), Error> {
+) -> Result<(Association, Association)> {
     let (handshake0ch_tx, mut handshake0ch_rx) = mpsc::channel(1);
     let (handshake1ch_tx, mut handshake1ch_rx) = mpsc::channel(1);
     let (closed_tx, mut closed_rx0) = broadcast::channel::<()>(1);
@@ -37,7 +37,7 @@ async fn create_new_association_pair(
         let _ = handshake0ch_tx.send(client).await;
         let _ = closed_rx0.recv().await;
 
-        Ok::<(), Error>(())
+        Result::<()>::Ok(())
     });
 
     // Setup server
@@ -53,7 +53,7 @@ async fn create_new_association_pair(
         let _ = handshake1ch_tx.send(server).await;
         let _ = closed_rx1.recv().await;
 
-        Ok::<(), Error>(())
+        Result::<()>::Ok(())
     });
 
     let mut client = None;
@@ -86,7 +86,7 @@ async fn create_new_association_pair(
     }
 
     if !a0handshake_done || !a1handshake_done {
-        return Err(Error::ErrOthers("handshake failed".to_owned()));
+        return Err(Error::new("handshake failed".to_owned()).into());
     }
 
     drop(closed_tx);
@@ -116,7 +116,7 @@ async fn close_association_pair(br: &Arc<Bridge>, client: Association, server: A
         let _ = handshake0ch_tx.send(()).await;
         let _ = closed_rx0.recv().await;
 
-        Ok::<(), Error>(())
+        Result::<()>::Ok(())
     });
 
     // Close server
@@ -125,7 +125,7 @@ async fn close_association_pair(br: &Arc<Bridge>, client: Association, server: A
         let _ = handshake1ch_tx.send(()).await;
         let _ = closed_rx1.recv().await;
 
-        Ok::<(), Error>(())
+        Result::<()>::Ok(())
     });
 
     let mut a0handshake_done = false;
@@ -179,7 +179,7 @@ async fn establish_session_pair(
     client: &Association,
     server: &mut Association,
     si: u16,
-) -> Result<(Arc<Stream>, Arc<Stream>), Error> {
+) -> Result<(Arc<Stream>, Arc<Stream>)> {
     let hello_msg = Bytes::from_static(b"Hello");
     let s0 = client
         .open_stream(si, PayloadProtocolIdentifier::Binary)
@@ -192,7 +192,7 @@ async fn establish_session_pair(
 
     let s1 = server.accept_stream().await.unwrap();
     if s0.stream_identifier != s1.stream_identifier {
-        return Err(Error::ErrOthers("SI should match".to_owned()));
+        return Err(Error::new("SI should match".to_owned()).into());
     }
 
     br.process().await;
@@ -201,15 +201,15 @@ async fn establish_session_pair(
     let (n, ppi) = s1.read_sctp(&mut buf).await?;
 
     if n != hello_msg.len() {
-        return Err(Error::ErrOthers("received data must by 3 bytes".to_owned()));
+        return Err(Error::new("received data must by 3 bytes".to_owned()).into());
     }
 
     if ppi != PayloadProtocolIdentifier::Dcep {
-        return Err(Error::ErrOthers("unexpected ppi".to_owned()));
+        return Err(Error::new("unexpected ppi".to_owned()).into());
     }
 
     if &buf[..n] != &hello_msg {
-        return Err(Error::ErrOthers("received data mismatch".to_owned()));
+        return Err(Error::new("received data mismatch".to_owned()).into());
     }
 
     flush_buffers(br, client, server).await;
@@ -220,7 +220,7 @@ async fn establish_session_pair(
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_assoc_reliable_simple() -> Result<(), Error> {
+async fn test_assoc_reliable_simple() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -285,7 +285,7 @@ async fn test_assoc_reliable_simple() -> Result<(), Error> {
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_assoc_reliable_ordered_reordered() -> Result<(), Error> {
+async fn test_assoc_reliable_ordered_reordered() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -380,7 +380,7 @@ async fn test_assoc_reliable_ordered_reordered() -> Result<(), Error> {
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_assoc_reliable_ordered_fragmented_then_defragmented() -> Result<(), Error> {
+async fn test_assoc_reliable_ordered_fragmented_then_defragmented() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -447,7 +447,7 @@ async fn test_assoc_reliable_ordered_fragmented_then_defragmented() -> Result<()
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_assoc_reliable_unordered_fragmented_then_defragmented() -> Result<(), Error> {
+async fn test_assoc_reliable_unordered_fragmented_then_defragmented() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -514,7 +514,7 @@ async fn test_assoc_reliable_unordered_fragmented_then_defragmented() -> Result<
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_assoc_reliable_unordered_ordered() -> Result<(), Error> {
+async fn test_assoc_reliable_unordered_ordered() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -607,7 +607,7 @@ async fn test_assoc_reliable_unordered_ordered() -> Result<(), Error> {
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_assoc_reliable_retransmission() -> Result<(), Error> {
+async fn test_assoc_reliable_retransmission() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -685,7 +685,7 @@ async fn test_assoc_reliable_retransmission() -> Result<(), Error> {
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_assoc_reliable_short_buffer() -> Result<(), Error> {
+async fn test_assoc_reliable_short_buffer() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -731,9 +731,8 @@ async fn test_assoc_reliable_short_buffer() -> Result<(), Error> {
     let result = s1.read_sctp(&mut buf).await;
     assert!(result.is_err(), "expected error to be io.ErrShortBuffer");
     if let Err(err) = result {
-        assert_eq!(
-            err,
-            Error::ErrShortBuffer,
+        assert!(
+            Error::ErrShortBuffer.equal(&err),
             "expected error to be io.ErrShortBuffer"
         );
     }
@@ -756,7 +755,7 @@ async fn test_assoc_reliable_short_buffer() -> Result<(), Error> {
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_assoc_unreliable_rexmit_ordered_no_fragment() -> Result<(), Error> {
+async fn test_assoc_unreliable_rexmit_ordered_no_fragment() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -841,7 +840,7 @@ async fn test_assoc_unreliable_rexmit_ordered_no_fragment() -> Result<(), Error>
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_assoc_unreliable_rexmit_ordered_fragment() -> Result<(), Error> {
+async fn test_assoc_unreliable_rexmit_ordered_fragment() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -931,7 +930,7 @@ async fn test_assoc_unreliable_rexmit_ordered_fragment() -> Result<(), Error> {
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_assoc_unreliable_rexmit_unordered_no_fragment() -> Result<(), Error> {
+async fn test_assoc_unreliable_rexmit_unordered_no_fragment() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -1016,7 +1015,7 @@ async fn test_assoc_unreliable_rexmit_unordered_no_fragment() -> Result<(), Erro
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_assoc_unreliable_rexmit_unordered_fragment() -> Result<(), Error> {
+async fn test_assoc_unreliable_rexmit_unordered_fragment() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -1111,7 +1110,7 @@ async fn test_assoc_unreliable_rexmit_unordered_fragment() -> Result<(), Error> 
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_assoc_unreliable_rexmit_timed_ordered() -> Result<(), Error> {
+async fn test_assoc_unreliable_rexmit_timed_ordered() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -1196,7 +1195,7 @@ async fn test_assoc_unreliable_rexmit_timed_ordered() -> Result<(), Error> {
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_assoc_unreliable_rexmit_timed_unordered() -> Result<(), Error> {
+async fn test_assoc_unreliable_rexmit_timed_unordered() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -1299,7 +1298,7 @@ async fn test_assoc_unreliable_rexmit_timed_unordered() -> Result<(), Error> {
 // 3) The first one is retransmitted, which makes s1 readable
 // Above should be done before RTO occurs (fast recovery)
 #[tokio::test]
-async fn test_assoc_congestion_control_fast_retransmission() -> Result<(), Error> {
+async fn test_assoc_congestion_control_fast_retransmission() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -1390,7 +1389,7 @@ async fn test_assoc_congestion_control_fast_retransmission() -> Result<(), Error
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_assoc_congestion_control_congestion_avoidance() -> Result<(), Error> {
+async fn test_assoc_congestion_control_congestion_avoidance() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -1532,7 +1531,7 @@ async fn test_assoc_congestion_control_congestion_avoidance() -> Result<(), Erro
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_assoc_congestion_control_slow_reader() -> Result<(), Error> {
+async fn test_assoc_congestion_control_slow_reader() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -1663,7 +1662,7 @@ async fn test_assoc_congestion_control_slow_reader() -> Result<(), Error> {
 use std::io::Write;
 
 #[tokio::test]
-async fn test_assoc_delayed_ack() -> Result<(), Error> {
+async fn test_assoc_delayed_ack() -> Result<()> {
     env_logger::Builder::new()
         .format(|buf, record| {
             writeln!(
@@ -1779,7 +1778,7 @@ async fn test_assoc_delayed_ack() -> Result<(), Error> {
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_assoc_reset_close_one_way() -> Result<(), Error> {
+async fn test_assoc_reset_close_one_way() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -1874,7 +1873,7 @@ async fn test_assoc_reset_close_one_way() -> Result<(), Error> {
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_assoc_reset_close_both_ways() -> Result<(), Error> {
+async fn test_assoc_reset_close_both_ways() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -2017,7 +2016,7 @@ async fn test_assoc_reset_close_both_ways() -> Result<(), Error> {
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_assoc_abort() -> Result<(), Error> {
+async fn test_assoc_abort() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -2105,19 +2104,16 @@ impl AsAny for FakeEchoConn {
 
 #[async_trait]
 impl Conn for FakeEchoConn {
-    async fn connect(&self, _addr: SocketAddr) -> io::Result<()> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    async fn connect(&self, _addr: SocketAddr) -> Result<()> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn recv(&self, b: &mut [u8]) -> io::Result<usize> {
+    async fn recv(&self, b: &mut [u8]) -> Result<usize> {
         let mut rd_rx = self.rd_rx.lock().await;
         let v = match rd_rx.recv().await {
             Some(v) => v,
             None => {
-                return Err(io::Error::new(
-                    io::ErrorKind::UnexpectedEof,
-                    "Unexpected EOF",
-                ))
+                return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "Unexpected EOF").into())
             }
         };
         let l = std::cmp::min(v.len(), b.len());
@@ -2126,36 +2122,33 @@ impl Conn for FakeEchoConn {
         Ok(l)
     }
 
-    async fn recv_from(&self, _buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    async fn recv_from(&self, _buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn send(&self, b: &[u8]) -> io::Result<usize> {
+    async fn send(&self, b: &[u8]) -> Result<usize> {
         let wr_tx = self.wr_tx.lock().await;
         match wr_tx.send(b.to_vec()).await {
             Ok(_) => {}
-            Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.to_string())),
+            Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.to_string()).into()),
         };
         self.bytes_sent.fetch_add(b.len(), Ordering::SeqCst);
         Ok(b.len())
     }
 
-    async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> io::Result<usize> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> Result<usize> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn local_addr(&self) -> io::Result<SocketAddr> {
-        Err(io::Error::new(
-            io::ErrorKind::AddrNotAvailable,
-            "Addr Not Available",
-        ))
+    async fn local_addr(&self) -> Result<SocketAddr> {
+        Err(io::Error::new(io::ErrorKind::AddrNotAvailable, "Addr Not Available").into())
     }
 }
 
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_stats() -> Result<(), Error> {
+async fn test_stats() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -2193,7 +2186,7 @@ async fn test_stats() -> Result<(), Error> {
     Ok(())
 }
 
-async fn create_assocs() -> Result<(Association, Association), Error> {
+async fn create_assocs() -> Result<(Association, Association)> {
     let addr1 = SocketAddr::from_str("0.0.0.0:0").unwrap();
     let addr2 = SocketAddr::from_str("0.0.0.0:0").unwrap();
 
@@ -2217,7 +2210,7 @@ async fn create_assocs() -> Result<(Association, Association), Error> {
 
         let _ = a1chan_tx.send(a).await;
 
-        Ok::<(), Error>(())
+        Result::<()>::Ok(())
     });
 
     tokio::spawn(async move {
@@ -2231,7 +2224,7 @@ async fn create_assocs() -> Result<(Association, Association), Error> {
 
         let _ = a2chan_tx.send(a).await;
 
-        Ok::<(), Error>(())
+        Result::<()>::Ok(())
     });
 
     let timer1 = tokio::time::sleep(Duration::from_secs(1));
@@ -2239,7 +2232,7 @@ async fn create_assocs() -> Result<(Association, Association), Error> {
     let a1 = tokio::select! {
         _ = timer1.as_mut() =>{
             assert!(false,"timed out waiting for a1");
-            return Err(Error::ErrOthers("timed out waiting for a1".to_owned()));
+            return Err(Error::new("timed out waiting for a1".to_owned()).into());
         },
         a1 = a1chan_rx.recv() => {
             a1.unwrap()
@@ -2251,7 +2244,7 @@ async fn create_assocs() -> Result<(Association, Association), Error> {
     let a2 = tokio::select! {
         _ = timer2.as_mut() =>{
             assert!(false,"timed out waiting for a2");
-            return Err(Error::ErrOthers("timed out waiting for a2".to_owned()));
+            return Err(Error::new("timed out waiting for a2".to_owned()).into());
         },
         a2 = a2chan_rx.recv() => {
             a2.unwrap()
@@ -2265,7 +2258,7 @@ async fn create_assocs() -> Result<(Association, Association), Error> {
 //TODO: remove this conditional test
 #[cfg(not(target_os = "windows"))]
 #[tokio::test]
-async fn test_association_shutdown() -> Result<(), Error> {
+async fn test_association_shutdown() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -2321,7 +2314,7 @@ async fn test_association_shutdown() -> Result<(), Error> {
 //TODO: remove this conditional test
 #[cfg(not(target_os = "windows"))]
 #[tokio::test]
-async fn test_association_shutdown_during_write() -> Result<(), Error> {
+async fn test_association_shutdown_during_write() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -2404,7 +2397,7 @@ async fn test_association_shutdown_during_write() -> Result<(), Error> {
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_association_handle_packet_before_init() -> Result<(), Error> {
+async fn test_association_handle_packet_before_init() -> Result<()> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(

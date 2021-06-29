@@ -1,5 +1,6 @@
 use super::{param_type::*, *};
 
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 
@@ -23,9 +24,9 @@ impl Param for ParamHeader {
         self.clone()
     }
 
-    fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw: &Bytes) -> Result<Self> {
         if raw.len() < PARAM_HEADER_LENGTH {
-            return Err(Error::ErrParamHeaderTooShort);
+            return Err(Error::ErrParamHeaderTooShort.into());
         }
 
         let reader = &mut raw.clone();
@@ -34,7 +35,7 @@ impl Param for ParamHeader {
 
         let len = reader.get_u16() as usize;
         if len < PARAM_HEADER_LENGTH || raw.len() < len {
-            return Err(Error::ErrParamHeaderTooShort);
+            return Err(Error::ErrParamHeaderTooShort.into());
         }
 
         Ok(ParamHeader {
@@ -43,7 +44,7 @@ impl Param for ParamHeader {
         })
     }
 
-    fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize, Error> {
+    fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize> {
         writer.put_u16(self.typ as u16);
         writer.put_u16(self.value_length + PARAM_HEADER_LENGTH as u16);
         Ok(writer.len())

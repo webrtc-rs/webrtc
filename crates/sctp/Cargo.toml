@@ -1,6 +1,6 @@
 [package]
 name = "webrtc-sctp"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of SCTP"
@@ -12,14 +12,15 @@ repository = "https://github.com/webrtc-rs/sctp"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-util = { package = "webrtc-util", version = "0.1.21" } #path = "../util"} #
+util = { package = "webrtc-util", version = "0.2.1", default-features = false, features = ["conn"] }
+tokio = { version = "1", features = ["full"] }
 bytes = "1"
-thiserror = "1"
 rand = "0.8.0"
 crc = "2.0.0"
-tokio = { version = "1", features = ["full"] }
 async-trait = "0.1"
 log = "0.4"
+thiserror = "1.0.25"
+anyhow = "1.0.41"
 
 [dev-dependencies]
 tokio-test = "0.4"

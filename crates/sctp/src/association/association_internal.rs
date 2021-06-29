@@ -2,6 +2,8 @@
 mod association_internal_test;
 
 use super::*;
+
+use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::atomic::AtomicBool;
 
@@ -165,7 +167,7 @@ impl AssociationInternal {
     }
 
     /// caller must hold self.lock
-    pub(crate) fn send_init(&mut self) -> Result<(), Error> {
+    pub(crate) fn send_init(&mut self) -> Result<()> {
         if let Some(stored_init) = self.stored_init.take() {
             log::debug!("[{}] sending INIT", self.name);
 
@@ -184,12 +186,12 @@ impl AssociationInternal {
 
             Ok(())
         } else {
-            Err(Error::ErrInitNotStoredToSend)
+            Err(Error::ErrInitNotStoredToSend.into())
         }
     }
 
     /// caller must hold self.lock
-    fn send_cookie_echo(&mut self) -> Result<(), Error> {
+    fn send_cookie_echo(&mut self) -> Result<()> {
         if let Some(stored_cookie_echo) = &self.stored_cookie_echo {
             log::debug!("[{}] sending COOKIE-ECHO", self.name);
 
@@ -204,11 +206,11 @@ impl AssociationInternal {
             self.awake_write_loop();
             Ok(())
         } else {
-            Err(Error::ErrCookieEchoNotStoredToSend)
+            Err(Error::ErrCookieEchoNotStoredToSend.into())
         }
     }
 
-    pub(crate) async fn close(&mut self) -> Result<(), Error> {
+    pub(crate) async fn close(&mut self) -> Result<()> {
         if self.get_state() != AssociationState::Closed {
             self.set_state(AssociationState::Closed);
 
@@ -299,7 +301,7 @@ impl AssociationInternal {
     }
 
     /// handle_inbound parses incoming raw packets
-    pub(crate) async fn handle_inbound(&mut self, raw: &Bytes) -> Result<(), Error> {
+    pub(crate) async fn handle_inbound(&mut self, raw: &Bytes) -> Result<()> {
         let p = Packet::unmarshal(raw)?;
         p.check_packet()?;
 
@@ -311,7 +313,7 @@ impl AssociationInternal {
 
         self.handle_chunk_end();
 
-        return Ok(());
+        Ok(())
     }
 
     fn gather_data_packets_to_retransmit(&mut self, mut raw_packets: Vec<Bytes>) -> Vec<Bytes> {
@@ -641,7 +643,7 @@ impl AssociationInternal {
         self.state.load(Ordering::SeqCst).into()
     }
 
-    async fn handle_init(&mut self, p: &Packet, i: &ChunkInit) -> Result<Vec<Packet>, Error> {
+    async fn handle_init(&mut self, p: &Packet, i: &ChunkInit) -> Result<Vec<Packet>> {
         let state = self.get_state();
         log::debug!("[{}] chunkInit received in state '{}'", self.name, state);
 
@@ -658,7 +660,7 @@ impl AssociationInternal {
         {
             // 5.2.2.  Unexpected INIT in States Other than CLOSED, COOKIE-ECHOED,
             //        COOKIE-WAIT, and SHUTDOWN-ACK-SENT
-            return Err(Error::ErrHandleInitState);
+            return Err(Error::ErrHandleInitState.into());
         }
 
         // Should we be setting any of these permanently until we've ACKed further?
@@ -726,7 +728,7 @@ impl AssociationInternal {
         Ok(vec![outbound])
     }
 
-    async fn handle_init_ack(&mut self, p: &Packet, i: &ChunkInit) -> Result<Vec<Packet>, Error> {
+    async fn handle_init_ack(&mut self, p: &Packet, i: &ChunkInit) -> Result<Vec<Packet>> {
         let state = self.get_state();
         log::debug!("[{}] chunkInitAck received in state '{}'", self.name, state);
         if state != AssociationState::CookieWait {
@@ -807,11 +809,11 @@ impl AssociationInternal {
 
             Ok(vec![])
         } else {
-            Err(Error::ErrInitAckNoCookie)
+            Err(Error::ErrInitAckNoCookie.into())
         }
     }
 
-    async fn handle_heartbeat(&self, c: &ChunkHeartbeat) -> Result<Vec<Packet>, Error> {
+    async fn handle_heartbeat(&self, c: &ChunkHeartbeat) -> Result<Vec<Packet>> {
         log::trace!("[{}] chunkHeartbeat", self.name);
         if let Some(p) = c.params.first() {
             if let Some(hbi) = p.as_any().downcast_ref::<ParamHeartbeatInfo>() {
@@ -836,7 +838,7 @@ impl AssociationInternal {
         Ok(vec![])
     }
 
-    async fn handle_cookie_echo(&mut self, c: &ChunkCookieEcho) -> Result<Vec<Packet>, Error> {
+    async fn handle_cookie_echo(&mut self, c: &ChunkCookieEcho) -> Result<Vec<Packet>> {
         let state = self.get_state();
         log::debug!("[{}] COOKIE-ECHO received in state '{}'", self.name, state);
 
@@ -884,7 +886,7 @@ impl AssociationInternal {
         }])
     }
 
-    async fn handle_cookie_ack(&mut self) -> Result<Vec<Packet>, Error> {
+    async fn handle_cookie_ack(&mut self) -> Result<Vec<Packet>> {
         let state = self.get_state();
         log::debug!("[{}] COOKIE-ACK received in state '{}'", self.name, state);
         if state != AssociationState::CookieEchoed {
@@ -908,7 +910,7 @@ impl AssociationInternal {
         Ok(vec![])
     }
 
-    async fn handle_data(&mut self, d: &ChunkPayloadData) -> Result<Vec<Packet>, Error> {
+    async fn handle_data(&mut self, d: &ChunkPayloadData) -> Result<Vec<Packet>> {
         log::trace!(
             "[{}] DATA: tsn={} immediateSack={} len={}",
             self.name,
@@ -966,7 +968,7 @@ impl AssociationInternal {
     fn handle_peer_last_tsn_and_acknowledgement(
         &mut self,
         sack_immediately: bool,
-    ) -> Result<Vec<Packet>, Error> {
+    ) -> Result<Vec<Packet>> {
         let mut reply = vec![];
 
         // Try to advance peer_last_tsn
@@ -1035,16 +1037,16 @@ impl AssociationInternal {
         &mut self,
         stream_identifier: u16,
         default_payload_type: PayloadProtocolIdentifier,
-    ) -> Result<Arc<Stream>, Error> {
+    ) -> Result<Arc<Stream>> {
         if self.streams.contains_key(&stream_identifier) {
-            return Err(Error::ErrStreamAlreadyExist);
+            return Err(Error::ErrStreamAlreadyExist.into());
         }
 
         if let Some(s) = self.create_stream(stream_identifier, false) {
             s.set_default_payload_type(default_payload_type);
             Ok(Arc::clone(&s))
         } else {
-            Err(Error::ErrStreamCreateFailed)
+            Err(Error::ErrStreamCreateFailed.into())
         }
     }
 
@@ -1096,7 +1098,7 @@ impl AssociationInternal {
     async fn process_selective_ack(
         &mut self,
         d: &ChunkSelectiveAck,
-    ) -> Result<(HashMap<u16, i64>, u32), Error> {
+    ) -> Result<(HashMap<u16, i64>, u32)> {
         let mut bytes_acked_per_stream = HashMap::new();
 
         // New ack point, so pop all ACKed packets from inflight_queue
@@ -1141,7 +1143,7 @@ impl AssociationInternal {
                         self.min_tsn2measure_rtt = self.my_next_tsn;
                         let rtt = match SystemTime::now().duration_since(c.since) {
                             Ok(rtt) => rtt,
-                            Err(_) => return Err(Error::ErrInvalidSystemTime),
+                            Err(_) => return Err(Error::ErrInvalidSystemTime.into()),
                         };
                         let srtt = self.rto_mgr.set_new_rtt(rtt.as_millis() as u64);
                         log::trace!(
@@ -1159,7 +1161,7 @@ impl AssociationInternal {
                     self.in_fast_recovery = false;
                 }
             } else {
-                return Err(Error::ErrInflightQueueTsnPop);
+                return Err(Error::ErrInflightQueueTsnPop.into());
             }
 
             i += 1;
@@ -1198,7 +1200,7 @@ impl AssociationInternal {
                             self.min_tsn2measure_rtt = self.my_next_tsn;
                             let rtt = match SystemTime::now().duration_since(c.since) {
                                 Ok(rtt) => rtt,
-                                Err(_) => return Err(Error::ErrInvalidSystemTime),
+                                Err(_) => return Err(Error::ErrInvalidSystemTime.into()),
                             };
                             let srtt = self.rto_mgr.set_new_rtt(rtt.as_millis() as u64);
                             log::trace!(
@@ -1215,7 +1217,7 @@ impl AssociationInternal {
                         }
                     }
                 } else {
-                    return Err(Error::ErrTsnRequestNotExist);
+                    return Err(Error::ErrTsnRequestNotExist.into());
                 }
             }
         }
@@ -1310,7 +1312,7 @@ impl AssociationInternal {
         cum_tsn_ack_point: u32,
         htna: u32,
         cum_tsn_ack_point_advanced: bool,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         // HTNA algorithm - RFC 4960 Sec 7.2.4
         // Increment missIndicator of each chunks that the SACK reported missing
         // when either of the following is met:
@@ -1355,7 +1357,7 @@ impl AssociationInternal {
                         }
                     }
                 } else {
-                    return Err(Error::ErrTsnRequestNotExist);
+                    return Err(Error::ErrTsnRequestNotExist.into());
                 }
 
                 tsn += 1;
@@ -1369,7 +1371,7 @@ impl AssociationInternal {
         Ok(())
     }
 
-    async fn handle_sack(&mut self, d: &ChunkSelectiveAck) -> Result<Vec<Packet>, Error> {
+    async fn handle_sack(&mut self, d: &ChunkSelectiveAck) -> Result<Vec<Packet>> {
         log::trace!(
             "[{}] {}, SACK: cumTSN={} a_rwnd={}",
             self.name,
@@ -1524,7 +1526,7 @@ impl AssociationInternal {
         }
     }
 
-    async fn handle_shutdown(&mut self, _: &ChunkShutdown) -> Result<Vec<Packet>, Error> {
+    async fn handle_shutdown(&mut self, _: &ChunkShutdown) -> Result<Vec<Packet>> {
         let state = self.get_state();
 
         if state == AssociationState::Established {
@@ -1549,7 +1551,7 @@ impl AssociationInternal {
         Ok(vec![])
     }
 
-    async fn handle_shutdown_ack(&mut self, _: &ChunkShutdownAck) -> Result<Vec<Packet>, Error> {
+    async fn handle_shutdown_ack(&mut self, _: &ChunkShutdownAck) -> Result<Vec<Packet>> {
         let state = self.get_state();
         if state == AssociationState::ShutdownSent || state == AssociationState::ShutdownAckSent {
             if let Some(t2shutdown) = &self.t2shutdown {
@@ -1563,10 +1565,7 @@ impl AssociationInternal {
         Ok(vec![])
     }
 
-    async fn handle_shutdown_complete(
-        &mut self,
-        _: &ChunkShutdownComplete,
-    ) -> Result<Vec<Packet>, Error> {
+    async fn handle_shutdown_complete(&mut self, _: &ChunkShutdownComplete) -> Result<Vec<Packet>> {
         let state = self.get_state();
         if state == AssociationState::ShutdownAckSent {
             if let Some(t2shutdown) = &self.t2shutdown {
@@ -1636,7 +1635,7 @@ impl AssociationInternal {
         }
     }
 
-    async fn handle_reconfig(&mut self, c: &ChunkReconfig) -> Result<Vec<Packet>, Error> {
+    async fn handle_reconfig(&mut self, c: &ChunkReconfig) -> Result<Vec<Packet>> {
         log::trace!("[{}] handle_reconfig", self.name);
 
         let mut pp = vec![];
@@ -1656,7 +1655,7 @@ impl AssociationInternal {
         Ok(pp)
     }
 
-    async fn handle_forward_tsn(&mut self, c: &ChunkForwardTsn) -> Result<Vec<Packet>, Error> {
+    async fn handle_forward_tsn(&mut self, c: &ChunkForwardTsn) -> Result<Vec<Packet>> {
         log::trace!("[{}] FwdTSN: {}", self.name, c.to_string());
 
         if !self.use_forward_tsn {
@@ -1737,10 +1736,10 @@ impl AssociationInternal {
         self.handle_peer_last_tsn_and_acknowledgement(false)
     }
 
-    async fn send_reset_request(&mut self, stream_identifier: u16) -> Result<(), Error> {
+    async fn send_reset_request(&mut self, stream_identifier: u16) -> Result<()> {
         let state = self.get_state();
         if state != AssociationState::Established {
-            return Err(Error::ErrResetPacketInStateNotExist);
+            return Err(Error::ErrResetPacketInStateNotExist.into());
         }
 
         // Create DATA chunk which only contains valid stream identifier with
@@ -1763,7 +1762,7 @@ impl AssociationInternal {
     async fn handle_reconfig_param(
         &mut self,
         raw: &Box<dyn Param + Send + Sync>,
-    ) -> Result<Option<Packet>, Error> {
+    ) -> Result<Option<Packet>> {
         if let Some(p) = raw.as_any().downcast_ref::<ParamOutgoingResetRequest>() {
             self.reconfig_requests
                 .insert(p.reconfig_request_sequence_number, p.clone());
@@ -1777,7 +1776,7 @@ impl AssociationInternal {
             }
             Ok(None)
         } else {
-            Err(Error::ErrParamterType)
+            Err(Error::ErrParamterType.into())
         }
     }
 
@@ -1963,10 +1962,10 @@ impl AssociationInternal {
     }
 
     /// send_payload_data sends the data chunks.
-    async fn send_payload_data(&mut self, chunks: Vec<ChunkPayloadData>) -> Result<(), Error> {
+    async fn send_payload_data(&mut self, chunks: Vec<ChunkPayloadData>) -> Result<()> {
         let state = self.get_state();
         if state != AssociationState::Established {
-            return Err(Error::ErrPayloadDataStateNotExist);
+            return Err(Error::ErrPayloadDataStateNotExist.into());
         }
 
         // Push the chunks into the pending queue first.
@@ -2133,7 +2132,7 @@ impl AssociationInternal {
         &mut self,
         p: &Packet,
         chunk: &Box<dyn Chunk + Send + Sync>,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         chunk.check()?;
         let chunk_any = chunk.as_any();
         let packets = if let Some(c) = chunk_any.downcast_ref::<ChunkInit>() {
@@ -2145,7 +2144,7 @@ impl AssociationInternal {
         } else if chunk_any.downcast_ref::<ChunkAbort>().is_some()
             || chunk_any.downcast_ref::<ChunkError>().is_some()
         {
-            return Err(Error::ErrChunk);
+            return Err(Error::ErrChunk.into());
         } else if let Some(c) = chunk_any.downcast_ref::<ChunkHeartbeat>() {
             self.handle_heartbeat(c).await?
         } else if let Some(c) = chunk_any.downcast_ref::<ChunkCookieEcho>() {
@@ -2167,7 +2166,7 @@ impl AssociationInternal {
         } else if let Some(c) = chunk_any.downcast_ref::<ChunkShutdownComplete>() {
             self.handle_shutdown_complete(c).await?
         } else {
-            return Err(Error::ErrChunkTypeUnhandled);
+            return Err(Error::ErrChunkTypeUnhandled.into());
         };
 
         if !packets.is_empty() {

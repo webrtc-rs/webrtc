@@ -1,5 +1,4 @@
-use crate::error::Error;
-
+use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
@@ -28,7 +27,7 @@ mod test_ack_timer {
     }
 
     #[tokio::test]
-    async fn test_ack_timer_start_and_stop() -> Result<(), Error> {
+    async fn test_ack_timer_start_and_stop() -> Result<()> {
         let ncbs = Arc::new(AtomicU32::new(0));
         let obs = Arc::new(Mutex::new(TestAckTimerObserver { ncbs: ncbs.clone() }));
 
@@ -75,7 +74,7 @@ mod test_rto_manager {
     use super::*;
 
     #[tokio::test]
-    async fn test_rto_manager_initial_values() -> Result<(), Error> {
+    async fn test_rto_manager_initial_values() -> Result<()> {
         let m = RtoManager::new();
         assert_eq!(RTO_INITIAL, m.rto, "should be rtoInitial");
         assert_eq!(RTO_INITIAL, m.get_rto(), "should be rtoInitial");
@@ -86,7 +85,7 @@ mod test_rto_manager {
     }
 
     #[tokio::test]
-    async fn test_rto_manager_rto_calculation_small_rtt() -> Result<(), Error> {
+    async fn test_rto_manager_rto_calculation_small_rtt() -> Result<()> {
         let mut m = RtoManager::new();
         let exp = vec![
             1800, 1500, 1275, 1106, 1000, // capped at RTO.Min
@@ -102,7 +101,7 @@ mod test_rto_manager {
     }
 
     #[tokio::test]
-    async fn test_rto_manager_rto_calculation_large_rtt() -> Result<(), Error> {
+    async fn test_rto_manager_rto_calculation_large_rtt() -> Result<()> {
         let mut m = RtoManager::new();
         let exp = vec![
             60000, // capped at RTO.Max
@@ -121,7 +120,7 @@ mod test_rto_manager {
     }
 
     #[tokio::test]
-    async fn test_rto_manager_calculate_next_timeout() -> Result<(), Error> {
+    async fn test_rto_manager_calculate_next_timeout() -> Result<()> {
         let rto = calculate_next_timeout(1, 0);
         assert_eq!(1, rto, "should match");
         let rto = calculate_next_timeout(1, 1);
@@ -139,7 +138,7 @@ mod test_rto_manager {
     }
 
     #[tokio::test]
-    async fn test_rto_manager_reset() -> Result<(), Error> {
+    async fn test_rto_manager_reset() -> Result<()> {
         let mut m = RtoManager::new();
         for _ in 0..10 {
             m.set_new_rtt(200);
@@ -210,7 +209,7 @@ mod test_rtx_timer {
     }
 
     #[tokio::test]
-    async fn test_rtx_timer_callback_interval() -> Result<(), Error> {
+    async fn test_rtx_timer_callback_interval() -> Result<()> {
         let timer_id = RtxTimerId::T1Init;
         let ncbs = Arc::new(AtomicU32::new(0));
         let obs = Arc::new(Mutex::new(TestTimerObserver {
@@ -237,7 +236,7 @@ mod test_rtx_timer {
     }
 
     #[tokio::test]
-    async fn test_rtx_timer_last_start_wins() -> Result<(), Error> {
+    async fn test_rtx_timer_last_start_wins() -> Result<()> {
         let timer_id = RtxTimerId::T3RTX;
         let ncbs = Arc::new(AtomicU32::new(0));
         let obs = Arc::new(Mutex::new(TestTimerObserver {
@@ -265,7 +264,7 @@ mod test_rtx_timer {
     }
 
     #[tokio::test]
-    async fn test_rtx_timer_stop_right_after_start() -> Result<(), Error> {
+    async fn test_rtx_timer_stop_right_after_start() -> Result<()> {
         let timer_id = RtxTimerId::T3RTX;
         let ncbs = Arc::new(AtomicU32::new(0));
         let obs = Arc::new(Mutex::new(TestTimerObserver {
@@ -290,7 +289,7 @@ mod test_rtx_timer {
     }
 
     #[tokio::test]
-    async fn test_rtx_timer_start_stop_then_start() -> Result<(), Error> {
+    async fn test_rtx_timer_start_stop_then_start() -> Result<()> {
         let timer_id = RtxTimerId::T1Cookie;
         let ncbs = Arc::new(AtomicU32::new(0));
         let obs = Arc::new(Mutex::new(TestTimerObserver {
@@ -319,7 +318,7 @@ mod test_rtx_timer {
     }
 
     #[tokio::test]
-    async fn test_rtx_timer_start_and_stop_in_atight_loop() -> Result<(), Error> {
+    async fn test_rtx_timer_start_and_stop_in_atight_loop() -> Result<()> {
         let timer_id = RtxTimerId::T2Shutdown;
         let ncbs = Arc::new(AtomicU32::new(0));
         let obs = Arc::new(Mutex::new(TestTimerObserver {
@@ -343,7 +342,7 @@ mod test_rtx_timer {
     }
 
     #[tokio::test]
-    async fn test_rtx_timer_should_stop_after_rtx_failure() -> Result<(), Error> {
+    async fn test_rtx_timer_should_stop_after_rtx_failure() -> Result<()> {
         let (done_tx, mut done_rx) = mpsc::channel(1);
 
         let timer_id = RtxTimerId::Reconfig;
@@ -392,7 +391,7 @@ mod test_rtx_timer {
     }
 
     #[tokio::test]
-    async fn test_rtx_timer_should_not_stop_if_max_retrans_is_zero() -> Result<(), Error> {
+    async fn test_rtx_timer_should_not_stop_if_max_retrans_is_zero() -> Result<()> {
         let (done_tx, mut done_rx) = mpsc::channel(1);
 
         let timer_id = RtxTimerId::Reconfig;
@@ -445,7 +444,7 @@ mod test_rtx_timer {
     }
 
     #[tokio::test]
-    async fn test_rtx_timer_stop_timer_that_is_not_running_is_noop() -> Result<(), Error> {
+    async fn test_rtx_timer_stop_timer_that_is_not_running_is_noop() -> Result<()> {
         let (done_tx, mut done_rx) = mpsc::channel(1);
 
         let timer_id = RtxTimerId::Reconfig;
@@ -473,7 +472,7 @@ mod test_rtx_timer {
     }
 
     #[tokio::test]
-    async fn test_rtx_timer_closed_timer_wont_start() -> Result<(), Error> {
+    async fn test_rtx_timer_closed_timer_wont_start() -> Result<()> {
         let timer_id = RtxTimerId::Reconfig;
         let ncbs = Arc::new(AtomicU32::new(0));
         let obs = Arc::new(Mutex::new(TestTimerObserver {

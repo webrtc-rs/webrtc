@@ -42,6 +42,7 @@ use crate::util::*;
 use association_internal::*;
 use association_stats::*;
 
+use anyhow::Result;
 use bytes::Bytes;
 use rand::random;
 use std::collections::{HashMap, VecDeque};
@@ -231,44 +232,44 @@ pub struct Association {
 
 impl Association {
     /// server accepts a SCTP stream over a conn
-    pub async fn server(config: Config) -> Result<Self, Error> {
+    pub async fn server(config: Config) -> Result<Self> {
         let mut a = Association::new(config, false).await?;
 
-        if let Some(err_opt) = &a.handshake_completed_ch_rx.recv().await {
+        if let Some(err_opt) = a.handshake_completed_ch_rx.recv().await {
             if let Some(err) = err_opt {
-                Err(err.clone())
+                Err(err.into())
             } else {
                 Ok(a)
             }
         } else {
-            Err(Error::ErrAssociationHandshakeClosed)
+            Err(Error::ErrAssociationHandshakeClosed.into())
         }
     }
 
     /// Client opens a SCTP stream over a conn
-    pub async fn client(config: Config) -> Result<Self, Error> {
+    pub async fn client(config: Config) -> Result<Self> {
         let mut a = Association::new(config, true).await?;
 
-        if let Some(err_opt) = &a.handshake_completed_ch_rx.recv().await {
+        if let Some(err_opt) = a.handshake_completed_ch_rx.recv().await {
             if let Some(err) = err_opt {
-                Err(err.clone())
+                Err(err.into())
             } else {
                 Ok(a)
             }
         } else {
-            Err(Error::ErrAssociationHandshakeClosed)
+            Err(Error::ErrAssociationHandshakeClosed.into())
         }
     }
 
     /// Shutdown initiates the shutdown sequence. The method blocks until the
     /// shutdown sequence is completed and the connection is closed, or until the
     /// passed context is done, in which case the context's error is returned.
-    pub async fn shutdown(&mut self) -> Result<(), Error> {
+    pub async fn shutdown(&mut self) -> Result<()> {
         log::debug!("[{}] closing association..", self.name);
 
         let state = self.get_state();
         if state != AssociationState::Established {
-            return Err(Error::ErrShutdownNonEstablished);
+            return Err(Error::ErrShutdownNonEstablished.into());
         }
 
         // Attempt a graceful shutdown.
@@ -287,14 +288,14 @@ impl Association {
     }
 
     /// Close ends the SCTP Association and cleans up any state
-    pub async fn close(&self) -> Result<(), Error> {
+    pub async fn close(&self) -> Result<()> {
         log::debug!("[{}] closing association..", self.name);
 
         let mut ai = self.association_internal.lock().await;
         ai.close().await
     }
 
-    async fn new(config: Config, is_client: bool) -> Result<Self, Error> {
+    async fn new(config: Config, is_client: bool) -> Result<Self> {
         let net_conn = Arc::clone(&config.net_conn);
 
         let (awake_write_loop_ch_tx, awake_write_loop_ch_rx) = mpsc::channel(1);
@@ -551,7 +552,7 @@ impl Association {
         &self,
         stream_identifier: u16,
         default_payload_type: PayloadProtocolIdentifier,
-    ) -> Result<Arc<Stream>, Error> {
+    ) -> Result<Arc<Stream>> {
         let mut ai = self.association_internal.lock().await;
         ai.open_stream(stream_identifier, default_payload_type)
     }

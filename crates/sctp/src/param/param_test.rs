@@ -6,7 +6,7 @@ use super::*;
 use super::param_type::*;
 
 #[test]
-fn test_parse_param_type_success() -> Result<(), Error> {
+fn test_parse_param_type_success() -> Result<()> {
     let tests = vec![
         (Bytes::from_static(&[0x0, 0x1]), ParamType::HeartbeatInfo),
         (Bytes::from_static(&[0x0, 0xd]), ParamType::OutSsnResetReq),
@@ -28,7 +28,7 @@ use super::param_header::*;
 static PARAM_HEADER_BYTES: Bytes = Bytes::from_static(&[0x0, 0x1, 0x0, 0x4]);
 
 #[test]
-fn test_param_header_success() -> Result<(), Error> {
+fn test_param_header_success() -> Result<()> {
     let tests = vec![(
         PARAM_HEADER_BYTES.clone(),
         ParamHeader {
@@ -48,7 +48,7 @@ fn test_param_header_success() -> Result<(), Error> {
 }
 
 #[test]
-fn test_param_header_unmarshal_failure() -> Result<(), Error> {
+fn test_param_header_unmarshal_failure() -> Result<()> {
     let tests = vec![
         ("header too short", PARAM_HEADER_BYTES.slice(..2)),
         // {"wrong param type", []byte{0x0, 0x0, 0x0, 0x4}}, // Not possible to fail parseParamType atm.
@@ -75,7 +75,7 @@ use super::param_forward_tsn_supported::*;
 static PARAM_FORWARD_TSN_SUPPORTED_BYTES: Bytes = Bytes::from_static(&[0xc0, 0x0, 0x0, 0x4]);
 
 #[test]
-fn test_param_forward_tsn_supported_success() -> Result<(), Error> {
+fn test_param_forward_tsn_supported_success() -> Result<()> {
     let tests = vec![(
         PARAM_FORWARD_TSN_SUPPORTED_BYTES.clone(),
         ParamForwardTsnSupported {},
@@ -92,7 +92,7 @@ fn test_param_forward_tsn_supported_success() -> Result<(), Error> {
 }
 
 #[test]
-fn test_param_forward_tsn_supported_failure() -> Result<(), Error> {
+fn test_param_forward_tsn_supported_failure() -> Result<()> {
     let tests = vec![("param too short", Bytes::from_static(&[0x0, 0xd, 0x0]))];
 
     for (name, binary) in tests {
@@ -117,7 +117,7 @@ static CHUNK_RECONFIG_PARAM_B: Bytes = Bytes::from_static(&[
 ]);
 
 #[test]
-fn test_param_outgoing_reset_request_success() -> Result<(), Error> {
+fn test_param_outgoing_reset_request_success() -> Result<()> {
     let tests = vec![
         (
             CHUNK_RECONFIG_PARAM_A.clone(),
@@ -150,7 +150,7 @@ fn test_param_outgoing_reset_request_success() -> Result<(), Error> {
 }
 
 #[test]
-fn test_param_outgoing_reset_request_failure() -> Result<(), Error> {
+fn test_param_outgoing_reset_request_failure() -> Result<()> {
     let tests = vec![
         ("packet too short", CHUNK_RECONFIG_PARAM_A.slice(..8)),
         ("param too short", Bytes::from_static(&[0x0, 0xd, 0x0, 0x4])),
@@ -174,7 +174,7 @@ static CHUNK_RECONFIG_RESPONCE: Bytes =
     Bytes::from_static(&[0x0, 0x10, 0x0, 0xc, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1]);
 
 #[test]
-fn test_param_reconfig_response_success() -> Result<(), Error> {
+fn test_param_reconfig_response_success() -> Result<()> {
     let tests = vec![(
         CHUNK_RECONFIG_RESPONCE.clone(),
         ParamReconfigResponse {
@@ -194,7 +194,7 @@ fn test_param_reconfig_response_success() -> Result<(), Error> {
 }
 
 #[test]
-fn test_param_reconfig_response_failure() -> Result<(), Error> {
+fn test_param_reconfig_response_failure() -> Result<()> {
     let tests = vec![
         ("packet too short", CHUNK_RECONFIG_RESPONCE.slice(..8)),
         (
@@ -212,7 +212,7 @@ fn test_param_reconfig_response_failure() -> Result<(), Error> {
 }
 
 #[test]
-fn test_reconfig_result_stringer() -> Result<(), Error> {
+fn test_reconfig_result_stringer() -> Result<()> {
     let tests = vec![
         (ReconfigResult::SuccessNop, "0: Success - Nothing to do"),
         (ReconfigResult::SuccessPerformed, "1: Success - Performed"),
@@ -242,7 +242,7 @@ fn test_reconfig_result_stringer() -> Result<(), Error> {
 ///////////////////////////////////////////////////////////////////
 
 #[test]
-fn test_build_param_success() -> Result<(), Error> {
+fn test_build_param_success() -> Result<()> {
     let tests = vec![CHUNK_RECONFIG_PARAM_A.clone()];
 
     for binary in tests {
@@ -255,7 +255,7 @@ fn test_build_param_success() -> Result<(), Error> {
 }
 
 #[test]
-fn test_build_param_failure() -> Result<(), Error> {
+fn test_build_param_failure() -> Result<()> {
     let tests = vec![
         ("invalid ParamType", Bytes::from_static(&[0x0, 0x0])),
         ("build failure", CHUNK_RECONFIG_PARAM_A.slice(..8)),

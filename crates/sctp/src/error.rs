@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-#[derive(Debug, Error, PartialEq, Clone)]
+#[derive(Debug, Error, PartialEq)]
 pub enum Error {
     #[error("raw is too small for a SCTP chunk")]
     ErrChunkHeaderTooSmall,
@@ -216,6 +216,13 @@ pub enum Error {
     #[error("Net Conn read error")]
     ErrNetConnReadError,
 
-    #[error("Other errors:{0}")]
-    ErrOthers(String),
+    #[allow(non_camel_case_types)]
+    #[error("{0}")]
+    new(String),
+}
+
+impl Error {
+    pub fn equal(&self, err: &anyhow::Error) -> bool {
+        err.downcast_ref::<Self>().map_or(false, |e| e == self)
+    }
 }

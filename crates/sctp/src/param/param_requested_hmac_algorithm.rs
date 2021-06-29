@@ -1,5 +1,6 @@
 use super::{param_header::*, param_type::*, *};
 
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 
@@ -66,7 +67,7 @@ impl Param for ParamRequestedHmacAlgorithm {
         }
     }
 
-    fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw: &Bytes) -> Result<Self> {
         let header = ParamHeader::unmarshal(raw)?;
 
         let reader =
@@ -79,7 +80,7 @@ impl Param for ParamRequestedHmacAlgorithm {
             if a == HmacAlgorithm::HmacSha128 || a == HmacAlgorithm::HmacSha256 {
                 available_algorithms.push(a);
             } else {
-                return Err(Error::ErrInvalidAlgorithmType);
+                return Err(Error::ErrInvalidAlgorithmType.into());
             }
 
             offset += 2;
@@ -90,7 +91,7 @@ impl Param for ParamRequestedHmacAlgorithm {
         })
     }
 
-    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize, Error> {
+    fn marshal_to(&self, buf: &mut BytesMut) -> Result<usize> {
         self.header().marshal_to(buf)?;
         for a in &self.available_algorithms {
             buf.put_u16(*a as u16);

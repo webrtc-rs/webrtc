@@ -6,31 +6,28 @@ struct DumbConn;
 
 #[async_trait]
 impl Conn for DumbConn {
-    async fn connect(&self, _addr: SocketAddr) -> io::Result<()> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    async fn connect(&self, _addr: SocketAddr) -> Result<()> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn recv(&self, _b: &mut [u8]) -> io::Result<usize> {
+    async fn recv(&self, _b: &mut [u8]) -> Result<usize> {
         Ok(0)
     }
 
-    async fn recv_from(&self, _buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    async fn recv_from(&self, _buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn send(&self, _b: &[u8]) -> io::Result<usize> {
+    async fn send(&self, _b: &[u8]) -> Result<usize> {
         Ok(0)
     }
 
-    async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> io::Result<usize> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> Result<usize> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn local_addr(&self) -> io::Result<SocketAddr> {
-        Err(io::Error::new(
-            io::ErrorKind::AddrNotAvailable,
-            "Addr Not Available",
-        ))
+    async fn local_addr(&self) -> Result<SocketAddr> {
+        Err(io::Error::new(io::ErrorKind::AddrNotAvailable, "Addr Not Available").into())
     }
 }
 
@@ -49,7 +46,7 @@ fn create_association_internal(config: Config) -> AssociationInternal {
 }
 
 #[test]
-fn test_create_forward_tsn_forward_one_abandoned() -> Result<(), Error> {
+fn test_create_forward_tsn_forward_one_abandoned() -> Result<()> {
     let mut a = AssociationInternal::default();
 
     a.cumulative_tsn_ack_point = 9;
@@ -77,7 +74,7 @@ fn test_create_forward_tsn_forward_one_abandoned() -> Result<(), Error> {
 }
 
 #[test]
-fn test_create_forward_tsn_forward_two_abandoned_with_the_same_si() -> Result<(), Error> {
+fn test_create_forward_tsn_forward_two_abandoned_with_the_same_si() -> Result<()> {
     let mut a = AssociationInternal::default();
 
     a.cumulative_tsn_ack_point = 9;
@@ -143,7 +140,7 @@ fn test_create_forward_tsn_forward_two_abandoned_with_the_same_si() -> Result<()
 }
 
 #[tokio::test]
-async fn test_handle_forward_tsn_forward_3unreceived_chunks() -> Result<(), Error> {
+async fn test_handle_forward_tsn_forward_3unreceived_chunks() -> Result<()> {
     let mut a = AssociationInternal::default();
 
     a.use_forward_tsn = true;
@@ -177,7 +174,7 @@ async fn test_handle_forward_tsn_forward_3unreceived_chunks() -> Result<(), Erro
 }
 
 #[tokio::test]
-async fn test_handle_forward_tsn_forward_1for1_missing() -> Result<(), Error> {
+async fn test_handle_forward_tsn_forward_1for1_missing() -> Result<()> {
     let mut a = AssociationInternal::default();
 
     a.use_forward_tsn = true;
@@ -225,7 +222,7 @@ async fn test_handle_forward_tsn_forward_1for1_missing() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_handle_forward_tsn_forward_1for2_missing() -> Result<(), Error> {
+async fn test_handle_forward_tsn_forward_1for2_missing() -> Result<()> {
     let mut a = AssociationInternal::default();
 
     a.use_forward_tsn = true;
@@ -271,7 +268,7 @@ async fn test_handle_forward_tsn_forward_1for2_missing() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_handle_forward_tsn_dup_forward_tsn_chunk_should_generate_sack() -> Result<(), Error> {
+async fn test_handle_forward_tsn_dup_forward_tsn_chunk_should_generate_sack() -> Result<()> {
     let mut a = AssociationInternal::default();
 
     a.use_forward_tsn = true;
@@ -296,7 +293,7 @@ async fn test_handle_forward_tsn_dup_forward_tsn_chunk_should_generate_sack() ->
 }
 
 #[tokio::test]
-async fn test_assoc_create_new_stream() -> Result<(), Error> {
+async fn test_assoc_create_new_stream() -> Result<()> {
     let (accept_ch_tx, _accept_ch_rx) = mpsc::channel(ACCEPT_CH_SIZE);
     let mut a = AssociationInternal {
         accept_ch_tx: Some(accept_ch_tx),
@@ -383,7 +380,7 @@ async fn handle_init_test(name: &str, initial_state: AssociationState, expect_er
 }
 
 #[tokio::test]
-async fn test_assoc_handle_init() -> Result<(), Error> {
+async fn test_assoc_handle_init() -> Result<()> {
     handle_init_test("normal", AssociationState::Closed, false).await;
 
     handle_init_test(
@@ -425,7 +422,7 @@ async fn test_assoc_handle_init() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_assoc_max_message_size_default() -> Result<(), Error> {
+async fn test_assoc_max_message_size_default() -> Result<()> {
     let mut a = create_association_internal(Config {
         net_conn: Arc::new(DumbConn {}),
         max_receive_buffer_size: 0,
@@ -446,9 +443,8 @@ async fn test_assoc_max_message_size_default() -> Result<(), Error> {
         let ppi = PayloadProtocolIdentifier::from(s.default_payload_type.load(Ordering::SeqCst));
 
         if let Err(err) = s.write_sctp(&p.slice(..65536), ppi).await {
-            assert_ne!(
-                err,
-                Error::ErrOutboundPacketTooLarge,
+            assert!(
+                !Error::ErrOutboundPacketTooLarge.equal(&err),
                 "should be not Error::ErrOutboundPacketTooLarge"
             );
         } else {
@@ -456,9 +452,8 @@ async fn test_assoc_max_message_size_default() -> Result<(), Error> {
         }
 
         if let Err(err) = s.write_sctp(&p.slice(..65537), ppi).await {
-            assert_eq!(
-                err,
-                Error::ErrOutboundPacketTooLarge,
+            assert!(
+                Error::ErrOutboundPacketTooLarge.equal(&err),
                 "should be Error::ErrOutboundPacketTooLarge"
             );
         } else {
@@ -470,7 +465,7 @@ async fn test_assoc_max_message_size_default() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_assoc_max_message_size_explicit() -> Result<(), Error> {
+async fn test_assoc_max_message_size_explicit() -> Result<()> {
     let mut a = create_association_internal(Config {
         net_conn: Arc::new(DumbConn {}),
         max_receive_buffer_size: 0,
@@ -492,9 +487,8 @@ async fn test_assoc_max_message_size_explicit() -> Result<(), Error> {
         let ppi = PayloadProtocolIdentifier::from(s.default_payload_type.load(Ordering::SeqCst));
 
         if let Err(err) = s.write_sctp(&p.slice(..30000), ppi).await {
-            assert_ne!(
-                err,
-                Error::ErrOutboundPacketTooLarge,
+            assert!(
+                !Error::ErrOutboundPacketTooLarge.equal(&err),
                 "should be not Error::ErrOutboundPacketTooLarge"
             );
         } else {
@@ -502,9 +496,8 @@ async fn test_assoc_max_message_size_explicit() -> Result<(), Error> {
         }
 
         if let Err(err) = s.write_sctp(&p.slice(..30001), ppi).await {
-            assert_eq!(
-                err,
-                Error::ErrOutboundPacketTooLarge,
+            assert!(
+                Error::ErrOutboundPacketTooLarge.equal(&err),
                 "should be Error::ErrOutboundPacketTooLarge"
             );
         } else {

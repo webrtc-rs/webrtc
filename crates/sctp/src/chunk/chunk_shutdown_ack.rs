@@ -1,5 +1,6 @@
 use super::{chunk_header::*, chunk_type::*, *};
 
+use anyhow::Result;
 use bytes::{Bytes, BytesMut};
 use std::fmt;
 
@@ -29,22 +30,22 @@ impl Chunk for ChunkShutdownAck {
         }
     }
 
-    fn unmarshal(raw: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw: &Bytes) -> Result<Self> {
         let header = ChunkHeader::unmarshal(raw)?;
 
         if header.typ != CT_SHUTDOWN_ACK {
-            return Err(Error::ErrChunkTypeNotShutdownAck);
+            return Err(Error::ErrChunkTypeNotShutdownAck.into());
         }
 
         Ok(ChunkShutdownAck {})
     }
 
-    fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize, Error> {
+    fn marshal_to(&self, writer: &mut BytesMut) -> Result<usize> {
         self.header().marshal_to(writer)?;
         Ok(writer.len())
     }
 
-    fn check(&self) -> Result<(), Error> {
+    fn check(&self) -> Result<()> {
         Ok(())
     }
 

@@ -2,6 +2,7 @@ use crate::chunk::chunk_payload_data::{ChunkPayloadData, PayloadProtocolIdentifi
 use crate::util::*;
 
 use crate::error::Error;
+use anyhow::Result;
 use std::cmp::Ordering;
 
 fn sort_chunks_by_tsn(c: &mut Vec<ChunkPayloadData>) {
@@ -252,10 +253,7 @@ impl ReassemblyQueue {
         false
     }
 
-    pub(crate) fn read(
-        &mut self,
-        buf: &mut [u8],
-    ) -> Result<(usize, PayloadProtocolIdentifier), Error> {
+    pub(crate) fn read(&mut self, buf: &mut [u8]) -> Result<(usize, PayloadProtocolIdentifier)> {
         // Check unordered first
         let cset = if !self.unordered.is_empty() {
             self.unordered.remove(0)
@@ -263,17 +261,17 @@ impl ReassemblyQueue {
             // Now, check ordered
             let cset = &self.ordered[0];
             if !cset.is_complete() {
-                return Err(Error::ErrTryAgain);
+                return Err(Error::ErrTryAgain.into());
             }
             if sna16gt(cset.ssn, self.next_ssn) {
-                return Err(Error::ErrTryAgain);
+                return Err(Error::ErrTryAgain.into());
             }
             if cset.ssn == self.next_ssn {
                 self.next_ssn += 1;
             }
             self.ordered.remove(0)
         } else {
-            return Err(Error::ErrTryAgain);
+            return Err(Error::ErrTryAgain.into());
         };
 
         // Concat all fragments into the buffer
@@ -293,7 +291,7 @@ impl ReassemblyQueue {
         }
 
         if let Some(err) = err {
-            Err(err)
+            Err(err.into())
         } else {
             Ok((n_written, cset.ppi))
         }
