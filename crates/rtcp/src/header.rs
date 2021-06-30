@@ -1,7 +1,8 @@
 use crate::error::Error;
+use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
 use anyhow::Result;
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{Buf, BufMut};
 
 /// PacketType specifies the type of an RTCP packet
 /// RTCP packet types registered with IANA. See: https://www.iana.org/assignments/rtp-parameters/rtp-parameters.xhtml#rtp-parameters-4
@@ -101,12 +102,17 @@ pub struct Header {
 }
 
 /// Marshal encodes the Header in binary
-impl Header {
-    fn size(&self) -> usize {
+impl MarshalSize for Header {
+    fn marshal_size(&self) -> usize {
         HEADER_LENGTH
     }
+}
 
-    pub fn marshal(&self) -> Result<Bytes> {
+impl Marshal for Header {
+    fn marshal_to<B>(&self, raw_packet: &mut B) -> Result<usize>
+    where
+        B: BufMut,
+    {
         if self.count > 31 {
             return Err(Error::InvalidHeader.into());
         }
@@ -118,8 +124,6 @@ impl Header {
          * |V=2|P|    RC   |   PT=SR=200   |             length            |
          * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
-        let mut raw_packet = BytesMut::with_capacity(HEADER_LENGTH);
-
         let b0 = (RTP_VERSION << VERSION_SHIFT)
             | ((self.padding as u8) << PADDING_SHIFT)
             | (self.count << COUNT_SHIFT);
@@ -128,12 +132,18 @@ impl Header {
         raw_packet.put_u8(self.packet_type as u8);
         raw_packet.put_u16(self.length);
 
-        Ok(raw_packet.freeze())
+        Ok(HEADER_LENGTH)
     }
+}
 
+impl Unmarshal for Header {
     /// Unmarshal decodes the Header from binary
-    pub fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
-        if raw_packet.len() < HEADER_LENGTH {
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    where
+        Self: Sized,
+        B: Buf,
+    {
+        if raw_packet.remaining() < HEADER_LENGTH {
             return Err(Error::PacketTooShort.into());
         }
 
@@ -144,8 +154,7 @@ impl Header {
          * |V=2|P|    RC   |      PT       |             length            |
          * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
-        let reader = &mut raw_packet.clone();
-        let b0 = reader.get_u8();
+        let b0 = raw_packet.get_u8();
         let version = (b0 >> VERSION_SHIFT) & VERSION_MASK;
         if version != RTP_VERSION {
             return Err(Error::BadVersion.into());
@@ -153,8 +162,8 @@ impl Header {
 
         let padding = ((b0 >> PADDING_SHIFT) & PADDING_MASK) > 0;
         let count = (b0 >> COUNT_SHIFT) & COUNT_MASK;
-        let packet_type = PacketType::from(reader.get_u8());
-        let length = reader.get_u16();
+        let packet_type = PacketType::from(raw_packet.get_u8());
+        let length = raw_packet.get_u16();
 
         Ok(Header {
             padding,
@@ -168,6 +177,7 @@ impl Header {
 #[cfg(test)]
 mod test {
     use super::*;
+    use bytes::Bytes;
 
     #[test]
     fn test_header_unmarshal() {
@@ -217,7 +227,8 @@ mod test {
         ];
 
         for (name, data, want, want_error) in tests {
-            let got = Header::unmarshal(&data);
+            let buf = &mut data.clone();
+            let got = Header::unmarshal(buf);
 
             assert_eq!(
                 got.is_err(),
@@ -306,8 +317,8 @@ mod test {
                 );
             } else {
                 let data = got.ok().unwrap();
-                let actual =
-                    Header::unmarshal(&data).expect(format!("Unmarshal {}", name).as_str());
+                let buf = &mut data.clone();
+                let actual = Header::unmarshal(buf).expect(format!("Unmarshal {}", name).as_str());
 
                 assert_eq!(
                     actual, want,
