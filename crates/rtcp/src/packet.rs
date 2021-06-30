@@ -13,13 +13,14 @@ use util::marshal::{Marshal, Unmarshal};
 //use anyhow::Result;
 //use bytes::Bytes;
 use std::any::Any;
+use std::fmt;
 
 /// Packet represents an RTCP packet, a protocol used for out-of-band statistics and
 /// control information for an RTP session
-pub trait Packet: Marshal + Unmarshal + PartialEq + Clone {
+pub trait Packet: Marshal + Unmarshal + PartialEq + Clone + fmt::Display + fmt::Debug {
     fn header(&self) -> Header;
     fn destination_ssrc(&self) -> Vec<u32>;
-    fn size(&self) -> usize;
+    fn raw_size(&self) -> usize;
     fn as_any(&self) -> &dyn Any;
 }
 
