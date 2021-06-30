@@ -3,6 +3,7 @@ mod slice_loss_indication_test;
 
 use crate::{error::Error, header::*, packet::*, util::*};
 
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::any::Any;
 use std::fmt;
@@ -54,9 +55,9 @@ impl Packet for SliceLossIndication {
     }
 
     /// Marshal encodes the SliceLossIndication in binary
-    fn marshal(&self) -> Result<Bytes, Error> {
+    fn marshal(&self) -> Result<Bytes> {
         if (self.sli_entries.len() + SLI_LENGTH) as u8 > std::u8::MAX {
-            return Err(Error::TooManyReports);
+            return Err(Error::TooManyReports.into());
         }
 
         let mut writer = BytesMut::with_capacity(self.marshal_size());
@@ -81,19 +82,19 @@ impl Packet for SliceLossIndication {
     }
 
     /// Unmarshal decodes the SliceLossIndication from binary
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
         if raw_packet.len() < (HEADER_LENGTH + SSRC_LENGTH) {
-            return Err(Error::PacketTooShort);
+            return Err(Error::PacketTooShort.into());
         }
 
         let h = Header::unmarshal(raw_packet)?;
 
         if raw_packet.len() < (HEADER_LENGTH + (4 * h.length as usize)) {
-            return Err(Error::PacketTooShort);
+            return Err(Error::PacketTooShort.into());
         }
 
         if h.packet_type != PacketType::TransportSpecificFeedback || h.count != FORMAT_SLI {
-            return Err(Error::WrongType);
+            return Err(Error::WrongType.into());
         }
 
         let reader = &mut raw_packet.slice(HEADER_LENGTH..);

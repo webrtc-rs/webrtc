@@ -1,7 +1,6 @@
 use thiserror::Error;
 
-/// Possible RTCP error.
-#[derive(Debug, Clone, PartialEq, Error)]
+#[derive(Error, Debug, PartialEq)]
 pub enum Error {
     /// Wrong marshal size.
     #[error("Wrong marshal size")]
@@ -83,7 +82,14 @@ pub enum Error {
     /// Packet status chunk is not 2 bytes.
     #[error("Packet status chunk must be 2 bytes")]
     PacketStatusChunkLength,
-    /// Other undefined error.
-    #[error("Other errors {0}")]
-    Other(String),
+
+    #[allow(non_camel_case_types)]
+    #[error("{0}")]
+    new(String),
+}
+
+impl Error {
+    pub fn equal(&self, err: &anyhow::Error) -> bool {
+        err.downcast_ref::<Self>().map_or(false, |e| e == self)
+    }
 }

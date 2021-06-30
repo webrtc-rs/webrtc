@@ -3,6 +3,7 @@ mod transport_layer_cc_test;
 
 use crate::{error::Error, header::*, packet::*, util::*};
 
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::any::Any;
 use std::fmt;
@@ -117,8 +118,8 @@ impl Default for SymbolTypeTcc {
 /// PacketStatusChunk has two kinds:
 /// RunLengthChunk and StatusVectorChunk
 pub trait PacketStatusChunk {
-    fn marshal(&self) -> Result<Bytes, Error>;
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error>
+    fn marshal(&self) -> Result<Bytes>;
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self>
     where
         Self: Sized;
 
@@ -158,7 +159,7 @@ pub struct RunLengthChunk {
 
 impl PacketStatusChunk for RunLengthChunk {
     /// Marshal ..
-    fn marshal(&self) -> Result<Bytes, Error> {
+    fn marshal(&self) -> Result<Bytes> {
         // append 1 bit '0'
         let mut dst = set_nbits_of_uint16(0, 1, 0, 0)?;
 
@@ -172,9 +173,9 @@ impl PacketStatusChunk for RunLengthChunk {
     }
 
     /// Unmarshal ..
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
         if raw_packet.len() != PACKET_STATUS_CHUNK_LENGTH as usize {
-            return Err(Error::PacketStatusChunkLength);
+            return Err(Error::PacketStatusChunkLength.into());
         }
 
         // record type
@@ -236,7 +237,7 @@ pub struct StatusVectorChunk {
 
 impl PacketStatusChunk for StatusVectorChunk {
     /// Marshal ..
-    fn marshal(&self) -> Result<Bytes, Error> {
+    fn marshal(&self) -> Result<Bytes> {
         // set first bit '1'
         let mut dst = set_nbits_of_uint16(0, 1, 0, 1)?;
 
@@ -254,9 +255,9 @@ impl PacketStatusChunk for StatusVectorChunk {
     }
 
     /// Unmarshal ..
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
         if raw_packet.len() != PACKET_STATUS_CHUNK_LENGTH {
-            return Err(Error::PacketBeforeCname);
+            return Err(Error::PacketBeforeCname.into());
         }
 
         let type_tcc = StatusChunkTypeTcc::StatusVectorChunk;
@@ -326,7 +327,7 @@ pub struct RecvDelta {
 
 impl RecvDelta {
     /// Marshal ..
-    pub fn marshal(&self) -> Result<Bytes, Error> {
+    pub fn marshal(&self) -> Result<Bytes> {
         let delta = self.delta / TYPE_TCC_DELTA_SCALE_FACTOR;
 
         // small delta
@@ -346,16 +347,16 @@ impl RecvDelta {
         }
 
         // overflow
-        Err(Error::DeltaExceedLimit)
+        Err(Error::DeltaExceedLimit.into())
     }
 
     /// Unmarshal ..
-    pub fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+    pub fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
         let chunk_len = raw_packet.len();
 
         // must be 1 or 2 bytes
         if chunk_len != 1 && chunk_len != 2 {
-            return Err(Error::DeltaExceedLimit);
+            return Err(Error::DeltaExceedLimit.into());
         }
 
         let reader = &mut raw_packet.clone();
@@ -475,7 +476,7 @@ impl Packet for TransportLayerCc {
         n
     }
 
-    fn marshal(&self) -> Result<Bytes, Error> {
+    fn marshal(&self) -> Result<Bytes> {
         let mut writer = BytesMut::with_capacity(self.marshal_size());
 
         let h = self.header();
@@ -517,9 +518,9 @@ impl Packet for TransportLayerCc {
     }
 
     /// Unmarshal ..
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
         if raw_packet.len() < (HEADER_LENGTH + SSRC_LENGTH) {
-            return Err(Error::PacketTooShort);
+            return Err(Error::PacketTooShort.into());
         }
 
         let h = Header::unmarshal(raw_packet)?;
@@ -529,15 +530,15 @@ impl Packet for TransportLayerCc {
         let total_length = 4 * (h.length + 1) as usize;
 
         if total_length <= HEADER_LENGTH + PACKET_CHUNK_OFFSET {
-            return Err(Error::PacketTooShort);
+            return Err(Error::PacketTooShort.into());
         }
 
         if raw_packet.len() < total_length {
-            return Err(Error::PacketTooShort);
+            return Err(Error::PacketTooShort.into());
         }
 
         if h.packet_type != PacketType::TransportSpecificFeedback || h.count != FORMAT_TCC {
-            return Err(Error::WrongType);
+            return Err(Error::WrongType.into());
         }
 
         let reader = &mut raw_packet.slice(HEADER_LENGTH..);
@@ -560,7 +561,7 @@ impl Packet for TransportLayerCc {
         let mut processed_packet_num = 0u16;
         while processed_packet_num < packet_status_count {
             if packet_status_pos + PACKET_STATUS_CHUNK_LENGTH >= total_length {
-                return Err(Error::PacketTooShort);
+                return Err(Error::PacketTooShort.into());
             }
 
             let chunk_reader =
@@ -639,7 +640,7 @@ impl Packet for TransportLayerCc {
 
         for delta in &mut recv_deltas {
             if recv_deltas_pos >= total_length {
-                return Err(Error::PacketTooShort);
+                return Err(Error::PacketTooShort.into());
             }
 
             if delta.type_tcc_packet == SymbolTypeTcc::PacketReceivedSmallDelta {

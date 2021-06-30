@@ -3,6 +3,7 @@ mod compound_packet_test;
 
 use crate::{error::Error, packet::*, receiver_report::*, sender_report::*, source_description::*};
 
+use anyhow::Result;
 use bytes::{Bytes, BytesMut};
 use std::any::Any;
 
@@ -41,7 +42,7 @@ impl Packet for CompoundPacket {
     }
 
     /// Marshal encodes the CompoundPacket as binary.
-    fn marshal(&self) -> Result<Bytes, Error> {
+    fn marshal(&self) -> Result<Bytes> {
         self.validate()?;
 
         let mut out = BytesMut::new();
@@ -52,7 +53,7 @@ impl Packet for CompoundPacket {
         Ok(out.freeze())
     }
 
-    fn unmarshal(raw_data: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw_data: &Bytes) -> Result<Self> {
         let mut packets = vec![];
 
         let mut raw_data = raw_data.clone();
@@ -86,9 +87,9 @@ impl Packet for CompoundPacket {
 
 impl CompoundPacket {
     /// Validate returns an error if this is not an RFC-compliant CompoundPacket.
-    pub fn validate(&self) -> Result<(), Error> {
+    pub fn validate(&self) -> Result<()> {
         if self.0.is_empty() {
-            return Err(Error::EmptyCompound);
+            return Err(Error::EmptyCompound.into());
         }
 
         // SenderReport and ReceiverReport are the only types that
@@ -99,7 +100,7 @@ impl CompoundPacket {
                 .downcast_ref::<ReceiverReport>()
                 .is_none()
         {
-            return Err(Error::BadFirstPacket);
+            return Err(Error::BadFirstPacket.into());
         }
 
         for pkt in &self.0[1..] {
@@ -120,25 +121,25 @@ impl CompoundPacket {
                 }
 
                 if !has_cname {
-                    return Err(Error::MissingCname);
+                    return Err(Error::MissingCname.into());
                 }
 
                 return Ok(());
 
             // Other packets are not permitted before the CNAME
             } else {
-                return Err(Error::PacketBeforeCname);
+                return Err(Error::PacketBeforeCname.into());
             }
         }
 
         // CNAME never reached
-        Err(Error::MissingCname)
+        Err(Error::MissingCname.into())
     }
 
     /// CNAME returns the CNAME that *must* be present in every CompoundPacket
-    pub fn cname(&self) -> Result<Bytes, Error> {
+    pub fn cname(&self) -> Result<Bytes> {
         if self.0.is_empty() {
-            return Err(Error::EmptyCompound);
+            return Err(Error::EmptyCompound.into());
         }
 
         for pkt in &self.0[1..] {
@@ -151,10 +152,10 @@ impl CompoundPacket {
                     }
                 }
             } else if pkt.as_any().downcast_ref::<ReceiverReport>().is_none() {
-                return Err(Error::PacketBeforeCname);
+                return Err(Error::PacketBeforeCname.into());
             }
         }
 
-        Err(Error::MissingCname)
+        Err(Error::MissingCname.into())
     }
 }

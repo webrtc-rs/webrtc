@@ -207,10 +207,12 @@ fn test_source_description_unmarshal() {
 
         if let Some(err) = want_error {
             let got_err = got.err().unwrap();
-            assert_eq!(
-                got_err, err,
+            assert!(
+                err.equal(&got_err),
                 "Unmarshal {}: err = {:?}, want {:?}",
-                name, got_err, err,
+                name,
+                got_err,
+                err,
             );
         } else {
             let actual = got.unwrap();
@@ -349,10 +351,12 @@ fn test_source_description_roundtrip() {
 
         if let Some(err) = want_error {
             let got_err = got.err().unwrap();
-            assert_eq!(
-                got_err, err,
+            assert!(
+                err.equal(&got_err),
                 "Unmarshal {} rr: err = {:?}, want {:?}",
-                name, got_err, err,
+                name,
+                got_err,
+                err,
             );
         } else {
             let data = got.ok().unwrap();

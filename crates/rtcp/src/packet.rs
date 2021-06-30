@@ -9,6 +9,7 @@ use crate::{
     util::*,
 };
 
+use anyhow::Result;
 use bytes::Bytes;
 use std::any::Any;
 
@@ -17,8 +18,8 @@ pub trait Packet {
     /// DestinationSSRC returns an array of SSRC values that this packet refers to.
     fn destination_ssrc(&self) -> Vec<u32>;
     fn size(&self) -> usize;
-    fn marshal(&self) -> Result<Bytes, Error>;
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error>
+    fn marshal(&self) -> Result<Bytes>;
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self>
     where
         Self: Sized;
 
@@ -51,7 +52,7 @@ impl Clone for Box<dyn Packet> {
 /// If this is a reduced-size RTCP packet a feedback packet (Goodbye, SliceLossIndication, etc)
 /// will be returned. Otherwise, the underlying type of the returned packet will be
 /// CompoundPacket.
-pub fn unmarshal(raw_data: &Bytes) -> Result<Box<dyn Packet>, Error> {
+pub fn unmarshal(raw_data: &Bytes) -> Result<Box<dyn Packet>> {
     let mut packets = vec![];
 
     let mut raw_data = raw_data.clone();
@@ -63,10 +64,10 @@ pub fn unmarshal(raw_data: &Bytes) -> Result<Box<dyn Packet>, Error> {
 
     match packets.len() {
         // Empty Packet
-        0 => Err(Error::InvalidHeader),
+        0 => Err(Error::InvalidHeader.into()),
 
         // Single Packet
-        1 => packets.pop().ok_or(Error::BadFirstPacket),
+        1 => packets.pop().ok_or_else(|| Error::BadFirstPacket.into()),
 
         // Compound Packet
         _ => Ok(Box::new(CompoundPacket(packets))),
@@ -75,12 +76,12 @@ pub fn unmarshal(raw_data: &Bytes) -> Result<Box<dyn Packet>, Error> {
 
 /// unmarshaller is a factory which pulls the first RTCP packet from a bytestream,
 /// and returns it's parsed representation, and the amount of data that was processed.
-pub(crate) fn unmarshaller(raw_data: &Bytes) -> Result<(Box<dyn Packet>, usize), Error> {
+pub(crate) fn unmarshaller(raw_data: &Bytes) -> Result<(Box<dyn Packet>, usize)> {
     let h = Header::unmarshal(&raw_data)?;
 
     let bytes_processed = (h.length as usize + 1) * 4;
     if bytes_processed > raw_data.len() {
-        return Err(Error::PacketTooShort);
+        return Err(Error::PacketTooShort.into());
     }
 
     let in_packet = raw_data.slice(..bytes_processed);
@@ -201,11 +202,16 @@ mod test {
     }
 
     #[test]
-    fn test_packet_unmarshal_empty() -> Result<(), Error> {
+    fn test_packet_unmarshal_empty() -> Result<()> {
         let result = unmarshal(&Bytes::new());
         if let Err(got) = result {
             let want = Error::InvalidHeader;
-            assert_eq!(got, want, "Unmarshal(nil) err = {}, want {}", got, want);
+            assert!(
+                want.equal(&got),
+                "Unmarshal(nil) err = {}, want {}",
+                got,
+                want
+            );
         } else {
             assert!(false, "want error");
         }
@@ -214,7 +220,7 @@ mod test {
     }
 
     #[test]
-    fn test_packet_invalid_header_length() -> Result<(), Error> {
+    fn test_packet_invalid_header_length() -> Result<()> {
         let data = Bytes::from_static(&[
             // Goodbye (offset=84)
             // v=2, p=0, count=1, BYE, len=100
@@ -224,10 +230,11 @@ mod test {
         let result = unmarshal(&data);
         if let Err(got) = result {
             let want = Error::PacketTooShort;
-            assert_eq!(
-                got, want,
+            assert!(
+                want.equal(&got),
                 "Unmarshal(invalid_header_length) err = {}, want {}",
-                got, want
+                got,
+                want
             );
         } else {
             assert!(false, "want error");

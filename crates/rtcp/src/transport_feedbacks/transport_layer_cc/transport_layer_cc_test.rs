@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn test_transport_layer_cc_run_length_chunk_unmarshal() -> Result<(), Error> {
+fn test_transport_layer_cc_run_length_chunk_unmarshal() -> Result<()> {
     let tests = vec![
         (
             // 3.1.3 example1: https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-7
@@ -34,7 +34,7 @@ fn test_transport_layer_cc_run_length_chunk_unmarshal() -> Result<(), Error> {
 }
 
 #[test]
-fn test_transport_layer_cc_run_length_chunk_marshal() -> Result<(), Error> {
+fn test_transport_layer_cc_run_length_chunk_marshal() -> Result<()> {
     let tests = vec![
         (
             // 3.1.3 example1: https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-7
@@ -67,7 +67,7 @@ fn test_transport_layer_cc_run_length_chunk_marshal() -> Result<(), Error> {
 }
 
 #[test]
-fn test_transport_layer_cc_status_vector_chunk_unmarshal() -> Result<(), Error> {
+fn test_transport_layer_cc_status_vector_chunk_unmarshal() -> Result<()> {
     let tests = vec![
         (
             // 3.1.4 example1: https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-7
@@ -123,7 +123,7 @@ fn test_transport_layer_cc_status_vector_chunk_unmarshal() -> Result<(), Error> 
 }
 
 #[test]
-fn test_transport_layer_cc_status_vector_chunk_marshal() -> Result<(), Error> {
+fn test_transport_layer_cc_status_vector_chunk_marshal() -> Result<()> {
     let tests = vec![
         (
             //3.1.4 example1: https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-7
@@ -179,7 +179,7 @@ fn test_transport_layer_cc_status_vector_chunk_marshal() -> Result<(), Error> {
 }
 
 #[test]
-fn test_transport_layer_cc_recv_delta_unmarshal() -> Result<(), Error> {
+fn test_transport_layer_cc_recv_delta_unmarshal() -> Result<()> {
     let tests = vec![
         (
             "small delta 63.75ms",
@@ -219,7 +219,7 @@ fn test_transport_layer_cc_recv_delta_unmarshal() -> Result<(), Error> {
 }
 
 #[test]
-fn test_transport_layer_cc_recv_delta_marshal() -> Result<(), Error> {
+fn test_transport_layer_cc_recv_delta_marshal() -> Result<()> {
     let tests = vec![
         (
             "small delta 63.75ms",
@@ -280,7 +280,7 @@ fn test_transport_layer_cc_recv_delta_marshal() -> Result<(), Error> {
 /// 0b00111101,0b11101000,0b00000010,0b00010111,
 /// 0b00100000,0b00000001,0b10010100,0b00000001,
 #[test]
-fn test_transport_layer_cc_unmarshal() -> Result<(), Error> {
+fn test_transport_layer_cc_unmarshal() -> Result<()> {
     let tests = vec![
         (
             "example1",
@@ -593,7 +593,7 @@ fn test_transport_layer_cc_unmarshal() -> Result<(), Error> {
 }
 
 #[test]
-fn test_transport_layer_cc_marshal() -> Result<(), Error> {
+fn test_transport_layer_cc_marshal() -> Result<()> {
     let tests = vec![
         (
             "example1",

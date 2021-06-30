@@ -1,5 +1,6 @@
 use crate::{error::Error, header::*, packet::Packet};
 
+use anyhow::Result;
 use bytes::Bytes;
 use std::any::Any;
 use std::fmt;
@@ -26,14 +27,14 @@ impl Packet for RawPacket {
     }
 
     /// Marshal encodes the packet in binary.
-    fn marshal(&self) -> Result<Bytes, Error> {
+    fn marshal(&self) -> Result<Bytes> {
         Ok(self.0.clone())
     }
 
     /// Unmarshal decodes the packet from binary.
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
         if raw_packet.len() < HEADER_LENGTH {
-            return Err(Error::PacketTooShort);
+            return Err(Error::PacketTooShort.into());
         }
 
         let _ = Header::unmarshal(raw_packet)?;
@@ -72,8 +73,8 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_raw_packet_roundtrip() {
-        let tests: Vec<(&str, RawPacket, Result<(), Error>, Result<(), Error>)> = vec![
+    fn test_raw_packet_roundtrip() -> Result<()> {
+        let tests: Vec<(&str, RawPacket, Option<Error>)> = vec![
             (
                 "valid",
                 RawPacket(Bytes::from_static(&[
@@ -81,14 +82,12 @@ mod test {
                     0x90, 0x2f, 0x9e, 0x2e, // ssrc=0x902f9e2e
                     0x03, 0x46, 0x4f, 0x4f, // len=3, text=FOO
                 ])),
-                Ok(()),
-                Ok(()),
+                None,
             ),
             (
                 "short header",
                 RawPacket(Bytes::from_static(&[0x80])),
-                Ok(()),
-                Err(Error::PacketTooShort),
+                Some(Error::PacketTooShort),
             ),
             (
                 "invalid header",
@@ -96,51 +95,36 @@ mod test {
                     // v=0, p=0, count=0, RR, len=4
                     Bytes::from_static(&[0x00, 0xc9, 0x00, 0x04]),
                 ),
-                Ok(()),
-                Err(Error::BadVersion),
+                Some(Error::BadVersion),
             ),
         ];
 
-        for (name, pkt, marshal_error, unmarshal_error) in tests {
-            let data = pkt.marshal();
+        for (name, pkt, unmarshal_error) in tests {
+            let data = pkt.marshal()?;
+            let result = RawPacket::unmarshal(&data);
 
             assert_eq!(
-                data.is_err(),
-                marshal_error.is_err(),
-                "Marshal {}: err = {:?}, want {:?}",
+                result.is_err(),
+                unmarshal_error.is_some(),
+                "Unmarshal {}: err = {:?}, want {:?}",
                 name,
-                data,
-                marshal_error
+                result,
+                unmarshal_error
             );
 
-            match data {
-                Ok(e) => {
-                    let result = RawPacket::unmarshal(&e);
-
-                    assert_eq!(
-                        result.is_err(),
-                        unmarshal_error.is_err(),
-                        "Unmarshal {}: err = {:?}, want {:?}",
-                        name,
-                        result,
-                        unmarshal_error
-                    );
-
-                    if result.is_err() {
-                        continue;
-                    }
-
-                    let decoded = result.unwrap();
-
-                    assert_eq!(
-                        decoded, pkt,
-                        "{} raw round trip: got {:?}, want {:?}",
-                        name, decoded, pkt
-                    )
-                }
-
-                Err(_) => continue,
+            if result.is_err() {
+                continue;
             }
+
+            let decoded = result.unwrap();
+
+            assert_eq!(
+                decoded, pkt,
+                "{} raw round trip: got {:?}, want {:?}",
+                name, decoded, pkt
+            )
         }
+
+        Ok(())
     }
 }

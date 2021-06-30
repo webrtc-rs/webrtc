@@ -3,6 +3,7 @@ mod receiver_estimated_maximum_bitrate_test;
 
 use crate::{error::Error, header::*, packet::*, util::*};
 
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::any::Any;
 use std::fmt;
@@ -61,7 +62,7 @@ impl Packet for ReceiverEstimatedMaximumBitrate {
     }
 
     /// Marshal serializes the packet and returns a byte slice.
-    fn marshal(&self) -> Result<Bytes, Error> {
+    fn marshal(&self) -> Result<Bytes> {
         /*
             0                   1                   2                   3
             0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -137,10 +138,10 @@ impl Packet for ReceiverEstimatedMaximumBitrate {
     }
 
     /// Unmarshal reads a REMB packet from the given byte slice.
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
         // 20 bytes is the size of the packet with no SSRCs
         if raw_packet.len() < 20 {
-            return Err(Error::PacketTooShort);
+            return Err(Error::PacketTooShort.into());
         }
         /*
             0                   1                   2                   3
@@ -164,7 +165,7 @@ impl Packet for ReceiverEstimatedMaximumBitrate {
 
         if header.packet_type != PacketType::PayloadSpecificFeedback || header.count != FORMAT_REMB
         {
-            return Err(Error::WrongType);
+            return Err(Error::WrongType.into());
         }
 
         let reader = &mut raw_packet.slice(HEADER_LENGTH..);
@@ -172,7 +173,7 @@ impl Packet for ReceiverEstimatedMaximumBitrate {
         let sender_ssrc = reader.get_u32();
         let media_ssrc = reader.get_u32();
         if media_ssrc != 0 {
-            return Err(Error::SsrcMustBeZero);
+            return Err(Error::SsrcMustBeZero.into());
         }
 
         // REMB rules all around me
@@ -186,7 +187,7 @@ impl Packet for ReceiverEstimatedMaximumBitrate {
             || unique_identifier[2] != UNIQUE_IDENTIFIER[2]
             || unique_identifier[3] != UNIQUE_IDENTIFIER[3]
         {
-            return Err(Error::MissingRembIdentifier);
+            return Err(Error::MissingRembIdentifier.into());
         }
 
         // The next byte is the number of SSRC entries at the end.

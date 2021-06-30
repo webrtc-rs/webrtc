@@ -3,6 +3,7 @@ mod rapid_resynchronization_request_test;
 
 use crate::{error::Error, header::*, packet::*, util::*};
 
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::any::Any;
 use std::fmt;
@@ -41,7 +42,7 @@ impl Packet for RapidResynchronizationRequest {
     }
 
     /// Marshal encodes the RapidResynchronizationRequest in binary
-    fn marshal(&self) -> Result<Bytes, Error> {
+    fn marshal(&self) -> Result<Bytes> {
         /*
          * RRR does not require parameters.  Therefore, the length field MUST be
          * 2, and there MUST NOT be any Feedback Control Information.
@@ -62,15 +63,15 @@ impl Packet for RapidResynchronizationRequest {
     }
 
     /// Unmarshal decodes the RapidResynchronizationRequest from binary
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
         if raw_packet.len() < (HEADER_LENGTH + (SSRC_LENGTH * 2)) {
-            return Err(Error::PacketTooShort);
+            return Err(Error::PacketTooShort.into());
         }
 
         let h = Header::unmarshal(raw_packet)?;
 
         if h.packet_type != PacketType::TransportSpecificFeedback || h.count != FORMAT_RRR {
-            return Err(Error::WrongType);
+            return Err(Error::WrongType.into());
         }
 
         let reader = &mut raw_packet.slice(HEADER_LENGTH..);

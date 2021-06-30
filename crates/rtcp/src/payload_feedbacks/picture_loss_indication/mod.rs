@@ -3,6 +3,7 @@ mod picture_loss_indication_test;
 
 use crate::{error::Error, header::*, packet::*, util::*};
 
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::any::Any;
 use std::fmt;
@@ -39,7 +40,7 @@ impl Packet for PictureLossIndication {
     }
 
     /// Marshal encodes the PictureLossIndication in binary
-    fn marshal(&self) -> Result<Bytes, Error> {
+    fn marshal(&self) -> Result<Bytes> {
         /*
          * PLI does not require parameters.  Therefore, the length field MUST be
          * 2, and there MUST NOT be any Feedback Control Information.
@@ -61,15 +62,15 @@ impl Packet for PictureLossIndication {
     }
 
     /// Unmarshal decodes the PictureLossIndication from binary
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
         if raw_packet.len() < (HEADER_LENGTH + (SSRC_LENGTH * 2)) {
-            return Err(Error::PacketTooShort);
+            return Err(Error::PacketTooShort.into());
         }
 
         let h = Header::unmarshal(raw_packet)?;
 
         if h.packet_type != PacketType::PayloadSpecificFeedback || h.count != FORMAT_PLI {
-            return Err(Error::WrongType);
+            return Err(Error::WrongType.into());
         }
 
         let reader = &mut raw_packet.slice(HEADER_LENGTH..);

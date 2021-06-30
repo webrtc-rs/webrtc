@@ -3,6 +3,7 @@ mod receiver_report_test;
 
 use crate::{error::Error, header::*, packet::*, reception_report::*, util::*};
 
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::any::Any;
 use std::fmt;
@@ -58,9 +59,9 @@ impl Packet for ReceiverReport {
     }
 
     /// Marshal encodes the packet in binary.
-    fn marshal(&self) -> Result<Bytes, Error> {
+    fn marshal(&self) -> Result<Bytes> {
         if self.reports.len() > COUNT_MAX {
-            return Err(Error::TooManyReports);
+            return Err(Error::TooManyReports.into());
         }
         /*
          *         0                   1                   2                   3
@@ -110,7 +111,7 @@ impl Packet for ReceiverReport {
     }
 
     /// Unmarshal decodes the ReceiverReport from binary
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
         /*
          *         0                   1                   2                   3
          *         0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -140,12 +141,12 @@ impl Packet for ReceiverReport {
          */
 
         if raw_packet.len() < (HEADER_LENGTH + SSRC_LENGTH) {
-            return Err(Error::PacketTooShort);
+            return Err(Error::PacketTooShort.into());
         }
 
         let header = Header::unmarshal(raw_packet)?;
         if header.packet_type != PacketType::ReceiverReport {
-            return Err(Error::WrongType);
+            return Err(Error::WrongType.into());
         }
 
         let reader = &mut raw_packet.slice(RR_SSRC_OFFSET..);
@@ -156,7 +157,7 @@ impl Packet for ReceiverReport {
         let mut reports = Vec::with_capacity(header.count as usize);
         for _ in 0..header.count {
             if offset + RECEPTION_REPORT_LENGTH > raw_packet.len() {
-                return Err(Error::PacketTooShort);
+                return Err(Error::PacketTooShort.into());
             }
             let reception_report = ReceptionReport::unmarshal(&raw_packet.slice(offset..))?;
             reports.push(reception_report);

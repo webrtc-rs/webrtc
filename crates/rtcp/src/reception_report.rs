@@ -1,5 +1,6 @@
 use crate::{error::Error, packet::*, util::*};
 
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::any::Any;
 
@@ -54,7 +55,7 @@ impl Packet for ReceptionReport {
     }
 
     /// Marshal encodes the ReceptionReport in binary
-    fn marshal(&self) -> Result<Bytes, Error> {
+    fn marshal(&self) -> Result<Bytes> {
         /*
          *  0                   1                   2                   3
          *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -81,7 +82,7 @@ impl Packet for ReceptionReport {
 
         // pack TotalLost into 24 bits
         if self.total_lost >= (1 << 25) {
-            return Err(Error::InvalidTotalLost);
+            return Err(Error::InvalidTotalLost.into());
         }
 
         writer.put_u8(((self.total_lost >> 16) & 0xFF) as u8);
@@ -98,9 +99,9 @@ impl Packet for ReceptionReport {
     }
 
     /// Unmarshal decodes the ReceptionReport from binary
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
         if raw_packet.len() < RECEPTION_REPORT_LENGTH {
-            return Err(Error::PacketTooShort);
+            return Err(Error::PacketTooShort.into());
         }
 
         /*

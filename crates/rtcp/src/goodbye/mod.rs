@@ -3,6 +3,7 @@ mod goodbye_test;
 
 use crate::{error::Error, header::*, packet::*, util::*};
 
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::any::Any;
 use std::fmt;
@@ -42,13 +43,13 @@ impl Packet for Goodbye {
     }
 
     /// Marshal encodes the packet in binary.
-    fn marshal(&self) -> Result<Bytes, Error> {
+    fn marshal(&self) -> Result<Bytes> {
         if self.sources.len() > COUNT_MAX {
-            return Err(Error::TooManySources);
+            return Err(Error::TooManySources.into());
         }
 
         if self.reason.len() > SDES_MAX_OCTET_COUNT {
-            return Err(Error::ReasonTooLong);
+            return Err(Error::ReasonTooLong.into());
         }
 
         /*
@@ -83,7 +84,7 @@ impl Packet for Goodbye {
         Ok(writer.freeze())
     }
 
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
         /*
          *        0                   1                   2                   3
          *        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -101,17 +102,17 @@ impl Packet for Goodbye {
         let header = Header::unmarshal(raw_packet)?;
 
         if header.packet_type != PacketType::Goodbye {
-            return Err(Error::WrongType);
+            return Err(Error::WrongType.into());
         }
 
         if get_padding(raw_packet.len()) != 0 {
-            return Err(Error::PacketTooShort);
+            return Err(Error::PacketTooShort.into());
         }
 
         let reason_offset = (HEADER_LENGTH + header.count as usize * SSRC_LENGTH) as usize;
 
         if reason_offset > raw_packet.len() {
-            return Err(Error::PacketTooShort);
+            return Err(Error::PacketTooShort.into());
         }
 
         let reader = &mut raw_packet.slice(HEADER_LENGTH..);
@@ -126,7 +127,7 @@ impl Packet for Goodbye {
             let reason_end = reason_offset + 1 + reason_len;
 
             if reason_end > raw_packet.len() {
-                return Err(Error::PacketTooShort);
+                return Err(Error::PacketTooShort.into());
             }
 
             raw_packet.slice(reason_offset + 1..reason_end)

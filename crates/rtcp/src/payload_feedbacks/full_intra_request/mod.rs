@@ -3,6 +3,7 @@ mod full_intra_request_test;
 
 use crate::{error::Error, header::*, packet::*, util::*};
 
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::any::Any;
 use std::fmt;
@@ -51,7 +52,7 @@ impl Packet for FullIntraRequest {
     }
 
     /// Marshal encodes the FullIntraRequest
-    fn marshal(&self) -> Result<Bytes, Error> {
+    fn marshal(&self) -> Result<Bytes> {
         let mut writer = BytesMut::with_capacity(self.marshal_size());
 
         let h = self.header();
@@ -73,19 +74,19 @@ impl Packet for FullIntraRequest {
     }
 
     /// Unmarshal decodes the FullIntraRequest
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
         if raw_packet.len() < (HEADER_LENGTH + SSRC_LENGTH) {
-            return Err(Error::PacketTooShort);
+            return Err(Error::PacketTooShort.into());
         }
 
         let h = Header::unmarshal(raw_packet)?;
 
         if raw_packet.len() < (HEADER_LENGTH + (4 * h.length) as usize) {
-            return Err(Error::PacketTooShort);
+            return Err(Error::PacketTooShort.into());
         }
 
         if h.packet_type != PacketType::PayloadSpecificFeedback || h.count != FORMAT_FIR {
-            return Err(Error::WrongType);
+            return Err(Error::WrongType.into());
         }
 
         let reader = &mut raw_packet.slice(HEADER_LENGTH..);

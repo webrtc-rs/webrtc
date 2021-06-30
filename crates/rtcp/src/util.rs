@@ -1,4 +1,6 @@
 use crate::error::Error;
+
+use anyhow::Result;
 use bytes::{BufMut, BytesMut};
 
 // getPadding Returns the padding required to make the length a multiple of 4
@@ -22,9 +24,9 @@ pub(crate) fn set_nbits_of_uint16(
     size: u16,
     start_index: u16,
     mut val: u16,
-) -> Result<u16, Error> {
+) -> Result<u16> {
     if start_index + size > 16 {
-        return Err(Error::InvalidSizeOrStartIndex);
+        return Err(Error::InvalidSizeOrStartIndex.into());
     }
 
     // truncate val to size bits
@@ -55,7 +57,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_get_padding() -> Result<(), Error> {
+    fn test_get_padding() -> Result<()> {
         let tests = vec![(0, 0), (1, 3), (2, 2), (3, 1), (4, 0), (100, 0), (500, 0)];
 
         for (n, p) in tests {
@@ -71,7 +73,7 @@ mod test {
     }
 
     #[test]
-    fn test_set_nbits_of_uint16() -> Result<(), Error> {
+    fn test_set_nbits_of_uint16() -> Result<()> {
         let tests = vec![
             ("setOneBit", 0, 1, 8, 1, 128, None),
             ("setStatusVectorBit", 0, 1, 0, 1, 32768, None),

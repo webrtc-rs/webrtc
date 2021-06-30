@@ -1,5 +1,6 @@
 use crate::error::Error;
 
+use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 /// PacketType specifies the type of an RTCP packet
@@ -105,9 +106,9 @@ impl Header {
         HEADER_LENGTH
     }
 
-    pub fn marshal(&self) -> Result<Bytes, Error> {
+    pub fn marshal(&self) -> Result<Bytes> {
         if self.count > 31 {
-            return Err(Error::InvalidHeader);
+            return Err(Error::InvalidHeader.into());
         }
 
         /*
@@ -131,9 +132,9 @@ impl Header {
     }
 
     /// Unmarshal decodes the Header from binary
-    pub fn unmarshal(raw_packet: &Bytes) -> Result<Self, Error> {
+    pub fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
         if raw_packet.len() < HEADER_LENGTH {
-            return Err(Error::PacketTooShort);
+            return Err(Error::PacketTooShort.into());
         }
 
         /*
@@ -147,7 +148,7 @@ impl Header {
         let b0 = reader.get_u8();
         let version = (b0 >> VERSION_SHIFT) & VERSION_MASK;
         if version != RTP_VERSION {
-            return Err(Error::BadVersion);
+            return Err(Error::BadVersion.into());
         }
 
         let padding = ((b0 >> PADDING_SHIFT) & PADDING_MASK) > 0;
@@ -229,10 +230,12 @@ mod test {
 
             if let Some(err) = want_error {
                 let got_err = got.err().unwrap();
-                assert_eq!(
-                    got_err, err,
+                assert!(
+                    err.equal(&got_err),
                     "Unmarshal {}: err = {:?}, want {:?}",
-                    name, got_err, err,
+                    name,
+                    got_err,
+                    err,
                 );
             } else {
                 let actual = got.unwrap();
@@ -294,10 +297,12 @@ mod test {
 
             if let Some(err) = want_error {
                 let got_err = got.err().unwrap();
-                assert_eq!(
-                    got_err, err,
+                assert!(
+                    err.equal(&got_err),
                     "Unmarshal {} rr: err = {:?}, want {:?}",
-                    name, got_err, err,
+                    name,
+                    got_err,
+                    err,
                 );
             } else {
                 let data = got.ok().unwrap();

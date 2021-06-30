@@ -104,10 +104,12 @@ fn test_full_intra_request_unmarshal() {
 
         if let Some(err) = want_error {
             let got_err = got.err().unwrap();
-            assert_eq!(
-                got_err, err,
+            assert!(
+                err.equal(&got_err),
                 "Unmarshal {} rr: err = {:?}, want {:?}",
-                name, got_err, err,
+                name,
+                got_err,
+                err,
             );
         } else {
             let actual = got.unwrap();
@@ -122,7 +124,7 @@ fn test_full_intra_request_unmarshal() {
 
 #[test]
 fn test_full_intra_request_round_trip() {
-    let tests = vec![
+    let tests: Vec<(&str, FullIntraRequest, Option<Error>)> = vec![
         (
             "valid",
             FullIntraRequest {
@@ -163,10 +165,12 @@ fn test_full_intra_request_round_trip() {
 
         if let Some(err) = want_error {
             let got_err = got.err().unwrap();
-            assert_eq!(
-                got_err, err,
+            assert!(
+                err.equal(&got_err),
                 "Unmarshal {} rr: err = {:?}, want {:?}",
-                name, got_err, err,
+                name,
+                got_err,
+                err,
             );
         } else {
             let data = got.ok().unwrap();

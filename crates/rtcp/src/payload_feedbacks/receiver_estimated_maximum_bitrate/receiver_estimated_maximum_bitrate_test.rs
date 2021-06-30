@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn test_receiver_estimated_maximum_bitrate_unmarshal() {
-    let tests = vec![
+    let tests: Vec<(&str, Bytes, ReceiverEstimatedMaximumBitrate, Option<Error>)> = vec![
         (
             "valid",
             Bytes::from_static(&[
@@ -78,10 +78,12 @@ fn test_receiver_estimated_maximum_bitrate_unmarshal() {
 
         if let Some(err) = want_error {
             let got_err = got.err().unwrap();
-            assert_eq!(
-                got_err, err,
+            assert!(
+                err.equal(&got_err),
                 "Unmarshal {} rr: err = {:?}, want {:?}",
-                name, got_err, err,
+                name,
+                got_err,
+                err,
             );
         } else {
             let actual = got.unwrap();
