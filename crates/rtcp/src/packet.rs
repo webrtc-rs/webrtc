@@ -1,4 +1,4 @@
-use crate::{
+/*use crate::{
     compound_packet::*, error::Error, goodbye::*, header::*,
     payload_feedbacks::full_intra_request::*, payload_feedbacks::picture_loss_indication::*,
     payload_feedbacks::receiver_estimated_maximum_bitrate::*,
@@ -6,46 +6,33 @@ use crate::{
     sender_report::*, source_description::*,
     transport_feedbacks::rapid_resynchronization_request::*,
     transport_feedbacks::transport_layer_cc::*, transport_feedbacks::transport_layer_nack::*,
-    util::*,
-};
+};*/
+use crate::header::Header;
+use util::marshal::{Marshal, Unmarshal};
 
-use anyhow::Result;
-use bytes::Bytes;
+//use anyhow::Result;
+//use bytes::Bytes;
 use std::any::Any;
 
-/// Packet represents an RTCP packet, a protocol used for out-of-band statistics and control information for an RTP session
-pub trait Packet {
-    /// DestinationSSRC returns an array of SSRC values that this packet refers to.
+/// Packet represents an RTCP packet, a protocol used for out-of-band statistics and
+/// control information for an RTP session
+pub trait Packet: Marshal + Unmarshal + PartialEq + Clone {
+    fn header(&self) -> Header;
     fn destination_ssrc(&self) -> Vec<u32>;
     fn size(&self) -> usize;
-    fn marshal(&self) -> Result<Bytes>;
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self>
-    where
-        Self: Sized;
-
-    fn equal_to(&self, other: &dyn Packet) -> bool;
-    fn clone_to(&self) -> Box<dyn Packet>;
     fn as_any(&self) -> &dyn Any;
+}
 
+/*
+impl MarshalSize for dyn Packet {
     fn marshal_size(&self) -> usize {
         let l = self.size();
         // align to 32-bit boundary
         l + get_padding(l)
     }
-}
+}*/
 
-impl PartialEq for dyn Packet {
-    fn eq(&self, other: &Self) -> bool {
-        self.equal_to(other)
-    }
-}
-
-impl Clone for Box<dyn Packet> {
-    fn clone(&self) -> Box<dyn Packet> {
-        self.clone_to()
-    }
-}
-
+/*
 /// Unmarshal takes an entire udp datagram (which may consist of multiple RTCP packets) and
 /// returns the unmarshaled packets it contains.
 ///
@@ -243,3 +230,4 @@ mod test {
         Ok(())
     }
 }
+*/

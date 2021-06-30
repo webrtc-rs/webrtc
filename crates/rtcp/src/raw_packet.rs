@@ -1,5 +1,7 @@
 use crate::{error::Error, header::*, packet::Packet};
 
+use util::marshal::{Marshal, MarshalSize, Unmarshal};
+
 use anyhow::Result;
 use bytes::Bytes;
 use std::any::Any;
@@ -42,14 +44,14 @@ impl Packet for RawPacket {
         Ok(RawPacket(raw_packet.clone()))
     }
 
-    fn equal_to(&self, other: &dyn Packet) -> bool {
+    fn equal(&self, other: &dyn Packet) -> bool {
         other
             .as_any()
             .downcast_ref::<RawPacket>()
             .map_or(false, |a| self == a)
     }
 
-    fn clone_to(&self) -> Box<dyn Packet> {
+    fn cloned(&self) -> Box<dyn Packet> {
         Box::new(self.clone())
     }
 

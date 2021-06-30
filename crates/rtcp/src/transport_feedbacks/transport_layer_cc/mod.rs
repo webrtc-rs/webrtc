@@ -123,20 +123,20 @@ pub trait PacketStatusChunk {
     where
         Self: Sized;
 
-    fn equal_to(&self, other: &dyn PacketStatusChunk) -> bool;
-    fn clone_to(&self) -> Box<dyn PacketStatusChunk>;
+    fn equal(&self, other: &dyn PacketStatusChunk) -> bool;
+    fn cloned(&self) -> Box<dyn PacketStatusChunk>;
     fn as_any(&self) -> &dyn Any;
 }
 
 impl PartialEq for dyn PacketStatusChunk {
     fn eq(&self, other: &dyn PacketStatusChunk) -> bool {
-        self.equal_to(other)
+        self.equal(other)
     }
 }
 
 impl Clone for Box<dyn PacketStatusChunk> {
     fn clone(&self) -> Box<dyn PacketStatusChunk> {
-        self.clone_to()
+        self.cloned()
     }
 }
 
@@ -198,14 +198,14 @@ impl PacketStatusChunk for RunLengthChunk {
         })
     }
 
-    fn equal_to(&self, other: &dyn PacketStatusChunk) -> bool {
+    fn equal(&self, other: &dyn PacketStatusChunk) -> bool {
         other
             .as_any()
             .downcast_ref::<RunLengthChunk>()
             .map_or(false, |a| self == a)
     }
 
-    fn clone_to(&self) -> Box<dyn PacketStatusChunk> {
+    fn cloned(&self) -> Box<dyn PacketStatusChunk> {
         Box::new(self.clone())
     }
 
@@ -298,14 +298,14 @@ impl PacketStatusChunk for StatusVectorChunk {
         })
     }
 
-    fn equal_to(&self, other: &dyn PacketStatusChunk) -> bool {
+    fn equal(&self, other: &dyn PacketStatusChunk) -> bool {
         other
             .as_any()
             .downcast_ref::<StatusVectorChunk>()
             .map_or(false, |a| self == a)
     }
 
-    fn clone_to(&self) -> Box<dyn PacketStatusChunk> {
+    fn cloned(&self) -> Box<dyn PacketStatusChunk> {
         Box::new(self.clone())
     }
 
@@ -668,14 +668,14 @@ impl Packet for TransportLayerCc {
         })
     }
 
-    fn equal_to(&self, other: &dyn Packet) -> bool {
+    fn equal(&self, other: &dyn Packet) -> bool {
         other
             .as_any()
             .downcast_ref::<TransportLayerCc>()
             .map_or(false, |a| self == a)
     }
 
-    fn clone_to(&self) -> Box<dyn Packet> {
+    fn cloned(&self) -> Box<dyn Packet> {
         Box::new(self.clone())
     }
 

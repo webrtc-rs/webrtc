@@ -172,14 +172,14 @@ impl Packet for ReceiverReport {
         })
     }
 
-    fn equal_to(&self, other: &dyn Packet) -> bool {
+    fn equal(&self, other: &dyn Packet) -> bool {
         other
             .as_any()
             .downcast_ref::<ReceiverReport>()
             .map_or(false, |a| self == a)
     }
 
-    fn clone_to(&self) -> Box<dyn Packet> {
+    fn cloned(&self) -> Box<dyn Packet> {
         Box::new(self.clone())
     }
 
