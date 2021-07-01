@@ -43,19 +43,19 @@ impl Unmarshal for Packet {
         let payload_len = raw_packet.remaining();
         let payload = raw_packet.copy_to_bytes(payload_len);
         if header.padding {
-           if payload_len > 0 {
-               let padding_len = payload[payload_len - 1] as usize;
-               if padding_len <= payload_len {
-                   Ok(Packet {
-                       header,
-                       payload: payload.slice(..payload_len - padding_len),
-                   })
-               } else {
-                   Err(Error::ErrShortPacket.into())
-               }
-           }else {
-               Err(Error::ErrShortPacket.into())
-           }
+            if payload_len > 0 {
+                let padding_len = payload[payload_len - 1] as usize;
+                if padding_len <= payload_len {
+                    Ok(Packet {
+                        header,
+                        payload: payload.slice(..payload_len - padding_len),
+                    })
+                } else {
+                    Err(Error::ErrShortPacket.into())
+                }
+            } else {
+                Err(Error::ErrShortPacket.into())
+            }
         } else {
             Ok(Packet { header, payload })
         }
@@ -70,7 +70,7 @@ impl MarshalSize for Packet {
             let padding_len = get_padding(payload_len);
             if padding_len == 0 {
                 4
-            }else{
+            } else {
                 padding_len
             }
         } else {
