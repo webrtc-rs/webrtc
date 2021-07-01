@@ -25,15 +25,6 @@ pub trait Packet: Marshal + Unmarshal + PartialEq + Clone + fmt::Display + fmt::
 }
 
 /*
-impl MarshalSize for dyn Packet {
-    fn marshal_size(&self) -> usize {
-        let l = self.size();
-        // align to 32-bit boundary
-        l + get_padding(l)
-    }
-}*/
-
-/*
 /// Unmarshal takes an entire udp datagram (which may consist of multiple RTCP packets) and
 /// returns the unmarshaled packets it contains.
 ///

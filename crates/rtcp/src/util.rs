@@ -1,7 +1,7 @@
 use crate::error::Error;
 
 use anyhow::Result;
-use bytes::{BufMut, BytesMut};
+use bytes::BufMut;
 
 // getPadding Returns the padding required to make the length a multiple of 4
 pub(crate) fn get_padding(len: usize) -> usize {
@@ -12,8 +12,11 @@ pub(crate) fn get_padding(len: usize) -> usize {
     }
 }
 
-pub(crate) fn put_padding(buf: &mut BytesMut) {
-    while buf.len() % 4 != 0 {
+pub(crate) fn put_padding<B>(buf: &mut B, len: usize)
+where
+    B: BufMut,
+{
+    for _ in 0..get_padding(len) {
         buf.put_u8(0);
     }
 }

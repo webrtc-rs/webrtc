@@ -42,7 +42,7 @@
 
 //pub mod compound_packet;
 pub mod error;
-//pub mod goodbye;
+pub mod goodbye;
 pub mod header;
 pub mod packet;
 //pub mod payload_feedbacks;

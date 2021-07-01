@@ -2,9 +2,10 @@
 mod goodbye_test;
 
 use crate::{error::Error, header::*, packet::*, util::*};
+use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
 use anyhow::Result;
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{Buf, BufMut, Bytes};
 use std::any::Any;
 use std::fmt;
 
@@ -30,20 +31,47 @@ impl fmt::Display for Goodbye {
 }
 
 impl Packet for Goodbye {
+    /// Header returns the Header associated with this packet.
+    fn header(&self) -> Header {
+        Header {
+            padding: get_padding(self.raw_size()) != 0,
+            count: self.sources.len() as u8,
+            packet_type: PacketType::Goodbye,
+            length: ((self.marshal_size() / 4) - 1) as u16,
+        }
+    }
+
     /// destination_ssrc returns an array of SSRC values that this packet refers to.
     fn destination_ssrc(&self) -> Vec<u32> {
         self.sources.to_vec()
     }
 
-    fn size(&self) -> usize {
+    fn raw_size(&self) -> usize {
         let srcs_length = self.sources.len() * SSRC_LENGTH;
         let reason_length = self.reason.len() + 1;
 
         HEADER_LENGTH + srcs_length + reason_length
     }
 
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl MarshalSize for Goodbye {
+    fn marshal_size(&self) -> usize {
+        let l = self.raw_size();
+        // align to 32-bit boundary
+        l + get_padding(l)
+    }
+}
+
+impl Marshal for Goodbye {
     /// Marshal encodes the packet in binary.
-    fn marshal(&self) -> Result<Bytes> {
+    fn marshal_to<B>(&self, writer: &mut B) -> Result<usize>
+    where
+        B: BufMut,
+    {
         if self.sources.len() > COUNT_MAX {
             return Err(Error::TooManySources.into());
         }
@@ -52,6 +80,10 @@ impl Packet for Goodbye {
             return Err(Error::ReasonTooLong.into());
         }
 
+        if writer.remaining_mut() < self.marshal_size() {
+            return Err(Error::BufferTooShort.into());
+        }
+
         /*
          *        0                   1                   2                   3
          *        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -65,11 +97,9 @@ impl Packet for Goodbye {
          * (opt) |     length    |               reason for leaving            ...
          *       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
-        let mut writer = BytesMut::with_capacity(self.marshal_size());
-
         let h = self.header();
         let data = h.marshal()?;
-        writer.extend(data);
+        writer.put(data);
 
         for source in &self.sources {
             writer.put_u32(*source);
@@ -77,14 +107,21 @@ impl Packet for Goodbye {
 
         writer.put_u8(self.reason.len() as u8);
         if !self.reason.is_empty() {
-            writer.extend(self.reason.clone());
+            writer.put(self.reason.clone());
         }
 
-        put_padding(&mut writer);
-        Ok(writer.freeze())
-    }
+        put_padding(writer, self.raw_size());
 
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
+        Ok(self.marshal_size())
+    }
+}
+
+impl Unmarshal for Goodbye {
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    where
+        Self: Sized,
+        B: Buf,
+    {
         /*
          *        0                   1                   2                   3
          *        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -98,6 +135,7 @@ impl Packet for Goodbye {
          * (opt) |     length    |               reason for leaving            ...
          *       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
+        let raw_packet_len = raw_packet.remaining();
 
         let header = Header::unmarshal(raw_packet)?;
 
@@ -105,63 +143,34 @@ impl Packet for Goodbye {
             return Err(Error::WrongType.into());
         }
 
-        if get_padding(raw_packet.len()) != 0 {
+        if get_padding(raw_packet_len) != 0 {
             return Err(Error::PacketTooShort.into());
         }
 
         let reason_offset = (HEADER_LENGTH + header.count as usize * SSRC_LENGTH) as usize;
 
-        if reason_offset > raw_packet.len() {
+        if reason_offset > raw_packet_len {
             return Err(Error::PacketTooShort.into());
         }
 
-        let reader = &mut raw_packet.slice(HEADER_LENGTH..);
-
         let mut sources = Vec::with_capacity(header.count as usize);
         for _ in 0..header.count {
-            sources.push(reader.get_u32());
+            sources.push(raw_packet.get_u32());
         }
 
-        let reason = if reason_offset < raw_packet.len() {
-            let reason_len = reader.get_u8() as usize;
+        let reason = if reason_offset < raw_packet_len {
+            let reason_len = raw_packet.get_u8() as usize;
             let reason_end = reason_offset + 1 + reason_len;
 
-            if reason_end > raw_packet.len() {
+            if reason_end > raw_packet_len {
                 return Err(Error::PacketTooShort.into());
             }
 
-            raw_packet.slice(reason_offset + 1..reason_end)
+            raw_packet.copy_to_bytes(reason_len)
         } else {
             Bytes::new()
         };
 
         Ok(Goodbye { sources, reason })
-    }
-
-    fn equal(&self, other: &dyn Packet) -> bool {
-        other
-            .as_any()
-            .downcast_ref::<Goodbye>()
-            .map_or(false, |a| self == a)
-    }
-
-    fn cloned(&self) -> Box<dyn Packet> {
-        Box::new(self.clone())
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
-impl Goodbye {
-    /// Header returns the Header associated with this packet.
-    pub fn header(&self) -> Header {
-        Header {
-            padding: get_padding(self.size()) != 0,
-            count: self.sources.len() as u8,
-            packet_type: PacketType::Goodbye,
-            length: ((self.marshal_size() / 4) - 1) as u16,
-        }
     }
 }

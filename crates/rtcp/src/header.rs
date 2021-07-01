@@ -116,6 +116,9 @@ impl Marshal for Header {
         if self.count > 31 {
             return Err(Error::InvalidHeader.into());
         }
+        if raw_packet.remaining_mut() < HEADER_LENGTH {
+            return Err(Error::BufferTooShort.into());
+        }
 
         /*
          *  0                   1                   2                   3
