@@ -40,20 +40,22 @@ impl Unmarshal for Packet {
         B: Buf,
     {
         let header = Header::unmarshal(raw_packet)?;
-        let payload = raw_packet.copy_to_bytes(raw_packet.remaining());
-        if header.padding && !payload.is_empty() {
-            let payload_len = payload.len();
-            let padding_len = payload[payload_len - 1] as usize;
-            if padding_len <= payload_len {
-                Ok(Packet {
-                    header,
-                    payload: payload.slice(..payload_len - padding_len),
-                })
-            } else {
-                Err(Error::ErrShortPacket.into())
-            }
-        } else if header.padding && payload.is_empty() {
-            Err(Error::ErrShortPacket.into())
+        let payload_len = raw_packet.remaining();
+        let payload = raw_packet.copy_to_bytes(payload_len);
+        if header.padding {
+           if payload_len > 0 {
+               let padding_len = payload[payload_len - 1] as usize;
+               if padding_len <= payload_len {
+                   Ok(Packet {
+                       header,
+                       payload: payload.slice(..payload_len - padding_len),
+                   })
+               } else {
+                   Err(Error::ErrShortPacket.into())
+               }
+           }else {
+               Err(Error::ErrShortPacket.into())
+           }
         } else {
             Ok(Packet { header, payload })
         }
@@ -65,7 +67,12 @@ impl MarshalSize for Packet {
     fn marshal_size(&self) -> usize {
         let payload_len = self.payload.len();
         let padding_len = if self.header.padding {
-            get_padding(payload_len)
+            let padding_len = get_padding(payload_len);
+            if padding_len == 0 {
+                4
+            }else{
+                padding_len
+            }
         } else {
             0
         };
@@ -86,7 +93,10 @@ impl Marshal for Packet {
         let n = self.header.marshal_to(buf)?;
         buf.put(&*self.payload);
         let padding_len = if self.header.padding {
-            let padding_len = get_padding(self.payload.len());
+            let mut padding_len = get_padding(self.payload.len());
+            if padding_len == 0 {
+                padding_len = 4;
+            }
             for i in 0..padding_len {
                 if i != padding_len - 1 {
                     buf.put_u8(0);
