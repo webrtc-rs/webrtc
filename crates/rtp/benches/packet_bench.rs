@@ -24,9 +24,7 @@ fn benchmark_packet(c: &mut Criterion) {
         payload: Bytes::from_static(&[0xFFu8; 15]), //vec![0x07, 0x08, 0x09, 0x0a], //MTU=1500
         ..Default::default()
     };
-    let mut raw = BytesMut::new();
-    let _ = pkt.marshal_to(&mut raw).unwrap();
-    let raw = raw.freeze();
+    let raw = pkt.marshal().unwrap();
     let buf = &mut raw.clone();
     let p = Packet::unmarshal(buf).unwrap();
     if pkt != p {
@@ -38,9 +36,9 @@ fn benchmark_packet(c: &mut Criterion) {
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     let mut buf = BytesMut::with_capacity(pkt.marshal_size());
+    buf.resize(pkt.marshal_size(), 0);
     c.bench_function("Benchmark MarshalTo", |b| {
         b.iter(|| {
-            buf.clear();
             let _ = pkt.marshal_to(&mut buf).unwrap();
         })
     });
