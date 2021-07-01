@@ -43,7 +43,7 @@ impl Unmarshal for AudioLevelExtension {
         B: Buf,
     {
         if raw_packet.remaining() < AUDIO_LEVEL_EXTENSION_SIZE {
-            return Err(Error::ErrTooSmall.into());
+            return Err(Error::ErrBufferTooSmall.into());
         }
 
         let b = raw_packet.get_u8();
@@ -68,6 +68,9 @@ impl Marshal for AudioLevelExtension {
     where
         B: BufMut,
     {
+        if buf.remaining_mut() < AUDIO_LEVEL_EXTENSION_SIZE {
+            return Err(Error::ErrBufferTooSmall.into());
+        }
         if self.level > 127 {
             return Err(Error::AudioLevelOverflow.into());
         }

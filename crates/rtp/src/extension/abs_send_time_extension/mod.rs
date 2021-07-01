@@ -24,7 +24,7 @@ impl Unmarshal for AbsSendTimeExtension {
         B: Buf,
     {
         if raw_packet.remaining() < ABS_SEND_TIME_EXTENSION_SIZE {
-            return Err(Error::ErrTooSmall.into());
+            return Err(Error::ErrBufferTooSmall.into());
         }
 
         let b0 = raw_packet.get_u8();
@@ -49,6 +49,10 @@ impl Marshal for AbsSendTimeExtension {
     where
         B: BufMut,
     {
+        if buf.remaining_mut() < ABS_SEND_TIME_EXTENSION_SIZE {
+            return Err(Error::ErrBufferTooSmall.into());
+        }
+
         buf.put_u8(((self.timestamp & 0xFF0000) >> 16) as u8);
         buf.put_u8(((self.timestamp & 0xFF00) >> 8) as u8);
         buf.put_u8((self.timestamp & 0xFF) as u8);

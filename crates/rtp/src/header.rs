@@ -214,7 +214,7 @@ impl MarshalSize for Header {
 
 impl Marshal for Header {
     /// Marshal serializes the header and writes to the buffer.
-    fn marshal_to<B>(&self, buf: &mut B) -> Result<usize>
+    fn marshal_to<B>(&self, writer: &mut B) -> Result<usize>
     where
         B: BufMut,
     {
@@ -232,7 +232,9 @@ impl Marshal for Header {
          * |                             ....                              |
          * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
-        let writer = buf;
+        if writer.remaining_mut() < self.marshal_size() {
+            return Err(Error::ErrBufferTooSmall.into());
+        }
 
         // The first byte contains the version, padding bit, extension bit, and csrc size
         let mut b0 = (self.version << VERSION_SHIFT) | self.csrc.len() as u8;

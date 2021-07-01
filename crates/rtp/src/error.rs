@@ -7,7 +7,7 @@ pub enum Error {
     #[error("RTP header size insufficient for extension")]
     ErrHeaderSizeInsufficientForExtension,
     #[error("buffer too small")]
-    ErrTooSmall,
+    ErrBufferTooSmall,
     #[error("extension not enabled")]
     ErrHeaderExtensionsNotEnabled,
     #[error("extension not found")]

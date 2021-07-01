@@ -32,7 +32,7 @@ impl Unmarshal for TransportCcExtension {
         B: Buf,
     {
         if raw_packet.remaining() < TRANSPORT_CC_EXTENSION_SIZE {
-            return Err(Error::ErrTooSmall.into());
+            return Err(Error::ErrBufferTooSmall.into());
         }
         let b0 = raw_packet.get_u8();
         let b1 = raw_packet.get_u8();
@@ -55,6 +55,9 @@ impl Marshal for TransportCcExtension {
     where
         B: BufMut,
     {
+        if buf.remaining_mut() < TRANSPORT_CC_EXTENSION_SIZE {
+            return Err(Error::ErrBufferTooSmall.into());
+        }
         buf.put_u16(self.transport_sequence);
         Ok(TRANSPORT_CC_EXTENSION_SIZE)
     }

@@ -52,6 +52,8 @@ impl Unmarshal for Packet {
             } else {
                 Err(Error::ErrShortPacket.into())
             }
+        } else if header.padding && payload.is_empty() {
+            Err(Error::ErrShortPacket.into())
         } else {
             Ok(Packet { header, payload })
         }
@@ -77,6 +79,10 @@ impl Marshal for Packet {
     where
         B: BufMut,
     {
+        if buf.remaining_mut() < self.marshal_size() {
+            return Err(Error::ErrBufferTooSmall.into());
+        }
+
         let n = self.header.marshal_to(buf)?;
         buf.put(&*self.payload);
         let padding_len = if self.header.padding {
