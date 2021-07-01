@@ -51,10 +51,7 @@ impl MarshalSize for TransportCcExtension {
 
 impl Marshal for TransportCcExtension {
     /// Marshal serializes the members to buffer
-    fn marshal_to<B>(&self, buf: &mut B) -> Result<usize>
-    where
-        B: BufMut,
-    {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
         if buf.remaining_mut() < TRANSPORT_CC_EXTENSION_SIZE {
             return Err(Error::ErrBufferTooSmall.into());
         }

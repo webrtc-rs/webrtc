@@ -1,6 +1,6 @@
 use super::*;
 use bytes::{Bytes, BytesMut};
-use std::collections::HashMap;
+//use std::collections::HashMap;
 
 #[test]
 fn test_basic() -> Result<()> {
@@ -53,8 +53,8 @@ fn test_basic() -> Result<()> {
         "wrong computed marshal size"
     );
 
-    let mut raw = BytesMut::new();
-    let n = packet.marshal_to(&mut raw)?;
+    let raw = packet.marshal()?;
+    let n = raw.len();
     assert_eq!(n, raw_pkt.len(), "wrong marshal size");
 
     assert_eq!(
@@ -115,6 +115,9 @@ fn test_extension() -> Result<()> {
         result.is_err(),
         "Marshal did not error on packet with invalid extension length"
     );
+    if let Err(err) = result {
+        assert!(Error::ErrBufferTooSmall.equal(&err));
+    }
 
     Ok(())
 }
@@ -158,12 +161,8 @@ fn test_packet_marshal_unmarshal() -> Result<()> {
         payload: Bytes::from_static(&[0xFFu8; 15]),
         ..Default::default()
     };
-    let mut raw = BytesMut::new();
-    let _ = pkt.marshal_to(&mut raw)?;
-
-    let raw = raw.freeze();
-    let buf = &mut raw.clone();
-    let p = Packet::unmarshal(buf)?;
+    let mut raw = pkt.marshal()?;
+    let p = Packet::unmarshal(&mut raw)?;
 
     assert_eq!(pkt, p);
 
@@ -199,8 +198,7 @@ fn test_rfc8285_one_byte_extension() -> Result<()> {
         payload: raw_pkt.slice(20..),
     };
 
-    let mut dst = BytesMut::new();
-    let _ = p.marshal_to(&mut dst)?;
+    let dst =  p.marshal()?;
     assert_eq!(dst, raw_pkt);
 
     Ok(())
@@ -266,8 +264,7 @@ fn test_rfc8285_one_byte_two_extension_of_two_bytes() -> Result<()> {
         payload: raw_pkt.slice(20..),
     };
 
-    let mut dst = BytesMut::new();
-    let _ = p.marshal_to(&mut dst)?;
+    let dst = p.marshal()?;
     assert_eq!(dst, raw_pkt);
 
     Ok(())
@@ -329,7 +326,7 @@ fn test_rfc8285_one_byte_multiple_extensions_with_padding() -> Result<()> {
         0x98, 0x36, 0xbe, 0x88, 0x9e,
     ];
 
-    let checker = |name: &str, buf: &mut [u8], p: &mut Packet| -> Result<()> {
+    let checker = |name: &str, buf: &mut [u8], p: &Packet| -> Result<()> {
         let size = p.marshal_to(buf)?;
 
         assert_eq!(
@@ -342,8 +339,16 @@ fn test_rfc8285_one_byte_multiple_extensions_with_padding() -> Result<()> {
         Ok(())
     };
 
-    checker("CleanBuffer", &mut dst_buf[0], &mut p)?;
-    checker("DirtyBuffer", &mut dst_buf[1], &mut p)
+    checker("CleanBuffer", &mut dst_buf[0], &packet)?;
+    checker("DirtyBuffer", &mut dst_buf[1], &packet)?;
+
+    let result = packet.marshal_to(&mut dst_buf[2]);
+    assert!(result.is_err());
+    if let Err(err) = result {
+        assert!(Error::ErrBufferTooSmall.equal(&err));
+    }
+
+    Ok(())
 }
 
 /*

@@ -214,10 +214,7 @@ impl MarshalSize for Header {
 
 impl Marshal for Header {
     /// Marshal serializes the header and writes to the buffer.
-    fn marshal_to<B>(&self, writer: &mut B) -> Result<usize>
-    where
-        B: BufMut,
-    {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
         /*
          *  0                   1                   2                   3
          *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -232,7 +229,7 @@ impl Marshal for Header {
          * |                             ....                              |
          * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
-        if writer.remaining_mut() < self.marshal_size() {
+        if buf.remaining_mut() < self.marshal_size() {
             return Err(Error::ErrBufferTooSmall.into());
         }
 
@@ -245,27 +242,27 @@ impl Marshal for Header {
         if self.extension {
             b0 |= 1 << EXTENSION_SHIFT;
         }
-        writer.put_u8(b0);
+        buf.put_u8(b0);
 
         // The second byte contains the marker bit and payload type.
         let mut b1 = self.payload_type;
         if self.marker {
             b1 |= 1 << MARKER_SHIFT;
         }
-        writer.put_u8(b1);
+        buf.put_u8(b1);
 
-        writer.put_u16(self.sequence_number);
-        writer.put_u32(self.timestamp);
-        writer.put_u32(self.ssrc);
+        buf.put_u16(self.sequence_number);
+        buf.put_u32(self.timestamp);
+        buf.put_u32(self.ssrc);
 
         let mut n = 12;
         for csrc in &self.csrc {
-            writer.put_u32(*csrc);
+            buf.put_u32(*csrc);
             n += 4;
         }
 
         if self.extension {
-            writer.put_u16(self.extension_profile);
+            buf.put_u16(self.extension_profile);
             n += 2;
 
             // calculate extensions size and round to 4 bytes boundaries
@@ -278,27 +275,27 @@ impl Marshal for Header {
                 return Err(Error::HeaderExtensionPayloadNot32BitWords.into());
             }
             let extension_payload_size = (extension_payload_len as u16 + 3) / 4;
-            writer.put_u16(extension_payload_size);
+            buf.put_u16(extension_payload_size);
             n += 2;
 
             match self.extension_profile {
                 // RFC 8285 RTP One Byte Header Extension
                 EXTENSION_PROFILE_ONE_BYTE => {
                     for extension in &self.extensions {
-                        writer.put_u8((extension.id << 4) | (extension.payload.len() as u8 - 1));
+                        buf.put_u8((extension.id << 4) | (extension.payload.len() as u8 - 1));
                         n += 1;
-                        writer.put(&*extension.payload);
+                        buf.put(&*extension.payload);
                         n += extension.payload.len();
                     }
                 }
                 // RFC 8285 RTP Two Byte Header Extension
                 EXTENSION_PROFILE_TWO_BYTE => {
                     for extension in &self.extensions {
-                        writer.put_u8(extension.id);
+                        buf.put_u8(extension.id);
                         n += 1;
-                        writer.put_u8(extension.payload.len() as u8);
+                        buf.put_u8(extension.payload.len() as u8);
                         n += 1;
-                        writer.put(&*extension.payload);
+                        buf.put(&*extension.payload);
                         n += extension.payload.len();
                     }
                 }
@@ -313,7 +310,7 @@ impl Marshal for Header {
                         if ext_len % 4 != 0 {
                             return Err(Error::HeaderExtensionPayloadNot32BitWords.into());
                         }
-                        writer.put(&*extension.payload);
+                        buf.put(&*extension.payload);
                         n += ext_len;
                     }
                 }
@@ -321,7 +318,7 @@ impl Marshal for Header {
 
             // add padding to reach 4 bytes boundaries
             for _ in extension_payload_len..extension_payload_size as usize * 4 {
-                writer.put_u8(0);
+                buf.put_u8(0);
                 n += 1;
             }
         }

@@ -22,6 +22,7 @@ fn test_audio_level_extension_voice_true() -> Result<()> {
     assert_eq!(a1, a2);
 
     let mut dst = BytesMut::with_capacity(a2.marshal_size());
+    dst.resize(a2.marshal_size(), 0);
     a2.marshal_to(&mut dst)?;
     assert_eq!(raw, dst.freeze());
 
@@ -40,6 +41,7 @@ fn test_audio_level_extension_voice_false() -> Result<()> {
     assert_eq!(a1, a2);
 
     let mut dst = BytesMut::with_capacity(a2.marshal_size());
+    dst.resize(a2.marshal_size(), 0);
     a2.marshal_to(&mut dst)?;
     assert_eq!(raw, dst.freeze());
 
@@ -54,6 +56,7 @@ fn test_audio_level_extension_level_overflow() -> Result<()> {
     };
 
     let mut dst = BytesMut::with_capacity(a.marshal_size());
+    dst.resize(a.marshal_size(), 0);
     let result = a.marshal_to(&mut dst);
     assert!(result.is_err());
 

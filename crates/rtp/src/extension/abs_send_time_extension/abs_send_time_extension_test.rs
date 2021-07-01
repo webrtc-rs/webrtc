@@ -55,6 +55,7 @@ fn test_abs_send_time_extension_roundtrip() -> Result<()> {
 
     for test in &tests {
         let mut raw = BytesMut::with_capacity(test.marshal_size());
+        raw.resize(test.marshal_size(), 0);
         test.marshal_to(&mut raw)?;
         let raw = raw.freeze();
         let buf = &mut raw.clone();
@@ -79,6 +80,7 @@ fn test_abs_send_time_extension_estimate() -> Result<()> {
             timestamp: send_ntp >> 14,
         };
         let mut raw = BytesMut::with_capacity(send.marshal_size());
+        raw.resize(send.marshal_size(), 0);
         send.marshal_to(&mut raw)?;
         let raw = raw.freeze();
         let buf = &mut raw.clone();

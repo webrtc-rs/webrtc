@@ -82,15 +82,13 @@ impl MarshalSize for Packet {
 
 impl Marshal for Packet {
     /// MarshalTo serializes the packet and writes to the buffer.
-    fn marshal_to<B>(&self, buf: &mut B) -> Result<usize>
-    where
-        B: BufMut,
-    {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
         if buf.remaining_mut() < self.marshal_size() {
             return Err(Error::ErrBufferTooSmall.into());
         }
 
         let n = self.header.marshal_to(buf)?;
+        buf = &mut buf[n..];
         buf.put(&*self.payload);
         let padding_len = if self.header.padding {
             let mut padding_len = get_padding(self.payload.len());

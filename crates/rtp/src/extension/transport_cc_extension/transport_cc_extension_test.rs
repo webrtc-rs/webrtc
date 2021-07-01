@@ -21,6 +21,7 @@ fn test_transport_cc_extension() -> Result<()> {
     assert_eq!(t1, t2);
 
     let mut dst = BytesMut::with_capacity(t2.marshal_size());
+    dst.resize(t2.marshal_size(), 0);
     t2.marshal_to(&mut dst)?;
     assert_eq!(raw, dst.freeze());
 

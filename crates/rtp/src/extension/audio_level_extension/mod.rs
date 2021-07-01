@@ -64,10 +64,7 @@ impl MarshalSize for AudioLevelExtension {
 
 impl Marshal for AudioLevelExtension {
     /// MarshalTo serializes the members to buffer
-    fn marshal_to<B>(&self, buf: &mut B) -> Result<usize>
-    where
-        B: BufMut,
-    {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
         if buf.remaining_mut() < AUDIO_LEVEL_EXTENSION_SIZE {
             return Err(Error::ErrBufferTooSmall.into());
         }

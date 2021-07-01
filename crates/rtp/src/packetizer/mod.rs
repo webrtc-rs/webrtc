@@ -97,6 +97,7 @@ impl<P: Payloader, S: Sequencer> Packetizer for PacketizerImpl<P, S> {
             let send_time = AbsSendTimeExtension::new(d);
             //apply http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
             let mut raw = BytesMut::with_capacity(send_time.marshal_size());
+            raw.resize(send_time.marshal_size(), 0);
             let _ = send_time.marshal_to(&mut raw)?;
             packets[l - 1]
                 .header

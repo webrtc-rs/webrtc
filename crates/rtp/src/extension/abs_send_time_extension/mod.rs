@@ -45,10 +45,7 @@ impl MarshalSize for AbsSendTimeExtension {
 
 impl Marshal for AbsSendTimeExtension {
     /// MarshalTo serializes the members to buffer.
-    fn marshal_to<B>(&self, buf: &mut B) -> Result<usize>
-    where
-        B: BufMut,
-    {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
         if buf.remaining_mut() < ABS_SEND_TIME_EXTENSION_SIZE {
             return Err(Error::ErrBufferTooSmall.into());
         }
