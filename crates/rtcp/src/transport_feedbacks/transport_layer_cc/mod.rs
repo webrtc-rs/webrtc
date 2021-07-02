@@ -118,26 +118,28 @@ impl Default for SymbolTypeTcc {
 
 /// PacketStatusChunk has two kinds:
 /// RunLengthChunk and StatusVectorChunk
-pub trait PacketStatusChunk {
-    fn marshal(&self) -> Result<Bytes>;
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self>
-    where
-        Self: Sized;
-
-    fn equal(&self, other: &dyn PacketStatusChunk) -> bool;
-    fn cloned(&self) -> Box<dyn PacketStatusChunk>;
-    fn as_any(&self) -> &dyn Any;
+#[derive(Debug, Clone, PartialEq)]
+pub enum PacketStatusChunk {
+    RunLengthChunk(RunLengthChunk),
+    StatusVectorChunk(StatusVectorChunk),
 }
 
-impl PartialEq for dyn PacketStatusChunk {
-    fn eq(&self, other: &dyn PacketStatusChunk) -> bool {
-        self.equal(other)
+impl MarshalSize for PacketStatusChunk {
+    fn marshal_size(&self) -> usize {
+        match self {
+            PacketStatusChunk::RunLengthChunk(c) => c.marshal_size(),
+            PacketStatusChunk::StatusVectorChunk(c) => c.marshal_size(),
+        }
     }
 }
 
-impl Clone for Box<dyn PacketStatusChunk> {
-    fn clone(&self) -> Box<dyn PacketStatusChunk> {
-        self.cloned()
+impl Marshal for PacketStatusChunk {
+    /// Marshal ..
+    fn marshal_to(&self, buf: &mut [u8]) -> Result<usize> {
+        match self {
+            PacketStatusChunk::RunLengthChunk(c) => c.marshal_to(buf),
+            PacketStatusChunk::StatusVectorChunk(c) => c.marshal_to(buf),
+        }
     }
 }
 
@@ -158,9 +160,15 @@ pub struct RunLengthChunk {
     pub run_length: u16,
 }
 
-impl PacketStatusChunk for RunLengthChunk {
+impl MarshalSize for RunLengthChunk {
+    fn marshal_size(&self) -> usize {
+        PACKET_STATUS_CHUNK_LENGTH
+    }
+}
+
+impl Marshal for RunLengthChunk {
     /// Marshal ..
-    fn marshal(&self) -> Result<Bytes> {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
         // append 1 bit '0'
         let mut dst = set_nbits_of_uint16(0, 1, 0, 0)?;
 
@@ -170,21 +178,29 @@ impl PacketStatusChunk for RunLengthChunk {
         // append 13 bit run_length
         dst = set_nbits_of_uint16(dst, 13, 3, self.run_length)?;
 
-        Ok(Bytes::from(dst.to_be_bytes().to_vec()))
-    }
+        buf.put_u16(dst);
 
+        Ok(PACKET_STATUS_CHUNK_LENGTH)
+    }
+}
+
+impl Unmarshal for RunLengthChunk {
     /// Unmarshal ..
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
-        if raw_packet.len() != PACKET_STATUS_CHUNK_LENGTH as usize {
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    where
+        Self: Sized,
+        B: Buf,
+    {
+        let raw_packet_len = raw_packet.remaining();
+        if raw_packet_len < PACKET_STATUS_CHUNK_LENGTH {
             return Err(Error::PacketStatusChunkLength.into());
         }
 
         // record type
         let type_tcc = StatusChunkTypeTcc::RunLengthChunk;
 
-        let reader = &mut raw_packet.clone();
-        let b0 = reader.get_u8();
-        let b1 = reader.get_u8();
+        let b0 = raw_packet.get_u8();
+        let b1 = raw_packet.get_u8();
 
         // get PacketStatusSymbol
         let packet_status_symbol = (get_nbits_from_byte(b0, 1, 2) as u16).into();
@@ -197,21 +213,6 @@ impl PacketStatusChunk for RunLengthChunk {
             packet_status_symbol,
             run_length,
         })
-    }
-
-    fn equal(&self, other: &dyn PacketStatusChunk) -> bool {
-        other
-            .as_any()
-            .downcast_ref::<RunLengthChunk>()
-            .map_or(false, |a| self == a)
-    }
-
-    fn cloned(&self) -> Box<dyn PacketStatusChunk> {
-        Box::new(self.clone())
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }
 
@@ -236,9 +237,15 @@ pub struct StatusVectorChunk {
     pub symbol_list: Vec<SymbolTypeTcc>,
 }
 
-impl PacketStatusChunk for StatusVectorChunk {
+impl MarshalSize for StatusVectorChunk {
+    fn marshal_size(&self) -> usize {
+        PACKET_STATUS_CHUNK_LENGTH
+    }
+}
+
+impl Marshal for StatusVectorChunk {
     /// Marshal ..
-    fn marshal(&self) -> Result<Bytes> {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
         // set first bit '1'
         let mut dst = set_nbits_of_uint16(0, 1, 0, 1)?;
 
@@ -252,20 +259,28 @@ impl PacketStatusChunk for StatusVectorChunk {
             dst = set_nbits_of_uint16(dst, num_of_bits, index, *s as u16)?;
         }
 
-        Ok(Bytes::from(dst.to_be_bytes().to_vec()))
-    }
+        buf.put_u16(dst);
 
+        Ok(PACKET_STATUS_CHUNK_LENGTH)
+    }
+}
+
+impl Unmarshal for StatusVectorChunk {
     /// Unmarshal ..
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
-        if raw_packet.len() != PACKET_STATUS_CHUNK_LENGTH {
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    where
+        Self: Sized,
+        B: Buf,
+    {
+        let raw_packet_len = raw_packet.remaining();
+        if raw_packet_len < PACKET_STATUS_CHUNK_LENGTH {
             return Err(Error::PacketBeforeCname.into());
         }
 
         let type_tcc = StatusChunkTypeTcc::StatusVectorChunk;
 
-        let reader = &mut raw_packet.clone();
-        let b0 = reader.get_u8();
-        let b1 = reader.get_u8();
+        let b0 = raw_packet.get_u8();
+        let b1 = raw_packet.get_u8();
 
         let symbol_size = get_nbits_from_byte(b0, 1, 1).into();
 
@@ -283,11 +298,11 @@ impl PacketStatusChunk for StatusVectorChunk {
 
             SymbolSizeTypeTcc::TwoBit => {
                 for i in 0..3u16 {
-                    symbol_list.push(get_nbits_from_byte(raw_packet[0], 2 + i * 2, 2).into());
+                    symbol_list.push(get_nbits_from_byte(b0, 2 + i * 2, 2).into());
                 }
 
                 for i in 0..4u16 {
-                    symbol_list.push(get_nbits_from_byte(raw_packet[1], i * 2, 2).into());
+                    symbol_list.push(get_nbits_from_byte(b1, i * 2, 2).into());
                 }
             }
         }
@@ -297,21 +312,6 @@ impl PacketStatusChunk for StatusVectorChunk {
             symbol_size,
             symbol_list,
         })
-    }
-
-    fn equal(&self, other: &dyn PacketStatusChunk) -> bool {
-        other
-            .as_any()
-            .downcast_ref::<StatusVectorChunk>()
-            .map_or(false, |a| self == a)
-    }
-
-    fn cloned(&self) -> Box<dyn PacketStatusChunk> {
-        Box::new(self.clone())
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }
 
@@ -326,9 +326,8 @@ pub struct RecvDelta {
     pub delta: i64,
 }
 
-impl RecvDelta {
-    /// Marshal ..
-    pub fn marshal(&self) -> Result<Bytes> {
+impl MarshalSize for RecvDelta {
+    fn marshal_size(&self) -> usize {
         let delta = self.delta / TYPE_TCC_DELTA_SCALE_FACTOR;
 
         // small delta
@@ -336,7 +335,7 @@ impl RecvDelta {
             && delta >= 0
             && delta <= std::u8::MAX as i64
         {
-            return Ok(Bytes::from((delta as u8).to_be_bytes().to_vec()));
+            return 1;
         }
 
         // big delta
@@ -344,33 +343,66 @@ impl RecvDelta {
             && delta >= std::i16::MIN as i64
             && delta <= std::u16::MAX as i64
         {
-            return Ok(Bytes::from((delta as u16).to_be_bytes().to_vec()));
+            return 2;
+        }
+
+        0
+    }
+}
+
+impl Marshal for RecvDelta {
+    /// Marshal ..
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
+        let delta = self.delta / TYPE_TCC_DELTA_SCALE_FACTOR;
+
+        // small delta
+        if self.type_tcc_packet == SymbolTypeTcc::PacketReceivedSmallDelta
+            && delta >= 0
+            && delta <= std::u8::MAX as i64
+            && buf.remaining_mut() >= 1
+        {
+            buf.put_u8(delta as u8);
+            return Ok(1);
+        }
+
+        // big delta
+        if self.type_tcc_packet == SymbolTypeTcc::PacketReceivedLargeDelta
+            && delta >= std::i16::MIN as i64
+            && delta <= std::u16::MAX as i64
+            && buf.remaining_mut() >= 2
+        {
+            buf.put_u16(delta as u16);
+            return Ok(2);
         }
 
         // overflow
         Err(Error::DeltaExceedLimit.into())
     }
+}
 
+impl Unmarshal for RecvDelta {
     /// Unmarshal ..
-    pub fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
-        let chunk_len = raw_packet.len();
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    where
+        Self: Sized,
+        B: Buf,
+    {
+        let chunk_len = raw_packet.remaining();
 
         // must be 1 or 2 bytes
         if chunk_len != 1 && chunk_len != 2 {
             return Err(Error::DeltaExceedLimit.into());
         }
 
-        let reader = &mut raw_packet.clone();
-
         let (type_tcc_packet, delta) = if chunk_len == 1 {
             (
                 SymbolTypeTcc::PacketReceivedSmallDelta,
-                TYPE_TCC_DELTA_SCALE_FACTOR * reader.get_u8() as i64,
+                TYPE_TCC_DELTA_SCALE_FACTOR * raw_packet.get_u8() as i64,
             )
         } else {
             (
                 SymbolTypeTcc::PacketReceivedLargeDelta,
-                TYPE_TCC_DELTA_SCALE_FACTOR * reader.get_i16() as i64,
+                TYPE_TCC_DELTA_SCALE_FACTOR * raw_packet.get_i16() as i64,
             )
         };
 
@@ -408,7 +440,7 @@ const PACKET_STATUS_CHUNK_LENGTH: usize = 2;
 
 /// TransportLayerCC for sender-BWE
 /// https://tools.ietf.org/html/draft-holmer-rmcat-transport-wide-cc-extensions-01#page-5
-#[derive(Default, PartialEq, Clone)]
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct TransportLayerCc {
     /// SSRC of sender
     pub sender_ssrc: u32,
@@ -423,7 +455,7 @@ pub struct TransportLayerCc {
     /// fb_pkt_count
     pub fb_pkt_count: u8,
     /// packet_chunks
-    pub packet_chunks: Vec<Box<dyn PacketStatusChunk>>,
+    pub packet_chunks: Vec<PacketStatusChunk>,
     /// recv_deltas
     pub recv_deltas: Vec<RecvDelta>,
 }
@@ -600,16 +632,14 @@ impl Unmarshal for TransportLayerCc {
                 return Err(Error::PacketTooShort.into());
             }
 
-            let chunk_reader =
-                raw_packet.slice(packet_status_pos..packet_status_pos + PACKET_STATUS_CHUNK_LENGTH);
-            let b0 = reader.get_u8();
-            reader.advance(1);
+            let mut chunk_reader = raw_packet.copy_to_bytes(PACKET_STATUS_CHUNK_LENGTH);
+            let b0 = chunk_reader[0];
 
             let typ = get_nbits_from_byte(b0, 0, 1);
-            let initial_packet_status: Box<dyn PacketStatusChunk>;
+            let initial_packet_status: PacketStatusChunk;
             match typ.into() {
                 StatusChunkTypeTcc::RunLengthChunk => {
-                    let packet_status = RunLengthChunk::unmarshal(&chunk_reader)?;
+                    let packet_status = RunLengthChunk::unmarshal(&mut chunk_reader)?;
 
                     let packet_number_to_process =
                         (packet_status_count - processed_packet_num).min(packet_status.run_length);
@@ -630,12 +660,12 @@ impl Unmarshal for TransportLayerCc {
                         }
                     }
 
-                    initial_packet_status = Box::new(packet_status);
+                    initial_packet_status = PacketStatusChunk::RunLengthChunk(packet_status);
                     processed_packet_num += packet_number_to_process;
                 }
 
                 StatusChunkTypeTcc::StatusVectorChunk => {
-                    let packet_status = StatusVectorChunk::unmarshal(&chunk_reader)?;
+                    let packet_status = StatusVectorChunk::unmarshal(&mut chunk_reader)?;
 
                     match packet_status.symbol_size {
                         SymbolSizeTypeTcc::OneBit => {
@@ -664,7 +694,7 @@ impl Unmarshal for TransportLayerCc {
                     }
 
                     processed_packet_num += packet_status.symbol_list.len() as u16;
-                    initial_packet_status = Box::new(packet_status);
+                    initial_packet_status = PacketStatusChunk::StatusVectorChunk(packet_status);
                 }
             }
 
@@ -680,14 +710,14 @@ impl Unmarshal for TransportLayerCc {
             }
 
             if delta.type_tcc_packet == SymbolTypeTcc::PacketReceivedSmallDelta {
-                let delta_reader = raw_packet.slice(recv_deltas_pos..recv_deltas_pos + 1);
-                *delta = RecvDelta::unmarshal(&delta_reader)?;
+                let mut delta_reader = raw_packet.take(1);
+                *delta = RecvDelta::unmarshal(&mut delta_reader)?;
                 recv_deltas_pos += 1;
             }
 
             if delta.type_tcc_packet == SymbolTypeTcc::PacketReceivedLargeDelta {
-                let delta_reader = raw_packet.slice(recv_deltas_pos..recv_deltas_pos + 2);
-                *delta = RecvDelta::unmarshal(&delta_reader)?;
+                let mut delta_reader = raw_packet.take(2);
+                *delta = RecvDelta::unmarshal(&mut delta_reader)?;
                 recv_deltas_pos += 2;
             }
         }
