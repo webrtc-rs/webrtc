@@ -1,4 +1,5 @@
 use super::*;
+use bytes::Bytes;
 
 #[test]
 fn test_slice_loss_indication_unmarshal() {
@@ -56,8 +57,8 @@ fn test_slice_loss_indication_unmarshal() {
         ),
     ];
 
-    for (name, data, want, want_error) in tests {
-        let got = SliceLossIndication::unmarshal(&data);
+    for (name, mut data, want, want_error) in tests {
+        let got = SliceLossIndication::unmarshal(&mut data);
 
         assert_eq!(
             got.is_err(),
@@ -133,8 +134,8 @@ fn test_slice_loss_indication_roundtrip() {
                 err,
             );
         } else {
-            let data = got.ok().unwrap();
-            let actual = SliceLossIndication::unmarshal(&data)
+            let mut data = got.ok().unwrap();
+            let actual = SliceLossIndication::unmarshal(&mut data)
                 .expect(format!("Unmarshal {}", name).as_str());
 
             assert_eq!(
