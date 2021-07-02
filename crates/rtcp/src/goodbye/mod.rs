@@ -67,11 +67,8 @@ impl MarshalSize for Goodbye {
 }
 
 impl Marshal for Goodbye {
-    /// Marshal encodes the packet in binary.
-    fn marshal_to<B>(&self, writer: &mut B) -> Result<usize>
-    where
-        B: BufMut,
-    {
+    /// marshal_to encodes the packet in binary.
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
         if self.sources.len() > COUNT_MAX {
             return Err(Error::TooManySources.into());
         }
@@ -80,7 +77,7 @@ impl Marshal for Goodbye {
             return Err(Error::ReasonTooLong.into());
         }
 
-        if writer.remaining_mut() < self.marshal_size() {
+        if buf.remaining_mut() < self.marshal_size() {
             return Err(Error::BufferTooShort.into());
         }
 
@@ -97,20 +94,19 @@ impl Marshal for Goodbye {
          * (opt) |     length    |               reason for leaving            ...
          *       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
-        let h = self.header();
-        let data = h.marshal()?;
-        writer.put(data);
+        let n = self.header().marshal_to(buf)?;
+        buf = &mut buf[n..];
 
         for source in &self.sources {
-            writer.put_u32(*source);
+            buf.put_u32(*source);
         }
 
-        writer.put_u8(self.reason.len() as u8);
+        buf.put_u8(self.reason.len() as u8);
         if !self.reason.is_empty() {
-            writer.put(self.reason.clone());
+            buf.put(self.reason.clone());
         }
 
-        put_padding(writer, self.raw_size());
+        put_padding(buf, self.raw_size());
 
         Ok(self.marshal_size())
     }

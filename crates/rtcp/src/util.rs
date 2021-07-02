@@ -12,10 +12,7 @@ pub(crate) fn get_padding(len: usize) -> usize {
     }
 }
 
-pub(crate) fn put_padding<B>(buf: &mut B, len: usize)
-where
-    B: BufMut,
-{
+pub(crate) fn put_padding(mut buf: &mut [u8], len: usize) {
     for _ in 0..get_padding(len) {
         buf.put_u8(0);
     }

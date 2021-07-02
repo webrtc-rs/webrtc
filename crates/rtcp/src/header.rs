@@ -109,14 +109,11 @@ impl MarshalSize for Header {
 }
 
 impl Marshal for Header {
-    fn marshal_to<B>(&self, raw_packet: &mut B) -> Result<usize>
-    where
-        B: BufMut,
-    {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
         if self.count > 31 {
             return Err(Error::InvalidHeader.into());
         }
-        if raw_packet.remaining_mut() < HEADER_LENGTH {
+        if buf.remaining_mut() < HEADER_LENGTH {
             return Err(Error::BufferTooShort.into());
         }
 
@@ -131,9 +128,9 @@ impl Marshal for Header {
             | ((self.padding as u8) << PADDING_SHIFT)
             | (self.count << COUNT_SHIFT);
 
-        raw_packet.put_u8(b0);
-        raw_packet.put_u8(self.packet_type as u8);
-        raw_packet.put_u16(self.length);
+        buf.put_u8(b0);
+        buf.put_u8(self.packet_type as u8);
+        buf.put_u16(self.length);
 
         Ok(HEADER_LENGTH)
     }
