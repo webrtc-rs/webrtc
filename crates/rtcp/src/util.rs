@@ -13,8 +13,13 @@ pub(crate) fn get_padding_size(len: usize) -> usize {
 }
 
 pub(crate) fn put_padding(mut buf: &mut [u8], len: usize) {
-    for _ in 0..get_padding_size(len) {
-        buf.put_u8(0);
+    let padding_size = get_padding_size(len);
+    for i in 0..padding_size {
+        if i == padding_size - 1 {
+            buf.put_u8(padding_size as u8);
+        } else {
+            buf.put_u8(0);
+        }
     }
 }
 

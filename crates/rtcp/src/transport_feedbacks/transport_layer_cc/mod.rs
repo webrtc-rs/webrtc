@@ -449,12 +449,21 @@ impl fmt::Display for TransportLayerCc {
 }
 
 impl Packet for TransportLayerCc {
+    fn header(&self) -> Header {
+        Header {
+            padding: get_padding_size(self.raw_size()) != 0,
+            count: FORMAT_TCC,
+            packet_type: PacketType::TransportSpecificFeedback,
+            length: ((self.marshal_size() / 4) - 1) as u16,
+        }
+    }
+
     /// destination_ssrc returns an array of SSRC values that this packet refers to.
     fn destination_ssrc(&self) -> Vec<u32> {
         vec![self.media_ssrc]
     }
 
-    fn size(&self) -> usize {
+    fn raw_size(&self) -> usize {
         let mut n = HEADER_LENGTH + PACKET_CHUNK_OFFSET + self.packet_chunks.len() * 2;
         for d in &self.recv_deltas {
             let delta = d.delta / TYPE_TCC_DELTA_SCALE_FACTOR;
@@ -477,50 +486,78 @@ impl Packet for TransportLayerCc {
         n
     }
 
-    fn marshal(&self) -> Result<Bytes> {
-        let mut writer = BytesMut::with_capacity(self.marshal_size());
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    /*fn equal(&self, other: &dyn Packet) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<TransportLayerCc>()
+            .map_or(false, |a| self == a)
+    }
+
+    fn cloned(&self) -> Box<dyn Packet> {
+        Box::new(self.clone())
+    }*/
+}
+
+impl MarshalSize for TransportLayerCc {
+    fn marshal_size(&self) -> usize {
+        let l = self.raw_size();
+        // align to 32-bit boundary
+        l + get_padding_size(l)
+    }
+}
+
+impl Marshal for TransportLayerCc {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
+        if buf.remaining_mut() < self.marshal_size() {
+            return Err(Error::BufferTooShort.into());
+        }
 
         let h = self.header();
-        let data = h.marshal()?;
-        writer.extend(data);
+        let n = h.marshal_to(buf)?;
+        buf = &mut buf[n..];
 
-        writer.put_u32(self.sender_ssrc);
-        writer.put_u32(self.media_ssrc);
-        writer.put_u16(self.base_sequence_number);
-        writer.put_u16(self.packet_status_count);
+        buf.put_u32(self.sender_ssrc);
+        buf.put_u32(self.media_ssrc);
+        buf.put_u16(self.base_sequence_number);
+        buf.put_u16(self.packet_status_count);
 
         let reference_time_and_fb_pkt_count = append_nbits_to_uint32(0, 24, self.reference_time);
         let reference_time_and_fb_pkt_count =
             append_nbits_to_uint32(reference_time_and_fb_pkt_count, 8, self.fb_pkt_count as u32);
 
-        writer.put_u32(reference_time_and_fb_pkt_count);
+        buf.put_u32(reference_time_and_fb_pkt_count);
 
         for chunk in &self.packet_chunks {
-            let data = chunk.marshal()?;
-            writer.extend(data);
+            let n = chunk.marshal_to(buf)?;
+            buf = &mut buf[n..];
         }
 
         for delta in &self.recv_deltas {
-            let data = delta.marshal()?;
-            writer.extend(data);
+            let n = delta.marshal_to(buf)?;
+            buf = &mut buf[n..];
         }
 
-        if self.marshal_size() > self.size() {
-            while writer.len() % 4 != 0 {
-                if writer.len() == self.marshal_size() - 1 {
-                    writer.put_u8((self.marshal_size() - self.size()) as u8);
-                } else {
-                    writer.put_u8(0);
-                }
-            }
+        if h.padding {
+            put_padding(buf, self.raw_size());
         }
-        //FIXME: why not using put_padding(&mut writer); like others?
-        Ok(writer.freeze())
+
+        Ok(self.marshal_size())
     }
+}
 
+impl Unmarshal for TransportLayerCc {
     /// Unmarshal ..
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
-        if raw_packet.len() < (HEADER_LENGTH + SSRC_LENGTH) {
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    where
+        Self: Sized,
+        B: Buf,
+    {
+        let raw_packet_len = raw_packet.remaining();
+        if raw_packet_len < (HEADER_LENGTH + SSRC_LENGTH) {
             return Err(Error::PacketTooShort.into());
         }
 
@@ -534,7 +571,7 @@ impl Packet for TransportLayerCc {
             return Err(Error::PacketTooShort.into());
         }
 
-        if raw_packet.len() < total_length {
+        if raw_packet_len < total_length {
             return Err(Error::PacketTooShort.into());
         }
 
@@ -542,19 +579,17 @@ impl Packet for TransportLayerCc {
             return Err(Error::WrongType.into());
         }
 
-        let reader = &mut raw_packet.slice(HEADER_LENGTH..);
-
-        let sender_ssrc = reader.get_u32();
-        let media_ssrc = reader.get_u32();
-        let base_sequence_number = reader.get_u16();
-        let packet_status_count = reader.get_u16();
+        let sender_ssrc = raw_packet.get_u32();
+        let media_ssrc = raw_packet.get_u32();
+        let base_sequence_number = raw_packet.get_u16();
+        let packet_status_count = raw_packet.get_u16();
 
         let mut buf = vec![0u8; 3];
-        buf[0] = reader.get_u8();
-        buf[1] = reader.get_u8();
-        buf[2] = reader.get_u8();
+        buf[0] = raw_packet.get_u8();
+        buf[1] = raw_packet.get_u8();
+        buf[2] = raw_packet.get_u8();
         let reference_time = get_24bits_from_bytes(&buf);
-        let fb_pkt_count = reader.get_u8();
+        let fb_pkt_count = raw_packet.get_u8();
         let mut packet_chunks = vec![];
         let mut recv_deltas = vec![];
 
@@ -657,6 +692,10 @@ impl Packet for TransportLayerCc {
             }
         }
 
+        if h.padding && raw_packet.has_remaining() {
+            raw_packet.advance(raw_packet.remaining());
+        }
+
         Ok(TransportLayerCc {
             sender_ssrc,
             media_ssrc,
@@ -667,31 +706,5 @@ impl Packet for TransportLayerCc {
             packet_chunks,
             recv_deltas,
         })
-    }
-
-    fn equal(&self, other: &dyn Packet) -> bool {
-        other
-            .as_any()
-            .downcast_ref::<TransportLayerCc>()
-            .map_or(false, |a| self == a)
-    }
-
-    fn cloned(&self) -> Box<dyn Packet> {
-        Box::new(self.clone())
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
-impl TransportLayerCc {
-    pub fn header(&self) -> Header {
-        Header {
-            padding: get_padding(self.size()) != 0,
-            count: FORMAT_TCC,
-            packet_type: PacketType::TransportSpecificFeedback,
-            length: ((self.marshal_size() / 4) - 1) as u16,
-        }
     }
 }

@@ -1,4 +1,5 @@
 use super::*;
+use bytes::Bytes;
 
 #[test]
 fn test_transport_layer_nack_unmarshal() {
@@ -56,8 +57,8 @@ fn test_transport_layer_nack_unmarshal() {
         ),
     ];
 
-    for (name, data, want, want_error) in tests {
-        let got = TransportLayerNack::unmarshal(&data);
+    for (name, mut data, want, want_error) in tests {
+        let got = TransportLayerNack::unmarshal(&mut data);
 
         assert_eq!(
             got.is_err(),
@@ -131,9 +132,9 @@ fn test_transport_layer_nack_roundtrip() {
                 err,
             );
         } else {
-            let data = got.ok().unwrap();
-            let actual =
-                TransportLayerNack::unmarshal(&data).expect(format!("Unmarshal {}", name).as_str());
+            let mut data = got.ok().unwrap();
+            let actual = TransportLayerNack::unmarshal(&mut data)
+                .expect(format!("Unmarshal {}", name).as_str());
 
             assert_eq!(
                 actual, want,
