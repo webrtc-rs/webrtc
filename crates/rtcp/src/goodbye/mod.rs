@@ -138,7 +138,6 @@ impl Unmarshal for Goodbye {
         let raw_packet_len = raw_packet.remaining();
 
         let header = Header::unmarshal(raw_packet)?;
-
         if header.packet_type != PacketType::Goodbye {
             return Err(Error::WrongType.into());
         }
