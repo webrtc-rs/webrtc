@@ -177,9 +177,9 @@ impl Marshal for SenderReport {
         buf.put_u32(self.packet_count);
         buf.put_u32(self.octet_count);
 
-        for rp in &self.reports {
-            let data = rp.marshal()?;
-            buf.put(data);
+        for report in &self.reports {
+            let n = report.marshal_to(buf)?;
+            buf = &mut buf[n..];
         }
 
         buf.put(self.profile_extensions.clone());

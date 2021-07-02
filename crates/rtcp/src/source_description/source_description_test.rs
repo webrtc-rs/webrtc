@@ -193,8 +193,8 @@ fn test_source_description_unmarshal() {
         ),
     ];
 
-    for (name, data, want, want_error) in tests {
-        let got = SourceDescription::unmarshal(&data);
+    for (name, mut data, want, want_error) in tests {
+        let got = SourceDescription::unmarshal(&mut data);
 
         assert_eq!(
             got.is_err(),
@@ -359,9 +359,9 @@ fn test_source_description_roundtrip() {
                 err,
             );
         } else {
-            let data = got.ok().unwrap();
-            let actual =
-                SourceDescription::unmarshal(&data).expect(format!("Unmarshal {}", name).as_str());
+            let mut data = got.ok().unwrap();
+            let actual = SourceDescription::unmarshal(&mut data)
+                .expect(format!("Unmarshal {}", name).as_str());
 
             assert_eq!(
                 actual, want,

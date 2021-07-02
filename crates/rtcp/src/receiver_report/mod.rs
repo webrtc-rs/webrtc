@@ -127,8 +127,8 @@ impl Marshal for ReceiverReport {
         buf.put_u32(self.ssrc);
 
         for report in &self.reports {
-            let data = report.marshal()?;
-            buf.put(data);
+            let n = report.marshal_to(buf)?;
+            buf = &mut buf[n..];
         }
 
         buf.put(self.profile_extensions.clone());
