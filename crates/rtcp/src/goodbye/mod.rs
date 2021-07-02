@@ -56,6 +56,17 @@ impl Packet for Goodbye {
     fn as_any(&self) -> &dyn Any {
         self
     }
+
+    fn equal(&self, other: &dyn Packet) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<Goodbye>()
+            .map_or(false, |a| self == a)
+    }
+
+    fn cloned(&self) -> Box<dyn Packet> {
+        Box::new(self.clone())
+    }
 }
 
 impl MarshalSize for Goodbye {

@@ -1,18 +1,11 @@
 use crate::{
-    compound_packet::*,
-    error::Error,
-    goodbye::*,
-    header::*,
-    //payload_feedbacks::full_intra_request::*,
-    //payload_feedbacks::receiver_estimated_maximum_bitrate::*,
-    //payload_feedbacks::slice_loss_indication::*,
-    payload_feedbacks::picture_loss_indication::*,
-    raw_packet::*,
-    receiver_report::*,
-    sender_report::*,
-    source_description::*,
-    //transport_feedbacks::rapid_resynchronization_request::*,
-    //transport_feedbacks::transport_layer_cc::*, transport_feedbacks::transport_layer_nack::*,
+    compound_packet::*, error::Error, goodbye::*, header::*,
+    payload_feedbacks::full_intra_request::*, payload_feedbacks::picture_loss_indication::*,
+    payload_feedbacks::receiver_estimated_maximum_bitrate::*,
+    payload_feedbacks::slice_loss_indication::*, raw_packet::*, receiver_report::*,
+    sender_report::*, source_description::*,
+    transport_feedbacks::rapid_resynchronization_request::*,
+    transport_feedbacks::transport_layer_cc::*, transport_feedbacks::transport_layer_nack::*,
 };
 use util::marshal::{Marshal, Unmarshal};
 
@@ -24,11 +17,24 @@ use std::fmt;
 /// Packet represents an RTCP packet, a protocol used for out-of-band statistics and
 /// control information for an RTP session
 pub trait Packet: Marshal + Unmarshal + fmt::Display + fmt::Debug {
-    //PartialEq +  Clone +
     fn header(&self) -> Header;
     fn destination_ssrc(&self) -> Vec<u32>;
     fn raw_size(&self) -> usize;
     fn as_any(&self) -> &dyn Any;
+    fn equal(&self, other: &dyn Packet) -> bool;
+    fn cloned(&self) -> Box<dyn Packet>;
+}
+
+impl PartialEq for dyn Packet {
+    fn eq(&self, other: &Self) -> bool {
+        self.equal(other)
+    }
+}
+
+impl Clone for Box<dyn Packet> {
+    fn clone(&self) -> Box<dyn Packet> {
+        self.cloned()
+    }
 }
 
 /// Unmarshal takes an entire udp datagram (which may consist of multiple RTCP packets) and
@@ -81,17 +87,17 @@ where
         PacketType::SourceDescription => Box::new(SourceDescription::unmarshal(&mut in_packet)?),
         PacketType::Goodbye => Box::new(Goodbye::unmarshal(&mut in_packet)?),
 
-        /*PacketType::TransportSpecificFeedback => match h.count {
-            FORMAT_TLN => Box::new(TransportLayerNack::unmarshal(&in_packet)?),
-            FORMAT_RRR => Box::new(RapidResynchronizationRequest::unmarshal(&in_packet)?),
-            FORMAT_TCC => Box::new(TransportLayerCc::unmarshal(&in_packet)?),
-            _ => Box::new(RawPacket::unmarshal(&in_packet)?),
-        },*/
+        PacketType::TransportSpecificFeedback => match h.count {
+            FORMAT_TLN => Box::new(TransportLayerNack::unmarshal(&mut in_packet)?),
+            FORMAT_RRR => Box::new(RapidResynchronizationRequest::unmarshal(&mut in_packet)?),
+            FORMAT_TCC => Box::new(TransportLayerCc::unmarshal(&mut in_packet)?),
+            _ => Box::new(RawPacket::unmarshal(&mut in_packet)?),
+        },
         PacketType::PayloadSpecificFeedback => match h.count {
             FORMAT_PLI => Box::new(PictureLossIndication::unmarshal(&mut in_packet)?),
-            //FORMAT_SLI => Box::new(SliceLossIndication::unmarshal(&in_packet)?),
-            //FORMAT_REMB => Box::new(ReceiverEstimatedMaximumBitrate::unmarshal(&in_packet)?),
-            //FORMAT_FIR => Box::new(FullIntraRequest::unmarshal(&in_packet)?),
+            FORMAT_SLI => Box::new(SliceLossIndication::unmarshal(&mut in_packet)?),
+            FORMAT_REMB => Box::new(ReceiverEstimatedMaximumBitrate::unmarshal(&mut in_packet)?),
+            FORMAT_FIR => Box::new(FullIntraRequest::unmarshal(&mut in_packet)?),
             _ => Box::new(RawPacket::unmarshal(&mut in_packet)?),
         },
         _ => Box::new(RawPacket::unmarshal(&mut in_packet)?),
@@ -100,15 +106,15 @@ where
     Ok(p)
 }
 
-/*
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::reception_report::*;
+    use bytes::Bytes;
 
     #[test]
     fn test_packet_unmarshal() {
-        let data = Bytes::from_static(&[
+        let mut data = Bytes::from_static(&[
             // Receiver Report (offset=0)
             0x81, 0xc9, 0x0, 0x7, // v=2, p=0, count=1, RR, len=7
             0x90, 0x2f, 0x9e, 0x2e, // ssrc=0x902f9e2e
@@ -138,7 +144,7 @@ mod test {
             0x90, 0x2f, 0x9e, 0x2e, // media=0x902f9e2e
         ]);
 
-        let packet = unmarshal(&data).expect("Error unmarshalling packets");
+        let packet = unmarshal(&mut data).expect("Error unmarshalling packets");
 
         let a = ReceiverReport {
             ssrc: 0x902f9e2e,
@@ -192,7 +198,7 @@ mod test {
 
     #[test]
     fn test_packet_unmarshal_empty() -> Result<()> {
-        let result = unmarshal(&Bytes::new());
+        let result = unmarshal(&mut Bytes::new());
         if let Err(got) = result {
             let want = Error::InvalidHeader;
             assert!(
@@ -210,13 +216,13 @@ mod test {
 
     #[test]
     fn test_packet_invalid_header_length() -> Result<()> {
-        let data = Bytes::from_static(&[
+        let mut data = Bytes::from_static(&[
             // Goodbye (offset=84)
             // v=2, p=0, count=1, BYE, len=100
             0x81, 0xcb, 0x0, 0x64,
         ]);
 
-        let result = unmarshal(&data);
+        let result = unmarshal(&mut data);
         if let Err(got) = result {
             let want = Error::PacketTooShort;
             assert!(
@@ -232,4 +238,3 @@ mod test {
         Ok(())
     }
 }
-*/

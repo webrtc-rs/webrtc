@@ -522,7 +522,7 @@ impl Packet for TransportLayerCc {
         self
     }
 
-    /*fn equal(&self, other: &dyn Packet) -> bool {
+    fn equal(&self, other: &dyn Packet) -> bool {
         other
             .as_any()
             .downcast_ref::<TransportLayerCc>()
@@ -531,7 +531,7 @@ impl Packet for TransportLayerCc {
 
     fn cloned(&self) -> Box<dyn Packet> {
         Box::new(self.clone())
-    }*/
+    }
 }
 
 impl MarshalSize for TransportLayerCc {

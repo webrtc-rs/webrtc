@@ -76,7 +76,6 @@ impl Packet for ReceiverEstimatedMaximumBitrate {
         self
     }
 
-    /*
     fn equal(&self, other: &dyn Packet) -> bool {
         other
             .as_any()
@@ -86,7 +85,7 @@ impl Packet for ReceiverEstimatedMaximumBitrate {
 
     fn cloned(&self) -> Box<dyn Packet> {
         Box::new(self.clone())
-    }*/
+    }
 }
 
 impl MarshalSize for ReceiverEstimatedMaximumBitrate {

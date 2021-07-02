@@ -65,7 +65,6 @@ impl Packet for FullIntraRequest {
         self
     }
 
-    /*
     fn equal(&self, other: &dyn Packet) -> bool {
         other
             .as_any()
@@ -75,7 +74,7 @@ impl Packet for FullIntraRequest {
 
     fn cloned(&self) -> Box<dyn Packet> {
         Box::new(self.clone())
-    }*/
+    }
 }
 
 impl MarshalSize for FullIntraRequest {

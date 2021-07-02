@@ -24,7 +24,7 @@ use std::fmt;
 /// to identify the source and to begin associating media for purposes such as lip-sync.
 ///
 /// Other RTCP packet types may follow in any order. Packet types may appear more than once.
-#[derive(Debug, Default)] //PartialEq, Clone
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct CompoundPacket(pub Vec<Box<dyn Packet>>);
 
 impl fmt::Display for CompoundPacket {
@@ -58,6 +58,17 @@ impl Packet for CompoundPacket {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn equal(&self, other: &dyn Packet) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<CompoundPacket>()
+            .map_or(false, |a| self == a)
+    }
+
+    fn cloned(&self) -> Box<dyn Packet> {
+        Box::new(self.clone())
     }
 }
 
