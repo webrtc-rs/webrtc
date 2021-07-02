@@ -1,8 +1,10 @@
-use crate::{error::Error, packet::*, util::*};
+use crate::{error::Error, header::*, packet::*, util::*};
+use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
 use anyhow::Result;
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{Buf, BufMut};
 use std::any::Any;
+use std::fmt;
 
 pub(crate) const RECEPTION_REPORT_LENGTH: usize = 24;
 pub(crate) const FRACTION_LOST_OFFSET: usize = 4;
@@ -45,17 +47,41 @@ pub struct ReceptionReport {
     pub delay: u32,
 }
 
+impl fmt::Display for ReceptionReport {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 impl Packet for ReceptionReport {
+    fn header(&self) -> Header {
+        Header::default()
+    }
+
     fn destination_ssrc(&self) -> Vec<u32> {
         vec![]
     }
 
-    fn size(&self) -> usize {
+    fn raw_size(&self) -> usize {
         RECEPTION_REPORT_LENGTH
     }
 
-    /// Marshal encodes the ReceptionReport in binary
-    fn marshal(&self) -> Result<Bytes> {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl MarshalSize for ReceptionReport {
+    fn marshal_size(&self) -> usize {
+        let l = self.raw_size();
+        // align to 32-bit boundary
+        l + get_padding(l)
+    }
+}
+
+impl Marshal for ReceptionReport {
+    /// marshal_to encodes the ReceptionReport in binary
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
         /*
          *  0                   1                   2                   3
          *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -73,34 +99,43 @@ impl Packet for ReceptionReport {
          * |                   delay since last SR (DLSR)                  |
          * +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
          */
+        if buf.remaining_mut() < self.marshal_size() {
+            return Err(Error::BufferTooShort.into());
+        }
 
-        let mut writer = BytesMut::with_capacity(self.marshal_size());
+        buf.put_u32(self.ssrc);
 
-        writer.put_u32(self.ssrc);
-
-        writer.put_u8(self.fraction_lost);
+        buf.put_u8(self.fraction_lost);
 
         // pack TotalLost into 24 bits
         if self.total_lost >= (1 << 25) {
             return Err(Error::InvalidTotalLost.into());
         }
 
-        writer.put_u8(((self.total_lost >> 16) & 0xFF) as u8);
-        writer.put_u8(((self.total_lost >> 8) & 0xFF) as u8);
-        writer.put_u8((self.total_lost & 0xFF) as u8);
+        buf.put_u8(((self.total_lost >> 16) & 0xFF) as u8);
+        buf.put_u8(((self.total_lost >> 8) & 0xFF) as u8);
+        buf.put_u8((self.total_lost & 0xFF) as u8);
 
-        writer.put_u32(self.last_sequence_number);
-        writer.put_u32(self.jitter);
-        writer.put_u32(self.last_sender_report);
-        writer.put_u32(self.delay);
+        buf.put_u32(self.last_sequence_number);
+        buf.put_u32(self.jitter);
+        buf.put_u32(self.last_sender_report);
+        buf.put_u32(self.delay);
 
-        put_padding(&mut writer);
-        Ok(writer.freeze())
+        put_padding(buf, self.raw_size());
+
+        Ok(self.marshal_size())
     }
+}
 
-    /// Unmarshal decodes the ReceptionReport from binary
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
-        if raw_packet.len() < RECEPTION_REPORT_LENGTH {
+impl Unmarshal for ReceptionReport {
+    /// unmarshal decodes the ReceptionReport from binary
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    where
+        Self: Sized,
+        B: Buf,
+    {
+        let raw_packet_len = raw_packet.remaining();
+        if raw_packet_len < RECEPTION_REPORT_LENGTH {
             return Err(Error::PacketTooShort.into());
         }
 
@@ -121,21 +156,18 @@ impl Packet for ReceptionReport {
          * |                   delay since last SR (DLSR)                  |
          * +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
          */
+        let ssrc = raw_packet.get_u32();
+        let fraction_lost = raw_packet.get_u8();
 
-        let reader = &mut raw_packet.clone();
-
-        let ssrc = reader.get_u32();
-        let fraction_lost = reader.get_u8();
-
-        let t0 = reader.get_u8();
-        let t1 = reader.get_u8();
-        let t2 = reader.get_u8();
+        let t0 = raw_packet.get_u8();
+        let t1 = raw_packet.get_u8();
+        let t2 = raw_packet.get_u8();
         let total_lost = (t2 as u32) | (t1 as u32) << 8 | (t0 as u32) << 16;
 
-        let last_sequence_number = reader.get_u32();
-        let jitter = reader.get_u32();
-        let last_sender_report = reader.get_u32();
-        let delay = reader.get_u32();
+        let last_sequence_number = raw_packet.get_u32();
+        let jitter = raw_packet.get_u32();
+        let last_sender_report = raw_packet.get_u32();
+        let delay = raw_packet.get_u32();
 
         Ok(ReceptionReport {
             ssrc,
@@ -146,20 +178,5 @@ impl Packet for ReceptionReport {
             last_sender_report,
             delay,
         })
-    }
-
-    fn equal(&self, other: &dyn Packet) -> bool {
-        other
-            .as_any()
-            .downcast_ref::<ReceptionReport>()
-            .map_or(false, |a| self == a)
-    }
-
-    fn cloned(&self) -> Box<dyn Packet> {
-        Box::new(self.clone())
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }
