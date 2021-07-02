@@ -94,7 +94,9 @@ impl Marshal for Goodbye {
          * (opt) |     length    |               reason for leaving            ...
          *       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
-        let n = self.header().marshal_to(buf)?;
+
+        let h = self.header();
+        let n = h.marshal_to(buf)?;
         buf = &mut buf[n..];
 
         for source in &self.sources {
@@ -106,7 +108,9 @@ impl Marshal for Goodbye {
             buf.put(self.reason.clone());
         }
 
-        put_padding(buf, self.raw_size());
+        if h.padding {
+            put_padding(buf, self.raw_size());
+        }
 
         Ok(self.marshal_size())
     }
