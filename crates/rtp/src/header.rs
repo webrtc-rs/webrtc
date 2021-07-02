@@ -404,6 +404,14 @@ impl Header {
         Ok(())
     }
 
+    /// returns an extension id array
+    pub fn get_extension_ids(&self) -> Vec<u8> {
+        if !self.extension {
+            return vec![];
+        }
+        self.extensions.iter().map(|e| e.id).collect()
+    }
+
     /// returns an RTP header extension
     pub fn get_extension(&self, id: u8) -> Option<Bytes> {
         if !self.extension {

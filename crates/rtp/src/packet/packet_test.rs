@@ -1,6 +1,5 @@
 use super::*;
 use bytes::{Bytes, BytesMut};
-//use std::collections::HashMap;
 
 #[test]
 fn test_basic() -> Result<()> {
@@ -170,7 +169,7 @@ fn test_packet_marshal_unmarshal() -> Result<()> {
 }
 
 #[test]
-fn test_rfc8285_one_byte_extension() -> Result<()> {
+fn test_rfc_8285_one_byte_extension() -> Result<()> {
     let raw_pkt = Bytes::from_static(&[
         0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0xBE, 0xDE, 0x00,
         0x01, 0x50, 0xAA, 0x00, 0x00, 0x98, 0x36, 0xbe, 0x88, 0x9e,
@@ -205,7 +204,7 @@ fn test_rfc8285_one_byte_extension() -> Result<()> {
 }
 
 #[test]
-fn test_rfc8285_one_byte_two_extension_of_two_bytes() -> Result<()> {
+fn test_rfc_8285_one_byte_two_extension_of_two_bytes() -> Result<()> {
     //  0                   1                   2                   3
     //  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
     // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -271,7 +270,7 @@ fn test_rfc8285_one_byte_two_extension_of_two_bytes() -> Result<()> {
 }
 
 #[test]
-fn test_rfc8285_one_byte_multiple_extensions_with_padding() -> Result<()> {
+fn test_rfc_8285_one_byte_multiple_extensions_with_padding() -> Result<()> {
     //  0                   1                   2                   3
     //  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
     // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -351,8 +350,7 @@ fn test_rfc8285_one_byte_multiple_extensions_with_padding() -> Result<()> {
     Ok(())
 }
 
-/*
-fn test_rfc_8285_one_byte_multiple_extension() -> Result<(), RTPError> {
+fn test_rfc_8285_one_byte_multiple_extension() -> Result<()> {
     //  0                   1                   2                   3
     //  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
     // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -365,13 +363,13 @@ fn test_rfc_8285_one_byte_multiple_extension() -> Result<(), RTPError> {
     //             ...data             |
     // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     let raw_pkt = &[
-        0x90u8, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0xBE, 0xDE,
-        0x00, 0x03, 0x10, 0xAA, 0x21, 0xBB, 0xBB, 0x33, 0xCC, 0xCC, 0xCC, 0xCC, 0x00, 0x00,
+        0x90u8, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0xBE, 0xDE, 0x00,
+        0x03, 0x10, 0xAA, 0x21, 0xBB, 0xBB, 0x33, 0xCC, 0xCC, 0xCC, 0xCC, 0x00, 0x00,
         // Payload
         0x98, 0x36, 0xbe, 0x88, 0x9e,
     ];
 
-    let mut p = Packet {
+    let p = Packet {
         header: Header {
             marker: true,
             extension: true,
@@ -379,15 +377,15 @@ fn test_rfc_8285_one_byte_multiple_extension() -> Result<(), RTPError> {
             extensions: vec![
                 Extension {
                     id: 1,
-                    payload: vec![0xAA],
+                    payload: Bytes::from_static(&[0xAA]),
                 },
                 Extension {
                     id: 2,
-                    payload: vec![0xBB, 0xBB],
+                    payload: Bytes::from_static(&[0xBB, 0xBB]),
                 },
                 Extension {
                     id: 3,
-                    payload: vec![0xCC, 0xCC],
+                    payload: Bytes::from_static(&[0xCC, 0xCC]),
                 },
             ],
             version: 2,
@@ -402,7 +400,7 @@ fn test_rfc_8285_one_byte_multiple_extension() -> Result<(), RTPError> {
 
     let dst_data = p.marshal()?;
     assert_eq!(
-        dst_data.as_slice(),
+        &dst_data[..],
         raw_pkt,
         "Marshal failed raw \nMarshaled:\n{:?}\nrawPkt:\n{:?}",
         dst_data,
@@ -412,29 +410,27 @@ fn test_rfc_8285_one_byte_multiple_extension() -> Result<(), RTPError> {
     Ok(())
 }
 
-fn test_rfc_8285_two_byte_extension() -> Result<(), RTPError> {
-    let mut p = Packet::default();
+fn test_rfc_8285_two_byte_extension() -> Result<()> {
+    let raw_pkt = Bytes::from_static(&[
+        0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0x10, 0x00, 0x00,
+        0x07, 0x05, 0x18, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
+        0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0x00, 0x00, 0x98,
+        0x36, 0xbe, 0x88, 0x9e,
+    ]);
 
-    let raw_pkt = &[
-        0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0x10, 0x00,
-        0x00, 0x07, 0x05, 0x18, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
-        0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
-        0x00, 0x00, 0x98, 0x36, 0xbe, 0x88, 0x9e,
-    ];
+    let _ = Packet::unmarshal(&mut raw_pkt.clone())?;
 
-    p.unmarshal(raw_pkt)?;
-
-    let mut p = Packet {
+    let p = Packet {
         header: Header {
             marker: true,
             extension: true,
             extension_profile: 0x1000,
             extensions: vec![Extension {
                 id: 5,
-                payload: vec![
-                    0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
-                    0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
-                ],
+                payload: Bytes::from_static(&[
+                    0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
+                    0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
+                ]),
             }],
             version: 2,
             payload_type: 96,
@@ -443,23 +439,19 @@ fn test_rfc_8285_two_byte_extension() -> Result<(), RTPError> {
             ssrc: 476325762,
             ..Default::default()
         },
-        payload: raw_pkt[44..].into(),
+        payload: raw_pkt.slice(44..),
     };
 
     let dst_data = p.marshal()?;
     assert_eq!(
-        dst_data.as_slice(),
-        raw_pkt,
+        dst_data, raw_pkt,
         "Marshal failed raw \nMarshaled:\n{:?}\nrawPkt:\n{:?}",
-        dst_data,
-        raw_pkt
+        dst_data, raw_pkt
     );
     Ok(())
 }
 
-fn test_rfc8285_two_byte_multiple_extension_with_padding() -> Result<(), RTPError> {
-    let mut p = Packet::default();
-
+fn test_rfc8285_two_byte_multiple_extension_with_padding() -> Result<()> {
     // 0                   1                   2                   3
     // 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
     // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -472,48 +464,42 @@ fn test_rfc8285_two_byte_multiple_extension_with_padding() -> Result<(), RTPErro
     // |                          data                                 |
     // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
-    let raw_pkt = &[
-        0x90u8, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0x10, 0x00,
-        0x00, 0x03, 0x01, 0x00, 0x02, 0x01, 0xBB, 0x00, 0x03, 0x04, 0xCC, 0xCC, 0xCC, 0xCC,
-        0x98, 0x36, 0xbe, 0x88, 0x9e,
-    ];
+    let raw_pkt = Bytes::from_static(&[
+        0x90u8, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0x10, 0x00, 0x00,
+        0x03, 0x01, 0x00, 0x02, 0x01, 0xBB, 0x00, 0x03, 0x04, 0xCC, 0xCC, 0xCC, 0xCC, 0x98, 0x36,
+        0xbe, 0x88, 0x9e,
+    ]);
 
-    p.unmarshal(raw_pkt)?;
+    let p = Packet::unmarshal(&mut raw_pkt.clone())?;
 
     let ext = p.header.get_extension(1);
-    let ext_expect: &[u8] = &[];
+    let ext_expect = Some(Bytes::from_static(&[]));
     assert_eq!(
-        ext,
-        Some(ext_expect),
+        ext, ext_expect,
         "Extension has incorrect data. Got: {:?}, Expected: {:?}",
-        ext,
-        ext_expect
+        ext, ext_expect
     );
 
     let ext = p.header.get_extension(2);
-    let ext_expect: &[u8] = &[0xBB];
+    let ext_expect = Some(Bytes::from_static(&[0xBB]));
     assert_eq!(
-        ext,
-        Some(ext_expect),
+        ext, ext_expect,
         "Extension has incorrect data. Got: {:?}, Expected: {:?}",
-        ext,
-        ext_expect
+        ext, ext_expect
     );
 
     let ext = p.header.get_extension(3);
-    let ext_expect: &[u8] = &[0xCC, 0xCC, 0xCC, 0xCC];
+    let ext_expect = Some(Bytes::from_static(&[0xCC, 0xCC, 0xCC, 0xCC]));
     assert_eq!(
-        ext,
-        Some(ext_expect),
+        ext, ext_expect,
         "Extension has incorrect data. Got: {:?}, Expected: {:?}",
-        ext,
-        ext_expect
+        ext, ext_expect
     );
 
     Ok(())
 }
 
-fn test_rfc8285_two_byte_multiple_extension_with_large_extension() -> Result<(), RTPError> {
+fn test_rfc8285_two_byte_multiple_extension_with_large_extension() -> Result<()> {
     // 0                   1                   2                   3
     // 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
     // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -532,15 +518,14 @@ fn test_rfc8285_two_byte_multiple_extension_with_large_extension() -> Result<(),
     //                            ...data...                           |
     // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
-    let raw_pkt = [
-        0x90u8, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0x10, 0x00,
-        0x00, 0x06, 0x01, 0x00, 0x02, 0x01, 0xBB, 0x03, 0x11, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-        0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-        // Payload
+    let raw_pkt = Bytes::from_static(&[
+        0x90u8, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0x10, 0x00, 0x00,
+        0x06, 0x01, 0x00, 0x02, 0x01, 0xBB, 0x03, 0x11, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
+        0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, // Payload
         0x98, 0x36, 0xbe, 0x88, 0x9e,
-    ];
+    ]);
 
-    let mut p = Packet {
+    let p = Packet {
         header: Header {
             marker: true,
             extension: true,
@@ -548,18 +533,18 @@ fn test_rfc8285_two_byte_multiple_extension_with_large_extension() -> Result<(),
             extensions: vec![
                 Extension {
                     id: 1,
-                    payload: vec![],
+                    payload: Bytes::from_static(&[]),
                 },
                 Extension {
                     id: 2,
-                    payload: vec![0xBB].as_slice().into(),
+                    payload: Bytes::from_static(&[0xBB]),
                 },
                 Extension {
                     id: 3,
-                    payload: vec![
+                    payload: Bytes::from_static(&[
                         0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
                         0xCC, 0xCC, 0xCC, 0xCC, 0xCC,
-                    ],
+                    ]),
                 },
             ],
             version: 2,
@@ -569,7 +554,7 @@ fn test_rfc8285_two_byte_multiple_extension_with_large_extension() -> Result<(),
             ssrc: 476325762,
             ..Default::default()
         },
-        payload: raw_pkt[40..].into(),
+        payload: raw_pkt.slice(40..),
     };
 
     let dst_data = p.marshal()?;
@@ -584,11 +569,11 @@ fn test_rfc8285_two_byte_multiple_extension_with_large_extension() -> Result<(),
     Ok(())
 }
 
-fn test_rfc8285_get_extension_returns_nil_when_extension_disabled() -> Result<(), RTPError> {
-    let payload = vec![
+fn test_rfc8285_get_extension_returns_nil_when_extension_disabled() -> Result<()> {
+    let payload = Bytes::from_static(&[
         // Payload
         0x98u8, 0x36, 0xbe, 0x88, 0x9e,
-    ];
+    ]);
 
     let p = Packet {
         header: Header {
@@ -600,7 +585,7 @@ fn test_rfc8285_get_extension_returns_nil_when_extension_disabled() -> Result<()
             ssrc: 476325762,
             ..Default::default()
         },
-        payload: payload.as_slice().into(),
+        payload,
         ..Default::default()
     };
 
@@ -613,11 +598,11 @@ fn test_rfc8285_get_extension_returns_nil_when_extension_disabled() -> Result<()
     Ok(())
 }
 
-fn test_rfc8285_del_extension() -> Result<(), RTPError> {
-    let payload = vec![
+fn test_rfc8285_del_extension() -> Result<()> {
+    let payload = Bytes::from_static(&[
         // Payload
         0x98u8, 0x36, 0xbe, 0x88, 0x9e,
-    ];
+    ]);
     let mut p = Packet {
         header: Header {
             marker: true,
@@ -625,7 +610,7 @@ fn test_rfc8285_del_extension() -> Result<(), RTPError> {
             extension_profile: 0xBEDE,
             extensions: vec![Extension {
                 id: 1,
-                payload: vec![0xAA].as_slice().into(),
+                payload: Bytes::from_static(&[0xAA]),
             }],
             version: 2,
             payload_type: 96,
@@ -634,7 +619,7 @@ fn test_rfc8285_del_extension() -> Result<(), RTPError> {
             ssrc: 476325762,
             ..Default::default()
         },
-        payload: payload.as_slice().into(),
+        payload,
         ..Default::default()
     };
 
@@ -656,7 +641,7 @@ fn test_rfc8285_del_extension() -> Result<(), RTPError> {
 }
 
 fn test_rfc8285_get_extension_ids() {
-    let payload = [0x98u8, 0x36, 0xbe, 0x88, 0x9e];
+    let payload = Bytes::from_static(&[0x98u8, 0x36, 0xbe, 0x88, 0x9e]);
 
     let p = Packet {
         header: Header {
@@ -666,11 +651,11 @@ fn test_rfc8285_get_extension_ids() {
             extensions: vec![
                 Extension {
                     id: 1,
-                    payload: vec![0xAA],
+                    payload: Bytes::from_static(&[0xAA]),
                 },
                 Extension {
                     id: 2,
-                    payload: vec![0xBB],
+                    payload: Bytes::from_static(&[0xBB]),
                 },
             ],
             version: 2,
@@ -680,7 +665,7 @@ fn test_rfc8285_get_extension_ids() {
             ssrc: 476325762,
             ..Default::default()
         },
-        payload: payload[..].into(),
+        payload,
         ..Default::default()
     };
 
@@ -702,7 +687,7 @@ fn test_rfc8285_get_extension_ids() {
 }
 
 fn test_rfc8285_get_extension_ids_return_empty_when_extension_disabled() {
-    let payload = [0x98u8, 0x36, 0xbe, 0x88, 0x9e];
+    let payload = Bytes::from_static(&[0x98u8, 0x36, 0xbe, 0x88, 0x9e]);
 
     let p = Packet {
         header: Header {
@@ -715,7 +700,7 @@ fn test_rfc8285_get_extension_ids_return_empty_when_extension_disabled() {
             ssrc: 476325762,
             ..Default::default()
         },
-        payload: payload[..].into(),
+        payload,
         ..Default::default()
     };
 
@@ -724,7 +709,7 @@ fn test_rfc8285_get_extension_ids_return_empty_when_extension_disabled() {
 }
 
 fn test_rfc8285_del_extension_returns_error_when_extenstions_disabled() {
-    let payload = [0x98u8, 0x36, 0xbe, 0x88, 0x9e];
+    let payload = Bytes::from_static(&[0x98u8, 0x36, 0xbe, 0x88, 0x9e]);
 
     let mut p = Packet {
         header: Header {
@@ -737,7 +722,7 @@ fn test_rfc8285_del_extension_returns_error_when_extenstions_disabled() {
             ssrc: 476325762,
             ..Default::default()
         },
-        payload: payload[..].into(),
+        payload,
         ..Default::default()
     };
 
@@ -749,7 +734,7 @@ fn test_rfc8285_del_extension_returns_error_when_extenstions_disabled() {
 }
 
 fn test_rfc8285_one_byte_set_extension_should_enable_extension_when_adding() {
-    let payload = [0x98u8, 0x36, 0xbe, 0x88, 0x9e];
+    let payload = Bytes::from_static(&[0x98u8, 0x36, 0xbe, 0x88, 0x9e]);
 
     let mut p = Packet {
         header: Header {
@@ -762,12 +747,12 @@ fn test_rfc8285_one_byte_set_extension_should_enable_extension_when_adding() {
             ssrc: 476325762,
             ..Default::default()
         },
-        payload: payload[..].into(),
+        payload,
         ..Default::default()
     };
 
-    let extension = [0xAAu8, 0xAA];
-    let result = p.header.set_extension(1, &extension);
+    let extension = Bytes::from_static(&[0xAAu8, 0xAA]);
+    let result = p.header.set_extension(1, extension.clone());
     assert!(result.is_ok(), "Error setting extension");
 
     assert_eq!(p.header.extension, true, "Extension should be set to true");
@@ -782,13 +767,13 @@ fn test_rfc8285_one_byte_set_extension_should_enable_extension_when_adding() {
     );
     assert_eq!(
         p.header.get_extension(1),
-        Some(extension[..].into()),
+        Some(extension),
         "Extension value is not set"
     )
 }
 
 fn test_rfc8285_set_extension_should_set_correct_extension_profile_for_16_byte_extension() {
-    let payload = [0x98u8, 0x36, 0xbe, 0x88, 0x9e];
+    let payload = Bytes::from_static(&[0x98u8, 0x36, 0xbe, 0x88, 0x9e]);
 
     let mut p = Packet {
         header: Header {
@@ -801,16 +786,16 @@ fn test_rfc8285_set_extension_should_set_correct_extension_profile_for_16_byte_e
             ssrc: 476325762,
             ..Default::default()
         },
-        payload: payload[..].into(),
+        payload,
         ..Default::default()
     };
 
-    let extension = [
-        0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
-        0xAA, 0xAA,
-    ];
+    let extension = Bytes::from_static(&[
+        0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
+        0xAA,
+    ]);
 
-    let res = p.header.set_extension(1, &extension);
+    let res = p.header.set_extension(1, extension);
     assert!(res.is_ok(), "Error setting extension");
 
     assert_eq!(
@@ -819,8 +804,8 @@ fn test_rfc8285_set_extension_should_set_correct_extension_profile_for_16_byte_e
     );
 }
 
-fn test_rfc8285_set_extension_should_update_existing_extension() -> Result<(), RTPError> {
-    let payload = [0x98u8, 0x36, 0xbe, 0x88, 0x9e];
+fn test_rfc8285_set_extension_should_update_existing_extension() -> Result<()> {
+    let payload = Bytes::from_static(&[0x98u8, 0x36, 0xbe, 0x88, 0x9e]);
 
     let mut p = Packet {
         header: Header {
@@ -829,7 +814,7 @@ fn test_rfc8285_set_extension_should_update_existing_extension() -> Result<(), R
             extension_profile: 0xBEDE,
             extensions: vec![Extension {
                 id: 1,
-                payload: vec![0xAA].as_slice().into(),
+                payload: Bytes::from_static(&[0xAA]),
             }],
             version: 2,
             payload_type: 96,
@@ -838,7 +823,7 @@ fn test_rfc8285_set_extension_should_update_existing_extension() -> Result<(), R
             ssrc: 476325762,
             ..Default::default()
         },
-        payload: payload[..].into(),
+        payload,
         ..Default::default()
     };
 
@@ -848,12 +833,12 @@ fn test_rfc8285_set_extension_should_update_existing_extension() -> Result<(), R
         "Extension value not initialized properly"
     );
 
-    let extension = [0xBBu8];
-    p.header.set_extension(1, &extension)?;
+    let extension = Bytes::from_static(&[0xBBu8]);
+    p.header.set_extension(1, extension.clone())?;
 
     assert_eq!(
         p.header.get_extension(1),
-        extension[..].into(),
+        Some(extension),
         "Extension value was not set"
     );
 
@@ -861,7 +846,7 @@ fn test_rfc8285_set_extension_should_update_existing_extension() -> Result<(), R
 }
 
 fn test_rfc8285_one_byte_set_extension_should_error_when_invalid_id_provided() {
-    let payload = [0x98u8, 0x36, 0xbe, 0x88, 0x9e];
+    let payload = Bytes::from_static(&[0x98u8, 0x36, 0xbe, 0x88, 0x9e]);
 
     let mut p = Packet {
         header: Header {
@@ -870,7 +855,7 @@ fn test_rfc8285_one_byte_set_extension_should_error_when_invalid_id_provided() {
             extension_profile: 0xBEDE,
             extensions: vec![Extension {
                 id: 1,
-                payload: vec![0xAA].as_slice().into(),
+                payload: Bytes::from_static(&[0xAA]),
             }],
             version: 2,
             payload_type: 96,
@@ -879,30 +864,32 @@ fn test_rfc8285_one_byte_set_extension_should_error_when_invalid_id_provided() {
             ssrc: 476325762,
             ..Default::default()
         },
-        payload: payload[..].into(),
+        payload,
         ..Default::default()
     };
 
     assert!(
-        p.header.set_extension(0, &[0xBBu8]).is_err(),
+        p.header
+            .set_extension(0, Bytes::from_static(&[0xBBu8]))
+            .is_err(),
         "set_extension did not error on invalid id"
     );
     assert!(
-        p.header.set_extension(15, &[0xBBu8]).is_err(),
+        p.header
+            .set_extension(15, Bytes::from_static(&[0xBBu8]))
+            .is_err(),
         "set_extension did not error on invalid id"
     );
 }
 
-fn test_rfc8285_one_byte_extension_terminate_processing_when_reserved_id_encountered(
-) -> Result<(), RTPError> {
-    let mut p = Packet::default();
+fn test_rfc8285_one_byte_extension_terminate_processing_when_reserved_id_encountered() -> Result<()>
+{
+    let reserved_id_pkt = Bytes::from_static(&[
+        0x90u8, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0xBE, 0xDE, 0x00,
+        0x01, 0xF0, 0xAA, 0x98, 0x36, 0xbe, 0x88, 0x9e,
+    ]);
 
-    let reserved_id_pkt = &[
-        0x90u8, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, 0x1c, 0x64, 0x27, 0x82, 0xBE, 0xDE,
-        0x00, 0x01, 0xF0, 0xAA, 0x98, 0x36, 0xbe, 0x88, 0x9e,
-    ];
-
-    p.unmarshal(reserved_id_pkt)?;
+    let p = Packet::unmarshal(&mut reserved_id_pkt.clone())?;
 
     assert_eq!(
         p.header.extensions.len(),
@@ -910,18 +897,14 @@ fn test_rfc8285_one_byte_extension_terminate_processing_when_reserved_id_encount
         "Extension should be empty for invalid ID"
     );
 
-    let payload = &reserved_id_pkt[17..];
-    assert_eq!(
-        p.payload,
-        payload.to_vec(),
-        "p.payload must be same as payload"
-    );
+    let payload = reserved_id_pkt.slice(17..);
+    assert_eq!(p.payload, payload, "p.payload must be same as payload");
 
     Ok(())
 }
 
 fn test_rfc8285_one_byte_set_extension_should_error_when_payload_too_large() {
-    let payload = [0x98u8, 0x36, 0xbe, 0x88, 0x9e];
+    let payload = Bytes::from_static(&[0x98u8, 0x36, 0xbe, 0x88, 0x9e]);
 
     let mut p = Packet {
         header: Header {
@@ -930,7 +913,7 @@ fn test_rfc8285_one_byte_set_extension_should_error_when_payload_too_large() {
             extension_profile: 0xBEDE,
             extensions: vec![Extension {
                 id: 1,
-                payload: vec![0xAAu8].as_slice().into(),
+                payload: Bytes::from_static(&[0xAAu8]),
             }],
             version: 2,
             payload_type: 96,
@@ -939,16 +922,16 @@ fn test_rfc8285_one_byte_set_extension_should_error_when_payload_too_large() {
             ssrc: 476325762,
             ..Default::default()
         },
-        payload: payload[..].into(),
+        payload,
         ..Default::default()
     };
 
     let res = p.header.set_extension(
         1,
-        &[
-            0xBBu8, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB,
-            0xBB, 0xBB, 0xBB, 0xBB,
-        ],
+        Bytes::from_static(&[
+            0xBBu8, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB,
+            0xBB, 0xBB, 0xBB,
+        ]),
     );
 
     assert!(
@@ -957,9 +940,8 @@ fn test_rfc8285_one_byte_set_extension_should_error_when_payload_too_large() {
     );
 }
 
-fn test_rfc8285_two_bytes_set_extension_should_enable_extension_when_adding(
-) -> Result<(), RTPError> {
-    let payload = [0x98u8, 0x36, 0xbe, 0x88, 0x9e];
+fn test_rfc8285_two_bytes_set_extension_should_enable_extension_when_adding() -> Result<()> {
+    let payload = Bytes::from_static(&[0x98u8, 0x36, 0xbe, 0x88, 0x9e]);
 
     let mut p = Packet {
         header: Header {
@@ -973,16 +955,16 @@ fn test_rfc8285_two_bytes_set_extension_should_enable_extension_when_adding(
             ssrc: 476325762,
             ..Default::default()
         },
-        payload: payload[..].into(),
+        payload,
         ..Default::default()
     };
 
-    let extension = [
-        0xAAu8, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
-        0xAA, 0xAA, 0xAA,
-    ];
+    let extension = Bytes::from_static(&[
+        0xAAu8, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
+        0xAA, 0xAA,
+    ]);
 
-    p.header.set_extension(1, &extension)?;
+    p.header.set_extension(1, extension.clone())?;
 
     assert_eq!(p.header.extension, true, "Extension should be set to true");
     assert_eq!(
@@ -996,16 +978,15 @@ fn test_rfc8285_two_bytes_set_extension_should_enable_extension_when_adding(
     );
     assert_eq!(
         p.header.get_extension(1),
-        Some(&extension[..]),
+        Some(extension),
         "Extension value is not set"
     );
 
     Ok(())
 }
 
-fn test_rfc8285_two_byte_set_extension_should_update_existing_extension() -> Result<(), RTPError>
-{
-    let payload = [0x98u8, 0x36, 0xbe, 0x88, 0x9e];
+fn test_rfc8285_two_byte_set_extension_should_update_existing_extension() -> Result<()> {
+    let payload = Bytes::from_static(&[0x98u8, 0x36, 0xbe, 0x88, 0x9e]);
 
     let mut p = Packet {
         header: Header {
@@ -1014,7 +995,7 @@ fn test_rfc8285_two_byte_set_extension_should_update_existing_extension() -> Res
             extension_profile: 0x1000,
             extensions: vec![Extension {
                 id: 1,
-                payload: vec![0xAA].as_slice().into(),
+                payload: Bytes::from_static(&[0xAA]),
             }],
             version: 2,
             payload_type: 96,
@@ -1023,30 +1004,30 @@ fn test_rfc8285_two_byte_set_extension_should_update_existing_extension() -> Res
             ssrc: 476325762,
             ..Default::default()
         },
-        payload: payload[..].into(),
+        payload,
         ..Default::default()
     };
 
     assert_eq!(
         p.header.get_extension(1),
-        Some([0xAA][..].into()),
+        Some(Bytes::from_static(&[0xAA])),
         "Extension value not initialized properly"
     );
 
-    let extension = [
-        0xBBu8, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB,
-        0xBB, 0xBB, 0xBB,
-    ];
+    let extension = Bytes::from_static(&[
+        0xBBu8, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB,
+        0xBB, 0xBB,
+    ]);
 
-    p.header.set_extension(1, &extension)?;
+    p.header.set_extension(1, extension.clone())?;
 
-    assert_eq!(p.header.get_extension(1), Some(&extension[..]));
+    assert_eq!(p.header.get_extension(1), Some(extension));
 
     Ok(())
 }
 
 fn test_rfc8285_two_byte_set_extension_should_error_when_payload_too_large() {
-    let payload = [0x98u8, 0x36, 0xbe, 0x88, 0x9e];
+    let payload = Bytes::from_static(&[0x98u8, 0x36, 0xbe, 0x88, 0x9e]);
 
     let mut p = Packet {
         header: Header {
@@ -1055,7 +1036,7 @@ fn test_rfc8285_two_byte_set_extension_should_error_when_payload_too_large() {
             extension_profile: 0xBEDE,
             extensions: vec![Extension {
                 id: 1,
-                payload: vec![0xAA].as_slice().into(),
+                payload: Bytes::from_static(&[0xAA]),
             }],
             version: 2,
             payload_type: 96,
@@ -1064,13 +1045,13 @@ fn test_rfc8285_two_byte_set_extension_should_error_when_payload_too_large() {
             ssrc: 476325762,
             ..Default::default()
         },
-        payload: payload[..].into(),
+        payload,
         ..Default::default()
     };
 
     let res = p.header.set_extension(
         1,
-        &[
+        Bytes::from_static(&[
             0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB,
             0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB,
             0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB,
@@ -1090,7 +1071,7 @@ fn test_rfc8285_two_byte_set_extension_should_error_when_payload_too_large() {
             0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB,
             0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB,
             0xBB, 0xBB, 0xBB, 0xBB,
-        ],
+        ]),
     );
 
     assert!(
@@ -1099,8 +1080,8 @@ fn test_rfc8285_two_byte_set_extension_should_error_when_payload_too_large() {
     );
 }
 
-fn test_rfc3550_set_extension_should_error_when_non_zero() -> Result<(), RTPError> {
-    let payload = [0x98u8, 0x36, 0xbe, 0x88, 0x9e];
+fn test_rfc3550_set_extension_should_error_when_non_zero() -> Result<()> {
+    let payload = Bytes::from_static(&[0x98u8, 0x36, 0xbe, 0x88, 0x9e]);
 
     let mut p = Packet {
         header: Header {
@@ -1109,7 +1090,7 @@ fn test_rfc3550_set_extension_should_error_when_non_zero() -> Result<(), RTPErro
             extension_profile: 0x1111,
             extensions: vec![Extension {
                 id: 1,
-                payload: vec![0xAA].as_slice().into(),
+                payload: Bytes::from_static(&[0xAA]),
             }],
             version: 2,
             payload_type: 96,
@@ -1118,15 +1099,15 @@ fn test_rfc3550_set_extension_should_error_when_non_zero() -> Result<(), RTPErro
             ssrc: 476325762,
             ..Default::default()
         },
-        payload: payload[..].into(),
+        payload,
         ..Default::default()
     };
 
-    p.header.set_extension(0, &[0xBB])?;
+    p.header.set_extension(0, Bytes::from_static(&[0xBB]))?;
     let res = p.header.get_extension(0);
     assert_eq!(
         res,
-        Some([0xBB][..].into()),
+        Some(Bytes::from_static(&[0xBB])),
         "p.get_extenstion returned incorrect value"
     );
 
@@ -1134,7 +1115,7 @@ fn test_rfc3550_set_extension_should_error_when_non_zero() -> Result<(), RTPErro
 }
 
 fn test_rfc3550_set_extension_should_error_when_setting_non_zero_id() {
-    let payload = [0x98u8, 0x36, 0xbe, 0x88, 0x9e];
+    let payload = Bytes::from_static(&[0x98u8, 0x36, 0xbe, 0x88, 0x9e]);
 
     let mut p = Packet {
         header: Header {
@@ -1148,17 +1129,19 @@ fn test_rfc3550_set_extension_should_error_when_setting_non_zero_id() {
             ssrc: 476325762,
             ..Default::default()
         },
-        payload: payload[..].into(),
+        payload,
         ..Default::default()
     };
 
-    let res = p.header.set_extension(1, &[0xBB]);
+    let res = p.header.set_extension(1, Bytes::from_static(&[0xBB]));
     assert!(res.is_err(), "set_extension did not error on invalid id");
 }
 
+use std::collections::HashMap;
+
 struct Cases {
-    input: Vec<u8>,
-    err: Option<RTPError>,
+    input: Bytes,
+    err: Error,
 }
 
 fn test_unmarshal_error_handling() {
@@ -1167,89 +1150,84 @@ fn test_unmarshal_error_handling() {
     cases.insert(
         "ShortHeader",
         Cases {
-            input: vec![
+            input: Bytes::from_static(&[
                 0x80, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, // timestamp
                 0x1c, 0x64, 0x27, // SSRC (one byte missing)
-            ],
-            err: Some(RTPError::HeaderSizeInsufficient),
+            ]),
+            err: Error::ErrHeaderSizeInsufficient,
         },
     );
 
     cases.insert(
         "MissingCSRC",
         Cases {
-            input: vec![
+            input: Bytes::from_static(&[
                 0x81, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, // timestamp
                 0x1c, 0x64, 0x27, 0x82, // SSRC
-            ],
-            err: Some(RTPError::HeaderSizeInsufficient),
+            ]),
+            err: Error::ErrHeaderSizeInsufficient,
         },
     );
 
     cases.insert(
         "MissingExtension",
         Cases {
-            input: vec![
+            input: Bytes::from_static(&[
                 0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, // timestamp
                 0x1c, 0x64, 0x27, 0x82, // SSRC
-            ],
-            err: Some(RTPError::HeaderSizeInsufficientForExtension),
+            ]),
+            err: Error::ErrHeaderSizeInsufficientForExtension,
         },
     );
 
     cases.insert(
         "MissingExtensionData",
         Cases {
-            input: vec![
+            input: Bytes::from_static(&[
                 0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, // timestamp
                 0x1c, 0x64, 0x27, 0x82, // SSRC
-                0xBE, 0xDE, 0x00,
-                0x03, // specified to have 3 extensions, but actually not
-            ],
-            err: Some(RTPError::HeaderSizeInsufficientForExtension),
+                0xBE, 0xDE, 0x00, 0x03, // specified to have 3 extensions, but actually not
+            ]),
+            err: Error::ErrHeaderSizeInsufficientForExtension,
         },
     );
 
     cases.insert(
         "MissingExtensionDataPayload",
         Cases {
-            input: vec![
+            input: Bytes::from_static(&[
                 0x90, 0xe0, 0x69, 0x8f, 0xd9, 0xc2, 0x93, 0xda, // timestamp
                 0x1c, 0x64, 0x27, 0x82, // SSRC
                 0xBE, 0xDE, 0x00, 0x01, // have 1 extension
                 0x12,
                 0x00, // length of the payload is expected to be 3, but actually have only 1
-            ],
-            err: Some(RTPError::HeaderSizeInsufficientForExtension),
+            ]),
+            err: Error::ErrHeaderSizeInsufficientForExtension,
         },
     );
 
-    for (name, test_case) in cases.drain() {
-        let mut h = Header::default();
-        let result = h.unmarshal(&test_case.input);
-
-        assert_eq!(
-            result.err(),
-            test_case.err,
+    for (name, mut test_case) in cases.drain() {
+        let result = Header::unmarshal(&mut test_case.input);
+        let err = result.err().unwrap();
+        assert!(
+            test_case.err.equal(&err),
             "Expected :{:?}, found: {:?} for testcase {}",
             test_case.err,
-            result.err(),
+            err,
             name
         )
     }
 }
 
-fn test_round_trip() -> Result<(), RTPError> {
-    let raw_pkt = &[
-        0x00u8, 0x10, 0x23, 0x45, 0x12, 0x34, 0x45, 0x67, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11,
-        0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
-    ];
+fn test_round_trip() -> Result<()> {
+    let raw_pkt = Bytes::from_static(&[
+        0x00u8, 0x10, 0x23, 0x45, 0x12, 0x34, 0x45, 0x67, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11, 0x22,
+        0x33, 0x44, 0x55, 0x66, 0x77,
+    ]);
 
-    let payload = raw_pkt[12..].to_vec();
+    let payload = raw_pkt.slice(12..);
 
-    let mut p = Packet::default();
-
-    p.unmarshal(raw_pkt)?;
+    let p = Packet::unmarshal(&mut raw_pkt.clone())?;
 
     assert_eq!(
         payload, p.payload,
@@ -1260,11 +1238,9 @@ fn test_round_trip() -> Result<(), RTPError> {
     let buf = p.marshal()?;
 
     assert_eq!(
-        raw_pkt,
-        buf.as_slice(),
+        raw_pkt, buf,
         "buf must be the same as raw_pkt. \n buf: {:?},\nraw_pkt: {:?}",
-        buf,
-        raw_pkt,
+        buf, raw_pkt,
     );
     assert_eq!(
         payload, p.payload,
@@ -1274,4 +1250,3 @@ fn test_round_trip() -> Result<(), RTPError> {
 
     Ok(())
 }
-*/
