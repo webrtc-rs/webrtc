@@ -2,9 +2,10 @@
 mod receiver_report_test;
 
 use crate::{error::Error, header::*, packet::*, reception_report::*, util::*};
+use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
 use anyhow::Result;
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{Buf, BufMut, Bytes};
 use std::any::Any;
 use std::fmt;
 
@@ -44,12 +45,22 @@ impl fmt::Display for ReceiverReport {
 }
 
 impl Packet for ReceiverReport {
+    /// Header returns the Header associated with this packet.
+    fn header(&self) -> Header {
+        Header {
+            padding: get_padding(self.raw_size()) != 0,
+            count: self.reports.len() as u8,
+            packet_type: PacketType::ReceiverReport,
+            length: ((self.marshal_size() / 4) - 1) as u16,
+        }
+    }
+
     /// destination_ssrc returns an array of SSRC values that this packet refers to.
     fn destination_ssrc(&self) -> Vec<u32> {
         self.reports.iter().map(|x| x.ssrc).collect()
     }
 
-    fn size(&self) -> usize {
+    fn raw_size(&self) -> usize {
         let mut reps_length = 0;
         for rep in &self.reports {
             reps_length += rep.marshal_size();
@@ -58,11 +69,30 @@ impl Packet for ReceiverReport {
         HEADER_LENGTH + SSRC_LENGTH + reps_length + self.profile_extensions.len()
     }
 
-    /// Marshal encodes the packet in binary.
-    fn marshal(&self) -> Result<Bytes> {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl MarshalSize for ReceiverReport {
+    fn marshal_size(&self) -> usize {
+        let l = self.raw_size();
+        // align to 32-bit boundary
+        l + get_padding(l)
+    }
+}
+
+impl Marshal for ReceiverReport {
+    /// marshal_to encodes the packet in binary.
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
         if self.reports.len() > COUNT_MAX {
             return Err(Error::TooManyReports.into());
         }
+
+        if buf.remaining_mut() < self.marshal_size() {
+            return Err(Error::BufferTooShort.into());
+        }
+
         /*
          *         0                   1                   2                   3
          *         0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -90,28 +120,34 @@ impl Packet for ReceiverReport {
          *        |                  profile-specific extensions                  |
          *        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
-
-        let mut writer = BytesMut::with_capacity(self.marshal_size());
-
         let h = self.header();
-        let data = h.marshal()?;
-        writer.extend(data);
+        let n = h.marshal_to(buf)?;
+        buf = &mut buf[n..];
 
-        writer.put_u32(self.ssrc);
+        buf.put_u32(self.ssrc);
 
         for report in &self.reports {
             let data = report.marshal()?;
-            writer.extend(data);
+            buf.put(data);
         }
 
-        writer.extend(self.profile_extensions.clone());
+        buf.put(self.profile_extensions.clone());
 
-        put_padding(&mut writer);
-        Ok(writer.freeze())
+        if h.padding {
+            put_padding(buf, self.raw_size());
+        }
+
+        Ok(self.marshal_size())
     }
+}
 
+impl Unmarshal for ReceiverReport {
     /// Unmarshal decodes the ReceiverReport from binary
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    where
+        Self: Sized,
+        B: Buf,
+    {
         /*
          *         0                   1                   2                   3
          *         0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -139,8 +175,8 @@ impl Packet for ReceiverReport {
          *        |                  profile-specific extensions                  |
          *        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
-
-        if raw_packet.len() < (HEADER_LENGTH + SSRC_LENGTH) {
+        let raw_packet_len = raw_packet.remaining();
+        if raw_packet_len < (HEADER_LENGTH + SSRC_LENGTH) {
             return Err(Error::PacketTooShort.into());
         }
 
@@ -149,53 +185,24 @@ impl Packet for ReceiverReport {
             return Err(Error::WrongType.into());
         }
 
-        let reader = &mut raw_packet.slice(RR_SSRC_OFFSET..);
-
-        let ssrc = reader.get_u32();
+        let ssrc = raw_packet.get_u32();
 
         let mut offset = RR_REPORT_OFFSET;
         let mut reports = Vec::with_capacity(header.count as usize);
         for _ in 0..header.count {
-            if offset + RECEPTION_REPORT_LENGTH > raw_packet.len() {
+            if offset + RECEPTION_REPORT_LENGTH > raw_packet_len {
                 return Err(Error::PacketTooShort.into());
             }
-            let reception_report = ReceptionReport::unmarshal(&raw_packet.slice(offset..))?;
+            let reception_report = ReceptionReport::unmarshal(raw_packet)?;
             reports.push(reception_report);
             offset += RECEPTION_REPORT_LENGTH;
         }
-        let profile_extensions = raw_packet.slice(offset..);
+        let profile_extensions = raw_packet.copy_to_bytes(raw_packet.remaining());
 
         Ok(ReceiverReport {
             ssrc,
             reports,
             profile_extensions,
         })
-    }
-
-    fn equal(&self, other: &dyn Packet) -> bool {
-        other
-            .as_any()
-            .downcast_ref::<ReceiverReport>()
-            .map_or(false, |a| self == a)
-    }
-
-    fn cloned(&self) -> Box<dyn Packet> {
-        Box::new(self.clone())
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
-impl ReceiverReport {
-    /// Header returns the Header associated with this packet.
-    pub fn header(&self) -> Header {
-        Header {
-            padding: get_padding(self.size()) != 0,
-            count: self.reports.len() as u8,
-            packet_type: PacketType::ReceiverReport,
-            length: ((self.marshal_size() / 4) - 1) as u16,
-        }
     }
 }
