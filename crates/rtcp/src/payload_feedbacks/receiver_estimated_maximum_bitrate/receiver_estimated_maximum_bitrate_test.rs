@@ -1,4 +1,5 @@
 use super::*;
+use bytes::Bytes;
 
 #[test]
 fn test_receiver_estimated_maximum_bitrate_unmarshal() {
@@ -64,8 +65,8 @@ fn test_receiver_estimated_maximum_bitrate_unmarshal() {
         ),
     ];
 
-    for (name, data, want, want_error) in tests {
-        let got = ReceiverEstimatedMaximumBitrate::unmarshal(&data);
+    for (name, mut data, want, want_error) in tests {
+        let got = ReceiverEstimatedMaximumBitrate::unmarshal(&mut data);
 
         assert_eq!(
             got.is_err(),
@@ -157,8 +158,8 @@ fn test_receiver_estimated_maximum_bitrate_roundtrip() {
             marshal_error
         );
 
-        let data = got.ok().unwrap();
-        let actual = ReceiverEstimatedMaximumBitrate::unmarshal(&data)
+        let mut data = got.ok().unwrap();
+        let actual = ReceiverEstimatedMaximumBitrate::unmarshal(&mut data)
             .expect(format!("Unmarshal {}", name).as_str());
 
         if let Some(expected_bitrate) = unmarshal_expected {

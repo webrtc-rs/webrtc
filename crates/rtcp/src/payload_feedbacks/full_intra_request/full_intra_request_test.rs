@@ -1,4 +1,5 @@
 use super::*;
+use bytes::Bytes;
 
 #[test]
 fn test_full_intra_request_unmarshal() {
@@ -90,8 +91,8 @@ fn test_full_intra_request_unmarshal() {
         ),
     ];
 
-    for (name, data, want, want_error) in tests {
-        let got = FullIntraRequest::unmarshal(&data);
+    for (name, mut data, want, want_error) in tests {
+        let got = FullIntraRequest::unmarshal(&mut data);
 
         assert_eq!(
             got.is_err(),
@@ -173,9 +174,9 @@ fn test_full_intra_request_round_trip() {
                 err,
             );
         } else {
-            let data = got.ok().unwrap();
-            let actual =
-                FullIntraRequest::unmarshal(&data).expect(format!("Unmarshal {}", name).as_str());
+            let mut data = got.ok().unwrap();
+            let actual = FullIntraRequest::unmarshal(&mut data)
+                .expect(format!("Unmarshal {}", name).as_str());
 
             assert_eq!(
                 actual, want,
@@ -203,8 +204,8 @@ fn test_full_intra_request_unmarshal_header() {
         },
     )];
 
-    for (name, data, want) in tests {
-        let result = FullIntraRequest::unmarshal(&data);
+    for (name, mut data, want) in tests {
+        let result = FullIntraRequest::unmarshal(&mut data);
 
         assert!(
             result.is_ok(),

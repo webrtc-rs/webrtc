@@ -2,9 +2,10 @@
 mod source_description_test;
 
 use crate::{error::Error, header::*, packet::*, util::*};
+use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
 use anyhow::Result;
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{Buf, BufMut, Bytes};
 use std::any::Any;
 use std::fmt;
 
@@ -80,8 +81,30 @@ pub struct SourceDescriptionChunk {
 }
 
 impl SourceDescriptionChunk {
+    fn raw_size(&self) -> usize {
+        let mut len = SDES_SOURCE_LEN;
+        for it in &self.items {
+            len += it.marshal_size();
+        }
+        len += SDES_TYPE_LEN; // for terminating null octet
+        len
+    }
+}
+
+impl MarshalSize for SourceDescriptionChunk {
+    fn marshal_size(&self) -> usize {
+        let l = self.raw_size();
+        // align to 32-bit boundary
+        l + get_padding_size(l)
+    }
+}
+
+impl Marshal for SourceDescriptionChunk {
     /// Marshal encodes the SourceDescriptionChunk in binary
-    pub fn marshal(&self) -> Result<Bytes> {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
+        if buf.remaining_mut() < self.marshal_size() {
+            return Err(Error::BufferTooShort.into());
+        }
         /*
          *  +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
          *  |                          SSRC/CSRC_1                          |
@@ -91,25 +114,29 @@ impl SourceDescriptionChunk {
          *  +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
          */
 
-        let mut writer = BytesMut::with_capacity(self.marshal_size());
-
-        writer.put_u32(self.source);
+        buf.put_u32(self.source);
 
         for it in &self.items {
-            let data = it.marshal()?;
-            writer.extend(data);
+            let n = it.marshal_to(buf)?;
+            buf = &mut buf[n..];
         }
 
         // The list of items in each chunk MUST be terminated by one or more null octets
-        writer.put_u8(SdesType::SdesEnd as u8);
+        buf.put_u8(SdesType::SdesEnd as u8);
 
         // additional null octets MUST be included if needed to pad until the next 32-bit boundary
-        put_padding(&mut writer);
-        Ok(writer.freeze())
+        put_padding(buf, self.raw_size());
+        Ok(self.marshal_size())
     }
+}
 
+impl Unmarshal for SourceDescriptionChunk {
     /// Unmarshal decodes the SourceDescriptionChunk from binary
-    pub fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    where
+        Self: Sized,
+        B: Buf,
+    {
         /*
          *  +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
          *  |                          SSRC/CSRC_1                          |
@@ -118,42 +145,32 @@ impl SourceDescriptionChunk {
          *  |                              ...                              |
          *  +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
          */
-
-        if raw_packet.len() < (SDES_SOURCE_LEN + SDES_TYPE_LEN) {
+        let raw_packet_len = raw_packet.remaining();
+        if raw_packet_len < (SDES_SOURCE_LEN + SDES_TYPE_LEN) {
             return Err(Error::PacketTooShort.into());
         }
 
-        let reader = &mut raw_packet.clone();
-
-        let source = reader.get_u32();
+        let source = raw_packet.get_u32();
 
         let mut offset = SDES_SOURCE_LEN;
         let mut items = vec![];
-        while offset < raw_packet.len() {
-            let pkt_type = SdesType::from(reader.get_u8());
-            if pkt_type == SdesType::SdesEnd {
-                return Ok(SourceDescriptionChunk { source, items });
+        while offset < raw_packet_len {
+            let item = SourceDescriptionItem::unmarshal(raw_packet)?;
+            if item.sdes_type == SdesType::SdesEnd {
+                // offset + 1 (one byte for SdesEnd)
+                let padding_len = get_padding_size(offset + 1);
+                if raw_packet.remaining() >= padding_len {
+                    raw_packet.advance(padding_len);
+                    return Ok(SourceDescriptionChunk { source, items });
+                } else {
+                    return Err(Error::PacketTooShort.into());
+                }
             }
-
-            let item = SourceDescriptionItem::unmarshal(&raw_packet.slice(offset..))?;
-            reader.advance(item.marshal_size() - 1); // reader.get_u8() already consumes one bytes
             offset += item.marshal_size();
             items.push(item);
         }
 
         Err(Error::PacketTooShort.into())
-    }
-
-    pub fn marshal_size(&self) -> usize {
-        let mut len = SDES_SOURCE_LEN;
-        for it in &self.items {
-            len += it.marshal_size();
-        }
-
-        len += SDES_TYPE_LEN; // for terminating null octet
-
-        // align to 32-bit boundary
-        len + get_padding(len)
     }
 }
 
@@ -168,8 +185,8 @@ pub struct SourceDescriptionItem {
     pub text: Bytes,
 }
 
-impl SourceDescriptionItem {
-    pub fn marshal_size(&self) -> usize {
+impl MarshalSize for SourceDescriptionItem {
+    fn marshal_size(&self) -> usize {
         /*
          *   0                   1                   2                   3
          *   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -179,9 +196,11 @@ impl SourceDescriptionItem {
          */
         SDES_TYPE_LEN + SDES_OCTET_COUNT_LEN + self.text.len()
     }
+}
 
+impl Marshal for SourceDescriptionItem {
     /// Marshal encodes the SourceDescriptionItem in binary
-    pub fn marshal(&self) -> Result<Bytes> {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
         /*
          *   0                   1                   2                   3
          *   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -194,22 +213,30 @@ impl SourceDescriptionItem {
             return Err(Error::SdesMissingType.into());
         }
 
-        let mut writer = BytesMut::with_capacity(self.marshal_size());
+        if buf.remaining_mut() < self.marshal_size() {
+            return Err(Error::BufferTooShort.into());
+        }
 
-        writer.put_u8(self.sdes_type as u8);
+        buf.put_u8(self.sdes_type as u8);
 
         if self.text.len() > SDES_MAX_OCTET_COUNT {
             return Err(Error::SdesTextTooLong.into());
         }
-        writer.put_u8(self.text.len() as u8);
-        writer.extend(self.text.clone());
+        buf.put_u8(self.text.len() as u8);
+        buf.put(self.text.clone());
 
         //no padding for each SourceDescriptionItem
-        Ok(writer.freeze())
+        Ok(self.marshal_size())
     }
+}
 
+impl Unmarshal for SourceDescriptionItem {
     /// Unmarshal decodes the SourceDescriptionItem from binary
-    pub fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    where
+        Self: Sized,
+        B: Buf,
+    {
         /*
          *   0                   1                   2                   3
          *   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -217,20 +244,29 @@ impl SourceDescriptionItem {
          *  |    CNAME=1    |     length    | user and domain name        ...
          *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
-
-        if raw_packet.len() < (SDES_TYPE_LEN + SDES_OCTET_COUNT_LEN) {
+        let raw_packet_len = raw_packet.remaining();
+        if raw_packet_len < SDES_TYPE_LEN {
             return Err(Error::PacketTooShort.into());
         }
 
-        let reader = &mut raw_packet.clone();
+        let sdes_type = SdesType::from(raw_packet.get_u8());
+        if sdes_type == SdesType::SdesEnd {
+            return Ok(SourceDescriptionItem {
+                sdes_type,
+                text: Bytes::new(),
+            });
+        }
 
-        let sdes_type = SdesType::from(reader.get_u8());
-        let octet_count = reader.get_u8() as usize;
-        if SDES_TEXT_OFFSET + octet_count > raw_packet.len() {
+        if raw_packet_len < (SDES_TYPE_LEN + SDES_OCTET_COUNT_LEN) {
             return Err(Error::PacketTooShort.into());
         }
 
-        let text = raw_packet.slice(SDES_TEXT_OFFSET..SDES_TEXT_OFFSET + octet_count);
+        let octet_count = raw_packet.get_u8() as usize;
+        if SDES_TEXT_OFFSET + octet_count > raw_packet_len {
+            return Err(Error::PacketTooShort.into());
+        }
+
+        let text = raw_packet.copy_to_bytes(octet_count);
 
         Ok(SourceDescriptionItem { sdes_type, text })
     }
@@ -256,12 +292,22 @@ impl fmt::Display for SourceDescription {
 }
 
 impl Packet for SourceDescription {
+    /// Header returns the Header associated with this packet.
+    fn header(&self) -> Header {
+        Header {
+            padding: get_padding_size(self.raw_size()) != 0,
+            count: self.chunks.len() as u8,
+            packet_type: PacketType::SourceDescription,
+            length: ((self.marshal_size() / 4) - 1) as u16,
+        }
+    }
+
     /// destination_ssrc returns an array of SSRC values that this packet refers to.
     fn destination_ssrc(&self) -> Vec<u32> {
         self.chunks.iter().map(|x| x.source).collect()
     }
 
-    fn size(&self) -> usize {
+    fn raw_size(&self) -> usize {
         let mut chunks_length = 0;
         for c in &self.chunks {
             chunks_length += c.marshal_size();
@@ -270,47 +316,41 @@ impl Packet for SourceDescription {
         HEADER_LENGTH + chunks_length
     }
 
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn equal(&self, other: &dyn Packet) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<SourceDescription>()
+            .map_or(false, |a| self == a)
+    }
+
+    fn cloned(&self) -> Box<dyn Packet> {
+        Box::new(self.clone())
+    }
+}
+
+impl MarshalSize for SourceDescription {
+    fn marshal_size(&self) -> usize {
+        let l = self.raw_size();
+        // align to 32-bit boundary
+        l + get_padding_size(l)
+    }
+}
+
+impl Marshal for SourceDescription {
     /// Marshal encodes the SourceDescription in binary
-    fn marshal(&self) -> Result<Bytes> {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
         if self.chunks.len() > COUNT_MAX {
             return Err(Error::TooManyChunks.into());
         }
 
-        /*
-         *         0                   1                   2                   3
-         *         0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-         *        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-         * header |V=2|P|    SC   |  PT=SDES=202  |             length            |
-         *        +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
-         * chunk  |                          SSRC/CSRC_1                          |
-         *   1    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-         *        |                           SDES items                          |
-         *        |                              ...                              |
-         *        +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
-         * chunk  |                          SSRC/CSRC_2                          |
-         *   2    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-         *        |                           SDES items                          |
-         *        |                              ...                              |
-         *        +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
-         */
-
-        let mut writer = BytesMut::with_capacity(self.marshal_size());
-
-        let h = self.header();
-        let data = h.marshal()?;
-        writer.extend(data);
-
-        for c in &self.chunks {
-            let data = c.marshal()?;
-            writer.extend(data);
+        if buf.remaining_mut() < self.marshal_size() {
+            return Err(Error::BufferTooShort.into());
         }
 
-        put_padding(&mut writer);
-        Ok(writer.freeze())
-    }
-
-    /// Unmarshal decodes the SourceDescription from binary
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
         /*
          *         0                   1                   2                   3
          *         0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -329,16 +369,58 @@ impl Packet for SourceDescription {
          *        +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
          */
 
-        let h = Header::unmarshal(raw_packet)?;
+        let h = self.header();
+        let n = h.marshal_to(buf)?;
+        buf = &mut buf[n..];
 
+        for c in &self.chunks {
+            let n = c.marshal_to(buf)?;
+            buf = &mut buf[n..];
+        }
+
+        if h.padding {
+            put_padding(buf, self.raw_size());
+        }
+
+        Ok(self.marshal_size())
+    }
+}
+
+impl Unmarshal for SourceDescription {
+    /// Unmarshal decodes the SourceDescription from binary
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    where
+        Self: Sized,
+        B: Buf,
+    {
+        /*
+         *         0                   1                   2                   3
+         *         0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+         *        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+         * header |V=2|P|    SC   |  PT=SDES=202  |             length            |
+         *        +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+         * chunk  |                          SSRC/CSRC_1                          |
+         *   1    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+         *        |                           SDES items                          |
+         *        |                              ...                              |
+         *        +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+         * chunk  |                          SSRC/CSRC_2                          |
+         *   2    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+         *        |                           SDES items                          |
+         *        |                              ...                              |
+         *        +=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+         */
+        let raw_packet_len = raw_packet.remaining();
+
+        let h = Header::unmarshal(raw_packet)?;
         if h.packet_type != PacketType::SourceDescription {
             return Err(Error::WrongType.into());
         }
 
         let mut offset = HEADER_LENGTH;
         let mut chunks = vec![];
-        while offset < raw_packet.len() {
-            let chunk = SourceDescriptionChunk::unmarshal(&raw_packet.slice(offset..))?;
+        while offset < raw_packet_len {
+            let chunk = SourceDescriptionChunk::unmarshal(raw_packet)?;
             offset += chunk.marshal_size();
             chunks.push(chunk);
         }
@@ -347,33 +429,10 @@ impl Packet for SourceDescription {
             return Err(Error::InvalidHeader.into());
         }
 
-        Ok(SourceDescription { chunks })
-    }
-
-    fn equal_to(&self, other: &dyn Packet) -> bool {
-        other
-            .as_any()
-            .downcast_ref::<SourceDescription>()
-            .map_or(false, |a| self == a)
-    }
-
-    fn clone_to(&self) -> Box<dyn Packet> {
-        Box::new(self.clone())
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
-impl SourceDescription {
-    /// Header returns the Header associated with this packet.
-    pub fn header(&self) -> Header {
-        Header {
-            padding: get_padding(self.size()) != 0,
-            count: self.chunks.len() as u8,
-            packet_type: PacketType::SourceDescription,
-            length: ((self.marshal_size() / 4) - 1) as u16,
+        if h.padding && raw_packet.has_remaining() {
+            raw_packet.advance(raw_packet.remaining());
         }
+
+        Ok(SourceDescription { chunks })
     }
 }

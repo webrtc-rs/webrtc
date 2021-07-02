@@ -1,7 +1,9 @@
-use crate::{error::Error, header::*, packet::Packet};
+use crate::{error::Error, header::*, packet::Packet, util::*};
+
+use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
 use anyhow::Result;
-use bytes::Bytes;
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::any::Any;
 use std::fmt;
 
@@ -17,54 +19,80 @@ impl fmt::Display for RawPacket {
 }
 
 impl Packet for RawPacket {
+    /// Header returns the Header associated with this packet.
+    fn header(&self) -> Header {
+        match Header::unmarshal(&mut self.0.clone()) {
+            Ok(h) => h,
+            Err(_) => Header::default(),
+        }
+    }
+
     /// destination_ssrc returns an array of SSRC values that this packet refers to.
     fn destination_ssrc(&self) -> Vec<u32> {
         vec![]
     }
 
-    fn size(&self) -> usize {
+    fn raw_size(&self) -> usize {
         self.0.len()
     }
 
-    /// Marshal encodes the packet in binary.
-    fn marshal(&self) -> Result<Bytes> {
-        Ok(self.0.clone())
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 
-    /// Unmarshal decodes the packet from binary.
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
-        if raw_packet.len() < HEADER_LENGTH {
-            return Err(Error::PacketTooShort.into());
-        }
-
-        let _ = Header::unmarshal(raw_packet)?;
-
-        Ok(RawPacket(raw_packet.clone()))
-    }
-
-    fn equal_to(&self, other: &dyn Packet) -> bool {
+    fn equal(&self, other: &dyn Packet) -> bool {
         other
             .as_any()
             .downcast_ref::<RawPacket>()
             .map_or(false, |a| self == a)
     }
 
-    fn clone_to(&self) -> Box<dyn Packet> {
+    fn cloned(&self) -> Box<dyn Packet> {
         Box::new(self.clone())
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }
 
-impl RawPacket {
-    /// Header returns the Header associated with this packet.
-    pub fn header(&self) -> Header {
-        match Header::unmarshal(&self.0) {
-            Ok(h) => h,
-            Err(_) => Header::default(),
+impl MarshalSize for RawPacket {
+    fn marshal_size(&self) -> usize {
+        let l = self.raw_size();
+        // align to 32-bit boundary
+        l + get_padding_size(l)
+    }
+}
+
+impl Marshal for RawPacket {
+    /// Marshal encodes the packet in binary.
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
+        let h = Header::unmarshal(&mut self.0.clone())?;
+        buf.put(self.0.clone());
+        if h.padding {
+            put_padding(buf, self.raw_size());
         }
+        Ok(self.marshal_size())
+    }
+}
+
+impl Unmarshal for RawPacket {
+    /// Unmarshal decodes the packet from binary.
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    where
+        Self: Sized,
+        B: Buf,
+    {
+        let raw_packet_len = raw_packet.remaining();
+        if raw_packet_len < HEADER_LENGTH {
+            return Err(Error::PacketTooShort.into());
+        }
+
+        let h = Header::unmarshal(raw_packet)?;
+
+        let raw_hdr = h.marshal()?;
+        let raw_body = raw_packet.copy_to_bytes(raw_packet.remaining());
+        let mut raw = BytesMut::new();
+        raw.extend(raw_hdr);
+        raw.extend(raw_body);
+
+        Ok(RawPacket(raw.freeze()))
     }
 }
 
@@ -100,8 +128,23 @@ mod test {
         ];
 
         for (name, pkt, unmarshal_error) in tests {
-            let data = pkt.marshal()?;
-            let result = RawPacket::unmarshal(&data);
+            let result = pkt.marshal();
+            assert_eq!(
+                result.is_err(),
+                unmarshal_error.is_some(),
+                "Unmarshal {}: err = {:?}, want {:?}",
+                name,
+                result,
+                unmarshal_error
+            );
+
+            if result.is_err() {
+                continue;
+            }
+
+            let mut data = result.unwrap();
+
+            let result = RawPacket::unmarshal(&mut data);
 
             assert_eq!(
                 result.is_err(),

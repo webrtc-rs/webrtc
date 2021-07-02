@@ -37,6 +37,9 @@ pub enum Error {
     /// Packet received is too short.
     #[error("Packet status chunk must be 2 bytes")]
     PacketTooShort,
+    /// Buffer is too short.
+    #[error("Buffer too short to be written")]
+    BufferTooShort,
     /// Wrong packet type.
     #[error("Wrong packet type")]
     WrongType,

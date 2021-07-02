@@ -1,4 +1,5 @@
 use super::*;
+use bytes::Bytes;
 
 #[test]
 fn test_transport_layer_cc_run_length_chunk_unmarshal() -> Result<()> {
@@ -25,8 +26,8 @@ fn test_transport_layer_cc_run_length_chunk_unmarshal() -> Result<()> {
         ),
     ];
 
-    for (name, data, want) in tests {
-        let got = RunLengthChunk::unmarshal(&data)?;
+    for (name, mut data, want) in tests {
+        let got = RunLengthChunk::unmarshal(&mut data)?;
         assert_eq!(got, want, "Unmarshal {} : err", name,);
     }
 
@@ -114,8 +115,8 @@ fn test_transport_layer_cc_status_vector_chunk_unmarshal() -> Result<()> {
         ),
     ];
 
-    for (name, data, want) in tests {
-        let got = StatusVectorChunk::unmarshal(&data)?;
+    for (name, mut data, want) in tests {
+        let got = StatusVectorChunk::unmarshal(&mut data)?;
         assert_eq!(got, want, "Unmarshal {} : err", name,);
     }
 
@@ -210,8 +211,8 @@ fn test_transport_layer_cc_recv_delta_unmarshal() -> Result<()> {
         ),
     ];
 
-    for (name, data, want) in tests {
-        let got = RecvDelta::unmarshal(&data)?;
+    for (name, mut data, want) in tests {
+        let got = RecvDelta::unmarshal(&mut data)?;
         assert_eq!(got, want, "Unmarshal {} : err", name,);
     }
 
@@ -296,7 +297,7 @@ fn test_transport_layer_cc_unmarshal() -> Result<()> {
                 reference_time: 4057090,
                 fb_pkt_count: 23,
                 // 0b00100000, 0b00000001
-                packet_chunks: vec![Box::new(RunLengthChunk {
+                packet_chunks: vec![PacketStatusChunk::RunLengthChunk(RunLengthChunk {
                     type_tcc: StatusChunkTypeTcc::RunLengthChunk,
                     packet_status_symbol: SymbolTypeTcc::PacketReceivedSmallDelta,
                     run_length: 1,
@@ -322,7 +323,7 @@ fn test_transport_layer_cc_unmarshal() -> Result<()> {
                 reference_time: 4567386,
                 fb_pkt_count: 64,
                 packet_chunks: vec![
-                    Box::new(StatusVectorChunk {
+                    PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
                         type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
                         symbol_size: SymbolSizeTypeTcc::TwoBit,
                         symbol_list: vec![
@@ -335,7 +336,7 @@ fn test_transport_layer_cc_unmarshal() -> Result<()> {
                             SymbolTypeTcc::PacketNotReceived,
                         ],
                     }),
-                    Box::new(StatusVectorChunk {
+                    PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
                         type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
                         symbol_size: SymbolSizeTypeTcc::TwoBit,
                         symbol_list: vec![
@@ -377,12 +378,12 @@ fn test_transport_layer_cc_unmarshal() -> Result<()> {
                 reference_time: 4567386,
                 fb_pkt_count: 64,
                 packet_chunks: vec![
-                    Box::new(RunLengthChunk {
+                    PacketStatusChunk::RunLengthChunk(RunLengthChunk {
                         type_tcc: StatusChunkTypeTcc::RunLengthChunk,
                         packet_status_symbol: SymbolTypeTcc::PacketReceivedLargeDelta,
                         run_length: 2,
                     }),
-                    Box::new(RunLengthChunk {
+                    PacketStatusChunk::RunLengthChunk(RunLengthChunk {
                         type_tcc: StatusChunkTypeTcc::RunLengthChunk,
                         packet_status_symbol: SymbolTypeTcc::PacketReceivedSmallDelta,
                         run_length: 4,
@@ -430,7 +431,7 @@ fn test_transport_layer_cc_unmarshal() -> Result<()> {
                 packet_status_count: 7,
                 reference_time: 1074030,
                 fb_pkt_count: 1,
-                packet_chunks: vec![Box::new(RunLengthChunk {
+                packet_chunks: vec![PacketStatusChunk::RunLengthChunk(RunLengthChunk {
                     type_tcc: StatusChunkTypeTcc::RunLengthChunk,
                     packet_status_symbol: SymbolTypeTcc::PacketReceivedSmallDelta,
                     run_length: 7,
@@ -480,7 +481,7 @@ fn test_transport_layer_cc_unmarshal() -> Result<()> {
                 packet_status_count: 14,
                 reference_time: 1074029,
                 fb_pkt_count: 0,
-                packet_chunks: vec![Box::new(StatusVectorChunk {
+                packet_chunks: vec![PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
                     type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
                     symbol_size: SymbolSizeTypeTcc::OneBit,
                     symbol_list: vec![
@@ -535,7 +536,7 @@ fn test_transport_layer_cc_unmarshal() -> Result<()> {
                 reference_time: 6551830,
                 fb_pkt_count: 179,
                 packet_chunks: vec![
-                    Box::new(StatusVectorChunk {
+                    PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
                         type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
                         symbol_size: SymbolSizeTypeTcc::TwoBit,
                         symbol_list: vec![
@@ -548,7 +549,7 @@ fn test_transport_layer_cc_unmarshal() -> Result<()> {
                             SymbolTypeTcc::PacketReceivedLargeDelta,
                         ],
                     }),
-                    Box::new(RunLengthChunk {
+                    PacketStatusChunk::RunLengthChunk(RunLengthChunk {
                         type_tcc: StatusChunkTypeTcc::RunLengthChunk,
                         packet_status_symbol: SymbolTypeTcc::PacketNotReceived,
                         run_length: 48,
@@ -584,8 +585,8 @@ fn test_transport_layer_cc_unmarshal() -> Result<()> {
         ),
     ];
 
-    for (name, data, want) in tests {
-        let got = TransportLayerCc::unmarshal(&data)?;
+    for (name, mut data, want) in tests {
+        let got = TransportLayerCc::unmarshal(&mut data)?;
         assert!(got == want, "Unmarshal {} : err", name,);
     }
 
@@ -605,7 +606,7 @@ fn test_transport_layer_cc_marshal() -> Result<()> {
                 reference_time: 4057090,
                 fb_pkt_count: 23,
                 // 0b00100000, 0b00000001
-                packet_chunks: vec![Box::new(RunLengthChunk {
+                packet_chunks: vec![PacketStatusChunk::RunLengthChunk(RunLengthChunk {
                     type_tcc: StatusChunkTypeTcc::RunLengthChunk,
                     packet_status_symbol: SymbolTypeTcc::PacketReceivedSmallDelta,
                     run_length: 1,
@@ -631,7 +632,7 @@ fn test_transport_layer_cc_marshal() -> Result<()> {
                 reference_time: 4567386,
                 fb_pkt_count: 64,
                 packet_chunks: vec![
-                    Box::new(StatusVectorChunk {
+                    PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
                         type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
                         symbol_size: SymbolSizeTypeTcc::TwoBit,
                         symbol_list: vec![
@@ -644,7 +645,7 @@ fn test_transport_layer_cc_marshal() -> Result<()> {
                             SymbolTypeTcc::PacketNotReceived,
                         ],
                     }),
-                    Box::new(StatusVectorChunk {
+                    PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
                         type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
                         symbol_size: SymbolSizeTypeTcc::TwoBit,
                         symbol_list: vec![
@@ -685,12 +686,12 @@ fn test_transport_layer_cc_marshal() -> Result<()> {
                 reference_time: 4567386,
                 fb_pkt_count: 64,
                 packet_chunks: vec![
-                    Box::new(RunLengthChunk {
+                    PacketStatusChunk::RunLengthChunk(RunLengthChunk {
                         type_tcc: StatusChunkTypeTcc::RunLengthChunk,
                         packet_status_symbol: SymbolTypeTcc::PacketReceivedLargeDelta,
                         run_length: 2,
                     }),
-                    Box::new(RunLengthChunk {
+                    PacketStatusChunk::RunLengthChunk(RunLengthChunk {
                         type_tcc: StatusChunkTypeTcc::RunLengthChunk,
                         packet_status_symbol: SymbolTypeTcc::PacketReceivedSmallDelta,
                         run_length: 4,
@@ -738,7 +739,7 @@ fn test_transport_layer_cc_marshal() -> Result<()> {
                 packet_status_count: 7,
                 reference_time: 1074030,
                 fb_pkt_count: 1,
-                packet_chunks: vec![Box::new(RunLengthChunk {
+                packet_chunks: vec![PacketStatusChunk::RunLengthChunk(RunLengthChunk {
                     type_tcc: StatusChunkTypeTcc::RunLengthChunk,
                     packet_status_symbol: SymbolTypeTcc::PacketReceivedSmallDelta,
                     run_length: 7,
@@ -789,7 +790,7 @@ fn test_transport_layer_cc_marshal() -> Result<()> {
                 packet_status_count: 14,
                 reference_time: 1074029,
                 fb_pkt_count: 0,
-                packet_chunks: vec![Box::new(StatusVectorChunk {
+                packet_chunks: vec![PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
                     type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
                     symbol_size: SymbolSizeTypeTcc::OneBit,
                     symbol_list: vec![
@@ -842,7 +843,7 @@ fn test_transport_layer_cc_marshal() -> Result<()> {
                 packet_status_count: 12,
                 reference_time: 7701536,
                 fb_pkt_count: 0,
-                packet_chunks: vec![Box::new(StatusVectorChunk {
+                packet_chunks: vec![PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
                     type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
                     symbol_size: SymbolSizeTypeTcc::OneBit,
                     symbol_list: vec![

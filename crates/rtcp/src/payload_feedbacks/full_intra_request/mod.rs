@@ -2,9 +2,10 @@
 mod full_intra_request_test;
 
 use crate::{error::Error, header::*, packet::*, util::*};
+use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
 use anyhow::Result;
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{Buf, BufMut};
 use std::any::Any;
 use std::fmt;
 
@@ -38,6 +39,15 @@ impl fmt::Display for FullIntraRequest {
 }
 
 impl Packet for FullIntraRequest {
+    fn header(&self) -> Header {
+        Header {
+            padding: get_padding_size(self.raw_size()) != 0,
+            count: FORMAT_FIR,
+            packet_type: PacketType::PayloadSpecificFeedback,
+            length: ((self.marshal_size() / 4) - 1) as u16,
+        }
+    }
+
     /// destination_ssrc returns an array of SSRC values that this packet refers to.
     fn destination_ssrc(&self) -> Vec<u32> {
         let mut ssrcs: Vec<u32> = Vec::with_capacity(self.fir.len());
@@ -47,41 +57,78 @@ impl Packet for FullIntraRequest {
         ssrcs
     }
 
-    fn size(&self) -> usize {
+    fn raw_size(&self) -> usize {
         HEADER_LENGTH + FIR_OFFSET + self.fir.len() * 8
     }
 
-    /// Marshal encodes the FullIntraRequest
-    fn marshal(&self) -> Result<Bytes> {
-        let mut writer = BytesMut::with_capacity(self.marshal_size());
-
-        let h = self.header();
-        let data = h.marshal()?;
-        writer.extend(data);
-
-        writer.put_u32(self.sender_ssrc);
-        writer.put_u32(self.media_ssrc);
-
-        for (_, fir) in self.fir.iter().enumerate() {
-            writer.put_u32(fir.ssrc);
-            writer.put_u8(fir.sequence_number);
-            writer.put_u8(0);
-            writer.put_u16(0);
-        }
-
-        put_padding(&mut writer);
-        Ok(writer.freeze())
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 
+    fn equal(&self, other: &dyn Packet) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<FullIntraRequest>()
+            .map_or(false, |a| self == a)
+    }
+
+    fn cloned(&self) -> Box<dyn Packet> {
+        Box::new(self.clone())
+    }
+}
+
+impl MarshalSize for FullIntraRequest {
+    fn marshal_size(&self) -> usize {
+        let l = self.raw_size();
+        // align to 32-bit boundary
+        l + get_padding_size(l)
+    }
+}
+
+impl Marshal for FullIntraRequest {
+    /// Marshal encodes the FullIntraRequest
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
+        if buf.remaining_mut() < self.marshal_size() {
+            return Err(Error::BufferTooShort.into());
+        }
+
+        let h = self.header();
+        let n = h.marshal_to(buf)?;
+        buf = &mut buf[n..];
+
+        buf.put_u32(self.sender_ssrc);
+        buf.put_u32(self.media_ssrc);
+
+        for (_, fir) in self.fir.iter().enumerate() {
+            buf.put_u32(fir.ssrc);
+            buf.put_u8(fir.sequence_number);
+            buf.put_u8(0);
+            buf.put_u16(0);
+        }
+
+        if h.padding {
+            put_padding(buf, self.raw_size());
+        }
+
+        Ok(self.marshal_size())
+    }
+}
+
+impl Unmarshal for FullIntraRequest {
     /// Unmarshal decodes the FullIntraRequest
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
-        if raw_packet.len() < (HEADER_LENGTH + SSRC_LENGTH) {
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    where
+        Self: Sized,
+        B: Buf,
+    {
+        let raw_packet_len = raw_packet.remaining();
+        if raw_packet_len < (HEADER_LENGTH + SSRC_LENGTH) {
             return Err(Error::PacketTooShort.into());
         }
 
         let h = Header::unmarshal(raw_packet)?;
 
-        if raw_packet.len() < (HEADER_LENGTH + (4 * h.length) as usize) {
+        if raw_packet_len < (HEADER_LENGTH + (4 * h.length) as usize) {
             return Err(Error::PacketTooShort.into());
         }
 
@@ -89,22 +136,24 @@ impl Packet for FullIntraRequest {
             return Err(Error::WrongType.into());
         }
 
-        let reader = &mut raw_packet.slice(HEADER_LENGTH..);
-
-        let sender_ssrc = reader.get_u32();
-        let media_ssrc = reader.get_u32();
+        let sender_ssrc = raw_packet.get_u32();
+        let media_ssrc = raw_packet.get_u32();
 
         let mut i = HEADER_LENGTH + FIR_OFFSET;
         let mut fir = vec![];
         while i < HEADER_LENGTH + (h.length * 4) as usize {
             fir.push(FirEntry {
-                ssrc: reader.get_u32(),
-                sequence_number: reader.get_u8(),
+                ssrc: raw_packet.get_u32(),
+                sequence_number: raw_packet.get_u8(),
             });
-            reader.get_u8();
-            reader.get_u16();
+            raw_packet.get_u8();
+            raw_packet.get_u16();
 
             i += 8;
+        }
+
+        if h.padding && raw_packet.has_remaining() {
+            raw_packet.advance(raw_packet.remaining());
         }
 
         Ok(FullIntraRequest {
@@ -112,31 +161,5 @@ impl Packet for FullIntraRequest {
             media_ssrc,
             fir,
         })
-    }
-
-    fn equal_to(&self, other: &dyn Packet) -> bool {
-        other
-            .as_any()
-            .downcast_ref::<FullIntraRequest>()
-            .map_or(false, |a| self == a)
-    }
-
-    fn clone_to(&self) -> Box<dyn Packet> {
-        Box::new(self.clone())
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
-impl FullIntraRequest {
-    pub fn header(&self) -> Header {
-        Header {
-            padding: get_padding(self.size()) != 0,
-            count: FORMAT_FIR,
-            packet_type: PacketType::PayloadSpecificFeedback,
-            length: ((self.marshal_size() / 4) - 1) as u16,
-        }
     }
 }

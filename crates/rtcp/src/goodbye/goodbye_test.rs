@@ -103,8 +103,8 @@ fn test_goodbye_unmarshal() {
         ),
     ];
 
-    for (name, data, want, want_error) in tests {
-        let got = Goodbye::unmarshal(&data);
+    for (name, mut data, want, want_error) in tests {
+        let got = Goodbye::unmarshal(&mut data);
 
         assert_eq!(
             got.is_err(),
@@ -225,8 +225,9 @@ fn test_goodbye_round_trip() {
                 err,
             );
         } else {
-            let data = got.ok().unwrap();
-            let actual = Goodbye::unmarshal(&data).expect(format!("Unmarshal {}", name).as_str());
+            let mut data = got.ok().unwrap();
+            let actual =
+                Goodbye::unmarshal(&mut data).expect(format!("Unmarshal {}", name).as_str());
 
             assert_eq!(
                 actual, want,

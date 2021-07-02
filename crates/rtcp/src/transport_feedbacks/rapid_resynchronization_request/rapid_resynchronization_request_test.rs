@@ -1,4 +1,5 @@
 use super::*;
+use bytes::Bytes;
 
 #[test]
 fn test_rapid_resynchronization_request_unmarshal() {
@@ -49,8 +50,8 @@ fn test_rapid_resynchronization_request_unmarshal() {
         ),
     ];
 
-    for (name, data, want, want_error) in tests {
-        let got = RapidResynchronizationRequest::unmarshal(&data);
+    for (name, mut data, want, want_error) in tests {
+        let got = RapidResynchronizationRequest::unmarshal(&mut data);
 
         assert_eq!(
             got.is_err(),
@@ -114,8 +115,8 @@ fn test_rapid_resynchronization_request_roundtrip() {
                 err,
             );
         } else {
-            let data = got.ok().unwrap();
-            let actual = RapidResynchronizationRequest::unmarshal(&data)
+            let mut data = got.ok().unwrap();
+            let actual = RapidResynchronizationRequest::unmarshal(&mut data)
                 .expect(format!("Unmarshal {}", name).as_str());
 
             assert_eq!(

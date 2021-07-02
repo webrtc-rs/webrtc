@@ -2,9 +2,10 @@
 mod slice_loss_indication_test;
 
 use crate::{error::Error, header::*, packet::*, util::*};
+use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
 use anyhow::Result;
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{Buf, BufMut};
 use std::any::Any;
 use std::fmt;
 
@@ -45,51 +46,97 @@ impl fmt::Display for SliceLossIndication {
 }
 
 impl Packet for SliceLossIndication {
+    /// Header returns the Header associated with this packet.
+    fn header(&self) -> Header {
+        Header {
+            padding: get_padding_size(self.raw_size()) != 0,
+            count: FORMAT_SLI,
+            packet_type: PacketType::TransportSpecificFeedback,
+            length: ((self.marshal_size() / 4) - 1) as u16,
+        }
+    }
+
     /// destination_ssrc returns an array of SSRC values that this packet refers to.
     fn destination_ssrc(&self) -> Vec<u32> {
         vec![self.media_ssrc]
     }
 
-    fn size(&self) -> usize {
+    fn raw_size(&self) -> usize {
         HEADER_LENGTH + SLI_OFFSET + self.sli_entries.len() * 4
     }
 
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn equal(&self, other: &dyn Packet) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<SliceLossIndication>()
+            .map_or(false, |a| self == a)
+    }
+
+    fn cloned(&self) -> Box<dyn Packet> {
+        Box::new(self.clone())
+    }
+}
+
+impl MarshalSize for SliceLossIndication {
+    fn marshal_size(&self) -> usize {
+        let l = self.raw_size();
+        // align to 32-bit boundary
+        l + get_padding_size(l)
+    }
+}
+
+impl Marshal for SliceLossIndication {
     /// Marshal encodes the SliceLossIndication in binary
-    fn marshal(&self) -> Result<Bytes> {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
         if (self.sli_entries.len() + SLI_LENGTH) as u8 > std::u8::MAX {
             return Err(Error::TooManyReports.into());
         }
-
-        let mut writer = BytesMut::with_capacity(self.marshal_size());
+        if buf.remaining_mut() < self.marshal_size() {
+            return Err(Error::BufferTooShort.into());
+        }
 
         let h = self.header();
-        let data = h.marshal()?;
-        writer.extend(data);
+        let n = h.marshal_to(buf)?;
+        buf = &mut buf[n..];
 
-        writer.put_u32(self.sender_ssrc);
-        writer.put_u32(self.media_ssrc);
+        buf.put_u32(self.sender_ssrc);
+        buf.put_u32(self.media_ssrc);
 
         for s in &self.sli_entries {
             let sli = ((s.first as u32 & 0x1FFF) << 19)
                 | ((s.number as u32 & 0x1FFF) << 6)
                 | (s.picture as u32 & 0x3F);
 
-            writer.put_u32(sli);
+            buf.put_u32(sli);
         }
 
-        put_padding(&mut writer);
-        Ok(writer.freeze())
-    }
+        if h.padding {
+            put_padding(buf, self.raw_size());
+        }
 
+        Ok(self.marshal_size())
+    }
+}
+
+impl Unmarshal for SliceLossIndication {
     /// Unmarshal decodes the SliceLossIndication from binary
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self> {
-        if raw_packet.len() < (HEADER_LENGTH + SSRC_LENGTH) {
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    where
+        Self: Sized,
+        B: Buf,
+    {
+        let raw_packet_len = raw_packet.remaining();
+        if raw_packet_len < (HEADER_LENGTH + SSRC_LENGTH) {
             return Err(Error::PacketTooShort.into());
         }
 
         let h = Header::unmarshal(raw_packet)?;
 
-        if raw_packet.len() < (HEADER_LENGTH + (4 * h.length as usize)) {
+        if raw_packet_len < (HEADER_LENGTH + (4 * h.length as usize)) {
             return Err(Error::PacketTooShort.into());
         }
 
@@ -97,15 +144,13 @@ impl Packet for SliceLossIndication {
             return Err(Error::WrongType.into());
         }
 
-        let reader = &mut raw_packet.slice(HEADER_LENGTH..);
-
-        let sender_ssrc = reader.get_u32();
-        let media_ssrc = reader.get_u32();
+        let sender_ssrc = raw_packet.get_u32();
+        let media_ssrc = raw_packet.get_u32();
 
         let mut i = HEADER_LENGTH + SLI_OFFSET;
         let mut sli_entries = vec![];
         while i < HEADER_LENGTH + h.length as usize * 4 {
-            let sli = reader.get_u32();
+            let sli = raw_packet.get_u32();
             sli_entries.push(SliEntry {
                 first: ((sli >> 19) & 0x1FFF) as u16,
                 number: ((sli >> 6) & 0x1FFF) as u16,
@@ -115,37 +160,14 @@ impl Packet for SliceLossIndication {
             i += 4;
         }
 
+        if h.padding && raw_packet.has_remaining() {
+            raw_packet.advance(raw_packet.remaining());
+        }
+
         Ok(SliceLossIndication {
             sender_ssrc,
             media_ssrc,
             sli_entries,
         })
-    }
-
-    fn equal_to(&self, other: &dyn Packet) -> bool {
-        other
-            .as_any()
-            .downcast_ref::<SliceLossIndication>()
-            .map_or(false, |a| self == a)
-    }
-
-    fn clone_to(&self) -> Box<dyn Packet> {
-        Box::new(self.clone())
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
-impl SliceLossIndication {
-    /// Header returns the Header associated with this packet.
-    pub fn header(&self) -> Header {
-        Header {
-            padding: get_padding(self.size()) != 0,
-            count: FORMAT_SLI,
-            packet_type: PacketType::TransportSpecificFeedback,
-            length: ((self.marshal_size() / 4) - 1) as u16,
-        }
     }
 }

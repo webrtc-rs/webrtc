@@ -6,43 +6,34 @@ use crate::{
     sender_report::*, source_description::*,
     transport_feedbacks::rapid_resynchronization_request::*,
     transport_feedbacks::transport_layer_cc::*, transport_feedbacks::transport_layer_nack::*,
-    util::*,
 };
+use util::marshal::{Marshal, Unmarshal};
 
 use anyhow::Result;
-use bytes::Bytes;
+use bytes::Buf;
 use std::any::Any;
+use std::fmt;
 
-/// Packet represents an RTCP packet, a protocol used for out-of-band statistics and control information for an RTP session
-pub trait Packet {
-    /// DestinationSSRC returns an array of SSRC values that this packet refers to.
+/// Packet represents an RTCP packet, a protocol used for out-of-band statistics and
+/// control information for an RTP session
+pub trait Packet: Marshal + Unmarshal + fmt::Display + fmt::Debug {
+    fn header(&self) -> Header;
     fn destination_ssrc(&self) -> Vec<u32>;
-    fn size(&self) -> usize;
-    fn marshal(&self) -> Result<Bytes>;
-    fn unmarshal(raw_packet: &Bytes) -> Result<Self>
-    where
-        Self: Sized;
-
-    fn equal_to(&self, other: &dyn Packet) -> bool;
-    fn clone_to(&self) -> Box<dyn Packet>;
+    fn raw_size(&self) -> usize;
     fn as_any(&self) -> &dyn Any;
-
-    fn marshal_size(&self) -> usize {
-        let l = self.size();
-        // align to 32-bit boundary
-        l + get_padding(l)
-    }
+    fn equal(&self, other: &dyn Packet) -> bool;
+    fn cloned(&self) -> Box<dyn Packet>;
 }
 
 impl PartialEq for dyn Packet {
     fn eq(&self, other: &Self) -> bool {
-        self.equal_to(other)
+        self.equal(other)
     }
 }
 
 impl Clone for Box<dyn Packet> {
     fn clone(&self) -> Box<dyn Packet> {
-        self.clone_to()
+        self.cloned()
     }
 }
 
@@ -52,14 +43,15 @@ impl Clone for Box<dyn Packet> {
 /// If this is a reduced-size RTCP packet a feedback packet (Goodbye, SliceLossIndication, etc)
 /// will be returned. Otherwise, the underlying type of the returned packet will be
 /// CompoundPacket.
-pub fn unmarshal(raw_data: &Bytes) -> Result<Box<dyn Packet>> {
+pub fn unmarshal<B>(raw_data: &mut B) -> Result<Box<dyn Packet>>
+where
+    B: Buf,
+{
     let mut packets = vec![];
 
-    let mut raw_data = raw_data.clone();
-    while !raw_data.is_empty() {
-        let (p, processed) = unmarshaller(&raw_data)?;
+    while raw_data.has_remaining() {
+        let p = unmarshaller(raw_data)?;
         packets.push(p);
-        raw_data = raw_data.split_off(processed);
     }
 
     match packets.len() {
@@ -76,50 +68,53 @@ pub fn unmarshal(raw_data: &Bytes) -> Result<Box<dyn Packet>> {
 
 /// unmarshaller is a factory which pulls the first RTCP packet from a bytestream,
 /// and returns it's parsed representation, and the amount of data that was processed.
-pub(crate) fn unmarshaller(raw_data: &Bytes) -> Result<(Box<dyn Packet>, usize)> {
-    let h = Header::unmarshal(&raw_data)?;
+pub(crate) fn unmarshaller<B>(raw_data: &mut B) -> Result<Box<dyn Packet>>
+where
+    B: Buf,
+{
+    let h = Header::unmarshal(raw_data)?;
 
-    let bytes_processed = (h.length as usize + 1) * 4;
-    if bytes_processed > raw_data.len() {
+    let length = (h.length as usize) * 4;
+    if length > raw_data.remaining() {
         return Err(Error::PacketTooShort.into());
     }
 
-    let in_packet = raw_data.slice(..bytes_processed);
+    let mut in_packet = h.marshal()?.chain(raw_data.take(length));
 
     let p: Box<dyn Packet> = match h.packet_type {
-        PacketType::SenderReport => Box::new(SenderReport::unmarshal(&in_packet)?),
-        PacketType::ReceiverReport => Box::new(ReceiverReport::unmarshal(&in_packet)?),
-        PacketType::SourceDescription => Box::new(SourceDescription::unmarshal(&in_packet)?),
-        PacketType::Goodbye => Box::new(Goodbye::unmarshal(&in_packet)?),
+        PacketType::SenderReport => Box::new(SenderReport::unmarshal(&mut in_packet)?),
+        PacketType::ReceiverReport => Box::new(ReceiverReport::unmarshal(&mut in_packet)?),
+        PacketType::SourceDescription => Box::new(SourceDescription::unmarshal(&mut in_packet)?),
+        PacketType::Goodbye => Box::new(Goodbye::unmarshal(&mut in_packet)?),
 
         PacketType::TransportSpecificFeedback => match h.count {
-            FORMAT_TLN => Box::new(TransportLayerNack::unmarshal(&in_packet)?),
-            FORMAT_RRR => Box::new(RapidResynchronizationRequest::unmarshal(&in_packet)?),
-            FORMAT_TCC => Box::new(TransportLayerCc::unmarshal(&in_packet)?),
-            _ => Box::new(RawPacket::unmarshal(&in_packet)?),
+            FORMAT_TLN => Box::new(TransportLayerNack::unmarshal(&mut in_packet)?),
+            FORMAT_RRR => Box::new(RapidResynchronizationRequest::unmarshal(&mut in_packet)?),
+            FORMAT_TCC => Box::new(TransportLayerCc::unmarshal(&mut in_packet)?),
+            _ => Box::new(RawPacket::unmarshal(&mut in_packet)?),
         },
-
         PacketType::PayloadSpecificFeedback => match h.count {
-            FORMAT_PLI => Box::new(PictureLossIndication::unmarshal(&in_packet)?),
-            FORMAT_SLI => Box::new(SliceLossIndication::unmarshal(&in_packet)?),
-            FORMAT_REMB => Box::new(ReceiverEstimatedMaximumBitrate::unmarshal(&in_packet)?),
-            FORMAT_FIR => Box::new(FullIntraRequest::unmarshal(&in_packet)?),
-            _ => Box::new(RawPacket::unmarshal(&in_packet)?),
+            FORMAT_PLI => Box::new(PictureLossIndication::unmarshal(&mut in_packet)?),
+            FORMAT_SLI => Box::new(SliceLossIndication::unmarshal(&mut in_packet)?),
+            FORMAT_REMB => Box::new(ReceiverEstimatedMaximumBitrate::unmarshal(&mut in_packet)?),
+            FORMAT_FIR => Box::new(FullIntraRequest::unmarshal(&mut in_packet)?),
+            _ => Box::new(RawPacket::unmarshal(&mut in_packet)?),
         },
-        _ => Box::new(RawPacket::unmarshal(&in_packet)?),
+        _ => Box::new(RawPacket::unmarshal(&mut in_packet)?),
     };
 
-    Ok((p, bytes_processed))
+    Ok(p)
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::reception_report::*;
+    use bytes::Bytes;
 
     #[test]
     fn test_packet_unmarshal() {
-        let data = Bytes::from_static(&[
+        let mut data = Bytes::from_static(&[
             // Receiver Report (offset=0)
             0x81, 0xc9, 0x0, 0x7, // v=2, p=0, count=1, RR, len=7
             0x90, 0x2f, 0x9e, 0x2e, // ssrc=0x902f9e2e
@@ -149,7 +144,7 @@ mod test {
             0x90, 0x2f, 0x9e, 0x2e, // media=0x902f9e2e
         ]);
 
-        let packet = unmarshal(&data).expect("Error unmarshalling packets");
+        let packet = unmarshal(&mut data).expect("Error unmarshalling packets");
 
         let a = ReceiverReport {
             ssrc: 0x902f9e2e,
@@ -203,7 +198,7 @@ mod test {
 
     #[test]
     fn test_packet_unmarshal_empty() -> Result<()> {
-        let result = unmarshal(&Bytes::new());
+        let result = unmarshal(&mut Bytes::new());
         if let Err(got) = result {
             let want = Error::InvalidHeader;
             assert!(
@@ -221,13 +216,13 @@ mod test {
 
     #[test]
     fn test_packet_invalid_header_length() -> Result<()> {
-        let data = Bytes::from_static(&[
+        let mut data = Bytes::from_static(&[
             // Goodbye (offset=84)
             // v=2, p=0, count=1, BYE, len=100
             0x81, 0xcb, 0x0, 0x64,
         ]);
 
-        let result = unmarshal(&data);
+        let result = unmarshal(&mut data);
         if let Err(got) = result {
             let want = Error::PacketTooShort;
             assert!(

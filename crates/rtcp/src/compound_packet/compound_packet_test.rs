@@ -34,23 +34,21 @@ const REAL_PACKET: [u8; 116] = [
 
 #[test]
 fn test_read_eof() {
-    let short_header = Bytes::from_static(&[
+    let mut short_header = Bytes::from_static(&[
         0x81, 0xc9, // missing type & len
     ]);
-
-    let result = unmarshal(&short_header);
+    let result = unmarshal(&mut short_header);
     assert!(result.is_err(), "missing type & len");
 }
 
 #[test]
 fn test_bad_compound() {
-    let bad_compound = Bytes::copy_from_slice(&REAL_PACKET[..34]);
-    let result = unmarshal(&bad_compound);
+    let mut bad_compound = Bytes::copy_from_slice(&REAL_PACKET[..34]);
+    let result = unmarshal(&mut bad_compound);
     assert!(result.is_err(), "trailing data!");
 
-    let bad_compound = Bytes::copy_from_slice(&REAL_PACKET[84..104]);
-
-    let p = unmarshal(&bad_compound).expect("Error unmarshalling packet");
+    let mut bad_compound = Bytes::copy_from_slice(&REAL_PACKET[84..104]);
+    let p = unmarshal(&mut bad_compound).expect("Error unmarshalling packet");
     let compound = p.as_any().downcast_ref::<CompoundPacket>().unwrap();
 
     // this should return an error,
@@ -340,10 +338,12 @@ fn test_compound_packet_roundtrip() {
         }
 
         let data1 = result.unwrap();
+        let c = CompoundPacket::unmarshal(&mut data1.clone())
+            .expect(format!("unmarshal {} error", name).as_str());
 
-        let c = CompoundPacket::unmarshal(&data1).expect("Unmarshall should be nil");
-
-        let data2 = c.marshal().expect("Marshal should be nil");
+        let data2 = c
+            .marshal()
+            .expect(format!("marshal {} error", name).as_str());
 
         assert_eq!(
             data1, data2,

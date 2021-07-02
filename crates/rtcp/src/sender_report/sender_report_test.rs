@@ -112,8 +112,8 @@ fn test_sender_report_unmarshal() {
         ),
     ];
 
-    for (name, data, want, want_error) in tests {
-        let got = SenderReport::unmarshal(&data);
+    for (name, mut data, want, want_error) in tests {
+        let got = SenderReport::unmarshal(&mut data);
 
         assert_eq!(
             got.is_err(),
@@ -252,9 +252,9 @@ fn test_sender_report_roundtrip() {
                 err,
             );
         } else {
-            let data = got.ok().unwrap();
+            let mut data = got.ok().unwrap();
             let actual =
-                SenderReport::unmarshal(&data).expect(format!("Unmarshal {}", name).as_str());
+                SenderReport::unmarshal(&mut data).expect(format!("Unmarshal {}", name).as_str());
 
             assert_eq!(
                 actual, want,
