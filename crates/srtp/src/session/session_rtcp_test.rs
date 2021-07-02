@@ -1,15 +1,14 @@
 use super::*;
 use crate::protection_profile::*;
 
-use rtcp::packet::Packet;
 use rtcp::payload_feedbacks::*;
 use util::conn::conn_pipe::*;
 
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 
-async fn build_session_srtcp_pair() -> Result<(Session, Session), Error> {
+async fn build_session_srtcp_pair() -> Result<(Session, Session)> {
     let (ua, ub) = pipe();
 
     let ca = Config {
@@ -73,7 +72,7 @@ async fn build_session_srtcp_pair() -> Result<(Session, Session), Error> {
 const TEST_SSRC: u32 = 5000;
 
 #[tokio::test]
-async fn test_session_srtcp_accept() -> Result<(), Error> {
+async fn test_session_srtcp_accept() -> Result<()> {
     let (mut sa, mut sb) = build_session_srtcp_pair().await?;
 
     let rtcp_packet = picture_loss_indication::PictureLossIndication {
@@ -111,7 +110,7 @@ async fn test_session_srtcp_accept() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_session_srtcp_listen() -> Result<(), Error> {
+async fn test_session_srtcp_listen() -> Result<()> {
     let (mut sa, mut sb) = build_session_srtcp_pair().await?;
 
     let rtcp_packet = picture_loss_indication::PictureLossIndication {
@@ -142,7 +141,7 @@ async fn test_session_srtcp_listen() -> Result<(), Error> {
     Ok(())
 }
 
-fn encrypt_srtcp(context: &mut Context, pkt: &dyn rtcp::packet::Packet) -> Result<Bytes, Error> {
+fn encrypt_srtcp(context: &mut Context, pkt: &dyn rtcp::packet::Packet) -> Result<Bytes> {
     let decrypted = pkt.marshal()?;
     let encrypted = context.encrypt_rtcp(&decrypted)?;
     Ok(encrypted)
@@ -150,21 +149,21 @@ fn encrypt_srtcp(context: &mut Context, pkt: &dyn rtcp::packet::Packet) -> Resul
 
 const PLI_PACKET_SIZE: usize = 8;
 
-async fn get_sender_ssrc(read_stream: &mut Stream) -> Result<u32, Error> {
+async fn get_sender_ssrc(read_stream: &mut Stream) -> Result<u32> {
     let auth_tag_size = ProtectionProfile::Aes128CmHmacSha1_80.auth_tag_len();
 
     let mut read_buffer = BytesMut::with_capacity(PLI_PACKET_SIZE + auth_tag_size);
     read_buffer.resize(PLI_PACKET_SIZE + auth_tag_size, 0u8);
 
     let (n, _) = read_stream.read_rtcp(&mut read_buffer).await?;
-    let reader = Bytes::from(read_buffer[0..n].to_vec()); //TODO: how to avoid this memory allocation
-    let pli = picture_loss_indication::PictureLossIndication::unmarshal(&reader)?;
+    let mut reader = &read_buffer[0..n];
+    let pli = picture_loss_indication::PictureLossIndication::unmarshal(&mut reader)?;
 
     Ok(pli.sender_ssrc)
 }
 
 #[tokio::test]
-async fn test_session_srtcp_replay_protection() -> Result<(), Error> {
+async fn test_session_srtcp_replay_protection() -> Result<()> {
     let (mut sa, mut sb) = build_session_srtcp_pair().await?;
 
     let mut read_stream = sb.listen(TEST_SSRC).await?;

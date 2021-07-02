@@ -10,9 +10,9 @@ use crate::{
     option::*, protection_profile::*,
 };
 
-use util::replay_detector::*;
-
+use anyhow::Result;
 use std::collections::HashMap;
+use util::replay_detector::*;
 
 pub mod srtcp;
 pub mod srtp;
@@ -119,14 +119,14 @@ impl Context {
         profile: ProtectionProfile,
         srtp_ctx_opt: Option<ContextOption>,
         srtcp_ctx_opt: Option<ContextOption>,
-    ) -> Result<Context, Error> {
+    ) -> Result<Context> {
         let key_len = profile.key_len();
         let salt_len = profile.salt_len();
 
         if master_key.len() != key_len {
-            return Err(Error::SrtpMasterKeyLength(key_len, master_key.len()));
+            return Err(Error::SrtpMasterKeyLength(key_len, master_key.len()).into());
         } else if master_salt.len() != salt_len {
-            return Err(Error::SrtpSaltLength(salt_len, master_salt.len()));
+            return Err(Error::SrtpSaltLength(salt_len, master_salt.len()).into());
         }
 
         let cipher: Box<dyn Cipher + Send> = match profile {

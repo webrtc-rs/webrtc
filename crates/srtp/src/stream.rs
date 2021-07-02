@@ -1,8 +1,7 @@
 use crate::error::Error;
-use rtp::packetizer::Marshaller;
-use util::Buffer;
+use util::{marshal::*, Buffer};
 
-use bytes::{Bytes, BytesMut};
+use anyhow::Result;
 use tokio::sync::mpsc;
 
 /// Limit the buffer size to 1MB
@@ -55,44 +54,38 @@ impl Stream {
     }
 
     /// Read reads and decrypts full RTP packet from the nextConn
-    pub async fn read(&mut self, buf: &mut BytesMut) -> Result<usize, Error> {
+    pub async fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         Ok(self.buffer.read(buf, None).await?)
     }
 
     /// ReadRTP reads and decrypts full RTP packet and its header from the nextConn
-    pub async fn read_rtp(
-        &mut self,
-        buf: &mut BytesMut,
-    ) -> Result<(usize, rtp::header::Header), Error> {
+    pub async fn read_rtp(&mut self, buf: &mut [u8]) -> Result<(usize, rtp::header::Header)> {
         if !self.is_rtp {
-            return Err(Error::InvalidRtpStream);
+            return Err(Error::InvalidRtpStream.into());
         }
 
         let n = self.buffer.read(buf, None).await?;
-        let b = Bytes::from(buf[..n].to_vec()); //TODO: how to avoid this memory allocation
-        let header = rtp::header::Header::unmarshal(&b)?;
+        let mut b = &buf[..n];
+        let header = rtp::header::Header::unmarshal(&mut b)?;
 
         Ok((n, header))
     }
 
     /// ReadRTCP reads and decrypts full RTP packet and its header from the nextConn
-    pub async fn read_rtcp(
-        &mut self,
-        buf: &mut BytesMut,
-    ) -> Result<(usize, rtcp::header::Header), Error> {
+    pub async fn read_rtcp(&mut self, buf: &mut [u8]) -> Result<(usize, rtcp::header::Header)> {
         if self.is_rtp {
-            return Err(Error::InvalidRtcpStream);
+            return Err(Error::InvalidRtcpStream.into());
         }
 
         let n = self.buffer.read(buf, None).await?;
-        let b = Bytes::from(buf[..n].to_vec()); //TODO: how to avoid this memory allocation
-        let header = rtcp::header::Header::unmarshal(&b)?;
+        let mut b = &buf[..n];
+        let header = rtcp::header::Header::unmarshal(&mut b)?;
 
         Ok((n, header))
     }
 
     /// Close removes the ReadStream from the session and cleans up any associated state
-    pub async fn close(&mut self) -> Result<(), Error> {
+    pub async fn close(&mut self) -> Result<()> {
         self.buffer.close().await;
         self.tx.send(self.ssrc).await?;
 

@@ -1,14 +1,14 @@
 use super::*;
 use crate::protection_profile::*;
 
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use std::{collections::HashMap, sync::Arc};
 use tokio::{
     net::UdpSocket,
     sync::{mpsc, Mutex},
 };
 
-async fn build_session_srtp_pair() -> Result<(Session, Session), Error> {
+async fn build_session_srtp_pair() -> Result<(Session, Session)> {
     let ua = UdpSocket::bind("127.0.0.1:0").await?;
     let ub = UdpSocket::bind("127.0.0.1:0").await?;
 
@@ -77,7 +77,7 @@ const TEST_SSRC: u32 = 5000;
 const RTP_HEADER_SIZE: usize = 12;
 
 #[tokio::test]
-async fn test_session_srtp_accept() -> Result<(), Error> {
+async fn test_session_srtp_accept() -> Result<()> {
     let test_payload = Bytes::from_static(&[0x00, 0x01, 0x03, 0x04]);
     let mut read_buffer = BytesMut::with_capacity(RTP_HEADER_SIZE + test_payload.len());
     read_buffer.resize(RTP_HEADER_SIZE + test_payload.len(), 0u8);
@@ -117,7 +117,7 @@ async fn test_session_srtp_accept() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_session_srtp_listen() -> Result<(), Error> {
+async fn test_session_srtp_listen() -> Result<()> {
     let test_payload = Bytes::from_static(&[0x00, 0x01, 0x03, 0x04]);
     let mut read_buffer = BytesMut::with_capacity(RTP_HEADER_SIZE + test_payload.len());
     read_buffer.resize(RTP_HEADER_SIZE + test_payload.len(), 0u8);
@@ -152,7 +152,7 @@ async fn test_session_srtp_listen() -> Result<(), Error> {
 }
 
 #[tokio::test]
-async fn test_session_srtp_multi_ssrc() -> Result<(), Error> {
+async fn test_session_srtp_multi_ssrc() -> Result<()> {
     let ssrcs = vec![5000, 5001, 5002];
     let test_payload = Bytes::from_static(&[0x00, 0x01, 0x03, 0x04]);
     let mut read_buffer = BytesMut::with_capacity(RTP_HEADER_SIZE + test_payload.len());
@@ -196,7 +196,7 @@ async fn test_session_srtp_multi_ssrc() -> Result<(), Error> {
     Ok(())
 }
 
-fn encrypt_srtp(context: &mut Context, pkt: &rtp::packet::Packet) -> Result<Bytes, Error> {
+fn encrypt_srtp(context: &mut Context, pkt: &rtp::packet::Packet) -> Result<Bytes> {
     let decrypted = pkt.marshal()?;
     let encrypted = context.encrypt_rtp(&decrypted)?;
     Ok(encrypted)
@@ -206,7 +206,7 @@ async fn payload_srtp(
     read_stream: &mut Stream,
     header_size: usize,
     expected_payload: &[u8],
-) -> Result<u16, Error> {
+) -> Result<u16> {
     let mut read_buffer = BytesMut::with_capacity(header_size + expected_payload.len());
     read_buffer.resize(header_size + expected_payload.len(), 0u8);
 
@@ -224,7 +224,7 @@ async fn payload_srtp(
 }
 
 #[tokio::test]
-async fn test_session_srtp_replay_protection() -> Result<(), Error> {
+async fn test_session_srtp_replay_protection() -> Result<()> {
     let test_payload = Bytes::from_static(&[0x00, 0x01, 0x03, 0x04]);
 
     let (mut sa, mut sb) = build_session_srtp_pair().await?;

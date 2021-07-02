@@ -8,7 +8,7 @@ const CIPHER_CONTEXT_ALGO: ProtectionProfile = ProtectionProfile::Aes128CmHmacSh
 const DEFAULT_SSRC: u32 = 0;
 
 #[test]
-fn test_context_roc() -> Result<(), Error> {
+fn test_context_roc() -> Result<()> {
     let key_len = CIPHER_CONTEXT_ALGO.key_len();
     let salt_len = CIPHER_CONTEXT_ALGO.salt_len();
 
@@ -35,7 +35,7 @@ fn test_context_roc() -> Result<(), Error> {
 }
 
 #[test]
-fn test_context_index() -> Result<(), Error> {
+fn test_context_index() -> Result<()> {
     let key_len = CIPHER_CONTEXT_ALGO.key_len();
     let salt_len = CIPHER_CONTEXT_ALGO.salt_len();
 
@@ -62,7 +62,7 @@ fn test_context_index() -> Result<(), Error> {
 }
 
 #[test]
-fn test_key_len() -> Result<(), Error> {
+fn test_key_len() -> Result<()> {
     let key_len = CIPHER_CONTEXT_ALGO.key_len();
     let salt_len = CIPHER_CONTEXT_ALGO.salt_len();
 
@@ -88,7 +88,7 @@ fn test_key_len() -> Result<(), Error> {
 }
 
 #[test]
-fn test_valid_packet_counter() -> Result<(), Error> {
+fn test_valid_packet_counter() -> Result<()> {
     let master_key = vec![
         0x0d, 0xcd, 0x21, 0x3e, 0x4c, 0xbc, 0xf2, 0x8f, 0x01, 0x7f, 0x69, 0x94, 0x40, 0x1e, 0x28,
         0x89,
@@ -124,7 +124,7 @@ fn test_valid_packet_counter() -> Result<(), Error> {
 }
 
 #[test]
-fn test_rollover_count() -> Result<(), Error> {
+fn test_rollover_count() -> Result<()> {
     let mut s = SrtpSsrcState {
         ssrc: DEFAULT_SSRC,
         ..Default::default()

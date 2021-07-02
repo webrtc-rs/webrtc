@@ -1,8 +1,7 @@
 pub mod cipher_aead_aes_gcm;
 pub mod cipher_aes_cm_hmac_sha1;
 
-use crate::error::Error;
-
+use anyhow::Result;
 use bytes::Bytes;
 
 ///NOTE: Auth tag and AEAD auth tag are placed at the different position in SRTCP
@@ -35,37 +34,27 @@ pub(crate) trait Cipher {
     fn auth_tag_len(&self) -> usize;
 
     /// Retrieved RTCP index.
-    fn get_rtcp_index(&self, input: &Bytes) -> usize;
+    fn get_rtcp_index(&self, input: &[u8]) -> usize;
 
     /// Encrypt RTP payload.
     fn encrypt_rtp(
         &mut self,
-        payload: &Bytes,
+        payload: &[u8],
         header: &rtp::header::Header,
         roc: u32,
-    ) -> Result<Bytes, Error>;
+    ) -> Result<Bytes>;
 
-    /// Decrypt RTP encrypted payload.
+    /// Decrypt RTP payload.
     fn decrypt_rtp(
         &mut self,
-        encrypted: &Bytes,
+        payload: &[u8],
         header: &rtp::header::Header,
         roc: u32,
-    ) -> Result<Bytes, Error>;
+    ) -> Result<Bytes>;
 
     /// Encrypt RTCP payload.
-    fn encrypt_rtcp(
-        &mut self,
-        decrypted: &Bytes,
-        srtcp_index: usize,
-        ssrc: u32,
-    ) -> Result<Bytes, Error>;
+    fn encrypt_rtcp(&mut self, payload: &[u8], srtcp_index: usize, ssrc: u32) -> Result<Bytes>;
 
-    /// Decrypt RTCP encrypted payload.
-    fn decrypt_rtcp(
-        &mut self,
-        encrypted: &Bytes,
-        srtcp_index: usize,
-        ssrc: u32,
-    ) -> Result<Bytes, Error>;
+    /// Decrypt RTCP payload.
+    fn decrypt_rtcp(&mut self, payload: &[u8], srtcp_index: usize, ssrc: u32) -> Result<Bytes>;
 }

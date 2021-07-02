@@ -1,6 +1,5 @@
 use super::*;
-
-use rtp::packetizer::Marshaller;
+use util::marshal::*;
 
 use bytes::Bytes;
 use lazy_static::lazy_static;
@@ -58,7 +57,7 @@ lazy_static! {
     ];
 }
 
-fn build_test_context() -> Result<Context, Error> {
+fn build_test_context() -> Result<Context> {
     let master_key = Bytes::from_static(&[
         0x0d, 0xcd, 0x21, 0x3e, 0x4c, 0xbc, 0xf2, 0x8f, 0x01, 0x7f, 0x69, 0x94, 0x40, 0x1e, 0x28,
         0x89,
@@ -77,7 +76,7 @@ fn build_test_context() -> Result<Context, Error> {
 }
 
 #[test]
-fn test_rtp_invalid_auth() -> Result<(), Error> {
+fn test_rtp_invalid_auth() -> Result<()> {
     let master_key = Bytes::from_static(&[
         0x0d, 0xcd, 0x21, 0x3e, 0x4c, 0xbc, 0xf2, 0x8f, 0x01, 0x7f, 0x69, 0x94, 0x40, 0x1e, 0x28,
         0x89,
@@ -119,7 +118,7 @@ fn test_rtp_invalid_auth() -> Result<(), Error> {
 }
 
 #[test]
-fn test_rtp_lifecyle() -> Result<(), Error> {
+fn test_rtp_lifecyle() -> Result<()> {
     let mut encrypt_context = build_test_context()?;
     let mut decrypt_context = build_test_context()?;
     let auth_tag_len = ProtectionProfile::Aes128CmHmacSha1_80.auth_tag_len();

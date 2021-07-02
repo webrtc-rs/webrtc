@@ -1,19 +1,9 @@
-use crate::{error::Error, option::*, protection_profile::*};
+use crate::{option::*, protection_profile::*};
+use util::KeyingMaterialExporter;
 
-use async_trait::async_trait;
+use anyhow::Result;
 
 const LABEL_EXTRACTOR_DTLS_SRTP: &str = "EXTRACTOR-dtls_srtp";
-
-/// KeyingMaterialExporter allows package SRTP to extract keying material
-#[async_trait]
-pub trait KeyingMaterialExporter {
-    async fn export_keying_material(
-        &self,
-        label: &str,
-        context: &[u8],
-        length: usize,
-    ) -> Result<Vec<u8>, Error>;
-}
 
 /// SessionKeys bundles the keys required to setup an SRTP session
 #[derive(Default, Debug, Clone)]
@@ -51,7 +41,7 @@ impl Config {
         &mut self,
         exporter: impl KeyingMaterialExporter,
         is_client: bool,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let key_len = self.profile.key_len();
         let salt_len = self.profile.salt_len();
 

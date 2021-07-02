@@ -1,18 +1,17 @@
 use super::Cipher;
 use crate::{error::Error, key_derivation::*, protection_profile::*};
+use util::marshal::*;
 
 use aes::cipher::generic_array::GenericArray;
+use anyhow::Result;
 use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
+use bytes::{BufMut, Bytes, BytesMut};
 use ctr::cipher::stream::{NewStreamCipher, StreamCipher};
 use hmac::NewMac;
 use hmac::{Hmac, Mac};
 use sha1::Sha1;
-use subtle::ConstantTimeEq;
-
-use bytes::{BufMut, Bytes, BytesMut};
-use rtp::packetizer::Marshaller;
-
 use std::io::BufWriter;
+use subtle::ConstantTimeEq;
 
 type HmacSha1 = Hmac<Sha1>;
 type Aes128Ctr = ctr::Ctr128<aes::Aes128>;
@@ -31,7 +30,7 @@ pub(crate) struct CipherAesCmHmacSha1 {
 }
 
 impl CipherAesCmHmacSha1 {
-    pub fn new(master_key: &[u8], master_salt: &[u8]) -> Result<Self, Error> {
+    pub fn new(master_key: &[u8], master_salt: &[u8]) -> Result<Self> {
         let srtp_session_key = aes_cm_key_derivation(
             LABEL_SRTP_ENCRYPTION,
             master_key,
@@ -108,7 +107,7 @@ impl CipherAesCmHmacSha1 {
     /// - Authenticated portion of the packet is everything BEFORE MKI
     /// - k_a is the session message authentication key
     /// - n_tag is the bit-length of the output authentication tag
-    fn generate_srtp_auth_tag(&mut self, buf: &[u8], roc: u32) -> Result<Vec<u8>, Error> {
+    fn generate_srtp_auth_tag(&mut self, buf: &[u8], roc: u32) -> Result<Vec<u8>> {
         self.srtp_session_auth.reset();
 
         self.srtp_session_auth.update(buf);
@@ -158,7 +157,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         CIPHER_AES_CM_HMAC_SHA1AUTH_TAG_LEN
     }
 
-    fn get_rtcp_index(&self, input: &Bytes) -> usize {
+    fn get_rtcp_index(&self, input: &[u8]) -> usize {
         let tail_offset = input.len() - (self.auth_tag_len() + SRTCP_INDEX_SIZE);
         (BigEndian::read_u32(&input[tail_offset..tail_offset + SRTCP_INDEX_SIZE]) & !(1 << 31))
             as usize
@@ -166,15 +165,16 @@ impl Cipher for CipherAesCmHmacSha1 {
 
     fn encrypt_rtp(
         &mut self,
-        payload: &Bytes,
+        payload: &[u8],
         header: &rtp::header::Header,
         roc: u32,
-    ) -> Result<Bytes, Error> {
+    ) -> Result<Bytes> {
         let mut writer =
             BytesMut::with_capacity(header.marshal_size() + payload.len() + self.auth_tag_len());
 
         // Copy the header unencrypted.
-        header.marshal_to(&mut writer)?;
+        let data = header.marshal()?;
+        writer.extend(data);
 
         // Write the plaintext header to the destination buffer.
         writer.extend_from_slice(payload);
@@ -201,12 +201,12 @@ impl Cipher for CipherAesCmHmacSha1 {
 
     fn decrypt_rtp(
         &mut self,
-        encrypted: &Bytes,
+        encrypted: &[u8],
         header: &rtp::header::Header,
         roc: u32,
-    ) -> Result<Bytes, Error> {
+    ) -> Result<Bytes> {
         if encrypted.len() < self.auth_tag_len() {
-            return Err(Error::SrtpTooSmall(encrypted.len(), self.auth_tag_len()));
+            return Err(Error::SrtpTooSmall(encrypted.len(), self.auth_tag_len()).into());
         }
 
         let mut writer = BytesMut::with_capacity(encrypted.len() - self.auth_tag_len());
@@ -221,7 +221,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         // See if the auth tag actually matches.
         // We use a constant time comparison to prevent timing attacks.
         if actual_tag.ct_eq(&expected_tag).unwrap_u8() != 1 {
-            return Err(Error::RtpFailedToVerifyAuthTag);
+            return Err(Error::RtpFailedToVerifyAuthTag.into());
         }
 
         // Write cipher_text to the destination buffer.
@@ -244,12 +244,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         Ok(writer.freeze())
     }
 
-    fn encrypt_rtcp(
-        &mut self,
-        decrypted: &Bytes,
-        srtcp_index: usize,
-        ssrc: u32,
-    ) -> Result<Bytes, Error> {
+    fn encrypt_rtcp(&mut self, decrypted: &[u8], srtcp_index: usize, ssrc: u32) -> Result<Bytes> {
         let mut writer =
             BytesMut::with_capacity(decrypted.len() + SRTCP_INDEX_SIZE + self.auth_tag_len());
 
@@ -280,17 +275,13 @@ impl Cipher for CipherAesCmHmacSha1 {
         Ok(writer.freeze())
     }
 
-    fn decrypt_rtcp(
-        &mut self,
-        encrypted: &Bytes,
-        srtcp_index: usize,
-        ssrc: u32,
-    ) -> Result<Bytes, Error> {
+    fn decrypt_rtcp(&mut self, encrypted: &[u8], srtcp_index: usize, ssrc: u32) -> Result<Bytes> {
         if encrypted.len() < self.auth_tag_len() + SRTCP_INDEX_SIZE {
             return Err(Error::SrtcpTooSmall(
                 encrypted.len(),
                 self.auth_tag_len() + SRTCP_INDEX_SIZE,
-            ));
+            )
+            .into());
         }
 
         let tail_offset = encrypted.len() - (self.auth_tag_len() + SRTCP_INDEX_SIZE);
@@ -314,7 +305,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         // See if the auth tag actually matches.
         // We use a constant time comparison to prevent timing attacks.
         if actual_tag.ct_eq(&expected_tag).unwrap_u8() != 1 {
-            return Err(Error::RtcpFailedToVerifyAuthTag);
+            return Err(Error::RtcpFailedToVerifyAuthTag.into());
         }
 
         let counter = generate_counter(

@@ -2,9 +2,9 @@ use aes::cipher::generic_array::GenericArray;
 use aes::cipher::{BlockCipher, NewBlockCipher};
 use aes::Aes128;
 
-use std::io::BufWriter;
-
+use anyhow::Result;
 use byteorder::{BigEndian, WriteBytesExt};
+use std::io::BufWriter;
 
 use crate::error::Error;
 
@@ -23,10 +23,10 @@ pub(crate) fn aes_cm_key_derivation(
     master_salt: &[u8],
     index_over_kdr: usize,
     out_len: usize,
-) -> Result<Vec<u8>, Error> {
+) -> Result<Vec<u8>> {
     if index_over_kdr != 0 {
         // 24-bit "index DIV kdr" must be xored to prf input.
-        return Err(Error::UnsupportedIndexOverKdr);
+        return Err(Error::UnsupportedIndexOverKdr.into());
     }
 
     // https://tools.ietf.org/html/rfc3711#appendix-B.3
@@ -75,7 +75,7 @@ pub(crate) fn generate_counter(
     rollover_counter: u32,
     ssrc: u32,
     session_salt: &[u8],
-) -> Result<Vec<u8>, Error> {
+) -> Result<Vec<u8>> {
     assert!(session_salt.len() <= 16);
 
     let mut counter: Vec<u8> = vec![0; 16];
@@ -99,7 +99,7 @@ mod test {
     use crate::protection_profile::*;
 
     #[test]
-    fn test_valid_session_keys() -> Result<(), Error> {
+    fn test_valid_session_keys() -> Result<()> {
         // Key Derivation Test Vectors from https://tools.ietf.org/html/rfc3711#appendix-B.3
         let master_key = vec![
             0xE1, 0xF9, 0x7A, 0x0D, 0x3E, 0x01, 0x8B, 0xE0, 0xD6, 0x4F, 0xA3, 0x2C, 0x06, 0xDE,
@@ -168,7 +168,7 @@ mod test {
     // This test asserts that calling aesCmKeyDerivation with a non-zero indexOverKdr fails
     // Currently this isn't supported, but the API makes sure we can add this in the future
     #[test]
-    fn test_index_over_kdr() -> Result<(), Error> {
+    fn test_index_over_kdr() -> Result<()> {
         let result = aes_cm_key_derivation(LABEL_SRTP_AUTHENTICATION_TAG, &[], &[], 1, 0);
         assert!(result.is_err());
 

@@ -4,11 +4,10 @@ mod session_rtcp_test;
 mod session_rtp_test;
 
 use crate::{config::*, context::*, error::Error, option::*, stream::*};
+use util::{buffer::*, conn::Conn, marshal::*};
 
-use rtp::packetizer::Marshaller;
-use util::{buffer::*, conn::Conn};
-
-use bytes::{Bytes, BytesMut};
+use anyhow::Result;
+use bytes::Bytes;
 use std::collections::hash_map::Entry;
 use std::{
     collections::HashMap,
@@ -39,7 +38,7 @@ impl Session {
         conn: Arc<dyn Conn + Send + Sync>,
         config: Config,
         is_rtp: bool,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self> {
         let local_context = Context::new(
             &config.keys.local_master_key,
             &config.keys.local_master_salt,
@@ -78,8 +77,7 @@ impl Session {
         let cloned_close_stream_tx = close_stream_tx.clone();
 
         tokio::spawn(async move {
-            let mut buf = BytesMut::with_capacity(8192);
-            buf.resize(8192, 0u8);
+            let mut buf = vec![0u8; 8192];
 
             loop {
                 let incoming_stream = Session::incoming(
@@ -125,29 +123,29 @@ impl Session {
 
     async fn incoming(
         udp_rx: &Arc<dyn Conn + Send + Sync>,
-        buf: &mut BytesMut,
+        buf: &mut [u8],
         streams_map: &Arc<Mutex<HashMap<u32, Buffer>>>,
         close_stream_tx: &mpsc::Sender<u32>,
         new_stream_tx: &mut mpsc::Sender<Stream>,
         remote_context: &mut Context,
         is_rtp: bool,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let n = udp_rx.recv(buf).await?;
         if n == 0 {
-            return Err(Error::SessionEof);
+            return Err(Error::SessionEof.into());
         }
 
-        let encrypted = Bytes::from(buf[0..n].to_vec()); //TODO: how to avoid this memory allocation
         let decrypted = if is_rtp {
-            remote_context.decrypt_rtp(&encrypted)?
+            remote_context.decrypt_rtp(&buf[0..n])?
         } else {
-            remote_context.decrypt_rtcp(&encrypted)?
+            remote_context.decrypt_rtcp(&buf[0..n])?
         };
 
+        let mut buf = &decrypted[..];
         let ssrcs = if is_rtp {
-            vec![rtp::header::Header::unmarshal(&decrypted)?.ssrc]
+            vec![rtp::header::Header::unmarshal(&mut buf)?.ssrc]
         } else {
-            rtcp::packet::unmarshal(&decrypted)?.destination_ssrc()
+            rtcp::packet::unmarshal(&mut buf)?.destination_ssrc()
         };
 
         let mut streams = streams_map.lock().await;
@@ -163,8 +161,8 @@ impl Session {
                 Ok(_) => {}
                 Err(err) => {
                     // Silently drop data when the buffer is full.
-                    if err != ERR_BUFFER_FULL.clone() {
-                        return Err(Error::UtilError(err));
+                    if !util::buffer::error::Error::ErrBufferFull.equal(&err) {
+                        return Err(err);
                     }
                 }
             }
@@ -175,7 +173,7 @@ impl Session {
 
     /// listen on the given SSRC to create a stream, it can be used
     /// if you want a certain SSRC, but don't want to wait for Accept
-    pub async fn listen(&mut self, ssrc: u32) -> Result<Stream, Error> {
+    pub async fn listen(&mut self, ssrc: u32) -> Result<Stream> {
         let mut streams = self.streams_map.lock().await;
 
         if let Entry::Vacant(e) = streams.entry(ssrc) {
@@ -184,29 +182,29 @@ impl Session {
 
             Ok(stream)
         } else {
-            Err(Error::StreamWithSsrcExists(ssrc))
+            Err(Error::StreamWithSsrcExists(ssrc).into())
         }
     }
 
     /// accept returns a stream to handle RTCP for a single SSRC
-    pub async fn accept(&mut self) -> Result<Stream, Error> {
+    pub async fn accept(&mut self) -> Result<Stream> {
         let result = self.new_stream_rx.recv().await;
         if let Some(stream) = result {
             Ok(stream)
         } else {
-            Err(Error::SessionSrtpAlreadyClosed)
+            Err(Error::SessionSrtpAlreadyClosed.into())
         }
     }
 
-    pub async fn close(&mut self) -> Result<(), Error> {
+    pub async fn close(&mut self) -> Result<()> {
         self.close_session_tx.send(()).await?;
 
         Ok(())
     }
 
-    pub async fn write(&mut self, buf: &Bytes, is_rtp: bool) -> Result<usize, Error> {
+    pub async fn write(&mut self, buf: &Bytes, is_rtp: bool) -> Result<usize> {
         if self.is_rtp != is_rtp {
-            return Err(Error::SessionRtpRtcpTypeMismatch);
+            return Err(Error::SessionRtpRtcpTypeMismatch.into());
         }
 
         let mut local_context = self.local_context.lock().await;
@@ -219,16 +217,16 @@ impl Session {
 
         match self.udp_tx.send(&encrypted).await {
             Ok(n) => Ok(n),
-            Err(err) => Err(err.into()),
+            Err(err) => Err(err),
         }
     }
 
-    pub async fn write_rtp(&mut self, packet: &rtp::packet::Packet) -> Result<usize, Error> {
+    pub async fn write_rtp(&mut self, packet: &rtp::packet::Packet) -> Result<usize> {
         let raw = packet.marshal()?;
         self.write(&raw, true).await
     }
 
-    pub async fn write_rtcp(&mut self, packet: &dyn rtcp::packet::Packet) -> Result<usize, Error> {
+    pub async fn write_rtcp(&mut self, packet: &dyn rtcp::packet::Packet) -> Result<usize> {
         let raw = packet.marshal()?;
         self.write(&raw, false).await
     }

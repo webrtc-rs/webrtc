@@ -1,8 +1,6 @@
-use crate::stream::Stream;
-
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Error, Debug, PartialEq)]
 pub enum Error {
     #[error("duplicated packet")]
     ErrDuplicated,
@@ -73,25 +71,14 @@ pub enum Error {
     InvalidRtpStream,
     #[error("this stream is not a RTCPStream")]
     InvalidRtcpStream,
-    #[error("UtilError: {0}")]
-    UtilError(#[from] util::error::Error),
-    #[error("RtpError: {0}")]
-    RtpError(#[from] rtp::error::Error),
-    #[error("RtcpError: {0}")]
-    RtcpError(#[from] rtcp::error::Error),
-    #[error("IoError: {0}")]
-    Io(#[from] std::io::Error),
-    #[error("AesGcm: {0}")]
-    AesGcm(#[from] aes_gcm::Error),
-    #[error("InvalidKeyLength: {0}")]
-    InvalidKeyLength(#[from] hmac::crypto_mac::InvalidKeyLength),
-    #[error("SendError: {0}")]
-    SendUnit(#[from] tokio::sync::mpsc::error::SendError<()>),
-    #[error("SendError: {0}")]
-    SendU32(#[from] tokio::sync::mpsc::error::SendError<u32>),
-    #[error("SendError: {0}")]
-    SendStream(#[from] tokio::sync::mpsc::error::SendError<Stream>),
 
-    #[error("Other errors: {0}")]
-    ErrOthers(String),
+    #[allow(non_camel_case_types)]
+    #[error("{0}")]
+    new(String),
+}
+
+impl Error {
+    pub fn equal(&self, err: &anyhow::Error) -> bool {
+        err.downcast_ref::<Self>().map_or(false, |e| e == self)
+    }
 }

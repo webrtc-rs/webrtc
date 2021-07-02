@@ -94,7 +94,7 @@ lazy_static! {
 }
 
 #[test]
-fn test_rtcp_lifecycle() -> Result<(), Error> {
+fn test_rtcp_lifecycle() -> Result<()> {
     let mut encrypt_context = Context::new(
         &RTCP_TEST_MASTER_KEY,
         &RTCP_TEST_MASTER_SALT,
@@ -129,7 +129,7 @@ fn test_rtcp_lifecycle() -> Result<(), Error> {
 }
 
 #[test]
-fn test_rtcp_invalid_auth_tag() -> Result<(), Error> {
+fn test_rtcp_invalid_auth_tag() -> Result<()> {
     let auth_tag_len = ProtectionProfile::Aes128CmHmacSha1_80.auth_tag_len();
 
     let mut decrypt_context = Context::new(
@@ -162,7 +162,7 @@ fn test_rtcp_invalid_auth_tag() -> Result<(), Error> {
 }
 
 #[test]
-fn test_rtcp_replay_detector_separation() -> Result<(), Error> {
+fn test_rtcp_replay_detector_separation() -> Result<()> {
     let mut decrypt_context = Context::new(
         &RTCP_TEST_MASTER_KEY,
         &RTCP_TEST_MASTER_SALT,
@@ -208,7 +208,7 @@ fn get_rtcp_index(encrypted: &Bytes, auth_tag_len: usize) -> u32 {
 }
 
 #[test]
-fn test_encrypt_rtcp_separation() -> Result<(), Error> {
+fn test_encrypt_rtcp_separation() -> Result<()> {
     let mut encrypt_context = Context::new(
         &RTCP_TEST_MASTER_KEY,
         &RTCP_TEST_MASTER_SALT,
