@@ -1,4 +1,5 @@
 use super::*;
+use bytes::Bytes;
 
 #[test]
 fn test_picture_loss_indication_unmarshal() {
@@ -52,8 +53,8 @@ fn test_picture_loss_indication_unmarshal() {
         ),
     ];
 
-    for (name, data, want, want_error) in tests {
-        let got = PictureLossIndication::unmarshal(&data);
+    for (name, mut data, want, want_error) in tests {
+        let got = PictureLossIndication::unmarshal(&mut data);
 
         assert_eq!(
             got.is_err(),
@@ -127,8 +128,8 @@ fn test_picture_loss_indication_roundtrip() {
                 err,
             );
         } else {
-            let data = got.ok().unwrap();
-            let actual = PictureLossIndication::unmarshal(&data)
+            let mut data = got.ok().unwrap();
+            let actual = PictureLossIndication::unmarshal(&mut data)
                 .expect(format!("Unmarshal {}", name).as_str());
 
             assert_eq!(
@@ -157,8 +158,8 @@ fn test_picture_loss_indication_unmarshal_header() -> Result<()> {
         },
     )];
 
-    for (name, bytes, header) in tests {
-        let pli = PictureLossIndication::unmarshal(&bytes)?;
+    for (name, mut data, header) in tests {
+        let pli = PictureLossIndication::unmarshal(&mut data)?;
 
         assert_eq!(
             pli.header(),
