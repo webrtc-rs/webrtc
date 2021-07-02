@@ -25,8 +25,9 @@ pub trait Marshal: MarshalSize {
     }
 }
 
-pub trait Unmarshal: Sized + MarshalSize {
+pub trait Unmarshal: MarshalSize {
     fn unmarshal<B>(buf: &mut B) -> Result<Self>
     where
+        Self: Sized,
         B: Buf;
 }
