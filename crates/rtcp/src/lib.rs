@@ -40,7 +40,7 @@
 //!     let pli_data = pkt.marshal().unwrap();
 //!     // ...
 
-//pub mod compound_packet;
+pub mod compound_packet;
 pub mod error;
 pub mod goodbye;
 pub mod header;

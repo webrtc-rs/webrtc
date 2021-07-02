@@ -1,44 +1,51 @@
-/*use crate::{
-    compound_packet::*, error::Error, goodbye::*, header::*,
-    payload_feedbacks::full_intra_request::*, payload_feedbacks::picture_loss_indication::*,
-    payload_feedbacks::receiver_estimated_maximum_bitrate::*,
-    payload_feedbacks::slice_loss_indication::*, raw_packet::*, receiver_report::*,
-    sender_report::*, source_description::*,
-    transport_feedbacks::rapid_resynchronization_request::*,
-    transport_feedbacks::transport_layer_cc::*, transport_feedbacks::transport_layer_nack::*,
-};*/
-use crate::header::Header;
+use crate::{
+    compound_packet::*,
+    error::Error,
+    goodbye::*,
+    header::*,
+    //payload_feedbacks::full_intra_request::*,
+    //payload_feedbacks::receiver_estimated_maximum_bitrate::*,
+    //payload_feedbacks::slice_loss_indication::*,
+    payload_feedbacks::picture_loss_indication::*,
+    raw_packet::*,
+    receiver_report::*,
+    sender_report::*,
+    source_description::*,
+    //transport_feedbacks::rapid_resynchronization_request::*,
+    //transport_feedbacks::transport_layer_cc::*, transport_feedbacks::transport_layer_nack::*,
+};
 use util::marshal::{Marshal, Unmarshal};
 
-//use anyhow::Result;
-//use bytes::Bytes;
+use anyhow::Result;
+use bytes::Buf;
 use std::any::Any;
 use std::fmt;
 
 /// Packet represents an RTCP packet, a protocol used for out-of-band statistics and
 /// control information for an RTP session
-pub trait Packet: Marshal + Unmarshal + PartialEq + Clone + fmt::Display + fmt::Debug {
+pub trait Packet: Marshal + Unmarshal + fmt::Display + fmt::Debug {
+    //PartialEq +  Clone +
     fn header(&self) -> Header;
     fn destination_ssrc(&self) -> Vec<u32>;
     fn raw_size(&self) -> usize;
     fn as_any(&self) -> &dyn Any;
 }
 
-/*
 /// Unmarshal takes an entire udp datagram (which may consist of multiple RTCP packets) and
 /// returns the unmarshaled packets it contains.
 ///
 /// If this is a reduced-size RTCP packet a feedback packet (Goodbye, SliceLossIndication, etc)
 /// will be returned. Otherwise, the underlying type of the returned packet will be
 /// CompoundPacket.
-pub fn unmarshal(raw_data: &Bytes) -> Result<Box<dyn Packet>> {
+pub fn unmarshal<B>(raw_data: &mut B) -> Result<Box<dyn Packet>>
+where
+    B: Buf,
+{
     let mut packets = vec![];
 
-    let mut raw_data = raw_data.clone();
-    while !raw_data.is_empty() {
-        let (p, processed) = unmarshaller(&raw_data)?;
+    while raw_data.has_remaining() {
+        let p = unmarshaller(raw_data)?;
         packets.push(p);
-        raw_data = raw_data.split_off(processed);
     }
 
     match packets.len() {
@@ -55,42 +62,45 @@ pub fn unmarshal(raw_data: &Bytes) -> Result<Box<dyn Packet>> {
 
 /// unmarshaller is a factory which pulls the first RTCP packet from a bytestream,
 /// and returns it's parsed representation, and the amount of data that was processed.
-pub(crate) fn unmarshaller(raw_data: &Bytes) -> Result<(Box<dyn Packet>, usize)> {
-    let h = Header::unmarshal(&raw_data)?;
+pub(crate) fn unmarshaller<B>(raw_data: &mut B) -> Result<Box<dyn Packet>>
+where
+    B: Buf,
+{
+    let h = Header::unmarshal(raw_data)?;
 
-    let bytes_processed = (h.length as usize + 1) * 4;
-    if bytes_processed > raw_data.len() {
+    let length = (h.length as usize) * 4;
+    if length > raw_data.remaining() {
         return Err(Error::PacketTooShort.into());
     }
 
-    let in_packet = raw_data.slice(..bytes_processed);
+    let mut in_packet = h.marshal()?.chain(raw_data.take(length));
 
     let p: Box<dyn Packet> = match h.packet_type {
-        PacketType::SenderReport => Box::new(SenderReport::unmarshal(&in_packet)?),
-        PacketType::ReceiverReport => Box::new(ReceiverReport::unmarshal(&in_packet)?),
-        PacketType::SourceDescription => Box::new(SourceDescription::unmarshal(&in_packet)?),
-        PacketType::Goodbye => Box::new(Goodbye::unmarshal(&in_packet)?),
+        PacketType::SenderReport => Box::new(SenderReport::unmarshal(&mut in_packet)?),
+        PacketType::ReceiverReport => Box::new(ReceiverReport::unmarshal(&mut in_packet)?),
+        PacketType::SourceDescription => Box::new(SourceDescription::unmarshal(&mut in_packet)?),
+        PacketType::Goodbye => Box::new(Goodbye::unmarshal(&mut in_packet)?),
 
-        PacketType::TransportSpecificFeedback => match h.count {
+        /*PacketType::TransportSpecificFeedback => match h.count {
             FORMAT_TLN => Box::new(TransportLayerNack::unmarshal(&in_packet)?),
             FORMAT_RRR => Box::new(RapidResynchronizationRequest::unmarshal(&in_packet)?),
             FORMAT_TCC => Box::new(TransportLayerCc::unmarshal(&in_packet)?),
             _ => Box::new(RawPacket::unmarshal(&in_packet)?),
-        },
-
+        },*/
         PacketType::PayloadSpecificFeedback => match h.count {
-            FORMAT_PLI => Box::new(PictureLossIndication::unmarshal(&in_packet)?),
-            FORMAT_SLI => Box::new(SliceLossIndication::unmarshal(&in_packet)?),
-            FORMAT_REMB => Box::new(ReceiverEstimatedMaximumBitrate::unmarshal(&in_packet)?),
-            FORMAT_FIR => Box::new(FullIntraRequest::unmarshal(&in_packet)?),
-            _ => Box::new(RawPacket::unmarshal(&in_packet)?),
+            FORMAT_PLI => Box::new(PictureLossIndication::unmarshal(&mut in_packet)?),
+            //FORMAT_SLI => Box::new(SliceLossIndication::unmarshal(&in_packet)?),
+            //FORMAT_REMB => Box::new(ReceiverEstimatedMaximumBitrate::unmarshal(&in_packet)?),
+            //FORMAT_FIR => Box::new(FullIntraRequest::unmarshal(&in_packet)?),
+            _ => Box::new(RawPacket::unmarshal(&mut in_packet)?),
         },
-        _ => Box::new(RawPacket::unmarshal(&in_packet)?),
+        _ => Box::new(RawPacket::unmarshal(&mut in_packet)?),
     };
 
-    Ok((p, bytes_processed))
+    Ok(p)
 }
 
+/*
 #[cfg(test)]
 mod test {
     use super::*;

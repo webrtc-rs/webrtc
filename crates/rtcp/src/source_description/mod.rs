@@ -95,7 +95,7 @@ impl MarshalSize for SourceDescriptionChunk {
     fn marshal_size(&self) -> usize {
         let l = self.raw_size();
         // align to 32-bit boundary
-        l + get_padding(l)
+        l + get_padding_size(l)
     }
 }
 
@@ -158,7 +158,7 @@ impl Unmarshal for SourceDescriptionChunk {
             let item = SourceDescriptionItem::unmarshal(raw_packet)?;
             if item.sdes_type == SdesType::SdesEnd {
                 // offset + 1 (one byte for SdesEnd)
-                let padding_len = get_padding(offset + 1);
+                let padding_len = get_padding_size(offset + 1);
                 if raw_packet.remaining() >= padding_len {
                     raw_packet.advance(padding_len);
                     return Ok(SourceDescriptionChunk { source, items });
@@ -245,7 +245,7 @@ impl Unmarshal for SourceDescriptionItem {
          *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
          */
         let raw_packet_len = raw_packet.remaining();
-        if raw_packet_len < (SDES_TYPE_LEN + SDES_OCTET_COUNT_LEN) {
+        if raw_packet_len < SDES_TYPE_LEN {
             return Err(Error::PacketTooShort.into());
         }
 
@@ -255,6 +255,10 @@ impl Unmarshal for SourceDescriptionItem {
                 sdes_type,
                 text: Bytes::new(),
             });
+        }
+
+        if raw_packet_len < (SDES_TYPE_LEN + SDES_OCTET_COUNT_LEN) {
+            return Err(Error::PacketTooShort.into());
         }
 
         let octet_count = raw_packet.get_u8() as usize;
@@ -291,7 +295,7 @@ impl Packet for SourceDescription {
     /// Header returns the Header associated with this packet.
     fn header(&self) -> Header {
         Header {
-            padding: get_padding(self.raw_size()) != 0,
+            padding: get_padding_size(self.raw_size()) != 0,
             count: self.chunks.len() as u8,
             packet_type: PacketType::SourceDescription,
             length: ((self.marshal_size() / 4) - 1) as u16,
@@ -321,7 +325,7 @@ impl MarshalSize for SourceDescription {
     fn marshal_size(&self) -> usize {
         let l = self.raw_size();
         // align to 32-bit boundary
-        l + get_padding(l)
+        l + get_padding_size(l)
     }
 }
 
@@ -412,6 +416,10 @@ impl Unmarshal for SourceDescription {
 
         if chunks.len() != h.count as usize {
             return Err(Error::InvalidHeader.into());
+        }
+
+        if h.padding && raw_packet.has_remaining() {
+            raw_packet.advance(raw_packet.remaining());
         }
 
         Ok(SourceDescription { chunks })

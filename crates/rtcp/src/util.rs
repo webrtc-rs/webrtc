@@ -3,8 +3,8 @@ use crate::error::Error;
 use anyhow::Result;
 use bytes::BufMut;
 
-// getPadding Returns the padding required to make the length a multiple of 4
-pub(crate) fn get_padding(len: usize) -> usize {
+// returns the padding required to make the length a multiple of 4
+pub(crate) fn get_padding_size(len: usize) -> usize {
     if len % 4 == 0 {
         0
     } else {
@@ -13,7 +13,7 @@ pub(crate) fn get_padding(len: usize) -> usize {
 }
 
 pub(crate) fn put_padding(mut buf: &mut [u8], len: usize) {
-    for _ in 0..get_padding(len) {
+    for _ in 0..get_padding_size(len) {
         buf.put_u8(0);
     }
 }
@@ -62,7 +62,7 @@ mod test {
 
         for (n, p) in tests {
             assert_eq!(
-                get_padding(n),
+                get_padding_size(n),
                 p,
                 "Test case returned wrong value for input {}",
                 n

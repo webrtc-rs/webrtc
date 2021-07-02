@@ -75,7 +75,7 @@ impl MarshalSize for ReceptionReport {
     fn marshal_size(&self) -> usize {
         let l = self.raw_size();
         // align to 32-bit boundary
-        l + get_padding(l)
+        l + get_padding_size(l)
     }
 }
 

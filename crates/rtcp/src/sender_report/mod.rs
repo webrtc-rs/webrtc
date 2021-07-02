@@ -83,7 +83,7 @@ impl Packet for SenderReport {
     /// Header returns the Header associated with this packet.
     fn header(&self) -> Header {
         Header {
-            padding: get_padding(self.raw_size()) != 0,
+            padding: get_padding_size(self.raw_size()) != 0,
             count: self.reports.len() as u8,
             packet_type: PacketType::SenderReport,
             length: ((self.marshal_size() / 4) - 1) as u16,
@@ -115,7 +115,7 @@ impl MarshalSize for SenderReport {
     fn marshal_size(&self) -> usize {
         let l = self.raw_size();
         // align to 32-bit boundary
-        l + get_padding(l)
+        l + get_padding_size(l)
     }
 }
 
@@ -263,6 +263,11 @@ impl Unmarshal for SenderReport {
             offset += RECEPTION_REPORT_LENGTH;
         }
         let profile_extensions = raw_packet.copy_to_bytes(raw_packet.remaining());
+        /*
+        if header.padding && raw_packet.has_remaining() {
+            raw_packet.advance(raw_packet.remaining());
+        }
+         */
 
         Ok(SenderReport {
             ssrc,

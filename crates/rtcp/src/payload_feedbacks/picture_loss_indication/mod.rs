@@ -34,7 +34,7 @@ impl Packet for PictureLossIndication {
     /// Header returns the Header associated with this packet.
     fn header(&self) -> Header {
         Header {
-            padding: get_padding(self.raw_size()) != 0,
+            padding: get_padding_size(self.raw_size()) != 0,
             count: FORMAT_PLI,
             packet_type: PacketType::PayloadSpecificFeedback,
             length: ((self.marshal_size() / 4) - 1) as u16,
@@ -59,7 +59,7 @@ impl MarshalSize for PictureLossIndication {
     fn marshal_size(&self) -> usize {
         let l = self.raw_size();
         // align to 32-bit boundary
-        l + get_padding(l)
+        l + get_padding_size(l)
     }
 }
 
@@ -104,13 +104,16 @@ impl Unmarshal for PictureLossIndication {
         }
 
         let h = Header::unmarshal(raw_packet)?;
-
         if h.packet_type != PacketType::PayloadSpecificFeedback || h.count != FORMAT_PLI {
             return Err(Error::WrongType.into());
         }
 
         let sender_ssrc = raw_packet.get_u32();
         let media_ssrc = raw_packet.get_u32();
+
+        if h.padding && raw_packet.has_remaining() {
+            raw_packet.advance(raw_packet.remaining());
+        }
 
         Ok(PictureLossIndication {
             sender_ssrc,

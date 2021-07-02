@@ -34,7 +34,7 @@ impl Packet for Goodbye {
     /// Header returns the Header associated with this packet.
     fn header(&self) -> Header {
         Header {
-            padding: get_padding(self.raw_size()) != 0,
+            padding: get_padding_size(self.raw_size()) != 0,
             count: self.sources.len() as u8,
             packet_type: PacketType::Goodbye,
             length: ((self.marshal_size() / 4) - 1) as u16,
@@ -62,7 +62,7 @@ impl MarshalSize for Goodbye {
     fn marshal_size(&self) -> usize {
         let l = self.raw_size();
         // align to 32-bit boundary
-        l + get_padding(l)
+        l + get_padding_size(l)
     }
 }
 
@@ -142,7 +142,7 @@ impl Unmarshal for Goodbye {
             return Err(Error::WrongType.into());
         }
 
-        if get_padding(raw_packet_len) != 0 {
+        if get_padding_size(raw_packet_len) != 0 {
             return Err(Error::PacketTooShort.into());
         }
 
@@ -169,6 +169,10 @@ impl Unmarshal for Goodbye {
         } else {
             Bytes::new()
         };
+
+        if header.padding && raw_packet.has_remaining() {
+            raw_packet.advance(raw_packet.remaining());
+        }
 
         Ok(Goodbye { sources, reason })
     }

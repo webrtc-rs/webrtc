@@ -1,11 +1,16 @@
 #[cfg(test)]
 mod compound_packet_test;
 
-use crate::{error::Error, packet::*, receiver_report::*, sender_report::*, source_description::*};
+use crate::{
+    error::Error, header::*, packet::*, receiver_report::*, sender_report::*,
+    source_description::*, util::*,
+};
+use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
 use anyhow::Result;
-use bytes::{Bytes, BytesMut};
+use bytes::{Buf, Bytes};
 use std::any::Any;
+use std::fmt;
 
 /// A CompoundPacket is a collection of RTCP packets transmitted as a single packet with
 /// the underlying protocol (for example UDP).
@@ -19,10 +24,20 @@ use std::any::Any;
 /// to identify the source and to begin associating media for purposes such as lip-sync.
 ///
 /// Other RTCP packet types may follow in any order. Packet types may appear more than once.
-#[derive(PartialEq, Default, Clone)]
+#[derive(Debug, Default)] //PartialEq, Clone
 pub struct CompoundPacket(pub Vec<Box<dyn Packet>>);
 
+impl fmt::Display for CompoundPacket {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 impl Packet for CompoundPacket {
+    fn header(&self) -> Header {
+        Header::default()
+    }
+
     /// destination_ssrc returns the synchronization sources associated with this
     /// CompoundPacket's reception report.
     fn destination_ssrc(&self) -> Vec<u32> {
@@ -33,7 +48,7 @@ impl Packet for CompoundPacket {
         }
     }
 
-    fn size(&self) -> usize {
+    fn raw_size(&self) -> usize {
         let mut l = 0;
         for packet in &self.0 {
             l += packet.marshal_size();
@@ -41,47 +56,50 @@ impl Packet for CompoundPacket {
         l
     }
 
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl MarshalSize for CompoundPacket {
+    fn marshal_size(&self) -> usize {
+        let l = self.raw_size();
+        // align to 32-bit boundary
+        l + get_padding_size(l)
+    }
+}
+
+impl Marshal for CompoundPacket {
     /// Marshal encodes the CompoundPacket as binary.
-    fn marshal(&self) -> Result<Bytes> {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
         self.validate()?;
 
-        let mut out = BytesMut::new();
         for packet in &self.0 {
-            let a = packet.marshal()?;
-            out.extend(a);
+            let n = packet.marshal_to(buf)?;
+            buf = &mut buf[n..];
         }
-        Ok(out.freeze())
-    }
 
-    fn unmarshal(raw_data: &Bytes) -> Result<Self> {
+        Ok(self.marshal_size())
+    }
+}
+
+impl Unmarshal for CompoundPacket {
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    where
+        Self: Sized,
+        B: Buf,
+    {
         let mut packets = vec![];
 
-        let mut raw_data = raw_data.clone();
-        while !raw_data.is_empty() {
-            let (p, processed) = unmarshaller(&raw_data)?;
+        while raw_packet.has_remaining() {
+            let p = unmarshaller(raw_packet)?;
             packets.push(p);
-            raw_data = raw_data.split_off(processed);
         }
 
         let c = CompoundPacket(packets);
         c.validate()?;
 
         Ok(c)
-    }
-
-    fn equal(&self, other: &dyn Packet) -> bool {
-        other
-            .as_any()
-            .downcast_ref::<CompoundPacket>()
-            .map_or(false, |a| self == a)
-    }
-
-    fn cloned(&self) -> Box<dyn Packet> {
-        Box::new(self.clone())
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }
 
