@@ -226,7 +226,8 @@ fn test_goodbye_round_trip() {
             );
         } else {
             let mut data = got.ok().unwrap();
-            let actual = Goodbye::unmarshal(&mut data).expect(format!("Unmarshal {}", name).as_str());
+            let actual =
+                Goodbye::unmarshal(&mut data).expect(format!("Unmarshal {}", name).as_str());
 
             assert_eq!(
                 actual, want,
