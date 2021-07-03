@@ -1,10 +1,7 @@
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Debug, Error, PartialEq)]
 pub enum Error {
-    #[error("SctpError: {0}")]
-    ErrSctpError(#[from] sctp::error::Error),
-
     #[error(
         "DataChannel message is not long enough to determine type: (expected: {expected}, actual: {actual})"
     )]
@@ -13,4 +10,14 @@ pub enum Error {
     InvalidMessageType(u8),
     #[error("Unknown ChannelType {0}")]
     InvalidChannelType(u8),
+
+    #[allow(non_camel_case_types)]
+    #[error("{0}")]
+    new(String),
+}
+
+impl Error {
+    pub fn equal(&self, err: &anyhow::Error) -> bool {
+        err.downcast_ref::<Self>().map_or(false, |e| e == self)
+    }
 }
