@@ -1,8 +1,15 @@
-use crate::{error::Error, message::message_channel_open::*, message::*};
-use sctp::{association::*, chunk::chunk_payload_data::PayloadProtocolIdentifier, stream::*};
+#[cfg(test)]
+mod data_channel_test;
+
+use crate::{
+    error::Error, message::message_channel_ack::*, message::message_channel_open::*, message::*,
+};
+
+use sctp::{
+    association::Association, chunk::chunk_payload_data::PayloadProtocolIdentifier, stream::*,
+};
 use util::marshal::*;
 
-use crate::message::message_channel_ack::DataChannelAck;
 use anyhow::Result;
 use bytes::{Buf, Bytes};
 use derive_builder::Builder;
@@ -156,7 +163,11 @@ impl DataChannel {
                 PayloadProtocolIdentifier::String | PayloadProtocolIdentifier::StringEmpty => {
                     is_string = true;
                 }
-                PayloadProtocolIdentifier::Binary | PayloadProtocolIdentifier::BinaryEmpty => {
+                _ => {}
+            };
+
+            match ppi {
+                PayloadProtocolIdentifier::StringEmpty | PayloadProtocolIdentifier::BinaryEmpty => {
                     n = 0;
                 }
                 _ => {}
@@ -315,13 +326,5 @@ impl DataChannel {
             reliability_type,
             self.config.reliability_parameter,
         );
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
     }
 }
