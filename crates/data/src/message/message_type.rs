@@ -2,9 +2,9 @@ use super::*;
 use crate::error::Error;
 
 // The first byte in a `Message` that specifies its type:
-const MESSAGE_TYPE_ACK: u8 = 0x02;
-const MESSAGE_TYPE_OPEN: u8 = 0x03;
-const MESSAGE_TYPE_LEN: usize = 1;
+pub(crate) const MESSAGE_TYPE_ACK: u8 = 0x02;
+pub(crate) const MESSAGE_TYPE_OPEN: u8 = 0x03;
+pub(crate) const MESSAGE_TYPE_LEN: usize = 1;
 
 // A parsed DataChannel message
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
@@ -62,7 +62,7 @@ mod tests {
     use bytes::{Bytes, BytesMut};
 
     #[test]
-    fn unmarshal_open_success() -> Result<()> {
+    fn test_message_type_unmarshal_open_success() -> Result<()> {
         let mut bytes = Bytes::from_static(&[0x03]);
         let msg_type = MessageType::unmarshal(&mut bytes)?;
 
@@ -72,7 +72,7 @@ mod tests {
     }
 
     #[test]
-    fn unmarshal_ack_success() -> Result<()> {
+    fn test_message_type_unmarshal_ack_success() -> Result<()> {
         let mut bytes = Bytes::from_static(&[0x02]);
         let msg_type = MessageType::unmarshal(&mut bytes)?;
 
@@ -81,7 +81,7 @@ mod tests {
     }
 
     #[test]
-    fn unmarshal_invalid_message_type() -> Result<()> {
+    fn test_message_type_unmarshal_invalid() -> Result<()> {
         let mut bytes = Bytes::from_static(&[0x01]);
         match MessageType::unmarshal(&mut bytes) {
             Ok(_) => assert!(false, "expected Error, but got Ok"),
@@ -104,7 +104,7 @@ mod tests {
     }
 
     #[test]
-    fn marshal_size() -> Result<()> {
+    fn test_message_type_marshal_size() -> Result<()> {
         let ack = MessageType::DataChannelAck;
         let marshal_size = ack.marshal_size();
 
@@ -113,7 +113,7 @@ mod tests {
     }
 
     #[test]
-    fn marshal() -> Result<()> {
+    fn test_message_type_marshal() -> Result<()> {
         let mut buf = BytesMut::with_capacity(MESSAGE_TYPE_LEN);
         buf.resize(MESSAGE_TYPE_LEN, 0u8);
         let msg_type = MessageType::DataChannelAck;

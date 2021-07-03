@@ -12,21 +12,21 @@ use super::*;
 ///+-+-+-+-+-+-+-+-+
 /// ```
 #[derive(Eq, PartialEq, Clone, Debug)]
-pub struct MessageChannelAck;
+pub struct DataChannelAck;
 
-impl MarshalSize for MessageChannelAck {
+impl MarshalSize for DataChannelAck {
     fn marshal_size(&self) -> usize {
         0
     }
 }
 
-impl Marshal for MessageChannelAck {
+impl Marshal for DataChannelAck {
     fn marshal_to(&self, _buf: &mut [u8]) -> Result<usize> {
         Ok(0)
     }
 }
 
-impl Unmarshal for MessageChannelAck {
+impl Unmarshal for DataChannelAck {
     fn unmarshal<B>(_buf: &mut B) -> Result<Self>
     where
         Self: Sized,
@@ -42,18 +42,18 @@ mod tests {
     use bytes::{Bytes, BytesMut};
 
     #[test]
-    fn unmarshal() -> Result<()> {
+    fn test_channel_ack_unmarshal() -> Result<()> {
         let mut bytes = Bytes::from_static(&[]);
 
-        let channel_ack = MessageChannelAck::unmarshal(&mut bytes)?;
+        let channel_ack = DataChannelAck::unmarshal(&mut bytes)?;
 
-        assert_eq!(channel_ack, MessageChannelAck);
+        assert_eq!(channel_ack, DataChannelAck);
         Ok(())
     }
 
     #[test]
-    fn marshal_size() -> Result<()> {
-        let channel_ack = MessageChannelAck;
+    fn test_channel_ack_marshal_size() -> Result<()> {
+        let channel_ack = DataChannelAck;
         let marshal_size = channel_ack.marshal_size();
 
         assert_eq!(marshal_size, 0);
@@ -61,8 +61,8 @@ mod tests {
     }
 
     #[test]
-    fn marshal() -> Result<()> {
-        let channel_ack = MessageChannelAck;
+    fn test_channel_ack_marshal() -> Result<()> {
+        let channel_ack = DataChannelAck;
         let mut buf = BytesMut::with_capacity(0);
         let bytes_written = channel_ack.marshal_to(&mut buf)?;
         let bytes = buf.freeze();
