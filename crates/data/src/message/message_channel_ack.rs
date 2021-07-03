@@ -20,27 +20,26 @@ impl MarshalSize for MessageChannelAck {
     }
 }
 
+impl Marshal for MessageChannelAck {
+    fn marshal_to(&self, _buf: &mut [u8]) -> Result<usize> {
+        Ok(0)
+    }
+}
+
 impl Unmarshal for MessageChannelAck {
     fn unmarshal<B>(_buf: &mut B) -> Result<Self>
     where
+        Self: Sized,
         B: Buf,
     {
         Ok(Self)
     }
 }
 
-impl Marshal for MessageChannelAck {
-    fn marshal_to<B>(&self, _buf: &mut B) -> Result<usize>
-    where
-        B: BufMut,
-    {
-        Ok(0)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bytes::{Bytes, BytesMut};
 
     #[test]
     fn unmarshal() -> Result<()> {

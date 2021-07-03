@@ -19,6 +19,19 @@ impl MarshalSize for MessageType {
     }
 }
 
+impl Marshal for MessageType {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
+        let b = match self {
+            MessageType::DataChannelAck => MESSAGE_TYPE_ACK,
+            MessageType::DataChannelOpen => MESSAGE_TYPE_OPEN,
+        };
+
+        buf.put_u8(b);
+
+        Ok(1)
+    }
+}
+
 impl Unmarshal for MessageType {
     fn unmarshal<B>(buf: &mut B) -> Result<Self>
     where
@@ -43,25 +56,10 @@ impl Unmarshal for MessageType {
     }
 }
 
-impl Marshal for MessageType {
-    fn marshal_to<B>(&self, buf: &mut B) -> Result<usize>
-    where
-        B: BufMut,
-    {
-        let b = match self {
-            MessageType::DataChannelAck => MESSAGE_TYPE_ACK,
-            MessageType::DataChannelOpen => MESSAGE_TYPE_OPEN,
-        };
-
-        buf.put_u8(b);
-
-        Ok(1)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bytes::{Bytes, BytesMut};
 
     #[test]
     fn unmarshal_open_success() -> Result<()> {
@@ -117,6 +115,7 @@ mod tests {
     #[test]
     fn marshal() -> Result<()> {
         let mut buf = BytesMut::with_capacity(MESSAGE_TYPE_LEN);
+        buf.resize(MESSAGE_TYPE_LEN, 0u8);
         let msg_type = MessageType::DataChannelAck;
         let n = msg_type.marshal_to(&mut buf)?;
         let bytes = buf.freeze();

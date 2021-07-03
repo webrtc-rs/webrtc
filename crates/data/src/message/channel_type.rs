@@ -50,6 +50,32 @@ impl MarshalSize for ChannelType {
     }
 }
 
+impl Marshal for ChannelType {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
+        let required_len = self.marshal_size();
+        if buf.remaining_mut() < required_len {
+            return Err(Error::UnexpectedEndOfBuffer {
+                expected: required_len,
+                actual: buf.remaining_mut(),
+            }
+            .into());
+        }
+
+        let byte = match self {
+            Self::Reliable => CHANNEL_TYPE_RELIABLE,
+            Self::ReliableUnordered => CHANNEL_TYPE_RELIABLE_UNORDERED,
+            Self::PartialReliableRexmit => CHANNEL_TYPE_PARTIAL_RELIABLE_REXMIT,
+            Self::PartialReliableRexmitUnordered => CHANNEL_TYPE_PARTIAL_RELIABLE_REXMIT_UNORDERED,
+            Self::PartialReliableTimed => CHANNEL_TYPE_PARTIAL_RELIABLE_TIMED,
+            Self::PartialReliableTimedUnordered => CHANNEL_TYPE_PARTIAL_RELIABLE_TIMED_UNORDERED,
+        };
+
+        buf.put_u8(byte);
+
+        Ok(1)
+    }
+}
+
 impl Unmarshal for ChannelType {
     fn unmarshal<B>(buf: &mut B) -> Result<Self>
     where
@@ -83,38 +109,10 @@ impl Unmarshal for ChannelType {
     }
 }
 
-impl Marshal for ChannelType {
-    fn marshal_to<B>(&self, buf: &mut B) -> Result<usize>
-    where
-        B: BufMut,
-    {
-        let required_len = self.marshal_size();
-        if buf.remaining_mut() < required_len {
-            return Err(Error::UnexpectedEndOfBuffer {
-                expected: required_len,
-                actual: buf.remaining_mut(),
-            }
-            .into());
-        }
-
-        let byte = match self {
-            Self::Reliable => CHANNEL_TYPE_RELIABLE,
-            Self::ReliableUnordered => CHANNEL_TYPE_RELIABLE_UNORDERED,
-            Self::PartialReliableRexmit => CHANNEL_TYPE_PARTIAL_RELIABLE_REXMIT,
-            Self::PartialReliableRexmitUnordered => CHANNEL_TYPE_PARTIAL_RELIABLE_REXMIT_UNORDERED,
-            Self::PartialReliableTimed => CHANNEL_TYPE_PARTIAL_RELIABLE_TIMED,
-            Self::PartialReliableTimedUnordered => CHANNEL_TYPE_PARTIAL_RELIABLE_TIMED_UNORDERED,
-        };
-
-        buf.put_u8(byte);
-
-        Ok(1)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bytes::{Bytes, BytesMut};
 
     #[test]
     fn unmarshal_success() -> Result<()> {
@@ -187,6 +185,7 @@ mod tests {
     #[test]
     fn marshal() -> Result<()> {
         let mut buf = BytesMut::with_capacity(1);
+        buf.resize(1, 0u8);
         let channel_type = ChannelType::Reliable;
         let bytes_written = channel_type.marshal_to(&mut buf)?;
         assert_eq!(bytes_written, channel_type.marshal_size());

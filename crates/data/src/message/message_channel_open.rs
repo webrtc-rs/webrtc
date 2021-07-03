@@ -45,6 +45,29 @@ impl MarshalSize for MessageChannelOpen {
     }
 }
 
+impl Marshal for MessageChannelOpen {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
+        let required_len = self.marshal_size();
+        if buf.remaining_mut() < required_len {
+            return Err(Error::UnexpectedEndOfBuffer {
+                expected: required_len,
+                actual: buf.remaining_mut(),
+            }
+            .into());
+        }
+
+        let n = self.channel_type.marshal_to(buf)?;
+        buf = &mut buf[n..];
+        buf.put_u16(self.priority);
+        buf.put_u32(self.reliability_parameter);
+        buf.put_u16(self.label.len() as u16);
+        buf.put_u16(self.protocol.len() as u16);
+        buf.put_slice(self.label.as_slice());
+        buf.put_slice(self.protocol.as_slice());
+        Ok(self.marshal_size())
+    }
+}
+
 impl Unmarshal for MessageChannelOpen {
     fn unmarshal<B>(buf: &mut B) -> Result<Self>
     where
@@ -90,34 +113,10 @@ impl Unmarshal for MessageChannelOpen {
     }
 }
 
-impl Marshal for MessageChannelOpen {
-    fn marshal_to<B>(&self, buf: &mut B) -> Result<usize>
-    where
-        B: BufMut,
-    {
-        let required_len = self.marshal_size();
-        if buf.remaining_mut() < required_len {
-            return Err(Error::UnexpectedEndOfBuffer {
-                expected: required_len,
-                actual: buf.remaining_mut(),
-            }
-            .into());
-        }
-
-        self.channel_type.marshal_to(buf)?;
-        buf.put_u16(self.priority);
-        buf.put_u32(self.reliability_parameter);
-        buf.put_u16(self.label.len() as u16);
-        buf.put_u16(self.protocol.len() as u16);
-        buf.put_slice(self.label.as_slice());
-        buf.put_slice(self.protocol.as_slice());
-        Ok(self.marshal_size())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bytes::{Bytes, BytesMut};
 
     static MARSHALED_BYTES: [u8; 24] = [
         0x00, // channel type
@@ -257,6 +256,7 @@ mod tests {
         };
 
         let mut buf = BytesMut::with_capacity(11 + 5 + 8);
+        buf.resize(11 + 5 + 8, 0u8);
         let bytes_written = channel_open.marshal_to(&mut buf).unwrap();
         let bytes = buf.freeze();
 
