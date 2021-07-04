@@ -12,10 +12,9 @@ repository = "https://github.com/webrtc-rs/util"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["buffer", "conn", "error", "ifaces", "vnet", "marshal"]
+default = ["buffer", "conn", "ifaces", "vnet", "marshal"]
 buffer = []
-conn = []
-error = []
+conn = ["ifaces"]
 ifaces = []
 vnet = []
 marshal = []
