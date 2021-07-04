@@ -14,9 +14,9 @@ repository = "https://github.com/webrtc-rs/util"
 [features]
 default = ["buffer", "conn", "ifaces", "vnet", "marshal"]
 buffer = []
-conn = ["ifaces"]
+conn = []
 ifaces = []
-vnet = []
+vnet = ["ifaces"]
 marshal = []
 
 [dependencies]
