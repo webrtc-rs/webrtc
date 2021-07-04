@@ -1,5 +1,7 @@
 use super::*;
 
+use anyhow::Result;
+
 /// DTLSTransport allows an application access to information about the DTLS
 /// transport over which RTP and RTCP packets are sent and received by
 /// RTPSender and RTPReceiver, as well other data such as SCTP packets sent
@@ -77,7 +79,7 @@ impl DTLSTransport {
 
     /// write_rtcp sends a user provided RTCP packet to the connected peer. If no peer is connected the
     /// packet is discarded.
-    pub async fn write_rtcp(&mut self, pkt: &(dyn rtcp::packet::Packet)) -> Result<usize, Error> {
+    pub async fn write_rtcp(&mut self, pkt: &(dyn rtcp::packet::Packet)) -> Result<usize> {
         if let Some(srtcp_session) = &mut self.srtcp_session {
             Ok(srtcp_session.write_rtcp(pkt).await?)
         } else {
@@ -86,7 +88,7 @@ impl DTLSTransport {
     }
 
     /// get_local_parameters returns the DTLS parameters of the local DTLSTransport upon construction.
-    pub fn get_local_parameters(&self) -> Result<DTLSParameters, Error> {
+    pub fn get_local_parameters(&self) -> Result<DTLSParameters> {
         let fingerprints = vec![];
 
         for _c in &self.certificates {
@@ -106,7 +108,7 @@ impl DTLSTransport {
         self.remote_certificate.clone()
     }
 
-    pub(crate) async fn start_srtp(&mut self) -> Result<(), Error> {
+    pub(crate) async fn start_srtp(&mut self) -> Result<()> {
         let mut srtp_config = srtp::config::Config {
             profile: self.srtp_protection_profile,
             ..Default::default()
@@ -138,7 +140,7 @@ impl DTLSTransport {
                 .extract_session_keys_from_dtls(conn_state, self.role() == DTLSRole::Client)
                 .await?;
         } else {
-            return Err(Error::ErrDtlsTransportNotStarted);
+            return Err(Error::ErrDtlsTransportNotStarted.into());
         }
 
         self.srtp_session = if let Some(srtp_endpoint) = &self.srtp_endpoint {
@@ -206,11 +208,11 @@ impl DTLSTransport {
     async fn prepare_transport(
         &mut self,
         remote_parameters: DTLSParameters,
-    ) -> Result<(DTLSRole, dtls::config::Config), Error> {
+    ) -> Result<(DTLSRole, dtls::config::Config)> {
         self.ensure_ice_conn()?;
 
         if self.state != DTLSTransportState::New {
-            return Err(Error::ErrInvalidDTLSStart);
+            return Err(Error::ErrInvalidDTLSStart.into());
         }
 
         self.srtp_endpoint = self.ice_transport.new_endpoint(Box::new(match_srtp)).await;
@@ -241,7 +243,7 @@ impl DTLSTransport {
     }
 
     /// start DTLS transport negotiation with the parameters of the remote DTLS transport
-    pub async fn start(&mut self, remote_parameters: DTLSParameters) -> Result<(), Error> {
+    pub async fn start(&mut self, remote_parameters: DTLSParameters) -> Result<()> {
         let dtls_conn_result = if let Some(dtls_endpoint) =
             self.ice_transport.new_endpoint(Box::new(match_dtls)).await
         {
@@ -270,16 +272,14 @@ impl DTLSTransport {
                 .await
             }
         } else {
-            Err(dtls::error::Error::ErrOthers(
-                "ice_transport.new_endpoint failed".to_owned(),
-            ))
+            Err(Error::new("ice_transport.new_endpoint failed".to_owned()).into())
         };
 
         let dtls_conn = match dtls_conn_result {
             Ok(dtls_conn) => dtls_conn,
             Err(err) => {
                 self.state_change(DTLSTransportState::Failed).await;
-                return Err(err.into());
+                return Err(err);
             }
         };
 
@@ -293,7 +293,7 @@ impl DTLSTransport {
             }
             _=> {
                 self.state_change(DTLSTransportState::Failed).await;
-                return Err(Error::ErrNoSRTPProtectionProfile);
+                return Err(Error::ErrNoSRTPProtectionProfile.into());
             }
         };
 
@@ -308,7 +308,7 @@ impl DTLSTransport {
         let remote_certs = &dtls_conn.connection_state().await.peer_certificates;
         if remote_certs.is_empty() {
             self.state_change(DTLSTransportState::Failed).await;
-            return Err(Error::ErrNoRemoteCertificate);
+            return Err(Error::ErrNoRemoteCertificate.into());
         }
         self.remote_certificate = Bytes::from(remote_certs[0].clone());
 
@@ -338,14 +338,14 @@ impl DTLSTransport {
     }
 
     /// stops and closes the DTLSTransport object.
-    pub async fn stop(&mut self) -> Result<(), Error> {
+    pub async fn stop(&mut self) -> Result<()> {
         // Try closing everything and collect the errors
-        let mut close_errs: Vec<Error> = vec![];
+        let mut close_errs: Vec<anyhow::Error> = vec![];
         if let Some(mut srtp_session) = self.srtp_session.take() {
             match srtp_session.close().await {
                 Ok(_) => {}
                 Err(err) => {
-                    close_errs.push(err.into());
+                    close_errs.push(err);
                 }
             };
         }
@@ -354,7 +354,7 @@ impl DTLSTransport {
             match srtcp_session.close().await {
                 Ok(_) => {}
                 Err(err) => {
-                    close_errs.push(err.into());
+                    close_errs.push(err);
                 }
             };
         }
@@ -363,7 +363,7 @@ impl DTLSTransport {
             match ss.close().await {
                 Ok(_) => {}
                 Err(err) => {
-                    close_errs.push(err.into());
+                    close_errs.push(err);
                 }
             };
         }
@@ -374,7 +374,7 @@ impl DTLSTransport {
                 Ok(_) => {}
                 Err(err) => {
                     if err.to_string() != dtls::error::Error::ErrConnClosed.to_string() {
-                        close_errs.push(err.into());
+                        close_errs.push(err);
                     }
                 }
             }
@@ -387,11 +387,11 @@ impl DTLSTransport {
         } else {
             let close_errs_strs: Vec<String> =
                 close_errs.into_iter().map(|e| e.to_string()).collect();
-            Err(Error::ErrOthers(close_errs_strs.join("\n")))
+            Err(Error::new(close_errs_strs.join("\n")).into())
         }
     }
 
-    pub(crate) fn validate_fingerprint(&self, _remote_cert: &[u8]) -> Result<(), Error> {
+    pub(crate) fn validate_fingerprint(&self, _remote_cert: &[u8]) -> Result<()> {
         /*TODO: for  fp in self.remote_parameters.fingerprints {
             hashAlgo, err := fingerprint.HashFromString(fp.algorithm);
             if err != nil {
@@ -412,9 +412,9 @@ impl DTLSTransport {
         Ok(())
     }
 
-    pub(crate) fn ensure_ice_conn(&self) -> Result<(), Error> {
+    pub(crate) fn ensure_ice_conn(&self) -> Result<()> {
         if self.ice_transport.state() == ICETransportState::New {
-            Err(Error::ErrICEConnectionNotStarted)
+            Err(Error::ErrICEConnectionNotStarted.into())
         } else {
             Ok(())
         }
@@ -430,13 +430,13 @@ mod test {
     use super::*;
 
     #[tokio::test]
-    async fn test_invalid_fingerprint_causes_failed() -> Result<(), Error> {
+    async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
         //TODO:
         Ok(())
     }
 
     #[tokio::test]
-    async fn test_peer_connection_dtls_role_setting_engine() -> Result<(), Error> {
+    async fn test_peer_connection_dtls_role_setting_engine() -> Result<()> {
         //TODO:
         Ok(())
     }

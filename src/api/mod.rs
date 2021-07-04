@@ -1,5 +1,4 @@
 use crate::dtls::dtls_transport::DTLSTransport;
-use crate::error::Error;
 use crate::ice::ice_gather::ice_gatherer::ICEGatherer;
 use crate::ice::ice_gather::ICEGatherOptions;
 use crate::ice::ice_transport::ICETransport;
@@ -9,6 +8,8 @@ use setting_engine::*;
 
 pub mod media_engine;
 pub mod setting_engine;
+
+use anyhow::Result;
 
 /// API bundles the global functions of the WebRTC and ORTC API.
 /// Some of these functions are also exported globally using the
@@ -24,7 +25,7 @@ impl Api {
     /// new_ice_gatherer creates a new ice gatherer.
     /// This constructor is part of the ORTC API. It is not
     /// meant to be used together with the basic WebRTC API.
-    pub fn new_ice_gatherer(&self, opts: ICEGatherOptions) -> Result<ICEGatherer, Error> {
+    pub fn new_ice_gatherer(&self, opts: ICEGatherOptions) -> Result<ICEGatherer> {
         let mut validated_servers = vec![];
         if !opts.ice_servers.is_empty() {
             for server in &opts.ice_servers {
@@ -54,7 +55,7 @@ impl Api {
         &self,
         ice_transport: ICETransport,
         certificates: Vec<Certificate>,
-    ) -> Result<DTLSTransport, Error> {
+    ) -> Result<DTLSTransport> {
         /*TODO: if !certificates.is_empty() {
             now := time.Now()
             for _, x509Cert := range certificates {

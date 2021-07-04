@@ -1,5 +1,7 @@
 use crate::error::Error;
 use crate::sdp::sdp_type::SDPType;
+
+use anyhow::Result;
 use std::fmt;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -122,10 +124,10 @@ pub(crate) fn check_next_signaling_state(
     next: SignalingState,
     op: StateChangeOp,
     sdp_type: SDPType,
-) -> Result<SignalingState, Error> {
+) -> Result<SignalingState> {
     // Special case for rollbacks
     if sdp_type == SDPType::Rollback && cur == SignalingState::Stable {
-        return Err(Error::ErrSignalingStateCannotRollback);
+        return Err(Error::ErrSignalingStateCannotRollback.into());
     }
 
     // 4.3.1 valid state transitions
@@ -201,11 +203,11 @@ pub(crate) fn check_next_signaling_state(
             }
         }
         _ => {
-            return Err(Error::ErrSignalingStateProposedTransitionInvalid);
+            return Err(Error::ErrSignalingStateProposedTransitionInvalid.into());
         }
     };
 
-    Err(Error::ErrSignalingStateProposedTransitionInvalid)
+    Err(Error::ErrSignalingStateProposedTransitionInvalid.into())
 }
 
 #[cfg(test)]

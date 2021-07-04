@@ -25,7 +25,7 @@ async fn pipe_memory() -> (Arc<Endpoint>, impl Conn) {
 }
 
 #[tokio::test]
-async fn test_no_endpoints() -> Result<(), Error> {
+async fn test_no_endpoints() -> Result<()> {
     // In memory pipe
     let (ca, _) = pipe();
 
@@ -47,11 +47,11 @@ struct MuxErrorConn {
 
 #[async_trait]
 impl Conn for MuxErrorConn {
-    async fn connect(&self, _addr: SocketAddr) -> io::Result<()> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    async fn connect(&self, _addr: SocketAddr) -> Result<()> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn recv(&self, buf: &mut [u8]) -> io::Result<usize> {
+    async fn recv(&self, buf: &mut [u8]) -> Result<usize> {
         let idx = self.idx.fetch_add(1, Ordering::SeqCst);
         if idx < self.data.len() {
             let n = std::cmp::min(buf.len(), self.data[idx].len());
@@ -61,29 +61,30 @@ impl Conn for MuxErrorConn {
             Err(io::Error::new(
                 io::ErrorKind::Other,
                 format!("idx {} >= data.len {}", idx, self.data.len()),
-            ))
+            )
+            .into())
         }
     }
 
-    async fn recv_from(&self, _buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    async fn recv_from(&self, _buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn send(&self, _buf: &[u8]) -> io::Result<usize> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    async fn send(&self, _buf: &[u8]) -> Result<usize> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> io::Result<usize> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> Result<usize> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn local_addr(&self) -> io::Result<SocketAddr> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable"))
+    async fn local_addr(&self) -> Result<SocketAddr> {
+        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 }
 
 #[tokio::test]
-async fn test_non_fatal_read() -> Result<(), Error> {
+async fn test_non_fatal_read() -> Result<()> {
     let expected_data = b"expected_data".to_vec();
 
     let conn = Arc::new(MuxErrorConn {

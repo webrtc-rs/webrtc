@@ -9,15 +9,17 @@ use crate::ice::ice_role::ICERole;
 use crate::ice::ice_transport::ice_transport_state::ICETransportState;
 use crate::mux::{Config, Mux};
 
-//use crate::error::Error;
 use crate::error::Error;
 use crate::ice::ice_candidate::ICECandidate;
 use crate::ice::ICEParameters;
 use crate::mux::endpoint::Endpoint;
 use crate::mux::mux_func::MatchFunc;
 use crate::RECEIVE_MTU;
+
 use ice::candidate::Candidate;
 use ice::state::ConnectionState;
+
+use anyhow::Result;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -81,9 +83,9 @@ impl ICETransport {
         //gatherer: Option<ICEGatherer>,
         params: ICEParameters,
         role: Option<ICERole>,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         if self.state() != ICETransportState::New {
-            return Err(Error::ErrICETransportNotInNew);
+            return Err(Error::ErrICETransportNotInNew.into());
         }
 
         self.ensure_gatherer().await?;
@@ -158,7 +160,7 @@ impl ICETransport {
                         .await?
                 }
 
-                _ => return Err(Error::ErrICERoleUnknown),
+                _ => return Err(Error::ErrICERoleUnknown.into()),
             };
 
             self.cancel_tx = Some(cancel_tx);
@@ -172,13 +174,13 @@ impl ICETransport {
 
             Ok(())
         } else {
-            Err(Error::ErrICEAgentNotExist)
+            Err(Error::ErrICEAgentNotExist.into())
         }
     }
 
     /// restart is not exposed currently because ORTC has users create a whole new ICETransport
     /// so for now lets keep it private so we don't cause ORTC users to depend on non-standard APIs
-    pub(crate) async fn restart(&mut self) -> Result<(), Error> {
+    pub(crate) async fn restart(&mut self) -> Result<()> {
         if let Some(agent) = self.gatherer.get_agent() {
             agent
                 .restart(
@@ -191,13 +193,13 @@ impl ICETransport {
                 )
                 .await?;
         } else {
-            return Err(Error::ErrICEAgentNotExist);
+            return Err(Error::ErrICEAgentNotExist.into());
         }
         self.gatherer.gather().await
     }
 
     /// Stop irreversibly stops the ICETransport.
-    pub async fn stop(&mut self) -> Result<(), Error> {
+    pub async fn stop(&mut self) -> Result<()> {
         self.set_state(ICETransportState::Closed);
 
         self.cancel_tx.take();
@@ -236,7 +238,7 @@ impl ICETransport {
     pub async fn set_remote_candidates(
         &mut self,
         remote_candidates: &[ICECandidate],
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         self.ensure_gatherer().await?;
 
         if let Some(agent) = self.gatherer.get_agent() {
@@ -246,7 +248,7 @@ impl ICETransport {
             }
             Ok(())
         } else {
-            Err(Error::ErrICEAgentNotExist)
+            Err(Error::ErrICEAgentNotExist.into())
         }
     }
 
@@ -254,7 +256,7 @@ impl ICETransport {
     pub async fn add_remote_candidate(
         &mut self,
         remote_candidate: Option<ICECandidate>,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         self.ensure_gatherer().await?;
 
         if let Some(agent) = self.gatherer.get_agent() {
@@ -265,7 +267,7 @@ impl ICETransport {
 
             Ok(())
         } else {
-            Err(Error::ErrICEAgentNotExist)
+            Err(Error::ErrICEAgentNotExist.into())
         }
     }
 
@@ -286,7 +288,7 @@ impl ICETransport {
         }
     }
 
-    pub(crate) async fn ensure_gatherer(&mut self) -> Result<(), Error> {
+    pub(crate) async fn ensure_gatherer(&mut self) -> Result<()> {
         if self.gatherer.get_agent().is_none() {
             self.gatherer.create_agent().await
         } else {
@@ -334,11 +336,11 @@ impl ICETransport {
         &self,
         new_ufrag: String,
         new_pwd: String,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         if let Some(agent) = self.gatherer.get_agent() {
             Ok(agent.set_remote_credentials(new_ufrag, new_pwd).await?)
         } else {
-            Err(Error::ErrICEAgentNotExist)
+            Err(Error::ErrICEAgentNotExist.into())
         }
     }
 }

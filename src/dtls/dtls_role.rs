@@ -1,5 +1,6 @@
 use sdp::session_description::SessionDescription;
 use sdp::util::ConnectionRole;
+
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -90,7 +91,8 @@ impl DTLSRole {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::error::Error;
+
+    use anyhow::Result;
     use std::io::Cursor;
 
     #[test]
@@ -108,7 +110,7 @@ mod test {
     }
 
     #[test]
-    fn test_dtls_role_from_remote_sdp() -> Result<(), Error> {
+    fn test_dtls_role_from_remote_sdp() -> Result<()> {
         const NO_MEDIA: &str = "v=0
 o=- 4596489990601351948 2 IN IP4 127.0.0.1
 s=-

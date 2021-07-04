@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-#[derive(Debug, Error)] //, PartialEq, Clone
+#[derive(Error, Debug, PartialEq)]
 pub enum Error {
     /// ErrUnknownType indicates an error with Unknown info.
     #[error("unknown")]
@@ -303,22 +303,13 @@ pub enum Error {
     #[error("bad Certificate PEM format")]
     ErrCertificatePEMFormatError,
 
-    #[error("IoError: {0}")]
-    ErrIoError(#[from] std::io::Error),
+    #[allow(non_camel_case_types)]
+    #[error("{0}")]
+    new(String),
+}
 
-    #[error("SdpError: {0}")]
-    ErrSdpError(#[from] sdp::error::Error),
-    #[error("UtilError: {0}")]
-    ErrUtilError(#[from] util::error::Error),
-    #[error("RtcpError: {0}")]
-    ErrRtcpError(#[from] rtcp::error::Error),
-    #[error("RtpError: {0}")]
-    ErrRtpError(#[from] rtp::error::Error),
-    #[error("SrtpError: {0}")]
-    ErrSrtpError(#[from] srtp::error::Error),
-    #[error("DtlsError: {0}")]
-    ErrDtlsError(#[from] dtls::error::Error),
-
-    #[error("Other errors: {0}")]
-    ErrOthers(String),
+impl Error {
+    pub fn equal(&self, err: &anyhow::Error) -> bool {
+        err.downcast_ref::<Self>().map_or(false, |e| e == self)
+    }
 }

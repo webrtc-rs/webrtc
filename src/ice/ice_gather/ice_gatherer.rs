@@ -1,14 +1,16 @@
 use crate::api::setting_engine::SettingEngine;
 use crate::error::Error;
+use crate::ice::ice_candidate::ice_candidate_type::ICECandidateType;
 use crate::ice::ice_candidate::*;
 use crate::ice::ice_gather::ice_gatherer_state::ICEGathererState;
-use crate::policy::ice_transport_policy::ICETransportPolicy;
-use ice::candidate::{Candidate, CandidateType};
-
-use crate::ice::ice_candidate::ice_candidate_type::ICECandidateType;
 use crate::ice::ICEParameters;
+use crate::policy::ice_transport_policy::ICETransportPolicy;
+
 use ice::agent::Agent;
+use ice::candidate::{Candidate, CandidateType};
 use ice::url::Url;
+
+use anyhow::Result;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -65,7 +67,7 @@ impl ICEGatherer {
         }
     }
 
-    pub(crate) async fn create_agent(&mut self) -> Result<(), Error> {
+    pub(crate) async fn create_agent(&mut self) -> Result<()> {
         if self.agent.is_some() || self.state() != ICEGathererState::New {
             return Ok(());
         }
@@ -147,7 +149,7 @@ impl ICEGatherer {
     }
 
     /// Gather ICE candidates.
-    pub async fn gather(&mut self) -> Result<(), Error> {
+    pub async fn gather(&mut self) -> Result<()> {
         self.create_agent().await?;
         self.set_state(ICEGathererState::Gathering).await;
 
@@ -216,7 +218,7 @@ impl ICEGatherer {
     }
 
     /// Close prunes all local candidates, and closes the ports.
-    pub async fn close(&mut self) -> Result<(), Error> {
+    pub async fn close(&mut self) -> Result<()> {
         if let Some(agent) = self.agent.take() {
             agent.close().await?;
             self.set_state(ICEGathererState::Closed).await;
@@ -226,13 +228,13 @@ impl ICEGatherer {
     }
 
     /// get_local_parameters returns the ICE parameters of the ICEGatherer.
-    pub async fn get_local_parameters(&mut self) -> Result<ICEParameters, Error> {
+    pub async fn get_local_parameters(&mut self) -> Result<ICEParameters> {
         self.create_agent().await?;
 
         let (frag, pwd) = if let Some(agent) = &self.agent {
             agent.get_local_user_credentials().await
         } else {
-            return Err(Error::ErrICEAgentNotExist);
+            return Err(Error::ErrICEAgentNotExist.into());
         };
 
         Ok(ICEParameters {
@@ -243,13 +245,13 @@ impl ICEGatherer {
     }
 
     /// get_local_candidates returns the sequence of valid local candidates associated with the ICEGatherer.
-    pub async fn get_local_candidates(&mut self) -> Result<Vec<ICECandidate>, Error> {
+    pub async fn get_local_candidates(&mut self) -> Result<Vec<ICECandidate>> {
         self.create_agent().await?;
 
         let ice_candidates = if let Some(agent) = &self.agent {
             agent.get_local_candidates().await?
         } else {
-            return Err(Error::ErrICEAgentNotExist);
+            return Err(Error::ErrICEAgentNotExist.into());
         };
 
         Ok(ice_candidates_from_ice(&ice_candidates))
@@ -419,7 +421,7 @@ mod test {
     use tokio::sync::mpsc;
 
     #[tokio::test]
-    async fn test_new_ice_gatherer_success() -> Result<(), Error> {
+    async fn test_new_ice_gatherer_success() -> Result<()> {
         let opts = ICEGatherOptions {
             ice_servers: vec![ICEServer {
                 urls: vec!["stun:stun.l.google.com:19302".to_owned()],
@@ -471,7 +473,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_ice_gather_mdns_candidate_gathering() -> Result<(), Error> {
+    async fn test_ice_gather_mdns_candidate_gathering() -> Result<()> {
         let mut s = SettingEngine::default();
         s.set_ice_multicast_dns_mode(ice::mdns::MulticastDnsMode::QueryAndGather);
 

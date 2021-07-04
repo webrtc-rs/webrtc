@@ -1,6 +1,8 @@
 use crate::error::Error;
 use crate::ice::ice_credential_type::ICECredentialType;
 
+use anyhow::Result;
+
 /// ICEServer describes a single STUN and TURN server that can be used by
 /// the ICEAgent to establish a connection with a peer.
 #[derive(Default, Debug, Clone)]
@@ -12,16 +14,16 @@ pub struct ICEServer {
 }
 
 impl ICEServer {
-    pub(crate) fn parse_url(&self, url_str: &str) -> Result<ice::url::Url, Error> {
-        Ok(ice::url::Url::parse_url(url_str)?)
+    pub(crate) fn parse_url(&self, url_str: &str) -> Result<ice::url::Url> {
+        ice::url::Url::parse_url(url_str)
     }
 
-    pub(crate) fn validate(&self) -> Result<(), Error> {
+    pub(crate) fn validate(&self) -> Result<()> {
         self.urls()?;
         Ok(())
     }
 
-    pub(crate) fn urls(&self) -> Result<Vec<ice::url::Url>, Error> {
+    pub(crate) fn urls(&self) -> Result<Vec<ice::url::Url>> {
         let mut urls = vec![];
 
         for url_str in &self.urls {
@@ -30,7 +32,7 @@ impl ICEServer {
             {
                 // https://www.w3.org/TR/webrtc/#set-the-configuration (step #11.3.2)
                 if self.username.is_empty() || self.credential.is_empty() {
-                    return Err(Error::ErrNoTurnCredentials);
+                    return Err(Error::ErrNoTurnCredentials.into());
                 }
                 url.username = self.username.clone();
 
@@ -47,7 +49,7 @@ impl ICEServer {
                             }
                         }*/
                     }
-                    _ => return Err(Error::ErrTurnCredentials),
+                    _ => return Err(Error::ErrTurnCredentials.into()),
                 };
             }
 
@@ -108,7 +110,7 @@ mod test {
                     urls: vec!["turn:192.158.29.39?transport=udp".to_owned()],
                     ..Default::default()
                 },
-                Error::ErrNoTurnCredentials.to_string(),
+                Error::ErrNoTurnCredentials,
             ),
             (
                 ICEServer {
@@ -117,7 +119,7 @@ mod test {
                     credential: String::new(),
                     credential_type: ICECredentialType::Password,
                 },
-                Error::ErrNoTurnCredentials.to_string(),
+                Error::ErrNoTurnCredentials,
             ),
             (
                 ICEServer {
@@ -126,7 +128,7 @@ mod test {
                     credential: String::new(),
                     credential_type: ICECredentialType::Oauth,
                 },
-                Error::ErrNoTurnCredentials.to_string(),
+                Error::ErrNoTurnCredentials,
             ),
             (
                 ICEServer {
@@ -135,23 +137,44 @@ mod test {
                     credential: String::new(),
                     credential_type: ICECredentialType::Unspecified,
                 },
-                Error::ErrNoTurnCredentials.to_string(),
-            ),
-            (
-                ICEServer {
-                    urls: vec!["stun:google.de?transport=udp".to_owned()],
-                    username: "unittest".to_owned(),
-                    credential: String::new(),
-                    credential_type: ICECredentialType::Oauth,
-                },
-                //Error::ErrUtilError.to_string(),
-                "UtilError: queries not supported in stun address".to_owned(),
+                Error::ErrNoTurnCredentials,
             ),
         ];
 
         for (ice_server, expected_err) in tests {
             if let Err(err) = ice_server.urls() {
-                assert_eq!(err.to_string(), expected_err, "{:?}", ice_server);
+                assert!(
+                    expected_err.equal(&err),
+                    "{:?} with err {:?}",
+                    ice_server,
+                    err
+                );
+            } else {
+                assert!(false, "expected error, but got ok");
+            }
+        }
+    }
+
+    #[test]
+    fn test_ice_server_validate_failure_err_stun_query() {
+        let tests = vec![(
+            ICEServer {
+                urls: vec!["stun:google.de?transport=udp".to_owned()],
+                username: "unittest".to_owned(),
+                credential: String::new(),
+                credential_type: ICECredentialType::Oauth,
+            },
+            ice::error::Error::ErrStunQuery,
+        )];
+
+        for (ice_server, expected_err) in tests {
+            if let Err(err) = ice_server.urls() {
+                assert!(
+                    expected_err.equal(&err),
+                    "{:?} with err {:?}",
+                    ice_server,
+                    err
+                );
             } else {
                 assert!(false, "expected error, but got ok");
             }

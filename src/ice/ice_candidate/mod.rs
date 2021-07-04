@@ -4,6 +4,7 @@ pub mod ice_candidate_type;
 use crate::error::Error;
 use crate::ice::ice_candidate::ice_candidate_type::ICECandidateType;
 use crate::ice::ice_protocol::ICEProtocol;
+use anyhow::Result;
 use ice::candidate::candidate_base::CandidateBaseConfig;
 use ice::candidate::candidate_host::CandidateHostConfig;
 use ice::candidate::candidate_peer_reflexive::CandidatePeerReflexiveConfig;
@@ -64,7 +65,7 @@ impl From<&Arc<dyn Candidate + Send + Sync>> for ICECandidate {
 }
 
 impl ICECandidate {
-    pub(crate) async fn to_ice(&self) -> Result<impl Candidate, Error> {
+    pub(crate) async fn to_ice(&self) -> Result<impl Candidate> {
         let candidate_id = self.stats_id.clone();
         let c = match self.typ {
             ICECandidateType::Host => {
@@ -136,7 +137,7 @@ impl ICECandidate {
                 };
                 config.new_candidate_relay().await?
             }
-            _ => return Err(Error::ErrICECandidateTypeUnknown),
+            _ => return Err(Error::ErrICECandidateTypeUnknown.into()),
         };
 
         Ok(c)

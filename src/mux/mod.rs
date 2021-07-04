@@ -4,10 +4,10 @@ mod mux_test;
 pub mod endpoint;
 pub mod mux_func;
 
-use crate::error::Error;
 use crate::mux::endpoint::Endpoint;
 use crate::mux::mux_func::MatchFunc;
 
+use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -120,7 +120,7 @@ impl Mux {
     async fn dispatch(
         buf: &[u8],
         endpoints: &Arc<Mutex<HashMap<usize, Arc<Endpoint>>>>,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let mut endpoint = None;
 
         {

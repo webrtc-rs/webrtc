@@ -1,6 +1,6 @@
 use super::sdp_type::SDPType;
-use crate::error::Error;
 
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 
@@ -15,7 +15,7 @@ pub struct SessionDescription {
 
 /// Unmarshal is a helper to deserialize the sdp
 impl SessionDescription {
-    pub fn unmarshal(&self) -> Result<sdp::session_description::SessionDescription, Error> {
+    pub fn unmarshal(&self) -> Result<sdp::session_description::SessionDescription> {
         let mut reader = Cursor::new(self.sdp.as_bytes());
         let parsed = sdp::session_description::SessionDescription::unmarshal(&mut reader)?;
         Ok(parsed)
