@@ -2,6 +2,7 @@ use crate::dtls::dtls_transport::DTLSTransport;
 use crate::ice::ice_gather::ice_gatherer::ICEGatherer;
 use crate::ice::ice_gather::ICEGatherOptions;
 use crate::ice::ice_transport::ICETransport;
+
 use dtls::crypto::Certificate;
 use media_engine::*;
 use setting_engine::*;
@@ -44,8 +45,8 @@ impl Api {
     /// new_ice_transport creates a new ice transport.
     /// This constructor is part of the ORTC API. It is not
     /// meant to be used together with the basic WebRTC API.
-    pub fn new_ice_transport(&self, gatherer: ICEGatherer) -> ICETransport {
-        ICETransport::new(gatherer)
+    pub fn new_ice_transport(&self, gatherer: ICEGatherer) -> Result<ICETransport> {
+        Ok(ICETransport::new(gatherer))
     }
 
     /// new_dtls_transport creates a new dtls transport.
@@ -82,6 +83,25 @@ impl Api {
             self.setting_engine.clone(),
         ))
     }
+
+    /*TODO:
+    /// new_sctp_transport creates a new SCTPTransport.
+    /// This constructor is part of the ORTC API. It is not
+    /// meant to be used together with the basic WebRTC API.
+    pub fn new_sctp_transport(&self, dtls: DTLSTransport) -> Result<SCTPTransport> {
+        /*TODO:res := &SCTPTransport{
+            dtlsTransport: dtls,
+            state:         SCTPTransportStateConnecting,
+            api:           api,
+            log:           api.settingEngine.LoggerFactory.NewLogger("ortc"),
+        }
+
+        res.updateMessageSize()
+        res.updateMaxChannels()
+
+        return res*/
+        Err(Error::ErrSCTPTransportDTLS.into())
+    }*/
 }
 
 pub struct ApiBuilder {
