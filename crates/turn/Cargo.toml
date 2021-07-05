@@ -1,6 +1,6 @@
 [package]
 name = "turn"
-version = "0.2.2"
+version = "0.2.3"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of TURN"
@@ -13,7 +13,7 @@ repository = "https://github.com/webrtc-rs/turn"
 
 [dependencies]
 util = { package = "webrtc-util", version = "0.2.3", default-features = false, features = ["conn", "vnet", "ifaces"] }
-stun = "0.2.2"
+stun = "0.2.3"
 tokio = { version = "1.0", features = ["full"] }
 async-trait = "0.1"
 log = "0.4"
