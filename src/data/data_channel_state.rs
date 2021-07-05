@@ -34,6 +34,18 @@ const DATA_CHANNEL_STATE_OPEN_STR: &str = "Open";
 const DATA_CHANNEL_STATE_CLOSING_STR: &str = "Closing";
 const DATA_CHANNEL_STATE_CLOSED_STR: &str = "Closed";
 
+impl From<u8> for DataChannelState {
+    fn from(v: u8) -> Self {
+        match v {
+            1 => DataChannelState::Connecting,
+            2 => DataChannelState::Open,
+            3 => DataChannelState::Closing,
+            4 => DataChannelState::Closed,
+            _ => DataChannelState::Unspecified,
+        }
+    }
+}
+
 impl From<&str> for DataChannelState {
     fn from(raw: &str) -> Self {
         match raw {

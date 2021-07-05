@@ -9,9 +9,7 @@ use std::sync::Arc;
 
 const sctpMaxChannels: u16 = u16::MAX;
 
-pub type OnErrorHdlrFn = Box<
-    dyn (FnMut(anyhow::Error) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync,
->;
+
 
 pub type OnDataChannelHdlrFn = Box<
     dyn (FnMut(Arc<DataChannel>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)

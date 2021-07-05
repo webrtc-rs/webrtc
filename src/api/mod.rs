@@ -85,23 +85,47 @@ impl Api {
     }
 
     /*TODO:
-    /// new_sctp_transport creates a new SCTPTransport.
-    /// This constructor is part of the ORTC API. It is not
-    /// meant to be used together with the basic WebRTC API.
-    pub fn new_sctp_transport(&self, dtls: DTLSTransport) -> Result<SCTPTransport> {
-        /*TODO:res := &SCTPTransport{
-            dtlsTransport: dtls,
-            state:         SCTPTransportStateConnecting,
-            api:           api,
-            log:           api.settingEngine.LoggerFactory.NewLogger("ortc"),
+            /// new_sctp_transport creates a new SCTPTransport.
+            /// This constructor is part of the ORTC API. It is not
+            /// meant to be used together with the basic WebRTC API.
+            pub fn new_sctp_transport(&self, dtls: DTLSTransport) -> Result<SCTPTransport> {
+                /*TODO:res := &SCTPTransport{
+                    dtlsTransport: dtls,
+                    state:         SCTPTransportStateConnecting,
+                    api:           api,
+                    log:           api.settingEngine.LoggerFactory.NewLogger("ortc"),
+                }
+
+                res.updateMessageSize()
+                res.updateMaxChannels()
+
+                return res*/
+                Err(Error::ErrSCTPTransportDTLS.into())
+            }
+
+
+        // NewDataChannel creates a new DataChannel.
+    // This constructor is part of the ORTC API. It is not
+    // meant to be used together with the basic WebRTC API.
+    func (api *API) NewDataChannel(transport *SCTPTransport, params *DataChannelParameters) (*DataChannel, error) {
+        // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #5)
+        if len(params.Label) > 65535 {
+            return nil, &rtcerr.TypeError{Err: ErrStringSizeLimit}
+        }
+        d, err := api.newDataChannel(params, api.settingEngine.LoggerFactory.NewLogger("ortc"))
+
+        if err != nil {
+            return nil, err
         }
 
-        res.updateMessageSize()
-        res.updateMaxChannels()
+        err = d.open(transport)
+        if err != nil {
+            return nil, err
+        }
 
-        return res*/
-        Err(Error::ErrSCTPTransportDTLS.into())
-    }*/
+        return d, nil
+    }
+             */
 }
 
 pub struct ApiBuilder {

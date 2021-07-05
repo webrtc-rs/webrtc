@@ -1,7 +1,8 @@
+pub mod data_channel;
+pub mod data_channel_state;
+
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-
-pub mod data_channel_state;
 
 /// DataChannelConfig can be used to configure properties of the underlying
 /// channel such as data reliability.

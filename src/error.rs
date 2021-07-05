@@ -1,3 +1,5 @@
+use std::future::Future;
+use std::pin::Pin;
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq)]
@@ -302,6 +304,11 @@ pub enum Error {
     ErrICETransportNotInNew,
     #[error("bad Certificate PEM format")]
     ErrCertificatePEMFormatError,
+    #[error("SCTP is not established")]
+    ErrSCTPNotEstablished,
+
+    #[error("DataChannel is not opened")]
+    ErrClosedPipe,
 
     #[allow(non_camel_case_types)]
     #[error("{0}")]
@@ -313,3 +320,7 @@ impl Error {
         err.downcast_ref::<Self>().map_or(false, |e| e == self)
     }
 }
+
+pub type OnErrorHdlrFn = Box<
+    dyn (FnMut(anyhow::Error) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync,
+>;
