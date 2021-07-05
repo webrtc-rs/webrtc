@@ -15,9 +15,9 @@ repository = "https://github.com/webrtc-rs/webrtc"
 util = { package = "webrtc-util", version = "0.2.3" }
 sdp = "0.2.1"
 mdns = { package = "webrtc-mdns", version = "0.2.13" }
-stun = "0.2.2"
-turn = "0.2.2"
-ice = { package = "webrtc-ice", version = "0.2.2" }
+stun = "0.2.3"
+turn = "0.2.3"
+ice = { package = "webrtc-ice", version = "0.2.3" }
 dtls = { package = "webrtc-dtls", version = "0.2.2" }
 rtp = "0.2.7"
 rtcp = "0.2.3"
