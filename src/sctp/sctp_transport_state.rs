@@ -1,6 +1,7 @@
 use std::fmt;
 
 /// SCTPTransportState indicates the state of the SCTP transport.#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum SCTPTransportState {
     Unspecified = 0,
 
@@ -50,5 +51,43 @@ impl fmt::Display for SCTPTransportState {
             SCTPTransportState::Unspecified => crate::UNSPECIFIED_STR,
         };
         write!(f, "{}", s)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_new_sctp_transport_state() {
+        let tests = vec![
+            (crate::UNSPECIFIED_STR, SCTPTransportState::Unspecified),
+            ("Connecting", SCTPTransportState::Connecting),
+            ("Connected", SCTPTransportState::Connected),
+            ("Closed", SCTPTransportState::Closed),
+        ];
+
+        for (transport_state_string, expected_transport_state) in tests {
+            assert_eq!(
+                expected_transport_state,
+                SCTPTransportState::from(transport_state_string),
+                "testCase: {}",
+                expected_transport_state,
+            );
+        }
+    }
+
+    #[test]
+    fn test_sctp_transport_state_string() {
+        let tests = vec![
+            (SCTPTransportState::Unspecified, crate::UNSPECIFIED_STR),
+            (SCTPTransportState::Connecting, "Connecting"),
+            (SCTPTransportState::Connected, "Connected"),
+            (SCTPTransportState::Closed, "Closed"),
+        ];
+
+        for (state, expected_string) in tests {
+            assert_eq!(expected_string, state.to_string(),)
+        }
     }
 }

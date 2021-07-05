@@ -95,7 +95,7 @@ mod test {
     #[test]
     fn test_dtls_transport_state_string() {
         let tests = vec![
-            (DTLSTransportState::Unspecified, "Unspecified"),
+            (DTLSTransportState::Unspecified, crate::UNSPECIFIED_STR),
             (DTLSTransportState::New, "New"),
             (DTLSTransportState::Connecting, "Connecting"),
             (DTLSTransportState::Connected, "Connected"),
