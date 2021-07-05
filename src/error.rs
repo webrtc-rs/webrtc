@@ -81,10 +81,10 @@ pub enum Error {
     ErrNegotiatedWithoutID,
 
     /// ErrRetransmitsOrPacketLifeTime indicates that an attempt to create a data
-    /// channel was made with both options MaxPacketLifeTime and MaxRetransmits
+    /// channel was made with both options max_packet_life_time and max_retransmits
     /// set together. Such configuration is not supported by the specification
     /// and is mutually exclusive.
-    #[error("both MaxPacketLifeTime and MaxRetransmits was set")]
+    #[error("both max_packet_life_time and max_retransmits was set")]
     ErrRetransmitsOrPacketLifeTime,
 
     /// ErrCodecNotFound is returned when a codec search to the Media Engine fails

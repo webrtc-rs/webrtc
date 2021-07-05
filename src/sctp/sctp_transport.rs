@@ -172,9 +172,9 @@ func (r *SCTPTransport) acceptDataChannels(a *sctp.Association) {
             Label:             dc.Config.Label,
             Protocol:          dc.Config.Protocol,
             Negotiated:        dc.Config.Negotiated,
-            Ordered:           ordered,
-            MaxPacketLifeTime: maxPacketLifeTime,
-            MaxRetransmits:    maxRetransmits,
+            ordered:           ordered,
+            max_packet_life_time: maxPacketLifeTime,
+            max_retransmits:    maxRetransmits,
         }, r.api.settingEngine.LoggerFactory.NewLogger("ortc"))
         if err != nil {
             r.log.Errorf("Failed to accept data channel: %v", err)
