@@ -31,7 +31,7 @@ pub type OnCloseHdlrFn =
 /// DataChannel represents a WebRTC DataChannel
 /// The DataChannel interface represents a network channel
 /// which can be used for bidirectional peer-to-peer transfers of arbitrary data
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct DataChannel {
     stats_id: String,
     label: String,
@@ -43,7 +43,7 @@ pub struct DataChannel {
     id: u16,
     ready_state: Arc<AtomicU8>, // DataChannelState
     //buffered_amount_low_threshold: u64,
-    detach_called: AtomicBool,
+    detach_called: Arc<AtomicBool>,
 
     // The binaryType represents attribute MUST, on getting, return the value to
     // which it was last set. On setting, if the new value is either the string
@@ -82,7 +82,7 @@ impl DataChannel {
             max_packet_lifetime: params.max_packet_lifetime,
             max_retransmits: params.max_retransmits,
             ready_state: Arc::new(AtomicU8::new(DataChannelState::Connecting as u8)),
-            detach_called: AtomicBool::new(false),
+            detach_called: Arc::new(AtomicBool::new(false)),
             setting_engine,
             ..Default::default()
         }
@@ -208,7 +208,7 @@ impl DataChannel {
         *handler = Some(f);
     }
 
-    pub(crate) async fn handle_open(&mut self, dc: Arc<data::data_channel::DataChannel>) {
+    pub(crate) async fn handle_open(&self) {
         self.set_ready_state(DataChannelState::Open);
 
         {
@@ -219,29 +219,25 @@ impl DataChannel {
             }
         }
 
-        if !self.setting_engine.detach.data_channels {
-            let data_channel = Arc::clone(&dc);
-            let ready_state = Arc::clone(&self.ready_state);
-            let on_message_handler = Arc::clone(&self.on_message_handler);
-            let on_close_handler = Arc::clone(&self.on_close_handler);
-            let on_error_handler = Arc::clone(&self.on_error_handler);
-            tokio::spawn(async move {
-                DataChannel::read_loop(
-                    data_channel,
-                    ready_state,
-                    on_message_handler,
-                    on_close_handler,
-                    on_error_handler,
-                )
-                .await;
-            });
+        if let Some(dc) = &self.data_channel {
+            if !self.setting_engine.detach.data_channels {
+                let data_channel = Arc::clone(dc);
+                let ready_state = Arc::clone(&self.ready_state);
+                let on_message_handler = Arc::clone(&self.on_message_handler);
+                let on_close_handler = Arc::clone(&self.on_close_handler);
+                let on_error_handler = Arc::clone(&self.on_error_handler);
+                tokio::spawn(async move {
+                    DataChannel::read_loop(
+                        data_channel,
+                        ready_state,
+                        on_message_handler,
+                        on_close_handler,
+                        on_error_handler,
+                    )
+                    .await;
+                });
+            }
         }
-
-        /*{
-            let mut data_channel = self.data_channel.lock().await;
-            *data_channel = Some(dc);
-        }*/
-        self.data_channel = Some(dc);
     }
 
     /// on_error sets an event handler which is invoked when
