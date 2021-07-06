@@ -21,7 +21,7 @@ async fn create_new_association_pair(
     br: &Arc<Bridge>,
     ca: Arc<dyn Conn + Send + Sync>,
     cb: Arc<dyn Conn + Send + Sync>,
-) -> Result<(Association, Association)> {
+) -> Result<(Arc<Association>, Arc<Association>)> {
     let (handshake0ch_tx, mut handshake0ch_rx) = mpsc::channel(1);
     let (handshake1ch_tx, mut handshake1ch_rx) = mpsc::channel(1);
     let (closed_tx, mut closed_rx0) = broadcast::channel::<()>(1);
@@ -94,10 +94,14 @@ async fn create_new_association_pair(
 
     drop(closed_tx);
 
-    Ok((client.unwrap(), server.unwrap()))
+    Ok((Arc::new(client.unwrap()), Arc::new(server.unwrap())))
 }
 
-async fn close_association_pair(br: &Arc<Bridge>, client: Association, server: Association) {
+async fn close_association_pair(
+    br: &Arc<Bridge>,
+    client: Arc<Association>,
+    server: Arc<Association>,
+) {
     let (handshake0ch_tx, mut handshake0ch_rx) = mpsc::channel(1);
     let (handshake1ch_tx, mut handshake1ch_rx) = mpsc::channel(1);
     let (closed_tx, mut closed_rx0) = broadcast::channel::<()>(1);
@@ -168,7 +172,7 @@ async fn pr_ordered_unordered_test(channel_type: ChannelType, is_ordered: bool) 
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
-    let (a0, mut a1) = create_new_association_pair(&br, Arc::new(ca), Arc::new(cb)).await?;
+    let (a0, a1) = create_new_association_pair(&br, Arc::new(ca), Arc::new(cb)).await?;
 
     let cfg = Config {
         channel_type,
@@ -180,7 +184,7 @@ async fn pr_ordered_unordered_test(channel_type: ChannelType, is_ordered: bool) 
     let dc0 = DataChannel::dial(&a0, 100, cfg.clone()).await?;
     bridge_process_at_least_one(&br).await;
 
-    let dc1 = DataChannel::accept(&mut a1, Config::default()).await?;
+    let dc1 = DataChannel::accept(&a1, Config::default()).await?;
     bridge_process_at_least_one(&br).await;
 
     assert_eq!(dc0.config, cfg, "local config should match");
@@ -254,7 +258,7 @@ async fn test_data_channel_channel_type_reliable_ordered() -> Result<()> {
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
-    let (a0, mut a1) = create_new_association_pair(&br, Arc::new(ca), Arc::new(cb)).await?;
+    let (a0, a1) = create_new_association_pair(&br, Arc::new(ca), Arc::new(cb)).await?;
 
     let cfg = Config {
         channel_type: ChannelType::Reliable,
@@ -266,7 +270,7 @@ async fn test_data_channel_channel_type_reliable_ordered() -> Result<()> {
     let dc0 = DataChannel::dial(&a0, 100, cfg.clone()).await?;
     bridge_process_at_least_one(&br).await;
 
-    let dc1 = DataChannel::accept(&mut a1, Config::default()).await?;
+    let dc1 = DataChannel::accept(&a1, Config::default()).await?;
     bridge_process_at_least_one(&br).await;
 
     assert_eq!(dc0.config, cfg, "local config should match");
@@ -316,7 +320,7 @@ async fn test_data_channel_channel_type_reliable_unordered() -> Result<()> {
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
-    let (a0, mut a1) = create_new_association_pair(&br, Arc::new(ca), Arc::new(cb)).await?;
+    let (a0, a1) = create_new_association_pair(&br, Arc::new(ca), Arc::new(cb)).await?;
 
     let cfg = Config {
         channel_type: ChannelType::ReliableUnordered,
@@ -328,7 +332,7 @@ async fn test_data_channel_channel_type_reliable_unordered() -> Result<()> {
     let dc0 = DataChannel::dial(&a0, 100, cfg.clone()).await?;
     bridge_process_at_least_one(&br).await;
 
-    let dc1 = DataChannel::accept(&mut a1, Config::default()).await?;
+    let dc1 = DataChannel::accept(&a1, Config::default()).await?;
     bridge_process_at_least_one(&br).await;
 
     assert_eq!(dc0.config, cfg, "local config should match");
@@ -411,7 +415,7 @@ async fn test_data_channel_buffered_amount() -> Result<()> {
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
-    let (a0, mut a1) = create_new_association_pair(&br, Arc::new(ca), Arc::new(cb)).await?;
+    let (a0, a1) = create_new_association_pair(&br, Arc::new(ca), Arc::new(cb)).await?;
 
     let dc0 = Arc::new(
         DataChannel::dial(
@@ -426,7 +430,7 @@ async fn test_data_channel_buffered_amount() -> Result<()> {
     );
     bridge_process_at_least_one(&br).await;
 
-    let dc1 = Arc::new(DataChannel::accept(&mut a1, Config::default()).await?);
+    let dc1 = Arc::new(DataChannel::accept(&a1, Config::default()).await?);
     bridge_process_at_least_one(&br).await;
 
     while dc0.buffered_amount() > 0 {
@@ -511,7 +515,7 @@ async fn test_stats() -> Result<()> {
 
     let (br, ca, cb) = Bridge::new(0, None, None);
 
-    let (a0, mut a1) = create_new_association_pair(&br, Arc::new(ca), Arc::new(cb)).await?;
+    let (a0, a1) = create_new_association_pair(&br, Arc::new(ca), Arc::new(cb)).await?;
 
     let cfg = Config {
         channel_type: ChannelType::Reliable,
@@ -523,7 +527,7 @@ async fn test_stats() -> Result<()> {
     let dc0 = DataChannel::dial(&a0, 100, cfg.clone()).await?;
     bridge_process_at_least_one(&br).await;
 
-    let dc1 = DataChannel::accept(&mut a1, Config::default()).await?;
+    let dc1 = DataChannel::accept(&a1, Config::default()).await?;
     bridge_process_at_least_one(&br).await;
 
     let mut bytes_sent = 0;

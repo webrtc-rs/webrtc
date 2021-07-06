@@ -38,7 +38,7 @@ pub struct Config {
 /// DataChannel represents a data channel
 #[derive(Debug, Default, Clone)]
 pub struct DataChannel {
-    config: Config,
+    pub config: Config,
     stream: Arc<Stream>,
 
     // stats
@@ -58,7 +58,11 @@ impl DataChannel {
     }
 
     /// Dial opens a data channels over SCTP
-    pub async fn dial(association: &Association, identifier: u16, config: Config) -> Result<Self> {
+    pub async fn dial(
+        association: &Arc<Association>,
+        identifier: u16,
+        config: Config,
+    ) -> Result<Self> {
         let stream = association
             .open_stream(identifier, PayloadProtocolIdentifier::Binary)
             .await?;
@@ -67,11 +71,11 @@ impl DataChannel {
     }
 
     /// Accept is used to accept incoming data channels over SCTP
-    pub async fn accept(association: &mut Association, config: Config) -> Result<Self> {
+    pub async fn accept(association: &Arc<Association>, config: Config) -> Result<Self> {
         let stream = association
             .accept_stream()
             .await
-            .ok_or_else(|| Error::new("accept_stream failed with empty".to_owned()))?;
+            .ok_or_else(|| Error::ErrStreamClosed)?;
 
         stream.set_default_payload_type(PayloadProtocolIdentifier::Binary);
 

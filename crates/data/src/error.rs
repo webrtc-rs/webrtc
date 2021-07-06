@@ -12,6 +12,8 @@ pub enum Error {
     InvalidChannelType(u8),
     #[error("Unknown PayloadProtocolIdentifier {0}")]
     InvalidPayloadProtocolIdentifier(u8),
+    #[error("Stream closed")]
+    ErrStreamClosed,
 
     #[allow(non_camel_case_types)]
     #[error("{0}")]

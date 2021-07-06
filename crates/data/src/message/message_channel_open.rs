@@ -9,6 +9,12 @@ const CHANNEL_TYPE_PARTIAL_RELIABLE_TIMED: u8 = 0x02;
 const CHANNEL_TYPE_PARTIAL_RELIABLE_TIMED_UNORDERED: u8 = 0x82;
 const CHANNEL_TYPE_LEN: usize = 1;
 
+/// ChannelPriority
+pub const CHANNEL_PRIORITY_BELOW_NORMAL: u16 = 128;
+pub const CHANNEL_PRIORITY_NORMAL: u16 = 256;
+pub const CHANNEL_PRIORITY_HIGH: u16 = 512;
+pub const CHANNEL_PRIORITY_EXTRA_HIGH: u16 = 1024;
+
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub enum ChannelType {
     // `Reliable` determines the Data Channel provides a
