@@ -220,12 +220,11 @@ pub struct Association {
     inflight_queue_length: Arc<AtomicUsize>,
     will_send_shutdown: Arc<AtomicBool>,
     awake_write_loop_ch: Arc<mpsc::Sender<()>>,
-    close_loop_ch_rx: broadcast::Receiver<()>,
-    accept_ch_rx: mpsc::Receiver<Arc<Stream>>,
+    close_loop_ch_rx: Mutex<broadcast::Receiver<()>>,
+    accept_ch_rx: Mutex<mpsc::Receiver<Arc<Stream>>>,
     net_conn: Arc<dyn Conn + Send + Sync>,
     bytes_received: Arc<AtomicUsize>,
     bytes_sent: Arc<AtomicUsize>,
-    handshake_completed_ch_rx: mpsc::Receiver<Option<Error>>,
 
     pub(crate) association_internal: Arc<Mutex<AssociationInternal>>,
 }
@@ -233,9 +232,9 @@ pub struct Association {
 impl Association {
     /// server accepts a SCTP stream over a conn
     pub async fn server(config: Config) -> Result<Self> {
-        let mut a = Association::new(config, false).await?;
+        let (a, mut handshake_completed_ch_rx) = Association::new(config, false).await?;
 
-        if let Some(err_opt) = a.handshake_completed_ch_rx.recv().await {
+        if let Some(err_opt) = handshake_completed_ch_rx.recv().await {
             if let Some(err) = err_opt {
                 Err(err.into())
             } else {
@@ -248,9 +247,9 @@ impl Association {
 
     /// Client opens a SCTP stream over a conn
     pub async fn client(config: Config) -> Result<Self> {
-        let mut a = Association::new(config, true).await?;
+        let (a, mut handshake_completed_ch_rx) = Association::new(config, true).await?;
 
-        if let Some(err_opt) = a.handshake_completed_ch_rx.recv().await {
+        if let Some(err_opt) = handshake_completed_ch_rx.recv().await {
             if let Some(err) = err_opt {
                 Err(err.into())
             } else {
@@ -264,7 +263,7 @@ impl Association {
     /// Shutdown initiates the shutdown sequence. The method blocks until the
     /// shutdown sequence is completed and the connection is closed, or until the
     /// passed context is done, in which case the context's error is returned.
-    pub async fn shutdown(&mut self) -> Result<()> {
+    pub async fn shutdown(&self) -> Result<()> {
         log::debug!("[{}] closing association..", self.name);
 
         let state = self.get_state();
@@ -282,7 +281,10 @@ impl Association {
             self.set_state(AssociationState::ShutdownSent);
         }
 
-        let _ = self.close_loop_ch_rx.recv().await;
+        {
+            let mut close_loop_ch_rx = self.close_loop_ch_rx.lock().await;
+            let _ = close_loop_ch_rx.recv().await;
+        }
 
         Ok(())
     }
@@ -295,7 +297,7 @@ impl Association {
         ai.close().await
     }
 
-    async fn new(config: Config, is_client: bool) -> Result<Self> {
+    async fn new(config: Config, is_client: bool) -> Result<(Self, mpsc::Receiver<Option<Error>>)> {
         let net_conn = Arc::clone(&config.net_conn);
 
         let (awake_write_loop_ch_tx, awake_write_loop_ch_rx) = mpsc::channel(1);
@@ -411,21 +413,23 @@ impl Association {
             }
         }
 
-        Ok(Association {
-            name,
-            state,
-            max_message_size,
-            inflight_queue_length,
-            will_send_shutdown,
-            awake_write_loop_ch,
-            close_loop_ch_rx,
-            accept_ch_rx,
-            net_conn,
-            bytes_received,
-            bytes_sent,
+        Ok((
+            Association {
+                name,
+                state,
+                max_message_size,
+                inflight_queue_length,
+                will_send_shutdown,
+                awake_write_loop_ch,
+                close_loop_ch_rx: Mutex::new(close_loop_ch_rx),
+                accept_ch_rx: Mutex::new(accept_ch_rx),
+                net_conn,
+                bytes_received,
+                bytes_sent,
+                association_internal,
+            },
             handshake_completed_ch_rx,
-            association_internal,
-        })
+        ))
     }
 
     async fn read_loop(
@@ -558,8 +562,9 @@ impl Association {
     }
 
     /// accept_stream accepts a stream
-    pub async fn accept_stream(&mut self) -> Option<Arc<Stream>> {
-        self.accept_ch_rx.recv().await
+    pub async fn accept_stream(&self) -> Option<Arc<Stream>> {
+        let mut accept_ch_rx = self.accept_ch_rx.lock().await;
+        accept_ch_rx.recv().await
     }
 
     /// max_message_size returns the maximum message size you can send.

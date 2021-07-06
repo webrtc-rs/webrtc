@@ -69,7 +69,7 @@ async fn main() -> Result<()> {
         max_message_size: 0,
         name: "server".to_owned(),
     };
-    let mut a = Association::server(config).await?;
+    let a = Association::server(config).await?;
     println!("created a server");
 
     let stream = a.accept_stream().await.unwrap();

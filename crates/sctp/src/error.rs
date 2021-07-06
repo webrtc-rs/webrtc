@@ -215,6 +215,8 @@ pub enum Error {
     ErrInvalidSystemTime,
     #[error("Net Conn read error")]
     ErrNetConnReadError,
+    #[error("Max Data Channel ID")]
+    ErrMaxDataChannelID,
 
     #[allow(non_camel_case_types)]
     #[error("{0}")]

@@ -2274,7 +2274,7 @@ async fn test_association_shutdown() -> Result<()> {
     .filter(None, log::LevelFilter::Trace)
     .init();*/
 
-    let (mut a1, mut a2) = create_assocs().await?;
+    let (a1, a2) = create_assocs().await?;
 
     let s11 = a1.open_stream(1, PayloadProtocolIdentifier::String).await?;
     let s21 = a2.open_stream(1, PayloadProtocolIdentifier::String).await?;
@@ -2295,18 +2295,21 @@ async fn test_association_shutdown() -> Result<()> {
         assert!(false, "shutdown timeout");
     }
 
-    // Wait for close read loop channels to prevent flaky tests.
-    let timer2 = tokio::time::sleep(Duration::from_secs(1));
-    tokio::pin!(timer2);
-    tokio::select! {
-        _ = timer2.as_mut() =>{
-            assert!(false,"timed out waiting for a2 read loop to close");
-        },
-        _ = a2.close_loop_ch_rx.recv() => {
-            log::debug!("recv a2.close_loop_ch_rx");
-        }
-    };
+    {
+        let mut close_loop_ch_rx = a2.close_loop_ch_rx.lock().await;
 
+        // Wait for close read loop channels to prevent flaky tests.
+        let timer2 = tokio::time::sleep(Duration::from_secs(1));
+        tokio::pin!(timer2);
+        tokio::select! {
+            _ = timer2.as_mut() =>{
+                assert!(false,"timed out waiting for a2 read loop to close");
+            },
+            _ = close_loop_ch_rx.recv() => {
+                log::debug!("recv a2.close_loop_ch_rx");
+            }
+        };
+    }
     Ok(())
 }
 
@@ -2330,7 +2333,7 @@ async fn test_association_shutdown_during_write() -> Result<()> {
     .filter(None, log::LevelFilter::Trace)
     .init();*/
 
-    let (mut a1, mut a2) = create_assocs().await?;
+    let (a1, a2) = create_assocs().await?;
 
     let s11 = a1.open_stream(1, PayloadProtocolIdentifier::String).await?;
     let s21 = a2.open_stream(1, PayloadProtocolIdentifier::String).await?;
@@ -2364,32 +2367,38 @@ async fn test_association_shutdown_during_write() -> Result<()> {
     assert_eq!(test_data.len(), n);
     assert_eq!(&test_data, &buf[0..n]);
 
-    tokio::select! {
-        res = tokio::time::timeout(Duration::from_secs(1), a1.shutdown()) => {
-            if let Ok(result) = res {
-                assert!(result.is_ok(), "shutdown should be ok");
-            } else {
-                assert!(false, "shutdown timeout");
+    {
+        let mut close_loop_ch_rx = a1.close_loop_ch_rx.lock().await;
+        tokio::select! {
+            res = tokio::time::timeout(Duration::from_secs(1), a1.shutdown()) => {
+                if let Ok(result) = res {
+                    assert!(result.is_ok(), "shutdown should be ok");
+                } else {
+                    assert!(false, "shutdown timeout");
+                }
             }
-        }
-        _ = writing_done_rx.recv() => {
-            log::debug!("writing_done_rx");
-            let result = a1.close_loop_ch_rx.recv().await;
-            log::debug!("a1.close_loop_ch_rx.recv: {:?}", result);
-        },
-    };
+            _ = writing_done_rx.recv() => {
+                log::debug!("writing_done_rx");
+                let result = close_loop_ch_rx.recv().await;
+                log::debug!("a1.close_loop_ch_rx.recv: {:?}", result);
+            },
+        };
+    }
 
-    // Wait for close read loop channels to prevent flaky tests.
-    let timer2 = tokio::time::sleep(Duration::from_secs(1));
-    tokio::pin!(timer2);
-    tokio::select! {
-        _ = timer2.as_mut() =>{
-            assert!(false,"timed out waiting for a2 read loop to close");
-        },
-        _ = a2.close_loop_ch_rx.recv() => {
-            log::debug!("recv a2.close_loop_ch_rx");
-        }
-    };
+    {
+        let mut close_loop_ch_rx = a2.close_loop_ch_rx.lock().await;
+        // Wait for close read loop channels to prevent flaky tests.
+        let timer2 = tokio::time::sleep(Duration::from_secs(1));
+        tokio::pin!(timer2);
+        tokio::select! {
+            _ = timer2.as_mut() =>{
+                assert!(false,"timed out waiting for a2 read loop to close");
+            },
+            _ = close_loop_ch_rx.recv() => {
+                log::debug!("recv a2.close_loop_ch_rx");
+            }
+        };
+    }
 
     Ok(())
 }
@@ -2550,7 +2559,7 @@ async fn test_association_handle_packet_before_init() -> Result<()> {
 
         let (a_conn, charlie_conn) = pipe();
 
-        let a = Association::new(
+        let (a, _) = Association::new(
             Config {
                 net_conn: Arc::new(a_conn),
                 max_message_size: 0,
