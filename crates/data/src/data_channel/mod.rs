@@ -205,7 +205,7 @@ impl DataChannel {
         self.stream.stream_identifier()
     }
 
-    pub async fn handle_dcep<B>(&self, data: &mut B) -> Result<()>
+    async fn handle_dcep<B>(&self, data: &mut B) -> Result<()>
     where
         B: Buf,
     {
@@ -264,7 +264,7 @@ impl DataChannel {
         }
     }
 
-    pub async fn write_data_channel_ack(&self) -> Result<usize> {
+    async fn write_data_channel_ack(&self) -> Result<usize> {
         let ack = Message::DataChannelAck(DataChannelAck {}).marshal()?;
         self.stream
             .write_sctp(&ack, PayloadProtocolIdentifier::Dcep)
@@ -311,7 +311,7 @@ impl DataChannel {
         self.stream.on_buffered_amount_low(f).await
     }
 
-    pub fn commit_reliability_params(&self) {
+    fn commit_reliability_params(&self) {
         let (unordered, reliability_type) = match self.config.channel_type {
             ChannelType::Reliable => (false, ReliabilityType::Reliable),
             ChannelType::ReliableUnordered => (true, ReliabilityType::Reliable),
