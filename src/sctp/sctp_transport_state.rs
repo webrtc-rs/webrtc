@@ -3,7 +3,7 @@ use std::fmt;
 /// SCTPTransportState indicates the state of the SCTP transport.#[derive(Debug, Copy, Clone, PartialEq)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum SCTPTransportState {
-    Unspecified = 0,
+    Unspecified,
 
     /// SCTPTransportStateConnecting indicates the SCTPTransport is in the
     /// process of negotiating an association. This is the initial state of the
@@ -37,6 +37,17 @@ impl From<&str> for SCTPTransportState {
             SCTP_TRANSPORT_STATE_CONNECTING_STR => SCTPTransportState::Connecting,
             SCTP_TRANSPORT_STATE_CONNECTED_STR => SCTPTransportState::Connected,
             SCTP_TRANSPORT_STATE_CLOSED_STR => SCTPTransportState::Closed,
+            _ => SCTPTransportState::Unspecified,
+        }
+    }
+}
+
+impl From<u8> for SCTPTransportState {
+    fn from(v: u8) -> Self {
+        match v {
+            1 => SCTPTransportState::Connecting,
+            2 => SCTPTransportState::Connected,
+            3 => SCTPTransportState::Closed,
             _ => SCTPTransportState::Unspecified,
         }
     }

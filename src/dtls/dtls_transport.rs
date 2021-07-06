@@ -17,7 +17,7 @@ pub struct DTLSTransport {
     pub(crate) state: DTLSTransportState,
     pub(crate) srtp_protection_profile: ProtectionProfile,
     pub(crate) on_state_change_handler: Arc<Mutex<Option<OnStateChangeHdlrFn>>>,
-    pub(crate) conn: Option<DTLSConn>,
+    pub(crate) conn: Option<Arc<DTLSConn>>,
 
     pub(crate) srtp_session: Option<Session>,
     pub(crate) srtcp_session: Option<Session>,
@@ -331,7 +331,7 @@ impl DTLSTransport {
             return err
         }*/
 
-        self.conn = Some(dtls_conn);
+        self.conn = Some(Arc::new(dtls_conn));
         self.state_change(DTLSTransportState::Connected).await;
 
         self.start_srtp().await
@@ -368,7 +368,7 @@ impl DTLSTransport {
             };
         }
 
-        if let Some(mut conn) = self.conn.take() {
+        if let Some(conn) = self.conn.take() {
             // dtls connection may be closed on sctp close.
             match conn.close().await {
                 Ok(_) => {}

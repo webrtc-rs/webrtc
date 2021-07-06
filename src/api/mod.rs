@@ -89,15 +89,17 @@ impl Api {
             /// This constructor is part of the ORTC API. It is not
             /// meant to be used together with the basic WebRTC API.
             pub fn new_sctp_transport(&self, dtls: DTLSTransport) -> Result<SCTPTransport> {
-                /*TODO:res := &SCTPTransport{
+                /*TODO:
+                let remoteMaxMessageSize :usize = 65536;
+                let canSendSize:usize = 65536;
+                res := &SCTPTransport{
                     dtlsTransport: dtls,
                     state:         SCTPTransportStateConnecting,
+                    max_message_size: SCTPTransport::calc_message_size(remoteMaxMessageSize, canSendSize),
+                    max_channels : SCTP_MAX_CHANNELS
                     api:           api,
                     log:           api.settingEngine.LoggerFactory.NewLogger("ortc"),
                 }
-
-                res.updateMessageSize()
-                res.updateMaxChannels()
 
                 return res*/
                 Err(Error::ErrSCTPTransportDTLS.into())

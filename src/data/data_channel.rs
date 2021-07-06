@@ -5,10 +5,12 @@ use crate::error::{Error, OnErrorHdlrFn};
 
 use sctp::stream::OnBufferedAmountLowFn;
 
+use crate::sctp::sctp_transport::SCTPTransport;
 use anyhow::Result;
+use data::message::message_channel_open::ChannelType;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::Mutex;
@@ -31,7 +33,7 @@ pub type OnCloseHdlrFn =
 /// DataChannel represents a WebRTC DataChannel
 /// The DataChannel interface represents a network channel
 /// which can be used for bidirectional peer-to-peer transfers of arbitrary data
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub struct DataChannel {
     stats_id: String,
     label: String,
@@ -40,10 +42,10 @@ pub struct DataChannel {
     max_retransmits: u16,
     protocol: String,
     negotiated: bool,
-    id: u16,
+    id: AtomicU16,
     ready_state: Arc<AtomicU8>, // DataChannelState
-    //buffered_amount_low_threshold: u64,
-    detach_called: Arc<AtomicBool>,
+    buffered_amount_low_threshold: AtomicUsize,
+    detach_called: AtomicBool,
 
     // The binaryType represents attribute MUST, on getting, return the value to
     // which it was last set. On setting, if the new value is either the string
@@ -57,8 +59,10 @@ pub struct DataChannel {
     on_close_handler: Arc<Mutex<Option<OnCloseHdlrFn>>>,
     on_error_handler: Arc<Mutex<Option<OnErrorHdlrFn>>>,
 
-    //TODO:       sctpTransport *SCTPTransport
-    data_channel: Option<Arc<data::data_channel::DataChannel>>,
+    on_buffered_amount_low: Mutex<Option<OnBufferedAmountLowFn>>,
+
+    sctp_transport: Mutex<Option<Arc<SCTPTransport>>>,
+    data_channel: Mutex<Option<Arc<data::data_channel::DataChannel>>>,
 
     // A reference to the associated api object used by this datachannel
     setting_engine: SettingEngine,
@@ -77,96 +81,97 @@ impl DataChannel {
             label: params.label,
             protocol: params.protocol,
             negotiated: params.negotiated,
-            id: params.id,
+            id: AtomicU16::new(params.id),
             ordered: params.ordered,
             max_packet_lifetime: params.max_packet_lifetime,
             max_retransmits: params.max_retransmits,
             ready_state: Arc::new(AtomicU8::new(DataChannelState::Connecting as u8)),
-            detach_called: Arc::new(AtomicBool::new(false)),
+            detach_called: AtomicBool::new(false),
             setting_engine,
             ..Default::default()
         }
     }
 
-    /*
     /// open opens the datachannel over the sctp transport
-    pub(crate) fn open(sctpTransport: SCTPTransport) ->Result<()> {
-        association := sctpTransport.association()
-        if association == nil {
-            return errSCTPNotEstablished
-        }
-
-        d.mu.Lock()
-        if d.sctpTransport != nil { // already open
-            d.mu.Unlock()
-            return nil
-        }
-        d.sctpTransport = sctpTransport
-        var channelType datachannel.ChannelType
-        var reliabilityParameter uint32
-
-        switch {
-        case d.max_packet_life_time == nil && d.max_retransmits == nil:
-            if d.ordered {
-                channelType = datachannel.ChannelTypeReliable
+    pub(crate) async fn open(&self, sctp_transport: Arc<SCTPTransport>) -> Result<()> {
+        {
+            let mut st = self.sctp_transport.lock().await;
+            if st.is_none() {
+                *st = Some(Arc::clone(&sctp_transport));
             } else {
-                channelType = datachannel.ChannelTypeReliableUnordered
+                return Ok(());
             }
+        }
 
-        case d.max_retransmits != nil:
-            reliabilityParameter = uint32(*d.max_retransmits)
-            if d.ordered {
-                channelType = datachannel.ChannelTypePartialReliableRexmit
+        let association = sctp_transport.association().await;
+
+        let channel_type;
+        let reliability_parameter;
+
+        if self.max_packet_lifetime == 0 && self.max_retransmits == 0 {
+            reliability_parameter = 0u32;
+            if self.ordered {
+                channel_type = ChannelType::Reliable;
             } else {
-                channelType = datachannel.ChannelTypePartialReliableRexmitUnordered
+                channel_type = ChannelType::ReliableUnordered;
             }
-        default:
-            reliabilityParameter = uint32(*d.max_packet_life_time)
-            if d.ordered {
-                channelType = datachannel.ChannelTypePartialReliableTimed
+        } else if self.max_retransmits != 0 {
+            reliability_parameter = self.max_retransmits as u32;
+            if self.ordered {
+                channel_type = ChannelType::PartialReliableRexmit;
             } else {
-                channelType = datachannel.ChannelTypePartialReliableTimedUnordered
+                channel_type = ChannelType::PartialReliableRexmitUnordered;
+            }
+        } else {
+            reliability_parameter = self.max_packet_lifetime as u32;
+            if self.ordered {
+                channel_type = ChannelType::PartialReliableTimed;
+            } else {
+                channel_type = ChannelType::PartialReliableTimedUnordered;
             }
         }
 
-        cfg := &datachannel.Config{
-            ChannelType:          channelType,
-            Priority:             datachannel.ChannelPriorityNormal,
-            ReliabilityParameter: reliabilityParameter,
-            Label:                d.label,
-            Protocol:             d.protocol,
-            Negotiated:           d.negotiated,
-            LoggerFactory:        d.api.settingEngine.LoggerFactory,
+        let cfg = data::data_channel::Config {
+            channel_type,
+            priority: data::message::message_channel_open::CHANNEL_PRIORITY_NORMAL,
+            reliability_parameter,
+            label: self.label.clone(),
+            protocol: self.protocol.clone(),
+            negotiated: self.negotiated,
+        };
+
+        if self.id.load(Ordering::SeqCst) == 0 {
+            self.id.store(
+                sctp_transport
+                    .generate_and_set_data_channel_id(sctp_transport.dtls_transport.role())
+                    .await?,
+                Ordering::SeqCst,
+            );
         }
 
-        if d.id == nil {
-            err := d.sctpTransport.generateAndSetDataChannelID(d.sctpTransport.dtlsTransport.role(), &d.id)
-            if err != nil {
-                return err
-            }
-        }
-        dc, err := datachannel.Dial(association, *d.id, cfg)
-        if err != nil {
-            d.mu.Unlock()
-            return err
-        }
+        let dc = data::data_channel::DataChannel::dial(&association, self.id(), cfg).await?;
 
         // buffered_amount_low_threshold and on_buffered_amount_low might be set earlier
-        dc.set_buffered_amount_low_threshold(d.buffered_amount_low_threshold)
-        dc.on_buffered_amount_low(d.on_buffered_amount_low)
-        d.mu.Unlock()
+        dc.set_buffered_amount_low_threshold(
+            self.buffered_amount_low_threshold.load(Ordering::SeqCst),
+        );
+        {
+            let mut on_buffered_amount_low = self.on_buffered_amount_low.lock().await;
+            if let Some(f) = on_buffered_amount_low.take() {
+                dc.on_buffered_amount_low(f).await;
+            }
+        }
 
-        d.handleOpen(dc)
-        return nil
+        self.handle_open(Arc::new(dc)).await;
+
+        Ok(())
     }
 
-    // Transport returns the SCTPTransport instance the DataChannel is sending over.
-    func (d *DataChannel) Transport() *SCTPTransport {
-        d.mu.RLock()
-        defer d.mu.RUnlock()
-
-        return d.sctpTransport
-    }*/
+    /// transport returns the SCTPTransport instance the DataChannel is sending over.
+    pub async fn transport(&self) -> Option<Arc<SCTPTransport>> {
+        let sctp_transport = self.sctp_transport.lock().await;
+        sctp_transport.clone()
+    }
 
     /// After onOpen is complete check that the user called detach
     /// and provide an error message if the call was missed
@@ -208,7 +213,11 @@ impl DataChannel {
         *handler = Some(f);
     }
 
-    pub(crate) async fn handle_open(&self) {
+    pub(crate) async fn handle_open(&self, dc: Arc<data::data_channel::DataChannel>) {
+        {
+            let mut data_channel = self.data_channel.lock().await;
+            *data_channel = Some(Arc::clone(&dc));
+        }
         self.set_ready_state(DataChannelState::Open);
 
         {
@@ -219,24 +228,21 @@ impl DataChannel {
             }
         }
 
-        if let Some(dc) = &self.data_channel {
-            if !self.setting_engine.detach.data_channels {
-                let data_channel = Arc::clone(dc);
-                let ready_state = Arc::clone(&self.ready_state);
-                let on_message_handler = Arc::clone(&self.on_message_handler);
-                let on_close_handler = Arc::clone(&self.on_close_handler);
-                let on_error_handler = Arc::clone(&self.on_error_handler);
-                tokio::spawn(async move {
-                    DataChannel::read_loop(
-                        data_channel,
-                        ready_state,
-                        on_message_handler,
-                        on_close_handler,
-                        on_error_handler,
-                    )
-                    .await;
-                });
-            }
+        if !self.setting_engine.detach.data_channels {
+            let ready_state = Arc::clone(&self.ready_state);
+            let on_message_handler = Arc::clone(&self.on_message_handler);
+            let on_close_handler = Arc::clone(&self.on_close_handler);
+            let on_error_handler = Arc::clone(&self.on_error_handler);
+            tokio::spawn(async move {
+                DataChannel::read_loop(
+                    dc,
+                    ready_state,
+                    on_message_handler,
+                    on_close_handler,
+                    on_error_handler,
+                )
+                .await;
+            });
         }
     }
 
@@ -256,6 +262,7 @@ impl DataChannel {
     ) {
         let mut buffer = vec![0u8; DATA_CHANNEL_BUFFER_SIZE as usize];
         loop {
+            //TODO: add cancellation handling
             let (n, is_string) = match data_channel.read_data_channel(&mut buffer).await {
                 Ok((n, is_string)) => (n, is_string),
                 Err(err) => {
@@ -294,7 +301,9 @@ impl DataChannel {
     /// send sends the binary message to the DataChannel peer
     pub async fn send(&self, data: &Bytes) -> Result<usize> {
         self.ensure_open()?;
-        if let Some(dc) = &self.data_channel {
+
+        let data_channel = self.data_channel.lock().await;
+        if let Some(dc) = &*data_channel {
             dc.write_data_channel(data, false).await
         } else {
             Err(Error::ErrClosedPipe.into())
@@ -305,7 +314,8 @@ impl DataChannel {
     pub async fn send_text(&self, s: String) -> Result<usize> {
         self.ensure_open()?;
 
-        if let Some(dc) = &self.data_channel {
+        let data_channel = self.data_channel.lock().await;
+        if let Some(dc) = &*data_channel {
             dc.write_data_channel(&Bytes::from(s), true).await
         } else {
             Err(Error::ErrClosedPipe.into())
@@ -328,12 +338,13 @@ impl DataChannel {
     /// Please refer to the data-channels-detach example and the
     /// pion/datachannel documentation for the correct way to handle the
     /// resulting DataChannel object.
-    pub fn detach(&self) -> Result<Arc<data::data_channel::DataChannel>> {
+    pub async fn detach(&self) -> Result<Arc<data::data_channel::DataChannel>> {
         if !self.setting_engine.detach.data_channels {
             return Err(Error::ErrDetachNotEnabled.into());
         }
 
-        if let Some(dc) = &self.data_channel {
+        let data_channel = self.data_channel.lock().await;
+        if let Some(dc) = &*data_channel {
             self.detach_called.store(true, Ordering::SeqCst);
 
             Ok(Arc::clone(dc))
@@ -351,7 +362,8 @@ impl DataChannel {
 
         self.set_ready_state(DataChannelState::Closing);
 
-        if let Some(dc) = &self.data_channel {
+        let data_channel = self.data_channel.lock().await;
+        if let Some(dc) = &*data_channel {
             dc.close().await
         } else {
             Ok(())
@@ -402,7 +414,7 @@ impl DataChannel {
     /// selected by the script or generated. After the ID is set to a non-null
     /// value, it will not change.
     pub fn id(&self) -> u16 {
-        self.id
+        self.id.load(Ordering::SeqCst)
     }
 
     /// ready_state represents the state of the DataChannel object.
@@ -420,8 +432,9 @@ impl DataChannel {
     /// increase with each call to the send() method as long as the ready_state is
     /// open; however, buffered_amount does not reset to zero once the channel
     /// closes.
-    pub fn buffered_amount(&self) -> usize {
-        if let Some(dc) = &self.data_channel {
+    pub async fn buffered_amount(&self) -> usize {
+        let data_channel = self.data_channel.lock().await;
+        if let Some(dc) = &*data_channel {
             dc.buffered_amount()
         } else {
             0
@@ -434,20 +447,22 @@ impl DataChannel {
     /// event fires. buffered_amount_low_threshold is initially zero on each new
     /// DataChannel, but the application may change its value at any time.
     /// The threshold is set to 0 by default.
-    pub fn buffered_amount_low_threshold(&self) -> usize {
-        if let Some(dc) = &self.data_channel {
+    pub async fn buffered_amount_low_threshold(&self) -> usize {
+        let data_channel = self.data_channel.lock().await;
+        if let Some(dc) = &*data_channel {
             dc.buffered_amount_low_threshold()
         } else {
-            //self.buffered_amount_low_threshold
-            0
+            self.buffered_amount_low_threshold.load(Ordering::SeqCst)
         }
     }
 
     /// set_buffered_amount_low_threshold is used to update the threshold.
     /// See buffered_amount_low_threshold().
-    pub fn set_buffered_amount_low_threshold(&self, th: usize) {
-        //self.buffered_amount_low_threshold = th;
-        if let Some(dc) = &self.data_channel {
+    pub async fn set_buffered_amount_low_threshold(&self, th: usize) {
+        self.buffered_amount_low_threshold
+            .store(th, Ordering::SeqCst);
+        let data_channel = self.data_channel.lock().await;
+        if let Some(dc) = &*data_channel {
             dc.set_buffered_amount_low_threshold(th);
         }
     }
@@ -456,8 +471,9 @@ impl DataChannel {
     /// the number of bytes of outgoing data becomes lower than the
     /// buffered_amount_low_threshold.
     pub async fn on_buffered_amount_low(&self, f: OnBufferedAmountLowFn) {
-        //self.onBufferedAmountLow = f
-        if let Some(dc) = &self.data_channel {
+        //TODO: self.onBufferedAmountLow = f
+        let data_channel = self.data_channel.lock().await;
+        if let Some(dc) = &*data_channel {
             dc.on_buffered_amount_low(f).await;
         }
     }
