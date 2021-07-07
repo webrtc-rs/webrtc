@@ -18,12 +18,12 @@ mdns = { package = "webrtc-mdns", version = "0.2.13" }
 stun = "0.2.3"
 turn = "0.2.3"
 ice = { package = "webrtc-ice", version = "0.2.3" }
-dtls = { package = "webrtc-dtls", path = "crates/dtls" } #version = "0.2.2" }
+dtls = { package = "webrtc-dtls", version = "0.2.3" }
 rtp = "0.2.7"
 rtcp = "0.2.3"
 srtp = { package = "webrtc-srtp", version = "0.2.7" }
-sctp = { package = "webrtc-sctp", path = "crates/sctp" } #version = "0.2.1" }
-data = { package = "webrtc-data", path = "crates/data" } #version = "0.1.0" }
+sctp = { package = "webrtc-sctp", version = "0.2.2" }
+data = { package = "webrtc-data", version = "0.1.1" }
 tokio = { version = "1.0", features = ["full"] }
 log = "0.4.14"
 async-trait = "0.1.42"
