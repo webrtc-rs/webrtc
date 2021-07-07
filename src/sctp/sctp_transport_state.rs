@@ -1,6 +1,6 @@
 use std::fmt;
 
-/// SCTPTransportState indicates the state of the SCTP transport.#[derive(Debug, Copy, Clone, PartialEq)]
+/// SCTPTransportState indicates the state of the SCTP transport.
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum SCTPTransportState {
     Unspecified,
@@ -78,12 +78,12 @@ mod test {
             ("Closed", SCTPTransportState::Closed),
         ];
 
-        for (transport_state_string, expected_transport_state) in tests {
+        for (state_string, expected_state) in tests {
             assert_eq!(
-                expected_transport_state,
-                SCTPTransportState::from(transport_state_string),
+                expected_state,
+                SCTPTransportState::from(state_string),
                 "testCase: {}",
-                expected_transport_state,
+                expected_state,
             );
         }
     }
