@@ -140,7 +140,7 @@ async fn test_routine_leak_on_close() -> Result<()> {
     .filter(None, LevelFilter::Trace)
     .init();*/
 
-    let (mut ca, mut cb) = build_pipe().await?;
+    let (ca, cb) = build_pipe().await?;
 
     let buf_a = vec![0xFA; 100];
     let n_a = ca.write(&buf_a, Some(Duration::from_secs(5))).await?;
@@ -181,7 +181,7 @@ async fn test_sequence_number_overflow_on_application_data() -> Result<()> {
     .filter(None, LevelFilter::Trace)
     .init();*/
 
-    let (mut ca, mut cb) = build_pipe().await?;
+    let (ca, cb) = build_pipe().await?;
 
     {
         let mut lsn = ca.state.local_sequence_number.lock().await;
@@ -245,7 +245,7 @@ async fn test_sequence_number_overflow_on_handshake() -> Result<()> {
     .filter(None, LevelFilter::Trace)
     .init();*/
 
-    let (mut ca, mut cb) = build_pipe().await?;
+    let (ca, cb) = build_pipe().await?;
 
     {
         let mut lsn = ca.state.local_sequence_number.lock().await;
@@ -431,10 +431,10 @@ async fn test_export_keying_material() -> Result<()> {
             ..Default::default()
         },
         cache: HandshakeCache::new(),
-        decrypted_rx,
+        decrypted_rx: Mutex::new(decrypted_rx),
         handshake_completed_successfully: Arc::new(AtomicBool::new(false)),
         connection_closed_by_user: false,
-        closed: false,
+        closed: AtomicBool::new(false),
         current_flight: Box::new(Flight0 {}) as Box<dyn Flight + Send + Sync>,
         flights: None,
         cfg: HandshakeConfig::default(),
@@ -445,7 +445,7 @@ async fn test_export_keying_material() -> Result<()> {
         handle_queue_tx,
         handshake_done_tx: None,
 
-        reader_close_tx: None,
+        reader_close_tx: Mutex::new(None),
     };
 
     c.set_local_epoch(0);
@@ -563,7 +563,7 @@ async fn test_psk() -> Result<()> {
             ..Default::default()
         };
 
-        let mut server = create_test_server(Arc::new(cb), config, false).await?;
+        let server = create_test_server(Arc::new(cb), config, false).await?;
 
         let actual_psk_identity_hint = &server.connection_state().await.identity_hint;
         assert_eq!(
@@ -573,7 +573,7 @@ async fn test_psk() -> Result<()> {
         );
 
         if let Some(result) = client_res_rx.recv().await {
-            if let Ok(mut client) = result {
+            if let Ok(client) = result {
                 client.close().await?;
             } else {
                 assert!(

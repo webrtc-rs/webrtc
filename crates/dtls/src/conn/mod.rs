@@ -24,18 +24,19 @@ use crate::record_layer::*;
 use crate::signature_hash_algorithm::parse_signature_schemes;
 use crate::state::*;
 
+use util::{replay_detector::*, Conn};
+
 use anyhow::Result;
+use async_trait::async_trait;
 use log::*;
 use std::collections::HashMap;
 use std::io::{BufReader, BufWriter};
 use std::marker::{Send, Sync};
+use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::Arc;
-
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::Duration;
-
-use util::replay_detector::*;
 
 pub(crate) const INITIAL_TICKER_INTERVAL: Duration = Duration::from_secs(1);
 pub(crate) const COOKIE_LENGTH: usize = 20;
@@ -75,13 +76,13 @@ struct ConnReaderContext {
 // Conn represents a DTLS connection
 pub struct DTLSConn {
     pub(crate) cache: HandshakeCache, // caching of handshake messages for verifyData generation
-    decrypted_rx: mpsc::Receiver<Result<Vec<u8>>>, // Decrypted Application Data or error, pull by calling `Read`
-    pub(crate) state: State,                       // Internal state
+    decrypted_rx: Mutex<mpsc::Receiver<Result<Vec<u8>>>>, // Decrypted Application Data or error, pull by calling `Read`
+    pub(crate) state: State,                              // Internal state
 
     handshake_completed_successfully: Arc<AtomicBool>,
     connection_closed_by_user: bool,
     // closeLock              sync.Mutex
-    closed: bool, //  *closer.Closer
+    closed: AtomicBool, //  *closer.Closer
     //handshakeLoopsFinished sync.WaitGroup
 
     //readDeadline  :deadline.Deadline,
@@ -104,7 +105,29 @@ pub struct DTLSConn {
     pub(crate) handle_queue_tx: mpsc::Sender<mpsc::Sender<()>>,
     pub(crate) handshake_done_tx: Option<mpsc::Sender<()>>,
 
-    reader_close_tx: Option<mpsc::Sender<()>>,
+    reader_close_tx: Mutex<Option<mpsc::Sender<()>>>,
+}
+
+#[async_trait]
+impl Conn for DTLSConn {
+    async fn connect(&self, _addr: SocketAddr) -> Result<()> {
+        Err(Error::new("Not applicable".to_owned()).into())
+    }
+    async fn recv(&self, buf: &mut [u8]) -> Result<usize> {
+        self.read(buf, None).await
+    }
+    async fn recv_from(&self, _buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
+        Err(Error::new("Not applicable".to_owned()).into())
+    }
+    async fn send(&self, buf: &[u8]) -> Result<usize> {
+        self.write(buf, None).await
+    }
+    async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> Result<usize> {
+        Err(Error::new("Not applicable".to_owned()).into())
+    }
+    async fn local_addr(&self) -> Result<SocketAddr> {
+        Err(Error::new("Not applicable".to_owned()).into())
+    }
 }
 
 impl DTLSConn {
@@ -232,11 +255,11 @@ impl DTLSConn {
 
         let mut c = DTLSConn {
             cache,
-            decrypted_rx,
+            decrypted_rx: Mutex::new(decrypted_rx),
             state,
             handshake_completed_successfully,
             connection_closed_by_user: false,
-            closed: false,
+            closed: AtomicBool::new(false),
 
             current_flight: flight,
             flights: None,
@@ -246,7 +269,7 @@ impl DTLSConn {
             packet_tx: packet_tx1,
             handle_queue_tx,
             handshake_done_tx: Some(handshake_done_tx),
-            reader_close_tx: Some(reader_close_tx),
+            reader_close_tx: Mutex::new(Some(reader_close_tx)),
         };
 
         let cipher_suite1 = Arc::clone(&c.state.cipher_suite);
@@ -342,22 +365,25 @@ impl DTLSConn {
     }
 
     // Read reads data from the connection.
-    pub async fn read(&mut self, p: &mut [u8], duration: Option<Duration>) -> Result<usize> {
+    pub async fn read(&self, p: &mut [u8], duration: Option<Duration>) -> Result<usize> {
         if !self.is_handshake_completed_successfully() {
             return Err(Error::ErrHandshakeInProgress.into());
         }
 
         loop {
-            let rx = if let Some(d) = duration {
-                let timer = tokio::time::sleep(d);
-                tokio::pin!(timer);
+            let rx = {
+                let mut decrypted_rx = self.decrypted_rx.lock().await;
+                if let Some(d) = duration {
+                    let timer = tokio::time::sleep(d);
+                    tokio::pin!(timer);
 
-                tokio::select! {
-                    r = self.decrypted_rx.recv() => r,
-                    _ = timer.as_mut() => return Err(Error::ErrDeadlineExceeded.into()),
+                    tokio::select! {
+                        r = decrypted_rx.recv() => r,
+                        _ = timer.as_mut() => return Err(Error::ErrDeadlineExceeded.into()),
+                    }
+                } else {
+                    decrypted_rx.recv().await
                 }
-            } else {
-                self.decrypted_rx.recv().await
             };
 
             if let Some(out) = rx {
@@ -378,7 +404,7 @@ impl DTLSConn {
     }
 
     // Write writes len(p) bytes from p to the DTLS connection
-    pub async fn write(&mut self, p: &[u8], duration: Option<Duration>) -> Result<usize> {
+    pub async fn write(&self, p: &[u8], duration: Option<Duration>) -> Result<usize> {
         if self.is_connection_closed() {
             return Err(Error::ErrConnClosed.into());
         }
@@ -417,16 +443,17 @@ impl DTLSConn {
     }
 
     // Close closes the connection.
-    pub async fn close(&mut self) -> Result<()> {
-        if !self.closed {
+    pub async fn close(&self) -> Result<()> {
+        if !self.closed.load(Ordering::SeqCst) {
+            self.closed.store(true, Ordering::SeqCst);
+
             // Discard error from notify() to return non-error on the first user call of Close()
             // even if the underlying connection is already closed.
             self.notify(AlertLevel::Warning, AlertDescription::CloseNotify)
                 .await?;
 
-            self.reader_close_tx.take();
-
-            self.closed = true;
+            let mut reader_close_tx = self.reader_close_tx.lock().await;
+            reader_close_tx.take();
         }
 
         Ok(())
@@ -443,7 +470,7 @@ impl DTLSConn {
         self.state.srtp_protection_profile
     }
 
-    pub(crate) async fn notify(&mut self, level: AlertLevel, desc: AlertDescription) -> Result<()> {
+    pub(crate) async fn notify(&self, level: AlertLevel, desc: AlertDescription) -> Result<()> {
         self.write_packets(vec![Packet {
             record: RecordLayer::new(
                 PROTOCOL_VERSION1_2,
@@ -459,7 +486,7 @@ impl DTLSConn {
         .await
     }
 
-    pub(crate) async fn write_packets(&mut self, pkts: Vec<Packet>) -> Result<()> {
+    pub(crate) async fn write_packets(&self, pkts: Vec<Packet>) -> Result<()> {
         let (tx, mut rx) = mpsc::channel(1);
 
         self.packet_tx.send((pkts, Some(tx))).await?;
@@ -1080,7 +1107,7 @@ impl DTLSConn {
     }
 
     fn is_connection_closed(&self) -> bool {
-        self.closed
+        self.closed.load(Ordering::SeqCst)
     }
 
     pub(crate) fn set_local_epoch(&mut self, epoch: u16) {
