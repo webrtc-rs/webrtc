@@ -75,7 +75,7 @@ impl DataChannel {
         let stream = association
             .accept_stream()
             .await
-            .ok_or_else(|| Error::ErrStreamClosed)?;
+            .ok_or(Error::ErrStreamClosed)?;
 
         stream.set_default_payload_type(PayloadProtocolIdentifier::Binary);
 
