@@ -94,77 +94,79 @@ impl DataChannel {
 
     /// open opens the datachannel over the sctp transport
     pub(crate) async fn open(&self, sctp_transport: Arc<SCTPTransport>) -> Result<()> {
-        {
-            let mut st = self.sctp_transport.lock().await;
-            if st.is_none() {
-                *st = Some(Arc::clone(&sctp_transport));
-            } else {
-                return Ok(());
+        if let Some(association) = sctp_transport.association().await {
+            {
+                let mut st = self.sctp_transport.lock().await;
+                if st.is_none() {
+                    *st = Some(Arc::clone(&sctp_transport));
+                } else {
+                    return Ok(());
+                }
             }
-        }
 
-        let association = sctp_transport.association().await;
+            let channel_type;
+            let reliability_parameter;
 
-        let channel_type;
-        let reliability_parameter;
-
-        if self.max_packet_lifetime == 0 && self.max_retransmits == 0 {
-            reliability_parameter = 0u32;
-            if self.ordered {
-                channel_type = ChannelType::Reliable;
+            if self.max_packet_lifetime == 0 && self.max_retransmits == 0 {
+                reliability_parameter = 0u32;
+                if self.ordered {
+                    channel_type = ChannelType::Reliable;
+                } else {
+                    channel_type = ChannelType::ReliableUnordered;
+                }
+            } else if self.max_retransmits != 0 {
+                reliability_parameter = self.max_retransmits as u32;
+                if self.ordered {
+                    channel_type = ChannelType::PartialReliableRexmit;
+                } else {
+                    channel_type = ChannelType::PartialReliableRexmitUnordered;
+                }
             } else {
-                channel_type = ChannelType::ReliableUnordered;
+                reliability_parameter = self.max_packet_lifetime as u32;
+                if self.ordered {
+                    channel_type = ChannelType::PartialReliableTimed;
+                } else {
+                    channel_type = ChannelType::PartialReliableTimedUnordered;
+                }
             }
-        } else if self.max_retransmits != 0 {
-            reliability_parameter = self.max_retransmits as u32;
-            if self.ordered {
-                channel_type = ChannelType::PartialReliableRexmit;
-            } else {
-                channel_type = ChannelType::PartialReliableRexmitUnordered;
-            }
-        } else {
-            reliability_parameter = self.max_packet_lifetime as u32;
-            if self.ordered {
-                channel_type = ChannelType::PartialReliableTimed;
-            } else {
-                channel_type = ChannelType::PartialReliableTimedUnordered;
-            }
-        }
 
-        let cfg = data::data_channel::Config {
-            channel_type,
-            priority: data::message::message_channel_open::CHANNEL_PRIORITY_NORMAL,
-            reliability_parameter,
-            label: self.label.clone(),
-            protocol: self.protocol.clone(),
-            negotiated: self.negotiated,
-        };
+            let cfg = data::data_channel::Config {
+                channel_type,
+                priority: data::message::message_channel_open::CHANNEL_PRIORITY_NORMAL,
+                reliability_parameter,
+                label: self.label.clone(),
+                protocol: self.protocol.clone(),
+                negotiated: self.negotiated,
+            };
 
-        if self.id.load(Ordering::SeqCst) == 0 {
-            self.id.store(
-                sctp_transport
-                    .generate_and_set_data_channel_id(sctp_transport.dtls_transport.role())
-                    .await?,
-                Ordering::SeqCst,
+            if self.id.load(Ordering::SeqCst) == 0 {
+                self.id.store(
+                    sctp_transport
+                        .generate_and_set_data_channel_id(sctp_transport.dtls_transport.role())
+                        .await?,
+                    Ordering::SeqCst,
+                );
+            }
+
+            let dc = data::data_channel::DataChannel::dial(&association, self.id(), cfg).await?;
+
+            // buffered_amount_low_threshold and on_buffered_amount_low might be set earlier
+            dc.set_buffered_amount_low_threshold(
+                self.buffered_amount_low_threshold.load(Ordering::SeqCst),
             );
-        }
-
-        let dc = data::data_channel::DataChannel::dial(&association, self.id(), cfg).await?;
-
-        // buffered_amount_low_threshold and on_buffered_amount_low might be set earlier
-        dc.set_buffered_amount_low_threshold(
-            self.buffered_amount_low_threshold.load(Ordering::SeqCst),
-        );
-        {
-            let mut on_buffered_amount_low = self.on_buffered_amount_low.lock().await;
-            if let Some(f) = on_buffered_amount_low.take() {
-                dc.on_buffered_amount_low(f).await;
+            {
+                let mut on_buffered_amount_low = self.on_buffered_amount_low.lock().await;
+                if let Some(f) = on_buffered_amount_low.take() {
+                    dc.on_buffered_amount_low(f).await;
+                }
             }
+
+            self.handle_open(Arc::new(dc)).await;
+
+            Ok(())
+        } else {
+            Err(Error::ErrSCTPNotEstablished.into())
         }
-
-        self.handle_open(Arc::new(dc)).await;
-
-        Ok(())
     }
 
     /// transport returns the SCTPTransport instance the DataChannel is sending over.

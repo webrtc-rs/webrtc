@@ -10,7 +10,12 @@ use setting_engine::*;
 pub mod media_engine;
 pub mod setting_engine;
 
+use crate::data::data_channel::DataChannel;
+use crate::data::DataChannelParameters;
+use crate::error::Error;
+use crate::sctp::sctp_transport::SCTPTransport;
 use anyhow::Result;
+use std::sync::Arc;
 
 /// API bundles the global functions of the WebRTC and ORTC API.
 /// Some of these functions are also exported globally using the
@@ -84,50 +89,34 @@ impl Api {
         ))
     }
 
-    /*TODO:
-            /// new_sctp_transport creates a new SCTPTransport.
-            /// This constructor is part of the ORTC API. It is not
-            /// meant to be used together with the basic WebRTC API.
-            pub fn new_sctp_transport(&self, dtls: DTLSTransport) -> Result<SCTPTransport> {
-                /*TODO:
-                let remoteMaxMessageSize :usize = 65536;
-                let canSendSize:usize = 65536;
-                res := &SCTPTransport{
-                    dtlsTransport: dtls,
-                    state:         SCTPTransportStateConnecting,
-                    max_message_size: SCTPTransport::calc_message_size(remoteMaxMessageSize, canSendSize),
-                    max_channels : SCTP_MAX_CHANNELS
-                    api:           api,
-                    log:           api.settingEngine.LoggerFactory.NewLogger("ortc"),
-                }
-
-                return res*/
-                Err(Error::ErrSCTPTransportDTLS.into())
-            }
-
-
-        // NewDataChannel creates a new DataChannel.
-    // This constructor is part of the ORTC API. It is not
-    // meant to be used together with the basic WebRTC API.
-    func (api *API) NewDataChannel(transport *SCTPTransport, params *DataChannelParameters) (*DataChannel, error) {
-        // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #5)
-        if len(params.Label) > 65535 {
-            return nil, &rtcerr.TypeError{Err: ErrStringSizeLimit}
-        }
-        d, err := api.newDataChannel(params, api.settingEngine.LoggerFactory.NewLogger("ortc"))
-
-        if err != nil {
-            return nil, err
-        }
-
-        err = d.open(transport)
-        if err != nil {
-            return nil, err
-        }
-
-        return d, nil
+    /// new_sctp_transport creates a new SCTPTransport.
+    /// This constructor is part of the ORTC API. It is not
+    /// meant to be used together with the basic WebRTC API.
+    pub fn new_sctp_transport(&self, dtls_transport: Arc<DTLSTransport>) -> Result<SCTPTransport> {
+        Ok(SCTPTransport::new(
+            dtls_transport,
+            self.setting_engine.clone(),
+        ))
     }
-             */
+
+    /// new_data_channel creates a new DataChannel.
+    /// This constructor is part of the ORTC API. It is not
+    /// meant to be used together with the basic WebRTC API.
+    pub async fn new_data_channel(
+        &self,
+        sctp_transport: Arc<SCTPTransport>,
+        params: DataChannelParameters,
+    ) -> Result<DataChannel> {
+        // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #5)
+        if params.label.len() > 65535 {
+            return Err(Error::ErrStringSizeLimit.into());
+        }
+
+        let d = DataChannel::new(params, self.setting_engine.clone());
+        d.open(sctp_transport).await?;
+
+        Ok(d)
+    }
 }
 
 pub struct ApiBuilder {

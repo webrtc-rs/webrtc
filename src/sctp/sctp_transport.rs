@@ -48,11 +48,11 @@ pub struct SCTPTransport {
     pub(crate) dtls_transport: Arc<DTLSTransport>,
 
     // State represents the current state of the SCTP transport.
-    state: Arc<AtomicU8>, //SCTPTransportState,
+    state: AtomicU8, //SCTPTransportState,
 
     // SCTPTransportState doesn't have an enum to distinguish between New/Connecting
     // so we need a dedicated field
-    is_started: Arc<AtomicBool>,
+    is_started: AtomicBool,
 
     // max_message_size represents the maximum size of data that can be passed to
     // DataChannel's send() method.
@@ -62,7 +62,7 @@ pub struct SCTPTransport {
     // be used simultaneously.
     max_channels: u16,
 
-    sctp_association: Mutex<Arc<Association>>,
+    sctp_association: Mutex<Option<Arc<Association>>>,
 
     on_error_handler: Arc<Mutex<Option<OnErrorHdlrFn>>>,
     on_data_channel_handler: Arc<Mutex<Option<OnDataChannelHdlrFn>>>,
@@ -71,13 +71,34 @@ pub struct SCTPTransport {
     // DataChannels
     data_channels: Arc<Mutex<Vec<Arc<DataChannel>>>>,
     data_channels_opened: Arc<AtomicU32>,
-    data_channels_requested: u32,
+    data_channels_requested: Arc<AtomicU32>,
     data_channels_accepted: Arc<AtomicU32>,
 
     setting_engine: SettingEngine,
 }
 
 impl SCTPTransport {
+    pub fn new(dtls_transport: Arc<DTLSTransport>, setting_engine: SettingEngine) -> Self {
+        SCTPTransport {
+            dtls_transport,
+            state: AtomicU8::new(SCTPTransportState::Connecting as u8),
+            is_started: AtomicBool::new(false),
+            max_message_size: SCTPTransport::calc_message_size(65536, 65536),
+            max_channels: SCTP_MAX_CHANNELS,
+            sctp_association: Mutex::new(None),
+            on_error_handler: Arc::new(Mutex::new(None)),
+            on_data_channel_handler: Arc::new(Mutex::new(None)),
+            on_data_channel_opened_handler: Arc::new(Mutex::new(None)),
+
+            data_channels: Arc::new(Mutex::new(vec![])),
+            data_channels_opened: Arc::new(AtomicU32::new(0)),
+            data_channels_requested: Arc::new(AtomicU32::new(0)),
+            data_channels_accepted: Arc::new(AtomicU32::new(0)),
+
+            setting_engine,
+        }
+    }
+
     /// transport returns the DTLSTransport instance the SCTPTransport is sending over.
     pub fn transport(&self) -> Arc<DTLSTransport> {
         Arc::clone(&self.dtls_transport)
@@ -113,7 +134,7 @@ impl SCTPTransport {
 
             {
                 let mut sa = self.sctp_association.lock().await;
-                *sa = Arc::clone(&sctp_association);
+                *sa = Some(Arc::clone(&sctp_association));
             }
             self.state
                 .store(SCTPTransportState::Connected as u8, Ordering::SeqCst);
@@ -141,8 +162,10 @@ impl SCTPTransport {
     /// Stop stops the SCTPTransport
     pub async fn stop(&self) -> Result<()> {
         {
-            let sctp_association = self.sctp_association.lock().await;
-            sctp_association.close().await?;
+            let mut sctp_association = self.sctp_association.lock().await;
+            if let Some(sa) = sctp_association.take() {
+                sa.close().await?;
+            }
         }
 
         self.state
@@ -336,8 +359,8 @@ impl SCTPTransport {
         Err(Error::ErrMaxDataChannelID.into())
     }
 
-    pub(crate) async fn association(&self) -> Arc<Association> {
+    pub(crate) async fn association(&self) -> Option<Arc<Association>> {
         let sctp_association = self.sctp_association.lock().await;
-        Arc::clone(&sctp_association)
+        sctp_association.clone()
     }
 }
