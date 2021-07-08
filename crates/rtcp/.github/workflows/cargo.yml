@@ -1,4 +1,4 @@
-name: Cargo
+name: cargo
 
 on:
   push:
