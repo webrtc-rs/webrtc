@@ -16,7 +16,7 @@
   <img src="https://img.shields.io/crates/v/webrtc-srtp.svg">
  </a> 
  <a href="https://docs.rs/webrtc-srtp"> 
-  <img src="https://docs.rs/webrtc-s/badge.svg">
+  <img src="https://docs.rs/webrtc-srtp/badge.svg">
  </a>
  <a href="https://doc.rust-lang.org/1.6.0/complement-project-faq.html#why-dual-mitasl2-license">
   <img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-blue" alt="License: MIT/Apache 2.0">
