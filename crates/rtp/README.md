@@ -4,7 +4,7 @@
 </h1>
 <p align="center">
  <a href="https://github.com/webrtc-rs/rtp/actions"> 
-  <img src="https://github.com/webrtc-rs/rtp/workflows/Cargo/badge.svg">
+  <img src="https://github.com/webrtc-rs/rtp/workflows/cargo/badge.svg">
  </a> 
  <a href="https://codecov.io/gh/webrtc-rs/rtp"> 
   <img src="https://codecov.io/gh/webrtc-rs/rtp/branch/main/graph/badge.svg">
