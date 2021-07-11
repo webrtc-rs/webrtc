@@ -1,15 +1,20 @@
-use super::sctp_transport_state::SCTPTransportState;
+pub mod sctp_transport_capabilities;
+pub mod sctp_transport_state;
+
+use sctp_transport_state::SCTPTransportState;
+
 use crate::api::setting_engine::SettingEngine;
 use crate::data::data_channel::DataChannel;
+use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use crate::dtls::dtls_role::DTLSRole;
 use crate::dtls::dtls_transport::*;
 use crate::error::*;
-use crate::sctp::SCTPCapabilities;
 
 use data::message::message_channel_open::ChannelType;
 use sctp::association::Association;
 
-use crate::data::DataChannelParameters;
+use crate::data::data_channel::data_channel_parameters::DataChannelParameters;
+
 use anyhow::Result;
 use std::future::Future;
 use std::pin::Pin;
@@ -105,8 +110,8 @@ impl SCTPTransport {
     }
 
     /// get_capabilities returns the SCTPCapabilities of the SCTPTransport.
-    pub fn get_capabilities() -> SCTPCapabilities {
-        SCTPCapabilities {
+    pub fn get_capabilities() -> SCTPTransportCapabilities {
+        SCTPTransportCapabilities {
             max_message_size: 0,
         }
     }
@@ -114,7 +119,7 @@ impl SCTPTransport {
     /// Start the SCTPTransport. Since both local and remote parties must mutually
     /// create an SCTPTransport, SCTP SO (Simultaneous Open) is used to establish
     /// a connection over SCTP.
-    pub async fn start(&self, _remote_caps: SCTPCapabilities) -> Result<()> {
+    pub async fn start(&self, _remote_caps: SCTPTransportCapabilities) -> Result<()> {
         if self.is_started.load(Ordering::SeqCst) {
             return Ok(());
         }

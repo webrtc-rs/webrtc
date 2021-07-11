@@ -16,7 +16,6 @@ pub mod mux;
 pub mod peer;
 pub mod policy;
 pub mod rtp;
-pub mod sctp;
 pub mod sdp;
 pub mod stats;
 pub mod track;

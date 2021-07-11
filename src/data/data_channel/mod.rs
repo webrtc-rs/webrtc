@@ -1,19 +1,28 @@
-use super::*;
-use crate::api::setting_engine::SettingEngine;
-use crate::data::data_channel_state::DataChannelState;
-use crate::error::{Error, OnErrorHdlrFn};
+pub mod data_channel_config;
+pub mod data_channel_message;
+pub mod data_channel_parameters;
+pub mod data_channel_state;
 
-use sctp::stream::OnBufferedAmountLowFn;
+use data_channel_message::*;
+use data_channel_parameters::*;
 
-use crate::sctp::sctp_transport::SCTPTransport;
-use anyhow::Result;
-use data::message::message_channel_open::ChannelType;
+use bytes::Bytes;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU8, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
+
+use anyhow::Result;
+use data::message::message_channel_open::ChannelType;
+use sctp::stream::OnBufferedAmountLowFn;
 use tokio::sync::Mutex;
+
+use data_channel_state::DataChannelState;
+
+use crate::api::setting_engine::SettingEngine;
+use crate::data::sctp_transport::SCTPTransport;
+use crate::error::{Error, OnErrorHdlrFn};
 
 /// message size limit for Chromium
 const DATA_CHANNEL_BUFFER_SIZE: u16 = u16::MAX;
