@@ -1,6 +1,40 @@
-use super::*;
+pub mod dtls_fingerprint;
+pub mod dtls_parameters;
+pub mod dtls_role;
+pub mod dtls_transport_state;
 
+use dtls_role::*;
+
+use crate::api::setting_engine::SettingEngine;
+use crate::default_srtp_protection_profiles;
+use crate::error::Error;
+use crate::media::dtls_transport::dtls_transport_state::DTLSTransportState;
+use crate::media::ice_transport::ice_transport_state::ICETransportState;
+use crate::media::ice_transport::ICETransport;
+use crate::peer::ice::ice_role::ICERole;
+use crate::util::mux::endpoint::Endpoint;
+use crate::util::mux::mux_func::{match_dtls, match_srtcp, match_srtp, MatchFunc};
+use bytes::Bytes;
+use dtls::config::ClientAuthType;
+use dtls::conn::DTLSConn;
+use dtls::crypto::Certificate;
+use srtp::protection_profile::ProtectionProfile;
+use srtp::session::Session;
+use srtp::stream::Stream;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
+use tokio::sync::{mpsc, Mutex};
+use util::Conn;
+
+use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
 use anyhow::Result;
+
+pub type OnStateChangeHdlrFn = Box<
+    dyn (FnMut(DTLSTransportState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+        + Send
+        + Sync,
+>;
 
 /// DTLSTransport allows an application access to information about the DTLS
 /// transport over which RTP and RTCP packets are sent and received by
@@ -72,7 +106,7 @@ impl DTLSTransport {
         *on_state_change_handler = Some(f);
     }
 
-    /// state returns the current dtls transport state.
+    /// state returns the current dtls_transport transport state.
     pub fn state(&self) -> DTLSTransportState {
         self.state
     }
@@ -369,7 +403,7 @@ impl DTLSTransport {
         }
 
         if let Some(conn) = self.conn.take() {
-            // dtls connection may be closed on sctp close.
+            // dtls_transport connection may be closed on sctp close.
             match conn.close().await {
                 Ok(_) => {}
                 Err(err) => {

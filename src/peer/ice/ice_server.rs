@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::ice::ice_credential_type::ICECredentialType;
+use crate::peer::ice::ice_credential_type::ICECredentialType;
 
 use anyhow::Result;
 

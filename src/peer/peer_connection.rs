@@ -2019,7 +2019,7 @@ func (pc *PeerConnection) startTransports(iceRole ICERole, dtlsRole DTLSRole, re
         return
     }
 
-    // Start the dtls transport
+    // Start the dtls_transport transport
     err = pc.dtlsTransport.Start(DTLSParameters{
         Role:         dtlsRole,
         Fingerprints: []DTLSFingerprint{{Algorithm: fingerprintHash, Value: fingerprint}},

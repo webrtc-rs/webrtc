@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::sdp::sdp_type::SDPType;
+use crate::peer::sdp::sdp_type::SDPType;
 
 use anyhow::Result;
 use std::fmt;

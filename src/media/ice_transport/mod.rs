@@ -3,17 +3,17 @@ mod ice_transport_test;
 
 pub mod ice_transport_state;
 
-use crate::ice::ice_candidate::ice_candidate_pair::ICECandidatePair;
-use crate::ice::ice_gather::ice_gatherer::ICEGatherer;
-use crate::ice::ice_role::ICERole;
-use crate::ice::ice_transport::ice_transport_state::ICETransportState;
-use crate::mux::{Config, Mux};
+use crate::media::ice_transport::ice_transport_state::ICETransportState;
+use crate::peer::ice::ice_candidate::ice_candidate_pair::ICECandidatePair;
+use crate::peer::ice::ice_gather::ice_gatherer::ICEGatherer;
+use crate::peer::ice::ice_role::ICERole;
+use crate::util::mux::{Config, Mux};
 
 use crate::error::Error;
-use crate::ice::ice_candidate::ICECandidate;
-use crate::ice::ICEParameters;
-use crate::mux::endpoint::Endpoint;
-use crate::mux::mux_func::MatchFunc;
+use crate::peer::ice::ice_candidate::ICECandidate;
+use crate::peer::ice::ICEParameters;
+use crate::util::mux::endpoint::Endpoint;
+use crate::util::mux::mux_func::MatchFunc;
 use crate::RECEIVE_MTU;
 
 use ice::candidate::Candidate;

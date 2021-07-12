@@ -1,4 +1,4 @@
-use crate::mux::mux_func::MatchFunc;
+use crate::util::mux::mux_func::MatchFunc;
 use util::{Buffer, Conn};
 
 use anyhow::Result;

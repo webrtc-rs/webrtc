@@ -1,8 +1,8 @@
 use ice::mdns::MulticastDnsMode;
 use ice::network_type::NetworkType;
 
-use crate::dtls::dtls_role::DTLSRole;
-use crate::ice::ice_candidate::ice_candidate_type::ICECandidateType;
+use crate::media::dtls_transport::dtls_role::DTLSRole;
+use crate::peer::ice::ice_candidate::ice_candidate_type::ICECandidateType;
 use dtls::extension::extension_use_srtp::SrtpProtectionProfile;
 use ice::agent::agent_config::InterfaceFilterFn;
 use std::sync::Arc;
@@ -86,7 +86,7 @@ impl SettingEngine {
 
     // SetSRTPProtectionProfiles allows the user to override the default srtp Protection Profiles
     // The default srtp protection profiles are provided by the function `defaultSrtpProtectionProfiles`
-    func (e *SettingEngine) SetSRTPProtectionProfiles(profiles ...dtls.SRTPProtectionProfile) {
+    func (e *SettingEngine) SetSRTPProtectionProfiles(profiles ...dtls_transport.SRTPProtectionProfile) {
         e.srtp_protection_profiles = profiles
     }
 
@@ -180,14 +180,14 @@ impl SettingEngine {
         e.candidates.nat1to1ipcandidate_type = candidateType
     }
 
-    // SetAnsweringDTLSRole sets the dtls role that is selected when offering
-    // The dtls role controls if the WebRTC Client as a client or server. This
+    // SetAnsweringDTLSRole sets the dtls_transport role that is selected when offering
+    // The dtls_transport role controls if the WebRTC Client as a client or server. This
     // may be useful when interacting with non-compliant clients or debugging issues.
     //
     // DTLSRoleActive:
-    // 		Act as dtls Client, send the ClientHello and starts the handshake
+    // 		Act as dtls_transport Client, send the ClientHello and starts the handshake
     // DTLSRolePassive:
-    // 		Act as dtls Server, wait for ClientHello
+    // 		Act as dtls_transport Server, wait for ClientHello
     func (e *SettingEngine) SetAnsweringDTLSRole(role DTLSRole) error {
         if role != DTLSRoleClient && role != DTLSRoleServer {
             return errSettingEngineSetAnsweringDTLSRole
@@ -227,14 +227,14 @@ impl SettingEngine {
         e.candidates.password = password
     }
 
-    // DisableCertificateFingerprintVerification disables fingerprint verification after dtls Handshake has finished
+    // DisableCertificateFingerprintVerification disables fingerprint verification after dtls_transport Handshake has finished
     func (e *SettingEngine) DisableCertificateFingerprintVerification(isDisabled bool) {
         e.disable_certificate_fingerprint_verification = isDisabled
     }
 
-    // SetDTLSReplayProtectionWindow sets a replay attack protection window size of dtls connection.
+    // SetDTLSReplayProtectionWindow sets a replay attack protection window size of dtls_transport connection.
     func (e *SettingEngine) SetDTLSReplayProtectionWindow(n uint) {
-        e.replayProtection.dtls = &n
+        e.replayProtection.dtls_transport = &n
     }
 
     // SetSRTPReplayProtectionWindow sets a replay attack protection window size of srtp session.
@@ -259,7 +259,7 @@ impl SettingEngine {
         e.disable_srtcpreplay_protection = isDisabled
     }
 
-    // SetSDPMediaLevelFingerprints configures the logic for dtls Fingerprint insertion
+    // SetSDPMediaLevelFingerprints configures the logic for dtls_transport Fingerprint insertion
     // If true, fingerprints will be inserted in the sdp at the fingerprint
     // level, instead of the session level. This helps with compatibility with
     // some webrtc implementations.

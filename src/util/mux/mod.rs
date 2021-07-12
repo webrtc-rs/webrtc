@@ -4,8 +4,8 @@ mod mux_test;
 pub mod endpoint;
 pub mod mux_func;
 
-use crate::mux::endpoint::Endpoint;
-use crate::mux::mux_func::MatchFunc;
+use crate::util::mux::endpoint::Endpoint;
+use crate::util::mux::mux_func::MatchFunc;
 
 use anyhow::Result;
 use std::collections::HashMap;

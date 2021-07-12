@@ -2,8 +2,8 @@ pub mod ice_candidate_pair;
 pub mod ice_candidate_type;
 
 use crate::error::Error;
-use crate::ice::ice_candidate::ice_candidate_type::ICECandidateType;
-use crate::ice::ice_protocol::ICEProtocol;
+use crate::peer::ice::ice_candidate::ice_candidate_type::ICECandidateType;
+use crate::peer::ice::ice_protocol::ICEProtocol;
 use anyhow::Result;
 use ice::candidate::candidate_base::CandidateBaseConfig;
 use ice::candidate::candidate_host::CandidateHostConfig;

@@ -1,10 +1,10 @@
 use crate::api::setting_engine::SettingEngine;
 use crate::error::Error;
-use crate::ice::ice_candidate::ice_candidate_type::ICECandidateType;
-use crate::ice::ice_candidate::*;
-use crate::ice::ice_gather::ice_gatherer_state::ICEGathererState;
-use crate::ice::ICEParameters;
-use crate::policy::ice_transport_policy::ICETransportPolicy;
+use crate::peer::ice::ice_candidate::ice_candidate_type::ICECandidateType;
+use crate::peer::ice::ice_candidate::*;
+use crate::peer::ice::ice_gather::ice_gatherer_state::ICEGathererState;
+use crate::peer::ice::ICEParameters;
+use crate::peer::policy::ice_transport_policy::ICETransportPolicy;
 
 use ice::agent::Agent;
 use ice::candidate::{Candidate, CandidateType};
@@ -416,8 +416,8 @@ impl ICEGatherer {
 mod test {
     use super::*;
     use crate::api::ApiBuilder;
-    use crate::ice::ice_gather::ICEGatherOptions;
-    use crate::ice::ice_server::ICEServer;
+    use crate::peer::ice::ice_gather::ICEGatherOptions;
+    use crate::peer::ice::ice_server::ICEServer;
     use tokio::sync::mpsc;
 
     #[tokio::test]

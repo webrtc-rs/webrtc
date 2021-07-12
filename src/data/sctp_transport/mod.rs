@@ -6,9 +6,9 @@ use sctp_transport_state::SCTPTransportState;
 use crate::api::setting_engine::SettingEngine;
 use crate::data::data_channel::DataChannel;
 use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
-use crate::dtls::dtls_role::DTLSRole;
-use crate::dtls::dtls_transport::*;
 use crate::error::*;
+use crate::media::dtls_transport::dtls_role::DTLSRole;
+use crate::media::dtls_transport::*;
 
 use data::message::message_channel_open::ChannelType;
 use sctp::association::Association;

@@ -1,7 +1,7 @@
-use crate::dtls::dtls_transport::DTLSTransport;
-use crate::ice::ice_gather::ice_gatherer::ICEGatherer;
-use crate::ice::ice_gather::ICEGatherOptions;
-use crate::ice::ice_transport::ICETransport;
+use crate::media::dtls_transport::DTLSTransport;
+use crate::media::ice_transport::ICETransport;
+use crate::peer::ice::ice_gather::ice_gatherer::ICEGatherer;
+use crate::peer::ice::ice_gather::ICEGatherOptions;
 
 use dtls::crypto::Certificate;
 use media_engine::*;
@@ -54,7 +54,7 @@ impl Api {
         Ok(ICETransport::new(gatherer))
     }
 
-    /// new_dtls_transport creates a new dtls transport.
+    /// new_dtls_transport creates a new dtls_transport transport.
     /// This constructor is part of the ORTC API. It is not
     /// meant to be used together with the basic WebRTC API.
     pub fn new_dtls_transport(
