@@ -19,7 +19,7 @@ pub const TRANSPORT_CC_EXTENSION_SIZE: usize = 2;
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 /// |  ID   | L=1   |transport-wide sequence number | zero padding  |
 /// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Default, Copy, Clone)]
 pub struct TransportCcExtension {
     pub transport_sequence: u16,
 }

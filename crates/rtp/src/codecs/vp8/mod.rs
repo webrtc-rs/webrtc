@@ -74,7 +74,7 @@ impl Payloader for Vp8Payloader {
 }
 
 /// Vp8Packet represents the VP8 header that is stored in the payload of an RTP Packet
-#[derive(Debug, Default)]
+#[derive(PartialEq, Debug, Default, Clone)]
 pub struct Vp8Packet {
     // Required Header
     pub x: u8,   /* extended controlbits present */

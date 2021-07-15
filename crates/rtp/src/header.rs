@@ -27,7 +27,7 @@ pub const SSRC_LENGTH: usize = 4;
 pub const CSRC_OFFSET: usize = 12;
 pub const CSRC_LENGTH: usize = 4;
 
-#[derive(Debug, Eq, PartialEq, Default)]
+#[derive(Debug, Eq, PartialEq, Default, Clone)]
 pub struct Extension {
     pub id: u8,
     pub payload: Bytes,
@@ -35,7 +35,7 @@ pub struct Extension {
 
 /// Header represents an RTP packet header
 /// NOTE: PayloadOffset is populated by Marshal/Unmarshal and should not be modified
-#[derive(Debug, Eq, PartialEq, Default)]
+#[derive(Debug, Eq, PartialEq, Default, Clone)]
 pub struct Header {
     pub version: u8,
     pub padding: bool,

@@ -10,7 +10,7 @@ use std::fmt;
 
 /// Packet represents an RTP Packet
 /// NOTE: Raw is populated by Marshal/Unmarshal and should not be modified
-#[derive(Debug, Eq, PartialEq, Default)]
+#[derive(Debug, Eq, PartialEq, Default, Clone)]
 pub struct Packet {
     pub header: Header,
     pub payload: Bytes,

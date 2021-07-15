@@ -153,7 +153,7 @@ impl Payloader for H264Payloader {
 }
 
 /// H264Packet represents the H264 header that is stored in the payload of an RTP Packet
-#[derive(Debug, Default)]
+#[derive(PartialEq, Debug, Default, Clone)]
 pub struct H264Packet {
     pub payload: Bytes,
 }
