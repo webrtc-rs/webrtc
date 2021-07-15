@@ -1,6 +1,9 @@
 use super::*;
+use crate::api::media_engine::*;
+use crate::error::Error;
 use crate::media::rtp::fmtp::*;
 
+use anyhow::Result;
 use std::fmt;
 
 /// RTPCodecType determines the type of a codec
@@ -53,6 +56,22 @@ pub struct RTPCodecCapability {
     pub rtcp_feedback: Vec<RTCPFeedback>,
 }
 
+impl RTPCodecCapability {
+    pub(crate) fn payloader_for_codec(
+        &self,
+    ) -> Result<Box<dyn rtp::packetizer::Payloader + Send + Sync>> {
+        match self.mime_type.to_lowercase().as_str() {
+            MIME_TYPE_H264 => Ok(Box::new(rtp::codecs::h264::H264Payloader)),
+            MIME_TYPE_OPUS => Ok(Box::new(rtp::codecs::opus::OpusPayloader)),
+            MIME_TYPE_VP8 => Ok(Box::new(rtp::codecs::vp8::Vp8Payloader)),
+            //TODO:case strings.ToLower(MIME_TYPE_VP9): return &codecs.VP9Payloader{}, nil
+            MIME_TYPE_G722 => Ok(Box::new(rtp::codecs::g7xx::G7xxPayloader)),
+            MIME_TYPE_PCMU | MIME_TYPE_PCMA => Ok(Box::new(rtp::codecs::g7xx::G7xxPayloader)),
+            _ => Err(Error::ErrNoPayloaderForCodec.into()),
+        }
+    }
+}
+
 /// RTPHeaderExtensionCapability is used to define a RFC5285 RTP header extension supported by the codec.
 /// https://w3c.github.io/webrtc-pc/#dom-rtcrtpcapabilities-headerextensions
 #[derive(Default, Debug, Clone)]
@@ -81,15 +100,23 @@ pub struct RTPCodecParameters {
 
 /// RTPParameters is a list of negotiated codecs and header extensions
 /// https://w3c.github.io/webrtc-pc/#dictionary-rtcrtpparameters-members
+#[derive(Debug, Clone)]
 pub struct RTPParameters {
     pub header_extensions: Vec<RTPHeaderExtensionParameter>,
     pub codecs: Vec<RTPCodecParameters>,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub(crate) enum CodecMatchType {
     None = 0,
     Partial = 1,
     Exact = 2,
+}
+
+impl Default for CodecMatchType {
+    fn default() -> Self {
+        CodecMatchType::None
+    }
 }
 
 /// Do a fuzzy find for a codec in the list of codecs

@@ -19,7 +19,7 @@ stun = "0.2.3"
 turn = "0.2.3"
 ice = { package = "webrtc-ice", version = "0.2.3" }
 dtls = { package = "webrtc-dtls", version = "0.2.3" }
-rtp = "0.2.7"
+rtp = "0.2.8"
 rtcp = "0.2.3"
 srtp = { package = "webrtc-srtp", version = "0.2.7" }
 sctp = { package = "webrtc-sctp", version = "0.2.2" }

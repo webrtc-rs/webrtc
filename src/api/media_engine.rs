@@ -2,25 +2,25 @@ use std::collections::HashMap;
 
 /// MIME_TYPE_H264 H264 MIME type.
 /// Note: Matching should be case insensitive.
-pub const MIME_TYPE_H264: &str = "video/H264";
+pub const MIME_TYPE_H264: &str = "video/h264";
 /// MIME_TYPE_OPUS Opus MIME type
 /// Note: Matching should be case insensitive.
 pub const MIME_TYPE_OPUS: &str = "audio/opus";
 /// MIME_TYPE_VP8 VP8 MIME type
 /// Note: Matching should be case insensitive.
-pub const MIME_TYPE_VP8: &str = "video/VP8";
+pub const MIME_TYPE_VP8: &str = "video/vp8";
 /// MIME_TYPE_VP9 VP9 MIME type
 /// Note: Matching should be case insensitive.
-pub const MIME_TYPE_VP9: &str = "video/VP9";
+pub const MIME_TYPE_VP9: &str = "video/vp9";
 /// MIME_TYPE_G722 G722 MIME type
 /// Note: Matching should be case insensitive.
-pub const MIME_TYPE_G722: &str = "audio/G722";
+pub const MIME_TYPE_G722: &str = "audio/g722";
 /// MIME_TYPE_PCMU PCMU MIME type
 /// Note: Matching should be case insensitive.
-pub const MIME_TYPE_PCMU: &str = "audio/PCMU";
+pub const MIME_TYPE_PCMU: &str = "audio/pcmu";
 /// MIME_TYPE_PCMA PCMA MIME type
 /// Note: Matching should be case insensitive.
-pub const MIME_TYPE_PCMA: &str = "audio/PCMA";
+pub const MIME_TYPE_PCMA: &str = "audio/pcma";
 
 pub(crate) struct MediaEngineHeaderExtension {
     uri: String,
@@ -525,22 +525,4 @@ func (m *MediaEngine) getRTPParametersByPayloadType(payloadType PayloadType) (RT
     }, nil
 }
 
-func payloaderForCodec(codec RTPCodecCapability) (rtp.Payloader, error) {
-    switch strings.ToLower(codec.mime_type) {
-    case strings.ToLower(MIME_TYPE_H264):
-        return &codecs.H264Payloader{}, nil
-    case strings.ToLower(MIME_TYPE_OPUS):
-        return &codecs.OpusPayloader{}, nil
-    case strings.ToLower(MIME_TYPE_VP8):
-        return &codecs.VP8Payloader{}, nil
-    case strings.ToLower(MIME_TYPE_VP9):
-        return &codecs.VP9Payloader{}, nil
-    case strings.ToLower(MIME_TYPE_G722):
-        return &codecs.G722Payloader{}, nil
-    case strings.ToLower(MIME_TYPE_PCMU), strings.ToLower(MIME_TYPE_PCMA):
-        return &codecs.G711Payloader{}, nil
-    default:
-        return nil, ErrNoPayloaderForCodec
-    }
-}
 */

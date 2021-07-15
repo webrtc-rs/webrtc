@@ -360,7 +360,7 @@ func (pc *PeerConnection) checkNegotiationNeeded() bool { //nolint:gocognit
             if t.Direction() == RTPTransceiverDirectionSendrecv || t.Direction() == RTPTransceiverDirectionSendonly {
                 descMsid, okMsid := m.Attribute(sdp.AttrKeyMsid)
                 track := t.Sender().Track()
-                if !okMsid || descMsid != track.StreamID()+" "+track.ID() {
+                if !okMsid || descMsid != track.stream_id()+" "+track.ID() {
                     return true
                 }
             }
@@ -1559,7 +1559,7 @@ func (pc *PeerConnection) AddTrack(track TrackLocal) (*RTPSender, error) {
     pc.mu.Lock()
     defer pc.mu.Unlock()
     for _, t := range pc.rtpTransceivers {
-        if !t.stopped && t.kind == track.Kind() && t.Sender() == nil {
+        if !t.stopped && t.kind == track.kind() && t.Sender() == nil {
             sender, err := pc.api.NewRTPSender(track, pc.dtlsTransport)
             if err == nil {
                 err = t.SetSender(sender, track)
@@ -1617,7 +1617,7 @@ func (pc *PeerConnection) newTransceiverFromTrack(direction RTPTransceiverDirect
     )
     switch direction {
     case RTPTransceiverDirectionSendrecv:
-        r, err = pc.api.NewRTPReceiver(track.Kind(), pc.dtlsTransport)
+        r, err = pc.api.NewRTPReceiver(track.kind(), pc.dtlsTransport)
         if err != nil {
             return
         }
@@ -1630,7 +1630,7 @@ func (pc *PeerConnection) newTransceiverFromTrack(direction RTPTransceiverDirect
     if err != nil {
         return
     }
-    return newRTPTransceiver(r, s, direction, track.Kind()), nil
+    return newRTPTransceiver(r, s, direction, track.kind()), nil
 }
 
 // AddTransceiverFromKind Create a new RtpTransceiver and adds it to the set of transceivers.
