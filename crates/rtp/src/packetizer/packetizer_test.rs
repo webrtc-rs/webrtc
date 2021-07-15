@@ -7,8 +7,8 @@ use std::time::Duration;
 #[test]
 fn test_packetizer() -> Result<()> {
     let multiple_payload = Bytes::from_static(&[0; 128]);
-    let g722 = g7xx::G722Payloader {};
-    let seq = new_random_sequencer();
+    let g722 = Box::new(g7xx::G722Payloader {});
+    let seq = Box::new(new_random_sequencer());
 
     //use the G722 payloader here, because it's very simple and all 0s is valid G722 data.
     let mut packetizer = new_packetizer(100, 98, 0x1234ABCD, g722, seq, 90000);
@@ -38,8 +38,8 @@ fn fixed_time_gen() -> Duration {
 
 #[test]
 fn test_packetizer_abs_send_time() -> Result<()> {
-    let g722 = g7xx::G722Payloader {};
-    let sequencer = new_fixed_sequencer(1234);
+    let g722 = Box::new(g7xx::G722Payloader {});
+    let sequencer = Box::new(new_fixed_sequencer(1234));
 
     //use the G722 payloader here, because it's very simple and all 0s is valid G722 data.
     let mut pktizer = PacketizerImpl {
