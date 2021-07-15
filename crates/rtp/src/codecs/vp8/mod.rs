@@ -74,7 +74,7 @@ impl Payloader for Vp8Payloader {
     }
 
     fn clone_to(&self) -> Box<dyn Payloader + Send + Sync> {
-        Box::new(self.clone())
+        Box::new(*self)
     }
 }
 

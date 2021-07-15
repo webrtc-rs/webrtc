@@ -25,6 +25,7 @@ impl Clone for Box<dyn Payloader + Send + Sync> {
 pub trait Packetizer: fmt::Debug {
     fn enable_abs_send_time(&mut self, value: u8);
     fn packetize(&mut self, payload: &Bytes, samples: u32) -> Result<Vec<Packet>>;
+    fn skip_samples(&mut self, skipped_samples: u32);
     fn clone_to(&self) -> Box<dyn Packetizer + Send + Sync>;
 }
 
@@ -121,6 +122,12 @@ impl Packetizer for PacketizerImpl {
         }
 
         Ok(packets)
+    }
+
+    /// skip_samples causes a gap in sample count between Packetize requests so the
+    /// RTP payloads produced have a gap in timestamps
+    fn skip_samples(&mut self, skipped_samples: u32) {
+        self.timestamp += skipped_samples;
     }
 
     fn clone_to(&self) -> Box<dyn Packetizer + Send + Sync> {

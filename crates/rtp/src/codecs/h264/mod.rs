@@ -153,7 +153,7 @@ impl Payloader for H264Payloader {
     }
 
     fn clone_to(&self) -> Box<dyn Payloader + Send + Sync> {
-        Box::new(self.clone())
+        Box::new(*self)
     }
 }
 
