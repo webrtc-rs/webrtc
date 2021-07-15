@@ -12,6 +12,7 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 pub const VP8_HEADER_SIZE: isize = 1;
 
 /// Vp8Payloader payloads VP8 packets
+#[derive(Debug, Copy, Clone)]
 pub struct Vp8Payloader;
 
 impl Payloader for Vp8Payloader {
@@ -70,6 +71,10 @@ impl Payloader for Vp8Payloader {
         }
 
         Ok(payloads)
+    }
+
+    fn clone_to(&self) -> Box<dyn Payloader + Send + Sync> {
+        Box::new(self.clone())
     }
 }
 

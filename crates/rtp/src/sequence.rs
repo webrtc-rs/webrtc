@@ -1,17 +1,26 @@
+use std::fmt;
 use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
+use std::sync::Arc;
 
 /// Sequencer generates sequential sequence numbers for building RTP packets
-pub trait Sequencer {
+pub trait Sequencer: fmt::Debug {
     fn next_sequence_number(&self) -> u16;
     fn roll_over_count(&self) -> u64;
+    fn clone_to(&self) -> Box<dyn Sequencer + Send + Sync>;
+}
+
+impl Clone for Box<dyn Sequencer + Send + Sync> {
+    fn clone(&self) -> Box<dyn Sequencer + Send + Sync> {
+        self.clone_to()
+    }
 }
 
 /// NewRandomSequencer returns a new sequencer starting from a random sequence
 /// number
 pub fn new_random_sequencer() -> impl Sequencer {
     SequencerImpl {
-        sequence_number: AtomicU16::new(rand::random::<u16>()),
-        roll_over_count: AtomicU64::new(0),
+        sequence_number: Arc::new(AtomicU16::new(rand::random::<u16>())),
+        roll_over_count: Arc::new(AtomicU64::new(0)),
     }
 }
 
@@ -20,17 +29,18 @@ pub fn new_random_sequencer() -> impl Sequencer {
 pub fn new_fixed_sequencer(s: u16) -> impl Sequencer {
     SequencerImpl {
         sequence_number: if s == 0 {
-            AtomicU16::new(0xFFFF)
+            Arc::new(AtomicU16::new(0xFFFF))
         } else {
-            AtomicU16::new(s - 1)
+            Arc::new(AtomicU16::new(s - 1))
         },
-        roll_over_count: AtomicU64::new(0),
+        roll_over_count: Arc::new(AtomicU64::new(0)),
     }
 }
 
+#[derive(Debug, Clone)]
 struct SequencerImpl {
-    sequence_number: AtomicU16,
-    roll_over_count: AtomicU64,
+    sequence_number: Arc<AtomicU16>,
+    roll_over_count: Arc<AtomicU64>,
 }
 
 impl Sequencer for SequencerImpl {
@@ -53,5 +63,9 @@ impl Sequencer for SequencerImpl {
     /// has wrapped
     fn roll_over_count(&self) -> u64 {
         self.roll_over_count.load(Ordering::SeqCst)
+    }
+
+    fn clone_to(&self) -> Box<dyn Sequencer + Send + Sync> {
+        Box::new(self.clone())
     }
 }

@@ -6,17 +6,32 @@ use util::marshal::{Marshal, MarshalSize};
 
 use anyhow::Result;
 use bytes::{Bytes, BytesMut};
+use std::fmt;
 use std::time::{Duration, SystemTime};
 
 /// Payloader payloads a byte array for use as rtp.Packet payloads
-pub trait Payloader {
+pub trait Payloader: fmt::Debug {
     fn payload(&self, mtu: usize, b: &Bytes) -> Result<Vec<Bytes>>;
+    fn clone_to(&self) -> Box<dyn Payloader + Send + Sync>;
+}
+
+impl Clone for Box<dyn Payloader + Send + Sync> {
+    fn clone(&self) -> Box<dyn Payloader + Send + Sync> {
+        self.clone_to()
+    }
 }
 
 /// Packetizer packetizes a payload
-pub trait Packetizer {
+pub trait Packetizer: fmt::Debug {
     fn enable_abs_send_time(&mut self, value: u8);
     fn packetize(&mut self, payload: &Bytes, samples: u32) -> Result<Vec<Packet>>;
+    fn clone_to(&self) -> Box<dyn Packetizer + Send + Sync>;
+}
+
+impl Clone for Box<dyn Packetizer + Send + Sync> {
+    fn clone(&self) -> Box<dyn Packetizer + Send + Sync> {
+        self.clone_to()
+    }
 }
 
 /// Depacketizer depacketizes a RTP payload, removing any RTP specific data from the payload
@@ -26,24 +41,25 @@ pub trait Depacketizer {
 
 pub type FnTimeGen = fn() -> Duration;
 
-pub(crate) struct PacketizerImpl<P: Payloader, S: Sequencer> {
+#[derive(Debug, Clone)]
+pub(crate) struct PacketizerImpl {
     pub(crate) mtu: usize,
     pub(crate) payload_type: u8,
     pub(crate) ssrc: u32,
-    pub(crate) payloader: P,
-    pub(crate) sequencer: S,
+    pub(crate) payloader: Box<dyn Payloader + Send + Sync>,
+    pub(crate) sequencer: Box<dyn Sequencer + Send + Sync>,
     pub(crate) timestamp: u32,
     pub(crate) clock_rate: u32,
     pub(crate) abs_send_time: u8, //http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
     pub(crate) time_gen: Option<FnTimeGen>,
 }
 
-pub fn new_packetizer<P: Payloader, S: Sequencer>(
+pub fn new_packetizer(
     mtu: usize,
     payload_type: u8,
     ssrc: u32,
-    payloader: P,
-    sequencer: S,
+    payloader: Box<dyn Payloader + Send + Sync>,
+    sequencer: Box<dyn Sequencer + Send + Sync>,
     clock_rate: u32,
 ) -> impl Packetizer {
     PacketizerImpl {
@@ -59,7 +75,7 @@ pub fn new_packetizer<P: Payloader, S: Sequencer>(
     }
 }
 
-impl<P: Payloader, S: Sequencer> Packetizer for PacketizerImpl<P, S> {
+impl Packetizer for PacketizerImpl {
     fn enable_abs_send_time(&mut self, value: u8) {
         self.abs_send_time = value
     }
@@ -105,5 +121,9 @@ impl<P: Payloader, S: Sequencer> Packetizer for PacketizerImpl<P, S> {
         }
 
         Ok(packets)
+    }
+
+    fn clone_to(&self) -> Box<dyn Packetizer + Send + Sync> {
+        Box::new(self.clone())
     }
 }

@@ -10,6 +10,7 @@ use anyhow::Result;
 use bytes::{BufMut, Bytes, BytesMut};
 
 /// H264Payloader payloads H264 packets
+#[derive(Debug, Copy, Clone)]
 pub struct H264Payloader;
 
 pub const STAPA_NALU_TYPE: u8 = 24;
@@ -149,6 +150,10 @@ impl Payloader for H264Payloader {
         }
 
         Ok(payloads)
+    }
+
+    fn clone_to(&self) -> Box<dyn Payloader + Send + Sync> {
+        Box::new(self.clone())
     }
 }
 

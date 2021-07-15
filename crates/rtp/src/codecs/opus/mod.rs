@@ -9,6 +9,7 @@ use crate::{
 use anyhow::Result;
 use bytes::Bytes;
 
+#[derive(Debug, Copy, Clone)]
 pub struct OpusPayloader;
 
 impl Payloader for OpusPayloader {
@@ -18,6 +19,10 @@ impl Payloader for OpusPayloader {
         }
 
         Ok(vec![payload.clone()])
+    }
+
+    fn clone_to(&self) -> Box<dyn Payloader + Send + Sync> {
+        Box::new(self.clone())
     }
 }
 

@@ -11,6 +11,7 @@ pub type G711Payloader = G7xxPayloader;
 /// G722Payloader payloads G722 packets
 pub type G722Payloader = G7xxPayloader;
 
+#[derive(Debug, Copy, Clone)]
 pub struct G7xxPayloader;
 
 impl Payloader for G7xxPayloader {
@@ -34,5 +35,9 @@ impl Payloader for G7xxPayloader {
         }
 
         Ok(payloads)
+    }
+
+    fn clone_to(&self) -> Box<dyn Payloader + Send + Sync> {
+        Box::new(self.clone())
     }
 }
