@@ -2,6 +2,8 @@ pub mod conn_bridge;
 pub mod conn_disconnected_packet;
 pub mod conn_pipe;
 pub mod conn_udp;
+pub mod conn_udp_listener;
+pub mod error;
 
 #[cfg(test)]
 mod conn_bridge_test;
@@ -13,6 +15,7 @@ mod conn_test;
 use anyhow::Result;
 use async_trait::async_trait;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tokio::net::ToSocketAddrs;
 
 #[async_trait]
@@ -23,6 +26,21 @@ pub trait Conn {
     async fn send(&self, buf: &[u8]) -> Result<usize>;
     async fn send_to(&self, buf: &[u8], target: SocketAddr) -> Result<usize>;
     async fn local_addr(&self) -> Result<SocketAddr>;
+}
+
+/// A Listener is a generic network listener for connection-oriented protocols.
+/// Multiple connections may invoke methods on a Listener simultaneously.
+#[async_trait]
+pub trait Listener {
+    /// accept waits for and returns the next connection to the listener.
+    async fn accept(&mut self) -> Result<Arc<dyn Conn + Send + Sync>>;
+
+    /// close closes the listener.
+    /// Any blocked accept operations will be unblocked and return errors.
+    async fn close(&mut self) -> Result<()>;
+
+    /// addr returns the listener's network address.
+    async fn addr(&self) -> Result<SocketAddr>;
 }
 
 pub async fn lookup_host<T>(use_ipv4: bool, host: T) -> Result<SocketAddr>
