@@ -1,4 +1,5 @@
 pub mod conn_bridge;
+pub mod conn_disconnected_packet;
 pub mod conn_pipe;
 pub mod conn_udp;
 
