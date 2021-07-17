@@ -54,6 +54,10 @@ impl Conn for BridgeConn {
     async fn local_addr(&self) -> Result<SocketAddr> {
         Err(Error::new(ErrorKind::AddrNotAvailable, "Addr Not Available").into())
     }
+
+    async fn close(&self) -> Result<()> {
+        Ok(())
+    }
 }
 
 pub type FilterCbFn = Box<dyn Fn(&Bytes) -> bool + Send + Sync>;

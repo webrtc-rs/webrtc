@@ -55,4 +55,8 @@ impl Conn for DisconnectedPacketConn {
     async fn local_addr(&self) -> Result<SocketAddr> {
         self.pconn.local_addr().await
     }
+
+    async fn close(&self) -> Result<()> {
+        Ok(())
+    }
 }

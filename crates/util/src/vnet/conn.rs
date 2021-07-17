@@ -133,4 +133,8 @@ impl Conn for UdpConn {
     async fn local_addr(&self) -> Result<SocketAddr> {
         Ok(self.loc_addr)
     }
+
+    async fn close(&self) -> Result<()> {
+        Ok(())
+    }
 }

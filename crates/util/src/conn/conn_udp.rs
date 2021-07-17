@@ -27,4 +27,8 @@ impl Conn for UdpSocket {
     async fn local_addr(&self) -> Result<SocketAddr> {
         Ok(self.local_addr()?)
     }
+
+    async fn close(&self) -> Result<()> {
+        Ok(())
+    }
 }

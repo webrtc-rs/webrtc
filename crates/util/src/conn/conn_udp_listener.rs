@@ -245,4 +245,9 @@ impl Conn for UdpConn {
     async fn local_addr(&self) -> Result<SocketAddr> {
         self.pconn.local_addr().await
     }
+
+    async fn close(&self) -> Result<()> {
+        //TODO:
+        Ok(())
+    }
 }

@@ -28,6 +28,7 @@ pub trait Conn {
     async fn send(&self, buf: &[u8]) -> Result<usize>;
     async fn send_to(&self, buf: &[u8], target: SocketAddr) -> Result<usize>;
     async fn local_addr(&self) -> Result<SocketAddr>;
+    async fn close(&self) -> Result<()>;
 }
 
 /// A Listener is a generic network listener for connection-oriented protocols.
