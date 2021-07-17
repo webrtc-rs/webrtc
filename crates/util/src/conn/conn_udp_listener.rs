@@ -17,6 +17,8 @@ const DEFAULT_LISTEN_BACKLOG: usize = 128; // same as Linux default
 pub type AcceptFilterFn =
     Box<dyn (Fn(&[u8]) -> Pin<Box<dyn Future<Output = bool> + Send + 'static>>) + Send + Sync>;
 
+type AcceptDoneCh = (mpsc::Receiver<Arc<UdpConn>>, mpsc::Receiver<()>);
+
 /// listener is used in the [DTLS](https://github.com/webrtc-rs/dtls) and
 /// [SCTP](https://github.com/webrtc-rs/sctp) transport to provide a connection-oriented
 /// listener over a UDP.
@@ -24,34 +26,38 @@ struct ListenerImpl {
     pconn: Arc<dyn Conn + Send + Sync>,
     accepting: Arc<AtomicBool>,
     accept_ch_tx: Arc<Mutex<Option<mpsc::Sender<Arc<UdpConn>>>>>,
-    accept_ch_rx: mpsc::Receiver<Arc<UdpConn>>,
-    done_ch_tx: Option<mpsc::Sender<()>>,
-    done_ch_rx: mpsc::Receiver<()>,
+    done_ch_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
+    ch_rx: Arc<Mutex<AcceptDoneCh>>,
     conns: Arc<Mutex<HashMap<String, Arc<UdpConn>>>>,
 }
 
 #[async_trait]
 impl Listener for ListenerImpl {
     /// accept waits for and returns the next connection to the listener.
-    async fn accept(&mut self) -> Result<Arc<dyn Conn + Send + Sync>> {
+    async fn accept(&self) -> Result<Arc<dyn Conn + Send + Sync>> {
+        let (accept_ch_rx, done_ch_rx) = &mut *self.ch_rx.lock().await;
+
         tokio::select! {
-            c = self.accept_ch_rx.recv() =>{
+            c = accept_ch_rx.recv() =>{
                 if let Some(c) = c{
                     Ok(c)
                 }else{
                     Err(Error::ErrClosedListenerAcceptCh.into())
                 }
             }
-            _ = self.done_ch_rx.recv() =>  Err(Error::ErrClosedListener.into()),
+            _ = done_ch_rx.recv() =>  Err(Error::ErrClosedListener.into()),
         }
     }
 
     /// close closes the listener.
     /// Any blocked Accept operations will be unblocked and return errors.
-    async fn close(&mut self) -> Result<()> {
+    async fn close(&self) -> Result<()> {
         if self.accepting.load(Ordering::SeqCst) {
             self.accepting.store(false, Ordering::SeqCst);
-            self.done_ch_tx.take();
+            {
+                let mut done_ch = self.done_ch_tx.lock().await;
+                done_ch.take();
+            }
             {
                 let mut accept_ch = self.accept_ch_tx.lock().await;
                 accept_ch.take();
@@ -68,6 +74,7 @@ impl Listener for ListenerImpl {
 }
 
 /// ListenConfig stores options for listening to an address.
+#[derive(Default)]
 pub struct ListenConfig {
     /// Backlog defines the maximum length of the queue of pending
     /// connections. It is equivalent of the backlog argument of
@@ -80,6 +87,10 @@ pub struct ListenConfig {
     /// AcceptFilter determines whether the new conn should be made for
     /// the incoming packet. If not set, any packet creates new conn.
     pub accept_filter: Option<AcceptFilterFn>,
+}
+
+pub async fn listen<A: ToSocketAddrs>(laddr: A) -> Result<impl Listener> {
+    ListenConfig::default().listen(laddr).await
 }
 
 impl ListenConfig {
@@ -97,9 +108,8 @@ impl ListenConfig {
             pconn,
             accepting: Arc::new(AtomicBool::new(true)),
             accept_ch_tx: Arc::new(Mutex::new(Some(accept_ch_tx))),
-            accept_ch_rx,
-            done_ch_tx: Some(done_ch_tx),
-            done_ch_rx,
+            done_ch_tx: Arc::new(Mutex::new(Some(done_ch_tx))),
+            ch_rx: Arc::new(Mutex::new((accept_ch_rx, done_ch_rx))),
             conns: Arc::new(Mutex::new(HashMap::new())),
         };
 

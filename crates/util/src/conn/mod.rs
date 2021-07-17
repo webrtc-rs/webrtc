@@ -11,6 +11,8 @@ mod conn_bridge_test;
 mod conn_pipe_test;
 #[cfg(test)]
 mod conn_test;
+#[cfg(test)]
+mod conn_udp_listener_test;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -33,11 +35,11 @@ pub trait Conn {
 #[async_trait]
 pub trait Listener {
     /// accept waits for and returns the next connection to the listener.
-    async fn accept(&mut self) -> Result<Arc<dyn Conn + Send + Sync>>;
+    async fn accept(&self) -> Result<Arc<dyn Conn + Send + Sync>>;
 
     /// close closes the listener.
     /// Any blocked accept operations will be unblocked and return errors.
-    async fn close(&mut self) -> Result<()>;
+    async fn close(&self) -> Result<()>;
 
     /// addr returns the listener's network address.
     async fn addr(&self) -> Result<SocketAddr>;
