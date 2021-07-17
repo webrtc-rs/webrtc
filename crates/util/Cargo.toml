@@ -42,4 +42,3 @@ winapi = "0.2.8"
 tokio-test = "0.4"
 env_logger = "0.8.3"
 chrono = "0.4.19"
-

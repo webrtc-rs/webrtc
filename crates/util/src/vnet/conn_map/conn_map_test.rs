@@ -15,6 +15,8 @@ impl ConnObserver for DummyObserver {
         Ok(())
     }
 
+    async fn on_closed(&self, _addr: SocketAddr) {}
+
     fn determine_source_ip(&self, loc_ip: IpAddr, _dst_ip: IpAddr) -> Option<IpAddr> {
         Some(loc_ip)
     }

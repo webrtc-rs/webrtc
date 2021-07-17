@@ -59,8 +59,11 @@ impl ConnObserver for VNetInternal {
     async fn write(&self, c: Box<dyn Chunk + Send + Sync>) -> Result<()> {
         if c.network() == UDP_STR && c.get_destination_ip().is_loopback() {
             if let Some(conn) = self.udp_conns.find(&c.destination_addr()).await {
-                let tx = conn.get_inbound_ch();
-                let _ = tx.send(c).await;
+                let read_ch_tx = conn.get_inbound_ch();
+                let ch_tx = read_ch_tx.lock().await;
+                if let Some(tx) = &*ch_tx {
+                    let _ = tx.send(c).await;
+                }
             }
             return Ok(());
         }
@@ -72,6 +75,10 @@ impl ConnObserver for VNetInternal {
         } else {
             Err(Error::ErrNoRouterLinked.into())
         }
+    }
+
+    async fn on_closed(&self, addr: SocketAddr) {
+        let _ = self.udp_conns.delete(&addr).await;
     }
 
     // This method determines the srcIP based on the dstIP when locIP
@@ -160,8 +167,11 @@ impl Nic for VNet {
         if c.network() == UDP_STR {
             let vi = self.vi.lock().await;
             if let Some(conn) = vi.udp_conns.find(&c.destination_addr()).await {
-                let tx = conn.get_inbound_ch();
-                let _ = tx.send(c).await;
+                let read_ch_tx = conn.get_inbound_ch();
+                let ch_tx = read_ch_tx.lock().await;
+                if let Some(tx) = &*ch_tx {
+                    let _ = tx.send(c).await;
+                }
             }
         }
     }
