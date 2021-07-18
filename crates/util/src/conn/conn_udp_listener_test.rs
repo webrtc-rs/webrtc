@@ -189,7 +189,10 @@ async fn test_listener_concurrent() -> Result<()> {
                 conn.close().await?;
             }
             Err(err) => {
-                assert!(Error::ErrClosedListener.equal(&err));
+                assert!(
+                    Error::ErrClosedListener.equal(&err)
+                        || Error::ErrClosedListenerAcceptCh.equal(&err)
+                );
             }
         }
 
