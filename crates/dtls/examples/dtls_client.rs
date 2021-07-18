@@ -1,8 +1,9 @@
 use anyhow::Result;
 use clap::{App, AppSettings, Arg};
-use std::io::Write;
+//use std::io::Write;
 use std::str;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::net::UdpSocket;
 use util::Conn;
 use webrtc_dtls::{
@@ -28,20 +29,20 @@ async fn create_client(
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    env_logger::Builder::new()
-        .format(|buf, record| {
-            writeln!(
-                buf,
-                "{}:{} [{}] {} - {}",
-                record.file().unwrap_or("unknown"),
-                record.line().unwrap_or(0),
-                record.level(),
-                chrono::Local::now().format("%H:%M:%S.%6f"),
-                record.args()
-            )
-        })
-        .filter(None, log::LevelFilter::Trace)
-        .init();
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
 
     let mut app = App::new("SCTP Ping")
         .version("0.1.0")
@@ -81,12 +82,20 @@ async fn main() -> Result<()> {
     };
     let dtls_conn = create_client(conn, cfg, true).await?;
 
-    let message = "hello world from dtls client";
-    dtls_conn.send(message.as_bytes()).await?;
+    for i in 0..10 {
+        let message = format!(
+            "hello world msg {} from dtls client: {}",
+            i,
+            dtls_conn.local_addr().await?
+        );
+        dtls_conn.send(message.as_bytes()).await?;
 
-    let mut buf = [0; 1024];
-    let n = dtls_conn.recv(&mut buf).await?;
-    println!("{}", str::from_utf8(&buf[..n])?);
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        let mut buf = [0; 1024];
+        let n = dtls_conn.recv(&mut buf).await?;
+        println!("{}", str::from_utf8(&buf[..n])?);
+    }
 
     dtls_conn.close().await
 }
