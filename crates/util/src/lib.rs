@@ -4,6 +4,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 
+#[cfg(feature = "vnet")]
 #[macro_use]
 extern crate lazy_static;
 
