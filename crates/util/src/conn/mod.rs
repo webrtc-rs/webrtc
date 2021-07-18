@@ -11,6 +11,9 @@ mod conn_bridge_test;
 mod conn_pipe_test;
 #[cfg(test)]
 mod conn_test;
+
+//TODO: remove this conditional test
+#[cfg(not(target_os = "windows"))]
 #[cfg(test)]
 mod conn_udp_listener_test;
 
