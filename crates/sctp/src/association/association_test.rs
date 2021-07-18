@@ -2143,6 +2143,10 @@ impl Conn for FakeEchoConn {
     async fn local_addr(&self) -> Result<SocketAddr> {
         Err(io::Error::new(io::ErrorKind::AddrNotAvailable, "Addr Not Available").into())
     }
+
+    async fn close(&self) -> Result<()> {
+        Ok(())
+    }
 }
 
 //use std::io::Write;

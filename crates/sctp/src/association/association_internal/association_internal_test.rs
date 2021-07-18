@@ -29,6 +29,10 @@ impl Conn for DumbConn {
     async fn local_addr(&self) -> Result<SocketAddr> {
         Err(io::Error::new(io::ErrorKind::AddrNotAvailable, "Addr Not Available").into())
     }
+
+    async fn close(&self) -> Result<()> {
+        Ok(())
+    }
 }
 
 fn create_association_internal(config: Config) -> AssociationInternal {
