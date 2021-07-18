@@ -85,6 +85,7 @@ async fn main() -> Result<()> {
                             let message = format!("Echo: {}", client_msg);
                             dtls_conn.send(message.as_bytes()).await?;
                         }
+                        println!("closing dtls_conn");
                         dtls_conn.close().await
                     });
                 }

@@ -247,8 +247,8 @@ impl DTLSConn {
         let (handle_queue_tx, mut handle_queue_rx) = mpsc::channel(1);
         let (reader_close_tx, mut reader_close_rx) = mpsc::channel(1);
 
-        let packet_tx1 = Arc::new(packet_tx);
-        let packet_tx2 = Arc::clone(&packet_tx1);
+        let packet_tx = Arc::new(packet_tx);
+        let packet_tx2 = Arc::clone(&packet_tx);
         let next_conn_rx = Arc::clone(&conn);
         let next_conn_tx = Arc::clone(&conn);
         let cache = HandshakeCache::new();
@@ -271,7 +271,7 @@ impl DTLSConn {
             cfg,
             retransmit: false,
             handshake_rx,
-            packet_tx: packet_tx1,
+            packet_tx,
             handle_queue_tx,
             handshake_done_tx: Some(handshake_done_tx),
             reader_close_tx: Mutex::new(Some(reader_close_tx)),
@@ -353,6 +353,12 @@ impl DTLSConn {
                                 err
                             );
                             if Error::ErrAlertFatalOrClose.equal(&err) {
+                                trace!(
+                                    "{}: read_and_buffer exit with {}",
+                                    srv_cli_str(ctx.is_client),
+                                    err
+                                );
+
                                 break;
                             }
                         }
@@ -375,36 +381,34 @@ impl DTLSConn {
             return Err(Error::ErrHandshakeInProgress.into());
         }
 
-        loop {
-            let rx = {
-                let mut decrypted_rx = self.decrypted_rx.lock().await;
-                if let Some(d) = duration {
-                    let timer = tokio::time::sleep(d);
-                    tokio::pin!(timer);
+        let rx = {
+            let mut decrypted_rx = self.decrypted_rx.lock().await;
+            if let Some(d) = duration {
+                let timer = tokio::time::sleep(d);
+                tokio::pin!(timer);
 
-                    tokio::select! {
-                        r = decrypted_rx.recv() => r,
-                        _ = timer.as_mut() => return Err(Error::ErrDeadlineExceeded.into()),
-                    }
-                } else {
-                    decrypted_rx.recv().await
+                tokio::select! {
+                    r = decrypted_rx.recv() => r,
+                    _ = timer.as_mut() => return Err(Error::ErrDeadlineExceeded.into()),
                 }
-            };
-
-            if let Some(out) = rx {
-                match out {
-                    Ok(val) => {
-                        if p.len() < val.len() {
-                            return Err(Error::ErrBufferTooSmall.into());
-                        }
-                        p[..val.len()].copy_from_slice(&val);
-                        return Ok(val.len());
-                    }
-                    Err(err) => return Err(err),
-                };
             } else {
-                continue;
+                decrypted_rx.recv().await
             }
+        };
+
+        if let Some(out) = rx {
+            match out {
+                Ok(val) => {
+                    if p.len() < val.len() {
+                        return Err(Error::ErrBufferTooSmall.into());
+                    }
+                    p[..val.len()].copy_from_slice(&val);
+                    Ok(val.len())
+                }
+                Err(err) => Err(err),
+            }
+        } else {
+            Err(Error::ErrAlertFatalOrClose.into())
         }
     }
 
