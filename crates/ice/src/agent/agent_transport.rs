@@ -208,4 +208,8 @@ impl Conn for AgentConn {
             Err(io::Error::new(io::ErrorKind::AddrNotAvailable, "Addr Not Available").into())
         }
     }
+
+    async fn close(&self) -> Result<()> {
+        Ok(())
+    }
 }

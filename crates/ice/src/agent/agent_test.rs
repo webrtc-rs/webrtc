@@ -572,6 +572,10 @@ impl Conn for MockPacketConn {
     async fn local_addr(&self) -> Result<SocketAddr> {
         Ok(SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0))
     }
+
+    async fn close(&self) -> Result<()> {
+        Ok(())
+    }
 }
 
 fn build_msg(c: MessageClass, username: String, key: String) -> Result<Message> {
