@@ -75,6 +75,7 @@ struct ConnReaderContext {
 
 // Conn represents a DTLS connection
 pub struct DTLSConn {
+    conn: Arc<dyn Conn + Send + Sync>,
     pub(crate) cache: HandshakeCache, // caching of handshake messages for verifyData generation
     decrypted_rx: Mutex<mpsc::Receiver<Result<Vec<u8>>>>, // Decrypted Application Data or error, pull by calling `Read`
     pub(crate) state: State,                              // Internal state
@@ -126,13 +127,16 @@ impl Conn for DTLSConn {
         Err(Error::new("Not applicable".to_owned()).into())
     }
     async fn local_addr(&self) -> Result<SocketAddr> {
-        Err(Error::new("Not applicable".to_owned()).into())
+        self.conn.local_addr().await
+    }
+    async fn close(&self) -> Result<()> {
+        self.close().await
     }
 }
 
 impl DTLSConn {
     pub async fn new(
-        conn: Arc<dyn util::Conn + Send + Sync>,
+        conn: Arc<dyn Conn + Send + Sync>,
         mut config: Config,
         is_client: bool,
         initial_state: Option<State>,
@@ -254,6 +258,7 @@ impl DTLSConn {
         let handshake_completed_successfully2 = Arc::clone(&handshake_completed_successfully);
 
         let mut c = DTLSConn {
+            conn: Arc::clone(&conn),
             cache,
             decrypted_rx: Mutex::new(decrypted_rx),
             state,
@@ -452,8 +457,11 @@ impl DTLSConn {
             self.notify(AlertLevel::Warning, AlertDescription::CloseNotify)
                 .await?;
 
-            let mut reader_close_tx = self.reader_close_tx.lock().await;
-            reader_close_tx.take();
+            {
+                let mut reader_close_tx = self.reader_close_tx.lock().await;
+                reader_close_tx.take();
+            }
+            self.conn.close().await?;
         }
 
         Ok(())

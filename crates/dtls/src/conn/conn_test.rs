@@ -409,8 +409,10 @@ async fn test_export_keying_material() -> Result<()> {
     let (_handshake_tx, handshake_rx) = mpsc::channel(1);
     let (packet_tx, _packet_rx) = mpsc::channel(1);
     let (handle_queue_tx, _handle_queue_rx) = mpsc::channel(1);
+    let (ca, _cb) = pipe();
 
     let mut c = DTLSConn {
+        conn: Arc::new(ca),
         state: State {
             local_random: HandshakeRandom {
                 gmt_unix_time: SystemTime::UNIX_EPOCH

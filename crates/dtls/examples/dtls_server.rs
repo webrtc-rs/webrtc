@@ -26,7 +26,7 @@ async fn create_server(
 // cargo run --color=always --package webrtc-dtls --example dtls_server -- --host 0.0.0.0:5678
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     env_logger::Builder::new()
         .format(|buf, record| {
             writeln!(
@@ -69,19 +69,21 @@ async fn main() {
     }
 
     let host = matches.value_of("host").unwrap();
-    let conn = DisconnectedPacketConn::new(Arc::new(UdpSocket::bind(host).await.unwrap()));
-    println!("listening {}...", conn.local_addr().await.unwrap());
+    let conn = DisconnectedPacketConn::new(Arc::new(UdpSocket::bind(host).await?));
+    println!("listening {}...", conn.local_addr().await?);
 
     let cfg = Config {
         srtp_protection_profiles: vec![SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_80],
         ..Default::default()
     };
-    let dtls_conn = create_server(Arc::new(conn), cfg, true).await.unwrap();
+    let dtls_conn = create_server(Arc::new(conn), cfg, true).await?;
 
     let mut buf = [0; 1024];
-    let n = dtls_conn.recv(&mut buf).await.unwrap();
-    println!("{}", str::from_utf8(&buf[..n]).unwrap());
+    let n = dtls_conn.recv(&mut buf).await?;
+    println!("{}", str::from_utf8(&buf[..n])?);
 
     let message = "hello world from dtls server";
-    dtls_conn.send(message.as_bytes()).await.unwrap();
+    dtls_conn.send(message.as_bytes()).await?;
+
+    dtls_conn.close().await
 }
