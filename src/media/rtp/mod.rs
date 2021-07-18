@@ -4,6 +4,7 @@ use rtp_codec::*;
 
 mod fmtp;
 pub mod rtp_codec;
+pub mod rtp_receiver;
 pub mod rtp_sender;
 
 /// SSRC represents a synchronization source
