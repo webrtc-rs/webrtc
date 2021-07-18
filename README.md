@@ -81,7 +81,6 @@ WebRTC.rs is a pure Rust implementation of WebRTC stack, which rewrites <a href=
     <img src="./doc/check.png">TURN<a href="https://crates.io/crates/turn"><img src="https://img.shields.io/crates/v/turn.svg"></a>
     <img src="./doc/check.png">ICE<a href="https://crates.io/crates/webrtc-ice"><img src="https://img.shields.io/crates/v/webrtc-ice.svg"></a>
     <br>
-    <img src="./doc/uncheck.png">UDP<a href="https://crates.io/crates/webrtc-udp"><img src="https://img.shields.io/crates/v/webrtc-udp.svg"></a>
     <img src="./doc/check.png">SDP<a href="https://crates.io/crates/sdp"><img src="https://img.shields.io/crates/v/sdp.svg"></a>
     <img src="./doc/check.png">Util<a href="https://crates.io/crates/webrtc-util"><img src="https://img.shields.io/crates/v/webrtc-util.svg"></a>
 </p>
