@@ -57,12 +57,13 @@ lazy_static! {
 }
 
 type PacketSendRequest = (Vec<Packet>, Option<mpsc::Sender<Result<()>>>);
+type DecryptedResult = Result<(Vec<u8>, SocketAddr)>;
 
 struct ConnReaderContext {
     is_client: bool,
     replay_protection_window: usize,
     replay_detector: Vec<Box<dyn ReplayDetector + Send>>,
-    decrypted_tx: mpsc::Sender<Result<Vec<u8>>>,
+    decrypted_tx: mpsc::Sender<DecryptedResult>,
     encrypted_packets: Vec<Vec<u8>>,
     fragment_buffer: FragmentBuffer,
     cache: HandshakeCache,
@@ -77,7 +78,7 @@ struct ConnReaderContext {
 pub struct DTLSConn {
     conn: Arc<dyn Conn + Send + Sync>,
     pub(crate) cache: HandshakeCache, // caching of handshake messages for verifyData generation
-    decrypted_rx: Mutex<mpsc::Receiver<Result<Vec<u8>>>>, // Decrypted Application Data or error, pull by calling `Read`
+    decrypted_rx: Mutex<mpsc::Receiver<DecryptedResult>>, // Decrypted Application Data or error, pull by calling `Read`
     pub(crate) state: State,                              // Internal state
 
     handshake_completed_successfully: Arc<AtomicBool>,
@@ -115,10 +116,11 @@ impl Conn for DTLSConn {
         Err(Error::new("Not applicable".to_owned()).into())
     }
     async fn recv(&self, buf: &mut [u8]) -> Result<usize> {
-        self.read(buf, None).await
+        let (n, _) = self.read(buf, None).await?;
+        Ok(n)
     }
-    async fn recv_from(&self, _buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
-        Err(Error::new("Not applicable".to_owned()).into())
+    async fn recv_from(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
+        self.read(buf, None).await
     }
     async fn send(&self, buf: &[u8]) -> Result<usize> {
         self.write(buf, None).await
@@ -376,7 +378,11 @@ impl DTLSConn {
     }
 
     // Read reads data from the connection.
-    pub async fn read(&self, p: &mut [u8], duration: Option<Duration>) -> Result<usize> {
+    pub async fn read(
+        &self,
+        p: &mut [u8],
+        duration: Option<Duration>,
+    ) -> Result<(usize, SocketAddr)> {
         if !self.is_handshake_completed_successfully() {
             return Err(Error::ErrHandshakeInProgress.into());
         }
@@ -399,11 +405,12 @@ impl DTLSConn {
         if let Some(out) = rx {
             match out {
                 Ok(val) => {
-                    if p.len() < val.len() {
+                    let n = val.0.len();
+                    if p.len() < n {
                         return Err(Error::ErrBufferTooSmall.into());
                     }
-                    p[..val.len()].copy_from_slice(&val);
-                    Ok(val.len())
+                    p[..n].copy_from_slice(&val.0);
+                    Ok((n, val.1))
                 }
                 Err(err) => Err(err),
             }
@@ -742,11 +749,12 @@ impl DTLSConn {
         local_epoch: &Arc<AtomicU16>,
         handshake_completed_successfully: &Arc<AtomicBool>,
     ) -> Result<()> {
-        let n = next_conn.recv(buf).await?;
+        let (n, raddr) = next_conn.recv_from(buf).await?;
         let pkts = unpack_datagram(&buf[..n])?;
         let mut has_handshake = false;
         for pkt in pkts {
-            let (hs, alert, mut err) = DTLSConn::handle_incoming_packet(ctx, pkt, true).await;
+            let (hs, alert, mut err) =
+                DTLSConn::handle_incoming_packet(ctx, pkt, raddr, true).await;
             if let Some(alert) = alert {
                 let alert_err = ctx
                     .packet_tx
@@ -807,7 +815,7 @@ impl DTLSConn {
                                 //trace!("recv handle_queue: {} ", srv_cli_str(ctx.is_client));
 
                                 let pkts = ctx.encrypted_packets.drain(..).collect();
-                                DTLSConn::handle_queued_packets(ctx, local_epoch, handshake_completed_successfully, pkts).await?;
+                                DTLSConn::handle_queued_packets(ctx, local_epoch, handshake_completed_successfully, pkts, raddr).await?;
 
                                 drop(done);
                             }
@@ -826,9 +834,10 @@ impl DTLSConn {
         local_epoch: &Arc<AtomicU16>,
         handshake_completed_successfully: &Arc<AtomicBool>,
         pkts: Vec<Vec<u8>>,
+        raddr: SocketAddr,
     ) -> Result<()> {
         for p in pkts {
-            let (_, alert, mut err) = DTLSConn::handle_incoming_packet(ctx, p, false).await; // don't re-enqueue
+            let (_, alert, mut err) = DTLSConn::handle_incoming_packet(ctx, p, raddr, false).await; // don't re-enqueue
             if let Some(alert) = alert {
                 let alert_err = ctx
                     .packet_tx
@@ -873,6 +882,7 @@ impl DTLSConn {
     async fn handle_incoming_packet(
         ctx: &mut ConnReaderContext,
         mut pkt: Vec<u8>,
+        raddr: SocketAddr,
         enqueue: bool,
     ) -> (bool, Option<Alert>, Option<anyhow::Error>) {
         let mut reader = BufReader::new(pkt.as_slice());
@@ -1096,7 +1106,7 @@ impl DTLSConn {
 
                 ctx.replay_detector[h.epoch as usize].accept();
 
-                let _ = ctx.decrypted_tx.send(Ok(a.data)).await;
+                let _ = ctx.decrypted_tx.send(Ok((a.data, raddr))).await;
                 //TODO
                 /*select {
                     case self.decrypted < - content.data:

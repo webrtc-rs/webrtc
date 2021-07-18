@@ -77,15 +77,16 @@ async fn main() -> Result<()> {
                 if let Ok(dtls_conn) = result {
                     tokio::spawn(async move {
                         let mut buf = [0; 1024];
-
-                        while let Ok(n) = dtls_conn.recv(&mut buf).await{
+                        let mut remote_addr = None;
+                        while let Ok((n,raddr)) = dtls_conn.recv_from(&mut buf).await{
                             let client_msg = str::from_utf8(&buf[..n])?;
                             println!("{}", client_msg);
 
+                            remote_addr = Some(raddr);
                             let message = format!("Echo: {}", client_msg);
                             dtls_conn.send(message.as_bytes()).await?;
                         }
-                        println!("closing dtls_conn");
+                        println!("closing dtls_conn from {:?}", remote_addr);
                         dtls_conn.close().await
                     });
                 }
