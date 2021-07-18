@@ -56,7 +56,12 @@ impl Conn for Endpoint {
     async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> Result<usize> {
         Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
+
     async fn local_addr(&self) -> Result<SocketAddr> {
         self.next_conn.local_addr().await
+    }
+
+    async fn close(&self) -> Result<()> {
+        Ok(())
     }
 }

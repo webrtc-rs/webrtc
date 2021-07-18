@@ -81,6 +81,10 @@ impl Conn for MuxErrorConn {
     async fn local_addr(&self) -> Result<SocketAddr> {
         Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
+
+    async fn close(&self) -> Result<()> {
+        Ok(())
+    }
 }
 
 #[tokio::test]
