@@ -3,6 +3,7 @@ use super::*;
 use bytes::Bytes;
 use std::collections::VecDeque;
 use std::io::{Error, ErrorKind};
+use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
@@ -35,8 +36,9 @@ impl Conn for BridgeConn {
         Ok(l)
     }
 
-    async fn recv_from(&self, _buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
-        Err(Error::new(ErrorKind::Other, "Not applicable").into())
+    async fn recv_from(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
+        let n = self.recv(buf).await?;
+        Ok((n, SocketAddr::from_str("0.0.0.0:0")?))
     }
 
     async fn send(&self, b: &[u8]) -> Result<usize> {
