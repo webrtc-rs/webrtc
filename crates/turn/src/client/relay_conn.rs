@@ -182,6 +182,10 @@ impl<T: RelayConnObserver + Send + Sync> Conn for RelayConn<T> {
     async fn local_addr(&self) -> Result<SocketAddr> {
         Ok(self.relayed_addr)
     }
+
+    async fn close(&self) -> Result<()> {
+        Ok(())
+    }
 }
 
 impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
