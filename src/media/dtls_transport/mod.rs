@@ -44,7 +44,7 @@ pub type OnStateChangeHdlrFn = Box<
 pub struct DTLSTransport {
     pub(crate) ice_transport: ICETransport,
     pub(crate) certificates: Vec<Certificate>,
-    pub(crate) setting_engine: SettingEngine,
+    pub(crate) setting_engine: Arc<SettingEngine>,
 
     pub(crate) remote_parameters: DTLSParameters,
     pub(crate) remote_certificate: Bytes,
@@ -69,7 +69,7 @@ impl DTLSTransport {
     pub fn new(
         ice_transport: ICETransport,
         certificates: Vec<Certificate>,
-        setting_engine: SettingEngine,
+        setting_engine: Arc<SettingEngine>,
     ) -> Self {
         let (srtp_ready_tx, srtp_ready_rx) = mpsc::channel(1);
         DTLSTransport {

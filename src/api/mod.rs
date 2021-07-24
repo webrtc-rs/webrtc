@@ -14,6 +14,7 @@ use crate::data::data_channel::data_channel_parameters::DataChannelParameters;
 use crate::data::data_channel::DataChannel;
 use crate::data::sctp_transport::SCTPTransport;
 use crate::error::Error;
+use crate::media::interceptor::Interceptor;
 use anyhow::Result;
 use std::sync::Arc;
 
@@ -22,9 +23,9 @@ use std::sync::Arc;
 /// defaultAPI object. Note that the global version of the API
 /// may be phased out in the future.
 pub struct Api {
-    setting_engine: SettingEngine,
-    media_engine: MediaEngine,
-    //TODO: interceptor   interceptor.Interceptor
+    setting_engine: Arc<SettingEngine>,
+    media_engine: Arc<MediaEngine>,
+    interceptor: Option<Arc<dyn Interceptor>>,
 }
 
 impl Api {
@@ -43,7 +44,7 @@ impl Api {
         Ok(ICEGatherer::new(
             validated_servers,
             opts.ice_gather_policy,
-            self.setting_engine.clone(),
+            Arc::clone(&self.setting_engine),
         ))
     }
 
@@ -85,7 +86,7 @@ impl Api {
         Ok(DTLSTransport::new(
             ice_transport,
             certificates,
-            self.setting_engine.clone(),
+            Arc::clone(&self.setting_engine),
         ))
     }
 
@@ -95,7 +96,7 @@ impl Api {
     pub fn new_sctp_transport(&self, dtls_transport: Arc<DTLSTransport>) -> Result<SCTPTransport> {
         Ok(SCTPTransport::new(
             dtls_transport,
-            self.setting_engine.clone(),
+            Arc::clone(&self.setting_engine),
         ))
     }
 
@@ -112,26 +113,18 @@ impl Api {
             return Err(Error::ErrStringSizeLimit.into());
         }
 
-        let d = DataChannel::new(params, self.setting_engine.clone());
+        let d = DataChannel::new(params, Arc::clone(&self.setting_engine));
         d.open(sctp_transport).await?;
 
         Ok(d)
     }
 }
 
+#[derive(Default)]
 pub struct ApiBuilder {
-    api: Api,
-}
-
-impl Default for ApiBuilder {
-    fn default() -> Self {
-        ApiBuilder {
-            api: Api {
-                setting_engine: SettingEngine::default(),
-                media_engine: MediaEngine::default(),
-            },
-        }
-    }
+    setting_engine: Option<Arc<SettingEngine>>,
+    media_engine: Option<Arc<MediaEngine>>,
+    interceptor: Option<Arc<dyn Interceptor>>,
 }
 
 impl ApiBuilder {
@@ -139,30 +132,40 @@ impl ApiBuilder {
         ApiBuilder::default()
     }
 
-    pub fn build(self) -> Api {
-        self.api
+    pub fn build(mut self) -> Api {
+        Api {
+            setting_engine: if let Some(setting_engine) = self.setting_engine.take() {
+                setting_engine
+            } else {
+                Arc::new(SettingEngine::default())
+            },
+            media_engine: if let Some(media_engine) = self.media_engine.take() {
+                media_engine
+            } else {
+                Arc::new(MediaEngine::default())
+            },
+            interceptor: self.interceptor.take(),
+        }
     }
 
     /// WithSettingEngine allows providing a SettingEngine to the API.
     /// Settings should not be changed after passing the engine to an API.
     pub fn with_setting_engine(mut self, setting_engine: SettingEngine) -> Self {
-        self.api.setting_engine = setting_engine;
+        self.setting_engine = Some(Arc::new(setting_engine));
         self
     }
 
     /// WithMediaEngine allows providing a MediaEngine to the API.
     /// Settings can be changed after passing the engine to an API.
     pub fn with_media_engine(mut self, media_engine: MediaEngine) -> Self {
-        self.api.media_engine = media_engine;
+        self.media_engine = Some(Arc::new(media_engine));
         self
     }
 
-    //TODO:
-    // WithInterceptorRegistry allows providing Interceptors to the API.
-    // Settings should not be changed after passing the registry to an API.
-    /*pub WithInterceptorRegistry(interceptorRegistry *interceptor.Registry) func(a *API) {
-        return func(a *API) {
-            a.interceptor = interceptorRegistry.Build()
-        }
-    }*/
+    /// with_interceptor allows providing Interceptors to the API.
+    /// Settings should not be changed after passing the registry to an API.
+    pub fn with_interceptor(mut self, interceptor: Arc<dyn Interceptor>) -> Self {
+        self.interceptor = Some(interceptor);
+        self
+    }
 }

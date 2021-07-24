@@ -40,7 +40,7 @@ pub type OnGatheringCompleteHdlrFn =
 pub struct ICEGatherer {
     pub(crate) validated_servers: Vec<Url>,
     pub(crate) gather_policy: ICETransportPolicy,
-    pub(crate) setting_engine: SettingEngine,
+    pub(crate) setting_engine: Arc<SettingEngine>,
 
     pub(crate) state: Arc<AtomicU8>, //ICEGathererState,
     pub(crate) agent: Option<Arc<ice::agent::Agent>>,
@@ -56,7 +56,7 @@ impl ICEGatherer {
     pub fn new(
         validated_servers: Vec<Url>,
         gather_policy: ICETransportPolicy,
-        setting_engine: SettingEngine,
+        setting_engine: Arc<SettingEngine>,
     ) -> Self {
         ICEGatherer {
             gather_policy,
@@ -118,7 +118,7 @@ impl ICEGatherer {
             interface_filter: self.setting_engine.candidates.interface_filter.clone(),
             nat_1to1_ips: self.setting_engine.candidates.nat_1to1_ips.clone(),
             nat_1to1_ip_candidate_type: nat_1to1_cand_type,
-            net: self.setting_engine.net.take(),
+            net: self.setting_engine.net.clone(),
             multicast_dns_mode: mdns_mode,
             multicast_dns_host_name: self
                 .setting_engine

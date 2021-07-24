@@ -74,12 +74,12 @@ pub struct DataChannel {
     data_channel: Mutex<Option<Arc<data::data_channel::DataChannel>>>,
 
     // A reference to the associated api object used by this datachannel
-    setting_engine: SettingEngine,
+    setting_engine: Arc<SettingEngine>,
 }
 
 impl DataChannel {
     // create the DataChannel object before the networking is set up.
-    pub fn new(params: DataChannelParameters, setting_engine: SettingEngine) -> Self {
+    pub fn new(params: DataChannelParameters, setting_engine: Arc<SettingEngine>) -> Self {
         DataChannel {
             stats_id: format!(
                 "DataChannel-{}",

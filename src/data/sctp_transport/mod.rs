@@ -45,7 +45,7 @@ struct AcceptDataChannelParams {
     on_data_channel_opened_handler: Arc<Mutex<Option<OnDataChannelOpenedHdlrFn>>>,
     data_channels_opened: Arc<AtomicU32>,
     data_channels_accepted: Arc<AtomicU32>,
-    setting_engine: SettingEngine,
+    setting_engine: Arc<SettingEngine>,
 }
 
 /// SCTPTransport provides details about the SCTP transport.
@@ -79,11 +79,11 @@ pub struct SCTPTransport {
     data_channels_requested: Arc<AtomicU32>,
     data_channels_accepted: Arc<AtomicU32>,
 
-    setting_engine: SettingEngine,
+    setting_engine: Arc<SettingEngine>,
 }
 
 impl SCTPTransport {
-    pub fn new(dtls_transport: Arc<DTLSTransport>, setting_engine: SettingEngine) -> Self {
+    pub fn new(dtls_transport: Arc<DTLSTransport>, setting_engine: Arc<SettingEngine>) -> Self {
         SCTPTransport {
             dtls_transport,
             state: AtomicU8::new(SCTPTransportState::Connecting as u8),
@@ -152,7 +152,7 @@ impl SCTPTransport {
                 on_data_channel_opened_handler: Arc::clone(&self.on_data_channel_opened_handler),
                 data_channels_opened: Arc::clone(&self.data_channels_opened),
                 data_channels_accepted: Arc::clone(&self.data_channels_accepted),
-                setting_engine: self.setting_engine.clone(),
+                setting_engine: Arc::clone(&self.setting_engine),
             };
             tokio::spawn(async move {
                 SCTPTransport::accept_data_channels(param).await;
@@ -241,7 +241,7 @@ impl SCTPTransport {
                     max_packet_lifetime,
                     max_retransmits,
                 },
-                param.setting_engine.clone(),
+                Arc::clone(&param.setting_engine),
             ));
 
             {

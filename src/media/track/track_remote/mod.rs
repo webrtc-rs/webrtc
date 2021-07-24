@@ -6,7 +6,7 @@ use crate::media::rtp::{PayloadType, SSRC};
 use bytes::Bytes;
 
 /// TrackRemote represents a single inbound source of media
-#[derive(Default, Debug, Clone)]
+#[derive(Default)]
 pub struct TrackRemote {
     id: String,
     stream_id: String,
@@ -18,7 +18,7 @@ pub struct TrackRemote {
     params: RTPParameters,
     rid: String,
 
-    receiver: RTPReceiver,
+    receiver: Option<RTPReceiver>,
     peeked: Bytes,
     peeked_attributes: Attributes,
 }
@@ -29,7 +29,7 @@ impl TrackRemote {
             kind,
             ssrc,
             rid,
-            receiver,
+            receiver: Some(receiver),
             ..Default::default()
         }
     }

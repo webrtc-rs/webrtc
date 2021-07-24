@@ -1,6 +1,7 @@
 use super::Attributes;
 
 /// RTPHeaderExtension represents a negotiated RFC5285 RTP header extension.
+#[derive(Default, Debug, Clone)]
 pub struct RTPHeaderExtension {
     uri: String,
     id: usize,
@@ -8,6 +9,7 @@ pub struct RTPHeaderExtension {
 
 /// RTCPFeedback signals the connection to use additional RTCP packet types.
 /// https://draft.ortc.org/#dom-rtcrtcpfeedback
+#[derive(Default, Debug, Clone)]
 pub struct RTCPFeedback {
     /// Type is the type of feedback.
     /// see: https://draft.ortc.org/#dom-rtcrtcpfeedback
@@ -20,6 +22,7 @@ pub struct RTCPFeedback {
 }
 
 /// StreamInfo is the Context passed when a StreamLocal or StreamRemote has been Binded or Unbinded
+#[derive(Default, Debug, Clone)]
 pub struct StreamInfo {
     id: String,
     attributes: Attributes,

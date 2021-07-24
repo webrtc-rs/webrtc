@@ -1,16 +1,25 @@
+use crate::media::dtls_transport::DTLSTransport;
+use crate::media::rtp::rtp_codec::RTPCodecType;
+use crate::media::track::TrackStreams;
+
+use crate::api::media_engine::MediaEngine;
+use crate::media::interceptor::Interceptor;
+use std::sync::Arc;
+use tokio::sync::mpsc;
+
 /// RTPReceiver allows an application to inspect the receipt of a TrackRemote
-#[derive(Default, Debug, Clone)]
 pub struct RTPReceiver {
-    /*kind      RTPCodecType
-transport *DTLSTransport
+    kind: RTPCodecType,
+    transport: Arc<DTLSTransport>,
 
-tracks []trackStreams
+    tracks: Vec<TrackStreams>,
 
-closed, received chan interface{}
-mu               sync.RWMutex
+    closed: Option<mpsc::Sender<()>>,
+    received: Option<mpsc::Sender<()>>,
 
-// A reference to the associated api object
-api *API*/}
+    media_engine: Arc<MediaEngine>,
+    interceptor: Option<Arc<dyn Interceptor>>,
+}
 
 /*
 // NewRTPReceiver constructs a new RTPReceiver
