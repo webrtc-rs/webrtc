@@ -21,7 +21,7 @@ ice = { package = "webrtc-ice", version = "0.3.0" }
 dtls = { package = "webrtc-dtls", version = "0.3.1" }
 rtp = "0.3.0"
 rtcp = "0.3.0"
-srtp = { package = "webrtc-srtp", version = "0.3.0" }
+srtp = { package = "webrtc-srtp", version = "0.3.1" }
 sctp = { package = "webrtc-sctp", version = "0.3.0" }
 data = { package = "webrtc-data", version = "0.2.0" }
 tokio = { version = "1.0", features = ["full"] }

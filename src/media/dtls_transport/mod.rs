@@ -208,11 +208,11 @@ impl DTLSTransport {
         Ok(())
     }
 
-    fn get_srtp_session(&self) -> Option<&Session> {
+    pub(crate) fn get_srtp_session(&self) -> Option<&Session> {
         self.srtp_session.as_ref()
     }
 
-    fn get_srtcp_session(&self) -> Option<&Session> {
+    pub(crate) fn get_srtcp_session(&self) -> Option<&Session> {
         self.srtcp_session.as_ref()
     }
 
@@ -375,7 +375,7 @@ impl DTLSTransport {
     pub async fn stop(&mut self) -> Result<()> {
         // Try closing everything and collect the errors
         let mut close_errs: Vec<anyhow::Error> = vec![];
-        if let Some(mut srtp_session) = self.srtp_session.take() {
+        if let Some(srtp_session) = self.srtp_session.take() {
             match srtp_session.close().await {
                 Ok(_) => {}
                 Err(err) => {
@@ -384,7 +384,7 @@ impl DTLSTransport {
             };
         }
 
-        if let Some(mut srtcp_session) = self.srtcp_session.take() {
+        if let Some(srtcp_session) = self.srtcp_session.take() {
             match srtcp_session.close().await {
                 Ok(_) => {}
                 Err(err) => {

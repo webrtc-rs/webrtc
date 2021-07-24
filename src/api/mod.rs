@@ -15,8 +15,12 @@ use crate::data::data_channel::DataChannel;
 use crate::data::sctp_transport::SCTPTransport;
 use crate::error::Error;
 use crate::media::interceptor::Interceptor;
+use crate::media::rtp::rtp_codec::RTPCodecType;
+use crate::media::rtp::rtp_receiver::RTPReceiver;
+
 use anyhow::Result;
 use std::sync::Arc;
+use tokio::sync::mpsc;
 
 /// API bundles the global functions of the WebRTC and ORTC API.
 /// Some of these functions are also exported globally using the
@@ -117,6 +121,31 @@ impl Api {
         d.open(sctp_transport).await?;
 
         Ok(d)
+    }
+
+    /// new_rtp_receiver constructs a new RTPReceiver
+    pub fn new_rtp_receiver(
+        &self,
+        kind: RTPCodecType,
+        transport: Arc<DTLSTransport>,
+    ) -> RTPReceiver {
+        let (closed_tx, closed_rx) = mpsc::channel(1);
+        let (received_tx, received_rx) = mpsc::channel(1);
+
+        RTPReceiver {
+            kind,
+            transport,
+
+            tracks: vec![],
+
+            closed_tx: Some(closed_tx),
+            closed_rx,
+            received_tx: Some(received_tx),
+            received_rx,
+
+            media_engine: Arc::clone(&self.media_engine),
+            interceptor: self.interceptor.clone(),
+        }
     }
 }
 

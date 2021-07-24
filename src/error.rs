@@ -309,6 +309,8 @@ pub enum Error {
 
     #[error("DataChannel is not opened")]
     ErrClosedPipe,
+    #[error("Interceptor is not bind")]
+    ErrInterceptorNotBind,
 
     #[allow(non_camel_case_types)]
     #[error("{0}")]

@@ -1,9 +1,9 @@
-use crate::media::interceptor::Attributes;
+use crate::media::interceptor::{Attributes, Interceptor};
 use crate::media::rtp::rtp_codec::{RTPCodecParameters, RTPCodecType, RTPParameters};
-use crate::media::rtp::rtp_receiver::RTPReceiver;
 use crate::media::rtp::{PayloadType, SSRC};
 
 use bytes::Bytes;
+use std::sync::Arc;
 
 /// TrackRemote represents a single inbound source of media
 #[derive(Default)]
@@ -18,18 +18,24 @@ pub struct TrackRemote {
     params: RTPParameters,
     rid: String,
 
-    receiver: Option<RTPReceiver>,
+    interceptor: Option<Arc<dyn Interceptor>>,
+
     peeked: Bytes,
     peeked_attributes: Attributes,
 }
 
 impl TrackRemote {
-    pub(crate) fn new(kind: RTPCodecType, ssrc: SSRC, rid: String, receiver: RTPReceiver) -> Self {
+    pub(crate) fn new(
+        kind: RTPCodecType,
+        ssrc: SSRC,
+        rid: String,
+        interceptor: Option<Arc<dyn Interceptor>>,
+    ) -> Self {
         TrackRemote {
             kind,
             ssrc,
             rid,
-            receiver: Some(receiver),
+            interceptor,
             ..Default::default()
         }
     }

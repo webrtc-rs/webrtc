@@ -1030,7 +1030,7 @@ func (pc *PeerConnection) SetRemoteDescription(desc SessionDescription) error { 
 
             switch {
             case t == nil:
-                receiver, err := pc.api.NewRTPReceiver(kind, pc.dtlsTransport)
+                receiver, err := pc.api.new_rtpreceiver(kind, pc.dtlsTransport)
                 if err != nil {
                     return err
                 }
@@ -1617,7 +1617,7 @@ func (pc *PeerConnection) newTransceiverFromTrack(direction RTPTransceiverDirect
     )
     switch direction {
     case RTPTransceiverDirectionSendrecv:
-        r, err = pc.api.NewRTPReceiver(track.kind(), pc.dtlsTransport)
+        r, err = pc.api.new_rtpreceiver(track.kind(), pc.dtlsTransport)
         if err != nil {
             return
         }
@@ -1660,7 +1660,7 @@ func (pc *PeerConnection) AddTransceiverFromKind(kind RTPCodecType, init ...RTPT
             return nil, err
         }
     case RTPTransceiverDirectionRecvonly:
-        receiver, err := pc.api.NewRTPReceiver(kind, pc.dtlsTransport)
+        receiver, err := pc.api.new_rtpreceiver(kind, pc.dtlsTransport)
         if err != nil {
             return nil, err
         }
@@ -2056,7 +2056,7 @@ func (pc *PeerConnection) startRTP(isRenegotiation bool, remoteDesc *SessionDesc
                 continue
             }
 
-            receiver, err := pc.api.NewRTPReceiver(t.Receiver().kind, pc.dtlsTransport)
+            receiver, err := pc.api.new_rtpreceiver(t.Receiver().kind, pc.dtlsTransport)
             if err != nil {
                 pc.log.Warnf("Failed to create new RtpReceiver: %s", err)
                 continue

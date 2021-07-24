@@ -82,11 +82,11 @@ func (r *RTPSender) Transport() *DTLSTransport {
     return r.transport
 }
 
-// GetParameters describes the current configuration for the encoding and
+// get_parameters describes the current configuration for the encoding and
 // transmission of media on the sender's track.
-func (r *RTPSender) GetParameters() RTPSendParameters {
+func (r *RTPSender) get_parameters() RTPSendParameters {
     return RTPSendParameters{
-        RTPParameters: r.api.mediaEngine.getRTPParametersByKind(
+        RTPParameters: r.api.mediaEngine.get_rtpparameters_by_kind(
             r.track.kind(),
             []RTPTransceiverDirection{RTPTransceiverDirectionSendonly},
         ),
@@ -151,7 +151,7 @@ func (r *RTPSender) Send(parameters RTPSendParameters) error {
     writeStream := &interceptorToTrackLocalWriter{}
     r.context = TrackLocalContext{
         id:          r.id,
-        params:      r.api.mediaEngine.getRTPParametersByKind(r.track.kind(), []RTPTransceiverDirection{RTPTransceiverDirectionSendonly}),
+        params:      r.api.mediaEngine.get_rtpparameters_by_kind(r.track.kind(), []RTPTransceiverDirection{RTPTransceiverDirectionSendonly}),
         ssrc:        parameters.Encodings[0].SSRC,
         writeStream: writeStream,
     }
@@ -207,8 +207,8 @@ func (r *RTPSender) Read(b []byte) (n int, a interceptor.Attributes, err error) 
     }
 }
 
-// ReadRTCP is a convenience method that wraps Read and unmarshals for you.
-func (r *RTPSender) ReadRTCP() ([]rtcp.Packet, interceptor.Attributes, error) {
+// read_rtcp is a convenience method that wraps Read and unmarshals for you.
+func (r *RTPSender) read_rtcp() ([]rtcp.Packet, interceptor.Attributes, error) {
     b := make([]byte, receiveMTU)
     i, attributes, err := r.Read(b)
     if err != nil {
