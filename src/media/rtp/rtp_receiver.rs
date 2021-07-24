@@ -1,16 +1,3 @@
-/// trackStreams maintains a mapping of RTP/RTCP streams to a specific track
-/// a RTPReceiver may contain multiple streams if we are dealing with Multicast
-struct TrackStreams {
-    /*track *TrackRemote
-
-streamInfo interceptor.StreamInfo
-
-rtpReadStream  *srtp.ReadStreamSRTP
-rtpInterceptor interceptor.RTPReader
-
-rtcpReadStream  *srtp.ReadStreamSRTCP
-rtcpInterceptor interceptor.RTCPReader*/}
-
 /// RTPReceiver allows an application to inspect the receipt of a TrackRemote
 #[derive(Default, Debug, Clone)]
 pub struct RTPReceiver {
@@ -221,7 +208,7 @@ func (r *RTPReceiver) Stop() error {
             }
 
             err = util.FlattenErrs(errs)
-            r.api.interceptor.UnbindRemoteStream(&r.tracks[i].streamInfo)
+            r.api.interceptor.unbind_remote_stream(&r.tracks[i].streamInfo)
         }
     default:
     }
@@ -288,7 +275,7 @@ func (r *RTPReceiver) streamsForSSRC(ssrc SSRC, streamInfo interceptor.StreamInf
         return nil, nil, nil, nil, err
     }
 
-    rtpInterceptor := r.api.interceptor.BindRemoteStream(&streamInfo, interceptor.RTPReaderFunc(func(in []byte, a interceptor.Attributes) (n int, attributes interceptor.Attributes, err error) {
+    rtpInterceptor := r.api.interceptor.bind_remote_stream(&streamInfo, interceptor.RTPReaderFunc(func(in []byte, a interceptor.Attributes) (n int, attributes interceptor.Attributes, err error) {
         n, err = rtpReadStream.Read(in)
         return n, a, err
     }))
@@ -303,7 +290,7 @@ func (r *RTPReceiver) streamsForSSRC(ssrc SSRC, streamInfo interceptor.StreamInf
         return nil, nil, nil, nil, err
     }
 
-    rtcpInterceptor := r.api.interceptor.BindRTCPReader(interceptor.RTPReaderFunc(func(in []byte, a interceptor.Attributes) (n int, attributes interceptor.Attributes, err error) {
+    rtcpInterceptor := r.api.interceptor.bind_rtcpreader(interceptor.RTPReaderFunc(func(in []byte, a interceptor.Attributes) (n int, attributes interceptor.Attributes, err error) {
         n, err = rtcpReadStream.Read(in)
         return n, a, err
     }))

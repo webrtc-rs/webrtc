@@ -153,7 +153,7 @@ func (api *API) NewPeerConnection(configuration Configuration) (*PeerConnection,
         }
     })
 
-    pc.interceptorRTCPWriter = api.interceptor.BindRTCPWriter(interceptor.RTCPWriterFunc(pc.writeRTCP))
+    pc.interceptorRTCPWriter = api.interceptor.bind_rtcpwriter(interceptor.RTCPWriterFunc(pc.writeRTCP))
 
     return pc, nil
 }

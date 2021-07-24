@@ -54,7 +54,7 @@ func (api *API) NewRTPSender(track TrackLocal, transport *DTLSTransport) (*RTPSe
 
     r.srtpStream.rtpSender = r
 
-    r.rtcpInterceptor = r.api.interceptor.BindRTCPReader(interceptor.RTPReaderFunc(func(in []byte, a interceptor.Attributes) (n int, attributes interceptor.Attributes, err error) {
+    r.rtcpInterceptor = r.api.interceptor.bind_rtcpreader(interceptor.RTPReaderFunc(func(in []byte, a interceptor.Attributes) (n int, attributes interceptor.Attributes, err error) {
         n, err = r.srtpStream.Read(in)
         return n, a, err
     }))
@@ -163,7 +163,7 @@ func (r *RTPSender) Send(parameters RTPSendParameters) error {
     r.context.params.Codecs = []RTPCodecParameters{codec}
 
     r.streamInfo = createStreamInfo(r.id, parameters.Encodings[0].SSRC, codec.PayloadType, codec.RTPCodecCapability, parameters.header_extensions)
-    rtpInterceptor := r.api.interceptor.BindLocalStream(&r.streamInfo, interceptor.RTPWriterFunc(func(header *rtp.Header, payload []byte, attributes interceptor.Attributes) (int, error) {
+    rtpInterceptor := r.api.interceptor.bind_local_stream(&r.streamInfo, interceptor.RTPWriterFunc(func(header *rtp.Header, payload []byte, attributes interceptor.Attributes) (int, error) {
         return r.srtpStream.write_rtp(header, payload)
     }))
     writeStream.interceptor.Store(rtpInterceptor)
@@ -192,7 +192,7 @@ func (r *RTPSender) Stop() error {
         return err
     }
 
-    r.api.interceptor.UnbindLocalStream(&r.streamInfo)
+    r.api.interceptor.unbind_local_stream(&r.streamInfo)
 
     return r.srtpStream.Close()
 }
