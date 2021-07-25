@@ -10,49 +10,36 @@ const RUNES_CANDIDATE_ID_FOUNDATION: &[u8] =
 const LEN_UFRAG: usize = 16;
 const LEN_PWD: usize = 32;
 
-pub fn generate_cand_id() -> String {
-    // https://tools.ietf.org/html/rfc5245#section-15.1
-    // candidate-id = "candidate" ":" foundation
-    // foundation   = 1*32ice-char
-    // ice-char     = ALPHA / DIGIT / "+" / "/"
+//TODO: generates a random string for cryptographic usage.
+pub fn generate_crypto_random_string(n: usize, runes: &[u8]) -> String {
     let mut rng = thread_rng();
 
-    let rand_string: String = (0..32)
+    let rand_string: String = (0..n)
         .map(|_| {
-            let idx = rng.gen_range(0..RUNES_CANDIDATE_ID_FOUNDATION.len());
-            RUNES_CANDIDATE_ID_FOUNDATION[idx] as char
+            let idx = rng.gen_range(0..runes.len());
+            runes[idx] as char
         })
         .collect();
 
     format!("candidate:{}", rand_string)
 }
 
+/// https://tools.ietf.org/html/rfc5245#section-15.1
+/// candidate-id = "candidate" ":" foundation
+/// foundation   = 1*32ice-char
+/// ice-char     = ALPHA / DIGIT / "+" / "/"
+pub fn generate_cand_id() -> String {
+    generate_crypto_random_string(32, RUNES_CANDIDATE_ID_FOUNDATION)
+}
+
 /// Generates ICE pwd.
-/// This internally uses `generateCryptoRandomString`.
+/// This internally uses `generate_crypto_random_string`.
 pub fn generate_pwd() -> String {
-    let mut rng = thread_rng();
-
-    let rand_pwd: String = (0..LEN_PWD)
-        .map(|_| {
-            let idx = rng.gen_range(0..RUNES_ALPHA.len());
-            RUNES_ALPHA[idx] as char
-        })
-        .collect();
-
-    rand_pwd
+    generate_crypto_random_string(LEN_PWD, RUNES_ALPHA)
 }
 
 /// ICE user fragment.
-/// This internally uses `generateCryptoRandomString`.
+/// This internally uses `generate_crypto_random_string`.
 pub fn generate_ufrag() -> String {
-    let mut rng = thread_rng();
-
-    let rand_ufrag: String = (0..LEN_UFRAG)
-        .map(|_| {
-            let idx = rng.gen_range(0..RUNES_ALPHA.len());
-            RUNES_ALPHA[idx] as char
-        })
-        .collect();
-
-    rand_ufrag
+    generate_crypto_random_string(LEN_UFRAG, RUNES_ALPHA)
 }

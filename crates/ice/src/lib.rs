@@ -9,7 +9,7 @@ pub mod external_ip_mapper;
 pub mod mdns;
 pub mod network_type;
 pub mod priority;
-mod rand;
+pub mod rand;
 pub mod state;
 pub mod stats;
 pub mod tcp_type;
