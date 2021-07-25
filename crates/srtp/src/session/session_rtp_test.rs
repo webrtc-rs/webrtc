@@ -81,7 +81,7 @@ async fn test_session_srtp_accept() -> Result<()> {
     let test_payload = Bytes::from_static(&[0x00, 0x01, 0x03, 0x04]);
     let mut read_buffer = BytesMut::with_capacity(RTP_HEADER_SIZE + test_payload.len());
     read_buffer.resize(RTP_HEADER_SIZE + test_payload.len(), 0u8);
-    let (mut sa, mut sb) = build_session_srtp_pair().await?;
+    let (sa, sb) = build_session_srtp_pair().await?;
 
     let packet = rtp::packet::Packet {
         header: rtp::header::Header {
@@ -92,7 +92,7 @@ async fn test_session_srtp_accept() -> Result<()> {
     };
     sa.write_rtp(&packet).await?;
 
-    let mut read_stream = sb.accept().await?;
+    let read_stream = sb.accept().await?;
     let ssrc = read_stream.get_ssrc();
     assert_eq!(
         ssrc, TEST_SSRC,
@@ -121,7 +121,7 @@ async fn test_session_srtp_listen() -> Result<()> {
     let test_payload = Bytes::from_static(&[0x00, 0x01, 0x03, 0x04]);
     let mut read_buffer = BytesMut::with_capacity(RTP_HEADER_SIZE + test_payload.len());
     read_buffer.resize(RTP_HEADER_SIZE + test_payload.len(), 0u8);
-    let (mut sa, mut sb) = build_session_srtp_pair().await?;
+    let (sa, sb) = build_session_srtp_pair().await?;
 
     let packet = rtp::packet::Packet {
         header: rtp::header::Header {
@@ -131,7 +131,7 @@ async fn test_session_srtp_listen() -> Result<()> {
         payload: test_payload.clone(),
     };
 
-    let mut read_stream = sb.listen(TEST_SSRC).await?;
+    let read_stream = sb.listen(TEST_SSRC).await?;
 
     sa.write_rtp(&packet).await?;
 
@@ -157,7 +157,7 @@ async fn test_session_srtp_multi_ssrc() -> Result<()> {
     let test_payload = Bytes::from_static(&[0x00, 0x01, 0x03, 0x04]);
     let mut read_buffer = BytesMut::with_capacity(RTP_HEADER_SIZE + test_payload.len());
     read_buffer.resize(RTP_HEADER_SIZE + test_payload.len(), 0u8);
-    let (mut sa, mut sb) = build_session_srtp_pair().await?;
+    let (sa, sb) = build_session_srtp_pair().await?;
 
     let mut read_streams = HashMap::new();
     for ssrc in &ssrcs {
@@ -227,7 +227,7 @@ async fn payload_srtp(
 async fn test_session_srtp_replay_protection() -> Result<()> {
     let test_payload = Bytes::from_static(&[0x00, 0x01, 0x03, 0x04]);
 
-    let (mut sa, mut sb) = build_session_srtp_pair().await?;
+    let (sa, sb) = build_session_srtp_pair().await?;
 
     let mut read_stream = sb.listen(TEST_SSRC).await?;
 

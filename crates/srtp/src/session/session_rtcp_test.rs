@@ -73,7 +73,7 @@ const TEST_SSRC: u32 = 5000;
 
 #[tokio::test]
 async fn test_session_srtcp_accept() -> Result<()> {
-    let (mut sa, mut sb) = build_session_srtcp_pair().await?;
+    let (sa, sb) = build_session_srtcp_pair().await?;
 
     let rtcp_packet = picture_loss_indication::PictureLossIndication {
         media_ssrc: TEST_SSRC,
@@ -83,7 +83,7 @@ async fn test_session_srtcp_accept() -> Result<()> {
     let test_payload = rtcp_packet.marshal()?;
     sa.write_rtcp(&rtcp_packet).await?;
 
-    let mut read_stream = sb.accept().await?;
+    let read_stream = sb.accept().await?;
     let ssrc = read_stream.get_ssrc();
     assert_eq!(
         ssrc, TEST_SSRC,
@@ -111,7 +111,7 @@ async fn test_session_srtcp_accept() -> Result<()> {
 
 #[tokio::test]
 async fn test_session_srtcp_listen() -> Result<()> {
-    let (mut sa, mut sb) = build_session_srtcp_pair().await?;
+    let (sa, sb) = build_session_srtcp_pair().await?;
 
     let rtcp_packet = picture_loss_indication::PictureLossIndication {
         media_ssrc: TEST_SSRC,
@@ -119,7 +119,7 @@ async fn test_session_srtcp_listen() -> Result<()> {
     };
 
     let test_payload = rtcp_packet.marshal()?;
-    let mut read_stream = sb.listen(TEST_SSRC).await?;
+    let read_stream = sb.listen(TEST_SSRC).await?;
 
     sa.write_rtcp(&rtcp_packet).await?;
 
@@ -164,7 +164,7 @@ async fn get_sender_ssrc(read_stream: &mut Stream) -> Result<u32> {
 
 #[tokio::test]
 async fn test_session_srtcp_replay_protection() -> Result<()> {
-    let (mut sa, mut sb) = build_session_srtcp_pair().await?;
+    let (sa, sb) = build_session_srtcp_pair().await?;
 
     let mut read_stream = sb.listen(TEST_SSRC).await?;
 

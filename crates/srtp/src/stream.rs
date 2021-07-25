@@ -54,12 +54,12 @@ impl Stream {
     }
 
     /// Read reads and decrypts full RTP packet from the nextConn
-    pub async fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+    pub async fn read(&self, buf: &mut [u8]) -> Result<usize> {
         Ok(self.buffer.read(buf, None).await?)
     }
 
     /// ReadRTP reads and decrypts full RTP packet and its header from the nextConn
-    pub async fn read_rtp(&mut self, buf: &mut [u8]) -> Result<(usize, rtp::header::Header)> {
+    pub async fn read_rtp(&self, buf: &mut [u8]) -> Result<(usize, rtp::header::Header)> {
         if !self.is_rtp {
             return Err(Error::InvalidRtpStream.into());
         }
@@ -71,8 +71,8 @@ impl Stream {
         Ok((n, header))
     }
 
-    /// ReadRTCP reads and decrypts full RTP packet and its header from the nextConn
-    pub async fn read_rtcp(&mut self, buf: &mut [u8]) -> Result<(usize, rtcp::header::Header)> {
+    /// read_rtcp reads and decrypts full RTP packet and its header from the nextConn
+    pub async fn read_rtcp(&self, buf: &mut [u8]) -> Result<(usize, rtcp::header::Header)> {
         if self.is_rtp {
             return Err(Error::InvalidRtcpStream.into());
         }
@@ -85,7 +85,7 @@ impl Stream {
     }
 
     /// Close removes the ReadStream from the session and cleans up any associated state
-    pub async fn close(&mut self) -> Result<()> {
+    pub async fn close(&self) -> Result<()> {
         self.buffer.close().await;
         self.tx.send(self.ssrc).await?;
 

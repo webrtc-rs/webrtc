@@ -26,7 +26,7 @@ const DEFAULT_SESSION_SRTCP_REPLAY_PROTECTION_WINDOW: usize = 64;
 pub struct Session {
     local_context: Arc<Mutex<Context>>,
     streams_map: Arc<Mutex<HashMap<u32, Buffer>>>,
-    new_stream_rx: mpsc::Receiver<Stream>,
+    new_stream_rx: Arc<Mutex<mpsc::Receiver<Stream>>>,
     close_stream_tx: mpsc::Sender<u32>,
     close_session_tx: mpsc::Sender<()>,
     pub(crate) udp_tx: Arc<dyn Conn + Send + Sync>,
@@ -108,7 +108,7 @@ impl Session {
         Ok(Session {
             local_context: Arc::new(Mutex::new(local_context)),
             streams_map,
-            new_stream_rx,
+            new_stream_rx: Arc::new(Mutex::new(new_stream_rx)),
             close_stream_tx,
             close_session_tx,
             udp_tx,
@@ -173,7 +173,7 @@ impl Session {
 
     /// listen on the given SSRC to create a stream, it can be used
     /// if you want a certain SSRC, but don't want to wait for Accept
-    pub async fn listen(&mut self, ssrc: u32) -> Result<Stream> {
+    pub async fn listen(&self, ssrc: u32) -> Result<Stream> {
         let mut streams = self.streams_map.lock().await;
 
         if let Entry::Vacant(e) = streams.entry(ssrc) {
@@ -187,8 +187,9 @@ impl Session {
     }
 
     /// accept returns a stream to handle RTCP for a single SSRC
-    pub async fn accept(&mut self) -> Result<Stream> {
-        let result = self.new_stream_rx.recv().await;
+    pub async fn accept(&self) -> Result<Stream> {
+        let mut new_stream_rx = self.new_stream_rx.lock().await;
+        let result = new_stream_rx.recv().await;
         if let Some(stream) = result {
             Ok(stream)
         } else {
@@ -196,23 +197,25 @@ impl Session {
         }
     }
 
-    pub async fn close(&mut self) -> Result<()> {
+    pub async fn close(&self) -> Result<()> {
         self.close_session_tx.send(()).await?;
 
         Ok(())
     }
 
-    pub async fn write(&mut self, buf: &Bytes, is_rtp: bool) -> Result<usize> {
+    pub async fn write(&self, buf: &Bytes, is_rtp: bool) -> Result<usize> {
         if self.is_rtp != is_rtp {
             return Err(Error::SessionRtpRtcpTypeMismatch.into());
         }
 
-        let mut local_context = self.local_context.lock().await;
+        let encrypted = {
+            let mut local_context = self.local_context.lock().await;
 
-        let encrypted = if is_rtp {
-            local_context.encrypt_rtp(buf)?
-        } else {
-            local_context.encrypt_rtcp(buf)?
+            if is_rtp {
+                local_context.encrypt_rtp(buf)?
+            } else {
+                local_context.encrypt_rtcp(buf)?
+            }
         };
 
         match self.udp_tx.send(&encrypted).await {
@@ -221,12 +224,12 @@ impl Session {
         }
     }
 
-    pub async fn write_rtp(&mut self, packet: &rtp::packet::Packet) -> Result<usize> {
+    pub async fn write_rtp(&self, packet: &rtp::packet::Packet) -> Result<usize> {
         let raw = packet.marshal()?;
         self.write(&raw, true).await
     }
 
-    pub async fn write_rtcp(&mut self, packet: &dyn rtcp::packet::Packet) -> Result<usize> {
+    pub async fn write_rtcp(&self, packet: &dyn rtcp::packet::Packet) -> Result<usize> {
         let raw = packet.marshal()?;
         self.write(&raw, false).await
     }
