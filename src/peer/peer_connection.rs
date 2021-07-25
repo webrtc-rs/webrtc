@@ -1560,7 +1560,7 @@ func (pc *PeerConnection) AddTrack(track TrackLocal) (*RTPSender, error) {
     defer pc.mu.Unlock()
     for _, t := range pc.rtpTransceivers {
         if !t.stopped && t.kind == track.kind() && t.Sender() == nil {
-            sender, err := pc.api.NewRTPSender(track, pc.dtlsTransport)
+            sender, err := pc.api.new_rtpsender(track, pc.dtlsTransport)
             if err == nil {
                 err = t.SetSender(sender, track)
                 if err != nil {
@@ -1621,9 +1621,9 @@ func (pc *PeerConnection) newTransceiverFromTrack(direction RTPTransceiverDirect
         if err != nil {
             return
         }
-        s, err = pc.api.NewRTPSender(track, pc.dtlsTransport)
+        s, err = pc.api.new_rtpsender(track, pc.dtlsTransport)
     case RTPTransceiverDirectionSendonly:
-        s, err = pc.api.NewRTPSender(track, pc.dtlsTransport)
+        s, err = pc.api.new_rtpsender(track, pc.dtlsTransport)
     default:
         err = errPeerConnAddTransceiverFromTrackSupport
     }

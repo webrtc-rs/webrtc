@@ -1,10 +1,13 @@
 use super::*;
 
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
 /// TrackLocalStaticRTP  is a TrackLocal that has a pre-set codec and accepts RTP Packets.
 /// If you wish to send a media.Sample use TrackLocalStaticSample
 #[derive(Debug, Clone)]
 pub struct TrackLocalStaticRTP {
-    bindings: Vec<TrackBinding>,
+    bindings: Arc<Mutex<Vec<TrackBinding>>>,
     codec: RTPCodecCapability,
     id: String,
     stream_id: String,
@@ -15,7 +18,7 @@ impl TrackLocalStaticRTP {
     pub fn new(codec: RTPCodecCapability, id: String, stream_id: String) -> Self {
         TrackLocalStaticRTP {
             codec,
-            bindings: vec![],
+            bindings: Arc::new(Mutex::new(vec![])),
             id,
             stream_id,
         }
@@ -27,11 +30,12 @@ impl TrackLocalStaticRTP {
     }
 }
 
+#[async_trait]
 impl TrackLocal for TrackLocalStaticRTP {
     /// bind is called by the PeerConnection after negotiation is complete
     /// This asserts that the code requested is supported by the remote peer.
     /// If so it setups all the state (SSRC and PayloadType) to have a call
-    fn bind(&mut self, t: TrackLocalContext) -> Result<RTPCodecParameters> {
+    async fn bind(&self, t: &TrackLocalContext) -> Result<RTPCodecParameters> {
         let parameters = RTPCodecParameters {
             capability: self.codec.clone(),
             ..Default::default()
@@ -39,12 +43,15 @@ impl TrackLocal for TrackLocalStaticRTP {
 
         let (codec, match_type) = codec_parameters_fuzzy_search(&parameters, t.codec_parameters());
         if match_type != CodecMatchType::None {
-            self.bindings.push(TrackBinding {
-                ssrc: t.ssrc(),
-                payload_type: codec.payload_type,
-                write_stream: t.write_stream(),
-                id: t.id(),
-            });
+            {
+                let mut bindings = self.bindings.lock().await;
+                bindings.push(TrackBinding {
+                    ssrc: t.ssrc(),
+                    payload_type: codec.payload_type,
+                    write_stream: t.write_stream(),
+                    id: t.id(),
+                });
+            }
 
             Ok(codec)
         } else {
@@ -54,16 +61,17 @@ impl TrackLocal for TrackLocalStaticRTP {
 
     /// unbind implements the teardown logic when the track is no longer needed. This happens
     /// because a track has been stopped.
-    fn unbind(&mut self, t: TrackLocalContext) -> Result<()> {
+    async fn unbind(&self, t: &TrackLocalContext) -> Result<()> {
+        let mut bindings = self.bindings.lock().await;
         let mut idx = None;
-        for (index, binding) in self.bindings.iter().enumerate() {
+        for (index, binding) in bindings.iter().enumerate() {
             if binding.id == t.id() {
                 idx = Some(index);
                 break;
             }
         }
         if let Some(index) = idx {
-            self.bindings.remove(index);
+            bindings.remove(index);
             Ok(())
         } else {
             Err(Error::ErrUnbindFailed.into())
@@ -94,26 +102,32 @@ impl TrackLocal for TrackLocalStaticRTP {
     }
 }
 
+#[async_trait]
 impl TrackLocalWriter for TrackLocalStaticRTP {
     /// write_rtp writes a RTP Packet to the TrackLocalStaticRTP
     /// If one PeerConnection fails the packets will still be sent to
     /// all PeerConnections. The error message will contain the ID of the failed
     /// PeerConnections so you can remove them
-    fn write_rtp(&self, p: &rtp::packet::Packet) -> Result<usize> {
+    async fn write_rtp(&self, p: &rtp::packet::Packet) -> Result<usize> {
         let mut n = 0;
         let mut write_err = None;
         let mut pkt = p.clone();
 
-        for b in &self.bindings {
+        let bindings = self.bindings.lock().await;
+        for b in &*bindings {
             pkt.header.ssrc = b.ssrc;
             pkt.header.payload_type = b.payload_type;
-            match b.write_stream.write_rtp(&pkt) {
-                Ok(m) => {
-                    n += m;
+            if let Some(write_stream) = &b.write_stream {
+                match write_stream.write_rtp(&pkt).await {
+                    Ok(m) => {
+                        n += m;
+                    }
+                    Err(err) => {
+                        write_err = Some(err);
+                    }
                 }
-                Err(err) => {
-                    write_err = Some(err);
-                }
+            } else {
+                //TODO: handle None case
             }
         }
 
@@ -128,10 +142,10 @@ impl TrackLocalWriter for TrackLocalStaticRTP {
     /// If one PeerConnection fails the packets will still be sent to
     /// all PeerConnections. The error message will contain the ID of the failed
     /// PeerConnections so you can remove them
-    fn write(&self, b: &Bytes) -> Result<usize> {
+    async fn write(&self, b: &Bytes) -> Result<usize> {
         let buf = &mut b.clone();
         let pkt = rtp::packet::Packet::unmarshal(buf)?;
-        self.write_rtp(&pkt)?;
+        self.write_rtp(&pkt).await?;
         Ok(b.len())
     }
 

@@ -104,7 +104,7 @@ func (t *RTPTransceiver) setDirection(d RTPTransceiverDirection) {
 }
 
 func (t *RTPTransceiver) setSendingTrack(track TrackLocal) error {
-    if err := t.Sender().ReplaceTrack(track); err != nil {
+    if err := t.Sender().replace_track(track); err != nil {
         return err
     }
     if track == nil {

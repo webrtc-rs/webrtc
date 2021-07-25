@@ -8,6 +8,7 @@ pub mod rtp_receiver;
 pub mod rtp_sender;
 pub mod rtp_transceiver;
 pub mod rtp_transceiver_direction;
+pub(crate) mod srtp_writer_future;
 
 /// SSRC represents a synchronization source
 /// A synchronization source is a randomly chosen
@@ -83,4 +84,10 @@ pub type RTPEncodingParameters = RTPCodingParameters;
 /// RTPReceiveParameters contains the RTP stack settings used by receivers
 pub struct RTPReceiveParameters {
     pub encodings: Vec<RTPDecodingParameters>,
+}
+
+/// RTPSendParameters contains the RTP stack settings used by receivers
+pub struct RTPSendParameters {
+    pub rtp_parameters: RTPParameters,
+    pub encodings: Vec<RTPEncodingParameters>,
 }

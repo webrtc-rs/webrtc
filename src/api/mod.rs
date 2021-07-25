@@ -18,7 +18,12 @@ use crate::media::interceptor::Interceptor;
 use crate::media::rtp::rtp_codec::RTPCodecType;
 use crate::media::rtp::rtp_receiver::RTPReceiver;
 
+use crate::media::interceptor::stream_info::StreamInfo;
+use crate::media::rtp::rtp_sender::RTPSender;
+use crate::media::rtp::srtp_writer_future::SrtpWriterFuture;
+use crate::media::track::track_local::{TrackLocal, TrackLocalContext};
 use anyhow::Result;
+use ice::rand::generate_crypto_random_string;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
@@ -146,6 +151,56 @@ impl Api {
             media_engine: Arc::clone(&self.media_engine),
             interceptor: self.interceptor.clone(),
         }
+    }
+
+    /// new_rtp_sender constructs a new RTPSender
+    pub fn new_rtp_sender(
+        &self,
+        track: Arc<dyn TrackLocal>,
+        transport: Arc<DTLSTransport>,
+    ) -> RTPSender {
+        let id = generate_crypto_random_string(
+            32,
+            b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        );
+        let (send_called_tx, send_called_rx) = mpsc::channel(1);
+        let (stop_called_tx, stop_called_rx) = mpsc::channel(1);
+        let ssrc = rand::random::<u32>();
+        let srtp_stream = SrtpWriterFuture::default();
+
+        RTPSender {
+            track,
+
+            srtp_stream,
+            rtcp_interceptor: None,
+            stream_info: StreamInfo::default(),
+
+            context: TrackLocalContext::default(),
+            transport,
+
+            payload_type: 0,
+            ssrc,
+
+            negotiated: false,
+
+            media_engine: Arc::clone(&self.media_engine),
+            id,
+
+            //api:        api,
+            send_called_tx: Some(send_called_tx),
+            send_called_rx,
+            stop_called_tx: Some(stop_called_tx),
+            stop_called_rx,
+        }
+
+        /*TODO: r.srtp_stream.rtpSender = r
+
+        r.rtcp_interceptor = r.api.interceptor.bind_rtcpreader(interceptor.RTPReaderFunc(func(in []byte, a interceptor.Attributes) (n int, attributes interceptor.Attributes, err error) {
+            n, err = r.srtp_stream.Read(in)
+            return n, a, err
+        }))
+
+        return r, nil*/
     }
 }
 

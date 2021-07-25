@@ -181,7 +181,7 @@ impl RTPReceiver {
         Ok((pkts, attributes))
     }
 
-    async fn have_received(&self) -> bool {
+    fn have_received(&self) -> bool {
         self.received_tx.is_none()
     }
 

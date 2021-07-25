@@ -6,17 +6,19 @@ use crate::media::rtp::rtp_codec::*;
 use crate::media::rtp::*;
 
 use anyhow::Result;
+use async_trait::async_trait;
 use bytes::Bytes;
 use std::fmt;
 use util::Unmarshal;
 
 /// TrackLocalWriter is the Writer for outbound RTP Packets
+#[async_trait]
 pub trait TrackLocalWriter: fmt::Debug {
     /// write_rtp encrypts a RTP packet and writes to the connection
-    fn write_rtp(&self, p: &rtp::packet::Packet) -> Result<usize>;
+    async fn write_rtp(&self, p: &rtp::packet::Packet) -> Result<usize>;
 
     /// write encrypts and writes a full RTP packet
-    fn write(&self, b: &Bytes) -> Result<usize>;
+    async fn write(&self, b: &Bytes) -> Result<usize>;
 
     fn clone_to(&self) -> Box<dyn TrackLocalWriter + Send + Sync>;
 }
@@ -29,12 +31,12 @@ impl Clone for Box<dyn TrackLocalWriter + Send + Sync> {
 
 /// TrackLocalContext is the Context passed when a TrackLocal has been Binded/Unbinded from a PeerConnection, and used
 /// in Interceptors.
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct TrackLocalContext {
     id: String,
     params: RTPParameters,
     ssrc: SSRC,
-    write_stream: Box<dyn TrackLocalWriter + Send + Sync>,
+    write_stream: Option<Box<dyn TrackLocalWriter + Send + Sync>>,
 }
 
 impl TrackLocalContext {
@@ -58,7 +60,7 @@ impl TrackLocalContext {
 
     /// write_stream returns the write_stream for this TrackLocal. The implementer writes the outbound
     /// media packets to it
-    pub fn write_stream(&self) -> Box<dyn TrackLocalWriter + Send + Sync> {
+    pub fn write_stream(&self) -> Option<Box<dyn TrackLocalWriter + Send + Sync>> {
         self.write_stream.clone()
     }
 
@@ -70,15 +72,16 @@ impl TrackLocalContext {
 /// TrackLocal is an interface that controls how the user can send media
 /// The user can provide their own TrackLocal implementatiosn, or use
 /// the implementations in pkg/media
+#[async_trait]
 pub trait TrackLocal {
     /// bind should implement the way how the media data flows from the Track to the PeerConnection
     /// This will be called internally after signaling is complete and the list of available
     /// codecs has been determined
-    fn bind(&mut self, t: TrackLocalContext) -> Result<RTPCodecParameters>;
+    async fn bind(&self, t: &TrackLocalContext) -> Result<RTPCodecParameters>;
 
     /// unbind should implement the teardown logic when the track is no longer needed. This happens
     /// because a track has been stopped.
-    fn unbind(&mut self, t: TrackLocalContext) -> Result<()>;
+    async fn unbind(&self, t: &TrackLocalContext) -> Result<()>;
 
     /// id is the unique identifier for this Track. This should be unique for the
     /// stream, but doesn't have to globally unique. A common example would be 'audio' or 'video'
@@ -95,10 +98,10 @@ pub trait TrackLocal {
 /// TrackBinding is a single bind for a Track
 /// Bind can be called multiple times, this stores the
 /// result for a single bind call so that it can be used when writing
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub(crate) struct TrackBinding {
     id: String,
     ssrc: SSRC,
     payload_type: PayloadType,
-    write_stream: Box<dyn TrackLocalWriter + Send + Sync>,
+    write_stream: Option<Box<dyn TrackLocalWriter + Send + Sync>>,
 }
