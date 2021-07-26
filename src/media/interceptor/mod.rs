@@ -2,6 +2,7 @@ pub mod stream_info;
 
 use stream_info::StreamInfo;
 
+use crate::media::track::track_local::TrackLocalWriter;
 use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -126,3 +127,36 @@ func (a Attributes) Set(key interface{}, val interface{}) {
     a[key] = val
 }
 */
+
+#[derive(Debug, Clone)]
+pub(crate) struct InterceptorToTrackLocalWriter {
+    // interceptor atomic.Value //  // interceptor.RTPWriter }
+}
+
+#[async_trait]
+impl TrackLocalWriter for InterceptorToTrackLocalWriter {
+    async fn write_rtp(&self, _p: &rtp::packet::Packet) -> Result<usize> {
+        /*TODO:
+           if writer, ok := i.interceptor.Load().(interceptor.RTPWriter); ok && writer != nil {
+            return writer.Write(header, payload, interceptor.Attributes{})
+        }
+
+        return 0, nil*/
+        Ok(0)
+    }
+
+    async fn write(&self, _b: &Bytes) -> Result<usize> {
+        /*TODO:
+           packet := &rtp.Packet{}
+        if err := packet.Unmarshal(b); err != nil {
+            return 0, err
+        }
+
+        return i.WriteRTP(&packet.Header, packet.Payload)*/
+        Ok(0)
+    }
+
+    fn clone_to(&self) -> Box<dyn TrackLocalWriter + Send + Sync> {
+        Box::new(self.clone())
+    }
+}

@@ -169,7 +169,7 @@ impl Api {
         let srtp_stream = SrtpWriterFuture::default();
 
         RTPSender {
-            track,
+            track: Some(track),
 
             srtp_stream,
             rtcp_interceptor: None,
@@ -184,6 +184,8 @@ impl Api {
             negotiated: false,
 
             media_engine: Arc::clone(&self.media_engine),
+            interceptor: self.interceptor.clone(),
+
             id,
 
             //api:        api,

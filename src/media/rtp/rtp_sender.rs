@@ -1,20 +1,24 @@
 use crate::api::media_engine::MediaEngine;
+use crate::error::Error;
 use crate::media::dtls_transport::DTLSTransport;
 use crate::media::interceptor::stream_info::StreamInfo;
-use crate::media::interceptor::RTCPReader;
+use crate::media::interceptor::{
+    Attributes, Interceptor, InterceptorToTrackLocalWriter, RTCPReader,
+};
 use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
 use crate::media::rtp::srtp_writer_future::SrtpWriterFuture;
 use crate::media::rtp::{PayloadType, RTPEncodingParameters, RTPSendParameters, SSRC};
 use crate::media::track::track_local::{TrackLocal, TrackLocalContext};
-//use crate::error::Error;
 
+use crate::media::rtp::rtp_codec::{RTPCodecParameters, RTPCodecType};
+use crate::RECEIVE_MTU;
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
 /// RTPSender allows an application to control how a given Track is encoded and transmitted to a remote peer
 pub struct RTPSender {
-    pub(crate) track: Arc<dyn TrackLocal>,
+    pub(crate) track: Option<Arc<dyn TrackLocal>>,
 
     pub(crate) srtp_stream: SrtpWriterFuture,
     pub(crate) rtcp_interceptor: Option<Box<dyn RTCPReader>>,
@@ -32,6 +36,7 @@ pub struct RTPSender {
     pub(crate) negotiated: bool,
 
     pub(crate) media_engine: Arc<MediaEngine>,
+    pub(crate) interceptor: Option<Arc<dyn Interceptor>>,
 
     pub(crate) id: String,
 
@@ -61,7 +66,11 @@ impl RTPSender {
     pub fn get_parameters(&self) -> RTPSendParameters {
         RTPSendParameters {
             rtp_parameters: self.media_engine.get_rtp_parameters_by_kind(
-                self.track.kind(),
+                if let Some(t) = &self.track {
+                    t.kind()
+                } else {
+                    RTPCodecType::default()
+                },
                 &[RTPTransceiverDirection::Sendonly],
             ),
             encodings: vec![RTPEncodingParameters {
@@ -73,109 +82,138 @@ impl RTPSender {
     }
 
     /// track returns the RTCRtpTransceiver track, or nil
-    pub fn track(&self) -> Arc<dyn TrackLocal> {
-        Arc::clone(&self.track)
+    pub fn track(&self) -> Option<Arc<dyn TrackLocal>> {
+        self.track.clone()
     }
 
     /// replace_track replaces the track currently being used as the sender's source with a new TrackLocal.
     /// The new track must be of the same media kind (audio, video, etc) and switching the track should not
     /// require negotiation.
-    pub async fn replace_track(&mut self, track: Arc<dyn TrackLocal>) -> Result<()> {
+    pub async fn replace_track(&mut self, track: Option<Arc<dyn TrackLocal>>) -> Result<()> {
         if self.has_sent() {
-            self.track.unbind(&self.context).await?;
-            if let Err(err) = track.bind(&self.context).await {
-                // Re-bind the original track
-                self.track.bind(&self.context).await?;
-                return Err(err);
+            if let Some(track) = &self.track {
+                track.unbind(&self.context).await?;
             }
+        }
+
+        if !self.has_sent() || track.is_none() {
+            self.track = track;
+            return Ok(());
+        }
+
+        let result = if let Some(t) = &track {
+            // Re-bind the original track
+            t.bind(&self.context).await
+        } else {
+            Err(Error::ErrRTPSenderTrackNil.into())
+        };
+
+        if let Err(err) = result {
+            return Err(err);
         }
 
         self.track = track;
 
         Ok(())
     }
-    /*
-    // Send Attempts to set the parameters controlling the sending of media.
-    pub async fn Send(&self, parameters:&RTPSendParameters) ->Result<()>{
+
+    // send Attempts to set the parameters controlling the sending of media.
+    pub async fn send(&mut self, parameters: &RTPSendParameters) -> Result<()> {
         if self.has_sent() {
             return Err(Error::ErrRTPSenderSendAlreadyCalled.into());
         }
 
-        writeStream := &interceptorToTrackLocalWriter{}
-        r.context = TrackLocalContext{
-            id:          r.id,
-            params:      r.api.mediaEngine.get_rtpparameters_by_kind(r.track.kind(), []RTPTransceiverDirection{RTPTransceiverDirectionSendonly}),
-            ssrc:        parameters.Encodings[0].SSRC,
-            writeStream: writeStream,
-        }
+        self.context = TrackLocalContext {
+            id: self.id.clone(),
+            params: self.media_engine.get_rtp_parameters_by_kind(
+                if let Some(t) = &self.track {
+                    t.kind()
+                } else {
+                    RTPCodecType::default()
+                },
+                &[RTPTransceiverDirection::Sendonly],
+            ),
+            ssrc: parameters.encodings[0].ssrc,
+            write_stream: Some(Box::new(InterceptorToTrackLocalWriter {})),
+        };
 
-        codec, err := r.track.bind(r.context)
-        if err != nil {
-            return err
-        }
-        r.context.params.Codecs = []RTPCodecParameters{codec}
+        let codec = if let Some(t) = &self.track {
+            t.bind(&self.context).await?
+        } else {
+            RTPCodecParameters::default()
+        };
+        let payload_type = codec.payload_type;
+        let capability = codec.capability.clone();
 
-        r.stream_info = createStreamInfo(r.id, parameters.Encodings[0].SSRC, codec.PayloadType, codec.RTPCodecCapability, parameters.header_extensions)
-        rtpInterceptor := r.api.interceptor.bind_local_stream(&r.stream_info, interceptor.RTPWriterFunc(func(header *rtp.Header, payload []byte, attributes interceptor.Attributes) (int, error) {
+        self.context.params.codecs = vec![codec];
+
+        self.stream_info = StreamInfo::new(
+            self.id.clone(),
+            parameters.encodings[0].ssrc,
+            payload_type,
+            capability,
+            &parameters.rtp_parameters.header_extensions,
+        );
+        /*TODO: rtpInterceptor := r.api.interceptor.bind_local_stream(&r.stream_info, interceptor.RTPWriterFunc(func(header *rtp.Header, payload []byte, attributes interceptor.Attributes) (int, error) {
             return r.srtp_stream.write_rtp(header, payload)
         }))
-        writeStream.interceptor.Store(rtpInterceptor)
+        writeStream.interceptor.Store(rtpInterceptor)*/
 
-        close(r.sendCalled)
-        return nil
+        self.send_called_tx.take();
+
+        Ok(())
     }
 
-    // Stop irreversibly stops the RTPSender
-    func (r *RTPSender) Stop() error {
-        r.mu.Lock()
-
-        if stopped := r.has_stopped(); stopped {
-            r.mu.Unlock()
-            return nil
+    /// stop irreversibly stops the RTPSender
+    pub async fn stop(&mut self) -> Result<()> {
+        if self.has_stopped() {
+            return Ok(());
         }
 
-        close(r.stopCalled)
-        r.mu.Unlock()
+        self.stop_called_tx.take();
 
-        if !r.has_sent() {
-            return nil
+        if !self.has_sent() {
+            return Ok(());
         }
 
-        if err := r.replace_track(nil); err != nil {
-            return err
+        self.replace_track(None).await?;
+
+        if let Some(interceptor) = &self.interceptor {
+            interceptor.unbind_local_stream(&self.stream_info).await;
         }
 
-        r.api.interceptor.unbind_local_stream(&r.stream_info)
-
-        return r.srtp_stream.Close()
+        self.srtp_stream.close()
     }
 
-    // Read reads incoming RTCP for this RTPReceiver
-    func (r *RTPSender) Read(b []byte) (n int, a interceptor.Attributes, err error) {
-        select {
-        case <-r.sendCalled:
-            return r.rtcp_interceptor.Read(b, a)
-        case <-r.stopCalled:
-            return 0, nil, io.ErrClosedPipe
+    /// read reads incoming RTCP for this RTPReceiver
+    pub async fn read(&mut self, b: &mut [u8]) -> Result<(usize, Attributes)> {
+        tokio::select! {
+            _ = self.send_called_rx.recv() =>{
+                if let Some(rtcp_interceptor) = &self.rtcp_interceptor{
+                    let a = Attributes::new();
+                    rtcp_interceptor.read(b, &a).await
+                }else{
+                    Err(Error::ErrInterceptorNotBind.into())
+                }
+            }
+            _ = self.stop_called_rx.recv() =>{
+                Err(Error::ErrClosedPipe.into())
+            }
         }
     }
 
-    // read_rtcp is a convenience method that wraps Read and unmarshals for you.
-    func (r *RTPSender) read_rtcp() ([]rtcp.Packet, interceptor.Attributes, error) {
-        b := make([]byte, receiveMTU)
-        i, attributes, err := r.Read(b)
-        if err != nil {
-            return nil, nil, err
-        }
+    /// read_rtcp is a convenience method that wraps Read and unmarshals for you.
+    pub async fn read_rtcp(&mut self) -> Result<(Box<dyn rtcp::packet::Packet>, Attributes)> {
+        let mut b = vec![0u8; RECEIVE_MTU];
+        let (n, attributes) = self.read(&mut b).await?;
 
-        pkts, err := rtcp.Unmarshal(b[:i])
-        if err != nil {
-            return nil, nil, err
-        }
+        let mut buf = &b[..n];
+        let pkts = rtcp::packet::unmarshal(&mut buf)?;
 
-        return pkts, attributes, nil
+        Ok((pkts, attributes))
     }
 
+    /*
     // SetReadDeadline sets the deadline for the Read operation.
     // Setting to zero means no deadline.
     func (r *RTPSender) SetReadDeadline(t time.Time) error {

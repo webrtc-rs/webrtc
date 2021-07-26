@@ -33,10 +33,10 @@ impl Clone for Box<dyn TrackLocalWriter + Send + Sync> {
 /// in Interceptors.
 #[derive(Default, Debug, Clone)]
 pub struct TrackLocalContext {
-    id: String,
-    params: RTPParameters,
-    ssrc: SSRC,
-    write_stream: Option<Box<dyn TrackLocalWriter + Send + Sync>>,
+    pub(crate) id: String,
+    pub(crate) params: RTPParameters,
+    pub(crate) ssrc: SSRC,
+    pub(crate) write_stream: Option<Box<dyn TrackLocalWriter + Send + Sync>>,
 }
 
 impl TrackLocalContext {
