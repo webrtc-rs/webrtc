@@ -1,138 +1,139 @@
-/*
-// RTPTransceiver represents a combination of an RTPSender and an RTPReceiver that share a common mid.
-type RTPTransceiver struct {
-    mid       atomic.Value // string
-    sender    atomic.Value // *RTPSender
-    receiver  atomic.Value // *RTPReceiver
-    direction atomic.Value // RTPTransceiverDirection
+use crate::media::rtp::rtp_codec::RTPCodecType;
+use crate::media::rtp::rtp_receiver::RTPReceiver;
+use crate::media::rtp::rtp_sender::RTPSender;
+use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
+use crate::media::track::track_local::TrackLocal;
 
-    stopped bool
-    kind    RTPCodecType
+use crate::error::Error;
+use anyhow::Result;
+use std::sync::Arc;
+
+/// RTPTransceiver represents a combination of an RTPSender and an RTPReceiver that share a common mid.
+pub struct RTPTransceiver {
+    mid: String,                        //atomic.Value
+    sender: Option<RTPSender>,          //atomic.Value
+    receiver: Option<RTPReceiver>,      //atomic.Value
+    direction: RTPTransceiverDirection, //atomic.Value
+
+    stopped: bool,
+    kind: RTPCodecType,
 }
 
-func newRTPTransceiver(
-    receiver *RTPReceiver,
-    sender *RTPSender,
-    direction RTPTransceiverDirection,
-    kind RTPCodecType,
-) *RTPTransceiver {
-    t := &RTPTransceiver{kind: kind}
-    t.setReceiver(receiver)
-    t.setSender(sender)
-    t.setDirection(direction)
-    return t
-}
+impl RTPTransceiver {
+    pub(crate) fn new(
+        receiver: Option<RTPReceiver>,
+        sender: Option<RTPSender>,
+        direction: RTPTransceiverDirection,
+        kind: RTPCodecType,
+    ) -> Self {
+        RTPTransceiver {
+            mid: String::new(),
+            sender,
+            receiver,
+            direction,
 
-// Sender returns the RTPTransceiver's RTPSender if it has one
-func (t *RTPTransceiver) Sender() *RTPSender {
-    if v := t.sender.Load(); v != nil {
-        return v.(*RTPSender)
-    }
-
-    return nil
-}
-
-// SetSender sets the RTPSender and Track to current transceiver
-func (t *RTPTransceiver) SetSender(s *RTPSender, track TrackLocal) error {
-    t.setSender(s)
-    return t.setSendingTrack(track)
-}
-
-func (t *RTPTransceiver) setSender(s *RTPSender) {
-    t.sender.Store(s)
-}
-
-// Receiver returns the RTPTransceiver's RTPReceiver if it has one
-func (t *RTPTransceiver) Receiver() *RTPReceiver {
-    if v := t.receiver.Load(); v != nil {
-        return v.(*RTPReceiver)
-    }
-
-    return nil
-}
-
-// setMid sets the RTPTransceiver's mid. If it was already set, will return an error.
-func (t *RTPTransceiver) setMid(mid string) error {
-    if currentMid := t.Mid(); currentMid != "" {
-        return fmt.Errorf("%w: %s to %s", errRTPTransceiverCannotChangeMid, currentMid, mid)
-    }
-    t.mid.Store(mid)
-    return nil
-}
-
-// Mid gets the Transceiver's mid value. When not already set, this value will be set in CreateOffer or CreateAnswer.
-func (t *RTPTransceiver) Mid() string {
-    if v := t.mid.Load(); v != nil {
-        return v.(string)
-    }
-    return ""
-}
-
-// Kind returns RTPTransceiver's kind.
-func (t *RTPTransceiver) Kind() RTPCodecType {
-    return t.kind
-}
-
-// Direction returns the RTPTransceiver's current direction
-func (t *RTPTransceiver) Direction() RTPTransceiverDirection {
-    return t.direction.Load().(RTPTransceiverDirection)
-}
-
-// Stop irreversibly stops the RTPTransceiver
-func (t *RTPTransceiver) Stop() error {
-    if t.Sender() != nil {
-        if err := t.Sender().Stop(); err != nil {
-            return err
-        }
-    }
-    if t.Receiver() != nil {
-        if err := t.Receiver().Stop(); err != nil {
-            return err
+            stopped: false,
+            kind,
         }
     }
 
-    t.setDirection(RTPTransceiverDirectionInactive)
-    return nil
-}
-
-func (t *RTPTransceiver) setReceiver(r *RTPReceiver) {
-    t.receiver.Store(r)
-}
-
-func (t *RTPTransceiver) setDirection(d RTPTransceiverDirection) {
-    t.direction.Store(d)
-}
-
-func (t *RTPTransceiver) setSendingTrack(track TrackLocal) error {
-    if err := t.Sender().replace_track(track); err != nil {
-        return err
-    }
-    if track == nil {
-        t.setSender(nil)
+    /// sender returns the RTPTransceiver's RTPSender if it has one
+    pub fn sender(&self) -> Option<&RTPSender> {
+        self.sender.as_ref()
     }
 
-    switch {
-    case track != nil && t.Direction() == RTPTransceiverDirectionRecvonly:
-        t.setDirection(RTPTransceiverDirectionSendrecv)
-    case track != nil && t.Direction() == RTPTransceiverDirectionInactive:
-        t.setDirection(RTPTransceiverDirectionSendonly)
-    case track == nil && t.Direction() == RTPTransceiverDirectionSendrecv:
-        t.setDirection(RTPTransceiverDirectionRecvonly)
-    case track != nil && t.Direction() == RTPTransceiverDirectionSendonly:
-        // Handle the case where a sendonly transceiver was added by a negotiation
-        // initiated by remote peer. For example a remote peer added a transceiver
-        // with direction recvonly.
-    case track != nil && t.Direction() == RTPTransceiverDirectionSendrecv:
-        // Similar to above, but for sendrecv transceiver.
-    case track == nil && t.Direction() == RTPTransceiverDirectionSendonly:
-        t.setDirection(RTPTransceiverDirectionInactive)
-    default:
-        return errRTPTransceiverSetSendingInvalidState
+    /// set_sender sets the RTPSender and Track to current transceiver
+    pub async fn set_sender(
+        &mut self,
+        sender: Option<RTPSender>,
+        track: Option<Arc<dyn TrackLocal>>,
+    ) -> Result<()> {
+        self.sender = sender;
+        self.set_sending_track(track).await
     }
-    return nil
+
+    /// receiver returns the RTPTransceiver's RTPReceiver if it has one
+    pub fn receiver(&self) -> Option<&RTPReceiver> {
+        self.receiver.as_ref()
+    }
+
+    /// set_mid sets the RTPTransceiver's mid. If it was already set, will return an error.
+    pub(crate) fn set_mid(&mut self, mid: String) -> Result<()> {
+        if !self.mid.is_empty() {
+            return Err(Error::ErrRTPTransceiverCannotChangeMid.into());
+        }
+        self.mid = mid;
+
+        Ok(())
+    }
+
+    /// mid gets the Transceiver's mid value. When not already set, this value will be set in CreateOffer or CreateAnswer.
+    pub fn mid(&self) -> String {
+        self.mid.clone()
+    }
+
+    /// kind returns RTPTransceiver's kind.
+    pub fn kind(&self) -> RTPCodecType {
+        self.kind
+    }
+
+    /// direction returns the RTPTransceiver's current direction
+    pub fn direction(&self) -> RTPTransceiverDirection {
+        self.direction
+    }
+
+    /// stop irreversibly stops the RTPTransceiver
+    pub async fn stop(&mut self) -> Result<()> {
+        if let Some(sender) = &mut self.sender {
+            sender.stop().await?;
+        }
+        if let Some(receiver) = &mut self.receiver {
+            receiver.stop().await?;
+        }
+
+        self.direction = RTPTransceiverDirection::Inactive;
+
+        Ok(())
+    }
+
+    pub(crate) async fn set_sending_track(
+        &mut self,
+        track: Option<Arc<dyn TrackLocal>>,
+    ) -> Result<()> {
+        let track_is_none = track.is_none();
+        if let Some(sender) = &mut self.sender {
+            sender.replace_track(track).await?;
+        }
+        if track_is_none {
+            self.sender = None;
+        }
+
+        if !track_is_none && self.direction == RTPTransceiverDirection::Recvonly {
+            self.direction = RTPTransceiverDirection::Sendrecv;
+        } else if !track_is_none && self.direction == RTPTransceiverDirection::Inactive {
+            self.direction = RTPTransceiverDirection::Sendonly;
+        } else if track_is_none && self.direction == RTPTransceiverDirection::Sendrecv {
+            self.direction = RTPTransceiverDirection::Recvonly;
+        } else if !track_is_none
+            && (self.direction == RTPTransceiverDirection::Sendonly
+                || self.direction == RTPTransceiverDirection::Sendrecv)
+        {
+            // Handle the case where a sendonly transceiver was added by a negotiation
+            // initiated by remote peer. For example a remote peer added a transceiver
+            // with direction recvonly.
+            //} else if !track_is_none && self.direction == RTPTransceiverDirection::Sendrecv {
+            // Similar to above, but for sendrecv transceiver.
+        } else if track_is_none && self.direction == RTPTransceiverDirection::Sendonly {
+            self.direction = RTPTransceiverDirection::Inactive;
+        } else {
+            return Err(Error::ErrRTPTransceiverSetSendingInvalidState.into());
+        }
+        Ok(())
+    }
 }
 
-func findByMid(mid string, localTransceivers []*RTPTransceiver) (*RTPTransceiver, []*RTPTransceiver) {
+/*TODO:
+pub(crate) fn find_by_mid(mid:&str, localTransceivers: Vec[RTPTransceiver]) ->(RTPTransceiver, []*RTPTransceiver) {
     for i, t := range localTransceivers {
         if t.Mid() == mid {
             return t, append(localTransceivers[:i], localTransceivers[i+1:]...)
@@ -141,6 +142,7 @@ func findByMid(mid string, localTransceivers []*RTPTransceiver) (*RTPTransceiver
 
     return nil, localTransceivers
 }
+
 
 // Given a direction+type pluck a transceiver from the passed list
 // if no entry satisfies the requested type+direction return a inactive Transceiver
