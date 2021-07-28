@@ -9,6 +9,9 @@ use util::Conn;
 impl Agent {
     /// Connects to the remote agent, acting as the controlling ice agent.
     /// The method blocks until at least one ice candidate pair has successfully connected.
+    ///
+    /// The operation will be cancelled if `cancel_rx` either receives a message or its channel
+    /// closes.
     pub async fn dial(
         &self,
         mut cancel_rx: mpsc::Receiver<()>,
@@ -37,6 +40,9 @@ impl Agent {
 
     /// Connects to the remote agent, acting as the controlled ice agent.
     /// The method blocks until at least one ice candidate pair has successfully connected.
+    ///
+    /// The operation will be cancelled if `cancel_rx` either receives a message or its channel
+    /// closes.
     pub async fn accept(
         &self,
         mut cancel_rx: mpsc::Receiver<()>,
