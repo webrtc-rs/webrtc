@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::Arc;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub(crate) enum PermState {
-    Idle,
-    Permitted,
+    Idle = 0,
+    Permitted = 1,
 }
 
 impl Default for PermState {
@@ -13,25 +15,34 @@ impl Default for PermState {
     }
 }
 
-#[derive(Default, Copy, Clone)]
+impl From<u8> for PermState {
+    fn from(v: u8) -> Self {
+        match v {
+            0 => PermState::Idle,
+            _ => PermState::Permitted,
+        }
+    }
+}
+
+#[derive(Default)]
 pub(crate) struct Permission {
-    st: PermState,
+    st: AtomicU8, //PermState,
 }
 
 impl Permission {
-    pub(crate) fn set_state(&mut self, state: PermState) {
-        self.st = state;
+    pub(crate) fn set_state(&self, state: PermState) {
+        self.st.store(state as u8, Ordering::SeqCst);
     }
 
     pub(crate) fn state(&self) -> PermState {
-        self.st
+        self.st.load(Ordering::SeqCst).into()
     }
 }
 
 // Thread-safe Permission map
 #[derive(Default)]
 pub(crate) struct PermissionMap {
-    perm_map: HashMap<String, Permission>,
+    perm_map: HashMap<String, Arc<Permission>>,
 }
 
 impl PermissionMap {
@@ -41,11 +52,11 @@ impl PermissionMap {
         }
     }
 
-    pub(crate) fn insert(&mut self, addr: &SocketAddr, p: Permission) {
+    pub(crate) fn insert(&mut self, addr: &SocketAddr, p: Arc<Permission>) {
         self.perm_map.insert(addr.ip().to_string(), p);
     }
 
-    pub(crate) fn find(&self, addr: &SocketAddr) -> Option<&Permission> {
+    pub(crate) fn find(&self, addr: &SocketAddr) -> Option<&Arc<Permission>> {
         self.perm_map.get(&addr.ip().to_string())
     }
 

@@ -209,17 +209,17 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
     // On packet-oriented connections, write timeouts are rare.
     async fn send_to(&mut self, p: &[u8], addr: SocketAddr) -> Result<usize> {
         // check if we have a permission for the destination IP addr
-        let mut perm = if let Some(perm) = self.perm_map.find(&addr) {
-            *perm
+        let perm = if let Some(perm) = self.perm_map.find(&addr) {
+            Arc::clone(perm)
         } else {
-            let perm = Permission::default();
-            self.perm_map.insert(&addr, perm);
+            let perm = Arc::new(Permission::default());
+            self.perm_map.insert(&addr, Arc::clone(&perm));
             perm
         };
 
         let mut result = Ok(());
         for _ in 0..MAX_RETRY_ATTEMPTS {
-            result = self.create_perm(&mut perm, addr).await;
+            result = self.create_perm(&perm, addr).await;
             if let Err(err) = &result {
                 if !Error::ErrTryAgain.equal(err) {
                     break;
@@ -362,7 +362,7 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
     // all the data transmission. This is done assuming that the request
     // will be mostly likely successful and we can tolerate some loss of
     // UDP packet (or reorder), inorder to minimize the latency in most cases.
-    async fn create_perm(&mut self, perm: &mut Permission, addr: SocketAddr) -> Result<()> {
+    async fn create_perm(&mut self, perm: &Arc<Permission>, addr: SocketAddr) -> Result<()> {
         if perm.state() == PermState::Idle {
             // punch a hole! (this would block a bit..)
             if let Err(err) = self.create_permissions(&[addr]).await {
