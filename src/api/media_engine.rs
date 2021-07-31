@@ -1,10 +1,15 @@
 use crate::media::rtp::rtp_codec::{
-    RTPCodecParameters, RTPCodecType, RTPHeaderExtensionParameter, RTPParameters,
+    RTPCodecCapability, RTPCodecParameters, RTPCodecType, RTPHeaderExtensionParameter,
+    RTPParameters,
 };
 use crate::media::rtp::rtp_transceiver_direction::{
     have_rtp_transceiver_direction_intersection, RTPTransceiverDirection,
 };
+
+use crate::error::Error;
+use anyhow::Result;
 use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// MIME_TYPE_H264 H264 MIME type.
 /// Note: Matching should be case insensitive.
@@ -42,169 +47,206 @@ pub(crate) struct MediaEngineHeaderExtension {
 #[derive(Default)]
 pub struct MediaEngine {
     // If we have attempted to negotiate a codec type yet.
-    negotiated_video: bool,
-    negotiated_audio: bool,
+    pub(crate) negotiated_video: bool,
+    pub(crate) negotiated_audio: bool,
 
-    video_codecs: Vec<RTPCodecParameters>,
-    audio_codecs: Vec<RTPCodecParameters>,
-    negotiated_video_codecs: Vec<RTPCodecParameters>,
-    negotiated_audio_codecs: Vec<RTPCodecParameters>,
+    pub(crate) video_codecs: Vec<RTPCodecParameters>,
+    pub(crate) audio_codecs: Vec<RTPCodecParameters>,
+    pub(crate) negotiated_video_codecs: Vec<RTPCodecParameters>,
+    pub(crate) negotiated_audio_codecs: Vec<RTPCodecParameters>,
 
-    header_extensions: Vec<MediaEngineHeaderExtension>,
-    negotiated_header_extensions: HashMap<usize, MediaEngineHeaderExtension>,
+    pub(crate) header_extensions: Vec<MediaEngineHeaderExtension>,
+    pub(crate) negotiated_header_extensions: HashMap<usize, MediaEngineHeaderExtension>,
 }
 
 impl MediaEngine {
+    /// register_default_codecs registers the default codecs supported by Pion WebRTC.
+    /// register_default_codecs is not safe for concurrent use.
+    pub fn register_default_codecs(&mut self) -> Result<()> {
+        // Default Audio Codecs
+        for codec in vec![
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: MIME_TYPE_OPUS.to_owned(),
+                    clock_rate: 48000,
+                    channels: 2,
+                    sdp_fmtp_line: "minptime=10;useinbandfec=1".to_owned(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 111,
+                ..Default::default()
+            },
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: MIME_TYPE_G722.to_owned(),
+                    clock_rate: 8000,
+                    channels: 0,
+                    sdp_fmtp_line: "".to_owned(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 9,
+                ..Default::default()
+            },
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: MIME_TYPE_PCMU.to_owned(),
+                    clock_rate: 8000,
+                    channels: 0,
+                    sdp_fmtp_line: "".to_owned(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 0,
+                ..Default::default()
+            },
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: MIME_TYPE_PCMA.to_owned(),
+                    clock_rate: 8000,
+                    channels: 0,
+                    sdp_fmtp_line: "".to_owned(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 8,
+                ..Default::default()
+            },
+        ] {
+            self.register_codec(codec, RTPCodecType::Audio)?;
+        }
+        /*TODO:
+                videoRTCPFeedback := []rtcpfeedback{{"goog-remb", ""}, {"ccm", "fir"}, {"nack", ""}, {"nack", "pli"}}
+                for _, codec := range []RTPCodecParameters{
+                    {
+                        RTPCodecCapability: RTPCodecCapability{MIME_TYPE_VP8, 90000, 0, "", videoRTCPFeedback},
+                        PayloadType:        96,
+                    },
+                    {
+                        RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=96", nil},
+                        PayloadType:        97,
+                    },
+
+                    {
+                        RTPCodecCapability: RTPCodecCapability{MIME_TYPE_VP9, 90000, 0, "profile-id=0", videoRTCPFeedback},
+                        PayloadType:        98,
+                    },
+                    {
+                        RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=98", nil},
+                        PayloadType:        99,
+                    },
+
+                    {
+                        RTPCodecCapability: RTPCodecCapability{MIME_TYPE_VP9, 90000, 0, "profile-id=1", videoRTCPFeedback},
+                        PayloadType:        100,
+                    },
+                    {
+                        RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=100", nil},
+                        PayloadType:        101,
+                    },
+
+                    {
+                        RTPCodecCapability: RTPCodecCapability{MIME_TYPE_H264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f", videoRTCPFeedback},
+                        PayloadType:        102,
+                    },
+                    {
+                        RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=102", nil},
+                        PayloadType:        121,
+                    },
+
+                    {
+                        RTPCodecCapability: RTPCodecCapability{MIME_TYPE_H264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42001f", videoRTCPFeedback},
+                        PayloadType:        127,
+                    },
+                    {
+                        RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=127", nil},
+                        PayloadType:        120,
+                    },
+
+                    {
+                        RTPCodecCapability: RTPCodecCapability{MIME_TYPE_H264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f", videoRTCPFeedback},
+                        PayloadType:        125,
+                    },
+                    {
+                        RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=125", nil},
+                        PayloadType:        107,
+                    },
+
+                    {
+                        RTPCodecCapability: RTPCodecCapability{MIME_TYPE_H264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42e01f", videoRTCPFeedback},
+                        PayloadType:        108,
+                    },
+                    {
+                        RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=108", nil},
+                        PayloadType:        109,
+                    },
+
+                    {
+                        RTPCodecCapability: RTPCodecCapability{MIME_TYPE_H264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42001f", videoRTCPFeedback},
+                        PayloadType:        127,
+                    },
+                    {
+                        RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=127", nil},
+                        PayloadType:        120,
+                    },
+
+                    {
+                        RTPCodecCapability: RTPCodecCapability{MIME_TYPE_H264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640032", videoRTCPFeedback},
+                        PayloadType:        123,
+                    },
+                    {
+                        RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=123", nil},
+                        PayloadType:        118,
+                    },
+
+                    {
+                        RTPCodecCapability: RTPCodecCapability{"video/ulpfec", 90000, 0, "", nil},
+                        PayloadType:        116,
+                    },
+                } {
+                    if err := m.register_codec(codec, RTPCodecTypeVideo); err != nil {
+                        return err
+                    }
+                }
+        */
+        Ok(())
+    }
+
+    /// add_codec will append codec if it not exists
+    fn add_codec(codecs: &mut Vec<RTPCodecParameters>, codec: RTPCodecParameters) {
+        for c in codecs.iter() {
+            if c.capability.mime_type == codec.capability.mime_type
+                && c.payload_type == codec.payload_type
+            {
+                return;
+            }
+        }
+        codecs.push(codec);
+    }
+
+    /// register_codec adds codec to the MediaEngine
+    /// These are the list of codecs supported by this PeerConnection.
+    /// register_codec is not safe for concurrent use.
+    pub fn register_codec(
+        &mut self,
+        mut codec: RTPCodecParameters,
+        typ: RTPCodecType,
+    ) -> Result<()> {
+        codec.stats_id = format!(
+            "RTPCodec-{}",
+            SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
+        );
+        match typ {
+            RTPCodecType::Audio => {
+                MediaEngine::add_codec(&mut self.audio_codecs, codec);
+                Ok(())
+            }
+            RTPCodecType::Video => {
+                MediaEngine::add_codec(&mut self.video_codecs, codec);
+                Ok(())
+            }
+            _ => Err(Error::ErrUnknownType.into()),
+        }
+    }
+
     /*
-    // RegisterDefaultCodecs registers the default codecs supported by Pion WebRTC.
-    // RegisterDefaultCodecs is not safe for concurrent use.
-    func (m *MediaEngine) RegisterDefaultCodecs() error {
-        // Default Pion Audio Codecs
-        for _, codec := range []RTPCodecParameters{
-            {
-                RTPCodecCapability: RTPCodecCapability{MIME_TYPE_OPUS, 48000, 2, "minptime=10;useinbandfec=1", nil},
-                PayloadType:        111,
-            },
-            {
-                RTPCodecCapability: RTPCodecCapability{MIME_TYPE_G722, 8000, 0, "", nil},
-                PayloadType:        9,
-            },
-            {
-                RTPCodecCapability: RTPCodecCapability{MIME_TYPE_PCMU, 8000, 0, "", nil},
-                PayloadType:        0,
-            },
-            {
-                RTPCodecCapability: RTPCodecCapability{MIME_TYPE_PCMA, 8000, 0, "", nil},
-                PayloadType:        8,
-            },
-        } {
-            if err := m.RegisterCodec(codec, RTPCodecTypeAudio); err != nil {
-                return err
-            }
-        }
-
-        videoRTCPFeedback := []rtcpfeedback{{"goog-remb", ""}, {"ccm", "fir"}, {"nack", ""}, {"nack", "pli"}}
-        for _, codec := range []RTPCodecParameters{
-            {
-                RTPCodecCapability: RTPCodecCapability{MIME_TYPE_VP8, 90000, 0, "", videoRTCPFeedback},
-                PayloadType:        96,
-            },
-            {
-                RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=96", nil},
-                PayloadType:        97,
-            },
-
-            {
-                RTPCodecCapability: RTPCodecCapability{MIME_TYPE_VP9, 90000, 0, "profile-id=0", videoRTCPFeedback},
-                PayloadType:        98,
-            },
-            {
-                RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=98", nil},
-                PayloadType:        99,
-            },
-
-            {
-                RTPCodecCapability: RTPCodecCapability{MIME_TYPE_VP9, 90000, 0, "profile-id=1", videoRTCPFeedback},
-                PayloadType:        100,
-            },
-            {
-                RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=100", nil},
-                PayloadType:        101,
-            },
-
-            {
-                RTPCodecCapability: RTPCodecCapability{MIME_TYPE_H264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f", videoRTCPFeedback},
-                PayloadType:        102,
-            },
-            {
-                RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=102", nil},
-                PayloadType:        121,
-            },
-
-            {
-                RTPCodecCapability: RTPCodecCapability{MIME_TYPE_H264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42001f", videoRTCPFeedback},
-                PayloadType:        127,
-            },
-            {
-                RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=127", nil},
-                PayloadType:        120,
-            },
-
-            {
-                RTPCodecCapability: RTPCodecCapability{MIME_TYPE_H264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f", videoRTCPFeedback},
-                PayloadType:        125,
-            },
-            {
-                RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=125", nil},
-                PayloadType:        107,
-            },
-
-            {
-                RTPCodecCapability: RTPCodecCapability{MIME_TYPE_H264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42e01f", videoRTCPFeedback},
-                PayloadType:        108,
-            },
-            {
-                RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=108", nil},
-                PayloadType:        109,
-            },
-
-            {
-                RTPCodecCapability: RTPCodecCapability{MIME_TYPE_H264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42001f", videoRTCPFeedback},
-                PayloadType:        127,
-            },
-            {
-                RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=127", nil},
-                PayloadType:        120,
-            },
-
-            {
-                RTPCodecCapability: RTPCodecCapability{MIME_TYPE_H264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640032", videoRTCPFeedback},
-                PayloadType:        123,
-            },
-            {
-                RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=123", nil},
-                PayloadType:        118,
-            },
-
-            {
-                RTPCodecCapability: RTPCodecCapability{"video/ulpfec", 90000, 0, "", nil},
-                PayloadType:        116,
-            },
-        } {
-            if err := m.RegisterCodec(codec, RTPCodecTypeVideo); err != nil {
-                return err
-            }
-        }
-
-        return nil
-    }
-
-    // addCodec will append codec if it not exists
-    func (m *MediaEngine) addCodec(codecs []RTPCodecParameters, codec RTPCodecParameters) []RTPCodecParameters {
-        for _, c := range codecs {
-            if c.mime_type == codec.mime_type && c.PayloadType == codec.PayloadType {
-                return codecs
-            }
-        }
-        return append(codecs, codec)
-    }
-
-    // RegisterCodec adds codec to the MediaEngine
-    // These are the list of codecs supported by this PeerConnection.
-    // RegisterCodec is not safe for concurrent use.
-    func (m *MediaEngine) RegisterCodec(codec RTPCodecParameters, typ RTPCodecType) error {
-        codec.statsID = fmt.Sprintf("RTPCodec-%d", time.Now().UnixNano())
-        switch typ {
-        case RTPCodecTypeAudio:
-            m.audioCodecs = m.addCodec(m.audioCodecs, codec)
-        case RTPCodecTypeVideo:
-            m.videoCodecs = m.addCodec(m.videoCodecs, codec)
-        default:
-            return ErrUnknownType
-        }
-        return nil
-    }
-
     // RegisterHeaderExtension adds a header extension to the MediaEngine
     // To determine the negotiated value use `GetHeaderExtensionID` after signaling is complete
     func (m *MediaEngine) RegisterHeaderExtension(extension RTPHeaderExtensionCapability, typ RTPCodecType, allowedDirections ...RTPTransceiverDirection) error {
@@ -406,9 +448,9 @@ impl MediaEngine {
     func (m *MediaEngine) pushCodecs(codecs []RTPCodecParameters, typ RTPCodecType) {
         for _, codec := range codecs {
             if typ == RTPCodecTypeAudio {
-                m.negotiatedAudioCodecs = m.addCodec(m.negotiatedAudioCodecs, codec)
+                m.negotiatedAudioCodecs = m.add_codec(m.negotiatedAudioCodecs, codec)
             } else if typ == RTPCodecTypeVideo {
-                m.negotiatedVideoCodecs = m.addCodec(m.negotiatedVideoCodecs, codec)
+                m.negotiatedVideoCodecs = m.add_codec(m.negotiatedVideoCodecs, codec)
             }
         }
     }

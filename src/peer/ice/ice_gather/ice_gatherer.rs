@@ -415,7 +415,7 @@ impl ICEGatherer {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::api::ApiBuilder;
+    use crate::api::APIBuilder;
     use crate::peer::ice::ice_gather::ICEGatherOptions;
     use crate::peer::ice::ice_server::ICEServer;
     use tokio::sync::mpsc;
@@ -430,7 +430,7 @@ mod test {
             ..Default::default()
         };
 
-        let mut gatherer = ApiBuilder::new().build().new_ice_gatherer(opts)?;
+        let mut gatherer = APIBuilder::new().build().new_ice_gatherer(opts)?;
 
         assert_eq!(
             gatherer.state(),
@@ -477,7 +477,7 @@ mod test {
         let mut s = SettingEngine::default();
         s.set_ice_multicast_dns_mode(ice::mdns::MulticastDnsMode::QueryAndGather);
 
-        let mut gatherer = ApiBuilder::new()
+        let mut gatherer = APIBuilder::new()
             .with_setting_engine(s)
             .build()
             .new_ice_gatherer(ICEGatherOptions::default())?;

@@ -127,7 +127,7 @@ impl Mux {
             let eps = endpoints.lock().await;
             for ep in eps.values() {
                 if (ep.match_fn)(buf) {
-                    endpoint = Some(Arc::clone(&ep));
+                    endpoint = Some(Arc::clone(ep));
                     break;
                 }
             }

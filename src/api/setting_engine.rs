@@ -76,14 +76,14 @@ pub struct SettingEngine {
 }
 
 impl SettingEngine {
-    /*TODO:
-    // DetachDataChannels enables detaching data channels. When enabled
-    // data channels have to be detached in the OnOpen callback using the
-    // DataChannel.Detach method.
-    func (e *SettingEngine) DetachDataChannels() {
-        e.Detach.data_channels = true
+    /// detach_data_channels enables detaching data channels. When enabled
+    /// data channels have to be detached in the OnOpen callback using the
+    /// DataChannel.Detach method.
+    pub fn detach_data_channels(&mut self) {
+        self.detach.data_channels = true;
     }
 
+    /*TODO:
     // SetSRTPProtectionProfiles allows the user to override the default srtp Protection Profiles
     // The default srtp protection profiles are provided by the function `defaultSrtpProtectionProfiles`
     func (e *SettingEngine) SetSRTPProtectionProfiles(profiles ...dtls_transport.SRTPProtectionProfile) {

@@ -31,13 +31,13 @@ use tokio::sync::mpsc;
 /// Some of these functions are also exported globally using the
 /// defaultAPI object. Note that the global version of the API
 /// may be phased out in the future.
-pub struct Api {
+pub struct API {
     setting_engine: Arc<SettingEngine>,
     media_engine: Arc<MediaEngine>,
     interceptor: Option<Arc<dyn Interceptor>>,
 }
 
-impl Api {
+impl API {
     /// new_ice_gatherer creates a new ice gatherer.
     /// This constructor is part of the ORTC API. It is not
     /// meant to be used together with the basic WebRTC API.
@@ -207,19 +207,19 @@ impl Api {
 }
 
 #[derive(Default)]
-pub struct ApiBuilder {
+pub struct APIBuilder {
     setting_engine: Option<Arc<SettingEngine>>,
     media_engine: Option<Arc<MediaEngine>>,
     interceptor: Option<Arc<dyn Interceptor>>,
 }
 
-impl ApiBuilder {
+impl APIBuilder {
     pub fn new() -> Self {
-        ApiBuilder::default()
+        APIBuilder::default()
     }
 
-    pub fn build(mut self) -> Api {
-        Api {
+    pub fn build(mut self) -> API {
+        API {
             setting_engine: if let Some(setting_engine) = self.setting_engine.take() {
                 setting_engine
             } else {
@@ -253,5 +253,35 @@ impl ApiBuilder {
     pub fn with_interceptor(mut self, interceptor: Arc<dyn Interceptor>) -> Self {
         self.interceptor = Some(interceptor);
         self
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_new_api() -> Result<()> {
+        let mut s = SettingEngine::default();
+        s.detach_data_channels();
+        let mut m = MediaEngine::default();
+        m.register_default_codecs()?;
+
+        let api = APIBuilder::new()
+            .with_setting_engine(s)
+            .with_media_engine(m)
+            .build();
+
+        assert_eq!(
+            api.setting_engine.detach.data_channels, true,
+            "Failed to set settings engine"
+        );
+        assert_eq!(
+            api.media_engine.audio_codecs.is_empty(),
+            false,
+            "Failed to set media engine"
+        );
+
+        Ok(())
     }
 }

@@ -193,7 +193,7 @@ impl DTLSTransport {
         self.srtcp_session = if let Some(srtcp_endpoint) = &self.srtcp_endpoint {
             Some(
                 Session::new(
-                    Arc::clone(&srtcp_endpoint) as Arc<dyn Conn + Send + Sync>,
+                    Arc::clone(srtcp_endpoint) as Arc<dyn Conn + Send + Sync>,
                     srtcp_config,
                     false,
                 )

@@ -61,14 +61,14 @@ type PeerConnection struct {
 }
 
 // NewPeerConnection creates a PeerConnection with the default codecs and
-// interceptors.  See RegisterDefaultCodecs and RegisterDefaultInterceptors.
+// interceptors.  See register_default_codecs and RegisterDefaultInterceptors.
 //
 // If you wish to customize the set of available codecs or the set of
 // active interceptors, create a MediaEngine and call api.NewPeerConnection
 // instead of this function.
 func NewPeerConnection(configuration Configuration) (*PeerConnection, error) {
     m := &MediaEngine{}
-    if err := m.RegisterDefaultCodecs(); err != nil {
+    if err := m.register_default_codecs(); err != nil {
         return nil, err
     }
 
