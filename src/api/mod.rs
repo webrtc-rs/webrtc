@@ -38,6 +38,85 @@ pub struct API {
 }
 
 impl API {
+    /*TODO:
+    // NewPeerConnection creates a new PeerConnection with the provided configuration against the received API object
+    func (api *API) NewPeerConnection(configuration Configuration) (*PeerConnection, error) {
+        // https://w3c.github.io/webrtc-pc/#constructor (Step #2)
+        // Some variables defined explicitly despite their implicit zero values to
+        // allow better readability to understand what is happening.
+        pc := &PeerConnection{
+            statsID: fmt.Sprintf("PeerConnection-%d", time.Now().UnixNano()),
+            configuration: Configuration{
+                ICEServers:           []ICEServer{},
+                ICETransportPolicy:   ICETransportPolicyAll,
+                BundlePolicy:         BundlePolicyBalanced,
+                RTCPMuxPolicy:        RTCPMuxPolicyRequire,
+                Certificates:         []Certificate{},
+                ICECandidatePoolSize: 0,
+            },
+            ops:                    newOperations(),
+            isClosed:               &atomicBool{},
+            isNegotiationNeeded:    &atomicBool{},
+            negotiationNeededState: negotiationNeededStateEmpty,
+            lastOffer:              "",
+            lastAnswer:             "",
+            greaterMid:             -1,
+            signalingState:         SignalingStateStable,
+            iceConnectionState:     ICEConnectionStateNew,
+            connectionState:        PeerConnectionStateNew,
+
+            api: api,
+            log: api.settingEngine.LoggerFactory.NewLogger("pc"),
+        }
+
+        if !api.settingEngine.disableMediaEngineCopy {
+            pc.api = &API{
+                settingEngine: api.settingEngine,
+                mediaEngine:   api.mediaEngine.copy(),
+                interceptor:   api.interceptor,
+            }
+        }
+
+        var err error
+        if err = pc.initConfiguration(configuration); err != nil {
+            return nil, err
+        }
+
+        pc.iceGatherer, err = pc.createICEGatherer()
+        if err != nil {
+            return nil, err
+        }
+
+        // Create the ice transport
+        iceTransport := pc.createICETransport()
+        pc.iceTransport = iceTransport
+
+        // Create the DTLS transport
+        dtlsTransport, err := pc.api.NewDTLSTransport(pc.iceTransport, pc.configuration.Certificates)
+        if err != nil {
+            return nil, err
+        }
+        pc.dtlsTransport = dtlsTransport
+
+        // Create the SCTP transport
+        pc.sctpTransport = pc.api.NewSCTPTransport(pc.dtlsTransport)
+
+        // Wire up the on datachannel handler
+        pc.sctpTransport.OnDataChannel(func(d *DataChannel) {
+            pc.mu.RLock()
+            handler := pc.onDataChannelHandler
+            pc.mu.RUnlock()
+            if handler != nil {
+                handler(d)
+            }
+        })
+
+        pc.interceptorRTCPWriter = api.interceptor.bind_rtcpwriter(interceptor.RTCPWriterFunc(pc.writeRTCP))
+
+        return pc, nil
+    }
+    */
+
     /// new_ice_gatherer creates a new ice gatherer.
     /// This constructor is part of the ORTC API. It is not
     /// meant to be used together with the basic WebRTC API.
