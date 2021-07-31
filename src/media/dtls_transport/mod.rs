@@ -66,7 +66,7 @@ pub struct DTLSTransport {
 }
 
 impl DTLSTransport {
-    pub fn new(
+    pub(crate) fn new(
         ice_transport: ICETransport,
         certificates: Vec<Certificate>,
         setting_engine: Arc<SettingEngine>,

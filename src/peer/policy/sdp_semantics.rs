@@ -116,11 +116,11 @@ mod test {
         lim := test.TimeOut(time.Second * 30)
         defer lim.Stop()
 
-        opc, err := NewPeerConnection(Configuration{
+        opc, err := new_peer_connection(Configuration{
             SDPSemantics: SDPSemanticsPlanB,
         })
         if err != nil {
-            t.Errorf("NewPeerConnection failed: %v", err)
+            t.Errorf("new_peer_connection failed: %v", err)
         }
 
         if _, err = opc.AddTransceiverFromKind(RTPCodecTypeVideo, RTPTransceiverInit{
@@ -161,11 +161,11 @@ mod test {
             }
         }
 
-        apc, err := NewPeerConnection(Configuration{
+        apc, err := new_peer_connection(Configuration{
             SDPSemantics: SDPSemanticsPlanB,
         })
         if err != nil {
-            t.Errorf("NewPeerConnection failed: %v", err)
+            t.Errorf("new_peer_connection failed: %v", err)
         }
 
         if err = apc.SetRemoteDescription(offer); err != nil {
@@ -190,11 +190,11 @@ mod test {
         lim := test.TimeOut(time.Second * 30)
         defer lim.Stop()
 
-        opc, err := NewPeerConnection(Configuration{
+        opc, err := new_peer_connection(Configuration{
             SDPSemantics: SDPSemanticsPlanB,
         })
         if err != nil {
-            t.Errorf("NewPeerConnection failed: %v", err)
+            t.Errorf("new_peer_connection failed: %v", err)
         }
 
         if _, err = opc.AddTransceiverFromKind(RTPCodecTypeVideo, RTPTransceiverInit{
@@ -216,11 +216,11 @@ mod test {
         mdNames := getMdNames(offer.parsed)
         assert.ObjectsAreEqual(mdNames, []string{"video", "audio", "data"})
 
-        apc, err := NewPeerConnection(Configuration{
+        apc, err := new_peer_connection(Configuration{
             SDPSemantics: SDPSemanticsPlanB,
         })
         if err != nil {
-            t.Errorf("NewPeerConnection failed: %v", err)
+            t.Errorf("new_peer_connection failed: %v", err)
         }
 
         video1, err := NewTrackLocalStaticSample(RTPCodecCapability{MimeType: "video/h264", SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"}, "1", "1")
@@ -283,11 +283,11 @@ mod test {
         lim := test.TimeOut(time.Second * 30)
         defer lim.Stop()
 
-        opc, err := NewPeerConnection(Configuration{
+        opc, err := new_peer_connection(Configuration{
             SDPSemantics: SDPSemanticsPlanB,
         })
         if err != nil {
-            t.Errorf("NewPeerConnection failed: %v", err)
+            t.Errorf("new_peer_connection failed: %v", err)
         }
 
         if _, err = opc.AddTransceiverFromKind(RTPCodecTypeVideo, RTPTransceiverInit{
@@ -309,11 +309,11 @@ mod test {
         mdNames := getMdNames(offer.parsed)
         assert.ObjectsAreEqual(mdNames, []string{"video", "audio", "data"})
 
-        apc, err := NewPeerConnection(Configuration{
+        apc, err := new_peer_connection(Configuration{
             SDPSemantics: SDPSemanticsUnifiedPlanWithFallback,
         })
         if err != nil {
-            t.Errorf("NewPeerConnection failed: %v", err)
+            t.Errorf("new_peer_connection failed: %v", err)
         }
 
         video1, err := NewTrackLocalStaticSample(RTPCodecCapability{MimeType: "video/h264", SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"}, "1", "1")

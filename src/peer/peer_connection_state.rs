@@ -91,6 +91,7 @@ impl fmt::Display for PeerConnectionState {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub(crate) enum NegotiationNeededState {
     /// NegotiationNeededStateEmpty not running and queue is empty
     Empty,
@@ -98,6 +99,12 @@ pub(crate) enum NegotiationNeededState {
     Run,
     /// NegotiationNeededStateEmpty running and queue
     Queue,
+}
+
+impl Default for NegotiationNeededState {
+    fn default() -> Self {
+        NegotiationNeededState::Empty
+    }
 }
 
 #[cfg(test)]

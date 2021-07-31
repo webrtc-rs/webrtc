@@ -80,7 +80,7 @@ mod test {
 
     #[test]
     fn test_session_description_unmarshal() {
-        /*TODO: pc, err := NewPeerConnection(Configuration{})
+        /*TODO: pc, err := new_peer_connection(Configuration{})
         assert.NoError(t, err)
         offer, err := pc.CreateOffer(nil)
         assert.NoError(t, err)

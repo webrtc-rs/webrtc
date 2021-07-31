@@ -56,7 +56,7 @@ pub struct ICETransport {
 
 impl ICETransport {
     /// creates a new new_icetransport.
-    pub fn new(gatherer: ICEGatherer) -> Self {
+    pub(crate) fn new(gatherer: ICEGatherer) -> Self {
         ICETransport {
             state: Arc::new(AtomicU8::new(ICETransportState::New as u8)),
             gatherer,

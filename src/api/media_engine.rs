@@ -33,6 +33,7 @@ pub const MIME_TYPE_PCMU: &str = "audio/pcmu";
 /// Note: Matching should be case insensitive.
 pub const MIME_TYPE_PCMA: &str = "audio/pcma";
 
+#[derive(Default, Clone)]
 pub(crate) struct MediaEngineHeaderExtension {
     pub(crate) uri: String,
     pub(crate) is_audio: bool,
@@ -44,7 +45,7 @@ pub(crate) struct MediaEngineHeaderExtension {
 /// A MediaEngine defines the codecs supported by a PeerConnection, and the
 /// configuration of those codecs. A MediaEngine must not be shared between
 /// PeerConnections.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct MediaEngine {
     // If we have attempted to negotiate a codec type yet.
     pub(crate) negotiated_video: bool,
@@ -318,22 +319,19 @@ impl MediaEngine {
         }
 
         return
-    }
+    }*/
 
-    // copy copies any user modifiable state of the MediaEngine
-    // all internal state is reset
-    func (m *MediaEngine) copy() *MediaEngine {
-        cloned := &MediaEngine{
-            videoCodecs:      append([]RTPCodecParameters{}, m.videoCodecs...),
-            audioCodecs:      append([]RTPCodecParameters{}, m.audioCodecs...),
-            header_extensions: append([]mediaEngineHeaderExtension{}, m.header_extensions...),
+    /// clone_to copies any user modifiable state of the MediaEngine
+    /// all internal state is reset
+    pub(crate) fn clone_to(&self) -> Self {
+        MediaEngine {
+            video_codecs: self.video_codecs.clone(),
+            audio_codecs: self.audio_codecs.clone(),
+            header_extensions: self.header_extensions.clone(),
+            ..Default::default()
         }
-        if len(m.header_extensions) > 0 {
-            cloned.negotiated_header_extensions = map[int]mediaEngineHeaderExtension{}
-        }
-        return cloned
     }
-
+    /*
     func (m *MediaEngine) getCodecByPayload(payloadType PayloadType) (RTPCodecParameters, RTPCodecType, error) {
         for _, codec := range m.negotiatedVideoCodecs {
             if codec.PayloadType == payloadType {

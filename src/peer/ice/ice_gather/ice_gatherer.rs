@@ -53,7 +53,7 @@ pub struct ICEGatherer {
 }
 
 impl ICEGatherer {
-    pub fn new(
+    pub(crate) fn new(
         validated_servers: Vec<Url>,
         gather_policy: ICETransportPolicy,
         setting_engine: Arc<SettingEngine>,

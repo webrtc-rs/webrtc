@@ -79,7 +79,7 @@ pub struct DataChannel {
 
 impl DataChannel {
     // create the DataChannel object before the networking is set up.
-    pub fn new(params: DataChannelParameters, setting_engine: Arc<SettingEngine>) -> Self {
+    pub(crate) fn new(params: DataChannelParameters, setting_engine: Arc<SettingEngine>) -> Self {
         DataChannel {
             stats_id: format!(
                 "DataChannel-{}",

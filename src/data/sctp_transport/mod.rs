@@ -83,7 +83,10 @@ pub struct SCTPTransport {
 }
 
 impl SCTPTransport {
-    pub fn new(dtls_transport: Arc<DTLSTransport>, setting_engine: Arc<SettingEngine>) -> Self {
+    pub(crate) fn new(
+        dtls_transport: Arc<DTLSTransport>,
+        setting_engine: Arc<SettingEngine>,
+    ) -> Self {
         SCTPTransport {
             dtls_transport,
             state: AtomicU8::new(SCTPTransportState::Connecting as u8),
