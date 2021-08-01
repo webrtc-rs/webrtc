@@ -65,6 +65,10 @@ impl Conn for Pipe {
         Err(Error::new(ErrorKind::AddrNotAvailable, "Addr Not Available").into())
     }
 
+    async fn remote_addr(&self) -> Option<SocketAddr> {
+        None
+    }
+
     async fn close(&self) -> Result<()> {
         Ok(())
     }

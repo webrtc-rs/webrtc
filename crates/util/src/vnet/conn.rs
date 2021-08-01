@@ -140,6 +140,11 @@ impl Conn for UdpConn {
         Ok(self.loc_addr)
     }
 
+    async fn remote_addr(&self) -> Option<SocketAddr> {
+        let rem_addr = self.rem_addr.lock().await;
+        *rem_addr
+    }
+
     async fn close(&self) -> Result<()> {
         if self.closed.load(Ordering::SeqCst) {
             return Err(Error::ErrAlreadyClosed.into());

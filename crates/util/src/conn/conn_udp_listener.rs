@@ -259,6 +259,10 @@ impl Conn for UdpConn {
         self.pconn.local_addr().await
     }
 
+    async fn remote_addr(&self) -> Option<SocketAddr> {
+        Some(self.raddr)
+    }
+
     async fn close(&self) -> Result<()> {
         let mut conns = self.conns.lock().await;
         conns.remove(self.raddr.to_string().as_str());

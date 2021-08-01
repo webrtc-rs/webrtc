@@ -28,6 +28,10 @@ impl Conn for UdpSocket {
         Ok(self.local_addr()?)
     }
 
+    async fn remote_addr(&self) -> Option<SocketAddr> {
+        None
+    }
+
     async fn close(&self) -> Result<()> {
         Ok(())
     }

@@ -56,6 +56,11 @@ impl Conn for DisconnectedPacketConn {
         self.pconn.local_addr().await
     }
 
+    async fn remote_addr(&self) -> Option<SocketAddr> {
+        let raddr = self.raddr.lock().await;
+        Some(*raddr)
+    }
+
     async fn close(&self) -> Result<()> {
         Ok(())
     }
