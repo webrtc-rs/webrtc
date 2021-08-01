@@ -147,7 +147,7 @@ async fn test_routine_leak_on_close() -> Result<()> {
     assert_eq!(n_a, 100);
 
     let mut buf_b = vec![0; 1024];
-    let (n_b, _) = cb.read(&mut buf_b, Some(Duration::from_secs(5))).await?;
+    let n_b = cb.read(&mut buf_b, Some(Duration::from_secs(5))).await?;
     assert_eq!(n_a, 100);
     assert_eq!(&buf_a[..], &buf_b[0..n_b]);
 
@@ -193,7 +193,7 @@ async fn test_sequence_number_overflow_on_application_data() -> Result<()> {
     assert_eq!(n_a, 100);
 
     let mut buf_b = vec![0; 1024];
-    let (n_b, _) = cb.read(&mut buf_b, Some(Duration::from_secs(5))).await?;
+    let n_b = cb.read(&mut buf_b, Some(Duration::from_secs(5))).await?;
     assert_eq!(n_a, 100);
     assert_eq!(&buf_a[..], &buf_b[0..n_b]);
 

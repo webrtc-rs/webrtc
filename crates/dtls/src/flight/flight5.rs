@@ -629,7 +629,7 @@ async fn initalize_cipher_suite(
                 .session_hash(
                     cipher_suite.hash_func(),
                     cfg.initial_epoch,
-                    &sending_plain_text,
+                    sending_plain_text,
                 )
                 .await
             {

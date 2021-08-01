@@ -269,7 +269,7 @@ pub(crate) fn verify_key_signature(
     );
 
     public_key
-        .verify(&message, remote_key_signature)
+        .verify(message, remote_key_signature)
         .map_err(|e| Error::new(e.to_string()))?;
 
     Ok(())

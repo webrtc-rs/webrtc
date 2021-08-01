@@ -74,15 +74,14 @@ async fn main() -> Result<()> {
                 break;
             }
             result = listener.accept() => {
-                if let Ok(dtls_conn) = result {
+                if let Ok((dtls_conn, remote_addr)) = result {
                     tokio::spawn(async move {
                         let mut buf = [0; 1024];
-                        let mut remote_addr = None;
-                        while let Ok((n,raddr)) = dtls_conn.recv_from(&mut buf).await{
+                        while let Ok((n, raddr)) = dtls_conn.recv_from(&mut buf).await{
                             let client_msg = str::from_utf8(&buf[..n])?;
                             println!("{}", client_msg);
+                            assert_eq!(raddr, remote_addr, "two remote addresses should be the same");
 
-                            remote_addr = Some(raddr);
                             let message = format!("Echo: {}", client_msg);
                             dtls_conn.send(message.as_bytes()).await?;
                         }
