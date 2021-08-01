@@ -183,6 +183,10 @@ impl<T: RelayConnObserver + Send + Sync> Conn for RelayConn<T> {
         Ok(self.relayed_addr)
     }
 
+    async fn remote_addr(&self) -> Option<SocketAddr> {
+        None
+    }
+
     async fn close(&self) -> Result<()> {
         Ok(())
     }
