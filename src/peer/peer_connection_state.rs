@@ -107,6 +107,16 @@ impl Default for NegotiationNeededState {
     }
 }
 
+impl From<u8> for NegotiationNeededState {
+    fn from(v: u8) -> Self {
+        match v {
+            1 => NegotiationNeededState::Run,
+            2 => NegotiationNeededState::Queue,
+            _ => NegotiationNeededState::Empty,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

@@ -8,10 +8,14 @@ use crate::media::dtls_transport::DTLSTransport;
 use crate::media::ice_transport::ice_transport_state::ICETransportState;
 use crate::media::ice_transport::ICETransport;
 use crate::media::interceptor::Interceptor;
+use crate::media::rtp::rtp_receiver::RTPReceiver;
 use crate::media::rtp::rtp_transceiver::RTPTransceiver;
+use crate::media::track::track_remote::TrackRemote;
 use crate::peer::configuration::Configuration;
 use crate::peer::ice::ice_connection_state::ICEConnectionState;
-use crate::peer::ice::ice_gather::ice_gatherer::ICEGatherer;
+use crate::peer::ice::ice_gather::ice_gatherer::{
+    ICEGatherer, OnICEGathererStateChangeHdlrFn, OnLocalCandidateHdlrFn,
+};
 use crate::peer::ice::ice_gather::ICEGatherOptions;
 use crate::peer::peer_connection_state::{NegotiationNeededState, PeerConnectionState};
 use crate::peer::policy::bundle_policy::BundlePolicy;
@@ -29,8 +33,18 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex;
 
+pub type OnSignalingStateChangeHdlrFn = Box<
+    dyn (FnMut(SignalingState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync,
+>;
+
 pub type OnICEConnectionStateChangeHdlrFn = Box<
     dyn (FnMut(ICEConnectionState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+        + Send
+        + Sync,
+>;
+
+pub type OnPeerConnectionStateChangeHdlrFn = Box<
+    dyn (FnMut(PeerConnectionState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
@@ -40,6 +54,18 @@ pub type OnDataChannelHdlrFn = Box<
         + Send
         + Sync,
 >;
+
+pub type OnTrackHdlrFn = Box<
+    dyn (FnMut(
+            Option<Arc<TrackRemote>>,
+            Option<Arc<RTPReceiver>>,
+        ) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+        + Send
+        + Sync,
+>;
+
+pub type OnNegotiationNeededHdlrFn =
+    Box<dyn (FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync>;
 
 /// PeerConnection represents a WebRTC connection that establishes a
 /// peer-to-peer communications with another PeerConnection instance in a
@@ -66,9 +92,9 @@ pub struct PeerConnection {
 
     idp_login_url: Option<String>,
 
-    is_closed: AtomicBool,             //*atomicBool
-    is_negotiation_needed: AtomicBool, //*atomicBool
-    negotiation_needed_state: NegotiationNeededState,
+    is_closed: AtomicBool,              //*atomicBool
+    is_negotiation_needed: AtomicBool,  //*atomicBool
+    negotiation_needed_state: AtomicU8, //NegotiationNeededState,
 
     last_offer: String,
     last_answer: String,
@@ -81,16 +107,14 @@ pub struct PeerConnection {
 
     rtp_transceivers: Vec<RTPTransceiver>,
 
-    //onSignalingStateChangeHandler     func(SignalingState)
+    on_signaling_state_change_handler: Arc<Mutex<Option<OnSignalingStateChangeHdlrFn>>>,
+    on_connection_state_change_handler: Arc<Mutex<Option<OnPeerConnectionStateChangeHdlrFn>>>,
+    on_track_handler: Arc<Mutex<Option<OnTrackHdlrFn>>>,
     on_ice_connection_state_change_handler: Arc<Mutex<Option<OnICEConnectionStateChangeHdlrFn>>>,
     on_data_channel_handler: Arc<Mutex<Option<OnDataChannelHdlrFn>>>,
+    on_negotiation_needed_handler: Arc<Mutex<Option<OnNegotiationNeededHdlrFn>>>,
 
-    /*TODO:
-    onConnectionStateChangeHandler    func(PeerConnectionState)
-    onTrackHandler                    func(*TrackRemote, *RTPReceiver)
-    onNegotiationNeededHandler        atomic.Value // func()
-    interceptorRTCPWriter interceptor.RTCPWriter
-     */
+    // interceptorRTCPWriter interceptor.RTCPWriter
     ice_gatherer: Arc<ICEGatherer>,
     ice_transport: Arc<ICETransport>,
     dtls_transport: Arc<DTLSTransport>,
@@ -131,7 +155,7 @@ impl PeerConnection {
             //TODO: ops:                    newOperations(),
             is_closed: AtomicBool::new(false),
             is_negotiation_needed: AtomicBool::new(false),
-            negotiation_needed_state: NegotiationNeededState::Empty,
+            negotiation_needed_state: AtomicU8::new(NegotiationNeededState::Empty as u8),
             last_offer: "".to_owned(),
             last_answer: "".to_owned(),
             greater_mid: -1,
@@ -186,7 +210,7 @@ impl PeerConnection {
                     ICETransportState::Disconnected => ICEConnectionState::Disconnected,
                     ICETransportState::Closed => ICEConnectionState::Closed,
                     _ => {
-                        log::warn!("OnConnectionStateChange: unhandled ICE state: {}", state);
+                        log::warn!("on_connection_state_change: unhandled ICE state: {}", state);
                         return Box::pin(async {});
                     }
                 };
@@ -278,58 +302,60 @@ impl PeerConnection {
 
         Ok(())
     }
-    /*
-    // OnSignalingStateChange sets an event handler which is invoked when the
-    // peer connection's signaling state changes
-    func (pc *PeerConnection) OnSignalingStateChange(f func(SignalingState)) {
-        pc.mu.Lock()
-        defer pc.mu.Unlock()
-        pc.onSignalingStateChangeHandler = f
+
+    /// on_signaling_state_change sets an event handler which is invoked when the
+    /// peer connection's signaling state changes
+    pub async fn on_signaling_state_change(&self, f: OnSignalingStateChangeHdlrFn) {
+        let mut on_signaling_state_change_handler =
+            self.on_signaling_state_change_handler.lock().await;
+        *on_signaling_state_change_handler = Some(f);
     }
 
-    func (pc *PeerConnection) onSignalingStateChange(newState SignalingState) {
-        pc.mu.RLock()
-        handler := pc.onSignalingStateChangeHandler
-        pc.mu.RUnlock()
-
-        pc.log.Infof("signaling state changed to %s", newState)
-        if handler != nil {
-            go handler(newState)
+    async fn do_signaling_state_change(&self, new_state: SignalingState) {
+        log::info!("signaling state changed to {}", new_state);
+        let mut handler = self.on_signaling_state_change_handler.lock().await;
+        if let Some(f) = &mut *handler {
+            f(new_state).await;
         }
     }
 
-    // OnDataChannel sets an event handler which is invoked when a data
-    // channel message arrives from a remote peer.
-    func (pc *PeerConnection) OnDataChannel(f func(*DataChannel)) {
-        pc.mu.Lock()
-        defer pc.mu.Unlock()
-        pc.onDataChannelHandler = f
+    /// on_data_channel sets an event handler which is invoked when a data
+    /// channel message arrives from a remote peer.
+    pub async fn on_data_channel(&self, f: OnDataChannelHdlrFn) {
+        let mut on_data_channel_handler = self.on_data_channel_handler.lock().await;
+        *on_data_channel_handler = Some(f);
     }
 
-    // OnNegotiationNeeded sets an event handler which is invoked when
-    // a change has occurred which requires session negotiation
-    func (pc *PeerConnection) OnNegotiationNeeded(f func()) {
-        pc.onNegotiationNeededHandler.Store(f)
+    /// on_negotiation_needed sets an event handler which is invoked when
+    /// a change has occurred which requires session negotiation
+    pub async fn on_negotiation_needed(&self, f: OnNegotiationNeededHdlrFn) {
+        let mut on_negotiation_needed_handler = self.on_negotiation_needed_handler.lock().await;
+        *on_negotiation_needed_handler = Some(f);
     }
 
-    // onNegotiationNeeded enqueues negotiationNeededOp if necessary
-    // caller of this method should hold `pc.mu` lock
-    func (pc *PeerConnection) onNegotiationNeeded() {
+    /// do_negotiation_needed enqueues negotiationNeededOp if necessary
+    /// caller of this method should hold `pc.mu` lock
+    async fn do_negotiation_needed(&self) {
         // https://w3c.github.io/webrtc-pc/#updating-the-negotiation-needed-flag
         // non-canon step 1
-        if pc.negotiation_needed_state == negotiationNeededStateRun {
-            pc.negotiation_needed_state = negotiationNeededStateQueue
-            return
-        } else if pc.negotiation_needed_state == negotiationNeededStateQueue {
-            return
+        let negotiation_needed_state: NegotiationNeededState =
+            self.negotiation_needed_state.load(Ordering::SeqCst).into();
+        if negotiation_needed_state == NegotiationNeededState::Run {
+            self.negotiation_needed_state
+                .store(NegotiationNeededState::Queue as u8, Ordering::SeqCst);
+            return;
+        } else if negotiation_needed_state == NegotiationNeededState::Queue {
+            return;
         }
-        pc.negotiation_needed_state = negotiationNeededStateRun
-        pc.ops.Enqueue(pc.negotiationNeededOp)
+        self.negotiation_needed_state
+            .store(NegotiationNeededState::Run as u8, Ordering::SeqCst);
+        //TODO: pc.ops.Enqueue(pc.negotiationNeededOp)
     }
 
+    /*TODO:
     func (pc *PeerConnection) negotiationNeededOp() {
-        // Don't run NegotiatedNeeded checks if OnNegotiationNeeded is not set
-        if handler := pc.onNegotiationNeededHandler.Load(); handler == nil {
+        // Don't run NegotiatedNeeded checks if on_negotiation_needed is not set
+        if handler := pc.on_negotiation_needed_handler.Load(); handler == nil {
             return
         }
 
@@ -374,7 +400,7 @@ impl PeerConnection {
         pc.is_negotiation_needed.set(true)
 
         // Step 2.7
-        if handler, ok := pc.onNegotiationNeededHandler.Load().(func()); ok && handler != nil {
+        if handler, ok := pc.on_negotiation_needed_handler.Load().(func()); ok && handler != nil {
             handler()
         }
     }
@@ -449,44 +475,44 @@ impl PeerConnection {
         }
         // Step 6
         return false
+    }*/
+
+    /// on_ice_candidate sets an event handler which is invoked when a new ICE
+    /// candidate is found.
+    /// Take note that the handler is gonna be called with a nil pointer when
+    /// gathering is finished.
+    pub async fn on_ice_candidate(&self, f: OnLocalCandidateHdlrFn) {
+        self.ice_gatherer.on_local_candidate(f).await
     }
 
-    // OnICECandidate sets an event handler which is invoked when a new ICE
-    // candidate is found.
-    // Take note that the handler is gonna be called with a nil pointer when
-    // gathering is finished.
-    func (pc *PeerConnection) OnICECandidate(f func(*ICECandidate)) {
-        pc.iceGatherer.OnLocalCandidate(f)
+    /// on_ice_gathering_state_change sets an event handler which is invoked when the
+    /// ICE candidate gathering state has changed.
+    pub async fn on_ice_gathering_state_change(&self, f: OnICEGathererStateChangeHdlrFn) {
+        self.ice_gatherer.on_state_change(f).await
     }
 
-    // OnICEGatheringStateChange sets an event handler which is invoked when the
-    // ICE candidate gathering state has changed.
-    func (pc *PeerConnection) OnICEGatheringStateChange(f func(ICEGathererState)) {
-        pc.iceGatherer.OnStateChange(f)
+    /// on_track sets an event handler which is called when remote track
+    /// arrives from a remote peer.
+    pub async fn on_track(&self, f: OnTrackHdlrFn) {
+        let mut on_track_handler = self.on_track_handler.lock().await;
+        *on_track_handler = Some(f);
     }
 
-    // OnTrack sets an event handler which is called when remote track
-    // arrives from a remote peer.
-    func (pc *PeerConnection) OnTrack(f func(*TrackRemote, *RTPReceiver)) {
-        pc.mu.Lock()
-        defer pc.mu.Unlock()
-        pc.onTrackHandler = f
-    }
+    async fn do_track(&self, t: Option<Arc<TrackRemote>>, r: Option<Arc<RTPReceiver>>) {
+        log::debug!(
+            "got new track: {}",
+            if let Some(t) = &t { t.id() } else { "None" }
+        );
 
-    func (pc *PeerConnection) onTrack(t *TrackRemote, r *RTPReceiver) {
-        pc.mu.RLock()
-        handler := pc.onTrackHandler
-        pc.mu.RUnlock()
-
-        pc.log.Debugf("got new track: %+v", t)
-        if t != nil {
-            if handler != nil {
-                go handler(t, r)
+        if t.is_some() {
+            let mut handler = self.on_track_handler.lock().await;
+            if let Some(f) = &mut *handler {
+                f(t, r).await;
             } else {
-                pc.log.Warnf("OnTrack unset, unable to handle incoming media streams")
+                log::warn!("on_track unset, unable to handle incoming media streams");
             }
         }
-    }*/
+    }
 
     /// on_ice_connection_state_change sets an event handler which is called
     /// when an ICE connection state is changed.
@@ -498,22 +524,23 @@ impl PeerConnection {
 
     async fn do_ice_connection_state_change(&self, cs: ICEConnectionState) {
         self.ice_connection_state.store(cs as u8, Ordering::SeqCst);
-        log::info!("ICE connection state changed: {}", cs);
 
+        log::info!("ICE connection state changed: {}", cs);
         let mut handler = self.on_ice_connection_state_change_handler.lock().await;
         if let Some(f) = &mut *handler {
             f(cs).await;
         }
     }
-    /*
-    // OnConnectionStateChange sets an event handler which is called
-    // when the PeerConnectionState has changed
-    func (pc *PeerConnection) OnConnectionStateChange(f func(PeerConnectionState)) {
-        pc.mu.Lock()
-        defer pc.mu.Unlock()
-        pc.onConnectionStateChangeHandler = f
+
+    /// on_connection_state_change sets an event handler which is called
+    /// when the PeerConnectionState has changed
+    pub async fn on_connection_state_change(&self, f: OnPeerConnectionStateChangeHdlrFn) {
+        let mut on_connection_state_change_handler =
+            self.on_connection_state_change_handler.lock().await;
+        *on_connection_state_change_handler = Some(f);
     }
 
+    /*
     // SetConfiguration updates the configuration of this PeerConnection object.
     func (pc *PeerConnection) SetConfiguration(configuration Configuration) error { //nolint:gocognit
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-setconfiguration (step #2)
@@ -769,7 +796,7 @@ impl PeerConnection {
         self.connection_state
             .store(connection_state as u8, Ordering::SeqCst);
 
-        /*handler := pc.onConnectionStateChangeHandler
+        /*handler := pc.on_connection_state_change_handler
         if handler != nil {
             go handler(connection_state)
         }*/
@@ -1457,7 +1484,7 @@ impl PeerConnection {
                     pc.dtlsTransport.storeSimulcastStream(stream)
 
                     if err := pc.handleUndeclaredSSRC(rtpStream, ssrc); err != nil {
-                        pc.log.Errorf("Incoming unhandled RTP ssrc(%d), OnTrack will not be fired. %v", ssrc, err)
+                        pc.log.Errorf("Incoming unhandled RTP ssrc(%d), on_track will not be fired. %v", ssrc, err)
                     }
                     atomic.AddUint64(&simulcastRoutineCount, ^uint64(0))
                 }(stream, SSRC(ssrc))
@@ -1477,7 +1504,7 @@ impl PeerConnection {
                     pc.log.Warnf("Failed to accept RTCP %v", err)
                     return
                 }
-                pc.log.Warnf("Incoming unhandled RTCP ssrc(%d), OnTrack will not be fired", ssrc)
+                pc.log.Warnf("Incoming unhandled RTCP ssrc(%d), on_track will not be fired", ssrc)
             }
         }()
     }

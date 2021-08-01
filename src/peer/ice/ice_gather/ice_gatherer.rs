@@ -23,7 +23,7 @@ pub type OnLocalCandidateHdlrFn = Box<
         + Sync,
 >;
 
-pub type OnStateChangeHdlrFn = Box<
+pub type OnICEGathererStateChangeHdlrFn = Box<
     dyn (FnMut(ICEGathererState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
@@ -46,7 +46,7 @@ pub struct ICEGatherer {
     pub(crate) agent: Mutex<Option<Arc<ice::agent::Agent>>>,
 
     pub(crate) on_local_candidate_handler: Arc<Mutex<Option<OnLocalCandidateHdlrFn>>>,
-    pub(crate) on_state_change_handler: Arc<Mutex<Option<OnStateChangeHdlrFn>>>,
+    pub(crate) on_state_change_handler: Arc<Mutex<Option<OnICEGathererStateChangeHdlrFn>>>,
 
     // Used for GatheringCompletePromise
     pub(crate) on_gathering_complete_handler: Arc<Mutex<Option<OnGatheringCompleteHdlrFn>>>,
@@ -271,7 +271,7 @@ impl ICEGatherer {
     }
 
     /// on_state_change sets an event handler which fires any time the ICEGatherer changes
-    pub async fn on_state_change(&self, f: OnStateChangeHdlrFn) {
+    pub async fn on_state_change(&self, f: OnICEGathererStateChangeHdlrFn) {
         let mut on_state_change_handler = self.on_state_change_handler.lock().await;
         *on_state_change_handler = Some(f);
     }

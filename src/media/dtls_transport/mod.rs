@@ -30,7 +30,7 @@ use util::Conn;
 use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
 use anyhow::Result;
 
-pub type OnStateChangeHdlrFn = Box<
+pub type OnDTLSTransportStateChangeHdlrFn = Box<
     dyn (FnMut(DTLSTransportState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
@@ -50,7 +50,7 @@ pub struct DTLSTransport {
     pub(crate) remote_certificate: Bytes,
     pub(crate) state: DTLSTransportState,
     pub(crate) srtp_protection_profile: ProtectionProfile,
-    pub(crate) on_state_change_handler: Arc<Mutex<Option<OnStateChangeHdlrFn>>>,
+    pub(crate) on_state_change_handler: Arc<Mutex<Option<OnDTLSTransportStateChangeHdlrFn>>>,
     pub(crate) conn: Option<Arc<DTLSConn>>,
 
     pub(crate) srtp_session: Option<Session>,
@@ -101,7 +101,7 @@ impl DTLSTransport {
 
     /// on_state_change sets a handler that is fired when the DTLS
     /// connection state changes.
-    pub async fn on_state_change(&self, f: OnStateChangeHdlrFn) {
+    pub async fn on_state_change(&self, f: OnDTLSTransportStateChangeHdlrFn) {
         let mut on_state_change_handler = self.on_state_change_handler.lock().await;
         *on_state_change_handler = Some(f);
     }
