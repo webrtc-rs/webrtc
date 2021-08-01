@@ -45,7 +45,7 @@ impl Cipher for CipherAeadAesGcm {
         let encrypted = self.srtp_cipher.encrypt(
             Nonce::from_slice(&nonce),
             Payload {
-                msg: &payload,
+                msg: payload,
                 aad: &writer,
             },
         )?;
@@ -107,7 +107,7 @@ impl Cipher for CipherAeadAesGcm {
         }
 
         let nonce = self.rtcp_initialization_vector(srtcp_index, ssrc);
-        let aad = self.rtcp_additional_authenticated_data(&encrypted, srtcp_index);
+        let aad = self.rtcp_additional_authenticated_data(encrypted, srtcp_index);
 
         let decrypted_data = self.srtcp_cipher.decrypt(
             Nonce::from_slice(&nonce),

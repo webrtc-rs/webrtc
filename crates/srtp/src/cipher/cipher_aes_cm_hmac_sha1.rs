@@ -188,7 +188,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         )?;
         let key = GenericArray::from_slice(&self.srtp_session_key);
         let nonce = GenericArray::from_slice(&counter);
-        let mut stream = Aes128Ctr::new(&key, &nonce);
+        let mut stream = Aes128Ctr::new(key, nonce);
         let payload_offset = header.marshal_size();
         stream.encrypt(&mut writer[payload_offset..]);
 
@@ -237,7 +237,7 @@ impl Cipher for CipherAesCmHmacSha1 {
 
         let key = GenericArray::from_slice(&self.srtp_session_key);
         let nonce = GenericArray::from_slice(&counter);
-        let mut stream = Aes128Ctr::new(&key, &nonce);
+        let mut stream = Aes128Ctr::new(key, nonce);
         let payload_offset = header.marshal_size();
         stream.decrypt(&mut writer[payload_offset..]);
 
@@ -261,7 +261,7 @@ impl Cipher for CipherAesCmHmacSha1 {
 
         let key = GenericArray::from_slice(&self.srtcp_session_key);
         let nonce = GenericArray::from_slice(&counter);
-        let mut stream = Aes128Ctr::new(&key, &nonce);
+        let mut stream = Aes128Ctr::new(key, nonce);
 
         stream.encrypt(&mut writer[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH..]);
 
@@ -317,7 +317,7 @@ impl Cipher for CipherAesCmHmacSha1 {
 
         let key = GenericArray::from_slice(&self.srtcp_session_key);
         let nonce = GenericArray::from_slice(&counter);
-        let mut stream = Aes128Ctr::new(&key, &nonce);
+        let mut stream = Aes128Ctr::new(key, nonce);
 
         stream.decrypt(&mut writer[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH..]);
 

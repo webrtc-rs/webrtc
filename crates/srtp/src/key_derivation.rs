@@ -44,7 +44,7 @@ pub(crate) fn aes_cm_key_derivation(
 
     //The resulting value is then AES encrypted using the master key to get the cipher key.
     let key = GenericArray::from_slice(master_key);
-    let block = Aes128::new(&key);
+    let block = Aes128::new(key);
 
     let mut out = vec![0u8; ((out_len + n_master_key) / n_master_key) * n_master_key];
     for (i, n) in (0..out_len).step_by(n_master_key).enumerate() {
