@@ -82,6 +82,10 @@ impl Conn for MuxErrorConn {
         Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
+    async fn remote_addr(&self) -> Option<SocketAddr> {
+        None
+    }
+
     async fn close(&self) -> Result<()> {
         Ok(())
     }

@@ -61,6 +61,10 @@ impl Conn for Endpoint {
         self.next_conn.local_addr().await
     }
 
+    async fn remote_addr(&self) -> Option<SocketAddr> {
+        self.next_conn.remote_addr().await
+    }
+
     async fn close(&self) -> Result<()> {
         Ok(())
     }
