@@ -36,14 +36,14 @@ pub type OnGatheringCompleteHdlrFn =
 /// candidates, as well as enabling the retrieval of local Interactive
 /// Connectivity Establishment (ICE) parameters which can be
 /// exchanged in signaling.
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub struct ICEGatherer {
     pub(crate) validated_servers: Vec<Url>,
     pub(crate) gather_policy: ICETransportPolicy,
     pub(crate) setting_engine: Arc<SettingEngine>,
 
     pub(crate) state: Arc<AtomicU8>, //ICEGathererState,
-    pub(crate) agent: Option<Arc<ice::agent::Agent>>,
+    pub(crate) agent: Mutex<Option<Arc<ice::agent::Agent>>>,
 
     pub(crate) on_local_candidate_handler: Arc<Mutex<Option<OnLocalCandidateHdlrFn>>>,
     pub(crate) on_state_change_handler: Arc<Mutex<Option<OnStateChangeHdlrFn>>>,
@@ -67,9 +67,12 @@ impl ICEGatherer {
         }
     }
 
-    pub(crate) async fn create_agent(&mut self) -> Result<()> {
-        if self.agent.is_some() || self.state() != ICEGathererState::New {
-            return Ok(());
+    pub(crate) async fn create_agent(&self) -> Result<()> {
+        {
+            let agent = self.agent.lock().await;
+            if agent.is_some() || self.state() != ICEGathererState::New {
+                return Ok(());
+            }
         }
 
         let mut candidate_types = vec![];
@@ -142,18 +145,20 @@ impl ICEGatherer {
 
         config.network_types.extend(requested_network_types);
 
-        let agent = ice::agent::Agent::new(config).await?;
-        self.agent = Some(Arc::new(agent));
+        {
+            let mut agent = self.agent.lock().await;
+            *agent = Some(Arc::new(ice::agent::Agent::new(config).await?))
+        }
 
         Ok(())
     }
 
     /// Gather ICE candidates.
-    pub async fn gather(&mut self) -> Result<()> {
+    pub async fn gather(&self) -> Result<()> {
         self.create_agent().await?;
         self.set_state(ICEGathererState::Gathering).await;
 
-        if let Some(agent) = &self.agent {
+        if let Some(agent) = self.get_agent().await {
             let state = Arc::clone(&self.state);
             let on_local_candidate_handler = Arc::clone(&self.on_local_candidate_handler);
             let on_state_change_handler = Arc::clone(&self.on_state_change_handler);
@@ -218,8 +223,9 @@ impl ICEGatherer {
     }
 
     /// Close prunes all local candidates, and closes the ports.
-    pub async fn close(&mut self) -> Result<()> {
-        if let Some(agent) = self.agent.take() {
+    pub async fn close(&self) -> Result<()> {
+        let mut agent_opt = self.agent.lock().await;
+        if let Some(agent) = agent_opt.take() {
             agent.close().await?;
             self.set_state(ICEGathererState::Closed).await;
         }
@@ -228,10 +234,10 @@ impl ICEGatherer {
     }
 
     /// get_local_parameters returns the ICE parameters of the ICEGatherer.
-    pub async fn get_local_parameters(&mut self) -> Result<ICEParameters> {
+    pub async fn get_local_parameters(&self) -> Result<ICEParameters> {
         self.create_agent().await?;
 
-        let (frag, pwd) = if let Some(agent) = &self.agent {
+        let (frag, pwd) = if let Some(agent) = self.get_agent().await {
             agent.get_local_user_credentials().await
         } else {
             return Err(Error::ErrICEAgentNotExist.into());
@@ -245,10 +251,10 @@ impl ICEGatherer {
     }
 
     /// get_local_candidates returns the sequence of valid local candidates associated with the ICEGatherer.
-    pub async fn get_local_candidates(&mut self) -> Result<Vec<ICECandidate>> {
+    pub async fn get_local_candidates(&self) -> Result<Vec<ICECandidate>> {
         self.create_agent().await?;
 
-        let ice_candidates = if let Some(agent) = &self.agent {
+        let ice_candidates = if let Some(agent) = self.get_agent().await {
             agent.get_local_candidates().await?
         } else {
             return Err(Error::ErrICEAgentNotExist.into());
@@ -290,8 +296,9 @@ impl ICEGatherer {
         }
     }
 
-    pub(crate) fn get_agent(&self) -> Option<Arc<Agent>> {
-        self.agent.clone()
+    pub(crate) async fn get_agent(&self) -> Option<Arc<Agent>> {
+        let agent = self.agent.lock().await;
+        agent.clone()
     }
 
     /*TODO:
@@ -430,7 +437,7 @@ mod test {
             ..Default::default()
         };
 
-        let mut gatherer = APIBuilder::new().build().new_ice_gatherer(opts)?;
+        let gatherer = APIBuilder::new().build().new_ice_gatherer(opts)?;
 
         assert_eq!(
             gatherer.state(),
@@ -477,7 +484,7 @@ mod test {
         let mut s = SettingEngine::default();
         s.set_ice_multicast_dns_mode(ice::mdns::MulticastDnsMode::QueryAndGather);
 
-        let mut gatherer = APIBuilder::new()
+        let gatherer = APIBuilder::new()
             .with_setting_engine(s)
             .build()
             .new_ice_gatherer(ICEGatherOptions::default())?;

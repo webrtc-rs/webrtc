@@ -46,7 +46,7 @@ impl RTPTransceiver {
     pub async fn set_sender(
         &mut self,
         sender: Option<RTPSender>,
-        track: Option<Arc<dyn TrackLocal>>,
+        track: Option<Arc<dyn TrackLocal + Send + Sync>>,
     ) -> Result<()> {
         self.sender = sender;
         self.set_sending_track(track).await
@@ -98,7 +98,7 @@ impl RTPTransceiver {
 
     pub(crate) async fn set_sending_track(
         &mut self,
-        track: Option<Arc<dyn TrackLocal>>,
+        track: Option<Arc<dyn TrackLocal + Send + Sync>>,
     ) -> Result<()> {
         let track_is_none = track.is_none();
         if let Some(sender) = &mut self.sender {

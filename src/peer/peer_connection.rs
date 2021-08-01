@@ -1,22 +1,45 @@
-use crate::media::rtp::rtp_transceiver::RTPTransceiver;
-use crate::peer::configuration::Configuration;
-use crate::peer::ice::ice_connection_state::ICEConnectionState;
-use crate::peer::peer_connection_state::{NegotiationNeededState, PeerConnectionState};
-use crate::peer::sdp::session_description::SessionDescription;
-use crate::peer::signaling_state::SignalingState;
-
 use crate::api::media_engine::MediaEngine;
 use crate::api::setting_engine::SettingEngine;
 use crate::api::API;
+use crate::data::data_channel::DataChannel;
+use crate::data::sctp_transport::SCTPTransport;
+use crate::media::dtls_transport::dtls_transport_state::DTLSTransportState;
+use crate::media::dtls_transport::DTLSTransport;
+use crate::media::ice_transport::ice_transport_state::ICETransportState;
+use crate::media::ice_transport::ICETransport;
 use crate::media::interceptor::Interceptor;
+use crate::media::rtp::rtp_transceiver::RTPTransceiver;
+use crate::peer::configuration::Configuration;
+use crate::peer::ice::ice_connection_state::ICEConnectionState;
+use crate::peer::ice::ice_gather::ice_gatherer::ICEGatherer;
+use crate::peer::ice::ice_gather::ICEGatherOptions;
+use crate::peer::peer_connection_state::{NegotiationNeededState, PeerConnectionState};
 use crate::peer::policy::bundle_policy::BundlePolicy;
 use crate::peer::policy::ice_transport_policy::ICETransportPolicy;
 use crate::peer::policy::rtcp_mux_policy::RTCPMuxPolicy;
 use crate::peer::policy::sdp_semantics::SDPSemantics;
+use crate::peer::sdp::session_description::SessionDescription;
+use crate::peer::signaling_state::SignalingState;
+
 use anyhow::Result;
-use std::sync::atomic::AtomicBool;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::sync::Mutex;
+
+pub type OnICEConnectionStateChangeHdlrFn = Box<
+    dyn (FnMut(ICEConnectionState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+        + Send
+        + Sync,
+>;
+
+pub type OnDataChannelHdlrFn = Box<
+    dyn (FnMut(Arc<DataChannel>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+        + Send
+        + Sync,
+>;
 
 /// PeerConnection represents a WebRTC connection that establishes a
 /// peer-to-peer communications with another PeerConnection instance in a
@@ -38,8 +61,8 @@ pub struct PeerConnection {
     current_remote_description: SessionDescription,
     pending_remote_description: SessionDescription,
     signaling_state: SignalingState,
-    ice_connection_state: ICEConnectionState,
-    connection_state: PeerConnectionState,
+    ice_connection_state: AtomicU8, //ICEConnectionState,
+    connection_state: AtomicU8,     //PeerConnectionState,
 
     idp_login_url: Option<String>,
 
@@ -57,25 +80,26 @@ pub struct PeerConnection {
     greater_mid: isize,
 
     rtp_transceivers: Vec<RTPTransceiver>,
+
+    //onSignalingStateChangeHandler     func(SignalingState)
+    on_ice_connection_state_change_handler: Arc<Mutex<Option<OnICEConnectionStateChangeHdlrFn>>>,
+    on_data_channel_handler: Arc<Mutex<Option<OnDataChannelHdlrFn>>>,
+
     /*TODO:
-    onSignalingStateChangeHandler     func(SignalingState)
-    onICEConnectionStateChangeHandler func(ICEConnectionState)
     onConnectionStateChangeHandler    func(PeerConnectionState)
     onTrackHandler                    func(*TrackRemote, *RTPReceiver)
-    onDataChannelHandler              func(*DataChannel)
     onNegotiationNeededHandler        atomic.Value // func()
-
-    iceGatherer   *ICEGatherer
-    iceTransport  *ICETransport
-    dtlsTransport *DTLSTransport
-    sctpTransport *SCTPTransport
-
     interceptorRTCPWriter interceptor.RTCPWriter
      */
+    ice_gatherer: Arc<ICEGatherer>,
+    ice_transport: Arc<ICETransport>,
+    dtls_transport: Arc<DTLSTransport>,
+    sctp_transport: Arc<SCTPTransport>,
+
     // A reference to the associated API state used by this connection
     setting_engine: Arc<SettingEngine>,
     media_engine: Arc<MediaEngine>,
-    interceptor: Option<Arc<dyn Interceptor>>,
+    interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
 }
 
 impl PeerConnection {
@@ -85,7 +109,7 @@ impl PeerConnection {
     /// If you wish to customize the set of available codecs or the set of
     /// active interceptors, create a MediaEngine and call api.new_peer_connection
     /// instead of this function.
-    pub(crate) fn new(api: &API, configuration: Configuration) -> Result<Self> {
+    pub(crate) async fn new(api: &API, configuration: Configuration) -> Result<Arc<Self>> {
         // https://w3c.github.io/webrtc-pc/#constructor (Step #2)
         // Some variables defined explicitly despite their implicit zero values to
         // allow better readability to understand what is happening.
@@ -112,8 +136,8 @@ impl PeerConnection {
             last_answer: "".to_owned(),
             greater_mid: -1,
             signaling_state: SignalingState::Stable,
-            ice_connection_state: ICEConnectionState::New,
-            connection_state: PeerConnectionState::New,
+            ice_connection_state: AtomicU8::new(ICEConnectionState::New as u8),
+            connection_state: AtomicU8::new(PeerConnectionState::New as u8),
 
             setting_engine: Arc::clone(&api.setting_engine),
             media_engine: if !api.setting_engine.disable_media_engine_copy {
@@ -128,40 +152,67 @@ impl PeerConnection {
 
         pc.init_configuration(configuration)?;
 
-        /*
-        pc.iceGatherer, err = pc.createICEGatherer()
-        if err != nil {
-            return nil, err
-        }
+        // Create the ice gatherer
+        pc.ice_gatherer = Arc::new(api.new_ice_gatherer(ICEGatherOptions {
+            ice_servers: pc.configuration.get_ice_servers(),
+            ice_gather_policy: pc.configuration.ice_transport_policy,
+        })?);
 
         // Create the ice transport
-        iceTransport := pc.createICETransport()
-        pc.iceTransport = iceTransport
+        pc.ice_transport = Arc::new(api.new_ice_transport(Arc::clone(&pc.ice_gatherer)));
 
         // Create the DTLS transport
-        dtlsTransport, err := pc.api.NewDTLSTransport(pc.iceTransport, pc.configuration.Certificates)
-        if err != nil {
-            return nil, err
-        }
-        pc.dtlsTransport = dtlsTransport
+        pc.dtls_transport = Arc::new(api.new_dtls_transport(
+            Arc::clone(&pc.ice_transport),
+            pc.configuration.certificates.clone(),
+        )?);
 
         // Create the SCTP transport
-        pc.sctpTransport = pc.api.NewSCTPTransport(pc.dtlsTransport)
+        pc.sctp_transport = Arc::new(api.new_sctp_transport(Arc::clone(&pc.dtls_transport))?);
+
+        //TODO: pc.interceptorRTCPWriter = api.interceptor.bind_rtcpwriter(interceptor.RTCPWriterFunc(pc.writeRTCP))
+
+        let pc = Arc::new(pc);
+
+        let pc1 = Arc::clone(&pc);
+        pc.ice_transport
+            .on_connection_state_change(Box::new(move |state: ICETransportState| {
+                let cs = match state {
+                    ICETransportState::New => ICEConnectionState::New,
+                    ICETransportState::Checking => ICEConnectionState::Checking,
+                    ICETransportState::Connected => ICEConnectionState::Connected,
+                    ICETransportState::Completed => ICEConnectionState::Completed,
+                    ICETransportState::Failed => ICEConnectionState::Failed,
+                    ICETransportState::Disconnected => ICEConnectionState::Disconnected,
+                    ICETransportState::Closed => ICEConnectionState::Closed,
+                    _ => {
+                        log::warn!("OnConnectionStateChange: unhandled ICE state: {}", state);
+                        return Box::pin(async {});
+                    }
+                };
+                let pc2 = Arc::clone(&pc1);
+                Box::pin(async move {
+                    pc2.do_ice_connection_state_change(cs).await;
+                    pc2.update_connection_state(cs, pc2.dtls_transport.state())
+                        .await;
+                })
+            }))
+            .await;
 
         // Wire up the on datachannel handler
-        pc.sctpTransport.OnDataChannel(func(d *DataChannel) {
-            pc.mu.RLock()
-            handler := pc.onDataChannelHandler
-            pc.mu.RUnlock()
-            if handler != nil {
-                handler(d)
-            }
-        })
+        let pc1 = Arc::clone(&pc);
+        pc.sctp_transport
+            .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
+                let pc2 = Arc::clone(&pc1);
+                Box::pin(async move {
+                    let mut handler = pc2.on_data_channel_handler.lock().await;
+                    if let Some(f) = &mut *handler {
+                        f(d).await;
+                    }
+                })
+            }))
+            .await;
 
-        pc.interceptorRTCPWriter = api.interceptor.bind_rtcpwriter(interceptor.RTCPWriterFunc(pc.writeRTCP))
-
-        return pc, nil
-         */
         Ok(pc)
     }
 
@@ -435,28 +486,26 @@ impl PeerConnection {
                 pc.log.Warnf("OnTrack unset, unable to handle incoming media streams")
             }
         }
+    }*/
+
+    /// on_ice_connection_state_change sets an event handler which is called
+    /// when an ICE connection state is changed.
+    pub async fn on_ice_connection_state_change(&self, f: OnICEConnectionStateChangeHdlrFn) {
+        let mut on_ice_connection_state_change_handler =
+            self.on_ice_connection_state_change_handler.lock().await;
+        *on_ice_connection_state_change_handler = Some(f);
     }
 
-    // OnICEConnectionStateChange sets an event handler which is called
-    // when an ICE connection state is changed.
-    func (pc *PeerConnection) OnICEConnectionStateChange(f func(ICEConnectionState)) {
-        pc.mu.Lock()
-        defer pc.mu.Unlock()
-        pc.onICEConnectionStateChangeHandler = f
-    }
+    async fn do_ice_connection_state_change(&self, cs: ICEConnectionState) {
+        self.ice_connection_state.store(cs as u8, Ordering::SeqCst);
+        log::info!("ICE connection state changed: {}", cs);
 
-    func (pc *PeerConnection) onICEConnectionStateChange(cs ICEConnectionState) {
-        pc.mu.Lock()
-        pc.ice_connection_state = cs
-        handler := pc.onICEConnectionStateChangeHandler
-        pc.mu.Unlock()
-
-        pc.log.Infof("ICE connection state changed: %s", cs)
-        if handler != nil {
-            go handler(cs)
+        let mut handler = self.on_ice_connection_state_change_handler.lock().await;
+        if let Some(f) = &mut *handler {
+            f(cs).await;
         }
     }
-
+    /*
     // OnConnectionStateChange sets an event handler which is called
     // when the PeerConnectionState has changed
     func (pc *PeerConnection) OnConnectionStateChange(f func(PeerConnectionState)) {
@@ -680,93 +729,53 @@ impl PeerConnection {
         pc.last_offer = offer.SDP
         return offer, nil
     }
+    */
 
-    func (pc *PeerConnection) createICEGatherer() (*ICEGatherer, error) {
-        g, err := pc.api.NewICEGatherer(ICEGatherOptions{
-            ICEServers:      pc.configuration.getICEServers(),
-            ICEGatherPolicy: pc.configuration.ICETransportPolicy,
-        })
-        if err != nil {
-            return nil, err
-        }
-
-        return g, nil
-    }
-
-    // Update the PeerConnectionState given the state of relevant transports
-    // https://www.w3.org/TR/webrtc/#rtcpeerconnectionstate-enum
-    func (pc *PeerConnection) updateConnectionState(ice_connection_state ICEConnectionState, dtlsTransportState DTLSTransportState) {
-        pc.mu.Lock()
-        defer pc.mu.Unlock()
-
-        connection_state := PeerConnectionStateNew
-        switch {
+    /// Update the PeerConnectionState given the state of relevant transports
+    /// https://www.w3.org/TR/webrtc/#rtcpeerconnectionstate-enum
+    async fn update_connection_state(
+        &self,
+        ice_connection_state: ICEConnectionState,
+        dtls_transport_state: DTLSTransportState,
+    ) {
+        let  connection_state =
         // The RTCPeerConnection object's [[IsClosed]] slot is true.
-        case pc.is_closed.get():
-            connection_state = PeerConnectionStateClosed
-
-        // Any of the RTCIceTransports or RTCDtlsTransports are in a "failed" state.
-        case ice_connection_state == ICEConnectionStateFailed || dtlsTransportState == DTLSTransportStateFailed:
-            connection_state = PeerConnectionStateFailed
-
-        // Any of the RTCIceTransports or RTCDtlsTransports are in the "disconnected"
-        // state and none of them are in the "failed" or "connecting" or "checking" state.
-        case ice_connection_state == ICEConnectionStateDisconnected:
-            connection_state = PeerConnectionStateDisconnected
-
-        // All RTCIceTransports and RTCDtlsTransports are in the "connected", "completed" or "closed"
-        // state and at least one of them is in the "connected" or "completed" state.
-        case ice_connection_state == ICEConnectionStateConnected && dtlsTransportState == DTLSTransportStateConnected:
-            connection_state = PeerConnectionStateConnected
-
+        if self.is_closed.load(Ordering::SeqCst) {
+             PeerConnectionState::Closed
+        }else if ice_connection_state == ICEConnectionState::Failed || dtls_transport_state == DTLSTransportState::Failed {
+            // Any of the RTCIceTransports or RTCDtlsTransports are in a "failed" state.
+             PeerConnectionState::Failed
+        }else if ice_connection_state == ICEConnectionState::Disconnected {
+            // Any of the RTCIceTransports or RTCDtlsTransports are in the "disconnected"
+            // state and none of them are in the "failed" or "connecting" or "checking" state.
+            PeerConnectionState::Disconnected
+        }else if ice_connection_state == ICEConnectionState::Connected && dtls_transport_state == DTLSTransportState::Connected {
+            // All RTCIceTransports and RTCDtlsTransports are in the "connected", "completed" or "closed"
+            // state and at least one of them is in the "connected" or "completed" state.
+            PeerConnectionState::Connected
+        }else if ice_connection_state == ICEConnectionState::Checking && dtls_transport_state == DTLSTransportState::Connecting{
         //  Any of the RTCIceTransports or RTCDtlsTransports are in the "connecting" or
         // "checking" state and none of them is in the "failed" state.
-        case ice_connection_state == ICEConnectionStateChecking && dtlsTransportState == DTLSTransportStateConnecting:
-            connection_state = PeerConnectionStateConnecting
+             PeerConnectionState::Connecting
+        }else{
+            PeerConnectionState::New
+        };
+
+        if self.connection_state.load(Ordering::SeqCst) == connection_state as u8 {
+            return;
         }
 
-        if pc.connection_state == connection_state {
-            return
-        }
+        log::info!("peer connection state changed: {}", connection_state);
+        self.connection_state
+            .store(connection_state as u8, Ordering::SeqCst);
 
-        pc.log.Infof("peer connection state changed: %s", connection_state)
-        pc.connection_state = connection_state
-        handler := pc.onConnectionStateChangeHandler
+        /*handler := pc.onConnectionStateChangeHandler
         if handler != nil {
             go handler(connection_state)
-        }
+        }*/
     }
 
-    func (pc *PeerConnection) createICETransport() *ICETransport {
-        t := pc.api.NewICETransport(pc.iceGatherer)
-        t.OnConnectionStateChange(func(state ICETransportState) {
-            var cs ICEConnectionState
-            switch state {
-            case ICETransportStateNew:
-                cs = ICEConnectionStateNew
-            case ICETransportStateChecking:
-                cs = ICEConnectionStateChecking
-            case ICETransportStateConnected:
-                cs = ICEConnectionStateConnected
-            case ICETransportStateCompleted:
-                cs = ICEConnectionStateCompleted
-            case ICETransportStateFailed:
-                cs = ICEConnectionStateFailed
-            case ICETransportStateDisconnected:
-                cs = ICEConnectionStateDisconnected
-            case ICETransportStateClosed:
-                cs = ICEConnectionStateClosed
-            default:
-                pc.log.Warnf("OnConnectionStateChange: unhandled ICE state: %s", state)
-                return
-            }
-            pc.onICEConnectionStateChange(cs)
-            pc.updateConnectionState(cs, pc.dtlsTransport.State())
-        })
-
-        return t
-    }
-
+    /*
     // CreateAnswer starts the PeerConnection and generates the localDescription
     func (pc *PeerConnection) CreateAnswer(options *AnswerOptions) (SessionDescription, error) {
         useIdentity := pc.idp_login_url != nil
@@ -1853,7 +1862,7 @@ impl PeerConnection {
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #11)
-        pc.updateConnectionState(pc.ICEConnectionState(), pc.dtlsTransport.State())
+        pc.update_connection_state(pc.ICEConnectionState(), pc.dtlsTransport.State())
 
         return util.FlattenErrs(closeErrs)
     }
@@ -2030,7 +2039,7 @@ impl PeerConnection {
             Role:         dtlsRole,
             Fingerprints: []DTLSFingerprint{{Algorithm: fingerprintHash, Value: fingerprint}},
         })
-        pc.updateConnectionState(pc.ICEConnectionState(), pc.dtlsTransport.State())
+        pc.update_connection_state(pc.ICEConnectionState(), pc.dtlsTransport.State())
         if err != nil {
             pc.log.Warnf("Failed to start manager: %s", err)
             return

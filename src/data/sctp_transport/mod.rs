@@ -49,6 +49,7 @@ struct AcceptDataChannelParams {
 }
 
 /// SCTPTransport provides details about the SCTP transport.
+#[derive(Default)]
 pub struct SCTPTransport {
     pub(crate) dtls_transport: Arc<DTLSTransport>,
 

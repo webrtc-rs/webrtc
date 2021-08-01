@@ -14,11 +14,17 @@ use std::collections::HashMap;
 pub trait Interceptor {
     /// bind_rtcp_reader lets you modify any incoming RTCP packets. It is called once per sender/receiver, however this might
     /// change in the future. The returned method will be called once per packet batch.
-    async fn bind_rtcp_reader(&self, reader: Box<dyn RTCPReader>) -> Box<dyn RTCPReader>;
+    async fn bind_rtcp_reader(
+        &self,
+        reader: Box<dyn RTCPReader + Send + Sync>,
+    ) -> Box<dyn RTCPReader + Send + Sync>;
 
     /// bind_rtcp_writer lets you modify any outgoing RTCP packets. It is called once per PeerConnection. The returned method
     /// will be called once per packet batch.
-    async fn bind_rtcp_writer(&self, writer: Box<dyn RTCPWriter>) -> Box<dyn RTCPWriter>;
+    async fn bind_rtcp_writer(
+        &self,
+        writer: Box<dyn RTCPWriter + Send + Sync>,
+    ) -> Box<dyn RTCPWriter + Send + Sync>;
 
     /// bind_local_stream lets you modify any outgoing RTP packets. It is called once for per LocalStream. The returned method
     /// will be called once per rtp packet.

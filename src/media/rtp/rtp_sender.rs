@@ -18,10 +18,10 @@ use tokio::sync::mpsc;
 
 /// RTPSender allows an application to control how a given Track is encoded and transmitted to a remote peer
 pub struct RTPSender {
-    pub(crate) track: Option<Arc<dyn TrackLocal>>,
+    pub(crate) track: Option<Arc<dyn TrackLocal + Send + Sync>>,
 
     pub(crate) srtp_stream: SrtpWriterFuture,
-    pub(crate) rtcp_interceptor: Option<Box<dyn RTCPReader>>,
+    pub(crate) rtcp_interceptor: Option<Box<dyn RTCPReader + Send + Sync>>,
     pub(crate) stream_info: StreamInfo,
 
     pub(crate) context: TrackLocalContext,
@@ -36,7 +36,7 @@ pub struct RTPSender {
     pub(crate) negotiated: bool,
 
     pub(crate) media_engine: Arc<MediaEngine>,
-    pub(crate) interceptor: Option<Arc<dyn Interceptor>>,
+    pub(crate) interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
 
     pub(crate) id: String,
 
@@ -82,14 +82,17 @@ impl RTPSender {
     }
 
     /// track returns the RTCRtpTransceiver track, or nil
-    pub fn track(&self) -> Option<Arc<dyn TrackLocal>> {
+    pub fn track(&self) -> Option<Arc<dyn TrackLocal + Send + Sync>> {
         self.track.clone()
     }
 
     /// replace_track replaces the track currently being used as the sender's source with a new TrackLocal.
     /// The new track must be of the same media kind (audio, video, etc) and switching the track should not
     /// require negotiation.
-    pub async fn replace_track(&mut self, track: Option<Arc<dyn TrackLocal>>) -> Result<()> {
+    pub async fn replace_track(
+        &mut self,
+        track: Option<Arc<dyn TrackLocal + Send + Sync>>,
+    ) -> Result<()> {
         if self.has_sent() {
             if let Some(track) = &self.track {
                 track.unbind(&self.context).await?;

@@ -27,7 +27,7 @@ pub struct RTPReceiver {
     pub(crate) received_rx: mpsc::Receiver<()>,
 
     pub(crate) media_engine: Arc<MediaEngine>,
-    pub(crate) interceptor: Option<Arc<dyn Interceptor>>,
+    pub(crate) interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
 }
 
 impl RTPReceiver {
@@ -279,9 +279,9 @@ impl RTPReceiver {
         _stream_info: &StreamInfo,
     ) -> Result<(
         Option<Arc<srtp::stream::Stream>>,
-        Option<Box<dyn RTPReader>>,
+        Option<Box<dyn RTPReader + Send + Sync>>,
         Option<Arc<srtp::stream::Stream>>,
-        Option<Box<dyn RTCPReader>>,
+        Option<Box<dyn RTCPReader + Send + Sync>>,
     )> {
         let srtp_session = self
             .transport

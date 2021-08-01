@@ -151,7 +151,9 @@ impl DataChannel {
             if self.id.load(Ordering::SeqCst) == 0 {
                 self.id.store(
                     sctp_transport
-                        .generate_and_set_data_channel_id(sctp_transport.dtls_transport.role())
+                        .generate_and_set_data_channel_id(
+                            sctp_transport.dtls_transport.role().await,
+                        )
                         .await?,
                     Ordering::SeqCst,
                 );

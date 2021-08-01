@@ -15,7 +15,7 @@ pub(crate) struct TrackStreams {
     pub(crate) stream_info: StreamInfo,
 
     pub(crate) rtp_read_stream: Option<Arc<srtp::stream::Stream>>, //ReadStreamSRTP
-    pub(crate) rtp_interceptor: Option<Box<dyn RTPReader>>,
+    pub(crate) rtp_interceptor: Option<Box<dyn RTPReader + Send + Sync>>,
     pub(crate) rtcp_read_stream: Option<Arc<srtp::stream::Stream>>, //ReadStreamSRTCP
-    pub(crate) rtcp_interceptor: Option<Box<dyn RTCPReader>>,
+    pub(crate) rtcp_interceptor: Option<Box<dyn RTCPReader + Send + Sync>>,
 }

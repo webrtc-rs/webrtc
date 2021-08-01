@@ -39,24 +39,29 @@ pub type OnSelectedCandidatePairChangeHdlrFn = Box<
         + Sync,
 >;
 
-/// ICETransport allows an application access to information about the ICE
-/// transport over which packets are sent and received.
-#[derive(Default, Clone)]
-pub struct ICETransport {
-    gatherer: ICEGatherer,
+#[derive(Default)]
+pub struct ICETransportInternal {
     role: ICERole,
-    on_connection_state_change_handler: Arc<Mutex<Option<OnConnectionStateChangeHdlrFn>>>,
-    on_selected_candidate_pair_change_handler:
-        Arc<Mutex<Option<OnSelectedCandidatePairChangeHdlrFn>>>,
-    state: Arc<AtomicU8>,                      // ICETransportState
     conn: Option<Arc<dyn Conn + Send + Sync>>, //AgentConn
     mux: Option<Mux>,
     cancel_tx: Option<mpsc::Sender<()>>,
 }
 
+/// ICETransport allows an application access to information about the ICE
+/// transport over which packets are sent and received.
+#[derive(Default)]
+pub struct ICETransport {
+    gatherer: Arc<ICEGatherer>,
+    on_connection_state_change_handler: Arc<Mutex<Option<OnConnectionStateChangeHdlrFn>>>,
+    on_selected_candidate_pair_change_handler:
+        Arc<Mutex<Option<OnSelectedCandidatePairChangeHdlrFn>>>,
+    state: Arc<AtomicU8>, // ICETransportState
+    internal: Mutex<ICETransportInternal>,
+}
+
 impl ICETransport {
     /// creates a new new_icetransport.
-    pub(crate) fn new(gatherer: ICEGatherer) -> Self {
+    pub(crate) fn new(gatherer: Arc<ICEGatherer>) -> Self {
         ICETransport {
             state: Arc::new(AtomicU8::new(ICETransportState::New as u8)),
             gatherer,
@@ -67,7 +72,7 @@ impl ICETransport {
     /// get_selected_candidate_pair returns the selected candidate pair on which packets are sent
     /// if there is no selected pair nil is returned
     pub async fn get_selected_candidate_pair(&self) -> Option<ICECandidatePair> {
-        if let Some(agent) = self.gatherer.get_agent() {
+        if let Some(agent) = self.gatherer.get_agent().await {
             if let Some(ice_pair) = agent.get_selected_candidate_pair().await {
                 let local = ICECandidate::from(&ice_pair.local);
                 let remote = ICECandidate::from(&ice_pair.remote);
@@ -79,7 +84,7 @@ impl ICETransport {
 
     /// Start incoming connectivity checks based on its configured role.
     pub async fn start(
-        &mut self,
+        &self,
         //gatherer: Option<ICEGatherer>,
         params: ICEParameters,
         role: Option<ICERole>,
@@ -90,7 +95,7 @@ impl ICETransport {
 
         self.ensure_gatherer().await?;
 
-        if let Some(agent) = self.gatherer.get_agent() {
+        if let Some(agent) = self.gatherer.get_agent().await {
             let state = Arc::clone(&self.state);
 
             let on_connection_state_change_handler =
@@ -104,7 +109,7 @@ impl ICETransport {
                     Box::pin(async move {
                         let mut handler = on_connection_state_change_handler_clone.lock().await;
                         if let Some(f) = &mut *handler {
-                            f(s);
+                            f(s).await;
                         }
                     })
                 }))
@@ -124,14 +129,14 @@ impl ICETransport {
                             let mut handler =
                                 on_selected_candidate_pair_change_handler_clone.lock().await;
                             if let Some(f) = &mut *handler {
-                                f(ICECandidatePair::new(local, remote));
+                                f(ICECandidatePair::new(local, remote)).await;
                             }
                         })
                     },
                 ))
                 .await;
 
-            self.role = if let Some(role) = role {
+            let role = if let Some(role) = role {
                 role
             } else {
                 ICERole::Controlled
@@ -139,7 +144,7 @@ impl ICETransport {
 
             let (cancel_tx, cancel_rx) = mpsc::channel(1);
 
-            let conn: Arc<dyn Conn + Send + Sync> = match self.role {
+            let conn: Arc<dyn Conn + Send + Sync> = match role {
                 ICERole::Controlling => {
                     agent
                         .dial(
@@ -163,14 +168,18 @@ impl ICETransport {
                 _ => return Err(Error::ErrICERoleUnknown.into()),
             };
 
-            self.cancel_tx = Some(cancel_tx);
-            self.conn = Some(Arc::clone(&conn));
-
             let config = Config {
-                conn,
+                conn: Arc::clone(&conn),
                 buffer_size: RECEIVE_MTU,
             };
-            self.mux = Some(Mux::new(config));
+
+            {
+                let mut internal = self.internal.lock().await;
+                internal.role = role;
+                internal.cancel_tx = Some(cancel_tx);
+                internal.conn = Some(conn);
+                internal.mux = Some(Mux::new(config));
+            }
 
             Ok(())
         } else {
@@ -181,7 +190,7 @@ impl ICETransport {
     /// restart is not exposed currently because ORTC has users create a whole new ICETransport
     /// so for now lets keep it private so we don't cause ORTC users to depend on non-standard APIs
     pub(crate) async fn restart(&mut self) -> Result<()> {
-        if let Some(agent) = self.gatherer.get_agent() {
+        if let Some(agent) = self.gatherer.get_agent().await {
             agent
                 .restart(
                     self.gatherer
@@ -199,13 +208,15 @@ impl ICETransport {
     }
 
     /// Stop irreversibly stops the ICETransport.
-    pub async fn stop(&mut self) -> Result<()> {
+    pub async fn stop(&self) -> Result<()> {
         self.set_state(ICETransportState::Closed);
 
-        self.cancel_tx.take();
-
-        if let Some(mut mux) = self.mux.take() {
-            mux.close().await;
+        {
+            let mut internal = self.internal.lock().await;
+            internal.cancel_tx.take();
+            if let Some(mut mux) = internal.mux.take() {
+                mux.close().await;
+            }
         }
 
         self.gatherer.close().await?;
@@ -230,8 +241,9 @@ impl ICETransport {
     }
 
     /// Role indicates the current role of the ICE transport.
-    pub fn role(&self) -> ICERole {
-        self.role
+    pub async fn role(&self) -> ICERole {
+        let internal = self.internal.lock().await;
+        internal.role
     }
 
     /// set_remote_candidates sets the sequence of candidates associated with the remote ICETransport.
@@ -241,7 +253,7 @@ impl ICETransport {
     ) -> Result<()> {
         self.ensure_gatherer().await?;
 
-        if let Some(agent) = self.gatherer.get_agent() {
+        if let Some(agent) = self.gatherer.get_agent().await {
             for rc in remote_candidates {
                 let c: Arc<dyn Candidate + Send + Sync> = Arc::new(rc.to_ice().await?);
                 agent.add_remote_candidate(&c).await?;
@@ -259,7 +271,7 @@ impl ICETransport {
     ) -> Result<()> {
         self.ensure_gatherer().await?;
 
-        if let Some(agent) = self.gatherer.get_agent() {
+        if let Some(agent) = self.gatherer.get_agent().await {
             if let Some(r) = remote_candidate {
                 let c: Arc<dyn Candidate + Send + Sync> = Arc::new(r.to_ice().await?);
                 agent.add_remote_candidate(&c).await?;
@@ -276,20 +288,21 @@ impl ICETransport {
         ICETransportState::from(self.state.load(Ordering::SeqCst))
     }
 
-    pub(crate) fn set_state(&mut self, s: ICETransportState) {
+    pub(crate) fn set_state(&self, s: ICETransportState) {
         self.state.store(s as u8, Ordering::SeqCst)
     }
 
     pub(crate) async fn new_endpoint(&self, f: MatchFunc) -> Option<Arc<Endpoint>> {
-        if let Some(mux) = &self.mux {
+        let internal = self.internal.lock().await;
+        if let Some(mux) = &internal.mux {
             Some(mux.new_endpoint(f).await)
         } else {
             None
         }
     }
 
-    pub(crate) async fn ensure_gatherer(&mut self) -> Result<()> {
-        if self.gatherer.get_agent().is_none() {
+    pub(crate) async fn ensure_gatherer(&self) -> Result<()> {
+        if self.gatherer.get_agent().await.is_none() {
             self.gatherer.create_agent().await
         } else {
             Ok(())
@@ -324,7 +337,7 @@ impl ICETransport {
         new_ufrag: String,
         new_pwd: String,
     ) -> bool {
-        if let Some(agent) = self.gatherer.get_agent() {
+        if let Some(agent) = self.gatherer.get_agent().await {
             let (ufrag, upwd) = agent.get_remote_user_credentials().await;
             ufrag != new_ufrag || upwd != new_pwd
         } else {
@@ -337,7 +350,7 @@ impl ICETransport {
         new_ufrag: String,
         new_pwd: String,
     ) -> Result<()> {
-        if let Some(agent) = self.gatherer.get_agent() {
+        if let Some(agent) = self.gatherer.get_agent().await {
             Ok(agent.set_remote_credentials(new_ufrag, new_pwd).await?)
         } else {
             Err(Error::ErrICEAgentNotExist.into())

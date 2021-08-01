@@ -42,7 +42,7 @@ pub type OnStateChangeHdlrFn = Box<
 /// and received by data channels.
 #[derive(Default)]
 pub struct DTLSTransport {
-    pub(crate) ice_transport: ICETransport,
+    pub(crate) ice_transport: Arc<ICETransport>,
     pub(crate) certificates: Vec<Certificate>,
     pub(crate) setting_engine: Arc<SettingEngine>,
 
@@ -67,7 +67,7 @@ pub struct DTLSTransport {
 
 impl DTLSTransport {
     pub(crate) fn new(
-        ice_transport: ICETransport,
+        ice_transport: Arc<ICETransport>,
         certificates: Vec<Certificate>,
         setting_engine: Arc<SettingEngine>,
     ) -> Self {
@@ -171,7 +171,7 @@ impl DTLSTransport {
         if let Some(conn) = &self.conn {
             let conn_state = conn.connection_state().await;
             srtp_config
-                .extract_session_keys_from_dtls(conn_state, self.role() == DTLSRole::Client)
+                .extract_session_keys_from_dtls(conn_state, self.role().await == DTLSRole::Client)
                 .await?;
         } else {
             return Err(Error::ErrDtlsTransportNotStarted.into());
@@ -216,7 +216,7 @@ impl DTLSTransport {
         self.srtcp_session.as_ref()
     }
 
-    pub(crate) fn role(&self) -> DTLSRole {
+    pub(crate) async fn role(&self) -> DTLSRole {
         // If remote has an explicit role use the inverse
         match self.remote_parameters.role {
             DTLSRole::Client => return DTLSRole::Server,
@@ -232,7 +232,7 @@ impl DTLSTransport {
         };
 
         // Remote was auto and no explicit role was configured via SettingEngine
-        if self.ice_transport.role() == ICERole::Controlling {
+        if self.ice_transport.role().await == ICERole::Controlling {
             return DTLSRole::Server;
         }
 
@@ -257,7 +257,7 @@ impl DTLSTransport {
         self.state_change(DTLSTransportState::Connecting).await;
 
         Ok((
-            self.role(),
+            self.role().await,
             dtls::config::Config {
                 certificates: vec![cert],
                 srtp_protection_profiles: if !self

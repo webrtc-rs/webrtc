@@ -18,7 +18,7 @@ pub struct TrackRemote {
     params: RTPParameters,
     rid: String,
 
-    interceptor: Option<Arc<dyn Interceptor>>,
+    interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
 
     peeked: Bytes,
     peeked_attributes: Attributes,
@@ -29,7 +29,7 @@ impl TrackRemote {
         kind: RTPCodecType,
         ssrc: SSRC,
         rid: String,
-        interceptor: Option<Arc<dyn Interceptor>>,
+        interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
     ) -> Self {
         TrackRemote {
             kind,

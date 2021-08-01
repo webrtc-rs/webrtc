@@ -36,13 +36,16 @@ use tokio::sync::mpsc;
 pub struct API {
     pub(crate) setting_engine: Arc<SettingEngine>,
     pub(crate) media_engine: Arc<MediaEngine>,
-    pub(crate) interceptor: Option<Arc<dyn Interceptor>>,
+    pub(crate) interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
 }
 
 impl API {
     /// new_peer_connection creates a new PeerConnection with the provided configuration against the received API object
-    pub fn new_peer_connection(&self, configuration: Configuration) -> Result<PeerConnection> {
-        PeerConnection::new(self, configuration)
+    pub async fn new_peer_connection(
+        &self,
+        configuration: Configuration,
+    ) -> Result<Arc<PeerConnection>> {
+        PeerConnection::new(self, configuration).await
     }
 
     /// new_ice_gatherer creates a new ice gatherer.
@@ -67,8 +70,8 @@ impl API {
     /// new_ice_transport creates a new ice transport.
     /// This constructor is part of the ORTC API. It is not
     /// meant to be used together with the basic WebRTC API.
-    pub fn new_ice_transport(&self, gatherer: ICEGatherer) -> Result<ICETransport> {
-        Ok(ICETransport::new(gatherer))
+    pub fn new_ice_transport(&self, gatherer: Arc<ICEGatherer>) -> ICETransport {
+        ICETransport::new(gatherer)
     }
 
     /// new_dtls_transport creates a new dtls_transport transport.
@@ -76,7 +79,7 @@ impl API {
     /// meant to be used together with the basic WebRTC API.
     pub fn new_dtls_transport(
         &self,
-        ice_transport: ICETransport,
+        ice_transport: Arc<ICETransport>,
         certificates: Vec<Certificate>,
     ) -> Result<DTLSTransport> {
         /*TODO: if !certificates.is_empty() {
@@ -163,7 +166,7 @@ impl API {
     /// new_rtp_sender constructs a new RTPSender
     pub fn new_rtp_sender(
         &self,
-        track: Arc<dyn TrackLocal>,
+        track: Arc<dyn TrackLocal + Send + Sync>,
         transport: Arc<DTLSTransport>,
     ) -> RTPSender {
         let id = generate_crypto_random_string(
@@ -217,7 +220,7 @@ impl API {
 pub struct APIBuilder {
     setting_engine: Option<Arc<SettingEngine>>,
     media_engine: Option<Arc<MediaEngine>>,
-    interceptor: Option<Arc<dyn Interceptor>>,
+    interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
 }
 
 impl APIBuilder {
@@ -257,7 +260,7 @@ impl APIBuilder {
 
     /// with_interceptor allows providing Interceptors to the API.
     /// Settings should not be changed after passing the registry to an API.
-    pub fn with_interceptor(mut self, interceptor: Arc<dyn Interceptor>) -> Self {
+    pub fn with_interceptor(mut self, interceptor: Arc<dyn Interceptor + Send + Sync>) -> Self {
         self.interceptor = Some(interceptor);
         self
     }
