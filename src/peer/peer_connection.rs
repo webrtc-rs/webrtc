@@ -540,6 +540,14 @@ impl PeerConnection {
         *on_connection_state_change_handler = Some(f);
     }
 
+    async fn do_connection_state_change(&self, cs: PeerConnectionState) {
+        log::info!("Peer connection state changed: {}", cs);
+        let mut handler = self.on_connection_state_change_handler.lock().await;
+        if let Some(f) = &mut *handler {
+            f(cs).await;
+        }
+    }
+
     /*
     // SetConfiguration updates the configuration of this PeerConnection object.
     func (pc *PeerConnection) SetConfiguration(configuration Configuration) error { //nolint:gocognit
@@ -796,10 +804,7 @@ impl PeerConnection {
         self.connection_state
             .store(connection_state as u8, Ordering::SeqCst);
 
-        /*handler := pc.on_connection_state_change_handler
-        if handler != nil {
-            go handler(connection_state)
-        }*/
+        self.do_connection_state_change(connection_state).await;
     }
 
     /*
