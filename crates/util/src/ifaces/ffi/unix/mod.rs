@@ -36,27 +36,27 @@ pub const AF_PACKET: i32 = nix::libc::AF_PACKET;
 #[allow(dead_code, non_camel_case_types)]
 #[repr(C)]
 pub enum SiocgifFlags {
-    Iff_Up = 0x1,           /* Interface is up.  */
-    Iff_Broadcast = 0x2,    /* Broadcast address valid.  */
-    Iff_Debug = 0x4,        /* Turn on debugging.  */
-    Iff_Loopback = 0x8,     /* Is a loopback net.  */
-    Iff_Pointopoint = 0x10, /* Interface is point-to-point link.  */
-    Iff_Notrailers = 0x20,  /* Avoid use of trailers.  */
-    Iff_Running = 0x40,     /* Resources allocated.  */
-    Iff_Noarp = 0x80,       /* No address resolution protocol.  */
-    Iff_Promisc = 0x100,    /* Receive all packets.  */
+    Up = 0x1,           /* Interface is up.  */
+    Broadcast = 0x2,    /* Broadcast address valid.  */
+    Debug = 0x4,        /* Turn on debugging.  */
+    Loopback = 0x8,     /* Is a loopback net.  */
+    Pointopoint = 0x10, /* Interface is point-to-point link.  */
+    Notrailers = 0x20,  /* Avoid use of trailers.  */
+    Running = 0x40,     /* Resources allocated.  */
+    Noarp = 0x80,       /* No address resolution protocol.  */
+    Promisc = 0x100,    /* Receive all packets.  */
 
     /* Not supported */
-    Iff_Allmulti = 0x200, /* Receive all multicast packets.  */
+    Allmulti = 0x200, /* Receive all multicast packets.  */
 
-    Iff_Master = 0x400, /* Master of a load balancer.  */
-    Iff_Slave = 0x800,  /* Slave of a load balancer.  */
+    Master = 0x400, /* Master of a load balancer.  */
+    Slave = 0x800,  /* Slave of a load balancer.  */
 
-    Iff_Multicast = 0x1000, /* Supports multicast.  */
+    Multicast = 0x1000, /* Supports multicast.  */
 
-    Iff_Portsel = 0x2000,   /* Can set media type.  */
-    Iff_Automedia = 0x4000, /* Auto media select active.  */
-    Iff_Dynamic = 0x8000,   /* Dialup device with changing addresses.  */
+    Portsel = 0x2000,   /* Can set media type.  */
+    Automedia = 0x4000, /* Auto media select active.  */
+    Dynamic = 0x8000,   /* Dialup device with changing addresses.  */
 }
 
 #[repr(C)]
@@ -170,8 +170,8 @@ pub fn ifaces() -> Result<Vec<Interface>, Error> {
                 let addr = nix_socketaddr_to_sockaddr(unsafe { (*item).ifa_addr });
                 let mask = nix_socketaddr_to_sockaddr(unsafe { (*item).ifa_netmask });
                 let hop = unsafe {
-                    if (*item).ifa_flags & SiocgifFlags::Iff_Broadcast as ::std::os::raw::c_uint
-                        == SiocgifFlags::Iff_Broadcast as ::std::os::raw::c_uint
+                    if (*item).ifa_flags & SiocgifFlags::Broadcast as ::std::os::raw::c_uint
+                        == SiocgifFlags::Broadcast as ::std::os::raw::c_uint
                     {
                         nix_socketaddr_to_sockaddr((*item).ifa_ifu.ifu_broadaddr())
                             .map(NextHop::Broadcast)
