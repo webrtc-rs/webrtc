@@ -173,8 +173,13 @@ impl Conn for AgentConn {
         Ok(n)
     }
 
-    async fn recv_from(&self, _buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
-        Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
+    async fn recv_from(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
+        if let Some(raddr) = self.remote_addr().await {
+            let n = self.recv(buf).await?;
+            Ok((n, raddr))
+        } else {
+            Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
+        }
     }
 
     async fn send(&self, buf: &[u8]) -> Result<usize> {
@@ -212,6 +217,14 @@ impl Conn for AgentConn {
             Ok(pair.local.addr().await)
         } else {
             Err(io::Error::new(io::ErrorKind::AddrNotAvailable, "Addr Not Available").into())
+        }
+    }
+
+    async fn remote_addr(&self) -> Option<SocketAddr> {
+        if let Some(pair) = self.get_selected_pair().await {
+            Some(pair.remote.addr().await)
+        } else {
+            None
         }
     }
 

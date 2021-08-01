@@ -30,6 +30,9 @@ impl Conn for MockConn {
     async fn local_addr(&self) -> Result<SocketAddr> {
         Ok(SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0))
     }
+    async fn remote_addr(&self) -> Option<SocketAddr> {
+        None
+    }
     async fn close(&self) -> Result<()> {
         Ok(())
     }

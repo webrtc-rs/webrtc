@@ -573,6 +573,10 @@ impl Conn for MockPacketConn {
         Ok(SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0))
     }
 
+    async fn remote_addr(&self) -> Option<SocketAddr> {
+        None
+    }
+
     async fn close(&self) -> Result<()> {
         Ok(())
     }
