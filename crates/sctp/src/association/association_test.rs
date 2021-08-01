@@ -2144,6 +2144,10 @@ impl Conn for FakeEchoConn {
         Err(io::Error::new(io::ErrorKind::AddrNotAvailable, "Addr Not Available").into())
     }
 
+    async fn remote_addr(&self) -> Option<SocketAddr> {
+        None
+    }
+
     async fn close(&self) -> Result<()> {
         Ok(())
     }

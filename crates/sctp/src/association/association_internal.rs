@@ -920,7 +920,7 @@ impl AssociationInternal {
         );
         self.stats.inc_datas();
 
-        let can_push = self.payload_queue.can_push(&d, self.peer_last_tsn);
+        let can_push = self.payload_queue.can_push(d, self.peer_last_tsn);
         let mut stream_handle_data = false;
         if can_push {
             if let Some(_s) = self.get_or_create_stream(d.stream_identifier) {
@@ -1409,7 +1409,7 @@ impl AssociationInternal {
         }
 
         // Process selective ack
-        let (bytes_acked_per_stream, htna) = self.process_selective_ack(&d).await?;
+        let (bytes_acked_per_stream, htna) = self.process_selective_ack(d).await?;
 
         let mut total_bytes_acked = 0;
         for n_bytes_acked in bytes_acked_per_stream.values() {
