@@ -8,8 +8,8 @@ use crate::ifaces::{Interface, Kind, NextHop};
 
 // https://github.com/Exa-Networks/exaproxy/blob/master/lib/exaproxy/util/interfaces.py
 
-pub const AF_INET: i32 = nix::sys::socket::AF_INET;
-pub const AF_INET6: i32 = nix::sys::socket::AF_INET6;
+pub const AF_INET: i32 = nix::sys::socket::AddressFamily::Inet as i32;
+pub const AF_INET6: i32 = nix::sys::socket::AddressFamily::Inet6 as i32;
 
 #[cfg(any(
     target_os = "macos",
@@ -96,7 +96,7 @@ pub fn nix_socketaddr_to_sockaddr(sa: *mut nix::sys::socket::sockaddr) -> Option
     }
 
     let (addr, port) = match unsafe { *sa }.sa_family as i32 {
-        nix::sys::socket::AF_INET => {
+        AF_INET => {
             let sa: *const nix::sys::socket::sockaddr_in = sa as *const nix::libc::sockaddr_in;
             let sa = &unsafe { *sa };
             let (addr, port) = (sa.sin_addr.s_addr, sa.sin_port);
@@ -110,7 +110,7 @@ pub fn nix_socketaddr_to_sockaddr(sa: *mut nix::sys::socket::sockaddr) -> Option
                 port,
             )
         }
-        nix::sys::socket::AF_INET6 => {
+        AF_INET6 => {
             let sa: *const nix::sys::socket::sockaddr_in6 = sa as *const nix::libc::sockaddr_in6;
             let sa = &unsafe { *sa };
             let (addr, port) = (sa.sin6_addr.s6_addr, sa.sin6_port);
