@@ -1,7 +1,10 @@
 fn main() {
-    if std::env::var("TARGET").unwrap_or(String::new()).contains("android") {
+    if std::env::var("TARGET")
+        .unwrap_or_default()
+        .contains("android")
+    {
         cc::Build::new()
-            .file("ifaddrs-android/ifaddrs-android.cpp")
+            .file("src/ifaces/ffi/android/ifaddrs.cpp")
             .compile("ifaddrs-android");
     }
 }
