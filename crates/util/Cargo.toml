@@ -38,6 +38,9 @@ libc = "0.2.8"
 bitflags = "1.2.1"
 winapi = "0.2.8"
 
+[build-dependencies]
+cc = "1.0.69"
+
 [dev-dependencies]
 tokio-test = "0.4"
 env_logger = "0.8.3"
