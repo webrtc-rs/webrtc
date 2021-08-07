@@ -75,7 +75,7 @@ pub struct SCTPTransport {
     on_data_channel_opened_handler: Arc<Mutex<Option<OnDataChannelOpenedHdlrFn>>>,
 
     // DataChannels
-    data_channels: Arc<Mutex<Vec<Arc<DataChannel>>>>,
+    pub(crate) data_channels: Arc<Mutex<Vec<Arc<DataChannel>>>>,
     data_channels_opened: Arc<AtomicU32>,
     data_channels_requested: Arc<AtomicU32>,
     data_channels_accepted: Arc<AtomicU32>,
