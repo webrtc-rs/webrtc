@@ -25,6 +25,7 @@ use crate::peer::policy::sdp_semantics::SDPSemantics;
 use crate::peer::sdp::session_description::SessionDescription;
 use crate::peer::signaling_state::SignalingState;
 
+use crate::peer::operation::Operations;
 use anyhow::Result;
 use std::future::Future;
 use std::pin::Pin;
@@ -79,7 +80,8 @@ pub struct PeerConnection {
     // ops is an operations queue which will ensure the enqueued actions are
     // executed in order. It is used for asynchronously, but serially processing
     // remote and local descriptions
-    //TODO: ops *operations
+    ops: Operations,
+
     configuration: Configuration,
 
     current_local_description: SessionDescription,
@@ -152,7 +154,7 @@ impl PeerConnection {
                 ice_candidate_pool_size: 0,
                 sdp_semantics: SDPSemantics::default(),
             },
-            //TODO: ops:                    newOperations(),
+            ops: Operations::new(),
             is_closed: AtomicBool::new(false),
             is_negotiation_needed: AtomicBool::new(false),
             negotiation_needed_state: AtomicU8::new(NegotiationNeededState::Empty as u8),
@@ -350,6 +352,10 @@ impl PeerConnection {
         self.negotiation_needed_state
             .store(NegotiationNeededState::Run as u8, Ordering::SeqCst);
         //TODO: pc.ops.Enqueue(pc.negotiationNeededOp)
+        /*let _ = self
+        .ops
+        .enqueue(Operation(Box::new(move || Box::pin(async {}))))
+        .await;*/
     }
 
     /*TODO:

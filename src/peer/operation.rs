@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicIsize, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use waitgroup::WaitGroup;
@@ -19,15 +19,16 @@ impl fmt::Debug for Operation {
 }
 
 /// Operations is a task executor.
+#[derive(Default)]
 pub(crate) struct Operations {
-    length: Arc<AtomicIsize>,
-    ops_tx: mpsc::UnboundedSender<Operation>,
-    close_tx: mpsc::Sender<()>,
+    length: Arc<AtomicUsize>,
+    ops_tx: Option<mpsc::UnboundedSender<Operation>>,
+    close_tx: Option<mpsc::Sender<()>>,
 }
 
 impl Operations {
     pub(crate) fn new() -> Self {
-        let length = Arc::new(AtomicIsize::new(0));
+        let length = Arc::new(AtomicUsize::new(0));
         let (ops_tx, ops_rx) = mpsc::unbounded_channel();
         let (close_tx, close_rx) = mpsc::channel(1);
         let l = Arc::clone(&length);
@@ -37,16 +38,18 @@ impl Operations {
 
         Operations {
             length,
-            ops_tx,
-            close_tx,
+            ops_tx: Some(ops_tx),
+            close_tx: Some(close_tx),
         }
     }
 
     /// enqueue adds a new action to be executed. If there are no actions scheduled,
     /// the execution will start immediately in a new goroutine.
     pub(crate) async fn enqueue(&self, op: Operation) -> Result<()> {
-        let _ = self.ops_tx.send(op)?;
-        self.length.fetch_add(1, Ordering::SeqCst);
+        if let Some(ops_tx) = &self.ops_tx {
+            let _ = ops_tx.send(op)?;
+            self.length.fetch_add(1, Ordering::SeqCst);
+        }
         Ok(())
     }
 
@@ -70,7 +73,7 @@ impl Operations {
     }
 
     pub(crate) async fn start(
-        length: Arc<AtomicIsize>,
+        length: Arc<AtomicUsize>,
         mut ops_rx: mpsc::UnboundedReceiver<Operation>,
         mut close_rx: mpsc::Receiver<()>,
     ) {
@@ -81,8 +84,8 @@ impl Operations {
                 }
                 result = ops_rx.recv() => {
                     if let Some(mut f) = result {
-                        f.0().await;
                         length.fetch_sub(1, Ordering::SeqCst);
+                        f.0().await;
                     }
                 }
             }
@@ -90,7 +93,9 @@ impl Operations {
     }
 
     pub(crate) async fn close(&self) -> Result<()> {
-        let _ = self.close_tx.send(()).await?;
+        if let Some(close_tx) = &self.close_tx {
+            let _ = close_tx.send(()).await?;
+        }
         Ok(())
     }
 }
