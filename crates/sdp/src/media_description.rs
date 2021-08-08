@@ -98,6 +98,11 @@ impl MediaDescription {
         self
     }
 
+    /// with_fingerprint adds a fingerprint to the media description
+    pub fn with_fingerprint(self, algorithm: String, value: String) -> Self {
+        self.with_value_attribute("fingerprint".to_owned(), algorithm + " " + &value)
+    }
+
     /// WithICECredentials adds ICE credentials to the media description
     pub fn with_ice_credentials(self, username: String, password: String) -> Self {
         self.with_value_attribute("ice-ufrag".to_string(), username)
