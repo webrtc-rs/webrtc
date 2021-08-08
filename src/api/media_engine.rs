@@ -57,7 +57,7 @@ pub struct MediaEngine {
     pub(crate) negotiated_audio_codecs: Vec<RTPCodecParameters>,
 
     pub(crate) header_extensions: Vec<MediaEngineHeaderExtension>,
-    pub(crate) negotiated_header_extensions: HashMap<usize, MediaEngineHeaderExtension>,
+    pub(crate) negotiated_header_extensions: HashMap<isize, MediaEngineHeaderExtension>,
 }
 
 impl MediaEngine {
@@ -468,7 +468,7 @@ impl MediaEngine {
                 continue
             }
 
-            codecs, err := codecsFromMediaDescription(media)
+            codecs, err := codecs_from_media_description(media)
             if err != nil {
                 return err
             }
@@ -500,7 +500,7 @@ impl MediaEngine {
                 continue
             }
 
-            extensions, err := rtpExtensionsFromMediaDescription(media)
+            extensions, err := rtp_extensions_from_media_description(media)
             if err != nil {
                 return err
             }
@@ -515,7 +515,7 @@ impl MediaEngine {
     }
     */
 
-    fn get_codecs_by_kind(&self, typ: RTPCodecType) -> Vec<RTPCodecParameters> {
+    pub(crate) fn get_codecs_by_kind(&self, typ: RTPCodecType) -> Vec<RTPCodecParameters> {
         if typ == RTPCodecType::Video {
             if self.negotiated_video {
                 self.negotiated_video_codecs.clone()
@@ -561,7 +561,7 @@ impl MediaEngine {
                         || e.is_video && typ == RTPCodecType::Video)
                 {
                     header_extensions.push(RTPHeaderExtensionParameter {
-                        id: id + 1,
+                        id: id as isize + 1,
                         uri: e.uri.clone(),
                     })
                 }

@@ -84,7 +84,7 @@ pub struct RTPHeaderExtensionCapability {
 #[derive(Default, Debug, Clone)]
 pub struct RTPHeaderExtensionParameter {
     pub uri: String,
-    pub id: usize,
+    pub id: isize,
 }
 
 /// RTPCodecParameters is a sequence containing the media codecs that an RtpSender

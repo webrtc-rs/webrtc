@@ -428,7 +428,7 @@ impl PeerConnection {
             /*
             let lenDataChannel = self.sctp_transport.data_channels.len();
 
-            if lenDataChannel != 0 && haveDataChannel(localDesc) == nil {
+            if lenDataChannel != 0 && have_data_channel(localDesc) == nil {
                 return true;
             }
 
@@ -438,7 +438,7 @@ impl PeerConnection {
                 // if t.stopping && !t.stopped {
                 // 	return true
                 // }
-                m := getByMid(t.Mid(), localDesc)
+                m := get_by_mid(t.Mid(), localDesc)
                 // Step 5.2
                 if !t.stopped && m == nil {
                     return true
@@ -455,12 +455,12 @@ impl PeerConnection {
                     switch localDesc.Type {
                     case SDPTypeOffer:
                         // Step 5.3.2
-                        rm := getByMid(t.Mid(), remoteDesc)
+                        rm := get_by_mid(t.Mid(), remoteDesc)
                         if rm == nil {
                             return true
                         }
 
-                        if getPeerDirection(m) != t.Direction() && getPeerDirection(rm) != t.Direction().Revers() {
+                        if get_peer_direction(m) != t.Direction() && get_peer_direction(rm) != t.Direction().Revers() {
                             return true
                         }
                     case SDPTypeAnswer:
@@ -473,7 +473,7 @@ impl PeerConnection {
                 }
                 // Step 5.4
                 if t.stopped && t.Mid() != "" {
-                    if getByMid(t.Mid(), localDesc) != nil || getByMid(t.Mid(), remoteDesc) != nil {
+                    if get_by_mid(t.Mid(), localDesc) != nil || get_by_mid(t.Mid(), remoteDesc) != nil {
                         return true
                     }
                 }
@@ -648,12 +648,12 @@ impl PeerConnection {
     // caller of this method should hold `pc.mu` lock
     func (pc *PeerConnection) hasLocalDescriptionChanged(desc *SessionDescription) bool {
         for _, t := range pc.rtp_transceivers {
-            m := getByMid(t.Mid(), desc)
+            m := get_by_mid(t.Mid(), desc)
             if m == nil {
                 return true
             }
 
-            if getPeerDirection(m) != t.Direction() {
+            if get_peer_direction(m) != t.Direction() {
                 return true
             }
         }
@@ -702,7 +702,7 @@ impl PeerConnection {
             // https://w3c.github.io/webrtc-pc/#dfn-in-parallel-steps-to-create-an-offer
             isPlanB := pc.configuration.SDPSemantics == SDPSemanticsPlanB
             if pc.current_remote_description != nil {
-                isPlanB = descriptionIsPlanB(pc.current_remote_description)
+                isPlanB = description_is_plan_b(pc.current_remote_description)
             }
 
             // include unmatched local transceivers
@@ -746,7 +746,7 @@ impl PeerConnection {
                 return SessionDescription{}, err
             }
 
-            updateSDPOrigin(&pc.sdp_origin, d)
+            update_sdp_origin(&pc.sdp_origin, d)
             sdpBytes, err := d.Marshal()
             if err != nil {
                 return SessionDescription{}, err
@@ -842,7 +842,7 @@ impl PeerConnection {
                 return SessionDescription{}, err
             }
 
-            updateSDPOrigin(&pc.sdp_origin, d)
+            update_sdporigin(&pc.sdp_origin, d)
             sdpBytes, err := d.Marshal()
             if err != nil {
                 return SessionDescription{}, err
@@ -1054,7 +1054,7 @@ impl PeerConnection {
 
             var t *RTPTransceiver
             localTransceivers := append([]*RTPTransceiver{}, pc.GetTransceivers()...)
-            detectedPlanB := descriptionIsPlanB(pc.RemoteDescription())
+            detectedPlanB := description_is_plan_b(pc.RemoteDescription())
             weOffer := desc.Type == SDPTypeAnswer
 
             if !weOffer && !detectedPlanB {
@@ -1069,7 +1069,7 @@ impl PeerConnection {
                     }
 
                     kind := NewRTPCodecType(media.MediaName.Media)
-                    direction := getPeerDirection(media)
+                    direction := get_peer_direction(media)
                     if kind == 0 || direction == RTPTransceiverDirection(Unknown) {
                         continue
                     }
@@ -1117,7 +1117,7 @@ impl PeerConnection {
                 }
             }
 
-            remoteUfrag, remotePwd, candidates, err := extractICEDetails(desc.parsed)
+            remoteUfrag, remotePwd, candidates, err := extract_icedetails(desc.parsed)
             if err != nil {
                 return err
             }
@@ -1162,7 +1162,7 @@ impl PeerConnection {
                 }
             }
 
-            fingerprint, fingerprintHash, err := extractFingerprint(desc.parsed)
+            fingerprint, fingerprintHash, err := extract_fingerprint(desc.parsed)
             if err != nil {
                 return err
             }
@@ -1251,7 +1251,7 @@ impl PeerConnection {
             case SDPSemanticsPlanB:
                 remoteIsPlanB = true
             case SDPSemanticsUnifiedPlanWithFallback:
-                remoteIsPlanB = descriptionIsPlanB(pc.RemoteDescription())
+                remoteIsPlanB = description_is_plan_b(pc.RemoteDescription())
             default:
                 // none
             }
@@ -1925,7 +1925,7 @@ impl PeerConnection {
             iceGather := pc.iceGatherer
             iceGatheringState := pc.ICEGatheringState()
             pc.mu.Unlock()
-            return populateLocalCandidates(localDescription, iceGather, iceGatheringState)
+            return populate_local_candidates(localDescription, iceGather, iceGatheringState)
         }
 
         // PendingLocalDescription represents a local description that is in the
@@ -1938,7 +1938,7 @@ impl PeerConnection {
             iceGather := pc.iceGatherer
             iceGatheringState := pc.ICEGatheringState()
             pc.mu.Unlock()
-            return populateLocalCandidates(localDescription, iceGather, iceGatheringState)
+            return populate_local_candidates(localDescription, iceGather, iceGatheringState)
         }
 
         // CurrentRemoteDescription represents the last remote description that was
@@ -2121,7 +2121,7 @@ impl PeerConnection {
             }
 
             pc.startRTPReceivers(TrackDetails, currentTransceivers)
-            if haveApplicationMediaSection(remoteDesc.parsed) {
+            if have_application_media_section(remoteDesc.parsed) {
                 pc.startSCTP()
             }
 
@@ -2198,7 +2198,7 @@ impl PeerConnection {
                 return nil, err
             }
 
-            return populateSDP(d, isPlanB, dtlsFingerprints, pc.api.settingEngine.sdpMediaLevelFingerprints, pc.api.settingEngine.candidates.ICELite, pc.api.mediaEngine, connectionRoleFromDtlsRole(defaultDtlsRoleOffer), candidates, iceParams, mediaSections, pc.ICEGatheringState())
+            return populate_sdp(d, isPlanB, dtlsFingerprints, pc.api.settingEngine.sdpMediaLevelFingerprints, pc.api.settingEngine.candidates.ICELite, pc.api.mediaEngine, connectionRoleFromDtlsRole(defaultDtlsRoleOffer), candidates, iceParams, mediaSections, pc.ICEGatheringState())
         }
 
         // generateMatchedSDP generates a SDP and takes the remote state into account
@@ -2226,7 +2226,7 @@ impl PeerConnection {
                 remoteDescription = pc.pending_remote_description
             }
             localTransceivers := append([]*RTPTransceiver{}, transceivers...)
-            detectedPlanB := descriptionIsPlanB(remoteDescription)
+            detectedPlanB := description_is_plan_b(remoteDescription)
             mediaSections := []mediaSection{}
             alreadyHaveApplicationMediaSection := false
             for _, media := range remoteDescription.parsed.MediaDescriptions {
@@ -2242,7 +2242,7 @@ impl PeerConnection {
                 }
 
                 kind := NewRTPCodecType(media.MediaName.Media)
-                direction := getPeerDirection(media)
+                direction := get_peer_direction(media)
                 if kind == 0 || direction == RTPTransceiverDirection(Unknown) {
                     continue
                 }
@@ -2319,7 +2319,7 @@ impl PeerConnection {
                 return nil, err
             }
 
-            return populateSDP(d, detectedPlanB, dtlsFingerprints, pc.api.settingEngine.sdpMediaLevelFingerprints, pc.api.settingEngine.candidates.ICELite, pc.api.mediaEngine, connectionRole, candidates, iceParams, mediaSections, pc.ICEGatheringState())
+            return populate_sdp(d, detectedPlanB, dtlsFingerprints, pc.api.settingEngine.sdpMediaLevelFingerprints, pc.api.settingEngine.candidates.ICELite, pc.api.mediaEngine, connectionRole, candidates, iceParams, mediaSections, pc.ICEGatheringState())
         }
     */
     async fn set_gather_complete_handler(&self, f: OnGatheringCompleteHdlrFn) {

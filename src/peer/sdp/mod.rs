@@ -1,12 +1,32 @@
-use crate::media::rtp::rtp_codec::RTPCodecType;
-use crate::media::rtp::SSRC;
-
-use sdp::media_description::MediaDescription;
-use sdp::session_description::*;
-use std::collections::HashMap;
+use crate::api::media_engine::MediaEngine;
+use crate::error::Error;
+use crate::media::dtls_transport::dtls_fingerprint::DTLSFingerprint;
+use crate::media::rtp::rtp_codec::{RTPCodecCapability, RTPCodecParameters, RTPCodecType};
+use crate::media::rtp::rtp_transceiver::RTPTransceiver;
+use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
+use crate::media::rtp::{PayloadType, RTCPFeedback, SSRC};
+use crate::peer::ice::ice_candidate::ICECandidate;
+use crate::peer::ice::ice_gather::ice_gatherer::ICEGatherer;
+use crate::peer::ice::ice_gather::ice_gathering_state::ICEGatheringState;
+use crate::peer::ice::ICEParameters;
+use crate::MEDIA_SECTION_APPLICATION;
 
 pub mod sdp_type;
 pub mod session_description;
+
+use anyhow::Result;
+use ice::candidate::candidate_base::unmarshal_candidate;
+use ice::candidate::Candidate;
+use sdp::common_description::{Address, ConnectionInformation};
+use sdp::extmap::ExtMap;
+use sdp::media_description::{MediaDescription, MediaName, RangedPort};
+use sdp::session_description::*;
+use sdp::util::ConnectionRole;
+use std::collections::HashMap;
+use std::convert::From;
+use std::io::BufReader;
+use std::sync::Arc;
+use url::Url;
 
 /// TrackDetails represents any media source that can be represented in a SDP
 /// This isn't keyed by SSRC because it also needs to support rid based sources
@@ -191,266 +211,413 @@ fn get_rids(media: &MediaDescription) -> HashMap<String, String> {
     }
     rids
 }
-/*
-func addCandidatesToMediaDescriptions(candidates []ICECandidate, m *sdp.MediaDescription, iceGatheringState ICEGatheringState) error {
-    appendCandidateIfNew := func(c ice.Candidate, attributes []sdp.Attribute) {
-        marshaled := c.Marshal()
-        for _, a := range attributes {
-            if marshaled == a.Value {
-                return
+
+pub(crate) async fn add_candidates_to_media_descriptions(
+    candidates: &[ICECandidate],
+    mut m: MediaDescription,
+    ice_gathering_state: ICEGatheringState,
+) -> Result<MediaDescription> {
+    let append_candidate_if_new = |c: &dyn Candidate, m: MediaDescription| -> MediaDescription {
+        let marshaled = c.marshal();
+        for a in &m.attributes {
+            if let Some(value) = &a.value {
+                if &marshaled == value {
+                    return m;
+                }
             }
         }
 
-        m.WithValueAttribute("candidate", marshaled)
+        m.with_value_attribute("candidate".to_owned(), marshaled)
+    };
+
+    for c in candidates {
+        let candidate = c.to_ice().await?;
+
+        candidate.set_component(1);
+        m = append_candidate_if_new(&candidate, m);
+
+        candidate.set_component(2);
+        m = append_candidate_if_new(&candidate, m);
     }
 
-    for _, c := range candidates {
-        candidate, err := c.toICE()
-        if err != nil {
-            return err
-        }
-
-        candidate.SetComponent(1)
-        appendCandidateIfNew(candidate, m.Attributes)
-
-        candidate.SetComponent(2)
-        appendCandidateIfNew(candidate, m.Attributes)
+    if ice_gathering_state != ICEGatheringState::Complete {
+        return Ok(m);
     }
-
-    if iceGatheringState != ICEGatheringStateComplete {
-        return nil
-    }
-    for _, a := range m.Attributes {
-        if a.Key == "end-of-candidates" {
-            return nil
+    for a in &m.attributes {
+        if &a.key == "end-of-candidates" {
+            return Ok(m);
         }
     }
 
-    m.WithPropertyAttribute("end-of-candidates")
-    return nil
+    Ok(m.with_property_attribute("end-of-candidates".to_owned()))
 }
 
-func addDataMediaSection(d *sdp.SessionDescription, shouldAddCandidates bool, dtlsFingerprints []DTLSFingerprint, midValue string, iceParams ICEParameters, candidates []ICECandidate, dtlsRole sdp.ConnectionRole, iceGatheringState ICEGatheringState) error {
-    media := (&sdp.MediaDescription{
-        MediaName: sdp.MediaName{
-            Media:   mediaSectionApplication,
-            Port:    sdp.RangedPort{Value: 9},
-            Protos:  []string{"UDP", "DTLS", "SCTP"},
-            Formats: []string{"webrtc-datachannel"},
-        },
-        ConnectionInformation: &sdp.ConnectionInformation{
-            NetworkType: "IN",
-            AddressType: "IP4",
-            Address: &sdp.Address{
-                Address: "0.0.0.0",
+pub(crate) struct AddDataMediaSectionParams {
+    should_add_candidates: bool,
+    mid_value: String,
+    ice_params: ICEParameters,
+    dtls_role: ConnectionRole,
+    ice_gathering_state: ICEGatheringState,
+}
+
+pub(crate) async fn add_data_media_section(
+    d: sdp::session_description::SessionDescription,
+    dtls_fingerprints: &[DTLSFingerprint],
+    candidates: &[ICECandidate],
+    params: AddDataMediaSectionParams,
+) -> Result<sdp::session_description::SessionDescription> {
+    let mut media = MediaDescription {
+        media_name: MediaName {
+            media: MEDIA_SECTION_APPLICATION.to_owned(),
+            port: RangedPort {
+                value: 9,
+                range: None,
             },
+            protos: vec!["UDP".to_owned(), "DTLS".to_owned(), "SCTP".to_owned()],
+            formats: vec!["webrtc-datachannel".to_owned()],
         },
-    }).
-        WithValueAttribute(sdp.AttrKeyConnectionSetup, dtlsRole.String()).
-        WithValueAttribute(sdp.AttrKeyMID, midValue).
-        WithPropertyAttribute(RTPTransceiverDirectionSendrecv.String()).
-        WithPropertyAttribute("sctp-port:5000").
-        WithICECredentials(iceParams.UsernameFragment, iceParams.Password)
+        media_title: None,
+        connection_information: Some(ConnectionInformation {
+            network_type: "IN".to_owned(),
+            address_type: "IP4".to_owned(),
+            address: Some(Address {
+                address: "0.0.0.0".to_owned(),
+                ttl: None,
+                range: None,
+            }),
+        }),
+        bandwidth: vec![],
+        encryption_key: None,
+        attributes: vec![],
+    }
+    .with_value_attribute(
+        ATTR_KEY_CONNECTION_SETUP.to_owned(),
+        params.dtls_role.to_string(),
+    )
+    .with_value_attribute(ATTR_KEY_MID.to_owned(), params.mid_value)
+    .with_property_attribute(RTPTransceiverDirection::Sendrecv.to_string())
+    .with_property_attribute("sctp-port:5000".to_owned())
+    .with_ice_credentials(
+        params.ice_params.username_fragment,
+        params.ice_params.password,
+    );
 
-    for _, f := range dtlsFingerprints {
-        media = media.WithFingerprint(f.Algorithm, strings.ToUpper(f.Value))
+    for f in dtls_fingerprints {
+        media = media.with_fingerprint(f.algorithm.clone(), f.value.to_uppercase());
     }
 
-    if shouldAddCandidates {
-        if err := addCandidatesToMediaDescriptions(candidates, media, iceGatheringState); err != nil {
-            return err
-        }
+    if params.should_add_candidates {
+        media = add_candidates_to_media_descriptions(candidates, media, params.ice_gathering_state)
+            .await?;
     }
 
-    d.WithMedia(media)
-    return nil
+    Ok(d.with_media(media))
 }
 
-func populateLocalCandidates(sessionDescription *SessionDescription, i *ICEGatherer, iceGatheringState ICEGatheringState) *SessionDescription {
-    if sessionDescription == nil || i == nil {
-        return sessionDescription
+pub(crate) async fn populate_local_candidates(
+    session_description: Option<session_description::SessionDescription>,
+    ice_gatherer: Option<Arc<ICEGatherer>>,
+    ice_gathering_state: ICEGatheringState,
+) -> Option<session_description::SessionDescription> {
+    if session_description.is_none() || ice_gatherer.is_none() {
+        return session_description;
     }
 
-    candidates, err := i.GetLocalCandidates()
-    if err != nil {
-        return sessionDescription
-    }
+    if let (Some(sd), Some(ice)) = (session_description, ice_gatherer) {
+        let candidates = match ice.get_local_candidates().await {
+            Ok(candidates) => candidates,
+            Err(_) => return Some(sd),
+        };
 
-    parsed := sessionDescription.parsed
-    if len(parsed.MediaDescriptions) > 0 {
-        m := parsed.MediaDescriptions[0]
-        if err = addCandidatesToMediaDescriptions(candidates, m, iceGatheringState); err != nil {
-            return sessionDescription
+        let mut parsed = match sd.unmarshal() {
+            Ok(parsed) => parsed,
+            Err(_) => return Some(sd),
+        };
+
+        if !parsed.media_descriptions.is_empty() {
+            let mut m = parsed.media_descriptions.remove(0);
+            m = match add_candidates_to_media_descriptions(&candidates, m, ice_gathering_state)
+                .await
+            {
+                Ok(m) => m,
+                Err(_) => return Some(sd),
+            };
+            parsed.media_descriptions.insert(0, m);
         }
-    }
 
-    sdp, err := parsed.Marshal()
-    if err != nil {
-        return sessionDescription
-    }
-
-    return &SessionDescription{
-        SDP:    string(sdp),
-        Type:   sessionDescription.Type,
-        parsed: parsed,
-    }
-}
-
-func addTransceiverSDP(d *sdp.SessionDescription, isPlanB, shouldAddCandidates bool, dtlsFingerprints []DTLSFingerprint, mediaEngine *MediaEngine, midValue string, iceParams ICEParameters, candidates []ICECandidate, dtlsRole sdp.ConnectionRole, iceGatheringState ICEGatheringState, mediaSection mediaSection) (bool, error) {
-    transceivers := mediaSection.transceivers
-    if len(transceivers) < 1 {
-        return false, errSDPZeroTransceivers
-    }
-    // Use the first transceiver to generate the section attributes
-    t := transceivers[0]
-    media := sdp.NewJSEPMediaDescription(t.kind.String(), []string{}).
-        WithValueAttribute(sdp.AttrKeyConnectionSetup, dtlsRole.String()).
-        WithValueAttribute(sdp.AttrKeyMID, midValue).
-        WithICECredentials(iceParams.UsernameFragment, iceParams.Password).
-        WithPropertyAttribute(sdp.AttrKeyRTCPMux).
-        WithPropertyAttribute(sdp.AttrKeyRTCPRsize)
-
-    codecs := t.getCodecs()
-    for _, codec := range codecs {
-        name := strings.TrimPrefix(codec.MimeType, "audio/")
-        name = strings.TrimPrefix(name, "video/")
-        media.WithCodec(uint8(codec.PayloadType), name, codec.ClockRate, codec.Channels, codec.SDPFmtpLine)
-
-        for _, feedback := range codec.RTPCodecCapability.RTCPFeedback {
-            media.WithValueAttribute("rtcp-fb", fmt.Sprintf("%d %s %s", codec.PayloadType, feedback.Type, feedback.Parameter))
-        }
-    }
-    if len(codecs) == 0 {
-        // Explicitly reject track if we don't have the codec
-        d.WithMedia(&sdp.MediaDescription{
-            MediaName: sdp.MediaName{
-                Media:   t.kind.String(),
-                Port:    sdp.RangedPort{Value: 0},
-                Protos:  []string{"UDP", "TLS", "RTP", "SAVPF"},
-                Formats: []string{"0"},
-            },
+        Some(session_description::SessionDescription {
+            sdp_type: sd.sdp_type,
+            sdp: parsed.marshal(),
         })
-        return false, nil
+    } else {
+        None
     }
+}
 
-    directions := []RTPTransceiverDirection{}
-    if t.Sender() != nil {
-        directions = append(directions, RTPTransceiverDirectionSendonly)
-    }
-    if t.Receiver() != nil {
-        directions = append(directions, RTPTransceiverDirectionRecvonly)
-    }
+pub(crate) struct AddTransceiverSdpParams {
+    is_plan_b: bool,
+    should_add_candidates: bool,
+    mid_value: String,
+    dtls_role: ConnectionRole,
+    ice_gathering_state: ICEGatheringState,
+}
 
-    parameters := mediaEngine.getRTPParametersByKind(t.kind, directions)
-    for _, rtpExtension := range parameters.HeaderExtensions {
-        extURL, err := url.Parse(rtpExtension.URI)
-        if err != nil {
-            return false, err
+pub(crate) async fn add_transceiver_sdp(
+    mut d: sdp::session_description::SessionDescription,
+    dtls_fingerprints: &[DTLSFingerprint],
+    media_engine: &Arc<MediaEngine>,
+    ice_params: &ICEParameters,
+    candidates: &[ICECandidate],
+    media_section: &MediaSection,
+    params: AddTransceiverSdpParams,
+) -> Result<(sdp::session_description::SessionDescription, bool)> {
+    if media_section.transceivers.is_empty() {
+        return Err(Error::ErrSDPZeroTransceivers.into());
+    }
+    let (is_plan_b, should_add_candidates, mid_value, dtls_role, ice_gathering_state) = (
+        params.is_plan_b,
+        params.should_add_candidates,
+        params.mid_value,
+        params.dtls_role,
+        params.ice_gathering_state,
+    );
+
+    let transceivers = &media_section.transceivers;
+    // Use the first transceiver to generate the section attributes
+    let t = &transceivers[0];
+    let mut media = sdp::media_description::MediaDescription::new_jsep_media_description(
+        t.kind.to_string(),
+        vec![],
+    )
+    .with_value_attribute(ATTR_KEY_CONNECTION_SETUP.to_owned(), dtls_role.to_string())
+    .with_value_attribute(ATTR_KEY_MID.to_owned(), mid_value.clone())
+    .with_ice_credentials(
+        ice_params.username_fragment.clone(),
+        ice_params.password.clone(),
+    )
+    .with_property_attribute(ATTR_KEY_RTCPMUX.to_owned())
+    .with_property_attribute(ATTR_KEY_RTCPRSIZE.to_owned());
+
+    let codecs = t.get_codecs();
+    for codec in &codecs {
+        let name = codec
+            .capability
+            .mime_type
+            .trim_start_matches("audio/")
+            .trim_start_matches("video/")
+            .to_owned();
+        media = media.with_codec(
+            codec.payload_type,
+            name,
+            codec.capability.clock_rate,
+            codec.capability.channels,
+            codec.capability.sdp_fmtp_line.clone(),
+        );
+
+        for feedback in &codec.capability.rtcp_feedback {
+            media = media.with_value_attribute(
+                "rtcp-fb".to_owned(),
+                format!(
+                    "{} {} {}",
+                    codec.payload_type, feedback.typ, feedback.parameter
+                ),
+            );
         }
-        media.WithExtMap(sdp.ExtMap{Value: rtpExtension.ID, URI: extURL})
+    }
+    if codecs.is_empty() {
+        // Explicitly reject track if we don't have the codec
+        d = d.with_media(sdp::media_description::MediaDescription {
+            media_name: sdp::media_description::MediaName {
+                media: t.kind.to_string(),
+                port: RangedPort {
+                    value: 0,
+                    range: None,
+                },
+                protos: vec![
+                    "UDP".to_owned(),
+                    "TLS".to_owned(),
+                    "RTP".to_owned(),
+                    "SAVPF".to_owned(),
+                ],
+                formats: vec!["0".to_owned()],
+            },
+            media_title: None,
+            connection_information: None,
+            bandwidth: vec![],
+            encryption_key: None,
+            attributes: vec![],
+        });
+        return Ok((d, false));
     }
 
-    if len(mediaSection.ridMap) > 0 {
-        recvRids := make([]string, 0, len(mediaSection.ridMap))
+    let mut directions = vec![];
+    if t.sender().is_some() {
+        directions.push(RTPTransceiverDirection::Sendonly);
+    }
+    if t.receiver().is_some() {
+        directions.push(RTPTransceiverDirection::Recvonly);
+    }
 
-        for rid := range mediaSection.ridMap {
-            media.WithValueAttribute("rid", rid+" recv")
-            recvRids = append(recvRids, rid)
+    let parameters = media_engine.get_rtp_parameters_by_kind(t.kind, &directions);
+    for rtp_extension in &parameters.header_extensions {
+        let ext_url = Url::parse(rtp_extension.uri.as_str())?;
+        media = media.with_extmap(sdp::extmap::ExtMap {
+            value: rtp_extension.id,
+            uri: Some(ext_url),
+            ..Default::default()
+        });
+    }
+
+    if !media_section.rid_map.is_empty() {
+        let mut recv_rids: Vec<String> = vec![];
+
+        for rid in media_section.rid_map.keys() {
+            media = media.with_value_attribute("rid".to_owned(), rid.to_owned() + " recv");
+            recv_rids.push(rid.to_owned());
         }
         // Simulcast
-        media.WithValueAttribute("simulcast", "recv "+strings.Join(recvRids, ";"))
+        media = media.with_value_attribute(
+            "simulcast".to_owned(),
+            "recv ".to_owned() + recv_rids.join(";").as_str(),
+        );
     }
 
-    for _, mt := range transceivers {
-        if mt.Sender() != nil && mt.Sender().Track() != nil {
-            track := mt.Sender().Track()
-            media = media.WithMediaSource(uint32(mt.Sender().ssrc), track.StreamID() /* cname */, track.StreamID() /* streamLabel */, track.ID())
-            if !isPlanB {
-                media = media.WithPropertyAttribute("msid:" + track.StreamID() + " " + track.ID())
-                break
+    for mt in transceivers {
+        if let Some(sender) = mt.sender() {
+            if let Some(track) = sender.track() {
+                media = media.with_media_source(
+                    sender.ssrc,
+                    track.stream_id(), /* cname */
+                    track.stream_id(), /* streamLabel */
+                    track.id(),
+                );
+                if !is_plan_b {
+                    media = media.with_property_attribute(
+                        "msid:".to_owned() + track.stream_id().as_str() + " " + track.id().as_str(),
+                    );
+                    break;
+                }
             }
         }
     }
 
-    media = media.WithPropertyAttribute(t.Direction().String())
+    media = media.with_property_attribute(t.direction().to_string());
 
-    for _, fingerprint := range dtlsFingerprints {
-        media = media.WithFingerprint(fingerprint.Algorithm, strings.ToUpper(fingerprint.Value))
+    for fingerprint in dtls_fingerprints {
+        media = media.with_fingerprint(
+            fingerprint.algorithm.to_owned(),
+            fingerprint.value.to_uppercase(),
+        );
     }
 
-    if shouldAddCandidates {
-        if err := addCandidatesToMediaDescriptions(candidates, media, iceGatheringState); err != nil {
-            return false, err
-        }
+    if should_add_candidates {
+        media =
+            add_candidates_to_media_descriptions(candidates, media, ice_gathering_state).await?;
     }
 
-    d.WithMedia(media)
-
-    return true, nil
+    Ok((d.with_media(media), true))
 }
 
-type mediaSection struct {
-    id           string
-    transceivers []*RTPTransceiver
-    data         bool
-    ridMap       map[string]string
+pub(crate) struct MediaSection {
+    id: String,
+    transceivers: Vec<RTPTransceiver>,
+    data: bool,
+    rid_map: HashMap<String, String>,
 }
 
-// populateSDP serializes a PeerConnections state into an SDP
-func populateSDP(d *sdp.SessionDescription, isPlanB bool, dtlsFingerprints []DTLSFingerprint, mediaDescriptionFingerprint bool, isICELite bool, mediaEngine *MediaEngine, connectionRole sdp.ConnectionRole, candidates []ICECandidate, iceParams ICEParameters, mediaSections []mediaSection, iceGatheringState ICEGatheringState) (*sdp.SessionDescription, error) {
-    var err error
-    mediaDtlsFingerprints := []DTLSFingerprint{}
+pub(crate) struct PopulateSdpParams {
+    is_plan_b: bool,
+    media_description_fingerprint: bool,
+    is_icelite: bool,
+    connection_role: ConnectionRole,
+    ice_gathering_state: ICEGatheringState,
+}
 
-    if mediaDescriptionFingerprint {
-        mediaDtlsFingerprints = dtlsFingerprints
-    }
+/// populate_sdp serializes a PeerConnections state into an SDP
+pub(crate) async fn populate_sdp(
+    mut d: sdp::session_description::SessionDescription,
+    dtls_fingerprints: &[DTLSFingerprint],
+    media_engine: &Arc<MediaEngine>,
+    candidates: &[ICECandidate],
+    ice_params: &ICEParameters,
+    media_sections: &[MediaSection],
+    params: PopulateSdpParams,
+) -> Result<sdp::session_description::SessionDescription> {
+    let media_dtls_fingerprints = if params.media_description_fingerprint {
+        dtls_fingerprints.to_vec()
+    } else {
+        vec![]
+    };
 
-    bundleValue := "BUNDLE"
-    bundleCount := 0
-    appendBundle := func(midValue string) {
-        bundleValue += " " + midValue
-        bundleCount++
-    }
+    let mut bundle_value = "BUNDLE".to_owned();
+    let mut bundle_count = 0;
+    let append_bundle = |mid_value: &str, value: &mut String, count: &mut i32| {
+        *value = value.clone() + " " + mid_value;
+        *count += 1;
+    };
 
-    for i, m := range mediaSections {
-        if m.data && len(m.transceivers) != 0 {
-            return nil, errSDPMediaSectionMediaDataChanInvalid
-        } else if !isPlanB && len(m.transceivers) > 1 {
-            return nil, errSDPMediaSectionMultipleTrackInvalid
+    for (i, m) in media_sections.iter().enumerate() {
+        if m.data && !m.transceivers.is_empty() {
+            return Err(Error::ErrSDPMediaSectionMediaDataChanInvalid.into());
+        } else if !params.is_plan_b && m.transceivers.len() > 1 {
+            return Err(Error::ErrSDPMediaSectionMultipleTrackInvalid.into());
         }
 
-        shouldAddID := true
-        shouldAddCandidates := i == 0
-        if m.data {
-            if err = addDataMediaSection(d, shouldAddCandidates, mediaDtlsFingerprints, m.id, iceParams, candidates, connectionRole, iceGatheringState); err != nil {
-                return nil, err
-            }
+        let should_add_candidates = i == 0;
+
+        let should_add_id = if m.data {
+            let params = AddDataMediaSectionParams {
+                should_add_candidates,
+                mid_value: m.id.clone(),
+                ice_params: ice_params.clone(),
+                dtls_role: params.connection_role,
+                ice_gathering_state: params.ice_gathering_state,
+            };
+            d = add_data_media_section(d, &media_dtls_fingerprints, candidates, params).await?;
+            true
         } else {
-            shouldAddID, err = addTransceiverSDP(d, isPlanB, shouldAddCandidates, mediaDtlsFingerprints, mediaEngine, m.id, iceParams, candidates, connectionRole, iceGatheringState, m)
-            if err != nil {
-                return nil, err
-            }
-        }
+            let params = AddTransceiverSdpParams {
+                is_plan_b: params.is_plan_b,
+                should_add_candidates,
+                mid_value: m.id.clone(),
+                dtls_role: params.connection_role,
+                ice_gathering_state: params.ice_gathering_state,
+            };
+            let (d1, should_add_id) = add_transceiver_sdp(
+                d,
+                &media_dtls_fingerprints,
+                media_engine,
+                ice_params,
+                candidates,
+                m,
+                params,
+            )
+            .await?;
+            d = d1;
+            should_add_id
+        };
 
-        if shouldAddID {
-            appendBundle(m.id)
+        if should_add_id {
+            append_bundle(&m.id, &mut bundle_value, &mut bundle_count);
         }
     }
 
-    if !mediaDescriptionFingerprint {
-        for _, fingerprint := range dtlsFingerprints {
-            d.WithFingerprint(fingerprint.Algorithm, strings.ToUpper(fingerprint.Value))
+    if !params.media_description_fingerprint {
+        for fingerprint in dtls_fingerprints {
+            d = d.with_fingerprint(
+                fingerprint.algorithm.clone(),
+                fingerprint.value.to_uppercase(),
+            );
         }
     }
 
-    if isICELite {
+    if params.is_icelite {
         // RFC 5245 S15.3
-        d = d.WithValueAttribute(sdp.AttrKeyICELite, sdp.AttrKeyICELite)
+        d = d.with_value_attribute(ATTR_KEY_ICELITE.to_owned(), ATTR_KEY_ICELITE.to_owned());
     }
 
-    return d.WithValueAttribute(sdp.AttrKeyGroup, bundleValue), nil
+    Ok(d.with_value_attribute(ATTR_KEY_GROUP.to_owned(), bundle_value))
 }
-*/
 
 fn get_mid_value(media: &MediaDescription) -> Option<&String> {
     for attr in &media.attributes {
@@ -461,225 +628,265 @@ fn get_mid_value(media: &MediaDescription) -> Option<&String> {
     None
 }
 
-/*
-func descriptionIsPlanB(desc *SessionDescription) bool {
-    if desc == nil || desc.parsed == nil {
-        return false
-    }
-
-    detectionRegex := regexp.MustCompile(`(?i)^(audio|video|data)$`)
-    for _, media := range desc.parsed.MediaDescriptions {
-        if len(detectionRegex.FindStringSubmatch(get_mid_value(media))) == 2 {
-            return true
-        }
-    }
-    return false
-}
-
-func getPeerDirection(media *sdp.MediaDescription) RTPTransceiverDirection {
-    for _, a := range media.Attributes {
-        if direction := NewRTPTransceiverDirection(a.Key); direction != RTPTransceiverDirection(Unknown) {
-            return direction
-        }
-    }
-    return RTPTransceiverDirection(Unknown)
-}
-
-func extractFingerprint(desc *sdp.SessionDescription) (string, string, error) {
-    fingerprints := []string{}
-
-    if fingerprint, haveFingerprint := desc.Attribute("fingerprint"); haveFingerprint {
-        fingerprints = append(fingerprints, fingerprint)
-    }
-
-    for _, m := range desc.MediaDescriptions {
-        if fingerprint, haveFingerprint := m.Attribute("fingerprint"); haveFingerprint {
-            fingerprints = append(fingerprints, fingerprint)
-        }
-    }
-
-    if len(fingerprints) < 1 {
-        return "", "", ErrSessionDescriptionNoFingerprint
-    }
-
-    for _, m := range fingerprints {
-        if m != fingerprints[0] {
-            return "", "", ErrSessionDescriptionConflictingFingerprints
-        }
-    }
-
-    parts := strings.Split(fingerprints[0], " ")
-    if len(parts) != 2 {
-        return "", "", ErrSessionDescriptionInvalidFingerprint
-    }
-    return parts[1], parts[0], nil
-}
-
-func extractICEDetails(desc *sdp.SessionDescription) (string, string, []ICECandidate, error) {
-    candidates := []ICECandidate{}
-    remotePwds := []string{}
-    remoteUfrags := []string{}
-
-    if ufrag, haveUfrag := desc.Attribute("ice-ufrag"); haveUfrag {
-        remoteUfrags = append(remoteUfrags, ufrag)
-    }
-    if pwd, havePwd := desc.Attribute("ice-pwd"); havePwd {
-        remotePwds = append(remotePwds, pwd)
-    }
-
-    for _, m := range desc.MediaDescriptions {
-        if ufrag, haveUfrag := m.Attribute("ice-ufrag"); haveUfrag {
-            remoteUfrags = append(remoteUfrags, ufrag)
-        }
-        if pwd, havePwd := m.Attribute("ice-pwd"); havePwd {
-            remotePwds = append(remotePwds, pwd)
-        }
-
-        for _, a := range m.Attributes {
-            if a.IsICECandidate() {
-                c, err := ice.UnmarshalCandidate(a.Value)
-                if err != nil {
-                    return "", "", nil, err
+pub(crate) fn description_is_plan_b(
+    desc: &sdp::session_description::SessionDescription,
+) -> Result<bool> {
+    let detection_regex = regex::Regex::new(r"(?i)^(audio|video|data)$")?; //TODO: fix regex pattern
+    for media in &desc.media_descriptions {
+        if let Some(s) = get_mid_value(media) {
+            if let Some(caps) = detection_regex.captures(s) {
+                if caps.len() == 2 {
+                    return Ok(true);
                 }
+            }
+        }
+    }
+    Ok(false)
+}
 
-                candidate, err := newICECandidateFromICE(c)
-                if err != nil {
-                    return "", "", nil, err
+pub(crate) fn get_peer_direction(
+    media: &sdp::media_description::MediaDescription,
+) -> RTPTransceiverDirection {
+    for a in &media.attributes {
+        let direction = RTPTransceiverDirection::from(a.key.as_str());
+        if direction != RTPTransceiverDirection::Unspecified {
+            return direction;
+        }
+    }
+    RTPTransceiverDirection::Unspecified
+}
+
+pub(crate) fn extract_fingerprint(
+    desc: &sdp::session_description::SessionDescription,
+) -> Result<(String, String)> {
+    let mut fingerprints = vec![];
+
+    if let Some(fingerprint) = desc.attribute("fingerprint") {
+        fingerprints.push(fingerprint.clone());
+    }
+
+    for m in &desc.media_descriptions {
+        if let Some(fingerprint) = m.attribute("fingerprint") {
+            fingerprints.push(fingerprint.clone());
+        }
+    }
+
+    if fingerprints.is_empty() {
+        return Err(Error::ErrSessionDescriptionNoFingerprint.into());
+    }
+
+    for m in 1..fingerprints.len() {
+        if fingerprints[m] != fingerprints[0] {
+            return Err(Error::ErrSessionDescriptionConflictingFingerprints.into());
+        }
+    }
+
+    let parts: Vec<&str> = fingerprints[0].split(' ').collect();
+    if parts.len() != 2 {
+        return Err(Error::ErrSessionDescriptionInvalidFingerprint.into());
+    }
+
+    Ok((parts[1].to_owned(), parts[0].to_owned()))
+}
+
+pub(crate) async fn extract_ice_details(
+    desc: &sdp::session_description::SessionDescription,
+) -> Result<(String, String, Vec<ICECandidate>)> {
+    let mut candidates = vec![];
+    let mut remote_pwds = vec![];
+    let mut remote_ufrags = vec![];
+
+    if let Some(ufrag) = desc.attribute("ice-ufrag") {
+        remote_ufrags.push(ufrag.clone());
+    }
+    if let Some(pwd) = desc.attribute("ice-pwd") {
+        remote_pwds.push(pwd.clone());
+    }
+
+    for m in &desc.media_descriptions {
+        if let Some(ufrag) = m.attribute("ice-ufrag") {
+            remote_ufrags.push(ufrag.clone());
+        }
+        if let Some(pwd) = m.attribute("ice-pwd") {
+            remote_pwds.push(pwd.clone());
+        }
+
+        for a in &m.attributes {
+            if a.is_ice_candidate() {
+                if let Some(value) = &a.value {
+                    let c: Arc<dyn Candidate + Send + Sync> =
+                        Arc::new(unmarshal_candidate(value.clone()).await?);
+                    let candidate = ICECandidate::from(&c);
+                    candidates.push(candidate);
                 }
-
-                candidates = append(candidates, candidate)
             }
         }
     }
 
-    if len(remoteUfrags) == 0 {
-        return "", "", nil, ErrSessionDescriptionMissingIceUfrag
-    } else if len(remotePwds) == 0 {
-        return "", "", nil, ErrSessionDescriptionMissingIcePwd
+    if remote_ufrags.is_empty() {
+        return Err(Error::ErrSessionDescriptionMissingIceUfrag.into());
+    } else if remote_pwds.is_empty() {
+        return Err(Error::ErrSessionDescriptionMissingIcePwd.into());
     }
 
-    for _, m := range remoteUfrags {
-        if m != remoteUfrags[0] {
-            return "", "", nil, ErrSessionDescriptionConflictingIceUfrag
+    for m in 1..remote_ufrags.len() {
+        if remote_ufrags[m] != remote_ufrags[0] {
+            return Err(Error::ErrSessionDescriptionConflictingIceUfrag.into());
         }
     }
 
-    for _, m := range remotePwds {
-        if m != remotePwds[0] {
-            return "", "", nil, ErrSessionDescriptionConflictingIcePwd
+    for m in 1..remote_pwds.len() {
+        if remote_pwds[m] != remote_pwds[0] {
+            return Err(Error::ErrSessionDescriptionConflictingIcePwd.into());
         }
     }
 
-    return remoteUfrags[0], remotePwds[0], candidates, nil
+    Ok((remote_ufrags[0].clone(), remote_pwds[0].clone(), candidates))
 }
 
-func haveApplicationMediaSection(desc *sdp.SessionDescription) bool {
-    for _, m := range desc.MediaDescriptions {
-        if m.MediaName.Media == mediaSectionApplication {
-            return true
+pub(crate) fn have_application_media_section(
+    desc: &sdp::session_description::SessionDescription,
+) -> bool {
+    for m in &desc.media_descriptions {
+        if m.media_name.media == MEDIA_SECTION_APPLICATION {
+            return true;
         }
     }
 
-    return false
+    false
 }
 
-func getByMid(searchMid string, desc *SessionDescription) *sdp.MediaDescription {
-    for _, m := range desc.parsed.MediaDescriptions {
-        if mid, ok := m.Attribute(sdp.AttrKeyMID); ok && mid == searchMid {
-            return m
-        }
-    }
-    return nil
-}
-
-// haveDataChannel return MediaDescription with MediaName equal application
-func haveDataChannel(desc *SessionDescription) *sdp.MediaDescription {
-    for _, d := range desc.parsed.MediaDescriptions {
-        if d.MediaName.Media == mediaSectionApplication {
-            return d
-        }
-    }
-    return nil
-}
-
-func codecsFromMediaDescription(m *sdp.MediaDescription) (out []RTPCodecParameters, err error) {
-    s := &sdp.SessionDescription{
-        MediaDescriptions: []*sdp.MediaDescription{m},
-    }
-
-    for _, payloadStr := range m.MediaName.Formats {
-        payloadType, err := strconv.Atoi(payloadStr)
-        if err != nil {
-            return nil, err
-        }
-
-        codec, err := s.GetCodecForPayloadType(uint8(payloadType))
-        if err != nil {
-            if payloadType == 0 {
-                continue
+pub(crate) fn get_by_mid<'a, 'b>(
+    search_mid: &'a str,
+    desc: &'b sdp::session_description::SessionDescription,
+) -> Option<&'b sdp::media_description::MediaDescription> {
+    for m in &desc.media_descriptions {
+        if let Some(mid) = m.attribute(ATTR_KEY_MID) {
+            if mid == search_mid {
+                return Some(m);
             }
-            return nil, err
         }
+    }
+    None
+}
 
-        channels := uint16(0)
-        val, err := strconv.Atoi(codec.EncodingParameters)
-        if err == nil {
-            channels = uint16(val)
+/// have_data_channel return MediaDescription with MediaName equal application
+pub(crate) fn have_data_channel(
+    desc: &sdp::session_description::SessionDescription,
+) -> Option<&sdp::media_description::MediaDescription> {
+    for d in &desc.media_descriptions {
+        if d.media_name.media == MEDIA_SECTION_APPLICATION {
+            return Some(d);
         }
+    }
+    None
+}
 
-        feedback := []RTCPFeedback{}
-        for _, raw := range codec.RTCPFeedback {
-            split := strings.Split(raw, " ")
-            entry := RTCPFeedback{Type: split[0]}
-            if len(split) == 2 {
-                entry.Parameter = split[1]
+pub(crate) fn codecs_from_media_description(
+    m: &sdp::media_description::MediaDescription,
+) -> Result<Vec<RTPCodecParameters>> {
+    let s = sdp::session_description::SessionDescription {
+        media_descriptions: vec![m.clone()],
+        ..Default::default()
+    };
+
+    let mut out = vec![];
+    for payload_str in &m.media_name.formats {
+        let payload_type: PayloadType = payload_str.parse::<u8>()?;
+        let codec = match s.get_codec_for_payload_type(payload_type) {
+            Ok(codec) => codec,
+            Err(err) => {
+                if payload_type == 0 {
+                    continue;
+                }
+                return Err(err);
             }
+        };
 
-            feedback = append(feedback, entry)
+        let channels = codec.encoding_parameters.parse::<u16>().unwrap_or(0);
+
+        let mut feedback = vec![];
+        for raw in &codec.rtcp_feedback {
+            let split: Vec<&str> = raw.split(' ').collect();
+
+            let entry = if split.len() == 2 {
+                RTCPFeedback {
+                    typ: split[0].to_string(),
+                    parameter: split[1].to_string(),
+                }
+            } else {
+                RTCPFeedback {
+                    typ: split[0].to_string(),
+                    parameter: String::new(),
+                }
+            };
+
+            feedback.push(entry);
         }
 
-        out = append(out, RTPCodecParameters{
-            RTPCodecCapability: RTPCodecCapability{m.MediaName.Media + "/" + codec.Name, codec.ClockRate, channels, codec.Fmtp, feedback},
-            PayloadType:        PayloadType(payloadType),
+        out.push(RTPCodecParameters {
+            capability: RTPCodecCapability {
+                mime_type: m.media_name.media.clone() + "/" + codec.name.as_str(),
+                clock_rate: codec.clock_rate,
+                channels,
+                sdp_fmtp_line: codec.fmtp.clone(),
+                rtcp_feedback: feedback,
+            },
+            payload_type,
+            stats_id: String::new(),
         })
     }
 
-    return out, nil
+    Ok(out)
 }
 
-func rtpExtensionsFromMediaDescription(m *sdp.MediaDescription) (map[string]int, error) {
-    out := map[string]int{}
+pub(crate) fn rtp_extensions_from_media_description(
+    m: &sdp::media_description::MediaDescription,
+) -> Result<HashMap<String, isize>> {
+    let mut out = HashMap::new();
 
-    for _, a := range m.Attributes {
-        if a.Key == sdp.AttrKeyExtMap {
-            e := sdp.ExtMap{}
-            if err := e.Unmarshal(a.String()); err != nil {
-                return nil, err
+    for a in &m.attributes {
+        if a.key == ATTR_KEY_EXT_MAP {
+            let a_str = a.to_string();
+            let mut reader = BufReader::new(a_str.as_bytes());
+            let e = ExtMap::unmarshal(&mut reader)?;
+
+            if let Some(uri) = e.uri {
+                out.insert(uri.to_string(), e.value);
             }
-
-            out[e.URI.String()] = e.Value
         }
     }
 
-    return out, nil
+    Ok(out)
 }
 
-// updateSDPOrigin saves sdp.Origin in PeerConnection when creating 1st local SDP;
-// for subsequent calling, it updates Origin for SessionDescription from saved one
-// and increments session version by one.
-// https://tools.ietf.org/html/draft-ietf-rtcweb-jsep-25#section-5.2.2
-// https://tools.ietf.org/html/draft-ietf-rtcweb-jsep-25#section-5.3.2
-func updateSDPOrigin(origin *sdp.Origin, d *sdp.SessionDescription) {
-    if atomic.CompareAndSwapUint64(&origin.SessionVersion, 0, d.Origin.SessionVersion) { // store
-        atomic.StoreUint64(&origin.SessionID, d.Origin.SessionID)
-    } else { // load
-        for { // awaiting for saving session id
+/// update_sdp_origin saves sdp.Origin in PeerConnection when creating 1st local SDP;
+/// for subsequent calling, it updates Origin for SessionDescription from saved one
+/// and increments session version by one.
+/// https://tools.ietf.org/html/draft-ietf-rtcweb-jsep-25#section-5.2.2
+/// https://tools.ietf.org/html/draft-ietf-rtcweb-jsep-25#section-5.3.2
+pub(crate) fn update_sdp_origin(
+    origin: &mut Origin,
+    d: &mut sdp::session_description::SessionDescription,
+) {
+    //TODO: if atomic.CompareAndSwapUint64(&origin.SessionVersion, 0, d.Origin.SessionVersion)
+    if origin.session_version == 0 {
+        // store
+        origin.session_version = d.origin.session_version;
+        //atomic.StoreUint64(&origin.SessionID, d.Origin.SessionID)
+        origin.session_id = d.origin.session_id;
+    } else {
+        // load
+        /*for { // awaiting for saving session id
             d.Origin.SessionID = atomic.LoadUint64(&origin.SessionID)
             if d.Origin.SessionID != 0 {
                 break
             }
-        }
-        d.Origin.SessionVersion = atomic.AddUint64(&origin.SessionVersion, 1)
+        }*/
+        d.origin.session_id = origin.session_id;
+
+        //d.Origin.SessionVersion = atomic.AddUint64(&origin.SessionVersion, 1)
+        origin.session_version += 1;
+        d.origin.session_version += 1;
     }
 }
-*/

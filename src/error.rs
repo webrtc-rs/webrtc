@@ -282,9 +282,11 @@ pub enum Error {
     ErrRTPTransceiverCannotChangeMid,
     #[error("invalid state change in RTPTransceiver.setSending")]
     ErrRTPTransceiverSetSendingInvalidState,
+    #[error("unsupported codec type by this transceiver")]
+    ErrRTPTransceiverCodecUnsupported,
     #[error("DTLS not established")]
     ErrSCTPTransportDTLS,
-    #[error("addTransceiverSDP() called with 0 transceivers")]
+    #[error("add_transceiver_sdp() called with 0 transceivers")]
     ErrSDPZeroTransceivers,
     #[error("invalid Media Section. Media + DataChannel both enabled")]
     ErrSDPMediaSectionMediaDataChanInvalid,

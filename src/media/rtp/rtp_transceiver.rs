@@ -1,9 +1,12 @@
-use crate::media::rtp::rtp_codec::RTPCodecType;
+use crate::media::rtp::rtp_codec::{
+    codec_parameters_fuzzy_search, CodecMatchType, RTPCodecParameters, RTPCodecType,
+};
 use crate::media::rtp::rtp_receiver::RTPReceiver;
 use crate::media::rtp::rtp_sender::RTPSender;
 use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
 use crate::media::track::track_local::TrackLocal;
 
+use crate::api::media_engine::MediaEngine;
 use crate::error::Error;
 use anyhow::Result;
 use std::sync::Arc;
@@ -15,8 +18,12 @@ pub struct RTPTransceiver {
     receiver: Option<RTPReceiver>,      //atomic.Value
     direction: RTPTransceiverDirection, //atomic.Value
 
+    codecs: Vec<RTPCodecParameters>, // User provided codecs via set_codec_preferences
+
     stopped: bool,
-    kind: RTPCodecType,
+    pub(crate) kind: RTPCodecType,
+
+    media_engine: Arc<MediaEngine>,
 }
 
 impl RTPTransceiver {
@@ -25,16 +32,51 @@ impl RTPTransceiver {
         sender: Option<RTPSender>,
         direction: RTPTransceiverDirection,
         kind: RTPCodecType,
+        media_engine: Arc<MediaEngine>,
     ) -> Self {
         RTPTransceiver {
             mid: String::new(),
             sender,
             receiver,
             direction,
-
+            codecs: vec![],
             stopped: false,
             kind,
+            media_engine,
         }
+    }
+
+    /// set_codec_preferences sets preferred list of supported codecs
+    /// if codecs is empty or nil we reset to default from MediaEngine
+    pub fn set_codec_preferences(&mut self, codecs: Vec<RTPCodecParameters>) -> Result<()> {
+        for codec in &codecs {
+            let media_engine_codecs = self.media_engine.get_codecs_by_kind(self.kind);
+            let (_, match_type) = codec_parameters_fuzzy_search(codec, &media_engine_codecs);
+            if match_type == CodecMatchType::None {
+                return Err(Error::ErrRTPTransceiverCodecUnsupported.into());
+            }
+        }
+
+        self.codecs = codecs;
+        Ok(())
+    }
+
+    /// Codecs returns list of supported codecs
+    pub(crate) fn get_codecs(&self) -> Vec<RTPCodecParameters> {
+        let media_engine_codecs = self.media_engine.get_codecs_by_kind(self.kind);
+        if self.codecs.is_empty() {
+            return media_engine_codecs;
+        }
+
+        let mut filtered_codecs = vec![];
+        for codec in &self.codecs {
+            let (c, match_type) = codec_parameters_fuzzy_search(codec, &media_engine_codecs);
+            if match_type != CodecMatchType::None {
+                filtered_codecs.push(c);
+            }
+        }
+
+        filtered_codecs
     }
 
     /// sender returns the RTPTransceiver's RTPSender if it has one

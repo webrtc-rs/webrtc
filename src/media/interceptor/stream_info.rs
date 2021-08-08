@@ -6,7 +6,7 @@ use crate::media::rtp::{PayloadType, SSRC};
 #[derive(Default, Debug, Clone)]
 pub struct RTPHeaderExtension {
     uri: String,
-    id: usize,
+    id: isize,
 }
 
 /// RTCPFeedback signals the connection to use additional RTCP packet types.

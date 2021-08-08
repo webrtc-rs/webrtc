@@ -13,11 +13,11 @@ repository = "https://github.com/webrtc-rs/webrtc"
 
 [dependencies]
 util = { package = "webrtc-util", version = "0.4.1" }
-sdp = "0.2.1"
+sdp = "0.2.3"
 mdns = { package = "webrtc-mdns", version = "0.3.1" }
 stun = "0.3.1"
 turn = "0.3.1"
-ice = { package = "webrtc-ice", version = "0.3.2" }
+ice = { package = "webrtc-ice", version = "0.3.3" }
 dtls = { package = "webrtc-dtls", version = "0.4.0" }
 rtp = "0.3.1"
 rtcp = "0.3.1"
@@ -35,6 +35,8 @@ thiserror = "1.0.25"
 anyhow = "1.0.41"
 waitgroup = "0.1.2"
 defer = "0.1.0"
+regex = "1"
+url = "2.2.2"
 
 [dev-dependencies]
 tokio-test = "0.4"
