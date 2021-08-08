@@ -11,7 +11,7 @@ pub const EXT_MAP_VALUE_TRANSPORT_CC_URI: &str =
 
 /// MediaDescription represents a media type.
 /// https://tools.ietf.org/html/rfc4566#section-5.14
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct MediaDescription {
     /// m=<media> <port>/<number of ports> <proto> <fmt> ...
     /// https://tools.ietf.org/html/rfc4566#section-5.14
@@ -179,7 +179,7 @@ impl MediaDescription {
 /// it may be necessary to specify multiple transport ports, the protocol allows
 /// to write it as: <port>/<number of ports> where number of ports is a an
 /// offsetting range.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct RangedPort {
     pub value: isize,
     pub range: Option<isize>,
@@ -196,7 +196,7 @@ impl fmt::Display for RangedPort {
 }
 
 /// MediaName describes the "m=" field storage structure.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct MediaName {
     pub media: String,
     pub port: RangedPort,

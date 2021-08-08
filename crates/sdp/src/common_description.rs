@@ -6,7 +6,7 @@ pub type Information = String;
 
 /// ConnectionInformation defines the representation for the "c=" field
 /// containing connection data.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct ConnectionInformation {
     pub network_type: String,
     pub address_type: String,
@@ -24,7 +24,7 @@ impl fmt::Display for ConnectionInformation {
 }
 
 /// Address desribes a structured address token from within the "c=" field.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Address {
     pub address: String,
     pub ttl: Option<isize>,
@@ -46,7 +46,7 @@ impl fmt::Display for Address {
 
 /// Bandwidth describes an optional field which denotes the proposed bandwidth
 /// to be used by the session or media.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Bandwidth {
     pub experimental: bool,
     pub bandwidth_type: String,
@@ -65,7 +65,7 @@ pub type EncryptionKey = String;
 
 /// Attribute describes the "a=" field which represents the primary means for
 /// extending SDP.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Attribute {
     pub key: String,
     pub value: Option<String>,

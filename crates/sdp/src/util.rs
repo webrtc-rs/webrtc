@@ -90,12 +90,12 @@ pub(crate) fn new_session_id() -> u64 {
 // Codec represents a codec
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Codec {
-    payload_type: u8,
-    name: String,
-    clock_rate: u32,
-    encoding_parameters: String,
-    fmtp: String,
-    rtcp_feedback: Vec<String>,
+    pub payload_type: u8,
+    pub name: String,
+    pub clock_rate: u32,
+    pub encoding_parameters: String,
+    pub fmtp: String,
+    pub rtcp_feedback: Vec<String>,
 }
 
 impl fmt::Display for Codec {
