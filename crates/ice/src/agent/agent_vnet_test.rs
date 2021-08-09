@@ -1,5 +1,6 @@
 use super::*;
 
+use crate::candidate::candidate_base::unmarshal_candidate;
 use async_trait::async_trait;
 use std::net::{IpAddr, Ipv4Addr};
 use std::str::FromStr;
@@ -386,14 +387,14 @@ pub(crate) async fn gather_and_exchange_candidates(
     let candidates = a_agent.get_local_candidates().await?;
     for c in candidates {
         let c2: Arc<dyn Candidate + Send + Sync> =
-            Arc::new(b_agent.unmarshal_remote_candidate(c.marshal()).await?);
+            Arc::new(unmarshal_candidate(c.marshal()).await?);
         b_agent.add_remote_candidate(&c2).await?;
     }
 
     let candidates = b_agent.get_local_candidates().await?;
     for c in candidates {
         let c2: Arc<dyn Candidate + Send + Sync> =
-            Arc::new(a_agent.unmarshal_remote_candidate(c.marshal()).await?);
+            Arc::new(unmarshal_candidate(c.marshal()).await?);
         a_agent.add_remote_candidate(&c2).await?;
     }
 

@@ -1,4 +1,8 @@
 use super::*;
+use crate::candidate::candidate_host::CandidateHostConfig;
+use crate::candidate::candidate_peer_reflexive::CandidatePeerReflexiveConfig;
+use crate::candidate::candidate_relay::CandidateRelayConfig;
+use crate::candidate::candidate_server_reflexive::CandidateServerReflexiveConfig;
 use crate::error::*;
 use crate::util::*;
 
@@ -462,5 +466,139 @@ impl CandidateBase {
                 log::warn!("failed to write packet: {}", err);
             }
         }
+    }
+}
+
+/// Creates a Candidate from its string representation.
+pub async fn unmarshal_candidate(raw: String) -> Result<impl Candidate> {
+    let split: Vec<&str> = raw.split_whitespace().collect();
+    if split.len() < 8 {
+        return Err(Error::new(format!(
+            "{:?} ({})",
+            Error::ErrAttributeTooShortIceCandidate,
+            split.len()
+        ))
+        .into());
+    }
+
+    // Foundation
+    let foundation = split[0].to_owned();
+
+    // Component
+    let component: u16 = split[1].parse()?;
+
+    // Network
+    let network = split[2].to_owned();
+
+    // Priority
+    let priority: u32 = split[3].parse()?;
+
+    // Address
+    let address = split[4].to_owned();
+
+    // Port
+    let port: u16 = split[5].parse()?;
+
+    let typ = split[7];
+
+    let mut rel_addr = String::new();
+    let mut rel_port = 0;
+    let mut tcp_type = TcpType::Unspecified;
+
+    if split.len() > 8 {
+        let split2 = &split[8..];
+
+        if split2[0] == "raddr" {
+            if split2.len() < 4 {
+                return Err(Error::new(format!(
+                    "{:?}: incorrect length",
+                    Error::ErrParseRelatedAddr
+                ))
+                .into());
+            }
+
+            // RelatedAddress
+            rel_addr = split2[1].to_owned();
+
+            // RelatedPort
+            rel_port = split2[3].parse()?;
+        } else if split2[0] == "tcptype" {
+            if split2.len() < 2 {
+                return Err(
+                    Error::new(format!("{:?}: incorrect length", Error::ErrParseType)).into(),
+                );
+            }
+
+            tcp_type = TcpType::from(split2[1]);
+        }
+    }
+
+    match typ {
+        "host" => {
+            let config = CandidateHostConfig {
+                base_config: CandidateBaseConfig {
+                    network,
+                    address,
+                    port,
+                    component,
+                    priority,
+                    foundation,
+                    ..CandidateBaseConfig::default()
+                },
+                tcp_type,
+            };
+            config.new_candidate_host().await
+        }
+        "srflx" => {
+            let config = CandidateServerReflexiveConfig {
+                base_config: CandidateBaseConfig {
+                    network,
+                    address,
+                    port,
+                    component,
+                    priority,
+                    foundation,
+                    ..CandidateBaseConfig::default()
+                },
+                rel_addr,
+                rel_port,
+            };
+            config.new_candidate_server_reflexive().await
+        }
+        "prflx" => {
+            let config = CandidatePeerReflexiveConfig {
+                base_config: CandidateBaseConfig {
+                    network,
+                    address,
+                    port,
+                    component,
+                    priority,
+                    foundation,
+                    ..CandidateBaseConfig::default()
+                },
+                rel_addr,
+                rel_port,
+            };
+
+            config.new_candidate_peer_reflexive().await
+        }
+        "relay" => {
+            let config = CandidateRelayConfig {
+                base_config: CandidateBaseConfig {
+                    network,
+                    address,
+                    port,
+                    component,
+                    priority,
+                    foundation,
+                    ..CandidateBaseConfig::default()
+                },
+                rel_addr,
+                rel_port,
+                ..CandidateRelayConfig::default()
+            };
+            config.new_candidate_relay().await
+        }
+        _ => Err(Error::new(format!("{:?} ({})", Error::ErrUnknownCandidateType, typ)).into()),
     }
 }
