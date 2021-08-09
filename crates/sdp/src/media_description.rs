@@ -54,7 +54,7 @@ impl MediaDescription {
 
     /// New JSEPMediaDescription creates a new MediaName with
     /// some settings that are required by the JSEP spec.
-    pub fn new(codec_type: String, _codec_prefs: Vec<&str>) -> Self {
+    pub fn new_jsep_media_description(codec_type: String, _codec_prefs: Vec<&str>) -> Self {
         MediaDescription {
             media_name: MediaName {
                 media: codec_type,
