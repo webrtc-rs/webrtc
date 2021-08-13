@@ -259,14 +259,13 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
                     let rc_obs = Arc::clone(&self.obs);
                     let nonce = self.nonce.clone();
                     let integrity = self.integrity.clone();
-                    tokio::spawn(async move {
-                        {
-                            let mut bm = binding_mgr.lock().await;
-                            if let Some(b) = bm.get_by_addr(&bind_addr) {
-                                b.set_state(BindingState::Request);
-                            }
+                    {
+                        let mut bm = binding_mgr.lock().await;
+                        if let Some(b) = bm.get_by_addr(&bind_addr) {
+                            b.set_state(BindingState::Request);
                         }
-
+                    }
+                    tokio::spawn(async move {
                         let result = RelayConnInternal::bind(
                             rc_obs,
                             bind_addr,
@@ -321,14 +320,13 @@ impl<T: RelayConnObserver + Send + Sync> RelayConnInternal<T> {
                 let rc_obs = Arc::clone(&self.obs);
                 let nonce = self.nonce.clone();
                 let integrity = self.integrity.clone();
-                tokio::spawn(async move {
-                    {
-                        let mut bm = binding_mgr.lock().await;
-                        if let Some(b) = bm.get_by_addr(&bind_addr) {
-                            b.set_state(BindingState::Refresh);
-                        }
+                {
+                    let mut bm = binding_mgr.lock().await;
+                    if let Some(b) = bm.get_by_addr(&bind_addr) {
+                        b.set_state(BindingState::Refresh);
                     }
-
+                }
+                tokio::spawn(async move {
                     let result =
                         RelayConnInternal::bind(rc_obs, bind_addr, bind_number, nonce, integrity)
                             .await;
