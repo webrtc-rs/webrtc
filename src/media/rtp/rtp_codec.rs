@@ -27,8 +27,8 @@ impl Default for RTPCodecType {
 impl From<&str> for RTPCodecType {
     fn from(raw: &str) -> Self {
         match raw {
-            "Audio" => RTPCodecType::Audio,
-            "Video" => RTPCodecType::Video,
+            "audio" => RTPCodecType::Audio,
+            "video" => RTPCodecType::Video,
             _ => RTPCodecType::Unspecified,
         }
     }
@@ -37,8 +37,8 @@ impl From<&str> for RTPCodecType {
 impl fmt::Display for RTPCodecType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
-            RTPCodecType::Audio => "Audio",
-            RTPCodecType::Video => "Video",
+            RTPCodecType::Audio => "audio",
+            RTPCodecType::Video => "video",
             RTPCodecType::Unspecified => crate::UNSPECIFIED_STR,
         };
         write!(f, "{}", s)
@@ -47,7 +47,7 @@ impl fmt::Display for RTPCodecType {
 
 /// RTPCodecCapability provides information about codec capabilities.
 /// https://w3c.github.io/webrtc-pc/#dictionary-rtcrtpcodeccapability-members
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct RTPCodecCapability {
     pub mime_type: String,
     pub clock_rate: u32,
@@ -91,7 +91,7 @@ pub struct RTPHeaderExtensionParameter {
 /// will choose from, as well as entries for RTX, RED and FEC mechanisms. This also
 /// includes the PayloadType that has been negotiated
 /// https://w3c.github.io/webrtc-pc/#rtcrtpcodecparameters
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct RTPCodecParameters {
     pub capability: RTPCodecCapability,
     pub payload_type: PayloadType,

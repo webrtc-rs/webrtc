@@ -41,7 +41,7 @@ pub const TYPE_RTCP_FB_NACK: &str = "nack";
 
 /// rtcpfeedback signals the connection to use additional RTCP packet types.
 /// https://draft.ortc.org/#dom-rtcrtcpfeedback
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct RTCPFeedback {
     /// Type is the type of feedback.
     /// see: https://draft.ortc.org/#dom-rtcrtcpfeedback
