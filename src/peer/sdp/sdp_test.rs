@@ -1,5 +1,7 @@
 use super::*;
-use crate::api::media_engine::MIME_TYPE_OPUS;
+use crate::api::media_engine::{MIME_TYPE_OPUS, MIME_TYPE_VP8};
+use crate::api::setting_engine::SettingEngine;
+use crate::media::dtls_transport::dtls_role::DEFAULT_DTLS_ROLE_OFFER;
 use sdp::common_description::Attribute;
 
 #[test]
@@ -501,7 +503,7 @@ fn test_have_application_media_section() -> Result<()> {
     Ok(())
 }
 
-/*TODO:
+/*TODO: add certificate.GetFingerprints support
 #[test]
 fn test_media_description_fingerprints() -> Result<()> {
     let mut engine = MediaEngine::default();
@@ -566,96 +568,154 @@ fn test_media_description_fingerprints() -> Result<()> {
     t.Run("Per-Session Description Fingerprints", fingerprintTest(false, 1))
 }
 
+ */
 
 #[tokio::test]
-async fn test_populate_sdp() ->Result<()>{
+async fn test_populate_sdp() -> Result<()> {
     //"Rid"
     {
-        se := SettingEngine{}
+        let se = SettingEngine::default();
+        let mut me = MediaEngine::default();
+        me.register_default_codecs()?;
+        let me = Arc::new(me);
 
-        me := &MediaEngine{}
-        assert.NoError(t, me.RegisterDefaultCodecs())
-        api := NewAPI(WithMediaEngine(me))
+        let tr = RTPTransceiver::new(
+            None,
+            None,
+            RTPTransceiverDirection::Recvonly,
+            RTPCodecType::Video,
+            me.video_codecs.clone(),
+            Arc::clone(&me),
+        );
 
-        tr := &RTPTransceiver{kind: RTPCodecTypeVideo, api: api, codecs: me.videoCodecs}
-        tr.setDirection(RTPTransceiverDirectionRecvonly)
-        ridMap := map[string]string{
-            "ridkey": "some",
-        }
-        mediaSections := []mediaSection{{id: "video", transceivers: []*RTPTransceiver{tr}, ridMap: ridMap}}
+        let mut rid_map = HashMap::new();
+        rid_map.insert("ridkey".to_owned(), "some".to_owned());
+        let media_sections = vec![MediaSection {
+            id: "video".to_owned(),
+            transceivers: vec![tr],
+            data: false,
+            rid_map,
+        }];
 
-        d := &sdp.SessionDescription{}
+        let d = sdp::session_description::SessionDescription::default();
 
-        offerSdp, err := populateSDP(d, false, []DTLSFingerprint{}, se.sdpMediaLevelFingerprints, se.candidates.ICELite, me, connectionRoleFromDtlsRole(defaultDtlsRoleOffer), []ICECandidate{}, ICEParameters{}, mediaSections, ICEGatheringStateComplete)
-        assert.Nil(t, err)
+        let params = PopulateSdpParams {
+            is_plan_b: false,
+            media_description_fingerprint: se.sdp_media_level_fingerprints,
+            is_icelite: se.candidates.ice_lite,
+            connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
+            ice_gathering_state: ICEGatheringState::Complete,
+        };
+        let offer_sdp = populate_sdp(
+            d,
+            &[],
+            &me,
+            &[],
+            &ICEParameters::default(),
+            &media_sections,
+            params,
+        )
+        .await?;
 
         // Test contains rid map keys
-        var found bool
-        for _, desc := range offerSdp.MediaDescriptions {
-            if desc.MediaName.Media != "video" {
-                continue
+        let mut found = false;
+        for desc in &offer_sdp.media_descriptions {
+            if desc.media_name.media != "video" {
+                continue;
             }
-            for _, a := range desc.Attributes {
-                if a.Key == "rid" {
-                    if strings.Contains(a.Value, "ridkey") {
-                        found = true
-                        break
+            for a in &desc.attributes {
+                if a.key == "rid" {
+                    if let Some(value) = &a.value {
+                        if value.contains("ridkey") {
+                            found = true;
+                            break;
+                        }
                     }
                 }
             }
         }
-        assert.Equal(t, true, found, "Rid key should be present")
+        assert_eq!(true, found, "Rid key should be present");
     }
 
     //"SetCodecPreferences"
     {
-        se := SettingEngine{}
+        let se = SettingEngine::default();
+        let mut me = MediaEngine::default();
+        me.register_default_codecs()?;
+        me.push_codecs(me.video_codecs.clone(), RTPCodecType::Video);
+        me.push_codecs(me.audio_codecs.clone(), RTPCodecType::Audio);
+        let me = Arc::new(me);
 
-        me := &MediaEngine{}
-        assert.NoError(t, me.RegisterDefaultCodecs())
-        api := NewAPI(WithMediaEngine(me))
-        me.pushCodecs(me.videoCodecs, RTPCodecTypeVideo)
-        me.pushCodecs(me.audioCodecs, RTPCodecTypeAudio)
-
-        tr := &RTPTransceiver{kind: RTPCodecTypeVideo, api: api, codecs: me.videoCodecs}
-        tr.setDirection(RTPTransceiverDirectionRecvonly)
-        codecErr := tr.SetCodecPreferences([]RTPCodecParameters{
-            {
-                RTPCodecCapability: RTPCodecCapability{MimeTypeVP8, 90000, 0, "", nil},
-                PayloadType:        96,
+        let mut tr = RTPTransceiver::new(
+            None,
+            None,
+            RTPTransceiverDirection::Recvonly,
+            RTPCodecType::Video,
+            me.video_codecs.clone(),
+            Arc::clone(&me),
+        );
+        tr.set_codec_preferences(vec![RTPCodecParameters {
+            capability: RTPCodecCapability {
+                mime_type: MIME_TYPE_VP8.to_owned(),
+                clock_rate: 90000,
+                channels: 0,
+                sdp_fmtp_line: "".to_owned(),
+                rtcp_feedback: vec![],
             },
-        })
-        assert.NoError(t, codecErr)
+            payload_type: 96,
+            ..Default::default()
+        }])?;
 
-        mediaSections := []mediaSection{{id: "video", transceivers: []*RTPTransceiver{tr}}}
+        let media_sections = vec![MediaSection {
+            id: "video".to_owned(),
+            transceivers: vec![tr],
+            data: false,
+            rid_map: HashMap::new(),
+        }];
 
-        d := &sdp.SessionDescription{}
+        let d = sdp::session_description::SessionDescription::default();
 
-        offerSdp, err := populateSDP(d, false, []DTLSFingerprint{}, se.sdpMediaLevelFingerprints, se.candidates.ICELite, me, connectionRoleFromDtlsRole(defaultDtlsRoleOffer), []ICECandidate{}, ICEParameters{}, mediaSections, ICEGatheringStateComplete)
-        assert.Nil(t, err)
+        let params = PopulateSdpParams {
+            is_plan_b: false,
+            media_description_fingerprint: se.sdp_media_level_fingerprints,
+            is_icelite: se.candidates.ice_lite,
+            connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
+            ice_gathering_state: ICEGatheringState::Complete,
+        };
+        let offer_sdp = populate_sdp(
+            d,
+            &[],
+            &me,
+            &[],
+            &ICEParameters::default(),
+            &media_sections,
+            params,
+        )
+        .await?;
 
         // Test codecs
-        foundVP8 := false
-        for _, desc := range offerSdp.MediaDescriptions {
-            if desc.MediaName.Media != "video" {
-                continue
+        let mut found_vp8 = false;
+        for desc in &offer_sdp.media_descriptions {
+            if desc.media_name.media != "video" {
+                continue;
             }
-            for _, a := range desc.Attributes {
-                if strings.Contains(a.Key, "rtpmap") {
-                    if a.Value == "98 VP9/90000" {
-                        t.Fatal("vp9 should not be present in sdp")
-                    } else if a.Value == "96 VP8/90000" {
-                        foundVP8 = true
+            for a in &desc.attributes {
+                if a.key.contains("rtpmap") {
+                    if let Some(value) = &a.value {
+                        if value == "98 VP9/90000" {
+                            assert!(false, "vp9 should not be present in sdp");
+                        } else if value == "96 VP8/90000" {
+                            found_vp8 = true;
+                        }
                     }
                 }
             }
         }
-        assert.Equal(t, true, foundVP8, "vp8 should be present in sdp")
+        assert_eq!(true, found_vp8, "vp8 should be present in sdp");
     }
 
     Ok(())
 }
- */
 
 #[test]
 fn test_get_rids() {

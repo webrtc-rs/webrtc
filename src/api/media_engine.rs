@@ -7,31 +7,32 @@ use crate::media::rtp::rtp_transceiver_direction::{
 };
 
 use crate::error::Error;
+use crate::media::rtp::RTCPFeedback;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// MIME_TYPE_H264 H264 MIME type.
 /// Note: Matching should be case insensitive.
-pub const MIME_TYPE_H264: &str = "video/h264";
+pub const MIME_TYPE_H264: &str = "video/H264";
 /// MIME_TYPE_OPUS Opus MIME type
 /// Note: Matching should be case insensitive.
 pub const MIME_TYPE_OPUS: &str = "audio/opus";
 /// MIME_TYPE_VP8 VP8 MIME type
 /// Note: Matching should be case insensitive.
-pub const MIME_TYPE_VP8: &str = "video/vp8";
+pub const MIME_TYPE_VP8: &str = "video/VP8";
 /// MIME_TYPE_VP9 VP9 MIME type
 /// Note: Matching should be case insensitive.
-pub const MIME_TYPE_VP9: &str = "video/vp9";
+pub const MIME_TYPE_VP9: &str = "video/VP9";
 /// MIME_TYPE_G722 G722 MIME type
 /// Note: Matching should be case insensitive.
-pub const MIME_TYPE_G722: &str = "audio/g722";
+pub const MIME_TYPE_G722: &str = "audio/G722";
 /// MIME_TYPE_PCMU PCMU MIME type
 /// Note: Matching should be case insensitive.
-pub const MIME_TYPE_PCMU: &str = "audio/pcmu";
+pub const MIME_TYPE_PCMU: &str = "audio/PCMU";
 /// MIME_TYPE_PCMA PCMA MIME type
 /// Note: Matching should be case insensitive.
-pub const MIME_TYPE_PCMA: &str = "audio/pcma";
+pub const MIME_TYPE_PCMA: &str = "audio/PCMA";
 
 #[derive(Default, Clone)]
 pub(crate) struct MediaEngineHeaderExtension {
@@ -113,100 +114,251 @@ impl MediaEngine {
         ] {
             self.register_codec(codec, RTPCodecType::Audio)?;
         }
-        /*TODO:
-                videoRTCPFeedback := []rtcpfeedback{{"goog-remb", ""}, {"ccm", "fir"}, {"nack", ""}, {"nack", "pli"}}
-                for _, codec := range []RTPCodecParameters{
-                    {
-                        RTPCodecCapability: RTPCodecCapability{MIME_TYPE_VP8, 90000, 0, "", videoRTCPFeedback},
-                        PayloadType:        96,
-                    },
-                    {
-                        RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=96", nil},
-                        PayloadType:        97,
-                    },
 
-                    {
-                        RTPCodecCapability: RTPCodecCapability{MIME_TYPE_VP9, 90000, 0, "profile-id=0", videoRTCPFeedback},
-                        PayloadType:        98,
-                    },
-                    {
-                        RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=98", nil},
-                        PayloadType:        99,
-                    },
+        let video_rtcp_feedback = vec![
+            RTCPFeedback {
+                typ: "goog-remb".to_owned(),
+                parameter: "".to_owned(),
+            },
+            RTCPFeedback {
+                typ: "ccm".to_owned(),
+                parameter: "fir".to_owned(),
+            },
+            RTCPFeedback {
+                typ: "nack".to_owned(),
+                parameter: "".to_owned(),
+            },
+            RTCPFeedback {
+                typ: "nack".to_owned(),
+                parameter: "pli".to_owned(),
+            },
+        ];
+        for codec in vec![
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: MIME_TYPE_VP8.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: "".to_owned(),
+                    rtcp_feedback: video_rtcp_feedback.clone(),
+                },
+                payload_type: 96,
+                ..Default::default()
+            },
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: "video/rtx".to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: "apt=96".to_owned(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 97,
+                ..Default::default()
+            },
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: MIME_TYPE_VP9.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: "profile-id=0".to_owned(),
+                    rtcp_feedback: video_rtcp_feedback.clone(),
+                },
+                payload_type: 98,
+                ..Default::default()
+            },
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: "video/rtx".to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: "apt=98".to_owned(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 99,
+                ..Default::default()
+            },
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: MIME_TYPE_VP9.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: "profile-id=1".to_owned(),
+                    rtcp_feedback: video_rtcp_feedback.clone(),
+                },
+                payload_type: 100,
+                ..Default::default()
+            },
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: "video/rtx".to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: "apt=100".to_owned(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 101,
+                ..Default::default()
+            },
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: MIME_TYPE_H264.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line:
+                        "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"
+                            .to_owned(),
+                    rtcp_feedback: video_rtcp_feedback.clone(),
+                },
+                payload_type: 102,
+                ..Default::default()
+            },
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: "video/rtx".to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: "apt=102".to_owned(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 121,
+                ..Default::default()
+            },
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: MIME_TYPE_H264.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line:
+                        "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42001f"
+                            .to_owned(),
+                    rtcp_feedback: video_rtcp_feedback.clone(),
+                },
+                payload_type: 127,
+                ..Default::default()
+            },
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: "video/rtx".to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: "apt=127".to_owned(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 120,
+                ..Default::default()
+            },
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: MIME_TYPE_H264.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line:
+                        "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f"
+                            .to_owned(),
+                    rtcp_feedback: video_rtcp_feedback.clone(),
+                },
+                payload_type: 125,
+                ..Default::default()
+            },
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: "video/rtx".to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: "apt=125".to_owned(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 107,
+                ..Default::default()
+            },
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: MIME_TYPE_H264.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line:
+                        "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42e01f"
+                            .to_owned(),
+                    rtcp_feedback: video_rtcp_feedback.clone(),
+                },
+                payload_type: 108,
+                ..Default::default()
+            },
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: "video/rtx".to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: "apt=108".to_owned(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 109,
+                ..Default::default()
+            },
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: MIME_TYPE_H264.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line:
+                        "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42001f"
+                            .to_owned(),
+                    rtcp_feedback: video_rtcp_feedback.clone(),
+                },
+                payload_type: 127,
+                ..Default::default()
+            },
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: "video/rtx".to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: "apt=127".to_owned(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 120,
+                ..Default::default()
+            },
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: MIME_TYPE_H264.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line:
+                        "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640032"
+                            .to_owned(),
+                    rtcp_feedback: video_rtcp_feedback,
+                },
+                payload_type: 123,
+                ..Default::default()
+            },
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: "video/rtx".to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: "apt=123".to_owned(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 118,
+                ..Default::default()
+            },
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: "video/ulpfec".to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: "".to_owned(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 116,
+                ..Default::default()
+            },
+        ] {
+            self.register_codec(codec, RTPCodecType::Video)?;
+        }
 
-                    {
-                        RTPCodecCapability: RTPCodecCapability{MIME_TYPE_VP9, 90000, 0, "profile-id=1", videoRTCPFeedback},
-                        PayloadType:        100,
-                    },
-                    {
-                        RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=100", nil},
-                        PayloadType:        101,
-                    },
-
-                    {
-                        RTPCodecCapability: RTPCodecCapability{MIME_TYPE_H264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f", videoRTCPFeedback},
-                        PayloadType:        102,
-                    },
-                    {
-                        RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=102", nil},
-                        PayloadType:        121,
-                    },
-
-                    {
-                        RTPCodecCapability: RTPCodecCapability{MIME_TYPE_H264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42001f", videoRTCPFeedback},
-                        PayloadType:        127,
-                    },
-                    {
-                        RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=127", nil},
-                        PayloadType:        120,
-                    },
-
-                    {
-                        RTPCodecCapability: RTPCodecCapability{MIME_TYPE_H264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f", videoRTCPFeedback},
-                        PayloadType:        125,
-                    },
-                    {
-                        RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=125", nil},
-                        PayloadType:        107,
-                    },
-
-                    {
-                        RTPCodecCapability: RTPCodecCapability{MIME_TYPE_H264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42e01f", videoRTCPFeedback},
-                        PayloadType:        108,
-                    },
-                    {
-                        RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=108", nil},
-                        PayloadType:        109,
-                    },
-
-                    {
-                        RTPCodecCapability: RTPCodecCapability{MIME_TYPE_H264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42001f", videoRTCPFeedback},
-                        PayloadType:        127,
-                    },
-                    {
-                        RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=127", nil},
-                        PayloadType:        120,
-                    },
-
-                    {
-                        RTPCodecCapability: RTPCodecCapability{MIME_TYPE_H264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640032", videoRTCPFeedback},
-                        PayloadType:        123,
-                    },
-                    {
-                        RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=123", nil},
-                        PayloadType:        118,
-                    },
-
-                    {
-                        RTPCodecCapability: RTPCodecCapability{"video/ulpfec", 90000, 0, "", nil},
-                        PayloadType:        116,
-                    },
-                } {
-                    if err := m.register_codec(codec, RTPCodecTypeVideo); err != nil {
-                        return err
-                    }
-                }
-        */
         Ok(())
     }
 
@@ -441,18 +593,18 @@ impl MediaEngine {
             }
         }
         return nil
-    }
+    }*/
 
-    func (m *MediaEngine) pushCodecs(codecs []RTPCodecParameters, typ RTPCodecType) {
-        for _, codec := range codecs {
-            if typ == RTPCodecTypeAudio {
-                m.negotiatedAudioCodecs = m.add_codec(m.negotiatedAudioCodecs, codec)
-            } else if typ == RTPCodecTypeVideo {
-                m.negotiatedVideoCodecs = m.add_codec(m.negotiatedVideoCodecs, codec)
+    pub(crate) fn push_codecs(&mut self, codecs: Vec<RTPCodecParameters>, typ: RTPCodecType) {
+        for codec in codecs {
+            if typ == RTPCodecType::Audio {
+                MediaEngine::add_codec(&mut self.negotiated_audio_codecs, codec);
+            } else if typ == RTPCodecType::Video {
+                MediaEngine::add_codec(&mut self.negotiated_video_codecs, codec);
             }
         }
     }
-
+    /*
     // Update the MediaEngine from a remote description
     func (m *MediaEngine) updateFromRemoteDescription(desc sdp.SessionDescription) error {
         for _, media := range desc.MediaDescriptions {

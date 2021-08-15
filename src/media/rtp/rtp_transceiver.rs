@@ -32,6 +32,7 @@ impl RTPTransceiver {
         sender: Option<RTPSender>,
         direction: RTPTransceiverDirection,
         kind: RTPCodecType,
+        codecs: Vec<RTPCodecParameters>,
         media_engine: Arc<MediaEngine>,
     ) -> Self {
         RTPTransceiver {
@@ -39,7 +40,7 @@ impl RTPTransceiver {
             sender,
             receiver,
             direction,
-            codecs: vec![],
+            codecs,
             stopped: false,
             kind,
             media_engine,
