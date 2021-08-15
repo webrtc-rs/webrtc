@@ -47,11 +47,11 @@ pub struct RTPSender {
 }
 
 impl RTPSender {
-    fn is_negotiated(&self) -> bool {
+    pub(crate) fn is_negotiated(&self) -> bool {
         self.negotiated
     }
 
-    fn set_segotiated(&mut self) {
+    pub(crate) fn set_segotiated(&mut self) {
         self.negotiated = true;
     }
 
@@ -225,12 +225,12 @@ impl RTPSender {
     */
 
     /// has_sent tells if data has been ever sent for this instance
-    fn has_sent(&self) -> bool {
+    pub(crate) fn has_sent(&self) -> bool {
         self.send_called_tx.is_none()
     }
 
     /// has_stopped tells if stop has been called
-    fn has_stopped(&self) -> bool {
+    pub(crate) fn has_stopped(&self) -> bool {
         self.stop_called_tx.is_none()
     }
 }
