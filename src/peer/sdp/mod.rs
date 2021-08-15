@@ -319,23 +319,23 @@ pub(crate) async fn add_data_media_section(
 }
 
 pub(crate) async fn populate_local_candidates(
-    session_description: Option<session_description::SessionDescription>,
-    ice_gatherer: Option<Arc<ICEGatherer>>,
+    session_description: Option<&session_description::SessionDescription>,
+    ice_gatherer: Option<&Arc<ICEGatherer>>,
     ice_gathering_state: ICEGatheringState,
 ) -> Option<session_description::SessionDescription> {
     if session_description.is_none() || ice_gatherer.is_none() {
-        return session_description;
+        return session_description.cloned();
     }
 
     if let (Some(sd), Some(ice)) = (session_description, ice_gatherer) {
         let candidates = match ice.get_local_candidates().await {
             Ok(candidates) => candidates,
-            Err(_) => return Some(sd),
+            Err(_) => return Some(sd.clone()),
         };
 
         let mut parsed = match sd.unmarshal() {
             Ok(parsed) => parsed,
-            Err(_) => return Some(sd),
+            Err(_) => return Some(sd.clone()),
         };
 
         if !parsed.media_descriptions.is_empty() {
@@ -344,7 +344,7 @@ pub(crate) async fn populate_local_candidates(
                 .await
             {
                 Ok(m) => m,
-                Err(_) => return Some(sd),
+                Err(_) => return Some(sd.clone()),
             };
             parsed.media_descriptions.insert(0, m);
         }
