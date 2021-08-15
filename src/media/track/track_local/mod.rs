@@ -86,10 +86,10 @@ pub trait TrackLocal {
     /// id is the unique identifier for this Track. This should be unique for the
     /// stream, but doesn't have to globally unique. A common example would be 'audio' or 'video'
     /// and stream_id would be 'desktop' or 'webcam'
-    fn id(&self) -> String;
+    fn id(&self) -> &str;
 
     /// stream_id is the group this track belongs too. This must be unique
-    fn stream_id(&self) -> String;
+    fn stream_id(&self) -> &str;
 
     /// kind controls if this TrackLocal is audio or video
     fn kind(&self) -> RTPCodecType;

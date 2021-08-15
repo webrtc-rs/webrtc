@@ -20,7 +20,7 @@ pub struct RTPTransceiver {
 
     codecs: Vec<RTPCodecParameters>, // User provided codecs via set_codec_preferences
 
-    stopped: bool,
+    pub(crate) stopped: bool,
     pub(crate) kind: RTPCodecType,
 
     media_engine: Arc<MediaEngine>,
@@ -111,8 +111,8 @@ impl RTPTransceiver {
     }
 
     /// mid gets the Transceiver's mid value. When not already set, this value will be set in CreateOffer or CreateAnswer.
-    pub fn mid(&self) -> String {
-        self.mid.clone()
+    pub fn mid(&self) -> &str {
+        self.mid.as_str()
     }
 
     /// kind returns RTPTransceiver's kind.

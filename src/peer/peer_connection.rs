@@ -25,9 +25,13 @@ use crate::peer::policy::sdp_semantics::SDPSemantics;
 use crate::peer::sdp::session_description::SessionDescription;
 use crate::peer::signaling_state::SignalingState;
 
+use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
 use crate::peer::operation::Operations;
+use crate::peer::sdp::sdp_type::SDPType;
+use crate::peer::sdp::{get_by_mid, get_peer_direction, have_data_channel};
 use anyhow::Result;
 use defer::defer;
+use sdp::session_description::ATTR_KEY_MSID;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
@@ -399,7 +403,7 @@ impl PeerConnection {
         }
 
         // Step 2.4
-        if !self.check_negotiation_needed() {
+        if !self.check_negotiation_needed().await {
             self.is_negotiation_needed.store(false, Ordering::SeqCst);
             return;
         }
@@ -419,65 +423,87 @@ impl PeerConnection {
         }
     }
 
-    fn check_negotiation_needed(&self) -> bool {
+    async fn check_negotiation_needed(&self) -> bool {
         // To check if negotiation is needed for connection, perform the following checks:
         // Skip 1, 2 steps
         // Step 3
-        if let Some(_local_desc) = &self.current_local_description {
-            let _remote_desc = &self.current_remote_description;
-            /*
-            let lenDataChannel = self.sctp_transport.data_channels.len();
+        if let Some(local_desc) = &self.current_local_description {
+            let len_data_channel = {
+                let data_channels = self.sctp_transport.data_channels.lock().await;
+                data_channels.len()
+            };
 
-            if lenDataChannel != 0 && have_data_channel(localDesc) == nil {
+            if len_data_channel != 0 && have_data_channel(local_desc).is_none() {
                 return true;
             }
 
-            for _, t := range pc.rtp_transceivers {
+            for t in &self.rtp_transceivers {
                 // https://www.w3.org/TR/webrtc/#dfn-update-the-negotiation-needed-flag
                 // Step 5.1
                 // if t.stopping && !t.stopped {
                 // 	return true
                 // }
-                m := get_by_mid(t.Mid(), localDesc)
+                let m = get_by_mid(t.mid(), local_desc);
                 // Step 5.2
-                if !t.stopped && m == nil {
-                    return true
+                if !t.stopped && m.is_none() {
+                    return true;
                 }
-                if !t.stopped && m != nil {
-                    // Step 5.3.1
-                    if t.Direction() == RTPTransceiverDirectionSendrecv || t.Direction() == RTPTransceiverDirectionSendonly {
-                        descMsid, okMsid := m.Attribute(sdp.AttrKeyMsid)
-                        track := t.Sender().Track()
-                        if !okMsid || descMsid != track.stream_id()+" "+track.ID() {
-                            return true
+                if !t.stopped {
+                    if let Some(m) = m {
+                        // Step 5.3.1
+                        if t.direction() == RTPTransceiverDirection::Sendrecv
+                            || t.direction() == RTPTransceiverDirection::Sendonly
+                        {
+                            if let (Some(desc_msid), Some(sender)) =
+                                (m.attribute(ATTR_KEY_MSID), t.sender())
+                            {
+                                if let Some(track) = &sender.track() {
+                                    if desc_msid.as_str()
+                                        != track.stream_id().to_owned() + " " + track.id()
+                                    {
+                                        return true;
+                                    }
+                                }
+                            } else {
+                                return true;
+                            }
                         }
-                    }
-                    switch localDesc.Type {
-                    case SDPTypeOffer:
-                        // Step 5.3.2
-                        rm := get_by_mid(t.Mid(), remoteDesc)
-                        if rm == nil {
-                            return true
-                        }
-
-                        if get_peer_direction(m) != t.Direction() && get_peer_direction(rm) != t.Direction().Revers() {
-                            return true
-                        }
-                    case SDPTypeAnswer:
-                        // Step 5.3.3
-                        if _, ok := m.Attribute(t.Direction().String()); !ok {
-                            return true
-                        }
-                    default:
+                        match local_desc.serde.sdp_type {
+                            SDPType::Offer => {
+                                // Step 5.3.2
+                                if let Some(remote_desc) = &self.current_remote_description {
+                                    if let Some(rm) = get_by_mid(t.mid(), remote_desc) {
+                                        if get_peer_direction(m) != t.direction()
+                                            && get_peer_direction(rm) != t.direction().reverse()
+                                        {
+                                            return true;
+                                        }
+                                    } else {
+                                        return true;
+                                    }
+                                }
+                            }
+                            SDPType::Answer => {
+                                // Step 5.3.3
+                                if m.attribute(t.direction().to_string().as_str()).is_none() {
+                                    return true;
+                                }
+                            }
+                            _ => {}
+                        };
                     }
                 }
                 // Step 5.4
-                if t.stopped && t.Mid() != "" {
-                    if get_by_mid(t.Mid(), localDesc) != nil || get_by_mid(t.Mid(), remoteDesc) != nil {
-                        return true
+                if t.stopped && !t.mid().is_empty() {
+                    if let Some(remote_desc) = &self.current_remote_description {
+                        if get_by_mid(t.mid(), local_desc).is_some()
+                            || get_by_mid(t.mid(), remote_desc).is_some()
+                        {
+                            return true;
+                        }
                     }
                 }
-            }*/
+            }
             // Step 6
             false
         } else {

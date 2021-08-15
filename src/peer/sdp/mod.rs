@@ -17,6 +17,7 @@ use crate::MEDIA_SECTION_APPLICATION;
 pub mod sdp_type;
 pub mod session_description;
 
+use crate::peer::sdp::session_description::SessionDescriptionSerde;
 use anyhow::Result;
 use ice::candidate::candidate_base::unmarshal_candidate;
 use ice::candidate::Candidate;
@@ -349,8 +350,11 @@ pub(crate) async fn populate_local_candidates(
         }
 
         Some(session_description::SessionDescription {
-            sdp_type: sd.sdp_type,
-            sdp: parsed.marshal(),
+            serde: SessionDescriptionSerde {
+                sdp_type: sd.serde.sdp_type,
+                sdp: parsed.marshal(),
+            },
+            parsed: Some(parsed),
         })
     } else {
         None
@@ -490,13 +494,13 @@ pub(crate) async fn add_transceiver_sdp(
             if let Some(track) = sender.track() {
                 media = media.with_media_source(
                     sender.ssrc,
-                    track.stream_id(), /* cname */
-                    track.stream_id(), /* streamLabel */
-                    track.id(),
+                    track.stream_id().to_owned(), /* cname */
+                    track.stream_id().to_owned(), /* streamLabel */
+                    track.id().to_owned(),
                 );
                 if !is_plan_b {
                     media = media.with_property_attribute(
-                        "msid:".to_owned() + track.stream_id().as_str() + " " + track.id().as_str(),
+                        "msid:".to_owned() + track.stream_id() + " " + track.id(),
                     );
                     break;
                 }
@@ -761,12 +765,14 @@ pub(crate) fn have_application_media_section(
 
 pub(crate) fn get_by_mid<'a, 'b>(
     search_mid: &'a str,
-    desc: &'b sdp::session_description::SessionDescription,
+    desc: &'b session_description::SessionDescription,
 ) -> Option<&'b sdp::media_description::MediaDescription> {
-    for m in &desc.media_descriptions {
-        if let Some(mid) = m.attribute(ATTR_KEY_MID) {
-            if mid == search_mid {
-                return Some(m);
+    if let Some(parsed) = &desc.parsed {
+        for m in &parsed.media_descriptions {
+            if let Some(mid) = m.attribute(ATTR_KEY_MID) {
+                if mid == search_mid {
+                    return Some(m);
+                }
             }
         }
     }
@@ -775,11 +781,13 @@ pub(crate) fn get_by_mid<'a, 'b>(
 
 /// have_data_channel return MediaDescription with MediaName equal application
 pub(crate) fn have_data_channel(
-    desc: &sdp::session_description::SessionDescription,
+    desc: &session_description::SessionDescription,
 ) -> Option<&sdp::media_description::MediaDescription> {
-    for d in &desc.media_descriptions {
-        if d.media_name.media == MEDIA_SECTION_APPLICATION {
-            return Some(d);
+    if let Some(parsed) = &desc.parsed {
+        for d in &parsed.media_descriptions {
+            if d.media_name.media == MEDIA_SECTION_APPLICATION {
+                return Some(d);
+            }
         }
     }
     None

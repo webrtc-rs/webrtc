@@ -81,13 +81,13 @@ impl TrackLocal for TrackLocalStaticRTP {
     /// id is the unique identifier for this Track. This should be unique for the
     /// stream, but doesn't have to globally unique. A common example would be 'audio' or 'video'
     /// and StreamID would be 'desktop' or 'webcam'
-    fn id(&self) -> String {
-        self.id.clone()
+    fn id(&self) -> &str {
+        self.id.as_str()
     }
 
     /// stream_id is the group this track belongs too. This must be unique
-    fn stream_id(&self) -> String {
-        self.stream_id.clone()
+    fn stream_id(&self) -> &str {
+        self.stream_id.as_str()
     }
 
     /// kind controls if this TrackLocal is audio or video
