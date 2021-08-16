@@ -109,7 +109,7 @@ async fn main() -> Result<()> {
     let conn = Arc::new(UdpSocket::bind(format!("0.0.0.0:{}", port)).await?);
     println!("listening {}...", conn.local_addr()?);
 
-    let server = Server::new(ServerConfig {
+    let mut server = Server::new(ServerConfig {
         conn_configs: vec![ConnConfig {
             conn,
             relay_addr_generator: Box::new(RelayAddressGeneratorStatic {
@@ -127,7 +127,7 @@ async fn main() -> Result<()> {
     println!("Waiting for Ctrl-C...");
     signal::ctrl_c().await.expect("failed to listen for event");
     println!("\nClosing connection now...");
-    server.close()?;
+    server.close().await?;
 
     Ok(())
 }

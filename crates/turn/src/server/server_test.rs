@@ -46,7 +46,7 @@ async fn test_server_simple() -> Result<()> {
     let conn = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     let server_port = conn.local_addr()?.port();
 
-    let server = Server::new(ServerConfig {
+    let mut server = Server::new(ServerConfig {
         conn_configs: vec![ConnConfig {
             conn,
             relay_addr_generator: Box::new(RelayAddressGeneratorStatic {
@@ -88,7 +88,7 @@ async fn test_server_simple() -> Result<()> {
         .await?;
 
     client.close().await?;
-    server.close()?;
+    server.close().await?;
 
     Ok(())
 }

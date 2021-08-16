@@ -57,7 +57,7 @@ async fn test_new_long_term_auth_handler() -> Result<()> {
     let conn = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     let server_port = conn.local_addr()?.port();
 
-    let server = Server::new(ServerConfig {
+    let mut server = Server::new(ServerConfig {
         conn_configs: vec![ConnConfig {
             conn,
             relay_addr_generator: Box::new(RelayAddressGeneratorStatic {
@@ -97,7 +97,7 @@ async fn test_new_long_term_auth_handler() -> Result<()> {
     let _allocation = client.allocate().await?;
 
     client.close().await?;
-    server.close()?;
+    server.close().await?;
 
     Ok(())
 }
