@@ -37,13 +37,12 @@ async fn main() -> Result<()> {
 
     let server = matches.value_of("server").unwrap();
 
-    println!("Connecting {}...", server);
-
     let (handler_tx, mut handler_rx) = tokio::sync::mpsc::unbounded_channel();
 
-    let conn = UdpSocket::bind("::0:0").await?;
-    println!("local address: {}", conn.local_addr()?);
+    let conn = UdpSocket::bind("0:0").await?;
+    println!("Local address: {}", conn.local_addr()?);
 
+    println!("Connecting to: {}", server);
     conn.connect(server).await?;
 
     let mut client = ClientBuilder::new().with_conn(Arc::new(conn)).build()?;
@@ -57,14 +56,10 @@ async fn main() -> Result<()> {
     client.send(&msg, Some(Arc::new(handler_tx))).await?;
 
     if let Some(event) = handler_rx.recv().await {
-        match event.event_body {
-            Ok(msg) => {
-                let mut xor_addr = XorMappedAddress::default();
-                xor_addr.get_from(&msg)?;
-                println!("{}", xor_addr);
-            }
-            Err(err) => println!("{:?}", err),
-        };
+        let msg = event.event_body?;
+        let mut xor_addr = XorMappedAddress::default();
+        xor_addr.get_from(&msg)?;
+        println!("Got response: {}", xor_addr);
     }
 
     client.close().await?;
