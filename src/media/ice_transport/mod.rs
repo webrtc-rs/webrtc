@@ -189,7 +189,7 @@ impl ICETransport {
 
     /// restart is not exposed currently because ORTC has users create a whole new ICETransport
     /// so for now lets keep it private so we don't cause ORTC users to depend on non-standard APIs
-    pub(crate) async fn restart(&mut self) -> Result<()> {
+    pub(crate) async fn restart(&self) -> Result<()> {
         if let Some(agent) = self.gatherer.get_agent().await {
             agent
                 .restart(

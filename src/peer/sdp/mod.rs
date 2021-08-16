@@ -626,7 +626,7 @@ pub(crate) async fn populate_sdp(
     Ok(d.with_value_attribute(ATTR_KEY_GROUP.to_owned(), bundle_value))
 }
 
-fn get_mid_value(media: &MediaDescription) -> Option<&String> {
+pub(crate) fn get_mid_value(media: &MediaDescription) -> Option<&String> {
     for attr in &media.attributes {
         if attr.key == "mid" {
             return attr.value.as_ref();
@@ -636,14 +636,16 @@ fn get_mid_value(media: &MediaDescription) -> Option<&String> {
 }
 
 pub(crate) fn description_is_plan_b(
-    desc: &sdp::session_description::SessionDescription,
+    desc: &session_description::SessionDescription,
 ) -> Result<bool> {
-    let detection_regex = regex::Regex::new(r"(?i)^(audio|video|data)$")?; //TODO: fix regex pattern
-    for media in &desc.media_descriptions {
-        if let Some(s) = get_mid_value(media) {
-            if let Some(caps) = detection_regex.captures(s) {
-                if caps.len() == 2 {
-                    return Ok(true);
+    if let Some(parsed) = &desc.parsed {
+        let detection_regex = regex::Regex::new(r"(?i)^(audio|video|data)$")?; //TODO: fix regex pattern
+        for media in &parsed.media_descriptions {
+            if let Some(s) = get_mid_value(media) {
+                if let Some(caps) = detection_regex.captures(s) {
+                    if caps.len() == 2 {
+                        return Ok(true);
+                    }
                 }
             }
         }

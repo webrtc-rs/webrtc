@@ -22,21 +22,25 @@ use crate::peer::policy::bundle_policy::BundlePolicy;
 use crate::peer::policy::ice_transport_policy::ICETransportPolicy;
 use crate::peer::policy::rtcp_mux_policy::RTCPMuxPolicy;
 use crate::peer::policy::sdp_semantics::SDPSemantics;
-use crate::peer::sdp::session_description::SessionDescription;
+use crate::peer::sdp::session_description::{SessionDescription, SessionDescriptionSerde};
 use crate::peer::signaling_state::{SignalingState, StateChangeOp};
 
 use crate::error::Error;
+use crate::media::dtls_transport::dtls_role::DEFAULT_DTLS_ROLE_OFFER;
 use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
 use crate::peer::ice::ice_gather::ice_gatherer_state::ICEGathererState;
 use crate::peer::ice::ice_gather::ice_gathering_state::ICEGatheringState;
+use crate::peer::offer_answer_options::OfferOptions;
 use crate::peer::operation::Operations;
 use crate::peer::sdp::sdp_type::SDPType;
 use crate::peer::sdp::{
-    get_by_mid, get_peer_direction, have_data_channel, populate_local_candidates,
+    description_is_plan_b, get_by_mid, get_mid_value, get_peer_direction, have_data_channel,
+    populate_local_candidates, update_sdp_origin,
 };
 use anyhow::Result;
 use defer::defer;
 use sdp::session_description::ATTR_KEY_MSID;
+use sdp::util::ConnectionRole;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
@@ -671,136 +675,127 @@ impl PeerConnection {
     fn get_stats_id(&self) -> &str {
         self.stats_id.as_str()
     }
-    /*
-    // hasLocalDescriptionChanged returns whether local media (rtp_transceivers) has changed
-    // caller of this method should hold `pc.mu` lock
-    func (pc *PeerConnection) hasLocalDescriptionChanged(desc *SessionDescription) bool {
-        for _, t := range pc.rtp_transceivers {
-            m := get_by_mid(t.Mid(), desc)
-            if m == nil {
-                return true
-            }
 
-            if get_peer_direction(m) != t.Direction() {
-                return true
+    /// has_local_description_changed returns whether local media (rtp_transceivers) has changed
+    /// caller of this method should hold `pc.mu` lock
+    fn has_local_description_changed(&self, desc: &SessionDescription) -> bool {
+        for t in &self.rtp_transceivers {
+            if let Some(m) = get_by_mid(t.mid(), desc) {
+                if get_peer_direction(m) != t.direction() {
+                    return true;
+                }
+            } else {
+                return true;
             }
         }
-        return false
+        false
     }
 
-    var errExcessiveRetries = errors.New("excessive retries in CreateOffer")
-
-    // CreateOffer starts the PeerConnection and generates the localDescription
-    // https://w3c.github.io/webrtc-pc/#dom-rtcpeerconnection-createoffer
-    func (pc *PeerConnection) CreateOffer(options *OfferOptions) (SessionDescription, error) { //nolint:gocognit
-        useIdentity := pc.idp_login_url != nil
-        switch {
-        case useIdentity:
-            return SessionDescription{}, errIdentityProviderNotImplemented
-        case pc.is_closed.get():
-            return SessionDescription{}, &rtcerr.InvalidStateError{Err: ErrConnectionClosed}
+    /// create_offer starts the PeerConnection and generates the localDescription
+    /// https://w3c.github.io/webrtc-pc/#dom-rtcpeerconnection-createoffer
+    pub async fn create_offer(
+        &mut self,
+        options: Option<OfferOptions>,
+    ) -> Result<SessionDescription> {
+        let use_identity = self.idp_login_url.is_some();
+        if use_identity {
+            return Err(Error::ErrIdentityProviderNotImplemented.into());
+        } else if self.is_closed.load(Ordering::SeqCst) {
+            return Err(Error::ErrConnectionClosed.into());
         }
 
-        if options != nil && options.ICERestart {
-            if err := pc.iceTransport.restart(); err != nil {
-                return SessionDescription{}, err
+        if let Some(options) = options {
+            if options.ice_restart {
+                self.ice_transport.restart().await?;
             }
         }
-
-        var (
-            d     *sdp.SessionDescription
-            offer SessionDescription
-            err   error
-        )
 
         // This may be necessary to recompute if, for example, createOffer was called when only an
         // audio RTCRtpTransceiver was added to connection, but while performing the in-parallel
         // steps to create an offer, a video RTCRtpTransceiver was added, requiring additional
         // inspection of video system resources.
-        count := 0
-        pc.mu.Lock()
-        defer pc.mu.Unlock()
-        for {
+        let mut count = 0;
+        let mut offer;
+
+        loop {
             // We cache current transceivers to ensure they aren't
             // mutated during offer generation. We later check if they have
             // been mutated and recompute the offer if necessary.
-            currentTransceivers := pc.rtp_transceivers
+            let current_transceivers = &mut self.rtp_transceivers;
 
             // in-parallel steps to create an offer
             // https://w3c.github.io/webrtc-pc/#dfn-in-parallel-steps-to-create-an-offer
-            isPlanB := pc.configuration.SDPSemantics == SDPSemanticsPlanB
-            if pc.current_remote_description != nil {
-                isPlanB = description_is_plan_b(pc.current_remote_description)
+            let mut is_plan_b = self.configuration.sdp_semantics == SDPSemantics::PlanB;
+            if let Some(current_remote_description) = &self.current_remote_description {
+                is_plan_b = description_is_plan_b(current_remote_description)?;
             }
 
             // include unmatched local transceivers
-            if !isPlanB {
+            if !is_plan_b {
                 // update the greater mid if the remote description provides a greater one
-                if pc.current_remote_description != nil {
-                    var numericMid int
-                    for _, media := range pc.current_remote_description.parsed.MediaDescriptions {
-                        mid := getMidValue(media)
-                        if mid == "" {
-                            continue
-                        }
-                        numericMid, err = strconv.Atoi(mid)
-                        if err != nil {
-                            continue
-                        }
-                        if numericMid > pc.greater_mid {
-                            pc.greater_mid = numericMid
+                if let Some(current_remote_description) = &self.current_remote_description {
+                    if let Some(parsed) = &current_remote_description.parsed {
+                        for media in &parsed.media_descriptions {
+                            if let Some(mid) = get_mid_value(media) {
+                                if mid.is_empty() {
+                                    continue;
+                                }
+                                let numeric_mid = match mid.parse::<isize>() {
+                                    Ok(n) => n,
+                                    Err(_) => continue,
+                                };
+                                if numeric_mid > self.greater_mid {
+                                    self.greater_mid = numeric_mid;
+                                }
+                            }
                         }
                     }
                 }
-                for _, t := range currentTransceivers {
-                    if t.Mid() != "" {
-                        continue
+                for t in current_transceivers {
+                    if !t.mid().is_empty() {
+                        continue;
                     }
-                    pc.greater_mid++
-                    err = t.setMid(strconv.Itoa(pc.greater_mid))
-                    if err != nil {
-                        return SessionDescription{}, err
-                    }
+                    self.greater_mid += 1;
+                    t.set_mid(format!("{}", self.greater_mid))?;
                 }
             }
 
-            if pc.current_remote_description == nil {
-                d, err = pc.generateUnmatchedSDP(currentTransceivers, useIdentity)
+            let mut d = if self.current_remote_description.is_none() {
+                self.generate_unmatched_sdp(/*current_transceivers,*/ use_identity)?
             } else {
-                d, err = pc.generateMatchedSDP(currentTransceivers, useIdentity, true /*includeUnmatched */, connectionRoleFromDtlsRole(defaultDtlsRoleOffer))
-            }
+                self.generate_matched_sdp(
+                    /*current_transceivers,*/
+                    use_identity,
+                    true, /*includeUnmatched */
+                    DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
+                )?
+            };
 
-            if err != nil {
-                return SessionDescription{}, err
-            }
+            update_sdp_origin(&mut self.sdp_origin, &mut d);
+            let sdp = d.marshal();
 
-            update_sdp_origin(&pc.sdp_origin, d)
-            sdpBytes, err := d.Marshal()
-            if err != nil {
-                return SessionDescription{}, err
-            }
-
-            offer = SessionDescription{
-                Type:   SDPTypeOffer,
-                SDP:    string(sdpBytes),
-                parsed: d,
-            }
+            offer = SessionDescription {
+                serde: SessionDescriptionSerde {
+                    sdp_type: SDPType::Offer,
+                    sdp,
+                },
+                parsed: Some(d),
+            };
 
             // Verify local media hasn't changed during offer
             // generation. Recompute if necessary
-            if isPlanB || !pc.hasLocalDescriptionChanged(&offer) {
-                break
+            if is_plan_b || !self.has_local_description_changed(&offer) {
+                break;
             }
-            count++
+            count += 1;
             if count >= 128 {
-                return SessionDescription{}, errExcessiveRetries
+                return Err(Error::ErrExcessiveRetries.into());
             }
         }
 
-        pc.last_offer = offer.SDP
-        return offer, nil
+        self.last_offer = offer.serde.sdp.clone();
+        Ok(offer)
     }
-    */
 
     /// Update the PeerConnectionState given the state of relevant transports
     /// https://www.w3.org/TR/webrtc/#rtcpeerconnectionstate-enum
@@ -865,7 +860,7 @@ impl PeerConnection {
         pc.mu.Lock()
         defer pc.mu.Unlock()
 
-        d, err := pc.generateMatchedSDP(pc.rtp_transceivers, useIdentity, false /*includeUnmatched */, connectionRole)
+        d, err := pc.generate_matched_sdp(pc.rtp_transceivers, useIdentity, false /*includeUnmatched */, connectionRole)
         if err != nil {
             return SessionDescription{}, err
         }
@@ -1996,332 +1991,350 @@ impl PeerConnection {
         self.connection_state.load(Ordering::SeqCst).into()
     }
     /*
-        // GetStats return data providing statistics about the overall connection
-        func (pc *PeerConnection) GetStats() StatsReport {
-            var (
-                dataChannelsAccepted  uint32
-                dataChannelsClosed    uint32
-                dataChannelsOpened    uint32
-                dataChannelsRequested uint32
-            )
-            statsCollector := newStatsReportCollector()
-            statsCollector.Collecting()
+    // GetStats return data providing statistics about the overall connection
+    func (pc *PeerConnection) GetStats() StatsReport {
+        var (
+            dataChannelsAccepted  uint32
+            dataChannelsClosed    uint32
+            dataChannelsOpened    uint32
+            dataChannelsRequested uint32
+        )
+        statsCollector := newStatsReportCollector()
+        statsCollector.Collecting()
 
-            pc.mu.Lock()
-            if pc.iceGatherer != nil {
-                pc.iceGatherer.collectStats(statsCollector)
-            }
-            if pc.iceTransport != nil {
-                pc.iceTransport.collectStats(statsCollector)
-            }
+        pc.mu.Lock()
+        if pc.iceGatherer != nil {
+            pc.iceGatherer.collectStats(statsCollector)
+        }
+        if pc.iceTransport != nil {
+            pc.iceTransport.collectStats(statsCollector)
+        }
 
-            pc.sctpTransport.lock.Lock()
-            dataChannels := append([]*DataChannel{}, pc.sctpTransport.dataChannels...)
-            dataChannelsAccepted = pc.sctpTransport.dataChannelsAccepted
-            dataChannelsOpened = pc.sctpTransport.dataChannelsOpened
-            dataChannelsRequested = pc.sctpTransport.dataChannelsRequested
-            pc.sctpTransport.lock.Unlock()
+        pc.sctpTransport.lock.Lock()
+        dataChannels := append([]*DataChannel{}, pc.sctpTransport.dataChannels...)
+        dataChannelsAccepted = pc.sctpTransport.dataChannelsAccepted
+        dataChannelsOpened = pc.sctpTransport.dataChannelsOpened
+        dataChannelsRequested = pc.sctpTransport.dataChannelsRequested
+        pc.sctpTransport.lock.Unlock()
 
-            for _, d := range dataChannels {
-                state := d.ReadyState()
-                if state != DataChannelStateConnecting && state != DataChannelStateOpen {
-                    dataChannelsClosed++
-                }
-
-                d.collectStats(statsCollector)
-            }
-            pc.sctpTransport.collectStats(statsCollector)
-
-            stats := PeerConnectionStats{
-                Timestamp:             statsTimestampNow(),
-                Type:                  StatsTypePeerConnection,
-                ID:                    pc.stats_id,
-                DataChannelsAccepted:  dataChannelsAccepted,
-                DataChannelsClosed:    dataChannelsClosed,
-                DataChannelsOpened:    dataChannelsOpened,
-                DataChannelsRequested: dataChannelsRequested,
+        for _, d := range dataChannels {
+            state := d.ReadyState()
+            if state != DataChannelStateConnecting && state != DataChannelStateOpen {
+                dataChannelsClosed++
             }
 
-            statsCollector.Collect(stats.ID, stats)
+            d.collectStats(statsCollector)
+        }
+        pc.sctpTransport.collectStats(statsCollector)
 
-            certificates := pc.configuration.Certificates
-            for _, certificate := range certificates {
-                if err := certificate.collectStats(statsCollector); err != nil {
+        stats := PeerConnectionStats{
+            Timestamp:             statsTimestampNow(),
+            Type:                  StatsTypePeerConnection,
+            ID:                    pc.stats_id,
+            DataChannelsAccepted:  dataChannelsAccepted,
+            DataChannelsClosed:    dataChannelsClosed,
+            DataChannelsOpened:    dataChannelsOpened,
+            DataChannelsRequested: dataChannelsRequested,
+        }
+
+        statsCollector.Collect(stats.ID, stats)
+
+        certificates := pc.configuration.Certificates
+        for _, certificate := range certificates {
+            if err := certificate.collectStats(statsCollector); err != nil {
+                continue
+            }
+        }
+        pc.mu.Unlock()
+
+        pc.api.mediaEngine.collectStats(statsCollector)
+
+        return statsCollector.Ready()
+    }
+
+    // Start all transports. PeerConnection now has enough state
+    func (pc *PeerConnection) startTransports(iceRole ICERole, dtlsRole DTLSRole, remoteUfrag, remotePwd, fingerprint, fingerprintHash string) {
+        // Start the ice transport
+        err := pc.iceTransport.Start(
+            pc.iceGatherer,
+            ICEParameters{
+                UsernameFragment: remoteUfrag,
+                Password:         remotePwd,
+                ICELite:          false,
+            },
+            &iceRole,
+        )
+        if err != nil {
+            pc.log.Warnf("Failed to start manager: %s", err)
+            return
+        }
+
+        // Start the dtls_transport transport
+        err = pc.dtlsTransport.Start(DTLSParameters{
+            Role:         dtlsRole,
+            Fingerprints: []DTLSFingerprint{{Algorithm: fingerprintHash, Value: fingerprint}},
+        })
+        pc.update_connection_state(pc.ICEConnectionState(), pc.dtlsTransport.State())
+        if err != nil {
+            pc.log.Warnf("Failed to start manager: %s", err)
+            return
+        }
+    }
+
+    func (pc *PeerConnection) startRTP(isRenegotiation bool, remoteDesc *SessionDescription, currentTransceivers []*RTPTransceiver) {
+        TrackDetails := track_details_from_sdp(pc.log, remoteDesc.parsed)
+        if isRenegotiation {
+            for _, t := range currentTransceivers {
+                if t.Receiver() == nil || t.Receiver().Track() == nil {
                     continue
                 }
-            }
-            pc.mu.Unlock()
 
-            pc.api.mediaEngine.collectStats(statsCollector)
+                t.Receiver().Track().mu.Lock()
+                ssrc := t.Receiver().Track().ssrc
 
-            return statsCollector.Ready()
-        }
-
-        // Start all transports. PeerConnection now has enough state
-        func (pc *PeerConnection) startTransports(iceRole ICERole, dtlsRole DTLSRole, remoteUfrag, remotePwd, fingerprint, fingerprintHash string) {
-            // Start the ice transport
-            err := pc.iceTransport.Start(
-                pc.iceGatherer,
-                ICEParameters{
-                    UsernameFragment: remoteUfrag,
-                    Password:         remotePwd,
-                    ICELite:          false,
-                },
-                &iceRole,
-            )
-            if err != nil {
-                pc.log.Warnf("Failed to start manager: %s", err)
-                return
-            }
-
-            // Start the dtls_transport transport
-            err = pc.dtlsTransport.Start(DTLSParameters{
-                Role:         dtlsRole,
-                Fingerprints: []DTLSFingerprint{{Algorithm: fingerprintHash, Value: fingerprint}},
-            })
-            pc.update_connection_state(pc.ICEConnectionState(), pc.dtlsTransport.State())
-            if err != nil {
-                pc.log.Warnf("Failed to start manager: %s", err)
-                return
-            }
-        }
-
-        func (pc *PeerConnection) startRTP(isRenegotiation bool, remoteDesc *SessionDescription, currentTransceivers []*RTPTransceiver) {
-            TrackDetails := track_details_from_sdp(pc.log, remoteDesc.parsed)
-            if isRenegotiation {
-                for _, t := range currentTransceivers {
-                    if t.Receiver() == nil || t.Receiver().Track() == nil {
-                        continue
-                    }
-
-                    t.Receiver().Track().mu.Lock()
-                    ssrc := t.Receiver().Track().ssrc
-
-                    if details := track_details_for_ssrc(TrackDetails, ssrc); details != nil {
-                        t.Receiver().Track().id = details.id
-                        t.Receiver().Track().streamID = details.streamID
-                        t.Receiver().Track().mu.Unlock()
-                        continue
-                    }
-
+                if details := track_details_for_ssrc(TrackDetails, ssrc); details != nil {
+                    t.Receiver().Track().id = details.id
+                    t.Receiver().Track().streamID = details.streamID
                     t.Receiver().Track().mu.Unlock()
+                    continue
+                }
 
-                    if err := t.Receiver().Stop(); err != nil {
-                        pc.log.Warnf("Failed to stop RtpReceiver: %s", err)
-                        continue
-                    }
+                t.Receiver().Track().mu.Unlock()
 
-                    receiver, err := pc.api.new_rtpreceiver(t.Receiver().kind, pc.dtlsTransport)
-                    if err != nil {
-                        pc.log.Warnf("Failed to create new RtpReceiver: %s", err)
-                        continue
-                    }
-                    t.setReceiver(receiver)
+                if err := t.Receiver().Stop(); err != nil {
+                    pc.log.Warnf("Failed to stop RtpReceiver: %s", err)
+                    continue
+                }
+
+                receiver, err := pc.api.new_rtpreceiver(t.Receiver().kind, pc.dtlsTransport)
+                if err != nil {
+                    pc.log.Warnf("Failed to create new RtpReceiver: %s", err)
+                    continue
+                }
+                t.setReceiver(receiver)
+            }
+        }
+
+        pc.startRTPReceivers(TrackDetails, currentTransceivers)
+        if have_application_media_section(remoteDesc.parsed) {
+            pc.startSCTP()
+        }
+
+        if !isRenegotiation {
+            pc.undeclaredMediaProcessor()
+        }
+    }*/
+
+    /// generate_unmatched_sdp generates an SDP that doesn't take remote state into account
+    /// This is used for the initial call for CreateOffer
+    fn generate_unmatched_sdp(
+        &self,
+        //_transceivers: &[RTPTransceiver],
+        _use_identity: bool,
+    ) -> Result<sdp::session_description::SessionDescription> {
+        Ok(sdp::session_description::SessionDescription::default())
+        /*TODO:
+        let current_transceivers = &self.rtp_transceivers;
+        d, err := sdp.NewJSEPSessionDescription(useIdentity)
+        if err != nil {
+            return nil, err
+        }
+
+        iceParams, err := pc.iceGatherer.GetLocalParameters()
+        if err != nil {
+            return nil, err
+        }
+
+        candidates, err := pc.iceGatherer.GetLocalCandidates()
+        if err != nil {
+            return nil, err
+        }
+
+        isPlanB := pc.configuration.SDPSemantics == SDPSemanticsPlanB
+        mediaSections := []mediaSection{}
+
+        // Needed for pc.sctpTransport.dataChannelsRequested
+        pc.sctpTransport.lock.Lock()
+        defer pc.sctpTransport.lock.Unlock()
+
+        if isPlanB {
+            video := make([]*RTPTransceiver, 0)
+            audio := make([]*RTPTransceiver, 0)
+
+            for _, t := range transceivers {
+                if t.kind == RTPCodecTypeVideo {
+                    video = append(video, t)
+                } else if t.kind == RTPCodecTypeAudio {
+                    audio = append(audio, t)
+                }
+                if t.Sender() != nil {
+                    t.Sender().setNegotiated()
                 }
             }
 
-            pc.startRTPReceivers(TrackDetails, currentTransceivers)
-            if have_application_media_section(remoteDesc.parsed) {
-                pc.startSCTP()
+            if len(video) > 0 {
+                mediaSections = append(mediaSections, mediaSection{id: "video", transceivers: video})
+            }
+            if len(audio) > 0 {
+                mediaSections = append(mediaSections, mediaSection{id: "audio", transceivers: audio})
             }
 
-            if !isRenegotiation {
-                pc.undeclaredMediaProcessor()
+            if pc.sctpTransport.dataChannelsRequested != 0 {
+                mediaSections = append(mediaSections, mediaSection{id: "data", data: true})
+            }
+        } else {
+            for _, t := range transceivers {
+                if t.Sender() != nil {
+                    t.Sender().setNegotiated()
+                }
+                mediaSections = append(mediaSections, mediaSection{id: t.Mid(), transceivers: []*RTPTransceiver{t}})
+            }
+
+            if pc.sctpTransport.dataChannelsRequested != 0 {
+                mediaSections = append(mediaSections, mediaSection{id: strconv.Itoa(len(mediaSections)), data: true})
             }
         }
 
-        // generateUnmatchedSDP generates an SDP that doesn't take remote state into account
-        // This is used for the initial call for CreateOffer
-        func (pc *PeerConnection) generateUnmatchedSDP(transceivers []*RTPTransceiver, useIdentity bool) (*sdp.SessionDescription, error) {
-            d, err := sdp.NewJSEPSessionDescription(useIdentity)
-            if err != nil {
-                return nil, err
+        dtlsFingerprints, err := pc.configuration.Certificates[0].GetFingerprints()
+        if err != nil {
+            return nil, err
+        }
+
+        return populate_sdp(d, isPlanB, dtlsFingerprints, pc.api.settingEngine.sdpMediaLevelFingerprints, pc.api.settingEngine.candidates.ICELite, pc.api.mediaEngine, connectionRoleFromDtlsRole(defaultDtlsRoleOffer), candidates, iceParams, mediaSections, pc.icegathering_state())
+        */
+    }
+
+    /// generate_matched_sdp generates a SDP and takes the remote state into account
+    /// this is used everytime we have a remote_description
+    fn generate_matched_sdp(
+        &self,
+        //_transceivers: &[RTPTransceiver],
+        _use_identity: bool,
+        _include_unmatched: bool,
+        _connection_role: ConnectionRole,
+    ) -> Result<sdp::session_description::SessionDescription> {
+        Ok(sdp::session_description::SessionDescription::default())
+
+        /*TODO:
+        let current_transceivers = &self.rtp_transceivers;
+           d, err := sdp.NewJSEPSessionDescription(useIdentity)
+        if err != nil {
+            return nil, err
+        }
+
+        iceParams, err := pc.iceGatherer.GetLocalParameters()
+        if err != nil {
+            return nil, err
+        }
+
+        candidates, err := pc.iceGatherer.GetLocalCandidates()
+        if err != nil {
+            return nil, err
+        }
+
+        var t *RTPTransceiver
+        remoteDescription := pc.current_remote_description
+        if pc.pending_remote_description != nil {
+            remoteDescription = pc.pending_remote_description
+        }
+        localTransceivers := append([]*RTPTransceiver{}, transceivers...)
+        detectedPlanB := description_is_plan_b(remoteDescription)
+        mediaSections := []mediaSection{}
+        alreadyHaveApplicationMediaSection := false
+        for _, media := range remoteDescription.parsed.MediaDescriptions {
+            midValue := getMidValue(media)
+            if midValue == "" {
+                return nil, errPeerConnRemoteDescriptionWithoutMidValue
             }
 
-            iceParams, err := pc.iceGatherer.GetLocalParameters()
-            if err != nil {
-                return nil, err
+            if media.MediaName.Media == mediaSectionApplication {
+                mediaSections = append(mediaSections, mediaSection{id: midValue, data: true})
+                alreadyHaveApplicationMediaSection = true
+                continue
             }
 
-            candidates, err := pc.iceGatherer.GetLocalCandidates()
-            if err != nil {
-                return nil, err
+            kind := NewRTPCodecType(media.MediaName.Media)
+            direction := get_peer_direction(media)
+            if kind == 0 || direction == RTPTransceiverDirection(Unknown) {
+                continue
             }
 
-            isPlanB := pc.configuration.SDPSemantics == SDPSemanticsPlanB
-            mediaSections := []mediaSection{}
+            sdpSemantics := pc.configuration.SDPSemantics
 
-            // Needed for pc.sctpTransport.dataChannelsRequested
-            pc.sctpTransport.lock.Lock()
-            defer pc.sctpTransport.lock.Unlock()
-
-            if isPlanB {
-                video := make([]*RTPTransceiver, 0)
-                audio := make([]*RTPTransceiver, 0)
-
-                for _, t := range transceivers {
-                    if t.kind == RTPCodecTypeVideo {
-                        video = append(video, t)
-                    } else if t.kind == RTPCodecTypeAudio {
-                        audio = append(audio, t)
+            switch {
+            case sdpSemantics == SDPSemanticsPlanB || sdpSemantics == SDPSemanticsUnifiedPlanWithFallback && detectedPlanB:
+                if !detectedPlanB {
+                    return nil, &rtcerr.TypeError{Err: ErrIncorrectSDPSemantics}
+                }
+                // If we're responding to a plan-b offer, then we should try to fill up this
+                // media entry with all matching local transceivers
+                mediaTransceivers := []*RTPTransceiver{}
+                for {
+                    // keep going until we can't get any more
+                    t, localTransceivers = satisfyTypeAndDirection(kind, direction, localTransceivers)
+                    if t == nil {
+                        if len(mediaTransceivers) == 0 {
+                            t = &RTPTransceiver{kind: kind}
+                            t.setDirection(RTPTransceiverDirectionInactive)
+                            mediaTransceivers = append(mediaTransceivers, t)
+                        }
+                        break
                     }
                     if t.Sender() != nil {
                         t.Sender().setNegotiated()
                     }
+                    mediaTransceivers = append(mediaTransceivers, t)
                 }
+                mediaSections = append(mediaSections, mediaSection{id: midValue, transceivers: mediaTransceivers})
+            case sdpSemantics == SDPSemanticsUnifiedPlan || sdpSemantics == SDPSemanticsUnifiedPlanWithFallback:
+                if detectedPlanB {
+                    return nil, &rtcerr.TypeError{Err: ErrIncorrectSDPSemantics}
+                }
+                t, localTransceivers = findByMid(midValue, localTransceivers)
+                if t == nil {
+                    return nil, fmt.Errorf("%w: %q", errPeerConnTranscieverMidNil, midValue)
+                }
+                if t.Sender() != nil {
+                    t.Sender().setNegotiated()
+                }
+                mediaTransceivers := []*RTPTransceiver{t}
+                mediaSections = append(mediaSections, mediaSection{id: midValue, transceivers: mediaTransceivers, ridMap: getRids(media)})
+            }
+        }
 
-                if len(video) > 0 {
-                    mediaSections = append(mediaSections, mediaSection{id: "video", transceivers: video})
-                }
-                if len(audio) > 0 {
-                    mediaSections = append(mediaSections, mediaSection{id: "audio", transceivers: audio})
-                }
-
-                if pc.sctpTransport.dataChannelsRequested != 0 {
-                    mediaSections = append(mediaSections, mediaSection{id: "data", data: true})
-                }
-            } else {
-                for _, t := range transceivers {
+        // If we are offering also include unmatched local transceivers
+        if includeUnmatched {
+            if !detectedPlanB {
+                for _, t := range localTransceivers {
                     if t.Sender() != nil {
                         t.Sender().setNegotiated()
                     }
                     mediaSections = append(mediaSections, mediaSection{id: t.Mid(), transceivers: []*RTPTransceiver{t}})
                 }
+            }
 
-                if pc.sctpTransport.dataChannelsRequested != 0 {
+            if pc.sctpTransport.dataChannelsRequested != 0 && !alreadyHaveApplicationMediaSection {
+                if detectedPlanB {
+                    mediaSections = append(mediaSections, mediaSection{id: "data", data: true})
+                } else {
                     mediaSections = append(mediaSections, mediaSection{id: strconv.Itoa(len(mediaSections)), data: true})
                 }
             }
-
-            dtlsFingerprints, err := pc.configuration.Certificates[0].GetFingerprints()
-            if err != nil {
-                return nil, err
-            }
-
-            return populate_sdp(d, isPlanB, dtlsFingerprints, pc.api.settingEngine.sdpMediaLevelFingerprints, pc.api.settingEngine.candidates.ICELite, pc.api.mediaEngine, connectionRoleFromDtlsRole(defaultDtlsRoleOffer), candidates, iceParams, mediaSections, pc.icegathering_state())
         }
 
-        // generateMatchedSDP generates a SDP and takes the remote state into account
-        // this is used everytime we have a remote_description
-        // nolint: gocyclo
-        func (pc *PeerConnection) generateMatchedSDP(transceivers []*RTPTransceiver, useIdentity bool, includeUnmatched bool, connectionRole sdp.ConnectionRole) (*sdp.SessionDescription, error) { //nolint:gocognit
-            d, err := sdp.NewJSEPSessionDescription(useIdentity)
-            if err != nil {
-                return nil, err
-            }
-
-            iceParams, err := pc.iceGatherer.GetLocalParameters()
-            if err != nil {
-                return nil, err
-            }
-
-            candidates, err := pc.iceGatherer.GetLocalCandidates()
-            if err != nil {
-                return nil, err
-            }
-
-            var t *RTPTransceiver
-            remoteDescription := pc.current_remote_description
-            if pc.pending_remote_description != nil {
-                remoteDescription = pc.pending_remote_description
-            }
-            localTransceivers := append([]*RTPTransceiver{}, transceivers...)
-            detectedPlanB := description_is_plan_b(remoteDescription)
-            mediaSections := []mediaSection{}
-            alreadyHaveApplicationMediaSection := false
-            for _, media := range remoteDescription.parsed.MediaDescriptions {
-                midValue := getMidValue(media)
-                if midValue == "" {
-                    return nil, errPeerConnRemoteDescriptionWithoutMidValue
-                }
-
-                if media.MediaName.Media == mediaSectionApplication {
-                    mediaSections = append(mediaSections, mediaSection{id: midValue, data: true})
-                    alreadyHaveApplicationMediaSection = true
-                    continue
-                }
-
-                kind := NewRTPCodecType(media.MediaName.Media)
-                direction := get_peer_direction(media)
-                if kind == 0 || direction == RTPTransceiverDirection(Unknown) {
-                    continue
-                }
-
-                sdpSemantics := pc.configuration.SDPSemantics
-
-                switch {
-                case sdpSemantics == SDPSemanticsPlanB || sdpSemantics == SDPSemanticsUnifiedPlanWithFallback && detectedPlanB:
-                    if !detectedPlanB {
-                        return nil, &rtcerr.TypeError{Err: ErrIncorrectSDPSemantics}
-                    }
-                    // If we're responding to a plan-b offer, then we should try to fill up this
-                    // media entry with all matching local transceivers
-                    mediaTransceivers := []*RTPTransceiver{}
-                    for {
-                        // keep going until we can't get any more
-                        t, localTransceivers = satisfyTypeAndDirection(kind, direction, localTransceivers)
-                        if t == nil {
-                            if len(mediaTransceivers) == 0 {
-                                t = &RTPTransceiver{kind: kind}
-                                t.setDirection(RTPTransceiverDirectionInactive)
-                                mediaTransceivers = append(mediaTransceivers, t)
-                            }
-                            break
-                        }
-                        if t.Sender() != nil {
-                            t.Sender().setNegotiated()
-                        }
-                        mediaTransceivers = append(mediaTransceivers, t)
-                    }
-                    mediaSections = append(mediaSections, mediaSection{id: midValue, transceivers: mediaTransceivers})
-                case sdpSemantics == SDPSemanticsUnifiedPlan || sdpSemantics == SDPSemanticsUnifiedPlanWithFallback:
-                    if detectedPlanB {
-                        return nil, &rtcerr.TypeError{Err: ErrIncorrectSDPSemantics}
-                    }
-                    t, localTransceivers = findByMid(midValue, localTransceivers)
-                    if t == nil {
-                        return nil, fmt.Errorf("%w: %q", errPeerConnTranscieverMidNil, midValue)
-                    }
-                    if t.Sender() != nil {
-                        t.Sender().setNegotiated()
-                    }
-                    mediaTransceivers := []*RTPTransceiver{t}
-                    mediaSections = append(mediaSections, mediaSection{id: midValue, transceivers: mediaTransceivers, ridMap: getRids(media)})
-                }
-            }
-
-            // If we are offering also include unmatched local transceivers
-            if includeUnmatched {
-                if !detectedPlanB {
-                    for _, t := range localTransceivers {
-                        if t.Sender() != nil {
-                            t.Sender().setNegotiated()
-                        }
-                        mediaSections = append(mediaSections, mediaSection{id: t.Mid(), transceivers: []*RTPTransceiver{t}})
-                    }
-                }
-
-                if pc.sctpTransport.dataChannelsRequested != 0 && !alreadyHaveApplicationMediaSection {
-                    if detectedPlanB {
-                        mediaSections = append(mediaSections, mediaSection{id: "data", data: true})
-                    } else {
-                        mediaSections = append(mediaSections, mediaSection{id: strconv.Itoa(len(mediaSections)), data: true})
-                    }
-                }
-            }
-
-            if pc.configuration.SDPSemantics == SDPSemanticsUnifiedPlanWithFallback && detectedPlanB {
-                pc.log.Info("Plan-B Offer detected; responding with Plan-B Answer")
-            }
-
-            dtlsFingerprints, err := pc.configuration.Certificates[0].GetFingerprints()
-            if err != nil {
-                return nil, err
-            }
-
-            return populate_sdp(d, detectedPlanB, dtlsFingerprints, pc.api.settingEngine.sdpMediaLevelFingerprints, pc.api.settingEngine.candidates.ICELite, pc.api.mediaEngine, connectionRole, candidates, iceParams, mediaSections, pc.icegathering_state())
+        if pc.configuration.SDPSemantics == SDPSemanticsUnifiedPlanWithFallback && detectedPlanB {
+            pc.log.Info("Plan-B Offer detected; responding with Plan-B Answer")
         }
-    */
+
+        dtlsFingerprints, err := pc.configuration.Certificates[0].GetFingerprints()
+        if err != nil {
+            return nil, err
+        }
+
+        return populate_sdp(d, detectedPlanB, dtlsFingerprints, pc.api.settingEngine.sdpMediaLevelFingerprints, pc.api.settingEngine.candidates.ICELite, pc.api.mediaEngine, connectionRole, candidates, iceParams, mediaSections, pc.icegathering_state())
+        */
+    }
+
     async fn set_gather_complete_handler(&self, f: OnGatheringCompleteHdlrFn) {
         self.ice_gatherer.on_gathering_complete(f).await;
     }

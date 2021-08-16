@@ -313,6 +313,8 @@ pub enum Error {
     ErrClosedPipe,
     #[error("Interceptor is not bind")]
     ErrInterceptorNotBind,
+    #[error("excessive retries in CreateOffer")]
+    ErrExcessiveRetries,
 
     #[allow(non_camel_case_types)]
     #[error("{0}")]
