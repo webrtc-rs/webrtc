@@ -199,6 +199,9 @@ impl Allocation {
 
         log::trace!("allocation with {} closed!", self.five_tuple);
 
+        let _ = self.turn_socket.close().await;
+        let _ = self.relay_socket.close().await;
+
         Ok(())
     }
 
