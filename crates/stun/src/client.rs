@@ -381,6 +381,10 @@ impl Client {
         }
         self.client_agent_tx.take();
 
+        if let Some(c) = self.settings.c.take() {
+            c.close().await?;
+        }
+
         Ok(())
     }
 
