@@ -26,11 +26,11 @@ use crate::peer::sdp::session_description::{SessionDescription, SessionDescripti
 use crate::peer::signaling_state::{SignalingState, StateChangeOp};
 
 use crate::error::Error;
-use crate::media::dtls_transport::dtls_role::DEFAULT_DTLS_ROLE_OFFER;
+use crate::media::dtls_transport::dtls_role::{DEFAULT_DTLS_ROLE_ANSWER, DEFAULT_DTLS_ROLE_OFFER};
 use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
 use crate::peer::ice::ice_gather::ice_gatherer_state::ICEGathererState;
 use crate::peer::ice::ice_gather::ice_gathering_state::ICEGatheringState;
-use crate::peer::offer_answer_options::OfferOptions;
+use crate::peer::offer_answer_options::{AnswerOptions, OfferOptions};
 use crate::peer::operation::Operations;
 use crate::peer::sdp::sdp_type::SDPType;
 use crate::peer::sdp::{
@@ -838,47 +838,46 @@ impl PeerConnection {
         self.do_connection_state_change(connection_state).await;
     }
 
-    /*
-    // CreateAnswer starts the PeerConnection and generates the localDescription
-    pub fn CreateAnswer(&self, options: AnswerOptions) ->Result<SessionDescription> {
-        useIdentity := pc.idp_login_url != nil
-        switch {
-        case pc.remote_description() == nil:
-            return SessionDescription{}, &rtcerr.InvalidStateError{Err: ErrNoRemoteDescription}
-        case useIdentity:
-            return SessionDescription{}, errIdentityProviderNotImplemented
-        case pc.is_closed.get():
-            return SessionDescription{}, &rtcerr.InvalidStateError{Err: ErrConnectionClosed}
-        case pc.signaling_state.Get() != SignalingStateHaveRemoteOffer && pc.signaling_state.Get() != SignalingStateHaveLocalPranswer:
-            return SessionDescription{}, &rtcerr.InvalidStateError{Err: ErrIncorrectSignalingState}
+    /// create_answer starts the PeerConnection and generates the localDescription
+    pub fn create_answer(&mut self, _options: Option<AnswerOptions>) -> Result<SessionDescription> {
+        let use_identity = self.idp_login_url.is_some();
+        if self.remote_description().is_none() {
+            return Err(Error::ErrNoRemoteDescription.into());
+        } else if use_identity {
+            return Err(Error::ErrIdentityProviderNotImplemented.into());
+        } else if self.is_closed.load(Ordering::SeqCst) {
+            return Err(Error::ErrConnectionClosed.into());
+        } else if self.signaling_state() != SignalingState::HaveRemoteOffer
+            && self.signaling_state() != SignalingState::HaveLocalPranswer
+        {
+            return Err(Error::ErrIncorrectSignalingState.into());
         }
 
-        connectionRole := connectionRoleFromDtlsRole(pc.api.settingEngine.answeringDTLSRole)
-        if connectionRole == sdp.ConnectionRole(0) {
-            connectionRole = connectionRoleFromDtlsRole(defaultDtlsRoleAnswer)
-        }
-        pc.mu.Lock()
-        defer pc.mu.Unlock()
-
-        d, err := pc.generate_matched_sdp(pc.rtp_transceivers, useIdentity, false /*includeUnmatched */, connectionRole)
-        if err != nil {
-            return SessionDescription{}, err
+        let mut connection_role = self.setting_engine.answering_dtls_role.to_connection_role();
+        if connection_role == ConnectionRole::Unspecified {
+            connection_role = DEFAULT_DTLS_ROLE_ANSWER.to_connection_role();
         }
 
-        update_sdporigin(&pc.sdp_origin, d)
-        sdpBytes, err := d.Marshal()
-        if err != nil {
-            return SessionDescription{}, err
-        }
+        let mut d = self.generate_matched_sdp(
+            /*self.rtp_transceivers,*/ use_identity,
+            false, /*includeUnmatched */
+            connection_role,
+        )?;
 
-        desc := SessionDescription{
-            Type:   SDPTypeAnswer,
-            SDP:    string(sdpBytes),
-            parsed: d,
-        }
-        pc.last_answer = desc.SDP
-        return desc, nil
-    }*/
+        update_sdp_origin(&mut self.sdp_origin, &mut d);
+        let sdp = d.marshal();
+
+        let answer = SessionDescription {
+            serde: SessionDescriptionSerde {
+                sdp_type: SDPType::Answer,
+                sdp,
+            },
+            parsed: Some(d),
+        };
+
+        self.last_answer = answer.serde.sdp.clone();
+        Ok(answer)
+    }
 
     // 4.4.1.6 Set the SessionDescription
     pub(crate) fn set_description(

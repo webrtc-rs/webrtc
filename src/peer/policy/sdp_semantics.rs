@@ -172,9 +172,9 @@ mod test {
             t.Errorf("SetRemoteDescription failed: %s", err)
         }
 
-        answer, err := apc.CreateAnswer(nil)
+        answer, err := apc.create_answer(nil)
         if err != nil {
-            t.Errorf("Plan B CreateAnswer failed: %s", err)
+            t.Errorf("Plan B create_answer failed: %s", err)
         }
 
         mdNames = getMdNames(answer.parsed)
@@ -256,9 +256,9 @@ mod test {
             t.Errorf("SetRemoteDescription failed: %s", err)
         }
 
-        answer, err := apc.CreateAnswer(nil)
+        answer, err := apc.create_answer(nil)
         if err != nil {
-            t.Errorf("Plan B CreateAnswer failed: %s", err)
+            t.Errorf("Plan B create_answer failed: %s", err)
         }
 
         mdNames = getMdNames(answer.parsed)
@@ -349,9 +349,9 @@ mod test {
             t.Errorf("SetRemoteDescription failed: %s", err)
         }
 
-        answer, err := apc.CreateAnswer(nil)
+        answer, err := apc.create_answer(nil)
         if err != nil {
-            t.Errorf("Plan B CreateAnswer failed: %s", err)
+            t.Errorf("Plan B create_answer failed: %s", err)
         }
 
         mdNames = getMdNames(answer.parsed)

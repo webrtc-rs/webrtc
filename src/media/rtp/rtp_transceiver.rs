@@ -110,7 +110,7 @@ impl RTPTransceiver {
         Ok(())
     }
 
-    /// mid gets the Transceiver's mid value. When not already set, this value will be set in CreateOffer or CreateAnswer.
+    /// mid gets the Transceiver's mid value. When not already set, this value will be set in CreateOffer or create_answer.
     pub fn mid(&self) -> &str {
         self.mid.as_str()
     }
