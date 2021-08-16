@@ -237,17 +237,30 @@ async fn test_allocation_timeout() -> Result<()> {
         allocations.push(a);
     }
 
-    tokio::time::sleep(lifetime + Duration::from_millis(100)).await;
+    let mut count = 0;
 
-    for allocation in allocations {
-        let mut a = allocation.lock().await;
-        assert!(
-            a.close().await.is_err(),
-            "Allocation should be closed if lifetime timeout"
-        );
+    'outer: loop {
+        count += 1;
+
+        if count >= 10 {
+            assert!(false, "Allocations didn't timeout");
+        }
+
+        tokio::time::sleep(lifetime + Duration::from_millis(100)).await;
+
+        let any_outstanding = false;
+
+        for allocation in &allocations {
+            let mut a = allocation.lock().await;
+            if !a.close().await.is_err() {
+                continue 'outer;
+            }
+        }
+
+        if !any_outstanding {
+            return Ok(());
+        }
     }
-
-    Ok(())
 }
 
 #[tokio::test]
