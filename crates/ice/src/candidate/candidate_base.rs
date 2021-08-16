@@ -248,10 +248,14 @@ impl Candidate for CandidateBase {
         }
 
         if let Some(relay_client) = &self.relay_client {
-            relay_client.close().await
-        } else {
-            Ok(())
+            let _ = relay_client.close().await;
         }
+
+        if let Some(conn) = &self.conn {
+            let _ = conn.close().await;
+        }
+
+        Ok(())
     }
 
     fn seen(&self, outbound: bool) {
