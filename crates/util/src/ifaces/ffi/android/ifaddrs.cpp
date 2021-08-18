@@ -42,8 +42,12 @@ struct ifaddrs {
     sockaddr* ifa_addr;
     // Interface netmask.
     sockaddr* ifa_netmask;
+    // Unused
+    sockaddr* ifa_ifu;
+    void *ifa_data;
+
     ifaddrs(ifaddrs* next)
-    : ifa_next(next), ifa_name(NULL), ifa_flags(0), ifa_addr(NULL), ifa_netmask(NULL)
+    : ifa_next(next), ifa_name(NULL), ifa_flags(0), ifa_addr(NULL), ifa_netmask(NULL), ifa_ifu(NULL), ifa_data(NULL)
     {
     }
     ~ifaddrs() {
