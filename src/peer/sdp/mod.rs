@@ -40,8 +40,8 @@ pub(crate) struct TrackDetails {
     kind: RTPCodecType,
     stream_id: String,
     id: String,
-    ssrc: SSRC,
-    rids: Vec<String>,
+    pub(crate) ssrc: SSRC,
+    pub(crate) rids: Vec<String>,
 }
 
 pub(crate) fn track_details_for_ssrc(

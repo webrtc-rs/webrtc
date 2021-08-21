@@ -29,6 +29,7 @@ use crate::error::Error;
 use crate::media::dtls_transport::dtls_role::{DEFAULT_DTLS_ROLE_ANSWER, DEFAULT_DTLS_ROLE_OFFER};
 use crate::media::rtp::rtp_codec::RTPCodecType;
 use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
+use crate::media::rtp::RTPCodingParameters;
 use crate::peer::ice::ice_gather::ice_gatherer_state::ICEGathererState;
 use crate::peer::ice::ice_gather::ice_gathering_state::ICEGatheringState;
 use crate::peer::ice::ice_role::ICERole;
@@ -38,6 +39,7 @@ use crate::peer::sdp::sdp_type::SDPType;
 use crate::peer::sdp::{
     description_is_plan_b, extract_fingerprint, extract_ice_details, get_by_mid, get_mid_value,
     get_peer_direction, have_data_channel, populate_local_candidates, update_sdp_origin,
+    TrackDetails,
 };
 use crate::MEDIA_SECTION_APPLICATION;
 use anyhow::Result;
@@ -1287,57 +1289,68 @@ impl PeerConnection {
 
         Ok(())
     }
-    /*
-    func (pc *PeerConnection) startReceiver(incoming TrackDetails, receiver *RTPReceiver) {
-        encodings := []RTPDecodingParameters{}
-        if incoming.ssrc != 0 {
-            encodings = append(encodings, RTPDecodingParameters{RTPCodingParameters{SSRC: incoming.ssrc}})
-        }
-        for _, rid := range incoming.rids {
-            encodings = append(encodings, RTPDecodingParameters{RTPCodingParameters{RID: rid}})
-        }
 
-        if err := receiver.Receive(RTPReceiveParameters{Encodings: encodings}); err != nil {
-            self.log.Warnf("RTPReceiver Receive failed %s", err)
-            return
+    async fn start_receiver(&self, incoming: TrackDetails, _receiver: Arc<RTPReceiver>) {
+        let mut encodings = vec![];
+        if incoming.ssrc != 0 {
+            encodings.push(RTPCodingParameters {
+                ssrc: incoming.ssrc,
+                ..Default::default()
+            });
+        }
+        for rid in incoming.rids {
+            encodings.push(RTPCodingParameters {
+                rid,
+                ..Default::default()
+            });
+        }
+        /*
+        if let Err(err) = receiver.receive(&RTPReceiveParameters { encodings }).await {
+            log::warn!("RTPReceiver Receive failed {}", err);
+            return;
         }
 
         // set track id and label early so they can be set as new track information
         // is received from the SDP.
-        for i := range receiver.tracks {
-            receiver.tracks[i].track.mu.Lock()
-            receiver.tracks[i].track.id = incoming.id
-            receiver.tracks[i].track.streamID = incoming.streamID
-            receiver.tracks[i].track.mu.Unlock()
+        for track_streams in &receiver.tracks {
+            track_streams.track.id = incoming.id;
+            track_streams.track.stream_id = incoming.stream_id;
         }
 
         // We can't block and wait for a single SSRC
         if incoming.ssrc == 0 {
-            return
+            return;
         }
 
-        go func() {
-            if err := receiver.Track().determinePayloadType(); err != nil {
-                self.log.Warnf("Could not determine PayloadType for SSRC %d", receiver.Track().SSRC())
-                return
+        let media_engine = Arc::clone(&self.media_engine);
+        tokio::spawn(async move {
+            if let Some(track) = receiver.track() {
+                if let Err(err) = track.determine_payload_type() {
+                    log::warn!("Could not determine PayloadType for SSRC {}", track.ssrc());
+                    return;
+                }
+
+                let params =
+                    match media_engine.get_rtp_parameters_by_payload_type(track.payload_type()) {
+                        Ok(params) => params,
+                        Err(err) => {
+                            log::warnf(
+                                "no codec could be found for payloadType {}",
+                                track.payload_type(),
+                            );
+                            return;
+                        }
+                    };
+
+                track.kind = receiver.kind;
+                track.codec = params.Codecs[0];
+                track.params = params;
+
+                self.onTrack(receiver.Track(), receiver)
             }
-
-            params, err := self.api.mediaEngine.getRTPParametersByPayloadType(receiver.Track().PayloadType())
-            if err != nil {
-                self.log.Warnf("no codec could be found for payloadType %d", receiver.Track().PayloadType())
-                return
-            }
-
-            receiver.Track().mu.Lock()
-            receiver.Track().kind = receiver.kind
-            receiver.Track().codec = params.Codecs[0]
-            receiver.Track().params = params
-            receiver.Track().mu.Unlock()
-
-            self.onTrack(receiver.Track(), receiver)
-        }()
+        });*/
     }
-
+    /*
     // startRTPReceivers opens knows inbound SRTP streams from the remote_description
     func (pc *PeerConnection) startRTPReceivers(incomingTracks []TrackDetails, currentTransceivers []*RTPTransceiver) { //nolint:gocognit
         localTransceivers := append([]*RTPTransceiver{}, currentTransceivers...)
@@ -1386,7 +1399,7 @@ impl PeerConnection {
                     continue
                 }
 
-                self.startReceiver(incomingTrack, t.Receiver())
+                self.start_receiver(incomingTrack, t.Receiver())
                 trackHandled = true
                 break
             }
@@ -1405,7 +1418,7 @@ impl PeerConnection {
                     self.log.Warnf("Could not add transceiver for remote SSRC %d: %s", incoming.ssrc, err)
                     continue
                 }
-                self.startReceiver(incoming, t.Receiver())
+                self.start_receiver(incoming, t.Receiver())
             }
         }
     }*/
@@ -1492,7 +1505,7 @@ impl PeerConnection {
             if err != nil {
                 return fmt.Errorf("%w: %d: %s", errPeerConnRemoteSSRCAddTransceiver, ssrc, err)
             }
-            self.startReceiver(incoming, t.Receiver())
+            self.start_receiver(incoming, t.Receiver())
             return nil
         }
 
