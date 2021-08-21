@@ -63,16 +63,19 @@ impl RTPSender {
 
     /// get_parameters describes the current configuration for the encoding and
     /// transmission of media on the sender's track.
-    pub fn get_parameters(&self) -> RTPSendParameters {
+    pub async fn get_parameters(&self) -> RTPSendParameters {
         RTPSendParameters {
-            rtp_parameters: self.media_engine.get_rtp_parameters_by_kind(
-                if let Some(t) = &self.track {
-                    t.kind()
-                } else {
-                    RTPCodecType::default()
-                },
-                &[RTPTransceiverDirection::Sendonly],
-            ),
+            rtp_parameters: self
+                .media_engine
+                .get_rtp_parameters_by_kind(
+                    if let Some(t) = &self.track {
+                        t.kind()
+                    } else {
+                        RTPCodecType::default()
+                    },
+                    &[RTPTransceiverDirection::Sendonly],
+                )
+                .await,
             encodings: vec![RTPEncodingParameters {
                 rid: String::new(),
                 ssrc: self.ssrc,
@@ -128,14 +131,17 @@ impl RTPSender {
 
         self.context = TrackLocalContext {
             id: self.id.clone(),
-            params: self.media_engine.get_rtp_parameters_by_kind(
-                if let Some(t) = &self.track {
-                    t.kind()
-                } else {
-                    RTPCodecType::default()
-                },
-                &[RTPTransceiverDirection::Sendonly],
-            ),
+            params: self
+                .media_engine
+                .get_rtp_parameters_by_kind(
+                    if let Some(t) = &self.track {
+                        t.kind()
+                    } else {
+                        RTPCodecType::default()
+                    },
+                    &[RTPTransceiverDirection::Sendonly],
+                )
+                .await,
             ssrc: parameters.encodings[0].ssrc,
             write_stream: Some(Box::new(InterceptorToTrackLocalWriter {})),
         };

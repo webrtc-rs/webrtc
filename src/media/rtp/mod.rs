@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use rtp_codec::*;
 
-mod fmtp;
+pub(crate) mod fmtp;
 pub mod rtp_codec;
 pub mod rtp_receiver;
 pub mod rtp_sender;

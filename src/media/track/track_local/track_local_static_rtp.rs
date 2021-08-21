@@ -42,7 +42,7 @@ impl TrackLocal for TrackLocalStaticRTP {
         };
 
         let (codec, match_type) = codec_parameters_fuzzy_search(&parameters, t.codec_parameters());
-        if match_type != CodecMatchType::None {
+        if match_type != CodecMatch::None {
             {
                 let mut bindings = self.bindings.lock().await;
                 bindings.push(TrackBinding {

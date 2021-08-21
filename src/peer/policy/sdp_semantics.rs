@@ -168,8 +168,8 @@ mod test {
             t.Errorf("new_peer_connection failed: %v", err)
         }
 
-        if err = apc.SetRemoteDescription(offer); err != nil {
-            t.Errorf("SetRemoteDescription failed: %s", err)
+        if err = apc.set_remote_description(offer); err != nil {
+            t.Errorf("set_remote_description failed: %s", err)
         }
 
         answer, err := apc.create_answer(nil)
@@ -252,8 +252,8 @@ mod test {
             t.Errorf("Failed to add audio track")
         }
 
-        if err = apc.SetRemoteDescription(offer); err != nil {
-            t.Errorf("SetRemoteDescription failed: %s", err)
+        if err = apc.set_remote_description(offer); err != nil {
+            t.Errorf("set_remote_description failed: %s", err)
         }
 
         answer, err := apc.create_answer(nil)
@@ -345,8 +345,8 @@ mod test {
             t.Errorf("Failed to add audio track")
         }
 
-        if err = apc.SetRemoteDescription(offer); err != nil {
-            t.Errorf("SetRemoteDescription failed: %s", err)
+        if err = apc.set_remote_description(offer); err != nil {
+            t.Errorf("set_remote_description failed: %s", err)
         }
 
         answer, err := apc.create_answer(nil)

@@ -117,39 +117,39 @@ pub enum Error {
     #[error("RtpSender not created by this PeerConnection")]
     ErrSenderNotCreatedByConnection,
 
-    /// ErrSessionDescriptionNoFingerprint indicates SetRemoteDescription was called with a SessionDescription that has no
+    /// ErrSessionDescriptionNoFingerprint indicates set_remote_description was called with a SessionDescription that has no
     /// fingerprint
-    #[error("SetRemoteDescription called with no fingerprint")]
+    #[error("set_remote_description called with no fingerprint")]
     ErrSessionDescriptionNoFingerprint,
 
-    /// ErrSessionDescriptionInvalidFingerprint indicates SetRemoteDescription was called with a SessionDescription that
+    /// ErrSessionDescriptionInvalidFingerprint indicates set_remote_description was called with a SessionDescription that
     /// has an invalid fingerprint
-    #[error("SetRemoteDescription called with an invalid fingerprint")]
+    #[error("set_remote_description called with an invalid fingerprint")]
     ErrSessionDescriptionInvalidFingerprint,
 
-    /// ErrSessionDescriptionConflictingFingerprints indicates SetRemoteDescription was called with a SessionDescription that
+    /// ErrSessionDescriptionConflictingFingerprints indicates set_remote_description was called with a SessionDescription that
     /// has an conflicting fingerprints
-    #[error("SetRemoteDescription called with multiple conflicting fingerprint")]
+    #[error("set_remote_description called with multiple conflicting fingerprint")]
     ErrSessionDescriptionConflictingFingerprints,
 
-    /// ErrSessionDescriptionMissingIceUfrag indicates SetRemoteDescription was called with a SessionDescription that
+    /// ErrSessionDescriptionMissingIceUfrag indicates set_remote_description was called with a SessionDescription that
     /// is missing an ice-ufrag value
-    #[error("SetRemoteDescription called with no ice-ufrag")]
+    #[error("set_remote_description called with no ice-ufrag")]
     ErrSessionDescriptionMissingIceUfrag,
 
-    /// ErrSessionDescriptionMissingIcePwd indicates SetRemoteDescription was called with a SessionDescription that
+    /// ErrSessionDescriptionMissingIcePwd indicates set_remote_description was called with a SessionDescription that
     /// is missing an ice-pwd value
-    #[error("SetRemoteDescription called with no ice-pwd")]
+    #[error("set_remote_description called with no ice-pwd")]
     ErrSessionDescriptionMissingIcePwd,
 
-    /// ErrSessionDescriptionConflictingIceUfrag  indicates SetRemoteDescription was called with a SessionDescription that
+    /// ErrSessionDescriptionConflictingIceUfrag  indicates set_remote_description was called with a SessionDescription that
     /// contains multiple conflicting ice-ufrag values
-    #[error("SetRemoteDescription called with multiple conflicting ice-ufrag values")]
+    #[error("set_remote_description called with multiple conflicting ice-ufrag values")]
     ErrSessionDescriptionConflictingIceUfrag,
 
-    /// ErrSessionDescriptionConflictingIcePwd indicates SetRemoteDescription was called with a SessionDescription that
+    /// ErrSessionDescriptionConflictingIcePwd indicates set_remote_description was called with a SessionDescription that
     /// contains multiple conflicting ice-pwd values
-    #[error("SetRemoteDescription called with multiple conflicting ice-pwd values")]
+    #[error("set_remote_description called with multiple conflicting ice-pwd values")]
     ErrSessionDescriptionConflictingIcePwd,
 
     /// ErrNoSRTPProtectionProfile indicates that the DTLS handshake completed and no SRTP Protection Profile was chosen

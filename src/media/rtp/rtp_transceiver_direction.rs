@@ -39,6 +39,18 @@ impl From<&str> for RTPTransceiverDirection {
     }
 }
 
+impl From<u8> for RTPTransceiverDirection {
+    fn from(v: u8) -> Self {
+        match v {
+            1 => RTPTransceiverDirection::Sendrecv,
+            2 => RTPTransceiverDirection::Sendonly,
+            3 => RTPTransceiverDirection::Recvonly,
+            4 => RTPTransceiverDirection::Inactive,
+            _ => RTPTransceiverDirection::Unspecified,
+        }
+    }
+}
+
 impl fmt::Display for RTPTransceiverDirection {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {

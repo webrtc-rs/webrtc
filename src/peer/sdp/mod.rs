@@ -405,7 +405,7 @@ pub(crate) async fn add_transceiver_sdp(
     .with_property_attribute(ATTR_KEY_RTCPMUX.to_owned())
     .with_property_attribute(ATTR_KEY_RTCPRSIZE.to_owned());
 
-    let codecs = t.get_codecs();
+    let codecs = t.get_codecs().await;
     for codec in &codecs {
         let name = codec
             .capability
@@ -465,7 +465,9 @@ pub(crate) async fn add_transceiver_sdp(
         directions.push(RTPTransceiverDirection::Recvonly);
     }
 
-    let parameters = media_engine.get_rtp_parameters_by_kind(t.kind, &directions);
+    let parameters = media_engine
+        .get_rtp_parameters_by_kind(t.kind, &directions)
+        .await;
     for rtp_extension in &parameters.header_extensions {
         let ext_url = Url::parse(rtp_extension.uri.as_str())?;
         media = media.with_extmap(sdp::extmap::ExtMap {
@@ -636,15 +638,17 @@ pub(crate) fn get_mid_value(media: &MediaDescription) -> Option<&String> {
 }
 
 pub(crate) fn description_is_plan_b(
-    desc: &session_description::SessionDescription,
+    desc: Option<&session_description::SessionDescription>,
 ) -> Result<bool> {
-    if let Some(parsed) = &desc.parsed {
-        let detection_regex = regex::Regex::new(r"(?i)^(audio|video|data)$")?; //TODO: fix regex pattern
-        for media in &parsed.media_descriptions {
-            if let Some(s) = get_mid_value(media) {
-                if let Some(caps) = detection_regex.captures(s) {
-                    if caps.len() == 2 {
-                        return Ok(true);
+    if let Some(desc) = desc {
+        if let Some(parsed) = &desc.parsed {
+            let detection_regex = regex::Regex::new(r"(?i)^(audio|video|data)$")?; //TODO: fix regex pattern
+            for media in &parsed.media_descriptions {
+                if let Some(s) = get_mid_value(media) {
+                    if let Some(caps) = detection_regex.captures(s) {
+                        if caps.len() == 2 {
+                            return Ok(true);
+                        }
                     }
                 }
             }

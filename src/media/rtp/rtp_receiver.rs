@@ -39,9 +39,10 @@ impl RTPReceiver {
 
     /// get_parameters describes the current configuration for the encoding and
     /// transmission of media on the receiver's track.
-    pub fn get_parameters(&self) -> RTPParameters {
+    pub async fn get_parameters(&self) -> RTPParameters {
         self.media_engine
             .get_rtp_parameters_by_kind(self.kind, &[RTPTransceiverDirection::Recvonly])
+            .await
     }
 
     /// track returns the RtpTransceiver TrackRemote
@@ -67,7 +68,7 @@ impl RTPReceiver {
 
         if parameters.encodings.len() == 1 && parameters.encodings[0].ssrc != 0 {
             if let Some(encoding) = parameters.encodings.first() {
-                let global_params = self.get_parameters();
+                let global_params = self.get_parameters().await;
                 let codec = if let Some(codec) = global_params.codecs.first() {
                     codec.capability.clone()
                 } else {

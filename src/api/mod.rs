@@ -140,9 +140,10 @@ impl API {
 
     /// new_rtp_receiver constructs a new RTPReceiver
     pub fn new_rtp_receiver(
-        &self,
         kind: RTPCodecType,
         transport: Arc<DTLSTransport>,
+        media_engine: Arc<MediaEngine>,
+        interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
     ) -> RTPReceiver {
         let (closed_tx, closed_rx) = mpsc::channel(1);
         let (received_tx, received_rx) = mpsc::channel(1);
@@ -158,16 +159,17 @@ impl API {
             received_tx: Some(received_tx),
             received_rx,
 
-            media_engine: Arc::clone(&self.media_engine),
-            interceptor: self.interceptor.clone(),
+            media_engine,
+            interceptor,
         }
     }
 
     /// new_rtp_sender constructs a new RTPSender
     pub fn new_rtp_sender(
-        &self,
         track: Arc<dyn TrackLocal + Send + Sync>,
         transport: Arc<DTLSTransport>,
+        media_engine: Arc<MediaEngine>,
+        interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
     ) -> RTPSender {
         let id = generate_crypto_random_string(
             32,
@@ -193,8 +195,8 @@ impl API {
 
             negotiated: false,
 
-            media_engine: Arc::clone(&self.media_engine),
-            interceptor: self.interceptor.clone(),
+            media_engine,
+            interceptor,
 
             id,
 

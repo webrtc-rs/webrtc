@@ -265,10 +265,7 @@ impl ICETransport {
     }
 
     /// adds a candidate associated with the remote ICETransport.
-    pub async fn add_remote_candidate(
-        &mut self,
-        remote_candidate: Option<ICECandidate>,
-    ) -> Result<()> {
+    pub async fn add_remote_candidate(&self, remote_candidate: Option<ICECandidate>) -> Result<()> {
         self.ensure_gatherer().await?;
 
         if let Some(agent) = self.gatherer.get_agent().await {
@@ -334,8 +331,8 @@ impl ICETransport {
 
     pub(crate) async fn have_remote_credentials_change(
         &self,
-        new_ufrag: String,
-        new_pwd: String,
+        new_ufrag: &str,
+        new_pwd: &str,
     ) -> bool {
         if let Some(agent) = self.gatherer.get_agent().await {
             let (ufrag, upwd) = agent.get_remote_user_credentials().await;

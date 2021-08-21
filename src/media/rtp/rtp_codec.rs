@@ -107,15 +107,15 @@ pub struct RTPParameters {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub(crate) enum CodecMatchType {
+pub(crate) enum CodecMatch {
     None = 0,
     Partial = 1,
     Exact = 2,
 }
 
-impl Default for CodecMatchType {
+impl Default for CodecMatch {
     fn default() -> Self {
-        CodecMatchType::None
+        CodecMatch::None
     }
 }
 
@@ -125,7 +125,7 @@ impl Default for CodecMatchType {
 pub(crate) fn codec_parameters_fuzzy_search(
     needle: &RTPCodecParameters,
     haystack: &[RTPCodecParameters],
-) -> (RTPCodecParameters, CodecMatchType) {
+) -> (RTPCodecParameters, CodecMatch) {
     let needle_fmtp = parse_fmtp(&needle.capability.sdp_fmtp_line);
 
     //TODO: do case-folding equal
@@ -135,16 +135,16 @@ pub(crate) fn codec_parameters_fuzzy_search(
         if c.capability.mime_type.to_uppercase() == needle.capability.mime_type.to_uppercase()
             && fmtp_consist(&needle_fmtp, &parse_fmtp(&c.capability.sdp_fmtp_line))
         {
-            return (c.clone(), CodecMatchType::Exact);
+            return (c.clone(), CodecMatch::Exact);
         }
     }
 
     // Fallback to just mime_type
     for c in haystack {
         if c.capability.mime_type.to_uppercase() == needle.capability.mime_type.to_uppercase() {
-            return (c.clone(), CodecMatchType::Partial);
+            return (c.clone(), CodecMatch::Partial);
         }
     }
 
-    (RTPCodecParameters::default(), CodecMatchType::None)
+    (RTPCodecParameters::default(), CodecMatch::None)
 }

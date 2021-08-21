@@ -642,8 +642,10 @@ async fn test_populate_sdp() -> Result<()> {
         let se = SettingEngine::default();
         let mut me = MediaEngine::default();
         me.register_default_codecs()?;
-        me.push_codecs(me.video_codecs.clone(), RTPCodecType::Video);
-        me.push_codecs(me.audio_codecs.clone(), RTPCodecType::Audio);
+        me.push_codecs(me.video_codecs.clone(), RTPCodecType::Video)
+            .await;
+        me.push_codecs(me.audio_codecs.clone(), RTPCodecType::Audio)
+            .await;
         let me = Arc::new(me);
 
         let mut tr = RTPTransceiver::new(
@@ -664,7 +666,8 @@ async fn test_populate_sdp() -> Result<()> {
             },
             payload_type: 96,
             ..Default::default()
-        }])?;
+        }])
+        .await?;
 
         let media_sections = vec![MediaSection {
             id: "video".to_owned(),
