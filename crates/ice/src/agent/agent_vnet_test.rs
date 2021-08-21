@@ -48,7 +48,7 @@ pub(crate) struct VNet {
 
 impl VNet {
     pub(crate) async fn close(&self) -> Result<()> {
-        self.server.close()?;
+        self.server.close().await?;
         let mut w = self.wan.lock().await;
         w.stop().await?;
         Ok(())

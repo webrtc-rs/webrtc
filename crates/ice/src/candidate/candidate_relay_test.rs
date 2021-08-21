@@ -99,7 +99,7 @@ async fn test_relay_only_connection() -> Result<()> {
 
     a_agent.close().await?;
     b_agent.close().await?;
-    server.close()?;
+    server.close().await?;
 
     Ok(())
 }

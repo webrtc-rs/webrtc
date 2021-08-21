@@ -82,7 +82,7 @@ async fn test_server_reflexive_only_connection() -> Result<()> {
 
     a_agent.close().await?;
     b_agent.close().await?;
-    server.close()?;
+    server.close().await?;
 
     Ok(())
 }
