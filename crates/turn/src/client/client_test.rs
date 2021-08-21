@@ -138,7 +138,7 @@ async fn test_client_nonce_expiration() -> Result<()> {
     let conn = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
     let server_port = conn.local_addr()?.port();
 
-    let mut server = Server::new(ServerConfig {
+    let server = Server::new(ServerConfig {
         conn_configs: vec![ConnConfig {
             conn,
             relay_addr_generator: Box::new(RelayAddressGeneratorStatic {

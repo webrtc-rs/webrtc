@@ -19,17 +19,17 @@ use util::Conn;
 
 const INBOUND_MTU: usize = 1500;
 
-// Server is an instance of the Pion TURN Server
+/// Server is an instance of the TURN Server
 pub struct Server {
     auth_handler: Arc<Box<dyn AuthHandler + Send + Sync>>,
     realm: String,
     channel_bind_timeout: Duration,
     pub(crate) nonces: Arc<Mutex<HashMap<String, Instant>>>,
-    shutdown_tx: Option<watch::Sender<bool>>,
+    shutdown_tx: Mutex<Option<watch::Sender<bool>>>,
 }
 
 impl Server {
-    // creates the TURN server
+    /// creates the TURN server
     pub async fn new(config: ServerConfig) -> Result<Self> {
         config.validate()?;
 
@@ -40,7 +40,7 @@ impl Server {
             realm: config.realm,
             channel_bind_timeout: config.channel_bind_timeout,
             nonces: Arc::new(Mutex::new(HashMap::new())),
-            shutdown_tx: Some(shutdown_tx),
+            shutdown_tx: Mutex::new(Some(shutdown_tx)),
         };
 
         if s.channel_bind_timeout == Duration::from_secs(0) {
@@ -128,9 +128,10 @@ impl Server {
         let _ = conn.close().await;
     }
 
-    // Close stops the TURN Server. It cleans up any associated state and closes all connections it is managing
-    pub async fn close(&mut self) -> Result<()> {
-        if let Some(tx) = self.shutdown_tx.take() {
+    /// Close stops the TURN Server. It cleans up any associated state and closes all connections it is managing
+    pub async fn close(&self) -> Result<()> {
+        let mut shutdown_tx = self.shutdown_tx.lock().await;
+        if let Some(tx) = shutdown_tx.take() {
             // errors if there are no receivers, but that's irrelevant.
             let _ = tx.send(true);
             // wait for all receivers to drop/close.
