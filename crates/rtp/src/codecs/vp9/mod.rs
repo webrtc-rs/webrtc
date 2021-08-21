@@ -266,11 +266,12 @@ impl Depacketizer for Vp9Packet {
                     b = reader.get_u8();
                     payload_index += 1;
 
-                    let mut p = Vp9PictureGroup::default();
-
-                    p.tid = (b & 0b1110_0000) >> 5;
-                    p.u = (b & 0b0001_0000) >> 4;
-                    p.r = (b & 0b0000_1100) >> 2;
+                    let mut p = Vp9PictureGroup {
+                        tid: (b & 0b1110_0000) >> 5,
+                        u: (b & 0b0001_0000) >> 4,
+                        r: (b & 0b0000_1100) >> 2,
+                        ..Default::default()
+                    };
 
                     for _ in 0..p.r {
                         p.p_diff.push(reader.get_u8());
