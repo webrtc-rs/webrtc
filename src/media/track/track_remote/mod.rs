@@ -1,27 +1,32 @@
+use crate::error::Error;
 use crate::media::interceptor::{Attributes, Interceptor};
 use crate::media::rtp::rtp_codec::{RTPCodecParameters, RTPCodecType, RTPParameters};
 use crate::media::rtp::{PayloadType, SSRC};
+use crate::RECEIVE_MTU;
 
-use bytes::Bytes;
+use anyhow::Result;
+use bytes::{Bytes, BytesMut};
 use std::sync::Arc;
+use util::Unmarshal;
 
 /// TrackRemote represents a single inbound source of media
 #[derive(Default)]
 pub struct TrackRemote {
-    id: String,
-    stream_id: String,
+    pub(crate) id: String,
+    pub(crate) stream_id: String,
 
     payload_type: PayloadType,
-    kind: RTPCodecType,
+    pub(crate) kind: RTPCodecType,
     ssrc: SSRC,
-    codec: RTPCodecParameters,
-    params: RTPParameters,
+    pub(crate) codec: RTPCodecParameters,
+    pub(crate) params: RTPParameters,
     rid: String,
 
     interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
 
-    peeked: Bytes,
-    peeked_attributes: Attributes,
+    //receiver: Arc<RTPReceiver>,
+    peeked: Option<Bytes>,
+    peeked_attributes: Option<Attributes>,
 }
 
 impl TrackRemote {
@@ -29,12 +34,14 @@ impl TrackRemote {
         kind: RTPCodecType,
         ssrc: SSRC,
         rid: String,
+        //receiver: Arc<RTPReceiver>,
         interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
     ) -> Self {
         TrackRemote {
             kind,
             ssrc,
             rid,
+            //receiver,
             interceptor,
             ..Default::default()
         }
@@ -83,90 +90,61 @@ impl TrackRemote {
     pub fn codec(&self) -> &RTPCodecParameters {
         &self.codec
     }
-    /*
-    // Read reads data from the track.
-    func (t *TrackRemote) Read(b []byte) (n int, attributes interceptor.Attributes, err error) {
-        t.mu.RLock()
-        r := t.receiver
-        peeked := t.peeked != nil
-        t.mu.RUnlock()
 
-        if peeked {
-            t.mu.Lock()
-            data := t.peeked
-            attributes = t.peeked_attributes
-
-            t.peeked = nil
-            t.peeked_attributes = nil
-            t.mu.Unlock()
+    /// Read reads data from the track.
+    pub async fn read(&mut self, b: &mut [u8]) -> Result<(usize, Attributes)> {
+        if let (Some(data), Some(attributes)) = (self.peeked.take(), self.peeked_attributes.take())
+        {
             // someone else may have stolen our packet when we
             // released the lock.  Deal with it.
-            if data != nil {
-                n = copy(b, data)
-                return
+            let n = std::cmp::min(b.len(), data.len());
+            b[..n].copy_from_slice(&data[..n]);
+            Ok((n, attributes))
+        } else {
+            //TODO: self.receiver.read_rtp(b, t)
+            Err(Error::new("TODO".to_owned()).into())
+        }
+    }
+    /*
+        // ReadRTP is a convenience method that wraps Read and unmarshals for you.
+        func (t *TrackRemote) ReadRTP() (*rtp.Packet, interceptor.Attributes, error) {
+            b := make([]byte, receiveMTU)
+            i, attributes, err := t.Read(b)
+            if err != nil {
+                return nil, nil, err
             }
-        }
 
-        return r.readRTP(b, t)
+            r := &rtp.Packet{}
+            if err := r.Unmarshal(b[:i]); err != nil {
+                return nil, nil, err
+            }
+            return r, attributes, nil
+        }
+    */
+    /// determine_payload_type blocks and reads a single packet to determine the PayloadType for this Track
+    /// this is useful because we can't announce it to the user until we know the payload_type
+    pub(crate) async fn determine_payload_type(&mut self) -> Result<()> {
+        let mut b = vec![0u8; RECEIVE_MTU];
+        let (n, _) = self.peek(&mut b).await?;
+
+        let mut buf = &b[..n];
+        let r = rtp::packet::Packet::unmarshal(&mut buf)?;
+        self.payload_type = r.header.payload_type;
+
+        Ok(())
     }
 
-    // ReadRTP is a convenience method that wraps Read and unmarshals for you.
-    func (t *TrackRemote) ReadRTP() (*rtp.Packet, interceptor.Attributes, error) {
-        b := make([]byte, receiveMTU)
-        i, attributes, err := t.Read(b)
-        if err != nil {
-            return nil, nil, err
-        }
+    /// peek is like Read, but it doesn't discard the packet read
+    pub(crate) async fn peek(&mut self, b: &mut [u8]) -> Result<(usize, Attributes)> {
+        let (n, a) = self.read(b).await?;
 
-        r := &rtp.Packet{}
-        if err := r.Unmarshal(b[:i]); err != nil {
-            return nil, nil, err
-        }
-        return r, attributes, nil
-    }
-
-    // determinePayloadType blocks and reads a single packet to determine the PayloadType for this Track
-    // this is useful because we can't announce it to the user until we know the payload_type
-    func (t *TrackRemote) determinePayloadType() error {
-        b := make([]byte, receiveMTU)
-        n, _, err := t.peek(b)
-        if err != nil {
-            return err
-        }
-        r := rtp.Packet{}
-        if err := r.Unmarshal(b[:n]); err != nil {
-            return err
-        }
-
-        t.mu.Lock()
-        t.payload_type = PayloadType(r.PayloadType)
-        defer t.mu.Unlock()
-
-        return nil
-    }
-
-    // peek is like Read, but it doesn't discard the packet read
-    func (t *TrackRemote) peek(b []byte) (n int, a interceptor.Attributes, err error) {
-        n, a, err = t.Read(b)
-        if err != nil {
-            return
-        }
-
-        t.mu.Lock()
         // this might overwrite data if somebody peeked between the Read
         // and us getting the lock.  Oh well, we'll just drop a packet in
         // that case.
-        data := make([]byte, n)
-        n = copy(data, b[:n])
-        t.peeked = data
-        t.peeked_attributes = a
-        t.mu.Unlock()
-        return
+        let mut data = BytesMut::new();
+        data.extend(b[..n].to_vec());
+        self.peeked = Some(data.freeze());
+        self.peeked_attributes = Some(a.clone());
+        Ok((n, a))
     }
-
-    // SetReadDeadline sets the max amount of time the RTP stream will block before returning. 0 is forever.
-    func (t *TrackRemote) SetReadDeadline(deadline time.Time) error {
-        return t.receiver.setRTPReadDeadline(deadline, t)
-    }
-    */
 }

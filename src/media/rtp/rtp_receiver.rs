@@ -2,7 +2,7 @@ use crate::api::media_engine::MediaEngine;
 use crate::error::Error;
 use crate::media::dtls_transport::DTLSTransport;
 use crate::media::interceptor::stream_info::StreamInfo;
-use crate::media::interceptor::{Attributes, Interceptor, RTCPReader, RTPReader};
+use crate::media::interceptor::*;
 use crate::media::rtp::rtp_codec::{RTPCodecCapability, RTPCodecType, RTPParameters};
 use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
 use crate::media::rtp::{RTPReceiveParameters, SSRC};
@@ -226,25 +226,27 @@ impl RTPReceiver {
         }
     }
 
-    /*TODO:
-    async fn streams_for_track(&self, t: &Arc<TrackRemote>) -> Option<&TrackStreams> {
+    fn streams_for_track(&self, tid: &str) -> Option<&TrackStreams> {
         for track in &self.tracks {
-            if &track.track == t {
+            if track.track.id() == tid {
                 return Some(track);
             }
         }
         None
     }
 
-    // readRTP should only be called by a track, this only exists so we can keep state in one place
-    func (r *RTPReceiver) readRTP(b []byte, reader *TrackRemote) (n int, a interceptor.Attributes, err error) {
-        <-r.received
-        if t := r.streamsForTrack(reader); t != nil {
-            return t.rtpInterceptor.Read(b, a)
+    /// read_rtp should only be called by a track, this only exists so we can keep state in one place
+    pub(crate) async fn read_rtp(&self, b: &mut [u8], tid: &str) -> Result<(usize, Attributes)> {
+        //TODO: <-self.received
+        if let Some(t) = self.streams_for_track(tid) {
+            if let Some(ri) = &t.rtp_interceptor {
+                let a = Attributes::new();
+                return ri.read(b, &a).await;
+            }
         }
 
-        return 0, nil, fmt.Errorf("%w: %d", errRTPReceiverWithSSRCTrackStreamNotFound, reader.SSRC())
-    }*/
+        Err(Error::ErrRTPReceiverWithSSRCTrackStreamNotFound.into())
+    }
 
     /// receive_for_rid is the sibling of Receive expect for RIDs instead of SSRCs
     /// It populates all the internal state for the given RID

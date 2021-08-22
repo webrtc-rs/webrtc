@@ -1304,7 +1304,7 @@ impl PeerConnection {
                 ..Default::default()
             });
         }
-        /*
+        /*TODO:
         if let Err(err) = receiver.receive(&RTPReceiveParameters { encodings }).await {
             log::warn!("RTPReceiver Receive failed {}", err);
             return;
@@ -1313,8 +1313,8 @@ impl PeerConnection {
         // set track id and label early so they can be set as new track information
         // is received from the SDP.
         for track_streams in &receiver.tracks {
-            track_streams.track.id = incoming.id;
-            track_streams.track.stream_id = incoming.stream_id;
+            track_streams.track.id = incoming.id.clone();
+            track_streams.track.stream_id = incoming.stream_id.clone();
         }
 
         // We can't block and wait for a single SSRC
@@ -1334,7 +1334,7 @@ impl PeerConnection {
                     match media_engine.get_rtp_parameters_by_payload_type(track.payload_type()) {
                         Ok(params) => params,
                         Err(err) => {
-                            log::warnf(
+                            log::warn!(
                                 "no codec could be found for payloadType {}",
                                 track.payload_type(),
                             );

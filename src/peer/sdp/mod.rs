@@ -38,8 +38,8 @@ use url::Url;
 pub(crate) struct TrackDetails {
     mid: String,
     kind: RTPCodecType,
-    stream_id: String,
-    id: String,
+    pub(crate) stream_id: String,
+    pub(crate) id: String,
     pub(crate) ssrc: SSRC,
     pub(crate) rids: Vec<String>,
 }
