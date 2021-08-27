@@ -14,10 +14,10 @@ use std::sync::Arc;
 
 /// RTPTransceiver represents a combination of an RTPSender and an RTPReceiver that share a common mid.
 pub struct RTPTransceiver {
-    mid: String,                   //atomic.Value
-    sender: Option<RTPSender>,     //atomic.Value
-    receiver: Option<RTPReceiver>, //atomic.Value
-    direction: AtomicU8,           //RTPTransceiverDirection, //atomic.Value
+    mid: String,                        //atomic.Value
+    sender: Option<Arc<RTPSender>>,     //atomic.Value
+    receiver: Option<Arc<RTPReceiver>>, //atomic.Value
+    direction: AtomicU8,                //RTPTransceiverDirection, //atomic.Value
 
     codecs: Vec<RTPCodecParameters>, // User provided codecs via set_codec_preferences
 
@@ -29,8 +29,8 @@ pub struct RTPTransceiver {
 
 impl RTPTransceiver {
     pub(crate) fn new(
-        receiver: Option<RTPReceiver>,
-        sender: Option<RTPSender>,
+        receiver: Option<Arc<RTPReceiver>>,
+        sender: Option<Arc<RTPSender>>,
         direction: RTPTransceiverDirection,
         kind: RTPCodecType,
         codecs: Vec<RTPCodecParameters>,
@@ -82,14 +82,14 @@ impl RTPTransceiver {
     }
 
     /// sender returns the RTPTransceiver's RTPSender if it has one
-    pub fn sender(&self) -> Option<&RTPSender> {
+    pub fn sender(&self) -> Option<&Arc<RTPSender>> {
         self.sender.as_ref()
     }
 
     /// set_sender sets the RTPSender and Track to current transceiver
     pub async fn set_sender(
         &mut self,
-        sender: Option<RTPSender>,
+        sender: Option<Arc<RTPSender>>,
         track: Option<Arc<dyn TrackLocal + Send + Sync>>,
     ) -> Result<()> {
         self.sender = sender;
@@ -97,7 +97,7 @@ impl RTPTransceiver {
     }
 
     /// receiver returns the RTPTransceiver's RTPReceiver if it has one
-    pub fn receiver(&self) -> Option<&RTPReceiver> {
+    pub fn receiver(&self) -> Option<&Arc<RTPReceiver>> {
         self.receiver.as_ref()
     }
 
@@ -132,11 +132,11 @@ impl RTPTransceiver {
 
     /// stop irreversibly stops the RTPTransceiver
     pub async fn stop(&mut self) -> Result<()> {
-        if let Some(sender) = &mut self.sender {
-            sender.stop().await?;
+        if let Some(_sender) = &mut self.sender {
+            //TODO: sender.stop().await?;
         }
-        if let Some(receiver) = &mut self.receiver {
-            receiver.stop().await?;
+        if let Some(_receiver) = &mut self.receiver {
+            //TODO: receiver.stop().await?;
         }
 
         self.set_direction(RTPTransceiverDirection::Inactive);
@@ -149,8 +149,8 @@ impl RTPTransceiver {
         track: Option<Arc<dyn TrackLocal + Send + Sync>>,
     ) -> Result<()> {
         let track_is_none = track.is_none();
-        if let Some(sender) = &mut self.sender {
-            sender.replace_track(track).await?;
+        if let Some(_sender) = &mut self.sender {
+            //TODO: sender.replace_track(track).await?;
         }
         if track_is_none {
             self.sender = None;

@@ -182,7 +182,7 @@ impl RTPReceiver {
         Ok((pkts, attributes))
     }
 
-    fn have_received(&self) -> bool {
+    pub(crate) fn have_received(&self) -> bool {
         self.received_tx.is_none()
     }
 

@@ -36,8 +36,8 @@ use url::Url;
 /// This isn't keyed by SSRC because it also needs to support rid based sources
 #[derive(Default, Debug, Clone)]
 pub(crate) struct TrackDetails {
-    mid: String,
-    kind: RTPCodecType,
+    pub(crate) mid: String,
+    pub(crate) kind: RTPCodecType,
     pub(crate) stream_id: String,
     pub(crate) id: String,
     pub(crate) ssrc: SSRC,

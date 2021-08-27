@@ -123,22 +123,22 @@ mod test {
             t.Errorf("new_peer_connection failed: %v", err)
         }
 
-        if _, err = opc.AddTransceiverFromKind(RTPCodecTypeVideo, RTPTransceiverInit{
+        if _, err = opc.add_transceiver_from_kind(RTPCodecTypeVideo, RTPTransceiverInit{
             Direction: RTPTransceiverDirectionSendrecv,
         }); err != nil {
             t.Errorf("AddTransceiver failed: %v", err)
         }
-        if _, err = opc.AddTransceiverFromKind(RTPCodecTypeVideo, RTPTransceiverInit{
+        if _, err = opc.add_transceiver_from_kind(RTPCodecTypeVideo, RTPTransceiverInit{
             Direction: RTPTransceiverDirectionSendrecv,
         }); err != nil {
             t.Errorf("AddTransceiver failed: %v", err)
         }
-        if _, err = opc.AddTransceiverFromKind(RTPCodecTypeAudio, RTPTransceiverInit{
+        if _, err = opc.add_transceiver_from_kind(RTPCodecTypeAudio, RTPTransceiverInit{
             Direction: RTPTransceiverDirectionSendrecv,
         }); err != nil {
             t.Errorf("AddTransceiver failed: %v", err)
         }
-        if _, err = opc.AddTransceiverFromKind(RTPCodecTypeAudio, RTPTransceiverInit{
+        if _, err = opc.add_transceiver_from_kind(RTPCodecTypeAudio, RTPTransceiverInit{
             Direction: RTPTransceiverDirectionSendrecv,
         }); err != nil {
             t.Errorf("AddTransceiver failed: %v", err)
@@ -197,12 +197,12 @@ mod test {
             t.Errorf("new_peer_connection failed: %v", err)
         }
 
-        if _, err = opc.AddTransceiverFromKind(RTPCodecTypeVideo, RTPTransceiverInit{
+        if _, err = opc.add_transceiver_from_kind(RTPCodecTypeVideo, RTPTransceiverInit{
             Direction: RTPTransceiverDirectionRecvonly,
         }); err != nil {
             t.Errorf("Failed to add transceiver")
         }
-        if _, err = opc.AddTransceiverFromKind(RTPCodecTypeAudio, RTPTransceiverInit{
+        if _, err = opc.add_transceiver_from_kind(RTPCodecTypeAudio, RTPTransceiverInit{
             Direction: RTPTransceiverDirectionRecvonly,
         }); err != nil {
             t.Errorf("Failed to add transceiver")
@@ -290,12 +290,12 @@ mod test {
             t.Errorf("new_peer_connection failed: %v", err)
         }
 
-        if _, err = opc.AddTransceiverFromKind(RTPCodecTypeVideo, RTPTransceiverInit{
+        if _, err = opc.add_transceiver_from_kind(RTPCodecTypeVideo, RTPTransceiverInit{
             Direction: RTPTransceiverDirectionRecvonly,
         }); err != nil {
             t.Errorf("Failed to add transceiver")
         }
-        if _, err = opc.AddTransceiverFromKind(RTPCodecTypeAudio, RTPTransceiverInit{
+        if _, err = opc.add_transceiver_from_kind(RTPCodecTypeAudio, RTPTransceiverInit{
             Direction: RTPTransceiverDirectionRecvonly,
         }); err != nil {
             t.Errorf("Failed to add transceiver")

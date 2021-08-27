@@ -248,11 +248,11 @@ pub enum Error {
     ErrPeerConnSimulcastStreamIDRTPExtensionRequired,
     #[error("incoming SSRC failed Simulcast probing")]
     ErrPeerConnSimulcastIncomingSSRCFailed,
-    #[error("AddTransceiverFromKind only accepts one RTPTransceiverInit")]
+    #[error("add_transceiver_from_kind only accepts one RTPTransceiverInit")]
     ErrPeerConnAddTransceiverFromKindOnlyAcceptsOne,
     #[error("AddTransceiverFromTrack only accepts one RTPTransceiverInit")]
     ErrPeerConnAddTransceiverFromTrackOnlyAcceptsOne,
-    #[error("AddTransceiverFromKind currently only supports recvonly")]
+    #[error("add_transceiver_from_kind currently only supports recvonly")]
     ErrPeerConnAddTransceiverFromKindSupport,
     #[error("AddTransceiverFromTrack currently only supports sendonly and sendrecv")]
     ErrPeerConnAddTransceiverFromTrackSupport,

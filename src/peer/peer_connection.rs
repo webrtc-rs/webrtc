@@ -29,7 +29,9 @@ use crate::error::Error;
 use crate::media::dtls_transport::dtls_role::{DEFAULT_DTLS_ROLE_ANSWER, DEFAULT_DTLS_ROLE_OFFER};
 use crate::media::rtp::rtp_codec::RTPCodecType;
 use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
-use crate::media::rtp::RTPCodingParameters;
+use crate::media::rtp::{RTPCodingParameters, RTPTransceiverInit, SSRC};
+use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
+use crate::media::track::track_local::TrackLocal;
 use crate::peer::ice::ice_gather::ice_gatherer_state::ICEGathererState;
 use crate::peer::ice::ice_gather::ice_gathering_state::ICEGatheringState;
 use crate::peer::ice::ice_role::ICERole;
@@ -37,10 +39,11 @@ use crate::peer::offer_answer_options::{AnswerOptions, OfferOptions};
 use crate::peer::operation::Operations;
 use crate::peer::sdp::sdp_type::SDPType;
 use crate::peer::sdp::{
-    description_is_plan_b, extract_fingerprint, extract_ice_details, get_by_mid, get_mid_value,
-    get_peer_direction, have_data_channel, populate_local_candidates, update_sdp_origin,
-    TrackDetails,
+    description_is_plan_b, extract_fingerprint, extract_ice_details, filter_track_with_ssrc,
+    get_by_mid, get_mid_value, get_peer_direction, have_data_channel, populate_local_candidates,
+    update_sdp_origin, TrackDetails,
 };
+use crate::util::math_rand_alpha;
 use crate::MEDIA_SECTION_APPLICATION;
 use anyhow::Result;
 use defer::defer;
@@ -1181,12 +1184,12 @@ impl PeerConnection {
                                         //TODO: t.set_mid(midValue)?;
                                     }
                                 } else {
-                                    let receiver = API::new_rtp_receiver(
+                                    let receiver = Arc::new(API::new_rtp_receiver(
                                         kind,
                                         Arc::clone(&self.dtls_transport),
                                         Arc::clone(&self.media_engine),
                                         self.interceptor.clone(),
-                                    );
+                                    ));
 
                                     let local_direction =
                                         if direction == RTPTransceiverDirection::Recvonly {
@@ -1290,7 +1293,7 @@ impl PeerConnection {
         Ok(())
     }
 
-    async fn start_receiver(&self, incoming: TrackDetails, _receiver: Arc<RTPReceiver>) {
+    async fn start_receiver(&self, incoming: &TrackDetails, _receiver: &Arc<RTPReceiver>) {
         let mut encodings = vec![];
         if incoming.ssrc != 0 {
             encodings.push(RTPCodingParameters {
@@ -1298,9 +1301,9 @@ impl PeerConnection {
                 ..Default::default()
             });
         }
-        for rid in incoming.rids {
+        for rid in &incoming.rids {
             encodings.push(RTPCodingParameters {
-                rid,
+                rid: rid.to_owned(),
                 ..Default::default()
             });
         }
@@ -1350,78 +1353,102 @@ impl PeerConnection {
             }
         });*/
     }
-    /*
-    // startRTPReceivers opens knows inbound SRTP streams from the remote_description
-    func (pc *PeerConnection) startRTPReceivers(incomingTracks []TrackDetails, currentTransceivers []*RTPTransceiver) { //nolint:gocognit
-        localTransceivers := append([]*RTPTransceiver{}, currentTransceivers...)
 
-        remoteIsPlanB := false
-        switch self.configuration.SDPSemantics {
-        case SDPSemanticsPlanB:
-            remoteIsPlanB = true
-        case SDPSemanticsUnifiedPlanWithFallback:
-            remoteIsPlanB = description_is_plan_b(self.remote_description())
-        default:
-            // none
-        }
+    /// start_rtp_receivers opens knows inbound SRTP streams from the remote_description
+    pub(crate) async fn start_rtp_receivers(
+        &mut self,
+        incoming_tracks: &mut Vec<TrackDetails>,
+        current_transceivers: &[Arc<RTPTransceiver>],
+    ) -> Result<()> {
+        let local_transceivers = current_transceivers.to_vec();
+
+        let remote_is_plan_b = match self.configuration.sdp_semantics {
+            SDPSemantics::PlanB => true,
+            SDPSemantics::UnifiedPlanWithFallback => {
+                description_is_plan_b(self.remote_description())?
+            }
+            _ => false,
+        };
 
         // Ensure we haven't already started a transceiver for this ssrc
-        for i := range incomingTracks {
-            if len(incomingTracks) <= i {
-                break
-            }
-            incomingTrack := incomingTracks[i]
-
-            for _, t := range localTransceivers {
-                if (t.Receiver()) == nil || t.Receiver().Track() == nil || t.Receiver().Track().ssrc != incomingTrack.ssrc {
-                    continue
+        let ssrcs: Vec<SSRC> = incoming_tracks.iter().map(|x| x.ssrc).collect();
+        for ssrc in ssrcs {
+            for t in &local_transceivers {
+                if let Some(receiver) = t.receiver() {
+                    if let Some(track) = receiver.track() {
+                        if track.ssrc() != ssrc {
+                            continue;
+                        }
+                    } else {
+                        continue;
+                    }
+                } else {
+                    continue;
                 }
 
-                incomingTracks = filter_track_with_ssrc(incomingTracks, incomingTrack.ssrc)
+                filter_track_with_ssrc(incoming_tracks, ssrc);
             }
         }
 
-        unhandledTracks := incomingTracks[:0]
-        for i := range incomingTracks {
-            trackHandled := false
-            for j := range localTransceivers {
-                t := localTransceivers[j]
-                incomingTrack := incomingTracks[i]
-
-                if t.Mid() != incomingTrack.mid {
-                    continue
+        let mut unhandled_tracks = vec![]; // incoming_tracks[:0]
+        for incoming_track in incoming_tracks.iter() {
+            let mut track_handled = false;
+            for t in &local_transceivers {
+                if t.mid() != incoming_track.mid {
+                    continue;
                 }
 
-                if (incomingTrack.kind != t.kind) ||
-                    (t.Direction() != RTPTransceiverDirectionRecvonly && t.Direction() != RTPTransceiverDirectionSendrecv) ||
-                    (t.Receiver()) == nil ||
-                    (t.Receiver().haveReceived()) {
-                    continue
+                if (incoming_track.kind != t.kind())
+                    || (t.direction() != RTPTransceiverDirection::Recvonly
+                        && t.direction() != RTPTransceiverDirection::Sendrecv)
+                {
+                    continue;
                 }
 
-                self.start_receiver(incomingTrack, t.Receiver())
-                trackHandled = true
-                break
+                if let Some(receiver) = t.receiver() {
+                    if receiver.have_received() {
+                        continue;
+                    }
+                    self.start_receiver(incoming_track, receiver).await;
+                    track_handled = true;
+                }
             }
 
-            if !trackHandled {
-                unhandledTracks = append(unhandledTracks, incomingTracks[i])
+            if !track_handled {
+                unhandled_tracks.push(incoming_track);
+            }
+        }
+
+        if remote_is_plan_b {
+            for incoming in unhandled_tracks {
+                let t = match self
+                    .add_transceiver_from_kind(
+                        incoming.kind,
+                        &[RTPTransceiverInit {
+                            direction: RTPTransceiverDirection::Sendrecv,
+                            send_encodings: vec![],
+                        }],
+                    )
+                    .await
+                {
+                    Ok(t) => t,
+                    Err(err) => {
+                        log::warn!(
+                            "Could not add transceiver for remote SSRC {}: {}",
+                            incoming.ssrc,
+                            err
+                        );
+                        continue;
+                    }
+                };
+                if let Some(receiver) = t.receiver() {
+                    self.start_receiver(incoming, receiver).await;
+                }
             }
         }
 
-        if remoteIsPlanB {
-            for _, incoming := range unhandledTracks {
-                t, err := self.AddTransceiverFromKind(incoming.kind, RTPTransceiverInit{
-                    Direction: RTPTransceiverDirectionSendrecv,
-                })
-                if err != nil {
-                    self.log.Warnf("Could not add transceiver for remote SSRC %d: %s", incoming.ssrc, err)
-                    continue
-                }
-                self.start_receiver(incoming, t.Receiver())
-            }
-        }
-    }*/
+        Ok(())
+    }
 
     /// start_rtp_senders starts all outbound RTP streams
     pub(crate) async fn start_rtp_senders(
@@ -1499,7 +1526,7 @@ impl PeerConnection {
                 incoming.kind = RTPCodecTypeAudio
             }
 
-            t, err := self.AddTransceiverFromKind(incoming.kind, RTPTransceiverInit{
+            t, err := self.add_transceiver_from_kind(incoming.kind, RTPTransceiverInit{
                 Direction: RTPTransceiverDirectionSendrecv,
             })
             if err != nil {
@@ -1728,7 +1755,7 @@ impl PeerConnection {
             }
         }
 
-        transceiver, err := self.newTransceiverFromTrack(RTPTransceiverDirectionSendrecv, track)
+        transceiver, err := self.new_transceiver_from_track(RTPTransceiverDirectionSendrecv, track)
         if err != nil {
             return nil, err
         }
@@ -1761,71 +1788,105 @@ impl PeerConnection {
         }
         return
     }
-
-    func (pc *PeerConnection) newTransceiverFromTrack(direction RTPTransceiverDirection, track TrackLocal) (t *RTPTransceiver, err error) {
-        var (
-            r *RTPReceiver
-            s *RTPSender
-        )
-        switch direction {
-        case RTPTransceiverDirectionSendrecv:
-            r, err = self.api.new_rtpreceiver(track.kind(), self.dtlsTransport)
-            if err != nil {
-                return
+    */
+    fn new_transceiver_from_track(
+        &self,
+        direction: RTPTransceiverDirection,
+        track: Arc<dyn TrackLocal + Send + Sync>,
+    ) -> Result<Arc<RTPTransceiver>> {
+        let (r, s) = match direction {
+            RTPTransceiverDirection::Sendrecv => {
+                let r = Some(Arc::new(API::new_rtp_receiver(
+                    track.kind(),
+                    Arc::clone(&self.dtls_transport),
+                    Arc::clone(&self.media_engine),
+                    self.interceptor.clone(),
+                )));
+                let s = Some(Arc::new(API::new_rtp_sender(
+                    Arc::clone(&track),
+                    Arc::clone(&self.dtls_transport),
+                    Arc::clone(&self.media_engine),
+                    self.interceptor.clone(),
+                )));
+                (r, s)
             }
-            s, err = self.api.new_rtpsender(track, self.dtlsTransport)
-        case RTPTransceiverDirectionSendonly:
-            s, err = self.api.new_rtpsender(track, self.dtlsTransport)
-        default:
-            err = errPeerConnAddTransceiverFromTrackSupport
-        }
-        if err != nil {
-            return
-        }
-        return newRTPTransceiver(r, s, direction, track.kind()), nil
+            RTPTransceiverDirection::Sendonly => {
+                let s = Some(Arc::new(API::new_rtp_sender(
+                    Arc::clone(&track),
+                    Arc::clone(&self.dtls_transport),
+                    Arc::clone(&self.media_engine),
+                    self.interceptor.clone(),
+                )));
+                (None, s)
+            }
+            _ => return Err(Error::ErrPeerConnAddTransceiverFromTrackSupport.into()),
+        };
+
+        Ok(Arc::new(RTPTransceiver::new(
+            r,
+            s,
+            direction,
+            track.kind(),
+            vec![],
+            Arc::clone(&self.media_engine),
+        )))
     }
 
-    // AddTransceiverFromKind Create a new RtpTransceiver and adds it to the set of transceivers.
-    func (pc *PeerConnection) AddTransceiverFromKind(kind RTPCodecType, init ...RTPTransceiverInit) (t *RTPTransceiver, err error) {
-        if self.is_closed.get() {
-            return nil, &rtcerr.InvalidStateError{Err: ErrConnectionClosed}
+    /// add_transceiver_from_kind Create a new RtpTransceiver and adds it to the set of transceivers.
+    pub async fn add_transceiver_from_kind(
+        &mut self,
+        kind: RTPCodecType,
+        init: &[RTPTransceiverInit],
+    ) -> Result<Arc<RTPTransceiver>> {
+        if self.is_closed.load(Ordering::SeqCst) {
+            return Err(Error::ErrConnectionClosed.into());
         }
 
-        direction := RTPTransceiverDirectionSendrecv
-        if len(init) > 1 {
-            return nil, errPeerConnAddTransceiverFromKindOnlyAcceptsOne
-        } else if len(init) == 1 {
-            direction = init[0].Direction
-        }
-        switch direction {
-        case RTPTransceiverDirectionSendonly, RTPTransceiverDirectionSendrecv:
-            codecs := self.api.mediaEngine.getCodecsByKind(kind)
-            if len(codecs) == 0 {
-                return nil, ErrNoCodecsAvailable
+        let direction = match init.len() {
+            0 => RTPTransceiverDirection::Sendrecv,
+            1 => init[0].direction,
+            _ => return Err(Error::ErrPeerConnAddTransceiverFromKindOnlyAcceptsOne.into()),
+        };
+
+        let t = match direction {
+            RTPTransceiverDirection::Sendonly | RTPTransceiverDirection::Sendrecv => {
+                let codecs = self.media_engine.get_codecs_by_kind(kind).await;
+                if codecs.is_empty() {
+                    return Err(Error::ErrNoCodecsAvailable.into());
+                }
+                let track = Arc::new(TrackLocalStaticSample::new(
+                    codecs[0].capability.clone(),
+                    math_rand_alpha(16),
+                    math_rand_alpha(16),
+                ));
+
+                self.new_transceiver_from_track(direction, track)?
             }
-            track, err := NewTrackLocalStaticSample(codecs[0].RTPCodecCapability, util.MathRandAlpha(16), util.MathRandAlpha(16))
-            if err != nil {
-                return nil, err
+            RTPTransceiverDirection::Recvonly => {
+                let receiver = Arc::new(API::new_rtp_receiver(
+                    kind,
+                    Arc::clone(&self.dtls_transport),
+                    Arc::clone(&self.media_engine),
+                    self.interceptor.clone(),
+                ));
+
+                Arc::new(RTPTransceiver::new(
+                    Some(receiver),
+                    None,
+                    RTPTransceiverDirection::Recvonly,
+                    kind,
+                    vec![],
+                    Arc::clone(&self.media_engine),
+                ))
             }
-            t, err = self.newTransceiverFromTrack(direction, track)
-            if err != nil {
-                return nil, err
-            }
-        case RTPTransceiverDirectionRecvonly:
-            receiver, err := self.api.new_rtpreceiver(kind, self.dtlsTransport)
-            if err != nil {
-                return nil, err
-            }
-            t = newRTPTransceiver(receiver, nil, RTPTransceiverDirectionRecvonly, kind)
-        default:
-            return nil, errPeerConnAddTransceiverFromKindSupport
-        }
-        self.mu.Lock()
-        self.add_rtptransceiver(t)
-        self.mu.Unlock()
-        return t, nil
+            _ => return Err(Error::ErrPeerConnAddTransceiverFromKindSupport.into()),
+        };
+
+        self.add_rtp_transceiver(Arc::clone(&t)).await;
+
+        Ok(t)
     }
-
+    /*
     // AddTransceiverFromTrack Create a new RtpTransceiver(SendRecv or SendOnly) and add it to the set of transceivers.
     func (pc *PeerConnection) AddTransceiverFromTrack(track TrackLocal, init ...RTPTransceiverInit) (t *RTPTransceiver, err error) {
         if self.is_closed.get() {
@@ -1839,7 +1900,7 @@ impl PeerConnection {
             direction = init[0].Direction
         }
 
-        t, err = self.newTransceiverFromTrack(direction, track)
+        t, err = self.new_transceiver_from_track(direction, track)
         if err == nil {
             self.mu.Lock()
             self.add_rtptransceiver(t)
@@ -2203,7 +2264,7 @@ impl PeerConnection {
             }
         }
 
-        self.startRTPReceivers(TrackDetails, currentTransceivers)
+        self.start_rtpreceivers(TrackDetails, currentTransceivers)
         if have_application_media_section(remoteDesc.parsed) {
             self.startSCTP()
         }

@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
 use rtp_codec::*;
 
 pub(crate) mod fmtp;
@@ -91,3 +92,14 @@ pub struct RTPSendParameters {
     pub rtp_parameters: RTPParameters,
     pub encodings: Vec<RTPEncodingParameters>,
 }
+
+/// RTPTransceiverInit dictionary is used when calling the WebRTC function addTransceiver() to provide configuration options for the new transceiver.
+pub struct RTPTransceiverInit {
+    pub direction: RTPTransceiverDirection,
+    pub send_encodings: Vec<RTPEncodingParameters>,
+    // Streams       []*Track
+}
+
+// RtpTransceiverInit is a temporary mapping while we fix case sensitivity
+// Deprecated: Use RTPTransceiverInit instead
+pub type RtpTransceiverInit = RTPTransceiverInit;
