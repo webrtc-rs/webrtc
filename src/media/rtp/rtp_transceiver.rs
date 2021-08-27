@@ -8,9 +8,11 @@ use crate::media::track::track_local::TrackLocal;
 
 use crate::api::media_engine::MediaEngine;
 use crate::error::Error;
+use crate::media::rtp::PayloadType;
 use anyhow::Result;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
+use util::Unmarshal;
 
 /// RTPTransceiver represents a combination of an RTPSender and an RTPReceiver that share a common mid.
 pub struct RTPTransceiver {
@@ -227,28 +229,34 @@ pub(crate) fn satisfy_type_and_direction(
 
     None
 }
-/*
-// handleUnknownRTPPacket consumes a single RTP Packet and returns information that is helpful
-// for demuxing and handling an unknown SSRC (usually for Simulcast)
-func handleUnknownRTPPacket(buf []byte, midExtensionID, streamIDExtensionID uint8) (mid, rid string, payloadType PayloadType, err error) {
-    rp := &rtp.Packet{}
-    if err = rp.Unmarshal(buf); err != nil {
-        return
+
+/// handle_unknown_rtp_packet consumes a single RTP Packet and returns information that is helpful
+/// for demuxing and handling an unknown SSRC (usually for Simulcast)
+pub(crate) fn handle_unknown_rtp_packet(
+    buf: &[u8],
+    mid_extension_id: u8,
+    sid_extension_id: u8,
+) -> Result<(String, String, PayloadType)> {
+    let mut reader = buf;
+    let rp = rtp::packet::Packet::unmarshal(&mut reader)?;
+
+    if !rp.header.extension {
+        return Ok((String::new(), String::new(), 0));
     }
 
-    if !rp.Header.Extension {
-        return
-    }
+    let payload_type = rp.header.payload_type;
 
-    payloadType = PayloadType(rp.PayloadType)
-    if payload := rp.GetExtension(midExtensionID); payload != nil {
-        mid = string(payload)
-    }
+    let mid = if let Some(payload) = rp.header.get_extension(mid_extension_id) {
+        String::from_utf8(payload.to_vec())?
+    } else {
+        String::new()
+    };
 
-    if payload := rp.GetExtension(streamIDExtensionID); payload != nil {
-        rid = string(payload)
-    }
+    let rid = if let Some(payload) = rp.header.get_extension(sid_extension_id) {
+        String::from_utf8(payload.to_vec())?
+    } else {
+        String::new()
+    };
 
-    return
+    Ok((mid, rid, payload_type))
 }
-*/

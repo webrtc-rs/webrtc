@@ -76,7 +76,7 @@ pub struct SCTPTransport {
 
     // DataChannels
     pub(crate) data_channels: Arc<Mutex<Vec<Arc<DataChannel>>>>,
-    data_channels_opened: Arc<AtomicU32>,
+    pub(crate) data_channels_opened: Arc<AtomicU32>,
     data_channels_requested: Arc<AtomicU32>,
     data_channels_accepted: Arc<AtomicU32>,
 

@@ -9,7 +9,9 @@ use crate::media::ice_transport::ice_transport_state::ICETransportState;
 use crate::media::ice_transport::ICETransport;
 use crate::media::interceptor::Interceptor;
 use crate::media::rtp::rtp_receiver::RTPReceiver;
-use crate::media::rtp::rtp_transceiver::{find_by_mid, satisfy_type_and_direction, RTPTransceiver};
+use crate::media::rtp::rtp_transceiver::{
+    find_by_mid, handle_unknown_rtp_packet, satisfy_type_and_direction, RTPTransceiver,
+};
 use crate::media::track::track_remote::TrackRemote;
 use crate::peer::configuration::Configuration;
 use crate::peer::ice::ice_connection_state::ICEConnectionState;
@@ -25,9 +27,11 @@ use crate::peer::policy::sdp_semantics::SDPSemantics;
 use crate::peer::sdp::session_description::{SessionDescription, SessionDescriptionSerde};
 use crate::peer::signaling_state::{check_next_signaling_state, SignalingState, StateChangeOp};
 
+use crate::data::data_channel::data_channel_state::DataChannelState;
+use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use crate::error::Error;
 use crate::media::dtls_transport::dtls_role::{DEFAULT_DTLS_ROLE_ANSWER, DEFAULT_DTLS_ROLE_OFFER};
-use crate::media::rtp::rtp_codec::RTPCodecType;
+use crate::media::rtp::rtp_codec::{RTPCodecType, RTPHeaderExtensionCapability};
 use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
 use crate::media::rtp::{RTPCodingParameters, RTPTransceiverInit, SSRC};
 use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
@@ -44,12 +48,13 @@ use crate::peer::sdp::{
     update_sdp_origin, TrackDetails,
 };
 use crate::util::math_rand_alpha;
-use crate::MEDIA_SECTION_APPLICATION;
+use crate::{MEDIA_SECTION_APPLICATION, RECEIVE_MTU, SIMULCAST_PROBE_COUNT, SSRC_STR};
 use anyhow::Result;
 use defer::defer;
 use sdp::session_description::{ATTR_KEY_ICELITE, ATTR_KEY_MSID};
 use sdp::util::ConnectionRole;
 use std::future::Future;
+use std::io::Read;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
@@ -1465,133 +1470,158 @@ impl PeerConnection {
 
         Ok(())
     }
-    /*
-    // Start SCTP subsystem
-    func (pc *PeerConnection) startSCTP() {
+
+    /// Start SCTP subsystem
+    pub(crate) async fn start_sctp(&self) {
         // Start sctp
-        if err := self.sctpTransport.Start(SCTPCapabilities{
-            MaxMessageSize: 0,
-        }); err != nil {
-            self.log.Warnf("Failed to start SCTP: %s", err)
-            if err = self.sctpTransport.Stop(); err != nil {
-                self.log.Warnf("Failed to stop SCTPTransport: %s", err)
+        if let Err(err) = self
+            .sctp_transport
+            .start(SCTPTransportCapabilities {
+                max_message_size: 0,
+            })
+            .await
+        {
+            log::warn!("Failed to start SCTP: {}", err);
+            if let Err(err) = self.sctp_transport.stop().await {
+                log::warn!("Failed to stop SCTPTransport: {}", err);
             }
 
-            return
+            return;
         }
 
         // DataChannels that need to be opened now that SCTP is available
         // make a copy we may have incoming DataChannels mutating this while we open
-        self.sctpTransport.lock.RLock()
-        dataChannels := append([]*DataChannel{}, self.sctpTransport.dataChannels...)
-        self.sctpTransport.lock.RUnlock()
+        let data_channels = {
+            let data_channels = self.sctp_transport.data_channels.lock().await;
+            data_channels.clone()
+        };
 
-        var openedDCCount uint32
-        for _, d := range dataChannels {
-            if d.ReadyState() == DataChannelStateConnecting {
-                err := d.open(self.sctpTransport)
-                if err != nil {
-                    self.log.Warnf("failed to open data channel: %s", err)
-                    continue
+        let mut opened_dc_count = 0;
+        for d in data_channels {
+            if d.ready_state() == DataChannelState::Connecting {
+                if let Err(err) = d.open(Arc::clone(&self.sctp_transport)).await {
+                    log::warn!("failed to open data channel: {}", err);
+                    continue;
                 }
-                openedDCCount++
+                opened_dc_count += 1;
             }
         }
 
-        self.sctpTransport.lock.Lock()
-        self.sctpTransport.dataChannelsOpened += openedDCCount
-        self.sctpTransport.lock.Unlock()
+        self.sctp_transport
+            .data_channels_opened
+            .fetch_add(opened_dc_count, Ordering::SeqCst);
     }
 
-    func (pc *PeerConnection) handleUndeclaredSSRC(rtpStream io.Reader, ssrc SSRC) error { //nolint:gocognit
-        remoteDescription := self.remote_description()
-        if remoteDescription == nil {
-            return errPeerConnRemoteDescriptionNil
-        }
+    async fn handle_undeclared_ssrc<R: Read>(
+        &mut self,
+        rtp_stream: &mut R,
+        ssrc: SSRC,
+    ) -> Result<()> {
+        if let Some(remote_description) = self.remote_description() {
+            if let Some(parsed) = &remote_description.parsed {
+                // If the remote SDP was only one media section the ssrc doesn't have to be explicitly declared
+                if parsed.media_descriptions.len() == 1 {
+                    if let Some(only_media_section) = parsed.media_descriptions.first() {
+                        for a in &only_media_section.attributes {
+                            if a.key == SSRC_STR {
+                                return Err(
+                                    Error::ErrPeerConnSingleMediaSectionHasExplicitSSRC.into()
+                                );
+                            }
+                        }
 
-        // If the remote SDP was only one media section the ssrc doesn't have to be explicitly declared
-        if len(remoteDescription.parsed.MediaDescriptions) == 1 {
-            onlyMediaSection := remoteDescription.parsed.MediaDescriptions[0]
-            for _, a := range onlyMediaSection.Attributes {
-                if a.Key == ssrcStr {
-                    return errPeerConnSingleMediaSectionHasExplicitSSRC
-                }
-            }
+                        let mut incoming = TrackDetails {
+                            ssrc,
+                            kind: RTPCodecType::Video,
+                            ..Default::default()
+                        };
+                        if only_media_section.media_name.media == RTPCodecType::Audio.to_string() {
+                            incoming.kind = RTPCodecType::Audio;
+                        }
 
-            incoming := TrackDetails{
-                ssrc: ssrc,
-                kind: RTPCodecTypeVideo,
-            }
-            if onlyMediaSection.MediaName.Media == RTPCodecTypeAudio.String() {
-                incoming.kind = RTPCodecTypeAudio
-            }
+                        let t = self
+                            .add_transceiver_from_kind(
+                                incoming.kind,
+                                &[RTPTransceiverInit {
+                                    direction: RTPTransceiverDirection::Sendrecv,
+                                    send_encodings: vec![],
+                                }],
+                            )
+                            .await?;
 
-            t, err := self.add_transceiver_from_kind(incoming.kind, RTPTransceiverInit{
-                Direction: RTPTransceiverDirectionSendrecv,
-            })
-            if err != nil {
-                return fmt.Errorf("%w: %d: %s", errPeerConnRemoteSSRCAddTransceiver, ssrc, err)
-            }
-            self.start_receiver(incoming, t.Receiver())
-            return nil
-        }
-
-        midExtensionID, audioSupported, videoSupported := self.api.mediaEngine.getHeaderExtensionID(RTPHeaderExtensionCapability{sdp.SDESMidURI})
-        if !audioSupported && !videoSupported {
-            return errPeerConnSimulcastMidRTPExtensionRequired
-        }
-
-        streamIDExtensionID, audioSupported, videoSupported := self.api.mediaEngine.getHeaderExtensionID(RTPHeaderExtensionCapability{sdp.SDESRTPStreamIDURI})
-        if !audioSupported && !videoSupported {
-            return errPeerConnSimulcastStreamIDRTPExtensionRequired
-        }
-
-        b := make([]byte, receiveMTU)
-        var mid, rid string
-        for readCount := 0; readCount <= simulcastProbeCount; readCount++ {
-            i, err := rtpStream.Read(b)
-            if err != nil {
-                return err
-            }
-
-            maybeMid, maybeRid, payloadType, err := handleUnknownRTPPacket(b[:i], uint8(midExtensionID), uint8(streamIDExtensionID))
-            if err != nil {
-                return err
-            }
-
-            if maybeMid != "" {
-                mid = maybeMid
-            }
-            if maybeRid != "" {
-                rid = maybeRid
-            }
-
-            if mid == "" || rid == "" {
-                continue
-            }
-
-            params, err := self.api.mediaEngine.getRTPParametersByPayloadType(payloadType)
-            if err != nil {
-                return err
-            }
-
-            for _, t := range self.get_transceivers() {
-                if t.Mid() != mid || t.Receiver() == nil {
-                    continue
+                        if let Some(receiver) = t.receiver() {
+                            self.start_receiver(&incoming, receiver).await;
+                        }
+                        return Ok(());
+                    }
                 }
 
-                track, err := t.Receiver().receiveForRid(rid, params, ssrc)
-                if err != nil {
-                    return err
+                let (mid_extension_id, audio_supported, video_supported) = self
+                    .media_engine
+                    .get_header_extension_id(RTPHeaderExtensionCapability {
+                        uri: sdp::extmap::SDES_MID_URI.to_owned(),
+                    })
+                    .await;
+                if !audio_supported && !video_supported {
+                    return Err(Error::ErrPeerConnSimulcastMidRTPExtensionRequired.into());
                 }
-                self.onTrack(track, t.Receiver())
-                return nil
+
+                let (sid_extension_id, audio_supported, video_supported) = self
+                    .media_engine
+                    .get_header_extension_id(RTPHeaderExtensionCapability {
+                        uri: sdp::extmap::SDES_RTP_STREAM_ID_URI.to_owned(),
+                    })
+                    .await;
+                if !audio_supported && !video_supported {
+                    return Err(Error::ErrPeerConnSimulcastStreamIDRTPExtensionRequired.into());
+                }
+
+                let mut b = vec![0u8; RECEIVE_MTU];
+                let (mut mid, mut rid) = (String::new(), String::new());
+                for _ in 0..=SIMULCAST_PROBE_COUNT {
+                    let n = rtp_stream.read(&mut b)?;
+
+                    let (maybe_mid, maybe_rid, payload_type) = handle_unknown_rtp_packet(
+                        &b[..n],
+                        mid_extension_id as u8,
+                        sid_extension_id as u8,
+                    )?;
+
+                    if !maybe_mid.is_empty() {
+                        mid = maybe_mid;
+                    }
+                    if !maybe_rid.is_empty() {
+                        rid = maybe_rid;
+                    }
+
+                    if mid.is_empty() || rid.is_empty() {
+                        continue;
+                    }
+
+                    let params = self
+                        .media_engine
+                        .get_rtp_parameters_by_payload_type(payload_type)
+                        .await?;
+
+                    for t in self.get_transceivers() {
+                        if t.mid() != mid || t.receiver().is_none() {
+                            continue;
+                        }
+
+                        if let Some(receiver) = t.receiver() {
+                            let track = receiver.receive_for_rid(rid.as_str(), &params, ssrc)?;
+                            self.do_track(Some(track), Some(receiver.clone())).await;
+                        }
+                        return Ok(());
+                    }
+                }
+                return Err(Error::ErrPeerConnSimulcastIncomingSSRCFailed.into());
             }
         }
 
-        return errPeerConnSimulcastIncomingSSRCFailed
+        Err(Error::ErrPeerConnRemoteDescriptionNil.into())
     }
-
+    /*
     // undeclaredMediaProcessor handles RTP/RTCP packets that don't match any a:ssrc lines
     func (pc *PeerConnection) undeclaredMediaProcessor() {
         go func() {
@@ -1625,7 +1655,7 @@ impl PeerConnection {
                 go func(rtpStream io.Reader, ssrc SSRC) {
                     self.dtlsTransport.storeSimulcastStream(stream)
 
-                    if err := self.handleUndeclaredSSRC(rtpStream, ssrc); err != nil {
+                    if err := self.handle_undeclared_ssrc(rtpStream, ssrc); err != nil {
                         self.log.Errorf("Incoming unhandled RTP ssrc(%d), on_track will not be fired. %v", ssrc, err)
                     }
                     atomic.AddUint64(&simulcastRoutineCount, ^uint64(0))
@@ -2266,7 +2296,7 @@ impl PeerConnection {
 
         self.start_rtpreceivers(TrackDetails, currentTransceivers)
         if have_application_media_section(remoteDesc.parsed) {
-            self.startSCTP()
+            self.start_sctp()
         }
 
         if !isRenegotiation {

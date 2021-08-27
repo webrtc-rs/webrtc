@@ -250,13 +250,13 @@ impl RTPReceiver {
 
     /// receive_for_rid is the sibling of Receive expect for RIDs instead of SSRCs
     /// It populates all the internal state for the given RID
-    fn receive_for_rid(
-        &mut self,
+    pub(crate) fn receive_for_rid(
+        &self,
         rid: &str,
         _params: &RTPParameters,
         _ssrc: SSRC,
     ) -> Result<Arc<TrackRemote>> {
-        for t in &mut self.tracks {
+        for t in &self.tracks {
             if t.track.rid() == rid {
                 /*TODO: t.track.kind = r.kind
                 t.track.codec = params.Codecs[0]

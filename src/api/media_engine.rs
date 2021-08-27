@@ -1,6 +1,6 @@
 use crate::media::rtp::rtp_codec::{
     codec_parameters_fuzzy_search, CodecMatch, RTPCodecCapability, RTPCodecParameters,
-    RTPCodecType, RTPHeaderExtensionParameter, RTPParameters,
+    RTPCodecType, RTPHeaderExtensionCapability, RTPHeaderExtensionParameter, RTPParameters,
 };
 use crate::media::rtp::rtp_transceiver_direction::{
     have_rtp_transceiver_direction_intersection, RTPTransceiverDirection,
@@ -8,7 +8,7 @@ use crate::media::rtp::rtp_transceiver_direction::{
 
 use crate::error::Error;
 use crate::media::rtp::fmtp::parse_fmtp;
-use crate::media::rtp::RTCPFeedback;
+use crate::media::rtp::{PayloadType, RTCPFeedback};
 use crate::peer::sdp::{codecs_from_media_description, rtp_extensions_from_media_description};
 use anyhow::Result;
 use std::collections::HashMap;
@@ -459,23 +459,27 @@ impl MediaEngine {
                 m.audioCodecs[i] = v
             }
         }
-    }
+    }*/
 
-    // getHeaderExtensionID returns the negotiated ID for a header extension.
-    // If the Header Extension isn't enabled ok will be false
-    func (m *MediaEngine) getHeaderExtensionID(extension RTPHeaderExtensionCapability) (val int, audioNegotiated, videoNegotiated bool) {
-        if m.negotiated_header_extensions == nil {
-            return 0, false, false
+    /// get_header_extension_id returns the negotiated ID for a header extension.
+    /// If the Header Extension isn't enabled ok will be false
+    pub(crate) async fn get_header_extension_id(
+        &self,
+        extension: RTPHeaderExtensionCapability,
+    ) -> (isize, bool, bool) {
+        let negotiated_header_extensions = self.negotiated_header_extensions.lock().await;
+        if negotiated_header_extensions.is_empty() {
+            return (0, false, false);
         }
 
-        for id, h := range m.negotiated_header_extensions {
-            if extension.URI == h.uri {
-                return id, h.is_audio, h.is_video
+        for (id, h) in &*negotiated_header_extensions {
+            if extension.uri == h.uri {
+                return (*id, h.is_audio, h.is_video);
             }
         }
 
-        return
-    }*/
+        (0, false, false)
+    }
 
     /// clone_to copies any user modifiable state of the MediaEngine
     /// all internal state is reset
@@ -487,22 +491,31 @@ impl MediaEngine {
             ..Default::default()
         }
     }
-    /*
-        func (m *MediaEngine) getCodecByPayload(payloadType PayloadType) (RTPCodecParameters, RTPCodecType, error) {
-            for _, codec := range m.negotiatedVideoCodecs {
-                if codec.PayloadType == payloadType {
-                    return codec, RTPCodecTypeVideo, nil
-                }
-            }
-            for _, codec := range m.negotiatedAudioCodecs {
-                if codec.PayloadType == payloadType {
-                    return codec, RTPCodecTypeAudio, nil
-                }
-            }
 
-            return RTPCodecParameters{}, 0, ErrCodecNotFound
+    pub(crate) async fn get_codec_by_payload(
+        &self,
+        payload_type: PayloadType,
+    ) -> Result<(RTPCodecParameters, RTPCodecType)> {
+        {
+            let negotiated_video_codecs = self.negotiated_video_codecs.lock().await;
+            for codec in &*negotiated_video_codecs {
+                if codec.payload_type == payload_type {
+                    return Ok((codec.clone(), RTPCodecType::Video));
+                }
+            }
+        }
+        {
+            let negotiated_audio_codecs = self.negotiated_audio_codecs.lock().await;
+            for codec in &*negotiated_audio_codecs {
+                if codec.payload_type == payload_type {
+                    return Ok((codec.clone(), RTPCodecType::Audio));
+                }
+            }
         }
 
+        Err(Error::ErrCodecNotFound.into())
+    }
+    /*
         func (m *MediaEngine) collectStats(collector *statsReportCollector) {
             statsLoop := func(codecs []RTPCodecParameters) {
                 for _, codec := range codecs {
@@ -737,25 +750,31 @@ impl MediaEngine {
             codecs: self.get_codecs_by_kind(typ).await,
         }
     }
-    /*
-    func (m *MediaEngine) getRTPParametersByPayloadType(payloadType PayloadType) (RTPParameters, error) {
-        codec, typ, err := m.getCodecByPayload(payloadType)
-        if err != nil {
-            return RTPParameters{}, err
-        }
 
-        header_extensions := make([]RTPHeaderExtensionParameter, 0)
-        for id, e := range m.negotiated_header_extensions {
-            if e.is_audio && typ == RTPCodecTypeAudio || e.is_video && typ == RTPCodecTypeVideo {
-                header_extensions = append(header_extensions, RTPHeaderExtensionParameter{ID: id, URI: e.uri})
+    pub(crate) async fn get_rtp_parameters_by_payload_type(
+        &self,
+        payload_type: PayloadType,
+    ) -> Result<RTPParameters> {
+        let (codec, typ) = self.get_codec_by_payload(payload_type).await?;
+
+        let mut header_extensions = vec![];
+        {
+            let negotiated_header_extensions = self.negotiated_header_extensions.lock().await;
+            for (id, e) in &*negotiated_header_extensions {
+                if e.is_audio && typ == RTPCodecType::Audio
+                    || e.is_video && typ == RTPCodecType::Video
+                {
+                    header_extensions.push(RTPHeaderExtensionParameter {
+                        uri: e.uri.clone(),
+                        id: *id,
+                    });
+                }
             }
         }
 
-        return RTPParameters{
-            header_extensions: header_extensions,
-            Codecs:           []RTPCodecParameters{codec},
-        }, nil
+        Ok(RTPParameters {
+            header_extensions,
+            codecs: vec![codec],
+        })
     }
-
-    */
 }
