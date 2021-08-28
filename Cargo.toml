@@ -24,7 +24,7 @@ rtcp = "0.3.3"
 srtp = { package = "webrtc-srtp", version = "0.3.3" }
 sctp = { package = "webrtc-sctp", version = "0.3.3" }
 data = { package = "webrtc-data", version = "0.2.2" }
-tokio = { version = "1.0", features = ["full"] }
+tokio = { version = "1.10.1", features = ["full"] }
 log = "0.4.14"
 async-trait = "0.1.42"
 serde = { version = "1.0", features = ["derive"] }
