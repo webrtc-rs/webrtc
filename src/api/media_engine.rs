@@ -403,63 +403,72 @@ impl MediaEngine {
         }
     }
 
-    /*
-    // RegisterHeaderExtension adds a header extension to the MediaEngine
-    // To determine the negotiated value use `GetHeaderExtensionID` after signaling is complete
-    func (m *MediaEngine) RegisterHeaderExtension(extension RTPHeaderExtensionCapability, typ RTPCodecType, allowedDirections ...RTPTransceiverDirection) error {
-        if m.negotiated_header_extensions == nil {
-            m.negotiated_header_extensions = map[int]mediaEngineHeaderExtension{}
+    /// register_header_extension adds a header extension to the MediaEngine
+    /// To determine the negotiated value use `GetHeaderExtensionID` after signaling is complete
+    pub async fn register_header_extension(
+        &mut self,
+        extension: RTPHeaderExtensionCapability,
+        typ: RTPCodecType,
+        mut allowed_directions: Vec<RTPTransceiverDirection>,
+    ) -> Result<()> {
+        if allowed_directions.is_empty() {
+            allowed_directions = vec![
+                RTPTransceiverDirection::Recvonly,
+                RTPTransceiverDirection::Sendonly,
+            ];
         }
 
-        if len(allowedDirections) == 0 {
-            allowedDirections = []RTPTransceiverDirection{RTPTransceiverDirectionRecvonly, RTPTransceiverDirectionSendonly}
-        }
-
-        for _, direction := range allowedDirections {
-            if direction != RTPTransceiverDirectionRecvonly && direction != RTPTransceiverDirectionSendonly {
-                return ErrRegisterHeaderExtensionInvalidDirection
+        for direction in &allowed_directions {
+            if *direction != RTPTransceiverDirection::Recvonly
+                && *direction != RTPTransceiverDirection::Sendonly
+            {
+                return Err(Error::ErrRegisterHeaderExtensionInvalidDirection.into());
             }
         }
 
-        extensionIndex := -1
-        for i := range m.header_extensions {
-            if extension.URI == m.header_extensions[i].uri {
-                extensionIndex = i
+        let mut extension_index = None;
+        for (i, ext) in self.header_extensions.iter().enumerate() {
+            if extension.uri == ext.uri {
+                extension_index = Some(i);
             }
         }
 
-        if extensionIndex == -1 {
-            m.header_extensions = append(m.header_extensions, mediaEngineHeaderExtension{})
-            extensionIndex = len(m.header_extensions) - 1
+        if extension_index.is_none() {
+            self.header_extensions
+                .push(MediaEngineHeaderExtension::default());
+            extension_index = Some(self.header_extensions.len() - 1);
         }
 
-        if typ == RTPCodecTypeAudio {
-            m.header_extensions[extensionIndex].is_audio = true
-        } else if typ == RTPCodecTypeVideo {
-            m.header_extensions[extensionIndex].is_video = true
+        if let Some(extension_index) = extension_index {
+            if typ == RTPCodecType::Audio {
+                self.header_extensions[extension_index].is_audio = true;
+            } else if typ == RTPCodecType::Video {
+                self.header_extensions[extension_index].is_video = true;
+            }
+
+            self.header_extensions[extension_index].uri = extension.uri;
+            self.header_extensions[extension_index].allowed_directions = allowed_directions;
         }
 
-        m.header_extensions[extensionIndex].uri = extension.URI
-        m.header_extensions[extensionIndex].allowedDirections = allowedDirections
-
-        return nil
+        Ok(())
     }
 
-    // RegisterFeedback adds feedback mechanism to already registered codecs.
-    func (m *MediaEngine) RegisterFeedback(feedback rtcpfeedback, typ RTPCodecType) {
-        switch typ {
-        case RTPCodecTypeVideo:
-            for i, v := range m.videoCodecs {
-                v.rtcpfeedback = append(v.rtcpfeedback, feedback)
-                m.videoCodecs[i] = v
+    /// register_feedback adds feedback mechanism to already registered codecs.
+    pub fn register_feedback(&mut self, feedback: RTCPFeedback, typ: RTPCodecType) {
+        match typ {
+            RTPCodecType::Video => {
+                for v in &mut self.video_codecs {
+                    v.capability.rtcp_feedback.push(feedback.clone());
+                }
             }
-        case RTPCodecTypeAudio:
-            for i, v := range m.audioCodecs {
-                v.rtcpfeedback = append(v.rtcpfeedback, feedback)
-                m.audioCodecs[i] = v
+            RTPCodecType::Audio => {
+                for a in &mut self.audio_codecs {
+                    a.capability.rtcp_feedback.push(feedback.clone());
+                }
             }
+            _ => {}
         }
-    }*/
+    }
 
     /// get_header_extension_id returns the negotiated ID for a header extension.
     /// If the Header Extension isn't enabled ok will be false
@@ -515,8 +524,8 @@ impl MediaEngine {
 
         Err(Error::ErrCodecNotFound.into())
     }
-    /*
-        func (m *MediaEngine) collectStats(collector *statsReportCollector) {
+
+    /*TODO: func (m *MediaEngine) collectStats(collector *statsReportCollector) {
             statsLoop := func(codecs []RTPCodecParameters) {
                 for _, codec := range codecs {
                     collector.Collecting()
@@ -539,6 +548,7 @@ impl MediaEngine {
             statsLoop(m.audioCodecs)
         }
     */
+
     /// Look up a codec and enable if it exists
     pub(crate) fn match_remote_codec(
         &self,
