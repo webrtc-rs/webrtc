@@ -592,7 +592,7 @@ async fn test_populate_sdp() -> Result<()> {
         rid_map.insert("ridkey".to_owned(), "some".to_owned());
         let media_sections = vec![MediaSection {
             id: "video".to_owned(),
-            transceivers: vec![tr],
+            transceivers: vec![Arc::new(tr)],
             data: false,
             rid_map,
         }];
@@ -671,7 +671,7 @@ async fn test_populate_sdp() -> Result<()> {
 
         let media_sections = vec![MediaSection {
             id: "video".to_owned(),
-            transceivers: vec![tr],
+            transceivers: vec![Arc::new(tr)],
             data: false,
             rid_map: HashMap::new(),
         }];

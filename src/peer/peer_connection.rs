@@ -54,7 +54,7 @@ use crate::peer::operation::Operations;
 use crate::peer::sdp::sdp_type::SDPType;
 use crate::peer::sdp::{
     description_is_plan_b, extract_fingerprint, extract_ice_details, filter_track_with_ssrc,
-    get_by_mid, get_mid_value, get_peer_direction, have_application_media_section,
+    get_by_mid, get_mid_value, get_peer_direction, get_rids, have_application_media_section,
     have_data_channel, populate_local_candidates, populate_sdp, track_details_for_ssrc,
     track_details_from_sdp, update_sdp_origin, MediaSection, PopulateSdpParams, TrackDetails,
 };
@@ -801,7 +801,8 @@ impl PeerConnection {
                     use_identity,
                     true, /*includeUnmatched */
                     DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
-                )?
+                )
+                .await?
             };
 
             update_sdp_origin(&mut self.sdp_origin, &mut d);
@@ -872,7 +873,10 @@ impl PeerConnection {
     }
 
     /// create_answer starts the PeerConnection and generates the localDescription
-    pub fn create_answer(&mut self, _options: Option<AnswerOptions>) -> Result<SessionDescription> {
+    pub async fn create_answer(
+        &mut self,
+        _options: Option<AnswerOptions>,
+    ) -> Result<SessionDescription> {
         let use_identity = self.idp_login_url.is_some();
         if self.remote_description().is_none() {
             return Err(Error::ErrNoRemoteDescription.into());
@@ -891,11 +895,13 @@ impl PeerConnection {
             connection_role = DEFAULT_DTLS_ROLE_ANSWER.to_connection_role();
         }
 
-        let mut d = self.generate_matched_sdp(
-            /*self.rtp_transceivers,*/ use_identity,
-            false, /*includeUnmatched */
-            connection_role,
-        )?;
+        let mut d = self
+            .generate_matched_sdp(
+                /*self.rtp_transceivers,*/ use_identity,
+                false, /*includeUnmatched */
+                connection_role,
+            )
+            .await?;
 
         update_sdp_origin(&mut self.sdp_origin, &mut d);
         let sdp = d.marshal();
@@ -2507,133 +2513,195 @@ impl PeerConnection {
 
     /// generate_matched_sdp generates a SDP and takes the remote state into account
     /// this is used everytime we have a remote_description
-    fn generate_matched_sdp(
+    async fn generate_matched_sdp(
         &self,
-        //_transceivers: &[RTPTransceiver],
-        _use_identity: bool,
-        _include_unmatched: bool,
-        _connection_role: ConnectionRole,
+        use_identity: bool,
+        include_unmatched: bool,
+        connection_role: ConnectionRole,
     ) -> Result<sdp::session_description::SessionDescription> {
-        Ok(sdp::session_description::SessionDescription::default())
+        let transceivers = &self.rtp_transceivers;
 
-        /*TODO:
-        let current_transceivers = &self.rtp_transceivers;
-           d, err := sdp.NewJSEPSessionDescription(useIdentity)
-        if err != nil {
-            return nil, err
-        }
+        let d = sdp::session_description::SessionDescription::new_jsep_session_description(
+            use_identity,
+        );
 
-        iceParams, err := self.iceGatherer.GetLocalParameters()
-        if err != nil {
-            return nil, err
-        }
+        let ice_params = self.ice_gatherer.get_local_parameters().await?;
+        let candidates = self.ice_gatherer.get_local_candidates().await?;
 
-        candidates, err := self.iceGatherer.GetLocalCandidates()
-        if err != nil {
-            return nil, err
-        }
+        let remote_description = if self.pending_remote_description.is_some() {
+            self.pending_remote_description.as_ref()
+        } else {
+            self.current_remote_description.as_ref()
+        };
 
-        var t *RTPTransceiver
-        remoteDescription := self.current_remote_description
-        if self.pending_remote_description != nil {
-            remoteDescription = self.pending_remote_description
-        }
-        localTransceivers := append([]*RTPTransceiver{}, transceivers...)
-        detectedPlanB := description_is_plan_b(remoteDescription)
-        mediaSections := []mediaSection{}
-        alreadyHaveApplicationMediaSection := false
-        for _, media := range remoteDescription.parsed.MediaDescriptions {
-            midValue := getMidValue(media)
-            if midValue == "" {
-                return nil, errPeerConnRemoteDescriptionWithoutMidValue
-            }
-
-            if media.MediaName.Media == mediaSectionApplication {
-                mediaSections = append(mediaSections, mediaSection{id: midValue, data: true})
-                alreadyHaveApplicationMediaSection = true
-                continue
-            }
-
-            kind := NewRTPCodecType(media.MediaName.Media)
-            direction := get_peer_direction(media)
-            if kind == 0 || direction == RTPTransceiverDirection(Unknown) {
-                continue
-            }
-
-            sdpSemantics := self.configuration.SDPSemantics
-
-            switch {
-            case sdpSemantics == SDPSemanticsPlanB || sdpSemantics == SDPSemanticsUnifiedPlanWithFallback && detectedPlanB:
-                if !detectedPlanB {
-                    return nil, &rtcerr.TypeError{Err: ErrIncorrectSDPSemantics}
-                }
-                // If we're responding to a plan-b offer, then we should try to fill up this
-                // media entry with all matching local transceivers
-                mediaTransceivers := []*RTPTransceiver{}
-                for {
-                    // keep going until we can't get any more
-                    t, localTransceivers = satisfy_type_and_direction(kind, direction, localTransceivers)
-                    if t == nil {
-                        if len(mediaTransceivers) == 0 {
-                            t = &RTPTransceiver{kind: kind}
-                            t.setDirection(RTPTransceiverDirectionInactive)
-                            mediaTransceivers = append(mediaTransceivers, t)
+        let mut local_transceivers = transceivers.clone();
+        let detected_plan_b = description_is_plan_b(remote_description)?;
+        let mut media_sections = vec![];
+        let mut already_have_application_media_section = false;
+        if let Some(remote_description) = remote_description {
+            if let Some(parsed) = &remote_description.parsed {
+                for media in &parsed.media_descriptions {
+                    if let Some(mid_value) = get_mid_value(media) {
+                        if mid_value.is_empty() {
+                            return Err(Error::ErrPeerConnRemoteDescriptionWithoutMidValue.into());
                         }
-                        break
+
+                        if media.media_name.media == MEDIA_SECTION_APPLICATION {
+                            media_sections.push(MediaSection {
+                                id: mid_value.to_owned(),
+                                data: true,
+                                ..Default::default()
+                            });
+                            already_have_application_media_section = true;
+                            continue;
+                        }
+
+                        let kind = RTPCodecType::from(media.media_name.media.as_str());
+                        let direction = get_peer_direction(media);
+                        if kind == RTPCodecType::Unspecified
+                            || direction == RTPTransceiverDirection::Unspecified
+                        {
+                            continue;
+                        }
+
+                        let sdp_semantics = self.configuration.sdp_semantics;
+
+                        if sdp_semantics == SDPSemantics::PlanB
+                            || (sdp_semantics == SDPSemantics::UnifiedPlanWithFallback
+                                && detected_plan_b)
+                        {
+                            if !detected_plan_b {
+                                return Err(Error::ErrIncorrectSDPSemantics.into());
+                            }
+                            // If we're responding to a plan-b offer, then we should try to fill up this
+                            // media entry with all matching local transceivers
+                            let mut media_transceivers = vec![];
+                            loop {
+                                // keep going until we can't get any more
+                                if let Some(t) = satisfy_type_and_direction(
+                                    kind,
+                                    direction,
+                                    &mut local_transceivers,
+                                ) {
+                                    if let Some(sender) = t.sender() {
+                                        sender.set_negotiated();
+                                    }
+                                    media_transceivers.push(t);
+                                } else {
+                                    if media_transceivers.is_empty() {
+                                        let t = RTPTransceiver::new(
+                                            None,
+                                            None,
+                                            RTPTransceiverDirection::Inactive,
+                                            kind,
+                                            vec![],
+                                            Arc::clone(&self.media_engine),
+                                        );
+                                        media_transceivers.push(Arc::new(t));
+                                    }
+                                    break;
+                                }
+                            }
+                            media_sections.push(MediaSection {
+                                id: mid_value.to_owned(),
+                                transceivers: media_transceivers,
+                                ..Default::default()
+                            });
+                        } else if sdp_semantics == SDPSemantics::UnifiedPlan
+                            || sdp_semantics == SDPSemantics::UnifiedPlanWithFallback
+                        {
+                            if detected_plan_b {
+                                return Err(Error::ErrIncorrectSDPSemantics.into());
+                            }
+                            if let Some(t) = find_by_mid(mid_value, &mut local_transceivers) {
+                                if let Some(sender) = t.sender() {
+                                    sender.set_negotiated();
+                                }
+                                let media_transceivers = vec![t];
+                                media_sections.push(MediaSection {
+                                    id: mid_value.to_owned(),
+                                    transceivers: media_transceivers,
+                                    rid_map: get_rids(media),
+                                    ..Default::default()
+                                });
+                            } else {
+                                return Err(Error::ErrPeerConnTranscieverMidNil.into());
+                            }
+                        }
+                    } else {
+                        return Err(Error::ErrPeerConnRemoteDescriptionWithoutMidValue.into());
                     }
-                    if t.Sender() != nil {
-                        t.Sender().setNegotiated()
-                    }
-                    mediaTransceivers = append(mediaTransceivers, t)
                 }
-                mediaSections = append(mediaSections, mediaSection{id: midValue, transceivers: mediaTransceivers})
-            case sdpSemantics == SDPSemanticsUnifiedPlan || sdpSemantics == SDPSemanticsUnifiedPlanWithFallback:
-                if detectedPlanB {
-                    return nil, &rtcerr.TypeError{Err: ErrIncorrectSDPSemantics}
-                }
-                t, localTransceivers = findByMid(midValue, localTransceivers)
-                if t == nil {
-                    return nil, fmt.Errorf("%w: %q", errPeerConnTranscieverMidNil, midValue)
-                }
-                if t.Sender() != nil {
-                    t.Sender().setNegotiated()
-                }
-                mediaTransceivers := []*RTPTransceiver{t}
-                mediaSections = append(mediaSections, mediaSection{id: midValue, transceivers: mediaTransceivers, ridMap: getRids(media)})
             }
         }
 
         // If we are offering also include unmatched local transceivers
-        if includeUnmatched {
-            if !detectedPlanB {
-                for _, t := range localTransceivers {
-                    if t.Sender() != nil {
-                        t.Sender().setNegotiated()
+        if include_unmatched {
+            if !detected_plan_b {
+                for t in &local_transceivers {
+                    if let Some(sender) = t.sender() {
+                        sender.set_negotiated();
                     }
-                    mediaSections = append(mediaSections, mediaSection{id: t.Mid(), transceivers: []*RTPTransceiver{t}})
+                    media_sections.push(MediaSection {
+                        id: t.mid().to_owned(),
+                        transceivers: vec![Arc::clone(t)],
+                        ..Default::default()
+                    });
                 }
             }
 
-            if self.sctpTransport.dataChannelsRequested != 0 && !alreadyHaveApplicationMediaSection {
-                if detectedPlanB {
-                    mediaSections = append(mediaSections, mediaSection{id: "data", data: true})
+            if self
+                .sctp_transport
+                .data_channels_requested
+                .load(Ordering::SeqCst)
+                != 0
+                && !already_have_application_media_section
+            {
+                if detected_plan_b {
+                    media_sections.push(MediaSection {
+                        id: "data".to_owned(),
+                        data: true,
+                        ..Default::default()
+                    });
                 } else {
-                    mediaSections = append(mediaSections, mediaSection{id: strconv.Itoa(len(mediaSections)), data: true})
+                    media_sections.push(MediaSection {
+                        id: format!("{}", media_sections.len()),
+                        data: true,
+                        ..Default::default()
+                    });
                 }
             }
         }
 
-        if self.configuration.SDPSemantics == SDPSemanticsUnifiedPlanWithFallback && detectedPlanB {
-            self.log.Info("Plan-B Offer detected; responding with Plan-B Answer")
+        if self.configuration.sdp_semantics == SDPSemantics::UnifiedPlanWithFallback
+            && detected_plan_b
+        {
+            log::info!("Plan-B Offer detected; responding with Plan-B Answer");
         }
 
-        dtls_fingerprints, err := self.configuration.Certificates[0].GetFingerprints()
+        let dtls_fingerprints = vec![];
+        /*TODO:dtls_fingerprints, err := self.configuration.Certificates[0].GetFingerprints()
         if err != nil {
             return nil, err
-        }
+        }*/
 
-        return populate_sdp(d, detectedPlanB, dtls_fingerprints, self.api.settingEngine.sdpMediaLevelFingerprints, self.api.settingEngine.candidates.ICELite, self.api.mediaEngine, connectionRole, candidates, iceParams, mediaSections, self.icegathering_state())
-        */
+        let params = PopulateSdpParams {
+            is_plan_b: detected_plan_b,
+            media_description_fingerprint: self.setting_engine.sdp_media_level_fingerprints,
+            is_icelite: self.setting_engine.candidates.ice_lite,
+            connection_role,
+            ice_gathering_state: self.ice_gathering_state(),
+        };
+        populate_sdp(
+            d,
+            &dtls_fingerprints,
+            &self.media_engine,
+            &candidates,
+            &ice_params,
+            &media_sections,
+            params,
+        )
+        .await
     }
 
     async fn set_gather_complete_handler(&self, f: OnGatheringCompleteHdlrFn) {

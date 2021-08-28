@@ -203,7 +203,7 @@ pub(crate) fn track_details_from_sdp(
     incoming_tracks
 }
 
-fn get_rids(media: &MediaDescription) -> HashMap<String, String> {
+pub(crate) fn get_rids(media: &MediaDescription) -> HashMap<String, String> {
     let mut rids = HashMap::new();
     for attr in &media.attributes {
         if attr.key.as_str() == "rid" {
