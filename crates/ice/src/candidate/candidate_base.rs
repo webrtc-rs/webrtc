@@ -474,7 +474,7 @@ impl CandidateBase {
 }
 
 /// Creates a Candidate from its string representation.
-pub async fn unmarshal_candidate(raw: String) -> Result<impl Candidate> {
+pub async fn unmarshal_candidate(raw: &str) -> Result<impl Candidate> {
     let split: Vec<&str> = raw.split_whitespace().collect();
     if split.len() < 8 {
         return Err(Error::new(format!(

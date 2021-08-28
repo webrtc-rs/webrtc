@@ -387,14 +387,14 @@ pub(crate) async fn gather_and_exchange_candidates(
     let candidates = a_agent.get_local_candidates().await?;
     for c in candidates {
         let c2: Arc<dyn Candidate + Send + Sync> =
-            Arc::new(unmarshal_candidate(c.marshal()).await?);
+            Arc::new(unmarshal_candidate(c.marshal().as_str()).await?);
         b_agent.add_remote_candidate(&c2).await?;
     }
 
     let candidates = b_agent.get_local_candidates().await?;
     for c in candidates {
         let c2: Arc<dyn Candidate + Send + Sync> =
-            Arc::new(unmarshal_candidate(c.marshal()).await?);
+            Arc::new(unmarshal_candidate(c.marshal().as_str()).await?);
         a_agent.add_remote_candidate(&c2).await?;
     }
 

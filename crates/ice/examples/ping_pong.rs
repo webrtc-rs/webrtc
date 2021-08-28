@@ -247,7 +247,7 @@ async fn main() -> Result<()> {
     tokio::spawn(async move {
         let mut rx = REMOTE_CAND_CHANNEL.1.lock().await;
         while let Some(s) = rx.recv().await {
-            if let Ok(c) = unmarshal_candidate(s).await {
+            if let Ok(c) = unmarshal_candidate(&s).await {
                 println!("add_remote_candidate: {}", c);
                 let c: Arc<dyn Candidate + Send + Sync> = Arc::new(c);
                 let _ = ice_agent2.add_remote_candidate(&c).await;

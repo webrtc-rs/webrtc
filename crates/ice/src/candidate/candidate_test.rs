@@ -324,7 +324,7 @@ async fn test_candidate_marshal() -> Result<()> {
     ];
 
     for (candidate, marshaled) in tests {
-        let actual_candidate = unmarshal_candidate(marshaled.to_owned()).await;
+        let actual_candidate = unmarshal_candidate(marshaled).await;
         if let Some(candidate) = candidate {
             if let Ok(actual_candidate) = actual_candidate {
                 assert!(
