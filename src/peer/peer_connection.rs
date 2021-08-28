@@ -1641,7 +1641,7 @@ impl PeerConnection {
         tokio::spawn(async move {
             let simulcast_routine_count = Arc::new(AtomicU64::new(0));
             loop {
-                let srtp_session = match dtls_transport.get_srtp_session() {
+                let srtp_session = match dtls_transport.get_srtp_session().await {
                     Some(s) => s,
                     None => {
                         log::warn!("undeclared_media_processor failed to open SrtpSession");
@@ -1693,7 +1693,7 @@ impl PeerConnection {
         let dtls_transport = Arc::clone(&self.dtls_transport);
         tokio::spawn(async move {
             loop {
-                let srtcp_session = match dtls_transport.get_srtcp_session() {
+                let srtcp_session = match dtls_transport.get_srtcp_session().await {
                     Some(s) => s,
                     None => {
                         log::warn!("undeclared_media_processor failed to open SrtcpSession");
@@ -2079,19 +2079,20 @@ impl PeerConnection {
         //TODO: self.dtls_transport.write_rtcp(pkts).await
         Ok(0)
     }
-    /*
-    // Close ends the PeerConnection
-    func (pc *PeerConnection) Close() error {
+
+    /// close ends the PeerConnection
+    pub async fn close(self) -> Result<()> {
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #1)
-        if self.is_closed.get() {
-            return nil
+        if self.is_closed.load(Ordering::SeqCst) {
+            return Ok(());
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #2)
-        self.is_closed.set(true)
+        self.is_closed.store(true, Ordering::SeqCst);
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #3)
-        self.signaling_state.Set(SignalingStateClosed)
+        self.signaling_state
+            .store(SignalingState::Closed as u8, Ordering::SeqCst);
 
         // Try closing everything and collect the errors
         // Shutdown strategy:
@@ -2099,44 +2100,58 @@ impl PeerConnection {
         // 2. A Mux stops this chain. It won't close the underlying
         //    Conn if one of the endpoints is closed down. To
         //    continue the chain the Mux has to be closed.
-        closeErrs := make([]error, 4)
+        let mut close_errs = vec![];
 
-        closeErrs = append(closeErrs, self.api.interceptor.Close())
-
-        // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #4)
-        self.mu.Lock()
-        for _, t := range self.rtp_transceivers {
-            if !t.stopped {
-                closeErrs = append(closeErrs, t.Stop())
+        if let Some(interceptor) = &self.interceptor {
+            if let Err(err) = interceptor.close().await {
+                close_errs.push(err);
             }
         }
-        self.mu.Unlock()
+
+        // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #4)
+        for t in &self.rtp_transceivers {
+            if !t.stopped {
+                if let Err(err) = t.stop().await {
+                    close_errs.push(err);
+                }
+            }
+        }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #5)
-        self.sctpTransport.lock.Lock()
-        for _, d := range self.sctpTransport.dataChannels {
-            d.setReadyState(DataChannelStateClosed)
+        {
+            let data_channels = self.sctp_transport.data_channels.lock().await;
+            for d in &*data_channels {
+                d.set_ready_state(DataChannelState::Closed);
+            }
         }
-        self.sctpTransport.lock.Unlock()
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #6)
-        if self.sctpTransport != nil {
-            closeErrs = append(closeErrs, self.sctpTransport.Stop())
+        if let Err(err) = self.sctp_transport.stop().await {
+            close_errs.push(err);
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #7)
-        closeErrs = append(closeErrs, self.dtlsTransport.Stop())
+        if let Err(err) = self.dtls_transport.stop().await {
+            close_errs.push(err);
+        }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #8, #9, #10)
-        if self.iceTransport != nil {
-            closeErrs = append(closeErrs, self.iceTransport.Stop())
+        if let Err(err) = self.ice_transport.stop().await {
+            close_errs.push(err);
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #11)
-        self.update_connection_state(self.iceconnection_state(), self.dtlsTransport.State())
+        self.update_connection_state(self.ice_connection_state(), self.dtls_transport.state())
+            .await;
 
-        return util.FlattenErrs(closeErrs)
-    }*/
+        if close_errs.is_empty() {
+            Ok(())
+        } else {
+            let close_errs_strs: Vec<String> =
+                close_errs.into_iter().map(|e| e.to_string()).collect();
+            Err(Error::new(close_errs_strs.join("\n")).into())
+        }
+    }
 
     /// add_rtp_transceiver appends t into rtp_transceivers
     /// and fires onNegotiationNeeded;

@@ -289,6 +289,7 @@ impl RTPReceiver {
         let srtp_session = self
             .transport
             .get_srtp_session()
+            .await
             .ok_or(Error::ErrDtlsTransportNotStarted)?;
         let rtp_read_stream = srtp_session.listen(ssrc).await?;
 
@@ -301,6 +302,7 @@ impl RTPReceiver {
         let srtcp_session = self
             .transport
             .get_srtcp_session()
+            .await
             .ok_or(Error::ErrDtlsTransportNotStarted)?;
         let rtcp_read_stream = srtcp_session.listen(ssrc).await?;
 

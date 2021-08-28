@@ -29,6 +29,7 @@ use util::Conn;
 
 use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
 use anyhow::Result;
+use std::sync::atomic::{AtomicU8, Ordering};
 
 pub type OnDTLSTransportStateChangeHdlrFn = Box<
     dyn (FnMut(DTLSTransportState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
@@ -48,13 +49,13 @@ pub struct DTLSTransport {
 
     pub(crate) remote_parameters: DTLSParameters,
     pub(crate) remote_certificate: Bytes,
-    pub(crate) state: DTLSTransportState,
+    pub(crate) state: AtomicU8, //DTLSTransportState,
     pub(crate) srtp_protection_profile: ProtectionProfile,
     pub(crate) on_state_change_handler: Arc<Mutex<Option<OnDTLSTransportStateChangeHdlrFn>>>,
     pub(crate) conn: Option<Arc<DTLSConn>>,
 
-    pub(crate) srtp_session: Option<Session>,
-    pub(crate) srtcp_session: Option<Session>,
+    pub(crate) srtp_session: Mutex<Option<Arc<Session>>>,
+    pub(crate) srtcp_session: Mutex<Option<Arc<Session>>>,
     pub(crate) srtp_endpoint: Option<Arc<Endpoint>>,
     pub(crate) srtcp_endpoint: Option<Arc<Endpoint>>,
 
@@ -78,7 +79,7 @@ impl DTLSTransport {
             setting_engine,
             srtp_ready_tx: Some(srtp_ready_tx),
             srtp_ready_rx: Some(srtp_ready_rx),
-            state: DTLSTransportState::New,
+            state: AtomicU8::new(DTLSTransportState::New as u8),
             dtls_matcher: Some(Box::new(match_dtls)),
             ..Default::default()
         }
@@ -91,8 +92,8 @@ impl DTLSTransport {
     }
 
     /// state_change requires the caller holds the lock
-    async fn state_change(&mut self, state: DTLSTransportState) {
-        self.state = state;
+    async fn state_change(&self, state: DTLSTransportState) {
+        self.state.store(state as u8, Ordering::SeqCst);
         let mut handler = self.on_state_change_handler.lock().await;
         if let Some(f) = &mut *handler {
             f(state).await;
@@ -108,13 +109,14 @@ impl DTLSTransport {
 
     /// state returns the current dtls_transport transport state.
     pub fn state(&self) -> DTLSTransportState {
-        self.state
+        self.state.load(Ordering::SeqCst).into()
     }
 
     /// write_rtcp sends a user provided RTCP packet to the connected peer. If no peer is connected the
     /// packet is discarded.
-    pub async fn write_rtcp(&mut self, pkt: &(dyn rtcp::packet::Packet)) -> Result<usize> {
-        if let Some(srtcp_session) = &mut self.srtcp_session {
+    pub async fn write_rtcp(&self, pkt: &(dyn rtcp::packet::Packet)) -> Result<usize> {
+        let srtcp_session = self.srtcp_session.lock().await;
+        if let Some(srtcp_session) = &*srtcp_session {
             Ok(srtcp_session.write_rtcp(pkt).await?)
         } else {
             Ok(0)
@@ -178,29 +180,29 @@ impl DTLSTransport {
         }
 
         self.srtp_session = if let Some(srtp_endpoint) = &self.srtp_endpoint {
-            Some(
+            Mutex::new(Some(Arc::new(
                 Session::new(
                     Arc::clone(srtp_endpoint) as Arc<dyn Conn + Send + Sync>,
                     srtp_config,
                     true,
                 )
                 .await?,
-            )
+            )))
         } else {
-            None
+            Mutex::new(None)
         };
 
         self.srtcp_session = if let Some(srtcp_endpoint) = &self.srtcp_endpoint {
-            Some(
+            Mutex::new(Some(Arc::new(
                 Session::new(
                     Arc::clone(srtcp_endpoint) as Arc<dyn Conn + Send + Sync>,
                     srtcp_config,
                     false,
                 )
                 .await?,
-            )
+            )))
         } else {
-            None
+            Mutex::new(None)
         };
 
         self.srtp_ready_tx.take();
@@ -208,12 +210,14 @@ impl DTLSTransport {
         Ok(())
     }
 
-    pub(crate) fn get_srtp_session(&self) -> Option<&Session> {
-        self.srtp_session.as_ref()
+    pub(crate) async fn get_srtp_session(&self) -> Option<Arc<Session>> {
+        let srtp_session = self.srtp_session.lock().await;
+        srtp_session.clone()
     }
 
-    pub(crate) fn get_srtcp_session(&self) -> Option<&Session> {
-        self.srtcp_session.as_ref()
+    pub(crate) async fn get_srtcp_session(&self) -> Option<Arc<Session>> {
+        let srtcp_session = self.srtcp_session.lock().await;
+        srtcp_session.clone()
     }
 
     pub(crate) async fn role(&self) -> DTLSRole {
@@ -245,7 +249,7 @@ impl DTLSTransport {
     ) -> Result<(DTLSRole, dtls::config::Config)> {
         self.ensure_ice_conn()?;
 
-        if self.state != DTLSTransportState::New {
+        if self.state() != DTLSTransportState::New {
             return Err(Error::ErrInvalidDTLSStart.into());
         }
 
@@ -372,25 +376,31 @@ impl DTLSTransport {
     }
 
     /// stops and closes the DTLSTransport object.
-    pub async fn stop(&mut self) -> Result<()> {
+    pub async fn stop(&self) -> Result<()> {
         // Try closing everything and collect the errors
         let mut close_errs: Vec<anyhow::Error> = vec![];
-        if let Some(srtp_session) = self.srtp_session.take() {
-            match srtp_session.close().await {
-                Ok(_) => {}
-                Err(err) => {
-                    close_errs.push(err);
-                }
-            };
+        {
+            let mut srtp_session = self.srtp_session.lock().await;
+            if let Some(srtp_session) = srtp_session.take() {
+                match srtp_session.close().await {
+                    Ok(_) => {}
+                    Err(err) => {
+                        close_errs.push(err);
+                    }
+                };
+            }
         }
 
-        if let Some(srtcp_session) = self.srtcp_session.take() {
-            match srtcp_session.close().await {
-                Ok(_) => {}
-                Err(err) => {
-                    close_errs.push(err);
-                }
-            };
+        {
+            let mut srtcp_session = self.srtcp_session.lock().await;
+            if let Some(srtcp_session) = srtcp_session.take() {
+                match srtcp_session.close().await {
+                    Ok(_) => {}
+                    Err(err) => {
+                        close_errs.push(err);
+                    }
+                };
+            }
         }
 
         {
@@ -405,7 +415,7 @@ impl DTLSTransport {
             }
         }
 
-        if let Some(conn) = self.conn.take() {
+        if let Some(conn) = &self.conn {
             // dtls_transport connection may be closed on sctp close.
             match conn.close().await {
                 Ok(_) => {}

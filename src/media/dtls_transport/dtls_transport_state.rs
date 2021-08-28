@@ -53,6 +53,19 @@ impl From<&str> for DTLSTransportState {
     }
 }
 
+impl From<u8> for DTLSTransportState {
+    fn from(v: u8) -> Self {
+        match v {
+            1 => DTLSTransportState::New,
+            2 => DTLSTransportState::Connecting,
+            3 => DTLSTransportState::Connected,
+            4 => DTLSTransportState::Closed,
+            5 => DTLSTransportState::Failed,
+            _ => DTLSTransportState::Unspecified,
+        }
+    }
+}
+
 impl fmt::Display for DTLSTransportState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {

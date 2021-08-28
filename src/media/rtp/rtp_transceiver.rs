@@ -133,11 +133,11 @@ impl RTPTransceiver {
     }
 
     /// stop irreversibly stops the RTPTransceiver
-    pub async fn stop(&mut self) -> Result<()> {
-        if let Some(_sender) = &mut self.sender {
+    pub async fn stop(&self) -> Result<()> {
+        if let Some(_sender) = &self.sender {
             //TODO: sender.stop().await?;
         }
-        if let Some(_receiver) = &mut self.receiver {
+        if let Some(_receiver) = &self.receiver {
             //TODO: receiver.stop().await?;
         }
 
