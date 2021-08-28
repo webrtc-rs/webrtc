@@ -26,8 +26,9 @@ use crate::peer::configuration::Configuration;
 use crate::peer::peer_connection::PeerConnection;
 use anyhow::Result;
 use ice::rand::generate_crypto_random_string;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 
 /// API bundles the global functions of the WebRTC and ORTC API.
 /// Some of these functions are also exported globally using the
@@ -154,10 +155,11 @@ impl API {
 
             tracks: vec![],
 
-            closed_tx: Some(closed_tx),
+            closed_tx: Mutex::new(Some(closed_tx)),
             closed_rx,
             received_tx: Some(received_tx),
             received_rx,
+            received: AtomicBool::new(false),
 
             media_engine,
             interceptor,

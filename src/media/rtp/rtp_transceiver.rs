@@ -103,6 +103,18 @@ impl RTPTransceiver {
         self.receiver.as_ref()
     }
 
+    /*TODO: pub(crate) async fn set_receiver(&mut self, r:Option<Arc<RTPReceiver>>) {
+        if r != nil {
+            r.setRTPTransceiver(t)
+        }
+
+        if prevReceiver := t.Receiver(); prevReceiver != nil {
+            prevReceiver.setRTPTransceiver(nil)
+        }
+
+        t.receiver.Store(r)
+    }*/
+
     /// set_mid sets the RTPTransceiver's mid. If it was already set, will return an error.
     pub(crate) fn set_mid(&mut self, mid: String) -> Result<()> {
         if !self.mid.is_empty() {

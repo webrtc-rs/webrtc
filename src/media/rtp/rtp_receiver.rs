@@ -8,11 +8,12 @@ use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
 use crate::media::rtp::{RTPReceiveParameters, SSRC};
 use crate::media::track::track_remote::TrackRemote;
 use crate::media::track::TrackStreams;
-
 use crate::RECEIVE_MTU;
+
 use anyhow::Result;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 
 /// RTPReceiver allows an application to inspect the receipt of a TrackRemote
 pub struct RTPReceiver {
@@ -21,10 +22,11 @@ pub struct RTPReceiver {
 
     pub(crate) tracks: Vec<TrackStreams>,
 
-    pub(crate) closed_tx: Option<mpsc::Sender<()>>,
+    pub(crate) closed_tx: Mutex<Option<mpsc::Sender<()>>>,
     pub(crate) closed_rx: mpsc::Receiver<()>,
     pub(crate) received_tx: Option<mpsc::Sender<()>>,
     pub(crate) received_rx: mpsc::Receiver<()>,
+    pub(crate) received: AtomicBool,
 
     pub(crate) media_engine: Arc<MediaEngine>,
     pub(crate) interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
@@ -65,6 +67,7 @@ impl RTPReceiver {
             else => {}  // default:
         };
         let _d = self.received_tx.take(); // defer drop(received_tx)
+        self.received.store(true, Ordering::SeqCst);
 
         if parameters.encodings.len() == 1 && parameters.encodings[0].ssrc != 0 {
             if let Some(encoding) = parameters.encodings.first() {
@@ -187,42 +190,42 @@ impl RTPReceiver {
     }
 
     /// Stop irreversibly stops the RTPReceiver
-    pub async fn stop(&mut self) -> Result<()> {
-        if self.closed_tx.is_none() {
-            return Ok(());
-        }
-        let _d = self.closed_tx.take();
+    pub async fn stop(&self) -> Result<()> {
+        let _d = {
+            let mut closed_tx = self.closed_tx.lock().await;
+            if closed_tx.is_none() {
+                return Ok(());
+            }
+            closed_tx.take()
+        };
 
-        tokio::select! {
-            _ = self.received_rx.recv() =>{
-                let mut errs = None;
-                for t in &self.tracks {
-                    if let Some(rtcp_read_stream) = &t.rtcp_read_stream{
-                        if let Err(err) = rtcp_read_stream.close().await {
-                            errs = Some(err);
-                        }
-                    }
-
-                    if let Some(rtp_read_stream) = &t.rtp_read_stream {
-                        if let Err(err) = rtp_read_stream.close().await {
-                            errs = Some(err);
-                        }
-                    }
-
-                    if let Some(interceptor) = &self.interceptor{
-                        interceptor.unbind_remote_stream(&t.stream_info).await;
+        if self.received.load(Ordering::SeqCst) {
+            let mut errs = None;
+            for t in &self.tracks {
+                if let Some(rtcp_read_stream) = &t.rtcp_read_stream {
+                    if let Err(err) = rtcp_read_stream.close().await {
+                        errs = Some(err);
                     }
                 }
 
-                if let Some(err) = errs{
-                    Err(err)
-                }else{
-                    Ok(())
+                if let Some(rtp_read_stream) = &t.rtp_read_stream {
+                    if let Err(err) = rtp_read_stream.close().await {
+                        errs = Some(err);
+                    }
+                }
+
+                if let Some(interceptor) = &self.interceptor {
+                    interceptor.unbind_remote_stream(&t.stream_info).await;
                 }
             }
-            else => {
+
+            if let Some(err) = errs {
+                Err(err)
+            } else {
                 Ok(())
             }
+        } else {
+            Ok(())
         }
     }
 

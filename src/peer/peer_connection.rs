@@ -33,7 +33,11 @@ use crate::data::data_channel::data_channel_state::DataChannelState;
 use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use crate::data::sctp_transport::sctp_transport_state::SCTPTransportState;
 use crate::error::Error;
-use crate::media::dtls_transport::dtls_role::{DEFAULT_DTLS_ROLE_ANSWER, DEFAULT_DTLS_ROLE_OFFER};
+//use crate::media::dtls_transport::dtls_fingerprint::DTLSFingerprint;
+//use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
+use crate::media::dtls_transport::dtls_role::{
+    DTLSRole, DEFAULT_DTLS_ROLE_ANSWER, DEFAULT_DTLS_ROLE_OFFER,
+};
 use crate::media::rtp::rtp_codec::{RTPCodecType, RTPHeaderExtensionCapability};
 use crate::media::rtp::rtp_sender::RTPSender;
 use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
@@ -44,12 +48,14 @@ use crate::peer::ice::ice_candidate::{ICECandidate, ICECandidateInit};
 use crate::peer::ice::ice_gather::ice_gatherer_state::ICEGathererState;
 use crate::peer::ice::ice_gather::ice_gathering_state::ICEGatheringState;
 use crate::peer::ice::ice_role::ICERole;
+use crate::peer::ice::ICEParameters;
 use crate::peer::offer_answer_options::{AnswerOptions, OfferOptions};
 use crate::peer::operation::Operations;
 use crate::peer::sdp::sdp_type::SDPType;
 use crate::peer::sdp::{
     description_is_plan_b, extract_fingerprint, extract_ice_details, filter_track_with_ssrc,
-    get_by_mid, get_mid_value, get_peer_direction, have_data_channel, populate_local_candidates,
+    get_by_mid, get_mid_value, get_peer_direction, have_application_media_section,
+    have_data_channel, populate_local_candidates, track_details_for_ssrc, track_details_from_sdp,
     update_sdp_origin, TrackDetails,
 };
 use crate::util::math_rand_alpha;
@@ -1106,7 +1112,7 @@ impl PeerConnection {
         if we_answer && remote_desc.is_some() {
             self.start_rtp_senders(current_transceivers).await?;
             /*TODO:pc.ops.Enqueue(func() {
-                pc.startRTP(have_local_description, remote_desc, current_transceivers)
+                pc.start_rtp(have_local_description, remote_desc, current_transceivers)
             })*/
         }
 
@@ -1265,7 +1271,7 @@ impl PeerConnection {
                 if we_offer {
                     self.start_rtp_senders(current_transceivers).await?;
                     /*TODO: self.ops.Enqueue(func() {
-                        self.startRTP(true, &desc, current_transceivers)
+                        self.start_rtp(true, &desc, current_transceivers)
                     })*/
                 }
                 return Ok(());
@@ -1300,9 +1306,9 @@ impl PeerConnection {
             }
 
             /*TODO: self.ops.Enqueue(func() {
-                self.startTransports(iceRole, dtlsRoleFromRemoteSDP(desc.parsed), remote_ufrag, remote_pwd, fingerprint, fingerprintHash)
+                self.start_transports(iceRole, dtlsRoleFromRemoteSDP(desc.parsed), remote_ufrag, remote_pwd, fingerprint, fingerprintHash)
                 if weOffer {
-                    self.startRTP(false, &desc, current_transceivers)
+                    self.start_rtp(false, &desc, current_transceivers)
                 }
             })*/
         }
@@ -2211,10 +2217,6 @@ impl PeerConnection {
     /// icegathering_state attribute returns the ICE gathering state of the
     /// PeerConnection instance.
     pub fn ice_gathering_state(&self) -> ICEGatheringState {
-        //if self.ice_gatherer == nil {
-        //    return ICEGatheringStateNew
-        //}
-
         match self.ice_gatherer.state() {
             ICEGathererState::New => ICEGatheringState::New,
             ICEGathererState::Gathering => ICEGatheringState::Gathering,
@@ -2227,7 +2229,8 @@ impl PeerConnection {
     pub fn connection_state(&self) -> PeerConnectionState {
         self.connection_state.load(Ordering::SeqCst).into()
     }
-    /*
+
+    /*TODO:
     // GetStats return data providing statistics about the overall connection
     func (pc *PeerConnection) GetStats() StatsReport {
         var (
@@ -2288,79 +2291,106 @@ impl PeerConnection {
 
         return statsCollector.Ready()
     }
+    */
 
-    // Start all transports. PeerConnection now has enough state
-    func (pc *PeerConnection) startTransports(iceRole ICERole, dtlsRole DTLSRole, remoteUfrag, remotePwd, fingerprint, fingerprintHash string) {
+    /// Start all transports. PeerConnection now has enough state
+    async fn start_transports(
+        &self,
+        ice_role: ICERole,
+        _dtls_role: DTLSRole,
+        remote_ufrag: String,
+        remote_pwd: String,
+        _fingerprint: String,
+        _fingerprint_hash: String,
+    ) {
         // Start the ice transport
-        err := self.iceTransport.Start(
-            self.iceGatherer,
-            ICEParameters{
-                UsernameFragment: remoteUfrag,
-                Password:         remotePwd,
-                ICELite:          false,
-            },
-            &iceRole,
-        )
-        if err != nil {
-            self.log.Warnf("Failed to start manager: %s", err)
-            return
+        if let Err(err) = self
+            .ice_transport
+            .start(
+                //TODO: self.iceGatherer,
+                ICEParameters {
+                    username_fragment: remote_ufrag,
+                    password: remote_pwd,
+                    ice_lite: false,
+                },
+                Some(ice_role),
+            )
+            .await
+        {
+            log::warn!("Failed to start manager: {}", err);
+            return;
         }
 
         // Start the dtls_transport transport
-        err = self.dtlsTransport.Start(DTLSParameters{
-            Role:         dtlsRole,
-            Fingerprints: []DTLSFingerprint{{Algorithm: fingerprintHash, Value: fingerprint}},
-        })
-        self.update_connection_state(self.iceconnection_state(), self.dtlsTransport.State())
-        if err != nil {
-            self.log.Warnf("Failed to start manager: %s", err)
-            return
-        }
+        /*TODO: let result = self
+            .dtls_transport
+            .start(DTLSParameters {
+                role: dtls_role,
+                fingerprints: vec![DTLSFingerprint {
+                    algorithm: fingerprint_hash,
+                    value: fingerprint,
+                }],
+            })
+            .await;
+        self.update_connection_state(self.ice_connection_state(), self.dtls_transport.state())
+            .await;
+        if let Err(err) = result {
+            log::warn!("Failed to start manager: {}", err);
+        }*/
     }
 
-    func (pc *PeerConnection) startRTP(isRenegotiation bool, remoteDesc *SessionDescription, currentTransceivers []*RTPTransceiver) {
-        TrackDetails := track_details_from_sdp(self.log, remoteDesc.parsed)
-        if isRenegotiation {
-            for _, t := range currentTransceivers {
-                if t.Receiver() == nil || t.Receiver().Track() == nil {
-                    continue
+    async fn start_rtp(
+        &self,
+        is_renegotiation: bool,
+        remote_desc: &SessionDescription,
+        current_transceivers: &[Arc<RTPTransceiver>],
+    ) {
+        let track_details = if let Some(parsed) = &remote_desc.parsed {
+            track_details_from_sdp(parsed)
+        } else {
+            vec![]
+        };
+
+        if is_renegotiation {
+            for t in current_transceivers {
+                if let Some(receiver) = t.receiver() {
+                    if let Some(track) = receiver.track() {
+                        let ssrc = track.ssrc();
+                        if let Some(_details) = track_details_for_ssrc(&track_details, ssrc) {
+                            //TODO: track.id = details.id;
+                            //track.stream_id = details.stream_id;
+                            continue;
+                        }
+                    }
+
+                    if let Err(err) = receiver.stop().await {
+                        log::warn!("Failed to stop RtpReceiver: {}", err);
+                        continue;
+                    }
+
+                    let _receiver = API::new_rtp_receiver(
+                        receiver.kind,
+                        Arc::clone(&self.dtls_transport),
+                        Arc::clone(&self.media_engine),
+                        self.interceptor.clone(),
+                    );
+                    //TODO: t.set_receiver(receiver);
                 }
-
-                t.Receiver().Track().mu.Lock()
-                ssrc := t.Receiver().Track().ssrc
-
-                if details := track_details_for_ssrc(TrackDetails, ssrc); details != nil {
-                    t.Receiver().Track().id = details.id
-                    t.Receiver().Track().streamID = details.streamID
-                    t.Receiver().Track().mu.Unlock()
-                    continue
-                }
-
-                t.Receiver().Track().mu.Unlock()
-
-                if err := t.Receiver().Stop(); err != nil {
-                    self.log.Warnf("Failed to stop RtpReceiver: %s", err)
-                    continue
-                }
-
-                receiver, err := self.api.new_rtpreceiver(t.Receiver().kind, self.dtlsTransport)
-                if err != nil {
-                    self.log.Warnf("Failed to create new RtpReceiver: %s", err)
-                    continue
-                }
-                t.setReceiver(receiver)
             }
         }
 
-        self.start_rtpreceivers(TrackDetails, currentTransceivers)
-        if have_application_media_section(remoteDesc.parsed) {
-            self.start_sctp()
+        //TODO: self.start_rtp_receivers(&mut track_details, current_transceivers).await?;
+
+        if let Some(parsed) = &remote_desc.parsed {
+            if have_application_media_section(parsed) {
+                self.start_sctp().await;
+            }
         }
 
-        if !isRenegotiation {
+        if !is_renegotiation {
             self.undeclared_media_processor()
         }
-    }*/
+    }
 
     /// generate_unmatched_sdp generates an SDP that doesn't take remote state into account
     /// This is used for the initial call for CreateOffer
