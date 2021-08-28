@@ -318,8 +318,7 @@ impl SCTPTransport {
         self.state.load(Ordering::SeqCst).into()
     }
 
-    /*TODO:
-    func (r *SCTPTransport) collectStats(collector *statsReportCollector) {
+    /*TODO: func (r *SCTPTransport) collectStats(collector *statsReportCollector) {
         collector.Collecting()
 
         stats := TransportStats{

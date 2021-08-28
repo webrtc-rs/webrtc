@@ -306,8 +306,7 @@ impl ICETransport {
         }
     }
 
-    /*TODO:
-    func (t *ICETransport) collectStats(collector *statsReportCollector) {
+    /*TODO: func (t *ICETransport) collectStats(collector *statsReportCollector) {
         t.lock.Lock()
         conn := t.conn
         t.lock.Unlock()

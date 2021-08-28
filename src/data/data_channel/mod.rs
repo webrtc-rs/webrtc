@@ -495,8 +495,7 @@ impl DataChannel {
         self.stats_id.as_str()
     }
 
-    /*TODO:
-    func (d *DataChannel) collectStats(collector *statsReportCollector) {
+    /*TODO: func (d *DataChannel) collectStats(collector *statsReportCollector) {
         collector.Collecting()
 
         d.mu.Lock()

@@ -62,9 +62,9 @@ impl RTPCodecCapability {
     ) -> Result<Box<dyn rtp::packetizer::Payloader + Send + Sync>> {
         match self.mime_type.to_lowercase().as_str() {
             MIME_TYPE_H264 => Ok(Box::new(rtp::codecs::h264::H264Payloader)),
-            MIME_TYPE_OPUS => Ok(Box::new(rtp::codecs::opus::OpusPayloader)),
             MIME_TYPE_VP8 => Ok(Box::new(rtp::codecs::vp8::Vp8Payloader)),
-            //TODO:case strings.ToLower(MIME_TYPE_VP9): return &codecs.VP9Payloader{}, nil
+            MIME_TYPE_VP9 => Ok(Box::new(rtp::codecs::vp9::Vp9Payloader)),
+            MIME_TYPE_OPUS => Ok(Box::new(rtp::codecs::opus::OpusPayloader)),
             MIME_TYPE_G722 => Ok(Box::new(rtp::codecs::g7xx::G7xxPayloader)),
             MIME_TYPE_PCMU | MIME_TYPE_PCMA => Ok(Box::new(rtp::codecs::g7xx::G7xxPayloader)),
             _ => Err(Error::ErrNoPayloaderForCodec.into()),
