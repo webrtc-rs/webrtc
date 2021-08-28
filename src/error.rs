@@ -296,7 +296,7 @@ pub enum Error {
         "invalid Media Section. Can not have multiple tracks in one MediaSection in UnifiedPlan"
     )]
     ErrSDPMediaSectionMultipleTrackInvalid,
-    #[error("SetAnsweringDTLSRole must DTLSRoleClient or DTLSRoleServer")]
+    #[error("set_answering_dtlsrole must DTLSRoleClient or DTLSRoleServer")]
     ErrSettingEngineSetAnsweringDTLSRole,
     #[error("can't rollback from stable state")]
     ErrSignalingStateCannotRollback,

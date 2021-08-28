@@ -1,10 +1,12 @@
-use ice::mdns::MulticastDnsMode;
-use ice::network_type::NetworkType;
-
 use crate::media::dtls_transport::dtls_role::DTLSRole;
 use crate::peer::ice::ice_candidate::ice_candidate_type::ICECandidateType;
 use dtls::extension::extension_use_srtp::SrtpProtectionProfile;
 use ice::agent::agent_config::InterfaceFilterFn;
+use ice::mdns::MulticastDnsMode;
+use ice::network_type::NetworkType;
+
+use crate::error::Error;
+use anyhow::Result;
 use std::sync::Arc;
 use tokio::time::Duration;
 use util::vnet::net::*;
@@ -66,7 +68,7 @@ pub struct SettingEngine {
     pub(crate) disable_certificate_fingerprint_verification: bool,
     pub(crate) disable_srtp_replay_protection: bool,
     pub(crate) disable_srtcp_replay_protection: bool,
-    pub(crate) net: Option<Arc<Net>>,
+    pub(crate) vnet: Option<Arc<Net>>,
     //TODO: BufferFactory                             :func(packetType packetio.BufferPacketType, ssrc uint32) io.ReadWriteCloser,
     //TODO:? iceTCPMux                                 :ice.TCPMux,?
     //iceUDPMux                                 :ice.UDPMux,?
@@ -83,213 +85,213 @@ impl SettingEngine {
         self.detach.data_channels = true;
     }
 
-    /*TODO:
-    // SetSRTPProtectionProfiles allows the user to override the default srtp Protection Profiles
-    // The default srtp protection profiles are provided by the function `defaultSrtpProtectionProfiles`
-    func (e *SettingEngine) SetSRTPProtectionProfiles(profiles ...dtls_transport.SRTPProtectionProfile) {
-        e.srtp_protection_profiles = profiles
+    /// set_srtp_protection_profiles allows the user to override the default srtp Protection Profiles
+    /// The default srtp protection profiles are provided by the function `defaultSrtpProtectionProfiles`
+    pub fn set_srtp_protection_profiles(&mut self, profiles: Vec<SrtpProtectionProfile>) {
+        self.srtp_protection_profiles = profiles
     }
 
-    // SetICETimeouts sets the behavior around ICE Timeouts
-    // * disconnectedTimeout is the duration without network activity before a Agent is considered disconnected. Default is 5 Seconds
-    // * failedTimeout is the duration without network activity before a Agent is considered failed after disconnected. Default is 25 Seconds
-    // * keepAliveInterval is how often the ICE Agent sends extra traffic if there is no activity, if media is flowing no traffic will be sent. Default is 2 seconds
-    func (e *SettingEngine) SetICETimeouts(disconnectedTimeout, failedTimeout, keepAliveInterval time.Duration) {
-        e.timeout.icedisconnected_timeout = &disconnectedTimeout
-        e.timeout.icefailed_timeout = &failedTimeout
-        e.timeout.icekeepalive_interval = &keepAliveInterval
+    /// set_ice_timeouts sets the behavior around ICE Timeouts
+    /// * disconnected_timeout is the duration without network activity before a Agent is considered disconnected. Default is 5 Seconds
+    /// * failed_timeout is the duration without network activity before a Agent is considered failed after disconnected. Default is 25 Seconds
+    /// * keep_alive_interval is how often the ICE Agent sends extra traffic if there is no activity, if media is flowing no traffic will be sent. Default is 2 seconds
+    pub fn set_ice_timeouts(
+        &mut self,
+        disconnected_timeout: Duration,
+        failed_timeout: Duration,
+        keep_alive_interval: Duration,
+    ) {
+        self.timeout.ice_disconnected_timeout = disconnected_timeout;
+        self.timeout.ice_failed_timeout = failed_timeout;
+        self.timeout.ice_keepalive_interval = keep_alive_interval;
     }
 
-    // SetHostAcceptanceMinWait sets the icehost_acceptance_min_wait
-    func (e *SettingEngine) SetHostAcceptanceMinWait(t time.Duration) {
-        e.timeout.icehost_acceptance_min_wait = &t
+    /// set_host_acceptance_min_wait sets the icehost_acceptance_min_wait
+    pub fn set_host_acceptance_min_wait(&mut self, t: Duration) {
+        self.timeout.ice_host_acceptance_min_wait = t;
     }
 
-    // SetSrflxAcceptanceMinWait sets the icesrflx_acceptance_min_wait
-    func (e *SettingEngine) SetSrflxAcceptanceMinWait(t time.Duration) {
-        e.timeout.icesrflx_acceptance_min_wait = &t
+    /// set_srflx_acceptance_min_wait sets the icesrflx_acceptance_min_wait
+    pub fn set_srflx_acceptance_min_wait(&mut self, t: Duration) {
+        self.timeout.ice_srflx_acceptance_min_wait = t;
     }
 
-    // SetPrflxAcceptanceMinWait sets the iceprflx_acceptance_min_wait
-    func (e *SettingEngine) SetPrflxAcceptanceMinWait(t time.Duration) {
-        e.timeout.iceprflx_acceptance_min_wait = &t
+    /// set_prflx_acceptance_min_wait sets the iceprflx_acceptance_min_wait
+    pub fn set_prflx_acceptance_min_wait(&mut self, t: Duration) {
+        self.timeout.ice_prflx_acceptance_min_wait = t;
     }
 
-    // SetRelayAcceptanceMinWait sets the icerelay_acceptance_min_wait
-    func (e *SettingEngine) SetRelayAcceptanceMinWait(t time.Duration) {
-        e.timeout.icerelay_acceptance_min_wait = &t
+    /// set_relay_acceptance_min_wait sets the icerelay_acceptance_min_wait
+    pub fn set_relay_acceptance_min_wait(&mut self, t: Duration) {
+        self.timeout.ice_relay_acceptance_min_wait = t;
     }
 
-    // SetEphemeralUDPPortRange limits the pool of ephemeral ports that
-    // ICE UDP connections can allocate from. This affects both host candidates,
-    // and the local address of server reflexive candidates.
-    func (e *SettingEngine) SetEphemeralUDPPortRange(portMin, portMax uint16) error {
-        if portMax < portMin {
-            return ice.ErrPort
+    /// set_ephemeral_udp_port_range limits the pool of ephemeral ports that
+    /// ICE UDP connections can allocate from. This affects both host candidates,
+    /// and the local address of server reflexive candidates.
+    pub fn set_ephemeral_udp_port_range(&mut self, port_min: u16, port_max: u16) -> Result<()> {
+        if port_max < port_min {
+            return Err(ice::error::Error::ErrPort.into());
         }
 
-        e.ephemeralUDP.port_min = portMin
-        e.ephemeralUDP.port_max = portMax
-        return nil
+        self.ephemeral_udp.port_min = port_min;
+        self.ephemeral_udp.port_max = port_max;
+        Ok(())
     }
 
-    // SetLite configures whether or not the ice agent should be a lite agent
-    func (e *SettingEngine) SetLite(lite bool) {
-        e.candidates.icelite = lite
+    /// set_lite configures whether or not the ice agent should be a lite agent
+    pub fn set_lite(&mut self, lite: bool) {
+        self.candidates.ice_lite = lite;
     }
 
-    // SetNetworkTypes configures what types of candidate networks are supported
-    // during local and server reflexive gathering.
-    func (e *SettingEngine) SetNetworkTypes(candidateTypes []NetworkType) {
-        e.candidates.icenetwork_types = candidateTypes
+    /// set_network_types configures what types of candidate networks are supported
+    /// during local and server reflexive gathering.
+    pub fn set_network_types(&mut self, candidate_types: Vec<NetworkType>) {
+        self.candidates.ice_network_types = candidate_types;
     }
 
-    // SetInterfaceFilter sets the filtering functions when gathering ICE candidates
-    // This can be used to exclude certain network interfaces from ICE. Which may be
-    // useful if you know a certain interface will never succeed, or if you wish to reduce
-    // the amount of information you wish to expose to the remote peer
-    func (e *SettingEngine) SetInterfaceFilter(filter func(string) bool) {
-        e.candidates.interface_filter = filter
+    /// set_interface_filter sets the filtering functions when gathering ICE candidates
+    /// This can be used to exclude certain network interfaces from ICE. Which may be
+    /// useful if you know a certain interface will never succeed, or if you wish to reduce
+    /// the amount of information you wish to expose to the remote peer
+    pub fn set_interface_filter(&mut self, filter: InterfaceFilterFn) {
+        self.candidates.interface_filter = Arc::new(Some(filter));
     }
 
-    // SetNAT1To1IPs sets a list of external IP addresses of 1:1 (D)NAT
-    // and a candidate type for which the external IP address is used.
-    // This is useful when you are host a server using Pion on an AWS EC2 instance
-    // which has a private address, behind a 1:1 DNAT with a public IP (e.g.
-    // Elastic IP). In this case, you can give the public IP address so that
-    // Pion will use the public IP address in its candidate instead of the private
-    // IP address. The second argument, candidateType, is used to tell Pion which
-    // type of candidate should use the given public IP address.
-    // Two types of candidates are supported:
-    //
-    // ICECandidateTypeHost:
-    //		The public IP address will be used for the host candidate in the SDP.
-    // ICECandidateTypeSrflx:
-    //		A server reflexive candidate with the given public IP address will be added
-    // to the SDP.
-    //
-    // Please note that if you choose ICECandidateTypeHost, then the private IP address
-    // won't be advertised with the peer. Also, this option cannot be used along with mDNS.
-    //
-    // If you choose ICECandidateTypeSrflx, it simply adds a server reflexive candidate
-    // with the public IP. The host candidate is still available along with mDNS
-    // capabilities unaffected. Also, you cannot give STUN server URL at the same time.
-    // It will result in an error otherwise.
-    func (e *SettingEngine) SetNAT1To1IPs(ips []string, candidateType ICECandidateType) {
-        e.candidates.nat1to1ips = ips
-        e.candidates.nat1to1ipcandidate_type = candidateType
+    /// set_nat_1to1_ips sets a list of external IP addresses of 1:1 (D)NAT
+    /// and a candidate type for which the external IP address is used.
+    /// This is useful when you are host a server using Pion on an AWS EC2 instance
+    /// which has a private address, behind a 1:1 DNAT with a public IP (e.g.
+    /// Elastic IP). In this case, you can give the public IP address so that
+    /// Pion will use the public IP address in its candidate instead of the private
+    /// IP address. The second argument, candidate_type, is used to tell Pion which
+    /// type of candidate should use the given public IP address.
+    /// Two types of candidates are supported:
+    ///
+    /// ICECandidateTypeHost:
+    ///   The public IP address will be used for the host candidate in the SDP.
+    /// ICECandidateTypeSrflx:
+    ///   A server reflexive candidate with the given public IP address will be added
+    /// to the SDP.
+    ///
+    /// Please note that if you choose ICECandidateTypeHost, then the private IP address
+    /// won't be advertised with the peer. Also, this option cannot be used along with mDNS.
+    ///
+    /// If you choose ICECandidateTypeSrflx, it simply adds a server reflexive candidate
+    /// with the public IP. The host candidate is still available along with mDNS
+    /// capabilities unaffected. Also, you cannot give STUN server URL at the same time.
+    /// It will result in an error otherwise.
+    pub fn set_nat_1to1_ips(&mut self, ips: Vec<String>, candidate_type: ICECandidateType) {
+        self.candidates.nat_1to1_ips = ips;
+        self.candidates.nat_1to1_ip_candidate_type = candidate_type;
     }
 
-    // SetAnsweringDTLSRole sets the dtls_transport role that is selected when offering
-    // The dtls_transport role controls if the WebRTC Client as a client or server. This
-    // may be useful when interacting with non-compliant clients or debugging issues.
-    //
-    // DTLSRoleActive:
-    // 		Act as dtls_transport Client, send the ClientHello and starts the handshake
-    // DTLSRolePassive:
-    // 		Act as dtls_transport Server, wait for ClientHello
-    func (e *SettingEngine) SetAnsweringDTLSRole(role DTLSRole) error {
-        if role != DTLSRoleClient && role != DTLSRoleServer {
-            return errSettingEngineSetAnsweringDTLSRole
+    /// set_answering_dtls_role sets the dtls_transport role that is selected when offering
+    /// The dtls_transport role controls if the WebRTC Client as a client or server. This
+    /// may be useful when interacting with non-compliant clients or debugging issues.
+    ///
+    /// DTLSRoleActive:
+    ///   Act as dtls_transport Client, send the ClientHello and starts the handshake
+    /// DTLSRolePassive:
+    ///   Act as dtls_transport Server, wait for ClientHello
+    pub fn set_answering_dtls_role(&mut self, role: DTLSRole) -> Result<()> {
+        if role != DTLSRole::Client && role != DTLSRole::Server {
+            return Err(Error::ErrSettingEngineSetAnsweringDTLSRole.into());
         }
 
-        e.answering_dtlsrole = role
-        return nil
+        self.answering_dtls_role = role;
+        Ok(())
     }
 
-    // SetVNet sets the VNet instance that is passed to pion/ice
-    //
-    // VNet is a virtual network layer for Pion, allowing users to simulate
-    // different topologies, latency, loss and jitter. This can be useful for
-    // learning WebRTC concepts or testing your application in a lab environment
-    func (e *SettingEngine) SetVNet(vnet *vnet.Net) {
-        e.vnet = vnet
+    /// set_vnet sets the VNet instance that is passed to ice
+    /// VNet is a virtual network layer, allowing users to simulate
+    /// different topologies, latency, loss and jitter. This can be useful for
+    /// learning WebRTC concepts or testing your application in a lab environment
+    pub fn set_vnet(&mut self, vnet: Option<Arc<Net>>) {
+        self.vnet = vnet;
     }
-    */
-    /// set_ice_multicast_dns_mode controls if pion/ice queries and generates mDNS ICE Candidates
+
+    /// set_ice_multicast_dns_mode controls if ice queries and generates mDNS ICE Candidates
     pub fn set_ice_multicast_dns_mode(&mut self, multicast_dns_mode: ice::mdns::MulticastDnsMode) {
         self.candidates.multicast_dns_mode = multicast_dns_mode
     }
-    /*
-    // SetMulticastDNSHostName sets a static HostName to be used by pion/ice instead of generating one on startup
-    //
-    // This should only be used for a single PeerConnection. Having multiple PeerConnections with the same HostName will cause
-    // undefined behavior
-    func (e *SettingEngine) SetMulticastDNSHostName(hostName string) {
-        e.candidates.multicast_dnshost_name = hostName
+
+    /// set_multicast_dns_host_name sets a static HostName to be used by ice instead of generating one on startup
+    /// This should only be used for a single PeerConnection. Having multiple PeerConnections with the same HostName will cause
+    /// undefined behavior
+    pub fn set_multicast_dns_host_name(&mut self, host_name: String) {
+        self.candidates.multicast_dns_host_name = host_name;
     }
 
-    // SetICECredentials sets a staic uFrag/uPwd to be used by pion/ice
-    //
-    // This is useful if you want to do signalless WebRTC session, or having a reproducible environment with static credentials
-    func (e *SettingEngine) SetICECredentials(usernameFragment, password string) {
-        e.candidates.username_fragment = usernameFragment
-        e.candidates.password = password
+    /// set_ice_credentials sets a staic uFrag/uPwd to be used by ice
+    /// This is useful if you want to do signalless WebRTC session, or having a reproducible environment with static credentials
+    pub fn set_ice_credentials(&mut self, username_fragment: String, password: String) {
+        self.candidates.username_fragment = username_fragment;
+        self.candidates.password = password;
     }
 
-    // DisableCertificateFingerprintVerification disables fingerprint verification after dtls_transport Handshake has finished
-    func (e *SettingEngine) DisableCertificateFingerprintVerification(isDisabled bool) {
-        e.disable_certificate_fingerprint_verification = isDisabled
+    /// disable_certificate_fingerprint_verification disables fingerprint verification after dtls_transport Handshake has finished
+    pub fn disable_certificate_fingerprint_verification(&mut self, is_disabled: bool) {
+        self.disable_certificate_fingerprint_verification = is_disabled;
     }
 
-    // SetDTLSReplayProtectionWindow sets a replay attack protection window size of dtls_transport connection.
-    func (e *SettingEngine) SetDTLSReplayProtectionWindow(n uint) {
-        e.replayProtection.dtls_transport = &n
+    /// set_dtls_replay_protection_window sets a replay attack protection window size of dtls_transport connection.
+    pub fn set_dtls_replay_protection_window(&mut self, n: usize) {
+        self.replay_protection.dtls = n;
     }
 
-    // SetSRTPReplayProtectionWindow sets a replay attack protection window size of srtp session.
-    func (e *SettingEngine) SetSRTPReplayProtectionWindow(n uint) {
-        e.disable_srtpreplay_protection = false
-        e.replayProtection.srtp = &n
+    /// set_srtp_replay_protection_window sets a replay attack protection window size of srtp session.
+    pub fn set_srtp_replay_protection_window(&mut self, n: usize) {
+        self.disable_srtp_replay_protection = false;
+        self.replay_protection.srtp = n;
     }
 
-    // SetSRTCPReplayProtectionWindow sets a replay attack protection window size of srtcp session.
-    func (e *SettingEngine) SetSRTCPReplayProtectionWindow(n uint) {
-        e.disable_srtcpreplay_protection = false
-        e.replayProtection.srtcp = &n
+    /// set_srtcp_replay_protection_window sets a replay attack protection window size of srtcp session.
+    pub fn set_srtcp_replay_protection_window(&mut self, n: usize) {
+        self.disable_srtcp_replay_protection = false;
+        self.replay_protection.srtcp = n;
     }
 
-    // DisableSRTPReplayProtection disables srtp replay protection.
-    func (e *SettingEngine) DisableSRTPReplayProtection(isDisabled bool) {
-        e.disable_srtpreplay_protection = isDisabled
+    /// disable_srtp_replay_protection disables srtp replay protection.
+    pub fn disable_srtp_replay_protection(&mut self, is_disabled: bool) {
+        self.disable_srtp_replay_protection = is_disabled;
     }
 
-    // DisableSRTCPReplayProtection disables srtcp replay protection.
-    func (e *SettingEngine) DisableSRTCPReplayProtection(isDisabled bool) {
-        e.disable_srtcpreplay_protection = isDisabled
+    /// disable_srtcp_replay_protection disables srtcp replay protection.
+    pub fn disable_srtcp_replay_protection(&mut self, is_disabled: bool) {
+        self.disable_srtcp_replay_protection = is_disabled;
     }
 
-    // SetSDPMediaLevelFingerprints configures the logic for dtls_transport Fingerprint insertion
-    // If true, fingerprints will be inserted in the sdp at the fingerprint
-    // level, instead of the session level. This helps with compatibility with
-    // some webrtc implementations.
-    func (e *SettingEngine) SetSDPMediaLevelFingerprints(sdp_media_level_fingerprints bool) {
-        e.sdp_media_level_fingerprints = sdp_media_level_fingerprints
+    /// set_sdp_media_level_fingerprints configures the logic for dtls_transport Fingerprint insertion
+    /// If true, fingerprints will be inserted in the sdp at the fingerprint
+    /// level, instead of the session level. This helps with compatibility with
+    /// some webrtc implementations.
+    pub fn set_sdp_media_level_fingerprints(&mut self, sdp_media_level_fingerprints: bool) {
+        self.sdp_media_level_fingerprints = sdp_media_level_fingerprints;
     }
 
     // SetICETCPMux enables ICE-TCP when set to a non-nil value. Make sure that
     // NetworkTypeTCP4 or NetworkTypeTCP6 is enabled as well.
-    func (e *SettingEngine) SetICETCPMux(tcpMux ice.TCPMux) {
-        e.iceTCPMux = tcpMux
-    }
+    //pub fn SetICETCPMux(&mut self, tcpMux ice.TCPMux) {
+    //    self.iceTCPMux = tcpMux
+    //}
 
     // SetICEUDPMux allows ICE traffic to come through a single UDP port, drastically
     // simplifying deployments where ports will need to be opened/forwarded.
     // UDPMux should be started prior to creating PeerConnections.
-    func (e *SettingEngine) SetICEUDPMux(udpMux ice.UDPMux) {
-        e.iceUDPMux = udpMux
-    }
+    //pub fn SetICEUDPMux(&mut self, udpMux ice.UDPMux) {
+    //    self.iceUDPMux = udpMux
+    //}
 
     // SetICEProxyDialer sets the proxy dialer interface based on golang.org/x/net/proxy.
-    func (e *SettingEngine) SetICEProxyDialer(d proxy.Dialer) {
-        e.iceProxyDialer = d
-    }
+    //pub fn SetICEProxyDialer(&mut self, d proxy.Dialer) {
+    //    self.iceProxyDialer = d
+    //}
 
-    // DisableMediaEngineCopy stops the MediaEngine from being copied. This allows a user to modify
-    // the MediaEngine after the PeerConnection has been constructed. This is useful if you wish to
-    // modify codecs after signaling. Make sure not to share MediaEngines between PeerConnections.
-    func (e *SettingEngine) DisableMediaEngineCopy(isDisabled bool) {
-        e.disable_media_engine_copy = isDisabled
+    /// disable_media_engine_copy stops the MediaEngine from being copied. This allows a user to modify
+    /// the MediaEngine after the PeerConnection has been constructed. This is useful if you wish to
+    /// modify codecs after signaling. Make sure not to share MediaEngines between PeerConnections.
+    pub fn disable_media_engine_copy(&mut self, is_disabled: bool) {
+        self.disable_media_engine_copy = is_disabled;
     }
-    */
 }
