@@ -195,7 +195,7 @@ impl API {
             payload_type: 0,
             ssrc,
 
-            negotiated: false,
+            negotiated: AtomicBool::new(false),
 
             media_engine,
             interceptor,

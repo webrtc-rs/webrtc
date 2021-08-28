@@ -527,19 +527,20 @@ pub(crate) async fn add_transceiver_sdp(
     Ok((d.with_media(media), true))
 }
 
+#[derive(Default)]
 pub(crate) struct MediaSection {
-    id: String,
-    transceivers: Vec<RTPTransceiver>,
-    data: bool,
-    rid_map: HashMap<String, String>,
+    pub(crate) id: String,
+    pub(crate) transceivers: Vec<Arc<RTPTransceiver>>,
+    pub(crate) data: bool,
+    pub(crate) rid_map: HashMap<String, String>,
 }
 
 pub(crate) struct PopulateSdpParams {
-    is_plan_b: bool,
-    media_description_fingerprint: bool,
-    is_icelite: bool,
-    connection_role: ConnectionRole,
-    ice_gathering_state: ICEGatheringState,
+    pub(crate) is_plan_b: bool,
+    pub(crate) media_description_fingerprint: bool,
+    pub(crate) is_icelite: bool,
+    pub(crate) connection_role: ConnectionRole,
+    pub(crate) ice_gathering_state: ICEGatheringState,
 }
 
 /// populate_sdp serializes a PeerConnections state into an SDP

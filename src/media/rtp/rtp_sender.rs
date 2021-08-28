@@ -13,6 +13,7 @@ use crate::media::track::track_local::{TrackLocal, TrackLocalContext};
 use crate::media::rtp::rtp_codec::{RTPCodecParameters, RTPCodecType};
 use crate::RECEIVE_MTU;
 use anyhow::Result;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
@@ -33,7 +34,7 @@ pub struct RTPSender {
 
     /// a transceiver sender since we can just check the
     /// transceiver negotiation status
-    pub(crate) negotiated: bool,
+    pub(crate) negotiated: AtomicBool,
 
     pub(crate) media_engine: Arc<MediaEngine>,
     pub(crate) interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
@@ -48,11 +49,11 @@ pub struct RTPSender {
 
 impl RTPSender {
     pub(crate) fn is_negotiated(&self) -> bool {
-        self.negotiated
+        self.negotiated.load(Ordering::SeqCst)
     }
 
-    pub(crate) fn set_segotiated(&mut self) {
-        self.negotiated = true;
+    pub(crate) fn set_negotiated(&self) {
+        self.negotiated.store(true, Ordering::SeqCst);
     }
 
     /// transport returns the currently-configured DTLSTransport

@@ -55,8 +55,8 @@ use crate::peer::sdp::sdp_type::SDPType;
 use crate::peer::sdp::{
     description_is_plan_b, extract_fingerprint, extract_ice_details, filter_track_with_ssrc,
     get_by_mid, get_mid_value, get_peer_direction, have_application_media_section,
-    have_data_channel, populate_local_candidates, track_details_for_ssrc, track_details_from_sdp,
-    update_sdp_origin, TrackDetails,
+    have_data_channel, populate_local_candidates, populate_sdp, track_details_for_ssrc,
+    track_details_from_sdp, update_sdp_origin, MediaSection, PopulateSdpParams, TrackDetails,
 };
 use crate::util::math_rand_alpha;
 use crate::{
@@ -793,7 +793,8 @@ impl PeerConnection {
             }
 
             let mut d = if self.current_remote_description.is_none() {
-                self.generate_unmatched_sdp(/*current_transceivers,*/ use_identity)?
+                self.generate_unmatched_sdp(/*current_transceivers,*/ use_identity)
+                    .await?
             } else {
                 self.generate_matched_sdp(
                     /*current_transceivers,*/
@@ -2394,81 +2395,114 @@ impl PeerConnection {
 
     /// generate_unmatched_sdp generates an SDP that doesn't take remote state into account
     /// This is used for the initial call for CreateOffer
-    fn generate_unmatched_sdp(
+    async fn generate_unmatched_sdp(
         &self,
-        //_transceivers: &[RTPTransceiver],
-        _use_identity: bool,
+        use_identity: bool,
     ) -> Result<sdp::session_description::SessionDescription> {
-        Ok(sdp::session_description::SessionDescription::default())
-        /*TODO:
-        let current_transceivers = &self.rtp_transceivers;
-        d, err := sdp.NewJSEPSessionDescription(useIdentity)
-        if err != nil {
-            return nil, err
-        }
+        let transceivers = &self.rtp_transceivers;
+        let d = sdp::session_description::SessionDescription::new_jsep_session_description(
+            use_identity,
+        );
 
-        iceParams, err := self.iceGatherer.GetLocalParameters()
-        if err != nil {
-            return nil, err
-        }
+        let ice_params = self.ice_gatherer.get_local_parameters().await?;
 
-        candidates, err := self.iceGatherer.GetLocalCandidates()
-        if err != nil {
-            return nil, err
-        }
+        let candidates = self.ice_gatherer.get_local_candidates().await?;
 
-        isPlanB := self.configuration.SDPSemantics == SDPSemanticsPlanB
-        mediaSections := []mediaSection{}
+        let is_plan_b = self.configuration.sdp_semantics == SDPSemantics::PlanB;
+        let mut media_sections = vec![];
 
         // Needed for self.sctpTransport.dataChannelsRequested
-        self.sctpTransport.lock.Lock()
-        defer self.sctpTransport.lock.Unlock()
+        if is_plan_b {
+            let mut video = vec![];
+            let mut audio = vec![];
 
-        if isPlanB {
-            video := make([]*RTPTransceiver, 0)
-            audio := make([]*RTPTransceiver, 0)
-
-            for _, t := range transceivers {
-                if t.kind == RTPCodecTypeVideo {
-                    video = append(video, t)
-                } else if t.kind == RTPCodecTypeAudio {
-                    audio = append(audio, t)
+            for t in transceivers {
+                if t.kind == RTPCodecType::Video {
+                    video.push(Arc::clone(t));
+                } else if t.kind == RTPCodecType::Audio {
+                    audio.push(Arc::clone(t));
                 }
-                if t.Sender() != nil {
-                    t.Sender().setNegotiated()
+                if let Some(sender) = t.sender() {
+                    sender.set_negotiated();
                 }
             }
 
-            if len(video) > 0 {
-                mediaSections = append(mediaSections, mediaSection{id: "video", transceivers: video})
+            if !video.is_empty() {
+                media_sections.push(MediaSection {
+                    id: "video".to_owned(),
+                    transceivers: video,
+                    ..Default::default()
+                })
             }
-            if len(audio) > 0 {
-                mediaSections = append(mediaSections, mediaSection{id: "audio", transceivers: audio})
+            if !audio.is_empty() {
+                media_sections.push(MediaSection {
+                    id: "audio".to_owned(),
+                    transceivers: audio,
+                    ..Default::default()
+                });
             }
 
-            if self.sctpTransport.dataChannelsRequested != 0 {
-                mediaSections = append(mediaSections, mediaSection{id: "data", data: true})
+            if self
+                .sctp_transport
+                .data_channels_requested
+                .load(Ordering::SeqCst)
+                != 0
+            {
+                media_sections.push(MediaSection {
+                    id: "data".to_owned(),
+                    data: true,
+                    ..Default::default()
+                });
             }
         } else {
-            for _, t := range transceivers {
-                if t.Sender() != nil {
-                    t.Sender().setNegotiated()
+            for t in transceivers {
+                if let Some(sender) = t.sender() {
+                    sender.set_negotiated();
                 }
-                mediaSections = append(mediaSections, mediaSection{id: t.Mid(), transceivers: []*RTPTransceiver{t}})
+                media_sections.push(MediaSection {
+                    id: t.mid().to_owned(),
+                    transceivers: vec![Arc::clone(t)],
+                    ..Default::default()
+                });
             }
 
-            if self.sctpTransport.dataChannelsRequested != 0 {
-                mediaSections = append(mediaSections, mediaSection{id: strconv.Itoa(len(mediaSections)), data: true})
+            if self
+                .sctp_transport
+                .data_channels_requested
+                .load(Ordering::SeqCst)
+                != 0
+            {
+                media_sections.push(MediaSection {
+                    id: format!("{}", media_sections.len()),
+                    data: true,
+                    ..Default::default()
+                });
             }
         }
 
-        dtlsFingerprints, err := self.configuration.Certificates[0].GetFingerprints()
+        let dtls_fingerprints = vec![];
+        /*TODO: dtls_fingerprints, err := self.configuration.Certificates[0].GetFingerprints()
         if err != nil {
             return nil, err
-        }
+        }*/
 
-        return populate_sdp(d, isPlanB, dtlsFingerprints, self.api.settingEngine.sdpMediaLevelFingerprints, self.api.settingEngine.candidates.ICELite, self.api.mediaEngine, connectionRoleFromDtlsRole(defaultDtlsRoleOffer), candidates, iceParams, mediaSections, self.icegathering_state())
-        */
+        let params = PopulateSdpParams {
+            is_plan_b,
+            media_description_fingerprint: self.setting_engine.sdp_media_level_fingerprints,
+            is_icelite: self.setting_engine.candidates.ice_lite,
+            connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
+            ice_gathering_state: self.ice_gathering_state(),
+        };
+        populate_sdp(
+            d,
+            &dtls_fingerprints,
+            &self.media_engine,
+            &candidates,
+            &ice_params,
+            &media_sections,
+            params,
+        )
+        .await
     }
 
     /// generate_matched_sdp generates a SDP and takes the remote state into account
@@ -2593,12 +2627,12 @@ impl PeerConnection {
             self.log.Info("Plan-B Offer detected; responding with Plan-B Answer")
         }
 
-        dtlsFingerprints, err := self.configuration.Certificates[0].GetFingerprints()
+        dtls_fingerprints, err := self.configuration.Certificates[0].GetFingerprints()
         if err != nil {
             return nil, err
         }
 
-        return populate_sdp(d, detectedPlanB, dtlsFingerprints, self.api.settingEngine.sdpMediaLevelFingerprints, self.api.settingEngine.candidates.ICELite, self.api.mediaEngine, connectionRole, candidates, iceParams, mediaSections, self.icegathering_state())
+        return populate_sdp(d, detectedPlanB, dtls_fingerprints, self.api.settingEngine.sdpMediaLevelFingerprints, self.api.settingEngine.candidates.ICELite, self.api.mediaEngine, connectionRole, candidates, iceParams, mediaSections, self.icegathering_state())
         */
     }
 
