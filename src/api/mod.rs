@@ -123,16 +123,16 @@ impl API {
     /// This constructor is part of the ORTC API. It is not
     /// meant to be used together with the basic WebRTC API.
     pub async fn new_data_channel(
-        &self,
         sctp_transport: Arc<SCTPTransport>,
         params: DataChannelParameters,
+        setting_engine: Arc<SettingEngine>,
     ) -> Result<DataChannel> {
         // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #5)
         if params.label.len() > 65535 {
             return Err(Error::ErrStringSizeLimit.into());
         }
 
-        let d = DataChannel::new(params, Arc::clone(&self.setting_engine));
+        let d = DataChannel::new(params, setting_engine);
         d.open(sctp_transport).await?;
 
         Ok(d)

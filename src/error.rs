@@ -250,13 +250,13 @@ pub enum Error {
     ErrPeerConnSimulcastIncomingSSRCFailed,
     #[error("add_transceiver_from_kind only accepts one RTPTransceiverInit")]
     ErrPeerConnAddTransceiverFromKindOnlyAcceptsOne,
-    #[error("AddTransceiverFromTrack only accepts one RTPTransceiverInit")]
+    #[error("add_transceiver_from_track only accepts one RTPTransceiverInit")]
     ErrPeerConnAddTransceiverFromTrackOnlyAcceptsOne,
     #[error("add_transceiver_from_kind currently only supports recvonly")]
     ErrPeerConnAddTransceiverFromKindSupport,
-    #[error("AddTransceiverFromTrack currently only supports sendonly and sendrecv")]
+    #[error("add_transceiver_from_track currently only supports sendonly and sendrecv")]
     ErrPeerConnAddTransceiverFromTrackSupport,
-    #[error("TODO SetIdentityProvider")]
+    #[error("TODO set_identity_provider")]
     ErrPeerConnSetIdentityProviderNotImplemented,
     #[error("write_rtcp failed to open write_stream")]
     ErrPeerConnWriteRTCPOpenWriteStream,

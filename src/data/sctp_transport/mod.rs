@@ -77,7 +77,7 @@ pub struct SCTPTransport {
     // DataChannels
     pub(crate) data_channels: Arc<Mutex<Vec<Arc<DataChannel>>>>,
     pub(crate) data_channels_opened: Arc<AtomicU32>,
-    data_channels_requested: Arc<AtomicU32>,
+    pub(crate) data_channels_requested: Arc<AtomicU32>,
     data_channels_accepted: Arc<AtomicU32>,
 
     setting_engine: Arc<SettingEngine>,
@@ -242,7 +242,7 @@ impl SCTPTransport {
                     protocol: dc.config.protocol.clone(),
                     negotiated: dc.config.negotiated,
                     ordered,
-                    max_packet_lifetime,
+                    max_packet_life_time: max_packet_lifetime,
                     max_retransmits,
                 },
                 Arc::clone(&param.setting_engine),

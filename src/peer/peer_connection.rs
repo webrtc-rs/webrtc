@@ -7,7 +7,7 @@ use crate::media::dtls_transport::dtls_transport_state::DTLSTransportState;
 use crate::media::dtls_transport::DTLSTransport;
 use crate::media::ice_transport::ice_transport_state::ICETransportState;
 use crate::media::ice_transport::ICETransport;
-use crate::media::interceptor::Interceptor;
+use crate::media::interceptor::{Attributes, Interceptor, RTCPWriter};
 use crate::media::rtp::rtp_receiver::RTPReceiver;
 use crate::media::rtp::rtp_transceiver::{
     find_by_mid, handle_unknown_rtp_packet, satisfy_type_and_direction, RTPTransceiver,
@@ -27,8 +27,11 @@ use crate::peer::policy::sdp_semantics::SDPSemantics;
 use crate::peer::sdp::session_description::{SessionDescription, SessionDescriptionSerde};
 use crate::peer::signaling_state::{check_next_signaling_state, SignalingState, StateChangeOp};
 
+use crate::data::data_channel::data_channel_config::DataChannelConfig;
+use crate::data::data_channel::data_channel_parameters::DataChannelParameters;
 use crate::data::data_channel::data_channel_state::DataChannelState;
 use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
+use crate::data::sctp_transport::sctp_transport_state::SCTPTransportState;
 use crate::error::Error;
 use crate::media::dtls_transport::dtls_role::{DEFAULT_DTLS_ROLE_ANSWER, DEFAULT_DTLS_ROLE_OFFER};
 use crate::media::rtp::rtp_codec::{RTPCodecType, RTPHeaderExtensionCapability};
@@ -150,7 +153,7 @@ pub struct PeerConnection {
     on_data_channel_handler: Arc<Mutex<Option<OnDataChannelHdlrFn>>>,
     on_negotiation_needed_handler: Arc<Mutex<Option<OnNegotiationNeededHdlrFn>>>,
 
-    // interceptorRTCPWriter interceptor.RTCPWriter
+    // interceptor_rtcpwriter interceptor.RTCPWriter
     ice_gatherer: Arc<ICEGatherer>,
     ice_transport: Arc<ICETransport>,
     dtls_transport: Arc<DTLSTransport>,
@@ -160,6 +163,8 @@ pub struct PeerConnection {
     setting_engine: Arc<SettingEngine>,
     media_engine: Arc<MediaEngine>,
     interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
+
+    interceptor_rtcp_writer: Option<Arc<dyn RTCPWriter + Send + Sync>>,
 }
 
 impl PeerConnection {
@@ -230,7 +235,7 @@ impl PeerConnection {
         // Create the SCTP transport
         pc.sctp_transport = Arc::new(api.new_sctp_transport(Arc::clone(&pc.dtls_transport))?);
 
-        //TODO: pc.interceptorRTCPWriter = api.interceptor.bind_rtcpwriter(interceptor.RTCPWriterFunc(pc.writeRTCP))
+        //TODO: pc.interceptor_rtcp_writer = api.interceptor.bind_rtcp_writer(interceptor.RTCPWriterFunc(pc.writeRTCP))
 
         let pc = Arc::new(pc);
 
@@ -1944,127 +1949,137 @@ impl PeerConnection {
 
         Ok(t)
     }
-    /*
-    // AddTransceiverFromTrack Create a new RtpTransceiver(SendRecv or SendOnly) and add it to the set of transceivers.
-    func (pc *PeerConnection) AddTransceiverFromTrack(track TrackLocal, init ...RTPTransceiverInit) (t *RTPTransceiver, err error) {
-        if self.is_closed.get() {
-            return nil, &rtcerr.InvalidStateError{Err: ErrConnectionClosed}
+
+    /// add_transceiver_from_track Create a new RtpTransceiver(SendRecv or SendOnly) and add it to the set of transceivers.
+    pub async fn add_transceiver_from_track(
+        &mut self,
+        track: &Arc<dyn TrackLocal + Send + Sync>, //Why compiler complains if "track: Arc<dyn TrackLocal + Send + Sync>"?
+        init: &[RTPTransceiverInit],
+    ) -> Result<Arc<RTPTransceiver>> {
+        if self.is_closed.load(Ordering::SeqCst) {
+            return Err(Error::ErrConnectionClosed.into());
         }
 
-        direction := RTPTransceiverDirectionSendrecv
-        if len(init) > 1 {
-            return nil, errPeerConnAddTransceiverFromTrackOnlyAcceptsOne
-        } else if len(init) == 1 {
-            direction = init[0].Direction
-        }
+        let direction = match init.len() {
+            0 => RTPTransceiverDirection::Sendrecv,
+            1 => init[0].direction,
+            _ => return Err(Error::ErrPeerConnAddTransceiverFromTrackOnlyAcceptsOne.into()),
+        };
 
-        t, err = self.new_transceiver_from_track(direction, track)
-        if err == nil {
-            self.mu.Lock()
-            self.add_rtptransceiver(t)
-            self.mu.Unlock()
-        }
-        return
+        let t = self.new_transceiver_from_track(direction, Arc::clone(track))?;
+
+        self.add_rtp_transceiver(Arc::clone(&t)).await;
+
+        Ok(t)
     }
 
-    // CreateDataChannel creates a new DataChannel object with the given label
-    // and optional DataChannelInit used to configure properties of the
-    // underlying channel such as data reliability.
-    func (pc *PeerConnection) CreateDataChannel(label string, options *DataChannelInit) (*DataChannel, error) {
+    /// create_data_channel creates a new DataChannel object with the given label
+    /// and optional DataChannelInit used to configure properties of the
+    /// underlying channel such as data reliability.
+    pub async fn create_data_channel(
+        &self,
+        label: String,
+        options: Option<DataChannelConfig>,
+    ) -> Result<Arc<DataChannel>> {
         // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #2)
-        if self.is_closed.get() {
-            return nil, &rtcerr.InvalidStateError{Err: ErrConnectionClosed}
+        if self.is_closed.load(Ordering::SeqCst) {
+            return Err(Error::ErrConnectionClosed.into());
         }
 
-        params := &DataChannelParameters{
-            Label:   label,
-            Ordered: true,
-        }
+        let mut params = DataChannelParameters {
+            label,
+            ordered: true,
+            ..Default::default()
+        };
 
         // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #19)
-        if options != nil {
-            params.ID = options.ID
-        }
+        if let Some(options) = options {
+            if let Some(id) = options.id {
+                params.id = id;
+            }
 
-        if options != nil {
             // Ordered indicates if data is allowed to be delivered out of order. The
             // default value of true, guarantees that data will be delivered in order.
             // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #9)
-            if options.Ordered != nil {
-                params.Ordered = *options.Ordered
+            if let Some(ordered) = options.ordered {
+                params.ordered = ordered;
             }
 
             // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #7)
-            if options.MaxPacketLifeTime != nil {
-                params.MaxPacketLifeTime = options.MaxPacketLifeTime
+            if let Some(max_packet_life_time) = options.max_packet_life_time {
+                params.max_packet_life_time = max_packet_life_time;
             }
 
             // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #8)
-            if options.MaxRetransmits != nil {
-                params.MaxRetransmits = options.MaxRetransmits
+            if let Some(max_retransmits) = options.max_retransmits {
+                params.max_retransmits = max_retransmits;
             }
 
             // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #10)
-            if options.Protocol != nil {
-                params.Protocol = *options.Protocol
+            if let Some(protocol) = options.protocol {
+                params.protocol = protocol;
             }
 
             // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #11)
-            if len(params.Protocol) > 65535 {
-                return nil, &rtcerr.TypeError{Err: ErrProtocolTooLarge}
+            if params.protocol.len() > 65535 {
+                return Err(Error::ErrProtocolTooLarge.into());
             }
 
             // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #12)
-            if options.Negotiated != nil {
-                params.Negotiated = *options.Negotiated
+            if let Some(negotiated) = options.negotiated {
+                params.negotiated = negotiated;
             }
         }
 
-        d, err := self.api.newDataChannel(params, self.log)
-        if err != nil {
-            return nil, err
-        }
+        let d = Arc::new(DataChannel::new(params, Arc::clone(&self.setting_engine)));
 
         // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #16)
-        if d.maxPacketLifeTime != nil && d.maxRetransmits != nil {
-            return nil, &rtcerr.TypeError{Err: ErrRetransmitsOrPacketLifeTime}
+        if d.max_packet_lifetime != 0 && d.max_retransmits != 0 {
+            return Err(Error::ErrRetransmitsOrPacketLifeTime.into());
         }
 
-        self.sctpTransport.lock.Lock()
-        self.sctpTransport.dataChannels = append(self.sctpTransport.dataChannels, d)
-        self.sctpTransport.dataChannelsRequested++
-        self.sctpTransport.lock.Unlock()
+        {
+            let mut data_channels = self.sctp_transport.data_channels.lock().await;
+            data_channels.push(Arc::clone(&d));
+        }
+        self.sctp_transport
+            .data_channels_requested
+            .fetch_add(1, Ordering::SeqCst);
 
         // If SCTP already connected open all the channels
-        if self.sctpTransport.State() == SCTPTransportStateConnected {
-            if err = d.open(self.sctpTransport); err != nil {
-                return nil, err
-            }
+        if self.sctp_transport.state() == SCTPTransportState::Connected {
+            d.open(Arc::clone(&self.sctp_transport)).await?;
         }
 
-        self.mu.Lock()
-        self.onNegotiationNeeded()
-        self.mu.Unlock()
+        self.do_negotiation_needed().await;
 
-        return d, nil
+        Ok(d)
     }
 
-    // SetIdentityProvider is used to configure an identity provider to generate identity assertions
-    func (pc *PeerConnection) SetIdentityProvider(provider string) error {
-        return errPeerConnSetIdentityProviderNotImplemented
+    /// set_identity_provider is used to configure an identity provider to generate identity assertions
+    pub fn set_identity_provider(&self, _provider: &str) -> Result<()> {
+        Err(Error::ErrPeerConnSetIdentityProviderNotImplemented.into())
     }
 
-    // WriteRTCP sends a user provided RTCP packet to the connected peer. If no peer is connected the
-    // packet is discarded. It also runs any configured interceptors.
-    func (pc *PeerConnection) WriteRTCP(pkts []rtcp.Packet) error {
-        _, err := self.interceptorRTCPWriter.Write(pkts, make(interceptor.Attributes))
-        return err
+    /// write_rtcp sends a user provided RTCP packet to the connected peer. If no peer is connected the
+    /// packet is discarded. It also runs any configured interceptors.
+    pub async fn write_rtcp(&self, pkts: &dyn rtcp::packet::Packet) -> Result<()> {
+        if let Some(rtc_writer) = &self.interceptor_rtcp_writer {
+            let a = Attributes::new();
+            rtc_writer.write(pkts, &a).await?;
+        }
+        Ok(())
     }
 
-    func (pc *PeerConnection) writeRTCP(pkts []rtcp.Packet, _ interceptor.Attributes) (int, error) {
-        return self.dtlsTransport.WriteRTCP(pkts)
+    async fn dtls_write_rtcp(
+        &self,
+        _pkts: &dyn rtcp::packet::Packet,
+        _a: &Attributes,
+    ) -> Result<usize> {
+        //TODO: self.dtls_transport.write_rtcp(pkts).await
+        Ok(0)
     }
-
+    /*
     // Close ends the PeerConnection
     func (pc *PeerConnection) Close() error {
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #1)

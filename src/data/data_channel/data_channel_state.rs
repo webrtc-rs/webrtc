@@ -7,7 +7,7 @@ pub enum DataChannelState {
 
     /// DataChannelStateConnecting indicates that the data channel is being
     /// established. This is the initial state of DataChannel, whether created
-    /// with CreateDataChannel, or dispatched as a part of an DataChannelEvent.
+    /// with create_data_channel, or dispatched as a part of an DataChannelEvent.
     Connecting,
 
     /// DataChannelStateOpen indicates that the underlying data transport is
