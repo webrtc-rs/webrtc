@@ -28,6 +28,7 @@ use tokio::sync::{mpsc, Mutex};
 use util::Conn;
 
 use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
+use crate::util::flatten_errs;
 use anyhow::Result;
 use std::sync::atomic::{AtomicU8, Ordering};
 
@@ -429,13 +430,7 @@ impl DTLSTransport {
 
         self.state_change(DTLSTransportState::Closed).await;
 
-        if close_errs.is_empty() {
-            Ok(())
-        } else {
-            let close_errs_strs: Vec<String> =
-                close_errs.into_iter().map(|e| e.to_string()).collect();
-            Err(Error::new(close_errs_strs.join("\n")).into())
-        }
+        flatten_errs(close_errs)
     }
 
     pub(crate) fn validate_fingerprint(&self, _remote_cert: &[u8]) -> Result<()> {

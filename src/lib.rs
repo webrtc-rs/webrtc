@@ -33,6 +33,8 @@ pub(crate) const MEDIA_SECTION_APPLICATION: &str = "application";
 
 pub(crate) const RTP_OUTBOUND_MTU: usize = 1200;
 
+pub(crate) const RTP_PAYLOAD_TYPE_BITMASK: u8 = 0x7F;
+
 pub(crate) fn default_srtp_protection_profiles() -> Vec<SrtpProtectionProfile> {
     vec![
         SrtpProtectionProfile::Srtp_Aead_Aes_128_Gcm,

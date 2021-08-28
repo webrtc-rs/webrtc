@@ -58,7 +58,7 @@ use crate::peer::sdp::{
     have_data_channel, populate_local_candidates, populate_sdp, track_details_for_ssrc,
     track_details_from_sdp, update_sdp_origin, MediaSection, PopulateSdpParams, TrackDetails,
 };
-use crate::util::math_rand_alpha;
+use crate::util::{flatten_errs, math_rand_alpha};
 use crate::{
     MEDIA_SECTION_APPLICATION, RECEIVE_MTU, SIMULCAST_MAX_PROBE_ROUTINES, SIMULCAST_PROBE_COUNT,
     SSRC_STR,
@@ -2157,13 +2157,7 @@ impl PeerConnection {
         self.update_connection_state(self.ice_connection_state(), self.dtls_transport.state())
             .await;
 
-        if close_errs.is_empty() {
-            Ok(())
-        } else {
-            let close_errs_strs: Vec<String> =
-                close_errs.into_iter().map(|e| e.to_string()).collect();
-            Err(Error::new(close_errs_strs.join("\n")).into())
-        }
+        flatten_errs(close_errs)
     }
 
     /// add_rtp_transceiver appends t into rtp_transceivers

@@ -1,3 +1,5 @@
+use crate::error::Error;
+use anyhow::Result;
 use rand::{thread_rng, Rng};
 
 pub mod mux;
@@ -16,4 +18,14 @@ pub fn math_rand_alpha(n: usize) -> String {
         .collect();
 
     rand_string
+}
+
+/// flatten_errs flattens multiple errors into one
+pub fn flatten_errs(errs: Vec<anyhow::Error>) -> Result<()> {
+    if errs.is_empty() {
+        Ok(())
+    } else {
+        let errs_strs: Vec<String> = errs.into_iter().map(|e| e.to_string()).collect();
+        Err(Error::new(errs_strs.join("\n")).into())
+    }
 }

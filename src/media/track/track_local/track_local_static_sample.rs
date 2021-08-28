@@ -3,6 +3,7 @@ use super::*;
 use crate::media::Sample;
 use crate::RTP_OUTBOUND_MTU;
 
+use crate::util::flatten_errs;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -45,7 +46,7 @@ impl TrackLocalStaticSample {
     /// If one PeerConnection fails the packets will still be sent to
     /// all PeerConnections. The error message will contain the ID of the failed
     /// PeerConnections so you can remove them
-    pub async fn write_sample(&mut self, sample: &Sample) -> Result<()> {
+    pub async fn write_sample(&self, sample: &Sample) -> Result<()> {
         let mut internal = self.internal.lock().await;
 
         if internal.packetizer.is_none() || internal.sequencer.is_none() {
@@ -71,18 +72,14 @@ impl TrackLocalStaticSample {
             vec![]
         };
 
-        let mut write_err = None;
+        let mut write_errs = vec![];
         for p in packets {
             if let Err(err) = self.rtp_track.write_rtp(&p).await {
-                write_err = Some(err);
+                write_errs.push(err);
             }
         }
 
-        if let Some(err) = write_err {
-            Err(err)
-        } else {
-            Ok(())
-        }
+        flatten_errs(write_errs)
     }
 }
 

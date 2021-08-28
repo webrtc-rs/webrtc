@@ -93,6 +93,7 @@ impl RTPReceiver {
                         self.kind,
                         encoding.ssrc,
                         "".to_owned(),
+                        Arc::clone(&self.media_engine),
                         self.interceptor.clone(),
                     )),
                     stream_info,
@@ -110,6 +111,7 @@ impl RTPReceiver {
                         self.kind,
                         0,
                         encoding.rid.clone(),
+                        Arc::clone(&self.media_engine),
                         self.interceptor.clone(),
                     )),
                     ..Default::default()

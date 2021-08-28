@@ -1,5 +1,6 @@
 use super::*;
 
+use crate::util::flatten_errs;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -110,7 +111,7 @@ impl TrackLocalWriter for TrackLocalStaticRTP {
     /// PeerConnections so you can remove them
     async fn write_rtp(&self, p: &rtp::packet::Packet) -> Result<usize> {
         let mut n = 0;
-        let mut write_err = None;
+        let mut write_errs = vec![];
         let mut pkt = p.clone();
 
         let bindings = self.bindings.lock().await;
@@ -123,19 +124,17 @@ impl TrackLocalWriter for TrackLocalStaticRTP {
                         n += m;
                     }
                     Err(err) => {
-                        write_err = Some(err);
+                        write_errs.push(err);
                     }
                 }
             } else {
-                //TODO: handle None case
+                write_errs
+                    .push(Error::new("track binding has none write_stream".to_owned()).into());
             }
         }
 
-        if let Some(err) = write_err {
-            Err(err)
-        } else {
-            Ok(n)
-        }
+        flatten_errs(write_errs)?;
+        Ok(n)
     }
 
     /// write writes a RTP Packet as a buffer to the TrackLocalStaticRTP

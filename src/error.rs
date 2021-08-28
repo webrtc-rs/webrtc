@@ -318,6 +318,9 @@ pub enum Error {
     #[error("excessive retries in CreateOffer")]
     ErrExcessiveRetries,
 
+    #[error("not long enough to be a RTP Packet")]
+    ErrRTPTooShort,
+
     #[allow(non_camel_case_types)]
     #[error("{0}")]
     new(String),
