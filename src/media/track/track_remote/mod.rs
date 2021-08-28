@@ -7,7 +7,7 @@ use crate::{RECEIVE_MTU, RTP_PAYLOAD_TYPE_BITMASK};
 
 use anyhow::Result;
 use bytes::{Bytes, BytesMut};
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use util::Unmarshal;
@@ -21,14 +21,14 @@ struct TrackRemoteInternal {
 /// TrackRemote represents a single inbound source of media
 #[derive(Default)]
 pub struct TrackRemote {
-    pub(crate) id: String,
-    pub(crate) stream_id: String,
+    id: String,
+    stream_id: String,
 
     payload_type: AtomicU8, //PayloadType,
-    pub(crate) kind: RTPCodecType,
-    ssrc: SSRC,
-    pub(crate) codec: Mutex<RTPCodecParameters>,
-    pub(crate) params: Mutex<RTPParameters>,
+    kind: AtomicU8,         //RTPCodecType,
+    ssrc: AtomicU32,        //SSRC,
+    codec: Mutex<RTPCodecParameters>,
+    params: Mutex<RTPParameters>,
     rid: String,
 
     media_engine: Arc<MediaEngine>,
@@ -47,8 +47,8 @@ impl TrackRemote {
         interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
     ) -> Self {
         TrackRemote {
-            kind,
-            ssrc,
+            kind: AtomicU8::new(kind as u8),
+            ssrc: AtomicU32::new(ssrc),
             rid,
             //receiver,
             media_engine,
@@ -76,9 +76,17 @@ impl TrackRemote {
         self.payload_type.load(Ordering::SeqCst)
     }
 
+    pub fn set_payload_type(&self, payload_type: PayloadType) {
+        self.payload_type.store(payload_type, Ordering::SeqCst);
+    }
+
     /// kind gets the Kind of the track
     pub fn kind(&self) -> RTPCodecType {
-        self.kind
+        self.kind.load(Ordering::SeqCst).into()
+    }
+
+    pub fn set_kind(&self, kind: RTPCodecType) {
+        self.kind.store(kind as u8, Ordering::SeqCst);
     }
 
     /// stream_id is the group this track belongs too. This must be unique
@@ -88,7 +96,11 @@ impl TrackRemote {
 
     /// ssrc gets the SSRC of the track
     pub fn ssrc(&self) -> SSRC {
-        self.ssrc
+        self.ssrc.load(Ordering::SeqCst)
+    }
+
+    pub fn set_ssrc(&self, ssrc: SSRC) {
+        self.ssrc.store(ssrc, Ordering::SeqCst);
     }
 
     /// msid gets the Msid of the track
@@ -100,6 +112,16 @@ impl TrackRemote {
     pub async fn codec(&self) -> RTPCodecParameters {
         let codec = self.codec.lock().await;
         codec.clone()
+    }
+
+    pub async fn set_codec(&self, codec: RTPCodecParameters) {
+        let mut c = self.codec.lock().await;
+        *c = codec;
+    }
+
+    pub async fn set_params(&self, params: RTPParameters) {
+        let mut p = self.params.lock().await;
+        *p = params;
     }
 
     /// Read reads data from the track.

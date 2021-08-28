@@ -34,6 +34,16 @@ impl From<&str> for RTPCodecType {
     }
 }
 
+impl From<u8> for RTPCodecType {
+    fn from(v: u8) -> Self {
+        match v {
+            1 => RTPCodecType::Audio,
+            2 => RTPCodecType::Video,
+            _ => RTPCodecType::Unspecified,
+        }
+    }
+}
+
 impl fmt::Display for RTPCodecType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {

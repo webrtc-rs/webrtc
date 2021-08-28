@@ -1405,7 +1405,7 @@ impl PeerConnection {
         for ssrc in ssrcs {
             for t in &local_transceivers {
                 if let Some(receiver) = t.receiver() {
-                    if let Some(track) = receiver.track() {
+                    if let Some(track) = receiver.track().await {
                         if track.ssrc() != ssrc {
                             continue;
                         }
@@ -1634,7 +1634,9 @@ impl PeerConnection {
                         }
 
                         if let Some(receiver) = t.receiver() {
-                            let track = receiver.receive_for_rid(rid.as_str(), &params, ssrc)?;
+                            let track = receiver
+                                .receive_for_rid(rid.as_str(), &params, ssrc)
+                                .await?;
                             self.do_track(Some(track), Some(receiver.clone())).await;
                         }
                         return Ok(());
@@ -2355,7 +2357,7 @@ impl PeerConnection {
         if is_renegotiation {
             for t in current_transceivers {
                 if let Some(receiver) = t.receiver() {
-                    if let Some(track) = receiver.track() {
+                    if let Some(track) = receiver.track().await {
                         let ssrc = track.ssrc();
                         if let Some(_details) = track_details_for_ssrc(&track_details, ssrc) {
                             //TODO: track.id = details.id;

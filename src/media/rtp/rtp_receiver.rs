@@ -10,6 +10,7 @@ use crate::media::track::track_remote::TrackRemote;
 use crate::media::track::TrackStreams;
 use crate::RECEIVE_MTU;
 
+use crate::util::flatten_errs;
 use anyhow::Result;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -20,7 +21,7 @@ pub struct RTPReceiver {
     pub(crate) kind: RTPCodecType,
     pub(crate) transport: Arc<DTLSTransport>,
 
-    pub(crate) tracks: Vec<TrackStreams>,
+    pub(crate) tracks: Mutex<Vec<TrackStreams>>,
 
     pub(crate) closed_tx: Mutex<Option<mpsc::Sender<()>>>,
     pub(crate) closed_rx: mpsc::Receiver<()>,
@@ -48,14 +49,16 @@ impl RTPReceiver {
     }
 
     /// track returns the RtpTransceiver TrackRemote
-    pub fn track(&self) -> Option<Arc<TrackRemote>> {
-        self.tracks.first().map(|t| Arc::clone(&t.track))
+    pub async fn track(&self) -> Option<Arc<TrackRemote>> {
+        let tracks = self.tracks.lock().await;
+        tracks.first().map(|t| Arc::clone(&t.track))
     }
 
     /// tracks returns the RtpTransceiver tracks
     /// A RTPReceiver to support Simulcast may now have multiple tracks
-    pub fn tracks(&self) -> Vec<Arc<TrackRemote>> {
-        self.tracks.iter().map(|t| Arc::clone(&t.track)).collect()
+    pub async fn tracks(&self) -> Vec<Arc<TrackRemote>> {
+        let tracks = self.tracks.lock().await;
+        tracks.iter().map(|t| Arc::clone(&t.track)).collect()
     }
 
     /// receive initialize the track and starts all the transports
@@ -102,20 +105,26 @@ impl RTPReceiver {
                     rtcp_read_stream,
                     rtcp_interceptor,
                 };
-                self.tracks.push(t);
+                {
+                    let mut tracks = self.tracks.lock().await;
+                    tracks.push(t);
+                }
             }
         } else {
             for encoding in &parameters.encodings {
-                self.tracks.push(TrackStreams {
-                    track: Arc::new(TrackRemote::new(
-                        self.kind,
-                        0,
-                        encoding.rid.clone(),
-                        Arc::clone(&self.media_engine),
-                        self.interceptor.clone(),
-                    )),
-                    ..Default::default()
-                });
+                {
+                    let mut tracks = self.tracks.lock().await;
+                    tracks.push(TrackStreams {
+                        track: Arc::new(TrackRemote::new(
+                            self.kind,
+                            0,
+                            encoding.rid.clone(),
+                            Arc::clone(&self.media_engine),
+                            self.interceptor.clone(),
+                        )),
+                        ..Default::default()
+                    });
+                }
             }
         }
 
@@ -126,11 +135,16 @@ impl RTPReceiver {
     pub async fn read(&mut self, b: &mut [u8]) -> Result<(usize, Attributes)> {
         tokio::select! {
             _ = self.received_rx.recv() =>{
-                if let Some(rtcp_interceptor) = &self.tracks[0].rtcp_interceptor{
-                    let a = Attributes::new();
-                    rtcp_interceptor.read(b, &a).await
+                let tracks = self.tracks.lock().await;
+                if let Some(t) = tracks.first(){
+                    if let Some(rtcp_interceptor) = &t.rtcp_interceptor{
+                        let a = Attributes::new();
+                        rtcp_interceptor.read(b, &a).await
+                    }else{
+                        Err(Error::ErrInterceptorNotBind.into())
+                    }
                 }else{
-                    Err(Error::ErrInterceptorNotBind.into())
+                    Err(Error::ErrExistingTrack.into())
                 }
             }
             _ = self.closed_rx.recv() => {
@@ -143,7 +157,8 @@ impl RTPReceiver {
     pub async fn read_simulcast(&mut self, b: &mut [u8], rid: &str) -> Result<(usize, Attributes)> {
         tokio::select! {
             _ = self.received_rx.recv() =>{
-                for  t in &self.tracks {
+                let tracks = self.tracks.lock().await;
+                for  t in &*tracks {
                     if t.track.rid() == rid {
                        if let Some(rtcp_interceptor) = &t.rtcp_interceptor{
                             let a = Attributes::new();
@@ -201,18 +216,19 @@ impl RTPReceiver {
             closed_tx.take()
         };
 
+        let mut errs = vec![];
         if self.received.load(Ordering::SeqCst) {
-            let mut errs = None;
-            for t in &self.tracks {
+            let tracks = self.tracks.lock().await;
+            for t in &*tracks {
                 if let Some(rtcp_read_stream) = &t.rtcp_read_stream {
                     if let Err(err) = rtcp_read_stream.close().await {
-                        errs = Some(err);
+                        errs.push(err);
                     }
                 }
 
                 if let Some(rtp_read_stream) = &t.rtp_read_stream {
                     if let Err(err) = rtp_read_stream.close().await {
-                        errs = Some(err);
+                        errs.push(err);
                     }
                 }
 
@@ -220,33 +236,25 @@ impl RTPReceiver {
                     interceptor.unbind_remote_stream(&t.stream_info).await;
                 }
             }
-
-            if let Some(err) = errs {
-                Err(err)
-            } else {
-                Ok(())
-            }
-        } else {
-            Ok(())
         }
-    }
-
-    fn streams_for_track(&self, tid: &str) -> Option<&TrackStreams> {
-        for track in &self.tracks {
-            if track.track.id() == tid {
-                return Some(track);
-            }
-        }
-        None
+        flatten_errs(errs)
     }
 
     /// read_rtp should only be called by a track, this only exists so we can keep state in one place
-    pub(crate) async fn read_rtp(&self, b: &mut [u8], tid: &str) -> Result<(usize, Attributes)> {
-        //TODO: <-self.received
-        if let Some(t) = self.streams_for_track(tid) {
-            if let Some(ri) = &t.rtp_interceptor {
-                let a = Attributes::new();
-                return ri.read(b, &a).await;
+    pub(crate) async fn read_rtp(
+        &mut self,
+        b: &mut [u8],
+        tid: &str,
+    ) -> Result<(usize, Attributes)> {
+        let _ = self.received_rx.recv().await;
+
+        let tracks = self.tracks.lock().await;
+        for t in &*tracks {
+            if t.track.id() == tid {
+                if let Some(ri) = &t.rtp_interceptor {
+                    let a = Attributes::new();
+                    return ri.read(b, &a).await;
+                }
             }
         }
 
@@ -255,24 +263,34 @@ impl RTPReceiver {
 
     /// receive_for_rid is the sibling of Receive expect for RIDs instead of SSRCs
     /// It populates all the internal state for the given RID
-    pub(crate) fn receive_for_rid(
+    pub(crate) async fn receive_for_rid(
         &self,
         rid: &str,
-        _params: &RTPParameters,
-        _ssrc: SSRC,
+        params: &RTPParameters,
+        ssrc: SSRC,
     ) -> Result<Arc<TrackRemote>> {
-        for t in &self.tracks {
-            if t.track.rid() == rid {
-                /*TODO: t.track.kind = r.kind
-                t.track.codec = params.Codecs[0]
-                t.track.params = params
-                t.track.ssrc = ssrc
-                t.streamInfo = createStreamInfo("", ssrc, params.Codecs[0].PayloadType, params.Codecs[0].RTPCodecCapability, params.HeaderExtensions)
+        let mut tracks = self.tracks.lock().await;
+        for t in &mut *tracks {
+            if t.track.rid() == rid && !params.codecs.is_empty() {
+                t.track.set_kind(self.kind);
+                t.track.set_codec(params.codecs[0].clone()).await;
+                t.track.set_params(params.clone()).await;
+                t.track.set_ssrc(ssrc);
+                t.stream_info = StreamInfo::new(
+                    "".to_owned(),
+                    ssrc,
+                    params.codecs[0].payload_type,
+                    params.codecs[0].capability.clone(),
+                    &params.header_extensions,
+                );
 
-                var err error
-                if r.tracks[i].rtpReadStream, r.tracks[i].rtpInterceptor, r.tracks[i].rtcpReadStream, r.tracks[i].rtcpInterceptor, err = r.streams_for_ssrc(ssrc, r.tracks[i].streamInfo); err != nil {
-                    return nil, err
-                }*/
+                let (rtp_read_stream, rtp_interceptor, rtcp_read_stream, rtcp_interceptor) =
+                    self.streams_for_ssrc(ssrc, &t.stream_info).await?;
+
+                t.rtp_read_stream = rtp_read_stream;
+                t.rtp_interceptor = rtp_interceptor;
+                t.rtcp_read_stream = rtcp_read_stream;
+                t.rtcp_interceptor = rtcp_interceptor;
 
                 return Ok(Arc::clone(&t.track));
             }
@@ -287,9 +305,9 @@ impl RTPReceiver {
         _stream_info: &StreamInfo,
     ) -> Result<(
         Option<Arc<srtp::stream::Stream>>,
-        Option<Box<dyn RTPReader + Send + Sync>>,
+        Option<Arc<dyn RTPReader + Send + Sync>>,
         Option<Arc<srtp::stream::Stream>>,
-        Option<Box<dyn RTCPReader + Send + Sync>>,
+        Option<Arc<dyn RTCPReader + Send + Sync>>,
     )> {
         let srtp_session = self
             .transport
@@ -324,42 +342,4 @@ impl RTPReceiver {
             rtcp_interceptor,
         ))
     }
-
-    /*TODO:
-    // SetReadDeadline sets the max amount of time the RTCP stream will block before returning. 0 is forever.
-    func (r *RTPReceiver) SetReadDeadline(t time.Time) error {
-        r.mu.RLock()
-        defer r.mu.RUnlock()
-
-        if err := r.tracks[0].rtcpReadStream.SetReadDeadline(t); err != nil {
-            return err
-        }
-        return nil
-    }
-
-    // SetReadDeadlineSimulcast sets the max amount of time the RTCP stream for a given rid will block before returning. 0 is forever.
-    func (r *RTPReceiver) SetReadDeadlineSimulcast(deadline time.Time, rid string) error {
-        r.mu.RLock()
-        defer r.mu.RUnlock()
-
-        for _, t := range r.tracks {
-            if t.track != nil && t.track.rid == rid {
-                return t.rtcpReadStream.SetReadDeadline(deadline)
-            }
-        }
-        return fmt.Errorf("%w: %s", errRTPReceiverForRIDTrackStreamNotFound, rid)
-    }
-
-    // setRTPReadDeadline sets the max amount of time the RTP stream will block before returning. 0 is forever.
-    // This should be fired by calling SetReadDeadline on the TrackRemote
-    func (r *RTPReceiver) setRTPReadDeadline(deadline time.Time, reader *TrackRemote) error {
-        r.mu.RLock()
-        defer r.mu.RUnlock()
-
-        if t := r.streamsForTrack(reader); t != nil {
-            return t.rtpReadStream.SetReadDeadline(deadline)
-        }
-        return fmt.Errorf("%w: %d", errRTPReceiverWithSSRCTrackStreamNotFound, reader.SSRC())
-    }
-    */
 }

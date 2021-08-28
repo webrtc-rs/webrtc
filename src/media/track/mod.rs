@@ -6,7 +6,7 @@ use track_remote::*;
 use crate::media::interceptor::{stream_info::StreamInfo, *};
 use std::sync::Arc;
 
-/// trackStreams maintains a mapping of RTP/RTCP streams to a specific track
+/// TrackStreams maintains a mapping of RTP/RTCP streams to a specific track
 /// a RTPReceiver may contain multiple streams if we are dealing with Multicast
 #[derive(Default)]
 pub(crate) struct TrackStreams {
@@ -15,7 +15,7 @@ pub(crate) struct TrackStreams {
     pub(crate) stream_info: StreamInfo,
 
     pub(crate) rtp_read_stream: Option<Arc<srtp::stream::Stream>>, //ReadStreamSRTP
-    pub(crate) rtp_interceptor: Option<Box<dyn RTPReader + Send + Sync>>,
+    pub(crate) rtp_interceptor: Option<Arc<dyn RTPReader + Send + Sync>>,
     pub(crate) rtcp_read_stream: Option<Arc<srtp::stream::Stream>>, //ReadStreamSRTCP
-    pub(crate) rtcp_interceptor: Option<Box<dyn RTCPReader + Send + Sync>>,
+    pub(crate) rtcp_interceptor: Option<Arc<dyn RTCPReader + Send + Sync>>,
 }

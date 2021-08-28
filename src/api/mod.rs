@@ -153,7 +153,7 @@ impl API {
             kind,
             transport,
 
-            tracks: vec![],
+            tracks: Mutex::new(vec![]),
 
             closed_tx: Mutex::new(Some(closed_tx)),
             closed_rx,
