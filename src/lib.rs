@@ -27,7 +27,7 @@ pub(crate) const SIMULCAST_PROBE_COUNT: usize = 10;
 
 /// SIMULCAST_MAX_PROBE_ROUTINES is how many active routines can be used to probe
 /// If the total amount of incoming SSRCes exceeds this new requests will be ignored
-pub(crate) const SIMULCAST_MAX_PROBE_ROUTINES: usize = 25;
+pub(crate) const SIMULCAST_MAX_PROBE_ROUTINES: u64 = 25;
 
 pub(crate) const MEDIA_SECTION_APPLICATION: &str = "application";
 

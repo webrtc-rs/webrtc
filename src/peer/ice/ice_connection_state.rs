@@ -1,6 +1,6 @@
 use std::fmt;
 
-/// ICEConnectionState indicates signaling state of the ICE Connection.
+/// iceconnection_state indicates signaling state of the ICE Connection.
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ICEConnectionState {
     Unspecified,
@@ -54,7 +54,7 @@ const ICE_CONNECTION_STATE_DISCONNECTED_STR: &str = "Disconnected";
 const ICE_CONNECTION_STATE_FAILED_STR: &str = "Failed";
 const ICE_CONNECTION_STATE_CLOSED_STR: &str = "Closed";
 
-/// takes a string and converts it to ICEConnectionState
+/// takes a string and converts it to iceconnection_state
 impl From<&str> for ICEConnectionState {
     fn from(raw: &str) -> Self {
         match raw {

@@ -227,28 +227,28 @@ mod test {
         if err != nil {
             t.Errorf("Failed to create video track")
         }
-        if _, err = apc.AddTrack(video1); err != nil {
+        if _, err = apc.add_track(video1); err != nil {
             t.Errorf("Failed to add video track")
         }
         video2, err := NewTrackLocalStaticSample(RTPCodecCapability{MimeType: "video/h264", SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"}, "2", "2")
         if err != nil {
             t.Errorf("Failed to create video track")
         }
-        if _, err = apc.AddTrack(video2); err != nil {
+        if _, err = apc.add_track(video2); err != nil {
             t.Errorf("Failed to add video track")
         }
         audio1, err := NewTrackLocalStaticSample(RTPCodecCapability{MimeType: "audio/opus"}, "3", "3")
         if err != nil {
             t.Errorf("Failed to create audio track")
         }
-        if _, err = apc.AddTrack(audio1); err != nil {
+        if _, err = apc.add_track(audio1); err != nil {
             t.Errorf("Failed to add audio track")
         }
         audio2, err := NewTrackLocalStaticSample(RTPCodecCapability{MimeType: "audio/opus"}, "4", "4")
         if err != nil {
             t.Errorf("Failed to create audio track")
         }
-        if _, err = apc.AddTrack(audio2); err != nil {
+        if _, err = apc.add_track(audio2); err != nil {
             t.Errorf("Failed to add audio track")
         }
 
@@ -320,28 +320,28 @@ mod test {
         if err != nil {
             t.Errorf("Failed to create video track")
         }
-        if _, err = apc.AddTrack(video1); err != nil {
+        if _, err = apc.add_track(video1); err != nil {
             t.Errorf("Failed to add video track")
         }
         video2, err := NewTrackLocalStaticSample(RTPCodecCapability{MimeType: "video/h264", SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"}, "2", "2")
         if err != nil {
             t.Errorf("Failed to create video track")
         }
-        if _, err = apc.AddTrack(video2); err != nil {
+        if _, err = apc.add_track(video2); err != nil {
             t.Errorf("Failed to add video track")
         }
         audio1, err := NewTrackLocalStaticSample(RTPCodecCapability{MimeType: "audio/opus"}, "3", "3")
         if err != nil {
             t.Errorf("Failed to create audio track")
         }
-        if _, err = apc.AddTrack(audio1); err != nil {
+        if _, err = apc.add_track(audio1); err != nil {
             t.Errorf("Failed to add audio track")
         }
         audio2, err := NewTrackLocalStaticSample(RTPCodecCapability{MimeType: "audio/opus"}, "4", "4")
         if err != nil {
             t.Errorf("Failed to create audio track")
         }
-        if _, err = apc.AddTrack(audio2); err != nil {
+        if _, err = apc.add_track(audio2); err != nil {
             t.Errorf("Failed to add audio track")
         }
 

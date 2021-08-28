@@ -17,7 +17,7 @@ sdp = "0.2.3"
 mdns = { package = "webrtc-mdns", version = "0.3.1" }
 stun = "0.3.1"
 turn = "0.3.1"
-ice = { package = "webrtc-ice", version = "0.3.3" }
+ice = { package = "webrtc-ice", version = "0.3.6" }
 dtls = { package = "webrtc-dtls", version = "0.4.0" }
 rtp = "0.3.1"
 rtcp = "0.3.1"

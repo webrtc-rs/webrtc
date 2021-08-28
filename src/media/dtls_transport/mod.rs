@@ -58,7 +58,7 @@ pub struct DTLSTransport {
     pub(crate) srtp_endpoint: Option<Arc<Endpoint>>,
     pub(crate) srtcp_endpoint: Option<Arc<Endpoint>>,
 
-    pub(crate) simulcast_streams: Vec<Stream>,
+    pub(crate) simulcast_streams: Mutex<Vec<Arc<Stream>>>,
     pub(crate) srtp_ready_tx: Option<mpsc::Sender<()>>,
     pub(crate) srtp_ready_rx: Option<mpsc::Receiver<()>>,
 
@@ -393,13 +393,16 @@ impl DTLSTransport {
             };
         }
 
-        for ss in &mut self.simulcast_streams {
-            match ss.close().await {
-                Ok(_) => {}
-                Err(err) => {
-                    close_errs.push(err);
-                }
-            };
+        {
+            let simulcast_streams = self.simulcast_streams.lock().await;
+            for ss in &*simulcast_streams {
+                match ss.close().await {
+                    Ok(_) => {}
+                    Err(err) => {
+                        close_errs.push(err);
+                    }
+                };
+            }
         }
 
         if let Some(conn) = self.conn.take() {
@@ -454,8 +457,9 @@ impl DTLSTransport {
         }
     }
 
-    pub(crate) fn store_simulcast_stream(&mut self, stream: Stream) {
-        self.simulcast_streams.push(stream)
+    pub(crate) async fn store_simulcast_stream(&self, stream: Arc<Stream>) {
+        let mut simulcast_streams = self.simulcast_streams.lock().await;
+        simulcast_streams.push(stream)
     }
 }
 

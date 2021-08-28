@@ -32,10 +32,12 @@ use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapab
 use crate::error::Error;
 use crate::media::dtls_transport::dtls_role::{DEFAULT_DTLS_ROLE_ANSWER, DEFAULT_DTLS_ROLE_OFFER};
 use crate::media::rtp::rtp_codec::{RTPCodecType, RTPHeaderExtensionCapability};
+use crate::media::rtp::rtp_sender::RTPSender;
 use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
 use crate::media::rtp::{RTPCodingParameters, RTPTransceiverInit, SSRC};
 use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::media::track::track_local::TrackLocal;
+use crate::peer::ice::ice_candidate::{ICECandidate, ICECandidateInit};
 use crate::peer::ice::ice_gather::ice_gatherer_state::ICEGathererState;
 use crate::peer::ice::ice_gather::ice_gathering_state::ICEGatheringState;
 use crate::peer::ice::ice_role::ICERole;
@@ -48,15 +50,20 @@ use crate::peer::sdp::{
     update_sdp_origin, TrackDetails,
 };
 use crate::util::math_rand_alpha;
-use crate::{MEDIA_SECTION_APPLICATION, RECEIVE_MTU, SIMULCAST_PROBE_COUNT, SSRC_STR};
+use crate::{
+    MEDIA_SECTION_APPLICATION, RECEIVE_MTU, SIMULCAST_MAX_PROBE_ROUTINES, SIMULCAST_PROBE_COUNT,
+    SSRC_STR,
+};
 use anyhow::Result;
 use defer::defer;
+use ice::candidate::candidate_base::unmarshal_candidate;
+use ice::candidate::Candidate;
 use sdp::session_description::{ATTR_KEY_ICELITE, ATTR_KEY_MSID};
 use sdp::util::ConnectionRole;
 use std::future::Future;
 use std::io::Read;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex;
@@ -116,12 +123,12 @@ pub struct PeerConnection {
     current_remote_description: Option<SessionDescription>,
     pending_remote_description: Option<SessionDescription>,
     signaling_state: AtomicU8,      //SignalingState,
-    ice_connection_state: AtomicU8, //ICEConnectionState,
+    ice_connection_state: AtomicU8, //iceconnection_state,
     connection_state: AtomicU8,     //PeerConnectionState,
 
     idp_login_url: Option<String>,
 
-    is_closed: AtomicBool,              //*atomicBool
+    is_closed: Arc<AtomicBool>,         //*atomicBool
     is_negotiation_needed: AtomicBool,  //*atomicBool
     negotiation_needed_state: AtomicU8, //NegotiationNeededState,
 
@@ -182,7 +189,7 @@ impl PeerConnection {
                 sdp_semantics: SDPSemantics::default(),
             },
             ops: Operations::new(),
-            is_closed: AtomicBool::new(false),
+            is_closed: Arc::new(AtomicBool::new(false)),
             is_negotiation_needed: AtomicBool::new(false),
             negotiation_needed_state: AtomicU8::new(NegotiationNeededState::Empty as u8),
             last_offer: "".to_owned(),
@@ -1621,65 +1628,88 @@ impl PeerConnection {
 
         Err(Error::ErrPeerConnRemoteDescriptionNil.into())
     }
-    /*
-    // undeclaredMediaProcessor handles RTP/RTCP packets that don't match any a:ssrc lines
-    func (pc *PeerConnection) undeclaredMediaProcessor() {
-        go func() {
-            var simulcastRoutineCount uint64
-            for {
-                srtpSession, err := self.dtlsTransport.getSRTPSession()
-                if err != nil {
-                    self.log.Warnf("undeclaredMediaProcessor failed to open SrtpSession: %v", err)
-                    return
-                }
 
-                stream, ssrc, err := srtpSession.AcceptStream()
-                if err != nil {
-                    self.log.Warnf("Failed to accept RTP %v", err)
-                    return
-                }
-
-                if self.is_closed.get() {
-                    if err = stream.Close(); err != nil {
-                        self.log.Warnf("Failed to close RTP stream %v", err)
+    /// undeclared_media_processor handles RTP/RTCP packets that don't match any a:ssrc lines
+    fn undeclared_media_processor(&self) {
+        let dtls_transport = Arc::clone(&self.dtls_transport);
+        let is_closed = Arc::clone(&self.is_closed);
+        tokio::spawn(async move {
+            let simulcast_routine_count = Arc::new(AtomicU64::new(0));
+            loop {
+                let srtp_session = match dtls_transport.get_srtp_session() {
+                    Some(s) => s,
+                    None => {
+                        log::warn!("undeclared_media_processor failed to open SrtpSession");
+                        return;
                     }
-                    continue
-                }
+                };
 
-                if atomic.AddUint64(&simulcastRoutineCount, 1) >= simulcastMaxProbeRoutines {
-                    atomic.AddUint64(&simulcastRoutineCount, ^uint64(0))
-                    self.log.Warn(ErrSimulcastProbeOverflow.Error())
-                    continue
-                }
-
-                go func(rtpStream io.Reader, ssrc SSRC) {
-                    self.dtlsTransport.storeSimulcastStream(stream)
-
-                    if err := self.handle_undeclared_ssrc(rtpStream, ssrc); err != nil {
-                        self.log.Errorf("Incoming unhandled RTP ssrc(%d), on_track will not be fired. %v", ssrc, err)
+                let stream = match srtp_session.accept().await {
+                    Ok(stream) => Arc::new(stream),
+                    Err(err) => {
+                        log::warn!("Failed to accept RTP {}", err);
+                        return;
                     }
-                    atomic.AddUint64(&simulcastRoutineCount, ^uint64(0))
-                }(stream, SSRC(ssrc))
-            }
-        }()
+                };
 
-        go func() {
-            for {
-                srtcpSession, err := self.dtlsTransport.getSRTCPSession()
-                if err != nil {
-                    self.log.Warnf("undeclaredMediaProcessor failed to open SrtcpSession: %v", err)
-                    return
+                if is_closed.load(Ordering::SeqCst) {
+                    if let Err(err) = stream.close().await {
+                        log::warn!("Failed to close RTP stream {}", err);
+                    }
+                    continue;
                 }
 
-                _, ssrc, err := srtcpSession.AcceptStream()
-                if err != nil {
-                    self.log.Warnf("Failed to accept RTCP %v", err)
-                    return
+                if simulcast_routine_count.fetch_add(1, Ordering::SeqCst) + 1
+                    >= SIMULCAST_MAX_PROBE_ROUTINES
+                {
+                    simulcast_routine_count.fetch_sub(1, Ordering::SeqCst);
+                    log::warn!("{:?}", Error::ErrSimulcastProbeOverflow);
+                    continue;
                 }
-                self.log.Warnf("Incoming unhandled RTCP ssrc(%d), on_track will not be fired", ssrc)
+
+                let dtls_transport2 = Arc::clone(&dtls_transport);
+                let simulcast_routine_count2 = Arc::clone(&simulcast_routine_count);
+                tokio::spawn(async move {
+                    dtls_transport2
+                        .store_simulcast_stream(Arc::clone(&stream))
+                        .await;
+
+                    /*
+                    TODO:
+                     let ssrc = stream.get_ssrc();
+                     if let Err(err) = self.handle_undeclared_ssrc(stream, ssrc) {
+                        log::error!("Incoming unhandled RTP ssrc({}), on_track will not be fired. {}", ssrc, err);
+                    }*/
+                    simulcast_routine_count2.fetch_sub(1, Ordering::SeqCst);
+                });
             }
-        }()
-    }*/
+        });
+
+        let dtls_transport = Arc::clone(&self.dtls_transport);
+        tokio::spawn(async move {
+            loop {
+                let srtcp_session = match dtls_transport.get_srtcp_session() {
+                    Some(s) => s,
+                    None => {
+                        log::warn!("undeclared_media_processor failed to open SrtcpSession");
+                        return;
+                    }
+                };
+
+                let stream = match srtcp_session.accept().await {
+                    Ok(stream) => stream,
+                    Err(err) => {
+                        log::warn!("Failed to accept RTCP {}", err);
+                        return;
+                    }
+                };
+                log::warn!(
+                    "Incoming unhandled RTCP ssrc({}), on_track will not be fired",
+                    stream.get_ssrc()
+                );
+            }
+        });
+    }
 
     /// remote_description returns pending_remote_description if it is not null and
     /// otherwise it returns current_remote_description. This property is used to
@@ -1692,133 +1722,131 @@ impl PeerConnection {
             self.current_remote_description.as_ref()
         }
     }
-    /*
-    // AddICECandidate accepts an ICE candidate string and adds it
-    // to the existing set of candidates.
-    func (pc *PeerConnection) AddICECandidate(candidate ICECandidateInit) error {
-        if self.remote_description() == nil {
-            return &rtcerr.InvalidStateError{Err: ErrNoRemoteDescription}
+
+    /// add_ice_candidate accepts an ICE candidate string and adds it
+    /// to the existing set of candidates.
+    pub async fn add_ice_candidate(&self, candidate: ICECandidateInit) -> Result<()> {
+        if self.remote_description().is_none() {
+            return Err(Error::ErrNoRemoteDescription.into());
         }
 
-        candidateValue := strings.TrimPrefix(candidate.Candidate, "candidate:")
+        let candidate_value = match candidate.candidate.strip_prefix("candidate:") {
+            Some(s) => s,
+            None => candidate.candidate.as_str(),
+        };
 
-        var iceCandidate *ICECandidate
-        if candidateValue != "" {
-            candidate, err := ice.UnmarshalCandidate(candidateValue)
-            if err != nil {
-                return err
-            }
+        let ice_candidate = if !candidate_value.is_empty() {
+            let candidate: Arc<dyn Candidate + Send + Sync> =
+                Arc::new(unmarshal_candidate(candidate_value).await?);
 
-            c, err := newICECandidateFromICE(candidate)
-            if err != nil {
-                return err
-            }
-            iceCandidate = &c
-        }
+            Some(ICECandidate::from(&candidate))
+        } else {
+            None
+        };
 
-        return self.iceTransport.AddRemoteCandidate(iceCandidate)
+        self.ice_transport.add_remote_candidate(ice_candidate).await
     }
 
-    // ICEConnectionState returns the ICE connection state of the
-    // PeerConnection instance.
-    func (pc *PeerConnection) ICEConnectionState() ICEConnectionState {
-        self.mu.RLock()
-        defer self.mu.RUnlock()
-
-        return self.ice_connection_state
+    /// ice_connection_state returns the ICE connection state of the
+    /// PeerConnection instance.
+    pub fn ice_connection_state(&self) -> ICEConnectionState {
+        self.ice_connection_state.load(Ordering::SeqCst).into()
     }
 
-    // GetSenders returns the RTPSender that are currently attached to this PeerConnection
-    func (pc *PeerConnection) GetSenders() (result []*RTPSender) {
-        self.mu.Lock()
-        defer self.mu.Unlock()
-
-        for _, transceiver := range self.rtp_transceivers {
-            if transceiver.Sender() != nil {
-                result = append(result, transceiver.Sender())
+    /// get_senders returns the RTPSender that are currently attached to this PeerConnection
+    pub fn get_senders(&self) -> Vec<Arc<RTPSender>> {
+        let mut senders = vec![];
+        for transceiver in &self.rtp_transceivers {
+            if let Some(sender) = transceiver.sender() {
+                senders.push(Arc::clone(sender));
             }
         }
-        return result
+        senders
     }
 
-    // GetReceivers returns the RTPReceivers that are currently attached to this PeerConnection
-    func (pc *PeerConnection) GetReceivers() (receivers []*RTPReceiver) {
-        self.mu.Lock()
-        defer self.mu.Unlock()
-
-        for _, transceiver := range self.rtp_transceivers {
-            if transceiver.Receiver() != nil {
-                receivers = append(receivers, transceiver.Receiver())
+    /// get_receivers returns the RTPReceivers that are currently attached to this PeerConnection
+    pub fn get_receivers(&self) -> Vec<Arc<RTPReceiver>> {
+        let mut receivers = vec![];
+        for transceiver in &self.rtp_transceivers {
+            if let Some(receiver) = transceiver.receiver() {
+                receivers.push(Arc::clone(receiver));
             }
         }
-        return
-    }*/
+        receivers
+    }
 
     /// get_transceivers returns the RtpTransceiver that are currently attached to this PeerConnection
     pub fn get_transceivers(&self) -> &[Arc<RTPTransceiver>] {
         &self.rtp_transceivers
     }
-    /*
-    // AddTrack adds a Track to the PeerConnection
-    func (pc *PeerConnection) AddTrack(track TrackLocal) (*RTPSender, error) {
-        if self.is_closed.get() {
-            return nil, &rtcerr.InvalidStateError{Err: ErrConnectionClosed}
+
+    /// add_track adds a Track to the PeerConnection
+    pub async fn add_track(
+        &mut self,
+        track: Arc<dyn TrackLocal + Send + Sync>,
+    ) -> Result<Arc<RTPSender>> {
+        if self.is_closed.load(Ordering::SeqCst) {
+            return Err(Error::ErrConnectionClosed.into());
         }
 
-        self.mu.Lock()
-        defer self.mu.Unlock()
-        for _, t := range self.rtp_transceivers {
-            if !t.stopped && t.kind == track.kind() && t.Sender() == nil {
-                sender, err := self.api.new_rtpsender(track, self.dtlsTransport)
-                if err == nil {
-                    err = t.SetSender(sender, track)
-                    if err != nil {
-                        _ = sender.Stop()
-                        t.setSender(nil)
-                    }
-                }
-                if err != nil {
-                    return nil, err
-                }
-                self.onNegotiationNeeded()
-                return sender, nil
+        for t in &self.rtp_transceivers {
+            if !t.stopped && t.kind == track.kind() && t.sender().is_none() {
+                let sender = Arc::new(API::new_rtp_sender(
+                    Arc::clone(&track),
+                    Arc::clone(&self.dtls_transport),
+                    Arc::clone(&self.media_engine),
+                    self.interceptor.clone(),
+                ));
+
+                /*TODO: if let Err(err) = t.set_sender(Some(Arc::clone(&sender)), Some(Arc::clone(&track)))).await {
+                    _ = sender.stop()
+                    t.setSender(nil)
+                    return Err(er);
+                }*/
+
+                self.do_negotiation_needed().await;
+                return Ok(sender);
             }
         }
 
-        transceiver, err := self.new_transceiver_from_track(RTPTransceiverDirectionSendrecv, track)
-        if err != nil {
-            return nil, err
+        let transceiver =
+            self.new_transceiver_from_track(RTPTransceiverDirection::Sendrecv, track)?;
+        self.add_rtp_transceiver(Arc::clone(&transceiver)).await;
+
+        match transceiver.sender() {
+            Some(sender) => Ok(Arc::clone(sender)),
+            None => Err(Error::ErrRTPSenderNil.into()),
         }
-        self.add_rtptransceiver(transceiver)
-        return transceiver.Sender(), nil
     }
 
-    // RemoveTrack removes a Track from the PeerConnection
-    func (pc *PeerConnection) RemoveTrack(sender *RTPSender) (err error) {
-        if self.is_closed.get() {
-            return &rtcerr.InvalidStateError{Err: ErrConnectionClosed}
+    /// remove_track removes a Track from the PeerConnection
+    pub async fn remove_track(&self, sender: &Arc<RTPSender>) -> Result<()> {
+        if self.is_closed.load(Ordering::SeqCst) {
+            return Err(Error::ErrConnectionClosed.into());
         }
 
-        var transceiver *RTPTransceiver
-        self.mu.Lock()
-        defer self.mu.Unlock()
-        for _, t := range self.rtp_transceivers {
-            if t.Sender() == sender {
-                transceiver = t
-                break
+        let mut transceiver = None;
+        for t in &self.rtp_transceivers {
+            if let Some(s) = t.sender() {
+                if s.id == sender.id {
+                    transceiver = Some(t);
+                    break;
+                }
             }
         }
-        if transceiver == nil {
-            return &rtcerr.InvalidAccessError{Err: ErrSenderNotCreatedByConnection}
-        } else if err = sender.Stop(); err == nil {
-            err = transceiver.setSendingTrack(nil)
-            if err == nil {
-                self.onNegotiationNeeded()
-            }
+
+        if let Some(_transceiver) = transceiver {
+            /*TODO:if let Ok(_) = sender.stop().await {
+                if transceiver.set_sending_track(None).await.is_ok() {
+                    self.do_negotiation_needed().await;
+                }
+            }*/
+            Ok(())
+        } else {
+            Err(Error::ErrSenderNotCreatedByConnection.into())
         }
-        return
     }
-    */
+
     fn new_transceiver_from_track(
         &self,
         direction: RTPTransceiverDirection,
@@ -2090,7 +2118,7 @@ impl PeerConnection {
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #11)
-        self.update_connection_state(self.ICEConnectionState(), self.dtlsTransport.State())
+        self.update_connection_state(self.iceconnection_state(), self.dtlsTransport.State())
 
         return util.FlattenErrs(closeErrs)
     }*/
@@ -2130,14 +2158,14 @@ impl PeerConnection {
     /// current_remote_description represents the last remote description that was
     /// successfully negotiated the last time the PeerConnection transitioned
     /// into the stable state plus any remote candidates that have been supplied
-    /// via AddICECandidate() since the offer or answer was created.
+    /// via add_icecandidate() since the offer or answer was created.
     pub fn current_remote_description(&self) -> Option<&SessionDescription> {
         self.current_remote_description.as_ref()
     }
 
     /// pending_remote_description represents a remote description that is in the
     /// process of being negotiated, complete with any remote candidates that
-    /// have been supplied via AddICECandidate() since the offer or answer was
+    /// have been supplied via add_icecandidate() since the offer or answer was
     /// created. If the PeerConnection is in the stable state, the value is
     /// null.
     pub fn pending_remote_description(&self) -> Option<&SessionDescription> {
@@ -2253,7 +2281,7 @@ impl PeerConnection {
             Role:         dtlsRole,
             Fingerprints: []DTLSFingerprint{{Algorithm: fingerprintHash, Value: fingerprint}},
         })
-        self.update_connection_state(self.ICEConnectionState(), self.dtlsTransport.State())
+        self.update_connection_state(self.iceconnection_state(), self.dtlsTransport.State())
         if err != nil {
             self.log.Warnf("Failed to start manager: %s", err)
             return
@@ -2300,7 +2328,7 @@ impl PeerConnection {
         }
 
         if !isRenegotiation {
-            self.undeclaredMediaProcessor()
+            self.undeclared_media_processor()
         }
     }*/
 

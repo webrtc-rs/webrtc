@@ -112,7 +112,7 @@ pub enum Error {
     #[error("protocol is larger then 65535 bytes")]
     ErrProtocolTooLarge,
 
-    /// ErrSenderNotCreatedByConnection indicates RemoveTrack was called with a RtpSender not created
+    /// ErrSenderNotCreatedByConnection indicates remove_track was called with a RtpSender not created
     /// by this PeerConnection
     #[error("RtpSender not created by this PeerConnection")]
     ErrSenderNotCreatedByConnection,
@@ -274,6 +274,8 @@ pub enum Error {
     ErrRTPReceiverForRIDTrackStreamNotFound,
     #[error("Track must not be nil")]
     ErrRTPSenderTrackNil,
+    #[error("RTPSender must not be nil")]
+    ErrRTPSenderNil,
     #[error("DTLSTransport must not be nil")]
     ErrRTPSenderDTLSTransportNil,
     #[error("Send has already been called")]
