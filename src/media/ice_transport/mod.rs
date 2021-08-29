@@ -83,12 +83,7 @@ impl ICETransport {
     }
 
     /// Start incoming connectivity checks based on its configured role.
-    pub async fn start(
-        &self,
-        //TODO: gatherer: Option<ICEGatherer>,
-        params: ICEParameters,
-        role: Option<ICERole>,
-    ) -> Result<()> {
+    pub async fn start(&self, params: ICEParameters, role: Option<ICERole>) -> Result<()> {
         if self.state() != ICETransportState::New {
             return Err(Error::ErrICETransportNotInNew.into());
         }
