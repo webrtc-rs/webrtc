@@ -112,7 +112,7 @@ impl RTPReceiverInternal {
         let _ = self.received_rx.recv().await;
 
         for t in &self.tracks {
-            if t.track.id() == tid {
+            if t.track.id().await == tid {
                 if let Some(ri) = &t.rtp_interceptor {
                     let a = Attributes::new();
                     return ri.read(b, &a).await;

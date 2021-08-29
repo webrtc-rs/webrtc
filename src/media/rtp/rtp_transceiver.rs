@@ -79,8 +79,8 @@ impl RTPTransceiver {
         sender.clone()
     }
 
-    /// set_sender sets the RTPSender and Track to current transceiver
-    pub async fn set_sender(
+    /// set_sender_track sets the RTPSender and Track to current transceiver
+    pub async fn set_sender_track(
         &self,
         sender: Option<Arc<RTPSender>>,
         track: Option<Arc<dyn TrackLocal + Send + Sync>>,
@@ -90,6 +90,22 @@ impl RTPTransceiver {
             *s = sender;
         }
         self.set_sending_track(track).await
+    }
+
+    pub async fn set_sender(&self, _s: Option<Arc<RTPSender>>) -> Result<()> {
+        //TODO:
+        /*
+            if s != nil {
+            s.setRTPTransceiver(t)
+        }
+
+        if prevSender := t.Sender(); prevSender != nil {
+            prevSender.setRTPTransceiver(nil)
+        }
+
+        t.sender.Store(s)
+             */
+        Ok(())
     }
 
     /// receiver returns the RTPTransceiver's RTPReceiver if it has one

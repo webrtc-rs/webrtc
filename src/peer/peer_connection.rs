@@ -35,6 +35,8 @@ use crate::data::sctp_transport::sctp_transport_state::SCTPTransportState;
 use crate::error::Error;
 //use crate::media::dtls_transport::dtls_fingerprint::DTLSFingerprint;
 //use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
+use crate::media::dtls_transport::dtls_fingerprint::DTLSFingerprint;
+use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
 use crate::media::dtls_transport::dtls_role::{
     DTLSRole, DEFAULT_DTLS_ROLE_ANSWER, DEFAULT_DTLS_ROLE_OFFER,
 };
@@ -577,7 +579,11 @@ impl PeerConnection {
     async fn do_track(&self, t: Option<Arc<TrackRemote>>, r: Option<Arc<RTPReceiver>>) {
         log::debug!(
             "got new track: {}",
-            if let Some(t) = &t { t.id() } else { "None" }
+            if let Some(t) = &t {
+                t.id().await
+            } else {
+                "None".to_owned()
+            }
         );
 
         if t.is_some() {
@@ -1191,7 +1197,7 @@ impl PeerConnection {
                                 let t = if let Some(t) =
                                     find_by_mid(mid_value, &mut local_transceivers).await
                                 {
-                                    //TODO:  t.stop().await?;
+                                    t.stop().await?;
                                     Some(t)
                                 } else {
                                     satisfy_type_and_direction(
@@ -1491,7 +1497,7 @@ impl PeerConnection {
         for transceiver in current_transceivers {
             if let Some(sender) = transceiver.sender().await {
                 if sender.is_negotiated() && !sender.has_sent().await {
-                    //TODO: sender.send(&sender.get_parameters()).await?;
+                    sender.send(&sender.get_parameters().await).await?;
                 }
             }
         }
@@ -1821,11 +1827,14 @@ impl PeerConnection {
                     self.interceptor.clone(),
                 ));
 
-                /*TODO: if let Err(err) = t.set_sender(Some(Arc::clone(&sender)), Some(Arc::clone(&track)))).await {
-                    _ = sender.stop()
-                    t.setSender(nil)
-                    return Err(er);
-                }*/
+                if let Err(err) = t
+                    .set_sender_track(Some(Arc::clone(&sender)), Some(Arc::clone(&track)))
+                    .await
+                {
+                    let _ = sender.stop().await;
+                    let _ = t.set_sender(None).await;
+                    return Err(err);
+                }
 
                 self.do_negotiation_needed().await;
                 return Ok(sender);
@@ -1858,12 +1867,10 @@ impl PeerConnection {
             }
         }
 
-        if let Some(_transceiver) = transceiver {
-            /*TODO:if let Ok(_) = sender.stop().await {
-                if transceiver.set_sending_track(None).await.is_ok() {
-                    self.do_negotiation_needed().await;
-                }
-            }*/
+        if let Some(t) = transceiver {
+            if sender.stop().await.is_ok() && t.set_sending_track(None).await.is_ok() {
+                self.do_negotiation_needed().await;
+            }
             Ok(())
         } else {
             Err(Error::ErrSenderNotCreatedByConnection.into())
@@ -2091,11 +2098,10 @@ impl PeerConnection {
 
     async fn dtls_write_rtcp(
         &self,
-        _pkts: &dyn rtcp::packet::Packet,
+        pkts: &dyn rtcp::packet::Packet,
         _a: &Attributes,
     ) -> Result<usize> {
-        //TODO: self.dtls_transport.write_rtcp(pkts).await
-        Ok(0)
+        self.dtls_transport.write_rtcp(pkts).await
     }
 
     /// close ends the PeerConnection
@@ -2236,8 +2242,7 @@ impl PeerConnection {
         self.connection_state.load(Ordering::SeqCst).into()
     }
 
-    /*TODO:
-    // GetStats return data providing statistics about the overall connection
+    /*TODO: // GetStats return data providing statistics about the overall connection
     func (pc *PeerConnection) GetStats() StatsReport {
         var (
             dataChannelsAccepted  uint32
@@ -2303,17 +2308,16 @@ impl PeerConnection {
     async fn start_transports(
         &self,
         ice_role: ICERole,
-        _dtls_role: DTLSRole,
+        dtls_role: DTLSRole,
         remote_ufrag: String,
         remote_pwd: String,
-        _fingerprint: String,
-        _fingerprint_hash: String,
+        fingerprint: String,
+        fingerprint_hash: String,
     ) {
         // Start the ice transport
         if let Err(err) = self
             .ice_transport
             .start(
-                //TODO: self.iceGatherer,
                 ICEParameters {
                     username_fragment: remote_ufrag,
                     password: remote_pwd,
@@ -2328,7 +2332,7 @@ impl PeerConnection {
         }
 
         // Start the dtls_transport transport
-        /*TODO: let result = self
+        let result = self
             .dtls_transport
             .start(DTLSParameters {
                 role: dtls_role,
@@ -2342,7 +2346,7 @@ impl PeerConnection {
             .await;
         if let Err(err) = result {
             log::warn!("Failed to start manager: {}", err);
-        }*/
+        }
     }
 
     async fn start_rtp(
@@ -2362,9 +2366,9 @@ impl PeerConnection {
                 if let Some(receiver) = t.receiver().await {
                     if let Some(track) = receiver.track().await {
                         let ssrc = track.ssrc();
-                        if let Some(_details) = track_details_for_ssrc(&track_details, ssrc) {
-                            //TODO: track.id = details.id;
-                            //track.stream_id = details.stream_id;
+                        if let Some(details) = track_details_for_ssrc(&track_details, ssrc) {
+                            track.set_id(details.id.clone()).await;
+                            track.set_stream_id(details.stream_id.clone()).await;
                             continue;
                         }
                     }
@@ -2374,13 +2378,13 @@ impl PeerConnection {
                         continue;
                     }
 
-                    let _receiver = API::new_rtp_receiver(
+                    let receiver = Arc::new(API::new_rtp_receiver(
                         receiver.kind(),
                         Arc::clone(&self.dtls_transport),
                         Arc::clone(&self.media_engine),
                         self.interceptor.clone(),
-                    );
-                    //TODO: t.set_receiver(receiver);
+                    ));
+                    t.set_receiver(Some(receiver)).await;
                 }
             }
         }

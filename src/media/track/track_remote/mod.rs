@@ -22,8 +22,8 @@ struct TrackRemoteInternal {
 /// TrackRemote represents a single inbound source of media
 #[derive(Default)]
 pub struct TrackRemote {
-    id: String,
-    stream_id: String,
+    id: Mutex<String>,
+    stream_id: Mutex<String>,
 
     payload_type: AtomicU8, //PayloadType,
     kind: AtomicU8,         //RTPCodecType,
@@ -62,8 +62,25 @@ impl TrackRemote {
     /// id is the unique identifier for this Track. This should be unique for the
     /// stream, but doesn't have to globally unique. A common example would be 'audio' or 'video'
     /// and StreamID would be 'desktop' or 'webcam'
-    pub fn id(&self) -> &str {
-        self.id.as_str()
+    pub async fn id(&self) -> String {
+        let id = self.id.lock().await;
+        id.clone()
+    }
+
+    pub async fn set_id(&self, s: String) {
+        let mut id = self.id.lock().await;
+        *id = s;
+    }
+
+    /// stream_id is the group this track belongs too. This must be unique
+    pub async fn stream_id(&self) -> String {
+        let stream_id = self.stream_id.lock().await;
+        stream_id.clone()
+    }
+
+    pub async fn set_stream_id(&self, s: String) {
+        let mut stream_id = self.stream_id.lock().await;
+        *stream_id = s;
     }
 
     /// rid gets the RTP Stream ID of this Track
@@ -91,11 +108,6 @@ impl TrackRemote {
         self.kind.store(kind as u8, Ordering::SeqCst);
     }
 
-    /// stream_id is the group this track belongs too. This must be unique
-    pub fn stream_id(&self) -> &str {
-        self.stream_id.as_str()
-    }
-
     /// ssrc gets the SSRC of the track
     pub fn ssrc(&self) -> SSRC {
         self.ssrc.load(Ordering::SeqCst)
@@ -106,8 +118,8 @@ impl TrackRemote {
     }
 
     /// msid gets the Msid of the track
-    pub fn msid(&self) -> String {
-        self.stream_id().to_owned() + " " + self.id()
+    pub async fn msid(&self) -> String {
+        self.stream_id().await + " " + self.id().await.as_str()
     }
 
     /// codec gets the Codec of the track
@@ -144,7 +156,7 @@ impl TrackRemote {
             let (n, attributes) = {
                 if let Some(receiver) = &self.receiver {
                     let mut internal = receiver.lock().await;
-                    internal.read_rtp(b, self.id()).await?
+                    internal.read_rtp(b, self.id().await.as_str()).await?
                 } else {
                     return Err(Error::ErrRTPReceiverNil.into());
                 }
