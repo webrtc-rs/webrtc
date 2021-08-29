@@ -48,20 +48,20 @@ pub struct DTLSTransport {
     pub(crate) certificates: Vec<Certificate>,
     pub(crate) setting_engine: Arc<SettingEngine>,
 
-    pub(crate) remote_parameters: DTLSParameters,
-    pub(crate) remote_certificate: Bytes,
+    pub(crate) remote_parameters: Mutex<DTLSParameters>,
+    pub(crate) remote_certificate: Mutex<Bytes>,
     pub(crate) state: AtomicU8, //DTLSTransportState,
-    pub(crate) srtp_protection_profile: ProtectionProfile,
+    pub(crate) srtp_protection_profile: Mutex<ProtectionProfile>,
     pub(crate) on_state_change_handler: Arc<Mutex<Option<OnDTLSTransportStateChangeHdlrFn>>>,
-    pub(crate) conn: Option<Arc<DTLSConn>>,
+    pub(crate) conn: Mutex<Option<Arc<DTLSConn>>>,
 
     pub(crate) srtp_session: Mutex<Option<Arc<Session>>>,
     pub(crate) srtcp_session: Mutex<Option<Arc<Session>>>,
-    pub(crate) srtp_endpoint: Option<Arc<Endpoint>>,
-    pub(crate) srtcp_endpoint: Option<Arc<Endpoint>>,
+    pub(crate) srtp_endpoint: Mutex<Option<Arc<Endpoint>>>,
+    pub(crate) srtcp_endpoint: Mutex<Option<Arc<Endpoint>>>,
 
     pub(crate) simulcast_streams: Mutex<Vec<Arc<Stream>>>,
-    pub(crate) srtp_ready_tx: Option<mpsc::Sender<()>>,
+    pub(crate) srtp_ready_tx: Mutex<Option<mpsc::Sender<()>>>,
     pub(crate) srtp_ready_rx: Mutex<Option<mpsc::Receiver<()>>>,
 
     pub(crate) dtls_matcher: Option<MatchFunc>,
@@ -78,12 +78,17 @@ impl DTLSTransport {
             ice_transport,
             certificates,
             setting_engine,
-            srtp_ready_tx: Some(srtp_ready_tx),
+            srtp_ready_tx: Mutex::new(Some(srtp_ready_tx)),
             srtp_ready_rx: Mutex::new(Some(srtp_ready_rx)),
             state: AtomicU8::new(DTLSTransportState::New as u8),
             dtls_matcher: Some(Box::new(match_dtls)),
             ..Default::default()
         }
+    }
+
+    pub(crate) async fn conn(&self) -> Option<Arc<DTLSConn>> {
+        let conn = self.conn.lock().await;
+        conn.clone()
     }
 
     /// returns the currently-configured ICETransport or None
@@ -141,17 +146,23 @@ impl DTLSTransport {
 
     /// get_remote_certificate returns the certificate chain in use by the remote side
     /// returns an empty list prior to selection of the remote certificate
-    pub fn get_remote_certificate(&self) -> Bytes {
-        self.remote_certificate.clone()
+    pub async fn get_remote_certificate(&self) -> Bytes {
+        let remote_certificate = self.remote_certificate.lock().await;
+        remote_certificate.clone()
     }
 
-    pub(crate) async fn start_srtp(&mut self) -> Result<()> {
+    pub(crate) async fn start_srtp(&self) -> Result<()> {
+        let profile = {
+            let srtp_protection_profile = self.srtp_protection_profile.lock().await;
+            *srtp_protection_profile
+        };
+
         let mut srtp_config = srtp::config::Config {
-            profile: self.srtp_protection_profile,
+            profile,
             ..Default::default()
         };
         let mut srtcp_config = srtp::config::Config {
-            profile: self.srtp_protection_profile,
+            profile,
             ..Default::default()
         };
 
@@ -171,7 +182,7 @@ impl DTLSTransport {
             srtcp_config.remote_rtcp_options = Some(srtp::option::srtcp_no_replay_protection());
         }
 
-        if let Some(conn) = &self.conn {
+        if let Some(conn) = self.conn().await {
             let conn_state = conn.connection_state().await;
             srtp_config
                 .extract_session_keys_from_dtls(conn_state, self.role().await == DTLSRole::Client)
@@ -180,33 +191,48 @@ impl DTLSTransport {
             return Err(Error::ErrDtlsTransportNotStarted.into());
         }
 
-        self.srtp_session = if let Some(srtp_endpoint) = &self.srtp_endpoint {
-            Mutex::new(Some(Arc::new(
-                Session::new(
-                    Arc::clone(srtp_endpoint) as Arc<dyn Conn + Send + Sync>,
-                    srtp_config,
-                    true,
-                )
-                .await?,
-            )))
-        } else {
-            Mutex::new(None)
-        };
+        {
+            let mut srtp_session = self.srtp_session.lock().await;
+            *srtp_session = {
+                let se = self.srtp_endpoint.lock().await;
+                if let Some(srtp_endpoint) = &*se {
+                    Some(Arc::new(
+                        Session::new(
+                            Arc::clone(srtp_endpoint) as Arc<dyn Conn + Send + Sync>,
+                            srtp_config,
+                            true,
+                        )
+                        .await?,
+                    ))
+                } else {
+                    None
+                }
+            };
+        }
 
-        self.srtcp_session = if let Some(srtcp_endpoint) = &self.srtcp_endpoint {
-            Mutex::new(Some(Arc::new(
-                Session::new(
-                    Arc::clone(srtcp_endpoint) as Arc<dyn Conn + Send + Sync>,
-                    srtcp_config,
-                    false,
-                )
-                .await?,
-            )))
-        } else {
-            Mutex::new(None)
-        };
+        {
+            let mut srtcp_session = self.srtcp_session.lock().await;
+            *srtcp_session = {
+                let se = self.srtcp_endpoint.lock().await;
+                if let Some(srtcp_endpoint) = &*se {
+                    Some(Arc::new(
+                        Session::new(
+                            Arc::clone(srtcp_endpoint) as Arc<dyn Conn + Send + Sync>,
+                            srtcp_config,
+                            false,
+                        )
+                        .await?,
+                    ))
+                } else {
+                    None
+                }
+            };
+        }
 
-        self.srtp_ready_tx.take();
+        {
+            let mut srtp_ready_tx = self.srtp_ready_tx.lock().await;
+            srtp_ready_tx.take();
+        }
 
         Ok(())
     }
@@ -223,11 +249,14 @@ impl DTLSTransport {
 
     pub(crate) async fn role(&self) -> DTLSRole {
         // If remote has an explicit role use the inverse
-        match self.remote_parameters.role {
-            DTLSRole::Client => return DTLSRole::Server,
-            DTLSRole::Server => return DTLSRole::Client,
-            _ => {}
-        };
+        {
+            let remote_parameters = self.remote_parameters.lock().await;
+            match remote_parameters.role {
+                DTLSRole::Client => return DTLSRole::Server,
+                DTLSRole::Server => return DTLSRole::Client,
+                _ => {}
+            };
+        }
 
         // If SettingEngine has an explicit role
         match self.setting_engine.answering_dtls_role {
@@ -245,7 +274,7 @@ impl DTLSTransport {
     }
 
     async fn prepare_transport(
-        &mut self,
+        &self,
         remote_parameters: DTLSParameters,
     ) -> Result<(DTLSRole, dtls::config::Config)> {
         self.ensure_ice_conn()?;
@@ -254,9 +283,18 @@ impl DTLSTransport {
             return Err(Error::ErrInvalidDTLSStart.into());
         }
 
-        self.srtp_endpoint = self.ice_transport.new_endpoint(Box::new(match_srtp)).await;
-        self.srtcp_endpoint = self.ice_transport.new_endpoint(Box::new(match_srtcp)).await;
-        self.remote_parameters = remote_parameters;
+        {
+            let mut srtp_endpoint = self.srtp_endpoint.lock().await;
+            *srtp_endpoint = self.ice_transport.new_endpoint(Box::new(match_srtp)).await;
+        }
+        {
+            let mut srtcp_endpoint = self.srtcp_endpoint.lock().await;
+            *srtcp_endpoint = self.ice_transport.new_endpoint(Box::new(match_srtcp)).await;
+        }
+        {
+            let mut rp = self.remote_parameters.lock().await;
+            *rp = remote_parameters;
+        }
 
         let cert = self.certificates[0].clone();
         self.state_change(DTLSTransportState::Connecting).await;
@@ -282,7 +320,7 @@ impl DTLSTransport {
     }
 
     /// start DTLS transport negotiation with the parameters of the remote DTLS transport
-    pub async fn start(&mut self, remote_parameters: DTLSParameters) -> Result<()> {
+    pub async fn start(&self, remote_parameters: DTLSParameters) -> Result<()> {
         let dtls_conn_result = if let Some(dtls_endpoint) =
             self.ice_transport.new_endpoint(Box::new(match_dtls)).await
         {
@@ -323,18 +361,21 @@ impl DTLSTransport {
         };
 
         let srtp_profile = dtls_conn.selected_srtpprotection_profile();
-        match srtp_profile {
-            dtls::extension::extension_use_srtp::SrtpProtectionProfile::Srtp_Aead_Aes_128_Gcm=> {
-                self.srtp_protection_profile = srtp::protection_profile::ProtectionProfile::AeadAes128Gcm;
-            }
-            dtls::extension::extension_use_srtp::SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_80=> {
-                self.srtp_protection_profile = srtp::protection_profile::ProtectionProfile::Aes128CmHmacSha1_80;
-            }
-            _=> {
-                self.state_change(DTLSTransportState::Failed).await;
-                return Err(Error::ErrNoSRTPProtectionProfile.into());
-            }
-        };
+        {
+            let mut srtp_protection_profile = self.srtp_protection_profile.lock().await;
+            *srtp_protection_profile = match srtp_profile {
+                dtls::extension::extension_use_srtp::SrtpProtectionProfile::Srtp_Aead_Aes_128_Gcm => {
+                    srtp::protection_profile::ProtectionProfile::AeadAes128Gcm
+                }
+                dtls::extension::extension_use_srtp::SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_80 => {
+                    srtp::protection_profile::ProtectionProfile::Aes128CmHmacSha1_80
+                }
+                _ => {
+                    self.state_change(DTLSTransportState::Failed).await;
+                    return Err(Error::ErrNoSRTPProtectionProfile.into());
+                }
+            };
+        }
 
         if self
             .setting_engine
@@ -349,7 +390,10 @@ impl DTLSTransport {
             self.state_change(DTLSTransportState::Failed).await;
             return Err(Error::ErrNoRemoteCertificate.into());
         }
-        self.remote_certificate = Bytes::from(remote_certs[0].clone());
+        {
+            let mut remote_certificate = self.remote_certificate.lock().await;
+            *remote_certificate = Bytes::from(remote_certs[0].clone());
+        }
 
         /*TODO: let parsedRemoteCert = x509.ParseCertificate(t.remote_certificate)
         if err != nil {
@@ -370,7 +414,10 @@ impl DTLSTransport {
             return err
         }*/
 
-        self.conn = Some(Arc::new(dtls_conn));
+        {
+            let mut conn = self.conn.lock().await;
+            *conn = Some(Arc::new(dtls_conn));
+        }
         self.state_change(DTLSTransportState::Connected).await;
 
         self.start_srtp().await
@@ -416,7 +463,7 @@ impl DTLSTransport {
             }
         }
 
-        if let Some(conn) = &self.conn {
+        if let Some(conn) = self.conn().await {
             // dtls_transport connection may be closed on sctp close.
             match conn.close().await {
                 Ok(_) => {}

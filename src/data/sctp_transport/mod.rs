@@ -130,7 +130,7 @@ impl SCTPTransport {
         self.is_started.store(true, Ordering::SeqCst);
 
         let dtls_transport = self.transport();
-        if let Some(net_conn) = &dtls_transport.conn {
+        if let Some(net_conn) = &dtls_transport.conn().await {
             let sctp_association = Arc::new(
                 sctp::association::Association::client(sctp::association::Config {
                     net_conn: Arc::clone(net_conn) as Arc<dyn Conn + Send + Sync>,
