@@ -1,117 +1,131 @@
-use anyhow::Result;
+use crate::error::Error;
+use crate::media::dtls_transport::DTLSTransport;
+use crate::media::rtp::rtp_sender::RTPSenderInternal;
+use crate::media::rtp::SSRC;
+
+use srtp::session::Session;
 use srtp::stream::Stream;
+
+use anyhow::Result;
+use bytes::Bytes;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 /// SrtpWriterFuture blocks Read/Write calls until
 /// the SRTP Session is available
-#[derive(Default)]
 pub(crate) struct SrtpWriterFuture {
-    //rtpSender: RTPSender,
-    rtcp_read_stream: Option<Arc<Stream>>, // atomic.Value // *
-    rtp_write_stream: Option<Arc<Stream>>, // atomic.Value // *
+    pub(crate) ssrc: SSRC,
+    pub(crate) rtp_sender: Arc<Mutex<RTPSenderInternal>>,
+    pub(crate) rtp_transport: Arc<DTLSTransport>,
+    pub(crate) rtcp_read_stream: Mutex<Option<Arc<Stream>>>, // atomic.Value // *
+    pub(crate) rtp_write_session: Mutex<Option<Arc<Session>>>, // atomic.Value // *
 }
+
 impl SrtpWriterFuture {
-    /*
-    func (s *srtpWriterFuture) init(returnWhenNoSRTP bool) error {
-        if returnWhenNoSRTP {
-            select {
-            case <-s.rtpSender.stopCalled:
-                return io.ErrClosedPipe
-            case <-s.rtpSender.transport.srtpReady:
-            default:
-                return nil
+    async fn init(&self, return_when_no_srtp: bool) -> Result<()> {
+        {
+            let mut rx = self.rtp_transport.srtp_ready_rx.lock().await;
+            if let Some(srtp_ready_rx) = &mut *rx {
+                let mut rtp_sender = self.rtp_sender.lock().await;
+                if return_when_no_srtp {
+                    tokio::select! {
+                        _ = rtp_sender.stop_called_rx.recv()=> return Err(Error::ErrClosedPipe.into()),
+                        _ = srtp_ready_rx.recv() =>{}
+                        else => {
+                            return Ok(());
+                        }
+                    }
+                } else {
+                    tokio::select! {
+                        _ = rtp_sender.stop_called_rx.recv()=> return Err(Error::ErrClosedPipe.into()),
+                        _ = srtp_ready_rx.recv() =>{}
+                    }
+                }
             }
-        } else {
-            select {
-            case <-s.rtpSender.stopCalled:
-                return io.ErrClosedPipe
-            case <-s.rtpSender.transport.srtpReady:
-            }
         }
 
-        srtcpSession, err := s.rtpSender.transport.getSRTCPSession()
-        if err != nil {
-            return err
+        if let Some(srtcp_session) = self.rtp_transport.get_srtcp_session().await {
+            //TODO: use srtcp_session.open(self.ssrc).await?
+            let rtcp_read_stream = Arc::new(srtcp_session.listen(self.ssrc).await?);
+            let mut stream = self.rtcp_read_stream.lock().await;
+            *stream = Some(rtcp_read_stream);
         }
 
-        rtcp_read_stream, err := srtcpSession.OpenReadStream(uint32(s.rtpSender.ssrc))
-        if err != nil {
-            return err
+        {
+            let srtp_session = self.rtp_transport.get_srtp_session().await;
+            let mut session = self.rtp_write_session.lock().await;
+            *session = srtp_session;
         }
 
-        srtpSession, err := s.rtpSender.transport.getSRTPSession()
-        if err != nil {
-            return err
-        }
-
-        rtp_write_stream, err := srtpSession.OpenWriteStream()
-        if err != nil {
-            return err
-        }
-
-        s.rtcp_read_stream.Store(rtcp_read_stream)
-        s.rtp_write_stream.Store(rtp_write_stream)
-        return nil
-    }
-    */
-
-    pub fn close(&self) -> Result<()> {
-        /*TODO:
-           if value := s.rtcp_read_stream.Load(); value != nil {
-            return value.(*srtp.ReadStreamSRTCP).Close()
-        }
-
-        return nil*/
         Ok(())
     }
 
-    /*
-    func (s *srtpWriterFuture) Read(b []byte) (n int, err error) {
-        if value := s.rtcp_read_stream.Load(); value != nil {
-            return value.(*srtp.ReadStreamSRTCP).Read(b)
+    pub async fn close(&self) -> Result<()> {
+        let stream = self.rtcp_read_stream.lock().await;
+        if let Some(rtcp_read_stream) = &*stream {
+            rtcp_read_stream.close().await
+        } else {
+            Ok(())
         }
-
-        if err := s.init(false); err != nil || s.rtcp_read_stream.Load() == nil {
-            return 0, err
-        }
-
-        return s.Read(b)
     }
 
-    func (s *srtpWriterFuture) SetReadDeadline(t time.Time) error {
-        if value := s.rtcp_read_stream.Load(); value != nil {
-            return value.(*srtp.ReadStreamSRTCP).SetReadDeadline(t)
+    pub async fn read(&self, b: &mut [u8]) -> Result<usize> {
+        {
+            let stream = self.rtcp_read_stream.lock().await;
+            if let Some(rtcp_read_stream) = &*stream {
+                return rtcp_read_stream.read(b).await;
+            }
         }
 
-        if err := s.init(false); err != nil || s.rtcp_read_stream.Load() == nil {
-            return err
-        }
+        self.init(false).await?;
 
-        return s.SetReadDeadline(t)
+        {
+            let stream = self.rtcp_read_stream.lock().await;
+            if let Some(rtcp_read_stream) = &*stream {
+                rtcp_read_stream.read(b).await
+            } else {
+                Err(Error::ErrDtlsTransportNotStarted.into())
+            }
+        }
     }
 
-    func (s *srtpWriterFuture) WriteRTP(header *rtp.Header, payload []byte) (int, error) {
-        if value := s.rtp_write_stream.Load(); value != nil {
-            return value.(*srtp.WriteStreamSRTP).WriteRTP(header, payload)
+    pub async fn write_rtp(&self, packet: &rtp::packet::Packet) -> Result<usize> {
+        {
+            let session = self.rtp_write_session.lock().await;
+            if let Some(rtp_write_session) = &*session {
+                return rtp_write_session.write_rtp(packet).await;
+            }
         }
 
-        if err := s.init(true); err != nil || s.rtp_write_stream.Load() == nil {
-            return 0, err
-        }
+        self.init(true).await?;
 
-        return s.WriteRTP(header, payload)
+        {
+            let session = self.rtp_write_session.lock().await;
+            if let Some(rtp_write_session) = &*session {
+                rtp_write_session.write_rtp(packet).await
+            } else {
+                Err(Error::ErrDtlsTransportNotStarted.into())
+            }
+        }
     }
 
-    func (s *srtpWriterFuture) Write(b []byte) (int, error) {
-        if value := s.rtp_write_stream.Load(); value != nil {
-            return value.(*srtp.WriteStreamSRTP).Write(b)
+    pub async fn write(&self, b: &Bytes) -> Result<usize> {
+        {
+            let session = self.rtp_write_session.lock().await;
+            if let Some(rtp_write_session) = &*session {
+                return rtp_write_session.write(b, true).await;
+            }
         }
 
-        if err := s.init(true); err != nil || s.rtp_write_stream.Load() == nil {
-            return 0, err
-        }
+        self.init(true).await?;
 
-        return s.Write(b)
+        {
+            let session = self.rtp_write_session.lock().await;
+            if let Some(rtp_write_session) = &*session {
+                rtp_write_session.write(b, true).await
+            } else {
+                Err(Error::ErrDtlsTransportNotStarted.into())
+            }
+        }
     }
-    */
 }

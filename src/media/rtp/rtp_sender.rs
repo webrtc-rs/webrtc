@@ -18,11 +18,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 
-struct RTPSenderInternal {
-    send_called_rx: mpsc::Receiver<()>,
-    stop_called_rx: mpsc::Receiver<()>,
-
-    rtcp_interceptor: Option<Box<dyn RTCPReader + Send + Sync>>,
+pub(crate) struct RTPSenderInternal {
+    pub(crate) send_called_rx: mpsc::Receiver<()>,
+    pub(crate) stop_called_rx: mpsc::Receiver<()>,
+    pub(crate) rtcp_interceptor: Option<Box<dyn RTCPReader + Send + Sync>>,
 }
 
 impl RTPSenderInternal {
@@ -81,7 +80,7 @@ pub struct RTPSender {
     send_called_tx: Mutex<Option<mpsc::Sender<()>>>,
     stop_called_tx: Mutex<Option<mpsc::Sender<()>>>,
 
-    internal: Mutex<RTPSenderInternal>,
+    internal: Arc<Mutex<RTPSenderInternal>>,
 }
 
 impl RTPSender {
@@ -98,7 +97,24 @@ impl RTPSender {
         let (send_called_tx, send_called_rx) = mpsc::channel(1);
         let (stop_called_tx, stop_called_rx) = mpsc::channel(1);
         let ssrc = rand::random::<u32>();
-        let srtp_stream = SrtpWriterFuture::default();
+
+        /*TODO: r.rtcp_interceptor = r.api.interceptor.bind_rtcpreader(interceptor.RTPReaderFunc(func(in []byte, a interceptor.Attributes) (n int, attributes interceptor.Attributes, err error) {
+            n, err = r.srtp_stream.Read(in)
+            return n, a, err
+        }))*/
+        let internal = Arc::new(Mutex::new(RTPSenderInternal {
+            send_called_rx,
+            stop_called_rx,
+            rtcp_interceptor: None,
+        }));
+
+        let srtp_stream = SrtpWriterFuture {
+            ssrc,
+            rtp_sender: Arc::clone(&internal),
+            rtp_transport: Arc::clone(&transport),
+            rtcp_read_stream: Mutex::new(None),
+            rtp_write_session: Mutex::new(None),
+        };
 
         RTPSender {
             track: Mutex::new(Some(track)),
@@ -122,21 +138,8 @@ impl RTPSender {
             send_called_tx: Mutex::new(Some(send_called_tx)),
             stop_called_tx: Mutex::new(Some(stop_called_tx)),
 
-            internal: Mutex::new(RTPSenderInternal {
-                send_called_rx,
-                stop_called_rx,
-                rtcp_interceptor: None,
-            }),
+            internal,
         }
-
-        /*TODO: r.srtp_stream.rtpSender = r
-
-        r.rtcp_interceptor = r.api.interceptor.bind_rtcpreader(interceptor.RTPReaderFunc(func(in []byte, a interceptor.Attributes) (n int, attributes interceptor.Attributes, err error) {
-            n, err = r.srtp_stream.Read(in)
-            return n, a, err
-        }))
-
-        return r, nil*/
     }
 
     pub(crate) fn is_negotiated(&self) -> bool {
@@ -309,7 +312,7 @@ impl RTPSender {
             interceptor.unbind_local_stream(&*stream_info).await;
         }
 
-        self.srtp_stream.close()
+        self.srtp_stream.close().await
     }
 
     /// read reads incoming RTCP for this RTPReceiver

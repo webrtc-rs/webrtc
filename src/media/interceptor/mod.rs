@@ -158,7 +158,7 @@ impl TrackLocalWriter for InterceptorToTrackLocalWriter {
             return 0, err
         }
 
-        return i.WriteRTP(&packet.Header, packet.Payload)*/
+        return i.write_rtp(&packet.Header, packet.Payload)*/
         Ok(0)
     }
 

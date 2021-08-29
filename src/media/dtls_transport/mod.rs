@@ -62,7 +62,7 @@ pub struct DTLSTransport {
 
     pub(crate) simulcast_streams: Mutex<Vec<Arc<Stream>>>,
     pub(crate) srtp_ready_tx: Option<mpsc::Sender<()>>,
-    pub(crate) srtp_ready_rx: Option<mpsc::Receiver<()>>,
+    pub(crate) srtp_ready_rx: Mutex<Option<mpsc::Receiver<()>>>,
 
     pub(crate) dtls_matcher: Option<MatchFunc>,
 }
@@ -79,7 +79,7 @@ impl DTLSTransport {
             certificates,
             setting_engine,
             srtp_ready_tx: Some(srtp_ready_tx),
-            srtp_ready_rx: Some(srtp_ready_rx),
+            srtp_ready_rx: Mutex::new(Some(srtp_ready_rx)),
             state: AtomicU8::new(DTLSTransportState::New as u8),
             dtls_matcher: Some(Box::new(match_dtls)),
             ..Default::default()
