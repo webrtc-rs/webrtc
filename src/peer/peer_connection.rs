@@ -1436,7 +1436,7 @@ impl PeerConnection {
                 }
 
                 if let Some(receiver) = t.receiver() {
-                    if receiver.have_received() {
+                    if receiver.have_received().await {
                         continue;
                     }
                     self.start_receiver(incoming_track, receiver).await;
@@ -2372,7 +2372,7 @@ impl PeerConnection {
                     }
 
                     let _receiver = API::new_rtp_receiver(
-                        receiver.kind,
+                        receiver.kind(),
                         Arc::clone(&self.dtls_transport),
                         Arc::clone(&self.media_engine),
                         self.interceptor.clone(),

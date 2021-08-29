@@ -8,61 +8,30 @@ use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
 use crate::media::rtp::{RTPReceiveParameters, SSRC};
 use crate::media::track::track_remote::TrackRemote;
 use crate::media::track::TrackStreams;
+use crate::util::flatten_errs;
 use crate::RECEIVE_MTU;
 
-use crate::util::flatten_errs;
 use anyhow::Result;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 
-/// RTPReceiver allows an application to inspect the receipt of a TrackRemote
-pub struct RTPReceiver {
-    pub(crate) kind: RTPCodecType,
-    pub(crate) transport: Arc<DTLSTransport>,
+struct RTPReceiverInternal {
+    kind: RTPCodecType,
+    tracks: Vec<TrackStreams>,
 
-    pub(crate) tracks: Mutex<Vec<TrackStreams>>,
+    transport: Arc<DTLSTransport>,
+    media_engine: Arc<MediaEngine>,
+    interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
 
-    pub(crate) closed_tx: Mutex<Option<mpsc::Sender<()>>>,
-    pub(crate) closed_rx: mpsc::Receiver<()>,
-    pub(crate) received_tx: Option<mpsc::Sender<()>>,
-    pub(crate) received_rx: mpsc::Receiver<()>,
-    pub(crate) received: AtomicBool,
-
-    pub(crate) media_engine: Arc<MediaEngine>,
-    pub(crate) interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
+    closed_tx: Option<mpsc::Sender<()>>,
+    closed_rx: mpsc::Receiver<()>,
+    received_tx: Option<mpsc::Sender<()>>,
+    received_rx: mpsc::Receiver<()>,
 }
 
-impl RTPReceiver {
-    /// transport returns the currently-configured *DTLSTransport or nil
-    /// if one has not yet been configured
-    pub fn transport(&self) -> Arc<DTLSTransport> {
-        Arc::clone(&self.transport)
-    }
-
-    /// get_parameters describes the current configuration for the encoding and
-    /// transmission of media on the receiver's track.
-    pub async fn get_parameters(&self) -> RTPParameters {
-        self.media_engine
-            .get_rtp_parameters_by_kind(self.kind, &[RTPTransceiverDirection::Recvonly])
-            .await
-    }
-
-    /// track returns the RtpTransceiver TrackRemote
-    pub async fn track(&self) -> Option<Arc<TrackRemote>> {
-        let tracks = self.tracks.lock().await;
-        tracks.first().map(|t| Arc::clone(&t.track))
-    }
-
-    /// tracks returns the RtpTransceiver tracks
-    /// A RTPReceiver to support Simulcast may now have multiple tracks
-    pub async fn tracks(&self) -> Vec<Arc<TrackRemote>> {
-        let tracks = self.tracks.lock().await;
-        tracks.iter().map(|t| Arc::clone(&t.track)).collect()
-    }
-
+impl RTPReceiverInternal {
     /// receive initialize the track and starts all the transports
-    pub async fn receive(&mut self, parameters: &RTPReceiveParameters) -> Result<()> {
+    async fn receive(&mut self, parameters: &RTPReceiveParameters) -> Result<()> {
         tokio::select! {
             _ = self.received_rx.recv() => {
                 return Err(Error::ErrRTPReceiverReceiveAlreadyCalled.into());
@@ -70,7 +39,6 @@ impl RTPReceiver {
             else => {}  // default:
         };
         let _d = self.received_tx.take(); // defer drop(received_tx)
-        self.received.store(true, Ordering::SeqCst);
 
         if parameters.encodings.len() == 1 && parameters.encodings[0].ssrc != 0 {
             if let Some(encoding) = parameters.encodings.first() {
@@ -89,7 +57,8 @@ impl RTPReceiver {
                     &global_params.header_extensions,
                 );
                 let (rtp_read_stream, rtp_interceptor, rtcp_read_stream, rtcp_interceptor) =
-                    self.streams_for_ssrc(encoding.ssrc, &stream_info).await?;
+                    RTPReceiver::streams_for_ssrc(&self.transport, encoding.ssrc, &stream_info)
+                        .await?;
 
                 let t = TrackStreams {
                     track: Arc::new(TrackRemote::new(
@@ -105,26 +74,21 @@ impl RTPReceiver {
                     rtcp_read_stream,
                     rtcp_interceptor,
                 };
-                {
-                    let mut tracks = self.tracks.lock().await;
-                    tracks.push(t);
-                }
+
+                self.tracks.push(t);
             }
         } else {
             for encoding in &parameters.encodings {
-                {
-                    let mut tracks = self.tracks.lock().await;
-                    tracks.push(TrackStreams {
-                        track: Arc::new(TrackRemote::new(
-                            self.kind,
-                            0,
-                            encoding.rid.clone(),
-                            Arc::clone(&self.media_engine),
-                            self.interceptor.clone(),
-                        )),
-                        ..Default::default()
-                    });
-                }
+                self.tracks.push(TrackStreams {
+                    track: Arc::new(TrackRemote::new(
+                        self.kind,
+                        0,
+                        encoding.rid.clone(),
+                        Arc::clone(&self.media_engine),
+                        self.interceptor.clone(),
+                    )),
+                    ..Default::default()
+                });
             }
         }
 
@@ -132,11 +96,10 @@ impl RTPReceiver {
     }
 
     /// read reads incoming RTCP for this RTPReceiver
-    pub async fn read(&mut self, b: &mut [u8]) -> Result<(usize, Attributes)> {
+    async fn read(&mut self, b: &mut [u8]) -> Result<(usize, Attributes)> {
         tokio::select! {
             _ = self.received_rx.recv() =>{
-                let tracks = self.tracks.lock().await;
-                if let Some(t) = tracks.first(){
+                if let Some(t) = self.tracks.first(){
                     if let Some(rtcp_interceptor) = &t.rtcp_interceptor{
                         let a = Attributes::new();
                         rtcp_interceptor.read(b, &a).await
@@ -154,11 +117,10 @@ impl RTPReceiver {
     }
 
     /// read_simulcast reads incoming RTCP for this RTPReceiver for given rid
-    pub async fn read_simulcast(&mut self, b: &mut [u8], rid: &str) -> Result<(usize, Attributes)> {
+    async fn read_simulcast(&mut self, b: &mut [u8], rid: &str) -> Result<(usize, Attributes)> {
         tokio::select! {
             _ = self.received_rx.recv() =>{
-                let tracks = self.tracks.lock().await;
-                for  t in &*tracks {
+                for t in &self.tracks{
                     if t.track.rid() == rid {
                        if let Some(rtcp_interceptor) = &t.rtcp_interceptor{
                             let a = Attributes::new();
@@ -178,7 +140,7 @@ impl RTPReceiver {
 
     /// read_rtcp is a convenience method that wraps Read and unmarshal for you.
     /// It also runs any configured interceptors.
-    pub async fn read_rtcp(&mut self) -> Result<(Box<dyn rtcp::packet::Packet>, Attributes)> {
+    async fn read_rtcp(&mut self) -> Result<(Box<dyn rtcp::packet::Packet>, Attributes)> {
         let mut b = vec![0u8; RECEIVE_MTU];
         let (n, attributes) = self.read(&mut b).await?;
 
@@ -189,7 +151,7 @@ impl RTPReceiver {
     }
 
     /// read_simulcast_rtcp is a convenience method that wraps ReadSimulcast and unmarshal for you
-    pub async fn read_simulcast_rtcp(
+    async fn read_simulcast_rtcp(
         &mut self,
         rid: &str,
     ) -> Result<(Box<dyn rtcp::packet::Packet>, Attributes)> {
@@ -202,54 +164,10 @@ impl RTPReceiver {
         Ok((pkts, attributes))
     }
 
-    pub(crate) fn have_received(&self) -> bool {
-        self.received_tx.is_none()
-    }
-
-    /// Stop irreversibly stops the RTPReceiver
-    pub async fn stop(&self) -> Result<()> {
-        let _d = {
-            let mut closed_tx = self.closed_tx.lock().await;
-            if closed_tx.is_none() {
-                return Ok(());
-            }
-            closed_tx.take()
-        };
-
-        let mut errs = vec![];
-        if self.received.load(Ordering::SeqCst) {
-            let tracks = self.tracks.lock().await;
-            for t in &*tracks {
-                if let Some(rtcp_read_stream) = &t.rtcp_read_stream {
-                    if let Err(err) = rtcp_read_stream.close().await {
-                        errs.push(err);
-                    }
-                }
-
-                if let Some(rtp_read_stream) = &t.rtp_read_stream {
-                    if let Err(err) = rtp_read_stream.close().await {
-                        errs.push(err);
-                    }
-                }
-
-                if let Some(interceptor) = &self.interceptor {
-                    interceptor.unbind_remote_stream(&t.stream_info).await;
-                }
-            }
-        }
-        flatten_errs(errs)
-    }
-
-    /// read_rtp should only be called by a track, this only exists so we can keep state in one place
-    pub(crate) async fn read_rtp(
-        &mut self,
-        b: &mut [u8],
-        tid: &str,
-    ) -> Result<(usize, Attributes)> {
+    async fn read_rtp(&mut self, b: &mut [u8], tid: &str) -> Result<(usize, Attributes)> {
         let _ = self.received_rx.recv().await;
 
-        let tracks = self.tracks.lock().await;
-        for t in &*tracks {
+        for t in &self.tracks {
             if t.track.id() == tid {
                 if let Some(ri) = &t.rtp_interceptor {
                     let a = Attributes::new();
@@ -261,6 +179,166 @@ impl RTPReceiver {
         Err(Error::ErrRTPReceiverWithSSRCTrackStreamNotFound.into())
     }
 
+    async fn get_parameters(&self) -> RTPParameters {
+        self.media_engine
+            .get_rtp_parameters_by_kind(self.kind, &[RTPTransceiverDirection::Recvonly])
+            .await
+    }
+}
+
+/// RTPReceiver allows an application to inspect the receipt of a TrackRemote
+pub struct RTPReceiver {
+    kind: RTPCodecType,
+    transport: Arc<DTLSTransport>,
+    internal: Mutex<RTPReceiverInternal>,
+}
+
+impl RTPReceiver {
+    pub fn new(
+        kind: RTPCodecType,
+        transport: Arc<DTLSTransport>,
+        media_engine: Arc<MediaEngine>,
+        interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
+    ) -> Self {
+        let (closed_tx, closed_rx) = mpsc::channel(1);
+        let (received_tx, received_rx) = mpsc::channel(1);
+
+        RTPReceiver {
+            kind,
+            transport: Arc::clone(&transport),
+            internal: Mutex::new(RTPReceiverInternal {
+                kind,
+
+                tracks: vec![],
+                transport,
+                media_engine,
+                interceptor,
+
+                closed_tx: Some(closed_tx),
+                closed_rx,
+                received_tx: Some(received_tx),
+                received_rx,
+            }),
+        }
+    }
+
+    pub fn kind(&self) -> RTPCodecType {
+        self.kind
+    }
+
+    /// transport returns the currently-configured *DTLSTransport or nil
+    /// if one has not yet been configured
+    pub fn transport(&self) -> Arc<DTLSTransport> {
+        Arc::clone(&self.transport)
+    }
+
+    /// get_parameters describes the current configuration for the encoding and
+    /// transmission of media on the receiver's track.
+    pub async fn get_parameters(&self) -> RTPParameters {
+        let internal = self.internal.lock().await;
+        internal.get_parameters().await
+    }
+
+    /// track returns the RtpTransceiver TrackRemote
+    pub async fn track(&self) -> Option<Arc<TrackRemote>> {
+        let internal = self.internal.lock().await;
+        internal.tracks.first().map(|t| Arc::clone(&t.track))
+    }
+
+    /// tracks returns the RtpTransceiver tracks
+    /// A RTPReceiver to support Simulcast may now have multiple tracks
+    pub async fn tracks(&self) -> Vec<Arc<TrackRemote>> {
+        let internal = self.internal.lock().await;
+        internal
+            .tracks
+            .iter()
+            .map(|t| Arc::clone(&t.track))
+            .collect()
+    }
+
+    /// receive initialize the track and starts all the transports
+    pub async fn receive(&self, parameters: &RTPReceiveParameters) -> Result<()> {
+        let mut internal = self.internal.lock().await;
+        internal.receive(parameters).await
+    }
+
+    /// read reads incoming RTCP for this RTPReceiver
+    pub async fn read(&self, b: &mut [u8]) -> Result<(usize, Attributes)> {
+        let mut internal = self.internal.lock().await;
+        internal.read(b).await
+    }
+
+    /// read_simulcast reads incoming RTCP for this RTPReceiver for given rid
+    pub async fn read_simulcast(&self, b: &mut [u8], rid: &str) -> Result<(usize, Attributes)> {
+        let mut internal = self.internal.lock().await;
+        internal.read_simulcast(b, rid).await
+    }
+
+    /// read_rtcp is a convenience method that wraps Read and unmarshal for you.
+    /// It also runs any configured interceptors.
+    pub async fn read_rtcp(&self) -> Result<(Box<dyn rtcp::packet::Packet>, Attributes)> {
+        let mut internal = self.internal.lock().await;
+        internal.read_rtcp().await
+    }
+
+    /// read_simulcast_rtcp is a convenience method that wraps ReadSimulcast and unmarshal for you
+    pub async fn read_simulcast_rtcp(
+        &self,
+        rid: &str,
+    ) -> Result<(Box<dyn rtcp::packet::Packet>, Attributes)> {
+        let mut internal = self.internal.lock().await;
+        internal.read_simulcast_rtcp(rid).await
+    }
+
+    pub(crate) async fn have_received(&self) -> bool {
+        let internal = self.internal.lock().await;
+        internal.received_tx.is_none()
+    }
+
+    /// Stop irreversibly stops the RTPReceiver
+    pub async fn stop(&self) -> Result<()> {
+        let mut internal = self.internal.lock().await;
+
+        let _d = {
+            if internal.closed_tx.is_none() {
+                return Ok(());
+            }
+            internal.closed_tx.take()
+        };
+
+        let mut errs = vec![];
+        tokio::select! {
+            _ = internal.received_rx.recv()=>{
+                for t in &internal.tracks {
+                    if let Some(rtcp_read_stream) = &t.rtcp_read_stream {
+                        if let Err(err) = rtcp_read_stream.close().await {
+                            errs.push(err);
+                        }
+                    }
+
+                    if let Some(rtp_read_stream) = &t.rtp_read_stream {
+                        if let Err(err) = rtp_read_stream.close().await {
+                            errs.push(err);
+                        }
+                    }
+
+                    if let Some(interceptor) = &internal.interceptor {
+                        interceptor.unbind_remote_stream(&t.stream_info).await;
+                    }
+                }
+            }
+            else => {}
+        }
+
+        flatten_errs(errs)
+    }
+
+    /// read_rtp should only be called by a track, this only exists so we can keep state in one place
+    pub(crate) async fn read_rtp(&self, b: &mut [u8], tid: &str) -> Result<(usize, Attributes)> {
+        let mut internal = self.internal.lock().await;
+        internal.read_rtp(b, tid).await
+    }
+
     /// receive_for_rid is the sibling of Receive expect for RIDs instead of SSRCs
     /// It populates all the internal state for the given RID
     pub(crate) async fn receive_for_rid(
@@ -269,8 +347,8 @@ impl RTPReceiver {
         params: &RTPParameters,
         ssrc: SSRC,
     ) -> Result<Arc<TrackRemote>> {
-        let mut tracks = self.tracks.lock().await;
-        for t in &mut *tracks {
+        let mut internal = self.internal.lock().await;
+        for t in &mut internal.tracks {
             if t.track.rid() == rid && !params.codecs.is_empty() {
                 t.track.set_kind(self.kind);
                 t.track.set_codec(params.codecs[0].clone()).await;
@@ -285,7 +363,7 @@ impl RTPReceiver {
                 );
 
                 let (rtp_read_stream, rtp_interceptor, rtcp_read_stream, rtcp_interceptor) =
-                    self.streams_for_ssrc(ssrc, &t.stream_info).await?;
+                    RTPReceiver::streams_for_ssrc(&self.transport, ssrc, &t.stream_info).await?;
 
                 t.rtp_read_stream = rtp_read_stream;
                 t.rtp_interceptor = rtp_interceptor;
@@ -300,7 +378,7 @@ impl RTPReceiver {
     }
 
     async fn streams_for_ssrc(
-        &self,
+        transport: &Arc<DTLSTransport>,
         ssrc: SSRC,
         _stream_info: &StreamInfo,
     ) -> Result<(
@@ -309,8 +387,7 @@ impl RTPReceiver {
         Option<Arc<srtp::stream::Stream>>,
         Option<Arc<dyn RTCPReader + Send + Sync>>,
     )> {
-        let srtp_session = self
-            .transport
+        let srtp_session = transport
             .get_srtp_session()
             .await
             .ok_or(Error::ErrDtlsTransportNotStarted)?;
@@ -322,8 +399,7 @@ impl RTPReceiver {
         }))*/
         let rtp_interceptor = None;
 
-        let srtcp_session = self
-            .transport
+        let srtcp_session = transport
             .get_srtcp_session()
             .await
             .ok_or(Error::ErrDtlsTransportNotStarted)?;

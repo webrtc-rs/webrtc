@@ -28,7 +28,7 @@ use anyhow::Result;
 use ice::rand::generate_crypto_random_string;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::mpsc;
 
 /// API bundles the global functions of the WebRTC and ORTC API.
 /// Some of these functions are also exported globally using the
@@ -146,24 +146,7 @@ impl API {
         media_engine: Arc<MediaEngine>,
         interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
     ) -> RTPReceiver {
-        let (closed_tx, closed_rx) = mpsc::channel(1);
-        let (received_tx, received_rx) = mpsc::channel(1);
-
-        RTPReceiver {
-            kind,
-            transport,
-
-            tracks: Mutex::new(vec![]),
-
-            closed_tx: Mutex::new(Some(closed_tx)),
-            closed_rx,
-            received_tx: Some(received_tx),
-            received_rx,
-            received: AtomicBool::new(false),
-
-            media_engine,
-            interceptor,
-        }
+        RTPReceiver::new(kind, transport, media_engine, interceptor)
     }
 
     /// new_rtp_sender constructs a new RTPSender
