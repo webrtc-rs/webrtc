@@ -276,6 +276,8 @@ pub enum Error {
     ErrRTPSenderTrackNil,
     #[error("RTPSender must not be nil")]
     ErrRTPSenderNil,
+    #[error("RTPReceiver must not be nil")]
+    ErrRTPReceiverNil,
     #[error("DTLSTransport must not be nil")]
     ErrRTPSenderDTLSTransportNil,
     #[error("Send has already been called")]

@@ -5,6 +5,7 @@ use crate::media::rtp::rtp_codec::{RTPCodecParameters, RTPCodecType, RTPParamete
 use crate::media::rtp::{PayloadType, SSRC};
 use crate::{RECEIVE_MTU, RTP_PAYLOAD_TYPE_BITMASK};
 
+use crate::media::rtp::rtp_receiver::RTPReceiverInternal;
 use anyhow::Result;
 use bytes::{Bytes, BytesMut};
 use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
@@ -33,7 +34,8 @@ pub struct TrackRemote {
 
     media_engine: Arc<MediaEngine>,
     interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
-    //receiver: Arc<RTPReceiver>,
+
+    receiver: Option<Arc<Mutex<RTPReceiverInternal>>>,
     internal: Mutex<TrackRemoteInternal>,
 }
 
@@ -42,7 +44,7 @@ impl TrackRemote {
         kind: RTPCodecType,
         ssrc: SSRC,
         rid: String,
-        //receiver: Arc<RTPReceiver>,
+        receiver: Arc<Mutex<RTPReceiverInternal>>,
         media_engine: Arc<MediaEngine>,
         interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
     ) -> Self {
@@ -50,7 +52,7 @@ impl TrackRemote {
             kind: AtomicU8::new(kind as u8),
             ssrc: AtomicU32::new(ssrc),
             rid,
-            //receiver,
+            receiver: Some(receiver),
             media_engine,
             interceptor,
             ..Default::default()
@@ -139,8 +141,14 @@ impl TrackRemote {
             self.check_and_update_track(&b[..n]).await?;
             Ok((n, attributes))
         } else {
-            let (n, attributes) = (2, Attributes::new());
-            //TODO: self.receiver.read_rtp(b, t)
+            let (n, attributes) = {
+                if let Some(receiver) = &self.receiver {
+                    let mut internal = receiver.lock().await;
+                    internal.read_rtp(b, self.id()).await?
+                } else {
+                    return Err(Error::ErrRTPReceiverNil.into());
+                }
+            };
             self.check_and_update_track(&b[..n]).await?;
             Ok((n, attributes))
         }
@@ -160,7 +168,10 @@ impl TrackRemote {
                 .get_rtp_parameters_by_payload_type(payload_type)
                 .await?;
 
-            //TODO: self.kind = self.receiver.kind;
+            if let Some(receiver) = &self.receiver {
+                let r = receiver.lock().await;
+                self.kind.store(r.kind as u8, Ordering::SeqCst);
+            }
             self.payload_type.store(payload_type, Ordering::SeqCst);
             {
                 let mut codec = self.codec.lock().await;

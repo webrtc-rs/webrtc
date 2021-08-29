@@ -15,8 +15,8 @@ use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 
-struct RTPReceiverInternal {
-    kind: RTPCodecType,
+pub(crate) struct RTPReceiverInternal {
+    pub(crate) kind: RTPCodecType,
     tracks: Vec<TrackStreams>,
 
     transport: Arc<DTLSTransport>,
@@ -30,71 +30,6 @@ struct RTPReceiverInternal {
 }
 
 impl RTPReceiverInternal {
-    /// receive initialize the track and starts all the transports
-    async fn receive(&mut self, parameters: &RTPReceiveParameters) -> Result<()> {
-        tokio::select! {
-            _ = self.received_rx.recv() => {
-                return Err(Error::ErrRTPReceiverReceiveAlreadyCalled.into());
-            }
-            else => {}  // default:
-        };
-        let _d = self.received_tx.take(); // defer drop(received_tx)
-
-        if parameters.encodings.len() == 1 && parameters.encodings[0].ssrc != 0 {
-            if let Some(encoding) = parameters.encodings.first() {
-                let global_params = self.get_parameters().await;
-                let codec = if let Some(codec) = global_params.codecs.first() {
-                    codec.capability.clone()
-                } else {
-                    RTPCodecCapability::default()
-                };
-
-                let stream_info = StreamInfo::new(
-                    "".to_owned(),
-                    encoding.ssrc,
-                    0,
-                    codec,
-                    &global_params.header_extensions,
-                );
-                let (rtp_read_stream, rtp_interceptor, rtcp_read_stream, rtcp_interceptor) =
-                    RTPReceiver::streams_for_ssrc(&self.transport, encoding.ssrc, &stream_info)
-                        .await?;
-
-                let t = TrackStreams {
-                    track: Arc::new(TrackRemote::new(
-                        self.kind,
-                        encoding.ssrc,
-                        "".to_owned(),
-                        Arc::clone(&self.media_engine),
-                        self.interceptor.clone(),
-                    )),
-                    stream_info,
-                    rtp_read_stream,
-                    rtp_interceptor,
-                    rtcp_read_stream,
-                    rtcp_interceptor,
-                };
-
-                self.tracks.push(t);
-            }
-        } else {
-            for encoding in &parameters.encodings {
-                self.tracks.push(TrackStreams {
-                    track: Arc::new(TrackRemote::new(
-                        self.kind,
-                        0,
-                        encoding.rid.clone(),
-                        Arc::clone(&self.media_engine),
-                        self.interceptor.clone(),
-                    )),
-                    ..Default::default()
-                });
-            }
-        }
-
-        Ok(())
-    }
-
     /// read reads incoming RTCP for this RTPReceiver
     async fn read(&mut self, b: &mut [u8]) -> Result<(usize, Attributes)> {
         tokio::select! {
@@ -164,7 +99,11 @@ impl RTPReceiverInternal {
         Ok((pkts, attributes))
     }
 
-    async fn read_rtp(&mut self, b: &mut [u8], tid: &str) -> Result<(usize, Attributes)> {
+    pub(crate) async fn read_rtp(
+        &mut self,
+        b: &mut [u8],
+        tid: &str,
+    ) -> Result<(usize, Attributes)> {
         let _ = self.received_rx.recv().await;
 
         for t in &self.tracks {
@@ -190,7 +129,7 @@ impl RTPReceiverInternal {
 pub struct RTPReceiver {
     kind: RTPCodecType,
     transport: Arc<DTLSTransport>,
-    internal: Mutex<RTPReceiverInternal>,
+    pub(crate) internal: Arc<Mutex<RTPReceiverInternal>>,
 }
 
 impl RTPReceiver {
@@ -206,7 +145,7 @@ impl RTPReceiver {
         RTPReceiver {
             kind,
             transport: Arc::clone(&transport),
-            internal: Mutex::new(RTPReceiverInternal {
+            internal: Arc::new(Mutex::new(RTPReceiverInternal {
                 kind,
 
                 tracks: vec![],
@@ -218,7 +157,7 @@ impl RTPReceiver {
                 closed_rx,
                 received_tx: Some(received_tx),
                 received_rx,
-            }),
+            })),
         }
     }
 
@@ -258,8 +197,73 @@ impl RTPReceiver {
 
     /// receive initialize the track and starts all the transports
     pub async fn receive(&self, parameters: &RTPReceiveParameters) -> Result<()> {
+        let receiver = Arc::clone(&self.internal);
         let mut internal = self.internal.lock().await;
-        internal.receive(parameters).await
+        tokio::select! {
+            _ = internal.received_rx.recv() => {
+                return Err(Error::ErrRTPReceiverReceiveAlreadyCalled.into());
+            }
+            else => {}  // default:
+        };
+        let _d = internal.received_tx.take(); // defer drop(received_tx)
+
+        if parameters.encodings.len() == 1 && parameters.encodings[0].ssrc != 0 {
+            if let Some(encoding) = parameters.encodings.first() {
+                let global_params = self.get_parameters().await;
+                let codec = if let Some(codec) = global_params.codecs.first() {
+                    codec.capability.clone()
+                } else {
+                    RTPCodecCapability::default()
+                };
+
+                let stream_info = StreamInfo::new(
+                    "".to_owned(),
+                    encoding.ssrc,
+                    0,
+                    codec,
+                    &global_params.header_extensions,
+                );
+                let (rtp_read_stream, rtp_interceptor, rtcp_read_stream, rtcp_interceptor) =
+                    RTPReceiver::streams_for_ssrc(&self.transport, encoding.ssrc, &stream_info)
+                        .await?;
+
+                let t = TrackStreams {
+                    track: Arc::new(TrackRemote::new(
+                        self.kind,
+                        encoding.ssrc,
+                        "".to_owned(),
+                        receiver,
+                        Arc::clone(&internal.media_engine),
+                        internal.interceptor.clone(),
+                    )),
+                    stream_info,
+                    rtp_read_stream,
+                    rtp_interceptor,
+                    rtcp_read_stream,
+                    rtcp_interceptor,
+                };
+
+                internal.tracks.push(t);
+            }
+        } else {
+            for encoding in &parameters.encodings {
+                let t = TrackStreams {
+                    track: Arc::new(TrackRemote::new(
+                        self.kind,
+                        0,
+                        encoding.rid.clone(),
+                        Arc::clone(&receiver),
+                        Arc::clone(&internal.media_engine),
+                        internal.interceptor.clone(),
+                    )),
+                    ..Default::default()
+                };
+
+                internal.tracks.push(t);
+            }
+        }
+
+        Ok(())
     }
 
     /// read reads incoming RTCP for this RTPReceiver
