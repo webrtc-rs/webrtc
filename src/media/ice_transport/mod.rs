@@ -247,10 +247,7 @@ impl ICETransport {
     }
 
     /// set_remote_candidates sets the sequence of candidates associated with the remote ICETransport.
-    pub async fn set_remote_candidates(
-        &mut self,
-        remote_candidates: &[ICECandidate],
-    ) -> Result<()> {
+    pub async fn set_remote_candidates(&self, remote_candidates: &[ICECandidate]) -> Result<()> {
         self.ensure_gatherer().await?;
 
         if let Some(agent) = self.gatherer.get_agent().await {
