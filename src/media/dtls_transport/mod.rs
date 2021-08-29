@@ -1,9 +1,8 @@
+pub mod dtls_certificate;
 pub mod dtls_fingerprint;
 pub mod dtls_parameters;
 pub mod dtls_role;
 pub mod dtls_transport_state;
-
-use dtls_role::*;
 
 use crate::api::setting_engine::SettingEngine;
 use crate::default_srtp_protection_profiles;
@@ -14,10 +13,12 @@ use crate::media::ice_transport::ICETransport;
 use crate::peer::ice::ice_role::ICERole;
 use crate::util::mux::endpoint::Endpoint;
 use crate::util::mux::mux_func::{match_dtls, match_srtcp, match_srtp, MatchFunc};
+
 use bytes::Bytes;
 use dtls::config::ClientAuthType;
 use dtls::conn::DTLSConn;
 use dtls::crypto::Certificate;
+use dtls_role::*;
 use srtp::protection_profile::ProtectionProfile;
 use srtp::session::Session;
 use srtp::stream::Stream;
