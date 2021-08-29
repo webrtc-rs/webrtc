@@ -648,7 +648,7 @@ async fn test_populate_sdp() -> Result<()> {
             .await;
         let me = Arc::new(me);
 
-        let mut tr = RTPTransceiver::new(
+        let tr = RTPTransceiver::new(
             None,
             None,
             RTPTransceiverDirection::Recvonly,

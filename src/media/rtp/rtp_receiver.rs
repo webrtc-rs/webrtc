@@ -3,7 +3,10 @@ use crate::error::Error;
 use crate::media::dtls_transport::DTLSTransport;
 use crate::media::interceptor::stream_info::StreamInfo;
 use crate::media::interceptor::*;
-use crate::media::rtp::rtp_codec::{RTPCodecCapability, RTPCodecType, RTPParameters};
+use crate::media::rtp::rtp_codec::{
+    codec_parameters_fuzzy_search, CodecMatch, RTPCodecCapability, RTPCodecParameters,
+    RTPCodecType, RTPParameters,
+};
 use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
 use crate::media::rtp::{RTPReceiveParameters, SSRC};
 use crate::media::track::track_remote::TrackRemote;
@@ -27,6 +30,8 @@ pub(crate) struct RTPReceiverInternal {
     closed_rx: mpsc::Receiver<()>,
     received_tx: Option<mpsc::Sender<()>>,
     received_rx: mpsc::Receiver<()>,
+
+    transceiver_codecs: Option<Arc<Mutex<Vec<RTPCodecParameters>>>>,
 }
 
 impl RTPReceiverInternal {
@@ -119,9 +124,38 @@ impl RTPReceiverInternal {
     }
 
     async fn get_parameters(&self) -> RTPParameters {
-        self.media_engine
+        let mut parameters = self
+            .media_engine
             .get_rtp_parameters_by_kind(self.kind, &[RTPTransceiverDirection::Recvonly])
-            .await
+            .await;
+
+        if let Some(codecs) = &self.transceiver_codecs {
+            let c = codecs.lock().await;
+            parameters.codecs =
+                RTPReceiverInternal::get_codecs(&*c, self.kind, &self.media_engine).await;
+        }
+
+        parameters
+    }
+
+    pub(crate) async fn get_codecs(
+        codecs: &[RTPCodecParameters],
+        kind: RTPCodecType,
+        media_engine: &Arc<MediaEngine>,
+    ) -> Vec<RTPCodecParameters> {
+        let media_engine_codecs = media_engine.get_codecs_by_kind(kind).await;
+        if codecs.is_empty() {
+            return media_engine_codecs;
+        }
+        let mut filtered_codecs = vec![];
+        for codec in &*codecs {
+            let (c, match_type) = codec_parameters_fuzzy_search(codec, &media_engine_codecs);
+            if match_type != CodecMatch::None {
+                filtered_codecs.push(c);
+            }
+        }
+
+        filtered_codecs
     }
 }
 
@@ -157,12 +191,22 @@ impl RTPReceiver {
                 closed_rx,
                 received_tx: Some(received_tx),
                 received_rx,
+
+                transceiver_codecs: None,
             })),
         }
     }
 
     pub fn kind(&self) -> RTPCodecType {
         self.kind
+    }
+
+    pub(crate) async fn set_transceiver_codecs(
+        &self,
+        codecs: Option<Arc<Mutex<Vec<RTPCodecParameters>>>>,
+    ) {
+        let mut internal = self.internal.lock().await;
+        internal.transceiver_codecs = codecs;
     }
 
     /// transport returns the currently-configured *DTLSTransport or nil

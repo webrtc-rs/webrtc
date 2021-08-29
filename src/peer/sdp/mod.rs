@@ -458,10 +458,10 @@ pub(crate) async fn add_transceiver_sdp(
     }
 
     let mut directions = vec![];
-    if t.sender().is_some() {
+    if t.sender().await.is_some() {
         directions.push(RTPTransceiverDirection::Sendonly);
     }
-    if t.receiver().is_some() {
+    if t.receiver().await.is_some() {
         directions.push(RTPTransceiverDirection::Recvonly);
     }
 
@@ -492,7 +492,7 @@ pub(crate) async fn add_transceiver_sdp(
     }
 
     for mt in transceivers {
-        if let Some(sender) = mt.sender() {
+        if let Some(sender) = mt.sender().await {
             if let Some(track) = sender.track().await {
                 media = media.with_media_source(
                     sender.ssrc,

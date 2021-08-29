@@ -483,7 +483,7 @@ impl PeerConnection {
                 // if t.stopping && !t.stopped {
                 // 	return true
                 // }
-                let m = get_by_mid(t.mid(), local_desc);
+                let m = get_by_mid(t.mid().await.as_str(), local_desc);
                 // Step 5.2
                 if !t.stopped && m.is_none() {
                     return true;
@@ -495,7 +495,7 @@ impl PeerConnection {
                             || t.direction() == RTPTransceiverDirection::Sendonly
                         {
                             if let (Some(desc_msid), Some(sender)) =
-                                (m.attribute(ATTR_KEY_MSID), t.sender())
+                                (m.attribute(ATTR_KEY_MSID), t.sender().await)
                             {
                                 if let Some(track) = &sender.track().await {
                                     if desc_msid.as_str()
@@ -512,7 +512,9 @@ impl PeerConnection {
                             SDPType::Offer => {
                                 // Step 5.3.2
                                 if let Some(remote_desc) = &self.current_remote_description {
-                                    if let Some(rm) = get_by_mid(t.mid(), remote_desc) {
+                                    if let Some(rm) =
+                                        get_by_mid(t.mid().await.as_str(), remote_desc)
+                                    {
                                         if get_peer_direction(m) != t.direction()
                                             && get_peer_direction(rm) != t.direction().reverse()
                                         {
@@ -534,10 +536,10 @@ impl PeerConnection {
                     }
                 }
                 // Step 5.4
-                if t.stopped && !t.mid().is_empty() {
+                if t.stopped && !t.mid().await.is_empty() {
                     if let Some(remote_desc) = &self.current_remote_description {
-                        if get_by_mid(t.mid(), local_desc).is_some()
-                            || get_by_mid(t.mid(), remote_desc).is_some()
+                        if get_by_mid(t.mid().await.as_str(), local_desc).is_some()
+                            || get_by_mid(t.mid().await.as_str(), remote_desc).is_some()
                         {
                             return true;
                         }
@@ -709,9 +711,9 @@ impl PeerConnection {
 
     /// has_local_description_changed returns whether local media (rtp_transceivers) has changed
     /// caller of this method should hold `pc.mu` lock
-    fn has_local_description_changed(&self, desc: &SessionDescription) -> bool {
+    async fn has_local_description_changed(&self, desc: &SessionDescription) -> bool {
         for t in &self.rtp_transceivers {
-            if let Some(m) = get_by_mid(t.mid(), desc) {
+            if let Some(m) = get_by_mid(t.mid().await.as_str(), desc) {
                 if get_peer_direction(m) != t.direction() {
                     return true;
                 }
@@ -784,7 +786,7 @@ impl PeerConnection {
                     }
                 }
                 for t in current_transceivers {
-                    if !t.mid().is_empty() {
+                    if !t.mid().await.is_empty() {
                         continue;
                     }
                     self.greater_mid += 1;
@@ -818,7 +820,7 @@ impl PeerConnection {
 
             // Verify local media hasn't changed during offer
             // generation. Recompute if necessary
-            if is_plan_b || !self.has_local_description_changed(&offer) {
+            if is_plan_b || !self.has_local_description_changed(&offer).await {
                 break;
             }
             count += 1;
@@ -1187,7 +1189,7 @@ impl PeerConnection {
                                 }
 
                                 let t = if let Some(t) =
-                                    find_by_mid(mid_value, &mut local_transceivers)
+                                    find_by_mid(mid_value, &mut local_transceivers).await
                                 {
                                     //TODO:  t.stop().await?;
                                     Some(t)
@@ -1197,6 +1199,7 @@ impl PeerConnection {
                                         direction,
                                         &mut local_transceivers,
                                     )
+                                    .await
                                 };
 
                                 if let Some(t) = t {
@@ -1210,8 +1213,8 @@ impl PeerConnection {
                                         t.set_direction(RTPTransceiverDirection::Sendrecv);
                                     }
 
-                                    if t.mid().is_empty() {
-                                        //TODO: t.set_mid(midValue)?;
+                                    if t.mid().await.is_empty() {
+                                        t.set_mid(mid_value.to_owned()).await?;
                                     }
                                 } else {
                                     let receiver = Arc::new(API::new_rtp_receiver(
@@ -1238,8 +1241,8 @@ impl PeerConnection {
                                     ));
                                     //TODO: self.add_rtp_transceiver(Arc::clone(&t));
 
-                                    if t.mid().is_empty() {
-                                        //TODO: t.set_mid(midValue)?;
+                                    if t.mid().await.is_empty() {
+                                        t.set_mid(mid_value.to_owned()).await?;
                                     }
                                 }
                             }
@@ -1404,7 +1407,7 @@ impl PeerConnection {
         let ssrcs: Vec<SSRC> = incoming_tracks.iter().map(|x| x.ssrc).collect();
         for ssrc in ssrcs {
             for t in &local_transceivers {
-                if let Some(receiver) = t.receiver() {
+                if let Some(receiver) = t.receiver().await {
                     if let Some(track) = receiver.track().await {
                         if track.ssrc() != ssrc {
                             continue;
@@ -1424,7 +1427,7 @@ impl PeerConnection {
         for incoming_track in incoming_tracks.iter() {
             let mut track_handled = false;
             for t in &local_transceivers {
-                if t.mid() != incoming_track.mid {
+                if t.mid().await != incoming_track.mid {
                     continue;
                 }
 
@@ -1435,11 +1438,11 @@ impl PeerConnection {
                     continue;
                 }
 
-                if let Some(receiver) = t.receiver() {
+                if let Some(receiver) = t.receiver().await {
                     if receiver.have_received().await {
                         continue;
                     }
-                    self.start_receiver(incoming_track, receiver).await;
+                    self.start_receiver(incoming_track, &receiver).await;
                     track_handled = true;
                 }
             }
@@ -1471,8 +1474,8 @@ impl PeerConnection {
                         continue;
                     }
                 };
-                if let Some(receiver) = t.receiver() {
-                    self.start_receiver(incoming, receiver).await;
+                if let Some(receiver) = t.receiver().await {
+                    self.start_receiver(incoming, &receiver).await;
                 }
             }
         }
@@ -1486,7 +1489,7 @@ impl PeerConnection {
         current_transceivers: &[Arc<RTPTransceiver>],
     ) -> Result<()> {
         for transceiver in current_transceivers {
-            if let Some(sender) = transceiver.sender() {
+            if let Some(sender) = transceiver.sender().await {
                 if sender.is_negotiated() && !sender.has_sent().await {
                     //TODO: sender.send(&sender.get_parameters()).await?;
                 }
@@ -1574,8 +1577,8 @@ impl PeerConnection {
                             )
                             .await?;
 
-                        if let Some(receiver) = t.receiver() {
-                            self.start_receiver(&incoming, receiver).await;
+                        if let Some(receiver) = t.receiver().await {
+                            self.start_receiver(&incoming, &receiver).await;
                         }
                         return Ok(());
                     }
@@ -1629,11 +1632,11 @@ impl PeerConnection {
                         .await?;
 
                     for t in self.get_transceivers() {
-                        if t.mid() != mid || t.receiver().is_none() {
+                        if t.mid().await != mid || t.receiver().await.is_none() {
                             continue;
                         }
 
-                        if let Some(receiver) = t.receiver() {
+                        if let Some(receiver) = t.receiver().await {
                             let track = receiver
                                 .receive_for_rid(rid.as_str(), &params, ssrc)
                                 .await?;
@@ -1774,22 +1777,22 @@ impl PeerConnection {
     }
 
     /// get_senders returns the RTPSender that are currently attached to this PeerConnection
-    pub fn get_senders(&self) -> Vec<Arc<RTPSender>> {
+    pub async fn get_senders(&self) -> Vec<Arc<RTPSender>> {
         let mut senders = vec![];
         for transceiver in &self.rtp_transceivers {
-            if let Some(sender) = transceiver.sender() {
-                senders.push(Arc::clone(sender));
+            if let Some(sender) = transceiver.sender().await {
+                senders.push(sender);
             }
         }
         senders
     }
 
     /// get_receivers returns the RTPReceivers that are currently attached to this PeerConnection
-    pub fn get_receivers(&self) -> Vec<Arc<RTPReceiver>> {
+    pub async fn get_receivers(&self) -> Vec<Arc<RTPReceiver>> {
         let mut receivers = vec![];
         for transceiver in &self.rtp_transceivers {
-            if let Some(receiver) = transceiver.receiver() {
-                receivers.push(Arc::clone(receiver));
+            if let Some(receiver) = transceiver.receiver().await {
+                receivers.push(receiver);
             }
         }
         receivers
@@ -1810,7 +1813,7 @@ impl PeerConnection {
         }
 
         for t in &self.rtp_transceivers {
-            if !t.stopped && t.kind == track.kind() && t.sender().is_none() {
+            if !t.stopped && t.kind == track.kind() && t.sender().await.is_none() {
                 let sender = Arc::new(API::new_rtp_sender(
                     Arc::clone(&track),
                     Arc::clone(&self.dtls_transport),
@@ -1833,8 +1836,8 @@ impl PeerConnection {
             self.new_transceiver_from_track(RTPTransceiverDirection::Sendrecv, track)?;
         self.add_rtp_transceiver(Arc::clone(&transceiver)).await;
 
-        match transceiver.sender() {
-            Some(sender) => Ok(Arc::clone(sender)),
+        match transceiver.sender().await {
+            Some(sender) => Ok(sender),
             None => Err(Error::ErrRTPSenderNil.into()),
         }
     }
@@ -1847,7 +1850,7 @@ impl PeerConnection {
 
         let mut transceiver = None;
         for t in &self.rtp_transceivers {
-            if let Some(s) = t.sender() {
+            if let Some(s) = t.sender().await {
                 if s.id == sender.id {
                     transceiver = Some(t);
                     break;
@@ -2356,7 +2359,7 @@ impl PeerConnection {
 
         if is_renegotiation {
             for t in current_transceivers {
-                if let Some(receiver) = t.receiver() {
+                if let Some(receiver) = t.receiver().await {
                     if let Some(track) = receiver.track().await {
                         let ssrc = track.ssrc();
                         if let Some(_details) = track_details_for_ssrc(&track_details, ssrc) {
@@ -2424,7 +2427,7 @@ impl PeerConnection {
                 } else if t.kind == RTPCodecType::Audio {
                     audio.push(Arc::clone(t));
                 }
-                if let Some(sender) = t.sender() {
+                if let Some(sender) = t.sender().await {
                     sender.set_negotiated();
                 }
             }
@@ -2458,11 +2461,11 @@ impl PeerConnection {
             }
         } else {
             for t in transceivers {
-                if let Some(sender) = t.sender() {
+                if let Some(sender) = t.sender().await {
                     sender.set_negotiated();
                 }
                 media_sections.push(MediaSection {
-                    id: t.mid().to_owned(),
+                    id: t.mid().await,
                     transceivers: vec![Arc::clone(t)],
                     ..Default::default()
                 });
@@ -2578,8 +2581,10 @@ impl PeerConnection {
                                     kind,
                                     direction,
                                     &mut local_transceivers,
-                                ) {
-                                    if let Some(sender) = t.sender() {
+                                )
+                                .await
+                                {
+                                    if let Some(sender) = t.sender().await {
                                         sender.set_negotiated();
                                     }
                                     media_transceivers.push(t);
@@ -2609,8 +2614,8 @@ impl PeerConnection {
                             if detected_plan_b {
                                 return Err(Error::ErrIncorrectSDPSemantics.into());
                             }
-                            if let Some(t) = find_by_mid(mid_value, &mut local_transceivers) {
-                                if let Some(sender) = t.sender() {
+                            if let Some(t) = find_by_mid(mid_value, &mut local_transceivers).await {
+                                if let Some(sender) = t.sender().await {
                                     sender.set_negotiated();
                                 }
                                 let media_transceivers = vec![t];
@@ -2635,11 +2640,11 @@ impl PeerConnection {
         if include_unmatched {
             if !detected_plan_b {
                 for t in &local_transceivers {
-                    if let Some(sender) = t.sender() {
+                    if let Some(sender) = t.sender().await {
                         sender.set_negotiated();
                     }
                     media_sections.push(MediaSection {
-                        id: t.mid().to_owned(),
+                        id: t.mid().await,
                         transceivers: vec![Arc::clone(t)],
                         ..Default::default()
                     });
