@@ -493,7 +493,7 @@ pub(crate) async fn add_transceiver_sdp(
 
     for mt in transceivers {
         if let Some(sender) = mt.sender() {
-            if let Some(track) = sender.track() {
+            if let Some(track) = sender.track().await {
                 media = media.with_media_source(
                     sender.ssrc,
                     track.stream_id().to_owned(), /* cname */

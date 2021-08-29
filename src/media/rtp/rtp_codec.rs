@@ -138,7 +138,7 @@ pub(crate) fn codec_parameters_fuzzy_search(
 ) -> (RTPCodecParameters, CodecMatch) {
     let needle_fmtp = parse_fmtp(&needle.capability.sdp_fmtp_line);
 
-    //TODO: do case-folding equal
+    //TODO: add unicode case-folding equal support
 
     // First attempt to match on mime_type + sdpfmtp_line
     for c in haystack {

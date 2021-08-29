@@ -497,7 +497,7 @@ impl PeerConnection {
                             if let (Some(desc_msid), Some(sender)) =
                                 (m.attribute(ATTR_KEY_MSID), t.sender())
                             {
-                                if let Some(track) = &sender.track() {
+                                if let Some(track) = &sender.track().await {
                                     if desc_msid.as_str()
                                         != track.stream_id().to_owned() + " " + track.id()
                                     {
@@ -1487,7 +1487,7 @@ impl PeerConnection {
     ) -> Result<()> {
         for transceiver in current_transceivers {
             if let Some(sender) = transceiver.sender() {
-                if sender.is_negotiated() && !sender.has_sent() {
+                if sender.is_negotiated() && !sender.has_sent().await {
                     //TODO: sender.send(&sender.get_parameters()).await?;
                 }
             }
