@@ -133,9 +133,9 @@ pub struct PeerConnection {
     pending_local_description: Option<SessionDescription>,
     current_remote_description: Option<SessionDescription>,
     pending_remote_description: Option<SessionDescription>,
-    signaling_state: AtomicU8,      //SignalingState,
-    ice_connection_state: AtomicU8, //iceconnection_state,
-    connection_state: AtomicU8,     //PeerConnectionState,
+    signaling_state: AtomicU8,            //SignalingState,
+    ice_connection_state: Arc<AtomicU8>,  //ICEConnectionState,
+    peer_connection_state: Arc<AtomicU8>, //PeerConnectionState,
 
     idp_login_url: Option<String>,
 
@@ -154,9 +154,9 @@ pub struct PeerConnection {
 
     rtp_transceivers: Vec<Arc<RTPTransceiver>>,
 
-    on_signaling_state_change_handler: Arc<Mutex<Option<OnSignalingStateChangeHdlrFn>>>,
-    on_connection_state_change_handler: Arc<Mutex<Option<OnPeerConnectionStateChangeHdlrFn>>>,
     on_track_handler: Arc<Mutex<Option<OnTrackHdlrFn>>>,
+    on_signaling_state_change_handler: Arc<Mutex<Option<OnSignalingStateChangeHdlrFn>>>,
+    on_peer_connection_state_change_handler: Arc<Mutex<Option<OnPeerConnectionStateChangeHdlrFn>>>,
     on_ice_connection_state_change_handler: Arc<Mutex<Option<OnICEConnectionStateChangeHdlrFn>>>,
     on_data_channel_handler: Arc<Mutex<Option<OnDataChannelHdlrFn>>>,
     on_negotiation_needed_handler: Arc<Mutex<Option<OnNegotiationNeededHdlrFn>>>,
@@ -182,7 +182,7 @@ impl PeerConnection {
     /// If you wish to customize the set of available codecs or the set of
     /// active interceptors, create a MediaEngine and call api.new_peer_connection
     /// instead of this function.
-    pub(crate) async fn new(api: &API, configuration: Configuration) -> Result<Arc<Self>> {
+    pub(crate) async fn new(api: &API, configuration: Configuration) -> Result<Self> {
         // https://w3c.github.io/webrtc-pc/#constructor (Step #2)
         // Some variables defined explicitly despite their implicit zero values to
         // allow better readability to understand what is happening.
@@ -209,8 +209,8 @@ impl PeerConnection {
             last_answer: "".to_owned(),
             greater_mid: -1,
             signaling_state: AtomicU8::new(SignalingState::Stable as u8),
-            ice_connection_state: AtomicU8::new(ICEConnectionState::New as u8),
-            connection_state: AtomicU8::new(PeerConnectionState::New as u8),
+            ice_connection_state: Arc::new(AtomicU8::new(ICEConnectionState::New as u8)),
+            peer_connection_state: Arc::new(AtomicU8::new(PeerConnectionState::New as u8)),
 
             setting_engine: Arc::clone(&api.setting_engine),
             media_engine: if !api.setting_engine.disable_media_engine_copy {
@@ -245,12 +245,18 @@ impl PeerConnection {
 
         //TODO: pc.interceptor_rtcp_writer = api.interceptor.bind_rtcp_writer(interceptor.RTCPWriterFunc(pc.writeRTCP))
 
-        let pc = Arc::new(pc);
+        let ice_connection_state = Arc::clone(&pc.ice_connection_state);
+        let peer_connection_state = Arc::clone(&pc.peer_connection_state);
+        let is_closed = Arc::clone(&pc.is_closed);
+        let dtls_transport = Arc::clone(&pc.dtls_transport);
+        let on_ice_connection_state_change_handler =
+            Arc::clone(&pc.on_ice_connection_state_change_handler);
+        let on_peer_connection_state_change_handler =
+            Arc::clone(&pc.on_peer_connection_state_change_handler);
 
-        let pc1 = Arc::clone(&pc);
         pc.ice_transport
             .on_connection_state_change(Box::new(move |state: ICETransportState| {
-                let cs = match state {
+                let ice_cs = match state {
                     ICETransportState::New => ICEConnectionState::New,
                     ICETransportState::Checking => ICEConnectionState::Checking,
                     ICETransportState::Connected => ICEConnectionState::Connected,
@@ -263,22 +269,79 @@ impl PeerConnection {
                         return Box::pin(async {});
                     }
                 };
-                let pc2 = Arc::clone(&pc1);
+
+                ice_connection_state.store(ice_cs as u8, Ordering::SeqCst);
+                log::info!("ICE connection state changed: {}", ice_cs);
+
+                let on_ice_connection_state_change_handler2 =
+                    Arc::clone(&on_ice_connection_state_change_handler);
+                let on_peer_connection_state_change_handler2 = Arc::clone(&on_peer_connection_state_change_handler);
+                let is_closed2 =  Arc::clone(&is_closed);
+                let dtls_transport_state = dtls_transport.state();
+                let peer_cs_old = peer_connection_state.load(Ordering::SeqCst);
+                let peer_connection_state2 = Arc::clone(&peer_connection_state);
                 Box::pin(async move {
-                    pc2.do_ice_connection_state_change(cs).await;
-                    pc2.update_connection_state(cs, pc2.dtls_transport.state())
-                        .await;
+                    //pc2.do_ice_connection_state_change(cs).await;
+                    {
+                        let mut handler = on_ice_connection_state_change_handler2.lock().await;
+                        if let Some(f) = &mut *handler {
+                            f(ice_cs).await;
+                        }
+                    }
+
+                    //pc2.update_connection_state(cs, pc2.dtls_transport.state()).await;
+                    {
+                        let peer_cs_new =
+                        // The RTCPeerConnection object's [[IsClosed]] slot is true.
+                        if is_closed2.load(Ordering::SeqCst) {
+                             PeerConnectionState::Closed
+                        }else if ice_cs == ICEConnectionState::Failed || dtls_transport_state == DTLSTransportState::Failed {
+                            // Any of the RTCIceTransports or RTCDtlsTransports are in a "failed" state.
+                             PeerConnectionState::Failed
+                        }else if ice_cs == ICEConnectionState::Disconnected {
+                            // Any of the RTCIceTransports or RTCDtlsTransports are in the "disconnected"
+                            // state and none of them are in the "failed" or "connecting" or "checking" state.
+                            PeerConnectionState::Disconnected
+                        }else if ice_cs == ICEConnectionState::Connected && dtls_transport_state == DTLSTransportState::Connected {
+                            // All RTCIceTransports and RTCDtlsTransports are in the "connected", "completed" or "closed"
+                            // state and at least one of them is in the "connected" or "completed" state.
+                            PeerConnectionState::Connected
+                        }else if ice_cs == ICEConnectionState::Checking && dtls_transport_state == DTLSTransportState::Connecting{
+                        //  Any of the RTCIceTransports or RTCDtlsTransports are in the "connecting" or
+                        // "checking" state and none of them is in the "failed" state.
+                             PeerConnectionState::Connecting
+                        }else{
+                            PeerConnectionState::New
+                        };
+
+                        if peer_cs_old == peer_cs_new as u8 {
+                            return;
+                        }
+
+                        log::info!("peer connection state changed: {}", peer_cs_new);
+                        peer_connection_state2
+                            .store(peer_cs_new as u8, Ordering::SeqCst);
+
+                        //self.do_peer_connection_state_change(connection_state).await;
+                        {
+                            log::info!("Peer connection state changed: {}", peer_cs_new);
+                            let mut handler = on_peer_connection_state_change_handler2.lock().await;
+                            if let Some(f) = &mut *handler {
+                                f(peer_cs_new).await;
+                            }
+                        }
+                    }
                 })
             }))
             .await;
 
         // Wire up the on datachannel handler
-        let pc1 = Arc::clone(&pc);
+        let on_data_channel_handler = Arc::clone(&pc.on_data_channel_handler);
         pc.sctp_transport
             .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
-                let pc2 = Arc::clone(&pc1);
+                let on_data_channel_handler2 = Arc::clone(&on_data_channel_handler);
                 Box::pin(async move {
-                    let mut handler = pc2.on_data_channel_handler.lock().await;
+                    let mut handler = on_data_channel_handler2.lock().await;
                     if let Some(f) = &mut *handler {
                         f(d).await;
                     }
@@ -614,17 +677,17 @@ impl PeerConnection {
         }
     }
 
-    /// on_connection_state_change sets an event handler which is called
+    /// on_peer_connection_state_change sets an event handler which is called
     /// when the PeerConnectionState has changed
-    pub async fn on_connection_state_change(&self, f: OnPeerConnectionStateChangeHdlrFn) {
-        let mut on_connection_state_change_handler =
-            self.on_connection_state_change_handler.lock().await;
-        *on_connection_state_change_handler = Some(f);
+    pub async fn on_peer_connection_state_change(&self, f: OnPeerConnectionStateChangeHdlrFn) {
+        let mut on_peer_connection_state_change_handler =
+            self.on_peer_connection_state_change_handler.lock().await;
+        *on_peer_connection_state_change_handler = Some(f);
     }
 
-    async fn do_connection_state_change(&self, cs: PeerConnectionState) {
+    async fn do_peer_connection_state_change(&self, cs: PeerConnectionState) {
         log::info!("Peer connection state changed: {}", cs);
-        let mut handler = self.on_connection_state_change_handler.lock().await;
+        let mut handler = self.on_peer_connection_state_change_handler.lock().await;
         if let Some(f) = &mut *handler {
             f(cs).await;
         }
@@ -869,15 +932,15 @@ impl PeerConnection {
             PeerConnectionState::New
         };
 
-        if self.connection_state.load(Ordering::SeqCst) == connection_state as u8 {
+        if self.peer_connection_state.load(Ordering::SeqCst) == connection_state as u8 {
             return;
         }
 
         log::info!("peer connection state changed: {}", connection_state);
-        self.connection_state
+        self.peer_connection_state
             .store(connection_state as u8, Ordering::SeqCst);
 
-        self.do_connection_state_change(connection_state).await;
+        self.do_peer_connection_state_change(connection_state).await;
     }
 
     /// create_answer starts the PeerConnection and generates the localDescription
@@ -1223,7 +1286,7 @@ impl PeerConnection {
                                         t.set_mid(mid_value.to_owned()).await?;
                                     }
                                 } else {
-                                    let receiver = Arc::new(API::new_rtp_receiver(
+                                    let receiver = Arc::new(RTPReceiver::new(
                                         kind,
                                         Arc::clone(&self.dtls_transport),
                                         Arc::clone(&self.media_engine),
@@ -1827,7 +1890,7 @@ impl PeerConnection {
 
         for t in &self.rtp_transceivers {
             if !t.stopped && t.kind == track.kind() && t.sender().await.is_none() {
-                let sender = Arc::new(API::new_rtp_sender(
+                let sender = Arc::new(RTPSender::new(
                     Arc::clone(&track),
                     Arc::clone(&self.dtls_transport),
                     Arc::clone(&self.media_engine),
@@ -1891,13 +1954,13 @@ impl PeerConnection {
     ) -> Result<Arc<RTPTransceiver>> {
         let (r, s) = match direction {
             RTPTransceiverDirection::Sendrecv => {
-                let r = Some(Arc::new(API::new_rtp_receiver(
+                let r = Some(Arc::new(RTPReceiver::new(
                     track.kind(),
                     Arc::clone(&self.dtls_transport),
                     Arc::clone(&self.media_engine),
                     self.interceptor.clone(),
                 )));
-                let s = Some(Arc::new(API::new_rtp_sender(
+                let s = Some(Arc::new(RTPSender::new(
                     Arc::clone(&track),
                     Arc::clone(&self.dtls_transport),
                     Arc::clone(&self.media_engine),
@@ -1906,7 +1969,7 @@ impl PeerConnection {
                 (r, s)
             }
             RTPTransceiverDirection::Sendonly => {
-                let s = Some(Arc::new(API::new_rtp_sender(
+                let s = Some(Arc::new(RTPSender::new(
                     Arc::clone(&track),
                     Arc::clone(&self.dtls_transport),
                     Arc::clone(&self.media_engine),
@@ -1958,7 +2021,7 @@ impl PeerConnection {
                 self.new_transceiver_from_track(direction, track)?
             }
             RTPTransceiverDirection::Recvonly => {
-                let receiver = Arc::new(API::new_rtp_receiver(
+                let receiver = Arc::new(RTPReceiver::new(
                     kind,
                     Arc::clone(&self.dtls_transport),
                     Arc::clone(&self.media_engine),
@@ -2246,7 +2309,7 @@ impl PeerConnection {
     /// connection_state attribute returns the connection state of the
     /// PeerConnection instance.
     pub fn connection_state(&self) -> PeerConnectionState {
-        self.connection_state.load(Ordering::SeqCst).into()
+        self.peer_connection_state.load(Ordering::SeqCst).into()
     }
 
     /*TODO: // GetStats return data providing statistics about the overall connection
@@ -2385,7 +2448,7 @@ impl PeerConnection {
                         continue;
                     }
 
-                    let receiver = Arc::new(API::new_rtp_receiver(
+                    let receiver = Arc::new(RTPReceiver::new(
                         receiver.kind(),
                         Arc::clone(&self.dtls_transport),
                         Arc::clone(&self.media_engine),

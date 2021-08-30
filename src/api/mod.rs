@@ -40,7 +40,7 @@ impl API {
     pub async fn new_peer_connection(
         &self,
         configuration: Configuration,
-    ) -> Result<Arc<PeerConnection>> {
+    ) -> Result<PeerConnection> {
         PeerConnection::new(self, configuration).await
     }
 
@@ -136,22 +136,30 @@ impl API {
 
     /// new_rtp_receiver constructs a new RTPReceiver
     pub fn new_rtp_receiver(
+        &self,
         kind: RTPCodecType,
         transport: Arc<DTLSTransport>,
-        media_engine: Arc<MediaEngine>,
-        interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
     ) -> RTPReceiver {
-        RTPReceiver::new(kind, transport, media_engine, interceptor)
+        RTPReceiver::new(
+            kind,
+            transport,
+            Arc::clone(&self.media_engine),
+            self.interceptor.clone(),
+        )
     }
 
     /// new_rtp_sender constructs a new RTPSender
     pub fn new_rtp_sender(
+        &self,
         track: Arc<dyn TrackLocal + Send + Sync>,
         transport: Arc<DTLSTransport>,
-        media_engine: Arc<MediaEngine>,
-        interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
     ) -> RTPSender {
-        RTPSender::new(track, transport, media_engine, interceptor)
+        RTPSender::new(
+            track,
+            transport,
+            Arc::clone(&self.media_engine),
+            self.interceptor.clone(),
+        )
     }
 }
 
