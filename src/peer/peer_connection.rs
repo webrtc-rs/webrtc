@@ -370,9 +370,8 @@ impl PeerConnection {
             self.configuration.peer_identity = configuration.peer_identity;
         }
 
-        /*TODO:
         // https://www.w3.org/TR/webrtc/#constructor (step #3)
-        if !configuration.certificates.is_empty() {
+        /*TODO:if !configuration.certificates.is_empty() {
             now := time.Now()
             for _, x509Cert := range configuration.Certificates {
                 if !x509Cert.Expires().IsZero() && now.After(x509Cert.Expires()) {
@@ -1234,7 +1233,7 @@ impl PeerConnection {
             let we_offer = desc.serde.sdp_type == SDPType::Answer;
 
             if !we_offer && !detected_plan_b {
-                let desc = self.remote_description();
+                let desc = self.remote_description().cloned();
                 if let Some(desc) = desc {
                     if let Some(parsed) = &desc.parsed {
                         for media in &parsed.media_descriptions {
@@ -1308,7 +1307,8 @@ impl PeerConnection {
                                         vec![],
                                         Arc::clone(&self.media_engine),
                                     ));
-                                    //TODO: self.add_rtp_transceiver(Arc::clone(&t));
+
+                                    self.add_rtp_transceiver(Arc::clone(&t)).await;
 
                                     if t.mid().await.is_empty() {
                                         t.set_mid(mid_value.to_owned()).await?;
@@ -1773,12 +1773,15 @@ impl PeerConnection {
                         .store_simulcast_stream(Arc::clone(&stream))
                         .await;
 
-                    /*
-                    TODO:
-                     let ssrc = stream.get_ssrc();
-                     if let Err(err) = self.handle_undeclared_ssrc(stream, ssrc) {
-                        log::error!("Incoming unhandled RTP ssrc({}), on_track will not be fired. {}", ssrc, err);
+                    let _ssrc = stream.get_ssrc();
+                    /*TODO:if let Err(err) = self.handle_undeclared_ssrc(stream, ssrc) {
+                        log::error!(
+                            "Incoming unhandled RTP ssrc({}), on_track will not be fired. {}",
+                            ssrc,
+                            err
+                        );
                     }*/
+
                     simulcast_routine_count2.fetch_sub(1, Ordering::SeqCst);
                 });
             }
@@ -2312,8 +2315,8 @@ impl PeerConnection {
         self.peer_connection_state.load(Ordering::SeqCst).into()
     }
 
-    /*TODO: // GetStats return data providing statistics about the overall connection
-    func (pc *PeerConnection) GetStats() StatsReport {
+    // GetStats return data providing statistics about the overall connection
+    /*TODO: func (pc *PeerConnection) GetStats() StatsReport {
         var (
             dataChannelsAccepted  uint32
             dataChannelsClosed    uint32
@@ -2420,12 +2423,12 @@ impl PeerConnection {
     }
 
     async fn start_rtp(
-        &self,
+        &mut self,
         is_renegotiation: bool,
         remote_desc: &SessionDescription,
         current_transceivers: &[Arc<RTPTransceiver>],
-    ) {
-        let track_details = if let Some(parsed) = &remote_desc.parsed {
+    ) -> Result<()> {
+        let mut track_details = if let Some(parsed) = &remote_desc.parsed {
             track_details_from_sdp(parsed)
         } else {
             vec![]
@@ -2459,7 +2462,8 @@ impl PeerConnection {
             }
         }
 
-        //TODO: self.start_rtp_receivers(&mut track_details, current_transceivers).await?;
+        self.start_rtp_receivers(&mut track_details, current_transceivers)
+            .await?;
 
         if let Some(parsed) = &remote_desc.parsed {
             if have_application_media_section(parsed) {
@@ -2470,6 +2474,8 @@ impl PeerConnection {
         if !is_renegotiation {
             self.undeclared_media_processor()
         }
+
+        Ok(())
     }
 
     /// generate_unmatched_sdp generates an SDP that doesn't take remote state into account
