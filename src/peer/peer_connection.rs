@@ -43,7 +43,7 @@ use crate::media::dtls_transport::dtls_role::{
 use crate::media::rtp::rtp_codec::{RTPCodecType, RTPHeaderExtensionCapability};
 use crate::media::rtp::rtp_sender::RTPSender;
 use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
-use crate::media::rtp::{RTPCodingParameters, RTPTransceiverInit, SSRC};
+use crate::media::rtp::{RTPCodingParameters, RTPReceiveParameters, RTPTransceiverInit, SSRC};
 use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::media::track::track_local::TrackLocal;
 use crate::peer::ice::ice_candidate::{ICECandidate, ICECandidateInit};
@@ -796,7 +796,7 @@ impl PeerConnection {
                         continue;
                     }
                     self.greater_mid += 1;
-                    //TODO: t.set_mid(format!("{}", self.greater_mid))?;
+                    t.set_mid(format!("{}", self.greater_mid)).await?;
                 }
             }
 
@@ -1332,7 +1332,7 @@ impl PeerConnection {
         Ok(())
     }
 
-    async fn start_receiver(&self, incoming: &TrackDetails, _receiver: &Arc<RTPReceiver>) {
+    async fn start_receiver(&self, incoming: &TrackDetails, receiver: Arc<RTPReceiver>) {
         let mut encodings = vec![];
         if incoming.ssrc != 0 {
             encodings.push(RTPCodingParameters {
@@ -1346,7 +1346,7 @@ impl PeerConnection {
                 ..Default::default()
             });
         }
-        /*TODO:
+
         if let Err(err) = receiver.receive(&RTPReceiveParameters { encodings }).await {
             log::warn!("RTPReceiver Receive failed {}", err);
             return;
@@ -1354,9 +1354,9 @@ impl PeerConnection {
 
         // set track id and label early so they can be set as new track information
         // is received from the SDP.
-        for track_streams in &receiver.tracks {
-            track_streams.track.id = incoming.id.clone();
-            track_streams.track.stream_id = incoming.stream_id.clone();
+        for track_remote in &receiver.tracks().await {
+            track_remote.set_id(incoming.id.clone()).await;
+            track_remote.set_stream_id(incoming.stream_id.clone()).await;
         }
 
         // We can't block and wait for a single SSRC
@@ -1366,31 +1366,38 @@ impl PeerConnection {
 
         let media_engine = Arc::clone(&self.media_engine);
         tokio::spawn(async move {
-            if let Some(track) = receiver.track() {
-                if let Err(err) = track.determine_payload_type() {
-                    log::warn!("Could not determine PayloadType for SSRC {}", track.ssrc());
+            if let Some(track) = receiver.track().await {
+                if let Err(err) = track.determine_payload_type().await {
+                    log::warn!(
+                        "Could not determine PayloadType for SSRC {} with err {}",
+                        track.ssrc(),
+                        err
+                    );
                     return;
                 }
 
-                let params =
-                    match media_engine.get_rtp_parameters_by_payload_type(track.payload_type()) {
-                        Ok(params) => params,
-                        Err(err) => {
-                            log::warn!(
-                                "no codec could be found for payloadType {}",
-                                track.payload_type(),
-                            );
-                            return;
-                        }
-                    };
+                let params = match media_engine
+                    .get_rtp_parameters_by_payload_type(track.payload_type())
+                    .await
+                {
+                    Ok(params) => params,
+                    Err(err) => {
+                        log::warn!(
+                            "no codec could be found for payloadType {} with err {}",
+                            track.payload_type(),
+                            err,
+                        );
+                        return;
+                    }
+                };
 
-                track.kind = receiver.kind;
-                track.codec = params.Codecs[0];
-                track.params = params;
+                track.set_kind(receiver.kind());
+                track.set_codec(params.codecs[0].clone()).await;
+                track.set_params(params).await;
 
-                self.onTrack(receiver.Track(), receiver)
+                //TODO:self.do_track(receiver.track().await, Some(Arc::clone(&receiver))).await;
             }
-        });*/
+        });
     }
 
     /// start_rtp_receivers opens knows inbound SRTP streams from the remote_description
@@ -1448,7 +1455,7 @@ impl PeerConnection {
                     if receiver.have_received().await {
                         continue;
                     }
-                    self.start_receiver(incoming_track, &receiver).await;
+                    self.start_receiver(incoming_track, receiver).await;
                     track_handled = true;
                 }
             }
@@ -1481,7 +1488,7 @@ impl PeerConnection {
                     }
                 };
                 if let Some(receiver) = t.receiver().await {
-                    self.start_receiver(incoming, &receiver).await;
+                    self.start_receiver(incoming, receiver).await;
                 }
             }
         }
@@ -1584,7 +1591,7 @@ impl PeerConnection {
                             .await?;
 
                         if let Some(receiver) = t.receiver().await {
-                            self.start_receiver(&incoming, &receiver).await;
+                            self.start_receiver(&incoming, receiver).await;
                         }
                         return Ok(());
                     }
