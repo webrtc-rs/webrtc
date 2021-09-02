@@ -48,7 +48,7 @@ pub struct ICEGatherer {
     pub(crate) on_local_candidate_handler: Arc<Mutex<Option<OnLocalCandidateHdlrFn>>>,
     pub(crate) on_state_change_handler: Arc<Mutex<Option<OnICEGathererStateChangeHdlrFn>>>,
 
-    // Used for GatheringCompletePromise
+    // Used for gathering_complete_promise
     pub(crate) on_gathering_complete_handler: Arc<Mutex<Option<OnGatheringCompleteHdlrFn>>>,
 }
 

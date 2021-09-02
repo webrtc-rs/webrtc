@@ -1,3 +1,6 @@
+#[cfg(test)]
+pub(crate) mod peer_connection_test;
+
 use crate::api::media_engine::MediaEngine;
 use crate::api::setting_engine::SettingEngine;
 use crate::api::API;
@@ -77,7 +80,7 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, Mutex};
 
 pub type OnSignalingStateChangeHdlrFn = Box<
     dyn (FnMut(SignalingState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync,
@@ -169,7 +172,7 @@ pub struct PeerConnection {
 
     // A reference to the associated API state used by this connection
     setting_engine: Arc<SettingEngine>,
-    media_engine: Arc<MediaEngine>,
+    pub(crate) media_engine: Arc<MediaEngine>,
     interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
 
     interceptor_rtcp_writer: Option<Arc<dyn RTCPWriter + Send + Sync>>,
@@ -2076,7 +2079,7 @@ impl PeerConnection {
     /// underlying channel such as data reliability.
     pub async fn create_data_channel(
         &self,
-        label: String,
+        label: &str,
         options: Option<DataChannelConfig>,
     ) -> Result<Arc<DataChannel>> {
         // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #2)
@@ -2085,7 +2088,7 @@ impl PeerConnection {
         }
 
         let mut params = DataChannelParameters {
-            label,
+            label: label.to_owned(),
             ordered: true,
             ..Default::default()
         };
@@ -2795,5 +2798,34 @@ impl PeerConnection {
     /// https://www.w3.org/TR/webrtc/#attributes-15
     pub fn sctp(&self) -> Arc<SCTPTransport> {
         Arc::clone(&self.sctp_transport)
+    }
+
+    /// gathering_complete_promise is a Pion specific helper function that returns a channel that is closed when gathering is complete.
+    /// This function may be helpful in cases where you are unable to trickle your ICE Candidates.
+    ///
+    /// It is better to not use this function, and instead trickle candidates. If you use this function you will see longer connection startup times.
+    /// When the call is connected you will see no impact however.
+    pub async fn gathering_complete_promise(&self) -> mpsc::Receiver<()> {
+        let (gathering_complete_tx, gathering_complete_rx) = mpsc::channel(1);
+
+        // It's possible to miss the GatherComplete event since setGatherCompleteHandler is an atomic operation and the
+        // promise might have been created after the gathering is finished. Therefore, we need to check if the ICE gathering
+        // state has changed to complete so that we don't block the caller forever.
+        let ice_gatherer = Arc::clone(&self.ice_gatherer);
+        let mut done = Some(gathering_complete_tx);
+        self.set_gather_complete_handler(Box::new(move || {
+            let state = match ice_gatherer.state() {
+                ICEGathererState::New => ICEGatheringState::New,
+                ICEGathererState::Gathering => ICEGatheringState::Gathering,
+                _ => ICEGatheringState::Complete,
+            };
+            if state == ICEGatheringState::Complete {
+                done.take();
+            }
+            Box::pin(async move {})
+        }))
+        .await;
+
+        gathering_complete_rx
     }
 }
