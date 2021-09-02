@@ -1,17 +1,17 @@
 use super::*;
+use crate::api::media_engine::MIME_TYPE_OPUS;
 use crate::api::APIBuilder;
 use crate::peer::configuration::Configuration;
 use regex::Regex;
+use std::io::Cursor;
 
 #[tokio::test]
 async fn test_opus_case() -> Result<()> {
     let mut m = MediaEngine::default();
     m.register_default_codecs()?;
-
     let api = APIBuilder::new().with_media_engine(m).build();
 
     let mut pc = api.new_peer_connection(Configuration::default()).await?;
-
     pc.add_transceiver_from_kind(RTPCodecType::Audio, &[])
         .await?;
 
@@ -19,141 +19,156 @@ async fn test_opus_case() -> Result<()> {
 
     let re = Regex::new(r"(?m)^a=rtpmap:\d+ opus/48000/2")?;
     assert!(re.is_match(offer.serde.sdp.as_str()));
+
     pc.close().await?;
 
     Ok(())
 }
 
-/*
-func TestVideoCase()->Result<()> {
-    pc, err := NewPeerConnection(Configuration{})
-    assert.NoError(t, err)
+#[tokio::test]
+async fn test_video_case() -> Result<()> {
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+    let api = APIBuilder::new().with_media_engine(m).build();
 
-    _, err = pc.AddTransceiverFromKind(RTPCodecTypeVideo)
-    assert.NoError(t, err)
+    let mut pc = api.new_peer_connection(Configuration::default()).await?;
+    pc.add_transceiver_from_kind(RTPCodecType::Video, &[])
+        .await?;
 
-    offer, err := pc.CreateOffer(nil)
-    assert.NoError(t, err)
+    let offer = pc.create_offer(None).await?;
 
-    assert.True(t, regexp.MustCompile(`(?m)^a=rtpmap:\d+ H264/90000`).MatchString(offer.SDP))
-    assert.True(t, regexp.MustCompile(`(?m)^a=rtpmap:\d+ VP8/90000`).MatchString(offer.SDP))
-    assert.True(t, regexp.MustCompile(`(?m)^a=rtpmap:\d+ VP9/90000`).MatchString(offer.SDP))
-    assert.NoError(t, pc.Close())
+    let re = Regex::new(r"(?m)^a=rtpmap:\d+ H264/90000")?;
+    assert!(re.is_match(offer.serde.sdp.as_str()));
+    let re = Regex::new(r"(?m)^a=rtpmap:\d+ VP8/90000")?;
+    assert!(re.is_match(offer.serde.sdp.as_str()));
+    let re = Regex::new(r"(?m)^a=rtpmap:\d+ VP9/90000")?;
+    assert!(re.is_match(offer.serde.sdp.as_str()));
+
+    pc.close().await?;
+
+    Ok(())
 }
 
-func TestMediaEngineRemoteDescription()->Result<()> {
-    mustParse := func(raw string) sdp.SessionDescription {
-        s := sdp.SessionDescription{}
-        assert.NoError(t, s.Unmarshal([]byte(raw)))
-        return s
-    }
+#[tokio::test]
+async fn test_media_engine_remote_description() -> Result<()> {
+    let must_parse = |raw: &str| -> Result<sdp::session_description::SessionDescription> {
+        let mut reader = Cursor::new(raw.as_bytes());
+        sdp::session_description::SessionDescription::unmarshal(&mut reader)
+    };
 
-    t.Run("No Media", func()->Result<()> {
-        const noMedia = `v=0
+    //"No Media"
+    {
+        const NO_MEDIA: &str = "v=0
 o=- 4596489990601351948 2 IN IP4 127.0.0.1
 s=-
 t=0 0
-`
-        m := MediaEngine{}
-        assert.NoError(t, m.RegisterDefaultCodecs())
-        assert.NoError(t, m.updateFromRemoteDescription(mustParse(noMedia)))
+";
+        let mut m = MediaEngine::default();
+        m.register_default_codecs()?;
+        m.update_from_remote_description(&must_parse(NO_MEDIA)?)
+            .await?;
 
-        assert.False(t, m.negotiatedVideo)
-        assert.False(t, m.negotiatedAudio)
-    })
+        assert!(!m.negotiated_video.load(Ordering::SeqCst));
+        assert!(!m.negotiated_audio.load(Ordering::SeqCst));
+    }
 
-    t.Run("Enable Opus", func()->Result<()> {
-        const opusSamePayload = `v=0
+    //"Enable Opus"
+    {
+        const OPUS_SAME_PAYLOAD: &str = "v=0
 o=- 4596489990601351948 2 IN IP4 127.0.0.1
 s=-
 t=0 0
 m=audio 9 UDP/TLS/RTP/SAVPF 111
 a=rtpmap:111 opus/48000/2
 a=fmtp:111 minptime=10; useinbandfec=1
-`
+";
 
-        m := MediaEngine{}
-        assert.NoError(t, m.RegisterDefaultCodecs())
-        assert.NoError(t, m.updateFromRemoteDescription(mustParse(opusSamePayload)))
+        let mut m = MediaEngine::default();
+        m.register_default_codecs()?;
+        m.update_from_remote_description(&must_parse(OPUS_SAME_PAYLOAD)?)
+            .await?;
 
-        assert.False(t, m.negotiatedVideo)
-        assert.True(t, m.negotiatedAudio)
+        assert!(!m.negotiated_video.load(Ordering::SeqCst));
+        assert!(m.negotiated_audio.load(Ordering::SeqCst));
 
-        opusCodec, _, err := m.getCodecByPayload(111)
-        assert.NoError(t, err)
-        assert.Equal(t, opusCodec.MimeType, MimeTypeOpus)
-    })
+        let (opus_codec, _) = m.get_codec_by_payload(111).await?;
+        assert_eq!(opus_codec.capability.mime_type, MIME_TYPE_OPUS);
+    }
 
-    t.Run("Change Payload Type", func()->Result<()> {
-        const opusSamePayload = `v=0
+    //"Change Payload Type"
+    {
+        const OPUS_SAME_PAYLOAD: &str = "v=0
 o=- 4596489990601351948 2 IN IP4 127.0.0.1
 s=-
 t=0 0
 m=audio 9 UDP/TLS/RTP/SAVPF 112
 a=rtpmap:112 opus/48000/2
 a=fmtp:112 minptime=10; useinbandfec=1
-`
+";
 
-        m := MediaEngine{}
-        assert.NoError(t, m.RegisterDefaultCodecs())
-        assert.NoError(t, m.updateFromRemoteDescription(mustParse(opusSamePayload)))
+        let mut m = MediaEngine::default();
+        m.register_default_codecs()?;
+        m.update_from_remote_description(&must_parse(OPUS_SAME_PAYLOAD)?)
+            .await?;
 
-        assert.False(t, m.negotiatedVideo)
-        assert.True(t, m.negotiatedAudio)
+        assert!(!m.negotiated_video.load(Ordering::SeqCst));
+        assert!(m.negotiated_audio.load(Ordering::SeqCst));
 
-        _, _, err := m.getCodecByPayload(111)
-        assert.Error(t, err)
+        let result = m.get_codec_by_payload(111).await;
+        assert!(result.is_err());
 
-        opusCodec, _, err := m.getCodecByPayload(112)
-        assert.NoError(t, err)
-        assert.Equal(t, opusCodec.MimeType, MimeTypeOpus)
-    })
+        let (opus_codec, _) = m.get_codec_by_payload(112).await?;
+        assert_eq!(opus_codec.capability.mime_type, MIME_TYPE_OPUS);
+    }
 
-    t.Run("Case Insensitive", func()->Result<()> {
-        const opusUpcase = `v=0
+    //"Case Insensitive"
+    {
+        const OPUS_UPCASE: &str = "v=0
 o=- 4596489990601351948 2 IN IP4 127.0.0.1
 s=-
 t=0 0
 m=audio 9 UDP/TLS/RTP/SAVPF 111
 a=rtpmap:111 OPUS/48000/2
 a=fmtp:111 minptime=10; useinbandfec=1
-`
+";
 
-        m := MediaEngine{}
-        assert.NoError(t, m.RegisterDefaultCodecs())
-        assert.NoError(t, m.updateFromRemoteDescription(mustParse(opusUpcase)))
+        let mut m = MediaEngine::default();
+        m.register_default_codecs()?;
+        m.update_from_remote_description(&must_parse(OPUS_UPCASE)?)
+            .await?;
 
-        assert.False(t, m.negotiatedVideo)
-        assert.True(t, m.negotiatedAudio)
+        assert!(!m.negotiated_video.load(Ordering::SeqCst));
+        assert!(m.negotiated_audio.load(Ordering::SeqCst));
 
-        opusCodec, _, err := m.getCodecByPayload(111)
-        assert.NoError(t, err)
-        assert.Equal(t, opusCodec.MimeType, "audio/OPUS")
-    })
+        let (opus_codec, _) = m.get_codec_by_payload(111).await?;
+        assert_eq!(opus_codec.capability.mime_type, "audio/OPUS");
+    }
 
-    t.Run("Handle different fmtp", func()->Result<()> {
-        const opusNoFmtp = `v=0
+    //"Handle different fmtp"
+    {
+        const OPUS_NO_FMTP: &str = "v=0
 o=- 4596489990601351948 2 IN IP4 127.0.0.1
 s=-
 t=0 0
 m=audio 9 UDP/TLS/RTP/SAVPF 111
 a=rtpmap:111 opus/48000/2
-`
+";
 
-        m := MediaEngine{}
-        assert.NoError(t, m.RegisterDefaultCodecs())
-        assert.NoError(t, m.updateFromRemoteDescription(mustParse(opusNoFmtp)))
+        let mut m = MediaEngine::default();
+        m.register_default_codecs()?;
+        m.update_from_remote_description(&must_parse(OPUS_NO_FMTP)?)
+            .await?;
 
-        assert.False(t, m.negotiatedVideo)
-        assert.True(t, m.negotiatedAudio)
+        assert!(!m.negotiated_video.load(Ordering::SeqCst));
+        assert!(m.negotiated_audio.load(Ordering::SeqCst));
 
-        opusCodec, _, err := m.getCodecByPayload(111)
-        assert.NoError(t, err)
-        assert.Equal(t, opusCodec.MimeType, MimeTypeOpus)
-    })
+        let (opus_codec, _) = m.get_codec_by_payload(111).await?;
+        assert_eq!(opus_codec.capability.mime_type, MIME_TYPE_OPUS);
+    }
 
-    t.Run("Header Extensions", func()->Result<()> {
-        const headerExtensions = `v=0
+    //"Header Extensions"
+    {
+        const HEADER_EXTENSIONS: &str = "v=0
 o=- 4596489990601351948 2 IN IP4 127.0.0.1
 s=-
 t=0 0
@@ -161,35 +176,52 @@ m=audio 9 UDP/TLS/RTP/SAVPF 111
 a=extmap:7 urn:ietf:params:rtp-hdrext:sdes:mid
 a=extmap:5 urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id
 a=rtpmap:111 opus/48000/2
-`
+";
 
-        m := MediaEngine{}
-        assert.NoError(t, m.RegisterDefaultCodecs())
-        for _, extension := range []string{
+        let mut m = MediaEngine::default();
+        m.register_default_codecs()?;
+        for extension in [
             "urn:ietf:params:rtp-hdrext:sdes:mid",
             "urn:ietf:params:rtp-hdrext:sdes:repaired-rtp-stream-id",
-        } {
-            assert.NoError(t, m.RegisterHeaderExtension(RTPHeaderExtensionCapability{URI: extension}, RTPCodecTypeAudio))
+        ] {
+            m.register_header_extension(
+                RTPHeaderExtensionCapability {
+                    uri: extension.to_owned(),
+                },
+                RTPCodecType::Audio,
+                vec![],
+            )
+            .await?;
         }
 
-        assert.NoError(t, m.updateFromRemoteDescription(mustParse(headerExtensions)))
+        m.update_from_remote_description(&must_parse(HEADER_EXTENSIONS)?)
+            .await?;
 
-        assert.False(t, m.negotiatedVideo)
-        assert.True(t, m.negotiatedAudio)
+        assert!(!m.negotiated_video.load(Ordering::SeqCst));
+        assert!(m.negotiated_audio.load(Ordering::SeqCst));
 
-        absID, absAudioEnabled, absVideoEnabled := m.getHeaderExtensionID(RTPHeaderExtensionCapability{sdp.ABSSendTimeURI})
-        assert.Equal(t, absID, 0)
-        assert.False(t, absAudioEnabled)
-        assert.False(t, absVideoEnabled)
+        let (abs_id, abs_audio_enabled, abs_video_enabled) = m
+            .get_header_extension_id(RTPHeaderExtensionCapability {
+                uri: sdp::extmap::ABS_SEND_TIME_URI.to_owned(),
+            })
+            .await;
+        assert_eq!(abs_id, 0);
+        assert!(!abs_audio_enabled);
+        assert!(!abs_video_enabled);
 
-        midID, midAudioEnabled, midVideoEnabled := m.getHeaderExtensionID(RTPHeaderExtensionCapability{sdp.SDESMidURI})
-        assert.Equal(t, midID, 7)
-        assert.True(t, midAudioEnabled)
-        assert.False(t, midVideoEnabled)
-    })
+        let (mid_id, mid_audio_enabled, mid_video_enabled) = m
+            .get_header_extension_id(RTPHeaderExtensionCapability {
+                uri: sdp::extmap::SDES_MID_URI.to_owned(),
+            })
+            .await;
+        assert_eq!(mid_id, 7);
+        assert!(mid_audio_enabled);
+        assert!(!mid_video_enabled);
+    }
 
-    t.Run("Prefers exact codec matches", func()->Result<()> {
-        const profileLevels = `v=0
+    //"Prefers exact codec matches"
+    {
+        const PROFILE_LEVELS: &str = "v=0
 o=- 4596489990601351948 2 IN IP4 127.0.0.1
 s=-
 t=0 0
@@ -198,89 +230,140 @@ a=rtpmap:96 H264/90000
 a=fmtp:96 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640c1f
 a=rtpmap:98 H264/90000
 a=fmtp:98 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f
-`
-        m := MediaEngine{}
-        assert.NoError(t, m.RegisterCodec(RTPCodecParameters{
-            RTPCodecCapability: RTPCodecCapability{MimeTypeH264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f", nil},
-            PayloadType:        127,
-        }, RTPCodecTypeVideo))
-        assert.NoError(t, m.updateFromRemoteDescription(mustParse(profileLevels)))
+";
+        let mut m = MediaEngine::default();
+        m.register_codec(
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: MIME_TYPE_H264.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line:
+                        "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f"
+                            .to_string(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 127,
+                ..Default::default()
+            },
+            RTPCodecType::Video,
+        )?;
+        m.update_from_remote_description(&must_parse(PROFILE_LEVELS)?)
+            .await?;
 
-        assert.True(t, m.negotiatedVideo)
-        assert.False(t, m.negotiatedAudio)
+        assert!(m.negotiated_video.load(Ordering::SeqCst));
+        assert!(!m.negotiated_audio.load(Ordering::SeqCst));
 
-        supportedH264, _, err := m.getCodecByPayload(98)
-        assert.NoError(t, err)
-        assert.Equal(t, supportedH264.MimeType, MimeTypeH264)
+        let (supported_h264, _) = m.get_codec_by_payload(98).await?;
+        assert_eq!(supported_h264.capability.mime_type, MIME_TYPE_H264);
 
-        _, _, err = m.getCodecByPayload(96)
-        assert.Error(t, err)
-    })
+        assert!(m.get_codec_by_payload(96).await.is_err());
+    }
 
-    t.Run("Does not match when fmtpline is set and does not match", func()->Result<()> {
-        const profileLevels = `v=0
+    //"Does not match when fmtpline is set and does not match"
+    {
+        const PROFILE_LEVELS: &str = "v=0
 o=- 4596489990601351948 2 IN IP4 127.0.0.1
 s=-
 t=0 0
 m=video 60323 UDP/TLS/RTP/SAVPF 96 98
 a=rtpmap:96 H264/90000
 a=fmtp:96 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640c1f
-`
-        m := MediaEngine{}
-        assert.NoError(t, m.RegisterCodec(RTPCodecParameters{
-            RTPCodecCapability: RTPCodecCapability{MimeTypeH264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f", nil},
-            PayloadType:        127,
-        }, RTPCodecTypeVideo))
-        assert.Error(t, m.updateFromRemoteDescription(mustParse(profileLevels)))
+";
+        let mut m = MediaEngine::default();
+        m.register_codec(
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: MIME_TYPE_H264.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line:
+                        "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f"
+                            .to_string(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 127,
+                ..Default::default()
+            },
+            RTPCodecType::Video,
+        )?;
+        assert!(m
+            .update_from_remote_description(&must_parse(PROFILE_LEVELS)?)
+            .await
+            .is_err());
 
-        _, _, err := m.getCodecByPayload(96)
-        assert.Error(t, err)
-    })
+        assert!(m.get_codec_by_payload(96).await.is_err());
+    }
 
-    t.Run("Matches when fmtpline is not set in offer, but exists in mediaengine", func()->Result<()> {
-        const profileLevels = `v=0
+    //"Matches when fmtpline is not set in offer, but exists in mediaengine"
+    {
+        const PROFILE_LEVELS: &str = "v=0
 o=- 4596489990601351948 2 IN IP4 127.0.0.1
 s=-
 t=0 0
 m=video 60323 UDP/TLS/RTP/SAVPF 96
 a=rtpmap:96 VP9/90000
-`
-        m := MediaEngine{}
-        assert.NoError(t, m.RegisterCodec(RTPCodecParameters{
-            RTPCodecCapability: RTPCodecCapability{MimeTypeVP9, 90000, 0, "profile-id=0", nil},
-            PayloadType:        98,
-        }, RTPCodecTypeVideo))
-        assert.NoError(t, m.updateFromRemoteDescription(mustParse(profileLevels)))
+";
+        let mut m = MediaEngine::default();
+        m.register_codec(
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: MIME_TYPE_VP9.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: "profile-id=0".to_string(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 98,
+                ..Default::default()
+            },
+            RTPCodecType::Video,
+        )?;
 
-        assert.True(t, m.negotiatedVideo)
+        m.update_from_remote_description(&must_parse(PROFILE_LEVELS)?)
+            .await?;
 
-        _, _, err := m.getCodecByPayload(96)
-        assert.NoError(t, err)
-    })
+        assert!(m.negotiated_video.load(Ordering::SeqCst));
 
-    t.Run("Matches when fmtpline exists in neither", func()->Result<()> {
-        const profileLevels = `v=0
+        m.get_codec_by_payload(96).await?;
+    }
+
+    //"Matches when fmtpline exists in neither"
+    {
+        const PROFILE_LEVELS: &str = "v=0
 o=- 4596489990601351948 2 IN IP4 127.0.0.1
 s=-
 t=0 0
 m=video 60323 UDP/TLS/RTP/SAVPF 96
 a=rtpmap:96 VP8/90000
-`
-        m := MediaEngine{}
-        assert.NoError(t, m.RegisterCodec(RTPCodecParameters{
-            RTPCodecCapability: RTPCodecCapability{MimeTypeVP8, 90000, 0, "", nil},
-            PayloadType:        96,
-        }, RTPCodecTypeVideo))
-        assert.NoError(t, m.updateFromRemoteDescription(mustParse(profileLevels)))
+";
+        let mut m = MediaEngine::default();
+        m.register_codec(
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: MIME_TYPE_VP8.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: "".to_string(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 96,
+                ..Default::default()
+            },
+            RTPCodecType::Video,
+        )?;
 
-        assert.True(t, m.negotiatedVideo)
+        m.update_from_remote_description(&must_parse(PROFILE_LEVELS)?)
+            .await?;
 
-        _, _, err := m.getCodecByPayload(96)
-        assert.NoError(t, err)
-    })
+        assert!(m.negotiated_video.load(Ordering::SeqCst));
 
-    t.Run("Matches when rtx apt for exact match codec", func()->Result<()> {
-        const profileLevels = `v=0
+        m.get_codec_by_payload(96).await?;
+    }
+
+    //"Matches when rtx apt for exact match codec"
+    {
+        const PROFILE_LEVELS: &str = "v=0
 o=- 4596489990601351948 2 IN IP4 127.0.0.1
 s=-
 t=0 0
@@ -290,30 +373,64 @@ a=rtpmap:96 VP9/90000
 a=fmtp:96 profile-id=2
 a=rtpmap:97 rtx/90000
 a=fmtp:97 apt=96
-`
-        m := MediaEngine{}
-        assert.NoError(t, m.RegisterCodec(RTPCodecParameters{
-            RTPCodecCapability: RTPCodecCapability{MimeTypeVP8, 90000, 0, "", nil},
-            PayloadType:        94,
-        }, RTPCodecTypeVideo))
-        assert.NoError(t, m.RegisterCodec(RTPCodecParameters{
-            RTPCodecCapability: RTPCodecCapability{MimeTypeVP9, 90000, 0, "profile-id=2", nil},
-            PayloadType:        96,
-        }, RTPCodecTypeVideo))
-        assert.NoError(t, m.RegisterCodec(RTPCodecParameters{
-            RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=96", nil},
-            PayloadType:        97,
-        }, RTPCodecTypeVideo))
-        assert.NoError(t, m.updateFromRemoteDescription(mustParse(profileLevels)))
+";
+        let mut m = MediaEngine::default();
+        m.register_codec(
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: MIME_TYPE_VP8.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: "".to_string(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 94,
+                ..Default::default()
+            },
+            RTPCodecType::Video,
+        )?;
 
-        assert.True(t, m.negotiatedVideo)
+        m.register_codec(
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: MIME_TYPE_VP9.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: "profile-id=2".to_string(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 96,
+                ..Default::default()
+            },
+            RTPCodecType::Video,
+        )?;
 
-        _, _, err := m.getCodecByPayload(97)
-        assert.NoError(t, err)
-    })
+        m.register_codec(
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: "video/rtx".to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: "apt=96".to_string(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 97,
+                ..Default::default()
+            },
+            RTPCodecType::Video,
+        )?;
 
-    t.Run("Matches when rtx apt for partial match codec", func()->Result<()> {
-        const profileLevels = `v=0
+        m.update_from_remote_description(&must_parse(PROFILE_LEVELS)?)
+            .await?;
+
+        assert!(m.negotiated_video.load(Ordering::SeqCst));
+
+        m.get_codec_by_payload(97).await?;
+    }
+
+    //"Matches when rtx apt for partial match codec"
+    {
+        const PROFILE_LEVELS: &str = "v=0
 o=- 4596489990601351948 2 IN IP4 127.0.0.1
 s=-
 t=0 0
@@ -323,29 +440,69 @@ a=rtpmap:96 VP9/90000
 a=fmtp:96 profile-id=2
 a=rtpmap:97 rtx/90000
 a=fmtp:97 apt=96
-`
-        m := MediaEngine{}
-        assert.NoError(t, m.RegisterCodec(RTPCodecParameters{
-            RTPCodecCapability: RTPCodecCapability{MimeTypeVP8, 90000, 0, "", nil},
-            PayloadType:        94,
-        }, RTPCodecTypeVideo))
-        assert.NoError(t, m.RegisterCodec(RTPCodecParameters{
-            RTPCodecCapability: RTPCodecCapability{MimeTypeVP9, 90000, 0, "profile-id=1", nil},
-            PayloadType:        96,
-        }, RTPCodecTypeVideo))
-        assert.NoError(t, m.RegisterCodec(RTPCodecParameters{
-            RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=96", nil},
-            PayloadType:        97,
-        }, RTPCodecTypeVideo))
-        assert.NoError(t, m.updateFromRemoteDescription(mustParse(profileLevels)))
+";
+        let mut m = MediaEngine::default();
+        m.register_codec(
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: MIME_TYPE_VP8.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: "".to_string(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 94,
+                ..Default::default()
+            },
+            RTPCodecType::Video,
+        )?;
 
-        assert.True(t, m.negotiatedVideo)
+        m.register_codec(
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: MIME_TYPE_VP9.to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: "profile-id=1".to_string(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 96,
+                ..Default::default()
+            },
+            RTPCodecType::Video,
+        )?;
 
-        _, _, err := m.getCodecByPayload(97)
-        assert.ErrorIs(t, err, ErrCodecNotFound)
-    })
+        m.register_codec(
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: "video/rtx".to_owned(),
+                    clock_rate: 90000,
+                    channels: 0,
+                    sdp_fmtp_line: "apt=96".to_string(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 97,
+                ..Default::default()
+            },
+            RTPCodecType::Video,
+        )?;
+
+        m.update_from_remote_description(&must_parse(PROFILE_LEVELS)?)
+            .await?;
+
+        assert!(m.negotiated_video.load(Ordering::SeqCst));
+
+        if let Err(err) = m.get_codec_by_payload(97).await {
+            assert!(Error::ErrCodecNotFound.equal(&err));
+        } else {
+            assert!(false);
+        }
+    }
+
+    Ok(())
 }
 
+/*
 func TestMediaEngineHeaderExtensionDirection()->Result<()> {
     report := test.CheckRoutines(t)
     defer report()
