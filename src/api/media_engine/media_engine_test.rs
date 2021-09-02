@@ -502,100 +502,224 @@ a=fmtp:97 apt=96
     Ok(())
 }
 
-/*
-func TestMediaEngineHeaderExtensionDirection()->Result<()> {
-    report := test.CheckRoutines(t)
-    defer report()
+#[tokio::test]
+async fn test_media_engine_header_extension_direction() -> Result<()> {
+    let register_codec = |m: &mut MediaEngine| -> Result<()> {
+        m.register_codec(
+            RTPCodecParameters {
+                capability: RTPCodecCapability {
+                    mime_type: MIME_TYPE_OPUS.to_owned(),
+                    clock_rate: 48000,
+                    channels: 0,
+                    sdp_fmtp_line: "".to_string(),
+                    rtcp_feedback: vec![],
+                },
+                payload_type: 111,
+                ..Default::default()
+            },
+            RTPCodecType::Audio,
+        )
+    };
 
-    registerCodec := func(m *MediaEngine) {
-        assert.NoError(t, m.RegisterCodec(
-            RTPCodecParameters{
-                RTPCodecCapability: RTPCodecCapability{MimeTypeOpus, 48000, 0, "", nil},
-                PayloadType:        111,
-            }, RTPCodecTypeAudio))
+    //"No Direction"
+    {
+        let mut m = MediaEngine::default();
+        register_codec(&mut m)?;
+        m.register_header_extension(
+            RTPHeaderExtensionCapability {
+                uri: "webrtc-header-test".to_owned(),
+            },
+            RTPCodecType::Audio,
+            vec![],
+        )
+        .await?;
+
+        let params = m
+            .get_rtp_parameters_by_kind(RTPCodecType::Audio, &[RTPTransceiverDirection::Recvonly])
+            .await;
+
+        assert_eq!(1, params.header_extensions.len());
     }
 
-    t.Run("No Direction", func()->Result<()> {
-        m := &MediaEngine{}
-        registerCodec(m)
-        assert.NoError(t, m.RegisterHeaderExtension(RTPHeaderExtensionCapability{"pion-header-test"}, RTPCodecTypeAudio))
+    //"Same Direction"
+    {
+        let mut m = MediaEngine::default();
+        register_codec(&mut m)?;
+        m.register_header_extension(
+            RTPHeaderExtensionCapability {
+                uri: "webrtc-header-test".to_owned(),
+            },
+            RTPCodecType::Audio,
+            vec![RTPTransceiverDirection::Recvonly],
+        )
+        .await?;
 
-        params := m.getRTPParametersByKind(RTPCodecTypeAudio, []RTPTransceiverDirection{RTPTransceiverDirectionRecvonly})
+        let params = m
+            .get_rtp_parameters_by_kind(RTPCodecType::Audio, &[RTPTransceiverDirection::Recvonly])
+            .await;
 
-        assert.Equal(t, 1, len(params.HeaderExtensions))
-    })
-
-    t.Run("Same Direction", func()->Result<()> {
-        m := &MediaEngine{}
-        registerCodec(m)
-        assert.NoError(t, m.RegisterHeaderExtension(RTPHeaderExtensionCapability{"pion-header-test"}, RTPCodecTypeAudio, RTPTransceiverDirectionRecvonly))
-
-        params := m.getRTPParametersByKind(RTPCodecTypeAudio, []RTPTransceiverDirection{RTPTransceiverDirectionRecvonly})
-
-        assert.Equal(t, 1, len(params.HeaderExtensions))
-    })
-
-    t.Run("Different Direction", func()->Result<()> {
-        m := &MediaEngine{}
-        registerCodec(m)
-        assert.NoError(t, m.RegisterHeaderExtension(RTPHeaderExtensionCapability{"pion-header-test"}, RTPCodecTypeAudio, RTPTransceiverDirectionSendonly))
-
-        params := m.getRTPParametersByKind(RTPCodecTypeAudio, []RTPTransceiverDirection{RTPTransceiverDirectionRecvonly})
-
-        assert.Equal(t, 0, len(params.HeaderExtensions))
-    })
-
-    t.Run("Invalid Direction", func()->Result<()> {
-        m := &MediaEngine{}
-        registerCodec(m)
-
-        assert.Error(t, m.RegisterHeaderExtension(RTPHeaderExtensionCapability{"pion-header-test"}, RTPCodecTypeAudio, RTPTransceiverDirectionSendrecv), ErrRegisterHeaderExtensionInvalidDirection)
-        assert.Error(t, m.RegisterHeaderExtension(RTPHeaderExtensionCapability{"pion-header-test"}, RTPCodecTypeAudio, RTPTransceiverDirectionInactive), ErrRegisterHeaderExtensionInvalidDirection)
-        assert.Error(t, m.RegisterHeaderExtension(RTPHeaderExtensionCapability{"pion-header-test"}, RTPCodecTypeAudio, RTPTransceiverDirection(0)), ErrRegisterHeaderExtensionInvalidDirection)
-    })
-}
-
-// If a user attempts to register a codec twice we should just discard duplicate calls
-func TestMediaEngineDoubleRegister()->Result<()> {
-    m := MediaEngine{}
-
-    assert.NoError(t, m.RegisterCodec(
-        RTPCodecParameters{
-            RTPCodecCapability: RTPCodecCapability{MimeTypeOpus, 48000, 0, "", nil},
-            PayloadType:        111,
-        }, RTPCodecTypeAudio))
-
-    assert.NoError(t, m.RegisterCodec(
-        RTPCodecParameters{
-            RTPCodecCapability: RTPCodecCapability{MimeTypeOpus, 48000, 0, "", nil},
-            PayloadType:        111,
-        }, RTPCodecTypeAudio))
-
-    assert.Equal(t, len(m.audioCodecs), 1)
-}
-
-// The cloned MediaEngine instance should be able to update negotiated header extensions.
-func TestUpdateHeaderExtenstionToClonedMediaEngine()->Result<()> {
-    src := MediaEngine{}
-
-    assert.NoError(t, src.RegisterCodec(
-        RTPCodecParameters{
-            RTPCodecCapability: RTPCodecCapability{MimeTypeOpus, 48000, 0, "", nil},
-            PayloadType:        111,
-        }, RTPCodecTypeAudio))
-
-    assert.NoError(t, src.RegisterHeaderExtension(RTPHeaderExtensionCapability{"test-extension"}, RTPCodecTypeAudio))
-
-    validate := func(m *MediaEngine) {
-        assert.NoError(t, m.updateHeaderExtension(2, "test-extension", RTPCodecTypeAudio))
-
-        id, audioNegotiated, videoNegotiated := m.getHeaderExtensionID(RTPHeaderExtensionCapability{URI: "test-extension"})
-        assert.Equal(t, 2, id)
-        assert.True(t, audioNegotiated)
-        assert.False(t, videoNegotiated)
+        assert_eq!(1, params.header_extensions.len());
     }
 
-    validate(&src)
-    validate(src.copy())
+    //"Different Direction"
+    {
+        let mut m = MediaEngine::default();
+        register_codec(&mut m)?;
+        m.register_header_extension(
+            RTPHeaderExtensionCapability {
+                uri: "webrtc-header-test".to_owned(),
+            },
+            RTPCodecType::Audio,
+            vec![RTPTransceiverDirection::Sendonly],
+        )
+        .await?;
+
+        let params = m
+            .get_rtp_parameters_by_kind(RTPCodecType::Audio, &[RTPTransceiverDirection::Recvonly])
+            .await;
+
+        assert_eq!(0, params.header_extensions.len());
+    }
+
+    //"Invalid Direction"
+    {
+        let mut m = MediaEngine::default();
+        register_codec(&mut m)?;
+
+        let result = m
+            .register_header_extension(
+                RTPHeaderExtensionCapability {
+                    uri: "webrtc-header-test".to_owned(),
+                },
+                RTPCodecType::Audio,
+                vec![RTPTransceiverDirection::Sendrecv],
+            )
+            .await;
+        if let Err(err) = result {
+            assert!(Error::ErrRegisterHeaderExtensionInvalidDirection.equal(&err));
+        } else {
+            assert!(false);
+        }
+
+        let result = m
+            .register_header_extension(
+                RTPHeaderExtensionCapability {
+                    uri: "webrtc-header-test".to_owned(),
+                },
+                RTPCodecType::Audio,
+                vec![RTPTransceiverDirection::Inactive],
+            )
+            .await;
+        if let Err(err) = result {
+            assert!(Error::ErrRegisterHeaderExtensionInvalidDirection.equal(&err));
+        } else {
+            assert!(false);
+        }
+        let result = m
+            .register_header_extension(
+                RTPHeaderExtensionCapability {
+                    uri: "webrtc-header-test".to_owned(),
+                },
+                RTPCodecType::Audio,
+                vec![RTPTransceiverDirection::Unspecified],
+            )
+            .await;
+        if let Err(err) = result {
+            assert!(Error::ErrRegisterHeaderExtensionInvalidDirection.equal(&err));
+        } else {
+            assert!(false);
+        }
+    }
+
+    Ok(())
 }
-*/
+
+/// If a user attempts to register a codec twice we should just discard duplicate calls
+#[tokio::test]
+async fn test_media_engine_double_register() -> Result<()> {
+    let mut m = MediaEngine::default();
+
+    m.register_codec(
+        RTPCodecParameters {
+            capability: RTPCodecCapability {
+                mime_type: MIME_TYPE_OPUS.to_owned(),
+                clock_rate: 48000,
+                channels: 0,
+                sdp_fmtp_line: "".to_string(),
+                rtcp_feedback: vec![],
+            },
+            payload_type: 111,
+            ..Default::default()
+        },
+        RTPCodecType::Audio,
+    )?;
+
+    m.register_codec(
+        RTPCodecParameters {
+            capability: RTPCodecCapability {
+                mime_type: MIME_TYPE_OPUS.to_owned(),
+                clock_rate: 48000,
+                channels: 0,
+                sdp_fmtp_line: "".to_string(),
+                rtcp_feedback: vec![],
+            },
+            payload_type: 111,
+            ..Default::default()
+        },
+        RTPCodecType::Audio,
+    )?;
+
+    assert_eq!(m.audio_codecs.len(), 1);
+    Ok(())
+}
+
+async fn validate(m: &MediaEngine) -> Result<()> {
+    m.update_header_extension(2, "test-extension", RTPCodecType::Audio)
+        .await?;
+
+    let (id, audio_negotiated, video_negotiated) = m
+        .get_header_extension_id(RTPHeaderExtensionCapability {
+            uri: "test-extension".to_owned(),
+        })
+        .await;
+    assert_eq!(2, id);
+    assert!(audio_negotiated);
+    assert!(!video_negotiated);
+
+    Ok(())
+}
+
+/// The cloned MediaEngine instance should be able to update negotiated header extensions.
+#[tokio::test]
+async fn test_update_header_extenstion_to_cloned_media_engine() -> Result<()> {
+    let mut m = MediaEngine::default();
+
+    m.register_codec(
+        RTPCodecParameters {
+            capability: RTPCodecCapability {
+                mime_type: MIME_TYPE_OPUS.to_owned(),
+                clock_rate: 48000,
+                channels: 0,
+                sdp_fmtp_line: "".to_string(),
+                rtcp_feedback: vec![],
+            },
+            payload_type: 111,
+            ..Default::default()
+        },
+        RTPCodecType::Audio,
+    )?;
+
+    m.register_header_extension(
+        RTPHeaderExtensionCapability {
+            uri: "test-extension".to_owned(),
+        },
+        RTPCodecType::Audio,
+        vec![],
+    )
+    .await?;
+
+    validate(&m).await?;
+    validate(&m.clone_to()).await?;
+
+    Ok(())
+}
