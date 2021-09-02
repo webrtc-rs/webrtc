@@ -243,12 +243,9 @@ impl RTPReceiver {
     pub async fn receive(&self, parameters: &RTPReceiveParameters) -> Result<()> {
         let receiver = Arc::clone(&self.internal);
         let mut internal = self.internal.lock().await;
-        tokio::select! {
-            _ = internal.received_rx.recv() => {
-                return Err(Error::ErrRTPReceiverReceiveAlreadyCalled.into());
-            }
-            else => {}  // default:
-        };
+        if internal.received_tx.is_none() {
+            return Err(Error::ErrRTPReceiverReceiveAlreadyCalled.into());
+        }
         let _d = internal.received_tx.take(); // defer drop(received_tx)
 
         if parameters.encodings.len() == 1 && parameters.encodings[0].ssrc != 0 {
@@ -355,27 +352,24 @@ impl RTPReceiver {
         };
 
         let mut errs = vec![];
-        tokio::select! {
-            _ = internal.received_rx.recv()=>{
-                for t in &internal.tracks {
-                    if let Some(rtcp_read_stream) = &t.rtcp_read_stream {
-                        if let Err(err) = rtcp_read_stream.close().await {
-                            errs.push(err);
-                        }
-                    }
-
-                    if let Some(rtp_read_stream) = &t.rtp_read_stream {
-                        if let Err(err) = rtp_read_stream.close().await {
-                            errs.push(err);
-                        }
-                    }
-
-                    if let Some(interceptor) = &internal.interceptor {
-                        interceptor.unbind_remote_stream(&t.stream_info).await;
+        if internal.received_tx.is_none() {
+            for t in &internal.tracks {
+                if let Some(rtcp_read_stream) = &t.rtcp_read_stream {
+                    if let Err(err) = rtcp_read_stream.close().await {
+                        errs.push(err);
                     }
                 }
+
+                if let Some(rtp_read_stream) = &t.rtp_read_stream {
+                    if let Err(err) = rtp_read_stream.close().await {
+                        errs.push(err);
+                    }
+                }
+
+                if let Some(interceptor) = &internal.interceptor {
+                    interceptor.unbind_remote_stream(&t.stream_info).await;
+                }
             }
-            else => {}
         }
 
         flatten_errs(errs)

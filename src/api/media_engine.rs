@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod media_engine_test;
+
 use crate::media::rtp::rtp_codec::{
     codec_parameters_fuzzy_search, CodecMatch, RTPCodecCapability, RTPCodecParameters,
     RTPCodecType, RTPHeaderExtensionCapability, RTPHeaderExtensionParameter, RTPParameters,

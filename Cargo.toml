@@ -44,6 +44,8 @@ tokio-test = "0.4"
 #chrono = "0.4.19"
 #clap = "2"
 
+[profile.dev]
+opt-level = 0
 
 [[example]]
 name = "examples"
