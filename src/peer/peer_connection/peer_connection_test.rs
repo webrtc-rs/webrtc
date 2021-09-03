@@ -1,8 +1,13 @@
 use super::*;
+use crate::api::APIBuilder;
 
 /// new_pair creates two new peer connections (an offerer and an answerer)
 /// *without* using an api (i.e. using the default settings).
-pub(crate) async fn new_pair(api: &API) -> Result<(PeerConnection, PeerConnection)> {
+pub(crate) async fn new_pair() -> Result<(PeerConnection, PeerConnection)> {
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+    let api = APIBuilder::new().with_media_engine(m).build();
+
     let pca = api.new_peer_connection(Configuration::default()).await?;
     let pcb = api.new_peer_connection(Configuration::default()).await?;
 

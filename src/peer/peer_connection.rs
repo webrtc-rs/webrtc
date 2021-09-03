@@ -2181,7 +2181,7 @@ impl PeerConnection {
     }
 
     /// close ends the PeerConnection
-    pub async fn close(self) -> Result<()> {
+    pub async fn close(&self) -> Result<()> {
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #1)
         if self.is_closed.load(Ordering::SeqCst) {
             return Ok(());

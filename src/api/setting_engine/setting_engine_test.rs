@@ -178,11 +178,7 @@ TODO: missing pc.ops.Enqueue in signal_pair
 async fn test_setting_engine_set_disable_media_engine_copy() -> Result<()> {
     //"Copy"
     {
-        let mut m = MediaEngine::default();
-        m.register_default_codecs()?;
-        let api = APIBuilder::new().with_media_engine(m).build();
-
-        let (mut offerer, mut answerer) = new_pair(&api).await?;
+        let (mut offerer, mut answerer) = new_pair().await?;
 
         offerer
             .add_transceiver_from_kind(RTPCodecType::Video, &[])

@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod data_channel_test;
+
 pub mod data_channel_config;
 pub mod data_channel_message;
 pub mod data_channel_parameters;
