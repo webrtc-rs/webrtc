@@ -21,7 +21,7 @@ pub fn generate_crypto_random_string(n: usize, runes: &[u8]) -> String {
         })
         .collect();
 
-    format!("candidate:{}", rand_string)
+    rand_string
 }
 
 /// https://tools.ietf.org/html/rfc5245#section-15.1
@@ -29,7 +29,10 @@ pub fn generate_crypto_random_string(n: usize, runes: &[u8]) -> String {
 /// foundation   = 1*32ice-char
 /// ice-char     = ALPHA / DIGIT / "+" / "/"
 pub fn generate_cand_id() -> String {
-    generate_crypto_random_string(32, RUNES_CANDIDATE_ID_FOUNDATION)
+    format!(
+        "candidate:{}",
+        generate_crypto_random_string(32, RUNES_CANDIDATE_ID_FOUNDATION)
+    )
 }
 
 /// Generates ICE pwd.

@@ -174,7 +174,7 @@ async fn main() -> Result<()> {
                 let client3 = Arc::clone(&client2);
                 Box::pin(async move {
                     if let Some(c) = c {
-                        println!("{}", c.marshal());
+                        println!("posting remoteCandidate with {}", c.marshal());
 
                         let req = match Request::builder()
                             .method(Method::POST)
@@ -217,6 +217,7 @@ async fn main() -> Result<()> {
     // Get the local auth details and send to remote peer
     let (local_ufrag, local_pwd) = ice_agent.get_local_user_credentials().await;
 
+    println!("posting remoteAuth with {}:{}", local_ufrag, local_pwd);
     let req = match Request::builder()
         .method(Method::POST)
         .uri(format!("http://localhost:{}/remoteAuth", remote_http_port))
@@ -235,6 +236,7 @@ async fn main() -> Result<()> {
     let (remote_ufrag, remote_pwd) = {
         let mut rx = REMOTE_AUTH_CHANNEL.1.lock().await;
         if let Some(s) = rx.recv().await {
+            println!("received: {}", s);
             let fields: Vec<String> = s.split(':').map(|s| s.to_string()).collect();
             (fields[0].clone(), fields[1].clone())
         } else {
