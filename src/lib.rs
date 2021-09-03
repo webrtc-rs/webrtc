@@ -14,6 +14,10 @@ pub mod peer;
 pub mod stats;
 mod util;
 
+#[cfg(test)]
+#[macro_use]
+extern crate lazy_static;
+
 pub(crate) const UNSPECIFIED_STR: &str = "Unspecified";
 pub(crate) const SSRC_STR: &str = "ssrc";
 

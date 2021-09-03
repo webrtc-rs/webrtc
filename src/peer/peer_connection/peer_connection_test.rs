@@ -6,6 +6,7 @@ use bytes::Bytes;
 use tokio::time::Duration;
 use util::vnet::net::{Net, NetConfig};
 use util::vnet::router::{Router, RouterConfig};
+use waitgroup::WaitGroup;
 
 pub(crate) async fn create_vnet_pair(
 ) -> Result<(PeerConnection, PeerConnection, Arc<Mutex<Router>>)> {
@@ -221,4 +222,22 @@ pub(crate) async fn send_video_until_done(
             }
         }
     }
+}
+
+pub(crate) async fn until_connection_state(
+    pc: &mut PeerConnection,
+    wg: &WaitGroup,
+    state: PeerConnectionState,
+) {
+    let w = Arc::new(Mutex::new(Some(wg.worker())));
+    pc.on_peer_connection_state_change(Box::new(move |pcs: PeerConnectionState| {
+        let w2 = Arc::clone(&w);
+        Box::pin(async move {
+            if pcs == state {
+                let mut worker = w2.lock().await;
+                worker.take();
+            }
+        })
+    }))
+    .await;
 }

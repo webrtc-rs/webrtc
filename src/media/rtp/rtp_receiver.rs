@@ -4,7 +4,7 @@ mod rtp_receiver_test;
 use crate::api::media_engine::MediaEngine;
 use crate::error::Error;
 use crate::media::dtls_transport::DTLSTransport;
-use crate::media::interceptor::stream_info::StreamInfo;
+use crate::media::interceptor::stream_info::{RTPHeaderExtension, StreamInfo};
 use crate::media::interceptor::*;
 use crate::media::rtp::rtp_codec::{
     codec_parameters_fuzzy_search, CodecMatch, RTPCodecCapability, RTPCodecParameters,
@@ -223,6 +223,30 @@ impl RTPReceiver {
     pub async fn get_parameters(&self) -> RTPParameters {
         let internal = self.internal.lock().await;
         internal.get_parameters().await
+    }
+
+    /// SetRTPParameters applies provided RTPParameters the RTPReceiver's tracks.
+    /// This method is part of the ORTC API. It is not
+    /// meant to be used together with the basic WebRTC API.
+    /// The amount of provided codecs must match the number of tracks on the receiver.
+    pub async fn set_rtp_parameters(&self, params: RTPParameters) {
+        let mut header_extensions = vec![];
+        for h in &params.header_extensions {
+            header_extensions.push(RTPHeaderExtension {
+                id: h.id,
+                uri: h.uri.clone(),
+            });
+        }
+
+        let mut internal = self.internal.lock().await;
+        for (idx, codec) in params.codecs.iter().enumerate() {
+            let t = &mut internal.tracks[idx];
+            t.stream_info.rtp_header_extensions = header_extensions.clone();
+
+            let current_track = &t.track;
+            current_track.set_codec(codec.clone()).await;
+            current_track.set_params(params.clone()).await;
+        }
     }
 
     /// track returns the RtpTransceiver TrackRemote

@@ -5,8 +5,8 @@ use crate::media::rtp::{PayloadType, SSRC};
 /// RTPHeaderExtension represents a negotiated RFC5285 RTP header extension.
 #[derive(Default, Debug, Clone)]
 pub struct RTPHeaderExtension {
-    uri: String,
-    id: isize,
+    pub(crate) uri: String,
+    pub(crate) id: isize,
 }
 
 /// RTCPFeedback signals the connection to use additional RTCP packet types.
@@ -30,7 +30,7 @@ pub struct StreamInfo {
     attributes: Attributes,
     ssrc: u32,
     payload_type: PayloadType,
-    rtp_header_extensions: Vec<RTPHeaderExtension>,
+    pub(crate) rtp_header_extensions: Vec<RTPHeaderExtension>,
     mime_type: String,
     clock_rate: u32,
     channels: u16,

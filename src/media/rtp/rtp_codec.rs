@@ -99,7 +99,7 @@ pub struct RTPHeaderExtensionCapability {
 
 /// RTPHeaderExtensionParameter represents a negotiated RFC5285 RTP header extension.
 /// https://w3c.github.io/webrtc-pc/#dictionary-rtcrtpheaderextensionparameters-members
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct RTPHeaderExtensionParameter {
     pub uri: String,
     pub id: isize,
