@@ -70,14 +70,22 @@ impl RTPCodecCapability {
     pub(crate) fn payloader_for_codec(
         &self,
     ) -> Result<Box<dyn rtp::packetizer::Payloader + Send + Sync>> {
-        match self.mime_type.to_lowercase().as_str() {
-            MIME_TYPE_H264 => Ok(Box::new(rtp::codecs::h264::H264Payloader)),
-            MIME_TYPE_VP8 => Ok(Box::new(rtp::codecs::vp8::Vp8Payloader)),
-            MIME_TYPE_VP9 => Ok(Box::new(rtp::codecs::vp9::Vp9Payloader)),
-            MIME_TYPE_OPUS => Ok(Box::new(rtp::codecs::opus::OpusPayloader)),
-            MIME_TYPE_G722 => Ok(Box::new(rtp::codecs::g7xx::G7xxPayloader)),
-            MIME_TYPE_PCMU | MIME_TYPE_PCMA => Ok(Box::new(rtp::codecs::g7xx::G7xxPayloader)),
-            _ => Err(Error::ErrNoPayloaderForCodec.into()),
+        let mime_type = self.mime_type.to_lowercase();
+        if mime_type == MIME_TYPE_H264.to_lowercase() {
+            Ok(Box::new(rtp::codecs::h264::H264Payloader))
+        } else if mime_type == MIME_TYPE_VP8.to_lowercase() {
+            Ok(Box::new(rtp::codecs::vp8::Vp8Payloader))
+        } else if mime_type == MIME_TYPE_VP9.to_lowercase() {
+            Ok(Box::new(rtp::codecs::vp9::Vp9Payloader))
+        } else if mime_type == MIME_TYPE_OPUS.to_lowercase() {
+            Ok(Box::new(rtp::codecs::opus::OpusPayloader))
+        } else if mime_type == MIME_TYPE_G722.to_lowercase()
+            || mime_type == MIME_TYPE_PCMU.to_lowercase()
+            || mime_type == MIME_TYPE_PCMA.to_lowercase()
+        {
+            Ok(Box::new(rtp::codecs::g7xx::G7xxPayloader))
+        } else {
+            Err(Error::ErrNoPayloaderForCodec.into())
         }
     }
 }

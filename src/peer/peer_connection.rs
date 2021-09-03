@@ -57,12 +57,7 @@ use crate::peer::ice::ICEParameters;
 use crate::peer::offer_answer_options::{AnswerOptions, OfferOptions};
 use crate::peer::operation::Operations;
 use crate::peer::sdp::sdp_type::SDPType;
-use crate::peer::sdp::{
-    description_is_plan_b, extract_fingerprint, extract_ice_details, filter_track_with_ssrc,
-    get_by_mid, get_mid_value, get_peer_direction, get_rids, have_application_media_section,
-    have_data_channel, populate_local_candidates, populate_sdp, track_details_for_ssrc,
-    track_details_from_sdp, update_sdp_origin, MediaSection, PopulateSdpParams, TrackDetails,
-};
+use crate::peer::sdp::*;
 use crate::util::{flatten_errs, math_rand_alpha};
 use crate::{
     MEDIA_SECTION_APPLICATION, RECEIVE_MTU, SIMULCAST_MAX_PROBE_ROUTINES, SIMULCAST_PROBE_COUNT,
@@ -1367,7 +1362,7 @@ impl PeerConnection {
                 }
             }
 
-            let (_fingerprint, _fingerprint_hash) = extract_fingerprint(parsed)?;
+            //TODO: let (_fingerprint, _fingerprint_hash) = extract_fingerprint(parsed)?;
 
             let _ice_role =
             // If one of the agents is lite and the other one is not, the lite agent must be the controlling agent.

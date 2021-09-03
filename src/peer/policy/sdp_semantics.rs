@@ -25,7 +25,7 @@ pub enum SDPSemantics {
 
 impl Default for SDPSemantics {
     fn default() -> Self {
-        SDPSemantics::Unspecified
+        SDPSemantics::UnifiedPlan
     }
 }
 
