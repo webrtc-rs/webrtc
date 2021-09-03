@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod rtp_transceiver_test;
+
 use crate::api::media_engine::MediaEngine;
 use crate::error::Error;
 use crate::media::rtp::rtp_codec::*;

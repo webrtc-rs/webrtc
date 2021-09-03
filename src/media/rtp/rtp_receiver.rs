@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod rtp_receiver_test;
+
 use crate::api::media_engine::MediaEngine;
 use crate::error::Error;
 use crate::media::dtls_transport::DTLSTransport;

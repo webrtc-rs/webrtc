@@ -1,7 +1,96 @@
 use super::*;
 use crate::media::Sample;
+
+use crate::api::APIBuilder;
 use bytes::Bytes;
 use tokio::time::Duration;
+use util::vnet::net::{Net, NetConfig};
+use util::vnet::router::{Router, RouterConfig};
+
+pub(crate) async fn create_vnet_pair(
+) -> Result<(PeerConnection, PeerConnection, Arc<Mutex<Router>>)> {
+    // Create a root router
+    let wan = Arc::new(Mutex::new(Router::new(RouterConfig {
+        cidr: "1.2.3.0/24".to_owned(),
+        ..Default::default()
+    })?));
+
+    // Create a network interface for offerer
+    let offer_vnet = Arc::new(Net::new(Some(NetConfig {
+        static_ips: vec!["1.2.3.4".to_owned()],
+        ..Default::default()
+    })));
+
+    // Add the network interface to the router
+    let nic = offer_vnet.get_nic()?;
+    {
+        let mut w = wan.lock().await;
+        w.add_net(Arc::clone(&nic)).await?;
+    }
+    {
+        let n = nic.lock().await;
+        n.set_router(Arc::clone(&wan)).await?;
+    }
+
+    let mut offer_setting_engine = SettingEngine::default();
+    offer_setting_engine.set_vnet(Some(offer_vnet));
+    offer_setting_engine.set_ice_timeouts(
+        Duration::from_secs(1),
+        Duration::from_secs(1),
+        Duration::from_millis(200),
+    );
+
+    // Create a network interface for answerer
+    let answer_vnet = Arc::new(Net::new(Some(NetConfig {
+        static_ips: vec!["1.2.3.5".to_owned()],
+        ..Default::default()
+    })));
+
+    // Add the network interface to the router
+    let nic = answer_vnet.get_nic()?;
+    {
+        let mut w = wan.lock().await;
+        w.add_net(Arc::clone(&nic)).await?;
+    }
+    {
+        let n = nic.lock().await;
+        n.set_router(Arc::clone(&wan)).await?;
+    }
+
+    let mut answer_setting_engine = SettingEngine::default();
+    answer_setting_engine.set_vnet(Some(answer_vnet));
+    answer_setting_engine.set_ice_timeouts(
+        Duration::from_secs(1),
+        Duration::from_secs(1),
+        Duration::from_millis(200),
+    );
+
+    // Start the virtual network by calling Start() on the root router
+    {
+        let mut w = wan.lock().await;
+        w.start().await?;
+    }
+
+    let mut offer_media_engine = MediaEngine::default();
+    offer_media_engine.register_default_codecs()?;
+    let offer_peer_connection = APIBuilder::new()
+        .with_setting_engine(offer_setting_engine)
+        .with_media_engine(offer_media_engine)
+        .build()
+        .new_peer_connection(Configuration::default())
+        .await?;
+
+    let mut answer_media_engine = MediaEngine::default();
+    answer_media_engine.register_default_codecs()?;
+    let answer_peer_connection = APIBuilder::new()
+        .with_setting_engine(answer_setting_engine)
+        .with_media_engine(answer_media_engine)
+        .build()
+        .new_peer_connection(Configuration::default())
+        .await?;
+
+    Ok((offer_peer_connection, answer_peer_connection, wan))
+}
 
 /// new_pair creates two new peer connections (an offerer and an answerer)
 /// *without* using an api (i.e. using the default settings).

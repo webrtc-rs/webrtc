@@ -1,8 +1,8 @@
+pub mod mux;
+
 use crate::error::Error;
 use anyhow::Result;
 use rand::{thread_rng, Rng};
-
-pub mod mux;
 
 const RUNES_ALPHA: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
