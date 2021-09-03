@@ -137,4 +137,8 @@ impl TrackLocal for TrackLocalStaticSample {
     fn kind(&self) -> RTPCodecType {
         self.rtp_track.kind()
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }

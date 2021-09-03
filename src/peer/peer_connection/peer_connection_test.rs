@@ -1,4 +1,6 @@
 use super::*;
+use crate::media::Sample;
+use bytes::Bytes;
 use tokio::time::Duration;
 
 /// new_pair creates two new peer connections (an offerer and an answerer)
@@ -102,3 +104,32 @@ func offerMediaHasDirection(offer SessionDescription, kind RTPCodecType, directi
     }
     return false
 }*/
+
+pub(crate) async fn send_video_until_done(
+    mut done_rx: mpsc::Receiver<()>,
+    tracks: &[Arc<dyn TrackLocal + Send + Sync>],
+) {
+    loop {
+        let timeout = tokio::time::sleep(Duration::from_millis(20));
+        tokio::pin!(timeout);
+
+        tokio::select! {
+            _ = timeout.as_mut() =>{
+                for track in tracks {
+                    if let Some(t) = track.as_any().downcast_ref::<TrackLocalStaticSample>(){
+                        assert!(t.write_sample(&Sample{
+                            data: Bytes::from_static(&[0x00]),
+                            duration: Duration::from_secs(1),
+                            ..Default::default()
+                        }).await.is_ok());
+                    }else{
+                        assert!(false);
+                    }
+                }
+            }
+            _ = done_rx.recv() =>{
+                return;
+            }
+        }
+    }
+}

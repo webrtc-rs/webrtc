@@ -8,7 +8,7 @@ use tokio::sync::Mutex;
 /// If you wish to send a media.Sample use TrackLocalStaticSample
 #[derive(Debug, Clone)]
 pub struct TrackLocalStaticRTP {
-    bindings: Arc<Mutex<Vec<TrackBinding>>>,
+    pub(crate) bindings: Arc<Mutex<Vec<TrackBinding>>>,
     codec: RTPCodecCapability,
     id: String,
     stream_id: String,
@@ -100,6 +100,10 @@ impl TrackLocal for TrackLocalStaticRTP {
         } else {
             RTPCodecType::Unspecified
         }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

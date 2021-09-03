@@ -16,6 +16,18 @@ pub struct Sample {
     pub prev_dropped_packets: u16,
 }
 
+impl Default for Sample {
+    fn default() -> Self {
+        Sample {
+            data: Bytes::new(),
+            timestamp: Instant::now(),
+            duration: Duration::from_secs(0),
+            packet_timestamp: 0,
+            prev_dropped_packets: 0,
+        }
+    }
+}
+
 /*
 // Writer defines an interface to handle
 // the creation of media files

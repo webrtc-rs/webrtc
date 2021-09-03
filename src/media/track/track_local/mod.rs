@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod track_local_static_test;
+
 pub mod track_local_static_rtp;
 pub mod track_local_static_sample;
 
@@ -8,6 +11,7 @@ use crate::media::rtp::*;
 use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
+use std::any::Any;
 use std::fmt;
 use util::Unmarshal;
 
@@ -93,6 +97,8 @@ pub trait TrackLocal {
 
     /// kind controls if this TrackLocal is audio or video
     fn kind(&self) -> RTPCodecType;
+
+    fn as_any(&self) -> &dyn Any;
 }
 
 /// TrackBinding is a single bind for a Track
