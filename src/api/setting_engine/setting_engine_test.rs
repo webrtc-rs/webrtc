@@ -1,4 +1,6 @@
 use super::*;
+use crate::api::media_engine::MediaEngine;
+use crate::api::APIBuilder;
 use crate::media::rtp::rtp_codec::RTPCodecType;
 use crate::peer::peer_connection::peer_connection_test::*;
 use std::sync::atomic::Ordering;
@@ -174,7 +176,11 @@ fn test_set_replay_protection() -> Result<()> {
 async fn test_setting_engine_set_disable_media_engine_copy() -> Result<()> {
     //"Copy"
     {
-        let (mut offerer, mut answerer) = new_pair().await?;
+        let mut m = MediaEngine::default();
+        m.register_default_codecs()?;
+        let api = APIBuilder::new().with_media_engine(m).build();
+
+        let (mut offerer, mut answerer) = new_pair(&api).await?;
 
         offerer
             .add_transceiver_from_kind(RTPCodecType::Video, &[])
@@ -183,11 +189,11 @@ async fn test_setting_engine_set_disable_media_engine_copy() -> Result<()> {
         signal_pair(&mut offerer, &mut answerer).await?;
 
         // Assert that the MediaEngine the user created isn't modified
-        /*assert!(!m.negotiated_video.load(Ordering::SeqCst));
+        assert!(!api.media_engine.negotiated_video.load(Ordering::SeqCst));
         {
-            let negotiated_video_codecs = m.negotiated_video_codecs.lock().await;
+            let negotiated_video_codecs = api.media_engine.negotiated_video_codecs.lock().await;
             assert!(negotiated_video_codecs.is_empty());
-        }*/
+        }
 
         // Assert that the internal MediaEngine is modified
         assert!(offerer.media_engine.negotiated_video.load(Ordering::SeqCst));
@@ -196,56 +202,75 @@ async fn test_setting_engine_set_disable_media_engine_copy() -> Result<()> {
             assert!(!negotiated_video_codecs.is_empty());
         }
 
-        /*
-        closePairNow(t, offerer, answerer)
+        close_pair_now(&offerer, &answerer).await;
 
-        newOfferer, newAnswerer, err := api.newPair(Configuration{})
-        assert.NoError(t, err)
+        let (new_offerer, new_answerer) = new_pair(&api).await?;
 
         // Assert that the first internal MediaEngine hasn't been cleared
-        assert.True(t, offerer.api.mediaEngine.negotiatedVideo)
-        assert.NotEmpty(t, offerer.api.mediaEngine.negotiatedVideoCodecs)
+        assert!(offerer.media_engine.negotiated_video.load(Ordering::SeqCst));
+        {
+            let negotiated_video_codecs = offerer.media_engine.negotiated_video_codecs.lock().await;
+            assert!(!negotiated_video_codecs.is_empty());
+        }
 
         // Assert that the new internal MediaEngine isn't modified
-        assert.False(t, newOfferer.api.mediaEngine.negotiatedVideo)
-        assert.Empty(t, newAnswerer.api.mediaEngine.negotiatedVideoCodecs)
-
-        closePairNow(t, newOfferer, newAnswerer)*/
-    }
-    /*
-        //"No Copy"
+        assert!(!new_offerer
+            .media_engine
+            .negotiated_video
+            .load(Ordering::SeqCst));
         {
-            m := &MediaEngine{}
-            assert.NoError(t, m.RegisterDefaultCodecs())
-
-            s := SettingEngine{}
-            s.DisableMediaEngineCopy(true)
-
-            api := NewAPI(WithMediaEngine(m), WithSettingEngine(s))
-
-            offerer, answerer, err := api.newPair(Configuration{})
-            assert.NoError(t, err)
-
-            _, err = offerer.AddTransceiverFromKind(RTPCodecTypeVideo)
-            assert.NoError(t, err)
-
-            assert.NoError(t, signalPair(offerer, answerer))
-
-            // Assert that the user MediaEngine was modified, so no copy happened
-            assert.True(t, m.negotiatedVideo)
-            assert.NotEmpty(t, m.negotiatedVideoCodecs)
-
-            closePairNow(t, offerer, answerer)
-
-            offerer, answerer, err = api.newPair(Configuration{})
-            assert.NoError(t, err)
-
-            // Assert that the new internal MediaEngine was modified, so no copy happened
-            assert.True(t, offerer.api.mediaEngine.negotiatedVideo)
-            assert.NotEmpty(t, offerer.api.mediaEngine.negotiatedVideoCodecs)
-
-            closePairNow(t, offerer, answerer)
+            let negotiated_video_codecs = new_offerer
+                .media_engine
+                .negotiated_video_codecs
+                .lock()
+                .await;
+            assert!(negotiated_video_codecs.is_empty());
         }
-    */
+
+        close_pair_now(&new_offerer, &new_answerer).await;
+    }
+
+    //"No Copy"
+    {
+        let mut m = MediaEngine::default();
+        m.register_default_codecs()?;
+
+        let mut s = SettingEngine::default();
+        s.disable_media_engine_copy(true);
+
+        let api = APIBuilder::new()
+            .with_media_engine(m)
+            .with_setting_engine(s)
+            .build();
+
+        let (mut offerer, mut answerer) = new_pair(&api).await?;
+
+        offerer
+            .add_transceiver_from_kind(RTPCodecType::Video, &[])
+            .await?;
+
+        signal_pair(&mut offerer, &mut answerer).await?;
+
+        // Assert that the user MediaEngine was modified, so no copy happened
+        assert!(api.media_engine.negotiated_video.load(Ordering::SeqCst));
+        {
+            let negotiated_video_codecs = api.media_engine.negotiated_video_codecs.lock().await;
+            assert!(!negotiated_video_codecs.is_empty());
+        }
+
+        close_pair_now(&offerer, &answerer).await;
+
+        let (offerer, answerer) = new_pair(&api).await?;
+
+        // Assert that the new internal MediaEngine was modified, so no copy happened
+        assert!(offerer.media_engine.negotiated_video.load(Ordering::SeqCst));
+        {
+            let negotiated_video_codecs = offerer.media_engine.negotiated_video_codecs.lock().await;
+            assert!(!negotiated_video_codecs.is_empty());
+        }
+
+        close_pair_now(&offerer, &answerer).await;
+    }
+
     Ok(())
 }

@@ -1,13 +1,9 @@
 use super::*;
-use crate::api::APIBuilder;
+use tokio::time::Duration;
 
 /// new_pair creates two new peer connections (an offerer and an answerer)
 /// *without* using an api (i.e. using the default settings).
-pub(crate) async fn new_pair() -> Result<(PeerConnection, PeerConnection)> {
-    let mut m = MediaEngine::default();
-    m.register_default_codecs()?;
-    let api = APIBuilder::new().with_media_engine(m).build();
-
+pub(crate) async fn new_pair(api: &API) -> Result<(PeerConnection, PeerConnection)> {
     let pca = api.new_peer_connection(Configuration::default()).await?;
     let pcb = api.new_peer_connection(Configuration::default()).await?;
 
@@ -58,6 +54,39 @@ pub(crate) async fn signal_pair(
         )
         .await
 }
+
+pub(crate) async fn close_pair_now(pc1: &PeerConnection, pc2: &PeerConnection) {
+    let mut fail = false;
+    if let Err(err) = pc1.close().await {
+        log::error!("Failed to close PeerConnection: {}", err);
+        fail = true;
+    }
+    if let Err(err) = pc2.close().await {
+        log::error!("Failed to close PeerConnection: {}", err);
+        fail = true;
+    }
+
+    assert!(!fail);
+}
+
+pub(crate) async fn close_pair(
+    pc1: &PeerConnection,
+    pc2: &PeerConnection,
+    mut done_rx: mpsc::Receiver<()>,
+) {
+    let timeout = tokio::time::sleep(Duration::from_secs(1));
+    tokio::pin!(timeout);
+
+    tokio::select! {
+        _ = timeout.as_mut() =>{
+            assert!(false, "close_pair timed out waiting for done signal");
+        }
+        _ = done_rx.recv() =>{
+            close_pair_now(pc1, pc2).await;
+        }
+    }
+}
+
 /*
 func offerMediaHasDirection(offer SessionDescription, kind RTPCodecType, direction RTPTransceiverDirection) bool {
     parsed := &sdp.SessionDescription{}

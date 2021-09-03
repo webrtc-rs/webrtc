@@ -1,8 +1,10 @@
 use super::*;
 use crate::data::data_channel::data_channel_config::DataChannelConfig;
-use crate::peer::peer_connection::peer_connection_test::{new_pair, signal_pair};
+use crate::peer::peer_connection::peer_connection_test::*;
 use crate::peer::peer_connection::PeerConnection;
 
+use crate::api::media_engine::MediaEngine;
+use crate::api::{APIBuilder, API};
 use tokio::sync::mpsc;
 use tokio::time::Duration;
 
@@ -11,35 +13,8 @@ use tokio::time::Duration;
 // bindings this is a requirement).
 const EXPECTED_LABEL: &str = "data";
 
-async fn close_pair_now(pc1: &PeerConnection, pc2: &PeerConnection) {
-    let mut fail = false;
-    if let Err(err) = pc1.close().await {
-        log::error!("Failed to close PeerConnection: {}", err);
-        fail = true;
-    }
-    if let Err(err) = pc2.close().await {
-        log::error!("Failed to close PeerConnection: {}", err);
-        fail = true;
-    }
-
-    assert!(!fail);
-}
-
-async fn close_pair(pc1: &PeerConnection, pc2: &PeerConnection, mut done_rx: mpsc::Receiver<()>) {
-    let timeout = tokio::time::sleep(Duration::from_secs(1));
-    tokio::pin!(timeout);
-
-    tokio::select! {
-        _ = timeout.as_mut() =>{
-            assert!(false, "close_pair timed out waiting for done signal");
-        }
-        _ = done_rx.recv() =>{
-            close_pair_now(pc1, pc2).await;
-        }
-    }
-}
-
 async fn set_up_data_channel_parameters_test(
+    api: &API,
     options: Option<DataChannelConfig>,
 ) -> Result<(
     PeerConnection,
@@ -48,7 +23,7 @@ async fn set_up_data_channel_parameters_test(
     mpsc::Sender<()>,
     mpsc::Receiver<()>,
 )> {
-    let (offer_pc, answer_pc) = new_pair().await?;
+    let (offer_pc, answer_pc) = new_pair(api).await?;
     let (done_tx, done_rx) = mpsc::channel(1);
 
     let dc = offer_pc
@@ -121,7 +96,11 @@ func benchmarkDataChannelSend(b *testing.B, numChannels int) {
 async fn test_data_channel_open() -> Result<()> {
     //"handler should be called once"
     {
-        let (_offer_pc, answer_pc) = new_pair().await?;
+        let mut m = MediaEngine::default();
+        m.register_default_codecs()?;
+        let api = APIBuilder::new().with_media_engine(m).build();
+
+        let (_offer_pc, answer_pc) = new_pair(&api).await?;
 
         let (done_tx, _done_rx) = mpsc::channel(1);
         let (open_calls_tx, _open_calls_rx) = mpsc::channel(2);
