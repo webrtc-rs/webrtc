@@ -40,8 +40,8 @@ url = "2.2.2"
 
 [dev-dependencies]
 tokio-test = "0.4"
-#env_logger = "0.8"
-#chrono = "0.4.19"
+env_logger = "0.8"
+chrono = "0.4.19"
 #clap = "2"
 
 [profile.dev]

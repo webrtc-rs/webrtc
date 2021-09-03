@@ -3,10 +3,11 @@ use crate::data::data_channel::data_channel_config::DataChannelConfig;
 use crate::peer::peer_connection::peer_connection_test::*;
 use crate::peer::peer_connection::PeerConnection;
 
-use crate::api::media_engine::MediaEngine;
-use crate::api::{APIBuilder, API};
+//use crate::api::media_engine::MediaEngine;
+use crate::api::API;
+//use log::LevelFilter;
 use tokio::sync::mpsc;
-use tokio::time::Duration;
+//use tokio::time::Duration;
 
 // EXPECTED_LABEL represents the label of the data channel we are trying to test.
 // Some other channels may have been created during initialization (in the Wasm
@@ -92,18 +93,36 @@ func benchmarkDataChannelSend(b *testing.B, numChannels int) {
 }
 */
 
+/*
+use std::io::Write;
+
 #[tokio::test]
 async fn test_data_channel_open() -> Result<()> {
+    env_logger::Builder::new()
+        .format(|buf, record| {
+            writeln!(
+                buf,
+                "{}:{} [{}] {} - {}",
+                record.file().unwrap_or("unknown"),
+                record.line().unwrap_or(0),
+                record.level(),
+                chrono::Local::now().format("%H:%M:%S.%6f"),
+                record.args()
+            )
+        })
+        .filter(None, LevelFilter::Trace)
+        .init();
+
     //"handler should be called once"
     {
         let mut m = MediaEngine::default();
         m.register_default_codecs()?;
         let api = APIBuilder::new().with_media_engine(m).build();
 
-        let (_offer_pc, answer_pc) = new_pair(&api).await?;
+        let (mut offer_pc, mut answer_pc) = new_pair(&api).await?;
 
-        let (done_tx, _done_rx) = mpsc::channel(1);
-        let (open_calls_tx, _open_calls_rx) = mpsc::channel(2);
+        let (done_tx, done_rx) = mpsc::channel(1);
+        let (open_calls_tx, mut open_calls_rx) = mpsc::channel(2);
 
         let open_calls_tx = Arc::new(open_calls_tx);
         let done_tx = Arc::new(done_tx);
@@ -136,27 +155,27 @@ async fn test_data_channel_open() -> Result<()> {
             }))
             .await;
 
-        /*
-        dc, err := offerPC.CreateDataChannel(EXPECTED_LABEL, nil)
-        assert.NoError(t, err)
+        let dc = offer_pc.create_data_channel(EXPECTED_LABEL, None).await?;
 
-        dc.OnOpen(func() {
-            e := dc.SendText("Ping")
-            if e != nil {
-                t.Fatalf("Failed to send string on data channel")
-            }
-        })
+        let dc2 = Arc::clone(&dc);
+        dc.on_open(Box::new(move || {
+            Box::pin(async move {
+                let result = dc2.send_text("Ping".to_owned()).await;
+                assert!(result.is_ok(), "Failed to send string on data channel");
+            })
+        }))
+        .await;
 
-        assert.NoError(t, signalPair(offerPC, answerPC))
+        signal_pair(&mut offer_pc, &mut answer_pc).await?;
 
-        close_pair(t, offerPC, answerPC, done)
+        close_pair(&offer_pc, &answer_pc, done_rx).await;
 
-        assert.Len(t, openCalls, 1)*/
+        let _ = open_calls_rx.recv().await;
     }
 
     Ok(())
 }
-
+*/
 /*
 #[tokio::test]
 async fn  TestDataChannel_Send()->Result<()> {
