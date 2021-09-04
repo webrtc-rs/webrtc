@@ -227,8 +227,9 @@ impl RTPTransceiver {
 
 pub(crate) async fn find_by_mid(
     mid: &str,
-    local_transceivers: &mut Vec<Arc<RTPTransceiver>>,
+    rtp_transceivers: &Arc<Mutex<Vec<Arc<RTPTransceiver>>>>,
 ) -> Option<Arc<RTPTransceiver>> {
+    let mut local_transceivers = rtp_transceivers.lock().await;
     for (i, t) in local_transceivers.iter().enumerate() {
         if t.mid().await == mid {
             return Some(local_transceivers.remove(i));
@@ -243,7 +244,7 @@ pub(crate) async fn find_by_mid(
 pub(crate) async fn satisfy_type_and_direction(
     remote_kind: RTPCodecType,
     remote_direction: RTPTransceiverDirection,
-    local_transceivers: &mut Vec<Arc<RTPTransceiver>>,
+    rtp_transceivers: &Arc<Mutex<Vec<Arc<RTPTransceiver>>>>,
 ) -> Option<Arc<RTPTransceiver>> {
     // Get direction order from most preferred to least
     let get_preferred_directions = || -> Vec<RTPTransceiverDirection> {
@@ -261,6 +262,7 @@ pub(crate) async fn satisfy_type_and_direction(
         }
     };
 
+    let mut local_transceivers = rtp_transceivers.lock().await;
     for possible_direction in get_preferred_directions() {
         for (i, t) in local_transceivers.iter().enumerate() {
             if t.mid().await.is_empty()
