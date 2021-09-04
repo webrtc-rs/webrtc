@@ -1,4 +1,5 @@
 use super::*;
+use srtp::stream::Stream;
 
 #[derive(Default, Clone)]
 pub(crate) struct PeerConnectionInternal {
@@ -102,11 +103,10 @@ impl PeerConnectionInternal {
     }
 
     pub(super) async fn start_rtp(
-        &self,
+        self: Arc<Self>,
         is_renegotiation: bool,
-        remote_desc: &SessionDescription,
-        current_transceivers: &[Arc<RTPTransceiver>],
-        configuration: &Configuration,
+        remote_desc: Arc<SessionDescription>,
+        sdp_semantics: SDPSemantics,
     ) -> Result<()> {
         let mut track_details = if let Some(parsed) = &remote_desc.parsed {
             track_details_from_sdp(parsed)
@@ -114,8 +114,13 @@ impl PeerConnectionInternal {
             vec![]
         };
 
+        let current_transceivers = {
+            let current_transceivers = self.rtp_transceivers.lock().await;
+            current_transceivers.clone()
+        };
+
         if is_renegotiation {
-            for t in current_transceivers {
+            for t in &current_transceivers {
                 if let Some(receiver) = t.receiver().await {
                     if let Some(track) = receiver.track().await {
                         let ssrc = track.ssrc();
@@ -142,7 +147,7 @@ impl PeerConnectionInternal {
             }
         }
 
-        self.start_rtp_receivers(&mut track_details, current_transceivers, configuration)
+        self.start_rtp_receivers(&mut track_details, &current_transceivers, sdp_semantics)
             .await?;
 
         if let Some(parsed) = &remote_desc.parsed {
@@ -159,9 +164,10 @@ impl PeerConnectionInternal {
     }
 
     /// undeclared_media_processor handles RTP/RTCP packets that don't match any a:ssrc lines
-    fn undeclared_media_processor(&self) {
+    fn undeclared_media_processor(self: &Arc<Self>) {
         let dtls_transport = Arc::clone(&self.dtls_transport);
         let is_closed = Arc::clone(&self.is_closed);
+        let pci = Arc::clone(self);
         tokio::spawn(async move {
             let simulcast_routine_count = Arc::new(AtomicU64::new(0));
             loop {
@@ -198,19 +204,20 @@ impl PeerConnectionInternal {
 
                 let dtls_transport2 = Arc::clone(&dtls_transport);
                 let simulcast_routine_count2 = Arc::clone(&simulcast_routine_count);
+                let pci2 = Arc::clone(&pci);
                 tokio::spawn(async move {
                     dtls_transport2
                         .store_simulcast_stream(Arc::clone(&stream))
                         .await;
 
-                    let _ssrc = stream.get_ssrc();
-                    /*TODO:if let Err(err) = self.handle_undeclared_ssrc(stream, ssrc) {
+                    let ssrc = stream.get_ssrc();
+                    if let Err(err) = pci2.handle_undeclared_ssrc(stream, ssrc).await {
                         log::error!(
                             "Incoming unhandled RTP ssrc({}), on_track will not be fired. {}",
                             ssrc,
                             err
                         );
-                    }*/
+                    }
 
                     simulcast_routine_count2.fetch_sub(1, Ordering::SeqCst);
                 });
@@ -245,14 +252,12 @@ impl PeerConnectionInternal {
 
     /// start_rtp_receivers opens knows inbound SRTP streams from the remote_description
     async fn start_rtp_receivers(
-        &self,
+        self: &Arc<Self>,
         incoming_tracks: &mut Vec<TrackDetails>,
-        current_transceivers: &[Arc<RTPTransceiver>],
-        configuration: &Configuration,
+        local_transceivers: &[Arc<RTPTransceiver>],
+        sdp_semantics: SDPSemantics,
     ) -> Result<()> {
-        let local_transceivers = current_transceivers.to_vec();
-
-        let remote_is_plan_b = match configuration.sdp_semantics {
+        let remote_is_plan_b = match sdp_semantics {
             SDPSemantics::PlanB => true,
             SDPSemantics::UnifiedPlanWithFallback => {
                 description_is_plan_b(self.remote_description().await.as_ref())?
@@ -263,7 +268,7 @@ impl PeerConnectionInternal {
         // Ensure we haven't already started a transceiver for this ssrc
         let ssrcs: Vec<SSRC> = incoming_tracks.iter().map(|x| x.ssrc).collect();
         for ssrc in ssrcs {
-            for t in &local_transceivers {
+            for t in local_transceivers {
                 if let Some(receiver) = t.receiver().await {
                     if let Some(track) = receiver.track().await {
                         if track.ssrc() != ssrc {
@@ -283,7 +288,7 @@ impl PeerConnectionInternal {
         let mut unhandled_tracks = vec![]; // incoming_tracks[:0]
         for incoming_track in incoming_tracks.iter() {
             let mut track_handled = false;
-            for t in &local_transceivers {
+            for t in local_transceivers {
                 if t.mid().await != incoming_track.mid {
                     continue;
                 }
@@ -515,7 +520,7 @@ impl PeerConnectionInternal {
         .await;
     }
 
-    pub(super) async fn remote_description(&self) -> Option<SessionDescription> {
+    pub(super) async fn remote_description(self: &Arc<Self>) -> Option<SessionDescription> {
         let pending_remote_description = self.pending_remote_description.lock().await;
         if pending_remote_description.is_some() {
             pending_remote_description.clone()
@@ -905,7 +910,11 @@ impl PeerConnectionInternal {
         }
     }
 
-    async fn handle_undeclared_ssrc<R: Read>(&self, rtp_stream: &mut R, ssrc: SSRC) -> Result<()> {
+    async fn handle_undeclared_ssrc(
+        self: &Arc<Self>,
+        rtp_stream: Arc<Stream>,
+        ssrc: SSRC,
+    ) -> Result<()> {
         if let Some(rd) = self.remote_description().await {
             if let Some(parsed) = &rd.parsed {
                 // If the remote SDP was only one media section the ssrc doesn't have to be explicitly declared
@@ -974,7 +983,7 @@ impl PeerConnectionInternal {
                 let mut b = vec![0u8; RECEIVE_MTU];
                 let (mut mid, mut rid) = (String::new(), String::new());
                 for _ in 0..=SIMULCAST_PROBE_COUNT {
-                    let n = rtp_stream.read(&mut b)?;
+                    let n = rtp_stream.read(&mut b).await?;
 
                     let (maybe_mid, maybe_rid, payload_type) = handle_unknown_rtp_packet(
                         &b[..n],

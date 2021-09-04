@@ -270,15 +270,15 @@ impl RTPReceiver {
     /// receive initialize the track and starts all the transports
     pub async fn receive(&self, parameters: &RTPReceiveParameters) -> Result<()> {
         let receiver = Arc::clone(&self.internal);
+
         let mut internal = self.internal.lock().await;
         if internal.received_tx.is_none() {
             return Err(Error::ErrRTPReceiverReceiveAlreadyCalled.into());
         }
-        let _d = internal.received_tx.take(); // defer drop(received_tx)
+        let (_d, global_params) = (internal.received_tx.take(), internal.get_parameters().await);
 
         if parameters.encodings.len() == 1 && parameters.encodings[0].ssrc != 0 {
             if let Some(encoding) = parameters.encodings.first() {
-                let global_params = self.get_parameters().await;
                 let codec = if let Some(codec) = global_params.codecs.first() {
                     codec.capability.clone()
                 } else {

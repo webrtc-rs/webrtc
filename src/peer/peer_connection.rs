@@ -71,7 +71,6 @@ use ice::candidate::Candidate;
 use sdp::session_description::{ATTR_KEY_ICELITE, ATTR_KEY_MSID};
 use sdp::util::ConnectionRole;
 use std::future::Future;
-use std::io::Read;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
@@ -1133,7 +1132,7 @@ impl PeerConnection {
             return Err(Error::ErrConnectionClosed.into());
         }
 
-        let _have_local_description = {
+        let have_local_description = {
             let current_local_description = self.internal.current_local_description.lock().await;
             current_local_description.is_some()
         };
@@ -1154,15 +1153,29 @@ impl PeerConnection {
         desc.parsed = Some(desc.unmarshal()?);
         self.set_description(&desc, StateChangeOp::SetLocal).await?;
 
-        let current_transceivers = self.get_transceivers().await;
-
         let we_answer = desc.serde.sdp_type == SDPType::Answer;
-        let remote_desc = self.remote_description().await;
-        if we_answer && remote_desc.is_some() {
-            self.start_rtp_senders(&current_transceivers).await?;
-            /*TODO:pc.ops.Enqueue(func() {
-                pc.start_rtp(have_local_description, remote_desc, current_transceivers)
-            })*/
+        let remote_description = self.remote_description().await;
+        if we_answer {
+            if let Some(remote_desc) = remote_description {
+                self.start_rtp_senders().await?;
+
+                let pci = Arc::clone(&self.internal);
+                let sdp_semantics = self.configuration.sdp_semantics;
+                let remote_desc = Arc::new(remote_desc);
+                self.internal
+                    .ops
+                    .enqueue(Operation(Box::new(move || {
+                        let pc = Arc::clone(&pci);
+                        let rd = Arc::clone(&remote_desc);
+                        Box::pin(async move {
+                            let _ = pc
+                                .start_rtp(have_local_description, rd, sdp_semantics)
+                                .await;
+                            false
+                        })
+                    })))
+                    .await?;
+            }
         }
 
         if self.internal.ice_gatherer.state() == ICEGathererState::New {
@@ -1323,10 +1336,9 @@ impl PeerConnection {
                     .await?;
             }
 
-            let current_transceivers = self.get_transceivers().await;
             if is_renegotation {
                 if we_offer {
-                    self.start_rtp_senders(&current_transceivers).await?;
+                    self.start_rtp_senders().await?;
                     /*TODO: self.internal.ops.Enqueue(func() {
                         self.start_rtp(true, &desc, current_transceivers)
                     })*/
@@ -1359,7 +1371,7 @@ impl PeerConnection {
             // Start the networking in a new routine since it will block until
             // the connection is actually established.
             if we_offer {
-                self.start_rtp_senders(&current_transceivers).await?;
+                self.start_rtp_senders().await?;
             }
 
             /*TODO: self.internal.ops.Enqueue(func() {
@@ -1374,11 +1386,9 @@ impl PeerConnection {
     }
 
     /// start_rtp_senders starts all outbound RTP streams
-    pub(crate) async fn start_rtp_senders(
-        &self,
-        current_transceivers: &[Arc<RTPTransceiver>],
-    ) -> Result<()> {
-        for transceiver in current_transceivers {
+    pub(crate) async fn start_rtp_senders(&self) -> Result<()> {
+        let current_transceivers = self.internal.rtp_transceivers.lock().await;
+        for transceiver in &*current_transceivers {
             if let Some(sender) = transceiver.sender().await {
                 if sender.is_negotiated() && !sender.has_sent().await {
                     sender.send(&sender.get_parameters().await).await?;
