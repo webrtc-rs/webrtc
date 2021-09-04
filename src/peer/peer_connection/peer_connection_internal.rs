@@ -31,10 +31,10 @@ pub(crate) struct PeerConnectionInternal {
 
     pub(super) ice_gatherer: Arc<ICEGatherer>,
 
-    pub(super) current_local_description: Option<SessionDescription>, //TODO: Arc<Mutex?
-    pub(super) current_remote_description: Option<SessionDescription>, //TODO: Arc<Mutex?
-    pub(super) pending_local_description: Option<SessionDescription>,
-    pub(super) pending_remote_description: Option<SessionDescription>,
+    pub(super) current_local_description: Arc<Mutex<Option<SessionDescription>>>,
+    pub(super) current_remote_description: Arc<Mutex<Option<SessionDescription>>>,
+    pub(super) pending_local_description: Arc<Mutex<Option<SessionDescription>>>,
+    pub(super) pending_remote_description: Arc<Mutex<Option<SessionDescription>>>,
 
     // A reference to the associated API state used by this connection
     pub(super) setting_engine: Arc<SettingEngine>,
@@ -101,7 +101,7 @@ impl PeerConnectionInternal {
     }
 
     /// undeclared_media_processor handles RTP/RTCP packets that don't match any a:ssrc lines
-    pub(super) fn undeclared_media_processor(&self) {
+    fn undeclared_media_processor(&self) {
         let dtls_transport = Arc::clone(&self.dtls_transport);
         let is_closed = Arc::clone(&self.is_closed);
         tokio::spawn(async move {
@@ -186,7 +186,7 @@ impl PeerConnectionInternal {
     }
 
     /// start_rtp_receivers opens knows inbound SRTP streams from the remote_description
-    pub(crate) async fn start_rtp_receivers(
+    async fn start_rtp_receivers(
         &self,
         incoming_tracks: &mut Vec<TrackDetails>,
         current_transceivers: &[Arc<RTPTransceiver>],
@@ -197,7 +197,7 @@ impl PeerConnectionInternal {
         let remote_is_plan_b = match configuration.sdp_semantics {
             SDPSemantics::PlanB => true,
             SDPSemantics::UnifiedPlanWithFallback => {
-                description_is_plan_b(self.remote_description())?
+                description_is_plan_b(self.remote_description().await.as_ref())?
             }
             _ => false,
         };
@@ -295,7 +295,7 @@ impl PeerConnectionInternal {
     }
 
     /// Start SCTP subsystem
-    pub(crate) async fn start_sctp(&self) {
+    async fn start_sctp(&self) {
         // Start sctp
         if let Err(err) = self
             .sctp_transport
@@ -450,18 +450,20 @@ impl PeerConnectionInternal {
             check_negotiation_needed_params: CheckNegotiationNeededParams {
                 sctp_transport: Arc::clone(&self.sctp_transport),
                 rtp_transceivers: Arc::clone(&self.rtp_transceivers),
-                current_local_description: self.current_local_description.clone(),
-                current_remote_description: self.current_remote_description.clone(),
+                current_local_description: Arc::clone(&self.current_local_description),
+                current_remote_description: Arc::clone(&self.current_remote_description),
             },
         })
         .await;
     }
 
-    pub(super) fn remote_description(&self) -> Option<&SessionDescription> {
-        if self.pending_remote_description.is_some() {
-            self.pending_remote_description.as_ref()
+    pub(super) async fn remote_description(&self) -> Option<SessionDescription> {
+        let pending_remote_description = self.pending_remote_description.lock().await;
+        if pending_remote_description.is_some() {
+            pending_remote_description.clone()
         } else {
-            self.current_remote_description.as_ref()
+            let current_remote_description = self.current_remote_description.lock().await;
+            current_remote_description.clone()
         }
     }
 
@@ -469,7 +471,7 @@ impl PeerConnectionInternal {
         self.ice_gatherer.on_gathering_complete(f).await;
     }
 
-    pub(super) async fn dtls_write_rtcp(
+    async fn dtls_write_rtcp(
         &self,
         pkts: &dyn rtcp::packet::Packet,
         _a: &Attributes,
@@ -660,16 +662,20 @@ impl PeerConnectionInternal {
         let ice_params = self.ice_gatherer.get_local_parameters().await?;
         let candidates = self.ice_gatherer.get_local_candidates().await?;
 
-        let remote_description = if self.pending_remote_description.is_some() {
-            self.pending_remote_description.as_ref()
-        } else {
-            self.current_remote_description.as_ref()
+        let remote_description = {
+            let pending_remote_description = self.pending_remote_description.lock().await;
+            if pending_remote_description.is_some() {
+                pending_remote_description.clone()
+            } else {
+                let current_remote_description = self.current_remote_description.lock().await;
+                current_remote_description.clone()
+            }
         };
 
-        let detected_plan_b = description_is_plan_b(remote_description)?;
+        let detected_plan_b = description_is_plan_b(remote_description.as_ref())?;
         let mut media_sections = vec![];
         let mut already_have_application_media_section = false;
-        if let Some(remote_description) = remote_description {
+        if let Some(remote_description) = remote_description.as_ref() {
             if let Some(parsed) = &remote_description.parsed {
                 for media in &parsed.media_descriptions {
                     if let Some(mid_value) = get_mid_value(media) {
@@ -842,7 +848,7 @@ impl PeerConnectionInternal {
     }
 
     async fn handle_undeclared_ssrc<R: Read>(&self, rtp_stream: &mut R, ssrc: SSRC) -> Result<()> {
-        if let Some(rd) = self.remote_description() {
+        if let Some(rd) = self.remote_description().await {
             if let Some(parsed) = &rd.parsed {
                 // If the remote SDP was only one media section the ssrc doesn't have to be explicitly declared
                 if parsed.media_descriptions.len() == 1 {

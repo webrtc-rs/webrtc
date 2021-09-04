@@ -128,8 +128,8 @@ struct StartTransportsParams {
 struct CheckNegotiationNeededParams {
     sctp_transport: Arc<SCTPTransport>,
     rtp_transceivers: Arc<Mutex<Vec<Arc<RTPTransceiver>>>>,
-    current_local_description: Option<SessionDescription>,
-    current_remote_description: Option<SessionDescription>,
+    current_local_description: Arc<Mutex<Option<SessionDescription>>>,
+    current_remote_description: Arc<Mutex<Option<SessionDescription>>>,
 }
 
 #[derive(Clone)]
@@ -469,7 +469,12 @@ impl PeerConnection {
         // To check if negotiation is needed for connection, perform the following checks:
         // Skip 1, 2 steps
         // Step 3
-        if let Some(local_desc) = &params.current_local_description {
+        let current_local_description = {
+            let current_local_description = params.current_local_description.lock().await;
+            current_local_description.clone()
+        };
+
+        if let Some(local_desc) = &current_local_description {
             let len_data_channel = {
                 let data_channels = params.sctp_transport.data_channels.lock().await;
                 data_channels.len()
@@ -514,7 +519,9 @@ impl PeerConnection {
                         match local_desc.serde.sdp_type {
                             SDPType::Offer => {
                                 // Step 5.3.2
-                                if let Some(remote_desc) = &params.current_remote_description {
+                                let current_remote_description =
+                                    params.current_remote_description.lock().await;
+                                if let Some(remote_desc) = &*current_remote_description {
                                     if let Some(rm) =
                                         get_by_mid(t.mid().await.as_str(), remote_desc)
                                     {
@@ -540,7 +547,8 @@ impl PeerConnection {
                 }
                 // Step 5.4
                 if t.stopped && !t.mid().await.is_empty() {
-                    if let Some(remote_desc) = &params.current_remote_description {
+                    let current_remote_description = params.current_remote_description.lock().await;
+                    if let Some(remote_desc) = &*current_remote_description {
                         if get_by_mid(t.mid().await.as_str(), local_desc).is_some()
                             || get_by_mid(t.mid().await.as_str(), remote_desc).is_some()
                         {
@@ -774,29 +782,36 @@ impl PeerConnection {
 
             // in-parallel steps to create an offer
             // https://w3c.github.io/webrtc-pc/#dfn-in-parallel-steps-to-create-an-offer
-            let is_plan_b = if self.internal.current_remote_description.is_some() {
-                description_is_plan_b(self.internal.current_remote_description.as_ref())?
-            } else {
-                self.configuration.sdp_semantics == SDPSemantics::PlanB
+            let is_plan_b = {
+                let current_remote_description =
+                    self.internal.current_remote_description.lock().await;
+                if current_remote_description.is_some() {
+                    description_is_plan_b(current_remote_description.as_ref())?
+                } else {
+                    self.configuration.sdp_semantics == SDPSemantics::PlanB
+                }
             };
 
             // include unmatched local transceivers
             if !is_plan_b {
                 // update the greater mid if the remote description provides a greater one
-                if let Some(current_remote_description) = &self.internal.current_remote_description
                 {
-                    if let Some(parsed) = &current_remote_description.parsed {
-                        for media in &parsed.media_descriptions {
-                            if let Some(mid) = get_mid_value(media) {
-                                if mid.is_empty() {
-                                    continue;
-                                }
-                                let numeric_mid = match mid.parse::<isize>() {
-                                    Ok(n) => n,
-                                    Err(_) => continue,
-                                };
-                                if numeric_mid > self.greater_mid {
-                                    self.greater_mid = numeric_mid;
+                    let current_remote_description =
+                        self.internal.current_remote_description.lock().await;
+                    if let Some(d) = &*current_remote_description {
+                        if let Some(parsed) = &d.parsed {
+                            for media in &parsed.media_descriptions {
+                                if let Some(mid) = get_mid_value(media) {
+                                    if mid.is_empty() {
+                                        continue;
+                                    }
+                                    let numeric_mid = match mid.parse::<isize>() {
+                                        Ok(n) => n,
+                                        Err(_) => continue,
+                                    };
+                                    if numeric_mid > self.greater_mid {
+                                        self.greater_mid = numeric_mid;
+                                    }
                                 }
                             }
                         }
@@ -811,7 +826,13 @@ impl PeerConnection {
                 }
             }
 
-            let mut d = if self.internal.current_remote_description.is_none() {
+            let has_current_remote_description = {
+                let current_remote_description =
+                    self.internal.current_remote_description.lock().await;
+                current_remote_description.is_none()
+            };
+
+            let mut d = if !has_current_remote_description {
                 self.internal
                     .generate_unmatched_sdp(
                         current_transceivers,
@@ -911,7 +932,7 @@ impl PeerConnection {
         _options: Option<AnswerOptions>,
     ) -> Result<SessionDescription> {
         let use_identity = self.idp_login_url.is_some();
-        if self.remote_description().is_none() {
+        if self.remote_description().await.is_none() {
             return Err(Error::ErrNoRemoteDescription.into());
         } else if use_identity {
             return Err(Error::ErrIdentityProviderNotImplemented.into());
@@ -991,7 +1012,9 @@ impl PeerConnection {
                                     sd.serde.sdp_type,
                                 );
                                 if next_state.is_ok() {
-                                    self.internal.pending_local_description = Some(sd.clone());
+                                    let mut pending_local_description =
+                                        self.internal.pending_local_description.lock().await;
+                                    *pending_local_description = Some(sd.clone());
                                 }
                                 next_state
                             }
@@ -1009,11 +1032,27 @@ impl PeerConnection {
                                     sd.serde.sdp_type,
                                 );
                                 if next_state.is_ok() {
-                                    self.internal.current_local_description = Some(sd.clone());
-                                    self.internal.current_remote_description =
-                                        self.internal.pending_remote_description.take();
-                                    self.internal.pending_remote_description = None;
-                                    self.internal.pending_local_description = None;
+                                    let pending_remote_description = {
+                                        let mut pending_remote_description =
+                                            self.internal.pending_remote_description.lock().await;
+                                        pending_remote_description.take()
+                                    };
+                                    let _pending_local_description = {
+                                        let mut pending_local_description =
+                                            self.internal.pending_local_description.lock().await;
+                                        pending_local_description.take()
+                                    };
+
+                                    {
+                                        let mut current_local_description =
+                                            self.internal.current_local_description.lock().await;
+                                        *current_local_description = Some(sd.clone());
+                                    }
+                                    {
+                                        let mut current_remote_description =
+                                            self.internal.current_remote_description.lock().await;
+                                        *current_remote_description = pending_remote_description;
+                                    }
                                 }
                                 next_state
                             }
@@ -1026,7 +1065,9 @@ impl PeerConnection {
                                 sd.serde.sdp_type,
                             );
                             if next_state.is_ok() {
-                                self.internal.pending_local_description = None;
+                                let mut pending_local_description =
+                                    self.internal.pending_local_description.lock().await;
+                                *pending_local_description = None;
                             }
                             next_state
                         }
@@ -1042,7 +1083,9 @@ impl PeerConnection {
                                     sd.serde.sdp_type,
                                 );
                                 if next_state.is_ok() {
-                                    self.internal.pending_local_description = Some(sd.clone());
+                                    let mut pending_local_description =
+                                        self.internal.pending_local_description.lock().await;
+                                    *pending_local_description = Some(sd.clone());
                                 }
                                 next_state
                             }
@@ -1061,7 +1104,9 @@ impl PeerConnection {
                                 sd.serde.sdp_type,
                             );
                             if next_state.is_ok() {
-                                self.internal.pending_remote_description = Some(sd.clone());
+                                let mut pending_remote_description =
+                                    self.internal.pending_remote_description.lock().await;
+                                *pending_remote_description = Some(sd.clone());
                             }
                             next_state
                         }
@@ -1075,11 +1120,28 @@ impl PeerConnection {
                                 sd.serde.sdp_type,
                             );
                             if next_state.is_ok() {
-                                self.internal.current_remote_description = Some(sd.clone());
-                                self.internal.current_local_description =
-                                    self.internal.pending_local_description.take();
-                                self.internal.pending_remote_description = None;
-                                self.internal.pending_local_description = None;
+                                let pending_local_description = {
+                                    let mut pending_local_description =
+                                        self.internal.pending_local_description.lock().await;
+                                    pending_local_description.take()
+                                };
+
+                                let _pending_remote_description = {
+                                    let mut pending_remote_description =
+                                        self.internal.pending_remote_description.lock().await;
+                                    pending_remote_description.take()
+                                };
+
+                                {
+                                    let mut current_remote_description =
+                                        self.internal.current_remote_description.lock().await;
+                                    *current_remote_description = Some(sd.clone());
+                                }
+                                {
+                                    let mut current_local_description =
+                                        self.internal.current_local_description.lock().await;
+                                    *current_local_description = pending_local_description;
+                                }
                             }
                             next_state
                         }
@@ -1091,7 +1153,9 @@ impl PeerConnection {
                                 sd.serde.sdp_type,
                             );
                             if next_state.is_ok() {
-                                self.internal.pending_remote_description = None;
+                                let mut pending_remote_description =
+                                    self.internal.pending_remote_description.lock().await;
+                                *pending_remote_description = None;
                             }
                             next_state
                         }
@@ -1104,7 +1168,9 @@ impl PeerConnection {
                                 sd.serde.sdp_type,
                             );
                             if next_state.is_ok() {
-                                self.internal.pending_remote_description = Some(sd.clone());
+                                let mut pending_remote_description =
+                                    self.internal.pending_remote_description.lock().await;
+                                *pending_remote_description = Some(sd.clone());
                             }
                             next_state
                         }
@@ -1162,7 +1228,10 @@ impl PeerConnection {
             return Err(Error::ErrConnectionClosed.into());
         }
 
-        let _have_local_description = self.internal.current_local_description.is_some();
+        let _have_local_description = {
+            let current_local_description = self.internal.current_local_description.lock().await;
+            current_local_description.is_some()
+        };
 
         // JSEP 5.4
         if desc.serde.sdp.is_empty() {
@@ -1183,7 +1252,7 @@ impl PeerConnection {
         let current_transceivers = self.get_transceivers().await;
 
         let we_answer = desc.serde.sdp_type == SDPType::Answer;
-        let remote_desc = self.remote_description();
+        let remote_desc = self.remote_description().await;
         if we_answer && remote_desc.is_some() {
             self.start_rtp_senders(&current_transceivers).await?;
             /*TODO:pc.ops.Enqueue(func() {
@@ -1215,7 +1284,10 @@ impl PeerConnection {
             return Err(Error::ErrConnectionClosed.into());
         }
 
-        let is_renegotation = self.internal.current_remote_description.is_some();
+        let is_renegotation = {
+            let current_remote_description = self.internal.current_remote_description.lock().await;
+            current_remote_description.is_some()
+        };
 
         desc.parsed = Some(desc.unmarshal()?);
         self.set_description(&desc, StateChangeOp::SetRemote)
@@ -1228,12 +1300,12 @@ impl PeerConnection {
                 .await?;
 
             let mut local_transceivers = self.get_transceivers().await;
-            let detected_plan_b = description_is_plan_b(self.remote_description())?;
+            let remote_description = self.remote_description().await;
+            let detected_plan_b = description_is_plan_b(remote_description.as_ref())?;
             let we_offer = desc.serde.sdp_type == SDPType::Answer;
 
             if !we_offer && !detected_plan_b {
-                let desc = self.remote_description().cloned();
-                if let Some(desc) = desc {
+                if let Some(desc) = remote_description {
                     if let Some(parsed) = &desc.parsed {
                         for media in &parsed.media_descriptions {
                             if let Some(mid_value) = get_mid_value(media) {
@@ -1416,14 +1488,14 @@ impl PeerConnection {
     /// otherwise it returns current_remote_description. This property is used to
     /// determine if setRemoteDescription has already been called.
     /// https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-remotedescription
-    pub fn remote_description(&self) -> Option<&SessionDescription> {
-        self.internal.remote_description()
+    pub async fn remote_description(&self) -> Option<SessionDescription> {
+        self.internal.remote_description().await
     }
 
     /// add_ice_candidate accepts an ICE candidate string and adds it
     /// to the existing set of candidates.
     pub async fn add_ice_candidate(&self, candidate: ICECandidateInit) -> Result<()> {
-        if self.remote_description().is_none() {
+        if self.remote_description().await.is_none() {
             return Err(Error::ErrNoRemoteDescription.into());
         }
 
@@ -1843,11 +1915,14 @@ impl PeerConnection {
     /// into the stable state plus any local candidates that have been generated
     /// by the ICEAgent since the offer or answer was created.
     pub async fn current_local_description(&self) -> Option<SessionDescription> {
-        let local_description = self.internal.current_local_description.as_ref();
+        let local_description = {
+            let current_local_description = self.internal.current_local_description.lock().await;
+            current_local_description.clone()
+        };
         let ice_gather = Some(&self.internal.ice_gatherer);
         let ice_gathering_state = self.ice_gathering_state();
 
-        populate_local_candidates(local_description, ice_gather, ice_gathering_state).await
+        populate_local_candidates(local_description.as_ref(), ice_gather, ice_gathering_state).await
     }
 
     /// PendingLocalDescription represents a local description that is in the
@@ -1855,19 +1930,23 @@ impl PeerConnection {
     /// generated by the ICEAgent since the offer or answer was created. If the
     /// PeerConnection is in the stable state, the value is null.
     pub async fn pending_local_description(&self) -> Option<SessionDescription> {
-        let local_description = self.internal.pending_local_description.as_ref();
+        let local_description = {
+            let pending_local_description = self.internal.pending_local_description.lock().await;
+            pending_local_description.clone()
+        };
         let ice_gather = Some(&self.internal.ice_gatherer);
         let ice_gathering_state = self.ice_gathering_state();
 
-        populate_local_candidates(local_description, ice_gather, ice_gathering_state).await
+        populate_local_candidates(local_description.as_ref(), ice_gather, ice_gathering_state).await
     }
 
     /// current_remote_description represents the last remote description that was
     /// successfully negotiated the last time the PeerConnection transitioned
     /// into the stable state plus any remote candidates that have been supplied
     /// via add_icecandidate() since the offer or answer was created.
-    pub fn current_remote_description(&self) -> Option<&SessionDescription> {
-        self.internal.current_remote_description.as_ref()
+    pub async fn current_remote_description(&self) -> Option<SessionDescription> {
+        let current_remote_description = self.internal.current_remote_description.lock().await;
+        current_remote_description.clone()
     }
 
     /// pending_remote_description represents a remote description that is in the
@@ -1875,8 +1954,9 @@ impl PeerConnection {
     /// have been supplied via add_icecandidate() since the offer or answer was
     /// created. If the PeerConnection is in the stable state, the value is
     /// null.
-    pub fn pending_remote_description(&self) -> Option<&SessionDescription> {
-        self.internal.pending_remote_description.as_ref()
+    pub async fn pending_remote_description(&self) -> Option<SessionDescription> {
+        let pending_remote_description = self.internal.pending_remote_description.lock().await;
+        pending_remote_description.clone()
     }
 
     /// signaling_state attribute returns the signaling state of the
