@@ -64,7 +64,6 @@ use crate::{
     SSRC_STR,
 };
 use anyhow::Result;
-//use defer::defer;
 use ice::candidate::candidate_base::unmarshal_candidate;
 use ice::candidate::Candidate;
 use sdp::session_description::{ATTR_KEY_ICELITE, ATTR_KEY_MSID};
@@ -384,9 +383,7 @@ impl PeerConnection {
         *on_negotiation_needed_handler = Some(f);
     }
 
-    /// do_negotiation_needed enqueues negotiation_needed_op if necessary
-    /// caller of this method should hold `pc.mu` lock
-    async fn do_negotiation_needed(params: NegotiationNeededParams) {
+    fn do_negotiation_needed_inner(params: &NegotiationNeededParams) -> bool {
         // https://w3c.github.io/webrtc-pc/#updating-the-negotiation-needed-flag
         // non-canon step 1
         let state: NegotiationNeededState = params
@@ -397,14 +394,22 @@ impl PeerConnection {
             params
                 .negotiation_needed_state
                 .store(NegotiationNeededState::Queue as u8, Ordering::SeqCst);
-            return;
+            false
         } else if state == NegotiationNeededState::Queue {
+            false
+        } else {
+            params
+                .negotiation_needed_state
+                .store(NegotiationNeededState::Run as u8, Ordering::SeqCst);
+            true
+        }
+    }
+    /// do_negotiation_needed enqueues negotiation_needed_op if necessary
+    /// caller of this method should hold `pc.mu` lock
+    async fn do_negotiation_needed(params: NegotiationNeededParams) {
+        if !PeerConnection::do_negotiation_needed_inner(&params) {
             return;
         }
-
-        params
-            .negotiation_needed_state
-            .store(NegotiationNeededState::Run as u8, Ordering::SeqCst);
 
         let params2 = params.clone();
         let _ = params
@@ -414,6 +419,19 @@ impl PeerConnection {
                 Box::pin(async move { PeerConnection::negotiation_needed_op(params3).await })
             })))
             .await;
+    }
+
+    async fn after_negotiation_needed_op(params: NegotiationNeededParams) -> bool {
+        if params.negotiation_needed_state.load(Ordering::SeqCst)
+            == NegotiationNeededState::Queue as u8
+        {
+            PeerConnection::do_negotiation_needed_inner(&params)
+        } else {
+            params
+                .negotiation_needed_state
+                .store(NegotiationNeededState::Empty as u8, Ordering::SeqCst);
+            false
+        }
     }
 
     async fn negotiation_needed_op(params: NegotiationNeededParams) -> bool {
@@ -432,51 +450,42 @@ impl PeerConnection {
         }
         // non-canon step 2.2
         if !params.ops.is_empty().await {
+            //enqueue negotiation_needed_op again by return true
             return true;
         }
 
         // non-canon, run again if there was a request
-        /*TODO:defer(|| {
-            if params.negotiation_needed_state.load(Ordering::SeqCst)
-                == NegotiationNeededState::Queue as u8
-            {
-                Box::pin(async {
-                    PeerConnection::do_negotiation_needed(params).await;
-                });
-            } else {
-                params
-                    .negotiation_needed_state
-                    .store(NegotiationNeededState::Empty as u8, Ordering::SeqCst);
-            }
-        });*/
+        // starting defer(after_do_negotiation_needed(params).await);
 
         // Step 2.3
         if params.signaling_state.load(Ordering::SeqCst) != SignalingState::Stable as u8 {
-            return false;
+            return PeerConnection::after_negotiation_needed_op(params).await;
         }
 
         // Step 2.4
         if !PeerConnection::check_negotiation_needed(&params.check_negotiation_needed_params).await
         {
             params.is_negotiation_needed.store(false, Ordering::SeqCst);
-            return false;
+            return PeerConnection::after_negotiation_needed_op(params).await;
         }
 
         // Step 2.5
         if params.is_negotiation_needed.load(Ordering::SeqCst) {
-            return false;
+            return PeerConnection::after_negotiation_needed_op(params).await;
         }
 
         // Step 2.6
         params.is_negotiation_needed.store(true, Ordering::SeqCst);
 
         // Step 2.7
-        let mut handler = params.on_negotiation_needed_handler.lock().await;
-        if let Some(f) = &mut *handler {
-            f().await;
+        {
+            let mut handler = params.on_negotiation_needed_handler.lock().await;
+            if let Some(f) = &mut *handler {
+                f().await;
+            }
         }
 
-        false
+        PeerConnection::after_negotiation_needed_op(params).await
     }
 
     async fn check_negotiation_needed(params: &CheckNegotiationNeededParams) -> bool {

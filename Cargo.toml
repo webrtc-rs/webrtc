@@ -34,7 +34,6 @@ bytes = "1"
 thiserror = "1.0.25"
 anyhow = "1.0.41"
 waitgroup = "0.1.2"
-defer = "0.1.0"
 regex = "1"
 url = "2.2.2"
 
