@@ -2240,6 +2240,10 @@ impl PeerConnection {
         )
         .await;
 
+        if let Err(err) = self.ops.close().await {
+            close_errs.push(err);
+        }
+
         flatten_errs(close_errs)
     }
 

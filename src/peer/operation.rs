@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod operation_test;
+
 use anyhow::Result;
 use std::fmt;
 use std::future::Future;
