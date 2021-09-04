@@ -111,6 +111,15 @@ pub type OnTrackHdlrFn = Box<
 pub type OnNegotiationNeededHdlrFn =
     Box<dyn (FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync>;
 
+struct StartTransportsParams {
+    ice_transport: Arc<ICETransport>,
+    dtls_transport: Arc<DTLSTransport>,
+    on_peer_connection_state_change_handler: Arc<Mutex<Option<OnPeerConnectionStateChangeHdlrFn>>>,
+    is_closed: Arc<AtomicBool>,
+    peer_connection_state: Arc<AtomicU8>,
+    ice_connection_state: Arc<AtomicU8>,
+}
+
 /// PeerConnection represents a WebRTC connection that establishes a
 /// peer-to-peer communications with another PeerConnection instance in a
 /// browser, or to another endpoint implementing the required protocols.
@@ -229,7 +238,7 @@ impl PeerConnection {
             ice_gather_policy: pc.configuration.ice_transport_policy,
         })?);
 
-        // Create the ice transport
+        // Part I of Create the ice transport
         pc.ice_transport = Arc::new(api.new_ice_transport(Arc::clone(&pc.ice_gatherer)));
 
         // Create the DTLS transport
@@ -240,98 +249,6 @@ impl PeerConnection {
 
         // Create the SCTP transport
         pc.sctp_transport = Arc::new(api.new_sctp_transport(Arc::clone(&pc.dtls_transport))?);
-
-        //TODO: pc.interceptor_rtcp_writer = api.interceptor.bind_rtcp_writer(interceptor.RTCPWriterFunc(pc.writeRTCP))
-
-        let ice_connection_state = Arc::clone(&pc.ice_connection_state);
-        let peer_connection_state = Arc::clone(&pc.peer_connection_state);
-        let is_closed = Arc::clone(&pc.is_closed);
-        let dtls_transport = Arc::clone(&pc.dtls_transport);
-        let on_ice_connection_state_change_handler =
-            Arc::clone(&pc.on_ice_connection_state_change_handler);
-        let on_peer_connection_state_change_handler =
-            Arc::clone(&pc.on_peer_connection_state_change_handler);
-
-        pc.ice_transport
-            .on_connection_state_change(Box::new(move |state: ICETransportState| {
-                let ice_cs = match state {
-                    ICETransportState::New => ICEConnectionState::New,
-                    ICETransportState::Checking => ICEConnectionState::Checking,
-                    ICETransportState::Connected => ICEConnectionState::Connected,
-                    ICETransportState::Completed => ICEConnectionState::Completed,
-                    ICETransportState::Failed => ICEConnectionState::Failed,
-                    ICETransportState::Disconnected => ICEConnectionState::Disconnected,
-                    ICETransportState::Closed => ICEConnectionState::Closed,
-                    _ => {
-                        log::warn!("on_connection_state_change: unhandled ICE state: {}", state);
-                        return Box::pin(async {});
-                    }
-                };
-
-                ice_connection_state.store(ice_cs as u8, Ordering::SeqCst);
-                log::info!("ICE connection state changed: {}", ice_cs);
-
-                let on_ice_connection_state_change_handler2 =
-                    Arc::clone(&on_ice_connection_state_change_handler);
-                let on_peer_connection_state_change_handler2 = Arc::clone(&on_peer_connection_state_change_handler);
-                let is_closed2 =  Arc::clone(&is_closed);
-                let dtls_transport_state = dtls_transport.state();
-                let peer_cs_old = peer_connection_state.load(Ordering::SeqCst);
-                let peer_connection_state2 = Arc::clone(&peer_connection_state);
-                Box::pin(async move {
-                    //pc2.do_ice_connection_state_change(cs).await;
-                    {
-                        let mut handler = on_ice_connection_state_change_handler2.lock().await;
-                        if let Some(f) = &mut *handler {
-                            f(ice_cs).await;
-                        }
-                    }
-
-                    //pc2.update_connection_state(cs, pc2.dtls_transport.state()).await;
-                    {
-                        let peer_cs_new =
-                        // The RTCPeerConnection object's [[IsClosed]] slot is true.
-                        if is_closed2.load(Ordering::SeqCst) {
-                             PeerConnectionState::Closed
-                        }else if ice_cs == ICEConnectionState::Failed || dtls_transport_state == DTLSTransportState::Failed {
-                            // Any of the RTCIceTransports or RTCDtlsTransports are in a "failed" state.
-                             PeerConnectionState::Failed
-                        }else if ice_cs == ICEConnectionState::Disconnected {
-                            // Any of the RTCIceTransports or RTCDtlsTransports are in the "disconnected"
-                            // state and none of them are in the "failed" or "connecting" or "checking" state.
-                            PeerConnectionState::Disconnected
-                        }else if ice_cs == ICEConnectionState::Connected && dtls_transport_state == DTLSTransportState::Connected {
-                            // All RTCIceTransports and RTCDtlsTransports are in the "connected", "completed" or "closed"
-                            // state and at least one of them is in the "connected" or "completed" state.
-                            PeerConnectionState::Connected
-                        }else if ice_cs == ICEConnectionState::Checking && dtls_transport_state == DTLSTransportState::Connecting{
-                        //  Any of the RTCIceTransports or RTCDtlsTransports are in the "connecting" or
-                        // "checking" state and none of them is in the "failed" state.
-                             PeerConnectionState::Connecting
-                        }else{
-                            PeerConnectionState::New
-                        };
-
-                        if peer_cs_old == peer_cs_new as u8 {
-                            return;
-                        }
-
-                        log::info!("peer connection state changed: {}", peer_cs_new);
-                        peer_connection_state2
-                            .store(peer_cs_new as u8, Ordering::SeqCst);
-
-                        //self.do_peer_connection_state_change(connection_state).await;
-                        {
-                            log::info!("Peer connection state changed: {}", peer_cs_new);
-                            let mut handler = on_peer_connection_state_change_handler2.lock().await;
-                            if let Some(f) = &mut *handler {
-                                f(peer_cs_new).await;
-                            }
-                        }
-                    }
-                })
-            }))
-            .await;
 
         // Wire up the on datachannel handler
         let on_data_channel_handler = Arc::clone(&pc.on_data_channel_handler);
@@ -346,6 +263,11 @@ impl PeerConnection {
                 })
             }))
             .await;
+
+        // Part II of Create the ice transport
+        pc.setup_ice_transport().await;
+
+        //TODO: pc.interceptor_rtcp_writer = api.interceptor.bind_rtcp_writer(interceptor.RTCPWriterFunc(pc.writeRTCP))
 
         Ok(pc)
     }
@@ -664,11 +586,17 @@ impl PeerConnection {
         *on_ice_connection_state_change_handler = Some(f);
     }
 
-    async fn do_ice_connection_state_change(&self, cs: ICEConnectionState) {
-        self.ice_connection_state.store(cs as u8, Ordering::SeqCst);
+    async fn do_ice_connection_state_change(
+        on_ice_connection_state_change_handler: &Arc<
+            Mutex<Option<OnICEConnectionStateChangeHdlrFn>>,
+        >,
+        ice_connection_state: &Arc<AtomicU8>,
+        cs: ICEConnectionState,
+    ) {
+        ice_connection_state.store(cs as u8, Ordering::SeqCst);
 
         log::info!("ICE connection state changed: {}", cs);
-        let mut handler = self.on_ice_connection_state_change_handler.lock().await;
+        let mut handler = on_ice_connection_state_change_handler.lock().await;
         if let Some(f) = &mut *handler {
             f(cs).await;
         }
@@ -682,9 +610,14 @@ impl PeerConnection {
         *on_peer_connection_state_change_handler = Some(f);
     }
 
-    async fn do_peer_connection_state_change(&self, cs: PeerConnectionState) {
+    async fn do_peer_connection_state_change(
+        on_peer_connection_state_change_handler: &Arc<
+            Mutex<Option<OnPeerConnectionStateChangeHdlrFn>>,
+        >,
+        cs: PeerConnectionState,
+    ) {
         log::info!("Peer connection state changed: {}", cs);
-        let mut handler = self.on_peer_connection_state_change_handler.lock().await;
+        let mut handler = on_peer_connection_state_change_handler.lock().await;
         if let Some(f) = &mut *handler {
             f(cs).await;
         }
@@ -902,13 +835,17 @@ impl PeerConnection {
     /// Update the PeerConnectionState given the state of relevant transports
     /// https://www.w3.org/TR/webrtc/#rtcpeerconnectionstate-enum
     async fn update_connection_state(
-        &self,
+        on_peer_connection_state_change_handler: &Arc<
+            Mutex<Option<OnPeerConnectionStateChangeHdlrFn>>,
+        >,
+        is_closed: &Arc<AtomicBool>,
+        peer_connection_state: &Arc<AtomicU8>,
         ice_connection_state: ICEConnectionState,
         dtls_transport_state: DTLSTransportState,
     ) {
         let  connection_state =
         // The RTCPeerConnection object's [[IsClosed]] slot is true.
-        if self.is_closed.load(Ordering::SeqCst) {
+        if is_closed.load(Ordering::SeqCst) {
              PeerConnectionState::Closed
         }else if ice_connection_state == ICEConnectionState::Failed || dtls_transport_state == DTLSTransportState::Failed {
             // Any of the RTCIceTransports or RTCDtlsTransports are in a "failed" state.
@@ -929,15 +866,73 @@ impl PeerConnection {
             PeerConnectionState::New
         };
 
-        if self.peer_connection_state.load(Ordering::SeqCst) == connection_state as u8 {
+        if peer_connection_state.load(Ordering::SeqCst) == connection_state as u8 {
             return;
         }
 
         log::info!("peer connection state changed: {}", connection_state);
-        self.peer_connection_state
-            .store(connection_state as u8, Ordering::SeqCst);
+        peer_connection_state.store(connection_state as u8, Ordering::SeqCst);
 
-        self.do_peer_connection_state_change(connection_state).await;
+        PeerConnection::do_peer_connection_state_change(
+            on_peer_connection_state_change_handler,
+            connection_state,
+        )
+        .await;
+    }
+
+    async fn setup_ice_transport(&self) {
+        let ice_connection_state = Arc::clone(&self.ice_connection_state);
+        let peer_connection_state = Arc::clone(&self.peer_connection_state);
+        let is_closed = Arc::clone(&self.is_closed);
+        let dtls_transport = Arc::clone(&self.dtls_transport);
+        let on_ice_connection_state_change_handler =
+            Arc::clone(&self.on_ice_connection_state_change_handler);
+        let on_peer_connection_state_change_handler =
+            Arc::clone(&self.on_peer_connection_state_change_handler);
+
+        self.ice_transport
+            .on_connection_state_change(Box::new(move |state: ICETransportState| {
+                let cs = match state {
+                    ICETransportState::New => ICEConnectionState::New,
+                    ICETransportState::Checking => ICEConnectionState::Checking,
+                    ICETransportState::Connected => ICEConnectionState::Connected,
+                    ICETransportState::Completed => ICEConnectionState::Completed,
+                    ICETransportState::Failed => ICEConnectionState::Failed,
+                    ICETransportState::Disconnected => ICEConnectionState::Disconnected,
+                    ICETransportState::Closed => ICEConnectionState::Closed,
+                    _ => {
+                        log::warn!("on_connection_state_change: unhandled ICE state: {}", state);
+                        return Box::pin(async {});
+                    }
+                };
+
+                let ice_connection_state2 = Arc::clone(&ice_connection_state);
+                let on_ice_connection_state_change_handler2 =
+                    Arc::clone(&on_ice_connection_state_change_handler);
+                let on_peer_connection_state_change_handler2 =
+                    Arc::clone(&on_peer_connection_state_change_handler);
+                let is_closed2 = Arc::clone(&is_closed);
+                let dtls_transport_state = dtls_transport.state();
+                let peer_connection_state2 = Arc::clone(&peer_connection_state);
+                Box::pin(async move {
+                    PeerConnection::do_ice_connection_state_change(
+                        &on_ice_connection_state_change_handler2,
+                        &ice_connection_state2,
+                        cs,
+                    )
+                    .await;
+
+                    PeerConnection::update_connection_state(
+                        &on_peer_connection_state_change_handler2,
+                        &is_closed2,
+                        &peer_connection_state2,
+                        cs,
+                        dtls_transport_state,
+                    )
+                    .await;
+                })
+            }))
+            .await;
     }
 
     /// create_answer starts the PeerConnection and generates the localDescription
@@ -2236,8 +2231,14 @@ impl PeerConnection {
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #11)
-        self.update_connection_state(self.ice_connection_state(), self.dtls_transport.state())
-            .await;
+        PeerConnection::update_connection_state(
+            &self.on_peer_connection_state_change_handler,
+            &self.is_closed,
+            &self.peer_connection_state,
+            self.ice_connection_state(),
+            self.dtls_transport.state(),
+        )
+        .await;
 
         flatten_errs(close_errs)
     }
@@ -2377,7 +2378,7 @@ impl PeerConnection {
 
     /// Start all transports. PeerConnection now has enough state
     async fn start_transports(
-        &self,
+        params: StartTransportsParams,
         ice_role: ICERole,
         dtls_role: DTLSRole,
         remote_ufrag: String,
@@ -2386,7 +2387,7 @@ impl PeerConnection {
         fingerprint_hash: String,
     ) {
         // Start the ice transport
-        if let Err(err) = self
+        if let Err(err) = params
             .ice_transport
             .start(
                 ICEParameters {
@@ -2403,7 +2404,7 @@ impl PeerConnection {
         }
 
         // Start the dtls_transport transport
-        let result = self
+        let result = params
             .dtls_transport
             .start(DTLSParameters {
                 role: dtls_role,
@@ -2413,8 +2414,14 @@ impl PeerConnection {
                 }],
             })
             .await;
-        self.update_connection_state(self.ice_connection_state(), self.dtls_transport.state())
-            .await;
+        PeerConnection::update_connection_state(
+            &params.on_peer_connection_state_change_handler,
+            &params.is_closed,
+            &params.peer_connection_state,
+            params.ice_connection_state.load(Ordering::SeqCst).into(),
+            params.dtls_transport.state(),
+        )
+        .await;
         if let Err(err) = result {
             log::warn!("Failed to start manager: {}", err);
         }
