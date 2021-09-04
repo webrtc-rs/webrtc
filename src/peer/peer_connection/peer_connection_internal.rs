@@ -43,6 +43,64 @@ pub(crate) struct PeerConnectionInternal {
 }
 
 impl PeerConnectionInternal {
+    pub(super) async fn new(api: &API, configuration: &Configuration) -> Result<Self> {
+        let mut pc = PeerConnectionInternal {
+            ops: Arc::new(Operations::new()),
+            is_closed: Arc::new(AtomicBool::new(false)),
+            is_negotiation_needed: Arc::new(AtomicBool::new(false)),
+            negotiation_needed_state: Arc::new(AtomicU8::new(NegotiationNeededState::Empty as u8)),
+            signaling_state: Arc::new(AtomicU8::new(SignalingState::Stable as u8)),
+            ice_connection_state: Arc::new(AtomicU8::new(ICEConnectionState::New as u8)),
+            peer_connection_state: Arc::new(AtomicU8::new(PeerConnectionState::New as u8)),
+
+            setting_engine: Arc::clone(&api.setting_engine),
+            media_engine: if !api.setting_engine.disable_media_engine_copy {
+                Arc::new(api.media_engine.clone_to())
+            } else {
+                Arc::clone(&api.media_engine)
+            },
+            interceptor: api.interceptor.clone(),
+
+            ..Default::default()
+        };
+
+        // Create the ice gatherer
+        pc.ice_gatherer = Arc::new(api.new_ice_gatherer(ICEGatherOptions {
+            ice_servers: configuration.get_ice_servers(),
+            ice_gather_policy: configuration.ice_transport_policy,
+        })?);
+
+        // Create the ice transport
+        pc.ice_transport = pc.create_ice_transport(api).await;
+
+        // Create the DTLS transport
+        pc.dtls_transport = Arc::new(api.new_dtls_transport(
+            Arc::clone(&pc.ice_transport),
+            configuration.certificates.clone(),
+        )?);
+
+        // Create the SCTP transport
+        pc.sctp_transport = Arc::new(api.new_sctp_transport(Arc::clone(&pc.dtls_transport))?);
+
+        // Wire up the on datachannel handler
+        let on_data_channel_handler = Arc::clone(&pc.on_data_channel_handler);
+        pc.sctp_transport
+            .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
+                let on_data_channel_handler2 = Arc::clone(&on_data_channel_handler);
+                Box::pin(async move {
+                    let mut handler = on_data_channel_handler2.lock().await;
+                    if let Some(f) = &mut *handler {
+                        f(d).await;
+                    }
+                })
+            }))
+            .await;
+
+        //TODO: pc.interceptor_rtcp_writer = api.interceptor.bind_rtcp_writer(interceptor.RTCPWriterFunc(pc.writeRTCP))
+
+        Ok(pc)
+    }
+
     pub(super) async fn start_rtp(
         &self,
         is_renegotiation: bool,

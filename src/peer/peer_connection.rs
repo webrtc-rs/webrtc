@@ -167,7 +167,7 @@ pub struct PeerConnection {
 
     interceptor_rtcp_writer: Option<Arc<dyn RTCPWriter + Send + Sync>>,
 
-    pub(crate) internal: PeerConnectionInternal,
+    pub(crate) internal: Arc<PeerConnectionInternal>,
 }
 
 impl PeerConnection {
@@ -177,94 +177,24 @@ impl PeerConnection {
     /// If you wish to customize the set of available codecs or the set of
     /// active interceptors, create a MediaEngine and call api.new_peer_connection
     /// instead of this function.
-    pub(crate) async fn new(api: &API, configuration: Configuration) -> Result<Self> {
+    pub(crate) async fn new(api: &API, mut configuration: Configuration) -> Result<Self> {
+        PeerConnection::init_configuration(&mut configuration)?;
+
         // https://w3c.github.io/webrtc-pc/#constructor (Step #2)
         // Some variables defined explicitly despite their implicit zero values to
         // allow better readability to understand what is happening.
-        let mut pc = PeerConnection {
+        Ok(PeerConnection {
             stats_id: format!(
                 "PeerConnection-{}",
                 SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
             ),
-            configuration: Configuration {
-                ice_servers: vec![],
-                ice_transport_policy: ICETransportPolicy::All,
-                bundle_policy: BundlePolicy::Balanced,
-                rtcp_mux_policy: RTCPMuxPolicy::Require,
-                peer_identity: String::new(),
-                certificates: vec![],
-                ice_candidate_pool_size: 0,
-                sdp_semantics: SDPSemantics::default(),
-            },
-
             last_offer: "".to_owned(),
             last_answer: "".to_owned(),
             greater_mid: -1,
-
-            internal: PeerConnectionInternal {
-                ops: Arc::new(Operations::new()),
-                is_closed: Arc::new(AtomicBool::new(false)),
-                is_negotiation_needed: Arc::new(AtomicBool::new(false)),
-                negotiation_needed_state: Arc::new(AtomicU8::new(
-                    NegotiationNeededState::Empty as u8,
-                )),
-                signaling_state: Arc::new(AtomicU8::new(SignalingState::Stable as u8)),
-                ice_connection_state: Arc::new(AtomicU8::new(ICEConnectionState::New as u8)),
-                peer_connection_state: Arc::new(AtomicU8::new(PeerConnectionState::New as u8)),
-
-                setting_engine: Arc::clone(&api.setting_engine),
-                media_engine: if !api.setting_engine.disable_media_engine_copy {
-                    Arc::new(api.media_engine.clone_to())
-                } else {
-                    Arc::clone(&api.media_engine)
-                },
-                interceptor: api.interceptor.clone(),
-
-                ..Default::default()
-            },
-
+            internal: Arc::new(PeerConnectionInternal::new(api, &configuration).await?),
+            configuration,
             ..Default::default()
-        };
-
-        pc.init_configuration(configuration)?;
-
-        // Create the ice gatherer
-        pc.internal.ice_gatherer = Arc::new(api.new_ice_gatherer(ICEGatherOptions {
-            ice_servers: pc.configuration.get_ice_servers(),
-            ice_gather_policy: pc.configuration.ice_transport_policy,
-        })?);
-
-        // Create the ice transport
-        pc.internal.ice_transport = pc.internal.create_ice_transport(api).await;
-
-        // Create the DTLS transport
-        pc.internal.dtls_transport = Arc::new(api.new_dtls_transport(
-            Arc::clone(&pc.internal.ice_transport),
-            pc.configuration.certificates.clone(),
-        )?);
-
-        // Create the SCTP transport
-        pc.internal.sctp_transport =
-            Arc::new(api.new_sctp_transport(Arc::clone(&pc.internal.dtls_transport))?);
-
-        // Wire up the on datachannel handler
-        let on_data_channel_handler = Arc::clone(&pc.internal.on_data_channel_handler);
-        pc.internal
-            .sctp_transport
-            .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
-                let on_data_channel_handler2 = Arc::clone(&on_data_channel_handler);
-                Box::pin(async move {
-                    let mut handler = on_data_channel_handler2.lock().await;
-                    if let Some(f) = &mut *handler {
-                        f(d).await;
-                    }
-                })
-            }))
-            .await;
-
-        //TODO: pc.interceptor_rtcp_writer = api.interceptor.bind_rtcp_writer(interceptor.RTCPWriterFunc(pc.writeRTCP))
-
-        Ok(pc)
+        })
     }
 
     /// init_configuration defines validation of the specified Configuration and
@@ -272,17 +202,12 @@ impl PeerConnection {
     /// from its set_configuration counterpart because most of the checks do not
     /// include verification statements related to the existing state. Thus the
     /// function describes only minor verification of some the struct variables.
-    fn init_configuration(&mut self, configuration: Configuration) -> Result<()> {
+    fn init_configuration(configuration: &mut Configuration) -> Result<()> {
         let sanitized_ice_servers = configuration.get_ice_servers();
         if !sanitized_ice_servers.is_empty() {
             for server in &sanitized_ice_servers {
                 server.validate()?;
             }
-            self.configuration.ice_servers = sanitized_ice_servers;
-        }
-
-        if !configuration.peer_identity.is_empty() {
-            self.configuration.peer_identity = configuration.peer_identity;
         }
 
         // https://www.w3.org/TR/webrtc/#constructor (step #3)
@@ -305,26 +230,6 @@ impl PeerConnection {
             }
             pc.configuration.Certificates = []Certificate{*certificate}
         }  */
-
-        if configuration.bundle_policy != BundlePolicy::Unspecified {
-            self.configuration.bundle_policy = configuration.bundle_policy;
-        }
-
-        if configuration.rtcp_mux_policy != RTCPMuxPolicy::Unspecified {
-            self.configuration.rtcp_mux_policy = configuration.rtcp_mux_policy;
-        }
-
-        if configuration.ice_candidate_pool_size != 0 {
-            self.configuration.ice_candidate_pool_size = configuration.ice_candidate_pool_size;
-        }
-
-        if configuration.ice_transport_policy != ICETransportPolicy::Unspecified {
-            self.configuration.ice_transport_policy = configuration.ice_transport_policy;
-        }
-
-        if configuration.sdp_semantics != SDPSemantics::Unspecified {
-            self.configuration.sdp_semantics = configuration.sdp_semantics;
-        }
 
         Ok(())
     }
