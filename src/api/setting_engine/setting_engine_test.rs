@@ -196,9 +196,18 @@ async fn test_setting_engine_set_disable_media_engine_copy() -> Result<()> {
         }
 
         // Assert that the internal MediaEngine is modified
-        assert!(offerer.media_engine.negotiated_video.load(Ordering::SeqCst));
+        assert!(offerer
+            .internal
+            .media_engine
+            .negotiated_video
+            .load(Ordering::SeqCst));
         {
-            let negotiated_video_codecs = offerer.media_engine.negotiated_video_codecs.lock().await;
+            let negotiated_video_codecs = offerer
+                .internal
+                .media_engine
+                .negotiated_video_codecs
+                .lock()
+                .await;
             assert!(!negotiated_video_codecs.is_empty());
         }
 
@@ -207,19 +216,30 @@ async fn test_setting_engine_set_disable_media_engine_copy() -> Result<()> {
         let (new_offerer, new_answerer) = new_pair(&api).await?;
 
         // Assert that the first internal MediaEngine hasn't been cleared
-        assert!(offerer.media_engine.negotiated_video.load(Ordering::SeqCst));
+        assert!(offerer
+            .internal
+            .media_engine
+            .negotiated_video
+            .load(Ordering::SeqCst));
         {
-            let negotiated_video_codecs = offerer.media_engine.negotiated_video_codecs.lock().await;
+            let negotiated_video_codecs = offerer
+                .internal
+                .media_engine
+                .negotiated_video_codecs
+                .lock()
+                .await;
             assert!(!negotiated_video_codecs.is_empty());
         }
 
         // Assert that the new internal MediaEngine isn't modified
         assert!(!new_offerer
+            .internal
             .media_engine
             .negotiated_video
             .load(Ordering::SeqCst));
         {
             let negotiated_video_codecs = new_offerer
+                .internal
                 .media_engine
                 .negotiated_video_codecs
                 .lock()
@@ -263,9 +283,18 @@ async fn test_setting_engine_set_disable_media_engine_copy() -> Result<()> {
         let (offerer, answerer) = new_pair(&api).await?;
 
         // Assert that the new internal MediaEngine was modified, so no copy happened
-        assert!(offerer.media_engine.negotiated_video.load(Ordering::SeqCst));
+        assert!(offerer
+            .internal
+            .media_engine
+            .negotiated_video
+            .load(Ordering::SeqCst));
         {
-            let negotiated_video_codecs = offerer.media_engine.negotiated_video_codecs.lock().await;
+            let negotiated_video_codecs = offerer
+                .internal
+                .media_engine
+                .negotiated_video_codecs
+                .lock()
+                .await;
             assert!(!negotiated_video_codecs.is_empty());
         }
 

@@ -139,6 +139,41 @@ struct NegotiationNeededParams {
     check_negotiation_needed_params: CheckNegotiationNeededParams,
 }
 
+#[derive(Default, Clone)]
+pub(crate) struct PeerConnectionInternal {
+    on_negotiation_needed_handler: Arc<Mutex<Option<OnNegotiationNeededHdlrFn>>>,
+    is_closed: Arc<AtomicBool>,
+    // ops is an operations queue which will ensure the enqueued actions are
+    // executed in order. It is used for asynchronously, but serially processing
+    // remote and local descriptions
+    ops: Arc<Operations>,
+    negotiation_needed_state: Arc<AtomicU8>,
+    is_negotiation_needed: Arc<AtomicBool>,
+    signaling_state: Arc<AtomicU8>,
+
+    ice_transport: Arc<ICETransport>,
+    dtls_transport: Arc<DTLSTransport>,
+    on_peer_connection_state_change_handler: Arc<Mutex<Option<OnPeerConnectionStateChangeHdlrFn>>>,
+    peer_connection_state: Arc<AtomicU8>,
+    ice_connection_state: Arc<AtomicU8>,
+
+    sctp_transport: Arc<SCTPTransport>,
+    rtp_transceivers: Arc<Mutex<Vec<Arc<RTPTransceiver>>>>,
+    current_local_description: Option<SessionDescription>,
+    current_remote_description: Option<SessionDescription>,
+
+    on_track_handler: Arc<Mutex<Option<OnTrackHdlrFn>>>,
+    on_signaling_state_change_handler: Arc<Mutex<Option<OnSignalingStateChangeHdlrFn>>>,
+    on_ice_connection_state_change_handler: Arc<Mutex<Option<OnICEConnectionStateChangeHdlrFn>>>,
+    on_data_channel_handler: Arc<Mutex<Option<OnDataChannelHdlrFn>>>,
+
+    ice_gatherer: Arc<ICEGatherer>,
+
+    // A reference to the associated API state used by this connection
+    setting_engine: Arc<SettingEngine>,
+    pub(crate) media_engine: Arc<MediaEngine>,
+}
+
 /// PeerConnection represents a WebRTC connection that establishes a
 /// peer-to-peer communications with another PeerConnection instance in a
 /// browser, or to another endpoint implementing the required protocols.
@@ -148,26 +183,14 @@ pub struct PeerConnection {
 
     sdp_origin: sdp::session_description::Origin,
 
-    // ops is an operations queue which will ensure the enqueued actions are
-    // executed in order. It is used for asynchronously, but serially processing
-    // remote and local descriptions
-    ops: Arc<Operations>,
-
     configuration: Configuration,
 
     current_local_description: Option<SessionDescription>, //TODO: Arc<Mutex?
     current_remote_description: Option<SessionDescription>, //TODO: Arc<Mutex?
     pending_local_description: Option<SessionDescription>,
     pending_remote_description: Option<SessionDescription>,
-    signaling_state: Arc<AtomicU8>,       //SignalingState,
-    ice_connection_state: Arc<AtomicU8>,  //ICEConnectionState,
-    peer_connection_state: Arc<AtomicU8>, //PeerConnectionState,
 
     idp_login_url: Option<String>,
-
-    is_closed: Arc<AtomicBool>,              //*atomicBool
-    is_negotiation_needed: Arc<AtomicBool>,  //*atomicBool
-    negotiation_needed_state: Arc<AtomicU8>, //NegotiationNeededState,
 
     last_offer: String,
     last_answer: String,
@@ -178,27 +201,11 @@ pub struct PeerConnection {
     /// should be defined (see JSEP 3.4.1).
     greater_mid: isize,
 
-    rtp_transceivers: Arc<Mutex<Vec<Arc<RTPTransceiver>>>>,
-
-    on_track_handler: Arc<Mutex<Option<OnTrackHdlrFn>>>,
-    on_signaling_state_change_handler: Arc<Mutex<Option<OnSignalingStateChangeHdlrFn>>>,
-    on_peer_connection_state_change_handler: Arc<Mutex<Option<OnPeerConnectionStateChangeHdlrFn>>>,
-    on_ice_connection_state_change_handler: Arc<Mutex<Option<OnICEConnectionStateChangeHdlrFn>>>,
-    on_data_channel_handler: Arc<Mutex<Option<OnDataChannelHdlrFn>>>,
-    on_negotiation_needed_handler: Arc<Mutex<Option<OnNegotiationNeededHdlrFn>>>,
-
     // interceptor_rtcpwriter interceptor.RTCPWriter
-    ice_gatherer: Arc<ICEGatherer>,
-    ice_transport: Arc<ICETransport>,
-    dtls_transport: Arc<DTLSTransport>,
-    sctp_transport: Arc<SCTPTransport>,
-
-    // A reference to the associated API state used by this connection
-    setting_engine: Arc<SettingEngine>,
-    pub(crate) media_engine: Arc<MediaEngine>,
     interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
-
     interceptor_rtcp_writer: Option<Arc<dyn RTCPWriter + Send + Sync>>,
+
+    pub(crate) internal: PeerConnectionInternal,
 }
 
 impl PeerConnection {
@@ -227,24 +234,32 @@ impl PeerConnection {
                 ice_candidate_pool_size: 0,
                 sdp_semantics: SDPSemantics::default(),
             },
-            ops: Arc::new(Operations::new()),
-            is_closed: Arc::new(AtomicBool::new(false)),
-            is_negotiation_needed: Arc::new(AtomicBool::new(false)),
-            negotiation_needed_state: Arc::new(AtomicU8::new(NegotiationNeededState::Empty as u8)),
+
             last_offer: "".to_owned(),
             last_answer: "".to_owned(),
             greater_mid: -1,
-            signaling_state: Arc::new(AtomicU8::new(SignalingState::Stable as u8)),
-            ice_connection_state: Arc::new(AtomicU8::new(ICEConnectionState::New as u8)),
-            peer_connection_state: Arc::new(AtomicU8::new(PeerConnectionState::New as u8)),
 
-            setting_engine: Arc::clone(&api.setting_engine),
-            media_engine: if !api.setting_engine.disable_media_engine_copy {
-                Arc::new(api.media_engine.clone_to())
-            } else {
-                Arc::clone(&api.media_engine)
-            },
             interceptor: api.interceptor.clone(),
+
+            internal: PeerConnectionInternal {
+                ops: Arc::new(Operations::new()),
+                is_closed: Arc::new(AtomicBool::new(false)),
+                is_negotiation_needed: Arc::new(AtomicBool::new(false)),
+                negotiation_needed_state: Arc::new(AtomicU8::new(
+                    NegotiationNeededState::Empty as u8,
+                )),
+                signaling_state: Arc::new(AtomicU8::new(SignalingState::Stable as u8)),
+                ice_connection_state: Arc::new(AtomicU8::new(ICEConnectionState::New as u8)),
+                peer_connection_state: Arc::new(AtomicU8::new(PeerConnectionState::New as u8)),
+
+                setting_engine: Arc::clone(&api.setting_engine),
+                media_engine: if !api.setting_engine.disable_media_engine_copy {
+                    Arc::new(api.media_engine.clone_to())
+                } else {
+                    Arc::clone(&api.media_engine)
+                },
+                ..Default::default()
+            },
 
             ..Default::default()
         };
@@ -252,26 +267,29 @@ impl PeerConnection {
         pc.init_configuration(configuration)?;
 
         // Create the ice gatherer
-        pc.ice_gatherer = Arc::new(api.new_ice_gatherer(ICEGatherOptions {
+        pc.internal.ice_gatherer = Arc::new(api.new_ice_gatherer(ICEGatherOptions {
             ice_servers: pc.configuration.get_ice_servers(),
             ice_gather_policy: pc.configuration.ice_transport_policy,
         })?);
 
         // Part I of Create the ice transport
-        pc.ice_transport = Arc::new(api.new_ice_transport(Arc::clone(&pc.ice_gatherer)));
+        pc.internal.ice_transport =
+            Arc::new(api.new_ice_transport(Arc::clone(&pc.internal.ice_gatherer)));
 
         // Create the DTLS transport
-        pc.dtls_transport = Arc::new(api.new_dtls_transport(
-            Arc::clone(&pc.ice_transport),
+        pc.internal.dtls_transport = Arc::new(api.new_dtls_transport(
+            Arc::clone(&pc.internal.ice_transport),
             pc.configuration.certificates.clone(),
         )?);
 
         // Create the SCTP transport
-        pc.sctp_transport = Arc::new(api.new_sctp_transport(Arc::clone(&pc.dtls_transport))?);
+        pc.internal.sctp_transport =
+            Arc::new(api.new_sctp_transport(Arc::clone(&pc.internal.dtls_transport))?);
 
         // Wire up the on datachannel handler
-        let on_data_channel_handler = Arc::clone(&pc.on_data_channel_handler);
-        pc.sctp_transport
+        let on_data_channel_handler = Arc::clone(&pc.internal.on_data_channel_handler);
+        pc.internal
+            .sctp_transport
             .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
                 let on_data_channel_handler2 = Arc::clone(&on_data_channel_handler);
                 Box::pin(async move {
@@ -357,13 +375,13 @@ impl PeerConnection {
     /// peer connection's signaling state changes
     pub async fn on_signaling_state_change(&self, f: OnSignalingStateChangeHdlrFn) {
         let mut on_signaling_state_change_handler =
-            self.on_signaling_state_change_handler.lock().await;
+            self.internal.on_signaling_state_change_handler.lock().await;
         *on_signaling_state_change_handler = Some(f);
     }
 
     async fn do_signaling_state_change(&self, new_state: SignalingState) {
         log::info!("signaling state changed to {}", new_state);
-        let mut handler = self.on_signaling_state_change_handler.lock().await;
+        let mut handler = self.internal.on_signaling_state_change_handler.lock().await;
         if let Some(f) = &mut *handler {
             f(new_state).await;
         }
@@ -372,14 +390,15 @@ impl PeerConnection {
     /// on_data_channel sets an event handler which is invoked when a data
     /// channel message arrives from a remote peer.
     pub async fn on_data_channel(&self, f: OnDataChannelHdlrFn) {
-        let mut on_data_channel_handler = self.on_data_channel_handler.lock().await;
+        let mut on_data_channel_handler = self.internal.on_data_channel_handler.lock().await;
         *on_data_channel_handler = Some(f);
     }
 
     /// on_negotiation_needed sets an event handler which is invoked when
     /// a change has occurred which requires session negotiation
     pub async fn on_negotiation_needed(&self, f: OnNegotiationNeededHdlrFn) {
-        let mut on_negotiation_needed_handler = self.on_negotiation_needed_handler.lock().await;
+        let mut on_negotiation_needed_handler =
+            self.internal.on_negotiation_needed_handler.lock().await;
         *on_negotiation_needed_handler = Some(f);
     }
 
@@ -584,19 +603,19 @@ impl PeerConnection {
     /// Take note that the handler is gonna be called with a nil pointer when
     /// gathering is finished.
     pub async fn on_ice_candidate(&self, f: OnLocalCandidateHdlrFn) {
-        self.ice_gatherer.on_local_candidate(f).await
+        self.internal.ice_gatherer.on_local_candidate(f).await
     }
 
     /// on_ice_gathering_state_change sets an event handler which is invoked when the
     /// ICE candidate gathering state has changed.
     pub async fn on_ice_gathering_state_change(&self, f: OnICEGathererStateChangeHdlrFn) {
-        self.ice_gatherer.on_state_change(f).await
+        self.internal.ice_gatherer.on_state_change(f).await
     }
 
     /// on_track sets an event handler which is called when remote track
     /// arrives from a remote peer.
     pub async fn on_track(&self, f: OnTrackHdlrFn) {
-        let mut on_track_handler = self.on_track_handler.lock().await;
+        let mut on_track_handler = self.internal.on_track_handler.lock().await;
         *on_track_handler = Some(f);
     }
 
@@ -627,8 +646,11 @@ impl PeerConnection {
     /// on_ice_connection_state_change sets an event handler which is called
     /// when an ICE connection state is changed.
     pub async fn on_ice_connection_state_change(&self, f: OnICEConnectionStateChangeHdlrFn) {
-        let mut on_ice_connection_state_change_handler =
-            self.on_ice_connection_state_change_handler.lock().await;
+        let mut on_ice_connection_state_change_handler = self
+            .internal
+            .on_ice_connection_state_change_handler
+            .lock()
+            .await;
         *on_ice_connection_state_change_handler = Some(f);
     }
 
@@ -651,8 +673,11 @@ impl PeerConnection {
     /// on_peer_connection_state_change sets an event handler which is called
     /// when the PeerConnectionState has changed
     pub async fn on_peer_connection_state_change(&self, f: OnPeerConnectionStateChangeHdlrFn) {
-        let mut on_peer_connection_state_change_handler =
-            self.on_peer_connection_state_change_handler.lock().await;
+        let mut on_peer_connection_state_change_handler = self
+            .internal
+            .on_peer_connection_state_change_handler
+            .lock()
+            .await;
         *on_peer_connection_state_change_handler = Some(f);
     }
 
@@ -673,7 +698,7 @@ impl PeerConnection {
     pub async fn set_configuration(&mut self, configuration: Configuration) -> Result<()> {
         //nolint:gocognit
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-setconfiguration (step #2)
-        if self.is_closed.load(Ordering::SeqCst) {
+        if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed.into());
         }
 
@@ -757,7 +782,7 @@ impl PeerConnection {
     /// has_local_description_changed returns whether local media (rtp_transceivers) has changed
     /// caller of this method should hold `pc.mu` lock
     async fn has_local_description_changed(&self, desc: &SessionDescription) -> bool {
-        let rtp_transceivers = self.rtp_transceivers.lock().await;
+        let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
         for t in &*rtp_transceivers {
             if let Some(m) = get_by_mid(t.mid().await.as_str(), desc) {
                 if get_peer_direction(m) != t.direction() {
@@ -779,13 +804,13 @@ impl PeerConnection {
         let use_identity = self.idp_login_url.is_some();
         if use_identity {
             return Err(Error::ErrIdentityProviderNotImplemented.into());
-        } else if self.is_closed.load(Ordering::SeqCst) {
+        } else if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed.into());
         }
 
         if let Some(options) = options {
             if options.ice_restart {
-                self.ice_transport.restart().await?;
+                self.internal.ice_transport.restart().await?;
             }
         }
 
@@ -801,7 +826,7 @@ impl PeerConnection {
             // mutated during offer generation. We later check if they have
             // been mutated and recompute the offer if necessary.
             let current_transceivers = {
-                let rtp_transceivers = self.rtp_transceivers.lock().await;
+                let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
                 rtp_transceivers.clone()
             };
 
@@ -931,16 +956,17 @@ impl PeerConnection {
     }
 
     async fn setup_ice_transport(&self) {
-        let ice_connection_state = Arc::clone(&self.ice_connection_state);
-        let peer_connection_state = Arc::clone(&self.peer_connection_state);
-        let is_closed = Arc::clone(&self.is_closed);
-        let dtls_transport = Arc::clone(&self.dtls_transport);
+        let ice_connection_state = Arc::clone(&self.internal.ice_connection_state);
+        let peer_connection_state = Arc::clone(&self.internal.peer_connection_state);
+        let is_closed = Arc::clone(&self.internal.is_closed);
+        let dtls_transport = Arc::clone(&self.internal.dtls_transport);
         let on_ice_connection_state_change_handler =
-            Arc::clone(&self.on_ice_connection_state_change_handler);
+            Arc::clone(&self.internal.on_ice_connection_state_change_handler);
         let on_peer_connection_state_change_handler =
-            Arc::clone(&self.on_peer_connection_state_change_handler);
+            Arc::clone(&self.internal.on_peer_connection_state_change_handler);
 
-        self.ice_transport
+        self.internal
+            .ice_transport
             .on_connection_state_change(Box::new(move |state: ICETransportState| {
                 let cs = match state {
                     ICETransportState::New => ICEConnectionState::New,
@@ -995,7 +1021,7 @@ impl PeerConnection {
             return Err(Error::ErrNoRemoteDescription.into());
         } else if use_identity {
             return Err(Error::ErrIdentityProviderNotImplemented.into());
-        } else if self.is_closed.load(Ordering::SeqCst) {
+        } else if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed.into());
         } else if self.signaling_state() != SignalingState::HaveRemoteOffer
             && self.signaling_state() != SignalingState::HaveLocalPranswer
@@ -1003,7 +1029,11 @@ impl PeerConnection {
             return Err(Error::ErrIncorrectSignalingState.into());
         }
 
-        let mut connection_role = self.setting_engine.answering_dtls_role.to_connection_role();
+        let mut connection_role = self
+            .internal
+            .setting_engine
+            .answering_dtls_role
+            .to_connection_role();
         if connection_role == ConnectionRole::Unspecified {
             connection_role = DEFAULT_DTLS_ROLE_ANSWER.to_connection_role();
         }
@@ -1039,7 +1069,7 @@ impl PeerConnection {
         sd: &SessionDescription,
         op: StateChangeOp,
     ) -> Result<()> {
-        if self.is_closed.load(Ordering::SeqCst) {
+        if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed.into());
         } else if sd.serde.sdp_type == SDPType::Unspecified {
             return Err(Error::ErrPeerConnSDPTypeInvalidValue.into());
@@ -1190,22 +1220,27 @@ impl PeerConnection {
 
         match next_state {
             Ok(next_state) => {
-                self.signaling_state
+                self.internal
+                    .signaling_state
                     .store(next_state as u8, Ordering::SeqCst);
                 if self.signaling_state() == SignalingState::Stable {
-                    self.is_negotiation_needed.store(false, Ordering::SeqCst);
+                    self.internal
+                        .is_negotiation_needed
+                        .store(false, Ordering::SeqCst);
                     PeerConnection::do_negotiation_needed(NegotiationNeededParams {
                         on_negotiation_needed_handler: Arc::clone(
-                            &self.on_negotiation_needed_handler,
+                            &self.internal.on_negotiation_needed_handler,
                         ),
-                        is_closed: Arc::clone(&self.is_closed),
-                        ops: Arc::clone(&self.ops),
-                        negotiation_needed_state: Arc::clone(&self.negotiation_needed_state),
-                        is_negotiation_needed: Arc::clone(&self.is_negotiation_needed),
-                        signaling_state: Arc::clone(&self.signaling_state),
+                        is_closed: Arc::clone(&self.internal.is_closed),
+                        ops: Arc::clone(&self.internal.ops),
+                        negotiation_needed_state: Arc::clone(
+                            &self.internal.negotiation_needed_state,
+                        ),
+                        is_negotiation_needed: Arc::clone(&self.internal.is_negotiation_needed),
+                        signaling_state: Arc::clone(&self.internal.signaling_state),
                         check_negotiation_needed_params: CheckNegotiationNeededParams {
-                            sctp_transport: Arc::clone(&self.sctp_transport),
-                            rtp_transceivers: Arc::clone(&self.rtp_transceivers),
+                            sctp_transport: Arc::clone(&self.internal.sctp_transport),
+                            rtp_transceivers: Arc::clone(&self.internal.rtp_transceivers),
                             current_local_description: self.current_local_description.clone(),
                             current_remote_description: self.current_remote_description.clone(),
                         },
@@ -1221,7 +1256,7 @@ impl PeerConnection {
 
     /// set_local_description sets the SessionDescription of the local peer
     pub async fn set_local_description(&mut self, mut desc: SessionDescription) -> Result<()> {
-        if self.is_closed.load(Ordering::SeqCst) {
+        if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed.into());
         }
 
@@ -1254,8 +1289,8 @@ impl PeerConnection {
             })*/
         }
 
-        if self.ice_gatherer.state() == ICEGathererState::New {
-            self.ice_gatherer.gather().await
+        if self.internal.ice_gatherer.state() == ICEGathererState::New {
+            self.internal.ice_gatherer.gather().await
         } else {
             Ok(())
         }
@@ -1274,7 +1309,7 @@ impl PeerConnection {
 
     /// set_remote_description sets the SessionDescription of the remote peer
     pub async fn set_remote_description(&mut self, mut desc: SessionDescription) -> Result<()> {
-        if self.is_closed.load(Ordering::SeqCst) {
+        if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed.into());
         }
 
@@ -1285,7 +1320,8 @@ impl PeerConnection {
             .await?;
 
         if let Some(parsed) = &desc.parsed {
-            self.media_engine
+            self.internal
+                .media_engine
                 .update_from_remote_description(parsed)
                 .await?;
 
@@ -1348,8 +1384,8 @@ impl PeerConnection {
                                 } else {
                                     let receiver = Arc::new(RTPReceiver::new(
                                         kind,
-                                        Arc::clone(&self.dtls_transport),
-                                        Arc::clone(&self.media_engine),
+                                        Arc::clone(&self.internal.dtls_transport),
+                                        Arc::clone(&self.internal.media_engine),
                                         self.interceptor.clone(),
                                     ));
 
@@ -1366,7 +1402,7 @@ impl PeerConnection {
                                         local_direction,
                                         kind,
                                         vec![],
-                                        Arc::clone(&self.media_engine),
+                                        Arc::clone(&self.internal.media_engine),
                                     ));
 
                                     self.add_rtp_transceiver(Arc::clone(&t)).await;
@@ -1385,22 +1421,25 @@ impl PeerConnection {
 
             if is_renegotation
                 && self
+                    .internal
                     .ice_transport
                     .have_remote_credentials_change(&remote_ufrag, &remote_pwd)
                     .await
             {
                 // An ICE Restart only happens implicitly for a set_remote_description of type offer
                 if !we_offer {
-                    self.ice_transport.restart().await?;
+                    self.internal.ice_transport.restart().await?;
                 }
 
-                self.ice_transport
+                self.internal
+                    .ice_transport
                     .set_remote_credentials(remote_ufrag, remote_pwd)
                     .await?;
             }
 
             for candidate in candidates {
-                self.ice_transport
+                self.internal
+                    .ice_transport
                     .add_remote_candidate(Some(candidate))
                     .await?;
             }
@@ -1409,7 +1448,7 @@ impl PeerConnection {
             if is_renegotation {
                 if we_offer {
                     self.start_rtp_senders(&current_transceivers).await?;
-                    /*TODO: self.ops.Enqueue(func() {
+                    /*TODO: self.internal.ops.Enqueue(func() {
                         self.start_rtp(true, &desc, current_transceivers)
                     })*/
                 }
@@ -1430,8 +1469,8 @@ impl PeerConnection {
             // If one of the agents is lite and the other one is not, the lite agent must be the controlling agent.
             // If both or neither agents are lite the offering agent is controlling.
             // RFC 8445 S6.1.1
-            if (we_offer && remote_is_lite == self.setting_engine.candidates.ice_lite)
-                || (remote_is_lite && !self.setting_engine.candidates.ice_lite)
+            if (we_offer && remote_is_lite == self.internal.setting_engine.candidates.ice_lite)
+                || (remote_is_lite && !self.internal.setting_engine.candidates.ice_lite)
             {
                 ICERole::Controlling
             }else{
@@ -1444,7 +1483,7 @@ impl PeerConnection {
                 self.start_rtp_senders(&current_transceivers).await?;
             }
 
-            /*TODO: self.ops.Enqueue(func() {
+            /*TODO: self.internal.ops.Enqueue(func() {
                 self.start_transports(iceRole, dtlsRoleFromRemoteSDP(desc.parsed), remote_ufrag, remote_pwd, fingerprint, fingerprintHash)
                 if weOffer {
                     self.start_rtp(false, &desc, current_transceivers)
@@ -1561,8 +1600,8 @@ impl PeerConnection {
                     PeerConnection::start_receiver(
                         incoming_track,
                         receiver,
-                        Arc::clone(&self.media_engine),
-                        Arc::clone(&self.on_track_handler),
+                        Arc::clone(&self.internal.media_engine),
+                        Arc::clone(&self.internal.on_track_handler),
                     )
                     .await;
                     track_handled = true;
@@ -1600,8 +1639,8 @@ impl PeerConnection {
                     PeerConnection::start_receiver(
                         incoming,
                         receiver,
-                        Arc::clone(&self.media_engine),
-                        Arc::clone(&self.on_track_handler),
+                        Arc::clone(&self.internal.media_engine),
+                        Arc::clone(&self.internal.on_track_handler),
                     )
                     .await;
                 }
@@ -1631,6 +1670,7 @@ impl PeerConnection {
     pub(crate) async fn start_sctp(&self) {
         // Start sctp
         if let Err(err) = self
+            .internal
             .sctp_transport
             .start(SCTPTransportCapabilities {
                 max_message_size: 0,
@@ -1638,7 +1678,7 @@ impl PeerConnection {
             .await
         {
             log::warn!("Failed to start SCTP: {}", err);
-            if let Err(err) = self.sctp_transport.stop().await {
+            if let Err(err) = self.internal.sctp_transport.stop().await {
                 log::warn!("Failed to stop SCTPTransport: {}", err);
             }
 
@@ -1648,14 +1688,14 @@ impl PeerConnection {
         // DataChannels that need to be opened now that SCTP is available
         // make a copy we may have incoming DataChannels mutating this while we open
         let data_channels = {
-            let data_channels = self.sctp_transport.data_channels.lock().await;
+            let data_channels = self.internal.sctp_transport.data_channels.lock().await;
             data_channels.clone()
         };
 
         let mut opened_dc_count = 0;
         for d in data_channels {
             if d.ready_state() == DataChannelState::Connecting {
-                if let Err(err) = d.open(Arc::clone(&self.sctp_transport)).await {
+                if let Err(err) = d.open(Arc::clone(&self.internal.sctp_transport)).await {
                     log::warn!("failed to open data channel: {}", err);
                     continue;
                 }
@@ -1663,7 +1703,8 @@ impl PeerConnection {
             }
         }
 
-        self.sctp_transport
+        self.internal
+            .sctp_transport
             .data_channels_opened
             .fetch_add(opened_dc_count, Ordering::SeqCst);
     }
@@ -1672,9 +1713,13 @@ impl PeerConnection {
         &mut self,
         rtp_stream: &mut R,
         ssrc: SSRC,
+        remote_description: Option<SessionDescription>, //self.remote_description()
+        media_engine: Arc<MediaEngine>,
+        on_track_handler: Arc<Mutex<Option<OnTrackHdlrFn>>>,
+        rtp_transceivers: Arc<Mutex<Vec<Arc<RTPTransceiver>>>>,
     ) -> Result<()> {
-        if let Some(remote_description) = self.remote_description() {
-            if let Some(parsed) = &remote_description.parsed {
+        if let Some(rd) = remote_description {
+            if let Some(parsed) = &rd.parsed {
                 // If the remote SDP was only one media section the ssrc doesn't have to be explicitly declared
                 if parsed.media_descriptions.len() == 1 {
                     if let Some(only_media_section) = parsed.media_descriptions.first() {
@@ -1709,8 +1754,8 @@ impl PeerConnection {
                             PeerConnection::start_receiver(
                                 &incoming,
                                 receiver,
-                                Arc::clone(&self.media_engine),
-                                Arc::clone(&self.on_track_handler),
+                                Arc::clone(&media_engine),
+                                Arc::clone(&on_track_handler),
                             )
                             .await;
                         }
@@ -1718,8 +1763,7 @@ impl PeerConnection {
                     }
                 }
 
-                let (mid_extension_id, audio_supported, video_supported) = self
-                    .media_engine
+                let (mid_extension_id, audio_supported, video_supported) = media_engine
                     .get_header_extension_id(RTPHeaderExtensionCapability {
                         uri: sdp::extmap::SDES_MID_URI.to_owned(),
                     })
@@ -1728,8 +1772,7 @@ impl PeerConnection {
                     return Err(Error::ErrPeerConnSimulcastMidRTPExtensionRequired.into());
                 }
 
-                let (sid_extension_id, audio_supported, video_supported) = self
-                    .media_engine
+                let (sid_extension_id, audio_supported, video_supported) = media_engine
                     .get_header_extension_id(RTPHeaderExtensionCapability {
                         uri: sdp::extmap::SDES_RTP_STREAM_ID_URI.to_owned(),
                     })
@@ -1760,28 +1803,30 @@ impl PeerConnection {
                         continue;
                     }
 
-                    let params = self
-                        .media_engine
+                    let params = media_engine
                         .get_rtp_parameters_by_payload_type(payload_type)
                         .await?;
 
-                    for t in self.get_transceivers().await {
-                        if t.mid().await != mid || t.receiver().await.is_none() {
-                            continue;
-                        }
+                    {
+                        let transceivers = rtp_transceivers.lock().await;
+                        for t in &*transceivers {
+                            if t.mid().await != mid || t.receiver().await.is_none() {
+                                continue;
+                            }
 
-                        if let Some(receiver) = t.receiver().await {
-                            let track = receiver
-                                .receive_for_rid(rid.as_str(), &params, ssrc)
-                                .await?;
-                            PeerConnection::do_track(
-                                Arc::clone(&self.on_track_handler),
-                                Some(track),
-                                Some(receiver.clone()),
-                            )
-                            .await;
+                            if let Some(receiver) = t.receiver().await {
+                                let track = receiver
+                                    .receive_for_rid(rid.as_str(), &params, ssrc)
+                                    .await?;
+                                PeerConnection::do_track(
+                                    Arc::clone(&on_track_handler),
+                                    Some(track),
+                                    Some(receiver.clone()),
+                                )
+                                .await;
+                            }
+                            return Ok(());
                         }
-                        return Ok(());
                     }
                 }
                 return Err(Error::ErrPeerConnSimulcastIncomingSSRCFailed.into());
@@ -1793,8 +1838,8 @@ impl PeerConnection {
 
     /// undeclared_media_processor handles RTP/RTCP packets that don't match any a:ssrc lines
     fn undeclared_media_processor(&self) {
-        let dtls_transport = Arc::clone(&self.dtls_transport);
-        let is_closed = Arc::clone(&self.is_closed);
+        let dtls_transport = Arc::clone(&self.internal.dtls_transport);
+        let is_closed = Arc::clone(&self.internal.is_closed);
         tokio::spawn(async move {
             let simulcast_routine_count = Arc::new(AtomicU64::new(0));
             loop {
@@ -1850,7 +1895,7 @@ impl PeerConnection {
             }
         });
 
-        let dtls_transport = Arc::clone(&self.dtls_transport);
+        let dtls_transport = Arc::clone(&self.internal.dtls_transport);
         tokio::spawn(async move {
             loop {
                 let srtcp_session = match dtls_transport.get_srtcp_session().await {
@@ -1909,19 +1954,25 @@ impl PeerConnection {
             None
         };
 
-        self.ice_transport.add_remote_candidate(ice_candidate).await
+        self.internal
+            .ice_transport
+            .add_remote_candidate(ice_candidate)
+            .await
     }
 
     /// ice_connection_state returns the ICE connection state of the
     /// PeerConnection instance.
     pub fn ice_connection_state(&self) -> ICEConnectionState {
-        self.ice_connection_state.load(Ordering::SeqCst).into()
+        self.internal
+            .ice_connection_state
+            .load(Ordering::SeqCst)
+            .into()
     }
 
     /// get_senders returns the RTPSender that are currently attached to this PeerConnection
     pub async fn get_senders(&self) -> Vec<Arc<RTPSender>> {
         let mut senders = vec![];
-        let rtp_transceivers = self.rtp_transceivers.lock().await;
+        let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
         for transceiver in &*rtp_transceivers {
             if let Some(sender) = transceiver.sender().await {
                 senders.push(sender);
@@ -1933,7 +1984,7 @@ impl PeerConnection {
     /// get_receivers returns the RTPReceivers that are currently attached to this PeerConnection
     pub async fn get_receivers(&self) -> Vec<Arc<RTPReceiver>> {
         let mut receivers = vec![];
-        let rtp_transceivers = self.rtp_transceivers.lock().await;
+        let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
         for transceiver in &*rtp_transceivers {
             if let Some(receiver) = transceiver.receiver().await {
                 receivers.push(receiver);
@@ -1944,7 +1995,7 @@ impl PeerConnection {
 
     /// get_transceivers returns the RtpTransceiver that are currently attached to this PeerConnection
     pub async fn get_transceivers(&self) -> Vec<Arc<RTPTransceiver>> {
-        let rtp_transceivers = self.rtp_transceivers.lock().await;
+        let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
         rtp_transceivers.clone()
     }
 
@@ -1953,18 +2004,18 @@ impl PeerConnection {
         &mut self,
         track: Arc<dyn TrackLocal + Send + Sync>,
     ) -> Result<Arc<RTPSender>> {
-        if self.is_closed.load(Ordering::SeqCst) {
+        if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed.into());
         }
 
         {
-            let rtp_transceivers = self.rtp_transceivers.lock().await;
+            let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
             for t in &*rtp_transceivers {
                 if !t.stopped && t.kind == track.kind() && t.sender().await.is_none() {
                     let sender = Arc::new(RTPSender::new(
                         Arc::clone(&track),
-                        Arc::clone(&self.dtls_transport),
-                        Arc::clone(&self.media_engine),
+                        Arc::clone(&self.internal.dtls_transport),
+                        Arc::clone(&self.internal.media_engine),
                         self.interceptor.clone(),
                     ));
 
@@ -1979,16 +2030,18 @@ impl PeerConnection {
 
                     PeerConnection::do_negotiation_needed(NegotiationNeededParams {
                         on_negotiation_needed_handler: Arc::clone(
-                            &self.on_negotiation_needed_handler,
+                            &self.internal.on_negotiation_needed_handler,
                         ),
-                        is_closed: Arc::clone(&self.is_closed),
-                        ops: Arc::clone(&self.ops),
-                        negotiation_needed_state: Arc::clone(&self.negotiation_needed_state),
-                        is_negotiation_needed: Arc::clone(&self.is_negotiation_needed),
-                        signaling_state: Arc::clone(&self.signaling_state),
+                        is_closed: Arc::clone(&self.internal.is_closed),
+                        ops: Arc::clone(&self.internal.ops),
+                        negotiation_needed_state: Arc::clone(
+                            &self.internal.negotiation_needed_state,
+                        ),
+                        is_negotiation_needed: Arc::clone(&self.internal.is_negotiation_needed),
+                        signaling_state: Arc::clone(&self.internal.signaling_state),
                         check_negotiation_needed_params: CheckNegotiationNeededParams {
-                            sctp_transport: Arc::clone(&self.sctp_transport),
-                            rtp_transceivers: Arc::clone(&self.rtp_transceivers),
+                            sctp_transport: Arc::clone(&self.internal.sctp_transport),
+                            rtp_transceivers: Arc::clone(&self.internal.rtp_transceivers),
                             current_local_description: self.current_local_description.clone(),
                             current_remote_description: self.current_remote_description.clone(),
                         },
@@ -2012,13 +2065,13 @@ impl PeerConnection {
 
     /// remove_track removes a Track from the PeerConnection
     pub async fn remove_track(&self, sender: &Arc<RTPSender>) -> Result<()> {
-        if self.is_closed.load(Ordering::SeqCst) {
+        if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed.into());
         }
 
         let mut transceiver = None;
         {
-            let rtp_transceivers = self.rtp_transceivers.lock().await;
+            let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
             for t in &*rtp_transceivers {
                 if let Some(s) = t.sender().await {
                     if s.id == sender.id {
@@ -2032,15 +2085,17 @@ impl PeerConnection {
         if let Some(t) = transceiver {
             if sender.stop().await.is_ok() && t.set_sending_track(None).await.is_ok() {
                 PeerConnection::do_negotiation_needed(NegotiationNeededParams {
-                    on_negotiation_needed_handler: Arc::clone(&self.on_negotiation_needed_handler),
-                    is_closed: Arc::clone(&self.is_closed),
-                    ops: Arc::clone(&self.ops),
-                    negotiation_needed_state: Arc::clone(&self.negotiation_needed_state),
-                    is_negotiation_needed: Arc::clone(&self.is_negotiation_needed),
-                    signaling_state: Arc::clone(&self.signaling_state),
+                    on_negotiation_needed_handler: Arc::clone(
+                        &self.internal.on_negotiation_needed_handler,
+                    ),
+                    is_closed: Arc::clone(&self.internal.is_closed),
+                    ops: Arc::clone(&self.internal.ops),
+                    negotiation_needed_state: Arc::clone(&self.internal.negotiation_needed_state),
+                    is_negotiation_needed: Arc::clone(&self.internal.is_negotiation_needed),
+                    signaling_state: Arc::clone(&self.internal.signaling_state),
                     check_negotiation_needed_params: CheckNegotiationNeededParams {
-                        sctp_transport: Arc::clone(&self.sctp_transport),
-                        rtp_transceivers: Arc::clone(&self.rtp_transceivers),
+                        sctp_transport: Arc::clone(&self.internal.sctp_transport),
+                        rtp_transceivers: Arc::clone(&self.internal.rtp_transceivers),
                         current_local_description: self.current_local_description.clone(),
                         current_remote_description: self.current_remote_description.clone(),
                     },
@@ -2062,14 +2117,14 @@ impl PeerConnection {
             RTPTransceiverDirection::Sendrecv => {
                 let r = Some(Arc::new(RTPReceiver::new(
                     track.kind(),
-                    Arc::clone(&self.dtls_transport),
-                    Arc::clone(&self.media_engine),
+                    Arc::clone(&self.internal.dtls_transport),
+                    Arc::clone(&self.internal.media_engine),
                     self.interceptor.clone(),
                 )));
                 let s = Some(Arc::new(RTPSender::new(
                     Arc::clone(&track),
-                    Arc::clone(&self.dtls_transport),
-                    Arc::clone(&self.media_engine),
+                    Arc::clone(&self.internal.dtls_transport),
+                    Arc::clone(&self.internal.media_engine),
                     self.interceptor.clone(),
                 )));
                 (r, s)
@@ -2077,8 +2132,8 @@ impl PeerConnection {
             RTPTransceiverDirection::Sendonly => {
                 let s = Some(Arc::new(RTPSender::new(
                     Arc::clone(&track),
-                    Arc::clone(&self.dtls_transport),
-                    Arc::clone(&self.media_engine),
+                    Arc::clone(&self.internal.dtls_transport),
+                    Arc::clone(&self.internal.media_engine),
                     self.interceptor.clone(),
                 )));
                 (None, s)
@@ -2092,7 +2147,7 @@ impl PeerConnection {
             direction,
             track.kind(),
             vec![],
-            Arc::clone(&self.media_engine),
+            Arc::clone(&self.internal.media_engine),
         )))
     }
 
@@ -2102,7 +2157,7 @@ impl PeerConnection {
         kind: RTPCodecType,
         init: &[RTPTransceiverInit],
     ) -> Result<Arc<RTPTransceiver>> {
-        if self.is_closed.load(Ordering::SeqCst) {
+        if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed.into());
         }
 
@@ -2114,7 +2169,7 @@ impl PeerConnection {
 
         let t = match direction {
             RTPTransceiverDirection::Sendonly | RTPTransceiverDirection::Sendrecv => {
-                let codecs = self.media_engine.get_codecs_by_kind(kind).await;
+                let codecs = self.internal.media_engine.get_codecs_by_kind(kind).await;
                 if codecs.is_empty() {
                     return Err(Error::ErrNoCodecsAvailable.into());
                 }
@@ -2129,8 +2184,8 @@ impl PeerConnection {
             RTPTransceiverDirection::Recvonly => {
                 let receiver = Arc::new(RTPReceiver::new(
                     kind,
-                    Arc::clone(&self.dtls_transport),
-                    Arc::clone(&self.media_engine),
+                    Arc::clone(&self.internal.dtls_transport),
+                    Arc::clone(&self.internal.media_engine),
                     self.interceptor.clone(),
                 ));
 
@@ -2140,7 +2195,7 @@ impl PeerConnection {
                     RTPTransceiverDirection::Recvonly,
                     kind,
                     vec![],
-                    Arc::clone(&self.media_engine),
+                    Arc::clone(&self.internal.media_engine),
                 ))
             }
             _ => return Err(Error::ErrPeerConnAddTransceiverFromKindSupport.into()),
@@ -2157,7 +2212,7 @@ impl PeerConnection {
         track: &Arc<dyn TrackLocal + Send + Sync>, //Why compiler complains if "track: Arc<dyn TrackLocal + Send + Sync>"?
         init: &[RTPTransceiverInit],
     ) -> Result<Arc<RTPTransceiver>> {
-        if self.is_closed.load(Ordering::SeqCst) {
+        if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed.into());
         }
 
@@ -2183,7 +2238,7 @@ impl PeerConnection {
         options: Option<DataChannelConfig>,
     ) -> Result<Arc<DataChannel>> {
         // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #2)
-        if self.is_closed.load(Ordering::SeqCst) {
+        if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed.into());
         }
 
@@ -2232,7 +2287,10 @@ impl PeerConnection {
             }
         }
 
-        let d = Arc::new(DataChannel::new(params, Arc::clone(&self.setting_engine)));
+        let d = Arc::new(DataChannel::new(
+            params,
+            Arc::clone(&self.internal.setting_engine),
+        ));
 
         // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #16)
         if d.max_packet_lifetime != 0 && d.max_retransmits != 0 {
@@ -2240,28 +2298,29 @@ impl PeerConnection {
         }
 
         {
-            let mut data_channels = self.sctp_transport.data_channels.lock().await;
+            let mut data_channels = self.internal.sctp_transport.data_channels.lock().await;
             data_channels.push(Arc::clone(&d));
         }
-        self.sctp_transport
+        self.internal
+            .sctp_transport
             .data_channels_requested
             .fetch_add(1, Ordering::SeqCst);
 
         // If SCTP already connected open all the channels
-        if self.sctp_transport.state() == SCTPTransportState::Connected {
-            d.open(Arc::clone(&self.sctp_transport)).await?;
+        if self.internal.sctp_transport.state() == SCTPTransportState::Connected {
+            d.open(Arc::clone(&self.internal.sctp_transport)).await?;
         }
 
         PeerConnection::do_negotiation_needed(NegotiationNeededParams {
-            on_negotiation_needed_handler: Arc::clone(&self.on_negotiation_needed_handler),
-            is_closed: Arc::clone(&self.is_closed),
-            ops: Arc::clone(&self.ops),
-            negotiation_needed_state: Arc::clone(&self.negotiation_needed_state),
-            is_negotiation_needed: Arc::clone(&self.is_negotiation_needed),
-            signaling_state: Arc::clone(&self.signaling_state),
+            on_negotiation_needed_handler: Arc::clone(&self.internal.on_negotiation_needed_handler),
+            is_closed: Arc::clone(&self.internal.is_closed),
+            ops: Arc::clone(&self.internal.ops),
+            negotiation_needed_state: Arc::clone(&self.internal.negotiation_needed_state),
+            is_negotiation_needed: Arc::clone(&self.internal.is_negotiation_needed),
+            signaling_state: Arc::clone(&self.internal.signaling_state),
             check_negotiation_needed_params: CheckNegotiationNeededParams {
-                sctp_transport: Arc::clone(&self.sctp_transport),
-                rtp_transceivers: Arc::clone(&self.rtp_transceivers),
+                sctp_transport: Arc::clone(&self.internal.sctp_transport),
+                rtp_transceivers: Arc::clone(&self.internal.rtp_transceivers),
                 current_local_description: self.current_local_description.clone(),
                 current_remote_description: self.current_remote_description.clone(),
             },
@@ -2291,21 +2350,22 @@ impl PeerConnection {
         pkts: &dyn rtcp::packet::Packet,
         _a: &Attributes,
     ) -> Result<usize> {
-        self.dtls_transport.write_rtcp(pkts).await
+        self.internal.dtls_transport.write_rtcp(pkts).await
     }
 
     /// close ends the PeerConnection
     pub async fn close(&self) -> Result<()> {
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #1)
-        if self.is_closed.load(Ordering::SeqCst) {
+        if self.internal.is_closed.load(Ordering::SeqCst) {
             return Ok(());
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #2)
-        self.is_closed.store(true, Ordering::SeqCst);
+        self.internal.is_closed.store(true, Ordering::SeqCst);
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #3)
-        self.signaling_state
+        self.internal
+            .signaling_state
             .store(SignalingState::Closed as u8, Ordering::SeqCst);
 
         // Try closing everything and collect the errors
@@ -2324,7 +2384,7 @@ impl PeerConnection {
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #4)
         {
-            let rtp_transceivers = self.rtp_transceivers.lock().await;
+            let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
             for t in &*rtp_transceivers {
                 if !t.stopped {
                     if let Err(err) = t.stop().await {
@@ -2336,38 +2396,38 @@ impl PeerConnection {
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #5)
         {
-            let data_channels = self.sctp_transport.data_channels.lock().await;
+            let data_channels = self.internal.sctp_transport.data_channels.lock().await;
             for d in &*data_channels {
                 d.set_ready_state(DataChannelState::Closed);
             }
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #6)
-        if let Err(err) = self.sctp_transport.stop().await {
+        if let Err(err) = self.internal.sctp_transport.stop().await {
             close_errs.push(err);
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #7)
-        if let Err(err) = self.dtls_transport.stop().await {
+        if let Err(err) = self.internal.dtls_transport.stop().await {
             close_errs.push(err);
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #8, #9, #10)
-        if let Err(err) = self.ice_transport.stop().await {
+        if let Err(err) = self.internal.ice_transport.stop().await {
             close_errs.push(err);
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #11)
         PeerConnection::update_connection_state(
-            &self.on_peer_connection_state_change_handler,
-            &self.is_closed,
-            &self.peer_connection_state,
+            &self.internal.on_peer_connection_state_change_handler,
+            &self.internal.is_closed,
+            &self.internal.peer_connection_state,
             self.ice_connection_state(),
-            self.dtls_transport.state(),
+            self.internal.dtls_transport.state(),
         )
         .await;
 
-        if let Err(err) = self.ops.close().await {
+        if let Err(err) = self.internal.ops.close().await {
             close_errs.push(err);
         }
 
@@ -2379,19 +2439,19 @@ impl PeerConnection {
     /// caller of this method should hold `self.mu` lock
     async fn add_rtp_transceiver(&mut self, t: Arc<RTPTransceiver>) {
         {
-            let mut rtp_transceivers = self.rtp_transceivers.lock().await;
+            let mut rtp_transceivers = self.internal.rtp_transceivers.lock().await;
             rtp_transceivers.push(t);
         }
         PeerConnection::do_negotiation_needed(NegotiationNeededParams {
-            on_negotiation_needed_handler: Arc::clone(&self.on_negotiation_needed_handler),
-            is_closed: Arc::clone(&self.is_closed),
-            ops: Arc::clone(&self.ops),
-            negotiation_needed_state: Arc::clone(&self.negotiation_needed_state),
-            is_negotiation_needed: Arc::clone(&self.is_negotiation_needed),
-            signaling_state: Arc::clone(&self.signaling_state),
+            on_negotiation_needed_handler: Arc::clone(&self.internal.on_negotiation_needed_handler),
+            is_closed: Arc::clone(&self.internal.is_closed),
+            ops: Arc::clone(&self.internal.ops),
+            negotiation_needed_state: Arc::clone(&self.internal.negotiation_needed_state),
+            is_negotiation_needed: Arc::clone(&self.internal.is_negotiation_needed),
+            signaling_state: Arc::clone(&self.internal.signaling_state),
             check_negotiation_needed_params: CheckNegotiationNeededParams {
-                sctp_transport: Arc::clone(&self.sctp_transport),
-                rtp_transceivers: Arc::clone(&self.rtp_transceivers),
+                sctp_transport: Arc::clone(&self.internal.sctp_transport),
+                rtp_transceivers: Arc::clone(&self.internal.rtp_transceivers),
                 current_local_description: self.current_local_description.clone(),
                 current_remote_description: self.current_remote_description.clone(),
             },
@@ -2405,7 +2465,7 @@ impl PeerConnection {
     /// by the ICEAgent since the offer or answer was created.
     pub async fn current_local_description(&self) -> Option<SessionDescription> {
         let local_description = self.current_local_description.as_ref();
-        let ice_gather = Some(&self.ice_gatherer);
+        let ice_gather = Some(&self.internal.ice_gatherer);
         let ice_gathering_state = self.ice_gathering_state();
 
         populate_local_candidates(local_description, ice_gather, ice_gathering_state).await
@@ -2417,7 +2477,7 @@ impl PeerConnection {
     /// PeerConnection is in the stable state, the value is null.
     pub async fn pending_local_description(&self) -> Option<SessionDescription> {
         let local_description = self.pending_local_description.as_ref();
-        let ice_gather = Some(&self.ice_gatherer);
+        let ice_gather = Some(&self.internal.ice_gatherer);
         let ice_gathering_state = self.ice_gathering_state();
 
         populate_local_candidates(local_description, ice_gather, ice_gathering_state).await
@@ -2443,13 +2503,13 @@ impl PeerConnection {
     /// signaling_state attribute returns the signaling state of the
     /// PeerConnection instance.
     pub fn signaling_state(&self) -> SignalingState {
-        self.signaling_state.load(Ordering::SeqCst).into()
+        self.internal.signaling_state.load(Ordering::SeqCst).into()
     }
 
     /// icegathering_state attribute returns the ICE gathering state of the
     /// PeerConnection instance.
     pub fn ice_gathering_state(&self) -> ICEGatheringState {
-        match self.ice_gatherer.state() {
+        match self.internal.ice_gatherer.state() {
             ICEGathererState::New => ICEGatheringState::New,
             ICEGathererState::Gathering => ICEGatheringState::Gathering,
             _ => ICEGatheringState::Complete,
@@ -2459,7 +2519,10 @@ impl PeerConnection {
     /// connection_state attribute returns the connection state of the
     /// PeerConnection instance.
     pub fn connection_state(&self) -> PeerConnectionState {
-        self.peer_connection_state.load(Ordering::SeqCst).into()
+        self.internal
+            .peer_connection_state
+            .load(Ordering::SeqCst)
+            .into()
     }
 
     // GetStats return data providing statistics about the overall connection
@@ -2606,8 +2669,8 @@ impl PeerConnection {
 
                     let receiver = Arc::new(RTPReceiver::new(
                         receiver.kind(),
-                        Arc::clone(&self.dtls_transport),
-                        Arc::clone(&self.media_engine),
+                        Arc::clone(&self.internal.dtls_transport),
+                        Arc::clone(&self.internal.media_engine),
                         self.interceptor.clone(),
                     ));
                     t.set_receiver(Some(receiver)).await;
@@ -2642,9 +2705,9 @@ impl PeerConnection {
             use_identity,
         );
 
-        let ice_params = self.ice_gatherer.get_local_parameters().await?;
+        let ice_params = self.internal.ice_gatherer.get_local_parameters().await?;
 
-        let candidates = self.ice_gatherer.get_local_candidates().await?;
+        let candidates = self.internal.ice_gatherer.get_local_candidates().await?;
 
         let is_plan_b = self.configuration.sdp_semantics == SDPSemantics::PlanB;
         let mut media_sections = vec![];
@@ -2681,6 +2744,7 @@ impl PeerConnection {
             }
 
             if self
+                .internal
                 .sctp_transport
                 .data_channels_requested
                 .load(Ordering::SeqCst)
@@ -2707,6 +2771,7 @@ impl PeerConnection {
             }
 
             if self
+                .internal
                 .sctp_transport
                 .data_channels_requested
                 .load(Ordering::SeqCst)
@@ -2728,15 +2793,18 @@ impl PeerConnection {
 
         let params = PopulateSdpParams {
             is_plan_b,
-            media_description_fingerprint: self.setting_engine.sdp_media_level_fingerprints,
-            is_icelite: self.setting_engine.candidates.ice_lite,
+            media_description_fingerprint: self
+                .internal
+                .setting_engine
+                .sdp_media_level_fingerprints,
+            is_icelite: self.internal.setting_engine.candidates.ice_lite,
             connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
             ice_gathering_state: self.ice_gathering_state(),
         };
         populate_sdp(
             d,
             &dtls_fingerprints,
-            &self.media_engine,
+            &self.internal.media_engine,
             &candidates,
             &ice_params,
             &media_sections,
@@ -2758,8 +2826,8 @@ impl PeerConnection {
             use_identity,
         );
 
-        let ice_params = self.ice_gatherer.get_local_parameters().await?;
-        let candidates = self.ice_gatherer.get_local_candidates().await?;
+        let ice_params = self.internal.ice_gatherer.get_local_parameters().await?;
+        let candidates = self.internal.ice_gatherer.get_local_candidates().await?;
 
         let remote_description = if self.pending_remote_description.is_some() {
             self.pending_remote_description.as_ref()
@@ -2829,7 +2897,7 @@ impl PeerConnection {
                                             RTPTransceiverDirection::Inactive,
                                             kind,
                                             vec![],
-                                            Arc::clone(&self.media_engine),
+                                            Arc::clone(&self.internal.media_engine),
                                         );
                                         media_transceivers.push(Arc::new(t));
                                     }
@@ -2885,6 +2953,7 @@ impl PeerConnection {
             }
 
             if self
+                .internal
                 .sctp_transport
                 .data_channels_requested
                 .load(Ordering::SeqCst)
@@ -2921,15 +2990,18 @@ impl PeerConnection {
 
         let params = PopulateSdpParams {
             is_plan_b: detected_plan_b,
-            media_description_fingerprint: self.setting_engine.sdp_media_level_fingerprints,
-            is_icelite: self.setting_engine.candidates.ice_lite,
+            media_description_fingerprint: self
+                .internal
+                .setting_engine
+                .sdp_media_level_fingerprints,
+            is_icelite: self.internal.setting_engine.candidates.ice_lite,
             connection_role,
             ice_gathering_state: self.ice_gathering_state(),
         };
         populate_sdp(
             d,
             &dtls_fingerprints,
-            &self.media_engine,
+            &self.internal.media_engine,
             &candidates,
             &ice_params,
             &media_sections,
@@ -2939,7 +3011,7 @@ impl PeerConnection {
     }
 
     async fn set_gather_complete_handler(&self, f: OnGatheringCompleteHdlrFn) {
-        self.ice_gatherer.on_gathering_complete(f).await;
+        self.internal.ice_gatherer.on_gathering_complete(f).await;
     }
 
     /// sctp returns the SCTPTransport for this PeerConnection
@@ -2947,7 +3019,7 @@ impl PeerConnection {
     /// The SCTP transport over which SCTP data is sent and received. If SCTP has not been negotiated, the value is nil.
     /// https://www.w3.org/TR/webrtc/#attributes-15
     pub fn sctp(&self) -> Arc<SCTPTransport> {
-        Arc::clone(&self.sctp_transport)
+        Arc::clone(&self.internal.sctp_transport)
     }
 
     /// gathering_complete_promise is a Pion specific helper function that returns a channel that is closed when gathering is complete.
@@ -2961,7 +3033,7 @@ impl PeerConnection {
         // It's possible to miss the GatherComplete event since setGatherCompleteHandler is an atomic operation and the
         // promise might have been created after the gathering is finished. Therefore, we need to check if the ICE gathering
         // state has changed to complete so that we don't block the caller forever.
-        let ice_gatherer = Arc::clone(&self.ice_gatherer);
+        let ice_gatherer = Arc::clone(&self.internal.ice_gatherer);
         let mut done = Some(gathering_complete_tx);
         self.set_gather_complete_handler(Box::new(move || {
             let state = match ice_gatherer.state() {
