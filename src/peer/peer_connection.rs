@@ -46,7 +46,7 @@ use crate::media::dtls_transport::dtls_role::{
 use crate::media::rtp::rtp_codec::{RTPCodecType, RTPHeaderExtensionCapability};
 use crate::media::rtp::rtp_sender::RTPSender;
 use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
-use crate::media::rtp::{RTPCodingParameters, RTPReceiveParameters, RTPTransceiverInit, SSRC};
+use crate::media::rtp::{RTPTransceiverInit, SSRC};
 use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::media::track::track_local::TrackLocal;
 use crate::peer::ice::ice_candidate::{ICECandidate, ICECandidateInit};
@@ -600,7 +600,11 @@ impl PeerConnection {
         *on_track_handler = Some(f);
     }
 
-    async fn do_track(&self, t: Option<Arc<TrackRemote>>, r: Option<Arc<RTPReceiver>>) {
+    async fn do_track(
+        on_track_handler: Arc<Mutex<Option<OnTrackHdlrFn>>>,
+        t: Option<Arc<TrackRemote>>,
+        r: Option<Arc<RTPReceiver>>,
+    ) {
         log::debug!(
             "got new track: {}",
             if let Some(t) = &t {
@@ -611,7 +615,7 @@ impl PeerConnection {
         );
 
         if t.is_some() {
-            let mut handler = self.on_track_handler.lock().await;
+            let mut handler = on_track_handler.lock().await;
             if let Some(f) = &mut *handler {
                 f(t, r).await;
             } else {
@@ -1451,72 +1455,52 @@ impl PeerConnection {
         Ok(())
     }
 
-    async fn start_receiver(&self, incoming: &TrackDetails, receiver: Arc<RTPReceiver>) {
-        let mut encodings = vec![];
-        if incoming.ssrc != 0 {
-            encodings.push(RTPCodingParameters {
-                ssrc: incoming.ssrc,
-                ..Default::default()
-            });
-        }
-        for rid in &incoming.rids {
-            encodings.push(RTPCodingParameters {
-                rid: rid.to_owned(),
-                ..Default::default()
-            });
-        }
-
-        if let Err(err) = receiver.receive(&RTPReceiveParameters { encodings }).await {
-            log::warn!("RTPReceiver Receive failed {}", err);
-            return;
-        }
-
-        // set track id and label early so they can be set as new track information
-        // is received from the SDP.
-        for track_remote in &receiver.tracks().await {
-            track_remote.set_id(incoming.id.clone()).await;
-            track_remote.set_stream_id(incoming.stream_id.clone()).await;
-        }
-
-        // We can't block and wait for a single SSRC
-        if incoming.ssrc == 0 {
-            return;
-        }
-
-        let media_engine = Arc::clone(&self.media_engine);
-        tokio::spawn(async move {
-            if let Some(track) = receiver.track().await {
-                if let Err(err) = track.determine_payload_type().await {
-                    log::warn!(
-                        "Could not determine PayloadType for SSRC {} with err {}",
-                        track.ssrc(),
-                        err
-                    );
-                    return;
-                }
-
-                let params = match media_engine
-                    .get_rtp_parameters_by_payload_type(track.payload_type())
-                    .await
-                {
-                    Ok(params) => params,
-                    Err(err) => {
+    async fn start_receiver(
+        incoming: &TrackDetails,
+        receiver: Arc<RTPReceiver>,
+        media_engine: Arc<MediaEngine>,
+        on_track_handler: Arc<Mutex<Option<OnTrackHdlrFn>>>,
+    ) {
+        if receiver.start(incoming).await {
+            tokio::spawn(async move {
+                if let Some(track) = receiver.track().await {
+                    if let Err(err) = track.determine_payload_type().await {
                         log::warn!(
-                            "no codec could be found for payloadType {} with err {}",
-                            track.payload_type(),
-                            err,
+                            "Could not determine PayloadType for SSRC {} with err {}",
+                            track.ssrc(),
+                            err
                         );
                         return;
                     }
-                };
 
-                track.set_kind(receiver.kind());
-                track.set_codec(params.codecs[0].clone()).await;
-                track.set_params(params).await;
+                    let params = match media_engine
+                        .get_rtp_parameters_by_payload_type(track.payload_type())
+                        .await
+                    {
+                        Ok(params) => params,
+                        Err(err) => {
+                            log::warn!(
+                                "no codec could be found for payloadType {} with err {}",
+                                track.payload_type(),
+                                err,
+                            );
+                            return;
+                        }
+                    };
 
-                //TODO:self.do_track(receiver.track().await, Some(Arc::clone(&receiver))).await;
-            }
-        });
+                    track.set_kind(receiver.kind());
+                    track.set_codec(params.codecs[0].clone()).await;
+                    track.set_params(params).await;
+
+                    PeerConnection::do_track(
+                        on_track_handler,
+                        receiver.track().await,
+                        Some(Arc::clone(&receiver)),
+                    )
+                    .await;
+                }
+            });
+        }
     }
 
     /// start_rtp_receivers opens knows inbound SRTP streams from the remote_description
@@ -1574,7 +1558,13 @@ impl PeerConnection {
                     if receiver.have_received().await {
                         continue;
                     }
-                    self.start_receiver(incoming_track, receiver).await;
+                    PeerConnection::start_receiver(
+                        incoming_track,
+                        receiver,
+                        Arc::clone(&self.media_engine),
+                        Arc::clone(&self.on_track_handler),
+                    )
+                    .await;
                     track_handled = true;
                 }
             }
@@ -1607,7 +1597,13 @@ impl PeerConnection {
                     }
                 };
                 if let Some(receiver) = t.receiver().await {
-                    self.start_receiver(incoming, receiver).await;
+                    PeerConnection::start_receiver(
+                        incoming,
+                        receiver,
+                        Arc::clone(&self.media_engine),
+                        Arc::clone(&self.on_track_handler),
+                    )
+                    .await;
                 }
             }
         }
@@ -1710,7 +1706,13 @@ impl PeerConnection {
                             .await?;
 
                         if let Some(receiver) = t.receiver().await {
-                            self.start_receiver(&incoming, receiver).await;
+                            PeerConnection::start_receiver(
+                                &incoming,
+                                receiver,
+                                Arc::clone(&self.media_engine),
+                                Arc::clone(&self.on_track_handler),
+                            )
+                            .await;
                         }
                         return Ok(());
                     }
@@ -1772,7 +1774,12 @@ impl PeerConnection {
                             let track = receiver
                                 .receive_for_rid(rid.as_str(), &params, ssrc)
                                 .await?;
-                            self.do_track(Some(track), Some(receiver.clone())).await;
+                            PeerConnection::do_track(
+                                Arc::clone(&self.on_track_handler),
+                                Some(track),
+                                Some(receiver.clone()),
+                            )
+                            .await;
                         }
                         return Ok(());
                     }

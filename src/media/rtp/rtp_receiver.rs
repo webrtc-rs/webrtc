@@ -11,12 +11,13 @@ use crate::media::rtp::rtp_codec::{
     RTPCodecType, RTPParameters,
 };
 use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
-use crate::media::rtp::{RTPReceiveParameters, SSRC};
+use crate::media::rtp::{RTPCodingParameters, RTPReceiveParameters, SSRC};
 use crate::media::track::track_remote::TrackRemote;
 use crate::media::track::TrackStreams;
 use crate::util::flatten_errs;
 use crate::RECEIVE_MTU;
 
+use crate::peer::sdp::TrackDetails;
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
@@ -365,6 +366,73 @@ impl RTPReceiver {
     pub(crate) async fn have_received(&self) -> bool {
         let internal = self.internal.lock().await;
         internal.received_tx.is_none()
+    }
+
+    pub(crate) async fn start(&self, incoming: &TrackDetails) -> bool {
+        let mut encodings = vec![];
+        if incoming.ssrc != 0 {
+            encodings.push(RTPCodingParameters {
+                ssrc: incoming.ssrc,
+                ..Default::default()
+            });
+        }
+        for rid in &incoming.rids {
+            encodings.push(RTPCodingParameters {
+                rid: rid.to_owned(),
+                ..Default::default()
+            });
+        }
+
+        if let Err(err) = self.receive(&RTPReceiveParameters { encodings }).await {
+            log::warn!("RTPReceiver Receive failed {}", err);
+            return false;
+        }
+
+        // set track id and label early so they can be set as new track information
+        // is received from the SDP.
+        for track_remote in &self.tracks().await {
+            track_remote.set_id(incoming.id.clone()).await;
+            track_remote.set_stream_id(incoming.stream_id.clone()).await;
+        }
+
+        // We can't block and wait for a single SSRC
+        incoming.ssrc != 0
+
+        /*
+        let media_engine = Arc::clone(&self.media_engine);
+        tokio::spawn(async move {
+            if let Some(track) = receiver.track().await {
+                if let Err(err) = track.determine_payload_type().await {
+                    log::warn!(
+                        "Could not determine PayloadType for SSRC {} with err {}",
+                        track.ssrc(),
+                        err
+                    );
+                    return;
+                }
+
+                let params = match media_engine
+                    .get_rtp_parameters_by_payload_type(track.payload_type())
+                    .await
+                {
+                    Ok(params) => params,
+                    Err(err) => {
+                        log::warn!(
+                            "no codec could be found for payloadType {} with err {}",
+                            track.payload_type(),
+                            err,
+                        );
+                        return;
+                    }
+                };
+
+                track.set_kind(receiver.kind());
+                track.set_codec(params.codecs[0].clone()).await;
+                track.set_params(params).await;
+
+                //TODO:self.do_track(receiver.track().await, Some(Arc::clone(&receiver))).await;
+            }
+        });*/
     }
 
     /// Stop irreversibly stops the RTPReceiver
