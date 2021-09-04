@@ -12,7 +12,12 @@ async fn test_operations_enqueue() -> Result<()> {
                 let r2 = Arc::clone(&r);
                 Box::pin(async move {
                     let mut r3 = r2.lock().await;
-                    r3[k] = k * k;
+                    r3[k] += k * k;
+                    if r3[k] == 225 {
+                        true
+                    } else {
+                        false
+                    }
                 })
             })))
             .await?;
@@ -20,7 +25,7 @@ async fn test_operations_enqueue() -> Result<()> {
 
         ops.done().await;
         let expected = vec![
-            0, 1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, 144, 169, 196, 225,
+            0, 1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, 144, 169, 196, 450,
         ];
         {
             let r = results.lock().await;

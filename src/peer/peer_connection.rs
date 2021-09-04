@@ -411,41 +411,28 @@ impl PeerConnection {
             .ops
             .enqueue(Operation(Box::new(move || {
                 let params3 = params2.clone();
-                Box::pin(async move {
-                    PeerConnection::negotiation_needed_op(params3).await;
-                })
+                Box::pin(async move { PeerConnection::negotiation_needed_op(params3).await })
             })))
             .await;
     }
 
-    async fn negotiation_needed_op(params: NegotiationNeededParams) {
+    async fn negotiation_needed_op(params: NegotiationNeededParams) -> bool {
         // Don't run NegotiatedNeeded checks if on_negotiation_needed is not set
         {
             let handler = params.on_negotiation_needed_handler.lock().await;
             if handler.is_none() {
-                return;
+                return false;
             }
         }
 
         // https://www.w3.org/TR/webrtc/#updating-the-negotiation-needed-flag
         // Step 2.1
         if params.is_closed.load(Ordering::SeqCst) {
-            return;
+            return false;
         }
         // non-canon step 2.2
         if !params.ops.is_empty().await {
-            let params2 = params.clone();
-            let _ = params
-                .ops
-                .enqueue(Operation(Box::new(move || {
-                    let _params3 = params2.clone();
-                    Box::pin(async move {
-                        //PeerConnection::negotiation_needed_op(params3).await;
-                    })
-                })))
-                .await;
-
-            return;
+            return true;
         }
 
         // non-canon, run again if there was a request
@@ -465,19 +452,19 @@ impl PeerConnection {
 
         // Step 2.3
         if params.signaling_state.load(Ordering::SeqCst) != SignalingState::Stable as u8 {
-            return;
+            return false;
         }
 
         // Step 2.4
         if !PeerConnection::check_negotiation_needed(&params.check_negotiation_needed_params).await
         {
             params.is_negotiation_needed.store(false, Ordering::SeqCst);
-            return;
+            return false;
         }
 
         // Step 2.5
         if params.is_negotiation_needed.load(Ordering::SeqCst) {
-            return;
+            return false;
         }
 
         // Step 2.6
@@ -488,6 +475,8 @@ impl PeerConnection {
         if let Some(f) = &mut *handler {
             f().await;
         }
+
+        false
     }
 
     async fn check_negotiation_needed(params: &CheckNegotiationNeededParams) -> bool {
@@ -795,6 +784,14 @@ impl PeerConnection {
         let mut offer;
 
         loop {
+            // We cache current transceivers to ensure they aren't
+            // mutated during offer generation. We later check if they have
+            // been mutated and recompute the offer if necessary.
+            let current_transceivers = {
+                let rtp_transceivers = self.rtp_transceivers.lock().await;
+                rtp_transceivers.clone()
+            };
+
             // in-parallel steps to create an offer
             // https://w3c.github.io/webrtc-pc/#dfn-in-parallel-steps-to-create-an-offer
             let is_plan_b = if self.current_remote_description.is_some() {
@@ -824,12 +821,7 @@ impl PeerConnection {
                         }
                     }
                 }
-
-                // We cache current transceivers to ensure they aren't
-                // mutated during offer generation. We later check if they have
-                // been mutated and recompute the offer if necessary.
-                let rtp_transceivers = self.rtp_transceivers.lock().await;
-                for t in &*rtp_transceivers {
+                for t in &current_transceivers {
                     if !t.mid().await.is_empty() {
                         continue;
                     }
@@ -839,11 +831,11 @@ impl PeerConnection {
             }
 
             let mut d = if self.current_remote_description.is_none() {
-                self.generate_unmatched_sdp(/*current_transceivers,*/ use_identity)
+                self.generate_unmatched_sdp(current_transceivers, use_identity)
                     .await?
             } else {
                 self.generate_matched_sdp(
-                    /*current_transceivers,*/
+                    current_transceivers,
                     use_identity,
                     true, /*includeUnmatched */
                     DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
@@ -1003,9 +995,11 @@ impl PeerConnection {
             connection_role = DEFAULT_DTLS_ROLE_ANSWER.to_connection_role();
         }
 
+        let local_transceivers = self.get_transceivers().await;
         let mut d = self
             .generate_matched_sdp(
-                /*self.rtp_transceivers,*/ use_identity,
+                local_transceivers,
+                use_identity,
                 false, /*includeUnmatched */
                 connection_role,
             )
@@ -1236,10 +1230,12 @@ impl PeerConnection {
         desc.parsed = Some(desc.unmarshal()?);
         self.set_description(&desc, StateChangeOp::SetLocal).await?;
 
+        let current_transceivers = self.get_transceivers().await;
+
         let we_answer = desc.serde.sdp_type == SDPType::Answer;
         let remote_desc = self.remote_description();
         if we_answer && remote_desc.is_some() {
-            self.start_rtp_senders().await?;
+            self.start_rtp_senders(&current_transceivers).await?;
             /*TODO:pc.ops.Enqueue(func() {
                 pc.start_rtp(have_local_description, remote_desc, current_transceivers)
             })*/
@@ -1280,6 +1276,7 @@ impl PeerConnection {
                 .update_from_remote_description(parsed)
                 .await?;
 
+            let mut local_transceivers = self.get_transceivers().await;
             let detected_plan_b = description_is_plan_b(self.remote_description())?;
             let we_offer = desc.serde.sdp_type == SDPType::Answer;
 
@@ -1308,7 +1305,7 @@ impl PeerConnection {
                                 }
 
                                 let t = if let Some(t) =
-                                    find_by_mid(mid_value, &self.rtp_transceivers).await
+                                    find_by_mid(mid_value, &mut local_transceivers).await
                                 {
                                     t.stop().await?;
                                     Some(t)
@@ -1316,7 +1313,7 @@ impl PeerConnection {
                                     satisfy_type_and_direction(
                                         kind,
                                         direction,
-                                        &self.rtp_transceivers,
+                                        &mut local_transceivers,
                                     )
                                     .await
                                 };
@@ -1395,9 +1392,10 @@ impl PeerConnection {
                     .await?;
             }
 
+            let current_transceivers = self.get_transceivers().await;
             if is_renegotation {
                 if we_offer {
-                    self.start_rtp_senders().await?;
+                    self.start_rtp_senders(&current_transceivers).await?;
                     /*TODO: self.ops.Enqueue(func() {
                         self.start_rtp(true, &desc, current_transceivers)
                     })*/
@@ -1430,7 +1428,7 @@ impl PeerConnection {
             // Start the networking in a new routine since it will block until
             // the connection is actually established.
             if we_offer {
-                self.start_rtp_senders().await?;
+                self.start_rtp_senders(&current_transceivers).await?;
             }
 
             /*TODO: self.ops.Enqueue(func() {
@@ -1609,9 +1607,11 @@ impl PeerConnection {
     }
 
     /// start_rtp_senders starts all outbound RTP streams
-    pub(crate) async fn start_rtp_senders(&self) -> Result<()> {
-        let rtp_transceivers = self.rtp_transceivers.lock().await;
-        for transceiver in &*rtp_transceivers {
+    pub(crate) async fn start_rtp_senders(
+        &self,
+        current_transceivers: &[Arc<RTPTransceiver>],
+    ) -> Result<()> {
+        for transceiver in current_transceivers {
             if let Some(sender) = transceiver.sender().await {
                 if sender.is_negotiated() && !sender.has_sent().await {
                     sender.send(&sender.get_parameters().await).await?;
@@ -1754,21 +1754,18 @@ impl PeerConnection {
                         .get_rtp_parameters_by_payload_type(payload_type)
                         .await?;
 
-                    {
-                        let rtp_transceivers = self.rtp_transceivers.lock().await;
-                        for t in &*rtp_transceivers {
-                            if t.mid().await != mid || t.receiver().await.is_none() {
-                                continue;
-                            }
-
-                            if let Some(receiver) = t.receiver().await {
-                                let track = receiver
-                                    .receive_for_rid(rid.as_str(), &params, ssrc)
-                                    .await?;
-                                self.do_track(Some(track), Some(receiver.clone())).await;
-                            }
-                            return Ok(());
+                    for t in self.get_transceivers().await {
+                        if t.mid().await != mid || t.receiver().await.is_none() {
+                            continue;
                         }
+
+                        if let Some(receiver) = t.receiver().await {
+                            let track = receiver
+                                .receive_for_rid(rid.as_str(), &params, ssrc)
+                                .await?;
+                            self.do_track(Some(track), Some(receiver.clone())).await;
+                        }
+                        return Ok(());
                     }
                 }
                 return Err(Error::ErrPeerConnSimulcastIncomingSSRCFailed.into());
@@ -1927,6 +1924,12 @@ impl PeerConnection {
             }
         }
         receivers
+    }
+
+    /// get_transceivers returns the RtpTransceiver that are currently attached to this PeerConnection
+    pub async fn get_transceivers(&self) -> Vec<Arc<RTPTransceiver>> {
+        let rtp_transceivers = self.rtp_transceivers.lock().await;
+        rtp_transceivers.clone()
     }
 
     /// add_track adds a Track to the PeerConnection
@@ -2616,6 +2619,7 @@ impl PeerConnection {
     /// This is used for the initial call for CreateOffer
     async fn generate_unmatched_sdp(
         &self,
+        local_transceivers: Vec<Arc<RTPTransceiver>>,
         use_identity: bool,
     ) -> Result<sdp::session_description::SessionDescription> {
         let d = sdp::session_description::SessionDescription::new_jsep_session_description(
@@ -2634,17 +2638,14 @@ impl PeerConnection {
             let mut video = vec![];
             let mut audio = vec![];
 
-            {
-                let rtp_transceivers = self.rtp_transceivers.lock().await;
-                for t in &*rtp_transceivers {
-                    if t.kind == RTPCodecType::Video {
-                        video.push(Arc::clone(t));
-                    } else if t.kind == RTPCodecType::Audio {
-                        audio.push(Arc::clone(t));
-                    }
-                    if let Some(sender) = t.sender().await {
-                        sender.set_negotiated();
-                    }
+            for t in &local_transceivers {
+                if t.kind == RTPCodecType::Video {
+                    video.push(Arc::clone(t));
+                } else if t.kind == RTPCodecType::Audio {
+                    audio.push(Arc::clone(t));
+                }
+                if let Some(sender) = t.sender().await {
+                    sender.set_negotiated();
                 }
             }
 
@@ -2677,8 +2678,7 @@ impl PeerConnection {
             }
         } else {
             {
-                let rtp_transceivers = self.rtp_transceivers.lock().await;
-                for t in &*rtp_transceivers {
+                for t in &local_transceivers {
                     if let Some(sender) = t.sender().await {
                         sender.set_negotiated();
                     }
@@ -2733,6 +2733,7 @@ impl PeerConnection {
     /// this is used everytime we have a remote_description
     async fn generate_matched_sdp(
         &self,
+        mut local_transceivers: Vec<Arc<RTPTransceiver>>,
         use_identity: bool,
         include_unmatched: bool,
         connection_role: ConnectionRole,
@@ -2796,7 +2797,7 @@ impl PeerConnection {
                                 if let Some(t) = satisfy_type_and_direction(
                                     kind,
                                     direction,
-                                    &self.rtp_transceivers,
+                                    &mut local_transceivers,
                                 )
                                 .await
                                 {
@@ -2830,7 +2831,7 @@ impl PeerConnection {
                             if detected_plan_b {
                                 return Err(Error::ErrIncorrectSDPSemantics.into());
                             }
-                            if let Some(t) = find_by_mid(mid_value, &self.rtp_transceivers).await {
+                            if let Some(t) = find_by_mid(mid_value, &mut local_transceivers).await {
                                 if let Some(sender) = t.sender().await {
                                     sender.set_negotiated();
                                 }
@@ -2855,8 +2856,7 @@ impl PeerConnection {
         // If we are offering also include unmatched local transceivers
         if include_unmatched {
             if !detected_plan_b {
-                let rtp_transceivers = self.rtp_transceivers.lock().await;
-                for t in &*rtp_transceivers {
+                for t in &local_transceivers {
                     if let Some(sender) = t.sender().await {
                         sender.set_negotiated();
                     }

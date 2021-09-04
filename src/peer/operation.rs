@@ -12,7 +12,7 @@ use waitgroup::WaitGroup;
 
 /// Operation is a function
 pub struct Operation(
-    pub Box<dyn (FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync>,
+    pub Box<dyn (FnMut() -> Pin<Box<dyn Future<Output = bool> + Send + 'static>>) + Send + Sync>,
 );
 
 impl fmt::Debug for Operation {
@@ -25,7 +25,7 @@ impl fmt::Debug for Operation {
 #[derive(Default)]
 pub(crate) struct Operations {
     length: Arc<AtomicUsize>,
-    ops_tx: Option<mpsc::UnboundedSender<Operation>>,
+    ops_tx: Option<Arc<mpsc::UnboundedSender<Operation>>>,
     close_tx: Option<mpsc::Sender<()>>,
 }
 
@@ -35,13 +35,15 @@ impl Operations {
         let (ops_tx, ops_rx) = mpsc::unbounded_channel();
         let (close_tx, close_rx) = mpsc::channel(1);
         let l = Arc::clone(&length);
+        let ops_tx = Arc::new(ops_tx);
+        let ops_tx2 = Arc::clone(&ops_tx);
         tokio::spawn(async move {
-            Operations::start(l, ops_rx, close_rx).await;
+            Operations::start(l, ops_tx, ops_rx, close_rx).await;
         });
 
         Operations {
             length,
-            ops_tx: Some(ops_tx),
+            ops_tx: Some(ops_tx2),
             close_tx: Some(close_tx),
         }
     }
@@ -69,7 +71,7 @@ impl Operations {
         let _ = self
             .enqueue(Operation(Box::new(move || {
                 let _d = w.take();
-                Box::pin(async {})
+                Box::pin(async { false })
             })))
             .await;
         wg.wait().await;
@@ -77,6 +79,7 @@ impl Operations {
 
     pub(crate) async fn start(
         length: Arc<AtomicUsize>,
+        ops_tx: Arc<mpsc::UnboundedSender<Operation>>,
         mut ops_rx: mpsc::UnboundedReceiver<Operation>,
         mut close_rx: mpsc::Receiver<()>,
     ) {
@@ -88,7 +91,9 @@ impl Operations {
                 result = ops_rx.recv() => {
                     if let Some(mut f) = result {
                         length.fetch_sub(1, Ordering::SeqCst);
-                        f.0().await;
+                        if f.0().await {
+                            let _ = ops_tx.send(f);
+                        }
                     }
                 }
             }
