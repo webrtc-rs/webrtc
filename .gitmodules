@@ -40,3 +40,6 @@
 [submodule "crates/peer"]
 	path = crates/peer
 	url = https://github.com/webrtc-rs/peer
+[submodule "crates/interceptor"]
+	path = crates/interceptor
+	url = https://github.com/webrtc-rs/interceptor
