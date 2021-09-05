@@ -33,7 +33,6 @@ use stun::{agent::*, attributes::*, fingerprint::*, integrity::*, message::*, xo
 use util::{vnet::net::*, Buffer};
 
 use crate::agent::agent_gather::GatherCandidatesInternalParams;
-use crate::agent::agent_transport::AgentConn;
 use crate::rand::*;
 use crate::tcp_type::TcpType;
 use std::future::Future;
@@ -84,6 +83,12 @@ pub type OnCandidateHdlrFn = Box<
         + Sync,
 >;
 pub type GatherCandidateCancelFn = Box<dyn Fn() + Send + Sync>;
+
+struct ChanReceivers {
+    chan_state_rx: mpsc::Receiver<ConnectionState>,
+    chan_candidate_rx: mpsc::Receiver<Option<Arc<dyn Candidate + Send + Sync>>>,
+    chan_candidate_pair_rx: mpsc::Receiver<()>,
+}
 
 /// Represents the ICE agent.
 pub struct Agent {
@@ -138,82 +143,12 @@ impl Agent {
             }
         };
 
-        let (chan_state_tx, chan_state_rx) = mpsc::channel(1);
-        let (chan_candidate_tx, chan_candidate_rx) = mpsc::channel(1);
-        let (chan_candidate_pair_tx, chan_candidate_pair_rx) = mpsc::channel(1);
-        let (on_connected_tx, on_connected_rx) = mpsc::channel(1);
-        let (done_tx, done_rx) = mpsc::channel(1);
-        let (force_candidate_contact_tx, force_candidate_contact_rx) = mpsc::channel(1);
-        let (started_ch_tx, _) = broadcast::channel(1);
-
-        let mut ai = AgentInternal {
-            on_connected_tx: Some(on_connected_tx),
-            on_connected_rx: Some(on_connected_rx),
-
-            // State for closing
-            done_tx: Some(done_tx),
-            done_rx: Some(done_rx),
-
-            force_candidate_contact_tx,
-            force_candidate_contact_rx: Some(force_candidate_contact_rx),
-
-            chan_state_tx: Some(chan_state_tx),
-            chan_candidate_tx: Some(Arc::new(chan_candidate_tx)),
-            chan_candidate_pair_tx: Some(chan_candidate_pair_tx),
-
-            on_connection_state_change_hdlr: None,
-            on_selected_candidate_pair_change_hdlr: None,
-            on_candidate_hdlr: None,
-
-            tie_breaker: rand::random::<u64>(),
-
-            lite: config.lite,
-            is_controlling: config.is_controlling,
-            start_time: Instant::now(),
-            nominated_pair: None,
-
-            connection_state: ConnectionState::New,
-            local_candidates: HashMap::new(),
-            remote_candidates: HashMap::new(),
-
-            insecure_skip_verify: config.insecure_skip_verify,
-
-            started_ch_tx: Some(started_ch_tx),
-
-            max_binding_requests: 0,
-
-            host_acceptance_min_wait: Duration::from_secs(0),
-            srflx_acceptance_min_wait: Duration::from_secs(0),
-            prflx_acceptance_min_wait: Duration::from_secs(0),
-            relay_acceptance_min_wait: Duration::from_secs(0),
-
-            // How long connectivity checks can fail before the ICE Agent
-            // goes to disconnected
-            disconnected_timeout: Duration::from_secs(0),
-
-            // How long connectivity checks can fail before the ICE Agent
-            // goes to failed
-            failed_timeout: Duration::from_secs(0),
-
-            // How often should we send keepalive packets?
-            // 0 means never
-            keepalive_interval: Duration::from_secs(0),
-
-            // How often should we run our internal taskLoop to check for state changes when connecting
-            check_interval: Duration::from_secs(0),
-
-            local_ufrag: String::new(),
-            local_pwd: String::new(),
-
-            remote_ufrag: String::new(),
-            remote_pwd: String::new(),
-
-            // LRU of outbound Binding request Transaction IDs
-            pending_binding_requests: vec![],
-
-            // AgentConn
-            agent_conn: Arc::new(AgentConn::new()),
-        };
+        let (mut ai, chan_receivers) = AgentInternal::new(&config);
+        let (chan_state_rx, chan_candidate_rx, chan_candidate_pair_rx) = (
+            chan_receivers.chan_state_rx,
+            chan_receivers.chan_candidate_rx,
+            chan_receivers.chan_candidate_pair_rx,
+        );
 
         config.init_with_defaults(&mut ai);
 

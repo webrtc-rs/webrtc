@@ -78,23 +78,23 @@ async fn test_vnet_gather_listen_udp() -> Result<()> {
     let local_ips = local_interfaces(&nw, &a.interface_filter, &[NetworkType::Udp4]).await;
     assert!(!local_ips.is_empty(), "should have one local IP");
 
-    let ip = local_ips[0];
+    for ip in local_ips {
+        let _ = listen_udp_in_port_range(&nw, 0, 0, SocketAddr::new(ip, 0)).await?;
 
-    let _ = listen_udp_in_port_range(&nw, 0, 0, SocketAddr::new(ip, 0)).await?;
+        let result = listen_udp_in_port_range(&nw, 4999, 5000, SocketAddr::new(ip, 0)).await;
+        assert!(
+            result.is_err(),
+            "listenUDP with invalid port range did not return ErrPort"
+        );
 
-    let result = listen_udp_in_port_range(&nw, 4999, 5000, SocketAddr::new(ip, 0)).await;
-    assert!(
-        result.is_err(),
-        "listenUDP with invalid port range did not return ErrPort"
-    );
-
-    let conn = listen_udp_in_port_range(&nw, 5000, 5000, SocketAddr::new(ip, 0)).await?;
-    let port = conn.local_addr().await?.port();
-    assert_eq!(
-        port, 5000,
-        "listenUDP with port restriction of 5000 listened on incorrect port ({})",
-        port
-    );
+        let conn = listen_udp_in_port_range(&nw, 5000, 5000, SocketAddr::new(ip, 0)).await?;
+        let port = conn.local_addr().await?.port();
+        assert_eq!(
+            port, 5000,
+            "listenUDP with port restriction of 5000 listened on incorrect port ({})",
+            port
+        );
+    }
 
     a.close().await?;
 
