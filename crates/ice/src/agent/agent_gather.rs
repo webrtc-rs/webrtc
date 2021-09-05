@@ -94,7 +94,9 @@ impl Agent {
                     tokio::spawn(async move {
                         let _d = w;
 
+                        log::trace!("enter gather_candidates_local");
                         Self::gather_candidates_local(local_params).await;
+                        log::trace!("exit gather_candidates_local");
                     });
                 }
                 CandidateType::ServerReflexive => {
@@ -110,7 +112,9 @@ impl Agent {
                     tokio::spawn(async move {
                         let _d = w1;
 
+                        log::trace!("enter gather_candidates_srflx");
                         Self::gather_candidates_srflx(srflx_params).await;
+                        log::trace!("exit gather_candidates_srflx");
                     });
                     if let Some(ext_ip_mapper) = &*params.ext_ip_mapper {
                         if ext_ip_mapper.candidate_type == CandidateType::ServerReflexive {
@@ -126,7 +130,9 @@ impl Agent {
                             tokio::spawn(async move {
                                 let _d = w2;
 
+                                log::trace!("enter gather_candidates_srflx_mapped");
                                 Self::gather_candidates_srflx_mapped(srflx_mapped_params).await;
+                                log::trace!("exit gather_candidates_srflx");
                             });
                         }
                     }
@@ -139,7 +145,9 @@ impl Agent {
                     tokio::spawn(async move {
                         let _d = w;
 
+                        log::trace!("enter gather_candidates_relay");
                         Self::gather_candidates_relay(urls, net, agent_internal).await;
+                        log::trace!("exit gather_candidates_relay");
                     });
                 }
                 _ => {}
@@ -198,6 +206,8 @@ impl Agent {
 
         let ips = local_interfaces(&net, &*interface_filter, &network_types).await;
         for ip in ips {
+            log::trace!("gather_candidates_local checking local ip: {}", ip);
+
             let mut mapped_ip = ip;
 
             if mdns_mode != MulticastDnsMode::QueryAndGather && ext_ip_mapper.is_some() {
@@ -265,6 +275,11 @@ impl Agent {
                     }
                 };
 
+                log::trace!(
+                    "gather_candidates_local create CandidateHostConfig with {}:{}",
+                    mapped_ip,
+                    port
+                );
                 let host_config = CandidateHostConfig {
                     base_config: CandidateBaseConfig {
                         network: network.clone(),
@@ -306,6 +321,11 @@ impl Agent {
                         }
                     };
 
+                log::trace!(
+                    "gather_candidates_local add_candidate {}:{}",
+                    mapped_ip,
+                    port
+                );
                 {
                     let mut ai = agent_internal.lock().await;
                     if let Err(err) = ai.add_candidate(&candidate, &agent_internal).await {

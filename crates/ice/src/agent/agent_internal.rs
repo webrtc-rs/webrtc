@@ -437,6 +437,12 @@ impl AgentInternal {
             .started_ch_tx
             .as_ref()
             .map(tokio::sync::broadcast::Sender::subscribe);
+
+        log::trace!(
+            "ice add_candidate: start_candidate with {}:{}",
+            c.address(),
+            c.port()
+        );
         self.start_candidate(c, ai, initialized_ch).await;
 
         let network_type = c.network_type();
@@ -468,11 +474,22 @@ impl AgentInternal {
             self.add_pair(c.clone(), cand).await;
         }
 
+        log::trace!(
+            "ice add_candidate: request_connectivity_check with {}:{}",
+            c.address(),
+            c.port()
+        );
         self.request_connectivity_check();
         if let Some(chan_candidate_tx) = &self.chan_candidate_tx {
+            log::trace!(
+                "ice add_candidate: chan_candidate_tx.send with {}:{}",
+                c.address(),
+                c.port()
+            );
             let _ = chan_candidate_tx.send(Some(c.clone())).await;
         }
 
+        log::trace!("ice exit add_candidate with {}:{}", c.address(), c.port());
         Ok(())
     }
 
