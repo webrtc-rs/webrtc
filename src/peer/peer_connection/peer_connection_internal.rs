@@ -103,7 +103,7 @@ impl PeerConnectionInternal {
     }
 
     pub(super) async fn start_rtp(
-        self: Arc<Self>,
+        self: &Arc<Self>,
         is_renegotiation: bool,
         remote_desc: Arc<SessionDescription>,
         sdp_semantics: SDPSemantics,
@@ -544,14 +544,16 @@ impl PeerConnectionInternal {
 
     /// Start all transports. PeerConnection now has enough state
     pub(super) async fn start_transports(
-        &self,
-        ice_role: ICERole,
-        dtls_role: DTLSRole,
-        remote_ufrag: String,
-        remote_pwd: String,
-        fingerprint: String,
-        fingerprint_hash: String,
+        self: &Arc<Self>,
+        _ice_role: ICERole,
+        _dtls_role: DTLSRole,
+        _remote_ufrag: String,
+        _remote_pwd: String,
+        _fingerprint: String,
+        _fingerprint_hash: String,
     ) {
+        //TODO:
+        /*
         // Start the ice transport
         if let Err(err) = self
             .ice_transport
@@ -590,7 +592,7 @@ impl PeerConnectionInternal {
         .await;
         if let Err(err) = result {
             log::warn!("Failed to start manager: {}", err);
-        }
+        }*/
     }
 
     /// generate_unmatched_sdp generates an SDP that doesn't take remote state into account

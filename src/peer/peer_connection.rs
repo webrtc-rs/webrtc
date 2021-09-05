@@ -40,8 +40,6 @@ use crate::data::sctp_transport::sctp_transport_state::SCTPTransportState;
 use crate::error::Error;
 //use crate::media::dtls_transport::dtls_fingerprint::DTLSFingerprint;
 //use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
-use crate::media::dtls_transport::dtls_fingerprint::DTLSFingerprint;
-use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
 use crate::media::dtls_transport::dtls_role::{
     DTLSRole, DEFAULT_DTLS_ROLE_ANSWER, DEFAULT_DTLS_ROLE_OFFER,
 };
@@ -55,7 +53,7 @@ use crate::peer::ice::ice_candidate::{ICECandidate, ICECandidateInit};
 use crate::peer::ice::ice_gather::ice_gatherer_state::ICEGathererState;
 use crate::peer::ice::ice_gather::ice_gathering_state::ICEGatheringState;
 use crate::peer::ice::ice_role::ICERole;
-use crate::peer::ice::ICEParameters;
+//use crate::peer::ice::ICEParameters;
 use crate::peer::offer_answer_options::{AnswerOptions, OfferOptions};
 use crate::peer::operation::{Operation, Operations};
 use crate::peer::sdp::sdp_type::SDPType;
@@ -1223,8 +1221,8 @@ impl PeerConnection {
             let we_offer = desc.serde.sdp_type == SDPType::Answer;
 
             if !we_offer && !detected_plan_b {
-                if let Some(desc) = remote_description {
-                    if let Some(parsed) = &desc.parsed {
+                if let Some(remote_desc) = remote_description {
+                    if let Some(parsed) = &remote_desc.parsed {
                         for media in &parsed.media_descriptions {
                             if let Some(mid_value) = get_mid_value(media) {
                                 if mid_value.is_empty() {
@@ -1325,7 +1323,7 @@ impl PeerConnection {
 
                 self.internal
                     .ice_transport
-                    .set_remote_credentials(remote_ufrag, remote_pwd)
+                    .set_remote_credentials(remote_ufrag.clone(), remote_pwd.clone())
                     .await?;
             }
 
@@ -1339,9 +1337,21 @@ impl PeerConnection {
             if is_renegotation {
                 if we_offer {
                     self.start_rtp_senders().await?;
-                    /*TODO: self.internal.ops.Enqueue(func() {
-                        self.start_rtp(true, &desc, current_transceivers)
-                    })*/
+
+                    let pci = Arc::clone(&self.internal);
+                    let sdp_semantics = self.configuration.sdp_semantics;
+                    let remote_desc = Arc::new(desc);
+                    self.internal
+                        .ops
+                        .enqueue(Operation(Box::new(move || {
+                            let pc = Arc::clone(&pci);
+                            let rd = Arc::clone(&remote_desc);
+                            Box::pin(async move {
+                                let _ = pc.start_rtp(true, rd, sdp_semantics).await;
+                                false
+                            })
+                        })))
+                        .await?;
                 }
                 return Ok(());
             }
@@ -1354,17 +1364,18 @@ impl PeerConnection {
                 }
             }
 
+            let (fingerprint, fingerprint_hash) = (String::new(), String::new());
             //TODO: let (_fingerprint, _fingerprint_hash) = extract_fingerprint(parsed)?;
 
-            let _ice_role =
             // If one of the agents is lite and the other one is not, the lite agent must be the controlling agent.
             // If both or neither agents are lite the offering agent is controlling.
             // RFC 8445 S6.1.1
-            if (we_offer && remote_is_lite == self.internal.setting_engine.candidates.ice_lite)
+            let ice_role = if (we_offer
+                && remote_is_lite == self.internal.setting_engine.candidates.ice_lite)
                 || (remote_is_lite && !self.internal.setting_engine.candidates.ice_lite)
             {
                 ICERole::Controlling
-            }else{
+            } else {
                 ICERole::Controlled
             };
 
@@ -1374,12 +1385,30 @@ impl PeerConnection {
                 self.start_rtp_senders().await?;
             }
 
-            /*TODO: self.internal.ops.Enqueue(func() {
-                self.start_transports(iceRole, dtlsRoleFromRemoteSDP(desc.parsed), remote_ufrag, remote_pwd, fingerprint, fingerprintHash)
-                if weOffer {
-                    self.start_rtp(false, &desc, current_transceivers)
-                }
-            })*/
+            let pci = Arc::clone(&self.internal);
+            let sdp_semantics = self.configuration.sdp_semantics;
+            let dtls_role = DTLSRole::from(parsed);
+            let remote_desc = Arc::new(desc);
+            self.internal
+                .ops
+                .enqueue(Operation(Box::new(move || {
+                    let pc = Arc::clone(&pci);
+                    let rd = Arc::clone(&remote_desc);
+                    let ru = remote_ufrag.clone();
+                    let rp = remote_pwd.clone();
+                    let fp = fingerprint.clone();
+                    let fp_hash = fingerprint_hash.clone();
+                    Box::pin(async move {
+                        pc.start_transports(ice_role, dtls_role, ru, rp, fp, fp_hash)
+                            .await;
+
+                        if we_offer {
+                            let _ = pc.start_rtp(false, rd, sdp_semantics).await;
+                        }
+                        false
+                    })
+                })))
+                .await?;
         }
 
         Ok(())
