@@ -1,0 +1,14 @@
+[package]
+name = "interceptor"
+version = "0.0.0"
+authors = ["Rain Liu <yliu@webrtc.rs>"]
+edition = "2018"
+description = "A pure Rust implementation of Pluggable RTP/RTCP processors"
+license = "MIT"
+documentation = "https://docs.rs/interceptor"
+homepage = "https://webrtc.rs"
+repository = "https://github.com/webrtc-rs/interceptor"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
