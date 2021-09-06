@@ -23,7 +23,9 @@ impl Agent {
             let mut ai = self.agent_internal.lock().await;
             ai.start_connectivity_checks(agent_internal, true, remote_ufrag, remote_pwd)
                 .await?;
-            (ai.on_connected_rx.take(), Arc::clone(&ai.agent_conn))
+
+            let mut on_connected_rx = ai.on_connected_rx.lock().await;
+            (on_connected_rx.take(), Arc::clone(&ai.agent_conn))
         };
 
         if let Some(mut on_connected_rx) = on_connected_rx {
@@ -54,7 +56,9 @@ impl Agent {
             let mut ai = self.agent_internal.lock().await;
             ai.start_connectivity_checks(agent_internal, false, remote_ufrag, remote_pwd)
                 .await?;
-            (ai.on_connected_rx.take(), Arc::clone(&ai.agent_conn))
+
+            let mut on_connected_rx = ai.on_connected_rx.lock().await;
+            (on_connected_rx.take(), Arc::clone(&ai.agent_conn))
         };
 
         if let Some(mut on_connected_rx) = on_connected_rx {

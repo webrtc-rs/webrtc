@@ -8,8 +8,8 @@ pub type ChanCandidateTx = Option<Arc<mpsc::Sender<Option<Arc<dyn Candidate + Se
 
 pub struct AgentInternal {
     // State owned by the taskLoop
-    pub(crate) on_connected_tx: Option<mpsc::Sender<()>>,
-    pub(crate) on_connected_rx: Option<mpsc::Receiver<()>>,
+    pub(crate) on_connected_tx: Mutex<Option<mpsc::Sender<()>>>,
+    pub(crate) on_connected_rx: Mutex<Option<mpsc::Receiver<()>>>,
 
     // State for closing
     pub(crate) done_tx: Option<mpsc::Sender<()>>,
@@ -90,8 +90,8 @@ impl AgentInternal {
         let (started_ch_tx, _) = broadcast::channel(1);
 
         let ai = AgentInternal {
-            on_connected_tx: Some(on_connected_tx),
-            on_connected_rx: Some(on_connected_rx),
+            on_connected_tx: Mutex::new(Some(on_connected_tx)),
+            on_connected_rx: Mutex::new(Some(on_connected_rx)),
 
             // State for closing
             done_tx: Some(done_tx),
@@ -324,7 +324,10 @@ impl AgentInternal {
             }
 
             // Signal connected
-            self.on_connected_tx.take();
+            {
+                let mut on_connected_tx = self.on_connected_tx.lock().await;
+                on_connected_tx.take();
+            }
         } else {
             let mut selected_pair = self.agent_conn.selected_pair.lock().await;
             *selected_pair = None;
