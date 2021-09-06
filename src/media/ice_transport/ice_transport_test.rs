@@ -14,14 +14,14 @@ async fn test_ice_transport_on_selected_candidate_pair_change() -> Result<()> {
 
     let (mut pc_offer, mut pc_answer) = new_pair(&api).await?;
 
-    let (ice_complete_tx, _ice_complete_rx) = mpsc::channel::<()>(1);
+    let (ice_complete_tx, mut ice_complete_rx) = mpsc::channel::<()>(1);
     let ice_complete_tx = Arc::new(Mutex::new(Some(ice_complete_tx)));
     pc_answer
         .on_ice_connection_state_change(Box::new(move |ice_state: ICEConnectionState| {
             let ice_complete_tx2 = Arc::clone(&ice_complete_tx);
             Box::pin(async move {
                 if ice_state == ICEConnectionState::Connected {
-                    tokio::time::sleep(Duration::from_secs(3)).await;
+                    tokio::time::sleep(Duration::from_secs(1)).await; //TODO: why sleep 1s?
                     let mut done = ice_complete_tx2.lock().await;
                     done.take();
                 }
@@ -43,12 +43,12 @@ async fn test_ice_transport_on_selected_candidate_pair_change() -> Result<()> {
 
     signal_pair(&mut pc_offer, &mut pc_answer).await?;
 
-    //TODO: let _ = ice_complete_rx.recv().await;
-    /*TODO:assert_eq!(
+    let _ = ice_complete_rx.recv().await;
+    assert_eq!(
         sender_called_candidate_change.load(Ordering::SeqCst),
         1,
         "Sender ICETransport OnSelectedCandidateChange was never called"
-    );*/
+    );
 
     close_pair_now(&pc_offer, &pc_answer).await;
 
