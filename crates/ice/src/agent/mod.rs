@@ -460,7 +460,6 @@ impl Agent {
             chan_candidate_tx: Arc::clone(&self.internal.chan_candidate_tx),
         };
         tokio::spawn(async move {
-            log::trace!("starting gather_candidates_internal");
             Self::gather_candidates_internal(params).await;
         });
 

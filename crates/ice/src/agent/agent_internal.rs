@@ -551,11 +551,6 @@ impl AgentInternal {
             (*started_ch_tx).as_ref().map(|tx| tx.subscribe())
         };
 
-        log::trace!(
-            "ice add_candidate: start_candidate with {}:{}",
-            c.address(),
-            c.port()
-        );
         self.start_candidate(c, initialized_ch).await;
 
         let network_type = c.network_type();
@@ -592,25 +587,14 @@ impl AgentInternal {
             self.add_pair(c.clone(), cand).await;
         }
 
-        log::trace!(
-            "ice add_candidate: request_connectivity_check with {}:{}",
-            c.address(),
-            c.port()
-        );
         self.request_connectivity_check();
         {
             let chan_candidate_tx = self.chan_candidate_tx.lock().await;
             if let Some(tx) = &*chan_candidate_tx {
-                log::trace!(
-                    "ice add_candidate: chan_candidate_tx.send with {}:{}",
-                    c.address(),
-                    c.port()
-                );
                 let _ = tx.send(Some(c.clone())).await;
             }
         }
 
-        log::trace!("ice exit add_candidate with {}:{}", c.address(), c.port());
         Ok(())
     }
 
@@ -992,15 +976,11 @@ impl AgentInternal {
         mut chan_candidate_rx: mpsc::Receiver<Option<Arc<dyn Candidate + Send + Sync>>>,
         mut chan_candidate_pair_rx: mpsc::Receiver<()>,
     ) {
-        log::trace!("enter start_on_connection_state_change_routine");
         let ai = Arc::clone(self);
         tokio::spawn(async move {
             // CandidatePair and ConnectionState are usually changed at once.
             // Blocking one by the other one causes deadlock.
             while chan_candidate_pair_rx.recv().await.is_some() {
-                log::trace!(
-                    "start_on_connection_state_change_routine: enter chan_candidate_pair_rx.recv"
-                );
                 let selected_pair = {
                     let selected_pair = ai.agent_conn.selected_pair.lock().await;
                     selected_pair.clone()
@@ -1015,9 +995,6 @@ impl AgentInternal {
                         f(&p.local, &p.remote).await;
                     }
                 }
-                log::trace!(
-                    "start_on_connection_state_change_routine: exit chan_candidate_pair_rx.recv"
-                );
             }
         });
 
@@ -1026,7 +1003,6 @@ impl AgentInternal {
             loop {
                 tokio::select! {
                     opt_state = chan_state_rx.recv() => {
-                        log::trace!("start_on_connection_state_change_routine: enter chan_state_rx.recv");
                         if let Some(s) = opt_state {
                             let mut on_connection_state_change_hdlr = ai.on_connection_state_change_hdlr.lock().await;
                             if let Some(f) = &mut *on_connection_state_change_hdlr{
@@ -1041,10 +1017,8 @@ impl AgentInternal {
                             }
                             break;
                         }
-                        log::trace!("start_on_connection_state_change_routine: exit chan_state_rx.recv");
                     },
                     opt_cand = chan_candidate_rx.recv() => {
-                        log::trace!("start_on_connection_state_change_routine: enter chan_candidate_rx.recv");
                         if let Some(c) = opt_cand {
                             let mut on_candidate_hdlr = ai.on_candidate_hdlr.lock().await;
                             if let Some(f) = &mut *on_candidate_hdlr{
@@ -1059,7 +1033,6 @@ impl AgentInternal {
                             }
                             break;
                         }
-                        log::trace!("start_on_connection_state_change_routine: exit chan_candidate_rx.recv");
                     }
                 }
             }
