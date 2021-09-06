@@ -47,17 +47,17 @@ pub type OnCloseHdlrFn =
 /// which can be used for bidirectional peer-to-peer transfers of arbitrary data
 #[derive(Default)]
 pub struct DataChannel {
-    stats_id: String,
-    label: String,
-    ordered: bool,
+    pub(crate) stats_id: String,
+    pub(crate) label: String,
+    pub(crate) ordered: bool,
     pub(crate) max_packet_lifetime: u16,
     pub(crate) max_retransmits: u16,
-    protocol: String,
-    negotiated: bool,
-    id: AtomicU16,
-    ready_state: Arc<AtomicU8>, // DataChannelState
-    buffered_amount_low_threshold: AtomicUsize,
-    detach_called: AtomicBool,
+    pub(crate) protocol: String,
+    pub(crate) negotiated: bool,
+    pub(crate) id: AtomicU16,
+    pub(crate) ready_state: Arc<AtomicU8>, // DataChannelState
+    pub(crate) buffered_amount_low_threshold: AtomicUsize,
+    pub(crate) detach_called: AtomicBool,
 
     // The binaryType represents attribute MUST, on getting, return the value to
     // which it was last set. On setting, if the new value is either the string
@@ -66,18 +66,18 @@ pub struct DataChannel {
     // is created, the binaryType attribute MUST be initialized to the string
     // "blob". This attribute controls how binary data is exposed to scripts.
     // binaryType                 string
-    on_message_handler: Arc<Mutex<Option<OnMessageHdlrFn>>>,
-    on_open_handler: Arc<Mutex<Option<OnOpenHdlrFn>>>,
-    on_close_handler: Arc<Mutex<Option<OnCloseHdlrFn>>>,
-    on_error_handler: Arc<Mutex<Option<OnErrorHdlrFn>>>,
+    pub(crate) on_message_handler: Arc<Mutex<Option<OnMessageHdlrFn>>>,
+    pub(crate) on_open_handler: Arc<Mutex<Option<OnOpenHdlrFn>>>,
+    pub(crate) on_close_handler: Arc<Mutex<Option<OnCloseHdlrFn>>>,
+    pub(crate) on_error_handler: Arc<Mutex<Option<OnErrorHdlrFn>>>,
 
-    on_buffered_amount_low: Mutex<Option<OnBufferedAmountLowFn>>,
+    pub(crate) on_buffered_amount_low: Mutex<Option<OnBufferedAmountLowFn>>,
 
-    sctp_transport: Mutex<Option<Arc<SCTPTransport>>>,
-    data_channel: Mutex<Option<Arc<data::data_channel::DataChannel>>>,
+    pub(crate) sctp_transport: Mutex<Option<Arc<SCTPTransport>>>,
+    pub(crate) data_channel: Mutex<Option<Arc<data::data_channel::DataChannel>>>,
 
     // A reference to the associated api object used by this datachannel
-    setting_engine: Arc<SettingEngine>,
+    pub(crate) setting_engine: Arc<SettingEngine>,
 }
 
 impl DataChannel {

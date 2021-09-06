@@ -82,6 +82,7 @@ impl API {
         certificates: Vec<Certificate>,
     ) -> Result<DTLSTransport> {
         /*TODO: if !certificates.is_empty() {
+
             now := time.Now()
             for _, x509Cert := range certificates {
                 if !x509Cert.Expires().IsZero() && now.After(x509Cert.Expires()) {

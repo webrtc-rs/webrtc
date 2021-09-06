@@ -1,13 +1,10 @@
 use super::*;
+use crate::api::API;
 use crate::data::data_channel::data_channel_config::DataChannelConfig;
 use crate::peer::peer_connection::peer_connection_test::*;
 use crate::peer::peer_connection::PeerConnection;
 
-//use crate::api::media_engine::MediaEngine;
-use crate::api::API;
-//use log::LevelFilter;
 use tokio::sync::mpsc;
-//use tokio::time::Duration;
 
 // EXPECTED_LABEL represents the label of the data channel we are trying to test.
 // Some other channels may have been created during initialization (in the Wasm
@@ -93,7 +90,8 @@ func benchmarkDataChannelSend(b *testing.B, numChannels int) {
 }
 */
 
-/*TODO:
+/*TODO: finish test_data_channel
+use log::LevelFilter;
 use std::io::Write;
 
 #[tokio::test]

@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod sctp_transport_test;
+
 pub mod sctp_transport_capabilities;
 pub mod sctp_transport_state;
 
