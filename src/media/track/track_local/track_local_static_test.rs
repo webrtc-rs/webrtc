@@ -267,6 +267,21 @@ async fn test_track_local_static_payload_type() -> Result<()> {
 // Even though we can pass a pointer we shouldn't modify the incoming value
 #[tokio::test]
 async fn test_track_local_static_mutate_input() -> Result<()> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, LevelFilter::Trace)
+    .init();*/
+
     let mut m = MediaEngine::default();
     m.register_default_codecs()?;
     let api = APIBuilder::new().with_media_engine(m).build();
@@ -312,6 +327,21 @@ async fn test_track_local_static_mutate_input() -> Result<()> {
 // does not block
 #[tokio::test]
 async fn test_track_local_static_binding_non_blocking() -> Result<()> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, LevelFilter::Trace)
+    .init();*/
+
     let mut m = MediaEngine::default();
     m.register_default_codecs()?;
     let api = APIBuilder::new().with_media_engine(m).build();
