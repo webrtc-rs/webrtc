@@ -231,9 +231,10 @@ impl AgentInternal {
     }
 
     /// Returns a list of local candidates stats.
-    pub(crate) fn get_local_candidates_stats(&self) -> Vec<CandidateStats> {
-        let mut res = Vec::with_capacity(self.local_candidates.len());
-        for (network_type, local_candidates) in &self.local_candidates {
+    pub(crate) async fn get_local_candidates_stats(&self) -> Vec<CandidateStats> {
+        let local_candidates = self.local_candidates.lock().await;
+        let mut res = Vec::with_capacity(local_candidates.len());
+        for (network_type, local_candidates) in &*local_candidates {
             for c in local_candidates {
                 let stat = CandidateStats {
                     timestamp: Instant::now(),
@@ -255,9 +256,10 @@ impl AgentInternal {
     }
 
     /// Returns a list of remote candidates stats.
-    pub(crate) fn get_remote_candidates_stats(&self) -> Vec<CandidateStats> {
-        let mut res = Vec::with_capacity(self.remote_candidates.len());
-        for (network_type, remote_candidates) in &self.remote_candidates {
+    pub(crate) async fn get_remote_candidates_stats(&self) -> Vec<CandidateStats> {
+        let remote_candidates = self.remote_candidates.lock().await;
+        let mut res = Vec::with_capacity(remote_candidates.len());
+        for (network_type, remote_candidates) in &*remote_candidates {
             for c in remote_candidates {
                 let stat = CandidateStats {
                     timestamp: Instant::now(),

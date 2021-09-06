@@ -394,7 +394,8 @@ impl Agent {
 
         {
             let ai = self.agent_internal.lock().await;
-            for candidates in ai.local_candidates.values() {
+            let local_candidates = ai.local_candidates.lock().await;
+            for candidates in local_candidates.values() {
                 for candidate in candidates {
                     res.push(Arc::clone(candidate));
                 }
@@ -407,13 +408,15 @@ impl Agent {
     /// Returns the local user credentials.
     pub async fn get_local_user_credentials(&self) -> (String, String) {
         let ai = self.agent_internal.lock().await;
-        (ai.local_ufrag.clone(), ai.local_pwd.clone())
+        let ufrag_pwd = ai.ufrag_pwd.lock().await;
+        (ufrag_pwd.local_ufrag.clone(), ufrag_pwd.local_pwd.clone())
     }
 
     /// Returns the remote user credentials.
     pub async fn get_remote_user_credentials(&self) -> (String, String) {
         let ai = self.agent_internal.lock().await;
-        (ai.remote_ufrag.clone(), ai.remote_pwd.clone())
+        let ufrag_pwd = ai.ufrag_pwd.lock().await;
+        (ufrag_pwd.remote_ufrag.clone(), ufrag_pwd.remote_pwd.clone())
     }
 
     /// Cleans up the Agent.
@@ -440,7 +443,7 @@ impl Agent {
         remote_pwd: String,
     ) -> Result<()> {
         let mut ai = self.agent_internal.lock().await;
-        ai.set_remote_credentials(remote_ufrag, remote_pwd)
+        ai.set_remote_credentials(remote_ufrag, remote_pwd).await
     }
 
     /// Restarts the ICE Agent with the provided ufrag/pwd
@@ -481,10 +484,13 @@ impl Agent {
         }
 
         // Clear all agent needed to take back to fresh state
-        ai.local_ufrag = ufrag;
-        ai.local_pwd = pwd;
-        ai.remote_ufrag = String::new();
-        ai.remote_pwd = String::new();
+        {
+            let mut ufrag_pwd = ai.ufrag_pwd.lock().await;
+            ufrag_pwd.local_ufrag = ufrag;
+            ufrag_pwd.local_pwd = pwd;
+            ufrag_pwd.remote_ufrag = String::new();
+            ufrag_pwd.remote_pwd = String::new();
+        }
         {
             let mut pending_binding_requests = ai.pending_binding_requests.lock().await;
             *pending_binding_requests = vec![];
@@ -561,13 +567,13 @@ impl Agent {
     /// Returns a list of local candidates stats.
     pub async fn get_local_candidates_stats(&self) -> Vec<CandidateStats> {
         let ai = self.agent_internal.lock().await;
-        ai.get_local_candidates_stats()
+        ai.get_local_candidates_stats().await
     }
 
     /// Returns a list of remote candidates stats.
     pub async fn get_remote_candidates_stats(&self) -> Vec<CandidateStats> {
         let ai = self.agent_internal.lock().await;
-        ai.get_remote_candidates_stats()
+        ai.get_remote_candidates_stats().await
     }
 
     async fn resolve_and_add_multicast_candidate(

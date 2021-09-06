@@ -100,7 +100,9 @@ impl AgentInternal {
                 // request.
 
                 let (msg, result) = {
-                    let username = self.remote_ufrag.clone() + ":" + self.local_ufrag.as_str();
+                    let ufrag_pwd = self.ufrag_pwd.lock().await;
+                    let username =
+                        ufrag_pwd.remote_ufrag.clone() + ":" + ufrag_pwd.local_ufrag.as_str();
                     let mut msg = Message::new();
                     let result = msg.build(&[
                         Box::new(BINDING_REQUEST),
@@ -110,7 +112,7 @@ impl AgentInternal {
                         Box::new(AttrControlling(self.tie_breaker.load(Ordering::SeqCst))),
                         Box::new(PriorityAttr(pair.local.priority())),
                         Box::new(MessageIntegrity::new_short_term_integrity(
-                            self.remote_pwd.clone(),
+                            ufrag_pwd.remote_pwd.clone(),
                         )),
                         Box::new(FINGERPRINT),
                     ]);
@@ -263,7 +265,8 @@ impl ControllingSelector for AgentInternal {
         remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
         let (msg, result) = {
-            let username = self.remote_ufrag.clone() + ":" + self.local_ufrag.as_str();
+            let ufrag_pwd = self.ufrag_pwd.lock().await;
+            let username = ufrag_pwd.remote_ufrag.clone() + ":" + ufrag_pwd.local_ufrag.as_str();
             let mut msg = Message::new();
             let result = msg.build(&[
                 Box::new(BINDING_REQUEST),
@@ -272,7 +275,7 @@ impl ControllingSelector for AgentInternal {
                 Box::new(AttrControlling(self.tie_breaker.load(Ordering::SeqCst))),
                 Box::new(PriorityAttr(local.priority())),
                 Box::new(MessageIntegrity::new_short_term_integrity(
-                    self.remote_pwd.clone(),
+                    ufrag_pwd.remote_pwd.clone(),
                 )),
                 Box::new(FINGERPRINT),
             ]);
@@ -414,7 +417,8 @@ impl ControlledSelector for AgentInternal {
         remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
         let (msg, result) = {
-            let username = self.remote_ufrag.clone() + ":" + self.local_ufrag.as_str();
+            let ufrag_pwd = self.ufrag_pwd.lock().await;
+            let username = ufrag_pwd.remote_ufrag.clone() + ":" + ufrag_pwd.local_ufrag.as_str();
             let mut msg = Message::new();
             let result = msg.build(&[
                 Box::new(BINDING_REQUEST),
@@ -423,7 +427,7 @@ impl ControlledSelector for AgentInternal {
                 Box::new(AttrControlled(self.tie_breaker.load(Ordering::SeqCst))),
                 Box::new(PriorityAttr(local.priority())),
                 Box::new(MessageIntegrity::new_short_term_integrity(
-                    self.remote_pwd.clone(),
+                    ufrag_pwd.remote_pwd.clone(),
                 )),
                 Box::new(FINGERPRINT),
             ]);

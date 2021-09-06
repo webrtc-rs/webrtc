@@ -8,6 +8,14 @@ use std::sync::atomic::{AtomicBool, AtomicU64};
 pub type ChanCandidateTx =
     Arc<Mutex<Option<mpsc::Sender<Option<Arc<dyn Candidate + Send + Sync>>>>>>;
 
+#[derive(Default)]
+pub(crate) struct UfragPwd {
+    pub(crate) local_ufrag: String,
+    pub(crate) local_pwd: String,
+    pub(crate) remote_ufrag: String,
+    pub(crate) remote_pwd: String,
+}
+
 pub struct AgentInternal {
     // State owned by the taskLoop
     pub(crate) on_connected_tx: Mutex<Option<mpsc::Sender<()>>>,
@@ -40,12 +48,11 @@ pub struct AgentInternal {
 
     pub(crate) started_ch_tx: Mutex<Option<broadcast::Sender<()>>>,
 
-    pub(crate) local_ufrag: String,
-    pub(crate) local_pwd: String,
-    pub(crate) local_candidates: HashMap<NetworkType, Vec<Arc<dyn Candidate + Send + Sync>>>,
-    pub(crate) remote_ufrag: String,
-    pub(crate) remote_pwd: String,
-    pub(crate) remote_candidates: HashMap<NetworkType, Vec<Arc<dyn Candidate + Send + Sync>>>,
+    pub(crate) ufrag_pwd: Mutex<UfragPwd>,
+
+    pub(crate) local_candidates: Mutex<HashMap<NetworkType, Vec<Arc<dyn Candidate + Send + Sync>>>>,
+    pub(crate) remote_candidates:
+        Mutex<HashMap<NetworkType, Vec<Arc<dyn Candidate + Send + Sync>>>>,
 
     // LRU of outbound Binding request Transaction IDs
     pub(crate) pending_binding_requests: Mutex<Vec<BindingRequest>>,
@@ -109,8 +116,6 @@ impl AgentInternal {
             nominated_pair: Mutex::new(None),
 
             connection_state: AtomicU8::new(ConnectionState::New as u8),
-            local_candidates: HashMap::new(),
-            remote_candidates: HashMap::new(),
 
             insecure_skip_verify: config.insecure_skip_verify,
 
@@ -138,11 +143,10 @@ impl AgentInternal {
             // How often should we run our internal taskLoop to check for state changes when connecting
             check_interval: Duration::from_secs(0),
 
-            local_ufrag: String::new(),
-            local_pwd: String::new(),
+            ufrag_pwd: Mutex::new(UfragPwd::default()),
 
-            remote_ufrag: String::new(),
-            remote_pwd: String::new(),
+            local_candidates: Mutex::new(HashMap::new()),
+            remote_candidates: Mutex::new(HashMap::new()),
 
             // LRU of outbound Binding request Transaction IDs
             pending_binding_requests: Mutex::new(vec![]),
@@ -178,7 +182,8 @@ impl AgentInternal {
             remote_ufrag,
             remote_pwd
         );
-        self.set_remote_credentials(remote_ufrag, remote_pwd)?;
+        self.set_remote_credentials(remote_ufrag, remote_pwd)
+            .await?;
         self.is_controlling.store(is_controlling, Ordering::SeqCst);
         self.start().await;
         {
@@ -506,23 +511,29 @@ impl AgentInternal {
     pub(crate) async fn add_remote_candidate(&mut self, c: &Arc<dyn Candidate + Send + Sync>) {
         let network_type = c.network_type();
 
-        if let Some(cands) = self.remote_candidates.get(&network_type) {
-            for cand in cands {
-                if cand.equal(&**c) {
-                    return;
+        {
+            let mut remote_candidates = self.remote_candidates.lock().await;
+            if let Some(cands) = remote_candidates.get(&network_type) {
+                for cand in cands {
+                    if cand.equal(&**c) {
+                        return;
+                    }
                 }
+            }
+
+            if let Some(cands) = remote_candidates.get_mut(&network_type) {
+                cands.push(c.clone());
+            } else {
+                remote_candidates.insert(network_type, vec![c.clone()]);
             }
         }
 
-        if let Some(cands) = self.remote_candidates.get_mut(&network_type) {
-            cands.push(c.clone());
-        } else {
-            self.remote_candidates.insert(network_type, vec![c.clone()]);
-        }
-
         let mut local_cands = vec![];
-        if let Some(cands) = self.local_candidates.get(&network_type) {
-            local_cands = cands.clone();
+        {
+            let local_candidates = self.local_candidates.lock().await;
+            if let Some(cands) = local_candidates.get(&network_type) {
+                local_cands = cands.clone();
+            }
         }
 
         for cand in local_cands {
@@ -550,28 +561,33 @@ impl AgentInternal {
         self.start_candidate(c, ai, initialized_ch).await;
 
         let network_type = c.network_type();
-
-        if let Some(cands) = self.local_candidates.get(&network_type) {
-            for cand in cands {
-                if cand.equal(&**c) {
-                    if let Err(err) = c.close().await {
-                        log::warn!("Failed to close duplicate candidate: {}", err);
+        {
+            let mut local_candidates = self.local_candidates.lock().await;
+            if let Some(cands) = local_candidates.get(&network_type) {
+                for cand in cands {
+                    if cand.equal(&**c) {
+                        if let Err(err) = c.close().await {
+                            log::warn!("Failed to close duplicate candidate: {}", err);
+                        }
+                        //TODO: why return?
+                        return Ok(());
                     }
-                    //TODO: why return?
-                    return Ok(());
                 }
+            }
+
+            if let Some(cands) = local_candidates.get_mut(&network_type) {
+                cands.push(c.clone());
+            } else {
+                local_candidates.insert(network_type, vec![c.clone()]);
             }
         }
 
-        if let Some(cands) = self.local_candidates.get_mut(&network_type) {
-            cands.push(c.clone());
-        } else {
-            self.local_candidates.insert(network_type, vec![c.clone()]);
-        }
-
         let mut remote_cands = vec![];
-        if let Some(cands) = self.remote_candidates.get(&network_type) {
-            remote_cands = cands.clone();
+        {
+            let remote_candidates = self.remote_candidates.lock().await;
+            if let Some(cands) = remote_candidates.get(&network_type) {
+                remote_cands = cands.clone();
+            }
         }
 
         for cand in remote_cands {
@@ -641,33 +657,40 @@ impl AgentInternal {
     ///
     /// This is used for restarts, failures and on close.
     pub(crate) async fn delete_all_candidates(&mut self) {
-        for cs in &mut self.local_candidates.values_mut() {
-            for c in cs {
-                if let Err(err) = c.close().await {
-                    log::warn!("Failed to close candidate {}: {}", c, err);
+        {
+            let mut local_candidates = self.local_candidates.lock().await;
+            for cs in local_candidates.values_mut() {
+                for c in cs {
+                    if let Err(err) = c.close().await {
+                        log::warn!("Failed to close candidate {}: {}", c, err);
+                    }
                 }
             }
+            local_candidates.clear();
         }
-        self.local_candidates.clear();
 
-        for cs in self.remote_candidates.values_mut() {
-            for c in cs {
-                if let Err(err) = c.close().await {
-                    log::warn!("Failed to close candidate {}: {}", c, err);
+        {
+            let mut remote_candidates = self.remote_candidates.lock().await;
+            for cs in remote_candidates.values_mut() {
+                for c in cs {
+                    if let Err(err) = c.close().await {
+                        log::warn!("Failed to close candidate {}: {}", c, err);
+                    }
                 }
             }
+            remote_candidates.clear();
         }
-        self.remote_candidates.clear();
     }
 
-    pub(crate) fn find_remote_candidate(
+    pub(crate) async fn find_remote_candidate(
         &self,
         network_type: NetworkType,
         addr: SocketAddr,
     ) -> Option<Arc<dyn Candidate + Send + Sync>> {
         let (ip, port) = (addr.ip(), addr.port());
 
-        if let Some(cands) = self.remote_candidates.get(&network_type) {
+        let remote_candidates = self.remote_candidates.lock().await;
+        if let Some(cands) = remote_candidates.get(&network_type) {
             for c in cands {
                 if c.address() == ip.to_string() && c.port() == port {
                     return Some(c.clone());
@@ -708,6 +731,10 @@ impl AgentInternal {
     ) {
         let addr = remote.addr().await;
         let (ip, port) = (addr.ip(), addr.port());
+        let local_pwd = {
+            let ufrag_pwd = self.ufrag_pwd.lock().await;
+            ufrag_pwd.local_pwd.clone()
+        };
 
         let (out, result) = {
             let mut out = Message::new();
@@ -715,9 +742,7 @@ impl AgentInternal {
                 Box::new(m.clone()),
                 Box::new(BINDING_SUCCESS),
                 Box::new(XorMappedAddress { ip, port }),
-                Box::new(MessageIntegrity::new_short_term_integrity(
-                    self.local_pwd.clone(),
-                )),
+                Box::new(MessageIntegrity::new_short_term_integrity(local_pwd)),
                 Box::new(FINGERPRINT),
             ]);
             (out, result)
@@ -814,11 +839,18 @@ impl AgentInternal {
             return;
         }
 
-        let mut remote_candidate = self.find_remote_candidate(local.network_type(), remote);
+        let mut remote_candidate = self
+            .find_remote_candidate(local.network_type(), remote)
+            .await;
         if m.typ.class == CLASS_SUCCESS_RESPONSE {
-            if let Err(err) = assert_inbound_message_integrity(m, self.remote_pwd.as_bytes()) {
-                log::warn!("discard message from ({}), {}", remote, err);
-                return;
+            {
+                let ufrag_pwd = self.ufrag_pwd.lock().await;
+                if let Err(err) =
+                    assert_inbound_message_integrity(m, ufrag_pwd.remote_pwd.as_bytes())
+                {
+                    log::warn!("discard message from ({}), {}", remote, err);
+                    return;
+                }
             }
 
             if let Some(rc) = &remote_candidate {
@@ -828,14 +860,19 @@ impl AgentInternal {
                 return;
             }
         } else if m.typ.class == CLASS_REQUEST {
-            let username = self.local_ufrag.clone() + ":" + self.remote_ufrag.as_str();
-            if let Err(err) = assert_inbound_username(m, &username) {
-                log::warn!("discard message from ({}), {}", remote, err);
-                return;
-            } else if let Err(err) = assert_inbound_message_integrity(m, self.local_pwd.as_bytes())
             {
-                log::warn!("discard message from ({}), {}", remote, err);
-                return;
+                let ufrag_pwd = self.ufrag_pwd.lock().await;
+                let username =
+                    ufrag_pwd.local_ufrag.clone() + ":" + ufrag_pwd.remote_ufrag.as_str();
+                if let Err(err) = assert_inbound_username(m, &username) {
+                    log::warn!("discard message from ({}), {}", remote, err);
+                    return;
+                } else if let Err(err) =
+                    assert_inbound_message_integrity(m, ufrag_pwd.local_pwd.as_bytes())
+                {
+                    log::warn!("discard message from ({}), {}", remote, err);
+                    return;
+                }
             }
 
             if remote_candidate.is_none() {
@@ -887,6 +924,7 @@ impl AgentInternal {
         remote: SocketAddr,
     ) -> bool {
         self.find_remote_candidate(local.network_type(), remote)
+            .await
             .map_or(false, |remote_candidate| {
                 remote_candidate.seen(false);
                 true
@@ -894,7 +932,7 @@ impl AgentInternal {
     }
 
     /// Sets the credentials of the remote agent.
-    pub(crate) fn set_remote_credentials(
+    pub(crate) async fn set_remote_credentials(
         &mut self,
         remote_ufrag: String,
         remote_pwd: String,
@@ -905,8 +943,9 @@ impl AgentInternal {
             return Err(Error::ErrRemotePwdEmpty.into());
         }
 
-        self.remote_ufrag = remote_ufrag;
-        self.remote_pwd = remote_pwd;
+        let mut ufrag_pwd = self.ufrag_pwd.lock().await;
+        ufrag_pwd.remote_ufrag = remote_ufrag;
+        ufrag_pwd.remote_pwd = remote_pwd;
         Ok(())
     }
 
