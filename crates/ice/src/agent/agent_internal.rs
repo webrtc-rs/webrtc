@@ -3,7 +3,7 @@ use super::*;
 use crate::candidate::candidate_base::{CandidateBase, CandidateBaseConfig};
 use crate::candidate::candidate_peer_reflexive::CandidatePeerReflexiveConfig;
 use crate::util::*;
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicBool, AtomicU64};
 
 pub type ChanCandidateTx =
     Arc<Mutex<Option<mpsc::Sender<Option<Arc<dyn Candidate + Send + Sync>>>>>>;
@@ -30,9 +30,9 @@ pub struct AgentInternal {
     pub(crate) on_candidate_hdlr: Arc<Mutex<Option<OnCandidateHdlrFn>>>,
 
     pub(crate) tie_breaker: AtomicU64,
+    pub(crate) is_controlling: AtomicBool,
+    pub(crate) lite: AtomicBool,
 
-    pub(crate) is_controlling: bool,
-    pub(crate) lite: bool,
     pub(crate) start_time: Instant,
     pub(crate) nominated_pair: Option<Arc<CandidatePair>>,
 
@@ -112,9 +112,9 @@ impl AgentInternal {
             on_candidate_hdlr: Arc::new(Mutex::new(None)),
 
             tie_breaker: AtomicU64::new(rand::random::<u64>()),
+            is_controlling: AtomicBool::new(config.is_controlling),
+            lite: AtomicBool::new(config.lite),
 
-            lite: config.lite,
-            is_controlling: config.is_controlling,
             start_time: Instant::now(),
             nominated_pair: None,
 
@@ -186,7 +186,7 @@ impl AgentInternal {
             remote_pwd
         );
         self.set_remote_credentials(remote_ufrag, remote_pwd)?;
-        self.is_controlling = is_controlling;
+        self.is_controlling.store(is_controlling, Ordering::SeqCst);
         self.start();
         self.started_ch_tx.take();
 
@@ -396,7 +396,11 @@ impl AgentInternal {
         local: Arc<dyn Candidate + Send + Sync>,
         remote: Arc<dyn Candidate + Send + Sync>,
     ) {
-        let p = Arc::new(CandidatePair::new(local, remote, self.is_controlling));
+        let p = Arc::new(CandidatePair::new(
+            local,
+            remote,
+            self.is_controlling.load(Ordering::SeqCst),
+        ));
         let mut checklist = self.agent_conn.checklist.lock().await;
         checklist.push(p);
     }
@@ -789,7 +793,7 @@ impl AgentInternal {
             return;
         }
 
-        if self.is_controlling {
+        if self.is_controlling.load(Ordering::SeqCst) {
             if m.contains(ATTR_ICE_CONTROLLING) {
                 log::debug!("inbound isControlling && a.isControlling == true");
                 return;

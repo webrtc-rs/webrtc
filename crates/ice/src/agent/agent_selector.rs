@@ -130,7 +130,7 @@ impl AgentInternal {
     }
 
     pub(crate) fn start(&mut self) {
-        if self.is_controlling {
+        if self.is_controlling.load(Ordering::SeqCst) {
             ControllingSelector::start(self);
         } else {
             ControlledSelector::start(self);
@@ -138,7 +138,7 @@ impl AgentInternal {
     }
 
     pub(crate) async fn contact_candidates(&mut self) {
-        if self.is_controlling {
+        if self.is_controlling.load(Ordering::SeqCst) {
             ControllingSelector::contact_candidates(self).await;
         } else {
             ControlledSelector::contact_candidates(self).await;
@@ -150,7 +150,7 @@ impl AgentInternal {
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
-        if self.is_controlling {
+        if self.is_controlling.load(Ordering::SeqCst) {
             ControllingSelector::ping_candidate(self, local, remote).await;
         } else {
             ControlledSelector::ping_candidate(self, local, remote).await;
@@ -164,7 +164,7 @@ impl AgentInternal {
         remote: &Arc<dyn Candidate + Send + Sync>,
         remote_addr: SocketAddr,
     ) {
-        if self.is_controlling {
+        if self.is_controlling.load(Ordering::SeqCst) {
             ControllingSelector::handle_success_response(self, m, local, remote, remote_addr).await;
         } else {
             ControlledSelector::handle_success_response(self, m, local, remote, remote_addr).await;
@@ -177,7 +177,7 @@ impl AgentInternal {
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
-        if self.is_controlling {
+        if self.is_controlling.load(Ordering::SeqCst) {
             ControllingSelector::handle_binding_request(self, m, local, remote).await;
         } else {
             ControlledSelector::handle_binding_request(self, m, local, remote).await;
@@ -194,7 +194,7 @@ impl ControllingSelector for AgentInternal {
 
     async fn contact_candidates(&mut self) {
         // A lite selector should not contact candidates
-        if self.lite {
+        if self.lite.load(Ordering::SeqCst) {
             // This only happens if both peers are lite. See RFC 8445 S6.1.1 and S6.2
             log::trace!("now falling back to full agent");
         }
@@ -363,7 +363,7 @@ impl ControlledSelector for AgentInternal {
 
     async fn contact_candidates(&mut self) {
         // A lite selector should not contact candidates
-        if self.lite {
+        if self.lite.load(Ordering::SeqCst) {
             self.validate_selected_pair().await;
         } else if self.agent_conn.get_selected_pair().await.is_some() {
             if self.validate_selected_pair().await {

@@ -158,7 +158,9 @@ impl Agent {
             config.candidate_types.clone()
         };
 
-        if ai.lite && (candidate_types.len() != 1 || candidate_types[0] != CandidateType::Host) {
+        if ai.lite.load(Ordering::SeqCst)
+            && (candidate_types.len() != 1 || candidate_types[0] != CandidateType::Host)
+        {
             Self::close_multicast_conn(&mdns_conn).await;
             return Err(Error::ErrLiteUsingNonHostCandidates.into());
         }
