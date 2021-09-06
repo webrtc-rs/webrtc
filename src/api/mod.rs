@@ -4,12 +4,12 @@ mod api_test;
 pub mod media_engine;
 pub mod setting_engine;
 
+use crate::media::dtls_transport::dtls_certificate::Certificate;
 use crate::media::dtls_transport::DTLSTransport;
 use crate::media::ice_transport::ICETransport;
 use crate::peer::ice::ice_gather::ice_gatherer::ICEGatherer;
 use crate::peer::ice::ice_gather::ICEGatherOptions;
 
-use dtls::crypto::Certificate;
 use media_engine::*;
 use setting_engine::*;
 
@@ -79,19 +79,20 @@ impl API {
     pub fn new_dtls_transport(
         &self,
         ice_transport: Arc<ICETransport>,
-        certificates: Vec<Certificate>,
+        _dtls_certificates: Vec<Certificate>,
     ) -> Result<DTLSTransport> {
-        /*TODO: if !certificates.is_empty() {
-
-            now := time.Now()
+        let certificates = vec![];
+        /*TODO: if !dtls_certificates.is_empty() {
+            /*now := time.Now()
             for _, x509Cert := range certificates {
                 if !x509Cert.Expires().IsZero() && now.After(x509Cert.Expires()) {
                     return nil, &rtcerr.InvalidAccessError{Err: ErrCertificateExpired}
                 }
                 t.certificates = append(t.certificates, x509Cert)
-            }
+            }*/
+            vec![]
         } else {
-            sk, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+            /*sk, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
             if err != nil {
                 return nil, &rtcerr.UnknownError{Err: err}
             }
@@ -99,8 +100,9 @@ impl API {
             if err != nil {
                 return nil, err
             }
-            t.certificates = []Certificate{*certificate}
-        }*/
+            t.certificates = []Certificate{*certificate}*/
+            vec![]
+        };*/
 
         Ok(DTLSTransport::new(
             ice_transport,

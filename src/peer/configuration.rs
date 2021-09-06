@@ -1,10 +1,9 @@
+use crate::media::dtls_transport::dtls_certificate::Certificate;
 use crate::peer::ice::ice_server::ICEServer;
 use crate::peer::policy::bundle_policy::BundlePolicy;
 use crate::peer::policy::ice_transport_policy::ICETransportPolicy;
 use crate::peer::policy::rtcp_mux_policy::RTCPMuxPolicy;
 use crate::peer::policy::sdp_semantics::SDPSemantics;
-
-use dtls::crypto::Certificate;
 
 /// A Configuration defines how peer-to-peer communication via PeerConnection
 /// is established or re-established.
