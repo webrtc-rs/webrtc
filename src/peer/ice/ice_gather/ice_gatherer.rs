@@ -147,7 +147,7 @@ impl ICEGatherer {
 
         {
             let mut agent = self.agent.lock().await;
-            *agent = Some(Arc::new(ice::agent::Agent::new(config).await?))
+            *agent = Some(Arc::new(ice::agent::Agent::new(config).await?));
         }
 
         Ok(())
@@ -224,11 +224,15 @@ impl ICEGatherer {
 
     /// Close prunes all local candidates, and closes the ports.
     pub async fn close(&self) -> Result<()> {
-        let mut agent_opt = self.agent.lock().await;
-        if let Some(agent) = agent_opt.take() {
+        let agent = {
+            let mut agent_opt = self.agent.lock().await;
+            agent_opt.take()
+        };
+
+        if let Some(agent) = agent {
             agent.close().await?;
-            self.set_state(ICEGathererState::Closed).await;
         }
+        self.set_state(ICEGathererState::Closed).await;
 
         Ok(())
     }

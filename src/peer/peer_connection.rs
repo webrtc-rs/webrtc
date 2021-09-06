@@ -38,8 +38,8 @@ use crate::data::data_channel::data_channel_state::DataChannelState;
 use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use crate::data::sctp_transport::sctp_transport_state::SCTPTransportState;
 use crate::error::Error;
-//use crate::media::dtls_transport::dtls_fingerprint::DTLSFingerprint;
-//use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
+use crate::media::dtls_transport::dtls_fingerprint::DTLSFingerprint;
+use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
 use crate::media::dtls_transport::dtls_role::{
     DTLSRole, DEFAULT_DTLS_ROLE_ANSWER, DEFAULT_DTLS_ROLE_OFFER,
 };
@@ -53,7 +53,7 @@ use crate::peer::ice::ice_candidate::{ICECandidate, ICECandidateInit};
 use crate::peer::ice::ice_gather::ice_gatherer_state::ICEGathererState;
 use crate::peer::ice::ice_gather::ice_gathering_state::ICEGatheringState;
 use crate::peer::ice::ice_role::ICERole;
-//use crate::peer::ice::ICEParameters;
+use crate::peer::ice::ICEParameters;
 use crate::peer::offer_answer_options::{AnswerOptions, OfferOptions};
 use crate::peer::operation::{Operation, Operations};
 use crate::peer::sdp::sdp_type::SDPType;
@@ -68,6 +68,7 @@ use ice::candidate::candidate_base::unmarshal_candidate;
 use ice::candidate::Candidate;
 use sdp::session_description::{ATTR_KEY_ICELITE, ATTR_KEY_MSID};
 use sdp::util::ConnectionRole;
+use srtp::stream::Stream;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
@@ -555,7 +556,6 @@ impl PeerConnection {
         >,
         cs: PeerConnectionState,
     ) {
-        log::info!("Peer connection state changed: {}", cs);
         let mut handler = on_peer_connection_state_change_handler.lock().await;
         if let Some(f) = &mut *handler {
             f(cs).await;
@@ -1399,6 +1399,11 @@ impl PeerConnection {
                     let fp = fingerprint.clone();
                     let fp_hash = fingerprint_hash.clone();
                     Box::pin(async move {
+                        log::trace!(
+                            "start_transports: ice_role={}, dtls_role={}",
+                            ice_role,
+                            dtls_role
+                        );
                         pc.start_transports(ice_role, dtls_role, ru, rp, fp, fp_hash)
                             .await;
 
@@ -2015,6 +2020,7 @@ impl PeerConnection {
                     _ => ICEGatheringState::Complete,
                 };
                 if state == ICEGatheringState::Complete {
+                    log::trace!("ICEGatheringState::Complete");
                     done.take();
                 }
                 Box::pin(async move {})
