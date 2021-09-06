@@ -17,7 +17,7 @@ use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Certificate {
     pub certificate: rustls::Certificate,
     pub private_key: CryptoPrivateKey,
@@ -134,15 +134,30 @@ pub(crate) fn value_key_message(
     plaintext
 }
 
-pub(crate) enum CryptoPrivateKeyKind {
+pub enum CryptoPrivateKeyKind {
     Ed25519(Ed25519KeyPair),
     Ecdsa256(EcdsaKeyPair),
     Rsa256(RsaKeyPair),
 }
 
 pub struct CryptoPrivateKey {
-    pub(crate) kind: CryptoPrivateKeyKind,
-    pub(crate) serialized_der: Vec<u8>,
+    pub kind: CryptoPrivateKeyKind,
+    pub serialized_der: Vec<u8>,
+}
+
+impl PartialEq for CryptoPrivateKey {
+    fn eq(&self, other: &Self) -> bool {
+        if self.serialized_der != other.serialized_der {
+            return false;
+        }
+
+        match (&self.kind, &other.kind) {
+            (CryptoPrivateKeyKind::Rsa256(_), CryptoPrivateKeyKind::Rsa256(_)) => true,
+            (CryptoPrivateKeyKind::Ecdsa256(_), CryptoPrivateKeyKind::Ecdsa256(_)) => true,
+            (CryptoPrivateKeyKind::Ed25519(_), CryptoPrivateKeyKind::Ed25519(_)) => true,
+            _ => false,
+        }
+    }
 }
 
 impl Clone for CryptoPrivateKey {
