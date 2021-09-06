@@ -52,6 +52,21 @@ impl fmt::Display for ConnectionState {
     }
 }
 
+impl From<u8> for ConnectionState {
+    fn from(v: u8) -> Self {
+        match v {
+            1 => Self::New,
+            2 => Self::Checking,
+            3 => Self::Connected,
+            4 => Self::Completed,
+            5 => Self::Failed,
+            6 => Self::Disconnected,
+            7 => Self::Closed,
+            _ => Self::Unspecified,
+        }
+    }
+}
+
 /// Describes the state of the candidate gathering process.
 #[derive(PartialEq, Copy, Clone)]
 pub enum GatheringState {

@@ -498,7 +498,7 @@ impl Agent {
 
         // Restart is used by NewAgent. Accept/Connect should be used to move to checking
         // for new Agents
-        if ai.connection_state != ConnectionState::New {
+        if ai.connection_state.load(Ordering::SeqCst) != ConnectionState::New as u8 {
             ai.update_connection_state(ConnectionState::Checking).await;
         }
 

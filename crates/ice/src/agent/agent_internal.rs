@@ -36,7 +36,7 @@ pub struct AgentInternal {
     pub(crate) start_time: Mutex<Instant>,
     pub(crate) nominated_pair: Mutex<Option<Arc<CandidatePair>>>,
 
-    pub(crate) connection_state: ConnectionState,
+    pub(crate) connection_state: AtomicU8, //ConnectionState,
 
     pub(crate) started_ch_tx: Option<broadcast::Sender<()>>,
 
@@ -118,7 +118,7 @@ impl AgentInternal {
             start_time: Mutex::new(Instant::now()),
             nominated_pair: Mutex::new(None),
 
-            connection_state: ConnectionState::New,
+            connection_state: AtomicU8::new(ConnectionState::New as u8),
             local_candidates: HashMap::new(),
             remote_candidates: HashMap::new(),
 
@@ -206,15 +206,15 @@ impl AgentInternal {
         checking_duration: &mut Instant,
     ) {
         let mut ai = agent_internal.lock().await;
-        if ai.connection_state == ConnectionState::Failed {
+        if ai.connection_state.load(Ordering::SeqCst) == ConnectionState::Failed as u8 {
             // The connection is currently failed so don't send any checks
             // In the future it may be restarted though
-            *last_connection_state = ai.connection_state;
+            *last_connection_state = ai.connection_state.load(Ordering::SeqCst).into();
             return;
         }
-        if ai.connection_state == ConnectionState::Checking {
+        if ai.connection_state.load(Ordering::SeqCst) == ConnectionState::Checking as u8 {
             // We have just entered checking for the first time so update our checking timer
-            if *last_connection_state != ai.connection_state {
+            if *last_connection_state as u8 != ai.connection_state.load(Ordering::SeqCst) {
                 *checking_duration = Instant::now();
             }
 
@@ -223,14 +223,14 @@ impl AgentInternal {
                 > ai.disconnected_timeout + ai.failed_timeout
             {
                 ai.update_connection_state(ConnectionState::Failed).await;
-                *last_connection_state = ai.connection_state;
+                *last_connection_state = ai.connection_state.load(Ordering::SeqCst).into();
                 return;
             }
         }
 
         ai.contact_candidates().await;
 
-        *last_connection_state = ai.connection_state;
+        *last_connection_state = ai.connection_state.load(Ordering::SeqCst).into();
     }
 
     async fn connectivity_checks(&mut self, agent_internal: Arc<Mutex<Self>>) {
@@ -297,14 +297,15 @@ impl AgentInternal {
     }
 
     pub(crate) async fn update_connection_state(&mut self, new_state: ConnectionState) {
-        if self.connection_state != new_state {
+        if self.connection_state.load(Ordering::SeqCst) != new_state as u8 {
             // Connection has gone to failed, release all gathered candidates
             if new_state == ConnectionState::Failed {
                 self.delete_all_candidates().await;
             }
 
             log::info!("Setting new connection state: {}", new_state);
-            self.connection_state = new_state;
+            self.connection_state
+                .store(new_state as u8, Ordering::SeqCst);
 
             // Call handler after finishing current task since we may be holding the agent lock
             // and the handler may also require it
