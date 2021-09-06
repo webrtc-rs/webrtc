@@ -208,7 +208,8 @@ impl Agent {
                             mapped_ip = mi;
                         } else {
                             log::warn!(
-                                "1:1 NAT mapping is enabled but no external IP is found for {}",
+                                "[{}]: 1:1 NAT mapping is enabled but no external IP is found for {}",
+                                agent_internal.get_name(),
                                 ip
                             );
                         }
@@ -253,7 +254,13 @@ impl Agent {
                 {
                     Ok(conn) => conn,
                     Err(err) => {
-                        log::warn!("could not listen {} {}: {}", network, ip, err);
+                        log::warn!(
+                            "[{}]: could not listen {} {}: {}",
+                            agent_internal.get_name(),
+                            network,
+                            ip,
+                            err
+                        );
                         continue;
                     }
                 };
@@ -261,7 +268,11 @@ impl Agent {
                 let port = match conn.local_addr().await {
                     Ok(addr) => addr.port(),
                     Err(err) => {
-                        log::warn!("could not get local addr: {}", err);
+                        log::warn!(
+                            "[{}]: could not get local addr: {}",
+                            agent_internal.get_name(),
+                            err
+                        );
                         continue;
                     }
                 };
@@ -284,7 +295,8 @@ impl Agent {
                             if mdns_mode == MulticastDnsMode::QueryAndGather {
                                 if let Err(err) = candidate.set_ip(&ip).await {
                                     log::warn!(
-                                        "Failed to create host candidate: {} {} {}: {:?}",
+                                        "[{}]: Failed to create host candidate: {} {} {}: {:?}",
+                                        agent_internal.get_name(),
                                         network,
                                         mapped_ip,
                                         port,
@@ -297,7 +309,8 @@ impl Agent {
                         }
                         Err(err) => {
                             log::warn!(
-                                "Failed to create host candidate: {} {} {}: {}",
+                                "[{}]: Failed to create host candidate: {} {} {}: {}",
+                                agent_internal.get_name(),
                                 network,
                                 mapped_ip,
                                 port,
@@ -310,10 +323,15 @@ impl Agent {
                 {
                     if let Err(err) = agent_internal.add_candidate(&candidate).await {
                         if let Err(close_err) = candidate.close().await {
-                            log::warn!("Failed to close candidate: {}", close_err);
+                            log::warn!(
+                                "[{}]: Failed to close candidate: {}",
+                                agent_internal.get_name(),
+                                close_err
+                            );
                         }
                         log::warn!(
-                            "Failed to append to localCandidates and run onCandidateHdlr: {}",
+                            "[{}]: Failed to append to localCandidates and run onCandidateHdlr: {}",
+                            agent_internal.get_name(),
                             err
                         );
                     }
@@ -362,7 +380,12 @@ impl Agent {
                 {
                     Ok(conn) => conn,
                     Err(err) => {
-                        log::warn!("Failed to listen {}: {}", network, err);
+                        log::warn!(
+                            "[{}]: Failed to listen {}: {}",
+                            agent_internal2.get_name(),
+                            network,
+                            err
+                        );
                         return Ok(());
                     }
                 };
@@ -374,7 +397,8 @@ impl Agent {
                             Ok(ip) => ip,
                             Err(err) => {
                                 log::warn!(
-                                    "1:1 NAT mapping is enabled but no external IP is found for {}: {}",
+                                    "[{}]: 1:1 NAT mapping is enabled but no external IP is found for {}: {}",
+                                    agent_internal2.get_name(),
                                     laddr,
                                     err
                                 );
@@ -382,7 +406,10 @@ impl Agent {
                             }
                         }
                     } else {
-                        log::error!("ext_ip_mapper is None in gather_candidates_srflx_mapped");
+                        log::error!(
+                            "[{}]: ext_ip_mapper is None in gather_candidates_srflx_mapped",
+                            agent_internal2.get_name(),
+                        );
                         return Ok(());
                     }
                 };
@@ -405,7 +432,8 @@ impl Agent {
                         Ok(candidate) => Arc::new(candidate),
                         Err(err) => {
                             log::warn!(
-                                "Failed to create server reflexive candidate: {} {} {}: {}",
+                                "[{}]: Failed to create server reflexive candidate: {} {} {}: {}",
+                                agent_internal2.get_name(),
                                 network,
                                 mapped_ip,
                                 laddr.port(),
@@ -418,10 +446,15 @@ impl Agent {
                 {
                     if let Err(err) = agent_internal2.add_candidate(&candidate).await {
                         if let Err(close_err) = candidate.close().await {
-                            log::warn!("Failed to close candidate: {}", close_err);
+                            log::warn!(
+                                "[{}]: Failed to close candidate: {}",
+                                agent_internal2.get_name(),
+                                close_err
+                            );
                         }
                         log::warn!(
-                            "Failed to append to localCandidates and run onCandidateHdlr: {}",
+                            "[{}]: Failed to append to localCandidates and run onCandidateHdlr: {}",
+                            agent_internal2.get_name(),
                             err
                         );
                     }
@@ -465,7 +498,12 @@ impl Agent {
                     let server_addr = match net2.resolve_addr(is_ipv4, &host_port).await {
                         Ok(addr) => addr,
                         Err(err) => {
-                            log::warn!("failed to resolve stun host: {}: {}", host_port, err);
+                            log::warn!(
+                                "[{}]: failed to resolve stun host: {}: {}",
+                                agent_internal2.get_name(),
+                                host_port,
+                                err
+                            );
                             return Ok(());
                         }
                     };
@@ -484,7 +522,12 @@ impl Agent {
                     {
                         Ok(conn) => conn,
                         Err(err) => {
-                            log::warn!("Failed to listen for {}: {}", server_addr, err);
+                            log::warn!(
+                                "[{}]: Failed to listen for {}: {}",
+                                agent_internal2.get_name(),
+                                server_addr,
+                                err
+                            );
                             return Ok(());
                         }
                     };
@@ -494,7 +537,8 @@ impl Agent {
                             Ok(xoraddr) => xoraddr,
                             Err(err) => {
                                 log::warn!(
-                                    "could not get server reflexive address {} {}: {}",
+                                    "[{}]: could not get server reflexive address {} {}: {}",
+                                    agent_internal2.get_name(),
                                     network,
                                     url,
                                     err
@@ -524,12 +568,13 @@ impl Agent {
                             Ok(candidate) => Arc::new(candidate),
                             Err(err) => {
                                 log::warn!(
-                                    "Failed to create server reflexive candidate: {} {} {}: {:?}",
-                                    network,
-                                    ip,
-                                    port,
-                                    err
-                                );
+                                "[{}]: Failed to create server reflexive candidate: {} {} {}: {:?}",
+                                agent_internal2.get_name(),
+                                network,
+                                ip,
+                                port,
+                                err
+                            );
                                 return Ok(());
                             }
                         };
@@ -537,10 +582,15 @@ impl Agent {
                     {
                         if let Err(err) = agent_internal2.add_candidate(&candidate).await {
                             if let Err(close_err) = candidate.close().await {
-                                log::warn!("Failed to close candidate: {}", close_err);
+                                log::warn!(
+                                    "[{}]: Failed to close candidate: {}",
+                                    agent_internal2.get_name(),
+                                    close_err
+                                );
                             }
                             log::warn!(
-                                "Failed to append to localCandidates and run onCandidateHdlr: {}",
+                                "[{}]: Failed to append to localCandidates and run onCandidateHdlr: {}",
+                                agent_internal2.get_name(),
                                 err
                             );
                         }
@@ -567,14 +617,16 @@ impl Agent {
             }
             if url.username.is_empty() {
                 log::error!(
-                    "Failed to gather relay candidates: {:?}",
+                    "[{}]:Failed to gather relay candidates: {:?}",
+                    agent_internal.get_name(),
                     Error::ErrUsernameEmpty
                 );
                 return;
             }
             if url.password.is_empty() {
                 log::error!(
-                    "Failed to gather relay candidates: {:?}",
+                    "[{}]: Failed to gather relay candidates: {:?}",
+                    agent_internal.get_name(),
                     Error::ErrPasswordEmpty
                 );
                 return;
@@ -595,7 +647,11 @@ impl Agent {
                         let loc_conn = match net2.bind(SocketAddr::from_str("0.0.0.0:0")?).await {
                             Ok(c) => c,
                             Err(err) => {
-                                log::warn!("Failed to listen due to error: {}", err);
+                                log::warn!(
+                                    "[{}]: Failed to listen due to error: {}",
+                                    agent_internal2.get_name(),
+                                    err
+                                );
                                 return Ok(());
                             }
                         };
@@ -609,7 +665,11 @@ impl Agent {
                     case url.Proto == ProtoTypeTCP && url.Scheme == SchemeTypeTURN:
                     case url.Proto == ProtoTypeTCP && url.Scheme == SchemeTypeTURNS:*/
                     } else {
-                        log::warn!("Unable to handle URL in gather_candidates_relay {}", url);
+                        log::warn!(
+                            "[{}]: Unable to handle URL in gather_candidates_relay {}",
+                            agent_internal2.get_name(),
+                            url
+                        );
                         return Ok(());
                     };
 
@@ -628,7 +688,8 @@ impl Agent {
                     Ok(client) => Arc::new(client),
                     Err(err) => {
                         log::warn!(
-                            "Failed to build new turn.Client {} {}\n",
+                            "[{}]: Failed to build new turn.Client {} {}\n",
+                            agent_internal2.get_name(),
                             turn_server_addr,
                             err
                         );
@@ -638,7 +699,8 @@ impl Agent {
                 if let Err(err) = client.listen().await {
                     let _ = client.close().await;
                     log::warn!(
-                        "Failed to listen on turn.Client {} {}",
+                        "[{}]: Failed to listen on turn.Client {} {}",
+                        agent_internal2.get_name(),
                         turn_server_addr,
                         err
                     );
@@ -650,7 +712,8 @@ impl Agent {
                     Err(err) => {
                         let _ = client.close().await;
                         log::warn!(
-                            "Failed to allocate on turn.Client {} {}",
+                            "[{}]: Failed to allocate on turn.Client {} {}",
+                            agent_internal2.get_name(),
                             turn_server_addr,
                             err
                         );
@@ -679,7 +742,8 @@ impl Agent {
                         Err(err) => {
                             let _ = client.close().await;
                             log::warn!(
-                                "Failed to create relay candidate: {} {}: {}",
+                                "[{}]: Failed to create relay candidate: {} {}: {}",
+                                agent_internal2.get_name(),
                                 network,
                                 raddr,
                                 err
@@ -691,10 +755,15 @@ impl Agent {
                 {
                     if let Err(err) = agent_internal2.add_candidate(&candidate).await {
                         if let Err(close_err) = candidate.close().await {
-                            log::warn!("Failed to close candidate: {}", close_err);
+                            log::warn!(
+                                "[{}]: Failed to close candidate: {}",
+                                agent_internal2.get_name(),
+                                close_err
+                            );
                         }
                         log::warn!(
-                            "Failed to append to localCandidates and run onCandidateHdlr: {}",
+                            "[{}]: Failed to append to localCandidates and run onCandidateHdlr: {}",
+                            agent_internal2.get_name(),
                             err
                         );
                     }

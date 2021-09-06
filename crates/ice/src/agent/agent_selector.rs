@@ -225,7 +225,7 @@ impl ControllingSelector for AgentInternal {
 
         if self.agent_conn.get_selected_pair().await.is_some() {
             if self.validate_selected_pair().await {
-                log::trace!("checking keepalive");
+                log::trace!("[{}]: checking keepalive", self.get_name());
                 self.check_keepalive().await;
             }
         } else if nominated_pair_is_some {
@@ -403,7 +403,7 @@ impl ControlledSelector for AgentInternal {
             self.validate_selected_pair().await;
         } else if self.agent_conn.get_selected_pair().await.is_some() {
             if self.validate_selected_pair().await {
-                log::trace!("checking keepalive");
+                log::trace!("[{}]: checking keepalive", self.get_name());
                 self.check_keepalive().await;
             }
         } else {

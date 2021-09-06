@@ -303,7 +303,11 @@ impl AgentInternal {
                 self.delete_all_candidates().await;
             }
 
-            log::info!("Setting new connection state: {}", new_state);
+            log::info!(
+                "[{}]: Setting new connection state: {}",
+                self.get_name(),
+                new_state
+            );
             self.connection_state
                 .store(new_state as u8, Ordering::SeqCst);
 
@@ -319,7 +323,11 @@ impl AgentInternal {
     }
 
     pub(crate) async fn set_selected_pair(&self, p: Option<Arc<CandidatePair>>) {
-        log::trace!("Set selected candidate pair: {:?}", p);
+        log::trace!(
+            "[{}]: Set selected candidate pair: {:?}",
+            self.get_name(),
+            p
+        );
 
         if let Some(p) = p {
             p.nominated.store(true, Ordering::SeqCst);
@@ -351,7 +359,7 @@ impl AgentInternal {
     }
 
     pub(crate) async fn ping_all_candidates(&self) {
-        log::trace!("pinging all candidates");
+        log::trace!("[{}]: pinging all candidates", self.get_name(),);
 
         let mut pairs: Vec<(
             Arc<dyn Candidate + Send + Sync>,
@@ -362,7 +370,8 @@ impl AgentInternal {
             let mut checklist = self.agent_conn.checklist.lock().await;
             if checklist.is_empty() {
                 log::warn!(
-                    "pingAllCandidates called with no candidate pairs. Connection is not possible yet."
+                    "[{}]: pingAllCandidates called with no candidate pairs. Connection is not possible yet.",
+                    self.get_name(),
                 );
             }
             for p in &mut *checklist {
@@ -375,7 +384,11 @@ impl AgentInternal {
                 }
 
                 if p.binding_request_count.load(Ordering::SeqCst) > self.max_binding_requests {
-                    log::trace!("max requests reached for pair {}, marking it as failed", p);
+                    log::trace!(
+                        "[{}]: max requests reached for pair {}, marking it as failed",
+                        self.get_name(),
+                        p
+                    );
                     p.state
                         .store(CandidatePairState::Failed as u8, Ordering::SeqCst);
                 } else {
@@ -560,7 +573,11 @@ impl AgentInternal {
                 for cand in cands {
                     if cand.equal(&**c) {
                         if let Err(err) = c.close().await {
-                            log::warn!("Failed to close duplicate candidate: {}", err);
+                            log::warn!(
+                                "[{}]: Failed to close duplicate candidate: {}",
+                                self.get_name(),
+                                err
+                            );
                         }
                         //TODO: why return?
                         return Ok(());
@@ -644,7 +661,12 @@ impl AgentInternal {
             for cs in local_candidates.values_mut() {
                 for c in cs {
                     if let Err(err) = c.close().await {
-                        log::warn!("Failed to close candidate {}: {}", c, err);
+                        log::warn!(
+                            "[{}]: Failed to close candidate {}: {}",
+                            self.get_name(),
+                            c,
+                            err
+                        );
                     }
                 }
             }
@@ -656,7 +678,12 @@ impl AgentInternal {
             for cs in remote_candidates.values_mut() {
                 for c in cs {
                     if let Err(err) = c.close().await {
-                        log::warn!("Failed to close candidate {}: {}", c, err);
+                        log::warn!(
+                            "[{}]: Failed to close candidate {}: {}",
+                            self.get_name(),
+                            c,
+                            err
+                        );
                     }
                 }
             }
@@ -688,7 +715,12 @@ impl AgentInternal {
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
-        log::trace!("ping STUN from {} to {}", local, remote);
+        log::trace!(
+            "[{}]: ping STUN from {} to {}",
+            self.get_name(),
+            local,
+            remote
+        );
 
         self.invalidate_pending_binding_requests(Instant::now())
             .await;
@@ -732,7 +764,8 @@ impl AgentInternal {
 
         if let Err(err) = result {
             log::warn!(
-                "Failed to handle inbound ICE from: {} to: {} error: {}",
+                "[{}]: Failed to handle inbound ICE from: {} to: {} error: {}",
+                self.get_name(),
                 local,
                 remote,
                 err
@@ -761,7 +794,8 @@ impl AgentInternal {
         let bind_requests_removed = initial_size - pending_binding_requests.len();
         if bind_requests_removed > 0 {
             log::trace!(
-                "Discarded {} binding requests because they expired",
+                "[{}]: Discarded {} binding requests because they expired",
+                self.get_name(),
                 bind_requests_removed
             );
         }
@@ -799,7 +833,8 @@ impl AgentInternal {
                 || m.typ.class == CLASS_INDICATION)
         {
             log::trace!(
-                "unhandled STUN from {} to {} class({}) method({})",
+                "[{}]: unhandled STUN from {} to {} class({}) method({})",
+                self.get_name(),
                 remote,
                 local,
                 m.typ.class,
@@ -810,14 +845,23 @@ impl AgentInternal {
 
         if self.is_controlling.load(Ordering::SeqCst) {
             if m.contains(ATTR_ICE_CONTROLLING) {
-                log::debug!("inbound isControlling && a.isControlling == true");
+                log::debug!(
+                    "[{}]: inbound isControlling && a.isControlling == true",
+                    self.get_name(),
+                );
                 return;
             } else if m.contains(ATTR_USE_CANDIDATE) {
-                log::debug!("useCandidate && a.isControlling == true");
+                log::debug!(
+                    "[{}]: useCandidate && a.isControlling == true",
+                    self.get_name(),
+                );
                 return;
             }
         } else if m.contains(ATTR_ICE_CONTROLLED) {
-            log::debug!("inbound isControlled && a.isControlling == false");
+            log::debug!(
+                "[{}]: inbound isControlled && a.isControlling == false",
+                self.get_name(),
+            );
             return;
         }
 
@@ -830,7 +874,12 @@ impl AgentInternal {
                 if let Err(err) =
                     assert_inbound_message_integrity(m, ufrag_pwd.remote_pwd.as_bytes())
                 {
-                    log::warn!("discard message from ({}), {}", remote, err);
+                    log::warn!(
+                        "[{}]: discard message from ({}), {}",
+                        self.get_name(),
+                        remote,
+                        err
+                    );
                     return;
                 }
             }
@@ -838,7 +887,11 @@ impl AgentInternal {
             if let Some(rc) = &remote_candidate {
                 self.handle_success_response(m, local, rc, remote).await;
             } else {
-                log::warn!("discard success message from ({}), no such remote", remote);
+                log::warn!(
+                    "[{}]: discard success message from ({}), no such remote",
+                    self.get_name(),
+                    remote
+                );
                 return;
             }
         } else if m.typ.class == CLASS_REQUEST {
@@ -847,12 +900,22 @@ impl AgentInternal {
                 let username =
                     ufrag_pwd.local_ufrag.clone() + ":" + ufrag_pwd.remote_ufrag.as_str();
                 if let Err(err) = assert_inbound_username(m, &username) {
-                    log::warn!("discard message from ({}), {}", remote, err);
+                    log::warn!(
+                        "[{}]: discard message from ({}), {}",
+                        self.get_name(),
+                        remote,
+                        err
+                    );
                     return;
                 } else if let Err(err) =
                     assert_inbound_message_integrity(m, ufrag_pwd.local_pwd.as_bytes())
                 {
-                    log::warn!("discard message from ({}), {}", remote, err);
+                    log::warn!(
+                        "[{}]: discard message from ({}), {}",
+                        self.get_name(),
+                        remote,
+                        err
+                    );
                     return;
                 }
             }
@@ -875,18 +938,31 @@ impl AgentInternal {
                 match prflx_candidate_config.new_candidate_peer_reflexive().await {
                     Ok(prflx_candidate) => remote_candidate = Some(Arc::new(prflx_candidate)),
                     Err(err) => {
-                        log::error!("Failed to create new remote prflx candidate ({})", err);
+                        log::error!(
+                            "[{}]: Failed to create new remote prflx candidate ({})",
+                            self.get_name(),
+                            err
+                        );
                         return;
                     }
                 };
 
-                log::debug!("adding a new peer-reflexive candidate: {} ", remote);
+                log::debug!(
+                    "[{}]: adding a new peer-reflexive candidate: {} ",
+                    self.get_name(),
+                    remote
+                );
                 if let Some(rc) = &remote_candidate {
                     self.add_remote_candidate(rc).await;
                 }
             }
 
-            log::trace!("inbound STUN (Request) from {} to {}", remote, local);
+            log::trace!(
+                "[{}]: inbound STUN (Request) from {} to {}",
+                self.get_name(),
+                remote,
+                local
+            );
 
             if let Some(rc) = &remote_candidate {
                 self.handle_binding_request(m, local, rc).await;
@@ -938,7 +1014,11 @@ impl AgentInternal {
         remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
         if let Err(err) = local.write_to(&msg.raw, &**remote).await {
-            log::trace!("failed to send STUN message: {}", err);
+            log::trace!(
+                "[{}]: failed to send STUN message: {}",
+                self.get_name(),
+                err
+            );
         }
     }
 
@@ -966,7 +1046,7 @@ impl AgentInternal {
                     .await;
             });
         } else {
-            log::error!("Can't start due to conn is_none");
+            log::error!("[{}]: Can't start due to conn is_none", self.get_name(),);
         }
     }
 
@@ -1093,7 +1173,8 @@ impl AgentInternal {
 
             if let Err(err) = m.decode() {
                 log::warn!(
-                    "Failed to handle decode ICE from {} to {}: {}",
+                    "[{}]: Failed to handle decode ICE from {} to {}: {}",
+                    self.get_name(),
                     addr,
                     src_addr,
                     err
@@ -1103,12 +1184,21 @@ impl AgentInternal {
             }
         } else if !self.validate_non_stun_traffic(c, src_addr).await {
             log::warn!(
-                "Discarded message from {}, not a valid remote candidate",
+                "[{}]: Discarded message from {}, not a valid remote candidate",
+                self.get_name(),
                 c.addr().await
             );
         } else if let Err(err) = self.agent_conn.buffer.write(buf).await {
             // NOTE This will return packetio.ErrFull if the buffer ever manages to fill up.
-            log::warn!("failed to write packet: {}", err);
+            log::warn!("[{}]: failed to write packet: {}", self.get_name(), err);
+        }
+    }
+
+    pub(crate) fn get_name(&self) -> &str {
+        if self.is_controlling.load(Ordering::SeqCst) {
+            "controlling"
+        } else {
+            "controlled"
         }
     }
 }
