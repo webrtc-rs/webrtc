@@ -25,7 +25,7 @@ async fn test_pair_search() -> Result<()> {
     let a = Agent::new(config).await?;
 
     {
-        let ai = a.agent_internal.lock().await;
+        let ai = a.internal.lock().await;
         {
             let checklist = ai.agent_conn.checklist.lock().await;
             assert!(
@@ -122,7 +122,7 @@ async fn test_pair_priority() -> Result<()> {
     ];
 
     {
-        let mut ai = a.agent_internal.lock().await;
+        let mut ai = a.internal.lock().await;
         for remote in remotes {
             if ai.find_pair(&host_local, &remote).await.is_none() {
                 ai.add_pair(host_local.clone(), remote.clone()).await;
@@ -203,7 +203,7 @@ async fn test_on_selected_candidate_pair_change() -> Result<()> {
         false,
     ));
     {
-        let mut ai = a.agent_internal.lock().await;
+        let mut ai = a.internal.lock().await;
         ai.set_selected_pair(Some(p)).await;
     }
 
@@ -234,7 +234,7 @@ async fn test_handle_peer_reflexive_udp_pflx_candidate() -> Result<()> {
     let remote = SocketAddr::from_str("172.17.0.3:999")?;
 
     let (username, local_pwd, tie_breaker) = {
-        let ai = a.agent_internal.lock().await;
+        let ai = a.internal.lock().await;
         let ufrag_pwd = ai.ufrag_pwd.lock().await;
         (
             ufrag_pwd.local_ufrag.to_owned() + ":" + ufrag_pwd.remote_ufrag.as_str(),
@@ -256,7 +256,7 @@ async fn test_handle_peer_reflexive_udp_pflx_candidate() -> Result<()> {
     ])?;
 
     {
-        let mut ai = a.agent_internal.lock().await;
+        let mut ai = a.internal.lock().await;
         ai.handle_inbound(&mut msg, &local, remote).await;
 
         let remote_candidates = ai.remote_candidates.lock().await;
@@ -306,7 +306,7 @@ async fn test_handle_peer_reflexive_unknown_remote() -> Result<()> {
     tid.0[..3].copy_from_slice("ABC".as_bytes());
 
     let remote_pwd = {
-        let ai = a.agent_internal.lock().await;
+        let ai = a.internal.lock().await;
         {
             let mut pending_binding_requests = ai.pending_binding_requests.lock().await;
             *pending_binding_requests = vec![BindingRequest {
@@ -344,7 +344,7 @@ async fn test_handle_peer_reflexive_unknown_remote() -> Result<()> {
     ])?;
 
     {
-        let mut ai = a.agent_internal.lock().await;
+        let mut ai = a.internal.lock().await;
         ai.handle_inbound(&mut msg, &local, remote).await;
 
         let remote_candidates = ai.remote_candidates.lock().await;
@@ -639,7 +639,7 @@ async fn test_inbound_validity() -> Result<()> {
         let a = Agent::new(AgentConfig::default()).await?;
 
         {
-            let mut ai = a.agent_internal.lock().await;
+            let mut ai = a.internal.lock().await;
 
             let local_pwd = {
                 let ufrag_pwd = ai.ufrag_pwd.lock().await;
@@ -688,7 +688,7 @@ async fn test_inbound_validity() -> Result<()> {
         let a = Agent::new(AgentConfig::default()).await?;
 
         {
-            let mut ai = a.agent_internal.lock().await;
+            let mut ai = a.internal.lock().await;
             let username = {
                 let ufrag_pwd = ai.ufrag_pwd.lock().await;
                 format!("{}:{}", ufrag_pwd.local_ufrag, ufrag_pwd.remote_ufrag)
@@ -717,7 +717,7 @@ async fn test_inbound_validity() -> Result<()> {
         let a = Agent::new(AgentConfig::default()).await?;
 
         {
-            let mut ai = a.agent_internal.lock().await;
+            let mut ai = a.internal.lock().await;
 
             let username = {
                 let ufrag_pwd = ai.ufrag_pwd.lock().await;
@@ -745,7 +745,7 @@ async fn test_inbound_validity() -> Result<()> {
         let a = Agent::new(AgentConfig::default()).await?;
 
         {
-            let mut ai = a.agent_internal.lock().await;
+            let mut ai = a.internal.lock().await;
 
             let (username, local_pwd) = {
                 let ufrag_pwd = ai.ufrag_pwd.lock().await;
@@ -776,7 +776,7 @@ async fn test_inbound_validity() -> Result<()> {
         let a = Agent::new(AgentConfig::default()).await?;
 
         {
-            let mut ai = a.agent_internal.lock().await;
+            let mut ai = a.internal.lock().await;
 
             let (username, local_pwd) = {
                 let ufrag_pwd = ai.ufrag_pwd.lock().await;
@@ -811,7 +811,7 @@ async fn test_inbound_validity() -> Result<()> {
         let a = Agent::new(AgentConfig::default()).await?;
 
         {
-            let mut ai = a.agent_internal.lock().await;
+            let mut ai = a.internal.lock().await;
             let remote = SocketAddr::from_str("172.17.0.3:999")?;
 
             let mut t_id = TransactionId::default();
@@ -1113,7 +1113,7 @@ async fn test_candidate_pair_stats() -> Result<()> {
         Arc::clone(&prflx_remote),
         Arc::clone(&host_remote),
     ] {
-        let mut ai = a.agent_internal.lock().await;
+        let mut ai = a.internal.lock().await;
         let p = ai.find_pair(&host_local, remote).await;
 
         if p.is_none() {
@@ -1123,7 +1123,7 @@ async fn test_candidate_pair_stats() -> Result<()> {
     }
 
     {
-        let ai = a.agent_internal.lock().await;
+        let ai = a.internal.lock().await;
         if let Some(p) = ai.find_pair(&host_local, &prflx_remote).await {
             p.state
                 .store(CandidatePairState::Failed as u8, Ordering::SeqCst);
@@ -1228,7 +1228,7 @@ async fn test_local_candidate_stats() -> Result<()> {
     );
 
     {
-        let ai = a.agent_internal.lock().await;
+        let ai = a.internal.lock().await;
         let mut local_candidates = ai.local_candidates.lock().await;
         local_candidates.insert(
             NetworkType::Udp4,
@@ -1355,7 +1355,7 @@ async fn test_remote_candidate_stats() -> Result<()> {
     );
 
     {
-        let ai = a.agent_internal.lock().await;
+        let ai = a.internal.lock().await;
         let mut remote_candidates = ai.remote_candidates.lock().await;
         remote_candidates.insert(
             NetworkType::Udp4,
@@ -1546,7 +1546,7 @@ async fn test_binding_request_timeout() -> Result<()> {
 
     let now = Instant::now();
     {
-        let mut ai = a.agent_internal.lock().await;
+        let mut ai = a.internal.lock().await;
         {
             let mut pending_binding_requests = ai.pending_binding_requests.lock().await;
             pending_binding_requests.push(BindingRequest {
@@ -1588,7 +1588,7 @@ async fn test_agent_credentials() -> Result<()> {
 
     let a = Agent::new(AgentConfig::default()).await?;
     {
-        let ai = a.agent_internal.lock().await;
+        let ai = a.internal.lock().await;
         let ufrag_pwd = ai.ufrag_pwd.lock().await;
         assert!(ufrag_pwd.local_ufrag.as_bytes().len() * 8 >= 24);
         assert!(ufrag_pwd.local_pwd.as_bytes().len() * 8 >= 128);
@@ -1668,7 +1668,7 @@ async fn test_connection_state_failed_delete_all_candidates() -> Result<()> {
     let _ = is_failed_rx.recv().await;
 
     {
-        let ai = a_agent.agent_internal.lock().await;
+        let ai = a_agent.internal.lock().await;
         {
             let remote_candidates = ai.remote_candidates.lock().await;
             assert_eq!(remote_candidates.len(), 0);
@@ -1933,7 +1933,7 @@ async fn test_get_remote_credentials() -> Result<()> {
     let a = Agent::new(AgentConfig::default()).await?;
 
     let (remote_ufrag, remote_pwd) = {
-        let ai = a.agent_internal.lock().await;
+        let ai = a.internal.lock().await;
         let mut ufrag_pwd = ai.ufrag_pwd.lock().await;
         ufrag_pwd.remote_ufrag = "remoteUfrag".to_owned();
         ufrag_pwd.remote_pwd = "remotePwd".to_owned();

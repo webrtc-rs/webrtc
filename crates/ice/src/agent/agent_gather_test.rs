@@ -397,7 +397,7 @@ async fn test_vnet_gather_turn_connection_leak() -> Result<()> {
     let a_agent = Agent::new(cfg0).await?;
 
     {
-        let agent_internal = Arc::clone(&a_agent.agent_internal);
+        let agent_internal = Arc::clone(&a_agent.internal);
         Agent::gather_candidates_relay(
             vec![turn_server_url.clone()],
             Arc::clone(&v.net0),

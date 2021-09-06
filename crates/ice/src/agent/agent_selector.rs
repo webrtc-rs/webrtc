@@ -14,22 +14,22 @@ use tokio::time::Instant;
 
 #[async_trait]
 trait ControllingSelector {
-    async fn start(&mut self);
-    async fn contact_candidates(&mut self);
+    async fn start(&self);
+    async fn contact_candidates(&self);
     async fn ping_candidate(
-        &mut self,
+        &self,
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
     );
     async fn handle_success_response(
-        &mut self,
+        &self,
         m: &Message,
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
         remote_addr: SocketAddr,
     );
     async fn handle_binding_request(
-        &mut self,
+        &self,
         m: &Message,
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
@@ -38,22 +38,22 @@ trait ControllingSelector {
 
 #[async_trait]
 trait ControlledSelector {
-    async fn start(&mut self);
-    async fn contact_candidates(&mut self);
+    async fn start(&self);
+    async fn contact_candidates(&self);
     async fn ping_candidate(
-        &mut self,
+        &self,
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
     );
     async fn handle_success_response(
-        &mut self,
+        &self,
         m: &Message,
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
         remote_addr: SocketAddr,
     );
     async fn handle_binding_request(
-        &mut self,
+        &self,
         m: &Message,
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
@@ -90,7 +90,7 @@ impl AgentInternal {
         }
     }
 
-    async fn nominate_pair(&mut self) {
+    async fn nominate_pair(&self) {
         let result = {
             let nominated_pair = self.nominated_pair.lock().await;
             if let Some(pair) = &*nominated_pair {
@@ -142,7 +142,7 @@ impl AgentInternal {
         }
     }
 
-    pub(crate) async fn start(&mut self) {
+    pub(crate) async fn start(&self) {
         if self.is_controlling.load(Ordering::SeqCst) {
             ControllingSelector::start(self).await;
         } else {
@@ -150,7 +150,7 @@ impl AgentInternal {
         }
     }
 
-    pub(crate) async fn contact_candidates(&mut self) {
+    pub(crate) async fn contact_candidates(&self) {
         if self.is_controlling.load(Ordering::SeqCst) {
             ControllingSelector::contact_candidates(self).await;
         } else {
@@ -159,7 +159,7 @@ impl AgentInternal {
     }
 
     pub(crate) async fn ping_candidate(
-        &mut self,
+        &self,
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
@@ -171,7 +171,7 @@ impl AgentInternal {
     }
 
     pub(crate) async fn handle_success_response(
-        &mut self,
+        &self,
         m: &Message,
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
@@ -185,7 +185,7 @@ impl AgentInternal {
     }
 
     pub(crate) async fn handle_binding_request(
-        &mut self,
+        &self,
         m: &Message,
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
@@ -200,7 +200,7 @@ impl AgentInternal {
 
 #[async_trait]
 impl ControllingSelector for AgentInternal {
-    async fn start(&mut self) {
+    async fn start(&self) {
         {
             let mut nominated_pair = self.nominated_pair.lock().await;
             *nominated_pair = None;
@@ -211,7 +211,7 @@ impl ControllingSelector for AgentInternal {
         }
     }
 
-    async fn contact_candidates(&mut self) {
+    async fn contact_candidates(&self) {
         // A lite selector should not contact candidates
         if self.lite.load(Ordering::SeqCst) {
             // This only happens if both peers are lite. See RFC 8445 S6.1.1 and S6.2
@@ -260,7 +260,7 @@ impl ControllingSelector for AgentInternal {
     }
 
     async fn ping_candidate(
-        &mut self,
+        &self,
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
@@ -290,7 +290,7 @@ impl ControllingSelector for AgentInternal {
     }
 
     async fn handle_success_response(
-        &mut self,
+        &self,
         m: &Message,
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
@@ -340,7 +340,7 @@ impl ControllingSelector for AgentInternal {
     }
 
     async fn handle_binding_request(
-        &mut self,
+        &self,
         m: &Message,
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
@@ -395,9 +395,9 @@ impl ControllingSelector for AgentInternal {
 
 #[async_trait]
 impl ControlledSelector for AgentInternal {
-    async fn start(&mut self) {}
+    async fn start(&self) {}
 
-    async fn contact_candidates(&mut self) {
+    async fn contact_candidates(&self) {
         // A lite selector should not contact candidates
         if self.lite.load(Ordering::SeqCst) {
             self.validate_selected_pair().await;
@@ -412,7 +412,7 @@ impl ControlledSelector for AgentInternal {
     }
 
     async fn ping_candidate(
-        &mut self,
+        &self,
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
     ) {
@@ -442,7 +442,7 @@ impl ControlledSelector for AgentInternal {
     }
 
     async fn handle_success_response(
-        &mut self,
+        &self,
         m: &Message,
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
@@ -488,7 +488,7 @@ impl ControlledSelector for AgentInternal {
     }
 
     async fn handle_binding_request(
-        &mut self,
+        &self,
         m: &Message,
         local: &Arc<dyn Candidate + Send + Sync>,
         remote: &Arc<dyn Candidate + Send + Sync>,
