@@ -4,7 +4,8 @@ use crate::candidate::candidate_base::{CandidateBase, CandidateBaseConfig};
 use crate::candidate::candidate_peer_reflexive::CandidatePeerReflexiveConfig;
 use crate::util::*;
 
-pub type ChanCandidateTx = Arc<Mutex<Option<mpsc::Sender<Option<Arc<dyn Candidate + Send + Sync>>>>>>;
+pub type ChanCandidateTx =
+    Arc<Mutex<Option<mpsc::Sender<Option<Arc<dyn Candidate + Send + Sync>>>>>>;
 
 pub struct AgentInternal {
     // State owned by the taskLoop
@@ -15,16 +16,16 @@ pub struct AgentInternal {
     pub(crate) done_tx: Mutex<Option<mpsc::Sender<()>>>,
     // force candidate to be contacted immediately (instead of waiting for task ticker)
     pub(crate) force_candidate_contact_tx: mpsc::Sender<bool>,
-    pub(crate) done_and_force_candidate_contact_rx: Mutex<Option<(mpsc::Receiver<()>,mpsc::Receiver<bool>)>>,
+    pub(crate) done_and_force_candidate_contact_rx:
+        Mutex<Option<(mpsc::Receiver<()>, mpsc::Receiver<bool>)>>,
 
     pub(crate) chan_candidate_tx: ChanCandidateTx,
-    pub(crate) chan_candidate_pair_tx: Option<mpsc::Sender<()>>,
+    pub(crate) chan_candidate_pair_tx: Mutex<Option<mpsc::Sender<()>>>,
     pub(crate) chan_state_tx: Option<mpsc::Sender<ConnectionState>>,
 
     pub(crate) on_connection_state_change_hdlr: Option<OnConnectionStateChangeHdlrFn>,
     pub(crate) on_selected_candidate_pair_change_hdlr: Option<OnSelectedCandidatePairChangeHdlrFn>,
     pub(crate) on_candidate_hdlr: Option<OnCandidateHdlrFn>,
-
 
     pub(crate) tie_breaker: u64,
 
@@ -95,12 +96,14 @@ impl AgentInternal {
 
             done_tx: Mutex::new(Some(done_tx)),
             force_candidate_contact_tx,
-            done_and_force_candidate_contact_rx: Mutex::new(Some((done_rx, force_candidate_contact_rx))),
+            done_and_force_candidate_contact_rx: Mutex::new(Some((
+                done_rx,
+                force_candidate_contact_rx,
+            ))),
 
             chan_candidate_tx: Arc::new(Mutex::new(Some(chan_candidate_tx))),
-            chan_candidate_pair_tx: Some(chan_candidate_pair_tx),
+            chan_candidate_pair_tx: Mutex::new(Some(chan_candidate_pair_tx)),
             chan_state_tx: Some(chan_state_tx),
-
 
             on_connection_state_change_hdlr: None,
             on_selected_candidate_pair_change_hdlr: None,
@@ -240,11 +243,14 @@ impl AgentInternal {
         );
 
         let done_and_force_candidate_contact_rx = {
-            let mut done_and_force_candidate_contact_rx = self.done_and_force_candidate_contact_rx.lock().await;
+            let mut done_and_force_candidate_contact_rx =
+                self.done_and_force_candidate_contact_rx.lock().await;
             done_and_force_candidate_contact_rx.take()
         };
 
-        if let Some((mut done_rx, mut force_candidate_contact_rx)) = done_and_force_candidate_contact_rx {
+        if let Some((mut done_rx, mut force_candidate_contact_rx)) =
+            done_and_force_candidate_contact_rx
+        {
             tokio::spawn(async move {
                 loop {
                     let mut interval = DEFAULT_CHECK_INTERVAL;
@@ -320,8 +326,11 @@ impl AgentInternal {
                 .await;
 
             // Notify when the selected pair changes
-            if let Some(chan_candidate_pair_tx) = &self.chan_candidate_pair_tx {
-                let _ = chan_candidate_pair_tx.send(()).await;
+            {
+                let chan_candidate_pair_tx = self.chan_candidate_pair_tx.lock().await;
+                if let Some(tx) = &*chan_candidate_pair_tx {
+                    let _ = tx.send(()).await;
+                }
             }
 
             // Signal connected
@@ -601,10 +610,13 @@ impl AgentInternal {
         self.update_connection_state(ConnectionState::Closed).await;
 
         {
-            let mut chan_candidate_tx =  self.chan_candidate_tx.lock().await;
+            let mut chan_candidate_tx = self.chan_candidate_tx.lock().await;
             chan_candidate_tx.take();
         }
-        self.chan_candidate_pair_tx.take();
+        {
+            let mut chan_candidate_pair_tx = self.chan_candidate_pair_tx.lock().await;
+            chan_candidate_pair_tx.take();
+        }
         self.chan_state_tx.take();
 
         self.agent_conn.done.store(true, Ordering::SeqCst);
