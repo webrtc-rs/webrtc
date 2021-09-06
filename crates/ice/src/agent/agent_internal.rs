@@ -3,6 +3,7 @@ use super::*;
 use crate::candidate::candidate_base::{CandidateBase, CandidateBaseConfig};
 use crate::candidate::candidate_peer_reflexive::CandidatePeerReflexiveConfig;
 use crate::util::*;
+use std::sync::atomic::AtomicU64;
 
 pub type ChanCandidateTx =
     Arc<Mutex<Option<mpsc::Sender<Option<Arc<dyn Candidate + Send + Sync>>>>>>;
@@ -28,7 +29,7 @@ pub struct AgentInternal {
         Arc<Mutex<Option<OnSelectedCandidatePairChangeHdlrFn>>>,
     pub(crate) on_candidate_hdlr: Arc<Mutex<Option<OnCandidateHdlrFn>>>,
 
-    pub(crate) tie_breaker: u64,
+    pub(crate) tie_breaker: AtomicU64,
 
     pub(crate) is_controlling: bool,
     pub(crate) lite: bool,
@@ -110,7 +111,7 @@ impl AgentInternal {
             on_selected_candidate_pair_change_hdlr: Arc::new(Mutex::new(None)),
             on_candidate_hdlr: Arc::new(Mutex::new(None)),
 
-            tie_breaker: rand::random::<u64>(),
+            tie_breaker: AtomicU64::new(rand::random::<u64>()),
 
             lite: config.lite,
             is_controlling: config.is_controlling,

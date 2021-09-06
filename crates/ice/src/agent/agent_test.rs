@@ -239,7 +239,7 @@ async fn test_handle_peer_reflexive_udp_pflx_candidate() -> Result<()> {
         (
             ai.local_ufrag.to_owned() + ":" + ai.remote_ufrag.as_str(),
             ai.local_pwd.clone(),
-            ai.tie_breaker,
+            ai.tie_breaker.load(Ordering::SeqCst),
         )
     };
 
