@@ -503,7 +503,7 @@ fn test_have_application_media_section() -> Result<()> {
     Ok(())
 }
 
-/*TODO: add certificate.GetFingerprints support
+/*TODO: add certificate.get_fingerprints support
 #[test]
 fn test_media_description_fingerprints() -> Result<()> {
     let mut engine = MediaEngine::default();
@@ -513,7 +513,7 @@ fn test_media_description_fingerprints() -> Result<()> {
     let sk := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
     assert.NoError(t, err)
 
-    certificate, err := GenerateCertificate(sk)
+    certificate, err := generate_certificate(sk)
     assert.NoError(t, err)
 
     media := []mediaSection{
@@ -548,7 +548,7 @@ fn test_media_description_fingerprints() -> Result<()> {
         return func(t *testing.T) {
             s := &sdp.SessionDescription{}
 
-            dtlsFingerprints, err := certificate.GetFingerprints()
+            dtlsFingerprints, err := certificate.get_fingerprints()
             assert.NoError(t, err)
 
             s, err = populateSDP(s, false,

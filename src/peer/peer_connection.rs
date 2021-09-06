@@ -189,7 +189,7 @@ impl PeerConnection {
             last_offer: "".to_owned(),
             last_answer: "".to_owned(),
             greater_mid: -1,
-            internal: Arc::new(PeerConnectionInternal::new(api, &configuration).await?),
+            internal: Arc::new(PeerConnectionInternal::new(api, &mut configuration).await?),
             configuration,
             ..Default::default()
         })
@@ -212,7 +212,7 @@ impl PeerConnection {
         /*TODO:if !configuration.certificates.is_empty() {
             now := time.Now()
             for _, x509Cert := range configuration.Certificates {
-                if !x509Cert.Expires().IsZero() && now.After(x509Cert.Expires()) {
+                if !x509Cert.expires().IsZero() && now.After(x509Cert.expires()) {
                     return &rtcerr.InvalidAccessError{Err: ErrCertificateExpired}
                 }
                 pc.configuration.Certificates = append(pc.configuration.Certificates, x509Cert)
@@ -222,7 +222,7 @@ impl PeerConnection {
             if err != nil {
                 return &rtcerr.UnknownError{Err: err}
             }
-            certificate, err := GenerateCertificate(sk)
+            certificate, err := generate_certificate(sk)
             if err != nil {
                 return err
             }

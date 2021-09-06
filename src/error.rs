@@ -51,6 +51,10 @@ pub enum Error {
     #[error("certificates cannot be modified")]
     ErrModifyingCertificates,
 
+    /// ErrNonCertificate indicates that there is no certificate
+    #[error("no certificate")]
+    ErrNonCertificate,
+
     /// ErrModifyingBundlePolicy indicates that an attempt to modify
     /// BundlePolicy was made after PeerConnection has been initialized.
     #[error("bundle policy cannot be modified")]

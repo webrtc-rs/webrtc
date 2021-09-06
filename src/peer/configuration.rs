@@ -10,7 +10,7 @@ use crate::peer::policy::sdp_semantics::SDPSemantics;
 /// Configurations may be set up once and reused across multiple connections.
 /// Configurations are treated as readonly. As long as they are unmodified,
 /// they are safe for concurrent use.
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub struct Configuration {
     /// iceservers defines a slice describing servers available to be used by
     /// ICE, such as STUN and TURN servers.
@@ -35,7 +35,7 @@ pub struct Configuration {
 
     /// Certificates describes a set of certificates that the PeerConnection
     /// uses to authenticate. Valid values for this parameter are created
-    /// through calls to the GenerateCertificate function. Although any given
+    /// through calls to the generate_certificate function. Although any given
     /// DTLS connection will use only one certificate, this attribute allows the
     /// caller to provide multiple certificates that support different
     /// algorithms. The final certificate will be selected based on the DTLS

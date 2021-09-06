@@ -43,7 +43,7 @@ pub(crate) struct PeerConnectionInternal {
 }
 
 impl PeerConnectionInternal {
-    pub(super) async fn new(api: &API, configuration: &Configuration) -> Result<Self> {
+    pub(super) async fn new(api: &API, configuration: &mut Configuration) -> Result<Self> {
         let mut pc = PeerConnectionInternal {
             ops: Arc::new(Operations::new()),
             is_closed: Arc::new(AtomicBool::new(false)),
@@ -74,10 +74,9 @@ impl PeerConnectionInternal {
         pc.ice_transport = pc.create_ice_transport(api).await;
 
         // Create the DTLS transport
-        pc.dtls_transport = Arc::new(api.new_dtls_transport(
-            Arc::clone(&pc.ice_transport),
-            configuration.certificates.clone(),
-        )?);
+        let certificates = configuration.certificates.drain(..).collect();
+        pc.dtls_transport =
+            Arc::new(api.new_dtls_transport(Arc::clone(&pc.ice_transport), certificates)?);
 
         // Create the SCTP transport
         pc.sctp_transport = Arc::new(api.new_sctp_transport(Arc::clone(&pc.dtls_transport))?);
@@ -683,7 +682,7 @@ impl PeerConnectionInternal {
         }
 
         let dtls_fingerprints = vec![];
-        /*TODO: dtls_fingerprints, err := self.configuration.Certificates[0].GetFingerprints()
+        /*TODO: dtls_fingerprints, err := self.configuration.Certificates[0].get_fingerprints()
         if err != nil {
             return nil, err
         }*/
@@ -877,7 +876,7 @@ impl PeerConnectionInternal {
         }
 
         let dtls_fingerprints = vec![];
-        /*TODO:dtls_fingerprints, err := self.configuration.Certificates[0].GetFingerprints()
+        /*TODO:dtls_fingerprints, err := self.configuration.Certificates[0].get_fingerprints()
         if err != nil {
             return nil, err
         }*/

@@ -26,7 +26,9 @@ use crate::peer::configuration::Configuration;
 use crate::peer::peer_connection::PeerConnection;
 
 use anyhow::Result;
+use rcgen::KeyPair;
 use std::sync::Arc;
+use std::time::SystemTime;
 
 /// API bundles the global functions of the WebRTC and ORTC API.
 /// Some of these functions are also exported globally using the
@@ -79,30 +81,20 @@ impl API {
     pub fn new_dtls_transport(
         &self,
         ice_transport: Arc<ICETransport>,
-        _dtls_certificates: Vec<Certificate>,
+        mut certificates: Vec<Certificate>,
     ) -> Result<DTLSTransport> {
-        let certificates = vec![];
-        /*TODO: if !dtls_certificates.is_empty() {
-            /*now := time.Now()
-            for _, x509Cert := range certificates {
-                if !x509Cert.Expires().IsZero() && now.After(x509Cert.Expires()) {
-                    return nil, &rtcerr.InvalidAccessError{Err: ErrCertificateExpired}
+        if !certificates.is_empty() {
+            let now = SystemTime::now();
+            for cert in &certificates {
+                if cert.expires().duration_since(now).is_err() {
+                    return Err(Error::ErrCertificateExpired.into());
                 }
-                t.certificates = append(t.certificates, x509Cert)
-            }*/
-            vec![]
+            }
         } else {
-            /*sk, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-            if err != nil {
-                return nil, &rtcerr.UnknownError{Err: err}
-            }
-            certificate, err := GenerateCertificate(sk)
-            if err != nil {
-                return nil, err
-            }
-            t.certificates = []Certificate{*certificate}*/
-            vec![]
-        };*/
+            let kp = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
+            let cert = Certificate::from_key_pair(kp)?;
+            certificates = vec![cert];
+        };
 
         Ok(DTLSTransport::new(
             ice_transport,

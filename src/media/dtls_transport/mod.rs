@@ -10,31 +10,30 @@ pub mod dtls_transport_state;
 use crate::api::setting_engine::SettingEngine;
 use crate::default_srtp_protection_profiles;
 use crate::error::Error;
+use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
 use crate::media::dtls_transport::dtls_transport_state::DTLSTransportState;
 use crate::media::ice_transport::ice_transport_state::ICETransportState;
 use crate::media::ice_transport::ICETransport;
 use crate::peer::ice::ice_role::ICERole;
+use crate::util::flatten_errs;
 use crate::util::mux::endpoint::Endpoint;
 use crate::util::mux::mux_func::{match_dtls, match_srtcp, match_srtp, MatchFunc};
 
+use crate::media::dtls_transport::dtls_certificate::Certificate;
+use anyhow::Result;
 use bytes::Bytes;
 use dtls::config::ClientAuthType;
 use dtls::conn::DTLSConn;
-use dtls::crypto::Certificate;
 use dtls_role::*;
 use srtp::protection_profile::ProtectionProfile;
 use srtp::session::Session;
 use srtp::stream::Stream;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use util::Conn;
-
-use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
-use crate::util::flatten_errs;
-use anyhow::Result;
-use std::sync::atomic::{AtomicU8, Ordering};
 
 pub type OnDTLSTransportStateChangeHdlrFn = Box<
     dyn (FnMut(DTLSTransportState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
@@ -135,11 +134,10 @@ impl DTLSTransport {
 
     /// get_local_parameters returns the DTLS parameters of the local DTLSTransport upon construction.
     pub fn get_local_parameters(&self) -> Result<DTLSParameters> {
-        let fingerprints = vec![];
+        let mut fingerprints = vec![];
 
-        for _c in &self.certificates {
-            /*TODO: prints := c.GetFingerprints()?;
-            fingerprints.push(prints);*/
+        for c in &self.certificates {
+            fingerprints.push(c.get_fingerprint()?);
         }
 
         Ok(DTLSParameters {
@@ -300,13 +298,17 @@ impl DTLSTransport {
             *rp = remote_parameters;
         }
 
-        let cert = self.certificates[0].clone();
+        let certificate = if let Some(cert) = self.certificates.first() {
+            cert.certificate.clone()
+        } else {
+            return Err(Error::ErrNonCertificate.into());
+        };
         self.state_change(DTLSTransportState::Connecting).await;
 
         Ok((
             self.role().await,
             dtls::config::Config {
-                certificates: vec![cert],
+                certificates: vec![certificate],
                 srtp_protection_profiles: if !self
                     .setting_engine
                     .srtp_protection_profiles
