@@ -21,7 +21,7 @@ pub struct AgentInternal {
 
     pub(crate) chan_candidate_tx: ChanCandidateTx,
     pub(crate) chan_candidate_pair_tx: Mutex<Option<mpsc::Sender<()>>>,
-    pub(crate) chan_state_tx: Option<mpsc::Sender<ConnectionState>>,
+    pub(crate) chan_state_tx: Mutex<Option<mpsc::Sender<ConnectionState>>>,
 
     pub(crate) on_connection_state_change_hdlr: Option<OnConnectionStateChangeHdlrFn>,
     pub(crate) on_selected_candidate_pair_change_hdlr: Option<OnSelectedCandidatePairChangeHdlrFn>,
@@ -103,7 +103,7 @@ impl AgentInternal {
 
             chan_candidate_tx: Arc::new(Mutex::new(Some(chan_candidate_tx))),
             chan_candidate_pair_tx: Mutex::new(Some(chan_candidate_pair_tx)),
-            chan_state_tx: Some(chan_state_tx),
+            chan_state_tx: Mutex::new(Some(chan_state_tx)),
 
             on_connection_state_change_hdlr: None,
             on_selected_candidate_pair_change_hdlr: None,
@@ -306,8 +306,11 @@ impl AgentInternal {
 
             // Call handler after finishing current task since we may be holding the agent lock
             // and the handler may also require it
-            if let Some(chan_state_tx) = &self.chan_state_tx {
-                let _ = chan_state_tx.send(new_state).await;
+            {
+                let chan_state_tx = self.chan_state_tx.lock().await;
+                if let Some(tx) = &*chan_state_tx {
+                    let _ = tx.send(new_state).await;
+                }
             }
         }
     }
@@ -617,7 +620,10 @@ impl AgentInternal {
             let mut chan_candidate_pair_tx = self.chan_candidate_pair_tx.lock().await;
             chan_candidate_pair_tx.take();
         }
-        self.chan_state_tx.take();
+        {
+            let mut chan_state_tx = self.chan_state_tx.lock().await;
+            chan_state_tx.take();
+        }
 
         self.agent_conn.done.store(true, Ordering::SeqCst);
 
