@@ -37,19 +37,24 @@ fn test_set_ephemeral_udpport_range() -> Result<()> {
 fn test_set_connection_timeout() -> Result<()> {
     let mut s = SettingEngine::default();
 
-    let d = Duration::default();
-    assert_eq!(s.timeout.ice_disconnected_timeout, d);
-    assert_eq!(s.timeout.ice_failed_timeout, d);
-    assert_eq!(s.timeout.ice_keepalive_interval, d);
+    assert_eq!(s.timeout.ice_disconnected_timeout, None);
+    assert_eq!(s.timeout.ice_failed_timeout, None);
+    assert_eq!(s.timeout.ice_keepalive_interval, None);
 
     s.set_ice_timeouts(
-        Duration::from_secs(1),
-        Duration::from_secs(2),
-        Duration::from_secs(3),
+        Some(Duration::from_secs(1)),
+        Some(Duration::from_secs(2)),
+        Some(Duration::from_secs(3)),
     );
-    assert_eq!(s.timeout.ice_disconnected_timeout, Duration::from_secs(1));
-    assert_eq!(s.timeout.ice_failed_timeout, Duration::from_secs(2));
-    assert_eq!(s.timeout.ice_keepalive_interval, Duration::from_secs(3));
+    assert_eq!(
+        s.timeout.ice_disconnected_timeout,
+        Some(Duration::from_secs(1))
+    );
+    assert_eq!(s.timeout.ice_failed_timeout, Some(Duration::from_secs(2)));
+    assert_eq!(
+        s.timeout.ice_keepalive_interval,
+        Some(Duration::from_secs(3))
+    );
 
     Ok(())
 }

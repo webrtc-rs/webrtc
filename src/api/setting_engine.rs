@@ -27,13 +27,13 @@ pub struct Detach {
 
 #[derive(Default, Clone)]
 pub struct Timeout {
-    pub ice_disconnected_timeout: Duration,
-    pub ice_failed_timeout: Duration,
-    pub ice_keepalive_interval: Duration,
-    pub ice_host_acceptance_min_wait: Duration,
-    pub ice_srflx_acceptance_min_wait: Duration,
-    pub ice_prflx_acceptance_min_wait: Duration,
-    pub ice_relay_acceptance_min_wait: Duration,
+    pub ice_disconnected_timeout: Option<Duration>,
+    pub ice_failed_timeout: Option<Duration>,
+    pub ice_keepalive_interval: Option<Duration>,
+    pub ice_host_acceptance_min_wait: Option<Duration>,
+    pub ice_srflx_acceptance_min_wait: Option<Duration>,
+    pub ice_prflx_acceptance_min_wait: Option<Duration>,
+    pub ice_relay_acceptance_min_wait: Option<Duration>,
 }
 
 #[derive(Default, Clone)]
@@ -100,9 +100,9 @@ impl SettingEngine {
     /// * keep_alive_interval is how often the ICE Agent sends extra traffic if there is no activity, if media is flowing no traffic will be sent. Default is 2 seconds
     pub fn set_ice_timeouts(
         &mut self,
-        disconnected_timeout: Duration,
-        failed_timeout: Duration,
-        keep_alive_interval: Duration,
+        disconnected_timeout: Option<Duration>,
+        failed_timeout: Option<Duration>,
+        keep_alive_interval: Option<Duration>,
     ) {
         self.timeout.ice_disconnected_timeout = disconnected_timeout;
         self.timeout.ice_failed_timeout = failed_timeout;
@@ -110,22 +110,22 @@ impl SettingEngine {
     }
 
     /// set_host_acceptance_min_wait sets the icehost_acceptance_min_wait
-    pub fn set_host_acceptance_min_wait(&mut self, t: Duration) {
+    pub fn set_host_acceptance_min_wait(&mut self, t: Option<Duration>) {
         self.timeout.ice_host_acceptance_min_wait = t;
     }
 
     /// set_srflx_acceptance_min_wait sets the icesrflx_acceptance_min_wait
-    pub fn set_srflx_acceptance_min_wait(&mut self, t: Duration) {
+    pub fn set_srflx_acceptance_min_wait(&mut self, t: Option<Duration>) {
         self.timeout.ice_srflx_acceptance_min_wait = t;
     }
 
     /// set_prflx_acceptance_min_wait sets the iceprflx_acceptance_min_wait
-    pub fn set_prflx_acceptance_min_wait(&mut self, t: Duration) {
+    pub fn set_prflx_acceptance_min_wait(&mut self, t: Option<Duration>) {
         self.timeout.ice_prflx_acceptance_min_wait = t;
     }
 
     /// set_relay_acceptance_min_wait sets the icerelay_acceptance_min_wait
-    pub fn set_relay_acceptance_min_wait(&mut self, t: Duration) {
+    pub fn set_relay_acceptance_min_wait(&mut self, t: Option<Duration>) {
         self.timeout.ice_relay_acceptance_min_wait = t;
     }
 

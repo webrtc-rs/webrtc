@@ -36,9 +36,9 @@ pub(crate) async fn create_vnet_pair(
     let mut offer_setting_engine = SettingEngine::default();
     offer_setting_engine.set_vnet(Some(offer_vnet));
     offer_setting_engine.set_ice_timeouts(
-        Duration::from_secs(1),
-        Duration::from_secs(1),
-        Duration::from_millis(200),
+        Some(Duration::from_secs(1)),
+        Some(Duration::from_secs(1)),
+        Some(Duration::from_millis(200)),
     );
 
     // Create a network interface for answerer
@@ -61,9 +61,9 @@ pub(crate) async fn create_vnet_pair(
     let mut answer_setting_engine = SettingEngine::default();
     answer_setting_engine.set_vnet(Some(answer_vnet));
     answer_setting_engine.set_ice_timeouts(
-        Duration::from_secs(1),
-        Duration::from_secs(1),
-        Duration::from_millis(200),
+        Some(Duration::from_secs(1)),
+        Some(Duration::from_secs(1)),
+        Some(Duration::from_millis(200)),
     );
 
     // Start the virtual network by calling Start() on the root router

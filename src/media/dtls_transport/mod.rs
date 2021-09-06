@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod dtls_transport_test;
+
 pub mod dtls_certificate;
 pub mod dtls_fingerprint;
 pub mod dtls_parameters;

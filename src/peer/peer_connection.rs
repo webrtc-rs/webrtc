@@ -1385,6 +1385,8 @@ impl PeerConnection {
                 self.start_rtp_senders().await?;
             }
 
+            //log::trace!("start_transports: parsed={:?}", parsed);
+
             let pci = Arc::clone(&self.internal);
             let sdp_semantics = self.configuration.sdp_semantics;
             let dtls_role = DTLSRole::from(parsed);
@@ -1402,7 +1404,7 @@ impl PeerConnection {
                         log::trace!(
                             "start_transports: ice_role={}, dtls_role={}",
                             ice_role,
-                            dtls_role
+                            dtls_role,
                         );
                         pc.start_transports(ice_role, dtls_role, ru, rp, fp, fp_hash)
                             .await;
@@ -2010,22 +2012,24 @@ impl PeerConnection {
         // It's possible to miss the GatherComplete event since setGatherCompleteHandler is an atomic operation and the
         // promise might have been created after the gathering is finished. Therefore, we need to check if the ICE gathering
         // state has changed to complete so that we don't block the caller forever.
-        let ice_gatherer = Arc::clone(&self.internal.ice_gatherer);
-        let mut done = Some(gathering_complete_tx);
+        let done = Arc::new(Mutex::new(Some(gathering_complete_tx)));
+        let done2 = Arc::clone(&done);
         self.internal
             .set_gather_complete_handler(Box::new(move || {
-                let state = match ice_gatherer.state() {
-                    ICEGathererState::New => ICEGatheringState::New,
-                    ICEGathererState::Gathering => ICEGatheringState::Gathering,
-                    _ => ICEGatheringState::Complete,
-                };
-                if state == ICEGatheringState::Complete {
-                    log::trace!("ICEGatheringState::Complete");
-                    done.take();
-                }
-                Box::pin(async move {})
+                log::trace!("setGatherCompleteHandler");
+                let done3 = Arc::clone(&done2);
+                Box::pin(async move {
+                    let mut d = done3.lock().await;
+                    d.take();
+                })
             }))
             .await;
+
+        if self.ice_gathering_state() == ICEGatheringState::Complete {
+            log::trace!("ICEGatheringState::Complete");
+            let mut d = done.lock().await;
+            d.take();
+        }
 
         gathering_complete_rx
     }
