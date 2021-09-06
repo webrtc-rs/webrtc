@@ -71,10 +71,6 @@ pub struct AgentInternal {
     pub(crate) check_interval: Duration,
 }
 
-//TODO: remove unsafe
-unsafe impl Send for AgentInternal {}
-unsafe impl Sync for AgentInternal {}
-
 impl AgentInternal {
     pub(super) fn new(config: &AgentConfig) -> (Self, ChanReceivers) {
         let (chan_state_tx, chan_state_rx) = mpsc::channel(1);
@@ -542,11 +538,7 @@ impl AgentInternal {
     ) -> Result<()> {
         let initialized_ch = {
             let started_ch_tx = self.started_ch_tx.lock().await;
-            if let Some(tx) = &*started_ch_tx {
-                Some(tx.subscribe())
-            } else {
-                None
-            }
+            (*started_ch_tx).as_ref().map(|tx| tx.subscribe())
         };
 
         log::trace!(
