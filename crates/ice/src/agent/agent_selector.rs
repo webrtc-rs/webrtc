@@ -293,7 +293,7 @@ impl ControllingSelector for AgentInternal {
         remote: &Arc<dyn Candidate + Send + Sync>,
         remote_addr: SocketAddr,
     ) {
-        if let Some(pending_request) = self.handle_inbound_binding_success(m.transaction_id) {
+        if let Some(pending_request) = self.handle_inbound_binding_success(m.transaction_id).await {
             let transaction_addr = pending_request.destination;
 
             // Assert that NAT is not symmetric
@@ -450,7 +450,7 @@ impl ControlledSelector for AgentInternal {
         // request with an appropriate error code response (e.g., 400)
         // [RFC5389].
 
-        if let Some(pending_request) = self.handle_inbound_binding_success(m.transaction_id) {
+        if let Some(pending_request) = self.handle_inbound_binding_success(m.transaction_id).await {
             let transaction_addr = pending_request.destination;
 
             // Assert that NAT is not symmetric

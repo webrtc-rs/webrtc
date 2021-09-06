@@ -485,7 +485,10 @@ impl Agent {
         ai.local_pwd = pwd;
         ai.remote_ufrag = String::new();
         ai.remote_pwd = String::new();
-        ai.pending_binding_requests = vec![];
+        {
+            let mut pending_binding_requests = ai.pending_binding_requests.lock().await;
+            *pending_binding_requests = vec![];
+        }
 
         {
             let mut checklist = ai.agent_conn.checklist.lock().await;

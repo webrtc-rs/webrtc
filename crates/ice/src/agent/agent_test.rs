@@ -305,13 +305,16 @@ async fn test_handle_peer_reflexive_unknown_remote() -> Result<()> {
     tid.0[..3].copy_from_slice("ABC".as_bytes());
 
     let remote_pwd = {
-        let mut ai = a.agent_internal.lock().await;
-        ai.pending_binding_requests = vec![BindingRequest {
-            timestamp: Instant::now(),
-            transaction_id: tid,
-            destination: SocketAddr::from_str("0.0.0.0:0")?,
-            is_use_candidate: false,
-        }];
+        let ai = a.agent_internal.lock().await;
+        {
+            let mut pending_binding_requests = ai.pending_binding_requests.lock().await;
+            *pending_binding_requests = vec![BindingRequest {
+                timestamp: Instant::now(),
+                transaction_id: tid,
+                destination: SocketAddr::from_str("0.0.0.0:0")?,
+                is_use_candidate: false,
+            }];
+        }
         ai.remote_pwd.clone()
     };
 
@@ -1499,25 +1502,31 @@ async fn test_binding_request_timeout() -> Result<()> {
     let now = Instant::now();
     {
         let mut ai = a.agent_internal.lock().await;
-        ai.pending_binding_requests.push(BindingRequest {
-            timestamp: now, // valid
-            ..Default::default()
-        });
-        ai.pending_binding_requests.push(BindingRequest {
-            timestamp: now.sub(Duration::from_millis(3900)), // valid
-            ..Default::default()
-        });
-        ai.pending_binding_requests.push(BindingRequest {
-            timestamp: now.sub(Duration::from_millis(4100)), // invalid
-            ..Default::default()
-        });
-        ai.pending_binding_requests.push(BindingRequest {
-            timestamp: now.sub(Duration::from_secs(75)), // invalid
-            ..Default::default()
-        });
+        {
+            let mut pending_binding_requests = ai.pending_binding_requests.lock().await;
+            pending_binding_requests.push(BindingRequest {
+                timestamp: now, // valid
+                ..Default::default()
+            });
+            pending_binding_requests.push(BindingRequest {
+                timestamp: now.sub(Duration::from_millis(3900)), // valid
+                ..Default::default()
+            });
+            pending_binding_requests.push(BindingRequest {
+                timestamp: now.sub(Duration::from_millis(4100)), // invalid
+                ..Default::default()
+            });
+            pending_binding_requests.push(BindingRequest {
+                timestamp: now.sub(Duration::from_secs(75)), // invalid
+                ..Default::default()
+            });
+        }
 
-        ai.invalidate_pending_binding_requests(now);
-        assert_eq!(EXPECTED_REMOVAL_COUNT, ai.pending_binding_requests.len(), "Binding invalidation due to timeout did not remove the correct number of binding requests")
+        ai.invalidate_pending_binding_requests(now).await;
+        {
+            let pending_binding_requests = ai.pending_binding_requests.lock().await;
+            assert_eq!(EXPECTED_REMOVAL_COUNT, pending_binding_requests.len(), "Binding invalidation due to timeout did not remove the correct number of binding requests")
+        }
     }
 
     a.close().await?;

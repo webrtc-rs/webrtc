@@ -46,8 +46,9 @@ pub struct AgentInternal {
     pub(crate) remote_ufrag: String,
     pub(crate) remote_pwd: String,
     pub(crate) remote_candidates: HashMap<NetworkType, Vec<Arc<dyn Candidate + Send + Sync>>>,
+
     // LRU of outbound Binding request Transaction IDs
-    pub(crate) pending_binding_requests: Vec<BindingRequest>,
+    pub(crate) pending_binding_requests: Mutex<Vec<BindingRequest>>,
 
     pub(crate) agent_conn: Arc<AgentConn>,
 
@@ -144,7 +145,7 @@ impl AgentInternal {
             remote_pwd: String::new(),
 
             // LRU of outbound Binding request Transaction IDs
-            pending_binding_requests: vec![],
+            pending_binding_requests: Mutex::new(vec![]),
 
             // AgentConn
             agent_conn: Arc::new(AgentConn::new()),
@@ -684,13 +685,17 @@ impl AgentInternal {
     ) {
         log::trace!("ping STUN from {} to {}", local, remote);
 
-        self.invalidate_pending_binding_requests(Instant::now());
-        self.pending_binding_requests.push(BindingRequest {
-            timestamp: Instant::now(),
-            transaction_id: m.transaction_id,
-            destination: remote.addr().await,
-            is_use_candidate: m.contains(ATTR_USE_CANDIDATE),
-        });
+        self.invalidate_pending_binding_requests(Instant::now())
+            .await;
+        {
+            let mut pending_binding_requests = self.pending_binding_requests.lock().await;
+            pending_binding_requests.push(BindingRequest {
+                timestamp: Instant::now(),
+                transaction_id: m.transaction_id,
+                destination: remote.addr().await,
+                is_use_candidate: m.contains(ATTR_USE_CANDIDATE),
+            });
+        }
 
         self.send_stun(m, local, remote).await;
     }
@@ -734,18 +739,19 @@ impl AgentInternal {
     /// transaction timeout, which SHOULD be 2*RTT if RTT is known or 500 ms otherwise.
     ///
     /// reference: (IETF ref-8445)[https://tools.ietf.org/html/rfc8445#appendix-B.1].
-    pub(crate) fn invalidate_pending_binding_requests(&mut self, filter_time: Instant) {
-        let initial_size = self.pending_binding_requests.len();
+    pub(crate) async fn invalidate_pending_binding_requests(&mut self, filter_time: Instant) {
+        let mut pending_binding_requests = self.pending_binding_requests.lock().await;
+        let initial_size = pending_binding_requests.len();
 
         let mut temp = vec![];
-        for binding_request in self.pending_binding_requests.drain(..) {
+        for binding_request in pending_binding_requests.drain(..) {
             if filter_time.duration_since(binding_request.timestamp) < MAX_BINDING_REQUEST_TIMEOUT {
                 temp.push(binding_request);
             }
         }
 
-        self.pending_binding_requests = temp;
-        let bind_requests_removed = initial_size - self.pending_binding_requests.len();
+        *pending_binding_requests = temp;
+        let bind_requests_removed = initial_size - pending_binding_requests.len();
         if bind_requests_removed > 0 {
             log::trace!(
                 "Discarded {} binding requests because they expired",
@@ -756,14 +762,17 @@ impl AgentInternal {
 
     /// Assert that the passed `TransactionID` is in our `pendingBindingRequests` and returns the
     /// destination, If the bindingRequest was valid remove it from our pending cache.
-    pub(crate) fn handle_inbound_binding_success(
+    pub(crate) async fn handle_inbound_binding_success(
         &mut self,
         id: TransactionId,
     ) -> Option<BindingRequest> {
-        self.invalidate_pending_binding_requests(Instant::now());
-        for i in 0..self.pending_binding_requests.len() {
-            if self.pending_binding_requests[i].transaction_id == id {
-                let valid_binding_request = self.pending_binding_requests.remove(i);
+        self.invalidate_pending_binding_requests(Instant::now())
+            .await;
+
+        let mut pending_binding_requests = self.pending_binding_requests.lock().await;
+        for i in 0..pending_binding_requests.len() {
+            if pending_binding_requests[i].transaction_id == id {
+                let valid_binding_request = pending_binding_requests.remove(i);
                 return Some(valid_binding_request);
             }
         }
