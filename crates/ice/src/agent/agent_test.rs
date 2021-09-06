@@ -235,10 +235,10 @@ async fn test_handle_peer_reflexive_udp_pflx_candidate() -> Result<()> {
 
     let (username, local_pwd, tie_breaker) = {
         let ai = a.agent_internal.lock().await;
-
+        let ufrag_pwd = ai.ufrag_pwd.lock().await;
         (
-            ai.local_ufrag.to_owned() + ":" + ai.remote_ufrag.as_str(),
-            ai.local_pwd.clone(),
+            ufrag_pwd.local_ufrag.to_owned() + ":" + ufrag_pwd.remote_ufrag.as_str(),
+            ufrag_pwd.local_pwd.clone(),
             ai.tie_breaker.load(Ordering::SeqCst),
         )
     };
@@ -259,15 +259,16 @@ async fn test_handle_peer_reflexive_udp_pflx_candidate() -> Result<()> {
         let mut ai = a.agent_internal.lock().await;
         ai.handle_inbound(&mut msg, &local, remote).await;
 
+        let remote_candidates = ai.remote_candidates.lock().await;
         // length of remote candidate list must be one now
         assert_eq!(
-            ai.remote_candidates.len(),
+            remote_candidates.len(),
             1,
             "failed to add a network type to the remote candidate list"
         );
 
         // length of remote candidate list for a network type must be 1
-        if let Some(cands) = ai.remote_candidates.get(&local.network_type()) {
+        if let Some(cands) = remote_candidates.get(&local.network_type()) {
             assert_eq!(
                 cands.len(),
                 1,
@@ -315,7 +316,8 @@ async fn test_handle_peer_reflexive_unknown_remote() -> Result<()> {
                 is_use_candidate: false,
             }];
         }
-        ai.remote_pwd.clone()
+        let ufrag_pwd = ai.ufrag_pwd.lock().await;
+        ufrag_pwd.remote_pwd.clone()
     };
 
     let host_config = CandidateHostConfig {
@@ -345,8 +347,9 @@ async fn test_handle_peer_reflexive_unknown_remote() -> Result<()> {
         let mut ai = a.agent_internal.lock().await;
         ai.handle_inbound(&mut msg, &local, remote).await;
 
+        let remote_candidates = ai.remote_candidates.lock().await;
         assert_eq!(
-            ai.remote_candidates.len(),
+            remote_candidates.len(),
             0,
             "unknown remote was able to create a candidate"
         );
@@ -638,31 +641,43 @@ async fn test_inbound_validity() -> Result<()> {
         {
             let mut ai = a.agent_internal.lock().await;
 
-            let local_pwd = ai.local_pwd.clone();
+            let local_pwd = {
+                let ufrag_pwd = ai.ufrag_pwd.lock().await;
+                ufrag_pwd.local_pwd.clone()
+            };
             ai.handle_inbound(
                 &mut build_msg(CLASS_REQUEST, "invalid".to_owned(), local_pwd)?,
                 &local,
                 remote,
             )
             .await;
-            assert_ne!(
-                ai.remote_candidates.len(),
-                1,
-                "Binding with invalid Username was able to create prflx candidate"
-            );
+            {
+                let remote_candidates = ai.remote_candidates.lock().await;
+                assert_ne!(
+                    remote_candidates.len(),
+                    1,
+                    "Binding with invalid Username was able to create prflx candidate"
+                );
+            }
 
-            let username = format!("{}:{}", ai.local_ufrag, ai.remote_ufrag);
+            let username = {
+                let ufrag_pwd = ai.ufrag_pwd.lock().await;
+                format!("{}:{}", ufrag_pwd.local_ufrag, ufrag_pwd.remote_ufrag)
+            };
             ai.handle_inbound(
                 &mut build_msg(CLASS_REQUEST, username, "Invalid".to_owned())?,
                 &local,
                 remote,
             )
             .await;
-            assert_ne!(
-                ai.remote_candidates.len(),
-                1,
-                "Binding with invalid MessageIntegrity was able to create prflx candidate"
-            );
+            {
+                let remote_candidates = ai.remote_candidates.lock().await;
+                assert_ne!(
+                    remote_candidates.len(),
+                    1,
+                    "Binding with invalid MessageIntegrity was able to create prflx candidate"
+                );
+            }
         }
 
         a.close().await?;
@@ -674,19 +689,24 @@ async fn test_inbound_validity() -> Result<()> {
 
         {
             let mut ai = a.agent_internal.lock().await;
-
-            let username = format!("{}:{}", ai.local_ufrag, ai.remote_ufrag);
+            let username = {
+                let ufrag_pwd = ai.ufrag_pwd.lock().await;
+                format!("{}:{}", ufrag_pwd.local_ufrag, ufrag_pwd.remote_ufrag)
+            };
             ai.handle_inbound(
                 &mut build_msg(CLASS_SUCCESS_RESPONSE, username, "Invalid".to_owned())?,
                 &local,
                 remote,
             )
             .await;
-            assert_ne!(
-                ai.remote_candidates.len(),
-                1,
-                "Binding with invalid Username was able to create prflx candidate"
-            );
+            {
+                let remote_candidates = ai.remote_candidates.lock().await;
+                assert_ne!(
+                    remote_candidates.len(),
+                    1,
+                    "Binding with invalid Username was able to create prflx candidate"
+                );
+            }
         }
 
         a.close().await?;
@@ -699,15 +719,19 @@ async fn test_inbound_validity() -> Result<()> {
         {
             let mut ai = a.agent_internal.lock().await;
 
-            let username = format!("{}:{}", ai.local_ufrag, ai.remote_ufrag);
+            let username = {
+                let ufrag_pwd = ai.ufrag_pwd.lock().await;
+                format!("{}:{}", ufrag_pwd.local_ufrag, ufrag_pwd.remote_ufrag)
+            };
             ai.handle_inbound(
                 &mut build_msg(CLASS_ERROR_RESPONSE, username, "Invalid".to_owned())?,
                 &local,
                 remote,
             )
             .await;
+            let remote_candidates = ai.remote_candidates.lock().await;
             assert_ne!(
-                ai.remote_candidates.len(),
+                remote_candidates.len(),
                 1,
                 "non-binding message was able to create prflxRemote"
             );
@@ -723,16 +747,22 @@ async fn test_inbound_validity() -> Result<()> {
         {
             let mut ai = a.agent_internal.lock().await;
 
-            let username = format!("{}:{}", ai.local_ufrag, ai.remote_ufrag);
-            let local_pwd = ai.local_pwd.clone();
+            let (username, local_pwd) = {
+                let ufrag_pwd = ai.ufrag_pwd.lock().await;
+                (
+                    format!("{}:{}", ufrag_pwd.local_ufrag, ufrag_pwd.remote_ufrag),
+                    ufrag_pwd.local_pwd.clone(),
+                )
+            };
             ai.handle_inbound(
                 &mut build_msg(CLASS_REQUEST, username, local_pwd)?,
                 &local,
                 remote,
             )
             .await;
+            let remote_candidates = ai.remote_candidates.lock().await;
             assert_eq!(
-                ai.remote_candidates.len(),
+                remote_candidates.len(),
                 1,
                 "Binding with valid values was unable to create prflx candidate"
             );
@@ -748,8 +778,13 @@ async fn test_inbound_validity() -> Result<()> {
         {
             let mut ai = a.agent_internal.lock().await;
 
-            let username = format!("{}:{}", ai.local_ufrag, ai.remote_ufrag);
-            let local_pwd = ai.local_pwd.clone();
+            let (username, local_pwd) = {
+                let ufrag_pwd = ai.ufrag_pwd.lock().await;
+                (
+                    format!("{}:{}", ufrag_pwd.local_ufrag, ufrag_pwd.remote_ufrag),
+                    ufrag_pwd.local_pwd.clone(),
+                )
+            };
 
             let mut msg = Message::new();
             msg.build(&[
@@ -760,8 +795,9 @@ async fn test_inbound_validity() -> Result<()> {
             ])?;
 
             ai.handle_inbound(&mut msg, &local, remote).await;
+            let remote_candidates = ai.remote_candidates.lock().await;
             assert_eq!(
-                ai.remote_candidates.len(),
+                remote_candidates.len(),
                 1,
                 "Binding with valid values (but no fingerprint) was unable to create prflx candidate"
             );
@@ -781,7 +817,10 @@ async fn test_inbound_validity() -> Result<()> {
             let mut t_id = TransactionId::default();
             t_id.0[..3].copy_from_slice(b"ABC");
 
-            let remote_pwd = ai.remote_pwd.clone();
+            let remote_pwd = {
+                let ufrag_pwd = ai.ufrag_pwd.lock().await;
+                ufrag_pwd.remote_pwd.clone()
+            };
 
             let mut msg = Message::new();
             msg.build(&[
@@ -792,11 +831,15 @@ async fn test_inbound_validity() -> Result<()> {
             ])?;
 
             ai.handle_inbound(&mut msg, &local, remote).await;
-            assert_eq!(
-                ai.remote_candidates.len(),
-                0,
-                "unknown remote was able to create a candidate"
-            );
+
+            {
+                let remote_candidates = ai.remote_candidates.lock().await;
+                assert_eq!(
+                    remote_candidates.len(),
+                    0,
+                    "unknown remote was able to create a candidate"
+                );
+            }
         }
 
         a.close().await?;
@@ -1185,8 +1228,9 @@ async fn test_local_candidate_stats() -> Result<()> {
     );
 
     {
-        let mut ai = a.agent_internal.lock().await;
-        ai.local_candidates.insert(
+        let ai = a.agent_internal.lock().await;
+        let mut local_candidates = ai.local_candidates.lock().await;
+        local_candidates.insert(
             NetworkType::Udp4,
             vec![Arc::clone(&host_local), Arc::clone(&srflx_local)],
         );
@@ -1311,8 +1355,9 @@ async fn test_remote_candidate_stats() -> Result<()> {
     );
 
     {
-        let mut ai = a.agent_internal.lock().await;
-        ai.remote_candidates.insert(
+        let ai = a.agent_internal.lock().await;
+        let mut remote_candidates = ai.remote_candidates.lock().await;
+        remote_candidates.insert(
             NetworkType::Udp4,
             vec![
                 Arc::clone(&relay_remote),
@@ -1544,8 +1589,9 @@ async fn test_agent_credentials() -> Result<()> {
     let a = Agent::new(AgentConfig::default()).await?;
     {
         let ai = a.agent_internal.lock().await;
-        assert!(ai.local_ufrag.as_bytes().len() * 8 >= 24);
-        assert!(ai.local_pwd.as_bytes().len() * 8 >= 128);
+        let ufrag_pwd = ai.ufrag_pwd.lock().await;
+        assert!(ufrag_pwd.local_ufrag.as_bytes().len() * 8 >= 24);
+        assert!(ufrag_pwd.local_pwd.as_bytes().len() * 8 >= 128);
     }
     a.close().await?;
 
@@ -1623,8 +1669,14 @@ async fn test_connection_state_failed_delete_all_candidates() -> Result<()> {
 
     {
         let ai = a_agent.agent_internal.lock().await;
-        assert_eq!(ai.remote_candidates.len(), 0);
-        assert_eq!(ai.local_candidates.len(), 0);
+        {
+            let remote_candidates = ai.remote_candidates.lock().await;
+            assert_eq!(remote_candidates.len(), 0);
+        }
+        {
+            let local_candidates = ai.local_candidates.lock().await;
+            assert_eq!(local_candidates.len(), 0);
+        }
     }
 
     a_agent.close().await?;
@@ -1881,10 +1933,14 @@ async fn test_get_remote_credentials() -> Result<()> {
     let a = Agent::new(AgentConfig::default()).await?;
 
     let (remote_ufrag, remote_pwd) = {
-        let mut ai = a.agent_internal.lock().await;
-        ai.remote_ufrag = "remoteUfrag".to_owned();
-        ai.remote_pwd = "remotePwd".to_owned();
-        (ai.remote_ufrag.to_owned(), ai.remote_pwd.to_owned())
+        let ai = a.agent_internal.lock().await;
+        let mut ufrag_pwd = ai.ufrag_pwd.lock().await;
+        ufrag_pwd.remote_ufrag = "remoteUfrag".to_owned();
+        ufrag_pwd.remote_pwd = "remotePwd".to_owned();
+        (
+            ufrag_pwd.remote_ufrag.to_owned(),
+            ufrag_pwd.remote_pwd.to_owned(),
+        )
     };
 
     let (actual_ufrag, actual_pwd) = a.get_remote_user_credentials().await;
