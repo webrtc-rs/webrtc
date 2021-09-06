@@ -232,21 +232,25 @@ impl Agent {
 
     /// Sets a handler that is fired when the connection state changes.
     pub async fn on_connection_state_change(&self, f: OnConnectionStateChangeHdlrFn) {
-        let mut ai = self.agent_internal.lock().await;
-        ai.on_connection_state_change_hdlr = Some(f);
+        let ai = self.agent_internal.lock().await;
+        let mut on_connection_state_change_hdlr = ai.on_connection_state_change_hdlr.lock().await;
+        *on_connection_state_change_hdlr = Some(f);
     }
 
     /// Sets a handler that is fired when the final candidate pair is selected.
     pub async fn on_selected_candidate_pair_change(&self, f: OnSelectedCandidatePairChangeHdlrFn) {
-        let mut ai = self.agent_internal.lock().await;
-        ai.on_selected_candidate_pair_change_hdlr = Some(f);
+        let ai = self.agent_internal.lock().await;
+        let mut on_selected_candidate_pair_change_hdlr =
+            ai.on_selected_candidate_pair_change_hdlr.lock().await;
+        *on_selected_candidate_pair_change_hdlr = Some(f);
     }
 
     /// Sets a handler that is fired when new candidates gathered. When the gathering process
     /// complete the last candidate is nil.
     pub async fn on_candidate(&self, f: OnCandidateHdlrFn) {
-        let mut ai = self.agent_internal.lock().await;
-        ai.on_candidate_hdlr = Some(f);
+        let ai = self.agent_internal.lock().await;
+        let mut on_candidate_hdlr = ai.on_candidate_hdlr.lock().await;
+        *on_candidate_hdlr = Some(f);
     }
 
     async fn start_on_connection_state_change_routine(
@@ -262,18 +266,21 @@ impl Agent {
             // Blocking one by the other one causes deadlock.
             while chan_candidate_pair_rx.recv().await.is_some() {
                 log::trace!("start_on_connection_state_change_routine: enter chan_candidate_pair_rx.recv before lock");
-                let mut ai = agent_internal_pair.lock().await;
+                let ai = agent_internal_pair.lock().await;
                 log::trace!("start_on_connection_state_change_routine: enter chan_candidate_pair_rx.recv after lock");
                 let selected_pair = {
                     let selected_pair = ai.agent_conn.selected_pair.lock().await;
                     selected_pair.clone()
                 };
 
-                if let (Some(on_selected_candidate_pair_change), Some(p)) = (
-                    &mut ai.on_selected_candidate_pair_change_hdlr,
-                    &selected_pair,
-                ) {
-                    on_selected_candidate_pair_change(&p.local, &p.remote).await;
+                {
+                    let mut on_selected_candidate_pair_change_hdlr =
+                        ai.on_selected_candidate_pair_change_hdlr.lock().await;
+                    if let (Some(f), Some(p)) =
+                        (&mut *on_selected_candidate_pair_change_hdlr, &selected_pair)
+                    {
+                        f(&p.local, &p.remote).await;
+                    }
                 }
                 log::trace!(
                     "start_on_connection_state_change_routine: exit chan_candidate_pair_rx.recv"
@@ -286,16 +293,18 @@ impl Agent {
                 tokio::select! {
                     opt_state = chan_state_rx.recv() => {
                         log::trace!("start_on_connection_state_change_routine: enter chan_state_rx.recv before lock");
-                        let mut ai = agent_internal.lock().await;
+                        let ai = agent_internal.lock().await;
                         log::trace!("start_on_connection_state_change_routine: enter chan_state_rx.recv after lock");
                         if let Some(s) = opt_state {
-                            if let Some(on_connection_state_change) = &mut ai.on_connection_state_change_hdlr{
-                                on_connection_state_change(s).await;
+                            let mut on_connection_state_change_hdlr = ai.on_connection_state_change_hdlr.lock().await;
+                            if let Some(f) = &mut *on_connection_state_change_hdlr{
+                                f(s).await;
                             }
                         } else {
                             while let Some(c) = chan_candidate_rx.recv().await {
-                                if let Some(on_candidate) = &mut ai.on_candidate_hdlr {
-                                    on_candidate(c).await;
+                                let mut on_candidate_hdlr = ai.on_candidate_hdlr.lock().await;
+                                if let Some(f) = &mut *on_candidate_hdlr {
+                                    f(c).await;
                                 }
                             }
                             break;
@@ -304,16 +313,18 @@ impl Agent {
                     },
                     opt_cand = chan_candidate_rx.recv() => {
                         log::trace!("start_on_connection_state_change_routine: enter chan_candidate_rx.recv before lock");
-                        let mut ai = agent_internal.lock().await;
+                        let ai = agent_internal.lock().await;
                         log::trace!("start_on_connection_state_change_routine: enter chan_candidate_rx.recv after lock");
                         if let Some(c) = opt_cand {
-                            if let Some(on_candidate) = &mut ai.on_candidate_hdlr{
-                                on_candidate(c).await;
+                            let mut on_candidate_hdlr = ai.on_candidate_hdlr.lock().await;
+                            if let Some(f) = &mut *on_candidate_hdlr{
+                                f(c).await;
                             }
                         } else {
                             while let Some(s) = chan_state_rx.recv().await {
-                                if let Some(on_connection_state_change) = &mut ai.on_connection_state_change_hdlr{
-                                    on_connection_state_change(s).await;
+                                let mut on_connection_state_change_hdlr = ai.on_connection_state_change_hdlr.lock().await;
+                                if let Some(f) = &mut *on_connection_state_change_hdlr{
+                                    f(s).await;
                                 }
                             }
                             break;
@@ -500,7 +511,8 @@ impl Agent {
 
         let chan_candidate_tx = {
             let ai = self.agent_internal.lock().await;
-            if ai.on_candidate_hdlr.is_none() {
+            let on_candidate_hdlr = ai.on_candidate_hdlr.lock().await;
+            if on_candidate_hdlr.is_none() {
                 return Err(Error::ErrNoOnCandidateHandler.into());
             }
             ai.chan_candidate_tx.clone()

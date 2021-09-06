@@ -23,9 +23,10 @@ pub struct AgentInternal {
     pub(crate) chan_candidate_pair_tx: Mutex<Option<mpsc::Sender<()>>>,
     pub(crate) chan_state_tx: Mutex<Option<mpsc::Sender<ConnectionState>>>,
 
-    pub(crate) on_connection_state_change_hdlr: Option<OnConnectionStateChangeHdlrFn>,
-    pub(crate) on_selected_candidate_pair_change_hdlr: Option<OnSelectedCandidatePairChangeHdlrFn>,
-    pub(crate) on_candidate_hdlr: Option<OnCandidateHdlrFn>,
+    pub(crate) on_connection_state_change_hdlr: Arc<Mutex<Option<OnConnectionStateChangeHdlrFn>>>,
+    pub(crate) on_selected_candidate_pair_change_hdlr:
+        Arc<Mutex<Option<OnSelectedCandidatePairChangeHdlrFn>>>,
+    pub(crate) on_candidate_hdlr: Arc<Mutex<Option<OnCandidateHdlrFn>>>,
 
     pub(crate) tie_breaker: u64,
 
@@ -105,9 +106,9 @@ impl AgentInternal {
             chan_candidate_pair_tx: Mutex::new(Some(chan_candidate_pair_tx)),
             chan_state_tx: Mutex::new(Some(chan_state_tx)),
 
-            on_connection_state_change_hdlr: None,
-            on_selected_candidate_pair_change_hdlr: None,
-            on_candidate_hdlr: None,
+            on_connection_state_change_hdlr: Arc::new(Mutex::new(None)),
+            on_selected_candidate_pair_change_hdlr: Arc::new(Mutex::new(None)),
+            on_candidate_hdlr: Arc::new(Mutex::new(None)),
 
             tie_breaker: rand::random::<u64>(),
 
