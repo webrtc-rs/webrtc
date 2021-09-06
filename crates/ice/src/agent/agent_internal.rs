@@ -38,7 +38,7 @@ pub struct AgentInternal {
 
     pub(crate) connection_state: AtomicU8, //ConnectionState,
 
-    pub(crate) started_ch_tx: Option<broadcast::Sender<()>>,
+    pub(crate) started_ch_tx: Mutex<Option<broadcast::Sender<()>>>,
 
     pub(crate) max_binding_requests: u16,
 
@@ -124,7 +124,7 @@ impl AgentInternal {
 
             insecure_skip_verify: config.insecure_skip_verify,
 
-            started_ch_tx: Some(started_ch_tx),
+            started_ch_tx: Mutex::new(Some(started_ch_tx)),
 
             max_binding_requests: 0,
 
@@ -175,8 +175,11 @@ impl AgentInternal {
         remote_ufrag: String,
         remote_pwd: String,
     ) -> Result<()> {
-        if self.started_ch_tx.is_none() {
-            return Err(Error::ErrMultipleStart.into());
+        {
+            let started_ch_tx = self.started_ch_tx.lock().await;
+            if started_ch_tx.is_none() {
+                return Err(Error::ErrMultipleStart.into());
+            }
         }
 
         log::debug!(
@@ -188,7 +191,10 @@ impl AgentInternal {
         self.set_remote_credentials(remote_ufrag, remote_pwd)?;
         self.is_controlling.store(is_controlling, Ordering::SeqCst);
         self.start().await;
-        self.started_ch_tx.take();
+        {
+            let mut started_ch_tx = self.started_ch_tx.lock().await;
+            started_ch_tx.take();
+        }
 
         self.update_connection_state(ConnectionState::Checking)
             .await;
@@ -541,10 +547,14 @@ impl AgentInternal {
         c: &Arc<dyn Candidate + Send + Sync>,
         ai: &Arc<Mutex<Self>>,
     ) -> Result<()> {
-        let initialized_ch = self
-            .started_ch_tx
-            .as_ref()
-            .map(tokio::sync::broadcast::Sender::subscribe);
+        let initialized_ch = {
+            let started_ch_tx = self.started_ch_tx.lock().await;
+            if let Some(tx) = &*started_ch_tx {
+                Some(tx.subscribe())
+            } else {
+                None
+            }
+        };
 
         log::trace!(
             "ice add_candidate: start_candidate with {}:{}",
@@ -613,7 +623,10 @@ impl AgentInternal {
             done_tx.take();
         };
         self.delete_all_candidates().await;
-        self.started_ch_tx.take();
+        {
+            let mut started_ch_tx = self.started_ch_tx.lock().await;
+            started_ch_tx.take();
+        }
 
         self.agent_conn.buffer.close().await;
 
