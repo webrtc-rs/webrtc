@@ -12,8 +12,10 @@ pub struct AgentInternal {
     pub(crate) on_connected_rx: Mutex<Option<mpsc::Receiver<()>>>,
 
     // State for closing
-    pub(crate) done_tx: Option<mpsc::Sender<()>>,
-    pub(crate) done_rx: Option<mpsc::Receiver<()>>,
+    pub(crate) done_tx: Mutex<Option<mpsc::Sender<()>>>,
+    // force candidate to be contacted immediately (instead of waiting for task ticker)
+    pub(crate) force_candidate_contact_tx: mpsc::Sender<bool>,
+    pub(crate) done_and_force_candidate_contact_rx: Mutex<Option<(mpsc::Receiver<()>,mpsc::Receiver<bool>)>>,
 
     pub(crate) chan_candidate_tx: ChanCandidateTx,
     pub(crate) chan_candidate_pair_tx: Option<mpsc::Sender<()>>,
@@ -23,9 +25,7 @@ pub struct AgentInternal {
     pub(crate) on_selected_candidate_pair_change_hdlr: Option<OnSelectedCandidatePairChangeHdlrFn>,
     pub(crate) on_candidate_hdlr: Option<OnCandidateHdlrFn>,
 
-    // force candidate to be contacted immediately (instead of waiting for task ticker)
-    pub(crate) force_candidate_contact_tx: mpsc::Sender<bool>,
-    pub(crate) force_candidate_contact_rx: Option<mpsc::Receiver<bool>>,
+
     pub(crate) tie_breaker: u64,
 
     pub(crate) is_controlling: bool,
@@ -93,12 +93,9 @@ impl AgentInternal {
             on_connected_tx: Mutex::new(Some(on_connected_tx)),
             on_connected_rx: Mutex::new(Some(on_connected_rx)),
 
-            // State for closing
-            done_tx: Some(done_tx),
-            done_rx: Some(done_rx),
-
+            done_tx: Mutex::new(Some(done_tx)),
             force_candidate_contact_tx,
-            force_candidate_contact_rx: Some(force_candidate_contact_rx),
+            done_and_force_candidate_contact_rx: Mutex::new(Some((done_rx, force_candidate_contact_rx))),
 
             chan_state_tx: Some(chan_state_tx),
             chan_candidate_tx: Some(Arc::new(chan_candidate_tx)),
@@ -241,9 +238,12 @@ impl AgentInternal {
             self.failed_timeout,
         );
 
-        if let (Some(mut force_candidate_contact_rx), Some(mut done_rx)) =
-            (self.force_candidate_contact_rx.take(), self.done_rx.take())
-        {
+        let done_and_force_candidate_contact_rx = {
+            let mut done_and_force_candidate_contact_rx = self.done_and_force_candidate_contact_rx.lock().await;
+            done_and_force_candidate_contact_rx.take()
+        };
+
+        if let Some((mut done_rx, mut force_candidate_contact_rx)) = done_and_force_candidate_contact_rx {
             tokio::spawn(async move {
                 loop {
                     let mut interval = DEFAULT_CHECK_INTERVAL;
@@ -582,9 +582,13 @@ impl AgentInternal {
     }
 
     pub(crate) async fn close(&mut self) -> Result<()> {
-        if self.done_tx.is_none() {
-            return Err(Error::ErrClosed.into());
-        }
+        let _d = {
+            let mut done_tx = self.done_tx.lock().await;
+            if done_tx.is_none() {
+                return Err(Error::ErrClosed.into());
+            }
+            done_tx.take();
+        };
         self.delete_all_candidates().await;
         self.started_ch_tx.take();
 
@@ -592,7 +596,6 @@ impl AgentInternal {
 
         self.update_connection_state(ConnectionState::Closed).await;
 
-        self.done_tx.take();
         self.chan_candidate_tx.take();
         self.chan_candidate_pair_tx.take();
         self.chan_state_tx.take();

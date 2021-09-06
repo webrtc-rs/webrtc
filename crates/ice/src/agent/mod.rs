@@ -460,8 +460,11 @@ impl Agent {
 
         let mut ai = self.agent_internal.lock().await;
 
-        if ai.done_tx.is_none() {
-            return Err(Error::ErrClosed.into());
+        {
+            let done_tx = ai.done_tx.lock().await;
+            if done_tx.is_none() {
+                return Err(Error::ErrClosed.into());
+            }
         }
 
         // Clear all agent needed to take back to fresh state
