@@ -133,15 +133,16 @@ impl Agent {
             mdns_mode = MulticastDnsMode::QueryOnly;
         }
 
-        let mdns_conn = match create_multicast_dns(mdns_mode, &mdns_name) {
-            Ok(c) => c,
-            Err(err) => {
-                // Opportunistic mDNS: If we can't open the connection, that's ok: we
-                // can continue without it.
-                log::warn!("Failed to initialize mDNS {}: {}", mdns_name, err);
-                None
-            }
-        };
+        let mdns_conn =
+            match create_multicast_dns(mdns_mode, &mdns_name, &config.multicast_dns_dest_addr) {
+                Ok(c) => c,
+                Err(err) => {
+                    // Opportunistic mDNS: If we can't open the connection, that's ok: we
+                    // can continue without it.
+                    log::warn!("Failed to initialize mDNS {}: {}", mdns_name, err);
+                    None
+                }
+            };
 
         let (mut ai, chan_receivers) = AgentInternal::new(&config);
         let (chan_state_rx, chan_candidate_rx, chan_candidate_pair_rx) = (

@@ -41,15 +41,23 @@ pub(crate) fn generate_multicast_dns_name() -> String {
 pub(crate) fn create_multicast_dns(
     mdns_mode: MulticastDnsMode,
     mdns_name: &str,
+    dest_addr: &str,
 ) -> Result<Option<Arc<DnsConn>>> {
     if mdns_mode == MulticastDnsMode::Disabled {
         return Ok(None);
     }
 
-    //TODO: make it configurable
-    //TODO: why DEFAULT_DEST_ADDR doesn't work on Mac/Win?
-    // let addr = SocketAddr::from_str("0.0.0.0:5353")?;
-    let addr = SocketAddr::from_str(DEFAULT_DEST_ADDR)?;
+    let addr = if dest_addr.is_empty() {
+        //TODO: why DEFAULT_DEST_ADDR doesn't work on Mac/Win?
+        if cfg!(target_os = "linux") {
+            SocketAddr::from_str(DEFAULT_DEST_ADDR)?
+        } else {
+            SocketAddr::from_str("0.0.0.0:5353")?
+        }
+    } else {
+        SocketAddr::from_str(dest_addr)?
+    };
+    log::info!("mDNS is using {} as dest_addr", addr);
 
     match mdns_mode {
         MulticastDnsMode::QueryOnly => {
