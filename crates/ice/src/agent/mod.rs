@@ -33,7 +33,6 @@ use stun::{agent::*, attributes::*, fingerprint::*, integrity::*, message::*, xo
 use util::{vnet::net::*, Buffer};
 
 use crate::agent::agent_gather::GatherCandidatesInternalParams;
-use crate::agent::agent_transport::AgentConn;
 use crate::rand::*;
 use crate::tcp_type::TcpType;
 use std::future::Future;
@@ -85,9 +84,15 @@ pub type OnCandidateHdlrFn = Box<
 >;
 pub type GatherCandidateCancelFn = Box<dyn Fn() + Send + Sync>;
 
+struct ChanReceivers {
+    chan_state_rx: mpsc::Receiver<ConnectionState>,
+    chan_candidate_rx: mpsc::Receiver<Option<Arc<dyn Candidate + Send + Sync>>>,
+    chan_candidate_pair_rx: mpsc::Receiver<()>,
+}
+
 /// Represents the ICE agent.
 pub struct Agent {
-    pub(crate) agent_internal: Arc<Mutex<AgentInternal>>,
+    pub(crate) internal: Arc<AgentInternal>,
 
     pub(crate) port_min: u16,
     pub(crate) port_max: u16,
@@ -128,92 +133,23 @@ impl Agent {
             mdns_mode = MulticastDnsMode::QueryOnly;
         }
 
-        let mdns_conn = match create_multicast_dns(mdns_mode, &mdns_name) {
-            Ok(c) => c,
-            Err(err) => {
-                // Opportunistic mDNS: If we can't open the connection, that's ok: we
-                // can continue without it.
-                log::warn!("Failed to initialize mDNS {}: {}", mdns_name, err);
-                None
-            }
-        };
+        let mdns_conn =
+            match create_multicast_dns(mdns_mode, &mdns_name, &config.multicast_dns_dest_addr) {
+                Ok(c) => c,
+                Err(err) => {
+                    // Opportunistic mDNS: If we can't open the connection, that's ok: we
+                    // can continue without it.
+                    log::warn!("Failed to initialize mDNS {}: {}", mdns_name, err);
+                    None
+                }
+            };
 
-        let (chan_state_tx, chan_state_rx) = mpsc::channel(1);
-        let (chan_candidate_tx, chan_candidate_rx) = mpsc::channel(1);
-        let (chan_candidate_pair_tx, chan_candidate_pair_rx) = mpsc::channel(1);
-        let (on_connected_tx, on_connected_rx) = mpsc::channel(1);
-        let (done_tx, done_rx) = mpsc::channel(1);
-        let (force_candidate_contact_tx, force_candidate_contact_rx) = mpsc::channel(1);
-        let (started_ch_tx, _) = broadcast::channel(1);
-
-        let mut ai = AgentInternal {
-            on_connected_tx: Some(on_connected_tx),
-            on_connected_rx: Some(on_connected_rx),
-
-            // State for closing
-            done_tx: Some(done_tx),
-            done_rx: Some(done_rx),
-
-            force_candidate_contact_tx,
-            force_candidate_contact_rx: Some(force_candidate_contact_rx),
-
-            chan_state_tx: Some(chan_state_tx),
-            chan_candidate_tx: Some(Arc::new(chan_candidate_tx)),
-            chan_candidate_pair_tx: Some(chan_candidate_pair_tx),
-
-            on_connection_state_change_hdlr: None,
-            on_selected_candidate_pair_change_hdlr: None,
-            on_candidate_hdlr: None,
-
-            tie_breaker: rand::random::<u64>(),
-
-            lite: config.lite,
-            is_controlling: config.is_controlling,
-            start_time: Instant::now(),
-            nominated_pair: None,
-
-            connection_state: ConnectionState::New,
-            local_candidates: HashMap::new(),
-            remote_candidates: HashMap::new(),
-
-            insecure_skip_verify: config.insecure_skip_verify,
-
-            started_ch_tx: Some(started_ch_tx),
-
-            max_binding_requests: 0,
-
-            host_acceptance_min_wait: Duration::from_secs(0),
-            srflx_acceptance_min_wait: Duration::from_secs(0),
-            prflx_acceptance_min_wait: Duration::from_secs(0),
-            relay_acceptance_min_wait: Duration::from_secs(0),
-
-            // How long connectivity checks can fail before the ICE Agent
-            // goes to disconnected
-            disconnected_timeout: Duration::from_secs(0),
-
-            // How long connectivity checks can fail before the ICE Agent
-            // goes to failed
-            failed_timeout: Duration::from_secs(0),
-
-            // How often should we send keepalive packets?
-            // 0 means never
-            keepalive_interval: Duration::from_secs(0),
-
-            // How often should we run our internal taskLoop to check for state changes when connecting
-            check_interval: Duration::from_secs(0),
-
-            local_ufrag: String::new(),
-            local_pwd: String::new(),
-
-            remote_ufrag: String::new(),
-            remote_pwd: String::new(),
-
-            // LRU of outbound Binding request Transaction IDs
-            pending_binding_requests: vec![],
-
-            // AgentConn
-            agent_conn: Arc::new(AgentConn::new()),
-        };
+        let (mut ai, chan_receivers) = AgentInternal::new(&config);
+        let (chan_state_rx, chan_candidate_rx, chan_candidate_pair_rx) = (
+            chan_receivers.chan_state_rx,
+            chan_receivers.chan_candidate_rx,
+            chan_receivers.chan_candidate_pair_rx,
+        );
 
         config.init_with_defaults(&mut ai);
 
@@ -223,7 +159,9 @@ impl Agent {
             config.candidate_types.clone()
         };
 
-        if ai.lite && (candidate_types.len() != 1 || candidate_types[0] != CandidateType::Host) {
+        if ai.lite.load(Ordering::SeqCst)
+            && (candidate_types.len() != 1 || candidate_types[0] != CandidateType::Host)
+        {
             Self::close_multicast_conn(&mdns_conn).await;
             return Err(Error::ErrLiteUsingNonHostCandidates.into());
         }
@@ -257,10 +195,10 @@ impl Agent {
             Arc::new(Net::new(None))
         };
 
-        let a = Self {
+        let agent = Self {
             port_min: config.port_min,
             port_max: config.port_max,
-            agent_internal: Arc::new(Mutex::new(ai)),
+            internal: Arc::new(ai),
             interface_filter: Arc::clone(&config.interface_filter),
             mdns_mode,
             mdns_name,
@@ -272,110 +210,50 @@ impl Agent {
             urls: config.urls.clone(),
             network_types: config.network_types.clone(),
 
-            gather_candidate_cancel: None,
+            gather_candidate_cancel: None, //TODO: add cancel
         };
 
-        let agent_internal = Arc::clone(&a.agent_internal);
-
-        Self::start_on_connection_state_change_routine(
-            agent_internal,
-            chan_state_rx,
-            chan_candidate_rx,
-            chan_candidate_pair_rx,
-        )
-        .await;
+        agent
+            .internal
+            .start_on_connection_state_change_routine(
+                chan_state_rx,
+                chan_candidate_rx,
+                chan_candidate_pair_rx,
+            )
+            .await;
 
         // Restart is also used to initialize the agent for the first time
-        if let Err(err) = a.restart(config.local_ufrag, config.local_pwd).await {
-            Self::close_multicast_conn(&a.mdns_conn).await;
-            let _ = a.close().await;
+        if let Err(err) = agent.restart(config.local_ufrag, config.local_pwd).await {
+            Self::close_multicast_conn(&agent.mdns_conn).await;
+            let _ = agent.close().await;
             return Err(err);
         }
 
-        Ok(a)
+        Ok(agent)
     }
 
     /// Sets a handler that is fired when the connection state changes.
     pub async fn on_connection_state_change(&self, f: OnConnectionStateChangeHdlrFn) {
-        let mut ai = self.agent_internal.lock().await;
-        ai.on_connection_state_change_hdlr = Some(f);
+        let mut on_connection_state_change_hdlr =
+            self.internal.on_connection_state_change_hdlr.lock().await;
+        *on_connection_state_change_hdlr = Some(f);
     }
 
     /// Sets a handler that is fired when the final candidate pair is selected.
     pub async fn on_selected_candidate_pair_change(&self, f: OnSelectedCandidatePairChangeHdlrFn) {
-        let mut ai = self.agent_internal.lock().await;
-        ai.on_selected_candidate_pair_change_hdlr = Some(f);
+        let mut on_selected_candidate_pair_change_hdlr = self
+            .internal
+            .on_selected_candidate_pair_change_hdlr
+            .lock()
+            .await;
+        *on_selected_candidate_pair_change_hdlr = Some(f);
     }
 
     /// Sets a handler that is fired when new candidates gathered. When the gathering process
     /// complete the last candidate is nil.
     pub async fn on_candidate(&self, f: OnCandidateHdlrFn) {
-        let mut ai = self.agent_internal.lock().await;
-        ai.on_candidate_hdlr = Some(f);
-    }
-
-    async fn start_on_connection_state_change_routine(
-        agent_internal: Arc<Mutex<AgentInternal>>,
-        mut chan_state_rx: mpsc::Receiver<ConnectionState>,
-        mut chan_candidate_rx: mpsc::Receiver<Option<Arc<dyn Candidate + Send + Sync>>>,
-        mut chan_candidate_pair_rx: mpsc::Receiver<()>,
-    ) {
-        let agent_internal_pair = Arc::clone(&agent_internal);
-        tokio::spawn(async move {
-            // CandidatePair and ConnectionState are usually changed at once.
-            // Blocking one by the other one causes deadlock.
-            while chan_candidate_pair_rx.recv().await.is_some() {
-                let mut ai = agent_internal_pair.lock().await;
-                let selected_pair = {
-                    let selected_pair = ai.agent_conn.selected_pair.lock().await;
-                    selected_pair.clone()
-                };
-
-                if let (Some(on_selected_candidate_pair_change), Some(p)) = (
-                    &mut ai.on_selected_candidate_pair_change_hdlr,
-                    &selected_pair,
-                ) {
-                    on_selected_candidate_pair_change(&p.local, &p.remote).await;
-                }
-            }
-        });
-
-        tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    opt_state = chan_state_rx.recv() => {
-                        let mut ai = agent_internal.lock().await;
-                        if let Some(s) = opt_state {
-                            if let Some(on_connection_state_change) = &mut ai.on_connection_state_change_hdlr{
-                                on_connection_state_change(s).await;
-                            }
-                        } else {
-                            while let Some(c) = chan_candidate_rx.recv().await {
-                                if let Some(on_candidate) = &mut ai.on_candidate_hdlr {
-                                    on_candidate(c).await;
-                                }
-                            }
-                            break;
-                        }
-                    },
-                    opt_cand = chan_candidate_rx.recv() => {
-                        let mut ai = agent_internal.lock().await;
-                        if let Some(c) = opt_cand {
-                            if let Some(on_candidate) = &mut ai.on_candidate_hdlr{
-                                on_candidate(c).await;
-                            }
-                        } else {
-                            while let Some(s) = chan_state_rx.recv().await {
-                                if let Some(on_connection_state_change) = &mut ai.on_connection_state_change_hdlr{
-                                    on_connection_state_change(s).await;
-                                }
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-        });
+        let mut on_candidate_hdlr = self.internal.on_candidate_hdlr.lock().await;
+        *on_candidate_hdlr = Some(f);
     }
 
     /// Adds a new remote candidate.
@@ -403,7 +281,7 @@ impl Agent {
                 return Err(Error::ErrAddressParseFailed.into());
             }
 
-            let agent_internal = Arc::clone(&self.agent_internal);
+            let ai = Arc::clone(&self.internal);
             let host_candidate = Arc::clone(c);
             let mdns_conn = self.mdns_conn.clone();
             tokio::spawn(async move {
@@ -411,16 +289,14 @@ impl Agent {
                     if let Ok(candidate) =
                         Self::resolve_and_add_multicast_candidate(mdns_conn, host_candidate).await
                     {
-                        let mut ai = agent_internal.lock().await;
                         ai.add_remote_candidate(&candidate).await;
                     }
                 }
             });
         } else {
-            let agent_internal = Arc::clone(&self.agent_internal);
+            let ai = Arc::clone(&self.internal);
             let candidate = Arc::clone(c);
             tokio::spawn(async move {
-                let mut ai = agent_internal.lock().await;
                 ai.add_remote_candidate(&candidate).await;
             });
         }
@@ -433,8 +309,8 @@ impl Agent {
         let mut res = vec![];
 
         {
-            let ai = self.agent_internal.lock().await;
-            for candidates in ai.local_candidates.values() {
+            let local_candidates = self.internal.local_candidates.lock().await;
+            for candidates in local_candidates.values() {
                 for candidate in candidates {
                     res.push(Arc::clone(candidate));
                 }
@@ -446,14 +322,14 @@ impl Agent {
 
     /// Returns the local user credentials.
     pub async fn get_local_user_credentials(&self) -> (String, String) {
-        let ai = self.agent_internal.lock().await;
-        (ai.local_ufrag.clone(), ai.local_pwd.clone())
+        let ufrag_pwd = self.internal.ufrag_pwd.lock().await;
+        (ufrag_pwd.local_ufrag.clone(), ufrag_pwd.local_pwd.clone())
     }
 
     /// Returns the remote user credentials.
     pub async fn get_remote_user_credentials(&self) -> (String, String) {
-        let ai = self.agent_internal.lock().await;
-        (ai.remote_ufrag.clone(), ai.remote_pwd.clone())
+        let ufrag_pwd = self.internal.ufrag_pwd.lock().await;
+        (ufrag_pwd.remote_ufrag.clone(), ufrag_pwd.remote_pwd.clone())
     }
 
     /// Cleans up the Agent.
@@ -462,14 +338,13 @@ impl Agent {
             gather_candidate_cancel();
         }
 
-        let mut ai = self.agent_internal.lock().await;
-        ai.close().await
+        //FIXME: deadlock here
+        self.internal.close().await
     }
 
     /// Returns the selected pair or nil if there is none
     pub async fn get_selected_candidate_pair(&self) -> Option<Arc<CandidatePair>> {
-        let ai = self.agent_internal.lock().await;
-        ai.agent_conn.get_selected_pair().await
+        self.internal.agent_conn.get_selected_pair().await
     }
 
     /// Sets the credentials of the remote agent.
@@ -478,8 +353,9 @@ impl Agent {
         remote_ufrag: String,
         remote_pwd: String,
     ) -> Result<()> {
-        let mut ai = self.agent_internal.lock().await;
-        ai.set_remote_credentials(remote_ufrag, remote_pwd)
+        self.internal
+            .set_remote_credentials(remote_ufrag, remote_pwd)
+            .await
     }
 
     /// Restarts the ICE Agent with the provided ufrag/pwd
@@ -510,32 +386,41 @@ impl Agent {
         self.gathering_state
             .store(GatheringState::New as u8, Ordering::SeqCst);
 
-        let mut ai = self.agent_internal.lock().await;
-
-        if ai.done_tx.is_none() {
-            return Err(Error::ErrClosed.into());
+        {
+            let done_tx = self.internal.done_tx.lock().await;
+            if done_tx.is_none() {
+                return Err(Error::ErrClosed.into());
+            }
         }
 
         // Clear all agent needed to take back to fresh state
-        ai.local_ufrag = ufrag;
-        ai.local_pwd = pwd;
-        ai.remote_ufrag = String::new();
-        ai.remote_pwd = String::new();
-        ai.pending_binding_requests = vec![];
+        {
+            let mut ufrag_pwd = self.internal.ufrag_pwd.lock().await;
+            ufrag_pwd.local_ufrag = ufrag;
+            ufrag_pwd.local_pwd = pwd;
+            ufrag_pwd.remote_ufrag = String::new();
+            ufrag_pwd.remote_pwd = String::new();
+        }
+        {
+            let mut pending_binding_requests = self.internal.pending_binding_requests.lock().await;
+            *pending_binding_requests = vec![];
+        }
 
         {
-            let mut checklist = ai.agent_conn.checklist.lock().await;
+            let mut checklist = self.internal.agent_conn.checklist.lock().await;
             *checklist = vec![];
         }
 
-        ai.set_selected_pair(None).await;
-        ai.delete_all_candidates().await;
-        ai.start();
+        self.internal.set_selected_pair(None).await;
+        self.internal.delete_all_candidates().await;
+        self.internal.start().await;
 
         // Restart is used by NewAgent. Accept/Connect should be used to move to checking
         // for new Agents
-        if ai.connection_state != ConnectionState::New {
-            ai.update_connection_state(ConnectionState::Checking).await;
+        if self.internal.connection_state.load(Ordering::SeqCst) != ConnectionState::New as u8 {
+            self.internal
+                .update_connection_state(ConnectionState::Checking)
+                .await;
         }
 
         Ok(())
@@ -547,13 +432,12 @@ impl Agent {
             return Err(Error::ErrMultipleGatherAttempted.into());
         }
 
-        let chan_candidate_tx = {
-            let ai = self.agent_internal.lock().await;
-            if ai.on_candidate_hdlr.is_none() {
+        {
+            let on_candidate_hdlr = self.internal.on_candidate_hdlr.lock().await;
+            if on_candidate_hdlr.is_none() {
                 return Err(Error::ErrNoOnCandidateHandler.into());
             }
-            ai.chan_candidate_tx.clone()
-        };
+        }
 
         if let Some(gather_candidate_cancel) = &self.gather_candidate_cancel {
             gather_candidate_cancel(); // Cancel previous gathering routine
@@ -572,9 +456,9 @@ impl Agent {
             net: Arc::clone(&self.net),
             interface_filter: self.interface_filter.clone(),
             ext_ip_mapper: Arc::clone(&self.ext_ip_mapper),
-            agent_internal: Arc::clone(&self.agent_internal),
+            agent_internal: Arc::clone(&self.internal),
             gathering_state: Arc::clone(&self.gathering_state),
-            chan_candidate_tx,
+            chan_candidate_tx: Arc::clone(&self.internal.chan_candidate_tx),
         };
         tokio::spawn(async move {
             Self::gather_candidates_internal(params).await;
@@ -585,20 +469,17 @@ impl Agent {
 
     /// Returns a list of candidate pair stats.
     pub async fn get_candidate_pairs_stats(&self) -> Vec<CandidatePairStats> {
-        let ai = self.agent_internal.lock().await;
-        ai.get_candidate_pairs_stats().await
+        self.internal.get_candidate_pairs_stats().await
     }
 
     /// Returns a list of local candidates stats.
     pub async fn get_local_candidates_stats(&self) -> Vec<CandidateStats> {
-        let ai = self.agent_internal.lock().await;
-        ai.get_local_candidates_stats()
+        self.internal.get_local_candidates_stats().await
     }
 
     /// Returns a list of remote candidates stats.
     pub async fn get_remote_candidates_stats(&self) -> Vec<CandidateStats> {
-        let ai = self.agent_internal.lock().await;
-        ai.get_remote_candidates_stats()
+        self.internal.get_remote_candidates_stats().await
     }
 
     async fn resolve_and_add_multicast_candidate(

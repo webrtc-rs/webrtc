@@ -29,7 +29,7 @@ pub(crate) struct GatherCandidatesInternalParams {
     pub(crate) net: Arc<Net>,
     pub(crate) interface_filter: Arc<Option<InterfaceFilterFn>>,
     pub(crate) ext_ip_mapper: Arc<Option<ExternalIpMapper>>,
-    pub(crate) agent_internal: Arc<Mutex<AgentInternal>>,
+    pub(crate) agent_internal: Arc<AgentInternal>,
     pub(crate) gathering_state: Arc<AtomicU8>,
     pub(crate) chan_candidate_tx: ChanCandidateTx,
 }
@@ -43,7 +43,7 @@ struct GatherCandidatesLocalParams {
     interface_filter: Arc<Option<InterfaceFilterFn>>,
     ext_ip_mapper: Arc<Option<ExternalIpMapper>>,
     net: Arc<Net>,
-    agent_internal: Arc<Mutex<AgentInternal>>,
+    agent_internal: Arc<AgentInternal>,
 }
 
 struct GatherCandidatesSrflxMappedParasm {
@@ -52,7 +52,7 @@ struct GatherCandidatesSrflxMappedParasm {
     port_min: u16,
     ext_ip_mapper: Arc<Option<ExternalIpMapper>>,
     net: Arc<Net>,
-    agent_internal: Arc<Mutex<AgentInternal>>,
+    agent_internal: Arc<AgentInternal>,
 }
 
 struct GatherCandidatesSrflxParams {
@@ -61,7 +61,7 @@ struct GatherCandidatesSrflxParams {
     port_max: u16,
     port_min: u16,
     net: Arc<Net>,
-    agent_internal: Arc<Mutex<AgentInternal>>,
+    agent_internal: Arc<AgentInternal>,
 }
 
 impl Agent {
@@ -165,7 +165,8 @@ impl Agent {
         if GatheringState::from(gathering_state.load(Ordering::SeqCst)) != new_state
             && new_state == GatheringState::Complete
         {
-            if let Some(tx) = chan_candidate_tx {
+            let cand_tx = chan_candidate_tx.lock().await;
+            if let Some(tx) = &*cand_tx {
                 let _ = tx.send(None).await;
             }
         }
@@ -307,8 +308,7 @@ impl Agent {
                     };
 
                 {
-                    let mut ai = agent_internal.lock().await;
-                    if let Err(err) = ai.add_candidate(&candidate, &agent_internal).await {
+                    if let Err(err) = agent_internal.add_candidate(&candidate).await {
                         if let Err(close_err) = candidate.close().await {
                             log::warn!("Failed to close candidate: {}", close_err);
                         }
@@ -416,8 +416,7 @@ impl Agent {
                     };
 
                 {
-                    let mut ai = agent_internal2.lock().await;
-                    if let Err(err) = ai.add_candidate(&candidate, &agent_internal2).await {
+                    if let Err(err) = agent_internal2.add_candidate(&candidate).await {
                         if let Err(close_err) = candidate.close().await {
                             log::warn!("Failed to close candidate: {}", close_err);
                         }
@@ -536,8 +535,7 @@ impl Agent {
                         };
 
                     {
-                        let mut ai = agent_internal2.lock().await;
-                        if let Err(err) = ai.add_candidate(&candidate, &agent_internal2).await {
+                        if let Err(err) = agent_internal2.add_candidate(&candidate).await {
                             if let Err(close_err) = candidate.close().await {
                                 log::warn!("Failed to close candidate: {}", close_err);
                             }
@@ -559,7 +557,7 @@ impl Agent {
     pub(crate) async fn gather_candidates_relay(
         urls: Vec<Url>,
         net: Arc<Net>,
-        agent_internal: Arc<Mutex<AgentInternal>>,
+        agent_internal: Arc<AgentInternal>,
     ) {
         let wg = WaitGroup::new();
 
@@ -691,8 +689,7 @@ impl Agent {
                     };
 
                 {
-                    let mut ai = agent_internal2.lock().await;
-                    if let Err(err) = ai.add_candidate(&candidate, &agent_internal2).await {
+                    if let Err(err) = agent_internal2.add_candidate(&candidate).await {
                         if let Err(close_err) = candidate.close().await {
                             log::warn!("Failed to close candidate: {}", close_err);
                         }

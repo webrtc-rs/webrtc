@@ -17,7 +17,6 @@ use crate::network_type::*;
 use crate::tcp_type::*;
 use candidate_base::*;
 
-use crate::agent::agent_internal::AgentInternal;
 use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt;

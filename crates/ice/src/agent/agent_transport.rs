@@ -19,11 +19,15 @@ impl Agent {
         remote_pwd: String,
     ) -> Result<Arc<impl Conn>> {
         let (on_connected_rx, agent_conn) = {
-            let agent_internal = Arc::clone(&self.agent_internal);
-            let mut ai = self.agent_internal.lock().await;
-            ai.start_connectivity_checks(agent_internal, true, remote_ufrag, remote_pwd)
+            self.internal
+                .start_connectivity_checks(true, remote_ufrag, remote_pwd)
                 .await?;
-            (ai.on_connected_rx.take(), Arc::clone(&ai.agent_conn))
+
+            let mut on_connected_rx = self.internal.on_connected_rx.lock().await;
+            (
+                on_connected_rx.take(),
+                Arc::clone(&self.internal.agent_conn),
+            )
         };
 
         if let Some(mut on_connected_rx) = on_connected_rx {
@@ -50,11 +54,15 @@ impl Agent {
         remote_pwd: String,
     ) -> Result<Arc<impl Conn>> {
         let (on_connected_rx, agent_conn) = {
-            let agent_internal = Arc::clone(&self.agent_internal);
-            let mut ai = self.agent_internal.lock().await;
-            ai.start_connectivity_checks(agent_internal, false, remote_ufrag, remote_pwd)
+            self.internal
+                .start_connectivity_checks(false, remote_ufrag, remote_pwd)
                 .await?;
-            (ai.on_connected_rx.take(), Arc::clone(&ai.agent_conn))
+
+            let mut on_connected_rx = self.internal.on_connected_rx.lock().await;
+            (
+                on_connected_rx.take(),
+                Arc::clone(&self.internal.agent_conn),
+            )
         };
 
         if let Some(mut on_connected_rx) = on_connected_rx {

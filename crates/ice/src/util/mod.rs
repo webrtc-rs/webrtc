@@ -6,6 +6,7 @@ use crate::error::*;
 use crate::network_type::*;
 
 use anyhow::Result;
+use std::collections::HashSet;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use stun::{agent::*, attributes::*, integrity::*, message::*, textattrs::*, xoraddr::*};
@@ -92,8 +93,8 @@ pub async fn local_interfaces(
     vnet: &Arc<Net>,
     interface_filter: &Option<InterfaceFilterFn>,
     network_types: &[NetworkType],
-) -> Vec<IpAddr> {
-    let mut ips = vec![];
+) -> HashSet<IpAddr> {
+    let mut ips = HashSet::new();
     let interfaces = vnet.get_interfaces().await;
 
     let (mut ipv4requested, mut ipv6requested) = (false, false);
@@ -118,7 +119,7 @@ pub async fn local_interfaces(
             if !ipaddr.is_loopback()
                 && ((ipv4requested && ipaddr.is_ipv4()) || (ipv6requested && ipaddr.is_ipv6()))
             {
-                ips.push(ipaddr);
+                ips.insert(ipaddr);
             }
         }
     }

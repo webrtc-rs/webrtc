@@ -1,6 +1,7 @@
 use super::agent_vnet_test::*;
 use super::*;
 
+use crate::agent::agent_transport::AgentConn;
 use util::{vnet::*, Conn};
 use waitgroup::WaitGroup;
 

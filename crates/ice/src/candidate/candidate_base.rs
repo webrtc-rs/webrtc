@@ -6,8 +6,6 @@ use crate::candidate::candidate_server_reflexive::CandidateServerReflexiveConfig
 use crate::error::*;
 use crate::util::*;
 
-use stun::message::*;
-
 use async_trait::async_trait;
 use crc::{Crc, CRC_32_ISCSI};
 use std::fmt;
@@ -386,89 +384,6 @@ impl CandidateBase {
             (1 << 13) * direction_pref + other_pref
         } else {
             DEFAULT_LOCAL_PREFERENCE
-        }
-    }
-
-    pub(crate) async fn recv_loop(
-        candidate: Arc<dyn Candidate + Send + Sync>,
-        agent_internal: Arc<Mutex<AgentInternal>>,
-        mut closed_ch_rx: broadcast::Receiver<()>,
-        initialized_ch: Option<broadcast::Receiver<()>>,
-        conn: Arc<dyn util::Conn + Send + Sync>,
-        addr: SocketAddr,
-    ) -> Result<()> {
-        if let Some(mut initialized_ch) = initialized_ch {
-            tokio::select! {
-                _ = initialized_ch.recv() => {}
-                _ = closed_ch_rx.recv() => return Err(Error::ErrClosed.into()),
-            }
-        }
-
-        let mut buffer = vec![0_u8; RECEIVE_MTU];
-        let mut n;
-        let mut src_addr;
-        loop {
-            tokio::select! {
-               result = conn.recv_from(&mut buffer) => {
-                   match result {
-                       Ok((num, src)) => {
-                            n = num;
-                            src_addr = src;
-                       }
-                       Err(err) => return Err(Error::new(err.to_string()).into()),
-                   }
-               },
-                _  = closed_ch_rx.recv() => return Err(Error::ErrClosed.into()),
-            }
-
-            Self::handle_inbound_candidate_msg(
-                &candidate,
-                &agent_internal,
-                &buffer[..n],
-                src_addr,
-                addr,
-            )
-            .await;
-        }
-    }
-
-    async fn handle_inbound_candidate_msg(
-        c: &Arc<dyn Candidate + Send + Sync>,
-        agent_internal: &Arc<Mutex<AgentInternal>>,
-        buf: &[u8],
-        src_addr: SocketAddr,
-        addr: SocketAddr,
-    ) {
-        if stun::message::is_message(buf) {
-            let mut m = Message {
-                raw: vec![],
-                ..Message::default()
-            };
-            // Explicitly copy raw buffer so Message can own the memory.
-            m.raw.extend_from_slice(buf);
-
-            if let Err(err) = m.decode() {
-                log::warn!(
-                    "Failed to handle decode ICE from {} to {}: {}",
-                    addr,
-                    src_addr,
-                    err
-                );
-            } else {
-                let mut ai = agent_internal.lock().await;
-                ai.handle_inbound(&mut m, c, src_addr).await;
-            }
-        } else {
-            let ai = agent_internal.lock().await;
-            if !ai.validate_non_stun_traffic(c, src_addr).await {
-                log::warn!(
-                    "Discarded message from {}, not a valid remote candidate",
-                    c.addr().await
-                );
-            } else if let Err(err) = ai.agent_conn.buffer.write(buf).await {
-                // NOTE This will return packetio.ErrFull if the buffer ever manages to fill up.
-                log::warn!("failed to write packet: {}", err);
-            }
         }
     }
 }

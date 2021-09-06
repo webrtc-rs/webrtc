@@ -962,11 +962,11 @@ async fn test_write_use_valid_pair() -> Result<()> {
     tokio::spawn(async move {
         let test_message = "Test Message";
         let controlling_agent_conn = {
-            let agent_internal = Arc::clone(&controlling_agent_tx.agent_internal);
-            let mut ai = controlling_agent_tx.agent_internal.lock().await;
-            ai.start_connectivity_checks(agent_internal, true, controlled_ufrag, controlled_pwd)
+            controlling_agent_tx
+                .internal
+                .start_connectivity_checks(true, controlled_ufrag, controlled_pwd)
                 .await?;
-            Arc::clone(&ai.agent_conn) as Arc<dyn Conn + Send + Sync>
+            Arc::clone(&controlling_agent_tx.internal.agent_conn) as Arc<dyn Conn + Send + Sync>
         };
 
         log::debug!("controlling_agent start_connectivity_checks done...");
@@ -983,11 +983,11 @@ async fn test_write_use_valid_pair() -> Result<()> {
     });
 
     let controlled_agent_conn = {
-        let agent_internal = Arc::clone(&controlled_agent.agent_internal);
-        let mut ai = controlled_agent.agent_internal.lock().await;
-        ai.start_connectivity_checks(agent_internal, false, controlling_ufrag, controlling_pwd)
+        controlled_agent
+            .internal
+            .start_connectivity_checks(false, controlling_ufrag, controlling_pwd)
             .await?;
-        Arc::clone(&ai.agent_conn) as Arc<dyn Conn + Send + Sync>
+        Arc::clone(&controlled_agent.internal.agent_conn) as Arc<dyn Conn + Send + Sync>
     };
 
     log::debug!("controlled_agent start_connectivity_checks done...");
