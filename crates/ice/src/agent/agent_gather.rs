@@ -173,7 +173,8 @@ impl Agent {
         if GatheringState::from(gathering_state.load(Ordering::SeqCst)) != new_state
             && new_state == GatheringState::Complete
         {
-            if let Some(tx) = chan_candidate_tx {
+            let cand_tx = chan_candidate_tx.lock().await;
+            if let Some(tx) = &*cand_tx {
                 let _ = tx.send(None).await;
             }
         }

@@ -4,7 +4,7 @@ use crate::candidate::candidate_base::{CandidateBase, CandidateBaseConfig};
 use crate::candidate::candidate_peer_reflexive::CandidatePeerReflexiveConfig;
 use crate::util::*;
 
-pub type ChanCandidateTx = Option<Arc<mpsc::Sender<Option<Arc<dyn Candidate + Send + Sync>>>>>;
+pub type ChanCandidateTx = Arc<Mutex<Option<mpsc::Sender<Option<Arc<dyn Candidate + Send + Sync>>>>>>;
 
 pub struct AgentInternal {
     // State owned by the taskLoop
@@ -97,9 +97,10 @@ impl AgentInternal {
             force_candidate_contact_tx,
             done_and_force_candidate_contact_rx: Mutex::new(Some((done_rx, force_candidate_contact_rx))),
 
-            chan_state_tx: Some(chan_state_tx),
-            chan_candidate_tx: Some(Arc::new(chan_candidate_tx)),
+            chan_candidate_tx: Arc::new(Mutex::new(Some(chan_candidate_tx))),
             chan_candidate_pair_tx: Some(chan_candidate_pair_tx),
+            chan_state_tx: Some(chan_state_tx),
+
 
             on_connection_state_change_hdlr: None,
             on_selected_candidate_pair_change_hdlr: None,
@@ -568,13 +569,16 @@ impl AgentInternal {
             c.port()
         );
         self.request_connectivity_check();
-        if let Some(chan_candidate_tx) = &self.chan_candidate_tx {
-            log::trace!(
-                "ice add_candidate: chan_candidate_tx.send with {}:{}",
-                c.address(),
-                c.port()
-            );
-            let _ = chan_candidate_tx.send(Some(c.clone())).await;
+        {
+            let chan_candidate_tx = self.chan_candidate_tx.lock().await;
+            if let Some(tx) = &*chan_candidate_tx {
+                log::trace!(
+                    "ice add_candidate: chan_candidate_tx.send with {}:{}",
+                    c.address(),
+                    c.port()
+                );
+                let _ = tx.send(Some(c.clone())).await;
+            }
         }
 
         log::trace!("ice exit add_candidate with {}:{}", c.address(), c.port());
@@ -596,7 +600,10 @@ impl AgentInternal {
 
         self.update_connection_state(ConnectionState::Closed).await;
 
-        self.chan_candidate_tx.take();
+        {
+            let mut chan_candidate_tx =  self.chan_candidate_tx.lock().await;
+            chan_candidate_tx.take();
+        }
         self.chan_candidate_pair_tx.take();
         self.chan_state_tx.take();
 
