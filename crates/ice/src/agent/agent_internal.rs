@@ -40,42 +40,35 @@ pub struct AgentInternal {
 
     pub(crate) started_ch_tx: Mutex<Option<broadcast::Sender<()>>>,
 
-    pub(crate) max_binding_requests: u16,
+    pub(crate) local_ufrag: String,
+    pub(crate) local_pwd: String,
+    pub(crate) local_candidates: HashMap<NetworkType, Vec<Arc<dyn Candidate + Send + Sync>>>,
+    pub(crate) remote_ufrag: String,
+    pub(crate) remote_pwd: String,
+    pub(crate) remote_candidates: HashMap<NetworkType, Vec<Arc<dyn Candidate + Send + Sync>>>,
+    // LRU of outbound Binding request Transaction IDs
+    pub(crate) pending_binding_requests: Vec<BindingRequest>,
 
+    pub(crate) agent_conn: Arc<AgentConn>,
+
+    // the following variables won't be changed after init_with_defaults()
+    pub(crate) insecure_skip_verify: bool,
+    pub(crate) max_binding_requests: u16,
     pub(crate) host_acceptance_min_wait: Duration,
     pub(crate) srflx_acceptance_min_wait: Duration,
     pub(crate) prflx_acceptance_min_wait: Duration,
     pub(crate) relay_acceptance_min_wait: Duration,
-
     // How long connectivity checks can fail before the ICE Agent
     // goes to disconnected
     pub(crate) disconnected_timeout: Duration,
-
     // How long connectivity checks can fail before the ICE Agent
     // goes to failed
     pub(crate) failed_timeout: Duration,
-
     // How often should we send keepalive packets?
     // 0 means never
     pub(crate) keepalive_interval: Duration,
-
     // How often should we run our internal taskLoop to check for state changes when connecting
     pub(crate) check_interval: Duration,
-
-    pub(crate) local_ufrag: String,
-    pub(crate) local_pwd: String,
-    pub(crate) local_candidates: HashMap<NetworkType, Vec<Arc<dyn Candidate + Send + Sync>>>,
-
-    pub(crate) remote_ufrag: String,
-    pub(crate) remote_pwd: String,
-    pub(crate) remote_candidates: HashMap<NetworkType, Vec<Arc<dyn Candidate + Send + Sync>>>,
-
-    // LRU of outbound Binding request Transaction IDs
-    pub(crate) pending_binding_requests: Vec<BindingRequest>,
-
-    pub(crate) insecure_skip_verify: bool,
-
-    pub(crate) agent_conn: Arc<AgentConn>,
 }
 
 //TODO: remove unsafe
@@ -126,8 +119,8 @@ impl AgentInternal {
 
             started_ch_tx: Mutex::new(Some(started_ch_tx)),
 
+            //won't change after init_with_defaults()
             max_binding_requests: 0,
-
             host_acceptance_min_wait: Duration::from_secs(0),
             srflx_acceptance_min_wait: Duration::from_secs(0),
             prflx_acceptance_min_wait: Duration::from_secs(0),
