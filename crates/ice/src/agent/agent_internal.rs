@@ -33,8 +33,8 @@ pub struct AgentInternal {
     pub(crate) is_controlling: AtomicBool,
     pub(crate) lite: AtomicBool,
 
-    pub(crate) start_time: Instant,
-    pub(crate) nominated_pair: Option<Arc<CandidatePair>>,
+    pub(crate) start_time: Mutex<Instant>,
+    pub(crate) nominated_pair: Mutex<Option<Arc<CandidatePair>>>,
 
     pub(crate) connection_state: ConnectionState,
 
@@ -115,8 +115,8 @@ impl AgentInternal {
             is_controlling: AtomicBool::new(config.is_controlling),
             lite: AtomicBool::new(config.lite),
 
-            start_time: Instant::now(),
-            nominated_pair: None,
+            start_time: Mutex::new(Instant::now()),
+            nominated_pair: Mutex::new(None),
 
             connection_state: ConnectionState::New,
             local_candidates: HashMap::new(),
@@ -187,7 +187,7 @@ impl AgentInternal {
         );
         self.set_remote_credentials(remote_ufrag, remote_pwd)?;
         self.is_controlling.store(is_controlling, Ordering::SeqCst);
-        self.start();
+        self.start().await;
         self.started_ch_tx.take();
 
         self.update_connection_state(ConnectionState::Checking)

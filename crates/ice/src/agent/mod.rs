@@ -494,7 +494,7 @@ impl Agent {
 
         ai.set_selected_pair(None).await;
         ai.delete_all_candidates().await;
-        ai.start();
+        ai.start().await;
 
         // Restart is used by NewAgent. Accept/Connect should be used to move to checking
         // for new Agents
