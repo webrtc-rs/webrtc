@@ -2,9 +2,13 @@ use super::*;
 use crate::api::media_engine::MediaEngine;
 use crate::api::APIBuilder;
 use crate::peer::ice::ice_connection_state::ICEConnectionState;
-use crate::peer::peer_connection::peer_connection_test::{close_pair_now, new_pair, signal_pair};
+use crate::peer::peer_connection::peer_connection_test::{
+    close_pair_now, new_pair, signal_pair, until_connection_state,
+};
+use crate::peer::peer_connection_state::PeerConnectionState;
 use std::sync::atomic::AtomicU32;
 use tokio::time::Duration;
+use waitgroup::WaitGroup;
 
 #[tokio::test]
 async fn test_ice_transport_on_selected_candidate_pair_change() -> Result<()> {
@@ -14,7 +18,7 @@ async fn test_ice_transport_on_selected_candidate_pair_change() -> Result<()> {
 
     let (mut pc_offer, mut pc_answer) = new_pair(&api).await?;
 
-    let (ice_complete_tx, _ice_complete_rx) = mpsc::channel::<()>(1);
+    let (ice_complete_tx, mut ice_complete_rx) = mpsc::channel::<()>(1);
     let ice_complete_tx = Arc::new(Mutex::new(Some(ice_complete_tx)));
     pc_answer
         .on_ice_connection_state_change(Box::new(move |ice_state: ICEConnectionState| {
@@ -43,12 +47,12 @@ async fn test_ice_transport_on_selected_candidate_pair_change() -> Result<()> {
 
     signal_pair(&mut pc_offer, &mut pc_answer).await?;
 
-    /*TODO: let _ = ice_complete_rx.recv().await;
+    let _ = ice_complete_rx.recv().await;
     assert_eq!(
         sender_called_candidate_change.load(Ordering::SeqCst),
         1,
         "Sender ICETransport OnSelectedCandidateChange was never called"
-    );*/
+    );
 
     close_pair_now(&pc_offer, &pc_answer).await;
 
@@ -57,32 +61,63 @@ async fn test_ice_transport_on_selected_candidate_pair_change() -> Result<()> {
 
 #[tokio::test]
 async fn test_ice_transport_get_selected_candidate_pair() -> Result<()> {
-    /*
-    offerer, answerer, err := newPair()
-    assert.NoError(t, err)
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+    let api = APIBuilder::new().with_media_engine(m).build();
 
-    peerConnectionConnected := untilConnectionState(PeerConnectionStateConnected, offerer, answerer)
+    let (mut offerer, mut answerer) = new_pair(&api).await?;
 
-    offererSelectedPair, err := offerer.SCTP().Transport().ICETransport().GetSelectedCandidatePair()
-    assert.NoError(t, err)
-    assert.Nil(t, offererSelectedPair)
+    let peer_connection_connected = WaitGroup::new();
+    until_connection_state(
+        &mut offerer,
+        &peer_connection_connected,
+        PeerConnectionState::Connected,
+    )
+    .await;
+    until_connection_state(
+        &mut answerer,
+        &peer_connection_connected,
+        PeerConnectionState::Connected,
+    )
+    .await;
 
-    answererSelectedPair, err := answerer.SCTP().Transport().ICETransport().GetSelectedCandidatePair()
-    assert.NoError(t, err)
-    assert.Nil(t, answererSelectedPair)
+    let offerer_selected_pair = offerer
+        .sctp()
+        .transport()
+        .ice_transport()
+        .get_selected_candidate_pair()
+        .await;
+    assert!(offerer_selected_pair.is_none());
 
-    assert.NoError(t, signalPair(offerer, answerer))
-    peerConnectionConnected.Wait()
+    let answerer_selected_pair = answerer
+        .sctp()
+        .transport()
+        .ice_transport()
+        .get_selected_candidate_pair()
+        .await;
+    assert!(answerer_selected_pair.is_none());
 
-    offererSelectedPair, err = offerer.SCTP().Transport().ICETransport().GetSelectedCandidatePair()
-    assert.NoError(t, err)
-    assert.NotNil(t, offererSelectedPair)
+    signal_pair(&mut offerer, &mut answerer).await?;
 
-    answererSelectedPair, err = answerer.SCTP().Transport().ICETransport().GetSelectedCandidatePair()
-    assert.NoError(t, err)
-    assert.NotNil(t, answererSelectedPair)
+    peer_connection_connected.wait().await;
 
-    closePairNow(t, offerer, answerer)
-     */
+    let offerer_selected_pair = offerer
+        .sctp()
+        .transport()
+        .ice_transport()
+        .get_selected_candidate_pair()
+        .await;
+    assert!(offerer_selected_pair.is_some());
+
+    let answerer_selected_pair = answerer
+        .sctp()
+        .transport()
+        .ice_transport()
+        .get_selected_candidate_pair()
+        .await;
+    assert!(answerer_selected_pair.is_some());
+
+    close_pair_now(&offerer, &answerer).await;
+
     Ok(())
 }
