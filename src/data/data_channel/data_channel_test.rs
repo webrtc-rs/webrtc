@@ -1,5 +1,5 @@
 use super::*;
-use crate::api::API;
+use crate::api::{APIBuilder, API};
 use crate::data::data_channel::data_channel_config::DataChannelConfig;
 use crate::peer::peer_connection::peer_connection_test::*;
 use crate::peer::peer_connection::PeerConnection;
@@ -90,9 +90,11 @@ func benchmarkDataChannelSend(b *testing.B, numChannels int) {
 }
 */
 
-/*TODO: finish test_data_channel
+//TODO: finish test_data_channel
+use crate::api::media_engine::MediaEngine;
 use log::LevelFilter;
 use std::io::Write;
+use tokio::time::Duration;
 
 #[tokio::test]
 async fn test_data_channel_open() -> Result<()> {
@@ -173,7 +175,7 @@ async fn test_data_channel_open() -> Result<()> {
 
     Ok(())
 }
-*/
+
 /*
 #[tokio::test]
 async fn  TestDataChannel_Send()->Result<()> {
