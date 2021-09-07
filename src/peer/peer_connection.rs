@@ -76,7 +76,9 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::{mpsc, Mutex};
 
+use crate::media::dtls_transport::dtls_certificate::Certificate;
 use peer_connection_internal::*;
+use rcgen::KeyPair;
 
 pub type OnSignalingStateChangeHdlrFn = Box<
     dyn (FnMut(SignalingState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync,
@@ -209,25 +211,18 @@ impl PeerConnection {
         }
 
         // https://www.w3.org/TR/webrtc/#constructor (step #3)
-        /*TODO:if !configuration.certificates.is_empty() {
-            now := time.Now()
-            for _, x509Cert := range configuration.Certificates {
-                if !x509Cert.expires().IsZero() && now.After(x509Cert.expires()) {
-                    return &rtcerr.InvalidAccessError{Err: ErrCertificateExpired}
+        if !configuration.certificates.is_empty() {
+            let now = SystemTime::now();
+            for cert in &configuration.certificates {
+                if cert.expires().duration_since(now).is_err() {
+                    return Err(Error::ErrCertificateExpired.into());
                 }
-                pc.configuration.Certificates = append(pc.configuration.Certificates, x509Cert)
             }
         } else {
-            sk, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-            if err != nil {
-                return &rtcerr.UnknownError{Err: err}
-            }
-            certificate, err := generate_certificate(sk)
-            if err != nil {
-                return err
-            }
-            pc.configuration.Certificates = []Certificate{*certificate}
-        }  */
+            let kp = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
+            let cert = Certificate::from_key_pair(kp)?;
+            configuration.certificates = vec![cert];
+        };
 
         Ok(())
     }
@@ -584,11 +579,6 @@ impl PeerConnection {
                 return Err(Error::ErrModifyingCertificates.into());
             }
 
-            /*TODO: for (i, certificate) in configuration.certificates.iter().enumerate() {
-                if !self.configuration.certificates[i].Equals(certificate) {
-                    return Err(Error::ErrModifyingCertificates.into());
-                }
-            }*/
             self.configuration.certificates = configuration.certificates;
         }
 
@@ -1364,8 +1354,7 @@ impl PeerConnection {
                 }
             }
 
-            let (fingerprint, fingerprint_hash) = (String::new(), String::new());
-            //TODO: let (_fingerprint, _fingerprint_hash) = extract_fingerprint(parsed)?;
+            let (fingerprint, fingerprint_hash) = extract_fingerprint(parsed)?;
 
             // If one of the agents is lite and the other one is not, the lite agent must be the controlling agent.
             // If both or neither agents are lite the offering agent is controlling.

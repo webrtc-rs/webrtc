@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub(crate) struct PeerConnectionInternal {
     pub(super) on_negotiation_needed_handler: Arc<Mutex<Option<OnNegotiationNeededHdlrFn>>>,
     pub(super) is_closed: Arc<AtomicBool>,
@@ -681,11 +681,11 @@ impl PeerConnectionInternal {
             }
         }
 
-        let dtls_fingerprints = vec![];
-        /*TODO: dtls_fingerprints, err := self.configuration.Certificates[0].get_fingerprints()
-        if err != nil {
-            return nil, err
-        }*/
+        let dtls_fingerprints = if let Some(cert) = self.dtls_transport.certificates.first() {
+            vec![cert.get_fingerprint()?]
+        } else {
+            return Err(Error::ErrNonCertificate.into());
+        };
 
         let params = PopulateSdpParams {
             is_plan_b,
@@ -875,11 +875,11 @@ impl PeerConnectionInternal {
             log::info!("Plan-B Offer detected; responding with Plan-B Answer");
         }
 
-        let dtls_fingerprints = vec![];
-        /*TODO:dtls_fingerprints, err := self.configuration.Certificates[0].get_fingerprints()
-        if err != nil {
-            return nil, err
-        }*/
+        let dtls_fingerprints = if let Some(cert) = self.dtls_transport.certificates.first() {
+            vec![cert.get_fingerprint()?]
+        } else {
+            return Err(Error::ErrNonCertificate.into());
+        };
 
         let params = PopulateSdpParams {
             is_plan_b: detected_plan_b,
