@@ -151,12 +151,19 @@ impl PartialEq for CryptoPrivateKey {
             return false;
         }
 
-        match (&self.kind, &other.kind) {
-            (CryptoPrivateKeyKind::Rsa256(_), CryptoPrivateKeyKind::Rsa256(_)) => true,
-            (CryptoPrivateKeyKind::Ecdsa256(_), CryptoPrivateKeyKind::Ecdsa256(_)) => true,
-            (CryptoPrivateKeyKind::Ed25519(_), CryptoPrivateKeyKind::Ed25519(_)) => true,
-            _ => false,
-        }
+        matches!(
+            (&self.kind, &other.kind),
+            (
+                CryptoPrivateKeyKind::Rsa256(_),
+                CryptoPrivateKeyKind::Rsa256(_)
+            ) | (
+                CryptoPrivateKeyKind::Ecdsa256(_),
+                CryptoPrivateKeyKind::Ecdsa256(_)
+            ) | (
+                CryptoPrivateKeyKind::Ed25519(_),
+                CryptoPrivateKeyKind::Ed25519(_)
+            )
+        )
     }
 }
 
