@@ -1,10 +1,14 @@
 use super::*;
+use crate::api::media_engine::MediaEngine;
 use crate::api::{APIBuilder, API};
 use crate::data::data_channel::data_channel_config::DataChannelConfig;
 use crate::peer::peer_connection::peer_connection_test::*;
 use crate::peer::peer_connection::PeerConnection;
 
+//use log::LevelFilter;
+//use std::io::Write;
 use tokio::sync::mpsc;
+use tokio::time::Duration;
 
 // EXPECTED_LABEL represents the label of the data channel we are trying to test.
 // Some other channels may have been created during initialization (in the Wasm
@@ -90,28 +94,22 @@ func benchmarkDataChannelSend(b *testing.B, numChannels int) {
 }
 */
 
-//TODO: finish test_data_channel
-use crate::api::media_engine::MediaEngine;
-use log::LevelFilter;
-use std::io::Write;
-use tokio::time::Duration;
-
 #[tokio::test]
 async fn test_data_channel_open() -> Result<()> {
-    env_logger::Builder::new()
-        .format(|buf, record| {
-            writeln!(
-                buf,
-                "{}:{} [{}] {} - {}",
-                record.file().unwrap_or("unknown"),
-                record.line().unwrap_or(0),
-                record.level(),
-                chrono::Local::now().format("%H:%M:%S.%6f"),
-                record.args()
-            )
-        })
-        .filter(None, LevelFilter::Trace)
-        .init();
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, LevelFilter::Trace)
+    .init();*/
 
     //"handler should be called once"
     {
