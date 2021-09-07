@@ -30,6 +30,9 @@ impl SessionDescription {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::api::media_engine::MediaEngine;
+    use crate::api::APIBuilder;
+    use crate::peer::configuration::Configuration;
 
     #[test]
     fn test_session_description_json() {
@@ -98,28 +101,34 @@ mod test {
         }
     }
 
-    #[test]
-    fn test_session_description_unmarshal() {
-        /*TODO: pc, err := new_peer_connection(Configuration{})
-        assert.NoError(t, err)
-        offer, err := pc.CreateOffer(nil)
-        assert.NoError(t, err)
-        desc := SessionDescription{
-            Type: offer.Type,
-            SDP:  offer.SDP,
-        }
-        assert.Nil(t, desc.parsed)
-        parsed1, err := desc.Unmarshal()
-        assert.NotNil(t, parsed1)
-        assert.NotNil(t, desc.parsed)
-        assert.NoError(t, err)
-        parsed2, err2 := desc.Unmarshal()
-        assert.NotNil(t, parsed2)
-        assert.NoError(t, err2)
-        assert.NoError(t, pc.Close())
+    #[tokio::test]
+    async fn test_session_description_unmarshal() -> Result<()> {
+        let mut m = MediaEngine::default();
+        m.register_default_codecs()?;
+        let api = APIBuilder::new().with_media_engine(m).build();
+
+        let mut pc = api.new_peer_connection(Configuration::default()).await?;
+
+        let offer = pc.create_offer(None).await?;
+
+        let desc = SessionDescription {
+            serde: SessionDescriptionSerde {
+                sdp_type: offer.serde.sdp_type,
+                sdp: offer.serde.sdp,
+            },
+            ..Default::default()
+        };
+
+        assert!(desc.parsed.is_none());
+
+        let parsed1 = desc.unmarshal()?;
+        let parsed2 = desc.unmarshal()?;
+
+        pc.close().await?;
 
         // check if the two parsed results _really_ match, could be affected by internal caching
-        assert.True(t, reflect.DeepEqual(parsed1, parsed2))
-         */
+        assert_eq!(parsed1.marshal(), parsed2.marshal());
+
+        Ok(())
     }
 }

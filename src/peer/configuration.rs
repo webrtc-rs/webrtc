@@ -112,9 +112,9 @@ mod test {
         }
     }
 
-    #[test]
-    fn test_configuration_json() {
-        /*TODO: let j = r#"
+    /*TODO:#[test] fn test_configuration_json() {
+
+         let j = r#"
             {
                 "iceServers": [{"URLs": ["turn:turn.example.org"],
                                 "username": "jch",
@@ -147,6 +147,6 @@ mod test {
 
         var conf3 Configuration
         assert.NoError(t, json.Unmarshal(j2, &conf3))
-        assert.Equal(t, conf2, conf3)*/
-    }
+        assert.Equal(t, conf2, conf3)
+    }*/
 }
