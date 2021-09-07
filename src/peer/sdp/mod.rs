@@ -643,7 +643,7 @@ pub(crate) fn description_is_plan_b(
 ) -> Result<bool> {
     if let Some(desc) = desc {
         if let Some(parsed) = &desc.parsed {
-            let detection_regex = regex::Regex::new(r"(?i)^(audio|video|data)$")?; //TODO: fix regex pattern
+            let detection_regex = regex::Regex::new(r"(?i)^(audio|video|data)$")?;
             for media in &parsed.media_descriptions {
                 if let Some(s) = get_mid_value(media) {
                     if let Some(caps) = detection_regex.captures(s) {

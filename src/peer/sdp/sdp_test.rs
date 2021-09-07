@@ -1,7 +1,14 @@
 use super::*;
 use crate::api::media_engine::{MIME_TYPE_OPUS, MIME_TYPE_VP8};
 use crate::api::setting_engine::SettingEngine;
+use crate::api::APIBuilder;
+use crate::media::dtls_transport::dtls_certificate::Certificate;
 use crate::media::dtls_transport::dtls_role::DEFAULT_DTLS_ROLE_OFFER;
+use crate::media::dtls_transport::DTLSTransport;
+use crate::media::rtp::rtp_sender::RTPSender;
+use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
+use crate::media::track::track_local::TrackLocal;
+use rcgen::KeyPair;
 use sdp::common_description::Attribute;
 
 #[test]
@@ -503,72 +510,117 @@ fn test_have_application_media_section() -> Result<()> {
     Ok(())
 }
 
-/*TODO: add certificate.get_fingerprints support
-#[test]
-fn test_media_description_fingerprints() -> Result<()> {
-    let mut engine = MediaEngine::default();
-    engine.register_default_codecs()?;
-    let engine = Arc::new(engine);
+async fn fingerprint_test(
+    certificate: &Certificate,
+    engine: &Arc<MediaEngine>,
+    media: &[MediaSection],
+    sdpmedia_description_fingerprints: bool,
+    expected_fingerprint_count: usize,
+) -> Result<()> {
+    let s = sdp::session_description::SessionDescription::default();
 
-    let sk := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-    assert.NoError(t, err)
+    let dtls_fingerprints = vec![certificate.get_fingerprint()?];
 
-    certificate, err := generate_certificate(sk)
-    assert.NoError(t, err)
+    let params = PopulateSdpParams {
+        is_plan_b: false,
+        media_description_fingerprint: sdpmedia_description_fingerprints,
+        is_icelite: false,
+        connection_role: ConnectionRole::Active,
+        ice_gathering_state: ICEGatheringState::New,
+    };
 
-    media := []mediaSection{
-        {
-            id: "video",
-            transceivers: []*RTPTransceiver{{
-                kind:   RTPCodecTypeVideo,
-                api:    api,
-                codecs: engine.getCodecsByKind(RTPCodecTypeVideo),
-            }},
-        },
-        {
-            id: "audio",
-            transceivers: []*RTPTransceiver{{
-                kind:   RTPCodecTypeAudio,
-                api:    api,
-                codecs: engine.getCodecsByKind(RTPCodecTypeAudio),
-            }},
-        },
-        {
-            id:   "application",
-            data: true,
-        },
-    }
+    let s = populate_sdp(
+        s,
+        &dtls_fingerprints,
+        engine,
+        &[],
+        &ICEParameters::default(),
+        media,
+        params,
+    )
+    .await?;
 
-    for i := 0; i < 2; i++ {
-        media[i].transceivers[0].setSender(&RTPSender{})
-        media[i].transceivers[0].setDirection(RTPTransceiverDirectionSendonly)
-    }
+    let sdparray = s.marshal();
 
-    fingerprintTest := func(SDPMediaDescriptionFingerprints bool, expectedFingerprintCount int) func(t *testing.T) {
-        return func(t *testing.T) {
-            s := &sdp.SessionDescription{}
+    let v: Vec<&str> = sdparray.matches("sha-256").collect();
+    assert_eq!(v.len(), expected_fingerprint_count);
 
-            dtlsFingerprints, err := certificate.get_fingerprints()
-            assert.NoError(t, err)
-
-            s, err = populateSDP(s, false,
-                dtlsFingerprints,
-                SDPMediaDescriptionFingerprints,
-                false, engine, sdp.ConnectionRoleActive, []ICECandidate{}, ICEParameters{}, media, ICEGatheringStateNew)
-            assert.NoError(t, err)
-
-            sdparray, err := s.Marshal()
-            assert.NoError(t, err)
-
-            assert.Equal(t, strings.Count(string(sdparray), "sha-256"), expectedFingerprintCount)
-        }
-    }
-
-    t.Run("Per-Media Description Fingerprints", fingerprintTest(true, 3))
-    t.Run("Per-Session Description Fingerprints", fingerprintTest(false, 1))
+    Ok(())
 }
 
- */
+#[tokio::test]
+async fn test_media_description_fingerprints() -> Result<()> {
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+    let api = APIBuilder::new().with_media_engine(m).build();
+
+    let kp = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
+    let certificate = Certificate::from_key_pair(kp)?;
+
+    let media = vec![
+        MediaSection {
+            id: "video".to_owned(),
+            transceivers: vec![Arc::new(RTPTransceiver::new(
+                None,
+                None,
+                RTPTransceiverDirection::Inactive,
+                RTPCodecType::Video,
+                api.media_engine
+                    .get_codecs_by_kind(RTPCodecType::Video)
+                    .await,
+                Arc::clone(&api.media_engine),
+            ))],
+            ..Default::default()
+        },
+        MediaSection {
+            id: "audio".to_owned(),
+            transceivers: vec![Arc::new(RTPTransceiver::new(
+                None,
+                None,
+                RTPTransceiverDirection::Inactive,
+                RTPCodecType::Audio,
+                api.media_engine
+                    .get_codecs_by_kind(RTPCodecType::Audio)
+                    .await,
+                Arc::clone(&api.media_engine),
+            ))],
+            ..Default::default()
+        },
+        MediaSection {
+            id: "application".to_owned(),
+            data: true,
+            ..Default::default()
+        },
+    ];
+
+    for i in 0..2 {
+        let track: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
+            RTPCodecCapability {
+                mime_type: "video/vp8".to_owned(),
+                ..Default::default()
+            },
+            "video".to_owned(),
+            "webrtc-rs".to_owned(),
+        ));
+        media[i].transceivers[0]
+            .set_sender(Some(Arc::new(RTPSender::new(
+                track,
+                Arc::new(DTLSTransport::default()),
+                Arc::clone(&api.media_engine),
+                api.interceptor.clone(),
+            ))))
+            .await?;
+        media[i].transceivers[0].set_direction(RTPTransceiverDirection::Sendonly);
+    }
+
+    //"Per-Media Description Fingerprints",
+    fingerprint_test(&certificate, &api.media_engine, &media, true, 3).await?;
+
+    //"Per-Session Description Fingerprints",
+    fingerprint_test(&certificate, &api.media_engine, &media, false, 1).await?;
+
+    Ok(())
+}
 
 #[tokio::test]
 async fn test_populate_sdp() -> Result<()> {
