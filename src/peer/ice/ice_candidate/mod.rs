@@ -163,7 +163,7 @@ pub struct ICECandidateInit {
     pub username_fragment: String,
 }
 
-/*TODO:
+/*TODO: ToJSON
 // ToJSON returns an ICECandidateInit
 // as indicated by the spec https://w3c.github.io/webrtc-pc/#dom-rtcicecandidate-tojson
 func (c ICECandidate) ToJSON() ICECandidateInit {

@@ -296,8 +296,8 @@ impl ICEGatherer {
         agent.clone()
     }
 
-    /*TODO:
-    func (g *ICEGatherer) collectStats(collector *statsReportCollector) {
+    /*TODO:func (g *ICEGatherer) collectStats(collector *statsReportCollector) {
+
         agent := g.getAgent()
         if agent == nil {
             return

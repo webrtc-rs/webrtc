@@ -7,6 +7,7 @@ use crate::peer::peer_connection::PeerConnection;
 
 //use log::LevelFilter;
 //use std::io::Write;
+use crate::peer::ice::ice_connection_state::ICEConnectionState;
 use tokio::sync::mpsc;
 use tokio::time::Duration;
 
@@ -174,307 +175,448 @@ async fn test_data_channel_open() -> Result<()> {
     Ok(())
 }
 
-/*
 #[tokio::test]
-async fn  TestDataChannel_Send()->Result<()> {
-    t.Run("before signaling", func()->Result<()> {
-        report := test.CheckRoutines(t)
-        defer report()
+async fn test_data_channel_send_before_signaling() -> Result<()> {
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+    let api = APIBuilder::new().with_media_engine(m).build();
 
-        offerPC, answerPC, err := newPair()
-        if err != nil {
-            t.Fatalf("Failed to create a PC pair for testing")
-        }
+    //"before signaling"
 
-        done := make(chan bool)
+    let (mut offer_pc, mut answer_pc) = new_pair(&api).await?;
 
-        answerPC.OnDataChannel(func(d *DataChannel) {
+    answer_pc
+        .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
             // Make sure this is the data channel we were looking for. (Not the one
             // created in signalPair).
-            if d.Label() != EXPECTED_LABEL {
-                return
+            if d.label() != EXPECTED_LABEL {
+                return Box::pin(async {});
             }
-            d.OnMessage(func(msg DataChannelMessage) {
-                e := d.Send([]byte("Pong"))
-                if e != nil {
-                    t.Fatalf("Failed to send string on data channel")
-                }
-            })
-            assert.True(t, d.Ordered(), "Ordered should be set to true")
-        })
-
-        dc, err := offerPC.CreateDataChannel(EXPECTED_LABEL, nil)
-        if err != nil {
-            t.Fatalf("Failed to create a PC pair for testing")
-        }
-
-        assert.True(t, dc.Ordered(), "Ordered should be set to true")
-
-        dc.OnOpen(func() {
-            e := dc.SendText("Ping")
-            if e != nil {
-                t.Fatalf("Failed to send string on data channel")
-            }
-        })
-        dc.OnMessage(func(msg DataChannelMessage) {
-            done <- true
-        })
-
-        err = signalPair(offerPC, answerPC)
-        if err != nil {
-            t.Fatalf("Failed to signal our PC pair for testing: %+v", err)
-        }
-
-        close_pair(t, offerPC, answerPC, done)
-    })
-
-    t.Run("after connected", func()->Result<()> {
-        report := test.CheckRoutines(t)
-        defer report()
-
-        offerPC, answerPC, err := newPair()
-        if err != nil {
-            t.Fatalf("Failed to create a PC pair for testing")
-        }
-
-        done := make(chan bool)
-
-        answerPC.OnDataChannel(func(d *DataChannel) {
-            // Make sure this is the data channel we were looking for. (Not the one
-            // created in signalPair).
-            if d.Label() != EXPECTED_LABEL {
-                return
-            }
-            d.OnMessage(func(msg DataChannelMessage) {
-                e := d.Send([]byte("Pong"))
-                if e != nil {
-                    t.Fatalf("Failed to send string on data channel")
-                }
-            })
-            assert.True(t, d.Ordered(), "Ordered should be set to true")
-        })
-
-        once := &sync.Once{}
-        offerPC.OnICEConnectionStateChange(func(state ICEConnectionState) {
-            if state == ICEConnectionStateConnected || state == ICEConnectionStateCompleted {
-                // wasm fires completed state multiple times
-                once.Do(func() {
-                    dc, createErr := offerPC.CreateDataChannel(EXPECTED_LABEL, nil)
-                    if createErr != nil {
-                        t.Fatalf("Failed to create a PC pair for testing")
-                    }
-
-                    assert.True(t, dc.Ordered(), "Ordered should be set to true")
-
-                    dc.OnMessage(func(msg DataChannelMessage) {
-                        done <- true
+            Box::pin(async move {
+                let d2 = Arc::clone(&d);
+                d.on_message(Box::new(move |_: DataChannelMessage| {
+                    let d3 = Arc::clone(&d2);
+                    Box::pin(async move {
+                        let result = d3.send(&Bytes::from(b"Pong".to_vec())).await;
+                        assert!(result.is_ok(), "Failed to send string on data channel");
                     })
+                }))
+                .await;
+                assert!(d.ordered(), "Ordered should be set to true");
+            })
+        }))
+        .await;
 
-                    if e := dc.SendText("Ping"); e != nil {
-                        // wasm binding doesn't fire OnOpen (we probably already missed it)
-                        dc.OnOpen(func() {
-                            e = dc.SendText("Ping")
-                            if e != nil {
-                                t.Fatalf("Failed to send string on data channel")
-                            }
-                        })
+    let dc = offer_pc.create_data_channel(EXPECTED_LABEL, None).await?;
+
+    assert!(dc.ordered(), "Ordered should be set to true");
+
+    let dc2 = Arc::clone(&dc);
+    dc.on_open(Box::new(move || {
+        let dc3 = Arc::clone(&dc2);
+        Box::pin(async move {
+            let result = dc3.send_text("Ping".to_owned()).await;
+            assert!(result.is_ok(), "Failed to send string on data channel");
+        })
+    }))
+    .await;
+
+    let (done_tx, done_rx) = mpsc::channel::<()>(1);
+    let done_tx = Arc::new(Mutex::new(Some(done_tx)));
+    dc.on_message(Box::new(move |_: DataChannelMessage| {
+        let done_tx2 = Arc::clone(&done_tx);
+        Box::pin(async move {
+            let mut done = done_tx2.lock().await;
+            done.take();
+        })
+    }))
+    .await;
+
+    signal_pair(&mut offer_pc, &mut answer_pc).await?;
+
+    close_pair(&offer_pc, &answer_pc, done_rx).await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_data_channel_send_after_connected() -> Result<()> {
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+    let api = APIBuilder::new().with_media_engine(m).build();
+
+    let (mut offer_pc, mut answer_pc) = new_pair(&api).await?;
+
+    answer_pc
+        .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
+            // Make sure this is the data channel we were looking for. (Not the one
+            // created in signalPair).
+            if d.label() != EXPECTED_LABEL {
+                return Box::pin(async {});
+            }
+            Box::pin(async move {
+                let d2 = Arc::clone(&d);
+                d.on_message(Box::new(move |_: DataChannelMessage| {
+                    let d3 = Arc::clone(&d2);
+
+                    Box::pin(async move {
+                        let result = d3.send(&Bytes::from(b"Pong".to_vec())).await;
+                        assert!(result.is_ok(), "Failed to send string on data channel");
+                    })
+                }))
+                .await;
+                assert!(d.ordered(), "Ordered should be set to true");
+            })
+        }))
+        .await;
+
+    let dc = match offer_pc.create_data_channel(EXPECTED_LABEL, None).await {
+        Ok(dc) => dc,
+        Err(_) => {
+            assert!(false, "Failed to create a PC pair for testing");
+            return Ok(());
+        }
+    };
+
+    let (done_tx, done_rx) = mpsc::channel::<()>(1);
+    let done_tx = Arc::new(Mutex::new(Some(done_tx)));
+
+    //once := &sync.Once{}
+    offer_pc
+        .on_ice_connection_state_change(Box::new(move |state: ICEConnectionState| {
+            let done_tx1 = Arc::clone(&done_tx);
+            let dc1 = Arc::clone(&dc);
+            Box::pin(async move {
+                if state == ICEConnectionState::Connected || state == ICEConnectionState::Completed
+                {
+                    // wasm fires completed state multiple times
+                    /*once.Do(func()*/
+                    {
+                        assert!(dc1.ordered(), "Ordered should be set to true");
+
+                        dc1.on_message(Box::new(move |_: DataChannelMessage| {
+                            let done_tx2 = Arc::clone(&done_tx1);
+                            Box::pin(async move {
+                                let mut done = done_tx2.lock().await;
+                                done.take();
+                            })
+                        }))
+                        .await;
+
+                        if let Err(_) = dc1.send_text("Ping".to_owned()).await {
+                            // wasm binding doesn't fire OnOpen (we probably already missed it)
+                            let dc2 = Arc::clone(&dc1);
+                            dc1.on_open(Box::new(move || {
+                                let dc3 = Arc::clone(&dc2);
+                                Box::pin(async move {
+                                    let result = dc3.send_text("Ping".to_owned()).await;
+                                    assert!(
+                                        result.is_ok(),
+                                        "Failed to send string on data channel"
+                                    );
+                                })
+                            }))
+                            .await;
+                        }
                     }
-                })
-            }
-        })
+                }
+            })
+        }))
+        .await;
 
-        err = signalPair(offerPC, answerPC)
-        if err != nil {
-            t.Fatalf("Failed to signal our PC pair for testing")
-        }
+    signal_pair(&mut offer_pc, &mut answer_pc).await?;
 
-        close_pair(t, offerPC, answerPC, done)
-    })
+    close_pair(&offer_pc, &answer_pc, done_rx).await;
+
+    Ok(())
 }
 
 #[tokio::test]
-async fn  TestDataChannel_Close()->Result<()> {
-    report := test.CheckRoutines(t)
-    defer report()
+async fn test_data_channel_close() -> Result<()> {
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+    let api = APIBuilder::new().with_media_engine(m).build();
 
-    t.Run("Close after PeerConnection Closed", func()->Result<()> {
-        offerPC, answerPC, err := newPair()
-        assert.NoError(t, err)
+    // "Close after PeerConnection Closed"
+    {
+        let (mut offer_pc, mut answer_pc) = new_pair(&api).await?;
 
-        dc, err := offerPC.CreateDataChannel(EXPECTED_LABEL, nil)
-        assert.NoError(t, err)
+        let dc = offer_pc.create_data_channel(EXPECTED_LABEL, None).await?;
 
-        close_pair_now(t, offerPC, answerPC)
-        assert.NoError(t, dc.Close())
-    })
+        close_pair_now(&mut offer_pc, &mut answer_pc).await;
+        dc.close().await?;
+    }
 
-    t.Run("Close before connected", func()->Result<()> {
-        offerPC, answerPC, err := newPair()
-        assert.NoError(t, err)
+    // "Close before connected"
+    {
+        let (mut offer_pc, mut answer_pc) = new_pair(&api).await?;
 
-        dc, err := offerPC.CreateDataChannel(EXPECTED_LABEL, nil)
-        assert.NoError(t, err)
+        let dc = offer_pc.create_data_channel(EXPECTED_LABEL, None).await?;
 
-        assert.NoError(t, dc.Close())
-        close_pair_now(t, offerPC, answerPC)
-    })
+        dc.close().await?;
+        close_pair_now(&mut offer_pc, &mut answer_pc).await;
+    }
+
+    Ok(())
 }
 
 #[tokio::test]
-async fn  TestDataChannelParameters()->Result<()> {
-    report := test.CheckRoutines(t)
-    defer report()
+async fn test_data_channel_parameters_max_packet_life_time_exchange() -> Result<()> {
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+    let api = APIBuilder::new().with_media_engine(m).build();
 
-    t.Run("MaxPacketLifeTime exchange", func()->Result<()> {
-        ordered := true
-        maxPacketLifeTime := uint16(3)
-        options := &DataChannelInit{
-            Ordered:           &ordered,
-            MaxPacketLifeTime: &maxPacketLifeTime,
-        }
+    let ordered = true;
+    let max_packet_life_time = 3u16;
+    let options = DataChannelConfig {
+        ordered: Some(ordered),
+        max_packet_life_time: Some(max_packet_life_time),
+        ..Default::default()
+    };
 
-        offerPC, answerPC, dc, done := set_up_data_channel_parameters_test(t, options)
+    let (mut offer_pc, mut answer_pc, dc, done_tx, done_rx) =
+        set_up_data_channel_parameters_test(&api, Some(options)).await?;
 
-        // Check if parameters are correctly set
-        assert.Equal(t, dc.Ordered(), ordered, "Ordered should be same value as set in DataChannelInit")
-        if assert.NotNil(t, dc.MaxPacketLifeTime(), "should not be nil") {
-            assert.Equal(t, maxPacketLifeTime, *dc.MaxPacketLifeTime(), "should match")
-        }
+    // Check if parameters are correctly set
+    assert_eq!(
+        dc.ordered(),
+        ordered,
+        "Ordered should be same value as set in DataChannelInit"
+    );
+    assert_eq!(
+        dc.max_packet_lifetime(),
+        max_packet_life_time,
+        "should match"
+    );
 
-        answerPC.OnDataChannel(func(d *DataChannel) {
-            if d.Label() != EXPECTED_LABEL {
-                return
+    let done_tx = Arc::new(Mutex::new(Some(done_tx)));
+    answer_pc
+        .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
+            if d.label() != EXPECTED_LABEL {
+                return Box::pin(async {});
             }
             // Check if parameters are correctly set
-            assert.Equal(t, d.Ordered(), ordered, "Ordered should be same value as set in DataChannelInit")
-            if assert.NotNil(t, d.MaxPacketLifeTime(), "should not be nil") {
-                assert.Equal(t, maxPacketLifeTime, *d.MaxPacketLifeTime(), "should match")
-            }
-            done <- true
-        })
+            assert_eq!(
+                d.ordered(),
+                ordered,
+                "Ordered should be same value as set in DataChannelInit"
+            );
+            assert_eq!(
+                d.max_packet_lifetime(),
+                max_packet_life_time,
+                "should match"
+            );
+            let done_tx2 = Arc::clone(&done_tx);
+            Box::pin(async move {
+                let mut done = done_tx2.lock().await;
+                done.take();
+            })
+        }))
+        .await;
 
-        close_reliability_param_test(t, offerPC, answerPC, done)
-    })
+    close_reliability_param_test(&mut offer_pc, &mut answer_pc, done_rx).await?;
 
-    t.Run("MaxRetransmits exchange", func()->Result<()> {
-        ordered := false
-        maxRetransmits := uint16(3000)
-        options := &DataChannelInit{
-            Ordered:        &ordered,
-            MaxRetransmits: &maxRetransmits,
-        }
+    Ok(())
+}
 
-        offerPC, answerPC, dc, done := set_up_data_channel_parameters_test(t, options)
+#[tokio::test]
+async fn test_data_channel_parameters_max_retransmits_exchange() -> Result<()> {
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+    let api = APIBuilder::new().with_media_engine(m).build();
 
-        // Check if parameters are correctly set
-        assert.False(t, dc.Ordered(), "Ordered should be set to false")
-        if assert.NotNil(t, dc.MaxRetransmits(), "should not be nil") {
-            assert.Equal(t, maxRetransmits, *dc.MaxRetransmits(), "should match")
-        }
+    let ordered = false;
+    let max_retransmits = 3000u16;
+    let options = DataChannelConfig {
+        ordered: Some(ordered),
+        max_retransmits: Some(max_retransmits),
+        ..Default::default()
+    };
 
-        answerPC.OnDataChannel(func(d *DataChannel) {
+    let (mut offer_pc, mut answer_pc, dc, done_tx, done_rx) =
+        set_up_data_channel_parameters_test(&api, Some(options)).await?;
+
+    // Check if parameters are correctly set
+    assert!(!dc.ordered(), "Ordered should be set to false");
+    assert_eq!(dc.max_retransmits(), max_retransmits, "should match");
+
+    let done_tx = Arc::new(Mutex::new(Some(done_tx)));
+    answer_pc
+        .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
             // Make sure this is the data channel we were looking for. (Not the one
             // created in signalPair).
-            if d.Label() != EXPECTED_LABEL {
-                return
+            if d.label() != EXPECTED_LABEL {
+                return Box::pin(async {});
             }
+
             // Check if parameters are correctly set
-            assert.False(t, d.Ordered(), "Ordered should be set to false")
-            if assert.NotNil(t, d.MaxRetransmits(), "should not be nil") {
-                assert.Equal(t, maxRetransmits, *d.MaxRetransmits(), "should match")
-            }
-            done <- true
-        })
+            assert!(!d.ordered(), "Ordered should be set to false");
+            assert_eq!(max_retransmits, d.max_retransmits(), "should match");
+            let done_tx2 = Arc::clone(&done_tx);
+            Box::pin(async move {
+                let mut done = done_tx2.lock().await;
+                done.take();
+            })
+        }))
+        .await;
 
-        close_reliability_param_test(t, offerPC, answerPC, done)
-    })
+    close_reliability_param_test(&mut offer_pc, &mut answer_pc, done_rx).await?;
 
-    t.Run("Protocol exchange", func()->Result<()> {
-        protocol := "json"
-        options := &DataChannelInit{
-            Protocol: &protocol,
-        }
+    Ok(())
+}
 
-        offerPC, answerPC, dc, done := set_up_data_channel_parameters_test(t, options)
+#[tokio::test]
+async fn test_data_channel_parameters_protocol_exchange() -> Result<()> {
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+    let api = APIBuilder::new().with_media_engine(m).build();
 
-        // Check if parameters are correctly set
-        assert.Equal(t, protocol, dc.Protocol(), "Protocol should match DataChannelInit")
+    let protocol = "json".to_owned();
+    let options = DataChannelConfig {
+        protocol: Some(protocol.clone()),
+        ..Default::default()
+    };
 
-        answerPC.OnDataChannel(func(d *DataChannel) {
+    let (mut offer_pc, mut answer_pc, dc, done_tx, done_rx) =
+        set_up_data_channel_parameters_test(&api, Some(options)).await?;
+
+    // Check if parameters are correctly set
+    assert_eq!(
+        protocol,
+        dc.protocol(),
+        "Protocol should match DataChannelConfig"
+    );
+
+    let done_tx = Arc::new(Mutex::new(Some(done_tx)));
+    answer_pc
+        .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
             // Make sure this is the data channel we were looking for. (Not the one
             // created in signalPair).
-            if d.Label() != EXPECTED_LABEL {
-                return
+            if d.label() != EXPECTED_LABEL {
+                return Box::pin(async {});
             }
             // Check if parameters are correctly set
-            assert.Equal(t, protocol, d.Protocol(), "Protocol should match what channel creator declared")
-            done <- true
-        })
+            assert_eq!(
+                protocol,
+                d.protocol(),
+                "Protocol should match what channel creator declared"
+            );
 
-        close_reliability_param_test(t, offerPC, answerPC, done)
-    })
+            let done_tx2 = Arc::clone(&done_tx);
+            Box::pin(async move {
+                let mut done = done_tx2.lock().await;
+                done.take();
+            })
+        }))
+        .await;
 
-    t.Run("Negotiated exchange", func()->Result<()> {
-        const expectedMessage = "Hello World"
+    close_reliability_param_test(&mut offer_pc, &mut answer_pc, done_rx).await?;
 
-        negotiated := true
-        var id uint16 = 500
-        options := &DataChannelInit{
-            Negotiated: &negotiated,
-            ID:         &id,
-        }
+    Ok(())
+}
 
-        offerPC, answerPC, offerDatachannel, done := set_up_data_channel_parameters_test(t, options)
-        answerDatachannel, err := answerPC.CreateDataChannel(EXPECTED_LABEL, options)
-        assert.NoError(t, err)
+#[tokio::test]
+async fn test_data_channel_parameters_negotiated_exchange() -> Result<()> {
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+    let api = APIBuilder::new().with_media_engine(m).build();
 
-        answerPC.OnDataChannel(func(d *DataChannel) {
+    const EXPECTED_MESSAGE: &str = "Hello World";
+
+    let negotiated = true;
+    let id = 500u16;
+    let options = DataChannelConfig {
+        negotiated: Some(negotiated),
+        id: Some(id),
+        ..Default::default()
+    };
+
+    let (mut offer_pc, mut answer_pc, offer_datachannel, done_tx, done_rx) =
+        set_up_data_channel_parameters_test(&api, Some(options.clone())).await?;
+
+    let answer_datachannel = answer_pc
+        .create_data_channel(EXPECTED_LABEL, Some(options))
+        .await?;
+
+    answer_pc
+        .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
             // Ignore our default channel, exists to force ICE candidates. See signalPair for more info
-            if d.Label() == "initial_data_channel" {
-                return
+            if d.label() == "initial_data_channel" {
+                return Box::pin(async {});
+            }
+            assert!(
+                false,
+                "OnDataChannel must not be fired when negotiated == true"
+            );
+
+            Box::pin(async {})
+        }))
+        .await;
+
+    offer_pc
+        .on_data_channel(Box::new(move |_d: Arc<DataChannel>| {
+            assert!(
+                false,
+                "OnDataChannel must not be fired when negotiated == true"
+            );
+
+            Box::pin(async {})
+        }))
+        .await;
+
+    let seen_answer_message = Arc::new(AtomicBool::new(false));
+    let seen_offer_message = Arc::new(AtomicBool::new(false));
+
+    let seen_answer_message2 = Arc::clone(&seen_answer_message);
+    answer_datachannel
+        .on_message(Box::new(move |msg: DataChannelMessage| {
+            if msg.is_string && msg.data == EXPECTED_MESSAGE {
+                seen_answer_message2.store(true, Ordering::SeqCst);
             }
 
-            t.Fatal("OnDataChannel must not be fired when negotiated == true")
-        })
-        offerPC.OnDataChannel(func(d *DataChannel) {
-            t.Fatal("OnDataChannel must not be fired when negotiated == true")
-        })
+            Box::pin(async {})
+        }))
+        .await;
 
-        seenAnswerMessage := &atomicBool{}
-        seenOfferMessage := &atomicBool{}
-
-        answerDatachannel.OnMessage(func(msg DataChannelMessage) {
-            if msg.IsString && string(msg.Data) == expectedMessage {
-                seenAnswerMessage.set(true)
+    let seen_offer_message2 = Arc::clone(&seen_offer_message);
+    offer_datachannel
+        .on_message(Box::new(move |msg: DataChannelMessage| {
+            if msg.is_string && msg.data == EXPECTED_MESSAGE {
+                seen_offer_message2.store(true, Ordering::SeqCst);
             }
-        })
+            Box::pin(async {})
+        }))
+        .await;
 
-        offerDatachannel.OnMessage(func(msg DataChannelMessage) {
-            if msg.IsString && string(msg.Data) == expectedMessage {
-                seenOfferMessage.set(true)
-            }
-        })
-
-        go func() {
-            for {
-                if seenAnswerMessage.get() && seenOfferMessage.get() {
-                    break
-                }
-
-                if offerDatachannel.ReadyState() == DataChannelStateOpen {
-                    assert.NoError(t, offerDatachannel.SendText(expectedMessage))
-                }
-                if answerDatachannel.ReadyState() == DataChannelStateOpen {
-                    assert.NoError(t, answerDatachannel.SendText(expectedMessage))
-                }
-
-                time.Sleep(500 * time.Millisecond)
+    let done_tx = Arc::new(Mutex::new(Some(done_tx)));
+    tokio::spawn(async move {
+        loop {
+            if seen_answer_message.load(Ordering::SeqCst)
+                && seen_offer_message.load(Ordering::SeqCst)
+            {
+                break;
             }
 
-            done <- true
-        }()
+            if offer_datachannel.ready_state() == DataChannelState::Open {
+                offer_datachannel
+                    .send_text(EXPECTED_MESSAGE.to_owned())
+                    .await?;
+            }
+            if answer_datachannel.ready_state() == DataChannelState::Open {
+                answer_datachannel
+                    .send_text(EXPECTED_MESSAGE.to_owned())
+                    .await?;
+            }
 
-        close_reliability_param_test(t, offerPC, answerPC, done)
-    })
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+
+        let mut done = done_tx.lock().await;
+        done.take();
+
+        Result::<()>::Ok(())
+    });
+
+    close_reliability_param_test(&mut offer_pc, &mut answer_pc, done_rx).await?;
+
+    Ok(())
 }
-*/
