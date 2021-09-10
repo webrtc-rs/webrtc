@@ -607,7 +607,7 @@ async fn test_data_channel_parameters_negotiated_exchange() -> Result<()> {
                     .await?;
             }
 
-            tokio::time::sleep(Duration::from_millis(500)).await;
+            tokio::time::sleep(Duration::from_millis(50)).await;
         }
 
         let mut done = done_tx.lock().await;
