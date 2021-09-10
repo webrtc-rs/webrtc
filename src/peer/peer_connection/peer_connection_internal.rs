@@ -563,7 +563,7 @@ impl PeerConnectionInternal {
             )
             .await
         {
-            log::warn!("Failed to start manager: {}", err);
+            log::warn!("Failed to start manager ice: {}", err);
             return;
         }
 
@@ -587,7 +587,7 @@ impl PeerConnectionInternal {
         )
         .await;
         if let Err(err) = result {
-            log::warn!("Failed to start manager: {}", err);
+            log::warn!("Failed to start manager dtls: {}", err);
         }
     }
 

@@ -208,6 +208,8 @@ pub enum Error {
     ErrIdentityProviderNotImplemented,
     #[error("remote certificate does not match any fingerprint")]
     ErrNoMatchingCertificateFingerprint,
+    #[error("unsupported fingerprint algorithm")]
+    ErrUnsupportedFingerprintAlgorithm,
     #[error("ICE connection not started")]
     ErrICEConnectionNotStarted,
     #[error("unknown candidate type")]

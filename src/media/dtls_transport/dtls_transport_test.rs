@@ -1,99 +1,143 @@
 use super::*;
+use crate::api::media_engine::MediaEngine;
 use crate::api::APIBuilder;
+use crate::data::data_channel::DataChannel;
 use crate::peer::configuration::Configuration;
+use crate::peer::ice::ice_candidate::ICECandidate;
 use crate::peer::peer_connection::peer_connection_test::{
-    close_pair_now, signal_pair, until_connection_state,
+    close_pair_now, new_pair, signal_pair, until_connection_state,
 };
 use crate::peer::peer_connection_state::PeerConnectionState;
 use ice::mdns::MulticastDnsMode;
 use ice::network_type::NetworkType;
+use regex::Regex;
+use tokio::time::Duration;
 use waitgroup::WaitGroup;
 
-/*TODO: TestInvalidFingerprintCausesFailed
+//use log::LevelFilter;
+//use std::io::Write;
+
 // An invalid fingerprint MUST cause PeerConnectionState to go to PeerConnectionStateFailed
-func TestInvalidFingerprintCausesFailed(t *testing.T) {
-    lim := test.TimeOut(time.Second * 40)
-    defer lim.Stop()
-
-    report := test.CheckRoutines(t)
-    defer report()
-
-    pcOffer, err := NewPeerConnection(Configuration{})
-    if err != nil {
-        t.Fatal(err)
-    }
-
-    pcAnswer, err := NewPeerConnection(Configuration{})
-    if err != nil {
-        t.Fatal(err)
-    }
-
-    pcAnswer.OnDataChannel(func(_ *DataChannel) {
-        t.Fatal("A DataChannel must not be created when Fingerprint verification fails")
+#[tokio::test]
+async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
     })
+    .filter(None, LevelFilter::Trace)
+    .init();*/
 
-    defer closePairNow(t, pcOffer, pcAnswer)
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+    let api = APIBuilder::new().with_media_engine(m).build();
 
-    offerChan := make(chan SessionDescription)
-    pcOffer.OnICECandidate(func(candidate *ICECandidate) {
-        if candidate == nil {
-            offerChan <- *pcOffer.PendingLocalDescription()
+    let (mut pc_offer, mut pc_answer) = new_pair(&api).await?;
+
+    pc_answer
+        .on_data_channel(Box::new(|_: Arc<DataChannel>| {
+            assert!(
+                false,
+                "A DataChannel must not be created when Fingerprint verification fails"
+            );
+            Box::pin(async {})
+        }))
+        .await;
+
+    let (offer_chan_tx, mut offer_chan_rx) = mpsc::channel::<()>(1);
+
+    let offer_chan_tx = Arc::new(offer_chan_tx);
+    pc_offer
+        .on_ice_candidate(Box::new(move |candidate: Option<ICECandidate>| {
+            let offer_chan_tx2 = Arc::clone(&offer_chan_tx);
+            Box::pin(async move {
+                if candidate.is_none() {
+                    //TODO: offer_chan_tx.send(pc_offer.pending_local_description().await).await;
+                    let _ = offer_chan_tx2.send(()).await;
+                }
+            })
+        }))
+        .await;
+
+    let offer_connection_has_failed = WaitGroup::new();
+    until_connection_state(
+        &mut pc_offer,
+        &offer_connection_has_failed,
+        PeerConnectionState::Failed,
+    )
+    .await;
+    let answer_connection_has_failed = WaitGroup::new();
+    until_connection_state(
+        &mut pc_answer,
+        &answer_connection_has_failed,
+        PeerConnectionState::Failed,
+    )
+    .await;
+
+    let _ = pc_offer
+        .create_data_channel("unusedDataChannel", None)
+        .await?;
+
+    let offer = pc_offer.create_offer(None).await?;
+    pc_offer.set_local_description(offer).await?;
+
+    let timeout = tokio::time::sleep(Duration::from_secs(1));
+    tokio::pin!(timeout);
+
+    tokio::select! {
+        _ = offer_chan_rx.recv() =>{
+            let mut offer = pc_offer.pending_local_description().await.unwrap();
+
+            log::trace!("receiving pending local desc: {:?}", offer);
+
+            // Replace with invalid fingerprint
+            let re = Regex::new(r"sha-256 (.*?)\r")?;
+            offer.serde.sdp = re.replace_all(offer.serde.sdp.as_str(), "sha-256 AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA\r").to_string();
+
+            pc_answer.set_remote_description(offer).await?;
+
+            let mut answer = pc_answer.create_answer(None).await?;
+
+            pc_answer.set_local_description(answer.clone()).await?;
+
+            answer.serde.sdp = re.replace_all(answer.serde.sdp.as_str(), "sha-256 AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA\r").to_string();
+
+            pc_offer.set_remote_description(answer).await?;
         }
-    })
-
-    offerConnectionHasFailed := untilConnectionState(PeerConnectionStateFailed, pcOffer)
-    answerConnectionHasFailed := untilConnectionState(PeerConnectionStateFailed, pcAnswer)
-
-    if _, err = pcOffer.CreateDataChannel("unusedDataChannel", nil); err != nil {
-        t.Fatal(err)
+        _ = timeout.as_mut() =>{
+            assert!(false, "timed out waiting to receive offer");
+        }
     }
 
-    offer, err := pcOffer.CreateOffer(nil)
-    if err != nil {
-        t.Fatal(err)
-    } else if err := pcOffer.SetLocalDescription(offer); err != nil {
-        t.Fatal(err)
+    log::trace!("offer_connection_has_failed wait begin");
+
+    offer_connection_has_failed.wait().await;
+    answer_connection_has_failed.wait().await;
+
+    log::trace!("offer_connection_has_failed wait end");
+    {
+        let transport = pc_offer.sctp().transport();
+        assert_eq!(transport.state(), DTLSTransportState::Failed);
+        assert!(transport.conn().await.is_none());
     }
 
-    select {
-    case offer := <-offerChan:
-        // Replace with invalid fingerprint
-        re := regexp.MustCompile(`sha-256 (.*?)\r`)
-        offer.SDP = re.ReplaceAllString(offer.SDP, "sha-256 AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA\r")
-
-        if err := pcAnswer.SetRemoteDescription(offer); err != nil {
-            t.Fatal(err)
-        }
-
-        answer, err := pcAnswer.CreateAnswer(nil)
-        if err != nil {
-            t.Fatal(err)
-        }
-
-        if err = pcAnswer.SetLocalDescription(answer); err != nil {
-            t.Fatal(err)
-        }
-
-        answer.SDP = re.ReplaceAllString(answer.SDP, "sha-256 AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA\r")
-
-        err = pcOffer.SetRemoteDescription(answer)
-        if err != nil {
-            t.Fatal(err)
-        }
-    case <-time.After(5 * time.Second):
-        t.Fatal("timed out waiting to receive offer")
+    {
+        let transport = pc_answer.sctp().transport();
+        assert_eq!(transport.state(), DTLSTransportState::Failed);
+        assert!(transport.conn().await.is_none());
     }
 
-    offerConnectionHasFailed.Wait()
-    answerConnectionHasFailed.Wait()
+    close_pair_now(&mut pc_offer, &mut pc_answer).await;
 
-    assert.Equal(t, pcOffer.SCTP().Transport().State(), DTLSTransportStateFailed)
-    assert.Nil(t, pcOffer.SCTP().Transport().conn)
-
-    assert.Equal(t, pcAnswer.SCTP().Transport().State(), DTLSTransportStateFailed)
-    assert.Nil(t, pcAnswer.SCTP().Transport().conn)
+    Ok(())
 }
-*/
 
 async fn run_test(r: DTLSRole) -> Result<()> {
     let mut offer_s = SettingEngine::default();
@@ -127,47 +171,42 @@ async fn run_test(r: DTLSRole) -> Result<()> {
     Ok(())
 }
 
-/*TODO: test_peer_connection_dtls_role_setting_engine_server/client
-use log::LevelFilter;
-use std::io::Write;
-
 #[tokio::test]
 async fn test_peer_connection_dtls_role_setting_engine_server() -> Result<()> {
-    env_logger::Builder::new()
-        .format(|buf, record| {
-            writeln!(
-                buf,
-                "{}:{} [{}] {} - {}",
-                record.file().unwrap_or("unknown"),
-                record.line().unwrap_or(0),
-                record.level(),
-                chrono::Local::now().format("%H:%M:%S.%6f"),
-                record.args()
-            )
-        })
-        .filter(None, LevelFilter::Trace)
-        .init();
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, LevelFilter::Trace)
+    .init();*/
 
     run_test(DTLSRole::Server).await
 }
 
 #[tokio::test]
 async fn test_peer_connection_dtls_role_setting_engine_client() -> Result<()> {
-    env_logger::Builder::new()
-        .format(|buf, record| {
-            writeln!(
-                buf,
-                "{}:{} [{}] {} - {}",
-                record.file().unwrap_or("unknown"),
-                record.line().unwrap_or(0),
-                record.level(),
-                chrono::Local::now().format("%H:%M:%S.%6f"),
-                record.args()
-            )
-        })
-        .filter(None, LevelFilter::Trace)
-        .init();
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, LevelFilter::Trace)
+    .init();*/
 
     run_test(DTLSRole::Client).await
 }
-*/

@@ -25,6 +25,7 @@ use bytes::Bytes;
 use dtls::config::ClientAuthType;
 use dtls::conn::DTLSConn;
 use dtls_role::*;
+use sha2::{Digest, Sha256};
 use srtp::protection_profile::ProtectionProfile;
 use srtp::session::Session;
 use srtp::stream::Stream;
@@ -396,29 +397,20 @@ impl DTLSTransport {
             self.state_change(DTLSTransportState::Failed).await;
             return Err(Error::ErrNoRemoteCertificate.into());
         }
+
         {
             let mut remote_certificate = self.remote_certificate.lock().await;
             *remote_certificate = Bytes::from(remote_certs[0].clone());
         }
 
-        /*TODO: let parsedRemoteCert = x509.ParseCertificate(t.remote_certificate)
-        if err != nil {
-            if closeErr := dtlsConn.Close(); closeErr != nil {
-                t.log.Error(err.Error())
+        if let Err(err) = self.validate_fingerprint(&remote_certs[0]).await {
+            if dtls_conn.close().await.is_err() {
+                log::error!("{}", err);
             }
 
-            t.onStateChange(DTLSTransportStateFailed)
-            return err
+            self.state_change(DTLSTransportState::Failed).await;
+            return Err(err);
         }
-
-        if err = t.validate_finger_print(parsedRemoteCert); err != nil {
-            if closeErr := dtlsConn.Close(); closeErr != nil {
-                t.log.Error(err.Error())
-            }
-
-            t.onStateChange(DTLSTransportStateFailed)
-            return err
-        }*/
 
         {
             let mut conn = self.conn.lock().await;
@@ -486,25 +478,25 @@ impl DTLSTransport {
         flatten_errs(close_errs)
     }
 
-    pub(crate) fn validate_fingerprint(&self, _remote_cert: &[u8]) -> Result<()> {
-        /*TODO: for  fp in self.remote_parameters.fingerprints {
-            hashAlgo, err := fingerprint.HashFromString(fp.algorithm);
-            if err != nil {
-                return err
+    pub(crate) async fn validate_fingerprint(&self, remote_cert: &[u8]) -> Result<()> {
+        let remote_parameters = self.remote_parameters.lock().await;
+        for fp in &remote_parameters.fingerprints {
+            if fp.algorithm != "sha-256" {
+                return Err(Error::ErrUnsupportedFingerprintAlgorithm.into());
             }
 
-            remoteValue, err := fingerprint.Fingerprint(remoteCert, hashAlgo)
-            if err != nil {
-                return err
-            }
+            let mut h = Sha256::new();
+            h.update(remote_cert);
+            let hashed = h.finalize();
+            let values: Vec<String> = hashed.iter().map(|x| format! {"{:02x}", x}).collect();
+            let remote_value = values.join(":").to_lowercase();
 
-            if strings.EqualFold(remoteValue, fp.Value) {
-                return nil
+            if remote_value == fp.value.to_lowercase() {
+                return Ok(());
             }
         }
 
-        return errNoMatchingCertificateFingerprint*/
-        Ok(())
+        Err(Error::ErrNoMatchingCertificateFingerprint.into())
     }
 
     pub(crate) fn ensure_ice_conn(&self) -> Result<()> {
@@ -518,22 +510,5 @@ impl DTLSTransport {
     pub(crate) async fn store_simulcast_stream(&self, stream: Arc<Stream>) {
         let mut simulcast_streams = self.simulcast_streams.lock().await;
         simulcast_streams.push(stream)
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
-        //TODO:
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_peer_connection_dtls_role_setting_engine() -> Result<()> {
-        //TODO:
-        Ok(())
     }
 }
