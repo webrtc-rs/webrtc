@@ -124,7 +124,7 @@ impl Certificate {
         };
         params.key_pair = Some(key_pair);
 
-        log::debug!(
+        /*log::debug!(
             "from_key: alg:{:?}, nb:{:?}, na:{:?}, sn:{:?}, san:{:?}, dn:{:?}, ic:{:?}, ku:{:?}, eku:{:?}, ce:{:?}, uakie:{:?}, kim:{:?}, kp:{:?}",
             params.alg,
             params.not_before,
@@ -139,7 +139,7 @@ impl Certificate {
             params.use_authority_key_identifier_extension,
             params.key_identifier_method,
             params.key_pair,
-        );
+        );*/
 
         Certificate::from_params(params)
     }
@@ -181,7 +181,7 @@ impl Certificate {
     pub fn from_pem(pem_str: &str, key_pair: KeyPair) -> Result<Self> {
         let params = CertificateParams::from_ca_cert_pem(pem_str, key_pair)?;
 
-        log::debug!(
+        /*log::debug!(
             "from_pem: alg:{:?}, nb:{:?}, na:{:?}, sn:{:?}, san:{:?}, dn:{:?}, ic:{:?}, ku:{:?}, eku:{:?}, ce:{:?}, uakie:{:?}, kim:{:?}, kp:{:?}",
             params.alg,
             params.not_before,
@@ -196,7 +196,7 @@ impl Certificate {
             params.use_authority_key_identifier_extension,
             params.key_identifier_method,
             params.key_pair,
-        );
+        );*/
 
         Certificate::from_params(params)
     }

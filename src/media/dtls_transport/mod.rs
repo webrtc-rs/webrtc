@@ -164,10 +164,6 @@ impl DTLSTransport {
             profile,
             ..Default::default()
         };
-        let mut srtcp_config = srtp::config::Config {
-            profile,
-            ..Default::default()
-        };
 
         if self.setting_engine.replay_protection.srtp != 0 {
             srtp_config.remote_rtp_options = Some(srtp::option::srtp_replay_protection(
@@ -175,14 +171,6 @@ impl DTLSTransport {
             ));
         } else if self.setting_engine.disable_srtp_replay_protection {
             srtp_config.remote_rtp_options = Some(srtp::option::srtp_no_replay_protection());
-        }
-
-        if self.setting_engine.replay_protection.srtcp != 0 {
-            srtcp_config.remote_rtcp_options = Some(srtp::option::srtcp_replay_protection(
-                self.setting_engine.replay_protection.srtcp,
-            ));
-        } else if self.setting_engine.disable_srtcp_replay_protection {
-            srtcp_config.remote_rtcp_options = Some(srtp::option::srtcp_no_replay_protection());
         }
 
         if let Some(conn) = self.conn().await {
@@ -211,6 +199,27 @@ impl DTLSTransport {
                     None
                 }
             };
+        }
+
+        let mut srtcp_config = srtp::config::Config {
+            profile,
+            ..Default::default()
+        };
+        if self.setting_engine.replay_protection.srtcp != 0 {
+            srtcp_config.remote_rtcp_options = Some(srtp::option::srtcp_replay_protection(
+                self.setting_engine.replay_protection.srtcp,
+            ));
+        } else if self.setting_engine.disable_srtcp_replay_protection {
+            srtcp_config.remote_rtcp_options = Some(srtp::option::srtcp_no_replay_protection());
+        }
+
+        if let Some(conn) = self.conn().await {
+            let conn_state = conn.connection_state().await;
+            srtcp_config
+                .extract_session_keys_from_dtls(conn_state, self.role().await == DTLSRole::Client)
+                .await?;
+        } else {
+            return Err(Error::ErrDtlsTransportNotStarted.into());
         }
 
         {

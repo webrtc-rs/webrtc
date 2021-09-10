@@ -46,8 +46,26 @@ lazy_static! {
     };
 }
 
+//use log::LevelFilter;
+//use std::io::Write;
+
 #[tokio::test]
 async fn test_set_rtp_parameters() -> Result<()> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, LevelFilter::Trace)
+    .init();*/
+
     let (mut sender, mut receiver, wan) = create_vnet_pair().await?;
 
     let outgoing_track: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
@@ -121,7 +139,7 @@ async fn test_set_rtp_parameters() -> Result<()> {
 
     signal_pair(&mut sender, &mut receiver).await?;
 
-    //TODO: wg.wait().await;
+    wg.wait().await;
 
     if let Some(v) = outgoing_track
         .as_any()
