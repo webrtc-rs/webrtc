@@ -108,14 +108,9 @@ mod test {
             .collect::<Vec<String>>()
     }
 
-    /*TODO:
-    func TestSDPSemantics_PlanBOfferTransceivers(t *testing.T) {
-        report := test.CheckRoutines(t)
-        defer report()
-
-        lim := test.TimeOut(time.Second * 30)
-        defer lim.Stop()
-
+    /*
+    #[tokio::test]
+    async fn test_sdp_semantics_plan_b_offer_transceivers() -> Result<()>{
         opc, err := new_peer_connection(Configuration{
             SDPSemantics: SDPSemanticsPlanB,
         })
@@ -181,8 +176,8 @@ mod test {
         assert.ObjectsAreEqual(mdNames, []string{"video", "audio", "data"})
 
         closePairNow(t, apc, opc)
-    }
-
+    }*/
+    /*
     func TestSDPSemantics_PlanBAnswerSenders(t *testing.T) {
         report := test.CheckRoutines(t)
         defer report()

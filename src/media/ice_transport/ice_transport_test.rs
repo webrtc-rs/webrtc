@@ -25,7 +25,7 @@ async fn test_ice_transport_on_selected_candidate_pair_change() -> Result<()> {
             let ice_complete_tx2 = Arc::clone(&ice_complete_tx);
             Box::pin(async move {
                 if ice_state == ICEConnectionState::Connected {
-                    tokio::time::sleep(Duration::from_secs(1)).await; //TODO: why sleep 1s?
+                    tokio::time::sleep(Duration::from_secs(1)).await;
                     let mut done = ice_complete_tx2.lock().await;
                     done.take();
                 }

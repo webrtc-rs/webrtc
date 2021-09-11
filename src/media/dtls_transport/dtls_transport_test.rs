@@ -59,7 +59,6 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
             let offer_chan_tx2 = Arc::clone(&offer_chan_tx);
             Box::pin(async move {
                 if candidate.is_none() {
-                    //TODO: offer_chan_tx.send(pc_offer.pending_local_description().await).await;
                     let _ = offer_chan_tx2.send(()).await;
                 }
             })
