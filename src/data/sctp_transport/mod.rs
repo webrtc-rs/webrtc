@@ -117,7 +117,7 @@ impl SCTPTransport {
     }
 
     /// get_capabilities returns the SCTPCapabilities of the SCTPTransport.
-    pub fn get_capabilities() -> SCTPTransportCapabilities {
+    pub fn get_capabilities(&self) -> SCTPTransportCapabilities {
         SCTPTransportCapabilities {
             max_message_size: 0,
         }

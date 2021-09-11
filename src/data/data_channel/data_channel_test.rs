@@ -7,8 +7,18 @@ use crate::peer::peer_connection::PeerConnection;
 
 //use log::LevelFilter;
 //use std::io::Write;
+use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
+use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
+use crate::media::dtls_transport::DTLSTransport;
+use crate::media::ice_transport::ICETransport;
 use crate::peer::configuration::Configuration;
+use crate::peer::ice::ice_candidate::ICECandidate;
 use crate::peer::ice::ice_connection_state::ICEConnectionState;
+use crate::peer::ice::ice_gather::ice_gatherer::ICEGatherer;
+use crate::peer::ice::ice_gather::ICEGatherOptions;
+use crate::peer::ice::ice_role::ICERole;
+use crate::peer::ice::ICEParameters;
+use crate::util::flatten_errs;
 use regex::Regex;
 use tokio::sync::mpsc;
 use tokio::time::Duration;
@@ -1309,258 +1319,246 @@ async fn test_data_channel_non_standard_session_description() -> Result<()> {
     Ok(())
 }
 
-//TODO: add datachannel_ortc_test
-/*
-#[tokio::test] async fn TestDataChannel_ORTCE2E()->Result<()> {
-    // Limit runtime in case of deadlocks
-    lim := test.TimeOut(time.Second * 20)
-    defer lim.Stop()
+struct TestOrtcStack {
+    //api      *API
+    gatherer: Arc<ICEGatherer>,
+    ice: Arc<ICETransport>,
+    dtls: Arc<DTLSTransport>,
+    sctp: Arc<SCTPTransport>,
+}
 
-    report := test.CheckRoutines(t)
-    defer report()
+struct TestOrtcSignal {
+    ice_candidates: Vec<ICECandidate>, //`json:"iceCandidates"`
+    ice_parameters: ICEParameters,     //`json:"iceParameters"`
+    dtls_parameters: DTLSParameters,   //`json:"dtlsParameters"`
+    sctp_capabilities: SCTPTransportCapabilities, //`json:"sctpCapabilities"`
+}
 
-    stackA, stackB, err := newORTCPair()
-    if err != nil {
-        t.Fatal(err)
-    }
+impl TestOrtcStack {
+    async fn new(api: &API) -> Result<Self> {
+        // Create the ICE gatherer
+        let gatherer = Arc::new(api.new_ice_gatherer(ICEGatherOptions::default())?);
 
-    awaitSetup := make(chan struct{})
-    awaitString := make(chan struct{})
-    awaitBinary := make(chan struct{})
-    stackB.sctp.OnDataChannel(func(d *DataChannel) {
-        close(awaitSetup)
+        // Construct the ICE transport
+        let ice = Arc::new(api.new_ice_transport(Arc::clone(&gatherer)));
 
-        d.OnMessage(func(msg DataChannelMessage) {
-            if msg.IsString {
-                close(awaitString)
-            } else {
-                close(awaitBinary)
-            }
+        // Construct the DTLS transport
+        let dtls = Arc::new(api.new_dtls_transport(Arc::clone(&ice), vec![])?);
+
+        // Construct the SCTP transport
+        let sctp = Arc::new(api.new_sctp_transport(Arc::clone(&dtls))?);
+
+        Ok(TestOrtcStack {
+            gatherer,
+            ice,
+            dtls,
+            sctp,
         })
-    })
-
-    err = signalORTCPair(stackA, stackB)
-    if err != nil {
-        t.Fatal(err)
     }
 
-    var id uint16 = 1
-    dcParams := &DataChannelParameters{
-        Label: "Foo",
-        ID:    &id,
-    }
-    channelA, err := stackA.api.NewDataChannel(stackA.sctp, dcParams)
-    if err != nil {
-        t.Fatal(err)
+    async fn set_signal(&self, sig: &TestOrtcSignal, is_offer: bool) -> Result<()> {
+        let ice_role = if is_offer {
+            ICERole::Controlling
+        } else {
+            ICERole::Controlled
+        };
+
+        self.ice.set_remote_candidates(&sig.ice_candidates).await?;
+
+        // Start the ICE transport
+        self.ice.start(&sig.ice_parameters, Some(ice_role)).await?;
+
+        // Start the DTLS transport
+        self.dtls.start(sig.dtls_parameters.clone()).await?;
+
+        // Start the SCTP transport
+        self.sctp.start(sig.sctp_capabilities).await?;
+
+        Ok(())
     }
 
-    <-awaitSetup
+    async fn get_signal(&self) -> Result<TestOrtcSignal> {
+        let (gather_finished_tx, mut gather_finished_rx) = mpsc::channel::<()>(1);
+        let gather_finished_tx = Arc::new(gather_finished_tx);
+        self.gatherer
+            .on_local_candidate(Box::new(move |i: Option<ICECandidate>| {
+                let gather_finished_tx2 = Arc::clone(&gather_finished_tx);
+                Box::pin(async move {
+                    if i.is_none() {
+                        let _ = gather_finished_tx2.send(()).await;
+                    }
+                })
+            }))
+            .await;
 
-    err = channelA.SendText("ABC")
-    if err != nil {
-        t.Fatal(err)
-    }
-    err = channelA.Send([]byte("ABC"))
-    if err != nil {
-        t.Fatal(err)
-    }
-    <-awaitString
-    <-awaitBinary
+        self.gatherer.gather().await?;
 
-    err = stackA.close()
-    if err != nil {
-        t.Fatal(err)
+        let _ = gather_finished_rx.recv().await;
+
+        let ice_candidates = self.gatherer.get_local_candidates().await?;
+
+        let ice_parameters = self.gatherer.get_local_parameters().await?;
+
+        let dtls_parameters = self.dtls.get_local_parameters()?;
+
+        let sctp_capabilities = self.sctp.get_capabilities();
+
+        Ok(TestOrtcSignal {
+            ice_candidates,
+            ice_parameters,
+            dtls_parameters,
+            sctp_capabilities,
+        })
     }
 
-    err = stackB.close()
-    if err != nil {
-        t.Fatal(err)
+    async fn close(&self) -> Result<()> {
+        let mut close_errs = vec![];
+
+        if let Err(err) = self.sctp.stop().await {
+            close_errs.push(err);
+        }
+
+        if let Err(err) = self.ice.stop().await {
+            close_errs.push(err);
+        }
+
+        flatten_errs(close_errs)
     }
+}
+
+async fn new_ortc_pair(api: &API) -> Result<(Arc<TestOrtcStack>, Arc<TestOrtcStack>)> {
+    let sa = Arc::new(TestOrtcStack::new(api).await?);
+    let sb = Arc::new(TestOrtcStack::new(api).await?);
+    Ok((sa, sb))
+}
+
+async fn signal_ortc_pair(stack_a: Arc<TestOrtcStack>, stack_b: Arc<TestOrtcStack>) -> Result<()> {
+    let sig_a = stack_a.get_signal().await?;
+    let sig_b = stack_b.get_signal().await?;
+
+    let (a_tx, mut a_rx) = mpsc::channel(1);
+    let (b_tx, mut b_rx) = mpsc::channel(1);
+
+    tokio::spawn(async move {
+        let _ = a_tx.send(stack_b.set_signal(&sig_a, false).await).await;
+    });
+
+    tokio::spawn(async move {
+        let _ = b_tx.send(stack_a.set_signal(&sig_b, true).await).await;
+    });
+
+    let err_a = a_rx.recv().await.unwrap();
+    let err_b = b_rx.recv().await.unwrap();
+
+    let mut close_errs = vec![];
+    if let Err(err) = err_a {
+        close_errs.push(err);
+    }
+    if let Err(err) = err_b {
+        close_errs.push(err);
+    }
+
+    flatten_errs(close_errs)
+}
+
+#[tokio::test]
+async fn test_data_channel_ortc_e2e() -> Result<()> {
+    let api = APIBuilder::new().build();
+
+    let (stack_a, stack_b) = new_ortc_pair(&api).await?;
+
+    let (await_setup_tx, mut await_setup_rx) = mpsc::channel::<()>(1);
+    let (await_string_tx, mut await_string_rx) = mpsc::channel::<()>(1);
+    let (await_binary_tx, mut await_binary_rx) = mpsc::channel::<()>(1);
+
+    let await_setup_tx = Arc::new(await_setup_tx);
+    let await_string_tx = Arc::new(await_string_tx);
+    let await_binary_tx = Arc::new(await_binary_tx);
+    stack_b
+        .sctp
+        .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
+            let await_setup_tx2 = Arc::clone(&await_setup_tx);
+            let await_string_tx2 = Arc::clone(&await_string_tx);
+            let await_binary_tx2 = Arc::clone(&await_binary_tx);
+            Box::pin(async move {
+                let _ = await_setup_tx2.send(()).await;
+
+                d.on_message(Box::new(move |msg: DataChannelMessage| {
+                    let await_string_tx3 = Arc::clone(&await_string_tx2);
+                    let await_binary_tx3 = Arc::clone(&await_binary_tx2);
+                    Box::pin(async move {
+                        if msg.is_string {
+                            let _ = await_string_tx3.send(()).await;
+                        } else {
+                            let _ = await_binary_tx3.send(()).await;
+                        }
+                    })
+                }))
+                .await;
+            })
+        }))
+        .await;
+
+    signal_ortc_pair(Arc::clone(&stack_a), Arc::clone(&stack_b)).await?;
+
+    let id = 1u16;
+    let dc_params = DataChannelParameters {
+        label: "Foo".to_owned(),
+        id,
+        ..Default::default()
+    };
+
+    let channel_a = API::new_data_channel(
+        Arc::clone(&stack_a.sctp),
+        dc_params,
+        Arc::clone(&api.setting_engine),
+    )
+    .await?;
+
+    let _ = await_setup_rx.recv().await;
+
+    channel_a.send_text("ABC".to_owned()).await?;
+    channel_a.send(&Bytes::from_static(b"ABC")).await?;
+
+    let _ = await_string_rx.recv().await;
+    let _ = await_binary_rx.recv().await;
+
+    stack_a.close().await?;
+    stack_b.close().await?;
 
     // attempt to send when channel is closed
-    err = channelA.Send([]byte("ABC"))
-    assert.Error(t, err)
-    assert.Equal(t, io.ErrClosedPipe, err)
+    let result = channel_a.send(&Bytes::from_static(b"ABC")).await;
+    if let Err(err) = result {
+        assert!(
+            Error::ErrClosedPipe.equal(&err),
+            "expected ErrClosedPipe, but got {}",
+            err
+        );
+    } else {
+        assert!(false);
+    }
 
-    err = channelA.SendText("test")
-    assert.Error(t, err)
-    assert.Equal(t, io.ErrClosedPipe, err)
+    let result = channel_a.send_text("test".to_owned()).await;
+    if let Err(err) = result {
+        assert!(
+            Error::ErrClosedPipe.equal(&err),
+            "expected ErrClosedPipe, but got {}",
+            err
+        );
+    } else {
+        assert!(false);
+    }
 
-    err = channelA.ensureOpen()
-    assert.Error(t, err)
-    assert.Equal(t, io.ErrClosedPipe, err)
+    let result = channel_a.ensure_open();
+    if let Err(err) = result {
+        assert!(
+            Error::ErrClosedPipe.equal(&err),
+            "expected ErrClosedPipe, but got {}",
+            err
+        );
+    } else {
+        assert!(false);
+    }
+
+    Ok(())
 }
-
-type testORTCStack struct {
-    api      *API
-    gatherer *ICEGatherer
-    ice      *ICETransport
-    dtls     *DTLSTransport
-    sctp     *SCTPTransport
-}
-
-#[tokio::test] async fn(s *testORTCStack) setSignal(sig *testORTCSignal, isOffer bool) error {
-    iceRole := ICERoleControlled
-    if isOffer {
-        iceRole = ICERoleControlling
-    }
-
-    err := s.ice.SetRemoteCandidates(sig.ICECandidates)
-    if err != nil {
-        return err
-    }
-
-    // Start the ICE transport
-    err = s.ice.Start(nil, sig.ICEParameters, &iceRole)
-    if err != nil {
-        return err
-    }
-
-    // Start the DTLS transport
-    err = s.dtls.Start(sig.DTLSParameters)
-    if err != nil {
-        return err
-    }
-
-    // Start the SCTP transport
-    err = s.sctp.Start(sig.SCTPCapabilities)
-    if err != nil {
-        return err
-    }
-
-    return nil
-}
-
-#[tokio::test] async fn(s *testORTCStack) getSignal() (*testORTCSignal, error) {
-    gatherFinished := make(chan struct{})
-    s.gatherer.OnLocalCandidate(func(i *ICECandidate) {
-        if i == nil {
-            close(gatherFinished)
-        }
-    })
-
-    if err := s.gatherer.Gather(); err != nil {
-        return nil, err
-    }
-
-    <-gatherFinished
-    iceCandidates, err := s.gatherer.GetLocalCandidates()
-    if err != nil {
-        return nil, err
-    }
-
-    iceParams, err := s.gatherer.GetLocalParameters()
-    if err != nil {
-        return nil, err
-    }
-
-    dtlsParams, err := s.dtls.GetLocalParameters()
-    if err != nil {
-        return nil, err
-    }
-
-    sctpCapabilities := s.sctp.GetCapabilities()
-
-    return &testORTCSignal{
-        ICECandidates:    iceCandidates,
-        ICEParameters:    iceParams,
-        DTLSParameters:   dtlsParams,
-        SCTPCapabilities: sctpCapabilities,
-    }, nil
-}
-
-#[tokio::test] async fn(s *testORTCStack) close() error {
-    var closeErrs []error
-
-    if err := s.sctp.Stop(); err != nil {
-        closeErrs = append(closeErrs, err)
-    }
-
-    if err := s.ice.Stop(); err != nil {
-        closeErrs = append(closeErrs, err)
-    }
-
-    return util.FlattenErrs(closeErrs)
-}
-
-type testORTCSignal struct {
-    ICECandidates    []ICECandidate   `json:"iceCandidates"`
-    ICEParameters    ICEParameters    `json:"iceParameters"`
-    DTLSParameters   DTLSParameters   `json:"dtlsParameters"`
-    SCTPCapabilities SCTPCapabilities `json:"sctpCapabilities"`
-}
-
-#[tokio::test] async fnnewORTCPair() (stackA *testORTCStack, stackB *testORTCStack, err error) {
-    sa, err := newORTCStack()
-    if err != nil {
-        return nil, nil, err
-    }
-
-    sb, err := newORTCStack()
-    if err != nil {
-        return nil, nil, err
-    }
-
-    return sa, sb, nil
-}
-
-#[tokio::test] async fnnewORTCStack() (*testORTCStack, error) {
-    // Create an API object
-    api := NewAPI()
-
-    // Create the ICE gatherer
-    gatherer, err := api.NewICEGatherer(ICEGatherOptions{})
-    if err != nil {
-        return nil, err
-    }
-
-    // Construct the ICE transport
-    ice := api.NewICETransport(gatherer)
-
-    // Construct the DTLS transport
-    dtls, err := api.NewDTLSTransport(ice, nil)
-    if err != nil {
-        return nil, err
-    }
-
-    // Construct the SCTP transport
-    sctp := api.NewSCTPTransport(dtls)
-
-    return &testORTCStack{
-        api:      api,
-        gatherer: gatherer,
-        ice:      ice,
-        dtls:     dtls,
-        sctp:     sctp,
-    }, nil
-}
-
-#[tokio::test] async fnsignalORTCPair(stackA *testORTCStack, stackB *testORTCStack) error {
-    sigA, err := stackA.getSignal()
-    if err != nil {
-        return err
-    }
-    sigB, err := stackB.getSignal()
-    if err != nil {
-        return err
-    }
-
-    a := make(chan error)
-    b := make(chan error)
-
-    go func() {
-        a <- stackB.setSignal(sigA, false)
-    }()
-
-    go func() {
-        b <- stackA.setSignal(sigB, true)
-    }()
-
-    errA := <-a
-    errB := <-b
-
-    closeErrs := []error{errA, errB}
-
-    return util.FlattenErrs(closeErrs)
-}
-*/

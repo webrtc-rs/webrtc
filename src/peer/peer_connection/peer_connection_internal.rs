@@ -554,7 +554,7 @@ impl PeerConnectionInternal {
         if let Err(err) = self
             .ice_transport
             .start(
-                ICEParameters {
+                &ICEParameters {
                     username_fragment: remote_ufrag,
                     password: remote_pwd,
                     ice_lite: false,
