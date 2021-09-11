@@ -853,187 +853,208 @@ async fn test_data_channel_parameters_go() -> Result<()> {
     Ok(())
 }
 
+//use log::LevelFilter;
+//use std::io::Write;
+
 #[tokio::test]
-async fn test_data_channel_buffered_amount() -> Result<()> {
+async fn test_data_channel_buffered_amount_set_before_open() -> Result<()> {
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, LevelFilter::Trace)
+    .init();*/
+
     let mut m = MediaEngine::default();
     m.register_default_codecs()?;
     let api = APIBuilder::new().with_media_engine(m).build();
 
-    //"set before datachannel becomes open"
-    {
-        let n_cbs = Arc::new(AtomicU16::new(0));
-        let buf = Bytes::from_static(&[0u8; 1000]);
+    let n_cbs = Arc::new(AtomicU16::new(0));
+    let buf = Bytes::from_static(&[0u8; 1000]);
 
-        let (mut offer_pc, mut answer_pc) = new_pair(&api).await?;
+    let (mut offer_pc, mut answer_pc) = new_pair(&api).await?;
 
-        let (done_tx, done_rx) = mpsc::channel::<()>(1);
+    let (done_tx, done_rx) = mpsc::channel::<()>(1);
 
-        let done_tx = Arc::new(Mutex::new(Some(done_tx)));
-        let n_packets_received = Arc::new(AtomicU16::new(0));
-        answer_pc
-            .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
-                // Make sure this is the data channel we were looking for. (Not the one
-                // created in signalPair).
-                if d.label() != EXPECTED_LABEL {
-                    return Box::pin(async {});
-                }
+    let done_tx = Arc::new(Mutex::new(Some(done_tx)));
+    let n_packets_received = Arc::new(AtomicU16::new(0));
+    answer_pc
+        .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
+            // Make sure this is the data channel we were looking for. (Not the one
+            // created in signalPair).
+            if d.label() != EXPECTED_LABEL {
+                return Box::pin(async {});
+            }
 
-                let done_tx2 = Arc::clone(&done_tx);
-                let n_packets_received2 = Arc::clone(&n_packets_received);
-                Box::pin(async move {
-                    d.on_message(Box::new(move |_msg: DataChannelMessage| {
-                        let n = n_packets_received2.fetch_add(1, Ordering::SeqCst);
-                        if n == 9 {
-                            let done_tx3 = Arc::clone(&done_tx2);
-                            tokio::spawn(async move {
-                                tokio::time::sleep(Duration::from_millis(10)).await;
-                                let mut done = done_tx3.lock().await;
-                                done.take();
-                            });
-                        }
-
-                        Box::pin(async {})
-                    }))
-                    .await;
-
-                    assert!(d.ordered(), "Ordered should be set to true");
-                })
-            }))
-            .await;
-
-        let dc = offer_pc.create_data_channel(EXPECTED_LABEL, None).await?;
-
-        assert!(dc.ordered(), "Ordered should be set to true");
-
-        let dc2 = Arc::clone(&dc);
-        dc.on_open(Box::new(move || {
-            let dc3 = Arc::clone(&dc2);
+            let done_tx2 = Arc::clone(&done_tx);
+            let n_packets_received2 = Arc::clone(&n_packets_received);
             Box::pin(async move {
-                for _ in 0..10 {
-                    if let Err(_) = dc3.send(&buf).await {
-                        assert!(false, "Failed to send string on data channel");
+                d.on_message(Box::new(move |_msg: DataChannelMessage| {
+                    let n = n_packets_received2.fetch_add(1, Ordering::SeqCst);
+                    if n == 9 {
+                        let done_tx3 = Arc::clone(&done_tx2);
+                        tokio::spawn(async move {
+                            tokio::time::sleep(Duration::from_millis(10)).await;
+                            let mut done = done_tx3.lock().await;
+                            done.take();
+                        });
                     }
-                    assert_eq!(
-                        1500,
-                        dc3.buffered_amount_low_threshold().await,
-                        "value mismatch"
-                    );
-                }
-            })
-        }))
-        .await;
 
-        dc.on_message(Box::new(|_msg: DataChannelMessage| Box::pin(async {})))
-            .await;
-
-        // The value is temporarily stored in the dc object
-        // until the dc gets opened
-        dc.set_buffered_amount_low_threshold(1500).await;
-        // The callback function is temporarily stored in the dc object
-        // until the dc gets opened
-        let n_cbs2 = Arc::clone(&n_cbs);
-        dc.on_buffered_amount_low(Box::new(move || {
-            n_cbs2.fetch_add(1, Ordering::SeqCst);
-            Box::pin(async {})
-        }))
-        .await;
-
-        signal_pair(&mut offer_pc, &mut answer_pc).await?;
-
-        close_pair(&offer_pc, &answer_pc, done_rx).await;
-
-        /*TODO: FIXME: assert!(
-            n_cbs.load(Ordering::SeqCst) > 0,
-            "callback should be made at least once"
-        );*/
-    }
-
-    //"set after datachannel becomes open"
-    {
-        let n_cbs = Arc::new(AtomicU16::new(0));
-        let buf = Bytes::from_static(&[0u8; 1000]);
-
-        let (mut offer_pc, mut answer_pc) = new_pair(&api).await?;
-
-        let (done_tx, done_rx) = mpsc::channel::<()>(1);
-
-        let done_tx = Arc::new(Mutex::new(Some(done_tx)));
-        let n_packets_received = Arc::new(AtomicU16::new(0));
-        answer_pc
-            .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
-                // Make sure this is the data channel we were looking for. (Not the one
-                // created in signalPair).
-                if d.label() != EXPECTED_LABEL {
-                    return Box::pin(async {});
-                }
-
-                let done_tx2 = Arc::clone(&done_tx);
-                let n_packets_received2 = Arc::clone(&n_packets_received);
-                Box::pin(async move {
-                    d.on_message(Box::new(move |_msg: DataChannelMessage| {
-                        let n = n_packets_received2.fetch_add(1, Ordering::SeqCst);
-                        if n == 9 {
-                            let done_tx3 = Arc::clone(&done_tx2);
-                            tokio::spawn(async move {
-                                tokio::time::sleep(Duration::from_millis(10)).await;
-                                let mut done = done_tx3.lock().await;
-                                done.take();
-                            });
-                        }
-
-                        Box::pin(async {})
-                    }))
-                    .await;
-
-                    assert!(d.ordered(), "Ordered should be set to true");
-                })
-            }))
-            .await;
-
-        let dc = offer_pc.create_data_channel(EXPECTED_LABEL, None).await?;
-
-        assert!(dc.ordered(), "Ordered should be set to true");
-
-        let dc2 = Arc::clone(&dc);
-        let n_cbs2 = Arc::clone(&n_cbs);
-        dc.on_open(Box::new(move || {
-            let dc3 = Arc::clone(&dc2);
-            Box::pin(async move {
-                // The value should directly be passed to sctp
-                dc3.set_buffered_amount_low_threshold(1500).await;
-                // The callback function should directly be passed to sctp
-                dc3.on_buffered_amount_low(Box::new(move || {
-                    n_cbs2.fetch_add(1, Ordering::SeqCst);
                     Box::pin(async {})
                 }))
                 .await;
 
-                for _ in 0..10 {
-                    if let Err(_) = dc3.send(&buf).await {
-                        assert!(false, "Failed to send string on data channel");
-                    }
-                    assert_eq!(
-                        1500,
-                        dc3.buffered_amount_low_threshold().await,
-                        "value mismatch"
-                    );
-                }
+                assert!(d.ordered(), "Ordered should be set to true");
             })
         }))
         .await;
 
-        dc.on_message(Box::new(|_msg: DataChannelMessage| Box::pin(async {})))
+    let dc = offer_pc.create_data_channel(EXPECTED_LABEL, None).await?;
+
+    assert!(dc.ordered(), "Ordered should be set to true");
+
+    let dc2 = Arc::clone(&dc);
+    dc.on_open(Box::new(move || {
+        let dc3 = Arc::clone(&dc2);
+        Box::pin(async move {
+            for _ in 0..10 {
+                if let Err(_) = dc3.send(&buf).await {
+                    assert!(false, "Failed to send string on data channel");
+                }
+                assert_eq!(
+                    1500,
+                    dc3.buffered_amount_low_threshold().await,
+                    "value mismatch"
+                );
+            }
+        })
+    }))
+    .await;
+
+    dc.on_message(Box::new(|_msg: DataChannelMessage| Box::pin(async {})))
+        .await;
+
+    // The value is temporarily stored in the dc object
+    // until the dc gets opened
+    dc.set_buffered_amount_low_threshold(1500).await;
+    // The callback function is temporarily stored in the dc object
+    // until the dc gets opened
+    let n_cbs2 = Arc::clone(&n_cbs);
+    dc.on_buffered_amount_low(Box::new(move || {
+        n_cbs2.fetch_add(1, Ordering::SeqCst);
+        Box::pin(async {})
+    }))
+    .await;
+
+    signal_pair(&mut offer_pc, &mut answer_pc).await?;
+
+    close_pair(&offer_pc, &answer_pc, done_rx).await;
+
+    assert!(
+        n_cbs.load(Ordering::SeqCst) > 0,
+        "callback should be made at least once"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_data_channel_buffered_amount_set_after_open() -> Result<()> {
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+    let api = APIBuilder::new().with_media_engine(m).build();
+
+    let n_cbs = Arc::new(AtomicU16::new(0));
+    let buf = Bytes::from_static(&[0u8; 1000]);
+
+    let (mut offer_pc, mut answer_pc) = new_pair(&api).await?;
+
+    let (done_tx, done_rx) = mpsc::channel::<()>(1);
+
+    let done_tx = Arc::new(Mutex::new(Some(done_tx)));
+    let n_packets_received = Arc::new(AtomicU16::new(0));
+    answer_pc
+        .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
+            // Make sure this is the data channel we were looking for. (Not the one
+            // created in signalPair).
+            if d.label() != EXPECTED_LABEL {
+                return Box::pin(async {});
+            }
+
+            let done_tx2 = Arc::clone(&done_tx);
+            let n_packets_received2 = Arc::clone(&n_packets_received);
+            Box::pin(async move {
+                d.on_message(Box::new(move |_msg: DataChannelMessage| {
+                    let n = n_packets_received2.fetch_add(1, Ordering::SeqCst);
+                    if n == 9 {
+                        let done_tx3 = Arc::clone(&done_tx2);
+                        tokio::spawn(async move {
+                            tokio::time::sleep(Duration::from_millis(10)).await;
+                            let mut done = done_tx3.lock().await;
+                            done.take();
+                        });
+                    }
+
+                    Box::pin(async {})
+                }))
+                .await;
+
+                assert!(d.ordered(), "Ordered should be set to true");
+            })
+        }))
+        .await;
+
+    let dc = offer_pc.create_data_channel(EXPECTED_LABEL, None).await?;
+
+    assert!(dc.ordered(), "Ordered should be set to true");
+
+    let dc2 = Arc::clone(&dc);
+    let n_cbs2 = Arc::clone(&n_cbs);
+    dc.on_open(Box::new(move || {
+        let dc3 = Arc::clone(&dc2);
+        Box::pin(async move {
+            // The value should directly be passed to sctp
+            dc3.set_buffered_amount_low_threshold(1500).await;
+            // The callback function should directly be passed to sctp
+            dc3.on_buffered_amount_low(Box::new(move || {
+                n_cbs2.fetch_add(1, Ordering::SeqCst);
+                Box::pin(async {})
+            }))
             .await;
 
-        signal_pair(&mut offer_pc, &mut answer_pc).await?;
+            for _ in 0..10 {
+                if let Err(_) = dc3.send(&buf).await {
+                    assert!(false, "Failed to send string on data channel");
+                }
+                assert_eq!(
+                    1500,
+                    dc3.buffered_amount_low_threshold().await,
+                    "value mismatch"
+                );
+            }
+        })
+    }))
+    .await;
 
-        close_pair(&offer_pc, &answer_pc, done_rx).await;
+    dc.on_message(Box::new(|_msg: DataChannelMessage| Box::pin(async {})))
+        .await;
 
-        assert!(
-            n_cbs.load(Ordering::SeqCst) > 0,
-            "callback should be made at least once"
-        );
-    }
+    signal_pair(&mut offer_pc, &mut answer_pc).await?;
+
+    close_pair(&offer_pc, &answer_pc, done_rx).await;
+
+    assert!(
+        n_cbs.load(Ordering::SeqCst) > 0,
+        "callback should be made at least once"
+    );
 
     Ok(())
 }

@@ -496,10 +496,12 @@ impl DataChannel {
     /// the number of bytes of outgoing data becomes lower than the
     /// buffered_amount_low_threshold.
     pub async fn on_buffered_amount_low(&self, f: OnBufferedAmountLowFn) {
-        //TODO: self.onBufferedAmountLow = f
         let data_channel = self.data_channel.lock().await;
         if let Some(dc) = &*data_channel {
             dc.on_buffered_amount_low(f).await;
+        } else {
+            let mut on_buffered_amount_low = self.on_buffered_amount_low.lock().await;
+            *on_buffered_amount_low = Some(f);
         }
     }
 
