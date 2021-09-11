@@ -398,12 +398,19 @@ impl Stream {
             from_amount - n_bytes_released as usize
         };
 
-        log::trace!("[{}] bufferedAmount = {}", self.name, new_amount);
+        let buffered_amount_low = self.buffered_amount_low.load(Ordering::SeqCst);
 
-        let mut handler = self.on_buffered_amount_low.lock().await;
-        if let Some(f) = &mut *handler {
-            let buffered_amount_low = self.buffered_amount_low.load(Ordering::SeqCst);
-            if from_amount > buffered_amount_low && new_amount <= buffered_amount_low {
+        log::trace!(
+            "[{}] bufferedAmount = {}, from_amount = {}, buffered_amount_low = {}",
+            self.name,
+            new_amount,
+            from_amount,
+            buffered_amount_low,
+        );
+
+        if from_amount > buffered_amount_low && new_amount <= buffered_amount_low {
+            let mut handler = self.on_buffered_amount_low.lock().await;
+            if let Some(f) = &mut *handler {
                 f().await;
             }
         }
