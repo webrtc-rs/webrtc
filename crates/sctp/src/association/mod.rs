@@ -293,6 +293,8 @@ impl Association {
     pub async fn close(&self) -> Result<()> {
         log::debug!("[{}] closing association..", self.name);
 
+        let _ = self.net_conn.close().await;
+
         let mut ai = self.association_internal.lock().await;
         ai.close().await
     }
