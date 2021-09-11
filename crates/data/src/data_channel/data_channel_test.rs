@@ -462,6 +462,7 @@ async fn test_data_channel_buffered_amount() -> Result<()> {
     let n_cbs2 = Arc::clone(&n_cbs);
     dc0.on_buffered_amount_low(Box::new(move || {
         n_cbs2.fetch_add(1, Ordering::SeqCst);
+        Box::pin(async {})
     }))
     .await;
 
