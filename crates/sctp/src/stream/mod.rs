@@ -10,6 +10,8 @@ use crate::queue::pending_queue::PendingQueue;
 use anyhow::Result;
 use bytes::Bytes;
 use std::fmt;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU8, AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex, Notify};
@@ -52,7 +54,8 @@ impl From<u8> for ReliabilityType {
     }
 }
 
-pub type OnBufferedAmountLowFn = Box<dyn Fn() + Send + Sync>;
+pub type OnBufferedAmountLowFn =
+    Box<dyn (FnMut() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync>;
 
 // TODO: benchmark performance between multiple Atomic+Mutex vs one Mutex<StreamInternal>
 
@@ -397,11 +400,11 @@ impl Stream {
 
         log::trace!("[{}] bufferedAmount = {}", self.name, new_amount);
 
-        let on_buffered_amount_low = self.on_buffered_amount_low.lock().await;
-        if let Some(f) = &*on_buffered_amount_low {
+        let mut handler = self.on_buffered_amount_low.lock().await;
+        if let Some(f) = &mut *handler {
             let buffered_amount_low = self.buffered_amount_low.load(Ordering::SeqCst);
             if from_amount > buffered_amount_low && new_amount <= buffered_amount_low {
-                f();
+                f().await;
             }
         }
     }
