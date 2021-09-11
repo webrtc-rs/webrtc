@@ -7,9 +7,12 @@ use crate::peer::peer_connection::PeerConnection;
 
 //use log::LevelFilter;
 //use std::io::Write;
+use crate::peer::configuration::Configuration;
 use crate::peer::ice::ice_connection_state::ICEConnectionState;
+use regex::Regex;
 use tokio::sync::mpsc;
 use tokio::time::Duration;
+use waitgroup::WaitGroup;
 
 // EXPECTED_LABEL represents the label of the data channel we are trying to test.
 // Some other channels may have been created during initialization (in the Wasm
@@ -1025,268 +1028,286 @@ async fn test_data_channel_buffered_amount() -> Result<()> {
     Ok(())
 }
 
-/*
-#[tokio::test] async fn TestEOF()->Result<()> {
-    report := test.CheckRoutines(t)
-    defer report()
+#[tokio::test]
+async fn test_eof_detach() -> Result<()> {
+    let label: &str = "test-channel";
+    let test_data: &'static str = "this is some test data";
 
-    log := logging.NewDefaultLoggerFactory().NewLogger("test")
-    label := "test-channel"
-    testData := []byte("this is some test data")
+    // Use Detach data channels mode
+    let mut s = SettingEngine::default();
+    s.detach_data_channels();
+    let api = APIBuilder::new().with_setting_engine(s).build();
 
-    t.Run("Detach", func()->Result<()> {
-        // Use Detach data channels mode
-        s := SettingEngine{}
-        s.DetachDataChannels()
-        api := NewAPI(WithSettingEngine(s))
+    // Set up two peer connections.
+    let mut pca = api.new_peer_connection(Configuration::default()).await?;
+    let mut pcb = api.new_peer_connection(Configuration::default()).await?;
 
-        // Set up two peer connections.
-        config := Configuration{}
-        pca, err := api.NewPeerConnection(config)
-        if err != nil {
-            t.Fatal(err)
+    let wg = WaitGroup::new();
+
+    let (dc_chan_tx, mut dc_chan_rx) = mpsc::channel(1);
+    let dc_chan_tx = Arc::new(dc_chan_tx);
+    pcb.on_data_channel(Box::new(move |dc: Arc<DataChannel>| {
+        if dc.label() != label {
+            return Box::pin(async {});
         }
-        pcb, err := api.NewPeerConnection(config)
-        if err != nil {
-            t.Fatal(err)
-        }
+        log::debug!("OnDataChannel was called");
+        let dc_chan_tx2 = Arc::clone(&dc_chan_tx);
+        let dc2 = Arc::clone(&dc);
+        Box::pin(async move {
+            let dc3 = Arc::clone(&dc2);
+            dc2.on_open(Box::new(move || {
+                let dc_chan_tx3 = Arc::clone(&dc_chan_tx2);
+                let dc4 = Arc::clone(&dc3);
+                Box::pin(async move {
+                    let detached = match dc4.detach().await {
+                        Ok(detached) => detached,
+                        Err(err) => {
+                            log::debug!("Detach failed: {}", err);
+                            assert!(false);
+                            return;
+                        }
+                    };
 
-        defer closePairNow(t, pca, pcb)
+                    let _ = dc_chan_tx3.send(detached).await;
+                })
+            }))
+            .await;
+        })
+    }))
+    .await;
 
-        var wg sync.WaitGroup
+    let w = wg.worker();
+    tokio::spawn(async move {
+        let _d = w;
 
-        dcChan := make(chan datachannel.ReadWriteCloser)
-        pcb.OnDataChannel(func(dc *DataChannel) {
-            if dc.Label() != label {
-                return
-            }
-            log.Debug("OnDataChannel was called")
-            dc.OnOpen(func() {
-                detached, err2 := dc.Detach()
-                if err2 != nil {
-                    log.Debugf("Detach failed: %s\n", err2.Error())
-                    t.Error(err2)
-                }
+        log::debug!("Waiting for OnDataChannel");
+        let dc = dc_chan_rx.recv().await.unwrap();
+        log::debug!("data channel opened");
 
-                dcChan <- detached
+        log::debug!("Waiting for ping...");
+        let mut msg = vec![0u8; 256];
+        let n = dc.read(&mut msg).await?;
+        log::debug!("Received ping! {:?}\n", &msg[..n]);
+
+        assert_eq!(test_data.as_bytes(), &msg[..n]);
+        log::debug!("Received ping successfully!");
+
+        dc.close().await?;
+
+        Result::<()>::Ok(())
+    });
+
+    signal_pair(&mut pca, &mut pcb).await?;
+
+    let attached = pca.create_data_channel(label, None).await?;
+
+    log::debug!("Waiting for data channel to open");
+    let (open_tx, mut open_rx) = mpsc::channel::<()>(1);
+    let open_tx = Arc::new(open_tx);
+    attached
+        .on_open(Box::new(move || {
+            let open_tx2 = Arc::clone(&open_tx);
+            Box::pin(async move {
+                let _ = open_tx2.send(()).await;
             })
-        })
+        }))
+        .await;
 
-        wg.Add(1)
-        go func() {
-            defer wg.Done()
+    let _ = open_rx.recv().await;
+    log::debug!("data channel opened");
 
-            var msg []byte
+    let dc = attached.detach().await?;
 
-            log.Debug("Waiting for OnDataChannel")
-            dc := <-dcChan
-            log.Debug("data channel opened")
-            defer func() { assert.NoError(t, dc.Close(), "should succeed") }()
+    let w = wg.worker();
+    tokio::spawn(async move {
+        let _d = w;
+        log::debug!("Sending ping...");
+        dc.write(&Bytes::from_static(test_data.as_bytes())).await?;
+        log::debug!("Sent ping");
 
-            log.Debug("Waiting for ping...")
-            msg, err2 := ioutil.ReadAll(dc)
-            log.Debugf("Received ping! \"%s\"\n", string(msg))
-            if err2 != nil {
-                t.Error(err2)
-            }
+        dc.close().await?;
 
-            if !bytes.Equal(msg, testData) {
-                t.Errorf("expected %q, got %q", string(msg), string(testData))
-            } else {
-                log.Debug("Received ping successfully!")
-            }
-        }()
+        log::debug!("Wating for EOF");
+        let mut buf = vec![0u8; 256];
+        let n = dc.read(&mut buf).await?;
+        assert_eq!(0, n, "should be empty");
 
-        if err = signalPair(pca, pcb); err != nil {
-            t.Fatal(err)
+        Result::<()>::Ok(())
+    });
+
+    wg.wait().await;
+
+    close_pair_now(&pca, &pcb).await;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_eof_no_detach() -> Result<()> {
+    let label: &str = "test-channel";
+    let test_data: &'static [u8] = b"this is some test data";
+
+    let api = APIBuilder::new().build();
+
+    // Set up two peer connections.
+    let mut pca = api.new_peer_connection(Configuration::default()).await?;
+    let mut pcb = api.new_peer_connection(Configuration::default()).await?;
+
+    let (dca_closed_ch_tx, mut dca_closed_ch_rx) = mpsc::channel::<()>(1);
+    let (dcb_closed_ch_tx, mut dcb_closed_ch_rx) = mpsc::channel::<()>(1);
+
+    let dcb_closed_ch_tx = Arc::new(dcb_closed_ch_tx);
+    pcb.on_data_channel(Box::new(move |dc: Arc<DataChannel>| {
+        if dc.label() != label {
+            return Box::pin(async {});
         }
 
-        attached, err := pca.CreateDataChannel(label, nil)
-        if err != nil {
-            t.Fatal(err)
-        }
-        log.Debug("Waiting for data channel to open")
-        open := make(chan struct{})
-        attached.OnOpen(func() {
-            open <- struct{}{}
-        })
-        <-open
-        log.Debug("data channel opened")
+        log::debug!("pcb: new datachannel: {}", dc.label());
 
-        var dc io.ReadWriteCloser
-        dc, err = attached.Detach()
-        if err != nil {
-            t.Fatal(err)
-        }
-
-        wg.Add(1)
-        go func() {
-            defer wg.Done()
-            log.Debug("Sending ping...")
-            if _, err2 := dc.Write(testData); err2 != nil {
-                t.Error(err2)
-            }
-            log.Debug("Sent ping")
-
-            assert.NoError(t, dc.Close(), "should succeed")
-
-            log.Debug("Wating for EOF")
-            ret, err2 := ioutil.ReadAll(dc)
-            assert.Nil(t, err2, "should succeed")
-            assert.Equal(t, 0, len(ret), "should be empty")
-        }()
-
-        wg.Wait()
-    })
-
-    t.Run("No detach", func()->Result<()> {
-        lim := test.TimeOut(time.Second * 5)
-        defer lim.Stop()
-
-        // Set up two peer connections.
-        config := Configuration{}
-        pca, err := NewPeerConnection(config)
-        if err != nil {
-            t.Fatal(err)
-        }
-        pcb, err := NewPeerConnection(config)
-        if err != nil {
-            t.Fatal(err)
-        }
-
-        defer closePairNow(t, pca, pcb)
-
-        var dca, dcb *DataChannel
-        dcaClosedCh := make(chan struct{})
-        dcbClosedCh := make(chan struct{})
-
-        pcb.OnDataChannel(func(dc *DataChannel) {
-            if dc.Label() != label {
-                return
-            }
-
-            log.Debugf("pcb: new datachannel: %s\n", dc.Label())
-
-            dcb = dc
+        let dcb_closed_ch_tx2 = Arc::clone(&dcb_closed_ch_tx);
+        Box::pin(async move {
             // Register channel opening handling
-            dcb.OnOpen(func() {
-                log.Debug("pcb: datachannel opened")
-            })
+            dc.on_open(Box::new(move || {
+                log::debug!("pcb: datachannel opened");
+                Box::pin(async {})
+            }))
+            .await;
 
-            dcb.OnClose(func() {
+            dc.on_close(Box::new(move || {
                 // (2)
-                log.Debug("pcb: data channel closed")
-                close(dcbClosedCh)
-            })
+                log::debug!("pcb: data channel closed");
+                let dcb_closed_ch_tx3 = Arc::clone(&dcb_closed_ch_tx2);
+                Box::pin(async move {
+                    let _ = dcb_closed_ch_tx3.send(()).await;
+                })
+            }))
+            .await;
 
             // Register the OnMessage to handle incoming messages
-            log.Debug("pcb: registering onMessage callback")
-            dcb.OnMessage(func(dcMsg DataChannelMessage) {
-                log.Debugf("pcb: received ping: %s\n", string(dcMsg.Data))
-                if !reflect.DeepEqual(dcMsg.Data, testData) {
-                    t.Error("data mismatch")
-                }
-            })
+            log::debug!("pcb: registering onMessage callback");
+            dc.on_message(Box::new(|dc_msg: DataChannelMessage| {
+                let test_data: &'static [u8] = b"this is some test data";
+                log::debug!("pcb: received ping: {:?}", dc_msg.data);
+                assert_eq!(&dc_msg.data[..], test_data, "data mismatch");
+                Box::pin(async {})
+            }))
+            .await;
         })
+    }))
+    .await;
 
-        dca, err = pca.CreateDataChannel(label, nil)
-        if err != nil {
-            t.Fatal(err)
-        }
-
-        dca.OnOpen(func() {
-            log.Debug("pca: data channel opened")
-            log.Debugf("pca: sending \"%s\"", string(testData))
-            if err := dca.Send(testData); err != nil {
-                t.Fatal(err)
-            }
-            log.Debug("pca: sent ping")
-            assert.NoError(t, dca.Close(), "should succeed") // <-- dca closes
+    let dca = pca.create_data_channel(label, None).await?;
+    let dca2 = Arc::clone(&dca);
+    dca.on_open(Box::new(move || {
+        log::debug!("pca: data channel opened");
+        log::debug!("pca: sending {:?}", test_data);
+        let dca3 = Arc::clone(&dca2);
+        Box::pin(async move {
+            let _ = dca3.send(&Bytes::from_static(test_data)).await;
+            log::debug!("pca: sent ping");
+            assert!(dca3.close().await.is_ok(), "should succeed"); // <-- dca closes
         })
+    }))
+    .await;
 
-        dca.OnClose(func() {
-            // (1)
-            log.Debug("pca: data channel closed")
-            close(dcaClosedCh)
+    let dca_closed_ch_tx = Arc::new(dca_closed_ch_tx);
+    dca.on_close(Box::new(move || {
+        // (1)
+        log::debug!("pca: data channel closed");
+        let dca_closed_ch_tx2 = Arc::clone(&dca_closed_ch_tx);
+        Box::pin(async move {
+            let _ = dca_closed_ch_tx2.send(()).await;
         })
+    }))
+    .await;
 
-        // Register the OnMessage to handle incoming messages
-        log.Debug("pca: registering onMessage callback")
-        dca.OnMessage(func(dcMsg DataChannelMessage) {
-            log.Debugf("pca: received pong: %s\n", string(dcMsg.Data))
-            if !reflect.DeepEqual(dcMsg.Data, testData) {
-                t.Error("data mismatch")
-            }
-        })
+    // Register the OnMessage to handle incoming messages
+    log::debug!("pca: registering onMessage callback");
+    dca.on_message(Box::new(move |dc_msg: DataChannelMessage| {
+        log::debug!("pca: received pong: {:?}", &dc_msg.data[..]);
+        assert_eq!(&dc_msg.data[..], test_data, "data mismatch");
+        Box::pin(async {})
+    }))
+    .await;
 
-        if err := signalPair(pca, pcb); err != nil {
-            t.Fatal(err)
-        }
+    signal_pair(&mut pca, &mut pcb).await?;
 
-        // When dca closes the channel,
-        // (1) dca.Onclose() will fire immediately, then
-        // (2) dcb.OnClose will also fire
-        <-dcaClosedCh // (1)
-        <-dcbClosedCh // (2)
-    })
+    // When dca closes the channel,
+    // (1) dca.Onclose() will fire immediately, then
+    // (2) dcb.OnClose will also fire
+    let _ = dca_closed_ch_rx.recv().await; // (1)
+    let _ = dcb_closed_ch_rx.recv().await; // (2)
+
+    close_pair_now(&pca, &pcb).await;
+
+    Ok(())
 }
 
 // Assert that a Session Description that doesn't follow
 // draft-ietf-mmusic-sctp-sdp is still accepted
-#[tokio::test] async fn TestDataChannel_NonStandardSessionDescription()->Result<()> {
-    to := test.TimeOut(time.Second * 20)
-    defer to.Stop()
+#[tokio::test]
+async fn test_data_channel_non_standard_session_description() -> Result<()> {
+    let mut m = MediaEngine::default();
+    m.register_default_codecs()?;
+    let api = APIBuilder::new().with_media_engine(m).build();
 
-    report := test.CheckRoutines(t)
-    defer report()
+    let (mut offer_pc, mut answer_pc) = new_pair(&api).await?;
 
-    offerPC, answerPC, err := newPair()
-    assert.NoError(t, err)
+    let _ = offer_pc.create_data_channel("foo", None).await?;
 
-    _, err = offerPC.CreateDataChannel("foo", nil)
-    assert.NoError(t, err)
+    let (on_data_channel_called_tx, mut on_data_channel_called_rx) = mpsc::channel::<()>(1);
+    let on_data_channel_called_tx = Arc::new(on_data_channel_called_tx);
+    answer_pc
+        .on_data_channel(Box::new(move |_: Arc<DataChannel>| {
+            let on_data_channel_called_tx2 = Arc::clone(&on_data_channel_called_tx);
+            Box::pin(async move {
+                let _ = on_data_channel_called_tx2.send(()).await;
+            })
+        }))
+        .await;
 
-    onDataChannelCalled := make(chan struct{})
-    answerPC.OnDataChannel(func(_ *DataChannel) {
-        close(onDataChannelCalled)
-    })
+    let offer = offer_pc.create_offer(None).await?;
 
-    offer, err := offerPC.CreateOffer(nil)
-    assert.NoError(t, err)
+    let mut offer_gathering_complete = offer_pc.gathering_complete_promise().await;
+    offer_pc.set_local_description(offer).await?;
+    let _ = offer_gathering_complete.recv().await;
 
-    offerGatheringComplete := GatheringCompletePromise(offerPC)
-    assert.NoError(t, offerPC.SetLocalDescription(offer))
-    <-offerGatheringComplete
-
-    offer = *offerPC.LocalDescription()
+    let mut offer = offer_pc.local_description().await.unwrap();
 
     // Replace with old values
-    const (
-        oldApplication = "m=application 63743 DTLS/SCTP 5000\r"
-        oldAttribute   = "a=sctpmap:5000 webrtc-datachannel 256\r"
-    )
+    const OLD_APPLICATION: &str = "m=application 63743 DTLS/SCTP 5000\r";
+    const OLD_ATTRIBUTE: &str = "a=sctpmap:5000 webrtc-datachannel 256\r";
 
-    offer.SDP = regexp.MustCompile(`m=application (.*?)\r`).ReplaceAllString(offer.SDP, oldApplication)
-    offer.SDP = regexp.MustCompile(`a=sctp-port(.*?)\r`).ReplaceAllString(offer.SDP, oldAttribute)
+    let re = Regex::new(r"m=application (.*?)\r")?;
+    offer.serde.sdp = re
+        .replace_all(offer.serde.sdp.as_str(), OLD_APPLICATION)
+        .to_string();
+    let re = Regex::new(r"a=sctp-port(.*?)\r")?;
+    offer.serde.sdp = re
+        .replace_all(offer.serde.sdp.as_str(), OLD_ATTRIBUTE)
+        .to_string();
 
     // Assert that replace worked
-    assert.True(t, strings.Contains(offer.SDP, oldApplication))
-    assert.True(t, strings.Contains(offer.SDP, oldAttribute))
+    assert!(offer.serde.sdp.contains(OLD_APPLICATION));
+    assert!(offer.serde.sdp.contains(OLD_ATTRIBUTE));
 
-    assert.NoError(t, answerPC.SetRemoteDescription(offer))
+    answer_pc.set_remote_description(offer).await?;
 
-    answer, err := answerPC.CreateAnswer(nil)
-    assert.NoError(t, err)
+    let answer = answer_pc.create_answer(None).await?;
 
-    answerGatheringComplete := GatheringCompletePromise(answerPC)
-    assert.NoError(t, answerPC.SetLocalDescription(answer))
-    <-answerGatheringComplete
-    assert.NoError(t, offerPC.SetRemoteDescription(*answerPC.LocalDescription()))
+    let mut answer_gathering_complete = answer_pc.gathering_complete_promise().await;
+    answer_pc.set_local_description(answer).await?;
+    let _ = answer_gathering_complete.recv().await;
 
-    <-onDataChannelCalled
-    closePairNow(t, offerPC, answerPC)
+    let anwser = answer_pc.local_description().await.unwrap();
+    offer_pc.set_remote_description(anwser).await?;
+
+    let _ = on_data_channel_called_rx.recv().await;
+
+    close_pair_now(&offer_pc, &answer_pc).await;
+
+    Ok(())
 }
-*/
 
 //TODO: add datachannel_ortc_test
 /*
