@@ -177,8 +177,8 @@ impl DataChannel {
                 _ => {}
             };
 
-            self.messages_received.fetch_add(1, Ordering::Relaxed);
-            self.bytes_received.fetch_add(n, Ordering::Relaxed);
+            self.messages_received.fetch_add(1, Ordering::SeqCst);
+            self.bytes_received.fetch_add(n, Ordering::SeqCst);
 
             return Ok((n, is_string));
         }
@@ -186,22 +186,22 @@ impl DataChannel {
 
     /// MessagesSent returns the number of messages sent
     pub fn messages_sent(&self) -> usize {
-        self.messages_sent.load(Ordering::Relaxed)
+        self.messages_sent.load(Ordering::SeqCst)
     }
 
     /// MessagesReceived returns the number of messages received
     pub fn messages_received(&self) -> usize {
-        self.messages_received.load(Ordering::Relaxed)
+        self.messages_received.load(Ordering::SeqCst)
     }
 
     /// BytesSent returns the number of bytes sent
     pub fn bytes_sent(&self) -> usize {
-        self.bytes_sent.load(Ordering::Relaxed)
+        self.bytes_sent.load(Ordering::SeqCst)
     }
 
     /// BytesReceived returns the number of bytes received
     pub fn bytes_received(&self) -> usize {
-        self.bytes_received.load(Ordering::Relaxed)
+        self.bytes_received.load(Ordering::SeqCst)
     }
 
     /// StreamIdentifier returns the Stream identifier associated to the stream.
@@ -254,8 +254,8 @@ impl DataChannel {
             (true, _) => PayloadProtocolIdentifier::String,
         };
 
-        self.messages_sent.fetch_add(1, Ordering::Relaxed);
-        self.bytes_sent.fetch_add(data_len, Ordering::Relaxed);
+        self.messages_sent.fetch_add(1, Ordering::SeqCst);
+        self.bytes_sent.fetch_add(data_len, Ordering::SeqCst);
 
         if data_len == 0 {
             let _ = self
