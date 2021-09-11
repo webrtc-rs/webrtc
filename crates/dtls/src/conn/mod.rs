@@ -735,12 +735,11 @@ impl DTLSConn {
 
     pub(crate) fn set_handshake_completed_successfully(&mut self) {
         self.handshake_completed_successfully
-            .store(true, Ordering::Relaxed);
+            .store(true, Ordering::SeqCst);
     }
 
     pub(crate) fn is_handshake_completed_successfully(&self) -> bool {
-        self.handshake_completed_successfully
-            .load(Ordering::Relaxed)
+        self.handshake_completed_successfully.load(Ordering::SeqCst)
     }
 
     async fn read_and_buffer(
@@ -763,14 +762,13 @@ impl DTLSConn {
                         vec![Packet {
                             record: RecordLayer::new(
                                 PROTOCOL_VERSION1_2,
-                                local_epoch.load(Ordering::Relaxed),
+                                local_epoch.load(Ordering::SeqCst),
                                 Content::Alert(Alert {
                                     alert_level: alert.alert_level,
                                     alert_description: alert.alert_description,
                                 }),
                             ),
-                            should_encrypt: handshake_completed_successfully
-                                .load(Ordering::Relaxed),
+                            should_encrypt: handshake_completed_successfully.load(Ordering::SeqCst),
                             reset_local_sequence_number: false,
                         }],
                         None,
@@ -845,14 +843,13 @@ impl DTLSConn {
                         vec![Packet {
                             record: RecordLayer::new(
                                 PROTOCOL_VERSION1_2,
-                                local_epoch.load(Ordering::Relaxed),
+                                local_epoch.load(Ordering::SeqCst),
                                 Content::Alert(Alert {
                                     alert_level: alert.alert_level,
                                     alert_description: alert.alert_description,
                                 }),
                             ),
-                            should_encrypt: handshake_completed_successfully
-                                .load(Ordering::Relaxed),
+                            should_encrypt: handshake_completed_successfully.load(Ordering::SeqCst),
                             reset_local_sequence_number: false,
                         }],
                         None,
@@ -900,7 +897,7 @@ impl DTLSConn {
         };
 
         // Validate epoch
-        let epoch = ctx.remote_epoch.load(Ordering::Relaxed);
+        let epoch = ctx.remote_epoch.load(Ordering::SeqCst);
         if h.epoch > epoch {
             if h.epoch > epoch + 1 {
                 debug!(
@@ -1087,7 +1084,7 @@ impl DTLSConn {
                 );
 
                 if epoch + 1 == new_remote_epoch {
-                    ctx.remote_epoch.store(new_remote_epoch, Ordering::Relaxed);
+                    ctx.remote_epoch.store(new_remote_epoch, Ordering::SeqCst);
                     ctx.replay_detector[h.epoch as usize].accept();
                 }
             }
@@ -1132,11 +1129,11 @@ impl DTLSConn {
     }
 
     pub(crate) fn set_local_epoch(&mut self, epoch: u16) {
-        self.state.local_epoch.store(epoch, Ordering::Relaxed);
+        self.state.local_epoch.store(epoch, Ordering::SeqCst);
     }
 
     pub(crate) fn get_local_epoch(&self) -> u16 {
-        self.state.local_epoch.load(Ordering::Relaxed)
+        self.state.local_epoch.load(Ordering::SeqCst)
     }
 }
 

@@ -186,8 +186,8 @@ impl Flight for Flight0 {
 
         //TODO: figure out difference between golang's atom store and rust atom store
         let zero_epoch = 0;
-        state.local_epoch.store(zero_epoch, Ordering::Relaxed);
-        state.remote_epoch.store(zero_epoch, Ordering::Relaxed);
+        state.local_epoch.store(zero_epoch, Ordering::SeqCst);
+        state.remote_epoch.store(zero_epoch, Ordering::SeqCst);
 
         state.named_curve = DEFAULT_NAMED_CURVE;
         state.local_random.populate();

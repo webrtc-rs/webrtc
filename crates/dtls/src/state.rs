@@ -128,8 +128,8 @@ impl State {
         local_random.copy_from_slice(&local_rand);
         remote_random.copy_from_slice(&remote_rand);
 
-        let local_epoch = self.local_epoch.load(Ordering::Relaxed);
-        let remote_epoch = self.remote_epoch.load(Ordering::Relaxed);
+        let local_epoch = self.local_epoch.load(Ordering::SeqCst);
+        let remote_epoch = self.remote_epoch.load(Ordering::SeqCst);
         let sequence_number = {
             let lsn = self.local_sequence_number.lock().await;
             lsn[local_epoch as usize]
@@ -160,9 +160,9 @@ impl State {
     async fn deserialize(&mut self, serialized: &SerializedState) -> Result<()> {
         // Set epoch values
         self.local_epoch
-            .store(serialized.local_epoch, Ordering::Relaxed);
+            .store(serialized.local_epoch, Ordering::SeqCst);
         self.remote_epoch
-            .store(serialized.remote_epoch, Ordering::Relaxed);
+            .store(serialized.remote_epoch, Ordering::SeqCst);
         {
             let mut lsn = self.local_sequence_number.lock().await;
             while lsn.len() <= serialized.local_epoch as usize {
@@ -260,7 +260,7 @@ impl KeyingMaterialExporter for State {
         context: &[u8],
         length: usize,
     ) -> Result<Vec<u8>> {
-        if self.local_epoch.load(Ordering::Relaxed) == 0 {
+        if self.local_epoch.load(Ordering::SeqCst) == 0 {
             return Err(Error::ErrHandshakeInProgress.into());
         } else if !context.is_empty() {
             return Err(Error::ErrContextUnsupported.into());

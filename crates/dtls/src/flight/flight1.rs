@@ -120,10 +120,9 @@ impl Flight for Flight1 {
         _cache: &HandshakeCache,
         cfg: &HandshakeConfig,
     ) -> Result<Vec<Packet>, (Option<Alert>, Option<anyhow::Error>)> {
-        //TODO: figure out difference between golang's atom store and rust atom store
         let zero_epoch = 0;
-        state.local_epoch.store(zero_epoch, Ordering::Relaxed);
-        state.remote_epoch.store(zero_epoch, Ordering::Relaxed);
+        state.local_epoch.store(zero_epoch, Ordering::SeqCst);
+        state.remote_epoch.store(zero_epoch, Ordering::SeqCst);
 
         state.named_curve = DEFAULT_NAMED_CURVE;
         state.cookie = vec![];
