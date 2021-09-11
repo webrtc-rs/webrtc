@@ -211,6 +211,14 @@ impl DataChannel {
         }
     }
 
+    async fn do_open(&self) {
+        let mut handler = self.on_open_handler.lock().await;
+        if let Some(f) = handler.take() {
+            f().await;
+            self.check_detach_after_open();
+        }
+    }
+
     /// on_close sets an event handler which is invoked when
     /// the underlying data transport has been closed.
     pub async fn on_close(&self, f: OnCloseHdlrFn) {
@@ -229,6 +237,13 @@ impl DataChannel {
         *handler = Some(f);
     }
 
+    async fn do_message(&self, msg: DataChannelMessage) {
+        let mut handler = self.on_message_handler.lock().await;
+        if let Some(f) = &mut *handler {
+            f(msg).await;
+        }
+    }
+
     pub(crate) async fn handle_open(&self, dc: Arc<data::data_channel::DataChannel>) {
         {
             let mut data_channel = self.data_channel.lock().await;
@@ -236,13 +251,7 @@ impl DataChannel {
         }
         self.set_ready_state(DataChannelState::Open);
 
-        {
-            let mut handler = self.on_open_handler.lock().await;
-            if let Some(f) = handler.take() {
-                f().await;
-                self.check_detach_after_open();
-            }
-        }
+        self.do_open().await;
 
         if !self.setting_engine.detach.data_channels {
             let ready_state = Arc::clone(&self.ready_state);
