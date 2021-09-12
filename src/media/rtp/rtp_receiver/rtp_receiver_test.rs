@@ -82,7 +82,7 @@ async fn test_set_rtp_parameters() -> Result<()> {
     // Those parameters wouldn't make sense in a real application,
     // but for the sake of the test we just need different values.
 
-    let (seen_packet_tx, _seen_packet_rx) = mpsc::channel::<()>(1);
+    let (seen_packet_tx, mut seen_packet_rx) = mpsc::channel::<()>(1);
     let seen_packet_tx = Arc::new(Mutex::new(Some(seen_packet_tx)));
     receiver
         .on_track(Box::new(
@@ -155,7 +155,7 @@ async fn test_set_rtp_parameters() -> Result<()> {
         assert!(false);
     }
 
-    //TODO: let _ = seen_packet_rx.recv().await;
+    let _ = seen_packet_rx.recv().await;
     {
         let mut w = wan.lock().await;
         w.stop().await?;

@@ -294,8 +294,13 @@ impl RTPReceiver {
                     &global_params.header_extensions,
                 );
                 let (rtp_read_stream, rtp_interceptor, rtcp_read_stream, rtcp_interceptor) =
-                    RTPReceiver::streams_for_ssrc(&self.transport, encoding.ssrc, &stream_info)
-                        .await?;
+                    RTPReceiver::streams_for_ssrc(
+                        &self.transport,
+                        encoding.ssrc,
+                        &stream_info,
+                        &internal.interceptor,
+                    )
+                    .await?;
 
                 let t = TrackStreams {
                     track: Arc::new(TrackRemote::new(
@@ -490,6 +495,7 @@ impl RTPReceiver {
         ssrc: SSRC,
     ) -> Result<Arc<TrackRemote>> {
         let mut internal = self.internal.lock().await;
+        let interceptor = Arc::clone(&internal.interceptor);
         for t in &mut internal.tracks {
             if t.track.rid() == rid && !params.codecs.is_empty() {
                 t.track.set_kind(self.kind);
@@ -505,7 +511,13 @@ impl RTPReceiver {
                 );
 
                 let (rtp_read_stream, rtp_interceptor, rtcp_read_stream, rtcp_interceptor) =
-                    RTPReceiver::streams_for_ssrc(&self.transport, ssrc, &t.stream_info).await?;
+                    RTPReceiver::streams_for_ssrc(
+                        &self.transport,
+                        ssrc,
+                        &t.stream_info,
+                        &interceptor,
+                    )
+                    .await?;
 
                 t.rtp_read_stream = rtp_read_stream;
                 t.rtp_interceptor = rtp_interceptor;
@@ -522,7 +534,8 @@ impl RTPReceiver {
     async fn streams_for_ssrc(
         transport: &Arc<DTLSTransport>,
         ssrc: SSRC,
-        _stream_info: &StreamInfo,
+        stream_info: &StreamInfo,
+        interceptor: &Arc<dyn Interceptor + Send + Sync>,
     ) -> Result<(
         Option<Arc<srtp::stream::Stream>>,
         Option<Arc<dyn RTPReader + Send + Sync>>,
@@ -533,31 +546,25 @@ impl RTPReceiver {
             .get_srtp_session()
             .await
             .ok_or(Error::ErrDtlsTransportNotStarted)?;
-        let rtp_read_stream = srtp_session.listen(ssrc).await?;
-
-        /*TODO: rtp_interceptor := r.api.interceptor.bind_remote_stream(&streamInfo, interceptor.RTPReaderFunc(func(in []byte, a interceptor.Attributes) (n int, attributes interceptor.Attributes, err error) {
-            n, err = rtp_read_stream.Read(in)
-            return n, a, err
-        }))*/
-        let rtp_interceptor = None;
+        let rtp_read_stream = Arc::new(srtp_session.listen(ssrc).await?);
+        let rtp_stream_reader = Arc::clone(&rtp_read_stream) as Arc<dyn RTPReader + Send + Sync>;
+        let rtp_interceptor = interceptor
+            .bind_remote_stream(stream_info, rtp_stream_reader)
+            .await;
 
         let srtcp_session = transport
             .get_srtcp_session()
             .await
             .ok_or(Error::ErrDtlsTransportNotStarted)?;
-        let rtcp_read_stream = srtcp_session.listen(ssrc).await?;
-
-        /*TODO: rtcp_interceptor := r.api.interceptor.bind_rtcpreader(interceptor.RTPReaderFunc(func(in []byte, a interceptor.Attributes) (n int, attributes interceptor.Attributes, err error) {
-            n, err = rtcp_read_stream.Read(in)
-            return n, a, err
-        }))*/
-        let rtcp_interceptor = None;
+        let rtcp_read_stream = Arc::new(srtcp_session.listen(ssrc).await?);
+        let rtcp_stream_reader = Arc::clone(&rtcp_read_stream) as Arc<dyn RTCPReader + Send + Sync>;
+        let rtcp_interceptor = interceptor.bind_rtcp_reader(rtcp_stream_reader).await;
 
         Ok((
-            Some(Arc::new(rtp_read_stream)),
-            rtp_interceptor,
-            Some(Arc::new(rtcp_read_stream)),
-            rtcp_interceptor,
+            Some(rtp_read_stream),
+            Some(rtp_interceptor),
+            Some(rtcp_read_stream),
+            Some(rtcp_interceptor),
         ))
     }
 }
