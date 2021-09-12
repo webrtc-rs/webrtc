@@ -23,6 +23,7 @@ use tokio::sync::{mpsc, Mutex};
 pub(crate) struct RTPSenderInternal {
     pub(crate) send_called_rx: mpsc::Receiver<()>,
     pub(crate) stop_called_rx: mpsc::Receiver<()>,
+    pub(crate) stop_called_signal: Arc<AtomicBool>,
     pub(crate) rtcp_interceptor: Option<Arc<dyn RTCPReader + Send + Sync>>,
 }
 
@@ -81,6 +82,7 @@ pub struct RTPSender {
 
     send_called_tx: Mutex<Option<mpsc::Sender<()>>>,
     stop_called_tx: Mutex<Option<mpsc::Sender<()>>>,
+    stop_called_signal: Arc<AtomicBool>,
 
     internal: Arc<Mutex<RTPSenderInternal>>,
 }
@@ -99,10 +101,12 @@ impl RTPSender {
         let (send_called_tx, send_called_rx) = mpsc::channel(1);
         let (stop_called_tx, stop_called_rx) = mpsc::channel(1);
         let ssrc = rand::random::<u32>();
+        let stop_called_signal = Arc::new(AtomicBool::new(false));
 
         let internal = Arc::new(Mutex::new(RTPSenderInternal {
             send_called_rx,
             stop_called_rx,
+            stop_called_signal: Arc::clone(&stop_called_signal),
             rtcp_interceptor: None,
         }));
 
@@ -142,6 +146,7 @@ impl RTPSender {
 
             send_called_tx: Mutex::new(Some(send_called_tx)),
             stop_called_tx: Mutex::new(Some(stop_called_tx)),
+            stop_called_signal,
 
             internal,
         }
@@ -312,6 +317,7 @@ impl RTPSender {
                 return Ok(());
             }
             stop_called_tx.take();
+            self.stop_called_signal.store(true, Ordering::SeqCst);
         }
 
         if !self.has_sent().await {
@@ -348,7 +354,7 @@ impl RTPSender {
 
     /// has_stopped tells if stop has been called
     pub(crate) async fn has_stopped(&self) -> bool {
-        let stop_called_tx = self.stop_called_tx.lock().await;
-        stop_called_tx.is_none()
+        let stop_call_tx = self.stop_called_tx.lock().await;
+        stop_call_tx.is_none()
     }
 }

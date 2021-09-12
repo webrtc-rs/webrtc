@@ -31,7 +31,7 @@ use srtp::session::Session;
 use srtp::stream::Stream;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use util::Conn;
@@ -65,6 +65,8 @@ pub struct DTLSTransport {
     pub(crate) srtcp_endpoint: Mutex<Option<Arc<Endpoint>>>,
 
     pub(crate) simulcast_streams: Mutex<Vec<Arc<Stream>>>,
+
+    pub(crate) srtp_ready_signal: Arc<AtomicBool>,
     pub(crate) srtp_ready_tx: Mutex<Option<mpsc::Sender<()>>>,
     pub(crate) srtp_ready_rx: Mutex<Option<mpsc::Receiver<()>>>,
 
@@ -82,6 +84,7 @@ impl DTLSTransport {
             ice_transport,
             certificates,
             setting_engine,
+            srtp_ready_signal: Arc::new(AtomicBool::new(false)),
             srtp_ready_tx: Mutex::new(Some(srtp_ready_tx)),
             srtp_ready_rx: Mutex::new(Some(srtp_ready_rx)),
             state: AtomicU8::new(DTLSTransportState::New as u8),
@@ -247,6 +250,9 @@ impl DTLSTransport {
         {
             let mut srtp_ready_tx = self.srtp_ready_tx.lock().await;
             srtp_ready_tx.take();
+            if srtp_ready_tx.is_none() {
+                self.srtp_ready_signal.store(true, Ordering::SeqCst);
+            }
         }
 
         Ok(())

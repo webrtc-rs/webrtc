@@ -10,6 +10,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
 use interceptor::{Attributes, RTCPReader, RTPWriter};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -25,23 +26,25 @@ pub(crate) struct SrtpWriterFuture {
 
 impl SrtpWriterFuture {
     async fn init(&self, return_when_no_srtp: bool) -> Result<()> {
-        {
+        if return_when_no_srtp {
+            {
+                let rtp_sender = self.rtp_sender.lock().await;
+                if rtp_sender.stop_called_signal.load(Ordering::SeqCst) {
+                    return Err(Error::ErrClosedPipe.into());
+                }
+            }
+
+            if !self.rtp_transport.srtp_ready_signal.load(Ordering::SeqCst) {
+                return Ok(());
+            }
+        } else {
             let mut rx = self.rtp_transport.srtp_ready_rx.lock().await;
             if let Some(srtp_ready_rx) = &mut *rx {
                 let mut rtp_sender = self.rtp_sender.lock().await;
-                if return_when_no_srtp {
-                    tokio::select! {
-                        _ = rtp_sender.stop_called_rx.recv()=> return Err(Error::ErrClosedPipe.into()),
-                        _ = srtp_ready_rx.recv() =>{}
-                        else => {  //TODO: How to implement default?
-                            return Ok(());
-                        }
-                    }
-                } else {
-                    tokio::select! {
-                        _ = rtp_sender.stop_called_rx.recv()=> return Err(Error::ErrClosedPipe.into()),
-                        _ = srtp_ready_rx.recv() =>{}
-                    }
+
+                tokio::select! {
+                    _ = rtp_sender.stop_called_rx.recv()=> return Err(Error::ErrClosedPipe.into()),
+                    _ = srtp_ready_rx.recv() =>{}
                 }
             }
         }
@@ -84,11 +87,11 @@ impl SrtpWriterFuture {
         {
             let stream = self.rtcp_read_stream.lock().await;
             if let Some(rtcp_read_stream) = &*stream {
-                rtcp_read_stream.read(b).await
-            } else {
-                Err(Error::ErrDtlsTransportNotStarted.into())
+                return rtcp_read_stream.read(b).await;
             }
         }
+
+        Ok(0)
     }
 
     pub async fn write_rtp(&self, pkt: &rtp::packet::Packet) -> Result<usize> {
@@ -104,11 +107,11 @@ impl SrtpWriterFuture {
         {
             let session = self.rtp_write_session.lock().await;
             if let Some(rtp_write_session) = &*session {
-                rtp_write_session.write_rtp(pkt).await
-            } else {
-                Err(Error::ErrDtlsTransportNotStarted.into())
+                return rtp_write_session.write_rtp(pkt).await;
             }
         }
+
+        Ok(0)
     }
 
     pub async fn write(&self, b: &Bytes) -> Result<usize> {
@@ -124,11 +127,11 @@ impl SrtpWriterFuture {
         {
             let session = self.rtp_write_session.lock().await;
             if let Some(rtp_write_session) = &*session {
-                rtp_write_session.write(b, true).await
-            } else {
-                Err(Error::ErrDtlsTransportNotStarted.into())
+                return rtp_write_session.write(b, true).await;
             }
         }
+
+        Ok(0)
     }
 }
 
