@@ -174,25 +174,25 @@ async fn test_track_local_static_closed() -> Result<()> {
     Ok(())
 }
 
-use log::LevelFilter;
-use std::io::Write;
+//use log::LevelFilter;
+//use std::io::Write;
 
 #[tokio::test]
 async fn test_track_local_static_payload_type() -> Result<()> {
-    env_logger::Builder::new()
-        .format(|buf, record| {
-            writeln!(
-                buf,
-                "{}:{} [{}] {} - {}",
-                record.file().unwrap_or("unknown"),
-                record.line().unwrap_or(0),
-                record.level(),
-                chrono::Local::now().format("%H:%M:%S.%6f"),
-                record.args()
-            )
-        })
-        .filter(None, LevelFilter::Trace)
-        .init();
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, LevelFilter::Trace)
+    .init();*/
 
     let mut media_engine_one = MediaEngine::default();
     media_engine_one.register_codec(

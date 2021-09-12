@@ -34,7 +34,7 @@ pub struct TrackRemote {
     media_engine: Arc<MediaEngine>,
     interceptor: Arc<dyn Interceptor + Send + Sync>,
 
-    receiver: Option<Arc<Mutex<RTPReceiverInternal>>>,
+    receiver: Option<Arc<RTPReceiverInternal>>,
     internal: Mutex<TrackRemoteInternal>,
 }
 
@@ -58,7 +58,7 @@ impl TrackRemote {
         kind: RTPCodecType,
         ssrc: SSRC,
         rid: String,
-        receiver: Arc<Mutex<RTPReceiverInternal>>,
+        receiver: Arc<RTPReceiverInternal>,
         media_engine: Arc<MediaEngine>,
         interceptor: Arc<dyn Interceptor + Send + Sync>,
     ) -> Self {
@@ -180,8 +180,7 @@ impl TrackRemote {
         } else {
             let (n, attributes) = {
                 if let Some(receiver) = &self.receiver {
-                    let mut internal = receiver.lock().await;
-                    internal.read_rtp(b, self.id().await.as_str()).await?
+                    receiver.read_rtp(b, self.id().await.as_str()).await?
                 } else {
                     return Err(Error::ErrRTPReceiverNil.into());
                 }
@@ -206,8 +205,7 @@ impl TrackRemote {
                 .await?;
 
             if let Some(receiver) = &self.receiver {
-                let r = receiver.lock().await;
-                self.kind.store(r.kind as u8, Ordering::SeqCst);
+                self.kind.store(receiver.kind as u8, Ordering::SeqCst);
             }
             self.payload_type.store(payload_type, Ordering::SeqCst);
             {
