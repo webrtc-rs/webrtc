@@ -1,6 +1,7 @@
 #![warn(rust_2018_idioms)]
 #![allow(dead_code)]
 
+pub mod noop;
 pub mod stream_info;
 
 use stream_info::StreamInfo;
@@ -35,8 +36,8 @@ pub trait Interceptor {
     async fn bind_local_stream(
         &self,
         info: &StreamInfo,
-        writer: Box<dyn RTPWriter>,
-    ) -> Box<dyn RTPWriter>;
+        writer: Box<dyn RTPWriter + Send + Sync>,
+    ) -> Box<dyn RTPWriter + Send + Sync>;
 
     /// unbind_local_stream is called when the Stream is removed. It can be used to clean up any data related to that track.
     async fn unbind_local_stream(&self, info: &StreamInfo);
@@ -46,8 +47,8 @@ pub trait Interceptor {
     async fn bind_remote_stream(
         &self,
         info: &StreamInfo,
-        reader: Box<dyn RTPReader>,
-    ) -> Box<dyn RTPReader>;
+        reader: Box<dyn RTPReader + Send + Sync>,
+    ) -> Box<dyn RTPReader + Send + Sync>;
 
     /// unbind_remote_stream is called when the Stream is removed. It can be used to clean up any data related to that track.
     async fn unbind_remote_stream(&self, info: &StreamInfo);
