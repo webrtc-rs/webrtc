@@ -12,6 +12,7 @@ repository = "https://github.com/webrtc-rs/interceptor"
 [dependencies]
 rtp = "0.3.3"
 rtcp = "0.3.3"
+srtp = { package = "webrtc-srtp", version = "0.3.5" }
 async-trait = "0.1.42"
 bytes = "1"
 thiserror = "1.0.25"

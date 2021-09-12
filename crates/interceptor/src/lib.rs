@@ -6,15 +6,13 @@ pub mod error;
 pub mod noop;
 pub mod registry;
 pub mod stream_info;
+pub mod stream_reader;
 
 use stream_info::StreamInfo;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use bytes::Bytes;
 use std::collections::HashMap;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 
 /// Interceptor can be used to add functionality to you PeerConnections by modifying any incoming/outgoing rtp/rtcp
@@ -91,49 +89,6 @@ pub trait RTCPReader {
     /// read a batch of rtcp packets
     async fn read(&self, buf: &mut [u8], attributes: &Attributes) -> Result<(usize, Attributes)>;
 }
-
-/// RTPWriterFn is an adapter for RTPWrite interface
-pub type RTPWriterFn = Box<
-    dyn (FnMut(
-            &rtp::header::Header,
-            &Bytes,
-            &Attributes,
-        ) -> Pin<Box<dyn Future<Output = Result<usize>> + Send + 'static>>)
-        + Send
-        + Sync,
->;
-
-/// RTPReaderFn is an adapter for RTPReader interface
-pub type RTPReaderFn = Box<
-    dyn (FnMut(
-            &mut [u8],
-            &Attributes,
-        )
-            -> Pin<Box<dyn Future<Output = Result<(usize, Attributes)>> + Send + 'static>>)
-        + Send
-        + Sync,
->;
-
-/// RTCPWriterFn is an adapter for RTCPWriter interface
-pub type RTCPWriterFn = Box<
-    dyn (FnMut(
-            &(dyn rtcp::packet::Packet + Send + Sync),
-            &Attributes,
-        ) -> Pin<Box<dyn Future<Output = Result<usize>> + Send + 'static>>)
-        + Send
-        + Sync,
->;
-
-/// RTCPReaderFn is an adapter for RTCPReader interface
-pub type RTCPReaderFn = Box<
-    dyn (FnMut(
-            &mut [u8],
-            &Attributes,
-        )
-            -> Pin<Box<dyn Future<Output = Result<(usize, Attributes)>> + Send + 'static>>)
-        + Send
-        + Sync,
->;
 
 /// Attributes are a generic key/value store used by interceptors
 pub type Attributes = HashMap<usize, usize>;
