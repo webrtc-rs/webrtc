@@ -141,7 +141,10 @@ async fn test_session_srtcp_listen() -> Result<()> {
     Ok(())
 }
 
-fn encrypt_srtcp(context: &mut Context, pkt: &dyn rtcp::packet::Packet) -> Result<Bytes> {
+fn encrypt_srtcp(
+    context: &mut Context,
+    pkt: &(dyn rtcp::packet::Packet + Send + Sync),
+) -> Result<Bytes> {
     let decrypted = pkt.marshal()?;
     let encrypted = context.encrypt_rtcp(&decrypted)?;
     Ok(encrypted)

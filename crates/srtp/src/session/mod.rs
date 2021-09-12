@@ -224,13 +224,16 @@ impl Session {
         }
     }
 
-    pub async fn write_rtp(&self, packet: &rtp::packet::Packet) -> Result<usize> {
-        let raw = packet.marshal()?;
+    pub async fn write_rtp(&self, pkt: &rtp::packet::Packet) -> Result<usize> {
+        let raw = pkt.marshal()?;
         self.write(&raw, true).await
     }
 
-    pub async fn write_rtcp(&self, packet: &dyn rtcp::packet::Packet) -> Result<usize> {
-        let raw = packet.marshal()?;
+    pub async fn write_rtcp(
+        &self,
+        pkt: &(dyn rtcp::packet::Packet + Send + Sync),
+    ) -> Result<usize> {
+        let raw = pkt.marshal()?;
         self.write(&raw, false).await
     }
 }
