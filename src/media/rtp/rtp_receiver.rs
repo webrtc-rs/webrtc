@@ -4,7 +4,6 @@ mod rtp_receiver_test;
 use crate::api::media_engine::MediaEngine;
 use crate::error::Error;
 use crate::media::dtls_transport::DTLSTransport;
-use crate::media::interceptor::stream_info::{RTPHeaderExtension, StreamInfo};
 use crate::media::interceptor::*;
 use crate::media::rtp::rtp_codec::{
     codec_parameters_fuzzy_search, CodecMatch, RTPCodecCapability, RTPCodecParameters,
@@ -19,6 +18,8 @@ use crate::RECEIVE_MTU;
 
 use crate::peer::sdp::TrackDetails;
 use anyhow::Result;
+use interceptor::stream_info::{RTPHeaderExtension, StreamInfo};
+use interceptor::{Attributes, Interceptor, RTCPReader, RTPReader};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 
@@ -285,7 +286,7 @@ impl RTPReceiver {
                     RTPCodecCapability::default()
                 };
 
-                let stream_info = StreamInfo::new(
+                let stream_info = create_stream_info(
                     "".to_owned(),
                     encoding.ssrc,
                     0,
@@ -491,7 +492,7 @@ impl RTPReceiver {
                 t.track.set_codec(params.codecs[0].clone()).await;
                 t.track.set_params(params.clone()).await;
                 t.track.set_ssrc(ssrc);
-                t.stream_info = StreamInfo::new(
+                t.stream_info = create_stream_info(
                     "".to_owned(),
                     ssrc,
                     params.codecs[0].payload_type,

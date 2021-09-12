@@ -12,7 +12,6 @@ use crate::media::dtls_transport::dtls_transport_state::DTLSTransportState;
 use crate::media::dtls_transport::DTLSTransport;
 use crate::media::ice_transport::ice_transport_state::ICETransportState;
 use crate::media::ice_transport::ICETransport;
-use crate::media::interceptor::{Attributes, Interceptor, RTCPWriter};
 use crate::media::rtp::rtp_receiver::RTPReceiver;
 use crate::media::rtp::rtp_transceiver::{
     find_by_mid, handle_unknown_rtp_packet, satisfy_type_and_direction, RTPTransceiver,
@@ -77,6 +76,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::{mpsc, Mutex};
 
 use crate::media::dtls_transport::dtls_certificate::Certificate;
+use interceptor::{Attributes, Interceptor, RTCPWriter};
 use peer_connection_internal::*;
 use rcgen::KeyPair;
 

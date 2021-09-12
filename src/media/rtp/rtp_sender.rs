@@ -4,10 +4,7 @@ mod rtp_sender_test;
 use crate::api::media_engine::MediaEngine;
 use crate::error::Error;
 use crate::media::dtls_transport::DTLSTransport;
-use crate::media::interceptor::stream_info::StreamInfo;
-use crate::media::interceptor::{
-    Attributes, Interceptor, InterceptorToTrackLocalWriter, RTCPReader,
-};
+use crate::media::interceptor::{create_stream_info, InterceptorToTrackLocalWriter};
 use crate::media::rtp::rtp_codec::{RTPCodecParameters, RTPCodecType};
 use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
 use crate::media::rtp::srtp_writer_future::SrtpWriterFuture;
@@ -17,6 +14,8 @@ use crate::RECEIVE_MTU;
 
 use anyhow::Result;
 use ice::rand::generate_crypto_random_string;
+use interceptor::stream_info::StreamInfo;
+use interceptor::{Attributes, Interceptor, RTCPReader};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
@@ -261,7 +260,7 @@ impl RTPSender {
             let payload_type = codec.payload_type;
             let capability = codec.capability.clone();
             context.params.codecs = vec![codec];
-            let stream_info = StreamInfo::new(
+            let stream_info = create_stream_info(
                 self.id.clone(),
                 parameters.encodings[0].ssrc,
                 payload_type,
