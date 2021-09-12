@@ -59,10 +59,21 @@ impl fmt::Display for SDPSemantics {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::api::media_engine::MediaEngine;
+    use crate::api::APIBuilder;
+    use crate::media::rtp::rtp_codec::{RTPCodecCapability, RTPCodecType};
+    use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
+    use crate::media::rtp::RTPTransceiverInit;
+    use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
+    use crate::media::track::track_local::TrackLocal;
+    use crate::peer::configuration::Configuration;
+    use crate::peer::peer_connection::peer_connection_test::close_pair_now;
     use crate::SSRC_STR;
+    use anyhow::Result;
     use sdp::media_description::MediaDescription;
     use sdp::session_description::SessionDescription;
     use std::collections::HashSet;
+    use std::sync::Arc;
 
     #[test]
     fn test_sdp_semantics_string() {
@@ -108,274 +119,317 @@ mod test {
             .collect::<Vec<String>>()
     }
 
-    /*
     #[tokio::test]
-    async fn test_sdp_semantics_plan_b_offer_transceivers() -> Result<()>{
-        opc, err := new_peer_connection(Configuration{
-            SDPSemantics: SDPSemanticsPlanB,
-        })
-        if err != nil {
-            t.Errorf("new_peer_connection failed: %v", err)
-        }
+    async fn test_sdp_semantics_plan_b_offer_transceivers() -> Result<()> {
+        let mut m = MediaEngine::default();
+        m.register_default_codecs()?;
+        let api = APIBuilder::new().with_media_engine(m).build();
 
-        if _, err = opc.add_transceiver_from_kind(RTPCodecTypeVideo, RTPTransceiverInit{
-            Direction: RTPTransceiverDirectionSendrecv,
-        }); err != nil {
-            t.Errorf("AddTransceiver failed: %v", err)
-        }
-        if _, err = opc.add_transceiver_from_kind(RTPCodecTypeVideo, RTPTransceiverInit{
-            Direction: RTPTransceiverDirectionSendrecv,
-        }); err != nil {
-            t.Errorf("AddTransceiver failed: %v", err)
-        }
-        if _, err = opc.add_transceiver_from_kind(RTPCodecTypeAudio, RTPTransceiverInit{
-            Direction: RTPTransceiverDirectionSendrecv,
-        }); err != nil {
-            t.Errorf("AddTransceiver failed: %v", err)
-        }
-        if _, err = opc.add_transceiver_from_kind(RTPCodecTypeAudio, RTPTransceiverInit{
-            Direction: RTPTransceiverDirectionSendrecv,
-        }); err != nil {
-            t.Errorf("AddTransceiver failed: %v", err)
-        }
+        let mut opc = api
+            .new_peer_connection(Configuration {
+                sdp_semantics: SDPSemantics::PlanB,
+                ..Default::default()
+            })
+            .await?;
 
-        offer, err := opc.CreateOffer(nil)
-        if err != nil {
-            t.Errorf("Plan B CreateOffer failed: %s", err)
-        }
+        opc.add_transceiver_from_kind(
+            RTPCodecType::Video,
+            &[RTPTransceiverInit {
+                direction: RTPTransceiverDirection::Sendrecv,
+                send_encodings: vec![],
+            }],
+        )
+        .await?;
 
-        mdNames := getMdNames(offer.parsed)
-        assert.ObjectsAreEqual(mdNames, []string{"video", "audio", "data"})
+        opc.add_transceiver_from_kind(
+            RTPCodecType::Video,
+            &[RTPTransceiverInit {
+                direction: RTPTransceiverDirection::Sendrecv,
+                send_encodings: vec![],
+            }],
+        )
+        .await?;
 
-        // Verify that each section has 2 SSRCs (one for each transceiver)
-        for _, section := range []string{"video", "audio"} {
-            for _, media := range offer.parsed.MediaDescriptions {
-                if media.MediaName.Media == section {
-                    assert.Len(t, extractSsrcList(media), 2)
+        opc.add_transceiver_from_kind(
+            RTPCodecType::Audio,
+            &[RTPTransceiverInit {
+                direction: RTPTransceiverDirection::Sendrecv,
+                send_encodings: vec![],
+            }],
+        )
+        .await?;
+
+        opc.add_transceiver_from_kind(
+            RTPCodecType::Audio,
+            &[RTPTransceiverInit {
+                direction: RTPTransceiverDirection::Sendrecv,
+                send_encodings: vec![],
+            }],
+        )
+        .await?;
+
+        let offer = opc.create_offer(None).await?;
+
+        if let Some(parsed) = &offer.parsed {
+            let md_names = get_md_names(parsed);
+            assert_eq!(md_names, &["video".to_owned(), "audio".to_owned()]);
+
+            // Verify that each section has 2 SSRCs (one for each transceiver)
+            for section in &["video".to_owned(), "audio".to_owned()] {
+                for media in &parsed.media_descriptions {
+                    if &media.media_name.media == section {
+                        assert_eq!(extract_ssrc_list(media).len(), 2);
+                    }
                 }
             }
         }
 
-        apc, err := new_peer_connection(Configuration{
-            SDPSemantics: SDPSemanticsPlanB,
-        })
-        if err != nil {
-            t.Errorf("new_peer_connection failed: %v", err)
+        let mut apc = api
+            .new_peer_connection(Configuration {
+                sdp_semantics: SDPSemantics::PlanB,
+                ..Default::default()
+            })
+            .await?;
+
+        apc.set_remote_description(offer).await?;
+
+        let answer = apc.create_answer(None).await?;
+
+        if let Some(parsed) = &answer.parsed {
+            let md_names = get_md_names(parsed);
+            assert_eq!(md_names, &["video".to_owned(), "audio".to_owned()]);
         }
 
-        if err = apc.set_remote_description(offer); err != nil {
-            t.Errorf("set_remote_description failed: %s", err)
-        }
+        close_pair_now(&apc, &opc).await;
 
-        answer, err := apc.create_answer(nil)
-        if err != nil {
-            t.Errorf("Plan B create_answer failed: %s", err)
-        }
-
-        mdNames = getMdNames(answer.parsed)
-        assert.ObjectsAreEqual(mdNames, []string{"video", "audio", "data"})
-
-        closePairNow(t, apc, opc)
-    }*/
-    /*
-    func TestSDPSemantics_PlanBAnswerSenders(t *testing.T) {
-        report := test.CheckRoutines(t)
-        defer report()
-
-        lim := test.TimeOut(time.Second * 30)
-        defer lim.Stop()
-
-        opc, err := new_peer_connection(Configuration{
-            SDPSemantics: SDPSemanticsPlanB,
-        })
-        if err != nil {
-            t.Errorf("new_peer_connection failed: %v", err)
-        }
-
-        if _, err = opc.add_transceiver_from_kind(RTPCodecTypeVideo, RTPTransceiverInit{
-            Direction: RTPTransceiverDirectionRecvonly,
-        }); err != nil {
-            t.Errorf("Failed to add transceiver")
-        }
-        if _, err = opc.add_transceiver_from_kind(RTPCodecTypeAudio, RTPTransceiverInit{
-            Direction: RTPTransceiverDirectionRecvonly,
-        }); err != nil {
-            t.Errorf("Failed to add transceiver")
-        }
-
-        offer, err := opc.CreateOffer(nil)
-        if err != nil {
-            t.Errorf("Plan B CreateOffer failed: %s", err)
-        }
-
-        mdNames := getMdNames(offer.parsed)
-        assert.ObjectsAreEqual(mdNames, []string{"video", "audio", "data"})
-
-        apc, err := new_peer_connection(Configuration{
-            SDPSemantics: SDPSemanticsPlanB,
-        })
-        if err != nil {
-            t.Errorf("new_peer_connection failed: %v", err)
-        }
-
-        video1, err := NewTrackLocalStaticSample(RTPCodecCapability{MimeType: "video/h264", SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"}, "1", "1")
-        if err != nil {
-            t.Errorf("Failed to create video track")
-        }
-        if _, err = apc.add_track(video1); err != nil {
-            t.Errorf("Failed to add video track")
-        }
-        video2, err := NewTrackLocalStaticSample(RTPCodecCapability{MimeType: "video/h264", SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"}, "2", "2")
-        if err != nil {
-            t.Errorf("Failed to create video track")
-        }
-        if _, err = apc.add_track(video2); err != nil {
-            t.Errorf("Failed to add video track")
-        }
-        audio1, err := NewTrackLocalStaticSample(RTPCodecCapability{MimeType: "audio/opus"}, "3", "3")
-        if err != nil {
-            t.Errorf("Failed to create audio track")
-        }
-        if _, err = apc.add_track(audio1); err != nil {
-            t.Errorf("Failed to add audio track")
-        }
-        audio2, err := NewTrackLocalStaticSample(RTPCodecCapability{MimeType: "audio/opus"}, "4", "4")
-        if err != nil {
-            t.Errorf("Failed to create audio track")
-        }
-        if _, err = apc.add_track(audio2); err != nil {
-            t.Errorf("Failed to add audio track")
-        }
-
-        if err = apc.set_remote_description(offer); err != nil {
-            t.Errorf("set_remote_description failed: %s", err)
-        }
-
-        answer, err := apc.create_answer(nil)
-        if err != nil {
-            t.Errorf("Plan B create_answer failed: %s", err)
-        }
-
-        mdNames = getMdNames(answer.parsed)
-        assert.ObjectsAreEqual(mdNames, []string{"video", "audio", "data"})
-
-        // Verify that each section has 2 SSRCs (one for each sender)
-        for _, section := range []string{"video", "audio"} {
-            for _, media := range answer.parsed.MediaDescriptions {
-                if media.MediaName.Media == section {
-                    assert.Lenf(t, extractSsrcList(media), 2, "%q should have 2 SSRCs in Plan-B mode", section)
-                }
-            }
-        }
-
-        closePairNow(t, apc, opc)
+        Ok(())
     }
 
-    func TestSDPSemantics_UnifiedPlanWithFallback(t *testing.T) {
-        report := test.CheckRoutines(t)
-        defer report()
+    #[tokio::test]
+    async fn test_sdp_semantics_plan_b_answer_senders() -> Result<()> {
+        let mut m = MediaEngine::default();
+        m.register_default_codecs()?;
+        let api = APIBuilder::new().with_media_engine(m).build();
 
-        lim := test.TimeOut(time.Second * 30)
-        defer lim.Stop()
+        let mut opc = api
+            .new_peer_connection(Configuration {
+                sdp_semantics: SDPSemantics::PlanB,
+                ..Default::default()
+            })
+            .await?;
 
-        opc, err := new_peer_connection(Configuration{
-            SDPSemantics: SDPSemanticsPlanB,
-        })
-        if err != nil {
-            t.Errorf("new_peer_connection failed: %v", err)
-        }
+        opc.add_transceiver_from_kind(
+            RTPCodecType::Video,
+            &[RTPTransceiverInit {
+                direction: RTPTransceiverDirection::Recvonly,
+                send_encodings: vec![],
+            }],
+        )
+        .await?;
 
-        if _, err = opc.add_transceiver_from_kind(RTPCodecTypeVideo, RTPTransceiverInit{
-            Direction: RTPTransceiverDirectionRecvonly,
-        }); err != nil {
-            t.Errorf("Failed to add transceiver")
-        }
-        if _, err = opc.add_transceiver_from_kind(RTPCodecTypeAudio, RTPTransceiverInit{
-            Direction: RTPTransceiverDirectionRecvonly,
-        }); err != nil {
-            t.Errorf("Failed to add transceiver")
-        }
+        opc.add_transceiver_from_kind(
+            RTPCodecType::Audio,
+            &[RTPTransceiverInit {
+                direction: RTPTransceiverDirection::Recvonly,
+                send_encodings: vec![],
+            }],
+        )
+        .await?;
 
-        offer, err := opc.CreateOffer(nil)
-        if err != nil {
-            t.Errorf("Plan B CreateOffer failed: %s", err)
-        }
+        let offer = opc.create_offer(None).await?;
 
-        mdNames := getMdNames(offer.parsed)
-        assert.ObjectsAreEqual(mdNames, []string{"video", "audio", "data"})
-
-        apc, err := new_peer_connection(Configuration{
-            SDPSemantics: SDPSemanticsUnifiedPlanWithFallback,
-        })
-        if err != nil {
-            t.Errorf("new_peer_connection failed: %v", err)
+        if let Some(parsed) = &offer.parsed {
+            let md_names = get_md_names(parsed);
+            assert_eq!(md_names, &["video".to_owned(), "audio".to_owned()]);
         }
 
-        video1, err := NewTrackLocalStaticSample(RTPCodecCapability{MimeType: "video/h264", SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"}, "1", "1")
-        if err != nil {
-            t.Errorf("Failed to create video track")
-        }
-        if _, err = apc.add_track(video1); err != nil {
-            t.Errorf("Failed to add video track")
-        }
-        video2, err := NewTrackLocalStaticSample(RTPCodecCapability{MimeType: "video/h264", SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"}, "2", "2")
-        if err != nil {
-            t.Errorf("Failed to create video track")
-        }
-        if _, err = apc.add_track(video2); err != nil {
-            t.Errorf("Failed to add video track")
-        }
-        audio1, err := NewTrackLocalStaticSample(RTPCodecCapability{MimeType: "audio/opus"}, "3", "3")
-        if err != nil {
-            t.Errorf("Failed to create audio track")
-        }
-        if _, err = apc.add_track(audio1); err != nil {
-            t.Errorf("Failed to add audio track")
-        }
-        audio2, err := NewTrackLocalStaticSample(RTPCodecCapability{MimeType: "audio/opus"}, "4", "4")
-        if err != nil {
-            t.Errorf("Failed to create audio track")
-        }
-        if _, err = apc.add_track(audio2); err != nil {
-            t.Errorf("Failed to add audio track")
-        }
+        let mut apc = api
+            .new_peer_connection(Configuration {
+                sdp_semantics: SDPSemantics::PlanB,
+                ..Default::default()
+            })
+            .await?;
 
-        if err = apc.set_remote_description(offer); err != nil {
-            t.Errorf("set_remote_description failed: %s", err)
-        }
+        let video1: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
+            RTPCodecCapability {
+                mime_type: "video/h264".to_owned(),
+                sdp_fmtp_line:
+                    "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"
+                        .to_owned(),
+                ..Default::default()
+            },
+            "1".to_owned(),
+            "1".to_owned(),
+        ));
+        let _ = apc.add_track(video1).await?;
 
-        answer, err := apc.create_answer(nil)
-        if err != nil {
-            t.Errorf("Plan B create_answer failed: %s", err)
-        }
+        let video2: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
+            RTPCodecCapability {
+                mime_type: "video/h264".to_owned(),
+                sdp_fmtp_line:
+                    "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"
+                        .to_owned(),
+                ..Default::default()
+            },
+            "2".to_owned(),
+            "2".to_owned(),
+        ));
+        let _ = apc.add_track(video2).await?;
 
-        mdNames = getMdNames(answer.parsed)
-        assert.ObjectsAreEqual(mdNames, []string{"video", "audio", "data"})
+        let audio1: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
+            RTPCodecCapability {
+                mime_type: "audio/opus".to_owned(),
+                ..Default::default()
+            },
+            "3".to_owned(),
+            "3".to_owned(),
+        ));
+        let _ = apc.add_track(audio1).await?;
 
-        extractSsrcList := func(md *sdp.MediaDescription) []string {
-            ssrcMap := map[string]struct{}{}
-            for _, attr := range md.Attributes {
-                if attr.Key == ssrcStr {
-                    ssrc := strings.Fields(attr.Value)[0]
-                    ssrcMap[ssrc] = struct{}{}
+        let audio2: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
+            RTPCodecCapability {
+                mime_type: "audio/opus".to_owned(),
+                ..Default::default()
+            },
+            "4".to_owned(),
+            "4".to_owned(),
+        ));
+        let _ = apc.add_track(audio2).await?;
+
+        apc.set_remote_description(offer).await?;
+
+        let answer = apc.create_answer(None).await?;
+
+        if let Some(parsed) = &answer.parsed {
+            let md_names = get_md_names(parsed);
+            assert_eq!(md_names, &["video".to_owned(), "audio".to_owned()]);
+
+            // Verify that each section has 2 SSRCs (one for each transceiver)
+            for section in &["video".to_owned(), "audio".to_owned()] {
+                for media in &parsed.media_descriptions {
+                    if &media.media_name.media == section {
+                        assert_eq!(extract_ssrc_list(media).len(), 2);
+                    }
                 }
             }
-            ssrcList := make([]string, 0, len(ssrcMap))
-            for ssrc := range ssrcMap {
-                ssrcList = append(ssrcList, ssrc)
-            }
-            return ssrcList
-        }
-        // Verify that each section has 2 SSRCs (one for each sender)
-        for _, section := range []string{"video", "audio"} {
-            for _, media := range answer.parsed.MediaDescriptions {
-                if media.MediaName.Media == section {
-                    assert.Lenf(t, extractSsrcList(media), 2, "%q should have 2 SSRCs in Plan-B fallback mode", section)
-                }
-            }
         }
 
-        closePairNow(t, apc, opc)
+        close_pair_now(&apc, &opc).await;
+
+        Ok(())
     }
-     */
+
+    #[tokio::test]
+    async fn test_sdp_semantics_unified_plan_with_fallback() -> Result<()> {
+        let mut m = MediaEngine::default();
+        m.register_default_codecs()?;
+        let api = APIBuilder::new().with_media_engine(m).build();
+
+        let mut opc = api
+            .new_peer_connection(Configuration {
+                sdp_semantics: SDPSemantics::PlanB,
+                ..Default::default()
+            })
+            .await?;
+
+        opc.add_transceiver_from_kind(
+            RTPCodecType::Video,
+            &[RTPTransceiverInit {
+                direction: RTPTransceiverDirection::Recvonly,
+                send_encodings: vec![],
+            }],
+        )
+        .await?;
+
+        opc.add_transceiver_from_kind(
+            RTPCodecType::Audio,
+            &[RTPTransceiverInit {
+                direction: RTPTransceiverDirection::Recvonly,
+                send_encodings: vec![],
+            }],
+        )
+        .await?;
+
+        let offer = opc.create_offer(None).await?;
+
+        if let Some(parsed) = &offer.parsed {
+            let md_names = get_md_names(parsed);
+            assert_eq!(md_names, &["video".to_owned(), "audio".to_owned()]);
+        }
+
+        let mut apc = api
+            .new_peer_connection(Configuration {
+                sdp_semantics: SDPSemantics::UnifiedPlanWithFallback,
+                ..Default::default()
+            })
+            .await?;
+
+        let video1: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
+            RTPCodecCapability {
+                mime_type: "video/h264".to_owned(),
+                sdp_fmtp_line:
+                    "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"
+                        .to_owned(),
+                ..Default::default()
+            },
+            "1".to_owned(),
+            "1".to_owned(),
+        ));
+        let _ = apc.add_track(video1).await?;
+
+        let video2: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
+            RTPCodecCapability {
+                mime_type: "video/h264".to_owned(),
+                sdp_fmtp_line:
+                    "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"
+                        .to_owned(),
+                ..Default::default()
+            },
+            "2".to_owned(),
+            "2".to_owned(),
+        ));
+        let _ = apc.add_track(video2).await?;
+
+        let audio1: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
+            RTPCodecCapability {
+                mime_type: "audio/opus".to_owned(),
+                ..Default::default()
+            },
+            "3".to_owned(),
+            "3".to_owned(),
+        ));
+        let _ = apc.add_track(audio1).await?;
+
+        let audio2: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
+            RTPCodecCapability {
+                mime_type: "audio/opus".to_owned(),
+                ..Default::default()
+            },
+            "4".to_owned(),
+            "4".to_owned(),
+        ));
+        let _ = apc.add_track(audio2).await?;
+
+        apc.set_remote_description(offer).await?;
+
+        let answer = apc.create_answer(None).await?;
+
+        if let Some(parsed) = &answer.parsed {
+            let md_names = get_md_names(parsed);
+            assert_eq!(md_names, &["video".to_owned(), "audio".to_owned()]);
+
+            // Verify that each section has 2 SSRCs (one for each transceiver)
+            for section in &["video".to_owned(), "audio".to_owned()] {
+                for media in &parsed.media_descriptions {
+                    if &media.media_name.media == section {
+                        assert_eq!(extract_ssrc_list(media).len(), 2);
+                    }
+                }
+            }
+        }
+
+        close_pair_now(&apc, &opc).await;
+
+        Ok(())
+    }
 }

@@ -718,13 +718,13 @@ impl PeerConnection {
                 }
             }
 
-            let has_current_remote_description = {
+            let current_remote_description_is_none = {
                 let current_remote_description =
                     self.internal.current_remote_description.lock().await;
                 current_remote_description.is_none()
             };
 
-            let mut d = if !has_current_remote_description {
+            let mut d = if current_remote_description_is_none {
                 self.internal
                     .generate_unmatched_sdp(
                         current_transceivers,
