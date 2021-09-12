@@ -3,16 +3,17 @@ use crate::stream_info::StreamInfo;
 use crate::*;
 
 use anyhow::Result;
+use std::sync::Arc;
 
 /// Chain is an interceptor that runs all child interceptors in order.
 #[derive(Default)]
 pub struct Chain {
-    interceptors: Vec<Box<dyn Interceptor + Send + Sync>>,
+    interceptors: Vec<Arc<dyn Interceptor + Send + Sync>>,
 }
 
 impl Chain {
     /// new returns a new Chain interceptor.
-    pub fn new(interceptors: Vec<Box<dyn Interceptor + Send + Sync>>) -> Self {
+    pub fn new(interceptors: Vec<Arc<dyn Interceptor + Send + Sync>>) -> Self {
         Chain { interceptors }
     }
 }

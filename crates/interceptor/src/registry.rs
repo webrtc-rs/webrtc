@@ -2,10 +2,12 @@ use crate::chain::Chain;
 use crate::noop::NoOp;
 use crate::Interceptor;
 
+use std::sync::Arc;
+
 /// Registry is a collector for interceptors.
 #[derive(Default)]
 pub struct Registry {
-    interceptors: Vec<Box<dyn Interceptor + Send + Sync>>,
+    interceptors: Vec<Arc<dyn Interceptor + Send + Sync>>,
 }
 
 impl Registry {
@@ -16,20 +18,20 @@ impl Registry {
     }
 
     /// with_interceptor adds a new Interceptor to the registry.
-    pub fn with_interceptor(mut self, icpr: Box<dyn Interceptor + Send + Sync>) -> Self {
+    pub fn with_interceptor(mut self, icpr: Arc<dyn Interceptor + Send + Sync>) -> Self {
         self.interceptors.push(icpr);
         self
     }
 
     /// build constructs a single Interceptor from a InterceptorRegistry
-    pub fn build(mut self) -> Box<dyn Interceptor + Send + Sync> {
+    pub fn build(mut self) -> Arc<dyn Interceptor + Send + Sync> {
         if self.interceptors.is_empty() {
-            return Box::new(NoOp {});
+            return Arc::new(NoOp {});
         }
 
-        let interceptors: Vec<Box<dyn Interceptor + Send + Sync>> =
+        let interceptors: Vec<Arc<dyn Interceptor + Send + Sync>> =
             self.interceptors.drain(..).collect();
 
-        Box::new(Chain::new(interceptors))
+        Arc::new(Chain::new(interceptors))
     }
 }
