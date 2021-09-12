@@ -205,8 +205,10 @@ pub(crate) async fn send_video_until_done(
 
         tokio::select! {
             _ = timeout.as_mut() =>{
+                log::debug!("sendVideoUntilDone timeout");
                 for track in tracks {
                     if let Some(t) = track.as_any().downcast_ref::<TrackLocalStaticSample>(){
+                        log::debug!("sendVideoUntilDone track.WriteSample");
                         assert!(t.write_sample(&Sample{
                             data: Bytes::from_static(&[0x00]),
                             duration: Duration::from_secs(1),
@@ -218,6 +220,7 @@ pub(crate) async fn send_video_until_done(
                 }
             }
             _ = done_rx.recv() =>{
+                log::debug!("sendVideoUntilDone received done");
                 return;
             }
         }

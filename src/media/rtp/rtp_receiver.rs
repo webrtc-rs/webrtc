@@ -407,41 +407,6 @@ impl RTPReceiver {
 
         // We can't block and wait for a single SSRC
         incoming.ssrc != 0
-
-        /*TODO:   let media_engine = Arc::clone(&self.media_engine);
-        tokio::spawn(async move {
-            if let Some(track) = receiver.track().await {
-                if let Err(err) = track.determine_payload_type().await {
-                    log::warn!(
-                        "Could not determine PayloadType for SSRC {} with err {}",
-                        track.ssrc(),
-                        err
-                    );
-                    return;
-                }
-
-                let params = match media_engine
-                    .get_rtp_parameters_by_payload_type(track.payload_type())
-                    .await
-                {
-                    Ok(params) => params,
-                    Err(err) => {
-                        log::warn!(
-                            "no codec could be found for payloadType {} with err {}",
-                            track.payload_type(),
-                            err,
-                        );
-                        return;
-                    }
-                };
-
-                track.set_kind(receiver.kind());
-                track.set_codec(params.codecs[0].clone()).await;
-                track.set_params(params).await;
-
-                //TODO:self.do_track(receiver.track().await, Some(Arc::clone(&receiver))).await;
-            }
-        });*/
     }
 
     /// Stop irreversibly stops the RTPReceiver

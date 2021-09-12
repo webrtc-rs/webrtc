@@ -174,8 +174,26 @@ async fn test_track_local_static_closed() -> Result<()> {
     Ok(())
 }
 
+use log::LevelFilter;
+use std::io::Write;
+
 #[tokio::test]
 async fn test_track_local_static_payload_type() -> Result<()> {
+    env_logger::Builder::new()
+        .format(|buf, record| {
+            writeln!(
+                buf,
+                "{}:{} [{}] {} - {}",
+                record.file().unwrap_or("unknown"),
+                record.line().unwrap_or(0),
+                record.level(),
+                chrono::Local::now().format("%H:%M:%S.%6f"),
+                record.args()
+            )
+        })
+        .filter(None, LevelFilter::Trace)
+        .init();
+
     let mut media_engine_one = MediaEngine::default();
     media_engine_one.register_codec(
         RTPCodecParameters {
@@ -233,7 +251,7 @@ async fn test_track_local_static_payload_type() -> Result<()> {
 
     answerer.add_track(Arc::clone(&track)).await?;
 
-    let (on_track_fired_tx, _on_track_fired_rx) = mpsc::channel::<()>(1);
+    let (on_track_fired_tx, on_track_fired_rx) = mpsc::channel::<()>(1);
     let on_track_fired_tx = Arc::new(Mutex::new(Some(on_track_fired_tx)));
     offerer
         .on_track(Box::new(
@@ -245,6 +263,7 @@ async fn test_track_local_static_payload_type() -> Result<()> {
                         assert_eq!(t.codec().await.capability.mime_type, "video/VP8");
                     }
                     {
+                        log::debug!("onTrackFiredFunc!!!");
                         let mut done = on_track_fired_tx2.lock().await;
                         done.take();
                     }
@@ -255,8 +274,7 @@ async fn test_track_local_static_payload_type() -> Result<()> {
 
     signal_pair(&mut offerer, &mut answerer).await?;
 
-    //TODO: send_video_until_done(on_track_fired_rx, &[track]).await;
-    //  only works when "if let Err(err) = self.handle_undeclared_ssrc" is done
+    send_video_until_done(on_track_fired_rx, &[track]).await;
 
     close_pair_now(&offerer, &answerer).await;
 

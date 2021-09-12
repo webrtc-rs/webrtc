@@ -494,14 +494,7 @@ impl PeerConnection {
         t: Option<Arc<TrackRemote>>,
         r: Option<Arc<RTPReceiver>>,
     ) {
-        log::debug!(
-            "got new track: {}",
-            if let Some(t) = &t {
-                t.id().await
-            } else {
-                "None".to_owned()
-            }
-        );
+        log::debug!("got new track: {:?}", t);
 
         if t.is_some() {
             let mut handler = on_track_handler.lock().await;

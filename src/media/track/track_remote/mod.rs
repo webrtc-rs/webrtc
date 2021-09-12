@@ -38,6 +38,21 @@ pub struct TrackRemote {
     internal: Mutex<TrackRemoteInternal>,
 }
 
+impl std::fmt::Debug for TrackRemote {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TrackRemote")
+            .field("id", &self.id)
+            .field("stream_id", &self.stream_id)
+            .field("payload_type", &self.payload_type)
+            .field("kind", &self.kind)
+            .field("ssrc", &self.ssrc)
+            .field("codec", &self.codec)
+            .field("params", &self.params)
+            .field("rid", &self.rid)
+            .finish()
+    }
+}
+
 impl TrackRemote {
     pub(crate) fn new(
         kind: RTPCodecType,
