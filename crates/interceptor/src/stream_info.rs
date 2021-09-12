@@ -1,4 +1,4 @@
-use super::Attributes;
+use crate::Attributes;
 
 /// RTPHeaderExtension represents a negotiated RFC5285 RTP header extension.
 #[derive(Default, Debug, Clone)]

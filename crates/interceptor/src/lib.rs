@@ -1,6 +1,8 @@
 #![warn(rust_2018_idioms)]
 #![allow(dead_code)]
 
+pub mod chain;
+pub mod error;
 pub mod noop;
 pub mod registry;
 pub mod stream_info;
