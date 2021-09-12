@@ -151,8 +151,4 @@ impl TrackLocalWriter for TrackLocalStaticRTP {
         self.write_rtp(&pkt).await?;
         Ok(b.len())
     }
-
-    fn clone_to(&self) -> Box<dyn TrackLocalWriter + Send + Sync> {
-        Box::new(self.clone())
-    }
 }

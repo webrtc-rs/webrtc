@@ -1774,10 +1774,10 @@ impl PeerConnection {
     /// packet is discarded. It also runs any configured interceptors.
     pub async fn write_rtcp(
         &self,
-        pkts: &(dyn rtcp::packet::Packet + Send + Sync),
+        pkt: &(dyn rtcp::packet::Packet + Send + Sync),
     ) -> Result<usize> {
         let a = Attributes::new();
-        self.interceptor_rtcp_writer.write(pkts, &a).await
+        self.interceptor_rtcp_writer.write(pkt, &a).await
     }
 
     /// close ends the PeerConnection

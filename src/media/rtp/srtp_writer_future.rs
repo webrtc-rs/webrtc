@@ -9,7 +9,7 @@ use srtp::stream::Stream;
 use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
-use interceptor::{Attributes, RTCPReader};
+use interceptor::{Attributes, RTCPReader, RTPWriter};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -91,11 +91,11 @@ impl SrtpWriterFuture {
         }
     }
 
-    pub async fn write_rtp(&self, packet: &rtp::packet::Packet) -> Result<usize> {
+    pub async fn write_rtp(&self, pkt: &rtp::packet::Packet) -> Result<usize> {
         {
             let session = self.rtp_write_session.lock().await;
             if let Some(rtp_write_session) = &*session {
-                return rtp_write_session.write_rtp(packet).await;
+                return rtp_write_session.write_rtp(pkt).await;
             }
         }
 
@@ -104,7 +104,7 @@ impl SrtpWriterFuture {
         {
             let session = self.rtp_write_session.lock().await;
             if let Some(rtp_write_session) = &*session {
-                rtp_write_session.write_rtp(packet).await
+                rtp_write_session.write_rtp(pkt).await
             } else {
                 Err(Error::ErrDtlsTransportNotStarted.into())
             }
@@ -136,5 +136,12 @@ impl SrtpWriterFuture {
 impl RTCPReader for SrtpWriterFuture {
     async fn read(&self, buf: &mut [u8], a: &Attributes) -> Result<(usize, Attributes)> {
         Ok((self.read(buf).await?, a.clone()))
+    }
+}
+
+#[async_trait]
+impl RTPWriter for SrtpWriterFuture {
+    async fn write(&self, pkt: &rtp::packet::Packet, _a: &Attributes) -> Result<usize> {
+        self.write_rtp(pkt).await
     }
 }

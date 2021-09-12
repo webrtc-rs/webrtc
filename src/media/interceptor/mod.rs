@@ -6,34 +6,53 @@ use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
 use interceptor::stream_info::{RTCPFeedback, RTPHeaderExtension, StreamInfo};
-use interceptor::Attributes;
+use interceptor::{Attributes, RTPWriter};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use util::Unmarshal;
 
-#[derive(Debug, Clone)]
 pub(crate) struct InterceptorToTrackLocalWriter {
-    // interceptor atomic.Value //  // interceptor.RTPWriter }
+    pub(crate) interceptor_rtp_writer: Mutex<Option<Arc<dyn RTPWriter + Send + Sync>>>,
+}
+
+impl InterceptorToTrackLocalWriter {
+    pub(crate) fn new() -> Self {
+        InterceptorToTrackLocalWriter {
+            interceptor_rtp_writer: Mutex::new(None),
+        }
+    }
+}
+
+impl std::fmt::Debug for InterceptorToTrackLocalWriter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InterceptorToTrackLocalWriter").finish()
+    }
+}
+
+impl Default for InterceptorToTrackLocalWriter {
+    fn default() -> Self {
+        InterceptorToTrackLocalWriter {
+            interceptor_rtp_writer: Mutex::new(None),
+        }
+    }
 }
 
 #[async_trait]
 impl TrackLocalWriter for InterceptorToTrackLocalWriter {
-    async fn write_rtp(&self, _p: &rtp::packet::Packet) -> Result<usize> {
-        /*TODO:
-           if writer, ok := i.interceptor.Load().(interceptor.RTPWriter); ok && writer != nil {
-            return writer.Write(header, payload, interceptor.Attributes{})
+    async fn write_rtp(&self, pkt: &rtp::packet::Packet) -> Result<usize> {
+        let interceptor_rtp_writer = self.interceptor_rtp_writer.lock().await;
+        if let Some(writer) = &*interceptor_rtp_writer {
+            let a = Attributes::new();
+            writer.write(pkt, &a).await
+        } else {
+            Ok(0)
         }
-
-        return 0, nil*/
-        Ok(0)
     }
 
     async fn write(&self, b: &Bytes) -> Result<usize> {
         let buf = &mut b.clone();
-        let packet = rtp::packet::Packet::unmarshal(buf)?;
-        self.write_rtp(&packet).await
-    }
-
-    fn clone_to(&self) -> Box<dyn TrackLocalWriter + Send + Sync> {
-        Box::new(self.clone())
+        let pkt = rtp::packet::Packet::unmarshal(buf)?;
+        self.write_rtp(&pkt).await
     }
 }
 

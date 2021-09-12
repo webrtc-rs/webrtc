@@ -13,6 +13,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use std::any::Any;
 use std::fmt;
+use std::sync::Arc;
 use util::Unmarshal;
 
 /// TrackLocalWriter is the Writer for outbound RTP Packets
@@ -23,14 +24,6 @@ pub trait TrackLocalWriter: fmt::Debug {
 
     /// write encrypts and writes a full RTP packet
     async fn write(&self, b: &Bytes) -> Result<usize>;
-
-    fn clone_to(&self) -> Box<dyn TrackLocalWriter + Send + Sync>;
-}
-
-impl Clone for Box<dyn TrackLocalWriter + Send + Sync> {
-    fn clone(&self) -> Box<dyn TrackLocalWriter + Send + Sync> {
-        self.clone_to()
-    }
 }
 
 /// TrackLocalContext is the Context passed when a TrackLocal has been Binded/Unbinded from a PeerConnection, and used
@@ -40,7 +33,7 @@ pub struct TrackLocalContext {
     pub(crate) id: String,
     pub(crate) params: RTPParameters,
     pub(crate) ssrc: SSRC,
-    pub(crate) write_stream: Option<Box<dyn TrackLocalWriter + Send + Sync>>,
+    pub(crate) write_stream: Option<Arc<dyn TrackLocalWriter + Send + Sync>>,
 }
 
 impl TrackLocalContext {
@@ -64,7 +57,7 @@ impl TrackLocalContext {
 
     /// write_stream returns the write_stream for this TrackLocal. The implementer writes the outbound
     /// media packets to it
-    pub fn write_stream(&self) -> Option<Box<dyn TrackLocalWriter + Send + Sync>> {
+    pub fn write_stream(&self) -> Option<Arc<dyn TrackLocalWriter + Send + Sync>> {
         self.write_stream.clone()
     }
 
@@ -109,5 +102,5 @@ pub(crate) struct TrackBinding {
     id: String,
     ssrc: SSRC,
     payload_type: PayloadType,
-    write_stream: Option<Box<dyn TrackLocalWriter + Send + Sync>>,
+    write_stream: Option<Arc<dyn TrackLocalWriter + Send + Sync>>,
 }

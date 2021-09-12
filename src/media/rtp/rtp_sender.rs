@@ -9,13 +9,13 @@ use crate::media::rtp::rtp_codec::{RTPCodecParameters, RTPCodecType};
 use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
 use crate::media::rtp::srtp_writer_future::SrtpWriterFuture;
 use crate::media::rtp::{PayloadType, RTPEncodingParameters, RTPSendParameters, SSRC};
-use crate::media::track::track_local::{TrackLocal, TrackLocalContext};
+use crate::media::track::track_local::{TrackLocal, TrackLocalContext, TrackLocalWriter};
 use crate::RECEIVE_MTU;
 
 use anyhow::Result;
 use ice::rand::generate_crypto_random_string;
 use interceptor::stream_info::StreamInfo;
-use interceptor::{Attributes, Interceptor, RTCPReader};
+use interceptor::{Attributes, Interceptor, RTCPReader, RTPWriter};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
@@ -236,6 +236,7 @@ impl RTPSender {
             return Err(Error::ErrRTPSenderSendAlreadyCalled.into());
         }
 
+        let write_stream = Arc::new(InterceptorToTrackLocalWriter::new());
         let (context, stream_info) = {
             let track = self.track.lock().await;
             let mut context = TrackLocalContext {
@@ -252,7 +253,9 @@ impl RTPSender {
                     )
                     .await,
                 ssrc: parameters.encodings[0].ssrc,
-                write_stream: Some(Box::new(InterceptorToTrackLocalWriter {})),
+                write_stream: Some(
+                    Arc::clone(&write_stream) as Arc<dyn TrackLocalWriter + Send + Sync>
+                ),
             };
 
             let codec = if let Some(t) = &*track {
@@ -274,6 +277,16 @@ impl RTPSender {
             (context, stream_info)
         };
 
+        let srtp_rtp_writer = Arc::clone(&self.srtp_stream) as Arc<dyn RTPWriter + Send + Sync>;
+        let rtp_interceptor = self
+            .interceptor
+            .bind_local_stream(&stream_info, srtp_rtp_writer)
+            .await;
+        {
+            let mut interceptor_rtp_writer = write_stream.interceptor_rtp_writer.lock().await;
+            *interceptor_rtp_writer = Some(rtp_interceptor);
+        }
+
         {
             let mut ctx = self.context.lock().await;
             *ctx = context;
@@ -282,11 +295,6 @@ impl RTPSender {
             let mut si = self.stream_info.lock().await;
             *si = stream_info;
         }
-
-        /*TODO: rtpInterceptor := r.api.interceptor.bind_local_stream(&r.stream_info, interceptor.RTPWriterFunc(func(header *rtp.Header, payload []byte, attributes interceptor.Attributes) (int, error) {
-            return r.srtp_stream.write_rtp(header, payload)
-        }))
-        writeStream.interceptor.Store(rtpInterceptor)*/
 
         {
             let mut send_called_tx = self.send_called_tx.lock().await;

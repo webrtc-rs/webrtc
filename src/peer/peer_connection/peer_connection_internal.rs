@@ -1170,9 +1170,9 @@ impl PeerConnectionInternal {
 impl RTCPWriter for PeerConnectionInternal {
     async fn write(
         &self,
-        pkts: &(dyn rtcp::packet::Packet + Send + Sync),
+        pkt: &(dyn rtcp::packet::Packet + Send + Sync),
         _a: &Attributes,
     ) -> Result<usize> {
-        self.dtls_transport.write_rtcp(pkts).await
+        self.dtls_transport.write_rtcp(pkt).await
     }
 }
