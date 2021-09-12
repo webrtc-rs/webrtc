@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 pub mod noop;
+pub mod registry;
 pub mod stream_info;
 
 use stream_info::StreamInfo;
