@@ -24,8 +24,8 @@ impl Interceptor for Chain {
     /// change in the future. The returned method will be called once per packet batch.
     async fn bind_rtcp_reader(
         &self,
-        mut reader: Box<dyn RTCPReader + Send + Sync>,
-    ) -> Box<dyn RTCPReader + Send + Sync> {
+        mut reader: Arc<dyn RTCPReader + Send + Sync>,
+    ) -> Arc<dyn RTCPReader + Send + Sync> {
         for icpr in &self.interceptors {
             reader = icpr.bind_rtcp_reader(reader).await;
         }
@@ -36,8 +36,8 @@ impl Interceptor for Chain {
     /// will be called once per packet batch.
     async fn bind_rtcp_writer(
         &self,
-        mut writer: Box<dyn RTCPWriter + Send + Sync>,
-    ) -> Box<dyn RTCPWriter + Send + Sync> {
+        mut writer: Arc<dyn RTCPWriter + Send + Sync>,
+    ) -> Arc<dyn RTCPWriter + Send + Sync> {
         for icpr in &self.interceptors {
             writer = icpr.bind_rtcp_writer(writer).await;
         }
@@ -49,8 +49,8 @@ impl Interceptor for Chain {
     async fn bind_local_stream(
         &self,
         info: &StreamInfo,
-        mut writer: Box<dyn RTPWriter + Send + Sync>,
-    ) -> Box<dyn RTPWriter + Send + Sync> {
+        mut writer: Arc<dyn RTPWriter + Send + Sync>,
+    ) -> Arc<dyn RTPWriter + Send + Sync> {
         for icpr in &self.interceptors {
             writer = icpr.bind_local_stream(info, writer).await;
         }
@@ -69,8 +69,8 @@ impl Interceptor for Chain {
     async fn bind_remote_stream(
         &self,
         info: &StreamInfo,
-        mut reader: Box<dyn RTPReader + Send + Sync>,
-    ) -> Box<dyn RTPReader + Send + Sync> {
+        mut reader: Arc<dyn RTPReader + Send + Sync>,
+    ) -> Arc<dyn RTPReader + Send + Sync> {
         for icpr in &self.interceptors {
             reader = icpr.bind_remote_stream(info, reader).await;
         }

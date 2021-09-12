@@ -10,8 +10,8 @@ impl Interceptor for NoOp {
     /// change in the future. The returned method will be called once per packet batch.
     async fn bind_rtcp_reader(
         &self,
-        reader: Box<dyn RTCPReader + Send + Sync>,
-    ) -> Box<dyn RTCPReader + Send + Sync> {
+        reader: Arc<dyn RTCPReader + Send + Sync>,
+    ) -> Arc<dyn RTCPReader + Send + Sync> {
         reader
     }
 
@@ -19,8 +19,8 @@ impl Interceptor for NoOp {
     /// will be called once per packet batch.
     async fn bind_rtcp_writer(
         &self,
-        writer: Box<dyn RTCPWriter + Send + Sync>,
-    ) -> Box<dyn RTCPWriter + Send + Sync> {
+        writer: Arc<dyn RTCPWriter + Send + Sync>,
+    ) -> Arc<dyn RTCPWriter + Send + Sync> {
         writer
     }
 
@@ -29,8 +29,8 @@ impl Interceptor for NoOp {
     async fn bind_local_stream(
         &self,
         _info: &StreamInfo,
-        writer: Box<dyn RTPWriter + Send + Sync>,
-    ) -> Box<dyn RTPWriter + Send + Sync> {
+        writer: Arc<dyn RTPWriter + Send + Sync>,
+    ) -> Arc<dyn RTPWriter + Send + Sync> {
         writer
     }
 
@@ -42,8 +42,8 @@ impl Interceptor for NoOp {
     async fn bind_remote_stream(
         &self,
         _info: &StreamInfo,
-        reader: Box<dyn RTPReader + Send + Sync>,
-    ) -> Box<dyn RTPReader + Send + Sync> {
+        reader: Arc<dyn RTPReader + Send + Sync>,
+    ) -> Arc<dyn RTPReader + Send + Sync> {
         reader
     }
 
