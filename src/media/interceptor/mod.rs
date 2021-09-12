@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use interceptor::stream_info::{RTCPFeedback, RTPHeaderExtension, StreamInfo};
 use interceptor::Attributes;
+use util::Unmarshal;
 
 #[derive(Debug, Clone)]
 pub(crate) struct InterceptorToTrackLocalWriter {
@@ -25,15 +26,10 @@ impl TrackLocalWriter for InterceptorToTrackLocalWriter {
         Ok(0)
     }
 
-    async fn write(&self, _b: &Bytes) -> Result<usize> {
-        /*TODO:
-           packet := &rtp.Packet{}
-        if err := packet.Unmarshal(b); err != nil {
-            return 0, err
-        }
-
-        return i.write_rtp(&packet.Header, packet.Payload)*/
-        Ok(0)
+    async fn write(&self, b: &Bytes) -> Result<usize> {
+        let buf = &mut b.clone();
+        let packet = rtp::packet::Packet::unmarshal(buf)?;
+        self.write_rtp(&packet).await
     }
 
     fn clone_to(&self) -> Box<dyn TrackLocalWriter + Send + Sync> {

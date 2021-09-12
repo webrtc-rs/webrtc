@@ -75,7 +75,7 @@ pub struct RTPSender {
     pub(crate) negotiated: AtomicBool,
 
     pub(crate) media_engine: Arc<MediaEngine>,
-    pub(crate) interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
+    pub(crate) interceptor: Arc<dyn Interceptor + Send + Sync>,
 
     pub(crate) id: String,
 
@@ -90,7 +90,7 @@ impl RTPSender {
         track: Arc<dyn TrackLocal + Send + Sync>,
         transport: Arc<DTLSTransport>,
         media_engine: Arc<MediaEngine>,
-        interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
+        interceptor: Arc<dyn Interceptor + Send + Sync>,
     ) -> RTPSender {
         let id = generate_crypto_random_string(
             32,
@@ -309,9 +309,9 @@ impl RTPSender {
 
         self.replace_track(None).await?;
 
-        if let Some(interceptor) = &self.interceptor {
+        {
             let stream_info = self.stream_info.lock().await;
-            interceptor.unbind_local_stream(&*stream_info).await;
+            self.interceptor.unbind_local_stream(&*stream_info).await;
         }
 
         self.srtp_stream.close().await

@@ -20,7 +20,6 @@ struct TrackRemoteInternal {
 }
 
 /// TrackRemote represents a single inbound source of media
-#[derive(Default)]
 pub struct TrackRemote {
     id: Mutex<String>,
     stream_id: Mutex<String>,
@@ -33,7 +32,7 @@ pub struct TrackRemote {
     rid: String,
 
     media_engine: Arc<MediaEngine>,
-    interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
+    interceptor: Arc<dyn Interceptor + Send + Sync>,
 
     receiver: Option<Arc<Mutex<RTPReceiverInternal>>>,
     internal: Mutex<TrackRemoteInternal>,
@@ -46,16 +45,22 @@ impl TrackRemote {
         rid: String,
         receiver: Arc<Mutex<RTPReceiverInternal>>,
         media_engine: Arc<MediaEngine>,
-        interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
+        interceptor: Arc<dyn Interceptor + Send + Sync>,
     ) -> Self {
         TrackRemote {
+            id: Default::default(),
+            stream_id: Default::default(),
+            payload_type: Default::default(),
             kind: AtomicU8::new(kind as u8),
             ssrc: AtomicU32::new(ssrc),
+            codec: Default::default(),
+            params: Default::default(),
             rid,
             receiver: Some(receiver),
             media_engine,
             interceptor,
-            ..Default::default()
+
+            internal: Default::default(),
         }
     }
 

@@ -1,6 +1,5 @@
 use super::*;
 
-#[derive(Default)]
 pub(crate) struct PeerConnectionInternal {
     pub(super) on_negotiation_needed_handler: Arc<Mutex<Option<OnNegotiationNeededHdlrFn>>>,
     pub(super) is_closed: Arc<AtomicBool>,
@@ -39,18 +38,31 @@ pub(crate) struct PeerConnectionInternal {
     // A reference to the associated API state used by this connection
     pub(super) setting_engine: Arc<SettingEngine>,
     pub(crate) media_engine: Arc<MediaEngine>,
-    pub(super) interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
+    pub(super) interceptor: Arc<dyn Interceptor + Send + Sync>,
 }
 
 impl PeerConnectionInternal {
     pub(super) async fn new(api: &API, configuration: &mut Configuration) -> Result<Self> {
         let mut pc = PeerConnectionInternal {
+            on_negotiation_needed_handler: Arc::new(Default::default()),
             ops: Arc::new(Operations::new()),
             is_closed: Arc::new(AtomicBool::new(false)),
             is_negotiation_needed: Arc::new(AtomicBool::new(false)),
             negotiation_needed_state: Arc::new(AtomicU8::new(NegotiationNeededState::Empty as u8)),
             signaling_state: Arc::new(AtomicU8::new(SignalingState::Stable as u8)),
+            ice_transport: Arc::new(Default::default()),
+            dtls_transport: Arc::new(Default::default()),
             ice_connection_state: Arc::new(AtomicU8::new(ICEConnectionState::New as u8)),
+            sctp_transport: Arc::new(Default::default()),
+            rtp_transceivers: Arc::new(Default::default()),
+            on_track_handler: Arc::new(Default::default()),
+            on_signaling_state_change_handler: Arc::new(Default::default()),
+            on_ice_connection_state_change_handler: Arc::new(Default::default()),
+            on_data_channel_handler: Arc::new(Default::default()),
+            ice_gatherer: Arc::new(Default::default()),
+            current_local_description: Arc::new(Default::default()),
+            current_remote_description: Arc::new(Default::default()),
+            pending_local_description: Arc::new(Default::default()),
             peer_connection_state: Arc::new(AtomicU8::new(PeerConnectionState::New as u8)),
 
             setting_engine: Arc::clone(&api.setting_engine),
@@ -59,9 +71,9 @@ impl PeerConnectionInternal {
             } else {
                 Arc::clone(&api.media_engine)
             },
-            interceptor: api.interceptor.clone(),
-
-            ..Default::default()
+            interceptor: Arc::clone(&api.interceptor),
+            on_peer_connection_state_change_handler: Arc::new(Default::default()),
+            pending_remote_description: Arc::new(Default::default()),
         };
 
         // Create the ice gatherer
@@ -138,7 +150,7 @@ impl PeerConnectionInternal {
                         receiver.kind(),
                         Arc::clone(&self.dtls_transport),
                         Arc::clone(&self.media_engine),
-                        self.interceptor.clone(),
+                        Arc::clone(&self.interceptor),
                     ));
                     t.set_receiver(Some(receiver)).await;
                 }
@@ -430,7 +442,7 @@ impl PeerConnectionInternal {
                     kind,
                     Arc::clone(&self.dtls_transport),
                     Arc::clone(&self.media_engine),
-                    self.interceptor.clone(),
+                    Arc::clone(&self.interceptor),
                 ));
 
                 Arc::new(RTPTransceiver::new(
@@ -461,13 +473,13 @@ impl PeerConnectionInternal {
                     track.kind(),
                     Arc::clone(&self.dtls_transport),
                     Arc::clone(&self.media_engine),
-                    self.interceptor.clone(),
+                    Arc::clone(&self.interceptor),
                 )));
                 let s = Some(Arc::new(RTPSender::new(
                     Arc::clone(&track),
                     Arc::clone(&self.dtls_transport),
                     Arc::clone(&self.media_engine),
-                    self.interceptor.clone(),
+                    Arc::clone(&self.interceptor),
                 )));
                 (r, s)
             }
@@ -476,7 +488,7 @@ impl PeerConnectionInternal {
                     Arc::clone(&track),
                     Arc::clone(&self.dtls_transport),
                     Arc::clone(&self.media_engine),
-                    self.interceptor.clone(),
+                    Arc::clone(&self.interceptor),
                 )));
                 (None, s)
             }

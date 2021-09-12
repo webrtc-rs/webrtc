@@ -29,7 +29,7 @@ pub(crate) struct RTPReceiverInternal {
 
     transport: Arc<DTLSTransport>,
     media_engine: Arc<MediaEngine>,
-    interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
+    interceptor: Arc<dyn Interceptor + Send + Sync>,
 
     closed_tx: Option<mpsc::Sender<()>>,
     closed_rx: mpsc::Receiver<()>,
@@ -176,7 +176,7 @@ impl RTPReceiver {
         kind: RTPCodecType,
         transport: Arc<DTLSTransport>,
         media_engine: Arc<MediaEngine>,
-        interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
+        interceptor: Arc<dyn Interceptor + Send + Sync>,
     ) -> Self {
         let (closed_tx, closed_rx) = mpsc::channel(1);
         let (received_tx, received_rx) = mpsc::channel(1);
@@ -304,7 +304,7 @@ impl RTPReceiver {
                         "".to_owned(),
                         receiver,
                         Arc::clone(&internal.media_engine),
-                        internal.interceptor.clone(),
+                        Arc::clone(&internal.interceptor),
                     )),
                     stream_info,
                     rtp_read_stream,
@@ -324,9 +324,13 @@ impl RTPReceiver {
                         encoding.rid.clone(),
                         Arc::clone(&receiver),
                         Arc::clone(&internal.media_engine),
-                        internal.interceptor.clone(),
+                        Arc::clone(&internal.interceptor),
                     )),
-                    ..Default::default()
+                    stream_info: Default::default(),
+                    rtp_read_stream: None,
+                    rtp_interceptor: None,
+                    rtcp_read_stream: None,
+                    rtcp_interceptor: None,
                 };
 
                 internal.tracks.push(t);
@@ -462,9 +466,10 @@ impl RTPReceiver {
                     }
                 }
 
-                if let Some(interceptor) = &internal.interceptor {
-                    interceptor.unbind_remote_stream(&t.stream_info).await;
-                }
+                internal
+                    .interceptor
+                    .unbind_remote_stream(&t.stream_info)
+                    .await;
             }
         }
 

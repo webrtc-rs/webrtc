@@ -607,7 +607,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
                 track,
                 Arc::new(DTLSTransport::default()),
                 Arc::clone(&api.media_engine),
-                api.interceptor.clone(),
+                Arc::clone(&api.interceptor),
             ))))
             .await?;
         media[i].transceivers[0].set_direction(RTPTransceiverDirection::Sendonly);

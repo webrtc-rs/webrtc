@@ -9,7 +9,6 @@ use std::sync::Arc;
 
 /// TrackStreams maintains a mapping of RTP/RTCP streams to a specific track
 /// a RTPReceiver may contain multiple streams if we are dealing with Multicast
-#[derive(Default)]
 pub(crate) struct TrackStreams {
     pub(crate) track: Arc<TrackRemote>,
 

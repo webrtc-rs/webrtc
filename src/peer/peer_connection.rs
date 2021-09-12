@@ -146,7 +146,6 @@ struct NegotiationNeededParams {
 /// PeerConnection represents a WebRTC connection that establishes a
 /// peer-to-peer communications with another PeerConnection instance in a
 /// browser, or to another endpoint implementing the required protocols.
-#[derive(Default)]
 pub struct PeerConnection {
     stats_id: String,
 
@@ -191,9 +190,11 @@ impl PeerConnection {
             last_offer: "".to_owned(),
             last_answer: "".to_owned(),
             greater_mid: -1,
+            interceptor_rtcp_writer: None,
             internal: Arc::new(PeerConnectionInternal::new(api, &mut configuration).await?),
             configuration,
-            ..Default::default()
+            sdp_origin: Default::default(),
+            idp_login_url: None,
         })
     }
 
@@ -1266,7 +1267,7 @@ impl PeerConnection {
                                         kind,
                                         Arc::clone(&self.internal.dtls_transport),
                                         Arc::clone(&self.internal.media_engine),
-                                        self.internal.interceptor.clone(),
+                                        Arc::clone(&self.internal.interceptor),
                                     ));
 
                                     let local_direction =
@@ -1515,7 +1516,7 @@ impl PeerConnection {
                         Arc::clone(&track),
                         Arc::clone(&self.internal.dtls_transport),
                         Arc::clone(&self.internal.media_engine),
-                        self.internal.interceptor.clone(),
+                        Arc::clone(&self.internal.interceptor),
                     ));
 
                     if let Err(err) = t
@@ -1792,10 +1793,8 @@ impl PeerConnection {
         //    continue the chain the Mux has to be closed.
         let mut close_errs = vec![];
 
-        if let Some(interceptor) = &self.internal.interceptor {
-            if let Err(err) = interceptor.close().await {
-                close_errs.push(err);
-            }
+        if let Err(err) = self.internal.interceptor.close().await {
+            close_errs.push(err);
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #4)

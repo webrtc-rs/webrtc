@@ -23,9 +23,9 @@ use crate::media::rtp::rtp_sender::RTPSender;
 use crate::media::track::track_local::TrackLocal;
 use crate::peer::configuration::Configuration;
 use crate::peer::peer_connection::PeerConnection;
+use interceptor::{noop::NoOp, registry::Registry, Interceptor};
 
 use anyhow::Result;
-use interceptor::Interceptor;
 use rcgen::KeyPair;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -37,7 +37,7 @@ use std::time::SystemTime;
 pub struct API {
     pub(crate) setting_engine: Arc<SettingEngine>,
     pub(crate) media_engine: Arc<MediaEngine>,
-    pub(crate) interceptor: Option<Arc<dyn Interceptor + Send + Sync>>,
+    pub(crate) interceptor: Arc<dyn Interceptor + Send + Sync>,
 }
 
 impl API {
@@ -142,7 +142,7 @@ impl API {
             kind,
             transport,
             Arc::clone(&self.media_engine),
-            self.interceptor.clone(),
+            Arc::clone(&self.interceptor),
         )
     }
 
@@ -156,7 +156,7 @@ impl API {
             track,
             transport,
             Arc::clone(&self.media_engine),
-            self.interceptor.clone(),
+            Arc::clone(&self.interceptor),
         )
     }
 }
@@ -185,7 +185,11 @@ impl APIBuilder {
             } else {
                 Arc::new(MediaEngine::default())
             },
-            interceptor: self.interceptor.take(),
+            interceptor: if let Some(interceptor) = self.interceptor.take() {
+                interceptor
+            } else {
+                Arc::new(NoOp {})
+            },
         }
     }
 
@@ -203,10 +207,10 @@ impl APIBuilder {
         self
     }
 
-    /// with_interceptor allows providing Interceptors to the API.
+    /// with_interceptor_registry allows providing Interceptors to the API.
     /// Settings should not be changed after passing the registry to an API.
-    pub fn with_interceptor(mut self, interceptor: Arc<dyn Interceptor + Send + Sync>) -> Self {
-        self.interceptor = Some(interceptor);
+    pub fn with_interceptor_registry(mut self, interceptor_registry: Registry) -> Self {
+        self.interceptor = Some(interceptor_registry.build());
         self
     }
 }
