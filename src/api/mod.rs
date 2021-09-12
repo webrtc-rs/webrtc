@@ -147,7 +147,7 @@ impl API {
     }
 
     /// new_rtp_sender constructs a new RTPSender
-    pub fn new_rtp_sender(
+    pub async fn new_rtp_sender(
         &self,
         track: Arc<dyn TrackLocal + Send + Sync>,
         transport: Arc<DTLSTransport>,
@@ -158,6 +158,7 @@ impl API {
             Arc::clone(&self.media_engine),
             Arc::clone(&self.interceptor),
         )
+        .await
     }
 }
 

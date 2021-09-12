@@ -107,8 +107,6 @@ impl PeerConnectionInternal {
             }))
             .await;
 
-        //TODO: pc.interceptor_rtcp_writer = api.interceptor.bind_rtcp_writer(interceptor.RTCPWriterFunc(pc.writeRTCP))
-
         Ok(pc)
     }
 
@@ -435,7 +433,7 @@ impl PeerConnectionInternal {
                     math_rand_alpha(16),
                 ));
 
-                self.new_transceiver_from_track(direction, track)?
+                self.new_transceiver_from_track(direction, track).await?
             }
             RTPTransceiverDirection::Recvonly => {
                 let receiver = Arc::new(RTPReceiver::new(
@@ -462,7 +460,7 @@ impl PeerConnectionInternal {
         Ok(t)
     }
 
-    pub(super) fn new_transceiver_from_track(
+    pub(super) async fn new_transceiver_from_track(
         &self,
         direction: RTPTransceiverDirection,
         track: Arc<dyn TrackLocal + Send + Sync>,
@@ -475,21 +473,27 @@ impl PeerConnectionInternal {
                     Arc::clone(&self.media_engine),
                     Arc::clone(&self.interceptor),
                 )));
-                let s = Some(Arc::new(RTPSender::new(
-                    Arc::clone(&track),
-                    Arc::clone(&self.dtls_transport),
-                    Arc::clone(&self.media_engine),
-                    Arc::clone(&self.interceptor),
-                )));
+                let s = Some(Arc::new(
+                    RTPSender::new(
+                        Arc::clone(&track),
+                        Arc::clone(&self.dtls_transport),
+                        Arc::clone(&self.media_engine),
+                        Arc::clone(&self.interceptor),
+                    )
+                    .await,
+                ));
                 (r, s)
             }
             RTPTransceiverDirection::Sendonly => {
-                let s = Some(Arc::new(RTPSender::new(
-                    Arc::clone(&track),
-                    Arc::clone(&self.dtls_transport),
-                    Arc::clone(&self.media_engine),
-                    Arc::clone(&self.interceptor),
-                )));
+                let s = Some(Arc::new(
+                    RTPSender::new(
+                        Arc::clone(&track),
+                        Arc::clone(&self.dtls_transport),
+                        Arc::clone(&self.media_engine),
+                        Arc::clone(&self.interceptor),
+                    )
+                    .await,
+                ));
                 (None, s)
             }
             _ => return Err(Error::ErrPeerConnAddTransceiverFromTrackSupport.into()),
@@ -542,14 +546,6 @@ impl PeerConnectionInternal {
 
     pub(super) async fn set_gather_complete_handler(&self, f: OnGatheringCompleteHdlrFn) {
         self.ice_gatherer.on_gathering_complete(f).await;
-    }
-
-    async fn dtls_write_rtcp(
-        &self,
-        pkts: &dyn rtcp::packet::Packet,
-        _a: &Attributes,
-    ) -> Result<usize> {
-        self.dtls_transport.write_rtcp(pkts).await
     }
 
     /// Start all transports. PeerConnection now has enough state
@@ -1167,5 +1163,16 @@ impl PeerConnectionInternal {
             }
         }
         false
+    }
+}
+
+#[async_trait]
+impl RTCPWriter for PeerConnectionInternal {
+    async fn write(
+        &self,
+        pkts: &(dyn rtcp::packet::Packet + Send + Sync),
+        _a: &Attributes,
+    ) -> Result<usize> {
+        self.dtls_transport.write_rtcp(pkts).await
     }
 }

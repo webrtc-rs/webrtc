@@ -37,6 +37,7 @@ use crate::data::data_channel::data_channel_state::DataChannelState;
 use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use crate::data::sctp_transport::sctp_transport_state::SCTPTransportState;
 use crate::error::Error;
+use crate::media::dtls_transport::dtls_certificate::Certificate;
 use crate::media::dtls_transport::dtls_fingerprint::DTLSFingerprint;
 use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
 use crate::media::dtls_transport::dtls_role::{
@@ -62,9 +63,14 @@ use crate::{
     MEDIA_SECTION_APPLICATION, RECEIVE_MTU, SIMULCAST_MAX_PROBE_ROUTINES, SIMULCAST_PROBE_COUNT,
     SSRC_STR,
 };
+
 use anyhow::Result;
+use async_trait::async_trait;
 use ice::candidate::candidate_base::unmarshal_candidate;
 use ice::candidate::Candidate;
+use interceptor::{Attributes, Interceptor, RTCPWriter};
+use peer_connection_internal::*;
+use rcgen::KeyPair;
 use sdp::session_description::{ATTR_KEY_ICELITE, ATTR_KEY_MSID};
 use sdp::util::ConnectionRole;
 use srtp::stream::Stream;
@@ -74,11 +80,6 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::{mpsc, Mutex};
-
-use crate::media::dtls_transport::dtls_certificate::Certificate;
-use interceptor::{Attributes, Interceptor, RTCPWriter};
-use peer_connection_internal::*;
-use rcgen::KeyPair;
 
 pub type OnSignalingStateChangeHdlrFn = Box<
     dyn (FnMut(SignalingState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync,
@@ -164,7 +165,7 @@ pub struct PeerConnection {
     /// should be defined (see JSEP 3.4.1).
     greater_mid: isize,
 
-    interceptor_rtcp_writer: Option<Arc<dyn RTCPWriter + Send + Sync>>,
+    interceptor_rtcp_writer: Arc<dyn RTCPWriter + Send + Sync>,
 
     pub(crate) internal: Arc<PeerConnectionInternal>,
 }
@@ -179,6 +180,10 @@ impl PeerConnection {
     pub(crate) async fn new(api: &API, mut configuration: Configuration) -> Result<Self> {
         PeerConnection::init_configuration(&mut configuration)?;
 
+        let internal = Arc::new(PeerConnectionInternal::new(api, &mut configuration).await?);
+        let internal_rtcp_writer = Arc::clone(&internal) as Arc<dyn RTCPWriter + Send + Sync>;
+        let interceptor_rtcp_writer = api.interceptor.bind_rtcp_writer(internal_rtcp_writer).await;
+
         // https://w3c.github.io/webrtc-pc/#constructor (Step #2)
         // Some variables defined explicitly despite their implicit zero values to
         // allow better readability to understand what is happening.
@@ -190,8 +195,8 @@ impl PeerConnection {
             last_offer: "".to_owned(),
             last_answer: "".to_owned(),
             greater_mid: -1,
-            interceptor_rtcp_writer: None,
-            internal: Arc::new(PeerConnectionInternal::new(api, &mut configuration).await?),
+            interceptor_rtcp_writer,
+            internal,
             configuration,
             sdp_origin: Default::default(),
             idp_login_url: None,
@@ -1512,12 +1517,15 @@ impl PeerConnection {
             let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
             for t in &*rtp_transceivers {
                 if !t.stopped && t.kind == track.kind() && t.sender().await.is_none() {
-                    let sender = Arc::new(RTPSender::new(
-                        Arc::clone(&track),
-                        Arc::clone(&self.internal.dtls_transport),
-                        Arc::clone(&self.internal.media_engine),
-                        Arc::clone(&self.internal.interceptor),
-                    ));
+                    let sender = Arc::new(
+                        RTPSender::new(
+                            Arc::clone(&track),
+                            Arc::clone(&self.internal.dtls_transport),
+                            Arc::clone(&self.internal.media_engine),
+                            Arc::clone(&self.internal.interceptor),
+                        )
+                        .await,
+                    );
 
                     if let Err(err) = t
                         .set_sender_track(Some(Arc::clone(&sender)), Some(Arc::clone(&track)))
@@ -1561,7 +1569,8 @@ impl PeerConnection {
 
         let transceiver = self
             .internal
-            .new_transceiver_from_track(RTPTransceiverDirection::Sendrecv, track)?;
+            .new_transceiver_from_track(RTPTransceiverDirection::Sendrecv, track)
+            .await?;
         self.internal
             .add_rtp_transceiver(Arc::clone(&transceiver))
             .await;
@@ -1647,7 +1656,8 @@ impl PeerConnection {
 
         let t = self
             .internal
-            .new_transceiver_from_track(direction, Arc::clone(track))?;
+            .new_transceiver_from_track(direction, Arc::clone(track))
+            .await?;
 
         self.internal.add_rtp_transceiver(Arc::clone(&t)).await;
 
@@ -1762,12 +1772,12 @@ impl PeerConnection {
 
     /// write_rtcp sends a user provided RTCP packet to the connected peer. If no peer is connected the
     /// packet is discarded. It also runs any configured interceptors.
-    pub async fn write_rtcp(&self, pkts: &dyn rtcp::packet::Packet) -> Result<()> {
-        if let Some(rtc_writer) = &self.interceptor_rtcp_writer {
-            let a = Attributes::new();
-            rtc_writer.write(pkts, &a).await?;
-        }
-        Ok(())
+    pub async fn write_rtcp(
+        &self,
+        pkts: &(dyn rtcp::packet::Packet + Send + Sync),
+    ) -> Result<usize> {
+        let a = Attributes::new();
+        self.interceptor_rtcp_writer.write(pkts, &a).await
     }
 
     /// close ends the PeerConnection

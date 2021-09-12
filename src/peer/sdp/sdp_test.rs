@@ -603,12 +603,15 @@ async fn test_media_description_fingerprints() -> Result<()> {
             "webrtc-rs".to_owned(),
         ));
         media[i].transceivers[0]
-            .set_sender(Some(Arc::new(RTPSender::new(
-                track,
-                Arc::new(DTLSTransport::default()),
-                Arc::clone(&api.media_engine),
-                Arc::clone(&api.interceptor),
-            ))))
+            .set_sender(Some(Arc::new(
+                RTPSender::new(
+                    track,
+                    Arc::new(DTLSTransport::default()),
+                    Arc::clone(&api.media_engine),
+                    Arc::clone(&api.interceptor),
+                )
+                .await,
+            )))
             .await?;
         media[i].transceivers[0].set_direction(RTPTransceiverDirection::Sendonly);
     }

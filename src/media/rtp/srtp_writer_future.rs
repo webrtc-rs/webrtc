@@ -7,7 +7,9 @@ use srtp::session::Session;
 use srtp::stream::Stream;
 
 use anyhow::Result;
+use async_trait::async_trait;
 use bytes::Bytes;
+use interceptor::{Attributes, RTCPReader};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -127,5 +129,12 @@ impl SrtpWriterFuture {
                 Err(Error::ErrDtlsTransportNotStarted.into())
             }
         }
+    }
+}
+
+#[async_trait]
+impl RTCPReader for SrtpWriterFuture {
+    async fn read(&self, buf: &mut [u8], a: &Attributes) -> Result<(usize, Attributes)> {
+        Ok((self.read(buf).await?, a.clone()))
     }
 }

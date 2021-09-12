@@ -21,10 +21,10 @@ ice = { package = "webrtc-ice", version = "0.4.0" }
 dtls = { package = "webrtc-dtls", version = "0.4.4" }
 rtp = "0.3.3"
 rtcp = "0.3.3"
-srtp = { package = "webrtc-srtp", version = "0.3.4" }
+srtp = { package = "webrtc-srtp", path = "crates/srtp" } #version = "0.3.4" }
 sctp = { package = "webrtc-sctp", version = "0.3.5" }
 data = { package = "webrtc-data", version = "0.2.5" }
-interceptor = "0.0.2"
+interceptor = {path = "crates/interceptor"} #"0.0.2"
 tokio = { version = "1.10.1", features = ["full"] }
 log = "0.4.14"
 async-trait = "0.1.42"

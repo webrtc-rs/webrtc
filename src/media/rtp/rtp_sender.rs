@@ -23,7 +23,7 @@ use tokio::sync::{mpsc, Mutex};
 pub(crate) struct RTPSenderInternal {
     pub(crate) send_called_rx: mpsc::Receiver<()>,
     pub(crate) stop_called_rx: mpsc::Receiver<()>,
-    pub(crate) rtcp_interceptor: Option<Box<dyn RTCPReader + Send + Sync>>,
+    pub(crate) rtcp_interceptor: Option<Arc<dyn RTCPReader + Send + Sync>>,
 }
 
 impl RTPSenderInternal {
@@ -60,7 +60,7 @@ impl RTPSenderInternal {
 pub struct RTPSender {
     pub(crate) track: Mutex<Option<Arc<dyn TrackLocal + Send + Sync>>>,
 
-    pub(crate) srtp_stream: SrtpWriterFuture,
+    pub(crate) srtp_stream: Arc<SrtpWriterFuture>,
     pub(crate) stream_info: Mutex<StreamInfo>,
 
     pub(crate) context: Mutex<TrackLocalContext>,
@@ -86,7 +86,7 @@ pub struct RTPSender {
 }
 
 impl RTPSender {
-    pub fn new(
+    pub async fn new(
         track: Arc<dyn TrackLocal + Send + Sync>,
         transport: Arc<DTLSTransport>,
         media_engine: Arc<MediaEngine>,
@@ -100,23 +100,26 @@ impl RTPSender {
         let (stop_called_tx, stop_called_rx) = mpsc::channel(1);
         let ssrc = rand::random::<u32>();
 
-        /*TODO: r.rtcp_interceptor = r.api.interceptor.bind_rtcpreader(interceptor.RTPReaderFunc(func(in []byte, a interceptor.Attributes) (n int, attributes interceptor.Attributes, err error) {
-            n, err = r.srtp_stream.Read(in)
-            return n, a, err
-        }))*/
         let internal = Arc::new(Mutex::new(RTPSenderInternal {
             send_called_rx,
             stop_called_rx,
             rtcp_interceptor: None,
         }));
 
-        let srtp_stream = SrtpWriterFuture {
+        let srtp_stream = Arc::new(SrtpWriterFuture {
             ssrc,
             rtp_sender: Arc::clone(&internal),
             rtp_transport: Arc::clone(&transport),
             rtcp_read_stream: Mutex::new(None),
             rtp_write_session: Mutex::new(None),
-        };
+        });
+
+        let srtp_rtcp_reader = Arc::clone(&srtp_stream) as Arc<dyn RTCPReader + Send + Sync>;
+        let rtcp_interceptor = interceptor.bind_rtcp_reader(srtp_rtcp_reader).await;
+        {
+            let mut inner = internal.lock().await;
+            inner.rtcp_interceptor = Some(rtcp_interceptor);
+        }
 
         RTPSender {
             track: Mutex::new(Some(track)),

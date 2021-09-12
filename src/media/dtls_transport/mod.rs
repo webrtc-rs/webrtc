@@ -124,7 +124,10 @@ impl DTLSTransport {
 
     /// write_rtcp sends a user provided RTCP packet to the connected peer. If no peer is connected the
     /// packet is discarded.
-    pub async fn write_rtcp(&self, pkt: &(dyn rtcp::packet::Packet)) -> Result<usize> {
+    pub async fn write_rtcp(
+        &self,
+        pkt: &(dyn rtcp::packet::Packet + Send + Sync),
+    ) -> Result<usize> {
         let srtcp_session = self.srtcp_session.lock().await;
         if let Some(srtcp_session) = &*srtcp_session {
             Ok(srtcp_session.write_rtcp(pkt).await?)
