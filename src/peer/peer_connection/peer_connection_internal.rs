@@ -443,14 +443,15 @@ impl PeerConnectionInternal {
                     Arc::clone(&self.interceptor),
                 ));
 
-                Arc::new(RTPTransceiver::new(
+                RTPTransceiver::new(
                     Some(receiver),
                     None,
                     RTPTransceiverDirection::Recvonly,
                     kind,
                     vec![],
                     Arc::clone(&self.media_engine),
-                ))
+                )
+                .await
             }
             _ => return Err(Error::ErrPeerConnAddTransceiverFromKindSupport.into()),
         };
@@ -499,14 +500,15 @@ impl PeerConnectionInternal {
             _ => return Err(Error::ErrPeerConnAddTransceiverFromTrackSupport.into()),
         };
 
-        Ok(Arc::new(RTPTransceiver::new(
+        Ok(RTPTransceiver::new(
             r,
             s,
             direction,
             track.kind(),
             vec![],
             Arc::clone(&self.media_engine),
-        )))
+        )
+        .await)
     }
 
     /// add_rtp_transceiver appends t into rtp_transceivers
@@ -802,8 +804,9 @@ impl PeerConnectionInternal {
                                             kind,
                                             vec![],
                                             Arc::clone(&self.media_engine),
-                                        );
-                                        media_transceivers.push(Arc::new(t));
+                                        )
+                                        .await;
+                                        media_transceivers.push(t);
                                     }
                                     break;
                                 }

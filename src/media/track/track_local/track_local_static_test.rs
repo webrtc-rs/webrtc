@@ -237,7 +237,7 @@ async fn test_track_local_static_payload_type() -> Result<()> {
         .new_peer_connection(Configuration::default())
         .await?;
 
-    let track: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
+    let track = Arc::new(TrackLocalStaticSample::new(
         RTPCodecCapability {
             mime_type: "video/vp8".to_owned(),
             ..Default::default()
@@ -249,7 +249,9 @@ async fn test_track_local_static_payload_type() -> Result<()> {
         .add_transceiver_from_kind(RTPCodecType::Video, &[])
         .await?;
 
-    answerer.add_track(Arc::clone(&track)).await?;
+    answerer
+        .add_track(Arc::clone(&track) as Arc<dyn TrackLocal + Send + Sync>)
+        .await?;
 
     let (on_track_fired_tx, on_track_fired_rx) = mpsc::channel::<()>(1);
     let on_track_fired_tx = Arc::new(Mutex::new(Some(on_track_fired_tx)));
@@ -274,7 +276,7 @@ async fn test_track_local_static_payload_type() -> Result<()> {
 
     signal_pair(&mut offerer, &mut answerer).await?;
 
-    send_video_until_done(on_track_fired_rx, &[track]).await;
+    send_video_until_done(on_track_fired_rx, vec![track], Bytes::from_static(&[0x00])).await;
 
     close_pair_now(&offerer, &answerer).await;
 

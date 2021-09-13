@@ -197,7 +197,8 @@ func offerMediaHasDirection(offer SessionDescription, kind RTPCodecType, directi
 
 pub(crate) async fn send_video_until_done(
     mut done_rx: mpsc::Receiver<()>,
-    tracks: &[Arc<dyn TrackLocal + Send + Sync>],
+    tracks: Vec<Arc<TrackLocalStaticSample>>,
+    data: Bytes,
 ) {
     loop {
         let timeout = tokio::time::sleep(Duration::from_millis(20));
@@ -206,17 +207,14 @@ pub(crate) async fn send_video_until_done(
         tokio::select! {
             _ = timeout.as_mut() =>{
                 log::debug!("sendVideoUntilDone timeout");
-                for track in tracks {
-                    if let Some(t) = track.as_any().downcast_ref::<TrackLocalStaticSample>(){
-                        log::debug!("sendVideoUntilDone track.WriteSample");
-                        assert!(t.write_sample(&Sample{
-                            data: Bytes::from_static(&[0x00]),
-                            duration: Duration::from_secs(1),
-                            ..Default::default()
-                        }).await.is_ok());
-                    }else{
-                        assert!(false);
-                    }
+                for track in &tracks {
+                    log::debug!("sendVideoUntilDone track.WriteSample");
+                    let result = track.write_sample(&Sample{
+                        data: data.clone(),
+                        duration: Duration::from_secs(1),
+                        ..Default::default()
+                    }).await;
+                    assert!(result.is_ok());
                 }
             }
             _ = done_rx.recv() =>{

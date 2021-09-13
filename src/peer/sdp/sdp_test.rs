@@ -560,30 +560,36 @@ async fn test_media_description_fingerprints() -> Result<()> {
     let media = vec![
         MediaSection {
             id: "video".to_owned(),
-            transceivers: vec![Arc::new(RTPTransceiver::new(
-                None,
-                None,
-                RTPTransceiverDirection::Inactive,
-                RTPCodecType::Video,
-                api.media_engine
-                    .get_codecs_by_kind(RTPCodecType::Video)
-                    .await,
-                Arc::clone(&api.media_engine),
-            ))],
+            transceivers: vec![
+                RTPTransceiver::new(
+                    None,
+                    None,
+                    RTPTransceiverDirection::Inactive,
+                    RTPCodecType::Video,
+                    api.media_engine
+                        .get_codecs_by_kind(RTPCodecType::Video)
+                        .await,
+                    Arc::clone(&api.media_engine),
+                )
+                .await,
+            ],
             ..Default::default()
         },
         MediaSection {
             id: "audio".to_owned(),
-            transceivers: vec![Arc::new(RTPTransceiver::new(
-                None,
-                None,
-                RTPTransceiverDirection::Inactive,
-                RTPCodecType::Audio,
-                api.media_engine
-                    .get_codecs_by_kind(RTPCodecType::Audio)
-                    .await,
-                Arc::clone(&api.media_engine),
-            ))],
+            transceivers: vec![
+                RTPTransceiver::new(
+                    None,
+                    None,
+                    RTPTransceiverDirection::Inactive,
+                    RTPCodecType::Audio,
+                    api.media_engine
+                        .get_codecs_by_kind(RTPCodecType::Audio)
+                        .await,
+                    Arc::clone(&api.media_engine),
+                )
+                .await,
+            ],
             ..Default::default()
         },
         MediaSection {
@@ -612,7 +618,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
                 )
                 .await,
             )))
-            .await?;
+            .await;
         media[i].transceivers[0].set_direction(RTPTransceiverDirection::Sendonly);
     }
 
@@ -641,13 +647,14 @@ async fn test_populate_sdp() -> Result<()> {
             RTPCodecType::Video,
             me.video_codecs.clone(),
             Arc::clone(&me),
-        );
+        )
+        .await;
 
         let mut rid_map = HashMap::new();
         rid_map.insert("ridkey".to_owned(), "some".to_owned());
         let media_sections = vec![MediaSection {
             id: "video".to_owned(),
-            transceivers: vec![Arc::new(tr)],
+            transceivers: vec![tr],
             data: false,
             rid_map,
         }];
@@ -710,7 +717,8 @@ async fn test_populate_sdp() -> Result<()> {
             RTPCodecType::Video,
             me.video_codecs.clone(),
             Arc::clone(&me),
-        );
+        )
+        .await;
         tr.set_codec_preferences(vec![RTPCodecParameters {
             capability: RTPCodecCapability {
                 mime_type: MIME_TYPE_VP8.to_owned(),
@@ -726,7 +734,7 @@ async fn test_populate_sdp() -> Result<()> {
 
         let media_sections = vec![MediaSection {
             id: "video".to_owned(),
-            transceivers: vec![Arc::new(tr)],
+            transceivers: vec![tr],
             data: false,
             rid_map: HashMap::new(),
         }];

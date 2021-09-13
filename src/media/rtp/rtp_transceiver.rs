@@ -32,24 +32,29 @@ pub struct RTPTransceiver {
 }
 
 impl RTPTransceiver {
-    pub(crate) fn new(
+    pub(crate) async fn new(
         receiver: Option<Arc<RTPReceiver>>,
         sender: Option<Arc<RTPSender>>,
         direction: RTPTransceiverDirection,
         kind: RTPCodecType,
         codecs: Vec<RTPCodecParameters>,
         media_engine: Arc<MediaEngine>,
-    ) -> Self {
-        RTPTransceiver {
+    ) -> Arc<Self> {
+        let t = Arc::new(RTPTransceiver {
             mid: Mutex::new(String::new()),
-            sender: Mutex::new(sender),
-            receiver: Mutex::new(receiver),
+            sender: Mutex::new(None),
+            receiver: Mutex::new(None),
             direction: AtomicU8::new(direction as u8),
             codecs: Arc::new(Mutex::new(codecs)),
             stopped: false,
             kind,
             media_engine,
-        }
+        });
+
+        t.set_receiver(receiver).await;
+        t.set_sender(sender).await;
+
+        t
     }
 
     /// set_codec_preferences sets preferred list of supported codecs
@@ -92,7 +97,7 @@ impl RTPTransceiver {
         self.set_sending_track(track).await
     }
 
-    pub async fn set_sender(self: &Arc<Self>, s: Option<Arc<RTPSender>>) -> Result<()> {
+    pub async fn set_sender(self: &Arc<Self>, s: Option<Arc<RTPSender>>) {
         if let Some(sender) = &s {
             sender.set_rtp_transceiver(Some(Arc::clone(self))).await;
         }
@@ -105,8 +110,6 @@ impl RTPTransceiver {
             let mut sender = self.sender.lock().await;
             *sender = s;
         }
-
-        Ok(())
     }
 
     /// receiver returns the RTPTransceiver's RTPReceiver if it has one

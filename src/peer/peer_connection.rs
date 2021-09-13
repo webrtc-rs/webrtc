@@ -1275,14 +1275,15 @@ impl PeerConnection {
                                             RTPTransceiverDirection::Recvonly
                                         };
 
-                                    let t = Arc::new(RTPTransceiver::new(
+                                    let t = RTPTransceiver::new(
                                         Some(receiver),
                                         None,
                                         local_direction,
                                         kind,
                                         vec![],
                                         Arc::clone(&self.internal.media_engine),
-                                    ));
+                                    )
+                                    .await;
 
                                     self.internal.add_rtp_transceiver(Arc::clone(&t)).await;
 
