@@ -84,30 +84,28 @@ impl RTPTransceiver {
 
     /// set_sender_track sets the RTPSender and Track to current transceiver
     pub async fn set_sender_track(
-        &self,
+        self: &Arc<Self>,
         sender: Option<Arc<RTPSender>>,
         track: Option<Arc<dyn TrackLocal + Send + Sync>>,
     ) -> Result<()> {
-        {
-            let mut s = self.sender.lock().await;
-            *s = sender;
-        }
+        let _ = self.set_sender(sender).await;
         self.set_sending_track(track).await
     }
 
-    pub async fn set_sender(&self, _s: Option<Arc<RTPSender>>) -> Result<()> {
-        //TODO:
-        /*
-            if s != nil {
-            s.setRTPTransceiver(t)
+    pub async fn set_sender(self: &Arc<Self>, s: Option<Arc<RTPSender>>) -> Result<()> {
+        if let Some(sender) = &s {
+            sender.set_rtp_transceiver(Some(Arc::clone(self))).await;
         }
 
-        if prevSender := t.Sender(); prevSender != nil {
-            prevSender.setRTPTransceiver(nil)
+        if let Some(prev_sender) = self.sender().await {
+            prev_sender.set_rtp_transceiver(None).await;
         }
 
-        t.sender.Store(s)
-             */
+        {
+            let mut sender = self.sender.lock().await;
+            *sender = s;
+        }
+
         Ok(())
     }
 
