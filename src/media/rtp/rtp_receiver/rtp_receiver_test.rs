@@ -165,52 +165,84 @@ async fn test_set_rtp_parameters() -> Result<()> {
     Ok(())
 }
 
-/*TODO:
 // Assert that SetReadDeadline works as expected
 // This test uses VNet since we must have zero loss
-func Test_RTPReceiver_SetReadDeadline()->Result<()> {
-    lim := test.TimeOut(time.Second * 30)
-    defer lim.Stop()
+#[tokio::test]
+async fn test_rtp_receiver_set_read_deadline() -> Result<()> {
+    let (mut sender, mut receiver, wan) = create_vnet_pair().await?;
 
-    report := test.CheckRoutines(t)
-    defer report()
+    let track: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
+        RTPCodecCapability {
+            mime_type: "video/vp8".to_owned(),
+            ..Default::default()
+        },
+        "video".to_owned(),
+        "webrtc-rs".to_owned(),
+    ));
 
-    sender, receiver, wan := createVNetPair(t)
+    sender.add_track(Arc::clone(&track)).await?;
 
-    track, err := NewTrackLocalStaticSample(RTPCodecCapability{MimeType: "video/vp8"}, "video", "pion")
-    assert.NoError(t, err)
+    let (seen_packet_tx, mut seen_packet_rx) = mpsc::channel::<()>(1);
+    let seen_packet_tx = Arc::new(Mutex::new(Some(seen_packet_tx)));
+    receiver
+        .on_track(Box::new(
+            move |track_remote: Option<Arc<TrackRemote>>, receiver: Option<Arc<RTPReceiver>>| {
+                let seen_packet_tx2 = Arc::clone(&seen_packet_tx);
+                Box::pin(async move {
+                    // First call will not error because we cache for probing
+                    if let Some(track) = &track_remote {
+                        let result =
+                            tokio::time::timeout(Duration::from_secs(1), track.read_rtp()).await;
+                        assert!(
+                            result.is_ok(),
+                            " First call will not error because we cache for probing"
+                        );
 
-    _, err = sender.AddTrack(track)
-    assert.NoError(t, err)
+                        let result =
+                            tokio::time::timeout(Duration::from_secs(1), track.read_rtp()).await;
+                        assert!(result.is_err());
+                    }
 
-    seenPacket, seenPacketCancel := context.WithCancel(context.Background())
-    receiver.OnTrack(func(trackRemote *TrackRemote, r *RTPReceiver) {
-        // Set Deadline for both RTP and RTCP Stream
-        assert.NoError(t, r.SetReadDeadline(time.Now().Add(time.Second)))
-        assert.NoError(t, trackRemote.SetReadDeadline(time.Now().Add(time.Second)))
+                    if let Some(r) = &receiver {
+                        let result =
+                            tokio::time::timeout(Duration::from_secs(1), r.read_rtcp()).await;
+                        assert!(result.is_err());
+                    }
 
-        // First call will not error because we cache for probing
-        _, _, readErr := trackRemote.ReadRTP()
-        assert.NoError(t, readErr)
+                    {
+                        let mut done = seen_packet_tx2.lock().await;
+                        done.take();
+                    }
+                })
+            },
+        ))
+        .await;
 
-        _, _, readErr = trackRemote.ReadRTP()
-        assert.Error(t, readErr, packetio.ErrTimeout)
+    let wg = WaitGroup::new();
+    until_connection_state(&mut sender, &wg, PeerConnectionState::Connected).await;
+    until_connection_state(&mut receiver, &wg, PeerConnectionState::Connected).await;
 
-        _, _, readErr = r.ReadRTCP()
-        assert.Error(t, readErr, packetio.ErrTimeout)
+    signal_pair(&mut sender, &mut receiver).await?;
 
-        seenPacketCancel()
-    })
+    wg.wait().await;
 
-    peerConnectionsConnected := until_connection_state(PeerConnectionStateConnected, sender, receiver)
+    if let Some(v) = track.as_any().downcast_ref::<TrackLocalStaticSample>() {
+        v.write_sample(&Sample {
+            data: Bytes::from_static(&[0xAA]),
+            duration: Duration::from_secs(1),
+            ..Default::default()
+        })
+        .await?;
+    } else {
+        assert!(false);
+    }
 
-    assert.NoError(t, signalPair(sender, receiver))
+    let _ = seen_packet_rx.recv().await;
+    {
+        let mut w = wan.lock().await;
+        w.stop().await?;
+    }
+    close_pair_now(&sender, &receiver).await;
 
-    peerConnectionsConnected.Wait()
-    assert.NoError(t, track.WriteSample(media.Sample{Data: []byte{0xAA}, Duration: time.Second}))
-
-    <-seenPacket.Done()
-    assert.NoError(t, wan.Stop())
-    closePairNow(t, sender, receiver)
+    Ok(())
 }
-*/

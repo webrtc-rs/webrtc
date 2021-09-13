@@ -1,9 +1,6 @@
 #![warn(rust_2018_idioms)]
 #![allow(dead_code)]
 
-//#[macro_use]
-//extern crate lazy_static;
-
 use ::dtls::extension::extension_use_srtp::SrtpProtectionProfile;
 
 pub mod api;
