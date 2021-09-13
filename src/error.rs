@@ -172,6 +172,10 @@ pub enum Error {
     #[error("unable to start track, codec is not supported by remote")]
     ErrUnsupportedCodec,
 
+    /// ErrRTPSenderNewTrackHasIncorrectKind indicates that the new track is of a different kind than the previous/original
+    #[error("new track must be of the same kind as previous")]
+    ErrRTPSenderNewTrackHasIncorrectKind,
+
     /// ErrUnbindFailed indicates that a TrackLocal was not able to be unbind
     #[error("failed to unbind TrackLocal from PeerConnection")]
     ErrUnbindFailed,
