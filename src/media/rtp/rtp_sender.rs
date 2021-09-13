@@ -21,32 +21,37 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 
 pub(crate) struct RTPSenderInternal {
-    pub(crate) send_called_rx: mpsc::Receiver<()>,
-    pub(crate) stop_called_rx: mpsc::Receiver<()>,
+    pub(crate) send_called_rx: Mutex<mpsc::Receiver<()>>,
+    pub(crate) stop_called_rx: Mutex<mpsc::Receiver<()>>,
     pub(crate) stop_called_signal: Arc<AtomicBool>,
-    pub(crate) rtcp_interceptor: Option<Arc<dyn RTCPReader + Send + Sync>>,
+    pub(crate) rtcp_interceptor: Mutex<Option<Arc<dyn RTCPReader + Send + Sync>>>,
 }
 
 impl RTPSenderInternal {
     /// read reads incoming RTCP for this RTPReceiver
-    async fn read(&mut self, b: &mut [u8]) -> Result<(usize, Attributes)> {
+    async fn read(&self, b: &mut [u8]) -> Result<(usize, Attributes)> {
+        let (mut send_called_rx, mut stop_called_rx) = (
+            self.send_called_rx.lock().await,
+            self.stop_called_rx.lock().await,
+        );
         tokio::select! {
-            _ = self.send_called_rx.recv() =>{
-                if let Some(rtcp_interceptor) = &self.rtcp_interceptor{
+            _ = send_called_rx.recv() =>{
+                let rtcp_interceptor = self.rtcp_interceptor.lock().await;
+                if let Some(rtcp_interceptor) = &*rtcp_interceptor{
                     let a = Attributes::new();
                     rtcp_interceptor.read(b, &a).await
                 }else{
                     Err(Error::ErrInterceptorNotBind.into())
                 }
             }
-            _ = self.stop_called_rx.recv() =>{
+            _ = stop_called_rx.recv() =>{
                 Err(Error::ErrClosedPipe.into())
             }
         }
     }
 
     /// read_rtcp is a convenience method that wraps Read and unmarshals for you.
-    async fn read_rtcp(&mut self) -> Result<(Box<dyn rtcp::packet::Packet>, Attributes)> {
+    async fn read_rtcp(&self) -> Result<(Box<dyn rtcp::packet::Packet>, Attributes)> {
         let mut b = vec![0u8; RECEIVE_MTU];
         let (n, attributes) = self.read(&mut b).await?;
 
@@ -84,7 +89,7 @@ pub struct RTPSender {
     stop_called_tx: Mutex<Option<mpsc::Sender<()>>>,
     stop_called_signal: Arc<AtomicBool>,
 
-    internal: Arc<Mutex<RTPSenderInternal>>,
+    internal: Arc<RTPSenderInternal>,
 }
 
 impl RTPSender {
@@ -103,12 +108,12 @@ impl RTPSender {
         let ssrc = rand::random::<u32>();
         let stop_called_signal = Arc::new(AtomicBool::new(false));
 
-        let internal = Arc::new(Mutex::new(RTPSenderInternal {
-            send_called_rx,
-            stop_called_rx,
+        let internal = Arc::new(RTPSenderInternal {
+            send_called_rx: Mutex::new(send_called_rx),
+            stop_called_rx: Mutex::new(stop_called_rx),
             stop_called_signal: Arc::clone(&stop_called_signal),
-            rtcp_interceptor: None,
-        }));
+            rtcp_interceptor: Mutex::new(None),
+        });
 
         let srtp_stream = Arc::new(SrtpWriterFuture {
             ssrc,
@@ -121,8 +126,8 @@ impl RTPSender {
         let srtp_rtcp_reader = Arc::clone(&srtp_stream) as Arc<dyn RTCPReader + Send + Sync>;
         let rtcp_interceptor = interceptor.bind_rtcp_reader(srtp_rtcp_reader).await;
         {
-            let mut inner = internal.lock().await;
-            inner.rtcp_interceptor = Some(rtcp_interceptor);
+            let mut internal_rtcp_interceptor = internal.rtcp_interceptor.lock().await;
+            *internal_rtcp_interceptor = Some(rtcp_interceptor);
         }
 
         RTPSender {
@@ -336,14 +341,12 @@ impl RTPSender {
 
     /// read reads incoming RTCP for this RTPReceiver
     pub async fn read(&self, b: &mut [u8]) -> Result<(usize, Attributes)> {
-        let mut internal = self.internal.lock().await;
-        internal.read(b).await
+        self.internal.read(b).await
     }
 
     /// read_rtcp is a convenience method that wraps Read and unmarshals for you.
     pub async fn read_rtcp(&self) -> Result<(Box<dyn rtcp::packet::Packet>, Attributes)> {
-        let mut internal = self.internal.lock().await;
-        internal.read_rtcp().await
+        self.internal.read_rtcp().await
     }
 
     /// has_sent tells if data has been ever sent for this instance

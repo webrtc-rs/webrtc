@@ -18,7 +18,7 @@ use tokio::sync::Mutex;
 /// the SRTP Session is available
 pub(crate) struct SrtpWriterFuture {
     pub(crate) ssrc: SSRC,
-    pub(crate) rtp_sender: Arc<Mutex<RTPSenderInternal>>,
+    pub(crate) rtp_sender: Arc<RTPSenderInternal>,
     pub(crate) rtp_transport: Arc<DTLSTransport>,
     pub(crate) rtcp_read_stream: Mutex<Option<Arc<Stream>>>, // atomic.Value // *
     pub(crate) rtp_write_session: Mutex<Option<Arc<Session>>>, // atomic.Value // *
@@ -28,8 +28,7 @@ impl SrtpWriterFuture {
     async fn init(&self, return_when_no_srtp: bool) -> Result<()> {
         if return_when_no_srtp {
             {
-                let rtp_sender = self.rtp_sender.lock().await;
-                if rtp_sender.stop_called_signal.load(Ordering::SeqCst) {
+                if self.rtp_sender.stop_called_signal.load(Ordering::SeqCst) {
                     return Err(Error::ErrClosedPipe.into());
                 }
             }
@@ -40,10 +39,10 @@ impl SrtpWriterFuture {
         } else {
             let mut rx = self.rtp_transport.srtp_ready_rx.lock().await;
             if let Some(srtp_ready_rx) = &mut *rx {
-                let mut rtp_sender = self.rtp_sender.lock().await;
+                let mut stop_called_rx = self.rtp_sender.stop_called_rx.lock().await;
 
                 tokio::select! {
-                    _ = rtp_sender.stop_called_rx.recv()=> return Err(Error::ErrClosedPipe.into()),
+                    _ = stop_called_rx.recv()=> return Err(Error::ErrClosedPipe.into()),
                     _ = srtp_ready_rx.recv() =>{}
                 }
             }
