@@ -13,16 +13,19 @@ pub enum BundlePolicy {
     /// media type in use (audio, video, and data). If the remote endpoint is
     /// not bundle-aware, negotiate only one audio and video track on separate
     /// transports.
+    #[serde(rename = "balanced")]
     Balanced = 1,
 
     /// BundlePolicyMaxCompat indicates to gather ICE candidates for each
     /// track. If the remote endpoint is not bundle-aware, negotiate all media
     /// tracks on separate transports.
+    #[serde(rename = "max-compat")]
     MaxCompat = 2,
 
     /// BundlePolicyMaxBundle indicates to gather ICE candidates for only
     /// one track. If the remote endpoint is not bundle-aware, negotiate only
     /// one media track.
+    #[serde(rename = "max-bundle")]
     MaxBundle = 3,
 }
 
@@ -33,9 +36,9 @@ impl Default for BundlePolicy {
 }
 
 /// This is done this way because of a linter.
-const BUNDLE_POLICY_BALANCED_STR: &str = "Balanced";
-const BUNDLE_POLICY_MAX_COMPAT_STR: &str = "MaxCompat";
-const BUNDLE_POLICY_MAX_BUNDLE_STR: &str = "MaxBundle";
+const BUNDLE_POLICY_BALANCED_STR: &str = "balanced";
+const BUNDLE_POLICY_MAX_COMPAT_STR: &str = "max-compat";
+const BUNDLE_POLICY_MAX_BUNDLE_STR: &str = "max-bundle";
 
 impl From<&str> for BundlePolicy {
     /// NewSchemeType defines a procedure for creating a new SchemeType from a raw
@@ -69,9 +72,9 @@ mod test {
     fn test_new_bundle_policy() {
         let tests = vec![
             ("Unspecified", BundlePolicy::Unspecified),
-            ("Balanced", BundlePolicy::Balanced),
-            ("MaxCompat", BundlePolicy::MaxCompat),
-            ("MaxBundle", BundlePolicy::MaxBundle),
+            ("balanced", BundlePolicy::Balanced),
+            ("max-compat", BundlePolicy::MaxCompat),
+            ("max-bundle", BundlePolicy::MaxBundle),
         ];
 
         for (policy_string, expected_policy) in tests {
@@ -83,9 +86,9 @@ mod test {
     fn test_bundle_policy_string() {
         let tests = vec![
             (BundlePolicy::Unspecified, "Unspecified"),
-            (BundlePolicy::Balanced, "Balanced"),
-            (BundlePolicy::MaxCompat, "MaxCompat"),
-            (BundlePolicy::MaxBundle, "MaxBundle"),
+            (BundlePolicy::Balanced, "balanced"),
+            (BundlePolicy::MaxCompat, "max-compat"),
+            (BundlePolicy::MaxBundle, "max-bundle"),
         ];
 
         for (policy, expected_string) in tests {

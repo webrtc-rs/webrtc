@@ -45,7 +45,7 @@ mod test {
                     },
                     parsed: None,
                 },
-                r#"{"sdp_type":"Offer","sdp":"sdp"}"#,
+                r#"{"sdp_type":"offer","sdp":"sdp"}"#,
             ),
             (
                 SessionDescription {
@@ -55,7 +55,7 @@ mod test {
                     },
                     parsed: None,
                 },
-                r#"{"sdp_type":"Pranswer","sdp":"sdp"}"#,
+                r#"{"sdp_type":"pranswer","sdp":"sdp"}"#,
             ),
             (
                 SessionDescription {
@@ -65,7 +65,7 @@ mod test {
                     },
                     parsed: None,
                 },
-                r#"{"sdp_type":"Answer","sdp":"sdp"}"#,
+                r#"{"sdp_type":"answer","sdp":"sdp"}"#,
             ),
             (
                 SessionDescription {
@@ -75,7 +75,7 @@ mod test {
                     },
                     parsed: None,
                 },
-                r#"{"sdp_type":"Rollback","sdp":"sdp"}"#,
+                r#"{"sdp_type":"rollback","sdp":"sdp"}"#,
             ),
             (
                 SessionDescription {

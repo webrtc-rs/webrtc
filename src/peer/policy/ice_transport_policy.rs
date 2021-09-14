@@ -8,10 +8,12 @@ pub enum ICETransportPolicy {
     Unspecified = 0,
 
     /// ICETransportPolicyAll indicates any type of candidate is used.
+    #[serde(rename = "all")]
     All = 1,
 
     /// ICETransportPolicyRelay indicates only media relay candidates such
     /// as candidates passing through a TURN server are used.
+    #[serde(rename = "relay")]
     Relay = 2,
 }
 
@@ -24,8 +26,8 @@ impl Default for ICETransportPolicy {
 /// ICEGatherPolicy is the ORTC equivalent of ICETransportPolicy
 pub type ICEGatherPolicy = ICETransportPolicy;
 
-const ICE_TRANSPORT_POLICY_RELAY_STR: &str = "Relay";
-const ICE_TRANSPORT_POLICY_ALL_STR: &str = "All";
+const ICE_TRANSPORT_POLICY_RELAY_STR: &str = "relay";
+const ICE_TRANSPORT_POLICY_ALL_STR: &str = "all";
 
 /// takes a string and converts it to ICETransportPolicy
 impl From<&str> for ICETransportPolicy {
@@ -56,8 +58,8 @@ mod test {
     #[test]
     fn test_new_ice_transport_policy() {
         let tests = vec![
-            ("Relay", ICETransportPolicy::Relay),
-            ("All", ICETransportPolicy::All),
+            ("relay", ICETransportPolicy::Relay),
+            ("all", ICETransportPolicy::All),
         ];
 
         for (policy_string, expected_policy) in tests {
@@ -68,8 +70,8 @@ mod test {
     #[test]
     fn test_ice_transport_policy_string() {
         let tests = vec![
-            (ICETransportPolicy::Relay, "Relay"),
-            (ICETransportPolicy::All, "All"),
+            (ICETransportPolicy::Relay, "relay"),
+            (ICETransportPolicy::All, "all"),
         ];
 
         for (policy, expected_string) in tests {

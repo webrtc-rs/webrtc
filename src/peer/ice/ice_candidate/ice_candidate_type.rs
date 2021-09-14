@@ -12,6 +12,7 @@ pub enum ICECandidateType {
     /// candidate obtained by binding to a specific port from an IP address on
     /// the host. This includes IP addresses on physical interfaces and logical
     /// ones, such as ones obtained through VPNs.
+    #[serde(rename = "host")]
     Host,
 
     /// ICECandidateTypeSrflx indicates the the candidate is of Server
@@ -20,17 +21,20 @@ pub enum ICECandidateType {
     /// whose IP address and port are a binding allocated by a NAT for an ICE
     /// agent after it sends a packet through the NAT to a server, such as a
     /// STUN server.
+    #[serde(rename = "srflx")]
     Srflx,
 
     /// ICECandidateTypePrflx indicates that the candidate is of Peer
     /// Reflexive type. A candidate type whose IP address and port are a binding
     /// allocated by a NAT for an ICE agent after it sends a packet through the
     /// NAT to its peer.
+    #[serde(rename = "prflx")]
     Prflx,
 
     /// ICECandidateTypeRelay indicates the the candidate is of Relay type as
     /// described in https://tools.ietf.org/html/rfc8445#section-5.1.1.2. A
     /// candidate type obtained from a relay server, such as a TURN server.
+    #[serde(rename = "relay")]
     Relay,
 }
 
@@ -40,10 +44,10 @@ impl Default for ICECandidateType {
     }
 }
 
-const ICE_CANDIDATE_TYPE_HOST_STR: &str = "Host";
-const ICE_CANDIDATE_TYPE_SRFLX_STR: &str = "Srflx";
-const ICE_CANDIDATE_TYPE_PRFLX_STR: &str = "Prflx";
-const ICE_CANDIDATE_TYPE_RELAY_STR: &str = "Relay";
+const ICE_CANDIDATE_TYPE_HOST_STR: &str = "host";
+const ICE_CANDIDATE_TYPE_SRFLX_STR: &str = "srflx";
+const ICE_CANDIDATE_TYPE_PRFLX_STR: &str = "prflx";
+const ICE_CANDIDATE_TYPE_RELAY_STR: &str = "relay";
 
 ///  takes a string and converts it into ICECandidateType
 impl From<&str> for ICECandidateType {
@@ -90,10 +94,10 @@ mod test {
     fn test_ice_candidate_type() {
         let tests = vec![
             ("Unspecified", ICECandidateType::Unspecified),
-            ("Host", ICECandidateType::Host),
-            ("Srflx", ICECandidateType::Srflx),
-            ("Prflx", ICECandidateType::Prflx),
-            ("Relay", ICECandidateType::Relay),
+            ("host", ICECandidateType::Host),
+            ("srflx", ICECandidateType::Srflx),
+            ("prflx", ICECandidateType::Prflx),
+            ("relay", ICECandidateType::Relay),
         ];
 
         for (type_string, expected_type) in tests {
@@ -106,10 +110,10 @@ mod test {
     fn test_ice_candidate_type_string() {
         let tests = vec![
             (ICECandidateType::Unspecified, "Unspecified"),
-            (ICECandidateType::Host, "Host"),
-            (ICECandidateType::Srflx, "Srflx"),
-            (ICECandidateType::Prflx, "Prflx"),
-            (ICECandidateType::Relay, "Relay"),
+            (ICECandidateType::Host, "host"),
+            (ICECandidateType::Srflx, "srflx"),
+            (ICECandidateType::Prflx, "prflx"),
+            (ICECandidateType::Relay, "relay"),
         ];
 
         for (ctype, expected_string) in tests {

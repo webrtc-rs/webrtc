@@ -11,11 +11,13 @@ pub enum RTCPMuxPolicy {
     /// RTP and RTCP candidates. If the remote-endpoint is capable of
     /// multiplexing RTCP, multiplex RTCP on the RTP candidates. If it is not,
     /// use both the RTP and RTCP candidates separately.
+    #[serde(rename = "negotiate")]
     Negotiate = 1,
 
     /// RTCPMuxPolicyRequire indicates to gather ICE candidates only for
     /// RTP and multiplex RTCP on the RTP candidates. If the remote endpoint is
     /// not capable of rtcp-mux, session negotiation will fail.
+    #[serde(rename = "require")]
     Require = 2,
 }
 
@@ -25,8 +27,8 @@ impl Default for RTCPMuxPolicy {
     }
 }
 
-const RTCP_MUX_POLICY_NEGOTIATE_STR: &str = "Negotiate";
-const RTCP_MUX_POLICY_REQUIRE_STR: &str = "Require";
+const RTCP_MUX_POLICY_NEGOTIATE_STR: &str = "negotiate";
+const RTCP_MUX_POLICY_REQUIRE_STR: &str = "require";
 
 impl From<&str> for RTCPMuxPolicy {
     fn from(raw: &str) -> Self {
@@ -57,8 +59,8 @@ mod test {
     fn test_new_rtcp_mux_policy() {
         let tests = vec![
             ("Unspecified", RTCPMuxPolicy::Unspecified),
-            ("Negotiate", RTCPMuxPolicy::Negotiate),
-            ("Require", RTCPMuxPolicy::Require),
+            ("negotiate", RTCPMuxPolicy::Negotiate),
+            ("require", RTCPMuxPolicy::Require),
         ];
 
         for (policy_string, expected_policy) in tests {
@@ -70,8 +72,8 @@ mod test {
     fn test_rtcp_mux_policy_string() {
         let tests = vec![
             (RTCPMuxPolicy::Unspecified, "Unspecified"),
-            (RTCPMuxPolicy::Negotiate, "Negotiate"),
-            (RTCPMuxPolicy::Require, "Require"),
+            (RTCPMuxPolicy::Negotiate, "negotiate"),
+            (RTCPMuxPolicy::Require, "require"),
         ];
 
         for (policy, expected_string) in tests {

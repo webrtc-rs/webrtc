@@ -48,11 +48,12 @@ tokio-test = "0.4"
 env_logger = "0.8"
 lazy_static = "1.4"
 clap = "2"
+base64 = "0.13.0"
 
 [profile.dev]
 opt-level = 0
 
 [[example]]
 name = "reflect"
-path = "examples/reflect/reflect.rs"
+path = "examples/reflect.rs"
 bench = false

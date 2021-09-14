@@ -8,9 +8,11 @@ pub enum ICEProtocol {
     Unspecified,
 
     /// UDP indicates the URL uses a UDP transport.
+    #[serde(rename = "udp")]
     Udp,
 
     /// TCP indicates the URL uses a TCP transport.
+    #[serde(rename = "tcp")]
     Tcp,
 }
 
@@ -20,8 +22,8 @@ impl Default for ICEProtocol {
     }
 }
 
-const ICE_PROTOCOL_UDP_STR: &str = "Udp";
-const ICE_PROTOCOL_TCP_STR: &str = "Tcp";
+const ICE_PROTOCOL_UDP_STR: &str = "udp";
+const ICE_PROTOCOL_TCP_STR: &str = "tcp";
 
 /// takes a string and converts it to ICEProtocol
 impl From<&str> for ICEProtocol {
@@ -70,8 +72,8 @@ mod test {
     fn test_ice_protocol_string() {
         let tests = vec![
             (ICEProtocol::Unspecified, "Unspecified"),
-            (ICEProtocol::Udp, "Udp"),
-            (ICEProtocol::Tcp, "Tcp"),
+            (ICEProtocol::Udp, "udp"),
+            (ICEProtocol::Tcp, "tcp"),
         ];
 
         for (proto, expected_string) in tests {

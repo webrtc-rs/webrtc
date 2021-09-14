@@ -10,16 +10,19 @@ pub enum SDPSemantics {
     /// UnifiedPlan uses unified-plan offers and answers
     /// (the default in Chrome since M72)
     /// https://tools.ietf.org/html/draft-roach-mmusic-unified-plan-00
+    #[serde(rename = "unified-plan")]
     UnifiedPlan = 1,
 
     /// PlanB uses plan-b offers and answers
     /// NB: This format should be considered deprecated
     /// https://tools.ietf.org/html/draft-uberti-rtcweb-plan-00
+    #[serde(rename = "plan-b")]
     PlanB = 2,
 
     /// UnifiedPlanWithFallback prefers unified-plan
     /// offers and answers, but will respond to a plan-b offer
     /// with a plan-b answer
+    #[serde(rename = "unified-plan-with-fallback")]
     UnifiedPlanWithFallback = 3,
 }
 
@@ -29,9 +32,9 @@ impl Default for SDPSemantics {
     }
 }
 
-const SDP_SEMANTICS_UNIFIED_PLAN_WITH_FALLBACK: &str = "UnifiedPlanWithFallback";
-const SDP_SEMANTICS_UNIFIED_PLAN: &str = "UnifiedPlan";
-const SDP_SEMANTICS_PLAN_B: &str = "PlanB";
+const SDP_SEMANTICS_UNIFIED_PLAN_WITH_FALLBACK: &str = "unified-plan-with-fallback";
+const SDP_SEMANTICS_UNIFIED_PLAN: &str = "unified-plan";
+const SDP_SEMANTICS_PLAN_B: &str = "plan-b";
 
 impl From<&str> for SDPSemantics {
     fn from(raw: &str) -> Self {
@@ -81,10 +84,10 @@ mod test {
             (SDPSemantics::Unspecified, "Unspecified"),
             (
                 SDPSemantics::UnifiedPlanWithFallback,
-                "UnifiedPlanWithFallback",
+                "unified-plan-with-fallback",
             ),
-            (SDPSemantics::PlanB, "PlanB"),
-            (SDPSemantics::UnifiedPlan, "UnifiedPlan"),
+            (SDPSemantics::PlanB, "plan-b"),
+            (SDPSemantics::UnifiedPlan, "unified-plan"),
         ];
 
         for (value, expected_string) in tests {

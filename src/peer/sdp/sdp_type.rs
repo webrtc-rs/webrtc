@@ -7,18 +7,21 @@ pub enum SDPType {
     Unspecified = 0,
 
     /// indicates that a description MUST be treated as an SDP offer.
+    #[serde(rename = "offer")]
     Offer,
 
     /// indicates that a description MUST be treated as an
     /// SDP answer, but not a final answer. A description used as an SDP
     /// pranswer may be applied as a response to an SDP offer, or an update to
     /// a previously sent SDP pranswer.
+    #[serde(rename = "pranswer")]
     Pranswer,
 
     /// indicates that a description MUST be treated as an SDP
     /// final answer, and the offer-answer exchange MUST be considered complete.
     /// A description used as an SDP answer may be applied as a response to an
-    /// SDP offer or as an update to a previously sent SDP pranswer.
+    /// SDP offer or as an update to a previously sent SDP pranswer.    
+    #[serde(rename = "answer")]
     Answer,
 
     /// indicates that a description MUST be treated as
@@ -26,6 +29,7 @@ pub enum SDPType {
     /// answer back to what it was in the previous stable state. Note the
     /// local or remote SDP descriptions in the previous stable state could be
     /// null if there has not yet been a successful offer-answer negotiation.
+    #[serde(rename = "rollback")]
     Rollback,
 }
 
@@ -35,10 +39,10 @@ impl Default for SDPType {
     }
 }
 
-const SDP_TYPE_OFFER_STR: &str = "Offer";
-const SDP_TYPE_PRANSWER_STR: &str = "Pranswer";
-const SDP_TYPE_ANSWER_STR: &str = "Answer";
-const SDP_TYPE_ROLLBACK_STR: &str = "Rollback";
+const SDP_TYPE_OFFER_STR: &str = "offer";
+const SDP_TYPE_PRANSWER_STR: &str = "pranswer";
+const SDP_TYPE_ANSWER_STR: &str = "answer";
+const SDP_TYPE_ROLLBACK_STR: &str = "rollback";
 
 /// creates an SDPType from a string
 impl From<&str> for SDPType {
@@ -73,10 +77,10 @@ mod test {
     fn test_new_sdp_type() {
         let tests = vec![
             ("Unspecified", SDPType::Unspecified),
-            ("Offer", SDPType::Offer),
-            ("Pranswer", SDPType::Pranswer),
-            ("Answer", SDPType::Answer),
-            ("Rollback", SDPType::Rollback),
+            ("offer", SDPType::Offer),
+            ("pranswer", SDPType::Pranswer),
+            ("answer", SDPType::Answer),
+            ("rollback", SDPType::Rollback),
         ];
 
         for (sdp_type_string, expected_sdp_type) in tests {
@@ -88,10 +92,10 @@ mod test {
     fn test_sdp_type_string() {
         let tests = vec![
             (SDPType::Unspecified, "Unspecified"),
-            (SDPType::Offer, "Offer"),
-            (SDPType::Pranswer, "Pranswer"),
-            (SDPType::Answer, "Answer"),
-            (SDPType::Rollback, "Rollback"),
+            (SDPType::Offer, "offer"),
+            (SDPType::Pranswer, "pranswer"),
+            (SDPType::Answer, "answer"),
+            (SDPType::Rollback, "rollback"),
         ];
 
         for (sdp_type, expected_string) in tests {

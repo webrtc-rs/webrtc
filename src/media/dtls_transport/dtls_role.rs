@@ -12,12 +12,15 @@ pub enum DTLSRole {
     /// DTLSRoleAuto defines the DTLS role is determined based on
     /// the resolved ICE role: the ICE controlled role acts as the DTLS
     /// client and the ICE controlling role acts as the DTLS server.
+    #[serde(rename = "auto")]
     Auto = 1,
 
     /// DTLSRoleClient defines the DTLS client role.
+    #[serde(rename = "client")]
     Client = 2,
 
     /// DTLSRoleServer defines the DTLS server role.
+    #[serde(rename = "server")]
     Server = 3,
 }
 
@@ -44,9 +47,9 @@ impl Default for DTLSRole {
 impl fmt::Display for DTLSRole {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            DTLSRole::Auto => write!(f, "Auto"),
-            DTLSRole::Client => write!(f, "Client"),
-            DTLSRole::Server => write!(f, "Server"),
+            DTLSRole::Auto => write!(f, "auto"),
+            DTLSRole::Client => write!(f, "client"),
+            DTLSRole::Server => write!(f, "server"),
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }
     }
@@ -99,9 +102,9 @@ mod test {
     fn test_dtls_role_string() {
         let tests = vec![
             (DTLSRole::Unspecified, "Unspecified"),
-            (DTLSRole::Auto, "Auto"),
-            (DTLSRole::Client, "Client"),
-            (DTLSRole::Server, "Server"),
+            (DTLSRole::Auto, "auto"),
+            (DTLSRole::Client, "client"),
+            (DTLSRole::Server, "server"),
         ];
 
         for (role, expected_string) in tests {

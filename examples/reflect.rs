@@ -1,10 +1,13 @@
+mod internal;
+
 use anyhow::Result;
 use clap::{App, AppSettings, Arg};
+use std::sync::Arc;
+use tokio::time::Duration;
+
 use interceptor::registry::Registry;
 use interceptor::Attributes;
 use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
-use std::sync::Arc;
-use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_VP8};
 use webrtc::api::APIBuilder;
@@ -116,7 +119,10 @@ async fn main() -> Result<()> {
 
     // Wait for the offer to be pasted
     let offer = SessionDescription::default();
-    //TODO: signal.Decode(signal.MustReadStdin(), &offer)
+    let line = internal::signal::must_read_stdin()?;
+    println!("{}", line);
+    let _s = internal::signal::decode(line.as_str())?;
+    //TODO: signal.decode(signal.must_read_stdin(), &offer)
 
     // Set the remote SessionDescription
     peer_connection.set_remote_description(offer).await?;
@@ -209,6 +215,7 @@ async fn main() -> Result<()> {
 
     // Output the answer in base64 so we can paste it in browser
     if let Some(local_desc) = peer_connection.local_description().await {
+        println!("{:?}", local_desc);
         //TODO:fmt.Println(signal.Encode())
     } else {
         println!("generate local_description failed!");
