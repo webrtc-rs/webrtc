@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod api_test;
 
+pub mod interceptor_registry;
 pub mod media_engine;
 pub mod setting_engine;
 

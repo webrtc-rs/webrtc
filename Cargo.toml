@@ -47,12 +47,12 @@ chrono = "0.4.19"
 tokio-test = "0.4"
 env_logger = "0.8"
 lazy_static = "1.4"
-#clap = "2"
+clap = "2"
 
 [profile.dev]
 opt-level = 0
 
 [[example]]
-name = "examples"
-path = "examples/examples.rs"
+name = "reflect"
+path = "examples/reflect/reflect.rs"
 bench = false

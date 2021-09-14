@@ -172,7 +172,7 @@ pub struct PeerConnection {
 
 impl PeerConnection {
     /// creates a PeerConnection with the default codecs and
-    /// interceptors.  See register_default_codecs and RegisterDefaultInterceptors.
+    /// interceptors.  See register_default_codecs and register_default_interceptors.
     ///
     /// If you wish to customize the set of available codecs or the set of
     /// active interceptors, create a MediaEngine and call api.new_peer_connection
@@ -1772,6 +1772,10 @@ impl PeerConnection {
     ) -> Result<usize> {
         let a = Attributes::new();
         self.interceptor_rtcp_writer.write(pkt, &a).await
+    }
+
+    pub fn get_rtcp_writer(&self) -> Arc<dyn RTCPWriter + Send + Sync> {
+        Arc::clone(&self.interceptor_rtcp_writer)
     }
 
     /// close ends the PeerConnection
