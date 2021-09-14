@@ -9,7 +9,7 @@ pub mod error;
 pub mod media;
 pub mod peer;
 pub mod stats;
-mod util;
+pub mod util;
 
 #[cfg(test)]
 #[macro_use]

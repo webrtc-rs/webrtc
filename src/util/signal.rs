@@ -7,7 +7,7 @@ pub fn must_read_stdin() -> Result<String> {
 
     std::io::stdin().read_line(&mut line)?;
     line = line.trim().to_owned();
-    println!("");
+    println!();
 
     Ok(line)
 }

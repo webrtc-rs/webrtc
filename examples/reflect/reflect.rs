@@ -1,5 +1,3 @@
-mod internal;
-
 use anyhow::Result;
 use clap::{App, AppSettings, Arg};
 use std::sync::Arc;
@@ -20,6 +18,7 @@ use webrtc::peer::configuration::Configuration;
 use webrtc::peer::ice::ice_server::ICEServer;
 use webrtc::peer::peer_connection_state::PeerConnectionState;
 use webrtc::peer::sdp::session_description::{SessionDescription, SessionDescriptionSerde};
+use webrtc::util::signal;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -119,8 +118,8 @@ async fn main() -> Result<()> {
 
     // Wait for the offer to be pasted
     let mut offer = SessionDescription::default();
-    let line = internal::signal::must_read_stdin()?;
-    let desc_data = internal::signal::decode(line.as_str())?;
+    let line = signal::must_read_stdin()?;
+    let desc_data = signal::decode(line.as_str())?;
     offer.serde = serde_json::from_str::<SessionDescriptionSerde>(&desc_data)?;
 
     // Set the remote SessionDescription
@@ -216,7 +215,7 @@ async fn main() -> Result<()> {
     if let Some(local_desc) = peer_connection.local_description().await {
         let json_str = serde_json::to_string(&local_desc.serde)?;
         println!("{}", json_str);
-        let b64 = internal::signal::encode(&json_str);
+        let b64 = signal::encode(&json_str);
         println!("{}", b64);
     } else {
         println!("generate local_description failed!");

@@ -1,4 +1,5 @@
 pub mod mux;
+pub mod signal;
 
 use crate::error::Error;
 use anyhow::Result;
