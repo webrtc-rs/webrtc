@@ -6,7 +6,9 @@ use std::io::Cursor;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionDescriptionSerde {
+    #[serde(rename = "type")]
     pub sdp_type: SDPType,
+
     pub sdp: String,
 }
 
@@ -45,7 +47,7 @@ mod test {
                     },
                     parsed: None,
                 },
-                r#"{"sdp_type":"offer","sdp":"sdp"}"#,
+                r#"{"type":"offer","sdp":"sdp"}"#,
             ),
             (
                 SessionDescription {
@@ -55,7 +57,7 @@ mod test {
                     },
                     parsed: None,
                 },
-                r#"{"sdp_type":"pranswer","sdp":"sdp"}"#,
+                r#"{"type":"pranswer","sdp":"sdp"}"#,
             ),
             (
                 SessionDescription {
@@ -65,7 +67,7 @@ mod test {
                     },
                     parsed: None,
                 },
-                r#"{"sdp_type":"answer","sdp":"sdp"}"#,
+                r#"{"type":"answer","sdp":"sdp"}"#,
             ),
             (
                 SessionDescription {
@@ -75,7 +77,7 @@ mod test {
                     },
                     parsed: None,
                 },
-                r#"{"sdp_type":"rollback","sdp":"sdp"}"#,
+                r#"{"type":"rollback","sdp":"sdp"}"#,
             ),
             (
                 SessionDescription {
@@ -85,7 +87,7 @@ mod test {
                     },
                     parsed: None,
                 },
-                r#"{"sdp_type":"Unspecified","sdp":"sdp"}"#,
+                r#"{"type":"Unspecified","sdp":"sdp"}"#,
             ),
         ];
 

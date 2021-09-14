@@ -19,7 +19,7 @@ use webrtc::media::track::track_remote::TrackRemote;
 use webrtc::peer::configuration::Configuration;
 use webrtc::peer::ice::ice_server::ICEServer;
 use webrtc::peer::peer_connection_state::PeerConnectionState;
-use webrtc::peer::sdp::session_description::SessionDescription;
+use webrtc::peer::sdp::session_description::{SessionDescription, SessionDescriptionSerde};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -118,11 +118,10 @@ async fn main() -> Result<()> {
     });
 
     // Wait for the offer to be pasted
-    let offer = SessionDescription::default();
+    let mut offer = SessionDescription::default();
     let line = internal::signal::must_read_stdin()?;
-    println!("{}", line);
-    let _s = internal::signal::decode(line.as_str())?;
-    //TODO: signal.decode(signal.must_read_stdin(), &offer)
+    let desc_data = internal::signal::decode(line.as_str())?;
+    offer.serde = serde_json::from_str::<SessionDescriptionSerde>(&desc_data)?;
 
     // Set the remote SessionDescription
     peer_connection.set_remote_description(offer).await?;
@@ -215,8 +214,10 @@ async fn main() -> Result<()> {
 
     // Output the answer in base64 so we can paste it in browser
     if let Some(local_desc) = peer_connection.local_description().await {
-        println!("{:?}", local_desc);
-        //TODO:fmt.Println(signal.Encode())
+        let json_str = serde_json::to_string(&local_desc.serde)?;
+        println!("{}", json_str);
+        let b64 = internal::signal::encode(&json_str);
+        println!("{}", b64);
     } else {
         println!("generate local_description failed!");
     }
