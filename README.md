@@ -64,7 +64,7 @@
 
 ## Overview
 
-WebRTC.rs is a pure Rust implementation of WebRTC stack, which rewrites <a href="http://Pion.ly">Pion</a> stack in Rust.
+WebRTC.rs is a pure Rust implementation of WebRTC stack, which rewrites <a href="https://github.com/pion/webrtc/releases/tag/v3.0.32">Pion</a> stack in Rust.
 
 ## Features
 

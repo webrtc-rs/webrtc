@@ -57,7 +57,7 @@ pub struct DataChannel {
     pub(crate) id: AtomicU16,
     pub(crate) ready_state: Arc<AtomicU8>, // DataChannelState
     pub(crate) buffered_amount_low_threshold: AtomicUsize,
-    pub(crate) detach_called: AtomicBool,
+    pub(crate) detach_called: Arc<AtomicBool>,
 
     // The binaryType represents attribute MUST, on getting, return the value to
     // which it was last set. On setting, if the new value is either the string
@@ -98,7 +98,7 @@ impl DataChannel {
             max_packet_lifetime: params.max_packet_life_time,
             max_retransmits: params.max_retransmits,
             ready_state: Arc::new(AtomicU8::new(DataChannelState::Connecting as u8)),
-            detach_called: AtomicBool::new(false),
+            detach_called: Arc::new(AtomicBool::new(false)),
             setting_engine,
             ..Default::default()
         }
@@ -189,34 +189,38 @@ impl DataChannel {
         sctp_transport.clone()
     }
 
-    /// After onOpen is complete check that the user called detach
-    /// and provide an error message if the call was missed
-    fn check_detach_after_open(&self) {
-        if self.setting_engine.detach.data_channels && !self.detach_called.load(Ordering::SeqCst) {
-            log::warn!(
-                "webrtc.DetachDataChannels() enabled but didn't Detach, call Detach from OnOpen"
-            );
-        }
-    }
-
     /// on_open sets an event handler which is invoked when
     /// the underlying data transport has been established (or re-established).
     pub async fn on_open(&self, f: OnOpenHdlrFn) {
-        if self.ready_state() == DataChannelState::Open {
-            f().await;
-            self.check_detach_after_open();
-        } else {
+        {
             let mut handler = self.on_open_handler.lock().await;
             *handler = Some(f);
+        }
+
+        if self.ready_state() == DataChannelState::Open {
+            self.do_open().await;
         }
     }
 
     async fn do_open(&self) {
-        let mut handler = self.on_open_handler.lock().await;
-        if let Some(f) = handler.take() {
-            f().await;
-            self.check_detach_after_open();
-        }
+        let on_open_handler = Arc::clone(&self.on_open_handler);
+        let detach_data_channels = self.setting_engine.detach.data_channels;
+        let detach_called = Arc::clone(&self.detach_called);
+        tokio::spawn(async move {
+            let mut handler = on_open_handler.lock().await;
+            if let Some(f) = handler.take() {
+                f().await;
+
+                // self.check_detach_after_open();
+                // After onOpen is complete check that the user called detach
+                // and provide an error message if the call was missed
+                if detach_data_channels && !detach_called.load(Ordering::SeqCst) {
+                    log::warn!(
+                        "webrtc.DetachDataChannels() enabled but didn't Detach, call Detach from OnOpen"
+                    );
+                }
+            }
+        });
     }
 
     /// on_close sets an event handler which is invoked when
@@ -293,18 +297,22 @@ impl DataChannel {
                 Err(err) => {
                     ready_state.store(DataChannelState::Closed as u8, Ordering::SeqCst);
                     if !sctp::error::Error::ErrStreamClosed.equal(&err) {
-                        let mut handler = on_error_handler.lock().await;
-                        if let Some(f) = &mut *handler {
-                            f(err).await;
-                        }
+                        let on_error_handler2 = Arc::clone(&on_error_handler);
+                        tokio::spawn(async move {
+                            let mut handler = on_error_handler2.lock().await;
+                            if let Some(f) = &mut *handler {
+                                f(err).await;
+                            }
+                        });
                     }
 
-                    {
-                        let mut handler = on_close_handler.lock().await;
+                    let on_close_handler2 = Arc::clone(&on_close_handler);
+                    tokio::spawn(async move {
+                        let mut handler = on_close_handler2.lock().await;
                         if let Some(f) = &mut *handler {
                             f().await;
                         }
-                    }
+                    });
 
                     break;
                 }
