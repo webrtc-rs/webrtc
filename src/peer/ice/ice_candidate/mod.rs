@@ -142,6 +142,19 @@ impl ICECandidate {
 
         Ok(c)
     }
+
+    /// to_json returns an ICECandidateInit
+    /// as indicated by the spec https://w3c.github.io/webrtc-pc/#dom-rtcicecandidate-tojson
+    pub async fn to_json(&self) -> Result<ICECandidateInit> {
+        let candidate = self.to_ice().await?;
+
+        Ok(ICECandidateInit {
+            candidate: format!("candidate:{}", candidate.marshal()),
+            sdp_mid: "".to_owned(),
+            sdp_mline_index: 0u16,
+            username_fragment: "".to_owned(),
+        })
+    }
 }
 
 impl fmt::Display for ICECandidate {
@@ -162,24 +175,3 @@ pub struct ICECandidateInit {
     pub sdp_mline_index: u16,
     pub username_fragment: String,
 }
-
-/*TODO: ToJSON
-// ToJSON returns an ICECandidateInit
-// as indicated by the spec https://w3c.github.io/webrtc-pc/#dom-rtcicecandidate-tojson
-func (c ICECandidate) ToJSON() ICECandidateInit {
-    zeroVal := uint16(0)
-    emptyStr := ""
-    candidateStr := ""
-
-    candidate, err := c.toICE()
-    if err == nil {
-        candidateStr = candidate.Marshal()
-    }
-
-    return ICECandidateInit{
-        Candidate:     fmt.Sprintf("candidate:%s", candidateStr),
-        SDPMid:        &emptyStr,
-        SDPMLineIndex: &zeroVal,
-    }
-}
-*/
