@@ -46,13 +46,13 @@ impl Default for ICEConnectionState {
     }
 }
 
-const ICE_CONNECTION_STATE_NEW_STR: &str = "New";
-const ICE_CONNECTION_STATE_CHECKING_STR: &str = "Checking";
-const ICE_CONNECTION_STATE_CONNECTED_STR: &str = "Connected";
-const ICE_CONNECTION_STATE_COMPLETED_STR: &str = "Completed";
-const ICE_CONNECTION_STATE_DISCONNECTED_STR: &str = "Disconnected";
-const ICE_CONNECTION_STATE_FAILED_STR: &str = "Failed";
-const ICE_CONNECTION_STATE_CLOSED_STR: &str = "Closed";
+const ICE_CONNECTION_STATE_NEW_STR: &str = "new";
+const ICE_CONNECTION_STATE_CHECKING_STR: &str = "checking";
+const ICE_CONNECTION_STATE_CONNECTED_STR: &str = "connected";
+const ICE_CONNECTION_STATE_COMPLETED_STR: &str = "completed";
+const ICE_CONNECTION_STATE_DISCONNECTED_STR: &str = "disconnected";
+const ICE_CONNECTION_STATE_FAILED_STR: &str = "failed";
+const ICE_CONNECTION_STATE_CLOSED_STR: &str = "closed";
 
 /// takes a string and converts it to iceconnection_state
 impl From<&str> for ICEConnectionState {
@@ -109,13 +109,13 @@ mod test {
     fn test_new_ice_connection_state() {
         let tests = vec![
             (crate::UNSPECIFIED_STR, ICEConnectionState::Unspecified),
-            ("New", ICEConnectionState::New),
-            ("Checking", ICEConnectionState::Checking),
-            ("Connected", ICEConnectionState::Connected),
-            ("Completed", ICEConnectionState::Completed),
-            ("Disconnected", ICEConnectionState::Disconnected),
-            ("Failed", ICEConnectionState::Failed),
-            ("Closed", ICEConnectionState::Closed),
+            ("new", ICEConnectionState::New),
+            ("checking", ICEConnectionState::Checking),
+            ("connected", ICEConnectionState::Connected),
+            ("completed", ICEConnectionState::Completed),
+            ("disconnected", ICEConnectionState::Disconnected),
+            ("failed", ICEConnectionState::Failed),
+            ("closed", ICEConnectionState::Closed),
         ];
 
         for (state_string, expected_state) in tests {
@@ -132,13 +132,13 @@ mod test {
     fn test_ice_connection_state_string() {
         let tests = vec![
             (ICEConnectionState::Unspecified, crate::UNSPECIFIED_STR),
-            (ICEConnectionState::New, "New"),
-            (ICEConnectionState::Checking, "Checking"),
-            (ICEConnectionState::Connected, "Connected"),
-            (ICEConnectionState::Completed, "Completed"),
-            (ICEConnectionState::Disconnected, "Disconnected"),
-            (ICEConnectionState::Failed, "Failed"),
-            (ICEConnectionState::Closed, "Closed"),
+            (ICEConnectionState::New, "new"),
+            (ICEConnectionState::Checking, "checking"),
+            (ICEConnectionState::Connected, "connected"),
+            (ICEConnectionState::Completed, "completed"),
+            (ICEConnectionState::Disconnected, "disconnected"),
+            (ICEConnectionState::Failed, "failed"),
+            (ICEConnectionState::Closed, "closed"),
         ];
 
         for (state, expected_string) in tests {

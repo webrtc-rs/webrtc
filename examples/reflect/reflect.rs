@@ -20,9 +20,25 @@ use webrtc::peer::peer_connection_state::PeerConnectionState;
 use webrtc::peer::sdp::session_description::{SessionDescription, SessionDescriptionSerde};
 use webrtc::util::signal;
 
+use log::LevelFilter;
+use std::io::Write;
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    env_logger::init();
+    env_logger::Builder::new()
+        .format(|buf, record| {
+            writeln!(
+                buf,
+                "{}:{} [{}] {} - {}",
+                record.file().unwrap_or("unknown"),
+                record.line().unwrap_or(0),
+                record.level(),
+                chrono::Local::now().format("%H:%M:%S.%6f"),
+                record.args()
+            )
+        })
+        .filter(None, LevelFilter::Trace)
+        .init();
 
     let mut app = App::new("reflect")
         .version("0.1.0")
@@ -213,6 +229,7 @@ async fn main() -> Result<()> {
 
     // Output the answer in base64 so we can paste it in browser
     if let Some(local_desc) = peer_connection.local_description().await {
+        println!("{:?}", local_desc.serde);
         let json_str = serde_json::to_string(&local_desc.serde)?;
         println!("{}", json_str);
         let b64 = signal::encode(&json_str);

@@ -20,10 +20,10 @@ pub enum RTPTransceiverDirection {
     Inactive,
 }
 
-const RTP_TRANSCEIVER_DIRECTION_SENDRECV_STR: &str = "Sendrecv";
-const RTP_TRANSCEIVER_DIRECTION_SENDONLY_STR: &str = "Sendonly";
-const RTP_TRANSCEIVER_DIRECTION_RECVONLY_STR: &str = "Recvonly";
-const RTP_TRANSCEIVER_DIRECTION_INACTIVE_STR: &str = "Inactive";
+const RTP_TRANSCEIVER_DIRECTION_SENDRECV_STR: &str = "sendrecv";
+const RTP_TRANSCEIVER_DIRECTION_SENDONLY_STR: &str = "sendonly";
+const RTP_TRANSCEIVER_DIRECTION_RECVONLY_STR: &str = "recvonly";
+const RTP_TRANSCEIVER_DIRECTION_INACTIVE_STR: &str = "inactive";
 
 /// defines a procedure for creating a new
 /// RTPTransceiverDirection from a raw string naming the transceiver direction.
@@ -104,10 +104,10 @@ mod test {
     fn test_new_rtp_transceiver_direction() {
         let tests = vec![
             ("Unspecified", RTPTransceiverDirection::Unspecified),
-            ("Sendrecv", RTPTransceiverDirection::Sendrecv),
-            ("Sendonly", RTPTransceiverDirection::Sendonly),
-            ("Recvonly", RTPTransceiverDirection::Recvonly),
-            ("Inactive", RTPTransceiverDirection::Inactive),
+            ("sendrecv", RTPTransceiverDirection::Sendrecv),
+            ("sendonly", RTPTransceiverDirection::Sendonly),
+            ("recvonly", RTPTransceiverDirection::Recvonly),
+            ("inactive", RTPTransceiverDirection::Inactive),
         ];
 
         for (ct_str, expected_type) in tests {
@@ -119,10 +119,10 @@ mod test {
     fn test_rtp_transceiver_direction_string() {
         let tests = vec![
             (RTPTransceiverDirection::Unspecified, "Unspecified"),
-            (RTPTransceiverDirection::Sendrecv, "Sendrecv"),
-            (RTPTransceiverDirection::Sendonly, "Sendonly"),
-            (RTPTransceiverDirection::Recvonly, "Recvonly"),
-            (RTPTransceiverDirection::Inactive, "Inactive"),
+            (RTPTransceiverDirection::Sendrecv, "sendrecv"),
+            (RTPTransceiverDirection::Sendonly, "sendonly"),
+            (RTPTransceiverDirection::Recvonly, "recvonly"),
+            (RTPTransceiverDirection::Inactive, "inactive"),
         ];
 
         for (d, expected_string) in tests {

@@ -27,9 +27,9 @@ impl Default for SCTPTransportState {
     }
 }
 
-const SCTP_TRANSPORT_STATE_CONNECTING_STR: &str = "Connecting";
-const SCTP_TRANSPORT_STATE_CONNECTED_STR: &str = "Connected";
-const SCTP_TRANSPORT_STATE_CLOSED_STR: &str = "Closed";
+const SCTP_TRANSPORT_STATE_CONNECTING_STR: &str = "connecting";
+const SCTP_TRANSPORT_STATE_CONNECTED_STR: &str = "connected";
+const SCTP_TRANSPORT_STATE_CLOSED_STR: &str = "closed";
 
 impl From<&str> for SCTPTransportState {
     fn from(raw: &str) -> Self {
@@ -73,9 +73,9 @@ mod test {
     fn test_new_sctp_transport_state() {
         let tests = vec![
             (crate::UNSPECIFIED_STR, SCTPTransportState::Unspecified),
-            ("Connecting", SCTPTransportState::Connecting),
-            ("Connected", SCTPTransportState::Connected),
-            ("Closed", SCTPTransportState::Closed),
+            ("connecting", SCTPTransportState::Connecting),
+            ("connected", SCTPTransportState::Connected),
+            ("closed", SCTPTransportState::Closed),
         ];
 
         for (state_string, expected_state) in tests {
@@ -92,9 +92,9 @@ mod test {
     fn test_sctp_transport_state_string() {
         let tests = vec![
             (SCTPTransportState::Unspecified, crate::UNSPECIFIED_STR),
-            (SCTPTransportState::Connecting, "Connecting"),
-            (SCTPTransportState::Connected, "Connected"),
-            (SCTPTransportState::Closed, "Closed"),
+            (SCTPTransportState::Connecting, "connecting"),
+            (SCTPTransportState::Connected, "connected"),
+            (SCTPTransportState::Closed, "closed"),
         ];
 
         for (state, expected_string) in tests {

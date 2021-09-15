@@ -49,13 +49,13 @@ impl Default for ICETransportState {
     }
 }
 
-const ICE_TRANSPORT_STATE_NEW_STR: &str = "New";
-const ICE_TRANSPORT_STATE_CHECKING_STR: &str = "Checking";
-const ICE_TRANSPORT_STATE_CONNECTED_STR: &str = "Connected";
-const ICE_TRANSPORT_STATE_COMPLETED_STR: &str = "Completed";
-const ICE_TRANSPORT_STATE_FAILED_STR: &str = "Failed";
-const ICE_TRANSPORT_STATE_DISCONNECTED_STR: &str = "Disconnected";
-const ICE_TRANSPORT_STATE_CLOSED_STR: &str = "Closed";
+const ICE_TRANSPORT_STATE_NEW_STR: &str = "new";
+const ICE_TRANSPORT_STATE_CHECKING_STR: &str = "checking";
+const ICE_TRANSPORT_STATE_CONNECTED_STR: &str = "connected";
+const ICE_TRANSPORT_STATE_COMPLETED_STR: &str = "completed";
+const ICE_TRANSPORT_STATE_FAILED_STR: &str = "failed";
+const ICE_TRANSPORT_STATE_DISCONNECTED_STR: &str = "disconnected";
+const ICE_TRANSPORT_STATE_CLOSED_STR: &str = "closed";
 
 impl From<&str> for ICETransportState {
     fn from(raw: &str) -> Self {
@@ -148,13 +148,13 @@ mod test {
     fn test_ice_transport_state_string() {
         let tests = vec![
             (ICETransportState::Unspecified, "Unspecified"),
-            (ICETransportState::New, "New"),
-            (ICETransportState::Checking, "Checking"),
-            (ICETransportState::Connected, "Connected"),
-            (ICETransportState::Completed, "Completed"),
-            (ICETransportState::Failed, "Failed"),
-            (ICETransportState::Disconnected, "Disconnected"),
-            (ICETransportState::Closed, "Closed"),
+            (ICETransportState::New, "new"),
+            (ICETransportState::Checking, "checking"),
+            (ICETransportState::Connected, "connected"),
+            (ICETransportState::Completed, "completed"),
+            (ICETransportState::Failed, "failed"),
+            (ICETransportState::Disconnected, "disconnected"),
+            (ICETransportState::Closed, "closed"),
         ];
 
         for (state, expected_string) in tests {

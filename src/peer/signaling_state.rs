@@ -64,12 +64,12 @@ impl Default for SignalingState {
     }
 }
 
-const SIGNALING_STATE_STABLE_STR: &str = "Stable";
-const SIGNALING_STATE_HAVE_LOCAL_OFFER_STR: &str = "HaveLocalOffer";
-const SIGNALING_STATE_HAVE_REMOTE_OFFER_STR: &str = "HaveRemoteOffer";
-const SIGNALING_STATE_HAVE_LOCAL_PRANSWER_STR: &str = "HaveLocalPranswer";
-const SIGNALING_STATE_HAVE_REMOTE_PRANSWER_STR: &str = "HaveRemotePranswer";
-const SIGNALING_STATE_CLOSED_STR: &str = "Closed";
+const SIGNALING_STATE_STABLE_STR: &str = "stable";
+const SIGNALING_STATE_HAVE_LOCAL_OFFER_STR: &str = "have-local-offer";
+const SIGNALING_STATE_HAVE_REMOTE_OFFER_STR: &str = "have-remote-offer";
+const SIGNALING_STATE_HAVE_LOCAL_PRANSWER_STR: &str = "have-local-pranswer";
+const SIGNALING_STATE_HAVE_REMOTE_PRANSWER_STR: &str = "have-remote-pranswer";
+const SIGNALING_STATE_CLOSED_STR: &str = "closed";
 
 impl From<&str> for SignalingState {
     fn from(raw: &str) -> Self {
@@ -218,12 +218,12 @@ mod test {
     fn test_new_signaling_state() {
         let tests = vec![
             ("Unspecified", SignalingState::Unspecified),
-            ("Stable", SignalingState::Stable),
-            ("HaveLocalOffer", SignalingState::HaveLocalOffer),
-            ("HaveRemoteOffer", SignalingState::HaveRemoteOffer),
-            ("HaveLocalPranswer", SignalingState::HaveLocalPranswer),
-            ("HaveRemotePranswer", SignalingState::HaveRemotePranswer),
-            ("Closed", SignalingState::Closed),
+            ("stable", SignalingState::Stable),
+            ("have-local-offer", SignalingState::HaveLocalOffer),
+            ("have-remote-offer", SignalingState::HaveRemoteOffer),
+            ("have-local-pranswer", SignalingState::HaveLocalPranswer),
+            ("have-remote-pranswer", SignalingState::HaveRemotePranswer),
+            ("closed", SignalingState::Closed),
         ];
 
         for (state_string, expected_state) in tests {
@@ -235,12 +235,12 @@ mod test {
     fn test_signaling_state_string() {
         let tests = vec![
             (SignalingState::Unspecified, "Unspecified"),
-            (SignalingState::Stable, "Stable"),
-            (SignalingState::HaveLocalOffer, "HaveLocalOffer"),
-            (SignalingState::HaveRemoteOffer, "HaveRemoteOffer"),
-            (SignalingState::HaveLocalPranswer, "HaveLocalPranswer"),
-            (SignalingState::HaveRemotePranswer, "HaveRemotePranswer"),
-            (SignalingState::Closed, "Closed"),
+            (SignalingState::Stable, "stable"),
+            (SignalingState::HaveLocalOffer, "have-local-offer"),
+            (SignalingState::HaveRemoteOffer, "have-remote-offer"),
+            (SignalingState::HaveLocalPranswer, "have-local-pranswer"),
+            (SignalingState::HaveRemotePranswer, "have-remote-pranswer"),
+            (SignalingState::Closed, "closed"),
         ];
 
         for (state, expected_string) in tests {

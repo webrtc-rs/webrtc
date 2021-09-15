@@ -27,10 +27,10 @@ impl Default for ICEGathererState {
     }
 }
 
-const ICE_GATHERED_STATE_NEW_STR: &str = "New";
-const ICE_GATHERED_STATE_GATHERING_STR: &str = "Gathering";
-const ICE_GATHERED_STATE_COMPLETE_STR: &str = "Complete";
-const ICE_GATHERED_STATE_CLOSED_STR: &str = "Closed";
+const ICE_GATHERED_STATE_NEW_STR: &str = "new";
+const ICE_GATHERED_STATE_GATHERING_STR: &str = "gathering";
+const ICE_GATHERED_STATE_COMPLETE_STR: &str = "complete";
+const ICE_GATHERED_STATE_CLOSED_STR: &str = "closed";
 
 impl From<&str> for ICEGathererState {
     fn from(raw: &str) -> Self {
@@ -80,10 +80,10 @@ mod test {
     fn test_ice_gatherer_state_string() {
         let tests = vec![
             (ICEGathererState::Unspecified, "Unspecified"),
-            (ICEGathererState::New, "New"),
-            (ICEGathererState::Gathering, "Gathering"),
-            (ICEGathererState::Complete, "Complete"),
-            (ICEGathererState::Closed, "Closed"),
+            (ICEGathererState::New, "new"),
+            (ICEGathererState::Gathering, "gathering"),
+            (ICEGathererState::Complete, "complete"),
+            (ICEGathererState::Closed, "closed"),
         ];
 
         for (state, expected_string) in tests {

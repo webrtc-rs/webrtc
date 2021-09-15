@@ -29,10 +29,10 @@ impl Default for DataChannelState {
     }
 }
 
-const DATA_CHANNEL_STATE_CONNECTING_STR: &str = "Connecting";
-const DATA_CHANNEL_STATE_OPEN_STR: &str = "Open";
-const DATA_CHANNEL_STATE_CLOSING_STR: &str = "Closing";
-const DATA_CHANNEL_STATE_CLOSED_STR: &str = "Closed";
+const DATA_CHANNEL_STATE_CONNECTING_STR: &str = "connecting";
+const DATA_CHANNEL_STATE_OPEN_STR: &str = "open";
+const DATA_CHANNEL_STATE_CLOSING_STR: &str = "closing";
+const DATA_CHANNEL_STATE_CLOSED_STR: &str = "closed";
 
 impl From<u8> for DataChannelState {
     fn from(v: u8) -> Self {
@@ -79,10 +79,10 @@ mod test {
     fn test_new_data_channel_state() {
         let tests = vec![
             (crate::UNSPECIFIED_STR, DataChannelState::Unspecified),
-            ("Connecting", DataChannelState::Connecting),
-            ("Open", DataChannelState::Open),
-            ("Closing", DataChannelState::Closing),
-            ("Closed", DataChannelState::Closed),
+            ("connecting", DataChannelState::Connecting),
+            ("open", DataChannelState::Open),
+            ("closing", DataChannelState::Closing),
+            ("closed", DataChannelState::Closed),
         ];
 
         for (state_string, expected_state) in tests {
@@ -99,10 +99,10 @@ mod test {
     fn test_data_channel_state_string() {
         let tests = vec![
             (DataChannelState::Unspecified, crate::UNSPECIFIED_STR),
-            (DataChannelState::Connecting, "Connecting"),
-            (DataChannelState::Open, "Open"),
-            (DataChannelState::Closing, "Closing"),
-            (DataChannelState::Closed, "Closed"),
+            (DataChannelState::Connecting, "connecting"),
+            (DataChannelState::Open, "open"),
+            (DataChannelState::Closing, "closing"),
+            (DataChannelState::Closed, "closed"),
         ];
 
         for (state, expected_string) in tests {

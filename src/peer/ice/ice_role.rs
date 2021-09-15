@@ -23,8 +23,8 @@ impl Default for ICERole {
     }
 }
 
-const ICE_ROLE_CONTROLLING_STR: &str = "Controlling";
-const ICE_ROLE_CONTROLLED_STR: &str = "Controlled";
+const ICE_ROLE_CONTROLLING_STR: &str = "controlling";
+const ICE_ROLE_CONTROLLED_STR: &str = "controlled";
 
 impl From<&str> for ICERole {
     fn from(raw: &str) -> Self {
@@ -54,8 +54,8 @@ mod test {
     fn test_new_ice_role() {
         let tests = vec![
             ("Unspecified", ICERole::Unspecified),
-            ("Controlling", ICERole::Controlling),
-            ("Controlled", ICERole::Controlled),
+            ("controlling", ICERole::Controlling),
+            ("controlled", ICERole::Controlled),
         ];
 
         for (role_string, expected_role) in tests {
@@ -67,8 +67,8 @@ mod test {
     fn test_ice_role_string() {
         let tests = vec![
             (ICERole::Unspecified, "Unspecified"),
-            (ICERole::Controlling, "Controlling"),
-            (ICERole::Controlled, "Controlled"),
+            (ICERole::Controlling, "controlling"),
+            (ICERole::Controlled, "controlled"),
         ];
 
         for (proto, expected_string) in tests {

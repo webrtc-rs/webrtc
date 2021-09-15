@@ -41,12 +41,12 @@ impl Default for PeerConnectionState {
     }
 }
 
-const PEER_CONNECTION_STATE_NEW_STR: &str = "New";
-const PEER_CONNECTION_STATE_CONNECTING_STR: &str = "Connecting";
-const PEER_CONNECTION_STATE_CONNECTED_STR: &str = "Connected";
-const PEER_CONNECTION_STATE_DISCONNECTED_STR: &str = "Disconnected";
-const PEER_CONNECTION_STATE_FAILED_STR: &str = "Failed";
-const PEER_CONNECTION_STATE_CLOSED_STR: &str = "Closed";
+const PEER_CONNECTION_STATE_NEW_STR: &str = "new";
+const PEER_CONNECTION_STATE_CONNECTING_STR: &str = "connecting";
+const PEER_CONNECTION_STATE_CONNECTED_STR: &str = "connected";
+const PEER_CONNECTION_STATE_DISCONNECTED_STR: &str = "disconnected";
+const PEER_CONNECTION_STATE_FAILED_STR: &str = "failed";
+const PEER_CONNECTION_STATE_CLOSED_STR: &str = "closed";
 
 impl From<&str> for PeerConnectionState {
     fn from(raw: &str) -> Self {
@@ -125,12 +125,12 @@ mod test {
     fn test_new_peer_connection_state() {
         let tests = vec![
             (crate::UNSPECIFIED_STR, PeerConnectionState::Unspecified),
-            ("New", PeerConnectionState::New),
-            ("Connecting", PeerConnectionState::Connecting),
-            ("Connected", PeerConnectionState::Connected),
-            ("Disconnected", PeerConnectionState::Disconnected),
-            ("Failed", PeerConnectionState::Failed),
-            ("Closed", PeerConnectionState::Closed),
+            ("new", PeerConnectionState::New),
+            ("connecting", PeerConnectionState::Connecting),
+            ("connected", PeerConnectionState::Connected),
+            ("disconnected", PeerConnectionState::Disconnected),
+            ("failed", PeerConnectionState::Failed),
+            ("closed", PeerConnectionState::Closed),
         ];
 
         for (state_string, expected_state) in tests {
@@ -147,12 +147,12 @@ mod test {
     fn test_peer_connection_state_string() {
         let tests = vec![
             (PeerConnectionState::Unspecified, crate::UNSPECIFIED_STR),
-            (PeerConnectionState::New, "New"),
-            (PeerConnectionState::Connecting, "Connecting"),
-            (PeerConnectionState::Connected, "Connected"),
-            (PeerConnectionState::Disconnected, "Disconnected"),
-            (PeerConnectionState::Failed, "Failed"),
-            (PeerConnectionState::Closed, "Closed"),
+            (PeerConnectionState::New, "new"),
+            (PeerConnectionState::Connecting, "connecting"),
+            (PeerConnectionState::Connected, "connected"),
+            (PeerConnectionState::Disconnected, "disconnected"),
+            (PeerConnectionState::Failed, "failed"),
+            (PeerConnectionState::Closed, "closed"),
         ];
 
         for (state, expected_string) in tests {

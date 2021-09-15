@@ -25,9 +25,9 @@ impl Default for ICEGatheringState {
     }
 }
 
-const ICE_GATHERING_STATE_NEW_STR: &str = "New";
-const ICE_GATHERING_STATE_GATHERING_STR: &str = "Gathering";
-const ICE_GATHERING_STATE_COMPLETE_STR: &str = "Complete";
+const ICE_GATHERING_STATE_NEW_STR: &str = "new";
+const ICE_GATHERING_STATE_GATHERING_STR: &str = "gathering";
+const ICE_GATHERING_STATE_COMPLETE_STR: &str = "complete";
 
 /// takes a string and converts it to ICEGatheringState
 impl From<&str> for ICEGatheringState {
@@ -62,9 +62,9 @@ mod test {
     fn test_new_ice_gathering_state() {
         let tests = vec![
             ("Unspecified", ICEGatheringState::Unspecified),
-            ("New", ICEGatheringState::New),
-            ("Gathering", ICEGatheringState::Gathering),
-            ("Complete", ICEGatheringState::Complete),
+            ("new", ICEGatheringState::New),
+            ("gathering", ICEGatheringState::Gathering),
+            ("complete", ICEGatheringState::Complete),
         ];
 
         for (state_string, expected_state) in tests {
@@ -76,9 +76,9 @@ mod test {
     fn test_ice_gathering_state_string() {
         let tests = vec![
             (ICEGatheringState::Unspecified, "Unspecified"),
-            (ICEGatheringState::New, "New"),
-            (ICEGatheringState::Gathering, "Gathering"),
-            (ICEGatheringState::Complete, "Complete"),
+            (ICEGatheringState::New, "new"),
+            (ICEGatheringState::Gathering, "gathering"),
+            (ICEGatheringState::Complete, "complete"),
         ];
 
         for (state, expected_string) in tests {

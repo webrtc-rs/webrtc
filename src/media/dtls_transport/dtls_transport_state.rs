@@ -34,11 +34,11 @@ impl Default for DTLSTransportState {
     }
 }
 
-const DTLS_TRANSPORT_STATE_NEW_STR: &str = "New";
-const DTLS_TRANSPORT_STATE_CONNECTING_STR: &str = "Connecting";
-const DTLS_TRANSPORT_STATE_CONNECTED_STR: &str = "Connected";
-const DTLS_TRANSPORT_STATE_CLOSED_STR: &str = "Closed";
-const DTLS_TRANSPORT_STATE_FAILED_STR: &str = "Failed";
+const DTLS_TRANSPORT_STATE_NEW_STR: &str = "new";
+const DTLS_TRANSPORT_STATE_CONNECTING_STR: &str = "connecting";
+const DTLS_TRANSPORT_STATE_CONNECTED_STR: &str = "connected";
+const DTLS_TRANSPORT_STATE_CLOSED_STR: &str = "closed";
+const DTLS_TRANSPORT_STATE_FAILED_STR: &str = "failed";
 
 impl From<&str> for DTLSTransportState {
     fn from(raw: &str) -> Self {
@@ -88,11 +88,11 @@ mod test {
     fn test_new_dtls_transport_state() {
         let tests = vec![
             (crate::UNSPECIFIED_STR, DTLSTransportState::Unspecified),
-            ("New", DTLSTransportState::New),
-            ("Connecting", DTLSTransportState::Connecting),
-            ("Connected", DTLSTransportState::Connected),
-            ("Closed", DTLSTransportState::Closed),
-            ("Failed", DTLSTransportState::Failed),
+            ("new", DTLSTransportState::New),
+            ("connecting", DTLSTransportState::Connecting),
+            ("connected", DTLSTransportState::Connected),
+            ("closed", DTLSTransportState::Closed),
+            ("failed", DTLSTransportState::Failed),
         ];
 
         for (state_string, expected_state) in tests {
@@ -109,11 +109,11 @@ mod test {
     fn test_dtls_transport_state_string() {
         let tests = vec![
             (DTLSTransportState::Unspecified, crate::UNSPECIFIED_STR),
-            (DTLSTransportState::New, "New"),
-            (DTLSTransportState::Connecting, "Connecting"),
-            (DTLSTransportState::Connected, "Connected"),
-            (DTLSTransportState::Closed, "Closed"),
-            (DTLSTransportState::Failed, "Failed"),
+            (DTLSTransportState::New, "new"),
+            (DTLSTransportState::Connecting, "connecting"),
+            (DTLSTransportState::Connected, "connected"),
+            (DTLSTransportState::Closed, "closed"),
+            (DTLSTransportState::Failed, "failed"),
         ];
 
         for (state, expected_string) in tests {
