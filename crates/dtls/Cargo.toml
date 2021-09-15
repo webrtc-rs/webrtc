@@ -60,3 +60,6 @@ bench = false
 name = "dtls_server"
 path = "examples/dtls_server.rs"
 bench = false
+
+[workspace]
+members = [".", "examples/hub"]

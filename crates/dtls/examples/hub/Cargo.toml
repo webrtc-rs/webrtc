@@ -1,0 +1,11 @@
+[package]
+name = "hub"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+util = { package = "webrtc-util", version = "0.4.2", default-features = false, features = ["conn"] }
+tokio = { version = "1.0", features = ["full"] }
+log = "0.4"
+thiserror = "1.0.25"
+anyhow = "1.0.41"
