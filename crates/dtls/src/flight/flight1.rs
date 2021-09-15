@@ -18,6 +18,7 @@ use crate::handshake::*;
 use crate::record_layer::record_layer_header::*;
 use crate::record_layer::*;
 
+use crate::extension::renegotiation_info::ExtensionRenegotiationInfo;
 use async_trait::async_trait;
 use std::fmt;
 use std::sync::atomic::Ordering;
@@ -128,11 +129,14 @@ impl Flight for Flight1 {
         state.cookie = vec![];
         state.local_random.populate();
 
-        let mut extensions = vec![Extension::SupportedSignatureAlgorithms(
-            ExtensionSupportedSignatureAlgorithms {
+        let mut extensions = vec![
+            Extension::SupportedSignatureAlgorithms(ExtensionSupportedSignatureAlgorithms {
                 signature_hash_algorithms: cfg.local_signature_schemes.clone(),
-            },
-        )];
+            }),
+            Extension::RenegotiationInfo(ExtensionRenegotiationInfo {
+                renegotiated_connection: 0,
+            }),
+        ];
 
         if cfg.local_psk_callback.is_none() {
             extensions.extend_from_slice(&[

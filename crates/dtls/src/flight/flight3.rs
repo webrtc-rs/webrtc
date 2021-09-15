@@ -22,6 +22,7 @@ use crate::cipher_suite::cipher_suite_for_id;
 use crate::prf::{prf_pre_master_secret, prf_psk_pre_master_secret};
 use crate::{find_matching_cipher_suite, find_matching_srtp_profile};
 
+use crate::extension::renegotiation_info::ExtensionRenegotiationInfo;
 use async_trait::async_trait;
 use log::*;
 use std::fmt;
@@ -242,6 +243,12 @@ impl Flight for Flight3 {
                 ));
             }
             if find_matching_cipher_suite(&[h.cipher_suite], &cfg.local_cipher_suites).is_err() {
+                debug!(
+                    "[handshake:{}] use cipher suite: {}",
+                    srv_cli_str(state.is_client),
+                    h.cipher_suite
+                );
+
                 return Err((
                     Some(Alert {
                         alert_level: AlertLevel::Fatal,
@@ -251,8 +258,31 @@ impl Flight for Flight3 {
                 ));
             }
 
-            if let Ok(cipher_suite) = cipher_suite_for_id(h.cipher_suite) {
-                trace!("[handshake] use cipher suite: {}", cipher_suite.to_string());
+            let cipher_suite = match cipher_suite_for_id(h.cipher_suite) {
+                Ok(cipher_suite) => cipher_suite,
+                Err(_) => {
+                    debug!(
+                        "[handshake:{}] use cipher suite: {}",
+                        srv_cli_str(state.is_client),
+                        h.cipher_suite
+                    );
+
+                    return Err((
+                        Some(Alert {
+                            alert_level: AlertLevel::Fatal,
+                            alert_description: AlertDescription::InsufficientSecurity,
+                        }),
+                        Some(Error::ErrInvalidCipherSuite.into()),
+                    ));
+                }
+            };
+
+            trace!(
+                "[handshake:{}] use cipher suite: {}",
+                srv_cli_str(state.is_client),
+                cipher_suite.to_string()
+            );
+            {
                 let mut cs = state.cipher_suite.lock().await;
                 *cs = Some(cipher_suite);
             }
@@ -323,11 +353,14 @@ impl Flight for Flight3 {
         _cache: &HandshakeCache,
         cfg: &HandshakeConfig,
     ) -> Result<Vec<Packet>, (Option<Alert>, Option<anyhow::Error>)> {
-        let mut extensions = vec![Extension::SupportedSignatureAlgorithms(
-            ExtensionSupportedSignatureAlgorithms {
+        let mut extensions = vec![
+            Extension::SupportedSignatureAlgorithms(ExtensionSupportedSignatureAlgorithms {
                 signature_hash_algorithms: cfg.local_signature_schemes.clone(),
-            },
-        )];
+            }),
+            Extension::RenegotiationInfo(ExtensionRenegotiationInfo {
+                renegotiated_connection: 0,
+            }),
+        ];
 
         if cfg.local_psk_callback.is_none() {
             extensions.extend_from_slice(&[

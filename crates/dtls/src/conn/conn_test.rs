@@ -18,6 +18,7 @@ use crate::handshake::handshake_message_server_key_exchange::*;
 use crate::handshake::handshake_random::*;
 use crate::signature_hash_algorithm::*;
 
+use crate::extension::renegotiation_info::ExtensionRenegotiationInfo;
 use rand::Rng;
 use std::time::SystemTime;
 use util::conn::conn_pipe::*;
@@ -707,6 +708,8 @@ async fn test_client_timeout() -> Result<()> {
     Ok(())
 }
 
+//use std::io::Write;
+
 #[tokio::test]
 async fn test_srtp_configuration() -> Result<()> {
     /*env_logger::Builder::new()
@@ -724,7 +727,14 @@ async fn test_srtp_configuration() -> Result<()> {
     .filter(None, LevelFilter::Trace)
     .init();*/
 
-    let tests = vec![
+    let tests: Vec<(
+        &str,
+        Vec<SrtpProtectionProfile>,
+        Vec<SrtpProtectionProfile>,
+        SrtpProtectionProfile,
+        Option<Error>,
+        Option<Error>,
+    )> = vec![
         (
             "No SRTP in use",
             vec![],
@@ -822,14 +832,17 @@ async fn test_srtp_configuration() -> Result<()> {
                 assert!(false, "{} expected error, but got ok", name);
             }
         } else {
-            if let Ok(server) = result {
-                let actual_server_srtp = server.selected_srtpprotection_profile();
-                assert_eq!(actual_server_srtp, expected_profile,
-                           "test_srtp_configuration: Server SRTPProtectionProfile Mismatch '{}': expected({:?}) actual({:?})",
-                           name, expected_profile, actual_server_srtp);
-            } else {
-                assert!(false, "{} expected no error", name);
-            }
+            match result {
+                Ok(server) => {
+                    let actual_server_srtp = server.selected_srtpprotection_profile();
+                    assert_eq!(actual_server_srtp, expected_profile,
+                               "test_srtp_configuration: Server SRTPProtectionProfile Mismatch '{}': expected({:?}) actual({:?})",
+                               name, expected_profile, actual_server_srtp);
+                }
+                Err(err) => {
+                    assert!(false, "{} expected no error: {}", name, err);
+                }
+            };
         }
 
         let client_result = client_res_rx.recv().await;
@@ -2351,7 +2364,6 @@ async fn test_multiple_hello_verify_request() -> Result<()> {
         packets.push(packet);
     }
 
-    use util::Conn;
     let (ca, cb) = pipe();
 
     tokio::spawn(async move {
@@ -2391,6 +2403,139 @@ async fn test_multiple_hello_verify_request() -> Result<()> {
         }
         // write hello verify request
         cb.send(&packets[i]).await?;
+    }
+
+    Ok(())
+}
+
+async fn send_client_hello(
+    cookie: Vec<u8>,
+    ca: &Arc<dyn Conn + Send + Sync>,
+    sequence_number: u64,
+    send_renegotiation_info: bool,
+) -> Result<()> {
+    let mut extensions = vec![];
+    if send_renegotiation_info {
+        extensions.push(Extension::RenegotiationInfo(ExtensionRenegotiationInfo {
+            renegotiated_connection: 0,
+        }));
+    }
+
+    let mut h = Handshake::new(HandshakeMessage::ClientHello(HandshakeMessageClientHello {
+        version: PROTOCOL_VERSION1_2,
+        random: HandshakeRandom::default(),
+        cookie,
+
+        cipher_suites: vec![CipherSuiteId::Tls_Ecdhe_Ecdsa_With_Aes_128_Gcm_Sha256],
+        compression_methods: default_compression_methods(),
+        extensions,
+    }));
+    h.handshake_header.message_sequence = sequence_number as u16;
+
+    let mut record = RecordLayer::new(PROTOCOL_VERSION1_2, 0, Content::Handshake(h));
+    record.record_layer_header.sequence_number = sequence_number;
+
+    let mut packet = vec![];
+    {
+        let mut writer = BufWriter::<&mut Vec<u8>>::new(packet.as_mut());
+        record.marshal(&mut writer)?;
+    }
+
+    ca.send(&packet).await?;
+
+    Ok(())
+}
+
+// Assert that a DTLS Server always responds with RenegotiationInfo if
+// a ClientHello contained that extension or not
+#[tokio::test]
+async fn test_renegotation_info() -> Result<()> {
+    let mut resp = vec![0u8; 1024];
+
+    let tests = vec![
+        ("Include RenegotiationInfo", true),
+        ("No RenegotiationInfo", false),
+    ];
+
+    for (name, send_renegotiation_info) in tests {
+        let (ca, cb) = pipe();
+
+        tokio::spawn(async move {
+            let conf = Config::default();
+            let _ = tokio::time::timeout(
+                Duration::from_millis(100),
+                create_test_server(Arc::new(cb), conf, true),
+            )
+            .await;
+        });
+
+        tokio::time::sleep(Duration::from_millis(5)).await;
+
+        let ca: Arc<dyn Conn + Send + Sync> = Arc::new(ca);
+        send_client_hello(vec![], &ca, 0, send_renegotiation_info).await?;
+
+        let n = ca.recv(&mut resp).await?;
+        let mut reader = BufReader::new(&resp[..n]);
+        let record = RecordLayer::unmarshal(&mut reader)?;
+
+        let hello_verify_request = match record.content {
+            Content::Handshake(h) => match h.handshake_message {
+                HandshakeMessage::HelloVerifyRequest(hvr) => hvr,
+                _ => {
+                    assert!(false, "unexpected handshake message");
+                    return Ok(());
+                }
+            },
+            _ => {
+                assert!(false, "unexpected content");
+                return Ok(());
+            }
+        };
+
+        send_client_hello(
+            hello_verify_request.cookie.clone(),
+            &ca,
+            1,
+            send_renegotiation_info,
+        )
+        .await?;
+        let n = ca.recv(&mut resp).await?;
+        let messages = unpack_datagram(&resp[..n])?;
+
+        let mut reader = BufReader::new(&messages[0][..]);
+        let record = RecordLayer::unmarshal(&mut reader)?;
+
+        let server_hello = match record.content {
+            Content::Handshake(h) => match h.handshake_message {
+                HandshakeMessage::ServerHello(sh) => sh,
+                _ => {
+                    assert!(false, "unexpected handshake message");
+                    return Ok(());
+                }
+            },
+            _ => {
+                assert!(false, "unexpected content");
+                return Ok(());
+            }
+        };
+
+        let mut got_negotation_info = false;
+        for v in &server_hello.extensions {
+            match v {
+                Extension::RenegotiationInfo(_) => {
+                    got_negotation_info = true;
+                }
+                _ => {}
+            }
+        }
+
+        assert!(
+            got_negotation_info,
+            "{}: Received ServerHello without RenegotiationInfo",
+            name
+        );
+
+        ca.close().await?;
     }
 
     Ok(())

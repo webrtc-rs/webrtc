@@ -25,6 +25,7 @@ use crate::record_layer::record_layer_header::*;
 use crate::record_layer::*;
 use crate::signature_hash_algorithm::*;
 
+use crate::extension::renegotiation_info::ExtensionRenegotiationInfo;
 use async_trait::async_trait;
 use log::*;
 use std::fmt;
@@ -493,7 +494,9 @@ impl Flight for Flight4 {
         _cache: &HandshakeCache,
         cfg: &HandshakeConfig,
     ) -> Result<Vec<Packet>, (Option<Alert>, Option<anyhow::Error>)> {
-        let mut extensions = vec![];
+        let mut extensions = vec![Extension::RenegotiationInfo(ExtensionRenegotiationInfo {
+            renegotiated_connection: 0,
+        })];
         if (cfg.extended_master_secret == ExtendedMasterSecretType::Request
             || cfg.extended_master_secret == ExtendedMasterSecretType::Require)
             && state.extended_master_secret

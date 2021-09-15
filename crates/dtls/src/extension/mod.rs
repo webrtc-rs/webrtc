@@ -4,6 +4,7 @@ pub mod extension_supported_point_formats;
 pub mod extension_supported_signature_algorithms;
 pub mod extension_use_extended_master_secret;
 pub mod extension_use_srtp;
+pub mod renegotiation_info;
 
 use extension_server_name::*;
 use extension_supported_elliptic_curves::*;
@@ -14,6 +15,7 @@ use extension_use_srtp::*;
 
 use crate::error::*;
 
+use crate::extension::renegotiation_info::ExtensionRenegotiationInfo;
 use anyhow::Result;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::{Read, Write};
@@ -27,6 +29,7 @@ pub enum ExtensionValue {
     SupportedSignatureAlgorithms = 13,
     UseSrtp = 14,
     UseExtendedMasterSecret = 23,
+    RenegotiationInfo = 65281,
     Unsupported,
 }
 
@@ -39,6 +42,7 @@ impl From<u16> for ExtensionValue {
             13 => ExtensionValue::SupportedSignatureAlgorithms,
             14 => ExtensionValue::UseSrtp,
             23 => ExtensionValue::UseExtendedMasterSecret,
+            65281 => ExtensionValue::RenegotiationInfo,
             _ => ExtensionValue::Unsupported,
         }
     }
@@ -52,6 +56,7 @@ pub enum Extension {
     SupportedSignatureAlgorithms(ExtensionSupportedSignatureAlgorithms),
     UseSrtp(ExtensionUseSrtp),
     UseExtendedMasterSecret(ExtensionUseExtendedMasterSecret),
+    RenegotiationInfo(ExtensionRenegotiationInfo),
 }
 
 impl Extension {
@@ -63,6 +68,7 @@ impl Extension {
             Extension::SupportedSignatureAlgorithms(ext) => ext.extension_value(),
             Extension::UseSrtp(ext) => ext.extension_value(),
             Extension::UseExtendedMasterSecret(ext) => ext.extension_value(),
+            Extension::RenegotiationInfo(ext) => ext.extension_value(),
         }
     }
 
@@ -76,6 +82,7 @@ impl Extension {
             Extension::SupportedSignatureAlgorithms(ext) => ext.size(),
             Extension::UseSrtp(ext) => ext.size(),
             Extension::UseExtendedMasterSecret(ext) => ext.size(),
+            Extension::RenegotiationInfo(ext) => ext.size(),
         };
 
         len
@@ -90,6 +97,7 @@ impl Extension {
             Extension::SupportedSignatureAlgorithms(ext) => ext.marshal(writer),
             Extension::UseSrtp(ext) => ext.marshal(writer),
             Extension::UseExtendedMasterSecret(ext) => ext.marshal(writer),
+            Extension::RenegotiationInfo(ext) => ext.marshal(writer),
         }
     }
 
@@ -113,6 +121,9 @@ impl Extension {
             ExtensionValue::UseSrtp => Ok(Extension::UseSrtp(ExtensionUseSrtp::unmarshal(reader)?)),
             ExtensionValue::UseExtendedMasterSecret => Ok(Extension::UseExtendedMasterSecret(
                 ExtensionUseExtendedMasterSecret::unmarshal(reader)?,
+            )),
+            ExtensionValue::RenegotiationInfo => Ok(Extension::RenegotiationInfo(
+                ExtensionRenegotiationInfo::unmarshal(reader)?,
             )),
             _ => Err(Error::ErrInvalidExtensionType.into()),
         }
