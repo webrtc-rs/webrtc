@@ -1,29 +1,29 @@
 use anyhow::Result;
 use clap::{App, AppSettings, Arg};
-//use std::io::Write;
+use std::io::Write;
 use std::sync::Arc;
 use tokio::net::UdpSocket;
 use util::Conn;
 use webrtc_dtls::{config::*, conn::DTLSConn, crypto::Certificate};
 
-// cargo run --color=always --package webrtc-dtls --example dtls_client -- --server 127.0.0.1:4444
+// cargo run --example dail_selfsign -- --server 127.0.0.1:4444
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    /*env_logger::Builder::new()
-    .format(|buf, record| {
-        writeln!(
-            buf,
-            "{}:{} [{}] {} - {}",
-            record.file().unwrap_or("unknown"),
-            record.line().unwrap_or(0),
-            record.level(),
-            chrono::Local::now().format("%H:%M:%S.%6f"),
-            record.args()
-        )
-    })
-    .filter(None, log::LevelFilter::Trace)
-    .init();*/
+    env_logger::Builder::new()
+        .format(|buf, record| {
+            writeln!(
+                buf,
+                "{}:{} [{}] {} - {}",
+                record.file().unwrap_or("unknown"),
+                record.line().unwrap_or(0),
+                record.level(),
+                chrono::Local::now().format("%H:%M:%S.%6f"),
+                record.args()
+            )
+        })
+        .filter(None, log::LevelFilter::Trace)
+        .init();
 
     let mut app = App::new("DTLS Client")
         .version("0.1.0")
