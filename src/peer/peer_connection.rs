@@ -24,9 +24,6 @@ use crate::peer::ice::ice_gather::ice_gatherer::{
 };
 use crate::peer::ice::ice_gather::ICEGatherOptions;
 use crate::peer::peer_connection_state::{NegotiationNeededState, PeerConnectionState};
-use crate::peer::policy::bundle_policy::BundlePolicy;
-use crate::peer::policy::ice_transport_policy::ICETransportPolicy;
-use crate::peer::policy::rtcp_mux_policy::RTCPMuxPolicy;
 use crate::peer::policy::sdp_semantics::SDPSemantics;
 use crate::peer::sdp::session_description::{SessionDescription, SessionDescriptionSerde};
 use crate::peer::signaling_state::{check_next_signaling_state, SignalingState, StateChangeOp};
@@ -149,21 +146,9 @@ struct NegotiationNeededParams {
 /// browser, or to another endpoint implementing the required protocols.
 pub struct PeerConnection {
     stats_id: String,
-
-    sdp_origin: sdp::session_description::Origin,
-
-    configuration: Configuration,
-
     idp_login_url: Option<String>,
 
-    last_offer: String,
-    last_answer: String,
-
-    /// a value containing the last known greater mid value
-    /// we internally generate mids as numbers. Needed since JSEP
-    /// requires that when reusing a media section a new unique mid
-    /// should be defined (see JSEP 3.4.1).
-    greater_mid: isize,
+    configuration: Configuration,
 
     interceptor_rtcp_writer: Arc<dyn RTCPWriter + Send + Sync>,
 
@@ -192,13 +177,9 @@ impl PeerConnection {
                 "PeerConnection-{}",
                 SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
             ),
-            last_offer: "".to_owned(),
-            last_answer: "".to_owned(),
-            greater_mid: -1,
             interceptor_rtcp_writer,
             internal,
             configuration,
-            sdp_origin: Default::default(),
             idp_login_url: None,
         })
     }
@@ -556,7 +537,7 @@ impl PeerConnection {
         }
     }
 
-    /// set_configuration updates the configuration of this PeerConnection object.
+    /*TODO: // set_configuration updates the configuration of this PeerConnection object.
     pub async fn set_configuration(&mut self, configuration: Configuration) -> Result<()> {
         //nolint:gocognit
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-setconfiguration (step #2)
@@ -621,7 +602,7 @@ impl PeerConnection {
             self.configuration.ice_servers = configuration.ice_servers
         }
         Ok(())
-    }
+    }*/
 
     /// get_configuration returns a Configuration object representing the current
     /// configuration of this PeerConnection object. The returned object is a
@@ -638,10 +619,7 @@ impl PeerConnection {
 
     /// create_offer starts the PeerConnection and generates the localDescription
     /// https://w3c.github.io/webrtc-pc/#dom-rtcpeerconnection-createoffer
-    pub async fn create_offer(
-        &mut self,
-        options: Option<OfferOptions>,
-    ) -> Result<SessionDescription> {
+    pub async fn create_offer(&self, options: Option<OfferOptions>) -> Result<SessionDescription> {
         let use_identity = self.idp_login_url.is_some();
         if use_identity {
             return Err(Error::ErrIdentityProviderNotImplemented.into());
@@ -700,8 +678,12 @@ impl PeerConnection {
                                         Ok(n) => n,
                                         Err(_) => continue,
                                     };
-                                    if numeric_mid > self.greater_mid {
-                                        self.greater_mid = numeric_mid;
+                                    if numeric_mid
+                                        > self.internal.greater_mid.load(Ordering::SeqCst)
+                                    {
+                                        self.internal
+                                            .greater_mid
+                                            .store(numeric_mid, Ordering::SeqCst);
                                     }
                                 }
                             }
@@ -712,8 +694,8 @@ impl PeerConnection {
                     if !t.mid().await.is_empty() {
                         continue;
                     }
-                    self.greater_mid += 1;
-                    t.set_mid(format!("{}", self.greater_mid)).await?;
+                    let greater_mid = self.internal.greater_mid.fetch_add(1, Ordering::SeqCst);
+                    t.set_mid(format!("{}", greater_mid + 1)).await?;
                 }
             }
 
@@ -743,7 +725,10 @@ impl PeerConnection {
                     .await?
             };
 
-            update_sdp_origin(&mut self.sdp_origin, &mut d);
+            {
+                let mut sdp_origin = self.internal.sdp_origin.lock().await;
+                update_sdp_origin(&mut sdp_origin, &mut d);
+            }
             let sdp = d.marshal();
 
             offer = SessionDescription {
@@ -765,7 +750,10 @@ impl PeerConnection {
             }
         }
 
-        self.last_offer = offer.serde.sdp.clone();
+        {
+            let mut last_offer = self.internal.last_offer.lock().await;
+            *last_offer = offer.serde.sdp.clone();
+        }
         Ok(offer)
     }
 
@@ -819,7 +807,7 @@ impl PeerConnection {
 
     /// create_answer starts the PeerConnection and generates the localDescription
     pub async fn create_answer(
-        &mut self,
+        &self,
         _options: Option<AnswerOptions>,
     ) -> Result<SessionDescription> {
         let use_identity = self.idp_login_url.is_some();
@@ -856,7 +844,10 @@ impl PeerConnection {
             )
             .await?;
 
-        update_sdp_origin(&mut self.sdp_origin, &mut d);
+        {
+            let mut sdp_origin = self.internal.sdp_origin.lock().await;
+            update_sdp_origin(&mut sdp_origin, &mut d);
+        }
         let sdp = d.marshal();
 
         let answer = SessionDescription {
@@ -867,13 +858,16 @@ impl PeerConnection {
             parsed: Some(d),
         };
 
-        self.last_answer = answer.serde.sdp.clone();
+        {
+            let mut last_answer = self.internal.last_answer.lock().await;
+            *last_answer = answer.serde.sdp.clone();
+        }
         Ok(answer)
     }
 
     // 4.4.1.6 Set the SessionDescription
     pub(crate) async fn set_description(
-        &mut self,
+        &self,
         sd: &SessionDescription,
         op: StateChangeOp,
     ) -> Result<()> {
@@ -893,7 +887,11 @@ impl PeerConnection {
                     match sd.serde.sdp_type {
                         // stable->SetLocal(offer)->have-local-offer
                         SDPType::Offer => {
-                            if sd.serde.sdp != self.last_offer {
+                            let check = {
+                                let last_offer = self.internal.last_offer.lock().await;
+                                sd.serde.sdp != *last_offer
+                            };
+                            if check {
                                 Err(new_sdpdoes_not_match_offer.into())
                             } else {
                                 let next_state = check_next_signaling_state(
@@ -913,7 +911,11 @@ impl PeerConnection {
                         // have-remote-offer->SetLocal(answer)->stable
                         // have-local-pranswer->SetLocal(answer)->stable
                         SDPType::Answer => {
-                            if sd.serde.sdp != self.last_answer {
+                            let check = {
+                                let last_answer = self.internal.last_answer.lock().await;
+                                sd.serde.sdp != *last_answer
+                            };
+                            if check {
                                 Err(new_sdpdoes_not_match_answer.into())
                             } else {
                                 let next_state = check_next_signaling_state(
@@ -964,7 +966,11 @@ impl PeerConnection {
                         }
                         // have-remote-offer->SetLocal(pranswer)->have-local-pranswer
                         SDPType::Pranswer => {
-                            if sd.serde.sdp != self.last_answer {
+                            let check = {
+                                let last_answer = self.internal.last_answer.lock().await;
+                                sd.serde.sdp != *last_answer
+                            };
+                            if check {
                                 Err(new_sdpdoes_not_match_answer.into())
                             } else {
                                 let next_state = check_next_signaling_state(
@@ -1114,7 +1120,7 @@ impl PeerConnection {
     }
 
     /// set_local_description sets the SessionDescription of the local peer
-    pub async fn set_local_description(&mut self, mut desc: SessionDescription) -> Result<()> {
+    pub async fn set_local_description(&self, mut desc: SessionDescription) -> Result<()> {
         if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed.into());
         }
@@ -1128,10 +1134,12 @@ impl PeerConnection {
         if desc.serde.sdp.is_empty() {
             match desc.serde.sdp_type {
                 SDPType::Answer | SDPType::Pranswer => {
-                    desc.serde.sdp = self.last_answer.clone();
+                    let last_answer = self.internal.last_answer.lock().await;
+                    desc.serde.sdp = last_answer.clone();
                 }
                 SDPType::Offer => {
-                    desc.serde.sdp = self.last_offer.clone();
+                    let last_offer = self.internal.last_offer.lock().await;
+                    desc.serde.sdp = last_offer.clone();
                 }
                 _ => return Err(Error::ErrPeerConnSDPTypeInvalidValueSetLocalDescription.into()),
             }
@@ -1184,7 +1192,7 @@ impl PeerConnection {
     }
 
     /// set_remote_description sets the SessionDescription of the remote peer
-    pub async fn set_remote_description(&mut self, mut desc: SessionDescription) -> Result<()> {
+    pub async fn set_remote_description(&self, mut desc: SessionDescription) -> Result<()> {
         if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed.into());
         }
@@ -1500,7 +1508,7 @@ impl PeerConnection {
 
     /// add_track adds a Track to the PeerConnection
     pub async fn add_track(
-        &mut self,
+        &self,
         track: Arc<dyn TrackLocal + Send + Sync>,
     ) -> Result<Arc<RTPSender>> {
         if self.internal.is_closed.load(Ordering::SeqCst) {
@@ -1625,7 +1633,7 @@ impl PeerConnection {
 
     /// add_transceiver_from_kind Create a new RtpTransceiver and adds it to the set of transceivers.
     pub async fn add_transceiver_from_kind(
-        &mut self,
+        &self,
         kind: RTPCodecType,
         init: &[RTPTransceiverInit],
     ) -> Result<Arc<RTPTransceiver>> {
@@ -1634,7 +1642,7 @@ impl PeerConnection {
 
     /// add_transceiver_from_track Create a new RtpTransceiver(SendRecv or SendOnly) and add it to the set of transceivers.
     pub async fn add_transceiver_from_track(
-        &mut self,
+        &self,
         track: &Arc<dyn TrackLocal + Send + Sync>, //Why compiler complains if "track: Arc<dyn TrackLocal + Send + Sync>"?
         init: &[RTPTransceiverInit],
     ) -> Result<Arc<RTPTransceiver>> {
@@ -1772,10 +1780,6 @@ impl PeerConnection {
     ) -> Result<usize> {
         let a = Attributes::new();
         self.interceptor_rtcp_writer.write(pkt, &a).await
-    }
-
-    pub fn get_rtcp_writer(&self) -> Arc<dyn RTCPWriter + Send + Sync> {
-        Arc::clone(&self.interceptor_rtcp_writer)
     }
 
     /// close ends the PeerConnection

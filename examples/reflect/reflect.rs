@@ -4,7 +4,6 @@ use std::sync::Arc;
 use tokio::time::Duration;
 
 use interceptor::registry::Registry;
-use interceptor::Attributes;
 use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_VP8};
@@ -106,7 +105,7 @@ async fn main() -> Result<()> {
     };
 
     // Create a new RTCPeerConnection
-    let mut peer_connection = api.new_peer_connection(config).await?;
+    let peer_connection = Arc::new(api.new_peer_connection(config).await?);
 
     // Create Track that we send video back to browser on
     let output_track = Arc::new(TrackLocalStaticRTP::new(
@@ -143,14 +142,14 @@ async fn main() -> Result<()> {
 
     // Set a handler for when a new remote track starts, this handler copies inbound RTP packets,
     // replaces the SSRC and sends them back
-    let rtcp_writer = peer_connection.get_rtcp_writer();
+    let pc = Arc::clone(&peer_connection);
     peer_connection
         .on_track(Box::new(
             move |track: Option<Arc<TrackRemote>>, _receiver: Option<Arc<RTPReceiver>>| {
                 if let Some(track) = track {
                     let track2 = Arc::clone(&track);
                     let output_track2 = Arc::clone(&output_track);
-                    let rtcp_writer2 = Arc::clone(&rtcp_writer);
+                    let pc2 = Arc::clone(&pc);
                     Box::pin(async move {
                         // Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
                         // This is a temporary fix until we implement incoming RTCP events, then we would push a PLI only when a viewer requests it
@@ -163,11 +162,10 @@ async fn main() -> Result<()> {
 
                                 tokio::select! {
                                     _ = timeout.as_mut() =>{
-                                        let a = Attributes::new();
-                                        result = rtcp_writer2.write(&PictureLossIndication{
+                                        result = pc2.write_rtcp(&PictureLossIndication{
                                                 sender_ssrc: 0,
                                                 media_ssrc,
-                                        }, &a).await;
+                                        }).await;
                                     }
                                 };
                             }

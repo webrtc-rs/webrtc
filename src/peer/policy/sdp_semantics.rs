@@ -128,7 +128,7 @@ mod test {
         m.register_default_codecs()?;
         let api = APIBuilder::new().with_media_engine(m).build();
 
-        let mut opc = api
+        let opc = api
             .new_peer_connection(Configuration {
                 sdp_semantics: SDPSemantics::PlanB,
                 ..Default::default()
@@ -187,7 +187,7 @@ mod test {
             }
         }
 
-        let mut apc = api
+        let apc = api
             .new_peer_connection(Configuration {
                 sdp_semantics: SDPSemantics::PlanB,
                 ..Default::default()
@@ -214,7 +214,7 @@ mod test {
         m.register_default_codecs()?;
         let api = APIBuilder::new().with_media_engine(m).build();
 
-        let mut opc = api
+        let opc = api
             .new_peer_connection(Configuration {
                 sdp_semantics: SDPSemantics::PlanB,
                 ..Default::default()
@@ -246,7 +246,7 @@ mod test {
             assert_eq!(md_names, &["video".to_owned(), "audio".to_owned()]);
         }
 
-        let mut apc = api
+        let apc = api
             .new_peer_connection(Configuration {
                 sdp_semantics: SDPSemantics::PlanB,
                 ..Default::default()
@@ -328,7 +328,7 @@ mod test {
         m.register_default_codecs()?;
         let api = APIBuilder::new().with_media_engine(m).build();
 
-        let mut opc = api
+        let opc = api
             .new_peer_connection(Configuration {
                 sdp_semantics: SDPSemantics::PlanB,
                 ..Default::default()
@@ -360,7 +360,7 @@ mod test {
             assert_eq!(md_names, &["video".to_owned(), "audio".to_owned()]);
         }
 
-        let mut apc = api
+        let apc = api
             .new_peer_connection(Configuration {
                 sdp_semantics: SDPSemantics::UnifiedPlanWithFallback,
                 ..Default::default()

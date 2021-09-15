@@ -1282,7 +1282,7 @@ async fn test_data_channel_non_standard_session_description() -> Result<()> {
     m.register_default_codecs()?;
     let api = APIBuilder::new().with_media_engine(m).build();
 
-    let (mut offer_pc, mut answer_pc) = new_pair(&api).await?;
+    let (offer_pc, answer_pc) = new_pair(&api).await?;
 
     let _ = offer_pc.create_data_channel("foo", None).await?;
 

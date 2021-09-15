@@ -109,7 +109,7 @@ mod test {
         m.register_default_codecs()?;
         let api = APIBuilder::new().with_media_engine(m).build();
 
-        let mut pc = api.new_peer_connection(Configuration::default()).await?;
+        let pc = api.new_peer_connection(Configuration::default()).await?;
 
         let offer = pc.create_offer(None).await?;
 

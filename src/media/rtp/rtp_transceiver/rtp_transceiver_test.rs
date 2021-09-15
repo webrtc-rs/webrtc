@@ -163,13 +163,13 @@ async fn test_rtp_transceiver_set_codec_preferences_payload_type() -> Result<()>
     let mut m = MediaEngine::default();
     m.register_default_codecs()?;
     let api = APIBuilder::new().with_media_engine(m).build();
-    let mut offer_pc = api.new_peer_connection(Configuration::default()).await?;
+    let offer_pc = api.new_peer_connection(Configuration::default()).await?;
 
     let mut m = MediaEngine::default();
     m.register_default_codecs()?;
     m.register_codec(test_codec.clone(), RTPCodecType::Video)?;
     let api = APIBuilder::new().with_media_engine(m).build();
-    let mut answer_pc = api.new_peer_connection(Configuration::default()).await?;
+    let answer_pc = api.new_peer_connection(Configuration::default()).await?;
 
     let _ = offer_pc
         .add_transceiver_from_kind(RTPCodecType::Video, &[])

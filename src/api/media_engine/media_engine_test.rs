@@ -11,7 +11,7 @@ async fn test_opus_case() -> Result<()> {
     m.register_default_codecs()?;
     let api = APIBuilder::new().with_media_engine(m).build();
 
-    let mut pc = api.new_peer_connection(Configuration::default()).await?;
+    let pc = api.new_peer_connection(Configuration::default()).await?;
     pc.add_transceiver_from_kind(RTPCodecType::Audio, &[])
         .await?;
 
@@ -31,7 +31,7 @@ async fn test_video_case() -> Result<()> {
     m.register_default_codecs()?;
     let api = APIBuilder::new().with_media_engine(m).build();
 
-    let mut pc = api.new_peer_connection(Configuration::default()).await?;
+    let pc = api.new_peer_connection(Configuration::default()).await?;
     pc.add_transceiver_from_kind(RTPCodecType::Video, &[])
         .await?;
 

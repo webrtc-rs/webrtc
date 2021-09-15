@@ -1,12 +1,22 @@
 use super::*;
+use std::sync::atomic::AtomicIsize;
 
 pub(crate) struct PeerConnectionInternal {
+    /// a value containing the last known greater mid value
+    /// we internally generate mids as numbers. Needed since JSEP
+    /// requires that when reusing a media section a new unique mid
+    /// should be defined (see JSEP 3.4.1).
+    pub(super) greater_mid: AtomicIsize,
+    pub(super) sdp_origin: Mutex<sdp::session_description::Origin>,
+    pub(super) last_offer: Mutex<String>,
+    pub(super) last_answer: Mutex<String>,
+
     pub(super) on_negotiation_needed_handler: Arc<Mutex<Option<OnNegotiationNeededHdlrFn>>>,
     pub(super) is_closed: Arc<AtomicBool>,
 
-    // ops is an operations queue which will ensure the enqueued actions are
-    // executed in order. It is used for asynchronously, but serially processing
-    // remote and local descriptions
+    /// ops is an operations queue which will ensure the enqueued actions are
+    /// executed in order. It is used for asynchronously, but serially processing
+    /// remote and local descriptions
     pub(super) ops: Arc<Operations>,
     pub(super) negotiation_needed_state: Arc<AtomicU8>,
     pub(super) is_negotiation_needed: Arc<AtomicBool>,
@@ -44,6 +54,11 @@ pub(crate) struct PeerConnectionInternal {
 impl PeerConnectionInternal {
     pub(super) async fn new(api: &API, configuration: &mut Configuration) -> Result<Self> {
         let mut pc = PeerConnectionInternal {
+            greater_mid: AtomicIsize::new(-1),
+            sdp_origin: Mutex::new(Default::default()),
+            last_offer: Mutex::new("".to_owned()),
+            last_answer: Mutex::new("".to_owned()),
+
             on_negotiation_needed_handler: Arc::new(Default::default()),
             ops: Arc::new(Operations::new()),
             is_closed: Arc::new(AtomicBool::new(false)),

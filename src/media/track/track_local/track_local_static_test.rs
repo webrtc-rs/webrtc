@@ -369,7 +369,7 @@ async fn test_track_local_static_binding_non_blocking() -> Result<()> {
     m.register_default_codecs()?;
     let api = APIBuilder::new().with_media_engine(m).build();
 
-    let (mut pc_offer, mut pc_answer) = new_pair(&api).await?;
+    let (pc_offer, pc_answer) = new_pair(&api).await?;
 
     pc_offer
         .add_transceiver_from_kind(RTPCodecType::Video, &[])
