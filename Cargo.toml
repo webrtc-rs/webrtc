@@ -49,6 +49,7 @@ tokio-test = "0.4"
 env_logger = "0.8"
 lazy_static = "1.4"
 clap = "2"
+hyper = { version = "0.14", features = ["full"] }
 
 [profile.dev]
 opt-level = 0
@@ -56,4 +57,14 @@ opt-level = 0
 [[example]]
 name = "reflect"
 path = "examples/reflect/reflect.rs"
+bench = false
+
+[[example]]
+name = "offer"
+path = "examples/offer-answer/offer.rs"
+bench = false
+
+[[example]]
+name = "answer"
+path = "examples/offer-answer/answer.rs"
 bench = false

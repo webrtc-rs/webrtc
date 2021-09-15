@@ -4,8 +4,6 @@ reflect demonstrates how with one PeerConnection you can send video to webrtc-rs
 ## Instructions
 ### Build reflect
 ```
-git clone https://github.com/webrtc-rs/webrtc
-cd webrtc
 cargo build --example reflect
 ```
 
