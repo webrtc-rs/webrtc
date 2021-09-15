@@ -27,10 +27,14 @@ lazy_static! {
     static ref PEER_CONNECTION_MUTEX: Arc<Mutex<Option<Arc<PeerConnection>>>> =
         Arc::new(Mutex::new(None));
     static ref PENDING_CANDIDATES: Arc<Mutex<Vec<ICECandidate>>> = Arc::new(Mutex::new(vec![]));
-    static ref OFFER_ADDR: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
+    static ref ADDRESS: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
 }
 
 async fn signal_candidate(addr: &str, c: &ICECandidate) -> Result<()> {
+    println!(
+        "signal_candidate Post candidate to {}",
+        format!("http://{}/candidate", addr)
+    );
     let payload = c.to_json().await?.candidate;
     let req = match Request::builder()
         .method(Method::POST)
@@ -52,7 +56,7 @@ async fn signal_candidate(addr: &str, c: &ICECandidate) -> Result<()> {
             return Err(err.into());
         }
     };
-    println!("Response: {}", resp.status());
+    println!("signal_candidate Response: {}", resp.status());
 
     Ok(())
 }
@@ -63,9 +67,9 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
         let pcm = PEER_CONNECTION_MUTEX.lock().await;
         pcm.clone().unwrap()
     };
-    let offer_addr = {
-        let offer_addr = OFFER_ADDR.lock().await;
-        offer_addr.clone()
+    let addr = {
+        let addr = ADDRESS.lock().await;
+        addr.clone()
     };
 
     match (req.method(), req.uri().path()) {
@@ -73,6 +77,7 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
         // This allows us to add ICE candidates faster, we don't have to wait for STUN or TURN
         // candidates which may be slower
         (&Method::POST, "/candidate") => {
+            println!("remote_handler receive from /candidate");
             let candidate =
                 match std::str::from_utf8(&hyper::body::to_bytes(req.into_body()).await?) {
                     Ok(s) => s.to_owned(),
@@ -96,18 +101,19 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
 
         // A HTTP handler that processes a SessionDescription given to us from the other WebRTC-rs or Pion process
         (&Method::POST, "/sdp") => {
-            let mut offer = SessionDescription::default();
-            let offer_str =
-                match std::str::from_utf8(&hyper::body::to_bytes(req.into_body()).await?) {
-                    Ok(s) => s.to_owned(),
-                    Err(err) => panic!("{}", err),
-                };
-            offer.serde = match serde_json::from_str::<SessionDescriptionSerde>(&offer_str) {
+            println!("remote_handler receive from /sdp");
+            let mut sdp = SessionDescription::default();
+            let sdp_str = match std::str::from_utf8(&hyper::body::to_bytes(req.into_body()).await?)
+            {
+                Ok(s) => s.to_owned(),
+                Err(err) => panic!("{}", err),
+            };
+            sdp.serde = match serde_json::from_str::<SessionDescriptionSerde>(&sdp_str) {
                 Ok(s) => s,
                 Err(err) => panic!("{}", err),
             };
 
-            if let Err(err) = pc.set_remote_description(offer).await {
+            if let Err(err) = pc.set_remote_description(sdp).await {
                 panic!("{}", err);
             }
 
@@ -117,6 +123,11 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
                 Err(err) => panic!("{}", err),
             };
 
+            println!(
+                "remote_handler Post answer to {}",
+                format!("http://{}/sdp", addr)
+            );
+
             // Send our answer to the HTTP server listening in the other process
             let payload = match serde_json::to_string(&answer.serde) {
                 Ok(p) => p,
@@ -125,7 +136,7 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
 
             let req = match Request::builder()
                 .method(Method::POST)
-                .uri(format!("http://{}/candidate", offer_addr))
+                .uri(format!("http://{}/sdp", addr))
                 .header("content-type", "application/json; charset=utf-8")
                 .body(Body::from(payload))
             {
@@ -140,7 +151,7 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
                     return Err(err.into());
                 }
             };
-            println!("Response: {}", resp.status());
+            println!("remote_handler Response: {}", resp.status());
 
             // Sets the LocalDescription, and starts our UDP listeners
             if let Err(err) = pc.set_local_description(answer).await {
@@ -150,7 +161,7 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
             {
                 let cs = PENDING_CANDIDATES.lock().await;
                 for c in &*cs {
-                    if let Err(err) = signal_candidate(&offer_addr, c).await {
+                    if let Err(err) = signal_candidate(&addr, c).await {
                         panic!("{}", err);
                     }
                 }
@@ -209,7 +220,7 @@ async fn main() -> Result<()> {
             Arg::with_name("answer-address")
                 .required_unless("FULLHELP")
                 .takes_value(true)
-                .default_value(":60000")
+                .default_value("0.0.0.0:60000")
                 .long("answer-address")
                 .help("Address that the Answer HTTP server is hosted on."),
         );
@@ -225,7 +236,7 @@ async fn main() -> Result<()> {
     let answer_addr = matches.value_of("answer-address").unwrap().to_owned();
 
     {
-        let mut oa = OFFER_ADDR.lock().await;
+        let mut oa = ADDRESS.lock().await;
         *oa = offer_addr.clone();
     }
 
@@ -260,19 +271,21 @@ async fn main() -> Result<()> {
     // the other Pion instance will add this candidate by calling AddICECandidate
     let peer_connection2 = Arc::clone(&peer_connection);
     let pending_candidates2 = Arc::clone(&PENDING_CANDIDATES);
-    let offer_addr2 = offer_addr.clone();
+    let addr2 = offer_addr.clone();
     peer_connection
         .on_ice_candidate(Box::new(move |c: Option<ICECandidate>| {
+            println!("on_ice_candidate {:?}", c);
+
             let peer_connection3 = Arc::clone(&peer_connection2);
             let pending_candidates3 = Arc::clone(&pending_candidates2);
-            let offer_addr3 = offer_addr2.clone();
+            let addr3 = addr2.clone();
             Box::pin(async move {
                 if let Some(c) = c {
                     let desc = peer_connection3.remote_description().await;
                     if desc.is_none() {
                         let mut cs = pending_candidates3.lock().await;
                         cs.push(c);
-                    } else if let Err(err) = signal_candidate(&offer_addr3, &c).await {
+                    } else if let Err(err) = signal_candidate(&addr3, &c).await {
                         assert!(false, "{}", err);
                     }
                 }
@@ -285,6 +298,17 @@ async fn main() -> Result<()> {
         let mut pcm = PEER_CONNECTION_MUTEX.lock().await;
         *pcm = Some(Arc::clone(&peer_connection));
     }
+
+    tokio::spawn(async move {
+        let addr = SocketAddr::from_str(&answer_addr).unwrap();
+        let service =
+            make_service_fn(|_| async { Ok::<_, hyper::Error>(service_fn(remote_handler)) });
+        let server = Server::bind(&addr).serve(service);
+        // Run this server for... forever!
+        if let Err(e) = server.await {
+            eprintln!("server error: {}", e);
+        }
+    });
 
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
@@ -327,6 +351,7 @@ async fn main() -> Result<()> {
                         tokio::select! {
                             _ = timeout.as_mut() =>{
                                 let message = format!("Sending '{}'", i);
+                                println!("on_data_channel - on_open: {}", message);
                                 i += 1;
                                 result = d2.send_text(message).await;
                             }
@@ -334,6 +359,8 @@ async fn main() -> Result<()> {
                     }
                 })
             })).await;
+
+            println!("after on_data_channel - on_open");
 
             // Register text message handling
             d.on_message(Box::new(move |msg: DataChannelMessage| {
@@ -344,16 +371,7 @@ async fn main() -> Result<()> {
         })
     })).await;
 
-    tokio::spawn(async move {
-        let addr = SocketAddr::from_str(&answer_addr).unwrap();
-        let service =
-            make_service_fn(|_| async { Ok::<_, hyper::Error>(service_fn(remote_handler)) });
-        let server = Server::bind(&addr).serve(service);
-        // Run this server for... forever!
-        if let Err(e) = server.await {
-            eprintln!("server error: {}", e);
-        }
-    });
+    println!("after on_data_channel");
 
     println!("Press ctlr-c to stop server");
     tokio::signal::ctrl_c().await.unwrap();
