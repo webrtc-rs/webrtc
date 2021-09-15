@@ -229,9 +229,8 @@ async fn main() -> Result<()> {
 
     // Output the answer in base64 so we can paste it in browser
     if let Some(local_desc) = peer_connection.local_description().await {
-        println!("{:?}", local_desc.serde);
         let json_str = serde_json::to_string(&local_desc.serde)?;
-        println!("{}", json_str);
+        //println!("{}\n", json_str);
         let b64 = signal::encode(&json_str);
         println!("{}", b64);
     } else {
