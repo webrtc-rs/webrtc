@@ -1,31 +1,12 @@
 use anyhow::Result;
 use clap::{App, AppSettings, Arg};
 //use std::io::Write;
-use std::str;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::net::UdpSocket;
 use util::Conn;
-use webrtc_dtls::{
-    config::Config, conn::DTLSConn, crypto::Certificate,
-    extension::extension_use_srtp::SrtpProtectionProfile,
-};
+use webrtc_dtls::{config::*, conn::DTLSConn, crypto::Certificate};
 
-async fn create_client(
-    ca: Arc<dyn Conn + Send + Sync>,
-    mut cfg: Config,
-    generate_certificate: bool,
-) -> Result<impl Conn> {
-    if generate_certificate {
-        let client_cert = Certificate::generate_self_signed(vec!["localhost".to_owned()])?;
-        cfg.certificates = vec![client_cert];
-    }
-
-    cfg.insecure_skip_verify = true;
-    DTLSConn::new(ca, cfg, true, None).await
-}
-
-// cargo run --color=always --package webrtc-dtls --example dtls_client -- --server 0.0.0.0:5678
+// cargo run --color=always --package webrtc-dtls --example dtls_client -- --server 127.0.0.1:4444
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -59,6 +40,7 @@ async fn main() -> Result<()> {
             Arg::with_name("server")
                 .required_unless("FULLHELP")
                 .takes_value(true)
+                .default_value("127.0.0.1:4444")
                 .long("server")
                 .help("DTLS Server name."),
         );
@@ -76,26 +58,23 @@ async fn main() -> Result<()> {
     conn.connect(server).await?;
     println!("connecting {}..", server);
 
-    let cfg = Config {
-        srtp_protection_profiles: vec![SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_80],
+    // Generate a certificate and private key to secure the connection
+    let certificate = Certificate::generate_self_signed(vec!["localhost".to_owned()])?;
+
+    let config = Config {
+        certificates: vec![certificate],
+        insecure_skip_verify: true,
+        extended_master_secret: ExtendedMasterSecretType::Require,
+        //srtp_protection_profiles: vec![SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_80],
         ..Default::default()
     };
-    let dtls_conn = create_client(conn, cfg, true).await?;
+    let dtls_conn: Arc<dyn Conn + Send + Sync> =
+        Arc::new(DTLSConn::new(conn, config, true, None).await?);
 
-    for i in 0..10 {
-        let message = format!(
-            "hello world msg {} from dtls client: {}",
-            i,
-            dtls_conn.local_addr().await?
-        );
-        dtls_conn.send(message.as_bytes()).await?;
+    println!("Connected; type 'exit' to shutdown gracefully");
+    let _ = hub::utilities::chat(Arc::clone(&dtls_conn)).await;
 
-        tokio::time::sleep(Duration::from_secs(1)).await;
+    dtls_conn.close().await?;
 
-        let mut buf = [0; 1024];
-        let n = dtls_conn.recv(&mut buf).await?;
-        println!("{}", str::from_utf8(&buf[..n])?);
-    }
-
-    dtls_conn.close().await
+    Ok(())
 }

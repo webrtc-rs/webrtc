@@ -34,7 +34,7 @@ pub async fn chat(conn: Arc<dyn Conn + Send + Sync>) -> Result<()> {
 
         while let Ok(n) = conn_rx.recv(&mut b).await {
             let msg = String::from_utf8(b[..n].to_vec())?;
-            println!("Got message: {}", msg);
+            print!("Got message: {}", msg);
         }
 
         Result::<()>::Ok(())

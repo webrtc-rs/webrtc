@@ -50,6 +50,10 @@ tokio-test = "0.4"
 env_logger = "0.8"
 chrono = "0.4.19"
 clap = "2"
+hub = {path = "examples/hub"}
+
+[workspace]
+members = [".", "examples/hub"]
 
 [[example]]
 name = "dtls_client"
@@ -61,5 +65,12 @@ name = "dtls_server"
 path = "examples/dtls_server.rs"
 bench = false
 
-[workspace]
-members = [".", "examples/hub"]
+[[example]]
+name = "dail_selfsign"
+path = "examples/dail/selfsign/dail_selfsign.rs"
+bench = false
+
+[[example]]
+name = "listen_selfsign"
+path = "examples/listen/selfsign/listen_selfsign.rs"
+bench = false

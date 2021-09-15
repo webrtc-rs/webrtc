@@ -49,7 +49,7 @@ impl Hub {
 
         while let Ok(n) = conn.recv(&mut b).await {
             let msg = String::from_utf8(b[..n].to_vec())?;
-            println!("Got message: {}", msg);
+            print!("Got message: {}", msg);
         }
 
         Hub::unregister(conns, conn).await
