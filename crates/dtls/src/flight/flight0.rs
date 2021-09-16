@@ -80,6 +80,11 @@ impl Flight for Flight0 {
                 find_matching_cipher_suite(&client_hello.cipher_suites, &cfg.local_cipher_suites)
             {
                 if let Ok(cipher_suite) = cipher_suite_for_id(id) {
+                    log::debug!(
+                        "[handshake:{}] use cipher suite: {}",
+                        srv_cli_str(state.is_client),
+                        cipher_suite.to_string()
+                    );
                     let mut cs = state.cipher_suite.lock().await;
                     *cs = Some(cipher_suite);
                 }

@@ -56,16 +56,6 @@ hub = {path = "examples/hub"}
 members = [".", "examples/hub"]
 
 [[example]]
-name = "dtls_client"
-path = "examples/dtls_client.rs"
-bench = false
-
-[[example]]
-name = "dtls_server"
-path = "examples/dtls_server.rs"
-bench = false
-
-[[example]]
 name = "dail_selfsign"
 path = "examples/dail/selfsign/dail_selfsign.rs"
 bench = false

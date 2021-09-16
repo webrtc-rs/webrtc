@@ -303,10 +303,6 @@ impl Flight for Flight3 {
                 }
             };
             state.peer_certificates = h.certificate.clone();
-            trace!(
-                "[handshake] PeerCertificates3 {}",
-                state.peer_certificates.len()
-            );
         }
 
         if let Some(message) = msgs.get(&HandshakeType::ServerKeyExchange) {
