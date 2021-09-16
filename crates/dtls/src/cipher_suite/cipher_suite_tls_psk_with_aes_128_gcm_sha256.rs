@@ -4,7 +4,7 @@ use crate::prf::*;
 
 use anyhow::Result;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct CipherSuiteTlsPskWithAes128GcmSha256 {
     gcm: Option<CryptoGcm>,
 }
@@ -13,12 +13,6 @@ impl CipherSuiteTlsPskWithAes128GcmSha256 {
     const PRF_MAC_LEN: usize = 0;
     const PRF_KEY_LEN: usize = 16;
     const PRF_IV_LEN: usize = 4;
-}
-
-impl Default for CipherSuiteTlsPskWithAes128GcmSha256 {
-    fn default() -> Self {
-        CipherSuiteTlsPskWithAes128GcmSha256 { gcm: None }
-    }
 }
 
 impl CipherSuite for CipherSuiteTlsPskWithAes128GcmSha256 {
