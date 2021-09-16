@@ -170,7 +170,7 @@ pub(crate) fn prf_extended_master_secret(
     session_hash: &[u8],
     h: CipherSuiteHash,
 ) -> Result<Vec<u8>> {
-    let mut seed = PRF_MASTER_SECRET_LABEL.as_bytes().to_vec();
+    let mut seed = PRF_EXTENDED_MASTER_SECRET_LABEL.as_bytes().to_vec();
     seed.extend_from_slice(session_hash);
     prf_p_hash(pre_master_secret, &seed, 48, h)
 }
