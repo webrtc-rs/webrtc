@@ -58,7 +58,7 @@ impl fmt::Display for HandshakeType {
             HandshakeType::ClientHello => write!(f, "ClientHello"),
             HandshakeType::ServerHello => write!(f, "ServerHello"),
             HandshakeType::HelloVerifyRequest => write!(f, "HelloVerifyRequest"),
-            HandshakeType::Certificate => write!(f, "TypeCertificate"),
+            HandshakeType::Certificate => write!(f, "Certificate"),
             HandshakeType::ServerKeyExchange => write!(f, "ServerKeyExchange"),
             HandshakeType::CertificateRequest => write!(f, "CertificateRequest"),
             HandshakeType::ServerHelloDone => write!(f, "ServerHelloDone"),
