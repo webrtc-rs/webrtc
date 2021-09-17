@@ -1441,7 +1441,7 @@ async fn test_server_certificate() -> Result<()> {
             Config {
                 certificates: vec![cert.clone()],
                 client_auth: ClientAuthType::RequireAnyClientCert,
-                verify_peer_certificate: Some(fn_not_expected_chain),
+                verify_peer_certificate: Some(Arc::new(fn_not_expected_chain)),
                 ..Default::default()
             },
             false,
@@ -1460,7 +1460,7 @@ async fn test_server_certificate() -> Result<()> {
                 client_cert_verifier: Some(rustls::AllowAnyAuthenticatedClient::new(
                     roots_cas.clone(),
                 )),
-                verify_peer_certificate: Some(fn_expected_chain),
+                verify_peer_certificate: Some(Arc::new(fn_expected_chain)),
                 ..Default::default()
             },
             false,
@@ -1470,7 +1470,7 @@ async fn test_server_certificate() -> Result<()> {
             Config {
                 roots_cas: roots_cas.clone(),
                 server_name: server_name.clone(),
-                verify_peer_certificate: Some(fn_wrong_cert),
+                verify_peer_certificate: Some(Arc::new(fn_wrong_cert)),
                 ..Default::default()
             },
             Config {
