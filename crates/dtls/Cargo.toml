@@ -56,11 +56,23 @@ hub = {path = "examples/hub"}
 members = [".", "examples/hub"]
 
 [[example]]
+name = "dial_psk"
+path = "examples/dial/psk/dial_psk.rs"
+bench = false
+
+[[example]]
 name = "dial_selfsign"
 path = "examples/dial/selfsign/dial_selfsign.rs"
+bench = false
+
+[[example]]
+name = "listen_psk"
+path = "examples/listen/psk/listen_psk.rs"
 bench = false
 
 [[example]]
 name = "listen_selfsign"
 path = "examples/listen/selfsign/listen_selfsign.rs"
 bench = false
+
+

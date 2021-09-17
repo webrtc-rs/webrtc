@@ -2,11 +2,12 @@ use anyhow::Result;
 use clap::{App, AppSettings, Arg};
 use std::io::Write;
 use std::sync::Arc;
-use util::conn::*;
-use webrtc_dtls::config::ExtendedMasterSecretType;
-use webrtc_dtls::{config::Config, crypto::Certificate, listener::listen};
+use tokio::net::UdpSocket;
+use util::Conn;
+use webrtc_dtls::cipher_suite::CipherSuiteId;
+use webrtc_dtls::{config::*, conn::DTLSConn};
 
-// cargo run --example listen_selfsign -- --host 127.0.0.1:4444
+// cargo run --example dial_psk -- --server 127.0.0.1:4444
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -25,10 +26,10 @@ async fn main() -> Result<()> {
         .filter(None, log::LevelFilter::Trace)
         .init();
 
-    let mut app = App::new("DTLS Server")
+    let mut app = App::new("DTLS Client")
         .version("0.1.0")
         .author("Rain Liu <yliu@webrtc.rs>")
-        .about("An example of DTLS Server")
+        .about("An example of DTLS Client")
         .setting(AppSettings::DeriveDisplayOrder)
         .setting(AppSettings::SubcommandsNegateReqs)
         .arg(
@@ -37,12 +38,12 @@ async fn main() -> Result<()> {
                 .long("fullhelp"),
         )
         .arg(
-            Arg::with_name("host")
+            Arg::with_name("server")
                 .required_unless("FULLHELP")
                 .takes_value(true)
                 .default_value("127.0.0.1:4444")
-                .long("host")
-                .help("DTLS host name."),
+                .long("server")
+                .help("DTLS Server name."),
         );
 
     let matches = app.clone().get_matches();
@@ -52,34 +53,30 @@ async fn main() -> Result<()> {
         std::process::exit(0);
     }
 
-    let host = matches.value_of("host").unwrap().to_owned();
+    let server = matches.value_of("server").unwrap();
 
-    // Generate a certificate and private key to secure the connection
-    let certificate = Certificate::generate_self_signed(vec!["localhost".to_owned()])?;
+    let conn = Arc::new(UdpSocket::bind("0.0.0.0:0").await?);
+    conn.connect(server).await?;
+    println!("connecting {}..", server);
 
-    let cfg = Config {
-        certificates: vec![certificate],
+    let config = Config {
+        psk: Some(Arc::new(|hint: &[u8]| -> Result<Vec<u8>> {
+            println!("Server's hint: {}", String::from_utf8(hint.to_vec())?);
+            Ok(vec![0xAB, 0xC1, 0x23])
+        })),
+        psk_identity_hint: Some("webrtc-rs DTLS Server".as_bytes().to_vec()),
+        cipher_suites: vec![CipherSuiteId::Tls_Psk_With_Aes_128_Ccm_8],
         extended_master_secret: ExtendedMasterSecretType::Require,
+        //srtp_protection_profiles: vec![SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_80],
         ..Default::default()
     };
+    let dtls_conn: Arc<dyn Conn + Send + Sync> =
+        Arc::new(DTLSConn::new(conn, config, true, None).await?);
 
-    println!("listening {}...\ntype 'exit' to shutdown gracefully", host);
+    println!("Connected; type 'exit' to shutdown gracefully");
+    let _ = hub::utilities::chat(Arc::clone(&dtls_conn)).await;
 
-    let listener = Arc::new(listen(host, cfg).await?);
+    dtls_conn.close().await?;
 
-    // Simulate a chat session
-    let h = Arc::new(hub::Hub::new());
-
-    let listener2 = Arc::clone(&listener);
-    let h2 = Arc::clone(&h);
-    tokio::spawn(async move {
-        while let Ok((dtls_conn, _remote_addr)) = listener2.accept().await {
-            // Register the connection with the chat hub
-            h2.register(dtls_conn).await;
-        }
-    });
-
-    h.chat().await;
-
-    listener.close().await
+    Ok(())
 }

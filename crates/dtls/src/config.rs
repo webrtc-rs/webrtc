@@ -127,7 +127,7 @@ pub(crate) const DEFAULT_MTU: usize = 1200; // bytes
 
 // PSKCallback is called once we have the remote's psk_identity_hint.
 // If the remote provided none it will be nil
-pub(crate) type PskCallback = fn(&[u8]) -> Result<Vec<u8>>;
+pub(crate) type PskCallback = Arc<dyn (Fn(&[u8]) -> Result<Vec<u8>>) + Send + Sync>;
 
 // ClientAuthType declares the policy the server will follow for
 // TLS Client Authentication.

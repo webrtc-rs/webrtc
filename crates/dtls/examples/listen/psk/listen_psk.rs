@@ -3,8 +3,9 @@ use clap::{App, AppSettings, Arg};
 use std::io::Write;
 use std::sync::Arc;
 use util::conn::*;
+use webrtc_dtls::cipher_suite::CipherSuiteId;
 use webrtc_dtls::config::ExtendedMasterSecretType;
-use webrtc_dtls::{config::Config, crypto::Certificate, listener::listen};
+use webrtc_dtls::{config::Config, listener::listen};
 
 // cargo run --example listen_selfsign -- --host 127.0.0.1:4444
 
@@ -54,11 +55,13 @@ async fn main() -> Result<()> {
 
     let host = matches.value_of("host").unwrap().to_owned();
 
-    // Generate a certificate and private key to secure the connection
-    let certificate = Certificate::generate_self_signed(vec!["localhost".to_owned()])?;
-
     let cfg = Config {
-        certificates: vec![certificate],
+        psk: Some(Arc::new(|hint: &[u8]| -> Result<Vec<u8>> {
+            println!("Client's hint: {}", String::from_utf8(hint.to_vec())?);
+            Ok(vec![0xAB, 0xC1, 0x23])
+        })),
+        psk_identity_hint: Some("webrtc-rs DTLS Client".as_bytes().to_vec()),
+        cipher_suites: vec![CipherSuiteId::Tls_Psk_With_Aes_128_Ccm_8],
         extended_master_secret: ExtendedMasterSecretType::Require,
         ..Default::default()
     };

@@ -549,7 +549,7 @@ async fn test_psk() -> Result<()> {
         let (ca, cb) = pipe();
         tokio::spawn(async move {
             let conf = Config {
-                psk: Some(psk_callback_client),
+                psk: Some(Arc::new(psk_callback_client)),
                 psk_identity_hint: Some(client_identity.to_vec()),
                 cipher_suites: vec![CipherSuiteId::Tls_Psk_With_Aes_128_Ccm_8],
                 ..Default::default()
@@ -560,7 +560,7 @@ async fn test_psk() -> Result<()> {
         });
 
         let config = Config {
-            psk: Some(psk_callback_server),
+            psk: Some(Arc::new(psk_callback_server)),
             psk_identity_hint: server_identity,
             cipher_suites: vec![CipherSuiteId::Tls_Psk_With_Aes_128_Ccm_8],
             ..Default::default()
@@ -615,7 +615,7 @@ async fn test_psk_hint_fail() -> Result<()> {
     let (ca, cb) = pipe();
     tokio::spawn(async move {
         let conf = Config {
-            psk: Some(psk_callback_hint_fail),
+            psk: Some(Arc::new(psk_callback_hint_fail)),
             psk_identity_hint: Some(vec![]),
             cipher_suites: vec![CipherSuiteId::Tls_Psk_With_Aes_128_Ccm_8],
             ..Default::default()
@@ -626,7 +626,7 @@ async fn test_psk_hint_fail() -> Result<()> {
     });
 
     let config = Config {
-        psk: Some(psk_callback_hint_fail),
+        psk: Some(Arc::new(psk_callback_hint_fail)),
         psk_identity_hint: Some(vec![]),
         cipher_suites: vec![CipherSuiteId::Tls_Psk_With_Aes_128_Ccm_8],
         ..Default::default()
@@ -1785,7 +1785,11 @@ async fn test_psk_configuration() -> Result<()> {
         let (ca, cb) = pipe();
         tokio::spawn(async move {
             let conf = Config {
-                psk: if client_psk { Some(psk_callback) } else { None },
+                psk: if client_psk {
+                    Some(Arc::new(psk_callback))
+                } else {
+                    None
+                },
                 psk_identity_hint: client_psk_identity,
                 ..Default::default()
             };
@@ -1795,7 +1799,11 @@ async fn test_psk_configuration() -> Result<()> {
         });
 
         let config = Config {
-            psk: if server_psk { Some(psk_callback) } else { None },
+            psk: if server_psk {
+                Some(Arc::new(psk_callback))
+            } else {
+                None
+            },
             psk_identity_hint: server_psk_identity,
             ..Default::default()
         };
