@@ -6,7 +6,7 @@ use tokio::net::UdpSocket;
 use util::Conn;
 use webrtc_dtls::{config::*, conn::DTLSConn, crypto::Certificate};
 
-// cargo run --example dail_selfsign -- --server 127.0.0.1:4444
+// cargo run --example dial_selfsign -- --server 127.0.0.1:4444
 
 #[tokio::main]
 async fn main() -> Result<()> {

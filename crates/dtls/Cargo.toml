@@ -56,8 +56,8 @@ hub = {path = "examples/hub"}
 members = [".", "examples/hub"]
 
 [[example]]
-name = "dail_selfsign"
-path = "examples/dail/selfsign/dail_selfsign.rs"
+name = "dial_selfsign"
+path = "examples/dial/selfsign/dial_selfsign.rs"
 bench = false
 
 [[example]]
