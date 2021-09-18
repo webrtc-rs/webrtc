@@ -1,10 +1,8 @@
 use super::*;
 
-use dtls::crypto::{Certificate, CryptoPrivateKey, CryptoPrivateKeyKind};
-
 use anyhow::Result;
+use dtls::crypto::{Certificate, CryptoPrivateKey};
 use rcgen::KeyPair;
-use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
 use rustls::internal::pemfile::certs;
 use std::fs::File;
 use std::io::Read;
@@ -95,36 +93,7 @@ pub fn load_key(path: PathBuf) -> Result<CryptoPrivateKey> {
 
     let key_pair = KeyPair::from_pem(s.as_str())?;
 
-    let serialized_der = key_pair.serialize_der();
-    if key_pair.is_compatible(&rcgen::PKCS_ED25519) {
-        Ok(CryptoPrivateKey {
-            kind: CryptoPrivateKeyKind::Ed25519(
-                Ed25519KeyPair::from_pkcs8(&serialized_der)
-                    .map_err(|e| Error::new(e.to_string()))?,
-            ),
-            serialized_der,
-        })
-    } else if key_pair.is_compatible(&rcgen::PKCS_ECDSA_P256_SHA256) {
-        Ok(CryptoPrivateKey {
-            kind: CryptoPrivateKeyKind::Ecdsa256(
-                EcdsaKeyPair::from_pkcs8(
-                    &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
-                    &serialized_der,
-                )
-                .map_err(|e| Error::new(e.to_string()))?,
-            ),
-            serialized_der,
-        })
-    } else if key_pair.is_compatible(&rcgen::PKCS_RSA_SHA256) {
-        Ok(CryptoPrivateKey {
-            kind: CryptoPrivateKeyKind::Rsa256(
-                RsaKeyPair::from_pkcs8(&serialized_der).map_err(|e| Error::new(e.to_string()))?,
-            ),
-            serialized_der,
-        })
-    } else {
-        Err(Error::new("Unsupported key_pair".to_owned()).into())
-    }
+    CryptoPrivateKey::from_key_pair(&key_pair)
 }
 
 /// load_certificate Load/read certificate(s) from file
