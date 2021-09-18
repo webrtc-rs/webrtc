@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::{BufReader, Write};
 use std::sync::Arc;
 use util::conn::*;
-use webrtc_dtls::config::ExtendedMasterSecretType;
+use webrtc_dtls::config::{ClientAuthType, ExtendedMasterSecretType};
 use webrtc_dtls::{config::Config, listener::listen};
 
 // cargo run --example listen_verify -- --host 127.0.0.1:4444
@@ -71,7 +71,7 @@ async fn main() -> Result<()> {
     let cfg = Config {
         certificates: vec![certificate],
         extended_master_secret: ExtendedMasterSecretType::Require,
-        //client_auth: ClientAuthType::RequireAndVerifyClientCert,
+        client_auth: ClientAuthType::RequireAnyClientCert, //RequireAndVerifyClientCert,
         roots_cas: cert_pool,
         ..Default::default()
     };

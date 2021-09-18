@@ -347,15 +347,11 @@ pub(crate) fn generate_certificate_verify(
     handshake_bodies: &[u8],
     private_key: &CryptoPrivateKey, /*, hashAlgorithm hashAlgorithm*/
 ) -> Result<Vec<u8>> {
-    let mut h = Sha256::new();
-    h.update(handshake_bodies);
-    let hashed = h.finalize();
-
     let signature = match &private_key.kind {
-        CryptoPrivateKeyKind::Ed25519(kp) => kp.sign(hashed.as_slice()).as_ref().to_vec(),
+        CryptoPrivateKeyKind::Ed25519(kp) => kp.sign(handshake_bodies).as_ref().to_vec(),
         CryptoPrivateKeyKind::Ecdsa256(kp) => {
             let system_random = SystemRandom::new();
-            kp.sign(&system_random, hashed.as_slice())
+            kp.sign(&system_random, handshake_bodies)
                 .map_err(|e| Error::new(e.to_string()))?
                 .as_ref()
                 .to_vec()
@@ -366,7 +362,7 @@ pub(crate) fn generate_certificate_verify(
             kp.sign(
                 &ring::signature::RSA_PKCS1_SHA256,
                 &system_random,
-                hashed.as_slice(),
+                handshake_bodies,
                 &mut signature,
             )
             .map_err(|e| Error::new(e.to_string()))?;
