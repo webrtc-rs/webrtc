@@ -10,13 +10,11 @@ use crate::curve::named_curve::*;
 use crate::error::*;
 use crate::record_layer::record_layer_header::*;
 
-use der_parser::{oid, oid::Oid};
-
 use anyhow::Result;
+use der_parser::{oid, oid::Oid};
 use rcgen::KeyPair;
 use ring::rand::SystemRandom;
 use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
-use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
 #[derive(Clone, PartialEq)]
@@ -278,7 +276,7 @@ pub(crate) fn generate_key_signature(
 pub const OID_ED25519: Oid<'static> = oid!(1.3.101 .112);
 pub const OID_ECDSA: Oid<'static> = oid!(1.2.840 .10045 .2 .1);
 
-pub(crate) fn verify_key_signature(
+fn verify_signature(
     message: &[u8],
     /*_hash_algorithm: HashAlgorithm,*/
     remote_key_signature: &[u8],
@@ -335,6 +333,15 @@ pub(crate) fn verify_key_signature(
     Ok(())
 }
 
+pub(crate) fn verify_key_signature(
+    message: &[u8],
+    /*_hash_algorithm: HashAlgorithm,*/
+    remote_key_signature: &[u8],
+    raw_certificates: &[Vec<u8>],
+) -> Result<()> {
+    verify_signature(message, remote_key_signature, raw_certificates)
+}
+
 // If the server has sent a CertificateRequest message, the client MUST send the Certificate
 // message.  The ClientKeyExchange message is now sent, and the content
 // of that message will depend on the public key algorithm selected
@@ -380,11 +387,7 @@ pub(crate) fn verify_certificate_verify(
     remote_key_signature: &[u8],
     raw_certificates: &[Vec<u8>],
 ) -> Result<()> {
-    let mut h = Sha256::new();
-    h.update(handshake_bodies);
-    let hashed = h.finalize();
-
-    verify_key_signature(&hashed, remote_key_signature, raw_certificates)
+    verify_signature(handshake_bodies, remote_key_signature, raw_certificates)
 }
 
 pub(crate) fn load_certs(raw_certificates: &[Vec<u8>]) -> Result<Vec<rustls::Certificate>> {
