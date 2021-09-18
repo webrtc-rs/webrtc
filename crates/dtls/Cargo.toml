@@ -67,6 +67,11 @@ path = "examples/dial/selfsign/dial_selfsign.rs"
 bench = false
 
 [[example]]
+name = "dial_verify"
+path = "examples/dial/verify/dial_verify.rs"
+bench = false
+
+[[example]]
 name = "listen_psk"
 path = "examples/listen/psk/listen_psk.rs"
 bench = false

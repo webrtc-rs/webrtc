@@ -899,13 +899,13 @@ async fn test_client_certificate() -> Result<()> {
     let srv_cert = Certificate::generate_self_signed(vec!["localhost".to_owned()])?;
     let mut srv_ca_pool = rustls::RootCertStore::empty();
     srv_ca_pool
-        .add(&srv_cert.certificate)
+        .add(&srv_cert.certificate[0])
         .or_else(|_err| Err(Error::new("add srv_cert error".to_owned())))?;
 
     let cert = Certificate::generate_self_signed(vec!["localhost".to_owned()])?;
     let mut roots_cas = rustls::RootCertStore::empty();
     roots_cas
-        .add(&cert.certificate)
+        .add(&cert.certificate[0])
         .or_else(|_err| Err(Error::new("add cert error".to_owned())))?;
 
     let tests = vec![
@@ -1116,7 +1116,7 @@ async fn test_client_certificate() -> Result<()> {
             //if actual_client_cert.len() != len(tt.clientCfg.Certificates[0].Certificate) || !bytes.Equal(tt.clientCfg.Certificates[0].Certificate[0], actual_client_cert[0]) {
             assert_eq!(
                 actual_client_cert[0],
-                client_cfg.certificates[0].certificate.as_ref(),
+                client_cfg.certificates[0].certificate[0].as_ref(),
                 "{} Client certificate was not communicated correctly",
                 name,
             );
@@ -1144,13 +1144,13 @@ async fn test_client_certificate() -> Result<()> {
         )*/
         assert_eq!(
             actual_server_cert[0].len(),
-            server_cfg.certificates[0].certificate.as_ref().len(),
+            server_cfg.certificates[0].certificate[0].as_ref().len(),
             "{} Server certificate was not communicated correctly",
             name,
         );
         assert_eq!(
             actual_server_cert[0],
-            server_cfg.certificates[0].certificate.as_ref(),
+            server_cfg.certificates[0].certificate[0].as_ref(),
             "{} Server certificate was not communicated correctly",
             name,
         );
@@ -1385,7 +1385,7 @@ async fn test_server_certificate() -> Result<()> {
     let cert = Certificate::generate_self_signed(vec![server_name.clone()])?;
     let mut roots_cas = rustls::RootCertStore::empty();
     roots_cas
-        .add(&cert.certificate)
+        .add(&cert.certificate[0])
         .or_else(|_err| Err(Error::new("add cert error".to_owned())))?;
 
     let tests = vec![

@@ -65,7 +65,6 @@ async fn main() -> Result<()> {
         certificates: vec![certificate],
         insecure_skip_verify: true,
         extended_master_secret: ExtendedMasterSecretType::Require,
-        //srtp_protection_profiles: vec![SrtpProtectionProfile::Srtp_Aes128_Cm_Hmac_Sha1_80],
         ..Default::default()
     };
     let dtls_conn: Arc<dyn Conn + Send + Sync> =

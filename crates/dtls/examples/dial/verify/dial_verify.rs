@@ -1,13 +1,14 @@
 use anyhow::Result;
 use clap::{App, AppSettings, Arg};
-use std::io::Write;
+use hub::utilities::Error;
+use std::fs::File;
+use std::io::{BufReader, Write};
 use std::sync::Arc;
 use tokio::net::UdpSocket;
 use util::Conn;
-use webrtc_dtls::cipher_suite::CipherSuiteId;
 use webrtc_dtls::{config::*, conn::DTLSConn};
 
-// cargo run --example dial_psk -- --server 127.0.0.1:4444
+// cargo run --example dial_selfsign -- --server 127.0.0.1:4444
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -59,14 +60,27 @@ async fn main() -> Result<()> {
     conn.connect(server).await?;
     println!("connecting {}..", server);
 
+    /*let certificate = hub::utilities::load_key_and_certificate(
+        "examples/certificates/client.pem".into(),
+        "examples/certificates/client.pub.pem".into(),
+    )?;*/
+
+    //let root_certificate =
+    //    hub::utilities::load_certificate("examples/certificates/server.pub.pem".into())?;
+
+    let mut cert_pool = rustls::RootCertStore::empty();
+
+    let path = "examples/certificates/server.pub.pem";
+    let f = File::open(path)?;
+    let mut reader = BufReader::new(f);
+    if let Err(_) = cert_pool.add_pem_file(&mut reader) {
+        return Err(Error::new("cert_pool add_pem_file failed".to_owned()).into());
+    }
+
     let config = Config {
-        psk: Some(Arc::new(|hint: &[u8]| -> Result<Vec<u8>> {
-            println!("Server's hint: {}", String::from_utf8(hint.to_vec())?);
-            Ok(vec![0xAB, 0xC1, 0x23])
-        })),
-        psk_identity_hint: Some("webrtc-rs DTLS Server".as_bytes().to_vec()),
-        cipher_suites: vec![CipherSuiteId::Tls_Psk_With_Aes_128_Ccm_8],
+        certificates: vec![], //certificate
         extended_master_secret: ExtendedMasterSecretType::Require,
+        roots_cas: cert_pool,
         ..Default::default()
     };
     let dtls_conn: Arc<dyn Conn + Send + Sync> =

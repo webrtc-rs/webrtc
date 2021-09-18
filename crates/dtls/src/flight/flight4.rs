@@ -568,7 +568,11 @@ impl Flight for Flight4 {
                     0,
                     Content::Handshake(Handshake::new(HandshakeMessage::Certificate(
                         HandshakeMessageCertificate {
-                            certificate: vec![certificate.certificate.as_ref().to_vec()],
+                            certificate: certificate
+                                .certificate
+                                .iter()
+                                .map(|x| x.0.clone())
+                                .collect(),
                         },
                     ))),
                 ),

@@ -1,5 +1,14 @@
 use super::*;
 
+use dtls::crypto::{Certificate, CryptoPrivateKey, CryptoPrivateKeyKind};
+
+use anyhow::Result;
+use rcgen::KeyPair;
+use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
+use rustls::internal::pemfile::certs;
+use std::fs::File;
+use std::io::Read;
+use std::path::PathBuf;
 use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq)]
@@ -60,83 +69,71 @@ pub async fn chat(conn: Arc<dyn Conn + Send + Sync>) -> Result<()> {
     }
 }
 
-/*
-/// LoadKeyAndCertificate reads certificates or key from file
-func LoadKeyAndCertificate(keyPath string, certificatePath string) (*tls.Certificate, error) {
-    privateKey, err := LoadKey(keyPath)
-    if err != nil {
-        return nil, err
-    }
+/// load_key_and_certificate reads certificates or key from file
+pub fn load_key_and_certificate(
+    key_path: PathBuf,
+    certificate_path: PathBuf,
+) -> Result<Certificate> {
+    let private_key = load_key(key_path)?;
 
-    certificate, err := LoadCertificate(certificatePath)
-    if err != nil {
-        return nil, err
-    }
+    let certificate = load_certificate(certificate_path)?;
 
-    certificate.PrivateKey = privateKey
-
-    return certificate, nil
+    Ok(Certificate {
+        certificate,
+        private_key,
+    })
 }
 
-/// LoadKey Load/read key from file
-func LoadKey(path string) (crypto.PrivateKey, error) {
-    rawData, err := ioutil.ReadFile(filepath.Clean(path))
-    if err != nil {
-        return nil, err
-    }
+/// load_key Load/read key from file
+pub fn load_key(path: PathBuf) -> Result<CryptoPrivateKey> {
+    let f = File::open(&path)?;
+    let mut reader = BufReader::new(f);
 
-    block, _ := pem.Decode(rawData)
-    if block == nil || !strings.HasSuffix(block.Type, "PRIVATE KEY") {
-        return nil, errBlockIsNotPrivateKey
-    }
+    let mut buf = vec![];
+    reader.read_to_end(&mut buf)?;
 
-    if key, err := x509.ParsePKCS1PrivateKey(block.Bytes); err == nil {
-        return key, nil
-    }
+    let raw_data = String::from_utf8(buf)?;
+    let key_pair = KeyPair::from_pem(&raw_data)?;
 
-    if key, err := x509.ParsePKCS8PrivateKey(block.Bytes); err == nil {
-        switch key := key.(type) {
-        case *rsa.PrivateKey, *ecdsa.PrivateKey:
-            return key, nil
-        default:
-            return nil, errUnknownKeyTime
-        }
+    let serialized_der = key_pair.serialize_der();
+    if key_pair.is_compatible(&rcgen::PKCS_ED25519) {
+        Ok(CryptoPrivateKey {
+            kind: CryptoPrivateKeyKind::Ed25519(
+                Ed25519KeyPair::from_pkcs8(&serialized_der)
+                    .map_err(|e| Error::new(e.to_string()))?,
+            ),
+            serialized_der,
+        })
+    } else if key_pair.is_compatible(&rcgen::PKCS_ECDSA_P256_SHA256) {
+        Ok(CryptoPrivateKey {
+            kind: CryptoPrivateKeyKind::Ecdsa256(
+                EcdsaKeyPair::from_pkcs8(
+                    &ring::signature::ECDSA_P256_SHA256_ASN1_SIGNING,
+                    &serialized_der,
+                )
+                .map_err(|e| Error::new(e.to_string()))?,
+            ),
+            serialized_der,
+        })
+    } else if key_pair.is_compatible(&rcgen::PKCS_RSA_SHA256) {
+        Ok(CryptoPrivateKey {
+            kind: CryptoPrivateKeyKind::Rsa256(
+                RsaKeyPair::from_pkcs8(&serialized_der).map_err(|e| Error::new(e.to_string()))?,
+            ),
+            serialized_der,
+        })
+    } else {
+        Err(Error::new("Unsupported key_pair".to_owned()).into())
     }
-
-    if key, err := x509.ParseECPrivateKey(block.Bytes); err == nil {
-        return key, nil
-    }
-
-    return nil, errNoPrivateKeyFound
 }
 
-/// LoadCertificate Load/read certificate(s) from file
-func LoadCertificate(path string) (*tls.Certificate, error) {
-    rawData, err := ioutil.ReadFile(filepath.Clean(path))
-    if err != nil {
-        return nil, err
+/// load_certificate Load/read certificate(s) from file
+pub fn load_certificate(path: PathBuf) -> Result<Vec<rustls::Certificate>> {
+    let f = File::open(&path)?;
+
+    let mut reader = BufReader::new(f);
+    match certs(&mut reader) {
+        Ok(ders) => Ok(ders),
+        Err(_) => Err(Error::ErrNoCertificateFound.into()),
     }
-
-    var certificate tls.Certificate
-
-    for {
-        block, rest := pem.Decode(rawData)
-        if block == nil {
-            break
-        }
-
-        if block.Type != "CERTIFICATE" {
-            return nil, errBlockIsNotCertificate
-        }
-
-        certificate.Certificate = append(certificate.Certificate, block.Bytes)
-        rawData = rest
-    }
-
-    if len(certificate.Certificate) == 0 {
-        return nil, errNoCertificateFound
-    }
-
-    return &certificate, nil
 }
-*/

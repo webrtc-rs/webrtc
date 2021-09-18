@@ -184,7 +184,11 @@ fn test_certificate_verify() -> Result<()> {
     verify_certificate_verify(
         &plain_text,
         &cert_verify_ecdsa256,
-        &vec![certificate_ecdsa256.certificate.as_ref().to_vec()],
+        &certificate_ecdsa256
+            .certificate
+            .iter()
+            .map(|x| x.0.clone())
+            .collect::<Vec<Vec<u8>>>(),
     )?;
 
     //test ED25519
@@ -197,7 +201,11 @@ fn test_certificate_verify() -> Result<()> {
     verify_certificate_verify(
         &plain_text,
         &cert_verify_ed25519,
-        &vec![certificate_ed25519.certificate.as_ref().to_vec()],
+        &certificate_ed25519
+            .certificate
+            .iter()
+            .map(|x| x.0.clone())
+            .collect::<Vec<Vec<u8>>>(),
     )?;
 
     Ok(())
