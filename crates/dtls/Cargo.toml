@@ -81,4 +81,9 @@ name = "listen_selfsign"
 path = "examples/listen/selfsign/listen_selfsign.rs"
 bench = false
 
+[[example]]
+name = "listen_verify"
+path = "examples/listen/verify/listen_verify.rs"
+bench = false
+
 

@@ -7,7 +7,7 @@ Note that this was run on OpenSSL 1.1.1d, of which the arguments can be found in
 ```shell
 # Extensions required for certificate validation.
 $ EXTFILE='extfile.conf'
-$ echo 'subjectAltName = IP:127.0.0.1\nbasicConstraints = critical,CA:true' > "${EXTFILE}"
+$ echo 'subjectAltName = DNS:webrtc.rs\nbasicConstraints = critical,CA:true' > "${EXTFILE}"
 
 # Server.
 $ SERVER_NAME='server'

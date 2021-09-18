@@ -1,13 +1,14 @@
 use anyhow::Result;
 use clap::{App, AppSettings, Arg};
-use std::io::Write;
+use hub::utilities::Error;
+use std::fs::File;
+use std::io::{BufReader, Write};
 use std::sync::Arc;
 use util::conn::*;
-use webrtc_dtls::cipher_suite::CipherSuiteId;
 use webrtc_dtls::config::ExtendedMasterSecretType;
 use webrtc_dtls::{config::Config, listener::listen};
 
-// cargo run --example listen_psk -- --host 127.0.0.1:4444
+// cargo run --example listen_verify -- --host 127.0.0.1:4444
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -55,14 +56,23 @@ async fn main() -> Result<()> {
 
     let host = matches.value_of("host").unwrap().to_owned();
 
+    let certificate = hub::utilities::load_key_and_certificate(
+        "examples/certificates/server.pem.private_key.pem".into(),
+        "examples/certificates/server.pub.pem".into(),
+    )?;
+
+    let mut cert_pool = rustls::RootCertStore::empty();
+    let f = File::open("examples/certificates/server.pub.pem")?;
+    let mut reader = BufReader::new(f);
+    if let Err(_) = cert_pool.add_pem_file(&mut reader) {
+        return Err(Error::new("cert_pool add_pem_file failed".to_owned()).into());
+    }
+
     let cfg = Config {
-        psk: Some(Arc::new(|hint: &[u8]| -> Result<Vec<u8>> {
-            println!("Client's hint: {}", String::from_utf8(hint.to_vec())?);
-            Ok(vec![0xAB, 0xC1, 0x23])
-        })),
-        psk_identity_hint: Some("webrtc-rs DTLS Client".as_bytes().to_vec()),
-        cipher_suites: vec![CipherSuiteId::Tls_Psk_With_Aes_128_Ccm_8],
+        certificates: vec![certificate],
         extended_master_secret: ExtendedMasterSecretType::Require,
+        //client_auth: ClientAuthType::RequireAndVerifyClientCert,
+        roots_cas: cert_pool,
         ..Default::default()
     };
 

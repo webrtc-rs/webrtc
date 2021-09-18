@@ -88,12 +88,12 @@ pub fn load_key_and_certificate(
 pub fn load_key(path: PathBuf) -> Result<CryptoPrivateKey> {
     let f = File::open(&path)?;
     let mut reader = BufReader::new(f);
-
     let mut buf = vec![];
     reader.read_to_end(&mut buf)?;
 
-    let raw_data = String::from_utf8(buf)?;
-    let key_pair = KeyPair::from_pem(&raw_data)?;
+    let s = String::from_utf8(buf)?;
+
+    let key_pair = KeyPair::from_pem(s.as_str())?;
 
     let serialized_der = key_pair.serialize_der();
     if key_pair.is_compatible(&rcgen::PKCS_ED25519) {

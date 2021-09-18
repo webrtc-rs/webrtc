@@ -189,19 +189,17 @@ impl DTLSConn {
             config.replay_protection_window
         };
 
-        let server_name = config.server_name.clone();
+        let mut server_name = config.server_name.clone();
+
         // Use host from conn address when server_name is not provided
-        // TODO:
-        /*if is_client && server_name == "" && next_conn.RemoteAddr() != nil {
-            remoteAddr := nextConn.RemoteAddr().String()
-            var host string
-            host, _, err = net.SplitHostPort(remoteAddr)
-            if err != nil {
-                server_name = remoteAddr
+        if is_client && server_name.is_empty() {
+            if let Some(remote_addr) = conn.remote_addr().await {
+                server_name = remote_addr.ip().to_string();
             } else {
-                server_name = host
+                log::warn!("conn.remote_addr is empty, please set explicitly server_name in Config! Use default \"localhost\" as server_name now");
+                server_name = "localhost".to_owned();
             }
-        }*/
+        }
 
         let cfg = HandshakeConfig {
             local_psk_callback: config.psk.take(),

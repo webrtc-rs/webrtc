@@ -8,7 +8,7 @@ use tokio::net::UdpSocket;
 use util::Conn;
 use webrtc_dtls::{config::*, conn::DTLSConn};
 
-// cargo run --example dial_selfsign -- --server 127.0.0.1:4444
+// cargo run --example dial_verify -- --server 127.0.0.1:4444
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -60,27 +60,24 @@ async fn main() -> Result<()> {
     conn.connect(server).await?;
     println!("connecting {}..", server);
 
-    /*let certificate = hub::utilities::load_key_and_certificate(
-        "examples/certificates/client.pem".into(),
+    let certificate = hub::utilities::load_key_and_certificate(
+        "examples/certificates/client.pem.private_key.pem".into(),
         "examples/certificates/client.pub.pem".into(),
-    )?;*/
-
-    //let root_certificate =
-    //    hub::utilities::load_certificate("examples/certificates/server.pub.pem".into())?;
+    )?;
 
     let mut cert_pool = rustls::RootCertStore::empty();
-
-    let path = "examples/certificates/server.pub.pem";
-    let f = File::open(path)?;
+    let f = File::open("examples/certificates/server.pub.pem")?;
     let mut reader = BufReader::new(f);
     if let Err(_) = cert_pool.add_pem_file(&mut reader) {
         return Err(Error::new("cert_pool add_pem_file failed".to_owned()).into());
     }
 
     let config = Config {
-        certificates: vec![], //certificate
+        certificates: vec![certificate],
         extended_master_secret: ExtendedMasterSecretType::Require,
         roots_cas: cert_pool,
+        insecure_skip_verify: true,
+        server_name: "webrtc.rs".to_owned(),
         ..Default::default()
     };
     let dtls_conn: Arc<dyn Conn + Send + Sync> =

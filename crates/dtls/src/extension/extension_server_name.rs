@@ -21,12 +21,14 @@ impl ExtensionServerName {
 
     pub fn size(&self) -> usize {
         //TODO: check how to do cryptobyte?
-        2 + self.server_name.as_bytes().len()
+        2 + 2 + 1 + 2 + self.server_name.as_bytes().len()
     }
 
     pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {
         //TODO: check how to do cryptobyte?
-        //writer.write_u8(EXTENSION_SERVER_NAME_TYPE_DNSHOST_NAME)?;
+        writer.write_u16::<BigEndian>(2 + 1 + 2 + self.server_name.len() as u16)?;
+        writer.write_u16::<BigEndian>(1 + 2 + self.server_name.len() as u16)?;
+        writer.write_u8(EXTENSION_SERVER_NAME_TYPE_DNSHOST_NAME)?;
         writer.write_u16::<BigEndian>(self.server_name.len() as u16)?;
         writer.write_all(self.server_name.as_bytes())?;
 
@@ -35,10 +37,13 @@ impl ExtensionServerName {
 
     pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self> {
         //TODO: check how to do cryptobyte?
-        //let name_type = reader.read_u8()?;
-        //if name_type != EXTENSION_SERVER_NAME_TYPE_DNSHOST_NAME {
-        //    return Err(Error::ErrInvalidSniFormat.clone());
-        //}
+        let _ = reader.read_u16::<BigEndian>()? as usize;
+        let _ = reader.read_u16::<BigEndian>()? as usize;
+
+        let name_type = reader.read_u8()?;
+        if name_type != EXTENSION_SERVER_NAME_TYPE_DNSHOST_NAME {
+            return Err(Error::ErrInvalidSniFormat.into());
+        }
 
         let buf_len = reader.read_u16::<BigEndian>()? as usize;
         let mut buf: Vec<u8> = vec![0u8; buf_len];
