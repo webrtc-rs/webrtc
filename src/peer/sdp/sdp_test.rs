@@ -519,7 +519,7 @@ async fn fingerprint_test(
 ) -> Result<()> {
     let s = sdp::session_description::SessionDescription::default();
 
-    let dtls_fingerprints = vec![certificate.get_fingerprint()?];
+    let dtls_fingerprints = certificate.get_fingerprints()?;
 
     let params = PopulateSdpParams {
         is_plan_b: false,

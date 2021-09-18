@@ -144,7 +144,7 @@ impl DTLSTransport {
         let mut fingerprints = vec![];
 
         for c in &self.certificates {
-            fingerprints.push(c.get_fingerprint()?);
+            fingerprints.extend(c.get_fingerprints()?);
         }
 
         Ok(DTLSParameters {

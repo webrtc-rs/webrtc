@@ -77,7 +77,7 @@ impl Certificate {
 
         Ok(Certificate {
             certificate: dtls::crypto::Certificate {
-                certificate: rustls::Certificate(certificate),
+                certificate: vec![rustls::Certificate(certificate)],
                 private_key,
             },
             stats_id: format!(
@@ -94,18 +94,24 @@ impl Certificate {
         self.expires
     }
 
-    /// get_fingerprint returns certificate fingerprint, one of which
+    /// get_fingerprints returns certificate fingerprints, one of which
     /// is computed with the digest algorithm used in the certificate signature.
-    pub fn get_fingerprint(&self) -> Result<DTLSFingerprint> {
-        let mut h = Sha256::new();
-        h.update(&self.certificate.certificate.0);
-        let hashed = h.finalize();
-        let values: Vec<String> = hashed.iter().map(|x| format! {"{:02x}", x}).collect();
+    pub fn get_fingerprints(&self) -> Result<Vec<DTLSFingerprint>> {
+        let mut fingerpints = vec![];
 
-        Ok(DTLSFingerprint {
-            algorithm: "sha-256".to_owned(),
-            value: values.join(":"),
-        })
+        for certificate in &self.certificate.certificate {
+            let mut h = Sha256::new();
+            h.update(&certificate.0);
+            let hashed = h.finalize();
+            let values: Vec<String> = hashed.iter().map(|x| format! {"{:02x}", x}).collect();
+
+            fingerpints.push(DTLSFingerprint {
+                algorithm: "sha-256".to_owned(),
+                value: values.join(":"),
+            });
+        }
+
+        Ok(fingerpints)
     }
 
     /// from_key_pair causes the creation of an X.509 certificate and
