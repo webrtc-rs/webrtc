@@ -40,10 +40,8 @@ impl CryptoCbc {
 
     pub fn new(
         local_key: &[u8],
-        _local_write_iv: &[u8],
         local_mac: &[u8],
         remote_key: &[u8],
-        _remote_write_iv: &[u8],
         remote_mac: &[u8],
     ) -> Result<Self> {
         Ok(CryptoCbc {
