@@ -71,8 +71,8 @@ async fn main() -> Result<()> {
     let cfg = Config {
         certificates: vec![certificate],
         extended_master_secret: ExtendedMasterSecretType::Require,
-        client_auth: ClientAuthType::RequireAnyClientCert, //RequireAndVerifyClientCert,
-        roots_cas: cert_pool,
+        client_auth: ClientAuthType::RequireAndVerifyClientCert, //RequireAnyClientCert, //
+        client_cas: cert_pool,
         ..Default::default()
     };
 

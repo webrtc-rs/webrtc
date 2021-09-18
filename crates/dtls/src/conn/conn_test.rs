@@ -903,8 +903,8 @@ async fn test_client_certificate() -> Result<()> {
         .or_else(|_err| Err(Error::new("add srv_cert error".to_owned())))?;
 
     let cert = Certificate::generate_self_signed(vec!["localhost".to_owned()])?;
-    let mut roots_cas = rustls::RootCertStore::empty();
-    roots_cas
+    let mut ca_pool = rustls::RootCertStore::empty();
+    ca_pool
         .add(&cert.certificate[0])
         .or_else(|_err| Err(Error::new("add cert error".to_owned())))?;
 
@@ -1006,9 +1006,7 @@ async fn test_client_certificate() -> Result<()> {
             Config {
                 certificates: vec![srv_cert.clone()],
                 client_auth: ClientAuthType::VerifyClientCertIfGiven,
-                client_cert_verifier: Some(rustls::AllowAnyAuthenticatedClient::new(
-                    roots_cas.clone(),
-                )),
+                client_cas: ca_pool.clone(),
                 ..Default::default()
             },
             false,
@@ -1024,9 +1022,7 @@ async fn test_client_certificate() -> Result<()> {
             Config {
                 certificates: vec![srv_cert.clone()],
                 client_auth: ClientAuthType::VerifyClientCertIfGiven,
-                client_cert_verifier: Some(rustls::AllowAnyAuthenticatedClient::new(
-                    roots_cas.clone(),
-                )),
+                client_cas: ca_pool.clone(),
                 ..Default::default()
             },
             false,
@@ -1057,9 +1053,7 @@ async fn test_client_certificate() -> Result<()> {
             Config {
                 certificates: vec![srv_cert.clone()],
                 client_auth: ClientAuthType::RequireAndVerifyClientCert,
-                client_cert_verifier: Some(rustls::AllowAnyAuthenticatedClient::new(
-                    roots_cas.clone(),
-                )),
+                client_cas: ca_pool.clone(),
                 ..Default::default()
             },
             false,
@@ -1383,8 +1377,8 @@ async fn test_server_certificate() -> Result<()> {
 
     let server_name = "localhost".to_owned();
     let cert = Certificate::generate_self_signed(vec![server_name.clone()])?;
-    let mut roots_cas = rustls::RootCertStore::empty();
-    roots_cas
+    let mut ca_pool = rustls::RootCertStore::empty();
+    ca_pool
         .add(&cert.certificate[0])
         .or_else(|_err| Err(Error::new("add cert error".to_owned())))?;
 
@@ -1405,7 +1399,7 @@ async fn test_server_certificate() -> Result<()> {
         (
             "good_ca",
             Config {
-                roots_cas: roots_cas.clone(),
+                roots_cas: ca_pool.clone(),
                 server_name: server_name.clone(),
                 ..Default::default()
             },
@@ -1433,7 +1427,7 @@ async fn test_server_certificate() -> Result<()> {
         (
             "good_ca_skip_verify_custom_verify_peer",
             Config {
-                roots_cas: roots_cas.clone(),
+                roots_cas: ca_pool.clone(),
                 server_name: server_name.clone(),
                 certificates: vec![cert.clone()],
                 ..Default::default()
@@ -1449,7 +1443,7 @@ async fn test_server_certificate() -> Result<()> {
         (
             "good_ca_verify_custom_verify_peer",
             Config {
-                roots_cas: roots_cas.clone(),
+                roots_cas: ca_pool.clone(),
                 server_name: server_name.clone(),
                 certificates: vec![cert.clone()],
                 ..Default::default()
@@ -1457,9 +1451,7 @@ async fn test_server_certificate() -> Result<()> {
             Config {
                 certificates: vec![cert.clone()],
                 client_auth: ClientAuthType::RequireAndVerifyClientCert,
-                client_cert_verifier: Some(rustls::AllowAnyAuthenticatedClient::new(
-                    roots_cas.clone(),
-                )),
+                client_cas: ca_pool.clone(),
                 verify_peer_certificate: Some(Arc::new(fn_expected_chain)),
                 ..Default::default()
             },
@@ -1468,7 +1460,7 @@ async fn test_server_certificate() -> Result<()> {
         (
             "good_ca_custom_verify_peer",
             Config {
-                roots_cas: roots_cas.clone(),
+                roots_cas: ca_pool.clone(),
                 server_name: server_name.clone(),
                 verify_peer_certificate: Some(Arc::new(fn_wrong_cert)),
                 ..Default::default()
@@ -1483,7 +1475,7 @@ async fn test_server_certificate() -> Result<()> {
         (
             "server_name",
             Config {
-                roots_cas: roots_cas.clone(),
+                roots_cas: ca_pool.clone(),
                 server_name: server_name.clone(),
                 ..Default::default()
             },
@@ -1497,7 +1489,7 @@ async fn test_server_certificate() -> Result<()> {
         (
             "server_name_error",
             Config {
-                roots_cas: roots_cas.clone(),
+                roots_cas: ca_pool.clone(),
                 server_name: "barfoo".to_owned(),
                 ..Default::default()
             },
