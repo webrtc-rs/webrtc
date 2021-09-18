@@ -77,19 +77,15 @@ impl CipherSuite for CipherSuiteAes256CbcSha {
         if is_client {
             self.cbc = Some(CryptoCbc::new(
                 &keys.client_write_key,
-                &keys.client_write_iv,
                 &keys.client_mac_key,
                 &keys.server_write_key,
-                &keys.server_write_iv,
                 &keys.server_mac_key,
             )?);
         } else {
             self.cbc = Some(CryptoCbc::new(
                 &keys.server_write_key,
-                &keys.server_write_iv,
                 &keys.server_mac_key,
                 &keys.client_write_key,
-                &keys.client_write_iv,
                 &keys.client_mac_key,
             )?);
         }
