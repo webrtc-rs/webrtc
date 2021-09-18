@@ -76,7 +76,6 @@ async fn main() -> Result<()> {
         certificates: vec![certificate],
         extended_master_secret: ExtendedMasterSecretType::Require,
         roots_cas: cert_pool,
-        insecure_skip_verify: true,
         server_name: "webrtc.rs".to_owned(),
         ..Default::default()
     };

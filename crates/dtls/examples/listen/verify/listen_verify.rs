@@ -83,16 +83,35 @@ async fn main() -> Result<()> {
     // Simulate a chat session
     let h = Arc::new(hub::Hub::new());
 
+    let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
+    let mut done_tx = Some(done_tx);
+
     let listener2 = Arc::clone(&listener);
     let h2 = Arc::clone(&h);
     tokio::spawn(async move {
-        while let Ok((dtls_conn, _remote_addr)) = listener2.accept().await {
-            // Register the connection with the chat hub
-            h2.register(dtls_conn).await;
+        loop {
+            tokio::select! {
+                _ = done_rx.recv() => {
+                    break;
+                }
+                result = listener2.accept() => {
+                    match result{
+                        Ok((dtls_conn, _)) => {
+                            // Register the connection with the chat hub
+                            h2.register(dtls_conn).await;
+                        }
+                        Err(err) => {
+                            println!("connecting failed with error: {}", err);
+                        }
+                    }
+                }
+            }
         }
     });
 
     h.chat().await;
+
+    done_tx.take();
 
     listener.close().await
 }
