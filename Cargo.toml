@@ -76,6 +76,11 @@ path = "examples/data-channels-detach/data-channels-detach.rs"
 bench = false
 
 [[example]]
+name = "data-channels-detach-create"
+path = "examples/data-channels-detach-create/data-channels-detach-create.rs"
+bench = false
+
+[[example]]
 name = "reflect"
 path = "examples/reflect/reflect.rs"
 bench = false
