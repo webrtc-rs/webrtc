@@ -53,9 +53,6 @@ chrono = "0.4.19"
 clap = "2"
 hub = {path = "examples/hub"}
 
-[workspace]
-members = [".", "examples/hub"]
-
 [[example]]
 name = "dial_psk"
 path = "examples/dial/psk/dial_psk.rs"
