@@ -50,10 +50,10 @@ env_logger = "0.8"
 lazy_static = "1.4"
 clap = "2"
 hyper = { version = "0.14", features = ["full"] }
-utilities = {path = "examples/utilities"}
+signal = {path = "examples/signal" }
 
-[workspace]
-members = [".", "examples/utilities"]
+[profile.dev]
+opt-level = 0
 
 [[example]]
 name = "data-channels"

@@ -158,7 +158,7 @@ async fn main() -> Result<()> {
     // Output the answer in base64 so we can paste it in browser
     if let Some(local_desc) = peer_connection.local_description().await {
         let json_str = serde_json::to_string(&local_desc.serde)?;
-        let b64 = utilities::encode(&json_str);
+        let b64 = signal::encode(&json_str);
         println!("{}", b64);
     } else {
         println!("generate local_description failed!");
@@ -166,8 +166,8 @@ async fn main() -> Result<()> {
 
     // Wait for the answer to be pasted
     let mut answer = SessionDescription::default();
-    let line = utilities::must_read_stdin()?;
-    let desc_data = utilities::decode(line.as_str())?;
+    let line = signal::must_read_stdin()?;
+    let desc_data = signal::decode(line.as_str())?;
     answer.serde = serde_json::from_str::<SessionDescriptionSerde>(&desc_data)?;
 
     // Apply the answer as the remote description

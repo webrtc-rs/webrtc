@@ -1,5 +1,5 @@
 [package]
-name = "utilities"
+name = "signal"
 version = "0.1.0"
 edition = "2018"
 
