@@ -164,9 +164,9 @@ impl HandshakeMessageClientHello {
         let mut extension_buffer = vec![0u8; extension_buffer_len];
         reader.read_exact(&mut extension_buffer)?;
 
-        let mut extension_reader = BufReader::new(extension_buffer.as_slice());
         let mut offset = 0;
         while offset < extension_buffer_len {
+            let mut extension_reader = BufReader::new(&extension_buffer[offset..]);
             if let Ok(extension) = Extension::unmarshal(&mut extension_reader) {
                 extensions.push(extension);
             } else {
