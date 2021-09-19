@@ -107,7 +107,9 @@ impl HandshakeMessageServerHello {
         let random = HandshakeRandom::unmarshal(reader)?;
 
         // Session ID
-        reader.read_u8()?;
+        let session_id_len = reader.read_u8()? as usize;
+        let mut session_id_buffer = vec![0u8; session_id_len];
+        reader.read_exact(&mut session_id_buffer)?;
 
         let cipher_suite: CipherSuiteId = reader.read_u16::<BigEndian>()?.into();
 

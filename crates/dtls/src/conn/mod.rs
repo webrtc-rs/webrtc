@@ -989,6 +989,7 @@ impl DTLSConn {
         if is_handshake {
             ctx.replay_detector[h.epoch as usize].accept();
             while let Ok((out, epoch)) = ctx.fragment_buffer.pop() {
+                log::debug!("Extension Debug: out.len()={}", out.len());
                 let mut reader = BufReader::new(out.as_slice());
                 let raw_handshake = match Handshake::unmarshal(&mut reader) {
                     Ok(rh) => {
