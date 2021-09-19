@@ -167,8 +167,15 @@ impl HandshakeMessageClientHello {
         let mut extension_reader = BufReader::new(extension_buffer.as_slice());
         let mut offset = 0;
         while offset < extension_buffer_len {
-            let extension = Extension::unmarshal(&mut extension_reader)?;
-            extensions.push(extension);
+            if let Ok(extension) = Extension::unmarshal(&mut extension_reader) {
+                extensions.push(extension);
+            } else {
+                log::warn!(
+                    "Unsupported Extension Type {} {}",
+                    extension_buffer[offset],
+                    extension_buffer[offset + 1]
+                );
+            }
 
             let extension_len =
                 u16::from_be_bytes([extension_buffer[offset + 2], extension_buffer[offset + 3]])
