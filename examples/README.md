@@ -18,7 +18,7 @@ All examples are ported from [Pion](https://github.com/pion/webrtc/tree/master/e
 #### Data Channel API
 - [x] [Data Channels](data-channels): The data-channels example shows how you can send/recv DataChannel messages from a web browser.
 - [x] [Data Channels Create](data-channels-create): Example data-channels-create shows how you can send/recv DataChannel messages from a web browser. The difference with the data-channels example is that the data channel is initialized from the server side in this example.
-- [ ] [Data Channels Close](data-channels-close): Example data-channels-close is a variant of data-channels that allow playing with the life cycle of data channels.
+- [x] [Data Channels Close](data-channels-close): Example data-channels-close is a variant of data-channels that allow playing with the life cycle of data channels.
 - [ ] [Data Channels Detach](data-channels-detach): The data-channels-detach example shows how you can send/recv DataChannel messages using the underlying DataChannel implementation directly. This provides a more idiomatic way of interacting with Data Channels.
 - [ ] [Data Channels Detach Create](data-channels-detach-create): Example data-channels-detach-create shows how you can send/recv DataChannel messages using the underlying DataChannel implementation directly. This provides a more idiomatic way of interacting with Data Channels. The difference with the data-channels-detach example is that the data channel is initialized in this example.
 - [ ] [ORTC](ortc): Example ortc shows how you an use the ORTC API for DataChannel communication.
