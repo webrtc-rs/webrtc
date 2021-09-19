@@ -1,3 +1,6 @@
+#![warn(rust_2018_idioms)]
+#![allow(dead_code)]
+
 use anyhow::Result;
 
 /// must_read_stdin blocks until input is received from stdin
