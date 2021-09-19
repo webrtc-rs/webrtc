@@ -16,7 +16,7 @@ All examples are ported from [Pion](https://github.com/pion/webrtc/tree/master/e
 - [ ] [Simulcast](simulcast): The simulcast example demonstrates how to accept and demux 1 Track that contains 3 Simulcast streams. It then returns the media as 3 independent Tracks back to the sender.
 
 #### Data Channel API
-- [ ] [Data Channels](data-channels): The data-channels example shows how you can send/recv DataChannel messages from a web browser.
+- [x] [Data Channels](data-channels): The data-channels example shows how you can send/recv DataChannel messages from a web browser.
 - [ ] [Data Channels Create](data-channels-create): Example data-channels-create shows how you can send/recv DataChannel messages from a web browser. The difference with the data-channels example is that the data channel is initialized from the server side in this example.
 - [ ] [Data Channels Close](data-channels-close): Example data-channels-close is a variant of data-channels that allow playing with the life cycle of data channels.
 - [ ] [Data Channels Detach](data-channels-detach): The data-channels-detach example shows how you can send/recv DataChannel messages using the underlying DataChannel implementation directly. This provides a more idiomatic way of interacting with Data Channels.

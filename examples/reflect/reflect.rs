@@ -227,14 +227,13 @@ async fn main() -> Result<()> {
     // Output the answer in base64 so we can paste it in browser
     if let Some(local_desc) = peer_connection.local_description().await {
         let json_str = serde_json::to_string(&local_desc.serde)?;
-        //println!("{}\n", json_str);
         let b64 = signal::encode(&json_str);
         println!("{}", b64);
     } else {
         println!("generate local_description failed!");
     }
 
-    println!("Press ctlr-c to stop server");
+    println!("Press ctlr-c to stop");
     tokio::signal::ctrl_c().await.unwrap();
 
     peer_connection.close().await?;

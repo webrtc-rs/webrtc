@@ -19,6 +19,7 @@ use webrtc::peer::ice::ice_server::ICEServer;
 use webrtc::peer::peer_connection::PeerConnection;
 use webrtc::peer::peer_connection_state::PeerConnectionState;
 use webrtc::peer::sdp::session_description::{SessionDescription, SessionDescriptionSerde};
+use webrtc::util::math_rand_alpha;
 
 #[macro_use]
 extern crate lazy_static;
@@ -202,7 +203,7 @@ async fn main() -> Result<()> {
     let mut app = App::new("Answer")
         .version("0.1.0")
         .author("Rain Liu <yliu@webrtc.rs>")
-        .about("An example of WebRTC-rs Answer")
+        .about("An example of WebRTC-rs Answer.")
         .setting(AppSettings::DeriveDisplayOrder)
         .setting(AppSettings::SubcommandsNegateReqs)
         .arg(
@@ -316,7 +317,7 @@ async fn main() -> Result<()> {
     // This will notify you when the peer has connected/disconnected
     peer_connection
         .on_peer_connection_state_change(Box::new(move |s: PeerConnectionState| {
-            print!("Peer Connection State has changed: {}\n", s);
+            println!("Peer Connection State has changed: {}", s);
 
             if s == PeerConnectionState::Failed {
                 // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
@@ -334,7 +335,7 @@ async fn main() -> Result<()> {
     peer_connection.on_data_channel(Box::new(move |d: Arc<DataChannel>| {
         let d_label = d.label().to_owned();
         let d_id = d.id();
-        print!("New DataChannel {} {}\n", d_label, d_id);
+        println!("New DataChannel {} {}", d_label, d_id);
 
         Box::pin(async move{
             // Register channel opening handling
@@ -342,27 +343,23 @@ async fn main() -> Result<()> {
             let d_label2 = d_label.clone();
             let d_id2 = d_id.clone();
             d.on_open(Box::new(move || {
-                print!("Data channel '{}'-'{}' open. Random messages will now be sent to any connected DataChannels every 5 seconds\n", d_label2, d_id2);
+                println!("Data channel '{}'-'{}' open. Random messages will now be sent to any connected DataChannels every 5 seconds", d_label2, d_id2);
                 Box::pin(async move {
                     let mut result = Result::<usize>::Ok(0);
-                    let mut i = 0;
                     while result.is_ok() {
                         let timeout = tokio::time::sleep(Duration::from_secs(5));
                         tokio::pin!(timeout);
 
                         tokio::select! {
                             _ = timeout.as_mut() =>{
-                                let message = format!("Sending '{}'", i);
-                                println!("{}", message);
-                                i += 1;
+                                let message = math_rand_alpha(15);
+                                println!("Sending '{}'", message);
                                 result = d2.send_text(message).await;
                             }
                         };
                     }
                 })
             })).await;
-
-            //println!("after on_data_channel - on_open");
 
             // Register text message handling
             d.on_message(Box::new(move |msg: DataChannelMessage| {
@@ -373,9 +370,7 @@ async fn main() -> Result<()> {
         })
     })).await;
 
-    //println!("after on_data_channel");
-
-    println!("Press ctlr-c to stop server");
+    println!("Press ctlr-c to stop");
     tokio::signal::ctrl_c().await.unwrap();
 
     peer_connection.close().await?;

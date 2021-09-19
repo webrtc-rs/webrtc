@@ -18,6 +18,7 @@ use webrtc::peer::ice::ice_server::ICEServer;
 use webrtc::peer::peer_connection::PeerConnection;
 use webrtc::peer::peer_connection_state::PeerConnectionState;
 use webrtc::peer::sdp::session_description::{SessionDescription, SessionDescriptionSerde};
+use webrtc::util::math_rand_alpha;
 
 #[macro_use]
 extern crate lazy_static;
@@ -157,10 +158,10 @@ async fn main() -> Result<()> {
     .filter(None, log::LevelFilter::Trace)
     .init();*/
 
-    let mut app = App::new("Answer")
+    let mut app = App::new("Offer")
         .version("0.1.0")
         .author("Rain Liu <yliu@webrtc.rs>")
-        .about("An example of WebRTC-rs Answer")
+        .about("An example of WebRTC-rs Offer.")
         .setting(AppSettings::DeriveDisplayOrder)
         .setting(AppSettings::SubcommandsNegateReqs)
         .arg(
@@ -298,24 +299,20 @@ async fn main() -> Result<()> {
         let d2 = Arc::clone(&d1);
         Box::pin(async move {
             let mut result = Result::<usize>::Ok(0);
-            let mut i = 0;
             while result.is_ok() {
                 let timeout = tokio::time::sleep(Duration::from_secs(5));
                 tokio::pin!(timeout);
 
                 tokio::select! {
                     _ = timeout.as_mut() =>{
-                        let message = format!("Sending '{}'", i);
-                        println!("{}", message);
-                        i += 1;
+                        let message = math_rand_alpha(15);
+                        println!("Sending '{}'", message);
                         result = d2.send_text(message).await;
                     }
                 };
             }
         })
     })).await;
-
-    //println!("after on_open");
 
     // Register text message handling
     let d1 = Arc::clone(&data_channel);
@@ -360,7 +357,7 @@ async fn main() -> Result<()> {
     };
     //println!("Response: {}", resp.status());
 
-    println!("Press ctlr-c to stop server");
+    println!("Press ctlr-c to stop");
     tokio::signal::ctrl_c().await.unwrap();
 
     peer_connection.close().await?;

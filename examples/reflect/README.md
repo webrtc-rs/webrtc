@@ -24,4 +24,4 @@ Copy the text that `reflect` just emitted and copy into second text area
 ### Hit 'Start Session' in jsfiddle, enjoy your video!
 Your browser should send video to webrtc-rs, and then it will be relayed right back to you.
 
-Congrats, you have used webrtc-rs!
+Congrats, you have used WebRTC.rs!
