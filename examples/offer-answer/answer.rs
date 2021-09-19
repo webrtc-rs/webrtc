@@ -31,10 +31,10 @@ lazy_static! {
 }
 
 async fn signal_candidate(addr: &str, c: &ICECandidate) -> Result<()> {
-    println!(
+    /*println!(
         "signal_candidate Post candidate to {}",
         format!("http://{}/candidate", addr)
-    );
+    );*/
     let payload = c.to_json().await?.candidate;
     let req = match Request::builder()
         .method(Method::POST)
@@ -49,14 +49,14 @@ async fn signal_candidate(addr: &str, c: &ICECandidate) -> Result<()> {
         }
     };
 
-    let resp = match Client::new().request(req).await {
+    let _resp = match Client::new().request(req).await {
         Ok(resp) => resp,
         Err(err) => {
             println!("{}", err);
             return Err(err.into());
         }
     };
-    println!("signal_candidate Response: {}", resp.status());
+    //println!("signal_candidate Response: {}", resp.status());
 
     Ok(())
 }
@@ -77,7 +77,7 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
         // This allows us to add ICE candidates faster, we don't have to wait for STUN or TURN
         // candidates which may be slower
         (&Method::POST, "/candidate") => {
-            println!("remote_handler receive from /candidate");
+            //println!("remote_handler receive from /candidate");
             let candidate =
                 match std::str::from_utf8(&hyper::body::to_bytes(req.into_body()).await?) {
                     Ok(s) => s.to_owned(),
@@ -101,7 +101,7 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
 
         // A HTTP handler that processes a SessionDescription given to us from the other WebRTC-rs or Pion process
         (&Method::POST, "/sdp") => {
-            println!("remote_handler receive from /sdp");
+            //println!("remote_handler receive from /sdp");
             let mut sdp = SessionDescription::default();
             let sdp_str = match std::str::from_utf8(&hyper::body::to_bytes(req.into_body()).await?)
             {
@@ -123,10 +123,10 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
                 Err(err) => panic!("{}", err),
             };
 
-            println!(
+            /*println!(
                 "remote_handler Post answer to {}",
                 format!("http://{}/sdp", addr)
-            );
+            );*/
 
             // Send our answer to the HTTP server listening in the other process
             let payload = match serde_json::to_string(&answer.serde) {
@@ -144,14 +144,14 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
                 Err(err) => panic!("{}", err),
             };
 
-            let resp = match Client::new().request(req).await {
+            let _resp = match Client::new().request(req).await {
                 Ok(resp) => resp,
                 Err(err) => {
                     println!("{}", err);
                     return Err(err.into());
                 }
             };
-            println!("remote_handler Response: {}", resp.status());
+            //println!("remote_handler Response: {}", resp.status());
 
             // Sets the LocalDescription, and starts our UDP listeners
             if let Err(err) = pc.set_local_description(answer).await {
@@ -180,24 +180,24 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
     }
 }
 
-use std::io::Write;
+//use std::io::Write;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    env_logger::Builder::new()
-        .format(|buf, record| {
-            writeln!(
-                buf,
-                "{}:{} [{}] {} - {}",
-                record.file().unwrap_or("unknown"),
-                record.line().unwrap_or(0),
-                record.level(),
-                chrono::Local::now().format("%H:%M:%S.%6f"),
-                record.args()
-            )
-        })
-        .filter(None, log::LevelFilter::Trace)
-        .init();
+    /*env_logger::Builder::new()
+    .format(|buf, record| {
+        writeln!(
+            buf,
+            "{}:{} [{}] {} - {}",
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
+            record.level(),
+            chrono::Local::now().format("%H:%M:%S.%6f"),
+            record.args()
+        )
+    })
+    .filter(None, log::LevelFilter::Trace)
+    .init();*/
 
     let mut app = App::new("Answer")
         .version("0.1.0")
@@ -276,7 +276,7 @@ async fn main() -> Result<()> {
     let addr2 = offer_addr.clone();
     peer_connection
         .on_ice_candidate(Box::new(move |c: Option<ICECandidate>| {
-            println!("on_ice_candidate {:?}", c);
+            //println!("on_ice_candidate {:?}", c);
 
             let peer_connection3 = Arc::clone(&peer_connection2);
             let pending_candidates3 = Arc::clone(&pending_candidates2);
@@ -353,7 +353,7 @@ async fn main() -> Result<()> {
                         tokio::select! {
                             _ = timeout.as_mut() =>{
                                 let message = format!("Sending '{}'", i);
-                                println!("on_data_channel - on_open: {}", message);
+                                println!("{}", message);
                                 i += 1;
                                 result = d2.send_text(message).await;
                             }
@@ -362,7 +362,7 @@ async fn main() -> Result<()> {
                 })
             })).await;
 
-            println!("after on_data_channel - on_open");
+            //println!("after on_data_channel - on_open");
 
             // Register text message handling
             d.on_message(Box::new(move |msg: DataChannelMessage| {
@@ -373,7 +373,7 @@ async fn main() -> Result<()> {
         })
     })).await;
 
-    println!("after on_data_channel");
+    //println!("after on_data_channel");
 
     println!("Press ctlr-c to stop server");
     tokio::signal::ctrl_c().await.unwrap();
