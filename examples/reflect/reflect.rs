@@ -19,7 +19,6 @@ use webrtc::peer::peer_connection_state::PeerConnectionState;
 use webrtc::peer::sdp::session_description::{SessionDescription, SessionDescriptionSerde};
 use webrtc::util::signal;
 
-use log::LevelFilter;
 use std::io::Write;
 
 #[tokio::main]
@@ -36,7 +35,7 @@ async fn main() -> Result<()> {
                 record.args()
             )
         })
-        .filter(None, LevelFilter::Trace)
+        .filter(None, log::LevelFilter::Trace)
         .init();
 
     let mut app = App::new("reflect")

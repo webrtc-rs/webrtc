@@ -22,4 +22,4 @@ All examples are ported from [Pion](https://github.com/pion/webrtc/tree/master/e
 - [ ] [Data Channels Detach](data-channels-detach): The data-channels-detach example shows how you can send/recv DataChannel messages using the underlying DataChannel implementation directly. This provides a more idiomatic way of interacting with Data Channels.
 - [ ] [Data Channels Detach Create](data-channels-detach-create): Example data-channels-detach-create shows how you can send/recv DataChannel messages using the underlying DataChannel implementation directly. This provides a more idiomatic way of interacting with Data Channels. The difference with the data-channels-detach example is that the data channel is initialized in this example.
 - [ ] [ORTC](ortc): Example ortc shows how you an use the ORTC API for DataChannel communication.
-- [ ] [Offer Answer](offer-answer): Example offer-answer is an example of two webrtc-rs or pion instances communicating directly!
+- [x] [Offer Answer](offer-answer): Example offer-answer is an example of two webrtc-rs or pion instances communicating directly!
