@@ -278,7 +278,7 @@ async fn main() -> Result<()> {
     // This will notify you when the peer has connected/disconnected
     peer_connection
         .on_peer_connection_state_change(Box::new(move |s: PeerConnectionState| {
-            print!("Peer Connection State has changed: {}\n", s);
+            println!("Peer Connection State has changed: {}", s);
 
             if s == PeerConnectionState::Failed {
                 // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
@@ -295,7 +295,8 @@ async fn main() -> Result<()> {
     // Register channel opening handling
     let d1 = Arc::clone(&data_channel);
     data_channel.on_open(Box::new(move || {
-        print!("Data channel '{}'-'{}' open. Random messages will now be sent to any connected DataChannels every 5 seconds\n", d1.label(), d1.id());
+        println!("Data channel '{}'-'{}' open. Random messages will now be sent to any connected DataChannels every 5 seconds", d1.label(), d1.id());
+
         let d2 = Arc::clone(&d1);
         Box::pin(async move {
             let mut result = Result::<usize>::Ok(0);
@@ -315,11 +316,11 @@ async fn main() -> Result<()> {
     })).await;
 
     // Register text message handling
-    let d1 = Arc::clone(&data_channel);
+    let d_label = data_channel.label().to_owned();
     data_channel
         .on_message(Box::new(move |msg: DataChannelMessage| {
             let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-            print!("Message from DataChannel '{}': '{}'\n", d1.label(), msg_str);
+            println!("Message from DataChannel '{}': '{}'", d_label, msg_str);
             Box::pin(async {})
         }))
         .await;

@@ -18,7 +18,7 @@ mdns = { package = "webrtc-mdns", version = "0.3.3" }
 stun = "0.3.3"
 turn = "0.3.4"
 ice = { package = "webrtc-ice", version = "0.4.0" }
-dtls = { package = "webrtc-dtls", version = "0.4.9" }
+dtls = { package = "webrtc-dtls", version = "0.4.10" }
 rtp = "0.3.3"
 rtcp = "0.3.3"
 srtp = { package = "webrtc-srtp", version = "0.3.5" }
@@ -57,6 +57,11 @@ opt-level = 0
 [[example]]
 name = "data-channels"
 path = "examples/data-channels/data-channels.rs"
+bench = false
+
+[[example]]
+name = "data-channels-create"
+path = "examples/data-channels-create/data-channels-create.rs"
 bench = false
 
 [[example]]

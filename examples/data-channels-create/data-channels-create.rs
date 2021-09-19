@@ -8,7 +8,6 @@ use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::APIBuilder;
 use webrtc::data::data_channel::data_channel_message::DataChannelMessage;
-use webrtc::data::data_channel::DataChannel;
 use webrtc::peer::configuration::Configuration;
 use webrtc::peer::ice::ice_server::ICEServer;
 use webrtc::peer::peer_connection_state::PeerConnectionState;
@@ -34,10 +33,10 @@ async fn main() -> Result<()> {
     .filter(None, log::LevelFilter::Trace)
     .init();*/
 
-    let mut app = App::new("data-channels")
+    let mut app = App::new("data-channels-create")
         .version("0.1.0")
         .author("Rain Liu <yuliu@webrtc.rs>")
-        .about("An example of Data-Channels.")
+        .about("An example of Data-Channels-Create.")
         .setting(AppSettings::DeriveDisplayOrder)
         .setting(AppSettings::SubcommandsNegateReqs)
         .arg(
@@ -88,6 +87,9 @@ async fn main() -> Result<()> {
     // Create a new RTCPeerConnection
     let peer_connection = Arc::new(api.new_peer_connection(config).await?);
 
+    // Create a datachannel with label 'data'
+    let data_channel = peer_connection.create_data_channel("data", None).await?;
+
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection
@@ -106,65 +108,47 @@ async fn main() -> Result<()> {
         }))
         .await;
 
-    // Register data channel creation handling
-    peer_connection
-        .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
-            let d_label = d.label().to_owned();
-            let d_id = d.id();
-            println!("New DataChannel {} {}", d_label, d_id);
+    // Register channel opening handling
+    let d1 = Arc::clone(&data_channel);
+    data_channel.on_open(Box::new(move || {
+        println!("Data channel '{}'-'{}' open. Random messages will now be sent to any connected DataChannels every 5 seconds", d1.label(), d1.id());
 
-            // Register channel opening handling
-            Box::pin(async move {
-                let d2 = Arc::clone(&d);
-                let d_label2 = d_label.clone();
-                let d_id2 = d_id.clone();
-                d.on_open(Box::new(move || {
-                    println!("Data channel '{}'-'{}' open. Random messages will now be sent to any connected DataChannels every 5 seconds", d_label2, d_id2);
+        let d2 = Arc::clone(&d1);
+        Box::pin(async move {
+            let mut result = Result::<usize>::Ok(0);
+            while result.is_ok() {
+                let timeout = tokio::time::sleep(Duration::from_secs(5));
+                tokio::pin!(timeout);
 
-                    Box::pin(async move {
-                        let mut result = Result::<usize>::Ok(0);
-                        while result.is_ok() {
-                            let timeout = tokio::time::sleep(Duration::from_secs(5));
-                            tokio::pin!(timeout);
+                tokio::select! {
+                    _ = timeout.as_mut() =>{
+                        let message = math_rand_alpha(15);
+                        println!("Sending '{}'", message);
+                        result = d2.send_text(message).await;
+                    }
+                };
+            }
+        })
+    })).await;
 
-                            tokio::select! {
-                                _ = timeout.as_mut() =>{
-                                    let message = math_rand_alpha(15);
-                                    println!("Sending '{}'", message);
-                                    result = d2.send_text(message).await;
-                                }
-                            };
-                        }
-                    })
-                })).await;
-
-                // Register text message handling
-                d.on_message(Box::new(move |msg: DataChannelMessage| {
-                    let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-                    print!("Message from DataChannel '{}': '{}'\n", d_label, msg_str);
-                    Box::pin(async {})
-                })).await;
-            })
+    // Register text message handling
+    let d_label = data_channel.label().to_owned();
+    data_channel
+        .on_message(Box::new(move |msg: DataChannelMessage| {
+            let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
+            println!("Message from DataChannel '{}': '{}'", d_label, msg_str);
+            Box::pin(async {})
         }))
         .await;
 
-    // Wait for the offer to be pasted
-    let mut offer = SessionDescription::default();
-    let line = signal::must_read_stdin()?;
-    let desc_data = signal::decode(line.as_str())?;
-    offer.serde = serde_json::from_str::<SessionDescriptionSerde>(&desc_data)?;
-
-    // Set the remote SessionDescription
-    peer_connection.set_remote_description(offer).await?;
-
-    // Create an answer
-    let answer = peer_connection.create_answer(None).await?;
+    // Create an offer to send to the browser
+    let offer = peer_connection.create_offer(None).await?;
 
     // Create channel that is blocked until ICE Gathering is complete
     let mut gather_complete = peer_connection.gathering_complete_promise().await;
 
     // Sets the LocalDescription, and starts our UDP listeners
-    peer_connection.set_local_description(answer).await?;
+    peer_connection.set_local_description(offer).await?;
 
     // Block until ICE Gathering is complete, disabling trickle ICE
     // we do this because we only can exchange one signaling message
@@ -179,6 +163,15 @@ async fn main() -> Result<()> {
     } else {
         println!("generate local_description failed!");
     }
+
+    // Wait for the answer to be pasted
+    let mut answer = SessionDescription::default();
+    let line = signal::must_read_stdin()?;
+    let desc_data = signal::decode(line.as_str())?;
+    answer.serde = serde_json::from_str::<SessionDescriptionSerde>(&desc_data)?;
+
+    // Apply the answer as the remote description
+    peer_connection.set_remote_description(answer).await?;
 
     println!("Press ctlr-c to stop");
     tokio::signal::ctrl_c().await.unwrap();
