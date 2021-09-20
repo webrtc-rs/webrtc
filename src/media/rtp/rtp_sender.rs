@@ -3,13 +3,13 @@ mod rtp_sender_test;
 
 use crate::api::media_engine::MediaEngine;
 use crate::error::Error;
-use crate::media::dtls_transport::DTLSTransport;
+use crate::media::dtls_transport::RTCDtlsTransport;
 use crate::media::interceptor::{create_stream_info, InterceptorToTrackLocalWriter};
-use crate::media::rtp::rtp_codec::{RTPCodecParameters, RTPCodecType};
-use crate::media::rtp::rtp_transceiver::RTPTransceiver;
-use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
+use crate::media::rtp::rtp_codec::{RTCRtpCodecParameters, RTPCodecType};
+use crate::media::rtp::rtp_transceiver::RTCRtpTransceiver;
+use crate::media::rtp::rtp_transceiver_direction::RTCRtpTransceiverDirection;
 use crate::media::rtp::srtp_writer_future::SrtpWriterFuture;
-use crate::media::rtp::{PayloadType, RTPEncodingParameters, RTPSendParameters, SSRC};
+use crate::media::rtp::{PayloadType, RTCRtpEncodingParameters, RTCRtpSendParameters, SSRC};
 use crate::media::track::track_local::{TrackLocal, TrackLocalContext, TrackLocalWriter};
 use crate::RECEIVE_MTU;
 
@@ -64,7 +64,7 @@ impl RTPSenderInternal {
 }
 
 /// RTPSender allows an application to control how a given Track is encoded and transmitted to a remote peer
-pub struct RTPSender {
+pub struct RTCRtpSender {
     pub(crate) track: Mutex<Option<Arc<dyn TrackLocal + Send + Sync>>>,
 
     pub(crate) srtp_stream: Arc<SrtpWriterFuture>,
@@ -72,7 +72,7 @@ pub struct RTPSender {
 
     pub(crate) context: Mutex<TrackLocalContext>,
 
-    pub(crate) transport: Arc<DTLSTransport>,
+    pub(crate) transport: Arc<RTCDtlsTransport>,
 
     pub(crate) payload_type: PayloadType,
     pub(crate) ssrc: SSRC,
@@ -86,7 +86,7 @@ pub struct RTPSender {
 
     pub(crate) id: String,
 
-    tr: Mutex<Option<Arc<RTPTransceiver>>>,
+    tr: Mutex<Option<Arc<RTCRtpTransceiver>>>,
 
     send_called_tx: Mutex<Option<mpsc::Sender<()>>>,
     stop_called_tx: Mutex<Option<mpsc::Sender<()>>>,
@@ -95,13 +95,13 @@ pub struct RTPSender {
     internal: Arc<RTPSenderInternal>,
 }
 
-impl RTPSender {
+impl RTCRtpSender {
     pub async fn new(
         track: Arc<dyn TrackLocal + Send + Sync>,
-        transport: Arc<DTLSTransport>,
+        transport: Arc<RTCDtlsTransport>,
         media_engine: Arc<MediaEngine>,
         interceptor: Arc<dyn Interceptor + Send + Sync>,
-    ) -> RTPSender {
+    ) -> RTCRtpSender {
         let id = generate_crypto_random_string(
             32,
             b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
@@ -133,7 +133,7 @@ impl RTPSender {
             *internal_rtcp_interceptor = Some(rtcp_interceptor);
         }
 
-        RTPSender {
+        RTCRtpSender {
             track: Mutex::new(Some(track)),
 
             srtp_stream,
@@ -170,23 +170,23 @@ impl RTPSender {
         self.negotiated.store(true, Ordering::SeqCst);
     }
 
-    pub(crate) async fn set_rtp_transceiver(&self, t: Option<Arc<RTPTransceiver>>) {
+    pub(crate) async fn set_rtp_transceiver(&self, t: Option<Arc<RTCRtpTransceiver>>) {
         let mut tr = self.tr.lock().await;
         *tr = t;
     }
 
     /// transport returns the currently-configured DTLSTransport
     /// if one has not yet been configured
-    pub fn transport(&self) -> Arc<DTLSTransport> {
+    pub fn transport(&self) -> Arc<RTCDtlsTransport> {
         Arc::clone(&self.transport)
     }
 
     /// get_parameters describes the current configuration for the encoding and
     /// transmission of media on the sender's track.
-    pub async fn get_parameters(&self) -> RTPSendParameters {
+    pub async fn get_parameters(&self) -> RTCRtpSendParameters {
         let mut send_parameters = {
             let track = self.track.lock().await;
-            RTPSendParameters {
+            RTCRtpSendParameters {
                 rtp_parameters: self
                     .media_engine
                     .get_rtp_parameters_by_kind(
@@ -195,10 +195,10 @@ impl RTPSender {
                         } else {
                             RTPCodecType::default()
                         },
-                        &[RTPTransceiverDirection::Sendonly],
+                        &[RTCRtpTransceiverDirection::Sendonly],
                     )
                     .await,
-                encodings: vec![RTPEncodingParameters {
+                encodings: vec![RTCRtpEncodingParameters {
                     rid: String::new(),
                     ssrc: self.ssrc,
                     payload_type: self.payload_type,
@@ -267,7 +267,7 @@ impl RTPSender {
                 id: context.id.clone(),
                 params: self
                     .media_engine
-                    .get_rtp_parameters_by_kind(t.kind(), &[RTPTransceiverDirection::Sendonly])
+                    .get_rtp_parameters_by_kind(t.kind(), &[RTCRtpTransceiverDirection::Sendonly])
                     .await,
                 ssrc: context.ssrc,
                 write_stream: context.write_stream.clone(),
@@ -304,7 +304,7 @@ impl RTPSender {
     }
 
     /// send Attempts to set the parameters controlling the sending of media.
-    pub async fn send(&self, parameters: &RTPSendParameters) -> Result<()> {
+    pub async fn send(&self, parameters: &RTCRtpSendParameters) -> Result<()> {
         if self.has_sent().await {
             return Err(Error::ErrRTPSenderSendAlreadyCalled.into());
         }
@@ -322,7 +322,7 @@ impl RTPSender {
                         } else {
                             RTPCodecType::default()
                         },
-                        &[RTPTransceiverDirection::Sendonly],
+                        &[RTCRtpTransceiverDirection::Sendonly],
                     )
                     .await,
                 ssrc: parameters.encodings[0].ssrc,
@@ -334,7 +334,7 @@ impl RTPSender {
             let codec = if let Some(t) = &*track {
                 t.bind(&context).await?
             } else {
-                RTPCodecParameters::default()
+                RTCRtpCodecParameters::default()
             };
             let payload_type = codec.payload_type;
             let capability = codec.capability.clone();

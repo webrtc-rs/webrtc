@@ -5,25 +5,25 @@ pub mod interceptor_registry;
 pub mod media_engine;
 pub mod setting_engine;
 
-use crate::media::dtls_transport::dtls_certificate::Certificate;
-use crate::media::dtls_transport::DTLSTransport;
-use crate::media::ice_transport::ICETransport;
-use crate::peer::ice::ice_gather::ice_gatherer::ICEGatherer;
-use crate::peer::ice::ice_gather::ICEGatherOptions;
+use crate::media::dtls_transport::RTCDtlsTransport;
+use crate::media::ice_transport::RTCIceTransport;
+use crate::peer::certificate::RTCCertificate;
+use crate::peer::ice::ice_gather::ice_gatherer::RTCIceGatherer;
+use crate::peer::ice::ice_gather::RTCIceGatherOptions;
 
 use media_engine::*;
 use setting_engine::*;
 
 use crate::data::data_channel::data_channel_parameters::DataChannelParameters;
-use crate::data::data_channel::DataChannel;
-use crate::data::sctp_transport::SCTPTransport;
+use crate::data::data_channel::RTCDataChannel;
+use crate::data::sctp_transport::RTCSctpTransport;
 use crate::error::Error;
 use crate::media::rtp::rtp_codec::RTPCodecType;
-use crate::media::rtp::rtp_receiver::RTPReceiver;
-use crate::media::rtp::rtp_sender::RTPSender;
+use crate::media::rtp::rtp_receiver::RTCRtpReceiver;
+use crate::media::rtp::rtp_sender::RTCRtpSender;
 use crate::media::track::track_local::TrackLocal;
-use crate::peer::configuration::Configuration;
-use crate::peer::peer_connection::PeerConnection;
+use crate::peer::configuration::RTCConfiguration;
+use crate::peer::peer_connection::RTCPeerConnection;
 use interceptor::{noop::NoOp, registry::Registry, Interceptor};
 
 use anyhow::Result;
@@ -45,15 +45,15 @@ impl API {
     /// new_peer_connection creates a new PeerConnection with the provided configuration against the received API object
     pub async fn new_peer_connection(
         &self,
-        configuration: Configuration,
-    ) -> Result<PeerConnection> {
-        PeerConnection::new(self, configuration).await
+        configuration: RTCConfiguration,
+    ) -> Result<RTCPeerConnection> {
+        RTCPeerConnection::new(self, configuration).await
     }
 
     /// new_ice_gatherer creates a new ice gatherer.
     /// This constructor is part of the ORTC API. It is not
     /// meant to be used together with the basic WebRTC API.
-    pub fn new_ice_gatherer(&self, opts: ICEGatherOptions) -> Result<ICEGatherer> {
+    pub fn new_ice_gatherer(&self, opts: RTCIceGatherOptions) -> Result<RTCIceGatherer> {
         let mut validated_servers = vec![];
         if !opts.ice_servers.is_empty() {
             for server in &opts.ice_servers {
@@ -62,7 +62,7 @@ impl API {
             }
         }
 
-        Ok(ICEGatherer::new(
+        Ok(RTCIceGatherer::new(
             validated_servers,
             opts.ice_gather_policy,
             Arc::clone(&self.setting_engine),
@@ -72,8 +72,8 @@ impl API {
     /// new_ice_transport creates a new ice transport.
     /// This constructor is part of the ORTC API. It is not
     /// meant to be used together with the basic WebRTC API.
-    pub fn new_ice_transport(&self, gatherer: Arc<ICEGatherer>) -> ICETransport {
-        ICETransport::new(gatherer)
+    pub fn new_ice_transport(&self, gatherer: Arc<RTCIceGatherer>) -> RTCIceTransport {
+        RTCIceTransport::new(gatherer)
     }
 
     /// new_dtls_transport creates a new dtls_transport transport.
@@ -81,9 +81,9 @@ impl API {
     /// meant to be used together with the basic WebRTC API.
     pub fn new_dtls_transport(
         &self,
-        ice_transport: Arc<ICETransport>,
-        mut certificates: Vec<Certificate>,
-    ) -> Result<DTLSTransport> {
+        ice_transport: Arc<RTCIceTransport>,
+        mut certificates: Vec<RTCCertificate>,
+    ) -> Result<RTCDtlsTransport> {
         if !certificates.is_empty() {
             let now = SystemTime::now();
             for cert in &certificates {
@@ -93,11 +93,11 @@ impl API {
             }
         } else {
             let kp = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
-            let cert = Certificate::from_key_pair(kp)?;
+            let cert = RTCCertificate::from_key_pair(kp)?;
             certificates = vec![cert];
         };
 
-        Ok(DTLSTransport::new(
+        Ok(RTCDtlsTransport::new(
             ice_transport,
             certificates,
             Arc::clone(&self.setting_engine),
@@ -107,8 +107,11 @@ impl API {
     /// new_sctp_transport creates a new SCTPTransport.
     /// This constructor is part of the ORTC API. It is not
     /// meant to be used together with the basic WebRTC API.
-    pub fn new_sctp_transport(&self, dtls_transport: Arc<DTLSTransport>) -> Result<SCTPTransport> {
-        Ok(SCTPTransport::new(
+    pub fn new_sctp_transport(
+        &self,
+        dtls_transport: Arc<RTCDtlsTransport>,
+    ) -> Result<RTCSctpTransport> {
+        Ok(RTCSctpTransport::new(
             dtls_transport,
             Arc::clone(&self.setting_engine),
         ))
@@ -119,15 +122,15 @@ impl API {
     /// meant to be used together with the basic WebRTC API.
     pub async fn new_data_channel(
         &self,
-        sctp_transport: Arc<SCTPTransport>,
+        sctp_transport: Arc<RTCSctpTransport>,
         params: DataChannelParameters,
-    ) -> Result<DataChannel> {
+    ) -> Result<RTCDataChannel> {
         // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #5)
         if params.label.len() > 65535 {
             return Err(Error::ErrStringSizeLimit.into());
         }
 
-        let d = DataChannel::new(params, Arc::clone(&self.setting_engine));
+        let d = RTCDataChannel::new(params, Arc::clone(&self.setting_engine));
         d.open(sctp_transport).await?;
 
         Ok(d)
@@ -137,9 +140,9 @@ impl API {
     pub fn new_rtp_receiver(
         &self,
         kind: RTPCodecType,
-        transport: Arc<DTLSTransport>,
-    ) -> RTPReceiver {
-        RTPReceiver::new(
+        transport: Arc<RTCDtlsTransport>,
+    ) -> RTCRtpReceiver {
+        RTCRtpReceiver::new(
             kind,
             transport,
             Arc::clone(&self.media_engine),
@@ -151,9 +154,9 @@ impl API {
     pub async fn new_rtp_sender(
         &self,
         track: Arc<dyn TrackLocal + Send + Sync>,
-        transport: Arc<DTLSTransport>,
-    ) -> RTPSender {
-        RTPSender::new(
+        transport: Arc<RTCDtlsTransport>,
+    ) -> RTCRtpSender {
+        RTCRtpSender::new(
             track,
             transport,
             Arc::clone(&self.media_engine),

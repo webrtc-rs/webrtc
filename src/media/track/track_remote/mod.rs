@@ -1,6 +1,6 @@
 use crate::api::media_engine::MediaEngine;
 use crate::error::Error;
-use crate::media::rtp::rtp_codec::{RTPCodecParameters, RTPCodecType, RTPParameters};
+use crate::media::rtp::rtp_codec::{RTCRtpCodecParameters, RTCRtpParameters, RTPCodecType};
 use crate::media::rtp::{PayloadType, SSRC};
 use crate::{RECEIVE_MTU, RTP_PAYLOAD_TYPE_BITMASK};
 
@@ -27,8 +27,8 @@ pub struct TrackRemote {
     payload_type: AtomicU8, //PayloadType,
     kind: AtomicU8,         //RTPCodecType,
     ssrc: AtomicU32,        //SSRC,
-    codec: Mutex<RTPCodecParameters>,
-    pub(crate) params: Mutex<RTPParameters>,
+    codec: Mutex<RTCRtpCodecParameters>,
+    pub(crate) params: Mutex<RTCRtpParameters>,
     rid: String,
 
     media_engine: Arc<MediaEngine>,
@@ -143,22 +143,22 @@ impl TrackRemote {
     }
 
     /// codec gets the Codec of the track
-    pub async fn codec(&self) -> RTPCodecParameters {
+    pub async fn codec(&self) -> RTCRtpCodecParameters {
         let codec = self.codec.lock().await;
         codec.clone()
     }
 
-    pub async fn set_codec(&self, codec: RTPCodecParameters) {
+    pub async fn set_codec(&self, codec: RTCRtpCodecParameters) {
         let mut c = self.codec.lock().await;
         *c = codec;
     }
 
-    pub async fn params(&self) -> RTPParameters {
+    pub async fn params(&self) -> RTCRtpParameters {
         let p = self.params.lock().await;
         p.clone()
     }
 
-    pub async fn set_params(&self, params: RTPParameters) {
+    pub async fn set_params(&self, params: RTCRtpParameters) {
         let mut p = self.params.lock().await;
         *p = params;
     }

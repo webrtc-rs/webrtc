@@ -3,21 +3,21 @@ mod sdp_test;
 
 use crate::api::media_engine::MediaEngine;
 use crate::error::Error;
-use crate::media::dtls_transport::dtls_fingerprint::DTLSFingerprint;
-use crate::media::rtp::rtp_codec::{RTPCodecCapability, RTPCodecParameters, RTPCodecType};
-use crate::media::rtp::rtp_transceiver::RTPTransceiver;
-use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
+use crate::media::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
+use crate::media::ice_transport::ice_parameters::RTCIceParameters;
+use crate::media::rtp::rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType};
+use crate::media::rtp::rtp_transceiver::RTCRtpTransceiver;
+use crate::media::rtp::rtp_transceiver_direction::RTCRtpTransceiverDirection;
 use crate::media::rtp::{PayloadType, RTCPFeedback, SSRC};
-use crate::peer::ice::ice_candidate::ICECandidate;
-use crate::peer::ice::ice_gather::ice_gatherer::ICEGatherer;
-use crate::peer::ice::ice_gather::ice_gathering_state::ICEGatheringState;
-use crate::peer::ice::ICEParameters;
+use crate::peer::ice::ice_candidate::RTCIceCandidate;
+use crate::peer::ice::ice_gather::ice_gatherer::RTCIceGatherer;
+use crate::peer::ice::ice_gather::ice_gathering_state::RTCIceGatheringState;
 use crate::MEDIA_SECTION_APPLICATION;
 
 pub mod sdp_type;
 pub mod session_description;
 
-use crate::peer::sdp::session_description::SessionDescriptionSerde;
+use crate::peer::sdp::session_description::RTCSessionDescriptionSerde;
 use anyhow::Result;
 use ice::candidate::candidate_base::unmarshal_candidate;
 use ice::candidate::Candidate;
@@ -217,9 +217,9 @@ pub(crate) fn get_rids(media: &MediaDescription) -> HashMap<String, String> {
 }
 
 pub(crate) async fn add_candidates_to_media_descriptions(
-    candidates: &[ICECandidate],
+    candidates: &[RTCIceCandidate],
     mut m: MediaDescription,
-    ice_gathering_state: ICEGatheringState,
+    ice_gathering_state: RTCIceGatheringState,
 ) -> Result<MediaDescription> {
     let append_candidate_if_new = |c: &dyn Candidate, m: MediaDescription| -> MediaDescription {
         let marshaled = c.marshal();
@@ -244,7 +244,7 @@ pub(crate) async fn add_candidates_to_media_descriptions(
         m = append_candidate_if_new(&candidate, m);
     }
 
-    if ice_gathering_state != ICEGatheringState::Complete {
+    if ice_gathering_state != RTCIceGatheringState::Complete {
         return Ok(m);
     }
     for a in &m.attributes {
@@ -259,15 +259,15 @@ pub(crate) async fn add_candidates_to_media_descriptions(
 pub(crate) struct AddDataMediaSectionParams {
     should_add_candidates: bool,
     mid_value: String,
-    ice_params: ICEParameters,
+    ice_params: RTCIceParameters,
     dtls_role: ConnectionRole,
-    ice_gathering_state: ICEGatheringState,
+    ice_gathering_state: RTCIceGatheringState,
 }
 
 pub(crate) async fn add_data_media_section(
     d: sdp::session_description::SessionDescription,
-    dtls_fingerprints: &[DTLSFingerprint],
-    candidates: &[ICECandidate],
+    dtls_fingerprints: &[RTCDtlsFingerprint],
+    candidates: &[RTCIceCandidate],
     params: AddDataMediaSectionParams,
 ) -> Result<sdp::session_description::SessionDescription> {
     let mut media = MediaDescription {
@@ -299,7 +299,7 @@ pub(crate) async fn add_data_media_section(
         params.dtls_role.to_string(),
     )
     .with_value_attribute(ATTR_KEY_MID.to_owned(), params.mid_value)
-    .with_property_attribute(RTPTransceiverDirection::Sendrecv.to_string())
+    .with_property_attribute(RTCRtpTransceiverDirection::Sendrecv.to_string())
     .with_property_attribute("sctp-port:5000".to_owned())
     .with_ice_credentials(
         params.ice_params.username_fragment,
@@ -319,10 +319,10 @@ pub(crate) async fn add_data_media_section(
 }
 
 pub(crate) async fn populate_local_candidates(
-    session_description: Option<&session_description::SessionDescription>,
-    ice_gatherer: Option<&Arc<ICEGatherer>>,
-    ice_gathering_state: ICEGatheringState,
-) -> Option<session_description::SessionDescription> {
+    session_description: Option<&session_description::RTCSessionDescription>,
+    ice_gatherer: Option<&Arc<RTCIceGatherer>>,
+    ice_gathering_state: RTCIceGatheringState,
+) -> Option<session_description::RTCSessionDescription> {
     if session_description.is_none() || ice_gatherer.is_none() {
         return session_description.cloned();
     }
@@ -349,8 +349,8 @@ pub(crate) async fn populate_local_candidates(
             parsed.media_descriptions.insert(0, m);
         }
 
-        Some(session_description::SessionDescription {
-            serde: SessionDescriptionSerde {
+        Some(session_description::RTCSessionDescription {
+            serde: RTCSessionDescriptionSerde {
                 sdp_type: sd.serde.sdp_type,
                 sdp: parsed.marshal(),
             },
@@ -366,15 +366,15 @@ pub(crate) struct AddTransceiverSdpParams {
     should_add_candidates: bool,
     mid_value: String,
     dtls_role: ConnectionRole,
-    ice_gathering_state: ICEGatheringState,
+    ice_gathering_state: RTCIceGatheringState,
 }
 
 pub(crate) async fn add_transceiver_sdp(
     mut d: sdp::session_description::SessionDescription,
-    dtls_fingerprints: &[DTLSFingerprint],
+    dtls_fingerprints: &[RTCDtlsFingerprint],
     media_engine: &Arc<MediaEngine>,
-    ice_params: &ICEParameters,
-    candidates: &[ICECandidate],
+    ice_params: &RTCIceParameters,
+    candidates: &[RTCIceCandidate],
     media_section: &MediaSection,
     params: AddTransceiverSdpParams,
 ) -> Result<(sdp::session_description::SessionDescription, bool)> {
@@ -459,10 +459,10 @@ pub(crate) async fn add_transceiver_sdp(
 
     let mut directions = vec![];
     if t.sender().await.is_some() {
-        directions.push(RTPTransceiverDirection::Sendonly);
+        directions.push(RTCRtpTransceiverDirection::Sendonly);
     }
     if t.receiver().await.is_some() {
-        directions.push(RTPTransceiverDirection::Recvonly);
+        directions.push(RTCRtpTransceiverDirection::Recvonly);
     }
 
     let parameters = media_engine
@@ -530,7 +530,7 @@ pub(crate) async fn add_transceiver_sdp(
 #[derive(Default)]
 pub(crate) struct MediaSection {
     pub(crate) id: String,
-    pub(crate) transceivers: Vec<Arc<RTPTransceiver>>,
+    pub(crate) transceivers: Vec<Arc<RTCRtpTransceiver>>,
     pub(crate) data: bool,
     pub(crate) rid_map: HashMap<String, String>,
 }
@@ -540,16 +540,16 @@ pub(crate) struct PopulateSdpParams {
     pub(crate) media_description_fingerprint: bool,
     pub(crate) is_icelite: bool,
     pub(crate) connection_role: ConnectionRole,
-    pub(crate) ice_gathering_state: ICEGatheringState,
+    pub(crate) ice_gathering_state: RTCIceGatheringState,
 }
 
 /// populate_sdp serializes a PeerConnections state into an SDP
 pub(crate) async fn populate_sdp(
     mut d: sdp::session_description::SessionDescription,
-    dtls_fingerprints: &[DTLSFingerprint],
+    dtls_fingerprints: &[RTCDtlsFingerprint],
     media_engine: &Arc<MediaEngine>,
-    candidates: &[ICECandidate],
-    ice_params: &ICEParameters,
+    candidates: &[RTCIceCandidate],
+    ice_params: &RTCIceParameters,
     media_sections: &[MediaSection],
     params: PopulateSdpParams,
 ) -> Result<sdp::session_description::SessionDescription> {
@@ -639,7 +639,7 @@ pub(crate) fn get_mid_value(media: &MediaDescription) -> Option<&String> {
 }
 
 pub(crate) fn description_is_plan_b(
-    desc: Option<&session_description::SessionDescription>,
+    desc: Option<&session_description::RTCSessionDescription>,
 ) -> Result<bool> {
     if let Some(desc) = desc {
         if let Some(parsed) = &desc.parsed {
@@ -660,14 +660,14 @@ pub(crate) fn description_is_plan_b(
 
 pub(crate) fn get_peer_direction(
     media: &sdp::media_description::MediaDescription,
-) -> RTPTransceiverDirection {
+) -> RTCRtpTransceiverDirection {
     for a in &media.attributes {
-        let direction = RTPTransceiverDirection::from(a.key.as_str());
-        if direction != RTPTransceiverDirection::Unspecified {
+        let direction = RTCRtpTransceiverDirection::from(a.key.as_str());
+        if direction != RTCRtpTransceiverDirection::Unspecified {
             return direction;
         }
     }
-    RTPTransceiverDirection::Unspecified
+    RTCRtpTransceiverDirection::Unspecified
 }
 
 pub(crate) fn extract_fingerprint(
@@ -705,7 +705,7 @@ pub(crate) fn extract_fingerprint(
 
 pub(crate) async fn extract_ice_details(
     desc: &sdp::session_description::SessionDescription,
-) -> Result<(String, String, Vec<ICECandidate>)> {
+) -> Result<(String, String, Vec<RTCIceCandidate>)> {
     let mut candidates = vec![];
     let mut remote_pwds = vec![];
     let mut remote_ufrags = vec![];
@@ -730,7 +730,7 @@ pub(crate) async fn extract_ice_details(
                 if let Some(value) = &a.value {
                     let c: Arc<dyn Candidate + Send + Sync> =
                         Arc::new(unmarshal_candidate(value).await?);
-                    let candidate = ICECandidate::from(&c);
+                    let candidate = RTCIceCandidate::from(&c);
                     candidates.push(candidate);
                 }
             }
@@ -772,7 +772,7 @@ pub(crate) fn have_application_media_section(
 
 pub(crate) fn get_by_mid<'a, 'b>(
     search_mid: &'a str,
-    desc: &'b session_description::SessionDescription,
+    desc: &'b session_description::RTCSessionDescription,
 ) -> Option<&'b sdp::media_description::MediaDescription> {
     if let Some(parsed) = &desc.parsed {
         for m in &parsed.media_descriptions {
@@ -788,7 +788,7 @@ pub(crate) fn get_by_mid<'a, 'b>(
 
 /// have_data_channel return MediaDescription with MediaName equal application
 pub(crate) fn have_data_channel(
-    desc: &session_description::SessionDescription,
+    desc: &session_description::RTCSessionDescription,
 ) -> Option<&sdp::media_description::MediaDescription> {
     if let Some(parsed) = &desc.parsed {
         for d in &parsed.media_descriptions {
@@ -802,7 +802,7 @@ pub(crate) fn have_data_channel(
 
 pub(crate) fn codecs_from_media_description(
     m: &sdp::media_description::MediaDescription,
-) -> Result<Vec<RTPCodecParameters>> {
+) -> Result<Vec<RTCRtpCodecParameters>> {
     let s = sdp::session_description::SessionDescription {
         media_descriptions: vec![m.clone()],
         ..Default::default()
@@ -842,8 +842,8 @@ pub(crate) fn codecs_from_media_description(
             feedback.push(entry);
         }
 
-        out.push(RTPCodecParameters {
-            capability: RTPCodecCapability {
+        out.push(RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
                 mime_type: m.media_name.media.clone() + "/" + codec.name.as_str(),
                 clock_rate: codec.clock_rate,
                 channels,

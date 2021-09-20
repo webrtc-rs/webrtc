@@ -3,7 +3,7 @@ use std::fmt;
 /// ICERole describes the role ice.Agent is playing in selecting the
 /// preferred the candidate pair.
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum ICERole {
+pub enum RTCIceRole {
     Unspecified,
 
     /// ICERoleControlling indicates that the ICE agent that is responsible
@@ -17,30 +17,30 @@ pub enum ICERole {
     Controlled,
 }
 
-impl Default for ICERole {
+impl Default for RTCIceRole {
     fn default() -> Self {
-        ICERole::Unspecified
+        RTCIceRole::Unspecified
     }
 }
 
 const ICE_ROLE_CONTROLLING_STR: &str = "controlling";
 const ICE_ROLE_CONTROLLED_STR: &str = "controlled";
 
-impl From<&str> for ICERole {
+impl From<&str> for RTCIceRole {
     fn from(raw: &str) -> Self {
         match raw {
-            ICE_ROLE_CONTROLLING_STR => ICERole::Controlling,
-            ICE_ROLE_CONTROLLED_STR => ICERole::Controlled,
-            _ => ICERole::Unspecified,
+            ICE_ROLE_CONTROLLING_STR => RTCIceRole::Controlling,
+            ICE_ROLE_CONTROLLED_STR => RTCIceRole::Controlled,
+            _ => RTCIceRole::Unspecified,
         }
     }
 }
 
-impl fmt::Display for ICERole {
+impl fmt::Display for RTCIceRole {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            ICERole::Controlling => write!(f, "{}", ICE_ROLE_CONTROLLING_STR),
-            ICERole::Controlled => write!(f, "{}", ICE_ROLE_CONTROLLED_STR),
+            RTCIceRole::Controlling => write!(f, "{}", ICE_ROLE_CONTROLLING_STR),
+            RTCIceRole::Controlled => write!(f, "{}", ICE_ROLE_CONTROLLED_STR),
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }
     }
@@ -53,22 +53,22 @@ mod test {
     #[test]
     fn test_new_ice_role() {
         let tests = vec![
-            ("Unspecified", ICERole::Unspecified),
-            ("controlling", ICERole::Controlling),
-            ("controlled", ICERole::Controlled),
+            ("Unspecified", RTCIceRole::Unspecified),
+            ("controlling", RTCIceRole::Controlling),
+            ("controlled", RTCIceRole::Controlled),
         ];
 
         for (role_string, expected_role) in tests {
-            assert_eq!(expected_role, ICERole::from(role_string));
+            assert_eq!(expected_role, RTCIceRole::from(role_string));
         }
     }
 
     #[test]
     fn test_ice_role_string() {
         let tests = vec![
-            (ICERole::Unspecified, "Unspecified"),
-            (ICERole::Controlling, "controlling"),
-            (ICERole::Controlled, "controlled"),
+            (RTCIceRole::Unspecified, "Unspecified"),
+            (RTCIceRole::Controlling, "controlling"),
+            (RTCIceRole::Controlled, "controlled"),
         ];
 
         for (proto, expected_string) in tests {

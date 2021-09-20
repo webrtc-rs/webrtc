@@ -12,25 +12,25 @@ use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::APIBuilder;
 use webrtc::data::data_channel::data_channel_message::DataChannelMessage;
-use webrtc::peer::configuration::Configuration;
-use webrtc::peer::ice::ice_candidate::{ICECandidate, ICECandidateInit};
-use webrtc::peer::ice::ice_server::ICEServer;
-use webrtc::peer::peer_connection::PeerConnection;
-use webrtc::peer::peer_connection_state::PeerConnectionState;
-use webrtc::peer::sdp::session_description::{SessionDescription, SessionDescriptionSerde};
+use webrtc::peer::configuration::RTCConfiguration;
+use webrtc::peer::ice::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
+use webrtc::peer::ice::ice_server::RTCIceServer;
+use webrtc::peer::peer_connection::RTCPeerConnection;
+use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
+use webrtc::peer::sdp::session_description::{RTCSessionDescription, RTCSessionDescriptionSerde};
 use webrtc::util::math_rand_alpha;
 
 #[macro_use]
 extern crate lazy_static;
 
 lazy_static! {
-    static ref PEER_CONNECTION_MUTEX: Arc<Mutex<Option<Arc<PeerConnection>>>> =
+    static ref PEER_CONNECTION_MUTEX: Arc<Mutex<Option<Arc<RTCPeerConnection>>>> =
         Arc::new(Mutex::new(None));
-    static ref PENDING_CANDIDATES: Arc<Mutex<Vec<ICECandidate>>> = Arc::new(Mutex::new(vec![]));
+    static ref PENDING_CANDIDATES: Arc<Mutex<Vec<RTCIceCandidate>>> = Arc::new(Mutex::new(vec![]));
     static ref ADDRESS: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
 }
 
-async fn signal_candidate(addr: &str, c: &ICECandidate) -> Result<()> {
+async fn signal_candidate(addr: &str, c: &RTCIceCandidate) -> Result<()> {
     /*println!(
         "signal_candidate Post candidate to {}",
         format!("http://{}/candidate", addr)
@@ -85,7 +85,7 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
                 };
 
             if let Err(err) = pc
-                .add_ice_candidate(ICECandidateInit {
+                .add_ice_candidate(RTCIceCandidateInit {
                     candidate,
                     ..Default::default()
                 })
@@ -102,13 +102,13 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
         // A HTTP handler that processes a SessionDescription given to us from the other WebRTC-rs or Pion process
         (&Method::POST, "/sdp") => {
             //println!("remote_handler receive from /sdp");
-            let mut sdp = SessionDescription::default();
+            let mut sdp = RTCSessionDescription::default();
             let sdp_str = match std::str::from_utf8(&hyper::body::to_bytes(req.into_body()).await?)
             {
                 Ok(s) => s.to_owned(),
                 Err(err) => panic!("{}", err),
             };
-            sdp.serde = match serde_json::from_str::<SessionDescriptionSerde>(&sdp_str) {
+            sdp.serde = match serde_json::from_str::<RTCSessionDescriptionSerde>(&sdp_str) {
                 Ok(s) => s,
                 Err(err) => panic!("{}", err),
             };
@@ -202,8 +202,8 @@ async fn main() -> Result<()> {
     }
 
     // Prepare the configuration
-    let config = Configuration {
-        ice_servers: vec![ICEServer {
+    let config = RTCConfiguration {
+        ice_servers: vec![RTCIceServer {
             urls: vec!["stun:stun.l.google.com:19302".to_owned()],
             ..Default::default()
         }],
@@ -234,7 +234,7 @@ async fn main() -> Result<()> {
     let pending_candidates2 = Arc::clone(&PENDING_CANDIDATES);
     let addr2 = answer_addr.clone();
     peer_connection
-        .on_ice_candidate(Box::new(move |c: Option<ICECandidate>| {
+        .on_ice_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
             //println!("on_ice_candidate {:?}", c);
 
             let peer_connection3 = Arc::clone(&peer_connection2);
@@ -277,10 +277,10 @@ async fn main() -> Result<()> {
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection
-        .on_peer_connection_state_change(Box::new(move |s: PeerConnectionState| {
+        .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
             println!("Peer Connection State has changed: {}", s);
 
-            if s == PeerConnectionState::Failed {
+            if s == RTCPeerConnectionState::Failed {
                 // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
                 // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
                 // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.

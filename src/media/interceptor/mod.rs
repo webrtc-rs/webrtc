@@ -1,4 +1,4 @@
-use crate::media::rtp::rtp_codec::{RTPCodecCapability, RTPHeaderExtensionParameter};
+use crate::media::rtp::rtp_codec::{RTCRtpCodecCapability, RTCRtpHeaderExtensionParameters};
 use crate::media::rtp::{PayloadType, SSRC};
 use crate::media::track::track_local::TrackLocalWriter;
 
@@ -60,8 +60,8 @@ pub(crate) fn create_stream_info(
     id: String,
     ssrc: SSRC,
     payload_type: PayloadType,
-    codec: RTPCodecCapability,
-    webrtc_header_extensions: &[RTPHeaderExtensionParameter],
+    codec: RTCRtpCodecCapability,
+    webrtc_header_extensions: &[RTCRtpHeaderExtensionParameters],
 ) -> StreamInfo {
     let mut header_extensions = vec![];
     for h in webrtc_header_extensions {

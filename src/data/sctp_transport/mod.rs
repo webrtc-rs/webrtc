@@ -4,10 +4,10 @@ mod sctp_transport_test;
 pub mod sctp_transport_capabilities;
 pub mod sctp_transport_state;
 
-use sctp_transport_state::SCTPTransportState;
+use sctp_transport_state::RTCSctpTransportState;
 
 use crate::api::setting_engine::SettingEngine;
-use crate::data::data_channel::DataChannel;
+use crate::data::data_channel::RTCDataChannel;
 use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use crate::error::*;
 use crate::media::dtls_transport::dtls_role::DTLSRole;
@@ -29,20 +29,20 @@ use util::Conn;
 const SCTP_MAX_CHANNELS: u16 = u16::MAX;
 
 pub type OnDataChannelHdlrFn = Box<
-    dyn (FnMut(Arc<DataChannel>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+    dyn (FnMut(Arc<RTCDataChannel>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
 
 pub type OnDataChannelOpenedHdlrFn = Box<
-    dyn (FnMut(Arc<DataChannel>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+    dyn (FnMut(Arc<RTCDataChannel>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
 
 struct AcceptDataChannelParams {
     sctp_association: Arc<Association>,
-    data_channels: Arc<Mutex<Vec<Arc<DataChannel>>>>,
+    data_channels: Arc<Mutex<Vec<Arc<RTCDataChannel>>>>,
     on_error_handler: Arc<Mutex<Option<OnErrorHdlrFn>>>,
     on_data_channel_handler: Arc<Mutex<Option<OnDataChannelHdlrFn>>>,
     on_data_channel_opened_handler: Arc<Mutex<Option<OnDataChannelOpenedHdlrFn>>>,
@@ -53,8 +53,8 @@ struct AcceptDataChannelParams {
 
 /// SCTPTransport provides details about the SCTP transport.
 #[derive(Default)]
-pub struct SCTPTransport {
-    pub(crate) dtls_transport: Arc<DTLSTransport>,
+pub struct RTCSctpTransport {
+    pub(crate) dtls_transport: Arc<RTCDtlsTransport>,
 
     // State represents the current state of the SCTP transport.
     state: AtomicU8, //SCTPTransportState,
@@ -78,7 +78,7 @@ pub struct SCTPTransport {
     on_data_channel_opened_handler: Arc<Mutex<Option<OnDataChannelOpenedHdlrFn>>>,
 
     // DataChannels
-    pub(crate) data_channels: Arc<Mutex<Vec<Arc<DataChannel>>>>,
+    pub(crate) data_channels: Arc<Mutex<Vec<Arc<RTCDataChannel>>>>,
     pub(crate) data_channels_opened: Arc<AtomicU32>,
     pub(crate) data_channels_requested: Arc<AtomicU32>,
     data_channels_accepted: Arc<AtomicU32>,
@@ -86,16 +86,16 @@ pub struct SCTPTransport {
     setting_engine: Arc<SettingEngine>,
 }
 
-impl SCTPTransport {
+impl RTCSctpTransport {
     pub(crate) fn new(
-        dtls_transport: Arc<DTLSTransport>,
+        dtls_transport: Arc<RTCDtlsTransport>,
         setting_engine: Arc<SettingEngine>,
     ) -> Self {
-        SCTPTransport {
+        RTCSctpTransport {
             dtls_transport,
-            state: AtomicU8::new(SCTPTransportState::Connecting as u8),
+            state: AtomicU8::new(RTCSctpTransportState::Connecting as u8),
             is_started: AtomicBool::new(false),
-            max_message_size: SCTPTransport::calc_message_size(65536, 65536),
+            max_message_size: RTCSctpTransport::calc_message_size(65536, 65536),
             max_channels: SCTP_MAX_CHANNELS,
             sctp_association: Mutex::new(None),
             on_error_handler: Arc::new(Mutex::new(None)),
@@ -112,7 +112,7 @@ impl SCTPTransport {
     }
 
     /// transport returns the DTLSTransport instance the SCTPTransport is sending over.
-    pub fn transport(&self) -> Arc<DTLSTransport> {
+    pub fn transport(&self) -> Arc<RTCDtlsTransport> {
         Arc::clone(&self.dtls_transport)
     }
 
@@ -149,7 +149,7 @@ impl SCTPTransport {
                 *sa = Some(Arc::clone(&sctp_association));
             }
             self.state
-                .store(SCTPTransportState::Connected as u8, Ordering::SeqCst);
+                .store(RTCSctpTransportState::Connected as u8, Ordering::SeqCst);
 
             let param = AcceptDataChannelParams {
                 sctp_association,
@@ -162,7 +162,7 @@ impl SCTPTransport {
                 setting_engine: Arc::clone(&self.setting_engine),
             };
             tokio::spawn(async move {
-                SCTPTransport::accept_data_channels(param).await;
+                RTCSctpTransport::accept_data_channels(param).await;
             });
 
             Ok(())
@@ -181,7 +181,7 @@ impl SCTPTransport {
         }
 
         self.state
-            .store(SCTPTransportState::Closed as u8, Ordering::SeqCst);
+            .store(RTCSctpTransportState::Closed as u8, Ordering::SeqCst);
         Ok(())
     }
 
@@ -238,7 +238,7 @@ impl SCTPTransport {
             };
 
             let id = dc.stream_identifier();
-            let rtc_dc = Arc::new(DataChannel::new(
+            let rtc_dc = Arc::new(RTCDataChannel::new(
                 DataChannelParameters {
                     id,
                     label: dc.config.label.clone(),
@@ -317,7 +317,7 @@ impl SCTPTransport {
     }
 
     /// state returns the current state of the SCTPTransport
-    pub fn state(&self) -> SCTPTransportState {
+    pub fn state(&self) -> RTCSctpTransportState {
         self.state.load(Ordering::SeqCst).into()
     }
 

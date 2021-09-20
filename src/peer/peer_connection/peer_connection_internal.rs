@@ -22,15 +22,15 @@ pub(crate) struct PeerConnectionInternal {
     pub(super) is_negotiation_needed: Arc<AtomicBool>,
     pub(super) signaling_state: Arc<AtomicU8>,
 
-    pub(super) ice_transport: Arc<ICETransport>,
-    pub(super) dtls_transport: Arc<DTLSTransport>,
+    pub(super) ice_transport: Arc<RTCIceTransport>,
+    pub(super) dtls_transport: Arc<RTCDtlsTransport>,
     pub(super) on_peer_connection_state_change_handler:
         Arc<Mutex<Option<OnPeerConnectionStateChangeHdlrFn>>>,
     pub(super) peer_connection_state: Arc<AtomicU8>,
     pub(super) ice_connection_state: Arc<AtomicU8>,
 
-    pub(super) sctp_transport: Arc<SCTPTransport>,
-    pub(super) rtp_transceivers: Arc<Mutex<Vec<Arc<RTPTransceiver>>>>,
+    pub(super) sctp_transport: Arc<RTCSctpTransport>,
+    pub(super) rtp_transceivers: Arc<Mutex<Vec<Arc<RTCRtpTransceiver>>>>,
 
     pub(super) on_track_handler: Arc<Mutex<Option<OnTrackHdlrFn>>>,
     pub(super) on_signaling_state_change_handler: Arc<Mutex<Option<OnSignalingStateChangeHdlrFn>>>,
@@ -38,12 +38,12 @@ pub(crate) struct PeerConnectionInternal {
         Arc<Mutex<Option<OnICEConnectionStateChangeHdlrFn>>>,
     pub(super) on_data_channel_handler: Arc<Mutex<Option<OnDataChannelHdlrFn>>>,
 
-    pub(super) ice_gatherer: Arc<ICEGatherer>,
+    pub(super) ice_gatherer: Arc<RTCIceGatherer>,
 
-    pub(super) current_local_description: Arc<Mutex<Option<SessionDescription>>>,
-    pub(super) current_remote_description: Arc<Mutex<Option<SessionDescription>>>,
-    pub(super) pending_local_description: Arc<Mutex<Option<SessionDescription>>>,
-    pub(super) pending_remote_description: Arc<Mutex<Option<SessionDescription>>>,
+    pub(super) current_local_description: Arc<Mutex<Option<RTCSessionDescription>>>,
+    pub(super) current_remote_description: Arc<Mutex<Option<RTCSessionDescription>>>,
+    pub(super) pending_local_description: Arc<Mutex<Option<RTCSessionDescription>>>,
+    pub(super) pending_remote_description: Arc<Mutex<Option<RTCSessionDescription>>>,
 
     // A reference to the associated API state used by this connection
     pub(super) setting_engine: Arc<SettingEngine>,
@@ -52,7 +52,7 @@ pub(crate) struct PeerConnectionInternal {
 }
 
 impl PeerConnectionInternal {
-    pub(super) async fn new(api: &API, configuration: &mut Configuration) -> Result<Self> {
+    pub(super) async fn new(api: &API, configuration: &mut RTCConfiguration) -> Result<Self> {
         let mut pc = PeerConnectionInternal {
             greater_mid: AtomicIsize::new(-1),
             sdp_origin: Mutex::new(Default::default()),
@@ -64,10 +64,10 @@ impl PeerConnectionInternal {
             is_closed: Arc::new(AtomicBool::new(false)),
             is_negotiation_needed: Arc::new(AtomicBool::new(false)),
             negotiation_needed_state: Arc::new(AtomicU8::new(NegotiationNeededState::Empty as u8)),
-            signaling_state: Arc::new(AtomicU8::new(SignalingState::Stable as u8)),
+            signaling_state: Arc::new(AtomicU8::new(RTCSignalingState::Stable as u8)),
             ice_transport: Arc::new(Default::default()),
             dtls_transport: Arc::new(Default::default()),
-            ice_connection_state: Arc::new(AtomicU8::new(ICEConnectionState::New as u8)),
+            ice_connection_state: Arc::new(AtomicU8::new(RTCIceConnectionState::New as u8)),
             sctp_transport: Arc::new(Default::default()),
             rtp_transceivers: Arc::new(Default::default()),
             on_track_handler: Arc::new(Default::default()),
@@ -78,7 +78,7 @@ impl PeerConnectionInternal {
             current_local_description: Arc::new(Default::default()),
             current_remote_description: Arc::new(Default::default()),
             pending_local_description: Arc::new(Default::default()),
-            peer_connection_state: Arc::new(AtomicU8::new(PeerConnectionState::New as u8)),
+            peer_connection_state: Arc::new(AtomicU8::new(RTCPeerConnectionState::New as u8)),
 
             setting_engine: Arc::clone(&api.setting_engine),
             media_engine: if !api.setting_engine.disable_media_engine_copy {
@@ -92,7 +92,7 @@ impl PeerConnectionInternal {
         };
 
         // Create the ice gatherer
-        pc.ice_gatherer = Arc::new(api.new_ice_gatherer(ICEGatherOptions {
+        pc.ice_gatherer = Arc::new(api.new_ice_gatherer(RTCIceGatherOptions {
             ice_servers: configuration.get_ice_servers(),
             ice_gather_policy: configuration.ice_transport_policy,
         })?);
@@ -111,7 +111,7 @@ impl PeerConnectionInternal {
         // Wire up the on datachannel handler
         let on_data_channel_handler = Arc::clone(&pc.on_data_channel_handler);
         pc.sctp_transport
-            .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
+            .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
                 let on_data_channel_handler2 = Arc::clone(&on_data_channel_handler);
                 Box::pin(async move {
                     let mut handler = on_data_channel_handler2.lock().await;
@@ -128,8 +128,8 @@ impl PeerConnectionInternal {
     pub(super) async fn start_rtp(
         self: &Arc<Self>,
         is_renegotiation: bool,
-        remote_desc: Arc<SessionDescription>,
-        sdp_semantics: SDPSemantics,
+        remote_desc: Arc<RTCSessionDescription>,
+        sdp_semantics: RTCSdpSemantics,
     ) -> Result<()> {
         let mut track_details = if let Some(parsed) = &remote_desc.parsed {
             track_details_from_sdp(parsed)
@@ -159,7 +159,7 @@ impl PeerConnectionInternal {
                         continue;
                     }
 
-                    let receiver = Arc::new(RTPReceiver::new(
+                    let receiver = Arc::new(RTCRtpReceiver::new(
                         receiver.kind(),
                         Arc::clone(&self.dtls_transport),
                         Arc::clone(&self.media_engine),
@@ -277,12 +277,12 @@ impl PeerConnectionInternal {
     async fn start_rtp_receivers(
         self: &Arc<Self>,
         incoming_tracks: &mut Vec<TrackDetails>,
-        local_transceivers: &[Arc<RTPTransceiver>],
-        sdp_semantics: SDPSemantics,
+        local_transceivers: &[Arc<RTCRtpTransceiver>],
+        sdp_semantics: RTCSdpSemantics,
     ) -> Result<()> {
         let remote_is_plan_b = match sdp_semantics {
-            SDPSemantics::PlanB => true,
-            SDPSemantics::UnifiedPlanWithFallback => {
+            RTCSdpSemantics::PlanB => true,
+            RTCSdpSemantics::UnifiedPlanWithFallback => {
                 description_is_plan_b(self.remote_description().await.as_ref())?
             }
             _ => false,
@@ -317,8 +317,8 @@ impl PeerConnectionInternal {
                 }
 
                 if (incoming_track.kind != t.kind())
-                    || (t.direction() != RTPTransceiverDirection::Recvonly
-                        && t.direction() != RTPTransceiverDirection::Sendrecv)
+                    || (t.direction() != RTCRtpTransceiverDirection::Recvonly
+                        && t.direction() != RTCRtpTransceiverDirection::Sendrecv)
                 {
                     continue;
                 }
@@ -348,8 +348,8 @@ impl PeerConnectionInternal {
                 let t = match self
                     .add_transceiver_from_kind(
                         incoming.kind,
-                        &[RTPTransceiverInit {
-                            direction: RTPTransceiverDirection::Sendrecv,
+                        &[RTCRtpTransceiverInit {
+                            direction: RTCRtpTransceiverDirection::Sendrecv,
                             send_encodings: vec![],
                         }],
                     )
@@ -407,7 +407,7 @@ impl PeerConnectionInternal {
 
         let mut opened_dc_count = 0;
         for d in data_channels {
-            if d.ready_state() == DataChannelState::Connecting {
+            if d.ready_state() == RTCDataChannelState::Connecting {
                 if let Err(err) = d.open(Arc::clone(&self.sctp_transport)).await {
                     log::warn!("failed to open data channel: {}", err);
                     continue;
@@ -424,20 +424,20 @@ impl PeerConnectionInternal {
     pub(super) async fn add_transceiver_from_kind(
         &self,
         kind: RTPCodecType,
-        init: &[RTPTransceiverInit],
-    ) -> Result<Arc<RTPTransceiver>> {
+        init: &[RTCRtpTransceiverInit],
+    ) -> Result<Arc<RTCRtpTransceiver>> {
         if self.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed.into());
         }
 
         let direction = match init.len() {
-            0 => RTPTransceiverDirection::Sendrecv,
+            0 => RTCRtpTransceiverDirection::Sendrecv,
             1 => init[0].direction,
             _ => return Err(Error::ErrPeerConnAddTransceiverFromKindOnlyAcceptsOne.into()),
         };
 
         let t = match direction {
-            RTPTransceiverDirection::Sendonly | RTPTransceiverDirection::Sendrecv => {
+            RTCRtpTransceiverDirection::Sendonly | RTCRtpTransceiverDirection::Sendrecv => {
                 let codecs = self.media_engine.get_codecs_by_kind(kind).await;
                 if codecs.is_empty() {
                     return Err(Error::ErrNoCodecsAvailable.into());
@@ -450,18 +450,18 @@ impl PeerConnectionInternal {
 
                 self.new_transceiver_from_track(direction, track).await?
             }
-            RTPTransceiverDirection::Recvonly => {
-                let receiver = Arc::new(RTPReceiver::new(
+            RTCRtpTransceiverDirection::Recvonly => {
+                let receiver = Arc::new(RTCRtpReceiver::new(
                     kind,
                     Arc::clone(&self.dtls_transport),
                     Arc::clone(&self.media_engine),
                     Arc::clone(&self.interceptor),
                 ));
 
-                RTPTransceiver::new(
+                RTCRtpTransceiver::new(
                     Some(receiver),
                     None,
-                    RTPTransceiverDirection::Recvonly,
+                    RTCRtpTransceiverDirection::Recvonly,
                     kind,
                     vec![],
                     Arc::clone(&self.media_engine),
@@ -478,19 +478,19 @@ impl PeerConnectionInternal {
 
     pub(super) async fn new_transceiver_from_track(
         &self,
-        direction: RTPTransceiverDirection,
+        direction: RTCRtpTransceiverDirection,
         track: Arc<dyn TrackLocal + Send + Sync>,
-    ) -> Result<Arc<RTPTransceiver>> {
+    ) -> Result<Arc<RTCRtpTransceiver>> {
         let (r, s) = match direction {
-            RTPTransceiverDirection::Sendrecv => {
-                let r = Some(Arc::new(RTPReceiver::new(
+            RTCRtpTransceiverDirection::Sendrecv => {
+                let r = Some(Arc::new(RTCRtpReceiver::new(
                     track.kind(),
                     Arc::clone(&self.dtls_transport),
                     Arc::clone(&self.media_engine),
                     Arc::clone(&self.interceptor),
                 )));
                 let s = Some(Arc::new(
-                    RTPSender::new(
+                    RTCRtpSender::new(
                         Arc::clone(&track),
                         Arc::clone(&self.dtls_transport),
                         Arc::clone(&self.media_engine),
@@ -500,9 +500,9 @@ impl PeerConnectionInternal {
                 ));
                 (r, s)
             }
-            RTPTransceiverDirection::Sendonly => {
+            RTCRtpTransceiverDirection::Sendonly => {
                 let s = Some(Arc::new(
-                    RTPSender::new(
+                    RTCRtpSender::new(
                         Arc::clone(&track),
                         Arc::clone(&self.dtls_transport),
                         Arc::clone(&self.media_engine),
@@ -515,7 +515,7 @@ impl PeerConnectionInternal {
             _ => return Err(Error::ErrPeerConnAddTransceiverFromTrackSupport.into()),
         };
 
-        Ok(RTPTransceiver::new(
+        Ok(RTCRtpTransceiver::new(
             r,
             s,
             direction,
@@ -529,12 +529,12 @@ impl PeerConnectionInternal {
     /// add_rtp_transceiver appends t into rtp_transceivers
     /// and fires onNegotiationNeeded;
     /// caller of this method should hold `self.mu` lock
-    pub(super) async fn add_rtp_transceiver(&self, t: Arc<RTPTransceiver>) {
+    pub(super) async fn add_rtp_transceiver(&self, t: Arc<RTCRtpTransceiver>) {
         {
             let mut rtp_transceivers = self.rtp_transceivers.lock().await;
             rtp_transceivers.push(t);
         }
-        PeerConnection::do_negotiation_needed(NegotiationNeededParams {
+        RTCPeerConnection::do_negotiation_needed(NegotiationNeededParams {
             on_negotiation_needed_handler: Arc::clone(&self.on_negotiation_needed_handler),
             is_closed: Arc::clone(&self.is_closed),
             ops: Arc::clone(&self.ops),
@@ -551,7 +551,7 @@ impl PeerConnectionInternal {
         .await;
     }
 
-    pub(super) async fn remote_description(self: &Arc<Self>) -> Option<SessionDescription> {
+    pub(super) async fn remote_description(self: &Arc<Self>) -> Option<RTCSessionDescription> {
         let pending_remote_description = self.pending_remote_description.lock().await;
         if pending_remote_description.is_some() {
             pending_remote_description.clone()
@@ -568,7 +568,7 @@ impl PeerConnectionInternal {
     /// Start all transports. PeerConnection now has enough state
     pub(super) async fn start_transports(
         self: &Arc<Self>,
-        ice_role: ICERole,
+        ice_role: RTCIceRole,
         dtls_role: DTLSRole,
         remote_ufrag: String,
         remote_pwd: String,
@@ -579,7 +579,7 @@ impl PeerConnectionInternal {
         if let Err(err) = self
             .ice_transport
             .start(
-                &ICEParameters {
+                &RTCIceParameters {
                     username_fragment: remote_ufrag,
                     password: remote_pwd,
                     ice_lite: false,
@@ -597,13 +597,13 @@ impl PeerConnectionInternal {
             .dtls_transport
             .start(DTLSParameters {
                 role: dtls_role,
-                fingerprints: vec![DTLSFingerprint {
+                fingerprints: vec![RTCDtlsFingerprint {
                     algorithm: fingerprint_hash,
                     value: fingerprint,
                 }],
             })
             .await;
-        PeerConnection::update_connection_state(
+        RTCPeerConnection::update_connection_state(
             &self.on_peer_connection_state_change_handler,
             &self.is_closed,
             &self.peer_connection_state,
@@ -620,9 +620,9 @@ impl PeerConnectionInternal {
     /// This is used for the initial call for CreateOffer
     pub(super) async fn generate_unmatched_sdp(
         &self,
-        local_transceivers: Vec<Arc<RTPTransceiver>>,
+        local_transceivers: Vec<Arc<RTCRtpTransceiver>>,
         use_identity: bool,
-        sdp_semantics: SDPSemantics,
+        sdp_semantics: RTCSdpSemantics,
     ) -> Result<sdp::session_description::SessionDescription> {
         let d = sdp::session_description::SessionDescription::new_jsep_session_description(
             use_identity,
@@ -632,7 +632,7 @@ impl PeerConnectionInternal {
 
         let candidates = self.ice_gatherer.get_local_candidates().await?;
 
-        let is_plan_b = sdp_semantics == SDPSemantics::PlanB;
+        let is_plan_b = sdp_semantics == RTCSdpSemantics::PlanB;
         let mut media_sections = vec![];
 
         // Needed for self.sctpTransport.dataChannelsRequested
@@ -735,11 +735,11 @@ impl PeerConnectionInternal {
     /// this is used everytime we have a remote_description
     pub(super) async fn generate_matched_sdp(
         &self,
-        mut local_transceivers: Vec<Arc<RTPTransceiver>>,
+        mut local_transceivers: Vec<Arc<RTCRtpTransceiver>>,
         use_identity: bool,
         include_unmatched: bool,
         connection_role: ConnectionRole,
-        sdp_semantics: SDPSemantics,
+        sdp_semantics: RTCSdpSemantics,
     ) -> Result<sdp::session_description::SessionDescription> {
         let d = sdp::session_description::SessionDescription::new_jsep_session_description(
             use_identity,
@@ -782,13 +782,13 @@ impl PeerConnectionInternal {
                         let kind = RTPCodecType::from(media.media_name.media.as_str());
                         let direction = get_peer_direction(media);
                         if kind == RTPCodecType::Unspecified
-                            || direction == RTPTransceiverDirection::Unspecified
+                            || direction == RTCRtpTransceiverDirection::Unspecified
                         {
                             continue;
                         }
 
-                        if sdp_semantics == SDPSemantics::PlanB
-                            || (sdp_semantics == SDPSemantics::UnifiedPlanWithFallback
+                        if sdp_semantics == RTCSdpSemantics::PlanB
+                            || (sdp_semantics == RTCSdpSemantics::UnifiedPlanWithFallback
                                 && detected_plan_b)
                         {
                             if !detected_plan_b {
@@ -812,10 +812,10 @@ impl PeerConnectionInternal {
                                     media_transceivers.push(t);
                                 } else {
                                     if media_transceivers.is_empty() {
-                                        let t = RTPTransceiver::new(
+                                        let t = RTCRtpTransceiver::new(
                                             None,
                                             None,
-                                            RTPTransceiverDirection::Inactive,
+                                            RTCRtpTransceiverDirection::Inactive,
                                             kind,
                                             vec![],
                                             Arc::clone(&self.media_engine),
@@ -831,8 +831,8 @@ impl PeerConnectionInternal {
                                 transceivers: media_transceivers,
                                 ..Default::default()
                             });
-                        } else if sdp_semantics == SDPSemantics::UnifiedPlan
-                            || sdp_semantics == SDPSemantics::UnifiedPlanWithFallback
+                        } else if sdp_semantics == RTCSdpSemantics::UnifiedPlan
+                            || sdp_semantics == RTCSdpSemantics::UnifiedPlanWithFallback
                         {
                             if detected_plan_b {
                                 return Err(Error::ErrIncorrectSDPSemantics.into());
@@ -897,7 +897,7 @@ impl PeerConnectionInternal {
             }
         }
 
-        if sdp_semantics == SDPSemantics::UnifiedPlanWithFallback && detected_plan_b {
+        if sdp_semantics == RTCSdpSemantics::UnifiedPlanWithFallback && detected_plan_b {
             log::info!("Plan-B Offer detected; responding with Plan-B Answer");
         }
 
@@ -926,11 +926,11 @@ impl PeerConnectionInternal {
         .await
     }
 
-    pub(super) fn ice_gathering_state(&self) -> ICEGatheringState {
+    pub(super) fn ice_gathering_state(&self) -> RTCIceGatheringState {
         match self.ice_gatherer.state() {
-            ICEGathererState::New => ICEGatheringState::New,
-            ICEGathererState::Gathering => ICEGatheringState::Gathering,
-            _ => ICEGatheringState::Complete,
+            RTCIceGathererState::New => RTCIceGatheringState::New,
+            RTCIceGathererState::Gathering => RTCIceGatheringState::Gathering,
+            _ => RTCIceGatheringState::Complete,
         }
     }
 
@@ -964,8 +964,8 @@ impl PeerConnectionInternal {
                         let t = self
                             .add_transceiver_from_kind(
                                 incoming.kind,
-                                &[RTPTransceiverInit {
-                                    direction: RTPTransceiverDirection::Sendrecv,
+                                &[RTCRtpTransceiverInit {
+                                    direction: RTCRtpTransceiverDirection::Sendrecv,
                                     send_encodings: vec![],
                                 }],
                             )
@@ -986,7 +986,7 @@ impl PeerConnectionInternal {
 
                 let (mid_extension_id, audio_supported, video_supported) = self
                     .media_engine
-                    .get_header_extension_id(RTPHeaderExtensionCapability {
+                    .get_header_extension_id(RTCRtpHeaderExtensionCapability {
                         uri: sdp::extmap::SDES_MID_URI.to_owned(),
                     })
                     .await;
@@ -996,7 +996,7 @@ impl PeerConnectionInternal {
 
                 let (sid_extension_id, audio_supported, video_supported) = self
                     .media_engine
-                    .get_header_extension_id(RTPHeaderExtensionCapability {
+                    .get_header_extension_id(RTCRtpHeaderExtensionCapability {
                         uri: sdp::extmap::SDES_RTP_STREAM_ID_URI.to_owned(),
                     })
                     .await;
@@ -1042,7 +1042,7 @@ impl PeerConnectionInternal {
                                 let track = receiver
                                     .receive_for_rid(rid.as_str(), &params, ssrc)
                                     .await?;
-                                PeerConnection::do_track(
+                                RTCPeerConnection::do_track(
                                     Arc::clone(&self.on_track_handler),
                                     Some(track),
                                     Some(receiver.clone()),
@@ -1062,7 +1062,7 @@ impl PeerConnectionInternal {
 
     async fn start_receiver(
         incoming: &TrackDetails,
-        receiver: Arc<RTPReceiver>,
+        receiver: Arc<RTCRtpReceiver>,
         media_engine: Arc<MediaEngine>,
         on_track_handler: Arc<Mutex<Option<OnTrackHdlrFn>>>,
     ) {
@@ -1097,7 +1097,7 @@ impl PeerConnectionInternal {
                     track.set_codec(params.codecs[0].clone()).await;
                     track.set_params(params).await;
 
-                    PeerConnection::do_track(
+                    RTCPeerConnection::do_track(
                         on_track_handler,
                         receiver.track().await,
                         Some(Arc::clone(&receiver)),
@@ -1108,7 +1108,7 @@ impl PeerConnectionInternal {
         }
     }
 
-    pub(super) async fn create_ice_transport(&self, api: &API) -> Arc<ICETransport> {
+    pub(super) async fn create_ice_transport(&self, api: &API) -> Arc<RTCIceTransport> {
         let ice_transport = Arc::new(api.new_ice_transport(Arc::clone(&self.ice_gatherer)));
 
         let ice_connection_state = Arc::clone(&self.ice_connection_state);
@@ -1121,15 +1121,15 @@ impl PeerConnectionInternal {
             Arc::clone(&self.on_peer_connection_state_change_handler);
 
         ice_transport
-            .on_connection_state_change(Box::new(move |state: ICETransportState| {
+            .on_connection_state_change(Box::new(move |state: RTCIceTransportState| {
                 let cs = match state {
-                    ICETransportState::New => ICEConnectionState::New,
-                    ICETransportState::Checking => ICEConnectionState::Checking,
-                    ICETransportState::Connected => ICEConnectionState::Connected,
-                    ICETransportState::Completed => ICEConnectionState::Completed,
-                    ICETransportState::Failed => ICEConnectionState::Failed,
-                    ICETransportState::Disconnected => ICEConnectionState::Disconnected,
-                    ICETransportState::Closed => ICEConnectionState::Closed,
+                    RTCIceTransportState::New => RTCIceConnectionState::New,
+                    RTCIceTransportState::Checking => RTCIceConnectionState::Checking,
+                    RTCIceTransportState::Connected => RTCIceConnectionState::Connected,
+                    RTCIceTransportState::Completed => RTCIceConnectionState::Completed,
+                    RTCIceTransportState::Failed => RTCIceConnectionState::Failed,
+                    RTCIceTransportState::Disconnected => RTCIceConnectionState::Disconnected,
+                    RTCIceTransportState::Closed => RTCIceConnectionState::Closed,
                     _ => {
                         log::warn!("on_connection_state_change: unhandled ICE state: {}", state);
                         return Box::pin(async {});
@@ -1145,14 +1145,14 @@ impl PeerConnectionInternal {
                 let dtls_transport_state = dtls_transport.state();
                 let peer_connection_state2 = Arc::clone(&peer_connection_state);
                 Box::pin(async move {
-                    PeerConnection::do_ice_connection_state_change(
+                    RTCPeerConnection::do_ice_connection_state_change(
                         &on_ice_connection_state_change_handler2,
                         &ice_connection_state2,
                         cs,
                     )
                     .await;
 
-                    PeerConnection::update_connection_state(
+                    RTCPeerConnection::update_connection_state(
                         &on_peer_connection_state_change_handler2,
                         &is_closed2,
                         &peer_connection_state2,
@@ -1169,7 +1169,7 @@ impl PeerConnectionInternal {
 
     /// has_local_description_changed returns whether local media (rtp_transceivers) has changed
     /// caller of this method should hold `pc.mu` lock
-    pub(super) async fn has_local_description_changed(&self, desc: &SessionDescription) -> bool {
+    pub(super) async fn has_local_description_changed(&self, desc: &RTCSessionDescription) -> bool {
         let rtp_transceivers = self.rtp_transceivers.lock().await;
         for t in &*rtp_transceivers {
             if let Some(m) = get_by_mid(t.mid().await.as_str(), desc) {

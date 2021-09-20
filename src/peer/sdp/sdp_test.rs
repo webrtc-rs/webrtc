@@ -2,12 +2,12 @@ use super::*;
 use crate::api::media_engine::{MIME_TYPE_OPUS, MIME_TYPE_VP8};
 use crate::api::setting_engine::SettingEngine;
 use crate::api::APIBuilder;
-use crate::media::dtls_transport::dtls_certificate::Certificate;
 use crate::media::dtls_transport::dtls_role::DEFAULT_DTLS_ROLE_OFFER;
-use crate::media::dtls_transport::DTLSTransport;
-use crate::media::rtp::rtp_sender::RTPSender;
+use crate::media::dtls_transport::RTCDtlsTransport;
+use crate::media::rtp::rtp_sender::RTCRtpSender;
 use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::media::track::track_local::TrackLocal;
+use crate::peer::certificate::RTCCertificate;
 use rcgen::KeyPair;
 use sdp::common_description::Attribute;
 
@@ -511,7 +511,7 @@ fn test_have_application_media_section() -> Result<()> {
 }
 
 async fn fingerprint_test(
-    certificate: &Certificate,
+    certificate: &RTCCertificate,
     engine: &Arc<MediaEngine>,
     media: &[MediaSection],
     sdpmedia_description_fingerprints: bool,
@@ -526,7 +526,7 @@ async fn fingerprint_test(
         media_description_fingerprint: sdpmedia_description_fingerprints,
         is_icelite: false,
         connection_role: ConnectionRole::Active,
-        ice_gathering_state: ICEGatheringState::New,
+        ice_gathering_state: RTCIceGatheringState::New,
     };
 
     let s = populate_sdp(
@@ -534,7 +534,7 @@ async fn fingerprint_test(
         &dtls_fingerprints,
         engine,
         &[],
-        &ICEParameters::default(),
+        &RTCIceParameters::default(),
         media,
         params,
     )
@@ -555,16 +555,16 @@ async fn test_media_description_fingerprints() -> Result<()> {
     let api = APIBuilder::new().with_media_engine(m).build();
 
     let kp = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
-    let certificate = Certificate::from_key_pair(kp)?;
+    let certificate = RTCCertificate::from_key_pair(kp)?;
 
     let media = vec![
         MediaSection {
             id: "video".to_owned(),
             transceivers: vec![
-                RTPTransceiver::new(
+                RTCRtpTransceiver::new(
                     None,
                     None,
-                    RTPTransceiverDirection::Inactive,
+                    RTCRtpTransceiverDirection::Inactive,
                     RTPCodecType::Video,
                     api.media_engine
                         .get_codecs_by_kind(RTPCodecType::Video)
@@ -578,10 +578,10 @@ async fn test_media_description_fingerprints() -> Result<()> {
         MediaSection {
             id: "audio".to_owned(),
             transceivers: vec![
-                RTPTransceiver::new(
+                RTCRtpTransceiver::new(
                     None,
                     None,
-                    RTPTransceiverDirection::Inactive,
+                    RTCRtpTransceiverDirection::Inactive,
                     RTPCodecType::Audio,
                     api.media_engine
                         .get_codecs_by_kind(RTPCodecType::Audio)
@@ -601,7 +601,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
 
     for i in 0..2 {
         let track: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
-            RTPCodecCapability {
+            RTCRtpCodecCapability {
                 mime_type: "video/vp8".to_owned(),
                 ..Default::default()
             },
@@ -610,16 +610,16 @@ async fn test_media_description_fingerprints() -> Result<()> {
         ));
         media[i].transceivers[0]
             .set_sender(Some(Arc::new(
-                RTPSender::new(
+                RTCRtpSender::new(
                     track,
-                    Arc::new(DTLSTransport::default()),
+                    Arc::new(RTCDtlsTransport::default()),
                     Arc::clone(&api.media_engine),
                     Arc::clone(&api.interceptor),
                 )
                 .await,
             )))
             .await;
-        media[i].transceivers[0].set_direction(RTPTransceiverDirection::Sendonly);
+        media[i].transceivers[0].set_direction(RTCRtpTransceiverDirection::Sendonly);
     }
 
     //"Per-Media Description Fingerprints",
@@ -640,10 +640,10 @@ async fn test_populate_sdp() -> Result<()> {
         me.register_default_codecs()?;
         let me = Arc::new(me);
 
-        let tr = RTPTransceiver::new(
+        let tr = RTCRtpTransceiver::new(
             None,
             None,
-            RTPTransceiverDirection::Recvonly,
+            RTCRtpTransceiverDirection::Recvonly,
             RTPCodecType::Video,
             me.video_codecs.clone(),
             Arc::clone(&me),
@@ -666,14 +666,14 @@ async fn test_populate_sdp() -> Result<()> {
             media_description_fingerprint: se.sdp_media_level_fingerprints,
             is_icelite: se.candidates.ice_lite,
             connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
-            ice_gathering_state: ICEGatheringState::Complete,
+            ice_gathering_state: RTCIceGatheringState::Complete,
         };
         let offer_sdp = populate_sdp(
             d,
             &[],
             &me,
             &[],
-            &ICEParameters::default(),
+            &RTCIceParameters::default(),
             &media_sections,
             params,
         )
@@ -710,17 +710,17 @@ async fn test_populate_sdp() -> Result<()> {
             .await;
         let me = Arc::new(me);
 
-        let tr = RTPTransceiver::new(
+        let tr = RTCRtpTransceiver::new(
             None,
             None,
-            RTPTransceiverDirection::Recvonly,
+            RTCRtpTransceiverDirection::Recvonly,
             RTPCodecType::Video,
             me.video_codecs.clone(),
             Arc::clone(&me),
         )
         .await;
-        tr.set_codec_preferences(vec![RTPCodecParameters {
-            capability: RTPCodecCapability {
+        tr.set_codec_preferences(vec![RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
                 mime_type: MIME_TYPE_VP8.to_owned(),
                 clock_rate: 90000,
                 channels: 0,
@@ -746,14 +746,14 @@ async fn test_populate_sdp() -> Result<()> {
             media_description_fingerprint: se.sdp_media_level_fingerprints,
             is_icelite: se.candidates.ice_lite,
             connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
-            ice_gathering_state: ICEGatheringState::Complete,
+            ice_gathering_state: RTCIceGatheringState::Complete,
         };
         let offer_sdp = populate_sdp(
             d,
             &[],
             &me,
             &[],
-            &ICEParameters::default(),
+            &RTCIceParameters::default(),
             &media_sections,
             params,
         )
@@ -829,8 +829,8 @@ fn test_codecs_from_media_description() -> Result<()> {
 
         assert_eq!(
             codecs,
-            vec![RTPCodecParameters {
-                capability: RTPCodecCapability {
+            vec![RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_OPUS.to_owned(),
                     clock_rate: 48000,
                     channels: 2,
@@ -874,8 +874,8 @@ fn test_codecs_from_media_description() -> Result<()> {
 
         assert_eq!(
             codecs,
-            vec![RTPCodecParameters {
-                capability: RTPCodecCapability {
+            vec![RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_OPUS.to_owned(),
                     clock_rate: 48000,
                     channels: 2,

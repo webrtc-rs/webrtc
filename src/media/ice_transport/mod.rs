@@ -1,47 +1,50 @@
-#[cfg(test)]
-mod ice_transport_test;
-
-pub mod ice_transport_state;
-
-use crate::media::ice_transport::ice_transport_state::ICETransportState;
-use crate::peer::ice::ice_candidate::ice_candidate_pair::ICECandidatePair;
-use crate::peer::ice::ice_gather::ice_gatherer::ICEGatherer;
-use crate::peer::ice::ice_role::ICERole;
-use crate::util::mux::{Config, Mux};
-
-use crate::error::Error;
-use crate::peer::ice::ice_candidate::ICECandidate;
-use crate::peer::ice::ICEParameters;
-use crate::util::mux::endpoint::Endpoint;
-use crate::util::mux::mux_func::MatchFunc;
-use crate::RECEIVE_MTU;
-
-use ice::candidate::Candidate;
-use ice::state::ConnectionState;
-
-use anyhow::Result;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
+
+use anyhow::Result;
+use ice::candidate::Candidate;
+use ice::state::ConnectionState;
 use tokio::sync::{mpsc, Mutex};
 use util::Conn;
 
+use ice_candidate_pair::RTCIceCandidatePair;
+use ice_role::RTCIceRole;
+
+use crate::error::Error;
+use crate::media::ice_transport::ice_parameters::RTCIceParameters;
+use crate::media::ice_transport::ice_transport_state::RTCIceTransportState;
+use crate::peer::ice::ice_candidate::RTCIceCandidate;
+use crate::peer::ice::ice_gather::ice_gatherer::RTCIceGatherer;
+use crate::util::mux::endpoint::Endpoint;
+use crate::util::mux::mux_func::MatchFunc;
+use crate::util::mux::{Config, Mux};
+use crate::RECEIVE_MTU;
+
+#[cfg(test)]
+mod ice_transport_test;
+
+pub mod ice_candidate_pair;
+pub mod ice_parameters;
+pub mod ice_role;
+pub mod ice_transport_state;
+
 pub type OnConnectionStateChangeHdlrFn = Box<
-    dyn (FnMut(ICETransportState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+    dyn (FnMut(RTCIceTransportState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
 
 pub type OnSelectedCandidatePairChangeHdlrFn = Box<
-    dyn (FnMut(ICECandidatePair) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+    dyn (FnMut(RTCIceCandidatePair) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
 
 #[derive(Default)]
-pub struct ICETransportInternal {
-    role: ICERole,
+struct ICETransportInternal {
+    role: RTCIceRole,
     conn: Option<Arc<dyn Conn + Send + Sync>>, //AgentConn
     mux: Option<Mux>,
     cancel_tx: Option<mpsc::Sender<()>>,
@@ -50,8 +53,8 @@ pub struct ICETransportInternal {
 /// ICETransport allows an application access to information about the ICE
 /// transport over which packets are sent and received.
 #[derive(Default)]
-pub struct ICETransport {
-    gatherer: Arc<ICEGatherer>,
+pub struct RTCIceTransport {
+    gatherer: Arc<RTCIceGatherer>,
     on_connection_state_change_handler: Arc<Mutex<Option<OnConnectionStateChangeHdlrFn>>>,
     on_selected_candidate_pair_change_handler:
         Arc<Mutex<Option<OnSelectedCandidatePairChangeHdlrFn>>>,
@@ -59,11 +62,11 @@ pub struct ICETransport {
     internal: Mutex<ICETransportInternal>,
 }
 
-impl ICETransport {
+impl RTCIceTransport {
     /// creates a new new_icetransport.
-    pub(crate) fn new(gatherer: Arc<ICEGatherer>) -> Self {
-        ICETransport {
-            state: Arc::new(AtomicU8::new(ICETransportState::New as u8)),
+    pub(crate) fn new(gatherer: Arc<RTCIceGatherer>) -> Self {
+        RTCIceTransport {
+            state: Arc::new(AtomicU8::new(RTCIceTransportState::New as u8)),
             gatherer,
             ..Default::default()
         }
@@ -71,20 +74,20 @@ impl ICETransport {
 
     /// get_selected_candidate_pair returns the selected candidate pair on which packets are sent
     /// if there is no selected pair nil is returned
-    pub async fn get_selected_candidate_pair(&self) -> Option<ICECandidatePair> {
+    pub async fn get_selected_candidate_pair(&self) -> Option<RTCIceCandidatePair> {
         if let Some(agent) = self.gatherer.get_agent().await {
             if let Some(ice_pair) = agent.get_selected_candidate_pair().await {
-                let local = ICECandidate::from(&ice_pair.local);
-                let remote = ICECandidate::from(&ice_pair.remote);
-                return Some(ICECandidatePair::new(local, remote));
+                let local = RTCIceCandidate::from(&ice_pair.local);
+                let remote = RTCIceCandidate::from(&ice_pair.remote);
+                return Some(RTCIceCandidatePair::new(local, remote));
             }
         }
         None
     }
 
     /// Start incoming connectivity checks based on its configured role.
-    pub async fn start(&self, params: &ICEParameters, role: Option<ICERole>) -> Result<()> {
-        if self.state() != ICETransportState::New {
+    pub async fn start(&self, params: &RTCIceParameters, role: Option<RTCIceRole>) -> Result<()> {
+        if self.state() != RTCIceTransportState::New {
             return Err(Error::ErrICETransportNotInNew.into());
         }
 
@@ -97,7 +100,7 @@ impl ICETransport {
                 Arc::clone(&self.on_connection_state_change_handler);
             agent
                 .on_connection_state_change(Box::new(move |ice_state: ConnectionState| {
-                    let s = ICETransportState::from(ice_state);
+                    let s = RTCIceTransportState::from(ice_state);
                     let on_connection_state_change_handler_clone =
                         Arc::clone(&on_connection_state_change_handler);
                     state.store(s as u8, Ordering::SeqCst);
@@ -118,13 +121,13 @@ impl ICETransport {
                           remote: &Arc<dyn Candidate + Send + Sync>| {
                         let on_selected_candidate_pair_change_handler_clone =
                             Arc::clone(&on_selected_candidate_pair_change_handler);
-                        let local = ICECandidate::from(local);
-                        let remote = ICECandidate::from(remote);
+                        let local = RTCIceCandidate::from(local);
+                        let remote = RTCIceCandidate::from(remote);
                         Box::pin(async move {
                             let mut handler =
                                 on_selected_candidate_pair_change_handler_clone.lock().await;
                             if let Some(f) = &mut *handler {
-                                f(ICECandidatePair::new(local, remote)).await;
+                                f(RTCIceCandidatePair::new(local, remote)).await;
                             }
                         })
                     },
@@ -134,13 +137,13 @@ impl ICETransport {
             let role = if let Some(role) = role {
                 role
             } else {
-                ICERole::Controlled
+                RTCIceRole::Controlled
             };
 
             let (cancel_tx, cancel_rx) = mpsc::channel(1);
 
             let conn: Arc<dyn Conn + Send + Sync> = match role {
-                ICERole::Controlling => {
+                RTCIceRole::Controlling => {
                     agent
                         .dial(
                             cancel_rx,
@@ -150,7 +153,7 @@ impl ICETransport {
                         .await?
                 }
 
-                ICERole::Controlled => {
+                RTCIceRole::Controlled => {
                     agent
                         .accept(
                             cancel_rx,
@@ -204,7 +207,7 @@ impl ICETransport {
 
     /// Stop irreversibly stops the ICETransport.
     pub async fn stop(&self) -> Result<()> {
-        self.set_state(ICETransportState::Closed);
+        self.set_state(RTCIceTransportState::Closed);
 
         {
             let mut internal = self.internal.lock().await;
@@ -236,13 +239,13 @@ impl ICETransport {
     }
 
     /// Role indicates the current role of the ICE transport.
-    pub async fn role(&self) -> ICERole {
+    pub async fn role(&self) -> RTCIceRole {
         let internal = self.internal.lock().await;
         internal.role
     }
 
     /// set_remote_candidates sets the sequence of candidates associated with the remote ICETransport.
-    pub async fn set_remote_candidates(&self, remote_candidates: &[ICECandidate]) -> Result<()> {
+    pub async fn set_remote_candidates(&self, remote_candidates: &[RTCIceCandidate]) -> Result<()> {
         self.ensure_gatherer().await?;
 
         if let Some(agent) = self.gatherer.get_agent().await {
@@ -257,7 +260,10 @@ impl ICETransport {
     }
 
     /// adds a candidate associated with the remote ICETransport.
-    pub async fn add_remote_candidate(&self, remote_candidate: Option<ICECandidate>) -> Result<()> {
+    pub async fn add_remote_candidate(
+        &self,
+        remote_candidate: Option<RTCIceCandidate>,
+    ) -> Result<()> {
         self.ensure_gatherer().await?;
 
         if let Some(agent) = self.gatherer.get_agent().await {
@@ -273,11 +279,11 @@ impl ICETransport {
     }
 
     /// State returns the current ice transport state.
-    pub fn state(&self) -> ICETransportState {
-        ICETransportState::from(self.state.load(Ordering::SeqCst))
+    pub fn state(&self) -> RTCIceTransportState {
+        RTCIceTransportState::from(self.state.load(Ordering::SeqCst))
     }
 
-    pub(crate) fn set_state(&self, s: ICETransportState) {
+    pub(crate) fn set_state(&self, s: RTCIceTransportState) {
         self.state.store(s as u8, Ordering::SeqCst)
     }
 

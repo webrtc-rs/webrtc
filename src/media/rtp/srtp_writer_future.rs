@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::media::dtls_transport::DTLSTransport;
+use crate::media::dtls_transport::RTCDtlsTransport;
 use crate::media::rtp::rtp_sender::RTPSenderInternal;
 use crate::media::rtp::SSRC;
 
@@ -19,7 +19,7 @@ use tokio::sync::Mutex;
 pub(crate) struct SrtpWriterFuture {
     pub(crate) ssrc: SSRC,
     pub(crate) rtp_sender: Arc<RTPSenderInternal>,
-    pub(crate) rtp_transport: Arc<DTLSTransport>,
+    pub(crate) rtp_transport: Arc<RTCDtlsTransport>,
     pub(crate) rtcp_read_stream: Mutex<Option<Arc<Stream>>>, // atomic.Value // *
     pub(crate) rtp_write_session: Mutex<Option<Arc<Session>>>, // atomic.Value // *
 }

@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::media::dtls_transport::dtls_fingerprint::DTLSFingerprint;
+use crate::media::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
 use crate::util::math_rand_alpha;
 use anyhow::Result;
 use dtls::crypto::{CryptoPrivateKey, CryptoPrivateKeyKind};
@@ -9,7 +9,7 @@ use sha2::{Digest, Sha256};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Certificate represents a x509Cert used to authenticate WebRTC communications.
-pub struct Certificate {
+pub struct RTCCertificate {
     pub(crate) certificate: dtls::crypto::Certificate,
     pub(crate) stats_id: String,
     pub(crate) x509_cert: rcgen::Certificate,
@@ -17,13 +17,13 @@ pub struct Certificate {
 }
 
 /// Equals determines if two certificates are identical by comparing only certificate
-impl PartialEq for Certificate {
+impl PartialEq for RTCCertificate {
     fn eq(&self, other: &Self) -> bool {
         self.certificate == other.certificate
     }
 }
 
-impl Certificate {
+impl RTCCertificate {
     /// from_params generates a new x509 compliant Certificate to be used
     /// by DTLS for encrypting data sent over the wire. This method differs from
     /// generate_certificate by allowing to specify a template x509.Certificate to
@@ -75,7 +75,7 @@ impl Certificate {
         let x509_cert = rcgen::Certificate::from_params(params)?;
         let certificate = x509_cert.serialize_der()?;
 
-        Ok(Certificate {
+        Ok(RTCCertificate {
             certificate: dtls::crypto::Certificate {
                 certificate: vec![rustls::Certificate(certificate)],
                 private_key,
@@ -96,7 +96,7 @@ impl Certificate {
 
     /// get_fingerprints returns certificate fingerprints, one of which
     /// is computed with the digest algorithm used in the certificate signature.
-    pub fn get_fingerprints(&self) -> Result<Vec<DTLSFingerprint>> {
+    pub fn get_fingerprints(&self) -> Result<Vec<RTCDtlsFingerprint>> {
         let mut fingerpints = vec![];
 
         for certificate in &self.certificate.certificate {
@@ -105,7 +105,7 @@ impl Certificate {
             let hashed = h.finalize();
             let values: Vec<String> = hashed.iter().map(|x| format! {"{:02x}", x}).collect();
 
-            fingerpints.push(DTLSFingerprint {
+            fingerpints.push(RTCDtlsFingerprint {
                 algorithm: "sha-256".to_owned(),
                 value: values.join(":"),
             });
@@ -147,7 +147,7 @@ impl Certificate {
             params.key_pair,
         );*/
 
-        Certificate::from_params(params)
+        RTCCertificate::from_params(params)
     }
 
     /*TODO:
@@ -204,7 +204,7 @@ impl Certificate {
             params.key_pair,
         );*/
 
-        Certificate::from_params(params)
+        RTCCertificate::from_params(params)
     }
 
     /// PEM returns the certificate encoded as two pem block: once for the X509
@@ -239,7 +239,7 @@ mod test {
         let kp_pem = kp.serialize_pem();
         assert!(kp_pem.contains("PRIVATE KEY"));
 
-        let cert = Certificate::from_key_pair(kp)?;
+        let cert = RTCCertificate::from_key_pair(kp)?;
         let cert_pem = cert.x509_cert.serialize_pem()?;
         assert!(cert_pem.contains("CERTIFICATE"));
 
@@ -270,15 +270,15 @@ mod test {
 
         let kp1 = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
         let kp1_pem = kp1.serialize_pem();
-        let cert1 = Certificate::from_key_pair(kp1)?;
+        let cert1 = RTCCertificate::from_key_pair(kp1)?;
         let cert1_pem = cert1.pem()?;
 
         let kp2 = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
-        let _cert2 = Certificate::from_key_pair(kp2)?;
+        let _cert2 = RTCCertificate::from_key_pair(kp2)?;
 
         let kp3 = KeyPair::from_pem(kp1_pem.as_str())?;
         let kp3_pem = kp3.serialize_pem();
-        let _cert3 = Certificate::from_pem(cert1_pem.as_str(), kp3)?;
+        let _cert3 = RTCCertificate::from_pem(cert1_pem.as_str(), kp3)?;
 
         assert_eq!(kp1_pem, kp3_pem);
         //assert!(cert1 != cert2);
@@ -290,7 +290,7 @@ mod test {
     #[test]
     fn test_generate_certificate_expires() -> Result<()> {
         let kp = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
-        let cert = Certificate::from_key_pair(kp)?;
+        let cert = RTCCertificate::from_key_pair(kp)?;
 
         let now = SystemTime::now();
         assert!(cert.expires().duration_since(now).is_ok());
@@ -321,13 +321,13 @@ mod test {
 
         let kp = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
         let kp_pem = kp.serialize_pem();
-        let cert = Certificate::from_key_pair(kp)?;
+        let cert = RTCCertificate::from_key_pair(kp)?;
         let pem = cert.pem()?;
         log::info!("{}", pem);
 
         let kp2 = KeyPair::from_pem(kp_pem.as_str())?;
         let kp2_pem = kp2.serialize_pem();
-        let cert2 = Certificate::from_pem(pem.as_str(), kp2)?;
+        let cert2 = RTCCertificate::from_pem(pem.as_str(), kp2)?;
         let pem2 = cert2.pem()?;
         log::info!("{}", pem2);
 

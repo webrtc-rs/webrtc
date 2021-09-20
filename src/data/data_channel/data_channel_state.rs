@@ -2,7 +2,7 @@ use std::fmt;
 
 /// DataChannelState indicates the state of a data channel.
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum DataChannelState {
+pub enum RTCDataChannelState {
     Unspecified = 0,
 
     /// DataChannelStateConnecting indicates that the data channel is being
@@ -23,9 +23,9 @@ pub enum DataChannelState {
     Closed,
 }
 
-impl Default for DataChannelState {
+impl Default for RTCDataChannelState {
     fn default() -> Self {
-        DataChannelState::Unspecified
+        RTCDataChannelState::Unspecified
     }
 }
 
@@ -34,38 +34,38 @@ const DATA_CHANNEL_STATE_OPEN_STR: &str = "open";
 const DATA_CHANNEL_STATE_CLOSING_STR: &str = "closing";
 const DATA_CHANNEL_STATE_CLOSED_STR: &str = "closed";
 
-impl From<u8> for DataChannelState {
+impl From<u8> for RTCDataChannelState {
     fn from(v: u8) -> Self {
         match v {
-            1 => DataChannelState::Connecting,
-            2 => DataChannelState::Open,
-            3 => DataChannelState::Closing,
-            4 => DataChannelState::Closed,
-            _ => DataChannelState::Unspecified,
+            1 => RTCDataChannelState::Connecting,
+            2 => RTCDataChannelState::Open,
+            3 => RTCDataChannelState::Closing,
+            4 => RTCDataChannelState::Closed,
+            _ => RTCDataChannelState::Unspecified,
         }
     }
 }
 
-impl From<&str> for DataChannelState {
+impl From<&str> for RTCDataChannelState {
     fn from(raw: &str) -> Self {
         match raw {
-            DATA_CHANNEL_STATE_CONNECTING_STR => DataChannelState::Connecting,
-            DATA_CHANNEL_STATE_OPEN_STR => DataChannelState::Open,
-            DATA_CHANNEL_STATE_CLOSING_STR => DataChannelState::Closing,
-            DATA_CHANNEL_STATE_CLOSED_STR => DataChannelState::Closed,
-            _ => DataChannelState::Unspecified,
+            DATA_CHANNEL_STATE_CONNECTING_STR => RTCDataChannelState::Connecting,
+            DATA_CHANNEL_STATE_OPEN_STR => RTCDataChannelState::Open,
+            DATA_CHANNEL_STATE_CLOSING_STR => RTCDataChannelState::Closing,
+            DATA_CHANNEL_STATE_CLOSED_STR => RTCDataChannelState::Closed,
+            _ => RTCDataChannelState::Unspecified,
         }
     }
 }
 
-impl fmt::Display for DataChannelState {
+impl fmt::Display for RTCDataChannelState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
-            DataChannelState::Connecting => DATA_CHANNEL_STATE_CONNECTING_STR,
-            DataChannelState::Open => DATA_CHANNEL_STATE_OPEN_STR,
-            DataChannelState::Closing => DATA_CHANNEL_STATE_CLOSING_STR,
-            DataChannelState::Closed => DATA_CHANNEL_STATE_CLOSED_STR,
-            DataChannelState::Unspecified => crate::UNSPECIFIED_STR,
+            RTCDataChannelState::Connecting => DATA_CHANNEL_STATE_CONNECTING_STR,
+            RTCDataChannelState::Open => DATA_CHANNEL_STATE_OPEN_STR,
+            RTCDataChannelState::Closing => DATA_CHANNEL_STATE_CLOSING_STR,
+            RTCDataChannelState::Closed => DATA_CHANNEL_STATE_CLOSED_STR,
+            RTCDataChannelState::Unspecified => crate::UNSPECIFIED_STR,
         };
         write!(f, "{}", s)
     }
@@ -78,17 +78,17 @@ mod test {
     #[test]
     fn test_new_data_channel_state() {
         let tests = vec![
-            (crate::UNSPECIFIED_STR, DataChannelState::Unspecified),
-            ("connecting", DataChannelState::Connecting),
-            ("open", DataChannelState::Open),
-            ("closing", DataChannelState::Closing),
-            ("closed", DataChannelState::Closed),
+            (crate::UNSPECIFIED_STR, RTCDataChannelState::Unspecified),
+            ("connecting", RTCDataChannelState::Connecting),
+            ("open", RTCDataChannelState::Open),
+            ("closing", RTCDataChannelState::Closing),
+            ("closed", RTCDataChannelState::Closed),
         ];
 
         for (state_string, expected_state) in tests {
             assert_eq!(
                 expected_state,
-                DataChannelState::from(state_string),
+                RTCDataChannelState::from(state_string),
                 "testCase: {}",
                 expected_state,
             );
@@ -98,11 +98,11 @@ mod test {
     #[test]
     fn test_data_channel_state_string() {
         let tests = vec![
-            (DataChannelState::Unspecified, crate::UNSPECIFIED_STR),
-            (DataChannelState::Connecting, "connecting"),
-            (DataChannelState::Open, "open"),
-            (DataChannelState::Closing, "closing"),
-            (DataChannelState::Closed, "closed"),
+            (RTCDataChannelState::Unspecified, crate::UNSPECIFIED_STR),
+            (RTCDataChannelState::Connecting, "connecting"),
+            (RTCDataChannelState::Open, "open"),
+            (RTCDataChannelState::Closing, "closing"),
+            (RTCDataChannelState::Closed, "closed"),
         ];
 
         for (state, expected_string) in tests {

@@ -2,7 +2,7 @@ use std::fmt;
 
 /// ICEGathererState represents the current state of the ICE gatherer.
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum ICEGathererState {
+pub enum RTCIceGathererState {
     Unspecified,
 
     /// ICEGathererStateNew indicates object has been created but
@@ -21,9 +21,9 @@ pub enum ICEGathererState {
     Closed,
 }
 
-impl Default for ICEGathererState {
+impl Default for RTCIceGathererState {
     fn default() -> Self {
-        ICEGathererState::Unspecified
+        RTCIceGathererState::Unspecified
     }
 }
 
@@ -32,39 +32,39 @@ const ICE_GATHERED_STATE_GATHERING_STR: &str = "gathering";
 const ICE_GATHERED_STATE_COMPLETE_STR: &str = "complete";
 const ICE_GATHERED_STATE_CLOSED_STR: &str = "closed";
 
-impl From<&str> for ICEGathererState {
+impl From<&str> for RTCIceGathererState {
     fn from(raw: &str) -> Self {
         match raw {
-            ICE_GATHERED_STATE_NEW_STR => ICEGathererState::New,
-            ICE_GATHERED_STATE_GATHERING_STR => ICEGathererState::Gathering,
-            ICE_GATHERED_STATE_COMPLETE_STR => ICEGathererState::Complete,
-            ICE_GATHERED_STATE_CLOSED_STR => ICEGathererState::Closed,
-            _ => ICEGathererState::Unspecified,
+            ICE_GATHERED_STATE_NEW_STR => RTCIceGathererState::New,
+            ICE_GATHERED_STATE_GATHERING_STR => RTCIceGathererState::Gathering,
+            ICE_GATHERED_STATE_COMPLETE_STR => RTCIceGathererState::Complete,
+            ICE_GATHERED_STATE_CLOSED_STR => RTCIceGathererState::Closed,
+            _ => RTCIceGathererState::Unspecified,
         }
     }
 }
 
-impl From<u8> for ICEGathererState {
+impl From<u8> for RTCIceGathererState {
     fn from(v: u8) -> Self {
         match v {
-            1 => ICEGathererState::New,
-            2 => ICEGathererState::Gathering,
-            3 => ICEGathererState::Complete,
-            4 => ICEGathererState::Closed,
-            _ => ICEGathererState::Unspecified,
+            1 => RTCIceGathererState::New,
+            2 => RTCIceGathererState::Gathering,
+            3 => RTCIceGathererState::Complete,
+            4 => RTCIceGathererState::Closed,
+            _ => RTCIceGathererState::Unspecified,
         }
     }
 }
 
-impl fmt::Display for ICEGathererState {
+impl fmt::Display for RTCIceGathererState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            ICEGathererState::New => write!(f, "{}", ICE_GATHERED_STATE_NEW_STR),
-            ICEGathererState::Gathering => write!(f, "{}", ICE_GATHERED_STATE_GATHERING_STR),
-            ICEGathererState::Complete => {
+            RTCIceGathererState::New => write!(f, "{}", ICE_GATHERED_STATE_NEW_STR),
+            RTCIceGathererState::Gathering => write!(f, "{}", ICE_GATHERED_STATE_GATHERING_STR),
+            RTCIceGathererState::Complete => {
                 write!(f, "{}", ICE_GATHERED_STATE_COMPLETE_STR)
             }
-            ICEGathererState::Closed => {
+            RTCIceGathererState::Closed => {
                 write!(f, "{}", ICE_GATHERED_STATE_CLOSED_STR)
             }
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
@@ -79,11 +79,11 @@ mod test {
     #[test]
     fn test_ice_gatherer_state_string() {
         let tests = vec![
-            (ICEGathererState::Unspecified, "Unspecified"),
-            (ICEGathererState::New, "new"),
-            (ICEGathererState::Gathering, "gathering"),
-            (ICEGathererState::Complete, "complete"),
-            (ICEGathererState::Closed, "closed"),
+            (RTCIceGathererState::Unspecified, "Unspecified"),
+            (RTCIceGathererState::New, "new"),
+            (RTCIceGathererState::Gathering, "gathering"),
+            (RTCIceGathererState::Complete, "complete"),
+            (RTCIceGathererState::Closed, "closed"),
         ];
 
         for (state, expected_string) in tests {

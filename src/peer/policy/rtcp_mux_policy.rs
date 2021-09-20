@@ -4,7 +4,7 @@ use std::fmt;
 /// RTCPMuxPolicy affects what ICE candidates are gathered to support
 /// non-multiplexed RTCP.
 #[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
-pub enum RTCPMuxPolicy {
+pub enum RTCRtcpMuxPolicy {
     Unspecified = 0,
 
     /// RTCPMuxPolicyNegotiate indicates to gather ICE candidates for both
@@ -21,31 +21,31 @@ pub enum RTCPMuxPolicy {
     Require = 2,
 }
 
-impl Default for RTCPMuxPolicy {
+impl Default for RTCRtcpMuxPolicy {
     fn default() -> Self {
-        RTCPMuxPolicy::Negotiate
+        RTCRtcpMuxPolicy::Negotiate
     }
 }
 
 const RTCP_MUX_POLICY_NEGOTIATE_STR: &str = "negotiate";
 const RTCP_MUX_POLICY_REQUIRE_STR: &str = "require";
 
-impl From<&str> for RTCPMuxPolicy {
+impl From<&str> for RTCRtcpMuxPolicy {
     fn from(raw: &str) -> Self {
         match raw {
-            RTCP_MUX_POLICY_NEGOTIATE_STR => RTCPMuxPolicy::Negotiate,
-            RTCP_MUX_POLICY_REQUIRE_STR => RTCPMuxPolicy::Require,
-            _ => RTCPMuxPolicy::Unspecified,
+            RTCP_MUX_POLICY_NEGOTIATE_STR => RTCRtcpMuxPolicy::Negotiate,
+            RTCP_MUX_POLICY_REQUIRE_STR => RTCRtcpMuxPolicy::Require,
+            _ => RTCRtcpMuxPolicy::Unspecified,
         }
     }
 }
 
-impl fmt::Display for RTCPMuxPolicy {
+impl fmt::Display for RTCRtcpMuxPolicy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
-            RTCPMuxPolicy::Negotiate => RTCP_MUX_POLICY_NEGOTIATE_STR,
-            RTCPMuxPolicy::Require => RTCP_MUX_POLICY_REQUIRE_STR,
-            RTCPMuxPolicy::Unspecified => crate::UNSPECIFIED_STR,
+            RTCRtcpMuxPolicy::Negotiate => RTCP_MUX_POLICY_NEGOTIATE_STR,
+            RTCRtcpMuxPolicy::Require => RTCP_MUX_POLICY_REQUIRE_STR,
+            RTCRtcpMuxPolicy::Unspecified => crate::UNSPECIFIED_STR,
         };
         write!(f, "{}", s)
     }
@@ -58,22 +58,22 @@ mod test {
     #[test]
     fn test_new_rtcp_mux_policy() {
         let tests = vec![
-            ("Unspecified", RTCPMuxPolicy::Unspecified),
-            ("negotiate", RTCPMuxPolicy::Negotiate),
-            ("require", RTCPMuxPolicy::Require),
+            ("Unspecified", RTCRtcpMuxPolicy::Unspecified),
+            ("negotiate", RTCRtcpMuxPolicy::Negotiate),
+            ("require", RTCRtcpMuxPolicy::Require),
         ];
 
         for (policy_string, expected_policy) in tests {
-            assert_eq!(expected_policy, RTCPMuxPolicy::from(policy_string));
+            assert_eq!(expected_policy, RTCRtcpMuxPolicy::from(policy_string));
         }
     }
 
     #[test]
     fn test_rtcp_mux_policy_string() {
         let tests = vec![
-            (RTCPMuxPolicy::Unspecified, "Unspecified"),
-            (RTCPMuxPolicy::Negotiate, "negotiate"),
-            (RTCPMuxPolicy::Require, "require"),
+            (RTCRtcpMuxPolicy::Unspecified, "Unspecified"),
+            (RTCRtcpMuxPolicy::Negotiate, "negotiate"),
+            (RTCRtcpMuxPolicy::Require, "require"),
         ];
 
         for (policy, expected_string) in tests {

@@ -1,13 +1,13 @@
 use super::*;
 use crate::api::media_engine::MediaEngine;
 use crate::api::APIBuilder;
-use crate::data::data_channel::DataChannel;
-use crate::peer::configuration::Configuration;
-use crate::peer::ice::ice_candidate::ICECandidate;
+use crate::data::data_channel::RTCDataChannel;
+use crate::peer::configuration::RTCConfiguration;
+use crate::peer::ice::ice_candidate::RTCIceCandidate;
 use crate::peer::peer_connection::peer_connection_test::{
     close_pair_now, new_pair, signal_pair, until_connection_state,
 };
-use crate::peer::peer_connection_state::PeerConnectionState;
+use crate::peer::peer_connection_state::RTCPeerConnectionState;
 use ice::mdns::MulticastDnsMode;
 use ice::network_type::NetworkType;
 use regex::Regex;
@@ -42,7 +42,7 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
     let (mut pc_offer, mut pc_answer) = new_pair(&api).await?;
 
     pc_answer
-        .on_data_channel(Box::new(|_: Arc<DataChannel>| {
+        .on_data_channel(Box::new(|_: Arc<RTCDataChannel>| {
             assert!(
                 false,
                 "A DataChannel must not be created when Fingerprint verification fails"
@@ -55,7 +55,7 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
 
     let offer_chan_tx = Arc::new(offer_chan_tx);
     pc_offer
-        .on_ice_candidate(Box::new(move |candidate: Option<ICECandidate>| {
+        .on_ice_candidate(Box::new(move |candidate: Option<RTCIceCandidate>| {
             let offer_chan_tx2 = Arc::clone(&offer_chan_tx);
             Box::pin(async move {
                 if candidate.is_none() {
@@ -69,14 +69,14 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
     until_connection_state(
         &mut pc_offer,
         &offer_connection_has_failed,
-        PeerConnectionState::Failed,
+        RTCPeerConnectionState::Failed,
     )
     .await;
     let answer_connection_has_failed = WaitGroup::new();
     until_connection_state(
         &mut pc_answer,
         &answer_connection_has_failed,
-        PeerConnectionState::Failed,
+        RTCPeerConnectionState::Failed,
     )
     .await;
 
@@ -123,13 +123,13 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
     log::trace!("offer_connection_has_failed wait end");
     {
         let transport = pc_offer.sctp().transport();
-        assert_eq!(transport.state(), DTLSTransportState::Failed);
+        assert_eq!(transport.state(), RTCDtlsTransportState::Failed);
         assert!(transport.conn().await.is_none());
     }
 
     {
         let transport = pc_answer.sctp().transport();
-        assert_eq!(transport.state(), DTLSTransportState::Failed);
+        assert_eq!(transport.state(), RTCDtlsTransportState::Failed);
         assert!(transport.conn().await.is_none());
     }
 
@@ -146,7 +146,7 @@ async fn run_test(r: DTLSRole) -> Result<()> {
     let mut offer_pc = APIBuilder::new()
         .with_setting_engine(offer_s)
         .build()
-        .new_peer_connection(Configuration::default())
+        .new_peer_connection(RTCConfiguration::default())
         .await?;
 
     let mut answer_s = SettingEngine::default();
@@ -156,13 +156,13 @@ async fn run_test(r: DTLSRole) -> Result<()> {
     let mut answer_pc = APIBuilder::new()
         .with_setting_engine(answer_s)
         .build()
-        .new_peer_connection(Configuration::default())
+        .new_peer_connection(RTCConfiguration::default())
         .await?;
 
     signal_pair(&mut offer_pc, &mut answer_pc).await?;
 
     let wg = WaitGroup::new();
-    until_connection_state(&mut answer_pc, &wg, PeerConnectionState::Connected).await;
+    until_connection_state(&mut answer_pc, &wg, RTCPeerConnectionState::Connected).await;
     wg.wait().await;
 
     close_pair_now(&offer_pc, &answer_pc).await;

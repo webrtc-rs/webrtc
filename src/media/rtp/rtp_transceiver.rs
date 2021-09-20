@@ -4,9 +4,9 @@ mod rtp_transceiver_test;
 use crate::api::media_engine::MediaEngine;
 use crate::error::Error;
 use crate::media::rtp::rtp_codec::*;
-use crate::media::rtp::rtp_receiver::{RTPReceiver, RTPReceiverInternal};
-use crate::media::rtp::rtp_sender::RTPSender;
-use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
+use crate::media::rtp::rtp_receiver::{RTCRtpReceiver, RTPReceiverInternal};
+use crate::media::rtp::rtp_sender::RTCRtpSender;
+use crate::media::rtp::rtp_transceiver_direction::RTCRtpTransceiverDirection;
 use crate::media::rtp::PayloadType;
 use crate::media::track::track_local::TrackLocal;
 
@@ -17,13 +17,13 @@ use tokio::sync::Mutex;
 use util::Unmarshal;
 
 /// RTPTransceiver represents a combination of an RTPSender and an RTPReceiver that share a common mid.
-pub struct RTPTransceiver {
-    mid: Mutex<String>,                        //atomic.Value
-    sender: Mutex<Option<Arc<RTPSender>>>,     //atomic.Value
-    receiver: Mutex<Option<Arc<RTPReceiver>>>, //atomic.Value
-    direction: AtomicU8,                       //RTPTransceiverDirection, //atomic.Value
+pub struct RTCRtpTransceiver {
+    mid: Mutex<String>,                           //atomic.Value
+    sender: Mutex<Option<Arc<RTCRtpSender>>>,     //atomic.Value
+    receiver: Mutex<Option<Arc<RTCRtpReceiver>>>, //atomic.Value
+    direction: AtomicU8,                          //RTPTransceiverDirection, //atomic.Value
 
-    codecs: Arc<Mutex<Vec<RTPCodecParameters>>>, // User provided codecs via set_codec_preferences
+    codecs: Arc<Mutex<Vec<RTCRtpCodecParameters>>>, // User provided codecs via set_codec_preferences
 
     pub(crate) stopped: bool,
     pub(crate) kind: RTPCodecType,
@@ -31,16 +31,16 @@ pub struct RTPTransceiver {
     media_engine: Arc<MediaEngine>,
 }
 
-impl RTPTransceiver {
+impl RTCRtpTransceiver {
     pub(crate) async fn new(
-        receiver: Option<Arc<RTPReceiver>>,
-        sender: Option<Arc<RTPSender>>,
-        direction: RTPTransceiverDirection,
+        receiver: Option<Arc<RTCRtpReceiver>>,
+        sender: Option<Arc<RTCRtpSender>>,
+        direction: RTCRtpTransceiverDirection,
         kind: RTPCodecType,
-        codecs: Vec<RTPCodecParameters>,
+        codecs: Vec<RTCRtpCodecParameters>,
         media_engine: Arc<MediaEngine>,
     ) -> Arc<Self> {
-        let t = Arc::new(RTPTransceiver {
+        let t = Arc::new(RTCRtpTransceiver {
             mid: Mutex::new(String::new()),
             sender: Mutex::new(None),
             receiver: Mutex::new(None),
@@ -59,7 +59,7 @@ impl RTPTransceiver {
 
     /// set_codec_preferences sets preferred list of supported codecs
     /// if codecs is empty or nil we reset to default from MediaEngine
-    pub async fn set_codec_preferences(&self, codecs: Vec<RTPCodecParameters>) -> Result<()> {
+    pub async fn set_codec_preferences(&self, codecs: Vec<RTCRtpCodecParameters>) -> Result<()> {
         for codec in &codecs {
             let media_engine_codecs = self.media_engine.get_codecs_by_kind(self.kind).await;
             let (_, match_type) = codec_parameters_fuzzy_search(codec, &media_engine_codecs);
@@ -76,13 +76,13 @@ impl RTPTransceiver {
     }
 
     /// Codecs returns list of supported codecs
-    pub(crate) async fn get_codecs(&self) -> Vec<RTPCodecParameters> {
+    pub(crate) async fn get_codecs(&self) -> Vec<RTCRtpCodecParameters> {
         let codecs = self.codecs.lock().await;
         RTPReceiverInternal::get_codecs(&*codecs, self.kind, &self.media_engine).await
     }
 
     /// sender returns the RTPTransceiver's RTPSender if it has one
-    pub async fn sender(&self) -> Option<Arc<RTPSender>> {
+    pub async fn sender(&self) -> Option<Arc<RTCRtpSender>> {
         let sender = self.sender.lock().await;
         sender.clone()
     }
@@ -90,14 +90,14 @@ impl RTPTransceiver {
     /// set_sender_track sets the RTPSender and Track to current transceiver
     pub async fn set_sender_track(
         self: &Arc<Self>,
-        sender: Option<Arc<RTPSender>>,
+        sender: Option<Arc<RTCRtpSender>>,
         track: Option<Arc<dyn TrackLocal + Send + Sync>>,
     ) -> Result<()> {
         let _ = self.set_sender(sender).await;
         self.set_sending_track(track).await
     }
 
-    pub async fn set_sender(self: &Arc<Self>, s: Option<Arc<RTPSender>>) {
+    pub async fn set_sender(self: &Arc<Self>, s: Option<Arc<RTCRtpSender>>) {
         if let Some(sender) = &s {
             sender.set_rtp_transceiver(Some(Arc::clone(self))).await;
         }
@@ -113,12 +113,12 @@ impl RTPTransceiver {
     }
 
     /// receiver returns the RTPTransceiver's RTPReceiver if it has one
-    pub async fn receiver(&self) -> Option<Arc<RTPReceiver>> {
+    pub async fn receiver(&self) -> Option<Arc<RTCRtpReceiver>> {
         let receiver = self.receiver.lock().await;
         receiver.clone()
     }
 
-    pub(crate) async fn set_receiver(&self, r: Option<Arc<RTPReceiver>>) {
+    pub(crate) async fn set_receiver(&self, r: Option<Arc<RTCRtpReceiver>>) {
         if let Some(receiver) = &r {
             receiver
                 .set_transceiver_codecs(Some(Arc::clone(&self.codecs)))
@@ -158,11 +158,11 @@ impl RTPTransceiver {
     }
 
     /// direction returns the RTPTransceiver's current direction
-    pub fn direction(&self) -> RTPTransceiverDirection {
+    pub fn direction(&self) -> RTCRtpTransceiverDirection {
         self.direction.load(Ordering::SeqCst).into()
     }
 
-    pub(crate) fn set_direction(&self, d: RTPTransceiverDirection) {
+    pub(crate) fn set_direction(&self, d: RTCRtpTransceiverDirection) {
         self.direction.store(d as u8, Ordering::SeqCst);
     }
 
@@ -181,7 +181,7 @@ impl RTPTransceiver {
             }
         }
 
-        self.set_direction(RTPTransceiverDirection::Inactive);
+        self.set_direction(RTCRtpTransceiverDirection::Inactive);
 
         Ok(())
     }
@@ -202,23 +202,23 @@ impl RTPTransceiver {
         }
 
         let direction = self.direction();
-        if !track_is_none && direction == RTPTransceiverDirection::Recvonly {
-            self.set_direction(RTPTransceiverDirection::Sendrecv);
-        } else if !track_is_none && direction == RTPTransceiverDirection::Inactive {
-            self.set_direction(RTPTransceiverDirection::Sendonly);
-        } else if track_is_none && direction == RTPTransceiverDirection::Sendrecv {
-            self.set_direction(RTPTransceiverDirection::Recvonly);
+        if !track_is_none && direction == RTCRtpTransceiverDirection::Recvonly {
+            self.set_direction(RTCRtpTransceiverDirection::Sendrecv);
+        } else if !track_is_none && direction == RTCRtpTransceiverDirection::Inactive {
+            self.set_direction(RTCRtpTransceiverDirection::Sendonly);
+        } else if track_is_none && direction == RTCRtpTransceiverDirection::Sendrecv {
+            self.set_direction(RTCRtpTransceiverDirection::Recvonly);
         } else if !track_is_none
-            && (direction == RTPTransceiverDirection::Sendonly
-                || direction == RTPTransceiverDirection::Sendrecv)
+            && (direction == RTCRtpTransceiverDirection::Sendonly
+                || direction == RTCRtpTransceiverDirection::Sendrecv)
         {
             // Handle the case where a sendonly transceiver was added by a negotiation
             // initiated by remote peer. For example a remote peer added a transceiver
             // with direction recvonly.
             //} else if !track_is_none && self.direction == RTPTransceiverDirection::Sendrecv {
             // Similar to above, but for sendrecv transceiver.
-        } else if track_is_none && direction == RTPTransceiverDirection::Sendonly {
-            self.set_direction(RTPTransceiverDirection::Inactive);
+        } else if track_is_none && direction == RTCRtpTransceiverDirection::Sendonly {
+            self.set_direction(RTCRtpTransceiverDirection::Inactive);
         } else {
             return Err(Error::ErrRTPTransceiverSetSendingInvalidState.into());
         }
@@ -228,8 +228,8 @@ impl RTPTransceiver {
 
 pub(crate) async fn find_by_mid(
     mid: &str,
-    local_transceivers: &mut Vec<Arc<RTPTransceiver>>,
-) -> Option<Arc<RTPTransceiver>> {
+    local_transceivers: &mut Vec<Arc<RTCRtpTransceiver>>,
+) -> Option<Arc<RTCRtpTransceiver>> {
     for (i, t) in local_transceivers.iter().enumerate() {
         if t.mid().await == mid {
             return Some(local_transceivers.remove(i));
@@ -243,20 +243,20 @@ pub(crate) async fn find_by_mid(
 /// if no entry satisfies the requested type+direction return a inactive Transceiver
 pub(crate) async fn satisfy_type_and_direction(
     remote_kind: RTPCodecType,
-    remote_direction: RTPTransceiverDirection,
-    local_transceivers: &mut Vec<Arc<RTPTransceiver>>,
-) -> Option<Arc<RTPTransceiver>> {
+    remote_direction: RTCRtpTransceiverDirection,
+    local_transceivers: &mut Vec<Arc<RTCRtpTransceiver>>,
+) -> Option<Arc<RTCRtpTransceiver>> {
     // Get direction order from most preferred to least
-    let get_preferred_directions = || -> Vec<RTPTransceiverDirection> {
+    let get_preferred_directions = || -> Vec<RTCRtpTransceiverDirection> {
         match remote_direction {
-            RTPTransceiverDirection::Sendrecv => vec![
-                RTPTransceiverDirection::Recvonly,
-                RTPTransceiverDirection::Sendrecv,
+            RTCRtpTransceiverDirection::Sendrecv => vec![
+                RTCRtpTransceiverDirection::Recvonly,
+                RTCRtpTransceiverDirection::Sendrecv,
             ],
-            RTPTransceiverDirection::Sendonly => vec![RTPTransceiverDirection::Recvonly],
-            RTPTransceiverDirection::Recvonly => vec![
-                RTPTransceiverDirection::Sendonly,
-                RTPTransceiverDirection::Sendrecv,
+            RTCRtpTransceiverDirection::Sendonly => vec![RTCRtpTransceiverDirection::Recvonly],
+            RTCRtpTransceiverDirection::Recvonly => vec![
+                RTCRtpTransceiverDirection::Sendonly,
+                RTCRtpTransceiverDirection::Sendrecv,
             ],
             _ => vec![],
         }

@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::peer::sdp::sdp_type::SDPType;
+use crate::peer::sdp::sdp_type::RTCSdpType;
 
 use anyhow::Result;
 use std::fmt;
@@ -28,7 +28,7 @@ impl fmt::Display for StateChangeOp {
 
 /// SignalingState indicates the signaling state of the offer/answer process.
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum SignalingState {
+pub enum RTCSignalingState {
     Unspecified = 0,
 
     /// SignalingStateStable indicates there is no offer/answer exchange in
@@ -58,9 +58,9 @@ pub enum SignalingState {
     Closed,
 }
 
-impl Default for SignalingState {
+impl Default for RTCSignalingState {
     fn default() -> Self {
-        SignalingState::Unspecified
+        RTCSignalingState::Unspecified
     }
 }
 
@@ -71,95 +71,97 @@ const SIGNALING_STATE_HAVE_LOCAL_PRANSWER_STR: &str = "have-local-pranswer";
 const SIGNALING_STATE_HAVE_REMOTE_PRANSWER_STR: &str = "have-remote-pranswer";
 const SIGNALING_STATE_CLOSED_STR: &str = "closed";
 
-impl From<&str> for SignalingState {
+impl From<&str> for RTCSignalingState {
     fn from(raw: &str) -> Self {
         match raw {
-            SIGNALING_STATE_STABLE_STR => SignalingState::Stable,
-            SIGNALING_STATE_HAVE_LOCAL_OFFER_STR => SignalingState::HaveLocalOffer,
-            SIGNALING_STATE_HAVE_REMOTE_OFFER_STR => SignalingState::HaveRemoteOffer,
-            SIGNALING_STATE_HAVE_LOCAL_PRANSWER_STR => SignalingState::HaveLocalPranswer,
-            SIGNALING_STATE_HAVE_REMOTE_PRANSWER_STR => SignalingState::HaveRemotePranswer,
-            SIGNALING_STATE_CLOSED_STR => SignalingState::Closed,
-            _ => SignalingState::Unspecified,
+            SIGNALING_STATE_STABLE_STR => RTCSignalingState::Stable,
+            SIGNALING_STATE_HAVE_LOCAL_OFFER_STR => RTCSignalingState::HaveLocalOffer,
+            SIGNALING_STATE_HAVE_REMOTE_OFFER_STR => RTCSignalingState::HaveRemoteOffer,
+            SIGNALING_STATE_HAVE_LOCAL_PRANSWER_STR => RTCSignalingState::HaveLocalPranswer,
+            SIGNALING_STATE_HAVE_REMOTE_PRANSWER_STR => RTCSignalingState::HaveRemotePranswer,
+            SIGNALING_STATE_CLOSED_STR => RTCSignalingState::Closed,
+            _ => RTCSignalingState::Unspecified,
         }
     }
 }
 
-impl fmt::Display for SignalingState {
+impl fmt::Display for RTCSignalingState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            SignalingState::Stable => write!(f, "{}", SIGNALING_STATE_STABLE_STR),
-            SignalingState::HaveLocalOffer => write!(f, "{}", SIGNALING_STATE_HAVE_LOCAL_OFFER_STR),
-            SignalingState::HaveRemoteOffer => {
+            RTCSignalingState::Stable => write!(f, "{}", SIGNALING_STATE_STABLE_STR),
+            RTCSignalingState::HaveLocalOffer => {
+                write!(f, "{}", SIGNALING_STATE_HAVE_LOCAL_OFFER_STR)
+            }
+            RTCSignalingState::HaveRemoteOffer => {
                 write!(f, "{}", SIGNALING_STATE_HAVE_REMOTE_OFFER_STR)
             }
-            SignalingState::HaveLocalPranswer => {
+            RTCSignalingState::HaveLocalPranswer => {
                 write!(f, "{}", SIGNALING_STATE_HAVE_LOCAL_PRANSWER_STR)
             }
-            SignalingState::HaveRemotePranswer => {
+            RTCSignalingState::HaveRemotePranswer => {
                 write!(f, "{}", SIGNALING_STATE_HAVE_REMOTE_PRANSWER_STR)
             }
-            SignalingState::Closed => write!(f, "{}", SIGNALING_STATE_CLOSED_STR),
+            RTCSignalingState::Closed => write!(f, "{}", SIGNALING_STATE_CLOSED_STR),
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }
     }
 }
 
-impl From<u8> for SignalingState {
+impl From<u8> for RTCSignalingState {
     fn from(v: u8) -> Self {
         match v {
-            1 => SignalingState::Stable,
-            2 => SignalingState::HaveLocalOffer,
-            3 => SignalingState::HaveRemoteOffer,
-            4 => SignalingState::HaveLocalPranswer,
-            5 => SignalingState::HaveRemotePranswer,
-            6 => SignalingState::Closed,
-            _ => SignalingState::Unspecified,
+            1 => RTCSignalingState::Stable,
+            2 => RTCSignalingState::HaveLocalOffer,
+            3 => RTCSignalingState::HaveRemoteOffer,
+            4 => RTCSignalingState::HaveLocalPranswer,
+            5 => RTCSignalingState::HaveRemotePranswer,
+            6 => RTCSignalingState::Closed,
+            _ => RTCSignalingState::Unspecified,
         }
     }
 }
 
 pub(crate) fn check_next_signaling_state(
-    cur: SignalingState,
-    next: SignalingState,
+    cur: RTCSignalingState,
+    next: RTCSignalingState,
     op: StateChangeOp,
-    sdp_type: SDPType,
-) -> Result<SignalingState> {
+    sdp_type: RTCSdpType,
+) -> Result<RTCSignalingState> {
     // Special case for rollbacks
-    if sdp_type == SDPType::Rollback && cur == SignalingState::Stable {
+    if sdp_type == RTCSdpType::Rollback && cur == RTCSignalingState::Stable {
         return Err(Error::ErrSignalingStateCannotRollback.into());
     }
 
     // 4.3.1 valid state transitions
     match cur {
-        SignalingState::Stable => {
+        RTCSignalingState::Stable => {
             match op {
                 StateChangeOp::SetLocal => {
                     // stable->SetLocal(offer)->have-local-offer
-                    if sdp_type == SDPType::Offer && next == SignalingState::HaveLocalOffer {
+                    if sdp_type == RTCSdpType::Offer && next == RTCSignalingState::HaveLocalOffer {
                         return Ok(next);
                     }
                 }
                 StateChangeOp::SetRemote => {
                     // stable->SetRemote(offer)->have-remote-offer
-                    if sdp_type == SDPType::Offer && next == SignalingState::HaveRemoteOffer {
+                    if sdp_type == RTCSdpType::Offer && next == RTCSignalingState::HaveRemoteOffer {
                         return Ok(next);
                     }
                 }
             }
         }
-        SignalingState::HaveLocalOffer => {
+        RTCSignalingState::HaveLocalOffer => {
             if op == StateChangeOp::SetRemote {
                 match sdp_type {
                     // have-local-offer->SetRemote(answer)->stable
-                    SDPType::Answer => {
-                        if next == SignalingState::Stable {
+                    RTCSdpType::Answer => {
+                        if next == RTCSignalingState::Stable {
                             return Ok(next);
                         }
                     }
                     // have-local-offer->SetRemote(pranswer)->have-remote-pranswer
-                    SDPType::Pranswer => {
-                        if next == SignalingState::HaveRemotePranswer {
+                    RTCSdpType::Pranswer => {
+                        if next == RTCSignalingState::HaveRemotePranswer {
                             return Ok(next);
                         }
                     }
@@ -167,26 +169,26 @@ pub(crate) fn check_next_signaling_state(
                 }
             }
         }
-        SignalingState::HaveRemotePranswer => {
-            if op == StateChangeOp::SetRemote && sdp_type == SDPType::Answer {
+        RTCSignalingState::HaveRemotePranswer => {
+            if op == StateChangeOp::SetRemote && sdp_type == RTCSdpType::Answer {
                 // have-remote-pranswer->SetRemote(answer)->stable
-                if next == SignalingState::Stable {
+                if next == RTCSignalingState::Stable {
                     return Ok(next);
                 }
             }
         }
-        SignalingState::HaveRemoteOffer => {
+        RTCSignalingState::HaveRemoteOffer => {
             if op == StateChangeOp::SetLocal {
                 match sdp_type {
                     // have-remote-offer->SetLocal(answer)->stable
-                    SDPType::Answer => {
-                        if next == SignalingState::Stable {
+                    RTCSdpType::Answer => {
+                        if next == RTCSignalingState::Stable {
                             return Ok(next);
                         }
                     }
                     // have-remote-offer->SetLocal(pranswer)->have-local-pranswer
-                    SDPType::Pranswer => {
-                        if next == SignalingState::HaveLocalPranswer {
+                    RTCSdpType::Pranswer => {
+                        if next == RTCSignalingState::HaveLocalPranswer {
                             return Ok(next);
                         }
                     }
@@ -194,10 +196,10 @@ pub(crate) fn check_next_signaling_state(
                 }
             }
         }
-        SignalingState::HaveLocalPranswer => {
-            if op == StateChangeOp::SetLocal && sdp_type == SDPType::Answer {
+        RTCSignalingState::HaveLocalPranswer => {
+            if op == StateChangeOp::SetLocal && sdp_type == RTCSdpType::Answer {
                 // have-local-pranswer->SetLocal(answer)->stable
-                if next == SignalingState::Stable {
+                if next == RTCSignalingState::Stable {
                     return Ok(next);
                 }
             }
@@ -217,30 +219,36 @@ mod test {
     #[test]
     fn test_new_signaling_state() {
         let tests = vec![
-            ("Unspecified", SignalingState::Unspecified),
-            ("stable", SignalingState::Stable),
-            ("have-local-offer", SignalingState::HaveLocalOffer),
-            ("have-remote-offer", SignalingState::HaveRemoteOffer),
-            ("have-local-pranswer", SignalingState::HaveLocalPranswer),
-            ("have-remote-pranswer", SignalingState::HaveRemotePranswer),
-            ("closed", SignalingState::Closed),
+            ("Unspecified", RTCSignalingState::Unspecified),
+            ("stable", RTCSignalingState::Stable),
+            ("have-local-offer", RTCSignalingState::HaveLocalOffer),
+            ("have-remote-offer", RTCSignalingState::HaveRemoteOffer),
+            ("have-local-pranswer", RTCSignalingState::HaveLocalPranswer),
+            (
+                "have-remote-pranswer",
+                RTCSignalingState::HaveRemotePranswer,
+            ),
+            ("closed", RTCSignalingState::Closed),
         ];
 
         for (state_string, expected_state) in tests {
-            assert_eq!(expected_state, SignalingState::from(state_string));
+            assert_eq!(expected_state, RTCSignalingState::from(state_string));
         }
     }
 
     #[test]
     fn test_signaling_state_string() {
         let tests = vec![
-            (SignalingState::Unspecified, "Unspecified"),
-            (SignalingState::Stable, "stable"),
-            (SignalingState::HaveLocalOffer, "have-local-offer"),
-            (SignalingState::HaveRemoteOffer, "have-remote-offer"),
-            (SignalingState::HaveLocalPranswer, "have-local-pranswer"),
-            (SignalingState::HaveRemotePranswer, "have-remote-pranswer"),
-            (SignalingState::Closed, "closed"),
+            (RTCSignalingState::Unspecified, "Unspecified"),
+            (RTCSignalingState::Stable, "stable"),
+            (RTCSignalingState::HaveLocalOffer, "have-local-offer"),
+            (RTCSignalingState::HaveRemoteOffer, "have-remote-offer"),
+            (RTCSignalingState::HaveLocalPranswer, "have-local-pranswer"),
+            (
+                RTCSignalingState::HaveRemotePranswer,
+                "have-remote-pranswer",
+            ),
+            (RTCSignalingState::Closed, "closed"),
         ];
 
         for (state, expected_string) in tests {
@@ -253,82 +261,82 @@ mod test {
         let tests = vec![
             (
                 "stable->SetLocal(offer)->have-local-offer",
-                SignalingState::Stable,
-                SignalingState::HaveLocalOffer,
+                RTCSignalingState::Stable,
+                RTCSignalingState::HaveLocalOffer,
                 StateChangeOp::SetLocal,
-                SDPType::Offer,
+                RTCSdpType::Offer,
                 None,
             ),
             (
                 "stable->SetRemote(offer)->have-remote-offer",
-                SignalingState::Stable,
-                SignalingState::HaveRemoteOffer,
+                RTCSignalingState::Stable,
+                RTCSignalingState::HaveRemoteOffer,
                 StateChangeOp::SetRemote,
-                SDPType::Offer,
+                RTCSdpType::Offer,
                 None,
             ),
             (
                 "have-local-offer->SetRemote(answer)->stable",
-                SignalingState::HaveLocalOffer,
-                SignalingState::Stable,
+                RTCSignalingState::HaveLocalOffer,
+                RTCSignalingState::Stable,
                 StateChangeOp::SetRemote,
-                SDPType::Answer,
+                RTCSdpType::Answer,
                 None,
             ),
             (
                 "have-local-offer->SetRemote(pranswer)->have-remote-pranswer",
-                SignalingState::HaveLocalOffer,
-                SignalingState::HaveRemotePranswer,
+                RTCSignalingState::HaveLocalOffer,
+                RTCSignalingState::HaveRemotePranswer,
                 StateChangeOp::SetRemote,
-                SDPType::Pranswer,
+                RTCSdpType::Pranswer,
                 None,
             ),
             (
                 "have-remote-pranswer->SetRemote(answer)->stable",
-                SignalingState::HaveRemotePranswer,
-                SignalingState::Stable,
+                RTCSignalingState::HaveRemotePranswer,
+                RTCSignalingState::Stable,
                 StateChangeOp::SetRemote,
-                SDPType::Answer,
+                RTCSdpType::Answer,
                 None,
             ),
             (
                 "have-remote-offer->SetLocal(answer)->stable",
-                SignalingState::HaveRemoteOffer,
-                SignalingState::Stable,
+                RTCSignalingState::HaveRemoteOffer,
+                RTCSignalingState::Stable,
                 StateChangeOp::SetLocal,
-                SDPType::Answer,
+                RTCSdpType::Answer,
                 None,
             ),
             (
                 "have-remote-offer->SetLocal(pranswer)->have-local-pranswer",
-                SignalingState::HaveRemoteOffer,
-                SignalingState::HaveLocalPranswer,
+                RTCSignalingState::HaveRemoteOffer,
+                RTCSignalingState::HaveLocalPranswer,
                 StateChangeOp::SetLocal,
-                SDPType::Pranswer,
+                RTCSdpType::Pranswer,
                 None,
             ),
             (
                 "have-local-pranswer->SetLocal(answer)->stable",
-                SignalingState::HaveLocalPranswer,
-                SignalingState::Stable,
+                RTCSignalingState::HaveLocalPranswer,
+                RTCSignalingState::Stable,
                 StateChangeOp::SetLocal,
-                SDPType::Answer,
+                RTCSdpType::Answer,
                 None,
             ),
             (
                 "(invalid) stable->SetRemote(pranswer)->have-remote-pranswer",
-                SignalingState::Stable,
-                SignalingState::HaveRemotePranswer,
+                RTCSignalingState::Stable,
+                RTCSignalingState::HaveRemotePranswer,
                 StateChangeOp::SetRemote,
-                SDPType::Pranswer,
+                RTCSdpType::Pranswer,
                 Some(Error::ErrSignalingStateProposedTransitionInvalid),
             ),
             (
                 "(invalid) stable->SetRemote(rollback)->have-local-offer",
-                SignalingState::Stable,
-                SignalingState::HaveLocalOffer,
+                RTCSignalingState::Stable,
+                RTCSignalingState::HaveLocalOffer,
                 StateChangeOp::SetRemote,
-                SDPType::Rollback,
+                RTCSdpType::Rollback,
                 Some(Error::ErrSignalingStateCannotRollback),
             ),
         ];

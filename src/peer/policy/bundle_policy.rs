@@ -6,7 +6,7 @@ use std::fmt;
 /// remote endpoint is bundle-aware, all media tracks and data channels are
 /// bundled onto the same transport.
 #[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
-pub enum BundlePolicy {
+pub enum RTCBundlePolicy {
     Unspecified = 0,
 
     /// BundlePolicyBalanced indicates to gather ICE candidates for each
@@ -29,9 +29,9 @@ pub enum BundlePolicy {
     MaxBundle = 3,
 }
 
-impl Default for BundlePolicy {
+impl Default for RTCBundlePolicy {
     fn default() -> Self {
-        BundlePolicy::Unspecified
+        RTCBundlePolicy::Unspecified
     }
 }
 
@@ -40,25 +40,25 @@ const BUNDLE_POLICY_BALANCED_STR: &str = "balanced";
 const BUNDLE_POLICY_MAX_COMPAT_STR: &str = "max-compat";
 const BUNDLE_POLICY_MAX_BUNDLE_STR: &str = "max-bundle";
 
-impl From<&str> for BundlePolicy {
+impl From<&str> for RTCBundlePolicy {
     /// NewSchemeType defines a procedure for creating a new SchemeType from a raw
     /// string naming the scheme type.
     fn from(raw: &str) -> Self {
         match raw {
-            BUNDLE_POLICY_BALANCED_STR => BundlePolicy::Balanced,
-            BUNDLE_POLICY_MAX_COMPAT_STR => BundlePolicy::MaxCompat,
-            BUNDLE_POLICY_MAX_BUNDLE_STR => BundlePolicy::MaxBundle,
-            _ => BundlePolicy::Unspecified,
+            BUNDLE_POLICY_BALANCED_STR => RTCBundlePolicy::Balanced,
+            BUNDLE_POLICY_MAX_COMPAT_STR => RTCBundlePolicy::MaxCompat,
+            BUNDLE_POLICY_MAX_BUNDLE_STR => RTCBundlePolicy::MaxBundle,
+            _ => RTCBundlePolicy::Unspecified,
         }
     }
 }
 
-impl fmt::Display for BundlePolicy {
+impl fmt::Display for RTCBundlePolicy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            BundlePolicy::Balanced => write!(f, "{}", BUNDLE_POLICY_BALANCED_STR),
-            BundlePolicy::MaxCompat => write!(f, "{}", BUNDLE_POLICY_MAX_COMPAT_STR),
-            BundlePolicy::MaxBundle => write!(f, "{}", BUNDLE_POLICY_MAX_BUNDLE_STR),
+            RTCBundlePolicy::Balanced => write!(f, "{}", BUNDLE_POLICY_BALANCED_STR),
+            RTCBundlePolicy::MaxCompat => write!(f, "{}", BUNDLE_POLICY_MAX_COMPAT_STR),
+            RTCBundlePolicy::MaxBundle => write!(f, "{}", BUNDLE_POLICY_MAX_BUNDLE_STR),
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }
     }
@@ -71,24 +71,24 @@ mod test {
     #[test]
     fn test_new_bundle_policy() {
         let tests = vec![
-            ("Unspecified", BundlePolicy::Unspecified),
-            ("balanced", BundlePolicy::Balanced),
-            ("max-compat", BundlePolicy::MaxCompat),
-            ("max-bundle", BundlePolicy::MaxBundle),
+            ("Unspecified", RTCBundlePolicy::Unspecified),
+            ("balanced", RTCBundlePolicy::Balanced),
+            ("max-compat", RTCBundlePolicy::MaxCompat),
+            ("max-bundle", RTCBundlePolicy::MaxBundle),
         ];
 
         for (policy_string, expected_policy) in tests {
-            assert_eq!(expected_policy, BundlePolicy::from(policy_string));
+            assert_eq!(expected_policy, RTCBundlePolicy::from(policy_string));
         }
     }
 
     #[test]
     fn test_bundle_policy_string() {
         let tests = vec![
-            (BundlePolicy::Unspecified, "Unspecified"),
-            (BundlePolicy::Balanced, "balanced"),
-            (BundlePolicy::MaxCompat, "max-compat"),
-            (BundlePolicy::MaxBundle, "max-bundle"),
+            (RTCBundlePolicy::Unspecified, "Unspecified"),
+            (RTCBundlePolicy::Balanced, "balanced"),
+            (RTCBundlePolicy::MaxCompat, "max-compat"),
+            (RTCBundlePolicy::MaxBundle, "max-bundle"),
         ];
 
         for (policy, expected_string) in tests {

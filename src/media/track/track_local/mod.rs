@@ -31,7 +31,7 @@ pub trait TrackLocalWriter: fmt::Debug {
 #[derive(Default, Debug, Clone)]
 pub struct TrackLocalContext {
     pub(crate) id: String,
-    pub(crate) params: RTPParameters,
+    pub(crate) params: RTCRtpParameters,
     pub(crate) ssrc: SSRC,
     pub(crate) write_stream: Option<Arc<dyn TrackLocalWriter + Send + Sync>>,
 }
@@ -39,13 +39,13 @@ pub struct TrackLocalContext {
 impl TrackLocalContext {
     /// codec_parameters returns the negotiated RTPCodecParameters. These are the codecs supported by both
     /// PeerConnections and the SSRC/PayloadTypes
-    pub fn codec_parameters(&self) -> &[RTPCodecParameters] {
+    pub fn codec_parameters(&self) -> &[RTCRtpCodecParameters] {
         &self.params.codecs
     }
 
     /// header_extensions returns the negotiated RTPHeaderExtensionParameters. These are the header extensions supported by
     /// both PeerConnections and the SSRC/PayloadTypes
-    pub fn header_extensions(&self) -> &[RTPHeaderExtensionParameter] {
+    pub fn header_extensions(&self) -> &[RTCRtpHeaderExtensionParameters] {
         &self.params.header_extensions
     }
 
@@ -74,7 +74,7 @@ pub trait TrackLocal {
     /// bind should implement the way how the media data flows from the Track to the PeerConnection
     /// This will be called internally after signaling is complete and the list of available
     /// codecs has been determined
-    async fn bind(&self, t: &TrackLocalContext) -> Result<RTPCodecParameters>;
+    async fn bind(&self, t: &TrackLocalContext) -> Result<RTCRtpCodecParameters>;
 
     /// unbind should implement the teardown logic when the track is no longer needed. This happens
     /// because a track has been stopped.

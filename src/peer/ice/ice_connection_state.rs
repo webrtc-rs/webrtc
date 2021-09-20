@@ -1,8 +1,8 @@
 use std::fmt;
 
-/// iceconnection_state indicates signaling state of the ICE Connection.
+/// RTCIceConnectionState indicates signaling state of the ICE Connection.
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum ICEConnectionState {
+pub enum RTCIceConnectionState {
     Unspecified,
 
     /// ICEConnectionStateNew indicates that any of the ICETransports are
@@ -40,9 +40,9 @@ pub enum ICEConnectionState {
     Closed,
 }
 
-impl Default for ICEConnectionState {
+impl Default for RTCIceConnectionState {
     fn default() -> Self {
-        ICEConnectionState::Unspecified
+        RTCIceConnectionState::Unspecified
     }
 }
 
@@ -55,47 +55,47 @@ const ICE_CONNECTION_STATE_FAILED_STR: &str = "failed";
 const ICE_CONNECTION_STATE_CLOSED_STR: &str = "closed";
 
 /// takes a string and converts it to iceconnection_state
-impl From<&str> for ICEConnectionState {
+impl From<&str> for RTCIceConnectionState {
     fn from(raw: &str) -> Self {
         match raw {
-            ICE_CONNECTION_STATE_NEW_STR => ICEConnectionState::New,
-            ICE_CONNECTION_STATE_CHECKING_STR => ICEConnectionState::Checking,
-            ICE_CONNECTION_STATE_CONNECTED_STR => ICEConnectionState::Connected,
-            ICE_CONNECTION_STATE_COMPLETED_STR => ICEConnectionState::Completed,
-            ICE_CONNECTION_STATE_DISCONNECTED_STR => ICEConnectionState::Disconnected,
-            ICE_CONNECTION_STATE_FAILED_STR => ICEConnectionState::Failed,
-            ICE_CONNECTION_STATE_CLOSED_STR => ICEConnectionState::Closed,
-            _ => ICEConnectionState::Unspecified,
+            ICE_CONNECTION_STATE_NEW_STR => RTCIceConnectionState::New,
+            ICE_CONNECTION_STATE_CHECKING_STR => RTCIceConnectionState::Checking,
+            ICE_CONNECTION_STATE_CONNECTED_STR => RTCIceConnectionState::Connected,
+            ICE_CONNECTION_STATE_COMPLETED_STR => RTCIceConnectionState::Completed,
+            ICE_CONNECTION_STATE_DISCONNECTED_STR => RTCIceConnectionState::Disconnected,
+            ICE_CONNECTION_STATE_FAILED_STR => RTCIceConnectionState::Failed,
+            ICE_CONNECTION_STATE_CLOSED_STR => RTCIceConnectionState::Closed,
+            _ => RTCIceConnectionState::Unspecified,
         }
     }
 }
 
-impl From<u8> for ICEConnectionState {
+impl From<u8> for RTCIceConnectionState {
     fn from(v: u8) -> Self {
         match v {
-            1 => ICEConnectionState::New,
-            2 => ICEConnectionState::Checking,
-            3 => ICEConnectionState::Connected,
-            4 => ICEConnectionState::Completed,
-            5 => ICEConnectionState::Disconnected,
-            6 => ICEConnectionState::Failed,
-            7 => ICEConnectionState::Closed,
-            _ => ICEConnectionState::Unspecified,
+            1 => RTCIceConnectionState::New,
+            2 => RTCIceConnectionState::Checking,
+            3 => RTCIceConnectionState::Connected,
+            4 => RTCIceConnectionState::Completed,
+            5 => RTCIceConnectionState::Disconnected,
+            6 => RTCIceConnectionState::Failed,
+            7 => RTCIceConnectionState::Closed,
+            _ => RTCIceConnectionState::Unspecified,
         }
     }
 }
 
-impl fmt::Display for ICEConnectionState {
+impl fmt::Display for RTCIceConnectionState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
-            ICEConnectionState::New => ICE_CONNECTION_STATE_NEW_STR,
-            ICEConnectionState::Checking => ICE_CONNECTION_STATE_CHECKING_STR,
-            ICEConnectionState::Connected => ICE_CONNECTION_STATE_CONNECTED_STR,
-            ICEConnectionState::Completed => ICE_CONNECTION_STATE_COMPLETED_STR,
-            ICEConnectionState::Disconnected => ICE_CONNECTION_STATE_DISCONNECTED_STR,
-            ICEConnectionState::Failed => ICE_CONNECTION_STATE_FAILED_STR,
-            ICEConnectionState::Closed => ICE_CONNECTION_STATE_CLOSED_STR,
-            ICEConnectionState::Unspecified => crate::UNSPECIFIED_STR,
+            RTCIceConnectionState::New => ICE_CONNECTION_STATE_NEW_STR,
+            RTCIceConnectionState::Checking => ICE_CONNECTION_STATE_CHECKING_STR,
+            RTCIceConnectionState::Connected => ICE_CONNECTION_STATE_CONNECTED_STR,
+            RTCIceConnectionState::Completed => ICE_CONNECTION_STATE_COMPLETED_STR,
+            RTCIceConnectionState::Disconnected => ICE_CONNECTION_STATE_DISCONNECTED_STR,
+            RTCIceConnectionState::Failed => ICE_CONNECTION_STATE_FAILED_STR,
+            RTCIceConnectionState::Closed => ICE_CONNECTION_STATE_CLOSED_STR,
+            RTCIceConnectionState::Unspecified => crate::UNSPECIFIED_STR,
         };
         write!(f, "{}", s)
     }
@@ -108,20 +108,20 @@ mod test {
     #[test]
     fn test_new_ice_connection_state() {
         let tests = vec![
-            (crate::UNSPECIFIED_STR, ICEConnectionState::Unspecified),
-            ("new", ICEConnectionState::New),
-            ("checking", ICEConnectionState::Checking),
-            ("connected", ICEConnectionState::Connected),
-            ("completed", ICEConnectionState::Completed),
-            ("disconnected", ICEConnectionState::Disconnected),
-            ("failed", ICEConnectionState::Failed),
-            ("closed", ICEConnectionState::Closed),
+            (crate::UNSPECIFIED_STR, RTCIceConnectionState::Unspecified),
+            ("new", RTCIceConnectionState::New),
+            ("checking", RTCIceConnectionState::Checking),
+            ("connected", RTCIceConnectionState::Connected),
+            ("completed", RTCIceConnectionState::Completed),
+            ("disconnected", RTCIceConnectionState::Disconnected),
+            ("failed", RTCIceConnectionState::Failed),
+            ("closed", RTCIceConnectionState::Closed),
         ];
 
         for (state_string, expected_state) in tests {
             assert_eq!(
                 expected_state,
-                ICEConnectionState::from(state_string),
+                RTCIceConnectionState::from(state_string),
                 "testCase: {}",
                 expected_state,
             );
@@ -131,14 +131,14 @@ mod test {
     #[test]
     fn test_ice_connection_state_string() {
         let tests = vec![
-            (ICEConnectionState::Unspecified, crate::UNSPECIFIED_STR),
-            (ICEConnectionState::New, "new"),
-            (ICEConnectionState::Checking, "checking"),
-            (ICEConnectionState::Connected, "connected"),
-            (ICEConnectionState::Completed, "completed"),
-            (ICEConnectionState::Disconnected, "disconnected"),
-            (ICEConnectionState::Failed, "failed"),
-            (ICEConnectionState::Closed, "closed"),
+            (RTCIceConnectionState::Unspecified, crate::UNSPECIFIED_STR),
+            (RTCIceConnectionState::New, "new"),
+            (RTCIceConnectionState::Checking, "checking"),
+            (RTCIceConnectionState::Connected, "connected"),
+            (RTCIceConnectionState::Completed, "completed"),
+            (RTCIceConnectionState::Disconnected, "disconnected"),
+            (RTCIceConnectionState::Failed, "failed"),
+            (RTCIceConnectionState::Closed, "closed"),
         ];
 
         for (state, expected_string) in tests {

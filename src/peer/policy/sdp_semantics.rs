@@ -4,7 +4,7 @@ use std::fmt;
 /// SDPSemantics determines which style of SDP offers and answers
 /// can be used
 #[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
-pub enum SDPSemantics {
+pub enum RTCSdpSemantics {
     Unspecified = 0,
 
     /// UnifiedPlan uses unified-plan offers and answers
@@ -26,9 +26,9 @@ pub enum SDPSemantics {
     UnifiedPlanWithFallback = 3,
 }
 
-impl Default for SDPSemantics {
+impl Default for RTCSdpSemantics {
     fn default() -> Self {
-        SDPSemantics::UnifiedPlan
+        RTCSdpSemantics::UnifiedPlan
     }
 }
 
@@ -36,24 +36,24 @@ const SDP_SEMANTICS_UNIFIED_PLAN_WITH_FALLBACK: &str = "unified-plan-with-fallba
 const SDP_SEMANTICS_UNIFIED_PLAN: &str = "unified-plan";
 const SDP_SEMANTICS_PLAN_B: &str = "plan-b";
 
-impl From<&str> for SDPSemantics {
+impl From<&str> for RTCSdpSemantics {
     fn from(raw: &str) -> Self {
         match raw {
-            SDP_SEMANTICS_UNIFIED_PLAN_WITH_FALLBACK => SDPSemantics::UnifiedPlanWithFallback,
-            SDP_SEMANTICS_UNIFIED_PLAN => SDPSemantics::UnifiedPlan,
-            SDP_SEMANTICS_PLAN_B => SDPSemantics::PlanB,
-            _ => SDPSemantics::Unspecified,
+            SDP_SEMANTICS_UNIFIED_PLAN_WITH_FALLBACK => RTCSdpSemantics::UnifiedPlanWithFallback,
+            SDP_SEMANTICS_UNIFIED_PLAN => RTCSdpSemantics::UnifiedPlan,
+            SDP_SEMANTICS_PLAN_B => RTCSdpSemantics::PlanB,
+            _ => RTCSdpSemantics::Unspecified,
         }
     }
 }
 
-impl fmt::Display for SDPSemantics {
+impl fmt::Display for RTCSdpSemantics {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
-            SDPSemantics::UnifiedPlanWithFallback => SDP_SEMANTICS_UNIFIED_PLAN_WITH_FALLBACK,
-            SDPSemantics::UnifiedPlan => SDP_SEMANTICS_UNIFIED_PLAN,
-            SDPSemantics::PlanB => SDP_SEMANTICS_PLAN_B,
-            SDPSemantics::Unspecified => crate::UNSPECIFIED_STR,
+            RTCSdpSemantics::UnifiedPlanWithFallback => SDP_SEMANTICS_UNIFIED_PLAN_WITH_FALLBACK,
+            RTCSdpSemantics::UnifiedPlan => SDP_SEMANTICS_UNIFIED_PLAN,
+            RTCSdpSemantics::PlanB => SDP_SEMANTICS_PLAN_B,
+            RTCSdpSemantics::Unspecified => crate::UNSPECIFIED_STR,
         };
         write!(f, "{}", s)
     }
@@ -64,12 +64,12 @@ mod test {
     use super::*;
     use crate::api::media_engine::MediaEngine;
     use crate::api::APIBuilder;
-    use crate::media::rtp::rtp_codec::{RTPCodecCapability, RTPCodecType};
-    use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
-    use crate::media::rtp::RTPTransceiverInit;
+    use crate::media::rtp::rtp_codec::{RTCRtpCodecCapability, RTPCodecType};
+    use crate::media::rtp::rtp_transceiver_direction::RTCRtpTransceiverDirection;
+    use crate::media::rtp::RTCRtpTransceiverInit;
     use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
     use crate::media::track::track_local::TrackLocal;
-    use crate::peer::configuration::Configuration;
+    use crate::peer::configuration::RTCConfiguration;
     use crate::peer::peer_connection::peer_connection_test::close_pair_now;
     use crate::SSRC_STR;
     use anyhow::Result;
@@ -81,13 +81,13 @@ mod test {
     #[test]
     fn test_sdp_semantics_string() {
         let tests = vec![
-            (SDPSemantics::Unspecified, "Unspecified"),
+            (RTCSdpSemantics::Unspecified, "Unspecified"),
             (
-                SDPSemantics::UnifiedPlanWithFallback,
+                RTCSdpSemantics::UnifiedPlanWithFallback,
                 "unified-plan-with-fallback",
             ),
-            (SDPSemantics::PlanB, "plan-b"),
-            (SDPSemantics::UnifiedPlan, "unified-plan"),
+            (RTCSdpSemantics::PlanB, "plan-b"),
+            (RTCSdpSemantics::UnifiedPlan, "unified-plan"),
         ];
 
         for (value, expected_string) in tests {
@@ -129,16 +129,16 @@ mod test {
         let api = APIBuilder::new().with_media_engine(m).build();
 
         let opc = api
-            .new_peer_connection(Configuration {
-                sdp_semantics: SDPSemantics::PlanB,
+            .new_peer_connection(RTCConfiguration {
+                sdp_semantics: RTCSdpSemantics::PlanB,
                 ..Default::default()
             })
             .await?;
 
         opc.add_transceiver_from_kind(
             RTPCodecType::Video,
-            &[RTPTransceiverInit {
-                direction: RTPTransceiverDirection::Sendrecv,
+            &[RTCRtpTransceiverInit {
+                direction: RTCRtpTransceiverDirection::Sendrecv,
                 send_encodings: vec![],
             }],
         )
@@ -146,8 +146,8 @@ mod test {
 
         opc.add_transceiver_from_kind(
             RTPCodecType::Video,
-            &[RTPTransceiverInit {
-                direction: RTPTransceiverDirection::Sendrecv,
+            &[RTCRtpTransceiverInit {
+                direction: RTCRtpTransceiverDirection::Sendrecv,
                 send_encodings: vec![],
             }],
         )
@@ -155,8 +155,8 @@ mod test {
 
         opc.add_transceiver_from_kind(
             RTPCodecType::Audio,
-            &[RTPTransceiverInit {
-                direction: RTPTransceiverDirection::Sendrecv,
+            &[RTCRtpTransceiverInit {
+                direction: RTCRtpTransceiverDirection::Sendrecv,
                 send_encodings: vec![],
             }],
         )
@@ -164,8 +164,8 @@ mod test {
 
         opc.add_transceiver_from_kind(
             RTPCodecType::Audio,
-            &[RTPTransceiverInit {
-                direction: RTPTransceiverDirection::Sendrecv,
+            &[RTCRtpTransceiverInit {
+                direction: RTCRtpTransceiverDirection::Sendrecv,
                 send_encodings: vec![],
             }],
         )
@@ -188,8 +188,8 @@ mod test {
         }
 
         let apc = api
-            .new_peer_connection(Configuration {
-                sdp_semantics: SDPSemantics::PlanB,
+            .new_peer_connection(RTCConfiguration {
+                sdp_semantics: RTCSdpSemantics::PlanB,
                 ..Default::default()
             })
             .await?;
@@ -215,16 +215,16 @@ mod test {
         let api = APIBuilder::new().with_media_engine(m).build();
 
         let opc = api
-            .new_peer_connection(Configuration {
-                sdp_semantics: SDPSemantics::PlanB,
+            .new_peer_connection(RTCConfiguration {
+                sdp_semantics: RTCSdpSemantics::PlanB,
                 ..Default::default()
             })
             .await?;
 
         opc.add_transceiver_from_kind(
             RTPCodecType::Video,
-            &[RTPTransceiverInit {
-                direction: RTPTransceiverDirection::Recvonly,
+            &[RTCRtpTransceiverInit {
+                direction: RTCRtpTransceiverDirection::Recvonly,
                 send_encodings: vec![],
             }],
         )
@@ -232,8 +232,8 @@ mod test {
 
         opc.add_transceiver_from_kind(
             RTPCodecType::Audio,
-            &[RTPTransceiverInit {
-                direction: RTPTransceiverDirection::Recvonly,
+            &[RTCRtpTransceiverInit {
+                direction: RTCRtpTransceiverDirection::Recvonly,
                 send_encodings: vec![],
             }],
         )
@@ -247,14 +247,14 @@ mod test {
         }
 
         let apc = api
-            .new_peer_connection(Configuration {
-                sdp_semantics: SDPSemantics::PlanB,
+            .new_peer_connection(RTCConfiguration {
+                sdp_semantics: RTCSdpSemantics::PlanB,
                 ..Default::default()
             })
             .await?;
 
         let video1: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
-            RTPCodecCapability {
+            RTCRtpCodecCapability {
                 mime_type: "video/h264".to_owned(),
                 sdp_fmtp_line:
                     "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"
@@ -267,7 +267,7 @@ mod test {
         let _ = apc.add_track(video1).await?;
 
         let video2: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
-            RTPCodecCapability {
+            RTCRtpCodecCapability {
                 mime_type: "video/h264".to_owned(),
                 sdp_fmtp_line:
                     "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"
@@ -280,7 +280,7 @@ mod test {
         let _ = apc.add_track(video2).await?;
 
         let audio1: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
-            RTPCodecCapability {
+            RTCRtpCodecCapability {
                 mime_type: "audio/opus".to_owned(),
                 ..Default::default()
             },
@@ -290,7 +290,7 @@ mod test {
         let _ = apc.add_track(audio1).await?;
 
         let audio2: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
-            RTPCodecCapability {
+            RTCRtpCodecCapability {
                 mime_type: "audio/opus".to_owned(),
                 ..Default::default()
             },
@@ -329,16 +329,16 @@ mod test {
         let api = APIBuilder::new().with_media_engine(m).build();
 
         let opc = api
-            .new_peer_connection(Configuration {
-                sdp_semantics: SDPSemantics::PlanB,
+            .new_peer_connection(RTCConfiguration {
+                sdp_semantics: RTCSdpSemantics::PlanB,
                 ..Default::default()
             })
             .await?;
 
         opc.add_transceiver_from_kind(
             RTPCodecType::Video,
-            &[RTPTransceiverInit {
-                direction: RTPTransceiverDirection::Recvonly,
+            &[RTCRtpTransceiverInit {
+                direction: RTCRtpTransceiverDirection::Recvonly,
                 send_encodings: vec![],
             }],
         )
@@ -346,8 +346,8 @@ mod test {
 
         opc.add_transceiver_from_kind(
             RTPCodecType::Audio,
-            &[RTPTransceiverInit {
-                direction: RTPTransceiverDirection::Recvonly,
+            &[RTCRtpTransceiverInit {
+                direction: RTCRtpTransceiverDirection::Recvonly,
                 send_encodings: vec![],
             }],
         )
@@ -361,14 +361,14 @@ mod test {
         }
 
         let apc = api
-            .new_peer_connection(Configuration {
-                sdp_semantics: SDPSemantics::UnifiedPlanWithFallback,
+            .new_peer_connection(RTCConfiguration {
+                sdp_semantics: RTCSdpSemantics::UnifiedPlanWithFallback,
                 ..Default::default()
             })
             .await?;
 
         let video1: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
-            RTPCodecCapability {
+            RTCRtpCodecCapability {
                 mime_type: "video/h264".to_owned(),
                 sdp_fmtp_line:
                     "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"
@@ -381,7 +381,7 @@ mod test {
         let _ = apc.add_track(video1).await?;
 
         let video2: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
-            RTPCodecCapability {
+            RTCRtpCodecCapability {
                 mime_type: "video/h264".to_owned(),
                 sdp_fmtp_line:
                     "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"
@@ -394,7 +394,7 @@ mod test {
         let _ = apc.add_track(video2).await?;
 
         let audio1: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
-            RTPCodecCapability {
+            RTCRtpCodecCapability {
                 mime_type: "audio/opus".to_owned(),
                 ..Default::default()
             },
@@ -404,7 +404,7 @@ mod test {
         let _ = apc.add_track(audio1).await?;
 
         let audio2: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
-            RTPCodecCapability {
+            RTCRtpCodecCapability {
                 mime_type: "audio/opus".to_owned(),
                 ..Default::default()
             },

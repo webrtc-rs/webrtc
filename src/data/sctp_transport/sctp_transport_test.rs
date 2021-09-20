@@ -3,16 +3,16 @@ use std::sync::atomic::AtomicU16;
 
 #[tokio::test]
 async fn test_generate_data_channel_id() -> Result<()> {
-    let sctp_transport_with_channels = |ids: &[u16]| -> SCTPTransport {
+    let sctp_transport_with_channels = |ids: &[u16]| -> RTCSctpTransport {
         let mut data_channels = vec![];
         for id in ids {
-            data_channels.push(Arc::new(DataChannel {
+            data_channels.push(Arc::new(RTCDataChannel {
                 id: AtomicU16::new(*id),
                 ..Default::default()
             }));
         }
 
-        SCTPTransport {
+        RTCSctpTransport {
             data_channels: Arc::new(Mutex::new(data_channels)),
             ..Default::default()
         }

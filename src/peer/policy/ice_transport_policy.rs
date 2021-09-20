@@ -4,7 +4,7 @@ use std::fmt;
 /// ICETransportPolicy defines the ICE candidate policy surface the
 /// permitted candidates. Only these candidates are used for connectivity checks.
 #[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
-pub enum ICETransportPolicy {
+pub enum RTCIceTransportPolicy {
     Unspecified = 0,
 
     /// ICETransportPolicyAll indicates any type of candidate is used.
@@ -17,35 +17,35 @@ pub enum ICETransportPolicy {
     Relay = 2,
 }
 
-impl Default for ICETransportPolicy {
+impl Default for RTCIceTransportPolicy {
     fn default() -> Self {
-        ICETransportPolicy::Unspecified
+        RTCIceTransportPolicy::Unspecified
     }
 }
 
 /// ICEGatherPolicy is the ORTC equivalent of ICETransportPolicy
-pub type ICEGatherPolicy = ICETransportPolicy;
+pub type ICEGatherPolicy = RTCIceTransportPolicy;
 
 const ICE_TRANSPORT_POLICY_RELAY_STR: &str = "relay";
 const ICE_TRANSPORT_POLICY_ALL_STR: &str = "all";
 
 /// takes a string and converts it to ICETransportPolicy
-impl From<&str> for ICETransportPolicy {
+impl From<&str> for RTCIceTransportPolicy {
     fn from(raw: &str) -> Self {
         match raw {
-            ICE_TRANSPORT_POLICY_RELAY_STR => ICETransportPolicy::Relay,
-            ICE_TRANSPORT_POLICY_ALL_STR => ICETransportPolicy::All,
-            _ => ICETransportPolicy::Unspecified,
+            ICE_TRANSPORT_POLICY_RELAY_STR => RTCIceTransportPolicy::Relay,
+            ICE_TRANSPORT_POLICY_ALL_STR => RTCIceTransportPolicy::All,
+            _ => RTCIceTransportPolicy::Unspecified,
         }
     }
 }
 
-impl fmt::Display for ICETransportPolicy {
+impl fmt::Display for RTCIceTransportPolicy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
-            ICETransportPolicy::Relay => ICE_TRANSPORT_POLICY_RELAY_STR,
-            ICETransportPolicy::All => ICE_TRANSPORT_POLICY_ALL_STR,
-            ICETransportPolicy::Unspecified => crate::UNSPECIFIED_STR,
+            RTCIceTransportPolicy::Relay => ICE_TRANSPORT_POLICY_RELAY_STR,
+            RTCIceTransportPolicy::All => ICE_TRANSPORT_POLICY_ALL_STR,
+            RTCIceTransportPolicy::Unspecified => crate::UNSPECIFIED_STR,
         };
         write!(f, "{}", s)
     }
@@ -58,20 +58,20 @@ mod test {
     #[test]
     fn test_new_ice_transport_policy() {
         let tests = vec![
-            ("relay", ICETransportPolicy::Relay),
-            ("all", ICETransportPolicy::All),
+            ("relay", RTCIceTransportPolicy::Relay),
+            ("all", RTCIceTransportPolicy::All),
         ];
 
         for (policy_string, expected_policy) in tests {
-            assert_eq!(expected_policy, ICETransportPolicy::from(policy_string));
+            assert_eq!(expected_policy, RTCIceTransportPolicy::from(policy_string));
         }
     }
 
     #[test]
     fn test_ice_transport_policy_string() {
         let tests = vec![
-            (ICETransportPolicy::Relay, "relay"),
-            (ICETransportPolicy::All, "all"),
+            (RTCIceTransportPolicy::Relay, "relay"),
+            (RTCIceTransportPolicy::All, "all"),
         ];
 
         for (policy, expected_string) in tests {

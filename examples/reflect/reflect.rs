@@ -8,15 +8,15 @@ use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_VP8};
 use webrtc::api::APIBuilder;
-use webrtc::media::rtp::rtp_codec::{RTPCodecCapability, RTPCodecParameters, RTPCodecType};
-use webrtc::media::rtp::rtp_receiver::RTPReceiver;
+use webrtc::media::rtp::rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType};
+use webrtc::media::rtp::rtp_receiver::RTCRtpReceiver;
 use webrtc::media::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
 use webrtc::media::track::track_local::{TrackLocal, TrackLocalWriter};
 use webrtc::media::track::track_remote::TrackRemote;
-use webrtc::peer::configuration::Configuration;
-use webrtc::peer::ice::ice_server::ICEServer;
-use webrtc::peer::peer_connection_state::PeerConnectionState;
-use webrtc::peer::sdp::session_description::{SessionDescription, SessionDescriptionSerde};
+use webrtc::peer::configuration::RTCConfiguration;
+use webrtc::peer::ice::ice_server::RTCIceServer;
+use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
+use webrtc::peer::sdp::session_description::{RTCSessionDescription, RTCSessionDescriptionSerde};
 
 //use std::io::Write;
 
@@ -64,8 +64,8 @@ async fn main() -> Result<()> {
     // Setup the codecs you want to use.
     // We'll use a VP8 and Opus but you can also define your own
     m.register_codec(
-        RTPCodecParameters {
-            capability: RTPCodecCapability {
+        RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
                 mime_type: MIME_TYPE_VP8.to_owned(),
                 clock_rate: 90000,
                 channels: 0,
@@ -94,8 +94,8 @@ async fn main() -> Result<()> {
         .build();
 
     // Prepare the configuration
-    let config = Configuration {
-        ice_servers: vec![ICEServer {
+    let config = RTCConfiguration {
+        ice_servers: vec![RTCIceServer {
             urls: vec!["stun:stun.l.google.com:19302".to_owned()],
             ..Default::default()
         }],
@@ -107,7 +107,7 @@ async fn main() -> Result<()> {
 
     // Create Track that we send video back to browser on
     let output_track = Arc::new(TrackLocalStaticRTP::new(
-        RTPCodecCapability {
+        RTCRtpCodecCapability {
             mime_type: MIME_TYPE_VP8.to_owned(),
             ..Default::default()
         },
@@ -130,10 +130,10 @@ async fn main() -> Result<()> {
     });
 
     // Wait for the offer to be pasted
-    let mut offer = SessionDescription::default();
+    let mut offer = RTCSessionDescription::default();
     let line = signal::must_read_stdin()?;
     let desc_data = signal::decode(line.as_str())?;
-    offer.serde = serde_json::from_str::<SessionDescriptionSerde>(&desc_data)?;
+    offer.serde = serde_json::from_str::<RTCSessionDescriptionSerde>(&desc_data)?;
 
     // Set the remote SessionDescription
     peer_connection.set_remote_description(offer).await?;
@@ -143,7 +143,7 @@ async fn main() -> Result<()> {
     let pc = Arc::clone(&peer_connection);
     peer_connection
         .on_track(Box::new(
-            move |track: Option<Arc<TrackRemote>>, _receiver: Option<Arc<RTPReceiver>>| {
+            move |track: Option<Arc<TrackRemote>>, _receiver: Option<Arc<RTCRtpReceiver>>| {
                 if let Some(track) = track {
                     let track2 = Arc::clone(&track);
                     let output_track2 = Arc::clone(&output_track);
@@ -194,10 +194,10 @@ async fn main() -> Result<()> {
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection
-        .on_peer_connection_state_change(Box::new(move |s: PeerConnectionState| {
+        .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
             print!("Peer Connection State has changed: {}\n", s);
 
-            if s == PeerConnectionState::Failed {
+            if s == RTCPeerConnectionState::Failed {
                 // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
                 // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
                 // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.

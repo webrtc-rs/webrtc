@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
+use crate::media::rtp::rtp_transceiver_direction::RTCRtpTransceiverDirection;
 use rtp_codec::*;
 
 pub(crate) mod fmtp;
@@ -57,16 +57,16 @@ pub struct RTCPFeedback {
 /// RTPCapabilities represents the capabilities of a transceiver
 /// https://w3c.github.io/webrtc-pc/#rtcrtpcapabilities
 #[derive(Default, Debug, Clone)]
-pub struct RTPCapabilities {
-    pub codecs: Vec<RTPCodecCapability>,
-    pub header_extensions: Vec<RTPHeaderExtensionCapability>,
+pub struct RTCRtpCapabilities {
+    pub codecs: Vec<RTCRtpCodecCapability>,
+    pub header_extensions: Vec<RTCRtpHeaderExtensionCapability>,
 }
 
 /// RTPCodingParameters provides information relating to both encoding and decoding.
 /// This is a subset of the RFC since Pion WebRTC doesn't implement encoding/decoding itself
 /// http://draft.ortc.org/#dom-rtcrtpcodingparameters
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
-pub struct RTPCodingParameters {
+pub struct RTCRtpCodingParameters {
     pub rid: String,
     pub ssrc: SSRC,
     pub payload_type: PayloadType,
@@ -75,31 +75,27 @@ pub struct RTPCodingParameters {
 /// RTPDecodingParameters provides information relating to both encoding and decoding.
 /// This is a subset of the RFC since Pion WebRTC doesn't implement decoding itself
 /// http://draft.ortc.org/#dom-rtcrtpdecodingparameters
-pub type RTPDecodingParameters = RTPCodingParameters;
+pub type RTCRtpDecodingParameters = RTCRtpCodingParameters;
 
 /// RTPEncodingParameters provides information relating to both encoding and decoding.
 /// This is a subset of the RFC since Pion WebRTC doesn't implement encoding itself
 /// http://draft.ortc.org/#dom-rtcrtpencodingparameters
-pub type RTPEncodingParameters = RTPCodingParameters;
+pub type RTCRtpEncodingParameters = RTCRtpCodingParameters;
 
 /// RTPReceiveParameters contains the RTP stack settings used by receivers
-pub struct RTPReceiveParameters {
-    pub encodings: Vec<RTPDecodingParameters>,
+pub struct RTCRtpReceiveParameters {
+    pub encodings: Vec<RTCRtpDecodingParameters>,
 }
 
 /// RTPSendParameters contains the RTP stack settings used by receivers
-pub struct RTPSendParameters {
-    pub rtp_parameters: RTPParameters,
-    pub encodings: Vec<RTPEncodingParameters>,
+pub struct RTCRtpSendParameters {
+    pub rtp_parameters: RTCRtpParameters,
+    pub encodings: Vec<RTCRtpEncodingParameters>,
 }
 
 /// RTPTransceiverInit dictionary is used when calling the WebRTC function addTransceiver() to provide configuration options for the new transceiver.
-pub struct RTPTransceiverInit {
-    pub direction: RTPTransceiverDirection,
-    pub send_encodings: Vec<RTPEncodingParameters>,
+pub struct RTCRtpTransceiverInit {
+    pub direction: RTCRtpTransceiverDirection,
+    pub send_encodings: Vec<RTCRtpEncodingParameters>,
     // Streams       []*Track
 }
-
-// RtpTransceiverInit is a temporary mapping while we fix case sensitivity
-// Deprecated: Use RTPTransceiverInit instead
-pub type RtpTransceiverInit = RTPTransceiverInit;

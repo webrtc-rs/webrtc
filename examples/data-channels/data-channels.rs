@@ -8,11 +8,11 @@ use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::APIBuilder;
 use webrtc::data::data_channel::data_channel_message::DataChannelMessage;
-use webrtc::data::data_channel::DataChannel;
-use webrtc::peer::configuration::Configuration;
-use webrtc::peer::ice::ice_server::ICEServer;
-use webrtc::peer::peer_connection_state::PeerConnectionState;
-use webrtc::peer::sdp::session_description::{SessionDescription, SessionDescriptionSerde};
+use webrtc::data::data_channel::RTCDataChannel;
+use webrtc::peer::configuration::RTCConfiguration;
+use webrtc::peer::ice::ice_server::RTCIceServer;
+use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
+use webrtc::peer::sdp::session_description::{RTCSessionDescription, RTCSessionDescriptionSerde};
 use webrtc::util::math_rand_alpha;
 
 //use std::io::Write;
@@ -77,8 +77,8 @@ async fn main() -> Result<()> {
         .build();
 
     // Prepare the configuration
-    let config = Configuration {
-        ice_servers: vec![ICEServer {
+    let config = RTCConfiguration {
+        ice_servers: vec![RTCIceServer {
             urls: vec!["stun:stun.l.google.com:19302".to_owned()],
             ..Default::default()
         }],
@@ -91,10 +91,10 @@ async fn main() -> Result<()> {
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection
-        .on_peer_connection_state_change(Box::new(move |s: PeerConnectionState| {
+        .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
             println!("Peer Connection State has changed: {}", s);
 
-            if s == PeerConnectionState::Failed {
+            if s == RTCPeerConnectionState::Failed {
                 // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
                 // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
                 // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.
@@ -108,7 +108,7 @@ async fn main() -> Result<()> {
 
     // Register data channel creation handling
     peer_connection
-        .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
+        .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
             let d_label = d.label().to_owned();
             let d_id = d.id();
             println!("New DataChannel {} {}", d_label, d_id);
@@ -149,10 +149,10 @@ async fn main() -> Result<()> {
         .await;
 
     // Wait for the offer to be pasted
-    let mut offer = SessionDescription::default();
+    let mut offer = RTCSessionDescription::default();
     let line = signal::must_read_stdin()?;
     let desc_data = signal::decode(line.as_str())?;
-    offer.serde = serde_json::from_str::<SessionDescriptionSerde>(&desc_data)?;
+    offer.serde = serde_json::from_str::<RTCSessionDescriptionSerde>(&desc_data)?;
 
     // Set the remote SessionDescription
     peer_connection.set_remote_description(offer).await?;

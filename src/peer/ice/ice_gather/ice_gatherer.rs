@@ -1,10 +1,10 @@
 use crate::api::setting_engine::SettingEngine;
 use crate::error::Error;
-use crate::peer::ice::ice_candidate::ice_candidate_type::ICECandidateType;
+use crate::media::ice_transport::ice_parameters::RTCIceParameters;
+use crate::peer::ice::ice_candidate::ice_candidate_type::RTCIceCandidateType;
 use crate::peer::ice::ice_candidate::*;
-use crate::peer::ice::ice_gather::ice_gatherer_state::ICEGathererState;
-use crate::peer::ice::ICEParameters;
-use crate::peer::policy::ice_transport_policy::ICETransportPolicy;
+use crate::peer::ice::ice_gather::ice_gatherer_state::RTCIceGathererState;
+use crate::peer::policy::ice_transport_policy::RTCIceTransportPolicy;
 
 use ice::agent::Agent;
 use ice::candidate::{Candidate, CandidateType};
@@ -18,13 +18,13 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 pub type OnLocalCandidateHdlrFn = Box<
-    dyn (FnMut(Option<ICECandidate>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+    dyn (FnMut(Option<RTCIceCandidate>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
 
 pub type OnICEGathererStateChangeHdlrFn = Box<
-    dyn (FnMut(ICEGathererState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+    dyn (FnMut(RTCIceGathererState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
@@ -37,9 +37,9 @@ pub type OnGatheringCompleteHdlrFn =
 /// Connectivity Establishment (ICE) parameters which can be
 /// exchanged in signaling.
 #[derive(Default)]
-pub struct ICEGatherer {
+pub struct RTCIceGatherer {
     pub(crate) validated_servers: Vec<Url>,
-    pub(crate) gather_policy: ICETransportPolicy,
+    pub(crate) gather_policy: RTCIceTransportPolicy,
     pub(crate) setting_engine: Arc<SettingEngine>,
 
     pub(crate) state: Arc<AtomicU8>, //ICEGathererState,
@@ -52,17 +52,17 @@ pub struct ICEGatherer {
     pub(crate) on_gathering_complete_handler: Arc<Mutex<Option<OnGatheringCompleteHdlrFn>>>,
 }
 
-impl ICEGatherer {
+impl RTCIceGatherer {
     pub(crate) fn new(
         validated_servers: Vec<Url>,
-        gather_policy: ICETransportPolicy,
+        gather_policy: RTCIceTransportPolicy,
         setting_engine: Arc<SettingEngine>,
     ) -> Self {
-        ICEGatherer {
+        RTCIceGatherer {
             gather_policy,
             validated_servers,
             setting_engine,
-            state: Arc::new(AtomicU8::new(ICEGathererState::New as u8)),
+            state: Arc::new(AtomicU8::new(RTCIceGathererState::New as u8)),
             ..Default::default()
         }
     }
@@ -70,7 +70,7 @@ impl ICEGatherer {
     pub(crate) async fn create_agent(&self) -> Result<()> {
         {
             let agent = self.agent.lock().await;
-            if agent.is_some() || self.state() != ICEGathererState::New {
+            if agent.is_some() || self.state() != RTCIceGathererState::New {
                 return Ok(());
             }
         }
@@ -78,13 +78,13 @@ impl ICEGatherer {
         let mut candidate_types = vec![];
         if self.setting_engine.candidates.ice_lite {
             candidate_types.push(ice::candidate::CandidateType::Host);
-        } else if self.gather_policy == ICETransportPolicy::Relay {
+        } else if self.gather_policy == RTCIceTransportPolicy::Relay {
             candidate_types.push(ice::candidate::CandidateType::Relay);
         }
 
         let nat_1to1_cand_type = match self.setting_engine.candidates.nat_1to1_ip_candidate_type {
-            ICECandidateType::Host => CandidateType::Host,
-            ICECandidateType::Srflx => CandidateType::ServerReflexive,
+            RTCIceCandidateType::Host => CandidateType::Host,
+            RTCIceCandidateType::Srflx => CandidateType::ServerReflexive,
             _ => CandidateType::Unspecified,
         };
 
@@ -147,7 +147,7 @@ impl ICEGatherer {
     /// Gather ICE candidates.
     pub async fn gather(&self) -> Result<()> {
         self.create_agent().await?;
-        self.set_state(ICEGathererState::Gathering).await;
+        self.set_state(RTCIceGathererState::Gathering).await;
 
         if let Some(agent) = self.get_agent().await {
             let state = Arc::clone(&self.state);
@@ -167,7 +167,7 @@ impl ICEGatherer {
 
                         Box::pin(async move {
                             if let Some(cand) = candidate {
-                                let c = ICECandidate::from(&cand);
+                                let c = RTCIceCandidate::from(&cand);
 
                                 let mut on_local_candidate_handler =
                                     on_local_candidate_handler_clone.lock().await;
@@ -176,13 +176,13 @@ impl ICEGatherer {
                                 }
                             } else {
                                 state_clone
-                                    .store(ICEGathererState::Complete as u8, Ordering::SeqCst);
+                                    .store(RTCIceGathererState::Complete as u8, Ordering::SeqCst);
 
                                 {
                                     let mut on_state_change_handler =
                                         on_state_change_handler_clone.lock().await;
                                     if let Some(handler) = &mut *on_state_change_handler {
-                                        handler(ICEGathererState::Complete).await;
+                                        handler(RTCIceGathererState::Complete).await;
                                     }
                                 }
 
@@ -223,13 +223,13 @@ impl ICEGatherer {
         if let Some(agent) = agent {
             agent.close().await?;
         }
-        self.set_state(ICEGathererState::Closed).await;
+        self.set_state(RTCIceGathererState::Closed).await;
 
         Ok(())
     }
 
     /// get_local_parameters returns the ICE parameters of the ICEGatherer.
-    pub async fn get_local_parameters(&self) -> Result<ICEParameters> {
+    pub async fn get_local_parameters(&self) -> Result<RTCIceParameters> {
         self.create_agent().await?;
 
         let (frag, pwd) = if let Some(agent) = self.get_agent().await {
@@ -238,7 +238,7 @@ impl ICEGatherer {
             return Err(Error::ErrICEAgentNotExist.into());
         };
 
-        Ok(ICEParameters {
+        Ok(RTCIceParameters {
             username_fragment: frag,
             password: pwd,
             ice_lite: false,
@@ -246,7 +246,7 @@ impl ICEGatherer {
     }
 
     /// get_local_candidates returns the sequence of valid local candidates associated with the ICEGatherer.
-    pub async fn get_local_candidates(&self) -> Result<Vec<ICECandidate>> {
+    pub async fn get_local_candidates(&self) -> Result<Vec<RTCIceCandidate>> {
         self.create_agent().await?;
 
         let ice_candidates = if let Some(agent) = self.get_agent().await {
@@ -255,7 +255,7 @@ impl ICEGatherer {
             return Err(Error::ErrICEAgentNotExist.into());
         };
 
-        Ok(ice_candidates_from_ice(&ice_candidates))
+        Ok(rtc_ice_candidates_from_ice_candidates(&ice_candidates))
     }
 
     /// on_local_candidate sets an event handler which fires when a new local ICE candidate is available
@@ -278,11 +278,11 @@ impl ICEGatherer {
     }
 
     /// State indicates the current state of the ICE gatherer.
-    pub fn state(&self) -> ICEGathererState {
+    pub fn state(&self) -> RTCIceGathererState {
         self.state.load(Ordering::SeqCst).into()
     }
 
-    pub async fn set_state(&self, s: ICEGathererState) {
+    pub async fn set_state(&self, s: RTCIceGathererState) {
         self.state.store(s as u8, Ordering::SeqCst);
 
         let mut on_state_change_handler = self.on_state_change_handler.lock().await;
@@ -418,14 +418,14 @@ impl ICEGatherer {
 mod test {
     use super::*;
     use crate::api::APIBuilder;
-    use crate::peer::ice::ice_gather::ICEGatherOptions;
-    use crate::peer::ice::ice_server::ICEServer;
+    use crate::peer::ice::ice_gather::RTCIceGatherOptions;
+    use crate::peer::ice::ice_server::RTCIceServer;
     use tokio::sync::mpsc;
 
     #[tokio::test]
     async fn test_new_ice_gatherer_success() -> Result<()> {
-        let opts = ICEGatherOptions {
-            ice_servers: vec![ICEServer {
+        let opts = RTCIceGatherOptions {
+            ice_servers: vec![RTCIceServer {
                 urls: vec!["stun:stun.l.google.com:19302".to_owned()],
                 ..Default::default()
             }],
@@ -436,14 +436,14 @@ mod test {
 
         assert_eq!(
             gatherer.state(),
-            ICEGathererState::New,
+            RTCIceGathererState::New,
             "Expected gathering state new"
         );
 
         let (gather_finished_tx, mut gather_finished_rx) = mpsc::channel::<()>(1);
         let gather_finished_tx = Arc::new(Mutex::new(Some(gather_finished_tx)));
         gatherer
-            .on_local_candidate(Box::new(move |c: Option<ICECandidate>| {
+            .on_local_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
                 let gather_finished_tx_clone = Arc::clone(&gather_finished_tx);
                 Box::pin(async move {
                     if c.is_none() {
@@ -482,12 +482,12 @@ mod test {
         let gatherer = APIBuilder::new()
             .with_setting_engine(s)
             .build()
-            .new_ice_gatherer(ICEGatherOptions::default())?;
+            .new_ice_gatherer(RTCIceGatherOptions::default())?;
 
         let (done_tx, mut done_rx) = mpsc::channel::<()>(1);
         let done_tx = Arc::new(Mutex::new(Some(done_tx)));
         gatherer
-            .on_local_candidate(Box::new(move |c: Option<ICECandidate>| {
+            .on_local_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
                 let done_tx_clone = Arc::clone(&done_tx);
                 Box::pin(async move {
                     if let Some(c) = c {

@@ -9,14 +9,14 @@ use tokio::sync::Mutex;
 #[derive(Debug, Clone)]
 pub struct TrackLocalStaticRTP {
     pub(crate) bindings: Arc<Mutex<Vec<TrackBinding>>>,
-    codec: RTPCodecCapability,
+    codec: RTCRtpCodecCapability,
     id: String,
     stream_id: String,
 }
 
 impl TrackLocalStaticRTP {
     /// returns a TrackLocalStaticRTP.
-    pub fn new(codec: RTPCodecCapability, id: String, stream_id: String) -> Self {
+    pub fn new(codec: RTCRtpCodecCapability, id: String, stream_id: String) -> Self {
         TrackLocalStaticRTP {
             codec,
             bindings: Arc::new(Mutex::new(vec![])),
@@ -26,7 +26,7 @@ impl TrackLocalStaticRTP {
     }
 
     /// codec gets the Codec of the track
-    pub fn codec(&self) -> RTPCodecCapability {
+    pub fn codec(&self) -> RTCRtpCodecCapability {
         self.codec.clone()
     }
 }
@@ -36,8 +36,8 @@ impl TrackLocal for TrackLocalStaticRTP {
     /// bind is called by the PeerConnection after negotiation is complete
     /// This asserts that the code requested is supported by the remote peer.
     /// If so it setups all the state (SSRC and PayloadType) to have a call
-    async fn bind(&self, t: &TrackLocalContext) -> Result<RTPCodecParameters> {
-        let parameters = RTPCodecParameters {
+    async fn bind(&self, t: &TrackLocalContext) -> Result<RTCRtpCodecParameters> {
+        let parameters = RTCRtpCodecParameters {
             capability: self.codec.clone(),
             ..Default::default()
         };

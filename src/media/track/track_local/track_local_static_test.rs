@@ -1,9 +1,9 @@
 use super::{track_local_static_rtp::*, track_local_static_sample::*, *};
 use crate::api::media_engine::MediaEngine;
 use crate::api::APIBuilder;
-use crate::media::rtp::rtp_receiver::RTPReceiver;
+use crate::media::rtp::rtp_receiver::RTCRtpReceiver;
 use crate::media::track::track_remote::TrackRemote;
-use crate::peer::configuration::Configuration;
+use crate::peer::configuration::RTCConfiguration;
 use crate::peer::peer_connection::peer_connection_test::*;
 
 use std::sync::Arc;
@@ -14,7 +14,7 @@ use tokio::sync::{mpsc, Mutex};
 #[tokio::test]
 async fn test_track_local_static_no_codec_intersection() -> Result<()> {
     let track: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
-        RTPCodecCapability {
+        RTCRtpCodecCapability {
             mime_type: "video/vp8".to_owned(),
             ..Default::default()
         },
@@ -28,11 +28,11 @@ async fn test_track_local_static_no_codec_intersection() -> Result<()> {
 
     //"Offerer"
     {
-        let mut pc = api.new_peer_connection(Configuration::default()).await?;
+        let mut pc = api.new_peer_connection(RTCConfiguration::default()).await?;
 
         let mut no_codec_pc = APIBuilder::new()
             .build()
-            .new_peer_connection(Configuration::default())
+            .new_peer_connection(RTCConfiguration::default())
             .await?;
 
         pc.add_track(Arc::clone(&track)).await?;
@@ -48,12 +48,12 @@ async fn test_track_local_static_no_codec_intersection() -> Result<()> {
 
     //"Answerer"
     {
-        let mut pc = api.new_peer_connection(Configuration::default()).await?;
+        let mut pc = api.new_peer_connection(RTCConfiguration::default()).await?;
 
         let mut m = MediaEngine::default();
         m.register_codec(
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: "video/VP9".to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -68,7 +68,7 @@ async fn test_track_local_static_no_codec_intersection() -> Result<()> {
         let mut vp9only_pc = APIBuilder::new()
             .with_media_engine(m)
             .build()
-            .new_peer_connection(Configuration::default())
+            .new_peer_connection(RTCConfiguration::default())
             .await?;
 
         vp9only_pc
@@ -96,7 +96,7 @@ async fn test_track_local_static_no_codec_intersection() -> Result<()> {
         let (mut offerer, mut answerer) = new_pair(&api).await?;
 
         let invalid_codec_track = TrackLocalStaticSample::new(
-            RTPCodecCapability {
+            RTCRtpCodecCapability {
                 mime_type: "video/invalid-codec".to_owned(),
                 ..Default::default()
             },
@@ -132,7 +132,7 @@ async fn test_track_local_static_closed() -> Result<()> {
         .await?;
 
     let vp8writer: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticRTP::new(
-        RTPCodecCapability {
+        RTCRtpCodecCapability {
             mime_type: "video/vp8".to_owned(),
             ..Default::default()
         },
@@ -196,8 +196,8 @@ async fn test_track_local_static_payload_type() -> Result<()> {
 
     let mut media_engine_one = MediaEngine::default();
     media_engine_one.register_codec(
-        RTPCodecParameters {
-            capability: RTPCodecCapability {
+        RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
                 mime_type: "video/VP8".to_owned(),
                 clock_rate: 90000,
                 channels: 0,
@@ -212,8 +212,8 @@ async fn test_track_local_static_payload_type() -> Result<()> {
 
     let mut media_engine_two = MediaEngine::default();
     media_engine_two.register_codec(
-        RTPCodecParameters {
-            capability: RTPCodecCapability {
+        RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
                 mime_type: "video/VP8".to_owned(),
                 clock_rate: 90000,
                 channels: 0,
@@ -229,16 +229,16 @@ async fn test_track_local_static_payload_type() -> Result<()> {
     let mut offerer = APIBuilder::new()
         .with_media_engine(media_engine_one)
         .build()
-        .new_peer_connection(Configuration::default())
+        .new_peer_connection(RTCConfiguration::default())
         .await?;
     let mut answerer = APIBuilder::new()
         .with_media_engine(media_engine_two)
         .build()
-        .new_peer_connection(Configuration::default())
+        .new_peer_connection(RTCConfiguration::default())
         .await?;
 
     let track = Arc::new(TrackLocalStaticSample::new(
-        RTPCodecCapability {
+        RTCRtpCodecCapability {
             mime_type: "video/vp8".to_owned(),
             ..Default::default()
         },
@@ -257,7 +257,7 @@ async fn test_track_local_static_payload_type() -> Result<()> {
     let on_track_fired_tx = Arc::new(Mutex::new(Some(on_track_fired_tx)));
     offerer
         .on_track(Box::new(
-            move |track: Option<Arc<TrackRemote>>, _: Option<Arc<RTPReceiver>>| {
+            move |track: Option<Arc<TrackRemote>>, _: Option<Arc<RTCRtpReceiver>>| {
                 let on_track_fired_tx2 = Arc::clone(&on_track_fired_tx);
                 Box::pin(async move {
                     if let Some(t) = &track {
@@ -309,7 +309,7 @@ async fn test_track_local_static_mutate_input() -> Result<()> {
     let (mut pc_offer, mut pc_answer) = new_pair(&api).await?;
 
     let vp8writer: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticRTP::new(
-        RTPCodecCapability {
+        RTCRtpCodecCapability {
             mime_type: "video/vp8".to_owned(),
             ..Default::default()
         },
@@ -376,7 +376,7 @@ async fn test_track_local_static_binding_non_blocking() -> Result<()> {
         .await?;
 
     let vp8writer: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticRTP::new(
-        RTPCodecCapability {
+        RTCRtpCodecCapability {
             mime_type: "video/vp8".to_owned(),
             ..Default::default()
         },

@@ -1,23 +1,23 @@
 use super::*;
 use crate::api::media_engine::MediaEngine;
 use crate::api::{APIBuilder, API};
-use crate::data::data_channel::data_channel_config::DataChannelConfig;
+use crate::data::data_channel::data_channel_init::RTCDataChannelInit;
 use crate::peer::peer_connection::peer_connection_test::*;
-use crate::peer::peer_connection::PeerConnection;
+use crate::peer::peer_connection::RTCPeerConnection;
 
 //use log::LevelFilter;
 //use std::io::Write;
 use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
-use crate::media::dtls_transport::DTLSTransport;
-use crate::media::ice_transport::ICETransport;
-use crate::peer::configuration::Configuration;
-use crate::peer::ice::ice_candidate::ICECandidate;
-use crate::peer::ice::ice_connection_state::ICEConnectionState;
-use crate::peer::ice::ice_gather::ice_gatherer::ICEGatherer;
-use crate::peer::ice::ice_gather::ICEGatherOptions;
-use crate::peer::ice::ice_role::ICERole;
-use crate::peer::ice::ICEParameters;
+use crate::media::dtls_transport::RTCDtlsTransport;
+use crate::media::ice_transport::ice_parameters::RTCIceParameters;
+use crate::media::ice_transport::ice_role::RTCIceRole;
+use crate::media::ice_transport::RTCIceTransport;
+use crate::peer::configuration::RTCConfiguration;
+use crate::peer::ice::ice_candidate::RTCIceCandidate;
+use crate::peer::ice::ice_connection_state::RTCIceConnectionState;
+use crate::peer::ice::ice_gather::ice_gatherer::RTCIceGatherer;
+use crate::peer::ice::ice_gather::RTCIceGatherOptions;
 use crate::util::flatten_errs;
 use regex::Regex;
 use tokio::sync::mpsc;
@@ -31,11 +31,11 @@ const EXPECTED_LABEL: &str = "data";
 
 async fn set_up_data_channel_parameters_test(
     api: &API,
-    options: Option<DataChannelConfig>,
+    options: Option<RTCDataChannelInit>,
 ) -> Result<(
-    PeerConnection,
-    PeerConnection,
-    Arc<DataChannel>,
+    RTCPeerConnection,
+    RTCPeerConnection,
+    Arc<RTCDataChannel>,
     mpsc::Sender<()>,
     mpsc::Receiver<()>,
 )> {
@@ -49,8 +49,8 @@ async fn set_up_data_channel_parameters_test(
 }
 
 async fn close_reliability_param_test(
-    pc1: &mut PeerConnection,
-    pc2: &mut PeerConnection,
+    pc1: &mut RTCPeerConnection,
+    pc2: &mut RTCPeerConnection,
     done_rx: mpsc::Receiver<()>,
 ) -> Result<()> {
     signal_pair(pc1, pc2).await?;
@@ -139,7 +139,7 @@ async fn test_data_channel_open() -> Result<()> {
         let open_calls_tx = Arc::new(open_calls_tx);
         let done_tx = Arc::new(done_tx);
         answer_pc
-            .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
+            .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
                 if d.label() == EXPECTED_LABEL {
                     let open_calls_tx2 = Arc::clone(&open_calls_tx);
                     let done_tx2 = Arc::clone(&done_tx);
@@ -199,7 +199,7 @@ async fn test_data_channel_send_before_signaling() -> Result<()> {
     let (mut offer_pc, mut answer_pc) = new_pair(&api).await?;
 
     answer_pc
-        .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
+        .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
             // Make sure this is the data channel we were looking for. (Not the one
             // created in signalPair).
             if d.label() != EXPECTED_LABEL {
@@ -260,7 +260,7 @@ async fn test_data_channel_send_after_connected() -> Result<()> {
     let (mut offer_pc, mut answer_pc) = new_pair(&api).await?;
 
     answer_pc
-        .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
+        .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
             // Make sure this is the data channel we were looking for. (Not the one
             // created in signalPair).
             if d.label() != EXPECTED_LABEL {
@@ -295,11 +295,12 @@ async fn test_data_channel_send_after_connected() -> Result<()> {
 
     //once := &sync.Once{}
     offer_pc
-        .on_ice_connection_state_change(Box::new(move |state: ICEConnectionState| {
+        .on_ice_connection_state_change(Box::new(move |state: RTCIceConnectionState| {
             let done_tx1 = Arc::clone(&done_tx);
             let dc1 = Arc::clone(&dc);
             Box::pin(async move {
-                if state == ICEConnectionState::Connected || state == ICEConnectionState::Completed
+                if state == RTCIceConnectionState::Connected
+                    || state == RTCIceConnectionState::Completed
                 {
                     // wasm fires completed state multiple times
                     /*once.Do(func()*/
@@ -380,7 +381,7 @@ async fn test_data_channel_parameters_max_packet_life_time_exchange() -> Result<
 
     let ordered = true;
     let max_packet_life_time = 3u16;
-    let options = DataChannelConfig {
+    let options = RTCDataChannelInit {
         ordered: Some(ordered),
         max_packet_life_time: Some(max_packet_life_time),
         ..Default::default()
@@ -403,7 +404,7 @@ async fn test_data_channel_parameters_max_packet_life_time_exchange() -> Result<
 
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
     answer_pc
-        .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
+        .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
             if d.label() != EXPECTED_LABEL {
                 return Box::pin(async {});
             }
@@ -439,7 +440,7 @@ async fn test_data_channel_parameters_max_retransmits_exchange() -> Result<()> {
 
     let ordered = false;
     let max_retransmits = 3000u16;
-    let options = DataChannelConfig {
+    let options = RTCDataChannelInit {
         ordered: Some(ordered),
         max_retransmits: Some(max_retransmits),
         ..Default::default()
@@ -454,7 +455,7 @@ async fn test_data_channel_parameters_max_retransmits_exchange() -> Result<()> {
 
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
     answer_pc
-        .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
+        .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
             // Make sure this is the data channel we were looking for. (Not the one
             // created in signalPair).
             if d.label() != EXPECTED_LABEL {
@@ -484,7 +485,7 @@ async fn test_data_channel_parameters_protocol_exchange() -> Result<()> {
     let api = APIBuilder::new().with_media_engine(m).build();
 
     let protocol = "json".to_owned();
-    let options = DataChannelConfig {
+    let options = RTCDataChannelInit {
         protocol: Some(protocol.clone()),
         ..Default::default()
     };
@@ -501,7 +502,7 @@ async fn test_data_channel_parameters_protocol_exchange() -> Result<()> {
 
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
     answer_pc
-        .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
+        .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
             // Make sure this is the data channel we were looking for. (Not the one
             // created in signalPair).
             if d.label() != EXPECTED_LABEL {
@@ -537,7 +538,7 @@ async fn test_data_channel_parameters_negotiated_exchange() -> Result<()> {
 
     let negotiated = true;
     let id = 500u16;
-    let options = DataChannelConfig {
+    let options = RTCDataChannelInit {
         negotiated: Some(negotiated),
         id: Some(id),
         ..Default::default()
@@ -551,7 +552,7 @@ async fn test_data_channel_parameters_negotiated_exchange() -> Result<()> {
         .await?;
 
     answer_pc
-        .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
+        .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
             // Ignore our default channel, exists to force ICE candidates. See signalPair for more info
             if d.label() == "initial_data_channel" {
                 return Box::pin(async {});
@@ -566,7 +567,7 @@ async fn test_data_channel_parameters_negotiated_exchange() -> Result<()> {
         .await;
 
     offer_pc
-        .on_data_channel(Box::new(move |_d: Arc<DataChannel>| {
+        .on_data_channel(Box::new(move |_d: Arc<RTCDataChannel>| {
             assert!(
                 false,
                 "OnDataChannel must not be fired when negotiated == true"
@@ -609,12 +610,12 @@ async fn test_data_channel_parameters_negotiated_exchange() -> Result<()> {
                 break;
             }
 
-            if offer_datachannel.ready_state() == DataChannelState::Open {
+            if offer_datachannel.ready_state() == RTCDataChannelState::Open {
                 offer_datachannel
                     .send_text(EXPECTED_MESSAGE.to_owned())
                     .await?;
             }
-            if answer_datachannel.ready_state() == DataChannelState::Open {
+            if answer_datachannel.ready_state() == RTCDataChannelState::Open {
                 answer_datachannel
                     .send_text(EXPECTED_MESSAGE.to_owned())
                     .await?;
@@ -638,7 +639,7 @@ async fn test_data_channel_parameters_negotiated_exchange() -> Result<()> {
 async fn test_data_channel_event_handlers() -> Result<()> {
     let api = APIBuilder::new().build();
 
-    let dc = DataChannel {
+    let dc = RTCDataChannel {
         setting_engine: Arc::clone(&api.setting_engine),
         ..Default::default()
     };
@@ -688,7 +689,7 @@ async fn test_data_channel_event_handlers() -> Result<()> {
 async fn test_data_channel_messages_are_ordered() -> Result<()> {
     let api = APIBuilder::new().build();
 
-    let dc = DataChannel {
+    let dc = RTCDataChannel {
         setting_engine: Arc::clone(&api.setting_engine),
         ..Default::default()
     };
@@ -781,7 +782,7 @@ async fn test_data_channel_parameters_go() -> Result<()> {
     {
         let ordered = true;
         let max_packet_life_time = 3u16;
-        let options = DataChannelConfig {
+        let options = RTCDataChannelInit {
             ordered: Some(ordered),
             max_packet_life_time: Some(max_packet_life_time),
             ..Default::default()
@@ -800,7 +801,7 @@ async fn test_data_channel_parameters_go() -> Result<()> {
 
         let done_tx = Arc::new(Mutex::new(Some(done_tx)));
         answer_pc
-            .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
+            .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
                 // Make sure this is the data channel we were looking for. (Not the one
                 // created in signalPair).
                 if d.label() != EXPECTED_LABEL {
@@ -829,7 +830,7 @@ async fn test_data_channel_parameters_go() -> Result<()> {
     //"All other property methods"
     {
         let id = 123u16;
-        let dc = DataChannel {
+        let dc = RTCDataChannel {
             id: AtomicU16::new(id),
             label: "mylabel".to_owned(),
             protocol: "myprotocol".to_owned(),
@@ -887,7 +888,7 @@ async fn test_data_channel_buffered_amount_set_before_open() -> Result<()> {
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
     let n_packets_received = Arc::new(AtomicU16::new(0));
     answer_pc
-        .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
+        .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
             // Make sure this is the data channel we were looking for. (Not the one
             // created in signalPair).
             if d.label() != EXPECTED_LABEL {
@@ -982,7 +983,7 @@ async fn test_data_channel_buffered_amount_set_after_open() -> Result<()> {
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
     let n_packets_received = Arc::new(AtomicU16::new(0));
     answer_pc
-        .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
+        .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
             // Make sure this is the data channel we were looking for. (Not the one
             // created in signalPair).
             if d.label() != EXPECTED_LABEL {
@@ -1070,14 +1071,14 @@ async fn test_eof_detach() -> Result<()> {
     let api = APIBuilder::new().with_setting_engine(s).build();
 
     // Set up two peer connections.
-    let mut pca = api.new_peer_connection(Configuration::default()).await?;
-    let mut pcb = api.new_peer_connection(Configuration::default()).await?;
+    let mut pca = api.new_peer_connection(RTCConfiguration::default()).await?;
+    let mut pcb = api.new_peer_connection(RTCConfiguration::default()).await?;
 
     let wg = WaitGroup::new();
 
     let (dc_chan_tx, mut dc_chan_rx) = mpsc::channel(1);
     let dc_chan_tx = Arc::new(dc_chan_tx);
-    pcb.on_data_channel(Box::new(move |dc: Arc<DataChannel>| {
+    pcb.on_data_channel(Box::new(move |dc: Arc<RTCDataChannel>| {
         if dc.label() != label {
             return Box::pin(async {});
         }
@@ -1181,14 +1182,14 @@ async fn test_eof_no_detach() -> Result<()> {
     let api = APIBuilder::new().build();
 
     // Set up two peer connections.
-    let mut pca = api.new_peer_connection(Configuration::default()).await?;
-    let mut pcb = api.new_peer_connection(Configuration::default()).await?;
+    let mut pca = api.new_peer_connection(RTCConfiguration::default()).await?;
+    let mut pcb = api.new_peer_connection(RTCConfiguration::default()).await?;
 
     let (dca_closed_ch_tx, mut dca_closed_ch_rx) = mpsc::channel::<()>(1);
     let (dcb_closed_ch_tx, mut dcb_closed_ch_rx) = mpsc::channel::<()>(1);
 
     let dcb_closed_ch_tx = Arc::new(dcb_closed_ch_tx);
-    pcb.on_data_channel(Box::new(move |dc: Arc<DataChannel>| {
+    pcb.on_data_channel(Box::new(move |dc: Arc<RTCDataChannel>| {
         if dc.label() != label {
             return Box::pin(async {});
         }
@@ -1289,7 +1290,7 @@ async fn test_data_channel_non_standard_session_description() -> Result<()> {
     let (on_data_channel_called_tx, mut on_data_channel_called_rx) = mpsc::channel::<()>(1);
     let on_data_channel_called_tx = Arc::new(on_data_channel_called_tx);
     answer_pc
-        .on_data_channel(Box::new(move |_: Arc<DataChannel>| {
+        .on_data_channel(Box::new(move |_: Arc<RTCDataChannel>| {
             let on_data_channel_called_tx2 = Arc::clone(&on_data_channel_called_tx);
             Box::pin(async move {
                 let _ = on_data_channel_called_tx2.send(()).await;
@@ -1342,23 +1343,23 @@ async fn test_data_channel_non_standard_session_description() -> Result<()> {
 
 struct TestOrtcStack {
     //api      *API
-    gatherer: Arc<ICEGatherer>,
-    ice: Arc<ICETransport>,
-    dtls: Arc<DTLSTransport>,
-    sctp: Arc<SCTPTransport>,
+    gatherer: Arc<RTCIceGatherer>,
+    ice: Arc<RTCIceTransport>,
+    dtls: Arc<RTCDtlsTransport>,
+    sctp: Arc<RTCSctpTransport>,
 }
 
 struct TestOrtcSignal {
-    ice_candidates: Vec<ICECandidate>, //`json:"iceCandidates"`
-    ice_parameters: ICEParameters,     //`json:"iceParameters"`
-    dtls_parameters: DTLSParameters,   //`json:"dtlsParameters"`
+    ice_candidates: Vec<RTCIceCandidate>, //`json:"iceCandidates"`
+    ice_parameters: RTCIceParameters,     //`json:"iceParameters"`
+    dtls_parameters: DTLSParameters,      //`json:"dtlsParameters"`
     sctp_capabilities: SCTPTransportCapabilities, //`json:"sctpCapabilities"`
 }
 
 impl TestOrtcStack {
     async fn new(api: &API) -> Result<Self> {
         // Create the ICE gatherer
-        let gatherer = Arc::new(api.new_ice_gatherer(ICEGatherOptions::default())?);
+        let gatherer = Arc::new(api.new_ice_gatherer(RTCIceGatherOptions::default())?);
 
         // Construct the ICE transport
         let ice = Arc::new(api.new_ice_transport(Arc::clone(&gatherer)));
@@ -1379,9 +1380,9 @@ impl TestOrtcStack {
 
     async fn set_signal(&self, sig: &TestOrtcSignal, is_offer: bool) -> Result<()> {
         let ice_role = if is_offer {
-            ICERole::Controlling
+            RTCIceRole::Controlling
         } else {
-            ICERole::Controlled
+            RTCIceRole::Controlled
         };
 
         self.ice.set_remote_candidates(&sig.ice_candidates).await?;
@@ -1402,7 +1403,7 @@ impl TestOrtcStack {
         let (gather_finished_tx, mut gather_finished_rx) = mpsc::channel::<()>(1);
         let gather_finished_tx = Arc::new(gather_finished_tx);
         self.gatherer
-            .on_local_candidate(Box::new(move |i: Option<ICECandidate>| {
+            .on_local_candidate(Box::new(move |i: Option<RTCIceCandidate>| {
                 let gather_finished_tx2 = Arc::clone(&gather_finished_tx);
                 Box::pin(async move {
                     if i.is_none() {
@@ -1497,7 +1498,7 @@ async fn test_data_channel_ortc_e2e() -> Result<()> {
     let await_binary_tx = Arc::new(await_binary_tx);
     stack_b
         .sctp
-        .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
+        .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
             let await_setup_tx2 = Arc::clone(&await_setup_tx);
             let await_string_tx2 = Arc::clone(&await_string_tx);
             let await_binary_tx2 = Arc::clone(&await_binary_tx);

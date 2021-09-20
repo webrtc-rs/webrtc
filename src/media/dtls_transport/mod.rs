@@ -1,43 +1,44 @@
-#[cfg(test)]
-mod dtls_transport_test;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::Arc;
 
-pub mod dtls_certificate;
-pub mod dtls_fingerprint;
-pub mod dtls_parameters;
-pub mod dtls_role;
-pub mod dtls_transport_state;
+use anyhow::Result;
+use bytes::Bytes;
+use dtls::config::ClientAuthType;
+use dtls::conn::DTLSConn;
+use sha2::{Digest, Sha256};
+use srtp::protection_profile::ProtectionProfile;
+use srtp::session::Session;
+use srtp::stream::Stream;
+use tokio::sync::{mpsc, Mutex};
+use util::Conn;
+
+use dtls_role::*;
 
 use crate::api::setting_engine::SettingEngine;
 use crate::default_srtp_protection_profiles;
 use crate::error::Error;
 use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
-use crate::media::dtls_transport::dtls_transport_state::DTLSTransportState;
-use crate::media::ice_transport::ice_transport_state::ICETransportState;
-use crate::media::ice_transport::ICETransport;
-use crate::peer::ice::ice_role::ICERole;
+use crate::media::dtls_transport::dtls_transport_state::RTCDtlsTransportState;
+use crate::media::ice_transport::ice_role::RTCIceRole;
+use crate::media::ice_transport::ice_transport_state::RTCIceTransportState;
+use crate::media::ice_transport::RTCIceTransport;
+use crate::peer::certificate::RTCCertificate;
 use crate::util::flatten_errs;
 use crate::util::mux::endpoint::Endpoint;
 use crate::util::mux::mux_func::{match_dtls, match_srtcp, match_srtp, MatchFunc};
 
-use crate::media::dtls_transport::dtls_certificate::Certificate;
-use anyhow::Result;
-use bytes::Bytes;
-use dtls::config::ClientAuthType;
-use dtls::conn::DTLSConn;
-use dtls_role::*;
-use sha2::{Digest, Sha256};
-use srtp::protection_profile::ProtectionProfile;
-use srtp::session::Session;
-use srtp::stream::Stream;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
-use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
-use util::Conn;
+#[cfg(test)]
+mod dtls_transport_test;
+
+pub mod dtls_fingerprint;
+pub mod dtls_parameters;
+pub mod dtls_role;
+pub mod dtls_transport_state;
 
 pub type OnDTLSTransportStateChangeHdlrFn = Box<
-    dyn (FnMut(DTLSTransportState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+    dyn (FnMut(RTCDtlsTransportState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
@@ -47,9 +48,9 @@ pub type OnDTLSTransportStateChangeHdlrFn = Box<
 /// RTPSender and RTPReceiver, as well other data such as SCTP packets sent
 /// and received by data channels.
 #[derive(Default)]
-pub struct DTLSTransport {
-    pub(crate) ice_transport: Arc<ICETransport>,
-    pub(crate) certificates: Vec<Certificate>,
+pub struct RTCDtlsTransport {
+    pub(crate) ice_transport: Arc<RTCIceTransport>,
+    pub(crate) certificates: Vec<RTCCertificate>,
     pub(crate) setting_engine: Arc<SettingEngine>,
 
     pub(crate) remote_parameters: Mutex<DTLSParameters>,
@@ -73,21 +74,21 @@ pub struct DTLSTransport {
     pub(crate) dtls_matcher: Option<MatchFunc>,
 }
 
-impl DTLSTransport {
+impl RTCDtlsTransport {
     pub(crate) fn new(
-        ice_transport: Arc<ICETransport>,
-        certificates: Vec<Certificate>,
+        ice_transport: Arc<RTCIceTransport>,
+        certificates: Vec<RTCCertificate>,
         setting_engine: Arc<SettingEngine>,
     ) -> Self {
         let (srtp_ready_tx, srtp_ready_rx) = mpsc::channel(1);
-        DTLSTransport {
+        RTCDtlsTransport {
             ice_transport,
             certificates,
             setting_engine,
             srtp_ready_signal: Arc::new(AtomicBool::new(false)),
             srtp_ready_tx: Mutex::new(Some(srtp_ready_tx)),
             srtp_ready_rx: Mutex::new(Some(srtp_ready_rx)),
-            state: AtomicU8::new(DTLSTransportState::New as u8),
+            state: AtomicU8::new(RTCDtlsTransportState::New as u8),
             dtls_matcher: Some(Box::new(match_dtls)),
             ..Default::default()
         }
@@ -100,12 +101,12 @@ impl DTLSTransport {
 
     /// returns the currently-configured ICETransport or None
     /// if one has not been configured
-    pub fn ice_transport(&self) -> &ICETransport {
+    pub fn ice_transport(&self) -> &RTCIceTransport {
         &self.ice_transport
     }
 
     /// state_change requires the caller holds the lock
-    async fn state_change(&self, state: DTLSTransportState) {
+    async fn state_change(&self, state: RTCDtlsTransportState) {
         self.state.store(state as u8, Ordering::SeqCst);
         let mut handler = self.on_state_change_handler.lock().await;
         if let Some(f) = &mut *handler {
@@ -121,7 +122,7 @@ impl DTLSTransport {
     }
 
     /// state returns the current dtls_transport transport state.
-    pub fn state(&self) -> DTLSTransportState {
+    pub fn state(&self) -> RTCDtlsTransportState {
         self.state.load(Ordering::SeqCst).into()
     }
 
@@ -287,7 +288,7 @@ impl DTLSTransport {
         };
 
         // Remote was auto and no explicit role was configured via SettingEngine
-        if self.ice_transport.role().await == ICERole::Controlling {
+        if self.ice_transport.role().await == RTCIceRole::Controlling {
             return DTLSRole::Server;
         }
 
@@ -300,7 +301,7 @@ impl DTLSTransport {
     ) -> Result<(DTLSRole, dtls::config::Config)> {
         self.ensure_ice_conn()?;
 
-        if self.state() != DTLSTransportState::New {
+        if self.state() != RTCDtlsTransportState::New {
             return Err(Error::ErrInvalidDTLSStart.into());
         }
 
@@ -322,7 +323,7 @@ impl DTLSTransport {
         } else {
             return Err(Error::ErrNonCertificate.into());
         };
-        self.state_change(DTLSTransportState::Connecting).await;
+        self.state_change(RTCDtlsTransportState::Connecting).await;
 
         Ok((
             self.role().await,
@@ -380,7 +381,7 @@ impl DTLSTransport {
         let dtls_conn = match dtls_conn_result {
             Ok(dtls_conn) => dtls_conn,
             Err(err) => {
-                self.state_change(DTLSTransportState::Failed).await;
+                self.state_change(RTCDtlsTransportState::Failed).await;
                 return Err(err);
             }
         };
@@ -396,7 +397,7 @@ impl DTLSTransport {
                     srtp::protection_profile::ProtectionProfile::Aes128CmHmacSha1_80
                 }
                 _ => {
-                    self.state_change(DTLSTransportState::Failed).await;
+                    self.state_change(RTCDtlsTransportState::Failed).await;
                     return Err(Error::ErrNoSRTPProtectionProfile.into());
                 }
             };
@@ -412,7 +413,7 @@ impl DTLSTransport {
         // Check the fingerprint if a certificate was exchanged
         let remote_certs = &dtls_conn.connection_state().await.peer_certificates;
         if remote_certs.is_empty() {
-            self.state_change(DTLSTransportState::Failed).await;
+            self.state_change(RTCDtlsTransportState::Failed).await;
             return Err(Error::ErrNoRemoteCertificate.into());
         }
 
@@ -426,7 +427,7 @@ impl DTLSTransport {
                 log::error!("{}", err);
             }
 
-            self.state_change(DTLSTransportState::Failed).await;
+            self.state_change(RTCDtlsTransportState::Failed).await;
             return Err(err);
         }
 
@@ -434,7 +435,7 @@ impl DTLSTransport {
             let mut conn = self.conn.lock().await;
             *conn = Some(Arc::new(dtls_conn));
         }
-        self.state_change(DTLSTransportState::Connected).await;
+        self.state_change(RTCDtlsTransportState::Connected).await;
 
         self.start_srtp().await
     }
@@ -491,7 +492,7 @@ impl DTLSTransport {
             }
         }
 
-        self.state_change(DTLSTransportState::Closed).await;
+        self.state_change(RTCDtlsTransportState::Closed).await;
 
         flatten_errs(close_errs)
     }
@@ -518,7 +519,7 @@ impl DTLSTransport {
     }
 
     pub(crate) fn ensure_ice_conn(&self) -> Result<()> {
-        if self.ice_transport.state() == ICETransportState::New {
+        if self.ice_transport.state() == RTCIceTransportState::New {
             Err(Error::ErrICEConnectionNotStarted.into())
         } else {
             Ok(())

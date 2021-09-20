@@ -4,7 +4,7 @@ use std::fmt;
 
 /// ICECandidateType represents the type of the ICE candidate used.
 #[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
-pub enum ICECandidateType {
+pub enum RTCIceCandidateType {
     Unspecified,
 
     /// ICECandidateTypeHost indicates that the candidate is of Host type as
@@ -38,9 +38,9 @@ pub enum ICECandidateType {
     Relay,
 }
 
-impl Default for ICECandidateType {
+impl Default for RTCIceCandidateType {
     fn default() -> Self {
-        ICECandidateType::Unspecified
+        RTCIceCandidateType::Unspecified
     }
 }
 
@@ -50,37 +50,37 @@ const ICE_CANDIDATE_TYPE_PRFLX_STR: &str = "prflx";
 const ICE_CANDIDATE_TYPE_RELAY_STR: &str = "relay";
 
 ///  takes a string and converts it into ICECandidateType
-impl From<&str> for ICECandidateType {
+impl From<&str> for RTCIceCandidateType {
     fn from(raw: &str) -> Self {
         match raw {
-            ICE_CANDIDATE_TYPE_HOST_STR => ICECandidateType::Host,
-            ICE_CANDIDATE_TYPE_SRFLX_STR => ICECandidateType::Srflx,
-            ICE_CANDIDATE_TYPE_PRFLX_STR => ICECandidateType::Prflx,
-            ICE_CANDIDATE_TYPE_RELAY_STR => ICECandidateType::Relay,
-            _ => ICECandidateType::Unspecified,
+            ICE_CANDIDATE_TYPE_HOST_STR => RTCIceCandidateType::Host,
+            ICE_CANDIDATE_TYPE_SRFLX_STR => RTCIceCandidateType::Srflx,
+            ICE_CANDIDATE_TYPE_PRFLX_STR => RTCIceCandidateType::Prflx,
+            ICE_CANDIDATE_TYPE_RELAY_STR => RTCIceCandidateType::Relay,
+            _ => RTCIceCandidateType::Unspecified,
         }
     }
 }
 
-impl From<CandidateType> for ICECandidateType {
+impl From<CandidateType> for RTCIceCandidateType {
     fn from(candidate_type: CandidateType) -> Self {
         match candidate_type {
-            CandidateType::Host => ICECandidateType::Host,
-            CandidateType::ServerReflexive => ICECandidateType::Srflx,
-            CandidateType::PeerReflexive => ICECandidateType::Prflx,
-            CandidateType::Relay => ICECandidateType::Relay,
-            _ => ICECandidateType::Unspecified,
+            CandidateType::Host => RTCIceCandidateType::Host,
+            CandidateType::ServerReflexive => RTCIceCandidateType::Srflx,
+            CandidateType::PeerReflexive => RTCIceCandidateType::Prflx,
+            CandidateType::Relay => RTCIceCandidateType::Relay,
+            _ => RTCIceCandidateType::Unspecified,
         }
     }
 }
 
-impl fmt::Display for ICECandidateType {
+impl fmt::Display for RTCIceCandidateType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            ICECandidateType::Host => write!(f, "{}", ICE_CANDIDATE_TYPE_HOST_STR),
-            ICECandidateType::Srflx => write!(f, "{}", ICE_CANDIDATE_TYPE_SRFLX_STR),
-            ICECandidateType::Prflx => write!(f, "{}", ICE_CANDIDATE_TYPE_PRFLX_STR),
-            ICECandidateType::Relay => write!(f, "{}", ICE_CANDIDATE_TYPE_RELAY_STR),
+            RTCIceCandidateType::Host => write!(f, "{}", ICE_CANDIDATE_TYPE_HOST_STR),
+            RTCIceCandidateType::Srflx => write!(f, "{}", ICE_CANDIDATE_TYPE_SRFLX_STR),
+            RTCIceCandidateType::Prflx => write!(f, "{}", ICE_CANDIDATE_TYPE_PRFLX_STR),
+            RTCIceCandidateType::Relay => write!(f, "{}", ICE_CANDIDATE_TYPE_RELAY_STR),
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }
     }
@@ -93,15 +93,15 @@ mod test {
     #[test]
     fn test_ice_candidate_type() {
         let tests = vec![
-            ("Unspecified", ICECandidateType::Unspecified),
-            ("host", ICECandidateType::Host),
-            ("srflx", ICECandidateType::Srflx),
-            ("prflx", ICECandidateType::Prflx),
-            ("relay", ICECandidateType::Relay),
+            ("Unspecified", RTCIceCandidateType::Unspecified),
+            ("host", RTCIceCandidateType::Host),
+            ("srflx", RTCIceCandidateType::Srflx),
+            ("prflx", RTCIceCandidateType::Prflx),
+            ("relay", RTCIceCandidateType::Relay),
         ];
 
         for (type_string, expected_type) in tests {
-            let actual = ICECandidateType::from(type_string);
+            let actual = RTCIceCandidateType::from(type_string);
             assert_eq!(expected_type, actual);
         }
     }
@@ -109,11 +109,11 @@ mod test {
     #[test]
     fn test_ice_candidate_type_string() {
         let tests = vec![
-            (ICECandidateType::Unspecified, "Unspecified"),
-            (ICECandidateType::Host, "host"),
-            (ICECandidateType::Srflx, "srflx"),
-            (ICECandidateType::Prflx, "prflx"),
-            (ICECandidateType::Relay, "relay"),
+            (RTCIceCandidateType::Unspecified, "Unspecified"),
+            (RTCIceCandidateType::Host, "host"),
+            (RTCIceCandidateType::Srflx, "srflx"),
+            (RTCIceCandidateType::Prflx, "prflx"),
+            (RTCIceCandidateType::Relay, "relay"),
         ];
 
         for (ctype, expected_string) in tests {

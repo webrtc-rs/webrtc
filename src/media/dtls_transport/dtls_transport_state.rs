@@ -2,7 +2,7 @@ use std::fmt;
 
 /// DTLSTransportState indicates the DTLS transport establishment state.
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum DTLSTransportState {
+pub enum RTCDtlsTransportState {
     Unspecified = 0,
 
     /// DTLSTransportStateNew indicates that DTLS has not started negotiating
@@ -28,9 +28,9 @@ pub enum DTLSTransportState {
     Failed = 5,
 }
 
-impl Default for DTLSTransportState {
+impl Default for RTCDtlsTransportState {
     fn default() -> Self {
-        DTLSTransportState::Unspecified
+        RTCDtlsTransportState::Unspecified
     }
 }
 
@@ -40,41 +40,41 @@ const DTLS_TRANSPORT_STATE_CONNECTED_STR: &str = "connected";
 const DTLS_TRANSPORT_STATE_CLOSED_STR: &str = "closed";
 const DTLS_TRANSPORT_STATE_FAILED_STR: &str = "failed";
 
-impl From<&str> for DTLSTransportState {
+impl From<&str> for RTCDtlsTransportState {
     fn from(raw: &str) -> Self {
         match raw {
-            DTLS_TRANSPORT_STATE_NEW_STR => DTLSTransportState::New,
-            DTLS_TRANSPORT_STATE_CONNECTING_STR => DTLSTransportState::Connecting,
-            DTLS_TRANSPORT_STATE_CONNECTED_STR => DTLSTransportState::Connected,
-            DTLS_TRANSPORT_STATE_CLOSED_STR => DTLSTransportState::Closed,
-            DTLS_TRANSPORT_STATE_FAILED_STR => DTLSTransportState::Failed,
-            _ => DTLSTransportState::Unspecified,
+            DTLS_TRANSPORT_STATE_NEW_STR => RTCDtlsTransportState::New,
+            DTLS_TRANSPORT_STATE_CONNECTING_STR => RTCDtlsTransportState::Connecting,
+            DTLS_TRANSPORT_STATE_CONNECTED_STR => RTCDtlsTransportState::Connected,
+            DTLS_TRANSPORT_STATE_CLOSED_STR => RTCDtlsTransportState::Closed,
+            DTLS_TRANSPORT_STATE_FAILED_STR => RTCDtlsTransportState::Failed,
+            _ => RTCDtlsTransportState::Unspecified,
         }
     }
 }
 
-impl From<u8> for DTLSTransportState {
+impl From<u8> for RTCDtlsTransportState {
     fn from(v: u8) -> Self {
         match v {
-            1 => DTLSTransportState::New,
-            2 => DTLSTransportState::Connecting,
-            3 => DTLSTransportState::Connected,
-            4 => DTLSTransportState::Closed,
-            5 => DTLSTransportState::Failed,
-            _ => DTLSTransportState::Unspecified,
+            1 => RTCDtlsTransportState::New,
+            2 => RTCDtlsTransportState::Connecting,
+            3 => RTCDtlsTransportState::Connected,
+            4 => RTCDtlsTransportState::Closed,
+            5 => RTCDtlsTransportState::Failed,
+            _ => RTCDtlsTransportState::Unspecified,
         }
     }
 }
 
-impl fmt::Display for DTLSTransportState {
+impl fmt::Display for RTCDtlsTransportState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
-            DTLSTransportState::New => DTLS_TRANSPORT_STATE_NEW_STR,
-            DTLSTransportState::Connecting => DTLS_TRANSPORT_STATE_CONNECTING_STR,
-            DTLSTransportState::Connected => DTLS_TRANSPORT_STATE_CONNECTED_STR,
-            DTLSTransportState::Closed => DTLS_TRANSPORT_STATE_CLOSED_STR,
-            DTLSTransportState::Failed => DTLS_TRANSPORT_STATE_FAILED_STR,
-            DTLSTransportState::Unspecified => crate::UNSPECIFIED_STR,
+            RTCDtlsTransportState::New => DTLS_TRANSPORT_STATE_NEW_STR,
+            RTCDtlsTransportState::Connecting => DTLS_TRANSPORT_STATE_CONNECTING_STR,
+            RTCDtlsTransportState::Connected => DTLS_TRANSPORT_STATE_CONNECTED_STR,
+            RTCDtlsTransportState::Closed => DTLS_TRANSPORT_STATE_CLOSED_STR,
+            RTCDtlsTransportState::Failed => DTLS_TRANSPORT_STATE_FAILED_STR,
+            RTCDtlsTransportState::Unspecified => crate::UNSPECIFIED_STR,
         };
         write!(f, "{}", s)
     }
@@ -87,18 +87,18 @@ mod test {
     #[test]
     fn test_new_dtls_transport_state() {
         let tests = vec![
-            (crate::UNSPECIFIED_STR, DTLSTransportState::Unspecified),
-            ("new", DTLSTransportState::New),
-            ("connecting", DTLSTransportState::Connecting),
-            ("connected", DTLSTransportState::Connected),
-            ("closed", DTLSTransportState::Closed),
-            ("failed", DTLSTransportState::Failed),
+            (crate::UNSPECIFIED_STR, RTCDtlsTransportState::Unspecified),
+            ("new", RTCDtlsTransportState::New),
+            ("connecting", RTCDtlsTransportState::Connecting),
+            ("connected", RTCDtlsTransportState::Connected),
+            ("closed", RTCDtlsTransportState::Closed),
+            ("failed", RTCDtlsTransportState::Failed),
         ];
 
         for (state_string, expected_state) in tests {
             assert_eq!(
                 expected_state,
-                DTLSTransportState::from(state_string),
+                RTCDtlsTransportState::from(state_string),
                 "testCase: {}",
                 expected_state,
             );
@@ -108,12 +108,12 @@ mod test {
     #[test]
     fn test_dtls_transport_state_string() {
         let tests = vec![
-            (DTLSTransportState::Unspecified, crate::UNSPECIFIED_STR),
-            (DTLSTransportState::New, "new"),
-            (DTLSTransportState::Connecting, "connecting"),
-            (DTLSTransportState::Connected, "connected"),
-            (DTLSTransportState::Closed, "closed"),
-            (DTLSTransportState::Failed, "failed"),
+            (RTCDtlsTransportState::Unspecified, crate::UNSPECIFIED_STR),
+            (RTCDtlsTransportState::New, "new"),
+            (RTCDtlsTransportState::Connecting, "connecting"),
+            (RTCDtlsTransportState::Connected, "connected"),
+            (RTCDtlsTransportState::Closed, "closed"),
+            (RTCDtlsTransportState::Failed, "failed"),
         ];
 
         for (state, expected_string) in tests {

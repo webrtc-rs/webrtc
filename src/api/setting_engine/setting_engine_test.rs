@@ -87,12 +87,12 @@ fn test_set_nat_1to1_ips() -> Result<()> {
         "Invalid default value"
     );
     assert!(
-        s.candidates.nat_1to1_ip_candidate_type == ICECandidateType::Unspecified,
+        s.candidates.nat_1to1_ip_candidate_type == RTCIceCandidateType::Unspecified,
         "Invalid default value"
     );
 
     let ips = vec!["1.2.3.4".to_owned()];
-    let typ = ICECandidateType::Host;
+    let typ = RTCIceCandidateType::Host;
     s.set_nat_1to1_ips(ips, typ);
     assert!(
         !(s.candidates.nat_1to1_ips.len() != 1 || s.candidates.nat_1to1_ips[0] != "1.2.3.4"),

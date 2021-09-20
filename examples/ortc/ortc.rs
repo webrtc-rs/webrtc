@@ -6,14 +6,14 @@ use tokio::time::Duration;
 use webrtc::api::APIBuilder;
 use webrtc::data::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::data::data_channel::data_channel_parameters::DataChannelParameters;
-use webrtc::data::data_channel::DataChannel;
+use webrtc::data::data_channel::RTCDataChannel;
 use webrtc::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use webrtc::media::dtls_transport::dtls_parameters::DTLSParameters;
-use webrtc::peer::ice::ice_candidate::ICECandidate;
-use webrtc::peer::ice::ice_gather::ICEGatherOptions;
-use webrtc::peer::ice::ice_role::ICERole;
-use webrtc::peer::ice::ice_server::ICEServer;
-use webrtc::peer::ice::ICEParameters;
+use webrtc::media::ice_transport::ice_parameters::RTCIceParameters;
+use webrtc::media::ice_transport::ice_role::RTCIceRole;
+use webrtc::peer::ice::ice_candidate::RTCIceCandidate;
+use webrtc::peer::ice::ice_gather::RTCIceGatherOptions;
+use webrtc::peer::ice::ice_server::RTCIceServer;
 use webrtc::util::math_rand_alpha;
 
 //use std::io::Write;
@@ -64,8 +64,8 @@ async fn main() -> Result<()> {
     // Everything below is the Pion WebRTC (ORTC) API! Thanks for using it ❤️.
 
     // Prepare ICE gathering options
-    let ice_options = ICEGatherOptions {
-        ice_servers: vec![ICEServer {
+    let ice_options = RTCIceGatherOptions {
+        ice_servers: vec![RTCIceServer {
             urls: vec!["stun:stun.l.google.com:19302".to_owned()],
             ..Default::default()
         }],
@@ -88,7 +88,7 @@ async fn main() -> Result<()> {
     let sctp = Arc::new(api.new_sctp_transport(Arc::clone(&dtls))?);
 
     // Handle incoming data channels
-    sctp.on_data_channel(Box::new(|d: Arc<DataChannel>| {
+    sctp.on_data_channel(Box::new(|d: Arc<RTCDataChannel>| {
         let d_label = d.label().to_owned();
         let d_id = d.id();
         println!("New DataChannel {} {}", d_label, d_id);
@@ -118,7 +118,7 @@ async fn main() -> Result<()> {
     let (gather_finished_tx, mut gather_finished_rx) = tokio::sync::mpsc::channel::<()>(1);
     let mut gather_finished_tx = Some(gather_finished_tx);
     gatherer
-        .on_local_candidate(Box::new(move |c: Option<ICECandidate>| {
+        .on_local_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
             if c.is_none() {
                 gather_finished_tx.take();
             }
@@ -156,9 +156,9 @@ async fn main() -> Result<()> {
     let remote_signal = serde_json::from_str::<Signal>(&json_str)?;
 
     let ice_role = if is_offer {
-        ICERole::Controlling
+        RTCIceRole::Controlling
     } else {
-        ICERole::Controlled
+        RTCIceRole::Controlled
     };
 
     ice.set_remote_candidates(&remote_signal.ice_candidates)
@@ -215,10 +215,10 @@ async fn main() -> Result<()> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Signal {
     #[serde(rename = "iceCandidates")]
-    ice_candidates: Vec<ICECandidate>, //   `json:"iceCandidates"`
+    ice_candidates: Vec<RTCIceCandidate>, //   `json:"iceCandidates"`
 
     #[serde(rename = "iceParameters")]
-    ice_parameters: ICEParameters, //    `json:"iceParameters"`
+    ice_parameters: RTCIceParameters, //    `json:"iceParameters"`
 
     #[serde(rename = "dtlsParameters")]
     dtls_parameters: DTLSParameters, //   `json:"dtlsParameters"`
@@ -227,7 +227,7 @@ struct Signal {
     sctp_capabilities: SCTPTransportCapabilities, // `json:"sctpCapabilities"`
 }
 
-async fn handle_on_open(d: Arc<DataChannel>) -> Result<()> {
+async fn handle_on_open(d: Arc<RTCDataChannel>) -> Result<()> {
     let mut result = Result::<usize>::Ok(0);
     while result.is_ok() {
         let timeout = tokio::time::sleep(Duration::from_secs(5));

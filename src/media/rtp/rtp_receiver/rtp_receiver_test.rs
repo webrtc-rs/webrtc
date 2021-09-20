@@ -1,6 +1,6 @@
 use super::*;
 use crate::api::media_engine::MIME_TYPE_OPUS;
-use crate::media::rtp::rtp_codec::RTPHeaderExtensionParameter;
+use crate::media::rtp::rtp_codec::RTCRtpHeaderExtensionParameters;
 use crate::media::rtp::RTCPFeedback;
 use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::media::track::track_local::TrackLocal;
@@ -8,15 +8,15 @@ use crate::media::Sample;
 use crate::peer::peer_connection::peer_connection_test::{
     close_pair_now, create_vnet_pair, signal_pair, until_connection_state,
 };
-use crate::peer::peer_connection_state::PeerConnectionState;
+use crate::peer::peer_connection_state::RTCPeerConnectionState;
 use bytes::Bytes;
 use tokio::time::Duration;
 use waitgroup::WaitGroup;
 
 lazy_static! {
-    static ref P: RTPParameters = RTPParameters {
-        codecs: vec![RTPCodecParameters {
-            capability: RTPCodecCapability {
+    static ref P: RTCRtpParameters = RTCRtpParameters {
+        codecs: vec![RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
                 mime_type: MIME_TYPE_OPUS.to_string(),
                 clock_rate: 48000,
                 channels: 2,
@@ -30,15 +30,15 @@ lazy_static! {
             ..Default::default()
         }],
         header_extensions: vec![
-            RTPHeaderExtensionParameter {
+            RTCRtpHeaderExtensionParameters {
                 uri: "urn:ietf:params:rtp-hdrext:sdes:mid".to_owned(),
                 ..Default::default()
             },
-            RTPHeaderExtensionParameter {
+            RTCRtpHeaderExtensionParameters {
                 uri: "urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id".to_owned(),
                 ..Default::default()
             },
-            RTPHeaderExtensionParameter {
+            RTCRtpHeaderExtensionParameters {
                 uri: "urn:ietf:params:rtp-hdrext:sdes:repaired-rtp-stream-id".to_owned(),
                 ..Default::default()
             },
@@ -69,7 +69,7 @@ async fn test_set_rtp_parameters() -> Result<()> {
     let (mut sender, mut receiver, wan) = create_vnet_pair().await?;
 
     let outgoing_track: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
-        RTPCodecCapability {
+        RTCRtpCodecCapability {
             mime_type: "video/vp8".to_owned(),
             ..Default::default()
         },
@@ -86,7 +86,7 @@ async fn test_set_rtp_parameters() -> Result<()> {
     let seen_packet_tx = Arc::new(Mutex::new(Some(seen_packet_tx)));
     receiver
         .on_track(Box::new(
-            move |_: Option<Arc<TrackRemote>>, receiver: Option<Arc<RTPReceiver>>| {
+            move |_: Option<Arc<TrackRemote>>, receiver: Option<Arc<RTCRtpReceiver>>| {
                 let seen_packet_tx2 = Arc::clone(&seen_packet_tx);
                 Box::pin(async move {
                     if let Some(r) = &receiver {
@@ -134,8 +134,8 @@ async fn test_set_rtp_parameters() -> Result<()> {
 
     let wg = WaitGroup::new();
 
-    until_connection_state(&mut sender, &wg, PeerConnectionState::Connected).await;
-    until_connection_state(&mut receiver, &wg, PeerConnectionState::Connected).await;
+    until_connection_state(&mut sender, &wg, RTCPeerConnectionState::Connected).await;
+    until_connection_state(&mut receiver, &wg, RTCPeerConnectionState::Connected).await;
 
     signal_pair(&mut sender, &mut receiver).await?;
 
@@ -172,7 +172,7 @@ async fn test_rtp_receiver_set_read_deadline() -> Result<()> {
     let (mut sender, mut receiver, wan) = create_vnet_pair().await?;
 
     let track: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
-        RTPCodecCapability {
+        RTCRtpCodecCapability {
             mime_type: "video/vp8".to_owned(),
             ..Default::default()
         },
@@ -186,7 +186,7 @@ async fn test_rtp_receiver_set_read_deadline() -> Result<()> {
     let seen_packet_tx = Arc::new(Mutex::new(Some(seen_packet_tx)));
     receiver
         .on_track(Box::new(
-            move |track_remote: Option<Arc<TrackRemote>>, receiver: Option<Arc<RTPReceiver>>| {
+            move |track_remote: Option<Arc<TrackRemote>>, receiver: Option<Arc<RTCRtpReceiver>>| {
                 let seen_packet_tx2 = Arc::clone(&seen_packet_tx);
                 Box::pin(async move {
                     // First call will not error because we cache for probing
@@ -219,8 +219,8 @@ async fn test_rtp_receiver_set_read_deadline() -> Result<()> {
         .await;
 
     let wg = WaitGroup::new();
-    until_connection_state(&mut sender, &wg, PeerConnectionState::Connected).await;
-    until_connection_state(&mut receiver, &wg, PeerConnectionState::Connected).await;
+    until_connection_state(&mut sender, &wg, RTCPeerConnectionState::Connected).await;
+    until_connection_state(&mut receiver, &wg, RTCPeerConnectionState::Connected).await;
 
     signal_pair(&mut sender, &mut receiver).await?;
 

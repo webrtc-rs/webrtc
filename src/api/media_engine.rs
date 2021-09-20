@@ -2,11 +2,12 @@
 mod media_engine_test;
 
 use crate::media::rtp::rtp_codec::{
-    codec_parameters_fuzzy_search, CodecMatch, RTPCodecCapability, RTPCodecParameters,
-    RTPCodecType, RTPHeaderExtensionCapability, RTPHeaderExtensionParameter, RTPParameters,
+    codec_parameters_fuzzy_search, CodecMatch, RTCRtpCodecCapability, RTCRtpCodecParameters,
+    RTCRtpHeaderExtensionCapability, RTCRtpHeaderExtensionParameters, RTCRtpParameters,
+    RTPCodecType,
 };
 use crate::media::rtp::rtp_transceiver_direction::{
-    have_rtp_transceiver_direction_intersection, RTPTransceiverDirection,
+    have_rtp_transceiver_direction_intersection, RTCRtpTransceiverDirection,
 };
 
 use crate::error::Error;
@@ -47,7 +48,7 @@ pub(crate) struct MediaEngineHeaderExtension {
     pub(crate) is_audio: bool,
     pub(crate) is_video: bool,
     // If set only Transceivers of this direction are allowed
-    pub(crate) allowed_directions: Vec<RTPTransceiverDirection>,
+    pub(crate) allowed_directions: Vec<RTCRtpTransceiverDirection>,
 }
 
 /// A MediaEngine defines the codecs supported by a PeerConnection, and the
@@ -59,10 +60,10 @@ pub struct MediaEngine {
     pub(crate) negotiated_video: AtomicBool,
     pub(crate) negotiated_audio: AtomicBool,
 
-    pub(crate) video_codecs: Vec<RTPCodecParameters>,
-    pub(crate) audio_codecs: Vec<RTPCodecParameters>,
-    pub(crate) negotiated_video_codecs: Mutex<Vec<RTPCodecParameters>>,
-    pub(crate) negotiated_audio_codecs: Mutex<Vec<RTPCodecParameters>>,
+    pub(crate) video_codecs: Vec<RTCRtpCodecParameters>,
+    pub(crate) audio_codecs: Vec<RTCRtpCodecParameters>,
+    pub(crate) negotiated_video_codecs: Mutex<Vec<RTCRtpCodecParameters>>,
+    pub(crate) negotiated_audio_codecs: Mutex<Vec<RTCRtpCodecParameters>>,
 
     pub(crate) header_extensions: Vec<MediaEngineHeaderExtension>,
     pub(crate) negotiated_header_extensions: Mutex<HashMap<isize, MediaEngineHeaderExtension>>,
@@ -74,8 +75,8 @@ impl MediaEngine {
     pub fn register_default_codecs(&mut self) -> Result<()> {
         // Default Audio Codecs
         for codec in vec![
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_OPUS.to_owned(),
                     clock_rate: 48000,
                     channels: 2,
@@ -85,8 +86,8 @@ impl MediaEngine {
                 payload_type: 111,
                 ..Default::default()
             },
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_G722.to_owned(),
                     clock_rate: 8000,
                     channels: 0,
@@ -96,8 +97,8 @@ impl MediaEngine {
                 payload_type: 9,
                 ..Default::default()
             },
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_PCMU.to_owned(),
                     clock_rate: 8000,
                     channels: 0,
@@ -107,8 +108,8 @@ impl MediaEngine {
                 payload_type: 0,
                 ..Default::default()
             },
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_PCMA.to_owned(),
                     clock_rate: 8000,
                     channels: 0,
@@ -141,8 +142,8 @@ impl MediaEngine {
             },
         ];
         for codec in vec![
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_VP8.to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -152,8 +153,8 @@ impl MediaEngine {
                 payload_type: 96,
                 ..Default::default()
             },
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: "video/rtx".to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -163,8 +164,8 @@ impl MediaEngine {
                 payload_type: 97,
                 ..Default::default()
             },
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_VP9.to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -174,8 +175,8 @@ impl MediaEngine {
                 payload_type: 98,
                 ..Default::default()
             },
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: "video/rtx".to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -185,8 +186,8 @@ impl MediaEngine {
                 payload_type: 99,
                 ..Default::default()
             },
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_VP9.to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -196,8 +197,8 @@ impl MediaEngine {
                 payload_type: 100,
                 ..Default::default()
             },
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: "video/rtx".to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -207,8 +208,8 @@ impl MediaEngine {
                 payload_type: 101,
                 ..Default::default()
             },
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_H264.to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -220,8 +221,8 @@ impl MediaEngine {
                 payload_type: 102,
                 ..Default::default()
             },
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: "video/rtx".to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -231,8 +232,8 @@ impl MediaEngine {
                 payload_type: 121,
                 ..Default::default()
             },
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_H264.to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -244,8 +245,8 @@ impl MediaEngine {
                 payload_type: 127,
                 ..Default::default()
             },
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: "video/rtx".to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -255,8 +256,8 @@ impl MediaEngine {
                 payload_type: 120,
                 ..Default::default()
             },
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_H264.to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -268,8 +269,8 @@ impl MediaEngine {
                 payload_type: 125,
                 ..Default::default()
             },
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: "video/rtx".to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -279,8 +280,8 @@ impl MediaEngine {
                 payload_type: 107,
                 ..Default::default()
             },
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_H264.to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -292,8 +293,8 @@ impl MediaEngine {
                 payload_type: 108,
                 ..Default::default()
             },
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: "video/rtx".to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -303,8 +304,8 @@ impl MediaEngine {
                 payload_type: 109,
                 ..Default::default()
             },
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_H264.to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -316,8 +317,8 @@ impl MediaEngine {
                 payload_type: 127,
                 ..Default::default()
             },
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: "video/rtx".to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -327,8 +328,8 @@ impl MediaEngine {
                 payload_type: 120,
                 ..Default::default()
             },
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_H264.to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -340,8 +341,8 @@ impl MediaEngine {
                 payload_type: 123,
                 ..Default::default()
             },
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: "video/rtx".to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -351,8 +352,8 @@ impl MediaEngine {
                 payload_type: 118,
                 ..Default::default()
             },
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: "video/ulpfec".to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -370,7 +371,7 @@ impl MediaEngine {
     }
 
     /// add_codec will append codec if it not exists
-    fn add_codec(codecs: &mut Vec<RTPCodecParameters>, codec: RTPCodecParameters) {
+    fn add_codec(codecs: &mut Vec<RTCRtpCodecParameters>, codec: RTCRtpCodecParameters) {
         for c in codecs.iter() {
             if c.capability.mime_type == codec.capability.mime_type
                 && c.payload_type == codec.payload_type
@@ -386,7 +387,7 @@ impl MediaEngine {
     /// register_codec is not safe for concurrent use.
     pub fn register_codec(
         &mut self,
-        mut codec: RTPCodecParameters,
+        mut codec: RTCRtpCodecParameters,
         typ: RTPCodecType,
     ) -> Result<()> {
         codec.stats_id = format!(
@@ -410,20 +411,20 @@ impl MediaEngine {
     /// To determine the negotiated value use `GetHeaderExtensionID` after signaling is complete
     pub async fn register_header_extension(
         &mut self,
-        extension: RTPHeaderExtensionCapability,
+        extension: RTCRtpHeaderExtensionCapability,
         typ: RTPCodecType,
-        mut allowed_directions: Vec<RTPTransceiverDirection>,
+        mut allowed_directions: Vec<RTCRtpTransceiverDirection>,
     ) -> Result<()> {
         if allowed_directions.is_empty() {
             allowed_directions = vec![
-                RTPTransceiverDirection::Recvonly,
-                RTPTransceiverDirection::Sendonly,
+                RTCRtpTransceiverDirection::Recvonly,
+                RTCRtpTransceiverDirection::Sendonly,
             ];
         }
 
         for direction in &allowed_directions {
-            if *direction != RTPTransceiverDirection::Recvonly
-                && *direction != RTPTransceiverDirection::Sendonly
+            if *direction != RTCRtpTransceiverDirection::Recvonly
+                && *direction != RTCRtpTransceiverDirection::Sendonly
             {
                 return Err(Error::ErrRegisterHeaderExtensionInvalidDirection.into());
             }
@@ -477,7 +478,7 @@ impl MediaEngine {
     /// If the Header Extension isn't enabled ok will be false
     pub(crate) async fn get_header_extension_id(
         &self,
-        extension: RTPHeaderExtensionCapability,
+        extension: RTCRtpHeaderExtensionCapability,
     ) -> (isize, bool, bool) {
         let negotiated_header_extensions = self.negotiated_header_extensions.lock().await;
         if negotiated_header_extensions.is_empty() {
@@ -507,7 +508,7 @@ impl MediaEngine {
     pub(crate) async fn get_codec_by_payload(
         &self,
         payload_type: PayloadType,
-    ) -> Result<(RTPCodecParameters, RTPCodecType)> {
+    ) -> Result<(RTCRtpCodecParameters, RTPCodecType)> {
         {
             let negotiated_video_codecs = self.negotiated_video_codecs.lock().await;
             for codec in &*negotiated_video_codecs {
@@ -556,10 +557,10 @@ impl MediaEngine {
     /// Look up a codec and enable if it exists
     pub(crate) fn match_remote_codec(
         &self,
-        remote_codec: &RTPCodecParameters,
+        remote_codec: &RTCRtpCodecParameters,
         typ: RTPCodecType,
-        exact_matches: &[RTPCodecParameters],
-        partial_matches: &[RTPCodecParameters],
+        exact_matches: &[RTCRtpCodecParameters],
+        partial_matches: &[RTCRtpCodecParameters],
     ) -> Result<CodecMatch> {
         let codecs = if typ == RTPCodecType::Audio {
             &self.audio_codecs
@@ -635,7 +636,7 @@ impl MediaEngine {
         Ok(())
     }
 
-    pub(crate) async fn push_codecs(&self, codecs: Vec<RTPCodecParameters>, typ: RTPCodecType) {
+    pub(crate) async fn push_codecs(&self, codecs: Vec<RTCRtpCodecParameters>, typ: RTPCodecType) {
         for codec in codecs {
             if typ == RTPCodecType::Audio {
                 let mut negotiated_audio_codecs = self.negotiated_audio_codecs.lock().await;
@@ -703,7 +704,7 @@ impl MediaEngine {
         Ok(())
     }
 
-    pub(crate) async fn get_codecs_by_kind(&self, typ: RTPCodecType) -> Vec<RTPCodecParameters> {
+    pub(crate) async fn get_codecs_by_kind(&self, typ: RTPCodecType) -> Vec<RTCRtpCodecParameters> {
         if typ == RTPCodecType::Video {
             if self.negotiated_video.load(Ordering::SeqCst) {
                 let negotiated_video_codecs = self.negotiated_video_codecs.lock().await;
@@ -726,8 +727,8 @@ impl MediaEngine {
     pub(crate) async fn get_rtp_parameters_by_kind(
         &self,
         typ: RTPCodecType,
-        directions: &[RTPTransceiverDirection],
-    ) -> RTPParameters {
+        directions: &[RTCRtpTransceiverDirection],
+    ) -> RTCRtpParameters {
         let mut header_extensions = vec![];
 
         if self.negotiated_video.load(Ordering::SeqCst) && typ == RTPCodecType::Video
@@ -739,7 +740,7 @@ impl MediaEngine {
                     && (e.is_audio && typ == RTPCodecType::Audio
                         || e.is_video && typ == RTPCodecType::Video)
                 {
-                    header_extensions.push(RTPHeaderExtensionParameter {
+                    header_extensions.push(RTCRtpHeaderExtensionParameters {
                         id: *id,
                         uri: e.uri.clone(),
                     });
@@ -751,7 +752,7 @@ impl MediaEngine {
                     && (e.is_audio && typ == RTPCodecType::Audio
                         || e.is_video && typ == RTPCodecType::Video)
                 {
-                    header_extensions.push(RTPHeaderExtensionParameter {
+                    header_extensions.push(RTCRtpHeaderExtensionParameters {
                         id: id as isize + 1,
                         uri: e.uri.clone(),
                     })
@@ -759,7 +760,7 @@ impl MediaEngine {
             }
         }
 
-        RTPParameters {
+        RTCRtpParameters {
             header_extensions,
             codecs: self.get_codecs_by_kind(typ).await,
         }
@@ -768,7 +769,7 @@ impl MediaEngine {
     pub(crate) async fn get_rtp_parameters_by_payload_type(
         &self,
         payload_type: PayloadType,
-    ) -> Result<RTPParameters> {
+    ) -> Result<RTCRtpParameters> {
         let (codec, typ) = self.get_codec_by_payload(payload_type).await?;
 
         let mut header_extensions = vec![];
@@ -778,7 +779,7 @@ impl MediaEngine {
                 if e.is_audio && typ == RTPCodecType::Audio
                     || e.is_video && typ == RTPCodecType::Video
                 {
-                    header_extensions.push(RTPHeaderExtensionParameter {
+                    header_extensions.push(RTCRtpHeaderExtensionParameters {
                         uri: e.uri.clone(),
                         id: *id,
                     });
@@ -786,7 +787,7 @@ impl MediaEngine {
             }
         }
 
-        Ok(RTPParameters {
+        Ok(RTCRtpParameters {
             header_extensions,
             codecs: vec![codec],
         })

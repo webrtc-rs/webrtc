@@ -2,7 +2,7 @@ use std::fmt;
 
 /// SCTPTransportState indicates the state of the SCTP transport.
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum SCTPTransportState {
+pub enum RTCSctpTransportState {
     Unspecified,
 
     /// SCTPTransportStateConnecting indicates the SCTPTransport is in the
@@ -21,9 +21,9 @@ pub enum SCTPTransportState {
     Closed,
 }
 
-impl Default for SCTPTransportState {
+impl Default for RTCSctpTransportState {
     fn default() -> Self {
-        SCTPTransportState::Unspecified
+        RTCSctpTransportState::Unspecified
     }
 }
 
@@ -31,35 +31,35 @@ const SCTP_TRANSPORT_STATE_CONNECTING_STR: &str = "connecting";
 const SCTP_TRANSPORT_STATE_CONNECTED_STR: &str = "connected";
 const SCTP_TRANSPORT_STATE_CLOSED_STR: &str = "closed";
 
-impl From<&str> for SCTPTransportState {
+impl From<&str> for RTCSctpTransportState {
     fn from(raw: &str) -> Self {
         match raw {
-            SCTP_TRANSPORT_STATE_CONNECTING_STR => SCTPTransportState::Connecting,
-            SCTP_TRANSPORT_STATE_CONNECTED_STR => SCTPTransportState::Connected,
-            SCTP_TRANSPORT_STATE_CLOSED_STR => SCTPTransportState::Closed,
-            _ => SCTPTransportState::Unspecified,
+            SCTP_TRANSPORT_STATE_CONNECTING_STR => RTCSctpTransportState::Connecting,
+            SCTP_TRANSPORT_STATE_CONNECTED_STR => RTCSctpTransportState::Connected,
+            SCTP_TRANSPORT_STATE_CLOSED_STR => RTCSctpTransportState::Closed,
+            _ => RTCSctpTransportState::Unspecified,
         }
     }
 }
 
-impl From<u8> for SCTPTransportState {
+impl From<u8> for RTCSctpTransportState {
     fn from(v: u8) -> Self {
         match v {
-            1 => SCTPTransportState::Connecting,
-            2 => SCTPTransportState::Connected,
-            3 => SCTPTransportState::Closed,
-            _ => SCTPTransportState::Unspecified,
+            1 => RTCSctpTransportState::Connecting,
+            2 => RTCSctpTransportState::Connected,
+            3 => RTCSctpTransportState::Closed,
+            _ => RTCSctpTransportState::Unspecified,
         }
     }
 }
 
-impl fmt::Display for SCTPTransportState {
+impl fmt::Display for RTCSctpTransportState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
-            SCTPTransportState::Connecting => SCTP_TRANSPORT_STATE_CONNECTING_STR,
-            SCTPTransportState::Connected => SCTP_TRANSPORT_STATE_CONNECTED_STR,
-            SCTPTransportState::Closed => SCTP_TRANSPORT_STATE_CLOSED_STR,
-            SCTPTransportState::Unspecified => crate::UNSPECIFIED_STR,
+            RTCSctpTransportState::Connecting => SCTP_TRANSPORT_STATE_CONNECTING_STR,
+            RTCSctpTransportState::Connected => SCTP_TRANSPORT_STATE_CONNECTED_STR,
+            RTCSctpTransportState::Closed => SCTP_TRANSPORT_STATE_CLOSED_STR,
+            RTCSctpTransportState::Unspecified => crate::UNSPECIFIED_STR,
         };
         write!(f, "{}", s)
     }
@@ -72,16 +72,16 @@ mod test {
     #[test]
     fn test_new_sctp_transport_state() {
         let tests = vec![
-            (crate::UNSPECIFIED_STR, SCTPTransportState::Unspecified),
-            ("connecting", SCTPTransportState::Connecting),
-            ("connected", SCTPTransportState::Connected),
-            ("closed", SCTPTransportState::Closed),
+            (crate::UNSPECIFIED_STR, RTCSctpTransportState::Unspecified),
+            ("connecting", RTCSctpTransportState::Connecting),
+            ("connected", RTCSctpTransportState::Connected),
+            ("closed", RTCSctpTransportState::Closed),
         ];
 
         for (state_string, expected_state) in tests {
             assert_eq!(
                 expected_state,
-                SCTPTransportState::from(state_string),
+                RTCSctpTransportState::from(state_string),
                 "testCase: {}",
                 expected_state,
             );
@@ -91,10 +91,10 @@ mod test {
     #[test]
     fn test_sctp_transport_state_string() {
         let tests = vec![
-            (SCTPTransportState::Unspecified, crate::UNSPECIFIED_STR),
-            (SCTPTransportState::Connecting, "connecting"),
-            (SCTPTransportState::Connected, "connected"),
-            (SCTPTransportState::Closed, "closed"),
+            (RTCSctpTransportState::Unspecified, crate::UNSPECIFIED_STR),
+            (RTCSctpTransportState::Connecting, "connecting"),
+            (RTCSctpTransportState::Connected, "connected"),
+            (RTCSctpTransportState::Closed, "closed"),
         ];
 
         for (state, expected_string) in tests {
