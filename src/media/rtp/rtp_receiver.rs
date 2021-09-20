@@ -9,7 +9,7 @@ use crate::media::rtp::rtp_codec::{
     codec_parameters_fuzzy_search, CodecMatch, RTCRtpCodecCapability, RTCRtpCodecParameters,
     RTCRtpParameters, RTPCodecType,
 };
-use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
+use crate::media::rtp::rtp_transceiver_direction::RTCRtpTransceiverDirection;
 use crate::media::rtp::{RTCRtpCodingParameters, RTCRtpReceiveParameters, SSRC};
 use crate::media::track::track_remote::TrackRemote;
 use crate::media::track::TrackStreams;
@@ -144,7 +144,7 @@ impl RTPReceiverInternal {
     async fn get_parameters(&self) -> RTCRtpParameters {
         let mut parameters = self
             .media_engine
-            .get_rtp_parameters_by_kind(self.kind, &[RTPTransceiverDirection::Recvonly])
+            .get_rtp_parameters_by_kind(self.kind, &[RTCRtpTransceiverDirection::Recvonly])
             .await;
 
         let transceiver_codecs = self.transceiver_codecs.lock().await;
@@ -179,7 +179,7 @@ impl RTPReceiverInternal {
 }
 
 /// RTPReceiver allows an application to inspect the receipt of a TrackRemote
-pub struct RTPReceiver {
+pub struct RTCRtpReceiver {
     kind: RTPCodecType,
     transport: Arc<DTLSTransport>,
     closed_tx: Mutex<Option<mpsc::Sender<()>>>,
@@ -188,7 +188,7 @@ pub struct RTPReceiver {
     pub(crate) internal: Arc<RTPReceiverInternal>,
 }
 
-impl RTPReceiver {
+impl RTCRtpReceiver {
     pub fn new(
         kind: RTPCodecType,
         transport: Arc<DTLSTransport>,
@@ -198,7 +198,7 @@ impl RTPReceiver {
         let (closed_tx, closed_rx) = mpsc::channel(1);
         let (received_tx, received_rx) = mpsc::channel(1);
 
-        RTPReceiver {
+        RTCRtpReceiver {
             kind,
             transport: Arc::clone(&transport),
             closed_tx: Mutex::new(Some(closed_tx)),
@@ -318,7 +318,7 @@ impl RTPReceiver {
                     &global_params.header_extensions,
                 );
                 let (rtp_read_stream, rtp_interceptor, rtcp_read_stream, rtcp_interceptor) =
-                    RTPReceiver::streams_for_ssrc(
+                    RTCRtpReceiver::streams_for_ssrc(
                         &self.transport,
                         encoding.ssrc,
                         &stream_info,
@@ -507,7 +507,7 @@ impl RTPReceiver {
                     );
 
                     let (rtp_read_stream, rtp_interceptor, rtcp_read_stream, rtcp_interceptor) =
-                        RTPReceiver::streams_for_ssrc(
+                        RTCRtpReceiver::streams_for_ssrc(
                             &self.transport,
                             ssrc,
                             &t.stream_info,

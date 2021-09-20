@@ -535,7 +535,10 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
         .await?;
 
         let params = m
-            .get_rtp_parameters_by_kind(RTPCodecType::Audio, &[RTPTransceiverDirection::Recvonly])
+            .get_rtp_parameters_by_kind(
+                RTPCodecType::Audio,
+                &[RTCRtpTransceiverDirection::Recvonly],
+            )
             .await;
 
         assert_eq!(1, params.header_extensions.len());
@@ -550,12 +553,15 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
                 uri: "webrtc-header-test".to_owned(),
             },
             RTPCodecType::Audio,
-            vec![RTPTransceiverDirection::Recvonly],
+            vec![RTCRtpTransceiverDirection::Recvonly],
         )
         .await?;
 
         let params = m
-            .get_rtp_parameters_by_kind(RTPCodecType::Audio, &[RTPTransceiverDirection::Recvonly])
+            .get_rtp_parameters_by_kind(
+                RTPCodecType::Audio,
+                &[RTCRtpTransceiverDirection::Recvonly],
+            )
             .await;
 
         assert_eq!(1, params.header_extensions.len());
@@ -570,12 +576,15 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
                 uri: "webrtc-header-test".to_owned(),
             },
             RTPCodecType::Audio,
-            vec![RTPTransceiverDirection::Sendonly],
+            vec![RTCRtpTransceiverDirection::Sendonly],
         )
         .await?;
 
         let params = m
-            .get_rtp_parameters_by_kind(RTPCodecType::Audio, &[RTPTransceiverDirection::Recvonly])
+            .get_rtp_parameters_by_kind(
+                RTPCodecType::Audio,
+                &[RTCRtpTransceiverDirection::Recvonly],
+            )
             .await;
 
         assert_eq!(0, params.header_extensions.len());
@@ -592,7 +601,7 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
                     uri: "webrtc-header-test".to_owned(),
                 },
                 RTPCodecType::Audio,
-                vec![RTPTransceiverDirection::Sendrecv],
+                vec![RTCRtpTransceiverDirection::Sendrecv],
             )
             .await;
         if let Err(err) = result {
@@ -607,7 +616,7 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
                     uri: "webrtc-header-test".to_owned(),
                 },
                 RTPCodecType::Audio,
-                vec![RTPTransceiverDirection::Inactive],
+                vec![RTCRtpTransceiverDirection::Inactive],
             )
             .await;
         if let Err(err) = result {
@@ -621,7 +630,7 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
                     uri: "webrtc-header-test".to_owned(),
                 },
                 RTPCodecType::Audio,
-                vec![RTPTransceiverDirection::Unspecified],
+                vec![RTCRtpTransceiverDirection::Unspecified],
             )
             .await;
         if let Err(err) = result {

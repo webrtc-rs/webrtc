@@ -30,7 +30,7 @@ pub(crate) struct PeerConnectionInternal {
     pub(super) ice_connection_state: Arc<AtomicU8>,
 
     pub(super) sctp_transport: Arc<SCTPTransport>,
-    pub(super) rtp_transceivers: Arc<Mutex<Vec<Arc<RTPTransceiver>>>>,
+    pub(super) rtp_transceivers: Arc<Mutex<Vec<Arc<RTCRtpTransceiver>>>>,
 
     pub(super) on_track_handler: Arc<Mutex<Option<OnTrackHdlrFn>>>,
     pub(super) on_signaling_state_change_handler: Arc<Mutex<Option<OnSignalingStateChangeHdlrFn>>>,
@@ -159,7 +159,7 @@ impl PeerConnectionInternal {
                         continue;
                     }
 
-                    let receiver = Arc::new(RTPReceiver::new(
+                    let receiver = Arc::new(RTCRtpReceiver::new(
                         receiver.kind(),
                         Arc::clone(&self.dtls_transport),
                         Arc::clone(&self.media_engine),
@@ -277,7 +277,7 @@ impl PeerConnectionInternal {
     async fn start_rtp_receivers(
         self: &Arc<Self>,
         incoming_tracks: &mut Vec<TrackDetails>,
-        local_transceivers: &[Arc<RTPTransceiver>],
+        local_transceivers: &[Arc<RTCRtpTransceiver>],
         sdp_semantics: RTCSdpSemantics,
     ) -> Result<()> {
         let remote_is_plan_b = match sdp_semantics {
@@ -317,8 +317,8 @@ impl PeerConnectionInternal {
                 }
 
                 if (incoming_track.kind != t.kind())
-                    || (t.direction() != RTPTransceiverDirection::Recvonly
-                        && t.direction() != RTPTransceiverDirection::Sendrecv)
+                    || (t.direction() != RTCRtpTransceiverDirection::Recvonly
+                        && t.direction() != RTCRtpTransceiverDirection::Sendrecv)
                 {
                     continue;
                 }
@@ -348,8 +348,8 @@ impl PeerConnectionInternal {
                 let t = match self
                     .add_transceiver_from_kind(
                         incoming.kind,
-                        &[RTPTransceiverInit {
-                            direction: RTPTransceiverDirection::Sendrecv,
+                        &[RTCRtpTransceiverInit {
+                            direction: RTCRtpTransceiverDirection::Sendrecv,
                             send_encodings: vec![],
                         }],
                     )
@@ -424,20 +424,20 @@ impl PeerConnectionInternal {
     pub(super) async fn add_transceiver_from_kind(
         &self,
         kind: RTPCodecType,
-        init: &[RTPTransceiverInit],
-    ) -> Result<Arc<RTPTransceiver>> {
+        init: &[RTCRtpTransceiverInit],
+    ) -> Result<Arc<RTCRtpTransceiver>> {
         if self.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed.into());
         }
 
         let direction = match init.len() {
-            0 => RTPTransceiverDirection::Sendrecv,
+            0 => RTCRtpTransceiverDirection::Sendrecv,
             1 => init[0].direction,
             _ => return Err(Error::ErrPeerConnAddTransceiverFromKindOnlyAcceptsOne.into()),
         };
 
         let t = match direction {
-            RTPTransceiverDirection::Sendonly | RTPTransceiverDirection::Sendrecv => {
+            RTCRtpTransceiverDirection::Sendonly | RTCRtpTransceiverDirection::Sendrecv => {
                 let codecs = self.media_engine.get_codecs_by_kind(kind).await;
                 if codecs.is_empty() {
                     return Err(Error::ErrNoCodecsAvailable.into());
@@ -450,18 +450,18 @@ impl PeerConnectionInternal {
 
                 self.new_transceiver_from_track(direction, track).await?
             }
-            RTPTransceiverDirection::Recvonly => {
-                let receiver = Arc::new(RTPReceiver::new(
+            RTCRtpTransceiverDirection::Recvonly => {
+                let receiver = Arc::new(RTCRtpReceiver::new(
                     kind,
                     Arc::clone(&self.dtls_transport),
                     Arc::clone(&self.media_engine),
                     Arc::clone(&self.interceptor),
                 ));
 
-                RTPTransceiver::new(
+                RTCRtpTransceiver::new(
                     Some(receiver),
                     None,
-                    RTPTransceiverDirection::Recvonly,
+                    RTCRtpTransceiverDirection::Recvonly,
                     kind,
                     vec![],
                     Arc::clone(&self.media_engine),
@@ -478,12 +478,12 @@ impl PeerConnectionInternal {
 
     pub(super) async fn new_transceiver_from_track(
         &self,
-        direction: RTPTransceiverDirection,
+        direction: RTCRtpTransceiverDirection,
         track: Arc<dyn TrackLocal + Send + Sync>,
-    ) -> Result<Arc<RTPTransceiver>> {
+    ) -> Result<Arc<RTCRtpTransceiver>> {
         let (r, s) = match direction {
-            RTPTransceiverDirection::Sendrecv => {
-                let r = Some(Arc::new(RTPReceiver::new(
+            RTCRtpTransceiverDirection::Sendrecv => {
+                let r = Some(Arc::new(RTCRtpReceiver::new(
                     track.kind(),
                     Arc::clone(&self.dtls_transport),
                     Arc::clone(&self.media_engine),
@@ -500,7 +500,7 @@ impl PeerConnectionInternal {
                 ));
                 (r, s)
             }
-            RTPTransceiverDirection::Sendonly => {
+            RTCRtpTransceiverDirection::Sendonly => {
                 let s = Some(Arc::new(
                     RTCRtpSender::new(
                         Arc::clone(&track),
@@ -515,7 +515,7 @@ impl PeerConnectionInternal {
             _ => return Err(Error::ErrPeerConnAddTransceiverFromTrackSupport.into()),
         };
 
-        Ok(RTPTransceiver::new(
+        Ok(RTCRtpTransceiver::new(
             r,
             s,
             direction,
@@ -529,7 +529,7 @@ impl PeerConnectionInternal {
     /// add_rtp_transceiver appends t into rtp_transceivers
     /// and fires onNegotiationNeeded;
     /// caller of this method should hold `self.mu` lock
-    pub(super) async fn add_rtp_transceiver(&self, t: Arc<RTPTransceiver>) {
+    pub(super) async fn add_rtp_transceiver(&self, t: Arc<RTCRtpTransceiver>) {
         {
             let mut rtp_transceivers = self.rtp_transceivers.lock().await;
             rtp_transceivers.push(t);
@@ -620,7 +620,7 @@ impl PeerConnectionInternal {
     /// This is used for the initial call for CreateOffer
     pub(super) async fn generate_unmatched_sdp(
         &self,
-        local_transceivers: Vec<Arc<RTPTransceiver>>,
+        local_transceivers: Vec<Arc<RTCRtpTransceiver>>,
         use_identity: bool,
         sdp_semantics: RTCSdpSemantics,
     ) -> Result<sdp::session_description::SessionDescription> {
@@ -735,7 +735,7 @@ impl PeerConnectionInternal {
     /// this is used everytime we have a remote_description
     pub(super) async fn generate_matched_sdp(
         &self,
-        mut local_transceivers: Vec<Arc<RTPTransceiver>>,
+        mut local_transceivers: Vec<Arc<RTCRtpTransceiver>>,
         use_identity: bool,
         include_unmatched: bool,
         connection_role: ConnectionRole,
@@ -782,7 +782,7 @@ impl PeerConnectionInternal {
                         let kind = RTPCodecType::from(media.media_name.media.as_str());
                         let direction = get_peer_direction(media);
                         if kind == RTPCodecType::Unspecified
-                            || direction == RTPTransceiverDirection::Unspecified
+                            || direction == RTCRtpTransceiverDirection::Unspecified
                         {
                             continue;
                         }
@@ -812,10 +812,10 @@ impl PeerConnectionInternal {
                                     media_transceivers.push(t);
                                 } else {
                                     if media_transceivers.is_empty() {
-                                        let t = RTPTransceiver::new(
+                                        let t = RTCRtpTransceiver::new(
                                             None,
                                             None,
-                                            RTPTransceiverDirection::Inactive,
+                                            RTCRtpTransceiverDirection::Inactive,
                                             kind,
                                             vec![],
                                             Arc::clone(&self.media_engine),
@@ -964,8 +964,8 @@ impl PeerConnectionInternal {
                         let t = self
                             .add_transceiver_from_kind(
                                 incoming.kind,
-                                &[RTPTransceiverInit {
-                                    direction: RTPTransceiverDirection::Sendrecv,
+                                &[RTCRtpTransceiverInit {
+                                    direction: RTCRtpTransceiverDirection::Sendrecv,
                                     send_encodings: vec![],
                                 }],
                             )
@@ -1062,7 +1062,7 @@ impl PeerConnectionInternal {
 
     async fn start_receiver(
         incoming: &TrackDetails,
-        receiver: Arc<RTPReceiver>,
+        receiver: Arc<RTCRtpReceiver>,
         media_engine: Arc<MediaEngine>,
         on_track_handler: Arc<Mutex<Option<OnTrackHdlrFn>>>,
     ) {

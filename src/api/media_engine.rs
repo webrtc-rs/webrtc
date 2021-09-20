@@ -7,7 +7,7 @@ use crate::media::rtp::rtp_codec::{
     RTPCodecType,
 };
 use crate::media::rtp::rtp_transceiver_direction::{
-    have_rtp_transceiver_direction_intersection, RTPTransceiverDirection,
+    have_rtp_transceiver_direction_intersection, RTCRtpTransceiverDirection,
 };
 
 use crate::error::Error;
@@ -48,7 +48,7 @@ pub(crate) struct MediaEngineHeaderExtension {
     pub(crate) is_audio: bool,
     pub(crate) is_video: bool,
     // If set only Transceivers of this direction are allowed
-    pub(crate) allowed_directions: Vec<RTPTransceiverDirection>,
+    pub(crate) allowed_directions: Vec<RTCRtpTransceiverDirection>,
 }
 
 /// A MediaEngine defines the codecs supported by a PeerConnection, and the
@@ -413,18 +413,18 @@ impl MediaEngine {
         &mut self,
         extension: RTCRtpHeaderExtensionCapability,
         typ: RTPCodecType,
-        mut allowed_directions: Vec<RTPTransceiverDirection>,
+        mut allowed_directions: Vec<RTCRtpTransceiverDirection>,
     ) -> Result<()> {
         if allowed_directions.is_empty() {
             allowed_directions = vec![
-                RTPTransceiverDirection::Recvonly,
-                RTPTransceiverDirection::Sendonly,
+                RTCRtpTransceiverDirection::Recvonly,
+                RTCRtpTransceiverDirection::Sendonly,
             ];
         }
 
         for direction in &allowed_directions {
-            if *direction != RTPTransceiverDirection::Recvonly
-                && *direction != RTPTransceiverDirection::Sendonly
+            if *direction != RTCRtpTransceiverDirection::Recvonly
+                && *direction != RTCRtpTransceiverDirection::Sendonly
             {
                 return Err(Error::ErrRegisterHeaderExtensionInvalidDirection.into());
             }
@@ -727,7 +727,7 @@ impl MediaEngine {
     pub(crate) async fn get_rtp_parameters_by_kind(
         &self,
         typ: RTPCodecType,
-        directions: &[RTPTransceiverDirection],
+        directions: &[RTCRtpTransceiverDirection],
     ) -> RTCRtpParameters {
         let mut header_extensions = vec![];
 

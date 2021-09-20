@@ -6,8 +6,8 @@ use crate::error::Error;
 use crate::media::dtls_transport::dtls_fingerprint::DTLSFingerprint;
 use crate::media::ice_transport::ice_parameters::RTCIceParameters;
 use crate::media::rtp::rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType};
-use crate::media::rtp::rtp_transceiver::RTPTransceiver;
-use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
+use crate::media::rtp::rtp_transceiver::RTCRtpTransceiver;
+use crate::media::rtp::rtp_transceiver_direction::RTCRtpTransceiverDirection;
 use crate::media::rtp::{PayloadType, RTCPFeedback, SSRC};
 use crate::peer::ice::ice_candidate::RTCIceCandidate;
 use crate::peer::ice::ice_gather::ice_gatherer::RTCIceGatherer;
@@ -299,7 +299,7 @@ pub(crate) async fn add_data_media_section(
         params.dtls_role.to_string(),
     )
     .with_value_attribute(ATTR_KEY_MID.to_owned(), params.mid_value)
-    .with_property_attribute(RTPTransceiverDirection::Sendrecv.to_string())
+    .with_property_attribute(RTCRtpTransceiverDirection::Sendrecv.to_string())
     .with_property_attribute("sctp-port:5000".to_owned())
     .with_ice_credentials(
         params.ice_params.username_fragment,
@@ -459,10 +459,10 @@ pub(crate) async fn add_transceiver_sdp(
 
     let mut directions = vec![];
     if t.sender().await.is_some() {
-        directions.push(RTPTransceiverDirection::Sendonly);
+        directions.push(RTCRtpTransceiverDirection::Sendonly);
     }
     if t.receiver().await.is_some() {
-        directions.push(RTPTransceiverDirection::Recvonly);
+        directions.push(RTCRtpTransceiverDirection::Recvonly);
     }
 
     let parameters = media_engine
@@ -530,7 +530,7 @@ pub(crate) async fn add_transceiver_sdp(
 #[derive(Default)]
 pub(crate) struct MediaSection {
     pub(crate) id: String,
-    pub(crate) transceivers: Vec<Arc<RTPTransceiver>>,
+    pub(crate) transceivers: Vec<Arc<RTCRtpTransceiver>>,
     pub(crate) data: bool,
     pub(crate) rid_map: HashMap<String, String>,
 }
@@ -660,14 +660,14 @@ pub(crate) fn description_is_plan_b(
 
 pub(crate) fn get_peer_direction(
     media: &sdp::media_description::MediaDescription,
-) -> RTPTransceiverDirection {
+) -> RTCRtpTransceiverDirection {
     for a in &media.attributes {
-        let direction = RTPTransceiverDirection::from(a.key.as_str());
-        if direction != RTPTransceiverDirection::Unspecified {
+        let direction = RTCRtpTransceiverDirection::from(a.key.as_str());
+        if direction != RTCRtpTransceiverDirection::Unspecified {
             return direction;
         }
     }
-    RTPTransceiverDirection::Unspecified
+    RTCRtpTransceiverDirection::Unspecified
 }
 
 pub(crate) fn extract_fingerprint(

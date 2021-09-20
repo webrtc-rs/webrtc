@@ -86,7 +86,7 @@ async fn test_set_rtp_parameters() -> Result<()> {
     let seen_packet_tx = Arc::new(Mutex::new(Some(seen_packet_tx)));
     receiver
         .on_track(Box::new(
-            move |_: Option<Arc<TrackRemote>>, receiver: Option<Arc<RTPReceiver>>| {
+            move |_: Option<Arc<TrackRemote>>, receiver: Option<Arc<RTCRtpReceiver>>| {
                 let seen_packet_tx2 = Arc::clone(&seen_packet_tx);
                 Box::pin(async move {
                     if let Some(r) = &receiver {
@@ -186,7 +186,7 @@ async fn test_rtp_receiver_set_read_deadline() -> Result<()> {
     let seen_packet_tx = Arc::new(Mutex::new(Some(seen_packet_tx)));
     receiver
         .on_track(Box::new(
-            move |track_remote: Option<Arc<TrackRemote>>, receiver: Option<Arc<RTPReceiver>>| {
+            move |track_remote: Option<Arc<TrackRemote>>, receiver: Option<Arc<RTCRtpReceiver>>| {
                 let seen_packet_tx2 = Arc::clone(&seen_packet_tx);
                 Box::pin(async move {
                     // First call will not error because we cache for probing

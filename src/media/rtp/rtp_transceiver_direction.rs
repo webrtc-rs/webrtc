@@ -2,7 +2,7 @@ use std::fmt;
 
 /// RTPTransceiverDirection indicates the direction of the RTPTransceiver.
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum RTPTransceiverDirection {
+pub enum RTCRtpTransceiverDirection {
     Unspecified,
 
     /// Sendrecv indicates the RTPSender will offer
@@ -27,43 +27,43 @@ const RTP_TRANSCEIVER_DIRECTION_INACTIVE_STR: &str = "inactive";
 
 /// defines a procedure for creating a new
 /// RTPTransceiverDirection from a raw string naming the transceiver direction.
-impl From<&str> for RTPTransceiverDirection {
+impl From<&str> for RTCRtpTransceiverDirection {
     fn from(raw: &str) -> Self {
         match raw {
-            RTP_TRANSCEIVER_DIRECTION_SENDRECV_STR => RTPTransceiverDirection::Sendrecv,
-            RTP_TRANSCEIVER_DIRECTION_SENDONLY_STR => RTPTransceiverDirection::Sendonly,
-            RTP_TRANSCEIVER_DIRECTION_RECVONLY_STR => RTPTransceiverDirection::Recvonly,
-            RTP_TRANSCEIVER_DIRECTION_INACTIVE_STR => RTPTransceiverDirection::Inactive,
-            _ => RTPTransceiverDirection::Unspecified,
+            RTP_TRANSCEIVER_DIRECTION_SENDRECV_STR => RTCRtpTransceiverDirection::Sendrecv,
+            RTP_TRANSCEIVER_DIRECTION_SENDONLY_STR => RTCRtpTransceiverDirection::Sendonly,
+            RTP_TRANSCEIVER_DIRECTION_RECVONLY_STR => RTCRtpTransceiverDirection::Recvonly,
+            RTP_TRANSCEIVER_DIRECTION_INACTIVE_STR => RTCRtpTransceiverDirection::Inactive,
+            _ => RTCRtpTransceiverDirection::Unspecified,
         }
     }
 }
 
-impl From<u8> for RTPTransceiverDirection {
+impl From<u8> for RTCRtpTransceiverDirection {
     fn from(v: u8) -> Self {
         match v {
-            1 => RTPTransceiverDirection::Sendrecv,
-            2 => RTPTransceiverDirection::Sendonly,
-            3 => RTPTransceiverDirection::Recvonly,
-            4 => RTPTransceiverDirection::Inactive,
-            _ => RTPTransceiverDirection::Unspecified,
+            1 => RTCRtpTransceiverDirection::Sendrecv,
+            2 => RTCRtpTransceiverDirection::Sendonly,
+            3 => RTCRtpTransceiverDirection::Recvonly,
+            4 => RTCRtpTransceiverDirection::Inactive,
+            _ => RTCRtpTransceiverDirection::Unspecified,
         }
     }
 }
 
-impl fmt::Display for RTPTransceiverDirection {
+impl fmt::Display for RTCRtpTransceiverDirection {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            RTPTransceiverDirection::Sendrecv => {
+            RTCRtpTransceiverDirection::Sendrecv => {
                 write!(f, "{}", RTP_TRANSCEIVER_DIRECTION_SENDRECV_STR)
             }
-            RTPTransceiverDirection::Sendonly => {
+            RTCRtpTransceiverDirection::Sendonly => {
                 write!(f, "{}", RTP_TRANSCEIVER_DIRECTION_SENDONLY_STR)
             }
-            RTPTransceiverDirection::Recvonly => {
+            RTCRtpTransceiverDirection::Recvonly => {
                 write!(f, "{}", RTP_TRANSCEIVER_DIRECTION_RECVONLY_STR)
             }
-            RTPTransceiverDirection::Inactive => {
+            RTCRtpTransceiverDirection::Inactive => {
                 write!(f, "{}", RTP_TRANSCEIVER_DIRECTION_INACTIVE_STR)
             }
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
@@ -71,20 +71,20 @@ impl fmt::Display for RTPTransceiverDirection {
     }
 }
 
-impl RTPTransceiverDirection {
+impl RTCRtpTransceiverDirection {
     /// reverse indicate the opposite direction
-    pub fn reverse(&self) -> RTPTransceiverDirection {
+    pub fn reverse(&self) -> RTCRtpTransceiverDirection {
         match *self {
-            RTPTransceiverDirection::Sendonly => RTPTransceiverDirection::Recvonly,
-            RTPTransceiverDirection::Recvonly => RTPTransceiverDirection::Sendonly,
+            RTCRtpTransceiverDirection::Sendonly => RTCRtpTransceiverDirection::Recvonly,
+            RTCRtpTransceiverDirection::Recvonly => RTCRtpTransceiverDirection::Sendonly,
             _ => *self,
         }
     }
 }
 
 pub(crate) fn have_rtp_transceiver_direction_intersection(
-    haystack: &[RTPTransceiverDirection],
-    needle: &[RTPTransceiverDirection],
+    haystack: &[RTCRtpTransceiverDirection],
+    needle: &[RTCRtpTransceiverDirection],
 ) -> bool {
     for n in needle {
         for h in haystack {
@@ -103,26 +103,26 @@ mod test {
     #[test]
     fn test_new_rtp_transceiver_direction() {
         let tests = vec![
-            ("Unspecified", RTPTransceiverDirection::Unspecified),
-            ("sendrecv", RTPTransceiverDirection::Sendrecv),
-            ("sendonly", RTPTransceiverDirection::Sendonly),
-            ("recvonly", RTPTransceiverDirection::Recvonly),
-            ("inactive", RTPTransceiverDirection::Inactive),
+            ("Unspecified", RTCRtpTransceiverDirection::Unspecified),
+            ("sendrecv", RTCRtpTransceiverDirection::Sendrecv),
+            ("sendonly", RTCRtpTransceiverDirection::Sendonly),
+            ("recvonly", RTCRtpTransceiverDirection::Recvonly),
+            ("inactive", RTCRtpTransceiverDirection::Inactive),
         ];
 
         for (ct_str, expected_type) in tests {
-            assert_eq!(expected_type, RTPTransceiverDirection::from(ct_str));
+            assert_eq!(expected_type, RTCRtpTransceiverDirection::from(ct_str));
         }
     }
 
     #[test]
     fn test_rtp_transceiver_direction_string() {
         let tests = vec![
-            (RTPTransceiverDirection::Unspecified, "Unspecified"),
-            (RTPTransceiverDirection::Sendrecv, "sendrecv"),
-            (RTPTransceiverDirection::Sendonly, "sendonly"),
-            (RTPTransceiverDirection::Recvonly, "recvonly"),
-            (RTPTransceiverDirection::Inactive, "inactive"),
+            (RTCRtpTransceiverDirection::Unspecified, "Unspecified"),
+            (RTCRtpTransceiverDirection::Sendrecv, "sendrecv"),
+            (RTCRtpTransceiverDirection::Sendonly, "sendonly"),
+            (RTCRtpTransceiverDirection::Recvonly, "recvonly"),
+            (RTCRtpTransceiverDirection::Inactive, "inactive"),
         ];
 
         for (d, expected_string) in tests {

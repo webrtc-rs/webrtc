@@ -19,7 +19,7 @@ use crate::data::data_channel::DataChannel;
 use crate::data::sctp_transport::SCTPTransport;
 use crate::error::Error;
 use crate::media::rtp::rtp_codec::RTPCodecType;
-use crate::media::rtp::rtp_receiver::RTPReceiver;
+use crate::media::rtp::rtp_receiver::RTCRtpReceiver;
 use crate::media::rtp::rtp_sender::RTCRtpSender;
 use crate::media::track::track_local::TrackLocal;
 use crate::peer::configuration::RTCConfiguration;
@@ -138,8 +138,8 @@ impl API {
         &self,
         kind: RTPCodecType,
         transport: Arc<DTLSTransport>,
-    ) -> RTPReceiver {
-        RTPReceiver::new(
+    ) -> RTCRtpReceiver {
+        RTCRtpReceiver::new(
             kind,
             transport,
             Arc::clone(&self.media_engine),

@@ -17,10 +17,10 @@ async fn test_rtp_transceiver_set_codec_preferences() -> Result<()> {
 
     let api = APIBuilder::new().with_media_engine(m).build();
 
-    let tr = RTPTransceiver::new(
+    let tr = RTCRtpTransceiver::new(
         None,
         None,
-        RTPTransceiverDirection::Unspecified,
+        RTCRtpTransceiverDirection::Unspecified,
         RTPCodecType::Video,
         media_video_codecs.clone(),
         Arc::clone(&api.media_engine),

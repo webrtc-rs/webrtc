@@ -1,7 +1,7 @@
 use super::{track_local_static_rtp::*, track_local_static_sample::*, *};
 use crate::api::media_engine::MediaEngine;
 use crate::api::APIBuilder;
-use crate::media::rtp::rtp_receiver::RTPReceiver;
+use crate::media::rtp::rtp_receiver::RTCRtpReceiver;
 use crate::media::track::track_remote::TrackRemote;
 use crate::peer::configuration::RTCConfiguration;
 use crate::peer::peer_connection::peer_connection_test::*;
@@ -257,7 +257,7 @@ async fn test_track_local_static_payload_type() -> Result<()> {
     let on_track_fired_tx = Arc::new(Mutex::new(Some(on_track_fired_tx)));
     offerer
         .on_track(Box::new(
-            move |track: Option<Arc<TrackRemote>>, _: Option<Arc<RTPReceiver>>| {
+            move |track: Option<Arc<TrackRemote>>, _: Option<Arc<RTCRtpReceiver>>| {
                 let on_track_fired_tx2 = Arc::clone(&on_track_fired_tx);
                 Box::pin(async move {
                     if let Some(t) = &track {

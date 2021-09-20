@@ -3,7 +3,7 @@ use crate::api::media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MI
 use crate::api::setting_engine::SettingEngine;
 use crate::api::APIBuilder;
 use crate::media::rtp::rtp_codec::RTCRtpCodecCapability;
-use crate::media::rtp::rtp_receiver::RTPReceiver;
+use crate::media::rtp::rtp_receiver::RTCRtpReceiver;
 use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::media::track::track_remote::TrackRemote;
 use crate::peer::peer_connection::peer_connection_test::{
@@ -61,7 +61,7 @@ async fn test_rtp_sender_replace_track() -> Result<()> {
     let on_track_count = Arc::new(AtomicU64::new(0));
     receiver
         .on_track(Box::new(
-            move |track: Option<Arc<TrackRemote>>, _: Option<Arc<RTPReceiver>>| {
+            move |track: Option<Arc<TrackRemote>>, _: Option<Arc<RTCRtpReceiver>>| {
                 assert_eq!(0, on_track_count.fetch_add(1, Ordering::SeqCst));
                 let seen_packet_a_tx2 = Arc::clone(&seen_packet_a_tx);
                 let seen_packet_b_tx2 = Arc::clone(&seen_packet_b_tx);
@@ -224,7 +224,7 @@ async fn test_rtp_sender_replace_track_invalid_track_kind_change() -> Result<()>
     let seen_packet_tx = Arc::new(seen_packet_tx);
     receiver
         .on_track(Box::new(
-            move |_: Option<Arc<TrackRemote>>, _: Option<Arc<RTPReceiver>>| {
+            move |_: Option<Arc<TrackRemote>>, _: Option<Arc<RTCRtpReceiver>>| {
                 let seen_packet_tx2 = Arc::clone(&seen_packet_tx);
                 Box::pin(async move {
                     let _ = seen_packet_tx2.send(()).await;
@@ -300,7 +300,7 @@ async fn test_rtp_sender_replace_track_invalid_codec_change() -> Result<()> {
     let seen_packet_tx = Arc::new(seen_packet_tx);
     receiver
         .on_track(Box::new(
-            move |_: Option<Arc<TrackRemote>>, _: Option<Arc<RTPReceiver>>| {
+            move |_: Option<Arc<TrackRemote>>, _: Option<Arc<RTCRtpReceiver>>| {
                 let seen_packet_tx2 = Arc::clone(&seen_packet_tx);
                 Box::pin(async move {
                     let _ = seen_packet_tx2.send(()).await;

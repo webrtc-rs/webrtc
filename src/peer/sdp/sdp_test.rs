@@ -561,10 +561,10 @@ async fn test_media_description_fingerprints() -> Result<()> {
         MediaSection {
             id: "video".to_owned(),
             transceivers: vec![
-                RTPTransceiver::new(
+                RTCRtpTransceiver::new(
                     None,
                     None,
-                    RTPTransceiverDirection::Inactive,
+                    RTCRtpTransceiverDirection::Inactive,
                     RTPCodecType::Video,
                     api.media_engine
                         .get_codecs_by_kind(RTPCodecType::Video)
@@ -578,10 +578,10 @@ async fn test_media_description_fingerprints() -> Result<()> {
         MediaSection {
             id: "audio".to_owned(),
             transceivers: vec![
-                RTPTransceiver::new(
+                RTCRtpTransceiver::new(
                     None,
                     None,
-                    RTPTransceiverDirection::Inactive,
+                    RTCRtpTransceiverDirection::Inactive,
                     RTPCodecType::Audio,
                     api.media_engine
                         .get_codecs_by_kind(RTPCodecType::Audio)
@@ -619,7 +619,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
                 .await,
             )))
             .await;
-        media[i].transceivers[0].set_direction(RTPTransceiverDirection::Sendonly);
+        media[i].transceivers[0].set_direction(RTCRtpTransceiverDirection::Sendonly);
     }
 
     //"Per-Media Description Fingerprints",
@@ -640,10 +640,10 @@ async fn test_populate_sdp() -> Result<()> {
         me.register_default_codecs()?;
         let me = Arc::new(me);
 
-        let tr = RTPTransceiver::new(
+        let tr = RTCRtpTransceiver::new(
             None,
             None,
-            RTPTransceiverDirection::Recvonly,
+            RTCRtpTransceiverDirection::Recvonly,
             RTPCodecType::Video,
             me.video_codecs.clone(),
             Arc::clone(&me),
@@ -710,10 +710,10 @@ async fn test_populate_sdp() -> Result<()> {
             .await;
         let me = Arc::new(me);
 
-        let tr = RTPTransceiver::new(
+        let tr = RTCRtpTransceiver::new(
             None,
             None,
-            RTPTransceiverDirection::Recvonly,
+            RTCRtpTransceiverDirection::Recvonly,
             RTPCodecType::Video,
             me.video_codecs.clone(),
             Arc::clone(&me),

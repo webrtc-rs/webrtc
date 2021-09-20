@@ -6,8 +6,8 @@ use crate::error::Error;
 use crate::media::dtls_transport::DTLSTransport;
 use crate::media::interceptor::{create_stream_info, InterceptorToTrackLocalWriter};
 use crate::media::rtp::rtp_codec::{RTCRtpCodecParameters, RTPCodecType};
-use crate::media::rtp::rtp_transceiver::RTPTransceiver;
-use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
+use crate::media::rtp::rtp_transceiver::RTCRtpTransceiver;
+use crate::media::rtp::rtp_transceiver_direction::RTCRtpTransceiverDirection;
 use crate::media::rtp::srtp_writer_future::SrtpWriterFuture;
 use crate::media::rtp::{PayloadType, RTCRtpEncodingParameters, RTCRtpSendParameters, SSRC};
 use crate::media::track::track_local::{TrackLocal, TrackLocalContext, TrackLocalWriter};
@@ -86,7 +86,7 @@ pub struct RTCRtpSender {
 
     pub(crate) id: String,
 
-    tr: Mutex<Option<Arc<RTPTransceiver>>>,
+    tr: Mutex<Option<Arc<RTCRtpTransceiver>>>,
 
     send_called_tx: Mutex<Option<mpsc::Sender<()>>>,
     stop_called_tx: Mutex<Option<mpsc::Sender<()>>>,
@@ -170,7 +170,7 @@ impl RTCRtpSender {
         self.negotiated.store(true, Ordering::SeqCst);
     }
 
-    pub(crate) async fn set_rtp_transceiver(&self, t: Option<Arc<RTPTransceiver>>) {
+    pub(crate) async fn set_rtp_transceiver(&self, t: Option<Arc<RTCRtpTransceiver>>) {
         let mut tr = self.tr.lock().await;
         *tr = t;
     }
@@ -195,7 +195,7 @@ impl RTCRtpSender {
                         } else {
                             RTPCodecType::default()
                         },
-                        &[RTPTransceiverDirection::Sendonly],
+                        &[RTCRtpTransceiverDirection::Sendonly],
                     )
                     .await,
                 encodings: vec![RTCRtpEncodingParameters {
@@ -267,7 +267,7 @@ impl RTCRtpSender {
                 id: context.id.clone(),
                 params: self
                     .media_engine
-                    .get_rtp_parameters_by_kind(t.kind(), &[RTPTransceiverDirection::Sendonly])
+                    .get_rtp_parameters_by_kind(t.kind(), &[RTCRtpTransceiverDirection::Sendonly])
                     .await,
                 ssrc: context.ssrc,
                 write_stream: context.write_stream.clone(),
@@ -322,7 +322,7 @@ impl RTCRtpSender {
                         } else {
                             RTPCodecType::default()
                         },
-                        &[RTPTransceiverDirection::Sendonly],
+                        &[RTCRtpTransceiverDirection::Sendonly],
                     )
                     .await,
                 ssrc: parameters.encodings[0].ssrc,

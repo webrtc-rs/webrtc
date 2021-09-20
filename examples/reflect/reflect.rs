@@ -9,7 +9,7 @@ use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_VP8};
 use webrtc::api::APIBuilder;
 use webrtc::media::rtp::rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType};
-use webrtc::media::rtp::rtp_receiver::RTPReceiver;
+use webrtc::media::rtp::rtp_receiver::RTCRtpReceiver;
 use webrtc::media::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
 use webrtc::media::track::track_local::{TrackLocal, TrackLocalWriter};
 use webrtc::media::track::track_remote::TrackRemote;
@@ -143,7 +143,7 @@ async fn main() -> Result<()> {
     let pc = Arc::clone(&peer_connection);
     peer_connection
         .on_track(Box::new(
-            move |track: Option<Arc<TrackRemote>>, _receiver: Option<Arc<RTPReceiver>>| {
+            move |track: Option<Arc<TrackRemote>>, _receiver: Option<Arc<RTCRtpReceiver>>| {
                 if let Some(track) = track {
                     let track2 = Arc::clone(&track);
                     let output_track2 = Arc::clone(&output_track);

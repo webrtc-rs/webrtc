@@ -65,8 +65,8 @@ mod test {
     use crate::api::media_engine::MediaEngine;
     use crate::api::APIBuilder;
     use crate::media::rtp::rtp_codec::{RTCRtpCodecCapability, RTPCodecType};
-    use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
-    use crate::media::rtp::RTPTransceiverInit;
+    use crate::media::rtp::rtp_transceiver_direction::RTCRtpTransceiverDirection;
+    use crate::media::rtp::RTCRtpTransceiverInit;
     use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
     use crate::media::track::track_local::TrackLocal;
     use crate::peer::configuration::RTCConfiguration;
@@ -137,8 +137,8 @@ mod test {
 
         opc.add_transceiver_from_kind(
             RTPCodecType::Video,
-            &[RTPTransceiverInit {
-                direction: RTPTransceiverDirection::Sendrecv,
+            &[RTCRtpTransceiverInit {
+                direction: RTCRtpTransceiverDirection::Sendrecv,
                 send_encodings: vec![],
             }],
         )
@@ -146,8 +146,8 @@ mod test {
 
         opc.add_transceiver_from_kind(
             RTPCodecType::Video,
-            &[RTPTransceiverInit {
-                direction: RTPTransceiverDirection::Sendrecv,
+            &[RTCRtpTransceiverInit {
+                direction: RTCRtpTransceiverDirection::Sendrecv,
                 send_encodings: vec![],
             }],
         )
@@ -155,8 +155,8 @@ mod test {
 
         opc.add_transceiver_from_kind(
             RTPCodecType::Audio,
-            &[RTPTransceiverInit {
-                direction: RTPTransceiverDirection::Sendrecv,
+            &[RTCRtpTransceiverInit {
+                direction: RTCRtpTransceiverDirection::Sendrecv,
                 send_encodings: vec![],
             }],
         )
@@ -164,8 +164,8 @@ mod test {
 
         opc.add_transceiver_from_kind(
             RTPCodecType::Audio,
-            &[RTPTransceiverInit {
-                direction: RTPTransceiverDirection::Sendrecv,
+            &[RTCRtpTransceiverInit {
+                direction: RTCRtpTransceiverDirection::Sendrecv,
                 send_encodings: vec![],
             }],
         )
@@ -223,8 +223,8 @@ mod test {
 
         opc.add_transceiver_from_kind(
             RTPCodecType::Video,
-            &[RTPTransceiverInit {
-                direction: RTPTransceiverDirection::Recvonly,
+            &[RTCRtpTransceiverInit {
+                direction: RTCRtpTransceiverDirection::Recvonly,
                 send_encodings: vec![],
             }],
         )
@@ -232,8 +232,8 @@ mod test {
 
         opc.add_transceiver_from_kind(
             RTPCodecType::Audio,
-            &[RTPTransceiverInit {
-                direction: RTPTransceiverDirection::Recvonly,
+            &[RTCRtpTransceiverInit {
+                direction: RTCRtpTransceiverDirection::Recvonly,
                 send_encodings: vec![],
             }],
         )
@@ -337,8 +337,8 @@ mod test {
 
         opc.add_transceiver_from_kind(
             RTPCodecType::Video,
-            &[RTPTransceiverInit {
-                direction: RTPTransceiverDirection::Recvonly,
+            &[RTCRtpTransceiverInit {
+                direction: RTCRtpTransceiverDirection::Recvonly,
                 send_encodings: vec![],
             }],
         )
@@ -346,8 +346,8 @@ mod test {
 
         opc.add_transceiver_from_kind(
             RTPCodecType::Audio,
-            &[RTPTransceiverInit {
-                direction: RTPTransceiverDirection::Recvonly,
+            &[RTCRtpTransceiverInit {
+                direction: RTCRtpTransceiverDirection::Recvonly,
                 send_encodings: vec![],
             }],
         )
