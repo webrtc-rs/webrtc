@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::peer::ice::ice_credential_type::ICECredentialType;
+use crate::peer::ice::ice_credential_type::RTCIceCredentialType;
 
 use anyhow::Result;
 
@@ -10,7 +10,7 @@ pub struct ICEServer {
     pub urls: Vec<String>,
     pub username: String,
     pub credential: String,
-    pub credential_type: ICECredentialType,
+    pub credential_type: RTCIceCredentialType,
 }
 
 impl ICEServer {
@@ -37,11 +37,11 @@ impl ICEServer {
                 url.username = self.username.clone();
 
                 match self.credential_type {
-                    ICECredentialType::Password => {
+                    RTCIceCredentialType::Password => {
                         // https://www.w3.org/TR/webrtc/#set-the-configuration (step #11.3.3)
                         url.password = self.credential.clone();
                     }
-                    ICECredentialType::Oauth => {
+                    RTCIceCredentialType::Oauth => {
                         // https://www.w3.org/TR/webrtc/#set-the-configuration (step #11.3.4)
                         /*if _, ok: = s.Credential.(OAuthCredential); !ok {
                                 return nil,
@@ -72,7 +72,7 @@ mod test {
                     urls: vec!["turn:192.158.29.39?transport=udp".to_owned()],
                     username: "unittest".to_owned(),
                     credential: "placeholder".to_owned(),
-                    credential_type: ICECredentialType::Password,
+                    credential_type: RTCIceCredentialType::Password,
                 },
                 true,
             ),
@@ -81,7 +81,7 @@ mod test {
                     urls: vec!["turn:[2001:db8:1234:5678::1]?transport=udp".to_owned()],
                     username: "unittest".to_owned(),
                     credential: "placeholder".to_owned(),
-                    credential_type: ICECredentialType::Password,
+                    credential_type: RTCIceCredentialType::Password,
                 },
                 true,
             ),
@@ -117,7 +117,7 @@ mod test {
                     urls: vec!["turn:192.158.29.39?transport=udp".to_owned()],
                     username: "unittest".to_owned(),
                     credential: String::new(),
-                    credential_type: ICECredentialType::Password,
+                    credential_type: RTCIceCredentialType::Password,
                 },
                 Error::ErrNoTurnCredentials,
             ),
@@ -126,7 +126,7 @@ mod test {
                     urls: vec!["turn:192.158.29.39?transport=udp".to_owned()],
                     username: "unittest".to_owned(),
                     credential: String::new(),
-                    credential_type: ICECredentialType::Oauth,
+                    credential_type: RTCIceCredentialType::Oauth,
                 },
                 Error::ErrNoTurnCredentials,
             ),
@@ -135,7 +135,7 @@ mod test {
                     urls: vec!["turn:192.158.29.39?transport=udp".to_owned()],
                     username: "unittest".to_owned(),
                     credential: String::new(),
-                    credential_type: ICECredentialType::Unspecified,
+                    credential_type: RTCIceCredentialType::Unspecified,
                 },
                 Error::ErrNoTurnCredentials,
             ),
@@ -162,7 +162,7 @@ mod test {
                 urls: vec!["stun:google.de?transport=udp".to_owned()],
                 username: "unittest".to_owned(),
                 credential: String::new(),
-                credential_type: ICECredentialType::Oauth,
+                credential_type: RTCIceCredentialType::Oauth,
             },
             ice::error::Error::ErrStunQuery,
         )];
