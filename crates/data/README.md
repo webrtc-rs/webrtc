@@ -26,5 +26,5 @@
  </a>
 </p>
 <p align="center">
- A pure Rust implementation of WebRTC DataChannel API
+ A pure Rust implementation of WebRTC DataChannel. Rewrite <a href="https://github.com/pion/datachannel/releases/tag/v1.4.21">Pion</a> DataChannel in Rust
 </p>
