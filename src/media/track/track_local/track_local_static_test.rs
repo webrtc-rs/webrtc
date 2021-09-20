@@ -14,7 +14,7 @@ use tokio::sync::{mpsc, Mutex};
 #[tokio::test]
 async fn test_track_local_static_no_codec_intersection() -> Result<()> {
     let track: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
-        RTPCodecCapability {
+        RTCRtpCodecCapability {
             mime_type: "video/vp8".to_owned(),
             ..Default::default()
         },
@@ -52,8 +52,8 @@ async fn test_track_local_static_no_codec_intersection() -> Result<()> {
 
         let mut m = MediaEngine::default();
         m.register_codec(
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: "video/VP9".to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -96,7 +96,7 @@ async fn test_track_local_static_no_codec_intersection() -> Result<()> {
         let (mut offerer, mut answerer) = new_pair(&api).await?;
 
         let invalid_codec_track = TrackLocalStaticSample::new(
-            RTPCodecCapability {
+            RTCRtpCodecCapability {
                 mime_type: "video/invalid-codec".to_owned(),
                 ..Default::default()
             },
@@ -132,7 +132,7 @@ async fn test_track_local_static_closed() -> Result<()> {
         .await?;
 
     let vp8writer: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticRTP::new(
-        RTPCodecCapability {
+        RTCRtpCodecCapability {
             mime_type: "video/vp8".to_owned(),
             ..Default::default()
         },
@@ -196,8 +196,8 @@ async fn test_track_local_static_payload_type() -> Result<()> {
 
     let mut media_engine_one = MediaEngine::default();
     media_engine_one.register_codec(
-        RTPCodecParameters {
-            capability: RTPCodecCapability {
+        RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
                 mime_type: "video/VP8".to_owned(),
                 clock_rate: 90000,
                 channels: 0,
@@ -212,8 +212,8 @@ async fn test_track_local_static_payload_type() -> Result<()> {
 
     let mut media_engine_two = MediaEngine::default();
     media_engine_two.register_codec(
-        RTPCodecParameters {
-            capability: RTPCodecCapability {
+        RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
                 mime_type: "video/VP8".to_owned(),
                 clock_rate: 90000,
                 channels: 0,
@@ -238,7 +238,7 @@ async fn test_track_local_static_payload_type() -> Result<()> {
         .await?;
 
     let track = Arc::new(TrackLocalStaticSample::new(
-        RTPCodecCapability {
+        RTCRtpCodecCapability {
             mime_type: "video/vp8".to_owned(),
             ..Default::default()
         },
@@ -309,7 +309,7 @@ async fn test_track_local_static_mutate_input() -> Result<()> {
     let (mut pc_offer, mut pc_answer) = new_pair(&api).await?;
 
     let vp8writer: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticRTP::new(
-        RTPCodecCapability {
+        RTCRtpCodecCapability {
             mime_type: "video/vp8".to_owned(),
             ..Default::default()
         },
@@ -376,7 +376,7 @@ async fn test_track_local_static_binding_non_blocking() -> Result<()> {
         .await?;
 
     let vp8writer: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticRTP::new(
-        RTPCodecCapability {
+        RTCRtpCodecCapability {
             mime_type: "video/vp8".to_owned(),
             ..Default::default()
         },

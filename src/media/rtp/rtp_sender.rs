@@ -5,11 +5,11 @@ use crate::api::media_engine::MediaEngine;
 use crate::error::Error;
 use crate::media::dtls_transport::DTLSTransport;
 use crate::media::interceptor::{create_stream_info, InterceptorToTrackLocalWriter};
-use crate::media::rtp::rtp_codec::{RTPCodecParameters, RTPCodecType};
+use crate::media::rtp::rtp_codec::{RTCRtpCodecParameters, RTPCodecType};
 use crate::media::rtp::rtp_transceiver::RTPTransceiver;
 use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
 use crate::media::rtp::srtp_writer_future::SrtpWriterFuture;
-use crate::media::rtp::{PayloadType, RTPEncodingParameters, RTPSendParameters, SSRC};
+use crate::media::rtp::{PayloadType, RTCRtpEncodingParameters, RTCRtpSendParameters, SSRC};
 use crate::media::track::track_local::{TrackLocal, TrackLocalContext, TrackLocalWriter};
 use crate::RECEIVE_MTU;
 
@@ -183,10 +183,10 @@ impl RTCRtpSender {
 
     /// get_parameters describes the current configuration for the encoding and
     /// transmission of media on the sender's track.
-    pub async fn get_parameters(&self) -> RTPSendParameters {
+    pub async fn get_parameters(&self) -> RTCRtpSendParameters {
         let mut send_parameters = {
             let track = self.track.lock().await;
-            RTPSendParameters {
+            RTCRtpSendParameters {
                 rtp_parameters: self
                     .media_engine
                     .get_rtp_parameters_by_kind(
@@ -198,7 +198,7 @@ impl RTCRtpSender {
                         &[RTPTransceiverDirection::Sendonly],
                     )
                     .await,
-                encodings: vec![RTPEncodingParameters {
+                encodings: vec![RTCRtpEncodingParameters {
                     rid: String::new(),
                     ssrc: self.ssrc,
                     payload_type: self.payload_type,
@@ -304,7 +304,7 @@ impl RTCRtpSender {
     }
 
     /// send Attempts to set the parameters controlling the sending of media.
-    pub async fn send(&self, parameters: &RTPSendParameters) -> Result<()> {
+    pub async fn send(&self, parameters: &RTCRtpSendParameters) -> Result<()> {
         if self.has_sent().await {
             return Err(Error::ErrRTPSenderSendAlreadyCalled.into());
         }
@@ -334,7 +334,7 @@ impl RTCRtpSender {
             let codec = if let Some(t) = &*track {
                 t.bind(&context).await?
             } else {
-                RTPCodecParameters::default()
+                RTCRtpCodecParameters::default()
             };
             let payload_type = codec.payload_type;
             let capability = codec.capability.clone();

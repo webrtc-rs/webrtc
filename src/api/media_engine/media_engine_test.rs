@@ -185,7 +185,7 @@ a=rtpmap:111 opus/48000/2
             "urn:ietf:params:rtp-hdrext:sdes:repaired-rtp-stream-id",
         ] {
             m.register_header_extension(
-                RTPHeaderExtensionCapability {
+                RTCRtpHeaderExtensionCapability {
                     uri: extension.to_owned(),
                 },
                 RTPCodecType::Audio,
@@ -201,7 +201,7 @@ a=rtpmap:111 opus/48000/2
         assert!(m.negotiated_audio.load(Ordering::SeqCst));
 
         let (abs_id, abs_audio_enabled, abs_video_enabled) = m
-            .get_header_extension_id(RTPHeaderExtensionCapability {
+            .get_header_extension_id(RTCRtpHeaderExtensionCapability {
                 uri: sdp::extmap::ABS_SEND_TIME_URI.to_owned(),
             })
             .await;
@@ -210,7 +210,7 @@ a=rtpmap:111 opus/48000/2
         assert!(!abs_video_enabled);
 
         let (mid_id, mid_audio_enabled, mid_video_enabled) = m
-            .get_header_extension_id(RTPHeaderExtensionCapability {
+            .get_header_extension_id(RTCRtpHeaderExtensionCapability {
                 uri: sdp::extmap::SDES_MID_URI.to_owned(),
             })
             .await;
@@ -233,8 +233,8 @@ a=fmtp:98 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f
 ";
         let mut m = MediaEngine::default();
         m.register_codec(
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_H264.to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -272,8 +272,8 @@ a=fmtp:96 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640c1f
 ";
         let mut m = MediaEngine::default();
         m.register_codec(
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_H264.to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -306,8 +306,8 @@ a=rtpmap:96 VP9/90000
 ";
         let mut m = MediaEngine::default();
         m.register_codec(
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_VP9.to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -339,8 +339,8 @@ a=rtpmap:96 VP8/90000
 ";
         let mut m = MediaEngine::default();
         m.register_codec(
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_VP8.to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -376,8 +376,8 @@ a=fmtp:97 apt=96
 ";
         let mut m = MediaEngine::default();
         m.register_codec(
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_VP8.to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -391,8 +391,8 @@ a=fmtp:97 apt=96
         )?;
 
         m.register_codec(
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_VP9.to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -406,8 +406,8 @@ a=fmtp:97 apt=96
         )?;
 
         m.register_codec(
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: "video/rtx".to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -443,8 +443,8 @@ a=fmtp:97 apt=96
 ";
         let mut m = MediaEngine::default();
         m.register_codec(
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_VP8.to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -458,8 +458,8 @@ a=fmtp:97 apt=96
         )?;
 
         m.register_codec(
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_VP9.to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -473,8 +473,8 @@ a=fmtp:97 apt=96
         )?;
 
         m.register_codec(
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: "video/rtx".to_owned(),
                     clock_rate: 90000,
                     channels: 0,
@@ -506,8 +506,8 @@ a=fmtp:97 apt=96
 async fn test_media_engine_header_extension_direction() -> Result<()> {
     let register_codec = |m: &mut MediaEngine| -> Result<()> {
         m.register_codec(
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_OPUS.to_owned(),
                     clock_rate: 48000,
                     channels: 0,
@@ -526,7 +526,7 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
         let mut m = MediaEngine::default();
         register_codec(&mut m)?;
         m.register_header_extension(
-            RTPHeaderExtensionCapability {
+            RTCRtpHeaderExtensionCapability {
                 uri: "webrtc-header-test".to_owned(),
             },
             RTPCodecType::Audio,
@@ -546,7 +546,7 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
         let mut m = MediaEngine::default();
         register_codec(&mut m)?;
         m.register_header_extension(
-            RTPHeaderExtensionCapability {
+            RTCRtpHeaderExtensionCapability {
                 uri: "webrtc-header-test".to_owned(),
             },
             RTPCodecType::Audio,
@@ -566,7 +566,7 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
         let mut m = MediaEngine::default();
         register_codec(&mut m)?;
         m.register_header_extension(
-            RTPHeaderExtensionCapability {
+            RTCRtpHeaderExtensionCapability {
                 uri: "webrtc-header-test".to_owned(),
             },
             RTPCodecType::Audio,
@@ -588,7 +588,7 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
 
         let result = m
             .register_header_extension(
-                RTPHeaderExtensionCapability {
+                RTCRtpHeaderExtensionCapability {
                     uri: "webrtc-header-test".to_owned(),
                 },
                 RTPCodecType::Audio,
@@ -603,7 +603,7 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
 
         let result = m
             .register_header_extension(
-                RTPHeaderExtensionCapability {
+                RTCRtpHeaderExtensionCapability {
                     uri: "webrtc-header-test".to_owned(),
                 },
                 RTPCodecType::Audio,
@@ -617,7 +617,7 @@ async fn test_media_engine_header_extension_direction() -> Result<()> {
         }
         let result = m
             .register_header_extension(
-                RTPHeaderExtensionCapability {
+                RTCRtpHeaderExtensionCapability {
                     uri: "webrtc-header-test".to_owned(),
                 },
                 RTPCodecType::Audio,
@@ -640,8 +640,8 @@ async fn test_media_engine_double_register() -> Result<()> {
     let mut m = MediaEngine::default();
 
     m.register_codec(
-        RTPCodecParameters {
-            capability: RTPCodecCapability {
+        RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
                 mime_type: MIME_TYPE_OPUS.to_owned(),
                 clock_rate: 48000,
                 channels: 0,
@@ -655,8 +655,8 @@ async fn test_media_engine_double_register() -> Result<()> {
     )?;
 
     m.register_codec(
-        RTPCodecParameters {
-            capability: RTPCodecCapability {
+        RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
                 mime_type: MIME_TYPE_OPUS.to_owned(),
                 clock_rate: 48000,
                 channels: 0,
@@ -678,7 +678,7 @@ async fn validate(m: &MediaEngine) -> Result<()> {
         .await?;
 
     let (id, audio_negotiated, video_negotiated) = m
-        .get_header_extension_id(RTPHeaderExtensionCapability {
+        .get_header_extension_id(RTCRtpHeaderExtensionCapability {
             uri: "test-extension".to_owned(),
         })
         .await;
@@ -695,8 +695,8 @@ async fn test_update_header_extenstion_to_cloned_media_engine() -> Result<()> {
     let mut m = MediaEngine::default();
 
     m.register_codec(
-        RTPCodecParameters {
-            capability: RTPCodecCapability {
+        RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
                 mime_type: MIME_TYPE_OPUS.to_owned(),
                 clock_rate: 48000,
                 channels: 0,
@@ -710,7 +710,7 @@ async fn test_update_header_extenstion_to_cloned_media_engine() -> Result<()> {
     )?;
 
     m.register_header_extension(
-        RTPHeaderExtensionCapability {
+        RTCRtpHeaderExtensionCapability {
             uri: "test-extension".to_owned(),
         },
         RTPCodecType::Audio,

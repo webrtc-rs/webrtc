@@ -23,7 +23,7 @@ pub struct RTPTransceiver {
     receiver: Mutex<Option<Arc<RTPReceiver>>>, //atomic.Value
     direction: AtomicU8,                       //RTPTransceiverDirection, //atomic.Value
 
-    codecs: Arc<Mutex<Vec<RTPCodecParameters>>>, // User provided codecs via set_codec_preferences
+    codecs: Arc<Mutex<Vec<RTCRtpCodecParameters>>>, // User provided codecs via set_codec_preferences
 
     pub(crate) stopped: bool,
     pub(crate) kind: RTPCodecType,
@@ -37,7 +37,7 @@ impl RTPTransceiver {
         sender: Option<Arc<RTCRtpSender>>,
         direction: RTPTransceiverDirection,
         kind: RTPCodecType,
-        codecs: Vec<RTPCodecParameters>,
+        codecs: Vec<RTCRtpCodecParameters>,
         media_engine: Arc<MediaEngine>,
     ) -> Arc<Self> {
         let t = Arc::new(RTPTransceiver {
@@ -59,7 +59,7 @@ impl RTPTransceiver {
 
     /// set_codec_preferences sets preferred list of supported codecs
     /// if codecs is empty or nil we reset to default from MediaEngine
-    pub async fn set_codec_preferences(&self, codecs: Vec<RTPCodecParameters>) -> Result<()> {
+    pub async fn set_codec_preferences(&self, codecs: Vec<RTCRtpCodecParameters>) -> Result<()> {
         for codec in &codecs {
             let media_engine_codecs = self.media_engine.get_codecs_by_kind(self.kind).await;
             let (_, match_type) = codec_parameters_fuzzy_search(codec, &media_engine_codecs);
@@ -76,7 +76,7 @@ impl RTPTransceiver {
     }
 
     /// Codecs returns list of supported codecs
-    pub(crate) async fn get_codecs(&self) -> Vec<RTPCodecParameters> {
+    pub(crate) async fn get_codecs(&self) -> Vec<RTCRtpCodecParameters> {
         let codecs = self.codecs.lock().await;
         RTPReceiverInternal::get_codecs(&*codecs, self.kind, &self.media_engine).await
     }

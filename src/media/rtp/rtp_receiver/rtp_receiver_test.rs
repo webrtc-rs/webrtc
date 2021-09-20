@@ -1,6 +1,6 @@
 use super::*;
 use crate::api::media_engine::MIME_TYPE_OPUS;
-use crate::media::rtp::rtp_codec::RTPHeaderExtensionParameter;
+use crate::media::rtp::rtp_codec::RTCRtpHeaderExtensionParameters;
 use crate::media::rtp::RTCPFeedback;
 use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::media::track::track_local::TrackLocal;
@@ -14,9 +14,9 @@ use tokio::time::Duration;
 use waitgroup::WaitGroup;
 
 lazy_static! {
-    static ref P: RTPParameters = RTPParameters {
-        codecs: vec![RTPCodecParameters {
-            capability: RTPCodecCapability {
+    static ref P: RTCRtpParameters = RTCRtpParameters {
+        codecs: vec![RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
                 mime_type: MIME_TYPE_OPUS.to_string(),
                 clock_rate: 48000,
                 channels: 2,
@@ -30,15 +30,15 @@ lazy_static! {
             ..Default::default()
         }],
         header_extensions: vec![
-            RTPHeaderExtensionParameter {
+            RTCRtpHeaderExtensionParameters {
                 uri: "urn:ietf:params:rtp-hdrext:sdes:mid".to_owned(),
                 ..Default::default()
             },
-            RTPHeaderExtensionParameter {
+            RTCRtpHeaderExtensionParameters {
                 uri: "urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id".to_owned(),
                 ..Default::default()
             },
-            RTPHeaderExtensionParameter {
+            RTCRtpHeaderExtensionParameters {
                 uri: "urn:ietf:params:rtp-hdrext:sdes:repaired-rtp-stream-id".to_owned(),
                 ..Default::default()
             },
@@ -69,7 +69,7 @@ async fn test_set_rtp_parameters() -> Result<()> {
     let (mut sender, mut receiver, wan) = create_vnet_pair().await?;
 
     let outgoing_track: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
-        RTPCodecCapability {
+        RTCRtpCodecCapability {
             mime_type: "video/vp8".to_owned(),
             ..Default::default()
         },
@@ -172,7 +172,7 @@ async fn test_rtp_receiver_set_read_deadline() -> Result<()> {
     let (mut sender, mut receiver, wan) = create_vnet_pair().await?;
 
     let track: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
-        RTPCodecCapability {
+        RTCRtpCodecCapability {
             mime_type: "video/vp8".to_owned(),
             ..Default::default()
         },

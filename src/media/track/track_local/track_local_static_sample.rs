@@ -24,7 +24,7 @@ pub struct TrackLocalStaticSample {
 
 impl TrackLocalStaticSample {
     /// returns a TrackLocalStaticSample
-    pub fn new(codec: RTPCodecCapability, id: String, stream_id: String) -> Self {
+    pub fn new(codec: RTCRtpCodecCapability, id: String, stream_id: String) -> Self {
         let rtp_track = TrackLocalStaticRTP::new(codec, id, stream_id);
 
         TrackLocalStaticSample {
@@ -38,7 +38,7 @@ impl TrackLocalStaticSample {
     }
 
     /// codec gets the Codec of the track
-    pub fn codec(&self) -> RTPCodecCapability {
+    pub fn codec(&self) -> RTCRtpCodecCapability {
         self.rtp_track.codec()
     }
 
@@ -88,7 +88,7 @@ impl TrackLocal for TrackLocalStaticSample {
     /// Bind is called by the PeerConnection after negotiation is complete
     /// This asserts that the code requested is supported by the remote peer.
     /// If so it setups all the state (SSRC and PayloadType) to have a call
-    async fn bind(&self, t: &TrackLocalContext) -> Result<RTPCodecParameters> {
+    async fn bind(&self, t: &TrackLocalContext) -> Result<RTCRtpCodecParameters> {
         let codec = self.rtp_track.bind(t).await?;
 
         let mut internal = self.internal.lock().await;

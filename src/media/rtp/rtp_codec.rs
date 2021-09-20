@@ -58,7 +58,7 @@ impl fmt::Display for RTPCodecType {
 /// RTPCodecCapability provides information about codec capabilities.
 /// https://w3c.github.io/webrtc-pc/#dictionary-rtcrtpcodeccapability-members
 #[derive(Default, Debug, Clone, PartialEq)]
-pub struct RTPCodecCapability {
+pub struct RTCRtpCodecCapability {
     pub mime_type: String,
     pub clock_rate: u32,
     pub channels: u16,
@@ -66,7 +66,7 @@ pub struct RTPCodecCapability {
     pub rtcp_feedback: Vec<RTCPFeedback>,
 }
 
-impl RTPCodecCapability {
+impl RTCRtpCodecCapability {
     pub(crate) fn payloader_for_codec(
         &self,
     ) -> Result<Box<dyn rtp::packetizer::Payloader + Send + Sync>> {
@@ -93,14 +93,14 @@ impl RTPCodecCapability {
 /// RTPHeaderExtensionCapability is used to define a RFC5285 RTP header extension supported by the codec.
 /// https://w3c.github.io/webrtc-pc/#dom-rtcrtpcapabilities-headerextensions
 #[derive(Default, Debug, Clone)]
-pub struct RTPHeaderExtensionCapability {
+pub struct RTCRtpHeaderExtensionCapability {
     pub uri: String,
 }
 
 /// RTPHeaderExtensionParameter represents a negotiated RFC5285 RTP header extension.
 /// https://w3c.github.io/webrtc-pc/#dictionary-rtcrtpheaderextensionparameters-members
 #[derive(Default, Debug, Clone, PartialEq)]
-pub struct RTPHeaderExtensionParameter {
+pub struct RTCRtpHeaderExtensionParameters {
     pub uri: String,
     pub id: isize,
 }
@@ -110,8 +110,8 @@ pub struct RTPHeaderExtensionParameter {
 /// includes the PayloadType that has been negotiated
 /// https://w3c.github.io/webrtc-pc/#rtcrtpcodecparameters
 #[derive(Default, Debug, Clone, PartialEq)]
-pub struct RTPCodecParameters {
-    pub capability: RTPCodecCapability,
+pub struct RTCRtpCodecParameters {
+    pub capability: RTCRtpCodecCapability,
     pub payload_type: PayloadType,
     pub stats_id: String,
 }
@@ -119,9 +119,9 @@ pub struct RTPCodecParameters {
 /// RTPParameters is a list of negotiated codecs and header extensions
 /// https://w3c.github.io/webrtc-pc/#dictionary-rtcrtpparameters-members
 #[derive(Default, Debug, Clone)]
-pub struct RTPParameters {
-    pub header_extensions: Vec<RTPHeaderExtensionParameter>,
-    pub codecs: Vec<RTPCodecParameters>,
+pub struct RTCRtpParameters {
+    pub header_extensions: Vec<RTCRtpHeaderExtensionParameters>,
+    pub codecs: Vec<RTCRtpCodecParameters>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -141,9 +141,9 @@ impl Default for CodecMatch {
 /// Used for lookup up a codec in an existing list to find a match
 /// Returns codecMatchExact, codecMatchPartial, or codecMatchNone
 pub(crate) fn codec_parameters_fuzzy_search(
-    needle: &RTPCodecParameters,
-    haystack: &[RTPCodecParameters],
-) -> (RTPCodecParameters, CodecMatch) {
+    needle: &RTCRtpCodecParameters,
+    haystack: &[RTCRtpCodecParameters],
+) -> (RTCRtpCodecParameters, CodecMatch) {
     let needle_fmtp = parse_fmtp(&needle.capability.sdp_fmtp_line);
 
     //TODO: add unicode case-folding equal support
@@ -164,5 +164,5 @@ pub(crate) fn codec_parameters_fuzzy_search(
         }
     }
 
-    (RTPCodecParameters::default(), CodecMatch::None)
+    (RTCRtpCodecParameters::default(), CodecMatch::None)
 }

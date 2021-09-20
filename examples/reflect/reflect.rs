@@ -8,7 +8,7 @@ use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_VP8};
 use webrtc::api::APIBuilder;
-use webrtc::media::rtp::rtp_codec::{RTPCodecCapability, RTPCodecParameters, RTPCodecType};
+use webrtc::media::rtp::rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType};
 use webrtc::media::rtp::rtp_receiver::RTPReceiver;
 use webrtc::media::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
 use webrtc::media::track::track_local::{TrackLocal, TrackLocalWriter};
@@ -64,8 +64,8 @@ async fn main() -> Result<()> {
     // Setup the codecs you want to use.
     // We'll use a VP8 and Opus but you can also define your own
     m.register_codec(
-        RTPCodecParameters {
-            capability: RTPCodecCapability {
+        RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
                 mime_type: MIME_TYPE_VP8.to_owned(),
                 clock_rate: 90000,
                 channels: 0,
@@ -107,7 +107,7 @@ async fn main() -> Result<()> {
 
     // Create Track that we send video back to browser on
     let output_track = Arc::new(TrackLocalStaticRTP::new(
-        RTPCodecCapability {
+        RTCRtpCodecCapability {
             mime_type: MIME_TYPE_VP8.to_owned(),
             ..Default::default()
         },

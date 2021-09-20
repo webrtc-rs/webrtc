@@ -30,8 +30,8 @@ async fn test_rtp_transceiver_set_codec_preferences() -> Result<()> {
     assert_eq!(&media_video_codecs, &tr.get_codecs().await);
 
     let fail_test_cases = vec![
-        vec![RTPCodecParameters {
-            capability: RTPCodecCapability {
+        vec![RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
                 mime_type: MIME_TYPE_OPUS.to_string(),
                 clock_rate: 48000,
                 channels: 2,
@@ -42,8 +42,8 @@ async fn test_rtp_transceiver_set_codec_preferences() -> Result<()> {
             ..Default::default()
         }],
         vec![
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_VP8.to_string(),
                     clock_rate: 90000,
                     channels: 0,
@@ -53,8 +53,8 @@ async fn test_rtp_transceiver_set_codec_preferences() -> Result<()> {
                 payload_type: 96,
                 ..Default::default()
             },
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_OPUS.to_string(),
                     clock_rate: 48000,
                     channels: 2,
@@ -76,8 +76,8 @@ async fn test_rtp_transceiver_set_codec_preferences() -> Result<()> {
     }
 
     let success_test_cases = vec![
-        vec![RTPCodecParameters {
-            capability: RTPCodecCapability {
+        vec![RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
                 mime_type: MIME_TYPE_VP8.to_string(),
                 clock_rate: 90000,
                 channels: 0,
@@ -88,8 +88,8 @@ async fn test_rtp_transceiver_set_codec_preferences() -> Result<()> {
             ..Default::default()
         }],
         vec![
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_VP8.to_string(),
                     clock_rate: 90000,
                     channels: 0,
@@ -99,8 +99,8 @@ async fn test_rtp_transceiver_set_codec_preferences() -> Result<()> {
                 payload_type: 96,
                 ..Default::default()
             },
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: "video/rtx".to_string(),
                     clock_rate: 90000,
                     channels: 0,
@@ -110,8 +110,8 @@ async fn test_rtp_transceiver_set_codec_preferences() -> Result<()> {
                 payload_type: 97,
                 ..Default::default()
             },
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_VP9.to_string(),
                     clock_rate: 90000,
                     channels: 0,
@@ -121,8 +121,8 @@ async fn test_rtp_transceiver_set_codec_preferences() -> Result<()> {
                 payload_type: 98,
                 ..Default::default()
             },
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: "video/rtx".to_string(),
                     clock_rate: 90000,
                     channels: 0,
@@ -148,8 +148,8 @@ async fn test_rtp_transceiver_set_codec_preferences() -> Result<()> {
 // Assert that SetCodecPreferences properly filters codecs and PayloadTypes are respected
 #[tokio::test]
 async fn test_rtp_transceiver_set_codec_preferences_payload_type() -> Result<()> {
-    let test_codec = RTPCodecParameters {
-        capability: RTPCodecCapability {
+    let test_codec = RTCRtpCodecParameters {
+        capability: RTCRtpCodecCapability {
             mime_type: "video/test_codec".to_string(),
             clock_rate: 90000,
             channels: 0,
@@ -182,8 +182,8 @@ async fn test_rtp_transceiver_set_codec_preferences_payload_type() -> Result<()>
     answer_transceiver
         .set_codec_preferences(vec![
             test_codec,
-            RTPCodecParameters {
-                capability: RTPCodecCapability {
+            RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_VP8.to_string(),
                     clock_rate: 90000,
                     channels: 0,

@@ -42,7 +42,7 @@ use crate::media::dtls_transport::dtls_role::{
 };
 use crate::media::ice_transport::ice_parameters::RTCIceParameters;
 use crate::media::ice_transport::ice_role::ICERole;
-use crate::media::rtp::rtp_codec::{RTPCodecType, RTPHeaderExtensionCapability};
+use crate::media::rtp::rtp_codec::{RTCRtpHeaderExtensionCapability, RTPCodecType};
 use crate::media::rtp::rtp_sender::RTCRtpSender;
 use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
 use crate::media::rtp::{RTPTransceiverInit, SSRC};

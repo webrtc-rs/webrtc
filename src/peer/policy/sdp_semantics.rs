@@ -64,7 +64,7 @@ mod test {
     use super::*;
     use crate::api::media_engine::MediaEngine;
     use crate::api::APIBuilder;
-    use crate::media::rtp::rtp_codec::{RTPCodecCapability, RTPCodecType};
+    use crate::media::rtp::rtp_codec::{RTCRtpCodecCapability, RTPCodecType};
     use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
     use crate::media::rtp::RTPTransceiverInit;
     use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
@@ -254,7 +254,7 @@ mod test {
             .await?;
 
         let video1: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
-            RTPCodecCapability {
+            RTCRtpCodecCapability {
                 mime_type: "video/h264".to_owned(),
                 sdp_fmtp_line:
                     "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"
@@ -267,7 +267,7 @@ mod test {
         let _ = apc.add_track(video1).await?;
 
         let video2: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
-            RTPCodecCapability {
+            RTCRtpCodecCapability {
                 mime_type: "video/h264".to_owned(),
                 sdp_fmtp_line:
                     "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"
@@ -280,7 +280,7 @@ mod test {
         let _ = apc.add_track(video2).await?;
 
         let audio1: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
-            RTPCodecCapability {
+            RTCRtpCodecCapability {
                 mime_type: "audio/opus".to_owned(),
                 ..Default::default()
             },
@@ -290,7 +290,7 @@ mod test {
         let _ = apc.add_track(audio1).await?;
 
         let audio2: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
-            RTPCodecCapability {
+            RTCRtpCodecCapability {
                 mime_type: "audio/opus".to_owned(),
                 ..Default::default()
             },
@@ -368,7 +368,7 @@ mod test {
             .await?;
 
         let video1: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
-            RTPCodecCapability {
+            RTCRtpCodecCapability {
                 mime_type: "video/h264".to_owned(),
                 sdp_fmtp_line:
                     "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"
@@ -381,7 +381,7 @@ mod test {
         let _ = apc.add_track(video1).await?;
 
         let video2: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
-            RTPCodecCapability {
+            RTCRtpCodecCapability {
                 mime_type: "video/h264".to_owned(),
                 sdp_fmtp_line:
                     "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"
@@ -394,7 +394,7 @@ mod test {
         let _ = apc.add_track(video2).await?;
 
         let audio1: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
-            RTPCodecCapability {
+            RTCRtpCodecCapability {
                 mime_type: "audio/opus".to_owned(),
                 ..Default::default()
             },
@@ -404,7 +404,7 @@ mod test {
         let _ = apc.add_track(audio1).await?;
 
         let audio2: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
-            RTPCodecCapability {
+            RTCRtpCodecCapability {
                 mime_type: "audio/opus".to_owned(),
                 ..Default::default()
             },

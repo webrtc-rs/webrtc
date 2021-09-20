@@ -601,7 +601,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
 
     for i in 0..2 {
         let track: Arc<dyn TrackLocal + Send + Sync> = Arc::new(TrackLocalStaticSample::new(
-            RTPCodecCapability {
+            RTCRtpCodecCapability {
                 mime_type: "video/vp8".to_owned(),
                 ..Default::default()
             },
@@ -719,8 +719,8 @@ async fn test_populate_sdp() -> Result<()> {
             Arc::clone(&me),
         )
         .await;
-        tr.set_codec_preferences(vec![RTPCodecParameters {
-            capability: RTPCodecCapability {
+        tr.set_codec_preferences(vec![RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
                 mime_type: MIME_TYPE_VP8.to_owned(),
                 clock_rate: 90000,
                 channels: 0,
@@ -829,8 +829,8 @@ fn test_codecs_from_media_description() -> Result<()> {
 
         assert_eq!(
             codecs,
-            vec![RTPCodecParameters {
-                capability: RTPCodecCapability {
+            vec![RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_OPUS.to_owned(),
                     clock_rate: 48000,
                     channels: 2,
@@ -874,8 +874,8 @@ fn test_codecs_from_media_description() -> Result<()> {
 
         assert_eq!(
             codecs,
-            vec![RTPCodecParameters {
-                capability: RTPCodecCapability {
+            vec![RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_OPUS.to_owned(),
                     clock_rate: 48000,
                     channels: 2,

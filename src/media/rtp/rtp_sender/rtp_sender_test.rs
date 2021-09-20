@@ -2,7 +2,7 @@ use super::*;
 use crate::api::media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9};
 use crate::api::setting_engine::SettingEngine;
 use crate::api::APIBuilder;
-use crate::media::rtp::rtp_codec::RTPCodecCapability;
+use crate::media::rtp::rtp_codec::RTCRtpCodecCapability;
 use crate::media::rtp::rtp_receiver::RTPReceiver;
 use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::media::track::track_remote::TrackRemote;
@@ -32,7 +32,7 @@ async fn test_rtp_sender_replace_track() -> Result<()> {
     let (mut sender, mut receiver) = new_pair(&api).await?;
 
     let track_a = Arc::new(TrackLocalStaticSample::new(
-        RTPCodecCapability {
+        RTCRtpCodecCapability {
             mime_type: MIME_TYPE_VP8.to_owned(),
             ..Default::default()
         },
@@ -41,7 +41,7 @@ async fn test_rtp_sender_replace_track() -> Result<()> {
     ));
 
     let track_b = Arc::new(TrackLocalStaticSample::new(
-        RTPCodecCapability {
+        RTCRtpCodecCapability {
             mime_type: MIME_TYPE_H264.to_owned(),
             ..Default::default()
         },
@@ -146,7 +146,7 @@ async fn test_rtp_sender_set_read_deadline() -> Result<()> {
     let (mut sender, mut receiver, wan) = create_vnet_pair().await?;
 
     let track = Arc::new(TrackLocalStaticSample::new(
-        RTPCodecCapability {
+        RTCRtpCodecCapability {
             mime_type: MIME_TYPE_VP8.to_owned(),
             ..Default::default()
         },
@@ -197,7 +197,7 @@ async fn test_rtp_sender_replace_track_invalid_track_kind_change() -> Result<()>
     let (mut sender, mut receiver) = new_pair(&api).await?;
 
     let track_a = Arc::new(TrackLocalStaticSample::new(
-        RTPCodecCapability {
+        RTCRtpCodecCapability {
             mime_type: MIME_TYPE_VP8.to_owned(),
             ..Default::default()
         },
@@ -206,7 +206,7 @@ async fn test_rtp_sender_replace_track_invalid_track_kind_change() -> Result<()>
     ));
 
     let track_b = Arc::new(TrackLocalStaticSample::new(
-        RTPCodecCapability {
+        RTCRtpCodecCapability {
             mime_type: MIME_TYPE_OPUS.to_owned(),
             ..Default::default()
         },
@@ -256,7 +256,7 @@ async fn test_rtp_sender_replace_track_invalid_codec_change() -> Result<()> {
     let (mut sender, mut receiver) = new_pair(&api).await?;
 
     let track_a = Arc::new(TrackLocalStaticSample::new(
-        RTPCodecCapability {
+        RTCRtpCodecCapability {
             mime_type: MIME_TYPE_VP8.to_owned(),
             ..Default::default()
         },
@@ -265,7 +265,7 @@ async fn test_rtp_sender_replace_track_invalid_codec_change() -> Result<()> {
     ));
 
     let track_b = Arc::new(TrackLocalStaticSample::new(
-        RTPCodecCapability {
+        RTCRtpCodecCapability {
             mime_type: MIME_TYPE_VP9.to_owned(),
             ..Default::default()
         },
@@ -280,8 +280,8 @@ async fn test_rtp_sender_replace_track_invalid_codec_change() -> Result<()> {
     {
         let tr = rtp_sender.tr.lock().await;
         if let Some(t) = &*tr {
-            t.set_codec_preferences(vec![RTPCodecParameters {
-                capability: RTPCodecCapability {
+            t.set_codec_preferences(vec![RTCRtpCodecParameters {
+                capability: RTCRtpCodecCapability {
                     mime_type: MIME_TYPE_VP8.to_owned(),
                     ..Default::default()
                 },

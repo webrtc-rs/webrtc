@@ -5,7 +5,7 @@ use crate::api::media_engine::MediaEngine;
 use crate::error::Error;
 use crate::media::dtls_transport::dtls_fingerprint::DTLSFingerprint;
 use crate::media::ice_transport::ice_parameters::RTCIceParameters;
-use crate::media::rtp::rtp_codec::{RTPCodecCapability, RTPCodecParameters, RTPCodecType};
+use crate::media::rtp::rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType};
 use crate::media::rtp::rtp_transceiver::RTPTransceiver;
 use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
 use crate::media::rtp::{PayloadType, RTCPFeedback, SSRC};
@@ -802,7 +802,7 @@ pub(crate) fn have_data_channel(
 
 pub(crate) fn codecs_from_media_description(
     m: &sdp::media_description::MediaDescription,
-) -> Result<Vec<RTPCodecParameters>> {
+) -> Result<Vec<RTCRtpCodecParameters>> {
     let s = sdp::session_description::SessionDescription {
         media_descriptions: vec![m.clone()],
         ..Default::default()
@@ -842,8 +842,8 @@ pub(crate) fn codecs_from_media_description(
             feedback.push(entry);
         }
 
-        out.push(RTPCodecParameters {
-            capability: RTPCodecCapability {
+        out.push(RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
                 mime_type: m.media_name.media.clone() + "/" + codec.name.as_str(),
                 clock_rate: codec.clock_rate,
                 channels,
