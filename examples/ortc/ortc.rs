@@ -10,7 +10,7 @@ use webrtc::data::data_channel::DataChannel;
 use webrtc::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use webrtc::media::dtls_transport::dtls_parameters::DTLSParameters;
 use webrtc::media::ice_transport::ice_parameters::RTCIceParameters;
-use webrtc::media::ice_transport::ice_role::ICERole;
+use webrtc::media::ice_transport::ice_role::RTCIceRole;
 use webrtc::peer::ice::ice_candidate::RTCIceCandidate;
 use webrtc::peer::ice::ice_gather::RTCIceGatherOptions;
 use webrtc::peer::ice::ice_server::RTCIceServer;
@@ -156,9 +156,9 @@ async fn main() -> Result<()> {
     let remote_signal = serde_json::from_str::<Signal>(&json_str)?;
 
     let ice_role = if is_offer {
-        ICERole::Controlling
+        RTCIceRole::Controlling
     } else {
-        ICERole::Controlled
+        RTCIceRole::Controlled
     };
 
     ice.set_remote_candidates(&remote_signal.ice_candidates)

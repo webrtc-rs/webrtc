@@ -22,7 +22,7 @@ pub(crate) struct PeerConnectionInternal {
     pub(super) is_negotiation_needed: Arc<AtomicBool>,
     pub(super) signaling_state: Arc<AtomicU8>,
 
-    pub(super) ice_transport: Arc<ICETransport>,
+    pub(super) ice_transport: Arc<RTCIceTransport>,
     pub(super) dtls_transport: Arc<RTCDtlsTransport>,
     pub(super) on_peer_connection_state_change_handler:
         Arc<Mutex<Option<OnPeerConnectionStateChangeHdlrFn>>>,
@@ -568,7 +568,7 @@ impl PeerConnectionInternal {
     /// Start all transports. PeerConnection now has enough state
     pub(super) async fn start_transports(
         self: &Arc<Self>,
-        ice_role: ICERole,
+        ice_role: RTCIceRole,
         dtls_role: DTLSRole,
         remote_ufrag: String,
         remote_pwd: String,
@@ -1108,7 +1108,7 @@ impl PeerConnectionInternal {
         }
     }
 
-    pub(super) async fn create_ice_transport(&self, api: &API) -> Arc<ICETransport> {
+    pub(super) async fn create_ice_transport(&self, api: &API) -> Arc<RTCIceTransport> {
         let ice_transport = Arc::new(api.new_ice_transport(Arc::clone(&self.ice_gatherer)));
 
         let ice_connection_state = Arc::clone(&self.ice_connection_state);
@@ -1121,15 +1121,15 @@ impl PeerConnectionInternal {
             Arc::clone(&self.on_peer_connection_state_change_handler);
 
         ice_transport
-            .on_connection_state_change(Box::new(move |state: ICETransportState| {
+            .on_connection_state_change(Box::new(move |state: RTCIceTransportState| {
                 let cs = match state {
-                    ICETransportState::New => RTCIceConnectionState::New,
-                    ICETransportState::Checking => RTCIceConnectionState::Checking,
-                    ICETransportState::Connected => RTCIceConnectionState::Connected,
-                    ICETransportState::Completed => RTCIceConnectionState::Completed,
-                    ICETransportState::Failed => RTCIceConnectionState::Failed,
-                    ICETransportState::Disconnected => RTCIceConnectionState::Disconnected,
-                    ICETransportState::Closed => RTCIceConnectionState::Closed,
+                    RTCIceTransportState::New => RTCIceConnectionState::New,
+                    RTCIceTransportState::Checking => RTCIceConnectionState::Checking,
+                    RTCIceTransportState::Connected => RTCIceConnectionState::Connected,
+                    RTCIceTransportState::Completed => RTCIceConnectionState::Completed,
+                    RTCIceTransportState::Failed => RTCIceConnectionState::Failed,
+                    RTCIceTransportState::Disconnected => RTCIceConnectionState::Disconnected,
+                    RTCIceTransportState::Closed => RTCIceConnectionState::Closed,
                     _ => {
                         log::warn!("on_connection_state_change: unhandled ICE state: {}", state);
                         return Box::pin(async {});

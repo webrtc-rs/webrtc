@@ -6,7 +6,7 @@ pub mod media_engine;
 pub mod setting_engine;
 
 use crate::media::dtls_transport::RTCDtlsTransport;
-use crate::media::ice_transport::ICETransport;
+use crate::media::ice_transport::RTCIceTransport;
 use crate::peer::certificate::RTCCertificate;
 use crate::peer::ice::ice_gather::ice_gatherer::RTCIceGatherer;
 use crate::peer::ice::ice_gather::RTCIceGatherOptions;
@@ -72,8 +72,8 @@ impl API {
     /// new_ice_transport creates a new ice transport.
     /// This constructor is part of the ORTC API. It is not
     /// meant to be used together with the basic WebRTC API.
-    pub fn new_ice_transport(&self, gatherer: Arc<RTCIceGatherer>) -> ICETransport {
-        ICETransport::new(gatherer)
+    pub fn new_ice_transport(&self, gatherer: Arc<RTCIceGatherer>) -> RTCIceTransport {
+        RTCIceTransport::new(gatherer)
     }
 
     /// new_dtls_transport creates a new dtls_transport transport.
@@ -81,7 +81,7 @@ impl API {
     /// meant to be used together with the basic WebRTC API.
     pub fn new_dtls_transport(
         &self,
-        ice_transport: Arc<ICETransport>,
+        ice_transport: Arc<RTCIceTransport>,
         mut certificates: Vec<RTCCertificate>,
     ) -> Result<RTCDtlsTransport> {
         if !certificates.is_empty() {

@@ -21,9 +21,9 @@ use crate::default_srtp_protection_profiles;
 use crate::error::Error;
 use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
 use crate::media::dtls_transport::dtls_transport_state::RTCDtlsTransportState;
-use crate::media::ice_transport::ice_role::ICERole;
-use crate::media::ice_transport::ice_transport_state::ICETransportState;
-use crate::media::ice_transport::ICETransport;
+use crate::media::ice_transport::ice_role::RTCIceRole;
+use crate::media::ice_transport::ice_transport_state::RTCIceTransportState;
+use crate::media::ice_transport::RTCIceTransport;
 use crate::peer::certificate::RTCCertificate;
 use crate::util::flatten_errs;
 use crate::util::mux::endpoint::Endpoint;
@@ -49,7 +49,7 @@ pub type OnDTLSTransportStateChangeHdlrFn = Box<
 /// and received by data channels.
 #[derive(Default)]
 pub struct RTCDtlsTransport {
-    pub(crate) ice_transport: Arc<ICETransport>,
+    pub(crate) ice_transport: Arc<RTCIceTransport>,
     pub(crate) certificates: Vec<RTCCertificate>,
     pub(crate) setting_engine: Arc<SettingEngine>,
 
@@ -76,7 +76,7 @@ pub struct RTCDtlsTransport {
 
 impl RTCDtlsTransport {
     pub(crate) fn new(
-        ice_transport: Arc<ICETransport>,
+        ice_transport: Arc<RTCIceTransport>,
         certificates: Vec<RTCCertificate>,
         setting_engine: Arc<SettingEngine>,
     ) -> Self {
@@ -101,7 +101,7 @@ impl RTCDtlsTransport {
 
     /// returns the currently-configured ICETransport or None
     /// if one has not been configured
-    pub fn ice_transport(&self) -> &ICETransport {
+    pub fn ice_transport(&self) -> &RTCIceTransport {
         &self.ice_transport
     }
 
@@ -288,7 +288,7 @@ impl RTCDtlsTransport {
         };
 
         // Remote was auto and no explicit role was configured via SettingEngine
-        if self.ice_transport.role().await == ICERole::Controlling {
+        if self.ice_transport.role().await == RTCIceRole::Controlling {
             return DTLSRole::Server;
         }
 
@@ -519,7 +519,7 @@ impl RTCDtlsTransport {
     }
 
     pub(crate) fn ensure_ice_conn(&self) -> Result<()> {
-        if self.ice_transport.state() == ICETransportState::New {
+        if self.ice_transport.state() == RTCIceTransportState::New {
             Err(Error::ErrICEConnectionNotStarted.into())
         } else {
             Ok(())

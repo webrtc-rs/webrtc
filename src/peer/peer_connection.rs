@@ -10,8 +10,8 @@ use crate::data::data_channel::DataChannel;
 use crate::data::sctp_transport::SCTPTransport;
 use crate::media::dtls_transport::dtls_transport_state::RTCDtlsTransportState;
 use crate::media::dtls_transport::RTCDtlsTransport;
-use crate::media::ice_transport::ice_transport_state::ICETransportState;
-use crate::media::ice_transport::ICETransport;
+use crate::media::ice_transport::ice_transport_state::RTCIceTransportState;
+use crate::media::ice_transport::RTCIceTransport;
 use crate::media::rtp::rtp_receiver::RTCRtpReceiver;
 use crate::media::rtp::rtp_transceiver::{
     find_by_mid, handle_unknown_rtp_packet, satisfy_type_and_direction, RTCRtpTransceiver,
@@ -41,7 +41,7 @@ use crate::media::dtls_transport::dtls_role::{
     DTLSRole, DEFAULT_DTLS_ROLE_ANSWER, DEFAULT_DTLS_ROLE_OFFER,
 };
 use crate::media::ice_transport::ice_parameters::RTCIceParameters;
-use crate::media::ice_transport::ice_role::ICERole;
+use crate::media::ice_transport::ice_role::RTCIceRole;
 use crate::media::rtp::rtp_codec::{RTCRtpHeaderExtensionCapability, RTPCodecType};
 use crate::media::rtp::rtp_sender::RTCRtpSender;
 use crate::media::rtp::rtp_transceiver_direction::RTCRtpTransceiverDirection;
@@ -117,7 +117,7 @@ pub type OnNegotiationNeededHdlrFn =
 
 #[derive(Clone)]
 struct StartTransportsParams {
-    ice_transport: Arc<ICETransport>,
+    ice_transport: Arc<RTCIceTransport>,
     dtls_transport: Arc<RTCDtlsTransport>,
     on_peer_connection_state_change_handler: Arc<Mutex<Option<OnPeerConnectionStateChangeHdlrFn>>>,
     is_closed: Arc<AtomicBool>,
@@ -1378,9 +1378,9 @@ impl RTCPeerConnection {
                 && remote_is_lite == self.internal.setting_engine.candidates.ice_lite)
                 || (remote_is_lite && !self.internal.setting_engine.candidates.ice_lite)
             {
-                ICERole::Controlling
+                RTCIceRole::Controlling
             } else {
-                ICERole::Controlled
+                RTCIceRole::Controlled
             };
 
             // Start the networking in a new routine since it will block until

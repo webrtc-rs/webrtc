@@ -39,7 +39,7 @@ async fn test_ice_transport_on_selected_candidate_pair_change() -> Result<()> {
         .sctp()
         .transport()
         .ice_transport()
-        .on_selected_candidate_pair_change(Box::new(move |_: ICECandidatePair| {
+        .on_selected_candidate_pair_change(Box::new(move |_: RTCIceCandidatePair| {
             sender_called_candidate_change2.store(1, Ordering::SeqCst);
             Box::pin(async {})
         }))

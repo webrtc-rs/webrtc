@@ -3,7 +3,7 @@ use std::fmt;
 
 /// ICETransportState represents the current state of the ICE transport.
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum ICETransportState {
+pub enum RTCIceTransportState {
     Unspecified,
 
     /// ICETransportStateNew indicates the ICETransport is waiting
@@ -43,9 +43,9 @@ pub enum ICETransportState {
     Closed,
 }
 
-impl Default for ICETransportState {
+impl Default for RTCIceTransportState {
     fn default() -> Self {
-        ICETransportState::Unspecified
+        RTCIceTransportState::Unspecified
     }
 }
 
@@ -57,22 +57,22 @@ const ICE_TRANSPORT_STATE_FAILED_STR: &str = "failed";
 const ICE_TRANSPORT_STATE_DISCONNECTED_STR: &str = "disconnected";
 const ICE_TRANSPORT_STATE_CLOSED_STR: &str = "closed";
 
-impl From<&str> for ICETransportState {
+impl From<&str> for RTCIceTransportState {
     fn from(raw: &str) -> Self {
         match raw {
-            ICE_TRANSPORT_STATE_NEW_STR => ICETransportState::New,
-            ICE_TRANSPORT_STATE_CHECKING_STR => ICETransportState::Checking,
-            ICE_TRANSPORT_STATE_CONNECTED_STR => ICETransportState::Connected,
-            ICE_TRANSPORT_STATE_COMPLETED_STR => ICETransportState::Completed,
-            ICE_TRANSPORT_STATE_FAILED_STR => ICETransportState::Failed,
-            ICE_TRANSPORT_STATE_DISCONNECTED_STR => ICETransportState::Disconnected,
-            ICE_TRANSPORT_STATE_CLOSED_STR => ICETransportState::Closed,
-            _ => ICETransportState::Unspecified,
+            ICE_TRANSPORT_STATE_NEW_STR => RTCIceTransportState::New,
+            ICE_TRANSPORT_STATE_CHECKING_STR => RTCIceTransportState::Checking,
+            ICE_TRANSPORT_STATE_CONNECTED_STR => RTCIceTransportState::Connected,
+            ICE_TRANSPORT_STATE_COMPLETED_STR => RTCIceTransportState::Completed,
+            ICE_TRANSPORT_STATE_FAILED_STR => RTCIceTransportState::Failed,
+            ICE_TRANSPORT_STATE_DISCONNECTED_STR => RTCIceTransportState::Disconnected,
+            ICE_TRANSPORT_STATE_CLOSED_STR => RTCIceTransportState::Closed,
+            _ => RTCIceTransportState::Unspecified,
         }
     }
 }
 
-impl From<u8> for ICETransportState {
+impl From<u8> for RTCIceTransportState {
     fn from(v: u8) -> Self {
         match v {
             1 => Self::New,
@@ -87,22 +87,22 @@ impl From<u8> for ICETransportState {
     }
 }
 
-impl fmt::Display for ICETransportState {
+impl fmt::Display for RTCIceTransportState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            ICETransportState::New => write!(f, "{}", ICE_TRANSPORT_STATE_NEW_STR),
-            ICETransportState::Checking => write!(f, "{}", ICE_TRANSPORT_STATE_CHECKING_STR),
-            ICETransportState::Connected => {
+            RTCIceTransportState::New => write!(f, "{}", ICE_TRANSPORT_STATE_NEW_STR),
+            RTCIceTransportState::Checking => write!(f, "{}", ICE_TRANSPORT_STATE_CHECKING_STR),
+            RTCIceTransportState::Connected => {
                 write!(f, "{}", ICE_TRANSPORT_STATE_CONNECTED_STR)
             }
-            ICETransportState::Completed => write!(f, "{}", ICE_TRANSPORT_STATE_COMPLETED_STR),
-            ICETransportState::Failed => {
+            RTCIceTransportState::Completed => write!(f, "{}", ICE_TRANSPORT_STATE_COMPLETED_STR),
+            RTCIceTransportState::Failed => {
                 write!(f, "{}", ICE_TRANSPORT_STATE_FAILED_STR)
             }
-            ICETransportState::Disconnected => {
+            RTCIceTransportState::Disconnected => {
                 write!(f, "{}", ICE_TRANSPORT_STATE_DISCONNECTED_STR)
             }
-            ICETransportState::Closed => {
+            RTCIceTransportState::Closed => {
                 write!(f, "{}", ICE_TRANSPORT_STATE_CLOSED_STR)
             }
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
@@ -110,31 +110,31 @@ impl fmt::Display for ICETransportState {
     }
 }
 
-impl From<ConnectionState> for ICETransportState {
+impl From<ConnectionState> for RTCIceTransportState {
     fn from(raw: ConnectionState) -> Self {
         match raw {
-            ConnectionState::New => ICETransportState::New,
-            ConnectionState::Checking => ICETransportState::Checking,
-            ConnectionState::Connected => ICETransportState::Connected,
-            ConnectionState::Completed => ICETransportState::Completed,
-            ConnectionState::Failed => ICETransportState::Failed,
-            ConnectionState::Disconnected => ICETransportState::Disconnected,
-            ConnectionState::Closed => ICETransportState::Closed,
-            _ => ICETransportState::Unspecified,
+            ConnectionState::New => RTCIceTransportState::New,
+            ConnectionState::Checking => RTCIceTransportState::Checking,
+            ConnectionState::Connected => RTCIceTransportState::Connected,
+            ConnectionState::Completed => RTCIceTransportState::Completed,
+            ConnectionState::Failed => RTCIceTransportState::Failed,
+            ConnectionState::Disconnected => RTCIceTransportState::Disconnected,
+            ConnectionState::Closed => RTCIceTransportState::Closed,
+            _ => RTCIceTransportState::Unspecified,
         }
     }
 }
 
-impl ICETransportState {
+impl RTCIceTransportState {
     pub(crate) fn to_ice(self) -> ConnectionState {
         match self {
-            ICETransportState::New => ConnectionState::New,
-            ICETransportState::Checking => ConnectionState::Checking,
-            ICETransportState::Connected => ConnectionState::Connected,
-            ICETransportState::Completed => ConnectionState::Completed,
-            ICETransportState::Failed => ConnectionState::Failed,
-            ICETransportState::Disconnected => ConnectionState::Disconnected,
-            ICETransportState::Closed => ConnectionState::Closed,
+            RTCIceTransportState::New => ConnectionState::New,
+            RTCIceTransportState::Checking => ConnectionState::Checking,
+            RTCIceTransportState::Connected => ConnectionState::Connected,
+            RTCIceTransportState::Completed => ConnectionState::Completed,
+            RTCIceTransportState::Failed => ConnectionState::Failed,
+            RTCIceTransportState::Disconnected => ConnectionState::Disconnected,
+            RTCIceTransportState::Closed => ConnectionState::Closed,
             _ => ConnectionState::Unspecified,
         }
     }
@@ -147,14 +147,14 @@ mod test {
     #[test]
     fn test_ice_transport_state_string() {
         let tests = vec![
-            (ICETransportState::Unspecified, "Unspecified"),
-            (ICETransportState::New, "new"),
-            (ICETransportState::Checking, "checking"),
-            (ICETransportState::Connected, "connected"),
-            (ICETransportState::Completed, "completed"),
-            (ICETransportState::Failed, "failed"),
-            (ICETransportState::Disconnected, "disconnected"),
-            (ICETransportState::Closed, "closed"),
+            (RTCIceTransportState::Unspecified, "Unspecified"),
+            (RTCIceTransportState::New, "new"),
+            (RTCIceTransportState::Checking, "checking"),
+            (RTCIceTransportState::Connected, "connected"),
+            (RTCIceTransportState::Completed, "completed"),
+            (RTCIceTransportState::Failed, "failed"),
+            (RTCIceTransportState::Disconnected, "disconnected"),
+            (RTCIceTransportState::Closed, "closed"),
         ];
 
         for (state, expected_string) in tests {
@@ -165,22 +165,25 @@ mod test {
     #[test]
     fn test_ice_transport_state_convert() {
         let tests = vec![
-            (ICETransportState::Unspecified, ConnectionState::Unspecified),
-            (ICETransportState::New, ConnectionState::New),
-            (ICETransportState::Checking, ConnectionState::Checking),
-            (ICETransportState::Connected, ConnectionState::Connected),
-            (ICETransportState::Completed, ConnectionState::Completed),
-            (ICETransportState::Failed, ConnectionState::Failed),
             (
-                ICETransportState::Disconnected,
+                RTCIceTransportState::Unspecified,
+                ConnectionState::Unspecified,
+            ),
+            (RTCIceTransportState::New, ConnectionState::New),
+            (RTCIceTransportState::Checking, ConnectionState::Checking),
+            (RTCIceTransportState::Connected, ConnectionState::Connected),
+            (RTCIceTransportState::Completed, ConnectionState::Completed),
+            (RTCIceTransportState::Failed, ConnectionState::Failed),
+            (
+                RTCIceTransportState::Disconnected,
                 ConnectionState::Disconnected,
             ),
-            (ICETransportState::Closed, ConnectionState::Closed),
+            (RTCIceTransportState::Closed, ConnectionState::Closed),
         ];
 
         for (native, ice_state) in tests {
             assert_eq!(native.to_ice(), ice_state);
-            assert_eq!(native, ICETransportState::from(ice_state));
+            assert_eq!(native, RTCIceTransportState::from(ice_state));
         }
     }
 }

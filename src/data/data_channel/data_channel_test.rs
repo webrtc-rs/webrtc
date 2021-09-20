@@ -11,8 +11,8 @@ use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapab
 use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
 use crate::media::dtls_transport::RTCDtlsTransport;
 use crate::media::ice_transport::ice_parameters::RTCIceParameters;
-use crate::media::ice_transport::ice_role::ICERole;
-use crate::media::ice_transport::ICETransport;
+use crate::media::ice_transport::ice_role::RTCIceRole;
+use crate::media::ice_transport::RTCIceTransport;
 use crate::peer::configuration::RTCConfiguration;
 use crate::peer::ice::ice_candidate::RTCIceCandidate;
 use crate::peer::ice::ice_connection_state::RTCIceConnectionState;
@@ -1344,7 +1344,7 @@ async fn test_data_channel_non_standard_session_description() -> Result<()> {
 struct TestOrtcStack {
     //api      *API
     gatherer: Arc<RTCIceGatherer>,
-    ice: Arc<ICETransport>,
+    ice: Arc<RTCIceTransport>,
     dtls: Arc<RTCDtlsTransport>,
     sctp: Arc<SCTPTransport>,
 }
@@ -1380,9 +1380,9 @@ impl TestOrtcStack {
 
     async fn set_signal(&self, sig: &TestOrtcSignal, is_offer: bool) -> Result<()> {
         let ice_role = if is_offer {
-            ICERole::Controlling
+            RTCIceRole::Controlling
         } else {
-            ICERole::Controlled
+            RTCIceRole::Controlled
         };
 
         self.ice.set_remote_candidates(&sig.ice_candidates).await?;
