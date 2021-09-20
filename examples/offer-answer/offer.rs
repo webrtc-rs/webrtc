@@ -17,7 +17,7 @@ use webrtc::peer::ice::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
 use webrtc::peer::ice::ice_server::RTCIceServer;
 use webrtc::peer::peer_connection::RTCPeerConnection;
 use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
-use webrtc::peer::sdp::session_description::{RTCSessionDescription, RTCSessionDescriptionSerde};
+use webrtc::peer::sdp::session_description::RTCSessionDescription;
 use webrtc::util::math_rand_alpha;
 
 #[macro_use]
@@ -102,13 +102,12 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
         // A HTTP handler that processes a SessionDescription given to us from the other WebRTC-rs or Pion process
         (&Method::POST, "/sdp") => {
             //println!("remote_handler receive from /sdp");
-            let mut sdp = RTCSessionDescription::default();
             let sdp_str = match std::str::from_utf8(&hyper::body::to_bytes(req.into_body()).await?)
             {
                 Ok(s) => s.to_owned(),
                 Err(err) => panic!("{}", err),
             };
-            sdp.serde = match serde_json::from_str::<RTCSessionDescriptionSerde>(&sdp_str) {
+            let sdp = match serde_json::from_str::<RTCSessionDescription>(&sdp_str) {
                 Ok(s) => s,
                 Err(err) => panic!("{}", err),
             };
@@ -329,7 +328,7 @@ async fn main() -> Result<()> {
     let offer = peer_connection.create_offer(None).await?;
 
     // Send our offer to the HTTP server listening in the other process
-    let payload = match serde_json::to_string(&offer.serde) {
+    let payload = match serde_json::to_string(&offer) {
         Ok(p) => p,
         Err(err) => panic!("{}", err),
     };

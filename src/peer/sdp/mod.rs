@@ -17,7 +17,6 @@ use crate::MEDIA_SECTION_APPLICATION;
 pub mod sdp_type;
 pub mod session_description;
 
-use crate::peer::sdp::session_description::RTCSessionDescriptionSerde;
 use anyhow::Result;
 use ice::candidate::candidate_base::unmarshal_candidate;
 use ice::candidate::Candidate;
@@ -350,10 +349,8 @@ pub(crate) async fn populate_local_candidates(
         }
 
         Some(session_description::RTCSessionDescription {
-            serde: RTCSessionDescriptionSerde {
-                sdp_type: sd.serde.sdp_type,
-                sdp: parsed.marshal(),
-            },
+            sdp_type: sd.sdp_type,
+            sdp: parsed.marshal(),
             parsed: Some(parsed),
         })
     } else {

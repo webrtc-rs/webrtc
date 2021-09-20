@@ -4,26 +4,23 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct RTCSessionDescriptionSerde {
+/// SessionDescription is used to expose local and remote session descriptions.
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+pub struct RTCSessionDescription {
     #[serde(rename = "type")]
     pub sdp_type: RTCSdpType,
 
     pub sdp: String,
-}
 
-/// SessionDescription is used to expose local and remote session descriptions.
-#[derive(Default, Debug, Clone)]
-pub struct RTCSessionDescription {
-    pub serde: RTCSessionDescriptionSerde,
     /// This will never be initialized by callers, internal use only
+    #[serde(skip)]
     pub(crate) parsed: Option<sdp::session_description::SessionDescription>,
 }
 
 /// Unmarshal is a helper to deserialize the sdp
 impl RTCSessionDescription {
     pub fn unmarshal(&self) -> Result<sdp::session_description::SessionDescription> {
-        let mut reader = Cursor::new(self.serde.sdp.as_bytes());
+        let mut reader = Cursor::new(self.sdp.as_bytes());
         let parsed = sdp::session_description::SessionDescription::unmarshal(&mut reader)?;
         Ok(parsed)
     }
@@ -41,50 +38,40 @@ mod test {
         let tests = vec![
             (
                 RTCSessionDescription {
-                    serde: RTCSessionDescriptionSerde {
-                        sdp_type: RTCSdpType::Offer,
-                        sdp: "sdp".to_owned(),
-                    },
+                    sdp_type: RTCSdpType::Offer,
+                    sdp: "sdp".to_owned(),
                     parsed: None,
                 },
                 r#"{"type":"offer","sdp":"sdp"}"#,
             ),
             (
                 RTCSessionDescription {
-                    serde: RTCSessionDescriptionSerde {
-                        sdp_type: RTCSdpType::Pranswer,
-                        sdp: "sdp".to_owned(),
-                    },
+                    sdp_type: RTCSdpType::Pranswer,
+                    sdp: "sdp".to_owned(),
                     parsed: None,
                 },
                 r#"{"type":"pranswer","sdp":"sdp"}"#,
             ),
             (
                 RTCSessionDescription {
-                    serde: RTCSessionDescriptionSerde {
-                        sdp_type: RTCSdpType::Answer,
-                        sdp: "sdp".to_owned(),
-                    },
+                    sdp_type: RTCSdpType::Answer,
+                    sdp: "sdp".to_owned(),
                     parsed: None,
                 },
                 r#"{"type":"answer","sdp":"sdp"}"#,
             ),
             (
                 RTCSessionDescription {
-                    serde: RTCSessionDescriptionSerde {
-                        sdp_type: RTCSdpType::Rollback,
-                        sdp: "sdp".to_owned(),
-                    },
+                    sdp_type: RTCSdpType::Rollback,
+                    sdp: "sdp".to_owned(),
                     parsed: None,
                 },
                 r#"{"type":"rollback","sdp":"sdp"}"#,
             ),
             (
                 RTCSessionDescription {
-                    serde: RTCSessionDescriptionSerde {
-                        sdp_type: RTCSdpType::Unspecified,
-                        sdp: "sdp".to_owned(),
-                    },
+                    sdp_type: RTCSdpType::Unspecified,
+                    sdp: "sdp".to_owned(),
                     parsed: None,
                 },
                 r#"{"type":"Unspecified","sdp":"sdp"}"#,
@@ -92,14 +79,16 @@ mod test {
         ];
 
         for (desc, expected_string) in tests {
-            let result = serde_json::to_string(&desc.serde);
+            let result = serde_json::to_string(&desc);
             assert!(result.is_ok(), "testCase: marshal err: {:?}", result);
             let desc_data = result.unwrap();
             assert_eq!(desc_data, expected_string, "string is not expected");
 
-            let result = serde_json::from_str::<RTCSessionDescriptionSerde>(&desc_data);
+            let result = serde_json::from_str::<RTCSessionDescription>(&desc_data);
             assert!(result.is_ok(), "testCase: unmarshal err: {:?}", result);
-            assert_eq!(result.unwrap(), desc.serde);
+            if let Ok(sd) = result {
+                assert!(sd.sdp == desc.sdp && sd.sdp_type == desc.sdp_type);
+            }
         }
     }
 
@@ -114,10 +103,8 @@ mod test {
         let offer = pc.create_offer(None).await?;
 
         let desc = RTCSessionDescription {
-            serde: RTCSessionDescriptionSerde {
-                sdp_type: offer.serde.sdp_type,
-                sdp: offer.serde.sdp,
-            },
+            sdp_type: offer.sdp_type,
+            sdp: offer.sdp,
             ..Default::default()
         };
 

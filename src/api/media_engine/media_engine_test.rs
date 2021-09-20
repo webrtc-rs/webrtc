@@ -18,7 +18,7 @@ async fn test_opus_case() -> Result<()> {
     let offer = pc.create_offer(None).await?;
 
     let re = Regex::new(r"(?m)^a=rtpmap:\d+ opus/48000/2")?;
-    assert!(re.is_match(offer.serde.sdp.as_str()));
+    assert!(re.is_match(offer.sdp.as_str()));
 
     pc.close().await?;
 
@@ -38,11 +38,11 @@ async fn test_video_case() -> Result<()> {
     let offer = pc.create_offer(None).await?;
 
     let re = Regex::new(r"(?m)^a=rtpmap:\d+ H264/90000")?;
-    assert!(re.is_match(offer.serde.sdp.as_str()));
+    assert!(re.is_match(offer.sdp.as_str()));
     let re = Regex::new(r"(?m)^a=rtpmap:\d+ VP8/90000")?;
-    assert!(re.is_match(offer.serde.sdp.as_str()));
+    assert!(re.is_match(offer.sdp.as_str()));
     let re = Regex::new(r"(?m)^a=rtpmap:\d+ VP9/90000")?;
-    assert!(re.is_match(offer.serde.sdp.as_str()));
+    assert!(re.is_match(offer.sdp.as_str()));
 
     pc.close().await?;
 

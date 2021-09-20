@@ -1311,17 +1311,17 @@ async fn test_data_channel_non_standard_session_description() -> Result<()> {
     const OLD_ATTRIBUTE: &str = "a=sctpmap:5000 webrtc-datachannel 256\r";
 
     let re = Regex::new(r"m=application (.*?)\r")?;
-    offer.serde.sdp = re
-        .replace_all(offer.serde.sdp.as_str(), OLD_APPLICATION)
+    offer.sdp = re
+        .replace_all(offer.sdp.as_str(), OLD_APPLICATION)
         .to_string();
     let re = Regex::new(r"a=sctp-port(.*?)\r")?;
-    offer.serde.sdp = re
-        .replace_all(offer.serde.sdp.as_str(), OLD_ATTRIBUTE)
+    offer.sdp = re
+        .replace_all(offer.sdp.as_str(), OLD_ATTRIBUTE)
         .to_string();
 
     // Assert that replace worked
-    assert!(offer.serde.sdp.contains(OLD_APPLICATION));
-    assert!(offer.serde.sdp.contains(OLD_ATTRIBUTE));
+    assert!(offer.sdp.contains(OLD_APPLICATION));
+    assert!(offer.sdp.contains(OLD_ATTRIBUTE));
 
     answer_pc.set_remote_description(offer).await?;
 

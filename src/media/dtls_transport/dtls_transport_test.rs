@@ -98,7 +98,7 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
 
             // Replace with invalid fingerprint
             let re = Regex::new(r"sha-256 (.*?)\r")?;
-            offer.serde.sdp = re.replace_all(offer.serde.sdp.as_str(), "sha-256 AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA\r").to_string();
+            offer.sdp = re.replace_all(offer.sdp.as_str(), "sha-256 AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA\r").to_string();
 
             pc_answer.set_remote_description(offer).await?;
 
@@ -106,7 +106,7 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
 
             pc_answer.set_local_description(answer.clone()).await?;
 
-            answer.serde.sdp = re.replace_all(answer.serde.sdp.as_str(), "sha-256 AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA\r").to_string();
+            answer.sdp = re.replace_all(answer.sdp.as_str(), "sha-256 AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA\r").to_string();
 
             pc_offer.set_remote_description(answer).await?;
         }

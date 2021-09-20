@@ -11,7 +11,7 @@ use webrtc::data::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::peer::configuration::RTCConfiguration;
 use webrtc::peer::ice::ice_server::RTCIceServer;
 use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
-use webrtc::peer::sdp::session_description::{RTCSessionDescription, RTCSessionDescriptionSerde};
+use webrtc::peer::sdp::session_description::RTCSessionDescription;
 use webrtc::util::math_rand_alpha;
 
 //use std::io::Write;
@@ -157,7 +157,7 @@ async fn main() -> Result<()> {
 
     // Output the answer in base64 so we can paste it in browser
     if let Some(local_desc) = peer_connection.local_description().await {
-        let json_str = serde_json::to_string(&local_desc.serde)?;
+        let json_str = serde_json::to_string(&local_desc)?;
         let b64 = signal::encode(&json_str);
         println!("{}", b64);
     } else {
@@ -165,10 +165,9 @@ async fn main() -> Result<()> {
     }
 
     // Wait for the answer to be pasted
-    let mut answer = RTCSessionDescription::default();
     let line = signal::must_read_stdin()?;
     let desc_data = signal::decode(line.as_str())?;
-    answer.serde = serde_json::from_str::<RTCSessionDescriptionSerde>(&desc_data)?;
+    let answer = serde_json::from_str::<RTCSessionDescription>(&desc_data)?;
 
     // Apply the answer as the remote description
     peer_connection.set_remote_description(answer).await?;

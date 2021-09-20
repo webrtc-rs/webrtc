@@ -6,56 +6,55 @@ mod peer_connection_internal;
 use crate::api::media_engine::MediaEngine;
 use crate::api::setting_engine::SettingEngine;
 use crate::api::API;
-use crate::data::data_channel::RTCDataChannel;
-use crate::data::sctp_transport::RTCSctpTransport;
-use crate::media::dtls_transport::dtls_transport_state::RTCDtlsTransportState;
-use crate::media::dtls_transport::RTCDtlsTransport;
-use crate::media::ice_transport::ice_transport_state::RTCIceTransportState;
-use crate::media::ice_transport::RTCIceTransport;
-use crate::media::rtp::rtp_receiver::RTCRtpReceiver;
-use crate::media::rtp::rtp_transceiver::{
-    find_by_mid, handle_unknown_rtp_packet, satisfy_type_and_direction, RTCRtpTransceiver,
-};
-use crate::media::track::track_remote::TrackRemote;
-use crate::peer::configuration::RTCConfiguration;
-use crate::peer::ice::ice_connection_state::RTCIceConnectionState;
-use crate::peer::ice::ice_gather::ice_gatherer::{
-    OnGatheringCompleteHdlrFn, OnICEGathererStateChangeHdlrFn, OnLocalCandidateHdlrFn,
-    RTCIceGatherer,
-};
-use crate::peer::ice::ice_gather::RTCIceGatherOptions;
-use crate::peer::peer_connection_state::{NegotiationNeededState, RTCPeerConnectionState};
-use crate::peer::policy::sdp_semantics::RTCSdpSemantics;
-use crate::peer::sdp::session_description::{RTCSessionDescription, RTCSessionDescriptionSerde};
-use crate::peer::signaling_state::{check_next_signaling_state, RTCSignalingState, StateChangeOp};
-
 use crate::data::data_channel::data_channel_init::RTCDataChannelInit;
 use crate::data::data_channel::data_channel_parameters::DataChannelParameters;
 use crate::data::data_channel::data_channel_state::RTCDataChannelState;
+use crate::data::data_channel::RTCDataChannel;
 use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use crate::data::sctp_transport::sctp_transport_state::RTCSctpTransportState;
+use crate::data::sctp_transport::RTCSctpTransport;
 use crate::error::Error;
 use crate::media::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
 use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
 use crate::media::dtls_transport::dtls_role::{
     DTLSRole, DEFAULT_DTLS_ROLE_ANSWER, DEFAULT_DTLS_ROLE_OFFER,
 };
+use crate::media::dtls_transport::dtls_transport_state::RTCDtlsTransportState;
+use crate::media::dtls_transport::RTCDtlsTransport;
 use crate::media::ice_transport::ice_parameters::RTCIceParameters;
 use crate::media::ice_transport::ice_role::RTCIceRole;
+use crate::media::ice_transport::ice_transport_state::RTCIceTransportState;
+use crate::media::ice_transport::RTCIceTransport;
 use crate::media::rtp::rtp_codec::{RTCRtpHeaderExtensionCapability, RTPCodecType};
+use crate::media::rtp::rtp_receiver::RTCRtpReceiver;
 use crate::media::rtp::rtp_sender::RTCRtpSender;
+use crate::media::rtp::rtp_transceiver::{
+    find_by_mid, handle_unknown_rtp_packet, satisfy_type_and_direction, RTCRtpTransceiver,
+};
 use crate::media::rtp::rtp_transceiver_direction::RTCRtpTransceiverDirection;
 use crate::media::rtp::{RTCRtpTransceiverInit, SSRC};
 use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::media::track::track_local::TrackLocal;
+use crate::media::track::track_remote::TrackRemote;
 use crate::peer::certificate::RTCCertificate;
+use crate::peer::configuration::RTCConfiguration;
 use crate::peer::ice::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
+use crate::peer::ice::ice_connection_state::RTCIceConnectionState;
+use crate::peer::ice::ice_gather::ice_gatherer::{
+    OnGatheringCompleteHdlrFn, OnICEGathererStateChangeHdlrFn, OnLocalCandidateHdlrFn,
+    RTCIceGatherer,
+};
 use crate::peer::ice::ice_gather::ice_gatherer_state::RTCIceGathererState;
 use crate::peer::ice::ice_gather::ice_gathering_state::RTCIceGatheringState;
+use crate::peer::ice::ice_gather::RTCIceGatherOptions;
 use crate::peer::offer_answer_options::{RTCAnswerOptions, RTCOfferOptions};
 use crate::peer::operation::{Operation, Operations};
+use crate::peer::peer_connection_state::{NegotiationNeededState, RTCPeerConnectionState};
+use crate::peer::policy::sdp_semantics::RTCSdpSemantics;
 use crate::peer::sdp::sdp_type::RTCSdpType;
+use crate::peer::sdp::session_description::RTCSessionDescription;
 use crate::peer::sdp::*;
+use crate::peer::signaling_state::{check_next_signaling_state, RTCSignalingState, StateChangeOp};
 use crate::util::{flatten_errs, math_rand_alpha};
 use crate::{
     MEDIA_SECTION_APPLICATION, RECEIVE_MTU, SIMULCAST_MAX_PROBE_ROUTINES, SIMULCAST_PROBE_COUNT,
@@ -405,7 +404,7 @@ impl RTCPeerConnection {
                                 return true;
                             }
                         }
-                        match local_desc.serde.sdp_type {
+                        match local_desc.sdp_type {
                             RTCSdpType::Offer => {
                                 // Step 5.3.2
                                 let current_remote_description =
@@ -739,10 +738,8 @@ impl RTCPeerConnection {
             let sdp = d.marshal();
 
             offer = RTCSessionDescription {
-                serde: RTCSessionDescriptionSerde {
-                    sdp_type: RTCSdpType::Offer,
-                    sdp,
-                },
+                sdp_type: RTCSdpType::Offer,
+                sdp,
                 parsed: Some(d),
             };
 
@@ -759,7 +756,7 @@ impl RTCPeerConnection {
 
         {
             let mut last_offer = self.internal.last_offer.lock().await;
-            *last_offer = offer.serde.sdp.clone();
+            *last_offer = offer.sdp.clone();
         }
         Ok(offer)
     }
@@ -858,16 +855,14 @@ impl RTCPeerConnection {
         let sdp = d.marshal();
 
         let answer = RTCSessionDescription {
-            serde: RTCSessionDescriptionSerde {
-                sdp_type: RTCSdpType::Answer,
-                sdp,
-            },
+            sdp_type: RTCSdpType::Answer,
+            sdp,
             parsed: Some(d),
         };
 
         {
             let mut last_answer = self.internal.last_answer.lock().await;
-            *last_answer = answer.serde.sdp.clone();
+            *last_answer = answer.sdp.clone();
         }
         Ok(answer)
     }
@@ -880,7 +875,7 @@ impl RTCPeerConnection {
     ) -> Result<()> {
         if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed.into());
-        } else if sd.serde.sdp_type == RTCSdpType::Unspecified {
+        } else if sd.sdp_type == RTCSdpType::Unspecified {
             return Err(Error::ErrPeerConnSDPTypeInvalidValue.into());
         }
 
@@ -891,12 +886,12 @@ impl RTCPeerConnection {
 
             match op {
                 StateChangeOp::SetLocal => {
-                    match sd.serde.sdp_type {
+                    match sd.sdp_type {
                         // stable->SetLocal(offer)->have-local-offer
                         RTCSdpType::Offer => {
                             let check = {
                                 let last_offer = self.internal.last_offer.lock().await;
-                                sd.serde.sdp != *last_offer
+                                sd.sdp != *last_offer
                             };
                             if check {
                                 Err(new_sdpdoes_not_match_offer.into())
@@ -905,7 +900,7 @@ impl RTCPeerConnection {
                                     cur,
                                     RTCSignalingState::HaveLocalOffer,
                                     StateChangeOp::SetLocal,
-                                    sd.serde.sdp_type,
+                                    sd.sdp_type,
                                 );
                                 if next_state.is_ok() {
                                     let mut pending_local_description =
@@ -920,7 +915,7 @@ impl RTCPeerConnection {
                         RTCSdpType::Answer => {
                             let check = {
                                 let last_answer = self.internal.last_answer.lock().await;
-                                sd.serde.sdp != *last_answer
+                                sd.sdp != *last_answer
                             };
                             if check {
                                 Err(new_sdpdoes_not_match_answer.into())
@@ -929,7 +924,7 @@ impl RTCPeerConnection {
                                     cur,
                                     RTCSignalingState::Stable,
                                     StateChangeOp::SetLocal,
-                                    sd.serde.sdp_type,
+                                    sd.sdp_type,
                                 );
                                 if next_state.is_ok() {
                                     let pending_remote_description = {
@@ -962,7 +957,7 @@ impl RTCPeerConnection {
                                 cur,
                                 RTCSignalingState::Stable,
                                 StateChangeOp::SetLocal,
-                                sd.serde.sdp_type,
+                                sd.sdp_type,
                             );
                             if next_state.is_ok() {
                                 let mut pending_local_description =
@@ -975,7 +970,7 @@ impl RTCPeerConnection {
                         RTCSdpType::Pranswer => {
                             let check = {
                                 let last_answer = self.internal.last_answer.lock().await;
-                                sd.serde.sdp != *last_answer
+                                sd.sdp != *last_answer
                             };
                             if check {
                                 Err(new_sdpdoes_not_match_answer.into())
@@ -984,7 +979,7 @@ impl RTCPeerConnection {
                                     cur,
                                     RTCSignalingState::HaveLocalPranswer,
                                     StateChangeOp::SetLocal,
-                                    sd.serde.sdp_type,
+                                    sd.sdp_type,
                                 );
                                 if next_state.is_ok() {
                                     let mut pending_local_description =
@@ -998,14 +993,14 @@ impl RTCPeerConnection {
                     }
                 }
                 StateChangeOp::SetRemote => {
-                    match sd.serde.sdp_type {
+                    match sd.sdp_type {
                         // stable->SetRemote(offer)->have-remote-offer
                         RTCSdpType::Offer => {
                             let next_state = check_next_signaling_state(
                                 cur,
                                 RTCSignalingState::HaveRemoteOffer,
                                 StateChangeOp::SetRemote,
-                                sd.serde.sdp_type,
+                                sd.sdp_type,
                             );
                             if next_state.is_ok() {
                                 let mut pending_remote_description =
@@ -1021,7 +1016,7 @@ impl RTCPeerConnection {
                                 cur,
                                 RTCSignalingState::Stable,
                                 StateChangeOp::SetRemote,
-                                sd.serde.sdp_type,
+                                sd.sdp_type,
                             );
                             if next_state.is_ok() {
                                 let pending_local_description = {
@@ -1054,7 +1049,7 @@ impl RTCPeerConnection {
                                 cur,
                                 RTCSignalingState::Stable,
                                 StateChangeOp::SetRemote,
-                                sd.serde.sdp_type,
+                                sd.sdp_type,
                             );
                             if next_state.is_ok() {
                                 let mut pending_remote_description =
@@ -1069,7 +1064,7 @@ impl RTCPeerConnection {
                                 cur,
                                 RTCSignalingState::HaveRemotePranswer,
                                 StateChangeOp::SetRemote,
-                                sd.serde.sdp_type,
+                                sd.sdp_type,
                             );
                             if next_state.is_ok() {
                                 let mut pending_remote_description =
@@ -1138,15 +1133,15 @@ impl RTCPeerConnection {
         };
 
         // JSEP 5.4
-        if desc.serde.sdp.is_empty() {
-            match desc.serde.sdp_type {
+        if desc.sdp.is_empty() {
+            match desc.sdp_type {
                 RTCSdpType::Answer | RTCSdpType::Pranswer => {
                     let last_answer = self.internal.last_answer.lock().await;
-                    desc.serde.sdp = last_answer.clone();
+                    desc.sdp = last_answer.clone();
                 }
                 RTCSdpType::Offer => {
                     let last_offer = self.internal.last_offer.lock().await;
-                    desc.serde.sdp = last_offer.clone();
+                    desc.sdp = last_offer.clone();
                 }
                 _ => return Err(Error::ErrPeerConnSDPTypeInvalidValueSetLocalDescription.into()),
             }
@@ -1155,7 +1150,7 @@ impl RTCPeerConnection {
         desc.parsed = Some(desc.unmarshal()?);
         self.set_description(&desc, StateChangeOp::SetLocal).await?;
 
-        let we_answer = desc.serde.sdp_type == RTCSdpType::Answer;
+        let we_answer = desc.sdp_type == RTCSdpType::Answer;
         let remote_description = self.remote_description().await;
         if we_answer {
             if let Some(remote_desc) = remote_description {
@@ -1222,7 +1217,7 @@ impl RTCPeerConnection {
             let mut local_transceivers = self.get_transceivers().await;
             let remote_description = self.remote_description().await;
             let detected_plan_b = description_is_plan_b(remote_description.as_ref())?;
-            let we_offer = desc.serde.sdp_type == RTCSdpType::Answer;
+            let we_offer = desc.sdp_type == RTCSdpType::Answer;
 
             if !we_offer && !detected_plan_b {
                 if let Some(remote_desc) = remote_description {
