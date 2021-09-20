@@ -12,10 +12,7 @@ repository = "https://github.com/webrtc-rs/media"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-util = { package = "webrtc-util", version = "0.3.0", default-features = false, features = [
-    "marshal",
-] }
-
+util = { package = "webrtc-util", version = "0.3.0", default-features = false, features = ["marshal"] }
 anyhow = "1.0.41"
 byteorder = "1.4.3"
 bytes = "1.0.1"
