@@ -26,5 +26,5 @@
  </a>
 </p>
 <p align="center">
- A pure Rust implementation of RTP. Rewrite <a href="http://Pion.ly">Pion</a> RTP in Rust
+ A pure Rust implementation of RTP. Rewrite <a href="https://github.com/pion/rtp/releases/tag/v1.6.1">Pion</a> RTP in Rust
 </p>
