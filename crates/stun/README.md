@@ -26,5 +26,5 @@
  </a>
 </p>
 <p align="center">
- A pure Rust implementation of STUN. Rewrite <a href="http://Pion.ly">Pion</a> STUN in Rust
+ A pure Rust implementation of STUN. Rewrite <a href="https://github.com/pion/stun/releases/tag/v0.3.5">Pion</a> STUN in Rust
 </p>
