@@ -4,7 +4,7 @@ use crate::peer::ice::ice_candidate::ice_candidate_type::ICECandidateType;
 use crate::peer::ice::ice_candidate::*;
 use crate::peer::ice::ice_gather::ice_gatherer_state::ICEGathererState;
 use crate::peer::ice::ICEParameters;
-use crate::peer::policy::ice_transport_policy::ICETransportPolicy;
+use crate::peer::policy::ice_transport_policy::RTCIceTransportPolicy;
 
 use ice::agent::Agent;
 use ice::candidate::{Candidate, CandidateType};
@@ -39,7 +39,7 @@ pub type OnGatheringCompleteHdlrFn =
 #[derive(Default)]
 pub struct ICEGatherer {
     pub(crate) validated_servers: Vec<Url>,
-    pub(crate) gather_policy: ICETransportPolicy,
+    pub(crate) gather_policy: RTCIceTransportPolicy,
     pub(crate) setting_engine: Arc<SettingEngine>,
 
     pub(crate) state: Arc<AtomicU8>, //ICEGathererState,
@@ -55,7 +55,7 @@ pub struct ICEGatherer {
 impl ICEGatherer {
     pub(crate) fn new(
         validated_servers: Vec<Url>,
-        gather_policy: ICETransportPolicy,
+        gather_policy: RTCIceTransportPolicy,
         setting_engine: Arc<SettingEngine>,
     ) -> Self {
         ICEGatherer {
@@ -78,7 +78,7 @@ impl ICEGatherer {
         let mut candidate_types = vec![];
         if self.setting_engine.candidates.ice_lite {
             candidate_types.push(ice::candidate::CandidateType::Host);
-        } else if self.gather_policy == ICETransportPolicy::Relay {
+        } else if self.gather_policy == RTCIceTransportPolicy::Relay {
             candidate_types.push(ice::candidate::CandidateType::Relay);
         }
 

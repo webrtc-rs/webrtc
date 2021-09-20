@@ -1,7 +1,7 @@
 use crate::media::dtls_transport::dtls_certificate::Certificate;
 use crate::peer::ice::ice_server::RTCIceServer;
 use crate::peer::policy::bundle_policy::BundlePolicy;
-use crate::peer::policy::ice_transport_policy::ICETransportPolicy;
+use crate::peer::policy::ice_transport_policy::RTCIceTransportPolicy;
 use crate::peer::policy::rtcp_mux_policy::RTCPMuxPolicy;
 use crate::peer::policy::sdp_semantics::SDPSemantics;
 
@@ -18,7 +18,7 @@ pub struct RTCConfiguration {
 
     /// icetransport_policy indicates which candidates the ICEAgent is allowed
     /// to use.
-    pub ice_transport_policy: ICETransportPolicy,
+    pub ice_transport_policy: RTCIceTransportPolicy,
 
     /// bundle_policy indicates which media-bundling policy to use when gathering
     /// ICE candidates.
