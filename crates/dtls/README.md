@@ -26,5 +26,5 @@
  </a>
 </p>
 <p align="center">
- A pure Rust implementation of DTLS. Rewrite <a href="http://Pion.ly">Pion</a> DTLS in Rust
+ A pure Rust implementation of DTLS. Rewrite <a href="https://github.com/pion/dtls/releases/tag/v2.0.0">Pion</a> DTLS in Rust
 </p>
