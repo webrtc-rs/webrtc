@@ -64,7 +64,7 @@ impl RTPSenderInternal {
 }
 
 /// RTPSender allows an application to control how a given Track is encoded and transmitted to a remote peer
-pub struct RTPSender {
+pub struct RTCRtpSender {
     pub(crate) track: Mutex<Option<Arc<dyn TrackLocal + Send + Sync>>>,
 
     pub(crate) srtp_stream: Arc<SrtpWriterFuture>,
@@ -95,13 +95,13 @@ pub struct RTPSender {
     internal: Arc<RTPSenderInternal>,
 }
 
-impl RTPSender {
+impl RTCRtpSender {
     pub async fn new(
         track: Arc<dyn TrackLocal + Send + Sync>,
         transport: Arc<DTLSTransport>,
         media_engine: Arc<MediaEngine>,
         interceptor: Arc<dyn Interceptor + Send + Sync>,
-    ) -> RTPSender {
+    ) -> RTCRtpSender {
         let id = generate_crypto_random_string(
             32,
             b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
@@ -133,7 +133,7 @@ impl RTPSender {
             *internal_rtcp_interceptor = Some(rtcp_interceptor);
         }
 
-        RTPSender {
+        RTCRtpSender {
             track: Mutex::new(Some(track)),
 
             srtp_stream,

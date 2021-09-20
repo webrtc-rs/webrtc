@@ -20,7 +20,7 @@ use crate::data::sctp_transport::SCTPTransport;
 use crate::error::Error;
 use crate::media::rtp::rtp_codec::RTPCodecType;
 use crate::media::rtp::rtp_receiver::RTPReceiver;
-use crate::media::rtp::rtp_sender::RTPSender;
+use crate::media::rtp::rtp_sender::RTCRtpSender;
 use crate::media::track::track_local::TrackLocal;
 use crate::peer::configuration::RTCConfiguration;
 use crate::peer::peer_connection::RTCPeerConnection;
@@ -152,8 +152,8 @@ impl API {
         &self,
         track: Arc<dyn TrackLocal + Send + Sync>,
         transport: Arc<DTLSTransport>,
-    ) -> RTPSender {
-        RTPSender::new(
+    ) -> RTCRtpSender {
+        RTCRtpSender::new(
             track,
             transport,
             Arc::clone(&self.media_engine),

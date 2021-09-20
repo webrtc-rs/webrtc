@@ -4,7 +4,7 @@ use crate::api::setting_engine::SettingEngine;
 use crate::api::APIBuilder;
 use crate::media::dtls_transport::dtls_role::DEFAULT_DTLS_ROLE_OFFER;
 use crate::media::dtls_transport::DTLSTransport;
-use crate::media::rtp::rtp_sender::RTPSender;
+use crate::media::rtp::rtp_sender::RTCRtpSender;
 use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::media::track::track_local::TrackLocal;
 use crate::peer::certificate::RTCCertificate;
@@ -610,7 +610,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
         ));
         media[i].transceivers[0]
             .set_sender(Some(Arc::new(
-                RTPSender::new(
+                RTCRtpSender::new(
                     track,
                     Arc::new(DTLSTransport::default()),
                     Arc::clone(&api.media_engine),

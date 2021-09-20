@@ -43,7 +43,7 @@ use crate::media::dtls_transport::dtls_role::{
 use crate::media::ice_transport::ice_parameters::RTCIceParameters;
 use crate::media::ice_transport::ice_role::ICERole;
 use crate::media::rtp::rtp_codec::{RTPCodecType, RTPHeaderExtensionCapability};
-use crate::media::rtp::rtp_sender::RTPSender;
+use crate::media::rtp::rtp_sender::RTCRtpSender;
 use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
 use crate::media::rtp::{RTPTransceiverInit, SSRC};
 use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
@@ -1484,7 +1484,7 @@ impl RTCPeerConnection {
     }
 
     /// get_senders returns the RTPSender that are currently attached to this PeerConnection
-    pub async fn get_senders(&self) -> Vec<Arc<RTPSender>> {
+    pub async fn get_senders(&self) -> Vec<Arc<RTCRtpSender>> {
         let mut senders = vec![];
         let rtp_transceivers = self.internal.rtp_transceivers.lock().await;
         for transceiver in &*rtp_transceivers {
@@ -1517,7 +1517,7 @@ impl RTCPeerConnection {
     pub async fn add_track(
         &self,
         track: Arc<dyn TrackLocal + Send + Sync>,
-    ) -> Result<Arc<RTPSender>> {
+    ) -> Result<Arc<RTCRtpSender>> {
         if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed.into());
         }
@@ -1527,7 +1527,7 @@ impl RTCPeerConnection {
             for t in &*rtp_transceivers {
                 if !t.stopped && t.kind == track.kind() && t.sender().await.is_none() {
                     let sender = Arc::new(
-                        RTPSender::new(
+                        RTCRtpSender::new(
                             Arc::clone(&track),
                             Arc::clone(&self.internal.dtls_transport),
                             Arc::clone(&self.internal.media_engine),
@@ -1591,7 +1591,7 @@ impl RTCPeerConnection {
     }
 
     /// remove_track removes a Track from the PeerConnection
-    pub async fn remove_track(&self, sender: &Arc<RTPSender>) -> Result<()> {
+    pub async fn remove_track(&self, sender: &Arc<RTCRtpSender>) -> Result<()> {
         if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed.into());
         }

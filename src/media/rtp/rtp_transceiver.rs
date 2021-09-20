@@ -5,7 +5,7 @@ use crate::api::media_engine::MediaEngine;
 use crate::error::Error;
 use crate::media::rtp::rtp_codec::*;
 use crate::media::rtp::rtp_receiver::{RTPReceiver, RTPReceiverInternal};
-use crate::media::rtp::rtp_sender::RTPSender;
+use crate::media::rtp::rtp_sender::RTCRtpSender;
 use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
 use crate::media::rtp::PayloadType;
 use crate::media::track::track_local::TrackLocal;
@@ -19,7 +19,7 @@ use util::Unmarshal;
 /// RTPTransceiver represents a combination of an RTPSender and an RTPReceiver that share a common mid.
 pub struct RTPTransceiver {
     mid: Mutex<String>,                        //atomic.Value
-    sender: Mutex<Option<Arc<RTPSender>>>,     //atomic.Value
+    sender: Mutex<Option<Arc<RTCRtpSender>>>,  //atomic.Value
     receiver: Mutex<Option<Arc<RTPReceiver>>>, //atomic.Value
     direction: AtomicU8,                       //RTPTransceiverDirection, //atomic.Value
 
@@ -34,7 +34,7 @@ pub struct RTPTransceiver {
 impl RTPTransceiver {
     pub(crate) async fn new(
         receiver: Option<Arc<RTPReceiver>>,
-        sender: Option<Arc<RTPSender>>,
+        sender: Option<Arc<RTCRtpSender>>,
         direction: RTPTransceiverDirection,
         kind: RTPCodecType,
         codecs: Vec<RTPCodecParameters>,
@@ -82,7 +82,7 @@ impl RTPTransceiver {
     }
 
     /// sender returns the RTPTransceiver's RTPSender if it has one
-    pub async fn sender(&self) -> Option<Arc<RTPSender>> {
+    pub async fn sender(&self) -> Option<Arc<RTCRtpSender>> {
         let sender = self.sender.lock().await;
         sender.clone()
     }
@@ -90,14 +90,14 @@ impl RTPTransceiver {
     /// set_sender_track sets the RTPSender and Track to current transceiver
     pub async fn set_sender_track(
         self: &Arc<Self>,
-        sender: Option<Arc<RTPSender>>,
+        sender: Option<Arc<RTCRtpSender>>,
         track: Option<Arc<dyn TrackLocal + Send + Sync>>,
     ) -> Result<()> {
         let _ = self.set_sender(sender).await;
         self.set_sending_track(track).await
     }
 
-    pub async fn set_sender(self: &Arc<Self>, s: Option<Arc<RTPSender>>) {
+    pub async fn set_sender(self: &Arc<Self>, s: Option<Arc<RTCRtpSender>>) {
         if let Some(sender) = &s {
             sender.set_rtp_transceiver(Some(Arc::clone(self))).await;
         }
