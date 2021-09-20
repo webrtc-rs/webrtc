@@ -51,7 +51,7 @@ use crate::peer::ice::ice_gather::ice_gatherer_state::ICEGathererState;
 use crate::peer::ice::ice_gather::ice_gathering_state::ICEGatheringState;
 use crate::peer::ice::ice_role::ICERole;
 use crate::peer::ice::ICEParameters;
-use crate::peer::offer_answer_options::{AnswerOptions, OfferOptions};
+use crate::peer::offer_answer_options::{RTCAnswerOptions, RTCOfferOptions};
 use crate::peer::operation::{Operation, Operations};
 use crate::peer::sdp::sdp_type::SDPType;
 use crate::peer::sdp::*;
@@ -619,7 +619,10 @@ impl PeerConnection {
 
     /// create_offer starts the PeerConnection and generates the localDescription
     /// https://w3c.github.io/webrtc-pc/#dom-rtcpeerconnection-createoffer
-    pub async fn create_offer(&self, options: Option<OfferOptions>) -> Result<SessionDescription> {
+    pub async fn create_offer(
+        &self,
+        options: Option<RTCOfferOptions>,
+    ) -> Result<SessionDescription> {
         let use_identity = self.idp_login_url.is_some();
         if use_identity {
             return Err(Error::ErrIdentityProviderNotImplemented.into());
@@ -808,7 +811,7 @@ impl PeerConnection {
     /// create_answer starts the PeerConnection and generates the localDescription
     pub async fn create_answer(
         &self,
-        _options: Option<AnswerOptions>,
+        _options: Option<RTCAnswerOptions>,
     ) -> Result<SessionDescription> {
         let use_identity = self.idp_login_url.is_some();
         if self.remote_description().await.is_none() {
