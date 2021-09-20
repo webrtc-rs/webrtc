@@ -64,7 +64,7 @@ impl PeerConnectionInternal {
             is_closed: Arc::new(AtomicBool::new(false)),
             is_negotiation_needed: Arc::new(AtomicBool::new(false)),
             negotiation_needed_state: Arc::new(AtomicU8::new(NegotiationNeededState::Empty as u8)),
-            signaling_state: Arc::new(AtomicU8::new(SignalingState::Stable as u8)),
+            signaling_state: Arc::new(AtomicU8::new(RTCSignalingState::Stable as u8)),
             ice_transport: Arc::new(Default::default()),
             dtls_transport: Arc::new(Default::default()),
             ice_connection_state: Arc::new(AtomicU8::new(ICEConnectionState::New as u8)),

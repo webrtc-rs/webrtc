@@ -26,7 +26,7 @@ use crate::peer::ice::ice_gather::ICEGatherOptions;
 use crate::peer::peer_connection_state::{NegotiationNeededState, PeerConnectionState};
 use crate::peer::policy::sdp_semantics::SDPSemantics;
 use crate::peer::sdp::session_description::{SessionDescription, SessionDescriptionSerde};
-use crate::peer::signaling_state::{check_next_signaling_state, SignalingState, StateChangeOp};
+use crate::peer::signaling_state::{check_next_signaling_state, RTCSignalingState, StateChangeOp};
 
 use crate::data::data_channel::data_channel_config::DataChannelConfig;
 use crate::data::data_channel::data_channel_parameters::DataChannelParameters;
@@ -79,7 +79,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::{mpsc, Mutex};
 
 pub type OnSignalingStateChangeHdlrFn = Box<
-    dyn (FnMut(SignalingState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>) + Send + Sync,
+    dyn (FnMut(RTCSignalingState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+        + Send
+        + Sync,
 >;
 
 pub type OnICEConnectionStateChangeHdlrFn = Box<
@@ -222,7 +224,7 @@ impl PeerConnection {
         *on_signaling_state_change_handler = Some(f);
     }
 
-    async fn do_signaling_state_change(&self, new_state: SignalingState) {
+    async fn do_signaling_state_change(&self, new_state: RTCSignalingState) {
         log::info!("signaling state changed to {}", new_state);
         let mut handler = self.internal.on_signaling_state_change_handler.lock().await;
         if let Some(f) = &mut *handler {
@@ -320,7 +322,7 @@ impl PeerConnection {
         // starting defer(after_do_negotiation_needed(params).await);
 
         // Step 2.3
-        if params.signaling_state.load(Ordering::SeqCst) != SignalingState::Stable as u8 {
+        if params.signaling_state.load(Ordering::SeqCst) != RTCSignalingState::Stable as u8 {
             return PeerConnection::after_negotiation_needed_op(params).await;
         }
 
@@ -820,8 +822,8 @@ impl PeerConnection {
             return Err(Error::ErrIdentityProviderNotImplemented.into());
         } else if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed.into());
-        } else if self.signaling_state() != SignalingState::HaveRemoteOffer
-            && self.signaling_state() != SignalingState::HaveLocalPranswer
+        } else if self.signaling_state() != RTCSignalingState::HaveRemoteOffer
+            && self.signaling_state() != RTCSignalingState::HaveLocalPranswer
         {
             return Err(Error::ErrIncorrectSignalingState.into());
         }
@@ -899,7 +901,7 @@ impl PeerConnection {
                             } else {
                                 let next_state = check_next_signaling_state(
                                     cur,
-                                    SignalingState::HaveLocalOffer,
+                                    RTCSignalingState::HaveLocalOffer,
                                     StateChangeOp::SetLocal,
                                     sd.serde.sdp_type,
                                 );
@@ -923,7 +925,7 @@ impl PeerConnection {
                             } else {
                                 let next_state = check_next_signaling_state(
                                     cur,
-                                    SignalingState::Stable,
+                                    RTCSignalingState::Stable,
                                     StateChangeOp::SetLocal,
                                     sd.serde.sdp_type,
                                 );
@@ -956,7 +958,7 @@ impl PeerConnection {
                         SDPType::Rollback => {
                             let next_state = check_next_signaling_state(
                                 cur,
-                                SignalingState::Stable,
+                                RTCSignalingState::Stable,
                                 StateChangeOp::SetLocal,
                                 sd.serde.sdp_type,
                             );
@@ -978,7 +980,7 @@ impl PeerConnection {
                             } else {
                                 let next_state = check_next_signaling_state(
                                     cur,
-                                    SignalingState::HaveLocalPranswer,
+                                    RTCSignalingState::HaveLocalPranswer,
                                     StateChangeOp::SetLocal,
                                     sd.serde.sdp_type,
                                 );
@@ -999,7 +1001,7 @@ impl PeerConnection {
                         SDPType::Offer => {
                             let next_state = check_next_signaling_state(
                                 cur,
-                                SignalingState::HaveRemoteOffer,
+                                RTCSignalingState::HaveRemoteOffer,
                                 StateChangeOp::SetRemote,
                                 sd.serde.sdp_type,
                             );
@@ -1015,7 +1017,7 @@ impl PeerConnection {
                         SDPType::Answer => {
                             let next_state = check_next_signaling_state(
                                 cur,
-                                SignalingState::Stable,
+                                RTCSignalingState::Stable,
                                 StateChangeOp::SetRemote,
                                 sd.serde.sdp_type,
                             );
@@ -1048,7 +1050,7 @@ impl PeerConnection {
                         SDPType::Rollback => {
                             let next_state = check_next_signaling_state(
                                 cur,
-                                SignalingState::Stable,
+                                RTCSignalingState::Stable,
                                 StateChangeOp::SetRemote,
                                 sd.serde.sdp_type,
                             );
@@ -1063,7 +1065,7 @@ impl PeerConnection {
                         SDPType::Pranswer => {
                             let next_state = check_next_signaling_state(
                                 cur,
-                                SignalingState::HaveRemotePranswer,
+                                RTCSignalingState::HaveRemotePranswer,
                                 StateChangeOp::SetRemote,
                                 sd.serde.sdp_type,
                             );
@@ -1085,7 +1087,7 @@ impl PeerConnection {
                 self.internal
                     .signaling_state
                     .store(next_state as u8, Ordering::SeqCst);
-                if self.signaling_state() == SignalingState::Stable {
+                if self.signaling_state() == RTCSignalingState::Stable {
                     self.internal
                         .is_negotiation_needed
                         .store(false, Ordering::SeqCst);
@@ -1798,7 +1800,7 @@ impl PeerConnection {
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #3)
         self.internal
             .signaling_state
-            .store(SignalingState::Closed as u8, Ordering::SeqCst);
+            .store(RTCSignalingState::Closed as u8, Ordering::SeqCst);
 
         // Try closing everything and collect the errors
         // Shutdown strategy:
@@ -1915,7 +1917,7 @@ impl PeerConnection {
 
     /// signaling_state attribute returns the signaling state of the
     /// PeerConnection instance.
-    pub fn signaling_state(&self) -> SignalingState {
+    pub fn signaling_state(&self) -> RTCSignalingState {
         self.internal.signaling_state.load(Ordering::SeqCst).into()
     }
 
