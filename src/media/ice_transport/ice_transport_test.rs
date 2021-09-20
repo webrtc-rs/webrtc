@@ -1,7 +1,7 @@
 use super::*;
 use crate::api::media_engine::MediaEngine;
 use crate::api::APIBuilder;
-use crate::peer::ice::ice_connection_state::ICEConnectionState;
+use crate::peer::ice::ice_connection_state::RTCIceConnectionState;
 use crate::peer::peer_connection::peer_connection_test::{
     close_pair_now, new_pair, signal_pair, until_connection_state,
 };
@@ -21,10 +21,10 @@ async fn test_ice_transport_on_selected_candidate_pair_change() -> Result<()> {
     let (ice_complete_tx, mut ice_complete_rx) = mpsc::channel::<()>(1);
     let ice_complete_tx = Arc::new(Mutex::new(Some(ice_complete_tx)));
     pc_answer
-        .on_ice_connection_state_change(Box::new(move |ice_state: ICEConnectionState| {
+        .on_ice_connection_state_change(Box::new(move |ice_state: RTCIceConnectionState| {
             let ice_complete_tx2 = Arc::clone(&ice_complete_tx);
             Box::pin(async move {
-                if ice_state == ICEConnectionState::Connected {
+                if ice_state == RTCIceConnectionState::Connected {
                     tokio::time::sleep(Duration::from_secs(1)).await;
                     let mut done = ice_complete_tx2.lock().await;
                     done.take();

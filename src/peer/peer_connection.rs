@@ -18,7 +18,7 @@ use crate::media::rtp::rtp_transceiver::{
 };
 use crate::media::track::track_remote::TrackRemote;
 use crate::peer::configuration::RTCConfiguration;
-use crate::peer::ice::ice_connection_state::ICEConnectionState;
+use crate::peer::ice::ice_connection_state::RTCIceConnectionState;
 use crate::peer::ice::ice_gather::ice_gatherer::{
     ICEGatherer, OnGatheringCompleteHdlrFn, OnICEGathererStateChangeHdlrFn, OnLocalCandidateHdlrFn,
 };
@@ -85,7 +85,7 @@ pub type OnSignalingStateChangeHdlrFn = Box<
 >;
 
 pub type OnICEConnectionStateChangeHdlrFn = Box<
-    dyn (FnMut(ICEConnectionState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+    dyn (FnMut(RTCIceConnectionState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
@@ -505,7 +505,7 @@ impl PeerConnection {
             Mutex<Option<OnICEConnectionStateChangeHdlrFn>>,
         >,
         ice_connection_state: &Arc<AtomicU8>,
-        cs: ICEConnectionState,
+        cs: RTCIceConnectionState,
     ) {
         ice_connection_state.store(cs as u8, Ordering::SeqCst);
 
@@ -770,25 +770,25 @@ impl PeerConnection {
         >,
         is_closed: &Arc<AtomicBool>,
         peer_connection_state: &Arc<AtomicU8>,
-        ice_connection_state: ICEConnectionState,
+        ice_connection_state: RTCIceConnectionState,
         dtls_transport_state: DTLSTransportState,
     ) {
         let  connection_state =
         // The RTCPeerConnection object's [[IsClosed]] slot is true.
         if is_closed.load(Ordering::SeqCst) {
              RTCPeerConnectionState::Closed
-        }else if ice_connection_state == ICEConnectionState::Failed || dtls_transport_state == DTLSTransportState::Failed {
+        }else if ice_connection_state == RTCIceConnectionState::Failed || dtls_transport_state == DTLSTransportState::Failed {
             // Any of the RTCIceTransports or RTCDtlsTransports are in a "failed" state.
              RTCPeerConnectionState::Failed
-        }else if ice_connection_state == ICEConnectionState::Disconnected {
+        }else if ice_connection_state == RTCIceConnectionState::Disconnected {
             // Any of the RTCIceTransports or RTCDtlsTransports are in the "disconnected"
             // state and none of them are in the "failed" or "connecting" or "checking" state.
             RTCPeerConnectionState::Disconnected
-        }else if ice_connection_state == ICEConnectionState::Connected && dtls_transport_state == DTLSTransportState::Connected {
+        }else if ice_connection_state == RTCIceConnectionState::Connected && dtls_transport_state == DTLSTransportState::Connected {
             // All RTCIceTransports and RTCDtlsTransports are in the "connected", "completed" or "closed"
             // state and at least one of them is in the "connected" or "completed" state.
             RTCPeerConnectionState::Connected
-        }else if ice_connection_state == ICEConnectionState::Checking && dtls_transport_state == DTLSTransportState::Connecting{
+        }else if ice_connection_state == RTCIceConnectionState::Checking && dtls_transport_state == DTLSTransportState::Connecting{
         //  Any of the RTCIceTransports or RTCDtlsTransports are in the "connecting" or
         // "checking" state and none of them is in the "failed" state.
              RTCPeerConnectionState::Connecting
@@ -1474,7 +1474,7 @@ impl PeerConnection {
 
     /// ice_connection_state returns the ICE connection state of the
     /// PeerConnection instance.
-    pub fn ice_connection_state(&self) -> ICEConnectionState {
+    pub fn ice_connection_state(&self) -> RTCIceConnectionState {
         self.internal
             .ice_connection_state
             .load(Ordering::SeqCst)

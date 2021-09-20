@@ -13,7 +13,7 @@ use crate::media::dtls_transport::DTLSTransport;
 use crate::media::ice_transport::ICETransport;
 use crate::peer::configuration::RTCConfiguration;
 use crate::peer::ice::ice_candidate::ICECandidate;
-use crate::peer::ice::ice_connection_state::ICEConnectionState;
+use crate::peer::ice::ice_connection_state::RTCIceConnectionState;
 use crate::peer::ice::ice_gather::ice_gatherer::ICEGatherer;
 use crate::peer::ice::ice_gather::ICEGatherOptions;
 use crate::peer::ice::ice_role::ICERole;
@@ -295,11 +295,12 @@ async fn test_data_channel_send_after_connected() -> Result<()> {
 
     //once := &sync.Once{}
     offer_pc
-        .on_ice_connection_state_change(Box::new(move |state: ICEConnectionState| {
+        .on_ice_connection_state_change(Box::new(move |state: RTCIceConnectionState| {
             let done_tx1 = Arc::clone(&done_tx);
             let dc1 = Arc::clone(&dc);
             Box::pin(async move {
-                if state == ICEConnectionState::Connected || state == ICEConnectionState::Completed
+                if state == RTCIceConnectionState::Connected
+                    || state == RTCIceConnectionState::Completed
                 {
                     // wasm fires completed state multiple times
                     /*once.Do(func()*/

@@ -67,7 +67,7 @@ impl PeerConnectionInternal {
             signaling_state: Arc::new(AtomicU8::new(RTCSignalingState::Stable as u8)),
             ice_transport: Arc::new(Default::default()),
             dtls_transport: Arc::new(Default::default()),
-            ice_connection_state: Arc::new(AtomicU8::new(ICEConnectionState::New as u8)),
+            ice_connection_state: Arc::new(AtomicU8::new(RTCIceConnectionState::New as u8)),
             sctp_transport: Arc::new(Default::default()),
             rtp_transceivers: Arc::new(Default::default()),
             on_track_handler: Arc::new(Default::default()),
@@ -1123,13 +1123,13 @@ impl PeerConnectionInternal {
         ice_transport
             .on_connection_state_change(Box::new(move |state: ICETransportState| {
                 let cs = match state {
-                    ICETransportState::New => ICEConnectionState::New,
-                    ICETransportState::Checking => ICEConnectionState::Checking,
-                    ICETransportState::Connected => ICEConnectionState::Connected,
-                    ICETransportState::Completed => ICEConnectionState::Completed,
-                    ICETransportState::Failed => ICEConnectionState::Failed,
-                    ICETransportState::Disconnected => ICEConnectionState::Disconnected,
-                    ICETransportState::Closed => ICEConnectionState::Closed,
+                    ICETransportState::New => RTCIceConnectionState::New,
+                    ICETransportState::Checking => RTCIceConnectionState::Checking,
+                    ICETransportState::Connected => RTCIceConnectionState::Connected,
+                    ICETransportState::Completed => RTCIceConnectionState::Completed,
+                    ICETransportState::Failed => RTCIceConnectionState::Failed,
+                    ICETransportState::Disconnected => RTCIceConnectionState::Disconnected,
+                    ICETransportState::Closed => RTCIceConnectionState::Closed,
                     _ => {
                         log::warn!("on_connection_state_change: unhandled ICE state: {}", state);
                         return Box::pin(async {});
