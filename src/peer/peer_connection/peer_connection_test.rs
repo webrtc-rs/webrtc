@@ -9,7 +9,7 @@ use util::vnet::router::{Router, RouterConfig};
 use waitgroup::WaitGroup;
 
 pub(crate) async fn create_vnet_pair(
-) -> Result<(PeerConnection, PeerConnection, Arc<Mutex<Router>>)> {
+) -> Result<(RTCPeerConnection, RTCPeerConnection, Arc<Mutex<Router>>)> {
     // Create a root router
     let wan = Arc::new(Mutex::new(Router::new(RouterConfig {
         cidr: "1.2.3.0/24".to_owned(),
@@ -95,7 +95,7 @@ pub(crate) async fn create_vnet_pair(
 
 /// new_pair creates two new peer connections (an offerer and an answerer)
 /// *without* using an api (i.e. using the default settings).
-pub(crate) async fn new_pair(api: &API) -> Result<(PeerConnection, PeerConnection)> {
+pub(crate) async fn new_pair(api: &API) -> Result<(RTCPeerConnection, RTCPeerConnection)> {
     let pca = api.new_peer_connection(RTCConfiguration::default()).await?;
     let pcb = api.new_peer_connection(RTCConfiguration::default()).await?;
 
@@ -103,8 +103,8 @@ pub(crate) async fn new_pair(api: &API) -> Result<(PeerConnection, PeerConnectio
 }
 
 pub(crate) async fn signal_pair(
-    pc_offer: &mut PeerConnection,
-    pc_answer: &mut PeerConnection,
+    pc_offer: &mut RTCPeerConnection,
+    pc_answer: &mut RTCPeerConnection,
 ) -> Result<()> {
     // Note(albrow): We need to create a data channel in order to trigger ICE
     // candidate gathering in the background for the JavaScript/Wasm bindings. If
@@ -147,7 +147,7 @@ pub(crate) async fn signal_pair(
         .await
 }
 
-pub(crate) async fn close_pair_now(pc1: &PeerConnection, pc2: &PeerConnection) {
+pub(crate) async fn close_pair_now(pc1: &RTCPeerConnection, pc2: &RTCPeerConnection) {
     let mut fail = false;
     if let Err(err) = pc1.close().await {
         log::error!("Failed to close PeerConnection: {}", err);
@@ -162,8 +162,8 @@ pub(crate) async fn close_pair_now(pc1: &PeerConnection, pc2: &PeerConnection) {
 }
 
 pub(crate) async fn close_pair(
-    pc1: &PeerConnection,
-    pc2: &PeerConnection,
+    pc1: &RTCPeerConnection,
+    pc2: &RTCPeerConnection,
     mut done_rx: mpsc::Receiver<()>,
 ) {
     let timeout = tokio::time::sleep(Duration::from_secs(1));
@@ -226,7 +226,7 @@ pub(crate) async fn send_video_until_done(
 }
 
 pub(crate) async fn until_connection_state(
-    pc: &mut PeerConnection,
+    pc: &mut RTCPeerConnection,
     wg: &WaitGroup,
     state: RTCPeerConnectionState,
 ) {

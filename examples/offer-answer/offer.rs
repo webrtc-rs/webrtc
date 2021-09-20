@@ -15,7 +15,7 @@ use webrtc::data::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::peer::configuration::RTCConfiguration;
 use webrtc::peer::ice::ice_candidate::{ICECandidateInit, RTCIceCandidate};
 use webrtc::peer::ice::ice_server::RTCIceServer;
-use webrtc::peer::peer_connection::PeerConnection;
+use webrtc::peer::peer_connection::RTCPeerConnection;
 use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer::sdp::session_description::{RTCSessionDescription, RTCSessionDescriptionSerde};
 use webrtc::util::math_rand_alpha;
@@ -24,7 +24,7 @@ use webrtc::util::math_rand_alpha;
 extern crate lazy_static;
 
 lazy_static! {
-    static ref PEER_CONNECTION_MUTEX: Arc<Mutex<Option<Arc<PeerConnection>>>> =
+    static ref PEER_CONNECTION_MUTEX: Arc<Mutex<Option<Arc<RTCPeerConnection>>>> =
         Arc::new(Mutex::new(None));
     static ref PENDING_CANDIDATES: Arc<Mutex<Vec<RTCIceCandidate>>> = Arc::new(Mutex::new(vec![]));
     static ref ADDRESS: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));

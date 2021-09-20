@@ -534,7 +534,7 @@ impl PeerConnectionInternal {
             let mut rtp_transceivers = self.rtp_transceivers.lock().await;
             rtp_transceivers.push(t);
         }
-        PeerConnection::do_negotiation_needed(NegotiationNeededParams {
+        RTCPeerConnection::do_negotiation_needed(NegotiationNeededParams {
             on_negotiation_needed_handler: Arc::clone(&self.on_negotiation_needed_handler),
             is_closed: Arc::clone(&self.is_closed),
             ops: Arc::clone(&self.ops),
@@ -603,7 +603,7 @@ impl PeerConnectionInternal {
                 }],
             })
             .await;
-        PeerConnection::update_connection_state(
+        RTCPeerConnection::update_connection_state(
             &self.on_peer_connection_state_change_handler,
             &self.is_closed,
             &self.peer_connection_state,
@@ -1042,7 +1042,7 @@ impl PeerConnectionInternal {
                                 let track = receiver
                                     .receive_for_rid(rid.as_str(), &params, ssrc)
                                     .await?;
-                                PeerConnection::do_track(
+                                RTCPeerConnection::do_track(
                                     Arc::clone(&self.on_track_handler),
                                     Some(track),
                                     Some(receiver.clone()),
@@ -1097,7 +1097,7 @@ impl PeerConnectionInternal {
                     track.set_codec(params.codecs[0].clone()).await;
                     track.set_params(params).await;
 
-                    PeerConnection::do_track(
+                    RTCPeerConnection::do_track(
                         on_track_handler,
                         receiver.track().await,
                         Some(Arc::clone(&receiver)),
@@ -1145,14 +1145,14 @@ impl PeerConnectionInternal {
                 let dtls_transport_state = dtls_transport.state();
                 let peer_connection_state2 = Arc::clone(&peer_connection_state);
                 Box::pin(async move {
-                    PeerConnection::do_ice_connection_state_change(
+                    RTCPeerConnection::do_ice_connection_state_change(
                         &on_ice_connection_state_change_handler2,
                         &ice_connection_state2,
                         cs,
                     )
                     .await;
 
-                    PeerConnection::update_connection_state(
+                    RTCPeerConnection::update_connection_state(
                         &on_peer_connection_state_change_handler2,
                         &is_closed2,
                         &peer_connection_state2,

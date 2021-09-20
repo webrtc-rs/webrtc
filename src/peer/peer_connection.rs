@@ -146,7 +146,7 @@ struct NegotiationNeededParams {
 /// PeerConnection represents a WebRTC connection that establishes a
 /// peer-to-peer communications with another PeerConnection instance in a
 /// browser, or to another endpoint implementing the required protocols.
-pub struct PeerConnection {
+pub struct RTCPeerConnection {
     stats_id: String,
     idp_login_url: Option<String>,
 
@@ -157,7 +157,7 @@ pub struct PeerConnection {
     pub(crate) internal: Arc<PeerConnectionInternal>,
 }
 
-impl PeerConnection {
+impl RTCPeerConnection {
     /// creates a PeerConnection with the default codecs and
     /// interceptors.  See register_default_codecs and register_default_interceptors.
     ///
@@ -165,7 +165,7 @@ impl PeerConnection {
     /// active interceptors, create a MediaEngine and call api.new_peer_connection
     /// instead of this function.
     pub(crate) async fn new(api: &API, mut configuration: RTCConfiguration) -> Result<Self> {
-        PeerConnection::init_configuration(&mut configuration)?;
+        RTCPeerConnection::init_configuration(&mut configuration)?;
 
         let internal = Arc::new(PeerConnectionInternal::new(api, &mut configuration).await?);
         let internal_rtcp_writer = Arc::clone(&internal) as Arc<dyn RTCPWriter + Send + Sync>;
@@ -174,7 +174,7 @@ impl PeerConnection {
         // https://w3c.github.io/webrtc-pc/#constructor (Step #2)
         // Some variables defined explicitly despite their implicit zero values to
         // allow better readability to understand what is happening.
-        Ok(PeerConnection {
+        Ok(RTCPeerConnection {
             stats_id: format!(
                 "PeerConnection-{}",
                 SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
@@ -271,7 +271,7 @@ impl PeerConnection {
     /// do_negotiation_needed enqueues negotiation_needed_op if necessary
     /// caller of this method should hold `pc.mu` lock
     async fn do_negotiation_needed(params: NegotiationNeededParams) {
-        if !PeerConnection::do_negotiation_needed_inner(&params) {
+        if !RTCPeerConnection::do_negotiation_needed_inner(&params) {
             return;
         }
 
@@ -280,7 +280,7 @@ impl PeerConnection {
             .ops
             .enqueue(Operation(Box::new(move || {
                 let params3 = params2.clone();
-                Box::pin(async move { PeerConnection::negotiation_needed_op(params3).await })
+                Box::pin(async move { RTCPeerConnection::negotiation_needed_op(params3).await })
             })))
             .await;
     }
@@ -289,7 +289,7 @@ impl PeerConnection {
         if params.negotiation_needed_state.load(Ordering::SeqCst)
             == NegotiationNeededState::Queue as u8
         {
-            PeerConnection::do_negotiation_needed_inner(&params)
+            RTCPeerConnection::do_negotiation_needed_inner(&params)
         } else {
             params
                 .negotiation_needed_state
@@ -323,19 +323,20 @@ impl PeerConnection {
 
         // Step 2.3
         if params.signaling_state.load(Ordering::SeqCst) != RTCSignalingState::Stable as u8 {
-            return PeerConnection::after_negotiation_needed_op(params).await;
+            return RTCPeerConnection::after_negotiation_needed_op(params).await;
         }
 
         // Step 2.4
-        if !PeerConnection::check_negotiation_needed(&params.check_negotiation_needed_params).await
+        if !RTCPeerConnection::check_negotiation_needed(&params.check_negotiation_needed_params)
+            .await
         {
             params.is_negotiation_needed.store(false, Ordering::SeqCst);
-            return PeerConnection::after_negotiation_needed_op(params).await;
+            return RTCPeerConnection::after_negotiation_needed_op(params).await;
         }
 
         // Step 2.5
         if params.is_negotiation_needed.load(Ordering::SeqCst) {
-            return PeerConnection::after_negotiation_needed_op(params).await;
+            return RTCPeerConnection::after_negotiation_needed_op(params).await;
         }
 
         // Step 2.6
@@ -349,7 +350,7 @@ impl PeerConnection {
             }
         }
 
-        PeerConnection::after_negotiation_needed_op(params).await
+        RTCPeerConnection::after_negotiation_needed_op(params).await
     }
 
     async fn check_negotiation_needed(params: &CheckNegotiationNeededParams) -> bool {
@@ -803,7 +804,7 @@ impl PeerConnection {
         log::info!("peer connection state changed: {}", connection_state);
         peer_connection_state.store(connection_state as u8, Ordering::SeqCst);
 
-        PeerConnection::do_peer_connection_state_change(
+        RTCPeerConnection::do_peer_connection_state_change(
             on_peer_connection_state_change_handler,
             connection_state,
         )
@@ -1091,7 +1092,7 @@ impl PeerConnection {
                     self.internal
                         .is_negotiation_needed
                         .store(false, Ordering::SeqCst);
-                    PeerConnection::do_negotiation_needed(NegotiationNeededParams {
+                    RTCPeerConnection::do_negotiation_needed(NegotiationNeededParams {
                         on_negotiation_needed_handler: Arc::clone(
                             &self.internal.on_negotiation_needed_handler,
                         ),
@@ -1543,7 +1544,7 @@ impl PeerConnection {
                         return Err(err);
                     }
 
-                    PeerConnection::do_negotiation_needed(NegotiationNeededParams {
+                    RTCPeerConnection::do_negotiation_needed(NegotiationNeededParams {
                         on_negotiation_needed_handler: Arc::clone(
                             &self.internal.on_negotiation_needed_handler,
                         ),
@@ -1609,7 +1610,7 @@ impl PeerConnection {
 
         if let Some(t) = transceiver {
             if sender.stop().await.is_ok() && t.set_sending_track(None).await.is_ok() {
-                PeerConnection::do_negotiation_needed(NegotiationNeededParams {
+                RTCPeerConnection::do_negotiation_needed(NegotiationNeededParams {
                     on_negotiation_needed_handler: Arc::clone(
                         &self.internal.on_negotiation_needed_handler,
                     ),
@@ -1753,7 +1754,7 @@ impl PeerConnection {
             d.open(Arc::clone(&self.internal.sctp_transport)).await?;
         }
 
-        PeerConnection::do_negotiation_needed(NegotiationNeededParams {
+        RTCPeerConnection::do_negotiation_needed(NegotiationNeededParams {
             on_negotiation_needed_handler: Arc::clone(&self.internal.on_negotiation_needed_handler),
             is_closed: Arc::clone(&self.internal.is_closed),
             ops: Arc::clone(&self.internal.ops),
@@ -1850,7 +1851,7 @@ impl PeerConnection {
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #11)
-        PeerConnection::update_connection_state(
+        RTCPeerConnection::update_connection_state(
             &self.internal.on_peer_connection_state_change_handler,
             &self.internal.is_closed,
             &self.internal.peer_connection_state,

@@ -3,7 +3,7 @@ use crate::api::media_engine::MediaEngine;
 use crate::api::{APIBuilder, API};
 use crate::data::data_channel::data_channel_config::DataChannelConfig;
 use crate::peer::peer_connection::peer_connection_test::*;
-use crate::peer::peer_connection::PeerConnection;
+use crate::peer::peer_connection::RTCPeerConnection;
 
 //use log::LevelFilter;
 //use std::io::Write;
@@ -33,8 +33,8 @@ async fn set_up_data_channel_parameters_test(
     api: &API,
     options: Option<DataChannelConfig>,
 ) -> Result<(
-    PeerConnection,
-    PeerConnection,
+    RTCPeerConnection,
+    RTCPeerConnection,
     Arc<DataChannel>,
     mpsc::Sender<()>,
     mpsc::Receiver<()>,
@@ -49,8 +49,8 @@ async fn set_up_data_channel_parameters_test(
 }
 
 async fn close_reliability_param_test(
-    pc1: &mut PeerConnection,
-    pc2: &mut PeerConnection,
+    pc1: &mut RTCPeerConnection,
+    pc2: &mut RTCPeerConnection,
     done_rx: mpsc::Receiver<()>,
 ) -> Result<()> {
     signal_pair(pc1, pc2).await?;

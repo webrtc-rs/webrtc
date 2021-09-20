@@ -23,7 +23,7 @@ use crate::media::rtp::rtp_receiver::RTPReceiver;
 use crate::media::rtp::rtp_sender::RTPSender;
 use crate::media::track::track_local::TrackLocal;
 use crate::peer::configuration::RTCConfiguration;
-use crate::peer::peer_connection::PeerConnection;
+use crate::peer::peer_connection::RTCPeerConnection;
 use interceptor::{noop::NoOp, registry::Registry, Interceptor};
 
 use anyhow::Result;
@@ -46,8 +46,8 @@ impl API {
     pub async fn new_peer_connection(
         &self,
         configuration: RTCConfiguration,
-    ) -> Result<PeerConnection> {
-        PeerConnection::new(self, configuration).await
+    ) -> Result<RTCPeerConnection> {
+        RTCPeerConnection::new(self, configuration).await
     }
 
     /// new_ice_gatherer creates a new ice gatherer.
