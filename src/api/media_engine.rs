@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod media_engine_test;
 
+use crate::error::Error;
+use crate::media::rtp::fmtp::parse_fmtp;
 use crate::media::rtp::rtp_codec::{
     codec_parameters_fuzzy_search, CodecMatch, RTCRtpCodecCapability, RTCRtpCodecParameters,
     RTCRtpHeaderExtensionCapability, RTCRtpHeaderExtensionParameters, RTCRtpParameters,
@@ -9,12 +11,11 @@ use crate::media::rtp::rtp_codec::{
 use crate::media::rtp::rtp_transceiver_direction::{
     have_rtp_transceiver_direction_intersection, RTCRtpTransceiverDirection,
 };
-
-use crate::error::Error;
-use crate::media::rtp::fmtp::parse_fmtp;
 use crate::media::rtp::{PayloadType, RTCPFeedback};
 use crate::peer::sdp::{codecs_from_media_description, rtp_extensions_from_media_description};
+
 use anyhow::Result;
+use sdp::session_description::SessionDescription;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -651,7 +652,7 @@ impl MediaEngine {
     /// Update the MediaEngine from a remote description
     pub(crate) async fn update_from_remote_description(
         &self,
-        desc: &sdp::session_description::SessionDescription,
+        desc: &SessionDescription,
     ) -> Result<()> {
         for media in &desc.media_descriptions {
             let typ = if !self.negotiated_audio.load(Ordering::SeqCst)

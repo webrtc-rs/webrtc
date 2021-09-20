@@ -1,6 +1,7 @@
 use super::sdp_type::RTCSdpType;
 
 use anyhow::Result;
+use sdp::session_description::SessionDescription;
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 
@@ -14,14 +15,14 @@ pub struct RTCSessionDescription {
 
     /// This will never be initialized by callers, internal use only
     #[serde(skip)]
-    pub(crate) parsed: Option<sdp::session_description::SessionDescription>,
+    pub(crate) parsed: Option<SessionDescription>,
 }
 
 /// Unmarshal is a helper to deserialize the sdp
 impl RTCSessionDescription {
-    pub fn unmarshal(&self) -> Result<sdp::session_description::SessionDescription> {
+    pub fn unmarshal(&self) -> Result<SessionDescription> {
         let mut reader = Cursor::new(self.sdp.as_bytes());
-        let parsed = sdp::session_description::SessionDescription::unmarshal(&mut reader)?;
+        let parsed = SessionDescription::unmarshal(&mut reader)?;
         Ok(parsed)
     }
 }

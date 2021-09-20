@@ -623,10 +623,8 @@ impl PeerConnectionInternal {
         local_transceivers: Vec<Arc<RTCRtpTransceiver>>,
         use_identity: bool,
         sdp_semantics: RTCSdpSemantics,
-    ) -> Result<sdp::session_description::SessionDescription> {
-        let d = sdp::session_description::SessionDescription::new_jsep_session_description(
-            use_identity,
-        );
+    ) -> Result<SessionDescription> {
+        let d = SessionDescription::new_jsep_session_description(use_identity);
 
         let ice_params = self.ice_gatherer.get_local_parameters().await?;
 
@@ -740,10 +738,8 @@ impl PeerConnectionInternal {
         include_unmatched: bool,
         connection_role: ConnectionRole,
         sdp_semantics: RTCSdpSemantics,
-    ) -> Result<sdp::session_description::SessionDescription> {
-        let d = sdp::session_description::SessionDescription::new_jsep_session_description(
-            use_identity,
-        );
+    ) -> Result<SessionDescription> {
+        let d = SessionDescription::new_jsep_session_description(use_identity);
 
         let ice_params = self.ice_gatherer.get_local_parameters().await?;
         let candidates = self.ice_gatherer.get_local_candidates().await?;

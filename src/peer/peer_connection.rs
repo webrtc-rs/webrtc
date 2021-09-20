@@ -68,7 +68,7 @@ use ice::candidate::Candidate;
 use interceptor::{Attributes, Interceptor, RTCPWriter};
 use peer_connection_internal::*;
 use rcgen::KeyPair;
-use sdp::session_description::{ATTR_KEY_ICELITE, ATTR_KEY_MSID};
+use sdp::session_description::*;
 use sdp::util::ConnectionRole;
 use srtp::stream::Stream;
 use std::future::Future;

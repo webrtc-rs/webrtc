@@ -55,9 +55,7 @@ pub(crate) fn filter_track_with_ssrc(incoming_tracks: &mut Vec<TrackDetails>, ss
 }
 
 /// extract all TrackDetails from an SDP.
-pub(crate) fn track_details_from_sdp(
-    s: &sdp::session_description::SessionDescription,
-) -> Vec<TrackDetails> {
+pub(crate) fn track_details_from_sdp(s: &SessionDescription) -> Vec<TrackDetails> {
     let mut incoming_tracks = vec![];
     let mut rtx_repair_flows = HashMap::new();
 
@@ -264,11 +262,11 @@ pub(crate) struct AddDataMediaSectionParams {
 }
 
 pub(crate) async fn add_data_media_section(
-    d: sdp::session_description::SessionDescription,
+    d: SessionDescription,
     dtls_fingerprints: &[RTCDtlsFingerprint],
     candidates: &[RTCIceCandidate],
     params: AddDataMediaSectionParams,
-) -> Result<sdp::session_description::SessionDescription> {
+) -> Result<SessionDescription> {
     let mut media = MediaDescription {
         media_name: MediaName {
             media: MEDIA_SECTION_APPLICATION.to_owned(),
@@ -367,14 +365,14 @@ pub(crate) struct AddTransceiverSdpParams {
 }
 
 pub(crate) async fn add_transceiver_sdp(
-    mut d: sdp::session_description::SessionDescription,
+    mut d: SessionDescription,
     dtls_fingerprints: &[RTCDtlsFingerprint],
     media_engine: &Arc<MediaEngine>,
     ice_params: &RTCIceParameters,
     candidates: &[RTCIceCandidate],
     media_section: &MediaSection,
     params: AddTransceiverSdpParams,
-) -> Result<(sdp::session_description::SessionDescription, bool)> {
+) -> Result<(SessionDescription, bool)> {
     if media_section.transceivers.is_empty() {
         return Err(Error::ErrSDPZeroTransceivers.into());
     }
@@ -542,14 +540,14 @@ pub(crate) struct PopulateSdpParams {
 
 /// populate_sdp serializes a PeerConnections state into an SDP
 pub(crate) async fn populate_sdp(
-    mut d: sdp::session_description::SessionDescription,
+    mut d: SessionDescription,
     dtls_fingerprints: &[RTCDtlsFingerprint],
     media_engine: &Arc<MediaEngine>,
     candidates: &[RTCIceCandidate],
     ice_params: &RTCIceParameters,
     media_sections: &[MediaSection],
     params: PopulateSdpParams,
-) -> Result<sdp::session_description::SessionDescription> {
+) -> Result<SessionDescription> {
     let media_dtls_fingerprints = if params.media_description_fingerprint {
         dtls_fingerprints.to_vec()
     } else {
@@ -667,9 +665,7 @@ pub(crate) fn get_peer_direction(
     RTCRtpTransceiverDirection::Unspecified
 }
 
-pub(crate) fn extract_fingerprint(
-    desc: &sdp::session_description::SessionDescription,
-) -> Result<(String, String)> {
+pub(crate) fn extract_fingerprint(desc: &SessionDescription) -> Result<(String, String)> {
     let mut fingerprints = vec![];
 
     if let Some(fingerprint) = desc.attribute("fingerprint") {
@@ -701,7 +697,7 @@ pub(crate) fn extract_fingerprint(
 }
 
 pub(crate) async fn extract_ice_details(
-    desc: &sdp::session_description::SessionDescription,
+    desc: &SessionDescription,
 ) -> Result<(String, String, Vec<RTCIceCandidate>)> {
     let mut candidates = vec![];
     let mut remote_pwds = vec![];
@@ -755,9 +751,7 @@ pub(crate) async fn extract_ice_details(
     Ok((remote_ufrags[0].clone(), remote_pwds[0].clone(), candidates))
 }
 
-pub(crate) fn have_application_media_section(
-    desc: &sdp::session_description::SessionDescription,
-) -> bool {
+pub(crate) fn have_application_media_section(desc: &SessionDescription) -> bool {
     for m in &desc.media_descriptions {
         if m.media_name.media == MEDIA_SECTION_APPLICATION {
             return true;
@@ -800,7 +794,7 @@ pub(crate) fn have_data_channel(
 pub(crate) fn codecs_from_media_description(
     m: &sdp::media_description::MediaDescription,
 ) -> Result<Vec<RTCRtpCodecParameters>> {
-    let s = sdp::session_description::SessionDescription {
+    let s = SessionDescription {
         media_descriptions: vec![m.clone()],
         ..Default::default()
     };
@@ -880,10 +874,7 @@ pub(crate) fn rtp_extensions_from_media_description(
 /// and increments session version by one.
 /// https://tools.ietf.org/html/draft-ietf-rtcweb-jsep-25#section-5.2.2
 /// https://tools.ietf.org/html/draft-ietf-rtcweb-jsep-25#section-5.3.2
-pub(crate) fn update_sdp_origin(
-    origin: &mut Origin,
-    d: &mut sdp::session_description::SessionDescription,
-) {
+pub(crate) fn update_sdp_origin(origin: &mut Origin, d: &mut SessionDescription) {
     //TODO: if atomic.CompareAndSwapUint64(&origin.SessionVersion, 0, d.Origin.SessionVersion)
     if origin.session_version == 0 {
         // store

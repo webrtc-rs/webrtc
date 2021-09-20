@@ -15,7 +15,7 @@ use sdp::common_description::Attribute;
 fn test_extract_fingerprint() -> Result<()> {
     //"Good Session Fingerprint"
     {
-        let s = sdp::session_description::SessionDescription {
+        let s = SessionDescription {
             attributes: vec![Attribute {
                 key: "fingerprint".to_owned(),
                 value: Some("foo bar".to_owned()),
@@ -30,7 +30,7 @@ fn test_extract_fingerprint() -> Result<()> {
 
     //"Good Media Fingerprint"
     {
-        let s = sdp::session_description::SessionDescription {
+        let s = SessionDescription {
             media_descriptions: vec![sdp::media_description::MediaDescription {
                 attributes: vec![Attribute {
                     key: "fingerprint".to_owned(),
@@ -48,7 +48,7 @@ fn test_extract_fingerprint() -> Result<()> {
 
     //"No Fingerprint"
     {
-        let s = sdp::session_description::SessionDescription::default();
+        let s = SessionDescription::default();
 
         if let Err(err) = extract_fingerprint(&s) {
             assert!(Error::ErrSessionDescriptionNoFingerprint.equal(&err));
@@ -59,7 +59,7 @@ fn test_extract_fingerprint() -> Result<()> {
 
     //"Invalid Fingerprint"
     {
-        let s = sdp::session_description::SessionDescription {
+        let s = SessionDescription {
             attributes: vec![Attribute {
                 key: "fingerprint".to_owned(),
                 value: Some("foo".to_owned()),
@@ -76,7 +76,7 @@ fn test_extract_fingerprint() -> Result<()> {
 
     //"Conflicting Fingerprint"
     {
-        let s = sdp::session_description::SessionDescription {
+        let s = SessionDescription {
             attributes: vec![Attribute {
                 key: "fingerprint".to_owned(),
                 value: Some("foo".to_owned()),
@@ -108,7 +108,7 @@ async fn test_extract_ice_details() -> Result<()> {
 
     //"Missing ice-pwd"
     {
-        let s = sdp::session_description::SessionDescription {
+        let s = SessionDescription {
             media_descriptions: vec![sdp::media_description::MediaDescription {
                 attributes: vec![Attribute {
                     key: "ice-ufrag".to_owned(),
@@ -128,7 +128,7 @@ async fn test_extract_ice_details() -> Result<()> {
 
     //"Missing ice-ufrag"
     {
-        let s = sdp::session_description::SessionDescription {
+        let s = SessionDescription {
             media_descriptions: vec![sdp::media_description::MediaDescription {
                 attributes: vec![Attribute {
                     key: "ice-pwd".to_owned(),
@@ -148,7 +148,7 @@ async fn test_extract_ice_details() -> Result<()> {
 
     //"ice details at session level"
     {
-        let s = sdp::session_description::SessionDescription {
+        let s = SessionDescription {
             attributes: vec![
                 Attribute {
                     key: "ice-ufrag".to_owned(),
@@ -170,7 +170,7 @@ async fn test_extract_ice_details() -> Result<()> {
 
     //"ice details at media level"
     {
-        let s = sdp::session_description::SessionDescription {
+        let s = SessionDescription {
             media_descriptions: vec![sdp::media_description::MediaDescription {
                 attributes: vec![
                     Attribute {
@@ -194,7 +194,7 @@ async fn test_extract_ice_details() -> Result<()> {
 
     //"Conflict ufrag"
     {
-        let s = sdp::session_description::SessionDescription {
+        let s = SessionDescription {
             attributes: vec![Attribute {
                 key: "ice-ufrag".to_owned(),
                 value: Some("invalidUfrag".to_owned()),
@@ -224,7 +224,7 @@ async fn test_extract_ice_details() -> Result<()> {
 
     //"Conflict pwd"
     {
-        let s = sdp::session_description::SessionDescription {
+        let s = SessionDescription {
             attributes: vec![Attribute {
                 key: "ice-pwd".to_owned(),
                 value: Some("invalidPwd".to_owned()),
@@ -259,7 +259,7 @@ async fn test_extract_ice_details() -> Result<()> {
 fn test_track_details_from_sdp() -> Result<()> {
     //"Tracks unknown, audio and video with RTX"
     {
-        let s = sdp::session_description::SessionDescription {
+        let s = SessionDescription {
             media_descriptions: vec![
                 sdp::media_description::MediaDescription {
                     media_name: MediaName {
@@ -418,7 +418,7 @@ fn test_track_details_from_sdp() -> Result<()> {
 
     //"inactive and recvonly tracks ignored"
     {
-        let s = sdp::session_description::SessionDescription {
+        let s = SessionDescription {
             media_descriptions: vec![
                 sdp::media_description::MediaDescription {
                     media_name: MediaName {
@@ -467,7 +467,7 @@ fn test_track_details_from_sdp() -> Result<()> {
 fn test_have_application_media_section() -> Result<()> {
     //"Audio only"
     {
-        let s = sdp::session_description::SessionDescription {
+        let s = SessionDescription {
             media_descriptions: vec![sdp::media_description::MediaDescription {
                 media_name: MediaName {
                     media: "audio".to_owned(),
@@ -493,7 +493,7 @@ fn test_have_application_media_section() -> Result<()> {
 
     //"Application"
     {
-        let s = sdp::session_description::SessionDescription {
+        let s = SessionDescription {
             media_descriptions: vec![sdp::media_description::MediaDescription {
                 media_name: MediaName {
                     media: MEDIA_SECTION_APPLICATION.to_owned(),
@@ -517,7 +517,7 @@ async fn fingerprint_test(
     sdpmedia_description_fingerprints: bool,
     expected_fingerprint_count: usize,
 ) -> Result<()> {
-    let s = sdp::session_description::SessionDescription::default();
+    let s = SessionDescription::default();
 
     let dtls_fingerprints = certificate.get_fingerprints()?;
 
@@ -659,7 +659,7 @@ async fn test_populate_sdp() -> Result<()> {
             rid_map,
         }];
 
-        let d = sdp::session_description::SessionDescription::default();
+        let d = SessionDescription::default();
 
         let params = PopulateSdpParams {
             is_plan_b: false,
@@ -739,7 +739,7 @@ async fn test_populate_sdp() -> Result<()> {
             rid_map: HashMap::new(),
         }];
 
-        let d = sdp::session_description::SessionDescription::default();
+        let d = SessionDescription::default();
 
         let params = PopulateSdpParams {
             is_plan_b: false,

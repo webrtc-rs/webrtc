@@ -51,9 +51,9 @@ async fn test_video_case() -> Result<()> {
 
 #[tokio::test]
 async fn test_media_engine_remote_description() -> Result<()> {
-    let must_parse = |raw: &str| -> Result<sdp::session_description::SessionDescription> {
+    let must_parse = |raw: &str| -> Result<SessionDescription> {
         let mut reader = Cursor::new(raw.as_bytes());
-        sdp::session_description::SessionDescription::unmarshal(&mut reader)
+        SessionDescription::unmarshal(&mut reader)
     };
 
     //"No Media"
