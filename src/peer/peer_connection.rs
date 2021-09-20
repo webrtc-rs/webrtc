@@ -7,7 +7,7 @@ use crate::api::media_engine::MediaEngine;
 use crate::api::setting_engine::SettingEngine;
 use crate::api::API;
 use crate::data::data_channel::DataChannel;
-use crate::data::sctp_transport::SCTPTransport;
+use crate::data::sctp_transport::RTCSctpTransport;
 use crate::media::dtls_transport::dtls_transport_state::RTCDtlsTransportState;
 use crate::media::dtls_transport::RTCDtlsTransport;
 use crate::media::ice_transport::ice_transport_state::RTCIceTransportState;
@@ -33,7 +33,7 @@ use crate::data::data_channel::data_channel_init::DataChannelInit;
 use crate::data::data_channel::data_channel_parameters::DataChannelParameters;
 use crate::data::data_channel::data_channel_state::DataChannelState;
 use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
-use crate::data::sctp_transport::sctp_transport_state::SCTPTransportState;
+use crate::data::sctp_transport::sctp_transport_state::RTCSctpTransportState;
 use crate::error::Error;
 use crate::media::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
 use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
@@ -127,7 +127,7 @@ struct StartTransportsParams {
 
 #[derive(Clone)]
 struct CheckNegotiationNeededParams {
-    sctp_transport: Arc<SCTPTransport>,
+    sctp_transport: Arc<RTCSctpTransport>,
     rtp_transceivers: Arc<Mutex<Vec<Arc<RTCRtpTransceiver>>>>,
     current_local_description: Arc<Mutex<Option<RTCSessionDescription>>>,
     current_remote_description: Arc<Mutex<Option<RTCSessionDescription>>>,
@@ -1751,7 +1751,7 @@ impl RTCPeerConnection {
             .fetch_add(1, Ordering::SeqCst);
 
         // If SCTP already connected open all the channels
-        if self.internal.sctp_transport.state() == SCTPTransportState::Connected {
+        if self.internal.sctp_transport.state() == RTCSctpTransportState::Connected {
             d.open(Arc::clone(&self.internal.sctp_transport)).await?;
         }
 
@@ -2004,7 +2004,7 @@ impl RTCPeerConnection {
     ///
     /// The SCTP transport over which SCTP data is sent and received. If SCTP has not been negotiated, the value is nil.
     /// https://www.w3.org/TR/webrtc/#attributes-15
-    pub fn sctp(&self) -> Arc<SCTPTransport> {
+    pub fn sctp(&self) -> Arc<RTCSctpTransport> {
         Arc::clone(&self.internal.sctp_transport)
     }
 

@@ -24,7 +24,7 @@ use tokio::sync::Mutex;
 use data_channel_state::DataChannelState;
 
 use crate::api::setting_engine::SettingEngine;
-use crate::data::sctp_transport::SCTPTransport;
+use crate::data::sctp_transport::RTCSctpTransport;
 use crate::error::{Error, OnErrorHdlrFn};
 
 /// message size limit for Chromium
@@ -73,7 +73,7 @@ pub struct DataChannel {
 
     pub(crate) on_buffered_amount_low: Mutex<Option<OnBufferedAmountLowFn>>,
 
-    pub(crate) sctp_transport: Mutex<Option<Arc<SCTPTransport>>>,
+    pub(crate) sctp_transport: Mutex<Option<Arc<RTCSctpTransport>>>,
     pub(crate) data_channel: Mutex<Option<Arc<data::data_channel::DataChannel>>>,
 
     // A reference to the associated api object used by this datachannel
@@ -105,7 +105,7 @@ impl DataChannel {
     }
 
     /// open opens the datachannel over the sctp transport
-    pub(crate) async fn open(&self, sctp_transport: Arc<SCTPTransport>) -> Result<()> {
+    pub(crate) async fn open(&self, sctp_transport: Arc<RTCSctpTransport>) -> Result<()> {
         if let Some(association) = sctp_transport.association().await {
             {
                 let mut st = self.sctp_transport.lock().await;
@@ -184,7 +184,7 @@ impl DataChannel {
     }
 
     /// transport returns the SCTPTransport instance the DataChannel is sending over.
-    pub async fn transport(&self) -> Option<Arc<SCTPTransport>> {
+    pub async fn transport(&self) -> Option<Arc<RTCSctpTransport>> {
         let sctp_transport = self.sctp_transport.lock().await;
         sctp_transport.clone()
     }

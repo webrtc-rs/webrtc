@@ -1346,7 +1346,7 @@ struct TestOrtcStack {
     gatherer: Arc<RTCIceGatherer>,
     ice: Arc<RTCIceTransport>,
     dtls: Arc<RTCDtlsTransport>,
-    sctp: Arc<SCTPTransport>,
+    sctp: Arc<RTCSctpTransport>,
 }
 
 struct TestOrtcSignal {

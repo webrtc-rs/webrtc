@@ -4,7 +4,7 @@ mod sctp_transport_test;
 pub mod sctp_transport_capabilities;
 pub mod sctp_transport_state;
 
-use sctp_transport_state::SCTPTransportState;
+use sctp_transport_state::RTCSctpTransportState;
 
 use crate::api::setting_engine::SettingEngine;
 use crate::data::data_channel::DataChannel;
@@ -53,7 +53,7 @@ struct AcceptDataChannelParams {
 
 /// SCTPTransport provides details about the SCTP transport.
 #[derive(Default)]
-pub struct SCTPTransport {
+pub struct RTCSctpTransport {
     pub(crate) dtls_transport: Arc<RTCDtlsTransport>,
 
     // State represents the current state of the SCTP transport.
@@ -86,16 +86,16 @@ pub struct SCTPTransport {
     setting_engine: Arc<SettingEngine>,
 }
 
-impl SCTPTransport {
+impl RTCSctpTransport {
     pub(crate) fn new(
         dtls_transport: Arc<RTCDtlsTransport>,
         setting_engine: Arc<SettingEngine>,
     ) -> Self {
-        SCTPTransport {
+        RTCSctpTransport {
             dtls_transport,
-            state: AtomicU8::new(SCTPTransportState::Connecting as u8),
+            state: AtomicU8::new(RTCSctpTransportState::Connecting as u8),
             is_started: AtomicBool::new(false),
-            max_message_size: SCTPTransport::calc_message_size(65536, 65536),
+            max_message_size: RTCSctpTransport::calc_message_size(65536, 65536),
             max_channels: SCTP_MAX_CHANNELS,
             sctp_association: Mutex::new(None),
             on_error_handler: Arc::new(Mutex::new(None)),
@@ -149,7 +149,7 @@ impl SCTPTransport {
                 *sa = Some(Arc::clone(&sctp_association));
             }
             self.state
-                .store(SCTPTransportState::Connected as u8, Ordering::SeqCst);
+                .store(RTCSctpTransportState::Connected as u8, Ordering::SeqCst);
 
             let param = AcceptDataChannelParams {
                 sctp_association,
@@ -162,7 +162,7 @@ impl SCTPTransport {
                 setting_engine: Arc::clone(&self.setting_engine),
             };
             tokio::spawn(async move {
-                SCTPTransport::accept_data_channels(param).await;
+                RTCSctpTransport::accept_data_channels(param).await;
             });
 
             Ok(())
@@ -181,7 +181,7 @@ impl SCTPTransport {
         }
 
         self.state
-            .store(SCTPTransportState::Closed as u8, Ordering::SeqCst);
+            .store(RTCSctpTransportState::Closed as u8, Ordering::SeqCst);
         Ok(())
     }
 
@@ -317,7 +317,7 @@ impl SCTPTransport {
     }
 
     /// state returns the current state of the SCTPTransport
-    pub fn state(&self) -> SCTPTransportState {
+    pub fn state(&self) -> RTCSctpTransportState {
         self.state.load(Ordering::SeqCst).into()
     }
 

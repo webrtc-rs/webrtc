@@ -29,7 +29,7 @@ pub(crate) struct PeerConnectionInternal {
     pub(super) peer_connection_state: Arc<AtomicU8>,
     pub(super) ice_connection_state: Arc<AtomicU8>,
 
-    pub(super) sctp_transport: Arc<SCTPTransport>,
+    pub(super) sctp_transport: Arc<RTCSctpTransport>,
     pub(super) rtp_transceivers: Arc<Mutex<Vec<Arc<RTCRtpTransceiver>>>>,
 
     pub(super) on_track_handler: Arc<Mutex<Option<OnTrackHdlrFn>>>,

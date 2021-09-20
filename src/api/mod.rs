@@ -16,7 +16,7 @@ use setting_engine::*;
 
 use crate::data::data_channel::data_channel_parameters::DataChannelParameters;
 use crate::data::data_channel::DataChannel;
-use crate::data::sctp_transport::SCTPTransport;
+use crate::data::sctp_transport::RTCSctpTransport;
 use crate::error::Error;
 use crate::media::rtp::rtp_codec::RTPCodecType;
 use crate::media::rtp::rtp_receiver::RTCRtpReceiver;
@@ -110,8 +110,8 @@ impl API {
     pub fn new_sctp_transport(
         &self,
         dtls_transport: Arc<RTCDtlsTransport>,
-    ) -> Result<SCTPTransport> {
-        Ok(SCTPTransport::new(
+    ) -> Result<RTCSctpTransport> {
+        Ok(RTCSctpTransport::new(
             dtls_transport,
             Arc::clone(&self.setting_engine),
         ))
@@ -122,7 +122,7 @@ impl API {
     /// meant to be used together with the basic WebRTC API.
     pub async fn new_data_channel(
         &self,
-        sctp_transport: Arc<SCTPTransport>,
+        sctp_transport: Arc<RTCSctpTransport>,
         params: DataChannelParameters,
     ) -> Result<DataChannel> {
         // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #5)
