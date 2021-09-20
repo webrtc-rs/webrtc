@@ -26,5 +26,5 @@
  </a>
 </p>
 <p align="center">
- A pure Rust implementation of SCTP. Rewrite <a href="http://Pion.ly">Pion</a> SCTP in Rust
+ A pure Rust implementation of SCTP. Rewrite <a href="https://github.com/pion/sctp/releases/tag/v1.7.12">Pion</a> SCTP in Rust
 </p>
