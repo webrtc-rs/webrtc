@@ -2,12 +2,12 @@ use super::*;
 use crate::api::media_engine::{MIME_TYPE_OPUS, MIME_TYPE_VP8};
 use crate::api::setting_engine::SettingEngine;
 use crate::api::APIBuilder;
-use crate::media::dtls_transport::dtls_certificate::Certificate;
 use crate::media::dtls_transport::dtls_role::DEFAULT_DTLS_ROLE_OFFER;
 use crate::media::dtls_transport::DTLSTransport;
 use crate::media::rtp::rtp_sender::RTPSender;
 use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::media::track::track_local::TrackLocal;
+use crate::peer::certificate::RTCCertificate;
 use rcgen::KeyPair;
 use sdp::common_description::Attribute;
 
@@ -511,7 +511,7 @@ fn test_have_application_media_section() -> Result<()> {
 }
 
 async fn fingerprint_test(
-    certificate: &Certificate,
+    certificate: &RTCCertificate,
     engine: &Arc<MediaEngine>,
     media: &[MediaSection],
     sdpmedia_description_fingerprints: bool,
@@ -555,7 +555,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
     let api = APIBuilder::new().with_media_engine(m).build();
 
     let kp = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
-    let certificate = Certificate::from_key_pair(kp)?;
+    let certificate = RTCCertificate::from_key_pair(kp)?;
 
     let media = vec![
         MediaSection {

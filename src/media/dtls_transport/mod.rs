@@ -1,11 +1,20 @@
-#[cfg(test)]
-mod dtls_transport_test;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::Arc;
 
-pub mod dtls_certificate;
-pub mod dtls_fingerprint;
-pub mod dtls_parameters;
-pub mod dtls_role;
-pub mod dtls_transport_state;
+use anyhow::Result;
+use bytes::Bytes;
+use dtls::config::ClientAuthType;
+use dtls::conn::DTLSConn;
+use sha2::{Digest, Sha256};
+use srtp::protection_profile::ProtectionProfile;
+use srtp::session::Session;
+use srtp::stream::Stream;
+use tokio::sync::{mpsc, Mutex};
+use util::Conn;
+
+use dtls_role::*;
 
 use crate::api::setting_engine::SettingEngine;
 use crate::default_srtp_protection_profiles;
@@ -14,27 +23,19 @@ use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
 use crate::media::dtls_transport::dtls_transport_state::DTLSTransportState;
 use crate::media::ice_transport::ice_transport_state::ICETransportState;
 use crate::media::ice_transport::ICETransport;
+use crate::peer::certificate::RTCCertificate;
 use crate::peer::ice::ice_role::ICERole;
 use crate::util::flatten_errs;
 use crate::util::mux::endpoint::Endpoint;
 use crate::util::mux::mux_func::{match_dtls, match_srtcp, match_srtp, MatchFunc};
 
-use crate::media::dtls_transport::dtls_certificate::Certificate;
-use anyhow::Result;
-use bytes::Bytes;
-use dtls::config::ClientAuthType;
-use dtls::conn::DTLSConn;
-use dtls_role::*;
-use sha2::{Digest, Sha256};
-use srtp::protection_profile::ProtectionProfile;
-use srtp::session::Session;
-use srtp::stream::Stream;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
-use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
-use util::Conn;
+#[cfg(test)]
+mod dtls_transport_test;
+
+pub mod dtls_fingerprint;
+pub mod dtls_parameters;
+pub mod dtls_role;
+pub mod dtls_transport_state;
 
 pub type OnDTLSTransportStateChangeHdlrFn = Box<
     dyn (FnMut(DTLSTransportState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
@@ -49,7 +50,7 @@ pub type OnDTLSTransportStateChangeHdlrFn = Box<
 #[derive(Default)]
 pub struct DTLSTransport {
     pub(crate) ice_transport: Arc<ICETransport>,
-    pub(crate) certificates: Vec<Certificate>,
+    pub(crate) certificates: Vec<RTCCertificate>,
     pub(crate) setting_engine: Arc<SettingEngine>,
 
     pub(crate) remote_parameters: Mutex<DTLSParameters>,
@@ -76,7 +77,7 @@ pub struct DTLSTransport {
 impl DTLSTransport {
     pub(crate) fn new(
         ice_transport: Arc<ICETransport>,
-        certificates: Vec<Certificate>,
+        certificates: Vec<RTCCertificate>,
         setting_engine: Arc<SettingEngine>,
     ) -> Self {
         let (srtp_ready_tx, srtp_ready_rx) = mpsc::channel(1);

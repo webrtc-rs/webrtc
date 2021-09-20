@@ -1,4 +1,4 @@
-use crate::media::dtls_transport::dtls_certificate::Certificate;
+use crate::peer::certificate::RTCCertificate;
 use crate::peer::ice::ice_server::RTCIceServer;
 use crate::peer::policy::bundle_policy::RTCBundlePolicy;
 use crate::peer::policy::ice_transport_policy::RTCIceTransportPolicy;
@@ -44,7 +44,7 @@ pub struct RTCConfiguration {
     /// used for a given connection; how certificates are selected is outside
     /// the scope of this specification. If this value is absent, then a default
     /// set of certificates is generated for each PeerConnection instance.
-    pub certificates: Vec<Certificate>,
+    pub certificates: Vec<RTCCertificate>,
 
     /// icecandidate_pool_size describes the size of the prefetched ICE pool.
     pub ice_candidate_pool_size: u8,

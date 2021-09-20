@@ -5,9 +5,9 @@ pub mod interceptor_registry;
 pub mod media_engine;
 pub mod setting_engine;
 
-use crate::media::dtls_transport::dtls_certificate::Certificate;
 use crate::media::dtls_transport::DTLSTransport;
 use crate::media::ice_transport::ICETransport;
+use crate::peer::certificate::RTCCertificate;
 use crate::peer::ice::ice_gather::ice_gatherer::ICEGatherer;
 use crate::peer::ice::ice_gather::ICEGatherOptions;
 
@@ -82,7 +82,7 @@ impl API {
     pub fn new_dtls_transport(
         &self,
         ice_transport: Arc<ICETransport>,
-        mut certificates: Vec<Certificate>,
+        mut certificates: Vec<RTCCertificate>,
     ) -> Result<DTLSTransport> {
         if !certificates.is_empty() {
             let now = SystemTime::now();
@@ -93,7 +93,7 @@ impl API {
             }
         } else {
             let kp = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
-            let cert = Certificate::from_key_pair(kp)?;
+            let cert = RTCCertificate::from_key_pair(kp)?;
             certificates = vec![cert];
         };
 

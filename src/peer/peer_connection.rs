@@ -34,7 +34,6 @@ use crate::data::data_channel::data_channel_state::DataChannelState;
 use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use crate::data::sctp_transport::sctp_transport_state::SCTPTransportState;
 use crate::error::Error;
-use crate::media::dtls_transport::dtls_certificate::Certificate;
 use crate::media::dtls_transport::dtls_fingerprint::DTLSFingerprint;
 use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
 use crate::media::dtls_transport::dtls_role::{
@@ -46,6 +45,7 @@ use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
 use crate::media::rtp::{RTPTransceiverInit, SSRC};
 use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::media::track::track_local::TrackLocal;
+use crate::peer::certificate::RTCCertificate;
 use crate::peer::ice::ice_candidate::{ICECandidateInit, RTCIceCandidate};
 use crate::peer::ice::ice_gather::ice_gatherer_state::RTCIceGathererState;
 use crate::peer::ice::ice_gather::ice_gathering_state::RTCIceGatheringState;
@@ -209,7 +209,7 @@ impl PeerConnection {
             }
         } else {
             let kp = KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
-            let cert = Certificate::from_key_pair(kp)?;
+            let cert = RTCCertificate::from_key_pair(kp)?;
             configuration.certificates = vec![cert];
         };
 

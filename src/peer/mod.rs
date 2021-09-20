@@ -1,3 +1,4 @@
+pub mod certificate;
 pub mod configuration;
 pub mod ice;
 pub mod offer_answer_options;
