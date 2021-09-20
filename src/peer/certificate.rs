@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::media::dtls_transport::dtls_fingerprint::DTLSFingerprint;
+use crate::media::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
 use crate::util::math_rand_alpha;
 use anyhow::Result;
 use dtls::crypto::{CryptoPrivateKey, CryptoPrivateKeyKind};
@@ -96,7 +96,7 @@ impl RTCCertificate {
 
     /// get_fingerprints returns certificate fingerprints, one of which
     /// is computed with the digest algorithm used in the certificate signature.
-    pub fn get_fingerprints(&self) -> Result<Vec<DTLSFingerprint>> {
+    pub fn get_fingerprints(&self) -> Result<Vec<RTCDtlsFingerprint>> {
         let mut fingerpints = vec![];
 
         for certificate in &self.certificate.certificate {
@@ -105,7 +105,7 @@ impl RTCCertificate {
             let hashed = h.finalize();
             let values: Vec<String> = hashed.iter().map(|x| format! {"{:02x}", x}).collect();
 
-            fingerpints.push(DTLSFingerprint {
+            fingerpints.push(RTCDtlsFingerprint {
                 algorithm: "sha-256".to_owned(),
                 value: values.join(":"),
             });

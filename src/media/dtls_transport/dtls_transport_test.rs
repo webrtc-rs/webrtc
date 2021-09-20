@@ -123,13 +123,13 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
     log::trace!("offer_connection_has_failed wait end");
     {
         let transport = pc_offer.sctp().transport();
-        assert_eq!(transport.state(), DTLSTransportState::Failed);
+        assert_eq!(transport.state(), RTCDtlsTransportState::Failed);
         assert!(transport.conn().await.is_none());
     }
 
     {
         let transport = pc_answer.sctp().transport();
-        assert_eq!(transport.state(), DTLSTransportState::Failed);
+        assert_eq!(transport.state(), RTCDtlsTransportState::Failed);
         assert!(transport.conn().await.is_none());
     }
 

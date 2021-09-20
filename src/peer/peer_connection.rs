@@ -8,8 +8,8 @@ use crate::api::setting_engine::SettingEngine;
 use crate::api::API;
 use crate::data::data_channel::DataChannel;
 use crate::data::sctp_transport::SCTPTransport;
-use crate::media::dtls_transport::dtls_transport_state::DTLSTransportState;
-use crate::media::dtls_transport::DTLSTransport;
+use crate::media::dtls_transport::dtls_transport_state::RTCDtlsTransportState;
+use crate::media::dtls_transport::RTCDtlsTransport;
 use crate::media::ice_transport::ice_transport_state::ICETransportState;
 use crate::media::ice_transport::ICETransport;
 use crate::media::rtp::rtp_receiver::RTCRtpReceiver;
@@ -35,7 +35,7 @@ use crate::data::data_channel::data_channel_state::DataChannelState;
 use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use crate::data::sctp_transport::sctp_transport_state::SCTPTransportState;
 use crate::error::Error;
-use crate::media::dtls_transport::dtls_fingerprint::DTLSFingerprint;
+use crate::media::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
 use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
 use crate::media::dtls_transport::dtls_role::{
     DTLSRole, DEFAULT_DTLS_ROLE_ANSWER, DEFAULT_DTLS_ROLE_OFFER,
@@ -118,7 +118,7 @@ pub type OnNegotiationNeededHdlrFn =
 #[derive(Clone)]
 struct StartTransportsParams {
     ice_transport: Arc<ICETransport>,
-    dtls_transport: Arc<DTLSTransport>,
+    dtls_transport: Arc<RTCDtlsTransport>,
     on_peer_connection_state_change_handler: Arc<Mutex<Option<OnPeerConnectionStateChangeHdlrFn>>>,
     is_closed: Arc<AtomicBool>,
     peer_connection_state: Arc<AtomicU8>,
@@ -773,24 +773,24 @@ impl RTCPeerConnection {
         is_closed: &Arc<AtomicBool>,
         peer_connection_state: &Arc<AtomicU8>,
         ice_connection_state: RTCIceConnectionState,
-        dtls_transport_state: DTLSTransportState,
+        dtls_transport_state: RTCDtlsTransportState,
     ) {
         let  connection_state =
         // The RTCPeerConnection object's [[IsClosed]] slot is true.
         if is_closed.load(Ordering::SeqCst) {
              RTCPeerConnectionState::Closed
-        }else if ice_connection_state == RTCIceConnectionState::Failed || dtls_transport_state == DTLSTransportState::Failed {
+        }else if ice_connection_state == RTCIceConnectionState::Failed || dtls_transport_state == RTCDtlsTransportState::Failed {
             // Any of the RTCIceTransports or RTCDtlsTransports are in a "failed" state.
              RTCPeerConnectionState::Failed
         }else if ice_connection_state == RTCIceConnectionState::Disconnected {
             // Any of the RTCIceTransports or RTCDtlsTransports are in the "disconnected"
             // state and none of them are in the "failed" or "connecting" or "checking" state.
             RTCPeerConnectionState::Disconnected
-        }else if ice_connection_state == RTCIceConnectionState::Connected && dtls_transport_state == DTLSTransportState::Connected {
+        }else if ice_connection_state == RTCIceConnectionState::Connected && dtls_transport_state == RTCDtlsTransportState::Connected {
             // All RTCIceTransports and RTCDtlsTransports are in the "connected", "completed" or "closed"
             // state and at least one of them is in the "connected" or "completed" state.
             RTCPeerConnectionState::Connected
-        }else if ice_connection_state == RTCIceConnectionState::Checking && dtls_transport_state == DTLSTransportState::Connecting{
+        }else if ice_connection_state == RTCIceConnectionState::Checking && dtls_transport_state == RTCDtlsTransportState::Connecting{
         //  Any of the RTCIceTransports or RTCDtlsTransports are in the "connecting" or
         // "checking" state and none of them is in the "failed" state.
              RTCPeerConnectionState::Connecting

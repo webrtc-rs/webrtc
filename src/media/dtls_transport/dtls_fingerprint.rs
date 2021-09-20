@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 /// DTLSFingerprint specifies the hash function algorithm and certificate
 /// fingerprint as described in https://tools.ietf.org/html/rfc4572.
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
-pub struct DTLSFingerprint {
+pub struct RTCDtlsFingerprint {
     /// Algorithm specifies one of the the hash function algorithms defined in
     /// the 'Hash function Textual Names' registry.
     pub algorithm: String,

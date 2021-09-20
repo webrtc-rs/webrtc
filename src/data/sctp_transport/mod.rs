@@ -54,7 +54,7 @@ struct AcceptDataChannelParams {
 /// SCTPTransport provides details about the SCTP transport.
 #[derive(Default)]
 pub struct SCTPTransport {
-    pub(crate) dtls_transport: Arc<DTLSTransport>,
+    pub(crate) dtls_transport: Arc<RTCDtlsTransport>,
 
     // State represents the current state of the SCTP transport.
     state: AtomicU8, //SCTPTransportState,
@@ -88,7 +88,7 @@ pub struct SCTPTransport {
 
 impl SCTPTransport {
     pub(crate) fn new(
-        dtls_transport: Arc<DTLSTransport>,
+        dtls_transport: Arc<RTCDtlsTransport>,
         setting_engine: Arc<SettingEngine>,
     ) -> Self {
         SCTPTransport {
@@ -112,7 +112,7 @@ impl SCTPTransport {
     }
 
     /// transport returns the DTLSTransport instance the SCTPTransport is sending over.
-    pub fn transport(&self) -> Arc<DTLSTransport> {
+    pub fn transport(&self) -> Arc<RTCDtlsTransport> {
         Arc::clone(&self.dtls_transport)
     }
 

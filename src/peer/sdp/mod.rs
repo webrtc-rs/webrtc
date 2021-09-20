@@ -3,7 +3,7 @@ mod sdp_test;
 
 use crate::api::media_engine::MediaEngine;
 use crate::error::Error;
-use crate::media::dtls_transport::dtls_fingerprint::DTLSFingerprint;
+use crate::media::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
 use crate::media::ice_transport::ice_parameters::RTCIceParameters;
 use crate::media::rtp::rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType};
 use crate::media::rtp::rtp_transceiver::RTCRtpTransceiver;
@@ -266,7 +266,7 @@ pub(crate) struct AddDataMediaSectionParams {
 
 pub(crate) async fn add_data_media_section(
     d: sdp::session_description::SessionDescription,
-    dtls_fingerprints: &[DTLSFingerprint],
+    dtls_fingerprints: &[RTCDtlsFingerprint],
     candidates: &[RTCIceCandidate],
     params: AddDataMediaSectionParams,
 ) -> Result<sdp::session_description::SessionDescription> {
@@ -371,7 +371,7 @@ pub(crate) struct AddTransceiverSdpParams {
 
 pub(crate) async fn add_transceiver_sdp(
     mut d: sdp::session_description::SessionDescription,
-    dtls_fingerprints: &[DTLSFingerprint],
+    dtls_fingerprints: &[RTCDtlsFingerprint],
     media_engine: &Arc<MediaEngine>,
     ice_params: &RTCIceParameters,
     candidates: &[RTCIceCandidate],
@@ -546,7 +546,7 @@ pub(crate) struct PopulateSdpParams {
 /// populate_sdp serializes a PeerConnections state into an SDP
 pub(crate) async fn populate_sdp(
     mut d: sdp::session_description::SessionDescription,
-    dtls_fingerprints: &[DTLSFingerprint],
+    dtls_fingerprints: &[RTCDtlsFingerprint],
     media_engine: &Arc<MediaEngine>,
     candidates: &[RTCIceCandidate],
     ice_params: &RTCIceParameters,

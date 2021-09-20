@@ -3,7 +3,7 @@ mod rtp_sender_test;
 
 use crate::api::media_engine::MediaEngine;
 use crate::error::Error;
-use crate::media::dtls_transport::DTLSTransport;
+use crate::media::dtls_transport::RTCDtlsTransport;
 use crate::media::interceptor::{create_stream_info, InterceptorToTrackLocalWriter};
 use crate::media::rtp::rtp_codec::{RTCRtpCodecParameters, RTPCodecType};
 use crate::media::rtp::rtp_transceiver::RTCRtpTransceiver;
@@ -72,7 +72,7 @@ pub struct RTCRtpSender {
 
     pub(crate) context: Mutex<TrackLocalContext>,
 
-    pub(crate) transport: Arc<DTLSTransport>,
+    pub(crate) transport: Arc<RTCDtlsTransport>,
 
     pub(crate) payload_type: PayloadType,
     pub(crate) ssrc: SSRC,
@@ -98,7 +98,7 @@ pub struct RTCRtpSender {
 impl RTCRtpSender {
     pub async fn new(
         track: Arc<dyn TrackLocal + Send + Sync>,
-        transport: Arc<DTLSTransport>,
+        transport: Arc<RTCDtlsTransport>,
         media_engine: Arc<MediaEngine>,
         interceptor: Arc<dyn Interceptor + Send + Sync>,
     ) -> RTCRtpSender {
@@ -177,7 +177,7 @@ impl RTCRtpSender {
 
     /// transport returns the currently-configured DTLSTransport
     /// if one has not yet been configured
-    pub fn transport(&self) -> Arc<DTLSTransport> {
+    pub fn transport(&self) -> Arc<RTCDtlsTransport> {
         Arc::clone(&self.transport)
     }
 

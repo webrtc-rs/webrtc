@@ -7,5 +7,5 @@ use serde::{Deserialize, Serialize};
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct DTLSParameters {
     pub role: DTLSRole,
-    pub fingerprints: Vec<DTLSFingerprint>,
+    pub fingerprints: Vec<RTCDtlsFingerprint>,
 }

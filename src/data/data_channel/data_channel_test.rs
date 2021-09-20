@@ -9,7 +9,7 @@ use crate::peer::peer_connection::RTCPeerConnection;
 //use std::io::Write;
 use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
-use crate::media::dtls_transport::DTLSTransport;
+use crate::media::dtls_transport::RTCDtlsTransport;
 use crate::media::ice_transport::ice_parameters::RTCIceParameters;
 use crate::media::ice_transport::ice_role::ICERole;
 use crate::media::ice_transport::ICETransport;
@@ -1345,7 +1345,7 @@ struct TestOrtcStack {
     //api      *API
     gatherer: Arc<RTCIceGatherer>,
     ice: Arc<ICETransport>,
-    dtls: Arc<DTLSTransport>,
+    dtls: Arc<RTCDtlsTransport>,
     sctp: Arc<SCTPTransport>,
 }
 

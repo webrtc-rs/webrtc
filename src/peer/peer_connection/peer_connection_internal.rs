@@ -23,7 +23,7 @@ pub(crate) struct PeerConnectionInternal {
     pub(super) signaling_state: Arc<AtomicU8>,
 
     pub(super) ice_transport: Arc<ICETransport>,
-    pub(super) dtls_transport: Arc<DTLSTransport>,
+    pub(super) dtls_transport: Arc<RTCDtlsTransport>,
     pub(super) on_peer_connection_state_change_handler:
         Arc<Mutex<Option<OnPeerConnectionStateChangeHdlrFn>>>,
     pub(super) peer_connection_state: Arc<AtomicU8>,
@@ -597,7 +597,7 @@ impl PeerConnectionInternal {
             .dtls_transport
             .start(DTLSParameters {
                 role: dtls_role,
-                fingerprints: vec![DTLSFingerprint {
+                fingerprints: vec![RTCDtlsFingerprint {
                     algorithm: fingerprint_hash,
                     value: fingerprint,
                 }],

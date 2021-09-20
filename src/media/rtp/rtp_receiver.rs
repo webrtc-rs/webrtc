@@ -3,7 +3,7 @@ mod rtp_receiver_test;
 
 use crate::api::media_engine::MediaEngine;
 use crate::error::Error;
-use crate::media::dtls_transport::DTLSTransport;
+use crate::media::dtls_transport::RTCDtlsTransport;
 use crate::media::interceptor::*;
 use crate::media::rtp::rtp_codec::{
     codec_parameters_fuzzy_search, CodecMatch, RTCRtpCodecCapability, RTCRtpCodecParameters,
@@ -31,7 +31,7 @@ pub(crate) struct RTPReceiverInternal {
 
     transceiver_codecs: Mutex<Option<Arc<Mutex<Vec<RTCRtpCodecParameters>>>>>,
 
-    transport: Arc<DTLSTransport>,
+    transport: Arc<RTCDtlsTransport>,
     media_engine: Arc<MediaEngine>,
     interceptor: Arc<dyn Interceptor + Send + Sync>,
 }
@@ -181,7 +181,7 @@ impl RTPReceiverInternal {
 /// RTPReceiver allows an application to inspect the receipt of a TrackRemote
 pub struct RTCRtpReceiver {
     kind: RTPCodecType,
-    transport: Arc<DTLSTransport>,
+    transport: Arc<RTCDtlsTransport>,
     closed_tx: Mutex<Option<mpsc::Sender<()>>>,
     received_tx: Mutex<Option<mpsc::Sender<()>>>,
 
@@ -191,7 +191,7 @@ pub struct RTCRtpReceiver {
 impl RTCRtpReceiver {
     pub fn new(
         kind: RTPCodecType,
-        transport: Arc<DTLSTransport>,
+        transport: Arc<RTCDtlsTransport>,
         media_engine: Arc<MediaEngine>,
         interceptor: Arc<dyn Interceptor + Send + Sync>,
     ) -> Self {
@@ -234,7 +234,7 @@ impl RTCRtpReceiver {
 
     /// transport returns the currently-configured *DTLSTransport or nil
     /// if one has not yet been configured
-    pub fn transport(&self) -> Arc<DTLSTransport> {
+    pub fn transport(&self) -> Arc<RTCDtlsTransport> {
         Arc::clone(&self.transport)
     }
 
@@ -531,7 +531,7 @@ impl RTCRtpReceiver {
     }
 
     async fn streams_for_ssrc(
-        transport: &Arc<DTLSTransport>,
+        transport: &Arc<RTCDtlsTransport>,
         ssrc: SSRC,
         stream_info: &StreamInfo,
         interceptor: &Arc<dyn Interceptor + Send + Sync>,

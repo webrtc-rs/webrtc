@@ -5,7 +5,7 @@ pub mod interceptor_registry;
 pub mod media_engine;
 pub mod setting_engine;
 
-use crate::media::dtls_transport::DTLSTransport;
+use crate::media::dtls_transport::RTCDtlsTransport;
 use crate::media::ice_transport::ICETransport;
 use crate::peer::certificate::RTCCertificate;
 use crate::peer::ice::ice_gather::ice_gatherer::RTCIceGatherer;
@@ -83,7 +83,7 @@ impl API {
         &self,
         ice_transport: Arc<ICETransport>,
         mut certificates: Vec<RTCCertificate>,
-    ) -> Result<DTLSTransport> {
+    ) -> Result<RTCDtlsTransport> {
         if !certificates.is_empty() {
             let now = SystemTime::now();
             for cert in &certificates {
@@ -97,7 +97,7 @@ impl API {
             certificates = vec![cert];
         };
 
-        Ok(DTLSTransport::new(
+        Ok(RTCDtlsTransport::new(
             ice_transport,
             certificates,
             Arc::clone(&self.setting_engine),
@@ -107,7 +107,10 @@ impl API {
     /// new_sctp_transport creates a new SCTPTransport.
     /// This constructor is part of the ORTC API. It is not
     /// meant to be used together with the basic WebRTC API.
-    pub fn new_sctp_transport(&self, dtls_transport: Arc<DTLSTransport>) -> Result<SCTPTransport> {
+    pub fn new_sctp_transport(
+        &self,
+        dtls_transport: Arc<RTCDtlsTransport>,
+    ) -> Result<SCTPTransport> {
         Ok(SCTPTransport::new(
             dtls_transport,
             Arc::clone(&self.setting_engine),
@@ -137,7 +140,7 @@ impl API {
     pub fn new_rtp_receiver(
         &self,
         kind: RTPCodecType,
-        transport: Arc<DTLSTransport>,
+        transport: Arc<RTCDtlsTransport>,
     ) -> RTCRtpReceiver {
         RTCRtpReceiver::new(
             kind,
@@ -151,7 +154,7 @@ impl API {
     pub async fn new_rtp_sender(
         &self,
         track: Arc<dyn TrackLocal + Send + Sync>,
-        transport: Arc<DTLSTransport>,
+        transport: Arc<RTCDtlsTransport>,
     ) -> RTCRtpSender {
         RTCRtpSender::new(
             track,

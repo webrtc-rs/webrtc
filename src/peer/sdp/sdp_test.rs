@@ -3,7 +3,7 @@ use crate::api::media_engine::{MIME_TYPE_OPUS, MIME_TYPE_VP8};
 use crate::api::setting_engine::SettingEngine;
 use crate::api::APIBuilder;
 use crate::media::dtls_transport::dtls_role::DEFAULT_DTLS_ROLE_OFFER;
-use crate::media::dtls_transport::DTLSTransport;
+use crate::media::dtls_transport::RTCDtlsTransport;
 use crate::media::rtp::rtp_sender::RTCRtpSender;
 use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::media::track::track_local::TrackLocal;
@@ -612,7 +612,7 @@ async fn test_media_description_fingerprints() -> Result<()> {
             .set_sender(Some(Arc::new(
                 RTCRtpSender::new(
                     track,
-                    Arc::new(DTLSTransport::default()),
+                    Arc::new(RTCDtlsTransport::default()),
                     Arc::clone(&api.media_engine),
                     Arc::clone(&api.interceptor),
                 )
