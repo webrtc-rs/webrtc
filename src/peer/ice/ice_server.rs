@@ -6,14 +6,14 @@ use anyhow::Result;
 /// ICEServer describes a single STUN and TURN server that can be used by
 /// the ICEAgent to establish a connection with a peer.
 #[derive(Default, Debug, Clone)]
-pub struct ICEServer {
+pub struct RTCIceServer {
     pub urls: Vec<String>,
     pub username: String,
     pub credential: String,
     pub credential_type: RTCIceCredentialType,
 }
 
-impl ICEServer {
+impl RTCIceServer {
     pub(crate) fn parse_url(&self, url_str: &str) -> Result<ice::url::Url> {
         ice::url::Url::parse_url(url_str)
     }
@@ -68,7 +68,7 @@ mod test {
     fn test_ice_server_validate_success() {
         let tests = vec![
             (
-                ICEServer {
+                RTCIceServer {
                     urls: vec!["turn:192.158.29.39?transport=udp".to_owned()],
                     username: "unittest".to_owned(),
                     credential: "placeholder".to_owned(),
@@ -77,7 +77,7 @@ mod test {
                 true,
             ),
             (
-                ICEServer {
+                RTCIceServer {
                     urls: vec!["turn:[2001:db8:1234:5678::1]?transport=udp".to_owned()],
                     username: "unittest".to_owned(),
                     credential: "placeholder".to_owned(),
@@ -106,14 +106,14 @@ mod test {
     fn test_ice_server_validate_failure() {
         let tests = vec![
             (
-                ICEServer {
+                RTCIceServer {
                     urls: vec!["turn:192.158.29.39?transport=udp".to_owned()],
                     ..Default::default()
                 },
                 Error::ErrNoTurnCredentials,
             ),
             (
-                ICEServer {
+                RTCIceServer {
                     urls: vec!["turn:192.158.29.39?transport=udp".to_owned()],
                     username: "unittest".to_owned(),
                     credential: String::new(),
@@ -122,7 +122,7 @@ mod test {
                 Error::ErrNoTurnCredentials,
             ),
             (
-                ICEServer {
+                RTCIceServer {
                     urls: vec!["turn:192.158.29.39?transport=udp".to_owned()],
                     username: "unittest".to_owned(),
                     credential: String::new(),
@@ -131,7 +131,7 @@ mod test {
                 Error::ErrNoTurnCredentials,
             ),
             (
-                ICEServer {
+                RTCIceServer {
                     urls: vec!["turn:192.158.29.39?transport=udp".to_owned()],
                     username: "unittest".to_owned(),
                     credential: String::new(),
@@ -158,7 +158,7 @@ mod test {
     #[test]
     fn test_ice_server_validate_failure_err_stun_query() {
         let tests = vec![(
-            ICEServer {
+            RTCIceServer {
                 urls: vec!["stun:google.de?transport=udp".to_owned()],
                 username: "unittest".to_owned(),
                 credential: String::new(),

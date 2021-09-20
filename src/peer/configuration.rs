@@ -1,5 +1,5 @@
 use crate::media::dtls_transport::dtls_certificate::Certificate;
-use crate::peer::ice::ice_server::ICEServer;
+use crate::peer::ice::ice_server::RTCIceServer;
 use crate::peer::policy::bundle_policy::BundlePolicy;
 use crate::peer::policy::ice_transport_policy::ICETransportPolicy;
 use crate::peer::policy::rtcp_mux_policy::RTCPMuxPolicy;
@@ -14,7 +14,7 @@ use crate::peer::policy::sdp_semantics::SDPSemantics;
 pub struct RTCConfiguration {
     /// iceservers defines a slice describing servers available to be used by
     /// ICE, such as STUN and TURN servers.
-    pub ice_servers: Vec<ICEServer>,
+    pub ice_servers: Vec<RTCIceServer>,
 
     /// icetransport_policy indicates which candidates the ICEAgent is allowed
     /// to use.
@@ -58,7 +58,7 @@ impl RTCConfiguration {
     /// get_iceservers side-steps the strict parsing mode of the ice package
     /// (as defined in https://tools.ietf.org/html/rfc7064) by copying and then
     /// stripping any erroneous queries from "stun(s):" URLs before parsing.
-    pub(crate) fn get_ice_servers(&self) -> Vec<ICEServer> {
+    pub(crate) fn get_ice_servers(&self) -> Vec<RTCIceServer> {
         let mut ice_servers = self.ice_servers.clone();
 
         for ice_server in &mut ice_servers {
@@ -84,7 +84,7 @@ mod test {
         {
             let expected_server_str = "stun:stun.l.google.com:19302";
             let cfg = RTCConfiguration {
-                ice_servers: vec![ICEServer {
+                ice_servers: vec![RTCIceServer {
                     urls: vec![expected_server_str.to_owned()],
                     ..Default::default()
                 }],
@@ -100,7 +100,7 @@ mod test {
             let server_str = "stun:global.stun.twilio.com:3478?transport=udp";
             let expected_server_str = "stun:global.stun.twilio.com:3478";
             let cfg = RTCConfiguration {
-                ice_servers: vec![ICEServer {
+                ice_servers: vec![RTCIceServer {
                     urls: vec![server_str.to_owned()],
                     ..Default::default()
                 }],

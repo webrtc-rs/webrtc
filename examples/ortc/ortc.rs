@@ -12,7 +12,7 @@ use webrtc::media::dtls_transport::dtls_parameters::DTLSParameters;
 use webrtc::peer::ice::ice_candidate::ICECandidate;
 use webrtc::peer::ice::ice_gather::ICEGatherOptions;
 use webrtc::peer::ice::ice_role::ICERole;
-use webrtc::peer::ice::ice_server::ICEServer;
+use webrtc::peer::ice::ice_server::RTCIceServer;
 use webrtc::peer::ice::ICEParameters;
 use webrtc::util::math_rand_alpha;
 
@@ -65,7 +65,7 @@ async fn main() -> Result<()> {
 
     // Prepare ICE gathering options
     let ice_options = ICEGatherOptions {
-        ice_servers: vec![ICEServer {
+        ice_servers: vec![RTCIceServer {
             urls: vec!["stun:stun.l.google.com:19302".to_owned()],
             ..Default::default()
         }],

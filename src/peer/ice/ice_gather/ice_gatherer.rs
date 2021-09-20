@@ -419,13 +419,13 @@ mod test {
     use super::*;
     use crate::api::APIBuilder;
     use crate::peer::ice::ice_gather::ICEGatherOptions;
-    use crate::peer::ice::ice_server::ICEServer;
+    use crate::peer::ice::ice_server::RTCIceServer;
     use tokio::sync::mpsc;
 
     #[tokio::test]
     async fn test_new_ice_gatherer_success() -> Result<()> {
         let opts = ICEGatherOptions {
-            ice_servers: vec![ICEServer {
+            ice_servers: vec![RTCIceServer {
                 urls: vec!["stun:stun.l.google.com:19302".to_owned()],
                 ..Default::default()
             }],

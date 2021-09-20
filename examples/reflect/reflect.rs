@@ -14,7 +14,7 @@ use webrtc::media::track::track_local::track_local_static_rtp::TrackLocalStaticR
 use webrtc::media::track::track_local::{TrackLocal, TrackLocalWriter};
 use webrtc::media::track::track_remote::TrackRemote;
 use webrtc::peer::configuration::RTCConfiguration;
-use webrtc::peer::ice::ice_server::ICEServer;
+use webrtc::peer::ice::ice_server::RTCIceServer;
 use webrtc::peer::peer_connection_state::PeerConnectionState;
 use webrtc::peer::sdp::session_description::{SessionDescription, SessionDescriptionSerde};
 
@@ -95,7 +95,7 @@ async fn main() -> Result<()> {
 
     // Prepare the configuration
     let config = RTCConfiguration {
-        ice_servers: vec![ICEServer {
+        ice_servers: vec![RTCIceServer {
             urls: vec!["stun:stun.l.google.com:19302".to_owned()],
             ..Default::default()
         }],

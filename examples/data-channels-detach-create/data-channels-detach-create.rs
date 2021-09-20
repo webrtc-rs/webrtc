@@ -10,7 +10,7 @@ use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::setting_engine::SettingEngine;
 use webrtc::api::APIBuilder;
 use webrtc::peer::configuration::RTCConfiguration;
-use webrtc::peer::ice::ice_server::ICEServer;
+use webrtc::peer::ice::ice_server::RTCIceServer;
 use webrtc::peer::peer_connection_state::PeerConnectionState;
 use webrtc::peer::sdp::session_description::{SessionDescription, SessionDescriptionSerde};
 use webrtc::util::math_rand_alpha;
@@ -89,7 +89,7 @@ async fn main() -> Result<()> {
 
     // Prepare the configuration
     let config = RTCConfiguration {
-        ice_servers: vec![ICEServer {
+        ice_servers: vec![RTCIceServer {
             urls: vec!["stun:stun.l.google.com:19302".to_owned()],
             ..Default::default()
         }],
