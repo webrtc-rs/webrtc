@@ -24,7 +24,7 @@ use crate::peer::ice::ice_gather::ice_gatherer::{
 };
 use crate::peer::ice::ice_gather::ICEGatherOptions;
 use crate::peer::peer_connection_state::{NegotiationNeededState, RTCPeerConnectionState};
-use crate::peer::policy::sdp_semantics::SDPSemantics;
+use crate::peer::policy::sdp_semantics::RTCSdpSemantics;
 use crate::peer::sdp::session_description::{RTCSessionDescription, RTCSessionDescriptionSerde};
 use crate::peer::signaling_state::{check_next_signaling_state, RTCSignalingState, StateChangeOp};
 
@@ -663,7 +663,7 @@ impl RTCPeerConnection {
                 if current_remote_description.is_some() {
                     description_is_plan_b(current_remote_description.as_ref())?
                 } else {
-                    self.configuration.sdp_semantics == SDPSemantics::PlanB
+                    self.configuration.sdp_semantics == RTCSdpSemantics::PlanB
                 }
             };
 

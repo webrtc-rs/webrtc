@@ -4,7 +4,7 @@ use std::fmt;
 /// SDPSemantics determines which style of SDP offers and answers
 /// can be used
 #[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
-pub enum SDPSemantics {
+pub enum RTCSdpSemantics {
     Unspecified = 0,
 
     /// UnifiedPlan uses unified-plan offers and answers
@@ -26,9 +26,9 @@ pub enum SDPSemantics {
     UnifiedPlanWithFallback = 3,
 }
 
-impl Default for SDPSemantics {
+impl Default for RTCSdpSemantics {
     fn default() -> Self {
-        SDPSemantics::UnifiedPlan
+        RTCSdpSemantics::UnifiedPlan
     }
 }
 
@@ -36,24 +36,24 @@ const SDP_SEMANTICS_UNIFIED_PLAN_WITH_FALLBACK: &str = "unified-plan-with-fallba
 const SDP_SEMANTICS_UNIFIED_PLAN: &str = "unified-plan";
 const SDP_SEMANTICS_PLAN_B: &str = "plan-b";
 
-impl From<&str> for SDPSemantics {
+impl From<&str> for RTCSdpSemantics {
     fn from(raw: &str) -> Self {
         match raw {
-            SDP_SEMANTICS_UNIFIED_PLAN_WITH_FALLBACK => SDPSemantics::UnifiedPlanWithFallback,
-            SDP_SEMANTICS_UNIFIED_PLAN => SDPSemantics::UnifiedPlan,
-            SDP_SEMANTICS_PLAN_B => SDPSemantics::PlanB,
-            _ => SDPSemantics::Unspecified,
+            SDP_SEMANTICS_UNIFIED_PLAN_WITH_FALLBACK => RTCSdpSemantics::UnifiedPlanWithFallback,
+            SDP_SEMANTICS_UNIFIED_PLAN => RTCSdpSemantics::UnifiedPlan,
+            SDP_SEMANTICS_PLAN_B => RTCSdpSemantics::PlanB,
+            _ => RTCSdpSemantics::Unspecified,
         }
     }
 }
 
-impl fmt::Display for SDPSemantics {
+impl fmt::Display for RTCSdpSemantics {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
-            SDPSemantics::UnifiedPlanWithFallback => SDP_SEMANTICS_UNIFIED_PLAN_WITH_FALLBACK,
-            SDPSemantics::UnifiedPlan => SDP_SEMANTICS_UNIFIED_PLAN,
-            SDPSemantics::PlanB => SDP_SEMANTICS_PLAN_B,
-            SDPSemantics::Unspecified => crate::UNSPECIFIED_STR,
+            RTCSdpSemantics::UnifiedPlanWithFallback => SDP_SEMANTICS_UNIFIED_PLAN_WITH_FALLBACK,
+            RTCSdpSemantics::UnifiedPlan => SDP_SEMANTICS_UNIFIED_PLAN,
+            RTCSdpSemantics::PlanB => SDP_SEMANTICS_PLAN_B,
+            RTCSdpSemantics::Unspecified => crate::UNSPECIFIED_STR,
         };
         write!(f, "{}", s)
     }
@@ -81,13 +81,13 @@ mod test {
     #[test]
     fn test_sdp_semantics_string() {
         let tests = vec![
-            (SDPSemantics::Unspecified, "Unspecified"),
+            (RTCSdpSemantics::Unspecified, "Unspecified"),
             (
-                SDPSemantics::UnifiedPlanWithFallback,
+                RTCSdpSemantics::UnifiedPlanWithFallback,
                 "unified-plan-with-fallback",
             ),
-            (SDPSemantics::PlanB, "plan-b"),
-            (SDPSemantics::UnifiedPlan, "unified-plan"),
+            (RTCSdpSemantics::PlanB, "plan-b"),
+            (RTCSdpSemantics::UnifiedPlan, "unified-plan"),
         ];
 
         for (value, expected_string) in tests {
@@ -130,7 +130,7 @@ mod test {
 
         let opc = api
             .new_peer_connection(RTCConfiguration {
-                sdp_semantics: SDPSemantics::PlanB,
+                sdp_semantics: RTCSdpSemantics::PlanB,
                 ..Default::default()
             })
             .await?;
@@ -189,7 +189,7 @@ mod test {
 
         let apc = api
             .new_peer_connection(RTCConfiguration {
-                sdp_semantics: SDPSemantics::PlanB,
+                sdp_semantics: RTCSdpSemantics::PlanB,
                 ..Default::default()
             })
             .await?;
@@ -216,7 +216,7 @@ mod test {
 
         let opc = api
             .new_peer_connection(RTCConfiguration {
-                sdp_semantics: SDPSemantics::PlanB,
+                sdp_semantics: RTCSdpSemantics::PlanB,
                 ..Default::default()
             })
             .await?;
@@ -248,7 +248,7 @@ mod test {
 
         let apc = api
             .new_peer_connection(RTCConfiguration {
-                sdp_semantics: SDPSemantics::PlanB,
+                sdp_semantics: RTCSdpSemantics::PlanB,
                 ..Default::default()
             })
             .await?;
@@ -330,7 +330,7 @@ mod test {
 
         let opc = api
             .new_peer_connection(RTCConfiguration {
-                sdp_semantics: SDPSemantics::PlanB,
+                sdp_semantics: RTCSdpSemantics::PlanB,
                 ..Default::default()
             })
             .await?;
@@ -362,7 +362,7 @@ mod test {
 
         let apc = api
             .new_peer_connection(RTCConfiguration {
-                sdp_semantics: SDPSemantics::UnifiedPlanWithFallback,
+                sdp_semantics: RTCSdpSemantics::UnifiedPlanWithFallback,
                 ..Default::default()
             })
             .await?;

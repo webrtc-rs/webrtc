@@ -129,7 +129,7 @@ impl PeerConnectionInternal {
         self: &Arc<Self>,
         is_renegotiation: bool,
         remote_desc: Arc<RTCSessionDescription>,
-        sdp_semantics: SDPSemantics,
+        sdp_semantics: RTCSdpSemantics,
     ) -> Result<()> {
         let mut track_details = if let Some(parsed) = &remote_desc.parsed {
             track_details_from_sdp(parsed)
@@ -278,11 +278,11 @@ impl PeerConnectionInternal {
         self: &Arc<Self>,
         incoming_tracks: &mut Vec<TrackDetails>,
         local_transceivers: &[Arc<RTPTransceiver>],
-        sdp_semantics: SDPSemantics,
+        sdp_semantics: RTCSdpSemantics,
     ) -> Result<()> {
         let remote_is_plan_b = match sdp_semantics {
-            SDPSemantics::PlanB => true,
-            SDPSemantics::UnifiedPlanWithFallback => {
+            RTCSdpSemantics::PlanB => true,
+            RTCSdpSemantics::UnifiedPlanWithFallback => {
                 description_is_plan_b(self.remote_description().await.as_ref())?
             }
             _ => false,
@@ -622,7 +622,7 @@ impl PeerConnectionInternal {
         &self,
         local_transceivers: Vec<Arc<RTPTransceiver>>,
         use_identity: bool,
-        sdp_semantics: SDPSemantics,
+        sdp_semantics: RTCSdpSemantics,
     ) -> Result<sdp::session_description::SessionDescription> {
         let d = sdp::session_description::SessionDescription::new_jsep_session_description(
             use_identity,
@@ -632,7 +632,7 @@ impl PeerConnectionInternal {
 
         let candidates = self.ice_gatherer.get_local_candidates().await?;
 
-        let is_plan_b = sdp_semantics == SDPSemantics::PlanB;
+        let is_plan_b = sdp_semantics == RTCSdpSemantics::PlanB;
         let mut media_sections = vec![];
 
         // Needed for self.sctpTransport.dataChannelsRequested
@@ -739,7 +739,7 @@ impl PeerConnectionInternal {
         use_identity: bool,
         include_unmatched: bool,
         connection_role: ConnectionRole,
-        sdp_semantics: SDPSemantics,
+        sdp_semantics: RTCSdpSemantics,
     ) -> Result<sdp::session_description::SessionDescription> {
         let d = sdp::session_description::SessionDescription::new_jsep_session_description(
             use_identity,
@@ -787,8 +787,8 @@ impl PeerConnectionInternal {
                             continue;
                         }
 
-                        if sdp_semantics == SDPSemantics::PlanB
-                            || (sdp_semantics == SDPSemantics::UnifiedPlanWithFallback
+                        if sdp_semantics == RTCSdpSemantics::PlanB
+                            || (sdp_semantics == RTCSdpSemantics::UnifiedPlanWithFallback
                                 && detected_plan_b)
                         {
                             if !detected_plan_b {
@@ -831,8 +831,8 @@ impl PeerConnectionInternal {
                                 transceivers: media_transceivers,
                                 ..Default::default()
                             });
-                        } else if sdp_semantics == SDPSemantics::UnifiedPlan
-                            || sdp_semantics == SDPSemantics::UnifiedPlanWithFallback
+                        } else if sdp_semantics == RTCSdpSemantics::UnifiedPlan
+                            || sdp_semantics == RTCSdpSemantics::UnifiedPlanWithFallback
                         {
                             if detected_plan_b {
                                 return Err(Error::ErrIncorrectSDPSemantics.into());
@@ -897,7 +897,7 @@ impl PeerConnectionInternal {
             }
         }
 
-        if sdp_semantics == SDPSemantics::UnifiedPlanWithFallback && detected_plan_b {
+        if sdp_semantics == RTCSdpSemantics::UnifiedPlanWithFallback && detected_plan_b {
             log::info!("Plan-B Offer detected; responding with Plan-B Answer");
         }
 
