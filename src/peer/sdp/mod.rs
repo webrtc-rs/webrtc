@@ -387,18 +387,15 @@ pub(crate) async fn add_transceiver_sdp(
     let transceivers = &media_section.transceivers;
     // Use the first transceiver to generate the section attributes
     let t = &transceivers[0];
-    let mut media = sdp::media_description::MediaDescription::new_jsep_media_description(
-        t.kind.to_string(),
-        vec![],
-    )
-    .with_value_attribute(ATTR_KEY_CONNECTION_SETUP.to_owned(), dtls_role.to_string())
-    .with_value_attribute(ATTR_KEY_MID.to_owned(), mid_value.clone())
-    .with_ice_credentials(
-        ice_params.username_fragment.clone(),
-        ice_params.password.clone(),
-    )
-    .with_property_attribute(ATTR_KEY_RTCPMUX.to_owned())
-    .with_property_attribute(ATTR_KEY_RTCPRSIZE.to_owned());
+    let mut media = MediaDescription::new_jsep_media_description(t.kind.to_string(), vec![])
+        .with_value_attribute(ATTR_KEY_CONNECTION_SETUP.to_owned(), dtls_role.to_string())
+        .with_value_attribute(ATTR_KEY_MID.to_owned(), mid_value.clone())
+        .with_ice_credentials(
+            ice_params.username_fragment.clone(),
+            ice_params.password.clone(),
+        )
+        .with_property_attribute(ATTR_KEY_RTCPMUX.to_owned())
+        .with_property_attribute(ATTR_KEY_RTCPRSIZE.to_owned());
 
     let codecs = t.get_codecs().await;
     for codec in &codecs {
@@ -428,7 +425,7 @@ pub(crate) async fn add_transceiver_sdp(
     }
     if codecs.is_empty() {
         // Explicitly reject track if we don't have the codec
-        d = d.with_media(sdp::media_description::MediaDescription {
+        d = d.with_media(MediaDescription {
             media_name: sdp::media_description::MediaName {
                 media: t.kind.to_string(),
                 port: RangedPort {
@@ -653,9 +650,7 @@ pub(crate) fn description_is_plan_b(
     Ok(false)
 }
 
-pub(crate) fn get_peer_direction(
-    media: &sdp::media_description::MediaDescription,
-) -> RTCRtpTransceiverDirection {
+pub(crate) fn get_peer_direction(media: &MediaDescription) -> RTCRtpTransceiverDirection {
     for a in &media.attributes {
         let direction = RTCRtpTransceiverDirection::from(a.key.as_str());
         if direction != RTCRtpTransceiverDirection::Unspecified {
@@ -764,7 +759,7 @@ pub(crate) fn have_application_media_section(desc: &SessionDescription) -> bool 
 pub(crate) fn get_by_mid<'a, 'b>(
     search_mid: &'a str,
     desc: &'b session_description::RTCSessionDescription,
-) -> Option<&'b sdp::media_description::MediaDescription> {
+) -> Option<&'b MediaDescription> {
     if let Some(parsed) = &desc.parsed {
         for m in &parsed.media_descriptions {
             if let Some(mid) = m.attribute(ATTR_KEY_MID) {
@@ -780,7 +775,7 @@ pub(crate) fn get_by_mid<'a, 'b>(
 /// have_data_channel return MediaDescription with MediaName equal application
 pub(crate) fn have_data_channel(
     desc: &session_description::RTCSessionDescription,
-) -> Option<&sdp::media_description::MediaDescription> {
+) -> Option<&MediaDescription> {
     if let Some(parsed) = &desc.parsed {
         for d in &parsed.media_descriptions {
             if d.media_name.media == MEDIA_SECTION_APPLICATION {
@@ -792,7 +787,7 @@ pub(crate) fn have_data_channel(
 }
 
 pub(crate) fn codecs_from_media_description(
-    m: &sdp::media_description::MediaDescription,
+    m: &MediaDescription,
 ) -> Result<Vec<RTCRtpCodecParameters>> {
     let s = SessionDescription {
         media_descriptions: vec![m.clone()],
@@ -850,7 +845,7 @@ pub(crate) fn codecs_from_media_description(
 }
 
 pub(crate) fn rtp_extensions_from_media_description(
-    m: &sdp::media_description::MediaDescription,
+    m: &MediaDescription,
 ) -> Result<HashMap<String, isize>> {
     let mut out = HashMap::new();
 

@@ -31,7 +31,7 @@ fn test_extract_fingerprint() -> Result<()> {
     //"Good Media Fingerprint"
     {
         let s = SessionDescription {
-            media_descriptions: vec![sdp::media_description::MediaDescription {
+            media_descriptions: vec![MediaDescription {
                 attributes: vec![Attribute {
                     key: "fingerprint".to_owned(),
                     value: Some("foo bar".to_owned()),
@@ -81,7 +81,7 @@ fn test_extract_fingerprint() -> Result<()> {
                 key: "fingerprint".to_owned(),
                 value: Some("foo".to_owned()),
             }],
-            media_descriptions: vec![sdp::media_description::MediaDescription {
+            media_descriptions: vec![MediaDescription {
                 attributes: vec![Attribute {
                     key: "fingerprint".to_owned(),
                     value: Some("foo bar".to_owned()),
@@ -109,7 +109,7 @@ async fn test_extract_ice_details() -> Result<()> {
     //"Missing ice-pwd"
     {
         let s = SessionDescription {
-            media_descriptions: vec![sdp::media_description::MediaDescription {
+            media_descriptions: vec![MediaDescription {
                 attributes: vec![Attribute {
                     key: "ice-ufrag".to_owned(),
                     value: Some(DEFAULT_UFRAG.to_owned()),
@@ -129,7 +129,7 @@ async fn test_extract_ice_details() -> Result<()> {
     //"Missing ice-ufrag"
     {
         let s = SessionDescription {
-            media_descriptions: vec![sdp::media_description::MediaDescription {
+            media_descriptions: vec![MediaDescription {
                 attributes: vec![Attribute {
                     key: "ice-pwd".to_owned(),
                     value: Some(DEFAULT_PWD.to_owned()),
@@ -171,7 +171,7 @@ async fn test_extract_ice_details() -> Result<()> {
     //"ice details at media level"
     {
         let s = SessionDescription {
-            media_descriptions: vec![sdp::media_description::MediaDescription {
+            media_descriptions: vec![MediaDescription {
                 attributes: vec![
                     Attribute {
                         key: "ice-ufrag".to_owned(),
@@ -199,7 +199,7 @@ async fn test_extract_ice_details() -> Result<()> {
                 key: "ice-ufrag".to_owned(),
                 value: Some("invalidUfrag".to_owned()),
             }],
-            media_descriptions: vec![sdp::media_description::MediaDescription {
+            media_descriptions: vec![MediaDescription {
                 attributes: vec![
                     Attribute {
                         key: "ice-ufrag".to_owned(),
@@ -229,7 +229,7 @@ async fn test_extract_ice_details() -> Result<()> {
                 key: "ice-pwd".to_owned(),
                 value: Some("invalidPwd".to_owned()),
             }],
-            media_descriptions: vec![sdp::media_description::MediaDescription {
+            media_descriptions: vec![MediaDescription {
                 attributes: vec![
                     Attribute {
                         key: "ice-ufrag".to_owned(),
@@ -261,7 +261,7 @@ fn test_track_details_from_sdp() -> Result<()> {
     {
         let s = SessionDescription {
             media_descriptions: vec![
-                sdp::media_description::MediaDescription {
+                MediaDescription {
                     media_name: MediaName {
                         media: "foobar".to_owned(),
                         ..Default::default()
@@ -282,7 +282,7 @@ fn test_track_details_from_sdp() -> Result<()> {
                     ],
                     ..Default::default()
                 },
-                sdp::media_description::MediaDescription {
+                MediaDescription {
                     media_name: MediaName {
                         media: "audio".to_owned(),
                         ..Default::default()
@@ -303,7 +303,7 @@ fn test_track_details_from_sdp() -> Result<()> {
                     ],
                     ..Default::default()
                 },
-                sdp::media_description::MediaDescription {
+                MediaDescription {
                     media_name: MediaName {
                         media: "video".to_owned(),
                         ..Default::default()
@@ -332,7 +332,7 @@ fn test_track_details_from_sdp() -> Result<()> {
                     ],
                     ..Default::default()
                 },
-                sdp::media_description::MediaDescription {
+                MediaDescription {
                     media_name: MediaName {
                         media: "video".to_owned(),
                         ..Default::default()
@@ -357,7 +357,7 @@ fn test_track_details_from_sdp() -> Result<()> {
                     ],
                     ..Default::default()
                 },
-                sdp::media_description::MediaDescription {
+                MediaDescription {
                     media_name: MediaName {
                         media: "video".to_owned(),
                         ..Default::default()
@@ -420,7 +420,7 @@ fn test_track_details_from_sdp() -> Result<()> {
     {
         let s = SessionDescription {
             media_descriptions: vec![
-                sdp::media_description::MediaDescription {
+                MediaDescription {
                     media_name: MediaName {
                         media: "video".to_owned(),
                         ..Default::default()
@@ -437,7 +437,7 @@ fn test_track_details_from_sdp() -> Result<()> {
                     ],
                     ..Default::default()
                 },
-                sdp::media_description::MediaDescription {
+                MediaDescription {
                     media_name: MediaName {
                         media: "video".to_owned(),
                         ..Default::default()
@@ -468,7 +468,7 @@ fn test_have_application_media_section() -> Result<()> {
     //"Audio only"
     {
         let s = SessionDescription {
-            media_descriptions: vec![sdp::media_description::MediaDescription {
+            media_descriptions: vec![MediaDescription {
                 media_name: MediaName {
                     media: "audio".to_owned(),
                     ..Default::default()
@@ -494,7 +494,7 @@ fn test_have_application_media_section() -> Result<()> {
     //"Application"
     {
         let s = SessionDescription {
-            media_descriptions: vec![sdp::media_description::MediaDescription {
+            media_descriptions: vec![MediaDescription {
                 media_name: MediaName {
                     media: MEDIA_SECTION_APPLICATION.to_owned(),
                     ..Default::default()
@@ -785,7 +785,7 @@ async fn test_populate_sdp() -> Result<()> {
 
 #[test]
 fn test_get_rids() {
-    let m = vec![sdp::media_description::MediaDescription {
+    let m = vec![MediaDescription {
         media_name: MediaName {
             media: "video".to_owned(),
             ..Default::default()
@@ -814,7 +814,7 @@ fn test_get_rids() {
 fn test_codecs_from_media_description() -> Result<()> {
     //"Codec Only"
     {
-        let codecs = codecs_from_media_description(&sdp::media_description::MediaDescription {
+        let codecs = codecs_from_media_description(&MediaDescription {
             media_name: MediaName {
                 media: "audio".to_owned(),
                 formats: vec!["111".to_owned()],
@@ -845,7 +845,7 @@ fn test_codecs_from_media_description() -> Result<()> {
 
     //"Codec with fmtp/rtcp-fb"
     {
-        let codecs = codecs_from_media_description(&sdp::media_description::MediaDescription {
+        let codecs = codecs_from_media_description(&MediaDescription {
             media_name: MediaName {
                 media: "audio".to_owned(),
                 formats: vec!["111".to_owned()],
@@ -902,25 +902,24 @@ fn test_codecs_from_media_description() -> Result<()> {
 
 #[test]
 fn test_rtp_extensions_from_media_description() -> Result<()> {
-    let extensions =
-        rtp_extensions_from_media_description(&sdp::media_description::MediaDescription {
-            media_name: MediaName {
-                media: "audio".to_owned(),
-                formats: vec!["111".to_owned()],
-                ..Default::default()
-            },
-            attributes: vec![
-                Attribute {
-                    key: "extmap".to_owned(),
-                    value: Some("1 ".to_owned() + sdp::extmap::ABS_SEND_TIME_URI),
-                },
-                Attribute {
-                    key: "extmap".to_owned(),
-                    value: Some("3 ".to_owned() + sdp::extmap::SDES_MID_URI),
-                },
-            ],
+    let extensions = rtp_extensions_from_media_description(&MediaDescription {
+        media_name: MediaName {
+            media: "audio".to_owned(),
+            formats: vec!["111".to_owned()],
             ..Default::default()
-        })?;
+        },
+        attributes: vec![
+            Attribute {
+                key: "extmap".to_owned(),
+                value: Some("1 ".to_owned() + sdp::extmap::ABS_SEND_TIME_URI),
+            },
+            Attribute {
+                key: "extmap".to_owned(),
+                value: Some("3 ".to_owned() + sdp::extmap::SDES_MID_URI),
+            },
+        ],
+        ..Default::default()
+    })?;
 
     assert_eq!(extensions[sdp::extmap::ABS_SEND_TIME_URI], 1);
     assert_eq!(extensions[sdp::extmap::SDES_MID_URI], 3);

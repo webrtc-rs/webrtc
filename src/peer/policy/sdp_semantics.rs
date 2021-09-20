@@ -74,9 +74,9 @@ mod test {
     use crate::SSRC_STR;
     use anyhow::Result;
     use sdp::media_description::MediaDescription;
+    use sdp::session_description::SessionDescription;
     use std::collections::HashSet;
     use std::sync::Arc;
-    use SessionDescription;
 
     #[test]
     fn test_sdp_semantics_string() {
