@@ -2,8 +2,8 @@ pub mod ice_candidate_pair;
 pub mod ice_candidate_type;
 
 use crate::error::Error;
-use crate::peer::ice::ice_candidate::ice_candidate_type::ICECandidateType;
-use crate::peer::ice::ice_protocol::ICEProtocol;
+use crate::peer::ice::ice_candidate::ice_candidate_type::RTCIceCandidateType;
+use crate::peer::ice::ice_protocol::RTCIceProtocol;
 use anyhow::Result;
 use ice::candidate::candidate_base::CandidateBaseConfig;
 use ice::candidate::candidate_host::CandidateHostConfig;
@@ -22,9 +22,9 @@ pub struct RTCIceCandidate {
     pub foundation: String,
     pub priority: u32,
     pub address: String,
-    pub protocol: ICEProtocol,
+    pub protocol: RTCIceProtocol,
     pub port: u16,
-    pub typ: ICECandidateType,
+    pub typ: RTCIceCandidateType,
     pub component: u16,
     pub related_address: String,
     pub related_port: u16,
@@ -40,8 +40,8 @@ pub(crate) fn rtc_ice_candidates_from_ice_candidates(
 
 impl From<&Arc<dyn Candidate + Send + Sync>> for RTCIceCandidate {
     fn from(c: &Arc<dyn Candidate + Send + Sync>) -> Self {
-        let typ: ICECandidateType = c.candidate_type().into();
-        let protocol = ICEProtocol::from(c.network_type().network_short().as_str());
+        let typ: RTCIceCandidateType = c.candidate_type().into();
+        let protocol = RTCIceProtocol::from(c.network_type().network_short().as_str());
         let (related_address, related_port) = if let Some(ra) = c.related_address() {
             (ra.address, ra.port)
         } else {
@@ -68,7 +68,7 @@ impl RTCIceCandidate {
     pub(crate) async fn to_ice(&self) -> Result<impl Candidate> {
         let candidate_id = self.stats_id.clone();
         let c = match self.typ {
-            ICECandidateType::Host => {
+            RTCIceCandidateType::Host => {
                 let config = CandidateHostConfig {
                     base_config: CandidateBaseConfig {
                         candidate_id,
@@ -85,7 +85,7 @@ impl RTCIceCandidate {
                 };
                 config.new_candidate_host().await?
             }
-            ICECandidateType::Srflx => {
+            RTCIceCandidateType::Srflx => {
                 let config = CandidateServerReflexiveConfig {
                     base_config: CandidateBaseConfig {
                         candidate_id,
@@ -102,7 +102,7 @@ impl RTCIceCandidate {
                 };
                 config.new_candidate_server_reflexive().await?
             }
-            ICECandidateType::Prflx => {
+            RTCIceCandidateType::Prflx => {
                 let config = CandidatePeerReflexiveConfig {
                     base_config: CandidateBaseConfig {
                         candidate_id,
@@ -119,7 +119,7 @@ impl RTCIceCandidate {
                 };
                 config.new_candidate_peer_reflexive().await?
             }
-            ICECandidateType::Relay => {
+            RTCIceCandidateType::Relay => {
                 let config = CandidateRelayConfig {
                     base_config: CandidateBaseConfig {
                         candidate_id,

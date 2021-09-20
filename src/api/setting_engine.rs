@@ -2,7 +2,7 @@
 mod setting_engine_test;
 
 use crate::media::dtls_transport::dtls_role::DTLSRole;
-use crate::peer::ice::ice_candidate::ice_candidate_type::ICECandidateType;
+use crate::peer::ice::ice_candidate::ice_candidate_type::RTCIceCandidateType;
 use dtls::extension::extension_use_srtp::SrtpProtectionProfile;
 use ice::agent::agent_config::InterfaceFilterFn;
 use ice::mdns::MulticastDnsMode;
@@ -42,7 +42,7 @@ pub struct Candidates {
     pub ice_network_types: Vec<NetworkType>,
     pub interface_filter: Arc<Option<InterfaceFilterFn>>,
     pub nat_1to1_ips: Vec<String>,
-    pub nat_1to1_ip_candidate_type: ICECandidateType,
+    pub nat_1to1_ip_candidate_type: RTCIceCandidateType,
     pub multicast_dns_mode: MulticastDnsMode,
     pub multicast_dns_host_name: String,
     pub username_fragment: String,
@@ -184,7 +184,7 @@ impl SettingEngine {
     /// with the public IP. The host candidate is still available along with mDNS
     /// capabilities unaffected. Also, you cannot give STUN server URL at the same time.
     /// It will result in an error otherwise.
-    pub fn set_nat_1to1_ips(&mut self, ips: Vec<String>, candidate_type: ICECandidateType) {
+    pub fn set_nat_1to1_ips(&mut self, ips: Vec<String>, candidate_type: RTCIceCandidateType) {
         self.candidates.nat_1to1_ips = ips;
         self.candidates.nat_1to1_ip_candidate_type = candidate_type;
     }

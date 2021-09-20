@@ -1,6 +1,6 @@
 use crate::api::setting_engine::SettingEngine;
 use crate::error::Error;
-use crate::peer::ice::ice_candidate::ice_candidate_type::ICECandidateType;
+use crate::peer::ice::ice_candidate::ice_candidate_type::RTCIceCandidateType;
 use crate::peer::ice::ice_candidate::*;
 use crate::peer::ice::ice_gather::ice_gatherer_state::RTCIceGathererState;
 use crate::peer::ice::ICEParameters;
@@ -83,8 +83,8 @@ impl ICEGatherer {
         }
 
         let nat_1to1_cand_type = match self.setting_engine.candidates.nat_1to1_ip_candidate_type {
-            ICECandidateType::Host => CandidateType::Host,
-            ICECandidateType::Srflx => CandidateType::ServerReflexive,
+            RTCIceCandidateType::Host => CandidateType::Host,
+            RTCIceCandidateType::Srflx => CandidateType::ServerReflexive,
             _ => CandidateType::Unspecified,
         };
 
