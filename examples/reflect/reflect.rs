@@ -15,7 +15,7 @@ use webrtc::media::track::track_local::{TrackLocal, TrackLocalWriter};
 use webrtc::media::track::track_remote::TrackRemote;
 use webrtc::peer::configuration::RTCConfiguration;
 use webrtc::peer::ice::ice_server::RTCIceServer;
-use webrtc::peer::peer_connection_state::PeerConnectionState;
+use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer::sdp::session_description::{SessionDescription, SessionDescriptionSerde};
 
 //use std::io::Write;
@@ -194,10 +194,10 @@ async fn main() -> Result<()> {
     // Set the handler for Peer connection state
     // This will notify you when the peer has connected/disconnected
     peer_connection
-        .on_peer_connection_state_change(Box::new(move |s: PeerConnectionState| {
+        .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
             print!("Peer Connection State has changed: {}\n", s);
 
-            if s == PeerConnectionState::Failed {
+            if s == RTCPeerConnectionState::Failed {
                 // Wait until PeerConnection has had no network activity for 30 seconds or another failure. It may be reconnected using an ICE Restart.
                 // Use webrtc.PeerConnectionStateDisconnected if you are interested in detecting faster timeout.
                 // Note that the PeerConnection may come back from PeerConnectionStateDisconnected.

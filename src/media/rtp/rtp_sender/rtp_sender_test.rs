@@ -10,7 +10,7 @@ use crate::peer::peer_connection::peer_connection_test::{
     close_pair_now, create_vnet_pair, new_pair, send_video_until_done, signal_pair,
     until_connection_state,
 };
-use crate::peer::peer_connection_state::PeerConnectionState;
+use crate::peer::peer_connection_state::RTCPeerConnectionState;
 use bytes::Bytes;
 use std::sync::atomic::AtomicU64;
 use tokio::time::Duration;
@@ -162,13 +162,13 @@ async fn test_rtp_sender_set_read_deadline() -> Result<()> {
     until_connection_state(
         &mut sender,
         &peer_connections_connected,
-        PeerConnectionState::Connected,
+        RTCPeerConnectionState::Connected,
     )
     .await;
     until_connection_state(
         &mut receiver,
         &peer_connections_connected,
-        PeerConnectionState::Connected,
+        RTCPeerConnectionState::Connected,
     )
     .await;
 

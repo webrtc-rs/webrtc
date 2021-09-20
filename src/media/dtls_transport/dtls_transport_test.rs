@@ -7,7 +7,7 @@ use crate::peer::ice::ice_candidate::ICECandidate;
 use crate::peer::peer_connection::peer_connection_test::{
     close_pair_now, new_pair, signal_pair, until_connection_state,
 };
-use crate::peer::peer_connection_state::PeerConnectionState;
+use crate::peer::peer_connection_state::RTCPeerConnectionState;
 use ice::mdns::MulticastDnsMode;
 use ice::network_type::NetworkType;
 use regex::Regex;
@@ -69,14 +69,14 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
     until_connection_state(
         &mut pc_offer,
         &offer_connection_has_failed,
-        PeerConnectionState::Failed,
+        RTCPeerConnectionState::Failed,
     )
     .await;
     let answer_connection_has_failed = WaitGroup::new();
     until_connection_state(
         &mut pc_answer,
         &answer_connection_has_failed,
-        PeerConnectionState::Failed,
+        RTCPeerConnectionState::Failed,
     )
     .await;
 
@@ -162,7 +162,7 @@ async fn run_test(r: DTLSRole) -> Result<()> {
     signal_pair(&mut offer_pc, &mut answer_pc).await?;
 
     let wg = WaitGroup::new();
-    until_connection_state(&mut answer_pc, &wg, PeerConnectionState::Connected).await;
+    until_connection_state(&mut answer_pc, &wg, RTCPeerConnectionState::Connected).await;
     wg.wait().await;
 
     close_pair_now(&offer_pc, &answer_pc).await;

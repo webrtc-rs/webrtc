@@ -8,7 +8,7 @@ use crate::media::Sample;
 use crate::peer::peer_connection::peer_connection_test::{
     close_pair_now, create_vnet_pair, signal_pair, until_connection_state,
 };
-use crate::peer::peer_connection_state::PeerConnectionState;
+use crate::peer::peer_connection_state::RTCPeerConnectionState;
 use bytes::Bytes;
 use tokio::time::Duration;
 use waitgroup::WaitGroup;
@@ -134,8 +134,8 @@ async fn test_set_rtp_parameters() -> Result<()> {
 
     let wg = WaitGroup::new();
 
-    until_connection_state(&mut sender, &wg, PeerConnectionState::Connected).await;
-    until_connection_state(&mut receiver, &wg, PeerConnectionState::Connected).await;
+    until_connection_state(&mut sender, &wg, RTCPeerConnectionState::Connected).await;
+    until_connection_state(&mut receiver, &wg, RTCPeerConnectionState::Connected).await;
 
     signal_pair(&mut sender, &mut receiver).await?;
 
@@ -219,8 +219,8 @@ async fn test_rtp_receiver_set_read_deadline() -> Result<()> {
         .await;
 
     let wg = WaitGroup::new();
-    until_connection_state(&mut sender, &wg, PeerConnectionState::Connected).await;
-    until_connection_state(&mut receiver, &wg, PeerConnectionState::Connected).await;
+    until_connection_state(&mut sender, &wg, RTCPeerConnectionState::Connected).await;
+    until_connection_state(&mut receiver, &wg, RTCPeerConnectionState::Connected).await;
 
     signal_pair(&mut sender, &mut receiver).await?;
 

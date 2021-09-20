@@ -2,7 +2,7 @@ use std::fmt;
 
 /// PeerConnectionState indicates the state of the PeerConnection.
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum PeerConnectionState {
+pub enum RTCPeerConnectionState {
     Unspecified,
 
     /// PeerConnectionStateNew indicates that any of the ICETransports or
@@ -35,9 +35,9 @@ pub enum PeerConnectionState {
     Closed,
 }
 
-impl Default for PeerConnectionState {
+impl Default for RTCPeerConnectionState {
     fn default() -> Self {
-        PeerConnectionState::Unspecified
+        RTCPeerConnectionState::Unspecified
     }
 }
 
@@ -48,44 +48,44 @@ const PEER_CONNECTION_STATE_DISCONNECTED_STR: &str = "disconnected";
 const PEER_CONNECTION_STATE_FAILED_STR: &str = "failed";
 const PEER_CONNECTION_STATE_CLOSED_STR: &str = "closed";
 
-impl From<&str> for PeerConnectionState {
+impl From<&str> for RTCPeerConnectionState {
     fn from(raw: &str) -> Self {
         match raw {
-            PEER_CONNECTION_STATE_NEW_STR => PeerConnectionState::New,
-            PEER_CONNECTION_STATE_CONNECTING_STR => PeerConnectionState::Connecting,
-            PEER_CONNECTION_STATE_CONNECTED_STR => PeerConnectionState::Connected,
-            PEER_CONNECTION_STATE_DISCONNECTED_STR => PeerConnectionState::Disconnected,
-            PEER_CONNECTION_STATE_FAILED_STR => PeerConnectionState::Failed,
-            PEER_CONNECTION_STATE_CLOSED_STR => PeerConnectionState::Closed,
-            _ => PeerConnectionState::Unspecified,
+            PEER_CONNECTION_STATE_NEW_STR => RTCPeerConnectionState::New,
+            PEER_CONNECTION_STATE_CONNECTING_STR => RTCPeerConnectionState::Connecting,
+            PEER_CONNECTION_STATE_CONNECTED_STR => RTCPeerConnectionState::Connected,
+            PEER_CONNECTION_STATE_DISCONNECTED_STR => RTCPeerConnectionState::Disconnected,
+            PEER_CONNECTION_STATE_FAILED_STR => RTCPeerConnectionState::Failed,
+            PEER_CONNECTION_STATE_CLOSED_STR => RTCPeerConnectionState::Closed,
+            _ => RTCPeerConnectionState::Unspecified,
         }
     }
 }
 
-impl From<u8> for PeerConnectionState {
+impl From<u8> for RTCPeerConnectionState {
     fn from(v: u8) -> Self {
         match v {
-            1 => PeerConnectionState::New,
-            2 => PeerConnectionState::Connecting,
-            3 => PeerConnectionState::Connected,
-            4 => PeerConnectionState::Disconnected,
-            5 => PeerConnectionState::Failed,
-            6 => PeerConnectionState::Closed,
-            _ => PeerConnectionState::Unspecified,
+            1 => RTCPeerConnectionState::New,
+            2 => RTCPeerConnectionState::Connecting,
+            3 => RTCPeerConnectionState::Connected,
+            4 => RTCPeerConnectionState::Disconnected,
+            5 => RTCPeerConnectionState::Failed,
+            6 => RTCPeerConnectionState::Closed,
+            _ => RTCPeerConnectionState::Unspecified,
         }
     }
 }
 
-impl fmt::Display for PeerConnectionState {
+impl fmt::Display for RTCPeerConnectionState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match *self {
-            PeerConnectionState::New => PEER_CONNECTION_STATE_NEW_STR,
-            PeerConnectionState::Connecting => PEER_CONNECTION_STATE_CONNECTING_STR,
-            PeerConnectionState::Connected => PEER_CONNECTION_STATE_CONNECTED_STR,
-            PeerConnectionState::Disconnected => PEER_CONNECTION_STATE_DISCONNECTED_STR,
-            PeerConnectionState::Failed => PEER_CONNECTION_STATE_FAILED_STR,
-            PeerConnectionState::Closed => PEER_CONNECTION_STATE_CLOSED_STR,
-            PeerConnectionState::Unspecified => crate::UNSPECIFIED_STR,
+            RTCPeerConnectionState::New => PEER_CONNECTION_STATE_NEW_STR,
+            RTCPeerConnectionState::Connecting => PEER_CONNECTION_STATE_CONNECTING_STR,
+            RTCPeerConnectionState::Connected => PEER_CONNECTION_STATE_CONNECTED_STR,
+            RTCPeerConnectionState::Disconnected => PEER_CONNECTION_STATE_DISCONNECTED_STR,
+            RTCPeerConnectionState::Failed => PEER_CONNECTION_STATE_FAILED_STR,
+            RTCPeerConnectionState::Closed => PEER_CONNECTION_STATE_CLOSED_STR,
+            RTCPeerConnectionState::Unspecified => crate::UNSPECIFIED_STR,
         };
         write!(f, "{}", s)
     }
@@ -124,19 +124,19 @@ mod test {
     #[test]
     fn test_new_peer_connection_state() {
         let tests = vec![
-            (crate::UNSPECIFIED_STR, PeerConnectionState::Unspecified),
-            ("new", PeerConnectionState::New),
-            ("connecting", PeerConnectionState::Connecting),
-            ("connected", PeerConnectionState::Connected),
-            ("disconnected", PeerConnectionState::Disconnected),
-            ("failed", PeerConnectionState::Failed),
-            ("closed", PeerConnectionState::Closed),
+            (crate::UNSPECIFIED_STR, RTCPeerConnectionState::Unspecified),
+            ("new", RTCPeerConnectionState::New),
+            ("connecting", RTCPeerConnectionState::Connecting),
+            ("connected", RTCPeerConnectionState::Connected),
+            ("disconnected", RTCPeerConnectionState::Disconnected),
+            ("failed", RTCPeerConnectionState::Failed),
+            ("closed", RTCPeerConnectionState::Closed),
         ];
 
         for (state_string, expected_state) in tests {
             assert_eq!(
                 expected_state,
-                PeerConnectionState::from(state_string),
+                RTCPeerConnectionState::from(state_string),
                 "testCase: {}",
                 expected_state,
             );
@@ -146,13 +146,13 @@ mod test {
     #[test]
     fn test_peer_connection_state_string() {
         let tests = vec![
-            (PeerConnectionState::Unspecified, crate::UNSPECIFIED_STR),
-            (PeerConnectionState::New, "new"),
-            (PeerConnectionState::Connecting, "connecting"),
-            (PeerConnectionState::Connected, "connected"),
-            (PeerConnectionState::Disconnected, "disconnected"),
-            (PeerConnectionState::Failed, "failed"),
-            (PeerConnectionState::Closed, "closed"),
+            (RTCPeerConnectionState::Unspecified, crate::UNSPECIFIED_STR),
+            (RTCPeerConnectionState::New, "new"),
+            (RTCPeerConnectionState::Connecting, "connecting"),
+            (RTCPeerConnectionState::Connected, "connected"),
+            (RTCPeerConnectionState::Disconnected, "disconnected"),
+            (RTCPeerConnectionState::Failed, "failed"),
+            (RTCPeerConnectionState::Closed, "closed"),
         ];
 
         for (state, expected_string) in tests {

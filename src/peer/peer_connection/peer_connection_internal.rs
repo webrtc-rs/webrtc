@@ -78,7 +78,7 @@ impl PeerConnectionInternal {
             current_local_description: Arc::new(Default::default()),
             current_remote_description: Arc::new(Default::default()),
             pending_local_description: Arc::new(Default::default()),
-            peer_connection_state: Arc::new(AtomicU8::new(PeerConnectionState::New as u8)),
+            peer_connection_state: Arc::new(AtomicU8::new(RTCPeerConnectionState::New as u8)),
 
             setting_engine: Arc::clone(&api.setting_engine),
             media_engine: if !api.setting_engine.disable_media_engine_copy {

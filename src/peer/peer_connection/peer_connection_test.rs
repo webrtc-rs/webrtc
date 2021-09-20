@@ -228,10 +228,10 @@ pub(crate) async fn send_video_until_done(
 pub(crate) async fn until_connection_state(
     pc: &mut PeerConnection,
     wg: &WaitGroup,
-    state: PeerConnectionState,
+    state: RTCPeerConnectionState,
 ) {
     let w = Arc::new(Mutex::new(Some(wg.worker())));
-    pc.on_peer_connection_state_change(Box::new(move |pcs: PeerConnectionState| {
+    pc.on_peer_connection_state_change(Box::new(move |pcs: RTCPeerConnectionState| {
         let w2 = Arc::clone(&w);
         Box::pin(async move {
             if pcs == state {

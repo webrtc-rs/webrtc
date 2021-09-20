@@ -23,7 +23,7 @@ use crate::peer::ice::ice_gather::ice_gatherer::{
     ICEGatherer, OnGatheringCompleteHdlrFn, OnICEGathererStateChangeHdlrFn, OnLocalCandidateHdlrFn,
 };
 use crate::peer::ice::ice_gather::ICEGatherOptions;
-use crate::peer::peer_connection_state::{NegotiationNeededState, PeerConnectionState};
+use crate::peer::peer_connection_state::{NegotiationNeededState, RTCPeerConnectionState};
 use crate::peer::policy::sdp_semantics::SDPSemantics;
 use crate::peer::sdp::session_description::{SessionDescription, SessionDescriptionSerde};
 use crate::peer::signaling_state::{check_next_signaling_state, RTCSignalingState, StateChangeOp};
@@ -91,7 +91,7 @@ pub type OnICEConnectionStateChangeHdlrFn = Box<
 >;
 
 pub type OnPeerConnectionStateChangeHdlrFn = Box<
-    dyn (FnMut(PeerConnectionState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+    dyn (FnMut(RTCPeerConnectionState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
@@ -531,7 +531,7 @@ impl PeerConnection {
         on_peer_connection_state_change_handler: &Arc<
             Mutex<Option<OnPeerConnectionStateChangeHdlrFn>>,
         >,
-        cs: PeerConnectionState,
+        cs: RTCPeerConnectionState,
     ) {
         let mut handler = on_peer_connection_state_change_handler.lock().await;
         if let Some(f) = &mut *handler {
@@ -776,24 +776,24 @@ impl PeerConnection {
         let  connection_state =
         // The RTCPeerConnection object's [[IsClosed]] slot is true.
         if is_closed.load(Ordering::SeqCst) {
-             PeerConnectionState::Closed
+             RTCPeerConnectionState::Closed
         }else if ice_connection_state == ICEConnectionState::Failed || dtls_transport_state == DTLSTransportState::Failed {
             // Any of the RTCIceTransports or RTCDtlsTransports are in a "failed" state.
-             PeerConnectionState::Failed
+             RTCPeerConnectionState::Failed
         }else if ice_connection_state == ICEConnectionState::Disconnected {
             // Any of the RTCIceTransports or RTCDtlsTransports are in the "disconnected"
             // state and none of them are in the "failed" or "connecting" or "checking" state.
-            PeerConnectionState::Disconnected
+            RTCPeerConnectionState::Disconnected
         }else if ice_connection_state == ICEConnectionState::Connected && dtls_transport_state == DTLSTransportState::Connected {
             // All RTCIceTransports and RTCDtlsTransports are in the "connected", "completed" or "closed"
             // state and at least one of them is in the "connected" or "completed" state.
-            PeerConnectionState::Connected
+            RTCPeerConnectionState::Connected
         }else if ice_connection_state == ICEConnectionState::Checking && dtls_transport_state == DTLSTransportState::Connecting{
         //  Any of the RTCIceTransports or RTCDtlsTransports are in the "connecting" or
         // "checking" state and none of them is in the "failed" state.
-             PeerConnectionState::Connecting
+             RTCPeerConnectionState::Connecting
         }else{
-            PeerConnectionState::New
+            RTCPeerConnectionState::New
         };
 
         if peer_connection_state.load(Ordering::SeqCst) == connection_state as u8 {
@@ -1929,7 +1929,7 @@ impl PeerConnection {
 
     /// connection_state attribute returns the connection state of the
     /// PeerConnection instance.
-    pub fn connection_state(&self) -> PeerConnectionState {
+    pub fn connection_state(&self) -> RTCPeerConnectionState {
         self.internal
             .peer_connection_state
             .load(Ordering::SeqCst)

@@ -5,7 +5,7 @@ use crate::peer::ice::ice_connection_state::ICEConnectionState;
 use crate::peer::peer_connection::peer_connection_test::{
     close_pair_now, new_pair, signal_pair, until_connection_state,
 };
-use crate::peer::peer_connection_state::PeerConnectionState;
+use crate::peer::peer_connection_state::RTCPeerConnectionState;
 use std::sync::atomic::AtomicU32;
 use tokio::time::Duration;
 use waitgroup::WaitGroup;
@@ -71,13 +71,13 @@ async fn test_ice_transport_get_selected_candidate_pair() -> Result<()> {
     until_connection_state(
         &mut offerer,
         &peer_connection_connected,
-        PeerConnectionState::Connected,
+        RTCPeerConnectionState::Connected,
     )
     .await;
     until_connection_state(
         &mut answerer,
         &peer_connection_connected,
-        PeerConnectionState::Connected,
+        RTCPeerConnectionState::Connected,
     )
     .await;
 
