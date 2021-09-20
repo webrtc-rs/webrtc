@@ -9,11 +9,11 @@ use webrtc::data::data_channel::data_channel_parameters::DataChannelParameters;
 use webrtc::data::data_channel::DataChannel;
 use webrtc::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use webrtc::media::dtls_transport::dtls_parameters::DTLSParameters;
+use webrtc::media::ice_transport::ice_parameters::RTCIceParameters;
+use webrtc::media::ice_transport::ice_role::ICERole;
 use webrtc::peer::ice::ice_candidate::RTCIceCandidate;
-use webrtc::peer::ice::ice_gather::ICEGatherOptions;
-use webrtc::peer::ice::ice_role::ICERole;
+use webrtc::peer::ice::ice_gather::RTCIceGatherOptions;
 use webrtc::peer::ice::ice_server::RTCIceServer;
-use webrtc::peer::ice::ICEParameters;
 use webrtc::util::math_rand_alpha;
 
 //use std::io::Write;
@@ -64,7 +64,7 @@ async fn main() -> Result<()> {
     // Everything below is the Pion WebRTC (ORTC) API! Thanks for using it ❤️.
 
     // Prepare ICE gathering options
-    let ice_options = ICEGatherOptions {
+    let ice_options = RTCIceGatherOptions {
         ice_servers: vec![RTCIceServer {
             urls: vec!["stun:stun.l.google.com:19302".to_owned()],
             ..Default::default()
@@ -218,7 +218,7 @@ struct Signal {
     ice_candidates: Vec<RTCIceCandidate>, //   `json:"iceCandidates"`
 
     #[serde(rename = "iceParameters")]
-    ice_parameters: ICEParameters, //    `json:"iceParameters"`
+    ice_parameters: RTCIceParameters, //    `json:"iceParameters"`
 
     #[serde(rename = "dtlsParameters")]
     dtls_parameters: DTLSParameters, //   `json:"dtlsParameters"`

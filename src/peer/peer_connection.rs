@@ -20,15 +20,16 @@ use crate::media::track::track_remote::TrackRemote;
 use crate::peer::configuration::RTCConfiguration;
 use crate::peer::ice::ice_connection_state::RTCIceConnectionState;
 use crate::peer::ice::ice_gather::ice_gatherer::{
-    ICEGatherer, OnGatheringCompleteHdlrFn, OnICEGathererStateChangeHdlrFn, OnLocalCandidateHdlrFn,
+    OnGatheringCompleteHdlrFn, OnICEGathererStateChangeHdlrFn, OnLocalCandidateHdlrFn,
+    RTCIceGatherer,
 };
-use crate::peer::ice::ice_gather::ICEGatherOptions;
+use crate::peer::ice::ice_gather::RTCIceGatherOptions;
 use crate::peer::peer_connection_state::{NegotiationNeededState, RTCPeerConnectionState};
 use crate::peer::policy::sdp_semantics::RTCSdpSemantics;
 use crate::peer::sdp::session_description::{RTCSessionDescription, RTCSessionDescriptionSerde};
 use crate::peer::signaling_state::{check_next_signaling_state, RTCSignalingState, StateChangeOp};
 
-use crate::data::data_channel::data_channel_config::DataChannelConfig;
+use crate::data::data_channel::data_channel_init::DataChannelInit;
 use crate::data::data_channel::data_channel_parameters::DataChannelParameters;
 use crate::data::data_channel::data_channel_state::DataChannelState;
 use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
@@ -39,6 +40,8 @@ use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
 use crate::media::dtls_transport::dtls_role::{
     DTLSRole, DEFAULT_DTLS_ROLE_ANSWER, DEFAULT_DTLS_ROLE_OFFER,
 };
+use crate::media::ice_transport::ice_parameters::RTCIceParameters;
+use crate::media::ice_transport::ice_role::ICERole;
 use crate::media::rtp::rtp_codec::{RTPCodecType, RTPHeaderExtensionCapability};
 use crate::media::rtp::rtp_sender::RTPSender;
 use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
@@ -46,11 +49,9 @@ use crate::media::rtp::{RTPTransceiverInit, SSRC};
 use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::media::track::track_local::TrackLocal;
 use crate::peer::certificate::RTCCertificate;
-use crate::peer::ice::ice_candidate::{ICECandidateInit, RTCIceCandidate};
+use crate::peer::ice::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
 use crate::peer::ice::ice_gather::ice_gatherer_state::RTCIceGathererState;
 use crate::peer::ice::ice_gather::ice_gathering_state::RTCIceGatheringState;
-use crate::peer::ice::ice_role::ICERole;
-use crate::peer::ice::ICEParameters;
 use crate::peer::offer_answer_options::{RTCAnswerOptions, RTCOfferOptions};
 use crate::peer::operation::{Operation, Operations};
 use crate::peer::sdp::sdp_type::RTCSdpType;
@@ -1448,7 +1449,7 @@ impl RTCPeerConnection {
 
     /// add_ice_candidate accepts an ICE candidate string and adds it
     /// to the existing set of candidates.
-    pub async fn add_ice_candidate(&self, candidate: ICECandidateInit) -> Result<()> {
+    pub async fn add_ice_candidate(&self, candidate: RTCIceCandidateInit) -> Result<()> {
         if self.remote_description().await.is_none() {
             return Err(Error::ErrNoRemoteDescription.into());
         }
@@ -1678,7 +1679,7 @@ impl RTCPeerConnection {
     pub async fn create_data_channel(
         &self,
         label: &str,
-        options: Option<DataChannelConfig>,
+        options: Option<DataChannelInit>,
     ) -> Result<Arc<DataChannel>> {
         // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #2)
         if self.internal.is_closed.load(Ordering::SeqCst) {

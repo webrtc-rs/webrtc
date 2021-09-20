@@ -14,7 +14,7 @@ use webrtc::api::APIBuilder;
 use webrtc::data::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::data::data_channel::DataChannel;
 use webrtc::peer::configuration::RTCConfiguration;
-use webrtc::peer::ice::ice_candidate::{ICECandidateInit, RTCIceCandidate};
+use webrtc::peer::ice::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
 use webrtc::peer::ice::ice_server::RTCIceServer;
 use webrtc::peer::peer_connection::RTCPeerConnection;
 use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
@@ -86,7 +86,7 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
                 };
 
             if let Err(err) = pc
-                .add_ice_candidate(ICECandidateInit {
+                .add_ice_candidate(RTCIceCandidateInit {
                     candidate,
                     ..Default::default()
                 })

@@ -1,31 +1,34 @@
-#[cfg(test)]
-mod ice_transport_test;
-
-pub mod ice_transport_state;
-
-use crate::media::ice_transport::ice_transport_state::ICETransportState;
-use crate::peer::ice::ice_candidate::ice_candidate_pair::ICECandidatePair;
-use crate::peer::ice::ice_gather::ice_gatherer::ICEGatherer;
-use crate::peer::ice::ice_role::ICERole;
-use crate::util::mux::{Config, Mux};
-
-use crate::error::Error;
-use crate::peer::ice::ice_candidate::RTCIceCandidate;
-use crate::peer::ice::ICEParameters;
-use crate::util::mux::endpoint::Endpoint;
-use crate::util::mux::mux_func::MatchFunc;
-use crate::RECEIVE_MTU;
-
-use ice::candidate::Candidate;
-use ice::state::ConnectionState;
-
-use anyhow::Result;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
+
+use anyhow::Result;
+use ice::candidate::Candidate;
+use ice::state::ConnectionState;
 use tokio::sync::{mpsc, Mutex};
 use util::Conn;
+
+use ice_candidate_pair::ICECandidatePair;
+use ice_role::ICERole;
+
+use crate::error::Error;
+use crate::media::ice_transport::ice_parameters::RTCIceParameters;
+use crate::media::ice_transport::ice_transport_state::ICETransportState;
+use crate::peer::ice::ice_candidate::RTCIceCandidate;
+use crate::peer::ice::ice_gather::ice_gatherer::RTCIceGatherer;
+use crate::util::mux::endpoint::Endpoint;
+use crate::util::mux::mux_func::MatchFunc;
+use crate::util::mux::{Config, Mux};
+use crate::RECEIVE_MTU;
+
+#[cfg(test)]
+mod ice_transport_test;
+
+pub mod ice_candidate_pair;
+pub mod ice_parameters;
+pub mod ice_role;
+pub mod ice_transport_state;
 
 pub type OnConnectionStateChangeHdlrFn = Box<
     dyn (FnMut(ICETransportState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
@@ -51,7 +54,7 @@ pub struct ICETransportInternal {
 /// transport over which packets are sent and received.
 #[derive(Default)]
 pub struct ICETransport {
-    gatherer: Arc<ICEGatherer>,
+    gatherer: Arc<RTCIceGatherer>,
     on_connection_state_change_handler: Arc<Mutex<Option<OnConnectionStateChangeHdlrFn>>>,
     on_selected_candidate_pair_change_handler:
         Arc<Mutex<Option<OnSelectedCandidatePairChangeHdlrFn>>>,
@@ -61,7 +64,7 @@ pub struct ICETransport {
 
 impl ICETransport {
     /// creates a new new_icetransport.
-    pub(crate) fn new(gatherer: Arc<ICEGatherer>) -> Self {
+    pub(crate) fn new(gatherer: Arc<RTCIceGatherer>) -> Self {
         ICETransport {
             state: Arc::new(AtomicU8::new(ICETransportState::New as u8)),
             gatherer,
@@ -83,7 +86,7 @@ impl ICETransport {
     }
 
     /// Start incoming connectivity checks based on its configured role.
-    pub async fn start(&self, params: &ICEParameters, role: Option<ICERole>) -> Result<()> {
+    pub async fn start(&self, params: &RTCIceParameters, role: Option<ICERole>) -> Result<()> {
         if self.state() != ICETransportState::New {
             return Err(Error::ErrICETransportNotInNew.into());
         }

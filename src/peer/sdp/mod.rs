@@ -4,14 +4,14 @@ mod sdp_test;
 use crate::api::media_engine::MediaEngine;
 use crate::error::Error;
 use crate::media::dtls_transport::dtls_fingerprint::DTLSFingerprint;
+use crate::media::ice_transport::ice_parameters::RTCIceParameters;
 use crate::media::rtp::rtp_codec::{RTPCodecCapability, RTPCodecParameters, RTPCodecType};
 use crate::media::rtp::rtp_transceiver::RTPTransceiver;
 use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
 use crate::media::rtp::{PayloadType, RTCPFeedback, SSRC};
 use crate::peer::ice::ice_candidate::RTCIceCandidate;
-use crate::peer::ice::ice_gather::ice_gatherer::ICEGatherer;
+use crate::peer::ice::ice_gather::ice_gatherer::RTCIceGatherer;
 use crate::peer::ice::ice_gather::ice_gathering_state::RTCIceGatheringState;
-use crate::peer::ice::ICEParameters;
 use crate::MEDIA_SECTION_APPLICATION;
 
 pub mod sdp_type;
@@ -259,7 +259,7 @@ pub(crate) async fn add_candidates_to_media_descriptions(
 pub(crate) struct AddDataMediaSectionParams {
     should_add_candidates: bool,
     mid_value: String,
-    ice_params: ICEParameters,
+    ice_params: RTCIceParameters,
     dtls_role: ConnectionRole,
     ice_gathering_state: RTCIceGatheringState,
 }
@@ -320,7 +320,7 @@ pub(crate) async fn add_data_media_section(
 
 pub(crate) async fn populate_local_candidates(
     session_description: Option<&session_description::RTCSessionDescription>,
-    ice_gatherer: Option<&Arc<ICEGatherer>>,
+    ice_gatherer: Option<&Arc<RTCIceGatherer>>,
     ice_gathering_state: RTCIceGatheringState,
 ) -> Option<session_description::RTCSessionDescription> {
     if session_description.is_none() || ice_gatherer.is_none() {
@@ -373,7 +373,7 @@ pub(crate) async fn add_transceiver_sdp(
     mut d: sdp::session_description::SessionDescription,
     dtls_fingerprints: &[DTLSFingerprint],
     media_engine: &Arc<MediaEngine>,
-    ice_params: &ICEParameters,
+    ice_params: &RTCIceParameters,
     candidates: &[RTCIceCandidate],
     media_section: &MediaSection,
     params: AddTransceiverSdpParams,
@@ -549,7 +549,7 @@ pub(crate) async fn populate_sdp(
     dtls_fingerprints: &[DTLSFingerprint],
     media_engine: &Arc<MediaEngine>,
     candidates: &[RTCIceCandidate],
-    ice_params: &ICEParameters,
+    ice_params: &RTCIceParameters,
     media_sections: &[MediaSection],
     params: PopulateSdpParams,
 ) -> Result<sdp::session_description::SessionDescription> {

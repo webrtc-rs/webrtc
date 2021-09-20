@@ -534,7 +534,7 @@ async fn fingerprint_test(
         &dtls_fingerprints,
         engine,
         &[],
-        &ICEParameters::default(),
+        &RTCIceParameters::default(),
         media,
         params,
     )
@@ -673,7 +673,7 @@ async fn test_populate_sdp() -> Result<()> {
             &[],
             &me,
             &[],
-            &ICEParameters::default(),
+            &RTCIceParameters::default(),
             &media_sections,
             params,
         )
@@ -753,7 +753,7 @@ async fn test_populate_sdp() -> Result<()> {
             &[],
             &me,
             &[],
-            &ICEParameters::default(),
+            &RTCIceParameters::default(),
             &media_sections,
             params,
         )

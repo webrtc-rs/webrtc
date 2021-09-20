@@ -1,9 +1,9 @@
 use crate::api::setting_engine::SettingEngine;
 use crate::error::Error;
+use crate::media::ice_transport::ice_parameters::RTCIceParameters;
 use crate::peer::ice::ice_candidate::ice_candidate_type::RTCIceCandidateType;
 use crate::peer::ice::ice_candidate::*;
 use crate::peer::ice::ice_gather::ice_gatherer_state::RTCIceGathererState;
-use crate::peer::ice::ICEParameters;
 use crate::peer::policy::ice_transport_policy::RTCIceTransportPolicy;
 
 use ice::agent::Agent;
@@ -37,7 +37,7 @@ pub type OnGatheringCompleteHdlrFn =
 /// Connectivity Establishment (ICE) parameters which can be
 /// exchanged in signaling.
 #[derive(Default)]
-pub struct ICEGatherer {
+pub struct RTCIceGatherer {
     pub(crate) validated_servers: Vec<Url>,
     pub(crate) gather_policy: RTCIceTransportPolicy,
     pub(crate) setting_engine: Arc<SettingEngine>,
@@ -52,13 +52,13 @@ pub struct ICEGatherer {
     pub(crate) on_gathering_complete_handler: Arc<Mutex<Option<OnGatheringCompleteHdlrFn>>>,
 }
 
-impl ICEGatherer {
+impl RTCIceGatherer {
     pub(crate) fn new(
         validated_servers: Vec<Url>,
         gather_policy: RTCIceTransportPolicy,
         setting_engine: Arc<SettingEngine>,
     ) -> Self {
-        ICEGatherer {
+        RTCIceGatherer {
             gather_policy,
             validated_servers,
             setting_engine,
@@ -229,7 +229,7 @@ impl ICEGatherer {
     }
 
     /// get_local_parameters returns the ICE parameters of the ICEGatherer.
-    pub async fn get_local_parameters(&self) -> Result<ICEParameters> {
+    pub async fn get_local_parameters(&self) -> Result<RTCIceParameters> {
         self.create_agent().await?;
 
         let (frag, pwd) = if let Some(agent) = self.get_agent().await {
@@ -238,7 +238,7 @@ impl ICEGatherer {
             return Err(Error::ErrICEAgentNotExist.into());
         };
 
-        Ok(ICEParameters {
+        Ok(RTCIceParameters {
             username_fragment: frag,
             password: pwd,
             ice_lite: false,
@@ -418,13 +418,13 @@ impl ICEGatherer {
 mod test {
     use super::*;
     use crate::api::APIBuilder;
-    use crate::peer::ice::ice_gather::ICEGatherOptions;
+    use crate::peer::ice::ice_gather::RTCIceGatherOptions;
     use crate::peer::ice::ice_server::RTCIceServer;
     use tokio::sync::mpsc;
 
     #[tokio::test]
     async fn test_new_ice_gatherer_success() -> Result<()> {
-        let opts = ICEGatherOptions {
+        let opts = RTCIceGatherOptions {
             ice_servers: vec![RTCIceServer {
                 urls: vec!["stun:stun.l.google.com:19302".to_owned()],
                 ..Default::default()
@@ -482,7 +482,7 @@ mod test {
         let gatherer = APIBuilder::new()
             .with_setting_engine(s)
             .build()
-            .new_ice_gatherer(ICEGatherOptions::default())?;
+            .new_ice_gatherer(RTCIceGatherOptions::default())?;
 
         let (done_tx, mut done_rx) = mpsc::channel::<()>(1);
         let done_tx = Arc::new(Mutex::new(Some(done_tx)));

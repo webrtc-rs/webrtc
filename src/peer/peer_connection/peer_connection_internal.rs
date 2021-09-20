@@ -38,7 +38,7 @@ pub(crate) struct PeerConnectionInternal {
         Arc<Mutex<Option<OnICEConnectionStateChangeHdlrFn>>>,
     pub(super) on_data_channel_handler: Arc<Mutex<Option<OnDataChannelHdlrFn>>>,
 
-    pub(super) ice_gatherer: Arc<ICEGatherer>,
+    pub(super) ice_gatherer: Arc<RTCIceGatherer>,
 
     pub(super) current_local_description: Arc<Mutex<Option<RTCSessionDescription>>>,
     pub(super) current_remote_description: Arc<Mutex<Option<RTCSessionDescription>>>,
@@ -92,7 +92,7 @@ impl PeerConnectionInternal {
         };
 
         // Create the ice gatherer
-        pc.ice_gatherer = Arc::new(api.new_ice_gatherer(ICEGatherOptions {
+        pc.ice_gatherer = Arc::new(api.new_ice_gatherer(RTCIceGatherOptions {
             ice_servers: configuration.get_ice_servers(),
             ice_gather_policy: configuration.ice_transport_policy,
         })?);
@@ -579,7 +579,7 @@ impl PeerConnectionInternal {
         if let Err(err) = self
             .ice_transport
             .start(
-                &ICEParameters {
+                &RTCIceParameters {
                     username_fragment: remote_ufrag,
                     password: remote_pwd,
                     ice_lite: false,

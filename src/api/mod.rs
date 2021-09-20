@@ -8,8 +8,8 @@ pub mod setting_engine;
 use crate::media::dtls_transport::DTLSTransport;
 use crate::media::ice_transport::ICETransport;
 use crate::peer::certificate::RTCCertificate;
-use crate::peer::ice::ice_gather::ice_gatherer::ICEGatherer;
-use crate::peer::ice::ice_gather::ICEGatherOptions;
+use crate::peer::ice::ice_gather::ice_gatherer::RTCIceGatherer;
+use crate::peer::ice::ice_gather::RTCIceGatherOptions;
 
 use media_engine::*;
 use setting_engine::*;
@@ -53,7 +53,7 @@ impl API {
     /// new_ice_gatherer creates a new ice gatherer.
     /// This constructor is part of the ORTC API. It is not
     /// meant to be used together with the basic WebRTC API.
-    pub fn new_ice_gatherer(&self, opts: ICEGatherOptions) -> Result<ICEGatherer> {
+    pub fn new_ice_gatherer(&self, opts: RTCIceGatherOptions) -> Result<RTCIceGatherer> {
         let mut validated_servers = vec![];
         if !opts.ice_servers.is_empty() {
             for server in &opts.ice_servers {
@@ -62,7 +62,7 @@ impl API {
             }
         }
 
-        Ok(ICEGatherer::new(
+        Ok(RTCIceGatherer::new(
             validated_servers,
             opts.ice_gather_policy,
             Arc::clone(&self.setting_engine),
@@ -72,7 +72,7 @@ impl API {
     /// new_ice_transport creates a new ice transport.
     /// This constructor is part of the ORTC API. It is not
     /// meant to be used together with the basic WebRTC API.
-    pub fn new_ice_transport(&self, gatherer: Arc<ICEGatherer>) -> ICETransport {
+    pub fn new_ice_transport(&self, gatherer: Arc<RTCIceGatherer>) -> ICETransport {
         ICETransport::new(gatherer)
     }
 

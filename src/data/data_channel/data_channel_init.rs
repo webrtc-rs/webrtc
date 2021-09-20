@@ -1,7 +1,7 @@
 /// DataChannelConfig can be used to configure properties of the underlying
 /// channel such as data reliability.
 #[derive(Default, Debug, Clone)]
-pub struct DataChannelConfig {
+pub struct DataChannelInit {
     /// ordered indicates if data is allowed to be delivered out of order. The
     /// default value of true, guarantees that data will be delivered in order.
     pub ordered: Option<bool>,

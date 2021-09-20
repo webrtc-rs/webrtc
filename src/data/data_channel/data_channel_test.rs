@@ -1,7 +1,7 @@
 use super::*;
 use crate::api::media_engine::MediaEngine;
 use crate::api::{APIBuilder, API};
-use crate::data::data_channel::data_channel_config::DataChannelConfig;
+use crate::data::data_channel::data_channel_init::DataChannelInit;
 use crate::peer::peer_connection::peer_connection_test::*;
 use crate::peer::peer_connection::RTCPeerConnection;
 
@@ -10,14 +10,14 @@ use crate::peer::peer_connection::RTCPeerConnection;
 use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
 use crate::media::dtls_transport::DTLSTransport;
+use crate::media::ice_transport::ice_parameters::RTCIceParameters;
+use crate::media::ice_transport::ice_role::ICERole;
 use crate::media::ice_transport::ICETransport;
 use crate::peer::configuration::RTCConfiguration;
 use crate::peer::ice::ice_candidate::RTCIceCandidate;
 use crate::peer::ice::ice_connection_state::RTCIceConnectionState;
-use crate::peer::ice::ice_gather::ice_gatherer::ICEGatherer;
-use crate::peer::ice::ice_gather::ICEGatherOptions;
-use crate::peer::ice::ice_role::ICERole;
-use crate::peer::ice::ICEParameters;
+use crate::peer::ice::ice_gather::ice_gatherer::RTCIceGatherer;
+use crate::peer::ice::ice_gather::RTCIceGatherOptions;
 use crate::util::flatten_errs;
 use regex::Regex;
 use tokio::sync::mpsc;
@@ -31,7 +31,7 @@ const EXPECTED_LABEL: &str = "data";
 
 async fn set_up_data_channel_parameters_test(
     api: &API,
-    options: Option<DataChannelConfig>,
+    options: Option<DataChannelInit>,
 ) -> Result<(
     RTCPeerConnection,
     RTCPeerConnection,
@@ -381,7 +381,7 @@ async fn test_data_channel_parameters_max_packet_life_time_exchange() -> Result<
 
     let ordered = true;
     let max_packet_life_time = 3u16;
-    let options = DataChannelConfig {
+    let options = DataChannelInit {
         ordered: Some(ordered),
         max_packet_life_time: Some(max_packet_life_time),
         ..Default::default()
@@ -440,7 +440,7 @@ async fn test_data_channel_parameters_max_retransmits_exchange() -> Result<()> {
 
     let ordered = false;
     let max_retransmits = 3000u16;
-    let options = DataChannelConfig {
+    let options = DataChannelInit {
         ordered: Some(ordered),
         max_retransmits: Some(max_retransmits),
         ..Default::default()
@@ -485,7 +485,7 @@ async fn test_data_channel_parameters_protocol_exchange() -> Result<()> {
     let api = APIBuilder::new().with_media_engine(m).build();
 
     let protocol = "json".to_owned();
-    let options = DataChannelConfig {
+    let options = DataChannelInit {
         protocol: Some(protocol.clone()),
         ..Default::default()
     };
@@ -538,7 +538,7 @@ async fn test_data_channel_parameters_negotiated_exchange() -> Result<()> {
 
     let negotiated = true;
     let id = 500u16;
-    let options = DataChannelConfig {
+    let options = DataChannelInit {
         negotiated: Some(negotiated),
         id: Some(id),
         ..Default::default()
@@ -782,7 +782,7 @@ async fn test_data_channel_parameters_go() -> Result<()> {
     {
         let ordered = true;
         let max_packet_life_time = 3u16;
-        let options = DataChannelConfig {
+        let options = DataChannelInit {
             ordered: Some(ordered),
             max_packet_life_time: Some(max_packet_life_time),
             ..Default::default()
@@ -1343,7 +1343,7 @@ async fn test_data_channel_non_standard_session_description() -> Result<()> {
 
 struct TestOrtcStack {
     //api      *API
-    gatherer: Arc<ICEGatherer>,
+    gatherer: Arc<RTCIceGatherer>,
     ice: Arc<ICETransport>,
     dtls: Arc<DTLSTransport>,
     sctp: Arc<SCTPTransport>,
@@ -1351,7 +1351,7 @@ struct TestOrtcStack {
 
 struct TestOrtcSignal {
     ice_candidates: Vec<RTCIceCandidate>, //`json:"iceCandidates"`
-    ice_parameters: ICEParameters,        //`json:"iceParameters"`
+    ice_parameters: RTCIceParameters,     //`json:"iceParameters"`
     dtls_parameters: DTLSParameters,      //`json:"dtlsParameters"`
     sctp_capabilities: SCTPTransportCapabilities, //`json:"sctpCapabilities"`
 }
@@ -1359,7 +1359,7 @@ struct TestOrtcSignal {
 impl TestOrtcStack {
     async fn new(api: &API) -> Result<Self> {
         // Create the ICE gatherer
-        let gatherer = Arc::new(api.new_ice_gatherer(ICEGatherOptions::default())?);
+        let gatherer = Arc::new(api.new_ice_gatherer(RTCIceGatherOptions::default())?);
 
         // Construct the ICE transport
         let ice = Arc::new(api.new_ice_transport(Arc::clone(&gatherer)));

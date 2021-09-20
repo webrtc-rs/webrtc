@@ -1,9 +1,6 @@
-pub mod ice_candidate_pair;
-pub mod ice_candidate_type;
+use std::fmt;
+use std::sync::Arc;
 
-use crate::error::Error;
-use crate::peer::ice::ice_candidate::ice_candidate_type::RTCIceCandidateType;
-use crate::peer::ice::ice_protocol::RTCIceProtocol;
 use anyhow::Result;
 use ice::candidate::candidate_base::CandidateBaseConfig;
 use ice::candidate::candidate_host::CandidateHostConfig;
@@ -12,8 +9,12 @@ use ice::candidate::candidate_relay::CandidateRelayConfig;
 use ice::candidate::candidate_server_reflexive::CandidateServerReflexiveConfig;
 use ice::candidate::Candidate;
 use serde::{Deserialize, Serialize};
-use std::fmt;
-use std::sync::Arc;
+
+use crate::error::Error;
+use crate::peer::ice::ice_candidate::ice_candidate_type::RTCIceCandidateType;
+use crate::peer::ice::ice_protocol::RTCIceProtocol;
+
+pub mod ice_candidate_type;
 
 /// ICECandidate represents a ice candidate
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -145,10 +146,10 @@ impl RTCIceCandidate {
 
     /// to_json returns an ICECandidateInit
     /// as indicated by the spec https://w3c.github.io/webrtc-pc/#dom-rtcicecandidate-tojson
-    pub async fn to_json(&self) -> Result<ICECandidateInit> {
+    pub async fn to_json(&self) -> Result<RTCIceCandidateInit> {
         let candidate = self.to_ice().await?;
 
-        Ok(ICECandidateInit {
+        Ok(RTCIceCandidateInit {
             candidate: format!("candidate:{}", candidate.marshal()),
             sdp_mid: "".to_owned(),
             sdp_mline_index: 0u16,
@@ -169,7 +170,7 @@ impl fmt::Display for RTCIceCandidate {
 
 /// ICECandidateInit is used to serialize ice candidates
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ICECandidateInit {
+pub struct RTCIceCandidateInit {
     pub candidate: String,
     pub sdp_mid: String,
     pub sdp_mline_index: u16,
