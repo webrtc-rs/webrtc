@@ -36,10 +36,10 @@ async fn main() -> Result<()> {
     .filter(None, log::LevelFilter::Trace)
     .init();*/
 
-    let mut app = App::new("data-channels")
+    let mut app = App::new("data-channels-detach-create")
         .version("0.1.0")
         .author("Rain Liu <yuliu@webrtc.rs>")
-        .about("An example of Data-Channels.")
+        .about("An example of Data-Channels-Detach-Create.")
         .setting(AppSettings::DeriveDisplayOrder)
         .setting(AppSettings::SubcommandsNegateReqs)
         .arg(

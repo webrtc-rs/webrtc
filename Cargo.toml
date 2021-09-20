@@ -86,6 +86,11 @@ path = "examples/reflect/reflect.rs"
 bench = false
 
 [[example]]
+name = "ortc"
+path = "examples/ortc/ortc.rs"
+bench = false
+
+[[example]]
 name = "offer"
 path = "examples/offer-answer/offer.rs"
 bench = false

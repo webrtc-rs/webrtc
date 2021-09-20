@@ -1529,12 +1529,9 @@ async fn test_data_channel_ortc_e2e() -> Result<()> {
         ..Default::default()
     };
 
-    let channel_a = API::new_data_channel(
-        Arc::clone(&stack_a.sctp),
-        dc_params,
-        Arc::clone(&api.setting_engine),
-    )
-    .await?;
+    let channel_a = api
+        .new_data_channel(Arc::clone(&stack_a.sctp), dc_params)
+        .await?;
 
     let _ = await_setup_rx.recv().await;
 
