@@ -2,7 +2,7 @@ use crate::media::dtls_transport::dtls_certificate::Certificate;
 use crate::peer::ice::ice_server::RTCIceServer;
 use crate::peer::policy::bundle_policy::RTCBundlePolicy;
 use crate::peer::policy::ice_transport_policy::RTCIceTransportPolicy;
-use crate::peer::policy::rtcp_mux_policy::RTCPMuxPolicy;
+use crate::peer::policy::rtcp_mux_policy::RTCRtcpMuxPolicy;
 use crate::peer::policy::sdp_semantics::SDPSemantics;
 
 /// A Configuration defines how peer-to-peer communication via PeerConnection
@@ -26,7 +26,7 @@ pub struct RTCConfiguration {
 
     /// rtcp_mux_policy indicates which rtcp-mux policy to use when gathering ICE
     /// candidates.
-    pub rtcp_mux_policy: RTCPMuxPolicy,
+    pub rtcp_mux_policy: RTCRtcpMuxPolicy,
 
     /// peer_identity sets the target peer identity for the PeerConnection.
     /// The PeerConnection will not establish a connection to a remote peer
