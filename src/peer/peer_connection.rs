@@ -47,8 +47,8 @@ use crate::media::rtp::{RTPTransceiverInit, SSRC};
 use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::media::track::track_local::TrackLocal;
 use crate::peer::ice::ice_candidate::{ICECandidate, ICECandidateInit};
-use crate::peer::ice::ice_gather::ice_gatherer_state::ICEGathererState;
-use crate::peer::ice::ice_gather::ice_gathering_state::ICEGatheringState;
+use crate::peer::ice::ice_gather::ice_gatherer_state::RTCIceGathererState;
+use crate::peer::ice::ice_gather::ice_gathering_state::RTCIceGatheringState;
 use crate::peer::ice::ice_role::ICERole;
 use crate::peer::ice::ICEParameters;
 use crate::peer::offer_answer_options::{RTCAnswerOptions, RTCOfferOptions};
@@ -1178,7 +1178,7 @@ impl PeerConnection {
             }
         }
 
-        if self.internal.ice_gatherer.state() == ICEGathererState::New {
+        if self.internal.ice_gatherer.state() == RTCIceGathererState::New {
             self.internal.ice_gatherer.gather().await
         } else {
             Ok(())
@@ -1923,7 +1923,7 @@ impl PeerConnection {
 
     /// icegathering_state attribute returns the ICE gathering state of the
     /// PeerConnection instance.
-    pub fn ice_gathering_state(&self) -> ICEGatheringState {
+    pub fn ice_gathering_state(&self) -> RTCIceGatheringState {
         self.internal.ice_gathering_state()
     }
 
@@ -2030,7 +2030,7 @@ impl PeerConnection {
             }))
             .await;
 
-        if self.ice_gathering_state() == ICEGatheringState::Complete {
+        if self.ice_gathering_state() == RTCIceGatheringState::Complete {
             log::trace!("ICEGatheringState::Complete");
             let mut d = done.lock().await;
             d.take();

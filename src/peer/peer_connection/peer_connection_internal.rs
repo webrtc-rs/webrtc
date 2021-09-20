@@ -926,11 +926,11 @@ impl PeerConnectionInternal {
         .await
     }
 
-    pub(super) fn ice_gathering_state(&self) -> ICEGatheringState {
+    pub(super) fn ice_gathering_state(&self) -> RTCIceGatheringState {
         match self.ice_gatherer.state() {
-            ICEGathererState::New => ICEGatheringState::New,
-            ICEGathererState::Gathering => ICEGatheringState::Gathering,
-            _ => ICEGatheringState::Complete,
+            RTCIceGathererState::New => RTCIceGatheringState::New,
+            RTCIceGathererState::Gathering => RTCIceGatheringState::Gathering,
+            _ => RTCIceGatheringState::Complete,
         }
     }
 

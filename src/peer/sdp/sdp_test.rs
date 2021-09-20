@@ -526,7 +526,7 @@ async fn fingerprint_test(
         media_description_fingerprint: sdpmedia_description_fingerprints,
         is_icelite: false,
         connection_role: ConnectionRole::Active,
-        ice_gathering_state: ICEGatheringState::New,
+        ice_gathering_state: RTCIceGatheringState::New,
     };
 
     let s = populate_sdp(
@@ -666,7 +666,7 @@ async fn test_populate_sdp() -> Result<()> {
             media_description_fingerprint: se.sdp_media_level_fingerprints,
             is_icelite: se.candidates.ice_lite,
             connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
-            ice_gathering_state: ICEGatheringState::Complete,
+            ice_gathering_state: RTCIceGatheringState::Complete,
         };
         let offer_sdp = populate_sdp(
             d,
@@ -746,7 +746,7 @@ async fn test_populate_sdp() -> Result<()> {
             media_description_fingerprint: se.sdp_media_level_fingerprints,
             is_icelite: se.candidates.ice_lite,
             connection_role: DEFAULT_DTLS_ROLE_OFFER.to_connection_role(),
-            ice_gathering_state: ICEGatheringState::Complete,
+            ice_gathering_state: RTCIceGatheringState::Complete,
         };
         let offer_sdp = populate_sdp(
             d,

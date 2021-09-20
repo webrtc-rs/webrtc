@@ -2,7 +2,7 @@ use crate::api::setting_engine::SettingEngine;
 use crate::error::Error;
 use crate::peer::ice::ice_candidate::ice_candidate_type::ICECandidateType;
 use crate::peer::ice::ice_candidate::*;
-use crate::peer::ice::ice_gather::ice_gatherer_state::ICEGathererState;
+use crate::peer::ice::ice_gather::ice_gatherer_state::RTCIceGathererState;
 use crate::peer::ice::ICEParameters;
 use crate::peer::policy::ice_transport_policy::RTCIceTransportPolicy;
 
@@ -24,7 +24,7 @@ pub type OnLocalCandidateHdlrFn = Box<
 >;
 
 pub type OnICEGathererStateChangeHdlrFn = Box<
-    dyn (FnMut(ICEGathererState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+    dyn (FnMut(RTCIceGathererState) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
@@ -62,7 +62,7 @@ impl ICEGatherer {
             gather_policy,
             validated_servers,
             setting_engine,
-            state: Arc::new(AtomicU8::new(ICEGathererState::New as u8)),
+            state: Arc::new(AtomicU8::new(RTCIceGathererState::New as u8)),
             ..Default::default()
         }
     }
@@ -70,7 +70,7 @@ impl ICEGatherer {
     pub(crate) async fn create_agent(&self) -> Result<()> {
         {
             let agent = self.agent.lock().await;
-            if agent.is_some() || self.state() != ICEGathererState::New {
+            if agent.is_some() || self.state() != RTCIceGathererState::New {
                 return Ok(());
             }
         }
@@ -147,7 +147,7 @@ impl ICEGatherer {
     /// Gather ICE candidates.
     pub async fn gather(&self) -> Result<()> {
         self.create_agent().await?;
-        self.set_state(ICEGathererState::Gathering).await;
+        self.set_state(RTCIceGathererState::Gathering).await;
 
         if let Some(agent) = self.get_agent().await {
             let state = Arc::clone(&self.state);
@@ -176,13 +176,13 @@ impl ICEGatherer {
                                 }
                             } else {
                                 state_clone
-                                    .store(ICEGathererState::Complete as u8, Ordering::SeqCst);
+                                    .store(RTCIceGathererState::Complete as u8, Ordering::SeqCst);
 
                                 {
                                     let mut on_state_change_handler =
                                         on_state_change_handler_clone.lock().await;
                                     if let Some(handler) = &mut *on_state_change_handler {
-                                        handler(ICEGathererState::Complete).await;
+                                        handler(RTCIceGathererState::Complete).await;
                                     }
                                 }
 
@@ -223,7 +223,7 @@ impl ICEGatherer {
         if let Some(agent) = agent {
             agent.close().await?;
         }
-        self.set_state(ICEGathererState::Closed).await;
+        self.set_state(RTCIceGathererState::Closed).await;
 
         Ok(())
     }
@@ -278,11 +278,11 @@ impl ICEGatherer {
     }
 
     /// State indicates the current state of the ICE gatherer.
-    pub fn state(&self) -> ICEGathererState {
+    pub fn state(&self) -> RTCIceGathererState {
         self.state.load(Ordering::SeqCst).into()
     }
 
-    pub async fn set_state(&self, s: ICEGathererState) {
+    pub async fn set_state(&self, s: RTCIceGathererState) {
         self.state.store(s as u8, Ordering::SeqCst);
 
         let mut on_state_change_handler = self.on_state_change_handler.lock().await;
@@ -436,7 +436,7 @@ mod test {
 
         assert_eq!(
             gatherer.state(),
-            ICEGathererState::New,
+            RTCIceGathererState::New,
             "Expected gathering state new"
         );
 

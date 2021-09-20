@@ -10,7 +10,7 @@ use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
 use crate::media::rtp::{PayloadType, RTCPFeedback, SSRC};
 use crate::peer::ice::ice_candidate::ICECandidate;
 use crate::peer::ice::ice_gather::ice_gatherer::ICEGatherer;
-use crate::peer::ice::ice_gather::ice_gathering_state::ICEGatheringState;
+use crate::peer::ice::ice_gather::ice_gathering_state::RTCIceGatheringState;
 use crate::peer::ice::ICEParameters;
 use crate::MEDIA_SECTION_APPLICATION;
 
@@ -219,7 +219,7 @@ pub(crate) fn get_rids(media: &MediaDescription) -> HashMap<String, String> {
 pub(crate) async fn add_candidates_to_media_descriptions(
     candidates: &[ICECandidate],
     mut m: MediaDescription,
-    ice_gathering_state: ICEGatheringState,
+    ice_gathering_state: RTCIceGatheringState,
 ) -> Result<MediaDescription> {
     let append_candidate_if_new = |c: &dyn Candidate, m: MediaDescription| -> MediaDescription {
         let marshaled = c.marshal();
@@ -244,7 +244,7 @@ pub(crate) async fn add_candidates_to_media_descriptions(
         m = append_candidate_if_new(&candidate, m);
     }
 
-    if ice_gathering_state != ICEGatheringState::Complete {
+    if ice_gathering_state != RTCIceGatheringState::Complete {
         return Ok(m);
     }
     for a in &m.attributes {
@@ -261,7 +261,7 @@ pub(crate) struct AddDataMediaSectionParams {
     mid_value: String,
     ice_params: ICEParameters,
     dtls_role: ConnectionRole,
-    ice_gathering_state: ICEGatheringState,
+    ice_gathering_state: RTCIceGatheringState,
 }
 
 pub(crate) async fn add_data_media_section(
@@ -321,7 +321,7 @@ pub(crate) async fn add_data_media_section(
 pub(crate) async fn populate_local_candidates(
     session_description: Option<&session_description::SessionDescription>,
     ice_gatherer: Option<&Arc<ICEGatherer>>,
-    ice_gathering_state: ICEGatheringState,
+    ice_gathering_state: RTCIceGatheringState,
 ) -> Option<session_description::SessionDescription> {
     if session_description.is_none() || ice_gatherer.is_none() {
         return session_description.cloned();
@@ -366,7 +366,7 @@ pub(crate) struct AddTransceiverSdpParams {
     should_add_candidates: bool,
     mid_value: String,
     dtls_role: ConnectionRole,
-    ice_gathering_state: ICEGatheringState,
+    ice_gathering_state: RTCIceGatheringState,
 }
 
 pub(crate) async fn add_transceiver_sdp(
@@ -540,7 +540,7 @@ pub(crate) struct PopulateSdpParams {
     pub(crate) media_description_fingerprint: bool,
     pub(crate) is_icelite: bool,
     pub(crate) connection_role: ConnectionRole,
-    pub(crate) ice_gathering_state: ICEGatheringState,
+    pub(crate) ice_gathering_state: RTCIceGatheringState,
 }
 
 /// populate_sdp serializes a PeerConnections state into an SDP
