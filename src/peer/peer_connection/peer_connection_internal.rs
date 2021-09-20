@@ -40,10 +40,10 @@ pub(crate) struct PeerConnectionInternal {
 
     pub(super) ice_gatherer: Arc<ICEGatherer>,
 
-    pub(super) current_local_description: Arc<Mutex<Option<SessionDescription>>>,
-    pub(super) current_remote_description: Arc<Mutex<Option<SessionDescription>>>,
-    pub(super) pending_local_description: Arc<Mutex<Option<SessionDescription>>>,
-    pub(super) pending_remote_description: Arc<Mutex<Option<SessionDescription>>>,
+    pub(super) current_local_description: Arc<Mutex<Option<RTCSessionDescription>>>,
+    pub(super) current_remote_description: Arc<Mutex<Option<RTCSessionDescription>>>,
+    pub(super) pending_local_description: Arc<Mutex<Option<RTCSessionDescription>>>,
+    pub(super) pending_remote_description: Arc<Mutex<Option<RTCSessionDescription>>>,
 
     // A reference to the associated API state used by this connection
     pub(super) setting_engine: Arc<SettingEngine>,
@@ -128,7 +128,7 @@ impl PeerConnectionInternal {
     pub(super) async fn start_rtp(
         self: &Arc<Self>,
         is_renegotiation: bool,
-        remote_desc: Arc<SessionDescription>,
+        remote_desc: Arc<RTCSessionDescription>,
         sdp_semantics: SDPSemantics,
     ) -> Result<()> {
         let mut track_details = if let Some(parsed) = &remote_desc.parsed {
@@ -551,7 +551,7 @@ impl PeerConnectionInternal {
         .await;
     }
 
-    pub(super) async fn remote_description(self: &Arc<Self>) -> Option<SessionDescription> {
+    pub(super) async fn remote_description(self: &Arc<Self>) -> Option<RTCSessionDescription> {
         let pending_remote_description = self.pending_remote_description.lock().await;
         if pending_remote_description.is_some() {
             pending_remote_description.clone()
@@ -1169,7 +1169,7 @@ impl PeerConnectionInternal {
 
     /// has_local_description_changed returns whether local media (rtp_transceivers) has changed
     /// caller of this method should hold `pc.mu` lock
-    pub(super) async fn has_local_description_changed(&self, desc: &SessionDescription) -> bool {
+    pub(super) async fn has_local_description_changed(&self, desc: &RTCSessionDescription) -> bool {
         let rtp_transceivers = self.rtp_transceivers.lock().await;
         for t in &*rtp_transceivers {
             if let Some(m) = get_by_mid(t.mid().await.as_str(), desc) {

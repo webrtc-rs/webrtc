@@ -25,7 +25,7 @@ use crate::peer::ice::ice_gather::ice_gatherer::{
 use crate::peer::ice::ice_gather::ICEGatherOptions;
 use crate::peer::peer_connection_state::{NegotiationNeededState, RTCPeerConnectionState};
 use crate::peer::policy::sdp_semantics::SDPSemantics;
-use crate::peer::sdp::session_description::{SessionDescription, SessionDescriptionSerde};
+use crate::peer::sdp::session_description::{RTCSessionDescription, RTCSessionDescriptionSerde};
 use crate::peer::signaling_state::{check_next_signaling_state, RTCSignalingState, StateChangeOp};
 
 use crate::data::data_channel::data_channel_config::DataChannelConfig;
@@ -128,8 +128,8 @@ struct StartTransportsParams {
 struct CheckNegotiationNeededParams {
     sctp_transport: Arc<SCTPTransport>,
     rtp_transceivers: Arc<Mutex<Vec<Arc<RTPTransceiver>>>>,
-    current_local_description: Arc<Mutex<Option<SessionDescription>>>,
-    current_remote_description: Arc<Mutex<Option<SessionDescription>>>,
+    current_local_description: Arc<Mutex<Option<RTCSessionDescription>>>,
+    current_remote_description: Arc<Mutex<Option<RTCSessionDescription>>>,
 }
 
 #[derive(Clone)]
@@ -624,7 +624,7 @@ impl PeerConnection {
     pub async fn create_offer(
         &self,
         options: Option<RTCOfferOptions>,
-    ) -> Result<SessionDescription> {
+    ) -> Result<RTCSessionDescription> {
         let use_identity = self.idp_login_url.is_some();
         if use_identity {
             return Err(Error::ErrIdentityProviderNotImplemented.into());
@@ -736,8 +736,8 @@ impl PeerConnection {
             }
             let sdp = d.marshal();
 
-            offer = SessionDescription {
-                serde: SessionDescriptionSerde {
+            offer = RTCSessionDescription {
+                serde: RTCSessionDescriptionSerde {
                     sdp_type: RTCSdpType::Offer,
                     sdp,
                 },
@@ -814,7 +814,7 @@ impl PeerConnection {
     pub async fn create_answer(
         &self,
         _options: Option<RTCAnswerOptions>,
-    ) -> Result<SessionDescription> {
+    ) -> Result<RTCSessionDescription> {
         let use_identity = self.idp_login_url.is_some();
         if self.remote_description().await.is_none() {
             return Err(Error::ErrNoRemoteDescription.into());
@@ -855,8 +855,8 @@ impl PeerConnection {
         }
         let sdp = d.marshal();
 
-        let answer = SessionDescription {
-            serde: SessionDescriptionSerde {
+        let answer = RTCSessionDescription {
+            serde: RTCSessionDescriptionSerde {
                 sdp_type: RTCSdpType::Answer,
                 sdp,
             },
@@ -873,7 +873,7 @@ impl PeerConnection {
     // 4.4.1.6 Set the SessionDescription
     pub(crate) async fn set_description(
         &self,
-        sd: &SessionDescription,
+        sd: &RTCSessionDescription,
         op: StateChangeOp,
     ) -> Result<()> {
         if self.internal.is_closed.load(Ordering::SeqCst) {
@@ -1125,7 +1125,7 @@ impl PeerConnection {
     }
 
     /// set_local_description sets the SessionDescription of the local peer
-    pub async fn set_local_description(&self, mut desc: SessionDescription) -> Result<()> {
+    pub async fn set_local_description(&self, mut desc: RTCSessionDescription) -> Result<()> {
         if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed.into());
         }
@@ -1189,7 +1189,7 @@ impl PeerConnection {
     /// otherwise it returns CurrentLocalDescription. This property is used to
     /// determine if set_local_description has already been called.
     /// https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-localdescription
-    pub async fn local_description(&self) -> Option<SessionDescription> {
+    pub async fn local_description(&self) -> Option<RTCSessionDescription> {
         if let Some(pending_local_description) = self.pending_local_description().await {
             return Some(pending_local_description);
         }
@@ -1197,7 +1197,7 @@ impl PeerConnection {
     }
 
     /// set_remote_description sets the SessionDescription of the remote peer
-    pub async fn set_remote_description(&self, mut desc: SessionDescription) -> Result<()> {
+    pub async fn set_remote_description(&self, mut desc: RTCSessionDescription) -> Result<()> {
         if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed.into());
         }
@@ -1441,7 +1441,7 @@ impl PeerConnection {
     /// otherwise it returns current_remote_description. This property is used to
     /// determine if setRemoteDescription has already been called.
     /// https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-remotedescription
-    pub async fn remote_description(&self) -> Option<SessionDescription> {
+    pub async fn remote_description(&self) -> Option<RTCSessionDescription> {
         self.internal.remote_description().await
     }
 
@@ -1870,7 +1870,7 @@ impl PeerConnection {
     /// successfully negotiated the last time the PeerConnection transitioned
     /// into the stable state plus any local candidates that have been generated
     /// by the ICEAgent since the offer or answer was created.
-    pub async fn current_local_description(&self) -> Option<SessionDescription> {
+    pub async fn current_local_description(&self) -> Option<RTCSessionDescription> {
         let local_description = {
             let current_local_description = self.internal.current_local_description.lock().await;
             current_local_description.clone()
@@ -1885,7 +1885,7 @@ impl PeerConnection {
     /// process of being negotiated plus any local candidates that have been
     /// generated by the ICEAgent since the offer or answer was created. If the
     /// PeerConnection is in the stable state, the value is null.
-    pub async fn pending_local_description(&self) -> Option<SessionDescription> {
+    pub async fn pending_local_description(&self) -> Option<RTCSessionDescription> {
         let local_description = {
             let pending_local_description = self.internal.pending_local_description.lock().await;
             pending_local_description.clone()
@@ -1900,7 +1900,7 @@ impl PeerConnection {
     /// successfully negotiated the last time the PeerConnection transitioned
     /// into the stable state plus any remote candidates that have been supplied
     /// via add_icecandidate() since the offer or answer was created.
-    pub async fn current_remote_description(&self) -> Option<SessionDescription> {
+    pub async fn current_remote_description(&self) -> Option<RTCSessionDescription> {
         let current_remote_description = self.internal.current_remote_description.lock().await;
         current_remote_description.clone()
     }
@@ -1910,7 +1910,7 @@ impl PeerConnection {
     /// have been supplied via add_icecandidate() since the offer or answer was
     /// created. If the PeerConnection is in the stable state, the value is
     /// null.
-    pub async fn pending_remote_description(&self) -> Option<SessionDescription> {
+    pub async fn pending_remote_description(&self) -> Option<RTCSessionDescription> {
         let pending_remote_description = self.internal.pending_remote_description.lock().await;
         pending_remote_description.clone()
     }

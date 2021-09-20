@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SessionDescriptionSerde {
+pub struct RTCSessionDescriptionSerde {
     #[serde(rename = "type")]
     pub sdp_type: RTCSdpType,
 
@@ -14,14 +14,14 @@ pub struct SessionDescriptionSerde {
 
 /// SessionDescription is used to expose local and remote session descriptions.
 #[derive(Default, Debug, Clone)]
-pub struct SessionDescription {
-    pub serde: SessionDescriptionSerde,
+pub struct RTCSessionDescription {
+    pub serde: RTCSessionDescriptionSerde,
     /// This will never be initialized by callers, internal use only
     pub(crate) parsed: Option<sdp::session_description::SessionDescription>,
 }
 
 /// Unmarshal is a helper to deserialize the sdp
-impl SessionDescription {
+impl RTCSessionDescription {
     pub fn unmarshal(&self) -> Result<sdp::session_description::SessionDescription> {
         let mut reader = Cursor::new(self.serde.sdp.as_bytes());
         let parsed = sdp::session_description::SessionDescription::unmarshal(&mut reader)?;
@@ -40,8 +40,8 @@ mod test {
     fn test_session_description_json() {
         let tests = vec![
             (
-                SessionDescription {
-                    serde: SessionDescriptionSerde {
+                RTCSessionDescription {
+                    serde: RTCSessionDescriptionSerde {
                         sdp_type: RTCSdpType::Offer,
                         sdp: "sdp".to_owned(),
                     },
@@ -50,8 +50,8 @@ mod test {
                 r#"{"type":"offer","sdp":"sdp"}"#,
             ),
             (
-                SessionDescription {
-                    serde: SessionDescriptionSerde {
+                RTCSessionDescription {
+                    serde: RTCSessionDescriptionSerde {
                         sdp_type: RTCSdpType::Pranswer,
                         sdp: "sdp".to_owned(),
                     },
@@ -60,8 +60,8 @@ mod test {
                 r#"{"type":"pranswer","sdp":"sdp"}"#,
             ),
             (
-                SessionDescription {
-                    serde: SessionDescriptionSerde {
+                RTCSessionDescription {
+                    serde: RTCSessionDescriptionSerde {
                         sdp_type: RTCSdpType::Answer,
                         sdp: "sdp".to_owned(),
                     },
@@ -70,8 +70,8 @@ mod test {
                 r#"{"type":"answer","sdp":"sdp"}"#,
             ),
             (
-                SessionDescription {
-                    serde: SessionDescriptionSerde {
+                RTCSessionDescription {
+                    serde: RTCSessionDescriptionSerde {
                         sdp_type: RTCSdpType::Rollback,
                         sdp: "sdp".to_owned(),
                     },
@@ -80,8 +80,8 @@ mod test {
                 r#"{"type":"rollback","sdp":"sdp"}"#,
             ),
             (
-                SessionDescription {
-                    serde: SessionDescriptionSerde {
+                RTCSessionDescription {
+                    serde: RTCSessionDescriptionSerde {
                         sdp_type: RTCSdpType::Unspecified,
                         sdp: "sdp".to_owned(),
                     },
@@ -97,7 +97,7 @@ mod test {
             let desc_data = result.unwrap();
             assert_eq!(desc_data, expected_string, "string is not expected");
 
-            let result = serde_json::from_str::<SessionDescriptionSerde>(&desc_data);
+            let result = serde_json::from_str::<RTCSessionDescriptionSerde>(&desc_data);
             assert!(result.is_ok(), "testCase: unmarshal err: {:?}", result);
             assert_eq!(result.unwrap(), desc.serde);
         }
@@ -113,8 +113,8 @@ mod test {
 
         let offer = pc.create_offer(None).await?;
 
-        let desc = SessionDescription {
-            serde: SessionDescriptionSerde {
+        let desc = RTCSessionDescription {
+            serde: RTCSessionDescriptionSerde {
                 sdp_type: offer.serde.sdp_type,
                 sdp: offer.serde.sdp,
             },

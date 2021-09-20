@@ -17,7 +17,7 @@ use crate::MEDIA_SECTION_APPLICATION;
 pub mod sdp_type;
 pub mod session_description;
 
-use crate::peer::sdp::session_description::SessionDescriptionSerde;
+use crate::peer::sdp::session_description::RTCSessionDescriptionSerde;
 use anyhow::Result;
 use ice::candidate::candidate_base::unmarshal_candidate;
 use ice::candidate::Candidate;
@@ -319,10 +319,10 @@ pub(crate) async fn add_data_media_section(
 }
 
 pub(crate) async fn populate_local_candidates(
-    session_description: Option<&session_description::SessionDescription>,
+    session_description: Option<&session_description::RTCSessionDescription>,
     ice_gatherer: Option<&Arc<ICEGatherer>>,
     ice_gathering_state: RTCIceGatheringState,
-) -> Option<session_description::SessionDescription> {
+) -> Option<session_description::RTCSessionDescription> {
     if session_description.is_none() || ice_gatherer.is_none() {
         return session_description.cloned();
     }
@@ -349,8 +349,8 @@ pub(crate) async fn populate_local_candidates(
             parsed.media_descriptions.insert(0, m);
         }
 
-        Some(session_description::SessionDescription {
-            serde: SessionDescriptionSerde {
+        Some(session_description::RTCSessionDescription {
+            serde: RTCSessionDescriptionSerde {
                 sdp_type: sd.serde.sdp_type,
                 sdp: parsed.marshal(),
             },
@@ -639,7 +639,7 @@ pub(crate) fn get_mid_value(media: &MediaDescription) -> Option<&String> {
 }
 
 pub(crate) fn description_is_plan_b(
-    desc: Option<&session_description::SessionDescription>,
+    desc: Option<&session_description::RTCSessionDescription>,
 ) -> Result<bool> {
     if let Some(desc) = desc {
         if let Some(parsed) = &desc.parsed {
@@ -772,7 +772,7 @@ pub(crate) fn have_application_media_section(
 
 pub(crate) fn get_by_mid<'a, 'b>(
     search_mid: &'a str,
-    desc: &'b session_description::SessionDescription,
+    desc: &'b session_description::RTCSessionDescription,
 ) -> Option<&'b sdp::media_description::MediaDescription> {
     if let Some(parsed) = &desc.parsed {
         for m in &parsed.media_descriptions {
@@ -788,7 +788,7 @@ pub(crate) fn get_by_mid<'a, 'b>(
 
 /// have_data_channel return MediaDescription with MediaName equal application
 pub(crate) fn have_data_channel(
-    desc: &session_description::SessionDescription,
+    desc: &session_description::RTCSessionDescription,
 ) -> Option<&sdp::media_description::MediaDescription> {
     if let Some(parsed) = &desc.parsed {
         for d in &parsed.media_descriptions {

@@ -16,7 +16,7 @@ use webrtc::media::track::track_remote::TrackRemote;
 use webrtc::peer::configuration::RTCConfiguration;
 use webrtc::peer::ice::ice_server::RTCIceServer;
 use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
-use webrtc::peer::sdp::session_description::{SessionDescription, SessionDescriptionSerde};
+use webrtc::peer::sdp::session_description::{RTCSessionDescription, RTCSessionDescriptionSerde};
 
 //use std::io::Write;
 
@@ -130,10 +130,10 @@ async fn main() -> Result<()> {
     });
 
     // Wait for the offer to be pasted
-    let mut offer = SessionDescription::default();
+    let mut offer = RTCSessionDescription::default();
     let line = signal::must_read_stdin()?;
     let desc_data = signal::decode(line.as_str())?;
-    offer.serde = serde_json::from_str::<SessionDescriptionSerde>(&desc_data)?;
+    offer.serde = serde_json::from_str::<RTCSessionDescriptionSerde>(&desc_data)?;
 
     // Set the remote SessionDescription
     peer_connection.set_remote_description(offer).await?;
