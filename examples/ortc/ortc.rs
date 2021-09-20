@@ -6,7 +6,7 @@ use tokio::time::Duration;
 use webrtc::api::APIBuilder;
 use webrtc::data::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::data::data_channel::data_channel_parameters::DataChannelParameters;
-use webrtc::data::data_channel::DataChannel;
+use webrtc::data::data_channel::RTCDataChannel;
 use webrtc::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use webrtc::media::dtls_transport::dtls_parameters::DTLSParameters;
 use webrtc::media::ice_transport::ice_parameters::RTCIceParameters;
@@ -88,7 +88,7 @@ async fn main() -> Result<()> {
     let sctp = Arc::new(api.new_sctp_transport(Arc::clone(&dtls))?);
 
     // Handle incoming data channels
-    sctp.on_data_channel(Box::new(|d: Arc<DataChannel>| {
+    sctp.on_data_channel(Box::new(|d: Arc<RTCDataChannel>| {
         let d_label = d.label().to_owned();
         let d_id = d.id();
         println!("New DataChannel {} {}", d_label, d_id);
@@ -227,7 +227,7 @@ struct Signal {
     sctp_capabilities: SCTPTransportCapabilities, // `json:"sctpCapabilities"`
 }
 
-async fn handle_on_open(d: Arc<DataChannel>) -> Result<()> {
+async fn handle_on_open(d: Arc<RTCDataChannel>) -> Result<()> {
     let mut result = Result::<usize>::Ok(0);
     while result.is_ok() {
         let timeout = tokio::time::sleep(Duration::from_secs(5));

@@ -21,7 +21,7 @@ use data::message::message_channel_open::ChannelType;
 use sctp::stream::OnBufferedAmountLowFn;
 use tokio::sync::Mutex;
 
-use data_channel_state::DataChannelState;
+use data_channel_state::RTCDataChannelState;
 
 use crate::api::setting_engine::SettingEngine;
 use crate::data::sctp_transport::RTCSctpTransport;
@@ -46,7 +46,7 @@ pub type OnCloseHdlrFn =
 /// The DataChannel interface represents a network channel
 /// which can be used for bidirectional peer-to-peer transfers of arbitrary data
 #[derive(Default)]
-pub struct DataChannel {
+pub struct RTCDataChannel {
     pub(crate) stats_id: String,
     pub(crate) label: String,
     pub(crate) ordered: bool,
@@ -80,10 +80,10 @@ pub struct DataChannel {
     pub(crate) setting_engine: Arc<SettingEngine>,
 }
 
-impl DataChannel {
+impl RTCDataChannel {
     // create the DataChannel object before the networking is set up.
     pub(crate) fn new(params: DataChannelParameters, setting_engine: Arc<SettingEngine>) -> Self {
-        DataChannel {
+        RTCDataChannel {
             stats_id: format!(
                 "DataChannel-{}",
                 SystemTime::now()
@@ -97,7 +97,7 @@ impl DataChannel {
             ordered: params.ordered,
             max_packet_lifetime: params.max_packet_life_time,
             max_retransmits: params.max_retransmits,
-            ready_state: Arc::new(AtomicU8::new(DataChannelState::Connecting as u8)),
+            ready_state: Arc::new(AtomicU8::new(RTCDataChannelState::Connecting as u8)),
             detach_called: Arc::new(AtomicBool::new(false)),
             setting_engine,
             ..Default::default()
@@ -197,7 +197,7 @@ impl DataChannel {
             *handler = Some(f);
         }
 
-        if self.ready_state() == DataChannelState::Open {
+        if self.ready_state() == RTCDataChannelState::Open {
             self.do_open().await;
         }
     }
@@ -253,7 +253,7 @@ impl DataChannel {
             let mut data_channel = self.data_channel.lock().await;
             *data_channel = Some(Arc::clone(&dc));
         }
-        self.set_ready_state(DataChannelState::Open);
+        self.set_ready_state(RTCDataChannelState::Open);
 
         self.do_open().await;
 
@@ -263,7 +263,7 @@ impl DataChannel {
             let on_close_handler = Arc::clone(&self.on_close_handler);
             let on_error_handler = Arc::clone(&self.on_error_handler);
             tokio::spawn(async move {
-                DataChannel::read_loop(
+                RTCDataChannel::read_loop(
                     dc,
                     ready_state,
                     on_message_handler,
@@ -295,7 +295,7 @@ impl DataChannel {
             let (n, is_string) = match data_channel.read_data_channel(&mut buffer).await {
                 Ok((n, is_string)) => (n, is_string),
                 Err(err) => {
-                    ready_state.store(DataChannelState::Closed as u8, Ordering::SeqCst);
+                    ready_state.store(RTCDataChannelState::Closed as u8, Ordering::SeqCst);
                     if !sctp::error::Error::ErrStreamClosed.equal(&err) {
                         let on_error_handler2 = Arc::clone(&on_error_handler);
                         tokio::spawn(async move {
@@ -356,7 +356,7 @@ impl DataChannel {
     }
 
     fn ensure_open(&self) -> Result<()> {
-        if self.ready_state() != DataChannelState::Open {
+        if self.ready_state() != RTCDataChannelState::Open {
             Err(Error::ErrClosedPipe.into())
         } else {
             Ok(())
@@ -389,11 +389,11 @@ impl DataChannel {
     /// Close Closes the DataChannel. It may be called regardless of whether
     /// the DataChannel object was created by this peer or the remote peer.
     pub async fn close(&self) -> Result<()> {
-        if self.ready_state() == DataChannelState::Closed {
+        if self.ready_state() == RTCDataChannelState::Closed {
             return Ok(());
         }
 
-        self.set_ready_state(DataChannelState::Closing);
+        self.set_ready_state(RTCDataChannelState::Closing);
 
         let data_channel = self.data_channel.lock().await;
         if let Some(dc) = &*data_channel {
@@ -451,7 +451,7 @@ impl DataChannel {
     }
 
     /// ready_state represents the state of the DataChannel object.
-    pub fn ready_state(&self) -> DataChannelState {
+    pub fn ready_state(&self) -> RTCDataChannelState {
         self.ready_state.load(Ordering::SeqCst).into()
     }
 
@@ -549,7 +549,7 @@ impl DataChannel {
 
     */
 
-    pub(crate) fn set_ready_state(&self, r: DataChannelState) {
+    pub(crate) fn set_ready_state(&self, r: RTCDataChannelState) {
         self.ready_state.store(r as u8, Ordering::SeqCst);
     }
 }

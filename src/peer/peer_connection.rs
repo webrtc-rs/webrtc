@@ -6,7 +6,7 @@ mod peer_connection_internal;
 use crate::api::media_engine::MediaEngine;
 use crate::api::setting_engine::SettingEngine;
 use crate::api::API;
-use crate::data::data_channel::DataChannel;
+use crate::data::data_channel::RTCDataChannel;
 use crate::data::sctp_transport::RTCSctpTransport;
 use crate::media::dtls_transport::dtls_transport_state::RTCDtlsTransportState;
 use crate::media::dtls_transport::RTCDtlsTransport;
@@ -29,9 +29,9 @@ use crate::peer::policy::sdp_semantics::RTCSdpSemantics;
 use crate::peer::sdp::session_description::{RTCSessionDescription, RTCSessionDescriptionSerde};
 use crate::peer::signaling_state::{check_next_signaling_state, RTCSignalingState, StateChangeOp};
 
-use crate::data::data_channel::data_channel_init::DataChannelInit;
+use crate::data::data_channel::data_channel_init::RTCDataChannelInit;
 use crate::data::data_channel::data_channel_parameters::DataChannelParameters;
-use crate::data::data_channel::data_channel_state::DataChannelState;
+use crate::data::data_channel::data_channel_state::RTCDataChannelState;
 use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use crate::data::sctp_transport::sctp_transport_state::RTCSctpTransportState;
 use crate::error::Error;
@@ -98,7 +98,7 @@ pub type OnPeerConnectionStateChangeHdlrFn = Box<
 >;
 
 pub type OnDataChannelHdlrFn = Box<
-    dyn (FnMut(Arc<DataChannel>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+    dyn (FnMut(Arc<RTCDataChannel>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
@@ -1679,8 +1679,8 @@ impl RTCPeerConnection {
     pub async fn create_data_channel(
         &self,
         label: &str,
-        options: Option<DataChannelInit>,
-    ) -> Result<Arc<DataChannel>> {
+        options: Option<RTCDataChannelInit>,
+    ) -> Result<Arc<RTCDataChannel>> {
         // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #2)
         if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed.into());
@@ -1731,7 +1731,7 @@ impl RTCPeerConnection {
             }
         }
 
-        let d = Arc::new(DataChannel::new(
+        let d = Arc::new(RTCDataChannel::new(
             params,
             Arc::clone(&self.internal.setting_engine),
         ));
@@ -1832,7 +1832,7 @@ impl RTCPeerConnection {
         {
             let data_channels = self.internal.sctp_transport.data_channels.lock().await;
             for d in &*data_channels {
-                d.set_ready_state(DataChannelState::Closed);
+                d.set_ready_state(RTCDataChannelState::Closed);
             }
         }
 

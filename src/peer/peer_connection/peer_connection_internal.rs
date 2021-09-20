@@ -111,7 +111,7 @@ impl PeerConnectionInternal {
         // Wire up the on datachannel handler
         let on_data_channel_handler = Arc::clone(&pc.on_data_channel_handler);
         pc.sctp_transport
-            .on_data_channel(Box::new(move |d: Arc<DataChannel>| {
+            .on_data_channel(Box::new(move |d: Arc<RTCDataChannel>| {
                 let on_data_channel_handler2 = Arc::clone(&on_data_channel_handler);
                 Box::pin(async move {
                     let mut handler = on_data_channel_handler2.lock().await;
@@ -407,7 +407,7 @@ impl PeerConnectionInternal {
 
         let mut opened_dc_count = 0;
         for d in data_channels {
-            if d.ready_state() == DataChannelState::Connecting {
+            if d.ready_state() == RTCDataChannelState::Connecting {
                 if let Err(err) = d.open(Arc::clone(&self.sctp_transport)).await {
                     log::warn!("failed to open data channel: {}", err);
                     continue;

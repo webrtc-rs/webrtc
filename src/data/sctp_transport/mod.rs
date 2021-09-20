@@ -7,7 +7,7 @@ pub mod sctp_transport_state;
 use sctp_transport_state::RTCSctpTransportState;
 
 use crate::api::setting_engine::SettingEngine;
-use crate::data::data_channel::DataChannel;
+use crate::data::data_channel::RTCDataChannel;
 use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use crate::error::*;
 use crate::media::dtls_transport::dtls_role::DTLSRole;
@@ -29,20 +29,20 @@ use util::Conn;
 const SCTP_MAX_CHANNELS: u16 = u16::MAX;
 
 pub type OnDataChannelHdlrFn = Box<
-    dyn (FnMut(Arc<DataChannel>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+    dyn (FnMut(Arc<RTCDataChannel>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
 
 pub type OnDataChannelOpenedHdlrFn = Box<
-    dyn (FnMut(Arc<DataChannel>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+    dyn (FnMut(Arc<RTCDataChannel>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
 
 struct AcceptDataChannelParams {
     sctp_association: Arc<Association>,
-    data_channels: Arc<Mutex<Vec<Arc<DataChannel>>>>,
+    data_channels: Arc<Mutex<Vec<Arc<RTCDataChannel>>>>,
     on_error_handler: Arc<Mutex<Option<OnErrorHdlrFn>>>,
     on_data_channel_handler: Arc<Mutex<Option<OnDataChannelHdlrFn>>>,
     on_data_channel_opened_handler: Arc<Mutex<Option<OnDataChannelOpenedHdlrFn>>>,
@@ -78,7 +78,7 @@ pub struct RTCSctpTransport {
     on_data_channel_opened_handler: Arc<Mutex<Option<OnDataChannelOpenedHdlrFn>>>,
 
     // DataChannels
-    pub(crate) data_channels: Arc<Mutex<Vec<Arc<DataChannel>>>>,
+    pub(crate) data_channels: Arc<Mutex<Vec<Arc<RTCDataChannel>>>>,
     pub(crate) data_channels_opened: Arc<AtomicU32>,
     pub(crate) data_channels_requested: Arc<AtomicU32>,
     data_channels_accepted: Arc<AtomicU32>,
@@ -238,7 +238,7 @@ impl RTCSctpTransport {
             };
 
             let id = dc.stream_identifier();
-            let rtc_dc = Arc::new(DataChannel::new(
+            let rtc_dc = Arc::new(RTCDataChannel::new(
                 DataChannelParameters {
                     id,
                     label: dc.config.label.clone(),

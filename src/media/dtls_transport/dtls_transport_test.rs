@@ -1,7 +1,7 @@
 use super::*;
 use crate::api::media_engine::MediaEngine;
 use crate::api::APIBuilder;
-use crate::data::data_channel::DataChannel;
+use crate::data::data_channel::RTCDataChannel;
 use crate::peer::configuration::RTCConfiguration;
 use crate::peer::ice::ice_candidate::RTCIceCandidate;
 use crate::peer::peer_connection::peer_connection_test::{
@@ -42,7 +42,7 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
     let (mut pc_offer, mut pc_answer) = new_pair(&api).await?;
 
     pc_answer
-        .on_data_channel(Box::new(|_: Arc<DataChannel>| {
+        .on_data_channel(Box::new(|_: Arc<RTCDataChannel>| {
             assert!(
                 false,
                 "A DataChannel must not be created when Fingerprint verification fails"

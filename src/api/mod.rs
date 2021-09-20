@@ -15,7 +15,7 @@ use media_engine::*;
 use setting_engine::*;
 
 use crate::data::data_channel::data_channel_parameters::DataChannelParameters;
-use crate::data::data_channel::DataChannel;
+use crate::data::data_channel::RTCDataChannel;
 use crate::data::sctp_transport::RTCSctpTransport;
 use crate::error::Error;
 use crate::media::rtp::rtp_codec::RTPCodecType;
@@ -124,13 +124,13 @@ impl API {
         &self,
         sctp_transport: Arc<RTCSctpTransport>,
         params: DataChannelParameters,
-    ) -> Result<DataChannel> {
+    ) -> Result<RTCDataChannel> {
         // https://w3c.github.io/webrtc-pc/#peer-to-peer-data-api (Step #5)
         if params.label.len() > 65535 {
             return Err(Error::ErrStringSizeLimit.into());
         }
 
-        let d = DataChannel::new(params, Arc::clone(&self.setting_engine));
+        let d = RTCDataChannel::new(params, Arc::clone(&self.setting_engine));
         d.open(sctp_transport).await?;
 
         Ok(d)
