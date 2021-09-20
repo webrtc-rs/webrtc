@@ -1,7 +1,7 @@
 use super::*;
 use crate::api::media_engine::{MIME_TYPE_OPUS, MIME_TYPE_VP8, MIME_TYPE_VP9};
 use crate::api::APIBuilder;
-use crate::peer::configuration::Configuration;
+use crate::peer::configuration::RTCConfiguration;
 use crate::peer::peer_connection::peer_connection_test::close_pair_now;
 
 #[tokio::test]
@@ -163,13 +163,13 @@ async fn test_rtp_transceiver_set_codec_preferences_payload_type() -> Result<()>
     let mut m = MediaEngine::default();
     m.register_default_codecs()?;
     let api = APIBuilder::new().with_media_engine(m).build();
-    let offer_pc = api.new_peer_connection(Configuration::default()).await?;
+    let offer_pc = api.new_peer_connection(RTCConfiguration::default()).await?;
 
     let mut m = MediaEngine::default();
     m.register_default_codecs()?;
     m.register_codec(test_codec.clone(), RTPCodecType::Video)?;
     let api = APIBuilder::new().with_media_engine(m).build();
-    let answer_pc = api.new_peer_connection(Configuration::default()).await?;
+    let answer_pc = api.new_peer_connection(RTCConfiguration::default()).await?;
 
     let _ = offer_pc
         .add_transceiver_from_kind(RTPCodecType::Video, &[])

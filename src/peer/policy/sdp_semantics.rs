@@ -69,7 +69,7 @@ mod test {
     use crate::media::rtp::RTPTransceiverInit;
     use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
     use crate::media::track::track_local::TrackLocal;
-    use crate::peer::configuration::Configuration;
+    use crate::peer::configuration::RTCConfiguration;
     use crate::peer::peer_connection::peer_connection_test::close_pair_now;
     use crate::SSRC_STR;
     use anyhow::Result;
@@ -129,7 +129,7 @@ mod test {
         let api = APIBuilder::new().with_media_engine(m).build();
 
         let opc = api
-            .new_peer_connection(Configuration {
+            .new_peer_connection(RTCConfiguration {
                 sdp_semantics: SDPSemantics::PlanB,
                 ..Default::default()
             })
@@ -188,7 +188,7 @@ mod test {
         }
 
         let apc = api
-            .new_peer_connection(Configuration {
+            .new_peer_connection(RTCConfiguration {
                 sdp_semantics: SDPSemantics::PlanB,
                 ..Default::default()
             })
@@ -215,7 +215,7 @@ mod test {
         let api = APIBuilder::new().with_media_engine(m).build();
 
         let opc = api
-            .new_peer_connection(Configuration {
+            .new_peer_connection(RTCConfiguration {
                 sdp_semantics: SDPSemantics::PlanB,
                 ..Default::default()
             })
@@ -247,7 +247,7 @@ mod test {
         }
 
         let apc = api
-            .new_peer_connection(Configuration {
+            .new_peer_connection(RTCConfiguration {
                 sdp_semantics: SDPSemantics::PlanB,
                 ..Default::default()
             })
@@ -329,7 +329,7 @@ mod test {
         let api = APIBuilder::new().with_media_engine(m).build();
 
         let opc = api
-            .new_peer_connection(Configuration {
+            .new_peer_connection(RTCConfiguration {
                 sdp_semantics: SDPSemantics::PlanB,
                 ..Default::default()
             })
@@ -361,7 +361,7 @@ mod test {
         }
 
         let apc = api
-            .new_peer_connection(Configuration {
+            .new_peer_connection(RTCConfiguration {
                 sdp_semantics: SDPSemantics::UnifiedPlanWithFallback,
                 ..Default::default()
             })

@@ -13,7 +13,7 @@ use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::APIBuilder;
 use webrtc::data::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::data::data_channel::DataChannel;
-use webrtc::peer::configuration::Configuration;
+use webrtc::peer::configuration::RTCConfiguration;
 use webrtc::peer::ice::ice_candidate::{ICECandidate, ICECandidateInit};
 use webrtc::peer::ice::ice_server::ICEServer;
 use webrtc::peer::peer_connection::PeerConnection;
@@ -244,7 +244,7 @@ async fn main() -> Result<()> {
     }
 
     // Prepare the configuration
-    let config = Configuration {
+    let config = RTCConfiguration {
         ice_servers: vec![ICEServer {
             urls: vec!["stun:stun.l.google.com:19302".to_owned()],
             ..Default::default()

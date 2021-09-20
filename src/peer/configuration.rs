@@ -11,7 +11,7 @@ use crate::peer::policy::sdp_semantics::SDPSemantics;
 /// Configurations are treated as readonly. As long as they are unmodified,
 /// they are safe for concurrent use.
 #[derive(Default)]
-pub struct Configuration {
+pub struct RTCConfiguration {
     /// iceservers defines a slice describing servers available to be used by
     /// ICE, such as STUN and TURN servers.
     pub ice_servers: Vec<ICEServer>,
@@ -54,7 +54,7 @@ pub struct Configuration {
     pub sdp_semantics: SDPSemantics,
 }
 
-impl Configuration {
+impl RTCConfiguration {
     /// get_iceservers side-steps the strict parsing mode of the ice package
     /// (as defined in https://tools.ietf.org/html/rfc7064) by copying and then
     /// stripping any erroneous queries from "stun(s):" URLs before parsing.
@@ -83,7 +83,7 @@ mod test {
     fn test_configuration_get_iceservers() {
         {
             let expected_server_str = "stun:stun.l.google.com:19302";
-            let cfg = Configuration {
+            let cfg = RTCConfiguration {
                 ice_servers: vec![ICEServer {
                     urls: vec![expected_server_str.to_owned()],
                     ..Default::default()
@@ -99,7 +99,7 @@ mod test {
             // ignore the fact that stun URLs shouldn't have a query
             let server_str = "stun:global.stun.twilio.com:3478?transport=udp";
             let expected_server_str = "stun:global.stun.twilio.com:3478";
-            let cfg = Configuration {
+            let cfg = RTCConfiguration {
                 ice_servers: vec![ICEServer {
                     urls: vec![server_str.to_owned()],
                     ..Default::default()

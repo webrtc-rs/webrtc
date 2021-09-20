@@ -22,7 +22,7 @@ use crate::media::rtp::rtp_codec::RTPCodecType;
 use crate::media::rtp::rtp_receiver::RTPReceiver;
 use crate::media::rtp::rtp_sender::RTPSender;
 use crate::media::track::track_local::TrackLocal;
-use crate::peer::configuration::Configuration;
+use crate::peer::configuration::RTCConfiguration;
 use crate::peer::peer_connection::PeerConnection;
 use interceptor::{noop::NoOp, registry::Registry, Interceptor};
 
@@ -45,7 +45,7 @@ impl API {
     /// new_peer_connection creates a new PeerConnection with the provided configuration against the received API object
     pub async fn new_peer_connection(
         &self,
-        configuration: Configuration,
+        configuration: RTCConfiguration,
     ) -> Result<PeerConnection> {
         PeerConnection::new(self, configuration).await
     }

@@ -52,7 +52,7 @@ pub(crate) struct PeerConnectionInternal {
 }
 
 impl PeerConnectionInternal {
-    pub(super) async fn new(api: &API, configuration: &mut Configuration) -> Result<Self> {
+    pub(super) async fn new(api: &API, configuration: &mut RTCConfiguration) -> Result<Self> {
         let mut pc = PeerConnectionInternal {
             greater_mid: AtomicIsize::new(-1),
             sdp_origin: Mutex::new(Default::default()),

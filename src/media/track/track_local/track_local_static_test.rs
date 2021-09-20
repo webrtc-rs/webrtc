@@ -3,7 +3,7 @@ use crate::api::media_engine::MediaEngine;
 use crate::api::APIBuilder;
 use crate::media::rtp::rtp_receiver::RTPReceiver;
 use crate::media::track::track_remote::TrackRemote;
-use crate::peer::configuration::Configuration;
+use crate::peer::configuration::RTCConfiguration;
 use crate::peer::peer_connection::peer_connection_test::*;
 
 use std::sync::Arc;
@@ -28,11 +28,11 @@ async fn test_track_local_static_no_codec_intersection() -> Result<()> {
 
     //"Offerer"
     {
-        let mut pc = api.new_peer_connection(Configuration::default()).await?;
+        let mut pc = api.new_peer_connection(RTCConfiguration::default()).await?;
 
         let mut no_codec_pc = APIBuilder::new()
             .build()
-            .new_peer_connection(Configuration::default())
+            .new_peer_connection(RTCConfiguration::default())
             .await?;
 
         pc.add_track(Arc::clone(&track)).await?;
@@ -48,7 +48,7 @@ async fn test_track_local_static_no_codec_intersection() -> Result<()> {
 
     //"Answerer"
     {
-        let mut pc = api.new_peer_connection(Configuration::default()).await?;
+        let mut pc = api.new_peer_connection(RTCConfiguration::default()).await?;
 
         let mut m = MediaEngine::default();
         m.register_codec(
@@ -68,7 +68,7 @@ async fn test_track_local_static_no_codec_intersection() -> Result<()> {
         let mut vp9only_pc = APIBuilder::new()
             .with_media_engine(m)
             .build()
-            .new_peer_connection(Configuration::default())
+            .new_peer_connection(RTCConfiguration::default())
             .await?;
 
         vp9only_pc
@@ -229,12 +229,12 @@ async fn test_track_local_static_payload_type() -> Result<()> {
     let mut offerer = APIBuilder::new()
         .with_media_engine(media_engine_one)
         .build()
-        .new_peer_connection(Configuration::default())
+        .new_peer_connection(RTCConfiguration::default())
         .await?;
     let mut answerer = APIBuilder::new()
         .with_media_engine(media_engine_two)
         .build()
-        .new_peer_connection(Configuration::default())
+        .new_peer_connection(RTCConfiguration::default())
         .await?;
 
     let track = Arc::new(TrackLocalStaticSample::new(

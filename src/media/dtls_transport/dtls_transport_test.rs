@@ -2,7 +2,7 @@ use super::*;
 use crate::api::media_engine::MediaEngine;
 use crate::api::APIBuilder;
 use crate::data::data_channel::DataChannel;
-use crate::peer::configuration::Configuration;
+use crate::peer::configuration::RTCConfiguration;
 use crate::peer::ice::ice_candidate::ICECandidate;
 use crate::peer::peer_connection::peer_connection_test::{
     close_pair_now, new_pair, signal_pair, until_connection_state,
@@ -146,7 +146,7 @@ async fn run_test(r: DTLSRole) -> Result<()> {
     let mut offer_pc = APIBuilder::new()
         .with_setting_engine(offer_s)
         .build()
-        .new_peer_connection(Configuration::default())
+        .new_peer_connection(RTCConfiguration::default())
         .await?;
 
     let mut answer_s = SettingEngine::default();
@@ -156,7 +156,7 @@ async fn run_test(r: DTLSRole) -> Result<()> {
     let mut answer_pc = APIBuilder::new()
         .with_setting_engine(answer_s)
         .build()
-        .new_peer_connection(Configuration::default())
+        .new_peer_connection(RTCConfiguration::default())
         .await?;
 
     signal_pair(&mut offer_pc, &mut answer_pc).await?;

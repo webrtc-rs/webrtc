@@ -1,7 +1,7 @@
 use super::*;
 use crate::api::media_engine::MIME_TYPE_OPUS;
 use crate::api::APIBuilder;
-use crate::peer::configuration::Configuration;
+use crate::peer::configuration::RTCConfiguration;
 use regex::Regex;
 use std::io::Cursor;
 
@@ -11,7 +11,7 @@ async fn test_opus_case() -> Result<()> {
     m.register_default_codecs()?;
     let api = APIBuilder::new().with_media_engine(m).build();
 
-    let pc = api.new_peer_connection(Configuration::default()).await?;
+    let pc = api.new_peer_connection(RTCConfiguration::default()).await?;
     pc.add_transceiver_from_kind(RTPCodecType::Audio, &[])
         .await?;
 
@@ -31,7 +31,7 @@ async fn test_video_case() -> Result<()> {
     m.register_default_codecs()?;
     let api = APIBuilder::new().with_media_engine(m).build();
 
-    let pc = api.new_peer_connection(Configuration::default()).await?;
+    let pc = api.new_peer_connection(RTCConfiguration::default()).await?;
     pc.add_transceiver_from_kind(RTPCodecType::Video, &[])
         .await?;
 

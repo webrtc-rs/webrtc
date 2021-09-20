@@ -17,7 +17,7 @@ use crate::media::rtp::rtp_transceiver::{
     find_by_mid, handle_unknown_rtp_packet, satisfy_type_and_direction, RTPTransceiver,
 };
 use crate::media::track::track_remote::TrackRemote;
-use crate::peer::configuration::Configuration;
+use crate::peer::configuration::RTCConfiguration;
 use crate::peer::ice::ice_connection_state::ICEConnectionState;
 use crate::peer::ice::ice_gather::ice_gatherer::{
     ICEGatherer, OnGatheringCompleteHdlrFn, OnICEGathererStateChangeHdlrFn, OnLocalCandidateHdlrFn,
@@ -148,7 +148,7 @@ pub struct PeerConnection {
     stats_id: String,
     idp_login_url: Option<String>,
 
-    configuration: Configuration,
+    configuration: RTCConfiguration,
 
     interceptor_rtcp_writer: Arc<dyn RTCPWriter + Send + Sync>,
 
@@ -162,7 +162,7 @@ impl PeerConnection {
     /// If you wish to customize the set of available codecs or the set of
     /// active interceptors, create a MediaEngine and call api.new_peer_connection
     /// instead of this function.
-    pub(crate) async fn new(api: &API, mut configuration: Configuration) -> Result<Self> {
+    pub(crate) async fn new(api: &API, mut configuration: RTCConfiguration) -> Result<Self> {
         PeerConnection::init_configuration(&mut configuration)?;
 
         let internal = Arc::new(PeerConnectionInternal::new(api, &mut configuration).await?);
@@ -189,7 +189,7 @@ impl PeerConnection {
     /// from its set_configuration counterpart because most of the checks do not
     /// include verification statements related to the existing state. Thus the
     /// function describes only minor verification of some the struct variables.
-    fn init_configuration(configuration: &mut Configuration) -> Result<()> {
+    fn init_configuration(configuration: &mut RTCConfiguration) -> Result<()> {
         let sanitized_ice_servers = configuration.get_ice_servers();
         if !sanitized_ice_servers.is_empty() {
             for server in &sanitized_ice_servers {
@@ -609,7 +609,7 @@ impl PeerConnection {
     /// copy and direct mutation on it will not take affect until set_configuration
     /// has been called with Configuration passed as its only argument.
     /// https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-getconfiguration
-    pub fn get_configuration(&self) -> &Configuration {
+    pub fn get_configuration(&self) -> &RTCConfiguration {
         &self.configuration
     }
 

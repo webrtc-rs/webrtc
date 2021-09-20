@@ -11,7 +11,7 @@ use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapab
 use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
 use crate::media::dtls_transport::DTLSTransport;
 use crate::media::ice_transport::ICETransport;
-use crate::peer::configuration::Configuration;
+use crate::peer::configuration::RTCConfiguration;
 use crate::peer::ice::ice_candidate::ICECandidate;
 use crate::peer::ice::ice_connection_state::ICEConnectionState;
 use crate::peer::ice::ice_gather::ice_gatherer::ICEGatherer;
@@ -1070,8 +1070,8 @@ async fn test_eof_detach() -> Result<()> {
     let api = APIBuilder::new().with_setting_engine(s).build();
 
     // Set up two peer connections.
-    let mut pca = api.new_peer_connection(Configuration::default()).await?;
-    let mut pcb = api.new_peer_connection(Configuration::default()).await?;
+    let mut pca = api.new_peer_connection(RTCConfiguration::default()).await?;
+    let mut pcb = api.new_peer_connection(RTCConfiguration::default()).await?;
 
     let wg = WaitGroup::new();
 
@@ -1181,8 +1181,8 @@ async fn test_eof_no_detach() -> Result<()> {
     let api = APIBuilder::new().build();
 
     // Set up two peer connections.
-    let mut pca = api.new_peer_connection(Configuration::default()).await?;
-    let mut pcb = api.new_peer_connection(Configuration::default()).await?;
+    let mut pca = api.new_peer_connection(RTCConfiguration::default()).await?;
+    let mut pcb = api.new_peer_connection(RTCConfiguration::default()).await?;
 
     let (dca_closed_ch_tx, mut dca_closed_ch_rx) = mpsc::channel::<()>(1);
     let (dcb_closed_ch_tx, mut dcb_closed_ch_rx) = mpsc::channel::<()>(1);

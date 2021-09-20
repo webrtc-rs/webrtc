@@ -34,7 +34,7 @@ mod test {
     use super::*;
     use crate::api::media_engine::MediaEngine;
     use crate::api::APIBuilder;
-    use crate::peer::configuration::Configuration;
+    use crate::peer::configuration::RTCConfiguration;
 
     #[test]
     fn test_session_description_json() {
@@ -109,7 +109,7 @@ mod test {
         m.register_default_codecs()?;
         let api = APIBuilder::new().with_media_engine(m).build();
 
-        let pc = api.new_peer_connection(Configuration::default()).await?;
+        let pc = api.new_peer_connection(RTCConfiguration::default()).await?;
 
         let offer = pc.create_offer(None).await?;
 

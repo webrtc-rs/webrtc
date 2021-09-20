@@ -78,7 +78,7 @@ pub(crate) async fn create_vnet_pair(
         .with_setting_engine(offer_setting_engine)
         .with_media_engine(offer_media_engine)
         .build()
-        .new_peer_connection(Configuration::default())
+        .new_peer_connection(RTCConfiguration::default())
         .await?;
 
     let mut answer_media_engine = MediaEngine::default();
@@ -87,7 +87,7 @@ pub(crate) async fn create_vnet_pair(
         .with_setting_engine(answer_setting_engine)
         .with_media_engine(answer_media_engine)
         .build()
-        .new_peer_connection(Configuration::default())
+        .new_peer_connection(RTCConfiguration::default())
         .await?;
 
     Ok((offer_peer_connection, answer_peer_connection, wan))
@@ -96,8 +96,8 @@ pub(crate) async fn create_vnet_pair(
 /// new_pair creates two new peer connections (an offerer and an answerer)
 /// *without* using an api (i.e. using the default settings).
 pub(crate) async fn new_pair(api: &API) -> Result<(PeerConnection, PeerConnection)> {
-    let pca = api.new_peer_connection(Configuration::default()).await?;
-    let pcb = api.new_peer_connection(Configuration::default()).await?;
+    let pca = api.new_peer_connection(RTCConfiguration::default()).await?;
+    let pcb = api.new_peer_connection(RTCConfiguration::default()).await?;
 
     Ok((pca, pcb))
 }
