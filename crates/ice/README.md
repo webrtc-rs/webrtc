@@ -26,5 +26,5 @@
  </a>
 </p>
 <p align="center">
- A pure Rust implementation of ICE. Rewrite <a href="http://Pion.ly">Pion</a> ICE in Rust
+ A pure Rust implementation of ICE. Rewrite <a href="https://github.com/pion/ice/releases/tag/v2.0.14">Pion</a> ICE in Rust
 </p>
