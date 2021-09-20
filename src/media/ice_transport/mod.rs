@@ -10,7 +10,7 @@ use crate::peer::ice::ice_role::ICERole;
 use crate::util::mux::{Config, Mux};
 
 use crate::error::Error;
-use crate::peer::ice::ice_candidate::ICECandidate;
+use crate::peer::ice::ice_candidate::RTCIceCandidate;
 use crate::peer::ice::ICEParameters;
 use crate::util::mux::endpoint::Endpoint;
 use crate::util::mux::mux_func::MatchFunc;
@@ -74,8 +74,8 @@ impl ICETransport {
     pub async fn get_selected_candidate_pair(&self) -> Option<ICECandidatePair> {
         if let Some(agent) = self.gatherer.get_agent().await {
             if let Some(ice_pair) = agent.get_selected_candidate_pair().await {
-                let local = ICECandidate::from(&ice_pair.local);
-                let remote = ICECandidate::from(&ice_pair.remote);
+                let local = RTCIceCandidate::from(&ice_pair.local);
+                let remote = RTCIceCandidate::from(&ice_pair.remote);
                 return Some(ICECandidatePair::new(local, remote));
             }
         }
@@ -118,8 +118,8 @@ impl ICETransport {
                           remote: &Arc<dyn Candidate + Send + Sync>| {
                         let on_selected_candidate_pair_change_handler_clone =
                             Arc::clone(&on_selected_candidate_pair_change_handler);
-                        let local = ICECandidate::from(local);
-                        let remote = ICECandidate::from(remote);
+                        let local = RTCIceCandidate::from(local);
+                        let remote = RTCIceCandidate::from(remote);
                         Box::pin(async move {
                             let mut handler =
                                 on_selected_candidate_pair_change_handler_clone.lock().await;
@@ -242,7 +242,7 @@ impl ICETransport {
     }
 
     /// set_remote_candidates sets the sequence of candidates associated with the remote ICETransport.
-    pub async fn set_remote_candidates(&self, remote_candidates: &[ICECandidate]) -> Result<()> {
+    pub async fn set_remote_candidates(&self, remote_candidates: &[RTCIceCandidate]) -> Result<()> {
         self.ensure_gatherer().await?;
 
         if let Some(agent) = self.gatherer.get_agent().await {
@@ -257,7 +257,10 @@ impl ICETransport {
     }
 
     /// adds a candidate associated with the remote ICETransport.
-    pub async fn add_remote_candidate(&self, remote_candidate: Option<ICECandidate>) -> Result<()> {
+    pub async fn add_remote_candidate(
+        &self,
+        remote_candidate: Option<RTCIceCandidate>,
+    ) -> Result<()> {
         self.ensure_gatherer().await?;
 
         if let Some(agent) = self.gatherer.get_agent().await {

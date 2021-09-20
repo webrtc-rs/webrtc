@@ -12,7 +12,7 @@ use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
 use crate::media::dtls_transport::DTLSTransport;
 use crate::media::ice_transport::ICETransport;
 use crate::peer::configuration::RTCConfiguration;
-use crate::peer::ice::ice_candidate::ICECandidate;
+use crate::peer::ice::ice_candidate::RTCIceCandidate;
 use crate::peer::ice::ice_connection_state::RTCIceConnectionState;
 use crate::peer::ice::ice_gather::ice_gatherer::ICEGatherer;
 use crate::peer::ice::ice_gather::ICEGatherOptions;
@@ -1350,9 +1350,9 @@ struct TestOrtcStack {
 }
 
 struct TestOrtcSignal {
-    ice_candidates: Vec<ICECandidate>, //`json:"iceCandidates"`
-    ice_parameters: ICEParameters,     //`json:"iceParameters"`
-    dtls_parameters: DTLSParameters,   //`json:"dtlsParameters"`
+    ice_candidates: Vec<RTCIceCandidate>, //`json:"iceCandidates"`
+    ice_parameters: ICEParameters,        //`json:"iceParameters"`
+    dtls_parameters: DTLSParameters,      //`json:"dtlsParameters"`
     sctp_capabilities: SCTPTransportCapabilities, //`json:"sctpCapabilities"`
 }
 
@@ -1403,7 +1403,7 @@ impl TestOrtcStack {
         let (gather_finished_tx, mut gather_finished_rx) = mpsc::channel::<()>(1);
         let gather_finished_tx = Arc::new(gather_finished_tx);
         self.gatherer
-            .on_local_candidate(Box::new(move |i: Option<ICECandidate>| {
+            .on_local_candidate(Box::new(move |i: Option<RTCIceCandidate>| {
                 let gather_finished_tx2 = Arc::clone(&gather_finished_tx);
                 Box::pin(async move {
                     if i.is_none() {

@@ -14,7 +14,7 @@ use webrtc::api::APIBuilder;
 use webrtc::data::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::data::data_channel::DataChannel;
 use webrtc::peer::configuration::RTCConfiguration;
-use webrtc::peer::ice::ice_candidate::{ICECandidate, ICECandidateInit};
+use webrtc::peer::ice::ice_candidate::{ICECandidateInit, RTCIceCandidate};
 use webrtc::peer::ice::ice_server::RTCIceServer;
 use webrtc::peer::peer_connection::PeerConnection;
 use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
@@ -27,11 +27,11 @@ extern crate lazy_static;
 lazy_static! {
     static ref PEER_CONNECTION_MUTEX: Arc<Mutex<Option<Arc<PeerConnection>>>> =
         Arc::new(Mutex::new(None));
-    static ref PENDING_CANDIDATES: Arc<Mutex<Vec<ICECandidate>>> = Arc::new(Mutex::new(vec![]));
+    static ref PENDING_CANDIDATES: Arc<Mutex<Vec<RTCIceCandidate>>> = Arc::new(Mutex::new(vec![]));
     static ref ADDRESS: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
 }
 
-async fn signal_candidate(addr: &str, c: &ICECandidate) -> Result<()> {
+async fn signal_candidate(addr: &str, c: &RTCIceCandidate) -> Result<()> {
     /*println!(
         "signal_candidate Post candidate to {}",
         format!("http://{}/candidate", addr)
@@ -276,7 +276,7 @@ async fn main() -> Result<()> {
     let pending_candidates2 = Arc::clone(&PENDING_CANDIDATES);
     let addr2 = offer_addr.clone();
     peer_connection
-        .on_ice_candidate(Box::new(move |c: Option<ICECandidate>| {
+        .on_ice_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
             //println!("on_ice_candidate {:?}", c);
 
             let peer_connection3 = Arc::clone(&peer_connection2);

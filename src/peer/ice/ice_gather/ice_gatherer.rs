@@ -18,7 +18,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 pub type OnLocalCandidateHdlrFn = Box<
-    dyn (FnMut(Option<ICECandidate>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
+    dyn (FnMut(Option<RTCIceCandidate>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>)
         + Send
         + Sync,
 >;
@@ -167,7 +167,7 @@ impl ICEGatherer {
 
                         Box::pin(async move {
                             if let Some(cand) = candidate {
-                                let c = ICECandidate::from(&cand);
+                                let c = RTCIceCandidate::from(&cand);
 
                                 let mut on_local_candidate_handler =
                                     on_local_candidate_handler_clone.lock().await;
@@ -246,7 +246,7 @@ impl ICEGatherer {
     }
 
     /// get_local_candidates returns the sequence of valid local candidates associated with the ICEGatherer.
-    pub async fn get_local_candidates(&self) -> Result<Vec<ICECandidate>> {
+    pub async fn get_local_candidates(&self) -> Result<Vec<RTCIceCandidate>> {
         self.create_agent().await?;
 
         let ice_candidates = if let Some(agent) = self.get_agent().await {
@@ -255,7 +255,7 @@ impl ICEGatherer {
             return Err(Error::ErrICEAgentNotExist.into());
         };
 
-        Ok(ice_candidates_from_ice(&ice_candidates))
+        Ok(rtc_ice_candidates_from_ice_candidates(&ice_candidates))
     }
 
     /// on_local_candidate sets an event handler which fires when a new local ICE candidate is available
@@ -443,7 +443,7 @@ mod test {
         let (gather_finished_tx, mut gather_finished_rx) = mpsc::channel::<()>(1);
         let gather_finished_tx = Arc::new(Mutex::new(Some(gather_finished_tx)));
         gatherer
-            .on_local_candidate(Box::new(move |c: Option<ICECandidate>| {
+            .on_local_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
                 let gather_finished_tx_clone = Arc::clone(&gather_finished_tx);
                 Box::pin(async move {
                     if c.is_none() {
@@ -487,7 +487,7 @@ mod test {
         let (done_tx, mut done_rx) = mpsc::channel::<()>(1);
         let done_tx = Arc::new(Mutex::new(Some(done_tx)));
         gatherer
-            .on_local_candidate(Box::new(move |c: Option<ICECandidate>| {
+            .on_local_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
                 let done_tx_clone = Arc::clone(&done_tx);
                 Box::pin(async move {
                     if let Some(c) = c {

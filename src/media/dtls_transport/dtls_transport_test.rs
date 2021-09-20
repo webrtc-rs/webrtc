@@ -3,7 +3,7 @@ use crate::api::media_engine::MediaEngine;
 use crate::api::APIBuilder;
 use crate::data::data_channel::DataChannel;
 use crate::peer::configuration::RTCConfiguration;
-use crate::peer::ice::ice_candidate::ICECandidate;
+use crate::peer::ice::ice_candidate::RTCIceCandidate;
 use crate::peer::peer_connection::peer_connection_test::{
     close_pair_now, new_pair, signal_pair, until_connection_state,
 };
@@ -55,7 +55,7 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
 
     let offer_chan_tx = Arc::new(offer_chan_tx);
     pc_offer
-        .on_ice_candidate(Box::new(move |candidate: Option<ICECandidate>| {
+        .on_ice_candidate(Box::new(move |candidate: Option<RTCIceCandidate>| {
             let offer_chan_tx2 = Arc::clone(&offer_chan_tx);
             Box::pin(async move {
                 if candidate.is_none() {

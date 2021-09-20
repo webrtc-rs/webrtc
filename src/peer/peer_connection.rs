@@ -46,7 +46,7 @@ use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
 use crate::media::rtp::{RTPTransceiverInit, SSRC};
 use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::media::track::track_local::TrackLocal;
-use crate::peer::ice::ice_candidate::{ICECandidate, ICECandidateInit};
+use crate::peer::ice::ice_candidate::{ICECandidateInit, RTCIceCandidate};
 use crate::peer::ice::ice_gather::ice_gatherer_state::RTCIceGathererState;
 use crate::peer::ice::ice_gather::ice_gathering_state::RTCIceGatheringState;
 use crate::peer::ice::ice_role::ICERole;
@@ -1461,7 +1461,7 @@ impl PeerConnection {
             let candidate: Arc<dyn Candidate + Send + Sync> =
                 Arc::new(unmarshal_candidate(candidate_value).await?);
 
-            Some(ICECandidate::from(&candidate))
+            Some(RTCIceCandidate::from(&candidate))
         } else {
             None
         };

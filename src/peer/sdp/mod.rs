@@ -8,7 +8,7 @@ use crate::media::rtp::rtp_codec::{RTPCodecCapability, RTPCodecParameters, RTPCo
 use crate::media::rtp::rtp_transceiver::RTPTransceiver;
 use crate::media::rtp::rtp_transceiver_direction::RTPTransceiverDirection;
 use crate::media::rtp::{PayloadType, RTCPFeedback, SSRC};
-use crate::peer::ice::ice_candidate::ICECandidate;
+use crate::peer::ice::ice_candidate::RTCIceCandidate;
 use crate::peer::ice::ice_gather::ice_gatherer::ICEGatherer;
 use crate::peer::ice::ice_gather::ice_gathering_state::RTCIceGatheringState;
 use crate::peer::ice::ICEParameters;
@@ -217,7 +217,7 @@ pub(crate) fn get_rids(media: &MediaDescription) -> HashMap<String, String> {
 }
 
 pub(crate) async fn add_candidates_to_media_descriptions(
-    candidates: &[ICECandidate],
+    candidates: &[RTCIceCandidate],
     mut m: MediaDescription,
     ice_gathering_state: RTCIceGatheringState,
 ) -> Result<MediaDescription> {
@@ -267,7 +267,7 @@ pub(crate) struct AddDataMediaSectionParams {
 pub(crate) async fn add_data_media_section(
     d: sdp::session_description::SessionDescription,
     dtls_fingerprints: &[DTLSFingerprint],
-    candidates: &[ICECandidate],
+    candidates: &[RTCIceCandidate],
     params: AddDataMediaSectionParams,
 ) -> Result<sdp::session_description::SessionDescription> {
     let mut media = MediaDescription {
@@ -374,7 +374,7 @@ pub(crate) async fn add_transceiver_sdp(
     dtls_fingerprints: &[DTLSFingerprint],
     media_engine: &Arc<MediaEngine>,
     ice_params: &ICEParameters,
-    candidates: &[ICECandidate],
+    candidates: &[RTCIceCandidate],
     media_section: &MediaSection,
     params: AddTransceiverSdpParams,
 ) -> Result<(sdp::session_description::SessionDescription, bool)> {
@@ -548,7 +548,7 @@ pub(crate) async fn populate_sdp(
     mut d: sdp::session_description::SessionDescription,
     dtls_fingerprints: &[DTLSFingerprint],
     media_engine: &Arc<MediaEngine>,
-    candidates: &[ICECandidate],
+    candidates: &[RTCIceCandidate],
     ice_params: &ICEParameters,
     media_sections: &[MediaSection],
     params: PopulateSdpParams,
@@ -705,7 +705,7 @@ pub(crate) fn extract_fingerprint(
 
 pub(crate) async fn extract_ice_details(
     desc: &sdp::session_description::SessionDescription,
-) -> Result<(String, String, Vec<ICECandidate>)> {
+) -> Result<(String, String, Vec<RTCIceCandidate>)> {
     let mut candidates = vec![];
     let mut remote_pwds = vec![];
     let mut remote_ufrags = vec![];
@@ -730,7 +730,7 @@ pub(crate) async fn extract_ice_details(
                 if let Some(value) = &a.value {
                     let c: Arc<dyn Candidate + Send + Sync> =
                         Arc::new(unmarshal_candidate(value).await?);
-                    let candidate = ICECandidate::from(&c);
+                    let candidate = RTCIceCandidate::from(&c);
                     candidates.push(candidate);
                 }
             }

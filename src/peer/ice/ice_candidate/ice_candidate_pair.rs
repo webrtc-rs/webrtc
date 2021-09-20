@@ -4,8 +4,8 @@ use super::*;
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct ICECandidatePair {
     stats_id: String,
-    local: ICECandidate,
-    remote: ICECandidate,
+    local: RTCIceCandidate,
+    remote: RTCIceCandidate,
 }
 
 impl fmt::Display for ICECandidatePair {
@@ -21,7 +21,7 @@ impl ICECandidatePair {
 
     /// returns an initialized ICECandidatePair
     /// for the given pair of ICECandidate instances
-    pub fn new(local: ICECandidate, remote: ICECandidate) -> Self {
+    pub fn new(local: RTCIceCandidate, remote: RTCIceCandidate) -> Self {
         let stats_id = Self::stats_id(&local.stats_id, &remote.stats_id);
         ICECandidatePair {
             stats_id,

@@ -9,7 +9,7 @@ use webrtc::data::data_channel::data_channel_parameters::DataChannelParameters;
 use webrtc::data::data_channel::DataChannel;
 use webrtc::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use webrtc::media::dtls_transport::dtls_parameters::DTLSParameters;
-use webrtc::peer::ice::ice_candidate::ICECandidate;
+use webrtc::peer::ice::ice_candidate::RTCIceCandidate;
 use webrtc::peer::ice::ice_gather::ICEGatherOptions;
 use webrtc::peer::ice::ice_role::ICERole;
 use webrtc::peer::ice::ice_server::RTCIceServer;
@@ -118,7 +118,7 @@ async fn main() -> Result<()> {
     let (gather_finished_tx, mut gather_finished_rx) = tokio::sync::mpsc::channel::<()>(1);
     let mut gather_finished_tx = Some(gather_finished_tx);
     gatherer
-        .on_local_candidate(Box::new(move |c: Option<ICECandidate>| {
+        .on_local_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
             if c.is_none() {
                 gather_finished_tx.take();
             }
@@ -215,7 +215,7 @@ async fn main() -> Result<()> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Signal {
     #[serde(rename = "iceCandidates")]
-    ice_candidates: Vec<ICECandidate>, //   `json:"iceCandidates"`
+    ice_candidates: Vec<RTCIceCandidate>, //   `json:"iceCandidates"`
 
     #[serde(rename = "iceParameters")]
     ice_parameters: ICEParameters, //    `json:"iceParameters"`

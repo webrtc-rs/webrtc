@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 /// ICECandidate represents a ice candidate
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ICECandidate {
+pub struct RTCIceCandidate {
     pub stats_id: String,
     pub foundation: String,
     pub priority: u32,
@@ -31,14 +31,14 @@ pub struct ICECandidate {
     pub tcp_type: String,
 }
 
-/// Conversion for package ice
-pub(crate) fn ice_candidates_from_ice(
+/// Conversion for ice_candidates
+pub(crate) fn rtc_ice_candidates_from_ice_candidates(
     ice_candidates: &[Arc<dyn Candidate + Send + Sync>],
-) -> Vec<ICECandidate> {
+) -> Vec<RTCIceCandidate> {
     ice_candidates.iter().map(|c| c.into()).collect()
 }
 
-impl From<&Arc<dyn Candidate + Send + Sync>> for ICECandidate {
+impl From<&Arc<dyn Candidate + Send + Sync>> for RTCIceCandidate {
     fn from(c: &Arc<dyn Candidate + Send + Sync>) -> Self {
         let typ: ICECandidateType = c.candidate_type().into();
         let protocol = ICEProtocol::from(c.network_type().network_short().as_str());
@@ -48,7 +48,7 @@ impl From<&Arc<dyn Candidate + Send + Sync>> for ICECandidate {
             (String::new(), 0)
         };
 
-        ICECandidate {
+        RTCIceCandidate {
             stats_id: c.id(),
             foundation: c.foundation(),
             priority: c.priority(),
@@ -64,7 +64,7 @@ impl From<&Arc<dyn Candidate + Send + Sync>> for ICECandidate {
     }
 }
 
-impl ICECandidate {
+impl RTCIceCandidate {
     pub(crate) async fn to_ice(&self) -> Result<impl Candidate> {
         let candidate_id = self.stats_id.clone();
         let c = match self.typ {
@@ -157,7 +157,7 @@ impl ICECandidate {
     }
 }
 
-impl fmt::Display for ICECandidate {
+impl fmt::Display for RTCIceCandidate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
