@@ -3,7 +3,7 @@ use std::fmt;
 
 /// SDPType describes the type of an SessionDescription.
 #[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
-pub enum SDPType {
+pub enum RTCSdpType {
     Unspecified = 0,
 
     /// indicates that a description MUST be treated as an SDP offer.
@@ -33,9 +33,9 @@ pub enum SDPType {
     Rollback,
 }
 
-impl Default for SDPType {
+impl Default for RTCSdpType {
     fn default() -> Self {
-        SDPType::Unspecified
+        RTCSdpType::Unspecified
     }
 }
 
@@ -45,25 +45,25 @@ const SDP_TYPE_ANSWER_STR: &str = "answer";
 const SDP_TYPE_ROLLBACK_STR: &str = "rollback";
 
 /// creates an SDPType from a string
-impl From<&str> for SDPType {
+impl From<&str> for RTCSdpType {
     fn from(raw: &str) -> Self {
         match raw {
-            SDP_TYPE_OFFER_STR => SDPType::Offer,
-            SDP_TYPE_PRANSWER_STR => SDPType::Pranswer,
-            SDP_TYPE_ANSWER_STR => SDPType::Answer,
-            SDP_TYPE_ROLLBACK_STR => SDPType::Rollback,
-            _ => SDPType::Unspecified,
+            SDP_TYPE_OFFER_STR => RTCSdpType::Offer,
+            SDP_TYPE_PRANSWER_STR => RTCSdpType::Pranswer,
+            SDP_TYPE_ANSWER_STR => RTCSdpType::Answer,
+            SDP_TYPE_ROLLBACK_STR => RTCSdpType::Rollback,
+            _ => RTCSdpType::Unspecified,
         }
     }
 }
 
-impl fmt::Display for SDPType {
+impl fmt::Display for RTCSdpType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            SDPType::Offer => write!(f, "{}", SDP_TYPE_OFFER_STR),
-            SDPType::Pranswer => write!(f, "{}", SDP_TYPE_PRANSWER_STR),
-            SDPType::Answer => write!(f, "{}", SDP_TYPE_ANSWER_STR),
-            SDPType::Rollback => write!(f, "{}", SDP_TYPE_ROLLBACK_STR),
+            RTCSdpType::Offer => write!(f, "{}", SDP_TYPE_OFFER_STR),
+            RTCSdpType::Pranswer => write!(f, "{}", SDP_TYPE_PRANSWER_STR),
+            RTCSdpType::Answer => write!(f, "{}", SDP_TYPE_ANSWER_STR),
+            RTCSdpType::Rollback => write!(f, "{}", SDP_TYPE_ROLLBACK_STR),
             _ => write!(f, "{}", crate::UNSPECIFIED_STR),
         }
     }
@@ -76,26 +76,26 @@ mod test {
     #[test]
     fn test_new_sdp_type() {
         let tests = vec![
-            ("Unspecified", SDPType::Unspecified),
-            ("offer", SDPType::Offer),
-            ("pranswer", SDPType::Pranswer),
-            ("answer", SDPType::Answer),
-            ("rollback", SDPType::Rollback),
+            ("Unspecified", RTCSdpType::Unspecified),
+            ("offer", RTCSdpType::Offer),
+            ("pranswer", RTCSdpType::Pranswer),
+            ("answer", RTCSdpType::Answer),
+            ("rollback", RTCSdpType::Rollback),
         ];
 
         for (sdp_type_string, expected_sdp_type) in tests {
-            assert_eq!(expected_sdp_type, SDPType::from(sdp_type_string));
+            assert_eq!(expected_sdp_type, RTCSdpType::from(sdp_type_string));
         }
     }
 
     #[test]
     fn test_sdp_type_string() {
         let tests = vec![
-            (SDPType::Unspecified, "Unspecified"),
-            (SDPType::Offer, "offer"),
-            (SDPType::Pranswer, "pranswer"),
-            (SDPType::Answer, "answer"),
-            (SDPType::Rollback, "rollback"),
+            (RTCSdpType::Unspecified, "Unspecified"),
+            (RTCSdpType::Offer, "offer"),
+            (RTCSdpType::Pranswer, "pranswer"),
+            (RTCSdpType::Answer, "answer"),
+            (RTCSdpType::Rollback, "rollback"),
         ];
 
         for (sdp_type, expected_string) in tests {

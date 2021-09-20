@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::peer::sdp::sdp_type::SDPType;
+use crate::peer::sdp::sdp_type::RTCSdpType;
 
 use anyhow::Result;
 use std::fmt;
@@ -125,10 +125,10 @@ pub(crate) fn check_next_signaling_state(
     cur: RTCSignalingState,
     next: RTCSignalingState,
     op: StateChangeOp,
-    sdp_type: SDPType,
+    sdp_type: RTCSdpType,
 ) -> Result<RTCSignalingState> {
     // Special case for rollbacks
-    if sdp_type == SDPType::Rollback && cur == RTCSignalingState::Stable {
+    if sdp_type == RTCSdpType::Rollback && cur == RTCSignalingState::Stable {
         return Err(Error::ErrSignalingStateCannotRollback.into());
     }
 
@@ -138,13 +138,13 @@ pub(crate) fn check_next_signaling_state(
             match op {
                 StateChangeOp::SetLocal => {
                     // stable->SetLocal(offer)->have-local-offer
-                    if sdp_type == SDPType::Offer && next == RTCSignalingState::HaveLocalOffer {
+                    if sdp_type == RTCSdpType::Offer && next == RTCSignalingState::HaveLocalOffer {
                         return Ok(next);
                     }
                 }
                 StateChangeOp::SetRemote => {
                     // stable->SetRemote(offer)->have-remote-offer
-                    if sdp_type == SDPType::Offer && next == RTCSignalingState::HaveRemoteOffer {
+                    if sdp_type == RTCSdpType::Offer && next == RTCSignalingState::HaveRemoteOffer {
                         return Ok(next);
                     }
                 }
@@ -154,13 +154,13 @@ pub(crate) fn check_next_signaling_state(
             if op == StateChangeOp::SetRemote {
                 match sdp_type {
                     // have-local-offer->SetRemote(answer)->stable
-                    SDPType::Answer => {
+                    RTCSdpType::Answer => {
                         if next == RTCSignalingState::Stable {
                             return Ok(next);
                         }
                     }
                     // have-local-offer->SetRemote(pranswer)->have-remote-pranswer
-                    SDPType::Pranswer => {
+                    RTCSdpType::Pranswer => {
                         if next == RTCSignalingState::HaveRemotePranswer {
                             return Ok(next);
                         }
@@ -170,7 +170,7 @@ pub(crate) fn check_next_signaling_state(
             }
         }
         RTCSignalingState::HaveRemotePranswer => {
-            if op == StateChangeOp::SetRemote && sdp_type == SDPType::Answer {
+            if op == StateChangeOp::SetRemote && sdp_type == RTCSdpType::Answer {
                 // have-remote-pranswer->SetRemote(answer)->stable
                 if next == RTCSignalingState::Stable {
                     return Ok(next);
@@ -181,13 +181,13 @@ pub(crate) fn check_next_signaling_state(
             if op == StateChangeOp::SetLocal {
                 match sdp_type {
                     // have-remote-offer->SetLocal(answer)->stable
-                    SDPType::Answer => {
+                    RTCSdpType::Answer => {
                         if next == RTCSignalingState::Stable {
                             return Ok(next);
                         }
                     }
                     // have-remote-offer->SetLocal(pranswer)->have-local-pranswer
-                    SDPType::Pranswer => {
+                    RTCSdpType::Pranswer => {
                         if next == RTCSignalingState::HaveLocalPranswer {
                             return Ok(next);
                         }
@@ -197,7 +197,7 @@ pub(crate) fn check_next_signaling_state(
             }
         }
         RTCSignalingState::HaveLocalPranswer => {
-            if op == StateChangeOp::SetLocal && sdp_type == SDPType::Answer {
+            if op == StateChangeOp::SetLocal && sdp_type == RTCSdpType::Answer {
                 // have-local-pranswer->SetLocal(answer)->stable
                 if next == RTCSignalingState::Stable {
                     return Ok(next);
@@ -264,7 +264,7 @@ mod test {
                 RTCSignalingState::Stable,
                 RTCSignalingState::HaveLocalOffer,
                 StateChangeOp::SetLocal,
-                SDPType::Offer,
+                RTCSdpType::Offer,
                 None,
             ),
             (
@@ -272,7 +272,7 @@ mod test {
                 RTCSignalingState::Stable,
                 RTCSignalingState::HaveRemoteOffer,
                 StateChangeOp::SetRemote,
-                SDPType::Offer,
+                RTCSdpType::Offer,
                 None,
             ),
             (
@@ -280,7 +280,7 @@ mod test {
                 RTCSignalingState::HaveLocalOffer,
                 RTCSignalingState::Stable,
                 StateChangeOp::SetRemote,
-                SDPType::Answer,
+                RTCSdpType::Answer,
                 None,
             ),
             (
@@ -288,7 +288,7 @@ mod test {
                 RTCSignalingState::HaveLocalOffer,
                 RTCSignalingState::HaveRemotePranswer,
                 StateChangeOp::SetRemote,
-                SDPType::Pranswer,
+                RTCSdpType::Pranswer,
                 None,
             ),
             (
@@ -296,7 +296,7 @@ mod test {
                 RTCSignalingState::HaveRemotePranswer,
                 RTCSignalingState::Stable,
                 StateChangeOp::SetRemote,
-                SDPType::Answer,
+                RTCSdpType::Answer,
                 None,
             ),
             (
@@ -304,7 +304,7 @@ mod test {
                 RTCSignalingState::HaveRemoteOffer,
                 RTCSignalingState::Stable,
                 StateChangeOp::SetLocal,
-                SDPType::Answer,
+                RTCSdpType::Answer,
                 None,
             ),
             (
@@ -312,7 +312,7 @@ mod test {
                 RTCSignalingState::HaveRemoteOffer,
                 RTCSignalingState::HaveLocalPranswer,
                 StateChangeOp::SetLocal,
-                SDPType::Pranswer,
+                RTCSdpType::Pranswer,
                 None,
             ),
             (
@@ -320,7 +320,7 @@ mod test {
                 RTCSignalingState::HaveLocalPranswer,
                 RTCSignalingState::Stable,
                 StateChangeOp::SetLocal,
-                SDPType::Answer,
+                RTCSdpType::Answer,
                 None,
             ),
             (
@@ -328,7 +328,7 @@ mod test {
                 RTCSignalingState::Stable,
                 RTCSignalingState::HaveRemotePranswer,
                 StateChangeOp::SetRemote,
-                SDPType::Pranswer,
+                RTCSdpType::Pranswer,
                 Some(Error::ErrSignalingStateProposedTransitionInvalid),
             ),
             (
@@ -336,7 +336,7 @@ mod test {
                 RTCSignalingState::Stable,
                 RTCSignalingState::HaveLocalOffer,
                 StateChangeOp::SetRemote,
-                SDPType::Rollback,
+                RTCSdpType::Rollback,
                 Some(Error::ErrSignalingStateCannotRollback),
             ),
         ];

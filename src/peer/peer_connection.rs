@@ -53,7 +53,7 @@ use crate::peer::ice::ice_role::ICERole;
 use crate::peer::ice::ICEParameters;
 use crate::peer::offer_answer_options::{RTCAnswerOptions, RTCOfferOptions};
 use crate::peer::operation::{Operation, Operations};
-use crate::peer::sdp::sdp_type::SDPType;
+use crate::peer::sdp::sdp_type::RTCSdpType;
 use crate::peer::sdp::*;
 use crate::util::{flatten_errs, math_rand_alpha};
 use crate::{
@@ -404,7 +404,7 @@ impl PeerConnection {
                             }
                         }
                         match local_desc.serde.sdp_type {
-                            SDPType::Offer => {
+                            RTCSdpType::Offer => {
                                 // Step 5.3.2
                                 let current_remote_description =
                                     params.current_remote_description.lock().await;
@@ -422,7 +422,7 @@ impl PeerConnection {
                                     }
                                 }
                             }
-                            SDPType::Answer => {
+                            RTCSdpType::Answer => {
                                 // Step 5.3.3
                                 if m.attribute(t.direction().to_string().as_str()).is_none() {
                                     return true;
@@ -738,7 +738,7 @@ impl PeerConnection {
 
             offer = SessionDescription {
                 serde: SessionDescriptionSerde {
-                    sdp_type: SDPType::Offer,
+                    sdp_type: RTCSdpType::Offer,
                     sdp,
                 },
                 parsed: Some(d),
@@ -857,7 +857,7 @@ impl PeerConnection {
 
         let answer = SessionDescription {
             serde: SessionDescriptionSerde {
-                sdp_type: SDPType::Answer,
+                sdp_type: RTCSdpType::Answer,
                 sdp,
             },
             parsed: Some(d),
@@ -878,7 +878,7 @@ impl PeerConnection {
     ) -> Result<()> {
         if self.internal.is_closed.load(Ordering::SeqCst) {
             return Err(Error::ErrConnectionClosed.into());
-        } else if sd.serde.sdp_type == SDPType::Unspecified {
+        } else if sd.serde.sdp_type == RTCSdpType::Unspecified {
             return Err(Error::ErrPeerConnSDPTypeInvalidValue.into());
         }
 
@@ -891,7 +891,7 @@ impl PeerConnection {
                 StateChangeOp::SetLocal => {
                     match sd.serde.sdp_type {
                         // stable->SetLocal(offer)->have-local-offer
-                        SDPType::Offer => {
+                        RTCSdpType::Offer => {
                             let check = {
                                 let last_offer = self.internal.last_offer.lock().await;
                                 sd.serde.sdp != *last_offer
@@ -915,7 +915,7 @@ impl PeerConnection {
                         }
                         // have-remote-offer->SetLocal(answer)->stable
                         // have-local-pranswer->SetLocal(answer)->stable
-                        SDPType::Answer => {
+                        RTCSdpType::Answer => {
                             let check = {
                                 let last_answer = self.internal.last_answer.lock().await;
                                 sd.serde.sdp != *last_answer
@@ -955,7 +955,7 @@ impl PeerConnection {
                                 next_state
                             }
                         }
-                        SDPType::Rollback => {
+                        RTCSdpType::Rollback => {
                             let next_state = check_next_signaling_state(
                                 cur,
                                 RTCSignalingState::Stable,
@@ -970,7 +970,7 @@ impl PeerConnection {
                             next_state
                         }
                         // have-remote-offer->SetLocal(pranswer)->have-local-pranswer
-                        SDPType::Pranswer => {
+                        RTCSdpType::Pranswer => {
                             let check = {
                                 let last_answer = self.internal.last_answer.lock().await;
                                 sd.serde.sdp != *last_answer
@@ -998,7 +998,7 @@ impl PeerConnection {
                 StateChangeOp::SetRemote => {
                     match sd.serde.sdp_type {
                         // stable->SetRemote(offer)->have-remote-offer
-                        SDPType::Offer => {
+                        RTCSdpType::Offer => {
                             let next_state = check_next_signaling_state(
                                 cur,
                                 RTCSignalingState::HaveRemoteOffer,
@@ -1014,7 +1014,7 @@ impl PeerConnection {
                         }
                         // have-local-offer->SetRemote(answer)->stable
                         // have-remote-pranswer->SetRemote(answer)->stable
-                        SDPType::Answer => {
+                        RTCSdpType::Answer => {
                             let next_state = check_next_signaling_state(
                                 cur,
                                 RTCSignalingState::Stable,
@@ -1047,7 +1047,7 @@ impl PeerConnection {
                             }
                             next_state
                         }
-                        SDPType::Rollback => {
+                        RTCSdpType::Rollback => {
                             let next_state = check_next_signaling_state(
                                 cur,
                                 RTCSignalingState::Stable,
@@ -1062,7 +1062,7 @@ impl PeerConnection {
                             next_state
                         }
                         // have-local-offer->SetRemote(pranswer)->have-remote-pranswer
-                        SDPType::Pranswer => {
+                        RTCSdpType::Pranswer => {
                             let next_state = check_next_signaling_state(
                                 cur,
                                 RTCSignalingState::HaveRemotePranswer,
@@ -1138,11 +1138,11 @@ impl PeerConnection {
         // JSEP 5.4
         if desc.serde.sdp.is_empty() {
             match desc.serde.sdp_type {
-                SDPType::Answer | SDPType::Pranswer => {
+                RTCSdpType::Answer | RTCSdpType::Pranswer => {
                     let last_answer = self.internal.last_answer.lock().await;
                     desc.serde.sdp = last_answer.clone();
                 }
-                SDPType::Offer => {
+                RTCSdpType::Offer => {
                     let last_offer = self.internal.last_offer.lock().await;
                     desc.serde.sdp = last_offer.clone();
                 }
@@ -1153,7 +1153,7 @@ impl PeerConnection {
         desc.parsed = Some(desc.unmarshal()?);
         self.set_description(&desc, StateChangeOp::SetLocal).await?;
 
-        let we_answer = desc.serde.sdp_type == SDPType::Answer;
+        let we_answer = desc.serde.sdp_type == RTCSdpType::Answer;
         let remote_description = self.remote_description().await;
         if we_answer {
             if let Some(remote_desc) = remote_description {
@@ -1220,7 +1220,7 @@ impl PeerConnection {
             let mut local_transceivers = self.get_transceivers().await;
             let remote_description = self.remote_description().await;
             let detected_plan_b = description_is_plan_b(remote_description.as_ref())?;
-            let we_offer = desc.serde.sdp_type == SDPType::Answer;
+            let we_offer = desc.serde.sdp_type == RTCSdpType::Answer;
 
             if !we_offer && !detected_plan_b {
                 if let Some(remote_desc) = remote_description {

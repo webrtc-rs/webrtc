@@ -1,4 +1,4 @@
-use super::sdp_type::SDPType;
+use super::sdp_type::RTCSdpType;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -7,7 +7,7 @@ use std::io::Cursor;
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionDescriptionSerde {
     #[serde(rename = "type")]
-    pub sdp_type: SDPType,
+    pub sdp_type: RTCSdpType,
 
     pub sdp: String,
 }
@@ -42,7 +42,7 @@ mod test {
             (
                 SessionDescription {
                     serde: SessionDescriptionSerde {
-                        sdp_type: SDPType::Offer,
+                        sdp_type: RTCSdpType::Offer,
                         sdp: "sdp".to_owned(),
                     },
                     parsed: None,
@@ -52,7 +52,7 @@ mod test {
             (
                 SessionDescription {
                     serde: SessionDescriptionSerde {
-                        sdp_type: SDPType::Pranswer,
+                        sdp_type: RTCSdpType::Pranswer,
                         sdp: "sdp".to_owned(),
                     },
                     parsed: None,
@@ -62,7 +62,7 @@ mod test {
             (
                 SessionDescription {
                     serde: SessionDescriptionSerde {
-                        sdp_type: SDPType::Answer,
+                        sdp_type: RTCSdpType::Answer,
                         sdp: "sdp".to_owned(),
                     },
                     parsed: None,
@@ -72,7 +72,7 @@ mod test {
             (
                 SessionDescription {
                     serde: SessionDescriptionSerde {
-                        sdp_type: SDPType::Rollback,
+                        sdp_type: RTCSdpType::Rollback,
                         sdp: "sdp".to_owned(),
                     },
                     parsed: None,
@@ -82,7 +82,7 @@ mod test {
             (
                 SessionDescription {
                     serde: SessionDescriptionSerde {
-                        sdp_type: SDPType::Unspecified,
+                        sdp_type: RTCSdpType::Unspecified,
                         sdp: "sdp".to_owned(),
                     },
                     parsed: None,
