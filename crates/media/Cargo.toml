@@ -13,6 +13,7 @@ repository = "https://github.com/webrtc-rs/media"
 
 [dependencies]
 util = { package = "webrtc-util", version = "0.4.2", default-features = false, features = ["marshal"] }
+rtp = "0.3.3"
 anyhow = "1.0.41"
 byteorder = "1.4.3"
 bytes = "1.0.1"
