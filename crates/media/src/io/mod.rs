@@ -15,12 +15,12 @@ pub struct Sample {
     pub prev_dropped_packets: u16,
 }
 
-// Writer defines an interface to handle
+// RTPWriter defines an interface to handle
 // the creation of media files
-pub trait Writer {
+pub trait RTPWriter {
     // Add the content of an RTP packet to the media
-    fn write_rtp(pkt: &rtp::packet::Packet) -> Result<()>;
+    fn write_rtp(&mut self, pkt: &rtp::packet::Packet) -> Result<()>;
     // close the media
     // Note: close implementation must be idempotent
-    fn close() -> Result<()>;
+    fn close(&mut self) -> Result<()>;
 }

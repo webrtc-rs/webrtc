@@ -4,9 +4,9 @@ use byteorder::{LittleEndian, ReadBytesExt};
 use bytes::{Bytes, BytesMut};
 use std::io::Read;
 
-const IVF_FILE_HEADER_SIGNATURE: &[u8] = b"DKIF";
-const IVF_FILE_HEADER_SIZE: usize = 32;
-const IVF_FRAME_HEADER_SIZE: usize = 12;
+pub const IVF_FILE_HEADER_SIGNATURE: &[u8] = b"DKIF";
+pub const IVF_FILE_HEADER_SIZE: usize = 32;
+pub const IVF_FRAME_HEADER_SIZE: usize = 12;
 
 /// IVFFileHeader 32-byte header for IVF files
 /// https://wiki.multimedia.cx/index.php/IVF

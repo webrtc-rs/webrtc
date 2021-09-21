@@ -15,6 +15,11 @@ pub enum Error {
     #[error("IVF version unknown, parser may not parse correctly")]
     ErrUnknownIVFVersion,
 
+    #[error("file not opened")]
+    ErrFileNotOpened,
+    #[error("invalid nil packet")]
+    ErrInvalidNilPacket,
+
     #[allow(non_camel_case_types)]
     #[error("{0}")]
     new(String),
