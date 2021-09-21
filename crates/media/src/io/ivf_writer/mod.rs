@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod ivf_writer_test;
+
 use crate::io::ivf_reader::IVFFileHeader;
 use crate::io::RTPWriter;
 use anyhow::Result;

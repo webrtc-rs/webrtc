@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod ivf_reader_test;
+
 use crate::error::Error;
 use anyhow::Result;
 use byteorder::{LittleEndian, ReadBytesExt};
