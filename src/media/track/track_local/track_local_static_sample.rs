@@ -1,9 +1,9 @@
 use super::track_local_static_rtp::TrackLocalStaticRTP;
 use super::*;
-use crate::media::Sample;
+use crate::util::flatten_errs;
 use crate::RTP_OUTBOUND_MTU;
 
-use crate::util::flatten_errs;
+use media::Sample;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 

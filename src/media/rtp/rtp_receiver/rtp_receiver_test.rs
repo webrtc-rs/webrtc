@@ -4,12 +4,12 @@ use crate::media::rtp::rtp_codec::RTCRtpHeaderExtensionParameters;
 use crate::media::rtp::RTCPFeedback;
 use crate::media::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use crate::media::track::track_local::TrackLocal;
-use crate::media::Sample;
 use crate::peer::peer_connection::peer_connection_test::{
     close_pair_now, create_vnet_pair, signal_pair, until_connection_state,
 };
 use crate::peer::peer_connection_state::RTCPeerConnectionState;
 use bytes::Bytes;
+use media::Sample;
 use tokio::time::Duration;
 use waitgroup::WaitGroup;
 
