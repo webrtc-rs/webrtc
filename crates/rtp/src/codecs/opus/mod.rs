@@ -9,11 +9,11 @@ use crate::{
 use anyhow::Result;
 use bytes::Bytes;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Default, Debug, Copy, Clone)]
 pub struct OpusPayloader;
 
 impl Payloader for OpusPayloader {
-    fn payload(&self, mtu: usize, payload: &Bytes) -> Result<Vec<Bytes>> {
+    fn payload(&mut self, mtu: usize, payload: &Bytes) -> Result<Vec<Bytes>> {
         if payload.is_empty() || mtu == 0 {
             return Ok(vec![]);
         }

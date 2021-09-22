@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn test_vp9_payload() -> Result<()> {
-    let pck = Vp9Payloader {};
+    let mut pck = Vp9Payloader::default();
 
     const TEST_LEN: usize = 10000;
     const TEST_MTU: usize = 1500;

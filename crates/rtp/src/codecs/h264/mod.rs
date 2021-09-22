@@ -10,7 +10,7 @@ use anyhow::Result;
 use bytes::{BufMut, Bytes, BytesMut};
 
 /// H264Payloader payloads H264 packets
-#[derive(Debug, Copy, Clone)]
+#[derive(Default, Debug, Copy, Clone)]
 pub struct H264Payloader;
 
 pub const STAPA_NALU_TYPE: u8 = 24;
@@ -120,7 +120,7 @@ fn emit(nalu: &Bytes, mtu: usize, payloads: &mut Vec<Bytes>) {
 
 impl Payloader for H264Payloader {
     /// Payload fragments a H264 packet across one or more byte arrays
-    fn payload(&self, mtu: usize, payload: &Bytes) -> Result<Vec<Bytes>> {
+    fn payload(&mut self, mtu: usize, payload: &Bytes) -> Result<Vec<Bytes>> {
         if payload.is_empty() || mtu == 0 {
             return Ok(vec![]);
         }

@@ -9,15 +9,17 @@ use crate::{
 use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
-pub const VP8_HEADER_SIZE: isize = 1;
+pub const VP8_HEADER_SIZE: usize = 1;
 
 /// Vp8Payloader payloads VP8 packets
-#[derive(Debug, Copy, Clone)]
-pub struct Vp8Payloader;
+#[derive(Default, Debug, Copy, Clone)]
+pub struct Vp8Payloader {
+    picture_id: u16,
+}
 
 impl Payloader for Vp8Payloader {
     /// Payload fragments a VP8 packet across one or more byte arrays
-    fn payload(&self, mtu: usize, payload: &Bytes) -> Result<Vec<Bytes>> {
+    fn payload(&mut self, mtu: usize, payload: &Bytes) -> Result<Vec<Bytes>> {
         if payload.is_empty() || mtu == 0 {
             return Ok(vec![]);
         }
@@ -42,8 +44,13 @@ impl Payloader for Vp8Payloader {
          *     and MUST NOT be 1 otherwise.  The S bit MUST be set to 1 for the
          *     first packet of each encoded frame.
          */
+        let using_header_size = if self.picture_id == 0 || self.picture_id < 128 {
+            VP8_HEADER_SIZE + 2
+        } else {
+            VP8_HEADER_SIZE + 3
+        };
 
-        let max_fragment_size = mtu as isize - VP8_HEADER_SIZE;
+        let max_fragment_size = mtu as isize - VP8_HEADER_SIZE as isize;
         let mut payload_data_remaining = payload.len() as isize;
         let mut payload_data_index: usize = 0;
         let mut payloads = vec![];
@@ -53,13 +60,29 @@ impl Payloader for Vp8Payloader {
             return Ok(payloads);
         }
 
+        let mut first = true;
         while payload_data_remaining > 0 {
             let current_fragment_size =
                 std::cmp::min(max_fragment_size, payload_data_remaining) as usize;
-            let mut out = BytesMut::with_capacity(VP8_HEADER_SIZE as usize + current_fragment_size);
-            if payload_data_remaining == payload.len() as isize {
-                out.put_u8(0x10);
+            let mut out = BytesMut::with_capacity(using_header_size + current_fragment_size);
+            let mut buf = vec![0u8; 4];
+            if first {
+                buf[0] = 0x10;
+                first = false;
             }
+
+            if using_header_size == VP8_HEADER_SIZE + 2 {
+                buf[0] |= 0x80;
+                buf[1] |= 0x80;
+                buf[2] |= (self.picture_id & 0x7F) as u8;
+            } else if using_header_size == VP8_HEADER_SIZE + 3 {
+                buf[0] |= 0x80;
+                buf[1] |= 0x80;
+                buf[2] |= 0x80 | ((self.picture_id >> 8) & 0x7F) as u8;
+                buf[3] |= (self.picture_id & 0xFF) as u8;
+            }
+
+            out.put(&buf[..using_header_size]);
 
             out.put(
                 &*payload.slice(payload_data_index..payload_data_index + current_fragment_size),
@@ -69,6 +92,9 @@ impl Payloader for Vp8Payloader {
             payload_data_remaining -= current_fragment_size as isize;
             payload_data_index += current_fragment_size;
         }
+
+        self.picture_id += 1;
+        self.picture_id &= 0x7FFF;
 
         Ok(payloads)
     }
@@ -95,10 +121,6 @@ pub struct Vp8Packet {
 
     pub picture_id: u16, /* 8 or 16 bits, picture ID */
     pub tl0_pic_idx: u8, /* 8 bits temporal level zero index */
-
-    pub tid: u8,
-    pub y: u8,
-    pub key_idx: u8,
 
     pub payload: Bytes,
 }
@@ -142,11 +164,6 @@ impl Depacketizer for Vp8Packet {
             self.l = (b & 0x40) >> 6;
             self.t = (b & 0x20) >> 5;
             self.k = (b & 0x10) >> 4;
-        } else {
-            self.i = 0;
-            self.l = 0;
-            self.t = 0;
-            self.k = 0;
         }
 
         if self.i == 1 {
@@ -163,16 +180,12 @@ impl Depacketizer for Vp8Packet {
         }
 
         if self.l == 1 {
-            self.tl0_pic_idx = reader.get_u8();
+            reader.get_u8();
             payload_index += 1;
         }
 
         if self.t == 1 || self.k == 1 {
-            b = reader.get_u8();
             payload_index += 1;
-            self.tid = (b & 0b11000000) >> 6;
-            self.y = (b & 0b00100000) >> 5;
-            self.key_idx = b & 0b00011111;
         }
 
         if payload_index >= packet.len() {

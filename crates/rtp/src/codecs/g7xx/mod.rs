@@ -11,12 +11,12 @@ pub type G711Payloader = G7xxPayloader;
 /// G722Payloader payloads G722 packets
 pub type G722Payloader = G7xxPayloader;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Default, Debug, Copy, Clone)]
 pub struct G7xxPayloader;
 
 impl Payloader for G7xxPayloader {
     /// Payload fragments an G7xx packet across one or more byte arrays
-    fn payload(&self, mtu: usize, payload: &Bytes) -> Result<Vec<Bytes>> {
+    fn payload(&mut self, mtu: usize, payload: &Bytes) -> Result<Vec<Bytes>> {
         if payload.is_empty() || mtu == 0 {
             return Ok(vec![]);
         }

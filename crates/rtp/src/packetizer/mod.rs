@@ -11,7 +11,7 @@ use std::time::{Duration, SystemTime};
 
 /// Payloader payloads a byte array for use as rtp.Packet payloads
 pub trait Payloader: fmt::Debug {
-    fn payload(&self, mtu: usize, b: &Bytes) -> Result<Vec<Bytes>>;
+    fn payload(&mut self, mtu: usize, b: &Bytes) -> Result<Vec<Bytes>>;
     fn clone_to(&self) -> Box<dyn Payloader + Send + Sync>;
 }
 

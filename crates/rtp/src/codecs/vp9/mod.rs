@@ -10,12 +10,12 @@ use anyhow::Result;
 use bytes::{Buf, Bytes};
 
 /// Vp9Payloader payloads VP9 packets
-#[derive(Debug, Copy, Clone)]
+#[derive(Default, Debug, Copy, Clone)]
 pub struct Vp9Payloader;
 
 impl Payloader for Vp9Payloader {
     /// Payload fragments an Vp9Payloader packet across one or more byte arrays
-    fn payload(&self, mtu: usize, payload: &Bytes) -> Result<Vec<Bytes>> {
+    fn payload(&mut self, mtu: usize, payload: &Bytes) -> Result<Vec<Bytes>> {
         if payload.is_empty() || mtu == 0 {
             return Ok(vec![]);
         }

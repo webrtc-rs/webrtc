@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn test_g7xx_payload() -> Result<()> {
-    let pck = G711Payloader {};
+    let mut pck = G711Payloader::default();
 
     const TEST_LEN: usize = 10000;
     const TEST_MTU: usize = 1500;

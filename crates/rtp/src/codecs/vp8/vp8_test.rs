@@ -101,7 +101,7 @@ fn test_vp8_unmarshal() -> Result<()> {
 
 #[test]
 fn test_vp8_payload() -> Result<()> {
-    let pck = Vp8Payloader;
+    let mut pck = Vp8Payloader::default();
     let empty = Bytes::from_static(&[]);
     let payload = Bytes::from_static(&[0x90, 0x90, 0x90]);
 

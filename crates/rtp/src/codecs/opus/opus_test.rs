@@ -19,7 +19,7 @@ fn test_opus_unmarshal() -> Result<()> {
 
 #[test]
 fn test_opus_payload() -> Result<()> {
-    let pck = OpusPayloader;
+    let mut pck = OpusPayloader::default();
     let empty = Bytes::from_static(&[]);
     let payload = Bytes::from_static(&[0x90, 0x90, 0x90]);
 

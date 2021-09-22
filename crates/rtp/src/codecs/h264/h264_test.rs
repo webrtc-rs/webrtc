@@ -17,7 +17,7 @@ fn test_h264_payload() -> Result<()> {
         Bytes::from_static(&[0x1c, 0x40, 0x13, 0x14, 0x15]),
     ];
 
-    let pck = H264Payloader;
+    let mut pck = H264Payloader::default();
 
     // Positive MTU, empty payload
     let result = pck.payload(1, &empty)?;
