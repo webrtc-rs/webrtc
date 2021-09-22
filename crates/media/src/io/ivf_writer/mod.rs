@@ -2,7 +2,7 @@
 mod ivf_writer_test;
 
 use crate::io::ivf_reader::IVFFileHeader;
-use crate::io::RTPWriter;
+use crate::io::Writer;
 use anyhow::Result;
 use byteorder::{LittleEndian, WriteBytesExt};
 use bytes::{Bytes, BytesMut};
@@ -50,7 +50,7 @@ impl<W: Write + Seek> IVFWriter<W> {
     }
 }
 
-impl<W: Write + Seek> RTPWriter for IVFWriter<W> {
+impl<W: Write + Seek> Writer for IVFWriter<W> {
     /// write_rtp adds a new packet and writes the appropriate headers for it
     fn write_rtp(&mut self, packet: &rtp::packet::Packet) -> Result<()> {
         let mut vp8packet = rtp::codecs::vp8::Vp8Packet::default();
