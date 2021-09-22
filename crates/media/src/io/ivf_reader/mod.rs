@@ -2,6 +2,7 @@
 mod ivf_reader_test;
 
 use crate::error::Error;
+use crate::io::ResetFn;
 use anyhow::Result;
 use byteorder::{LittleEndian, ReadBytesExt};
 use bytes::{Bytes, BytesMut};
@@ -40,8 +41,6 @@ pub struct IVFReader<R: Read> {
     reader: R,
     bytes_read: usize,
 }
-
-pub type ResetFn<R> = Box<dyn FnMut(usize) -> R>;
 
 impl<R: Read> IVFReader<R> {
     /// new returns a new IVF reader and IVF file header

@@ -5,6 +5,8 @@ pub mod ogg_writer;
 
 use anyhow::Result;
 
+pub type ResetFn<R> = Box<dyn FnMut(usize) -> R>;
+
 // Writer defines an interface to handle
 // the creation of media files
 pub trait Writer {

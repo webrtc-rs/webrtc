@@ -144,7 +144,7 @@ fn test_ivf_writer_add_packet_and_close() -> Result<()> {
 
     let header = IVFFileHeader {
         signature: *b"DKIF",      // DKIF
-        version: 0,               // Version
+        version: 0,               // version
         header_size: 32,          // Header size
         four_cc: *b"VP80",        // FOURCC
         width: 640,               // Width in pixels

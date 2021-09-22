@@ -20,6 +20,19 @@ pub enum Error {
     #[error("invalid nil packet")]
     ErrInvalidNilPacket,
 
+    #[error("bad header signature")]
+    ErrBadIDPageSignature,
+    #[error("wrong header, expected beginning of stream")]
+    ErrBadIDPageType,
+    #[error("payload for id page must be 19 bytes")]
+    ErrBadIDPageLength,
+    #[error("bad payload signature")]
+    ErrBadIDPagePayloadSignature,
+    #[error("not enough data for payload header")]
+    ErrShortPageHeader,
+    #[error("expected and actual checksum do not match")]
+    ErrChecksumMismatch,
+
     #[allow(non_camel_case_types)]
     #[error("{0}")]
     new(String),

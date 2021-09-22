@@ -34,7 +34,7 @@ impl<W: Write + Seek> IVFWriter<W> {
 
     fn write_header(&mut self, header: &IVFFileHeader) -> Result<()> {
         self.writer.write_all(&header.signature)?; // DKIF
-        self.writer.write_u16::<LittleEndian>(header.version)?; // Version
+        self.writer.write_u16::<LittleEndian>(header.version)?; // version
         self.writer.write_u16::<LittleEndian>(header.header_size)?; // Header size
         self.writer.write_all(&header.four_cc)?; // FOURCC
         self.writer.write_u16::<LittleEndian>(header.width)?; // Width in pixels
