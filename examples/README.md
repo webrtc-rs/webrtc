@@ -6,7 +6,7 @@ All examples are ported from [Pion](https://github.com/pion/webrtc/tree/master/e
 
 #### Media API
 - [x] [Reflect](reflect): The reflect example demonstrates how to have webrtc-rs send back to the user exactly what it receives using the same PeerConnection.
-- [ ] [Play from Disk](play-from-disk): The play-from-disk example demonstrates how to send video to your browser from a file saved to disk.
+- [x] [Play from Disk](play-from-disk): The play-from-disk example demonstrates how to send video to your browser from a file saved to disk.
 - [ ] [Play from Disk Renegotation](play-from-disk-renegotation): The play-from-disk-renegotation example is an extension of the play-from-disk example, but demonstrates how you can add/remove video tracks from an already negotiated PeerConnection.
 - [ ] [Insertable Streams](insertable-streams): The insertable-streams example demonstrates how webrtc-rs can be used to send E2E encrypted video and decrypt via insertable streams in the browser.
 - [ ] [Save to Disk](save-to-disk): The save-to-disk example shows how to record your webcam and save the footage to disk on the server side.

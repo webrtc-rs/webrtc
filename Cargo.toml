@@ -19,13 +19,13 @@ stun = "0.3.3"
 turn = "0.3.4"
 ice = { package = "webrtc-ice", version = "0.4.0" }
 dtls = { package = "webrtc-dtls", version = "0.4.11" }
-rtp = "0.3.3"
+rtp = "0.3.4"
 rtcp = "0.3.3"
-srtp = { package = "webrtc-srtp", version = "0.3.5" }
+srtp = { package = "webrtc-srtp", version = "0.3.6" }
 sctp = { package = "webrtc-sctp", version = "0.3.5" }
 data = { package = "webrtc-data", version = "0.2.5" }
-media = { package = "webrtc-media", path = "crates/media" } #version = "0.0.2" }
-interceptor = "0.1.0"
+media = { package = "webrtc-media", version = "0.0.3" }
+interceptor = "0.1.1"
 tokio = { version = "1.10.1", features = ["full"] }
 log = "0.4.14"
 async-trait = "0.1.42"
