@@ -19,6 +19,7 @@ byteorder = "1.4.3"
 bytes = "1.0.1"
 displaydoc = "0.2.1"
 thiserror = "1.0.25"
+rand = "0.8.4"
 
 [dev-dependencies]
 criterion = { version = "0.3.4", features = ["html_reports"] }

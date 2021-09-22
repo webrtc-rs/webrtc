@@ -181,7 +181,7 @@ impl<R: Read> OggReader<R> {
     }
 }
 
-fn generate_checksum_table() -> [u32; 256] {
+pub(crate) fn generate_checksum_table() -> [u32; 256] {
     let mut table = [0u32; 256];
     const POLY: u32 = 0x04c11db7;
 
