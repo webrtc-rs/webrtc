@@ -24,7 +24,7 @@ rtcp = "0.3.3"
 srtp = { package = "webrtc-srtp", version = "0.3.6" }
 sctp = { package = "webrtc-sctp", version = "0.3.5" }
 data = { package = "webrtc-data", version = "0.2.5" }
-media = { package = "webrtc-media", version = "0.0.3" }
+media = { package = "webrtc-media", version = "0.0.4" }
 interceptor = "0.1.1"
 tokio = { version = "1.10.1", features = ["full"] }
 log = "0.4.14"
@@ -89,6 +89,11 @@ bench = false
 [[example]]
 name = "reflect"
 path = "examples/reflect/reflect.rs"
+bench = false
+
+[[example]]
+name = "save-to-disk"
+path = "examples/save-to-disk/save-to-disk.rs"
 bench = false
 
 [[example]]

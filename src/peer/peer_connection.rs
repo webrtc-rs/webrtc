@@ -481,12 +481,14 @@ impl RTCPeerConnection {
         log::debug!("got new track: {:?}", t);
 
         if t.is_some() {
-            let mut handler = on_track_handler.lock().await;
-            if let Some(f) = &mut *handler {
-                f(t, r).await;
-            } else {
-                log::warn!("on_track unset, unable to handle incoming media streams");
-            }
+            tokio::spawn(async move {
+                let mut handler = on_track_handler.lock().await;
+                if let Some(f) = &mut *handler {
+                    f(t, r).await;
+                } else {
+                    log::warn!("on_track unset, unable to handle incoming media streams");
+                }
+            });
         }
     }
 
