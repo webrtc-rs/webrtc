@@ -97,6 +97,11 @@ path = "examples/reflect/reflect.rs"
 bench = false
 
 [[example]]
+name = "rtp-forwarder"
+path = "examples/rtp-forwarder/rtp-forwarder.rs"
+bench = false
+
+[[example]]
 name = "save-to-disk"
 path = "examples/save-to-disk/save-to-disk.rs"
 bench = false

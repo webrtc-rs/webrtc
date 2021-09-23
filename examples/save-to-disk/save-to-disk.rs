@@ -159,7 +159,7 @@ async fn main() -> Result<()> {
             capability: RTCRtpCodecCapability {
                 mime_type: MIME_TYPE_OPUS.to_owned(),
                 clock_rate: 48000,
-                channels: 0,
+                channels: 2,
                 sdp_fmtp_line: "".to_owned(),
                 rtcp_feedback: vec![],
             },
