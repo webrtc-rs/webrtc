@@ -8,11 +8,15 @@ use byteorder::{LittleEndian, ReadBytesExt};
 use bytes::{Bytes, BytesMut};
 use std::io::{Cursor, Read};
 
-const PAGE_HEADER_TYPE_BEGINNING_OF_STREAM: u8 = 0x02;
-const PAGE_HEADER_SIGNATURE: &[u8] = b"OggS";
-const ID_PAGE_SIGNATURE: &[u8] = b"OpusHead";
-const PAGE_HEADER_LEN: usize = 27;
-const ID_PAGE_PAYLOAD_LENGTH: usize = 19;
+pub const PAGE_HEADER_TYPE_CONTINUATION_OF_STREAM: u8 = 0x00;
+pub const PAGE_HEADER_TYPE_BEGINNING_OF_STREAM: u8 = 0x02;
+pub const PAGE_HEADER_TYPE_END_OF_STREAM: u8 = 0x04;
+pub const DEFAULT_PRE_SKIP: u16 = 3840; // 3840 recommended in the RFC
+pub const PAGE_HEADER_SIGNATURE: &[u8] = b"OggS";
+pub const ID_PAGE_SIGNATURE: &[u8] = b"OpusHead";
+pub const COMMENT_PAGE_SIGNATURE: &[u8] = b"OpusTags";
+pub const PAGE_HEADER_SIZE: usize = 27;
+pub const ID_PAGE_PAYLOAD_SIZE: usize = 19;
 
 /// OggReader is used to read Ogg files and return page payloads
 pub struct OggReader<R: Read> {
@@ -75,7 +79,7 @@ impl<R: Read> OggReader<R> {
             return Err(Error::ErrBadIDPageType.into());
         }
 
-        if payload.len() != ID_PAGE_PAYLOAD_LENGTH {
+        if payload.len() != ID_PAGE_PAYLOAD_SIZE {
             return Err(Error::ErrBadIDPageLength.into());
         }
 
@@ -105,7 +109,7 @@ impl<R: Read> OggReader<R> {
     // parse_next_page reads from stream and returns Ogg page payload, header,
     // and an error if there is incomplete page data.
     pub fn parse_next_page(&mut self) -> Result<(Bytes, OggPageHeader)> {
-        let mut h = [0u8; PAGE_HEADER_LEN];
+        let mut h = [0u8; PAGE_HEADER_SIZE];
         self.reader.read_exact(&mut h)?;
 
         let mut head_reader = Cursor::new(h);

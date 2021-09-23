@@ -1,19 +1,13 @@
-use crate::io::ogg_reader::generate_checksum_table;
+#[cfg(test)]
+mod ogg_writer_test;
+
+use crate::io::ogg_reader::*;
 use crate::io::Writer;
 use anyhow::Result;
 use byteorder::{LittleEndian, WriteBytesExt};
 use bytes::Bytes;
 use rtp::packetizer::Depacketizer;
 use std::io::{BufWriter, Seek, Write};
-
-const PAGE_HEADER_TYPE_CONTINUATION_OF_STREAM: u8 = 0x00;
-const PAGE_HEADER_TYPE_BEGINNING_OF_STREAM: u8 = 0x02;
-const PAGE_HEADER_TYPE_END_OF_STREAM: u8 = 0x04;
-const DEFAULT_PRE_SKIP: u16 = 3840; // 3840 recommended in the RFC
-const ID_PAGE_SIGNATURE: &[u8] = b"OpusHead";
-const COMMENT_PAGE_SIGNATURE: &[u8] = b"OpusTags";
-const PAGE_HEADER_SIGNATURE: &[u8] = b"OggS";
-const PAGE_HEADER_SIZE: usize = 27;
 
 /// OggWriter is used to take RTP packets and write them to an OGG on disk
 pub struct OggWriter<W: Write + Seek> {

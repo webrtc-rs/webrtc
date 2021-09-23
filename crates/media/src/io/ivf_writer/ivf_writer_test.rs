@@ -22,7 +22,7 @@ fn test_ivf_writer_add_packet_and_close() -> Result<()> {
             timestamp: 3653407706,
             ssrc: 476325762,
             csrc: vec![],
-            padding: raw_valid_pkt.len() % 4 != 0,
+            padding: false,
             extensions: vec![],
         },
         payload: raw_valid_pkt.slice(20..),
