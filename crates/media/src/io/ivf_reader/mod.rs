@@ -5,7 +5,7 @@ use crate::error::Error;
 use crate::io::ResetFn;
 use anyhow::Result;
 use byteorder::{LittleEndian, ReadBytesExt};
-use bytes::{Bytes, BytesMut};
+use bytes::BytesMut;
 use std::io::Read;
 
 pub const IVF_FILE_HEADER_SIGNATURE: &[u8] = b"DKIF";
@@ -66,7 +66,7 @@ impl<R: Read> IVFReader<R> {
     /// parse_next_frame reads from stream and returns IVF frame payload, header,
     /// and an error if there is incomplete frame data.
     /// Returns all nil values when no more frames are available.
-    pub fn parse_next_frame(&mut self) -> Result<(Bytes, IVFFrameHeader)> {
+    pub fn parse_next_frame(&mut self) -> Result<(BytesMut, IVFFrameHeader)> {
         let frame_size = self.reader.read_u32::<LittleEndian>()?;
         let timestamp = self.reader.read_u64::<LittleEndian>()?;
         let header = IVFFrameHeader {
@@ -80,7 +80,7 @@ impl<R: Read> IVFReader<R> {
 
         self.bytes_read += IVF_FRAME_HEADER_SIZE + header.frame_size as usize;
 
-        Ok((payload.freeze(), header))
+        Ok((payload, header))
     }
 
     /// parse_file_header reads 32 bytes from stream and returns

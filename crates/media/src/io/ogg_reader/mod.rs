@@ -5,7 +5,7 @@ use crate::error::Error;
 use crate::io::ResetFn;
 use anyhow::Result;
 use byteorder::{LittleEndian, ReadBytesExt};
-use bytes::{Bytes, BytesMut};
+use bytes::BytesMut;
 use std::io::{Cursor, Read};
 
 pub const PAGE_HEADER_TYPE_CONTINUATION_OF_STREAM: u8 = 0x00;
@@ -108,7 +108,7 @@ impl<R: Read> OggReader<R> {
 
     // parse_next_page reads from stream and returns Ogg page payload, header,
     // and an error if there is incomplete page data.
-    pub fn parse_next_page(&mut self) -> Result<(Bytes, OggPageHeader)> {
+    pub fn parse_next_page(&mut self) -> Result<(BytesMut, OggPageHeader)> {
         let mut h = [0u8; PAGE_HEADER_SIZE];
         self.reader.read_exact(&mut h)?;
 
@@ -134,7 +134,6 @@ impl<R: Read> OggReader<R> {
         let mut payload = BytesMut::with_capacity(payload_size);
         payload.resize(payload_size as usize, 0);
         self.reader.read_exact(&mut payload)?;
-        let payload = payload.freeze();
 
         if self.do_checksum {
             let mut sum = 0;
@@ -151,7 +150,7 @@ impl<R: Read> OggReader<R> {
             for v in &size_buffer {
                 sum = self.update_checksum(*v, sum);
             }
-            for v in &payload {
+            for v in &payload[..] {
                 sum = self.update_checksum(*v, sum);
             }
 

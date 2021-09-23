@@ -1,4 +1,5 @@
 use super::*;
+use bytes::Bytes;
 
 // generates a valid ogg file that can be used for tests
 fn build_ogg_container() -> Vec<u8> {
