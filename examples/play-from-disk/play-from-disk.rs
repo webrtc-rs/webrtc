@@ -7,10 +7,12 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use std::sync::Arc;
+use tokio::sync::Notify;
 use tokio::time::Duration;
 
+use media::io::ogg_reader::OggReader;
 use webrtc::api::interceptor_registry::register_default_interceptors;
-use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_VP8};
+use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_OPUS, MIME_TYPE_VP8};
 use webrtc::api::APIBuilder;
 use webrtc::error::Error;
 use webrtc::media::rtp::rtp_codec::RTCRtpCodecCapability;
@@ -124,8 +126,9 @@ async fn main() -> Result<()> {
     // Create a new RTCPeerConnection
     let peer_connection = Arc::new(api.new_peer_connection(config).await?);
 
-    let (ice_connected_tx, mut ice_connected_rx) = tokio::sync::mpsc::channel::<()>(1);
-    let mut ice_connected_tx = Some(ice_connected_tx);
+    let notify_tx = Arc::new(Notify::new());
+    let notify_video = notify_tx.clone();
+    let notify_audio = notify_tx.clone();
 
     if let Some(video_file) = video_file {
         // Create a video track
@@ -160,7 +163,9 @@ async fn main() -> Result<()> {
             let (mut ivf, header) = IVFReader::new(reader)?;
 
             // Wait for connection established
-            let _ = ice_connected_rx.recv().await;
+            let _ = notify_video.notified().await;
+
+            println!("play video from disk file output.ivf");
 
             // Send our video file frame at a time. Pace our sending so we send it at the same speed it should be played back as.
             // This isn't required since the video is timestamped, but we will such much higher loss if we send all at once.
@@ -191,8 +196,65 @@ async fn main() -> Result<()> {
         });
     }
 
-    if let Some(_audio_file) = audio_file {
-        //TODO: add audio track handling for this example
+    if let Some(audio_file) = audio_file {
+        // Create a audio track
+        let audio_track = Arc::new(TrackLocalStaticSample::new(
+            RTCRtpCodecCapability {
+                mime_type: MIME_TYPE_OPUS.to_owned(),
+                ..Default::default()
+            },
+            "audio".to_owned(),
+            "webrtc-rs".to_owned(),
+        ));
+
+        // Add this newly created track to the PeerConnection
+        let rtp_sender = peer_connection
+            .add_track(Arc::clone(&audio_track) as Arc<dyn TrackLocal + Send + Sync>)
+            .await?;
+
+        // Read incoming RTCP packets
+        // Before these packets are returned they are processed by interceptors. For things
+        // like NACK this needs to be called.
+        tokio::spawn(async move {
+            let mut rtcp_buf = vec![0u8; 1500];
+            while let Ok((_, _)) = rtp_sender.read(&mut rtcp_buf).await {}
+            Result::<()>::Ok(())
+        });
+
+        let audio_file_name = audio_file.to_owned();
+        tokio::spawn(async move {
+            // Open a IVF file and start reading using our IVFReader
+            let file = File::open(audio_file_name)?;
+            let reader = BufReader::new(file);
+            // Open on oggfile in non-checksum mode.
+            let (mut ogg, _) = OggReader::new(reader, true)?;
+
+            // Wait for connection established
+            let _ = notify_audio.notified().await;
+
+            println!("play audio from disk file output.ogg");
+
+            // Keep track of last granule, the difference is the amount of samples in the buffer
+            let mut last_granule: u64 = 0;
+            while let Ok((page_data, page_header)) = ogg.parse_next_page() {
+                // The amount of samples is the difference between the last and current timestamp
+                let sample_count = page_header.granule_position - last_granule;
+                last_granule = page_header.granule_position;
+                let sample_duration = Duration::from_millis(sample_count * 1000 / 48000);
+
+                audio_track
+                    .write_sample(&Sample {
+                        data: page_data,
+                        duration: sample_duration,
+                        ..Default::default()
+                    })
+                    .await?;
+
+                tokio::time::sleep(sample_duration).await;
+            }
+
+            Result::<()>::Ok(())
+        });
     }
 
     // Set the handler for ICE connection state
@@ -201,7 +263,7 @@ async fn main() -> Result<()> {
         .on_ice_connection_state_change(Box::new(move |connection_state: RTCIceConnectionState| {
             println!("Connection State has changed {}", connection_state);
             if connection_state == RTCIceConnectionState::Connected {
-                ice_connected_tx.take();
+                notify_tx.notify_waiters();
             }
             Box::pin(async {})
         }))

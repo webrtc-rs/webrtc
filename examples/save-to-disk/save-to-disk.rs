@@ -3,6 +3,7 @@ use clap::{App, AppSettings, Arg};
 use interceptor::registry::Registry;
 use media::io::ivf_reader::IVFFileHeader;
 use media::io::ivf_writer::IVFWriter;
+use media::io::ogg_writer::OggWriter;
 use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use std::fs::File;
 use std::sync::Arc;
@@ -31,18 +32,23 @@ async fn save_to_disk(
                     let mut w = writer.lock().await;
                     w.write_rtp(&rtp_packet)?;
                 }else{
+                    println!("file closing begin after read_rtp error");
                     let mut w = writer.lock().await;
                     if let Err(err) = w.close() {
                         println!("file close err: {}", err);
                     }
+                    println!("file closing end after read_rtp error");
                     return Ok(());
                 }
             }
             _ = notify.notified() => {
+                println!("file closing begin after notified");
                 let mut w = writer.lock().await;
                 if let Err(err) = w.close() {
                     println!("file close err: {}", err);
                 }
+                println!("file closing end after notified");
+                return Ok(());
             }
         }
     }
@@ -88,6 +94,7 @@ async fn main() -> Result<()> {
         )
         .arg(
             Arg::with_name("audio")
+                .required_unless("FULLHELP")
                 .takes_value(true)
                 .short("a")
                 .long("audio")
@@ -103,7 +110,7 @@ async fn main() -> Result<()> {
     }
 
     let video_file = matches.value_of("video").unwrap();
-    let _audio_file = matches.value_of("audio");
+    let audio_file = matches.value_of("audio").unwrap();
 
     let ivf_writer: Arc<Mutex<dyn media::io::Writer + Send + Sync>> =
         Arc::new(Mutex::new(IVFWriter::new(
@@ -121,8 +128,9 @@ async fn main() -> Result<()> {
                 unused: 0,                // 28-31
             },
         )?));
-
-    //TODO: create audio_file
+    let ogg_writer: Arc<Mutex<dyn media::io::Writer + Send + Sync>> = Arc::new(Mutex::new(
+        OggWriter::new(File::create(audio_file)?, 48000, 2)?,
+    ));
 
     // Everything below is the WebRTC-rs API! Thanks for using it ❤️.
 
@@ -227,18 +235,19 @@ async fn main() -> Result<()> {
 
             let notify_rx2 = Arc::clone(&notify_rx);
             let ivf_writer2 = Arc::clone(&ivf_writer);
+            let ogg_writer2 = Arc::clone(&ogg_writer);
             Box::pin(async move {
                 let codec = track.codec().await;
                 if codec.capability.mime_type.to_lowercase() == MIME_TYPE_OPUS.to_lowercase() {
-                    println!("Got Opus track, saving to disk as output.opus (48 kHz, 2 channels)");
-                    //TODO: saveToDisk(oggFile, track)
-                     /*TODO:if closeErr := oggFile.Close(); closeErr != nil {
-                        panic(closeErr)
-                    }*/
-
+                    println!("Got Opus track, saving to disk as output.opus (48 kHz, 2 channels)");     
+                    tokio::spawn(async move {
+                        let _ = save_to_disk(ogg_writer2, track, notify_rx2).await;
+                    });
                 } else if codec.capability.mime_type.to_lowercase() == MIME_TYPE_VP8.to_lowercase() {
                     println!("Got VP8 track, saving to disk as output.ivf");
-                    let _ = save_to_disk(ivf_writer2, track, notify_rx2).await;
+                     tokio::spawn(async move {
+                         let _ = save_to_disk(ivf_writer2, track, notify_rx2).await;
+                     });
                 }
             })
         }else {
