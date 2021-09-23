@@ -4,7 +4,6 @@ use crate::media::track::track_local::TrackLocalWriter;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use bytes::Bytes;
 use interceptor::stream_info::{RTCPFeedback, RTPHeaderExtension, StreamInfo};
 use interceptor::{Attributes, RTPWriter};
 use std::sync::Arc;
@@ -49,9 +48,8 @@ impl TrackLocalWriter for InterceptorToTrackLocalWriter {
         }
     }
 
-    async fn write(&self, b: &Bytes) -> Result<usize> {
-        let buf = &mut b.clone();
-        let pkt = rtp::packet::Packet::unmarshal(buf)?;
+    async fn write(&self, mut b: &[u8]) -> Result<usize> {
+        let pkt = rtp::packet::Packet::unmarshal(&mut b)?;
         self.write_rtp(&pkt).await
     }
 }

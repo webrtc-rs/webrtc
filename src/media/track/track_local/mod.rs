@@ -10,7 +10,6 @@ use crate::media::rtp::*;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use bytes::Bytes;
 use std::any::Any;
 use std::fmt;
 use std::sync::Arc;
@@ -23,7 +22,7 @@ pub trait TrackLocalWriter: fmt::Debug {
     async fn write_rtp(&self, p: &rtp::packet::Packet) -> Result<usize>;
 
     /// write encrypts and writes a full RTP packet
-    async fn write(&self, b: &Bytes) -> Result<usize>;
+    async fn write(&self, b: &[u8]) -> Result<usize>;
 }
 
 /// TrackLocalContext is the Context passed when a TrackLocal has been Binded/Unbinded from a PeerConnection, and used

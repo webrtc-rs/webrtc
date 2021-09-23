@@ -6,6 +6,7 @@ use crate::media::track::track_remote::TrackRemote;
 use crate::peer::configuration::RTCConfiguration;
 use crate::peer::peer_connection::peer_connection_test::*;
 
+use bytes::Bytes;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 
@@ -393,7 +394,7 @@ async fn test_track_local_static_binding_non_blocking() -> Result<()> {
     pc_answer.set_local_description(answer).await?;
 
     if let Some(v) = vp8writer.as_any().downcast_ref::<TrackLocalStaticRTP>() {
-        v.write(&Bytes::from_static(&[0u8; 20])).await?;
+        v.write(&[0u8; 20]).await?;
     } else {
         assert!(false);
     }

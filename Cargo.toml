@@ -102,6 +102,11 @@ path = "examples/rtp-forwarder/rtp-forwarder.rs"
 bench = false
 
 [[example]]
+name = "rtp-to-webrtc"
+path = "examples/rtp-to-webrtc/rtp-to-webrtc.rs"
+bench = false
+
+[[example]]
 name = "save-to-disk"
 path = "examples/save-to-disk/save-to-disk.rs"
 bench = false

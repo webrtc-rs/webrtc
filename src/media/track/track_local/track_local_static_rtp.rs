@@ -145,9 +145,8 @@ impl TrackLocalWriter for TrackLocalStaticRTP {
     /// If one PeerConnection fails the packets will still be sent to
     /// all PeerConnections. The error message will contain the ID of the failed
     /// PeerConnections so you can remove them
-    async fn write(&self, b: &Bytes) -> Result<usize> {
-        let buf = &mut b.clone();
-        let pkt = rtp::packet::Packet::unmarshal(buf)?;
+    async fn write(&self, mut b: &[u8]) -> Result<usize> {
+        let pkt = rtp::packet::Packet::unmarshal(&mut b)?;
         self.write_rtp(&pkt).await?;
         Ok(b.len())
     }
