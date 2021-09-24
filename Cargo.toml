@@ -52,6 +52,7 @@ env_logger = "0.8"
 clap = "2"
 hyper = { version = "0.14", features = ["full"] }
 signal = {path = "examples/signal" }
+tokio-util = "0.6.8"
 
 [profile.dev]
 opt-level = 0
@@ -94,6 +95,11 @@ bench = false
 [[example]]
 name = "play-from-disk"
 path = "examples/play-from-disk/play-from-disk.rs"
+bench = false
+
+[[example]]
+name = "play-from-disk-renegotation"
+path = "examples/play-from-disk-renegotation/play-from-disk-renegotation.rs"
 bench = false
 
 [[example]]
