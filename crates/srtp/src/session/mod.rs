@@ -4,11 +4,10 @@ mod session_rtcp_test;
 mod session_rtp_test;
 
 use crate::{config::*, context::*, error::Error, option::*, stream::*};
-use util::{buffer::*, conn::Conn, marshal::*};
+use util::{conn::Conn, marshal::*};
 
 use anyhow::Result;
 use bytes::Bytes;
-use std::collections::hash_map::Entry;
 use std::{
     collections::HashMap,
     marker::{Send, Sync},
@@ -25,8 +24,8 @@ const DEFAULT_SESSION_SRTCP_REPLAY_PROTECTION_WINDOW: usize = 64;
 /// instead of making everyone re-implement
 pub struct Session {
     local_context: Arc<Mutex<Context>>,
-    streams_map: Arc<Mutex<HashMap<u32, Buffer>>>,
-    new_stream_rx: Arc<Mutex<mpsc::Receiver<Stream>>>,
+    streams_map: Arc<Mutex<HashMap<u32, Arc<Stream>>>>,
+    new_stream_rx: Arc<Mutex<mpsc::Receiver<Arc<Stream>>>>,
     close_stream_tx: mpsc::Sender<u32>,
     close_session_tx: mpsc::Sender<()>,
     pub(crate) udp_tx: Arc<dyn Conn + Send + Sync>,
@@ -116,7 +115,7 @@ impl Session {
         })
     }
 
-    async fn close_stream(streams_map: &Arc<Mutex<HashMap<u32, Buffer>>>, ssrc: u32) {
+    async fn close_stream(streams_map: &Arc<Mutex<HashMap<u32, Arc<Stream>>>>, ssrc: u32) {
         let mut streams = streams_map.lock().await;
         streams.remove(&ssrc);
     }
@@ -124,9 +123,9 @@ impl Session {
     async fn incoming(
         udp_rx: &Arc<dyn Conn + Send + Sync>,
         buf: &mut [u8],
-        streams_map: &Arc<Mutex<HashMap<u32, Buffer>>>,
+        streams_map: &Arc<Mutex<HashMap<u32, Arc<Stream>>>>,
         close_stream_tx: &mpsc::Sender<u32>,
-        new_stream_tx: &mut mpsc::Sender<Stream>,
+        new_stream_tx: &mut mpsc::Sender<Arc<Stream>>,
         remote_context: &mut Context,
         is_rtp: bool,
     ) -> Result<()> {
@@ -148,16 +147,15 @@ impl Session {
             rtcp::packet::unmarshal(&mut buf)?.destination_ssrc()
         };
 
-        let mut streams = streams_map.lock().await;
-
         for ssrc in ssrcs {
-            if let Entry::Vacant(e) = streams.entry(ssrc) {
-                let stream = Stream::new(ssrc, close_stream_tx.clone(), is_rtp);
-                e.insert(stream.get_cloned_buffer());
-                new_stream_tx.send(stream).await?;
+            let (stream, is_new) =
+                Session::get_or_create_stream(streams_map, close_stream_tx.clone(), is_rtp, ssrc)
+                    .await;
+            if is_new {
+                let _ = new_stream_tx.send(Arc::clone(&stream)).await?;
             }
 
-            match streams.get_mut(&ssrc).unwrap().write(&decrypted).await {
+            match stream.buffer.write(&decrypted).await {
                 Ok(_) => {}
                 Err(err) => {
                     // Silently drop data when the buffer is full.
@@ -171,23 +169,39 @@ impl Session {
         Ok(())
     }
 
-    /// listen on the given SSRC to create a stream, it can be used
-    /// if you want a certain SSRC, but don't want to wait for Accept
-    pub async fn listen(&self, ssrc: u32) -> Result<Stream> {
-        let mut streams = self.streams_map.lock().await;
+    async fn get_or_create_stream(
+        streams_map: &Arc<Mutex<HashMap<u32, Arc<Stream>>>>,
+        close_stream_tx: mpsc::Sender<u32>,
+        is_rtp: bool,
+        ssrc: u32,
+    ) -> (Arc<Stream>, bool) {
+        let mut streams = streams_map.lock().await;
 
-        if let Entry::Vacant(e) = streams.entry(ssrc) {
-            let stream = Stream::new(ssrc, self.close_stream_tx.clone(), self.is_rtp);
-            e.insert(stream.get_cloned_buffer());
-
-            Ok(stream)
+        if let Some(stream) = streams.get(&ssrc) {
+            (Arc::clone(stream), false)
         } else {
-            Err(Error::StreamWithSsrcExists(ssrc).into())
+            let stream = Arc::new(Stream::new(ssrc, close_stream_tx, is_rtp));
+            streams.insert(ssrc, Arc::clone(&stream));
+            (stream, true)
         }
     }
 
+    /// open on the given SSRC to create a stream, it can be used
+    /// if you want a certain SSRC, but don't want to wait for Accept
+    pub async fn open(&self, ssrc: u32) -> Arc<Stream> {
+        let (stream, _) = Session::get_or_create_stream(
+            &self.streams_map,
+            self.close_stream_tx.clone(),
+            self.is_rtp,
+            ssrc,
+        )
+        .await;
+
+        stream
+    }
+
     /// accept returns a stream to handle RTCP for a single SSRC
-    pub async fn accept(&self) -> Result<Stream> {
+    pub async fn accept(&self) -> Result<Arc<Stream>> {
         let mut new_stream_rx = self.new_stream_rx.lock().await;
         let result = new_stream_rx.recv().await;
         if let Some(stream) = result {

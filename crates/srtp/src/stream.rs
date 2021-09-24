@@ -15,7 +15,7 @@ pub const SRTCP_BUFFER_SIZE: usize = 100 * 1000;
 pub struct Stream {
     ssrc: u32,
     tx: mpsc::Sender<u32>,
-    buffer: Buffer,
+    pub(crate) buffer: Buffer,
     is_rtp: bool,
 }
 
@@ -36,11 +36,6 @@ impl Stream {
             ),
             is_rtp,
         }
-    }
-
-    /// Get Cloned Buffer
-    pub(crate) fn get_cloned_buffer(&self) -> Buffer {
-        self.buffer.clone()
     }
 
     /// GetSSRC returns the SSRC we are demuxing for

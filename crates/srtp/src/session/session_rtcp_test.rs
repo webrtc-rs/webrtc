@@ -119,7 +119,7 @@ async fn test_session_srtcp_listen() -> Result<()> {
     };
 
     let test_payload = rtcp_packet.marshal()?;
-    let read_stream = sb.listen(TEST_SSRC).await?;
+    let read_stream = sb.open(TEST_SSRC).await;
 
     sa.write_rtcp(&rtcp_packet).await?;
 
@@ -152,7 +152,7 @@ fn encrypt_srtcp(
 
 const PLI_PACKET_SIZE: usize = 8;
 
-async fn get_sender_ssrc(read_stream: &mut Stream) -> Result<u32> {
+async fn get_sender_ssrc(read_stream: &Arc<Stream>) -> Result<u32> {
     let auth_tag_size = ProtectionProfile::Aes128CmHmacSha1_80.auth_tag_len();
 
     let mut read_buffer = BytesMut::with_capacity(PLI_PACKET_SIZE + auth_tag_size);
@@ -169,7 +169,7 @@ async fn get_sender_ssrc(read_stream: &mut Stream) -> Result<u32> {
 async fn test_session_srtcp_replay_protection() -> Result<()> {
     let (sa, sb) = build_session_srtcp_pair().await?;
 
-    let mut read_stream = sb.listen(TEST_SSRC).await?;
+    let read_stream = sb.open(TEST_SSRC).await;
 
     // Generate test packets
     let mut packets = vec![];
@@ -199,7 +199,7 @@ async fn test_session_srtcp_replay_protection() -> Result<()> {
     tokio::spawn(async move {
         let mut i = 0;
         while i < count {
-            match get_sender_ssrc(&mut read_stream).await {
+            match get_sender_ssrc(&read_stream).await {
                 Ok(ssrc) => {
                     let mut r = cloned_received_ssrc.lock().await;
                     r.push(ssrc);

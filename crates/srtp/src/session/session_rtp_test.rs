@@ -131,7 +131,7 @@ async fn test_session_srtp_listen() -> Result<()> {
         payload: test_payload.clone(),
     };
 
-    let read_stream = sb.listen(TEST_SSRC).await?;
+    let read_stream = sb.open(TEST_SSRC).await;
 
     sa.write_rtp(&packet).await?;
 
@@ -161,7 +161,7 @@ async fn test_session_srtp_multi_ssrc() -> Result<()> {
 
     let mut read_streams = HashMap::new();
     for ssrc in &ssrcs {
-        let read_stream = sb.listen(*ssrc).await?;
+        let read_stream = sb.open(*ssrc).await;
         read_streams.insert(*ssrc, read_stream);
     }
 
@@ -203,7 +203,7 @@ fn encrypt_srtp(context: &mut Context, pkt: &rtp::packet::Packet) -> Result<Byte
 }
 
 async fn payload_srtp(
-    read_stream: &mut Stream,
+    read_stream: &Arc<Stream>,
     header_size: usize,
     expected_payload: &[u8],
 ) -> Result<u16> {
@@ -229,7 +229,7 @@ async fn test_session_srtp_replay_protection() -> Result<()> {
 
     let (sa, sb) = build_session_srtp_pair().await?;
 
-    let mut read_stream = sb.listen(TEST_SSRC).await?;
+    let read_stream = sb.open(TEST_SSRC).await;
 
     // Generate test packets
     let mut packets = vec![];
@@ -270,7 +270,7 @@ async fn test_session_srtp_replay_protection() -> Result<()> {
     tokio::spawn(async move {
         let mut i = 0;
         while i < count {
-            match payload_srtp(&mut read_stream, RTP_HEADER_SIZE, &test_payload).await {
+            match payload_srtp(&read_stream, RTP_HEADER_SIZE, &test_payload).await {
                 Ok(seq) => {
                     let mut r = cloned_received_sequence_number.lock().await;
                     r.push(seq);
