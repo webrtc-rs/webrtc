@@ -1,12 +1,11 @@
 use anyhow::Result;
 use clap::{App, AppSettings, Arg};
-use std::io::Write;
-use std::sync::Arc;
-use tokio::time::Duration;
-
 use interceptor::registry::Registry;
 use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use std::collections::HashMap;
+use std::io::Write;
+use std::sync::Arc;
+use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_VP8};
 use webrtc::api::APIBuilder;
@@ -25,10 +24,10 @@ use webrtc::peer::sdp::session_description::RTCSessionDescription;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut app = App::new("reflect")
+    let mut app = App::new("simulcast")
         .version("0.1.0")
         .author("Rain Liu <yuliu@webrtc.rs>")
-        .about("An example of how to send back to the user exactly what it receives using the same PeerConnection.")
+        .about("An example of simulcast.")
         .setting(AppSettings::DeriveDisplayOrder)
         .setting(AppSettings::SubcommandsNegateReqs)
         .arg(

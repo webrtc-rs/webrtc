@@ -3,6 +3,7 @@ use clap::{App, AppSettings, Arg};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Client, Method, Request, Response, Server, StatusCode};
 use interceptor::registry::Registry;
+use std::io::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -138,25 +139,8 @@ async fn remote_handler(req: Request<Body>) -> Result<Response<Body>, hyper::Err
     }
 }
 
-//use std::io::Write;
-
 #[tokio::main]
 async fn main() -> Result<()> {
-    /*env_logger::Builder::new()
-    .format(|buf, record| {
-        writeln!(
-            buf,
-            "{}:{} [{}] {} - {}",
-            record.file().unwrap_or("unknown"),
-            record.line().unwrap_or(0),
-            record.level(),
-            chrono::Local::now().format("%H:%M:%S.%6f"),
-            record.args()
-        )
-    })
-    .filter(None, log::LevelFilter::Trace)
-    .init();*/
-
     let mut app = App::new("Offer")
         .version("0.1.0")
         .author("Rain Liu <yliu@webrtc.rs>")
@@ -167,6 +151,12 @@ async fn main() -> Result<()> {
             Arg::with_name("FULLHELP")
                 .help("Prints more detailed help information")
                 .long("fullhelp"),
+        )
+        .arg(
+            Arg::with_name("debug")
+                .long("debug")
+                .short("d")
+                .help("Prints debug log information"),
         )
         .arg(
             Arg::with_name("offer-address")
@@ -190,6 +180,24 @@ async fn main() -> Result<()> {
     if matches.is_present("FULLHELP") {
         app.print_long_help().unwrap();
         std::process::exit(0);
+    }
+
+    let debug = matches.is_present("debug");
+    if debug {
+        env_logger::Builder::new()
+            .format(|buf, record| {
+                writeln!(
+                    buf,
+                    "{}:{} [{}] {} - {}",
+                    record.file().unwrap_or("unknown"),
+                    record.line().unwrap_or(0),
+                    record.level(),
+                    chrono::Local::now().format("%H:%M:%S.%6f"),
+                    record.args()
+                )
+            })
+            .filter(None, log::LevelFilter::Trace)
+            .init();
     }
 
     let offer_addr = matches.value_of("offer-address").unwrap().to_owned();

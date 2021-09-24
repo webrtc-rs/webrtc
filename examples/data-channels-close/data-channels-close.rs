@@ -1,11 +1,11 @@
 use anyhow::Result;
 use clap::{App, AppSettings, Arg};
-use std::sync::Arc;
-use tokio::time::Duration;
-
 use interceptor::registry::Registry;
+use std::io::Write;
 use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::APIBuilder;
@@ -17,25 +17,8 @@ use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer::sdp::session_description::RTCSessionDescription;
 use webrtc::util::math_rand_alpha;
 
-//use std::io::Write;
-
 #[tokio::main]
 async fn main() -> Result<()> {
-    /*env_logger::Builder::new()
-    .format(|buf, record| {
-        writeln!(
-            buf,
-            "{}:{} [{}] {} - {}",
-            record.file().unwrap_or("unknown"),
-            record.line().unwrap_or(0),
-            record.level(),
-            chrono::Local::now().format("%H:%M:%S.%6f"),
-            record.args()
-        )
-    })
-    .filter(None, log::LevelFilter::Trace)
-    .init();*/
-
     let mut app = App::new("data-channels-close")
         .version("0.1.0")
         .author("Rain Liu <yuliu@webrtc.rs>")
@@ -46,6 +29,12 @@ async fn main() -> Result<()> {
             Arg::with_name("FULLHELP")
                 .help("Prints more detailed help information")
                 .long("fullhelp"),
+        )
+        .arg(
+            Arg::with_name("debug")
+                .long("debug")
+                .short("d")
+                .help("Prints debug log information"),
         )
         .arg(
             Arg::with_name("close-after")
@@ -70,6 +59,23 @@ async fn main() -> Result<()> {
             .to_owned()
             .parse::<i32>()?,
     ));
+    let debug = matches.is_present("debug");
+    if debug {
+        env_logger::Builder::new()
+            .format(|buf, record| {
+                writeln!(
+                    buf,
+                    "{}:{} [{}] {} - {}",
+                    record.file().unwrap_or("unknown"),
+                    record.line().unwrap_or(0),
+                    record.level(),
+                    chrono::Local::now().format("%H:%M:%S.%6f"),
+                    record.args()
+                )
+            })
+            .filter(None, log::LevelFilter::Trace)
+            .init();
+    }
 
     // Everything below is the WebRTC-rs API! Thanks for using it ❤️.
 
