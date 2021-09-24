@@ -37,7 +37,7 @@ lazy_static! {
     static ref VIDEO_FILE: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
 }
 
-static INDEX: &str = "examples/play-from-disk-renegotation/index.html";
+static INDEX: &str = "examples/play-from-disk-renegotiation/index.html";
 static NOTFOUND: &[u8] = b"Not Found";
 
 /// HTTP status code 404
@@ -224,10 +224,10 @@ async fn remove_video(
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut app = App::new("play-from-disk-renegotation")
+    let mut app = App::new("play-from-disk-renegotiation")
         .version("0.1.0")
         .author("Rain Liu <yuliu@webrtc.rs>")
-        .about("An example of play-from-disk-renegotation.")
+        .about("An example of play-from-disk-renegotiation.")
         .setting(AppSettings::DeriveDisplayOrder)
         .setting(AppSettings::SubcommandsNegateReqs)
         .arg(

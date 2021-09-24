@@ -98,8 +98,8 @@ path = "examples/play-from-disk/play-from-disk.rs"
 bench = false
 
 [[example]]
-name = "play-from-disk-renegotation"
-path = "examples/play-from-disk-renegotation/play-from-disk-renegotation.rs"
+name = "play-from-disk-renegotiation"
+path = "examples/play-from-disk-renegotiation/play-from-disk-renegotiation.rs"
 bench = false
 
 [[example]]
