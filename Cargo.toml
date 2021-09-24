@@ -57,6 +57,11 @@ signal = {path = "examples/signal" }
 opt-level = 0
 
 [[example]]
+name = "broadcast"
+path = "examples/broadcast/broadcast.rs"
+bench = false
+
+[[example]]
 name = "data-channels"
 path = "examples/data-channels/data-channels.rs"
 bench = false
