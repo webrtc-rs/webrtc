@@ -114,29 +114,34 @@ impl RTPReceiverInternal {
         Ok((pkts, attributes))
     }
 
-    pub(crate) async fn read_rtp(&self, b: &mut [u8], tid: &str) -> Result<(usize, Attributes)> {
+    pub(crate) async fn read_rtp(&self, b: &mut [u8], tid: usize) -> Result<(usize, Attributes)> {
         {
             let mut received_rx = self.received_rx.lock().await;
             let _ = received_rx.recv().await;
         }
 
-        log::debug!("read_rtp enter tracks");
+        //log::debug!("read_rtp enter tracks tid {}", tid);
         let mut rtp_interceptor = None;
         {
             let tracks = self.tracks.lock().await;
             for t in &*tracks {
-                if t.track.id().await == tid {
+                if t.track.tid() == tid {
                     rtp_interceptor = t.rtp_interceptor.clone();
                     break;
                 }
             }
         };
-        log::debug!("read_rtp exit tracks");
+        /*log::debug!(
+            "read_rtp exit tracks with rtp_interceptor {} with tid {}",
+            rtp_interceptor.is_some(),
+            tid,
+        );*/
 
         if let Some(ri) = rtp_interceptor {
             let a = Attributes::new();
             ri.read(b, &a).await
         } else {
+            //log::debug!("read_rtp exit tracks with ErrRTPReceiverWithSSRCTrackStreamNotFound");
             Err(Error::ErrRTPReceiverWithSSRCTrackStreamNotFound.into())
         }
     }
@@ -271,7 +276,11 @@ impl RTCRtpReceiver {
     /// track returns the RtpTransceiver TrackRemote
     pub async fn track(&self) -> Option<Arc<TrackRemote>> {
         let tracks = self.internal.tracks.lock().await;
-        tracks.first().map(|t| Arc::clone(&t.track))
+        if tracks.len() != 1 {
+            None
+        } else {
+            tracks.first().map(|t| Arc::clone(&t.track))
+        }
     }
 
     /// tracks returns the RtpTransceiver tracks
@@ -476,7 +485,7 @@ impl RTCRtpReceiver {
     }
 
     /// read_rtp should only be called by a track, this only exists so we can keep state in one place
-    pub(crate) async fn read_rtp(&self, b: &mut [u8], tid: &str) -> Result<(usize, Attributes)> {
+    pub(crate) async fn read_rtp(&self, b: &mut [u8], tid: usize) -> Result<(usize, Attributes)> {
         self.internal.read_rtp(b, tid).await
     }
 
@@ -489,7 +498,7 @@ impl RTCRtpReceiver {
         ssrc: SSRC,
     ) -> Result<Arc<TrackRemote>> {
         let interceptor = Arc::clone(&self.internal.interceptor);
-        log::debug!("receive_for_rid enter tracks");
+        //log::debug!("receive_for_rid enter tracks");
         {
             let mut tracks = self.internal.tracks.lock().await;
             for t in &mut *tracks {
@@ -520,13 +529,13 @@ impl RTCRtpReceiver {
                     t.rtcp_read_stream = rtcp_read_stream;
                     t.rtcp_interceptor = rtcp_interceptor;
 
-                    log::debug!("receive_for_rid exit tracks 1");
+                    //log::debug!("receive_for_rid exit tracks 1");
                     return Ok(Arc::clone(&t.track));
                 }
             }
         }
 
-        log::debug!("receive_for_rid exit tracks 2");
+        //log::debug!("receive_for_rid exit tracks 2");
         Err(Error::ErrRTPReceiverForSSRCTrackStreamNotFound.into())
     }
 
@@ -545,7 +554,8 @@ impl RTCRtpReceiver {
             .get_srtp_session()
             .await
             .ok_or(Error::ErrDtlsTransportNotStarted)?;
-        let rtp_read_stream = Arc::new(srtp_session.listen(ssrc).await?);
+        //log::debug!("streams_for_ssrc: srtp_session.listen ssrc={}", ssrc);
+        let rtp_read_stream = srtp_session.open(ssrc).await;
         let rtp_stream_reader = Arc::clone(&rtp_read_stream) as Arc<dyn RTPReader + Send + Sync>;
         let rtp_interceptor = interceptor
             .bind_remote_stream(stream_info, rtp_stream_reader)
@@ -555,7 +565,8 @@ impl RTCRtpReceiver {
             .get_srtcp_session()
             .await
             .ok_or(Error::ErrDtlsTransportNotStarted)?;
-        let rtcp_read_stream = Arc::new(srtcp_session.listen(ssrc).await?);
+        //log::debug!("streams_for_ssrc: srtcp_session.listen ssrc={}", ssrc);
+        let rtcp_read_stream = srtcp_session.open(ssrc).await;
         let rtcp_stream_reader = Arc::clone(&rtcp_read_stream) as Arc<dyn RTCPReader + Send + Sync>;
         let rtcp_interceptor = interceptor.bind_rtcp_reader(rtcp_stream_reader).await;
 

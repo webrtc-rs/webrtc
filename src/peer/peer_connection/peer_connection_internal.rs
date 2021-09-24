@@ -203,7 +203,7 @@ impl PeerConnectionInternal {
                 };
 
                 let stream = match srtp_session.accept().await {
-                    Ok(stream) => Arc::new(stream),
+                    Ok(stream) => stream,
                     Err(err) => {
                         log::warn!("Failed to accept RTP {}", err);
                         return;
@@ -1038,6 +1038,7 @@ impl PeerConnectionInternal {
                                 let track = receiver
                                     .receive_for_rid(rid.as_str(), &params, ssrc)
                                     .await?;
+                                //println!("handleUndeclaredSSRC got new track: {:?}", track);
                                 RTCPeerConnection::do_track(
                                     Arc::clone(&self.on_track_handler),
                                     Some(track),
@@ -1093,6 +1094,7 @@ impl PeerConnectionInternal {
                     track.set_codec(params.codecs[0].clone()).await;
                     track.set_params(params).await;
 
+                    //println!("startReceiver got new track: {:?}", receiver.track().await);
                     RTCPeerConnection::do_track(
                         on_track_handler,
                         receiver.track().await,

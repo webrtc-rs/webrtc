@@ -49,8 +49,7 @@ impl SrtpWriterFuture {
         }
 
         if let Some(srtcp_session) = self.rtp_transport.get_srtcp_session().await {
-            //TODO: use srtcp_session.open(self.ssrc).await?
-            let rtcp_read_stream = Arc::new(srtcp_session.listen(self.ssrc).await?);
+            let rtcp_read_stream = srtcp_session.open(self.ssrc).await;
             let mut stream = self.rtcp_read_stream.lock().await;
             *stream = Some(rtcp_read_stream);
         }

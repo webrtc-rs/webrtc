@@ -11,7 +11,6 @@ pub mod peer;
 pub mod stats;
 pub mod util;
 
-#[cfg(test)]
 #[macro_use]
 extern crate lazy_static;
 

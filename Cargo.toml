@@ -21,11 +21,11 @@ ice = { package = "webrtc-ice", version = "0.4.0" }
 dtls = { package = "webrtc-dtls", version = "0.4.11" }
 rtp = "0.3.4"
 rtcp = "0.3.3"
-srtp = { package = "webrtc-srtp", version = "0.3.6" }
+srtp = { package = "webrtc-srtp", version = "0.4.0" }
 sctp = { package = "webrtc-sctp", version = "0.3.5" }
 data = { package = "webrtc-data", version = "0.2.5" }
 media = { package = "webrtc-media", version = "0.0.6" }
-interceptor = "0.1.1"
+interceptor = "0.1.2"
 tokio = { version = "1.10.1", features = ["full"] }
 log = "0.4.14"
 async-trait = "0.1.42"
@@ -44,11 +44,11 @@ ring = "0.16.19"
 sha2 = "0.9.1"
 chrono = "0.4.19"
 base64 = "0.13.0"
+lazy_static = "1.4"
 
 [dev-dependencies]
 tokio-test = "0.4"
 env_logger = "0.8"
-lazy_static = "1.4"
 clap = "2"
 hyper = { version = "0.14", features = ["full"] }
 signal = {path = "examples/signal" }
@@ -109,6 +109,11 @@ bench = false
 [[example]]
 name = "save-to-disk"
 path = "examples/save-to-disk/save-to-disk.rs"
+bench = false
+
+[[example]]
+name = "simulcast"
+path = "examples/simulcast/simulcast.rs"
 bench = false
 
 [[example]]

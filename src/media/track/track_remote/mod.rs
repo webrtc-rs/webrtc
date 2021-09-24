@@ -8,10 +8,14 @@ use crate::media::rtp::rtp_receiver::RTPReceiverInternal;
 use anyhow::Result;
 use bytes::{Bytes, BytesMut};
 use interceptor::{Attributes, Interceptor};
-use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU8, AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use util::Unmarshal;
+
+lazy_static! {
+    static ref TRACK_REMOTE_UNIQUE_ID: AtomicUsize = AtomicUsize::new(0);
+}
 
 #[derive(Default)]
 struct TrackRemoteInternal {
@@ -21,6 +25,8 @@ struct TrackRemoteInternal {
 
 /// TrackRemote represents a single inbound source of media
 pub struct TrackRemote {
+    tid: usize,
+
     id: Mutex<String>,
     stream_id: Mutex<String>,
 
@@ -63,6 +69,7 @@ impl TrackRemote {
         interceptor: Arc<dyn Interceptor + Send + Sync>,
     ) -> Self {
         TrackRemote {
+            tid: TRACK_REMOTE_UNIQUE_ID.fetch_add(1, Ordering::SeqCst),
             id: Default::default(),
             stream_id: Default::default(),
             payload_type: Default::default(),
@@ -77,6 +84,10 @@ impl TrackRemote {
 
             internal: Default::default(),
         }
+    }
+
+    pub fn tid(&self) -> usize {
+        self.tid
     }
 
     /// id is the unique identifier for this Track. This should be unique for the
@@ -180,7 +191,7 @@ impl TrackRemote {
         } else {
             let (n, attributes) = {
                 if let Some(receiver) = &self.receiver {
-                    receiver.read_rtp(b, self.id().await.as_str()).await?
+                    receiver.read_rtp(b, self.tid).await?
                 } else {
                     return Err(Error::ErrRTPReceiverNil.into());
                 }
