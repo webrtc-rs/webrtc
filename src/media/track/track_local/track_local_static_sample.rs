@@ -63,10 +63,16 @@ impl TrackLocalStaticSample {
         let clock_rate = internal.clock_rate;
 
         let packets = if let Some(packetizer) = &mut internal.packetizer {
-            let samples = (sample.duration.as_secs() as f64 * clock_rate) as u32;
+            let samples = (sample.duration.as_secs_f64() * clock_rate) as u32;
             if sample.prev_dropped_packets > 0 {
                 packetizer.skip_samples(samples * sample.prev_dropped_packets as u32);
             }
+            /*println!(
+                "clock_rate={}, samples={}, {}",
+                clock_rate,
+                samples,
+                sample.duration.as_secs_f64()
+            );*/
             packetizer.packetize(&sample.data, samples)?
         } else {
             vec![]
