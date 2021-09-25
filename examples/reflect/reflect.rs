@@ -2,11 +2,12 @@ use anyhow::Result;
 use clap::{App, AppSettings, Arg};
 use interceptor::registry::Registry;
 use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
+use std::collections::HashMap;
 use std::io::Write;
 use std::sync::Arc;
 use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
-use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_VP8};
+use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_OPUS, MIME_TYPE_VP8};
 use webrtc::api::APIBuilder;
 use webrtc::media::rtp::rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType};
 use webrtc::media::rtp::rtp_receiver::RTCRtpReceiver;
@@ -69,6 +70,18 @@ async fn main() -> Result<()> {
     let mut m = MediaEngine::default();
 
     // Setup the codecs you want to use.
+    m.register_codec(
+        RTCRtpCodecParameters {
+            capability: RTCRtpCodecCapability {
+                mime_type: MIME_TYPE_OPUS.to_owned(),
+                ..Default::default()
+            },
+            payload_type: 120,
+            ..Default::default()
+        },
+        RTPCodecType::Audio,
+    )?;
+
     // We'll use a VP8 and Opus but you can also define your own
     m.register_codec(
         RTCRtpCodecParameters {
@@ -111,30 +124,37 @@ async fn main() -> Result<()> {
 
     // Create a new RTCPeerConnection
     let peer_connection = Arc::new(api.new_peer_connection(config).await?);
+    let mut output_tracks = HashMap::new();
+    for s in vec!["audio", "video"] {
+        let output_track = Arc::new(TrackLocalStaticRTP::new(
+            RTCRtpCodecCapability {
+                mime_type: if s == "video" {
+                    MIME_TYPE_VP8.to_owned()
+                } else {
+                    MIME_TYPE_OPUS.to_owned()
+                },
+                ..Default::default()
+            },
+            format!("track-{}", s),
+            "webrtc-rs".to_owned(),
+        ));
 
-    // Create Track that we send video back to browser on
-    let output_track = Arc::new(TrackLocalStaticRTP::new(
-        RTCRtpCodecCapability {
-            mime_type: MIME_TYPE_VP8.to_owned(),
-            ..Default::default()
-        },
-        "video".to_owned(),
-        "webrtc-rs".to_owned(),
-    ));
+        // Add this newly created track to the PeerConnection
+        let rtp_sender = peer_connection
+            .add_track(Arc::clone(&output_track) as Arc<dyn TrackLocal + Send + Sync>)
+            .await?;
 
-    // Add this newly created track to the PeerConnection
-    let rtp_sender = peer_connection
-        .add_track(Arc::clone(&output_track) as Arc<dyn TrackLocal + Send + Sync>)
-        .await?;
+        // Read incoming RTCP packets
+        // Before these packets are returned they are processed by interceptors. For things
+        // like NACK this needs to be called.
+        tokio::spawn(async move {
+            let mut rtcp_buf = vec![0u8; 1500];
+            while let Ok((_, _)) = rtp_sender.read(&mut rtcp_buf).await {}
+            Result::<()>::Ok(())
+        });
 
-    // Read incoming RTCP packets
-    // Before these packets are returned they are processed by interceptors. For things
-    // like NACK this needs to be called.
-    tokio::spawn(async move {
-        let mut rtcp_buf = vec![0u8; 1500];
-        while let Ok((_, _)) = rtp_sender.read(&mut rtcp_buf).await {}
-        Result::<()>::Ok(())
-    });
+        output_tracks.insert(s.to_owned(), output_track);
+    }
 
     // Wait for the offer to be pasted
     let line = signal::must_read_stdin()?;
@@ -154,23 +174,38 @@ async fn main() -> Result<()> {
                     // Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
                     // This is a temporary fix until we implement incoming RTCP events, then we would push a PLI only when a viewer requests it
                     let media_ssrc = track.ssrc();
-                    let pc2 = Arc::clone(&pc);
-                    tokio::spawn(async move {
-                        let mut result = Result::<usize>::Ok(0);
-                        while result.is_ok() {
-                            let timeout = tokio::time::sleep(Duration::from_secs(3));
-                            tokio::pin!(timeout);
 
-                            tokio::select! {
-                                _ = timeout.as_mut() =>{
-                                    result = pc2.write_rtcp(&PictureLossIndication{
-                                            sender_ssrc: 0,
-                                            media_ssrc,
-                                    }).await;
-                                }
-                            };
-                        }
-                    });
+                    if track.kind() == RTPCodecType::Video {
+                        let pc2 = Arc::clone(&pc);
+                        tokio::spawn(async move {
+                            let mut result = Result::<usize>::Ok(0);
+                            while result.is_ok() {
+                                let timeout = tokio::time::sleep(Duration::from_secs(3));
+                                tokio::pin!(timeout);
+
+                                tokio::select! {
+                                    _ = timeout.as_mut() =>{
+                                        result = pc2.write_rtcp(&PictureLossIndication{
+                                                sender_ssrc: 0,
+                                                media_ssrc,
+                                        }).await;
+                                    }
+                                };
+                            }
+                        });
+                    }
+
+                    let kind = if track.kind() == RTPCodecType::Audio {
+                        "audio"
+                    } else {
+                        "video"
+                    };
+                    let output_track = if let Some(output_track) = output_tracks.get(kind) {
+                        Arc::clone(output_track)
+                    } else {
+                        println!("output_track not found for type = {}", kind);
+                        return Box::pin(async {});
+                    };
 
                     let output_track2 = Arc::clone(&output_track);
                     tokio::spawn(async move {
