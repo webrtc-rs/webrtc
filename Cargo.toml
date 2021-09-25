@@ -88,6 +88,11 @@ path = "examples/data-channels-detach-create/data-channels-detach-create.rs"
 bench = false
 
 [[example]]
+name = "data-channels-flow-control"
+path = "examples/data-channels-flow-control/data-channels-flow-control.rs"
+bench = false
+
+[[example]]
 name = "insertable-streams"
 path = "examples/insertable-streams/insertable-streams.rs"
 bench = false
