@@ -618,7 +618,7 @@ impl RTCPeerConnection {
         &self.configuration
     }
 
-    fn get_stats_id(&self) -> &str {
+    pub fn get_stats_id(&self) -> &str {
         self.stats_id.as_str()
     }
 
