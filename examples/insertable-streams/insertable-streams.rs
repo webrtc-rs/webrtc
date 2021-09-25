@@ -29,7 +29,7 @@ const CIPHER_KEY: u8 = 0xAA;
 async fn main() -> Result<()> {
     let mut app = App::new("insertable-streams")
         .version("0.1.0")
-        .author("Rain Liu <yuliu@webrtc.rs>")
+        .author("Rain Liu <yliu@webrtc.rs>")
         .about("An example of insertable-streams.")
         .setting(AppSettings::DeriveDisplayOrder)
         .setting(AppSettings::SubcommandsNegateReqs)

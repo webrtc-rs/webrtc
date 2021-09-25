@@ -59,7 +59,7 @@ async fn save_to_disk(
 async fn main() -> Result<()> {
     let mut app = App::new("save-to-disk")
         .version("0.1.0")
-        .author("Rain Liu <yuliu@webrtc.rs>")
+        .author("Rain Liu <yliu@webrtc.rs>")
         .about("An example of save-to-disk.")
         .setting(AppSettings::DeriveDisplayOrder)
         .setting(AppSettings::SubcommandsNegateReqs)

@@ -21,7 +21,7 @@ const MESSAGE_SIZE: usize = 1500;
 async fn main() -> Result<()> {
     let mut app = App::new("data-channels-detach-create")
         .version("0.1.0")
-        .author("Rain Liu <yuliu@webrtc.rs>")
+        .author("Rain Liu <yliu@webrtc.rs>")
         .about("An example of Data-Channels-Detach-Create.")
         .setting(AppSettings::DeriveDisplayOrder)
         .setting(AppSettings::SubcommandsNegateReqs)

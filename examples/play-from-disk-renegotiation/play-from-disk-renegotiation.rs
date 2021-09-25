@@ -226,7 +226,7 @@ async fn remove_video(
 async fn main() -> Result<()> {
     let mut app = App::new("play-from-disk-renegotiation")
         .version("0.1.0")
-        .author("Rain Liu <yuliu@webrtc.rs>")
+        .author("Rain Liu <yliu@webrtc.rs>")
         .about("An example of play-from-disk-renegotiation.")
         .setting(AppSettings::DeriveDisplayOrder)
         .setting(AppSettings::SubcommandsNegateReqs)

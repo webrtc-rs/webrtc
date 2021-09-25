@@ -21,7 +21,7 @@ use webrtc::util::math_rand_alpha;
 async fn main() -> Result<()> {
     let mut app = App::new("data-channels-close")
         .version("0.1.0")
-        .author("Rain Liu <yuliu@webrtc.rs>")
+        .author("Rain Liu <yliu@webrtc.rs>")
         .about("An example of Data-Channels-Close.")
         .setting(AppSettings::DeriveDisplayOrder)
         .setting(AppSettings::SubcommandsNegateReqs)

@@ -23,7 +23,7 @@ use webrtc::peer::sdp::session_description::RTCSessionDescription;
 async fn main() -> Result<()> {
     let mut app = App::new("reflect")
         .version("0.1.0")
-        .author("Rain Liu <yuliu@webrtc.rs>")
+        .author("Rain Liu <yliu@webrtc.rs>")
         .about("An example of how to send back to the user exactly what it receives using the same PeerConnection.")
         .setting(AppSettings::DeriveDisplayOrder)
         .setting(AppSettings::SubcommandsNegateReqs)
