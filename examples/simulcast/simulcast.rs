@@ -161,65 +161,56 @@ async fn main() -> Result<()> {
                 if let Some(track) = track {
                     println!("Track has started");
 
-                    let track2 = Arc::clone(&track);
-                    let pc2 = Arc::clone(&pc);
-
-                    let rid = track.rid();
-                    let output_track2 = if let Some(output_track) = output_tracks.get(rid) {
+                    let rid = track.rid().to_owned();
+                    let output_track = if let Some(output_track) = output_tracks.get(&rid) {
                         Arc::clone(output_track)
                     } else {
                         println!("output_track not found for rid = {}", rid);
                         return Box::pin(async {});
                     };
 
-                    Box::pin(async move {
-                        // Start reading from all the streams and sending them to the related output track
-                        let rid = track2.rid().to_owned();
-                        let media_ssrc = track2.ssrc();
-                        tokio::spawn(async move {
-                            let mut result = Result::<usize>::Ok(0);
-                            while result.is_ok() {
-                                println!(
-                                    "Sending pli for stream with rid: {}, ssrc: {}",
-                                    rid, media_ssrc
-                                );
+                    // Start reading from all the streams and sending them to the related output track
+                    let media_ssrc = track.ssrc();
+                    let pc2 = Arc::clone(&pc);
+                    tokio::spawn(async move {
+                        let mut result = Result::<usize>::Ok(0);
+                        while result.is_ok() {
+                            println!(
+                                "Sending pli for stream with rid: {}, ssrc: {}",
+                                rid, media_ssrc
+                            );
 
-                                let timeout = tokio::time::sleep(Duration::from_secs(3));
-                                tokio::pin!(timeout);
+                            let timeout = tokio::time::sleep(Duration::from_secs(3));
+                            tokio::pin!(timeout);
 
-                                tokio::select! {
-                                    _ = timeout.as_mut() =>{
-                                        result = pc2.write_rtcp(&PictureLossIndication{
-                                                sender_ssrc: 0,
-                                                media_ssrc,
-                                        }).await;
-                                    }
-                                };
-                            }
-                        });
+                            tokio::select! {
+                                _ = timeout.as_mut() =>{
+                                    result = pc2.write_rtcp(&PictureLossIndication{
+                                            sender_ssrc: 0,
+                                            media_ssrc,
+                                    }).await;
+                                }
+                            };
+                        }
+                    });
 
-                        tokio::spawn(async move {
-                            // Read RTP packets being sent to webrtc-rs
-                            println!("enter track loop {}", track2.rid());
-                            while let Ok((rtp, _)) = track2.read_rtp().await {
-                                if let Err(err) = output_track2.write_rtp(&rtp).await {
-                                    if !Error::ErrClosedPipe.equal(&err) {
-                                        println!(
-                                            "output track write_rtp got error: {} and break",
-                                            err
-                                        );
-                                        break;
-                                    } else {
-                                        println!("output track write_rtp got error: {}", err);
-                                    }
+                    tokio::spawn(async move {
+                        // Read RTP packets being sent to webrtc-rs
+                        println!("enter track loop {}", track.rid());
+                        while let Ok((rtp, _)) = track.read_rtp().await {
+                            if let Err(err) = output_track.write_rtp(&rtp).await {
+                                if !Error::ErrClosedPipe.equal(&err) {
+                                    println!("output track write_rtp got error: {} and break", err);
+                                    break;
+                                } else {
+                                    println!("output track write_rtp got error: {}", err);
                                 }
                             }
-                            println!("exit track loop {}", track2.rid());
-                        });
-                    })
-                } else {
-                    Box::pin(async {})
+                        }
+                        println!("exit track loop {}", track.rid());
+                    });
                 }
+                Box::pin(async {})
             },
         ))
         .await;

@@ -151,37 +151,36 @@ async fn main() -> Result<()> {
         .on_track(Box::new(
             move |track: Option<Arc<TrackRemote>>, _receiver: Option<Arc<RTCRtpReceiver>>| {
                 if let Some(track) = track {
-                    let track2 = Arc::clone(&track);
-                    let output_track2 = Arc::clone(&output_track);
+                    // Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
+                    // This is a temporary fix until we implement incoming RTCP events, then we would push a PLI only when a viewer requests it
+                    let media_ssrc = track.ssrc();
                     let pc2 = Arc::clone(&pc);
-                    Box::pin(async move {
-                        // Send a PLI on an interval so that the publisher is pushing a keyframe every rtcpPLIInterval
-                        // This is a temporary fix until we implement incoming RTCP events, then we would push a PLI only when a viewer requests it
-                        let media_ssrc = track2.ssrc();
-                        tokio::spawn(async move {
-                            let mut result = Result::<usize>::Ok(0);
-                            while result.is_ok() {
-                                let timeout = tokio::time::sleep(Duration::from_secs(3));
-                                tokio::pin!(timeout);
+                    tokio::spawn(async move {
+                        let mut result = Result::<usize>::Ok(0);
+                        while result.is_ok() {
+                            let timeout = tokio::time::sleep(Duration::from_secs(3));
+                            tokio::pin!(timeout);
 
-                                tokio::select! {
-                                    _ = timeout.as_mut() =>{
-                                        result = pc2.write_rtcp(&PictureLossIndication{
-                                                sender_ssrc: 0,
-                                                media_ssrc,
-                                        }).await;
-                                    }
-                                };
-                            }
-                        });
+                            tokio::select! {
+                                _ = timeout.as_mut() =>{
+                                    result = pc2.write_rtcp(&PictureLossIndication{
+                                            sender_ssrc: 0,
+                                            media_ssrc,
+                                    }).await;
+                                }
+                            };
+                        }
+                    });
 
+                    let output_track2 = Arc::clone(&output_track);
+                    tokio::spawn(async move {
                         print!(
                             "Track has started, of type {}: {} \n",
-                            track2.payload_type(),
-                            track2.codec().await.capability.mime_type
+                            track.payload_type(),
+                            track.codec().await.capability.mime_type
                         );
                         // Read RTP packets being sent to webrtc-rs
-                        while let Ok((rtp, _)) = track2.read_rtp().await {
+                        while let Ok((rtp, _)) = track.read_rtp().await {
                             if let Err(err) = output_track2.write_rtp(&rtp).await {
                                 print!("output track write_rtp got error: {}", err);
                                 break;
@@ -189,10 +188,9 @@ async fn main() -> Result<()> {
                         }
 
                         print!("on_track finished!");
-                    })
-                } else {
-                    Box::pin(async {})
+                    });
                 }
+                Box::pin(async {})
             },
         ))
         .await;
