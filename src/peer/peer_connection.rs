@@ -1247,7 +1247,9 @@ impl RTCPeerConnection {
                                 let t = if let Some(t) =
                                     find_by_mid(mid_value, &mut local_transceivers).await
                                 {
-                                    t.stop().await?;
+                                    if direction == RTCRtpTransceiverDirection::Inactive {
+                                        t.stop().await?;
+                                    }
                                     Some(t)
                                 } else {
                                     satisfy_type_and_direction(
