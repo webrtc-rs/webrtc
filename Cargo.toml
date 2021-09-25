@@ -133,6 +133,11 @@ path = "examples/simulcast/simulcast.rs"
 bench = false
 
 [[example]]
+name = "swap-tracks"
+path = "examples/swap-tracks/swap-tracks.rs"
+bench = false
+
+[[example]]
 name = "ortc"
 path = "examples/ortc/ortc.rs"
 bench = false
