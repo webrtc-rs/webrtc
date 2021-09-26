@@ -1,6 +1,6 @@
 [package]
 name = "webrtc-mdns"
-version = "0.3.4"
+version = "0.3.5"
 authors = ["Rain Liu <yuliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of mDNS"
@@ -24,7 +24,7 @@ thiserror = "1.0.29"
 anyhow = "1.0.44"
 
 [dev-dependencies]
-env_logger = "0.8"
+env_logger = "0.9"
 clap = "2"
 
 [[example]]
