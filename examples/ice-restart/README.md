@@ -18,6 +18,3 @@ and allow you to do an ICE Restart at anytime.
 * `Inbound DataChannel Messages` containing the current time sent by the Pion process every 3 seconds.
 
 Congrats, you have used WebRTC.rs!
-
-## Known issue:
-this example is also broken in Pion: https://github.com/pion/webrtc/issues/1970
