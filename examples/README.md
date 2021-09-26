@@ -15,8 +15,6 @@ All examples are ported from [Pion](https://github.com/pion/webrtc/tree/master/e
 - [x] [RTP to WebRTC](rtp-to-webrtc): The rtp-to-webrtc example demonstrates how to take RTP packets sent to a webrtc-rs process into your browser.
 - [x] [Simulcast](simulcast): The simulcast example demonstrates how to accept and demux 1 Track that contains 3 Simulcast streams. It then returns the media as 3 independent Tracks back to the sender.
 - [x] [Swap Tracks](swap-tracks): The swap-tracks demonstrates how to swap multiple incoming tracks on a single outgoing track.
-- [ ] [ICE Restart](ice-restart): The ice-restart demonstrates webrtc-rs ICE Restart abilities.
-- [ ] [ICE Single Port](ice-single-port): The ice-single-port demonstrates webrtc-rs ability to serve many PeerConnections on a single port.
 
 #### Data Channel API
 - [x] [Data Channels](data-channels): The data-channels example shows how you can send/recv DataChannel messages from a web browser.

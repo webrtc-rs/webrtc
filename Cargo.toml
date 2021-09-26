@@ -151,3 +151,8 @@ bench = false
 name = "answer"
 path = "examples/offer-answer/answer.rs"
 bench = false
+
+[[example]]
+name = "ice-restart"
+path = "examples/ice-restart/ice-restart.rs"
+bench = false
