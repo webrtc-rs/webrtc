@@ -56,7 +56,7 @@ async fn test_server_simple() -> Result<()> {
             }),
         }],
         realm: "webrtc.rs".to_owned(),
-        auth_handler: Arc::new(Box::new(TestAuthHandler::new())),
+        auth_handler: Arc::new(TestAuthHandler::new()),
         channel_bind_timeout: Duration::from_secs(0),
     })
     .await?;
@@ -190,7 +190,7 @@ async fn build_vnet() -> Result<VNet> {
             }),
         }],
         realm: "webrtc.rs".to_owned(),
-        auth_handler: Arc::new(Box::new(TestAuthHandler::new())),
+        auth_handler: Arc::new(TestAuthHandler::new()),
         channel_bind_timeout: Duration::from_secs(0),
     })
     .await?;

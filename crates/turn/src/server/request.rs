@@ -56,7 +56,7 @@ pub struct Request {
     pub nonces: Arc<Mutex<HashMap<String, Instant>>>,
 
     // User Configuration
-    pub auth_handler: Arc<Box<dyn AuthHandler + Send + Sync>>,
+    pub auth_handler: Arc<dyn AuthHandler + Send + Sync>,
     pub realm: String,
     pub channel_bind_timeout: Duration,
 }
@@ -66,7 +66,7 @@ impl Request {
         conn: Arc<dyn Conn + Send + Sync>,
         src_addr: SocketAddr,
         allocation_manager: Arc<Manager>,
-        auth_handler: Arc<Box<dyn AuthHandler + Send + Sync>>,
+        auth_handler: Arc<dyn AuthHandler + Send + Sync>,
     ) -> Self {
         Request {
             conn,

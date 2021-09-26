@@ -33,7 +33,7 @@ pub struct ServerConfig {
     pub realm: String,
 
     // auth_handler is a callback used to handle incoming auth requests, allowing users to customize Pion TURN with custom behavior
-    pub auth_handler: Arc<Box<dyn AuthHandler + Send + Sync>>,
+    pub auth_handler: Arc<dyn AuthHandler + Send + Sync>,
 
     // channel_bind_timeout sets the lifetime of channel binding. Defaults to 10 minutes.
     pub channel_bind_timeout: Duration,

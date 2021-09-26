@@ -74,12 +74,7 @@ async fn test_allocation_lifetime_deletion_zero_lifetime() -> Result<()> {
 
     let socket = SocketAddr::new(IpAddr::from_str("127.0.0.1")?, 5000);
 
-    let mut r = Request::new(
-        l,
-        socket,
-        allocation_manager,
-        Arc::new(Box::new(TestAuthHandler {})),
-    );
+    let mut r = Request::new(l, socket, allocation_manager, Arc::new(TestAuthHandler {}));
 
     {
         let mut nonces = r.nonces.lock().await;

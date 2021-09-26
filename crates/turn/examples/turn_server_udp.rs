@@ -119,7 +119,7 @@ async fn main() -> Result<()> {
             }),
         }],
         realm: realm.to_owned(),
-        auth_handler: Arc::new(Box::new(MyAuthHandler::new(cred_map))),
+        auth_handler: Arc::new(MyAuthHandler::new(cred_map)),
         channel_bind_timeout: Duration::from_secs(0),
     })
     .await?;

@@ -148,7 +148,7 @@ async fn test_client_nonce_expiration() -> Result<()> {
             }),
         }],
         realm: "webrtc.rs".to_owned(),
-        auth_handler: Arc::new(Box::new(TestAuthHandler {})),
+        auth_handler: Arc::new(TestAuthHandler {}),
         channel_bind_timeout: Duration::from_secs(0),
     })
     .await?;
