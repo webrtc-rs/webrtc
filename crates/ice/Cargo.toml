@@ -1,6 +1,6 @@
 [package]
 name = "webrtc-ice"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["Rain Liu <yliu@webrtc.rs>"]
 edition = "2018"
 description = "A pure Rust implementation of ICE"
@@ -12,11 +12,11 @@ repository = "https://github.com/webrtc-rs/ice"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-util = { package = "webrtc-util", version = "0.4.2", default-features = false, features = ["conn", "vnet"] }
-mdns = { package = "webrtc-mdns", version = "0.3.3" }
-stun = "0.3.3"
-turn = "0.3.4"
-tokio = { version = "1.0", features = ["full"] }
+util = { package = "webrtc-util", version = "0.4.3", default-features = false, features = ["conn", "vnet"] }
+mdns = { package = "webrtc-mdns", version = "0.3.5" }
+stun = "0.3.5"
+turn = "0.4.0"
+tokio = { version = "1.12.0", features = ["full"] }
 url = "2.2.0"
 crc = "2.0.0"
 uuid = { version = "0.8", features = ["v4"] }
@@ -30,12 +30,12 @@ anyhow = "1.0.41"
 [dev-dependencies]
 tokio-test = "0.4"
 regex = "1.4.3"
-env_logger = "0.8"
+env_logger = "0.9.0"
 chrono = "0.4.19"
 ipnet = "2.3.0"
 clap = "2"
 lazy_static = "1.3.0"
-hyper = { version = "0.14", features = ["full"] }
+hyper = { version = "0.14.13", features = ["full"] }
 
 [[example]]
 name = "ping_pong"

@@ -31,7 +31,7 @@ async fn test_server_reflexive_only_connection() -> Result<()> {
 
     let server = turn::server::Server::new(turn::server::config::ServerConfig {
         realm: "webrtc.rs".to_owned(),
-        auth_handler: Arc::new(Box::new(OptimisticAuthHandler {})),
+        auth_handler: Arc::new(OptimisticAuthHandler {}),
         conn_configs: vec![turn::server::config::ConnConfig {
             conn: server_listener,
             relay_addr_generator: Box::new(turn::relay::relay_none::RelayAddressGeneratorNone {
