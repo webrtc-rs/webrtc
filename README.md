@@ -71,7 +71,7 @@ This project is still in active and early development stage, please refer to the
 ## Features
 
 <p align="center">
-    <img src="./doc/uncheck.png">WebRTC<a href="https://crates.io/crates/webrtc"><img src="https://img.shields.io/crates/v/webrtc.svg"></a>
+    <img src="./doc/check.png">WebRTC<a href="https://crates.io/crates/webrtc"><img src="https://img.shields.io/crates/v/webrtc.svg"></a>
     <br>
     <img src="./doc/check.png">Media<a href="https://crates.io/crates/webrtc-media"><img src="https://img.shields.io/crates/v/webrtc-media.svg"></a>
     <img src="./doc/check.png">Interceptor<a href="https://crates.io/crates/interceptor"><img src="https://img.shields.io/crates/v/interceptor.svg"></a>
