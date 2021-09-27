@@ -1,0 +1,130 @@
+use std::fmt::Debug;
+
+use crate::track::{
+    constraint::{fitness::Fitness, NonNumeric, Numeric},
+    setting::audio as setting,
+};
+
+use super::Merge;
+
+pub type SampleRate = Numeric<setting::SampleRate>;
+pub type SampleSize = Numeric<setting::SampleSize>;
+pub type EchoCancellation = NonNumeric<setting::EchoCancellation>;
+pub type AutoGainControl = NonNumeric<setting::AutoGainControl>;
+pub type NoiseSuppression = NonNumeric<setting::NoiseSuppression>;
+pub type Latency = Numeric<setting::Latency>;
+pub type ChannelCount = Numeric<setting::ChannelCount>;
+
+/// An audio's constraints
+#[derive(PartialEq, Clone)]
+pub struct Audio {
+    pub sample_rate: Option<SampleRate>,
+    pub sample_size: Option<SampleSize>,
+    pub echo_cancellation: Option<EchoCancellation>,
+    pub auto_gain_control: Option<AutoGainControl>,
+    pub noise_suppression: Option<NoiseSuppression>,
+    pub latency: Option<Latency>,
+    pub channel_count: Option<ChannelCount>,
+}
+
+impl Debug for Audio {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut builder = f.debug_struct("Audio");
+
+        if let Some(sample_rate) = &self.sample_rate {
+            builder.field("sample_rate", &sample_rate);
+        }
+        if let Some(sample_size) = &self.sample_size {
+            builder.field("sample_size", &sample_size);
+        }
+        if let Some(echo_cancellation) = &self.echo_cancellation {
+            builder.field("echo_cancellation", &echo_cancellation);
+        }
+        if let Some(auto_gain_control) = &self.auto_gain_control {
+            builder.field("auto_gain_control", &auto_gain_control);
+        }
+        if let Some(noise_suppression) = &self.noise_suppression {
+            builder.field("noise_suppression", &noise_suppression);
+        }
+        if let Some(latency) = &self.latency {
+            builder.field("latency", &latency);
+        }
+        if let Some(channel_count) = &self.channel_count {
+            builder.field("channel_count", &channel_count);
+        }
+
+        builder.finish()
+    }
+}
+
+impl Merge for Audio {
+    fn merge(&mut self, other: &Self) {
+        if self.sample_rate.is_none() {
+            self.sample_rate = other.sample_rate.clone();
+        }
+        if self.sample_size.is_none() {
+            self.sample_size = other.sample_size.clone();
+        }
+        if self.echo_cancellation.is_none() {
+            self.echo_cancellation = other.echo_cancellation.clone();
+        }
+        if self.auto_gain_control.is_none() {
+            self.auto_gain_control = other.auto_gain_control.clone();
+        }
+        if self.noise_suppression.is_none() {
+            self.noise_suppression = other.noise_suppression.clone();
+        }
+        if self.latency.is_none() {
+            self.latency = other.latency.clone();
+        }
+        if self.channel_count.is_none() {
+            self.channel_count = other.channel_count.clone();
+        }
+    }
+}
+
+impl Audio {
+    fn fitness_distance(&self, settings: Option<&setting::Audio>) -> f64 {
+        // TODO(regexident): replace with `let_else` once stabilized:
+        // Tracking issue: https://github.com/rust-lang/rust/issues/87335
+        let settings = match settings {
+            Some(settings) => settings,
+            None => {
+                return 0.0;
+            }
+        };
+
+        let mut fitness: f64 = 0.0;
+
+        // TODO(regexident): Ignore unsupported constraints.
+
+        // Corresponding excerpt from W3C spec:
+        //
+        // > 1. If constraintName is not supported […],
+        // > the fitness distance is `0`.
+
+        if let Some(sample_rate) = &self.sample_rate {
+            fitness += sample_rate.fitness_distance(settings.sample_rate.as_ref());
+        }
+        if let Some(sample_size) = &self.sample_size {
+            fitness += sample_size.fitness_distance(settings.sample_size.as_ref());
+        }
+        if let Some(echo_cancellation) = &self.echo_cancellation {
+            fitness += echo_cancellation.fitness_distance(settings.echo_cancellation.as_ref());
+        }
+        if let Some(auto_gain_control) = &self.auto_gain_control {
+            fitness += auto_gain_control.fitness_distance(settings.auto_gain_control.as_ref());
+        }
+        if let Some(noise_suppression) = &self.noise_suppression {
+            fitness += noise_suppression.fitness_distance(settings.noise_suppression.as_ref());
+        }
+        if let Some(latency) = &self.latency {
+            fitness += latency.fitness_distance(settings.latency.as_ref());
+        }
+        if let Some(channel_count) = &self.channel_count {
+            fitness += channel_count.fitness_distance(settings.channel_count.as_ref());
+        }
+
+        return fitness;
+    }
+}
