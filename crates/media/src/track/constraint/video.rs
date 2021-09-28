@@ -1,5 +1,7 @@
 use std::fmt::Debug;
 
+use derive_builder::Builder;
+
 use crate::track::{
     constraint::{fitness::Fitness, NonNumeric, Numeric},
     setting::video as setting,
@@ -15,14 +17,44 @@ pub type FacingMode = NonNumeric<setting::FacingMode>;
 pub type ResizeMode = NonNumeric<setting::ResizeMode>;
 
 /// A video's constraints
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Default, Clone, Builder)]
 pub struct Video {
+    #[builder(default, setter(into, strip_option))]
     pub width: Option<Width>,
+    #[builder(default, setter(into, strip_option))]
     pub height: Option<Height>,
+    #[builder(default, setter(into, strip_option))]
     pub aspect_ratio: Option<AspectRatio>,
+    #[builder(default, setter(into, strip_option))]
     pub frame_rate: Option<FrameRate>,
+    #[builder(default, setter(into, strip_option))]
     pub facing_mode: Option<FacingMode>,
+    #[builder(default, setter(into, strip_option))]
     pub resize_mode: Option<ResizeMode>,
+}
+
+impl Video {
+    pub fn builder() -> VideoBuilder {
+        Default::default()
+    }
+
+    pub fn new(
+        width: Option<Width>,
+        height: Option<Height>,
+        aspect_ratio: Option<AspectRatio>,
+        frame_rate: Option<FrameRate>,
+        facing_mode: Option<FacingMode>,
+        resize_mode: Option<ResizeMode>,
+    ) -> Self {
+        Self {
+            width,
+            height,
+            aspect_ratio,
+            frame_rate,
+            facing_mode,
+            resize_mode,
+        }
+    }
 }
 
 impl Debug for Video {
@@ -108,5 +140,75 @@ impl Video {
         }
 
         return fitness;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default() {
+        let subject = Video::default();
+        assert_eq!(
+            subject,
+            Video {
+                width: None,
+                height: None,
+                aspect_ratio: None,
+                frame_rate: None,
+                facing_mode: None,
+                resize_mode: None,
+            }
+        );
+    }
+
+    #[test]
+    fn builder() {
+        let subject = Video::builder()
+            .height(Height::exactly(42.into()))
+            .frame_rate(FrameRate::at_least(30.0.into(), None))
+            .resize_mode(ResizeMode::any_of(
+                vec![setting::ResizeMode::CropAndScale],
+                None,
+            ))
+            .build()
+            .unwrap();
+        assert_eq!(
+            subject,
+            Video {
+                width: None,
+                height: Some(Height::exactly(42.into())),
+                aspect_ratio: None,
+                frame_rate: Some(FrameRate::at_least(30.0.into(), None)),
+                facing_mode: None,
+                resize_mode: Some(ResizeMode::any_of(
+                    vec![setting::ResizeMode::CropAndScale],
+                    None
+                )),
+            }
+        );
+    }
+
+    #[test]
+    fn fitness_distance() {
+        let constraint = Video::builder()
+            .height(Height::exactly(42.into()))
+            .frame_rate(FrameRate::at_least(30.0.into(), Some(40.0.into())))
+            .resize_mode(ResizeMode::any_of(
+                vec![setting::ResizeMode::CropAndScale],
+                None,
+            ))
+            .build()
+            .unwrap();
+
+        let setting = setting::Video::builder()
+            .height(setting::Height::from_pixels(42))
+            .frame_rate(setting::FrameRate::from_hertz(50.0))
+            .resize_mode(setting::ResizeMode::CropAndScale)
+            .build()
+            .unwrap();
+
+        assert_eq!(constraint.fitness_distance(Some(&setting)), 0.2);
     }
 }

@@ -1,84 +1,61 @@
-use std::ops::{RangeFrom, RangeInclusive, RangeToInclusive};
-
-use crate::track::constraint::Fitness;
-
-pub(crate) trait NumericSetting {
-    fn float_value(&self) -> f64;
-}
-
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub enum NumericMatchesKind<T> {
-    AtMost(RangeToInclusive<T>),
-    AtLeast(RangeFrom<T>),
-    Within(RangeInclusive<T>),
-}
+use crate::track::{constraint::Fitness, setting::NumericSetting};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum NumericKind<T> {
-    Exists(bool),
-    Matches(NumericMatchesKind<T>),
+    Exists { is_expected: bool },
+    Exactly { value: T },
+    AtLeast { min: T, ideal: Option<T> },
+    AtMost { max: T, ideal: Option<T> },
+    Within { min: T, max: T, ideal: Option<T> },
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Numeric<T> {
+    is_required: bool,
     kind: NumericKind<T>,
-    ideal: Option<T>,
-    required: bool,
 }
 
-impl<T> Numeric<T> {
-    pub fn exists(exists: bool) -> Self {
-        Self::kind(NumericKind::Exists(exists))
+impl<T> Numeric<T>
+where
+    T: Clone + PartialOrd,
+{
+    pub fn new(is_required: bool, kind: NumericKind<T>) -> Self {
+        Self { is_required, kind }
     }
 
-    pub fn at(value: T) -> Self
-    where
-        T: Clone,
-    {
-        let range = value.clone()..=value;
-        Self::matches(NumericMatchesKind::Within(range))
+    pub fn exists(is_expected: bool) -> Self {
+        Self::new(false, NumericKind::Exists { is_expected })
     }
 
-    pub fn at_most(range: RangeToInclusive<T>) -> Self {
-        Self::matches(NumericMatchesKind::AtMost(range))
+    pub fn exactly(value: T) -> Self {
+        Self::new(false, NumericKind::Exactly { value })
     }
 
-    pub fn at_least(range: RangeFrom<T>) -> Self {
-        Self::matches(NumericMatchesKind::AtLeast(range))
-    }
-
-    pub fn within(range: RangeInclusive<T>) -> Self {
-        Self::matches(NumericMatchesKind::Within(range))
-    }
-
-    fn kind(kind: NumericKind<T>) -> Self {
-        Self {
-            kind,
-            ideal: None,
-            required: false,
+    pub fn at_least(min: T, ideal: Option<T>) -> Self {
+        if let Some(ideal) = &ideal {
+            assert!(min <= *ideal);
         }
+        Self::new(false, NumericKind::AtLeast { min, ideal })
     }
 
-    fn matches(kind: NumericMatchesKind<T>) -> Self {
-        Self::kind(NumericKind::Matches(kind))
+    pub fn at_most(max: T, ideal: Option<T>) -> Self {
+        if let Some(ideal) = &ideal {
+            assert!(max >= *ideal);
+        }
+        Self::new(false, NumericKind::AtMost { max, ideal })
     }
 
-    pub fn required(mut self, required: bool) -> Self {
-        self.required = required;
+    pub fn within(min: T, max: T, ideal: Option<T>) -> Self {
+        if let Some(ideal) = &ideal {
+            assert!(min <= *ideal);
+            assert!(max >= *ideal);
+        }
+        Self::new(false, NumericKind::Within { min, max, ideal })
+    }
+
+    pub fn is_required(mut self, is_required: bool) -> Self {
+        self.is_required = is_required;
         self
-    }
-
-    pub fn ideal(mut self, ideal: Option<T>) -> Self {
-        self.ideal = ideal;
-        self
-    }
-
-    pub fn is_required(&self) -> bool {
-        self.required
-    }
-
-    pub fn ideal_value(&self) -> Option<&T> {
-        self.ideal.as_ref()
     }
 }
 
@@ -87,88 +64,294 @@ where
     T: Clone + PartialOrd + NumericSetting,
 {
     fn fitness_distance(&self, actual: Option<&T>) -> f64 {
-        let mismatch_distance = || {
-            if self.required {
-                // Corresponding excerpt from W3C spec:
-                //
-                // > 2. If the […] settings dictionary’s constraintName member’s value does not
-                // > satisfy the constraint […], the fitness distance is positive infinity.
-                f64::INFINITY
-            } else {
-                // Corresponding excerpt from W3C spec:
-                //
-                // > 5. If the settings dictionary's `constraintName` member does not exist,
-                // > the fitness distance is `1`.
-                1.0
+        let (is_match, ideal) = match &self.kind {
+            NumericKind::Exists { is_expected } => {
+                let is_match = actual.is_some() == *is_expected;
+                (is_match, None)
+            }
+            NumericKind::Exactly { value } => {
+                let is_match = match actual {
+                    Some(actual) => value == actual,
+                    None => false,
+                };
+                (is_match, Some(value))
+            }
+            NumericKind::AtLeast { min, ideal } => {
+                let is_match = match actual {
+                    Some(actual) => (min..).contains(&actual),
+                    None => false,
+                };
+                (is_match, ideal.as_ref())
+            }
+            NumericKind::AtMost { max, ideal } => {
+                let is_match = match actual {
+                    Some(actual) => (..=max).contains(&actual),
+                    None => false,
+                };
+                (is_match, ideal.as_ref())
+            }
+            NumericKind::Within { min, max, ideal } => {
+                let is_match = match actual {
+                    Some(actual) => (min..=max).contains(&actual),
+                    None => false,
+                };
+                (is_match, ideal.as_ref())
             }
         };
 
-        match &self.kind {
-            NumericKind::Exists(exists) => {
-                // Corresponding excerpt from W3C spec:
-                //
-                // > 4. If constraintValue is a boolean, but the constrainable property is not,
-                // > then the fitness distance is based on whether the settings
-                // > dictionary's constraintName member exists or not, from the formula
-                // >
-                // > ```
-                // > (constraintValue == exists) ? 0 : 1
-                // > ```
-                if *exists == actual.is_some() {
-                    0.0
-                } else {
-                    mismatch_distance()
-                }
-            }
-            NumericKind::Matches(kind) => {
-                // TODO(regexident): replace with `let_else` once stabilized:
-                // Tracking issue: https://github.com/rust-lang/rust/issues/87335
-                let actual = match actual {
-                    Some(actual) => actual,
-                    None => return mismatch_distance(),
-                };
-
-                let matches_value = match kind {
-                    NumericMatchesKind::AtMost(range) => range.contains(actual),
-                    NumericMatchesKind::AtLeast(range) => range.contains(actual),
-                    NumericMatchesKind::Within(range) => range.contains(actual),
-                };
-
-                if !matches_value {
-                    return mismatch_distance();
-                }
-
-                // TODO(regexident): replace with `let_else` once stabilized:
-                // Tracking issue: https://github.com/rust-lang/rust/issues/87335
-                let ideal = match self.ideal.as_ref() {
-                    Some(ideal) => ideal,
-                    None => {
-                        // Corresponding excerpt from W3C spec:
-                        //
-                        // > 6. If no ideal value is specified, the fitness distance is `0`.
-                        return 0.0;
-                    }
-                };
-
-                // Corresponding excerpt from W3C spec:
-                //
-                // > 7. For all positive numeric constraints […],
-                // > the fitness distance is the result of the formula
-                // >
-                // > ```
-                // > (actual == ideal) ? 0 : |actual - ideal| / max(|actual|, |ideal|)
-                // > ```
-                if actual == ideal {
-                    return 0.0;
-                } else {
-                    let actual: f64 = actual.float_value();
-                    let ideal: f64 = ideal.float_value();
-
-                    let numerator = (actual - ideal).abs();
-                    let denominator = actual.abs().max(ideal.abs());
-                    numerator / denominator
-                }
+        if !is_match {
+            if self.is_required {
+                return f64::INFINITY;
+            } else {
+                return 1.0;
             }
         }
+
+        match (actual, ideal) {
+            (_, None) => {
+                // No ideal value specified, so all values are equally fit.
+                0.0
+            }
+            (None, Some(_)) => {
+                // Value missing, so all values are equally unfit.
+                1.0
+            }
+            (Some(actual), Some(ideal)) => {
+                let actual: f64 = actual.float_value();
+                let ideal: f64 = ideal.float_value();
+
+                let numerator = (actual - ideal).abs();
+                let denominator = actual.abs().max(ideal.abs());
+                numerator / denominator
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
+    pub struct Dummy(u32);
+
+    impl From<u32> for Dummy {
+        fn from(u: u32) -> Self {
+            Self(u)
+        }
+    }
+
+    impl NumericSetting for Dummy {
+        fn float_value(&self) -> f64 {
+            self.0 as f64
+        }
+    }
+
+    #[test]
+    fn exists() {
+        let subject = Numeric::<Dummy>::exists(true);
+        assert_eq!(
+            subject,
+            Numeric {
+                is_required: false,
+                kind: NumericKind::Exists { is_expected: true }
+            }
+        );
+    }
+
+    #[test]
+    fn exactly() {
+        let subject = Numeric::<Dummy>::exactly(Dummy(42));
+        assert_eq!(
+            subject,
+            Numeric {
+                is_required: false,
+                kind: NumericKind::Exactly { value: Dummy(42) }
+            }
+        );
+    }
+
+    #[test]
+    fn at_least() {
+        let subject = Numeric::<Dummy>::at_least(Dummy(10), Some(Dummy(42)));
+        assert_eq!(
+            subject,
+            Numeric {
+                is_required: false,
+                kind: NumericKind::AtLeast {
+                    min: Dummy(10),
+                    ideal: Some(Dummy(42))
+                }
+            }
+        );
+    }
+
+    #[test]
+    fn at_most() {
+        let subject = Numeric::<Dummy>::at_most(Dummy(100), Some(Dummy(42)));
+        assert_eq!(
+            subject,
+            Numeric {
+                is_required: false,
+                kind: NumericKind::AtMost {
+                    max: Dummy(100),
+                    ideal: Some(Dummy(42))
+                }
+            }
+        );
+    }
+
+    #[test]
+    fn within() {
+        let subject = Numeric::<Dummy>::within(Dummy(10), Dummy(100), Some(Dummy(42)));
+        assert_eq!(
+            subject,
+            Numeric {
+                is_required: false,
+                kind: NumericKind::Within {
+                    min: Dummy(10),
+                    max: Dummy(100),
+                    ideal: Some(Dummy(42))
+                }
+            }
+        );
+    }
+
+    #[test]
+    fn is_required() {
+        let subject = Numeric::<Dummy>::exists(true);
+        assert_eq!(subject.is_required, false);
+        let subject = subject.is_required(true);
+        assert_eq!(subject.is_required, true);
+        let subject = subject.is_required(false);
+        assert_eq!(subject.is_required, false);
+    }
+
+    #[test]
+    fn fitness_distance_exists() {
+        fn fitness(is_expected: bool, is_required: bool, setting: Option<u32>) -> f64 {
+            let actual = setting.map(|t| t.into());
+            Numeric::<Dummy>::exists(is_expected)
+                .is_required(is_required)
+                .fitness_distance(actual.as_ref())
+        }
+
+        assert_eq!(fitness(false, false, None), 0.0);
+        assert_eq!(fitness(false, false, Some(42)), 1.0);
+        assert_eq!(fitness(false, true, None), 0.0);
+        assert_eq!(fitness(false, true, Some(42)), f64::INFINITY);
+        assert_eq!(fitness(true, false, None), 1.0);
+        assert_eq!(fitness(true, false, Some(42)), 0.0);
+        assert_eq!(fitness(true, true, None), f64::INFINITY);
+        assert_eq!(fitness(true, true, Some(42)), 0.0);
+    }
+
+    #[test]
+    fn fitness_distance_exactly() {
+        fn fitness(value: u32, is_required: bool, setting: Option<u32>) -> f64 {
+            let actual = setting.map(|t| t.into());
+            Numeric::<Dummy>::exactly(value.into())
+                .is_required(is_required)
+                .fitness_distance(actual.as_ref())
+        }
+
+        assert_eq!(fitness(42, false, None), 1.0);
+        assert_eq!(fitness(42, false, Some(42)), 0.0);
+        assert_eq!(fitness(42, true, None), f64::INFINITY);
+        assert_eq!(fitness(42, true, Some(42)), 0.0);
+        assert_eq!(fitness(123, false, None), 1.0);
+        assert_eq!(fitness(123, false, Some(42)), 1.0);
+        assert_eq!(fitness(123, true, None), f64::INFINITY);
+        assert_eq!(fitness(123, true, Some(42)), f64::INFINITY);
+    }
+
+    #[test]
+    fn fitness_distance_at_least() {
+        fn fitness(min: u32, ideal: Option<u32>, is_required: bool, setting: Option<u32>) -> f64 {
+            let ideal = ideal.map(|t| t.into());
+            let actual = setting.map(|t| t.into());
+            Numeric::<Dummy>::at_least(min.into(), ideal)
+                .is_required(is_required)
+                .fitness_distance(actual.as_ref())
+        }
+
+        assert_eq!(fitness(10, None, false, None), 1.0);
+        assert_eq!(fitness(10, None, false, Some(42)), 0.0);
+        assert_eq!(fitness(10, None, true, None), f64::INFINITY);
+        assert_eq!(fitness(10, None, true, Some(42)), 0.0);
+        assert_eq!(fitness(10, Some(50), false, None), 1.0);
+        assert_eq!(fitness(10, Some(50), false, Some(42)), 0.16);
+        assert_eq!(fitness(10, Some(50), true, None), f64::INFINITY);
+        assert_eq!(fitness(10, Some(50), true, Some(42)), 0.16);
+        assert_eq!(fitness(100, None, false, None), 1.0);
+        assert_eq!(fitness(100, None, false, Some(42)), 1.0);
+        assert_eq!(fitness(100, None, true, None), f64::INFINITY);
+        assert_eq!(fitness(100, None, true, Some(42)), f64::INFINITY);
+        assert_eq!(fitness(100, Some(200), false, None), 1.0);
+        assert_eq!(fitness(100, Some(200), false, Some(42)), 1.0);
+        assert_eq!(fitness(100, Some(200), true, None), f64::INFINITY);
+        assert_eq!(fitness(100, Some(200), true, Some(42)), f64::INFINITY);
+    }
+
+    #[test]
+    fn fitness_distance_at_most() {
+        fn fitness(max: u32, ideal: Option<u32>, is_required: bool, setting: Option<u32>) -> f64 {
+            let ideal = ideal.map(|t| t.into());
+            let actual = setting.map(|t| t.into());
+            Numeric::<Dummy>::at_most(max.into(), ideal)
+                .is_required(is_required)
+                .fitness_distance(actual.as_ref())
+        }
+
+        assert_eq!(fitness(100, None, false, None), 1.0);
+        assert_eq!(fitness(100, None, false, Some(42)), 0.0);
+        assert_eq!(fitness(100, None, true, None), f64::INFINITY);
+        assert_eq!(fitness(100, None, true, Some(42)), 0.0);
+        assert_eq!(fitness(100, Some(50), false, None), 1.0);
+        assert_eq!(fitness(100, Some(50), false, Some(42)), 0.16);
+        assert_eq!(fitness(100, Some(50), true, None), f64::INFINITY);
+        assert_eq!(fitness(100, Some(50), true, Some(42)), 0.16);
+        assert_eq!(fitness(10, None, false, None), 1.0);
+        assert_eq!(fitness(10, None, false, Some(42)), 1.0);
+        assert_eq!(fitness(10, None, true, None), f64::INFINITY);
+        assert_eq!(fitness(10, None, true, Some(42)), f64::INFINITY);
+        assert_eq!(fitness(10, Some(5), false, None), 1.0);
+        assert_eq!(fitness(10, Some(5), false, Some(42)), 1.0);
+        assert_eq!(fitness(10, Some(5), true, None), f64::INFINITY);
+        assert_eq!(fitness(10, Some(5), true, Some(42)), f64::INFINITY);
+    }
+
+    #[test]
+    fn fitness_distance_within() {
+        fn fitness(
+            min: u32,
+            max: u32,
+            ideal: Option<u32>,
+            is_required: bool,
+            setting: Option<u32>,
+        ) -> f64 {
+            let ideal = ideal.map(|t| t.into());
+            let actual = setting.map(|t| t.into());
+            Numeric::<Dummy>::within(min.into(), max.into(), ideal)
+                .is_required(is_required)
+                .fitness_distance(actual.as_ref())
+        }
+
+        assert_eq!(fitness(10, 100, None, false, None), 1.0);
+        assert_eq!(fitness(10, 100, None, false, Some(42)), 0.0);
+        assert_eq!(fitness(10, 100, None, true, None), f64::INFINITY);
+        assert_eq!(fitness(10, 100, None, true, Some(42)), 0.0);
+        assert_eq!(fitness(10, 100, Some(50), false, None), 1.0);
+        assert_eq!(fitness(10, 100, Some(50), false, Some(42)), 0.16);
+        assert_eq!(fitness(10, 100, Some(50), true, None), f64::INFINITY);
+        assert_eq!(fitness(10, 100, Some(50), true, Some(42)), 0.16);
+        assert_eq!(fitness(10, 20, None, false, None), 1.0);
+        assert_eq!(fitness(10, 20, None, false, Some(42)), 1.0);
+        assert_eq!(fitness(10, 20, None, true, None), f64::INFINITY);
+        assert_eq!(fitness(10, 20, None, true, Some(42)), f64::INFINITY);
+        assert_eq!(fitness(10, 20, Some(15), false, None), 1.0);
+        assert_eq!(fitness(10, 20, Some(15), false, Some(42)), 1.0);
+        assert_eq!(fitness(10, 20, Some(15), true, None), f64::INFINITY);
+        assert_eq!(fitness(10, 20, Some(15), true, Some(42)), f64::INFINITY);
     }
 }

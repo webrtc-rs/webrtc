@@ -1,5 +1,7 @@
 use std::fmt::Debug;
 
+use derive_builder::Builder;
+
 use crate::track::{
     constraint::{fitness::Fitness, NonNumeric, Numeric},
     setting::audio as setting,
@@ -16,15 +18,48 @@ pub type Latency = Numeric<setting::Latency>;
 pub type ChannelCount = Numeric<setting::ChannelCount>;
 
 /// An audio's constraints
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Default, Clone, Builder)]
 pub struct Audio {
+    #[builder(default, setter(into, strip_option))]
     pub sample_rate: Option<SampleRate>,
+    #[builder(default, setter(into, strip_option))]
     pub sample_size: Option<SampleSize>,
+    #[builder(default, setter(into, strip_option))]
     pub echo_cancellation: Option<EchoCancellation>,
+    #[builder(default, setter(into, strip_option))]
     pub auto_gain_control: Option<AutoGainControl>,
+    #[builder(default, setter(into, strip_option))]
     pub noise_suppression: Option<NoiseSuppression>,
+    #[builder(default, setter(into, strip_option))]
     pub latency: Option<Latency>,
+    #[builder(default, setter(into, strip_option))]
     pub channel_count: Option<ChannelCount>,
+}
+
+impl Audio {
+    pub fn builder() -> AudioBuilder {
+        Default::default()
+    }
+
+    pub fn new(
+        sample_rate: Option<SampleRate>,
+        sample_size: Option<SampleSize>,
+        echo_cancellation: Option<EchoCancellation>,
+        auto_gain_control: Option<AutoGainControl>,
+        noise_suppression: Option<NoiseSuppression>,
+        latency: Option<Latency>,
+        channel_count: Option<ChannelCount>,
+    ) -> Self {
+        Self {
+            sample_rate,
+            sample_size,
+            echo_cancellation,
+            auto_gain_control,
+            noise_suppression,
+            latency,
+            channel_count,
+        }
+    }
 }
 
 impl Debug for Audio {
@@ -126,5 +161,68 @@ impl Audio {
         }
 
         return fitness;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default() {
+        let subject = Audio::default();
+        assert_eq!(
+            subject,
+            Audio {
+                sample_rate: None,
+                sample_size: None,
+                echo_cancellation: None,
+                auto_gain_control: None,
+                noise_suppression: None,
+                latency: None,
+                channel_count: None,
+            }
+        );
+    }
+
+    #[test]
+    fn builder() {
+        let subject = Audio::builder()
+            .sample_rate(SampleRate::at_least(44_100.0.into(), None))
+            .auto_gain_control(AutoGainControl::exactly(setting::AutoGainControl::On))
+            .channel_count(ChannelCount::within(2.into(), 5.into(), Some(2.into())))
+            .build()
+            .unwrap();
+        assert_eq!(
+            subject,
+            Audio {
+                sample_rate: Some(SampleRate::at_least(44_100.0.into(), None)),
+                sample_size: None,
+                echo_cancellation: None,
+                auto_gain_control: Some(AutoGainControl::exactly(setting::AutoGainControl::On)),
+                noise_suppression: None,
+                latency: None,
+                channel_count: Some(ChannelCount::within(2.into(), 5.into(), Some(2.into()))),
+            }
+        );
+    }
+
+    #[test]
+    fn fitness_distance() {
+        let constraint = Audio::builder()
+            .sample_rate(SampleRate::at_least(44_100.0.into(), None))
+            .auto_gain_control(AutoGainControl::exactly(setting::AutoGainControl::On))
+            .channel_count(ChannelCount::within(2.into(), 5.into(), Some(2.into())))
+            .build()
+            .unwrap();
+
+        let setting = setting::Audio::builder()
+            .sample_rate(setting::SampleRate::from_hertz(44_100.0))
+            .auto_gain_control(setting::AutoGainControl::On)
+            .channel_count(setting::ChannelCount::from_channels(4))
+            .build()
+            .unwrap();
+
+        assert_eq!(constraint.fitness_distance(Some(&setting)), 0.5);
     }
 }
