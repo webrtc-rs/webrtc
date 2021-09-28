@@ -1,6 +1,18 @@
 use std::fmt::Debug;
 
-use crate::track::setting::NumericSetting;
+mod aspect_ratio;
+mod facing_mode;
+mod frame_rate;
+mod height;
+mod resize_mode;
+mod width;
+
+pub use aspect_ratio::*;
+pub use facing_mode::*;
+pub use frame_rate::*;
+pub use height::*;
+pub use resize_mode::*;
+pub use width::*;
 
 /// A video's settings
 #[derive(PartialEq, Clone)]
@@ -37,179 +49,5 @@ impl Debug for Video {
         }
 
         builder.finish()
-    }
-}
-
-/// The width or width range, in pixels.
-///
-/// As a capability, the range should span the video source's pre-set width
-/// values with min being equal to 1 and max being the largest width.
-///
-/// # Specification
-/// - <https://www.w3.org/TR/mediacapture-streams/#dfn-width>
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub struct Width(i32);
-
-impl Width {
-    pub fn from_pixels(pixels: i32) -> Self {
-        assert!(pixels > 0);
-
-        Self(pixels)
-    }
-}
-
-impl NumericSetting for Width {
-    fn float_value(&self) -> f64 {
-        self.0 as f64
-    }
-}
-
-impl Debug for Width {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{} px", self.0)
-    }
-}
-
-/// The height or height range, in pixels.
-///
-/// As a capability, the range should span the video source's pre-set height
-/// values with min being equal to 1 and max being the largest height.
-///
-/// # Specification
-/// - <https://www.w3.org/TR/mediacapture-streams/#dfn-height>
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub struct Height(i32);
-
-impl Height {
-    pub fn from_pixels(pixels: i32) -> Self {
-        assert!(pixels > 0);
-
-        Self(pixels)
-    }
-}
-
-impl NumericSetting for Height {
-    fn float_value(&self) -> f64 {
-        self.0 as f64
-    }
-}
-
-impl Debug for Height {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{} px", self.0)
-    }
-}
-
-/// The exact aspect ratio (width in pixels divided by height in pixels,
-/// represented as a double rounded to the tenth decimal place) or aspect ratio range.
-///
-/// # Specification
-/// - <https://www.w3.org/TR/mediacapture-streams/#dfn-aspectratio>
-#[derive(PartialEq, PartialOrd, Clone, Copy)]
-pub struct AspectRatio(f64);
-
-impl AspectRatio {
-    pub fn from_ratio(ratio: f64) -> Self {
-        assert!(ratio > 0.0);
-
-        Self(ratio)
-    }
-}
-
-impl NumericSetting for AspectRatio {
-    fn float_value(&self) -> f64 {
-        self.0 as f64
-    }
-}
-
-impl Debug for AspectRatio {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{}", self.0)
-    }
-}
-
-#[derive(PartialEq, PartialOrd, Clone, Copy)]
-pub struct FrameRate(f64);
-
-impl FrameRate {
-    pub fn from_hertz(hz: f64) -> Self {
-        assert!(hz > 0.0);
-
-        Self(hz)
-    }
-}
-
-impl NumericSetting for FrameRate {
-    fn float_value(&self) -> f64 {
-        self.0 as f64
-    }
-}
-
-impl Debug for FrameRate {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{} fps", self.0)
-    }
-}
-
-/// The directions that the camera can face, as seen from the user's perspective.
-///
-/// # Important
-/// Note that `getConstraints` may not return exactly the same string for strings not in this enum.
-/// This preserves the possibility of using a future version of WebIDL enum for this setting.
-///
-/// # Specification
-/// - <https://www.w3.org/TR/mediacapture-streams/#dfn-framerate>
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub enum FacingMode {
-    /// The source is facing toward the user (a self-view camera).
-    User,
-
-    /// The source is facing away from the user (viewing the environment).
-    Environment,
-
-    /// The source is facing to the left of the user.
-    Left,
-
-    /// The source is facing to the right of the user.
-    Right,
-}
-
-impl Debug for FacingMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::User => writeln!(f, "user"),
-            Self::Environment => writeln!(f, "environment"),
-            Self::Left => writeln!(f, "left"),
-            Self::Right => writeln!(f, "right"),
-        }
-    }
-}
-
-/// The directions that the camera can face, as seen from the user's perspective.
-///
-/// # Important
-/// Note that `getConstraints` may not return exactly the same string for strings not in this enum.
-/// This preserves the possibility of using a future version of WebIDL enum for this setting.
-///
-/// # Specification
-/// - <https://www.w3.org/TR/mediacapture-streams/#dfn-resizemode>
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub enum ResizeMode {
-    /// This resolution and frame rate is offered by the camera, its driver, or the OS.
-    None,
-
-    /// This resolution is down-scaled and/or cropped from a higher camera resolution by the User Agent,
-    /// or its frame rate is decimated by the User Agent.
-    /// The media MUST NOT be up-scaled, stretched or have fake data
-    /// created that did not occur in the input source.
-    CropAndScale,
-}
-
-impl Debug for ResizeMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::None => writeln!(f, "none"),
-            Self::CropAndScale => writeln!(f, "crop and scale"),
-        }
     }
 }
