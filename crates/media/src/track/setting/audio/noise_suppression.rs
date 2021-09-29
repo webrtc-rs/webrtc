@@ -7,7 +7,7 @@ use std::fmt::Debug;
 ///
 /// # Specification
 /// - <https://www.w3.org/TR/mediacapture-streams/#dfn-noisesuppression>
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub enum NoiseSuppression {
     Off,
     On,
@@ -23,15 +23,6 @@ impl From<bool> for NoiseSuppression {
     }
 }
 
-impl Debug for NoiseSuppression {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Off => write!(f, "off"),
-            Self::On => write!(f, "on"),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -42,16 +33,6 @@ mod tests {
 
         for (flag, expected) in scenarios {
             let actual = NoiseSuppression::from(flag);
-            assert_eq!(actual, expected);
-        }
-    }
-
-    #[test]
-    fn debug() {
-        let scenarios = [(NoiseSuppression::Off, "off"), (NoiseSuppression::On, "on")];
-
-        for (subject, expected) in scenarios {
-            let actual = format!("{:?}", subject);
             assert_eq!(actual, expected);
         }
     }

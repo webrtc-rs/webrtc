@@ -133,11 +133,6 @@ impl Audio {
 
         // TODO(regexident): Ignore unsupported constraints.
 
-        // Corresponding excerpt from W3C spec:
-        //
-        // > 1. If constraintName is not supported […],
-        // > the fitness distance is `0`.
-
         if let Some(sample_rate) = &self.sample_rate {
             fitness += sample_rate.fitness_distance(settings.sample_rate.as_ref());
         }
@@ -188,21 +183,21 @@ mod tests {
     #[test]
     fn builder() {
         let subject = Audio::builder()
-            .sample_rate(SampleRate::at_least(44_100.0.into(), None))
+            .sample_rate(SampleRate::at_least(44_100, None))
             .auto_gain_control(AutoGainControl::exactly(setting::AutoGainControl::On))
-            .channel_count(ChannelCount::within(2.into(), 5.into(), Some(2.into())))
+            .channel_count(ChannelCount::within(2, 5, Some(2)))
             .build()
             .unwrap();
         assert_eq!(
             subject,
             Audio {
-                sample_rate: Some(SampleRate::at_least(44_100.0.into(), None)),
+                sample_rate: Some(SampleRate::at_least(44_100, None)),
                 sample_size: None,
                 echo_cancellation: None,
                 auto_gain_control: Some(AutoGainControl::exactly(setting::AutoGainControl::On)),
                 noise_suppression: None,
                 latency: None,
-                channel_count: Some(ChannelCount::within(2.into(), 5.into(), Some(2.into()))),
+                channel_count: Some(ChannelCount::within(2, 5, Some(2))),
             }
         );
     }
@@ -210,16 +205,16 @@ mod tests {
     #[test]
     fn fitness_distance() {
         let constraint = Audio::builder()
-            .sample_rate(SampleRate::at_least(44_100.0.into(), None))
+            .sample_rate(SampleRate::at_least(44_100, None))
             .auto_gain_control(AutoGainControl::exactly(setting::AutoGainControl::On))
-            .channel_count(ChannelCount::within(2.into(), 5.into(), Some(2.into())))
+            .channel_count(ChannelCount::within(2, 5, Some(2)))
             .build()
             .unwrap();
 
         let setting = setting::Audio::builder()
-            .sample_rate(setting::SampleRate::from_hertz(44_100.0))
+            .sample_rate(44_100)
             .auto_gain_control(setting::AutoGainControl::On)
-            .channel_count(setting::ChannelCount::from_channels(4))
+            .channel_count(4)
             .build()
             .unwrap();
 

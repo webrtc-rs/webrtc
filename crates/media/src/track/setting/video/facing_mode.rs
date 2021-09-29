@@ -16,7 +16,7 @@ pub enum FacingModeParsingError {
 ///
 /// # Specification
 /// - <https://www.w3.org/TR/mediacapture-streams/#dfn-facingmode>
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub enum FacingMode {
     /// The source is facing toward the user (a self-view camera).
     User,
@@ -53,17 +53,6 @@ impl FromStr for FacingMode {
     }
 }
 
-impl Debug for FacingMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::User => write!(f, "user"),
-            Self::Environment => write!(f, "environment"),
-            Self::Left => write!(f, "left"),
-            Self::Right => write!(f, "right"),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -92,20 +81,5 @@ mod tests {
             value: "INVALID".to_owned(),
         });
         assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn debug() {
-        let scenarios = [
-            (FacingMode::User, "user"),
-            (FacingMode::Environment, "environment"),
-            (FacingMode::Left, "left"),
-            (FacingMode::Right, "right"),
-        ];
-
-        for (subject, expected) in scenarios {
-            let actual = format!("{:?}", subject);
-            assert_eq!(actual, expected);
-        }
     }
 }

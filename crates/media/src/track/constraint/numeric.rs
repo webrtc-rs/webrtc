@@ -1,4 +1,4 @@
-use crate::track::{constraint::Fitness, setting::NumericSetting};
+use crate::track::constraint::Fitness;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum NumericKind<T> {
@@ -9,10 +9,26 @@ pub enum NumericKind<T> {
     Within { min: T, max: T, ideal: Option<T> },
 }
 
+pub(crate) trait NumericSetting<T> {
+    fn float_value(setting: &T) -> f64;
+}
+
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Numeric<T> {
     is_required: bool,
     kind: NumericKind<T>,
+}
+
+impl NumericSetting<u32> for Numeric<u32> {
+    fn float_value(setting: &u32) -> f64 {
+        (*setting) as f64
+    }
+}
+
+impl NumericSetting<f64> for Numeric<f64> {
+    fn float_value(setting: &f64) -> f64 {
+        *setting
+    }
 }
 
 impl<T> Numeric<T>
@@ -61,7 +77,8 @@ where
 
 impl<T> Fitness<T> for Numeric<T>
 where
-    T: Clone + PartialOrd + NumericSetting,
+    T: Clone + PartialOrd,
+    Self: NumericSetting<T>,
 {
     fn fitness_distance(&self, actual: Option<&T>) -> f64 {
         let (is_match, ideal) = match &self.kind {
@@ -117,8 +134,8 @@ where
                 1.0
             }
             (Some(actual), Some(ideal)) => {
-                let actual: f64 = actual.float_value();
-                let ideal: f64 = ideal.float_value();
+                let actual: f64 = Self::float_value(actual);
+                let ideal: f64 = Self::float_value(ideal);
 
                 let numerator = (actual - ideal).abs();
                 let denominator = actual.abs().max(ideal.abs());
@@ -132,24 +149,9 @@ where
 mod tests {
     use super::*;
 
-    #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
-    pub struct Dummy(u32);
-
-    impl From<u32> for Dummy {
-        fn from(u: u32) -> Self {
-            Self(u)
-        }
-    }
-
-    impl NumericSetting for Dummy {
-        fn float_value(&self) -> f64 {
-            self.0 as f64
-        }
-    }
-
     #[test]
     fn exists() {
-        let subject = Numeric::<Dummy>::exists(true);
+        let subject = Numeric::<u32>::exists(true);
         assert_eq!(
             subject,
             Numeric {
@@ -161,26 +163,26 @@ mod tests {
 
     #[test]
     fn exactly() {
-        let subject = Numeric::<Dummy>::exactly(Dummy(42));
+        let subject = Numeric::<u32>::exactly(42);
         assert_eq!(
             subject,
             Numeric {
                 is_required: false,
-                kind: NumericKind::Exactly { value: Dummy(42) }
+                kind: NumericKind::Exactly { value: 42 }
             }
         );
     }
 
     #[test]
     fn at_least() {
-        let subject = Numeric::<Dummy>::at_least(Dummy(10), Some(Dummy(42)));
+        let subject = Numeric::<u32>::at_least(10, Some(42));
         assert_eq!(
             subject,
             Numeric {
                 is_required: false,
                 kind: NumericKind::AtLeast {
-                    min: Dummy(10),
-                    ideal: Some(Dummy(42))
+                    min: 10,
+                    ideal: Some(42)
                 }
             }
         );
@@ -188,14 +190,14 @@ mod tests {
 
     #[test]
     fn at_most() {
-        let subject = Numeric::<Dummy>::at_most(Dummy(100), Some(Dummy(42)));
+        let subject = Numeric::<u32>::at_most(100, Some(42));
         assert_eq!(
             subject,
             Numeric {
                 is_required: false,
                 kind: NumericKind::AtMost {
-                    max: Dummy(100),
-                    ideal: Some(Dummy(42))
+                    max: 100,
+                    ideal: Some(42)
                 }
             }
         );
@@ -203,15 +205,15 @@ mod tests {
 
     #[test]
     fn within() {
-        let subject = Numeric::<Dummy>::within(Dummy(10), Dummy(100), Some(Dummy(42)));
+        let subject = Numeric::<u32>::within(10, 100, Some(42));
         assert_eq!(
             subject,
             Numeric {
                 is_required: false,
                 kind: NumericKind::Within {
-                    min: Dummy(10),
-                    max: Dummy(100),
-                    ideal: Some(Dummy(42))
+                    min: 10,
+                    max: 100,
+                    ideal: Some(42)
                 }
             }
         );
@@ -219,7 +221,7 @@ mod tests {
 
     #[test]
     fn is_required() {
-        let subject = Numeric::<Dummy>::exists(true);
+        let subject = Numeric::<u32>::exists(true);
         assert_eq!(subject.is_required, false);
         let subject = subject.is_required(true);
         assert_eq!(subject.is_required, true);
@@ -231,7 +233,7 @@ mod tests {
     fn fitness_distance_exists() {
         fn fitness(is_expected: bool, is_required: bool, setting: Option<u32>) -> f64 {
             let actual = setting.map(|t| t.into());
-            Numeric::<Dummy>::exists(is_expected)
+            Numeric::<u32>::exists(is_expected)
                 .is_required(is_required)
                 .fitness_distance(actual.as_ref())
         }
@@ -250,7 +252,7 @@ mod tests {
     fn fitness_distance_exactly() {
         fn fitness(value: u32, is_required: bool, setting: Option<u32>) -> f64 {
             let actual = setting.map(|t| t.into());
-            Numeric::<Dummy>::exactly(value.into())
+            Numeric::<u32>::exactly(value.into())
                 .is_required(is_required)
                 .fitness_distance(actual.as_ref())
         }
@@ -270,7 +272,7 @@ mod tests {
         fn fitness(min: u32, ideal: Option<u32>, is_required: bool, setting: Option<u32>) -> f64 {
             let ideal = ideal.map(|t| t.into());
             let actual = setting.map(|t| t.into());
-            Numeric::<Dummy>::at_least(min.into(), ideal)
+            Numeric::<u32>::at_least(min.into(), ideal)
                 .is_required(is_required)
                 .fitness_distance(actual.as_ref())
         }
@@ -298,7 +300,7 @@ mod tests {
         fn fitness(max: u32, ideal: Option<u32>, is_required: bool, setting: Option<u32>) -> f64 {
             let ideal = ideal.map(|t| t.into());
             let actual = setting.map(|t| t.into());
-            Numeric::<Dummy>::at_most(max.into(), ideal)
+            Numeric::<u32>::at_most(max.into(), ideal)
                 .is_required(is_required)
                 .fitness_distance(actual.as_ref())
         }
@@ -332,7 +334,7 @@ mod tests {
         ) -> f64 {
             let ideal = ideal.map(|t| t.into());
             let actual = setting.map(|t| t.into());
-            Numeric::<Dummy>::within(min.into(), max.into(), ideal)
+            Numeric::<u32>::within(min.into(), max.into(), ideal)
                 .is_required(is_required)
                 .fitness_distance(actual.as_ref())
         }

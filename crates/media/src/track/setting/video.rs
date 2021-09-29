@@ -2,34 +2,31 @@ use std::fmt::Debug;
 
 use derive_builder::Builder;
 
-mod aspect_ratio;
 mod facing_mode;
-mod frame_rate;
-mod height;
 mod resize_mode;
-mod width;
 
-pub use aspect_ratio::*;
 pub use facing_mode::*;
-pub use frame_rate::*;
-pub use height::*;
 pub use resize_mode::*;
-pub use width::*;
+
+pub type Width = u32;
+pub type Height = u32;
+pub type AspectRatio = f64;
+pub type FrameRate = f64;
 
 /// A video's settings
 #[derive(PartialEq, Default, Clone, Builder)]
 pub struct Video {
-    #[builder(default, setter(into, strip_option))]
+    #[builder(default, setter(strip_option))]
     pub width: Option<Width>,
-    #[builder(default, setter(into, strip_option))]
+    #[builder(default, setter(strip_option))]
     pub height: Option<Height>,
-    #[builder(default, setter(into, strip_option))]
+    #[builder(default, setter(strip_option))]
     pub aspect_ratio: Option<AspectRatio>,
-    #[builder(default, setter(into, strip_option))]
+    #[builder(default, setter(strip_option))]
     pub frame_rate: Option<FrameRate>,
-    #[builder(default, setter(into, strip_option))]
+    #[builder(default, setter(strip_option))]
     pub facing_mode: Option<FacingMode>,
-    #[builder(default, setter(into, strip_option))]
+    #[builder(default, setter(strip_option))]
     pub resize_mode: Option<ResizeMode>,
 }
 
@@ -107,8 +104,8 @@ mod tests {
     #[test]
     fn builder() {
         let subject = Video::builder()
-            .height(Height::from(42))
-            .frame_rate(FrameRate::from(30.0))
+            .height(42)
+            .frame_rate(30.0)
             .resize_mode(ResizeMode::CropAndScale)
             .build()
             .unwrap();
@@ -116,9 +113,9 @@ mod tests {
             subject,
             Video {
                 width: None,
-                height: Some(Height::from(42)),
+                height: Some(42),
                 aspect_ratio: None,
-                frame_rate: Some(FrameRate::from(30.0)),
+                frame_rate: Some(30.0),
                 facing_mode: None,
                 resize_mode: Some(ResizeMode::CropAndScale),
             }
@@ -129,15 +126,15 @@ mod tests {
     fn debug() {
         let subject = Video {
             width: None,
-            height: Some(Height::from(42)),
+            height: Some(42),
             aspect_ratio: None,
-            frame_rate: Some(FrameRate::from(30.0)),
+            frame_rate: Some(30.0),
             facing_mode: None,
             resize_mode: Some(ResizeMode::CropAndScale),
         };
         assert_eq!(
             format!("{:?}", subject),
-            "Video { height: 42 px, frame_rate: 30 fps, resize_mode: crop-and-scale }"
+            "Video { height: 42, frame_rate: 30.0, resize_mode: CropAndScale }"
         );
     }
 

@@ -3,37 +3,34 @@ use std::fmt::Debug;
 use derive_builder::Builder;
 
 mod auto_gain_control;
-mod channel_count;
 mod echo_cancellation;
-mod latency;
 mod noise_suppression;
-mod sample_rate;
-mod sample_size;
 
 pub use auto_gain_control::*;
-pub use channel_count::*;
 pub use echo_cancellation::*;
-pub use latency::*;
 pub use noise_suppression::*;
-pub use sample_rate::*;
-pub use sample_size::*;
+
+pub type SampleRate = u32;
+pub type SampleSize = u32;
+pub type Latency = f64;
+pub type ChannelCount = u32;
 
 /// An audio's settings
 #[derive(PartialEq, Default, Clone, Builder)]
 pub struct Audio {
-    #[builder(default, setter(into, strip_option))]
+    #[builder(default, setter(strip_option))]
     pub sample_rate: Option<SampleRate>,
-    #[builder(default, setter(into, strip_option))]
+    #[builder(default, setter(strip_option))]
     pub sample_size: Option<SampleSize>,
-    #[builder(default, setter(into, strip_option))]
+    #[builder(default, setter(strip_option))]
     pub echo_cancellation: Option<EchoCancellation>,
-    #[builder(default, setter(into, strip_option))]
+    #[builder(default, setter(strip_option))]
     pub auto_gain_control: Option<AutoGainControl>,
-    #[builder(default, setter(into, strip_option))]
+    #[builder(default, setter(strip_option))]
     pub noise_suppression: Option<NoiseSuppression>,
-    #[builder(default, setter(into, strip_option))]
+    #[builder(default, setter(strip_option))]
     pub latency: Option<Latency>,
-    #[builder(default, setter(into, strip_option))]
+    #[builder(default, setter(strip_option))]
     pub channel_count: Option<ChannelCount>,
 }
 
@@ -117,21 +114,21 @@ mod tests {
     #[test]
     fn builder() {
         let subject = Audio::builder()
-            .sample_rate(SampleRate::from_hertz(44_100.0))
+            .sample_rate(44_100)
             .auto_gain_control(AutoGainControl::On)
-            .channel_count(ChannelCount::from_channels(42))
+            .channel_count(42)
             .build()
             .unwrap();
         assert_eq!(
             subject,
             Audio {
-                sample_rate: Some(SampleRate::from_hertz(44_100.0)),
+                sample_rate: Some(44_100),
                 sample_size: None,
                 echo_cancellation: None,
                 auto_gain_control: Some(AutoGainControl::On),
                 noise_suppression: None,
                 latency: None,
-                channel_count: Some(ChannelCount::from_channels(42)),
+                channel_count: Some(42),
             }
         );
     }
@@ -139,17 +136,23 @@ mod tests {
     #[test]
     fn debug() {
         let subject = Audio {
-            sample_rate: Some(SampleRate::from_hertz(44_100.0)),
+            sample_rate: Some(44_100),
             sample_size: None,
             echo_cancellation: None,
             auto_gain_control: Some(AutoGainControl::On),
             noise_suppression: None,
             latency: None,
-            channel_count: Some(ChannelCount::from_channels(42)),
+            channel_count: Some(42),
         };
         assert_eq!(
             format!("{:?}", subject),
-            "Audio { sample_rate: 44100 sps, auto_gain_control: on, channel_count: 42 }"
+            "Audio { sample_rate: 44100, auto_gain_control: On, channel_count: 42 }"
         );
+    }
+
+    #[test]
+    fn debug_empty() {
+        let subject = Audio::default();
+        assert_eq!(format!("{:?}", subject), "Audio");
     }
 }

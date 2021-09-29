@@ -120,6 +120,8 @@ impl Video {
 
         let mut fitness: f64 = 0.0;
 
+        // TODO(regexident): Ignore unsupported constraints.
+
         if let Some(width) = &self.width {
             fitness += width.fitness_distance(settings.width.as_ref());
         }
@@ -166,8 +168,8 @@ mod tests {
     #[test]
     fn builder() {
         let subject = Video::builder()
-            .height(Height::exactly(42.into()))
-            .frame_rate(FrameRate::at_least(30.0.into(), None))
+            .height(Height::exactly(42))
+            .frame_rate(FrameRate::at_least(30.0, None))
             .resize_mode(ResizeMode::any_of(
                 vec![setting::ResizeMode::CropAndScale],
                 None,
@@ -178,9 +180,9 @@ mod tests {
             subject,
             Video {
                 width: None,
-                height: Some(Height::exactly(42.into())),
+                height: Some(Height::exactly(42)),
                 aspect_ratio: None,
-                frame_rate: Some(FrameRate::at_least(30.0.into(), None)),
+                frame_rate: Some(FrameRate::at_least(30.0, None)),
                 facing_mode: None,
                 resize_mode: Some(ResizeMode::any_of(
                     vec![setting::ResizeMode::CropAndScale],
@@ -193,8 +195,8 @@ mod tests {
     #[test]
     fn fitness_distance() {
         let constraint = Video::builder()
-            .height(Height::exactly(42.into()))
-            .frame_rate(FrameRate::at_least(30.0.into(), Some(40.0.into())))
+            .height(Height::exactly(42))
+            .frame_rate(FrameRate::at_least(30.0, Some(40.0)))
             .resize_mode(ResizeMode::any_of(
                 vec![setting::ResizeMode::CropAndScale],
                 None,
@@ -203,8 +205,8 @@ mod tests {
             .unwrap();
 
         let setting = setting::Video::builder()
-            .height(setting::Height::from_pixels(42))
-            .frame_rate(setting::FrameRate::from_hertz(50.0))
+            .height(42)
+            .frame_rate(50.0)
             .resize_mode(setting::ResizeMode::CropAndScale)
             .build()
             .unwrap();

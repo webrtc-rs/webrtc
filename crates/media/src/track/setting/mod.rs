@@ -7,16 +7,6 @@ use derive_builder::Builder;
 pub mod audio;
 pub mod video;
 
-mod device_id;
-mod group_id;
-
-pub use device_id::*;
-pub use group_id::*;
-
-pub(crate) trait NumericSetting {
-    fn float_value(&self) -> f64;
-}
-
 #[derive(PartialEq, Clone)]
 pub enum MediaKind {
     Audio(audio::Audio),
@@ -46,10 +36,10 @@ impl Debug for MediaKind {
 
 #[derive(PartialEq, Clone, Builder)]
 pub struct Media {
-    #[builder(default, setter(into, strip_option))]
-    pub device_id: Option<DeviceId>,
-    #[builder(default, setter(into, strip_option))]
-    pub group_id: Option<GroupId>,
+    #[builder(default, setter(strip_option))]
+    pub device_id: Option<String>,
+    #[builder(default, setter(strip_option))]
+    pub group_id: Option<String>,
     #[builder(setter(into))]
     pub kind: MediaKind,
 }
@@ -59,7 +49,7 @@ impl Media {
         Default::default()
     }
 
-    pub fn new(device_id: Option<DeviceId>, group_id: Option<GroupId>, kind: MediaKind) -> Self {
+    pub fn new(device_id: Option<String>, group_id: Option<String>, kind: MediaKind) -> Self {
         Self {
             device_id,
             group_id,
@@ -87,21 +77,21 @@ impl Debug for Media {
 
 #[cfg(test)]
 mod tests {
-    use crate::track::setting::video::{Video, Width};
+    use crate::track::setting::video::Video;
 
     use super::*;
 
     #[test]
     fn builder() {
         let subject = Media::builder()
-            .device_id(DeviceId::from("DEVICE"))
+            .device_id("DEVICE".to_owned())
             .kind(Video::default())
             .build()
             .unwrap();
         assert_eq!(
             subject,
             Media {
-                device_id: Some(DeviceId::from("DEVICE")),
+                device_id: Some("DEVICE".to_owned()),
                 group_id: None,
                 kind: MediaKind::Video(Video::default())
             }
@@ -111,10 +101,10 @@ mod tests {
     #[test]
     fn debug() {
         let subject = Media {
-            device_id: Some(DeviceId::from("DEVICE")),
+            device_id: Some("DEVICE".to_owned()),
             group_id: None,
             kind: MediaKind::Video(Video {
-                width: Some(Width::from(42)),
+                width: Some(42),
                 height: None,
                 aspect_ratio: None,
                 frame_rate: None,
@@ -124,7 +114,7 @@ mod tests {
         };
         assert_eq!(
             format!("{:?}", subject),
-            "Media { device_id: DEVICE, kind: Video { width: 42 px } }"
+            "Media { device_id: \"DEVICE\", kind: Video { width: 42 } }"
         );
     }
 }

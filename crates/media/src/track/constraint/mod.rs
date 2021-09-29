@@ -1,7 +1,5 @@
 //! Media track constraints.
 
-use crate::track::setting;
-
 pub mod audio;
 pub mod video;
 
@@ -15,8 +13,8 @@ pub use numeric::*;
 
 pub(crate) use fitness::*;
 
-type DeviceId = NonNumeric<setting::DeviceId>;
-type GroupId = NonNumeric<setting::GroupId>;
+type DeviceId = NonNumeric<String>;
+type GroupId = NonNumeric<String>;
 
 pub trait Merge {
     fn merge(&mut self, other: &Self);

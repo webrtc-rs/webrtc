@@ -16,7 +16,7 @@ pub enum ResizeModeParsingError {
 ///
 /// # Specification
 /// - <https://www.w3.org/TR/mediacapture-streams/#dfn-resizemode>
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub enum ResizeMode {
     /// This resolution and frame rate is offered by the camera, its driver, or the OS.
     None,
@@ -48,15 +48,6 @@ impl FromStr for ResizeMode {
     }
 }
 
-impl Debug for ResizeMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::None => write!(f, "none"),
-            Self::CropAndScale => write!(f, "crop-and-scale"),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -83,18 +74,5 @@ mod tests {
             value: "INVALID".to_owned(),
         });
         assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn debug() {
-        let scenarios = [
-            (ResizeMode::None, "none"),
-            (ResizeMode::CropAndScale, "crop-and-scale"),
-        ];
-
-        for (subject, expected) in scenarios {
-            let actual = format!("{:?}", subject);
-            assert_eq!(actual, expected);
-        }
     }
 }
