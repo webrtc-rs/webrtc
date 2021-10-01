@@ -103,7 +103,7 @@ impl Chunk for ChunkSelectiveAck {
         let duplicate_tsn_len = reader.get_u16() as usize;
 
         if raw.len()
-            != CHUNK_HEADER_SIZE
+            < CHUNK_HEADER_SIZE
                 + SELECTIVE_ACK_HEADER_SIZE
                 + (4 * gap_ack_blocks_len + 4 * duplicate_tsn_len)
         {
