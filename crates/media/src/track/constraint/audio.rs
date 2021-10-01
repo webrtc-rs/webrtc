@@ -155,7 +155,7 @@ impl Audio {
             fitness += channel_count.fitness_distance(settings.channel_count.as_ref());
         }
 
-        return fitness;
+        fitness
     }
 }
 

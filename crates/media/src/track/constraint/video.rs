@@ -141,7 +141,7 @@ impl Video {
             fitness += resize_mode.fitness_distance(settings.resize_mode.as_ref());
         }
 
-        return fitness;
+        fitness
     }
 }
 
