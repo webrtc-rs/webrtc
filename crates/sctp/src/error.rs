@@ -123,8 +123,6 @@ pub enum Error {
     ErrChunkTypeNotSack,
     #[error("SACK Chunk size is not large enough to contain header")]
     ErrSackSizeNotLargeEnoughInfo,
-    #[error("SACK Chunk size does not match predicted amount from header values")]
-    ErrSackSizeNotMatchPredicted,
 
     #[error("invalid chunk size")]
     ErrInvalidChunkSize,

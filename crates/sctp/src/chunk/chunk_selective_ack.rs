@@ -102,12 +102,15 @@ impl Chunk for ChunkSelectiveAck {
         let gap_ack_blocks_len = reader.get_u16() as usize;
         let duplicate_tsn_len = reader.get_u16() as usize;
 
+        // Here we must account for case where the buffer contains another chunk
+        // right after this one. Testing for equality would incorrectly fail the
+        // parsing of this chunk and incorrectly close the transport.
         if raw.len()
             < CHUNK_HEADER_SIZE
                 + SELECTIVE_ACK_HEADER_SIZE
                 + (4 * gap_ack_blocks_len + 4 * duplicate_tsn_len)
         {
-            return Err(Error::ErrSackSizeNotMatchPredicted.into());
+            return Err(Error::ErrSackSizeNotLargeEnoughInfo.into());
         }
 
         let mut gap_ack_blocks = vec![];
