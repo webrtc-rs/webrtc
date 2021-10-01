@@ -93,6 +93,11 @@ impl Packet {
         let destination_port = reader.get_u16();
         let verification_tag = reader.get_u32();
         let their_checksum = reader.get_u32_le();
+        let our_checksum = generate_packet_checksum(raw);
+
+        if their_checksum != our_checksum {
+            return Err(Error::ErrChecksumMismatch.into());
+        }
 
         let mut chunks = vec![];
         let mut offset = PACKET_HEADER_SIZE;
@@ -128,11 +133,6 @@ impl Packet {
             let chunk_value_padding = get_padding_size(c.value_length());
             offset += CHUNK_HEADER_SIZE + c.value_length() + chunk_value_padding;
             chunks.push(c);
-        }
-
-        let our_checksum = generate_packet_checksum(raw);
-        if their_checksum != our_checksum {
-            return Err(Error::ErrChecksumMismatch.into());
         }
 
         Ok(Packet {
