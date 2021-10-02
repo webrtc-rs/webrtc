@@ -263,7 +263,6 @@ impl Depacketizer for H264Packet {
 }
 
 /// H264PartitionHeadChecker checks H264 partition head
-#[derive(Default)]
 pub struct H264PartitionHeadChecker;
 
 impl H264PartitionHeadChecker {

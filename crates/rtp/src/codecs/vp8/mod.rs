@@ -107,20 +107,30 @@ impl Payloader for Vp8Payloader {
 /// Vp8Packet represents the VP8 header that is stored in the payload of an RTP Packet
 #[derive(PartialEq, Debug, Default, Clone)]
 pub struct Vp8Packet {
-    // Required Header
-    pub x: u8,   /* extended controlbits present */
-    pub n: u8,   /* (non-reference frame)  when set to 1 this frame can be discarded */
-    pub s: u8,   /* start of VP8 partition */
-    pub pid: u8, /* partition index */
+    /// Required Header
+    /// extended controlbits present
+    pub x: u8,
+    /// (non-reference frame)  when set to 1 this frame can be discarded
+    pub n: u8,
+    /// start of VP8 partition
+    pub s: u8,
+    /// partition index
+    pub pid: u8,
 
-    // Optional Header
-    pub i: u8, /* 1 if PictureID is present */
-    pub l: u8, /* 1 if TL0PICIDX is present */
-    pub t: u8, /* 1 if TID is present */
-    pub k: u8, /* 1 if KEYIDX is present */
+    /// Optional Header
+    /// 1 if PictureID is present
+    pub i: u8,
+    /// 1 if TL0PICIDX is present
+    pub l: u8,
+    /// 1 if tid is present
+    pub t: u8,
+    /// 1 if KEYIDX is present
+    pub k: u8,
 
-    pub picture_id: u16, /* 8 or 16 bits, picture ID */
-    pub tl0_pic_idx: u8, /* 8 bits temporal level zero index */
+    /// 8 or 16 bits, picture ID
+    pub picture_id: u16,
+    /// 8 bits temporal level zero index
+    pub tl0_pic_idx: u8,
 
     pub payload: Bytes,
 }
