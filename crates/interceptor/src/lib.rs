@@ -6,7 +6,8 @@ pub mod error;
 pub mod nack;
 pub mod noop;
 pub mod registry;
-pub mod report;
+pub mod rr;
+pub mod sr;
 pub mod stream_info;
 pub mod stream_reader;
 
