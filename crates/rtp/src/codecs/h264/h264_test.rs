@@ -68,13 +68,19 @@ fn test_h264_payload() -> Result<()> {
 }
 
 #[test]
-fn test_h264packet_unmarshal() -> Result<()> {
+fn test_h264_packet_unmarshal() -> Result<()> {
     let single_payload = Bytes::from_static(&[0x90, 0x90, 0x90]);
     let single_payload_unmarshaled =
         Bytes::from_static(&[0x00, 0x00, 0x00, 0x01, 0x90, 0x90, 0x90]);
+    let single_payload_unmarshaled_avc =
+        Bytes::from_static(&[0x00, 0x00, 0x00, 0x03, 0x90, 0x90, 0x90]);
 
     let large_payload = Bytes::from_static(&[
         0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x10,
+        0x11, 0x12, 0x13, 0x14, 0x15,
+    ]);
+    let large_payload_avc = Bytes::from_static(&[
+        0x00, 0x00, 0x00, 0x10, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x10,
         0x11, 0x12, 0x13, 0x14, 0x15,
     ]);
     let large_payload_packetized = vec![
@@ -93,6 +99,10 @@ fn test_h264packet_unmarshal() -> Result<()> {
         0x00, 0x00, 0x00, 0x01, 0x67, 0x42, 0xc0, 0x1f, 0x1a, 0x32, 0x35, 0x01, 0x40, 0x7a, 0x40,
         0x3c, 0x22, 0x11, 0xa8, 0x00, 0x00, 0x00, 0x01, 0x68, 0x1a, 0x34, 0xe3, 0xc8,
     ]);
+    let single_payload_multi_nalu_unmarshaled_avc = Bytes::from_static(&[
+        0x00, 0x00, 0x00, 0x0f, 0x67, 0x42, 0xc0, 0x1f, 0x1a, 0x32, 0x35, 0x01, 0x40, 0x7a, 0x40,
+        0x3c, 0x22, 0x11, 0xa8, 0x00, 0x00, 0x00, 0x05, 0x68, 0x1a, 0x34, 0xe3, 0xc8,
+    ]);
 
     let incomplete_single_payload_multi_nalu = Bytes::from_static(&[
         0x78, 0x00, 0x0f, 0x67, 0x42, 0xc0, 0x1f, 0x1a, 0x32, 0x35, 0x01, 0x40, 0x7a, 0x40, 0x3c,
@@ -100,6 +110,10 @@ fn test_h264packet_unmarshal() -> Result<()> {
     ]);
 
     let mut pkt = H264Packet::default();
+    let mut avc_pkt = H264Packet {
+        is_avc: true,
+        ..Default::default()
+    };
 
     let data = Bytes::from_static(&[]);
     let result = pkt.depacketize(&data);
@@ -131,6 +145,12 @@ fn test_h264packet_unmarshal() -> Result<()> {
         "Unmarshaling a single payload shouldn't modify the payload"
     );
 
+    avc_pkt.depacketize(&single_payload)?;
+    assert_eq!(
+        avc_pkt.payload, single_payload_unmarshaled_avc,
+        "Unmarshaling a single payload into avc stream shouldn't modify the payload"
+    );
+
     let mut large_payload_result = BytesMut::new();
     for p in &large_payload_packetized {
         pkt.depacketize(p)?;
@@ -142,10 +162,74 @@ fn test_h264packet_unmarshal() -> Result<()> {
         "Failed to unmarshal a large payload"
     );
 
+    let mut large_payload_result_avc = BytesMut::new();
+    for p in &large_payload_packetized {
+        avc_pkt.depacketize(p)?;
+        large_payload_result_avc.put(&*avc_pkt.payload.clone());
+    }
+    assert_eq!(
+        large_payload_result_avc.freeze(),
+        large_payload_avc,
+        "Failed to unmarshal a large payload into avc stream"
+    );
+
     pkt.depacketize(&single_payload_multi_nalu)?;
     assert_eq!(
         pkt.payload, single_payload_multi_nalu_unmarshaled,
         "Failed to unmarshal a single packet with multiple NALUs"
+    );
+
+    avc_pkt.depacketize(&single_payload_multi_nalu)?;
+    assert_eq!(
+        avc_pkt.payload, single_payload_multi_nalu_unmarshaled_avc,
+        "Failed to unmarshal a single packet with multiple NALUs into avc stream"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_h264_partition_head_checker_is_partition_head() -> Result<()> {
+    let empty_nalu = Bytes::from_static(&[]);
+    assert!(
+        !H264PartitionHeadChecker::is_partition_head(&empty_nalu),
+        "empty nalu must not be a partition head"
+    );
+
+    let single_nalu = Bytes::from_static(&[1, 0]);
+    assert!(
+        H264PartitionHeadChecker::is_partition_head(&single_nalu),
+        "single nalu must be a partition head"
+    );
+
+    let stapa_nalu = Bytes::from_static(&[STAPA_NALU_TYPE, 0]);
+    assert!(
+        H264PartitionHeadChecker::is_partition_head(&stapa_nalu),
+        "stapa nalu must be a partition head"
+    );
+
+    let fua_start_nalu = Bytes::from_static(&[FUA_NALU_TYPE, FU_START_BITMASK]);
+    assert!(
+        H264PartitionHeadChecker::is_partition_head(&fua_start_nalu),
+        "fua start nalu must be a partition head"
+    );
+
+    let fua_end_nalu = Bytes::from_static(&[FUA_NALU_TYPE, FU_END_BITMASK]);
+    assert!(
+        !H264PartitionHeadChecker::is_partition_head(&fua_end_nalu),
+        "fua end nalu must not be a partition head"
+    );
+
+    let fub_start_nalu = Bytes::from_static(&[FUB_NALU_TYPE, FU_START_BITMASK]);
+    assert!(
+        H264PartitionHeadChecker::is_partition_head(&fub_start_nalu),
+        "fub start nalu must be a partition head"
+    );
+
+    let fub_end_nalu = Bytes::from_static(&[FUB_NALU_TYPE, FU_END_BITMASK]);
+    assert!(
+        !H264PartitionHeadChecker::is_partition_head(&fub_end_nalu),
+        "fub end nalu must not be a partition head"
     );
 
     Ok(())
