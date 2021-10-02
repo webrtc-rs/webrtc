@@ -3,8 +3,10 @@
 
 pub mod chain;
 pub mod error;
+pub mod nack;
 pub mod noop;
 pub mod registry;
+pub mod report;
 pub mod stream_info;
 pub mod stream_reader;
 
