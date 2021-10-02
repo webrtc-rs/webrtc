@@ -1,10 +1,17 @@
-use std::time::{Duration, SystemTime};
+use crate::{Attributes, RTPReader};
 
-#[derive(Debug, Clone)]
+use anyhow::Result;
+use async_trait::async_trait;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime};
+use util::Unmarshal;
+
+#[derive(Clone)]
 pub(crate) struct ReceiverStream {
     ssrc: u32,
     receiver_ssrc: u32,
     clock_rate: f64,
+    parent_reader: Arc<dyn RTPReader + Send + Sync>,
 
     size: u16,
     packets: Vec<u64>,
@@ -20,15 +27,21 @@ pub(crate) struct ReceiverStream {
     total_lost: u32,
 }
 
-impl Default for ReceiverStream {
-    fn default() -> Self {
+impl ReceiverStream {
+    pub(crate) fn new(
+        ssrc: u32,
+        clock_rate: u32,
+        reader: Arc<dyn RTPReader + Send + Sync>,
+    ) -> Self {
+        let receiver_ssrc = rand::random::<u32>();
         ReceiverStream {
-            ssrc: 0,
-            receiver_ssrc: 0,
-            clock_rate: 0.0,
+            ssrc,
+            receiver_ssrc,
+            clock_rate: clock_rate as f64,
+            parent_reader: reader,
 
-            size: 0,
-            packets: vec![],
+            size: 128,
+            packets: vec![0u64; 128],
             started: false,
             seq_num_cycles: 0,
             last_seq_num: 0,
@@ -39,20 +52,6 @@ impl Default for ReceiverStream {
             last_sender_report: 0,
             last_sender_report_time: SystemTime::UNIX_EPOCH,
             total_lost: 0,
-        }
-    }
-}
-
-impl ReceiverStream {
-    pub(crate) fn new(ssrc: u32, clock_rate: u32) -> Self {
-        let receiver_ssrc = rand::random::<u32>();
-        ReceiverStream {
-            ssrc,
-            receiver_ssrc,
-            clock_rate: clock_rate as f64,
-            size: 128,
-            packets: vec![0u64; 128],
-            ..Default::default()
         }
     }
 
@@ -172,5 +171,18 @@ impl ReceiverStream {
         self.last_report_seq_num = self.last_seq_num;
 
         r
+    }
+}
+
+#[async_trait]
+impl RTPReader for ReceiverStream {
+    async fn read(&self, buf: &mut [u8], a: &Attributes) -> Result<(usize, Attributes)> {
+        let (n, attr) = self.parent_reader.read(buf, a).await?;
+
+        let mut b = &buf[..n];
+        let _pkt = rtp::packet::Packet::unmarshal(&mut b)?;
+        //TODO: self.process_rtp(SystemTime::now(), &pkt)
+
+        Ok((n, attr))
     }
 }
