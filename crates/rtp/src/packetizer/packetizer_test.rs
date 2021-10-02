@@ -2,7 +2,7 @@ use super::*;
 use crate::codecs::*;
 
 use chrono::prelude::*;
-use std::time::Duration;
+use std::time::{Duration, UNIX_EPOCH};
 
 #[test]
 fn test_packetizer() -> Result<()> {
@@ -30,10 +30,12 @@ fn test_packetizer() -> Result<()> {
     Ok(())
 }
 
-fn fixed_time_gen() -> Duration {
+fn fixed_time_gen() -> SystemTime {
     let loc = FixedOffset::west(5 * 60 * 60); // UTC-5
     let t = loc.ymd(1985, 6, 23).and_hms_nano(4, 0, 0, 0);
-    Duration::from_nanos(t.timestamp_nanos() as u64)
+    UNIX_EPOCH
+        .checked_add(Duration::from_nanos(t.timestamp_nanos() as u64))
+        .unwrap_or(UNIX_EPOCH)
 }
 
 #[test]
@@ -51,7 +53,7 @@ fn test_packetizer_abs_send_time() -> Result<()> {
         timestamp: 45678,
         clock_rate: 90000,
         abs_send_time: 0,
-        time_gen: Some(fixed_time_gen),
+        time_gen: Some(Arc::new(fixed_time_gen)),
     };
     pktizer.enable_abs_send_time(1);
 

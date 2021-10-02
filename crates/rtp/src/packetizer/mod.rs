@@ -7,7 +7,8 @@ use util::marshal::{Marshal, MarshalSize};
 use anyhow::Result;
 use bytes::{Bytes, BytesMut};
 use std::fmt;
-use std::time::{Duration, SystemTime};
+use std::sync::Arc;
+use std::time::SystemTime;
 
 /// Payloader payloads a byte array for use as rtp.Packet payloads
 pub trait Payloader: fmt::Debug {
@@ -40,9 +41,9 @@ pub trait Depacketizer {
     fn depacketize(&mut self, b: &Bytes) -> Result<()>;
 }
 
-pub type FnTimeGen = fn() -> Duration;
+pub type FnTimeGen = Arc<dyn (Fn() -> SystemTime) + Send + Sync>;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) struct PacketizerImpl {
     pub(crate) mtu: usize,
     pub(crate) payload_type: u8,
@@ -53,6 +54,19 @@ pub(crate) struct PacketizerImpl {
     pub(crate) clock_rate: u32,
     pub(crate) abs_send_time: u8, //http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
     pub(crate) time_gen: Option<FnTimeGen>,
+}
+
+impl fmt::Debug for PacketizerImpl {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PacketizerImpl")
+            .field("mtu", &self.mtu)
+            .field("payload_type", &self.payload_type)
+            .field("ssrc", &self.ssrc)
+            .field("timestamp", &self.timestamp)
+            .field("clock_rate", &self.clock_rate)
+            .field("abs_send_time", &self.abs_send_time)
+            .finish()
+    }
 }
 
 pub fn new_packetizer(
@@ -106,12 +120,12 @@ impl Packetizer for PacketizerImpl {
         self.timestamp += samples;
 
         if l != 0 && self.abs_send_time != 0 {
-            let d = if let Some(fn_time_gen) = &self.time_gen {
+            let st = if let Some(fn_time_gen) = &self.time_gen {
                 fn_time_gen()
             } else {
-                SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?
+                SystemTime::now()
             };
-            let send_time = AbsSendTimeExtension::new(d);
+            let send_time = AbsSendTimeExtension::new(st);
             //apply http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time
             let mut raw = BytesMut::with_capacity(send_time.marshal_size());
             raw.resize(send_time.marshal_size(), 0);

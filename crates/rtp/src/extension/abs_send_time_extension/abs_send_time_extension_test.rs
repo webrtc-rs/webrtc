@@ -2,7 +2,6 @@ use super::*;
 
 use bytes::BytesMut;
 use chrono::prelude::*;
-use std::ops::Sub;
 use std::time::Duration;
 
 const ABS_SEND_TIME_RESOLUTION: i128 = 1000;
@@ -26,14 +25,19 @@ fn test_ntp_conversion() -> Result<()> {
     ];
 
     for (t, n) in &tests {
-        let ntp = unix2ntp(Duration::from_nanos(t.timestamp_nanos() as u64));
+        let st = UNIX_EPOCH
+            .checked_add(Duration::from_nanos(t.timestamp_nanos() as u64))
+            .unwrap_or(UNIX_EPOCH);
+        let ntp = unix2ntp(st);
         assert_eq!(ntp, *n, "unix2ntp error");
     }
 
     for (t, n) in &tests {
         let output = ntp2unix(*n);
-        let input = Duration::from_nanos(t.timestamp_nanos() as u64);
-        let diff = input.sub(output).as_nanos() as i128;
+        let input = UNIX_EPOCH
+            .checked_add(Duration::from_nanos(t.timestamp_nanos() as u64))
+            .unwrap_or(UNIX_EPOCH);
+        let diff = input.duration_since(output)?.as_nanos() as i128;
         if diff < -ABS_SEND_TIME_RESOLUTION || ABS_SEND_TIME_RESOLUTION < diff {
             assert!(
                 false,
@@ -87,7 +91,7 @@ fn test_abs_send_time_extension_estimate() -> Result<()> {
         let receive = AbsSendTimeExtension::unmarshal(buf)?;
 
         let estimated = receive.estimate(ntp2unix(receive_ntp));
-        let diff = estimated.sub(in_time).as_nanos() as i128;
+        let diff = estimated.duration_since(in_time)?.as_nanos() as i128;
         if diff < -ABS_SEND_TIME_RESOLUTION || ABS_SEND_TIME_RESOLUTION < diff {
             assert!(
                 false,
