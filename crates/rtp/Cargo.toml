@@ -9,8 +9,6 @@ documentation = "https://docs.rs/rtp"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/rtp"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 util = { package = "webrtc-util", version = "0.4.3", default-features = false, features = ["marshal"] }
 bytes = "1"
