@@ -29,7 +29,17 @@ fn test_ntp_conversion() -> Result<()> {
             .checked_add(Duration::from_nanos(t.timestamp_nanos() as u64))
             .unwrap_or(UNIX_EPOCH);
         let ntp = unix2ntp(st);
-        assert_eq!(ntp, *n, "unix2ntp error");
+
+        if cfg!(target_os = "windows") {
+            let actual = ntp as i128;
+            let expected = *n as i128;
+            let diff = actual - expected;
+            if diff < -ABS_SEND_TIME_RESOLUTION || ABS_SEND_TIME_RESOLUTION < diff {
+                assert!(false, "unix2ntp error, expected: {:?}, got: {:?}", ntp, *n,);
+            }
+        } else {
+            assert_eq!(ntp, *n, "unix2ntp error");
+        }
     }
 
     for (t, n) in &tests {
