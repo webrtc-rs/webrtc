@@ -24,7 +24,7 @@ impl ReceiverBuilder {
         self
     }
 
-    /// ReceiverNow sets an alternative for the time.Now function.
+    /// with_now_fn sets an alternative for the time.Now function.
     pub fn with_now_fn(mut self, now: NowFn) -> ReceiverBuilder {
         self.now = Some(now);
         self

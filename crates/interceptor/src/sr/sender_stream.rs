@@ -2,11 +2,13 @@ use crate::{Attributes, NowFn, RTPWriter};
 
 use anyhow::Result;
 use async_trait::async_trait;
+use rtp::extension::abs_send_time_extension::unix2ntp;
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 use tokio::sync::Mutex;
 
 struct SenderStreamInternal {
+    ssrc: u32,
     clock_rate: f64,
 
     /// data from rtp packets
@@ -25,6 +27,22 @@ impl SenderStreamInternal {
         self.packet_count += 1;
         self.octet_count += pkt.payload.len() as u32;
     }
+
+    fn generate_report(&mut self, now: SystemTime) -> rtcp::sender_report::SenderReport {
+        rtcp::sender_report::SenderReport {
+            ssrc: self.ssrc,
+            ntp_time: unix2ntp(now),
+            rtp_time: self.last_rtptime_rtp
+                + (now
+                    .duration_since(self.last_rtptime_time)
+                    .unwrap_or_else(|_| Duration::from_secs(0))
+                    .as_secs_f64()
+                    * self.clock_rate) as u32,
+            packet_count: self.packet_count,
+            octet_count: self.octet_count,
+            ..Default::default()
+        }
+    }
 }
 
 pub(crate) struct SenderStream {
@@ -36,6 +54,7 @@ pub(crate) struct SenderStream {
 
 impl SenderStream {
     pub(crate) fn new(
+        ssrc: u32,
         clock_rate: u32,
         writer: Arc<dyn RTPWriter + Send + Sync>,
         now: Option<NowFn>,
@@ -45,6 +64,7 @@ impl SenderStream {
             now,
 
             internal: Mutex::new(SenderStreamInternal {
+                ssrc,
                 clock_rate: clock_rate as f64,
                 last_rtptime_rtp: 0,
                 last_rtptime_time: SystemTime::UNIX_EPOCH,
@@ -57,6 +77,14 @@ impl SenderStream {
     async fn process_rtp(&self, now: SystemTime, pkt: &rtp::packet::Packet) {
         let mut internal = self.internal.lock().await;
         internal.process_rtp(now, pkt);
+    }
+
+    pub(crate) async fn generate_report(
+        &self,
+        now: SystemTime,
+    ) -> rtcp::sender_report::SenderReport {
+        let mut internal = self.internal.lock().await;
+        internal.generate_report(now)
     }
 }
 
