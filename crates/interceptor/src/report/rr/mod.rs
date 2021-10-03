@@ -1,4 +1,6 @@
-pub mod receiver_stream;
+mod receiver_stream;
+#[cfg(test)]
+mod receiver_test;
 
 use super::*;
 use crate::error::Error;
@@ -13,7 +15,7 @@ use waitgroup::WaitGroup;
 
 pub(crate) struct ReceiverReportInternal {
     pub(crate) interval: Duration,
-    pub(crate) now: Option<NowFn>,
+    pub(crate) now: Option<FnTimeGen>,
     pub(crate) parent_rtcp_reader: Mutex<Option<Arc<dyn RTCPReader + Send + Sync>>>,
     pub(crate) streams: Mutex<HashMap<u32, Arc<ReceiverStream>>>,
     pub(crate) close_rx: Mutex<Option<mpsc::Receiver<()>>>,
@@ -35,7 +37,7 @@ impl RTCPReader for ReceiverReportInternal {
         let pkt = rtcp::packet::unmarshal(&mut b)?;
 
         let now = if let Some(f) = &self.now {
-            f()
+            f().await
         } else {
             SystemTime::now()
         };
@@ -112,7 +114,7 @@ impl ReceiverReport {
             tokio::select! {
                 _ = ticker.tick() =>{
                     let now = if let Some(f) = &internal.now {
-                        f()
+                        f().await
                     }else{
                         SystemTime::now()
                     };

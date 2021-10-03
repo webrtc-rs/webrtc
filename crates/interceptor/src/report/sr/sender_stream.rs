@@ -48,7 +48,7 @@ impl SenderStreamInternal {
 
 pub(crate) struct SenderStream {
     next_rtp_writer: Arc<dyn RTPWriter + Send + Sync>,
-    now: Option<NowFn>,
+    now: Option<FnTimeGen>,
 
     internal: Mutex<SenderStreamInternal>,
 }
@@ -58,7 +58,7 @@ impl SenderStream {
         ssrc: u32,
         clock_rate: u32,
         writer: Arc<dyn RTPWriter + Send + Sync>,
-        now: Option<NowFn>,
+        now: Option<FnTimeGen>,
     ) -> Self {
         SenderStream {
             next_rtp_writer: writer,
@@ -95,7 +95,7 @@ impl RTPWriter for SenderStream {
     /// write a rtp packet
     async fn write(&self, pkt: &rtp::packet::Packet, a: &Attributes) -> Result<usize> {
         let now = if let Some(f) = &self.now {
-            f()
+            f().await
         } else {
             SystemTime::now()
         };

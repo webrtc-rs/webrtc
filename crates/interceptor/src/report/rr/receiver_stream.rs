@@ -140,7 +140,7 @@ impl ReceiverStreamInternal {
 
 pub(crate) struct ReceiverStream {
     parent_rtp_reader: Arc<dyn RTPReader + Send + Sync>,
-    now: Option<NowFn>,
+    now: Option<FnTimeGen>,
 
     internal: Mutex<ReceiverStreamInternal>,
 }
@@ -150,7 +150,7 @@ impl ReceiverStream {
         ssrc: u32,
         clock_rate: u32,
         reader: Arc<dyn RTPReader + Send + Sync>,
-        now: Option<NowFn>,
+        now: Option<FnTimeGen>,
     ) -> Self {
         let receiver_ssrc = rand::random::<u32>();
         ReceiverStream {
@@ -210,7 +210,7 @@ impl RTPReader for ReceiverStream {
         let mut b = &buf[..n];
         let pkt = rtp::packet::Packet::unmarshal(&mut b)?;
         let now = if let Some(f) = &self.now {
-            f()
+            f().await
         } else {
             SystemTime::now()
         };

@@ -1,4 +1,6 @@
-pub mod sender_stream;
+mod sender_stream;
+#[cfg(test)]
+mod sender_test;
 
 use super::*;
 use crate::error::Error;
@@ -13,7 +15,7 @@ use waitgroup::WaitGroup;
 
 pub(crate) struct SenderReportInternal {
     pub(crate) interval: Duration,
-    pub(crate) now: Option<NowFn>,
+    pub(crate) now: Option<FnTimeGen>,
     pub(crate) streams: Mutex<HashMap<u32, Arc<SenderStream>>>,
     pub(crate) close_rx: Mutex<Option<mpsc::Receiver<()>>>,
 }
@@ -55,7 +57,7 @@ impl SenderReport {
             tokio::select! {
                 _ = ticker.tick() =>{
                     let now = if let Some(f) = &internal.now {
-                        f()
+                        f().await
                     }else{
                         SystemTime::now()
                     };

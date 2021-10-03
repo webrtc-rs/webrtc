@@ -1,6 +1,7 @@
+use rtp::packetizer::FnTimeGen;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 use tokio::sync::{mpsc, Mutex};
 use waitgroup::WaitGroup;
 
@@ -10,14 +11,11 @@ pub mod sr;
 use rr::{ReceiverReport, ReceiverReportInternal};
 use sr::{SenderReport, SenderReportInternal};
 
-/// NowFn provides current SystemTime
-pub type NowFn = Arc<dyn (Fn() -> SystemTime) + Send + Sync>;
-
 /// ReceiverBuilder can be used to configure ReceiverReport Interceptor.
 #[derive(Default)]
 pub struct ReportBuilder {
     interval: Option<Duration>,
-    now: Option<NowFn>,
+    now: Option<FnTimeGen>,
 }
 
 impl ReportBuilder {
@@ -28,7 +26,7 @@ impl ReportBuilder {
     }
 
     /// with_now_fn sets an alternative for the time.Now function.
-    pub fn with_now_fn(mut self, now: NowFn) -> ReportBuilder {
+    pub fn with_now_fn(mut self, now: FnTimeGen) -> ReportBuilder {
         self.now = Some(now);
         self
     }
