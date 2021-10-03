@@ -12,11 +12,13 @@ repository = "https://github.com/webrtc-rs/interceptor"
 [dependencies]
 util = { package = "webrtc-util", version = "0.4.3", default-features = false, features = ["marshal"] }
 rtp = "0.4.0"
-rtcp = "0.3.4"
+rtcp = "0.4.0"
 srtp = { package = "webrtc-srtp", version = "0.4.1" }
-tokio = { version = "1.12.0", features = ["sync"] }
-async-trait = "0.1.42"
-bytes = "1"
-thiserror = "1.0.25"
-anyhow = "1.0.41"
+tokio = { version = "1.12.0", features = ["sync", "time"] }
+async-trait = "0.1.51"
+bytes = "1.1.0"
+thiserror = "1.0.29"
+anyhow = "1.0.44"
 rand = "0.8.4"
+waitgroup = "0.1.2"
+log = "0.4.14"

@@ -4,6 +4,11 @@ use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq)]
 pub enum Error {
+    #[error("Invalid Parent RTCP Reader")]
+    ErrInvalidParentRtcpReader,
+    #[error("Incorrect ReceiverReport CloseRx")]
+    ErrIncorrectReceiverReportCloseRx,
+
     #[allow(non_camel_case_types)]
     #[error("{0}")]
     new(String),

@@ -3,12 +3,14 @@ pub mod receiver_stream;
 use crate::*;
 use receiver_stream::ReceiverStream;
 
+use crate::error::Error;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 use tokio::sync::{mpsc, Mutex};
+use waitgroup::WaitGroup;
 
-pub type NowFn = Box<dyn (Fn() -> SystemTime) + Send + Sync>;
+pub type NowFn = Arc<dyn (Fn() -> SystemTime) + Send + Sync>;
 
 /// ReceiverBuilder can be used to configure ReceiverReport Interceptor.
 #[derive(Default)]
@@ -33,28 +35,93 @@ impl ReceiverBuilder {
     pub fn build(mut self) -> ReceiverReport {
         let (close_tx, close_rx) = mpsc::channel(1);
         ReceiverReport {
-            interval: if let Some(interval) = self.interval.take() {
-                interval
-            } else {
-                Duration::from_secs(1)
-            },
-            now: self.now.take(),
+            internal: Arc::new(ReceiverReportInternal {
+                interval: if let Some(interval) = self.interval.take() {
+                    interval
+                } else {
+                    Duration::from_secs(1)
+                },
+                now: self.now.take(),
+                parent_rtcp_reader: Mutex::new(None),
+                streams: Mutex::new(HashMap::new()),
+                close_rx: Mutex::new(Some(close_rx)),
+            }),
 
-            streams: Mutex::new(HashMap::new()),
-            close_rx,
+            wg: Mutex::new(Some(WaitGroup::new())),
             close_tx: Mutex::new(Some(close_tx)),
         }
     }
 }
 
-/// ReceiverReport interceptor generates receiver reports.
-pub struct ReceiverReport {
+struct ReceiverReportInternal {
     interval: Duration,
     now: Option<NowFn>,
-
+    parent_rtcp_reader: Mutex<Option<Arc<dyn RTCPReader + Send + Sync>>>,
     streams: Mutex<HashMap<u32, Arc<ReceiverStream>>>,
-    //wg       sync.WaitGroup
-    close_rx: mpsc::Receiver<()>,
+    close_rx: Mutex<Option<mpsc::Receiver<()>>>,
+}
+
+#[async_trait]
+impl RTCPReader for ReceiverReportInternal {
+    async fn read(&self, buf: &mut [u8], a: &Attributes) -> Result<(usize, Attributes)> {
+        let (n, attr) = {
+            let parent_rtcp_reader = self.parent_rtcp_reader.lock().await;
+            if let Some(reader) = &*parent_rtcp_reader {
+                reader.read(buf, a).await?
+            } else {
+                return Err(Error::ErrInvalidParentRtcpReader.into());
+            }
+        };
+
+        let mut b = &buf[..n];
+        let pkt = rtcp::packet::unmarshal(&mut b)?;
+
+        let now = if let Some(f) = &self.now {
+            f()
+        } else {
+            SystemTime::now()
+        };
+
+        if let Some(sr) = pkt
+            .as_any()
+            .downcast_ref::<rtcp::sender_report::SenderReport>()
+        {
+            let stream = {
+                let m = self.streams.lock().await;
+                m.get(&sr.ssrc).cloned()
+            };
+            if let Some(stream) = stream {
+                stream.process_sender_report(now, sr).await;
+            }
+        } else if let Some(cp) = pkt
+            .as_any()
+            .downcast_ref::<rtcp::compound_packet::CompoundPacket>()
+        {
+            for p in &cp.0 {
+                if let Some(sr) = p
+                    .as_any()
+                    .downcast_ref::<rtcp::sender_report::SenderReport>()
+                {
+                    let stream = {
+                        let m = self.streams.lock().await;
+                        m.get(&sr.ssrc).cloned()
+                    };
+                    if let Some(stream) = stream {
+                        stream.process_sender_report(now, sr).await;
+                    }
+                }
+            }
+        }
+
+        Ok((n, attr))
+    }
+}
+
+/// ReceiverReport interceptor generates receiver reports.
+pub struct ReceiverReport {
+    internal: Arc<ReceiverReportInternal>,
+
+    wg: Mutex<Option<WaitGroup>>,
     close_tx: Mutex<Option<mpsc::Sender<()>>>,
 }
 
@@ -64,100 +131,68 @@ impl ReceiverReport {
         ReceiverBuilder::default()
     }
 
-    /*
+    async fn is_closed(&self) -> bool {
+        let close_tx = self.close_tx.lock().await;
+        close_tx.is_none()
+    }
 
-    func (r *ReceiverInterceptor) loop(rtcpWriter interceptor.RTCPWriter) {
-        defer r.wg.Done()
+    async fn run(
+        rtcp_writer: Arc<dyn RTCPWriter + Send + Sync>,
+        internal: Arc<ReceiverReportInternal>,
+    ) -> Result<()> {
+        let mut ticker = tokio::time::interval(internal.interval);
+        let mut close_rx = {
+            let mut close_rx = internal.close_rx.lock().await;
+            if let Some(close) = close_rx.take() {
+                close
+            } else {
+                return Err(Error::ErrIncorrectReceiverReportCloseRx.into());
+            }
+        };
 
-        ticker := time.NewTicker(r.interval)
-        defer ticker.Stop()
-        for {
-            select {
-            case <-ticker.C:
-                now := r.now()
-                r.streams.Range(func(key, value interface{}) bool {
-                    stream := value.(*receiverStream)
+        loop {
+            tokio::select! {
+                _ = ticker.tick() =>{
+                    let now = if let Some(f) = &internal.now {
+                        f()
+                    }else{
+                        SystemTime::now()
+                    };
+                    let streams:Vec<Arc<ReceiverStream>> = {
+                        let m = internal.streams.lock().await;
+                        m.values().cloned().collect()
+                    };
+                    for stream in streams {
+                        let pkt = stream.generate_report(now).await;
 
-                    var pkts []rtcp.Packet
-
-                    pkts = append(pkts, stream.generateReport(now))
-
-                    if _, err := rtcpWriter.Write(pkts, interceptor.Attributes{}); err != nil {
-                        r.log.Warnf("failed sending: %+v", err)
+                        let a = Attributes::new();
+                        if let Err(err) = rtcp_writer.write(&pkt, &a).await{
+                            log::warn!("failed sending: {}", err);
+                        }
                     }
-
-                    return true
-                })
-
-            case <-r.close:
-                return
+                }
+                _ = close_rx.recv() =>{
+                    return Ok(());
+                }
             }
         }
     }
-     */
 }
 
 #[async_trait]
 impl Interceptor for ReceiverReport {
-    /*
-
-    // BindRTCPReader lets you modify any incoming RTCP packets. It is called once per sender/receiver, however this might
-    // change in the future. The returned method will be called once per packet batch.
-    func (r *ReceiverInterceptor) BindRTCPReader(reader interceptor.RTCPReader) interceptor.RTCPReader {
-        return interceptor.RTCPReaderFunc(func(b []byte, a interceptor.Attributes) (int, interceptor.Attributes, error) {
-            i, attr, err := reader.Read(b, a)
-            if err != nil {
-                return 0, nil, err
-            }
-
-            pkts, err := rtcp.Unmarshal(b[:i])
-            if err != nil {
-                return 0, nil, err
-            }
-
-            for _, pkt := range pkts {
-                if sr, ok := (pkt).(*rtcp.SenderReport); ok {
-                    value, ok := r.streams.Load(sr.SSRC)
-                    if !ok {
-                        continue
-                    }
-
-                    stream := value.(*receiverStream)
-                    stream.processSenderReport(r.now(), sr)
-                }
-            }
-
-            return i, attr, nil
-        })
-       }
-
-    // BindRTCPWriter lets you modify any outgoing RTCP packets. It is called once per PeerConnection. The returned method
-    // will be called once per packet batch.
-    func (r *ReceiverInterceptor) BindRTCPWriter(writer interceptor.RTCPWriter) interceptor.RTCPWriter {
-        r.m.Lock()
-        defer r.m.Unlock()
-
-        if r.isClosed() {
-            return writer
-        }
-
-        r.wg.Add(1)
-
-        go r.loop(writer)
-
-        return writer
-    }
-
-
-
-    */
     /// bind_rtcp_reader lets you modify any incoming RTCP packets. It is called once per sender/receiver, however this might
     /// change in the future. The returned method will be called once per packet batch.
     async fn bind_rtcp_reader(
         &self,
         reader: Arc<dyn RTCPReader + Send + Sync>,
     ) -> Arc<dyn RTCPReader + Send + Sync> {
-        reader
+        {
+            let mut parent_rtcp_reader = self.internal.parent_rtcp_reader.lock().await;
+            *parent_rtcp_reader = Some(reader);
+        }
+
+        Arc::clone(&self.internal) as Arc<dyn RTCPReader + Send + Sync>
     }
 
     /// bind_rtcp_writer lets you modify any outgoing RTCP packets. It is called once per PeerConnection. The returned method
@@ -166,6 +201,21 @@ impl Interceptor for ReceiverReport {
         &self,
         writer: Arc<dyn RTCPWriter + Send + Sync>,
     ) -> Arc<dyn RTCPWriter + Send + Sync> {
+        if self.is_closed().await {
+            return writer;
+        }
+
+        let mut w = {
+            let wait_group = self.wg.lock().await;
+            wait_group.as_ref().map(|wg| wg.worker())
+        };
+        let writer2 = Arc::clone(&writer);
+        let internal = Arc::clone(&self.internal);
+        tokio::spawn(async move {
+            let _d = w.take();
+            let _ = ReceiverReport::run(writer2, internal).await;
+        });
+
         writer
     }
 
@@ -181,7 +231,7 @@ impl Interceptor for ReceiverReport {
 
     /// UnbindLocalStream is called when the Stream is removed. It can be used to clean up any data related to that track.
     async fn unbind_local_stream(&self, info: &StreamInfo) {
-        let mut streams = self.streams.lock().await;
+        let mut streams = self.internal.streams.lock().await;
         streams.remove(&info.ssrc);
     }
 
@@ -192,9 +242,14 @@ impl Interceptor for ReceiverReport {
         info: &StreamInfo,
         reader: Arc<dyn RTPReader + Send + Sync>,
     ) -> Arc<dyn RTPReader + Send + Sync> {
-        let stream = Arc::new(ReceiverStream::new(info.ssrc, info.clock_rate, reader));
+        let stream = Arc::new(ReceiverStream::new(
+            info.ssrc,
+            info.clock_rate,
+            reader,
+            self.internal.now.clone(),
+        ));
         {
-            let mut streams = self.streams.lock().await;
+            let mut streams = self.internal.streams.lock().await;
             streams.insert(info.ssrc, Arc::clone(&stream));
         }
 
@@ -206,8 +261,17 @@ impl Interceptor for ReceiverReport {
 
     /// close closes the interceptor.
     async fn close(&self) -> Result<()> {
-        let mut close_tx = self.close_tx.lock().await;
-        close_tx.take();
+        {
+            let mut close_tx = self.close_tx.lock().await;
+            close_tx.take();
+        }
+
+        {
+            let mut wait_group = self.wg.lock().await;
+            if let Some(wg) = wait_group.take() {
+                wg.wait().await;
+            }
+        }
 
         Ok(())
     }

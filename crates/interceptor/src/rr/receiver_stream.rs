@@ -1,19 +1,17 @@
+use super::*;
 use crate::{Attributes, RTPReader};
 
 use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 use util::Unmarshal;
 
-#[derive(Clone)]
-pub(crate) struct ReceiverStream {
+struct ReceiverStreamInternal {
     ssrc: u32,
     receiver_ssrc: u32,
     clock_rate: f64,
-    parent_reader: Arc<dyn RTPReader + Send + Sync>,
 
-    size: u16,
     packets: Vec<u64>,
     started: bool,
     seq_num_cycles: u16,
@@ -27,35 +25,23 @@ pub(crate) struct ReceiverStream {
     total_lost: u32,
 }
 
-impl ReceiverStream {
-    pub(crate) fn new(
-        ssrc: u32,
-        clock_rate: u32,
-        reader: Arc<dyn RTPReader + Send + Sync>,
-    ) -> Self {
-        let receiver_ssrc = rand::random::<u32>();
-        ReceiverStream {
-            ssrc,
-            receiver_ssrc,
-            clock_rate: clock_rate as f64,
-            parent_reader: reader,
-
-            size: 128,
-            packets: vec![0u64; 128],
-            started: false,
-            seq_num_cycles: 0,
-            last_seq_num: 0,
-            last_report_seq_num: 0,
-            last_rtp_time_rtp: 0,
-            last_rtp_time_time: SystemTime::UNIX_EPOCH,
-            jitter: 0.0,
-            last_sender_report: 0,
-            last_sender_report_time: SystemTime::UNIX_EPOCH,
-            total_lost: 0,
-        }
+impl ReceiverStreamInternal {
+    fn set_received(&mut self, seq: u16) {
+        let pos = (seq as usize) % self.packets.len();
+        self.packets[pos / 64] |= 1 << (pos % 64);
     }
 
-    pub(crate) fn process_rtp(&mut self, now: SystemTime, pkt: &rtp::packet::Packet) {
+    fn del_received(&mut self, seq: u16) {
+        let pos = (seq as usize) % self.packets.len();
+        self.packets[pos / 64] &= u64::MAX ^ (1u64 << (pos % 64));
+    }
+
+    fn get_received(&self, seq: u16) -> bool {
+        let pos = (seq as usize) % self.packets.len();
+        (self.packets[pos / 64] & (1 << (pos % 64))) != 0
+    }
+
+    fn process_rtp(&mut self, now: SystemTime, pkt: &rtp::packet::Packet) {
         if !self.started {
             // first frame
             self.started = true;
@@ -96,34 +82,12 @@ impl ReceiverStream {
         self.last_rtp_time_time = now;
     }
 
-    pub(crate) fn set_received(&mut self, seq: u16) {
-        let pos = seq % self.size;
-        self.packets[pos as usize / 64] |= 1 << (pos % 64);
-    }
-
-    pub(crate) fn del_received(&mut self, seq: u16) {
-        let pos = seq % self.size;
-        self.packets[pos as usize / 64] &= u64::MAX ^ (1u64 << (pos % 64));
-    }
-
-    pub(crate) fn get_received(&self, seq: u16) -> bool {
-        let pos = seq % self.size;
-        (self.packets[pos as usize / 64] & (1 << (pos % 64))) != 0
-    }
-
-    pub(crate) fn process_sender_report(
-        &mut self,
-        now: SystemTime,
-        sr: &rtcp::sender_report::SenderReport,
-    ) {
+    fn process_sender_report(&mut self, now: SystemTime, sr: &rtcp::sender_report::SenderReport) {
         self.last_sender_report = (sr.ntp_time >> 16) as u32;
         self.last_sender_report_time = now;
     }
 
-    pub(crate) fn generate_report(
-        &mut self,
-        now: SystemTime,
-    ) -> rtcp::receiver_report::ReceiverReport {
+    fn generate_report(&mut self, now: SystemTime) -> rtcp::receiver_report::ReceiverReport {
         let total_since_report = self.last_seq_num - self.last_report_seq_num;
         let mut total_lost_since_report = {
             if self.last_seq_num == self.last_report_seq_num {
@@ -174,14 +138,81 @@ impl ReceiverStream {
     }
 }
 
+pub(crate) struct ReceiverStream {
+    parent_rtp_reader: Arc<dyn RTPReader + Send + Sync>,
+    now: Option<NowFn>,
+
+    internal: Mutex<ReceiverStreamInternal>,
+}
+
+impl ReceiverStream {
+    pub(crate) fn new(
+        ssrc: u32,
+        clock_rate: u32,
+        reader: Arc<dyn RTPReader + Send + Sync>,
+        now: Option<NowFn>,
+    ) -> Self {
+        let receiver_ssrc = rand::random::<u32>();
+        ReceiverStream {
+            parent_rtp_reader: reader,
+            now,
+
+            internal: Mutex::new(ReceiverStreamInternal {
+                ssrc,
+                receiver_ssrc,
+                clock_rate: clock_rate as f64,
+
+                packets: vec![0u64; 128],
+                started: false,
+                seq_num_cycles: 0,
+                last_seq_num: 0,
+                last_report_seq_num: 0,
+                last_rtp_time_rtp: 0,
+                last_rtp_time_time: SystemTime::UNIX_EPOCH,
+                jitter: 0.0,
+                last_sender_report: 0,
+                last_sender_report_time: SystemTime::UNIX_EPOCH,
+                total_lost: 0,
+            }),
+        }
+    }
+
+    pub(crate) async fn process_rtp(&self, now: SystemTime, pkt: &rtp::packet::Packet) {
+        let mut internal = self.internal.lock().await;
+        internal.process_rtp(now, pkt);
+    }
+
+    pub(crate) async fn process_sender_report(
+        &self,
+        now: SystemTime,
+        sr: &rtcp::sender_report::SenderReport,
+    ) {
+        let mut internal = self.internal.lock().await;
+        internal.process_sender_report(now, sr);
+    }
+
+    pub(crate) async fn generate_report(
+        &self,
+        now: SystemTime,
+    ) -> rtcp::receiver_report::ReceiverReport {
+        let mut internal = self.internal.lock().await;
+        internal.generate_report(now)
+    }
+}
+
 #[async_trait]
 impl RTPReader for ReceiverStream {
     async fn read(&self, buf: &mut [u8], a: &Attributes) -> Result<(usize, Attributes)> {
-        let (n, attr) = self.parent_reader.read(buf, a).await?;
+        let (n, attr) = self.parent_rtp_reader.read(buf, a).await?;
 
         let mut b = &buf[..n];
-        let _pkt = rtp::packet::Packet::unmarshal(&mut b)?;
-        //TODO: self.process_rtp(SystemTime::now(), &pkt)
+        let pkt = rtp::packet::Packet::unmarshal(&mut b)?;
+        let now = if let Some(f) = &self.now {
+            f()
+        } else {
+            SystemTime::now()
+        };
+        self.process_rtp(now, &pkt).await;
 
         Ok((n, attr))
     }
