@@ -94,14 +94,14 @@ impl Packet for TransportLayerNack {
         self
     }
 
-    fn equal(&self, other: &dyn Packet) -> bool {
+    fn equal(&self, other: &(dyn Packet + Send + Sync)) -> bool {
         other
             .as_any()
             .downcast_ref::<TransportLayerNack>()
             .map_or(false, |a| self == a)
     }
 
-    fn cloned(&self) -> Box<dyn Packet> {
+    fn cloned(&self) -> Box<dyn Packet + Send + Sync> {
         Box::new(self.clone())
     }
 }

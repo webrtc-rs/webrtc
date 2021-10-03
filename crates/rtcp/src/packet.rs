@@ -21,18 +21,18 @@ pub trait Packet: Marshal + Unmarshal + fmt::Display + fmt::Debug {
     fn destination_ssrc(&self) -> Vec<u32>;
     fn raw_size(&self) -> usize;
     fn as_any(&self) -> &dyn Any;
-    fn equal(&self, other: &dyn Packet) -> bool;
-    fn cloned(&self) -> Box<dyn Packet>;
+    fn equal(&self, other: &(dyn Packet + Send + Sync)) -> bool;
+    fn cloned(&self) -> Box<dyn Packet + Send + Sync>;
 }
 
-impl PartialEq for dyn Packet {
+impl PartialEq for dyn Packet + Send + Sync {
     fn eq(&self, other: &Self) -> bool {
         self.equal(other)
     }
 }
 
-impl Clone for Box<dyn Packet> {
-    fn clone(&self) -> Box<dyn Packet> {
+impl Clone for Box<dyn Packet + Send + Sync> {
+    fn clone(&self) -> Box<dyn Packet + Send + Sync> {
         self.cloned()
     }
 }
@@ -43,7 +43,7 @@ impl Clone for Box<dyn Packet> {
 /// If this is a reduced-size RTCP packet a feedback packet (Goodbye, SliceLossIndication, etc)
 /// will be returned. Otherwise, the underlying type of the returned packet will be
 /// CompoundPacket.
-pub fn unmarshal<B>(raw_data: &mut B) -> Result<Box<dyn Packet>>
+pub fn unmarshal<B>(raw_data: &mut B) -> Result<Box<dyn Packet + Send + Sync>>
 where
     B: Buf,
 {
@@ -68,7 +68,7 @@ where
 
 /// unmarshaller is a factory which pulls the first RTCP packet from a bytestream,
 /// and returns it's parsed representation, and the amount of data that was processed.
-pub(crate) fn unmarshaller<B>(raw_data: &mut B) -> Result<Box<dyn Packet>>
+pub(crate) fn unmarshaller<B>(raw_data: &mut B) -> Result<Box<dyn Packet + Send + Sync>>
 where
     B: Buf,
 {
@@ -81,7 +81,7 @@ where
 
     let mut in_packet = h.marshal()?.chain(raw_data.take(length));
 
-    let p: Box<dyn Packet> = match h.packet_type {
+    let p: Box<dyn Packet + Send + Sync> = match h.packet_type {
         PacketType::SenderReport => Box::new(SenderReport::unmarshal(&mut in_packet)?),
         PacketType::ReceiverReport => Box::new(ReceiverReport::unmarshal(&mut in_packet)?),
         PacketType::SourceDescription => Box::new(SourceDescription::unmarshal(&mut in_packet)?),
@@ -185,7 +185,7 @@ mod test {
             media_ssrc: 0x902f9e2e,
         };
 
-        let expected: Box<dyn Packet> = Box::new(CompoundPacket(vec![
+        let expected: Box<dyn Packet + Send + Sync> = Box::new(CompoundPacket(vec![
             Box::new(a),
             Box::new(b),
             Box::new(c),
