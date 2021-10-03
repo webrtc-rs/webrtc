@@ -1,23 +1,21 @@
 #![warn(rust_2018_idioms)]
 #![allow(dead_code)]
 
+use anyhow::Result;
+use async_trait::async_trait;
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use stream_info::StreamInfo;
+
 pub mod chain;
 pub mod error;
 pub mod nack;
 pub mod noop;
 pub mod registry;
-pub mod rr;
-pub mod sr;
+pub mod report;
 pub mod stream_info;
 pub mod stream_reader;
-
-use stream_info::StreamInfo;
-
-use anyhow::Result;
-use async_trait::async_trait;
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::SystemTime;
 
 /// Interceptor can be used to add functionality to you PeerConnections by modifying any incoming/outgoing rtp/rtcp
 /// packets, or sending your own packets as needed.
@@ -96,6 +94,3 @@ pub trait RTCPReader {
 
 /// Attributes are a generic key/value store used by interceptors
 pub type Attributes = HashMap<usize, usize>;
-
-/// NowFn provides current SystemTime
-pub type NowFn = Arc<dyn (Fn() -> SystemTime) + Send + Sync>;

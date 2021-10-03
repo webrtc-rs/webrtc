@@ -1,74 +1,35 @@
 pub mod sender_stream;
 
+use super::*;
+use crate::error::Error;
 use crate::*;
 use sender_stream::SenderStream;
 
-use crate::error::Error;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 use tokio::sync::{mpsc, Mutex};
 use waitgroup::WaitGroup;
 
-/// SenderBuilder can be used to configure SenderReport Interceptor.
-#[derive(Default)]
-pub struct SenderBuilder {
-    interval: Option<Duration>,
-    now: Option<NowFn>,
-}
-
-impl SenderBuilder {
-    /// with_interval sets send interval for the interceptor.
-    pub fn with_interval(mut self, interval: Duration) -> SenderBuilder {
-        self.interval = Some(interval);
-        self
-    }
-
-    /// with_now_fn sets an alternative for the time.Now function.
-    pub fn with_now_fn(mut self, now: NowFn) -> SenderBuilder {
-        self.now = Some(now);
-        self
-    }
-
-    pub fn build(mut self) -> SenderReport {
-        let (close_tx, close_rx) = mpsc::channel(1);
-        SenderReport {
-            internal: Arc::new(SenderReportInternal {
-                interval: if let Some(interval) = self.interval.take() {
-                    interval
-                } else {
-                    Duration::from_secs(1)
-                },
-                now: self.now.take(),
-                streams: Mutex::new(HashMap::new()),
-                close_rx: Mutex::new(Some(close_rx)),
-            }),
-
-            wg: Mutex::new(Some(WaitGroup::new())),
-            close_tx: Mutex::new(Some(close_tx)),
-        }
-    }
-}
-
-pub struct SenderReportInternal {
-    interval: Duration,
-    now: Option<NowFn>,
-    streams: Mutex<HashMap<u32, Arc<SenderStream>>>,
-    close_rx: Mutex<Option<mpsc::Receiver<()>>>,
+pub(crate) struct SenderReportInternal {
+    pub(crate) interval: Duration,
+    pub(crate) now: Option<NowFn>,
+    pub(crate) streams: Mutex<HashMap<u32, Arc<SenderStream>>>,
+    pub(crate) close_rx: Mutex<Option<mpsc::Receiver<()>>>,
 }
 
 /// SenderReport interceptor generates sender reports.
 pub struct SenderReport {
-    internal: Arc<SenderReportInternal>,
+    pub(crate) internal: Arc<SenderReportInternal>,
 
-    wg: Mutex<Option<WaitGroup>>,
-    close_tx: Mutex<Option<mpsc::Sender<()>>>,
+    pub(crate) wg: Mutex<Option<WaitGroup>>,
+    pub(crate) close_tx: Mutex<Option<mpsc::Sender<()>>>,
 }
 
 impl SenderReport {
-    /// builder returns a new ReceiverReport builder.
-    pub fn builder() -> SenderBuilder {
-        SenderBuilder::default()
+    /// builder returns a new ReportBuilder.
+    pub fn builder() -> ReportBuilder {
+        ReportBuilder::default()
     }
 
     async fn is_closed(&self) -> bool {

@@ -1,62 +1,22 @@
 pub mod receiver_stream;
 
+use super::*;
+use crate::error::Error;
 use crate::*;
 use receiver_stream::ReceiverStream;
 
-use crate::error::Error;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 use tokio::sync::{mpsc, Mutex};
 use waitgroup::WaitGroup;
 
-/// ReceiverBuilder can be used to configure ReceiverReport Interceptor.
-#[derive(Default)]
-pub struct ReceiverBuilder {
-    interval: Option<Duration>,
-    now: Option<NowFn>,
-}
-
-impl ReceiverBuilder {
-    /// with_interval sets send interval for the interceptor.
-    pub fn with_interval(mut self, interval: Duration) -> ReceiverBuilder {
-        self.interval = Some(interval);
-        self
-    }
-
-    /// with_now_fn sets an alternative for the time.Now function.
-    pub fn with_now_fn(mut self, now: NowFn) -> ReceiverBuilder {
-        self.now = Some(now);
-        self
-    }
-
-    pub fn build(mut self) -> ReceiverReport {
-        let (close_tx, close_rx) = mpsc::channel(1);
-        ReceiverReport {
-            internal: Arc::new(ReceiverReportInternal {
-                interval: if let Some(interval) = self.interval.take() {
-                    interval
-                } else {
-                    Duration::from_secs(1)
-                },
-                now: self.now.take(),
-                parent_rtcp_reader: Mutex::new(None),
-                streams: Mutex::new(HashMap::new()),
-                close_rx: Mutex::new(Some(close_rx)),
-            }),
-
-            wg: Mutex::new(Some(WaitGroup::new())),
-            close_tx: Mutex::new(Some(close_tx)),
-        }
-    }
-}
-
-struct ReceiverReportInternal {
-    interval: Duration,
-    now: Option<NowFn>,
-    parent_rtcp_reader: Mutex<Option<Arc<dyn RTCPReader + Send + Sync>>>,
-    streams: Mutex<HashMap<u32, Arc<ReceiverStream>>>,
-    close_rx: Mutex<Option<mpsc::Receiver<()>>>,
+pub(crate) struct ReceiverReportInternal {
+    pub(crate) interval: Duration,
+    pub(crate) now: Option<NowFn>,
+    pub(crate) parent_rtcp_reader: Mutex<Option<Arc<dyn RTCPReader + Send + Sync>>>,
+    pub(crate) streams: Mutex<HashMap<u32, Arc<ReceiverStream>>>,
+    pub(crate) close_rx: Mutex<Option<mpsc::Receiver<()>>>,
 }
 
 #[async_trait]
@@ -117,16 +77,16 @@ impl RTCPReader for ReceiverReportInternal {
 
 /// ReceiverReport interceptor generates receiver reports.
 pub struct ReceiverReport {
-    internal: Arc<ReceiverReportInternal>,
+    pub(crate) internal: Arc<ReceiverReportInternal>,
 
-    wg: Mutex<Option<WaitGroup>>,
-    close_tx: Mutex<Option<mpsc::Sender<()>>>,
+    pub(crate) wg: Mutex<Option<WaitGroup>>,
+    pub(crate) close_tx: Mutex<Option<mpsc::Sender<()>>>,
 }
 
 impl ReceiverReport {
-    /// builder returns a new ReceiverReport builder.
-    pub fn builder() -> ReceiverBuilder {
-        ReceiverBuilder::default()
+    /// builder returns a new ReportBuilder.
+    pub fn builder() -> ReportBuilder {
+        ReportBuilder::default()
     }
 
     async fn is_closed(&self) -> bool {
@@ -257,7 +217,7 @@ impl Interceptor for ReceiverReport {
     /// unbind_remote_stream is called when the Stream is removed. It can be used to clean up any data related to that track.
     async fn unbind_remote_stream(&self, _info: &StreamInfo) {}
 
-    /// close closes the interceptor.
+    /// close closes the Interceptor, cleaning up any data if necessary.
     async fn close(&self) -> Result<()> {
         {
             let mut close_tx = self.close_tx.lock().await;
