@@ -36,7 +36,7 @@ impl Packet for RawPacket {
         self.0.len()
     }
 
-    fn as_any(&self) -> &(dyn Any+ Send + Sync){
+    fn as_any(&self) -> &(dyn Any + Send + Sync) {
         self
     }
 

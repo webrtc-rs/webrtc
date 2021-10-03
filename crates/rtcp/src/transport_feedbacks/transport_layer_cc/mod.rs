@@ -518,7 +518,7 @@ impl Packet for TransportLayerCc {
         n
     }
 
-    fn as_any(&self) -> &(dyn Any+ Send + Sync) {
+    fn as_any(&self) -> &(dyn Any + Send + Sync) {
         self
     }
 

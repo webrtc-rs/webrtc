@@ -316,7 +316,7 @@ impl Packet for SourceDescription {
         HEADER_LENGTH + chunks_length
     }
 
-    fn as_any(&self) -> &(dyn Any+ Send + Sync) {
+    fn as_any(&self) -> &(dyn Any + Send + Sync) {
         self
     }
 

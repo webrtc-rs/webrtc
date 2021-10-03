@@ -65,7 +65,7 @@ impl Packet for SliceLossIndication {
         HEADER_LENGTH + SLI_OFFSET + self.sli_entries.len() * 4
     }
 
-    fn as_any(&self) -> &(dyn Any+ Send + Sync) {
+    fn as_any(&self) -> &(dyn Any + Send + Sync) {
         self
     }
 
