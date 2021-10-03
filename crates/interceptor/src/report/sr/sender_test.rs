@@ -1,12 +1,12 @@
 use super::*;
-use crate::mock::mock_time::SystemTimeMock;
+use crate::mock::mock_time::MockTime;
 use chrono::prelude::*;
 use std::future::Future;
 use std::pin::Pin;
 
 #[tokio::test]
 async fn test_sender_interceptor_before_any_packet() -> Result<()> {
-    let mt = Arc::new(SystemTimeMock::default());
+    let mt = Arc::new(MockTime::default());
     let mt2 = Arc::clone(&mt);
     let time_gen = Arc::new(
         move || -> Pin<Box<dyn Future<Output = SystemTime> + Send + 'static>> {
@@ -15,7 +15,7 @@ async fn test_sender_interceptor_before_any_packet() -> Result<()> {
         },
     );
 
-    let sr = SenderReport::builder()
+    let _sr = SenderReport::builder()
         .with_interval(Duration::from_millis(50))
         .with_now_fn(time_gen)
         .build_sr();
@@ -32,7 +32,7 @@ async fn test_sender_interceptor_before_any_packet() -> Result<()> {
     }()
 
 
-    pkts := <-stream.WrittenRTCP()
+    pkts := <-stream.written_rtcp()
     assert.Equal(t, len(pkts), 1)
     sr, ok := pkts[0].(*rtcp.SenderReport)
     assert.True(t, ok)
@@ -66,14 +66,14 @@ async fn test_sender_interceptor_after_rtp_packets() ->Result<()> {
     }()
 
     for i := 0; i < 10; i++ {
-        assert.NoError(t, stream.WriteRTP(&rtp.Packet{
+        assert.NoError(t, stream.write_rtp(&rtp.Packet{
             Header:  rtp.Header{SequenceNumber: uint16(i)},
             Payload: []byte("\x00\x00"),
         }))
     }
 
     mt.SetNow(time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC))
-    pkts := <-stream.WrittenRTCP()
+    pkts := <-stream.written_rtcp()
     assert.Equal(t, len(pkts), 1)
     sr, ok := pkts[0].(*rtcp.SenderReport)
     assert.True(t, ok)

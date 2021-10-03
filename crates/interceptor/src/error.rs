@@ -8,6 +8,10 @@ pub enum Error {
     ErrInvalidParentRtcpReader,
     #[error("Incorrect ReceiverReport CloseRx")]
     ErrIncorrectReceiverReportCloseRx,
+    #[error("IO EOF")]
+    ErrIoEOF,
+    #[error("Buffer is too short")]
+    ErrShortBuffer,
 
     #[allow(non_camel_case_types)]
     #[error("{0}")]

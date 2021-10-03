@@ -1,20 +1,20 @@
 use std::time::{Duration, SystemTime};
 use tokio::sync::Mutex;
 
-/// SystemTimeMock is a helper to replace SystemTime::now() for testing purposes.
-pub struct SystemTimeMock {
+/// MockTime is a helper to replace SystemTime::now() for testing purposes.
+pub struct MockTime {
     cur_now: Mutex<SystemTime>,
 }
 
-impl Default for SystemTimeMock {
+impl Default for MockTime {
     fn default() -> Self {
-        SystemTimeMock {
+        MockTime {
             cur_now: Mutex::new(SystemTime::UNIX_EPOCH),
         }
     }
 }
 
-impl SystemTimeMock {
+impl MockTime {
     /// set_now sets the current time.
     pub async fn set_now(&self, now: SystemTime) {
         let mut cur_now = self.cur_now.lock().await;
