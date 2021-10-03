@@ -52,7 +52,7 @@ impl Packet for RapidResynchronizationRequest {
         HEADER_LENGTH + RRR_HEADER_LENGTH
     }
 
-    fn as_any(&self) -> &dyn Any {
+    fn as_any(&self) -> &(dyn Any+ Send + Sync) {
         self
     }
 

@@ -66,7 +66,7 @@ impl Packet for ReceptionReport {
         RECEPTION_REPORT_LENGTH
     }
 
-    fn as_any(&self) -> &dyn Any {
+    fn as_any(&self) -> &(dyn Any+ Send + Sync) {
         self
     }
 

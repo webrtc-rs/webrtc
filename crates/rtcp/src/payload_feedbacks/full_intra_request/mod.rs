@@ -61,7 +61,7 @@ impl Packet for FullIntraRequest {
         HEADER_LENGTH + FIR_OFFSET + self.fir.len() * 8
     }
 
-    fn as_any(&self) -> &dyn Any {
+    fn as_any(&self) -> &(dyn Any+ Send + Sync) {
         self
     }
 

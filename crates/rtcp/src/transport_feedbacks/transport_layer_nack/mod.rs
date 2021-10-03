@@ -90,7 +90,7 @@ impl Packet for TransportLayerNack {
         HEADER_LENGTH + NACK_OFFSET + self.nacks.len() * 4
     }
 
-    fn as_any(&self) -> &dyn Any {
+    fn as_any(&self) -> &(dyn Any+ Send + Sync) {
         self
     }
 

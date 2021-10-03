@@ -56,7 +56,7 @@ impl Packet for CompoundPacket {
         l
     }
 
-    fn as_any(&self) -> &dyn Any {
+    fn as_any(&self) -> &(dyn Any+ Send + Sync) {
         self
     }
 

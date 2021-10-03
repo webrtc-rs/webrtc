@@ -72,7 +72,7 @@ impl Packet for ReceiverEstimatedMaximumBitrate {
         HEADER_LENGTH + REMB_OFFSET + self.ssrcs.len() * 4
     }
 
-    fn as_any(&self) -> &dyn Any {
+    fn as_any(&self) -> &(dyn Any+ Send + Sync) {
         self
     }
 

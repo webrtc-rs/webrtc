@@ -69,7 +69,7 @@ impl Packet for ReceiverReport {
         HEADER_LENGTH + SSRC_LENGTH + reps_length + self.profile_extensions.len()
     }
 
-    fn as_any(&self) -> &dyn Any {
+    fn as_any(&self) -> &(dyn Any+ Send + Sync) {
         self
     }
 
