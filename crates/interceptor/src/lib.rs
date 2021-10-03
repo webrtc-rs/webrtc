@@ -17,6 +17,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::SystemTime;
 
 /// Interceptor can be used to add functionality to you PeerConnections by modifying any incoming/outgoing rtp/rtcp
 /// packets, or sending your own packets as needed.
@@ -95,3 +96,6 @@ pub trait RTCPReader {
 
 /// Attributes are a generic key/value store used by interceptors
 pub type Attributes = HashMap<usize, usize>;
+
+/// NowFn provides current SystemTime
+pub type NowFn = Arc<dyn (Fn() -> SystemTime) + Send + Sync>;

@@ -10,8 +10,6 @@ use std::time::{Duration, SystemTime};
 use tokio::sync::{mpsc, Mutex};
 use waitgroup::WaitGroup;
 
-pub type NowFn = Arc<dyn (Fn() -> SystemTime) + Send + Sync>;
-
 /// ReceiverBuilder can be used to configure ReceiverReport Interceptor.
 #[derive(Default)]
 pub struct ReceiverBuilder {

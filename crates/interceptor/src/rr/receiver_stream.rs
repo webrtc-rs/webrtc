@@ -200,8 +200,10 @@ impl ReceiverStream {
     }
 }
 
+/// RTPReader is used by Interceptor.bind_remote_stream.
 #[async_trait]
 impl RTPReader for ReceiverStream {
+    /// read a rtp packet
     async fn read(&self, buf: &mut [u8], a: &Attributes) -> Result<(usize, Attributes)> {
         let (n, attr) = self.parent_rtp_reader.read(buf, a).await?;
 
