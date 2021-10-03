@@ -1,6 +1,6 @@
 use aes::cipher::generic_array::GenericArray;
-use aes::cipher::{BlockCipher, NewBlockCipher};
-use aes::Aes128;
+use aes::cipher::NewBlockCipher;
+use aes::{Aes128, BlockEncrypt};
 
 use anyhow::Result;
 use byteorder::{BigEndian, WriteBytesExt};
