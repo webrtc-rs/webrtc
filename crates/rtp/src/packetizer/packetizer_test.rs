@@ -4,15 +4,15 @@ use crate::codecs::*;
 use chrono::prelude::*;
 use std::time::{Duration, UNIX_EPOCH};
 
-#[test]
-fn test_packetizer() -> Result<()> {
+#[tokio::test]
+async fn test_packetizer() -> Result<()> {
     let multiple_payload = Bytes::from_static(&[0; 128]);
     let g722 = Box::new(g7xx::G722Payloader {});
     let seq = Box::new(new_random_sequencer());
 
     //use the G722 payloader here, because it's very simple and all 0s is valid G722 data.
     let mut packetizer = new_packetizer(100, 98, 0x1234ABCD, g722, seq, 90000);
-    let packets = packetizer.packetize(&multiple_payload, 2000)?;
+    let packets = packetizer.packetize(&multiple_payload, 2000).await?;
 
     if packets.len() != 2 {
         let mut packet_lengths = String::new();
@@ -30,18 +30,22 @@ fn test_packetizer() -> Result<()> {
     Ok(())
 }
 
-fn fixed_time_gen() -> SystemTime {
-    let loc = FixedOffset::west(5 * 60 * 60); // UTC-5
-    let t = loc.ymd(1985, 6, 23).and_hms_nano(4, 0, 0, 0);
-    UNIX_EPOCH
-        .checked_add(Duration::from_nanos(t.timestamp_nanos() as u64))
-        .unwrap_or(UNIX_EPOCH)
-}
-
-#[test]
-fn test_packetizer_abs_send_time() -> Result<()> {
+#[tokio::test]
+async fn test_packetizer_abs_send_time() -> Result<()> {
     let g722 = Box::new(g7xx::G722Payloader {});
     let sequencer = Box::new(new_fixed_sequencer(1234));
+
+    let time_gen: Option<FnTimeGen> = Some(Arc::new(
+        || -> Pin<Box<dyn Future<Output = SystemTime> + Send + 'static>> {
+            Box::pin(async move {
+                let loc = FixedOffset::west(5 * 60 * 60); // UTC-5
+                let t = loc.ymd(1985, 6, 23).and_hms_nano(4, 0, 0, 0);
+                UNIX_EPOCH
+                    .checked_add(Duration::from_nanos(t.timestamp_nanos() as u64))
+                    .unwrap_or(UNIX_EPOCH)
+            })
+        },
+    ));
 
     //use the G722 payloader here, because it's very simple and all 0s is valid G722 data.
     let mut pktizer = PacketizerImpl {
@@ -53,12 +57,12 @@ fn test_packetizer_abs_send_time() -> Result<()> {
         timestamp: 45678,
         clock_rate: 90000,
         abs_send_time: 0,
-        time_gen: Some(Arc::new(fixed_time_gen)),
+        time_gen,
     };
     pktizer.enable_abs_send_time(1);
 
     let payload = Bytes::from_static(&[0x11, 0x12, 0x13, 0x14]);
-    let packets = pktizer.packetize(&payload, 2000)?;
+    let packets = pktizer.packetize(&payload, 2000).await?;
 
     let expected = Packet {
         header: Header {

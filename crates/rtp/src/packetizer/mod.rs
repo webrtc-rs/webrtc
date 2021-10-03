@@ -5,8 +5,11 @@ use crate::{extension::abs_send_time_extension::*, header::*, packet::*, sequenc
 use util::marshal::{Marshal, MarshalSize};
 
 use anyhow::Result;
+use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
 use std::fmt;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -23,9 +26,10 @@ impl Clone for Box<dyn Payloader + Send + Sync> {
 }
 
 /// Packetizer packetizes a payload
+#[async_trait]
 pub trait Packetizer: fmt::Debug {
     fn enable_abs_send_time(&mut self, value: u8);
-    fn packetize(&mut self, payload: &Bytes, samples: u32) -> Result<Vec<Packet>>;
+    async fn packetize(&mut self, payload: &Bytes, samples: u32) -> Result<Vec<Packet>>;
     fn skip_samples(&mut self, skipped_samples: u32);
     fn clone_to(&self) -> Box<dyn Packetizer + Send + Sync>;
 }
@@ -41,7 +45,9 @@ pub trait Depacketizer {
     fn depacketize(&mut self, b: &Bytes) -> Result<()>;
 }
 
-pub type FnTimeGen = Arc<dyn (Fn() -> SystemTime) + Send + Sync>;
+/// FnTimeGen provides current SystemTime
+pub type FnTimeGen =
+    Arc<dyn (Fn() -> Pin<Box<dyn Future<Output = SystemTime> + Send + 'static>>) + Send + Sync>;
 
 #[derive(Clone)]
 pub(crate) struct PacketizerImpl {
@@ -90,12 +96,13 @@ pub fn new_packetizer(
     }
 }
 
+#[async_trait]
 impl Packetizer for PacketizerImpl {
     fn enable_abs_send_time(&mut self, value: u8) {
         self.abs_send_time = value
     }
 
-    fn packetize(&mut self, payload: &Bytes, samples: u32) -> Result<Vec<Packet>> {
+    async fn packetize(&mut self, payload: &Bytes, samples: u32) -> Result<Vec<Packet>> {
         let payloads = self.payloader.payload(self.mtu - 12, payload)?;
         let mut packets = vec![];
         let (mut i, l) = (0, payloads.len());
@@ -121,7 +128,7 @@ impl Packetizer for PacketizerImpl {
 
         if l != 0 && self.abs_send_time != 0 {
             let st = if let Some(fn_time_gen) = &self.time_gen {
-                fn_time_gen()
+                fn_time_gen().await
             } else {
                 SystemTime::now()
             };
