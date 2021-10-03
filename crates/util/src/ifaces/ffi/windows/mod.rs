@@ -1,10 +1,10 @@
 #![allow(unused, non_upper_case_globals)]
 
-use winapi::basetsd::{UINT32, UINT8, ULONG64};
-use winapi::guiddef::GUID;
-use winapi::minwindef::{BYTE, DWORD, PULONG, ULONG};
-use winapi::winnt::{PCHAR, PVOID, PWCHAR, WCHAR};
-use winapi::ws2def::SOCKET_ADDRESS;
+use winapi::shared::basetsd::{UINT32, UINT8, ULONG64};
+use winapi::shared::guiddef::GUID;
+use winapi::shared::minwindef::{BYTE, DWORD, PULONG, ULONG};
+use winapi::shared::ws2def::SOCKET_ADDRESS;
+use winapi::um::winnt::{PCHAR, PVOID, PWCHAR, WCHAR};
 
 const MAX_ADAPTER_ADDRESS_LENGTH: usize = 8;
 const ZONE_INDICES_LENGTH: usize = 16;
@@ -19,12 +19,12 @@ use std::mem;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::ptr;
 
-use winapi::winerror::{
+use winapi::shared::winerror::{
     ERROR_ADDRESS_NOT_ASSOCIATED, ERROR_BUFFER_OVERFLOW, ERROR_INVALID_PARAMETER,
     ERROR_NOT_ENOUGH_MEMORY, ERROR_NO_DATA, ERROR_SUCCESS,
 };
-use winapi::ws2def::{AF_INET, AF_INET6, AF_UNSPEC, SOCKADDR_IN};
-use winapi::ws2ipdef::sockaddr_in6;
+use winapi::shared::ws2def::{AF_INET, AF_INET6, AF_UNSPEC, SOCKADDR_IN};
+use winapi::shared::ws2ipdef::SOCKADDR_IN6;
 
 const PREALLOC_ADAPTERS_LEN: usize = 15 * 1024;
 
@@ -251,10 +251,10 @@ unsafe fn v4_socket_from_adapter(unicast_addr: &IpAdapterUnicastAddress) -> Sock
     let sin_addr = in_addr.sin_addr.S_un;
 
     let v4_addr = Ipv4Addr::new(
-        sin_addr as u8,
-        (sin_addr >> 8) as u8,
-        (sin_addr >> 16) as u8,
-        (sin_addr >> 24) as u8,
+        *sin_addr.S_addr() as u8,
+        (*sin_addr.S_addr() >> 8) as u8,
+        (*sin_addr.S_addr() >> 16) as u8,
+        (*sin_addr.S_addr() >> 24) as u8,
     );
 
     SocketAddrV4::new(v4_addr, 0)
@@ -263,12 +263,17 @@ unsafe fn v4_socket_from_adapter(unicast_addr: &IpAdapterUnicastAddress) -> Sock
 unsafe fn v6_socket_from_adapter(unicast_addr: &IpAdapterUnicastAddress) -> SocketAddrV6 {
     let socket_addr = &unicast_addr.address;
 
-    let sock_addr6: *const sockaddr_in6 = socket_addr.lpSockaddr as *const winapi::sockaddr_in6;
-    let in6_addr: sockaddr_in6 = *sock_addr6;
+    let sock_addr6: *const SOCKADDR_IN6 = socket_addr.lpSockaddr as *const SOCKADDR_IN6;
+    let in6_addr: SOCKADDR_IN6 = *sock_addr6;
 
-    let v6_addr = in6_addr.sin6_addr.s6_addr.into();
+    let v6_addr = (*in6_addr.sin6_addr.u.Word()).into();
 
-    SocketAddrV6::new(v6_addr, 0, in6_addr.sin6_flowinfo, in6_addr.sin6_scope_id)
+    SocketAddrV6::new(
+        v6_addr,
+        0,
+        in6_addr.sin6_flowinfo,
+        *in6_addr.u.sin6_scope_id(),
+    )
 }
 
 unsafe fn local_ifaces_with_buffer(buffer: &mut Vec<u8>) -> io::Result<()> {
