@@ -6,15 +6,14 @@ use aes::cipher::generic_array::GenericArray;
 use anyhow::Result;
 use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
 use bytes::{BufMut, Bytes, BytesMut};
-use ctr::cipher::stream::{NewStreamCipher, StreamCipher};
-use hmac::NewMac;
-use hmac::{Hmac, Mac};
+use ctr::cipher::{NewCipher, StreamCipher, StreamCipherSeek};
+use hmac::{Hmac, Mac, NewMac};
 use sha1::Sha1;
 use std::io::BufWriter;
 use subtle::ConstantTimeEq;
 
 type HmacSha1 = Hmac<Sha1>;
-type Aes128Ctr = ctr::Ctr128<aes::Aes128>;
+type Aes128Ctr = ctr::Ctr128BE<aes::Aes128>;
 
 pub const CIPHER_AES_CM_HMAC_SHA1AUTH_TAG_LEN: usize = 10;
 
@@ -78,8 +77,8 @@ impl CipherAesCmHmacSha1 {
             auth_key_len,
         )?;
 
-        let srtp_session_auth = HmacSha1::new_varkey(&srtp_session_auth_tag)?;
-        let srtcp_session_auth = HmacSha1::new_varkey(&srtcp_session_auth_tag)?;
+        let srtp_session_auth = HmacSha1::new_from_slice(&srtp_session_auth_tag)?;
+        let srtcp_session_auth = HmacSha1::new_from_slice(&srtcp_session_auth_tag)?;
 
         Ok(CipherAesCmHmacSha1 {
             srtp_session_key,
@@ -190,7 +189,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         let nonce = GenericArray::from_slice(&counter);
         let mut stream = Aes128Ctr::new(key, nonce);
         let payload_offset = header.marshal_size();
-        stream.encrypt(&mut writer[payload_offset..]);
+        stream.apply_keystream(&mut writer[payload_offset..]);
 
         // Generate the auth tag.
         let auth_tag = self.generate_srtp_auth_tag(&writer, roc)?;
@@ -239,7 +238,8 @@ impl Cipher for CipherAesCmHmacSha1 {
         let nonce = GenericArray::from_slice(&counter);
         let mut stream = Aes128Ctr::new(key, nonce);
         let payload_offset = header.marshal_size();
-        stream.decrypt(&mut writer[payload_offset..]);
+        stream.seek(0);
+        stream.apply_keystream(&mut writer[payload_offset..]);
 
         Ok(writer.freeze())
     }
@@ -263,7 +263,9 @@ impl Cipher for CipherAesCmHmacSha1 {
         let nonce = GenericArray::from_slice(&counter);
         let mut stream = Aes128Ctr::new(key, nonce);
 
-        stream.encrypt(&mut writer[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH..]);
+        stream.apply_keystream(
+            &mut writer[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH..],
+        );
 
         // Add SRTCP index and set Encryption bit
         writer.put_u32(srtcp_index as u32 | (1u32 << 31));
@@ -319,7 +321,10 @@ impl Cipher for CipherAesCmHmacSha1 {
         let nonce = GenericArray::from_slice(&counter);
         let mut stream = Aes128Ctr::new(key, nonce);
 
-        stream.decrypt(&mut writer[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH..]);
+        stream.seek(0);
+        stream.apply_keystream(
+            &mut writer[rtcp::header::HEADER_LENGTH + rtcp::header::SSRC_LENGTH..],
+        );
 
         Ok(writer.freeze())
     }
