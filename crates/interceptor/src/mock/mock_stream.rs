@@ -244,7 +244,7 @@ impl RTCPWriter for MockStream {
         pkt: &(dyn rtcp::packet::Packet + Send + Sync),
         _attributes: &Attributes,
     ) -> Result<usize> {
-        let _ = self.rtcp_out_modified_tx.try_send(pkt.cloned());
+        let _ = self.rtcp_out_modified_tx.send(pkt.cloned()).await;
 
         Ok(0)
     }
@@ -272,7 +272,7 @@ impl RTCPReader for MockStream {
 #[async_trait]
 impl RTPWriter for MockStream {
     async fn write(&self, pkt: &rtp::packet::Packet, _a: &Attributes) -> Result<usize> {
-        let _ = self.rtp_out_modified_tx.try_send(pkt.clone());
+        let _ = self.rtp_out_modified_tx.send(pkt.clone()).await;
         Ok(0)
     }
 }

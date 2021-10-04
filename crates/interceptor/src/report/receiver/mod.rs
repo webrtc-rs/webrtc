@@ -190,10 +190,7 @@ impl Interceptor for ReceiverReport {
     }
 
     /// UnbindLocalStream is called when the Stream is removed. It can be used to clean up any data related to that track.
-    async fn unbind_local_stream(&self, info: &StreamInfo) {
-        let mut streams = self.internal.streams.lock().await;
-        streams.remove(&info.ssrc);
-    }
+    async fn unbind_local_stream(&self, _info: &StreamInfo) {}
 
     /// bind_remote_stream lets you modify any incoming RTP packets. It is called once for per RemoteStream. The returned method
     /// will be called once per rtp packet.
@@ -217,7 +214,10 @@ impl Interceptor for ReceiverReport {
     }
 
     /// unbind_remote_stream is called when the Stream is removed. It can be used to clean up any data related to that track.
-    async fn unbind_remote_stream(&self, _info: &StreamInfo) {}
+    async fn unbind_remote_stream(&self, info: &StreamInfo) {
+        let mut streams = self.internal.streams.lock().await;
+        streams.remove(&info.ssrc);
+    }
 
     /// close closes the Interceptor, cleaning up any data if necessary.
     async fn close(&self) -> Result<()> {

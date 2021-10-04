@@ -15,8 +15,8 @@ struct ReceiverStreamInternal {
     packets: Vec<u64>,
     started: bool,
     seq_num_cycles: u16,
-    last_seq_num: u16,
-    last_report_seq_num: u16,
+    last_seq_num: i32,
+    last_report_seq_num: i32,
     last_rtp_time_rtp: u32,
     last_rtp_time_time: SystemTime,
     jitter: f64,
@@ -46,8 +46,8 @@ impl ReceiverStreamInternal {
             // first frame
             self.started = true;
             self.set_received(pkt.header.sequence_number);
-            self.last_seq_num = pkt.header.sequence_number;
-            self.last_report_seq_num = pkt.header.sequence_number - 1;
+            self.last_seq_num = pkt.header.sequence_number as i32;
+            self.last_report_seq_num = pkt.header.sequence_number as i32 - 1;
         } else {
             // following frames
             self.set_received(pkt.header.sequence_number);
@@ -60,11 +60,11 @@ impl ReceiverStreamInternal {
                 }
 
                 // set missing packets as missing
-                for i in self.last_seq_num + 1..pkt.header.sequence_number {
-                    self.del_received(i);
+                for i in self.last_seq_num + 1..pkt.header.sequence_number as i32 {
+                    self.del_received(i as u16);
                 }
 
-                self.last_seq_num = pkt.header.sequence_number;
+                self.last_seq_num = pkt.header.sequence_number as i32;
             }
 
             // compute jitter
@@ -88,14 +88,14 @@ impl ReceiverStreamInternal {
     }
 
     fn generate_report(&mut self, now: SystemTime) -> rtcp::receiver_report::ReceiverReport {
-        let total_since_report = self.last_seq_num - self.last_report_seq_num;
+        let total_since_report = (self.last_seq_num - self.last_report_seq_num) as u16;
         let mut total_lost_since_report = {
             if self.last_seq_num == self.last_report_seq_num {
                 0
             } else {
                 let mut ret = 0u32;
                 for i in self.last_report_seq_num + 1..self.last_seq_num {
-                    if !self.get_received(i) {
+                    if !self.get_received(i as u16) {
                         ret += 1;
                     }
                 }
