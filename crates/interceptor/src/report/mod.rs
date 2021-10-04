@@ -5,11 +5,11 @@ use std::time::Duration;
 use tokio::sync::{mpsc, Mutex};
 use waitgroup::WaitGroup;
 
-pub mod rr;
-pub mod sr;
+pub mod receiver;
+pub mod sender;
 
-use rr::{ReceiverReport, ReceiverReportInternal};
-use sr::{SenderReport, SenderReportInternal};
+use receiver::{ReceiverReport, ReceiverReportInternal};
+use sender::{SenderReport, SenderReportInternal};
 
 /// ReceiverBuilder can be used to configure ReceiverReport Interceptor.
 #[derive(Default)]
