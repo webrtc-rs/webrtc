@@ -13,8 +13,8 @@ struct SenderStreamInternal {
     clock_rate: f64,
 
     /// data from rtp packets
-    last_rtptime_rtp: u32,
-    last_rtptime_time: SystemTime,
+    last_rtp_time_rtp: u32,
+    last_rtp_time_time: SystemTime,
     packet_count: u32,
     octet_count: u32,
 }
@@ -22,8 +22,8 @@ struct SenderStreamInternal {
 impl SenderStreamInternal {
     fn process_rtp(&mut self, now: SystemTime, pkt: &rtp::packet::Packet) {
         // always update time to minimize errors
-        self.last_rtptime_rtp = pkt.header.timestamp;
-        self.last_rtptime_time = now;
+        self.last_rtp_time_rtp = pkt.header.timestamp;
+        self.last_rtp_time_time = now;
 
         self.packet_count += 1;
         self.octet_count += pkt.payload.len() as u32;
@@ -33,9 +33,9 @@ impl SenderStreamInternal {
         rtcp::sender_report::SenderReport {
             ssrc: self.ssrc,
             ntp_time: unix2ntp(now),
-            rtp_time: self.last_rtptime_rtp
+            rtp_time: self.last_rtp_time_rtp
                 + (now
-                    .duration_since(self.last_rtptime_time)
+                    .duration_since(self.last_rtp_time_time)
                     .unwrap_or_else(|_| Duration::from_secs(0))
                     .as_secs_f64()
                     * self.clock_rate) as u32,
@@ -67,8 +67,8 @@ impl SenderStream {
             internal: Mutex::new(SenderStreamInternal {
                 ssrc,
                 clock_rate: clock_rate as f64,
-                last_rtptime_rtp: 0,
-                last_rtptime_time: SystemTime::UNIX_EPOCH,
+                last_rtp_time_rtp: 0,
+                last_rtp_time_time: SystemTime::UNIX_EPOCH,
                 packet_count: 0,
                 octet_count: 0,
             }),
