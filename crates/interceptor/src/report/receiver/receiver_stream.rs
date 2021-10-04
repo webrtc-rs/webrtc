@@ -94,10 +94,13 @@ impl ReceiverStreamInternal {
                 0
             } else {
                 let mut ret = 0u32;
-                for i in self.last_report_seq_num + 1..self.last_seq_num {
-                    if !self.get_received(i as u16) {
+                let mut i = (self.last_report_seq_num + 1) as u16;
+                while i != self.last_seq_num as u16 {
+                    if !self.get_received(i) {
                         ret += 1;
                     }
+                    let (j, _) = i.overflowing_add(1);
+                    i = j;
                 }
                 ret
             }
@@ -123,9 +126,15 @@ impl ReceiverStreamInternal {
                 fraction_lost: ((total_lost_since_report * 256) as f64 / total_since_report as f64)
                     as u8,
                 total_lost: self.total_lost,
-                delay: match now.duration_since(self.last_sender_report_time) {
-                    Ok(d) => (d.as_secs_f64() * 65536.0) as u32,
-                    Err(_) => 0,
+                delay: {
+                    if self.last_sender_report_time == SystemTime::UNIX_EPOCH {
+                        0
+                    } else {
+                        match now.duration_since(self.last_sender_report_time) {
+                            Ok(d) => (d.as_secs_f64() * 65536.0) as u32,
+                            Err(_) => 0,
+                        }
+                    }
                 },
                 jitter: self.jitter as u32,
             }],

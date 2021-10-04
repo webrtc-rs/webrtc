@@ -187,7 +187,7 @@ impl MockStream {
     pub async fn receive_rtcp(&self, pkt: Box<dyn rtcp::packet::Packet + Send + Sync>) {
         let rtcp_in_tx = self.rtcp_in_tx.lock().await;
         if let Some(tx) = &*rtcp_in_tx {
-            let _ = tx.try_send(pkt);
+            let _ = tx.send(pkt).await;
         }
     }
 
@@ -195,7 +195,7 @@ impl MockStream {
     pub async fn receive_rtp(&self, pkt: rtp::packet::Packet) {
         let rtp_in_tx = self.rtp_in_tx.lock().await;
         if let Some(tx) = &*rtp_in_tx {
-            let _ = tx.try_send(pkt);
+            let _ = tx.send(pkt).await;
         }
     }
 
