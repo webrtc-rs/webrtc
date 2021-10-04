@@ -12,6 +12,9 @@ pub enum Error {
     ErrIoEOF,
     #[error("Buffer is too short")]
     ErrShortBuffer,
+    /// ErrInvalidSize is returned by newReceiveLog/newSendBuffer, when an incorrect buffer size is supplied.
+    #[error("invalid buffer size")]
+    ErrInvalidSize,
 
     #[allow(non_camel_case_types)]
     #[error("{0}")]
