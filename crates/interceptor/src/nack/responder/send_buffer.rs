@@ -71,3 +71,81 @@ impl SendBuffer {
         self.packets[(seq % self.size) as usize].as_ref()
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_send_buffer() -> Result<()> {
+        for start in [
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 511, 512, 513, 32767, 32768, 32769, 65527, 65528, 65529,
+            65530, 65531, 65532, 65533, 65534, 65535,
+        ] {
+            let mut sb = SendBuffer::new(8)?;
+
+            let add = |sb: &mut SendBuffer, nums: &[u16]| {
+                for n in nums {
+                    let seq = start + *n;
+                    sb.add(&rtp::packet::Packet {
+                        header: rtp::header::Header {
+                            sequence_number: seq,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    });
+                }
+            };
+
+            let assert_get = |sb: &SendBuffer, nums: &[u16]| {
+                for n in nums {
+                    let seq = start + *n;
+                    if let Some(packet) = sb.get(seq) {
+                        assert_eq!(
+                            packet.header.sequence_number, seq,
+                            "packet for {} returned with incorrect SequenceNumber: {}",
+                            seq, packet.header.sequence_number
+                        );
+                    } else {
+                        assert!(false, "packet not found: {}", seq);
+                    }
+                }
+            };
+
+            let assert_not_get = |sb: &SendBuffer, nums: &[u16]| {
+                for n in nums {
+                    let seq = start + *n;
+                    if let Some(packet) = sb.get(seq) {
+                        assert!(
+                            false,
+                            "packet found for {}: {}",
+                            seq, packet.header.sequence_number
+                        );
+                    }
+                }
+            };
+
+            add(&mut sb, &[0, 1, 2, 3, 4, 5, 6, 7]);
+            assert_get(&sb, &[0, 1, 2, 3, 4, 5, 6, 7]);
+
+            add(&mut sb, &[8]);
+            assert_get(&sb, &[8]);
+            assert_not_get(&sb, &[0]);
+
+            add(&mut sb, &[10]);
+            assert_get(&sb, &[10]);
+            assert_not_get(&sb, &[1, 2, 9]);
+
+            add(&mut sb, &[22]);
+            assert_get(&sb, &[22]);
+            assert_not_get(
+                &sb,
+                &[
+                    3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+                ],
+            );
+        }
+
+        Ok(())
+    }
+}
