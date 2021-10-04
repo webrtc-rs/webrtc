@@ -1,35 +1,20 @@
-use crate::error::Error;
-
 use crate::nack::UINT16SIZE_HALF;
-use anyhow::Result;
 
 #[derive(Default, Debug)]
-struct SendBuffer {
+struct ResponderStream {
     packets: Vec<Option<rtp::packet::Packet>>,
     size: u16,
     last_added: u16,
     started: bool,
 }
 
-impl SendBuffer {
-    fn new(size: u16) -> Result<Self> {
-        let mut correct_size = false;
-        for i in 0..16 {
-            if size == 1 << i {
-                correct_size = true;
-                break;
-            }
-        }
-
-        if !correct_size {
-            return Err(Error::ErrInvalidSize.into());
-        }
-
-        Ok(SendBuffer {
-            packets: vec![None; size as usize],
-            size,
+impl ResponderStream {
+    fn new(log2_size: u8) -> Self {
+        ResponderStream {
+            packets: vec![None; 1 << log2_size],
+            size: 1 << log2_size,
             ..Default::default()
-        })
+        }
     }
 
     fn add(&mut self, packet: &rtp::packet::Packet) {
@@ -74,17 +59,18 @@ impl SendBuffer {
 #[cfg(test)]
 mod test {
     use super::*;
+    use anyhow::Result;
 
     #[test]
-    fn test_send_buffer() -> Result<()> {
+    fn test_responder_stream() -> Result<()> {
         let tests: Vec<u16> = vec![
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 511, 512, 513, 32767, 32768, 32769, 65527, 65528, 65529,
             65530, 65531, 65532, 65533, 65534, 65535,
         ];
         for start in tests {
-            let mut sb = SendBuffer::new(8)?;
+            let mut sb = ResponderStream::new(3);
 
-            let add = |sb: &mut SendBuffer, nums: &[u16]| {
+            let add = |sb: &mut ResponderStream, nums: &[u16]| {
                 for n in nums {
                     let (seq, _) = start.overflowing_add(*n);
                     sb.add(&rtp::packet::Packet {
@@ -97,7 +83,7 @@ mod test {
                 }
             };
 
-            let assert_get = |sb: &SendBuffer, nums: &[u16]| {
+            let assert_get = |sb: &ResponderStream, nums: &[u16]| {
                 for n in nums {
                     let (seq, _) = start.overflowing_add(*n);
                     if let Some(packet) = sb.get(seq) {
@@ -112,7 +98,7 @@ mod test {
                 }
             };
 
-            let assert_not_get = |sb: &SendBuffer, nums: &[u16]| {
+            let assert_not_get = |sb: &ResponderStream, nums: &[u16]| {
                 for n in nums {
                     let (seq, _) = start.overflowing_add(*n);
                     if let Some(packet) = sb.get(seq) {

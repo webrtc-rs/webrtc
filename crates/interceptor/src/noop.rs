@@ -55,3 +55,17 @@ impl Interceptor for NoOp {
         Ok(())
     }
 }
+
+#[async_trait]
+impl RTPReader for NoOp {
+    async fn read(&self, _buf: &mut [u8], a: &Attributes) -> Result<(usize, Attributes)> {
+        Ok((0, a.clone()))
+    }
+}
+
+#[async_trait]
+impl RTCPReader for NoOp {
+    async fn read(&self, _buf: &mut [u8], a: &Attributes) -> Result<(usize, Attributes)> {
+        Ok((0, a.clone()))
+    }
+}

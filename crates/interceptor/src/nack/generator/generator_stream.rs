@@ -1,9 +1,9 @@
-use crate::error::Error;
+use super::*;
 use crate::nack::UINT16SIZE_HALF;
-use anyhow::Result;
 
-#[derive(Default, Debug)]
-struct ReceiveLog {
+use util::Unmarshal;
+
+struct GeneratorStreamInternal {
     packets: Vec<u64>,
     size: u16,
     end: u16,
@@ -11,25 +11,15 @@ struct ReceiveLog {
     last_consecutive: u16,
 }
 
-impl ReceiveLog {
-    fn new(size: u16) -> Result<Self> {
-        let mut correct_size = false;
-        for i in 6..16 {
-            if size == (1 << i) {
-                correct_size = true;
-                break;
-            }
+impl GeneratorStreamInternal {
+    fn new(log2_size_minus_6: u8) -> Self {
+        GeneratorStreamInternal {
+            packets: vec![0u64; 1 << log2_size_minus_6],
+            size: 1 << (log2_size_minus_6 + 6),
+            end: 0,
+            started: false,
+            last_consecutive: 0,
         }
-
-        if !correct_size {
-            return Err(Error::ErrInvalidSize.into());
-        }
-
-        Ok(ReceiveLog {
-            packets: vec![0u64; (size as usize) / 64],
-            size,
-            ..Default::default()
-        })
     }
 
     fn add(&mut self, seq: u16) {
@@ -133,18 +123,59 @@ impl ReceiveLog {
     }
 }
 
+pub(super) struct GeneratorStream {
+    parent_rtp_reader: Arc<dyn RTPReader + Send + Sync>,
+
+    internal: Mutex<GeneratorStreamInternal>,
+}
+
+impl GeneratorStream {
+    pub(super) fn new(log2_size_minus_6: u8, reader: Arc<dyn RTPReader + Send + Sync>) -> Self {
+        GeneratorStream {
+            parent_rtp_reader: reader,
+            internal: Mutex::new(GeneratorStreamInternal::new(log2_size_minus_6)),
+        }
+    }
+
+    pub(super) async fn missing_seq_numbers(&self, skip_last_n: u16) -> Vec<u16> {
+        let internal = self.internal.lock().await;
+        internal.missing_seq_numbers(skip_last_n)
+    }
+
+    pub(super) async fn add(&self, seq: u16) {
+        let mut internal = self.internal.lock().await;
+        internal.add(seq);
+    }
+}
+
+/// RTPReader is used by Interceptor.bind_remote_stream.
+#[async_trait]
+impl RTPReader for GeneratorStream {
+    /// read a rtp packet
+    async fn read(&self, buf: &mut [u8], a: &Attributes) -> Result<(usize, Attributes)> {
+        let (n, attr) = self.parent_rtp_reader.read(buf, a).await?;
+
+        let mut b = &buf[..n];
+        let pkt = rtp::packet::Packet::unmarshal(&mut b)?;
+        self.add(pkt.header.sequence_number).await;
+
+        Ok((n, attr))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+    use anyhow::Result;
 
     #[test]
-    fn test_received_buffer() -> Result<()> {
+    fn test_generator_stream() -> Result<()> {
         let tests: Vec<u16> = vec![
             0, 1, 127, 128, 129, 511, 512, 513, 32767, 32768, 32769, 65407, 65408, 65409, 65534,
             65535,
         ];
         for start in tests {
-            let mut rl = ReceiveLog::new(128)?;
+            let mut rl = GeneratorStreamInternal::new(1);
 
             let all = |min: u16, max: u16| -> Vec<u16> {
                 let mut result = vec![];
@@ -166,21 +197,21 @@ mod test {
                 result
             };
 
-            let add = |rl: &mut ReceiveLog, nums: &[u16]| {
+            let add = |rl: &mut GeneratorStreamInternal, nums: &[u16]| {
                 for n in nums {
                     let (seq, _) = start.overflowing_add(*n);
                     rl.add(seq);
                 }
             };
 
-            let assert_get = |rl: &ReceiveLog, nums: &[u16]| {
+            let assert_get = |rl: &GeneratorStreamInternal, nums: &[u16]| {
                 for n in nums {
                     let (seq, _) = start.overflowing_add(*n);
                     assert!(rl.get(seq), "not found: {}", seq);
                 }
             };
 
-            let assert_not_get = |rl: &ReceiveLog, nums: &[u16]| {
+            let assert_not_get = |rl: &GeneratorStreamInternal, nums: &[u16]| {
                 for n in nums {
                     let (seq, _) = start.overflowing_add(*n);
                     assert!(
@@ -193,7 +224,7 @@ mod test {
                 }
             };
 
-            let assert_missing = |rl: &ReceiveLog, skip_last_n: u16, nums: &[u16]| {
+            let assert_missing = |rl: &GeneratorStreamInternal, skip_last_n: u16, nums: &[u16]| {
                 let missing = rl.missing_seq_numbers(skip_last_n);
                 let mut want = vec![];
                 for n in nums {
@@ -203,7 +234,7 @@ mod test {
                 assert_eq!(want, missing, "missing want/got, ");
             };
 
-            let assert_last_consecutive = |rl: &ReceiveLog, last_consecutive: u16| {
+            let assert_last_consecutive = |rl: &GeneratorStreamInternal, last_consecutive: u16| {
                 let (want, _) = last_consecutive.overflowing_add(start);
                 assert_eq!(rl.last_consecutive, want, "invalid last_consecutive want");
             };
