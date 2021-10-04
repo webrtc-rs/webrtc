@@ -22,8 +22,8 @@ pub struct MockStream {
 
     rtcp_out_modified_rx: Mutex<mpsc::Receiver<Box<dyn rtcp::packet::Packet + Send + Sync>>>,
     rtp_out_modified_rx: Mutex<mpsc::Receiver<rtp::packet::Packet>>,
-    rtcp_in_tx: mpsc::Sender<Box<dyn rtcp::packet::Packet + Send + Sync>>,
-    rtp_in_tx: mpsc::Sender<rtp::packet::Packet>,
+    rtcp_in_tx: Mutex<Option<mpsc::Sender<Box<dyn rtcp::packet::Packet + Send + Sync>>>>,
+    rtp_in_tx: Mutex<Option<mpsc::Sender<rtp::packet::Packet>>>,
 
     rtcp_in_modified_rx: Mutex<mpsc::Receiver<RTCPWithError>>,
     rtp_in_modified_rx: Mutex<mpsc::Receiver<RTPWithError>>,
@@ -60,8 +60,8 @@ impl MockStream {
             rtcp_writer: Mutex::new(None),
             rtp_writer: Mutex::new(None),
 
-            rtcp_in_tx,
-            rtp_in_tx,
+            rtcp_in_tx: Mutex::new(Some(rtcp_in_tx)),
+            rtp_in_tx: Mutex::new(Some(rtp_in_tx)),
             rtcp_in_rx: Mutex::new(rtcp_in_rx),
             rtp_in_rx: Mutex::new(rtp_in_rx),
 
@@ -185,12 +185,18 @@ impl MockStream {
 
     /// receive_rtcp schedules a new rtcp batch, so it can be read be the stream
     pub async fn receive_rtcp(&self, pkt: Box<dyn rtcp::packet::Packet + Send + Sync>) {
-        let _ = self.rtcp_in_tx.try_send(pkt);
+        let rtcp_in_tx = self.rtcp_in_tx.lock().await;
+        if let Some(tx) = &*rtcp_in_tx {
+            let _ = tx.try_send(pkt);
+        }
     }
 
     /// receive_rtp schedules a rtp packet, so it can be read be the stream
     pub async fn receive_rtp(&self, pkt: rtp::packet::Packet) {
-        let _ = self.rtp_in_tx.try_send(pkt);
+        let rtp_in_tx = self.rtp_in_tx.lock().await;
+        if let Some(tx) = &*rtp_in_tx {
+            let _ = tx.try_send(pkt);
+        }
     }
 
     /// written_rtcp returns a channel containing the rtcp batches written, modified by the interceptor
@@ -220,12 +226,12 @@ impl MockStream {
     /// cose closes the stream and the underlying interceptor
     pub async fn close(&self) -> Result<()> {
         {
-            let mut rtcp_in_rx = self.rtcp_in_rx.lock().await;
-            rtcp_in_rx.close();
+            let mut rtcp_in_tx = self.rtcp_in_tx.lock().await;
+            rtcp_in_tx.take();
         }
         {
-            let mut rtp_in_rx = self.rtp_in_rx.lock().await;
-            rtp_in_rx.close();
+            let mut rtp_in_tx = self.rtp_in_tx.lock().await;
+            rtp_in_tx.take();
         }
         self.interceptor.close().await
     }
@@ -293,69 +299,59 @@ impl RTPReader for MockStream {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::noop::NoOp;
+    use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
+    use tokio::time::Duration;
 
-    #[test]
-    fn test_mock_stream() -> Result<()> {
-        /*let s = MockStream::new(StreamInfo::default(), &interceptor.NoOp{})
+    #[tokio::test]
+    async fn test_mock_stream() -> Result<()> {
+        let s = MockStream::new(&StreamInfo::default(), Arc::new(NoOp)).await;
 
-        assert.NoError(t, s.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{}}))
+        s.write_rtcp(&PictureLossIndication::default()).await?;
+        tokio::time::timeout(Duration::from_millis(10), s.written_rtcp()).await?;
+        let result = tokio::time::timeout(Duration::from_millis(10), s.written_rtcp()).await;
+        assert!(
+            result.is_err(),
+            "single rtcp packet written, but multiple found"
+        );
 
-        select {
-        case <-s.WrittenRTCP():
-        case <-time.After(10 * time.Millisecond):
-            t.Error("rtcp packet written but not found")
-        }
-        select {
-        case <-s.WrittenRTCP():
-            t.Error("single rtcp packet written, but multiple found")
-        case <-time.After(10 * time.Millisecond):
-        }
+        s.write_rtp(&rtp::packet::Packet::default()).await?;
+        tokio::time::timeout(Duration::from_millis(10), s.written_rtp()).await?;
+        let result = tokio::time::timeout(Duration::from_millis(10), s.written_rtp()).await;
+        assert!(
+            result.is_err(),
+            "single rtp packet written, but multiple found"
+        );
 
-        assert.NoError(t, s.WriteRTP(&rtp.Packet{}))
+        s.receive_rtcp(Box::new(PictureLossIndication::default()))
+            .await;
+        assert!(
+            tokio::time::timeout(Duration::from_millis(10), s.read_rtcp())
+                .await?
+                .is_some(),
+            "read rtcp returned error",
+        );
+        let result = tokio::time::timeout(Duration::from_millis(10), s.read_rtcp()).await;
+        assert!(
+            result.is_err(),
+            "single rtcp packet written, but multiple found"
+        );
 
-        select {
-        case <-s.WrittenRTP():
-        case <-time.After(10 * time.Millisecond):
-            t.Error("rtp packet written but not found")
-        }
-        select {
-        case <-s.WrittenRTP():
-            t.Error("single rtp packet written, but multiple found")
-        case <-time.After(10 * time.Millisecond):
-        }
+        s.receive_rtp(rtp::packet::Packet::default()).await;
+        assert!(
+            tokio::time::timeout(Duration::from_millis(10), s.read_rtp())
+                .await?
+                .is_some(),
+            "read rtp returned error",
+        );
+        let result = tokio::time::timeout(Duration::from_millis(10), s.read_rtp()).await;
+        assert!(
+            result.is_err(),
+            "single rtp packet written, but multiple found"
+        );
 
-        s.ReceiveRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{}})
-        select {
-        case r := <-s.ReadRTCP():
-            if r.Err != nil {
-                t.Errorf("read rtcp returned error: %v", r.Err)
-            }
-        case <-time.After(10 * time.Millisecond):
-            t.Error("rtcp packet received but not read")
-        }
-        select {
-        case r := <-s.ReadRTCP():
-            t.Errorf("single rtcp packet received, but multiple read: %v", r)
-        case <-time.After(10 * time.Millisecond):
-        }
+        s.close().await?;
 
-        s.ReceiveRTP(&rtp.Packet{})
-        select {
-        case r := <-s.ReadRTP():
-            if r.Err != nil {
-                t.Errorf("read rtcp returned error: %v", r.Err)
-            }
-        case <-time.After(10 * time.Millisecond):
-            t.Error("rtp packet received but not read")
-        }
-        select {
-        case r := <-s.ReadRTP():
-            t.Errorf("single rtp packet received, but multiple read: %v", r)
-        case <-time.After(10 * time.Millisecond):
-        }
-
-        assert.NoError(t, s.Close())
-        */
         Ok(())
     }
 }
