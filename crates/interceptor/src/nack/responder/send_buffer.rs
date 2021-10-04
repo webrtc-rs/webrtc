@@ -41,15 +41,15 @@ impl SendBuffer {
             return;
         }
 
-        //TODO: u16 subtract overflow?
-        let diff = seq - self.last_added;
+        let (diff, _) = seq.overflowing_sub(self.last_added);
         if diff == 0 {
             return;
         } else if diff < UINT16SIZE_HALF {
-            let mut i = self.last_added + 1;
+            let (mut i, _) = self.last_added.overflowing_add(1);
             while i != seq {
                 self.packets[(i % self.size) as usize] = None;
-                i += 1;
+                let (j, _) = i.overflowing_add(1);
+                i = j;
             }
         }
 
@@ -58,8 +58,7 @@ impl SendBuffer {
     }
 
     fn get(&self, seq: u16) -> Option<&rtp::packet::Packet> {
-        //TODO: u16 subtract overflow?
-        let diff = self.last_added - seq;
+        let (diff, _) = self.last_added.overflowing_sub(seq);
         if diff >= UINT16SIZE_HALF {
             return None;
         }
@@ -78,15 +77,16 @@ mod test {
 
     #[test]
     fn test_send_buffer() -> Result<()> {
-        for start in [
+        let tests: Vec<u16> = vec![
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 511, 512, 513, 32767, 32768, 32769, 65527, 65528, 65529,
             65530, 65531, 65532, 65533, 65534, 65535,
-        ] {
+        ];
+        for start in tests {
             let mut sb = SendBuffer::new(8)?;
 
             let add = |sb: &mut SendBuffer, nums: &[u16]| {
                 for n in nums {
-                    let seq = start + *n;
+                    let (seq, _) = start.overflowing_add(*n);
                     sb.add(&rtp::packet::Packet {
                         header: rtp::header::Header {
                             sequence_number: seq,
@@ -99,7 +99,7 @@ mod test {
 
             let assert_get = |sb: &SendBuffer, nums: &[u16]| {
                 for n in nums {
-                    let seq = start + *n;
+                    let (seq, _) = start.overflowing_add(*n);
                     if let Some(packet) = sb.get(seq) {
                         assert_eq!(
                             packet.header.sequence_number, seq,
@@ -114,7 +114,7 @@ mod test {
 
             let assert_not_get = |sb: &SendBuffer, nums: &[u16]| {
                 for n in nums {
-                    let seq = start + *n;
+                    let (seq, _) = start.overflowing_add(*n);
                     if let Some(packet) = sb.get(seq) {
                         assert!(
                             false,
