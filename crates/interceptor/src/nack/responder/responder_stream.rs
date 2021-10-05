@@ -64,7 +64,7 @@ impl ResponderStreamInternal {
 
 pub(super) struct ResponderStream {
     internal: Mutex<ResponderStreamInternal>,
-    next_rtp_writer: Arc<dyn RTPWriter + Send + Sync>,
+    pub(super) next_rtp_writer: Arc<dyn RTPWriter + Send + Sync>,
 }
 
 impl ResponderStream {

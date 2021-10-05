@@ -75,10 +75,11 @@ impl ResponderInternal {
                     Box::pin(async move {
                         if let Some(p) = stream3.get(seq).await {
                             let a = Attributes::new();
-                            if let Err(err) = stream3.write(&p, &a).await {
+                            if let Err(err) = stream3.next_rtp_writer.write(&p, &a).await {
                                 log::warn!("failed resending nacked packet: {}", err);
                             }
                         }
+
                         true
                     })
                 },
