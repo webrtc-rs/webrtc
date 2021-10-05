@@ -1,6 +1,6 @@
 [package]
 name = "rtcp"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["Rain Liu <yliu@webrtc.rs>", "Michael Uti <utimichael9@gmail.com>"]
 edition = "2018"
 description = "A pure Rust implementation of RTCP"
@@ -8,8 +8,6 @@ license = "MIT/Apache-2.0"
 documentation = "https://docs.rs/rtcp"
 homepage = "https://webrtc.rs"
 repository = "https://github.com/webrtc-rs/rtcp"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 util = { package = "webrtc-util", version = "0.4.3", default-features = false, features = ["marshal"] }
