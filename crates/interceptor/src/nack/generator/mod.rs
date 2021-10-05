@@ -19,7 +19,7 @@ use std::time::Duration;
 use tokio::sync::{mpsc, Mutex};
 use waitgroup::WaitGroup;
 
-/// GeneratorBuilder can be used to configure GeneratorInterceptor
+/// GeneratorBuilder can be used to configure Generator Interceptor
 #[derive(Default)]
 pub struct GeneratorBuilder {
     log2_size_minus_6: Option<u8>,

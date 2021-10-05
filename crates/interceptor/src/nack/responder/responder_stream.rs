@@ -1,19 +1,25 @@
 use crate::nack::UINT16SIZE_HALF;
+use crate::{Attributes, RTPWriter};
 
-#[derive(Default, Debug)]
-struct ResponderStream {
+use anyhow::Result;
+use async_trait::async_trait;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+struct ResponderStreamInternal {
     packets: Vec<Option<rtp::packet::Packet>>,
     size: u16,
     last_added: u16,
     started: bool,
 }
 
-impl ResponderStream {
+impl ResponderStreamInternal {
     fn new(log2_size: u8) -> Self {
-        ResponderStream {
+        ResponderStreamInternal {
             packets: vec![None; 1 << log2_size],
             size: 1 << log2_size,
-            ..Default::default()
+            last_added: 0,
+            started: false,
         }
     }
 
@@ -56,6 +62,41 @@ impl ResponderStream {
     }
 }
 
+pub(super) struct ResponderStream {
+    internal: Mutex<ResponderStreamInternal>,
+    next_rtp_writer: Arc<dyn RTPWriter + Send + Sync>,
+}
+
+impl ResponderStream {
+    pub(super) fn new(log2_size: u8, writer: Arc<dyn RTPWriter + Send + Sync>) -> Self {
+        ResponderStream {
+            internal: Mutex::new(ResponderStreamInternal::new(log2_size)),
+            next_rtp_writer: writer,
+        }
+    }
+
+    async fn add(&self, pkt: &rtp::packet::Packet) {
+        let mut internal = self.internal.lock().await;
+        internal.add(pkt);
+    }
+
+    pub(super) async fn get(&self, seq: u16) -> Option<rtp::packet::Packet> {
+        let internal = self.internal.lock().await;
+        internal.get(seq).cloned()
+    }
+}
+
+/// RTPWriter is used by Interceptor.bind_local_stream.
+#[async_trait]
+impl RTPWriter for ResponderStream {
+    /// write a rtp packet
+    async fn write(&self, pkt: &rtp::packet::Packet, a: &Attributes) -> Result<usize> {
+        self.add(pkt).await;
+
+        self.next_rtp_writer.write(pkt, a).await
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -68,9 +109,9 @@ mod test {
             65530, 65531, 65532, 65533, 65534, 65535,
         ];
         for start in tests {
-            let mut sb = ResponderStream::new(3);
+            let mut sb = ResponderStreamInternal::new(3);
 
-            let add = |sb: &mut ResponderStream, nums: &[u16]| {
+            let add = |sb: &mut ResponderStreamInternal, nums: &[u16]| {
                 for n in nums {
                     let (seq, _) = start.overflowing_add(*n);
                     sb.add(&rtp::packet::Packet {
@@ -83,7 +124,7 @@ mod test {
                 }
             };
 
-            let assert_get = |sb: &ResponderStream, nums: &[u16]| {
+            let assert_get = |sb: &ResponderStreamInternal, nums: &[u16]| {
                 for n in nums {
                     let (seq, _) = start.overflowing_add(*n);
                     if let Some(packet) = sb.get(seq) {
@@ -98,7 +139,7 @@ mod test {
                 }
             };
 
-            let assert_not_get = |sb: &ResponderStream, nums: &[u16]| {
+            let assert_not_get = |sb: &ResponderStreamInternal, nums: &[u16]| {
                 for n in nums {
                     let (seq, _) = start.overflowing_add(*n);
                     if let Some(packet) = sb.get(seq) {
