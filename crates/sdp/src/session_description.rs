@@ -114,12 +114,14 @@ impl fmt::Display for TimeZone {
 /// repeat intervals and durations for the scheduled session.
 #[derive(Debug, Default, Clone)]
 pub struct TimeDescription {
-    /// t=<start-time> <stop-time>
-    /// https://tools.ietf.org/html/rfc4566#section-5.9
+    /// `t=<start-time> <stop-time>`
+    ///
+    /// <https://tools.ietf.org/html/rfc4566#section-5.9>
     pub timing: Timing,
 
-    /// r=<repeat interval> <active duration> <offsets from start-time>
-    /// https://tools.ietf.org/html/rfc4566#section-5.10
+    /// `r=<repeat interval> <active duration> <offsets from start-time>`
+    ///
+    /// <https://tools.ietf.org/html/rfc4566#section-5.10>
     pub repeat_times: Vec<RepeatTime>,
 }
 
@@ -160,61 +162,75 @@ impl fmt::Display for RepeatTime {
 /// information to discover and participate in a multimedia session.
 #[derive(Debug, Default, Clone)]
 pub struct SessionDescription {
-    /// v=0
-    /// https://tools.ietf.org/html/rfc4566#section-5.1
+    /// `v=0`
+    ///
+    /// <https://tools.ietf.org/html/rfc4566#section-5.1>
     pub version: Version,
 
-    /// o=<username> <sess-id> <sess-version> <nettype> <addrtype> <unicast-address>
-    /// https://tools.ietf.org/html/rfc4566#section-5.2
+    /// `o=<username> <sess-id> <sess-version> <nettype> <addrtype> <unicast-address>`
+    ///
+    /// <https://tools.ietf.org/html/rfc4566#section-5.2>
     pub origin: Origin,
 
-    /// s=<session name>
-    /// https://tools.ietf.org/html/rfc4566#section-5.3
+    /// `s=<session name>`
+    ///
+    /// <https://tools.ietf.org/html/rfc4566#section-5.3>
     pub session_name: SessionName,
 
-    /// i=<session description>
-    /// https://tools.ietf.org/html/rfc4566#section-5.4
+    /// `i=<session description>`
+    ///
+    /// <https://tools.ietf.org/html/rfc4566#section-5.4>
     pub session_information: Option<Information>,
 
-    /// u=<uri>
-    /// https://tools.ietf.org/html/rfc4566#section-5.5
+    /// `u=<uri>`
+    ///
+    /// <https://tools.ietf.org/html/rfc4566#section-5.5>
     pub uri: Option<Url>,
 
-    /// e=<email-address>
-    /// https://tools.ietf.org/html/rfc4566#section-5.6
+    /// `e=<email-address>`
+    ///
+    /// <https://tools.ietf.org/html/rfc4566#section-5.6>
     pub email_address: Option<EmailAddress>,
 
-    /// p=<phone-number>
-    /// https://tools.ietf.org/html/rfc4566#section-5.6
+    /// `p=<phone-number>`
+    ///
+    /// <https://tools.ietf.org/html/rfc4566#section-5.6>
     pub phone_number: Option<PhoneNumber>,
 
-    /// c=<nettype> <addrtype> <connection-address>
-    /// https://tools.ietf.org/html/rfc4566#section-5.7
+    /// `c=<nettype> <addrtype> <connection-address>`
+    ///
+    /// <https://tools.ietf.org/html/rfc4566#section-5.7>
     pub connection_information: Option<ConnectionInformation>,
 
-    /// b=<bwtype>:<bandwidth>
-    /// https://tools.ietf.org/html/rfc4566#section-5.8
+    /// `b=<bwtype>:<bandwidth>`
+    ///
+    /// <https://tools.ietf.org/html/rfc4566#section-5.8>
     pub bandwidth: Vec<Bandwidth>,
 
-    /// https://tools.ietf.org/html/rfc4566#section-5.9
-    /// https://tools.ietf.org/html/rfc4566#section-5.10
+    /// <https://tools.ietf.org/html/rfc4566#section-5.9>
+    /// <https://tools.ietf.org/html/rfc4566#section-5.10>
     pub time_descriptions: Vec<TimeDescription>,
 
-    /// z=<adjustment time> <offset> <adjustment time> <offset> ...
-    /// https://tools.ietf.org/html/rfc4566#section-5.11
+    /// `z=<adjustment time> <offset> <adjustment time> <offset> ...`
+    ///
+    /// <https://tools.ietf.org/html/rfc4566#section-5.11>
     pub time_zones: Vec<TimeZone>,
 
-    /// k=<method>
-    /// k=<method>:<encryption key>
-    /// https://tools.ietf.org/html/rfc4566#section-5.12
+    /// `k=<method>`
+    ///
+    /// `k=<method>:<encryption key>`
+    ///
+    /// <https://tools.ietf.org/html/rfc4566#section-5.12>
     pub encryption_key: Option<EncryptionKey>,
 
-    /// a=<attribute>
-    /// a=<attribute>:<value>
-    /// https://tools.ietf.org/html/rfc4566#section-5.13
+    /// `a=<attribute>`
+    ///
+    /// `a=<attribute>:<value>`
+    ///
+    /// <https://tools.ietf.org/html/rfc4566#section-5.13>
     pub attributes: Vec<Attribute>,
 
-    /// https://tools.ietf.org/html/rfc4566#section-5.14
+    /// <https://tools.ietf.org/html/rfc4566#section-5.14>
     pub media_descriptions: Vec<MediaDescription>,
 }
 
@@ -350,7 +366,9 @@ impl SessionDescription {
     }
 
     /// Marshal takes a SDP struct to text
-    /// https://tools.ietf.org/html/rfc4566#section-5
+    ///
+    /// <https://tools.ietf.org/html/rfc4566#section-5>
+    ///
     /// Session description
     ///    v=  (protocol version)
     ///    o=  (originator and session identifier)
@@ -445,10 +463,11 @@ impl SessionDescription {
     /// (namely s1, s2, s3, ...) for a parsing procedure that complies with the
     /// specifications laid out by the rfc4566#section-5 as well as by JavaScript
     /// Session Establishment Protocol draft. Links:
-    ///     https://tools.ietf.org/html/rfc4566#section-5
-    ///     https://tools.ietf.org/html/draft-ietf-rtcweb-jsep-24
+    ///     <https://tools.ietf.org/html/rfc4566#section-5>
+    ///     <https://tools.ietf.org/html/draft-ietf-rtcweb-jsep-24>
     ///
-    /// https://tools.ietf.org/html/rfc4566#section-5
+    /// <https://tools.ietf.org/html/rfc4566#section-5>
+    ///
     /// Session description
     ///    v=  (protocol version)
     ///    o=  (originator and session identifier)
@@ -492,6 +511,8 @@ impl SessionDescription {
     /// below in order to distinguish between the states belonging to the media
     /// description as opposed to the session description, the states are marked
     /// with an asterisk ("a*", "k*").
+    ///
+    /// ```ignore
     /// +--------+----+-------+----+-----+----+-----+---+----+----+---+---+-----+---+---+----+---+----+
     /// | STATES | a* | a*,k* | a  | a,k | b  | b,c | e | i  | m  | o | p | r,t | s | t | u  | v | z  |
     /// +--------+----+-------+----+-----+----+-----+---+----+----+---+---+-----+---+---+----+---+----+
@@ -512,6 +533,7 @@ impl SessionDescription {
     /// |   s15  |    |    14 |    |     | 15 |     |   |    | 12 |   |   |     |   |   |    |   |    |
     /// |   s16  |    |    14 |    |     |    |  15 |   |    | 12 |   |   |     |   |   |    |   |    |
     /// +--------+----+-------+----+-----+----+-----+---+----+----+---+---+-----+---+---+----+---+----+
+    /// ```
     pub fn unmarshal<R: io::BufRead + io::Seek>(reader: &mut R) -> Result<Self> {
         let mut lexer = Lexer {
             desc: SessionDescription {
