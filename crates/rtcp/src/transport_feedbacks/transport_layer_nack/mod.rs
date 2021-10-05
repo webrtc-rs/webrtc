@@ -8,6 +8,8 @@ use anyhow::Result;
 use bytes::{Buf, BufMut};
 use std::any::Any;
 use std::fmt;
+use std::future::Future;
+use std::pin::Pin;
 
 /// PacketBitmap shouldn't be used like a normal integral,
 /// so it's type is masked here. Access it with PacketList().
@@ -22,6 +24,9 @@ pub struct NackPair {
     /// Bitmask of following lost packets
     pub lost_packets: PacketBitmap,
 }
+
+pub type RangeFn =
+    Box<dyn (Fn(u16) -> Pin<Box<dyn Future<Output = bool> + Send + 'static>>) + Send + Sync>;
 
 impl NackPair {
     /// PacketList returns a list of Nack'd packets that's referenced by a NackPair
@@ -39,6 +44,25 @@ impl NackPair {
             i += 1;
         }
         out
+    }
+
+    pub async fn range(&self, f: RangeFn) {
+        if !f(self.packet_id).await {
+            return;
+        }
+
+        let mut b = self.lost_packets;
+        let mut i = 0u16;
+        while b != 0 {
+            if (b & (1 << i)) != 0 {
+                b &= u16::MAX ^ (1 << i);
+                let (packet_id, _) = self.packet_id.overflowing_add(i + 1);
+                if !f(packet_id).await {
+                    return;
+                }
+            }
+            i += 1;
+        }
     }
 }
 
@@ -189,7 +213,7 @@ impl Unmarshal for TransportLayerNack {
     }
 }
 
-fn nack_pairs_from_sequence_numbers(seq_nos: &[u16]) -> Vec<NackPair> {
+pub fn nack_pairs_from_sequence_numbers(seq_nos: &[u16]) -> Vec<NackPair> {
     if seq_nos.is_empty() {
         return vec![];
     }
