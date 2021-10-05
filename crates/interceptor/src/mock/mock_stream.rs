@@ -25,20 +25,8 @@ pub struct MockStream {
     rtcp_in_tx: Mutex<Option<mpsc::Sender<Box<dyn rtcp::packet::Packet + Send + Sync>>>>,
     rtp_in_tx: Mutex<Option<mpsc::Sender<rtp::packet::Packet>>>,
 
-    rtcp_in_modified_rx: Mutex<mpsc::Receiver<RTCPWithError>>,
-    rtp_in_modified_rx: Mutex<mpsc::Receiver<RTPWithError>>,
-}
-
-/// RTPWithError is used to send an rtp packet or an error on a channel
-pub enum RTPWithError {
-    Pkt(rtp::packet::Packet),
-    Err(anyhow::Error),
-}
-
-/// RTCPWithError is used to send a batch of rtcp packets or an error on a channel
-pub enum RTCPWithError {
-    Pkt(Box<dyn rtcp::packet::Packet + Send + Sync>),
-    Err(anyhow::Error),
+    rtcp_in_modified_rx: Mutex<mpsc::Receiver<Result<Box<dyn rtcp::packet::Packet + Send + Sync>>>>,
+    rtp_in_modified_rx: Mutex<mpsc::Receiver<Result<rtp::packet::Packet>>>,
 }
 
 impl MockStream {
@@ -103,7 +91,7 @@ impl MockStream {
                     Ok((n, _)) => n,
                     Err(err) => {
                         if !Error::ErrIoEOF.equal(&err) {
-                            let _ = rtcp_in_modified_tx.send(RTCPWithError::Err(err)).await;
+                            let _ = rtcp_in_modified_tx.send(Err(err)).await;
                         }
                         break;
                     }
@@ -113,12 +101,12 @@ impl MockStream {
                 let pkt = match rtcp::packet::unmarshal(&mut b) {
                     Ok(pkt) => pkt,
                     Err(err) => {
-                        let _ = rtcp_in_modified_tx.send(RTCPWithError::Err(err)).await;
+                        let _ = rtcp_in_modified_tx.send(Err(err)).await;
                         break;
                     }
                 };
 
-                let _ = rtcp_in_modified_tx.send(RTCPWithError::Pkt(pkt)).await;
+                let _ = rtcp_in_modified_tx.send(Ok(pkt)).await;
             }
         });
 
@@ -136,7 +124,7 @@ impl MockStream {
                     Ok((n, _)) => n,
                     Err(err) => {
                         if !Error::ErrIoEOF.equal(&err) {
-                            let _ = rtp_in_modified_tx.send(RTPWithError::Err(err)).await;
+                            let _ = rtp_in_modified_tx.send(Err(err)).await;
                         }
                         break;
                     }
@@ -146,12 +134,12 @@ impl MockStream {
                 let pkt = match rtp::packet::Packet::unmarshal(&mut b) {
                     Ok(pkt) => pkt,
                     Err(err) => {
-                        let _ = rtp_in_modified_tx.send(RTPWithError::Err(err)).await;
+                        let _ = rtp_in_modified_tx.send(Err(err)).await;
                         break;
                     }
                 };
 
-                let _ = rtp_in_modified_tx.send(RTPWithError::Pkt(pkt)).await;
+                let _ = rtp_in_modified_tx.send(Ok(pkt)).await;
             }
         });
 
@@ -212,13 +200,13 @@ impl MockStream {
     }
 
     /// read_rtcp returns a channel containing the rtcp batched read, modified by the interceptor
-    pub async fn read_rtcp(&self) -> Option<RTCPWithError> {
+    pub async fn read_rtcp(&self) -> Option<Result<Box<dyn rtcp::packet::Packet + Send + Sync>>> {
         let mut rtcp_in_modified_rx = self.rtcp_in_modified_rx.lock().await;
         rtcp_in_modified_rx.recv().await
     }
 
     /// read_rtp returns a channel containing the rtp packets read, modified by the interceptor
-    pub async fn read_rtp(&self) -> Option<RTPWithError> {
+    pub async fn read_rtp(&self) -> Option<Result<rtp::packet::Packet>> {
         let mut rtp_in_modified_rx = self.rtp_in_modified_rx.lock().await;
         rtp_in_modified_rx.recv().await
     }

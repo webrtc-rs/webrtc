@@ -1,4 +1,6 @@
 mod responder_stream;
+#[cfg(test)]
+mod responder_test;
 
 use crate::stream_info::StreamInfo;
 use crate::{Attributes, Interceptor, RTCPReader, RTCPWriter, RTPReader, RTPWriter};

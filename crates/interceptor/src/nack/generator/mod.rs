@@ -1,4 +1,6 @@
 mod generator_stream;
+#[cfg(test)]
+mod generator_test;
 
 use generator_stream::GeneratorStream;
 
