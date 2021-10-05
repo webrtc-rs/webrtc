@@ -73,7 +73,7 @@ impl TrackLocalStaticSample {
                 samples,
                 sample.duration.as_secs_f64()
             );*/
-            packetizer.packetize(&sample.data, samples)?
+            packetizer.packetize(&sample.data, samples).await?
         } else {
             vec![]
         };

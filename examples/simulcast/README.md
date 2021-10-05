@@ -8,7 +8,7 @@ is selected.
 ## Instructions
 ### Build simulcast
 ```
-cargo build --examples simulcast
+cargo build --example simulcast
 ```
 
 ### Open simulcast example page
