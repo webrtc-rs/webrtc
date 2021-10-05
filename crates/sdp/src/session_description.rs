@@ -2,11 +2,10 @@
 mod session_description_test;
 
 use super::common_description::*;
-use super::error::Error;
+use super::error::{Error, Result};
 use super::media_description::*;
 use super::util::*;
 
-use anyhow::Result;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{fmt, io};

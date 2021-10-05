@@ -3,9 +3,8 @@ mod extmap_test;
 
 use super::common_description::*;
 use super::direction::*;
-use super::error::Error;
+use super::error::{Error, Result};
 
-use anyhow::Result;
 use std::fmt;
 use std::io;
 use url::Url;
