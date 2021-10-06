@@ -559,7 +559,10 @@ fn test_unmarshal_repeat_times_overflow() -> Result<()> {
     let mut reader = Cursor::new(REPEAT_TIMES_OVERFLOW_SDP.as_bytes());
     let result = SessionDescription::unmarshal(&mut reader);
     assert!(result.is_err());
-    assert!(Error::SdpInvalidValue("106751991167301d".to_owned()).equal(&result.unwrap_err()));
+    assert_eq!(
+        Error::SdpInvalidValue("106751991167301d".to_owned()),
+        result.unwrap_err()
+    );
     Ok(())
 }
 

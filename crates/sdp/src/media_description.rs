@@ -10,34 +10,41 @@ pub const EXT_MAP_VALUE_TRANSPORT_CC_URI: &str =
     "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
 
 /// MediaDescription represents a media type.
-/// https://tools.ietf.org/html/rfc4566#section-5.14
+/// <https://tools.ietf.org/html/rfc4566#section-5.14>
 #[derive(Debug, Default, Clone)]
 pub struct MediaDescription {
-    /// m=<media> <port>/<number of ports> <proto> <fmt> ...
-    /// https://tools.ietf.org/html/rfc4566#section-5.14
+    /// `m=<media> <port>/<number of ports> <proto> <fmt> ...`
+    ///
+    /// <https://tools.ietf.org/html/rfc4566#section-5.14>
     pub media_name: MediaName,
 
-    /// i=<session description>
-    /// https://tools.ietf.org/html/rfc4566#section-5.4
+    /// `i=<session description>`
+    ///
+    /// <https://tools.ietf.org/html/rfc4566#section-5.4>
     pub media_title: Option<Information>,
 
-    /// c=<nettype> <addrtype> <connection-address>
-    /// https://tools.ietf.org/html/rfc4566#section-5.7
+    /// `c=<nettype> <addrtype> <connection-address>`
+    ///
+    /// <https://tools.ietf.org/html/rfc4566#section-5.7>
     pub connection_information: Option<ConnectionInformation>,
 
-    /// b=<bwtype>:<bandwidth>
-    /// https://tools.ietf.org/html/rfc4566#section-5.8
+    /// `b=<bwtype>:<bandwidth>`
+    ///
+    /// <https://tools.ietf.org/html/rfc4566#section-5.8>
     pub bandwidth: Vec<Bandwidth>,
 
-    /// k=<method>
-    /// k=<method>:<encryption key>
-    /// https://tools.ietf.org/html/rfc4566#section-5.12
+    /// `k=<method>`
+    ///
+    /// `k=<method>:<encryption key>`
+    ///
+    /// <https://tools.ietf.org/html/rfc4566#section-5.12>
     pub encryption_key: Option<EncryptionKey>,
 
     /// Attributes are the primary means for extending SDP.  Attributes may
     /// be defined to be used as "session-level" attributes, "media-level"
     /// attributes, or both.
-    /// https://tools.ietf.org/html/rfc4566#section-5.12
+    ///
+    /// <https://tools.ietf.org/html/rfc4566#section-5.12>
     pub attributes: Vec<Attribute>,
 }
 

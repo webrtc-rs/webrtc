@@ -1,10 +1,9 @@
 #[cfg(test)]
 mod util_test;
 
-use super::error::Error;
+use super::error::{Error, Result};
 use super::session_description::SessionDescription;
 
-use anyhow::Result;
 use std::collections::HashMap;
 use std::io::SeekFrom;
 use std::{fmt, io};
@@ -117,12 +116,12 @@ pub(crate) fn parse_rtpmap(rtpmap: &str) -> Result<Codec> {
     // a=rtpmap:<payload type> <encoding name>/<clock rate>[/<encoding parameters>]
     let split: Vec<&str> = rtpmap.split_whitespace().collect();
     if split.len() != 2 {
-        return Err(Error::RtpmapParse.into());
+        return Err(Error::MissingWhitespace);
     }
 
     let pt_split: Vec<&str> = split[0].split(':').collect();
     if pt_split.len() != 2 {
-        return Err(Error::RtpmapParse.into());
+        return Err(Error::MissingColon);
     }
     let payload_type = pt_split[1].parse::<u8>()?;
 
@@ -153,14 +152,14 @@ pub(crate) fn parse_fmtp(fmtp: &str) -> Result<Codec> {
     // a=fmtp:<format> <format specific parameters>
     let split: Vec<&str> = fmtp.split_whitespace().collect();
     if split.len() != 2 {
-        return Err(Error::FmtpParse.into());
+        return Err(Error::MissingWhitespace);
     }
 
     let fmtp = split[1].to_string();
 
     let split: Vec<&str> = split[0].split(':').collect();
     if split.len() != 2 {
-        return Err(Error::FmtpParse.into());
+        return Err(Error::MissingColon);
     }
     let payload_type = split[1].parse::<u8>()?;
 
@@ -175,12 +174,12 @@ pub(crate) fn parse_rtcp_fb(rtcp_fb: &str) -> Result<Codec> {
     // a=ftcp-fb:<payload type> <RTCP feedback type> [<RTCP feedback parameter>]
     let split: Vec<&str> = rtcp_fb.splitn(2, ' ').collect();
     if split.len() != 2 {
-        return Err(Error::RtcpFb.into());
+        return Err(Error::MissingWhitespace);
     }
 
     let pt_split: Vec<&str> = split[0].split(':').collect();
     if pt_split.len() != 2 {
-        return Err(Error::RtcpFb.into());
+        return Err(Error::MissingColon);
     }
 
     Ok(Codec {
