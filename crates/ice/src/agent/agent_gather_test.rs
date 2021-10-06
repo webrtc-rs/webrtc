@@ -27,7 +27,7 @@ async fn test_vnet_gather_no_local_ip_address() -> Result<()> {
 #[tokio::test]
 async fn test_vnet_gather_dynamic_ip_address() -> Result<()> {
     let cider = "1.2.3.0/24";
-    let ipnet = IpNet::from_str(cider)?;
+    let ipnet = IpNet::from_str(cider).map_err(|e| Error::Other(e.to_string()))?;
 
     let r = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
         cidr: cider.to_owned(),

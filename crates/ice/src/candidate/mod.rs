@@ -13,11 +13,11 @@ pub mod candidate_peer_reflexive;
 pub mod candidate_relay;
 pub mod candidate_server_reflexive;
 
+use crate::error::Result;
 use crate::network_type::*;
 use crate::tcp_type::*;
 use candidate_base::*;
 
-use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt;
 use std::net::{IpAddr, SocketAddr};

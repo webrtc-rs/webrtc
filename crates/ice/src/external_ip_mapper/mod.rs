@@ -4,7 +4,6 @@ mod external_ip_mapper_test;
 use crate::candidate::*;
 use crate::error::*;
 
-use anyhow::Result;
 use std::collections::HashMap;
 use std::net::IpAddr;
 

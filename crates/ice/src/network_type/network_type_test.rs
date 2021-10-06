@@ -1,4 +1,5 @@
 use super::*;
+use crate::error::Result;
 
 #[test]
 fn test_network_type_parsing_success() -> Result<()> {

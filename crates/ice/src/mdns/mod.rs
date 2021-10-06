@@ -1,10 +1,11 @@
 #[cfg(test)]
 mod mdns_test;
 
+use crate::error::Result;
+
 use mdns::config::*;
 use mdns::conn::*;
 
-use anyhow::Result;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;

@@ -3,7 +3,6 @@ mod url_test;
 
 use crate::error::*;
 
-use anyhow::Result;
 use std::borrow::Cow;
 use std::convert::From;
 use std::fmt;

@@ -1,6 +1,6 @@
 use super::*;
+use crate::error::Result;
 
-use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use waitgroup::WaitGroup;

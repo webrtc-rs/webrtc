@@ -25,7 +25,6 @@ use agent_config::*;
 use agent_internal::*;
 use agent_stats::*;
 
-use anyhow::Result;
 use mdns::conn::*;
 use std::collections::HashMap;
 use std::net::{Ipv4Addr, SocketAddr};
@@ -492,7 +491,7 @@ impl Agent {
             Ok((_, src)) => src,
             Err(err) => {
                 log::warn!("Failed to discover mDNS candidate {}: {}", c.address(), err);
-                return Err(err);
+                return Err(err.into());
             }
         };
 

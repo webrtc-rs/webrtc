@@ -163,11 +163,11 @@ impl AgentConn {
 
 #[async_trait]
 impl Conn for AgentConn {
-    async fn connect(&self, _addr: SocketAddr) -> Result<()> {
+    async fn connect(&self, _addr: SocketAddr) -> std::result::Result<(), util::Error> {
         Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn recv(&self, buf: &mut [u8]) -> Result<usize> {
+    async fn recv(&self, buf: &mut [u8]) -> std::result::Result<usize, util::Error> {
         if self.done.load(Ordering::SeqCst) {
             return Err(io::Error::new(io::ErrorKind::Other, "Conn is closed").into());
         }
@@ -181,7 +181,10 @@ impl Conn for AgentConn {
         Ok(n)
     }
 
-    async fn recv_from(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
+    async fn recv_from(
+        &self,
+        buf: &mut [u8],
+    ) -> std::result::Result<(usize, SocketAddr), util::Error> {
         if let Some(raddr) = self.remote_addr().await {
             let n = self.recv(buf).await?;
             Ok((n, raddr))
@@ -190,13 +193,13 @@ impl Conn for AgentConn {
         }
     }
 
-    async fn send(&self, buf: &[u8]) -> Result<usize> {
+    async fn send(&self, buf: &[u8]) -> std::result::Result<usize, util::Error> {
         if self.done.load(Ordering::SeqCst) {
             return Err(io::Error::new(io::ErrorKind::Other, "Conn is closed").into());
         }
 
         if is_message(buf) {
-            return Err(Error::ErrIceWriteStunMessage.into());
+            return Err(util::Error::Other("ErrIceWriteStunMessage".into()));
         }
 
         let result = if let Some(pair) = self.get_selected_pair().await {
@@ -216,11 +219,15 @@ impl Conn for AgentConn {
         }
     }
 
-    async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> Result<usize> {
+    async fn send_to(
+        &self,
+        _buf: &[u8],
+        _target: SocketAddr,
+    ) -> std::result::Result<usize, util::Error> {
         Err(io::Error::new(io::ErrorKind::Other, "Not applicable").into())
     }
 
-    async fn local_addr(&self) -> Result<SocketAddr> {
+    async fn local_addr(&self) -> std::result::Result<SocketAddr, util::Error> {
         if let Some(pair) = self.get_selected_pair().await {
             Ok(pair.local.addr().await)
         } else {
@@ -236,7 +243,7 @@ impl Conn for AgentConn {
         }
     }
 
-    async fn close(&self) -> Result<()> {
+    async fn close(&self) -> std::result::Result<(), util::Error> {
         Ok(())
     }
 }

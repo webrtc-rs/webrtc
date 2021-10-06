@@ -3,7 +3,6 @@ mod network_type_test;
 
 use crate::error::*;
 
-use anyhow::Result;
 use std::fmt;
 use std::net::IpAddr;
 

@@ -392,7 +392,7 @@ impl CandidateBase {
 pub async fn unmarshal_candidate(raw: &str) -> Result<impl Candidate> {
     let split: Vec<&str> = raw.split_whitespace().collect();
     if split.len() < 8 {
-        return Err(Error::new(format!(
+        return Err(Error::Other(format!(
             "{:?} ({})",
             Error::ErrAttributeTooShortIceCandidate,
             split.len()
@@ -429,7 +429,7 @@ pub async fn unmarshal_candidate(raw: &str) -> Result<impl Candidate> {
 
         if split2[0] == "raddr" {
             if split2.len() < 4 {
-                return Err(Error::new(format!(
+                return Err(Error::Other(format!(
                     "{:?}: incorrect length",
                     Error::ErrParseRelatedAddr
                 ))
@@ -444,7 +444,7 @@ pub async fn unmarshal_candidate(raw: &str) -> Result<impl Candidate> {
         } else if split2[0] == "tcptype" {
             if split2.len() < 2 {
                 return Err(
-                    Error::new(format!("{:?}: incorrect length", Error::ErrParseType)).into(),
+                    Error::Other(format!("{:?}: incorrect length", Error::ErrParseType)).into(),
                 );
             }
 
@@ -518,6 +518,6 @@ pub async fn unmarshal_candidate(raw: &str) -> Result<impl Candidate> {
             };
             config.new_candidate_relay().await
         }
-        _ => Err(Error::new(format!("{:?} ({})", Error::ErrUnknownCandidateType, typ)).into()),
+        _ => Err(Error::Other(format!("{:?} ({})", Error::ErrUnknownCandidateType, typ)).into()),
     }
 }

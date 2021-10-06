@@ -5,7 +5,6 @@ use crate::agent::agent_config::InterfaceFilterFn;
 use crate::error::*;
 use crate::network_type::*;
 
-use anyhow::Result;
 use std::collections::HashSet;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
@@ -27,7 +26,7 @@ pub fn assert_inbound_username(m: &Message, expected_username: &str) -> Result<(
     username.get_from(m)?;
 
     if username.to_string() != expected_username {
-        return Err(Error::new(format!(
+        return Err(Error::Other(format!(
             "{:?} expected({}) actual({})",
             Error::ErrMismatchUsername,
             expected_username,
@@ -41,7 +40,7 @@ pub fn assert_inbound_username(m: &Message, expected_username: &str) -> Result<(
 
 pub fn assert_inbound_message_integrity(m: &mut Message, key: &[u8]) -> Result<()> {
     let message_integrity_attr = MessageIntegrity(key.to_vec());
-    message_integrity_attr.check(m)
+    Ok(message_integrity_attr.check(m)?)
 }
 
 /// Initiates a stun requests to `server_addr` using conn, reads the response and returns the
@@ -74,9 +73,9 @@ pub async fn stun_request(
         match tokio::time::timeout(deadline, conn.recv_from(&mut bs)).await {
             Ok(result) => match result {
                 Ok((n, addr)) => (n, addr),
-                Err(err) => return Err(Error::new(err.to_string()).into()),
+                Err(err) => return Err(Error::Other(err.to_string()).into()),
             },
-            Err(err) => return Err(Error::new(err.to_string()).into()),
+            Err(err) => return Err(Error::Other(err.to_string()).into()),
         }
     } else {
         conn.recv_from(&mut bs).await?
@@ -134,7 +133,7 @@ pub async fn listen_udp_in_port_range(
     laddr: SocketAddr,
 ) -> Result<Arc<dyn Conn + Send + Sync>> {
     if laddr.port() != 0 || (port_min == 0 && port_max == 0) {
-        return vnet.bind(laddr).await;
+        return Ok(vnet.bind(laddr).await?);
     }
     let i = if port_min == 0 { 1 } else { port_min };
     let j = if port_max == 0 { 0xFFFF } else { port_max };

@@ -4,7 +4,7 @@
 pub mod agent;
 pub mod candidate;
 pub mod control;
-pub mod error;
+mod error;
 pub mod external_ip_mapper;
 pub mod mdns;
 pub mod network_type;
@@ -16,3 +16,5 @@ pub mod tcp_type;
 pub mod url;
 pub mod use_candidate;
 mod util;
+
+pub use error::Error;
