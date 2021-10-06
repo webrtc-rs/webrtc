@@ -35,6 +35,6 @@ Run `broadcast`
 
 You can change the listening port using `-port 8011`
 
-You can `Join the broadcast` as many times as you want. The `broadcast` Golang application is relaying all traffic, so your browser only has to upload once.
+You can `Join the broadcast` as many times as you want. The `broadcast` application is relaying all traffic, so your browser only has to upload once.
 
 Congrats, you have used WebRTC.rs!
