@@ -1,6 +1,6 @@
 use super::*;
+use crate::error::Result;
 
-use anyhow::Result;
 use std::net::Ipv4Addr;
 
 #[test]

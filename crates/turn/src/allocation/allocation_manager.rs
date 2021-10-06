@@ -5,7 +5,6 @@ use super::*;
 use crate::error::*;
 use crate::relay::*;
 
-use anyhow::Result;
 use std::collections::HashMap;
 use util::Conn;
 

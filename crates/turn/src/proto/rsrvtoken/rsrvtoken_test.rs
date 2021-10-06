@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn test_reservation_token() -> Result<()> {
+fn test_reservation_token() -> Result<(), stun::Error> {
     let mut m = Message::new();
     let mut v = vec![0; 8];
     v[2] = 33;
@@ -36,8 +36,9 @@ fn test_reservation_token() -> Result<()> {
             let mut m = Message::new();
             let mut handle = ReservationToken::default();
             if let Err(err) = handle.get_from(&m) {
-                assert!(
-                    stun::error::Error::ErrAttributeNotFound.equal(&err),
+                assert_eq!(
+                    stun::Error::ErrAttributeNotFound,
+                    err,
                     "{} should be not found",
                     err
                 );

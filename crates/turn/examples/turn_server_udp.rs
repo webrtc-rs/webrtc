@@ -1,9 +1,8 @@
 use turn::auth::*;
-use turn::error::*;
 use turn::relay::relay_static::*;
 use turn::server::{config::*, *};
+use turn::Error;
 
-use anyhow::Result;
 use clap::{App, AppSettings, Arg};
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
@@ -25,7 +24,12 @@ impl MyAuthHandler {
 }
 
 impl AuthHandler for MyAuthHandler {
-    fn auth_handle(&self, username: &str, _realm: &str, _src_addr: SocketAddr) -> Result<Vec<u8>> {
+    fn auth_handle(
+        &self,
+        username: &str,
+        _realm: &str,
+        _src_addr: SocketAddr,
+    ) -> Result<Vec<u8>, Error> {
         if let Some(pw) = self.cred_map.get(username) {
             //log::debug!("username={}, password={:?}", username, pw);
             Ok(pw.to_vec())
@@ -38,7 +42,7 @@ impl AuthHandler for MyAuthHandler {
 // RUST_LOG=trace cargo run --color=always --package webrtc-turn --example turn_server_udp -- --public-ip 0.0.0.0 --users user=pass
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), Error> {
     env_logger::init();
 
     let mut app = App::new("TURN Server UDP")

@@ -30,7 +30,6 @@ use stun::xoraddr::*;
 
 use util::Conn;
 
-use anyhow::Result;
 use std::collections::HashMap;
 use std::marker::{Send, Sync};
 use std::net::SocketAddr;
@@ -161,7 +160,7 @@ impl Request {
         )?;
 
         if let Err(err) = nonce_attr.get_from(m) {
-            build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await?;
+            build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into()).await?;
             return Ok(None);
         }
 
@@ -188,11 +187,11 @@ impl Request {
         }
 
         if let Err(err) = realm_attr.get_from(m) {
-            build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await?;
+            build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into()).await?;
             return Ok(None);
         }
         if let Err(err) = username_attr.get_from(m) {
-            build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await?;
+            build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into()).await?;
             return Ok(None);
         }
 
@@ -216,7 +215,7 @@ impl Request {
 
         let mi = MessageIntegrity(our_key);
         if let Err(err) = mi.check(&mut m.clone()) {
-            build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await?;
+            build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into()).await?;
             Ok(None)
         } else {
             Ok(Some(mi))
@@ -340,7 +339,8 @@ impl Request {
                     reason: vec![],
                 })],
             )?;
-            return build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await;
+            return build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into())
+                .await;
         } else if requested_transport.protocol != PROTO_UDP {
             let msg = build_msg(
                 m.transaction_id,
@@ -729,12 +729,14 @@ impl Request {
                 };
             let mut channel = ChannelNumber::default();
             if let Err(err) = channel.get_from(m) {
-                return build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await;
+                return build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into())
+                    .await;
             }
 
             let mut peer_addr = PeerAddress::default();
             if let Err(err) = peer_addr.get_from(m) {
-                return build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await;
+                return build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into())
+                    .await;
             }
 
             log::debug!(
@@ -843,7 +845,7 @@ pub(crate) async fn build_and_send_err(
     conn: &Arc<dyn Conn + Send + Sync>,
     dst: SocketAddr,
     msg: Message,
-    err: anyhow::Error,
+    err: Error,
 ) -> Result<()> {
     if let Err(send_err) = build_and_send(conn, dst, msg).await {
         Err(send_err)

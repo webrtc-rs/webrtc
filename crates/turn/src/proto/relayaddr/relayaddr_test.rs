@@ -3,7 +3,7 @@ use super::*;
 use std::net::Ipv4Addr;
 
 #[test]
-fn test_relayed_address() -> Result<()> {
+fn test_relayed_address() -> Result<(), stun::Error> {
     // Simple tests because already tested in stun.
     let a = RelayedAddress {
         ip: IpAddr::V4(Ipv4Addr::new(111, 11, 1, 2)),

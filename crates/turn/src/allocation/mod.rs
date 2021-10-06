@@ -17,7 +17,6 @@ use stun::message::*;
 
 use util::Conn;
 
-use anyhow::Result;
 use std::collections::HashMap;
 use std::marker::{Send, Sync};
 use std::net::SocketAddr;

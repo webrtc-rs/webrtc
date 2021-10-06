@@ -1,12 +1,11 @@
 #[cfg(test)]
 mod auth_test;
 
-use crate::error::Error;
+use crate::error::*;
 
 use std::net::SocketAddr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use anyhow::Result;
 use md5::{Digest, Md5};
 use ring::hmac;
 
@@ -58,7 +57,9 @@ impl AuthHandler for LongTermAuthHandler {
 
         let t = Duration::from_secs(username.parse::<u64>()?);
         if t < SystemTime::now().duration_since(UNIX_EPOCH)? {
-            return Err(Error::new(format!("Expired time-windowed username {}", username)).into());
+            return Err(
+                Error::Other(format!("Expired time-windowed username {}", username)).into(),
+            );
         }
 
         let password = long_term_credentials(username, &self.shared_secret);

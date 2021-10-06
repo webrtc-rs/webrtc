@@ -1,7 +1,6 @@
 use super::*;
 use crate::error::*;
 
-use anyhow::Result;
 use async_trait::async_trait;
 use std::net::IpAddr;
 use util::vnet::net::*;

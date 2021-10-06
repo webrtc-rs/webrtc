@@ -4,8 +4,6 @@ mod chandata_test;
 use super::channum::*;
 use crate::error::*;
 
-use anyhow::Result;
-
 const PADDING: usize = 4;
 
 fn nearest_padded_value_length(l: usize) -> usize {

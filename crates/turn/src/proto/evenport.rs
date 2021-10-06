@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod evenport_test;
 
-use anyhow::Result;
 use std::fmt;
 use stun::attributes::*;
 use stun::checks::*;
@@ -37,7 +36,7 @@ const FIRST_BIT_SET: u8 = 0b10000000; //FIXME? (1 << 8) - 1;
 
 impl Setter for EvenPort {
     // AddTo adds EVEN-PORT to message.
-    fn add_to(&self, m: &mut Message) -> Result<()> {
+    fn add_to(&self, m: &mut Message) -> Result<(), stun::Error> {
         let mut v = vec![0; EVEN_PORT_SIZE];
         if self.reserve_port {
             // Set first bit to 1.
@@ -50,7 +49,7 @@ impl Setter for EvenPort {
 
 impl Getter for EvenPort {
     // GetFrom decodes EVEN-PORT from message.
-    fn get_from(&mut self, m: &Message) -> Result<()> {
+    fn get_from(&mut self, m: &Message) -> Result<(), stun::Error> {
         let v = m.get(ATTR_EVEN_PORT)?;
 
         check_size(ATTR_EVEN_PORT, v.len(), EVEN_PORT_SIZE)?;

@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod data_test;
 
-use anyhow::Result;
 use stun::attributes::*;
 use stun::message::*;
 
@@ -19,7 +18,7 @@ pub struct Data(pub Vec<u8>);
 
 impl Setter for Data {
     // AddTo adds DATA to message.
-    fn add_to(&self, m: &mut Message) -> Result<()> {
+    fn add_to(&self, m: &mut Message) -> Result<(), stun::Error> {
         m.add(ATTR_DATA, &self.0);
         Ok(())
     }
@@ -27,7 +26,7 @@ impl Setter for Data {
 
 impl Getter for Data {
     // GetFrom decodes DATA from message.
-    fn get_from(&mut self, m: &Message) -> Result<()> {
+    fn get_from(&mut self, m: &Message) -> Result<(), stun::Error> {
         self.0 = m.get(ATTR_DATA)?;
         Ok(())
     }

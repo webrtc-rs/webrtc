@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn test_channel_number_string() -> Result<()> {
+fn test_channel_number_string() -> Result<(), stun::Error> {
     let n = ChannelNumber(112);
     assert_eq!(n.to_string(), "112", "bad string {}, expected 112", n);
     Ok(())
@@ -9,7 +9,7 @@ fn test_channel_number_string() -> Result<()> {
 
 /*
 #[test]
-fn test_channel_number_NoAlloc() -> Result<()> {
+fn test_channel_number_NoAlloc() -> Result<(), stun::Error> {
     let mut m = Message::default();
 
         if wasAllocs(func() {
@@ -35,7 +35,7 @@ fn test_channel_number_NoAlloc() -> Result<()> {
 */
 
 #[test]
-fn test_channel_number_add_to() -> Result<()> {
+fn test_channel_number_add_to() -> Result<(), stun::Error> {
     let mut m = Message::new();
     let n = ChannelNumber(6);
     n.add_to(&mut m)?;
@@ -55,8 +55,9 @@ fn test_channel_number_add_to() -> Result<()> {
             let mut m = Message::new();
             let mut n_handle = ChannelNumber::default();
             if let Err(err) = n_handle.get_from(&m) {
-                assert!(
-                    stun::error::Error::ErrAttributeNotFound.equal(&err),
+                assert_eq!(
+                    stun::Error::ErrAttributeNotFound,
+                    err,
                     "{} should be not found",
                     err
                 );

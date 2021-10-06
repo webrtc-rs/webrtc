@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn test_requested_transport_string() -> Result<()> {
+fn test_requested_transport_string() -> Result<(), stun::Error> {
     let mut r = RequestedTransport {
         protocol: PROTO_UDP,
     };
@@ -27,7 +27,7 @@ fn test_requested_transport_string() -> Result<()> {
 }
 
 #[test]
-fn test_requested_transport_add_to() -> Result<()> {
+fn test_requested_transport_add_to() -> Result<(), stun::Error> {
     let mut m = Message::new();
     let r = RequestedTransport {
         protocol: PROTO_UDP,
@@ -50,8 +50,9 @@ fn test_requested_transport_add_to() -> Result<()> {
             let mut m = Message::new();
             let mut handle = RequestedTransport::default();
             if let Err(err) = handle.get_from(&m) {
-                assert!(
-                    stun::error::Error::ErrAttributeNotFound.equal(&err),
+                assert_eq!(
+                    stun::Error::ErrAttributeNotFound,
+                    err,
                     "{} should be not found",
                     err
                 );

@@ -15,7 +15,6 @@ use binding::*;
 use relay_conn::*;
 use transaction::*;
 
-use anyhow::Result;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -92,7 +91,7 @@ impl RelayConnObserver for ClientInternal {
     }
 
     // WriteTo sends data to the specified destination using the base socket.
-    async fn write_to(&self, data: &[u8], to: &str) -> Result<usize> {
+    async fn write_to(&self, data: &[u8], to: &str) -> std::result::Result<usize, util::Error> {
         let n = self.conn.send_to(data, SocketAddr::from_str(to)?).await?;
         Ok(n)
     }
@@ -313,7 +312,7 @@ impl ClientInternal {
         msg.decode()?;
 
         if msg.typ.class == CLASS_REQUEST {
-            return Err(Error::new(format!(
+            return Err(Error::Other(format!(
                 "{:?} : {}",
                 Error::ErrUnexpectedStunrequestMessage,
                 msg
@@ -542,9 +541,9 @@ impl ClientInternal {
             let mut code = ErrorCodeAttribute::default();
             let result = code.get_from(&res);
             if result.is_err() {
-                return Err(Error::new(format!("{}", res.typ)).into());
+                return Err(Error::Other(format!("{}", res.typ)).into());
             } else {
-                return Err(Error::new(format!("{} (error {})", res.typ, code)).into());
+                return Err(Error::Other(format!("{} (error {})", res.typ, code)).into());
             }
         }
 

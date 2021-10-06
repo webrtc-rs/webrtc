@@ -1,5 +1,5 @@
 use super::*;
-use anyhow::Result;
+use crate::error::Result;
 
 #[test]
 fn test_five_tuple_protocol() -> Result<()> {

@@ -1,7 +1,5 @@
 use super::*;
-use crate::error::Error;
-
-use anyhow::Result;
+use crate::error::*;
 
 const CHROME_ALLOC_REQ_TEST_HEX: [&str; 4] = [
     "000300242112a442626b4a6849664c3630526863802f0016687474703a2f2f6c6f63616c686f73743a333030302f00000019000411000000",
@@ -19,7 +17,7 @@ fn test_chrome_alloc_request() -> Result<()> {
     for h in &CHROME_ALLOC_REQ_TEST_HEX {
         let b = match hex::decode(h) {
             Ok(b) => b,
-            Err(_) => return Err(Error::new("hex decode error".to_owned()).into()),
+            Err(_) => return Err(Error::Other("hex decode error".to_owned()).into()),
         };
         data.push(b);
     }
