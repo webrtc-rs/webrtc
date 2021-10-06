@@ -302,8 +302,18 @@ impl AssociationInternal {
 
     /// handle_inbound parses incoming raw packets
     pub(crate) async fn handle_inbound(&mut self, raw: &Bytes) -> Result<()> {
-        let p = Packet::unmarshal(raw)?;
-        p.check_packet()?;
+        let p = match Packet::unmarshal(raw) {
+            Ok(p) => p,
+            Err(err) => {
+                log::warn!("[{}] unable to parse SCTP packet {}", self.name, err);
+                return Ok(());
+            }
+        };
+
+        if let Err(err) = p.check_packet() {
+            log::warn!("[{}] failed validating packet {}", self.name, err);
+            return Ok(());
+        }
 
         self.handle_chunk_start();
 
