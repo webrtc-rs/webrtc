@@ -20,8 +20,7 @@ util = { package = "webrtc-util", version = "0.4.3", default-features = false, f
 tokio = { version = "1.12.0", features = ["full"] }
 socket2 = { version = "0.4.2", features = ["all"] }
 log = "0.4"
-thiserror = "1.0.29"
-anyhow = "1.0.44"
+thiserror = "1.0"
 
 [dev-dependencies]
 env_logger = "0.9"

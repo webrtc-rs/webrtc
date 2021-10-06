@@ -7,7 +7,6 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Result;
 use core::sync::atomic;
 use socket2::SockAddr;
 use tokio::net::{ToSocketAddrs, UdpSocket};
@@ -71,7 +70,7 @@ impl DnsConn {
                 Ok(e) => e,
                 Err(e) => {
                     log::error!("Error getting interfaces: {:?}", e);
-                    return Err(Error::new(e.to_string()).into());
+                    return Err(Error::Other(e.to_string()));
                 }
             };
 
@@ -89,7 +88,7 @@ impl DnsConn {
             }
 
             if join_error_count >= interfaces.len() {
-                return Err(Error::ErrJoiningMulticastGroup.into());
+                return Err(Error::ErrJoiningMulticastGroup);
             }
         }
 
@@ -321,7 +320,7 @@ async fn run(
         let q = match p.question() {
             Ok(q) => q,
             Err(err) => {
-                if Error::ErrSectionDone.equal(&err) {
+                if Error::ErrSectionDone == err {
                     log::trace!("Parsing has completed");
                     break;
                 } else {
@@ -353,7 +352,7 @@ async fn run(
         let a = match p.answer_header() {
             Ok(a) => a,
             Err(err) => {
-                if !Error::ErrSectionDone.equal(&err) {
+                if Error::ErrSectionDone != err {
                     log::warn!("Failed to parse mDNS packet {}", err);
                 }
                 return;
@@ -407,7 +406,7 @@ async fn send_answer(
                     a: match interface_addr.ip() {
                         IpAddr::V4(ip) => ip.octets(),
                         IpAddr::V6(_) => {
-                            return Err(Error::new("Unexpected IpV6 addr".to_owned()).into())
+                            return Err(Error::Other("Unexpected IpV6 addr".to_owned()))
                         }
                     },
                 })),

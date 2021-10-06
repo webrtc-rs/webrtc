@@ -9,7 +9,6 @@ use super::resource::{
 use super::*;
 use crate::error::*;
 
-use anyhow::Result;
 use std::collections::HashMap;
 
 fn small_test_msg() -> Result<Message> {
@@ -320,7 +319,7 @@ fn test_name_pack_unpack() -> Result<()> {
         let result = input.pack(vec![], &mut Some(HashMap::new()), 0);
         if let Some(want_err) = want_err {
             if let Err(actual_err) = result {
-                assert!(want_err.equal(&actual_err));
+                assert_eq!(want_err, actual_err);
             } else {
                 assert!(false);
             }
@@ -365,8 +364,9 @@ fn test_incompressible_name() -> Result<()> {
     let mut n2 = Name::default();
     let result = n2.unpack_compressed(&buf, off, false /* allowCompression */);
     if let Err(err) = result {
-        assert!(
-            Error::ErrCompressedSrv.equal(&err),
+        assert_eq!(
+            Error::ErrCompressedSrv,
+            err,
             "unpacking compressed incompressible name with pointers: got {}, want = {}",
             err,
             Error::ErrCompressedSrv
@@ -507,7 +507,7 @@ fn test_resource_not_started() -> Result<()> {
     for (name, test_fn) in tests {
         let mut p = Parser::default();
         if let Err(err) = test_fn(&mut p) {
-            assert!(Error::ErrNotStarted.equal(&err), "{}", name);
+            assert_eq!(Error::ErrNotStarted, err, "{}", name);
         }
     }
 
@@ -623,28 +623,28 @@ fn test_skip_each() -> Result<()> {
 
     p.skip_question()?;
     if let Err(err) = p.skip_question() {
-        assert!(Error::ErrSectionDone.equal(&err));
+        assert_eq!(Error::ErrSectionDone, err);
     } else {
         assert!(false, "expected error, but got ok");
     }
 
     p.skip_answer()?;
     if let Err(err) = p.skip_answer() {
-        assert!(Error::ErrSectionDone.equal(&err));
+        assert_eq!(Error::ErrSectionDone, err);
     } else {
         assert!(false, "expected error, but got ok");
     }
 
     p.skip_authority()?;
     if let Err(err) = p.skip_authority() {
-        assert!(Error::ErrSectionDone.equal(&err));
+        assert_eq!(Error::ErrSectionDone, err);
     } else {
         assert!(false, "expected error, but got ok");
     }
 
     p.skip_additional()?;
     if let Err(err) = p.skip_additional() {
-        assert!(Error::ErrSectionDone.equal(&err));
+        assert_eq!(Error::ErrSectionDone, err);
     } else {
         assert!(false, "expected error, but got ok");
     }
@@ -713,7 +713,7 @@ fn test_skip_after_read() -> Result<()> {
         };
 
         if let Err(err) = result {
-            assert!(Error::ErrSectionDone.equal(&err));
+            assert_eq!(Error::ErrSectionDone, err);
         } else {
             assert!(false, "expected error, but got ok");
         }
@@ -746,7 +746,7 @@ fn test_skip_not_started() -> Result<()> {
     let mut p = Parser::default();
     for (name, test_fn) in tests {
         if let Err(err) = test_fn(&mut p) {
-            assert!(Error::ErrNotStarted.equal(&err));
+            assert_eq!(Error::ErrNotStarted, err);
         } else {
             assert!(false, "{} expected error, but got ok", name);
         }
@@ -813,12 +813,10 @@ fn test_too_many_records() -> Result<()> {
 
     for (name, mut msg, want) in tests {
         if let Err(got) = msg.pack() {
-            assert!(
-                want.equal(&got),
+            assert_eq!(
+                want, got,
                 "got Message.Pack() for {} = {}, want = {}",
-                name,
-                got,
-                want
+                name, got, want
             )
         } else {
             assert!(false, "expected error, but got ok");
@@ -880,7 +878,7 @@ fn test_too_long_txt() -> Result<()> {
     }
     let rb = TxtResource { txt: vec![str256] };
     if let Err(err) = rb.pack(vec![], &mut Some(HashMap::new()), 0) {
-        assert!(Error::ErrStringTooLong.equal(&err));
+        assert_eq!(Error::ErrStringTooLong, err);
     } else {
         assert!(false, "expected error, but got ok");
     }
@@ -936,13 +934,10 @@ fn test_start_error() -> Result<()> {
         for (test_name, test_fn) in &tests {
             let mut b = env_fn();
             if let Err(got_err) = test_fn(&mut b) {
-                assert!(
-                    env_err.equal(&got_err),
+                assert_eq!(
+                    *env_err, got_err,
                     "got Builder{}.{} = {}, want = {}",
-                    env_name,
-                    test_name,
-                    got_err,
-                    env_err
+                    env_name, test_name, got_err, env_err
                 );
             } else {
                 assert!(
@@ -1099,13 +1094,10 @@ fn test_builder_resource_error() -> Result<()> {
         for (test_name, test_fn) in &tests {
             let mut b = env_fn();
             if let Err(got_err) = test_fn(&mut b) {
-                assert!(
-                    env_err.equal(&got_err),
+                assert_eq!(
+                    *env_err, got_err,
                     "got Builder{}.{} = {}, want = {}",
-                    env_name,
-                    test_name,
-                    got_err,
-                    env_err
+                    env_name, test_name, got_err, env_err
                 );
             } else {
                 assert!(
@@ -1125,12 +1117,7 @@ fn test_finish_error() -> Result<()> {
     let mut b = Builder::default();
     let want = Error::ErrNotStarted;
     if let Err(got) = b.finish() {
-        assert!(
-            want.equal(&got),
-            "got Builder.Finish() = {}, want = {}",
-            got,
-            want
-        );
+        assert_eq!(want, got, "got Builder.Finish() = {}, want = {}", got, want);
     } else {
         assert!(false, "expected error, but got ok");
     }
@@ -1230,7 +1217,7 @@ fn test_resource_pack() -> Result<()> {
 
     for (mut m, want_err) in tests {
         if let Err(err) = m.pack() {
-            assert!(want_err.equal(&err));
+            assert_eq!(want_err, err);
         } else {
             assert!(false, "expected error, but got ok");
         }

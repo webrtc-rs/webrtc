@@ -1,6 +1,5 @@
 use crate::error::*;
 
-use anyhow::Result;
 use std::collections::HashMap;
 use std::fmt;
 

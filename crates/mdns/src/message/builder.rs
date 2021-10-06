@@ -4,7 +4,6 @@ use super::resource::*;
 use super::*;
 use crate::error::*;
 
-use anyhow::Result;
 use std::collections::HashMap;
 
 // A Builder allows incrementally packing a DNS message.

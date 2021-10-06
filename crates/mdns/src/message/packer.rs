@@ -1,8 +1,6 @@
 use super::*;
 use crate::error::*;
 
-use anyhow::Result;
-
 // pack_bytes appends the wire format of field to msg.
 pub(crate) fn pack_bytes(mut msg: Vec<u8>, field: &[u8]) -> Vec<u8> {
     msg.extend_from_slice(field);

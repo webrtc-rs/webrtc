@@ -2,8 +2,6 @@ use super::*;
 use crate::error::*;
 use crate::message::packer::*;
 
-use anyhow::Result;
-
 // A TXTResource is a txt Resource record.
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct TxtResource {

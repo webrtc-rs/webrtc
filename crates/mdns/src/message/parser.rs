@@ -5,8 +5,6 @@ use crate::message::question::Question;
 use crate::message::resource::{unpack_resource_body, Resource, ResourceBody, ResourceHeader};
 use crate::message::{DnsClass, DnsType};
 
-use anyhow::Result;
-
 // A Parser allows incrementally parsing a DNS message.
 //
 // When parsing is started, the Header is parsed. Next, each question can be
@@ -130,7 +128,7 @@ impl<'a> Parser<'a> {
         loop {
             match self.question() {
                 Err(err) => {
-                    if Error::ErrSectionDone.equal(&err) {
+                    if Error::ErrSectionDone == err {
                         return Ok(qs);
                     } else {
                         return Err(err);
@@ -156,7 +154,7 @@ impl<'a> Parser<'a> {
     pub fn skip_all_questions(&mut self) -> Result<()> {
         loop {
             if let Err(err) = self.skip_question() {
-                if Error::ErrSectionDone.equal(&err) {
+                if Error::ErrSectionDone == err {
                     return Ok(());
                 } else {
                     return Err(err);
@@ -190,7 +188,7 @@ impl<'a> Parser<'a> {
         loop {
             match self.answer() {
                 Err(err) => {
-                    if Error::ErrSectionDone.equal(&err) {
+                    if Error::ErrSectionDone == err {
                         return Ok(a);
                     } else {
                         return Err(err);
@@ -210,7 +208,7 @@ impl<'a> Parser<'a> {
     pub fn skip_all_answers(&mut self) -> Result<()> {
         loop {
             if let Err(err) = self.skip_answer() {
-                if Error::ErrSectionDone.equal(&err) {
+                if Error::ErrSectionDone == err {
                     return Ok(());
                 } else {
                     return Err(err);
@@ -244,7 +242,7 @@ impl<'a> Parser<'a> {
         loop {
             match self.authority() {
                 Err(err) => {
-                    if Error::ErrSectionDone.equal(&err) {
+                    if Error::ErrSectionDone == err {
                         return Ok(a);
                     } else {
                         return Err(err);
@@ -264,7 +262,7 @@ impl<'a> Parser<'a> {
     pub fn skip_all_authorities(&mut self) -> Result<()> {
         loop {
             if let Err(err) = self.skip_authority() {
-                if Error::ErrSectionDone.equal(&err) {
+                if Error::ErrSectionDone == err {
                     return Ok(());
                 } else {
                     return Err(err);
@@ -298,7 +296,7 @@ impl<'a> Parser<'a> {
         loop {
             match self.additional() {
                 Err(err) => {
-                    if Error::ErrSectionDone.equal(&err) {
+                    if Error::ErrSectionDone == err {
                         return Ok(a);
                     } else {
                         return Err(err);
@@ -318,7 +316,7 @@ impl<'a> Parser<'a> {
     pub fn skip_all_additionals(&mut self) -> Result<()> {
         loop {
             if let Err(err) = self.skip_additional() {
-                if Error::ErrSectionDone.equal(&err) {
+                if Error::ErrSectionDone == err {
                     return Ok(());
                 } else {
                     return Err(err);

@@ -16,7 +16,6 @@ use parser::*;
 use question::*;
 use resource::*;
 
-use anyhow::Result;
 use std::collections::HashMap;
 use std::fmt;
 

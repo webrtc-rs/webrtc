@@ -1,5 +1,6 @@
 use super::name::*;
 use super::*;
+use crate::error::Result;
 
 use std::collections::HashMap;
 use std::fmt;
