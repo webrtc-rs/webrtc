@@ -54,8 +54,9 @@ async fn test_agent_process() -> Result<()> {
 
     let result = a.process(m);
     if let Err(err) = result {
-        assert!(
-            Error::ErrAgentClosed.equal(&err),
+        assert_eq!(
+            Error::ErrAgentClosed,
+            err,
             "closed agent should return <{}>, but got <{}>",
             Error::ErrAgentClosed,
             err,
@@ -76,8 +77,9 @@ fn test_agent_start() -> Result<()> {
 
     let result = a.start(id, deadline);
     if let Err(err) = result {
-        assert!(
-            Error::ErrTransactionExists.equal(&err),
+        assert_eq!(
+            Error::ErrTransactionExists,
+            err,
             "duplicate start should return <{}>, got <{}>",
             Error::ErrTransactionExists,
             err,
@@ -90,8 +92,9 @@ fn test_agent_start() -> Result<()> {
     let id = TransactionId::new();
     let result = a.start(id, deadline);
     if let Err(err) = result {
-        assert!(
-            Error::ErrAgentClosed.equal(&err),
+        assert_eq!(
+            Error::ErrAgentClosed,
+            err,
             "start on closed agent should return <{}>, got <{}>",
             Error::ErrAgentClosed,
             err,
@@ -102,8 +105,9 @@ fn test_agent_start() -> Result<()> {
 
     let result = a.set_handler(noop_handler());
     if let Err(err) = result {
-        assert!(
-            Error::ErrAgentClosed.equal(&err),
+        assert_eq!(
+            Error::ErrAgentClosed,
+            err,
             "SetHandler on closed agent should return <{}>, got <{}>",
             Error::ErrAgentClosed,
             err,
@@ -122,8 +126,9 @@ async fn test_agent_stop() -> Result<()> {
 
     let result = a.stop(TransactionId::default());
     if let Err(err) = result {
-        assert!(
-            Error::ErrTransactionNotExists.equal(&err),
+        assert_eq!(
+            Error::ErrTransactionNotExists,
+            err,
             "unexpected error: {}, should be {}",
             Error::ErrTransactionNotExists,
             err,
@@ -143,7 +148,7 @@ async fn test_agent_stop() -> Result<()> {
     tokio::select! {
         evt = handler_rx.recv() => {
             if let Err(err) = evt.unwrap().event_body{
-                assert!(Error::ErrTransactionStopped.equal(&err),
+                assert_eq!(Error::ErrTransactionStopped,err,
                     "unexpected error: {}, should be {}",
                     err, Error::ErrTransactionStopped);
             }else{
@@ -157,8 +162,9 @@ async fn test_agent_stop() -> Result<()> {
 
     let result = a.close();
     if let Err(err) = result {
-        assert!(
-            Error::ErrAgentClosed.equal(&err),
+        assert_eq!(
+            Error::ErrAgentClosed,
+            err,
             "a.Close returned {} instead of {}",
             Error::ErrAgentClosed,
             err,
@@ -169,8 +175,9 @@ async fn test_agent_stop() -> Result<()> {
 
     let result = a.stop(TransactionId::default());
     if let Err(err) = result {
-        assert!(
-            Error::ErrAgentClosed.equal(&err),
+        assert_eq!(
+            Error::ErrAgentClosed,
+            err,
             "unexpected error: {}, should be {}",
             Error::ErrAgentClosed,
             err,

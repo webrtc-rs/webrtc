@@ -5,7 +5,6 @@ use crate::attributes::*;
 use crate::error::*;
 use crate::message::*;
 
-use anyhow::Result;
 use std::fmt;
 
 // UnknownAttributes represents UNKNOWN-ATTRIBUTES attribute.

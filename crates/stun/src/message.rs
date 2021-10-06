@@ -5,7 +5,6 @@ use crate::agent::*;
 use crate::attributes::*;
 use crate::error::*;
 
-use anyhow::Result;
 use rand::Rng;
 use std::fmt;
 use std::io::{Read, Write};
@@ -283,14 +282,14 @@ impl Message {
         let full_size = MESSAGE_HEADER_SIZE + size; // len(m.Raw)
 
         if cookie != MAGIC_COOKIE {
-            return Err(Error::new(format!(
+            return Err(Error::Other(format!(
                 "{:x} is invalid magic cookie (should be {:x})",
                 cookie, MAGIC_COOKIE
             ))
             .into());
         }
         if buf.len() < full_size {
-            return Err(Error::new(format!(
+            return Err(Error::Other(format!(
                 "buffer length {} is less than {} (expected message size)",
                 buf.len(),
                 full_size
@@ -312,7 +311,7 @@ impl Message {
         while offset < size {
             // checking that we have enough bytes to read header
             if b.len() < ATTRIBUTE_HEADER_SIZE {
-                return Err(Error::new(format!(
+                return Err(Error::Other(format!(
                     "buffer length {} is less than {} (expected header size)",
                     b.len(),
                     ATTRIBUTE_HEADER_SIZE
@@ -332,7 +331,7 @@ impl Message {
             offset += ATTRIBUTE_HEADER_SIZE;
             if b.len() < a_buff_l {
                 // checking size
-                return Err(Error::new(format!(
+                return Err(Error::Other(format!(
                     "buffer length {} is less than {} (expected value size for {})",
                     b.len(),
                     a_buff_l,

@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod attributes_test;
 
+use crate::error::*;
 use crate::message::*;
 
-use anyhow::Result;
 use std::fmt;
 
 // Attributes is list of message attributes.

@@ -25,8 +25,9 @@ fn test_mapped_address() -> Result<()> {
                 let message = Message::new();
                 let result = got.get_from(&message);
                 if let Err(err) = result {
-                    assert!(
-                        Error::ErrAttributeNotFound.equal(&err),
+                    assert_eq!(
+                        Error::ErrAttributeNotFound,
+                        err,
                         "should be not found: {}",
                         err
                     );
@@ -46,8 +47,9 @@ fn test_mapped_address() -> Result<()> {
                 message.add(ATTR_MAPPED_ADDRESS, &[1, 2, 3]);
                 let result = got.get_from(&message);
                 if let Err(err) = result {
-                    assert!(
-                        Error::ErrUnexpectedEof.equal(&err),
+                    assert_eq!(
+                        Error::ErrUnexpectedEof,
+                        err,
                         "<{}> should be <{}>",
                         err,
                         Error::ErrUnexpectedEof
@@ -85,8 +87,9 @@ fn test_mapped_address_v6() -> Result<()> {
                 let message = Message::new();
                 let result = got.get_from(&message);
                 if let Err(err) = result {
-                    assert!(
-                        Error::ErrAttributeNotFound.equal(&err),
+                    assert_eq!(
+                        Error::ErrAttributeNotFound,
+                        err,
                         "<{}> should be <{}>",
                         err,
                         Error::ErrAttributeNotFound,
@@ -123,8 +126,9 @@ fn test_alternate_server() -> Result<()> {
                 let message = Message::new();
                 let result = got.get_from(&message);
                 if let Err(err) = result {
-                    assert!(
-                        Error::ErrAttributeNotFound.equal(&err),
+                    assert_eq!(
+                        Error::ErrAttributeNotFound,
+                        err,
                         "<{}> should be <{}>",
                         err,
                         Error::ErrAttributeNotFound,
@@ -162,8 +166,9 @@ fn test_other_address() -> Result<()> {
                 let message = Message::new();
                 let result = got.get_from(&message);
                 if let Err(err) = result {
-                    assert!(
-                        Error::ErrAttributeNotFound.equal(&err),
+                    assert_eq!(
+                        Error::ErrAttributeNotFound,
+                        err,
                         "<{}> should be <{}>",
                         err,
                         Error::ErrAttributeNotFound,

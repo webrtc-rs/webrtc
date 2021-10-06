@@ -7,7 +7,6 @@ use crate::message::*;
 
 use util::Conn;
 
-use anyhow::Result;
 use std::collections::HashMap;
 use std::io::BufReader;
 use std::marker::{Send, Sync};
@@ -470,7 +469,7 @@ impl Client {
                         .await?;
                 }
             } else if let Err(err) = result {
-                return Err(Error::new(err.to_string()).into());
+                return Err(Error::Other(err.to_string()).into());
             }
         }
 

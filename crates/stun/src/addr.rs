@@ -5,7 +5,6 @@ use crate::attributes::*;
 use crate::error::*;
 use crate::message::*;
 
-use anyhow::Result;
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
@@ -72,7 +71,7 @@ impl MappedAddress {
 
         let family = u16::from_be_bytes([v[0], v[1]]);
         if family != FAMILY_IPV6 && family != FAMILY_IPV4 {
-            return Err(Error::new(format!("bad value {}", family)).into());
+            return Err(Error::Other(format!("bad value {}", family)).into());
         }
         self.port = u16::from_be_bytes([v[2], v[3]]);
 

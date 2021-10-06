@@ -54,8 +54,9 @@ fn test_software_add_to_invalid() -> Result<()> {
 
     let result = TextAttribute::get_from_as(&m, ATTR_SOFTWARE);
     if let Err(err) = result {
-        assert!(
-            Error::ErrAttributeNotFound.equal(&err),
+        assert_eq!(
+            Error::ErrAttributeNotFound,
+            err,
             "GetFrom should return {}, got: {}",
             Error::ErrAttributeNotFound,
             err
@@ -128,7 +129,7 @@ fn test_username() -> Result<()> {
                 let m = Message::new();
                 let result = TextAttribute::get_from_as(&m, ATTR_USERNAME);
                 if let Err(err) = result {
-                    assert!(Error::ErrAttributeNotFound.equal(&err), "Should error");
+                    assert_eq!(Error::ErrAttributeNotFound, err, "Should error");
                 } else {
                     assert!(false, "expected error, but got ok");
                 }
@@ -166,8 +167,9 @@ fn test_realm_get_from() -> Result<()> {
 
     let result = TextAttribute::get_from_as(&m2, ATTR_REALM);
     if let Err(err) = result {
-        assert!(
-            Error::ErrAttributeNotFound.equal(&err),
+        assert_eq!(
+            Error::ErrAttributeNotFound,
+            err,
             "GetFrom should return {}, got: {}",
             Error::ErrAttributeNotFound,
             err
@@ -211,8 +213,9 @@ fn test_realm_add_to_invalid() -> Result<()> {
 
     let result = TextAttribute::get_from_as(&m, ATTR_REALM);
     if let Err(err) = result {
-        assert!(
-            Error::ErrAttributeNotFound.equal(&err),
+        assert_eq!(
+            Error::ErrAttributeNotFound,
+            err,
             "GetFrom should return {}, got: {}",
             Error::ErrAttributeNotFound,
             err
@@ -238,8 +241,9 @@ fn test_nonce_get_from() -> Result<()> {
 
     let result = TextAttribute::get_from_as(&m2, ATTR_NONCE);
     if let Err(err) = result {
-        assert!(
-            Error::ErrAttributeNotFound.equal(&err),
+        assert_eq!(
+            Error::ErrAttributeNotFound,
+            err,
             "GetFrom should return {}, got: {}",
             Error::ErrAttributeNotFound,
             err
@@ -283,8 +287,9 @@ fn test_nonce_add_to_invalid() -> Result<()> {
 
     let result = TextAttribute::get_from_as(&m, ATTR_NONCE);
     if let Err(err) = result {
-        assert!(
-            Error::ErrAttributeNotFound.equal(&err),
+        assert_eq!(
+            Error::ErrAttributeNotFound,
+            err,
             "GetFrom should return {}, got: {}",
             Error::ErrAttributeNotFound,
             err

@@ -5,7 +5,6 @@ use crate::client::ClientTransaction;
 use crate::error::*;
 use crate::message::*;
 
-use anyhow::Result;
 use rand::Rng;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -273,7 +272,7 @@ impl Agent {
             };
 
             if let Err(err) = result {
-                if Error::ErrAgentClosed.equal(&err) {
+                if Error::ErrAgentClosed == err {
                     break;
                 }
             }

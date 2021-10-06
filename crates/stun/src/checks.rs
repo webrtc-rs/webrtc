@@ -1,7 +1,6 @@
 use crate::attributes::*;
 use crate::error::*;
 
-use anyhow::Result;
 use subtle::ConstantTimeEq;
 
 // check_size returns ErrAttrSizeInvalid if got is not equal to expected.
@@ -14,8 +13,8 @@ pub fn check_size(_at: AttrType, got: usize, expected: usize) -> Result<()> {
 }
 
 // is_attr_size_invalid returns true if error means that attribute size is invalid.
-pub fn is_attr_size_invalid(err: &anyhow::Error) -> bool {
-    Error::ErrAttributeSizeInvalid.equal(err)
+pub fn is_attr_size_invalid(err: &Error) -> bool {
+    Error::ErrAttributeSizeInvalid == *err
 }
 
 pub(crate) fn check_hmac(got: &[u8], expected: &[u8]) -> Result<()> {
@@ -44,6 +43,6 @@ pub fn check_overflow(_at: AttrType, got: usize, max: usize) -> Result<()> {
 }
 
 // is_attr_size_overflow returns true if error means that attribute size is too big.
-pub fn is_attr_size_overflow(err: &anyhow::Error) -> bool {
-    Error::ErrAttributeSizeOverflow.equal(err)
+pub fn is_attr_size_overflow(err: &Error) -> bool {
+    Error::ErrAttributeSizeOverflow == *err
 }

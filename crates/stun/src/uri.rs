@@ -3,7 +3,6 @@ mod uri_test;
 
 use crate::error::*;
 
-use anyhow::Result;
 use std::fmt;
 
 // SCHEME definitions from RFC 7064 Section 3.2.

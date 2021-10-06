@@ -6,7 +6,6 @@ use crate::checks::*;
 use crate::error::*;
 use crate::message::*;
 
-use anyhow::Result;
 use md5::{Digest, Md5};
 use ring::hmac;
 use std::fmt;

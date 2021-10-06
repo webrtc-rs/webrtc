@@ -3,7 +3,6 @@ use crate::checks::*;
 use crate::error::*;
 use crate::message::*;
 
-use anyhow::Result;
 use std::collections::HashMap;
 use std::fmt;
 
