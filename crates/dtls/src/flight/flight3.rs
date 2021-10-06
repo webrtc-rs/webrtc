@@ -4,7 +4,7 @@ use crate::compression_methods::*;
 use crate::config::*;
 use crate::content::*;
 use crate::curve::named_curve::*;
-use crate::error::*;
+use crate::error::Error;
 use crate::extension::extension_server_name::*;
 use crate::extension::extension_supported_elliptic_curves::*;
 use crate::extension::extension_supported_point_formats::*;
@@ -44,7 +44,7 @@ impl Flight for Flight3 {
         state: &mut State,
         cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<anyhow::Error>)> {
+    ) -> Result<Box<dyn Flight + Send + Sync>, (Option<Alert>, Option<Error>)> {
         // Clients may receive multiple HelloVerifyRequest messages with different cookies.
         // Clients SHOULD handle this by sending a new ClientHello with a cookie in response
         // to the new HelloVerifyRequest. RFC 6347 Section 4.2.1
@@ -348,7 +348,7 @@ impl Flight for Flight3 {
         state: &mut State,
         _cache: &HandshakeCache,
         cfg: &HandshakeConfig,
-    ) -> Result<Vec<Packet>, (Option<Alert>, Option<anyhow::Error>)> {
+    ) -> Result<Vec<Packet>, (Option<Alert>, Option<Error>)> {
         let mut extensions = vec![
             Extension::SupportedSignatureAlgorithms(ExtensionSupportedSignatureAlgorithms {
                 signature_hash_algorithms: cfg.local_signature_schemes.clone(),
@@ -415,7 +415,7 @@ pub(crate) fn handle_server_key_exchange(
     state: &mut State,
     cfg: &HandshakeConfig,
     h: &HandshakeMessageServerKeyExchange,
-) -> Result<(), (Option<Alert>, Option<anyhow::Error>)> {
+) -> Result<(), (Option<Alert>, Option<Error>)> {
     if let Some(local_psk_callback) = &cfg.local_psk_callback {
         let psk = match local_psk_callback(&h.identity_hint) {
             Ok(psk) => psk,

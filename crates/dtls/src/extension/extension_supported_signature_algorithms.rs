@@ -4,7 +4,6 @@ mod extension_supported_signature_algorithms_test;
 use super::*;
 use crate::signature_hash_algorithm::*;
 
-use anyhow::Result;
 
 const EXTENSION_SUPPORTED_SIGNATURE_ALGORITHMS_HEADER_SIZE: usize = 6;
 

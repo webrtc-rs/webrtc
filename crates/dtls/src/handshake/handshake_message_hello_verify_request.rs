@@ -4,7 +4,6 @@ mod handshake_message_hello_verify_request_test;
 use super::*;
 use crate::record_layer::record_layer_header::*;
 
-use anyhow::Result;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::io::{Read, Write};
 

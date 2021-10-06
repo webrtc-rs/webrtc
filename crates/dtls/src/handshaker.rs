@@ -7,7 +7,6 @@ use crate::error::*;
 use crate::extension::extension_use_srtp::*;
 use crate::signature_hash_algorithm::*;
 
-use anyhow::Result;
 use log::*;
 use std::collections::HashMap;
 use std::fmt;

@@ -6,7 +6,6 @@ use crate::error::*;
 use crate::handshake::handshake_header::*;
 use crate::record_layer::record_layer_header::*;
 
-use anyhow::Result;
 use std::collections::HashMap;
 use std::io::{BufWriter, Cursor};
 

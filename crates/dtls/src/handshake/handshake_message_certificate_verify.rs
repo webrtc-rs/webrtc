@@ -4,7 +4,6 @@ mod handshake_message_certificate_verify_test;
 use super::*;
 use crate::signature_hash_algorithm::*;
 
-use anyhow::Result;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::{Read, Write};
 

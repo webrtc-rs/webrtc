@@ -1,8 +1,7 @@
 use std::io::{Read, Write};
 
 use super::content::*;
-
-use anyhow::Result;
+use crate::error::Result;
 
 // Application data messages are carried by the record layer and are
 // fragmented, compressed, and encrypted based on the current connection

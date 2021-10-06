@@ -1,8 +1,7 @@
 use rand::Rng;
 
-use anyhow::Result;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 use std::time::{Duration, SystemTime};
 
 pub const RANDOM_BYTES_LENGTH: usize = 28;
@@ -29,7 +28,7 @@ impl HandshakeRandom {
         4 + RANDOM_BYTES_LENGTH
     }
 
-    pub fn marshal<W: Write>(&self, writer: &mut W) -> Result<()> {
+    pub fn marshal<W: Write>(&self, writer: &mut W) -> io::Result<()> {
         let secs = match self.gmt_unix_time.duration_since(SystemTime::UNIX_EPOCH) {
             Ok(d) => d.as_secs() as u32,
             Err(_) => 0,
@@ -40,7 +39,7 @@ impl HandshakeRandom {
         Ok(writer.flush()?)
     }
 
-    pub fn unmarshal<R: Read>(reader: &mut R) -> Result<Self> {
+    pub fn unmarshal<R: Read>(reader: &mut R) -> io::Result<Self> {
         let secs = reader.read_u32::<BigEndian>()?;
         let gmt_unix_time = if let Some(unix_time) =
             SystemTime::UNIX_EPOCH.checked_add(Duration::new(secs as u64, 0))

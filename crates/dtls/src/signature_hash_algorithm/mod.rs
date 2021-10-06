@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod signature_hash_algorithm_test;
 
-use anyhow::Result;
 use std::fmt;
 
 use crate::crypto::*;

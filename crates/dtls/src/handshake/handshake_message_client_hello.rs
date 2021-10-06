@@ -8,7 +8,6 @@ use crate::compression_methods::*;
 use crate::extension::*;
 use crate::record_layer::record_layer_header::*;
 
-use anyhow::Result;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::fmt;
 use std::io::{BufReader, BufWriter};

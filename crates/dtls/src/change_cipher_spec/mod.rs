@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod change_cipher_spec_test;
 
-use anyhow::Result;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::io::{Read, Write};
 

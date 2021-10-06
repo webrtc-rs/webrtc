@@ -3,7 +3,6 @@ mod handshake_message_client_key_exchange_test;
 
 use super::*;
 
-use anyhow::Result;
 use byteorder::{BigEndian, WriteBytesExt};
 use std::io::{Read, Write};
 

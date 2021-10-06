@@ -1,4 +1,3 @@
-use anyhow::Result;
 use rand_core::OsRng; // requires 'getrandom' feature
 
 use crate::error::*;

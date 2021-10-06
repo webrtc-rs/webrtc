@@ -16,7 +16,6 @@ use extension_use_srtp::*;
 use crate::error::*;
 
 use crate::extension::renegotiation_info::ExtensionRenegotiationInfo;
-use anyhow::Result;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::{Read, Write};
 

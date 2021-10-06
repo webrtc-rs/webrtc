@@ -94,7 +94,7 @@ fn psk_callback_server(hint: &[u8]) -> Result<Vec<u8>> {
 }
 
 fn psk_callback_hint_fail(_hint: &[u8]) -> Result<Vec<u8>> {
-    Err(Error::new(ERR_PSK_REJECTED.to_owned()).into())
+    Err(Error::Other(ERR_PSK_REJECTED.to_owned()).into())
 }
 
 async fn create_test_client(
@@ -900,13 +900,13 @@ async fn test_client_certificate() -> Result<()> {
     let mut srv_ca_pool = rustls::RootCertStore::empty();
     srv_ca_pool
         .add(&srv_cert.certificate[0])
-        .or_else(|_err| Err(Error::new("add srv_cert error".to_owned())))?;
+        .or_else(|_err| Err(Error::Other("add srv_cert error".to_owned())))?;
 
     let cert = Certificate::generate_self_signed(vec!["localhost".to_owned()])?;
     let mut ca_pool = rustls::RootCertStore::empty();
     ca_pool
         .add(&cert.certificate[0])
-        .or_else(|_err| Err(Error::new("add cert error".to_owned())))?;
+        .or_else(|_err| Err(Error::Other("add cert error".to_owned())))?;
 
     let tests = vec![
         (
@@ -1342,20 +1342,20 @@ async fn test_extended_master_secret() -> Result<()> {
 
 fn fn_not_expected_chain(_cert: &[Vec<u8>], chain: &[rustls::Certificate]) -> Result<()> {
     if !chain.is_empty() {
-        return Err(Error::new(ERR_NOT_EXPECTED_CHAIN.to_owned()).into());
+        return Err(Error::Other(ERR_NOT_EXPECTED_CHAIN.to_owned()).into());
     }
     Ok(())
 }
 
 fn fn_expected_chain(_cert: &[Vec<u8>], chain: &[rustls::Certificate]) -> Result<()> {
     if chain.is_empty() {
-        return Err(Error::new(ERR_EXPECTED_CHAIN.to_owned()).into());
+        return Err(Error::Other(ERR_EXPECTED_CHAIN.to_owned()).into());
     }
     Ok(())
 }
 
 fn fn_wrong_cert(_cert: &[Vec<u8>], _chain: &[rustls::Certificate]) -> Result<()> {
-    Err(Error::new(ERR_WRONG_CERT.to_owned()).into())
+    Err(Error::Other(ERR_WRONG_CERT.to_owned()).into())
 }
 
 #[tokio::test]
@@ -1380,7 +1380,7 @@ async fn test_server_certificate() -> Result<()> {
     let mut ca_pool = rustls::RootCertStore::empty();
     ca_pool
         .add(&cert.certificate[0])
-        .or_else(|_err| Err(Error::new("add cert error".to_owned())))?;
+        .or_else(|_err| Err(Error::Other("add cert error".to_owned())))?;
 
     let tests = vec![
         (

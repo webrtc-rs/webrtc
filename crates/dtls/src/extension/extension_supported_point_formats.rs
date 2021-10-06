@@ -3,7 +3,6 @@ mod extension_supported_point_formats_test;
 
 use super::*;
 
-use anyhow::Result;
 
 const EXTENSION_SUPPORTED_POINT_FORMATS_SIZE: usize = 5;
 

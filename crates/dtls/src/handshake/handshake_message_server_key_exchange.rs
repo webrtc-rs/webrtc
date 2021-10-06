@@ -6,7 +6,6 @@ use crate::curve::named_curve::*;
 use crate::curve::*;
 use crate::signature_hash_algorithm::*;
 
-use anyhow::Result;
 use byteorder::{BigEndian, WriteBytesExt};
 use std::io::{Read, Write};
 

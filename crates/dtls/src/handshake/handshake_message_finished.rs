@@ -3,7 +3,6 @@ mod handshake_message_finished_test;
 
 use super::*;
 
-use anyhow::Result;
 use std::io::{Read, Write};
 
 #[derive(Clone, Debug, PartialEq)]

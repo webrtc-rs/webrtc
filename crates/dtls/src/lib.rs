@@ -18,7 +18,7 @@ pub mod conn;
 pub mod content;
 pub mod crypto;
 pub mod curve;
-pub mod error;
+mod error;
 pub mod extension;
 pub mod flight;
 pub mod fragment_buffer;
@@ -29,6 +29,8 @@ pub mod prf;
 pub mod record_layer;
 pub mod signature_hash_algorithm;
 pub mod state;
+
+pub use error::Error;
 
 use cipher_suite::*;
 use extension::extension_use_srtp::SrtpProtectionProfile;

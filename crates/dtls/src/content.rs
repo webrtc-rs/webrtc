@@ -4,7 +4,6 @@ use super::change_cipher_spec::*;
 use super::handshake::*;
 use crate::error::*;
 
-use anyhow::Result;
 use std::io::{Read, Write};
 
 // https://tools.ietf.org/html/rfc4346#section-6.2.1

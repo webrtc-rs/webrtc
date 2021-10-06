@@ -2,8 +2,6 @@ use super::*;
 use crate::crypto::crypto_gcm::*;
 use crate::prf::*;
 
-use anyhow::Result;
-
 #[derive(Clone)]
 pub struct CipherSuiteAes128GcmSha256 {
     gcm: Option<CryptoGcm>,
@@ -98,7 +96,7 @@ impl CipherSuite for CipherSuiteAes128GcmSha256 {
             cg.encrypt(pkt_rlh, raw)
         } else {
             Err(
-                Error::new("CipherSuite has not been initialized, unable to encrypt".to_owned())
+                Error::Other("CipherSuite has not been initialized, unable to encrypt".to_owned())
                     .into(),
             )
         }
@@ -109,7 +107,7 @@ impl CipherSuite for CipherSuiteAes128GcmSha256 {
             cg.decrypt(input)
         } else {
             Err(
-                Error::new("CipherSuite has not been initialized, unable to decrypt".to_owned())
+                Error::Other("CipherSuite has not been initialized, unable to decrypt".to_owned())
                     .into(),
             )
         }

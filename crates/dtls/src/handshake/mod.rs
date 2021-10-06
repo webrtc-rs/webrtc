@@ -15,7 +15,6 @@ pub mod handshake_random;
 #[cfg(test)]
 mod handshake_test;
 
-use anyhow::Result;
 use std::fmt;
 use std::io::{Read, Write};
 

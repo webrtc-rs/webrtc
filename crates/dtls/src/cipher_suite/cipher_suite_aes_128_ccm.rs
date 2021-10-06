@@ -3,8 +3,6 @@ use crate::client_certificate_type::ClientCertificateType;
 use crate::crypto::crypto_ccm::{CryptoCcm, CryptoCcmTagLen};
 use crate::prf::*;
 
-use anyhow::Result;
-
 #[derive(Clone)]
 pub struct CipherSuiteAes128Ccm {
     ccm: Option<CryptoCcm>,
@@ -103,7 +101,7 @@ impl CipherSuite for CipherSuiteAes128Ccm {
             ccm.encrypt(pkt_rlh, raw)
         } else {
             Err(
-                Error::new("CipherSuite has not been initialized, unable to encrypt".to_owned())
+                Error::Other("CipherSuite has not been initialized, unable to encrypt".to_owned())
                     .into(),
             )
         }
@@ -114,7 +112,7 @@ impl CipherSuite for CipherSuiteAes128Ccm {
             ccm.decrypt(input)
         } else {
             Err(
-                Error::new("CipherSuite has not been initialized, unable to decrypt".to_owned())
+                Error::Other("CipherSuite has not been initialized, unable to decrypt".to_owned())
                     .into(),
             )
         }

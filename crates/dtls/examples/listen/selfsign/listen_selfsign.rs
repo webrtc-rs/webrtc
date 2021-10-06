@@ -1,15 +1,15 @@
-use anyhow::Result;
 use clap::{App, AppSettings, Arg};
 use std::io::Write;
 use std::sync::Arc;
 use util::conn::*;
 use webrtc_dtls::config::ExtendedMasterSecretType;
+use webrtc_dtls::Error;
 use webrtc_dtls::{config::Config, crypto::Certificate, listener::listen};
 
 // cargo run --example listen_selfsign -- --host 127.0.0.1:4444
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), Error> {
     env_logger::Builder::new()
         .format(|buf, record| {
             writeln!(
@@ -81,5 +81,5 @@ async fn main() -> Result<()> {
 
     h.chat().await;
 
-    listener.close().await
+    Ok(listener.close().await?)
 }

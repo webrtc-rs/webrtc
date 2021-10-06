@@ -5,7 +5,6 @@ use crate::extension::extension_use_srtp::SrtpProtectionProfile;
 use crate::handshaker::VerifyPeerCertificateFn;
 use crate::signature_hash_algorithm::SignatureScheme;
 
-use anyhow::Result;
 use std::sync::Arc;
 use tokio::time::Duration;
 

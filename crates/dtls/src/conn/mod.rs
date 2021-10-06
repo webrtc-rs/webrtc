@@ -26,7 +26,6 @@ use crate::state::*;
 
 use util::{replay_detector::*, Conn};
 
-use anyhow::Result;
 use async_trait::async_trait;
 use log::*;
 use std::collections::HashMap;
@@ -109,36 +108,40 @@ pub struct DTLSConn {
     reader_close_tx: Mutex<Option<mpsc::Sender<()>>>,
 }
 
+type UtilResult<T> = std::result::Result<T, util::Error>;
+
 #[async_trait]
 impl Conn for DTLSConn {
-    async fn connect(&self, _addr: SocketAddr) -> Result<()> {
-        Err(Error::new("Not applicable".to_owned()).into())
+    async fn connect(&self, _addr: SocketAddr) -> UtilResult<()> {
+        Err(util::Error::Other("Not applicable".to_owned()))
     }
-    async fn recv(&self, buf: &mut [u8]) -> Result<usize> {
-        self.read(buf, None).await
+    async fn recv(&self, buf: &mut [u8]) -> UtilResult<usize> {
+        self.read(buf, None).await.map_err(util::Error::from_std)
     }
-    async fn recv_from(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
+    async fn recv_from(&self, buf: &mut [u8]) -> UtilResult<(usize, SocketAddr)> {
         if let Some(raddr) = self.conn.remote_addr().await {
-            let n = self.read(buf, None).await?;
+            let n = self.read(buf, None).await.map_err(util::Error::from_std)?;
             Ok((n, raddr))
         } else {
-            Err(Error::new("No remote address is provided by underlying Conn".to_owned()).into())
+            Err(util::Error::Other(
+                "No remote address is provided by underlying Conn".to_owned(),
+            ))
         }
     }
-    async fn send(&self, buf: &[u8]) -> Result<usize> {
-        self.write(buf, None).await
+    async fn send(&self, buf: &[u8]) -> UtilResult<usize> {
+        self.write(buf, None).await.map_err(util::Error::from_std)
     }
-    async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> Result<usize> {
-        Err(Error::new("Not applicable".to_owned()).into())
+    async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> UtilResult<usize> {
+        Err(util::Error::Other("Not applicable".to_owned()))
     }
-    async fn local_addr(&self) -> Result<SocketAddr> {
+    async fn local_addr(&self) -> UtilResult<SocketAddr> {
         self.conn.local_addr().await
     }
     async fn remote_addr(&self) -> Option<SocketAddr> {
         self.conn.remote_addr().await
     }
-    async fn close(&self) -> Result<()> {
-        self.close().await
+    async fn close(&self) -> UtilResult<()> {
+        self.close().await.map_err(util::Error::from_std)
     }
 }
 
@@ -364,7 +367,7 @@ impl DTLSConn {
                                 srv_cli_str(is_client),
                                 err
                             );
-                            if Error::ErrAlertFatalOrClose.equal(&err) {
+                            if Error::ErrAlertFatalOrClose == err {
                                 trace!(
                                     "{}: read_and_buffer exit with {}",
                                     srv_cli_str(ctx.is_client),
@@ -781,7 +784,7 @@ impl DTLSConn {
 
                 if let Err(alert_err) = alert_err {
                     if err.is_none() {
-                        err = Some(Error::new(alert_err.to_string()).into());
+                        err = Some(Error::Other(alert_err.to_string()).into());
                     }
                 }
 
@@ -862,7 +865,7 @@ impl DTLSConn {
 
                 if let Err(alert_err) = alert_err {
                     if err.is_none() {
-                        err = Some(Error::new(alert_err.to_string()).into());
+                        err = Some(Error::Other(alert_err.to_string()).into());
                     }
                 }
                 if alert.alert_level == AlertLevel::Fatal
@@ -884,7 +887,7 @@ impl DTLSConn {
         ctx: &mut ConnReaderContext,
         mut pkt: Vec<u8>,
         enqueue: bool,
-    ) -> (bool, Option<Alert>, Option<anyhow::Error>) {
+    ) -> (bool, Option<Alert>, Option<Error>) {
         let mut reader = BufReader::new(pkt.as_slice());
         let h = match RecordLayerHeader::unmarshal(&mut reader) {
             Ok(h) => h,
@@ -1055,7 +1058,7 @@ impl DTLSConn {
                 return (
                     false,
                     Some(a),
-                    Some(Error::new(format!("Error of Alert {}", a.to_string())).into()),
+                    Some(Error::Other(format!("Error of Alert {}", a.to_string())).into()),
                 );
             }
             Content::ChangeCipherSpec(_) => {

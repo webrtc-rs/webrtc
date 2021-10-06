@@ -1,17 +1,16 @@
-use anyhow::Result;
 use clap::{App, AppSettings, Arg};
-use hub::utilities::Error;
 use std::fs::File;
 use std::io::{BufReader, Write};
 use std::sync::Arc;
 use tokio::net::UdpSocket;
 use util::Conn;
+use webrtc_dtls::Error;
 use webrtc_dtls::{config::*, conn::DTLSConn};
 
 // cargo run --example dial_verify -- --server 127.0.0.1:4444
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), Error> {
     env_logger::Builder::new()
         .format(|buf, record| {
             writeln!(
@@ -69,7 +68,7 @@ async fn main() -> Result<()> {
     let f = File::open("examples/certificates/server.pub.pem")?;
     let mut reader = BufReader::new(f);
     if let Err(_) = cert_pool.add_pem_file(&mut reader) {
-        return Err(Error::new("cert_pool add_pem_file failed".to_owned()).into());
+        return Err(Error::Other("cert_pool add_pem_file failed".to_owned()).into());
     }
 
     let config = Config {

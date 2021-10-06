@@ -11,7 +11,6 @@ use crate::change_cipher_spec::ChangeCipherSpec;
 use crate::handshake::Handshake;
 use record_layer_header::*;
 
-use anyhow::Result;
 use std::io::{Read, Write};
 
 /*
@@ -67,7 +66,7 @@ impl RecordLayer {
                 Content::ChangeCipherSpec(ChangeCipherSpec::unmarshal(reader)?)
             }
             ContentType::Handshake => Content::Handshake(Handshake::unmarshal(reader)?),
-            _ => return Err(Error::new("Invalid Content Type".to_owned()).into()),
+            _ => return Err(Error::Other("Invalid Content Type".to_owned()).into()),
         };
 
         Ok(RecordLayer {
