@@ -1,6 +1,7 @@
+use crate::error::Result;
+
 use super::*;
 
-use anyhow::Result;
 use std::net::SocketAddr;
 use std::str::FromStr;
 

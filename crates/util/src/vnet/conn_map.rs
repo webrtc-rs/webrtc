@@ -1,11 +1,10 @@
 #[cfg(test)]
 mod conn_map_test;
 
-use super::error::*;
+use crate::error::*;
 use crate::vnet::conn::UdpConn;
 use crate::Conn;
 
-use anyhow::Result;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;

@@ -1,9 +1,8 @@
 #[cfg(test)]
 mod resolver_test;
 
-use super::error::*;
+use crate::error::*;
 
-use anyhow::Result;
 use std::collections::HashMap;
 use std::future::Future;
 use std::net::IpAddr;

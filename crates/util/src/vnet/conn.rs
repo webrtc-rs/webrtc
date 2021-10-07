@@ -1,11 +1,10 @@
 #[cfg(test)]
 mod conn_test;
 
-use super::error::*;
 use crate::conn::Conn;
+use crate::error::*;
 use crate::vnet::chunk::{Chunk, ChunkUdp};
 
-use anyhow::Result;
 use std::net::{IpAddr, SocketAddr};
 use tokio::sync::{mpsc, Mutex};
 

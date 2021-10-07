@@ -1,5 +1,5 @@
-use super::error::Error;
 use super::*;
+use crate::error::Error;
 
 use tokio::time::{sleep, Duration};
 use tokio_test::assert_ok;
@@ -21,7 +21,7 @@ async fn test_buffer() {
     // Read deadline
     let result = buffer.read(&mut packet, Some(Duration::new(0, 1))).await;
     assert!(result.is_err());
-    assert!(Error::ErrTimeout.equal(&result.unwrap_err()));
+    assert_eq!(Error::ErrTimeout, result.unwrap_err());
 
     // Write twice
     let n = assert_ok!(buffer.write(&[2, 3, 4]).await);
@@ -58,7 +58,7 @@ async fn test_buffer() {
     // Until EOF
     let result = buffer.read(&mut packet, None).await;
     assert!(result.is_err());
-    assert!(Error::ErrBufferClosed.equal(&result.unwrap_err()));
+    assert_eq!(Error::ErrBufferClosed, result.unwrap_err());
 }
 
 async fn test_wraparound(grow: bool) {
@@ -138,7 +138,7 @@ async fn test_buffer_async() {
 
         let result = buffer2.read(&mut packet, None).await;
         assert!(result.is_err());
-        assert!(Error::ErrBufferClosed.equal(&result.unwrap_err()));
+        assert_eq!(Error::ErrBufferClosed, result.unwrap_err());
 
         drop(done_tx);
     });
@@ -178,7 +178,7 @@ async fn test_buffer_limit_count() {
     let result = buffer.write(&[4, 5]).await;
     assert!(result.is_err());
     if let Err(err) = result {
-        assert!(Error::ErrBufferFull.equal(&err));
+        assert_eq!(Error::ErrBufferFull, err);
     }
     assert_eq!(2, buffer.count().await);
 
@@ -198,7 +198,7 @@ async fn test_buffer_limit_count() {
     let result = buffer.write(&[8, 9]).await;
     assert!(result.is_err());
     if let Err(err) = result {
-        assert!(Error::ErrBufferFull.equal(&err));
+        assert_eq!(Error::ErrBufferFull, err);
     }
     assert_eq!(2, buffer.count().await);
 
@@ -236,7 +236,7 @@ async fn test_buffer_limit_size() {
     let result = buffer.write(&[4, 5]).await;
     assert!(result.is_err());
     if let Err(err) = result {
-        assert!(Error::ErrBufferFull.equal(&err));
+        assert_eq!(Error::ErrBufferFull, err);
     }
     assert_eq!(8, buffer.size().await);
 
@@ -261,7 +261,7 @@ async fn test_buffer_limit_size() {
     let result = buffer.write(&[9, 10]).await;
     assert!(result.is_err());
     if let Err(err) = result {
-        assert!(Error::ErrBufferFull.equal(&err));
+        assert_eq!(Error::ErrBufferFull, err);
     }
     assert_eq!(11, buffer.size().await);
 
@@ -320,7 +320,7 @@ async fn test_buffer_limit_sizes() {
         // Next write is expected to be errored.
         let result = buffer.write(&pkt).await;
         assert!(result.is_err(), "{}", name);
-        assert!(Error::ErrBufferFull.equal(&result.unwrap_err()), "{}", name);
+        assert_eq!(Error::ErrBufferFull, result.unwrap_err(), "{}", name);
 
         let mut packet = vec![0; size];
         for _ in 0..n_packets {
@@ -343,7 +343,7 @@ async fn test_buffer_misc() {
     let result = buffer.read(&mut packet, None).await;
     assert!(result.is_err());
     if let Err(err) = result {
-        assert!(Error::ErrBufferShort.equal(&err));
+        assert_eq!(Error::ErrBufferShort, err);
     }
 
     // Close

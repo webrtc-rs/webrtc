@@ -1,11 +1,8 @@
 #[cfg(test)]
 mod buffer_test;
 
-pub mod error;
+use crate::error::{Error, Result};
 
-use error::Error;
-
-use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::{timeout, Duration};

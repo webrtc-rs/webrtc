@@ -2,8 +2,8 @@
 mod chunk_test;
 
 use super::net::*;
+use crate::error::Result;
 
-use anyhow::Result;
 use std::fmt;
 use std::net::{IpAddr, SocketAddr};
 use std::ops::{BitAnd, BitOr};

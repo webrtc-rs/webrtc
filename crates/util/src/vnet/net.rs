@@ -2,14 +2,13 @@
 mod net_test;
 
 use super::conn_map::*;
-use super::error::*;
 use super::interface::*;
+use crate::error::*;
 use crate::vnet::chunk::Chunk;
 use crate::vnet::conn::{ConnObserver, UdpConn};
 use crate::vnet::router::*;
 use crate::{conn, ifaces, Conn};
 
-use anyhow::Result;
 use async_trait::async_trait;
 use ipnet::IpNet;
 use std::collections::HashMap;
@@ -318,7 +317,7 @@ impl VNet {
         if (use_ipv4 && remote_addr.is_ipv4()) || (!use_ipv4 && remote_addr.is_ipv6()) {
             Ok(remote_addr)
         } else {
-            Err(Error::new(format!(
+            Err(Error::Other(format!(
                 "No available {} IP address found!",
                 if use_ipv4 { "ipv4" } else { "ipv6" },
             ))

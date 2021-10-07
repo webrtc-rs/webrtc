@@ -103,7 +103,7 @@ impl Nic for DummyNic {
     }
 }
 
-async fn get_ipaddr(nic: &Arc<Mutex<dyn Nic + Send + Sync>>) -> Result<IpAddr, Error> {
+async fn get_ipaddr(nic: &Arc<Mutex<dyn Nic + Send + Sync>>) -> Result<IpAddr> {
     let n = nic.lock().await;
     let eth0 = n
         .get_interface("eth0")
