@@ -1,8 +1,8 @@
 #![warn(rust_2018_idioms)]
 #![allow(dead_code)]
 
-use anyhow::Result;
 use async_trait::async_trait;
+use error::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -12,13 +12,15 @@ use stream_info::StreamInfo;
 pub(crate) mod mock;
 
 pub mod chain;
-pub mod error;
+mod error;
 pub mod nack;
 pub mod noop;
 pub mod registry;
 pub mod report;
 pub mod stream_info;
 pub mod stream_reader;
+
+pub use error::Error;
 
 /// Interceptor can be used to add functionality to you PeerConnections by modifying any incoming/outgoing rtp/rtcp
 /// packets, or sending your own packets as needed.
@@ -97,3 +99,23 @@ pub trait RTCPReader {
 
 /// Attributes are a generic key/value store used by interceptors
 pub type Attributes = HashMap<usize, usize>;
+
+/// Helper for the tests.
+#[cfg(test)]
+mod test {
+    use std::future::Future;
+    use std::time::Duration;
+
+    pub async fn timeout_or_fail<T>(duration: Duration, future: T) -> T::Output
+    where
+        T: Future,
+    {
+        match tokio::time::timeout(duration, future).await {
+            Ok(v) => v,
+            Err(_) => {
+                assert!(false, "timed out");
+                unreachable!()
+            }
+        }
+    }
+}

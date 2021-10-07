@@ -7,7 +7,6 @@ use crate::error::Error;
 use crate::*;
 use receiver_stream::ReceiverStream;
 
-use anyhow::Result;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 use tokio::sync::{mpsc, Mutex};

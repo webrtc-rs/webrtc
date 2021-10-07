@@ -1,8 +1,7 @@
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::stream_info::StreamInfo;
 use crate::{Attributes, Interceptor, RTCPReader, RTCPWriter, RTPReader, RTPWriter};
 
-use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
@@ -90,7 +89,7 @@ impl MockStream {
                 let n = match rtcp_reader.read(&mut buf, &a).await {
                     Ok((n, _)) => n,
                     Err(err) => {
-                        if !Error::ErrIoEOF.equal(&err) {
+                        if Error::ErrIoEOF != err {
                             let _ = rtcp_in_modified_tx.send(Err(err)).await;
                         }
                         break;
@@ -101,7 +100,7 @@ impl MockStream {
                 let pkt = match rtcp::packet::unmarshal(&mut b) {
                     Ok(pkt) => pkt,
                     Err(err) => {
-                        let _ = rtcp_in_modified_tx.send(Err(err)).await;
+                        let _ = rtcp_in_modified_tx.send(Err(err.into())).await;
                         break;
                     }
                 };
@@ -123,7 +122,7 @@ impl MockStream {
                 let n = match rtp_reader.read(&mut buf, &a).await {
                     Ok((n, _)) => n,
                     Err(err) => {
-                        if !Error::ErrIoEOF.equal(&err) {
+                        if Error::ErrIoEOF != err {
                             let _ = rtp_in_modified_tx.send(Err(err)).await;
                         }
                         break;
@@ -134,7 +133,7 @@ impl MockStream {
                 let pkt = match rtp::packet::Packet::unmarshal(&mut b) {
                     Ok(pkt) => pkt,
                     Err(err) => {
-                        let _ = rtp_in_modified_tx.send(Err(err)).await;
+                        let _ = rtp_in_modified_tx.send(Err(err.into())).await;
                         break;
                     }
                 };
@@ -156,7 +155,7 @@ impl MockStream {
         if let Some(writer) = &*rtcp_writer {
             writer.write(pkt, &a).await
         } else {
-            Err(Error::new("invalid rtcp_writer".to_owned()).into())
+            Err(Error::Other("invalid rtcp_writer".to_owned()).into())
         }
     }
 
@@ -167,7 +166,7 @@ impl MockStream {
         if let Some(writer) = &*rtp_writer {
             writer.write(pkt, &a).await
         } else {
-            Err(Error::new("invalid rtp_writer".to_owned()).into())
+            Err(Error::Other("invalid rtp_writer".to_owned()).into())
         }
     }
 
@@ -288,6 +287,7 @@ impl RTPReader for MockStream {
 mod test {
     use super::*;
     use crate::noop::NoOp;
+    use crate::test::timeout_or_fail;
     use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
     use tokio::time::Duration;
 
@@ -296,7 +296,7 @@ mod test {
         let s = MockStream::new(&StreamInfo::default(), Arc::new(NoOp)).await;
 
         s.write_rtcp(&PictureLossIndication::default()).await?;
-        tokio::time::timeout(Duration::from_millis(10), s.written_rtcp()).await?;
+        timeout_or_fail(Duration::from_millis(10), s.written_rtcp()).await;
         let result = tokio::time::timeout(Duration::from_millis(10), s.written_rtcp()).await;
         assert!(
             result.is_err(),
@@ -304,7 +304,7 @@ mod test {
         );
 
         s.write_rtp(&rtp::packet::Packet::default()).await?;
-        tokio::time::timeout(Duration::from_millis(10), s.written_rtp()).await?;
+        timeout_or_fail(Duration::from_millis(10), s.written_rtp()).await;
         let result = tokio::time::timeout(Duration::from_millis(10), s.written_rtp()).await;
         assert!(
             result.is_err(),
@@ -314,8 +314,8 @@ mod test {
         s.receive_rtcp(Box::new(PictureLossIndication::default()))
             .await;
         assert!(
-            tokio::time::timeout(Duration::from_millis(10), s.read_rtcp())
-                .await?
+            timeout_or_fail(Duration::from_millis(10), s.read_rtcp())
+                .await
                 .is_some(),
             "read rtcp returned error",
         );
@@ -327,8 +327,8 @@ mod test {
 
         s.receive_rtp(rtp::packet::Packet::default()).await;
         assert!(
-            tokio::time::timeout(Duration::from_millis(10), s.read_rtp())
-                .await?
+            timeout_or_fail(Duration::from_millis(10), s.read_rtp())
+                .await
                 .is_some(),
             "read rtp returned error",
         );

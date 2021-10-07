@@ -1,8 +1,9 @@
-use anyhow::Result;
-
 use thiserror::Error;
 
+pub type Result<T> = std::result::Result<T, Error>;
+
 #[derive(Error, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum Error {
     #[error("Invalid Parent RTCP Reader")]
     ErrInvalidParentRtcpReader,
@@ -16,23 +17,23 @@ pub enum Error {
     #[error("invalid buffer size")]
     ErrInvalidSize,
 
-    #[allow(non_camel_case_types)]
     #[error("{0}")]
-    new(String),
-}
+    Srtp(#[from] srtp::Error),
+    #[error("{0}")]
+    Rtcp(#[from] rtcp::Error),
+    #[error("{0}")]
+    Util(#[from] util::Error),
 
-impl Error {
-    pub fn equal(&self, err: &anyhow::Error) -> bool {
-        err.downcast_ref::<Self>().map_or(false, |e| e == self)
-    }
+    #[error("{0}")]
+    Other(String),
 }
 
 /// flatten_errs flattens multiple errors into one
-pub fn flatten_errs(errs: Vec<anyhow::Error>) -> Result<()> {
+pub fn flatten_errs(errs: Vec<Error>) -> Result<()> {
     if errs.is_empty() {
         Ok(())
     } else {
         let errs_strs: Vec<String> = errs.into_iter().map(|e| e.to_string()).collect();
-        Err(Error::new(errs_strs.join("\n")).into())
+        Err(Error::Other(errs_strs.join("\n")).into())
     }
 }

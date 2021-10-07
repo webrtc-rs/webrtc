@@ -1,7 +1,6 @@
 use super::*;
 use crate::{Attributes, RTPWriter};
 
-use anyhow::Result;
 use async_trait::async_trait;
 use rtp::extension::abs_send_time_extension::unix2ntp;
 use std::sync::Arc;

@@ -1,6 +1,7 @@
 use super::*;
 use crate::mock::mock_stream::MockStream;
 use crate::stream_info::RTCPFeedback;
+use crate::test::timeout_or_fail;
 
 use rtcp::transport_feedbacks::transport_layer_nack::TransportLayerNack;
 
@@ -39,15 +40,11 @@ async fn test_generator_interceptor() -> Result<()> {
             })
             .await;
 
-        if let Some(r) = tokio::time::timeout(Duration::from_millis(10), stream.read_rtp()).await? {
-            if let Ok(r) = r {
-                assert_eq!(seq_num, r.header.sequence_number);
-            } else {
-                assert!(false);
-            }
-        } else {
-            assert!(false);
-        }
+        let r = timeout_or_fail(Duration::from_millis(10), stream.read_rtp())
+            .await
+            .expect("A read packet")
+            .expect("Not an error");
+        assert_eq!(seq_num, r.header.sequence_number);
     }
 
     tokio::time::sleep(INTERVAL * 2).await; // wait for at least 2 nack packets
@@ -55,15 +52,14 @@ async fn test_generator_interceptor() -> Result<()> {
     // ignore the first nack, it might only contain the sequence id 13 as missing
     let _ = stream.written_rtcp().await;
 
-    if let Some(r) = tokio::time::timeout(Duration::from_millis(10), stream.written_rtcp()).await? {
-        if let Some(p) = r.as_any().downcast_ref::<TransportLayerNack>() {
-            assert_eq!(13, p.nacks[0].packet_id);
-            assert_eq!(0b10, p.nacks[0].lost_packets); // we want packets: 13, 15 (not packet 17, because skipLastN is setReceived to 2)
-        } else {
-            assert!(false, "single packet RTCP Compound Packet expected");
-        }
+    let r = timeout_or_fail(Duration::from_millis(10), stream.written_rtcp())
+        .await
+        .expect("Write rtcp");
+    if let Some(p) = r.as_any().downcast_ref::<TransportLayerNack>() {
+        assert_eq!(13, p.nacks[0].packet_id);
+        assert_eq!(0b10, p.nacks[0].lost_packets); // we want packets: 13, 15 (not packet 17, because skipLastN is setReceived to 2)
     } else {
-        assert!(false);
+        assert!(false, "single packet RTCP Compound Packet expected");
     }
 
     stream.close().await?;

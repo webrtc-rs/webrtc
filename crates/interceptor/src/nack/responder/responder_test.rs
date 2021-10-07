@@ -1,6 +1,7 @@
 use super::*;
 use crate::mock::mock_stream::MockStream;
 use crate::stream_info::RTCPFeedback;
+use crate::test::timeout_or_fail;
 use tokio::time::Duration;
 
 use rtcp::transport_feedbacks::transport_layer_nack::{NackPair, TransportLayerNack};
@@ -34,13 +35,10 @@ async fn test_responder_interceptor() -> Result<()> {
             })
             .await?;
 
-        if let Some(p) =
-            tokio::time::timeout(Duration::from_millis(10), stream.written_rtp()).await?
-        {
-            assert_eq!(seq_num, p.header.sequence_number);
-        } else {
-            assert!(false);
-        }
+        let p = timeout_or_fail(Duration::from_millis(10), stream.written_rtp())
+            .await
+            .expect("A packet");
+        assert_eq!(seq_num, p.header.sequence_number);
     }
 
     stream
