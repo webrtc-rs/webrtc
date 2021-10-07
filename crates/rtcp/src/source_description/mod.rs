@@ -4,10 +4,11 @@ mod source_description_test;
 use crate::{error::Error, header::*, packet::*, util::*};
 use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
-use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes};
 use std::any::Any;
 use std::fmt;
+
+type Result<T> = std::result::Result<T, util::Error>;
 
 const SDES_SOURCE_LEN: usize = 4;
 const SDES_TYPE_LEN: usize = 1;

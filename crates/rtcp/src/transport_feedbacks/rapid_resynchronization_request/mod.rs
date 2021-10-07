@@ -4,10 +4,11 @@ mod rapid_resynchronization_request_test;
 use crate::{error::Error, header::*, packet::*, util::*};
 use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
-use anyhow::Result;
 use bytes::{Buf, BufMut};
 use std::any::Any;
 use std::fmt;
+
+type Result<T> = std::result::Result<T, util::Error>;
 
 const RRR_LENGTH: usize = 2;
 const RRR_HEADER_LENGTH: usize = SSRC_LENGTH * 2;

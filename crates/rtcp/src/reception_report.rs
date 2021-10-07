@@ -1,7 +1,6 @@
 use crate::{error::Error, header::*, packet::*, util::*};
 use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
-use anyhow::Result;
 use bytes::{Buf, BufMut};
 use std::any::Any;
 use std::fmt;
@@ -92,7 +91,7 @@ impl MarshalSize for ReceptionReport {
 
 impl Marshal for ReceptionReport {
     /// marshal_to encodes the ReceptionReport in binary
-    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize, util::Error> {
         /*
          *  0                   1                   2                   3
          *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -140,7 +139,7 @@ impl Marshal for ReceptionReport {
 
 impl Unmarshal for ReceptionReport {
     /// unmarshal decodes the ReceptionReport from binary
-    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self, util::Error>
     where
         Self: Sized,
         B: Buf,

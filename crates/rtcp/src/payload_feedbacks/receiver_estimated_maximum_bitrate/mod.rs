@@ -4,10 +4,11 @@ mod receiver_estimated_maximum_bitrate_test;
 use crate::{error::Error, header::*, packet::*, util::*};
 use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
-use anyhow::Result;
 use bytes::{Buf, BufMut};
 use std::any::Any;
 use std::fmt;
+
+type Result<T> = std::result::Result<T, util::Error>;
 
 /// ReceiverEstimatedMaximumBitrate contains the receiver's estimated maximum bitrate.
 /// see: https://tools.ietf.org/html/draft-alvestrand-rmcat-remb-03

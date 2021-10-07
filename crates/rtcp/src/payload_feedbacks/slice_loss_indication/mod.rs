@@ -4,10 +4,11 @@ mod slice_loss_indication_test;
 use crate::{error::Error, header::*, packet::*, util::*};
 use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
-use anyhow::Result;
 use bytes::{Buf, BufMut};
 use std::any::Any;
 use std::fmt;
+
+type Result<T> = std::result::Result<T, util::Error>;
 
 const SLI_LENGTH: usize = 2;
 const SLI_OFFSET: usize = 8;

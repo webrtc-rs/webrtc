@@ -4,10 +4,11 @@ mod goodbye_test;
 use crate::{error::Error, header::*, packet::*, util::*};
 use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
-use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes};
 use std::any::Any;
 use std::fmt;
+
+type Result<T> = std::result::Result<T, util::Error>;
 
 /// The Goodbye packet indicates that one or more sources are no longer active.
 #[derive(Debug, PartialEq, Default, Clone)]

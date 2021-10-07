@@ -4,10 +4,11 @@ mod sender_report_test;
 use crate::{error::Error, header::*, packet::*, reception_report::*, util::*};
 use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
-use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes};
 use std::any::Any;
 use std::fmt;
+
+type Result<T> = std::result::Result<T, util::Error>;
 
 pub(crate) const SR_HEADER_LENGTH: usize = 24;
 pub(crate) const SR_SSRC_OFFSET: usize = HEADER_LENGTH;

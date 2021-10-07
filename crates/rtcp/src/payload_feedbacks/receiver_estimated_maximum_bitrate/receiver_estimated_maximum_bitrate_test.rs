@@ -79,12 +79,10 @@ fn test_receiver_estimated_maximum_bitrate_unmarshal() {
 
         if let Some(err) = want_error {
             let got_err = got.err().unwrap();
-            assert!(
-                err.equal(&got_err),
+            assert_eq!(
+                err, got_err,
                 "Unmarshal {} rr: err = {:?}, want {:?}",
-                name,
-                got_err,
-                err,
+                name, got_err, err,
             );
         } else {
             let actual = got.unwrap();

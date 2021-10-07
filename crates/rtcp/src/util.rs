@@ -1,6 +1,5 @@
-use crate::error::Error;
+use crate::error::{Error, Result};
 
-use anyhow::Result;
 use bytes::BufMut;
 
 // returns the padding required to make the length a multiple of 4

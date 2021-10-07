@@ -12,5 +12,4 @@ repository = "https://github.com/webrtc-rs/rtcp"
 [dependencies]
 util = { package = "webrtc-util", version = "0.4.3", default-features = false, features = ["marshal"] }
 bytes = "1.1.0"
-thiserror = "1.0.29"
-anyhow = "1.0.44"
+thiserror = "1.0"
