@@ -1,11 +1,10 @@
 #[cfg(test)]
 mod nat_test;
 
-use super::error::*;
+use crate::error::*;
 use crate::vnet::chunk::Chunk;
 use crate::vnet::net::UDP_STR;
 
-use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
 use std::ops::Add;
@@ -309,7 +308,7 @@ impl NetworkAddressTranslator {
                     let dst_port = from.destination_addr().port();
                     to.set_destination_addr(&format!("{}:{}", dst_ip, dst_port))?;
                 } else {
-                    return Err(Error::new(format!(
+                    return Err(Error::Other(format!(
                         "drop {} as {:?}",
                         from,
                         Error::ErrNoAssociatedLocalAddress
@@ -333,7 +332,7 @@ impl NetworkAddressTranslator {
                     {
                         let filters = m.filters.lock().await;
                         if !filters.contains(&filter_key) {
-                            return Err(Error::new(format!(
+                            return Err(Error::Other(format!(
                                 "drop {} as the remote {} {:?}",
                                 from,
                                 filter_key,
@@ -353,7 +352,7 @@ impl NetworkAddressTranslator {
 
                     to.set_destination_addr(&m.local)?;
                 } else {
-                    return Err(Error::new(format!(
+                    return Err(Error::Other(format!(
                         "drop {} as {:?}",
                         from,
                         Error::ErrNoNatBindingFound

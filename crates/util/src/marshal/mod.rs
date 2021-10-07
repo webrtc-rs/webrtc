@@ -1,9 +1,8 @@
-pub mod error;
 pub mod exact_size_buf;
 
-use anyhow::Result;
 use bytes::{Buf, Bytes, BytesMut};
-use error::Error;
+
+use crate::error::{Error, Result};
 
 pub trait MarshalSize {
     fn marshal_size(&self) -> usize;
@@ -18,7 +17,7 @@ pub trait Marshal: MarshalSize {
         buf.resize(l, 0);
         let n = self.marshal_to(&mut buf)?;
         if n != l {
-            Err(Error::new(format!("marshal_to output size {}, but expect {}", n, l)).into())
+            Err(Error::Other(format!("marshal_to output size {}, but expect {}", n, l)).into())
         } else {
             Ok(buf.freeze())
         }

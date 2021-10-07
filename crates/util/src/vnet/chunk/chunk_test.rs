@@ -1,3 +1,5 @@
+use crate::error::Result;
+
 use super::*;
 
 #[test]

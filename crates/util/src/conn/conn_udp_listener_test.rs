@@ -1,6 +1,6 @@
 use super::conn_udp_listener::*;
-use super::error::Error;
 use super::*;
+use crate::error::{Error, Result};
 
 use std::future::Future;
 use std::pin::Pin;
@@ -41,7 +41,7 @@ async fn pipe() -> Result<(
 
     let result = String::from_utf8(buf[..n].to_vec())?;
     if handshake != result {
-        Err(Error::new(format!("errHandshakeFailed: {} != {}", handshake, result)).into())
+        Err(Error::Other(format!("errHandshakeFailed: {} != {}", handshake, result)).into())
     } else {
         Ok((listener, l_conn, d_conn))
     }
@@ -118,7 +118,7 @@ async fn test_listener_accept_filter() -> Result<()> {
             let (c, _raddr) = match listener2.accept().await {
                 Ok((c, raddr)) => (c, raddr),
                 Err(err) => {
-                    assert!(Error::ErrClosedListener.equal(&err));
+                    assert_eq!(Error::ErrClosedListener, err);
                     return Result::<()>::Ok(());
                 }
             };
@@ -198,10 +198,7 @@ async fn test_listener_concurrent() -> Result<()> {
                 conn.close().await?;
             }
             Err(err) => {
-                assert!(
-                    Error::ErrClosedListener.equal(&err)
-                        || Error::ErrClosedListenerAcceptCh.equal(&err)
-                );
+                assert!(Error::ErrClosedListener == err || Error::ErrClosedListenerAcceptCh == err);
             }
         }
 

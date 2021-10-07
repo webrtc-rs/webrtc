@@ -16,7 +16,9 @@ impl ConnObserver for DummyObserver {
 
         let read_ch_tx = self.read_ch_tx.lock().await;
         if let Some(tx) = &*read_ch_tx {
-            tx.send(Box::new(chunk)).await?;
+            tx.send(Box::new(chunk))
+                .await
+                .map_err(|e| Error::Other(e.to_string()))?;
         }
         Ok(())
     }

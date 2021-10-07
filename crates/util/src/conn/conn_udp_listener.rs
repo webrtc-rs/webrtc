@@ -1,8 +1,7 @@
-use super::error::Error;
 use super::*;
-
+use crate::error::Error;
 use crate::Buffer;
-use anyhow::Result;
+
 use core::sync::atomic::Ordering;
 use std::collections::HashMap;
 use std::future::Future;
@@ -239,7 +238,7 @@ impl Conn for UdpConn {
     }
 
     async fn recv(&self, buf: &mut [u8]) -> Result<usize> {
-        self.buffer.read(buf, None).await
+        Ok(self.buffer.read(buf, None).await?)
     }
 
     async fn recv_from(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr)> {

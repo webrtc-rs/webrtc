@@ -1,15 +1,14 @@
 #[cfg(test)]
 mod router_test;
 
+use crate::error::*;
 use crate::vnet::chunk::*;
 use crate::vnet::chunk_queue::*;
-use crate::vnet::error::*;
 use crate::vnet::interface::*;
 use crate::vnet::nat::*;
 use crate::vnet::net::*;
 use crate::vnet::resolver::*;
 
-use anyhow::Result;
 use async_trait::async_trait;
 use ipnet::*;
 use std::collections::HashMap;

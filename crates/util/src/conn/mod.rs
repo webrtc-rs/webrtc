@@ -3,7 +3,6 @@ pub mod conn_disconnected_packet;
 pub mod conn_pipe;
 pub mod conn_udp;
 pub mod conn_udp_listener;
-pub mod error;
 
 #[cfg(test)]
 mod conn_bridge_test;
@@ -17,11 +16,12 @@ mod conn_test;
 #[cfg(test)]
 mod conn_udp_listener_test;
 
-use anyhow::Result;
 use async_trait::async_trait;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::ToSocketAddrs;
+
+use crate::error::Result;
 
 #[async_trait]
 pub trait Conn {
