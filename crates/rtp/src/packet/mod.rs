@@ -4,7 +4,6 @@ mod packet_test;
 use crate::{error::Error, header::*};
 use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
-use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes};
 use std::fmt;
 
@@ -34,7 +33,7 @@ impl fmt::Display for Packet {
 
 impl Unmarshal for Packet {
     /// Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
-    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self, util::Error>
     where
         Self: Sized,
         B: Buf,
@@ -82,7 +81,7 @@ impl MarshalSize for Packet {
 
 impl Marshal for Packet {
     /// MarshalTo serializes the packet and writes to the buffer.
-    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize, util::Error> {
         if buf.remaining_mut() < self.marshal_size() {
             return Err(Error::ErrBufferTooSmall.into());
         }

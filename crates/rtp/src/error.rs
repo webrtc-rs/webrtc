@@ -1,6 +1,9 @@
 use thiserror::Error;
 
+pub type Result<T> = std::result::Result<T, Error>;
+
 #[derive(Error, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum Error {
     #[error("RTP header size insufficient")]
     ErrHeaderSizeInsufficient,
@@ -47,14 +50,24 @@ pub enum Error {
     StapASizeLargerThanBuffer(usize, usize),
     #[error("nalu type {0} is currently not handled")]
     NaluTypeIsNotHandled(u8),
-
-    #[allow(non_camel_case_types)]
     #[error("{0}")]
-    new(String),
+    Util(#[from] util::Error),
+
+    #[error("{0}")]
+    Other(String),
 }
 
-impl Error {
-    pub fn equal(&self, err: &anyhow::Error) -> bool {
-        err.downcast_ref::<Self>().map_or(false, |e| e == self)
+impl From<Error> for util::Error {
+    fn from(e: Error) -> Self {
+        util::Error::from_std(e)
+    }
+}
+
+impl PartialEq<util::Error> for Error {
+    fn eq(&self, other: &util::Error) -> bool {
+        if let Some(down) = other.downcast_ref::<Error>() {
+            return self == down;
+        }
+        false
     }
 }

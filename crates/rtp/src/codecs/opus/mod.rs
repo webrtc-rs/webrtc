@@ -2,11 +2,10 @@
 mod opus_test;
 
 use crate::{
-    error::Error,
+    error::{Error, Result},
     packetizer::{Depacketizer, Payloader},
 };
 
-use anyhow::Result;
 use bytes::Bytes;
 
 #[derive(Default, Debug, Copy, Clone)]

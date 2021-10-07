@@ -2,11 +2,10 @@
 mod h264_test;
 
 use crate::{
-    error::Error,
+    error::{Error, Result},
     packetizer::{Depacketizer, Payloader},
 };
 
-use anyhow::Result;
 use bytes::{BufMut, Bytes, BytesMut};
 
 /// H264Payloader payloads H264 packets

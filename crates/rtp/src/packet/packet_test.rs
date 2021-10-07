@@ -1,4 +1,5 @@
 use super::*;
+use crate::error::Result;
 use bytes::{Bytes, BytesMut};
 
 #[test]
@@ -115,7 +116,7 @@ fn test_extension() -> Result<()> {
         "Marshal did not error on packet with invalid extension length"
     );
     if let Err(err) = result {
-        assert!(Error::ErrBufferTooSmall.equal(&err));
+        assert_eq!(Error::ErrBufferTooSmall, err);
     }
 
     Ok(())
@@ -344,7 +345,7 @@ fn test_rfc_8285_one_byte_multiple_extensions_with_padding() -> Result<()> {
     let result = packet.marshal_to(&mut dst_buf[2]);
     assert!(result.is_err());
     if let Err(err) = result {
-        assert!(Error::ErrBufferTooSmall.equal(&err));
+        assert_eq!(Error::ErrBufferTooSmall, err);
     }
 
     Ok(())
@@ -1209,12 +1210,10 @@ fn test_unmarshal_error_handling() {
     for (name, mut test_case) in cases.drain() {
         let result = Header::unmarshal(&mut test_case.input);
         let err = result.err().unwrap();
-        assert!(
-            test_case.err.equal(&err),
+        assert_eq!(
+            test_case.err, err,
             "Expected :{:?}, found: {:?} for testcase {}",
-            test_case.err,
-            err,
-            name
+            test_case.err, err, name
         )
     }
 }

@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod g7xx_test;
 
+use crate::error::Result;
 use crate::packetizer::Payloader;
 
-use anyhow::Result;
 use bytes::Bytes;
 
 /// G711Payloader payloads G711 packets

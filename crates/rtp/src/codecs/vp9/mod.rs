@@ -2,10 +2,10 @@
 mod vp9_test;
 
 use crate::{
-    error::Error,
+    error::{Error, Result},
     packetizer::{Depacketizer, Payloader},
 };
-use anyhow::Result;
+
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 use std::sync::Arc;
