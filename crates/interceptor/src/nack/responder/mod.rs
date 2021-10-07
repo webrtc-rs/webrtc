@@ -93,8 +93,11 @@ impl ResponderInternal {
 impl RTCPReader for ResponderInternal {
     async fn read(&self, buf: &mut [u8], a: &Attributes) -> Result<(usize, Attributes)> {
         let (n, attr) = {
-            let parent_rtcp_reader = self.parent_rtcp_reader.lock().await;
-            if let Some(reader) = &*parent_rtcp_reader {
+            let parent_rtcp_reader = {
+                let parent_rtcp_reader = self.parent_rtcp_reader.lock().await;
+                parent_rtcp_reader.clone()
+            };
+            if let Some(reader) = parent_rtcp_reader {
                 reader.read(buf, a).await?
             } else {
                 return Err(Error::ErrInvalidParentRtcpReader.into());
