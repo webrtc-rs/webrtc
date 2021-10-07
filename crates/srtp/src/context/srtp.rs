@@ -1,7 +1,7 @@
 use super::*;
+use crate::error::Result;
 use util::marshal::*;
 
-use anyhow::Result;
 use bytes::Bytes;
 
 impl Context {

@@ -1,7 +1,6 @@
-use crate::error::Error;
+use crate::error::{Error, Result};
 use util::{marshal::*, Buffer};
 
-use anyhow::Result;
 use tokio::sync::mpsc;
 
 /// Limit the buffer size to 1MB

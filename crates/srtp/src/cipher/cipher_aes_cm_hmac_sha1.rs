@@ -1,9 +1,9 @@
 use super::Cipher;
+use crate::error::Result;
 use crate::{error::Error, key_derivation::*, protection_profile::*};
 use util::marshal::*;
 
 use aes::cipher::generic_array::GenericArray;
-use anyhow::Result;
 use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
 use bytes::{BufMut, Bytes, BytesMut};
 use ctr::cipher::{NewCipher, StreamCipher, StreamCipherSeek};
@@ -77,8 +77,10 @@ impl CipherAesCmHmacSha1 {
             auth_key_len,
         )?;
 
-        let srtp_session_auth = HmacSha1::new_from_slice(&srtp_session_auth_tag)?;
-        let srtcp_session_auth = HmacSha1::new_from_slice(&srtcp_session_auth_tag)?;
+        let srtp_session_auth = HmacSha1::new_from_slice(&srtp_session_auth_tag)
+            .map_err(|e| Error::Other(e.to_string()))?;
+        let srtcp_session_auth = HmacSha1::new_from_slice(&srtcp_session_auth_tag)
+            .map_err(|e| Error::Other(e.to_string()))?;
 
         Ok(CipherAesCmHmacSha1 {
             srtp_session_key,
