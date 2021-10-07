@@ -15,10 +15,9 @@ use crate::chunk::chunk_shutdown::ChunkShutdown;
 use crate::chunk::chunk_shutdown_ack::ChunkShutdownAck;
 use crate::chunk::chunk_shutdown_complete::ChunkShutdownComplete;
 use crate::chunk::chunk_type::*;
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::util::*;
 
-use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use crc::{Crc, CRC_32_ISCSI};
 use std::fmt;

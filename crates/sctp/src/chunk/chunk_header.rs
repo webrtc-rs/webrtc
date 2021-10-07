@@ -1,6 +1,6 @@
 use super::{chunk_type::*, *};
 
-use anyhow::Result;
+
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 

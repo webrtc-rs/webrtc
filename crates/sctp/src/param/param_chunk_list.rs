@@ -1,7 +1,7 @@
 use super::{param_header::*, param_type::*, *};
 use crate::chunk::chunk_type::*;
 
-use anyhow::Result;
+
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 #[derive(Default, Debug, Clone, PartialEq)]

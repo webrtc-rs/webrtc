@@ -3,7 +3,6 @@ mod association_internal_test;
 
 use super::*;
 
-use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::atomic::AtomicBool;
 

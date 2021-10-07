@@ -1,5 +1,5 @@
-use crate::error::Error;
-use anyhow::Result;
+use crate::error::{Error, Result};
+
 use bytes::{Bytes, BytesMut};
 
 ///////////////////////////////////////////////////////////////////
@@ -780,10 +780,7 @@ fn test_reassembly_queue_detect_buffer_too_short() -> Result<()> {
     let result = rq.read(&mut buf);
     assert!(result.is_err(), "read() should not succeed");
     if let Err(err) = result {
-        assert!(
-            Error::ErrShortBuffer.equal(&err),
-            "read() should not succeed"
-        );
+        assert_eq!(Error::ErrShortBuffer, err, "read() should not succeed");
     }
     assert_eq!(0, rq.get_num_bytes(), "num bytes mismatch");
 

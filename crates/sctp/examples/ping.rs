@@ -1,8 +1,8 @@
 use webrtc_sctp::association::*;
 use webrtc_sctp::chunk::chunk_payload_data::PayloadProtocolIdentifier;
 use webrtc_sctp::stream::*;
+use webrtc_sctp::Error;
 
-use anyhow::Result;
 use bytes::Bytes;
 use clap::{App, AppSettings, Arg};
 use std::sync::Arc;
@@ -13,7 +13,7 @@ use tokio::sync::mpsc;
 // RUST_LOG=trace cargo run --color=always --package webrtc-sctp --example ping -- --server 0.0.0.0:5678
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), Error> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -88,7 +88,7 @@ async fn main() -> Result<()> {
         }
 
         println!("finished send ping");
-        Result::<()>::Ok(())
+        Result::<(), Error>::Ok(())
     });
 
     let (done_tx, mut done_rx) = mpsc::channel::<()>(1);

@@ -3,11 +3,11 @@ mod stream_test;
 
 use crate::association::AssociationState;
 use crate::chunk::chunk_payload_data::{ChunkPayloadData, PayloadProtocolIdentifier};
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::queue::reassembly_queue::ReassemblyQueue;
 
 use crate::queue::pending_queue::PendingQueue;
-use anyhow::Result;
+
 use bytes::Bytes;
 use std::fmt;
 use std::future::Future;
@@ -186,7 +186,7 @@ impl Stream {
             if result.is_ok() {
                 return result;
             } else if let Err(err) = result {
-                if Error::ErrShortBuffer.equal(&err) {
+                if Error::ErrShortBuffer == err {
                     return Err(err);
                 }
             }

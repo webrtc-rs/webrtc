@@ -1,8 +1,8 @@
 use crate::chunk::chunk_payload_data::{ChunkPayloadData, PayloadProtocolIdentifier};
 use crate::util::*;
 
-use crate::error::Error;
-use anyhow::Result;
+use crate::error::{Error, Result};
+
 use std::cmp::Ordering;
 
 fn sort_chunks_by_tsn(c: &mut Vec<ChunkPayloadData>) {

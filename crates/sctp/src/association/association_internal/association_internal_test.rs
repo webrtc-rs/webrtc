@@ -2,6 +2,14 @@ use super::*;
 use std::io;
 use std::net::SocketAddr;
 
+type Result<T> = std::result::Result<T, util::Error>;
+
+impl From<Error> for util::Error {
+    fn from(e: Error) -> Self {
+        util::Error::from_std(e)
+    }
+}
+
 struct DumbConn;
 
 #[async_trait]
@@ -451,8 +459,9 @@ async fn test_assoc_max_message_size_default() -> Result<()> {
         let ppi = PayloadProtocolIdentifier::from(s.default_payload_type.load(Ordering::SeqCst));
 
         if let Err(err) = s.write_sctp(&p.slice(..65536), ppi).await {
-            assert!(
-                !Error::ErrOutboundPacketTooLarge.equal(&err),
+            assert_ne!(
+                Error::ErrOutboundPacketTooLarge,
+                err,
                 "should be not Error::ErrOutboundPacketTooLarge"
             );
         } else {
@@ -460,8 +469,9 @@ async fn test_assoc_max_message_size_default() -> Result<()> {
         }
 
         if let Err(err) = s.write_sctp(&p.slice(..65537), ppi).await {
-            assert!(
-                Error::ErrOutboundPacketTooLarge.equal(&err),
+            assert_eq!(
+                Error::ErrOutboundPacketTooLarge,
+                err,
                 "should be Error::ErrOutboundPacketTooLarge"
             );
         } else {
@@ -495,8 +505,9 @@ async fn test_assoc_max_message_size_explicit() -> Result<()> {
         let ppi = PayloadProtocolIdentifier::from(s.default_payload_type.load(Ordering::SeqCst));
 
         if let Err(err) = s.write_sctp(&p.slice(..30000), ppi).await {
-            assert!(
-                !Error::ErrOutboundPacketTooLarge.equal(&err),
+            assert_ne!(
+                Error::ErrOutboundPacketTooLarge,
+                err,
                 "should be not Error::ErrOutboundPacketTooLarge"
             );
         } else {
@@ -504,8 +515,9 @@ async fn test_assoc_max_message_size_explicit() -> Result<()> {
         }
 
         if let Err(err) = s.write_sctp(&p.slice(..30001), ppi).await {
-            assert!(
-                Error::ErrOutboundPacketTooLarge.equal(&err),
+            assert_eq!(
+                Error::ErrOutboundPacketTooLarge,
+                err,
                 "should be Error::ErrOutboundPacketTooLarge"
             );
         } else {

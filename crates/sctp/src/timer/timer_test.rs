@@ -1,4 +1,3 @@
-use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
@@ -12,6 +11,8 @@ use tokio::time::{sleep, Duration};
 use super::ack_timer::*;
 
 mod test_ack_timer {
+    use crate::error::Result;
+
     use super::*;
 
     struct TestAckTimerObserver {
@@ -71,6 +72,8 @@ mod test_ack_timer {
 use super::rtx_timer::*;
 
 mod test_rto_manager {
+    use crate::error::Result;
+
     use super::*;
 
     #[tokio::test]

@@ -1,6 +1,5 @@
-use crate::error::Error;
+use crate::error::{Error, Result};
 
-use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::fmt;
 

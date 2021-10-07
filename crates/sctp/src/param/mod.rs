@@ -13,7 +13,7 @@ pub(crate) mod param_state_cookie;
 pub(crate) mod param_supported_extensions;
 pub(crate) mod param_type;
 
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::param::{
     param_chunk_list::ParamChunkList, param_forward_tsn_supported::ParamForwardTsnSupported,
     param_heartbeat_info::ParamHeartbeatInfo,
@@ -25,7 +25,6 @@ use crate::param::{
 use param_header::*;
 use param_type::*;
 
-use anyhow::Result;
 use bytes::{Buf, Bytes, BytesMut};
 use std::{any::Any, fmt};
 

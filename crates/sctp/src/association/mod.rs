@@ -22,7 +22,7 @@ use crate::chunk::chunk_shutdown_ack::ChunkShutdownAck;
 use crate::chunk::chunk_shutdown_complete::ChunkShutdownComplete;
 use crate::chunk::chunk_type::*;
 use crate::chunk::Chunk;
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::error_cause::*;
 use crate::packet::Packet;
 use crate::param::param_heartbeat_info::ParamHeartbeatInfo;
@@ -42,7 +42,6 @@ use crate::util::*;
 use association_internal::*;
 use association_stats::*;
 
-use anyhow::Result;
 use bytes::Bytes;
 use rand::random;
 use std::collections::{HashMap, VecDeque};
