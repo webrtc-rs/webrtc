@@ -63,7 +63,7 @@ impl BufferInternal {
         }
 
         if newsize <= self.data.len() {
-            return Err(Error::ErrBufferFull.into());
+            return Err(Error::ErrBufferFull);
         }
 
         let mut newdata: Vec<u8> = vec![0; newsize];
@@ -130,19 +130,19 @@ impl Buffer {
     /// due to the internal data structure.
     pub async fn write(&self, packet: &[u8]) -> Result<usize> {
         if packet.len() >= 0x10000 {
-            return Err(Error::ErrPacketTooBig.into());
+            return Err(Error::ErrPacketTooBig);
         }
 
         let mut b = self.buffer.lock().await;
 
         if b.closed {
-            return Err(Error::ErrBufferClosed.into());
+            return Err(Error::ErrBufferClosed);
         }
 
         if (b.limit_count > 0 && b.count >= b.limit_count)
             || (b.limit_size > 0 && b.size() + 2 + packet.len() > b.limit_size)
         {
-            return Err(Error::ErrBufferFull.into());
+            return Err(Error::ErrBufferFull);
         }
 
         // grow the buffer until the packet fits
@@ -261,13 +261,13 @@ impl Buffer {
                     b.count -= 1;
 
                     if copied < count {
-                        return Err(Error::ErrBufferShort.into());
+                        return Err(Error::ErrBufferShort);
                     }
                     return Ok(copied);
                 }
 
                 if b.closed {
-                    return Err(Error::ErrBufferClosed.into());
+                    return Err(Error::ErrBufferClosed);
                 }
 
                 notify = b.notify_rx.take();
@@ -280,7 +280,7 @@ impl Buffer {
             if let Some(mut notify) = notify {
                 if let Some(d) = duration {
                     if timeout(d, notify.recv()).await.is_err() {
-                        return Err(Error::ErrTimeout.into());
+                        return Err(Error::ErrTimeout);
                     }
                 } else {
                     notify.recv().await;

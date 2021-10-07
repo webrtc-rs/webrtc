@@ -30,13 +30,13 @@ impl UdpConnMap {
         let mut port_map = self.port_map.lock().await;
         if let Some(conns) = port_map.get(&addr.port()) {
             if addr.ip().is_unspecified() {
-                return Err(Error::ErrAddressAlreadyInUse.into());
+                return Err(Error::ErrAddressAlreadyInUse);
             }
 
             for c in conns {
                 let laddr = c.local_addr().await?;
                 if laddr.ip().is_unspecified() || laddr.ip() == addr.ip() {
-                    return Err(Error::ErrAddressAlreadyInUse.into());
+                    return Err(Error::ErrAddressAlreadyInUse);
                 }
             }
         }
@@ -86,7 +86,7 @@ impl UdpConnMap {
                     let laddr = c.local_addr().await?;
                     if laddr.ip().is_unspecified() {
                         // This can't happen!
-                        return Err(Error::ErrCannotRemoveUnspecifiedIp.into());
+                        return Err(Error::ErrCannotRemoveUnspecifiedIp);
                     }
 
                     if laddr.ip() == addr.ip() {
@@ -96,7 +96,7 @@ impl UdpConnMap {
                 }
             }
         } else {
-            return Err(Error::ErrNoSuchUdpConn.into());
+            return Err(Error::ErrNoSuchUdpConn);
         }
 
         if new_conns.is_empty() {

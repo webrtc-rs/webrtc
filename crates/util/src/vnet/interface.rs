@@ -48,7 +48,7 @@ impl Interface {
                     }
                     prefix
                 }
-                _ => return Err(Error::ErrInvalidMask.into()),
+                _ => return Err(Error::ErrInvalidMask),
             }
         } else {
             32

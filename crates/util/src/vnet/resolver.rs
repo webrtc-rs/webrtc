@@ -36,7 +36,7 @@ impl Resolver {
 
     pub(crate) fn add_host(&mut self, name: String, ip_addr: String) -> Result<()> {
         if name.is_empty() {
-            return Err(Error::ErrHostnameEmpty.into());
+            return Err(Error::ErrHostnameEmpty);
         }
         let ip = IpAddr::from_str(&ip_addr)?;
         self.hosts.insert(name, ip);

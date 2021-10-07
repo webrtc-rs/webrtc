@@ -121,10 +121,10 @@ impl NetworkAddressTranslator {
             nat_type.mapping_life_time = Duration::from_secs(0);
 
             if config.mapped_ips.is_empty() {
-                return Err(Error::ErrNatRequriesMapping.into());
+                return Err(Error::ErrNatRequriesMapping);
             }
             if config.mapped_ips.len() != config.local_ips.len() {
-                return Err(Error::ErrMismatchLengthIp.into());
+                return Err(Error::ErrMismatchLengthIp);
             }
         } else {
             // Normal (NAPT) behavior
@@ -242,7 +242,7 @@ impl NetworkAddressTranslator {
                             )),
                         }
                     } else {
-                        return Err(Error::ErrNatRequriesMapping.into());
+                        return Err(Error::ErrNatRequriesMapping);
                     };
 
                     {
@@ -291,7 +291,7 @@ impl NetworkAddressTranslator {
             return Ok(Some(to));
         }
 
-        Err(Error::ErrNonUdpTranslationNotSupported.into())
+        Err(Error::ErrNonUdpTranslationNotSupported)
     }
 
     pub(crate) async fn translate_inbound(
@@ -312,8 +312,7 @@ impl NetworkAddressTranslator {
                         "drop {} as {:?}",
                         from,
                         Error::ErrNoAssociatedLocalAddress
-                    ))
-                    .into());
+                    )));
                 }
             } else {
                 // Normal (NAPT) behavior
@@ -337,8 +336,7 @@ impl NetworkAddressTranslator {
                                 from,
                                 filter_key,
                                 Error::ErrHasNoPermission
-                            ))
-                            .into());
+                            )));
                         }
                     }
 
@@ -356,8 +354,7 @@ impl NetworkAddressTranslator {
                         "drop {} as {:?}",
                         from,
                         Error::ErrNoNatBindingFound
-                    ))
-                    .into());
+                    )));
                 }
             }
 
@@ -371,7 +368,7 @@ impl NetworkAddressTranslator {
             return Ok(Some(to));
         }
 
-        Err(Error::ErrNonUdpTranslationNotSupported.into())
+        Err(Error::ErrNonUdpTranslationNotSupported)
     }
 
     // caller must hold the mutex

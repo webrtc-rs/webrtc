@@ -72,7 +72,7 @@ impl ConnObserver for VNetInternal {
             p.push(c).await;
             Ok(())
         } else {
-            Err(Error::ErrNoRouterLinked.into())
+            Err(Error::ErrNoRouterLinked)
         }
     }
 
@@ -152,7 +152,7 @@ impl Nic for VNet {
             }
         }
 
-        Err(Error::ErrNotFound.into())
+        Err(Error::ErrNotFound)
     }
 
     async fn set_router(&self, r: Arc<Mutex<Router>>) -> Result<()> {
@@ -240,7 +240,7 @@ impl VNet {
         }
 
         if ips.is_empty() {
-            return Err(Error::ErrBindFailed.into());
+            return Err(Error::ErrBindFailed);
         }
 
         // check if all these transport addresses are not in use
@@ -248,7 +248,7 @@ impl VNet {
             let addr = SocketAddr::new(ip2, port);
             let vi = self.vi.lock().await;
             if vi.udp_conns.find(&addr).await.is_some() {
-                return Err(Error::ErrAddressAlreadyInUse.into());
+                return Err(Error::ErrAddressAlreadyInUse);
             }
         }
 
@@ -259,7 +259,7 @@ impl VNet {
     pub(crate) async fn assign_port(&self, ip: IpAddr, start: u16, end: u16) -> Result<u16> {
         // choose randomly from the range between start and end (inclusive)
         if end < start {
-            return Err(Error::ErrEndPortLessThanStart.into());
+            return Err(Error::ErrEndPortLessThanStart);
         }
 
         let space = end + 1 - start;
@@ -272,13 +272,13 @@ impl VNet {
             }
         }
 
-        Err(Error::ErrPortSpaceExhausted.into())
+        Err(Error::ErrPortSpaceExhausted)
     }
 
     pub(crate) async fn resolve_addr(&self, use_ipv4: bool, address: &str) -> Result<SocketAddr> {
         let v: Vec<&str> = address.splitn(2, ':').collect();
         if v.len() != 2 {
-            return Err(Error::ErrAddrNotUdpAddr.into());
+            return Err(Error::ErrAddrNotUdpAddr);
         }
         let (host, port) = (v[0], v[1]);
 
@@ -302,10 +302,10 @@ impl VNet {
                         if let Some(ip) = resolver.lookup(host).await {
                             ip
                         } else {
-                            return Err(Error::ErrNotFound.into());
+                            return Err(Error::ErrNotFound);
                         }
                     } else {
-                        return Err(Error::ErrNoRouterLinked.into());
+                        return Err(Error::ErrNoRouterLinked);
                     }
                 }
             }
@@ -320,8 +320,7 @@ impl VNet {
             Err(Error::Other(format!(
                 "No available {} IP address found!",
                 if use_ipv4 { "ipv4" } else { "ipv6" },
-            ))
-            .into())
+            )))
         }
     }
 
@@ -332,7 +331,7 @@ impl VNet {
     ) -> Result<Arc<dyn Conn + Send + Sync>> {
         // validate address. do we have that address?
         if !self.has_ipaddr(local_addr.ip()) {
-            return Err(Error::ErrCantAssignRequestedAddr.into());
+            return Err(Error::ErrCantAssignRequestedAddr);
         }
 
         if local_addr.port() == 0 {
@@ -341,7 +340,7 @@ impl VNet {
         } else {
             let vi = self.vi.lock().await;
             if vi.udp_conns.find(&local_addr).await.is_some() {
-                return Err(Error::ErrAddressAlreadyInUse.into());
+                return Err(Error::ErrAddressAlreadyInUse);
             }
         }
 
@@ -564,7 +563,7 @@ impl Net {
     pub fn get_nic(&self) -> Result<Arc<Mutex<dyn Nic + Send + Sync>>> {
         match self {
             Net::VNet(vnet) => Ok(Arc::clone(vnet) as Arc<Mutex<dyn Nic + Send + Sync>>),
-            Net::Ifs(_) => Err(Error::ErrVnetDisabled.into()),
+            Net::Ifs(_) => Err(Error::ErrVnetDisabled),
         }
     }
 }

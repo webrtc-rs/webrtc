@@ -17,7 +17,10 @@ pub trait Marshal: MarshalSize {
         buf.resize(l, 0);
         let n = self.marshal_to(&mut buf)?;
         if n != l {
-            Err(Error::Other(format!("marshal_to output size {}, but expect {}", n, l)).into())
+            Err(Error::Other(format!(
+                "marshal_to output size {}, but expect {}",
+                n, l
+            )))
         } else {
             Ok(buf.freeze())
         }

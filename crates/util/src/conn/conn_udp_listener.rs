@@ -42,10 +42,10 @@ impl Listener for ListenerImpl {
                     let raddr = c.raddr;
                     Ok((c, raddr))
                 }else{
-                    Err(Error::ErrClosedListenerAcceptCh.into())
+                    Err(Error::ErrClosedListenerAcceptCh)
                 }
             }
-            _ = done_ch_rx.recv() =>  Err(Error::ErrClosedListener.into()),
+            _ = done_ch_rx.recv() =>  Err(Error::ErrClosedListener),
         }
     }
 
@@ -178,7 +178,7 @@ impl ListenConfig {
         }
 
         if !accepting.load(Ordering::SeqCst) {
-            return Err(Error::ErrClosedListener.into());
+            return Err(Error::ErrClosedListener);
         }
 
         if let Some(f) = accept_filter {
@@ -192,10 +192,10 @@ impl ListenConfig {
             let accept_ch = accept_ch_tx.lock().await;
             if let Some(tx) = &*accept_ch {
                 if tx.try_send(Arc::clone(&udp_conn)).is_err() {
-                    return Err(Error::ErrListenQueueExceeded.into());
+                    return Err(Error::ErrListenQueueExceeded);
                 }
             } else {
-                return Err(Error::ErrClosedListenerAcceptCh.into());
+                return Err(Error::ErrClosedListenerAcceptCh);
             }
         }
 

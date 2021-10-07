@@ -107,7 +107,7 @@ impl Conn for UdpConn {
         if let Some(rem_addr) = rem_addr {
             self.send_to(buf, rem_addr).await
         } else {
-            Err(Error::ErrNoRemAddr.into())
+            Err(Error::ErrNoRemAddr)
         }
     }
 
@@ -118,7 +118,7 @@ impl Conn for UdpConn {
             let obs = self.obs.lock().await;
             match obs.determine_source_ip(self.loc_addr.ip(), target.ip()) {
                 Some(ip) => ip,
-                None => return Err(Error::ErrLocAddr.into()),
+                None => return Err(Error::ErrLocAddr),
             }
         };
 
@@ -146,7 +146,7 @@ impl Conn for UdpConn {
 
     async fn close(&self) -> Result<()> {
         if self.closed.load(Ordering::SeqCst) {
-            return Err(Error::ErrAlreadyClosed.into());
+            return Err(Error::ErrAlreadyClosed);
         }
         self.closed.store(true, Ordering::SeqCst);
         {

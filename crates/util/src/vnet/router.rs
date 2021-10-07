@@ -123,7 +123,7 @@ impl Nic for Router {
             }
         }
 
-        Err(Error::ErrNotFound.into())
+        Err(Error::ErrNotFound)
     }
 
     async fn on_inbound_chunk(&self, c: Box<dyn Chunk + Send + Sync>) {
@@ -182,7 +182,7 @@ impl Nic for Router {
                 }
             }
         } else {
-            return Err(Error::ErrNoIpaddrEth0.into());
+            return Err(Error::ErrNoIpaddrEth0);
         }
 
         // Set up NAT here
@@ -250,7 +250,7 @@ impl Router {
                 if ip_pair.len() > 1 {
                     let loc_ip = IpAddr::from_str(ip_pair[1])?;
                     if !ipv4net.contains(&loc_ip) {
-                        return Err(Error::ErrLocalIpBeyondStaticIpsSubset.into());
+                        return Err(Error::ErrLocalIpBeyondStaticIpsSubset);
                     }
                     static_local_ips.insert(ip.to_string(), loc_ip);
                 }
@@ -266,7 +266,7 @@ impl Router {
 
         let n_static_local = static_local_ips.len();
         if n_static_local > 0 && n_static_local != static_ips.len() {
-            return Err(Error::ErrLocalIpNoStaticsIpsAssociated.into());
+            return Err(Error::ErrLocalIpNoStaticsIpsAssociated);
         }
 
         let router_internal = RouterInternal {
@@ -299,7 +299,7 @@ impl Router {
     // Start ...
     pub fn start(&mut self) -> Pin<Box<dyn Future<Output = Result<()>>>> {
         if self.done.is_some() {
-            return Box::pin(async move { Err(Error::ErrRouterAlreadyStarted.into()) });
+            return Box::pin(async move { Err(Error::ErrRouterAlreadyStarted) });
         }
 
         let (done_tx, mut done_rx) = mpsc::channel(1);
@@ -349,7 +349,7 @@ impl Router {
     // Stop ...
     pub fn stop(&mut self) -> Pin<Box<dyn Future<Output = Result<()>>>> {
         if self.done.is_none() {
-            return Box::pin(async move { Err(Error::ErrRouterAlreadyStopped.into()) });
+            return Box::pin(async move { Err(Error::ErrRouterAlreadyStopped) });
         }
         self.push_ch.take();
         self.done.take();
@@ -541,7 +541,7 @@ impl RouterInternal {
         let mut ipnets = vec![];
         for ip in &ips {
             if !self.ipv4net.contains(ip) {
-                return Err(Error::ErrStaticIpIsBeyondSubnet.into());
+                return Err(Error::ErrStaticIpIsBeyondSubnet);
             }
             self.nics.insert(ip.to_string(), Arc::clone(&nic));
             ipnets.push(IpNet::from_str(&format!(
@@ -564,7 +564,7 @@ impl RouterInternal {
         // See: https://stackoverflow.com/questions/14915188/ip-address-ending-with-zero
 
         if self.last_id == 0xfe {
-            return Err(Error::ErrAddressSpaceExhausted.into());
+            return Err(Error::ErrAddressSpaceExhausted);
         }
 
         self.last_id += 1;
