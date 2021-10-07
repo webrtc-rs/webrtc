@@ -1,50 +1,54 @@
 use crate::api::media_engine::MediaEngine;
-use anyhow::Result;
+use crate::media::rtp::{rtp_codec::RTPCodecType, RTCPFeedback};
+use interceptor::nack::{generator::Generator, responder::Responder};
 use interceptor::registry::Registry;
+use interceptor::report::{receiver::ReceiverReport, sender::SenderReport};
+
+use anyhow::Result;
+use std::sync::Arc;
 
 /// register_default_interceptors will register some useful interceptors.
 /// If you want to customize which interceptors are loaded, you should copy the
 /// code from this method and remove unwanted interceptors.
 pub fn register_default_interceptors(
-    registry: Registry,
-    _media_engine: &mut MediaEngine,
+    mut registry: Registry,
+    media_engine: &mut MediaEngine,
 ) -> Result<Registry> {
+    registry = configure_nack(registry, media_engine);
+
+    registry = configure_rtcp_reports(registry);
+
     Ok(registry)
 }
 
-/*TODO:
-// ConfigureRTCPReports will setup everything necessary for generating Sender and Receiver Reports
-func ConfigureRTCPReports(interceptorRegistry *interceptor.Registry) error {
-    reciver, err := report.NewReceiverInterceptor()
-    if err != nil {
-        return err
-    }
-
-    sender, err := report.NewSenderInterceptor()
-    if err != nil {
-        return err
-    }
-
-    interceptorRegistry.Add(reciver)
-    interceptorRegistry.Add(sender)
-    return nil
+/// configure_rtcp_reports will setup everything necessary for generating Sender and Receiver Reports
+pub fn configure_rtcp_reports(registry: Registry) -> Registry {
+    let receiver = Arc::new(ReceiverReport::builder().build_rr());
+    let sender = Arc::new(SenderReport::builder().build_sr());
+    registry.with_interceptor(receiver).with_interceptor(sender)
 }
 
-// ConfigureNack will setup everything necessary for handling generating/responding to nack messages.
-func ConfigureNack(mediaEngine *MediaEngine, interceptorRegistry *interceptor.Registry) error {
-    generator, err := nack.NewGeneratorInterceptor()
-    if err != nil {
-        return err
-    }
+/// configure_nack will setup everything necessary for handling generating/responding to nack messages.
+pub fn configure_nack(registry: Registry, media_engine: &mut MediaEngine) -> Registry {
+    let generator = Arc::new(Generator::builder().build());
+    let responder = Arc::new(Responder::builder().build());
 
-    responder, err := nack.NewResponderInterceptor()
-    if err != nil {
-        return err
-    }
+    media_engine.register_feedback(
+        RTCPFeedback {
+            typ: "nack".to_owned(),
+            parameter: "".to_owned(),
+        },
+        RTPCodecType::Video,
+    );
+    media_engine.register_feedback(
+        RTCPFeedback {
+            typ: "nack".to_owned(),
+            parameter: "pli".to_owned(),
+        },
+        RTPCodecType::Video,
+    );
 
-    mediaEngine.RegisterFeedback(RTCPFeedback{Type: "nack"}, RTPCodecTypeVideo)
-    mediaEngine.RegisterFeedback(RTCPFeedback{Type: "nack", Parameter: "pli"}, RTPCodecTypeVideo)
-    interceptorRegistry.Add(responder)
-    interceptorRegistry.Add(generator)
-    return nil
-}*/
+    registry
+        .with_interceptor(responder)
+        .with_interceptor(generator)
+}
