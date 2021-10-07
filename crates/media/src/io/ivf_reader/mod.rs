@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod ivf_reader_test;
 
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::io::ResetFn;
-use anyhow::Result;
+
 use byteorder::{LittleEndian, ReadBytesExt};
 use bytes::BytesMut;
 use std::io::Read;

@@ -1,9 +1,10 @@
 #[cfg(test)]
 mod ivf_writer_test;
 
+use crate::error::Result;
 use crate::io::ivf_reader::IVFFileHeader;
 use crate::io::Writer;
-use anyhow::Result;
+
 use byteorder::{LittleEndian, WriteBytesExt};
 use bytes::{Bytes, BytesMut};
 use rtp::packetizer::Depacketizer;

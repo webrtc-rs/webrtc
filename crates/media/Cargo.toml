@@ -14,11 +14,10 @@ repository = "https://github.com/webrtc-rs/media"
 [dependencies]
 util = { package = "webrtc-util", version = "0.4.3", default-features = false, features = ["marshal"] }
 rtp = "0.4.1"
-anyhow = "1.0.41"
 byteorder = "1.4.3"
 bytes = "1.0.1"
 displaydoc = "0.2.1"
-thiserror = "1.0.25"
+thiserror = "1.0"
 rand = "0.8.4"
 derive_builder = "0.10.2"
 

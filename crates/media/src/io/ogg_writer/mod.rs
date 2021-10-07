@@ -1,9 +1,10 @@
 #[cfg(test)]
 mod ogg_writer_test;
 
+use crate::error::Result;
 use crate::io::ogg_reader::*;
 use crate::io::Writer;
-use anyhow::Result;
+
 use byteorder::{LittleEndian, WriteBytesExt};
 use bytes::Bytes;
 use rtp::packetizer::Depacketizer;
