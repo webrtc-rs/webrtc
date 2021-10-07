@@ -1,5 +1,5 @@
 use crate::api::setting_engine::SettingEngine;
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::media::ice_transport::ice_parameters::RTCIceParameters;
 use crate::peer::ice::ice_candidate::ice_candidate_type::RTCIceCandidateType;
 use crate::peer::ice::ice_candidate::*;
@@ -10,7 +10,6 @@ use ice::agent::Agent;
 use ice::candidate::{Candidate, CandidateType};
 use ice::url::Url;
 
-use anyhow::Result;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU8, Ordering};

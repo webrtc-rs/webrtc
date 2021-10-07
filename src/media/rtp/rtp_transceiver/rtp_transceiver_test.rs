@@ -69,7 +69,7 @@ async fn test_rtp_transceiver_set_codec_preferences() -> Result<()> {
 
     for test_case in fail_test_cases {
         if let Err(err) = tr.set_codec_preferences(test_case).await {
-            assert!(Error::ErrRTPTransceiverCodecUnsupported.equal(&err));
+            assert_eq!(Error::ErrRTPTransceiverCodecUnsupported, err);
         } else {
             assert!(false);
         }

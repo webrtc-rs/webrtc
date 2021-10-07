@@ -8,7 +8,6 @@ use tokio::time::Duration;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::APIBuilder;
-use webrtc::error::Error;
 use webrtc::media::rtp::rtp_codec::RTPCodecType;
 use webrtc::media::rtp::rtp_receiver::RTCRtpReceiver;
 use webrtc::media::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
@@ -18,6 +17,7 @@ use webrtc::peer::configuration::RTCConfiguration;
 use webrtc::peer::ice::ice_server::RTCIceServer;
 use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer::sdp::session_description::RTCSessionDescription;
+use webrtc::Error;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -147,7 +147,7 @@ async fn main() -> Result<()> {
                                     result = pc2.write_rtcp(&PictureLossIndication{
                                             sender_ssrc: 0,
                                             media_ssrc,
-                                    }).await;
+                                    }).await.map_err(Into::into);
                                 }
                             };
                         }
@@ -166,7 +166,7 @@ async fn main() -> Result<()> {
                         // Read RTP packets being sent to webrtc-rs
                         while let Ok((rtp, _)) = track.read_rtp().await {
                             if let Err(err) = local_track.write_rtp(&rtp).await {
-                                if !Error::ErrClosedPipe.equal(&err) {
+                                if Error::ErrClosedPipe != err {
                                     print!("output track write_rtp got error: {} and break", err);
                                     break;
                                 } else {

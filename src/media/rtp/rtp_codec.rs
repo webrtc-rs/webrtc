@@ -1,9 +1,8 @@
 use super::*;
 use crate::api::media_engine::*;
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::media::rtp::fmtp::*;
 
-use anyhow::Result;
 use std::fmt;
 
 /// RTPCodecType determines the type of a codec

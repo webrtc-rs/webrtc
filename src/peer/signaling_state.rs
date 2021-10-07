@@ -1,7 +1,7 @@
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::peer::sdp::sdp_type::RTCSdpType;
 
-use anyhow::Result;
+
 use std::fmt;
 
 #[derive(Debug, Copy, Clone, PartialEq)]

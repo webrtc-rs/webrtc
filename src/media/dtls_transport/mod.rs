@@ -3,7 +3,6 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
 
-use anyhow::Result;
 use bytes::Bytes;
 use dtls::config::ClientAuthType;
 use dtls::conn::DTLSConn;
@@ -18,7 +17,7 @@ use dtls_role::*;
 
 use crate::api::setting_engine::SettingEngine;
 use crate::default_srtp_protection_profiles;
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
 use crate::media::dtls_transport::dtls_transport_state::RTCDtlsTransportState;
 use crate::media::ice_transport::ice_role::RTCIceRole;
@@ -375,14 +374,16 @@ impl RTCDtlsTransport {
                 .await
             }
         } else {
-            Err(Error::new("ice_transport.new_endpoint failed".to_owned()).into())
+            Err(dtls::Error::Other(
+                "ice_transport.new_endpoint failed".to_owned(),
+            ))
         };
 
         let dtls_conn = match dtls_conn_result {
             Ok(dtls_conn) => dtls_conn,
             Err(err) => {
                 self.state_change(RTCDtlsTransportState::Failed).await;
-                return Err(err);
+                return Err(err.into());
             }
         };
 
@@ -443,14 +444,14 @@ impl RTCDtlsTransport {
     /// stops and closes the DTLSTransport object.
     pub async fn stop(&self) -> Result<()> {
         // Try closing everything and collect the errors
-        let mut close_errs: Vec<anyhow::Error> = vec![];
+        let mut close_errs: Vec<Error> = vec![];
         {
             let mut srtp_session = self.srtp_session.lock().await;
             if let Some(srtp_session) = srtp_session.take() {
                 match srtp_session.close().await {
                     Ok(_) => {}
                     Err(err) => {
-                        close_errs.push(err);
+                        close_errs.push(err.into());
                     }
                 };
             }
@@ -462,7 +463,7 @@ impl RTCDtlsTransport {
                 match srtcp_session.close().await {
                     Ok(_) => {}
                     Err(err) => {
-                        close_errs.push(err);
+                        close_errs.push(err.into());
                     }
                 };
             }
@@ -474,7 +475,7 @@ impl RTCDtlsTransport {
                 match ss.close().await {
                     Ok(_) => {}
                     Err(err) => {
-                        close_errs.push(err);
+                        close_errs.push(err.into());
                     }
                 };
             }
@@ -485,8 +486,8 @@ impl RTCDtlsTransport {
             match conn.close().await {
                 Ok(_) => {}
                 Err(err) => {
-                    if err.to_string() != dtls::error::Error::ErrConnClosed.to_string() {
-                        close_errs.push(err);
+                    if err.to_string() != dtls::Error::ErrConnClosed.to_string() {
+                        close_errs.push(err.into());
                     }
                 }
             }

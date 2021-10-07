@@ -1,7 +1,7 @@
 pub mod mux;
 
-use crate::error::Error;
-use anyhow::Result;
+use crate::error::{Error, Result};
+
 use rand::{thread_rng, Rng};
 
 const RUNES_ALPHA: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -21,11 +21,11 @@ pub fn math_rand_alpha(n: usize) -> String {
 }
 
 /// flatten_errs flattens multiple errors into one
-pub fn flatten_errs(errs: Vec<anyhow::Error>) -> Result<()> {
+pub fn flatten_errs(errs: Vec<impl Into<Error>>) -> Result<()> {
     if errs.is_empty() {
         Ok(())
     } else {
-        let errs_strs: Vec<String> = errs.into_iter().map(|e| e.to_string()).collect();
+        let errs_strs: Vec<String> = errs.into_iter().map(|e| e.into().to_string()).collect();
         Err(Error::new(errs_strs.join("\n")).into())
     }
 }

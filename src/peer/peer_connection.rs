@@ -13,7 +13,7 @@ use crate::data::data_channel::RTCDataChannel;
 use crate::data::sctp_transport::sctp_transport_capabilities::SCTPTransportCapabilities;
 use crate::data::sctp_transport::sctp_transport_state::RTCSctpTransportState;
 use crate::data::sctp_transport::RTCSctpTransport;
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::media::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
 use crate::media::dtls_transport::dtls_parameters::DTLSParameters;
 use crate::media::dtls_transport::dtls_role::{
@@ -61,7 +61,6 @@ use crate::{
     SSRC_STR,
 };
 
-use anyhow::Result;
 use async_trait::async_trait;
 use ice::candidate::candidate_base::unmarshal_candidate;
 use ice::candidate::Candidate;
@@ -177,7 +176,10 @@ impl RTCPeerConnection {
         Ok(RTCPeerConnection {
             stats_id: format!(
                 "PeerConnection-{}",
-                SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
             ),
             interceptor_rtcp_writer,
             internal,
@@ -1785,7 +1787,7 @@ impl RTCPeerConnection {
         pkt: &(dyn rtcp::packet::Packet + Send + Sync),
     ) -> Result<usize> {
         let a = Attributes::new();
-        self.interceptor_rtcp_writer.write(pkt, &a).await
+        Ok(self.interceptor_rtcp_writer.write(pkt, &a).await?)
     }
 
     /// close ends the PeerConnection
@@ -1821,7 +1823,7 @@ impl RTCPeerConnection {
             for t in &*rtp_transceivers {
                 if !t.stopped {
                     if let Err(err) = t.stop().await {
-                        close_errs.push(err);
+                        close_errs.push(err.into());
                     }
                 }
             }
@@ -1837,17 +1839,17 @@ impl RTCPeerConnection {
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #6)
         if let Err(err) = self.internal.sctp_transport.stop().await {
-            close_errs.push(err);
+            close_errs.push(err.into());
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #7)
         if let Err(err) = self.internal.dtls_transport.stop().await {
-            close_errs.push(err);
+            close_errs.push(err.into());
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #8, #9, #10)
         if let Err(err) = self.internal.ice_transport.stop().await {
-            close_errs.push(err);
+            close_errs.push(err.into());
         }
 
         // https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close (step #11)
@@ -1861,7 +1863,7 @@ impl RTCPeerConnection {
         .await;
 
         if let Err(err) = self.internal.ops.close().await {
-            close_errs.push(err);
+            close_errs.push(err.into());
         }
 
         flatten_errs(close_errs)

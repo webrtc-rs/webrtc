@@ -1,4 +1,4 @@
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::media::dtls_transport::RTCDtlsTransport;
 use crate::media::rtp::rtp_sender::RTPSenderInternal;
 use crate::media::rtp::SSRC;
@@ -6,7 +6,6 @@ use crate::media::rtp::SSRC;
 use srtp::session::Session;
 use srtp::stream::Stream;
 
-use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
 use interceptor::{Attributes, RTCPReader, RTPWriter};
@@ -66,7 +65,7 @@ impl SrtpWriterFuture {
     pub async fn close(&self) -> Result<()> {
         let stream = self.rtcp_read_stream.lock().await;
         if let Some(rtcp_read_stream) = &*stream {
-            rtcp_read_stream.close().await
+            Ok(rtcp_read_stream.close().await?)
         } else {
             Ok(())
         }
@@ -76,7 +75,7 @@ impl SrtpWriterFuture {
         {
             let stream = self.rtcp_read_stream.lock().await;
             if let Some(rtcp_read_stream) = &*stream {
-                return rtcp_read_stream.read(b).await;
+                return Ok(rtcp_read_stream.read(b).await?);
             }
         }
 
@@ -85,7 +84,7 @@ impl SrtpWriterFuture {
         {
             let stream = self.rtcp_read_stream.lock().await;
             if let Some(rtcp_read_stream) = &*stream {
-                return rtcp_read_stream.read(b).await;
+                return Ok(rtcp_read_stream.read(b).await?);
             }
         }
 
@@ -96,7 +95,7 @@ impl SrtpWriterFuture {
         {
             let session = self.rtp_write_session.lock().await;
             if let Some(rtp_write_session) = &*session {
-                return rtp_write_session.write_rtp(pkt).await;
+                return Ok(rtp_write_session.write_rtp(pkt).await?);
             }
         }
 
@@ -105,7 +104,7 @@ impl SrtpWriterFuture {
         {
             let session = self.rtp_write_session.lock().await;
             if let Some(rtp_write_session) = &*session {
-                return rtp_write_session.write_rtp(pkt).await;
+                return Ok(rtp_write_session.write_rtp(pkt).await?);
             }
         }
 
@@ -116,7 +115,7 @@ impl SrtpWriterFuture {
         {
             let session = self.rtp_write_session.lock().await;
             if let Some(rtp_write_session) = &*session {
-                return rtp_write_session.write(b, true).await;
+                return Ok(rtp_write_session.write(b, true).await?);
             }
         }
 
@@ -125,7 +124,7 @@ impl SrtpWriterFuture {
         {
             let session = self.rtp_write_session.lock().await;
             if let Some(rtp_write_session) = &*session {
-                return rtp_write_session.write(b, true).await;
+                return Ok(rtp_write_session.write(b, true).await?);
             }
         }
 
@@ -133,16 +132,18 @@ impl SrtpWriterFuture {
     }
 }
 
+type IResult<T> = std::result::Result<T, interceptor::Error>;
+
 #[async_trait]
 impl RTCPReader for SrtpWriterFuture {
-    async fn read(&self, buf: &mut [u8], a: &Attributes) -> Result<(usize, Attributes)> {
+    async fn read(&self, buf: &mut [u8], a: &Attributes) -> IResult<(usize, Attributes)> {
         Ok((self.read(buf).await?, a.clone()))
     }
 }
 
 #[async_trait]
 impl RTPWriter for SrtpWriterFuture {
-    async fn write(&self, pkt: &rtp::packet::Packet, _a: &Attributes) -> Result<usize> {
-        self.write_rtp(pkt).await
+    async fn write(&self, pkt: &rtp::packet::Packet, _a: &Attributes) -> IResult<usize> {
+        Ok(self.write_rtp(pkt).await?)
     }
 }

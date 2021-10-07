@@ -3,7 +3,6 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 
-use anyhow::Result;
 use ice::candidate::Candidate;
 use ice::state::ConnectionState;
 use tokio::sync::{mpsc, Mutex};
@@ -12,7 +11,7 @@ use util::Conn;
 use ice_candidate_pair::RTCIceCandidatePair;
 use ice_role::RTCIceRole;
 
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::media::ice_transport::ice_parameters::RTCIceParameters;
 use crate::media::ice_transport::ice_transport_state::RTCIceTransportState;
 use crate::peer::ice::ice_candidate::RTCIceCandidate;

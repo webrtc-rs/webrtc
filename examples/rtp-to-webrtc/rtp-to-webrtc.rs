@@ -7,7 +7,6 @@ use tokio::net::UdpSocket;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_VP8};
 use webrtc::api::APIBuilder;
-use webrtc::error::Error;
 use webrtc::media::rtp::rtp_codec::RTCRtpCodecCapability;
 use webrtc::media::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
 use webrtc::media::track::track_local::{TrackLocal, TrackLocalWriter};
@@ -16,6 +15,7 @@ use webrtc::peer::ice::ice_connection_state::RTCIceConnectionState;
 use webrtc::peer::ice::ice_server::RTCIceServer;
 use webrtc::peer::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer::sdp::session_description::RTCSessionDescription;
+use webrtc::Error;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -195,7 +195,7 @@ async fn main() -> Result<()> {
         let mut inbound_rtp_packet = vec![0u8; 1600]; // UDP MTU
         while let Ok((n, _)) = listener.recv_from(&mut inbound_rtp_packet).await {
             if let Err(err) = video_track.write(&inbound_rtp_packet[..n]).await {
-                if Error::ErrClosedPipe.equal(&err) {
+                if Error::ErrClosedPipe == err {
                     // The peerConnection has been closed.
                     return;
                 } else {

@@ -1,7 +1,7 @@
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::media::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
 use crate::util::math_rand_alpha;
-use anyhow::Result;
+
 use dtls::crypto::{CryptoPrivateKey, CryptoPrivateKeyKind};
 use rcgen::{CertificateParams, KeyPair, RcgenError};
 use ring::signature::{EcdsaKeyPair, Ed25519KeyPair, RsaKeyPair};
@@ -82,7 +82,10 @@ impl RTCCertificate {
             },
             stats_id: format!(
                 "certificate-{}",
-                SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos() as u64
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos() as u64
             ),
             x509_cert,
             expires,

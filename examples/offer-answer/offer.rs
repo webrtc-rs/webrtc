@@ -315,7 +315,7 @@ async fn main() -> Result<()> {
                     _ = timeout.as_mut() =>{
                         let message = math_rand_alpha(15);
                         println!("Sending '{}'", message);
-                        result = d2.send_text(message).await;
+                        result = d2.send_text(message).await.map_err(Into::into);
                     }
                 };
             }

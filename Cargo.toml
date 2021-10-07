@@ -33,8 +33,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rand = "0.8"
 bytes = "1"
-thiserror = "1.0.25"
-anyhow = "1.0.41"
+thiserror = "1.0"
 waitgroup = "0.1.2"
 regex = "1"
 url = "2.2.2"
@@ -53,6 +52,7 @@ clap = "2"
 hyper = { version = "0.14.13", features = ["full"] }
 signal = {path = "examples/signal" }
 tokio-util = "0.6.8"
+anyhow = "1.0"
 
 [profile.dev]
 opt-level = 0

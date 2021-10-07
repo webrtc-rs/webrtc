@@ -2,7 +2,7 @@
 mod sdp_test;
 
 use crate::api::media_engine::MediaEngine;
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::media::dtls_transport::dtls_fingerprint::RTCDtlsFingerprint;
 use crate::media::ice_transport::ice_parameters::RTCIceParameters;
 use crate::media::rtp::rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType};
@@ -17,7 +17,6 @@ use crate::MEDIA_SECTION_APPLICATION;
 pub mod sdp_type;
 pub mod session_description;
 
-use anyhow::Result;
 use ice::candidate::candidate_base::unmarshal_candidate;
 use ice::candidate::Candidate;
 use sdp::common_description::{Address, ConnectionInformation};
@@ -635,7 +634,7 @@ pub(crate) fn description_is_plan_b(
 ) -> Result<bool> {
     if let Some(desc) = desc {
         if let Some(parsed) = &desc.parsed {
-            let detection_regex = regex::Regex::new(r"(?i)^(audio|video|data)$")?;
+            let detection_regex = regex::Regex::new(r"(?i)^(audio|video|data)$").unwrap();
             for media in &parsed.media_descriptions {
                 if let Some(s) = get_mid_value(media) {
                     if let Some(caps) = detection_regex.captures(s) {
@@ -803,7 +802,7 @@ pub(crate) fn codecs_from_media_description(
                 if payload_type == 0 {
                     continue;
                 }
-                return Err(err);
+                return Err(err.into());
             }
         };
 

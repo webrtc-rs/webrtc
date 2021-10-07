@@ -97,7 +97,7 @@ async fn test_invalid_fingerprint_causes_failed() -> Result<()> {
             log::trace!("receiving pending local desc: {:?}", offer);
 
             // Replace with invalid fingerprint
-            let re = Regex::new(r"sha-256 (.*?)\r")?;
+            let re = Regex::new(r"sha-256 (.*?)\r").unwrap();
             offer.sdp = re.replace_all(offer.sdp.as_str(), "sha-256 AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA\r").to_string();
 
             pc_answer.set_remote_description(offer).await?;

@@ -51,7 +51,7 @@ fn test_extract_fingerprint() -> Result<()> {
         let s = SessionDescription::default();
 
         if let Err(err) = extract_fingerprint(&s) {
-            assert!(Error::ErrSessionDescriptionNoFingerprint.equal(&err));
+            assert_eq!(Error::ErrSessionDescriptionNoFingerprint, err);
         } else {
             assert!(false);
         }
@@ -68,7 +68,7 @@ fn test_extract_fingerprint() -> Result<()> {
         };
 
         if let Err(err) = extract_fingerprint(&s) {
-            assert!(Error::ErrSessionDescriptionInvalidFingerprint.equal(&err));
+            assert_eq!(Error::ErrSessionDescriptionInvalidFingerprint, err);
         } else {
             assert!(false);
         }
@@ -92,7 +92,7 @@ fn test_extract_fingerprint() -> Result<()> {
         };
 
         if let Err(err) = extract_fingerprint(&s) {
-            assert!(Error::ErrSessionDescriptionConflictingFingerprints.equal(&err));
+            assert_eq!(Error::ErrSessionDescriptionConflictingFingerprints, err);
         } else {
             assert!(false);
         }
@@ -120,7 +120,7 @@ async fn test_extract_ice_details() -> Result<()> {
         };
 
         if let Err(err) = extract_ice_details(&s).await {
-            assert!(Error::ErrSessionDescriptionMissingIcePwd.equal(&err));
+            assert_eq!(Error::ErrSessionDescriptionMissingIcePwd, err);
         } else {
             assert!(false);
         }
@@ -140,7 +140,7 @@ async fn test_extract_ice_details() -> Result<()> {
         };
 
         if let Err(err) = extract_ice_details(&s).await {
-            assert!(Error::ErrSessionDescriptionMissingIceUfrag.equal(&err));
+            assert_eq!(Error::ErrSessionDescriptionMissingIceUfrag, err);
         } else {
             assert!(false);
         }
@@ -216,7 +216,7 @@ async fn test_extract_ice_details() -> Result<()> {
         };
 
         if let Err(err) = extract_ice_details(&s).await {
-            assert!(Error::ErrSessionDescriptionConflictingIceUfrag.equal(&err));
+            assert_eq!(Error::ErrSessionDescriptionConflictingIceUfrag, err);
         } else {
             assert!(false);
         }
@@ -246,7 +246,7 @@ async fn test_extract_ice_details() -> Result<()> {
         };
 
         if let Err(err) = extract_ice_details(&s).await {
-            assert!(Error::ErrSessionDescriptionConflictingIcePwd.equal(&err));
+            assert_eq!(Error::ErrSessionDescriptionConflictingIcePwd, err);
         } else {
             assert!(false);
         }

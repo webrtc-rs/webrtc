@@ -39,7 +39,7 @@ async fn test_track_local_static_no_codec_intersection() -> Result<()> {
         pc.add_track(Arc::clone(&track)).await?;
 
         if let Err(err) = signal_pair(&mut pc, &mut no_codec_pc).await {
-            assert!(Error::ErrUnsupportedCodec.equal(&err));
+            assert_eq!(Error::ErrUnsupportedCodec, err);
         } else {
             assert!(false);
         }
@@ -79,8 +79,9 @@ async fn test_track_local_static_no_codec_intersection() -> Result<()> {
         pc.add_track(Arc::clone(&track)).await?;
 
         if let Err(err) = signal_pair(&mut vp9only_pc, &mut pc).await {
-            assert!(
-                Error::ErrUnsupportedCodec.equal(&err),
+            assert_eq!(
+                Error::ErrUnsupportedCodec,
+                err,
                 "expected {}, but got {}",
                 Error::ErrUnsupportedCodec,
                 err
@@ -108,7 +109,7 @@ async fn test_track_local_static_no_codec_intersection() -> Result<()> {
         offerer.add_track(Arc::new(invalid_codec_track)).await?;
 
         if let Err(err) = signal_pair(&mut offerer, &mut answerer).await {
-            assert!(Error::ErrUnsupportedCodec.equal(&err));
+            assert_eq!(Error::ErrUnsupportedCodec, err);
         } else {
             assert!(false);
         }

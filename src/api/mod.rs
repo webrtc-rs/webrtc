@@ -17,7 +17,7 @@ use setting_engine::*;
 use crate::data::data_channel::data_channel_parameters::DataChannelParameters;
 use crate::data::data_channel::RTCDataChannel;
 use crate::data::sctp_transport::RTCSctpTransport;
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::media::rtp::rtp_codec::RTPCodecType;
 use crate::media::rtp::rtp_receiver::RTCRtpReceiver;
 use crate::media::rtp::rtp_sender::RTCRtpSender;
@@ -26,7 +26,6 @@ use crate::peer::configuration::RTCConfiguration;
 use crate::peer::peer_connection::RTCPeerConnection;
 use interceptor::{noop::NoOp, registry::Registry, Interceptor};
 
-use anyhow::Result;
 use rcgen::KeyPair;
 use std::sync::Arc;
 use std::time::SystemTime;

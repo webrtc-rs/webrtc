@@ -1,8 +1,8 @@
+use crate::error::Result;
 use crate::media::rtp::rtp_codec::{RTCRtpCodecCapability, RTCRtpHeaderExtensionParameters};
 use crate::media::rtp::{PayloadType, SSRC};
 use crate::media::track::track_local::TrackLocalWriter;
 
-use anyhow::Result;
 use async_trait::async_trait;
 use interceptor::stream_info::{RTCPFeedback, RTPHeaderExtension, StreamInfo};
 use interceptor::{Attributes, RTPWriter};
@@ -42,7 +42,7 @@ impl TrackLocalWriter for InterceptorToTrackLocalWriter {
         let interceptor_rtp_writer = self.interceptor_rtp_writer.lock().await;
         if let Some(writer) = &*interceptor_rtp_writer {
             let a = Attributes::new();
-            writer.write(pkt, &a).await
+            Ok(writer.write(pkt, &a).await?)
         } else {
             Ok(0)
         }

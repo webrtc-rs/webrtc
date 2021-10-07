@@ -8,8 +8,8 @@ use ice::agent::agent_config::InterfaceFilterFn;
 use ice::mdns::MulticastDnsMode;
 use ice::network_type::NetworkType;
 
-use crate::error::Error;
-use anyhow::Result;
+use crate::error::{Error, Result};
+
 use std::sync::Arc;
 use tokio::time::Duration;
 use util::vnet::net::*;
@@ -134,7 +134,7 @@ impl SettingEngine {
     /// and the local address of server reflexive candidates.
     pub fn set_ephemeral_udp_port_range(&mut self, port_min: u16, port_max: u16) -> Result<()> {
         if port_max < port_min {
-            return Err(ice::error::Error::ErrPort.into());
+            return Err(ice::Error::ErrPort.into());
         }
 
         self.ephemeral_udp.port_min = port_min;

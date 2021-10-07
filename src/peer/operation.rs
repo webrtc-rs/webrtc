@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod operation_test;
 
-use anyhow::Result;
 use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
@@ -9,6 +8,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use waitgroup::WaitGroup;
+
+use crate::error::Result;
 
 /// Operation is a function
 pub struct Operation(

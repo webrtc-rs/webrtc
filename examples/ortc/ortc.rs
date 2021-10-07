@@ -244,7 +244,7 @@ async fn handle_on_open(d: Arc<RTCDataChannel>) -> Result<()> {
             _ = timeout.as_mut() =>{
                 let message = math_rand_alpha(15);
                 println!("Sending '{}'", message);
-                result = d.send_text(message).await;
+                result = d.send_text(message).await.map_err(Into::into);
             }
         };
     }
