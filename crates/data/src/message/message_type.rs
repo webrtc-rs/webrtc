@@ -6,6 +6,8 @@ pub(crate) const MESSAGE_TYPE_ACK: u8 = 0x02;
 pub(crate) const MESSAGE_TYPE_OPEN: u8 = 0x03;
 pub(crate) const MESSAGE_TYPE_LEN: usize = 1;
 
+type Result<T> = std::result::Result<T, util::Error>;
+
 // A parsed DataChannel message
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub enum MessageType {

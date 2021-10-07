@@ -1,3 +1,5 @@
+use crate::error::Result;
+
 use super::*;
 
 use bytes::{Bytes, BytesMut};
@@ -46,7 +48,7 @@ fn test_message_unmarshal_invalid_message_type() {
     let expected = Error::InvalidMessageType(0x01);
     let actual = Message::unmarshal(&mut bytes);
     if let Err(err) = actual {
-        assert!(expected.equal(&err));
+        assert_eq!(expected, err);
     } else {
         assert!(false, "expected err, but got ok");
     }

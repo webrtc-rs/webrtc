@@ -1,6 +1,8 @@
 use super::*;
 use crate::error::Error;
 
+type Result<T> = std::result::Result<T, util::Error>;
+
 const CHANNEL_TYPE_RELIABLE: u8 = 0x00;
 const CHANNEL_TYPE_RELIABLE_UNORDERED: u8 = 0x80;
 const CHANNEL_TYPE_PARTIAL_RELIABLE_REXMIT: u8 = 0x01;
