@@ -19,7 +19,7 @@ impl CandidateServerReflexiveConfig {
     pub async fn new_candidate_server_reflexive(self) -> Result<CandidateBase> {
         let ip: IpAddr = match self.base_config.address.parse() {
             Ok(ip) => ip,
-            Err(_) => return Err(Error::ErrAddressParseFailed.into()),
+            Err(_) => return Err(Error::ErrAddressParseFailed),
         };
         let network_type = determine_network_type(&self.base_config.network, &ip)?;
 

@@ -102,7 +102,7 @@ impl Getter for AttrControl {
             return self.tie_breaker.get_from_as(m, ATTR_ICE_CONTROLLED);
         }
 
-        Err(stun::Error::ErrAttributeNotFound.into())
+        Err(stun::Error::ErrAttributeNotFound)
     }
 }
 

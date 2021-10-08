@@ -224,11 +224,11 @@ async fn main() -> Result<(), Error> {
         .body(Body::from(format!("{}:{}", local_ufrag, local_pwd)))
     {
         Ok(req) => req,
-        Err(err) => return Err(Error::Other(format!("{}", err)).into()),
+        Err(err) => return Err(Error::Other(format!("{}", err))),
     };
     let resp = match client.request(req).await {
         Ok(resp) => resp,
-        Err(err) => return Err(Error::Other(format!("{}", err)).into()),
+        Err(err) => return Err(Error::Other(format!("{}", err))),
     };
     println!("Response from remoteAuth: {}", resp.status());
 

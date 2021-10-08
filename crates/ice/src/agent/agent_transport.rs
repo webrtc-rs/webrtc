@@ -35,7 +35,7 @@ impl Agent {
             tokio::select! {
                 _ = on_connected_rx.recv() => {},
                 _ = cancel_rx.recv() => {
-                    return Err(Error::ErrCanceledByCaller.into());
+                    return Err(Error::ErrCanceledByCaller);
                 }
             }
         }
@@ -70,7 +70,7 @@ impl Agent {
             tokio::select! {
                 _ = on_connected_rx.recv() => {},
                 _ = cancel_rx.recv() => {
-                    return Err(Error::ErrCanceledByCaller.into());
+                    return Err(Error::ErrCanceledByCaller);
                 }
             }
         }

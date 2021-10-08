@@ -31,8 +31,7 @@ pub fn assert_inbound_username(m: &Message, expected_username: &str) -> Result<(
             Error::ErrMismatchUsername,
             expected_username,
             username,
-        ))
-        .into());
+        )));
     }
 
     Ok(())
@@ -73,9 +72,9 @@ pub async fn stun_request(
         match tokio::time::timeout(deadline, conn.recv_from(&mut bs)).await {
             Ok(result) => match result {
                 Ok((n, addr)) => (n, addr),
-                Err(err) => return Err(Error::Other(err.to_string()).into()),
+                Err(err) => return Err(Error::Other(err.to_string())),
             },
-            Err(err) => return Err(Error::Other(err.to_string()).into()),
+            Err(err) => return Err(Error::Other(err.to_string())),
         }
     } else {
         conn.recv_from(&mut bs).await?
@@ -138,7 +137,7 @@ pub async fn listen_udp_in_port_range(
     let i = if port_min == 0 { 1 } else { port_min };
     let j = if port_max == 0 { 0xFFFF } else { port_max };
     if i > j {
-        return Err(Error::ErrPort.into());
+        return Err(Error::ErrPort);
     }
 
     let port_start = rand::random::<u16>() % (j - i + 1) + i;
@@ -159,5 +158,5 @@ pub async fn listen_udp_in_port_range(
         }
     }
 
-    Err(Error::ErrPort.into())
+    Err(Error::ErrPort)
 }

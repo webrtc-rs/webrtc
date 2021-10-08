@@ -171,7 +171,7 @@ impl AgentInternal {
         {
             let started_ch_tx = self.started_ch_tx.lock().await;
             if started_ch_tx.is_none() {
-                return Err(Error::ErrMultipleStart.into());
+                return Err(Error::ErrMultipleStart);
             }
         }
 
@@ -619,7 +619,7 @@ impl AgentInternal {
         let _d = {
             let mut done_tx = self.done_tx.lock().await;
             if done_tx.is_none() {
-                return Err(Error::ErrClosed.into());
+                return Err(Error::ErrClosed);
             }
             done_tx.take();
         };
@@ -996,9 +996,9 @@ impl AgentInternal {
         remote_pwd: String,
     ) -> Result<()> {
         if remote_ufrag.is_empty() {
-            return Err(Error::ErrRemoteUfragEmpty.into());
+            return Err(Error::ErrRemoteUfragEmpty);
         } else if remote_pwd.is_empty() {
-            return Err(Error::ErrRemotePwdEmpty.into());
+            return Err(Error::ErrRemotePwdEmpty);
         }
 
         let mut ufrag_pwd = self.ufrag_pwd.lock().await;
@@ -1130,7 +1130,7 @@ impl AgentInternal {
         if let Some(mut initialized_ch) = initialized_ch {
             tokio::select! {
                 _ = initialized_ch.recv() => {}
-                _ = closed_ch_rx.recv() => return Err(Error::ErrClosed.into()),
+                _ = closed_ch_rx.recv() => return Err(Error::ErrClosed),
             }
         }
 
@@ -1145,10 +1145,10 @@ impl AgentInternal {
                             n = num;
                             src_addr = src;
                        }
-                       Err(err) => return Err(Error::Other(err.to_string()).into()),
+                       Err(err) => return Err(Error::Other(err.to_string())),
                    }
                },
-                _  = closed_ch_rx.recv() => return Err(Error::ErrClosed.into()),
+                _  = closed_ch_rx.recv() => return Err(Error::ErrClosed),
             }
 
             self.handle_inbound_candidate_msg(&candidate, &buffer[..n], src_addr, addr)
