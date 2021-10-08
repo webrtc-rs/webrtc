@@ -108,7 +108,7 @@ impl DataChannel {
         let (n, ppi) = stream.read_sctp(&mut buf).await?;
 
         if ppi != PayloadProtocolIdentifier::Dcep {
-            return Err(Error::InvalidPayloadProtocolIdentifier(ppi as u8).into());
+            return Err(Error::InvalidPayloadProtocolIdentifier(ppi as u8));
         }
 
         let mut read_buf = &buf[..n];
@@ -121,7 +121,7 @@ impl DataChannel {
             config.label = String::from_utf8(dco.label)?;
             config.protocol = String::from_utf8(dco.protocol)?;
         } else {
-            return Err(Error::InvalidMessageType(msg.message_type() as u8).into());
+            return Err(Error::InvalidMessageType(msg.message_type() as u8));
         };
 
         let data_channel = DataChannel::new(stream, config);

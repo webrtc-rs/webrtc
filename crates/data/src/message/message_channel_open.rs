@@ -431,8 +431,8 @@ mod tests {
             channel_type: ChannelType::Reliable,
             priority: 3893,
             reliability_parameter: 16715573,
-            label: b"label".iter().cloned().collect(),
-            protocol: b"protocol".iter().cloned().collect(),
+            label: b"label".to_vec(),
+            protocol: b"protocol".to_vec(),
         };
 
         let marshal_size = channel_open.marshal_size();
@@ -447,8 +447,8 @@ mod tests {
             channel_type: ChannelType::Reliable,
             priority: 3893,
             reliability_parameter: 16715573,
-            label: b"label".iter().cloned().collect(),
-            protocol: b"protocol".iter().cloned().collect(),
+            label: b"label".to_vec(),
+            protocol: b"protocol".to_vec(),
         };
 
         let mut buf = BytesMut::with_capacity(11 + 5 + 8);

@@ -23,8 +23,8 @@ fn test_message_unmarshal_open_success() {
         channel_type: ChannelType::Reliable,
         priority: 3893,
         reliability_parameter: 16715573,
-        label: b"label".iter().cloned().collect(),
-        protocol: b"protocol".iter().cloned().collect(),
+        label: b"label".to_vec(),
+        protocol: b"protocol".to_vec(),
     });
 
     assert_eq!(actual, expected);
@@ -74,8 +74,8 @@ fn test_message_marshal() {
         channel_type: ChannelType::Reliable,
         priority: 3893,
         reliability_parameter: 16715573,
-        label: b"label".iter().cloned().collect(),
-        protocol: b"protocol".iter().cloned().collect(),
+        label: b"label".to_vec(),
+        protocol: b"protocol".to_vec(),
     });
 
     let actual = msg.marshal_to(&mut buf).unwrap();
