@@ -4,7 +4,6 @@ mod abs_send_time_extension_test;
 use crate::error::Error;
 use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
-use anyhow::Result;
 use bytes::{Buf, BufMut};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -19,7 +18,7 @@ pub struct AbsSendTimeExtension {
 
 impl Unmarshal for AbsSendTimeExtension {
     /// Unmarshal parses the passed byte slice and stores the result in the members.
-    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self, util::Error>
     where
         Self: Sized,
         B: Buf,
@@ -46,7 +45,7 @@ impl MarshalSize for AbsSendTimeExtension {
 
 impl Marshal for AbsSendTimeExtension {
     /// MarshalTo serializes the members to buffer.
-    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize, util::Error> {
         if buf.remaining_mut() < ABS_SEND_TIME_EXTENSION_SIZE {
             return Err(Error::ErrBufferTooSmall.into());
         }

@@ -1,4 +1,5 @@
 use super::*;
+use crate::error::Result;
 
 use bytes::BytesMut;
 use chrono::prelude::*;
@@ -47,7 +48,7 @@ fn test_ntp_conversion() -> Result<()> {
         let input = UNIX_EPOCH
             .checked_add(Duration::from_nanos(t.timestamp_nanos() as u64))
             .unwrap_or(UNIX_EPOCH);
-        let diff = input.duration_since(output)?.as_nanos() as i128;
+        let diff = input.duration_since(output).unwrap().as_nanos() as i128;
         if diff < -ABS_SEND_TIME_RESOLUTION || ABS_SEND_TIME_RESOLUTION < diff {
             assert!(
                 false,
@@ -101,7 +102,7 @@ fn test_abs_send_time_extension_estimate() -> Result<()> {
         let receive = AbsSendTimeExtension::unmarshal(buf)?;
 
         let estimated = receive.estimate(ntp2unix(receive_ntp));
-        let diff = estimated.duration_since(in_time)?.as_nanos() as i128;
+        let diff = estimated.duration_since(in_time).unwrap().as_nanos() as i128;
         if diff < -ABS_SEND_TIME_RESOLUTION || ABS_SEND_TIME_RESOLUTION < diff {
             assert!(
                 false,

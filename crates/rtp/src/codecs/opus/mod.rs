@@ -2,11 +2,10 @@
 mod opus_test;
 
 use crate::{
-    error::Error,
+    error::{Error, Result},
     packetizer::{Depacketizer, Payloader},
 };
 
-use anyhow::Result;
 use bytes::Bytes;
 
 #[derive(Default, Debug, Copy, Clone)]
@@ -35,7 +34,7 @@ pub struct OpusPacket {
 impl Depacketizer for OpusPacket {
     fn depacketize(&mut self, packet: &Bytes) -> Result<()> {
         if packet.is_empty() {
-            Err(Error::ErrShortPacket.into())
+            Err(Error::ErrShortPacket)
         } else {
             self.payload = packet.clone();
             Ok(())

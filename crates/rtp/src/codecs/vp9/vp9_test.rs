@@ -208,12 +208,10 @@ fn test_vp9_packet_unmarshal() -> Result<()> {
 
         if let Some(expected) = err {
             if let Err(actual) = p.depacketize(&b) {
-                assert!(
-                    expected.equal(&actual),
+                assert_eq!(
+                    expected, actual,
                     "{}: expected {}, but got {}",
-                    name,
-                    expected,
-                    actual
+                    name, expected, actual
                 );
             } else {
                 assert!(false, "{}: expected error, but got passed", name);

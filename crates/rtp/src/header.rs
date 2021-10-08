@@ -1,7 +1,6 @@
-use crate::error::*;
+use crate::error::Error;
 use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
-use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes};
 
 pub const HEADER_LENGTH: usize = 4;
@@ -52,7 +51,7 @@ pub struct Header {
 
 impl Unmarshal for Header {
     /// Unmarshal parses the passed byte slice and stores the result in the Header this method is called upon
-    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self, util::Error>
     where
         Self: Sized,
         B: Buf,
@@ -214,7 +213,7 @@ impl MarshalSize for Header {
 
 impl Marshal for Header {
     /// Marshal serializes the header and writes to the buffer.
-    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize, util::Error> {
         /*
          *  0                   1                   2                   3
          *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -352,28 +351,28 @@ impl Header {
     }
 
     /// SetExtension sets an RTP header extension
-    pub fn set_extension(&mut self, id: u8, payload: Bytes) -> Result<()> {
+    pub fn set_extension(&mut self, id: u8, payload: Bytes) -> Result<(), Error> {
         if self.extension {
             match self.extension_profile {
                 EXTENSION_PROFILE_ONE_BYTE => {
                     if !(1..=14).contains(&id) {
-                        return Err(Error::ErrRfc8285oneByteHeaderIdrange.into());
+                        return Err(Error::ErrRfc8285oneByteHeaderIdrange);
                     }
                     if payload.len() > 16 {
-                        return Err(Error::ErrRfc8285oneByteHeaderSize.into());
+                        return Err(Error::ErrRfc8285oneByteHeaderSize);
                     }
                 }
                 EXTENSION_PROFILE_TWO_BYTE => {
                     if id < 1 {
-                        return Err(Error::ErrRfc8285twoByteHeaderIdrange.into());
+                        return Err(Error::ErrRfc8285twoByteHeaderIdrange);
                     }
                     if payload.len() > 255 {
-                        return Err(Error::ErrRfc8285twoByteHeaderSize.into());
+                        return Err(Error::ErrRfc8285twoByteHeaderSize);
                     }
                 }
                 _ => {
                     if id != 0 {
-                        return Err(Error::ErrRfc3550headerIdrange.into());
+                        return Err(Error::ErrRfc3550headerIdrange);
                     }
                 }
             };
@@ -427,9 +426,9 @@ impl Header {
     }
 
     /// Removes an RTP Header extension
-    pub fn del_extension(&mut self, id: u8) -> Result<()> {
+    pub fn del_extension(&mut self, id: u8) -> Result<(), Error> {
         if !self.extension {
-            return Err(Error::ErrHeaderExtensionsNotEnabled.into());
+            return Err(Error::ErrHeaderExtensionsNotEnabled);
         }
         for index in 0..self.extensions.len() {
             if self.extensions[index].id == id {
@@ -437,6 +436,6 @@ impl Header {
                 return Ok(());
             }
         }
-        Err(Error::ErrHeaderExtensionNotFound.into())
+        Err(Error::ErrHeaderExtensionNotFound)
     }
 }

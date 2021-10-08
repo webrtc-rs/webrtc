@@ -4,7 +4,6 @@ mod transport_cc_extension_test;
 use crate::error::Error;
 use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
-use anyhow::Result;
 use bytes::{Buf, BufMut};
 
 // transport-wide sequence
@@ -26,7 +25,7 @@ pub struct TransportCcExtension {
 
 impl Unmarshal for TransportCcExtension {
     /// Unmarshal parses the passed byte slice and stores the result in the members
-    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self, util::Error>
     where
         Self: Sized,
         B: Buf,
@@ -51,7 +50,7 @@ impl MarshalSize for TransportCcExtension {
 
 impl Marshal for TransportCcExtension {
     /// Marshal serializes the members to buffer
-    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize, util::Error> {
         if buf.remaining_mut() < TRANSPORT_CC_EXTENSION_SIZE {
             return Err(Error::ErrBufferTooSmall.into());
         }
