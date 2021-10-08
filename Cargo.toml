@@ -98,8 +98,13 @@ path = "examples/insertable-streams/insertable-streams.rs"
 bench = false
 
 [[example]]
-name = "play-from-disk"
-path = "examples/play-from-disk/play-from-disk.rs"
+name = "play-from-disk-vp8"
+path = "examples/play-from-disk-vp8/play-from-disk-vp8.rs"
+bench = false
+
+[[example]]
+name = "play-from-disk-vp9"
+path = "examples/play-from-disk-vp9/play-from-disk-vp9.rs"
 bench = false
 
 [[example]]

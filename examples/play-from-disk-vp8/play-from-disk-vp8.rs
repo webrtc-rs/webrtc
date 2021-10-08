@@ -26,10 +26,10 @@ use webrtc::peer::sdp::session_description::RTCSessionDescription;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut app = App::new("play-from-disk")
+    let mut app = App::new("play-from-disk-vp8")
         .version("0.1.0")
         .author("Rain Liu <yliu@webrtc.rs>")
-        .about("An example of play-from-disk.")
+        .about("An example of play-from-disk-vp8.")
         .setting(AppSettings::DeriveDisplayOrder)
         .setting(AppSettings::SubcommandsNegateReqs)
         .arg(
