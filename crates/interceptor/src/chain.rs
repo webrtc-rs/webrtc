@@ -2,7 +2,6 @@ use crate::error::*;
 use crate::stream_info::StreamInfo;
 use crate::*;
 
-use anyhow::Result;
 use std::sync::Arc;
 
 /// Chain is an interceptor that runs all child interceptors in order.

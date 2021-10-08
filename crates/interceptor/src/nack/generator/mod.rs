@@ -4,13 +4,13 @@ mod generator_test;
 
 use generator_stream::GeneratorStream;
 
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::stream_info::StreamInfo;
 use crate::RTCPWriter;
 use crate::{Attributes, Interceptor, RTCPReader, RTPReader, RTPWriter};
 
 use crate::nack::stream_support_nack;
-use anyhow::Result;
+
 use async_trait::async_trait;
 use rtcp::transport_feedbacks::transport_layer_nack::{
     nack_pairs_from_sequence_numbers, TransportLayerNack,
@@ -118,7 +118,7 @@ impl Generator {
             if let Some(close) = close_rx.take() {
                 close
             } else {
-                return Err(Error::ErrIncorrectReceiverReportCloseRx.into());
+                return Err(Error::ErrIncorrectReceiverReportCloseRx);
             }
         };
 

@@ -7,7 +7,6 @@ use crate::error::Error;
 use crate::*;
 use receiver_stream::ReceiverStream;
 
-use anyhow::Result;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 use tokio::sync::{mpsc, Mutex};
@@ -32,7 +31,7 @@ impl RTCPReader for ReceiverReportInternal {
             if let Some(reader) = parent_rtcp_reader {
                 reader.read(buf, a).await?
             } else {
-                return Err(Error::ErrInvalidParentRtcpReader.into());
+                return Err(Error::ErrInvalidParentRtcpReader);
             }
         };
 
@@ -109,7 +108,7 @@ impl ReceiverReport {
             if let Some(close) = close_rx.take() {
                 close
             } else {
-                return Err(Error::ErrIncorrectReceiverReportCloseRx.into());
+                return Err(Error::ErrIncorrectReceiverReportCloseRx);
             }
         };
 

@@ -166,7 +166,6 @@ impl RTPReader for GeneratorStream {
 #[cfg(test)]
 mod test {
     use super::*;
-    use anyhow::Result;
 
     #[test]
     fn test_generator_stream() -> Result<()> {

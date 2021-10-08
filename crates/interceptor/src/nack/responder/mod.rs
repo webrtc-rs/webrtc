@@ -6,9 +6,9 @@ use crate::stream_info::StreamInfo;
 use crate::{Attributes, Interceptor, RTCPReader, RTCPWriter, RTPReader, RTPWriter};
 use responder_stream::ResponderStream;
 
-use crate::error::Error;
+use crate::error::{Error, Result};
 use crate::nack::stream_support_nack;
-use anyhow::Result;
+
 use async_trait::async_trait;
 use rtcp::compound_packet::CompoundPacket;
 use rtcp::transport_feedbacks::transport_layer_nack::TransportLayerNack;
@@ -100,7 +100,7 @@ impl RTCPReader for ResponderInternal {
             if let Some(reader) = parent_rtcp_reader {
                 reader.read(buf, a).await?
             } else {
-                return Err(Error::ErrInvalidParentRtcpReader.into());
+                return Err(Error::ErrInvalidParentRtcpReader);
             }
         };
 

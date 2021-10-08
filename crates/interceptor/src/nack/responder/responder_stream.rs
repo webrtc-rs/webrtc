@@ -1,7 +1,7 @@
+use crate::error::Result;
 use crate::nack::UINT16SIZE_HALF;
 use crate::{Attributes, RTPWriter};
 
-use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -100,7 +100,6 @@ impl RTPWriter for ResponderStream {
 #[cfg(test)]
 mod test {
     use super::*;
-    use anyhow::Result;
 
     #[test]
     fn test_responder_stream() -> Result<()> {
