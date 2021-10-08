@@ -4,7 +4,7 @@ mod h264_reader_test;
 use crate::error::Error;
 
 use anyhow::Result;
-use bytes::Bytes;
+use bytes::{BufMut, Bytes, BytesMut};
 use std::fmt;
 use std::io::Read;
 
@@ -104,19 +104,19 @@ impl From<u8> for NalUnitType {
 
 /// NAL H.264 Network Abstraction Layer
 pub struct NAL {
-    picture_order_count: u32,
+    pub picture_order_count: u32,
 
     /// NAL header
-    forbidden_zero_bit: bool,
-    ref_idc: u8,
-    unit_type: NalUnitType,
+    pub forbidden_zero_bit: bool,
+    pub ref_idc: u8,
+    pub unit_type: NalUnitType,
 
     /// header byte + rbsp
-    data: Bytes,
+    pub data: BytesMut,
 }
 
 impl NAL {
-    fn new(data: Bytes) -> Self {
+    fn new(data: BytesMut) -> Self {
         NAL {
             picture_order_count: 0,
             forbidden_zero_bit: false,
@@ -140,7 +140,7 @@ const NAL_PREFIX_4BYTES: [u8; 4] = [0, 0, 0, 1];
 /// H264Reader reads data from stream and constructs h264 nal units
 pub struct H264Reader<R: Read> {
     reader: R,
-    nal_buffer: Vec<u8>,
+    nal_buffer: BytesMut,
     count_of_consecutive_zero_bytes: usize,
     nal_prefix_parsed: bool,
     read_buffer: Vec<u8>,
@@ -151,7 +151,7 @@ impl<R: Read> H264Reader<R> {
     pub fn new(reader: R) -> H264Reader<R> {
         H264Reader {
             reader,
-            nal_buffer: vec![],
+            nal_buffer: BytesMut::new(),
             count_of_consecutive_zero_bytes: 0,
             nal_prefix_parsed: false,
             read_buffer: vec![],
@@ -209,7 +209,7 @@ impl<R: Read> H264Reader<R> {
 
         // n == 4
         if nal_prefix3bytes_found {
-            self.nal_buffer.push(prefix_buffer[3]);
+            self.nal_buffer.put_u8(prefix_buffer[3]);
             return Ok(3);
         }
 
@@ -243,21 +243,21 @@ impl<R: Read> H264Reader<R> {
             if nal_found {
                 let nal_unit_type = NalUnitType::from(self.nal_buffer[0] & 0x1F);
                 if nal_unit_type == NalUnitType::SEI {
-                    self.nal_buffer = vec![];
+                    self.nal_buffer.clear();
                     continue;
                 } else {
                     break;
                 }
             }
 
-            self.nal_buffer.push(read_byte);
+            self.nal_buffer.put_u8(read_byte);
         }
 
         if self.nal_buffer.is_empty() {
             return Err(Error::ErrIoEOF.into());
         }
 
-        let mut nal = NAL::new(Bytes::from(self.nal_buffer.drain(..).collect::<Vec<u8>>()));
+        let mut nal = NAL::new(self.nal_buffer.split());
         nal.parse_header();
 
         Ok(nal)
@@ -281,7 +281,7 @@ impl<R: Read> H264Reader<R> {
                     let nal_unit_length =
                         self.nal_buffer.len() - count_of_consecutive_zero_bytes_in_prefix;
                     if nal_unit_length > 0 {
-                        self.nal_buffer.drain(nal_unit_length..);
+                        let _ = self.nal_buffer.split_off(nal_unit_length);
                         nal_found = true;
                     }
                 } else {
