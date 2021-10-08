@@ -1,7 +1,6 @@
 use super::*;
 use crate::error::*;
 
-use anyhow::Result;
 use async_trait::async_trait;
 use util::vnet::net::*;
 
@@ -17,7 +16,7 @@ impl RelayAddressGenerator for RelayAddressGeneratorNone {
     // validate confirms that the RelayAddressGenerator is properly initialized
     fn validate(&self) -> Result<()> {
         if self.address.is_empty() {
-            Err(Error::ErrListeningAddressInvalid.into())
+            Err(Error::ErrListeningAddressInvalid)
         } else {
             Ok(())
         }

@@ -2,9 +2,10 @@ pub mod relay_none;
 pub mod relay_range;
 pub mod relay_static;
 
+use crate::error::Result;
+
 use util::Conn;
 
-use anyhow::Result;
 use async_trait::async_trait;
 use std::net::SocketAddr;
 use std::sync::Arc;

@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn test_dont_fragment_false() -> Result<()> {
+fn test_dont_fragment_false() -> Result<(), stun::Error> {
     let mut dont_fragment = DontFragmentAttr::default();
 
     let mut m = Message::new();
@@ -12,7 +12,7 @@ fn test_dont_fragment_false() -> Result<()> {
 }
 
 #[test]
-fn test_dont_fragment_add_to() -> Result<()> {
+fn test_dont_fragment_add_to() -> Result<(), stun::Error> {
     let mut dont_fragment = DontFragmentAttr::default();
 
     let mut m = Message::new();

@@ -17,7 +17,6 @@ use stun::message::*;
 
 use util::Conn;
 
-use anyhow::Result;
 use std::collections::HashMap;
 use std::marker::{Send, Sync};
 use std::net::SocketAddr;
@@ -111,13 +110,13 @@ impl Allocation {
         {
             if let Some(addr) = self.get_channel_addr(&c.number).await {
                 if addr != c.peer {
-                    return Err(Error::ErrSameChannelDifferentPeer.into());
+                    return Err(Error::ErrSameChannelDifferentPeer);
                 }
             }
 
             if let Some(number) = self.get_channel_number(&c.peer).await {
                 if number != c.number {
-                    return Err(Error::ErrSameChannelDifferentPeer.into());
+                    return Err(Error::ErrSameChannelDifferentPeer);
                 }
             }
         }
@@ -177,7 +176,7 @@ impl Allocation {
     // Close closes the allocation
     pub async fn close(&mut self) -> Result<()> {
         if self.closed {
-            return Err(Error::ErrClosed.into());
+            return Err(Error::ErrClosed);
         }
 
         self.closed = true;

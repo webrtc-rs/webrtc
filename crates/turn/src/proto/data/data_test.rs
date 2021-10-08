@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn test_data_add_to() -> Result<()> {
+fn test_data_add_to() -> Result<(), stun::Error> {
     let mut m = Message::new();
     let d = Data(vec![1, 2, 33, 44, 0x13, 0xaf]);
     d.add_to(&mut m)?;
@@ -21,8 +21,9 @@ fn test_data_add_to() -> Result<()> {
             let m = Message::new();
             let mut handle = Data::default();
             if let Err(err) = handle.get_from(&m) {
-                assert!(
-                    stun::error::Error::ErrAttributeNotFound.equal(&err),
+                assert_eq!(
+                    stun::Error::ErrAttributeNotFound,
+                    err,
                     "{} should be not found",
                     err
                 );

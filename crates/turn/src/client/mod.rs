@@ -15,7 +15,6 @@ use binding::*;
 use relay_conn::*;
 use transaction::*;
 
-use anyhow::Result;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -92,7 +91,7 @@ impl RelayConnObserver for ClientInternal {
     }
 
     // WriteTo sends data to the specified destination using the base socket.
-    async fn write_to(&self, data: &[u8], to: &str) -> Result<usize> {
+    async fn write_to(&self, data: &[u8], to: &str) -> std::result::Result<usize, util::Error> {
         let n = self.conn.send_to(data, SocketAddr::from_str(to)?).await?;
         Ok(n)
     }
@@ -143,10 +142,10 @@ impl RelayConnObserver for ClientInternal {
         if let Some(mut result_ch_rx) = result_ch_rx {
             match result_ch_rx.recv().await {
                 Some(tr) => Ok(tr),
-                None => Err(Error::ErrTransactionClosed.into()),
+                None => Err(Error::ErrTransactionClosed),
             }
         } else {
-            Err(Error::ErrWaitForResultOnNonResultTransaction.into())
+            Err(Error::ErrWaitForResultOnNonResultTransaction)
         }
     }
 }
@@ -294,7 +293,7 @@ impl ClientInternal {
             ClientInternal::handle_channel_data(binding_mgr, read_ch_tx, data).await
         } else if !stun_serv_str.is_empty() && from.to_string() == *stun_serv_str {
             // received from STUN server but it is not a STUN message
-            Err(Error::ErrNonStunmessage.into())
+            Err(Error::ErrNonStunmessage)
         } else {
             // assume, this is an application data
             log::trace!("non-STUN/TURN packect, unhandled");
@@ -313,12 +312,11 @@ impl ClientInternal {
         msg.decode()?;
 
         if msg.typ.class == CLASS_REQUEST {
-            return Err(Error::new(format!(
+            return Err(Error::Other(format!(
                 "{:?} : {}",
                 Error::ErrUnexpectedStunrequestMessage,
                 msg
-            ))
-            .into());
+            )));
         }
 
         if msg.typ.class == CLASS_INDICATION {
@@ -419,7 +417,7 @@ impl ClientInternal {
             }
             Ok(())
         } else {
-            Err(Error::ErrAlreadyClosed.into())
+            Err(Error::ErrAlreadyClosed)
         }
     }
 
@@ -465,7 +463,7 @@ impl ClientInternal {
     // send_binding_request sends a new STUN request to the STUN server
     async fn send_binding_request(&mut self) -> Result<SocketAddr> {
         if self.stun_serv_addr.is_empty() {
-            Err(Error::ErrStunserverAddressNotSet.into())
+            Err(Error::ErrStunserverAddressNotSet)
         } else {
             self.send_binding_request_to(&self.stun_serv_addr.clone())
                 .await
@@ -488,7 +486,7 @@ impl ClientInternal {
             let read_ch_tx = self.read_ch_tx.lock().await;
             log::debug!("allocate check: read_ch_tx_opt = {}", read_ch_tx.is_some());
             if read_ch_tx.is_some() {
-                return Err(Error::ErrOneAllocateOnly.into());
+                return Err(Error::ErrOneAllocateOnly);
             }
         }
 
@@ -542,9 +540,9 @@ impl ClientInternal {
             let mut code = ErrorCodeAttribute::default();
             let result = code.get_from(&res);
             if result.is_err() {
-                return Err(Error::new(format!("{}", res.typ)).into());
+                return Err(Error::Other(format!("{}", res.typ)));
             } else {
-                return Err(Error::new(format!("{} (error {})", res.typ, code)).into());
+                return Err(Error::Other(format!("{} (error {})", res.typ, code)));
             }
         }
 

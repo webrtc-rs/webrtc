@@ -119,12 +119,10 @@ fn test_channel_data_decode() -> Result<()> {
             ..Default::default()
         };
         if let Err(err) = m.decode() {
-            assert!(
-                want_err.equal(&err),
+            assert_eq!(
+                want_err, err,
                 "unexpected: ({}) {} != {}",
-                name,
-                want_err,
-                err
+                name, want_err, err
             );
         } else {
             assert!(false, "expected error, but got ok");
@@ -180,7 +178,7 @@ fn test_chrome_channel_data() -> Result<()> {
     for h in &CHANDATA_TEST_HEX {
         let b = match hex::decode(h) {
             Ok(b) => b,
-            Err(_) => return Err(Error::new("hex decode error".to_owned()).into()),
+            Err(_) => return Err(Error::Other("hex decode error".to_owned())),
         };
         data.push(b);
     }

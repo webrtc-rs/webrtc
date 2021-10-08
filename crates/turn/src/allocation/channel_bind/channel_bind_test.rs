@@ -1,5 +1,6 @@
 use super::*;
 use crate::allocation::*;
+use crate::error::Result;
 
 use tokio::net::UdpSocket;
 

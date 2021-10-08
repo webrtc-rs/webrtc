@@ -31,7 +31,7 @@ async fn on_rtx_timeout(
         if let Some(tr) = tm.delete(tr_key) {
             if !tr
                 .write_result(TransactionResult {
-                    err: Some(Error::new(format!(
+                    err: Some(Error::Other(format!(
                         "{:?} {}",
                         Error::ErrAllRetransmissionsFailed,
                         tr_key
@@ -62,7 +62,7 @@ async fn on_rtx_timeout(
         if let Some(tr) = tm.delete(tr_key) {
             if !tr
                 .write_result(TransactionResult {
-                    err: Some(Error::new(format!(
+                    err: Some(Error::Other(format!(
                         "{:?} {}",
                         Error::ErrAllRetransmissionsFailed,
                         tr_key

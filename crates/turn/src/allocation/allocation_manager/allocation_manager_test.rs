@@ -1,8 +1,8 @@
 use super::*;
+use crate::error::Result;
 use crate::relay::relay_none::*;
 
 use crate::proto::lifetime::DEFAULT_LIFETIME;
-use anyhow::Result;
 use std::net::Ipv4Addr;
 use std::str::FromStr;
 use tokio::net::UdpSocket;
@@ -97,7 +97,7 @@ async fn test_packet_handler() -> Result<()> {
     let data = data_ch_rx
         .recv()
         .await
-        .ok_or(Error::new("data ch closed".to_owned()))?;
+        .ok_or(Error::Other("data ch closed".to_owned()))?;
 
     // resolve stun data message
     assert!(is_message(&data), "should be stun message");
@@ -122,7 +122,7 @@ async fn test_packet_handler() -> Result<()> {
     let data = data_ch_rx
         .recv()
         .await
-        .ok_or(Error::new("data ch closed".to_owned()))?;
+        .ok_or(Error::Other("data ch closed".to_owned()))?;
 
     // resolve channel data
     assert!(
@@ -252,7 +252,7 @@ async fn test_allocation_timeout() -> Result<()> {
 
         for allocation in &allocations {
             let mut a = allocation.lock().await;
-            if !a.close().await.is_err() {
+            if a.close().await.is_ok() {
                 continue 'outer;
             }
         }

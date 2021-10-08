@@ -5,9 +5,6 @@ use stun::attributes::*;
 use stun::checks::*;
 use stun::message::*;
 
-use crate::error::*;
-
-use anyhow::Result;
 use std::fmt;
 
 // Values for RequestedAddressFamily as defined in RFC 6156 Section 4.1.1.
@@ -34,7 +31,7 @@ const REQUESTED_FAMILY_SIZE: usize = 4;
 
 impl Setter for RequestedAddressFamily {
     // AddTo adds REQUESTED-ADDRESS-FAMILY to message.
-    fn add_to(&self, m: &mut Message) -> Result<()> {
+    fn add_to(&self, m: &mut Message) -> Result<(), stun::Error> {
         let mut v = vec![0; REQUESTED_FAMILY_SIZE];
         v[0] = self.0;
         // b[1:4] is RFFU = 0.
@@ -47,7 +44,7 @@ impl Setter for RequestedAddressFamily {
 
 impl Getter for RequestedAddressFamily {
     // GetFrom decodes REQUESTED-ADDRESS-FAMILY from message.
-    fn get_from(&mut self, m: &Message) -> Result<()> {
+    fn get_from(&mut self, m: &Message) -> Result<(), stun::Error> {
         let v = m.get(ATTR_REQUESTED_ADDRESS_FAMILY)?;
         check_size(
             ATTR_REQUESTED_ADDRESS_FAMILY,
@@ -56,7 +53,7 @@ impl Getter for RequestedAddressFamily {
         )?;
 
         if v[0] != REQUESTED_FAMILY_IPV4.0 && v[0] != REQUESTED_FAMILY_IPV6.0 {
-            return Err(Error::ErrInvalidRequestedFamilyValue.into());
+            return Err(stun::Error::Other("ErrInvalidRequestedFamilyValue".into()));
         }
         self.0 = v[0];
         Ok(())

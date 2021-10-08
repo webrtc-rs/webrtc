@@ -1,6 +1,5 @@
 use super::*;
-
-use anyhow::Result;
+use crate::error::Result;
 
 struct DummyPeriodicTimerTimeoutHandler;
 

@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn test_lifetime_string() -> Result<()> {
+fn test_lifetime_string() -> Result<(), stun::Error> {
     let l = Lifetime(Duration::from_secs(10));
     assert_eq!(l.to_string(), "10s", "bad string {}, expected 10s", l);
 
@@ -9,7 +9,7 @@ fn test_lifetime_string() -> Result<()> {
 }
 
 #[test]
-fn test_lifetime_add_to() -> Result<()> {
+fn test_lifetime_add_to() -> Result<(), stun::Error> {
     let mut m = Message::new();
     let l = Lifetime(Duration::from_secs(10));
     l.add_to(&mut m)?;
@@ -29,8 +29,9 @@ fn test_lifetime_add_to() -> Result<()> {
             let mut m = Message::new();
             let mut n_handle = Lifetime::default();
             if let Err(err) = n_handle.get_from(&m) {
-                assert!(
-                    stun::error::Error::ErrAttributeNotFound.equal(&err),
+                assert_eq!(
+                    stun::Error::ErrAttributeNotFound,
+                    err,
                     "{} should be not found",
                     err
                 );

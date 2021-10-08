@@ -4,7 +4,6 @@ use crate::relay::*;
 
 use util::Conn;
 
-use anyhow::Result;
 use std::sync::Arc;
 use tokio::time::Duration;
 
@@ -42,7 +41,7 @@ pub struct ServerConfig {
 impl ServerConfig {
     pub fn validate(&self) -> Result<()> {
         if self.conn_configs.is_empty() {
-            return Err(Error::ErrNoAvailableConns.into());
+            return Err(Error::ErrNoAvailableConns);
         }
 
         for cc in &self.conn_configs {

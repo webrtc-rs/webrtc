@@ -5,7 +5,6 @@ use super::*;
 use crate::error::*;
 use crate::relay::*;
 
-use anyhow::Result;
 use std::collections::HashMap;
 use util::Conn;
 
@@ -58,11 +57,11 @@ impl Manager {
         lifetime: Duration,
     ) -> Result<Arc<Mutex<Allocation>>> {
         if lifetime == Duration::from_secs(0) {
-            return Err(Error::ErrLifetimeZero.into());
+            return Err(Error::ErrLifetimeZero);
         }
 
         if self.get_allocation(&five_tuple).await.is_some() {
-            return Err(Error::ErrDupeFiveTuple.into());
+            return Err(Error::ErrDupeFiveTuple);
         }
 
         let (relay_socket, relay_addr) = self

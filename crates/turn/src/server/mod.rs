@@ -6,11 +6,11 @@ pub mod request;
 
 use crate::allocation::allocation_manager::*;
 use crate::auth::AuthHandler;
+use crate::error::*;
 use crate::proto::lifetime::DEFAULT_LIFETIME;
 use config::*;
 use request::*;
 
-use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{watch, Mutex};

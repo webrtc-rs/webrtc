@@ -1,4 +1,5 @@
 use super::*;
+use crate::error::Result;
 
 use std::net::Ipv4Addr;
 
@@ -22,7 +23,7 @@ impl RelayConnObserver for DummyRelayConnObserver {
         self.realm.clone()
     }
 
-    async fn write_to(&self, _data: &[u8], _to: &str) -> Result<usize> {
+    async fn write_to(&self, _data: &[u8], _to: &str) -> std::result::Result<usize, util::Error> {
         Ok(0)
     }
 
@@ -32,7 +33,7 @@ impl RelayConnObserver for DummyRelayConnObserver {
         _to: &str,
         _dont_wait: bool,
     ) -> Result<TransactionResult> {
-        Err(Error::ErrFakeErr.into())
+        Err(Error::ErrFakeErr)
     }
 }
 
@@ -74,7 +75,7 @@ async fn test_relay_conn() -> Result<()> {
     if let Err(err) =
         RelayConnInternal::bind(rc_obs, bind_addr, bind_number, nonce, integrity).await
     {
-        assert!(!Error::ErrUnexpectedResponse.equal(&err));
+        assert!(Error::ErrUnexpectedResponse != err);
     } else {
         assert!(false, "should fail");
     }

@@ -30,7 +30,6 @@ use stun::xoraddr::*;
 
 use util::Conn;
 
-use anyhow::Result;
 use std::collections::HashMap;
 use std::marker::{Send, Sync};
 use std::net::SocketAddr;
@@ -121,7 +120,7 @@ impl Request {
         if m.typ.class == CLASS_INDICATION {
             match m.typ.method {
                 METHOD_SEND => self.handle_send_indication(m).await,
-                _ => Err(Error::ErrUnexpectedClass.into()),
+                _ => Err(Error::ErrUnexpectedClass),
             }
         } else if m.typ.class == CLASS_REQUEST {
             match m.typ.method {
@@ -130,10 +129,10 @@ impl Request {
                 METHOD_CREATE_PERMISSION => self.handle_create_permission_request(m).await,
                 METHOD_CHANNEL_BIND => self.handle_channel_bind_request(m).await,
                 METHOD_BINDING => self.handle_binding_request(m).await,
-                _ => Err(Error::ErrUnexpectedClass.into()),
+                _ => Err(Error::ErrUnexpectedClass),
             }
         } else {
-            Err(Error::ErrUnexpectedClass.into())
+            Err(Error::ErrUnexpectedClass)
         }
     }
 
@@ -161,7 +160,7 @@ impl Request {
         )?;
 
         if let Err(err) = nonce_attr.get_from(m) {
-            build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await?;
+            build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into()).await?;
             return Ok(None);
         }
 
@@ -188,11 +187,11 @@ impl Request {
         }
 
         if let Err(err) = realm_attr.get_from(m) {
-            build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await?;
+            build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into()).await?;
             return Ok(None);
         }
         if let Err(err) = username_attr.get_from(m) {
-            build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await?;
+            build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into()).await?;
             return Ok(None);
         }
 
@@ -207,7 +206,7 @@ impl Request {
                     &self.conn,
                     self.src_addr,
                     bad_request_msg,
-                    Error::ErrNoSuchUser.into(),
+                    Error::ErrNoSuchUser,
                 )
                 .await?;
                 return Ok(None);
@@ -216,7 +215,7 @@ impl Request {
 
         let mi = MessageIntegrity(our_key);
         if let Err(err) = mi.check(&mut m.clone()) {
-            build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await?;
+            build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into()).await?;
             Ok(None)
         } else {
             Ok(Some(mi))
@@ -235,7 +234,7 @@ impl Request {
             // Nonce has already been taken
             let mut nonces = self.nonces.lock().await;
             if nonces.contains_key(&nonce) {
-                return Err(Error::ErrDuplicatedNonce.into());
+                return Err(Error::ErrDuplicatedNonce);
             }
             nonces.insert(nonce.clone(), Instant::now());
         }
@@ -319,7 +318,7 @@ impl Request {
                 &self.conn,
                 self.src_addr,
                 msg,
-                Error::ErrRelayAlreadyAllocatedForFiveTuple.into(),
+                Error::ErrRelayAlreadyAllocatedForFiveTuple,
             )
             .await;
         }
@@ -340,7 +339,8 @@ impl Request {
                     reason: vec![],
                 })],
             )?;
-            return build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await;
+            return build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into())
+                .await;
         } else if requested_transport.protocol != PROTO_UDP {
             let msg = build_msg(
                 m.transaction_id,
@@ -354,7 +354,7 @@ impl Request {
                 &self.conn,
                 self.src_addr,
                 msg,
-                Error::ErrRequestedTransportMustBeUdp.into(),
+                Error::ErrRequestedTransportMustBeUdp,
             )
             .await;
         }
@@ -380,7 +380,7 @@ impl Request {
                 &self.conn,
                 self.src_addr,
                 msg,
-                Error::ErrNoDontFragmentSupport.into(),
+                Error::ErrNoDontFragmentSupport,
             )
             .await;
         }
@@ -409,7 +409,7 @@ impl Request {
                     &self.conn,
                     self.src_addr,
                     bad_request_msg,
-                    Error::ErrRequestWithReservationTokenAndEvenPort.into(),
+                    Error::ErrRequestWithReservationTokenAndEvenPort,
                 )
                 .await;
             }
@@ -571,7 +571,7 @@ impl Request {
                 let a = a.lock().await;
                 a.refresh(lifetime_duration).await;
             } else {
-                return Err(Error::ErrNoAllocationFound.into());
+                return Err(Error::ErrNoAllocationFound);
             }
         } else {
             self.allocation_manager.delete_allocation(&five_tuple).await;
@@ -653,7 +653,7 @@ impl Request {
 
             build_and_send(&self.conn, self.src_addr, msg).await
         } else {
-            Err(Error::ErrNoAllocationFound.into())
+            Err(Error::ErrNoAllocationFound)
         }
     }
 
@@ -683,18 +683,18 @@ impl Request {
                 a.has_permission(&msg_dst).await
             };
             if !has_perm {
-                return Err(Error::ErrNoPermission.into());
+                return Err(Error::ErrNoPermission);
             }
 
             let a = a.lock().await;
             let l = a.relay_socket.send_to(&data_attr.0, msg_dst).await?;
             if l != data_attr.0.len() {
-                Err(Error::ErrShortWrite.into())
+                Err(Error::ErrShortWrite)
             } else {
                 Ok(())
             }
         } else {
-            Err(Error::ErrNoAllocationFound.into())
+            Err(Error::ErrNoAllocationFound)
         }
     }
 
@@ -729,12 +729,14 @@ impl Request {
                 };
             let mut channel = ChannelNumber::default();
             if let Err(err) = channel.get_from(m) {
-                return build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await;
+                return build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into())
+                    .await;
             }
 
             let mut peer_addr = PeerAddress::default();
             if let Err(err) = peer_addr.get_from(m) {
-                return build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err).await;
+                return build_and_send_err(&self.conn, self.src_addr, bad_request_msg, err.into())
+                    .await;
             }
 
             log::debug!(
@@ -762,7 +764,7 @@ impl Request {
             )?;
             return build_and_send(&self.conn, self.src_addr, msg).await;
         } else {
-            Err(Error::ErrNoAllocationFound.into())
+            Err(Error::ErrNoAllocationFound)
         }
     }
 
@@ -784,15 +786,15 @@ impl Request {
             if let Some(peer) = channel {
                 let l = a.relay_socket.send_to(&c.data, peer).await?;
                 if l != c.data.len() {
-                    Err(Error::ErrShortWrite.into())
+                    Err(Error::ErrShortWrite)
                 } else {
                     Ok(())
                 }
             } else {
-                Err(Error::ErrNoSuchChannelBind.into())
+                Err(Error::ErrNoSuchChannelBind)
             }
         } else {
-            Err(Error::ErrNoAllocationFound.into())
+            Err(Error::ErrNoAllocationFound)
         }
     }
 }
@@ -843,7 +845,7 @@ pub(crate) async fn build_and_send_err(
     conn: &Arc<dyn Conn + Send + Sync>,
     dst: SocketAddr,
     msg: Message,
-    err: anyhow::Error,
+    err: Error,
 ) -> Result<()> {
     if let Err(send_err) = build_and_send(conn, dst, msg).await {
         Err(send_err)
