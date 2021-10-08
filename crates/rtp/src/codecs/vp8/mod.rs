@@ -138,7 +138,7 @@ impl Depacketizer for Vp8Packet {
     /// depacketize parses the passed byte slice and stores the result in the VP8Packet this method is called upon
     fn depacketize(&mut self, packet: &Bytes) -> Result<()> {
         if packet.len() < 4 {
-            return Err(Error::ErrShortPacket.into());
+            return Err(Error::ErrShortPacket);
         }
         //    0 1 2 3 4 5 6 7                      0 1 2 3 4 5 6 7
         //    +-+-+-+-+-+-+-+-+                   +-+-+-+-+-+-+-+-+
@@ -198,7 +198,7 @@ impl Depacketizer for Vp8Packet {
         }
 
         if payload_index >= packet.len() {
-            return Err(Error::ErrShortPacket.into());
+            return Err(Error::ErrShortPacket);
         }
 
         self.payload = packet.slice(payload_index..);

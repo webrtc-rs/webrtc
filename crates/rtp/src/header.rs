@@ -356,23 +356,23 @@ impl Header {
             match self.extension_profile {
                 EXTENSION_PROFILE_ONE_BYTE => {
                     if !(1..=14).contains(&id) {
-                        return Err(Error::ErrRfc8285oneByteHeaderIdrange.into());
+                        return Err(Error::ErrRfc8285oneByteHeaderIdrange);
                     }
                     if payload.len() > 16 {
-                        return Err(Error::ErrRfc8285oneByteHeaderSize.into());
+                        return Err(Error::ErrRfc8285oneByteHeaderSize);
                     }
                 }
                 EXTENSION_PROFILE_TWO_BYTE => {
                     if id < 1 {
-                        return Err(Error::ErrRfc8285twoByteHeaderIdrange.into());
+                        return Err(Error::ErrRfc8285twoByteHeaderIdrange);
                     }
                     if payload.len() > 255 {
-                        return Err(Error::ErrRfc8285twoByteHeaderSize.into());
+                        return Err(Error::ErrRfc8285twoByteHeaderSize);
                     }
                 }
                 _ => {
                     if id != 0 {
-                        return Err(Error::ErrRfc3550headerIdrange.into());
+                        return Err(Error::ErrRfc3550headerIdrange);
                     }
                 }
             };
@@ -428,7 +428,7 @@ impl Header {
     /// Removes an RTP Header extension
     pub fn del_extension(&mut self, id: u8) -> Result<(), Error> {
         if !self.extension {
-            return Err(Error::ErrHeaderExtensionsNotEnabled.into());
+            return Err(Error::ErrHeaderExtensionsNotEnabled);
         }
         for index in 0..self.extensions.len() {
             if self.extensions[index].id == id {
@@ -436,6 +436,6 @@ impl Header {
                 return Ok(());
             }
         }
-        Err(Error::ErrHeaderExtensionNotFound.into())
+        Err(Error::ErrHeaderExtensionNotFound)
     }
 }

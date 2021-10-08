@@ -204,7 +204,7 @@ impl Depacketizer for Vp9Packet {
     /// depacketize parses the passed byte slice and stores the result in the Vp9Packet this method is called upon
     fn depacketize(&mut self, packet: &Bytes) -> Result<()> {
         if packet.is_empty() {
-            return Err(Error::ErrShortPacket.into());
+            return Err(Error::ErrShortPacket);
         }
 
         let reader = &mut packet.clone();
@@ -257,14 +257,14 @@ impl Vp9Packet {
         mut payload_index: usize,
     ) -> Result<usize> {
         if reader.remaining() == 0 {
-            return Err(Error::ErrShortPacket.into());
+            return Err(Error::ErrShortPacket);
         }
         let b = reader.get_u8();
         payload_index += 1;
         // PID present?
         if (b & 0x80) != 0 {
             if reader.remaining() == 0 {
-                return Err(Error::ErrShortPacket.into());
+                return Err(Error::ErrShortPacket);
             }
             // M == 1, PID is 15bit
             self.picture_id = (((b & 0x7f) as u16) << 8) | (reader.get_u8() as u16);
@@ -302,7 +302,7 @@ impl Vp9Packet {
         mut payload_index: usize,
     ) -> Result<usize> {
         if reader.remaining() == 0 {
-            return Err(Error::ErrShortPacket.into());
+            return Err(Error::ErrShortPacket);
         }
         let b = reader.get_u8();
         payload_index += 1;
@@ -313,7 +313,7 @@ impl Vp9Packet {
         self.d = b & 0x01 != 0;
 
         if self.sid >= MAX_SPATIAL_LAYERS {
-            Err(Error::ErrTooManySpatialLayers.into())
+            Err(Error::ErrTooManySpatialLayers)
         } else {
             Ok(payload_index)
         }
@@ -333,7 +333,7 @@ impl Vp9Packet {
         mut payload_index: usize,
     ) -> Result<usize> {
         if reader.remaining() == 0 {
-            return Err(Error::ErrShortPacket.into());
+            return Err(Error::ErrShortPacket);
         }
         self.tl0picidx = reader.get_u8();
         payload_index += 1;
@@ -355,14 +355,14 @@ impl Vp9Packet {
         let mut b = 1u8;
         while (b & 0x1) != 0 {
             if reader.remaining() == 0 {
-                return Err(Error::ErrShortPacket.into());
+                return Err(Error::ErrShortPacket);
             }
             b = reader.get_u8();
             payload_index += 1;
 
             self.pdiff.push(b >> 1);
             if self.pdiff.len() >= MAX_VP9REF_PICS {
-                return Err(Error::ErrTooManyPDiff.into());
+                return Err(Error::ErrTooManyPDiff);
             }
         }
 
@@ -391,7 +391,7 @@ impl Vp9Packet {
     //
     fn parse_ssdata(&mut self, reader: &mut dyn Buf, mut payload_index: usize) -> Result<usize> {
         if reader.remaining() == 0 {
-            return Err(Error::ErrShortPacket.into());
+            return Err(Error::ErrShortPacket);
         }
 
         let b = reader.get_u8();
@@ -406,7 +406,7 @@ impl Vp9Packet {
 
         if self.y {
             if reader.remaining() < 4 * ns {
-                return Err(Error::ErrShortPacket.into());
+                return Err(Error::ErrShortPacket);
             }
 
             self.width = vec![0u16; ns];
@@ -420,7 +420,7 @@ impl Vp9Packet {
 
         if self.g {
             if reader.remaining() == 0 {
-                return Err(Error::ErrShortPacket.into());
+                return Err(Error::ErrShortPacket);
             }
 
             self.ng = reader.get_u8();
@@ -429,7 +429,7 @@ impl Vp9Packet {
 
         for i in 0..self.ng as usize {
             if reader.remaining() == 0 {
-                return Err(Error::ErrShortPacket.into());
+                return Err(Error::ErrShortPacket);
             }
             let b = reader.get_u8();
             payload_index += 1;
@@ -439,7 +439,7 @@ impl Vp9Packet {
 
             let r = ((b >> 2) & 0x3) as usize;
             if reader.remaining() < r {
-                return Err(Error::ErrShortPacket.into());
+                return Err(Error::ErrShortPacket);
             }
 
             self.pgpdiff.push(vec![]);

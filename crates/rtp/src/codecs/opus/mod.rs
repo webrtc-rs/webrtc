@@ -34,7 +34,7 @@ pub struct OpusPacket {
 impl Depacketizer for OpusPacket {
     fn depacketize(&mut self, packet: &Bytes) -> Result<()> {
         if packet.is_empty() {
-            Err(Error::ErrShortPacket.into())
+            Err(Error::ErrShortPacket)
         } else {
             self.payload = packet.clone();
             Ok(())

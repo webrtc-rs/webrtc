@@ -175,7 +175,7 @@ impl Depacketizer for H264Packet {
     /// depacketize parses the passed byte slice and stores the result in the H264Packet this method is called upon
     fn depacketize(&mut self, packet: &Bytes) -> Result<()> {
         if packet.len() <= 2 {
-            return Err(Error::ErrShortPacket.into());
+            return Err(Error::ErrShortPacket);
         }
 
         let mut payload = BytesMut::new();
@@ -206,8 +206,7 @@ impl Depacketizer for H264Packet {
                         return Err(Error::StapASizeLargerThanBuffer(
                             nalu_size,
                             packet.len() - curr_offset,
-                        )
-                        .into());
+                        ));
                     }
 
                     if self.is_avc {
@@ -223,7 +222,7 @@ impl Depacketizer for H264Packet {
             }
             FUA_NALU_TYPE => {
                 if packet.len() < FUA_HEADER_SIZE as usize {
-                    return Err(Error::ErrShortPacket.into());
+                    return Err(Error::ErrShortPacket);
                 }
 
                 if self.fua_buffer.is_none() {
@@ -254,7 +253,7 @@ impl Depacketizer for H264Packet {
                     self.payload = Bytes::new();
                 }
             }
-            _ => return Err(Error::NaluTypeIsNotHandled(nalu_type).into()),
+            _ => return Err(Error::NaluTypeIsNotHandled(nalu_type)),
         }
 
         Ok(())
