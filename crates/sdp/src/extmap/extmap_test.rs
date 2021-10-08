@@ -4,13 +4,12 @@ use crate::util::{ATTRIBUTE_KEY, END_LINE};
 use std::io::BufReader;
 use std::iter::Iterator;
 
-const EXAMPLE_ATTR_EXTMAP1: &'static str = "extmap:1 http://example.com/082005/ext.htm#ttime";
-const EXAMPLE_ATTR_EXTMAP2: &'static str =
+const EXAMPLE_ATTR_EXTMAP1: &str = "extmap:1 http://example.com/082005/ext.htm#ttime";
+const EXAMPLE_ATTR_EXTMAP2: &str =
     "extmap:2/sendrecv http://example.com/082005/ext.htm#xmeta short";
-const FAILING_ATTR_EXTMAP1: &'static str =
+const FAILING_ATTR_EXTMAP1: &str =
     "extmap:257/sendrecv http://example.com/082005/ext.htm#xmeta short";
-const FAILING_ATTR_EXTMAP2: &'static str =
-    "extmap:2/blorg http://example.com/082005/ext.htm#xmeta short";
+const FAILING_ATTR_EXTMAP2: &str = "extmap:2/blorg http://example.com/082005/ext.htm#xmeta short";
 
 #[test]
 fn test_extmap() -> Result<()> {

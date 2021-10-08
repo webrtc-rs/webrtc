@@ -4,7 +4,7 @@ use crate::media_description::*;
 use crate::session_description::*;
 
 fn get_test_session_description() -> SessionDescription {
-    return SessionDescription{
+    SessionDescription{
         media_descriptions: vec![
             MediaDescription {
                 media_name: MediaName {
@@ -33,7 +33,7 @@ fn get_test_session_description() -> SessionDescription {
             },
 		],
         ..Default::default()
-	};
+	}
 }
 
 #[test]
