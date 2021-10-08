@@ -3,5 +3,7 @@
 
 pub mod config;
 pub mod conn;
-pub mod error;
+mod error;
 pub mod message;
+
+pub use error::Error;

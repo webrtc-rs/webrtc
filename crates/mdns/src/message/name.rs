@@ -1,6 +1,5 @@
 use crate::error::*;
 
-use anyhow::Result;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -23,7 +22,7 @@ impl fmt::Display for Name {
 impl Name {
     pub fn new(data: &str) -> Result<Self> {
         if data.len() > NAME_LEN {
-            Err(Error::ErrCalcLen.into())
+            Err(Error::ErrCalcLen)
         } else {
             Ok(Name {
                 data: data.to_owned(),
@@ -48,7 +47,7 @@ impl Name {
 
         // Add a trailing dot to canonicalize name.
         if data.is_empty() || data[data.len() - 1] != b'.' {
-            return Err(Error::ErrNonCanonicalName.into());
+            return Err(Error::ErrNonCanonicalName);
         }
 
         // Allow root domain.
@@ -66,12 +65,12 @@ impl Name {
                 // It isn't allowed for segments to be long enough to
                 // need them.
                 if i - begin >= (1 << 6) {
-                    return Err(Error::ErrSegTooLong.into());
+                    return Err(Error::ErrSegTooLong);
                 }
 
                 // Segments must have a non-zero length.
                 if i - begin == 0 {
-                    return Err(Error::ErrZeroSegLen.into());
+                    return Err(Error::ErrZeroSegLen);
                 }
 
                 msg.push((i - begin) as u8);
@@ -135,7 +134,7 @@ impl Name {
 
         loop {
             if curr_off >= msg.len() {
-                return Err(Error::ErrBaseLen.into());
+                return Err(Error::ErrBaseLen);
             }
             let c = msg[curr_off];
             curr_off += 1;
@@ -148,7 +147,7 @@ impl Name {
                     }
                     let end_off = curr_off + c as usize;
                     if end_off > msg.len() {
-                        return Err(Error::ErrCalcLen.into());
+                        return Err(Error::ErrCalcLen);
                     }
                     name.push_str(String::from_utf8(msg[curr_off..end_off].to_vec())?.as_str());
                     name.push('.');
@@ -157,10 +156,10 @@ impl Name {
                 0xC0 => {
                     // Pointer
                     if !allow_compression {
-                        return Err(Error::ErrCompressedSrv.into());
+                        return Err(Error::ErrCompressedSrv);
                     }
                     if curr_off >= msg.len() {
-                        return Err(Error::ErrInvalidPtr.into());
+                        return Err(Error::ErrInvalidPtr);
                     }
                     let c1 = msg[curr_off];
                     curr_off += 1;
@@ -170,13 +169,13 @@ impl Name {
                     // Don't follow too many pointers, maybe there's a loop.
                     ptr += 1;
                     if ptr > 10 {
-                        return Err(Error::ErrTooManyPtr.into());
+                        return Err(Error::ErrTooManyPtr);
                     }
                     curr_off = ((c ^ 0xC0) as usize) << 8 | (c1 as usize);
                 }
                 _ => {
                     // Prefixes 0x80 and 0x40 are reserved.
-                    return Err(Error::ErrReserved.into());
+                    return Err(Error::ErrReserved);
                 }
             }
         }
@@ -184,7 +183,7 @@ impl Name {
             name.push('.');
         }
         if name.len() > NAME_LEN {
-            return Err(Error::ErrCalcLen.into());
+            return Err(Error::ErrCalcLen);
         }
         self.data = name;
         if ptr == 0 {
@@ -201,7 +200,7 @@ impl Name {
 
         loop {
             if new_off >= msg.len() {
-                return Err(Error::ErrBaseLen.into());
+                return Err(Error::ErrBaseLen);
             }
             let c = msg[new_off];
             new_off += 1;
@@ -214,7 +213,7 @@ impl Name {
                     // literal string
                     new_off += c as usize;
                     if new_off > msg.len() {
-                        return Err(Error::ErrCalcLen.into());
+                        return Err(Error::ErrCalcLen);
                     }
                 }
                 0xC0 => {
@@ -228,7 +227,7 @@ impl Name {
                 }
                 _ => {
                     // Prefixes 0x80 and 0x40 are reserved.
-                    return Err(Error::ErrReserved.into());
+                    return Err(Error::ErrReserved);
                 }
             }
         }

@@ -25,7 +25,6 @@ use soa::*;
 use srv::*;
 use txt::*;
 
-use anyhow::Result;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -69,7 +68,7 @@ impl Resource {
         if let Some(body) = &self.body {
             self.header.typ = body.real_type();
         } else {
-            return Err(Error::ErrNilResourceBody.into());
+            return Err(Error::ErrNilResourceBody);
         }
         let (mut msg, len_off) = self.header.pack(msg, compression, compression_off)?;
         let pre_len = msg.len();
@@ -96,7 +95,7 @@ impl Resource {
         let (length, mut new_off) = unpack_uint16(msg, new_off)?;
         new_off += length as usize;
         if new_off > msg.len() {
-            return Err(Error::ErrResourceLen.into());
+            return Err(Error::ErrResourceLen);
         }
         Ok(new_off)
     }
@@ -179,7 +178,7 @@ impl ResourceHeader {
     // preLen is the length that msg was before the ResourceBody was packed.
     pub fn fix_len(&mut self, msg: &mut [u8], len_off: usize, pre_len: usize) -> Result<()> {
         if msg.len() < pre_len || msg.len() > pre_len + u16::MAX as usize {
-            return Err(Error::ErrResTooLong.into());
+            return Err(Error::ErrResTooLong);
         }
 
         let con_len = msg.len() - pre_len;
@@ -265,7 +264,7 @@ pub fn unpack_resource_body(
         DnsType::Aaaa => Box::new(AaaaResource::default()),
         DnsType::Srv => Box::new(SrvResource::default()),
         DnsType::Opt => Box::new(OptResource::default()),
-        _ => return Err(Error::ErrNilResourceBody.into()),
+        _ => return Err(Error::ErrNilResourceBody),
     };
 
     off = rb.unpack(msg, off, length)?;

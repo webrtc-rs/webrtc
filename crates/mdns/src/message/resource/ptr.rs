@@ -1,4 +1,5 @@
 use super::*;
+use crate::error::Result;
 use crate::message::name::*;
 
 // A PTRResource is a PTR Resource record.

@@ -5,8 +5,6 @@ use crate::message::question::Question;
 use crate::message::resource::{unpack_resource_body, Resource, ResourceBody, ResourceHeader};
 use crate::message::{DnsClass, DnsType};
 
-use anyhow::Result;
-
 // A Parser allows incrementally parsing a DNS message.
 //
 // When parsing is started, the Header is parsed. Next, each question can be
@@ -45,16 +43,16 @@ impl<'a> Parser<'a> {
 
     fn check_advance(&mut self, sec: Section) -> Result<()> {
         if self.section < sec {
-            return Err(Error::ErrNotStarted.into());
+            return Err(Error::ErrNotStarted);
         }
         if self.section > sec {
-            return Err(Error::ErrSectionDone.into());
+            return Err(Error::ErrSectionDone);
         }
         self.res_header_valid = false;
         if self.index == self.header.count(sec) as usize {
             self.index = 0;
             self.section = Section::from(1 + self.section as u8);
-            return Err(Error::ErrSectionDone.into());
+            return Err(Error::ErrSectionDone);
         }
         Ok(())
     }
@@ -90,7 +88,7 @@ impl<'a> Parser<'a> {
         if self.res_header_valid {
             let new_off = self.off + self.res_header.length as usize;
             if new_off > self.msg.len() {
-                return Err(Error::ErrResourceLen.into());
+                return Err(Error::ErrResourceLen);
             }
             self.off = new_off;
             self.res_header_valid = false;
@@ -130,7 +128,7 @@ impl<'a> Parser<'a> {
         loop {
             match self.question() {
                 Err(err) => {
-                    if Error::ErrSectionDone.equal(&err) {
+                    if Error::ErrSectionDone == err {
                         return Ok(qs);
                     } else {
                         return Err(err);
@@ -156,7 +154,7 @@ impl<'a> Parser<'a> {
     pub fn skip_all_questions(&mut self) -> Result<()> {
         loop {
             if let Err(err) = self.skip_question() {
-                if Error::ErrSectionDone.equal(&err) {
+                if Error::ErrSectionDone == err {
                     return Ok(());
                 } else {
                     return Err(err);
@@ -190,7 +188,7 @@ impl<'a> Parser<'a> {
         loop {
             match self.answer() {
                 Err(err) => {
-                    if Error::ErrSectionDone.equal(&err) {
+                    if Error::ErrSectionDone == err {
                         return Ok(a);
                     } else {
                         return Err(err);
@@ -210,7 +208,7 @@ impl<'a> Parser<'a> {
     pub fn skip_all_answers(&mut self) -> Result<()> {
         loop {
             if let Err(err) = self.skip_answer() {
-                if Error::ErrSectionDone.equal(&err) {
+                if Error::ErrSectionDone == err {
                     return Ok(());
                 } else {
                     return Err(err);
@@ -244,7 +242,7 @@ impl<'a> Parser<'a> {
         loop {
             match self.authority() {
                 Err(err) => {
-                    if Error::ErrSectionDone.equal(&err) {
+                    if Error::ErrSectionDone == err {
                         return Ok(a);
                     } else {
                         return Err(err);
@@ -264,7 +262,7 @@ impl<'a> Parser<'a> {
     pub fn skip_all_authorities(&mut self) -> Result<()> {
         loop {
             if let Err(err) = self.skip_authority() {
-                if Error::ErrSectionDone.equal(&err) {
+                if Error::ErrSectionDone == err {
                     return Ok(());
                 } else {
                     return Err(err);
@@ -298,7 +296,7 @@ impl<'a> Parser<'a> {
         loop {
             match self.additional() {
                 Err(err) => {
-                    if Error::ErrSectionDone.equal(&err) {
+                    if Error::ErrSectionDone == err {
                         return Ok(a);
                     } else {
                         return Err(err);
@@ -318,7 +316,7 @@ impl<'a> Parser<'a> {
     pub fn skip_all_additionals(&mut self) -> Result<()> {
         loop {
             if let Err(err) = self.skip_additional() {
-                if Error::ErrSectionDone.equal(&err) {
+                if Error::ErrSectionDone == err {
                     return Ok(());
                 } else {
                     return Err(err);
@@ -333,7 +331,7 @@ impl<'a> Parser<'a> {
     // method.
     pub fn resource_body(&mut self) -> Result<Box<dyn ResourceBody>> {
         if !self.res_header_valid {
-            return Err(Error::ErrNotStarted.into());
+            return Err(Error::ErrNotStarted);
         }
         let (rb, _off) = unpack_resource_body(
             self.res_header.typ,

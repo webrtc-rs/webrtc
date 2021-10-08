@@ -1,8 +1,7 @@
 use super::*;
+use crate::error::Result;
 use crate::error::*;
 use crate::message::packer::*;
-
-use anyhow::Result;
 
 // An OPTResource is an OPT pseudo Resource record.
 //
@@ -74,7 +73,7 @@ impl ResourceBody for OptResource {
                 data: vec![0; l as usize],
             };
             if off + l as usize > msg.len() {
-                return Err(Error::ErrCalcLen.into());
+                return Err(Error::ErrCalcLen);
             }
             opt.data.copy_from_slice(&msg[off..off + l as usize]);
             off += l as usize;

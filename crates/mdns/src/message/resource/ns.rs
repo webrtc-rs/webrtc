@@ -1,4 +1,5 @@
 use super::*;
+use crate::error::Result;
 use crate::message::name::*;
 
 // An NSResource is an NS Resource record.
