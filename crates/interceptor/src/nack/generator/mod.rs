@@ -118,7 +118,7 @@ impl Generator {
             if let Some(close) = close_rx.take() {
                 close
             } else {
-                return Err(Error::ErrIncorrectReceiverReportCloseRx.into());
+                return Err(Error::ErrIncorrectReceiverReportCloseRx);
             }
         };
 

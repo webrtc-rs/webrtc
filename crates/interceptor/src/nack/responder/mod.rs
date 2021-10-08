@@ -97,7 +97,7 @@ impl RTCPReader for ResponderInternal {
             if let Some(reader) = &*parent_rtcp_reader {
                 reader.read(buf, a).await?
             } else {
-                return Err(Error::ErrInvalidParentRtcpReader.into());
+                return Err(Error::ErrInvalidParentRtcpReader);
             }
         };
 

@@ -155,7 +155,7 @@ impl MockStream {
         if let Some(writer) = &*rtcp_writer {
             writer.write(pkt, &a).await
         } else {
-            Err(Error::Other("invalid rtcp_writer".to_owned()).into())
+            Err(Error::Other("invalid rtcp_writer".to_owned()))
         }
     }
 
@@ -166,7 +166,7 @@ impl MockStream {
         if let Some(writer) = &*rtp_writer {
             writer.write(pkt, &a).await
         } else {
-            Err(Error::Other("invalid rtp_writer".to_owned()).into())
+            Err(Error::Other("invalid rtp_writer".to_owned()))
         }
     }
 
@@ -248,7 +248,7 @@ impl RTCPReader for MockStream {
         let marshaled = pkt.marshal()?;
         let n = marshaled.len();
         if n > buf.len() {
-            return Err(Error::ErrShortBuffer.into());
+            return Err(Error::ErrShortBuffer);
         }
 
         buf[..n].copy_from_slice(&marshaled);
@@ -275,7 +275,7 @@ impl RTPReader for MockStream {
         let marshaled = pkt.marshal()?;
         let n = marshaled.len();
         if n > buf.len() {
-            return Err(Error::ErrShortBuffer.into());
+            return Err(Error::ErrShortBuffer);
         }
 
         buf[..n].copy_from_slice(&marshaled);

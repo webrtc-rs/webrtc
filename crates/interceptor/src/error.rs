@@ -34,6 +34,6 @@ pub fn flatten_errs(errs: Vec<Error>) -> Result<()> {
         Ok(())
     } else {
         let errs_strs: Vec<String> = errs.into_iter().map(|e| e.to_string()).collect();
-        Err(Error::Other(errs_strs.join("\n")).into())
+        Err(Error::Other(errs_strs.join("\n")))
     }
 }
