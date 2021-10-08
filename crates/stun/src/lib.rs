@@ -9,7 +9,7 @@ pub mod agent;
 pub mod attributes;
 pub mod checks;
 pub mod client;
-pub mod error;
+mod error;
 pub mod error_code;
 pub mod fingerprint;
 pub mod integrity;
@@ -22,3 +22,5 @@ pub mod xoraddr;
 // IANA assigned ports for "stun" protocol.
 pub const DEFAULT_PORT: u16 = 3478;
 pub const DEFAULT_TLS_PORT: u16 = 5349;
+
+pub use error::Error;

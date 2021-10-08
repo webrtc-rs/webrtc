@@ -7,7 +7,6 @@ use crate::checks::*;
 use crate::error::*;
 use crate::message::*;
 
-use anyhow::Result;
 use std::fmt;
 use std::mem;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -155,12 +154,12 @@ impl XorMappedAddress {
     pub fn get_from_as(&mut self, m: &Message, t: AttrType) -> Result<()> {
         let v = m.get(t)?;
         if v.len() <= 4 {
-            return Err(Error::ErrUnexpectedEof.into());
+            return Err(Error::ErrUnexpectedEof);
         }
 
         let family = u16::from_be_bytes([v[0], v[1]]);
         if family != FAMILY_IPV6 && family != FAMILY_IPV4 {
-            return Err(Error::new(format!("bad value {}", family)).into());
+            return Err(Error::Other(format!("bad value {}", family)));
         }
 
         check_overflow(

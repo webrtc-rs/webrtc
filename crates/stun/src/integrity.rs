@@ -6,7 +6,6 @@ use crate::checks::*;
 use crate::error::*;
 use crate::message::*;
 
-use anyhow::Result;
 use md5::{Digest, Md5};
 use ring::hmac;
 use std::fmt;
@@ -43,7 +42,7 @@ impl Setter for MessageIntegrity {
             // Message should not contain FINGERPRINT attribute
             // before MESSAGE-INTEGRITY.
             if a.typ == ATTR_FINGERPRINT {
-                return Err(Error::ErrFingerprintBeforeIntegrity.into());
+                return Err(Error::ErrFingerprintBeforeIntegrity);
             }
         }
         // The text used as input to HMAC is the STUN message,

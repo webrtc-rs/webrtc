@@ -3,10 +3,9 @@ mod textattrs_test;
 
 use crate::attributes::*;
 use crate::checks::*;
-use crate::error::Error;
+use crate::error::*;
 use crate::message::*;
 
-use anyhow::Result;
 use std::fmt;
 
 const MAX_USERNAME_B: usize = 513;
@@ -57,7 +56,7 @@ impl Setter for TextAttribute {
             ATTR_REALM => MAX_REALM_B,
             ATTR_SOFTWARE => MAX_SOFTWARE_B,
             ATTR_NONCE => MAX_NONCE_B,
-            _ => return Err(Error::new(format!("Unsupported AttrType {}", self.attr)).into()),
+            _ => return Err(Error::Other(format!("Unsupported AttrType {}", self.attr))),
         };
 
         check_overflow(self.attr, text.len(), max_len)?;
@@ -86,7 +85,7 @@ impl TextAttribute {
             ATTR_REALM => {}
             ATTR_SOFTWARE => {}
             ATTR_NONCE => {}
-            _ => return Err(Error::new(format!("Unsupported AttrType {}", attr)).into()),
+            _ => return Err(Error::Other(format!("Unsupported AttrType {}", attr))),
         };
 
         let a = m.get(attr)?;

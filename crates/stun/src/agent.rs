@@ -5,7 +5,6 @@ use crate::client::ClientTransaction;
 use crate::error::*;
 use crate::message::*;
 
-use anyhow::Result;
 use rand::Rng;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -126,7 +125,7 @@ impl Agent {
     // provided error. Can return ErrTransactionNotExists and ErrAgentClosed.
     fn stop_with_error(&mut self, id: TransactionId, error: Error) -> Result<()> {
         if self.closed {
-            return Err(Error::ErrAgentClosed.into());
+            return Err(Error::ErrAgentClosed);
         }
 
         let v = self.transactions.remove(&id);
@@ -134,19 +133,19 @@ impl Agent {
             if let Some(handler) = &self.handler {
                 handler.send(Event {
                     event_type: EventType::Callback(t.id),
-                    event_body: Err(error.into()),
+                    event_body: Err(error),
                 })?;
             }
             Ok(())
         } else {
-            Err(Error::ErrTransactionNotExists.into())
+            Err(Error::ErrTransactionNotExists)
         }
     }
 
     // process incoming message, synchronously passing it to handler.
     fn process(&mut self, message: Message) -> Result<()> {
         if self.closed {
-            return Err(Error::ErrAgentClosed.into());
+            return Err(Error::ErrAgentClosed);
         }
 
         self.transactions.remove(&message.transaction_id);
@@ -167,13 +166,13 @@ impl Agent {
     // closed state.
     fn close(&mut self) -> Result<()> {
         if self.closed {
-            return Err(Error::ErrAgentClosed.into());
+            return Err(Error::ErrAgentClosed);
         }
 
         for id in self.transactions.keys() {
             let e = Event {
                 event_type: EventType::Callback(*id),
-                event_body: Err(Error::ErrAgentClosed.into()),
+                event_body: Err(Error::ErrAgentClosed),
             };
             if let Some(handler) = &self.handler {
                 handler.send(e)?;
@@ -192,10 +191,10 @@ impl Agent {
     // Agent handler is guaranteed to be eventually called.
     fn start(&mut self, id: TransactionId, deadline: Instant) -> Result<()> {
         if self.closed {
-            return Err(Error::ErrAgentClosed.into());
+            return Err(Error::ErrAgentClosed);
         }
         if self.transactions.contains_key(&id) {
-            return Err(Error::ErrTransactionExists.into());
+            return Err(Error::ErrTransactionExists);
         }
 
         self.transactions
@@ -220,7 +219,7 @@ impl Agent {
             // Doing nothing if agent is closed.
             // All transactions should be already closed
             // during Close() call.
-            return Err(Error::ErrAgentClosed.into());
+            return Err(Error::ErrAgentClosed);
         }
 
         let mut to_remove: Vec<TransactionId> = Vec::with_capacity(AGENT_COLLECT_CAP);
@@ -242,7 +241,7 @@ impl Agent {
         for id in to_remove {
             let event = Event {
                 event_type: EventType::Callback(id),
-                event_body: Err(Error::ErrTransactionTimeOut.into()),
+                event_body: Err(Error::ErrTransactionTimeOut),
             };
             if let Some(handler) = &self.handler {
                 handler.send(event)?;
@@ -255,7 +254,7 @@ impl Agent {
     // set_handler sets agent handler to h.
     fn set_handler(&mut self, h: Handler) -> Result<()> {
         if self.closed {
-            return Err(Error::ErrAgentClosed.into());
+            return Err(Error::ErrAgentClosed);
         }
         self.handler = h;
 
@@ -273,7 +272,7 @@ impl Agent {
             };
 
             if let Err(err) = result {
-                if Error::ErrAgentClosed.equal(&err) {
+                if Error::ErrAgentClosed == err {
                     break;
                 }
             }

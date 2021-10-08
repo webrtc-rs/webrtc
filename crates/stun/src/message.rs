@@ -5,7 +5,6 @@ use crate::agent::*;
 use crate::attributes::*;
 use crate::error::*;
 
-use anyhow::Result;
 use rand::Rng;
 use std::fmt;
 use std::io::{Read, Write};
@@ -274,7 +273,7 @@ impl Message {
         // decoding message header
         let buf = &self.raw;
         if buf.len() < MESSAGE_HEADER_SIZE {
-            return Err(Error::ErrUnexpectedHeaderEof.into());
+            return Err(Error::ErrUnexpectedHeaderEof);
         }
 
         let t = u16::from_be_bytes([buf[0], buf[1]]); // first 2 bytes
@@ -283,19 +282,17 @@ impl Message {
         let full_size = MESSAGE_HEADER_SIZE + size; // len(m.Raw)
 
         if cookie != MAGIC_COOKIE {
-            return Err(Error::new(format!(
+            return Err(Error::Other(format!(
                 "{:x} is invalid magic cookie (should be {:x})",
                 cookie, MAGIC_COOKIE
-            ))
-            .into());
+            )));
         }
         if buf.len() < full_size {
-            return Err(Error::new(format!(
+            return Err(Error::Other(format!(
                 "buffer length {} is less than {} (expected message size)",
                 buf.len(),
                 full_size
-            ))
-            .into());
+            )));
         }
 
         // saving header data
@@ -312,12 +309,11 @@ impl Message {
         while offset < size {
             // checking that we have enough bytes to read header
             if b.len() < ATTRIBUTE_HEADER_SIZE {
-                return Err(Error::new(format!(
+                return Err(Error::Other(format!(
                     "buffer length {} is less than {} (expected header size)",
                     b.len(),
                     ATTRIBUTE_HEADER_SIZE
-                ))
-                .into());
+                )));
             }
 
             let mut a = RawAttribute {
@@ -332,13 +328,12 @@ impl Message {
             offset += ATTRIBUTE_HEADER_SIZE;
             if b.len() < a_buff_l {
                 // checking size
-                return Err(Error::new(format!(
+                return Err(Error::Other(format!(
                     "buffer length {} is less than {} (expected value size for {})",
                     b.len(),
                     a_buff_l,
                     a.typ
-                ))
-                .into());
+                )));
             }
             a.value = b[..a_l].to_vec();
             offset += a_buff_l;
@@ -405,7 +400,7 @@ impl Message {
         if ok {
             Ok(v.value)
         } else {
-            Err(Error::ErrAttributeNotFound.into())
+            Err(Error::ErrAttributeNotFound)
         }
     }
 

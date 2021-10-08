@@ -64,8 +64,9 @@ fn test_xormapped_address_get_from() -> Result<()> {
         };
         let result = addr.get_from(&m);
         if let Err(err) = result {
-            assert!(
-                Error::ErrUnexpectedEof.equal(&err),
+            assert_eq!(
+                Error::ErrUnexpectedEof,
+                err,
                 "len(v) = 4 should render <{}> error, got <{}>",
                 Error::ErrUnexpectedEof,
                 err

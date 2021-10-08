@@ -3,7 +3,6 @@ use crate::checks::*;
 use crate::error::*;
 use crate::message::*;
 
-use anyhow::Result;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -64,7 +63,7 @@ impl Getter for ErrorCodeAttribute {
         let v = m.get(ATTR_ERROR_CODE)?;
 
         if v.len() < ERROR_CODE_REASON_START {
-            return Err(Error::ErrUnexpectedEof.into());
+            return Err(Error::ErrUnexpectedEof);
         }
 
         let class = v[ERROR_CODE_CLASS_BYTE] as u16;
@@ -92,7 +91,7 @@ impl Setter for ErrorCode {
             };
             a.add_to(m)
         } else {
-            Err(Error::ErrNoDefaultReason.into())
+            Err(Error::ErrNoDefaultReason)
         }
     }
 }
