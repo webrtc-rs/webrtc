@@ -33,6 +33,11 @@ pub enum Error {
     #[error("expected and actual checksum do not match")]
     ErrChecksumMismatch,
 
+    #[error("data is not a H264 bitstream")]
+    ErrDataIsNotH264Stream,
+    #[error("Io EOF")]
+    ErrIoEOF,
+
     #[allow(non_camel_case_types)]
     #[error("{0}")]
     new(String),
