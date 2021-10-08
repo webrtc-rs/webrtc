@@ -234,7 +234,7 @@ impl RTCIceGatherer {
         let (frag, pwd) = if let Some(agent) = self.get_agent().await {
             agent.get_local_user_credentials().await
         } else {
-            return Err(Error::ErrICEAgentNotExist.into());
+            return Err(Error::ErrICEAgentNotExist);
         };
 
         Ok(RTCIceParameters {
@@ -251,7 +251,7 @@ impl RTCIceGatherer {
         let ice_candidates = if let Some(agent) = self.get_agent().await {
             agent.get_local_candidates().await?
         } else {
-            return Err(Error::ErrICEAgentNotExist.into());
+            return Err(Error::ErrICEAgentNotExist);
         };
 
         Ok(rtc_ice_candidates_from_ice_candidates(&ice_candidates))

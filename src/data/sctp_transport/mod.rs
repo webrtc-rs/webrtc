@@ -166,7 +166,7 @@ impl RTCSctpTransport {
 
             Ok(())
         } else {
-            Err(Error::ErrSCTPTransportDTLS.into())
+            Err(Error::ErrSCTPTransportDTLS)
         }
     }
 
@@ -366,7 +366,7 @@ impl RTCSctpTransport {
             }
         }
 
-        Err(Error::ErrMaxDataChannelID.into())
+        Err(Error::ErrMaxDataChannelID)
     }
 
     pub(crate) async fn association(&self) -> Option<Arc<Association>> {

@@ -137,7 +137,7 @@ impl RTCIceCandidate {
                 };
                 config.new_candidate_relay().await?
             }
-            _ => return Err(Error::ErrICECandidateTypeUnknown.into()),
+            _ => return Err(Error::ErrICECandidateTypeUnknown),
         };
 
         Ok(c)

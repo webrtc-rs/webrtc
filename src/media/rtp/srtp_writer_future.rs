@@ -28,7 +28,7 @@ impl SrtpWriterFuture {
         if return_when_no_srtp {
             {
                 if self.rtp_sender.stop_called_signal.load(Ordering::SeqCst) {
-                    return Err(Error::ErrClosedPipe.into());
+                    return Err(Error::ErrClosedPipe);
                 }
             }
 
@@ -41,7 +41,7 @@ impl SrtpWriterFuture {
                 let mut stop_called_rx = self.rtp_sender.stop_called_rx.lock().await;
 
                 tokio::select! {
-                    _ = stop_called_rx.recv()=> return Err(Error::ErrClosedPipe.into()),
+                    _ = stop_called_rx.recv()=> return Err(Error::ErrClosedPipe),
                     _ = srtp_ready_rx.recv() =>{}
                 }
             }

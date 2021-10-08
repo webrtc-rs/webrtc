@@ -84,7 +84,7 @@ impl RTCRtpCodecCapability {
         {
             Ok(Box::new(rtp::codecs::g7xx::G7xxPayloader::default()))
         } else {
-            Err(Error::ErrNoPayloaderForCodec.into())
+            Err(Error::ErrNoPayloaderForCodec)
         }
     }
 }

@@ -213,7 +213,7 @@ async fn main() -> Result<()> {
     let done1 = Arc::clone(&done);
     peer_connection
         .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            print!("Peer Connection State has changed: {}\n", s);
+            println!("Peer Connection State has changed: {}", s);
 
             let done2 = Arc::clone(&done1);
             Box::pin(async move {

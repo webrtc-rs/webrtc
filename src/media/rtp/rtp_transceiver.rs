@@ -63,7 +63,7 @@ impl RTCRtpTransceiver {
             let media_engine_codecs = self.media_engine.get_codecs_by_kind(self.kind).await;
             let (_, match_type) = codec_parameters_fuzzy_search(codec, &media_engine_codecs);
             if match_type == CodecMatch::None {
-                return Err(Error::ErrRTPTransceiverCodecUnsupported.into());
+                return Err(Error::ErrRTPTransceiverCodecUnsupported);
             }
         }
 
@@ -138,7 +138,7 @@ impl RTCRtpTransceiver {
     pub(crate) async fn set_mid(&self, mid: String) -> Result<()> {
         let mut m = self.mid.lock().await;
         if !m.is_empty() {
-            return Err(Error::ErrRTPTransceiverCannotChangeMid.into());
+            return Err(Error::ErrRTPTransceiverCannotChangeMid);
         }
         *m = mid;
 
@@ -219,7 +219,7 @@ impl RTCRtpTransceiver {
         } else if track_is_none && direction == RTCRtpTransceiverDirection::Sendonly {
             self.set_direction(RTCRtpTransceiverDirection::Inactive);
         } else {
-            return Err(Error::ErrRTPTransceiverSetSendingInvalidState.into());
+            return Err(Error::ErrRTPTransceiverSetSendingInvalidState);
         }
         Ok(())
     }

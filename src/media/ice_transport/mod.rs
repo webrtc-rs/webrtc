@@ -87,7 +87,7 @@ impl RTCIceTransport {
     /// Start incoming connectivity checks based on its configured role.
     pub async fn start(&self, params: &RTCIceParameters, role: Option<RTCIceRole>) -> Result<()> {
         if self.state() != RTCIceTransportState::New {
-            return Err(Error::ErrICETransportNotInNew.into());
+            return Err(Error::ErrICETransportNotInNew);
         }
 
         self.ensure_gatherer().await?;
@@ -162,7 +162,7 @@ impl RTCIceTransport {
                         .await?
                 }
 
-                _ => return Err(Error::ErrICERoleUnknown.into()),
+                _ => return Err(Error::ErrICERoleUnknown),
             };
 
             let config = Config {
@@ -180,7 +180,7 @@ impl RTCIceTransport {
 
             Ok(())
         } else {
-            Err(Error::ErrICEAgentNotExist.into())
+            Err(Error::ErrICEAgentNotExist)
         }
     }
 
@@ -199,7 +199,7 @@ impl RTCIceTransport {
                 )
                 .await?;
         } else {
-            return Err(Error::ErrICEAgentNotExist.into());
+            return Err(Error::ErrICEAgentNotExist);
         }
         self.gatherer.gather().await
     }
@@ -254,7 +254,7 @@ impl RTCIceTransport {
             }
             Ok(())
         } else {
-            Err(Error::ErrICEAgentNotExist.into())
+            Err(Error::ErrICEAgentNotExist)
         }
     }
 
@@ -273,7 +273,7 @@ impl RTCIceTransport {
 
             Ok(())
         } else {
-            Err(Error::ErrICEAgentNotExist.into())
+            Err(Error::ErrICEAgentNotExist)
         }
     }
 
@@ -346,7 +346,7 @@ impl RTCIceTransport {
         if let Some(agent) = self.gatherer.get_agent().await {
             Ok(agent.set_remote_credentials(new_ufrag, new_pwd).await?)
         } else {
-            Err(Error::ErrICEAgentNotExist.into())
+            Err(Error::ErrICEAgentNotExist)
         }
     }
 }

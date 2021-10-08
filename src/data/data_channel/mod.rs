@@ -178,7 +178,7 @@ impl RTCDataChannel {
 
             Ok(())
         } else {
-            Err(Error::ErrSCTPNotEstablished.into())
+            Err(Error::ErrSCTPNotEstablished)
         }
     }
 
@@ -338,7 +338,7 @@ impl RTCDataChannel {
         if let Some(dc) = &*data_channel {
             Ok(dc.write_data_channel(data, false).await?)
         } else {
-            Err(Error::ErrClosedPipe.into())
+            Err(Error::ErrClosedPipe)
         }
     }
 
@@ -350,13 +350,13 @@ impl RTCDataChannel {
         if let Some(dc) = &*data_channel {
             Ok(dc.write_data_channel(&Bytes::from(s), true).await?)
         } else {
-            Err(Error::ErrClosedPipe.into())
+            Err(Error::ErrClosedPipe)
         }
     }
 
     fn ensure_open(&self) -> Result<()> {
         if self.ready_state() != RTCDataChannelState::Open {
-            Err(Error::ErrClosedPipe.into())
+            Err(Error::ErrClosedPipe)
         } else {
             Ok(())
         }
@@ -372,7 +372,7 @@ impl RTCDataChannel {
     /// resulting DataChannel object.
     pub async fn detach(&self) -> Result<Arc<data::data_channel::DataChannel>> {
         if !self.setting_engine.detach.data_channels {
-            return Err(Error::ErrDetachNotEnabled.into());
+            return Err(Error::ErrDetachNotEnabled);
         }
 
         let data_channel = self.data_channel.lock().await;
@@ -381,7 +381,7 @@ impl RTCDataChannel {
 
             Ok(Arc::clone(dc))
         } else {
-            Err(Error::ErrDetachBeforeOpened.into())
+            Err(Error::ErrDetachBeforeOpened)
         }
     }
 

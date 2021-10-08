@@ -157,7 +157,7 @@ async fn main() -> Result<()> {
                     tokio::spawn(async move {
                         // Create Track that we send video back to browser on
                         let local_track = Arc::new(TrackLocalStaticRTP::new(
-                            track.codec().await.capability.clone(),
+                            track.codec().await.capability,
                             "video".to_owned(),
                             "webrtc-rs".to_owned(),
                         ));
@@ -186,7 +186,7 @@ async fn main() -> Result<()> {
     // This will notify you when the peer has connected/disconnected
     peer_connection
         .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            print!("Peer Connection State has changed: {}\n", s);
+            println!("Peer Connection State has changed: {}", s);
             Box::pin(async {})
         }))
         .await;
@@ -274,7 +274,7 @@ async fn main() -> Result<()> {
             // This will notify you when the peer has connected/disconnected
             peer_connection
                 .on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-                    print!("Peer Connection State has changed: {}\n", s);
+                    println!("Peer Connection State has changed: {}", s);
                     Box::pin(async {})
                 }))
                 .await;

@@ -199,7 +199,7 @@ impl SettingEngine {
     ///   Act as dtls_transport Server, wait for ClientHello
     pub fn set_answering_dtls_role(&mut self, role: DTLSRole) -> Result<()> {
         if role != DTLSRole::Client && role != DTLSRole::Server {
-            return Err(Error::ErrSettingEngineSetAnsweringDTLSRole.into());
+            return Err(Error::ErrSettingEngineSetAnsweringDTLSRole);
         }
 
         self.answering_dtls_role = role;

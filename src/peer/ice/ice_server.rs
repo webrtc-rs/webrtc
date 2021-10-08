@@ -30,7 +30,7 @@ impl RTCIceServer {
             {
                 // https://www.w3.org/TR/webrtc/#set-the-configuration (step #11.3.2)
                 if self.username.is_empty() || self.credential.is_empty() {
-                    return Err(Error::ErrNoTurnCredentials.into());
+                    return Err(Error::ErrNoTurnCredentials);
                 }
                 url.username = self.username.clone();
 
@@ -47,7 +47,7 @@ impl RTCIceServer {
                             }
                         }*/
                     }
-                    _ => return Err(Error::ErrTurnCredentials.into()),
+                    _ => return Err(Error::ErrTurnCredentials),
                 };
             }
 

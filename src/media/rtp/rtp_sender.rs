@@ -41,11 +41,11 @@ impl RTPSenderInternal {
                     let a = Attributes::new();
                     Ok(rtcp_interceptor.read(b, &a).await?)
                 }else{
-                    Err(Error::ErrInterceptorNotBind.into())
+                    Err(Error::ErrInterceptorNotBind)
                 }
             }
             _ = stop_called_rx.recv() =>{
-                Err(Error::ErrClosedPipe.into())
+                Err(Error::ErrClosedPipe)
             }
         }
     }
@@ -235,7 +235,7 @@ impl RTCRtpSender {
             let tr = self.tr.lock().await;
             if let Some(r) = &*tr {
                 if r.kind != t.kind() {
-                    return Err(Error::ErrRTPSenderNewTrackHasIncorrectKind.into());
+                    return Err(Error::ErrRTPSenderNewTrackHasIncorrectKind);
                 }
             } else {
                 //TODO: what about None tr?
@@ -274,7 +274,7 @@ impl RTCRtpSender {
 
             t.bind(&new_context).await
         } else {
-            Err(Error::ErrRTPSenderTrackNil.into())
+            Err(Error::ErrRTPSenderTrackNil)
         };
 
         match result {
@@ -305,7 +305,7 @@ impl RTCRtpSender {
     /// send Attempts to set the parameters controlling the sending of media.
     pub async fn send(&self, parameters: &RTCRtpSendParameters) -> Result<()> {
         if self.has_sent().await {
-            return Err(Error::ErrRTPSenderSendAlreadyCalled.into());
+            return Err(Error::ErrRTPSenderSendAlreadyCalled);
         }
 
         let write_stream = Arc::new(InterceptorToTrackLocalWriter::new());

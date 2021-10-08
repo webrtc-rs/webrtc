@@ -143,7 +143,7 @@ async fn main() -> Result<()> {
             Box::pin(async move {
                 let d2 = Arc::clone(&d);
                 let d_label2 = d_label.clone();
-                let d_id2 = d_id.clone();
+                let d_id2 = d_id;
                 d.on_open(Box::new(move || {
                     println!("Data channel '{}'-'{}' open. Random messages will now be sent to any connected DataChannels every 5 seconds", d_label2, d_id2);
                     let (done_tx, mut done_rx) = tokio::sync::mpsc::channel::<()>(1);
@@ -187,7 +187,7 @@ async fn main() -> Result<()> {
                 // Register text message handling
                 d.on_message(Box::new(move |msg: DataChannelMessage| {
                     let msg_str = String::from_utf8(msg.data.to_vec()).unwrap();
-                    print!("Message from DataChannel '{}': '{}'\n", d_label, msg_str);
+                    println!("Message from DataChannel '{}': '{}'", d_label, msg_str);
                     Box::pin(async {})
                 })).await;
             })

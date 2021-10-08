@@ -406,7 +406,7 @@ impl MediaEngine {
                 MediaEngine::add_codec(&mut self.video_codecs, codec);
                 Ok(())
             }
-            _ => Err(Error::ErrUnknownType.into()),
+            _ => Err(Error::ErrUnknownType),
         }
     }
 
@@ -429,7 +429,7 @@ impl MediaEngine {
             if *direction != RTCRtpTransceiverDirection::Recvonly
                 && *direction != RTCRtpTransceiverDirection::Sendonly
             {
-                return Err(Error::ErrRegisterHeaderExtensionInvalidDirection.into());
+                return Err(Error::ErrRegisterHeaderExtensionInvalidDirection);
             }
         }
 
@@ -529,7 +529,7 @@ impl MediaEngine {
             }
         }
 
-        Err(Error::ErrCodecNotFound.into())
+        Err(Error::ErrCodecNotFound)
     }
 
     /*TODO: func (m *MediaEngine) collectStats(collector *statsReportCollector) {

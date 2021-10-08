@@ -50,14 +50,14 @@ impl RTPReceiverInternal {
                         let a = Attributes::new();
                         Ok(rtcp_interceptor.read(b, &a).await?)
                     }else{
-                        Err(Error::ErrInterceptorNotBind.into())
+                        Err(Error::ErrInterceptorNotBind)
                     }
                 }else{
-                    Err(Error::ErrExistingTrack.into())
+                    Err(Error::ErrExistingTrack)
                 }
             }
             _ = closed_rx.recv() => {
-                Err(Error::ErrClosedPipe.into())
+                Err(Error::ErrClosedPipe)
             }
         }
     }
@@ -76,14 +76,14 @@ impl RTPReceiverInternal {
                             let a = Attributes::new();
                             return Ok(rtcp_interceptor.read(b, &a).await?);
                         }else{
-                            return Err(Error::ErrInterceptorNotBind.into());
+                            return Err(Error::ErrInterceptorNotBind);
                         }
                     }
                 }
-                Err(Error::ErrRTPReceiverForRIDTrackStreamNotFound.into())
+                Err(Error::ErrRTPReceiverForRIDTrackStreamNotFound)
             }
             _ = closed_rx.recv() => {
-                Err(Error::ErrClosedPipe.into())
+                Err(Error::ErrClosedPipe)
             }
         }
     }
@@ -142,7 +142,7 @@ impl RTPReceiverInternal {
             Ok(ri.read(b, &a).await?)
         } else {
             //log::debug!("read_rtp exit tracks with ErrRTPReceiverWithSSRCTrackStreamNotFound");
-            Err(Error::ErrRTPReceiverWithSSRCTrackStreamNotFound.into())
+            Err(Error::ErrRTPReceiverWithSSRCTrackStreamNotFound)
         }
     }
 
@@ -297,7 +297,7 @@ impl RTCRtpReceiver {
         let _d = {
             let mut received_tx = self.received_tx.lock().await;
             if received_tx.is_none() {
-                return Err(Error::ErrRTPReceiverReceiveAlreadyCalled.into());
+                return Err(Error::ErrRTPReceiverReceiveAlreadyCalled);
             }
             received_tx.take()
         };
@@ -536,7 +536,7 @@ impl RTCRtpReceiver {
         }
 
         //log::debug!("receive_for_rid exit tracks 2");
-        Err(Error::ErrRTPReceiverForSSRCTrackStreamNotFound.into())
+        Err(Error::ErrRTPReceiverForSSRCTrackStreamNotFound)
     }
 
     async fn streams_for_ssrc(

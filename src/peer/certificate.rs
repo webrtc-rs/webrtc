@@ -67,7 +67,7 @@ impl RTCCertificate {
                 serialized_der,
             }
         } else {
-            return Err(Error::new("Unsupported key_pair".to_owned()).into());
+            return Err(Error::new("Unsupported key_pair".to_owned()));
         };
         params.key_pair = Some(key_pair);
 
@@ -129,7 +129,7 @@ impl RTCCertificate {
         } else if key_pair.is_compatible(&rcgen::PKCS_RSA_SHA256) {
             params.alg = &rcgen::PKCS_RSA_SHA256;
         } else {
-            return Err(Error::new("Unsupported key_pair".to_owned()).into());
+            return Err(Error::new("Unsupported key_pair".to_owned()));
         };
         params.key_pair = Some(key_pair);
 

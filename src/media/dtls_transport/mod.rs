@@ -185,7 +185,7 @@ impl RTCDtlsTransport {
                 .extract_session_keys_from_dtls(conn_state, self.role().await == DTLSRole::Client)
                 .await?;
         } else {
-            return Err(Error::ErrDtlsTransportNotStarted.into());
+            return Err(Error::ErrDtlsTransportNotStarted);
         }
 
         {
@@ -225,7 +225,7 @@ impl RTCDtlsTransport {
                 .extract_session_keys_from_dtls(conn_state, self.role().await == DTLSRole::Client)
                 .await?;
         } else {
-            return Err(Error::ErrDtlsTransportNotStarted.into());
+            return Err(Error::ErrDtlsTransportNotStarted);
         }
 
         {
@@ -301,7 +301,7 @@ impl RTCDtlsTransport {
         self.ensure_ice_conn()?;
 
         if self.state() != RTCDtlsTransportState::New {
-            return Err(Error::ErrInvalidDTLSStart.into());
+            return Err(Error::ErrInvalidDTLSStart);
         }
 
         {
@@ -320,7 +320,7 @@ impl RTCDtlsTransport {
         let certificate = if let Some(cert) = self.certificates.first() {
             cert.certificate.clone()
         } else {
-            return Err(Error::ErrNonCertificate.into());
+            return Err(Error::ErrNonCertificate);
         };
         self.state_change(RTCDtlsTransportState::Connecting).await;
 
@@ -399,7 +399,7 @@ impl RTCDtlsTransport {
                 }
                 _ => {
                     self.state_change(RTCDtlsTransportState::Failed).await;
-                    return Err(Error::ErrNoSRTPProtectionProfile.into());
+                    return Err(Error::ErrNoSRTPProtectionProfile);
                 }
             };
         }
@@ -415,7 +415,7 @@ impl RTCDtlsTransport {
         let remote_certs = &dtls_conn.connection_state().await.peer_certificates;
         if remote_certs.is_empty() {
             self.state_change(RTCDtlsTransportState::Failed).await;
-            return Err(Error::ErrNoRemoteCertificate.into());
+            return Err(Error::ErrNoRemoteCertificate);
         }
 
         {
@@ -502,7 +502,7 @@ impl RTCDtlsTransport {
         let remote_parameters = self.remote_parameters.lock().await;
         for fp in &remote_parameters.fingerprints {
             if fp.algorithm != "sha-256" {
-                return Err(Error::ErrUnsupportedFingerprintAlgorithm.into());
+                return Err(Error::ErrUnsupportedFingerprintAlgorithm);
             }
 
             let mut h = Sha256::new();
@@ -516,12 +516,12 @@ impl RTCDtlsTransport {
             }
         }
 
-        Err(Error::ErrNoMatchingCertificateFingerprint.into())
+        Err(Error::ErrNoMatchingCertificateFingerprint)
     }
 
     pub(crate) fn ensure_ice_conn(&self) -> Result<()> {
         if self.ice_transport.state() == RTCIceTransportState::New {
-            Err(Error::ErrICEConnectionNotStarted.into())
+            Err(Error::ErrICEConnectionNotStarted)
         } else {
             Ok(())
         }

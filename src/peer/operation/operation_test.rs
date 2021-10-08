@@ -15,11 +15,7 @@ async fn test_operations_enqueue() -> Result<()> {
                 Box::pin(async move {
                     let mut r3 = r2.lock().await;
                     r3[k] += k * k;
-                    if r3[k] == 225 {
-                        true
-                    } else {
-                        false
-                    }
+                    r3[k] == 225
                 })
             })))
             .await?;

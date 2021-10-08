@@ -56,7 +56,7 @@ impl TrackLocal for TrackLocalStaticRTP {
 
             Ok(codec)
         } else {
-            Err(Error::ErrUnsupportedCodec.into())
+            Err(Error::ErrUnsupportedCodec)
         }
     }
 
@@ -75,7 +75,7 @@ impl TrackLocal for TrackLocalStaticRTP {
             bindings.remove(index);
             Ok(())
         } else {
-            Err(Error::ErrUnbindFailed.into())
+            Err(Error::ErrUnbindFailed)
         }
     }
 
@@ -132,8 +132,7 @@ impl TrackLocalWriter for TrackLocalStaticRTP {
                     }
                 }
             } else {
-                write_errs
-                    .push(Error::new("track binding has none write_stream".to_owned()).into());
+                write_errs.push(Error::new("track binding has none write_stream".to_owned()));
             }
         }
 

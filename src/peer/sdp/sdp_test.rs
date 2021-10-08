@@ -542,8 +542,10 @@ async fn fingerprint_test(
 
     let sdparray = s.marshal();
 
-    let v: Vec<&str> = sdparray.matches("sha-256").collect();
-    assert_eq!(v.len(), expected_fingerprint_count);
+    assert_eq!(
+        sdparray.matches("sha-256").count(),
+        expected_fingerprint_count
+    );
 
     Ok(())
 }
