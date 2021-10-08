@@ -207,12 +207,10 @@ fn test_source_description_unmarshal() {
 
         if let Some(err) = want_error {
             let got_err = got.err().unwrap();
-            assert!(
-                err.equal(&got_err),
+            assert_eq!(
+                err, got_err,
                 "Unmarshal {}: err = {:?}, want {:?}",
-                name,
-                got_err,
-                err,
+                name, got_err, err,
             );
         } else {
             let actual = got.unwrap();
@@ -351,17 +349,15 @@ fn test_source_description_roundtrip() {
 
         if let Some(err) = want_error {
             let got_err = got.err().unwrap();
-            assert!(
-                err.equal(&got_err),
+            assert_eq!(
+                err, got_err,
                 "Unmarshal {} rr: err = {:?}, want {:?}",
-                name,
-                got_err,
-                err,
+                name, got_err, err,
             );
         } else {
             let mut data = got.ok().unwrap();
             let actual = SourceDescription::unmarshal(&mut data)
-                .expect(format!("Unmarshal {}", name).as_str());
+                .unwrap_or_else(|_| panic!("Unmarshal {}", name));
 
             assert_eq!(
                 actual, want,

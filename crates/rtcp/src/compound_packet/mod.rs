@@ -7,10 +7,11 @@ use crate::{
 };
 use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
-use anyhow::Result;
 use bytes::{Buf, Bytes};
 use std::any::Any;
 use std::fmt;
+
+type Result<T> = std::result::Result<T, util::Error>;
 
 /// A CompoundPacket is a collection of RTCP packets transmitted as a single packet with
 /// the underlying protocol (for example UDP).

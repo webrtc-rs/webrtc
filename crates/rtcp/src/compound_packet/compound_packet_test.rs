@@ -58,8 +58,9 @@ fn test_bad_compound() {
 
         Err(err) => {
             let a = Error::BadFirstPacket;
-            assert!(
-                Error::BadFirstPacket.equal(&err),
+            assert_eq!(
+                Error::BadFirstPacket,
+                err,
                 "Unmarshal(badcompound) err={:?}, want {:?}",
                 err,
                 a,
@@ -150,7 +151,7 @@ fn test_valid_packet() {
             "goodbye",
             CompoundPacket(vec![
                 Box::new(ReceiverReport::default()),
-                Box::new(cname.clone()),
+                Box::new(cname),
                 Box::new(Goodbye::default()),
             ]),
             None,
@@ -161,13 +162,7 @@ fn test_valid_packet() {
         let result = packet.validate();
         assert_eq!(result.is_ok(), error.is_none());
         if let (Some(err), Err(got)) = (error, result) {
-            assert!(
-                err.equal(&got),
-                "Valid({}) = {:?}, want {:?}",
-                name,
-                got,
-                err
-            );
+            assert_eq!(err, got, "Valid({}) = {:?}, want {:?}", name, got, err);
         }
     }
 }
@@ -242,7 +237,7 @@ fn test_cname() {
             "goodbye",
             CompoundPacket(vec![
                 Box::new(ReceiverReport::default()),
-                Box::new(cname.clone()),
+                Box::new(cname),
                 Box::new(Goodbye::default()),
             ]),
             None,
@@ -254,13 +249,7 @@ fn test_cname() {
         let err = compound_packet.validate();
         assert_eq!(err.is_err(), want_error.is_some());
         if let (Some(want), Err(err)) = (&want_error, err) {
-            assert!(
-                want.equal(&err),
-                "Valid({}) = {:?}, want {:?}",
-                name,
-                err,
-                want
-            );
+            assert_eq!(*want, err, "Valid({}) = {:?}, want {:?}", name, err, want);
         }
 
         let name_result = compound_packet.cname();
@@ -273,13 +262,7 @@ fn test_cname() {
 
             Err(err) => {
                 if let Some(want) = &want_error {
-                    assert!(
-                        want.equal(&err),
-                        "CNAME({}) = {:?}, want {:?}",
-                        name,
-                        err,
-                        want
-                    );
+                    assert_eq!(*want, err, "CNAME({}) = {:?}, want {:?}", name, err, want);
                 }
             }
         }
@@ -303,7 +286,7 @@ fn test_compound_packet_roundtrip() {
             "goodbye",
             CompoundPacket(vec![
                 Box::new(ReceiverReport::default()),
-                Box::new(cname.clone()),
+                Box::new(cname),
                 Box::new(Goodbye {
                     sources: vec![1234],
                     ..Default::default()
@@ -322,12 +305,10 @@ fn test_compound_packet_roundtrip() {
         let result = packet.marshal();
         if let Some(err) = marshal_error {
             if let Err(got) = result {
-                assert!(
-                    err.equal(&got),
+                assert_eq!(
+                    err, got,
                     "marshal {} header: err = {}, want {}",
-                    name,
-                    got,
-                    err
+                    name, got, err
                 );
             } else {
                 assert!(false, "want error in test {}", name);
@@ -339,11 +320,11 @@ fn test_compound_packet_roundtrip() {
 
         let data1 = result.unwrap();
         let c = CompoundPacket::unmarshal(&mut data1.clone())
-            .expect(format!("unmarshal {} error", name).as_str());
+            .unwrap_or_else(|_| panic!("unmarshal {} error", name));
 
         let data2 = c
             .marshal()
-            .expect(format!("marshal {} error", name).as_str());
+            .unwrap_or_else(|_| panic!("marshal {} error", name));
 
         assert_eq!(
             data1, data2,

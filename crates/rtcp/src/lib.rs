@@ -41,7 +41,7 @@
 //!     // ...
 
 pub mod compound_packet;
-pub mod error;
+mod error;
 pub mod goodbye;
 pub mod header;
 pub mod packet;
@@ -53,3 +53,5 @@ pub mod sender_report;
 pub mod source_description;
 pub mod transport_feedbacks;
 mod util;
+
+pub use error::Error;

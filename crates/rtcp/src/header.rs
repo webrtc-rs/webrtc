@@ -1,7 +1,6 @@
 use crate::error::Error;
 use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
-use anyhow::Result;
 use bytes::{Buf, BufMut};
 
 /// PacketType specifies the type of an RTCP packet
@@ -109,7 +108,7 @@ impl MarshalSize for Header {
 }
 
 impl Marshal for Header {
-    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize, util::Error> {
         if self.count > 31 {
             return Err(Error::InvalidHeader.into());
         }
@@ -138,7 +137,7 @@ impl Marshal for Header {
 
 impl Unmarshal for Header {
     /// Unmarshal decodes the Header from binary
-    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self, util::Error>
     where
         Self: Sized,
         B: Buf,
@@ -241,12 +240,10 @@ mod test {
 
             if let Some(err) = want_error {
                 let got_err = got.err().unwrap();
-                assert!(
-                    err.equal(&got_err),
+                assert_eq!(
+                    err, got_err,
                     "Unmarshal {}: err = {:?}, want {:?}",
-                    name,
-                    got_err,
-                    err,
+                    name, got_err, err,
                 );
             } else {
                 let actual = got.unwrap();
@@ -308,17 +305,16 @@ mod test {
 
             if let Some(err) = want_error {
                 let got_err = got.err().unwrap();
-                assert!(
-                    err.equal(&got_err),
+                assert_eq!(
+                    err, got_err,
                     "Unmarshal {} rr: err = {:?}, want {:?}",
-                    name,
-                    got_err,
-                    err,
+                    name, got_err, err,
                 );
             } else {
                 let data = got.ok().unwrap();
                 let buf = &mut data.clone();
-                let actual = Header::unmarshal(buf).expect(format!("Unmarshal {}", name).as_str());
+                let actual =
+                    Header::unmarshal(buf).unwrap_or_else(|_| panic!("Unmarshal {}", name));
 
                 assert_eq!(
                     actual, want,

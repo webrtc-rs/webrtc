@@ -117,12 +117,10 @@ fn test_goodbye_unmarshal() {
 
         if let Some(err) = want_error {
             let got_err = got.err().unwrap();
-            assert!(
-                err.equal(&got_err),
+            assert_eq!(
+                err, got_err,
                 "Unmarshal {} rr: err = {:?}, want {:?}",
-                name,
-                got_err,
-                err,
+                name, got_err, err,
             );
         } else {
             let actual = got.unwrap();
@@ -188,7 +186,7 @@ fn test_goodbye_round_trip() {
         (
             "count overflow",
             Goodbye {
-                sources: too_many_sources.clone(),
+                sources: too_many_sources,
                 reason: Bytes::from_static(b""),
             },
             Some(Error::TooManySources),
@@ -217,17 +215,15 @@ fn test_goodbye_round_trip() {
 
         if let Some(err) = want_error {
             let got_err = got.err().unwrap();
-            assert!(
-                err.equal(&got_err),
+            assert_eq!(
+                err, got_err,
                 "Unmarshal {} rr: err = {:?}, want {:?}",
-                name,
-                got_err,
-                err,
+                name, got_err, err,
             );
         } else {
             let mut data = got.ok().unwrap();
             let actual =
-                Goodbye::unmarshal(&mut data).expect(format!("Unmarshal {}", name).as_str());
+                Goodbye::unmarshal(&mut data).unwrap_or_else(|_| panic!("Unmarshal {}", name));
 
             assert_eq!(
                 actual, want,

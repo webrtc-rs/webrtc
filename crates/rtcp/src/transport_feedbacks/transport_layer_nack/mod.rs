@@ -4,7 +4,6 @@ mod transport_layer_nack_test;
 use crate::{error::Error, header::*, packet::*, util::*};
 use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
-use anyhow::Result;
 use bytes::{Buf, BufMut};
 use std::any::Any;
 use std::fmt;
@@ -140,7 +139,7 @@ impl MarshalSize for TransportLayerNack {
 
 impl Marshal for TransportLayerNack {
     /// Marshal encodes the packet in binary.
-    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize, util::Error> {
         if self.nacks.len() + TLN_LENGTH > std::u8::MAX as usize {
             return Err(Error::TooManyReports.into());
         }
@@ -170,7 +169,7 @@ impl Marshal for TransportLayerNack {
 
 impl Unmarshal for TransportLayerNack {
     /// Unmarshal decodes the ReceptionReport from binary
-    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self, util::Error>
     where
         Self: Sized,
         B: Buf,

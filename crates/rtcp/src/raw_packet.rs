@@ -2,7 +2,6 @@ use crate::{error::Error, header::*, packet::Packet, util::*};
 
 use util::marshal::{Marshal, MarshalSize, Unmarshal};
 
-use anyhow::Result;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::any::Any;
 use std::fmt;
@@ -62,7 +61,7 @@ impl MarshalSize for RawPacket {
 
 impl Marshal for RawPacket {
     /// Marshal encodes the packet in binary.
-    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize> {
+    fn marshal_to(&self, mut buf: &mut [u8]) -> Result<usize, util::Error> {
         let h = Header::unmarshal(&mut self.0.clone())?;
         buf.put(self.0.clone());
         if h.padding {
@@ -74,7 +73,7 @@ impl Marshal for RawPacket {
 
 impl Unmarshal for RawPacket {
     /// Unmarshal decodes the packet from binary.
-    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self>
+    fn unmarshal<B>(raw_packet: &mut B) -> Result<Self, util::Error>
     where
         Self: Sized,
         B: Buf,
@@ -101,7 +100,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_raw_packet_roundtrip() -> Result<()> {
+    fn test_raw_packet_roundtrip() -> Result<(), Error> {
         let tests: Vec<(&str, RawPacket, Option<Error>)> = vec![
             (
                 "valid",

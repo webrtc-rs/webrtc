@@ -1,3 +1,4 @@
+use crate::error::Result;
 use crate::{
     compound_packet::*, error::Error, goodbye::*, header::*,
     payload_feedbacks::full_intra_request::*, payload_feedbacks::picture_loss_indication::*,
@@ -9,7 +10,6 @@ use crate::{
 };
 use util::marshal::{Marshal, Unmarshal};
 
-use anyhow::Result;
 use bytes::Buf;
 use std::any::Any;
 use std::fmt;
@@ -56,10 +56,10 @@ where
 
     match packets.len() {
         // Empty Packet
-        0 => Err(Error::InvalidHeader.into()),
+        0 => Err(Error::InvalidHeader),
 
         // Single Packet
-        1 => packets.pop().ok_or_else(|| Error::BadFirstPacket.into()),
+        1 => packets.pop().ok_or(Error::BadFirstPacket),
 
         // Compound Packet
         _ => Ok(Box::new(CompoundPacket(packets))),
@@ -76,7 +76,7 @@ where
 
     let length = (h.length as usize) * 4;
     if length > raw_data.remaining() {
-        return Err(Error::PacketTooShort.into());
+        return Err(Error::PacketTooShort);
     }
 
     let mut in_packet = h.marshal()?.chain(raw_data.take(length));
@@ -201,12 +201,7 @@ mod test {
         let result = unmarshal(&mut Bytes::new());
         if let Err(got) = result {
             let want = Error::InvalidHeader;
-            assert!(
-                want.equal(&got),
-                "Unmarshal(nil) err = {}, want {}",
-                got,
-                want
-            );
+            assert_eq!(want, got, "Unmarshal(nil) err = {}, want {}", got, want);
         } else {
             assert!(false, "want error");
         }
@@ -225,11 +220,10 @@ mod test {
         let result = unmarshal(&mut data);
         if let Err(got) = result {
             let want = Error::PacketTooShort;
-            assert!(
-                want.equal(&got),
+            assert_eq!(
+                want, got,
                 "Unmarshal(invalid_header_length) err = {}, want {}",
-                got,
-                want
+                got, want
             );
         } else {
             assert!(false, "want error");
