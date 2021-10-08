@@ -25,7 +25,7 @@ pub(crate) fn aes_cm_key_derivation(
 ) -> Result<Vec<u8>> {
     if index_over_kdr != 0 {
         // 24-bit "index DIV kdr" must be xored to prf input.
-        return Err(Error::UnsupportedIndexOverKdr.into());
+        return Err(Error::UnsupportedIndexOverKdr);
     }
 
     // https://tools.ietf.org/html/rfc3711#appendix-B.3

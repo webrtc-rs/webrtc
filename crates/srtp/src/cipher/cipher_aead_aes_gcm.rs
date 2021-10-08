@@ -63,7 +63,7 @@ impl Cipher for CipherAeadAesGcm {
         roc: u32,
     ) -> Result<Bytes> {
         if ciphertext.len() < self.auth_tag_len() {
-            return Err(Error::ErrFailedToVerifyAuthTag.into());
+            return Err(Error::ErrFailedToVerifyAuthTag);
         }
 
         let nonce = self.rtp_initialization_vector(header, roc);
@@ -105,7 +105,7 @@ impl Cipher for CipherAeadAesGcm {
 
     fn decrypt_rtcp(&mut self, encrypted: &[u8], srtcp_index: usize, ssrc: u32) -> Result<Bytes> {
         if encrypted.len() < self.auth_tag_len() + SRTCP_INDEX_SIZE {
-            return Err(Error::ErrFailedToVerifyAuthTag.into());
+            return Err(Error::ErrFailedToVerifyAuthTag);
         }
 
         let nonce = self.rtcp_initialization_vector(srtcp_index, ssrc);

@@ -207,7 +207,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         roc: u32,
     ) -> Result<Bytes> {
         if encrypted.len() < self.auth_tag_len() {
-            return Err(Error::SrtpTooSmall(encrypted.len(), self.auth_tag_len()).into());
+            return Err(Error::SrtpTooSmall(encrypted.len(), self.auth_tag_len()));
         }
 
         let mut writer = BytesMut::with_capacity(encrypted.len() - self.auth_tag_len());
@@ -222,7 +222,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         // See if the auth tag actually matches.
         // We use a constant time comparison to prevent timing attacks.
         if actual_tag.ct_eq(&expected_tag).unwrap_u8() != 1 {
-            return Err(Error::RtpFailedToVerifyAuthTag.into());
+            return Err(Error::RtpFailedToVerifyAuthTag);
         }
 
         // Write cipher_text to the destination buffer.
@@ -284,8 +284,7 @@ impl Cipher for CipherAesCmHmacSha1 {
             return Err(Error::SrtcpTooSmall(
                 encrypted.len(),
                 self.auth_tag_len() + SRTCP_INDEX_SIZE,
-            )
-            .into());
+            ));
         }
 
         let tail_offset = encrypted.len() - (self.auth_tag_len() + SRTCP_INDEX_SIZE);
@@ -309,7 +308,7 @@ impl Cipher for CipherAesCmHmacSha1 {
         // See if the auth tag actually matches.
         // We use a constant time comparison to prevent timing attacks.
         if actual_tag.ct_eq(&expected_tag).unwrap_u8() != 1 {
-            return Err(Error::RtcpFailedToVerifyAuthTag.into());
+            return Err(Error::RtcpFailedToVerifyAuthTag);
         }
 
         let counter = generate_counter(

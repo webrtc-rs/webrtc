@@ -214,10 +214,10 @@ async fn payload_srtp(
     let (n, hdr) = read_stream.read_rtp(&mut read_buffer).await?;
 
     assert_eq!(
-        &expected_payload[..],
+        expected_payload,
         &read_buffer[header_size..n],
         "Sent buffer does not match the one received exp({:?}) actual({:?})",
-        &expected_payload[..],
+        expected_payload,
         &read_buffer[header_size..n]
     );
 

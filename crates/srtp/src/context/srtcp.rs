@@ -17,11 +17,11 @@ impl Context {
             if let Some(state) = self.get_srtcp_ssrc_state(ssrc) {
                 if let Some(replay_detector) = &mut state.replay_detector {
                     if !replay_detector.check(index as u64) {
-                        return Err(Error::SrtcpSsrcDuplicated(ssrc, index).into());
+                        return Err(Error::SrtcpSsrcDuplicated(ssrc, index));
                     }
                 }
             } else {
-                return Err(Error::SsrcMissingFromSrtcp(ssrc).into());
+                return Err(Error::SsrcMissingFromSrtcp(ssrc));
             }
         }
 
@@ -55,7 +55,7 @@ impl Context {
                 }
                 index = state.srtcp_index;
             } else {
-                return Err(Error::SsrcMissingFromSrtcp(ssrc).into());
+                return Err(Error::SsrcMissingFromSrtcp(ssrc));
             }
         }
 

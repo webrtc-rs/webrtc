@@ -136,7 +136,7 @@ impl Session {
     ) -> Result<()> {
         let n = udp_rx.recv(buf).await?;
         if n == 0 {
-            return Err(Error::SessionEof.into());
+            return Err(Error::SessionEof);
         }
 
         let decrypted = if is_rtp {
@@ -212,7 +212,7 @@ impl Session {
         if let Some(stream) = result {
             Ok(stream)
         } else {
-            Err(Error::SessionSrtpAlreadyClosed.into())
+            Err(Error::SessionSrtpAlreadyClosed)
         }
     }
 
@@ -224,7 +224,7 @@ impl Session {
 
     pub async fn write(&self, buf: &Bytes, is_rtp: bool) -> Result<usize> {
         if self.is_rtp != is_rtp {
-            return Err(Error::SessionRtpRtcpTypeMismatch.into());
+            return Err(Error::SessionRtpRtcpTypeMismatch);
         }
 
         let encrypted = {

@@ -124,9 +124,9 @@ impl Context {
         let salt_len = profile.salt_len();
 
         if master_key.len() != key_len {
-            return Err(Error::SrtpMasterKeyLength(key_len, master_key.len()).into());
+            return Err(Error::SrtpMasterKeyLength(key_len, master_key.len()));
         } else if master_salt.len() != salt_len {
-            return Err(Error::SrtpSaltLength(salt_len, master_salt.len()).into());
+            return Err(Error::SrtpSaltLength(salt_len, master_salt.len()));
         }
 
         let cipher: Box<dyn Cipher + Send> = match profile {
