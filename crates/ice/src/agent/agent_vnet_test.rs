@@ -3,6 +3,7 @@ use super::*;
 use crate::candidate::candidate_base::unmarshal_candidate;
 use async_trait::async_trait;
 use std::net::{IpAddr, Ipv4Addr};
+use std::result::Result;
 use std::str::FromStr;
 use std::sync::atomic::AtomicU64;
 use util::vnet::chunk::Chunk;
@@ -13,28 +14,28 @@ pub(crate) struct MockConn;
 
 #[async_trait]
 impl Conn for MockConn {
-    async fn connect(&self, _addr: SocketAddr) -> Result<()> {
+    async fn connect(&self, _addr: SocketAddr) -> Result<(), util::Error> {
         Ok(())
     }
-    async fn recv(&self, _buf: &mut [u8]) -> Result<usize> {
+    async fn recv(&self, _buf: &mut [u8]) -> Result<usize, util::Error> {
         Ok(0)
     }
-    async fn recv_from(&self, _buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
+    async fn recv_from(&self, _buf: &mut [u8]) -> Result<(usize, SocketAddr), util::Error> {
         Ok((0, SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0)))
     }
-    async fn send(&self, _buf: &[u8]) -> Result<usize> {
+    async fn send(&self, _buf: &[u8]) -> Result<usize, util::Error> {
         Ok(0)
     }
-    async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> Result<usize> {
+    async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> Result<usize, util::Error> {
         Ok(0)
     }
-    async fn local_addr(&self) -> Result<SocketAddr> {
+    async fn local_addr(&self) -> Result<SocketAddr, util::Error> {
         Ok(SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0))
     }
     async fn remote_addr(&self) -> Option<SocketAddr> {
         None
     }
-    async fn close(&self) -> Result<()> {
+    async fn close(&self) -> Result<(), util::Error> {
         Ok(())
     }
 }
@@ -47,7 +48,7 @@ pub(crate) struct VNet {
 }
 
 impl VNet {
-    pub(crate) async fn close(&self) -> Result<()> {
+    pub(crate) async fn close(&self) -> Result<(), Error> {
         self.server.close().await?;
         let mut w = self.wan.lock().await;
         w.stop().await?;
@@ -67,7 +68,7 @@ pub(crate) const VNET_STUN_SERVER_PORT: u16 = 3478;
 pub(crate) async fn build_simple_vnet(
     _nat_type0: nat::NatType,
     _nat_type1: nat::NatType,
-) -> Result<VNet> {
+) -> Result<VNet, Error> {
     // WAN
     let wan = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
         cidr: "0.0.0.0/0".to_owned(),
@@ -113,7 +114,10 @@ pub(crate) async fn build_simple_vnet(
     })
 }
 
-pub(crate) async fn build_vnet(nat_type0: nat::NatType, nat_type1: nat::NatType) -> Result<VNet> {
+pub(crate) async fn build_vnet(
+    nat_type0: nat::NatType,
+    nat_type1: nat::NatType,
+) -> Result<VNet, Error> {
     // WAN
     let wan = Arc::new(Mutex::new(router::Router::new(router::RouterConfig {
         cidr: "0.0.0.0/0".to_owned(),
@@ -197,16 +201,21 @@ impl TestAuthHandler {
 }
 
 impl turn::auth::AuthHandler for TestAuthHandler {
-    fn auth_handle(&self, username: &str, _realm: &str, _src_addr: SocketAddr) -> Result<Vec<u8>> {
+    fn auth_handle(
+        &self,
+        username: &str,
+        _realm: &str,
+        _src_addr: SocketAddr,
+    ) -> Result<Vec<u8>, turn::Error> {
         if let Some(pw) = self.cred_map.get(username) {
             Ok(pw.to_vec())
         } else {
-            Err(Error::new("fake error".to_owned()).into())
+            Err(turn::Error::Other("fake error".to_owned()))
         }
     }
 }
 
-pub(crate) async fn add_vnet_stun(wan_net: Arc<net::Net>) -> Result<turn::server::Server> {
+pub(crate) async fn add_vnet_stun(wan_net: Arc<net::Net>) -> Result<turn::server::Server, Error> {
     // Run TURN(STUN) server
     let conn = wan_net
         .bind(SocketAddr::from_str(&format!(
@@ -238,7 +247,7 @@ pub(crate) async fn add_vnet_stun(wan_net: Arc<net::Net>) -> Result<turn::server
 pub(crate) async fn connect_with_vnet(
     a_agent: &Arc<Agent>,
     b_agent: &Arc<Agent>,
-) -> Result<(Arc<impl Conn>, Arc<impl Conn>)> {
+) -> Result<(Arc<impl Conn>, Arc<impl Conn>), Error> {
     // Manual signaling
     let (a_ufrag, a_pwd) = a_agent.get_local_user_credentials().await;
     let (b_ufrag, b_pwd) = b_agent.get_local_user_credentials().await;
@@ -254,7 +263,7 @@ pub(crate) async fn connect_with_vnet(
 
         let _ = accepted_tx.send(a_conn).await;
 
-        Result::<()>::Ok(())
+        Result::<(), Error>::Ok(())
     });
 
     let (_b_cancel_tx, b_cancel_rx) = mpsc::channel(1);
@@ -264,7 +273,7 @@ pub(crate) async fn connect_with_vnet(
     if let Some(a_conn) = accepted_rx.recv().await {
         Ok((a_conn, b_conn))
     } else {
-        Err(Error::new("no a_conn".to_owned()).into())
+        Err(Error::Other("no a_conn".to_owned()))
     }
 }
 
@@ -278,7 +287,7 @@ pub(crate) async fn pipe_with_vnet(
     v: &VNet,
     a0test_config: AgentTestConfig,
     a1test_config: AgentTestConfig,
-) -> Result<(Arc<impl Conn>, Arc<impl Conn>)> {
+) -> Result<(Arc<impl Conn>, Arc<impl Conn>), Error> {
     let (a_notifier, mut a_connected) = on_connected();
     let (b_notifier, mut b_connected) = on_connected();
 
@@ -347,7 +356,7 @@ pub(crate) fn on_connected() -> (OnConnectionStateChangeHdlrFn, mpsc::Receiver<(
 pub(crate) async fn gather_and_exchange_candidates(
     a_agent: &Arc<Agent>,
     b_agent: &Arc<Agent>,
-) -> Result<()> {
+) -> Result<(), Error> {
     let wg = WaitGroup::new();
 
     let w1 = Arc::new(Mutex::new(Some(wg.worker())));
@@ -401,15 +410,15 @@ pub(crate) async fn gather_and_exchange_candidates(
     Ok(())
 }
 
-pub(crate) async fn start_router(router: &Arc<Mutex<router::Router>>) -> Result<()> {
+pub(crate) async fn start_router(router: &Arc<Mutex<router::Router>>) -> Result<(), Error> {
     let mut w = router.lock().await;
-    w.start().await
+    Ok(w.start().await?)
 }
 
 pub(crate) async fn connect_net2router(
     net: &Arc<net::Net>,
     router: &Arc<Mutex<router::Router>>,
-) -> Result<()> {
+) -> Result<(), Error> {
     let nic = net.get_nic()?;
 
     {
@@ -427,7 +436,7 @@ pub(crate) async fn connect_net2router(
 pub(crate) async fn connect_router2router(
     child: &Arc<Mutex<router::Router>>,
     parent: &Arc<Mutex<router::Router>>,
-) -> Result<()> {
+) -> Result<(), Error> {
     {
         let mut w = parent.lock().await;
         w.add_router(Arc::clone(child)).await?;
@@ -442,7 +451,7 @@ pub(crate) async fn connect_router2router(
 }
 
 #[tokio::test]
-async fn test_connectivity_simple_vnet_full_cone_nats_on_both_ends() -> Result<()> {
+async fn test_connectivity_simple_vnet_full_cone_nats_on_both_ends() -> Result<(), Error> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -495,7 +504,7 @@ async fn test_connectivity_simple_vnet_full_cone_nats_on_both_ends() -> Result<(
 }
 
 #[tokio::test]
-async fn test_connectivity_vnet_full_cone_nats_on_both_ends() -> Result<()> {
+async fn test_connectivity_vnet_full_cone_nats_on_both_ends() -> Result<(), Error> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -557,7 +566,7 @@ async fn test_connectivity_vnet_full_cone_nats_on_both_ends() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_connectivity_vnet_symmetric_nats_on_both_ends() -> Result<()> {
+async fn test_connectivity_vnet_symmetric_nats_on_both_ends() -> Result<(), Error> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -619,7 +628,8 @@ async fn test_connectivity_vnet_symmetric_nats_on_both_ends() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_connectivity_vnet_1to1_nat_with_host_candidate_vs_symmetric_nats() -> Result<()> {
+async fn test_connectivity_vnet_1to1_nat_with_host_candidate_vs_symmetric_nats() -> Result<(), Error>
+{
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -671,7 +681,8 @@ async fn test_connectivity_vnet_1to1_nat_with_host_candidate_vs_symmetric_nats()
 }
 
 #[tokio::test]
-async fn test_connectivity_vnet_1to1_nat_with_srflx_candidate_vs_symmetric_nats() -> Result<()> {
+async fn test_connectivity_vnet_1to1_nat_with_srflx_candidate_vs_symmetric_nats(
+) -> Result<(), Error> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -735,7 +746,7 @@ async fn block_until_state_seen(
 
 // test_disconnected_to_connected asserts that an agent can go to disconnected, and then return to connected successfully
 #[tokio::test]
-async fn test_disconnected_to_connected() -> Result<()> {
+async fn test_disconnected_to_connected() -> Result<(), Error> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -879,7 +890,7 @@ async fn test_disconnected_to_connected() -> Result<()> {
 
 // Agent.Write should use the best valid pair if a selected pair is not yet available
 #[tokio::test]
-async fn test_write_use_valid_pair() -> Result<()> {
+async fn test_write_use_valid_pair() -> Result<(), Error> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(
@@ -979,7 +990,7 @@ async fn test_write_use_valid_pair() -> Result<()> {
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
 
-        Result::<()>::Ok(())
+        Result::<(), Error>::Ok(())
     });
 
     let controlled_agent_conn = {

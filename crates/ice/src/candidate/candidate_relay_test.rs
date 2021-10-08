@@ -3,7 +3,10 @@ use super::*;
 use crate::agent::agent_config::AgentConfig;
 use crate::agent::agent_vnet_test::{connect_with_vnet, on_connected};
 use crate::agent::Agent;
+use crate::error::Error;
 use crate::url::{ProtoType, SchemeType, Url};
+
+use std::result::Result;
 use std::time::Duration;
 use tokio::net::UdpSocket;
 use turn::auth::AuthHandler;
@@ -11,7 +14,12 @@ use turn::auth::AuthHandler;
 pub(crate) struct OptimisticAuthHandler;
 
 impl AuthHandler for OptimisticAuthHandler {
-    fn auth_handle(&self, _username: &str, _realm: &str, _src_addr: SocketAddr) -> Result<Vec<u8>> {
+    fn auth_handle(
+        &self,
+        _username: &str,
+        _realm: &str,
+        _src_addr: SocketAddr,
+    ) -> Result<Vec<u8>, turn::Error> {
         Ok(turn::auth::generate_auth_key(
             "username",
             "webrtc.rs",
@@ -23,7 +31,7 @@ impl AuthHandler for OptimisticAuthHandler {
 //use std::io::Write;
 
 #[tokio::test]
-async fn test_relay_only_connection() -> Result<()> {
+async fn test_relay_only_connection() -> Result<(), Error> {
     /*env_logger::Builder::new()
     .format(|buf, record| {
         writeln!(

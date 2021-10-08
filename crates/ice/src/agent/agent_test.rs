@@ -557,27 +557,34 @@ struct MockPacketConn;
 
 #[async_trait]
 impl Conn for MockPacketConn {
-    async fn connect(&self, _addr: SocketAddr) -> Result<()> {
+    async fn connect(&self, _addr: SocketAddr) -> std::result::Result<(), util::Error> {
         Ok(())
     }
 
-    async fn recv(&self, _buf: &mut [u8]) -> Result<usize> {
+    async fn recv(&self, _buf: &mut [u8]) -> std::result::Result<usize, util::Error> {
         Ok(0)
     }
 
-    async fn recv_from(&self, _buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
+    async fn recv_from(
+        &self,
+        _buf: &mut [u8],
+    ) -> std::result::Result<(usize, SocketAddr), util::Error> {
         Ok((0, SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0)))
     }
 
-    async fn send(&self, _buf: &[u8]) -> Result<usize> {
+    async fn send(&self, _buf: &[u8]) -> std::result::Result<usize, util::Error> {
         Ok(0)
     }
 
-    async fn send_to(&self, _buf: &[u8], _target: SocketAddr) -> Result<usize> {
+    async fn send_to(
+        &self,
+        _buf: &[u8],
+        _target: SocketAddr,
+    ) -> std::result::Result<usize, util::Error> {
         Ok(0)
     }
 
-    async fn local_addr(&self) -> Result<SocketAddr> {
+    async fn local_addr(&self) -> std::result::Result<SocketAddr, util::Error> {
         Ok(SocketAddr::new(Ipv4Addr::new(0, 0, 0, 0).into(), 0))
     }
 
@@ -585,7 +592,7 @@ impl Conn for MockPacketConn {
         None
     }
 
-    async fn close(&self) -> Result<()> {
+    async fn close(&self) -> std::result::Result<(), util::Error> {
         Ok(())
     }
 }
@@ -853,14 +860,14 @@ async fn test_invalid_agent_starts() -> Result<()> {
     let result = a.dial(cancel_rx1, "".to_owned(), "bar".to_owned()).await;
     assert!(result.is_err());
     if let Err(err) = result {
-        assert!(Error::ErrRemoteUfragEmpty.equal(&err));
+        assert_eq!(Error::ErrRemoteUfragEmpty, err);
     }
 
     let (_cancel_tx2, cancel_rx2) = mpsc::channel(1);
     let result = a.dial(cancel_rx2, "foo".to_owned(), "".to_owned()).await;
     assert!(result.is_err());
     if let Err(err) = result {
-        assert!(Error::ErrRemotePwdEmpty.equal(&err));
+        assert_eq!(Error::ErrRemotePwdEmpty, err);
     }
 
     let (cancel_tx3, cancel_rx3) = mpsc::channel(1);
@@ -872,14 +879,14 @@ async fn test_invalid_agent_starts() -> Result<()> {
     let result = a.dial(cancel_rx3, "foo".to_owned(), "bar".to_owned()).await;
     assert!(result.is_err());
     if let Err(err) = result {
-        assert!(Error::ErrCanceledByCaller.equal(&err));
+        assert_eq!(Error::ErrCanceledByCaller, err);
     }
 
     let (_cancel_tx4, cancel_rx4) = mpsc::channel(1);
     let result = a.dial(cancel_rx4, "foo".to_owned(), "bar".to_owned()).await;
     assert!(result.is_err());
     if let Err(err) = result {
-        assert!(Error::ErrMultipleStart.equal(&err));
+        assert_eq!(Error::ErrMultipleStart, err);
     }
 
     a.close().await?;
@@ -1010,8 +1017,9 @@ async fn test_invalid_gather() -> Result<()> {
     let a = Agent::new(AgentConfig::default()).await?;
 
     if let Err(err) = a.gather_candidates().await {
-        assert!(
-            Error::ErrNoOnCandidateHandler.equal(&err),
+        assert_eq!(
+            Error::ErrNoOnCandidateHandler,
+            err,
             "trickle GatherCandidates succeeded without OnCandidate"
         );
     }
@@ -1465,8 +1473,9 @@ async fn test_init_ext_ip_mapping() -> Result<()> {
     })
     .await
     {
-        assert!(
-            Error::ErrIneffectiveNat1to1IpMappingHost.equal(&err),
+        assert_eq!(
+            Error::ErrIneffectiveNat1to1IpMappingHost,
+            err,
             "Unexpected error: {}",
             err
         );
@@ -1484,8 +1493,9 @@ async fn test_init_ext_ip_mapping() -> Result<()> {
     })
     .await
     {
-        assert!(
-            Error::ErrIneffectiveNat1to1IpMappingSrflx.equal(&err),
+        assert_eq!(
+            Error::ErrIneffectiveNat1to1IpMappingSrflx,
+            err,
             "Unexpected error: {}",
             err
         );
@@ -1503,8 +1513,9 @@ async fn test_init_ext_ip_mapping() -> Result<()> {
     })
     .await
     {
-        assert!(
-            Error::ErrMulticastDnsWithNat1to1IpMapping.equal(&err),
+        assert_eq!(
+            Error::ErrMulticastDnsWithNat1to1IpMapping,
+            err,
             "Unexpected error: {}",
             err
         );
@@ -1520,8 +1531,9 @@ async fn test_init_ext_ip_mapping() -> Result<()> {
     })
     .await
     {
-        assert!(
-            Error::ErrInvalidNat1to1IpMapping.equal(&err),
+        assert_eq!(
+            Error::ErrInvalidNat1to1IpMapping,
+            err,
             "Unexpected error: {}",
             err
         );
@@ -1598,7 +1610,7 @@ async fn test_agent_credentials() -> Result<()> {
     })
     .await
     {
-        assert!(Error::ErrLocalUfragInsufficientBits.equal(&err));
+        assert_eq!(Error::ErrLocalUfragInsufficientBits, err);
     } else {
         panic!("expected error, but got ok");
     }
@@ -1609,7 +1621,7 @@ async fn test_agent_credentials() -> Result<()> {
     })
     .await
     {
-        assert!(Error::ErrLocalPwdInsufficientBits.equal(&err));
+        assert_eq!(Error::ErrLocalPwdInsufficientBits, err);
     } else {
         panic!("expected error, but got ok");
     }
@@ -1770,7 +1782,7 @@ async fn test_agent_restart_during_gather() -> Result<()> {
         .store(GatheringState::Gathering as u8, Ordering::SeqCst);
 
     if let Err(err) = agent.restart("".to_owned(), "".to_owned()).await {
-        assert!(Error::ErrRestartWhenGathering.equal(&err));
+        assert_eq!(Error::ErrRestartWhenGathering, err);
     } else {
         panic!("expected error, but got ok");
     }
@@ -1788,7 +1800,7 @@ async fn test_agent_restart_when_closed() -> Result<()> {
     agent.close().await?;
 
     if let Err(err) = agent.restart("".to_owned(), "".to_owned()).await {
-        assert!(Error::ErrClosed.equal(&err));
+        assert_eq!(Error::ErrClosed, err);
     } else {
         panic!("expected error, but got ok");
     }

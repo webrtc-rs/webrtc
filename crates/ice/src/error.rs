@@ -1,6 +1,14 @@
 use thiserror::Error;
 
+use std::io;
+use std::net;
+use std::num::ParseIntError;
+use std::time::SystemTimeError;
+
+pub type Result<T> = std::result::Result<T, Error>;
+
 #[derive(Debug, Error, PartialEq)]
+#[non_exhaustive]
 pub enum Error {
     /// Indicates an error with Unknown info.
     #[error("Unknown type")]
@@ -184,13 +192,46 @@ pub enum Error {
     #[error("relative URL without a base")]
     ErrUrlParse,
 
-    #[allow(non_camel_case_types)]
+    #[error("parse int: {0}")]
+    ParseInt(#[from] ParseIntError),
+    #[error("parse addr: {0}")]
+    ParseIp(#[from] net::AddrParseError),
     #[error("{0}")]
-    new(String),
+    Io(#[source] IoError),
+    #[error("{0}")]
+    Util(#[from] util::Error),
+    #[error("{0}")]
+    Stun(#[from] stun::Error),
+    #[error("{0}")]
+    ParseUrl(#[from] url::ParseError),
+    #[error("{0}")]
+    Mdns(#[from] mdns::Error),
+    #[error("{0}")]
+    Turn(#[from] turn::Error),
+
+    #[error("{0}")]
+    Other(String),
 }
 
-impl Error {
-    pub fn equal(&self, err: &anyhow::Error) -> bool {
-        err.downcast_ref::<Self>().map_or(false, |e| e == self)
+#[derive(Debug, Error)]
+#[error("io error: {0}")]
+pub struct IoError(#[from] pub io::Error);
+
+// Workaround for wanting PartialEq for io::Error.
+impl PartialEq for IoError {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.kind() == other.0.kind()
+    }
+}
+
+impl From<io::Error> for Error {
+    fn from(e: io::Error) -> Self {
+        Error::Io(IoError(e))
+    }
+}
+
+impl From<SystemTimeError> for Error {
+    fn from(e: SystemTimeError) -> Self {
+        Error::Other(e.to_string())
     }
 }

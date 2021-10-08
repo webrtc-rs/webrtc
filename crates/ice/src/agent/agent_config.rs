@@ -216,7 +216,7 @@ impl AgentConfig {
         {
             if ext_ip_mapper.candidate_type == CandidateType::Host {
                 if mdns_mode == MulticastDnsMode::QueryAndGather {
-                    return Err(Error::ErrMulticastDnsWithNat1to1IpMapping.into());
+                    return Err(Error::ErrMulticastDnsWithNat1to1IpMapping);
                 }
                 let mut candi_host_enabled = false;
                 for candi_type in candidate_types {
@@ -226,7 +226,7 @@ impl AgentConfig {
                     }
                 }
                 if !candi_host_enabled {
-                    return Err(Error::ErrIneffectiveNat1to1IpMappingHost.into());
+                    return Err(Error::ErrIneffectiveNat1to1IpMappingHost);
                 }
             } else if ext_ip_mapper.candidate_type == CandidateType::ServerReflexive {
                 let mut candi_srflx_enabled = false;
@@ -237,7 +237,7 @@ impl AgentConfig {
                     }
                 }
                 if !candi_srflx_enabled {
-                    return Err(Error::ErrIneffectiveNat1to1IpMappingSrflx.into());
+                    return Err(Error::ErrIneffectiveNat1to1IpMappingSrflx);
                 }
             }
 

@@ -1,6 +1,5 @@
 use super::*;
-
-use anyhow::Result;
+use crate::error::Result;
 
 #[test]
 fn test_tcp_type() -> Result<()> {

@@ -3,7 +3,6 @@ mod network_type_test;
 
 use crate::error::*;
 
-use anyhow::Result;
 use std::fmt;
 use std::net::IpAddr;
 
@@ -137,6 +136,6 @@ pub(crate) fn determine_network_type(network: &str, ip: &IpAddr) -> Result<Netwo
             Ok(NetworkType::Tcp6)
         }
     } else {
-        Err(Error::ErrDetermineNetworkType.into())
+        Err(Error::ErrDetermineNetworkType)
     }
 }

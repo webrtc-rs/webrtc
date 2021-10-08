@@ -240,7 +240,7 @@ impl Candidate for CandidateBase {
         {
             let mut closed_ch = self.closed_ch.lock().await;
             if closed_ch.is_none() {
-                return Err(Error::ErrClosed.into());
+                return Err(Error::ErrClosed);
             }
             closed_ch.take();
         }
@@ -392,12 +392,11 @@ impl CandidateBase {
 pub async fn unmarshal_candidate(raw: &str) -> Result<impl Candidate> {
     let split: Vec<&str> = raw.split_whitespace().collect();
     if split.len() < 8 {
-        return Err(Error::new(format!(
+        return Err(Error::Other(format!(
             "{:?} ({})",
             Error::ErrAttributeTooShortIceCandidate,
             split.len()
-        ))
-        .into());
+        )));
     }
 
     // Foundation
@@ -429,11 +428,10 @@ pub async fn unmarshal_candidate(raw: &str) -> Result<impl Candidate> {
 
         if split2[0] == "raddr" {
             if split2.len() < 4 {
-                return Err(Error::new(format!(
+                return Err(Error::Other(format!(
                     "{:?}: incorrect length",
                     Error::ErrParseRelatedAddr
-                ))
-                .into());
+                )));
             }
 
             // RelatedAddress
@@ -443,9 +441,10 @@ pub async fn unmarshal_candidate(raw: &str) -> Result<impl Candidate> {
             rel_port = split2[3].parse()?;
         } else if split2[0] == "tcptype" {
             if split2.len() < 2 {
-                return Err(
-                    Error::new(format!("{:?}: incorrect length", Error::ErrParseType)).into(),
-                );
+                return Err(Error::Other(format!(
+                    "{:?}: incorrect length",
+                    Error::ErrParseType
+                )));
             }
 
             tcp_type = TcpType::from(split2[1]);
@@ -518,6 +517,10 @@ pub async fn unmarshal_candidate(raw: &str) -> Result<impl Candidate> {
             };
             config.new_candidate_relay().await
         }
-        _ => Err(Error::new(format!("{:?} ({})", Error::ErrUnknownCandidateType, typ)).into()),
+        _ => Err(Error::Other(format!(
+            "{:?} ({})",
+            Error::ErrUnknownCandidateType,
+            typ
+        ))),
     }
 }

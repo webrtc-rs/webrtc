@@ -3,7 +3,6 @@ mod url_test;
 
 use crate::error::*;
 
-use anyhow::Result;
 use std::borrow::Cow;
 use std::convert::From;
 use std::fmt;
@@ -140,7 +139,7 @@ impl Url {
     pub fn parse_url(raw: &str) -> Result<Self> {
         // work around for url crate
         if raw.contains("//") {
-            return Err(Error::ErrInvalidUrl.into());
+            return Err(Error::ErrInvalidUrl);
         }
 
         let mut s = raw.to_string();
@@ -148,7 +147,7 @@ impl Url {
         if let Some(p) = pos {
             s.replace_range(p..=p, "://");
         } else {
-            return Err(Error::ErrSchemeType.into());
+            return Err(Error::ErrSchemeType);
         }
 
         let raw_parts = url::Url::parse(&s)?;
@@ -161,7 +160,7 @@ impl Url {
                 .trim_end_matches(']')
                 .to_owned()
         } else {
-            return Err(Error::ErrHost.into());
+            return Err(Error::ErrHost);
         };
 
         let port = if let Some(port) = raw_parts.port() {
@@ -176,29 +175,29 @@ impl Url {
         let proto = match scheme {
             SchemeType::Stun => {
                 if q_args.count() > 0 {
-                    return Err(Error::ErrStunQuery.into());
+                    return Err(Error::ErrStunQuery);
                 }
                 ProtoType::Udp
             }
             SchemeType::Stuns => {
                 if q_args.count() > 0 {
-                    return Err(Error::ErrStunQuery.into());
+                    return Err(Error::ErrStunQuery);
                 }
                 ProtoType::Tcp
             }
             SchemeType::Turn => {
                 if q_args.count() > 1 {
-                    return Err(Error::ErrInvalidQuery.into());
+                    return Err(Error::ErrInvalidQuery);
                 }
                 if let Some((key, value)) = q_args.next() {
                     if key == Cow::Borrowed("transport") {
                         let proto: ProtoType = value.as_ref().into();
                         if proto == ProtoType::Unknown {
-                            return Err(Error::ErrProtoType.into());
+                            return Err(Error::ErrProtoType);
                         }
                         proto
                     } else {
-                        return Err(Error::ErrInvalidQuery.into());
+                        return Err(Error::ErrInvalidQuery);
                     }
                 } else {
                     ProtoType::Udp
@@ -206,24 +205,24 @@ impl Url {
             }
             SchemeType::Turns => {
                 if q_args.count() > 1 {
-                    return Err(Error::ErrInvalidQuery.into());
+                    return Err(Error::ErrInvalidQuery);
                 }
                 if let Some((key, value)) = q_args.next() {
                     if key == Cow::Borrowed("transport") {
                         let proto: ProtoType = value.as_ref().into();
                         if proto == ProtoType::Unknown {
-                            return Err(Error::ErrProtoType.into());
+                            return Err(Error::ErrProtoType);
                         }
                         proto
                     } else {
-                        return Err(Error::ErrInvalidQuery.into());
+                        return Err(Error::ErrInvalidQuery);
                     }
                 } else {
                     ProtoType::Tcp
                 }
             }
             SchemeType::Unknown => {
-                return Err(Error::ErrSchemeType.into());
+                return Err(Error::ErrSchemeType);
             }
         };
 

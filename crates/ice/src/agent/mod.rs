@@ -25,7 +25,6 @@ use agent_config::*;
 use agent_internal::*;
 use agent_stats::*;
 
-use anyhow::Result;
 use mdns::conn::*;
 use std::collections::HashMap;
 use std::net::{Ipv4Addr, SocketAddr};
@@ -116,7 +115,7 @@ impl Agent {
     /// Creates a new Agent.
     pub async fn new(config: AgentConfig) -> Result<Self> {
         if config.port_max < config.port_min {
-            return Err(Error::ErrPort.into());
+            return Err(Error::ErrPort);
         }
 
         let mut mdns_name = config.multicast_dns_host_name.clone();
@@ -125,7 +124,7 @@ impl Agent {
         }
 
         if !mdns_name.ends_with(".local") || mdns_name.split('.').count() != 2 {
-            return Err(Error::ErrInvalidMulticastDnshostName.into());
+            return Err(Error::ErrInvalidMulticastDnshostName);
         }
 
         let mut mdns_mode = config.multicast_dns_mode;
@@ -163,7 +162,7 @@ impl Agent {
             && (candidate_types.len() != 1 || candidate_types[0] != CandidateType::Host)
         {
             Self::close_multicast_conn(&mdns_conn).await;
-            return Err(Error::ErrLiteUsingNonHostCandidates.into());
+            return Err(Error::ErrLiteUsingNonHostCandidates);
         }
 
         if !config.urls.is_empty()
@@ -171,7 +170,7 @@ impl Agent {
             && !contains_candidate_type(CandidateType::Relay, &candidate_types)
         {
             Self::close_multicast_conn(&mdns_conn).await;
-            return Err(Error::ErrUselessUrlsProvided.into());
+            return Err(Error::ErrUselessUrlsProvided);
         }
 
         let ext_ip_mapper = match config.init_ext_ip_mapping(mdns_mode, &candidate_types) {
@@ -278,7 +277,7 @@ impl Agent {
             }
 
             if c.candidate_type() != CandidateType::Host {
-                return Err(Error::ErrAddressParseFailed.into());
+                return Err(Error::ErrAddressParseFailed);
             }
 
             let ai = Arc::clone(&self.internal);
@@ -372,16 +371,16 @@ impl Agent {
         }
 
         if ufrag.len() * 8 < 24 {
-            return Err(Error::ErrLocalUfragInsufficientBits.into());
+            return Err(Error::ErrLocalUfragInsufficientBits);
         }
         if pwd.len() * 8 < 128 {
-            return Err(Error::ErrLocalPwdInsufficientBits.into());
+            return Err(Error::ErrLocalPwdInsufficientBits);
         }
 
         if GatheringState::from(self.gathering_state.load(Ordering::SeqCst))
             == GatheringState::Gathering
         {
-            return Err(Error::ErrRestartWhenGathering.into());
+            return Err(Error::ErrRestartWhenGathering);
         }
         self.gathering_state
             .store(GatheringState::New as u8, Ordering::SeqCst);
@@ -389,7 +388,7 @@ impl Agent {
         {
             let done_tx = self.internal.done_tx.lock().await;
             if done_tx.is_none() {
-                return Err(Error::ErrClosed.into());
+                return Err(Error::ErrClosed);
             }
         }
 
@@ -429,13 +428,13 @@ impl Agent {
     /// Initiates the trickle based gathering process.
     pub async fn gather_candidates(&self) -> Result<()> {
         if self.gathering_state.load(Ordering::SeqCst) != GatheringState::New as u8 {
-            return Err(Error::ErrMultipleGatherAttempted.into());
+            return Err(Error::ErrMultipleGatherAttempted);
         }
 
         {
             let on_candidate_hdlr = self.internal.on_candidate_hdlr.lock().await;
             if on_candidate_hdlr.is_none() {
-                return Err(Error::ErrNoOnCandidateHandler.into());
+                return Err(Error::ErrNoOnCandidateHandler);
             }
         }
 
@@ -492,7 +491,7 @@ impl Agent {
             Ok((_, src)) => src,
             Err(err) => {
                 log::warn!("Failed to discover mDNS candidate {}: {}", c.address(), err);
-                return Err(err);
+                return Err(err.into());
             }
         };
 
