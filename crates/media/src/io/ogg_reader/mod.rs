@@ -72,20 +72,20 @@ impl<R: Read> OggReader<R> {
         let (payload, page_header) = self.parse_next_page()?;
 
         if page_header.sig != PAGE_HEADER_SIGNATURE {
-            return Err(Error::ErrBadIDPageSignature.into());
+            return Err(Error::ErrBadIDPageSignature);
         }
 
         if page_header.header_type != PAGE_HEADER_TYPE_BEGINNING_OF_STREAM {
-            return Err(Error::ErrBadIDPageType.into());
+            return Err(Error::ErrBadIDPageType);
         }
 
         if payload.len() != ID_PAGE_PAYLOAD_SIZE {
-            return Err(Error::ErrBadIDPageLength.into());
+            return Err(Error::ErrBadIDPageLength);
         }
 
         let s = &payload[..8];
         if s != ID_PAGE_SIGNATURE {
-            return Err(Error::ErrBadIDPagePayloadSignature.into());
+            return Err(Error::ErrBadIDPagePayloadSignature);
         }
 
         let mut reader = Cursor::new(&payload[8..]);
@@ -155,7 +155,7 @@ impl<R: Read> OggReader<R> {
             }
 
             if sum != checksum {
-                return Err(Error::ErrChecksumMismatch.into());
+                return Err(Error::ErrChecksumMismatch);
             }
         }
 
